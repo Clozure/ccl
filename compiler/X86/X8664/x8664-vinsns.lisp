@@ -970,7 +970,7 @@
   (shlq (:$ub (- x8664::nbits-in-word (+ 16 x8664::fixnumshift))) (:%q dest))
   (sarq (:$ub (- x8664::nbits-in-word (+ 16 x8664::fixnumshift))) (:%q dest))
   (cmpq (:%q src) (:%q dest))
-  (je :bad)
+  (jne :bad)
   (testb (:$b x8664::fixnummask) (:%b dest))
   (jne :bad)
   (sarq (:$ub x8664::fixnumshift) (:%q dest))
