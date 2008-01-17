@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>IBClasses</key>
+	<array>
+		<dict>
+			<key>ACTIONS</key>
+			<dict>
+				<key>apropos</key>
+				<string>id</string>
+				<key>inspectSelectedSymbol</key>
+				<string>id</string>
+				<key>setPackage</key>
+				<string>id</string>
+				<key>toggleShowsExternalSymbols</key>
+				<string>id</string>
+			</dict>
+			<key>CLASS</key>
+			<string>AproposWindowController</string>
+			<key>LANGUAGE</key>
+			<string>ObjC</string>
+			<key>OUTLETS</key>
+			<dict>
+				<key>arrayController</key>
+				<string>id</string>
+				<key>comboBox</key>
+				<string>id</string>
+				<key>externalSymbolsCheckbox</key>
+				<string>id</string>
+				<key>tableView</key>
+				<string>id</string>
+				<key>textView</key>
+				<string>id</string>
+			</dict>
+			<key>SUPERCLASS</key>
+			<string>NSWindowController</string>
+		</dict>
+		<dict>
+			<key>CLASS</key>
+			<string>PackageComboBox</string>
+			<key>LANGUAGE</key>
+			<string>ObjC</string>
+			<key>OUTLETS</key>
+			<dict>
+				<key>dataSource</key>
+				<string>id</string>
+			</dict>
+		</dict>
+	</array>
+	<key>IBVersion</key>
+	<string>1</string>
+</dict>
+</plist>

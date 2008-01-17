@@ -1,0 +1,183 @@
+Using Apple's CHUD metering tools from OpenMCL
+
+ Prerequisites
+
+Apple's CHUD metering tools are available (as of this writing) from:
+
+<ftp://ftp.apple.com/developer/Tool_Chest/Testing_-_Debugging/Performance_tools/>. 
+
+There are also some CHUD packages distributed with some recent
+versions of Xcode; the standalone versions available via FTP seem to
+work much better with the OpenMCL interface. Both versions 4.1.1 and
+4.2.2 of the CHUD tools seem to work reasonably well; earlier versions
+provide a different ABI, and it's not known whether any future
+versions will be compatible.
+
+There don't seem to be any versions of CHUD that can deal with 64-bit
+processes.
+
+Ensure that either version 4.1.1 or 4.2.2 of the CHUD tools are
+installed. One side-effect of installation is that the folder "
+/Developer/Applications/Performance Tools" will have been created and
+will contain an application called "Shark". Double-click on Shark; in
+its "Preferences" window's "Search Paths" pane, use the "+" button to
+add your home directory to the "Patch Files" search path.
+
+ Background
+
+CHUD's Shark application is a user interface to its low-level
+performance monitoring facilities; those facilities provide access to
+high-resolution timers, on-chip debugging information, and OS
+performance counters. Shark allows the user to run sampling sessions,
+which record information about the context in which sampling events
+(such as timer interrupts) occur; at the end of the session, Shark
+processes the sampled data and presents a browsable interface which
+shows the processes, threads, and functions associated with those
+events.
+
+For many processes, Shark can identify functions (the range of
+addresses corresponding to the address of the first and last
+instructions in the function) by interpreting symbolic information
+contained in the executable file. This strategy enables it to identify
+C and assembler functions in OpenMCL's lisp kernel, but doesn't help
+much in identifying Lisp functions. Fortunately, Shark does have the
+ability to read "patch files" , which associate symbolic names to
+regions of a process's address space), and fortunately OpenMCL can be
+told to move the machine code (the "code vector") associated with a
+compiled function to a static memory area (so that the addresses of
+the first and last instructions in a compiled lisp function remain
+constant); it's possible to assign fixed addresses to the code vectors
+of all functions in the lisp at a given time, and to give symbolic
+names to the memory regions that delimit those code vectors.
+
+The process of moving code vectors to a static (and incidentally
+read-only) memory area is sometimes referred to as "purification".
+
+ A Sampling Sample
+
+There's a little bit of flexibility in the order in which these steps
+are performed, but for the sake of argument we'll pretend here that
+there isn't.
+
+1) Run Shark, and put it in "remote" mode.
+
+Run Shark. Ensure that it's in "Programmatic (Remote)" mode by
+selecting that option from the "Sampling" menu, or by pressing the key
+equivalent "command-shift-R". In the main Shark window, ensure that
+the sampling type is set to "Time Profile", select "Process" (instead
+of "Everything" ) from the next popup, and doing so should cause the
+third popup to select "Remote Client".
+
+2) Meter some code in OpenMCL.
+
+In OpenMCL, do:
+
+? (require "CHUD-METERING")
+
+and ensure that the code that you want to profile is defined.
+
+? (defun fact (n)
+    (if (zerop n)
+      1
+      (* n (fact (1- n)))))
+FACT
+? (defun fact-n-m-times (m n)
+    (dotimes (i m)
+      (fact n)))
+FACT-N-M-TIMES
+
+Then run something with metering enabled:
+
+? (CHUD:METER (fact-n-m-times 1000 1000))
+
+The first time that CHUD:METER is invoked in a lisp session, it'll:
+
+1. Ensure that Shark is running
+
+2. Move the code vectors of all functions to a static 
+   memory area.
+
+3. Write a Shark "spatch" file to the user's home 
+   directory (which is where we configure Shark to look 
+   for such files back in the "Prerequisites" section.)
+   See also CHUD:*SPATCH-DIRECTORY-PATH*.
+
+4. Try to ensure that Shark is running in "remote" mode. 
+   (I don't know of any way in which this can be ensured 
+   programatically, so it'll just keep asking whether or 
+   not Shark's in remote mode until you say "y" and the 
+   lisp metering code detects that that's the case.)
+
+Those steps may take anywhere from "a few" to "several" seconds; steps
+2 and 3 are probably the most expensive and depend on how many
+functions are in the lisp image, how big they are, etc.
+
+On every invocation of CHUD:METER, it'll tell Shark to start a
+metering session, execute the form which is its required argument,
+tell Shark to stop the session, and return the form's result(s).
+
+After it's been told to stop the sampling session, Shark will analyze
+the sampling data it obtained and display the results. In this
+example, it's reasonable to assume that some CCL package functions
+related to bignum multiplication dominate the execution time. Lisp
+functions that show up in Shark's session window will claim to be
+defined in the SPATCH library; their "names" will generally look like
+their printed representations.
+
+ Limitations
+
+It's generally tempting to start redefining functions that have
+longer-than-expected execution times. That's possibly the right thing
+to do in general, but (because of the way that the spatch mechanism
+works) it's hard to get meaningful results: Shark can only give names
+to lisp functions that're in its .spatch file, and will continue to
+use cached informaton from that .spatch file until it quits. General
+(GC-able) lisp functions - whose code-vectors might move around in
+memory - tend to confuse Shark (and at least some versions get
+confused enough that they may crash while trying to report time spent
+in functions that aren't where they used to be ...)
+
+After things get a little bit out-of-whack (in terms of newly defined
+lisp functions), it's often necessary to quit both Shark and OpenMCL,
+load the new-and-improved code into the lisp, and try again, hoping
+for better results.
+
+After CHUD:METER has done its first-time setup, it's generally
+necessary to quit both Shark and OpenMCL if either quits in order to
+get them back in synch again.
+
+Despite these limitations, it's probably fair to say that this is way,
+way better than nothing.
+
+ Reference
+
+(CHUD:METER form &key (duration 0) (frequency 1))  [Macro]
+
+Ensures that access to the "remote sampling facility" (Shark, usually)
+has been acquired, ensure that code vectors have been purified and
+that an spatch file for the current process is writen to the directory
+named by CHUD:*SPATCH-DIRECTORY-PATH* (or the user's home directory),
+and starts and stops the sampling facility around execution of <form>.
+Returns whatever values execution of <form> returns.
+
+Arguments
+  <form>        an arbitrary lisp expression
+  <frequency>   sampling frequency in milliseconds
+  <duration>    total number of sampling intervals, 0 implies "infinite".
+
+It seems that the <frequency> and <duration> arguments have no effect;
+the sampling frequency and duration can be set via Shark's "configuration
+editor" dialog.
+
+CHUD:*SPATCH-DIRECTORY-PATH*  [Special Variable]
+
+If non-NIL, should be a pathname whose directory component matches the
+"Patch FIles" search path in Shark's Preferences.  When this variable
+is NIL, USER-HOMEDIR-PATHNAME is used instead.
+
+
+ Acknowledgments
+
+Both Dan Knapp and Hamilton Link have posted similar CHUD interfaces
+to openmcl-devel in the past; Hamilton's also reported bugs in the
+spatch mechanism to CHUD developers (and gotten those bugs fixed.)

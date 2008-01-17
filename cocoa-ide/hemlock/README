@@ -1,0 +1,98 @@
+                               Phemlock
+                         The Portable Hemlock
+
+Please see:
+
+    http://www.stud.uni-karlsruhe.de/~unk6/hemlock/
+
+This is an attempt to free Hemlock from its CMUCL prison. In the long
+run I want to be able to run Hemlock on any system which supports ANSI
+Common Lisp and CLIM. 
+
+The source code of Hemlock showed unportability (or better its age) in
+the following areas:
+
+ - Buffers sometimes also serve as streams. As Hemlock was written
+   there was no universal de-facto standard interface for user defined
+   streams and the source code defined CMUCL streams. These days we
+   have Gray streams.
+
+ - File I/O was tied to both CMUCL and Unix and probably slow
+   machines. The file i/o functions directly called unix-read and
+   unix-write and beam data direcly to and fro system areas. I changed
+   that using standard CL functions doing i/o on a line-by-line basis
+   now.
+
+ - The TTY interface is inherently unportable. Currently it is
+   disabled altogether. I think we could reclaim some useful code from
+   Hemlock's TTY interface and morph it into a CLIM TTY port. And
+   since my screen cannot even display a text console interface, this
+   has very low priority on my list, though other people might want to
+   have it.
+
+ - The X11 interface uses the SERVE-EVENT facility of CMUCL, which
+   naturally is only available there. I provided a thin portability
+   layer to provide the same API using just the standard CLX
+   interface.
+
+This already summaries pretty well the current state of Phemlock. You
+can edit files using the X11 interface on an ANSI CL which provides
+for CLX.
+
+
+FUTURE
+
+The next steps I have in mind are:
+
+ - Port the missing files except the TTY interface.
+
+ - Hemlock has the idea that characters are 8-bit wide. We need to
+   teach it otherwise as we have Unicode strings now. This involves
+   syntax tables and probably searching.
+
+ - I want a CLIM Hemlock.
+
+   How exactly to do this is still not decided. I see two
+   possibilities:
+
+   . Hemlock already provides for a kind of device interface. We can
+     implement a new device which is just a CLIM device.
+
+   . Or we rip this device abstraction layer and state that CLIM
+     itself is the device layer. (Making the bet that we'll have a TTY
+     CLIM in the future).
+
+After that is done, we can talk about extending Phemlock in various
+ways like syntax highlighting, color, new modes, ...
+
+
+RANDOM NOTES
+
+. Hemlock has this feature of so called buffered lines; from the
+  documentation in line.lisp:
+
+    ;; A buffered line:
+    ;;    The line hasn't been touched since it was read from a file, and the
+    ;;    actual contents are in some system I/O area.  This is indicated by
+    ;;    the Line-Buffered-P slot being true.  In buffered lines on the RT,
+    ;;    the %Chars slot contains the system-area-pointer to the beginning
+    ;;    of the characters.
+
+  This sounds like a good idea actually. Though it seems that the CMUCL
+  implementation does this by using sap pointers and beams some data
+  back and fro to actual strings.
+
+  However, I am not very fond of random low-level byte-bashing hacks and
+  so the READ-FILE and WRITE-FILE functions are now just reading and
+  writing on a line by line basis which makes them clean an portable.
+
+  So the current state in Phemlock is: line-buffered-p is always nil. 
+
+. It uses EXT:COMPLETE-FILE which is defined in cmucl:filesys.lisp.
+  We'll need a portable definition.
+
+
+-- 
+Gilbert Baumann <unk6@stud.uni-karlsruhe.de>
+2003-02-06
+$Id$

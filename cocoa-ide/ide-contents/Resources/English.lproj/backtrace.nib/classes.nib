@@ -1,0 +1,11 @@
+{
+    IBClasses = (
+        {
+            CLASS = BacktraceWindowController; 
+            LANGUAGE = ObjC; 
+            OUTLETS = {outlineView = id; }; 
+            SUPERCLASS = NSWindowController; 
+        }
+    ); 
+    IBVersion = 1; 
+}

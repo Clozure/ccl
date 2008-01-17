@@ -1,0 +1,52 @@
+This is currently a work-in-progess.
+
+The aim is to build an environment taht lets most elisp packages run inside
+PHemlock. Two things that explicitly will not be handled is "emacs sockets"
+and "emacs sub-processes". There may be stubs for them, actuallym, there
+will probably be stubs for them.
+
+Currently, most of the code is horribly uncommented and there's next-to-no
+docstrings. This will be fixed, at some point.
+
+The current files in the implementation, with a description of my
+generals thoughts of what should go where:
+
+base.lisp: This is the "base elisp" implementation. Things here end up
+           in the ELISP package and should in general be "user visible".
+
+codewalker.lisp: This is a code walker necessary to wrap "variable
+           access". It's not the most well-tested piece of code in the
+           world, but so far it hasn't fallen over on my test cases.
+
+hemlock-shims.lisp: This is functions that need to interact deeply
+                    with Hemlock (key definitions etc, etc).
+
+internals.lisp: This is the file for what ends up being needed but not
+                fitting anywhere else.
+
+loadup.lisp: Load all files, in something approaching a sensible order.
+
+packages.lisp: Package definitions.
+
+read-table.lisp: Readtables and support functions.
+
+implementation-needed: Contains a tentative list of symbols in GNU
+    Emacs that may or may not need sensible implementation before
+    we're done. Theory is, once all built-ins are in place, we can
+    then bootstrap off whatever files tag along with emacs, should
+    anyone want to.
+
+Here are some things to look at before releasing:
+[new-bbox]
+|Warning: These variables are undefined:
+|  MAJOR-MODE MODE-NAME
+|
+|
+|Warning: These functions are undefined:
+|  DEFINE-KEY GET-BUFFER-CREATE MAKE-SPARSE-KEYMAP SET-BUFFER SWITCH-TO-BUFFER 
+|  USE-LOCAL-MAP
+
+
+
+
+//Ingvar <ingvar@bofh.se>

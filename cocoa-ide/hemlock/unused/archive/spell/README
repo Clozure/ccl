@@ -1,0 +1,26 @@
+SPELL was originally part of Hemlock, CMUCL's Common Lisp text editor.
+This version has been mostly rewritten in portable ANSI CL.  The only
+file that remains to be converted is spell-aug.lisp.  Besides ripping
+out implementation-specific code, the biggest change is that the spelling
+dictionary is no longer a global variable.  Instead, it has been
+converted to be a class; multiple dictionaries may thus coexist at any
+one time.  Most functions have therefore been changed to take an extra
+DICTIONARY parameter.
+
+An ASDF system definition is contained in spell.asd.
+
+Semi-extensive testing has been done.  However, a test suite would be
+a good thing to write.
+
+To get started, compile and load the system, then enter
+
+(SPELL::BUILD-DICTIONARY #p"/path/to/spell-dictionary.text" "outfile")
+(SETF MY-DICTIONARY *)
+(CORRECT-SPELLING MY-DICTIONARY "debugg")
+
+spellcoms.lisp is a file containing Hemlock commands and functions to
+integrate the SPELL package into Hemlock.  It needs to be rewritten
+to work with the new code, but is an example of what can be done with
+the provided interfaces.
+
+Please email any comments, questions, or bug fixes to froydnj@cs.rice.edu.

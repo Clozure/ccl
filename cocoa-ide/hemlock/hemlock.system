@@ -1,0 +1,162 @@
+;; -*- Mode: Lisp; -*-
+
+(defpackage #:hemlock-system
+  (:use #:cl)
+  (:export #:*hemlock-base-directory*))
+
+(in-package #:hemlock-system)
+
+
+(pushnew :command-bits *features*)
+(pushnew :buffered-lines *features*)
+
+(defparameter *hemlock-base-directory*
+  (make-pathname :name nil :type nil :version nil
+                 :defaults (parse-namestring *load-truename*)))
+
+(defparameter *binary-pathname*
+  (make-pathname :directory
+                 (append (pathname-directory *hemlock-base-directory*)
+                         (list "bin"
+                               #+CLISP "clisp"
+                               #+CMU   "cmu"
+                               #+EXCL  "acl"
+                               #+SBCL  "sbcl"
+                               #-(or CLISP CMU EXCL SBCL)
+                               (string-downcase (lisp-implementation-type))))
+                 :defaults *hemlock-base-directory*))
+       
+(mk:defsystem :hemlock
+    :source-pathname #.(make-pathname :directory
+                                      (append (pathname-directory *hemlock-base-directory*)
+                                              (list "src"))
+                                      :defaults *hemlock-base-directory*)
+    :source-extension "lisp"
+    :binary-pathname #.*binary-pathname*
+    ;; ehem ..
+    :initially-do
+    (progn
+      ;; try to load clx
+      (unless (ignore-errors (fboundp (find-symbol "OPEN-DISPLAY" "XLIB")))
+        (ignore-errors (require :clx))
+        (ignore-errors (require :cmucl-clx)))
+      (unless (ignore-errors (fboundp (find-symbol "OPEN-DISPLAY" "XLIB")))
+        (error "Please provide me with CLX."))
+      ;; Create binary pathnames
+      (ensure-directories-exist *binary-pathname*)
+      (dolist (subdir '("tty" "wire"))
+        (ensure-directories-exist (merge-pathnames (make-pathname :directory (list :relative subdir))
+                                                   *binary-pathname*)
+                                  :verbose t)))
+    :components
+    ("package"
+
+     ;; Lisp implementation specific stuff goes into one of the next
+     ;; two files.
+     "lispdep"
+     "hemlock-ext"                     
+
+     "decls"                            ;early declarations of functions and stuff
+     
+     "struct"
+     ;; "struct-ed"
+     "charmacs"
+     "key-event" 
+     "keysym-defs"
+
+     "rompsite"
+     
+     "input"
+     "macros"
+     "line"
+     "ring"
+     "vars"
+     "interp"
+     "syntax"
+     "htext1"
+     "buffer"  
+     "htext2"
+     "htext3"
+     "htext4"
+     "files"
+     "search1"
+     "search2"
+     "table"
+     #+clx
+     "hunk-draw"
+     "window"
+     "screen"
+     "winimage"
+     "linimage"
+     "display"
+     #+clx
+     "bit-display"
+
+     "tty/termcap"
+     ;"tty-disp-rt"
+     ;"tty-display"
+     "pop-up-stream"
+     "bit-screen"
+     "tty/tty-screen"
+     "cursor"
+     "font"
+     "streams"
+;     "hacks"
+     "main"
+     "echo"
+     "echocoms"
+     "command"
+     "indent"
+;; moved     "comments"
+     "morecoms"
+     "undo"
+     "killcoms"
+     "searchcoms"
+     "filecoms"
+     "doccoms"
+     "srccom"
+     "group"
+     "fill"
+     "text"
+     "lispmode"
+;;     "ts-buf"
+;;     "ts-stream"
+;;     "eval-server"
+     "lispbuf"
+;;     "lispeval"
+;;     "spell-rt"
+;;     "spell-corr"
+;;     "spell-aug"
+;;     "spellcoms"
+
+     "comments"
+     "overwrite"
+     "abbrev"
+     "icom"
+     "kbdmac"
+     "defsyn"
+     #+why
+     "scribe"
+     #+what
+     "pascal"
+     #+who
+     "dylan"
+     "edit-defs"
+     "auto-save"
+     "register"
+     "xcoms"
+;;     "unixcoms"
+;;     "mh"
+     "highlight"
+;;     "dired"
+;;     "diredcoms"
+     "bufed"
+     "lisp-lib"
+     "completion"
+;;     "shell"
+;;     "debug"
+;;     "netnews"
+;;     "rcs"
+     "bindings"
+     "bindings-gb"
+     ))

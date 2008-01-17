@@ -1,0 +1,12 @@
+This directory should eventually contain a scribe to HTML converter
+using the same backend formatter as i used for the annotatable CLIM
+manual.
+
+Since very rare information about Scribe is available, we'll work by
+infering the neccessary information from the Scribe files we have at
+hand, see file NOTES for details.
+
+$Id$
+
+
+

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>IBClasses</key>
+	<array>
+		<dict>
+			<key>ACTIONS</key>
+			<dict>
+				<key>selectCCLDirectory</key>
+				<string>id</string>
+				<key>showFontPanel</key>
+				<string>id</string>
+			</dict>
+			<key>CLASS</key>
+			<string>PreferencesWindowController</string>
+			<key>LANGUAGE</key>
+			<string>ObjC</string>
+			<key>OUTLETS</key>
+			<dict>
+				<key>appearancePrefs</key>
+				<string>id</string>
+				<key>cclPathButton</key>
+				<string>id</string>
+				<key>documentationPrefs</key>
+				<string>id</string>
+				<key>editorTabViewItem</key>
+				<string>id</string>
+				<key>encodingsPrefs</key>
+				<string>id</string>
+				<key>generalPrefs</key>
+				<string>id</string>
+				<key>hyperspecURLButton</key>
+				<string>id</string>
+				<key>listenerFontName</key>
+				<string>id</string>
+				<key>listenerTabViewItem</key>
+				<string>id</string>
+				<key>tabView</key>
+				<string>id</string>
+				<key>window</key>
+				<string>id</string>
+			</dict>
+		</dict>
+	</array>
+	<key>IBVersion</key>
+	<string>1</string>
+</dict>
+</plist>

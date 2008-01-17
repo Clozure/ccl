@@ -1,0 +1,60 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <title>CurrencyConverter HOWTO</title>
+    <link rel="stylesheet" type="text/css" href="../stylesheets/styles.css" />
+  </head>
+
+  <body>
+
+    <div class="title">
+      <h1>Creating a Project</h1>
+    </div>
+
+    <div class="section-head">
+      <h2>Example Files</h2>
+    </div>
+
+    <div class="body-text">
+      <p>This HOWTO is distributed with example files that include a
+      working <em>nibfile</em> (a file of user-interface objects,
+      named "CurrencyConverter.nib") and a Lisp source file (named
+      "CurrencyConverter.lisp"). You can build a working copy of the
+      example application by using these files, but you probably
+      shouldn't. If you want to understand how to build your own Lisp
+      application projects, you should follow the instructions here to
+      create your own source file and nibfile, and use the example
+      files only for reference in case something goes wrong.</p>
+    </div>
+
+    <div class="section-head">
+      <h2>Create the Project Folder</h2>
+    </div>
+
+    <div class="body-text">
+      <p>First, create a project folder to hold the files you are
+      going to create. When your project is complete, the folder will
+      contain a nibfile that defines the user interface, and
+      a Lisp source file that defines the behavior of the
+      application. Those two files are really all there is to a Lisp
+      application, though not all applications are as simple as this
+      currency converter. For more complex applications it makes sense
+      to split your UI into several nibfiles, and to split your
+      implementation into several source files. The basic principle
+      remains the same, however: nibfiles define your user interface,
+      and Lisp files define your application's behavior.</p>
+
+      <p>Create a folder somewhere convenient, and name it
+      "currency-converter". Next we will use Apple's InterfaceBuilder
+      application to create the user interface The next page tells you
+      how to do that; when you create your nibfile, save it into your
+      "currency-converter" folder.</p>
+
+    <div class="nav">
+      <p><a href="../../HOWTO.html">start</a>|<a href="building_ui.html">next</a></p>
+    </div>
+
+  </body>
+</html>
+

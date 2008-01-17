@@ -1,0 +1,109 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+  <head>
+    <title>The (preliminary) Cocoa-based development environment for OpenMCL</title>
+  </head>
+
+  <body>
+    <h1>The (still preliminary) Cocoa-based development environment for OpenMCL</h1>
+    <h2>General information</h2>
+    <p>
+      The OpenMCL Cocoa demo's been around for over a year; a variety
+      of things have kept it from moving forward:
+    </p>
+    <ol>
+      <li>
+	<p>
+	  It was difficult (in some cases, impossible) to get Cocoa's
+	  runtime system and OpenMCL's cooperative threads to interact
+	  reasonably.
+	</p>
+      </li>
+      <li>
+	<p>
+	  The demo code was written using a set of reader macros and
+	  other constructs that made it possible to sort of embed
+	  Objective-C like code in lisp.  (It was actually a bit worse
+	  than writing Objective-C code, since there was absolutely
+	  nothing in the way of compile-time type- or sanity-checking
+	  going on; the code was all effectively written at the lowest
+	  level of OpenMCL's ffi.
+	</p>
+	<p>
+	  The code's (almost ...) all rewritten using a Lisp-to-ObjC
+	  bridge package developed and contributed by Randall Beer.
+	  The bridge offers a lot of features that make Cocoa programming
+	  in OpenMCL saner, safer, and Lispier than it had been; it's
+	  a good thing, and seems to be an important step towards
+	  closer integration of CLOS and ObjC.
+	</p>
+      </li>
+      <li>
+	<p>
+	  There was a proof-of-concept example that showed how it was
+	  possible to save the demo IDE as a double-clickable bundled
+	  application.  A lot of the steps involved in that process
+	  had to be performed manually, and the result wasn't too
+	  usable ...
+	</p>
+      </li>
+    </ol>
+    <p>
+      These issues have been addressed to a large degree; the demo
+      IDE's still barely usable (neither the editor nor the listener
+      windows are particularly lisp-aware, a lot of development and
+      debugging tools are missing, etc.) but I think that the foundation
+      for building this stuff is significantly stronger than it was.
+    </p>
+    <p>
+      All of this is (obviously) MacOSX-specific.  The <a
+      href=http://www.gnustep.org>GNUstep Project</a> is trying to
+      provide a cross-platform, opensourced version of OPENSTEP (and
+      therefore a potentially high degree of compatibility with Cocoa.)
+      It might therefore be possible to port some of this to GNUstep
+      and Linux; I don't know how much would be involved in that.
+    </p>
+
+    <h2>Random technical issues &amp; to-do list</h2>
+
+    <h3>Lisp-awareness</h3>
+    <p>
+      The demo IDE's listener and editor windows are slightly
+      customized versions of Cocoa's NSTextView class; the underlying
+      editor buffers are accessed as "attributed strings".  There's no
+      support for lisp-syntax-aware navigation in NSTextView buffers,
+      and adding that support at the "attributed string" level would
+      seem to be a tedious, error-prone process.
+    </p>
+    <p>
+      I think that it'll be possible to effectively replace the
+      Cocoa text system's buffering mechanism with Lisp data structures
+      (e.g., PHemlock buffers), and continue to use the Cocoa text
+      system for display, scrolling, selection, and raw event handling.
+    </p>
+
+    <h3>Modularity</h3>
+    <p>
+      There's code in the demo IDE that's very specific to the IDE
+      application itself; some other code probably needs to be
+      in any (hypothetical) OpenMCL-based Cocoa application.  This
+      obviously needs to be refactored a bit.
+    </p>
+    <p>
+      The bundle directory used by the demo IDE ("ccl:OpenMCL.app")
+      is something that I originally created in ProjectBuilder a
+      long time ago.  It'd be nice (and probably not too hard)
+      if there was a simple way to create skeletal bundle hierarchys
+      that could be populated and customized to create other types
+      of applications, and if the lisp (in various ways) helped
+      to support this process.)  There are obviously lots of things
+      that could be done here ...
+    </p>
+
+    <hr>
+<!-- Created: Sun Jun  2 22:37:21 MDT 2002 -->
+<!-- hhmts start -->
+Last modified: Mon Sep  1 19:54:26 MDT 2003
+<!-- hhmts end -->
+  </body>
+</html>

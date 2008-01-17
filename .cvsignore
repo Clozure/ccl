@@ -1,0 +1,10 @@
+*\.?fsl
+*CL*
+*cl*
+*boot*
+*fsl
+.gdb*
+*.image
+README*
+*~.*
+*.app
