@@ -23,7 +23,7 @@
 (defx86lapfunction %get-errno ()
   (movq (@ (% :rcontext) x8664::tcr.errno-loc) (% imm1))
   (movslq (@ (% imm1)) (% imm0))
-  (movss (% fp0) (@ (% imm1)))
+  (movss (% fpzero) (@ (% imm1)))
   (negq (% imm0))
   (box-fixnum imm0 arg_z)
   (single-value-return))
