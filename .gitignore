@@ -10,6 +10,7 @@
 bin/*fsl
 cocoa-ide/*fsl
 cocoa-ide/*~.*
+cocoa-ide/fasls/*fsl
 cocoa-ide/hemlock/*~.*
 cocoa-ide/hemlock/bin/*~.*
 cocoa-ide/hemlock/bin/openmcl/*fsl
