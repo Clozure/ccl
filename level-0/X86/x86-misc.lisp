@@ -498,9 +498,9 @@
 
 (defx86lapfunction xchgl ((newval arg_y) (ptr arg_z))
   (unbox-fixnum newval imm0)
-  (macptr-ptr ptr im1)
+  (macptr-ptr ptr imm1)
   (lock)                                ; implicit ?
-  (xchgl (% imm0.l) (@ (% im1)))
+  (xchgl (% imm0.l) (@ (% imm1)))
   (box-fixnum imm0 arg_z)
   (single-value-return))
   
