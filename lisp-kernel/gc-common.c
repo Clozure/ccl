@@ -908,6 +908,8 @@ gc(TCR *tcr, signed_natural param)
       }
     }
 
+    mark_root(lisp_global(STATIC_CONSES));
+
     {
       area *next_area;
       area_code code;
