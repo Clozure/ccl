@@ -408,6 +408,11 @@ binding of that symbol is used - or an integer index into the frame's set of loc
 (defmethod application-error ((a lisp-development-system) condition error-pointer)
   (break-loop-handle-error condition error-pointer))
 
+(defun abnormal-application-exit ()
+  (print-call-history)
+  (force-output *debug-io*)
+  (quit -1))
+
 (defun break-loop-handle-error (condition error-pointer)
   (multiple-value-bind (bogus-globals newvals oldvals) (%check-error-globals)
     (dolist (x bogus-globals)
