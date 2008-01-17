@@ -82,17 +82,17 @@
     (apply function args)
     (if (or (not *NSApp*) (not (#/isRunning *NSApp*)))
       (call-next-method)
-        (let* ((e (#/otherEventWithType:location:modifierFlags:timestamp:windowNumber:context:subtype:data1:data2:
-                   ns:ns-event
-                   #$NSApplicationDefined
-                   (ns:make-ns-point 0 0)
-                   0
-                   0.0d0
-                   0
-                   +null-ptr+
-                   process-interrupt-event-subtype
-                   (register-appkit-process-interrupt
-                    #'(lambda () (apply function args))) 0)))
+      (let* ((e (#/otherEventWithType:location:modifierFlags:timestamp:windowNumber:context:subtype:data1:data2:
+                 ns:ns-event
+                 #$NSApplicationDefined
+                 (ns:make-ns-point 0 0)
+                 0
+                 0.0d0
+                 0
+                 +null-ptr+
+                 process-interrupt-event-subtype
+                 (register-appkit-process-interrupt
+                  #'(lambda () (apply function args))) 0)))
 	(#/retain e)
         (#/performSelectorOnMainThread:withObject:waitUntilDone:
          *NSApp* (@selector "postEventAtStart:") e  t)))))
