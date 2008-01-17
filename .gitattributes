@@ -103,6 +103,8 @@ lib/late-clos.lisp -text
 library/elf.lisp -text
 lisp-kernel/gc-common.c -text
 lisp-kernel/win64/Makefile -text
+objc-bridge/objc-package.lisp -text
+objc-bridge/obsolete/README -text
 scripts/ccl -text
 scripts/ccl64 -text
 scripts/http-to-ssh -text
