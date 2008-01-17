@@ -775,7 +775,8 @@
 					       (slot-definition-initargs slotd))
 	    (declare (ignore ignore))
 	    (if foundp
-		(if (funcall typepred newval)
+		(if (or (null typepred)
+                        (funcall typepred newval))
 		    (setf (slot-value instance sname) newval)
 		  (report-bad-arg newval slot-type))
 	      (let* ((loc (slot-definition-location slotd))
@@ -786,7 +787,8 @@
 			   (eq curval (%slot-unbound-marker))
 			   initfunction)
 		  (let ((newval (funcall initfunction)))
-		    (unless (funcall typepred newval)
+		    (unless (or (null typepred)
+                                (funcall typepred newval))
 		      (report-bad-arg newval slot-type))
 		    (setf (%standard-instance-instance-location-access
 			   instance loc)
