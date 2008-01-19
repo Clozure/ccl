@@ -801,5 +801,54 @@ are running on, or NIL if we can't find any useful information."
       (unless (zerop count)
         (format out "~&~a~36t~12d~48t~16d" (aref *heap-utilization-vector-type-names* i)  count sizes)))))
                             
+;; The number of words to allocate for static conses when the user requests
+;; one and we don't have any left over
+(defparameter *static-cons-chunk* 1048576)
 
+(defun initialize-static-cons ()
+  "Activates collection of garbage conses in the static-conses
+   list and allocates initial static conses."
+  (without-interrupts
+   (%lock-gc-lock)
+   ; Another thread might have called initialize already
+   (when (eq (%get-kernel-global 'static-conses) 0)
+     (%set-kernel-global 'static-conses nil))
+   (%unlock-gc-lock))
+  (allocate-static-conses))
+
+(defun allocate-static-conses ()
+  "Allocates some memory, freezes it and lets it become garbage.
+   This will add the memory to the list of free static conses."
+  (let ((l (make-array *static-cons-chunk*)))
+    (declare (ignore l))
+    (freeze))
+  (gc))
+
+(defmacro atomic-pop-kernel-global (place)
+  "Pops an cons cell off a kernel global, in a way that's atomic w.r.t.
+   garbage collection.  Uses gc-lock a.t.m., which is too
+   expensive."
+  `(without-interrupts
+     (%lock-gc-lock)
+     (let ((value (%get-kernel-global ,place)))
+       (%set-kernel-global ,place (cdr value))
+       (%unlock-gc-lock)
+       value)))
+
+(defun static-cons (car-value cdr-value)
+  "Allocates a cons cell that doesn't move on garbage collection,
+   and thus doesn't trigger re-hashing when used as a key in a hash
+   table.  Usage is equivalent to regular CONS."
+  (when (eq (%get-kernel-global 'static-conses) 0)
+    (initialize-static-cons))
+  (let ((cell (atomic-pop-kernel-global 'static-conses)))
+    (if cell
+      (progn
+	(setf (car cell) car-value)
+	(setf (cdr cell) cdr-value)
+	cell)
+      (progn
+	(allocate-static-conses)
+	(static-cons car-value cdr-value)))))
+	
 

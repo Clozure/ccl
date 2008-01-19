@@ -392,6 +392,8 @@
      *trace-level* 
      *fasl-save-doc-strings* 
      *fasl-save-definitions* 
+     *static-cons-chunk*
+     static-cons
 
      compiler-let
 
