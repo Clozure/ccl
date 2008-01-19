@@ -103,7 +103,7 @@ _exportfn(C(start_lisp))
 	__(clr %temp1)
 	__(clr %temp2)
 	__(clr %fn)
-	__(clr %ra0)
+        /*	__(clr %ra0) */ /* %ra0 == %temp2, now zeroed above */
 	__(clr %save0)
 	__(clr %save1)
 	__(clr %save2)
