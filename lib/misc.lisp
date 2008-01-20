@@ -808,12 +808,11 @@ are running on, or NIL if we can't find any useful information."
 (defun initialize-static-cons ()
   "Activates collection of garbage conses in the static-conses
    list and allocates initial static conses."
-  (without-interrupts
-   (%lock-gc-lock)
-   ; Another thread might have called initialize already
-   (when (eq (%get-kernel-global 'static-conses) 0)
-     (%set-kernel-global 'static-conses nil))
-   (%unlock-gc-lock))
+  ; There might be a race here when multiple threads call this
+  ; function.  However, the discarded static conses will become
+  ; garbage and be added right back to the list.  No harm here
+  ; except for additional garbage collections.
+  (%set-kernel-global 'static-conses nil)
   (allocate-static-conses))
 
 (defun allocate-static-conses ()
@@ -841,7 +840,8 @@ are running on, or NIL if we can't find any useful information."
    table.  Usage is equivalent to regular CONS."
   (when (eq (%get-kernel-global 'static-conses) 0)
     (initialize-static-cons))
-  (let ((cell (atomic-pop-kernel-global 'static-conses)))
+  (let ((cell #-x8664-target (atomic-pop-kernel-global 'static-conses)
+	      #+x8664-target (%atomic-pop-static-cons)))
     (if cell
       (progn
 	(setf (car cell) car-value)
