@@ -823,25 +823,13 @@ are running on, or NIL if we can't find any useful information."
     (freeze))
   (gc))
 
-(defmacro atomic-pop-kernel-global (place)
-  "Pops an cons cell off a kernel global, in a way that's atomic w.r.t.
-   garbage collection.  Uses gc-lock a.t.m., which is too
-   expensive."
-  `(without-interrupts
-     (%lock-gc-lock)
-     (let ((value (%get-kernel-global ,place)))
-       (%set-kernel-global ,place (cdr value))
-       (%unlock-gc-lock)
-       value)))
-
 (defun static-cons (car-value cdr-value)
   "Allocates a cons cell that doesn't move on garbage collection,
    and thus doesn't trigger re-hashing when used as a key in a hash
    table.  Usage is equivalent to regular CONS."
   (when (eq (%get-kernel-global 'static-conses) 0)
     (initialize-static-cons))
-  (let ((cell #-x8664-target (atomic-pop-kernel-global 'static-conses)
-	      #+x8664-target (%atomic-pop-static-cons)))
+  (let ((cell (%atomic-pop-static-cons)))
     (if cell
       (progn
 	(setf (car cell) car-value)

@@ -979,6 +979,18 @@
   (uuo_interr arch::error-propagate-suspend rzero)
   (li arg_z t)
   (blr))
+
+(defppclapfunction %atomic-pop-static-cons ()
+  (li imm0 (+ target::nil-value (target::kernel-global static-conses)))
+  @again
+  (lrarx arg_z rzero imm0)
+  (cmpri arg_z target::nil-value)
+  (be @lose)
+  (%cdr arg_z arg_y)
+  (strcx. arg_y rzero imm0)
+  (bne @again)
+  @lose
+  (blr))
   
 
 ; end of ppc-misc.lisp
