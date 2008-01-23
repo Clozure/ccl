@@ -192,12 +192,19 @@
     (create-directory path))
   (when (directory-pathname-p path)
     (return-from %create-file (probe-file-x path)))
-  (assert (or (eql if-exists :overwrite) (not (probe-file path))) ()
+  (assert (or (eql if-exists :overwrite)
+              (null if-exists)
+              (not (probe-file path))) ()
 	  "~s ~s not implemented yet" :if-exists if-exists)
   (let* ((unix-name (native-translated-namestring path))
-	 (fd (fd-open unix-name (logior #$O_WRONLY #$O_CREAT #$O_TRUNC))))
+	 (fd (fd-open unix-name (logior #$O_WRONLY #$O_CREAT #$O_TRUNC
+                                        (if (null if-exists)
+                                          #$O_EXCL
+                                          0)))))
     (if (< fd 0)
-      (signal-file-error fd path)
+      (if (eql fd (- #$EEXIST))         ; #$O_EXCL was set and file exists
+        (return-from %create-file nil)
+        (signal-file-error fd path))
       (fd-close fd))
     (%realpath unix-name)))
 
