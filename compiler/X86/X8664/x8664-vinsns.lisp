@@ -290,10 +290,13 @@
 
 (define-x8664-vinsn set-nargs (()
 			       ((n :s16const)))
-  ((:pred = n 0)
-   (xorw (:%w x8664::nargs ) (:%w x8664::nargs )))
-  ((:not (:pred = n 0))
-   (movw (:$w (:apply ash n x8664::word-shift)) (:%w x8664::nargs ))))
+
+  ((:pred < n 16)
+   (xorl (:%l x8664::nargs.l ) (:%l x8664::nargs.l ))
+   ((:pred > n 0)
+    (addl (:$b (:apply ash n x8664::word-shift)) (:%l  x8664::nargs.l))))
+  ((:pred >= n 16)
+   (movl (:$l (:apply ash n x8664::word-shift)) (:%l x8664::nargs.l ))))
 
 (define-x8664-vinsn check-exact-nargs (()
                                        ((n :u16const)))
