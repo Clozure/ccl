@@ -1508,6 +1508,7 @@ unsigned IP address."
   (let* ((ifaces (ip-interfaces)))
     (or (find-if #'(lambda (i)
 		     (and (eq #$AF_INET (ip-interface-address-family i))
+                          (ip-interface-addr i)
 			  (let* ((flags (ip-interface-flags i)))
 			    (and (not (logtest #$IFF_LOOPBACK flags))
 				 (logtest #$IFF_UP flags)))))
