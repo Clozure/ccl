@@ -26,9 +26,12 @@
   `(xorq (% ,reg) (% ,reg)))
 
 (defx86lapmacro set-nargs (n)
-  (if (eql n 0)
-    `(xorw (% nargs) (% nargs))
-    `(movw ($ ',n) (% nargs))))
+  (cond ((>= n 16) `(movl ($ ',n) (% nargs.l)))
+        ((= n 0) `(xorl (% nargs.l) (% nargs.l)))
+        (t `(progn
+             (xorl (% nargs.l) (% nargs.l))
+             (addl ($ ',n) (% nargs.l))))))
+        
 
 (defx86lapmacro anchored-uuo (form)
   `(progn
