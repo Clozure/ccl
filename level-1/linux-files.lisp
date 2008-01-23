@@ -806,6 +806,20 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
   )
 
 
+(defmacro wtermsig (status)
+  `(ldb (byte 7 0) ,status))
+
+(defmacro wexitstatus (status)
+  `(ldb (byte 8 8) (the fixnum ,status)))
+
+(defmacro wstopsig (status)
+  `(wexitstatus ,status))
+
+(defmacro wifexited (status)
+  `(eql (wtermsig ,status) 0))
+
+(defmacro wifstopped (status)
+  `(eql #x7f (ldb (byte 7 0) (the fixnum ,status))))
 
 (defun monitor-external-process (p)
   (let* ((in-fd (external-process-watched-fd p))
@@ -962,20 +976,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
     (and (external-process-pid proc) proc)))
 
 
-(defmacro wtermsig (status)
-  `(ldb (byte 7 0) ,status))
 
-(defmacro wexitstatus (status)
-  `(ldb (byte 8 8) (the fixnum ,status)))
-
-(defmacro wstopsig (status)
-  `(wexitstatus ,status))
-
-(defmacro wifexited (status)
-  `(eql (wtermsig ,status) 0))
-
-(defmacro wifstopped (status)
-  `(eql #x7f (ldb (byte 7 0) (the fixnum ,status))))
 
 (defmacro wifsignaled (status)
   (let* ((statname (gensym)))
