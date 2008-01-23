@@ -25,6 +25,53 @@
 #include <string.h>
 #include <sys/time.h>
 
+#ifndef timeradd
+# define timeradd(a, b, result)						      \
+  do {									      \
+    (result)->tv_sec = (a)->tv_sec + (b)->tv_sec;			      \
+    (result)->tv_usec = (a)->tv_usec + (b)->tv_usec;			      \
+    if ((result)->tv_usec >= 1000000)					      \
+      {									      \
+	++(result)->tv_sec;						      \
+	(result)->tv_usec -= 1000000;					      \
+      }									      \
+  } while (0)
+#endif
+#ifndef timersub
+# define timersub(a, b, result)						      \
+  do {									      \
+    (result)->tv_sec = (a)->tv_sec - (b)->tv_sec;			      \
+    (result)->tv_usec = (a)->tv_usec - (b)->tv_usec;			      \
+    if ((result)->tv_usec < 0) {					      \
+      --(result)->tv_sec;						      \
+      (result)->tv_usec += 1000000;					      \
+    }									      \
+  } while (0)
+#endif
+
+void
+comma_output_decimal(char *buf, int len, natural n) 
+{
+  int nout = 0;
+
+  buf[--len] = 0;
+  do {
+    buf[--len] = n%10+'0';
+    n = n/10;
+    if (n == 0) {
+      while (len) {
+        buf[--len] = ' ';
+      }
+      return;
+    }
+    if (len == 0) return;
+    nout ++;
+    if (nout == 3) {
+      buf[--len] = ',';
+      nout = 0;
+    }
+  } while (len >= 0);
+}
 
 
 natural
@@ -793,6 +840,7 @@ gc(TCR *tcr, signed_natural param)
   struct timeval start, stop;
   area *a = active_dynamic_area, *to = NULL, *from = NULL, *note = NULL;
   unsigned timeidx = 1;
+  paging_info paging_info_start;
   xframe_list *x;
   LispObj
     pkg,
@@ -845,6 +893,10 @@ gc(TCR *tcr, signed_natural param)
   }
 
   if (GCverbose) {
+    char buf[16];
+
+    sample_paging_info(&paging_info_start);
+    comma_output_decimal(buf,16,area_dnode(oldfree,a->low) << dnode_shift);
     if (GCephemeral_low) {
       fprintf(stderr,
               "\n\n;;; Starting Ephemeral GC of generation %d",
@@ -852,7 +904,7 @@ gc(TCR *tcr, signed_natural param)
     } else {
       fprintf(stderr,"\n\n;;; Starting full GC");
     }
-    fprintf(stderr, ",  %ld bytes allocated.\n", area_dnode(oldfree,a->low) << dnode_shift);
+    fprintf(stderr, ", %s bytes allocated.\n", buf);
   }
 
   get_time(start);
@@ -1147,17 +1199,23 @@ gc(TCR *tcr, signed_natural param)
       long long justfreed = oldfree - a->active;
       *( (long long *) ptr_from_lispobj(((macptr *) ptr_from_lispobj(untag(val)))->address)) += justfreed;
       if (GCverbose) {
+        char buf[16];
+        paging_info paging_info_stop;
+
+        sample_paging_info(&paging_info_stop);
         if (justfreed <= heap_segment_size) {
           justfreed = 0;
         }
+        comma_output_decimal(buf,16,justfreed);
         if (note == tenured_area) {
-          fprintf(stderr,";;; Finished full GC.  Freed %lld bytes in %d.%06d s\n\n", justfreed, elapsed.tv_sec, elapsed.tv_usec);
+          fprintf(stderr,";;; Finished full GC. %s bytes freed in %d.%06d s\n\n", buf, elapsed.tv_sec, elapsed.tv_usec);
         } else {
-          fprintf(stderr,";;; Finished Ephemeral GC of generation %d.  Freed %lld bytes in %d.%06d s\n\n", 
+          fprintf(stderr,";;; Finished EGC of generation %d. %s bytes freed in %d.%06d s\n\n", 
                   (from == g2_area) ? 2 : (from == g1_area) ? 1 : 0,
-                  justfreed, 
+                  buf, 
                   elapsed.tv_sec, elapsed.tv_usec);
         }
+        report_paging_info_delta(stderr, &paging_info_start, &paging_info_stop);
       }
     }
   }

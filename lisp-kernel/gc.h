@@ -111,6 +111,21 @@ typedef unsigned char qnode;
 #define VOID_ALLOCPTR ((LispObj)(-dnode_size))
 #endif
 
+#ifdef DARWIN
+#include <mach/task_info.h>
+typedef struct task_events_info paging_info;
+#else
+#ifndef WINDOWS
+#include <sys/resource.h>
+typedef struct rusage paging_info;
+#endif
+#endif
+
+#include <stdio.h>
+
+void sample_paging_info(paging_info *);
+void report_paging_info_delta(FILE*, paging_info *, paging_info *);
+
 
 #define GC_TRAP_FUNCTION_IMMEDIATE_GC (-1)
 #define GC_TRAP_FUNCTION_GC 0
