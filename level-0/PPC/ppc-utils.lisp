@@ -580,7 +580,10 @@ be somewhat larger than what was specified)."
   (check-nargs 0)
   (li imm0 arch::gc-trap-function-freeze)
   (trlgei allocptr 0)
-  (ba .SPmakeu64))
+  #+64-bit-target
+  (ba .SPmakeu64)
+  #+32-bit-target
+  (ba .SPmakeu32))
   
 
 
