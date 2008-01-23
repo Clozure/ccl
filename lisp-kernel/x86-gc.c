@@ -996,33 +996,31 @@ mark_simple_area_range(LispObj *start, LispObj *end)
         if (flags & nhash_weak_mask) {
           ((hash_table_vector_header *) start)->cache_key = undefined;
           ((hash_table_vector_header *) start)->cache_value = lisp_nil;
-        }
-
-        start[1] = GCweakvll;
-        GCweakvll = (LispObj) (((natural) start) + fulltag_misc);
-      } else {
-
-        if (subtag == subtag_pool) {
-          start[1] = lisp_nil;
-        }
-
-        if (subtag == subtag_weak) {
-          natural weak_type = (natural) start[2];
-          if (weak_type >> population_termination_bit)
-            element_count -= 2;
-          else
-            element_count -= 1; 
-          start[1] = GCweakvll;
-          GCweakvll = (LispObj) (((natural) start) + fulltag_misc);    
-        }
-
-        base = start + element_count + 1;
-	if (subtag == subtag_function) {
-	  element_count -= (int)start[1];
+	  start[1] = GCweakvll;
+	  GCweakvll = (LispObj) (((natural) start) + fulltag_misc);
+	  element_count = 0;
 	}
-        while(element_count--) {
-          mark_root(*--base);
-        }
+      } 
+      if (subtag == subtag_pool) {
+	start[1] = lisp_nil;
+      }
+
+      if (subtag == subtag_weak) {
+	natural weak_type = (natural) start[2];
+	if (weak_type >> population_termination_bit)
+	  element_count -= 2;
+	else
+	  element_count -= 1; 
+	start[1] = GCweakvll;
+	GCweakvll = (LispObj) (((natural) start) + fulltag_misc);    
+      }
+
+      base = start + element_count + 1;
+      if (subtag == subtag_function) {
+	element_count -= (int)start[1];
+      }
+      while(element_count--) {
+	mark_root(*--base);
       }
       start += size;
     }
