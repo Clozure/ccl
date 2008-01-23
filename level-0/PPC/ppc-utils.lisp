@@ -575,7 +575,12 @@ be somewhat larger than what was specified)."
   (blr))
 
 
-
+(defppclapfunction freeze ()
+  "Do a full GC, then consider all heap-allocated objects which survive to be non-relocatable."
+  (check-nargs 0)
+  (li imm0 arch::gc-trap-function-freeze)
+  (trlgei allocptr 0)
+  (ba .SPmakeu64))
   
 
 
