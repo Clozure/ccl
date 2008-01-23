@@ -1901,9 +1901,9 @@ report_paging_info_delta(FILE *out, paging_info *start, paging_info *stop)
 #else
 #ifndef WINDOWS
 void
-sample_paging_info(struct rusage *usage)
+sample_paging_info(paging_info *stats)
 {
-  getrusage(RUSAGE_SELF, rusage);
+  getrusage(RUSAGE_SELF, stats);
 }
 
 void
