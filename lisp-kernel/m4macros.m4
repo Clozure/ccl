@@ -32,6 +32,7 @@ undefine([EABI])
 undefine([POWEROPENABI])
 undefine([rTOC])
 
+
 ifdef([DARWIN],[define([SYSstabs],[BSDstabs])
 		define([DarwinAssembler],[])
                 define([CNamesNeedUnderscores],[])
@@ -107,14 +108,17 @@ define([_emit_COFF_source_line_stab],[
 ])
 
 
+dnl define([emit_source_line_stab],[
+dnl	ifelse(eval(SYSstabs),
+dnl             eval(BSDstabs),
+dnl  	      [_emit_BSD_source_line_stab($1)],
+dnl              eval(SYSstabs),
+dnl              eval(ELFstabs),
+dnl              [_emit_ELF_source_line_stab($1)],
+dnl              [_emit_COFF_source_line_stab($1)])])
+
 define([emit_source_line_stab],[
-	ifelse(eval(SYSstabs),
-               eval(BSDstabs),
-  	      [_emit_BSD_source_line_stab($1)],
-              eval(SYSstabs),
-              eval(ELFstabs),
-              [_emit_ELF_source_line_stab($1)],
-              [_emit_COFF_source_line_stab($1)])])
+# __line__ "__file__" 1])
 
 
 
@@ -278,7 +282,6 @@ define([_endstructf],[
 
 
 define([__],[emit_source_line_stab(__line__)
-# __line__
 	$@
 	])
 
