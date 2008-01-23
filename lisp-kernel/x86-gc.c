@@ -25,30 +25,6 @@
 #include <string.h>
 #include <sys/time.h>
 
-#ifndef timeradd
-# define timeradd(a, b, result)						      \
-  do {									      \
-    (result)->tv_sec = (a)->tv_sec + (b)->tv_sec;			      \
-    (result)->tv_usec = (a)->tv_usec + (b)->tv_usec;			      \
-    if ((result)->tv_usec >= 1000000)					      \
-      {									      \
-	++(result)->tv_sec;						      \
-	(result)->tv_usec -= 1000000;					      \
-      }									      \
-  } while (0)
-#endif
-#ifndef timersub
-# define timersub(a, b, result)						      \
-  do {									      \
-    (result)->tv_sec = (a)->tv_sec - (b)->tv_sec;			      \
-    (result)->tv_usec = (a)->tv_usec - (b)->tv_usec;			      \
-    if ((result)->tv_usec < 0) {					      \
-      --(result)->tv_sec;						      \
-      (result)->tv_usec += 1000000;					      \
-    }									      \
-  } while (0)
-#endif
-
 
 /* Heap sanity checking. */
 
@@ -347,10 +323,10 @@ mark_root(LispObj n)
         if (flags & nhash_weak_mask) {
           ((hash_table_vector_header *) base)->cache_key = undefined;
           ((hash_table_vector_header *) base)->cache_value = lisp_nil;
+          deref(ptr_to_lispobj(base),1) = GCweakvll;
+          GCweakvll = n;
+          return;
         }
-        deref(ptr_to_lispobj(base),1) = GCweakvll;
-        GCweakvll = n;
-        return;
       }
 
       if (subtag == subtag_pool) {
@@ -516,10 +492,10 @@ rmark(LispObj n)
         if (flags & nhash_weak_mask) {
           ((hash_table_vector_header *) base)->cache_key = undefined;
           ((hash_table_vector_header *) base)->cache_value = lisp_nil;
+          deref(ptr_to_lispobj(base),1) = GCweakvll;
+          GCweakvll = n;
+          return;
         }
-        deref(ptr_to_lispobj(base),1) = GCweakvll;
-        GCweakvll = n;
-        return;
       }
 
       if (subtag == subtag_pool) {
@@ -756,11 +732,10 @@ rmark(LispObj n)
       if (flags & nhash_weak_mask) {
         ((hash_table_vector_header *) base)->cache_key = undefined;
         ((hash_table_vector_header *) base)->cache_value = lisp_nil;
+        deref(ptr_to_lispobj(base),1) = GCweakvll;
+        GCweakvll = this;
+        goto Climb;
       }
-
-      deref(ptr_to_lispobj(base),1) = GCweakvll;
-      GCweakvll = this;
-      goto Climb;
     }
 
     if (subtag == subtag_pool) {
