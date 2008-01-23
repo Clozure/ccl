@@ -985,11 +985,15 @@
   @again
   (lrarx arg_z rzero imm0)
   (cmpri arg_z target::nil-value)
-  (be @lose)
-  (%cdr arg_z arg_y)
+  (beq @lose)
+  (%cdr arg_y arg_z)
   (strcx. arg_y rzero imm0)
+  (isync)
   (bne @again)
+  (blr)
   @lose
+  (li imm0 target::reservation-discharge)
+  (strcx. rzero rzero imm0)
   (blr))
   
 
