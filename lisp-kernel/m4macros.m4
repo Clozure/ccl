@@ -83,7 +83,10 @@ define([C],[ifdef([CNamesNeedUnderscores],[[_]$1],[$1])])
 define([_linecounter_],0)
 
 define([_emit_BSD_source_line_stab],[
+ifdef([X86],[
+# __line__ "__file__" 1],[
 	.stabd 68,0,$1
+])
 ])
 
 
@@ -108,17 +111,15 @@ define([_emit_COFF_source_line_stab],[
 ])
 
 
-dnl define([emit_source_line_stab],[
-dnl	ifelse(eval(SYSstabs),
-dnl             eval(BSDstabs),
-dnl  	      [_emit_BSD_source_line_stab($1)],
-dnl              eval(SYSstabs),
-dnl              eval(ELFstabs),
-dnl              [_emit_ELF_source_line_stab($1)],
-dnl              [_emit_COFF_source_line_stab($1)])])
-
 define([emit_source_line_stab],[
-# __line__ "__file__" 1])
+	ifelse(eval(SYSstabs),
+             eval(BSDstabs),
+  	      [_emit_BSD_source_line_stab($1)],
+              eval(SYSstabs),
+              eval(ELFstabs),
+              [_emit_ELF_source_line_stab($1)],
+              [_emit_COFF_source_line_stab($1)])])
+
 
 
 
@@ -192,8 +193,7 @@ ifdef([WIN64],[
 	.stabs "$1:F1",36,0,__line__,$1
 ])
 	.set func_start,$1
-        
-])
+# __line__ "__file__" 1 ])
 
 
 
