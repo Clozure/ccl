@@ -40,594 +40,507 @@ define([lwi],[ifdef([DARWIN],[
 ])])
 
 ifdef([PPC64],[
-        define([clrrri],[
-        clrrdi $@
-        ])       
-        define([clrlri],[
-        clrldi $@
-        ])
-        define([clrlri_],[
-        clrldi. $@
-        ])
-        define([ldr],[
-        ld $@
-        ])
-        define([ldrx],[
-        ldx $@
-        ])
-        define([ldru],[
-        ldu $@
-        ])
-        define([str],[
-        std $@
-        ])
-        define([strx],[
-        stdx $@
-        ])
-        define([stru],[
-        stdu $@
-        ])
-        define([strux],[
-        stdux $@
-        ])	
-        define([cmpr],[
-        cmpd $@
-        ])
-        define([cmpri],[
-        cmpdi $@
-        ])
-        define([cmplr],[
-        cmpld $@
-        ])
-        define([cmplri],[
-        cmpldi $@
-        ])
-        define([trlge],[
-        tdlge $@
-        ])
-        define([trllt],[
-        tdllt $@
-        ])
-        define([trlt],[
-        tdlt $@
-        ])
-	define([trlle],[
-	tdlle $@
-	])
-        define([treqi],[
-        tdeqi $@
-        ])
-        define([trnei],[
-        tdnei $@
-        ])
-        define([trgti],[
-        tdgti $@
-        ])
-        define([srari],[
-        sradi $@
-        ])
-        define([srri],[
-        srdi $@
-        ])
-        define([srr],[
-        srd $@
-        ])
-        define([slri],[
-        sldi $@
-        ])
-        define([lrarx],[
-        ldarx $@
-        ])
-        define([strcx],[
-        stdcx. $@
-        ])
+        define([clrrri],[clrrdi $@])       
+        define([clrlri],[clrldi $@])
+        define([clrlri_],[clrldi. $@])
+        define([ldr],[ld $@])
+        define([ldrx],[ldx $@])
+        define([ldru],[ldu $@])
+        define([str],[std $@])
+        define([strx],[stdx $@])
+        define([stru],[stdu $@])
+        define([strux],[stdux $@])	
+        define([cmpr],[cmpd $@])
+        define([cmpri],[cmpdi $@])
+        define([cmplr],[cmpld $@])
+        define([cmplri],[cmpldi $@])
+        define([trlge],[tdlge $@])
+        define([trllt],[tdllt $@])
+        define([trlt],[tdlt $@])
+	define([trlle],[tdlle $@])
+        define([treqi],[tdeqi $@])
+        define([trnei],[tdnei $@])
+        define([trgti],[tdgti $@])
+        define([srari],[sradi $@])
+        define([srri],[srdi $@])
+        define([srr],[srd $@])
+        define([slri],[sldi $@])
+        define([lrarx],[ldarx $@])
+        define([strcx],[stdcx. $@])
         define([load_highbit],[
-        lis $1,0x8000
-        sldi $1,$1,32
+        __(lis $1,0x8000)
+        __(sldi $1,$1,32)
         ])
         define([extract_bit_shift_count],[
-        clrldi $1,$2,64-bitmap_shift
+        __(clrldi $1,$2,64-bitmap_shift)
         ])
         define([alloc_trap],[
-        tdlt allocptr,allocbase
+        __(tdlt allocptr,allocbase)
         ])
-        define([mullr],[
-        mulld $@
-        ])
+        define([mullr],[mulld $@])
 ],[
-        define([clrrri],[
-        clrrwi $@
-        ])
-        define([clrlri],[
-        clrlwi $@
-        ])
-        define([clrlri_],[
-        clrlwi. $@
-        ])
-        define([ldr],[
-        lwz $@
-        ])
-        define([ldrx],[
-        lwzx $@
-        ])
-        define([ldru],[
-        lwzu $@
-        ])
-        define([str],[
-        stw $@
-        ])
-        define([strx],[
-        stwx $@
-        ])
-        define([stru],[
-        stwu $@
-        ])
-        define([strux],[
-        stwux $@
-        ])
-        define([cmpr],[
-        cmpw $@
-        ])
-        define([cmpri],[
-        cmpwi $@
-        ])
-        define([cmplr],[
-        cmplw $@
-        ])
-        define([cmplri],[
-        cmplwi $@
-        ])
-        define([trlge],[
-        twlge $@
-        ])
-        define([trllt],[
-        twllt $@
-        ])
-        define([trlt],[
-        twlt $@
-        ])
-        define([trlle],[
-        twlle $@
-        ])       
-        define([treqi],[
-        tweqi $@
-        ])
-        define([trnei],[
-        twnei $@
-        ])
-        define([trgti],[
-        twgti $@
-        ])
-        define([srari],[
-        srawi $@
-        ])
-        define([srri],[
-        srwi $@
-        ])
-        define([srr],[
-        srw $@
-        ])
-        define([slri],[
-        slwi $@
-        ])
-        define([lrarx],[
-        lwarx $@
-        ])
-        define([strcx],[
-        stwcx. $@
-        ])
+        define([clrrri],[clrrwi $@])
+        define([clrlri],[clrlwi $@])
+        define([clrlri_],[clrlwi. $@])
+        define([ldr],[lwz $@])
+        define([ldrx],[lwzx $@])
+        define([ldru],[lwzu $@])
+        define([str],[stw $@])
+        define([strx],[stwx $@])
+        define([stru],[stwu $@])
+        define([strux],[stwux $@])
+        define([cmpr],[cmpw $@])
+        define([cmpri],[cmpwi $@])
+        define([cmplr],[cmplw $@])
+        define([cmplri],[cmplwi $@])
+        define([trlge],[twlge $@])
+        define([trllt],[twllt $@])
+        define([trlt],[twlt $@])
+        define([trlle],[twlle $@])       
+        define([treqi],[tweqi $@])
+        define([trnei],[twnei $@])
+        define([trgti],[twgti $@])
+        define([srari],[srawi $@])
+        define([srri],[srwi $@])
+        define([srr],[srw $@])
+        define([slri],[slwi $@])
+        define([lrarx],[lwarx $@])
+        define([strcx],[stwcx. $@])
         define([load_highbit],[
-        lis $1,0x8000
+        __(lis $1,0x8000)
         ])
         define([extract_bit_shift_count],[
-        clrlwi $1,$2,32-bitmap_shift
+        __(clrlwi $1,$2,32-bitmap_shift)
         ])
         define([alloc_trap],[
-        twllt allocptr,allocbase
+        __(twllt allocptr,allocbase)
         ])
-        define([mullr],[
-        mullw $@
-        ])
+        define([mullr],[mullw $@])
 ])
 
 /* dnode_align(dest,src,delta) */
         define([dnode_align],[
-        la $1,($3+(dnode_size-1))($2)
-        clrrri($1,$1,dnode_align_bits)
+        __(la $1,($3+(dnode_size-1))($2))
+        __(clrrri($1,$1,dnode_align_bits))
 ])
 
 define([extract_fulltag],[
-	clrlri($1,$2,nbits_in_word-ntagbits)
+	__(clrlri($1,$2,nbits_in_word-ntagbits))
         ])
 
 define([extract_lisptag],[
-	clrlri($1,$2,nbits_in_word-nlisptagbits)
+	__(clrlri($1,$2,nbits_in_word-nlisptagbits))
         ])
 
 define([extract_lisptag_],[
-	clrlri_($1,$2,nbits_in_word-nlisptagbits)
+	__(clrlri_($1,$2,nbits_in_word-nlisptagbits))
         ])
 
 define([extract_subtag],[
-	lbz $1,misc_subtag_offset($2)])
+	__(lbz $1,misc_subtag_offset($2))
+	])
 
 ifdef([PPC64],[
 define([extract_lowtag],[
-        clrldi $1,$2,nbits_in_word-nlowtagbits
+        __(clrldi $1,$2,nbits_in_word-nlowtagbits)
 ])
 define([trap_unless_lowtag_equal],[
-        clrldi $3,$1,nbits_in_word-nlowtagbits
-        tdnei $3,$2
+        __(clrldi $3,$1,nbits_in_word-nlowtagbits)
+        __(tdnei $3,$2)
 ])                
         ])
                                
 define([extract_lowbyte],[
-        clrlri($1,$2,nbits_in_word-num_subtag_bits)
+        __(clrlri($1,$2,nbits_in_word-num_subtag_bits))
         ])
 
 define([extract_header],[
-	ldr($1,misc_header_offset($2))])
+	__(ldr($1,misc_header_offset($2)))
+	])
 
 
 ifdef([PPC64],[
 define([extract_typecode],[
 	new_macro_labels()
-	extract_fulltag($1,$2)
-	cmpdi cr0,$1,fulltag_misc
-	extract_lisptag($1,$1)
-	bne cr0,macro_label(not_misc)
-	extract_subtag($1,$2)
+	__(extract_fulltag($1,$2))
+	__(cmpdi cr0,$1,fulltag_misc)
+	__(extract_lisptag($1,$1))
+	__(bne cr0,macro_label(not_misc))
+	__(extract_subtag($1,$2))
 macro_label(not_misc):
 ])],[	
 define([extract_typecode],[
 	new_macro_labels()
-	extract_lisptag($1,$2)
-	cmpwi cr0,$1,tag_misc
-	bne cr0,macro_label(not_misc)
-	extract_subtag($1,$2)
+	__(extract_lisptag($1,$2))
+	__(cmpwi cr0,$1,tag_misc)
+	__(bne cr0,macro_label(not_misc))
+	__(extract_subtag($1,$2))
 macro_label(not_misc):
 ])])
 
 define([box_fixnum],[
-	slri($1,$2,fixnumshift)])
+	__(slri($1,$2,fixnumshift))
+	])
 
 define([unbox_fixnum],[	
-	srari($1,$2,fixnumshift)])
+	__(srari($1,$2,fixnumshift))
+	])
 
 define([loaddf],[
-	lfd $1,dfloat.value($2)])
+	__(lfd $1,dfloat.value($2))])
 	
 define([storedf],[
-	stfd $1,dfloat.value($2)])
+	__(stfd $1,dfloat.value($2))
+	])
 
 define([push],[
-	stru($1,-node_size($2))])
+	__(stru($1,-node_size($2)))
+	])
 	
 	/* Generally not a great idea. */
 define([pop],[
-	ldr($1,0($2))
-	la $2,node_size($2)])
+	__(ldr($1,0($2)))
+	__(la $2,node_size($2))
+	])
 	
 define([vpush],[
-	push($1,vsp)])
+	__(push($1,vsp))
+	])
 	
 define([vpop],[
-	pop($1,vsp)])
+	__(pop($1,vsp))
+	])
 	
 		
 define([unlink],[
-	ldr($1,0($1))
+	__(ldr($1,0($1)))
  ])
 
 	
 define([set_nargs],[
-	lwi(nargs,($1)<<fixnumshift)])
+	__(lwi(nargs,($1)<<fixnumshift))
+	])
 	
 define([bitclr],[
-	rlwinm $1,$2,0,0x1f&((31-($3))+1),0x1f&((31-($3))-1)])
+	__(rlwinm $1,$2,0,0x1f&((31-($3))+1),0x1f&((31-($3))-1))
+	])
 	
 
 define([vref32],[
-	lwz $1,misc_data_offset+(($3)<<2)($2)])
+	__(lwz $1,misc_data_offset+(($3)<<2)($2))
+	])
         
 define([vref16],[/* dest,src,n*/
-	lhz $1,misc_data_offset+(($3)<<1)($2)])
+	__(lhz $1,misc_data_offset+(($3)<<1)($2))
+	])
 	
 ifdef([PPC64],[
         define([vref64],[
-        ld $1,misc_data_offset+(($3)<<3)($2)])
+        __(ld $1,misc_data_offset+(($3)<<3)($2))
+	])
 
         define([vrefr],[
-        vref64($1,$2,$3)])
+        __(vref64($1,$2,$3))
+	])
 ],[
         define([vrefr],[
-        vref32($1,$2,$3)])
+        __(vref32($1,$2,$3))
+	])
 ])
         
                 	
 define([getvheader],[
-	ldr($1,vector.header($2))])
+	__(ldr($1,vector.header($2)))
+	])
 	
 	/* Size is unboxed element count */
 define([header_size],[
-	srri($1,$2,num_subtag_bits)])
+	__(srri($1,$2,num_subtag_bits))
+	])
 	
 	/* "Length" is fixnum element count */
 define([header_length],[
 ifdef([PPC64],[
-        rldicr $1,$2,nbits_in_word-(num_subtag_bits-nfixnumtagbits),63-nfixnumtagbits
-        clrldi $1,$1,(num_subtag_bits-nfixnumtagbits)
+        __(rldicr $1,$2,nbits_in_word-(num_subtag_bits-nfixnumtagbits),63-nfixnumtagbits)
+        __(clrldi $1,$1,(num_subtag_bits-nfixnumtagbits))
         ],[               
-	rlwinm $1,$2,nbits_in_word-(num_subtag_bits-nfixnumtagbits),(num_subtag_bits-nfixnumtagbits),31-nfixnumtagbits
+	__(rlwinm $1,$2,nbits_in_word-(num_subtag_bits-nfixnumtagbits),(num_subtag_bits-nfixnumtagbits),31-nfixnumtagbits)
         ])
 ])        
 
 
 define([vector_size],[
-	getvheader(ifelse($3.[],$1,$3),$2)
-	header_size($1,ifelse($3.[],$1,$3))])
+	__(getvheader(ifelse($3.[],$1,$3),$2))
+	__(header_size($1,ifelse($3.[],$1,$3)))
+	])
 	
 define([vector_length],[
-	getvheader($3,$2)
-	header_length($1,$3)])
+	__(getvheader($3,$2))
+	__(header_length($1,$3))
+	])
 
 	
 define([ref_global],[
-	ldr($1,lisp_globals.$2(0))
+	__(ldr($1,lisp_globals.$2(0)))
 ])
 
 define([set_global],[
-	str($1,lisp_globals.$2(0))
+	__(str($1,lisp_globals.$2(0)))
 ])
 
 define([ref_nrs_value],[
-	ldr($1,((nrs.$2)+(symbol.vcell))(0))
+	__(ldr($1,((nrs.$2)+(symbol.vcell))(0)))
 ])
 	
 define([set_nrs_value],[
-	str($1,((nrs.$2)+(symbol.vcell))(0))
+	__(str($1,((nrs.$2)+(symbol.vcell))(0)))
 ])
 
 define([extract_unsigned_byte_bits],[
 ifdef([PPC64],[
-        rldicr $1,$2,64-fixnumshift,63-$3
+        __(rldicr $1,$2,64-fixnumshift,63-$3)
 ],[                
-        rlwinm $1,$2,0,32-fixnumshift,31-($3+fixnumshift)
+        __(rlwinm $1,$2,0,32-fixnumshift,31-($3+fixnumshift))
 ])        
 ])
 
 define([extract_unsigned_byte_bits_],[
 ifdef([PPC64],[
-        rldicr. $1,$2,64-fixnumshift,63-$3
+        __(rldicr. $1,$2,64-fixnumshift,63-$3)
 ],[                
-        rlwinm. $1,$2,0,32-fixnumshift,31-($3+fixnumshift)
+        __(rlwinm. $1,$2,0,32-fixnumshift,31-($3+fixnumshift))
 ])        
 ])
 
 	/* vpop argregs - nargs is known to be non-zero */
 define([vpop_argregs_nz],[
 	new_macro_labels()
-	cmplri(cr1,nargs,node_size*2)
-	vpop(arg_z)
-	blt cr1,macro_label(l0)
-	vpop(arg_y)
-	bne cr1,macro_label(l0)
-	vpop(arg_x)
+	__(cmplri(cr1,nargs,node_size*2))
+	__(vpop(arg_z))
+	__(blt cr1,macro_label(l0))
+	__(vpop(arg_y))
+	__(bne cr1,macro_label(l0))
+	__(vpop(arg_x))
 macro_label(l0):])
 
                 
 	/* vpush argregs */
 define([vpush_argregs],[
 	new_macro_labels()
-	cmplri(cr0,nargs,0)
-	cmplri(cr1,nargs,node_size*2)
-	beq cr0,macro_label(done)
-	blt cr1,macro_label(z)
-	beq cr1,macro_label(yz)
-	vpush(arg_x)
+	__(cmplri(cr0,nargs,0))
+	__(cmplri(cr1,nargs,node_size*2))
+	__(beq cr0,macro_label(done))
+	__(blt cr1,macro_label(z))
+	__(beq cr1,macro_label(yz))
+	__(vpush(arg_x))
 macro_label(yz):
-	vpush(arg_y)
+	__(vpush(arg_y))
 macro_label(z):
-	vpush(arg_z)
+	__(vpush(arg_z))
 macro_label(done):
 ])
 
 define([create_lisp_frame],[
-	stru(sp,-lisp_frame.size(sp))
+	__(stru(sp,-lisp_frame.size(sp)))
 ])
 
                 
 define([build_lisp_frame],[
 	create_lisp_frame()
-	str(ifelse($1,[],fn,$1),lisp_frame.savefn(sp))
-	str(ifelse($2,[],loc_pc,$2),lisp_frame.savelr(sp))
-	str(ifelse($3,[],vsp,$3),lisp_frame.savevsp(sp))
+	__(str(ifelse($1,[],fn,$1),lisp_frame.savefn(sp)))
+	__(str(ifelse($2,[],loc_pc,$2),lisp_frame.savelr(sp)))
+	__(str(ifelse($3,[],vsp,$3),lisp_frame.savevsp(sp)))
 ])
 
         	
 define([discard_lisp_frame],[
-	la sp,lisp_frame.size(sp)])
+	__(la sp,lisp_frame.size(sp))
+	])
 	
 	
 define([_car],[
-	ldr($1,cons.car($2))
+	__(ldr($1,cons.car($2)))
 ])
 	
 define([_cdr],[
-	ldr($1,cons.cdr($2))])
+	__(ldr($1,cons.cdr($2)))
+	])
 	
 define([_rplaca],[
-	str($2,cons.car($1))])
+	__(str($2,cons.car($1)))
+	])
 	
 define([_rplacd],[
-	str($2,cons.cdr($1))])
+	__(str($2,cons.cdr($1)))
+	])
 
 define([vpush_saveregs],[
-	vpush(save7)
-	vpush(save6)
-	vpush(save5)
-	vpush(save4)
-	vpush(save3)
-	vpush(save2)
-	vpush(save1)
-	vpush(save0)])
+	__(vpush(save7))
+	__(vpush(save6))
+	__(vpush(save5))
+	__(vpush(save4))
+	__(vpush(save3))
+	__(vpush(save2))
+	__(vpush(save1))
+	__(vpush(save0))
+	])
 	
 define([restore_saveregs],[
-	ldr(save0,node_size*0($1))
-	ldr(save1,node_size*1($1))
-	ldr(save2,node_size*2($1))
-	ldr(save3,node_size*3($1))
-	ldr(save4,node_size*4($1))
-	ldr(save5,node_size*5($1))
-	ldr(save6,node_size*6($1))
-	ldr(save7,node_size*7($1))
+	__(ldr(save0,node_size*0($1)))
+	__(ldr(save1,node_size*1($1)))
+	__(ldr(save2,node_size*2($1)))
+	__(ldr(save3,node_size*3($1)))
+	__(ldr(save4,node_size*4($1)))
+	__(ldr(save5,node_size*5($1)))
+	__(ldr(save6,node_size*6($1)))
+	__(ldr(save7,node_size*7($1)))
 ])
 
 define([vpop_saveregs],[
-	restore_saveregs(vsp)
-	la vsp,node_size*8(vsp)
+	__(restore_saveregs(vsp))
+	__(la vsp,node_size*8(vsp))
 ])
 
 define([trap_unless_lisptag_equal],[
-	extract_lisptag($3,$1)
-	trnei($3,$2)
+	__(extract_lisptag($3,$1))
+	__(trnei($3,$2))
 ])
 
 ifdef([PPC64],[
 define([trap_unless_list],[
 	new_macro_labels()
-	cmpdi ifelse($3,$3,cr0),$1,nil_value
-	extract_fulltag($2,$1)
-	beq ifelse($3,$3,cr0),macro_label(is_list)
-	tdnei $2,fulltag_cons
+	__(cmpdi ifelse($3,$3,cr0),$1,nil_value)
+	__(extract_fulltag($2,$1))
+	__(beq ifelse($3,$3,cr0),macro_label(is_list))
+	__(tdnei $2,fulltag_cons)
 macro_label(is_list):	
 
 ])],[	
 define([trap_unless_list],[
-	trap_unless_lisptag_equal($1,tag_list,$2)
+	__(trap_unless_lisptag_equal($1,tag_list,$2))
 ])
 ])
 
 define([trap_unless_fulltag_equal],[
-	extract_fulltag($3,$1)
-	trnei($3,$2)
+	__(extract_fulltag($3,$1))
+	__(trnei($3,$2))
 ])
 	
 define([trap_unless_typecode_equal],[
-        extract_typecode($3,$1)
-        trnei($3,$2)
+        __(extract_typecode($3,$1))
+        __(trnei($3,$2))
 ])
         
 /* "jump" to the code-vector of the function in nfn. */
 define([jump_nfn],[
-	ldr(temp0,_function.codevector(nfn))
-	mtctr temp0
-	bctr
+	__(ldr(temp0,_function.codevector(nfn)))
+	__(mtctr temp0)
+	__(bctr)
 ])
 
 /* "call the code-vector of the function in nfn. */
 define([call_nfn],[
-	ldr(temp0,_function.codevector(nfn))
-	mtctr temp0
-	bctrl
+	__(ldr(temp0,_function.codevector(nfn)))
+	__(mtctr temp0)
+	__(bctrl)
 ])
 	
 
 /* "jump" to the function in fnames function cell. */
 define([jump_fname],[
-	ldr(nfn,symbol.fcell(fname))
-	jump_nfn()
+	__(ldr(nfn,symbol.fcell(fname)))
+	__(jump_nfn())
 ])
 
 /* call the function in fnames function cell. */
 define([call_fname],[
-	ldr(nfn,symbol.fcell(fname))
-	call_nfn()
+	__(ldr(nfn,symbol.fcell(fname)))
+	__(call_nfn())
 ])
 
 define([do_funcall],[
 	new_macro_labels()
-	extract_fulltag(imm0,temp0)
-	cmpri(imm0,fulltag_misc)
-	mr nfn,temp0
-	bne- macro_label(bad)
-	extract_subtag(imm0,temp0)
-	cmpri(imm0,subtag_function)
-	cmpri(cr1,imm0,subtag_symbol)
-        bne cr0,macro_label(_sym)
-        jump_nfn()
+	__(extract_fulltag(imm0,temp0))
+	__(cmpri(imm0,fulltag_misc))
+	__(mr nfn,temp0)
+	__(bne- macro_label(bad))
+	__(extract_subtag(imm0,temp0))
+	__(cmpri(imm0,subtag_function))
+	__(cmpri(cr1,imm0,subtag_symbol))
+        __(bne cr0,macro_label(_sym))
+        __(jump_nfn())
 macro_label(_sym):             
-	mr fname,temp0
-	bne cr1,macro_label(bad)
-	jump_fname()
+	__(mr fname,temp0)
+	__(bne cr1,macro_label(bad))
+	__(jump_fname())
 macro_label(bad):
-	uuo_interr(error_cant_call,temp0)
+	__(uuo_interr(error_cant_call,temp0))
 ])	
 
 define([mkcatch],[
-	mflr loc_pc
-	ldr(imm0,tcr.catch_top(rcontext))
-	lwz imm1,0(loc_pc) /* a forward branch to the catch/unwind cleanup */
-	rlwinm imm1,imm1,0,6,29	/* extract LI */
-	add loc_pc,loc_pc,imm1
-	build_lisp_frame(fn,loc_pc,vsp)
-	sub loc_pc,loc_pc,imm1
-	la loc_pc,4(loc_pc)	/* skip over the forward branch */
-	mtlr loc_pc
-	lwi(imm4,(catch_frame.element_count<<num_subtag_bits)|subtag_catch_frame)
-	ldr(imm3,tcr.xframe(rcontext))
-	ldr(imm1,tcr.db_link(rcontext))
-	TSP_Alloc_Fixed_Unboxed(catch_frame.size)
-	la nargs,tsp_frame.data_offset+fulltag_misc(tsp)
-        str(imm4,catch_frame.header(nargs))
-	str(arg_z,catch_frame.catch_tag(nargs))
-	str(imm0,catch_frame.link(nargs))
-	str(imm2,catch_frame.mvflag(nargs))
-	str(sp,catch_frame.csp(nargs))
-	str(imm1,catch_frame.db_link(nargs))
-        str(first_nvr,catch_frame.regs+0*node_size(nargs))
-        str(second_nvr,catch_frame.regs+1*node_size(nargs))
-        str(third_nvr,catch_frame.regs+2*node_size(nargs))
-        str(fourth_nvr,catch_frame.regs+3*node_size(nargs))
-        str(fifth_nvr,catch_frame.regs+4*node_size(nargs))
-        str(sixth_nvr,catch_frame.regs+5*node_size(nargs))
-        str(seventh_nvr,catch_frame.regs+6*node_size(nargs))
-        str(eighth_nvr,catch_frame.regs+7*node_size(nargs))
-	str(imm3,catch_frame.xframe(nargs))
-	str(rzero,catch_frame.tsp_segment(nargs))
-	Set_TSP_Frame_Boxed()
-	str(nargs,tcr.catch_top(rcontext))
-        li nargs,0
+	__(mflr loc_pc)
+	__(ldr(imm0,tcr.catch_top(rcontext)))
+	__(lwz imm1,0(loc_pc)) /* a forward branch to the catch/unwind cleanup */
+	__(rlwinm imm1,imm1,0,6,29)	/* extract LI */
+	__(add loc_pc,loc_pc,imm1)
+	__(build_lisp_frame(fn,loc_pc,vsp))
+	__(sub loc_pc,loc_pc,imm1)
+	__(la loc_pc,4(loc_pc))	/* skip over the forward branch */
+	__(mtlr loc_pc)
+	__(lwi(imm4,(catch_frame.element_count<<num_subtag_bits)|subtag_catch_frame))
+	__(ldr(imm3,tcr.xframe(rcontext)))
+	__(ldr(imm1,tcr.db_link(rcontext)))
+	__(TSP_Alloc_Fixed_Unboxed(catch_frame.size))
+	__(la nargs,tsp_frame.data_offset+fulltag_misc(tsp))
+        __(str(imm4,catch_frame.header(nargs)))
+	__(str(arg_z,catch_frame.catch_tag(nargs)))
+	__(str(imm0,catch_frame.link(nargs)))
+	__(str(imm2,catch_frame.mvflag(nargs)))
+	__(str(sp,catch_frame.csp(nargs)))
+	__(str(imm1,catch_frame.db_link(nargs)))
+        __(str(first_nvr,catch_frame.regs+0*node_size(nargs)))
+        __(str(second_nvr,catch_frame.regs+1*node_size(nargs)))
+        __(str(third_nvr,catch_frame.regs+2*node_size(nargs)))
+        __(str(fourth_nvr,catch_frame.regs+3*node_size(nargs)))
+        __(str(fifth_nvr,catch_frame.regs+4*node_size(nargs)))
+        __(str(sixth_nvr,catch_frame.regs+5*node_size(nargs)))
+        __(str(seventh_nvr,catch_frame.regs+6*node_size(nargs)))
+        __(str(eighth_nvr,catch_frame.regs+7*node_size(nargs)))
+	__(str(imm3,catch_frame.xframe(nargs)))
+	__(str(rzero,catch_frame.tsp_segment(nargs)))
+	__(Set_TSP_Frame_Boxed())
+	__(str(nargs,tcr.catch_top(rcontext)))
+        __(li nargs,0)
 
 ])	
 
 define([restore_catch_nvrs],[
-        ldr(first_nvr,catch_frame.regs+(node_size*0)($1))
-        ldr(second_nvr,catch_frame.regs+(node_size*1)($1))
-        ldr(third_nvr,catch_frame.regs+(node_size*2)($1))
-        ldr(fourth_nvr,catch_frame.regs+(node_size*3)($1))
-        ldr(fifth_nvr,catch_frame.regs+(node_size*4)($1))
-        ldr(sixth_nvr,catch_frame.regs+(node_size*5)($1))
-        ldr(seventh_nvr,catch_frame.regs+(node_size*6)($1))
-        ldr(eighth_nvr,catch_frame.regs+(node_size*7)($1))
+        __(ldr(first_nvr,catch_frame.regs+(node_size*0)($1)))
+        __(ldr(second_nvr,catch_frame.regs+(node_size*1)($1)))
+        __(ldr(third_nvr,catch_frame.regs+(node_size*2)($1)))
+        __(ldr(fourth_nvr,catch_frame.regs+(node_size*3)($1)))
+        __(ldr(fifth_nvr,catch_frame.regs+(node_size*4)($1)))
+        __(ldr(sixth_nvr,catch_frame.regs+(node_size*5)($1)))
+        __(ldr(seventh_nvr,catch_frame.regs+(node_size*6)($1)))
+        __(ldr(eighth_nvr,catch_frame.regs+(node_size*7)($1)))
 ])               
 
 define([DCBZL],[
-	.long (31<<26)+(1<<21)+($1<<16)+($2<<11)+(1014<<1)
+	__(.long (31<<26)+(1<<21)+($1<<16)+($2<<11)+(1014<<1))
 ])
 	
 define([check_stack_alignment],[
 	new_macro_labels()
-	andi. $1,sp,STACK_ALIGN_MASK
-	beq+ macro_label(stack_ok)
-	.long 0
+	__(andi. $1,sp,STACK_ALIGN_MASK)
+	__(beq+ macro_label(stack_ok))
+	__(.long 0)
 macro_label(stack_ok):
 ])
 
 define([stack_align],[((($1)+STACK_ALIGN_MASK)&~STACK_ALIGN_MASK)])
 
 define([clear_alloc_tag],[
-	clrrri(allocptr,allocptr,ntagbits)
+	__(clrrri(allocptr,allocptr,ntagbits))
 ])
 
 /* If the GC interrupts the current thread (after the trap), it needs */
@@ -649,12 +562,12 @@ define([clear_alloc_tag],[
 /*       invoke the segment allocator. */
 	
 define([Cons],[
-	la allocptr,(-cons.size+fulltag_cons)(allocptr)
-        alloc_trap()
-	str($3,cons.cdr(allocptr))
-	str($2,cons.car(allocptr))
-	mr $1,allocptr
-	clear_alloc_tag()
+	__(la allocptr,(-cons.size+fulltag_cons)(allocptr))
+        __(alloc_trap())
+	__(str($3,cons.cdr(allocptr)))
+	__(str($2,cons.car(allocptr)))
+	__(mr $1,allocptr)
+	__(clear_alloc_tag())
 ])
 
 
@@ -684,21 +597,21 @@ define([Cons],[
 
 
 define([Misc_Alloc],[
-	la $3,-fulltag_misc($3)
-	sub allocptr,allocptr,$3
-        alloc_trap()
-	str($2,misc_header_offset(allocptr))
-	mr $1,allocptr
-	clear_alloc_tag()
+	__(la $3,-fulltag_misc($3))
+	__(sub allocptr,allocptr,$3)
+        __(alloc_trap())
+	__(str($2,misc_header_offset(allocptr)))
+	__(mr $1,allocptr)
+	__(clear_alloc_tag())
 ])
 
 /*  Parameters $1, $2 as above; $3 = physical size constant. */
 define([Misc_Alloc_Fixed],[
-	la allocptr,(-$3)+fulltag_misc(allocptr)
-        alloc_trap()
-	str($2,misc_header_offset(allocptr))
-	mr $1,allocptr
-	clear_alloc_tag()
+	__(la allocptr,(-$3)+fulltag_misc(allocptr))
+        __(alloc_trap())
+	__(str($2,misc_header_offset(allocptr)))
+	__(mr $1,allocptr)
+	__(clear_alloc_tag())
 ])
 
 
@@ -725,29 +638,29 @@ ifdef([LINUX],[
 ])	
 
 define([Set_TSP_Frame_Unboxed],[
-	str(tsp,tsp_frame.type(tsp))
+	__(str(tsp,tsp_frame.type(tsp)))
 ])
 
 define([Set_TSP_Frame_Boxed],[
-	str(rzero,tsp_frame.type(tsp))
+	__(str(rzero,tsp_frame.type(tsp)))
 ])
 		
 /* A newly allocated TSP frame is always "raw" (has non-zero type, indicating */
 /* that it doesn't contain tagged data. */
 
 define([TSP_Alloc_Fixed_Unboxed],[
-	stru(tsp,-($1+tsp_frame.data_offset)(tsp))
-	Set_TSP_Frame_Unboxed()
+	__(stru(tsp,-($1+tsp_frame.data_offset)(tsp)))
+	__(Set_TSP_Frame_Unboxed())
 ])
 
 define([TSP_Alloc_Fixed_Unboxed_Zeroed],[
-	TSP_Alloc_Fixed_Unboxed($1)
-	zero_doublewords tsp,tsp_frame.fixed_overhead,$1
+	__(TSP_Alloc_Fixed_Unboxed($1))
+	__(zero_doublewords tsp,tsp_frame.fixed_overhead,$1)
 ])
 
 define([TSP_Alloc_Fixed_Boxed],[
-	TSP_Alloc_Fixed_Unboxed_Zeroed($1)
-	Set_TSP_Frame_Boxed()
+	__(TSP_Alloc_Fixed_Unboxed_Zeroed($1))
+	__(Set_TSP_Frame_Boxed())
 ])
 
 
@@ -764,61 +677,61 @@ define([TSP_Alloc_Fixed_Boxed],[
 
 /* Handle the general case, where the frame might be empty */
 define([Zero_TSP_Frame],[
-	new_macro_labels()
-	la $1,tsp_frame.size-8(tsp)
-	ldr($2,tsp_frame.backlink(tsp))
-	la $2,-8($2)
-	b macro_label(zero_tsp_test)
+	__(new_macro_labels())
+	__(la $1,tsp_frame.size-8(tsp))
+	__(ldr($2,tsp_frame.backlink(tsp)))
+	__(la $2,-8($2))
+	__(b macro_label(zero_tsp_test))
 macro_label(zero_tsp_loop):
-	stfdu fp_zero,8($1)
+	__(stfdu fp_zero,8($1))
 macro_label(zero_tsp_test):	
-	cmpr(ifelse($3,[],[cr0],$3),$1,$2)
-	bne ifelse($3,[],[cr0],$3),macro_label(zero_tsp_loop)
+	__(cmpr(ifelse($3,[],[cr0],$3),$1,$2))
+	__(bne ifelse($3,[],[cr0],$3),macro_label(zero_tsp_loop))
 ])
 
 /* Save some branching when we know that the frame can't be empty.*/
 define([Zero_TSP_Frame_nz],[
 	new_macro_labels()
-	la $1,tsp_frame.size-8(tsp)
-	ldr($2,tsp_frame.backlink(tsp))
-	la $2,-8($2)
+	__(la $1,tsp_frame.size-8(tsp))
+	__(ldr($2,tsp_frame.backlink(tsp)))
+	__(la $2,-8($2))
 macro_label(zero_tsp_loop):
-	stfdu fp_zero,8($1)
-	cmpr(ifelse($3,[],[cr0],$3),$1,$2)
-	bne ifelse($3,[],[cr0],$3),macro_label(zero_tsp_loop)
+	__(stfdu fp_zero,8($1))
+	__(cmpr(ifelse($3,[],[cr0],$3),$1,$2))
+	__(bne ifelse($3,[],[cr0],$3),macro_label(zero_tsp_loop))
 ])
 	
 /* $1 = 8-byte-aligned size, positive.  $2 (optiional) set */
 /* to negated size. */
 define([TSP_Alloc_Var_Unboxed],[
-	neg ifelse($2,[],$1,$2),$1
-	strux(tsp,tsp,ifelse($2,[],$1,$2))
-	Set_TSP_Frame_Unboxed()
+	__(neg ifelse($2,[],$1,$2),$1)
+	__(strux(tsp,tsp,ifelse($2,[],$1,$2)))
+	__(Set_TSP_Frame_Unboxed())
 ])
 
 define([TSP_Alloc_Var_Boxed],[
-	TSP_Alloc_Var_Unboxed($1)
-	Zero_TSP_Frame($1,$2)
-	Set_TSP_Frame_Boxed()
+	__(TSP_Alloc_Var_Unboxed($1))
+	__(Zero_TSP_Frame($1,$2))
+	__(Set_TSP_Frame_Boxed())
 ])		
 
 
 define([TSP_Alloc_Var_Boxed_nz],[
-	TSP_Alloc_Var_Unboxed($1)
-	Zero_TSP_Frame_nz($1,$2)
-	Set_TSP_Frame_Boxed()
+	__(TSP_Alloc_Var_Unboxed($1))
+	__(Zero_TSP_Frame_nz($1,$2))
+	__(Set_TSP_Frame_Boxed())
 ])		
 
 define([check_pending_interrupt],[
 	new_macro_labels()
-        ldr(nargs,tcr.tlb_pointer(rcontext))
-	ldr(nargs,INTERRUPT_LEVEL_BINDING_INDEX(nargs))
-	cmpri(ifelse($1,[],[cr0],$1),nargs,0)
-	blt ifelse($1,[],[cr0],$1),macro_label(done)
-	bgt ifelse($1,[],[cr0],$1),macro_label(trap)
-	ldr(nargs,tcr.interrupt_pending(rcontext))
+        __(ldr(nargs,tcr.tlb_pointer(rcontext)))
+	__(ldr(nargs,INTERRUPT_LEVEL_BINDING_INDEX(nargs)))
+	__(cmpri(ifelse($1,[],[cr0],$1),nargs,0))
+	__(blt ifelse($1,[],[cr0],$1),macro_label(done))
+	__(bgt ifelse($1,[],[cr0],$1),macro_label(trap))
+	__(ldr(nargs,tcr.interrupt_pending(rcontext)))
 macro_label(trap):
-	trgti(nargs,0)
+	__(trgti(nargs,0))
 macro_label(done):
 ])
 
@@ -826,5 +739,5 @@ macro_label(done):
 define([aligned_bignum_size],[((~(dnode_size-1)&(node_size+(dnode_size-1)+(4*$1))))])
 
 define([suspend_now],[
-	uuo_interr(error_propagate_suspend,rzero)
+	__(uuo_interr(error_propagate_suspend,rzero))
 ])
