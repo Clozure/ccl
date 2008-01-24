@@ -86,8 +86,7 @@ define([_emit_BSD_source_line_stab],[
 ifdef([X86],[
 # __line__ "__file__" 1],[
 	.stabd 68,0,$1
-])
-])
+])])
 
 
 /*  We don't really do "weak importing" of symbols from a separate  */
