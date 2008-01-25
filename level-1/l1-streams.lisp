@@ -5196,24 +5196,30 @@
     (process-input-wait fd)
     (- #$ETIMEDOUT)))
     
-(defun process-input-wait (fd &optional ticks)
+(defun process-input-wait (fd &optional timeout)
   "Wait until input is available on a given file-descriptor."
-  (let* ((wait-end (if ticks (+ (get-tick-count) ticks))))
-    (loop
-      ;; FD-INPUT-AVAILABLE-P can return NIL (e.g., if the
-      ;; thread receives an interrupt) before a timeout is
-      ;; reached.
-      (when (fd-input-available-p fd ticks)
-        (return t))
-      ;; If it returned and a timeout was specified, check
-      ;; to see if it's been exceeded.  If so, return NIL;
-      ;; otherwise, adjust the remaining timeout.
-      ;; If there was no timeout, continue to wait forever.
-      (when ticks
-        (let* ((now (get-tick-count)))
-          (if (and wait-end (>= now wait-end))
-            (return)
-            (setq ticks (- wait-end now))))))))
+  (rlet ((now :timeval))
+    (let* ((wait-end 
+            (if timeout
+              (multiple-value-bind (seconds millis) (milliseconds timeout)
+                (#_gettimeofday now +null-ptr+)
+                (setq timeout (+ (* seconds 1000) millis))
+                (+ (timeval->milliseconds now) timeout)))))
+      (loop
+        ;; FD-INPUT-AVAILABLE-P can return NIL (e.g., if the
+        ;; thread receives an interrupt) before a timeout is
+        ;; reached.
+        (when (fd-input-available-p fd (or timeout -1))
+          (return t))
+        ;; If it returned and a timeout was specified, check
+        ;; to see if it's been exceeded.  If so, return NIL;
+        ;; otherwise, adjust the remaining timeout.
+        ;; If there was no timeout, continue to wait forever.
+        (when timeout
+          (#_gettimeofday now +null-ptr+)
+          (setq timeout (- wait-end (timeval->milliseconds now)))
+          (if (<= timeout 0)
+            (return)))))))
 
 
 (defun process-output-would-block (fd)
@@ -5221,11 +5227,30 @@
     (process-output-wait fd)
     (- #$ETIMEDOUT)))
 
-(defun process-output-wait (fd)
+(defun process-output-wait (fd &optional timeout)
   "Wait until output is possible on a given file descriptor."
-  (loop
-    (when (fd-ready-for-output-p fd nil)
-      (return t))))
+  (rlet ((now :timeval))
+    (let* ((wait-end 
+            (if timeout
+              (multiple-value-bind (seconds millis) (milliseconds timeout)
+                (#_gettimeofday now +null-ptr+)
+                (setq timeout (+ (* seconds 1000) millis))
+                (+ (timeval->milliseconds now) timeout)))))
+      (loop
+        ;; FD-INPUT-AVAILABLE-P can return NIL (e.g., if the
+        ;; thread receives an interrupt) before a timeout is
+        ;; reached.
+        (when (fd-ready-for-output-p fd (or timeout -1))
+          (return t))
+        ;; If it returned and a timeout was specified, check
+        ;; to see if it's been exceeded.  If so, return NIL;
+        ;; otherwise, adjust the remaining timeout.
+        ;; If there was no timeout, continue to wait forever.
+        (when timeout
+          (#_gettimeofday now +null-ptr+)
+          (setq timeout (- wait-end (timeval->milliseconds now)))
+          (if (<= timeout 0)
+            (return)))))))
 
 
   
@@ -5239,25 +5264,20 @@
 	(setf (pref tv :timeval.tv_sec) seconds
 	      (pref tv :timeval.tv_usec) us)))))
 
-(defun fd-input-available-p (fd &optional ticks)
-  (rletZ ((tv :timeval))
-    (ticks-to-timeval ticks tv)
-    (%stack-block ((infds *fd-set-size*))
-      (fd-zero infds)
-      (fd-set fd infds)
-      (let* ((res (syscall syscalls::select (1+ fd) infds (%null-ptr) (%null-ptr)
-                           (if ticks tv (%null-ptr)))))
-        (> res 0)))))
+(defun fd-input-available-p (fd &optional milliseconds)
+  (rlet ((pollfds (:array (:struct :pollfd) 1)))
+    (setf (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.fd) fd
+          (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.events) #$POLLIN)
+    (let* ((res (ignoring-eintr (syscall syscalls::poll pollfds 1 (or milliseconds -1)))))
+      (> res 0))))
 
-(defun fd-ready-for-output-p (fd &optional ticks)
-  (rletZ ((tv :timeval))
-    (ticks-to-timeval ticks tv)
-    (%stack-block ((outfds *fd-set-size*))
-      (fd-zero outfds)
-      (fd-set fd outfds)
-      (let* ((res (#_select (1+ fd) (%null-ptr) outfds (%null-ptr)
-			    (if ticks tv (%null-ptr)))))
-        (> res 0)))))
+
+(defun fd-ready-for-output-p (fd &optional milliseconds)
+  (rlet ((pollfds (:array (:struct :pollfd) 1)))
+    (setf (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.fd) fd
+          (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.events) #$POLLOUT)
+    (let* ((res (ignoring-eintr (syscall syscalls::poll pollfds 1 (or milliseconds -1)))))
+      (> res 0))))
 
 (defun fd-urgent-data-available-p (fd &optional ticks)
   (rletZ ((tv :timeval))
@@ -5567,7 +5587,7 @@
   (let* ((date (file-write-date path))
          (tem-path (merge-pathnames (make-pathname :name (%integer-to-string date) :type "tem" :defaults nil) path)))
     (loop
-      (when (%create-file tem-path :if-exists nil) (return tem-path))
+      (when (not (probe-file tem-path)) (return tem-path))
       (setf (%pathname-name tem-path) (%integer-to-string (setq date (1+ date)))))))
 
 (defun probe-file-x (path)
