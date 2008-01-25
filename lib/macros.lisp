@@ -3512,6 +3512,14 @@ to be at least partially steppable."
             (unless (eq ,res t) (return ,res)))
 	  (return ,res))))))
 
+(defmacro ignoring-eintr (&body body)
+  (let* ((res (gensym))
+         (eintr (symbol-value (read-from-string "#$EINTR"))))
+    `(loop
+      (let* ((,res ,@body))
+        (unless (eql ,res (- ,eintr))
+          (return ,res))))))
+
 (defmacro basic-stream-ioblock (s)
   `(or (basic-stream.state ,s)
     (stream-is-closed ,s)))
