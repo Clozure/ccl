@@ -847,63 +847,62 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
          (out-stream (external-process-watched-stream p))
          (token (external-process-token p))
          (terminated))
-    (rlet ((tv :timeval))
-      (loop
-        (when (and terminated (null in-fd))
-          (signal-semaphore (external-process-completed p))
-          (return))
-        (when in-fd
-          (when (fd-input-available-p in-fd tv)
-            (%stack-block ((buf 1024))
-              (let* ((n (fd-read in-fd buf 1024)))
-                (declare (fixnum n))
-                (if (<= n 0)
-                  (progn
-                    (without-interrupts
-                     (decf (car token))
-                     (fd-close in-fd)
-                     (setq in-fd nil)))
-                  (let* ((string (make-string 1024)))
-                    (declare (dynamic-extent string))
-                    (%str-from-ptr buf n string)
-                    (write-sequence string out-stream :end n)))))))
-        (let* ((statusflags (check-pid (external-process-pid p)
-                                       (logior
-                                        (if in-fd #$WNOHANG 0)
-                                        #$WUNTRACED)))
-               (oldstatus (external-process-%status p)))
-          (cond ((null statusflags)
-                 (remove-external-process p)
-                 (setq terminated t))
-                ((eq statusflags t))	; Running.
-                (t
-                 (multiple-value-bind (status code core)
-                     (cond ((wifstopped statusflags)
-                            (values :stopped (wstopsig statusflags)))
-                           ((wifexited statusflags)
-                            (values :exited (wexitstatus statusflags)))
-                           (t
-                            (let* ((signal (wtermsig statusflags)))
-                              (declare (fixnum signal))
-                              (values
-                               (if (or (= signal #$SIGSTOP)
-                                       (= signal #$SIGTSTP)
-                                       (= signal #$SIGTTIN)
-                                       (= signal #$SIGTTOU))
-                                 :stopped
-                                 :signaled)
-                               signal
-                               (logtest #$WCOREFLAG statusflags)))))
-                   (setf (external-process-%status p) status
-                         (external-process-%exit-code p) code
-                         (external-process-core p) core)
-                   (let* ((status-hook (external-process-status-hook p)))
-                     (when (and status-hook (not (eq oldstatus status)))
-                       (funcall status-hook p)))
-                   (when (or (eq status :exited)
-                             (eq status :signaled))
-                     (remove-external-process p)
-                     (setq terminated t))))))))))
+    (loop
+      (when (and terminated (null in-fd))
+        (signal-semaphore (external-process-completed p))
+        (return))
+      (when in-fd
+        (when (fd-input-available-p in-fd 0)
+          (%stack-block ((buf 1024))
+            (let* ((n (fd-read in-fd buf 1024)))
+              (declare (fixnum n))
+              (if (<= n 0)
+                (progn
+                  (without-interrupts
+                   (decf (car token))
+                   (fd-close in-fd)
+                   (setq in-fd nil)))
+                (let* ((string (make-string 1024)))
+                  (declare (dynamic-extent string))
+                  (%str-from-ptr buf n string)
+                  (write-sequence string out-stream :end n)))))))
+      (let* ((statusflags (check-pid (external-process-pid p)
+                                     (logior
+                                      (if in-fd #$WNOHANG 0)
+                                      #$WUNTRACED)))
+             (oldstatus (external-process-%status p)))
+        (cond ((null statusflags)
+               (remove-external-process p)
+               (setq terminated t))
+              ((eq statusflags t))	; Running.
+              (t
+               (multiple-value-bind (status code core)
+                   (cond ((wifstopped statusflags)
+                          (values :stopped (wstopsig statusflags)))
+                         ((wifexited statusflags)
+                          (values :exited (wexitstatus statusflags)))
+                         (t
+                          (let* ((signal (wtermsig statusflags)))
+                            (declare (fixnum signal))
+                            (values
+                             (if (or (= signal #$SIGSTOP)
+                                     (= signal #$SIGTSTP)
+                                     (= signal #$SIGTTIN)
+                                     (= signal #$SIGTTOU))
+                               :stopped
+                               :signaled)
+                             signal
+                             (logtest #$WCOREFLAG statusflags)))))
+                 (setf (external-process-%status p) status
+                       (external-process-%exit-code p) code
+                       (external-process-core p) core)
+                 (let* ((status-hook (external-process-status-hook p)))
+                   (when (and status-hook (not (eq oldstatus status)))
+                     (funcall status-hook p)))
+                 (when (or (eq status :exited)
+                           (eq status :signaled))
+                   (remove-external-process p)
+                   (setq terminated t)))))))))
       
 (defun run-external-process (proc in-fd out-fd error-fd &optional env)
   ;; type-check the env variable
