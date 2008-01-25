@@ -33,7 +33,7 @@
 (define-syscall (logior platform-os-linux platform-cpu-x86 platform-word-size-64)  syscalls::stat 4 (:address :address) :signed-fullword)
 (define-syscall (logior platform-os-linux platform-cpu-x86 platform-word-size-64)  syscalls::fstat 5 (:unsigned-fullword :address) :signed-fullword )
 (define-syscall (logior platform-os-linux platform-cpu-x86 platform-word-size-64)  syscalls::lstat 6 (:address :address) :signed-fullword)
-
+(define-syscall (logior platform-os-linux platform-cpu-x86 platform-word-size-64) syscalls::poll 7 ((:* (:struct :pollfd)) :int :int) :int)
 (define-syscall (logior platform-os-linux platform-cpu-x86 platform-word-size-64)  syscalls::lseek 8 (:int :off_t :int) :off_t )
 
 (define-syscall (logior platform-os-linux platform-cpu-x86 platform-word-size-64)  syscalls::exit 60 (:int) :void)
