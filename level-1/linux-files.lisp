@@ -67,6 +67,17 @@
       (setq r (floor (* r 1000))))
     (values q r)))
 
+(defun microseconds (n)
+  (unless (and (typep n 'fixnum)
+               (>= (the fixnum n) 0))
+    (check-type n (real 0 #xffffffff)))
+  (multiple-value-bind (q r)
+      (floor n)
+    (if (zerop r)
+      (setq r 0)
+      (setq r (floor (* r 1000000))))
+    (values q r)))
+
 (defun semaphore-value (s)
   (if (istruct-typep s 'semaphore)
     (semaphore.value s)
@@ -432,6 +443,16 @@ given is that of a group to which the current user belongs."
     (setf (pref result :timeval.tv_sec) seconds
 	  (pref result :timeval.tv_usec) micros)
     result))
+
+;;; Return T iff the time denoted by the timeval a is not later than the
+;;; time denoted by the timeval b.
+(defun %timeval<= (a b)
+  (let* ((asec (pref a :timeval.tv_sec))
+         (bsec (pref b :timeval.tv_sec)))
+    (or (< asec bsec)
+        (and (= asec bsec)
+             (< (pref a :timeval.tv_usec)
+                (pref b :timeval.tv_usec))))))
 
 
 (defun %%rusage (usage &optional (who #$RUSAGE_SELF))
@@ -826,62 +847,63 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
          (out-stream (external-process-watched-stream p))
          (token (external-process-token p))
          (terminated))
-    (loop
-      (when (and terminated (null in-fd))
-        (signal-semaphore (external-process-completed p))
-        (return))
-      (if in-fd
-        (when (fd-input-available-p in-fd *ticks-per-second*)
-          (%stack-block ((buf 1024))
-            (let* ((n (fd-read in-fd buf 1024)))
-              (declare (fixnum n))
-              (if (<= n 0)
-                (progn
-                  (without-interrupts
-                   (decf (car token))
-                   (fd-close in-fd)
-                   (setq in-fd nil)))
-                (let* ((string (make-string 1024)))
-                  (declare (dynamic-extent string))
-                  (%str-from-ptr buf n string)
-                  (write-sequence string out-stream :end n)))))))
-      (let* ((statusflags (check-pid (external-process-pid p)
-                                     (logior
-                                      (if in-fd #$WNOHANG 0)
-                                      #$WUNTRACED)))
-             (oldstatus (external-process-%status p)))
-        (cond ((null statusflags)
-               (remove-external-process p)
-               (setq terminated t))
-              ((eq statusflags t))	; Running.
-              (t
-               (multiple-value-bind (status code core)
-                   (cond ((wifstopped statusflags)
-                          (values :stopped (wstopsig statusflags)))
-                         ((wifexited statusflags)
-                          (values :exited (wexitstatus statusflags)))
-                         (t
-                          (let* ((signal (wtermsig statusflags)))
-                            (declare (fixnum signal))
-                            (values
-                             (if (or (= signal #$SIGSTOP)
-                                     (= signal #$SIGTSTP)
-                                     (= signal #$SIGTTIN)
-                                     (= signal #$SIGTTOU))
-                               :stopped
-                               :signaled)
-                             signal
-                             (logtest #$WCOREFLAG statusflags)))))
-                 (setf (external-process-%status p) status
-                       (external-process-%exit-code p) code
-                       (external-process-core p) core)
-                 (let* ((status-hook (external-process-status-hook p)))
-                   (when (and status-hook (not (eq oldstatus status)))
-                     (funcall status-hook p)))
-                 (when (or (eq status :exited)
-                           (eq status :signaled))
-                   (remove-external-process p)
-                   (setq terminated t)))))))))
+    (rlet ((tv :timeval))
+      (loop
+        (when (and terminated (null in-fd))
+          (signal-semaphore (external-process-completed p))
+          (return))
+        (when in-fd
+          (when (fd-input-available-p in-fd tv)
+            (%stack-block ((buf 1024))
+              (let* ((n (fd-read in-fd buf 1024)))
+                (declare (fixnum n))
+                (if (<= n 0)
+                  (progn
+                    (without-interrupts
+                     (decf (car token))
+                     (fd-close in-fd)
+                     (setq in-fd nil)))
+                  (let* ((string (make-string 1024)))
+                    (declare (dynamic-extent string))
+                    (%str-from-ptr buf n string)
+                    (write-sequence string out-stream :end n)))))))
+        (let* ((statusflags (check-pid (external-process-pid p)
+                                       (logior
+                                        (if in-fd #$WNOHANG 0)
+                                        #$WUNTRACED)))
+               (oldstatus (external-process-%status p)))
+          (cond ((null statusflags)
+                 (remove-external-process p)
+                 (setq terminated t))
+                ((eq statusflags t))	; Running.
+                (t
+                 (multiple-value-bind (status code core)
+                     (cond ((wifstopped statusflags)
+                            (values :stopped (wstopsig statusflags)))
+                           ((wifexited statusflags)
+                            (values :exited (wexitstatus statusflags)))
+                           (t
+                            (let* ((signal (wtermsig statusflags)))
+                              (declare (fixnum signal))
+                              (values
+                               (if (or (= signal #$SIGSTOP)
+                                       (= signal #$SIGTSTP)
+                                       (= signal #$SIGTTIN)
+                                       (= signal #$SIGTTOU))
+                                 :stopped
+                                 :signaled)
+                               signal
+                               (logtest #$WCOREFLAG statusflags)))))
+                   (setf (external-process-%status p) status
+                         (external-process-%exit-code p) code
+                         (external-process-core p) core)
+                   (let* ((status-hook (external-process-status-hook p)))
+                     (when (and status-hook (not (eq oldstatus status)))
+                       (funcall status-hook p)))
+                   (when (or (eq status :exited)
+                             (eq status :signaled))
+                     (remove-external-process p)
+                     (setq terminated t))))))))))
       
 (defun run-external-process (proc in-fd out-fd error-fd &optional env)
   ;; type-check the env variable
