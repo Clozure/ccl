@@ -92,6 +92,8 @@
 (define-syscall (logior platform-os-darwin platform-cpu-ppc) syscalls::truncate 200 (:address :unsigned-doubleword) :signed-fullword )
 (define-syscall (logior platform-os-darwin platform-cpu-ppc) syscalls::ftruncate 201 (:unsigned-fullword :unsigned-doubleword) :signed-fullword )
 
+(define-syscall (logior platform-os-darwin platform-cpu-ppc) syscalls::poll 230 ((:* (:struct :pollfd)) :int :int) :int)
+
 #+notdefinedyet
 (progn
 				; 17 is obsolete sbreak 
