@@ -161,12 +161,10 @@
 
 ;;; write nbytes bytes from buffer buf to file-descriptor fd.
 (defun fd-write (fd buf nbytes)
-  (syscall syscalls::write fd buf nbytes))
+  (ignoring-eintr (syscall syscalls::write fd buf nbytes)))
 
 (defun fd-read (fd buf nbytes)
-  (loop
-    (let* ((n  (syscall syscalls::read fd buf nbytes)))
-      (unless (eql n (- #$EINTR)) (return n)))))
+  (ignoring-eintr (syscall syscalls::read fd buf nbytes)))
 
 
 (defun fd-open (path flags &optional (create-mode #o666))
