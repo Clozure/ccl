@@ -1223,8 +1223,8 @@ unsigned IP address."
                     (%%get-unsigned-longlong params 16) len)
               (syscall syscalls::socketcall 3 params)))))
     (cond ((or (eql err (- #$EINPROGRESS)) (eql err (- #$EINTR)))
-           (if (process-output-wait fd timeout)
-             (- (int-getsockopt fd #$SOL_SOCKET #$SO_ERROR))
+           (if (process-output-wait sockfd timeout)
+             (- (int-getsockopt sockfd #$SOL_SOCKET #$SO_ERROR))
              (- #$ETIMEDOUT)))
           (t err))))
 
