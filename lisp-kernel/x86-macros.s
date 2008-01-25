@@ -64,7 +64,7 @@ ifdef([DarwinAssembler],[
 ],[
 	.macro zero_dnodes base,disp,nbytes
 	.ifgt \nbytes
-	__(movapd %fpzero,\disp(\base))
+        movapd %fpzero,\disp(\base)
 	zero_dnodes \base,"\disp+dnode_size","\nbytes-dnode_size"
 	.endif
 	.endm
