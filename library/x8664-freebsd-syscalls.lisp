@@ -155,7 +155,7 @@
                 :signed-fullword)
 (define-syscall (logior platform-os-freebsd platform-cpu-x86 platform-word-size-64)  syscalls::getcwd 326 (:address :unsigned-fullword) :signed-fullword )
 
-
+(define-syscall (logior platform-os-freebsd platform-cpu-x86 platform-word-size-64) syscalls::poll 209 ((:* (:struct :pollfd)) :int :int) :int)
 
 #+notdefinedyet
 (progn
