@@ -673,12 +673,9 @@ the socket is not connected."))
     (unless (< fd 0)
       (fd-close fd))))
 
-(defun %socket-connect (fd addr addrlen)
-  (let* ((err (c_connect fd addr addrlen)))
+(defun %socket-connect (fd addr addrlen &optional timeout)
+  (let* ((err (c_connect fd addr addrlen timeout)))
     (declare (fixnum err))
-    (when (eql err (- #$EINPROGRESS))
-      (process-output-wait fd)
-      (setq err (- (int-getsockopt fd #$SOL_SOCKET #$SO_ERROR))))
     (unless (eql err 0) (socket-error nil "connect" err))))
     
 (defun inet-connect (fd host-n port-n)
@@ -990,9 +987,9 @@ unsigned IP address."
 	(socket-error socket "getsockopt" err)))))
 
 (defun timeval-setsockopt (socket level optname timeout)
-    (multiple-value-bind (seconds millis)
-        (milliseconds timeout)
-      (rlet ((valptr :timeval :tv_sec seconds :tv_usec millis))
+    (multiple-value-bind (seconds micros)
+        (microseconds timeout)
+      (rlet ((valptr :timeval :tv_sec seconds :tv_usec micros))
         (socket-call socket "setsockopt"
           (c_setsockopt socket level optname valptr (record-length :timeval))))))
                    
@@ -1075,7 +1072,7 @@ unsigned IP address."
   (with-cstrs ((name (string name)))
     (rlet ((hostent :hostent)
            (hp (* (struct :hostent)))
-           (herr :signed))
+           (herr :signed 0))
        (do* ((buflen 1024 (+ buflen buflen))) ()
          (declare (fixnum buflen))
          (%stack-block ((buf buflen))
@@ -1083,10 +1080,11 @@ unsigned IP address."
              (declare (fixnum res))
              (unless (eql res #$ERANGE)
 	       (return
-		 (if (eql res 0)
+                 (let* ((err (pref herr :signed)))
+		 (if (and (eql res 0) (eql err 0))
 		   (%get-unsigned-long
 		    (%get-ptr (pref (%get-ptr hp) :hostent.h_addr_list)))
-		   (values nil (- (pref herr :signed))))))))))))
+		   (values nil (- err))))))))))))
 
 (defun _getservbyname (name proto)
   (with-cstrs ((name (string name))
@@ -1201,23 +1199,34 @@ unsigned IP address."
             (%%get-unsigned-longlong params 16) addrlen)
       (syscall syscalls::socketcall 2 params))))
 
-(defun c_connect (sockfd addr len)
-  #+(or darwin-target linuxx8664-target freebsd-target)
-  (syscall syscalls::connect sockfd addr len)
-  #+linuxppc-target
-  (progn
-    #+ppc32-target
-    (%stack-block ((params 12))
-      (setf (%get-long params 0) sockfd
-            (%get-ptr params 4) addr
-            (%get-long params 8) len)
-      (syscall syscalls::socketcall 3 params))
-    #+ppc64-target
-    (%stack-block ((params 24))
-      (setf (%%get-unsigned-longlong params 0) sockfd
-            (%get-ptr params 8) addr
-            (%%get-unsigned-longlong params 16) len)
-      (syscall syscalls::socketcall 3 params))))
+
+;;; If attempts to connnect are interrupted, we basically have to
+;;; wait in #_select (or the equivalent).  There's a good rant
+;;; about these issues in:
+;;; <http://www.madore.org/~david/computers/connect-intr.html>
+(defun c_connect (sockfd addr len &optional timeout)
+  (let* ((err 
+          #+(or darwin-target linuxx8664-target freebsd-target)
+          (syscall syscalls::connect sockfd addr len)
+          #+linuxppc-target
+          (progn
+            #+ppc32-target
+            (%stack-block ((params 12))
+              (setf (%get-long params 0) sockfd
+                    (%get-ptr params 4) addr
+                    (%get-long params 8) len)
+              (syscall syscalls::socketcall 3 params))
+            #+ppc64-target
+            (%stack-block ((params 24))
+              (setf (%%get-unsigned-longlong params 0) sockfd
+                    (%get-ptr params 8) addr
+                    (%%get-unsigned-longlong params 16) len)
+              (syscall syscalls::socketcall 3 params)))))
+    (cond ((or (eql err (- #$EINPROGRESS)) (eql err (- #$EINTR)))
+           (if (process-output-wait fd timeout)
+             (- (int-getsockopt fd #$SOL_SOCKET #$SO_ERROR))
+             (- #$ETIMEDOUT)))
+          (t err))))
 
 (defun c_listen (sockfd backlog)
   #+(or darwin-target linuxx8664-target freebsd-target)
@@ -1236,22 +1245,23 @@ unsigned IP address."
       (syscall syscalls::socketcall 4 params))))
 
 (defun c_accept (sockfd addrp addrlenp)
-  #+(or darwin-target linuxx8664-target freebsd-target)
-  (syscall syscalls::accept sockfd addrp addrlenp)
-  #+linuxppc-target
-  (progn
-    #+ppc32-target
-    (%stack-block ((params 12))
-      (setf (%get-long params 0) sockfd
-            (%get-ptr params 4) addrp
-            (%get-ptr params 8) addrlenp)
-      (syscall syscalls::socketcall 5 params))
-    #+ppc64-target
-    (%stack-block ((params 24))
-      (setf (%%get-unsigned-longlong params 0) sockfd
-            (%get-ptr params 8) addrp
-            (%get-ptr params 16) addrlenp)
-      (syscall syscalls::socketcall 5 params))))
+  (ignoring-eintr 
+   #+(or darwin-target linuxx8664-target freebsd-target)
+   (syscall syscalls::accept sockfd addrp addrlenp)
+   #+linuxppc-target
+   (progn
+     #+ppc32-target
+     (%stack-block ((params 12))
+       (setf (%get-long params 0) sockfd
+             (%get-ptr params 4) addrp
+             (%get-ptr params 8) addrlenp)
+       (syscall syscalls::socketcall 5 params))
+     #+ppc64-target
+     (%stack-block ((params 24))
+       (setf (%%get-unsigned-longlong params 0) sockfd
+             (%get-ptr params 8) addrp
+             (%get-ptr params 16) addrlenp)
+       (syscall syscalls::socketcall 5 params)))))
 
 (defun c_getsockname (sockfd addrp addrlenp)
   #+(or darwin-target linuxx8664-target freebsd-target)
