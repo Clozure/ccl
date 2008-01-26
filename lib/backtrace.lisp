@@ -95,13 +95,13 @@
         (progn
           (call 'funcall)
           (call `(function ,(concatenate 'string "#<" (%lfun-name-string lfun) ">")))))
-      (if (<= pc target::arg-check-trap-pc-limit)
+      (if (and pc (<= pc target::arg-check-trap-pc-limit))
         (append (call) (arg-check-call-arguments cfp lfun))
         (multiple-value-bind (req opt restp keys)
             (function-args lfun)
           (when (or (not (eql 0 req)) (not (eql 0 opt)) restp keys)
             (let* ((arglist (arglist-from-map lfun)))
-              (if (null arglist)
+              (if (or (null arglist) (null pc))
                 (call "???")
                 (progn
                   (dotimes (i req)
