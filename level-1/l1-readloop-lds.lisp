@@ -326,7 +326,7 @@ binding of that symbol is used - or an integer index into the frame's set of loc
                         (if params
                           (cons keyword params)
                           keyword)))
-                    (params param)))))))))))
+                    (params (eval param))))))))))))
 
 ;;; Read a form from the specified stream.
 (defun toplevel-read (&key (input-stream *standard-input*)
@@ -409,9 +409,11 @@ binding of that symbol is used - or an integer index into the frame's set of loc
   (break-loop-handle-error condition error-pointer))
 
 (defun abnormal-application-exit ()
-  (print-call-history)
-  (force-output *debug-io*)
-  (quit -1))
+  (ignore-errors
+    (print-call-history)
+    (force-output *debug-io*)
+    (quit -1))
+  (#__exit -1))
 
 (defun break-loop-handle-error (condition error-pointer)
   (multiple-value-bind (bogus-globals newvals oldvals) (%check-error-globals)

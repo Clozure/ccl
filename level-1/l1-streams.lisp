@@ -5587,7 +5587,7 @@
   (let* ((date (file-write-date path))
          (tem-path (merge-pathnames (make-pathname :name (%integer-to-string date) :type "tem" :defaults nil) path)))
     (loop
-      (when (not (probe-file tem-path)) (return tem-path))
+      (when (%create-file tem-path :if-exists nil) (return tem-path))      
       (setf (%pathname-name tem-path) (%integer-to-string (setq date (1+ date)))))))
 
 (defun probe-file-x (path)

@@ -183,8 +183,11 @@
       (error "Invalid pathname : ~s." path))))
 
 (defun create-file (path &key (if-exists :error) (create-directory t))
-  (native-to-pathname (%create-file path :if-exists if-exists
+  (let* ((p (%create-file path :if-exists if-exists
 				      :create-directory create-directory)))
+    (and p
+         (native-to-pathname p))))
+
 (defun %create-file (path &key
 			 (if-exists :error)
 			 (create-directory t))
@@ -194,15 +197,18 @@
     (return-from %create-file (probe-file-x path)))
   (assert (or (eql if-exists :overwrite)
               (null if-exists)
+              (eq if-exists :error)
               (not (probe-file path))) ()
 	  "~s ~s not implemented yet" :if-exists if-exists)
   (let* ((unix-name (native-translated-namestring path))
 	 (fd (fd-open unix-name (logior #$O_WRONLY #$O_CREAT #$O_TRUNC
-                                        (if (null if-exists)
+                                        (if (or (null if-exists)
+                                                (eq if-exists :error))
                                           #$O_EXCL
                                           0)))))
     (if (< fd 0)
-      (if (eql fd (- #$EEXIST))         ; #$O_EXCL was set and file exists
+      (if (and (null if-exists)
+               (eql fd (- #$EEXIST)))
         (return-from %create-file nil)
         (signal-file-error fd path))
       (fd-close fd))
