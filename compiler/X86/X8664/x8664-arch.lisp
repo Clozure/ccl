@@ -166,9 +166,9 @@
 (defx86reg temp0.b bl)
 
 (defx86reg imm2 rcx)
+(defx86reg nargs ecx)
 (defx86reg imm2.l ecx)
-(defx86reg nargs cx)
-(defx86reg nargs.l ecx)
+(defx86reg nargs.w cx)
 (defx86reg nargs.q rcx)
 (defx86reg imm2.w cx)
 (defx86reg imm2.b cl)
@@ -263,8 +263,7 @@
 ;;; globally named functions through the function cell of a symbol.
 ;;; It appears that they're never live at the same time.
 ;;; (We can also consider passing next-method context on the stack.)
-;;; Using a boxed register for nargs is intended to keep both imm0
-;;; and imm1 free on function entry, to help with processing &optional/&key.
+
 (defx86reg fname temp0)
 (defx86reg next-method-context temp0)
 ;;; We rely one at least one of %ra0/%fn pointing to the current function
