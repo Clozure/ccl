@@ -394,7 +394,7 @@ are running on, or NIL if we can't find any useful information."
          (width
           (ecase internal-time-units-per-second
             (1000000 6)
-            (100  3)))
+            (1000  3)))
          (cpu-count (cpu-count)))
     (format s "~&~S took ~:D ~a (~,vF seconds) to run ~%~20twith ~D available CPU core~P."
             form elapsed-time units width (/ elapsed-time internal-time-units-per-second) cpu-count cpu-count)
