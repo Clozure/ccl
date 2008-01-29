@@ -1008,9 +1008,9 @@
     (declare (type (unsigned-byte 16) min nopt max))
     (with-x86-local-vinsn-macros (seg)
       (unless *x862-reckless*
-        (when rev-req-args
-          (! check-min-nargs min))
-        (! check-max-nargs max))
+        (if rev-req-args
+          (! check-min-max-nargs min max)
+          (! check-max-nargs max)))
       (if (> min $numx8664argregs)
         (! save-lisp-context-in-frame)
         (if (<= max $numx8664argregs)
@@ -5612,7 +5612,7 @@
                       (x862-reserve-vstack-lcells 1))))
                 (when hardopt
                   (x862-reserve-vstack-lcells num-opt)
-                  (x862-lri seg x8664::imm0 (ash num-opt *x862-target-fixnum-shift*))
+                  
 
                   ;; ! opt-supplied-p wants nargs to contain the
                   ;; actual arg-count minus the number of "fixed"
@@ -5624,7 +5624,8 @@
                          (! one-opt-supplied-p))
                         ((= 2 num-opt)
                          (! two-opt-supplied-p))
-                        (t (! opt-supplied-p))))
+                        (t
+                         (! opt-supplied-p num-opt))))
                 (let* ((nwords-vpushed (+ num-fixed 
                                           num-opt 
                                           (if hardopt num-opt 0) 
