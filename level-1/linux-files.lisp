@@ -273,7 +273,7 @@ given is that of a group to which the current user belongs."
        (pref stat :stat.st_uid)
        (pref stat :stat.st_blksize)
        #+linux-target
-       (pref stat :stat.st_mtim.tv_usec)
+       (round (pref stat :stat.st_mtim.tv_nsec) 1000)
        #-linux-target
        (round (pref stat :stat.st_mtimespec.tv_nsec) 1000)
        (pref stat :stat.st_gid))
