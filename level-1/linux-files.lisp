@@ -348,17 +348,6 @@ given is that of a group to which the current user belongs."
                                    #+freebsd-target #$SYS_NMLN idx)))
     "unknown"))
 
-(defun try-hard-to-get-errno (err)
-  (when (eq err -1)
-    (let ((nerr (%get-errno)))
-      (unless (eq nerr 0) (setq err nerr))))
-  #+darwin-target
-  (when (eq err -1)
-    ;; Not thread safe, but what else can I do??
-    (let ((nerr (pref (foreign-symbol-address "_errno") :signed)))
-      (unless (eq nerr 0) (setq err nerr))))
-  err)
-
 (defun copy-file-attributes (source-path dest-path)
   "Copy the mode, owner, group and modification time of source-path to dest-path.
    Returns T if succeeded, NIL if some of the attributes couldn't be copied due to
@@ -373,10 +362,8 @@ given is that of a group to which the current user belongs."
                    `(let ((err ,form))
                       (unless (eql err 0)
                         (setq win nil)
-                        ;; We need the real errno so we can tell if it's a permission
-                        ;; error or something else...
                         (when (eql err -1)
-                          (setq err (try-hard-to-get-errno err)))
+                          (setq err (- (%get-errno))))
                         (unless (eql err #$EPERM) (%errno-disp err dest-path))))))
         (errchk (#_chmod cnamestr mode))
         (errchk (%stack-block ((times (record-length (:array (:struct :timeval) 2))))
