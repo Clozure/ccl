@@ -244,11 +244,11 @@ define([jump_fname],[
 	
 define([set_nargs],[
         ifelse(eval($1>15),1,[
-        __(movl [$]$1<<fixnumshift,%nargs_l)
+        __(movl [$]$1<<fixnumshift,%nargs)
         ],[
-        __(xorl %nargs_l,%nargs_l)
+        __(xorl %nargs,%nargs)
         ifelse(eval($1),0,[],[
-        __(addl [$]$1<<fixnumshift,%nargs_l)
+        __(addl [$]$1<<fixnumshift,%nargs)
         ])])])
         
 
@@ -392,9 +392,9 @@ macro_label(done):
 	
 define([push_argregs],[
 	new_macro_labels()
-	__(testw %nargs,%nargs)
+	__(testl %nargs,%nargs)
 	__(jz macro_label(done))
-	__(cmpw [$]2*node_size,%nargs)
+	__(cmpl [$]2*node_size,%nargs)
 	__(je macro_label(yz))
 	__(jb macro_label(z))
 	__(push %arg_x)
