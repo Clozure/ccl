@@ -252,6 +252,10 @@ binding of that symbol is used - or an integer index into the frame's set of loc
 
 (defparameter *quit-on-eof* nil)
 
+(defmethod stream-eof-transient-p (stream)
+  (let ((fd (stream-device stream :input)))
+    (and fd (eof-transient-p fd))))
+
 ;;; This is the part common to toplevel loop and inner break loops.
 (defun read-loop (&key (input-stream *standard-input*)
                        (output-stream *standard-output*)
@@ -280,7 +284,7 @@ binding of that symbol is used - or an integer index into the frame's set of loc
                 (if (eq form eof-value)
                   (if (and (not *batch-flag*)
                            (not *quit-on-eof*)
-                           (eof-transient-p (stream-device input-stream :input)))
+                           (stream-eof-transient-p input-stream))
                     (progn
                       (stream-clear-input input-stream)
                       (abort-break))
