@@ -156,7 +156,7 @@
 (defx86lapfunction %fixnum-ref ((fixnum arg_y) #| &optional |# (offset arg_z))
   (:arglist (fixnum &optional offset))
   (check-nargs 1 2)
-  (cmpw ($ x8664::fixnumone) (% nargs))
+  (cmpl ($ x8664::fixnumone) (% nargs))
   (jne @2-args)
   (movq (% offset) (% fixnum))
   (xorl (%l offset) (%l offset))
@@ -168,7 +168,7 @@
 (defx86lapfunction %fixnum-ref-natural ((fixnum arg_y) #| &optional |# (offset arg_z))
   (:arglist (fixnum &optional offset))
   (check-nargs 1 2)
-  (cmpw ($ x8664::fixnumone) (% nargs))
+  (cmpl ($ x8664::fixnumone) (% nargs))
   (jne @2-args)
   (movq (% offset) (% fixnum))
   (xorl (%l offset) (%l offset))
@@ -180,7 +180,7 @@
 (defx86lapfunction %fixnum-set ((fixnum arg_x) (offset arg_y) #| &optional |# (new-value arg_z))
   (:arglist (fixnum offset &optional newval))
   (check-nargs 2 3)
-  (cmpw ($ '2) (% nargs))
+  (cmpl ($ '2) (% nargs))
   (jne @3-args)
   (movq (% offset) (% fixnum))
   (xorl (%l offset) (%l offset))
@@ -195,7 +195,7 @@
   (:arglist (fixnum offset &optional newval))
   (check-nargs 2 3)
   (save-simple-frame)
-  (cmpw ($ '2) (% nargs))
+  (cmpl ($ '2) (% nargs))
   (jne @3-args)
   (movq (% offset) (% fixnum))
   (xorl (%l offset) (%l offset))
@@ -345,9 +345,9 @@
   (movq (% function) (% xfn))
   (set-nargs 0)
   (movq (@ (% args)) (% imm0))          ;lexpr-count
-  (movw (% imm0.w) (% nargs))
+  (movl (%l imm0) (% nargs))
   (leaq (@ x8664::node-size (% arg_z) (% imm0)) (% imm1))
-  (subw ($ '3) (% imm0.w))
+  (subl ($ '3) (% imm0))
   (jbe @reg-only)
   ;; Some args will be pushed; reserve a frame
   (pushq ($ x8664::reserved-frame-marker))
@@ -365,9 +365,9 @@
   (movq (@ (* x8664::node-size 1) (% arg_z)) (% arg_z))
   (jmp @go)
   @reg-only
-  (testw (% nargs) (% nargs))
+  (testl (% nargs) (% nargs))
   (je @go)
-  (rcmpw (% nargs) ($ '2))
+  (rcmpl (% nargs) ($ '2))
   (je @two)
   (jb @one)
   (jmp @three)
@@ -405,19 +405,19 @@
   (push (% arg_x))
   (jne @loop)
   @done
-  (addw (% imm0.w) (% nargs))
+  (addl (%l imm0) (% nargs))
   (jne @pop)
   @discard-and-go
   (discard-reserved-frame)
   (jmp @go)
   @pop
-  (cmpw ($ '1) (% nargs))
+  (cmpl($ '1) (% nargs))
   (pop (% arg_z))
   (je @discard-and-go)
-  (cmpw ($ '2) (% nargs))
+  (cmpl ($ '2) (% nargs))
   (pop (% arg_y))
   (je @discard-and-go)
-  (cmpw ($ '3) (% nargs))
+  (cmpl ($ '3) (% nargs))
   (pop (% arg_x))
   (je @discard-and-go)
   @go
@@ -443,7 +443,7 @@
   (pop (%q nargs))
   (movq (@ x8664::lisp-frame.return-address (% rbp)) (% ra0))
   (movq (@ 0 (% rbp)) (% rbp))
-  (rcmpw (% nargs) ($ '3))
+  (rcmpl (% nargs) ($ '3))
   (jbe @pop-regs)
   ;; More than 3 args; some must have been pushed by caller,
   ;; so retain the reserved frame.
@@ -453,7 +453,7 @@
   (jmp @popped)
   @pop-regs
   (je @pop3)
-  (rcmpw (% nargs) ($ '1))
+  (rcmpl (% nargs) ($ '1))
   (jb @discard)
   (ja @pop2)
   (pop (% arg_z))
@@ -488,7 +488,7 @@
   (x86-lap-function apply+ ()
    (:arglist (function arg1 arg2 &rest other-args))
    (check-nargs 3 nil)
-   (cmpw ($ '3) (% nargs))
+   (cmpl ($ '3) (% nargs))
    (pop (% ra0))
    (ja @no-frame)
    (pushq ($ x8664::reserved-frame-marker))
@@ -497,7 +497,7 @@
    (push (% arg_x))
    (movq (% arg_z) (% temp0))           ; last
    (movq (% arg_y) (% arg_z))           ; butlast
-   (subw ($ '2) (% nargs))              ; remove count for butlast & last
+   (subl ($ '2) (% nargs))              ; remove count for butlast & last
    ;; Do .SPspreadargz inline here
    (xorl (%l imm0) (%l imm0))
    (movq (% arg_z) (% arg_y))           ; save in case of error
@@ -516,12 +516,12 @@
    @done
    ;; nargs was at least 1 when we started spreading, and can't have gotten
    ;; any smaller. 
-   (addw (%w imm0) (% nargs))
+   (addl (%l imm0) (% nargs))
    (movq (% temp0) (% arg_z))
    (pop (% arg_y))
    (pop (% arg_x))
-   (addw ($ '1) (% nargs))
-   (cmpw ($ '3) (% nargs))
+   (addl ($ '1) (% nargs))
+   (cmpl ($ '3) (% nargs))
    (jne @no-discard)
    (discard-reserved-frame)
    @no-discard

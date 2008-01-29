@@ -500,7 +500,6 @@ be somewhat larger than what was specified)."
   (single-value-return))
 
 (defx86lapfunction true ()
-  (movzwl (% nargs) (%l nargs))
   (subq ($ '3) (% nargs.q))
   (leaq (@ '2 (% rsp) (% nargs.q)) (% imm0))
   (cmovaq (% imm0) (% rsp))
@@ -508,7 +507,6 @@ be somewhat larger than what was specified)."
   (single-value-return))
 
 (defx86lapfunction false ()
-  (movzwl (% nargs) (%l nargs))
   (subq ($ '3) (% nargs.q))
   (leaq (@ '2 (% rsp) (% nargs.q)) (% imm0))
   (cmovaq (% imm0) (% rsp))
