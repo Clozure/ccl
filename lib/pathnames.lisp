@@ -109,26 +109,22 @@
 		(namestring (native-to-pathname new-namestring))))
 	(values new-name original (truename new-name))))))
 
-
 (defun copy-file (source-path dest-path &key (if-exists :error)
 			      (preserve-attributes nil))
   (let* ((original (truename source-path))
-	 (original-namestring (native-translated-namestring original))
 	 (new-name (merge-pathnames dest-path original))
-	 (new-namestring (native-translated-namestring new-name))
-	 (flags (if preserve-attributes "-pf" "-f")))
-    (unless new-namestring
-      (error "~S can't be created." new-name))
-    (unless (and (probe-file new-name)
-		 (not (if-exists if-exists new-name)))
-      (let* ((proc (run-program "/bin/cp"
-				`(,flags ,original-namestring ,new-namestring)
-				:wait t))
-	     (exit-code (external-process-%exit-code proc)))
-	(unless (zerop exit-code)
-	  (error "Error copying ~s to ~s: ~a"
-		 source-path dest-path (%strerror exit-code)))
-	(values new-name original (truename new-name))))))
+         (buffer (make-array 4096 :element-type '(unsigned-byte 8))))
+    (with-open-file (in original :direction :input
+                        :element-type '(unsigned-byte 8))
+      (with-open-file (out new-name :direction :output
+                           :if-exists if-exists
+                           :element-type '(unsigned-byte 8))
+        (loop
+          as n = (stream-read-vector in buffer 0 4096) until (eql n 0)
+          do (stream-write-vector out buffer 0 n))))
+    (when preserve-attributes
+      (copy-file-attributes original new-name))
+    (values new-name original (truename new-name))))
 
 (defun recursive-copy-directory (source-path dest-path &key test (if-exists :error))
   ;; TODO: Support :if-exists :supersede to blow away any files not in source dir

@@ -200,8 +200,11 @@ it has been changed, this is the directory OpenMCL was started in."
 (defun cd (path)
   (cwd path))
 
+(defmacro with-filename-cstrs (&rest rest)
+  `(#+darwin-target with-utf-8-cstrs #-darwin-target with-cstrs ,@rest))
+
 (defun %chdir (dirname)
-  (#+darwin-target with-utf-8-cstrs #-darwin-target with-cstrs ((dirname dirname))
+  (with-filename-cstrs ((dirname dirname))
     (syscall syscalls::chdir dirname)))
 
 (defun %mkdir (name mode)
@@ -209,12 +212,12 @@ it has been changed, this is the directory OpenMCL was started in."
          (len (length name)))
     (when (and (> len 0) (eql (char name (1- len)) #\/))
       (setq name (subseq name 0 (1- len))))
-    (#+darwin-target with-utf-8-cstrs #-darwin-target with-cstrs ((name name))
+    (with-filename-cstrs ((name name))
       (syscall syscalls::mkdir name mode))))
 
 (defun %rmdir (name)
   (let* ((last (1- (length name))))
-    (#+darwin-target with-utf-8-cstrs #-darwin-target with-cstrs ((name name))
+    (with-filename-cstrs ((name name))
       (when (and (>= last 0)
 		 (eql (%get-byte name last) (char-code #\/)))
 	(setf (%get-byte name last) 0))
@@ -268,12 +271,17 @@ given is that of a group to which the current user belongs."
        (pref stat :stat.st_mtimespec.tv_sec)
        (pref stat :stat.st_ino)
        (pref stat :stat.st_uid)
-       (pref stat :stat.st_blksize))
+       (pref stat :stat.st_blksize)
+       #+linux-target
+       (pref stat :stat.st_mtim.tv_usec)
+       #-linux-target
+       (round (pref stat :stat.st_mtimespec.tv_nsec) 1000)
+       (pref stat :stat.st_gid))
       (values nil nil nil nil nil nil nil)))
 
 
 (defun %%stat (name stat)
-  (#+darwin-target with-utf-8-cstrs #-darwin-target with-cstrs ((cname name))
+  (with-filename-cstrs ((cname name))
     (%stat-values
      #+linux-target
      (#_ __xstat #$_STAT_VER_LINUX cname stat)
@@ -290,7 +298,7 @@ given is that of a group to which the current user belongs."
    stat))
 
 (defun %%lstat (name stat)
-  (#+darwin-target with-utf-8-cstrs #-darwin-target with-cstrs ((cname name))
+  (with-filename-cstrs ((cname name))
     (%stat-values
      #+linux-target
      (#_ __lxstat #$_STAT_VER_LINUX cname stat)
@@ -340,6 +348,47 @@ given is that of a group to which the current user belongs."
                                    #+freebsd-target #$SYS_NMLN idx)))
     "unknown"))
 
+(defun try-hard-to-get-errno (err)
+  (when (eq err -1)
+    (let ((nerr (%get-errno)))
+      (unless (eq nerr 0) (setq err nerr))))
+  #+darwin-target
+  (when (eq err -1)
+    ;; Not thread safe, but what else can I do??
+    (let ((nerr (pref (foreign-symbol-address "_errno") :signed)))
+      (unless (eq nerr 0) (setq err nerr))))
+  err)
+
+(defun copy-file-attributes (source-path dest-path)
+  "Copy the mode, owner, group and modification time of source-path to dest-path.
+   Returns T if succeeded, NIL if some of the attributes couldn't be copied due to
+   permission problems.  Any other failures cause an error to be signalled"
+  (multiple-value-bind (win mode ignore mtime-sec ignore uid ignore mtime-usec gid)
+                       (%stat (native-translated-namestring source-path) t)
+    (declare (ignore ignore))
+    (unless win
+      (error "Cannot get attributes of ~s" source-path))
+    (with-filename-cstrs ((cnamestr (native-translated-namestring dest-path)))
+      (macrolet ((errchk (form)
+                   `(let ((err ,form))
+                      (unless (eql err 0)
+                        (setq win nil)
+                        ;; We need the real errno so we can tell if it's a permission
+                        ;; error or something else...
+                        (when (eql err -1)
+                          (setq err (try-hard-to-get-errno err)))
+                        (unless (eql err #$EPERM) (%errno-disp err dest-path))))))
+        (errchk (#_chmod cnamestr mode))
+        (errchk (%stack-block ((times (record-length (:array (:struct :timeval) 2))))
+                  (setf (pref times :timeval.tv_sec) mtime-sec)
+                  (setf (pref times :timeval.tv_usec) mtime-usec)
+                  (%incf-ptr times (record-length :timeval))
+                  (setf (pref times :timeval.tv_sec) mtime-sec)
+                  (setf (pref times :timeval.tv_usec) mtime-usec)
+                  (%incf-ptr times (- (record-length :timeval)))
+                  (#_utimes cnamestr times)))
+        (errchk (#_chown cnamestr uid gid))))
+    win))
 
 #+linux-target
 (defun %uname (idx)
@@ -405,7 +454,7 @@ given is that of a group to which the current user belongs."
   (when (zerop (length namestring))
     (setq namestring (current-directory-name)))
   (%stack-block ((resultbuf #$PATH_MAX))
-    (#+darwin-target with-utf-8-cstrs #-darwin-target with-cstrs ((name namestring #|(tilde-expand namestring)|#))
+    (with-filename-cstrs ((name namestring #|(tilde-expand namestring)|#))
       (let* ((result (#_realpath name resultbuf)))
         (declare (dynamic-extent result))
         (unless (%null-ptr-p result)
@@ -476,7 +525,7 @@ given is that of a group to which the current user belongs."
            (%get-cstring (pref pw :passwd.pw_name))))))))
 
 (defun %utimes (namestring)
-  (#+darwin-target with-utf-8-cstrs #-darwin-target with-cstrs ((cnamestring namestring))
+  (with-filename-cstrs ((cnamestring namestring))
     (let* ((err (#_utimes cnamestring (%null-ptr))))
       (declare (fixnum err))
       (or (eql err 0)
@@ -494,7 +543,7 @@ given is that of a group to which the current user belongs."
   (= 1 (#_isatty fd)))
 
 (defun %open-dir (namestring)
-  (#+darwin-target with-utf-8-cstrs #-darwin-target with-cstrs ((name namestring))
+  (with-filename-cstrs ((name namestring))
     (let* ((DIR (#_opendir name)))
       (unless (%null-ptr-p DIR)
 	DIR))))
