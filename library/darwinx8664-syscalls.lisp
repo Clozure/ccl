@@ -92,7 +92,7 @@
 (define-syscall (logior platform-os-darwin platform-cpu-x86 platform-word-size-64) syscalls::lseek  (logior darwinx8664-unix-syscall-mask 199) (:unsigned-fullword :signed-doubleword :unsigned-fullword) :signed-doubleword )
 (define-syscall (logior platform-os-darwin platform-cpu-x86 platform-word-size-64) syscalls::truncate  (logior darwinx8664-unix-syscall-mask 200) (:address :unsigned-doubleword) :signed-fullword )
 (define-syscall (logior platform-os-darwin platform-cpu-x86 platform-word-size-64) syscalls::ftruncate  (logior darwinx8664-unix-syscall-mask 201) (:unsigned-fullword :unsigned-doubleword) :signed-fullword )
-
+(define-syscall (logior platform-os-darwin platform-cpu-x86 platform-word-size-64) syscalls::poll (logior darwinx8664-unix-syscall-mask 230) ((:* (:struct :pollfd)) :int :int) :int)
 #+notdefinedyet
 (progn
 				; 17 is obsolete sbreak 
