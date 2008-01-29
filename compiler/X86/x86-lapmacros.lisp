@@ -26,11 +26,11 @@
   `(xorq (% ,reg) (% ,reg)))
 
 (defx86lapmacro set-nargs (n)
-  (cond ((>= n 16) `(movl ($ ',n) (% nargs.l)))
-        ((= n 0) `(xorl (% nargs.l) (% nargs.l)))
+  (cond ((>= n 16) `(movl ($ ',n) (% nargs)))
+        ((= n 0) `(xorl (% nargs) (% nargs)))
         (t `(progn
-             (xorl (% nargs.l) (% nargs.l))
-             (addl ($ ',n) (% nargs.l))))))
+             (xorl (% nargs) (% nargs))
+             (addl ($ ',n) (% nargs))))))
         
 
 (defx86lapmacro anchored-uuo (form)
@@ -45,7 +45,7 @@
       `(progn
         ,anchor
         ,(if (eql min 0)
-             `(testw (% nargs) (% nargs))
+             `(testl (% nargs) (% nargs))
              `(rcmp (% nargs) ($ ',min)))
         (jne ,bad)
         (:anchored-uuo-section ,anchor)
@@ -273,7 +273,7 @@
   (let* ((push (gensym))
          (done (gensym)))
   `(progn
-    (movzwl (% nargs) (%l imm0))
+    (movl (% nargs) (%l imm0))
     (subq ($ (* $numx8664argregs x8664::node-size)) (% imm0))
     (jle ,push)
     (movq (% rbp) (@ 8 (% rsp) (% imm0)))
@@ -370,9 +370,9 @@
          (yz (gensym))
          (z (gensym)))
   `(progn
-    (testw (% nargs) (% nargs))
+    (testl (% nargs) (% nargs))
     (je ,done)
-    (cmpw ($ '2) (% nargs))
+    (cmpl ($ '2) (% nargs))
     (je ,yz)
     (jb ,z)
     (push (% arg_x))
