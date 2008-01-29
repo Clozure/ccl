@@ -364,7 +364,6 @@
 (defun nsubst (new old tree &key key
                    (test #'eql testp) (test-not nil notp))
   "Substitute NEW for subtrees matching OLD."
-  "replace with above def when labels works"
   (if (and testp notp)
     (test-not-error test test-not))
   (nsubst-aux new old tree (or key #'identity) test test-not))
@@ -392,7 +391,6 @@
 
 (defun nsubst-if (new test tree &key key)
   "Substitute NEW for subtrees of TREE for which TEST is true."
-  "replace with above def when labels works."
   (unless key (setq key #'identity))
   (cond ((funcall test (funcall key tree)) new)
         ((atom tree) tree)
@@ -409,7 +407,6 @@
 
 (defun nsubst-if-not (new test tree &key key)
   "Substitute NEW for subtrees of TREE for which TEST is false."
-  "Replace with above def when labels works."
   (unless key (setq key #'identity))
   (cond ((not (funcall test (funcall key tree))) new)
         ((atom tree) tree)
