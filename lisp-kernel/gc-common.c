@@ -703,27 +703,6 @@ logcount16(unsigned short n)
   return c;
 }
 
-weak_mark_fun dws_mark_weak_htabv = traditional_dws_mark_htabv;
-weak_mark_fun mark_weak_htabv = traditional_mark_weak_htabv;
-weak_process_fun markhtabvs = traditional_markhtabvs;
-
-void
-install_weak_mark_functions(int set) {
-  switch(set) {
-  case 0:
-  default:
-    dws_mark_weak_htabv = traditional_dws_mark_htabv;
-    mark_weak_htabv = traditional_mark_weak_htabv;
-    markhtabvs = traditional_markhtabvs;
-    break;
-  case 1:
-    dws_mark_weak_htabv = ncircle_dws_mark_htabv;
-    mark_weak_htabv = ncircle_mark_weak_htabv;
-    markhtabvs = ncircle_markhtabvs;
-    break;
-  }
-}
-
 void
 gc_init()
 {
@@ -764,6 +743,28 @@ gc_init()
 }
 
 #endif
+
+
+weak_mark_fun dws_mark_weak_htabv = traditional_dws_mark_htabv;
+weak_mark_fun mark_weak_htabv = traditional_mark_weak_htabv;
+weak_process_fun markhtabvs = traditional_markhtabvs;
+
+void
+install_weak_mark_functions(int set) {
+  switch(set) {
+  case 0:
+  default:
+    dws_mark_weak_htabv = traditional_dws_mark_htabv;
+    mark_weak_htabv = traditional_mark_weak_htabv;
+    markhtabvs = traditional_markhtabvs;
+    break;
+  case 1:
+    dws_mark_weak_htabv = ncircle_dws_mark_htabv;
+    mark_weak_htabv = ncircle_mark_weak_htabv;
+    markhtabvs = ncircle_markhtabvs;
+    break;
+  }
+}
 
 LispObj
 node_forwarding_address(LispObj node)
