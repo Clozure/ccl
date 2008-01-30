@@ -88,6 +88,7 @@ bitvector GCmarkbits = NULL, GCdynamic_markbits = NULL;
 LispObj GCarealow = 0, GCareadynamiclow = 0;
 natural GCndnodes_in_area = 0, GCndynamic_dnodes_in_area = 0;
 LispObj GCweakvll = (LispObj)NULL;
+LispObj GCdwsweakvll = (LispObj)NULL;
 LispObj GCephemeral_low = 0;
 natural GCn_ephemeral_dnodes = 0;
 natural GCstack_limit = 0;
@@ -209,7 +210,7 @@ reaphashv(LispObj hashv)
   natural
     dnode,
     npairs = (header_element_count(hashp->header) - 
-              ((sizeof(hash_table_vector_header)/sizeof(LispObj)) -1)) >> 1;
+              (hash_table_vector_header_count -1)) >> 1;
   LispObj *pairp = (LispObj*) (hashp+1), weakelement;
   Boolean 
     weak_on_value = ((hashp->flags & nhash_weak_value_mask) != 0);
@@ -234,8 +235,72 @@ reaphashv(LispObj hashv)
     }
     pairp += 2;
   }
-}    
-    
+}
+
+void
+traditional_dws_mark_htabv(LispObj htabv)
+{
+  /* Do nothing, just add htabv to GCweakvll */
+  LispObj *base = (LispObj *) ptr_from_lispobj(untag(htabv));
+  
+  deref(base,1) = GCweakvll;
+  GCweakvll = htabv;
+}
+
+void
+ncircle_dws_mark_htabv(LispObj htabv)
+{
+  /* Do nothing, just add htabv to GCdwsweakvll */
+  LispObj *base = (LispObj *) ptr_from_lispobj(untag(htabv));
+  
+  deref(base,1) = GCdwsweakvll;
+  GCdwsweakvll = htabv;
+}
+
+void
+traditional_mark_weak_htabv(LispObj htabv)
+{
+  int i, skip = hash_table_vector_header_count;;
+
+  for (i = 2; i <= skip; i++) {
+    rmark(deref(htabv,i));
+  }
+
+  deref(htabv,1) = GCweakvll;
+  GCweakvll = htabv;
+}
+
+void
+ncircle_mark_weak_htabv(LispObj htabv)
+{
+  int i, skip = hash_table_vector_header_count;;
+  hash_table_vector_header *hashp = (hash_table_vector_header *)(untag(htabv));
+  natural
+    dnode,
+    npairs = (header_element_count(hashp->header) - 
+              (hash_table_vector_header_count - 1)) >> 1;
+  LispObj *pairp = (LispObj*) (hashp+1), weakelement;
+  Boolean 
+    weak_on_value = ((hashp->flags & nhash_weak_value_mask) != 0);
+  bitvector markbits = GCmarkbits;
+  int tag;
+
+  for (i = 2; i <= skip; i++) {
+    rmark(deref(htabv,i));
+  }
+  
+  if (!weak_on_value) {
+    pairp++;
+  }
+  /* unconditionally mark the non-weak element of each pair */
+  while (npairs--) {
+    rmark(*pairp);
+    pairp += 2;
+  }
+
+  deref(htabv,1) = GCweakvll;
+  GCweakvll = htabv;
+}
 
 
 Boolean
@@ -248,7 +313,7 @@ mark_weak_hash_vector(hash_table_vector_header *hashp, natural elements)
     val_marked,
     weak_value = ((flags & nhash_weak_value_mask) != 0);
   int 
-    skip = (sizeof(hash_table_vector_header)/sizeof(LispObj))-1,
+    skip = hash_table_vector_header_count-1,
     key_tag,
     val_tag,
     i;
@@ -350,7 +415,7 @@ mark_weak_alist(LispObj weak_alist, int weak_type)
 }
   
 void
-markhtabvs()
+traditional_markhtabvs()
 {
   LispObj this, header, pending;
   int subtag;
@@ -388,11 +453,6 @@ markhtabvs()
           if (mark_weak_hash_vector(hashp, elements)) {
             marked_new = true;
           }
-        } else {
-          deref(this,1) = (LispObj)NULL;
-          for (i = 2; i <= elements; i++) {
-            mark_root(deref(this,i));
-          }
         } 
       } else {
         Bug(NULL, "Strange object on weak vector linked list: 0x~08x\n", this);
@@ -419,6 +479,80 @@ markhtabvs()
       reapweakv(this);
     } else {
       reaphashv(this);
+    }
+  }
+
+  /* Finally, mark the termination lists in all terminatable weak vectors
+     They are now linked together on GCweakvll.
+     This is where to store  lisp_global(TERMINATION_LIST) if we decide to do that,
+     but it will force terminatable popualations to hold on to each other
+     (set TERMINATION_LIST before clearing GCweakvll, and don't clear deref(this,1)).
+     */
+  pending = GCweakvll;
+  GCweakvll = (LispObj)NULL;
+  while (pending) {
+    this = pending;
+    pending = deref(this,1);
+    deref(this,1) = (LispObj)NULL;
+    mark_root(deref(this,1+3));
+  }
+}
+
+void
+ncircle_markhtabvs()
+{
+  LispObj this, header, pending = 0;
+  int subtag;
+  bitvector markbits = GCmarkbits;
+  hash_table_vector_header *hashp;
+  Boolean marked_new;
+
+  /* First, process any weak hash tables that may have
+     been encountered by the link-inverting marker; we
+     should have more stack space now. */
+
+  while (GCdwsweakvll) {
+    this = GCdwsweakvll;
+    GCdwsweakvll = deref(this,1);
+    ncircle_mark_weak_htabv(this);
+  }
+
+  while (GCweakvll) {
+    this = GCweakvll;
+    GCweakvll = deref(this,1);
+      
+    header = header_of(this);
+    subtag = header_subtag(header);
+      
+    if (subtag == subtag_weak) {
+      natural weak_type = deref(this,2);
+      deref(this,1) = pending;
+      pending = this;
+      if ((weak_type & population_type_mask) == population_weak_alist) {
+        if (mark_weak_alist(this, weak_type)) {
+          marked_new = true;
+          }
+      }
+    } else if (subtag == subtag_hash_vector) {
+      reaphashv(this);
+    }
+  }
+
+  /* Now, everything's marked that's going to be,  and "pending" is a list
+     of populations.  CDR down that list and free
+     anything that isn't marked.
+     */
+
+  while (pending) {
+    this = pending;
+    pending = deref(this,1);
+    deref(this,1) = (LispObj)NULL;
+
+    subtag = header_subtag(header_of(this));
+    if (subtag == subtag_weak) {
+      reapweakv(this);
+    } else {
+      Bug(NULL, "Bad object on pending list: %s\n", this);
     }
   }
 
@@ -567,6 +701,27 @@ logcount16(unsigned short n)
     c++;
   }
   return c;
+}
+
+weak_mark_fun dws_mark_weak_htabv = traditional_dws_mark_htabv;
+weak_mark_fun mark_weak_htabv = traditional_mark_weak_htabv;
+weak_process_fun markhtabvs = traditional_markhtabvs;
+
+void
+install_weak_mark_functions(int set) {
+  switch(set) {
+  case 0:
+  default:
+    dws_mark_weak_htabv = traditional_dws_mark_htabv;
+    mark_weak_htabv = traditional_mark_weak_htabv;
+    markhtabvs = traditional_markhtabvs;
+    break;
+  case 1:
+    dws_mark_weak_htabv = ncircle_dws_mark_htabv;
+    mark_weak_htabv = ncircle_mark_weak_htabv;
+    markhtabvs = ncircle_markhtabvs;
+    break;
+  }
 }
 
 void
@@ -833,6 +988,8 @@ Boolean just_purified_p = false;
 #warning recursive marker disabled for testing; remember to re-enable it
 #endif
 
+int weak_hash_toggle = 0;
+
 void 
 gc(TCR *tcr, signed_natural param)
 {
@@ -848,6 +1005,9 @@ gc(TCR *tcr, signed_natural param)
   BytePtr oldfree = a->active;
   TCR *other_tcr;
   natural static_dnodes;
+
+  install_weak_mark_functions(weak_hash_toggle);
+  weak_hash_toggle = 1 - weak_hash_toggle;
 
 #ifndef FORCE_DWS_MARK
   if ((natural) (tcr->cs_limit) == CS_OVERFLOW_FORCE_LIMIT) {

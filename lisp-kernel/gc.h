@@ -146,7 +146,7 @@ Boolean GCDebug, GCverbose, just_purified_p;
 bitvector GCmarkbits, GCdynamic_markbits;
 LispObj GCarealow, GCareadynamiclow;
 natural GCndnodes_in_area, GCndynamic_dnodes_in_area;
-LispObj GCweakvll;
+LispObj GCweakvll,GCdwsweakvll;
 LispObj GCephemeral_low;
 natural GCn_ephemeral_dnodes;
 natural GCstack_limit;
@@ -164,7 +164,6 @@ void reapweakv(LispObj weakv);
 void reaphashv(LispObj hashv);
 Boolean mark_weak_hash_vector(hash_table_vector_header *hashp, natural elements);
 Boolean mark_weak_alist(LispObj weak_alist, int weak_type);
-void markhtabvs(void);
 void mark_tcr_tlb(TCR *);
 void mark_tcr_xframes(TCR *);
 void postGCfree(void *);
@@ -184,7 +183,18 @@ void gc(TCR *, signed_natural);
 
 /* backend-interface */
 
+typedef void (*weak_mark_fun) (LispObj);
+weak_mark_fun mark_weak_htabv, dws_mark_weak_htabv;
+
+typedef void (*weak_process_fun)(void);
+
+weak_process_fun markhtabvs;
+
+
+#define hash_table_vector_header_count (sizeof(hash_table_vector_header)/sizeof(LispObj))
+
 void mark_root(LispObj);
+void rmark(LispObj);
 void mark_xp(ExceptionInformation *);
 LispObj dnode_forwarding_address(natural, int);
 LispObj locative_forwarding_address(LispObj);
