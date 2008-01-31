@@ -729,7 +729,9 @@
 						       class
 						       initargs))
 	    (send-objc-init-message (allocate-objc-object class) ks vs))))
-    (unless (%null-ptr-p instance)
+    (if (%null-ptr-p instance)
+      (error "Got null pointer when trying to init instance of Objective-C class ~s with initargs ~s"
+	     class (remove-slot-initargs class initargs))
       (or (gethash instance *objc-object-slot-vectors*)
           (let* ((slot-vector (create-foreign-instance-slot-vector class)))
             (when slot-vector
