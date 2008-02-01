@@ -616,14 +616,14 @@ the socket is not connected."))
 		    local-port local-host backlog class out-of-band-inline
 		    local-filename remote-filename sharing basic
                     external-format (auto-close t)
-                    receive-timeout send-timeout)
+                    receive-timeout send-timeout connect-timeout)
   "Create and return a new socket."
   (declare (dynamic-extent keys))
   (declare (ignore type connect remote-host remote-port eol format
 		   keepalive reuse-address nodelay broadcast linger
 		   local-port local-host backlog class out-of-band-inline
 		   local-filename remote-filename sharing basic external-format
-                   auto-close receive-timeout send-timeout))
+                   auto-close receive-timeout send-timeout connect-timeout))
   (ecase address-family
     ((:file) (apply #'make-file-socket keys))
     ((nil :internet) (apply #'make-ip-socket keys))))
@@ -678,12 +678,12 @@ the socket is not connected."))
     (declare (fixnum err))
     (unless (eql err 0) (socket-error nil "connect" err))))
     
-(defun inet-connect (fd host-n port-n)
+(defun inet-connect (fd host-n port-n &optional connect-timeout)
   (rlet ((sockaddr :sockaddr_in))
     (setf (pref sockaddr :sockaddr_in.sin_family) #$AF_INET
           (pref sockaddr :sockaddr_in.sin_port) port-n
           (pref sockaddr :sockaddr_in.sin_addr.s_addr) host-n)
-    (%socket-connect fd sockaddr (record-length :sockaddr_in))))
+    (%socket-connect fd sockaddr (record-length :sockaddr_in) connect-timeout)))
                
 (defun file-socket-connect (fd remote-filename)
   (rletz ((sockaddr :sockaddr_un))
@@ -693,11 +693,13 @@ the socket is not connected."))
   
 (defun make-tcp-stream-socket (fd &rest keys
                                   &key remote-host
-				  remote-port				  
+				  remote-port
+                                  connect-timeout
 				  &allow-other-keys)
   (inet-connect fd
 		(host-as-inet-host remote-host)
-		(port-as-inet-port remote-port "tcp"))
+		(port-as-inet-port remote-port "tcp")
+                connect-timeout)
   (apply #'make-tcp-stream fd keys))
 
 (defun make-file-stream-socket (fd &rest keys
@@ -1205,28 +1207,33 @@ unsigned IP address."
 ;;; about these issues in:
 ;;; <http://www.madore.org/~david/computers/connect-intr.html>
 (defun c_connect (sockfd addr len &optional timeout)
-  (let* ((err 
-          #+(or darwin-target linuxx8664-target freebsd-target)
-          (syscall syscalls::connect sockfd addr len)
-          #+linuxppc-target
-          (progn
-            #+ppc32-target
-            (%stack-block ((params 12))
-              (setf (%get-long params 0) sockfd
-                    (%get-ptr params 4) addr
-                    (%get-long params 8) len)
-              (syscall syscalls::socketcall 3 params))
-            #+ppc64-target
-            (%stack-block ((params 24))
-              (setf (%%get-unsigned-longlong params 0) sockfd
-                    (%get-ptr params 8) addr
-                    (%%get-unsigned-longlong params 16) len)
-              (syscall syscalls::socketcall 3 params)))))
-    (cond ((or (eql err (- #$EINPROGRESS)) (eql err (- #$EINTR)))
-           (if (process-output-wait sockfd timeout)
-             (- (int-getsockopt sockfd #$SOL_SOCKET #$SO_ERROR))
-             (- #$ETIMEDOUT)))
-          (t err))))
+  (let* ((flags (fd-get-flags sockfd)))
+    (unwind-protect
+         (progn
+           (fd-set-flags sockfd (logior flags #$O_NONBLOCK))
+           (let* ((err 
+                   #+(or darwin-target linuxx8664-target freebsd-target)
+                   (syscall syscalls::connect sockfd addr len)
+                   #+linuxppc-target
+                   (progn
+                     #+ppc32-target
+                     (%stack-block ((params 12))
+                       (setf (%get-long params 0) sockfd
+                             (%get-ptr params 4) addr
+                             (%get-long params 8) len)
+                       (syscall syscalls::socketcall 3 params))
+                     #+ppc64-target
+                     (%stack-block ((params 24))
+                       (setf (%%get-unsigned-longlong params 0) sockfd
+                             (%get-ptr params 8) addr
+                             (%%get-unsigned-longlong params 16) len)
+                       (syscall syscalls::socketcall 3 params)))))
+             (cond ((or (eql err (- #$EINPROGRESS)) (eql err (- #$EINTR)))
+                    (if (process-output-wait sockfd timeout)
+                      (- (int-getsockopt sockfd #$SOL_SOCKET #$SO_ERROR))
+                      (- #$ETIMEDOUT)))
+                   (t err))))
+      (fd-set-flags sockfd flags))))
 
 (defun c_listen (sockfd backlog)
   #+(or darwin-target linuxx8664-target freebsd-target)
