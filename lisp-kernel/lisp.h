@@ -36,15 +36,15 @@ extern Boolean running_under_rosetta;
 
 extern int page_size, log2_page_size;
 
-static inline unsigned long
-_align_to_power_of_2(unsigned long n, unsigned power)
+static inline natural
+_align_to_power_of_2(natural n, unsigned power)
 {
-  unsigned long align = (1<<power) -1;
+  natural align = (1<<power) -1;
 
   return (n+align) & ~align;
 }
 
-#define align_to_power_of_2(n,p) _align_to_power_of_2(((unsigned long)(n)),p)
+#define align_to_power_of_2(n,p) _align_to_power_of_2(((natural)(n)),p)
 
 static inline unsigned long
 _truncate_to_power_of_2(unsigned long n, unsigned power)
@@ -72,6 +72,7 @@ ensure_stack_limit(size_t);
 #define PLATFORM_OS_SOLARIS 2
 #define PLATFORM_OS_DARWIN 3
 #define PLATFORM_OS_FREEBSD 4
+#define PLATFORM_OS_WINDOWS 6
 
 #ifdef LINUX
 #define PLATFORM_OS PLATFORM_OS_LINUX
@@ -87,6 +88,10 @@ ensure_stack_limit(size_t);
 
 #ifdef SOLARIS
 #define PLATFORM_OS PLATFORM_OS_SOLARIS
+#endif
+
+#ifdef WINDOWS
+#define PLATFORM_OS PLATFORM_OS_WINDOWS
 #endif
 
 #ifdef PPC

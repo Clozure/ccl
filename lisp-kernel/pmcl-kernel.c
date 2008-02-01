@@ -30,12 +30,16 @@
 #include "lisp-exceptions.h"
 #include <stdio.h>
 #include <stdlib.h>
+#ifndef WINDOWS
 #include <sys/mman.h>
+#endif
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
 #include <errno.h>
+#ifndef WINDOWS
 #include <sys/utsname.h>
+#endif
 
 #ifdef LINUX
 #include <mcheck.h>
@@ -105,7 +109,9 @@ Boolean running_under_rosetta = false;
 #endif
 
 #include <ctype.h>
+#ifndef WINDOWS
 #include <sys/select.h>
+#endif
 #include "Threads.h"
 
 #ifndef MAP_NORESERVE
@@ -140,7 +146,7 @@ void
 make_dynamic_heap_executable(LispObj *p, LispObj *q)
 {
   void * cache_start = (void *) p;
-  unsigned long ncacheflush = (unsigned long) q - (unsigned long) p;
+  natural ncacheflush = (natural) q - (natural) p;
 
   xMakeDataExecutable(cache_start, ncacheflush);  
 }
@@ -148,6 +154,8 @@ make_dynamic_heap_executable(LispObj *p, LispObj *q)
 size_t
 ensure_stack_limit(size_t stack_size)
 {
+#ifdef WINDOWS
+#else
   struct rlimit limits;
   rlim_t cur_stack_limit, max_stack_limit;
  
@@ -167,6 +175,7 @@ ensure_stack_limit(size_t stack_size)
       Fatal(": Stack resource limit too small", "");
     }
   }
+#endif
   return stack_size;
 }
 
@@ -188,8 +197,8 @@ allocate_lisp_stack(unsigned useable,
 {
   void *allocate_stack(unsigned);
   void free_stack(void *);
-  unsigned size = useable+softsize+hardsize;
-  unsigned overhead;
+  natural size = useable+softsize+hardsize;
+  natural overhead;
   BytePtr base, softlimit, hardlimit;
   OSErr err;
   Ptr h = allocate_stack(size+4095);
@@ -1628,11 +1637,14 @@ xStackSpace()
 }
 
 #ifndef DARWIN
+#ifdef WINDOWS
+#else
 void *
 xGetSharedLibrary(char *path, int mode)
 {
   return dlopen(path, mode);
 }
+#else
 #else
 void *
 xGetSharedLibrary(char *path, int *resultType)

@@ -16,20 +16,34 @@
 
 #include <stdlib.h>
 #include <unistd.h>
+#ifndef WINDOWS
 #include <sys/mman.h>
+#endif
 #include <stdio.h>
+#ifndef WINDOWS
 #include <pthread.h>
+#endif
 #include <errno.h>
 #include <limits.h>
+
 #undef USE_MACH_SEMAPHORES
-#undef USE_POSIX_SEMAPHORES
+#define USE_POSIX_SEMAPHORES
+#undef USE_WINDOWS_SEMAPHORES
+
 #ifdef DARWIN
 #define USE_MACH_SEMAPHORES 1
+#undef  USE_POSIX_SEMAPHORES
 #endif
-#ifndef USE_MACH_SEMAPHORES
-#define USE_POSIX_SEMAPHORES
+#ifdef WINDOWS
+#define USE_WINDOWS_SEMPAHORES 1
+#undef USE_POSIX_SEMAPHORES
+#endif
+
+#ifdef USE_POSIX_SEMAPHORES
 #include <semaphore.h>
 #endif
+
+
 #ifdef USE_MACH_SEMAPHORES
 /* We have to use Mach semaphores, even if we're otherwise 
    using POSIX signals, etc. */
@@ -69,6 +83,11 @@ Boolean extern log_tcr_info;
 #define TCR_TO_TSD(tcr) ((void *)((natural)(tcr)+TCR_BIAS))
 #define TCR_FROM_TSD(tsd) ((TCR *)((natural)(tsd)-TCR_BIAS))
 
+#ifdef USE_WINDOWS_SEMAPHORES
+
+typedef void *sem_t;
+
+#endif
 #ifdef USE_POSIX_SEMAPHORES
 typedef sem_t * SEMAPHORE;
 #define SEM_WAIT(s) sem_wait((SEMAPHORE)s)

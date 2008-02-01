@@ -1,5 +1,5 @@
 #
-#   Copyright (C) 2005 Clozure Associates
+#   Copyright (C) 2007 Clozure Associates
 #   This file is part of OpenMCL.  
 #
 #   OpenMCL is licensed under the terms of the Lisp Lesser GNU Public
@@ -16,13 +16,16 @@
 
 VPATH = ../
 RM = /bin/rm
-CC = x86_64-pc-mingw32-gcc
-AS = x86_64-pc-mingw32-as
+# gcc64, as64: until there's a real win64 gcc, assume that gcc and gas
+# are installed under these names
+CC = gcc64
+AS = as64
 M4 = m4
+LD = ld
 ASFLAGS = --64
 M4FLAGS = -DWIN64 -DWINDOWS -DX86 -DX8664 -DHAVE_TLS -DEMUTLS
 CDEFINES = -DWIN64 -DWINDOWS -D_REENTRANT -DX86 -DX8664 -D_GNU_SOURCE -DHAVE_TLS -DEMUTLS #-DDISABLE_EGC
-CDEBUG = -g
+CDEBUG = -gcoff
 COPT = -O2
 
 # If the linker supports a "--hash-style=" option, use traditional
@@ -39,7 +42,7 @@ endif
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) -m64 -o $@
+	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) -fno-leading-underscore -m64 -o $@
 
 SPOBJ = pad.o x86-spjump64.o x86-spentry64.o x86-subprims64.o
 ASMOBJ = x86-asmutils64.o imports.o
