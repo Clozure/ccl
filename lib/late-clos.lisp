@@ -18,7 +18,6 @@
 ;;; functions, if it seems likely that that might perform better than
 ;;; the general generic-function-dispatch mechanism.
 
-(defparameter *compile-dcode-functions* nil)
 
 ;;; If the GF accepts a fixed number of arguments, return its
 ;;; lambda list.
@@ -54,19 +53,18 @@
 ;;; methods (especially reader methods) as a very late (delivery-time)
 ;;; optimization.
 (defun dcode-for-fixed-arg-singleton-gf (gf)
-  (when *compile-dcode-functions*
-    (let* ((methods (generic-function-methods gf))
-           (method (car methods))
-           (args (gf-fixed-arg-lambda-list gf)))
-      (when (and method
-                 args
-                 (null (cdr methods))
-                 (null (method-qualifiers method))
-                 (dolist (spec (method-specializers method))
-                   (unless (eq spec *t-class*) (return t))))
-        (compile nil
-                 `(lambda ,args
-                   (cond ,(generate-conformance-clause args method)
-                         (t (no-applicable-method ,gf ,@args)))))))))
+  (let* ((methods (generic-function-methods gf))
+         (method (car methods))
+         (args (gf-fixed-arg-lambda-list gf)))
+    (when (and method
+               args
+               (null (cdr methods))
+               (null (method-qualifiers method))
+               (dolist (spec (method-specializers method))
+                 (unless (eq spec *t-class*) (return t))))
+      (compile nil
+               `(lambda ,args
+                 (cond ,(generate-conformance-clause args method)
+                       (t (no-applicable-method ,gf ,@args))))))))
 
 (register-non-dt-dcode-function #'dcode-for-fixed-arg-singleton-gf)
