@@ -1644,7 +1644,7 @@ xGetSharedLibrary(char *path, int mode)
 {
   return dlopen(path, mode);
 }
-#else
+#endif
 #else
 void *
 xGetSharedLibrary(char *path, int *resultType)
