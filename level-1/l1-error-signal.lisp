@@ -122,7 +122,9 @@
                             (apply #'format stream cont-string args))
                 nil))))
 
+
 (defun %error (condition args error-pointer)
+  (setq *error-reentry-count* 0)
   (setq condition (condition-arg condition args 'simple-error))
   (signal condition)
   (unless *interactive-streams-initialized*
