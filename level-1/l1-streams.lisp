@@ -5202,7 +5202,7 @@
     (let* ((wait-end 
             (if timeout
               (multiple-value-bind (seconds millis) (milliseconds timeout)
-                (#_gettimeofday now +null-ptr+)
+                (#_gettimeofday now (%null-ptr))
                 (setq timeout (+ (* seconds 1000) millis))
                 (+ (timeval->milliseconds now) timeout)))))
       (loop
@@ -5216,7 +5216,7 @@
         ;; otherwise, adjust the remaining timeout.
         ;; If there was no timeout, continue to wait forever.
         (when timeout
-          (#_gettimeofday now +null-ptr+)
+          (#_gettimeofday now (%null-ptr))
           (setq timeout (- wait-end (timeval->milliseconds now)))
           (if (<= timeout 0)
             (return)))))))
@@ -5233,7 +5233,7 @@
     (let* ((wait-end 
             (if timeout
               (multiple-value-bind (seconds millis) (milliseconds timeout)
-                (#_gettimeofday now +null-ptr+)
+                (#_gettimeofday now (%null-ptr))
                 (setq timeout (+ (* seconds 1000) millis))
                 (+ (timeval->milliseconds now) timeout)))))
       (loop
@@ -5247,7 +5247,7 @@
         ;; otherwise, adjust the remaining timeout.
         ;; If there was no timeout, continue to wait forever.
         (when timeout
-          (#_gettimeofday now +null-ptr+)
+          (#_gettimeofday now (%null-ptr))
           (setq timeout (- wait-end (timeval->milliseconds now)))
           (if (<= timeout 0)
             (return)))))))

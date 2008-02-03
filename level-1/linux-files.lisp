@@ -1321,7 +1321,7 @@ created with :WAIT NIL.) Return T if successful; signal an error otherwise."
                 (progn
                   (fd-close fd)
                   (error "Can't make a vector with ~s elements in this implementation." (+ ndata-elements nalignment-elements)))
-                (let* ((addr (#_mmap +null-ptr+
+                (let* ((addr (#_mmap (%null-ptr)
                                      nbytes
                                      #$PROT_NONE
                                      (logior #$MAP_ANON #$MAP_PRIVATE)
