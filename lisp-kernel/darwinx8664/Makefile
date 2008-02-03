@@ -26,7 +26,7 @@ LD = ld64
 
 ### Current ld64 bugs include the claim that 0x1000 isn't a power of 2.
 ### Gosh.  I always thought that it was.  Go know, right ?
-LDFLAGS = -arch x86_64 -dynamic  -o $@ -e start -pagezero_size 0x1000 -seg1addr 0x00001000
+LDFLAGS = -arch x86_64 -dynamic  -o $@ -e start -pagezero_size 0x11000 -seg1addr 0x00011000
 
 
 AS = as
