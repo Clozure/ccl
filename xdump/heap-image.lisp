@@ -96,7 +96,7 @@
 			   (+ 4095 (file-position f)))))
 
 
-(defparameter *image-abi-version* 1019)
+(defparameter *image-abi-version* 1020)
 
 (defun write-image-file (pathname image-base spaces &optional (abi-version *image-abi-version*))
   (target-setup-image-header-sizes)
