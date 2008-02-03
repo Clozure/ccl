@@ -97,25 +97,16 @@
 
 ;;; Return the (possibly truncated) 32-bit quotient and remainder
 ;;; resulting from dividing hi:low by divisor.
-;;; We only have two immediate registers, and -have- to use them
-;;; to represent hi:low.  Keep the unboxed divisor in the high
-;;; word of a fixnum on the top of the stack.  (That's probably
-;;; slower than using %rbp, but clobbering %rbp confuses backtrace).
-;;; For x8632, we'll probably have to mark something (%ecx ?) as
-;;; being "temporarily unboxed" by mucking with some bits in the
-;;; TCR.
 (defx86lapfunction %floor ((num-high arg_x) (num-low arg_y) (divisor arg_z))
   (let ((unboxed-high imm1)
         (unboxed-low imm0)
         (unboxed-quo imm0)
-        (unboxed-rem imm1))
-    (unbox-fixnum divisor imm0)
-    (pushq ($ 0))
-    (movl (%l imm0) (@ 4 (% rsp)))
+        (unboxed-rem imm1)
+        (unboxed-divisor imm2))
+    (unbox-fixnum divisor unboxed-divisor)
     (unbox-fixnum num-high unboxed-high)
     (unbox-fixnum num-low unboxed-low)
-    (divl (@ 4 (% rsp)))
-    (addq ($ 8) (% rsp))
+    (divl (%l unboxed-divisor))
     (box-fixnum unboxed-quo arg_y)
     (box-fixnum unboxed-rem arg_z)
     (movq (% rsp) (% temp0))
