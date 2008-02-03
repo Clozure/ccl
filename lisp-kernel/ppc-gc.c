@@ -301,8 +301,7 @@ mark_root(LispObj n)
         if (flags & nhash_weak_mask) {
           ((hash_table_vector_header *) base)->cache_key = undefined;
           ((hash_table_vector_header *) base)->cache_value = lisp_nil;
-	  deref(ptr_to_lispobj(base),1) = GCweakvll;
-	  GCweakvll = n;
+          mark_weak_htabv(n);
 	  return;
 	}
       }
@@ -561,8 +560,7 @@ rmark(LispObj n)
         if (flags & nhash_weak_mask) {
           ((hash_table_vector_header *) base)->cache_key = undefined;
           ((hash_table_vector_header *) base)->cache_value = lisp_nil;
-	  deref(ptr_to_lispobj(base),1) = GCweakvll;
-	  GCweakvll = n;
+	  mark_weak_htabv(n);
 	  return;
 	}
       }
@@ -730,10 +728,8 @@ rmark(LispObj n)
         if (flags & nhash_weak_mask) {
           ((hash_table_vector_header *) base)->cache_key = undefined;
           ((hash_table_vector_header *) base)->cache_value = lisp_nil;
-	  
-	  deref(ptr_to_lispobj(base),1) = GCweakvll;
-	  GCweakvll = this;
-	  goto Climb;
+	  dws_mark_weak_htabv(this);
+	  element_count = hash_table_vector_header_count;
 	}
       }
 
@@ -988,9 +984,7 @@ mark_simple_area_range(LispObj *start, LispObj *end)
         if (flags & nhash_weak_mask) {
           ((hash_table_vector_header *) start)->cache_key = undefined;
           ((hash_table_vector_header *) start)->cache_value = lisp_nil;
-        
-	  start[1] = GCweakvll;
-	  GCweakvll = (LispObj) (((natural) start) + fulltag_misc);
+	  mark_weak_htabv((LispObj)start);
 	  element_count = 0;
 	}
       }
