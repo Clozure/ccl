@@ -279,7 +279,7 @@
 
 ;;;; Multiplication.
 
-#|
+#||
 ;;; These parameters match GMP's.
 (defvar *sqr-basecase-threshold* 5)
 (defvar *sqr-karatsuba-threshold* 22)
@@ -741,7 +741,7 @@
 			 (the fixnum (- (the fixnum (- l un)) vn))
 			 c)
 			tt)))))))))))
-|#
+||#
 
 (defun multiply-bignums (a b)
   (let* ((signs-differ (not (eq (bignum-minusp a) (bignum-minusp b)))))
@@ -775,8 +775,95 @@
 
 (defun multiply-bignum-and-fixnum (bignum fixnum)
   (declare (type bignum-type bignum) (fixnum fixnum))
-  (with-small-bignum-buffers ((big-fix fixnum))
-    (multiply-bignums bignum big-fix)))
+  (let* ((big-len (%bignum-length bignum))
+         (big-neg (bignum-minusp bignum))
+         (signs-differ (not (eq big-neg (minusp fixnum)))))
+    (flet ((multiply-unsigned-bignum-and-2-digit-fixnum (a len-a high low)
+             (declare (bignum-type a)
+                      (bignum-element-type high low)
+                      (bignum-index len-a)
+                      (optimize (speed 3) (safety 0)))
+	     (let* ((len-res (+ len-a 2))
+		    (res (%allocate-bignum len-res)) )
+	       (declare (bignum-index len-a  len-res))
+               (dotimes (i len-a)
+                 (declare (type bignum-index i))
+                 (let* ((carry-digit 0)
+                        (x (bignum-ref a i))
+                        (k i))
+                   (declare (fixnum k))
+                   (multiple-value-bind (big-carry res-digit)
+                       (%multiply-and-add4 x
+                                           low
+                                           (bignum-ref res k)
+                                           carry-digit)
+                     (setf (bignum-ref res k) res-digit
+                           carry-digit big-carry
+                           k (1+ k)))
+                   (multiple-value-bind (big-carry res-digit)
+                       (%multiply-and-add4 x
+                                           high
+                                           (bignum-ref res k)
+                                           carry-digit)
+                     (setf (bignum-ref res k) res-digit
+                           carry-digit big-carry
+                           k (1+ k)))
+                   (setf (bignum-ref res k) carry-digit)))
+               res))
+           (multiply-unsigned-bignum-and-1-digit-fixnum (a len-a fix)
+             (declare (bignum-type a)
+                      (bignum-element-type fix)
+                      (bignum-index len-a)
+                      (optimize (speed 3) (safety 0)))
+	     (let* ((len-res (+ len-a 1))
+		    (res (%allocate-bignum len-res)) )
+	       (declare (bignum-index len-a  len-res))
+               (dotimes (i len-a)
+                 (declare (type bignum-index i))
+                 (let* ((carry-digit 0)
+                        (x (bignum-ref a i))
+                        (k i))
+                   (declare (fixnum k))
+                   (multiple-value-bind (big-carry res-digit)
+                       (%multiply-and-add4 x
+                                           fix
+                                           (bignum-ref res k)
+                                           carry-digit)
+                     (setf (bignum-ref res k) res-digit
+                           carry-digit big-carry
+                           k (1+ k)))
+                   (setf (bignum-ref res k) carry-digit)))
+               res)))
+      (let* ((low (logand (1- (ash 1 32)) fixnum))
+             (high (unless (<= (%fixnum-intlen fixnum) 32)
+                     (ldb (byte 32 32) fixnum)))
+             (res (if big-neg
+                    (let* ((neg-len (1+ big-len)))
+                      (declare (type bignum-index neg-len))
+                      (with-bignum-buffers ((neg neg-len))
+                        (negate-bignum bignum nil neg)
+                        (if high
+                          (multiply-unsigned-bignum-and-2-digit-fixnum
+                           neg
+                           neg-len
+                           high
+                           low)
+                          (multiply-unsigned-bignum-and-1-digit-fixnum
+                           neg
+                           neg-len
+                           low))))
+                    (if high
+                      (multiply-unsigned-bignum-and-2-digit-fixnum
+                       bignum
+                       big-len
+                       high
+                       low)
+                      (multiply-unsigned-bignum-and-1-digit-fixnum
+                       bignum
+                       big-len
+                       low)))))
+	(if signs-differ (negate-bignum-in-place res))
+	(%normalize-bignum-macro res)))))
 
 
 ;; assume we already know result won't fit in a fixnum
