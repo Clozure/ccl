@@ -1277,7 +1277,7 @@ void
 remap_spjump()
 {
   extern opcode spjump_start;
-  pc new = mmap((pc) 0x5000,
+  pc new = mmap((pc) 0x15000,
                 0x1000,
                 PROT_READ | PROT_WRITE | PROT_EXEC,
                 MAP_PRIVATE | MAP_ANON | MAP_FIXED,
@@ -1503,7 +1503,11 @@ main(int argc, char *argv[], char *envp[], void *aux)
   set_nil(load_image(image_name));
   lisp_global(TCR_AREA_LOCK) = ptr_to_lispobj(tcr_area_lock);
 
+#ifdef X8664
+  lisp_global(SUBPRIMS_BASE) = (LispObj)((1<<16)+(5<<10));
+#else
   lisp_global(SUBPRIMS_BASE) = (LispObj)(5<<10);
+#endif
   lisp_global(RET1VALN) = (LispObj)&ret1valn;
   lisp_global(LEXPR_RETURN) = (LispObj)&nvalret;
   lisp_global(LEXPR_RETURN1V) = (LispObj)&popj;
@@ -1821,7 +1825,7 @@ load_image(char *path)
     }
   }
   if (image_nil == 0) {
-    fprintf(stderr, "Couldn't load lisp heap image from %s\n", path);
+    fprintf(stderr, "Couldn't load lisp heap image from %s:\n%s\n", path, strerror(errno));
     exit(-1);
   }
   return image_nil;

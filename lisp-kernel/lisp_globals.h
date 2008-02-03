@@ -82,8 +82,8 @@ extern LispObj lisp_nil;
 #endif
 
 #ifdef X8664
-#define lisp_global(g) (((LispObj *) 0x3000)[(g)])
-#define nrs_symbol(s) (((lispsymbol *) 0x3020)[(s)])
+#define lisp_global(g) (((LispObj *) 0x13000)[(g)])
+#define nrs_symbol(s) (((lispsymbol *) 0x13020)[(s)])
 #endif
 
 

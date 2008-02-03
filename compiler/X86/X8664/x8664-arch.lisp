@@ -411,8 +411,8 @@
 (define-subtag instance fulltag-nodeheader-1 8)
 
 	
-(defconstant nil-value (+ #x3000 fulltag-nil))
-(defconstant t-value (+ #x3020 fulltag-symbol))
+(defconstant nil-value (+ #x13000 fulltag-nil))
+(defconstant t-value (+ #x13020 fulltag-symbol))
 (defconstant misc-bias fulltag-misc)
 (defconstant cons-bias fulltag-cons)
 (defconstant t-offset (- t-value nil-value))
@@ -765,11 +765,6 @@
 (define-header value-cell-header value-cell.element-count subtag-value-cell)
 (define-header macptr-header macptr.element-count subtag-macptr)
 
-#+x86-target
-(defconstant yield-syscall
-  #+linux-target 24
-  #+freebsd-target 321
-  #+darwin-target #x100003d)
 
 (defconstant gf-code-size 18)
 
@@ -951,7 +946,7 @@
            (ash element-count 1)))))))
 
 (defparameter *x8664-subprims-shift* 3)
-(defconstant x8664-subprims-base #x5000)
+(defconstant x8664-subprims-base #x15000)
 
 
 (declaim (special *x8664-subprims*))
