@@ -4717,7 +4717,7 @@ or prepended to output."
 
 (defun %count-characters-in-octet-vector (vector start end encoding)
   (unless (= (typecode vector) target::subtag-u8-vector)
-    (report-bad-arg vector '(simple-array (unsgigned-byte 8) (*))))
+    (report-bad-arg vector '(simple-array (unsigned-byte 8) (*))))
   (funcall (character-encoding-length-of-vector-encoding-function encoding)
            vector
            start
