@@ -9058,6 +9058,16 @@
                                          '%short-float)
                              (list nil (list arg))))))))
 
+(defun show-function-constants (f)
+  (cond ((typep f 'function)
+	 (do* ((i 0 j)
+	       (n (uvsize f))
+	       (j 1 (1+ j)))
+	      ((= j n))
+	   (format t "~&~d: ~s" i (uvref f j))))
+	(t (report-bad-arg f 'function))))
+
+	
 ;------
 
 #+not-yet
