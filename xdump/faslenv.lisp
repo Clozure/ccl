@@ -59,7 +59,7 @@
 (defconstant $fasl-file-id #xff00)
 (defconstant $fasl-file-id1 #xff01)
 (defconstant $fasl-vers #x52)
-(defconstant $fasl-min-vers #x51)
+(defconstant $fasl-min-vers #x52)
 (defconstant $faslend #xff)
 (defconstant $fasl-buf-len 2048)
 (defmacro deffaslop (n arglist &body body)
