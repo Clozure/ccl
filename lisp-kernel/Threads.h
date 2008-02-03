@@ -35,7 +35,7 @@
 #undef  USE_POSIX_SEMAPHORES
 #endif
 #ifdef WINDOWS
-#define USE_WINDOWS_SEMPAHORES 1
+#define USE_WINDOWS_SEMAPHORES 1
 #undef USE_POSIX_SEMAPHORES
 #endif
 
@@ -85,7 +85,7 @@ Boolean extern log_tcr_info;
 
 #ifdef USE_WINDOWS_SEMAPHORES
 
-typedef void *sem_t;
+typedef void * SEMAPHORE;
 
 #endif
 #ifdef USE_POSIX_SEMAPHORES

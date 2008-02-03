@@ -59,7 +59,7 @@ raise_thread_interrupt(TCR *target)
     return mach_raise_thread_interrupt(target);
   }
 #endif
-  return pthread_kill((pthread_t)target->osid, SIGNAL_FOR_PROCESS_INTERRUPT);
+ return pthread_kill((pthread_t)target->osid, SIGNAL_FOR_PROCESS_INTERRUPT);
 }
 
 signed_natural

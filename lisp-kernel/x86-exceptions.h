@@ -72,7 +72,7 @@ pthread_mutex_t *mach_exception_lock;
 #ifdef WIN64
 #define xpGPRvector(x) ((DWORD64 *)((x)->ContextRecord))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
-#define xpPC(x) xpGPR(x,Iip);
+#define xpPC(x) xpGPR(x,Iip)
 #endif
 
 #ifdef DARWIN
@@ -151,8 +151,11 @@ extern void set_gs_address(void *);
 #ifdef DARWIN
 #undef USE_SIGALTSTACK
 #else
+#ifdef WINDOWS
+#undef USE_SIGALTSTACK
+#else
 #define USE_SIGALTSTACK 1
-/* #undef USE_SIGALTSTACK */
+#endif
 #endif
 
 #ifdef USE_SIGALTSTACK

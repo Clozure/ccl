@@ -42,10 +42,10 @@
 */
 
 typedef struct {
-  unsigned long code;
+  natural code;
   area *area;
-  unsigned long memory_size;
-  unsigned long static_dnodes;
+  natural memory_size;
+  natural static_dnodes;
 } openmcl_image_section_header;
 
 typedef struct {

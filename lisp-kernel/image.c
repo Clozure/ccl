@@ -21,7 +21,9 @@
 #include "gc.h"
 #include <errno.h>
 #include <unistd.h>
+#ifndef WINDOWS
 #include <sys/mman.h>
+#endif
 #include <stdio.h>
 
 

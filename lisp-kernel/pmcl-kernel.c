@@ -236,7 +236,7 @@ allocate_lisp_stack(unsigned useable,
     if (softp) *softp = sprotp;
   }
   if (base_p) *base_p = base;
-  return (BytePtr) ((unsigned long)(base+size));
+  return (BytePtr) ((natural)(base+size));
 }
 
 /*
@@ -285,7 +285,7 @@ allocate_lisp_stack_area(area_code stack_type,
 area*
 register_cstack_holding_area_lock(BytePtr bottom, natural size)
 {
-  BytePtr lowlimit = (BytePtr) (((((unsigned long)bottom)-size)+4095)&~4095);
+  BytePtr lowlimit = (BytePtr) (((((natural)bottom)-size)+4095)&~4095);
   area *a = new_area((BytePtr) bottom-size, bottom, AREA_CSTACK);
   a->hardlimit = lowlimit+CSTACK_HARDPROT;
   a->softlimit = a->hardlimit+CSTACK_SOFTPROT;
@@ -358,6 +358,9 @@ unsigned unsigned_max(unsigned x, unsigned y)
 #ifdef PPC
 #define MAXIMUM_MAPPABLE_MEMORY (128L<<30L)
 #endif
+#endif
+#ifdef WINDOWS
+#define MAXIMUM_MAPPABLE_MEMORY (512<<30LL)
 #endif
 #else
 #ifdef DARWIN
@@ -510,7 +513,7 @@ extend_readonly_area(unsigned more)
     if ((a->active + more) > a->high) {
       return NULL;
     }
-    mask = ((unsigned long)a->active) & (page_size-1);
+    mask = ((natural)a->active) & (page_size-1);
     if (mask) {
       UnProtectMemory(a->active-mask, page_size);
     }
@@ -597,7 +600,7 @@ raise_limit()
 
 
 area *
-create_reserved_area(unsigned long totalsize)
+create_reserved_area(natural totalsize)
 {
   OSErr err;
   Ptr h;
@@ -667,7 +670,7 @@ create_reserved_area(unsigned long totalsize)
 
   if (start != want) {
     munmap(start, totalsize+heap_segment_size);
-    start = (void *)((((unsigned long)start)+heap_segment_size-1) & ~(heap_segment_size-1));
+    start = (void *)((((natural)start)+heap_segment_size-1) & ~(heap_segment_size-1));
     if(mmap(start, totalsize, PROT_NONE, MAP_PRIVATE | MAP_ANON | MAP_FIXED | MAP_NORESERVE, -1, 0) != start) {
       return NULL;
     }
@@ -675,7 +678,7 @@ create_reserved_area(unsigned long totalsize)
   mprotect(start, totalsize, PROT_NONE);
 
   h = (Ptr) start;
-  base = (unsigned long) start;
+  base = (natural) start;
   image_base = base;
   lastbyte = (BytePtr) (start+totalsize);
   static_space_start = static_space_active = (BytePtr)STATIC_BASE_ADDRESS;
@@ -689,10 +692,10 @@ create_reserved_area(unsigned long totalsize)
      maximum useable area of the heap (+ 3 words for the EGC.)
   */
   end = lastbyte;
-  end = (BytePtr) ((unsigned long)((((unsigned long)end) - ((totalsize+63)>>6)) & ~4095));
+  end = (BytePtr) ((natural)((((natural)end) - ((totalsize+63)>>6)) & ~4095));
 
   global_mark_ref_bits = (bitvector)end;
-  end = (BytePtr) ((unsigned long)((((unsigned long)end) - ((totalsize+63) >> 6)) & ~4095));
+  end = (BytePtr) ((natural)((((natural)end) - ((totalsize+63) >> 6)) & ~4095));
   global_reloctab = (LispObj *) end;
   reserved = new_area(start, end, AREA_VOID);
   /* The root of all evil is initially linked to itself. */
@@ -855,7 +858,7 @@ initial_stack_bottom()
   while (*p) {
     p += (1+strlen(p));
   }
-  return (BytePtr)((((unsigned long) p) +4095) & ~4095);
+  return (BytePtr)((((natural) p) +4095) & ~4095);
 }
 
 
@@ -1160,8 +1163,8 @@ process_options(int argc, char *argv[])
 	  if (stack_size >= MIN_CSTACK_SIZE) {
 	   thread_stack_size = stack_size;
 	  }
-          if (thread_stack_size >= (1L<<((WORD_SIZE-fixnumshift)-1))) {
-            thread_stack_size = (1L<<((WORD_SIZE-fixnumshift)-1))-1;
+          if (thread_stack_size >= (1LL<<((WORD_SIZE-fixnumshift)-1))) {
+            thread_stack_size = (1LL<<((WORD_SIZE-fixnumshift)-1))-1;
           }
           
 	}
@@ -1295,6 +1298,8 @@ remap_spjump()
 void
 check_os_version(char *progname)
 {
+#ifdef WINDOWS
+#else
   struct utsname uts;
 
   uname(&uts);
@@ -1312,6 +1317,7 @@ check_os_version(char *progname)
       reserved_area_size = 1U << 30;
     }
   }
+#endif
 #endif
 #endif
 }
@@ -1616,7 +1622,7 @@ void
 xMakeDataExecutable(void *start, unsigned long nbytes)
 {
   extern void flush_cache_lines();
-  unsigned long ustart = (unsigned long) start, base, end;
+  natural ustart = (natural) start, base, end;
   
   base = (ustart) & ~(cache_block_size-1);
   end = (ustart + nbytes + cache_block_size - 1) & ~(cache_block_size-1);

@@ -34,7 +34,9 @@
 #ifdef DARWIN
 #include <sysexits.h>
 #endif
+#ifndef WINDOWS
 #include <sys/syslog.h>
+#endif
 
 
 int

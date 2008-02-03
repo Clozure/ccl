@@ -118,6 +118,8 @@ typedef struct task_events_info paging_info;
 #ifndef WINDOWS
 #include <sys/resource.h>
 typedef struct rusage paging_info;
+#else
+typedef natural paging_info;
 #endif
 #endif
 

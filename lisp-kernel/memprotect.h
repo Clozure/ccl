@@ -28,6 +28,22 @@
 #include <ucontext.h>
 #endif
 
+#ifdef WINDOWS
+#define PROT_NONE (0)
+#define PROT_READ (1)
+#define PROT_WRITE (2)
+#define PROT_EXEC (3)
+
+#define MAP_PRIVATE (1)
+#define MAP_FIXED (2)
+#define MAP_ANON (3)
+
+void *mmap(void *, size_t, int, int, int, off_t);
+
+#define MAP_FAILED ((void *)(-1))
+
+#endif
+
 int
 ProtectMemory(LogicalAddress, int);
 

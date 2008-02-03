@@ -168,6 +168,11 @@ typedef struct area_list {
 #endif
 #endif
 #endif
+#ifdef WINDOWS
+#ifdef X8664
+#define IMAGE_BASE_ADDRESS 0x300000000000LL
+#endif
+#endif
 
 #ifdef X8664
 #define PURESPACE_RESERVE 0x40000000 /* 1GB */

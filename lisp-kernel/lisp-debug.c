@@ -27,7 +27,9 @@
 #include <errno.h>
 #include <stdio.h>
 
+#ifndef WINDOWS
 #include <sys/socket.h>
+#endif
 #include <sys/stat.h>
 
 

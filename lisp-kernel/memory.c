@@ -31,8 +31,9 @@
 #include <linux/prctl.h>
 #endif
 
-
+#ifndef WINDOWS
 #include <sys/mman.h>
+#endif
 
 void
 allocation_failure(Boolean pointerp, natural size)
@@ -178,7 +179,11 @@ find_protected_area(BytePtr addr)
 void
 zero_memory_range(BytePtr start, BytePtr end)
 {
-  bzero(start,end-start);
+#ifdef WINDOWS
+  ZeroMemory(start,end-start);
+#else
+  bzero(start,(size_t)(end-start));
+#endif
 }
 
 
