@@ -2040,7 +2040,7 @@
   (movb (:$b 4) (:@ x8664::misc-data-offset (:%q closure))) ; code word count
   (movb (:$b #x4c) (:@ (+ x8664::misc-data-offset 7) (:%q closure))) ; 1st byte of lea
   (movq (:%q imm0) (:@ (+ x8664::misc-data-offset 8) (:%q closure))) ; rest of lea, start of jmp
-  (movl (:$l #x00516825) (:@ (+ x8664::misc-data-offset 16) (:%q closure)))
+  (movl (:$l #x01516825) (:@ (+ x8664::misc-data-offset 16) (:%q closure)))
   (movb (:$b x8664::function-boundary-marker) (:@ (+ x8664::misc-data-offset 24)  (:%q closure))))
 
 
