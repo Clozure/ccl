@@ -53,7 +53,7 @@
     heap-start                          ; start of lisp heap
     heap-end                            ; end of lisp heap
     statically-linked                   ; true if the lisp kernel is statically linked
-    stack-size                          ; value of --stack-size arg
+    weak-gc-method                      ; weak gc policy/algorithm.
     objc-2-begin-catch                  ; objc_begin_catch
     bad-funcall                         ; pseudo-target for funcall
     all-areas                           ; doubly-linked area list
@@ -73,7 +73,7 @@
     host-platform                       ; 0 on MacOS, 1 on PPC Linux, 2 on VxWorks ...
     batch-flag				; non-zero if --batch specified
     unwind-resume			; _Unwind_Resume
-    BAD-fpscr-save-high  		; high word of FP reg used to save FPSCR
+    weak-gc-method                      ; weak gc algorithm.
     image-name				; current image name
     initial-tcr                         ; initial thread's context record
     ))

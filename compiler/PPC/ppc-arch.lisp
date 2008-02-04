@@ -269,8 +269,8 @@
     argv                                ; address of C lib argv
     host-platform                       ; 0 on MacOS, 1 on PPC Linux, 2 on VxWorks ...
     batch-flag				; non-zero if --batch specified
-    BAD-fpscr-save			; lisp's fpscr when in FFI-land
-    BAD-fpscr-save-high  		; high word of FP reg used to save FPSCR
+    unwind-resume                       ; objc exception
+    weak-gc-method                      ; for gc
     image-name				; current image name
     initial-tcr                         ; initial thread's context record
     ))
