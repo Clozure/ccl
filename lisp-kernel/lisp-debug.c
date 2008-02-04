@@ -81,7 +81,7 @@ readc()
       continue;
     case EOF:
       if (ferror(stdin)) {
-	if (errno == EINTR) {
+	if ((errno == EINTR) || (errno == EIO)) {
 	  continue;
 	}
       }
