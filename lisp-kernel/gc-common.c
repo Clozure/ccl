@@ -750,7 +750,7 @@ weak_mark_fun mark_weak_htabv = traditional_mark_weak_htabv;
 weak_process_fun markhtabvs = traditional_markhtabvs;
 
 void
-install_weak_mark_functions(int set) {
+install_weak_mark_functions(natural set) {
   switch(set) {
   case 0:
   default:
@@ -989,7 +989,6 @@ Boolean just_purified_p = false;
 #warning recursive marker disabled for testing; remember to re-enable it
 #endif
 
-int weak_hash_toggle = 0;
 
 void 
 gc(TCR *tcr, signed_natural param)
@@ -1007,8 +1006,9 @@ gc(TCR *tcr, signed_natural param)
   TCR *other_tcr;
   natural static_dnodes;
 
-  install_weak_mark_functions(weak_hash_toggle);
-  weak_hash_toggle = 1 - weak_hash_toggle;
+  install_weak_mark_functions(lisp_global(WEAK_GC_METHOD) >> fixnumshift);
+
+
 
 #ifndef FORCE_DWS_MARK
   if ((natural) (tcr->cs_limit) == CS_OVERFLOW_FORCE_LIMIT) {
