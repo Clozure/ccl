@@ -65,7 +65,7 @@ extern LispObj lisp_nil;
 #define HOST_PLATFORM (-43)	/* for platform-specific initialization */
 #define BATCH_FLAG (-44)	/* -b arg */
 #define UNWIND_RESUME (-45)	/* address of _Unwind_Resume from libobjc */
-#define BAD_FPSCR_SAVE_HIGH (-46)	/* high word of FP reg used to save FPSCR */
+#define WEAK_GC_METHOD (-46)	/* weak GC algorithm */
 #define IMAGE_NAME (-47)	/* --image-name arg */
 #define INITIAL_TCR (-48)	/* initial thread tcr */
 
