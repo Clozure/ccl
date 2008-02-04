@@ -846,12 +846,13 @@
                                             nil ;intern-hook
                                             )))
                         packages)))
-    (flet ((lookup-clone (p) (or (cdr (assq p alist)) (error "Package ~S not cloned ." p))))
+    (flet ((lookup-clone (p) (let* ((clone (cdr (assq p alist))))
+                               (when clone (list clone)))))
       (dolist (pair alist alist)
         (let* ((orig (car pair))
                (dup (cdr pair)))
-          (setf (pkg.used dup) (mapcar #'lookup-clone (pkg.used orig))
-                (pkg.used-by dup) (mapcar #'lookup-clone (pkg.used-by orig))))))))
+          (setf (pkg.used dup) (mapcan #'lookup-clone (pkg.used orig))
+                (pkg.used-by dup) (mapcan #'lookup-clone (pkg.used-by orig))))))))
 
 ;;; Dump each cloned package into dynamic-space; return an alist
 (defun xload-assign-aliased-package-addresses (alist)
@@ -982,6 +983,9 @@
     (show-list l)
     (format t ")")))
 
+(defun xload-initial-packages ()
+  (mapcar #'find-package '("CL" "CCL"  "KEYWORD" "TARGET")))
+
 
 (defun xfasload (output-file &rest pathnames)
   (let* ((*xload-symbols* (make-hash-table :test #'eq))
@@ -992,7 +996,7 @@
 	 (*xload-static-space* (init-xload-space *xload-static-space-address* *xload-static-space-size* area-static))
          (*xload-managed-static-space* (init-xload-space *xload-managed-static-space-address* *xload-managed-static-space-size* area-managed-static))
 						 
-         (*xload-package-alist* (xload-clone-packages %all-packages%))
+         (*xload-package-alist* (xload-clone-packages (xload-initial-packages)))
          (*xload-cold-load-functions* nil)
          (*xload-cold-load-documentation* nil)
          (*xload-loading-file-source-file* nil)
@@ -1729,15 +1733,6 @@
 				     *xload-default-backend*))
 	 (*xload-startup-file* (backend-xload-info-default-startup-file-name
 				*xload-target-backend*)))
-    ;; This just undoes the CLtL1 compatability stuff in
-    ;; "ccl:library;lisp-package".  If someone's created LISP and/or
-    ;; USER packages, nuke 'em.
-    (let* ((user-pkg (find-package "USER"))
-	   (lisp-pkg (find-package "LISP")))
-      (when (and user-pkg (not (eq user-pkg (find-package "CL-USER"))))
-	(delete-package user-pkg))
-      (when (and lisp-pkg (not (eq lisp-pkg (find-package "CL"))))
-	(delete-package lisp-pkg)))
     (in-development-mode
      (when recompile
        (target-Xcompile-level-0 target (eq recompile :force)))
