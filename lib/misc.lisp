@@ -840,3 +840,19 @@ are running on, or NIL if we can't find any useful information."
 	(static-cons car-value cdr-value)))))
 	
 
+(defparameter *weak-gc-method-names*
+  '((:traditional . 0)
+    (:non-circular . 1)))
+
+
+(defun weak-gc-method ()
+  (or (car (rassoc (%get-kernel-global 'weak-gc-method)
+                   *weak-gc-method-names*))
+      :traditional))
+
+
+(defun (setf weak-gc-method) (name)
+  (setf (%get-kernel-global 'weak-gc-method)
+        (or (cdr (assoc name *weak-gc-method-names*))
+            0))
+  name)
