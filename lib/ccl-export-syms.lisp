@@ -388,6 +388,7 @@
      gc-retaining-pages
      gc-verbose
      gc-verbose-p
+     weak-gc-method
      *trace-max-indent* 
      *trace-level* 
      *fasl-save-doc-strings* 
