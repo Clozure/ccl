@@ -40,7 +40,7 @@
   "Insert the last character typed.
   With prefix argument insert the character that many times."
   "Implements ``Self Insert'', calling this function is not meaningful."
-  (let ((char (hemlock-ext:key-event-char *last-key-event-typed*)))
+  (let ((char (last-char-typed)))
     (unless char (editor-error "Can't insert that character."))
     (if (and p (> p 1))
 	(insert-string
@@ -51,9 +51,8 @@
 (defcommand "Quoted Insert" (p)
   "Causes the next character typed to be inserted in the current
    buffer, even if would normally be interpreted as an editor command."
-  "Reads a key-event from *editor-input* and inserts it at the point."
   (declare (ignore p))
-  (hi::enable-self-insert hi::*editor-input*))
+  (setf (hi::hemlock-view-quote-next-p hi::*current-view*) t))
 
 (defcommand "Forward Character" (p)
   "Move the point forward one character, collapsing the selection.
@@ -179,7 +178,7 @@
 	 ((reverse-find-attribute mark :word-delimiter))
 	 (t
 	  (move-mark
-	   mark (buffer-start-mark (line-buffer (mark-line mark)))))))
+	   mark (buffer-start-mark (mark-buffer mark))))))
       (do ((cnt offset (1- cnt)))
 	  ((zerop cnt) mark)
 	(cond
@@ -230,12 +229,10 @@
 
 ;;;; Moving around:
 
-(defvar *target-column* 0)
-
 (defun set-target-column (mark)
   (if (eq (last-command-type) :line-motion)
-      *target-column*
-      (setq *target-column* (mark-column mark))))
+    (hi::hemlock-target-column hi::*current-view*)
+    (setf (hi::hemlock-target-column hi::*current-view*) (mark-column mark))))
 
 (defhvar "Next Line Inserts Newlines"
     "If true, causes the \"Next Line\" command to insert newlines when
@@ -249,20 +246,20 @@
    the prefix is negative)."
   "Moves the down p lines, collapsing the selection."
   (let* ((point (current-point-collapsing-selection))
-	 (target (set-target-column point)))
-    (unless (line-offset point (or p 1))
-      (when (value next-line-inserts-newlines)
-        (cond ((not p)
-               (when (same-line-p point (buffer-end-mark (current-buffer)))
-                 (line-end point))
-               (insert-character point #\newline))
-              ((minusp p)
-               (buffer-start point)
-               (editor-error "No previous line."))
-              (t
-               (buffer-end point)
-               (when p (editor-error "No next line."))))))
-    (unless (move-to-column point target) (line-end point))
+	 (target (set-target-column point))
+         (count (or p 1)))
+    (unless (line-offset point count)
+      (cond ((and (not p) (value next-line-inserts-newlines))
+             (when (same-line-p point (buffer-end-mark (current-buffer)))
+               (line-end point))
+             (insert-character point #\newline))
+            ((minusp count)
+             (buffer-start point)
+             (editor-error "No previous line."))
+            (t
+             (buffer-end point)
+             (editor-error "No next line."))))
+    (unless (move-to-position point target) (line-end point))
     (setf (last-command-type) :line-motion)))
 
 (defcommand "Select Next Line" (p)
@@ -284,7 +281,7 @@
               (t
                (buffer-end point)
                (when p (editor-error "No next line."))))))
-    (unless (move-to-column point target) (line-end point))
+    (unless (move-to-position point target) (line-end point))
     (setf (last-command-type) :line-motion)))
 
 
@@ -306,20 +303,20 @@
   "Sets the current region from point to the end of the buffer."
   "Sets the current region from point to the end of the buffer."
   (declare (ignore p))
-  (push-buffer-mark (buffer-end (copy-mark (current-point))) t))
+  (buffer-end (push-new-buffer-mark (current-point) t)))
 
 (defcommand "Mark to Beginning of Buffer" (p)
   "Sets the current region from the beginning of the buffer to point."
   "Sets the current region from the beginning of the buffer to point."
   (declare (ignore p))
-  (push-buffer-mark (buffer-start (copy-mark (current-point))) t))
+  (buffer-start (push-new-buffer-mark (current-point) t)))
 
 (defcommand "Beginning of Buffer" (p)
   "Moves the point to the beginning of the current buffer, collapsing the selection."
   "Moves the point to the beginning of the current buffer, collapsing the selection."
   (declare (ignore p))
   (let ((point (current-point-collapsing-selection)))
-    (push-buffer-mark (copy-mark point))
+    (push-new-buffer-mark point)
     (buffer-start point)))
 
 (defcommand "End of Buffer" (p)
@@ -327,7 +324,7 @@
   "Moves the point to the end of the current buffer."
   (declare (ignore p))
   (let ((point (current-point-collapsing-selection)))
-    (push-buffer-mark (copy-mark point))
+    (push-new-buffer-mark point)
     (buffer-end point)))
 
 (defcommand "Beginning of Line" (p)
@@ -379,66 +376,41 @@
    efficiently, insert a line moving the rest of the window's text downward."
   :value nil)
 
-(defcommand "Scroll Window Down" (p &optional (window (current-window)))
+(defcommand "Scroll Window Down" (p)
   "Move down one screenfull.
   With prefix argument scroll down that many lines."
   "If P is NIL then scroll Window, which defaults to the current
   window, down one screenfull.  If P is supplied then scroll that
   many lines."
-  (scroll-window window (or p :page-down)))
+  (if p
+    (set-scroll-position :lines-down p)
+    (set-scroll-position :page-down)))
 
-(defcommand "Scroll Window Up" (p &optional (window (current-window)))
+(defcommand "Scroll Window Up" (p)
   "Move up one screenfull.
   With prefix argument scroll up that many lines."
   "If P is NIL then scroll Window, which defaults to the current
   window, up one screenfull.  If P is supplied then scroll that
   many lines."
-  (scroll-window window (if p (- p) :page-up)))
+  (if p
+    (set-scroll-position :lines-up p)
+    (set-scroll-position :page-up)))
 
-(defcommand "Scroll Next Window Down" (p)
-  "Do a \"Scroll Window Down\" on the next window."
-  "Do a \"Scroll Window Down\" on the next window."
-  (let ((win (next-window (current-window))))
-    (when (eq win (current-window)) (editor-error "Only one window."))
-    (scroll-window-down-command p win)))
-
-(defcommand "Scroll Next Window Up" (p)
-  "Do a \"Scroll Window Up\" on the next window."
-  "Do a \"Scroll Window Up\" on the next window."
-  (let ((win (next-window (current-window))))
-    (when (eq win (current-window)) (editor-error "Only one window."))
-    (scroll-window-up-command p win)))
-
-
-
 ;;;; Kind of miscellaneous commands:
 
-;;; "Refresh Screen" may not be right with respect to wrapping lines in
-;;; the case where an argument is supplied due the use of
-;;; WINDOW-DISPLAY-START instead of SCROLL-WINDOW, but using the latter
-;;; messed with point and did other hard to predict stuff.
-;;; 
 (defcommand "Refresh Screen" (p)
-  "Refreshes everything in the window, centering current line."
-  "Refreshes everything in the window, centering current line."
-  (declare (ignore p))
-  (center-text-pane (current-window)))
-
-
-
-;;;
-(defun reset-window-display-recentering (window &optional buffer)
-  (declare (ignore buffer))
-  (setf (window-display-recentering window) nil))
-;;;
-(add-hook window-buffer-hook #'reset-window-display-recentering)
+  "Refreshes everything in the window, centering current line.
+With prefix argument, puts moves current line to top of window"
+  (if p
+    (set-scroll-position :line (current-point))
+    (set-scroll-position :center-selection)))
 
 
 (defcommand "Extended Command" (p)
   "Prompts for and executes an extended command."
   "Prompts for and executes an extended command.  The prefix argument is
   passed to the command."
-  (let* ((name (prompt-for-keyword (list *command-names*)
+  (let* ((name (prompt-for-keyword :tables (list *command-names*)
 				   :prompt "Extended Command: "
 				   :help "Name of a Hemlock command"))
 	 (function (command-function (getstring name *command-names*))))
@@ -448,84 +420,87 @@
   "Default value for \"Universal Argument\" command."
   :value 4)
 
+(defstruct (prefix-argument-state (:conc-name "PS-"))
+  sign
+  multiplier
+  read-some-digit-p
+  ;; This is NIL if haven't started and don't have a universal argument, else a number
+  result
+  ;; This is cleared by prefix-argument-resetting-state (called at the start of each
+  ;; command) and can be set by a command to avoid the state being reset at
+  ;; the end of the command.
+  set-p)
+
+(defun prefix-argument-resetting-state (&optional (ps (current-prefix-argument-state)))
+  "Fetches the prefix argument and uses it up, i.e. marks it as not being set"
+  (unless (ps-set-p ps)
+    (setf (ps-sign ps) 1
+	  (ps-multiplier ps) 1
+	  (ps-read-some-digit-p ps) nil
+	  (ps-result ps) nil))
+  (setf (ps-set-p ps) nil) ;; mark it for death unless explicitly revived.
+  (when (ps-result ps)
+    (* (ps-sign ps)
+       (if (ps-read-some-digit-p ps)
+	 (ps-result ps)
+	 (expt (value universal-argument-default) (ps-multiplier ps))))))
+
+(defun note-prefix-argument-set (ps)
+  (assert (ps-result ps))
+  (setf (ps-set-p ps) t)
+  (message (with-output-to-string (s)
+	     (dotimes (i (ps-multiplier ps))
+	       (write-string "C-U " s))
+	     (cond ((ps-read-some-digit-p ps)
+		    (format s "~d" (* (ps-sign ps) (ps-result ps))))
+		   ((< (ps-sign ps) 0)
+		    (write-string "-" s))))))
+
 (defcommand "Universal Argument" (p)
   "Sets prefix argument for next command.
-  Typing digits, regardless of any modifier keys, specifies the argument.
-  Optionally, you may first type a sign (- or +).  While typing digits, if you
-  type C-U or C-u, the digits following the C-U form a number this command
-  multiplies by the digits preceding the C-U.  The default value for this
-  command and any number following a C-U is the value of \"Universal Argument
-  Default\"."
-  "You probably don't want to use this as a function."
-  (declare (ignore p))
-  (clear-echo-area)
-  (write-string "C-U " *echo-area-stream*)
-  (let* ((key-event (get-key-event hi::*editor-input*))
-	 (char (hemlock-ext:key-event-char key-event)))
-    (if char
-	(case char
-	  (#\-
-	   (write-char #\- *echo-area-stream*)
-	   (universal-argument-loop (get-key-event hi::*editor-input*) -1))
-	  (#\+
-	   (write-char #\+ *echo-area-stream*)
-	   (universal-argument-loop (get-key-event hi::*editor-input*) -1))
-	  (t
-	   (universal-argument-loop key-event 1)))
-	(universal-argument-loop key-event 1))))
-
-(defcommand "Negative Argument" (p)
-  "This command is equivalent to invoking \"Universal Argument\" and typing
-   a minus sign (-).  It waits for more digits and a command to which to give
-   the prefix argument."
-  "Don't call this as a function."
-  (when p (editor-error "Must type minus sign first."))
-  (clear-echo-area)
-  (write-string "C-U -" *echo-area-stream*)
-  (universal-argument-loop (get-key-event hi::*editor-input*) -1))
+   Typing digits, regardless of any modifier keys, specifies the argument.
+   Optionally, you may first type a sign (- or +).  While typing digits, if you
+   type C-U or C-u, the digits following the C-U form a number this command
+   multiplies by the digits preceding the C-U.  The default value for this
+   command and any number following a C-U is the value of \"Universal Argument
+   Default\"."
+  (declare (ignore p)) ;; we operate on underlying state instead
+  (let ((ps (current-prefix-argument-state)))
+    (if (ps-result ps)
+      (incf (ps-multiplier ps))
+      (setf (ps-result ps) 0))
+    (note-prefix-argument-set ps)))
 
 (defcommand "Argument Digit" (p)
   "This command is equivalent to invoking \"Universal Argument\" and typing
-   the digit used to invoke this command.  It waits for more digits and a
+   the key used to invoke this command.  It waits for more digits and a
    command to which to give the prefix argument."
-  "Don't call this as a function."
-  (declare (ignore p))
-  (clear-echo-area)
-  (write-string "C-U " *echo-area-stream*)
-  (universal-argument-loop *last-key-event-typed* 1))
+  (declare (ignore p)) ;; we operate on underlying state instead
+  (let* ((ps (current-prefix-argument-state))
+	 (key-event (last-key-event-typed))
+	 (stripped-key-event (make-key-event key-event))
+	 (char (key-event-char stripped-key-event))
+	 (digit (if char (digit-char-p char))))
+    (when (null (ps-result ps))
+      (setf (ps-result ps) 0))
+    (case char
+      (#\-
+       (when (ps-read-some-digit-p ps) ;; could just insert it up front...
+	 (editor-error "Must type minus sign first."))
+       (setf (ps-sign ps) (- (ps-sign ps))))
+      (#\+
+       (when (ps-read-some-digit-p ps) ;; could just insert it up front...
+	 (editor-error "Must type plus sign first.")))
+      (t
+       (unless digit
+	 (editor-error "Argument Digit must be bound to a digit!"))
+       (setf (ps-read-some-digit-p ps) t)
+       (setf (ps-result ps) (+ digit (* (ps-result ps) 10)))))
+    (note-prefix-argument-set ps)))
 
-(defun universal-argument-loop (key-event sign &optional (multiplier 1))
-  (flet ((prefix (sign multiplier read-some-digit-p result)
-	   ;; read-some-digit-p and (zerop result) are not
-	   ;; equivalent if the user invokes this and types 0.
-	   (* sign multiplier
-	      (if read-some-digit-p
-		  result
-		  (value universal-argument-default)))))
-    (let* ((stripped-key-event (if key-event (hemlock-ext:make-key-event key-event)))
-	   (char (hemlock-ext:key-event-char stripped-key-event))
-	   (digit (if char (digit-char-p char)))
-	   (result 0)
-	   (read-some-digit-p nil))
-      (loop
-	(cond (digit
-	       (setf read-some-digit-p t)
-	       (write-char char *echo-area-stream*)
-	       (setf result (+ digit (* 10 result)))
-	       (setf key-event (get-key-event hi::*editor-input*))
-	       (setf stripped-key-event (if key-event
-					    (hemlock-ext:make-key-event key-event)))
-	       (setf char (hemlock-ext:key-event-char stripped-key-event))
-	       (setf digit (if char (digit-char-p char))))
-	      ((or (eq key-event #k"C-u") (eq key-event #k"C-U"))
-	       (write-string " C-U " *echo-area-stream*)
-	       (universal-argument-loop
-		(get-key-event hi::*editor-input*) 1
-		(prefix sign multiplier read-some-digit-p result))
-	       (return))
-	      (t
-	       (unget-key-event key-event hi::*editor-input*)
-	       (setf (prefix-argument)
-		     (prefix sign multiplier read-some-digit-p result))
-	       (return))))))
-  (setf (last-command-type) (last-command-type)))
+(defcommand "Digit" (p)
+  "With a numeric argument, this command extends the argument.
+   Otherwise it does self insert"
+  (if p
+    (argument-digit-command p)
+    (self-insert-command p)))

@@ -39,6 +39,8 @@
 			    direction string *last-search-pattern*)))
 
 
+(defun note-current-selection-set-by-search ()
+  (hemlock-ext:note-selection-set-by-search (current-buffer)))
 
 ;;;; Vanilla searching.
 
@@ -59,7 +61,7 @@
     (cond (won (move-mark mark point)
 	       (character-offset point won)
                (push-buffer-mark mark t)
-	       (hi::note-selection-set-by-search))
+	       (note-current-selection-set-by-search))
 	  (t (delete-mark mark)
 	     (editor-error)))
     (clear-echo-area)))
@@ -80,291 +82,26 @@
     (cond (won (move-mark mark point)
 	       (character-offset mark won)
 	       (push-buffer-mark mark t)
-	       (hi::note-selection-set-by-search))
+	       (note-current-selection-set-by-search))
 	  (t (delete-mark mark)
 	     (editor-error)))
     (clear-echo-area)))
 
 
 
-;;;; Incremental searching.
-
-(defun i-search-pattern (string direction)
-  (setq *last-search-pattern*
-	(new-search-pattern (if (value string-search-ignore-case)
-				:string-insensitive
-				:string-sensitive)
-			    direction string *last-search-pattern*)))
-
-;;;      %I-SEARCH-ECHO-REFRESH refreshes the echo buffer for incremental
-;;; search.
-;;;
-(defun %i-search-echo-refresh (string direction failure)
-  (when (interactive)
-    (clear-echo-area)
-    (format *echo-area-stream* 
-	    "~:[~;Failing ~]~:[~;Overwrapped ~]~:[Reverse I-Search~;I-Search~]: ~A"
-	    failure *search-wrapped-p* (eq direction :forward) string)))
-
-(defcommand "Incremental Search" (p)
-  "Searches for input string as characters are provided.
-  These are the default I-Search command characters:  ^Q quotes the
-  next character typed.  Backspace cancels the last character typed.  ^S
-  repeats forward, and ^R repeats backward.  ^R or ^S with empty string
-  either changes the direction or yanks the previous search string.
-  Escape exits the search unless the string is empty.  Escape with 
-  an empty search string calls the non-incremental search command.  
-  Other control characters cause exit and execution of the appropriate 
-  command.  If the search fails at some point, ^G and backspace may be 
-  used to backup to a non-failing point; also, ^S and ^R may be used to
-  look the other way.  ^W extends the search string to include the the word 
-  after the point. ^G during a successful search aborts and returns
-  point to where it started."
-  "Search for input string as characters are typed in.
-  It sets up for the recursive searching and checks return values."
-  (declare (ignore p))
-  (setf (last-command-type) nil)
-  (%i-search-echo-refresh "" :forward nil)
-  (let* ((*search-wrapped-p* nil)
-	 (point (current-point))
-	 (save-start (copy-mark point :temporary)))
-    (with-mark ((here point))
-      (when (eq (catch 'exit-i-search
-		  (%i-search "" point here :forward nil))
-		:control-g)
-	(move-mark point save-start)
-	(invoke-hook abort-hook)
-	(editor-error))
-      (if (region-active-p)
-	  (delete-mark save-start)
-	  (push-buffer-mark save-start)))))
-
-
-(defcommand "Reverse Incremental Search" (p)
-  "Searches for input string as characters are provided.
-  These are the default I-Search command characters:  ^Q quotes the
-  next character typed.  Backspace cancels the last character typed.  ^S
-  repeats forward, and ^R repeats backward.  ^R or ^S with empty string
-  either changes the direction or yanks the previous search string.
-  Altmode exits the search unless the string is empty.  Altmode with 
-  an empty search string calls the non-incremental search command.  
-  Other control characters cause exit and execution of the appropriate 
-  command.  If the search fails at some point, ^G and backspace may be 
-  used to backup to a non-failing point; also, ^S and ^R may be used to
-  look the other way.  ^G during a successful search aborts and returns
-  point to where it started."
-  "Search for input string as characters are typed in.
-  It sets up for the recursive searching and checks return values."
-  (declare (ignore p))
-  (setf (last-command-type) nil)
-  (%i-search-echo-refresh "" :backward nil)
-  (let* ((*search-wrapped-p* nil)
-	 (point (current-point))
-	 (save-start (copy-mark point :temporary)))
-    (with-mark ((here point))
-      (when (eq (catch 'exit-i-search
-		  (%i-search "" point here :backward nil))
-		:control-g)
-	(move-mark point save-start)
-	(invoke-hook abort-hook)
-	(editor-error))
-      (if (region-active-p)
-	  (delete-mark save-start)
-	  (push-buffer-mark save-start)))))
-
-;;;      %I-SEARCH recursively (with support functions) searches to provide
-;;; incremental searching.  There is a loop in case the recursion is ever
-;;; unwound to some call.  curr-point must be saved since point is clobbered
-;;; with each recursive call, and the point must be moved back before a
-;;; different letter may be typed at a given call.  In the CASE at :cancel
-;;; and :control-g, if the string is not null, an accurate pattern for this
-;;; call must be provided when %I-SEARCH-CHAR-EVAL is called a second time
-;;; since it is possible for ^S or ^R to be typed.
-;;;
-(defun %i-search (string point trailer direction failure)
-  (do* ((curr-point (copy-mark point :temporary))
-        (curr-trailer (copy-mark trailer :temporary)))
-       (nil)
-    (let* ((next-key-event (recursive-get-key-event hi::*editor-input* t))
-	   (val (%i-search-char-eval next-key-event string point trailer
-                                 direction failure))
-	   (empty-string-p (zerop (length string))))
-      (case val	
-        (:mouse-exit
-         (clear-echo-area)
-         (throw 'exit-i-search nil))
-        (:cancel
-         (%i-search-echo-refresh string direction failure)
-         (unless empty-string-p
-           (i-search-pattern string direction))) ;sets *last-search-pattern*
-        (:return-cancel ;backspace was typed
-	 (if empty-string-p
-	     (beep)
-	     (return :cancel)))
-        (:control-g
-         (when failure (return :control-g))
-         (%i-search-echo-refresh string direction nil)
-         (unless empty-string-p
-           (i-search-pattern string direction)))) ;*last-search-pattern*
-      (move-mark point curr-point)
-      (move-mark trailer curr-trailer))))
-
-;;;      %I-SEARCH-CHAR-EVAL evaluates the last character typed and takes
-;;; necessary actions.
-;;;
-(defun %i-search-char-eval (key-event string point trailer direction failure)
-  (declare (simple-string string))
-  (cond ((let ((character (key-event-char key-event)))
-	   (and character (standard-char-p character)))
-	 (%i-search-printed-char key-event string point trailer
-				 direction failure))
-	((or (logical-key-event-p key-event :forward-search)
-	     (logical-key-event-p key-event :backward-search))
-	 (%i-search-control-s-or-r key-event string point trailer
-				   direction failure))
-	((logical-key-event-p key-event :cancel) :return-cancel)
-	((logical-key-event-p key-event :extend-search-word)
-	 (with-mark ((end point))
-	   (word-offset end 1)
-	   (let ((extension (region-to-string (region point end))))
-	     (%i-search-extend-string string extension point trailer direction failure))))	     
-	((logical-key-event-p key-event :abort)
-	 (unless failure
-	   (clear-echo-area)
-	   (message "Search aborted.")
-	   (throw 'exit-i-search :control-g))
-	 :control-g)
-	((logical-key-event-p key-event :quote)
-	 (%i-search-printed-char (get-key-event hi::*editor-input* t)
-				 string point trailer direction failure))
-	((and (zerop (length string)) (logical-key-event-p key-event :exit))
-	 (if (eq direction :forward)
-	     (forward-search-command nil)
-	     (reverse-search-command nil))
-	 (throw 'exit-i-search nil))
-	(t
-	 (unless (logical-key-event-p key-event :exit)
-	   (unget-key-event key-event hi::*editor-input*))
-	 (unless (zerop (length string))
-	   (setf *last-search-string* string))
-	 (throw 'exit-i-search nil))))
-
-;;;      %I-SEARCH-CONTROL-S-OR-R handles repetitions in the search.  Note
-;;; that there cannot be failure in the last COND branch: since the direction
-;;; has just been changed, there cannot be a failure before trying a new
-;;; direction.
-;;;
-(defun %i-search-control-s-or-r (key-event string point trailer
-					   direction failure)
-  (let ((forward-direction-p (eq direction :forward))
-	(forward-character-p (logical-key-event-p key-event :forward-search)))
-    (cond ((zerop (length string))
-	   (%i-search-empty-string point trailer direction forward-direction-p
-				   forward-character-p))
-	  ((eq forward-direction-p forward-character-p) ;keep searching in the same direction
-	   (cond ((eq failure :first-failure)
-		  (cond (forward-direction-p
-			 (buffer-start point)
-			 (buffer-start trailer)
-			 (character-offset trailer (length string)))
-			(t
-			 (buffer-end point)
-			 (buffer-end trailer)))
-		  (push-buffer-mark (copy-mark point))
-		  (let ((*search-wrapped-p* t))
-		    (%i-search-echo-refresh string direction nil)
-		    (%i-search-find-pattern string point trailer direction)))
-		  (failure
-		   (%i-search string point trailer direction t))
-		  (t
-		   (%i-search-find-pattern string point (move-mark trailer point)
-					   direction))))
-	  (t
-	   (let ((new-direction (if forward-character-p :forward :backward)))
-	     (%i-search-echo-refresh string new-direction nil)
-	     (i-search-pattern string new-direction) ;sets *last-search-pattern*
-	     (%i-search-find-pattern string point (move-mark trailer point)
-				     new-direction))))))
-
-
-;;;      %I-SEARCH-EMPTY-STRING handles the empty string case when a ^S
-;;; or ^R is typed.  If the direction and character typed do not agree,
-;;; then merely switch directions.  If there was a previous string, search
-;;; for it, else flash at the guy.
-;;;
-(defun %i-search-empty-string (point trailer direction forward-direction-p
-				     forward-character-p)
-  (cond ((eq forward-direction-p (not forward-character-p))
-	 (let ((direction (if forward-character-p :forward :backward)))
-	   (%i-search-echo-refresh "" direction nil)
-	   (%i-search "" point trailer direction nil)))
-	(*last-search-string*
-	 (%i-search-echo-refresh *last-search-string* direction nil)
-	 (i-search-pattern *last-search-string* direction) ;sets *last-search-pattern*
-	 (%i-search-find-pattern *last-search-string* point trailer direction))
-	(t (beep))))
-
-
-;;;      %I-SEARCH-PRINTED-CHAR handles the case of standard character input.
-;;; If the direction is backwards, we have to be careful not to MARK-AFTER
-;;; the end of the buffer or to include the next character at the beginning
-;;; of the search.
-;;;
-(defun %i-search-printed-char (key-event string point trailer direction failure)
-  (let ((tchar (hemlock-ext:key-event-char key-event)))
-    (unless tchar (editor-error "Not a text character -- ~S" (key-event-char
-							      key-event)))
-    (when (interactive)
-      (insert-character (buffer-point *echo-area-buffer*) tchar)
-      (force-output *echo-area-stream*))
-    (let ((new-string (concatenate 'simple-string string (string tchar))))
-      (i-search-pattern new-string direction) ;sets *last-search-pattern*
-      (cond (failure (%i-search new-string point trailer direction failure))
-	    ((and (eq direction :backward) (next-character trailer))
-	     (%i-search-find-pattern new-string point (mark-after trailer)
-				     direction))
-	    (t
-	     (%i-search-find-pattern new-string point trailer direction))))))
-
-(defun %i-search-extend-string (string extension point trailer direction failure)
-  (when (interactive)
-    (insert-string (buffer-point *echo-area-buffer*) extension)
-    (force-output *echo-area-stream*))
-  (let ((new-string (concatenate 'simple-string string extension)))
-    (i-search-pattern new-string direction) ;sets *last-search-pattern*
-    (cond (failure (%i-search new-string point trailer direction failure))
-	  ((and (eq direction :backward) (next-character trailer))
-	   (%i-search-find-pattern new-string point (mark-after trailer)
-				   direction))
-	  (t
-	   (%i-search-find-pattern new-string point trailer direction)))))
-
-
-;;;      %I-SEARCH-FIND-PATTERN takes a pattern for a string and direction
-;;; and finds it, updating necessary pointers for the next call to %I-SEARCH.
-;;; If the search failed, tell the user and do not move any pointers.
-;;;
-(defun %i-search-find-pattern (string point trailer direction)
-  (let ((found-offset (find-pattern trailer *last-search-pattern*)))
-    (cond (found-offset
-	    (cond ((eq direction :forward)
-		   (character-offset (move-mark point trailer) found-offset))
-		  (t
-		   (move-mark point trailer)
-		   (character-offset trailer found-offset)))
-	    (push-buffer-mark (copy-mark trailer) t)
-	    (hi::note-selection-set-by-search)
-	    (%i-search string point trailer direction nil))
-	  (t
-	   (%i-search-echo-refresh string direction t)
-	   (if (interactive)
-	       (beep)
-	       (editor-error "I-Search failed."))
-	   (%i-search string point trailer direction :first-failure)))))
-
-
-
 ;;;; Replacement commands:
+
+(defmode "Query/Replace" :precedence :highest
+  :documentation "Type one of the following single-character commands:"
+  ;; Make anything that's not otherwise overridden exit query/replace
+  :default-command "Query/Replace Exit and Redo")
+
+(add-hook abort-hook 'abort-query/replace-mode)
+
+(defhvar "Case Replace"
+  "If this is true then \"Query Replace\" will try to preserve case when
+  doing replacements."
+  :value t)
 
 (defcommand "Replace String" (p &optional
 				(target (prompt-for-string
@@ -377,15 +114,14 @@
   "Replaces the specified Target string with the specified Replacement
    string in the current buffer for all occurrences after the point or within
    the active region, depending on whether it is active."
-  "Replaces the specified Target string with the specified Replacement
-   string in the current buffer for all occurrences after the point or within
-   the active region, depending on whether it is active.  The prefix argument
-   may limit the number of replacements."
-  (multiple-value-bind (ignore count)
-		       (query-replace-function p target replacement
-					       "Replace String" t)
-    (declare (ignore ignore))
-    (message "~D Occurrences replaced." count)))
+  (let ((qrs (query/replace-init :count p :target target :replacement replacement
+                                 :undo-name "Replace String")))
+    (query/replace-all qrs)
+    (query/replace-finish qrs)))
+
+(defun current-query-replace-state ()
+  (or (value query/replace-state)
+      (error "Query/Replace command invoked outside Query Replace")))
 
 (defcommand "Query Replace" (p &optional
 			       (target (prompt-for-string
@@ -398,23 +134,16 @@
   "Replaces the Target string with the Replacement string if confirmation
    from the keyboard is given.  If the region is active, limit queries to
    occurrences that occur within it, otherwise use point to end of buffer."
-  "Replaces the Target string with the Replacement string if confirmation
-   from the keyboard is given.  If the region is active, limit queries to
-   occurrences that occur within it, otherwise use point to end of buffer.
-   A prefix argument may limit the number of queries."
-  (let ((mark (copy-mark (current-point))))
-    (multiple-value-bind (ignore count)
-			 (query-replace-function p target replacement
-						 "Query Replace")
-      (declare (ignore ignore))
-      (message "~D Occurrences replaced." count))
-    (push-buffer-mark mark)))
-
-
-(defhvar "Case Replace"
-  "If this is true then \"Query Replace\" will try to preserve case when
-  doing replacements."
-  :value t)
+  (let* ((buffer (current-buffer))
+         (qrs (query/replace-init :count p :target target :replacement replacement
+                                  :undo-name "Query Replace")))
+    (setf (buffer-minor-mode (current-buffer) "Query/Replace") t)
+    (unless (hemlock-bound-p 'query/replace-state :buffer buffer)
+      (defhvar "Query/Replace State"
+        "Internal variable containing current state of Query/Replace"
+        :buffer buffer))
+    (setf (value query/replace-state) qrs)
+    (query/replace-find-next qrs)))
 
 (defstruct (replace-undo (:constructor make-replace-undo (mark region)))
   mark
@@ -425,133 +154,172 @@
 (setf (documentation 'replace-undo-region 'function)
       "Return region deleted due to replacement.")
 
-(defvar *query-replace-undo-data* nil)
 
-;;; REPLACE-THAT-CASE replaces a string case-sensitively.  Lower, Cap and Upper
-;;; are the original, capitalized and uppercase replacement strings.  Mark is a
-;;; :left-inserting mark after the text to be replaced.  Length is the length
-;;; of the target string.  If dumb, then do a simple replace.  This pushes
-;;; an undo information structure into *query-replace-undo-data* which
-;;; QUERY-REPLACE-FUNCTION uses.
-;;;
-(defun replace-that-case (lower cap upper mark length dumb)
-  (character-offset mark (- length))
-  (let ((insert (cond (dumb lower)
-		      ((upper-case-p (next-character mark))
-		       (mark-after mark)
-		       (prog1 (if (upper-case-p (next-character mark)) upper cap)
-			      (mark-before mark)))
-		      (t lower))))
-    (with-mark ((undo-mark1 mark :left-inserting)
-		(undo-mark2 mark :left-inserting))
-      (character-offset undo-mark2 length)
-      (push (make-replace-undo
-	     ;; Save :right-inserting, so the INSERT-STRING at mark below
-	     ;; doesn't move the copied mark the past replacement.
-	     (copy-mark mark :right-inserting)
-	     (delete-and-save-region (region undo-mark1 undo-mark2)))
-	    *query-replace-undo-data*))
-    (insert-string mark insert)))
+(defstruct (query-replace-state (:conc-name "QRS-"))
+  count
+  target
+  replacement
+  undo-name
+  dumb-p
+  upper
+  cap
+  start-mark
+  last-found
+  stop-mark
+  undo-data)
 
-;;; QUERY-REPLACE-FUNCTION does the work for the main replacement commands:
-;;; "Query Replace", "Replace String", "Group Query Replace", "Group Replace".
-;;; Name is the name of the command for undoing purposes.  If doing-all? is
-;;; true, this replaces all ocurrences for the non-querying commands.  This
-;;; returns t if it completes successfully, and nil if it is aborted.  As a
-;;; second value, it returns the number of replacements.
-;;;
-;;; The undo method, before undo'ing anything, makes all marks :left-inserting.
-;;; There's a problem when two replacements are immediately adjacent, such as
-;;;    foofoo
-;;; replacing "foo" with "bar".  If the marks were still :right-inserting as
-;;; REPLACE-THAT-CASE makes them, then undo'ing the first replacement would
-;;; bring the two marks together due to the DELETE-CHARACTERS.  Then inserting
-;;; the region would move the second replacement's mark to be before the first
-;;; replacement.
-;;;
-(defun query-replace-function (count target replacement name
-			       &optional (doing-all? nil))
-  (declare (simple-string replacement))
-  (let ((replacement-len (length replacement))
-	(*query-replace-undo-data* nil))
-    (when (and count (minusp count))
-      (editor-error "Replacement count is negative."))
+(defun query/replace-init (&key count target replacement undo-name)
+  (when (and count (minusp count))
+    (editor-error "Replacement count is negative."))
+  (let* ((point (current-point))
+         (region (get-count-region))
+         (start-mark (copy-mark (region-start region) :temporary))
+         (end-mark (copy-mark (region-end region) :left-inserting)))
+    (move-mark point start-mark)
     (get-search-pattern target :forward)
-    (unwind-protect
-	(query-replace-loop (get-count-region) (or count -1) target replacement
-			    replacement-len (current-point) doing-all?)
-      (let ((undo-data (nreverse *query-replace-undo-data*)))
-	(save-for-undo name
-	  #'(lambda ()
-	      (dolist (ele undo-data)
-		(setf (mark-kind (replace-undo-mark ele)) :left-inserting))
-	      (dolist (ele undo-data)
-		(let ((mark (replace-undo-mark ele)))
-		  (delete-characters mark replacement-len)
-		  (ninsert-region mark (replace-undo-region ele)))))
-	  #'(lambda ()
-	      (dolist (ele undo-data)
-		(delete-mark (replace-undo-mark ele)))))))))
-
-;;; QUERY-REPLACE-LOOP is the essence of QUERY-REPLACE-FUNCTION.  The first
-;;; value is whether we completed all replacements, nil if we aborted.  The
-;;; second value is how many replacements occurred.
-;;;
-(defun query-replace-loop (region count target replacement replacement-len
-			   point doing-all?)
-  (with-mark ((last-found point)
-	      ;; Copy REGION-END before moving point to REGION-START in case
-	      ;; the end is point.  Also, make it permanent in case we make
-	      ;; replacements on the last line containing the end.
-	      (stop-mark (region-end region) :left-inserting))
-    (move-mark point (region-start region))
-    (let ((length (length target))
-	  (cap (string-capitalize replacement))
-	  (upper (string-upcase replacement))
-	  (dumb (not (and (every #'(lambda (ch) (or (not (both-case-p ch))
-						    (lower-case-p ch)))
-				 (the string replacement))
-			  (value case-replace)))))
-      (values
-       (loop
-	 (let ((won (find-pattern point *last-search-pattern*)))
-	   (when (or (null won) (zerop count) (mark> point stop-mark))
-	     (character-offset (move-mark point last-found) replacement-len)
-	     (return t))
-	   (decf count)
-	   (move-mark last-found point)
-	   (character-offset point length)
-	   (if doing-all?
-	       (replace-that-case replacement cap upper point length dumb)
-	       (command-case
-		   (:prompt
-		    "Query replace: "
-		    :help "Type one of the following single-character commands:"
-		    :change-window nil :bind key-event)
-		 (:yes "Replace this occurrence."
-		       (replace-that-case replacement cap upper point length
-					  dumb))
-		 (:no "Don't replace this occurrence, but continue.")
-		 (:do-all "Replace this and all remaining occurrences."
-			  (replace-that-case replacement cap upper point length
-					     dumb)
-			  (setq doing-all? t))
-		 (:do-once "Replace this occurrence, then exit."
-			   (replace-that-case replacement cap upper point length
-					      dumb)
-			   (return nil))
-		 (:recursive-edit
-		  "Go into a recursive edit at the current position."
-		  (do-recursive-edit)
-		  (get-search-pattern target :forward))
-		 (:exit "Exit immediately."
-			(return nil))
-		 (t (unget-key-event key-event hi::*editor-input*)
-		    (return nil))))))
-       (length (the list *query-replace-undo-data*))))))
+    (make-query-replace-state
+     :count (or count -1)
+     :target target
+     :replacement replacement
+     :undo-name undo-name
+     :dumb-p (not (and (every #'(lambda (ch) (or (not (both-case-p ch))
+                                                 (lower-case-p ch)))
+                              (the string replacement))
+                       (value case-replace)))
+     :upper (string-upcase replacement)
+     :cap (string-capitalize replacement)
+     :start-mark start-mark
+     :last-found (copy-mark start-mark :temporary)
+     :stop-mark end-mark
+     :undo-data nil)))
 
 
-
+(defun query/replace-find-next (qrs &key (interactive t))
+  (let* ((point (current-point))
+         (won (and (not (zerop (qrs-count qrs)))
+		   (find-pattern point *last-search-pattern* (qrs-stop-mark qrs)))))
+    (if won
+      (progn
+	(decf (qrs-count qrs))
+	(move-mark (qrs-last-found qrs) (current-point))
+	(character-offset point (length (qrs-target qrs)))
+	(when interactive
+	  (message "Query Replace (type ? for help): "))
+	T)
+      (progn
+	(when interactive
+	  (end-query/replace-mode))
+	nil))))
+
+(defun query/replace-replace (qrs)
+  (let* ((replacement (qrs-replacement qrs))
+         (point (current-point))
+         (length (length (qrs-target qrs))))
+    (with-mark ((undo-mark1 point :left-inserting)
+		(undo-mark2 point :left-inserting))
+      (character-offset undo-mark1 (- length))
+      (let ((string (cond ((qrs-dumb-p qrs) replacement)
+			  ((upper-case-p (next-character undo-mark1))
+			   (prog2
+			    (mark-after undo-mark1)
+			    (if (upper-case-p (next-character undo-mark1))
+			      (qrs-upper qrs)
+			      (qrs-cap qrs))
+			    (mark-before undo-mark1)))
+			  (t replacement))))
+	(push (make-replace-undo
+               ;; Save :right-inserting, so the INSERT-STRING at mark below
+               ;; doesn't move the copied mark the past replacement.
+               (copy-mark undo-mark1 :right-inserting)
+               (delete-and-save-region (region undo-mark1 undo-mark2)))
+              (qrs-undo-data qrs))
+	(insert-string point string)))))
+
+(defun query/replace-all (qrs)
+  (loop
+    while (query/replace-find-next qrs :interactive nil)
+    do (query/replace-replace qrs)))
+
+(defun query/replace-finish (qrs &key (report t))
+  (let* ((undo-data (nreverse (qrs-undo-data qrs)))
+	 (count (length undo-data))
+	 (replacement-len (length (qrs-replacement qrs))))
+    (save-for-undo (qrs-undo-name qrs)
+      #'(lambda ()
+          (dolist (ele undo-data)
+            (setf (mark-kind (replace-undo-mark ele)) :left-inserting))
+          (dolist (ele undo-data)
+            (let ((mark (replace-undo-mark ele)))
+              (delete-characters mark replacement-len)
+              (ninsert-region mark (replace-undo-region ele)))))
+      #'(lambda ()
+          (dolist (ele undo-data)
+            (delete-mark (replace-undo-mark ele)))))
+    (unless (mark= (current-point) (qrs-start-mark qrs))
+      (push-buffer-mark (qrs-start-mark qrs)))
+    (delete-mark (qrs-stop-mark qrs))
+    (when report
+      (message "~D Occurrence~:[s~] replaced." count (eql count 1)))))
+
+
+(defun abort-query/replace-mode ()
+  (when (buffer-minor-mode (current-buffer) "Query/Replace")
+    (end-query/replace-mode :report nil)))
+
+(defun end-query/replace-mode (&key (report t))
+  (let* ((qrs (current-query-replace-state)))
+    (query/replace-finish qrs :report report)
+    (setf (buffer-minor-mode (current-buffer) "Query/Replace") nil)))
+
+(defcommand "Query/Replace This" (p)
+  "Replace this occurence"
+  (declare (ignore p))
+  (let ((qrs (current-query-replace-state)))
+    (query/replace-replace qrs)
+    (query/replace-find-next qrs)))
+
+(defcommand "Query/Replace Skip" (p)
+  "Don't replace this occurence, but continue"
+  (declare (ignore p))
+  (let ((qrs (current-query-replace-state)))
+    (query/replace-find-next qrs)))
+
+(defcommand "Query/Replace All" (p)
+  "Replace this and all remaining occurences"
+  (declare (ignore p))
+  (let ((qrs (current-query-replace-state)))
+    (query/replace-replace qrs)
+    (query/replace-all qrs))
+  (end-query/replace-mode))
+
+(defcommand "Query/Replace Last" (p)
+  "Replace this occurrence, then exit"
+  (declare (ignore p))
+  (let ((qrs (current-query-replace-state)))
+    (query/replace-replace qrs))
+  (end-query/replace-mode))
+
+(defcommand "Query/Replace Exit" (p)
+  "Exit Query Replace mode"
+  (declare (ignore p))
+  (end-query/replace-mode))
+
+(defcommand "Query/Replace Abort" (p)
+  "Abort Query/Replace mode"
+  (declare (ignore p))
+  (abort-current-command "Query/Replace aborted"))
+
+(defcommand "Query/Replace Help" (p)
+  "Describe Query/Replace commands"
+  (describe-mode-command p "Query/Replace"))
+
+;; The transparent-p flag takes care of executing the key normally when we're done,
+;; as long as we don't take a non-local exit.
+(defcommand ("Query/Replace Exit and Redo" :transparent-p t) (p)
+  "Exit Query Replace and then execute the key normally"
+  (declare (ignore p))
+  (end-query/replace-mode))
+
 ;;;; Occurrence searching.
 
 (defcommand "List Matching Lines" (p &optional string)

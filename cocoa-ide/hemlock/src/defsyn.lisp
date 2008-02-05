@@ -64,7 +64,7 @@
 (setf (character-attribute :word-delimiter #\linefeed) 1)
 (setf (character-attribute :word-delimiter
                            #+CMU #\formfeed
-                           #+(or EXCL sbcl CLISP OpenMCL) #\page) 1)
+                           #+(or EXCL sbcl CLISP Clozure) #\page) 1)
 (setf (character-attribute :word-delimiter #\tab) 1)
 (setf (character-attribute :word-delimiter #\newline) 1)
 

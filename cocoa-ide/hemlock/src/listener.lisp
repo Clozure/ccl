@@ -27,26 +27,24 @@
 (defun package-name-change-hook (name kind where new-value)
   (declare (ignore name new-value))
   (if (eq kind :buffer)
-    (hi::queue-buffer-change where)))
+    (hi::note-modeline-change where)))
 
 (define-file-option "Package" (buffer value)
   (defhvar "Current Package"
     "The package used for evaluation of Lisp in this buffer."
     :buffer buffer
     :value
-    (let* ((eof (list nil))
-	   (thing (read-from-string value nil eof)))
-      (when (eq thing eof) (error "Bad package file option value."))
+    (let ((thing (handler-case (read-from-string value t)
+                   (error () (editor-error "Bad package file option value")))))
       (cond
-       ((stringp thing)
-	thing)
-       ((symbolp thing)
-	(symbol-name thing))
-       ((characterp thing)
+       ((or (stringp thing) (symbolp thing))
 	(string thing))
+       ((and (consp thing) ;; e.g. Package: (foo :use bar)
+             (or (stringp (car thing)) (symbolp (car thing))))
+        (string (car thing)))
        (t
-	(message
-	 "Ignoring \"package\" file option -- cannot convert to a string."))))
+	(message "Ignoring \"package:\" file option ~a" thing)
+        nil)))
     :hooks (list 'package-name-change-hook)))
 
 
@@ -101,7 +99,7 @@
         :value nil)
       )
     (let* ((input-mark (variable-value 'buffer-input-mark :buffer buffer)))
-      (when gui::*read-only-listener*
+      (when (hemlock-ext:read-only-listener-p)
 	(setf (hi::buffer-protected-region buffer)
 	      (region (buffer-start-mark buffer) input-mark)))
       (move-mark input-mark point)
@@ -196,8 +194,7 @@ between the region's start and end, and if there are no ill-formed expressions i
           (push (cons r nil) (value input-regions))
           (move-mark (value buffer-input-mark) (current-point))
           (append-font-regions (current-buffer))
-          (hi::send-string-to-listener-process (hi::buffer-process (current-buffer))
-                                           string))))))
+          (hemlock-ext:send-string-to-listener (current-buffer) string))))))
 
 (defparameter *pop-string* ":POP
 " "what you have to type to exit a break loop")
@@ -210,13 +207,8 @@ between the region's start and end, and if there are no ill-formed expressions i
     (when point
       (if (and (null (next-character point))
 	       (null (next-character input-mark)))
-	  (listener-document-send-string (hi::buffer-document (current-buffer)) *pop-string*)
-	  (delete-next-character-command p)))))
-
-             
-
-
-
+        (hemlock-ext:send-string-to-listener (current-buffer) *pop-string*)
+        (delete-next-character-command p)))))
 
 
 ;;;; General interactive commands used in eval and typescript buffers.
@@ -395,7 +387,7 @@ between the region's start and end, and if there are no ill-formed expressions i
 			  (editor-error "Not after complete form."))
 			(region (copy-mark start) (copy-mark end))))))
       (buffer-end point)
-      (push-buffer-mark (copy-mark point))
+      (push-new-buffer-mark point)
       (insert-region point region)
       (setf (last-command-type) :ephemerally-active))))
 
@@ -504,20 +496,19 @@ between the region's start and end, and if there are no ill-formed expressions i
        (message "Evaluation returned ~S" (eval form))))))
 
 (defun macroexpand-expression (expander)
-  (let* ((out (hi::top-listener-output-stream)))
-    (when out
-      (let* ((point (buffer-point (current-buffer)))
-             (region (if (region-active-p)
-                       (current-region)
-                       (with-mark ((start point))
-                         (pre-command-parse-check start)
-                         (with-mark ((end start))
-                           (unless (form-offset end 1) (editor-error))
-                           (region start end)))))
-             (expr (with-input-from-region (s region)
-                           (read s))))
-        (let* ((*print-pretty* t))
-          (format out "~&~s~&" (funcall expander expr)))))))
+  (let* ((point (buffer-point (current-buffer)))
+	 (region (if (region-active-p)
+		   (current-region)
+		   (with-mark ((start point))
+		     (pre-command-parse-check start)
+		     (with-mark ((end start))
+		       (unless (form-offset end 1) (editor-error))
+		       (region start end)))))
+	 (expr (with-input-from-region (s region)
+		 (read s))))
+    (let* ((*print-pretty* t)
+	   (expansion (funcall expander expr)))
+      (format t "~&~s~&" expansion))))
 
 (defcommand "Editor Macroexpand-1 Expression" (p)
   "Show the macroexpansion of the current expression in the null environment.
@@ -546,45 +537,17 @@ between the region's start and end, and if there are no ill-formed expressions i
 
 (defcommand "Editor Evaluate Buffer" (p)
   "Evaluates the text in the current buffer in the editor Lisp."
-  "Evaluates the text in the current buffer redirecting *Standard-Output* to
-   the echo area.  This occurs in the editor Lisp.  The prefix argument is
-   ignored."
   (declare (ignore p))
-  (clear-echo-area)
-  (write-string "Evaluating buffer in the editor ..." *echo-area-stream*)
-  (finish-output *echo-area-stream*)
+  (message "Evaluating buffer in the editor ...")
   (with-input-from-region (stream (buffer-region (current-buffer)))
-    (let ((*standard-output* *echo-area-stream*))
-      (in-lisp
-       (do ((object (read stream nil lispbuf-eof) 
-		    (read stream nil lispbuf-eof)))
-	   ((eq object lispbuf-eof))
-	 (eval object))))
+    (in-lisp
+     (do ((object (read stream nil lispbuf-eof) 
+                  (read stream nil lispbuf-eof)))
+         ((eq object lispbuf-eof))
+       (eval object)))
     (message "Evaluation complete.")))
 
 
-
-;;; With-Output-To-Window  --  Internal
-;;;
-;;;
-(defmacro with-output-to-window ((stream name) &body forms)
-  "With-Output-To-Window (Stream Name) {Form}*
-  Bind Stream to a stream that writes into the buffer named Name a la
-  With-Output-To-Mark.  The buffer is created if it does not exist already
-  and a window is created to display the buffer if it is not displayed.
-  For the duration of the evaluation this window is made the current window."
-  (let ((nam (gensym)) (buffer (gensym)) (point (gensym)) 
-	(window (gensym)) (old-window (gensym)))
-    `(let* ((,nam ,name)
-	    (,buffer (or (getstring ,nam *buffer-names*) (make-buffer ,nam)))
-	    (,point (buffer-end (buffer-point ,buffer)))
-	    (,window (or (car (buffer-windows ,buffer)) (make-window ,point)))
-	    (,old-window (current-window)))
-       (unwind-protect
-	 (progn (setf (current-window) ,window)
-		(buffer-end ,point)
-		(with-output-to-mark (,stream ,point) ,@forms))
-	 (setf (current-window) ,old-window)))))
 
 (defcommand "Editor Compile File" (p)
   "Prompts for file to compile in the editor Lisp.  Does not compare source
@@ -595,8 +558,7 @@ between the region's start and end, and if there are no ill-formed expressions i
   (let ((pn (prompt-for-file :default
 			     (buffer-default-pathname (current-buffer))
 			     :prompt "File to compile: ")))
-    (with-output-to-window (*error-output* "Compiler Warnings")
-      (in-lisp (compile-file (namestring pn) #+cmu :error-file #+cmu nil)))))
+    (in-lisp (compile-file (namestring pn) #+cmu :error-file #+cmu nil))))
 
 
 (defun older-or-non-existent-fasl-p (pathname &optional definitely)
@@ -625,22 +587,19 @@ between the region's start and end, and if there are no ill-formed expressions i
 		      :prompt (list "Save and compile file ~A? "
 				    (namestring pn))))
 	     (write-buffer-file buf pn)
-	     (with-output-to-window (*error-output* "Compiler Warnings")
-	       (in-lisp (compile-file (namestring pn) #+cmu :error-file #+cmu nil)))))
+	     (in-lisp (compile-file (namestring pn) #+cmu :error-file #+cmu nil))))
 	  ((older-or-non-existent-fasl-p pn p)
 	   (when (or (not (value compile-buffer-file-confirm))
 		     (prompt-for-y-or-n
 		      :default t :default-string "Y"
 		      :prompt (list "Compile file ~A? " (namestring pn))))
-	     (with-output-to-window (*error-output* "Compiler Warnings")
-	       (in-lisp (compile-file (namestring pn) #+cmu :error-file #+cmu nil)))))
+	     (in-lisp (compile-file (namestring pn) #+cmu :error-file #+cmu nil))))
 	  (t (when (or p
 		       (prompt-for-y-or-n
 			:default t :default-string "Y"
 			:prompt
 			"Fasl file up to date, compile source anyway? "))
-	       (with-output-to-window (*error-output* "Compiler Warnings")
-		 (in-lisp (compile-file (namestring pn) #+cmu :error-file #+cmu nil))))))))
+	       (in-lisp (compile-file (namestring pn) #+cmu :error-file #+cmu nil)))))))
 
 
 

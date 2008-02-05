@@ -39,6 +39,14 @@
   (declare (ignore p)))
 
 
+(defcommand "Abort Command" (p)
+  "Abort reading a command in current view"
+  "Aborts c-q, multi-key commands (e.g. c-x), prefix translation (e.g.
+ESC as Meta-), prefix arguments (e.g. c-u), ephemeral modes such as
+i-search, and prompted input (e.g. m-x)"
+  (declare (ignore p))
+  (abort-to-toplevel))
+
 ;;;; Casing commands...
 
 (defcommand "Uppercase Word" (p)
@@ -173,7 +181,8 @@
 
 (defun prompt-for-place (prompt help)
   (multiple-value-bind (word val)
-		       (prompt-for-keyword *scope-table* :prompt prompt
+		       (prompt-for-keyword :tables *scope-table*
+					   :prompt prompt
 					   :help help :default "Global")
     (declare (ignore word))
     (case val
@@ -182,7 +191,7 @@
 					  :default (current-buffer))))
       (:mode
        (values :mode (prompt-for-keyword 
-		      (list *mode-names*)
+		      :tables (list *mode-names*)
 		      :prompt "Mode: "
 		      :help "Mode to be local to."
 		      :default (buffer-major-mode (current-buffer)))))
@@ -195,14 +204,15 @@
   (declare (ignore p))
   (multiple-value-call #'bind-key 
     (values (prompt-for-keyword
-	     (list *command-names*)
+	     :tables (list *command-names*)
 	     :prompt "Command to bind: "
 	     :help "Name of command to bind to a key."))
     (values (prompt-for-key 
-	     :prompt "Bind to: "  :must-exist nil
+             :must-exist nil
+	     :prompt "Bind to: "
 	     :help "Key to bind command to, confirm to complete."))
     (prompt-for-place "Kind of binding: "
-		      "The kind of binding to make.")))	    	    
+		      "The kind of binding to make.")))
 
 (defcommand "Delete Key Binding" (p)
   "Delete a key binding.
@@ -210,7 +220,8 @@
   "Prompt for stuff to do a delete-key-binding."
   (declare (ignore p))
   (let ((key (prompt-for-key 
-	      :prompt "Delete binding: " :must-exist nil 
+              :must-exist nil
+	      :prompt "Delete binding: "
 	      :help "Key to delete binding from.")))
     (multiple-value-bind (kind where)
 			 (prompt-for-place "Kind of binding: "
@@ -259,53 +270,6 @@
 	  (defhvar name doc kind where :value val :hooks hooks)))))
 
 
-
-
-
-;;; This is used by the :edit-level modeline field which is defined in Main.Lisp.
-;;;
-(defvar *recursive-edit-count* 0)
-
-(defun do-recursive-edit ()
-  "Does a recursive edit, wrapping []'s around the modeline of the current
-  window during its execution.  The current window and buffer are saved
-  beforehand and restored afterward.  If they have been deleted by the
-  time the edit is done then an editor-error is signalled."
-  (let* ((win (current-window))
-	 (buf (current-buffer)))
-    (unwind-protect
-	(let ((*recursive-edit-count* (1+ *recursive-edit-count*)))
-	  (update-modeline-field *echo-area-buffer* *echo-area-window*
-				 (modeline-field :edit-level))
-	  (recursive-edit))
-      (update-modeline-field *echo-area-buffer* *echo-area-window*
-			     (modeline-field :edit-level))
-      (unless (and (member win *window-list*) (memq buf *buffer-list*))
-	(editor-error "Old window or buffer has been deleted."))
-      (setf (current-window) win)
-      (unless (eq (window-buffer win) buf)
-	(setf (window-buffer win) buf))
-      (setf (current-buffer) buf))))
-
-(defcommand "Exit Recursive Edit" (p)
-  "Exit a level of recursive edit.  Signals an error when not in a
-   recursive edit."
-  "Exit a level of recursive edit.  Signals an error when not in a
-   recursive edit."
-  (declare (ignore p))
-  (unless (in-recursive-edit) (editor-error "Not in a recursive edit!"))
-  (exit-recursive-edit ()))
-
-(defcommand "Abort Recursive Edit" (p)
-  "Abort the current recursive edit.  Signals an error when not in a
-   recursive edit."
-  "Abort the current recursive edit.  Signals an error when not in a
-   recursive edit."
-  (declare (ignore p))
-  (unless (in-recursive-edit) (editor-error "Not in a recursive edit!"))
-  (abort-recursive-edit "Recursive edit aborted."))
-
-
 ;;; TRANSPOSE REGIONS uses CURRENT-REGION to signal an error if the current
 ;;; region is not active and to get start2 and end2 in proper order.  Delete1,
 ;;; delete2, and delete3 are necessary since we are possibly ROTATEF'ing the
@@ -349,13 +313,13 @@
 		      (delete-and-save-region (region start2 end2))))
 	   (point (current-point)))
       (with-mark ((ipoint point :left-inserting))
-	(let ((save-end2-loc (push-buffer-mark (copy-mark end2))))
+	(let ((save-end2-loc (push-new-buffer-mark end2)))
 	  (ninsert-region (move-mark ipoint end2) region1)
-	  (push-buffer-mark (copy-mark ipoint))
+	  (push-new-buffer-mark ipoint)
 	  (cond (adjacent-p
-		 (push-buffer-mark (copy-mark start2))
+		 (push-new-buffer-mark start2)
 		 (move-mark point save-end2-loc))
-		(t (push-buffer-mark (copy-mark end1))
+		(t (push-new-buffer-mark end1)
 		   (ninsert-region (move-mark ipoint end1) region2)
 		   (move-mark point ipoint))))))
     (delete-mark delete1)
@@ -392,241 +356,23 @@
       (editor-error "Must supply a non-negatige integer."))
     (let ((point (current-point-unless-selection)))
       (when point
-        (with-mark ((m point))
-          (unless (character-offset (buffer-start m) p)
-            (buffer-end m))
-          (move-mark point m))))))
+	(unless (move-to-absolute-position point p)
+	  (buffer-end point))))))
 
 (defcommand "What Cursor Position" (p)
   "Print info on current point position"
   "Print info on current point position"
   (declare (ignore p))
   (let* ((point (current-point))
-         (current-line (mark-line point)))
-    (let* ((line-number (do* ((l 1 (1+ l))
-                              (mark-line (line-previous (mark-line point)) (line-previous mark-line)))
-                             ((null mark-line) l)))
-             (charpos (mark-charpos point))
-             (abspos (+ (hi::get-line-origin current-line) charpos))
-             (char (next-character point))
-             (size (count-characters (buffer-region (current-buffer)))))
-        (message "Char: ~s point = ~d of ~d(~d%) line ~d column ~d"
-                 char abspos size (round (/ (* 100 abspos) size)) line-number charpos))))
-
-
-
-
-
-
-;;;; Mouse Commands.
-
-(defcommand "Do Nothing" (p)
-  "Do nothing.
-  With prefix argument, do it that many times."
-  "Do nothing p times."
-  (dotimes (i (or p 1)))
-  (setf (last-command-type) (last-command-type)))
-
-(defun do-nothing (&rest args)
-  (declare (ignore args))
-  nil)
-
-(defun maybe-change-window (window)
-  (unless (eq window (current-window))
-    (when (or (eq window *echo-area-window*)
-	      (eq (current-window) *echo-area-window*)
-	      (member window *random-typeout-buffers*
-		      :key #'(lambda (cons)
-			       (hi::random-typeout-stream-window (cdr cons)))))
-      (supply-generic-pointer-up-function #'do-nothing)
-      (editor-error "I'm afraid I can't let you do that Dave."))
-    (setf (current-window) window)
-    (let ((buffer (window-buffer window)))
-      (unless (eq (current-buffer) buffer)
-	(setf (current-buffer) buffer)))))
-
-(defcommand "Top Line to Here" (p)
-  "Move the top line to the line the mouse is on.
-  If in the first two columns then scroll continuously until the button is
-  released."
-  "Move the top line to the line the mouse is on."
-  (declare (ignore p))
-  (multiple-value-bind (x y window)
-		       (last-key-event-cursorpos)
-    (unless y (editor-error))
-    (cond ((< x 2)
-	   (loop
-	     (when (listen-editor-input hi::*editor-input*) (return))
-	     (scroll-window window -1)
-	     (redisplay)
-	     (editor-finish-output window)))
-	  (t
-	   (scroll-window window (- y))))))
-
-(defcommand "Here to Top of Window" (p)
-  "Move the line the mouse is on to the top of the window.
-  If in the first two columns then scroll continuously until the button is
-  released."
-  "Move the line the mouse is on to the top of the window."
-  (declare (ignore p))
-  (multiple-value-bind (x y window)
-		       (last-key-event-cursorpos)
-    (unless y (editor-error))
-    (cond ((< x 2)
-	   (loop
-	     (when (listen-editor-input hi::*editor-input*) (return))
-	     (scroll-window window 1)
-	     (redisplay)
-	     (editor-finish-output window)))
-	  (t
-	   (scroll-window window y)))))
-
-
-(defvar *generic-pointer-up-fun* nil
-  "This is the function for the \"Generic Pointer Up\" command that defines
-   its action.  Other commands set this in preparation for this command's
-   invocation.")
-;;;
-(defun supply-generic-pointer-up-function (fun)
-  "This provides the action \"Generic Pointer Up\" command performs."
-  (check-type fun function)
-  (setf *generic-pointer-up-fun* fun))
-
-(defcommand "Generic Pointer Up" (p)
-  "Other commands determine this command's action by supplying functions that
-   this command invokes.  The following built-in commands supply the following
-   generic up actions:
-      \"Point to Here\"
-         When the position of the pointer is different than the current
-	 point, the action pushes a buffer mark at point and moves point
-         to the pointer's position.
-      \"Bufed Goto and Quit\"
-         The action is a no-op."
-  "Invoke whatever is on *generic-pointer-up-fun*."
-  (declare (ignore p))
-  (unless *generic-pointer-up-fun*
-    (editor-error "No commands have supplied a \"Generic Pointer Up\" action."))
-  (funcall *generic-pointer-up-fun*))
-
-
-(defcommand "Point to Here" (p)
-  "Move the point to the position of the mouse.
-   If in the modeline, move to the absolute position in the file indicated by
-   the position within the modeline, pushing the old position on the mark
-   stack.  This supplies a function \"Generic Pointer Up\" invokes if it runs
-   without any intervening generic pointer up predecessors running.  If the
-   position of the pointer is different than the current point when the user
-   invokes \"Generic Pointer Up\", then this function pushes a buffer mark at
-   point and moves point to the pointer's position.  This allows the user to
-   mark off a region with the mouse."
-  "Move the point to the position of the mouse."
-  (declare (ignore p))
-  (multiple-value-bind (x y window)
-		       (last-key-event-cursorpos)
-    (unless x (editor-error))
-    (maybe-change-window window)
-    (if y
-	(let ((m (cursorpos-to-mark x y window)))
-	  (unless m (editor-error))
-	  (move-mark (current-point) m))
-	(let* ((buffer (window-buffer window))
-	       (region (buffer-region buffer))
-	       (point (buffer-point buffer)))
-	  (push-buffer-mark (copy-mark point))
-	  (move-mark point (region-start region))
-	  (line-offset point (round (* (1- (count-lines region)) x)
-				    (1- (window-width window)))))))
-  (supply-generic-pointer-up-function #'point-to-here-up-action))
-
-(defun point-to-here-up-action ()
-  (multiple-value-bind (x y window)
-		       (last-key-event-cursorpos)
-    (unless x (editor-error))
-    (when y
-      (maybe-change-window window)
-      (let ((m (cursorpos-to-mark x y window)))
-	(unless m (editor-error))
-	(when (eq (line-buffer (mark-line (current-point)))
-		  (line-buffer (mark-line m)))
-	  (unless (mark= m (current-point))
-	    (push-buffer-mark (copy-mark (current-point)) t)))
-	(move-mark (current-point) m)))))
-
-
-(defcommand "Insert Kill Buffer" (p)
-  "Move current point to the mouse location and insert the kill buffer."
-  "Move current point to the mouse location and insert the kill buffer."
-  (declare (ignore p))
-  (multiple-value-bind (x y window)
-		       (last-key-event-cursorpos)
-    (unless x (editor-error))
-    (maybe-change-window window)
-    (if y
-	(let ((m (cursorpos-to-mark x y window)))
-	  (unless m (editor-error))
-	  (move-mark (current-point) m)
-	  (un-kill-command nil))
-	(editor-error "Can't insert kill buffer in modeline."))))
-
-
-
-;;;; Page commands & stuff.
-
-(defvar *goto-page-last-num* 0)
-(defvar *goto-page-last-string* "")
-
-(defcommand "Goto Page" (p)
-  "Go to an absolute page number (argument).  If no argument, then go to
-  next page.  A negative argument moves back that many pages if possible.
-  If argument is zero, prompt for string and goto page with substring
-  in title."
-  "Go to an absolute page number (argument).  If no argument, then go to
-  next page.  A negative argument moves back that many pages if possible.
-  If argument is zero, prompt for string and goto page with substring
-  in title."
-  (let ((point (current-point)))
-    (cond ((not p)
-	   (page-offset point 1))
-	  ((zerop p)
-	   (let* ((againp (eq (last-command-type) :goto-page-zero))
-		  (name (prompt-for-string :prompt "Substring of page title: "
-					   :default (if againp
-							*goto-page-last-string*
-							*parse-default*)))
-		  (dir (page-directory (current-buffer)))
-		  (i 1))
-	     (declare (simple-string name))
-	     (cond ((not againp)
-		    (push-buffer-mark (copy-mark point)))
-		   ((string-equal name *goto-page-last-string*)
-		    (setf dir (nthcdr *goto-page-last-num* dir))
-		    (setf i (1+ *goto-page-last-num*))))
-	     (loop 
-	       (when (null dir)
-		 (editor-error "No page title contains ~S." name))
-	       (when (search name (the simple-string (car dir))
-			     :test #'char-equal)
-		 (goto-page point i)
-		 (setf (last-command-type) :goto-page-zero)
-		 (setf *goto-page-last-num* i)
-		 (setf *goto-page-last-string* name)
-		 (return t))
-	       (incf i)
-	       (setf dir (cdr dir)))))
-	    ((minusp p)
-	     (page-offset point p))
-	    (t (goto-page point p)))
-    (line-start (move-mark (window-display-start (current-window)) point))))
-
-(defun goto-page (mark i)
-  (with-mark ((m mark))
-    (buffer-start m)
-    (unless (page-offset m (1- i))
-      (editor-error "No page numbered ~D." i))
-    (move-mark mark m)))
-
-			   
-
+	 (line-number (do* ((l 1 (1+ l))
+			    (mark-line (line-previous (mark-line point)) (line-previous mark-line)))
+			   ((null mark-line) l)))
+	 (charpos (mark-charpos point))
+	 (abspos (mark-absolute-position point))
+	 (char (next-character point))
+	 (size (count-characters (buffer-region (current-buffer)))))
+    (message "Char: ~s point = ~d of ~d(~d%) line ~d column ~d"
+	     char abspos size (round (/ (* 100 abspos) size)) line-number charpos)))
 
 (defcommand "Count Lines" (p)
   "Display number of lines in the region."
@@ -715,7 +461,7 @@
   "Insert the last character typed, or the argument number of them.
    If the last character was an alphabetic character, then insert its
    capital form."
-  (let ((char (char-upcase (hemlock-ext:key-event-char *last-key-event-typed*))))
+  (let ((char (char-upcase (last-char-typed))))
     (if (and p (> p 1))
 	(insert-string (current-point) (make-string p :initial-element char))
 	(insert-character (current-point) char))))

@@ -613,17 +613,23 @@
 (def-sensitive-newline-search-method
   sensitive-find-newline-once-backward-method nil)
 
-(defun find-pattern (mark search-pattern)
+(defun find-pattern (mark search-pattern &optional stop-mark)
   "Find a match of Search-Pattern starting at Mark.  Mark is moved to
   point before the match and the number of characters matched is returned.
   If there is no match for the pattern then Mark is not modified and NIL
-  is returned."
+  is returned.
+  If stop-mark is specified, NIL is returned and mark is not moved if
+  the point before the match is after stop-mark"
   (close-line)
   (multiple-value-bind (line start matched)
 		       (funcall (search-pattern-search-function search-pattern)
 				search-pattern (mark-line mark)
 				(mark-charpos mark))
-    (when matched
+    (when (and matched
+	       (or (null stop-mark)
+		   (< (line-number line) (line-number (mark-line stop-mark)))
+		   (and (= (line-number line) (line-number (mark-line stop-mark)))
+			(<= start (mark-charpos stop-mark)))))
       (move-to-position mark start line)
       matched)))
 

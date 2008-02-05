@@ -73,7 +73,7 @@
 (defun flush-reg-references-to-deleted-buffer (buffer)
   (do-registers (name value)
     (etypecase value
-      (mark (when (eq (line-buffer (mark-line value)) buffer)
+      (mark (when (eq (mark-buffer value) buffer)
 	      (free-register name)))
       (cons (free-register-value value buffer)))))
 ;;;
@@ -88,7 +88,7 @@
 (defun free-register-value (value &optional buffer)
   (etypecase value
     (mark
-     (when (or (not buffer) (eq (line-buffer (mark-line value)) buffer))
+     (when (or (not buffer) (eq (mark-buffer value) buffer))
        (delete-mark value)))
     (cons
      (when (and buffer (eq (cdr value) buffer))
@@ -104,7 +104,6 @@
 
 (defcommand "Save Position" (p)
   "Saves the current location in a register.  Prompts for register name."
-  "Saves the current location in a register.  Prompts for register name."
   (declare (ignore p))
   (let ((reg-name (prompt-for-register)))
     (setf (register-value reg-name)
@@ -112,17 +111,17 @@
 
 (defcommand "Jump to Saved Position" (p)
   "Moves the point to a location previously saved in a register."
-  "Moves the point to a location previously saved in a register."
   (declare (ignore p))
   (let* ((reg-name (prompt-for-register "Jump to Register: " t))
 	 (val (register-value reg-name)))
     (unless (markp val)
       (editor-error "Register ~A does not hold a location." reg-name))
-    (change-to-buffer (line-buffer (mark-line val)))
-    (move-mark (current-point) val)))
+    (unless (eq (mark-buffer val) (current-buffer))
+      (hemlock-ext:raise-buffer-view (mark-buffer val)
+                                     #'(lambda ()
+                                         (move-mark (current-point) val))))))
 
 (defcommand "Kill Register" (p)
-  "Kill a regist er.  Prompts for the name."
   "Kill a register.  Prompts for the name."
   (declare (ignore p))
   (free-register (prompt-for-register "Register to kill: ")))
@@ -134,7 +133,7 @@
   (with-pop-up-display (f :height (* 2 (register-count)))
     (do-registers (name val :sorted)
       (write-string "Reg " f)
-      (hemlock-ext:print-pretty-key-event name f)
+      (write-string (pretty-key-string name) f)
       (write-string ":  " f)
       (etypecase val
 	(mark
@@ -176,6 +175,6 @@
     (unless (and (consp val) (regionp (car val)))
       (editor-error "Register ~A does not hold a region." reg-name))
     (let ((point (current-point)))
-      (push-buffer-mark (copy-mark point))
-      (insert-region (current-point) (car val))))
+      (push-new-buffer-mark point)
+      (insert-region point (car val))))
   (setf (last-command-type) :ephemerally-active))

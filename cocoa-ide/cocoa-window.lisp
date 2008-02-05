@@ -49,54 +49,20 @@
 		 :unsigned-byte (if flag #$YES #$NO)
 		 :void))
 
-(defstatic *appkit-process-interrupt-ids* (make-id-map))
-(defun register-appkit-process-interrupt (thunk)
-  (assign-id-map-id *appkit-process-interrupt-ids* thunk))
-(defun appkit-interrupt-function (id)
-  (id-map-free-object *appkit-process-interrupt-ids* id))
-
 (defclass appkit-process (process) ())
-
-(defconstant process-interrupt-event-subtype 17)
-
-
-
-
-(defclass lisp-application (ns:ns-application)
-    ((termp :foreign-type :<BOOL>))
-  (:metaclass ns:+ns-object))
-
-
-(objc:defmethod (#/postEventAtStart: :void) ((self  ns:ns-application) e)
-  (#/postEvent:atStart: self e t))
 
 ;;; Interrupt the AppKit event process, by enqueing an event (if the
 ;;; application event loop seems to be running.)  It's possible that
 ;;; the event loop will stop after the calling thread checks; in that
 ;;; case, the application's probably already in the process of
 ;;; exiting, and isn't that different from the case where asynchronous
-;;; interrupts are used.  An attribute of the event is used to identify
-;;; the thunk which the event handler needs to funcall.
+;;; interrupts are used.
 (defmethod process-interrupt ((process appkit-process) function &rest args)
   (if (eq process *current-process*)
     (apply function args)
-    (if (or (not *NSApp*) (not (#/isRunning *NSApp*)))
-      (call-next-method)
-      (let* ((e (#/otherEventWithType:location:modifierFlags:timestamp:windowNumber:context:subtype:data1:data2:
-                 ns:ns-event
-                 #$NSApplicationDefined
-                 (ns:make-ns-point 0 0)
-                 0
-                 0.0d0
-                 0
-                 +null-ptr+
-                 process-interrupt-event-subtype
-                 (register-appkit-process-interrupt
-                  #'(lambda () (apply function args))) 0)))
-	(#/retain e)
-        (#/performSelectorOnMainThread:withObject:waitUntilDone:
-         *NSApp* (@selector "postEventAtStart:") e  t)))))
-
+    (if (and *NSApp* (#/isRunning *NSApp*))
+      (queue-for-gui #'(lambda () (apply function args)) :at-start t)
+      (call-next-method))))
 
 (defparameter *debug-in-event-process* t)
 
@@ -108,7 +74,7 @@
     (let* ((c (if (typep condition 'ccl::ns-lisp-exception)
                 (ccl::ns-lisp-exception-condition condition)
                 condition)))
-      (unless (member c *event-process-reported-conditions*)
+      (unless (or (not (typep c 'error)) (member c *event-process-reported-conditions*))
         (push c *event-process-reported-conditions*)
         (catch 'need-a-catch-frame-for-backtrace
           (let* ((*debug-in-event-process* nil)
@@ -146,16 +112,6 @@
     (#_TransformProcessType psn #$kProcessTransformToForegroundApplication)
     (eql 0 (#_SetFrontProcess psn))))
 
-;;; I'm not sure if there's another way to recognize events whose
-;;; type is #$NSApplicationDefined.
-(objc:defmethod (#/sendEvent: :void) ((self lisp-application) e)
-  (if (and (eql (#/type e) #$NSApplicationDefined)
-	   (eql (#/subtype e)  process-interrupt-event-subtype))
-    ;;; The thunk to funcall is identified by the value
-    ;;; of the event's data1 attribute.
-    (funcall (appkit-interrupt-function (#/data1 e)))
-    (call-next-method e)))
-
 #+nil
 (objc:defmethod (#/showPreferences: :void) ((self lisp-application) sender)
   (declare (ignore sender))
@@ -165,13 +121,6 @@
   (declare (ignore sender))
   (#/show (#/sharedPanel typeout-window)))
 
-(defun nslog-condition (c)
-  (let* ((rep (format nil "~a" c)))
-    (with-cstrs ((str rep))
-      (with-nsstr (nsstr str (length rep))
-	(#_NSLog #@"Error in event loop: %@" :address nsstr)))))
-
-
 (defmethod ccl::process-exit-application ((process appkit-process) thunk)
   (when (eq process ccl::*initial-process*)
     (%set-toplevel thunk)
@@ -180,15 +129,26 @@
 (defun run-event-loop ()
   (%set-toplevel nil)
   (change-class *cocoa-event-process* 'appkit-process)
-  (let* ((app *NSApp*))
+  (event-loop))
+
+(defun stop-event-loop ()
+  (#/stop: *nsapp* +null-ptr+))
+
+(defun event-loop (&optional end-test)
+  (let ((app *NSApp*))
     (loop
-	(handler-case (let* ((*event-process-reported-conditions* nil))
-                        (#/run app))
-	  (error (c) (nslog-condition c)))
-	(unless (#/isRunning app)
-	  (return)))))
-
-
+      (handler-case (let* ((*event-process-reported-conditions* nil))
+		      (if end-test
+			(#/run app)
+			#|(#/runMode:beforeDate: (#/currentRunLoop ns:ns-run-loop)
+					       #&NSDefaultRunLoopMode
+					       (#/distantFuture ns:ns-date))|#
+			(#/run app)))
+	(error (c) (nslog-condition c)))
+      #+GZ (log-debug "~&runMode exited, end-test: ~s isRunning ~s quitting: ~s" end-test (#/isRunning app) ccl::*quitting*)
+      (when (or (and end-test (funcall end-test))
+		(and ccl::*quitting* (not (#/isRunning app))))
+	(return)))))
 
 (defun start-cocoa-application (&key
 				(application-proxy-class-name
@@ -196,13 +156,7 @@
   
   (flet ((cocoa-startup ()
 	   ;; Start up a thread to run periodic tasks.
-	   (process-run-function "housekeeping"
-				 #'(lambda ()
-				     (loop
-                                       (ccl::%nanosleep ccl::*periodic-task-seconds*
-							ccl::*periodic-task-nanoseconds*)
-                                       (ccl::housekeeping))))
-	   
+	   (process-run-function "housekeeping" #'ccl::housekeeping-loop)
            (with-autorelease-pool
              (enable-foreground)
              (or *NSApp* (setq *NSApp* (init-cocoa-application)))

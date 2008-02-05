@@ -6,39 +6,11 @@
 
 (defvar *grep-program* "grep")
 
-(defclass cocoa-edit-grep-line-request (ns:ns-object)
-  ((file-id :foreign-type :int)
-   (line-num :foreign-type :int))
-  (:metaclass ns:+ns-object))
-
-(objc:defmethod #/initWithFile:line:
-		((self cocoa-edit-grep-line-request) (file :int) (line :int))
-  (#/init self)
-  (setf (slot-value self 'file-id) file
-	(slot-value self 'line-num) line)
-  self)
-
-(objc:defmethod (#/editGrepLine: :void)
-    ((self hemlock-document-controller) request)
-  (let* ((file (id-map-free-object *edit-definition-id-map* (slot-value request 'file-id)))
-	 (line-num (slot-value request 'line-num))
-	 (namestring (native-translated-namestring file))
-	 (url (#/initFileURLWithPath:
-	       (#/alloc ns:ns-url)
-	       (%make-nsstring namestring)))
-	 (document (#/openDocumentWithContentsOfURL:display:error:
-		    self
-		    url
-		    nil
-		    +null-ptr+)))
-    (unless (%null-ptr-p document)
-      (when (= (#/count (#/windowControllers document)) 0)
-	(#/makeWindowControllers document))
-      (let* ((buffer (hemlock-document-buffer document))
-	     (hi::*current-buffer* buffer))
-	(edit-grep-line-in-buffer line-num))
-      (#/updateHemlockSelection (slot-value document 'textstorage))
-      (#/showWindows document))))
+(defun cocoa-edit-grep-line (file line-num)
+  (assume-cocoa-thread)
+  (let ((view (find-or-make-hemlock-view file)))
+    (hi::handle-hemlock-event view #'(lambda ()
+                                       (edit-grep-line-in-buffer line-num)))))
 
 (defun edit-grep-line-in-buffer (line-num)
   (let ((point (hi::current-point-collapsing-selection)))
@@ -59,14 +31,8 @@
 (defun request-edit-grep-line (line)
   (multiple-value-bind (file line-num) (parse-grep-line line)
     (when file
-      (let* ((request (make-instance 'cocoa-edit-grep-line-request
-				     :with-file (assign-id-map-id *edit-definition-id-map* file)
-				     :line line-num)))
-	(#/performSelectorOnMainThread:withObject:waitUntilDone:
-	 (#/sharedDocumentController ns:ns-document-controller)
-	 (@selector #/editGrepLine:)
-	 request
-	 t)))))
+      (execute-in-gui #'(lambda ()
+                          (cocoa-edit-grep-line file line-num))))))
 
 (defun grep-comment-line-p (line)
   (multiple-value-bind (file line-num) (parse-grep-line line)

@@ -30,9 +30,11 @@
     (let* ((first-line (mark-line mark))
            (buffer (line-%buffer first-line)))
       (modifying-buffer buffer)
-      (cocoa-read-file pathname mark buffer))))
-      
-
+      (with-open-file (input pathname :direction :input :element-type 'character)
+        (do ((line (read-line input nil :eof) (read-line input nil :eof)))
+            ((eql line :eof))
+	  (insert-string mark line)
+          (insert-character mark #\newline))))))
 
 
 ;;; Write-File:

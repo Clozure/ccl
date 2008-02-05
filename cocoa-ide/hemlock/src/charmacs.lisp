@@ -29,7 +29,7 @@
 
 ;;;; Stuff for the Syntax table functions (syntax)
 
-(defconstant syntax-char-code-limit char-code-limit
+(defconstant syntax-char-code-limit hemlock-char-code-limit
   "The highest char-code which a character argument to the syntax
   table functions may have.")
 

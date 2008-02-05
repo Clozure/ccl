@@ -26,6 +26,18 @@
 
 (def-cocoa-default *use-screen-fonts* :bool t "Use bitmap screen fonts when available")
 
+
+(defgeneric hemlock-view (ns-object))
+
+(defmethod hemlock-view ((unknown t))
+  nil)
+
+(defgeneric hemlock-buffer (ns-object))
+
+(defmethod hemlock-buffer ((unknown t))
+  (let ((view (hemlock-view unknown)))
+    (when view (hi::hemlock-view-buffer view))))
+
 (defmacro nsstring-encoding-to-nsinteger (n)
   (ccl::target-word-size-case
    (32 `(ccl::u32->s32 ,n))
@@ -144,15 +156,77 @@
     (assert buf)
     buf))
 
-;;; Define some key event modifiers.
+;;; Define some key event modifiers and keysym codes
 
-;;; HEMLOCK-EXT::DEFINE-CLX-MODIFIER is kind of misnamed; we can use
-;;; it to map NSEvent modifier keys to key-event modifiers.
+(hi:define-modifier-bit #$NSShiftKeyMask "Shift")
+(hi:define-modifier-bit #$NSControlKeyMask "Control")
+(hi:define-modifier-bit #$NSAlternateKeyMask "Meta")
+(hi:define-modifier-bit #$NSAlphaShiftKeyMask "Lock")
 
-(hemlock-ext::define-clx-modifier #$NSShiftKeyMask "Shift")
-(hemlock-ext::define-clx-modifier #$NSControlKeyMask "Control")
-(hemlock-ext::define-clx-modifier #$NSAlternateKeyMask "Meta")
-(hemlock-ext::define-clx-modifier #$NSAlphaShiftKeyMask "Lock")
+(hi:define-keysym-code :F1 #$NSF1FunctionKey)
+(hi:define-keysym-code :F2 #$NSF2FunctionKey)
+(hi:define-keysym-code :F3 #$NSF3FunctionKey)
+(hi:define-keysym-code :F4 #$NSF4FunctionKey)
+(hi:define-keysym-code :F5 #$NSF5FunctionKey)
+(hi:define-keysym-code :F6 #$NSF6FunctionKey)
+(hi:define-keysym-code :F7 #$NSF7FunctionKey)
+(hi:define-keysym-code :F8 #$NSF8FunctionKey)
+(hi:define-keysym-code :F9 #$NSF9FunctionKey)
+(hi:define-keysym-code :F10 #$NSF10FunctionKey)
+(hi:define-keysym-code :F11 #$NSF11FunctionKey)
+(hi:define-keysym-code :F12 #$NSF12FunctionKey)
+(hi:define-keysym-code :F13 #$NSF13FunctionKey)
+(hi:define-keysym-code :F14 #$NSF14FunctionKey)
+(hi:define-keysym-code :F15 #$NSF15FunctionKey)
+(hi:define-keysym-code :F16 #$NSF16FunctionKey)
+(hi:define-keysym-code :F17 #$NSF17FunctionKey)
+(hi:define-keysym-code :F18 #$NSF18FunctionKey)
+(hi:define-keysym-code :F19 #$NSF19FunctionKey)
+(hi:define-keysym-code :F20 #$NSF20FunctionKey)
+(hi:define-keysym-code :F21 #$NSF21FunctionKey)
+(hi:define-keysym-code :F22 #$NSF22FunctionKey)
+(hi:define-keysym-code :F23 #$NSF23FunctionKey)
+(hi:define-keysym-code :F24 #$NSF24FunctionKey)
+(hi:define-keysym-code :F25 #$NSF25FunctionKey)
+(hi:define-keysym-code :F26 #$NSF26FunctionKey)
+(hi:define-keysym-code :F27 #$NSF27FunctionKey)
+(hi:define-keysym-code :F28 #$NSF28FunctionKey)
+(hi:define-keysym-code :F29 #$NSF29FunctionKey)
+(hi:define-keysym-code :F30 #$NSF30FunctionKey)
+(hi:define-keysym-code :F31 #$NSF31FunctionKey)
+(hi:define-keysym-code :F32 #$NSF32FunctionKey)
+(hi:define-keysym-code :F33 #$NSF33FunctionKey)
+(hi:define-keysym-code :F34 #$NSF34FunctionKey)
+(hi:define-keysym-code :F35 #$NSF35FunctionKey)
+
+;;; Upper right key bank.
+;;;
+(hi:define-keysym-code :Printscreen #$NSPrintScreenFunctionKey)
+;; Couldn't type scroll lock.
+(hi:define-keysym-code :Pause #$NSPauseFunctionKey)
+
+;;; Middle right key bank.
+;;;
+(hi:define-keysym-code :Insert #$NSInsertFunctionKey)
+(hi:define-keysym-code :Del #$NSDeleteFunctionKey)
+(hi:define-keysym-code :Home #$NSHomeFunctionKey)
+(hi:define-keysym-code :Pageup #$NSPageUpFunctionKey)
+(hi:define-keysym-code :End #$NSEndFunctionKey)
+(hi:define-keysym-code :Pagedown #$NSPageDownFunctionKey)
+
+;;; Arrows.
+;;;
+(hi:define-keysym-code :Leftarrow #$NSLeftArrowFunctionKey)
+(hi:define-keysym-code :Uparrow #$NSUpArrowFunctionKey)
+(hi:define-keysym-code :Downarrow #$NSDownArrowFunctionKey)
+(hi:define-keysym-code :Rightarrow #$NSRightArrowFunctionKey)
+
+;;;
+
+;(hi:define-keysym-code :linefeed 65290)
+
+
+
 
 
 ;;; We want to display a Hemlock buffer in a "pane" (an on-screen
@@ -194,6 +268,11 @@
     ((cache :initform nil :initarg :cache :accessor hemlock-buffer-string-cache))
   (:metaclass ns:+ns-object))
 
+(defmethod hemlock-buffer ((self hemlock-buffer-string))
+  (let ((cache (hemlock-buffer-string-cache self)))
+    (when cache
+      (hemlock-buffer cache))))
+
 ;;; Cocoa wants to treat the buffer as a linear array of characters;
 ;;; Hemlock wants to treat it as a doubly-linked list of lines, so
 ;;; we often have to map between an absolute position in the buffer
@@ -214,6 +293,9 @@
   workline-length			; length of cached workline
   workline-start-font-index		; current font index at start of workline
   )
+
+(defmethod hemlock-buffer ((self buffer-cache))
+  (buffer-cache-buffer self))
 
 ;;; Initialize (or reinitialize) a buffer cache, so that it points
 ;;; to the buffer's first line (which is the only line whose
@@ -302,23 +384,16 @@
 ;;; Given an absolute position, move the specified mark to the appropriate
 ;;; offset on the appropriate line.
 (defun move-hemlock-mark-to-absolute-position (mark cache abspos)
+  ;; TODO: figure out if updating the cache matters, and if not, use hi:move-to-absolute-position.
   (let* ((hi::*current-buffer* (buffer-cache-buffer cache)))
     (multiple-value-bind (line idx) (update-line-cache-for-index cache abspos)
       #+debug
       (#_NSLog #@"Moving point from current pos %d to absolute position %d"
-               :int (mark-absolute-position mark)
+               :int (hi:mark-absolute-position mark)
                :int abspos)
       (hemlock::move-to-position mark idx line)
       #+debug
-      (#_NSLog #@"Moved mark to %d" :int (mark-absolute-position mark)))))
-
-;;; Return the absolute position of the mark in the containing buffer.
-;;; This doesn't use the caching mechanism, so it's always linear in the
-;;; number of preceding lines.
-(defun mark-absolute-position (mark)
-  (let* ((hi::*current-buffer* (hi::line-%buffer (hi::mark-line mark)))
-         (pos (hi::mark-charpos mark)))
-    (+ (hi::get-line-origin (hi::mark-line mark)) pos)))
+      (#_NSLog #@"Moved mark to %d" :int (hi:mark-absolute-position mark)))))
 
 ;;; Return the length of the abstract string, i.e., the number of
 ;;; characters in the buffer (including implicit newlines.)
@@ -426,6 +501,10 @@
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-text-storage))
 
+(defmethod hemlock-buffer ((self hemlock-text-storage))
+  (let ((string (slot-value self 'hemlock-string)))
+    (unless (%null-ptr-p string)
+      (hemlock-buffer string))))
 
 ;;; This is only here so that calls to it can be logged for debugging.
 #+debug
@@ -450,7 +529,7 @@
   (> (slot-value self 'edit-count) 0))
 
 (defmethod assume-not-editing ((ts hemlock-text-storage))
-  #+debug (assert (eql (slot-value ts 'edit-count) 0)))
+  #+debug NIL (assert (eql (slot-value ts 'edit-count) 0)))
 
 (defun textstorage-note-insertion-at-position (self pos n)
   (ns:with-ns-range (r pos 0)
@@ -468,11 +547,11 @@
   (declare (ignorable extra))
   (assume-cocoa-thread)
   (let* ((mirror (#/mirror self))
-         (hemlock-string (#/hemlockString self))
+	 (hemlock-string (#/hemlockString self))
          (display (hemlock-buffer-string-cache hemlock-string))
          (buffer (buffer-cache-buffer display))
          (hi::*current-buffer* buffer)
-         (font (buffer-active-font buffer))
+         (attributes (buffer-active-font-attributes buffer))
          (document (#/document self))
 	 (undo-mgr (and document (#/undoManager document))))
     #+debug 
@@ -489,7 +568,7 @@
         (#/replaceCharactersAtPosition:length:withString:
 	 (#/prepareWithInvocationTarget: undo-mgr self)
 	 pos n #@"")))
-    (#/setAttributes:range: mirror font (ns:make-ns-range pos n))    
+    (#/setAttributes:range: mirror attributes (ns:make-ns-range pos n))
     (textstorage-note-insertion-at-position self pos n)))
 
 (objc:defmethod (#/noteHemlockDeletionAtPosition:length: :void) ((self hemlock-text-storage)
@@ -653,12 +732,7 @@
   (#_NSLog #@"Attributes at index: %lu storage %@" :<NSUI>nteger index :id self)
   (with-slots (mirror styles) self
     (when (>= index (#/length mirror))
-      (#_NSLog #@"Attributes at index: %lu  edit-count: %d mirror: %@ layout: %@" :<NSUI>nteger index ::unsigned (slot-value self 'edit-count) :id mirror :id (#/objectAtIndex: (#/layoutManagers self) 0))
-      (for-each-textview-using-storage self
-                                       (lambda (tv)
-                                         (let* ((w (#/window tv))
-                                                (proc (slot-value w 'command-thread)))
-                                           (process-interrupt proc #'ccl::dbg))))
+      (#_NSLog #@"Bounds error - Attributes at index: %lu  edit-count: %d mirror: %@ layout: %@" :<NSUI>nteger index ::unsigned (slot-value self 'edit-count) :id mirror :id (#/objectAtIndex: (#/layoutManagers self) 0))
       (ccl::dbg))
     (let* ((attrs (#/attributesAtIndex:effectiveRange: mirror index rangeptr)))
       (when (eql 0 (#/count attrs))
@@ -682,41 +756,33 @@
     (ns:with-ns-range (r pos len)
       (#/replaceCharactersInRange:withString: self r string))))
 
+;; In theory (though not yet in practice) we allow for a buffer to be shown in multiple
+;; windows, and any change to a buffer through one window has to be reflected in all of
+;; them.  Once hemlock really supports multiple views of a buffer, it will have some
+;; mechanims to ensure that.
+;; In Cocoa, we get some messages for the buffer (i.e. the document or the textstorage)
+;; with no reference to a view.  There used to be code here that tried to do special-
+;; case stuff for all views on the buffer, but that's not necessary, because as long
+;; as hemlock doesn't support it, there will only be one view, and as soon as hemlock
+;; does support it, will take care of updating all other views.  So all we need is to
+;; get our hands on one of the views and do whatever it is through it.
+(defun front-view-for-buffer (buffer)
+  (loop
+     with win-arr =  (#/orderedWindows *NSApp*)
+     for i from 0 below (#/count win-arr) as w = (#/objectAtIndex: win-arr i)
+     thereis (and (eq (hemlock-buffer w) buffer) (hemlock-view w))))
+
 (objc:defmethod (#/replaceCharactersInRange:withString: :void)
     ((self hemlock-text-storage) (r :<NSR>ange) string)
-  #+debug (#_NSLog #@"Replace in range %ld/%ld with %@"
-                    :<NSI>nteger (pref r :<NSR>ange.location)
-                    :<NSI>nteger (pref r :<NSR>ange.length)
-                    :id string)
-  (let* ((cache (hemlock-buffer-string-cache (#/hemlockString  self)))
-	 (buffer (if cache (buffer-cache-buffer cache)))
-	 (hi::*current-buffer* buffer)
-         (location (pref r :<NSR>ange.location))
+  (let* ((buffer (hemlock-buffer self))
+         (position (pref r :<NSR>ange.location))
 	 (length (pref r :<NSR>ange.length))
-	 (point (hi::buffer-point buffer)))
-    (let* ((lisp-string (if (> (#/length string) 0) (lisp-string-from-nsstring string)))
-           (document (if buffer (hi::buffer-document buffer)))
-           (textstorage (if document (slot-value document 'textstorage))))
-      #+gz (unless (eql textstorage self) (break "why is self.ne.textstorage?"))
-      (when textstorage
-	(assume-cocoa-thread)
-	(#/beginEditing textstorage))
-      (setf (hi::buffer-region-active buffer) nil)
-      (hi::with-mark ((start point :right-inserting))
-        (move-hemlock-mark-to-absolute-position start cache location)
-        (unless (zerop length)
-          (hi::delete-characters start length))
-        (when lisp-string
-          (hi::insert-string start lisp-string)))
-      (when textstorage
-        (#/endEditing textstorage)
-        (for-each-textview-using-storage
-         textstorage
-         (lambda (tv)
-           (hi::disable-self-insert
-	    (hemlock-frame-event-queue (#/window tv)))))
-        (#/ensureSelectionVisible textstorage)))))
-
+	 (lisp-string (if (> (#/length string) 0) (lisp-string-from-nsstring string)))
+	 (view (front-view-for-buffer buffer)))
+    (when view
+      (hi::handle-hemlock-event view #'(lambda ()
+					 (hi:paste-characters position length
+							      lisp-string))))))
 
 (objc:defmethod (#/setAttributes:range: :void) ((self hemlock-text-storage)
                                                 attributes
@@ -744,16 +810,6 @@
 (objc:defmethod #/description ((self hemlock-text-storage))
   (#/stringWithFormat: ns:ns-string #@"%s : string %@" (#_object_getClassName self) (slot-value self 'hemlock-string)))
 
-;;; This needs to happen on the main thread.
-(objc:defmethod (#/ensureSelectionVisible :void) ((self hemlock-text-storage))
-  (assume-cocoa-thread)
-  (for-each-textview-using-storage
-   self
-   #'(lambda (tv)
-       (assume-not-editing tv)
-       (#/scrollRangeToVisible: tv (#/selectedRange tv)))))
-
-
 (defun close-hemlock-textstorage (ts)
   (declare (type hemlock-text-storage ts))
   (with-slots (styles) ts
@@ -769,17 +825,9 @@
           (setf (buffer-cache-buffer cache) nil
                 (slot-value hemlock-string 'cache) nil
                 (hi::buffer-document buffer) nil)
-          (let* ((p (hi::buffer-process buffer)))
-            (when p
-              (setf (hi::buffer-process buffer) nil)
-              (process-kill p)))
           (when (eq buffer hi::*current-buffer*)
-            (setf (hi::current-buffer)
-                  (car (last hi::*buffer-list*))))
-          (hi::invoke-hook (hi::buffer-delete-hook buffer) buffer)
-          (hi::invoke-hook hemlock::delete-buffer-hook buffer)
-          (setq hi::*buffer-list* (delq buffer hi::*buffer-list*))
-         (hi::delete-string (hi::buffer-name buffer) hi::*buffer-names*))))))
+	    (setf hi::*current-buffer* nil))
+	  (hi::delete-buffer buffer))))))
 
 
 ;;; Mostly experimental, so that we can see what happens when a 
@@ -807,6 +855,110 @@
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-textstorage-text-view))
 
+(defmethod hemlock-view ((self hemlock-textstorage-text-view))
+  (let ((frame (#/window self)))
+    (unless (%null-ptr-p frame)
+      (hemlock-view frame))))
+
+(defmethod activate-hemlock-view ((self hemlock-textstorage-text-view))
+  (assume-cocoa-thread)
+  (let* ((the-hemlock-frame (#/window self)))
+    #+debug (log-debug "Activating ~s" self)
+    (with-slots ((echo peer)) self
+      (deactivate-hemlock-view echo))
+    (#/setEditable: self t)
+    (#/makeFirstResponder: the-hemlock-frame self)))
+
+(defmethod deactivate-hemlock-view ((self hemlock-textstorage-text-view))
+  (assume-cocoa-thread)
+  #+debug (log-debug "deactivating ~s" self)
+  (assume-not-editing self)
+  (#/setSelectable: self nil))
+
+(defmethod eventqueue-abort-pending-p ((self hemlock-textstorage-text-view))
+  ;; Return true if cmd-. is in the queue.  Not sure what to do about c-g:
+  ;; would have to distinguish c-g from c-q c-g or c-q c-q c-g etc.... Maybe
+  ;; c-g will need to be synchronous meaning just end current command,
+  ;; while cmd-. is the real abort.
+  #|
+   (let* ((now (#/dateWithTimeIntervalSinceNow: ns:ns-date 0.0d0)))
+    (loop (let* ((event (#/nextEventMatchingMask:untilDate:inMode:dequeue:
+			 target (logior #$whatever) now #&NSDefaultRunLoopMode t)))
+	    (when (%null-ptr-p event) (return)))))
+  "target" can either be an NSWindow or the global shared application object;
+  |#
+  nil)
+
+(defvar *buffer-being-edited* nil)
+
+(objc:defmethod (#/keyDown: :void) ((self hemlock-textstorage-text-view) event)
+  #+debug (#_NSLog #@"Key down event = %@" :address event)
+  (let* ((view (hemlock-view self))
+	 ;; quote-p means handle characters natively
+	 (quote-p (and view (hi::hemlock-view-quote-next-p view))))
+    #+GZ (log-debug "~&quote-p ~s event ~s" quote-p event)
+    (if (or (null view)
+	    (#/hasMarkedText self)
+	    (and quote-p (zerop (#/length (#/characters event))))) ;; dead key, e.g. option-E
+      (call-next-method event)
+      (unless (eventqueue-abort-pending-p self)
+	(let ((hemlock-key (nsevent-to-key-event event quote-p)))
+	  (when hemlock-key
+	    (hi::handle-hemlock-event view hemlock-key)))))))
+
+(defmethod hi::handle-hemlock-event :around ((view hi:hemlock-view) event)
+  (declare (ignore event))
+  (with-autorelease-pool
+   (call-next-method)))
+
+(defconstant +shift-event-mask+ (hi:key-event-modifier-mask "Shift"))
+
+;;; Translate a keyDown NSEvent to a Hemlock key-event.
+(defun nsevent-to-key-event (event quote-p)
+  (let* ((modifiers (#/modifierFlags event)))
+    (unless (logtest #$NSCommandKeyMask modifiers)
+      (let* ((chars (if quote-p
+                      (#/characters event)
+                      (#/charactersIgnoringModifiers event)))
+             (n (if (%null-ptr-p chars)
+                  0
+                  (#/length chars)))
+             (c (and (eql n 1)
+		     (#/characterAtIndex: chars 0))))
+        (when c
+          (let* ((bits 0)
+                 (useful-modifiers (logandc2 modifiers
+                                             (logior
+					      ;#$NSShiftKeyMask
+					      #$NSAlphaShiftKeyMask))))
+            (unless quote-p
+              (dolist (map hi:*modifier-translations*)
+                (when (logtest useful-modifiers (car map))
+                  (setq bits (logior bits
+				     (hi:key-event-modifier-mask (cdr map)))))))
+            (let* ((char (code-char c)))
+              (when (and char (standard-char-p char))
+                (setq bits (logandc2 bits +shift-event-mask+))))
+	    (hi:make-key-event c bits)))))))
+
+;; For now, this is only used to abort i-search.  All actual mouse handling is done
+;; by Cocoa.   In the future might want to allow users to extend via hemlock, e.g.
+;; to implement mouse-copy.
+;; Also -- shouldn't this happen on mouse up?
+(objc:defmethod (#/mouseDown: :void) ((self hemlock-textstorage-text-view) event)
+  ;; If no modifier keys are pressed, send hemlock a no-op.
+  ;; (Or almost a no-op - this does an update-hemlock-selection as a side-effect)
+  (unless (logtest #$NSDeviceIndependentModifierFlagsMask (#/modifierFlags event))
+    (let* ((view (hemlock-view self)))
+      (when view
+	(unless (eventqueue-abort-pending-p self)
+	  (hi::handle-hemlock-event view #k"leftdown")))))
+  (call-next-method event))
+
+#+GZ
+(objc:defmethod  (#/mouseUp: :void) ((self hemlock-textstorage-text-view) event)
+  (log-debug "~&MOUSE UP!!")
+  (call-next-method event))
 
 (defmethod assume-not-editing ((tv hemlock-textstorage-text-view))
   (assume-not-editing (#/textStorage tv)))
@@ -890,8 +1042,7 @@
 
 (defmethod update-blink ((self hemlock-textstorage-text-view))
   (disable-blink self)
-  (let* ((d (hemlock-buffer-string-cache (#/hemlockString (#/textStorage self))))
-         (buffer (buffer-cache-buffer d)))
+  (let* ((buffer (hemlock-buffer self)))
     (when (and buffer (string= (hi::buffer-major-mode buffer) "Lisp"))
       (let* ((hi::*current-buffer* buffer)
              (point (hi::buffer-point buffer)))
@@ -904,7 +1055,7 @@
                    (when (hemlock::list-offset temp 1)
                      #+debug (#_NSLog #@"enable blink, forward")
                      (setf (text-view-blink-location self)
-                           (1- (mark-absolute-position temp))
+                           (1- (hi:mark-absolute-position temp))
                            (text-view-blink-enabled self) #$YES)))))
               ((eql (hi::previous-character point) #\))
                (hemlock::pre-command-parse-check point)
@@ -913,7 +1064,7 @@
                    (when (hemlock::list-offset temp -1)
                      #+debug (#_NSLog #@"enable blink, backward")
                      (setf (text-view-blink-location self)
-                           (mark-absolute-position temp)
+                           (hi:mark-absolute-position temp)
                            (text-view-blink-enabled self) #$YES))))))))))
 
 ;;; Set and display the selection at pos, whose length is len and whose
@@ -938,7 +1089,6 @@
 				 affinity
 				 nil)
     (assume-not-editing self)
-    (#/scrollRangeToVisible: self range)
     (when (> length 0)
       (let* ((ts (#/textStorage self)))
 	(with-slots (selection-set-by-search) ts
@@ -962,14 +1112,17 @@
 (defclass hemlock-text-view (hemlock-textstorage-text-view)
     ((pane :foreign-type :id :accessor text-view-pane)
      (char-width :foreign-type :<CGF>loat :accessor text-view-char-width)
-     (char-height :foreign-type :<CGF>loat :accessor text-view-char-height))
+     (line-height :foreign-type :<CGF>loat :accessor text-view-line-height))
   (:metaclass ns:+ns-object))
+(declaim (special hemlock-text-view))
+
+(defmethod hemlock-view ((self hemlock-text-view))
+  (let ((pane (text-view-pane self)))
+    (when pane (hemlock-view pane))))
 
 (objc:defmethod (#/evalSelection: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
-  (let* ((dc (#/sharedDocumentController ns:ns-document-controller))
-         (doc (#/documentForWindow: dc (#/window self)))
-         (buffer (hemlock-document-buffer doc))
+  (let* ((buffer (hemlock-buffer self))
          (package-name (hi::variable-value 'hemlock::current-package :buffer buffer))
          (pathname (hi::buffer-pathname buffer))
          (ranges (#/selectedRanges self))
@@ -982,27 +1135,21 @@
 
 (objc:defmethod (#/loadBuffer: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
-  (let* ((dc (#/sharedDocumentController ns:ns-document-controller))
-         (doc (#/documentForWindow: dc (#/window self)))
-         (buffer (hemlock-document-buffer doc))
+  (let* ((buffer (hemlock-buffer self))
          (package-name (hi::variable-value 'hemlock::current-package :buffer buffer))
          (pathname (hi::buffer-pathname buffer)))
     (ui-object-load-buffer *NSApp* (list package-name pathname))))
 
 (objc:defmethod (#/compileBuffer: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
-  (let* ((dc (#/sharedDocumentController ns:ns-document-controller))
-         (doc (#/documentForWindow: dc (#/window self)))
-         (buffer (hemlock-document-buffer doc))
+  (let* ((buffer (hemlock-buffer self))
          (package-name (hi::variable-value 'hemlock::current-package :buffer buffer))
          (pathname (hi::buffer-pathname buffer)))
     (ui-object-compile-buffer *NSApp* (list package-name pathname))))
 
 (objc:defmethod (#/compileAndLoadBuffer: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
-  (let* ((dc (#/sharedDocumentController ns:ns-document-controller))
-         (doc (#/documentForWindow: dc (#/window self)))
-         (buffer (hemlock-document-buffer doc))
+  (let* ((buffer (hemlock-buffer self))
          (package-name (hi::variable-value 'hemlock::current-package :buffer buffer))
          (pathname (hi::buffer-pathname buffer)))
     (ui-object-compile-and-load-buffer *NSApp* (list package-name pathname))))
@@ -1104,13 +1251,8 @@
 
 
 
-
-;;; Access the underlying buffer in one swell foop.
-(defmethod text-view-buffer ((self hemlock-textstorage-text-view))
-  (buffer-cache-buffer (hemlock-buffer-string-cache (#/hemlockString (#/textStorage self)))))
-
-
-
+(defmethod text-view-string-cache ((self hemlock-textstorage-text-view))
+  (hemlock-buffer-string-cache (#/hemlockString (#/textStorage self))))
 
 (objc:defmethod (#/selectionRangeForProposedRange:granularity: :ns-range)
     ((self hemlock-textstorage-text-view)
@@ -1136,12 +1278,12 @@
                      (cond ((eql (hi::next-character m1) #\()
                             (hi::with-mark ((m2 m1))
                               (when (hemlock::list-offset m2 1)
-                                (ns:init-ns-range r index (- (mark-absolute-position m2) index))
+                                (ns:init-ns-range r index (- (hi:mark-absolute-position m2) index))
                                 (return-from HANDLED r))))
                            ((eql (hi::previous-character m1) #\))
                             (hi::with-mark ((m2 m1))
                               (when (hemlock::list-offset m2 -1)
-                                (ns:init-ns-range r (mark-absolute-position m2) (- index (mark-absolute-position m2)))
+                                (ns:init-ns-range r (hi:mark-absolute-position m2) (- index (hi:mark-absolute-position m2)))
                                 (return-from HANDLED r))))))))))))
        (call-next-method proposed g)
        #+debug
@@ -1152,78 +1294,13 @@
 
 
 
-  
+(defun append-output (view string)
+  (assume-cocoa-thread)
+  ;; Arrange to do the append in command context
+  (when view
+    (hi::handle-hemlock-event view #'(lambda ()
+				       (hemlock::append-buffer-output (hi::hemlock-view-buffer view) string)))))
 
-
-;;; Translate a keyDown NSEvent to a Hemlock key-event.
-(defun nsevent-to-key-event (nsevent &optional quoted)
-  (let* ((modifiers (#/modifierFlags nsevent)))
-    (unless (logtest #$NSCommandKeyMask modifiers)
-      (let* ((chars (if quoted
-                      (#/characters nsevent)
-                      (#/charactersIgnoringModifiers nsevent)))
-             (n (if (%null-ptr-p chars)
-                  0
-                  (#/length chars)))
-             (c (if (eql n 1)
-                  (#/characterAtIndex: chars 0))))
-        (when c
-          (let* ((bits 0)
-                 (useful-modifiers (logandc2 modifiers
-                                             (logior ;#$NSShiftKeyMask
-                                                     #$NSAlphaShiftKeyMask))))
-            (unless quoted
-              (dolist (map hemlock-ext::*modifier-translations*)
-                (when (logtest useful-modifiers (car map))
-                  (setq bits (logior bits (hemlock-ext::key-event-modifier-mask
-                                         (cdr map)))))))
-            (let* ((char (code-char c)))
-              (when (and char (standard-char-p char))
-                (setq bits (logandc2 bits hi::+shift-event-mask+))))
-            (hemlock-ext::make-key-event c bits)))))))
-
-(defun pass-key-down-event-to-hemlock (self event q)
-  #+debug
-  (#_NSLog #@"Key down event = %@" :address event)
-  (let* ((buffer (text-view-buffer self)))
-    (when buffer
-      (let* ((hemlock-event (nsevent-to-key-event event (hi::frame-event-queue-quoted-insert q ))))
-        (when hemlock-event
-          (hi::enqueue-key-event q hemlock-event))))))
-
-(defun hi::enqueue-buffer-operation (buffer thunk)
-  (dolist (w (hi::buffer-windows buffer))
-    (let* ((q (hemlock-frame-event-queue (#/window w)))
-           (op (hi::make-buffer-operation :thunk thunk)))
-      (hi::event-queue-insert q op))))
-
-
-
-;;; Process a key-down NSEvent in a Hemlock text view by translating it
-;;; into a Hemlock key event and passing it into the Hemlock command
-;;; interpreter. 
-
-(defun handle-key-down (self event)
-  (let* ((q (hemlock-frame-event-queue (#/window self))))
-    (if (or (and (zerop (#/length (#/characters event)))
-                 (hi::frame-event-queue-quoted-insert q))
-            (#/hasMarkedText self))
-      nil
-      (progn
-        (pass-key-down-event-to-hemlock self event q)
-        t))))
-  
-
-(objc:defmethod (#/keyDown: :void) ((self hemlock-text-view) event)
-  (or (handle-key-down self event)
-      (call-next-method event)))
-
-(objc:defmethod (#/mouseDown: :void) ((self hemlock-text-view) event)
-  ;; If no modifier keys are pressed, send hemlock a no-op.
-  (unless (logtest #$NSDeviceIndependentModifierFlagsMask (#/modifierFlags event))
-    (let* ((q (hemlock-frame-event-queue (#/window self))))
-      (hi::enqueue-key-event q #k"leftdown")))
-  (call-next-method event))
 
 ;;; Update the underlying buffer's point (and "active region", if appropriate.
 ;;; This is called in response to a mouse click or other event; it shouldn't
@@ -1281,7 +1358,7 @@
              ;; selection: mark at n1, point at n1+m.
              ;; In all cases, activate Hemlock selection.
              (unless still-selecting
-                (let* ((pointpos (mark-absolute-position point))
+                (let* ((pointpos (hi:mark-absolute-position point))
                        (selection-end (+ location len))
                        (mark (hi::copy-mark point :right-inserting)))
                    (cond ((eql pointpos location)
@@ -1363,22 +1440,21 @@
     (unless (%null-ptr-p pane)
       (let* ((tv (text-pane-text-view pane)))
         (unless (%null-ptr-p tv)
-	  (text-view-buffer tv))))))
+	  (hemlock-buffer tv))))))
 
 ;;; Draw a string in the modeline view.  The font and other attributes
 ;;; are initialized lazily; apparently, calling the Font Manager too
 ;;; early in the loading sequence confuses some Carbon libraries that're
 ;;; used in the event dispatch mechanism,
 (defun draw-modeline-string (the-modeline-view)
-  (with-slots (pane text-attributes) the-modeline-view
+  (with-slots (text-attributes) the-modeline-view
     (let* ((buffer (buffer-for-modeline-view the-modeline-view)))
       (when buffer
 	(let* ((string
                 (apply #'concatenate 'string
                        (mapcar
                         #'(lambda (field)
-                            (funcall (hi::modeline-field-function field)
-                                     buffer pane))
+                            (funcall (hi::modeline-field-function field) buffer))
                         (hi::buffer-modeline-fields buffer)))))
 	  (#/drawAtPoint:withAttributes: (%make-nsstring string)
                                          (ns:make-ns-point 5 1)
@@ -1473,16 +1549,21 @@
 ;;; around (b) encapsulates the text view and the mode line.
 
 (defclass text-pane (ns:ns-box)
-    ((text-view :foreign-type :id :accessor text-pane-text-view)
+    ((hemlock-view :initform nil :reader text-pane-hemlock-view)
+     (text-view :foreign-type :id :accessor text-pane-text-view)
      (mode-line :foreign-type :id :accessor text-pane-mode-line)
      (scroll-view :foreign-type :id :accessor text-pane-scroll-view))
   (:metaclass ns:+ns-object))
 
-;;; Mark the pane's modeline as needing display.  This is called whenever
-;;; "interesting" attributes of a buffer are changed.
+(defmethod hemlock-view ((self text-pane))
+  (text-pane-hemlock-view self))
 
-(defun hi::invalidate-modeline (pane)
-  (#/setNeedsDisplay: (text-pane-mode-line pane) t))
+;;; Mark the buffer's modeline as needing display.  This is called whenever
+;;; "interesting" attributes of a buffer are changed.
+(defun hemlock-ext:invalidate-modeline (buffer)
+  (let* ((doc (hi::buffer-document buffer)))
+    (when doc
+      (document-invalidate-modeline doc))))
 
 (def-cocoa-default *text-pane-margin-width* :float 0.0f0 "width of indented margin around text pane")
 (def-cocoa-default *text-pane-margin-height* :float 0.0f0 "height of indented margin around text pane")
@@ -1595,68 +1676,34 @@
               (slot-value modeline 'pane) pane))
       tv)))
 
-
-(objc:defmethod (#/activateHemlockView :void) ((self text-pane))
-  (let* ((the-hemlock-frame (#/window self))
-	 (text-view (text-pane-text-view self)))
-    #+debug (#_NSLog #@"Activating text pane")
-    (with-slots ((echo peer)) text-view
-      (deactivate-hemlock-view echo))
-    (#/setEditable: text-view t)
-    (#/makeFirstResponder: the-hemlock-frame text-view)))
-
-(defmethod hi::activate-hemlock-view ((view text-pane))
-  (#/performSelectorOnMainThread:withObject:waitUntilDone:
-   view
-   (@selector #/activateHemlockView)
-   +null-ptr+
-   t))
-
-
-
-(defmethod deactivate-hemlock-view ((self hemlock-text-view))
-  #+debug (#_NSLog #@"deactivating text view")
-  (#/setSelectable: self nil))
+(defmethod hemlock-ext:change-active-pane ((view hi:hemlock-view) new-pane)
+  #+GZ (log-debug "change active pane to ~s" new-pane)
+  (let* ((pane (hi::hemlock-view-pane view))
+	 (text-view (text-pane-text-view pane))
+	 (tv (ecase new-pane
+	       (:echo (slot-value text-view 'peer))
+	       (:text text-view))))
+    (activate-hemlock-view tv)))
 
 (defclass echo-area-view (hemlock-textstorage-text-view)
     ()
   (:metaclass ns:+ns-object))
+(declaim (special echo-area-view))
 
-(objc:defmethod (#/activateHemlockView :void) ((self echo-area-view))
-  (assume-cocoa-thread)
-  (let* ((the-hemlock-frame (#/window self)))
-    #+debug
-    (#_NSLog #@"Activating echo area")
-    (with-slots ((pane peer)) self
-      (deactivate-hemlock-view pane))
-    (#/setEditable: self t)
-  (#/makeFirstResponder: the-hemlock-frame self)))
-
-(defmethod hi::activate-hemlock-view ((view echo-area-view))
-  (#/performSelectorOnMainThread:withObject:waitUntilDone:
-   view
-   (@selector #/activateHemlockView)
-   +null-ptr+
-   t))
-
-(defmethod deactivate-hemlock-view ((self echo-area-view))
-  (assume-cocoa-thread)
-  #+debug (#_NSLog #@"deactivating echo area")
-  (let* ((ts (#/textStorage self)))
-    #+debug 0
-    (when (#/editingInProgress ts)
-      (#_NSLog #@"deactivating %@, edit-count = %d" :id self :int (slot-value ts 'edit-count)))
-    (do* ()
-         ((not (#/editingInProgress ts)))
-      (#/endEditing ts))
-
-    (#/setSelectable: self nil)))
-
+(defmethod hemlock-view ((self echo-area-view))
+  (let ((text-view (slot-value self 'peer)))
+    (when text-view
+      (hemlock-view text-view))))
 
 ;;; The "document" for an echo-area isn't a real NSDocument.
 (defclass echo-area-document (ns:ns-object)
     ((textstorage :foreign-type :id))
   (:metaclass ns:+ns-object))
+
+(defmethod hemlock-buffer ((self echo-area-document))
+  (let ((ts (slot-value self 'textstorage)))
+    (unless (%null-ptr-p ts)
+      (hemlock-buffer ts))))
 
 (objc:defmethod (#/undoManager :<BOOL>) ((self echo-area-document))
   nil) ;For now, undo is not supported for echo-areas
@@ -1664,25 +1711,17 @@
 (defmethod update-buffer-package ((doc echo-area-document) buffer)
   (declare (ignore buffer)))
 
+(defmethod document-invalidate-modeline ((self echo-area-document))
+  nil)
+
 (objc:defmethod (#/close :void) ((self echo-area-document))
   (let* ((ts (slot-value self 'textstorage)))
     (unless (%null-ptr-p ts)
       (setf (slot-value self 'textstorage) (%null-ptr))
       (close-hemlock-textstorage ts))))
 
-(objc:defmethod (#/updateChangeCount: :void)
-    ((self echo-area-document)
-     (change :<NSD>ocument<C>hange<T>ype))
+(objc:defmethod (#/updateChangeCount: :void) ((self echo-area-document) (change :<NSD>ocument<C>hange<T>ype))
   (declare (ignore change)))
-
-(objc:defmethod (#/documentChangeCleared :void) ((self echo-area-document)))
-
-(objc:defmethod (#/keyDown: :void) ((self echo-area-view) event)
-  (or (handle-key-down self event)
-      (call-next-method event)))
-
-
-(defloadvar *hemlock-frame-count* 0)
 
 (defun make-echo-area (the-hemlock-frame x y width height main-buffer color)
   (let* ((box (make-instance 'ns:ns-view :with-frame (ns:make-ns-rect x y width height))))
@@ -1697,15 +1736,11 @@
       (#/addSubview: box clipview)
       (#/setAutoresizesSubviews: box t)
       (#/release clipview)
-      (let* ((buffer (hi:make-buffer (format nil "Echo Area ~d"
-                                             (prog1
-                                                 *hemlock-frame-count*
-                                               (incf *hemlock-frame-count*)))
-                                     :modes '("Echo Area")))
+      (let* ((buffer (hi::make-echo-buffer))
              (textstorage
               (progn
 		;; What's the reason for sharing this?  Is it just the lock?
-                (setf (hi::buffer-gap-context buffer) (hi::buffer-gap-context main-buffer))
+                (setf (hi::buffer-gap-context buffer) (hi::ensure-buffer-gap-context main-buffer))
                 (make-textstorage-for-hemlock-buffer buffer)))
              (doc (make-instance 'echo-area-document))
              (layout (make-instance 'ns:ns-layout-manager))
@@ -1756,13 +1791,15 @@
 (defclass hemlock-frame (ns:ns-window)
     ((echo-area-view :foreign-type :id)
      (pane :foreign-type :id)
-     (event-queue :initform (ccl::init-dll-header (hi::make-frame-event-queue))
-                  :reader hemlock-frame-event-queue)
-     (command-thread :initform nil)
      (echo-area-buffer :initform nil :accessor hemlock-frame-echo-area-buffer)
      (echo-area-stream :initform nil :accessor hemlock-frame-echo-area-stream))
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-frame))
+
+(defmethod hemlock-view ((self hemlock-frame))
+  (let ((pane (slot-value self 'pane)))
+    (unless (%null-ptr-p pane)
+      (hemlock-view pane))))
 
 (defun double-%-in (string)
   ;; Replace any % characters in string with %%, to keep them from
@@ -1773,114 +1810,45 @@
       string)))
 
 (defun nsstring-for-lisp-condition (cond)
-  (%make-nsstring (double-%-in (princ-to-string cond))))
+  (%make-nsstring (double-%-in (or (ignore-errors (princ-to-string cond))
+                                   "#<error printing error message>"))))
 
-(objc:defmethod (#/runErrorSheet: :void) ((self hemlock-frame) info)
-  (let* ((message (#/objectAtIndex: info 0))
-         (signal (#/objectAtIndex: info 1)))
-    #+debug (#_NSLog #@"runErrorSheet: signal = %@" :id signal)
-    (#_NSBeginAlertSheet #@"Error in Hemlock command processing" ;title
-                         (if (logbitp 0 (random 2))
-                           #@"Not OK, but what can you do?"
-                           #@"The sky is falling. FRED never did this!")
-                         +null-ptr+
-                         +null-ptr+
-                         self
-                         self
-                         (@selector #/sheetDidEnd:returnCode:contextInfo:)
-                         (@selector #/sheetDidDismiss:returnCode:contextInfo:)
-                         signal
-                         message)))
+(objc:defmethod (#/runErrorSheet: :void) ((self hemlock-frame) message)
+  #+debug (#_NSLog #@"runErrorSheet: signal = %@" :id signal)
+  (#_NSBeginAlertSheet #@"Error in Hemlock command processing" ;title
+                       (if (logbitp 0 (random 2))
+                         #@"Not OK, but what can you do?"
+                         #@"The sky is falling. FRED never did this!")
+                       +null-ptr+
+                       +null-ptr+
+                       self
+                       self
+                       +null-ptr+
+                       +null-ptr+
+                       +null-ptr+
+                       message))
 
-(objc:defmethod (#/sheetDidEnd:returnCode:contextInfo: :void) ((self hemlock-frame))
- (declare (ignore sheet code info))
-  #+debug
-  (#_NSLog #@"Sheet did end"))
-
-(objc:defmethod (#/sheetDidDismiss:returnCode:contextInfo: :void)
-    ((self hemlock-frame) sheet code info)
-  (declare (ignore sheet code))
-  #+debug (#_NSLog #@"dismiss sheet: semaphore = %lx" :unsigned-doubleword (#/unsignedLongValue info))
-  (ccl::%signal-semaphore-ptr (%int-to-ptr (#/unsignedLongValue info))))
-  
 (defun report-condition-in-hemlock-frame (condition frame)
-  (let* ((semaphore (make-semaphore))
-         (message (nsstring-for-lisp-condition condition))
-         (sem-value (make-instance 'ns:ns-number
-                                   :with-unsigned-long (%ptr-to-int (ccl::semaphore.value semaphore)))))
-    #+debug
-    (#_NSLog #@"created semaphore with value %lx" :address (semaphore.value semaphore))
-    (rlet ((paramptrs (:array :id 2)))
-      (setf (paref paramptrs (:array :id) 0) message
-            (paref paramptrs (:array :id) 1) sem-value)
-      (let* ((params (make-instance 'ns:ns-array
-                                    :with-objects paramptrs
-                                    :count 2))
-             #|(*debug-io* *typeout-stream*)|#)
-        (stream-clear-output *debug-io*)
-        (ignore-errors (print-call-history :detailed-p t))
-        (#/performSelectorOnMainThread:withObject:waitUntilDone:
-         frame (@selector #/runErrorSheet:) params t)
-        (wait-on-semaphore semaphore)))))
+  (assume-cocoa-thread)
+  (let ((message (nsstring-for-lisp-condition condition)))
+    (#/performSelectorOnMainThread:withObject:waitUntilDone:
+     frame
+     (@selector #/runErrorSheet:)
+     message
+     t)))
 
-(defun hi::report-hemlock-error (condition)
-  (let ((pane (hi::current-window)))
+(defmethod hemlock-ext:report-hemlock-error ((view hi:hemlock-view) condition debug-p)
+  (when debug-p (maybe-log-callback-error condition))
+  (let ((pane (hi::hemlock-view-pane view)))
     (when (and pane (not (%null-ptr-p pane)))
       (report-condition-in-hemlock-frame condition (#/window pane)))))
                        
-
-(defun hemlock-thread-function (q buffer pane echo-buffer echo-window)
-  (let* ((hi::*real-editor-input* q)
-         (hi::*editor-input* q)
-         (hi::*current-buffer* hi::*current-buffer*)
-         (hi::*current-window* pane)
-         (hi::*echo-area-window* echo-window)
-         (hi::*echo-area-buffer* echo-buffer)
-         (region (hi::buffer-region echo-buffer))
-         (hi::*echo-area-region* region)
-         (hi::*echo-area-stream* (hi::make-hemlock-output-stream
-                              (hi::region-end region) :full))
-	 (hi::*parse-starting-mark*
-	  (hi::copy-mark (hi::buffer-point hi::*echo-area-buffer*)
-			 :right-inserting))
-	 (hi::*parse-input-region*
-	  (hi::region hi::*parse-starting-mark*
-		      (hi::region-end region)))
-         (hi::*cache-modification-tick* -1)
-         (hi::*disembodied-buffer-counter* 0)
-         (hi::*in-a-recursive-edit* nil)
-         (hi::*last-key-event-typed* nil)
-         (hi::*input-transcript* nil)
-         (hemlock::*target-column* 0)
-         (hemlock::*last-comment-start* " ")
-         (hi::*translate-key-temp* (make-array 10 :fill-pointer 0 :adjustable t))
-         (hi::*current-command* (make-array 10 :fill-pointer 0 :adjustable t))
-         (hi::*current-translation* (make-array 10 :fill-pointer 0 :adjustable t))
-         (hi::*prompt-key* (make-array 10 :adjustable t :fill-pointer 0))
-         (hi::*command-key-event-buffer* buffer))
-    
-    (setf (hi::current-buffer) buffer)
-    (unwind-protect
-         (loop
-           (catch 'hi::editor-top-level-catcher
-             (handler-bind ((error #'(lambda (condition)
-                                       (hi::lisp-error-error-handler condition
-                                                                     :internal))))
-               (hi::invoke-hook hemlock::abort-hook)
-               (hi::%command-loop))))
-      (hi::invoke-hook hemlock::exit-hook))))
-
-
 (objc:defmethod (#/close :void) ((self hemlock-frame))
   (let* ((content-view (#/contentView self))
          (subviews (#/subviews content-view)))
     (do* ((i (1- (#/count subviews)) (1- i)))
          ((< i 0))
       (#/removeFromSuperviewWithoutNeedingDisplay (#/objectAtIndex: subviews i))))
-  (let* ((proc (slot-value self 'command-thread)))
-    (when proc
-      (setf (slot-value self 'command-thread) nil)
-      (process-kill proc)))
   (let* ((buf (hemlock-frame-echo-area-buffer self))
          (echo-doc (if buf (hi::buffer-document buf))))
     (when echo-doc
@@ -1921,41 +1889,43 @@
   (let* ((buffer (make-hemlock-buffer name :modes modes)))
     (nsstring-to-buffer nsstring buffer)))
 
-(defun %nsstring-to-mark (nsstring mark)
+(defun %nsstring-to-hemlock-string (nsstring)
   "returns line-termination of string"
   (let* ((string (lisp-string-from-nsstring nsstring))
          (lfpos (position #\linefeed string))
          (crpos (position #\return string))
          (line-termination (if crpos
                              (if (eql lfpos (1+ crpos))
-                               :cp/m
-                               :macos)
-                             :unix)))
-    (hi::insert-string mark
-                           (case line-termination
-                             (:cp/m (remove #\return string))
-                             (:macos (nsubstitute #\linefeed #\return string))
-                             (t string)))
-    line-termination))
-  
+                               :crlf
+                               :cr)
+			     :lf))
+	 (hemlock-string (case line-termination
+			   (:crlf (remove #\return string))
+			   (:cr (nsubstitute #\linefeed #\return string))
+			   (t string))))
+    (values hemlock-string line-termination)))
+
+;: TODO: I think this is jumping through hoops because it want to be invokable outside the main
+;; cocoa thread.
 (defun nsstring-to-buffer (nsstring buffer)
   (let* ((document (hi::buffer-document buffer))
 	 (hi::*current-buffer* buffer)
          (region (hi::buffer-region buffer)))
-    (setf (hi::buffer-document buffer) nil)
-    (unwind-protect
-	 (progn
-	   (hi::delete-region region)
-	   (hi::modifying-buffer buffer
-                                 (hi::with-mark ((mark (hi::buffer-point buffer) :left-inserting))
-                                   (setf (hi::buffer-line-termination buffer)
-                                         (%nsstring-to-mark nsstring mark)))
-                                 (setf (hi::buffer-modified buffer) nil)
-                                 (hi::buffer-start (hi::buffer-point buffer))
-                                 (hi::renumber-region region)
-                                 buffer))
-      (setf (hi::buffer-document buffer) document))))
+    (multiple-value-bind (hemlock-string line-termination)
+			 (%nsstring-to-hemlock-string nsstring)
+      (setf (hi::buffer-line-termination buffer) line-termination)
 
+      (setf (hi::buffer-document buffer) nil) ;; What's this about??
+      (unwind-protect
+	  (let ((point (hi::buffer-point buffer)))
+	    (hi::delete-region region)
+	    (hi::insert-string point hemlock-string)
+	    (setf (hi::buffer-modified buffer) nil)
+	    (hi::buffer-start point)
+	    ;; TODO: why would this be needed? insert-string should take care of any internal bookkeeping.
+	    (hi::renumber-region region)
+	    buffer)
+	(setf (hi::buffer-document buffer) document)))))
 
 
 (setq hi::*beep-function* #'(lambda (stream)
@@ -1967,37 +1937,25 @@
 (defun %hemlock-frame-for-textstorage (class ts ncols nrows container-tracks-text-view-width color style)
   (assume-cocoa-thread)
   (let* ((pane (textpane-for-textstorage class ts ncols nrows container-tracks-text-view-width color style))
+         (buffer (hemlock-buffer ts))
          (frame (#/window pane))
-         (buffer (text-view-buffer (text-pane-text-view pane)))
          (echo-area (make-echo-area-for-window frame buffer color))
+	 (echo-buffer (hemlock-buffer (#/textStorage echo-area)))
          (tv (text-pane-text-view pane)))
+    #+GZ (assert echo-buffer)
     (with-slots (peer) tv
       (setq peer echo-area))
     (with-slots (peer) echo-area
       (setq peer tv))
-    (hi::activate-hemlock-view pane)
     (setf (slot-value frame 'echo-area-view) echo-area
           (slot-value frame 'pane) pane)
-    (setf (slot-value frame 'command-thread)
-          (process-run-function (format nil "Hemlock window thread for ~s"
-					(hi::buffer-name buffer))
-                                #'(lambda ()
-                                    (hemlock-thread-function
-                                     (hemlock-frame-event-queue frame)
-                                     buffer
-                                     pane
-                                     (hemlock-frame-echo-area-buffer frame)
-                                     (slot-value frame 'echo-area-view)))))
-    frame))
-         
-    
-
-
-(defun hemlock-frame-for-textstorage (class ts ncols nrows container-tracks-text-view-width color style)
-  (process-interrupt *cocoa-event-process*
-                     #'%hemlock-frame-for-textstorage
-                     class ts  ncols nrows container-tracks-text-view-width color style))
-
+    (setf (slot-value pane 'hemlock-view)
+	  (make-instance 'hi:hemlock-view
+	    :buffer buffer
+	    :pane pane
+	    :echo-area-buffer echo-buffer))
+    (activate-hemlock-view tv)
+   frame))
 
 
 (defun hi::lock-buffer (b)
@@ -2006,33 +1964,40 @@
 (defun hi::unlock-buffer (b)
   (release-lock (hi::buffer-lock b))) 
 
-(defun hi::document-begin-editing (document)
-  (#/performSelectorOnMainThread:withObject:waitUntilDone:
-   (slot-value document 'textstorage)
-   (@selector #/beginEditing)
-   +null-ptr+
-   t))
+(defun hemlock-ext:invoke-modifying-buffer-storage (buffer thunk)
+  (assume-cocoa-thread)
+  (when buffer ;; nil means just get rid of any prior buffer
+    (setq buffer (require-type buffer 'hi::buffer)))
+  (let ((old *buffer-being-edited*))
+    (if (eq buffer old)
+      (funcall thunk)
+      (unwind-protect
+	  (progn
+	    (buffer-document-end-editing old)
+	    (buffer-document-begin-editing buffer)
+	    (funcall thunk))
+	(buffer-document-end-editing buffer)
+	(buffer-document-begin-editing old)))))
+
+(defun buffer-document-end-editing (buffer)
+  (when buffer
+    (let* ((document (hi::buffer-document (require-type buffer 'hi::buffer))))
+      (when document
+	(setq *buffer-being-edited* nil)
+	(let ((ts (slot-value document 'textstorage)))
+	  (#/endEditing ts)
+	  (update-hemlock-selection ts))))))
+
+(defun buffer-document-begin-editing (buffer)
+  (when buffer
+    (let* ((document (hi::buffer-document buffer)))
+      (when document
+	(setq *buffer-being-edited* buffer)
+	(#/beginEditing (slot-value document 'textstorage))))))
 
 (defun document-edit-level (document)
   (assume-cocoa-thread) ;; see comment in #/editingInProgress
   (slot-value (slot-value document 'textstorage) 'edit-count))
-
-(defun hi::document-end-editing (document)
-  (#/performSelectorOnMainThread:withObject:waitUntilDone:
-   (slot-value document 'textstorage)
-   (@selector #/endEditing)
-   +null-ptr+
-   t))
-
-(defun hi::document-set-point-position (document)
-  (declare (ignorable document))
-  #+debug
-  (#_NSLog #@"Document set point position called")
-  (let* ((textstorage (slot-value document 'textstorage)))
-    (#/performSelectorOnMainThread:withObject:waitUntilDone:
-     textstorage (@selector #/updateHemlockSelection) +null-ptr+ t)))
-
-
 
 (defun perform-edit-change-notification (textstorage selector pos n &optional (extra 0))
   (with-lock-grabbed (*buffer-change-invocation-lock*)
@@ -2064,15 +2029,15 @@
   (when (hi::bufferp buffer)
     (let* ((document (hi::buffer-document buffer))
 	   (textstorage (if document (slot-value document 'textstorage)))
-           (pos (mark-absolute-position (hi::region-start region)))
-           (n (- (mark-absolute-position (hi::region-end region)) pos)))
+           (pos (hi:mark-absolute-position (hi::region-start region)))
+           (n (- (hi:mark-absolute-position (hi::region-end region)) pos)))
       (perform-edit-change-notification textstorage
                                         (@selector #/noteHemlockAttrChangeAtPosition:length:)
                                         pos
                                         n
                                         font))))
 
-(defun buffer-active-font (buffer)
+(defun buffer-active-font-attributes (buffer)
   (let* ((style 0)
          (region (hi::buffer-active-font-region buffer))
          (textstorage (slot-value (hi::buffer-document buffer) 'textstorage))
@@ -2089,7 +2054,7 @@
     (let* ((document (hi::buffer-document buffer))
 	   (textstorage (if document (slot-value document 'textstorage))))
       (when textstorage
-        (let* ((pos (mark-absolute-position mark)))
+        (let* ((pos (hi:mark-absolute-position mark)))
           (when (eq (hi::mark-%kind mark) :left-inserting)
 	    ;; Make up for the fact that the mark moved forward with the insertion.
 	    ;; For :right-inserting and :temporary marks, they should be left back.
@@ -2106,7 +2071,7 @@
       (when textstorage
             (perform-edit-change-notification textstorage
                                               (@selector #/noteHemlockModificationAtPosition:length:)
-                                              (mark-absolute-position mark)
+                                              (hi:mark-absolute-position mark)
                                               n)))))
   
 
@@ -2115,7 +2080,7 @@
     (let* ((document (hi::buffer-document buffer))
 	   (textstorage (if document (slot-value document 'textstorage))))
       (when textstorage
-        (let* ((pos (mark-absolute-position mark)))
+        (let* ((pos (hi:mark-absolute-position mark)))
           (perform-edit-change-notification textstorage
                                             (@selector #/noteHemlockDeletionAtPosition:length:)
                                             pos
@@ -2123,21 +2088,19 @@
 
 
 
-(defun hi::set-document-modified (document flag)
-  (unless flag
-    (#/performSelectorOnMainThread:withObject:waitUntilDone:
-     document
-     (@selector #/documentChangeCleared)
-     +null-ptr+
-     t)))
+(defun hemlock-ext:note-buffer-saved (buffer)
+  (assume-cocoa-thread)
+  (let* ((document (hi::buffer-document buffer)))
+    (when document
+      ;; Hmm... I guess this is always done by the act of saving.
+      nil)))
 
+(defun hemlock-ext:note-buffer-unsaved (buffer)
+  (assume-cocoa-thread)
+  (let* ((document (hi::buffer-document buffer)))
+    (when document
+      (#/updateChangeCount: document #$NSChangeCleared))))
 
-(defmethod hi::document-panes ((document t))
-  )
-
-
-
-    
 
 (defun size-of-char-in-font (f)
   (let* ((sf (#/screenFont f))
@@ -2150,9 +2113,9 @@
          
 
 
-(defun size-text-pane (pane char-height char-width nrows ncols)
+(defun size-text-pane (pane line-height char-width nrows ncols)
   (let* ((tv (text-pane-text-view pane))
-         (height (fceiling (* nrows char-height)))
+         (height (fceiling (* nrows line-height)))
 	 (width (fceiling (* ncols char-width)))
 	 (scrollview (text-pane-scroll-view pane))
 	 (window (#/window scrollview))
@@ -2162,8 +2125,8 @@
                       (+ width (* 2 (#/lineFragmentPadding (#/textContainer tv))))
                       height)
       (when has-vertical-scroller 
-	(#/setVerticalLineScroll: scrollview char-height)
-	(#/setVerticalPageScroll: scrollview (cgfloat 0.0) #|char-height|#))
+	(#/setVerticalLineScroll: scrollview line-height)
+	(#/setVerticalPageScroll: scrollview (cgfloat 0.0) #|line-height|#))
       (when has-horizontal-scroller
 	(#/setHorizontalLineScroll: scrollview char-width)
 	(#/setHorizontalPageScroll: scrollview (cgfloat 0.0) #|char-width|#))
@@ -2177,15 +2140,19 @@
               (ns:ns-size-width margins))
         (#/setContentSize: window sv-size)
         (setf (slot-value tv 'char-width) char-width
-              (slot-value tv 'char-height) char-height)
+              (slot-value tv 'line-height) line-height)
         (#/setResizeIncrements: window
-                                (ns:make-ns-size char-width char-height))))))
+                                (ns:make-ns-size char-width line-height))))))
 				    
   
 (defclass hemlock-editor-window-controller (ns:ns-window-controller)
     ()
   (:metaclass ns:+ns-object))
 
+(defmethod hemlock-view ((self hemlock-editor-window-controller))
+  (let ((frame (#/window self)))
+    (unless (%null-ptr-p frame)
+      (hemlock-view frame))))
 
 ;;; Map *default-file-character-encoding* to an :<NSS>tring<E>ncoding
 (defun get-default-encoding ()
@@ -2221,11 +2188,21 @@
      (encoding :foreign-type :<NSS>tring<E>ncoding :initform (get-default-encoding)))
   (:metaclass ns:+ns-object))
 
-(objc:defmethod (#/documentChangeCleared :void) ((self hemlock-editor-document))
-  (#/updateChangeCount: self #$NSChangeCleared))
+(defmethod hemlock-buffer ((self hemlock-editor-document))
+  (let ((ts (slot-value self 'textstorage)))
+    (unless (%null-ptr-p ts)
+      (hemlock-buffer ts))))
 
 (defmethod assume-not-editing ((doc hemlock-editor-document))
   (assume-not-editing (slot-value doc 'textstorage)))
+
+(defmethod document-invalidate-modeline ((self hemlock-editor-document))
+  (for-each-textview-using-storage
+   (slot-value self 'textstorage)
+   #'(lambda (tv)
+       (let* ((pane (text-view-pane tv)))
+	 (unless (%null-ptr-p pane)
+	   (#/setNeedsDisplay: (text-pane-mode-line pane) t))))))
 
 (defmethod update-buffer-package ((doc hemlock-editor-document) buffer)
   (let* ((name (hemlock::package-at-mark (hi::buffer-point buffer))))
@@ -2238,11 +2215,13 @@
                 (not (string= curname name)))
           (setf (hi::variable-value 'hemlock::current-package :buffer buffer) name))))))
 
-(defun hi::document-note-selection-set-by-search (doc)
-  (with-slots (textstorage) doc
-    (when textstorage
-      (with-slots (selection-set-by-search) textstorage
-	(setq selection-set-by-search #$YES)))))
+(defun hemlock-ext:note-selection-set-by-search (buffer)
+  (let* ((doc (hi::buffer-document buffer)))
+    (when doc
+      (with-slots (textstorage) doc
+	(when textstorage
+	  (with-slots (selection-set-by-search) textstorage
+	    (setq selection-set-by-search #$YES)))))))
 
 (objc:defmethod (#/validateMenuItem: :<BOOL>)
     ((self hemlock-text-view) item)
@@ -2264,8 +2243,7 @@
           ((or (eql action (@selector #/loadBuffer:))
                (eql action (@selector #/compileBuffer:))
                (eql action (@selector #/compileAndLoadBuffer:))) 
-           (let* ((d (hemlock-buffer-string-cache (#/hemlockString (#/textStorage self))))
-                  (buffer (buffer-cache-buffer d))
+           (let* ((buffer (hemlock-buffer self))
                   (pathname (hi::buffer-pathname buffer)))
              (not (null pathname))))
 	  (t (call-next-method item)))))
@@ -2275,7 +2253,7 @@
 
 (defvar *encoding-name-hash* (make-hash-table))
 
-(defmethod hi::document-encoding-name ((doc hemlock-editor-document))
+(defmethod document-encoding-name ((doc hemlock-editor-document))
   (with-slots (encoding) doc
     (if (eql encoding 0)
       "Automatic"
@@ -2283,7 +2261,11 @@
           (setf (gethash encoding *encoding-name-hash*)
                 (lisp-string-from-nsstring (nsstring-for-nsstring-encoding encoding)))))))
 
+(defun hi::buffer-encoding-name (buffer)
+  (let ((doc (hi::buffer-document buffer)))
+    (and doc (document-encoding-name doc))))
 
+;; TODO: make each buffer have a slot, and this is just the default value.
 (defmethod textview-background-color ((doc hemlock-editor-document))
   *editor-background-color*)
 
@@ -2310,35 +2292,36 @@
                                   :with-contents-of-file filename
                                   :encoding encoding
                                   :error +null-ptr+))
-         (buffer (hemlock-document-buffer self))
+         (buffer (hemlock-buffer self))
          (old-length (hemlock-buffer-length buffer))
 	 (hi::*current-buffer* buffer)
          (textstorage (slot-value self 'textstorage))
          (point (hi::buffer-point buffer))
-         (pointpos (mark-absolute-position point)))
-    (#/beginEditing textstorage)
-    (#/edited:range:changeInLength:
-     textstorage #$NSTextStorageEditedCharacters (ns:make-ns-range 0 old-length) (- old-length))
-    (nsstring-to-buffer nsstring buffer)
-    (let* ((newlen (hemlock-buffer-length buffer)))
-      (#/edited:range:changeInLength: textstorage  #$NSTextStorageEditedAttributes (ns:make-ns-range 0 0) newlen)
-      (#/edited:range:changeInLength: textstorage #$NSTextStorageEditedCharacters (ns:make-ns-range 0 newlen) 0)
-      (let* ((ts-string (#/hemlockString textstorage))
-             (display (hemlock-buffer-string-cache ts-string)))
-        (reset-buffer-cache display) 
-        (update-line-cache-for-index display 0)
-        (move-hemlock-mark-to-absolute-position point
-                                                display
-                                                (min newlen pointpos))))
-    (#/updateMirror textstorage)
-    (#/endEditing textstorage)
-    (hi::document-set-point-position self)
-    (setf (hi::buffer-modified buffer) nil)
-    (hi::queue-buffer-change buffer)
+         (pointpos (hi:mark-absolute-position point)))
+    (hemlock-ext:invoke-modifying-buffer-storage
+     buffer
+     #'(lambda ()
+         (#/edited:range:changeInLength:
+          textstorage #$NSTextStorageEditedCharacters (ns:make-ns-range 0 old-length) (- old-length))
+         (nsstring-to-buffer nsstring buffer)
+         (let* ((newlen (hemlock-buffer-length buffer)))
+           (#/edited:range:changeInLength: textstorage  #$NSTextStorageEditedAttributes (ns:make-ns-range 0 0) newlen)
+           (#/edited:range:changeInLength: textstorage #$NSTextStorageEditedCharacters (ns:make-ns-range 0 newlen) 0)
+           (let* ((ts-string (#/hemlockString textstorage))
+                  (display (hemlock-buffer-string-cache ts-string)))
+             (reset-buffer-cache display) 
+             (update-line-cache-for-index display 0)
+             (move-hemlock-mark-to-absolute-position point
+                                                     display
+                                                     (min newlen pointpos))))
+         (#/updateMirror textstorage)
+         (setf (hi::buffer-modified buffer) nil)
+         (hi::note-modeline-change buffer)))
     t))
-         
-            
-  
+
+
+(defvar *last-document-created* nil)
+
 (objc:defmethod #/init ((self hemlock-editor-document))
   (let* ((doc (call-next-method)))
     (unless  (%null-ptr-p doc)
@@ -2347,72 +2330,71 @@
                                (lisp-string-from-nsstring
                                 (#/displayName doc))
                                :modes '("Lisp" "Editor")))))
+    (setq *last-document-created* doc)
     doc))
 
   
+(defun make-buffer-for-document (ns-document pathname)
+  (let* ((buffer-name (hi::pathname-to-buffer-name pathname))
+	 (buffer (make-hemlock-buffer buffer-name)))
+    (setf (slot-value ns-document 'textstorage)
+	  (make-textstorage-for-hemlock-buffer buffer))
+    (setf (hi::buffer-pathname buffer) pathname)
+    buffer))
+
 (objc:defmethod (#/readFromURL:ofType:error: :<BOOL>)
     ((self hemlock-editor-document) url type (perror (:* :id)))
   (declare (ignorable type))
-  (rlet ((pused-encoding :<NSS>tring<E>ncoding 0))
-    (let* ((pathname
-            (lisp-string-from-nsstring
-             (if (#/isFileURL url)
-               (#/path url)
-               (#/absoluteString url))))
-           (buffer-name (hi::pathname-to-buffer-name pathname))
-           (buffer (or
-                    (hemlock-document-buffer self)
-                    (let* ((b (make-hemlock-buffer buffer-name)))
-                      (setf (hi::buffer-pathname b) pathname)
-                      (setf (slot-value self 'textstorage)
-                            (make-textstorage-for-hemlock-buffer b))
-                      b)))
-           (selected-encoding (slot-value (#/sharedDocumentController (find-class 'hemlock-document-controller)) 'last-encoding))
-           (string
+  (with-callback-context "readFromURL"
+    (rlet ((pused-encoding :<NSS>tring<E>ncoding 0))
+      (let* ((pathname
+              (lisp-string-from-nsstring
+               (if (#/isFileURL url)
+                 (#/path url)
+                 (#/absoluteString url))))
+             (buffer (or (hemlock-buffer self)
+                         (make-buffer-for-document self pathname)))
+             (selected-encoding (slot-value (#/sharedDocumentController (find-class 'hemlock-document-controller)) 'last-encoding))
+             (string
+              (if (zerop selected-encoding)
+                (#/stringWithContentsOfURL:usedEncoding:error:
+                 ns:ns-string
+                 url
+                 pused-encoding
+                 perror)
+                +null-ptr+)))
+        
+        (if (%null-ptr-p string)
+          (progn
             (if (zerop selected-encoding)
-              (#/stringWithContentsOfURL:usedEncoding:error:
-               ns:ns-string
-               url
-               pused-encoding
-               perror)
-              +null-ptr+)))
+              (setq selected-encoding (get-default-encoding)))
+            (setq string (#/stringWithContentsOfURL:encoding:error:
+                          ns:ns-string
+                          url
+                          selected-encoding
+                          perror)))
+          (setq selected-encoding (pref pused-encoding :<NSS>tring<E>ncoding)))
+        (unless (%null-ptr-p string)
+          (with-slots (encoding) self (setq encoding selected-encoding))
 
-      (if (%null-ptr-p string)
-        (progn
-          (if (zerop selected-encoding)
-            (setq selected-encoding (get-default-encoding)))
-          (setq string (#/stringWithContentsOfURL:encoding:error:
-                        ns:ns-string
-                        url
-                        selected-encoding
-                        perror)))
-        (setq selected-encoding (pref pused-encoding :<NSS>tring<E>ncoding)))
-      (unless (%null-ptr-p string)
-        (with-slots (encoding) self (setq encoding selected-encoding))
-        (hi::queue-buffer-change buffer)
-        (hi::document-begin-editing self)
-	(nsstring-to-buffer string buffer)
-
-        (let* ((textstorage (slot-value self 'textstorage))
-               (display (hemlock-buffer-string-cache (#/hemlockString textstorage))))
-
-          (reset-buffer-cache display) 
-
-          (#/updateMirror textstorage)
-
-          (update-line-cache-for-index display 0)
-
-          (textstorage-note-insertion-at-position
-           textstorage
-           0
-           (hemlock-buffer-length buffer)))
-
-        (hi::document-end-editing self)
-
-        (setf (hi::buffer-modified buffer) nil)
-        (hi::process-file-options buffer pathname)
-        t))))
-
+          ;; ** TODO: Argh.  How about we just let hemlock insert it.
+          (let* ((textstorage (slot-value self 'textstorage))
+                 (display (hemlock-buffer-string-cache (#/hemlockString textstorage)))
+                 (hi::*current-buffer* buffer))
+            (hemlock-ext:invoke-modifying-buffer-storage
+             buffer
+             #'(lambda ()
+                 (nsstring-to-buffer string buffer)
+                 (reset-buffer-cache display) 
+                 (#/updateMirror textstorage)
+                 (update-line-cache-for-index display 0)
+                 (textstorage-note-insertion-at-position
+                  textstorage
+                  0
+                  (hemlock-buffer-length buffer))
+                 (hi::note-modeline-change buffer)
+                 (setf (hi::buffer-modified buffer) nil))))
+          t)))))
 
 
 
@@ -2450,29 +2432,16 @@
 
              
 
-(defmethod hemlock-document-buffer (document)
-  (let* ((string (#/hemlockString (slot-value document 'textstorage))))
-    (unless (%null-ptr-p string)
-      (let* ((cache (hemlock-buffer-string-cache string)))
-	(when cache (buffer-cache-buffer cache))))))
+(defmethod hemlock-view ((frame hemlock-frame))
+  (let ((pane (slot-value frame 'pane)))
+    (when (and pane (not (%null-ptr-p pane)))
+      (hemlock-view pane))))
 
-(defmethod hi:window-buffer ((frame hemlock-frame))
-  (let* ((dc (#/sharedDocumentController ns:ns-document-controller))
-	 (doc (#/documentForWindow: dc frame)))
-    ;; Sometimes doc is null.  Why?  What would cause a hemlock frame to
-    ;; not have a document?  (When it happened, there seemed to be a hemlock
-    ;; frame in (windows) that didn't correspond to any visible window).
-    (unless (%null-ptr-p doc)
-      (hemlock-document-buffer doc))))
-
-(defmethod hi:window-buffer ((pane text-pane))
-  (hi:window-buffer (#/window pane)))
-
-(defun ordered-hemlock-windows ()
-  (delete-if-not #'(lambda (win)
-		     (and (typep win 'hemlock-frame)
-			  (hi:window-buffer win)))
-		   (windows)))
+(defun hemlock-ext:all-hemlock-views ()
+  "List of all hemlock views, in z-order, frontmost first"
+  (loop for win in (windows)
+    as buf = (and (typep win 'hemlock-frame) (hemlock-view win))
+    when buf collect buf))
 
 (defmethod hi::document-panes ((document hemlock-editor-document))
   (let* ((ts (slot-value document 'textstorage))
@@ -2489,8 +2458,7 @@
                                                popup)
   (with-slots (encoding) self
     (setq encoding (nsinteger-to-nsstring-encoding (#/selectedTag popup)))
-    ;; Force modeline update.
-    (hi::queue-buffer-change (hemlock-document-buffer self))))
+    (hi::note-modeline-change (hemlock-buffer self))))
 
 (objc:defmethod (#/prepareSavePanel: :<BOOL>) ((self hemlock-editor-document)
                                                panel)
@@ -2514,17 +2482,17 @@
   (declare (ignore type))
   (with-slots (encoding textstorage) self
     (let* ((string (#/string textstorage))
-           (buffer (hemlock-document-buffer self)))
+           (buffer (hemlock-buffer self)))
       (case (when buffer (hi::buffer-line-termination buffer))
-        (:cp/m (unless (typep string 'ns:ns-mutable-string)
-                 (setq string (make-instance 'ns:ns-mutable-string :with string string))
-               (#/replaceOccurrencesOfString:withString:options:range:
-                string *ns-lf-string* *ns-crlf-string* #$NSLiteralSearch (ns:make-ns-range 0 (#/length string)))))
-        (:macos (setq string (if (typep string 'ns:ns-mutable-string)
-                              string
-                              (make-instance 'ns:ns-mutable-string :with string string)))
-                (#/replaceOccurrencesOfString:withString:options:range:
-                string *ns-lf-string* *ns-cr-string* #$NSLiteralSearch (ns:make-ns-range 0 (#/length string)))))
+        (:crlf (unless (typep string 'ns:ns-mutable-string)
+		 (setq string (make-instance 'ns:ns-mutable-string :with string string))
+		 (#/replaceOccurrencesOfString:withString:options:range:
+		  string *ns-lf-string* *ns-crlf-string* #$NSLiteralSearch (ns:make-ns-range 0 (#/length string)))))
+        (:cr (setq string (if (typep string 'ns:ns-mutable-string)
+			    string
+			    (make-instance 'ns:ns-mutable-string :with string string)))
+	     (#/replaceOccurrencesOfString:withString:options:range:
+	      string *ns-lf-string* *ns-cr-string* #$NSLiteralSearch (ns:make-ns-range 0 (#/length string)))))
       (when (#/writeToURL:atomically:encoding:error:
              string url t encoding error)
         (when buffer
@@ -2539,7 +2507,7 @@
 (objc:defmethod (#/setFileURL: :void) ((self hemlock-editor-document)
                                         url)
   (call-next-method url)
-  (let* ((buffer (hemlock-document-buffer self)))
+  (let* ((buffer (hemlock-buffer self)))
     (when buffer
       (let* ((new-pathname (lisp-string-from-nsstring (#/path url))))
 	(setf (hi::buffer-name buffer) (hi::pathname-to-buffer-name new-pathname))
@@ -2574,29 +2542,33 @@
 (objc:defmethod (#/makeWindowControllers :void) ((self hemlock-editor-document))
   #+debug
   (#_NSLog #@"Make window controllers")
-  (let* ((textstorage  (slot-value self 'textstorage))
-         (window (%hemlock-frame-for-textstorage
-                  hemlock-frame
-                  textstorage
-                  *editor-columns*
-                  *editor-rows*
-                  nil
-                  (textview-background-color self)
-                  (user-input-style self)))
-         (controller (make-instance
-		      'hemlock-editor-window-controller
-		      :with-window window)))
-    (#/setDelegate: (text-pane-text-view (slot-value window 'pane)) self)
-    (#/addWindowController: self controller)
-    (#/release controller)
-    (ns:with-ns-point  (current-point
-                        (or *next-editor-x-pos*
-                            (x-pos-for-window window *initial-editor-x-pos*))
-                        (or *next-editor-y-pos*
-                            (y-pos-for-window window *initial-editor-y-pos*)))
-      (let* ((new-point (#/cascadeTopLeftFromPoint: window current-point)))
-        (setq *next-editor-x-pos* (ns:ns-point-x new-point)
-              *next-editor-y-pos* (ns:ns-point-y new-point))))))
+  (with-callback-context "makeWindowControllers"
+    (let* ((textstorage  (slot-value self 'textstorage))
+           (window (%hemlock-frame-for-textstorage
+                    hemlock-frame
+                    textstorage
+                    *editor-columns*
+                    *editor-rows*
+                    nil
+                    (textview-background-color self)
+                    (user-input-style self)))
+           (controller (make-instance
+                           'hemlock-editor-window-controller
+                         :with-window window)))
+      (#/setDelegate: (text-pane-text-view (slot-value window 'pane)) self)
+      (#/addWindowController: self controller)
+      (#/release controller)
+      (ns:with-ns-point  (current-point
+                          (or *next-editor-x-pos*
+                              (x-pos-for-window window *initial-editor-x-pos*))
+                          (or *next-editor-y-pos*
+                              (y-pos-for-window window *initial-editor-y-pos*)))
+        (let* ((new-point (#/cascadeTopLeftFromPoint: window current-point)))
+          (setq *next-editor-x-pos* (ns:ns-point-x new-point)
+                *next-editor-y-pos* (ns:ns-point-y new-point))))
+      (let ((view (hemlock-view window)))
+        (hi::handle-hemlock-event view #'(lambda ()
+                                           (hi::process-file-options)))))))
 
 
 (objc:defmethod (#/close :void) ((self hemlock-editor-document))
@@ -2613,82 +2585,98 @@
       (close-hemlock-textstorage textstorage)))
   (call-next-method))
 
-(defun window-visible-range (text-view)
-  (let* ((rect (#/visibleRect text-view))
-	 (layout (#/layoutManager text-view))
-	 (text-container (#/textContainer text-view))
-	 (container-origin (#/textContainerOrigin text-view)))
+(defmethod view-screen-lines ((view hi:hemlock-view))
+    (let* ((pane (hi::hemlock-view-pane view)))
+      (floor (ns:ns-size-height (#/contentSize (text-pane-scroll-view pane)))
+             (text-view-line-height (text-pane-text-view pane)))))
+
+;; Beware this doesn't seem to take horizontal scrolling into account.
+(defun visible-charpos-range (tv)
+  (let* ((rect (#/visibleRect tv))
+         (container-origin (#/textContainerOrigin tv))
+         (layout (#/layoutManager tv)))
     ;; Convert from view coordinates to container coordinates
     (decf (pref rect :<NSR>ect.origin.x) (pref container-origin :<NSP>oint.x))
     (decf (pref rect :<NSR>ect.origin.y) (pref container-origin :<NSP>oint.y))
     (let* ((glyph-range (#/glyphRangeForBoundingRect:inTextContainer:
-			 layout rect text-container))
-	   (char-range (#/characterRangeForGlyphRange:actualGlyphRange:
-			layout glyph-range +null-ptr+)))
+                         layout rect (#/textContainer tv)))
+           (char-range (#/characterRangeForGlyphRange:actualGlyphRange:
+                        layout glyph-range +null-ptr+)))
       (values (pref char-range :<NSR>ange.location)
-	      (pref char-range :<NSR>ange.length)))))
-    
-(defun hi::scroll-window (textpane n)
-  (when n
-    (let* ((sv (text-pane-scroll-view textpane))
-	   (tv (text-pane-text-view textpane))
-	   (char-height (text-view-char-height tv))
-	   (sv-height (ns:ns-size-height (#/contentSize sv)))
-	   (nlines (floor sv-height char-height))
-	   (count (case n
-		    (:page-up (- nlines))
-		    (:page-down nlines)
-		    (t n))))
-      (multiple-value-bind (pages lines) (floor (abs count) nlines)
-	(dotimes (i pages)
-	  (if (< count 0)
-	      (#/performSelectorOnMainThread:withObject:waitUntilDone:
-	       tv
-	       (@selector #/scrollPageUp:)
-	       +null-ptr+
-	       t)
-	      (#/performSelectorOnMainThread:withObject:waitUntilDone:
-	       tv
-	       (@selector #/scrollPageDown:)
-	       +null-ptr+
-	       t)))
-	(dotimes (i lines)
-	  (if (< count 0)
-	      (#/performSelectorOnMainThread:withObject:waitUntilDone:
-	       tv
-	       (@selector #/scrollLineUp:)
-	       +null-ptr+
-	       t)
-	      (#/performSelectorOnMainThread:withObject:waitUntilDone:
-	       tv
-	       (@selector #/scrollLineDown:)
-	       +null-ptr+
-	       t))))
-      ;; If point is not on screen, move it.
-      (let* ((point (hi::current-point))
-	     (point-pos (mark-absolute-position point)))
-	(multiple-value-bind (win-pos win-len) (window-visible-range tv)
-	  (unless (and (<= win-pos point-pos) (< point-pos (+ win-pos win-len)))
-	    (let* ((point (hi::current-point-collapsing-selection))
-		   (cache (hemlock-buffer-string-cache
-			   (#/hemlockString (#/textStorage tv)))))
-	      (move-hemlock-mark-to-absolute-position point cache win-pos)
-	      ;; We should be done, but unfortunately, well, we're not.
-	      ;; Something insists on recentering around point, so fake it out
-	      #-work-around-overeager-centering
-	      (or (hi::line-offset point (floor nlines 2))
-		  (if (< count 0)
-		      (hi::buffer-start point)
-		      (hi::buffer-end point))))))))))
+              (pref char-range :<NSR>ange.length)))))
 
+(defun charpos-xy (tv charpos)
+  (let* ((layout (#/layoutManager tv))
+         (glyph-range (#/glyphRangeForCharacterRange:actualCharacterRange:
+                       layout
+                       (ns:make-ns-range charpos 0)
+                       +null-ptr+))
+         (rect (#/boundingRectForGlyphRange:inTextContainer:
+                layout
+                glyph-range
+                (#/textContainer tv)))
+         (container-origin (#/textContainerOrigin tv)))
+    (values (+ (pref rect :<NSR>ect.origin.x) (pref container-origin :<NSP>oint.x))
+            (+ (pref rect :<NSR>ect.origin.y) (pref container-origin :<NSP>oint.y)))))
 
-(defmethod hemlock::center-text-pane ((pane text-pane))
-  (#/performSelectorOnMainThread:withObject:waitUntilDone:
-   (text-pane-text-view pane)
-   (@selector #/centerSelectionInVisibleArea:)
-   +null-ptr+
-   t))
+;;(nth-value 1 (charpos-xy tv (visible-charpos-range tv))) - this is smaller as it
+;; only includes lines fully scrolled off...
+(defun text-view-vscroll (tv)
+  ;; Return the number of pixels scrolled off the top of the view.
+  (let* ((scroll-view (text-pane-scroll-view (text-view-pane tv)))
+         (clip-view (#/contentView scroll-view))
+         (bounds (#/bounds clip-view)))
+    (ns:ns-rect-y bounds)))
 
+(defun set-text-view-vscroll (tv vscroll)
+  (let* ((scroll-view (text-pane-scroll-view (text-view-pane tv)))
+         (clip-view (#/contentView scroll-view))
+         (bounds (#/bounds clip-view)))
+    (decf vscroll (mod vscroll (text-view-line-height tv))) ;; show whole line
+    (ns:with-ns-point (new-origin (ns:ns-rect-x bounds) vscroll)
+      (#/scrollToPoint: clip-view (#/constrainScrollPoint: clip-view new-origin))
+      (#/reflectScrolledClipView: scroll-view clip-view))))
+
+(defun scroll-by-lines (tv nlines)
+  "Change the vertical origin of the containing scrollview's clipview"
+  (set-text-view-vscroll tv (+ (text-view-vscroll tv)
+                               (* nlines (text-view-line-height tv)))))
+
+;; TODO: should be a hemlock variable..
+(defvar *next-screen-context-lines* 2)
+
+(defmethod hemlock-ext:scroll-view ((view hi:hemlock-view) how &optional where)
+  (assume-cocoa-thread)
+  (let* ((tv (text-pane-text-view (hi::hemlock-view-pane view))))
+    (when (eq how :line)
+      (setq where (require-type where '(integer 0)))
+      (let* ((line-y (nth-value 1 (charpos-xy tv where)))
+             (top-y (text-view-vscroll tv))
+             (nlines (floor (- line-y top-y) (text-view-line-height tv))))
+        (setq how :lines-down where nlines)))
+    (ecase how
+      (:center-selection
+       (#/centerSelectionInVisibleArea: tv +null-ptr+))
+      (:page-up
+       (require-type where 'null)
+       ;; TODO: next-screen-context-lines
+       (scroll-by-lines tv (- *next-screen-context-lines* (view-screen-lines view))))
+      (:page-down
+       (require-type where 'null)
+       (scroll-by-lines tv (- (view-screen-lines view) *next-screen-context-lines*)))
+      (:lines-up
+       (scroll-by-lines tv (- (require-type where 'integer))))
+      (:lines-down
+       (scroll-by-lines tv (require-type where 'integer))))
+    ;; If point is not on screen, move it.
+    (let* ((point (hi::current-point))
+           (point-pos (hi::mark-absolute-position point)))
+      (multiple-value-bind (win-pos win-len) (visible-charpos-range tv)
+        (unless (and (<= win-pos point-pos) (< point-pos (+ win-pos win-len)))
+          (let* ((point (hi::current-point-collapsing-selection))
+                 (cache (hemlock-buffer-string-cache (#/hemlockString (#/textStorage tv)))))
+            (move-hemlock-mark-to-absolute-position point cache win-pos)
+            (update-hemlock-selection (#/textStorage tv))))))))
 
 (defun iana-charset-name-of-nsstringencoding (ns)
   (#_CFStringConvertEncodingToIANACharSetName
@@ -2780,39 +2768,31 @@
   ;(#/sharedPanel lisp-preferences-panel)
   (make-editor-style-map))
 
-;;; This needs to run on the main thread.
-(objc:defmethod (#/updateHemlockSelection :void) ((self hemlock-text-storage))
+;;; This needs to run on the main thread.  Sets the cocoa selection from the
+;;; hemlock selection.
+(defmethod update-hemlock-selection ((self hemlock-text-storage))
   (assume-cocoa-thread)
-  (let* ((string (#/hemlockString self))
-         (buffer (buffer-cache-buffer (hemlock-buffer-string-cache string)))
-	 (hi::*current-buffer* buffer)
-         (point (hi::buffer-point buffer))
-         (pointpos (mark-absolute-position point))
-         (location pointpos)
-         (len 0))
-    (when (hemlock::%buffer-region-active-p buffer)
-      (let* ((mark (hi::buffer-%mark buffer)))
-        (when mark
-          (let* ((markpos (mark-absolute-position mark)))
-            (if (< markpos pointpos)
-              (setq location markpos len (- pointpos markpos))
-              (if (< pointpos markpos)
-                (setq location pointpos len (- markpos pointpos))))))))
-    #+debug
-    (#_NSLog #@"update Hemlock selection: charpos = %d, abspos = %d"
-             :int (hi::mark-charpos point) :int pointpos)
-    (for-each-textview-using-storage
-     self
-     #'(lambda (tv)
-         (#/updateSelection:length:affinity: tv location len (if (eql location 0) #$NSSelectionAffinityUpstream #$NSSelectionAffinityDownstream))))))
+  (let ((buffer (hemlock-buffer self)))
+    (multiple-value-bind (start end) (hi:buffer-selection-range buffer)
+      #+debug
+      (#_NSLog #@"update Hemlock selection: charpos = %d, abspos = %d"
+               :int (hi::mark-charpos (hi::buffer-point buffer)) :int start)
+      (for-each-textview-using-storage
+       self
+       #'(lambda (tv)
+           (#/updateSelection:length:affinity: tv
+                                               start
+                                               (- end start)
+                                               (if (eql start 0)
+                                                 #$NSSelectionAffinityUpstream
+                                                 #$NSSelectionAffinityDownstream)))))))
 
-
-(defun hi::allocate-temporary-object-pool ()
-  (create-autorelease-pool))
-
-(defun hi::free-temporary-objects (pool)
-  (release-autorelease-pool pool))
-
+;; This should be invoked by any command that modifies the buffer, so it can show the
+;; user what happened...  This ensures the Cocoa selection is made visible, so it
+;; assumes the Cocoa selection has already been synchronized with the hemlock one.
+(defmethod hemlock-ext:ensure-selection-visible ((view hi:hemlock-view))
+  (let ((tv (text-pane-text-view (hi::hemlock-view-pane view))))
+    (#/scrollRangeToVisible: tv (#/selectedRange tv))))
 
 (defloadvar *general-pasteboard* nil)
 
@@ -2853,6 +2833,7 @@
   #+debug (#_NSLog #@"Paste: sender = %@" :id sender)
   (let* ((pb (general-pasteboard))
          (string (progn (#/types pb) (#/stringForType: pb #&NSStringPboardType))))
+    #+GZ (log-debug "   string = ~s" string)
     (unless (%null-ptr-p string)
       (unless (zerop (ns:ns-range-length (#/rangeOfString: string *ns-cr-string*)))
         (setq string (make-instance 'ns:ns-mutable-string :with-string string))
@@ -2876,95 +2857,51 @@
             (lookup-hyperspec-symbol symbol self)))))))
 
 
-(defun hi::edit-definition (name)
-  (let* ((info (ccl::get-source-files-with-types&classes name)))
-    (when (null info)
-      (let* ((seen (list name))
-	     (found ())
-	     (pname (symbol-name name)))
-	(dolist (pkg (list-all-packages))
-	  (let ((sym (find-symbol pname pkg)))
-	    (when (and sym (not (member sym seen)))
-	      (let ((new (ccl::get-source-files-with-types&classes sym)))
-		(when new
-		  (setq info (append new info))
-		  (push sym found)))
-	      (push sym seen))))
-	(when found
-	  ;; Unfortunately, this puts the message in the wrong buffer (would be better in the destination buffer).
-	  (hi::loud-message "No definitions for ~s, using ~s instead"
-			    name (if (cdr found) found (car found))))))
-    (if info
-      (if (cdr info)
-        (edit-definition-list name info)
-        (edit-single-definition name (car info)))
-      (hi::editor-error "No known definitions for ~s" name))))
+;; This is called by stuff that makes a window programmatically, e.g. m-. or grep.
+;; But the Open and New menus invoke the cocoa fns below directly. So just changing
+;; things here will not change how the menus create views.  Instead,f make changes to
+;; the subfunctions invoked by the below, e.g. #/readFromURL or #/makeWindowControllers.
+(defun find-or-make-hemlock-view (&optional pathname)
+  (assume-cocoa-thread)
+  (rlet ((perror :id +null-ptr+))
+    (let* ((doc (if pathname
+                  (#/openDocumentWithContentsOfURL:display:error:
+                   (#/sharedDocumentController ns:ns-document-controller)
+                   (pathname-to-url pathname)
+                   #$YES
+                   perror)
+                  (let ((*last-document-created* nil))
+                    (#/newDocument: 
+                     (#/sharedDocumentController hemlock-document-controller)
+                     +null-ptr+)
+                    *last-document-created*))))
+      #+gz (log-debug "created ~s" doc)
+      (when (%null-ptr-p doc)
+        (error "Couldn't open ~s: ~a" pathname
+               (let ((error (pref perror :id)))
+                 (if (%null-ptr-p error)
+                   "unknown error encountered"
+                   (lisp-string-from-nsstring (#/localizedDescription error))))))
+      (front-view-for-buffer (hemlock-buffer doc)))))
 
+(defun cocoa-edit-single-definition (name info)
+  (assume-cocoa-thread)
+  (destructuring-bind (indicator . pathname) info
+    (let ((view (find-or-make-hemlock-view pathname)))
+      (hi::handle-hemlock-event view
+                                #'(lambda ()
+                                    (hemlock::find-definition-in-buffer name indicator))))))
 
-(defun find-definition-in-document (name indicator document)
-  (let* ((buffer (hemlock-document-buffer document))
-	 (hi::*current-buffer* buffer))
-    (hemlock::find-definition-in-buffer buffer name indicator)))
+(defun hemlock-ext:edit-single-definition (name info)
+  (execute-in-gui #'(lambda () (cocoa-edit-single-definition name info))))
 
-
-(defstatic *edit-definition-id-map* (make-id-map))
-
-;;; Need to force things to happen on the main thread.
-(defclass cocoa-edit-definition-request (ns:ns-object)
-    ((name-id :foreign-type :int)
-     (info-id :foreign-type :int))
-  (:metaclass ns:+ns-object))
-
-(objc:defmethod #/initWithName:info:
-    ((self cocoa-edit-definition-request)
-     (name :int) (info :int))
-  (#/init self)
-  (setf (slot-value self 'name-id) name
-        (slot-value self 'info-id) info)
-  self)
-
-(objc:defmethod (#/editDefinition: :void)
-    ((self hemlock-document-controller) request)
-  (let* ((name (id-map-free-object *edit-definition-id-map* (slot-value request 'name-id)))
-         (info (id-map-free-object *edit-definition-id-map* (slot-value request 'info-id))))
-    (destructuring-bind (indicator . pathname) info
-      (let* ((namestring (native-translated-namestring pathname))
-             (url (#/initFileURLWithPath:
-                   (#/alloc ns:ns-url)
-                   (%make-nsstring namestring)))
-             (document (#/openDocumentWithContentsOfURL:display:error:
-                        self
-                        url
-                        nil
-                        +null-ptr+)))
-        (unless (%null-ptr-p document)
-          (if (= (#/count (#/windowControllers document)) 0)
-            (#/makeWindowControllers document))
-          (find-definition-in-document name indicator document)
-          (#/updateHemlockSelection (slot-value document 'textstorage))
-          (#/showWindows document))))))
-
-(defun edit-single-definition (name info)
-  (let* ((request (make-instance 'cocoa-edit-definition-request
-                                 :with-name (assign-id-map-id *edit-definition-id-map* name)
-                                 :info (assign-id-map-id *edit-definition-id-map* info))))
-    (#/performSelectorOnMainThread:withObject:waitUntilDone:
-     (#/sharedDocumentController ns:ns-document-controller)
-     (@selector #/editDefinition:)
-     request
-     t)))
-
-                                        
-(defun edit-definition-list (name infolist)
+(defun hemlock-ext:open-sequence-dialog (&key title sequence action (printer #'prin1))
   (make-instance 'sequence-window-controller
-                 :sequence infolist
-                 :result-callback #'(lambda (info)
-                                      (edit-single-definition name info))
-                 :display #'(lambda (item stream)
-                              (prin1 (car item) stream))
-                 :title (format nil "Definitions of ~s" name)))
+    :title title
+    :sequence sequence
+    :result-callback action
+    :display printer))
 
-                                       
 (objc:defmethod (#/documentClassForType: :<C>lass) ((self hemlock-document-controller)
 						    type)
   (if (#/isEqualToString: type #@"html")
@@ -3002,47 +2939,28 @@
    +null-ptr+
    t))
 
+(defun hemlock-ext:raise-buffer-view (buffer &optional action)
+  "Bring a window containing buffer to front and then execute action in
+   the window.  Returns before operation completes."
+  ;; Queue for after this event, so don't screw up current context.
+  (queue-for-gui #'(lambda ()
+                     (let ((doc (hi::buffer-document buffer)))
+                       (unless (and doc (not (%null-ptr-p doc)))
+                         (hi:editor-error "Deleted buffer: ~s" buffer))
+                       (#/showWindows doc)
+                       (when action
+                         (hi::handle-hemlock-event (front-view-for-buffer buffer) action))))))
 
 ;;; Enable CL:ED
 (defun cocoa-edit (&optional arg)
-  (let* ((document-controller (#/sharedDocumentController hemlock-document-controller)))
-    (cond ((null arg)
-           (#/performSelectorOnMainThread:withObject:waitUntilDone:
-            document-controller
-            (@selector #/newDocument:)
-            +null-ptr+
-            t))
-          ((or (typep arg 'string)
-               (typep arg 'pathname))
-           (unless (probe-file arg)
-             (ccl::touch arg))
-           (with-autorelease-pool
-             (let* ((url (pathname-to-url arg))
-                    (signature (#/methodSignatureForSelector:
-                                document-controller
-                                (@selector #/openDocumentWithContentsOfURL:display:error:)))
-                    (invocation (#/invocationWithMethodSignature: ns:ns-invocation
-                                                                  signature)))
-             
-               (#/setTarget: invocation document-controller)
-               (#/setSelector: invocation (@selector #/openDocumentWithContentsOfURL:display:error:))
-               (rlet ((p :id)
-                      (q :<BOOL>)
-                      (perror :id +null-ptr+))
-                 (setf (pref p :id) url
-                       (pref q :<BOOL>) #$YES)
-                 (#/setArgument:atIndex: invocation p 2)
-                 (#/setArgument:atIndex: invocation q 3)
-                 (#/setArgument:atIndex: invocation perror 4)
-                 (#/performSelectorOnMainThread:withObject:waitUntilDone:
-                  invocation
-                  (@selector #/invoke)
-                  +null-ptr+
-                  t)))))
-          ((ccl::valid-function-name-p arg)
-           (hi::edit-definition arg))
-          (t (report-bad-arg arg '(or null string pathname (satisfies ccl::valid-function-name-p)))))
-    t))
+  (cond ((or (null arg)
+             (typep arg 'string)
+             (typep arg 'pathname))
+         (execute-in-gui #'(lambda () (find-or-make-hemlock-view arg))))
+        ((ccl::valid-function-name-p arg)
+         (hemlock::edit-definition arg)
+         nil)
+        (t (report-bad-arg arg '(or null string pathname (satisfies ccl::valid-function-name-p))))))
 
 (setq ccl::*resident-editor-hook* 'cocoa-edit)
 

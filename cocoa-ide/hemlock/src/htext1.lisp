@@ -93,7 +93,7 @@
   "Stuffs the characters in the currently open line back into the line they
   came from, and sets (current-open-line) to Nil."
   (when (current-open-line)
-    (hemlock-ext:without-interrupts
+    (without-interrupts
       (let* ((open-chars (current-open-chars))
 	     (right-pos (current-right-open-pos))
 	     (left-pos (current-left-open-pos))
@@ -111,6 +111,9 @@
 ;;;
 (defvar *cache-modification-tick* -1
   "The counter for the fixnums we stick in the chars of the cached line.")
+
+(defun next-cache-modification-tick ()
+  (ccl::atomic-decf *cache-modification-tick*))
 
 (defun open-line (line mark)
   "Closes the current open line and opens the given Line at the Mark.
@@ -167,7 +170,7 @@
   `(progn
     (unless (and (= (mark-charpos ,mark) (current-left-open-pos)) (current-open-line-p ,line))
       (open-line ,line ,mark))
-    (setf (line-chars (current-open-line)) (decf *cache-modification-tick*))))
+    (setf (line-chars (current-open-line)) (next-cache-modification-tick))))
 
 ;;; Now-Tick tells us when now is and isn't.
 ;;;
@@ -178,22 +181,6 @@
   `(ccl::atomic-incf now-tick))
 
   
-(defun buffer-document-begin-editing (buffer)
-  (when (bufferp buffer)
-    (let* ((document (buffer-document buffer)))
-      (when document
-        (lock-buffer buffer)
-        (document-begin-editing document)))))
-
-(defun buffer-document-end-editing (buffer)
-  (when (bufferp buffer)
-    (let* ((document (buffer-document buffer)))
-      (when document
-        (unlock-buffer buffer)
-        (document-end-editing document)))))
-
-
-
 ;;; Yeah, the following is kind of obscure, but at least it doesn't
 ;;; call Bufferp twice.  The without-interrupts is just to prevent
 ;;; people from being screwed by interrupting when the buffer structure
@@ -212,7 +199,7 @@
                  (buffer-unmodified-tick ,b))
           (invoke-hook hemlock::buffer-modified-hook ,b t))
         (setf (buffer-modified ,b) t))
-      (hemlock-ext:without-interrupts ,@forms))))
+      (without-interrupts ,@forms))))
 
 (defmacro always-change-line (mark new-line)
   (let ((scan (gensym))
@@ -415,6 +402,9 @@
 	  (t
 	   (error "~S is an invalid mark type." kind)))))
 
+(defun mark-buffer (mark)
+  (line-buffer (mark-line mark)))
+
 (defun copy-mark (mark &optional (kind (mark-%kind mark)))
   "Returns a new mark pointing to the same position as Mark.  The kind
   of mark created may be specified by Kind, which defaults to the
@@ -437,9 +427,72 @@
 (defun move-to-position (mark charpos &optional (line (mark-line mark)))
   "Changes the Mark to point to the given character position on the Line,
   which defaults to the line the mark is currently on."
-  (change-line mark line)
-  (setf (mark-charpos mark) charpos)
-  mark)
+  (when (<= charpos (line-length line))
+    (change-line mark line)
+    (setf (mark-charpos mark) charpos)
+    mark))
+
+(defun mark-absolute-position (mark)
+  (+ (get-line-origin (mark-line mark))
+     (mark-charpos mark)))
+
+(defun move-to-absolute-position (mark position)
+  (with-mark ((m (buffer-start-mark (mark-buffer mark))))
+    (when (character-offset m position)
+      (move-mark mark m))))
+
+(defun buffer-selection-range (buffer)
+  "Absolute start and end positions of the current selection"
+  (let* ((point (buffer-point buffer))
+         (pos-1 (mark-absolute-position point))
+         (mark (and (hemlock::%buffer-region-active-p buffer) (buffer-%mark buffer)))
+         (pos-2 (if mark (mark-absolute-position mark) pos-1)))
+    (values (min pos-1 pos-2) (max pos-1 pos-2))))
+
+(defun mark-column (mark)
+  (let ((column 0)
+        (tab-spaces (value hemlock::spaces-per-tab))
+        (line (mark-line mark))
+        (charpos (mark-charpos mark)))
+    (multiple-value-bind (chars gap-start gap-end)
+                         (if (current-open-line-p line)
+                           (values (current-open-chars)
+                                   (current-left-open-pos)
+                                   (current-right-open-pos))
+                           (values (line-chars line) charpos charpos))
+      (when (< gap-start charpos)
+        (incf charpos (- gap-end gap-start)))
+      (loop with pos = 0
+        do (when (eql pos gap-start) (setq pos gap-end))
+        while (< pos charpos)
+        do (incf column (if (eql (schar chars pos) #\tab)
+                          (- tab-spaces (mod column tab-spaces))
+                          1))
+        do (incf pos))
+      column)))
+
+(defun move-to-column (mark column &optional (line (mark-line mark)))
+  (let ((tab-spaces (value hemlock::spaces-per-tab)))
+    (multiple-value-bind (chars gap-start gap-end end-pos)
+                         (if (current-open-line-p line)
+                           (values (current-open-chars)
+                                   (current-left-open-pos)
+                                   (current-right-open-pos)
+                                   (current-line-cache-length))
+                           (values (line-%chars line)
+                                   0
+                                   0
+                                   (length (line-%chars line))))
+      (loop with col = 0 with pos = 0
+        do (when (eql pos gap-start) (setq pos gap-end))
+        while (and (< pos end-pos) (< col column))
+        do (incf col (if (eql (schar chars pos) #\tab)
+                           (- tab-spaces (mod col tab-spaces))
+                           1))
+        do (incf pos)
+        finally (return (unless (< col column)
+                          (move-to-position mark pos line)))))))
+
 
 ;;;; Regions.
 
@@ -461,11 +514,14 @@
 (defvar *disembodied-buffer-counter* 0
   "``Buffer'' given to lines in regions not in any buffer.")
 
+(defun next-disembodied-buffer-counter ()
+  (ccl::atomic-incf *disembodied-buffer-counter*))
+
 (defun make-empty-region ()
   "Returns a region with start and end marks pointing to the start of one empty
   line.  The start mark is right-inserting and the end mark is left-inserting."
   (let* ((line (make-line :chars ""  :number 0
-			  :%buffer (incf *disembodied-buffer-counter*)))
+			  :%buffer (next-disembodied-buffer-counter)))
 	 (start (mark line 0 :right-inserting))
 	 (end (mark line 0 :left-inserting)))
     (internal-make-region start end)))

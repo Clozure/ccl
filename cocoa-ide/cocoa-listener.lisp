@@ -26,23 +26,183 @@
 
 (def-cocoa-default *read-only-listener* :bool t "Do not allow editing old listener output")
 
-;;; Setup the server end of a pty pair.
-(defun setup-server-pty (pty)
-  (set-tty-raw pty)
-  pty)
+(defun hemlock-ext:read-only-listener-p ()
+  *read-only-listener*)
 
-;;; Setup the client end of a pty pair.
-(defun setup-client-pty (pty)
-  ;; Since the same (Unix) process will be reading from and writing
-  ;; to the pty, it's critical that we make the pty non-blocking.
-  ;; Has this been true for the last few years (native threads) ?
-  ;(fd-set-flag pty #$O_NONBLOCK)
-  (set-tty-raw pty)
-  #+no
-  (disable-tty-local-modes pty (logior #$ECHO #$ECHOCTL #$ISIG))
-  #+no
-  (disable-tty-output-modes pty #$ONLCR)  
-  pty)
+
+(defclass cocoa-listener-input-stream (fundamental-character-input-stream)
+  ((queue :initform ())
+   (queue-lock :initform (make-lock))
+   (read-lock :initform (make-lock))
+   (queue-semaphore :initform (make-semaphore)) ;; total queue count
+   (text-semaphore :initform (make-semaphore))  ;; text-only queue count
+   (cur-string :initform nil)
+   (cur-string-pos :initform 0)
+   (cur-env :initform nil)
+   (cur-sstream :initform nil)))
+
+(defmethod dequeue-listener-char ((stream cocoa-listener-input-stream) wait-p)
+  (with-slots (queue queue-lock read-lock queue-semaphore text-semaphore cur-string cur-string-pos) stream
+    (with-lock-grabbed (read-lock)
+      (or (with-lock-grabbed (queue-lock)
+            (when (< cur-string-pos (length cur-string))
+              (prog1 (aref cur-string cur-string-pos) (incf cur-string-pos))))
+          (loop
+            (unless (if wait-p
+                      (wait-on-semaphore text-semaphore nil "Listener Input")
+                      (timed-wait-on-semaphore text-semaphore 0))
+              (return nil))
+            (assert (timed-wait-on-semaphore queue-semaphore 0) () "queue/text mismatch!")
+            (with-lock-grabbed (queue-lock)
+              (let* ((s (find-if #'stringp queue)))
+                (assert s () "queue/semaphore mismatch!")
+                (setq queue (delq s queue 1))
+                (when (< 0 (length s))
+                  (setf cur-string s cur-string-pos 1)
+                  (return (aref s 0))))))))))
+
+(defmethod ccl::read-toplevel-form ((stream cocoa-listener-input-stream) eof-value)
+  (with-slots (queue queue-lock read-lock queue-semaphore text-semaphore cur-string cur-string-pos cur-sstream cur-env) stream
+    (with-lock-grabbed (read-lock)
+      (loop
+        (when cur-sstream
+          #+gz (log-debug "About to recursively read from sstring in env: ~s" cur-env)
+          (let* ((env cur-env)
+                 (form (progv (car env) (cdr env)
+                         (ccl::read-toplevel-form cur-sstream eof-value)))
+                 (last-form-in-selection (not (listen cur-sstream))))
+            #+gz (log-debug " --> ~s" form)
+            (when last-form-in-selection
+              (setf cur-sstream nil cur-env nil))
+            (return (values form env (or last-form-in-selection ccl::*verbose-eval-selection*)))))
+        (when (with-lock-grabbed (queue-lock)
+                (loop
+                  unless (< cur-string-pos (length cur-string)) return nil
+                  unless (whitespacep (aref cur-string cur-string-pos)) return t
+                  do (incf cur-string-pos)))
+          (return (values (call-next-method) nil t)))
+        (wait-on-semaphore queue-semaphore nil "Toplevel Read")
+        (let ((val (with-lock-grabbed (queue-lock) (pop queue))))
+          (cond ((stringp val)
+                 (assert (timed-wait-on-semaphore text-semaphore 0) () "text/queue mismatch!")
+                 (setq cur-string val cur-string-pos 0))
+                (t
+                 (destructuring-bind (string package-name pathname) val
+                   (let ((env (cons '(*loading-file-source-file*) (list pathname))))
+                     (when package-name
+                       (push '*package* (car env))
+                       (push (ccl::pkg-arg package-name) (cdr env)))
+                     (setf cur-sstream (make-string-input-stream string) cur-env env))))))))))
+
+(defmethod enqueue-toplevel-form ((stream cocoa-listener-input-stream) string &key package-name pathname)
+  (with-slots (queue-lock queue queue-semaphore) stream
+    (with-lock-grabbed (queue-lock)
+      (setq queue (nconc queue (list (list string package-name pathname))))
+      (signal-semaphore queue-semaphore))))
+
+(defmethod enqueue-listener-input ((stream cocoa-listener-input-stream) string)
+  (with-slots (queue-lock queue queue-semaphore text-semaphore) stream
+    (with-lock-grabbed (queue-lock)
+      (setq queue (nconc queue (list string)))
+      (signal-semaphore queue-semaphore)
+      (signal-semaphore text-semaphore))))
+
+(defmethod stream-read-char-no-hang ((stream cocoa-listener-input-stream))
+  (dequeue-listener-char stream nil))
+
+(defmethod stream-read-char ((stream cocoa-listener-input-stream))
+  (dequeue-listener-char stream t))
+
+(defmethod stream-unread-char ((stream cocoa-listener-input-stream) char)
+  ;; Can't guarantee the right order of reads/unreads, just make sure not to
+  ;; introduce any internal inconsistencies (and dtrt for the non-conflict case).
+  (with-slots (queue queue-lock queue-semaphore text-semaphore cur-string cur-string-pos) stream
+    (with-lock-grabbed (queue-lock)
+      (cond ((>= cur-string-pos (length cur-string))
+             (push (string char) queue)
+             (signal-semaphore queue-semaphore)
+             (signal-semaphore text-semaphore))
+            ((< 0 cur-string-pos)
+             (decf cur-string-pos)
+             (setf (aref cur-string cur-string-pos) char))
+            (t (setf cur-string (concatenate 'string (string char) cur-string)))))))
+
+(defmethod ccl::stream-eof-transient-p ((stream cocoa-listener-input-stream))
+  t)
+
+(defmethod stream-clear-input ((stream cocoa-listener-input-stream))
+  (with-slots (queue-lock cur-string cur-string-pos cur-sstream cur-env) stream
+    (with-lock-grabbed (queue-lock)
+      (setf cur-string nil cur-string-pos 0 cur-sstream nil cur-env nil))))
+
+(defparameter $listener-flush-limit 100)
+
+(defclass cocoa-listener-output-stream (fundamental-character-output-stream)
+  ((lock :initform (make-lock))
+   (hemlock-view :initarg :hemlock-view)
+   (data :initform (make-array (1+ $listener-flush-limit)
+                               :adjustable t :fill-pointer 0
+                               :element-type 'character))))
+
+(defmethod stream-element-type ((stream cocoa-listener-output-stream))
+  (with-slots (data) stream
+    (array-element-type data)))
+
+(defmethod ccl:stream-write-char ((stream cocoa-listener-output-stream) char)
+  (with-slots (data lock) stream
+    (when (with-lock-grabbed (lock)
+	    (>= (vector-push-extend char data) $listener-flush-limit))
+      (stream-force-output stream))))
+
+;; This isn't really thread safe, but it's not too bad...  I'll take a chance - trying
+;; to get it to execute in the gui thread is too deadlock-prone.
+(defmethod hemlock-listener-output-mark-column ((view hi::hemlock-view))
+  (let* ((output-region (hi::variable-value 'hemlock::current-output-font-region
+					    :buffer (hi::hemlock-view-buffer view))))
+    (hi::mark-charpos (hi::region-end output-region))))
+
+;; TODO: doesn't do the right thing for embedded tabs (in buffer or data)
+(defmethod ccl:stream-line-column ((stream cocoa-listener-output-stream))
+  (with-slots (hemlock-view data lock) stream
+    (with-lock-grabbed (lock)
+      (let* ((n (length data))
+             (pos (position #\Newline data :from-end t)))
+        (if (null pos)
+          (+ (hemlock-listener-output-mark-column hemlock-view) n)
+          (- n pos 1))))))
+
+(defmethod ccl:stream-fresh-line  ((stream cocoa-listener-output-stream))
+  (with-slots (hemlock-view data lock) stream
+    (when (with-lock-grabbed (lock)
+            (let ((n (length data)))
+              (unless (if (= n 0)
+                        (= (hemlock-listener-output-mark-column hemlock-view) 0)
+                        (eq (aref data (1- n)) #\Newline))
+                (>= (vector-push-extend #\Newline data) $listener-flush-limit))))
+      (stream-force-output stream))))
+
+(defmethod ccl::stream-finish-output ((stream cocoa-listener-output-stream))
+  (stream-force-output stream))
+
+(defmethod ccl:stream-force-output ((stream cocoa-listener-output-stream))
+  (if (typep *current-process* 'appkit-process)
+    (with-slots (hemlock-view data lock) stream
+      (with-lock-grabbed (lock)
+        (when (> (fill-pointer data) 0)
+          (append-output hemlock-view data)
+          (setf (fill-pointer data) 0))))
+    (with-slots (data) stream
+      (when (> (fill-pointer data) 0)
+        (queue-for-gui #'(lambda () (stream-force-output stream)))))))
+
+(defmethod ccl:stream-clear-output ((stream cocoa-listener-output-stream))
+  (with-slots (data lock) stream
+    (with-lock-grabbed (lock)
+      (setf (fill-pointer data) 0))))
+
+(defmethod ccl:stream-line-length ((stream cocoa-listener-output-stream))
+  ;; TODO: ** compute length from window size **
+  80)
 
 
 (defloadvar *cocoa-listener-count* 0)
@@ -50,64 +210,45 @@
 (defclass cocoa-listener-process (process)
     ((input-stream :reader cocoa-listener-process-input-stream)
      (output-stream :reader cocoa-listener-process-output-stream)
-     (input-peer-stream :reader cocoa-listener-process-input-peer-stream)
      (backtrace-contexts :initform nil
                          :accessor cocoa-listener-process-backtrace-contexts)
-     (window :reader cocoa-listener-process-window)
-     (buffer :initform nil :reader cocoa-listener-process-buffer)))
+     (window :reader cocoa-listener-process-window)))
   
 
-(defun new-cocoa-listener-process (procname input-fd output-fd peer-fd window buffer)
-  (let* ((input-stream (ccl::make-selection-input-stream
-                        input-fd
-                        :peer-fd peer-fd
-                        :elements-per-buffer (#_fpathconf
-                                              input-fd
-                                              #$_PC_MAX_INPUT)
-                        :encoding :utf-8))
-         (output-stream (ccl::make-fd-stream output-fd :direction :output
-					     :sharing :lock
-					     :elements-per-buffer
-					     (#_fpathconf
-					      output-fd
-					      #$_PC_MAX_INPUT)
-					     :encoding :utf-8))
-         (peer-stream (ccl::make-fd-stream peer-fd :direction :output
-					   :sharing :lock
-					   :elements-per-buffer
-					   (#_fpathconf
-					    peer-fd
-					    #$_PC_MAX_INPUT)
-					   :encoding :utf-8))
+(defun new-cocoa-listener-process (procname window)
+  (let* ((input-stream (make-instance 'cocoa-listener-input-stream))
+         (output-stream (make-instance 'cocoa-listener-output-stream
+                          :hemlock-view (hemlock-view window)))
+         
          (proc
           (ccl::make-mcl-listener-process 
            procname
            input-stream
            output-stream
+           ;; cleanup function
            #'(lambda ()
-               (let* ((buf (find *current-process* hi:*buffer-list*
-                                 :key #'hi::buffer-process))
-                      (doc (if buf (hi::buffer-document buf))))
-                 (when doc
-                   (setf (hi::buffer-process buf) nil)
-                   (#/performSelectorOnMainThread:withObject:waitUntilDone:
-                    doc
-                    (@selector #/close)
-                    +null-ptr+
-                    nil))))
+               (mapcar #'(lambda (buf)
+                           (when (eq (buffer-process buf) *current-process*)
+                             (let ((doc (hi::buffer-document buf)))
+                               (when doc
+                                 (setf (hemlock-document-process doc) nil) ;; so #/close doesn't kill it.
+                                 (#/performSelectorOnMainThread:withObject:waitUntilDone:
+                                  doc
+                                  (@selector #/close)
+                                  +null-ptr+
+                                  nil)))))
+                       hi:*buffer-list*))
            :initial-function
            #'(lambda ()
                (setq ccl::*listener-autorelease-pool* (create-autorelease-pool))
                (ccl::listener-function))
+           :echoing nil
            :class 'cocoa-listener-process)))
     (setf (slot-value proc 'input-stream) input-stream)
     (setf (slot-value proc 'output-stream) output-stream)
-    (setf (slot-value proc 'input-peer-stream) peer-stream)
     (setf (slot-value proc 'window) window)
-    (setf (slot-value proc 'buffer) buffer)
     proc))
-         
-
+  
 (defclass hemlock-listener-frame (hemlock-frame)
     ()
   (:metaclass ns:+ns-object))
@@ -115,12 +256,7 @@
 
 
 (defclass hemlock-listener-window-controller (hemlock-editor-window-controller)
-    ((filehandle :foreign-type :id)	;Filehandle for I/O
-     (clientfd :foreign-type :int)	;Client (listener)'s side of pty
-     (nextra :foreign-type :int)        ;count of untranslated bytes remaining
-     (translatebuf :foreign-type :address) ;buffer for utf8 translation
-     (bufsize :foreign-type :int)       ;size of translatebuf
-     )
+    ()
   (:metaclass ns:+ns-object)
   )
 (declaim (special hemlock-listener-window-controller))
@@ -132,95 +268,12 @@
   (declare (ignorable edited)))
  
 
-(objc:defmethod #/initWithWindow: ((self hemlock-listener-window-controller) w)
-  (let* ((new (call-next-method w)))
-    (unless (%null-ptr-p new)
-      (multiple-value-bind (server client) (ignore-errors (open-pty-pair))
-	(when server
-	  (let* ((fh (make-instance
-		      'ns:ns-file-handle
-		      :with-file-descriptor (setup-server-pty server)
-		      :close-on-dealloc t)))
-	    (setf (slot-value new 'filehandle) fh)
-	    (setf (slot-value new 'clientfd) (setup-client-pty client))
-            (let* ((bufsize #$BUFSIZ)
-                   (buffer (#_malloc bufsize)))
-              (setf (slot-value new 'translatebuf) buffer
-                    (slot-value new 'bufsize) bufsize
-                    (slot-value new 'nextra) 0))
-            (#/addObserver:selector:name:object:
-             (#/defaultCenter ns:ns-notification-center)
-             new
-             (@selector #/gotData:)
-             #&NSFileHandleReadCompletionNotification
-             fh)
-            (#/readInBackgroundAndNotify fh)))))
-    new))
-
-(objc:defmethod (#/gotData: :void) ((self hemlock-listener-window-controller)
-                                    notification)
-  (with-slots (filehandle nextra translatebuf bufsize) self
-    (let* ((data (#/objectForKey: (#/userInfo notification)
-                                  #&NSFileHandleNotificationDataItem))
-	   (document (#/document self))
-           (encoding (load-time-value (get-character-encoding :utf-8)))
-	   (data-length (#/length data))
-	   (buffer (hemlock-document-buffer document))
-           (n nextra)
-           (cursize bufsize)
-           (need (+ n data-length))
-           (xlate translatebuf)
-	   (fh filehandle))
-      (when (> need cursize)
-        (let* ((new (#_malloc need)))
-          (dotimes (i n) (setf (%get-unsigned-byte new i)
-                               (%get-unsigned-byte xlate i)))
-          (#_free xlate)
-          (setq xlate new translatebuf new bufsize need)))
-      #+debug (#_NSLog #@"got %d bytes of data" :int data-length)
-      (with-macptrs ((target (%inc-ptr xlate n)))
-        (#/getBytes:range: data target (ns:make-ns-range 0 data-length)))
-      (let* ((total (+ n data-length)))
-        (multiple-value-bind (nchars noctets-used)
-            (funcall (ccl::character-encoding-length-of-memory-encoding-function encoding)
-                     xlate
-                     total
-                     0)
-          (let* ((string (make-string nchars)))
-            (funcall (ccl::character-encoding-memory-decode-function encoding)
-                     xlate
-                     noctets-used
-                     0
-                     string)
-            (unless (zerop (setq n (- total noctets-used)))
-              ;; By definition, the number of untranslated octets
-              ;; can't be more than 3.
-              (dotimes (i n)
-                (setf (%get-unsigned-byte xlate i)
-                      (%get-unsigned-byte xlate (+ noctets-used i)))))
-            (setq nextra n)
-            (hi::enqueue-buffer-operation
-             buffer
-             #'(lambda ()
-                 (unwind-protect
-                      (progn
-                        (hi::buffer-document-begin-editing buffer)
-                        (hemlock::append-buffer-output buffer string))
-                   (hi::buffer-document-end-editing buffer))))
-            (#/readInBackgroundAndNotify fh)))))))
-	     
-
-
-(objc:defmethod (#/dealloc :void) ((self hemlock-listener-window-controller))
-  (#/removeObserver: (#/defaultCenter ns:ns-notification-center) self)
-  (call-next-method))
-
 (objc:defmethod #/windowTitleForDocumentDisplayName: ((self hemlock-listener-window-controller) name)
   (let* ((doc (#/document self)))
     (if (or (%null-ptr-p doc)
             (not (%null-ptr-p (#/fileURL doc))))
       (call-next-method name)
-      (let* ((buffer (hemlock-document-buffer doc))
+      (let* ((buffer (hemlock-buffer doc))
              (bufname (if buffer (hi::buffer-name buffer))))
         (if bufname
           (%make-nsstring bufname)
@@ -231,14 +284,22 @@
 
 
 (defclass hemlock-listener-document (hemlock-editor-document)
-    ()
+  ((process :reader %hemlock-document-process :writer (setf hemlock-document-process)))
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-listener-document))
+
+(defgeneric hemlock-document-process (doc)
+  (:method ((unknown t)) nil)
+  (:method ((doc hemlock-listener-document)) (%hemlock-document-process doc)))
+
+;; Nowadays this is nil except for listeners.
+(defun buffer-process (buffer)
+  (hemlock-document-process (hi::buffer-document buffer)))
 
 (defmethod update-buffer-package ((doc hemlock-listener-document) buffer)
   (declare (ignore buffer)))
 
-(defmethod hi::document-encoding-name ((doc hemlock-listener-document))
+(defmethod document-encoding-name ((doc hemlock-listener-document))
   "UTF-8")
 
 (defmethod user-input-style ((doc hemlock-listener-document))
@@ -247,13 +308,16 @@
 (defmethod textview-background-color ((doc hemlock-listener-document))
   *listener-background-color*)
 
-
-(defun hemlock::listener-document-send-string (document string)
-  (let* ((buffer (hemlock-document-buffer document))
-         (process (if buffer (hi::buffer-process buffer))))
-    (if process
-      (hi::send-string-to-listener-process process string))))
-
+;; For use with the :process-info listener modeline field
+(defmethod hemlock-ext:buffer-process-description (buffer)
+  (let ((proc (buffer-process buffer)))
+    (when proc
+      (format nil "~a(~d) [~a]"
+              (ccl:process-name proc)
+              (ccl::process-serial-number proc)
+              ;; TODO: this doesn't really work as a modeline item, because the modeline
+              ;; doesn't get notified when it changes.
+              (ccl:process-whostate proc)))))
 
 (objc:defmethod #/topListener ((self +hemlock-listener-document))
   (let* ((all-documents (#/orderedDocuments *NSApp*)))
@@ -263,21 +327,16 @@
 	  (return doc))))))
 
 (defun symbol-value-in-top-listener-process (symbol)
-  (let* ((listenerdoc (#/topListener hemlock-listener-document))
-	 (buffer (unless (%null-ptr-p listenerdoc)
-		   (hemlock-document-buffer listenerdoc)))
-	 (process (if buffer (hi::buffer-process buffer))))
+  (let* ((process (hemlock-document-process (#/topListener hemlock-listener-document))))
      (if process
        (ignore-errors (symbol-value-in-process symbol process))
        (values nil t))))
   
-(defun hi::top-listener-output-stream ()
-  (let* ((doc (#/topListener hemlock-listener-document)))
-    (unless (%null-ptr-p doc)
-      (let* ((buffer (hemlock-document-buffer doc))
-             (process (if buffer (hi::buffer-process buffer))))
-        (when (typep process 'cocoa-listener-process)
-          (cocoa-listener-process-output-stream process))))))
+(defun hemlock-ext:top-listener-output-stream ()
+  (let* ((process (hemlock-document-process (#/topListener hemlock-listener-document))))
+    (when process
+      (setq process (require-type process 'cocoa-listener-process))
+      (cocoa-listener-process-output-stream process))))
 
 
 
@@ -293,11 +352,11 @@
 			    "Listener"
 			    (format nil
 				    "Listener-~d" *cocoa-listener-count*)))
-	     (buffer (hemlock-document-buffer doc)))
+	     (buffer (hemlock-buffer doc)))
 	(setf (hi::buffer-pathname buffer) nil
 	      (hi::buffer-minor-mode buffer "Listener") t
 	      (hi::buffer-name buffer) listener-name)
-        (hi::sub-set-buffer-modeline-fields buffer hemlock::*listener-modeline-fields*)))
+        (hi::set-buffer-modeline-fields buffer hemlock::*listener-modeline-fields*)))
     doc))
 
 (def-cocoa-default *initial-listener-x-pos* :float -100.0f0 "X position of upper-left corner of initial listener")
@@ -311,6 +370,9 @@
   (if (zerop (decf *cocoa-listener-count*))
     (setq *next-listener-x-pos* nil
           *next-listener-y-pos* nil))
+  (let* ((p (shiftf (hemlock-document-process self) nil)))
+    (when p
+      (process-kill p)))
   (call-next-method))
 
 (objc:defmethod (#/makeWindowControllers :void) ((self hemlock-listener-document))
@@ -332,7 +394,7 @@
 	 (controller (make-instance
 		      'hemlock-listener-window-controller
 		      :with-window window))
-	 (listener-name (hi::buffer-name (hemlock-document-buffer self))))
+	 (listener-name (hi::buffer-name (hemlock-buffer self))))
     (with-slots (styles) textstorage
       ;; We probably should be more disciplined about
       ;; Cocoa memory management.  Having retain/release in
@@ -357,10 +419,8 @@
       (let* ((new-point (#/cascadeTopLeftFromPoint: window current-point)))
         (setf *next-listener-x-pos* (ns:ns-point-x new-point)
               *next-listener-y-pos* (ns:ns-point-y new-point))))
-    (setf (hi::buffer-process (hemlock-document-buffer self))
-	  (let* ((tty (slot-value controller 'clientfd))
-		 (peer-tty (#/fileDescriptor (slot-value controller 'filehandle))))
-	    (new-cocoa-listener-process listener-name tty tty peer-tty window (hemlock-document-buffer self))))
+    (setf (hemlock-document-process self)
+          (new-cocoa-listener-process listener-name window))
     controller))
 
 (objc:defmethod (#/textView:shouldChangeTextInRange:replacementString: :<BOOL>)
@@ -371,11 +431,11 @@
   (declare (ignore tv string))
   (let* ((range-start (ns:ns-range-location range))
          (range-end (+ range-start (ns:ns-range-length range)))
-         (buffer (hemlock-document-buffer self))
+         (buffer (hemlock-buffer self))
          (protected-region (hi::buffer-protected-region buffer)))
     (if protected-region
-      (let* ((prot-start (mark-absolute-position (hi::region-start protected-region)))
-             (prot-end (mark-absolute-position (hi::region-end protected-region))))
+      (let* ((prot-start (hi:mark-absolute-position (hi::region-start protected-region)))
+             (prot-end (hi:mark-absolute-position (hi::region-end protected-region))))
         (not (or (and (>= range-start prot-start)
                       (< range-start prot-end))
                  (and (>= range-end prot-start)
@@ -386,27 +446,25 @@
 ;;; Action methods
 (objc:defmethod (#/interrupt: :void) ((self hemlock-listener-document) sender)
   (declare (ignore sender))
-  (let* ((buffer (hemlock-document-buffer self))
-         (process (if buffer (hi::buffer-process buffer))))
-    (when (typep process 'cocoa-listener-process)
+  (let* ((process (hemlock-document-process self)))
+    (when process
       (ccl::force-break-in-listener process))))
 
 
 
 (objc:defmethod (#/exitBreak: :void) ((self hemlock-listener-document) sender)
   (declare (ignore sender))
-  (let* ((buffer (hemlock-document-buffer self))
-         (process (if buffer (hi::buffer-process buffer))))
-    (when (typep process 'cocoa-listener-process)
+  (let* ((process (hemlock-document-process self)))
+    (log-debug  "~&exitBreak process ~s" process)
+    (when process
       (process-interrupt process #'abort-break))))
 
 (defmethod listener-backtrace-context ((proc cocoa-listener-process))
   (car (cocoa-listener-process-backtrace-contexts proc)))
 
 (objc:defmethod (#/backtrace: :void) ((self hemlock-listener-document) sender)
-  (let* ((buffer (hemlock-document-buffer self))
-         (process (if buffer (hi::buffer-process buffer))))
-    (when (typep process 'cocoa-listener-process)
+  (let* ((process (hemlock-document-process self)))
+    (when process
       (let* ((context (listener-backtrace-context process)))
         (when context
           (#/showWindow: (backtrace-controller-for-context context) sender))))))
@@ -437,18 +495,16 @@
                                             (ccl::bt.break-level context)))))))
                             
 (objc:defmethod (#/restarts: :void) ((self hemlock-listener-document) sender)
-  (let* ((buffer (hemlock-document-buffer self))
-         (process (if buffer (hi::buffer-process buffer))))
-    (when (typep process 'cocoa-listener-process)
+  (let* ((process (hemlock-document-process self)))
+    (when process
       (let* ((context (listener-backtrace-context process)))
         (when context
           (#/showWindow: (restarts-controller-for-context context) sender))))))
 
 (objc:defmethod (#/continue: :void) ((self hemlock-listener-document) sender)
   (declare (ignore sender))
-  (let* ((buffer (hemlock-document-buffer self))
-         (process (if buffer (hi::buffer-process buffer))))
-    (when (typep process 'cocoa-listener-process)
+  (let* ((process (hemlock-document-process self)))
+    (when process
       (let* ((context (listener-backtrace-context process)))
         (when context
           (process-interrupt process #'invoke-restart-interactively 'continue))))))
@@ -466,9 +522,8 @@
   ;; Return two values: the first is true if the second is definitive.
   ;; So far, all actions demand that there be an underlying process, so
   ;; check for that first.
-  (let* ((buffer (hemlock-document-buffer doc))
-         (process (if buffer (hi::buffer-process buffer))))
-    (if (typep process 'cocoa-listener-process)
+  (let* ((process (hemlock-document-process doc)))
+    (if process
       (let* ((action (#/action item)))
         (cond
           ((or (eql action (@selector #/revertDocumentToSaved:))
@@ -507,43 +562,28 @@
           (setq name nick len nicklen))))))
 
 (defmethod ui-object-note-package ((app ns:ns-application) package)
-  (with-autorelease-pool
-      (process-interrupt *cocoa-event-process*
-			 #'(lambda (proc name)
-			     (dolist (buf hi::*buffer-list*)
-			       (when (eq proc (hi::buffer-process buf))
-				 (setf (hi::variable-value 'hemlock::current-package :buffer buf) name))))
-			 *current-process*
-			 (shortest-package-name package))))
+  (let ((proc *current-process*)
+        (name (shortest-package-name package)))
+    (execute-in-gui #'(lambda ()
+                        (dolist (buf hi::*buffer-list*)
+                          (when (eq proc (buffer-process buf))
+                            (setf (hi::variable-value 'hemlock::current-package :buffer buf) name)))))))
+
+
+(defmethod eval-in-listener-process ((process cocoa-listener-process)
+                                     string &key path package)
+  (enqueue-toplevel-form (cocoa-listener-process-input-stream process) string
+                         :package-name package :pathname path))
 
 ;;; This is basically used to provide INPUT to the listener process, by
-;;; writing to an fd which is conntected to that process's standard
+;;; writing to an fd which is connected to that process's standard
 ;;; input.
-(defmethod hi::send-string-to-listener-process ((process cocoa-listener-process)
-                                                string &key path package)
-  (let* ((stream (cocoa-listener-process-input-peer-stream process)))
-    (labels ((out-raw-char (ch)
-               (write-char ch stream))
-             (out-ch (ch)
-               (when (or (eql ch #\^v)
-                         (eql ch #\^p)
-                         (eql ch #\newline)
-                         (eql ch #\^q)
-                         (eql ch #\^d))
-                 (out-raw-char #\^q))
-               (out-raw-char ch))
-             (out-string (s)
-               (dotimes (i (length s))
-                 (out-ch (char s i)))))
-      (out-raw-char #\^p)
-      (when package (out-string package))
-      (out-raw-char #\newline)
-      (out-raw-char #\^v)
-      (when path (out-string path))
-      (out-raw-char #\newline)
-      (out-string string)
-      (out-raw-char #\^d)
-      (force-output stream))))
+(defun hemlock-ext:send-string-to-listener (listener-buffer string)
+  (let* ((process (buffer-process listener-buffer)))
+    (unless process
+      (error "No listener process found for ~s" listener-buffer))
+    (enqueue-listener-input (cocoa-listener-process-input-stream process) string)))
+
 
 
 (defun hemlock::evaluate-input-selection (selection)
@@ -553,47 +593,44 @@
 						    selection)
   (declare (ignore selection))
   (#/performSelectorOnMainThread:withObject:waitUntilDone:
-   (#/delegate *NSApp*) (@selector #/ensureListener:) +null-ptr+ #$YES)
-  (let* ((top-listener-document (#/topListener hemlock-listener-document)))
-    (if top-listener-document
-      (let* ((buffer (hemlock-document-buffer top-listener-document)))
-	(if buffer
-	  (let* ((proc (hi::buffer-process buffer)))
-	    (if (typep proc 'cocoa-listener-process)
-	      proc)))))))
+   (#/delegate *NSApp*)
+   (@selector #/ensureListener:)
+   +null-ptr+
+   #$YES)
+  (hemlock-document-process (#/topListener hemlock-listener-document)))
 
 (defmethod ui-object-eval-selection ((app ns:ns-application)
 				     selection)
   (let* ((target-listener (ui-object-choose-listener-for-selection
 			   app selection)))
-    (if (typep target-listener 'cocoa-listener-process)
-        (destructuring-bind (package path string) selection
-        (hi::send-string-to-listener-process target-listener string :package package :path path)))))
+    (when target-listener
+      (destructuring-bind (package path string) selection
+        (eval-in-listener-process target-listener string :package package :path path)))))
 
 (defmethod ui-object-load-buffer ((app ns:ns-application) selection)
   (let* ((target-listener (ui-object-choose-listener-for-selection app nil)))
-    (if (typep target-listener 'cocoa-listener-process)
-        (destructuring-bind (package path) selection
-          (let ((string (format nil "(load ~S)" path)))
-            (hi::send-string-to-listener-process target-listener string :package package :path path))))))
+    (when target-listener
+      (destructuring-bind (package path) selection
+        (let ((string (format nil "(load ~S)" path)))
+          (eval-in-listener-process target-listener string :package package :path path))))))
 
 (defmethod ui-object-compile-buffer ((app ns:ns-application) selection)
   (let* ((target-listener (ui-object-choose-listener-for-selection app nil)))
-    (if (typep target-listener 'cocoa-listener-process)
-        (destructuring-bind (package path) selection
-          (let ((string (format nil "(compile-file ~S)" path)))
-            (hi::send-string-to-listener-process target-listener string :package package :path path))))))
+    (when target-listener
+      (destructuring-bind (package path) selection
+        (let ((string (format nil "(compile-file ~S)" path)))
+          (eval-in-listener-process target-listener string :package package :path path))))))
 
 (defmethod ui-object-compile-and-load-buffer ((app ns:ns-application) selection)
   (let* ((target-listener (ui-object-choose-listener-for-selection app nil)))
-    (if (typep target-listener 'cocoa-listener-process)
-        (destructuring-bind (package path) selection
-          (let ((string (format nil "(progn (compile-file ~S)(load ~S))" 
-                                path
-                                (make-pathname :directory (pathname-directory path)
-                                               :name (pathname-name path)
-                                               :type (pathname-type path)))))
-            (hi::send-string-to-listener-process target-listener string :package package :path path))))))
+    (when target-listener
+      (destructuring-bind (package path) selection
+        (let ((string (format nil "(progn (compile-file ~S)(load ~S))" 
+                              path
+                              (make-pathname :directory (pathname-directory path)
+                                             :name (pathname-name path)
+                                             :type (pathname-type path)))))
+          (eval-in-listener-process target-listener string :package package :path path))))))
 
        
-  
+ 

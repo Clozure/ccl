@@ -188,12 +188,25 @@
    letters are in one list sorted by most recently used.  \"Completion Bucket
    Size\" limits the number of completions saved in each list.")
 
+(defvar *completion-modeline-field* (modeline-field :completion))
+
 (defcommand "Completion Mode" (p)
   "Toggles Completion Mode in the current buffer."
   "Toggles Completion Mode in the current buffer."
   (declare (ignore p))
-  (setf (buffer-minor-mode (current-buffer) "Completion")
-	(not (buffer-minor-mode (current-buffer) "Completion"))))
+  (let ((buffer (current-buffer)))
+    (setf (buffer-minor-mode buffer "Completion")
+          (not (buffer-minor-mode buffer "Completion")))
+    (let ((fields (buffer-modeline-fields buffer)))
+      (if (buffer-minor-mode buffer "Completion")
+        (unless (member *completion-modeline-field* fields)
+          (hi::set-buffer-modeline-fields buffer
+                                          (append fields
+                                                  (list *completion-modeline-field*))))
+        (when (member *completion-modeline-field* fields)
+          (hi::set-buffer-modeline-fields buffer
+                                          (remove *completion-modeline-field*
+                                                  fields)))))))
 
 
 ;;; Consecutive alphanumeric keystrokes that start a word cause a possible
@@ -220,7 +233,7 @@
    argument insert the character that many times."
   "Implements \"Completion Self Insert\". Calling this function is not
    meaningful."
-  (let ((char (hemlock-ext:key-event-char *last-key-event-typed*)))
+  (let ((char (last-char-typed)))
     (unless char (editor-error "Can't insert that character."))
     (cond ((completion-char-p char)
 	   ;; If start of word not already in *completion-prefix*, put it 
@@ -489,29 +502,25 @@
 
 (defvar *completion-mode-possibility* "")
 
-(defvar *completion-modeline-field* (modeline-field :completion))
-
 (defun display-possible-completion (prefix
 				    &optional (prefix-length (length prefix)))
   (let ((old *completion-mode-possibility*))
     (setq *completion-mode-possibility*
 	  (or (find-completion prefix prefix-length) ""))
     (unless (eq old *completion-mode-possibility*)
-      (update-modeline-field *echo-area-buffer* *echo-area-window*
-			     *completion-modeline-field*))))
+      (hi::note-modeline-change (current-buffer)))))
 
 (defun clear-completion-display ()
   (unless (= (length (the simple-string *completion-mode-possibility*)) 0)
     (setq *completion-mode-possibility* "")
-    (update-modeline-field *echo-area-buffer* *echo-area-window*
-			   *completion-modeline-field*)))
+    (hi::note-modeline-change (current-buffer))))
 
-
+#|
 ;;; COMPLETION-REDISPLAY-FUN erases any completion displayed in the status line.
 ;;;
 (defun completion-redisplay-fun (window)
   (declare (ignore window))
   (unless (eq (last-command-type) :completion-self-insert)
     (clear-completion-display)))
-;;;
 (add-hook redisplay-hook #'completion-redisplay-fun)
+|#

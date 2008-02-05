@@ -101,12 +101,12 @@
 (defun cgfloat (number)
   (float number ccl::+cgfloat-zero+))
 
-(defun color-values-to-nscolor (red green blue alpha)
+(defun color-values-to-nscolor (red green blue &optional alpha)
   (#/colorWithCalibratedRed:green:blue:alpha: ns:ns-color
                                               (cgfloat red)
                                               (cgfloat green)
                                               (cgfloat blue)
-                                              (cgfloat alpha)))
+                                              (cgfloat (or alpha 1.0))))
 
 (defun windows ()
   (let* ((win-arr (#/orderedWindows *NSApp*))
@@ -115,11 +115,138 @@
       (push (#/objectAtIndex: win-arr i) ret))
     (nreverse ret)))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+
+(defvar *log-callback-errors* :backtrace)
+
+(defun maybe-log-callback-error (condition)
+  (when *log-callback-errors*
+    ;; Put these in separate ignore-errors, so at least some of it can get thru
+    (let ((emsg (ignore-errors (princ-to-string condition))))
+      (ignore-errors (clear-output *debug-io*))
+      (ignore-errors (format *debug-io* "~&Lisp error: ~s" (or emsg condition)))
+      (when (eq *log-callback-errors* :backtrace)
+        (let* ((err (nth-value 1 (ignore-errors (ccl:print-call-history :detailed-p t)))))
+          (when err
+            (ignore-errors (format *debug-io* "~&Error printing call history - "))
+            (ignore-errors (print err *debug-io*))
+            (ignore-errors (princ err *debug-io*))
+            (ignore-errors (force-output *debug-io*))))))))
+
+(defmacro with-callback-context (description &body body)
+  (let ((saved-debug-io (gensym)))
+    `(ccl::with-standard-abort-handling ,(format nil "Abort ~a" description)
+       (let ((,saved-debug-io *debug-io*))
+         (handler-bind ((error #'(lambda (condition)
+                                   (let ((*debug-io* ,saved-debug-io))
+                                     (maybe-log-callback-error condition)
+                                     (abort)))))
+           ,@body)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; utilities for executing in the cocoa event thread
+
+(defstatic *cocoa-thread-arg-id-map* (make-id-map))
+
+;; This is for debugging, it's preserved across queue-for-gui and bound
+;; so it can be seen in backtraces.
+(defvar *invoking-event-context* "unknown")
+(defvar *invoking-event-process* nil)
+
+(defun register-cocoa-thread-function (thunk result-handler context)
+  (assign-id-map-id *cocoa-thread-arg-id-map* (list* thunk
+						     result-handler
+						     (or context *invoking-event-context*)
+						     *current-process*)))
+
+(objc:defmethod (#/invokeLispFunction: :void) ((self ns:ns-application) id)
+  (invoke-lisp-function self id))
+
+(defmethod invoke-lisp-function ((self ns:ns-application) id)
+  (destructuring-bind (thunk result-handler context . invoking-process)
+		      (id-map-free-object *cocoa-thread-arg-id-map* (if (numberp id) id (#/longValue id)))
+    (handle-invoking-lisp-function thunk result-handler context invoking-process)))
+
+(defun execute-in-gui (thunk &key context)
+  "Execute thunk in the main cocoa thread, return whatever values it returns"
+  (if (typep *current-process* 'appkit-process)
+    (handle-invoking-lisp-function thunk nil context)
+    (if (or (not *nsapp*) (not (#/isRunning *nsapp*)))
+      (error "cocoa thread not available")
+      (let* ((return-values nil)
+             (result-handler #'(lambda (&rest values) (setq return-values values)))
+             (arg (make-instance 'ns:ns-number
+                    :with-long (register-cocoa-thread-function thunk result-handler context))))
+	(#/performSelectorOnMainThread:withObject:waitUntilDone:
+	 *nsapp*
+	 (@selector #/invokeLispFunction:)
+	 arg
+	 t)
+        (apply #'values return-values)))))
+
+
+(defconstant $lisp-function-event-subtype 17)
+
+(defclass lisp-application (ns:ns-application)
+    ((termp :foreign-type :<BOOL>))
+  (:metaclass ns:+ns-object))
+
+;;; I'm not sure if there's another way to recognize events whose
+;;; type is #$NSApplicationDefined.
+(objc:defmethod (#/sendEvent: :void) ((self lisp-application) e)
+  (if (and (eql (#/type e) #$NSApplicationDefined)
+	   (eql (#/subtype e) $lisp-function-event-subtype))
+    (invoke-lisp-function self (#/data1 e))
+    (call-next-method e)))
+
+;; This queues an event rather than just doing performSelectorOnMainThread, so that the
+;; action is deferred until the event thread is idle.
+(defun queue-for-gui (thunk &key result-handler context at-start)
+  "Queue thunk for execution in main cocoa thread and return immediately."
+  (execute-in-gui
+   #'(lambda () 
+       (let* ((e (#/otherEventWithType:location:modifierFlags:timestamp:windowNumber:context:subtype:data1:data2:
+		  ns:ns-event
+		  #$NSApplicationDefined
+		  (ns:make-ns-point 0 0)
+		  0
+		  0.0d0
+		  0
+		  +null-ptr+
+		  $lisp-function-event-subtype
+		  (register-cocoa-thread-function thunk result-handler context)
+		  0)))
+	 ;(#/retain e)
+	 (#/postEvent:atStart: *nsapp* e (not (null at-start)))))))
+
+(defun handle-invoking-lisp-function (thunk result-handler context &optional (invoking-process *current-process*))
+  ;; TODO: the point is to execute result-handler in the original process, but this will do for now.
+  (let* ((*invoking-event-process* invoking-process)
+	 (*invoking-event-context* context))
+    (if result-handler
+      (multiple-value-call result-handler (funcall thunk))
+      (funcall thunk))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; debugging
+
 (defun log-debug (format-string &rest args)
   (#_NSLog (ccl::%make-nsstring (apply #'format nil format-string args))))
 
+(defun nslog-condition (c)
+  (let* ((rep (format nil "~a" c)))
+    (with-cstrs ((str rep))
+      (with-nsstr (nsstr str (length rep))
+	(#_NSLog #@"Error in event loop: %@" :address nsstr)))))
+
+
+
 (defun assume-cocoa-thread ()
-  #+debug (assert (eq *current-process* *initial-process*)))
+  (assert (eq *current-process* ccl::*initial-process*)))
 
 (defmethod assume-not-editing ((whatever t)))
 

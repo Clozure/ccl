@@ -209,7 +209,7 @@
        #'(lambda ()
 	   (let ((mark (region-start region)))
 	     (delete-mark mark-or-region)
-	     (when (line-buffer (mark-line mark))
+	     (when (mark-buffer mark)
 	       (delete-mark mark)
 	       (delete-mark (region-end region)))))
        (make-delete-region-undo region mark-or-region)))

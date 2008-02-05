@@ -63,7 +63,7 @@
 (setf (character-attribute :paragraph-delimiter #\space) 1)
 (setf (character-attribute :paragraph-delimiter #\linefeed) 1)
 (setf (character-attribute :paragraph-delimiter
-			   #+CMU #\formfeed #+(or sbcl EXCL CLISP OpenMCL) #\page) 1)
+			   #+CMU #\formfeed #+(or sbcl EXCL CLISP Clozure) #\page) 1)
 (setf (character-attribute :paragraph-delimiter #\tab) 1)
 (setf (character-attribute :paragraph-delimiter #\newline) 1)
 
@@ -128,7 +128,7 @@
     (multiple-value-bind (command t-bindings)
 			 (get-command #k"Linefeed" :current)
       (declare (ignore command)) ;command is this one, so don't invoke it
-      (dolist (c t-bindings) (funcall *invoke-hook* c p)))
+      (dolist (c t-bindings) (invoke-command c p)))
     (indent-new-line-command nil)))
 
 
@@ -147,7 +147,7 @@
     (multiple-value-bind (command t-bindings)
 			 (get-command #k"Return" :current)
       (declare (ignore command)) ;command is this one, so don't invoke it
-      (dolist (c t-bindings) (funcall *invoke-hook* c p)))
+      (dolist (c t-bindings) (invoke-command c p)))
     (new-line-command nil)))
 
 
@@ -503,7 +503,7 @@
 (defun fill-region-break-line (fill-mark prefix prefix-length
 					  end-mark column)
   (with-mark ((mark1 fill-mark :left-inserting))
-    (move-to-column mark1 column)
+    (move-to-position mark1 column)
     (cond ((not (whitespace-attribute-p (next-character mark1)))
 	   (if (not (find-attribute mark1 :whitespace))
 	       (line-end mark1))

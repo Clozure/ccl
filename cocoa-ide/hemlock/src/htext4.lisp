@@ -125,7 +125,7 @@
 		 ;; fix up the marks of the lines in the middle and mash
 		 ;;line-%buffer:
 		 (do* ((line (line-next first-line) (line-next line))
-		       (count (incf *disembodied-buffer-counter*)))
+		       (count (next-disembodied-buffer-counter)))
 		      ((eq line last-line)
 		       (setf (line-%buffer last-line) count))
 		   (setf (line-%buffer line) count)
@@ -177,7 +177,7 @@
                           (new-chars (make-string num))
                           (new-line (make-line
                                      :chars new-chars  :number 0
-                                     :%buffer (incf *disembodied-buffer-counter*))))
+                                     :%buffer (next-disembodied-buffer-counter))))
                      (declare (simple-string new-chars))
                      (%sp-byte-blt (current-open-chars) (current-right-open-pos) new-chars 0 num) 
                      (setf (current-right-open-pos) new-right)
@@ -201,7 +201,7 @@
                           (saved-first-length (- first-length first-charpos))
                           (saved-first-chars (make-string saved-first-length))
                           (saved-last-chars (make-string last-charpos))
-                          (count (incf *disembodied-buffer-counter*))
+                          (count (next-disembodied-buffer-counter))
                           (saved-line (make-line :chars saved-first-chars
                                                  :%buffer count)))
                      (declare (simple-string first-chars last-chars
@@ -270,7 +270,7 @@
 	 (last-line (mark-line end))
 	 (first-charpos (mark-charpos start))
 	 (last-charpos (mark-charpos end))
-	 (count (incf *disembodied-buffer-counter*)))
+	 (count (next-disembodied-buffer-counter)))
     (cond
      ((eq first-line last-line)
       (when (current-open-line-p first-line) (close-line))

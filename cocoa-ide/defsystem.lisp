@@ -16,9 +16,6 @@
 
 (require "OBJC-SUPPORT")
 
-(require "PTY")
-
-
 (defpackage "GUI"
   (:use :common-lisp :ccl)
   (:import-from
@@ -54,9 +51,6 @@
    release-canonical-nsobject
    objc-message-send
    open-main-bundle
-   ;; Symbols perhaps that should be exported by library;pty.lisp but aren't
-   open-pty-pair
-   set-tty-raw
    )
   (:export
    ))

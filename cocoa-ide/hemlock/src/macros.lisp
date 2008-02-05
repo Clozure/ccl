@@ -43,7 +43,7 @@
 ;;; if there is no such variable.
 ;;;
 (defmacro with-variable-object (name &body forms)
-  `(let ((obj (get ,name 'hemlock-variable-value)))
+  `(let ((obj (get-variable-object ,name :current)))
      (unless obj (undefined-variable-error ,name))
      ,@forms))
 
@@ -70,7 +70,22 @@
 	 ,@unsets))))
 
 
-
+;; MODIFYING-BUFFER-STORAGE
+;;
+;; This is kinda Cocoa-specific, but we'll pretend it's not. It gets wrapped around
+;; possible multiple modifications of the buffer's text, so that the OS can defer
+;; layout and redisplay until the end.  It takes care of showing the spin cursor
+;; if the command takes too long, and it ensures that the cocoa selection matches
+;; hemlock's idea of selection.
+;; As a special hack, buffer can be NIL to temporarily turn off the grouping.
+
+(defmacro modifying-buffer-storage ((buffer) &body body)
+  (if (eq buffer '*current-buffer*)
+    `(hemlock-ext:invoke-modifying-buffer-storage *current-buffer* #'(lambda () ,@body))
+    `(let ((*current-buffer* ,buffer))
+       (hemlock-ext:invoke-modifying-buffer-storage *current-buffer* #'(lambda () ,@body)))))
+
+
 ;;;; A couple funs to hack strings to symbols.
 
 (eval-when (:compile-toplevel :execute :load-toplevel)
@@ -181,20 +196,24 @@
     (setq function-doc command-doc))
   (when (atom lambda-list)
     (error "Command argument list is not a list: ~S." lambda-list))
-  (let (command-name function-name)
+  (let (command-name function-name extra-args)
     (cond ((listp name)
-	   (setq command-name (car name)  function-name (cadr name))
+	   (setq command-name (car name) function-name (cadr name))
 	   (unless (symbolp function-name)
-	     (error "Function name is not a symbol: ~S" function-name)))
+	     (error "Function name is not a symbol: ~S" function-name))
+	   (if (keywordp function-name)
+	     (setq function-name nil extra-args (cdr name))
+	     (setq extra-args (cddr name))))
 	  (t
-	   (setq command-name name
-		 function-name (bash-string-to-symbol name '-command))))
+	   (setq command-name name)))
+    (when (null function-name)
+      (setq function-name (bash-string-to-symbol command-name '-command)))
     (unless (stringp command-name)
       (error "Command name is not a string: ~S." name))
     `(eval-when (:load-toplevel :execute)
        (defun ,function-name ,lambda-list ,function-doc
               ,@forms)
-       (make-command ',name ,command-doc ',function-name)
+       (make-command ,command-name ,command-doc ',function-name ,@extra-args)
        ',function-name)))
 
 
@@ -312,56 +331,14 @@
 ||#
 
 
-(defmacro use-buffer (buffer &body forms)
-  "Use-Buffer Buffer {Form}*
-  Has The effect of making Buffer the current buffer during the evaluation
-  of the Forms.  For restrictions see the manual."
-  (let ((gensym (gensym)))
-    `(let ((,gensym *current-buffer*)
-	   (*current-buffer* ,buffer))
-      (unwind-protect
-           (progn
-             (use-buffer-set-up ,gensym)
-             ,@forms)
-	(use-buffer-clean-up ,gensym)))))
-
-
-
-
 ;;;; EDITOR-ERROR.
-
-(defun print-editor-error (condx s)
-    (apply #'format s (editor-error-format-string condx)
-	    (editor-error-format-arguments condx)))
-
-(define-condition editor-error (error)
-  ((format-string :initform "" :initarg :format-string
-		  :reader editor-error-format-string)
-   (format-arguments :initform '() :initarg :format-arguments
-		     :reader editor-error-format-arguments))
-  (:report print-editor-error))
-;;;
-(setf (documentation 'editor-error-format-string 'function)
-      "Returns the FORMAT control string of the given editor-error condition.")
-(setf (documentation 'editor-error-format-arguments 'function)
-      "Returns the FORMAT arguments for the given editor-error condition.")
 
 (defun editor-error (&rest args)
   "This function is called to signal minor errors within Hemlock;
    these are errors that a normal user could encounter in the course of editing
-   such as a search failing or an attempt to delete past the end of the buffer.
-   This function SIGNAL's an editor-error condition formed from args.  Hemlock
-   invokes commands in a dynamic context with an editor-error condition handler
-   bound.  This default handler beeps or flashes (or both) the display.  If
-   args were supplied, it also invokes MESSAGE on them.  The command in
-   progress is always aborted, and this function never returns."
-  (let ((condx (make-condition 'editor-error
-			       :format-string (car args)
-			       :format-arguments (cdr args))))
-    (signal condx)
-    (error "Unhandled editor-error was signaled -- ~A." condx)))
-
-    
+   such as a search failing or an attempt to delete past the end of the buffer."
+  (let ((message (and args (apply #'format nil args))))
+    (abort-current-command message)))
 
 ;;;; Do-Strings
 
@@ -405,31 +382,28 @@
 		tag))))
 ); eval-when
 ;;;  
-(defmacro command-case ((&key (change-window t)
-			      (prompt "Command character: ")
+(defmacro command-case ((&key (prompt "Command character: ")
 			      (help "Choose one of the following characters:")
 			      (bind (gensym)))
 			&body forms)
-  "This is analogous to the Common Lisp CASE macro.  Commands such as \"Query
-   Replace\" use this to get a key-event, translate it to a character, and
-   then to dispatch on the character to the specified case.  The syntax is
+  "This is analogous to the Common Lisp CASE macro.  Commands can use this
+   to get a key-event, translate it to a character, and then to dispatch on
+   the character to the specified case.  The syntax is
    as follows:
       (COMMAND-CASE ( {key value}* )
         {( {( {tag}* )  |  tag}  help  {form}* )}*
         )
    Each tag is either a character or a logical key-event.  The user's typed
-   key-event is compared using either EXT:LOGICAL-KEY-EVENT-P or CHAR= of
-   EXT:KEY-EVENT-CHAR.
+   key-event is compared using either LOGICAL-KEY-EVENT-P or CHAR= of
+   KEY-EVENT-CHAR.
 
-   The legal keys of the key/value pairs are :help, :prompt, :change-window,
-   and :bind.  See the manual for details."
+   The legal keys of the key/value pairs are :help, :prompt, and :bind."
   (do* ((forms forms (cdr forms))
 	(form (car forms) (car forms))
 	(cases ())
 	(bname (gensym))
 	(again (gensym))
 	(n-prompt (gensym))
-	(n-change (gensym))
 	(bind-char (gensym))
 	(docs ())
 	(t-case `(t (beep) (reprompt))))
@@ -437,15 +411,14 @@
 	`(macrolet ((reprompt ()
 		      `(progn
 			 (setf ,',bind
-			       (prompt-for-key-event* ,',n-prompt ,',n-change))
-			 (setf ,',bind-char (hemlock-ext:key-event-char ,',bind))
+			       (prompt-for-key-event :prompt ,',n-prompt))
+			 (setf ,',bind-char (key-event-char ,',bind))
 			 (go ,',again))))
 	   (block ,bname
 	     (let* ((,n-prompt ,prompt)
-		    (,n-change ,change-window)
-		    (,bind (prompt-for-key-event* ,n-prompt ,n-change))
-		    (,bind-char (hemlock-ext:key-event-char ,bind)))
-	       (declare (ignorable ,n-prompt ,n-change ,bind ,bind-char))
+		    (,bind (prompt-for-key-event :prompt ,n-prompt))
+		    (,bind-char (key-event-char ,bind)))
+	       (declare (ignorable,bind ,bind-char))
 	       (tagbody
 		,again
 		(return-from
@@ -491,6 +464,20 @@
 
 
 ;;;; Stuff from here on is implementation dependant.
+
+(defvar *saved-standard-output* nil)
+
+(defmacro with-output-to-listener (&body body)
+  `(let* ((*saved-standard-output* (or *saved-standard-output*
+				       (cons *standard-output* *error-output*)))
+	  (*standard-output* (hemlock-ext:top-listener-output-stream))
+	  (*error-output* *standard-output*))
+     ,@body))
+
+(defmacro with-standard-standard-output (&body body)
+  `(let* ((*standard-output* (or (car *saved-standard-output*) *standard-output*))
+	  (*error-output* (or (cdr *saved-standard-output*) *error-output*)))
+     ,@body))
 
 
 
@@ -559,32 +546,8 @@
 
 (declaim (special *random-typeout-ml-fields* *buffer-names*))
 
-(defvar *random-typeout-buffers* () "A list of random-typeout buffers.")
-
-
-
-
 
 ;;;; Error handling stuff.
-
-(declaim (special *echo-area-stream*))
-
-;;; LISP-ERROR-ERROR-HANDLER is in Macros.Lisp instead of Rompsite.Lisp because
-;;; it uses WITH-POP-UP-DISPLAY, and Macros is compiled after Rompsite.  It
-;;; binds an error condition handler to get us out of here on a recursive error
-;;; (we are already handling one if we are here).  Since COMMAND-CASE uses
-;;; EDITOR-ERROR for logical :abort characters, and this is a subtype of ERROR,
-;;; we bind an editor-error condition handler just inside of the error handler.
-;;; This keeps us from being thrown out into the debugger with supposedly
-;;; recursive errors occuring.  What we really want in this case is to simply
-;;; get back to the command loop and forget about the error we are currently
-;;; handling.
-;;;
-
-(defun lisp-error-error-handler (condition &optional internalp)
-  (declare (ignore internalp))
-  (report-hemlock-error condition)
-  (throw 'editor-top-level-catcher nil))
 
 (defmacro handle-lisp-errors (&body body)
   "Handle-Lisp-Errors {Form}*

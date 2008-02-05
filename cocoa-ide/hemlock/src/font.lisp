@@ -18,14 +18,6 @@
 
 (in-package :hemlock-internals)
 
-;;; Default-font used to be in the above list, but when I cleaned up the way
-;;; Hemlock compiles, a name conflict occurred because "Default Font" is a
-;;; Hemlock variable.  It is now exported by the export list in rompsite.lisp.
-
-(defvar *default-font-family* (make-font-family))
-
-
-
 ;;;; Creating, Deleting, and Moving.
 
 (defun new-font-region (buffer start-mark end-mark  font)
@@ -62,7 +54,6 @@
   (let ((new (internal-make-font-mark line charpos kind font)))
     (new-font-mark new line)
     (push new (line-marks line))
-    (incf (line-font-mark-count line))
     new))
 
 (defun delete-font-mark (font-mark)
@@ -71,7 +62,6 @@
   (let ((line (mark-line font-mark)))
     (when line
       (setf (line-marks line) (delq font-mark (line-marks line)))
-      (decf (line-font-mark-count line))
       (nuke-font-mark font-mark line)
       (setf (mark-line font-mark) nil))))
 

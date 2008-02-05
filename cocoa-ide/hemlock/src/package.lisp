@@ -1,21 +1,11 @@
 (in-package :cl-user)
 
-;; Note: I want real relative package names like the Symbolics has
-;; them. In the mean time:
-
-#+CMU
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (progn
-    ;; Just in case the original Hemlock is loaded.
-    (dolist (p '("HEMLOCK" "HEMLOCK-INTERNALS"))
-      (when (find-package p)
-        (delete-package p)))))
-    
-
 (defpackage :hemlock-interface
   (:use)
   (:export
-   ;; Functions from the CIM:
+   ;; Symbols from the CIM, by chapter:
+
+   ;; Representation of Text
    #:linep
    #:line-string
    #:line-previous
@@ -29,12 +19,16 @@
    #:mark-line
    #:mark-charpos
    #:mark-kind
+   #:mark-buffer
+   #:mark-absolute-position
    #:previous-character
    #:next-character
    #:mark
    #:copy-mark
    #:delete-mark
+   #:with-mark
    #:move-to-position
+   #:move-to-absolute-position
    #:move-mark
    #:line-start
    #:line-end
@@ -57,6 +51,8 @@
    #:set-region-bounds
    #:count-lines
    #:count-characters
+
+   ;; Buffers
    #:current-buffer
    #:current-point-for-insertion
    #:current-point-for-deletion
@@ -67,8 +63,8 @@
    #:current-mark
    #:pop-buffer-mark
    #:push-buffer-mark
-   #:change-to-buffer
-   #:previous-buffer
+   #:push-new-buffer-mark
+   #:all-buffers
    #:make-buffer
    #:bufferp
    #:buffer-name
@@ -84,11 +80,10 @@
    #:buffer-signature
    #:buffer-variables
    #:buffer-modes
-   #:buffer-windows
    #:buffer-delete-hook
    #:buffer-package
    #:delete-buffer
-   #:delete-buffer-if-possible
+   #:with-writable-buffer
    #:make-modeline-field
    #:modeline-field-p
    #:modeline-field-name
@@ -98,7 +93,8 @@
    #:buffer-modeline-fields
    #:buffer-modeline-field-p
    #:update-modeline-fields
-   #:update-modeline-field
+
+   ;; Altering and Searching Text
    #:insert-character
    #:insert-string
    #:insert-region
@@ -129,6 +125,7 @@
    #:last-line-p
    #:kill-region
    #:kill-characters
+   #:*ephemerally-active-command-types*
    #:activate-region
    #:deactivate-region
    #:region-active-p
@@ -139,6 +136,10 @@
    #:get-search-pattern
    #:find-pattern
    #:replace-pattern
+   #:*last-search-string*
+
+   ;; Hemlock Variables
+   #:*global-variable-names*
    #:current-variable-tables
    #:defhvar
    #:variable-value
@@ -146,8 +147,18 @@
    #:variable-hooks
    #:variable-name
    #:string-to-variable
+   #:value
+   #:setv
+   #:hlet
    #:hemlock-bound-p
    #:delete-variable
+   #:add-hook
+   #:remove-hook
+   #:invoke-hook
+
+   ;; Commands
+   #:*command-names*
+   #:defcommand
    #:make-command
    #:commandp
    #:command-documentation
@@ -159,19 +170,20 @@
    #:get-command
    #:map-bindings
    #:key-translation
-   #:interactive
    #:last-command-type
    #:prefix-argument
-   #:recursive-edit
-   #:in-recursive-edit
-   #:exit-recursive-edit
-   #:abort-recursive-edit
+
+   ;; Modes
+   #:*mode-names*
    #:defmode
    #:mode-documentation
    #:buffer-major-mode
    #:buffer-minor-mode
    #:mode-variables
    #:mode-major-p
+
+   ;; Character attributes
+   #:*character-attribute-names*
    #:defattribute
    #:character-attribute-name
    #:character-attribute-documentation
@@ -184,39 +196,29 @@
    #:reverse-find-attribute
    #:reverse-find-not-attribute
    #:character-attribute-hooks
-   #:current-window
-   #:make-window
-   #:windowp
-   #:delete-window
-   #:window-buffer
-   #:window-display-start
-   #:window-display-end
-   #:window-display-recentering
-   #:window-point
-   #:center-window
-   #:scroll-window
-   #:displayed-p
-   #:window-height
-   #:window-width
-   #:next-window
-   #:previous-window
-   #:mark-to-cursorpos
-   #:cursorpos-to-mark
-   #:last-key-event-cursorpos
+
+   ;; Controlling the Display
+   #:current-view
+   #:hemlock-view-p
+   #:hemlock-view-buffer
    #:mark-column
    #:move-to-column
-   #:show-mark
-   #:redisplay
-   #:redisplay-all
-   #:editor-finish-output
+   #:set-scroll-position
+
+   ;; Logical Key Events
+   #:*logical-key-event-names*
    #:define-logical-key-event
    #:logical-key-event-key-events
    #:logical-key-event-name
    #:logical-key-event-documentation
    #:logical-key-event-p
+
+   ;; The Echo Area
    #:clear-echo-area
    #:message
    #:loud-message
+   #:beep
+   #:command-case
    #:prompt-for-buffer
    #:prompt-for-key-event
    #:prompt-for-key
@@ -228,6 +230,11 @@
    #:prompt-for-variable
    #:prompt-for-y-or-n
    #:prompt-for-yes-or-no
+   #:parse-for-something
+
+   ;; Files
+   #:define-file-option
+   #:define-file-type-hook
    #:process-file-options
    #:pathname-to-buffer-name
    #:buffer-default-pathname
@@ -235,28 +242,26 @@
    #:write-file
    #:write-buffer-file
    #:read-buffer-file
-   #:find-file-buffer
+  ;; #:find-file-buffer
+
+   ;;# Hemlock's Lisp Environment
    ;;   #:ed
-   #:exit-hemlock
-   #:pause-hemlock
-   #:get-key-event
-   #:unget-key-event
-   #:recursive-get-key-event
-   #:clear-editor-input
-   #:listen-editor-input
-   #:editor-sleep
+   #:*key-event-history*
+   #:last-key-event-typed
+   #:last-char-typed
    #:make-hemlock-output-stream
    #:hemlock-output-stream-p
    #:make-hemlock-region-stream
    #:hemlock-region-stream-p
-   #:editor-error-format-string
-   #:editor-error-format-arguments
+   #:with-input-from-region
+   #:with-output-to-mark
+   #:with-pop-up-display
    #:editor-error
-   #:add-definition-dir-translation
-   #:delete-definition-dir-translation
-   #:schedule-event
-   #:remove-scheduled-event
+   #:handle-lisp-errors
    #:in-lisp
+   #:do-alpha-chars
+
+   ;; Higher-Level Text Primitives
    #:indent-region
    #:indent-region-for-commands
    #:delete-horizontal-space
@@ -275,12 +280,10 @@
    #:sentence-offset
    #:paragraph-offset
    #:mark-paragraph
-   #:goto-page
-   #:page-offset
-   #:page-directory
-   #:display-page-directory
    #:fill-region
    #:fill-region-by-paragraphs
+
+   ;; Utilities
    #:make-string-table
    #:string-table-p
    #:string-table-separator
@@ -290,6 +293,7 @@
    #:complete-string
    #:find-ambiguous
    #:find-containing
+   #:do-strings
    #:make-ring
    #:ringp
    #:ring-length
@@ -299,89 +303,60 @@
    #:rotate-ring
    #:save-for-undo
    #:make-region-undo
-   #:supply-generic-pointer-up-function
 
-   ;; Macros from the CIM:
-   #:with-writable-buffer
-   #:value
-   #:setv
-   #:add-hook
-   #:remove-hook
-   #:invoke-hook
-   #:defcommand
-   #:use-buffer
-   #:command-case
-   #:define-file-option
-   #:define-file-type-hook
-   #:do-active-group
-   #:with-input-from-region
-   #:with-output-to-mark
-   #:with-pop-up-display
-   #:handle-lisp-errors
-   #:do-alpha-chars
-   #:do-strings
-   
+   ;; Miscellaneous
+
+   #:define-keysym
+   #:define-keysym-code
+   #:define-mouse-keysym
+   #:name-keysym
+   #:keysym-names
+   #:keysym-preferred-name
+   #:define-key-event-modifier
+   #:*all-modifier-names*
+   #:make-key-event-bits
+   #:key-event-modifier-mask
+   #:key-event-bits-modifiers
+   #:make-key-event
+   #:key-event-p
+   #:key-event-bits
+   #:key-event-keysym
+   #:char-key-event
+   #:key-event-char
+   #:key-event-bit-p
+   #:do-alpha-key-events
+   #:pretty-key-string
    ))
 
+;; Functions defined externally (i.e. used by but not defined in hemlock).  In theory,
+;; these (and codes for the symbolic keysyms in keysym-defs.lisp, q.v.) is all you need
+;; to implement to port the IDE to a different window system.
 (defpackage :hemlock-ext
-  (:use :common-lisp
-        :hemlock-interface)
-  #+cmu
-  (:import-from :ext #:complete-file)
-  (:shadow #:char-code-limit)
+  (:use)
   ;;
   (:export
-   #:file-comment
-   #:without-interrupts
-   #:without-gcing
-   #:define-setf-method
-   #:getenv
+   #:invoke-modifying-buffer-storage
+   #:note-selection-set-by-search
+   #:scroll-view
+   #:ensure-selection-visible
+   #:report-hemlock-error
+   #:top-listener-output-stream
+   #:invalidate-modeline
+   #:note-buffer-saved
+   #:note-buffer-unsaved
+   #:read-only-listener-p
+   #:all-hemlock-views
+   #:open-sequence-dialog
+   #:edit-single-definition
+   #:change-active-pane
+   #:send-string-to-listener
+   #:buffer-process-description
+   #:raise-buffer-view
+   ))
 
-   #:delq #:memq #:assq
-   #:fixnump
-   #:file-writable
-     
-   #:define-keysym #:define-mouse-keysym #:name-keysym #:keysym-names
-   #:keysym-preferred-name #:define-key-event-modifier #:define-clx-modifier
-   #:make-key-event-bits #:key-event-modifier-mask #:key-event-bits-modifiers
-   #:*all-modifier-names* #:translate-key-event #:translate-mouse-key-event
-   #:make-key-event #:key-event #:key-event-p #:key-event-bits #:key-event-keysym
-   #:char-key-event #:key-event-char #:key-event-bit-p #:do-alpha-key-events
-   #:print-pretty-key #:print-pretty-key-event
-
-   ;; hemlock-ext.lisp
-   #:disable-clx-event-handling
-   #:quit
-   #:serve-event
-   #:sap-ref-8
-   #:make-object-set
-   #:default-clx-event-handler
-   #:serve-exposure
-   #:serve-graphics-exposure
-   #:serve-no-exposure
-   #:serve-configure-notify
-   #:serve-destroy-notify
-   #:serve-unmap-notify
-   #:serve-map-notify
-   #:serve-reparent-notify
-   #:serve-gravity-notify
-   #:serve-circulate-notify
-   #:serve-client-message
-   #:serve-key-press
-   #:serve-button-press
-   #:serve-button-release
-   #:serve-enter-notify
-   #:serve-leave-notify
-   #:flush-display-events
-   #:object-set-event-handler
-   #:with-clx-event-handling
-   #:complete-file
-   #:default-directory))
-
-(defpackage :hemlock-internals
+(defpackage :hi
   (:use :common-lisp :hemlock-interface)
-  (:nicknames :hi)
-  (:shadow #:char-code-limit)
+  (:nicknames :hemlock-internals)
   (:import-from
    ;; gray streams
    #+EXCL  :excl
@@ -389,9 +364,9 @@
    #+CMU   :ext
    #+sbcl  :sb-gray
    #+scl   :ext
-   #+openmcl :gray
+   #+clozure :gray
    ;;
-   ;; Note the pacth i received from DTC mentions character-output and
+   ;; Note the patch i received from DTC mentions character-output and
    ;; character-input-stream here, so we actually see us faced to
    ;; provide for compatibility classes. --GB
    #-scl   #:fundamental-character-output-stream
@@ -409,17 +384,29 @@
    #:stream-finish-output
    #:stream-force-output
    #:stream-line-column)
-  (:import-from :hemlock-ext
-                #:delq #:memq #:assq)
+  (:import-from :ccl
+                #:delq #:memq #:assq
+                #:getenv
+                #:fixnump)
+  (:import-from :gui
+		#:log-debug)
+  ;; ** TODO: get rid of this.  The code that uses it assumes it guarantees atomicity,
+  ;; and it doesn't.
+  (:import-from :ccl #:without-interrupts)
   ;;
   (:export
    #:*FAST*                             ;hmm not sure about this one
    
+   ;; Imported
+   #:delq #:memq #:assq #:getenv #:fixnump #:log-debug
+
+   ;; hemlock-ext.lisp
+   #:hemlock-char-code-limit
+   #:file-writable #:default-directory #:complete-file #:ambiguous-files
+
    ;; rompsite.lisp
-   #:show-mark #:editor-sleep #:*input-transcript* #:fun-defined-from-pathname
-   #:editor-describe-function #:pause-hemlock #:store-cut-string
-   #:fetch-cut-string #:schedule-event #:remove-scheduled-event
-   #:enter-window-autoraise #:directoryp #:merge-relative-pathnames
+   #:editor-describe-function
+   #:merge-relative-pathnames
    ;;
    ;; Export default-font to prevent a name conflict that occurs due to
    ;; the Hemlock variable "Default Font" defined in SITE-INIT below.
@@ -428,25 +415,27 @@
    #:*beep-function* #:beep
 
    ;; 
-   #:mark #:mark-line #:mark-charpos #:markp #:region #:region-start #:region-end
+   #:mark #:mark-line #:mark-charpos #:mark-column #:move-to-column
+   #:markp #:region #:region-start #:region-end
    #:regionp #:buffer #:bufferp #:buffer-modes #:buffer-point #:buffer-writable
-   #:buffer-delete-hook #:buffer-windows #:buffer-variables #:buffer-write-date
-   #:region #:regionp #:region-start #:region-end #:window #:windowp #:window-height
-   #:window-width #:window-display-start #:window-display-end #:window-point
-   #:window-display-recentering #:commandp #:command #:command-function
+   #:buffer-delete-hook #:buffer-variables #:buffer-write-date
+   #:region #:regionp #:region-start #:region-end
+   #:commandp #:command #:command-function
    #:command-documentation #:modeline-field #:modeline-field-p
-
-   ;; from input.lisp
-   #:get-key-event #:unget-key-event #:clear-editor-input #:listen-editor-input
-   #:*last-key-event-typed* #:*key-event-history*
-   #:input-waiting #:last-key-event-cursorpos
 
    ;; from macros.lisp
    #:invoke-hook #:value #:setv #:hlet #:string-to-variable #:add-hook #:remove-hook
    #:defcommand #:with-mark #:use-buffer #:editor-error
    #:editor-error-format-string #:editor-error-format-arguments #:do-strings
    #:command-case #:reprompt #:with-output-to-mark #:with-input-from-region
-   #:handle-lisp-errors #:with-pop-up-display #:*random-typeout-buffers*
+   #:handle-lisp-errors #:with-pop-up-display
+
+   ;; from views.lisp
+   #:hemlock-view #:current-view #:hemlock-view-buffer
+   #:current-prefix-argument-state #:last-key-event-typed #:last-char-typed
+   #:invoke-command
+   #:abort-to-toplevel #:abort-current-command
+   #:set-scroll-position
 
    ;; from line.lisp
    #:line #:linep #:line-previous #:line-next #:line-plist #:line-signature
@@ -461,46 +450,45 @@
    #:find-ambiguous #:complete-string #:find-containing
    #:delete-string #:clrstring #:do-strings
 
-   ;; bit-display.lisp
-   #:redisplay #:redisplay-all
-
-   ;; bit-screen.lisp
-   #:make-xwindow-like-hwindow #:*create-window-hook* #:*delete-window-hook*
-   #:*random-typeout-hook* #:*create-initial-windows-hook*
-
    ;; buffer.lisp
    #:buffer-modified #:buffer-region #:buffer-name #:buffer-pathname
    #:buffer-major-mode #:buffer-minor-mode #:buffer-modeline-fields
    #:buffer-modeline-field-p #:current-buffer #:current-point
-   #:in-recursive-edit #:exit-recursive-edit #:abort-recursive-edit
-   #:recursive-edit #:defmode #:mode-major-p #:mode-variables #:mode-documentation
+   #:defmode #:mode-major-p #:mode-variables #:mode-documentation
    #:make-buffer #:delete-buffer #:with-writable-buffer #:buffer-start-mark
    #:buffer-end-mark #:*buffer-list*
 
    ;; charmacs.lisp
    #:syntax-char-code-limit #:search-char-code-limit #:do-alpha-chars
 
-   ;; cursor.lisp
-   #:mark-to-cursorpos #:center-window #:displayed-p #:scroll-window
-   #:mark-column #:cursorpos-to-mark #:move-to-column
-
-   ;; display.lisp
-   #:redisplay #:redisplay-all
+   ;; key-event.lisp
+   #:define-keysym-code #:define-mouse-keysym #:define-modifier-bit
+   #:*all-modifier-names* #:*modifier-translations*
+   #:make-key-event #:char-key-event #:do-alpha-key-events
+   #:key-event-modifier-mask #:key-event-char #:key-event-bit-p
+   #:pretty-key-string
 
    ;; echo.lisp
-   #:*echo-area-buffer* #:*echo-area-stream* #:*echo-area-window*
-   #:*parse-starting-mark* #:*parse-input-region*
-   #:*parse-verification-function* #:*parse-string-tables*
-   #:*parse-value-must-exist* #:*parse-default* #:*parse-default-string*
-   #:*parse-prompt* #:*parse-help* #:clear-echo-area #:message #:loud-message
+   #:*echo-area-stream*
+   #:clear-echo-area #:message #:loud-message
+   #:current-echo-parse-state #:exit-echo-parse
+   #:eps-parse-type #:eps-parse-starting-mark #:eps-parse-input-region
+   #:eps-parse-verification-function #:eps-parse-string-tables
+   #:eps-parse-default #:eps-parse-help #:eps-parse-key-handler
    #:prompt-for-buffer #:prompt-for-file #:prompt-for-integer
    #:prompt-for-keyword #:prompt-for-expression #:prompt-for-string
    #:prompt-for-variable #:prompt-for-yes-or-no #:prompt-for-y-or-n
-   #:prompt-for-key-event #:prompt-for-key #:*logical-key-event-names*
+   #:prompt-for-key-event #:prompt-for-key
+   #:*logical-key-event-names*
    #:logical-key-event-p #:logical-key-event-documentation
    #:logical-key-event-name #:logical-key-event-key-events
-   #:define-logical-key-event #:*parse-type* #:current-variable-tables
+   #:define-logical-key-event #:current-variable-tables
 
+
+   ;; commands
+   #:make-prefix-argument-state #:prefix-argument-resetting-state
+
+  
    ;; files.lisp
    #:read-file #:write-file
 
@@ -511,7 +499,8 @@
 
    ;; htext1.lisp
    #:line-length #:line-buffer #:line-string #:line-character #:mark #:mark-kind
-   #:copy-mark #:delete-mark #:move-to-position #:region #:make-empty-region
+   #:copy-mark #:delete-mark #:move-to-position #:mark-absolute-position
+   #:move-to-absolute-position #:buffer-selection-range #:region #:make-empty-region
    #:start-line-p #:end-line-p #:empty-line-p #:blank-line-p #:blank-before-p
    #:blank-after-p #:same-line-p #:mark< #:mark<= #:mark> #:mark>= #:mark= #:mark/=
    #:line< #:line<= #:line> #:line>= #:first-line-p #:last-line-p #:buffer-signature
@@ -529,7 +518,7 @@
 
    ;; htext3.lisp
    #:insert-character #:insert-string #:insert-region #:ninsert-region
-
+   #:paste-characters
 
    ;; htext4.lisp
    #:delete-characters #:delete-region #:delete-and-save-region #:copy-region
@@ -539,22 +528,22 @@
    ;; interp.lisp
    #:bind-key #:delete-key-binding #:get-command #:map-bindings
    #:make-command #:command-name #:command-bindings #:last-command-type
-   #:prefix-argument #:exit-hemlock #:*invoke-hook* #:key-translation
+   #:prefix-argument #:key-translation
 
 
    ;; main.lisp
    #:*global-variable-names* #:*mode-names* #:*buffer-names*
    #:*character-attribute-names* #:*command-names* #:*buffer-list*
-   #:*window-list* #:*last-key-event-typed* #:after-editor-initializations
-
-   ;; screen.lisp
-   #:make-window #:delete-window #:next-window #:previous-window
-
+   #:after-editor-initializations
 
    ;; search1.lisp
    #:search-pattern #:search-pattern-p #:find-pattern #:replace-pattern
    #:new-search-pattern
 
+   ;; modeline.lisp
+   #:modeline-field-width
+   #:modeline-field-function #:make-modeline-field
+   #:update-modeline-field #:modeline-field-name #:modeline-field
 
    ;; streams.lisp
    #:make-hemlock-output-stream
@@ -573,83 +562,11 @@
    #:variable-value #:variable-hooks #:variable-documentation #:variable-name
    #:hemlock-bound-p #:defhvar #:delete-variable
 
-   ;; window.lisp
-   #:current-window #:window-buffer #:modeline-field-width
-   #:modeline-field-function #:make-modeline-field #:update-modeline-fields
-   #:update-modeline-field #:modeline-field-name #:modeline-field
-   #:editor-finish-output #:*window-list*
-
    ))
 
 
 (defpackage :hemlock
-  (:use :common-lisp :hemlock-interface :hi :hemlock-ext)
-;;;  (:import-from :hemlock-ext #:delq #:memq #:assq)
-;;;  (:import-from :hemlock-internals #:*fast*)
-  (:shadowing-import-from #:hemlock-ext
-			  #:char-code-limit)
-  ;;  #+cmu
-  ;; These are defined in EXTENSONS package in CMUCL
-  (:shadowing-import-from :hemlock-ext
-   #:*ALL-MODIFIER-NAMES*
-   #:ASSQ
-   #:CHAR-KEY-EVENT
-   #:DEFAULT-CLX-EVENT-HANDLER
-   #:DEFAULT-DIRECTORY
-   #:DEFINE-CLX-MODIFIER
-   #:DEFINE-KEY-EVENT-MODIFIER
-   #:DEFINE-KEYSYM
-   #:DEFINE-MOUSE-KEYSYM
-   #:DELQ
-   #:DISABLE-CLX-EVENT-HANDLING
-   #:DO-ALPHA-KEY-EVENTS
-   #:FILE-WRITABLE
-   #:FIXNUMP
-   #:FLUSH-DISPLAY-EVENTS
-   #:KEY-EVENT
-   #:KEY-EVENT-BIT-P
-   #:KEY-EVENT-BITS
-   #:KEY-EVENT-BITS-MODIFIERS
-   #:KEY-EVENT-CHAR
-   #:KEY-EVENT-KEYSYM
-   #:KEY-EVENT-MODIFIER-MASK
-   #:KEY-EVENT-P
-   #:KEYSYM-NAMES
-   #:KEYSYM-PREFERRED-NAME
-   #:MAKE-KEY-EVENT
-   #:MAKE-KEY-EVENT-BITS
-   #:MEMQ
-   #:NAME-KEYSYM
-   #:OBJECT-SET-EVENT-HANDLER
-   #:PRINT-PRETTY-KEY
-   #:PRINT-PRETTY-KEY-EVENT
-   #:QUIT
-   #:SERVE-BUTTON-PRESS
-   #:SERVE-BUTTON-RELEASE
-   #:SERVE-CIRCULATE-NOTIFY
-   #:SERVE-CLIENT-MESSAGE
-   #:SERVE-CONFIGURE-NOTIFY
-   #:SERVE-DESTROY-NOTIFY
-   #:SERVE-ENTER-NOTIFY
-   #:SERVE-EXPOSURE
-   #:SERVE-GRAPHICS-EXPOSURE
-   #:SERVE-GRAVITY-NOTIFY
-   #:SERVE-KEY-PRESS
-   #:SERVE-LEAVE-NOTIFY
-   #:SERVE-MAP-NOTIFY
-   #:SERVE-NO-EXPOSURE
-   #:SERVE-REPARENT-NOTIFY
-   #:SERVE-UNMAP-NOTIFY
-
-   ;; These four are from SYSTEM package
-   #:MAKE-OBJECT-SET
-   #:SAP-REF-8
-   #:SERVE-EVENT
-   #:WITHOUT-INTERRUPTS
-
-   #:TRANSLATE-KEY-EVENT
-   #:TRANSLATE-MOUSE-KEY-EVENT
-   #:WITH-CLX-EVENT-HANDLING)
+  (:use :common-lisp :hemlock-interface :hemlock-internals :hemlock-ext)
   )
 
 

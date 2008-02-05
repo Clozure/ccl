@@ -34,8 +34,8 @@
 
 ;;; Self insert letters:
 ;;;
-(hemlock-ext:do-alpha-key-events (key-event :both)
-                                 (bind-key "Self Insert" key-event))
+(do-alpha-key-events (key-event :both)
+  (bind-key "Self Insert" key-event))
 
 (bind-key "Beginning of Line" #k"control-a")
 (bind-key "Select to Beginning of Line" #k"control-A")
@@ -72,10 +72,16 @@
 (bind-key "Scroll Window Down" #k"pagedown")
 (bind-key "Scroll Window Up" #k"meta-v")
 (bind-key "Scroll Window Up" #k"pageup")
-(bind-key "Scroll Next Window Down" #k"control-meta-v")
-(bind-key "Scroll Next Window Up" #k"control-meta-V")
+;(bind-key "Scroll Next Window Down" #k"control-meta-v")
+;(bind-key "Scroll Next Window Up" #k"control-meta-V")
 
 (bind-key "Do Nothing" #k"leftdown")
+;(bind-key "Do Nothing" #k"leftup")
+
+(bind-key "Abort Command" #k"control-g")
+(bind-key "Abort Command" #k"control-G")
+(bind-key "Abort Command" #k"control-x control-g")
+(bind-key "Abort Command" #k"control-x control-G")
 
 
 (bind-key "Process File Options" #k"control-x m" :global)
@@ -83,6 +89,7 @@
 (bind-key "Beginning of Buffer" #k"home")
 (bind-key "End of Buffer" #k"end")
 (bind-key "Undo" #k"control-_")
+(bind-key "Undo" #k"control-\/")
 (bind-key "Describe Key" #k"meta-?")
 (bind-key "What Cursor Position" #k"control-x =")
 
@@ -113,7 +120,7 @@
 ;(bind-key "List Buffers" #k"control-x control-b")
 (bind-key "Buffer Not Modified" #k"meta-~")
 ;(bind-key "Check Buffer Modified" #k"control-x ~")
-(bind-key "Select Buffer" #k"control-x b")
+;(bind-key "Select Buffer" #k"control-x b")
 ;(bind-key "Select Previous Buffer" #k"control-meta-l")
 ;(bind-key "Circulate Buffers" #k"control-meta-L")
 ;(bind-key "Create Buffer" #k"control-x meta-b")
@@ -123,7 +130,7 @@
 ;(bind-key "Next Window" #k"control-x n")
 ;(bind-key "Next Window" #k"control-x o")
 ;(bind-key "Previous Window" #k"control-x p")
-(bind-key "Split Window" #k"control-x 2")
+;(bind-key "Split Window" #k"control-x 2")
 ;(bind-key "New Window" #k"control-x control-n")
 ;(bind-key "Delete Window" #k"control-x d")
 ;(bind-key "Delete Next Window" #k"control-x 1")
@@ -131,9 +138,6 @@
 ;(bind-key "Line to Center of Window" #k"meta-#")
 ;(bind-key "Top of Window" #k"meta-,")
 ;(bind-key "Bottom of Window" #k"meta-.")
-
-(bind-key "Exit Recursive Edit" #k"control-meta-z")
-(bind-key "Abort Recursive Edit" #k"control-]")
 
 (bind-key "Delete Previous Character" #k"delete")
 (bind-key "Delete Previous Character" #k"backspace")
@@ -186,10 +190,11 @@
 (bind-key "Expand Dynamic Abbreviation" #k"meta-/") ;; Aquamacs and LW binding
 (bind-key "Expand Dynamic Abbreviation" #k"meta-`") ;; MCL binding
 
+(bind-key "Help" #k"control-h")
 
 ;;;; Argument Digit and Negative Argument.
 
-(bind-key "Negative Argument" #k"meta-\-")
+(bind-key "Argument Digit" #k"meta-\-")
 (bind-key "Argument Digit" #k"meta-0")
 (bind-key "Argument Digit" #k"meta-1")
 (bind-key "Argument Digit" #k"meta-2")
@@ -200,7 +205,7 @@
 (bind-key "Argument Digit" #k"meta-7")
 (bind-key "Argument Digit" #k"meta-8")
 (bind-key "Argument Digit" #k"meta-9")
-(bind-key "Negative Argument" #k"control-\-")
+(bind-key "Argument Digit" #k"control-\-")
 (bind-key "Argument Digit" #k"control-0")
 (bind-key "Argument Digit" #k"control-1")
 (bind-key "Argument Digit" #k"control-2")
@@ -211,7 +216,7 @@
 (bind-key "Argument Digit" #k"control-7")
 (bind-key "Argument Digit" #k"control-8")
 (bind-key "Argument Digit" #k"control-9")
-(bind-key "Negative Argument" #k"control-meta-\-")
+(bind-key "Argument Digit" #k"control-meta-\-")
 (bind-key "Argument Digit" #k"control-meta-0")
 (bind-key "Argument Digit" #k"control-meta-1")
 (bind-key "Argument Digit" #k"control-meta-2")
@@ -222,6 +227,18 @@
 (bind-key "Argument Digit" #k"control-meta-7")
 (bind-key "Argument Digit" #k"control-meta-8")
 (bind-key "Argument Digit" #k"control-meta-9")
+
+(bind-key "Digit" #k"\-")
+(bind-key "Digit" #k"0")
+(bind-key "Digit" #k"1")
+(bind-key "Digit" #k"2")
+(bind-key "Digit" #k"3")
+(bind-key "Digit" #k"4")
+(bind-key "Digit" #k"5")
+(bind-key "Digit" #k"6")
+(bind-key "Digit" #k"7")
+(bind-key "Digit" #k"8")
+(bind-key "Digit" #k"9")
 
 
 ;;;; Self Insert and Quoted Insert.
@@ -242,16 +259,6 @@
 (bind-key "Self Insert" #k"_")
 (bind-key "Self Insert" #k"+")
 (bind-key "Self Insert" #k"~")
-(bind-key "Self Insert" #k"1")
-(bind-key "Self Insert" #k"2")
-(bind-key "Self Insert" #k"3")
-(bind-key "Self Insert" #k"4")
-(bind-key "Self Insert" #k"5")
-(bind-key "Self Insert" #k"6")
-(bind-key "Self Insert" #k"7")
-(bind-key "Self Insert" #k"8")
-(bind-key "Self Insert" #k"9")
-(bind-key "Self Insert" #k"0")
 (bind-key "Self Insert" #k"[")
 (bind-key "Self Insert" #k"]")
 (bind-key "Self Insert" #k"\\")
@@ -260,7 +267,6 @@
 (bind-key "Self Insert" #k";")
 (bind-key "Self Insert" #k"\"")
 (bind-key "Self Insert" #k"'")
-(bind-key "Self Insert" #k"\-")
 (bind-key "Self Insert" #k"=")
 (bind-key "Self Insert" #k"`")
 (bind-key "Self Insert" #k"\<")
@@ -347,29 +353,6 @@
 (bind-key "Editor Describe Function Call" #k"control-meta-A" :mode "Editor")
 (bind-key "Editor Describe Symbol" #k"control-meta-S" :mode "Editor")
 
-
-;;;; Typescript.
-#+typescript
-(progn
-(bind-key "Confirm Typescript Input" #k"return" :mode "Typescript")
-(bind-key "Interactive Beginning of Line" #k"control-a" :mode "Typescript")
-(bind-key "Kill Interactive Input" #k"meta-i" :mode "Typescript")
-(bind-key "Previous Interactive Input" #k"meta-p" :mode "Typescript")
-(bind-key "Search Previous Interactive Input" #k"meta-P" :mode "Typescript")
-(bind-key "Next Interactive Input" #k"meta-n" :mode "Typescript")
-(bind-key "Reenter Interactive Input" #k"control-return" :mode "Typescript")
-(bind-key "Typescript Slave Break" #k"hyper-b" :mode "Typescript")
-(bind-key "Typescript Slave to Top Level" #k"hyper-g" :mode "Typescript")
-(bind-key "Typescript Slave Status" #k"hyper-s" :mode "Typescript")
-(bind-key "Select Slave" #k"control-meta-\c")
-(bind-key "Select Background" #k"control-meta-C")
-
-(bind-key "Abort Operations" #k"hyper-a")
-(bind-key "List Operations" #k"hyper-l")
-
-(bind-key "Next Compiler Error" #k"hyper-n")
-(bind-key "Previous Compiler Error" #k"hyper-p")
-)
 
 ;;;; Lisp (some).
 
@@ -509,6 +492,7 @@
 
 
 
+#|
 ;;;; Keyboard macro bindings.
 
 (bind-key "Define Keyboard Macro" #k"control-x (")
@@ -517,6 +501,7 @@
 (bind-key "End Keyboard Macro" #k"control-x hyper-)")
 (bind-key "Last Keyboard Macro" #k"control-x e")
 (bind-key "Keyboard Macro Query" #k"control-x q")
+|#
 
 
 ;;;; Spell bindings.
@@ -548,7 +533,7 @@
 ;;; Do up the printing characters ...
 (do ((i 33 (1+ i)))
     ((= i 126))
-  (let ((key-event (hemlock-ext:char-key-event (code-char i))))
+  (let ((key-event (hi:char-key-event (code-char i))))
     (bind-key "Self Overwrite" key-event :mode "Overwrite")))
 
 (bind-key "Self Overwrite" #k"space" :mode "Overwrite")
@@ -607,9 +592,9 @@
 ;;; Clear everything user might hit to avoid getting the internal error
 ;;; message about modifying read-only buffers.
 ;;;
-(hemlock-ext:do-alpha-key-events (key-event :both)
-                                 (bind-key "Illegal" key-event :mode "Headers")
-                                 (bind-key "Illegal" key-event :mode "Message"))
+(do-alpha-key-events (key-event :both)
+  (bind-key "Illegal" key-event :mode "Headers")
+  (bind-key "Illegal" key-event :mode "Message"))
 
 ;;; Global.
 ;;;
@@ -700,9 +685,9 @@
 ;;; Clear everything user might hit to avoid getting the internal error
 ;;; message about modifying read-only buffers.
 ;;;
-(hemlock-ext:do-alpha-key-events (key-event :both)
-                                 (bind-key "Illegal" key-event :mode "News-Headers")
-                                 (bind-key "Illegal" key-event :mode "News-Message"))
+(do-alpha-key-events (key-event :both)
+  (bind-key "Illegal" key-event :mode "News-Headers")
+  (bind-key "Illegal" key-event :mode "News-Message"))
 
 
 ;;; Global Netnews bindings
@@ -895,34 +880,63 @@
 (bind-key "Completion Self Insert" #k"return" :mode "Completion")
 (bind-key "Completion Self Insert" #k"linefeed" :mode "Completion")
 
-(bind-key "Completion Complete Word" #k"end")
-(bind-key "Completion Rotate Completions" #k"meta-end")
-
-
+(bind-key "Completion Complete Word" #k"end" :mode "Completion")
+(bind-key "Completion Rotate Completions" #k"meta-end" :mode "Completion")
 
 ;;;; Caps-Lock mode.
 
-(hemlock-ext:do-alpha-key-events (key-event :lower)
-                                 (bind-key "Self Insert Caps Lock" key-event :mode "CAPS-LOCK"))
+(do-alpha-key-events (key-event :lower)
+  (bind-key "Self Insert Caps Lock" key-event :mode "CAPS-LOCK"))
 
 
-;;;; Logical characters.
+;;;; I-Search mode.
+;;;;
+;;;; Anything that's not explicitly bound here will exit i-search.
 
-(setf (logical-key-event-p #k"control-s" :forward-search) t)
-(setf (logical-key-event-p #k"control-r" :backward-search) t)
-(setf (logical-key-event-p #k"control-r" :recursive-edit) t)
-(setf (logical-key-event-p #k"delete" :cancel) t)
-(setf (logical-key-event-p #k"backspace" :cancel) t)
+(dotimes (n hi::hemlock-char-code-limit)
+  (when (standard-char-p (code-char n))
+    (let ((key (make-key-event n)))
+      (bind-key "I-Search Self Insert" key :mode "I-Search"))))
+
+(bind-key "I-Search Repeat Forward" #k"control-s" :mode "I-Search")
+(bind-key "I-Search Repeat Backward" #k"control-r" :mode "I-Search")
+(bind-key "I-Search Backup" #k"backspace" :mode "I-Search")
+(bind-key "I-Search Backup" #k"delete" :mode "I-Search")
+(bind-key "I-Search Abort" #k"control-g" :mode "I-Search")
+(bind-key "I-Search Abort" #k"control-G" :mode "I-Search")
+(bind-key "I-Search Exit or Search" #k"escape" :mode "I-Search")
+(bind-key "I-Search Yank Word" #k"control-w" :mode "I-Search")
+(bind-key "Quoted Insert" #k"control-q" :mode "I-Search")
+
+
+;;;; Query/Replace mode.
+;;;;
+;;;; Anything that's not explicitly bound here will exit i-search.
+
+(bind-key "Query/Replace This" #k"y" :mode "Query/Replace")
+(bind-key "Query/Replace This" #k"space" :mode "Query/Replace")
+(bind-key "Query/Replace Skip" #k"n" :mode "Query/Replace")
+(bind-key "Query/Replace Skip" #k"backspace" :mode "Query/Replace")
+(bind-key "Query/Replace Skip" #k"delete" :mode "Query/Replace")
+(bind-key "Query/Replace All" #k"!" :mode "Query/Replace")
+(bind-key "Query/Replace Last" #k"." :mode "Query/Replace")
+(bind-key "Query/Replace Exit" #k"q" :mode "Query/Replace")
+(bind-key "Query/Replace Exit" #k"escape" :mode "Query/Replace")
+(bind-key "Query/Replace Abort" #k"control-g" :mode "Query/Replace")
+(bind-key "Query/Replace Abort" #k"control-G" :mode "Query/Replace")
+(bind-key "Query/Replace Help" #k"h" :mode "Query/Replace")
+(bind-key "Query/Replace Help" #k"?" :mode "Query/Replace")
+(bind-key "Query/Replace Help" #k"home" :mode "Query/Replace")
+(bind-key "Query/Replace Help" #k"control-_" :mode "Query/Replace")
+
+;;;; Logical characters.
+ 
 (setf (logical-key-event-p #k"control-g" :abort) t)
-(setf (logical-key-event-p #k"escape" :exit) t)
-(setf (logical-key-event-p #k"leftdown" :mouse-exit) t)
 (setf (logical-key-event-p #k"y" :yes) t)
 (setf (logical-key-event-p #k"space" :yes) t)
 (setf (logical-key-event-p #k"n" :no) t)
 (setf (logical-key-event-p #k"backspace" :no) t)
 (setf (logical-key-event-p #k"delete" :no) t)
-(setf (logical-key-event-p #k"!" :do-all) t)
-(setf (logical-key-event-p #k"." :do-once) t)
 (setf (logical-key-event-p #k"home" :help) t)
 (setf (logical-key-event-p #k"h" :help) t)
 (setf (logical-key-event-p #k"?" :help) t)
@@ -930,4 +944,8 @@
 (setf (logical-key-event-p #k"return" :confirm) t)
 (setf (logical-key-event-p #k"control-q" :quote) t)
 (setf (logical-key-event-p #k"k" :keep) t)
-(setf (logical-key-event-p #k"control-w" :extend-search-word) t)
+(setf (logical-key-event-p #k"y" :y) t)
+(setf (logical-key-event-p #k"Y" :y) t)
+(setf (logical-key-event-p #k"n" :n) t)
+(setf (logical-key-event-p #k"N" :n) t)
+

@@ -75,36 +75,22 @@
      (error "~S is a losing value for Buffered." buffered)))
   stream)
 
-(defmacro with-left-inserting-mark ((var form) &body forms)
-  (let ((change (gensym)))
-    `(let* ((,var ,form)
-	    (,change (eq (mark-kind ,var) :right-inserting)))
-       (unwind-protect
-	   (progn
-	     (when ,change
-	       (setf (mark-kind ,var) :left-inserting))
-	     ,@forms)
-	 (when ,change
-	   (setf (mark-kind ,var) :right-inserting))))))
-
 (defun hemlock-output-unbuffered-out (stream character)
-  (with-left-inserting-mark (mark (hemlock-output-stream-mark stream))
-    (let* ((buffer (line-%buffer (mark-line mark))))
-      (buffer-document-begin-editing buffer)
-      (unwind-protect
-           (insert-character mark character)
-        (buffer-document-end-editing buffer)))))
+  (let ((mark (hemlock-output-stream-mark stream)))
+    (modifying-buffer-storage ((mark-buffer mark))
+      (insert-character mark character)
+      (unless (eq (mark-kind mark) :left-inserting)
+	(character-offset mark 1)))))
 
 (defun hemlock-output-unbuffered-sout (stream string start end)
-  (with-left-inserting-mark (mark (hemlock-output-stream-mark stream))
-    (unless (and (eql start 0)
-                 (eql end (length string)))
-      (setq string (subseq string start end)))
-    (let* ((buffer (line-%buffer (mark-line mark))))
-      (buffer-document-begin-editing buffer)
-      (unwind-protect
-           (insert-string mark string)
-        (buffer-document-end-editing buffer)))))
+  (unless (and (eql start 0)
+	       (eql end (length string)))
+    (setq string (subseq string start end)))
+  (let ((mark (hemlock-output-stream-mark stream)))
+    (modifying-buffer-storage ((mark-buffer mark))
+      (insert-string mark string)
+      (unless (eq (mark-kind mark) :left-inserting)
+	(character-offset mark (- end start))))))
 
 (defun hemlock-output-buffered-out (stream character)
   (hemlock-output-unbuffered-out stream character))
@@ -239,8 +225,7 @@
   (declare (ignore ignore-abort-attempts-p))
   (let ((index (kbdmac-stream-index stream)))
     (setf (kbdmac-stream-index stream) (1+ index))
-    (setq *last-key-event-typed*
-	  (svref (kbdmac-stream-buffer stream) index))))
+    (setf (last-key-event-typed) (svref (kbdmac-stream-buffer stream) index))))
 
 (defun kbdmac-unget (ignore stream)
   (declare (ignore ignore))

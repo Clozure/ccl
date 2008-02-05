@@ -38,9 +38,9 @@
 ;;; GET-TABLE-ENTRY returns the value at the end of a series of hashings.  For
 ;;; our purposes it is presently used to look up commands and key-translations.
 ;;;
-(defun get-table-entry (table key)
+(defun get-table-entry (table key &key (end (length key)))
   (let ((foo nil))
-    (dotimes (i (length key) foo)
+    (dotimes (i end foo)
       (let ((key-event (aref key i)))
 	(setf foo (gethash key-event table))
 	(unless (hash-table-p foo) (return foo))
@@ -71,8 +71,6 @@
 ;;; is a key, then we translate to that key.
 
 (defvar *key-translations* (make-hash-table))
-(defvar *translate-key-temp* (make-array 10 :fill-pointer 0 :adjustable t))
-
 
 ;;; TRANSLATE-KEY  --  Internal
 ;;;
@@ -84,9 +82,9 @@
 ;;;
 (defun translate-key (key &optional (result (make-array (length key)
 							:fill-pointer 0
-							:adjustable t)))
+							:adjustable t))
+			            (temp (make-array 10 :fill-pointer 0 :adjustable t)))
   (let ((key-len (length key))
-	(temp *translate-key-temp*)
 	(start 0)
 	(try-pos 0)
 	(prefix 0))
@@ -96,8 +94,7 @@
       (when (= try-pos key-len) (return))
       (let ((key-event (aref key try-pos)))
 	(vector-push-extend
-	 (hemlock-ext:make-key-event key-event (logior (hemlock-ext:key-event-bits key-event)
-					       prefix))
+	 (make-key-event key-event (logior (key-event-bits key-event) prefix))
 	 temp)
 	(setf prefix 0))
       (let ((entry (get-table-entry *key-translations* temp)))
@@ -137,13 +134,13 @@
       (hash-table :prefix)
       ((or simple-vector null) entry)
       (integer
-       (cons :bits (hemlock-ext:key-event-bits-modifiers entry))))))
+       (cons :bits (key-event-bits-modifiers entry))))))
 
 ;;; %SET-KEY-TRANSLATION  --  Internal
 ;;;
 (defun %set-key-translation (key new-value)
   (let ((entry (cond ((and (consp new-value) (eq (car new-value) :bits))
-		      (apply #'hemlock-ext:make-key-event-bits (cdr new-value)))
+		      (apply #'make-key-event-bits (cdr new-value)))
 		     (new-value (crunch-key new-value))
 		     (t new-value))))
     (set-table-entry *key-translations* (crunch-key key) entry)
@@ -188,11 +185,11 @@
 ;;;
 (defun crunch-key (key)
   (typecase key
-    (hemlock-ext:key-event (vector key))
+    (key-event (vector key))
     ((or list vector) ;List thrown in gratuitously.
      (when (zerop (length key))
        (error "A zero length key is illegal."))
-     (unless (every #'hemlock-ext:key-event-p key)
+     (unless (every #'key-event-p key)
        (error "A Key ~S must contain only key-events." key))
      (coerce key 'simple-vector))
     (t
@@ -217,7 +214,9 @@
                       (format *error-output*
                               "~&Error while trying to bind key ~A: ~A~%"
                               key condition)
-		      (return-from bind-key nil))))
+		      (message (format nil "~a" condition))
+                      #-GZ (return-from bind-key nil)
+		      )))
                 (let ((cmd (getstring name *command-names*))
                       (table (get-right-table kind where))
                       (key (copy-seq (translate-key (crunch-key key)))))
@@ -247,22 +246,38 @@
 ;;;    Look up a key in the current environment.
 ;;;
 (defun get-current-binding (key)
-  (let ((res (get-table-entry (buffer-bindings *current-buffer*) key)))
-    (cond
-     (res (values res nil))
-     (t
-      (do ((mode (buffer-mode-objects *current-buffer*) (cdr mode))
-	   (t-bindings ()))
-	  ((null mode)
-	   (values (get-table-entry *global-command-table* key)
-		   (nreverse t-bindings)))
-	(declare (list t-bindings))
-	(let ((res (get-table-entry (mode-object-bindings (car mode)) key)))
-	  (when res
-	    (if (mode-object-transparent-p (car mode))
-		(push res t-bindings)
-		(return (values res (nreverse t-bindings)))))))))))
+  (let ((buffer *current-buffer*)
+        (t-bindings nil) res t-res)
+    (multiple-value-setq (res t-res) (get-binding-in-buffer key buffer))
+    (when t-res (push t-res t-bindings))
+    (loop while (null res)
+      for mode in (buffer-minor-mode-objects buffer)
+      do (multiple-value-setq (res t-res) (get-binding-in-mode key mode))
+      do (when t-res (push t-res t-bindings)))
+    (when (null res)
+      (multiple-value-setq (res t-res)
+        (get-binding-in-mode key (buffer-major-mode-object buffer)))
+      (when t-res (push t-res t-bindings)))
+    (values (or res (get-table-entry *global-command-table* key))
+            (nreverse t-bindings))))
 
+(defun get-binding-in-buffer (key buffer)
+  (let ((res (get-table-entry (buffer-bindings buffer) key)))
+    (when res
+      (if (and (commandp res) (command-transparent-p res))
+        (values nil res)
+        (values res nil)))))
+
+(defun get-binding-in-mode (key mode)
+  (let* ((res (or (get-table-entry (mode-object-bindings mode) key)
+                  (let ((default (mode-object-default-command mode)))
+                    (and default (getstring default *command-names*))))))
+    (when res
+      (if (or (mode-object-transparent-p mode)
+              (and (commandp res) (command-transparent-p res)))
+        (values nil res)
+        (values res nil)))))
+  
 
 ;;; GET-COMMAND -- Public.
 ;;;
@@ -303,7 +318,7 @@
 ;;; If the command is already defined, then alter the command object;
 ;;; otherwise, make a new command object and enter it into the *command-names*.
 ;;;
-(defun make-command (name documentation function)
+(defun make-command (name documentation function &key transparent-p)
   "Create a new Hemlock command with Name and Documentation which is
    implemented by calling the function-value of the symbol Function"
   (let ((entry (getstring name *command-names*)))
@@ -311,10 +326,11 @@
      (entry
       (setf (command-name entry) name)
       (setf (command-documentation entry) documentation)
-      (setf (command-function entry) function))
+      (setf (command-function entry) function)
+      (setf (command-transparent-p entry) transparent-p))
      (t
       (setf (getstring name *command-names*)
-	    (internal-make-command name documentation function))))))
+	    (internal-make-command name documentation function transparent-p))))))
 
 
 ;;; COMMAND-NAME, %SET-COMMAND-NAME -- Public.
@@ -360,11 +376,7 @@
 	  (push place result))))
     result))
 
-
-(defvar *last-command-type* ()
-  "The command-type of the last command invoked.")
-(defvar *command-type-set* ()
-  "True if the last command set the command-type.")
+(defvar *key-event-history* (make-ring 60)) 
 
 ;;; LAST-COMMAND-TYPE  --  Public
 ;;;
@@ -373,145 +385,25 @@
   "Return the command-type of the last command invoked.
   If no command-type has been set then return NIL.  Setting this with
   Setf sets the value for the next command."
-  *last-command-type*)
+  *last-last-command-type*)
 
 ;;; %SET-LAST-COMMAND-TYPE  --  Internal
 ;;;
-;;;    Set the flag so we know not to clear the command-type.
-;;;
 (defun %set-last-command-type (type)
-  (setq *last-command-type* type *command-type-set* t))
+  (setf (hemlock-last-command-type *current-view*) type))
 
-
-(defvar *prefix-argument* nil "The prefix argument or NIL.")
-(defvar *prefix-argument-supplied* nil
-  "Should be set by functions which supply a prefix argument.")
 
 ;;; PREFIX-ARGUMENT  --  Public
 ;;;
 ;;;
 (defun prefix-argument ()
-  "Return the current value of prefix argument.  This can be set with SETF."
-  *prefix-argument*)
+  "Return the current value of prefix argument."
+  *last-prefix-argument*)
 
-;;; %SET-PREFIX-ARGUMENT  --  Internal
-;;;
-(defun %set-prefix-argument (argument)
-  "Set the prefix argument for the next command to Argument."
-  (unless (or (null argument) (integerp argument))
-    (error "Prefix argument ~S is neither an integer nor Nil." argument))
-  (setq *prefix-argument* argument  *prefix-argument-supplied* t))
-
-;;;; The Command Loop:
+(defun get-self-insert-command ()
+  ;; Get the command used to implement normal character insertion in current buffer.
+  (getstring (value hemlock::self-insert-command-name) *command-names*))
 
-;;; Buffers we use to read and translate keys.
-;;;
-(defvar *current-command* (make-array 10 :fill-pointer 0 :adjustable t))
-(defvar *current-translation* (make-array 10 :fill-pointer 0 :adjustable t))
-
-(defvar *invoke-hook* #'(lambda (command p)
-			  (funcall (command-function command) p))
-  "This function is called by the command interpreter when it wants to invoke a
-  command.  The arguments are the command to invoke and the prefix argument.
-  The default value just calls the Command-Function with the prefix argument.")
-
-
-
-(defvar *self-insert-command* nil)
-
-(defun self-insert-command ()
-  (or *self-insert-command*
-      (setq *self-insert-command* (getstring "Self Insert" *command-names*))))
-
-    
-;;; %COMMAND-LOOP  --  Internal
-;;;
-;;;    Read commands from the terminal and execute them, forever.
-;;;
-(defun %command-loop ()
-  (let  ((cmd *current-command*)
-	 (trans *current-translation*)
-	 (*last-command-type* nil)
-	 (*command-type-set* nil)
-	 (*prefix-argument* nil)
-	 (*prefix-argument-supplied* nil))
-    (declare (special *last-command-type* *command-type-set*
-		      *prefix-argument* *prefix-argument-supplied*))
-    (setf (fill-pointer cmd) 0)
-    (handler-bind
-	;; Bind this outside the invocation loop to save consing.
-	((editor-error #'(lambda (condx)
-			   (beep)
-			   (let ((string (editor-error-format-string condx)))
-			     (when string
-			       (apply #'message string
-				      (editor-error-format-arguments condx)))
-			     (throw 'command-loop-catcher nil)))))
-      (loop
-        (let* ((temporary-object-pool (allocate-temporary-object-pool)))
-          (unwind-protect
-               (progn
-                 (unless (eq *current-buffer* *echo-area-buffer*)
-                   (unless (or (zerop (length cmd))
-                               (not (value hemlock::key-echo-delay)))
-                     (editor-sleep (value hemlock::key-echo-delay))
-                     (unless (listen-editor-input *editor-input*)
-                       (clear-echo-area)
-                       (dotimes (i (length cmd))
-                         (hemlock-ext:print-pretty-key (aref cmd i) *echo-area-stream*)
-                         (write-char #\space *echo-area-stream*)))))
-                 (multiple-value-bind (key self-insert)
-                     (get-key-event *editor-input*)
-                   (unless (eq *current-buffer* *echo-area-buffer*)
-                     (when (buffer-modified *echo-area-buffer*)
-                       (clear-echo-area)))
-                   (vector-push-extend key cmd)
-                   (multiple-value-bind (trans-result prefix-p)
-                       (unless self-insert (translate-key cmd trans))
-                     (multiple-value-bind (res t-bindings)
-                         (if self-insert
-                           (self-insert-command)
-                           (get-current-binding trans-result))
-                       (etypecase res
-                         (command 
-                          (let ((punt t))
-                            (catch 'command-loop-catcher
-                              (let* ((buffer *current-buffer*)
-                                     (*command-key-event-buffer* buffer)
-                                     (doc (buffer-document buffer)))
-                                (unwind-protect
-                                     (progn
-                                       (when doc
-                                         (hi::document-begin-editing doc))
-                                       (dolist (c t-bindings)
-                                         (funcall *invoke-hook* c *prefix-argument*))
-                                       (funcall *invoke-hook* res *prefix-argument*)
-                                       (setf punt nil))
-                                  (when doc
-                                    (hi::document-end-editing doc)))))
-                            (when punt (invoke-hook hemlock::command-abort-hook)))
-                          (if *command-type-set*
-                            (setq *command-type-set* nil)
-                            (setq *last-command-type* nil))
-                          (if *prefix-argument-supplied*
-                            (setq *prefix-argument-supplied* nil)
-                            (setq *prefix-argument* nil))
-                          (setf (fill-pointer cmd) 0))
-                         (null
-                          (unless prefix-p
-                            (beep)
-                            (setq *prefix-argument* nil)
-                            (setf (fill-pointer cmd) 0)))
-                         (hash-table)))))
-                 (free-temporary-objects temporary-object-pool))))))))
-
-
-
-
-    
-
-
-
-;;; EXIT-HEMLOCK  --  Public
-;;;
-
+(defun get-default-command ()
+  ;; Get the command used when no binding is present in current buffer.
+  (getstring (value hemlock::default-command-name) *command-names*))

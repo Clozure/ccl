@@ -39,8 +39,8 @@
 ;;;    -*- Text -*-
 ;;; This kicks in if we find no colon on the file options line.
 ;;;
-(defun process-file-options (buffer &optional
-				    (pathname (buffer-pathname buffer)))
+(defun process-file-options (&optional (buffer (current-buffer))
+                                       (pathname (buffer-pathname buffer)))
   "Checks for file options and invokes handlers if there are any.  If no
    \"Mode\" mode option is specified, then this tries to invoke the appropriate
    file type hook."
@@ -206,7 +206,7 @@
   "Reprocess this buffer's file options."
   "Reprocess this buffer's file options."
   (declare (ignore p))
-  (process-file-options (current-buffer)))
+  (process-file-options))
 
 (defcommand "Ensure File Options Line" (p)
   "Insert a default file options line at the beginning of the buffer, unless such a line already exists."
@@ -273,7 +273,7 @@
 	 (end (copy-mark point :left-inserting))
 	 (region (region start end)))
     (setv pathname-defaults pn)
-    (push-buffer-mark (copy-mark end))
+    (push-new-buffer-mark end)
     (read-file pn end)
     (make-region-undo :delete "Insert File" region)))
 
@@ -349,70 +349,28 @@
       (hi::revert-document doc)))
   (clear-echo-area))
 
-;;; REVERT-PATHNAME -- Internal
-;;;
-;;; If in Save Mode, return either the checkpoint pathname or the buffer
-;;; pathname whichever is more recent. Otherwise return the buffer-pathname
-;;; if it exists. If neither file exists, return NIL.
-;;; 
-(defun revert-pathname (buffer)
-  (let* ((buffer-pn (buffer-pathname buffer))
-	 (buffer-pn-date (file-write-date buffer-pn))
-	 (checkpoint-pn (get-checkpoint-pathname buffer))
-	 (checkpoint-pn-date (and checkpoint-pn
-				  (file-write-date checkpoint-pn))))
-    (cond (checkpoint-pn-date
-	   (if (> checkpoint-pn-date (or buffer-pn-date 0))
-	       (values checkpoint-pn t)
-	       (values buffer-pn nil)))
-	  (buffer-pn-date (values buffer-pn nil))
-	  (t (values nil nil)))))
 
-
-
 ;;;; Find file.
 
 
-(defcommand "Old Find File" (p &optional pathname)
+(defcommand "Find File" (p)
   "Visit a file in its own buffer.
    If the file is already in some buffer, select that buffer,
    otherwise make a new buffer with the same name as the file and
    read the file into it."
-  "Make a buffer containing the file Pathname current, creating a buffer
-   if necessary.  The buffer is returned."
-  (declare (ignore p))
-  (let* ((pn (or pathname
-		 (prompt-for-file 
-		  :prompt "Find File: "
-		  :must-exist nil
-		  :help "Name of file to read into its own buffer."
-		  :default (buffer-default-pathname (current-buffer)))))
-	 (buffer (find-file-buffer pn)))
-    (change-to-buffer buffer)
-    buffer))
-
-(defcommand "Find File" (p &optional pathname)
-  "Visit a file in its own buffer.
-   If the file is already in some buffer, select that buffer,
-   otherwise make a new buffer with the same name as the file and
-   read the file into it."
-  "Make a buffer containing the file Pathname current, creating a buffer
-   if necessary.  The buffer is returned."
-  (if pathname
-    (old-find-file-command p pathname)
-    (hi::open-document)))
+  (hi::open-document))
   
 
-
+#|
 (defun find-file-buffer (pathname)
-  "Return a buffer assoicated with the file Pathname, reading the file into a
+  "Return a buffer associated with the file Pathname, reading the file into a
    new buffer if necessary.  The second value is T if we created a buffer, NIL
    otherwise.  If the file has already been read, we check to see if the file
    has been modified on disk since it was read, giving the user various
    recovery options."
   (let* ((pathname (pathname pathname))
 	 (trial-pathname (or (probe-file pathname)
-			     (merge-pathnames pathname (hemlock-ext:default-directory))))
+			     (merge-pathnames pathname (default-directory))))
 	 (found (find trial-pathname (the list *buffer-list*)
 		     :key #'buffer-pathname :test #'equal)))
     (cond ((not found)
@@ -444,7 +402,7 @@
 	  (t
 	   (read-buffer-file pathname found)
 	   (values found nil)))))
-
+|#
 
 ;;; Check-Disk-Version-Consistent  --  Internal
 ;;;
@@ -526,7 +484,7 @@
     (buffer-start (buffer-point buffer))
     (setf (buffer-modified buffer) nil)
     (let ((stored-pathname (or probed-pathname
-			       (merge-pathnames pathname (hemlock-ext:default-directory)))))
+			       (merge-pathnames pathname (default-directory)))))
       (setf (buffer-pathname buffer) stored-pathname)
       (setf (value pathname-defaults) stored-pathname)
       (process-file-options buffer stored-pathname)
@@ -625,9 +583,9 @@
   is no associated file, one is prompted for."
   "Writes the contents of the current buffer to the associated file."
   (declare (ignore p))
-  (let* ((document (hi::buffer-document buffer)))
-    (when document
-      (when (buffer-modified buffer)
+  (when (buffer-modified buffer)
+    (let* ((document (hi::buffer-document buffer)))
+      (when document
         (hi::save-hemlock-document document)))))
 
 (defhvar "Save All Files Confirm"
@@ -660,14 +618,6 @@
 	(message "No files were saved.")
 	(message "Saved ~S file~:P." saved-count))))
 
-(defcommand "Save All Files and Exit" (p)
-  "Save all modified buffers in their associated files and exit;
-  a combination of \"Save All Files\" and \"Exit Hemlock\"."
-  "Do a save-all-files-command and then an exit-hemlock."
-  (declare (ignore p))
-  (save-all-files-command ())
-  (exit-hemlock))
-
 (defcommand "Backup File" (p)
   "Write the buffer to a file without changing the associated name."
   "Write the buffer to a file without changing the associated name."
@@ -684,132 +634,6 @@
 
 ;;;; Buffer hacking commands:
 
-(defvar *buffer-history* ()
-  "A list of buffers, in order from most recently to least recently selected.")
-
-(defun previous-buffer ()
-  "Returns some previously selected buffer that is not the current buffer.
-   Returns nil if no such buffer exists."
-  (let ((b (car *buffer-history*)))
-    (or (if (eq b (current-buffer)) (cadr *buffer-history*) b)
-	(find-if-not #'(lambda (x)
-			 (or (eq x (current-buffer))
-			     (eq x *echo-area-buffer*)))
-		     (the list *buffer-list*)))))
-
-;;; ADD-BUFFER-HISTORY-HOOK makes sure every buffer will be visited by
-;;; "Circulate Buffers" even if it has never been before.
-;;;
-(defun add-buffer-history-hook (buffer)
-  (let ((ele (last *buffer-history*))
-	(new-stuff (list buffer)))
-    (if ele
-	(setf (cdr ele) new-stuff)
-	(setf *buffer-history* new-stuff))))
-;;;
-(add-hook make-buffer-hook 'add-buffer-history-hook)
-
-;;; DELETE-BUFFER-HISTORY-HOOK makes sure we never end up in a dead buffer.
-;;;
-(defun delete-buffer-history-hook (buffer)
-  (setq *buffer-history* (delq buffer *buffer-history*)))
-;;;
-(add-hook delete-buffer-hook 'delete-buffer-history-hook)
-  
-(defun change-to-buffer (buffer)
-  "Switches to buffer in the current window maintaining *buffer-history*."
-  (setq *buffer-history*
-	(cons (current-buffer) (delq (current-buffer) *buffer-history*)))
-  (setf (current-buffer) buffer)
-  (setf (window-buffer (current-window)) buffer))
-
-(defun delete-buffer-if-possible (buffer)
-  "Deletes a buffer if at all possible.  If buffer is the only buffer, other
-   than the echo area, signals an error.  Otherwise, find some recently current
-   buffer, and make all of buffer's windows display this recent buffer.  If
-   buffer is current, set the current buffer to be this recently current
-   buffer."
-  (let ((new-buf (flet ((frob (b)
-			  (or (eq b buffer) (eq b *echo-area-buffer*))))
-		   (or (find-if-not #'frob (the list *buffer-history*))
-		       (find-if-not #'frob (the list *buffer-list*))))))
-    (unless new-buf
-      (error "Cannot delete only buffer ~S." buffer))
-    (dolist (w (buffer-windows buffer))
-      (setf (window-buffer w) new-buf))
-    (when (eq buffer (current-buffer))
-      (setf (current-buffer) new-buf)))
-  (delete-buffer buffer))
-
-
-(defvar *create-buffer-count* 0)
-
-(defcommand "Create Buffer" (p &optional buffer-name)
-  "Create a new buffer.  If a buffer with the specified name already exists,
-   then go to it."
-  "Create or go to the buffer with the specifed name."
-  (declare (ignore p))
-  (let ((name (or buffer-name
-		  (prompt-for-buffer :prompt "Create Buffer: "
-				     :default-string
-				     (format nil "Buffer ~D"
-					     (incf *create-buffer-count*))
-				     :must-exist nil))))
-    (if (bufferp name)
-	(change-to-buffer name)
-	(change-to-buffer (or (getstring name *buffer-names*)
-			      (make-buffer name))))))
-
-(defcommand "Select Buffer" (p)
-  "Select a different buffer.
-   The buffer to go to is prompted for."
-  "Select a different buffer.
-   The buffer to go to is prompted for."
-  (declare (ignore p))
-  (let ((buf (prompt-for-buffer :prompt "Select Buffer: "
-				:default (previous-buffer))))
-    (when (eq buf *echo-area-buffer*)
-      (editor-error "Cannot select Echo Area buffer."))
-    (change-to-buffer buf)))
-
-
-(defvar *buffer-history-ptr* ()
-  "The successively previous buffer to the current buffer.")
-
-(defcommand "Select Previous Buffer" (p)
-  "Select the buffer selected before this one.  If called repeatedly
-   with an argument, select the successively previous buffer to the
-   current one leaving the buffer history as it is."
-  "Select the buffer selected before this one."
-  (if p
-      (circulate-buffers-command nil)
-      (let ((b (previous-buffer)))
-	(unless b (editor-error "No previous buffer."))
-	(change-to-buffer b)
-	;;
-	;; If the pointer goes to nil, then "Circulate Buffers" will keep doing
-	;; "Select Previous Buffer".
-	(setf *buffer-history-ptr* (cddr *buffer-history*))
-	(setf (last-command-type) :previous-buffer))))
-
-(defcommand "Circulate Buffers" (p)
-  "Advance through buffer history, selecting successively previous buffer."
-  "Advance through buffer history, selecting successively previous buffer."
-  (declare (ignore p))
-  (if (and (eq (last-command-type) :previous-buffer)
-	   *buffer-history-ptr*) ;Possibly nil if never CHANGE-TO-BUFFER.
-      (let ((b (pop *buffer-history-ptr*)))
-	(when (eq b (current-buffer))
-	  (setf b (pop *buffer-history-ptr*)))
-	(unless b
-	  (setf *buffer-history-ptr*
-		(or (cdr *buffer-history*) *buffer-history*))
-	  (setf b (car *buffer-history*)))
-	(setf (current-buffer) b)
-	(setf (window-buffer (current-window)) b)
-	(setf (last-command-type) :previous-buffer))
-      (select-previous-buffer-command nil)))
-  
 
 (defcommand "Buffer Not Modified" (p)
   "Make the current buffer not modified."
@@ -840,29 +664,6 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 (defun universal-time-to-string (ut)
   (multiple-value-bind (sec min hour day month year)
 		       (decode-universal-time ut)
@@ -872,28 +673,3 @@
 		       (1- month))
 	    (rem year 100)
 	    hour min sec)))
-
-
-
-
-
-;;;; Window hacking commands:
-
-
-
-(defcommand "Split Window" (p)
-  "Make a new window by splitting the current window.
-   The new window is made the current window and displays starting at
-   the same place as the current window."
-  "Create a new window which displays starting at the same place
-   as the current window."
-  (declare (ignore p))
-  (let ((new (make-window (window-display-start (current-window)))))
-    (unless new (editor-error "Could not make a new window."))
-    (setf (current-window) new)))
-
-
-
-
-
-

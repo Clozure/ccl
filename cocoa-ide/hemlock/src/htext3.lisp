@@ -54,7 +54,7 @@
 				    (new-chars (subseq (the simple-string (current-open-chars))
 						       0 (current-left-open-pos)))
 				    (new-line (make-line :%buffer buffer
-							 :chars (decf *cache-modification-tick*)
+							 :chars (next-cache-modification-tick)
 							 :previous line
 							 :next next)))
 			       (maybe-move-some-marks (charpos line new-line) (current-left-open-pos)
@@ -267,3 +267,12 @@
 	    (+ last-charpos (- this-charpos charpos)))
           (adjust-line-origins-forward line)
           (buffer-note-insertion buffer mark nins)))))))
+
+(defun paste-characters (position count string)
+  "Replace COUNT characters at POSITION with STRING.  POSITION is the
+absolute character position in buffer"
+  (with-mark ((m (buffer-start-mark (current-buffer))))
+    (unless (character-offset m position)
+      (buffer-end m))
+    (when (> count 0) (delete-characters m count))
+    (when string (insert-string m string))))

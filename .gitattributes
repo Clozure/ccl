@@ -9,7 +9,9 @@ cocoa-ide/cocoa-doc.lisp -text
 cocoa-ide/cocoa-grep.lisp -text
 cocoa-ide/cocoa-utils.lisp -text
 cocoa-ide/defsystem.lisp -text
+cocoa-ide/hemlock/src/isearchcoms.lisp -text
 cocoa-ide/hemlock/src/symbol-completion.lisp -text
+cocoa-ide/hemlock/src/views.lisp -text
 cocoa-ide/ide-bundle.lisp -text
 cocoa-ide/ide-contents/Resources/Appearance.tiff -text
 cocoa-ide/ide-contents/Resources/Documentation.icns -text

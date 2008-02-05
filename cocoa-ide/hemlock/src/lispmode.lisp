@@ -320,13 +320,17 @@
 	       (lisp-info-ending-quoted prev-line-info)))
     
     (if (lisp-info-begins-quoted line-info)
-	(deal-with-string-quote mark line-info)
-	(setf (lisp-info-ending-quoted line-info) nil))
+      (deal-with-string-quote mark line-info)
+      (setf (lisp-info-ending-quoted line-info) nil))
     
+    (assert (eq (hi::mark-buffer mark) (current-buffer)))
+
     (unless (lisp-info-ending-quoted line-info)
       (loop 
-	(find-lisp-char mark)
-	(ecase (character-attribute :lisp-syntax (next-character mark))
+
+        (unless (find-lisp-char mark)
+          (error "Expected at least a newline!"))
+        (case (character-attribute :lisp-syntax (next-character mark))
 	  
 	  (:open-paren
 	   (setq net-open-parens (1+ net-open-parens))
@@ -358,8 +362,12 @@
 	   (mark-after mark)
 	   (unless (deal-with-string-quote mark line-info)
 	     (setf (lisp-info-ending-quoted line-info) t)
-	     (return t))))))
-    
+	     (return t)))
+          (t (ERROR "character attribute of: ~s is ~s, at ~s"
+                    (next-character mark)
+                    (character-attribute :lisp-syntax (next-character mark))
+                    mark)))))
+
     (setf (lisp-info-net-open-parens line-info) net-open-parens)
     (setf (lisp-info-net-close-parens line-info) net-close-parens)
     (setf (lisp-info-signature-slot line-info) 
@@ -803,6 +811,12 @@
    feature is disabled."
   :value 2)
 
+(defhvar "Indent With-anything"
+  "This is the number of special arguments implicitly assumed to be supplied
+   in calls to functions whose names begin with \"WITH-\". If set to NIL, this
+   feature is disabled."
+  :value 1)
+
 (defvar *special-forms* (make-hash-table :test #'equal))
 
 (defun defindent (fname args)
@@ -818,25 +832,17 @@
 
 ;;; Hemlock forms.
 ;;; 
-(defindent "with-mark" 1)
-(defindent "with-random-typeout" 1)
-(defindent "with-pop-up-display" 1)
 (defindent "defhvar" 1)
 (defindent "hlet" 1)
 (defindent "defcommand" 2)
 (defindent "defattribute" 1)
 (defindent "command-case" 1)
-(defindent "with-input-from-region" 1)
-(defindent "with-output-to-mark" 1)
-(defindent "with-output-to-window" 1)
 (defindent "do-strings" 1)
 (defindent "save-for-undo" 1)
 (defindent "do-alpha-chars" 1)
 (defindent "do-headers-buffers" 1)
 (defindent "do-headers-lines" 1)
-(defindent "with-headers-mark" 1)
 (defindent "frob" 1) ;cover silly FLET and MACROLET names for Rob and Bill.
-(defindent "with-writable-buffer" 1)
 
 ;;; Common Lisp forms.
 ;;; 
@@ -887,11 +893,6 @@
 (defindent "unless" 1)
 (defindent "unwind-protect" 1)
 (defindent "when" 1)
-(defindent "with-input-from-string" 1)
-(defindent "with-open-file" 1)
-(defindent "with-open-stream" 1)
-(defindent "with-output-to-string" 1)
-(defindent "with-package-iterator" 1)
 
 ;;; Error/condition system forms.
 ;;; 
@@ -900,7 +901,6 @@
 (defindent "handler-case" 1)
 (defindent "restart-bind" 1)
 (defindent "restart-case" 1)
-(defindent "with-simple-restart" 1)
 ;;; These are for RESTART-CASE branch formatting.
 (defindent "store-value" 1)
 (defindent "use-value" 1)
@@ -952,7 +952,6 @@
 
 ;;; CLOS forms.
 ;;; 
-(defindent "with-slots" 1)
 (defindent "with-accessors" 2)
 (defindent "defclass" 2)
 (defindent "print-unreadable-object" 1)
@@ -964,7 +963,6 @@
 (defindent "rlet" 1)
 
 ;;; Multiprocessing forms.
-(defindent "with-lock-grabbed" 1)
 (defindent "process-wait" 1)
 
 
@@ -1005,7 +1003,10 @@
 	       (special-args (or (gethash fname *special-forms*)
 				 (and (> (length fname) 2)
 				      (string= fname "DEF" :end1 3)
-				      (value indent-defanything)))))
+				      (value indent-defanything))
+                                 (and (> (length fname) 4)
+                                      (string= fname "WITH-" :end1 5)
+                                      (value indent-with-anything)))))
 	  (declare (simple-string fname))
 	  ;; Now that we have the form name, did it have special syntax?
 	  (cond (special-args
@@ -1396,7 +1397,7 @@
   (with-mark ((m (current-point)))
     (pre-command-parse-check m)
     (let ((count (or p 1))
-	  (mark (push-buffer-mark (copy-mark m) t)))
+	  (mark (push-new-buffer-mark m t)))
       (if (form-offset m count)
 	  (move-mark mark m)
 	  (editor-error)))))
@@ -1415,7 +1416,7 @@
 	     (editor-error "No current or next top level form."))
 	    (t
 	     (move-mark point start)
-	     (move-mark (push-buffer-mark (copy-mark point) t) end))))))
+	     (move-mark (push-new-buffer-mark point t) end))))))
 
 (defcommand "Forward Kill Form" (p)
   "Kill the next Form.
@@ -1973,12 +1974,43 @@
     (mark-symbol mark1 mark2)
     (with-input-from-region (s (region mark1 mark2))
       (let* ((symbol (read s)))
-	(make-instance 'ccl::sequence-window-controller
-	  :sequence (ccl::callers symbol)
-	  :title (format nil "Callers of ~a" symbol)
-	  :result-callback #'(lambda (item)
-			       (get-def-info-and-go-to-it (symbol-name item)
-							  (symbol-package item))))))))
+	(hemlock-ext:open-sequence-dialog
+	 :title (format nil "Callers of ~a" symbol)
+	 :sequence (ccl::callers symbol)
+	 :action #'edit-definition)))))
+
+;; Note this isn't necessarily called from hemlock, e.g. it might be called by cl:ed,
+;; from any thread, or it might be called from a sequence dialog, etc.
+(defun edit-definition (name)
+  (flet ((get-source-alist (name)
+           (mapcar #'(lambda (item) (cons name item))
+                   (ccl::get-source-files-with-types&classes name))))
+    (let* ((info (get-source-alist name)))
+      (when (null info)
+        (let* ((seen (list name))
+               (found ())
+               (pname (symbol-name name)))
+          (dolist (pkg (list-all-packages))
+            (let ((sym (find-symbol pname pkg)))
+              (when (and sym (not (member sym seen)))
+                (let ((new (get-source-alist sym)))
+                  (when new
+                    (setq info (nconc new info))
+                    (push sym found)))
+                (push sym seen))))
+          (when found
+            ;; Unfortunately, this puts the message in the wrong buffer (would be better in the destination buffer).
+            (loud-message "No definitions for ~s, using ~s instead"
+                          name (if (cdr found) found (car found))))))
+      (if info
+        (if (cdr info)
+          (hemlock-ext:open-sequence-dialog
+           :title (format nil "Definitions of ~s" name)
+           :sequence info
+           :action #'(lambda (item) (hemlock-ext:edit-single-definition (car item) (cdr item)))
+           :printer #'(lambda (item stream) (prin1 (cadr item) stream)))
+          (hemlock-ext:edit-single-definition (caar info) (cdar info)))
+        (editor-error "No known definitions for ~s" name)))))
 
 #||
 (defcommand "Set Package Name" (p)

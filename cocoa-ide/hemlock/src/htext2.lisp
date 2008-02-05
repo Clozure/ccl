@@ -64,7 +64,7 @@
 	 (end (length string)))
     (declare (simple-string string))
     (do* ((index 0)
-	  (buffer (incf *disembodied-buffer-counter*))
+	  (buffer (next-disembodied-buffer-counter))
 	  (previous-line)
 	  (line (make-line :%buffer buffer))
 	  (first-line line))
@@ -237,13 +237,13 @@
   (setf (mark-charpos mark) (line-length* line))
   mark)
 
-(defun buffer-start (mark &optional (buffer (line-buffer (mark-line mark))))
+(defun buffer-start (mark &optional (buffer (mark-buffer mark)))
   "Change Mark to point to the beginning of Buffer, which defaults to
   the buffer Mark is currently in."
   (unless buffer (error "Mark ~S does not point into a buffer."))
   (move-mark mark (buffer-start-mark buffer)))
 
-(defun buffer-end (mark &optional (buffer (line-buffer (mark-line mark))))
+(defun buffer-end (mark &optional (buffer (mark-buffer mark)))
   "Change Mark to point to the end of Buffer, which defaults to
   the buffer Mark is currently in."
   (unless buffer (error "Mark ~S does not point into a buffer."))
@@ -382,7 +382,7 @@
 	   (write-string (line-chars structure) stream)))))
 
 (defun %print-before-mark (mark stream)
-  (let* ((hi::*current-buffer* (line-buffer (mark-line mark))))
+  (let* ((hi::*current-buffer* (mark-buffer mark)))
     (if (mark-line mark)
 	(let* ((line (mark-line mark))
 	       (chars (line-chars line))
@@ -405,7 +405,7 @@
 
 
 (defun %print-after-mark (mark stream)
-  (let* ((hi::*current-buffer* (line-buffer (mark-line mark))))
+  (let* ((hi::*current-buffer* (mark-buffer mark)))
     (if (mark-line mark)
 	(let* ((line (mark-line mark))
 	       (chars (line-chars line))
@@ -436,7 +436,7 @@
 
 (defun %print-hmark (structure stream d)
   (declare (ignore d))
-  (let ((hi::*current-buffer* (line-buffer (mark-line structure))))
+  (let ((hi::*current-buffer* (mark-buffer structure)))
     (write-string "#<Hemlock Mark \"" stream)
     (%print-before-mark structure stream)
     (write-string "^" stream)
@@ -451,7 +451,7 @@
   (write-string "#<Hemlock Region \"" stream)
   (let* ((start (region-start region))
 	 (end (region-end region))
-	 (hi::*current-buffer* (line-buffer (mark-line start)))
+	 (hi::*current-buffer* (mark-buffer start))
 	 (first-line (mark-line start))
 	 (last-line (mark-line end)))
     (cond

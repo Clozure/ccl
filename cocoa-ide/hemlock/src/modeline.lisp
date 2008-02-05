@@ -41,8 +41,7 @@
   (gethash name *modeline-field-names*))
 
 
-(declaim (inline modeline-field-name modeline-field-width
-		 modeline-field-function))
+(declaim (inline modeline-field-name modeline-field-width modeline-field-function))
 
 (defun modeline-field-name (ml-field)
   "Returns the name of a modeline field object."
@@ -63,70 +62,44 @@
 
 (declaim (special *buffer-list*))
 
-(defun %set-modeline-field-width (ml-field width)
-  (check-type ml-field modeline-field)
-  (unless (or (eq width nil) (and (integerp width) (plusp width)))
-    (error "Width must be nil or a positive integer."))
-  (unless (eql width (modeline-field-%width ml-field))
-    (setf (modeline-field-%width ml-field) width)
-    (dolist (b *buffer-list*)
-      (when (buffer-modeline-field-p b ml-field)
-	(dolist (w (buffer-windows b))
-	  (update-modeline-fields b w)))))
-  width)
-  
 (defun modeline-field-function (ml-field)
   "Returns the function of a modeline field object.  It returns a string."
   (modeline-field-%function ml-field))
 
-(defun %set-modeline-field-function (ml-field function)
-  (check-type ml-field modeline-field)
-  (check-type function (or symbol function))
-  (setf (modeline-field-%function ml-field) function)
-  (dolist (b *buffer-list*)
-    (when (buffer-modeline-field-p b ml-field)
-      (dolist (w (buffer-windows b))
-	(update-modeline-field b w ml-field))))
-  function)
 
-
 ;;;; Default modeline and update hooks.
 
 (make-modeline-field :name :hemlock-literal :width 8
-		     :function #'(lambda (buffer window)
+		     :function #'(lambda (buffer)
 				   "Returns \"Hemlock \"."
-				   (declare (ignore buffer window))
+				   (declare (ignore buffer))
 				   "Hemlock "))
 
 (make-modeline-field
  :name :external-format
- :function #'(lambda (buffer window)
+ :function #'(lambda (buffer)
 	       "Returns an indication of buffer's external-format, iff it's
 other than :DEFAULT"
-	       (declare (ignore window))
 	       (let* ((line-termination-string
                        (case (buffer-line-termination buffer)
-                         ((:unix nil))
-                         (:macos "CR")
-                         (:cp/m "CRLF")))
-                      (doc (buffer-document buffer))
-                      (encoding-name (if doc
-                                       (document-encoding-name doc)
-                                       "Default")))
+                         ((:lf nil))
+                         ((:cr) "CR")
+                         ((:crlf) "CRLF")))
+                      (encoding-name (or (buffer-encoding-name buffer)
+					 "Default")))
                  (format nil "[~a~@[ ~a~]] "
                          encoding-name line-termination-string))))
 
 
 (make-modeline-field
  :name :package
- :function #'(lambda (buffer window)
+ :function #'(lambda (buffer)
 	       "Returns the value of buffer's \"Current Package\" followed
 		by a colon and two spaces, or a string with one space."
-	       (declare (ignore window))
 	       (if (hemlock-bound-p 'hemlock::current-package :buffer buffer)
 		   (let ((val (variable-value 'hemlock::current-package
 					      :buffer buffer)))
-		     (if val
+		     (if (stringp val)
                        (if (find-package val)
 			 (format nil "~A:  " val)
                          (format nil "?~A?:  " val))
@@ -135,22 +108,19 @@ other than :DEFAULT"
 
 (make-modeline-field
  :name :modes
- :function #'(lambda (buffer window)
+ :function #'(lambda (buffer)
 	       "Returns buffer's modes followed by one space."
-	       (declare (ignore window))
                (let* ((m ()))
-                 (dolist (mode (buffer-mode-objects buffer))
-                   (unless (or (hi::mode-object-major-p mode)
-                               (hi::mode-object-hidden mode))
+                 (dolist (mode (buffer-minor-mode-objects buffer))
+                   (unless (mode-object-hidden mode)
                      (push (mode-object-name mode) m)))
-	       (format nil "~A  " (cons (hi::buffer-major-mode buffer)
-                                        (nreverse m))))))
+                 (format nil "~A  " (cons (buffer-major-mode buffer)
+                                          (nreverse m))))))
 
 (make-modeline-field
  :name :modifiedp
- :function #'(lambda (buffer window)
+ :function #'(lambda (buffer)
 	       "Returns \"* \" if buffer is modified, or \"  \"."
-	       (declare (ignore window))
 	       (let ((modifiedp (buffer-modified buffer)))
 		 (if modifiedp
 		     "* "
@@ -158,11 +128,10 @@ other than :DEFAULT"
 
 (make-modeline-field
  :name :buffer-name
- :function #'(lambda (buffer window)
+ :function #'(lambda (buffer)
 	       "Returns buffer's name followed by a colon and a space if the
 		name is not derived from the buffer's pathname, or the empty
 		string."
-	       (declare (ignore window))
 	       (let ((pn (buffer-pathname buffer))
 		     (name (buffer-name buffer)))
 		 (cond ((not pn)
@@ -171,6 +140,15 @@ other than :DEFAULT"
 			(format nil "~A: " name))
 		       (t "")))))
 
+(make-modeline-field
+ :name :completion :width 40
+ :function #'(lambda (buffer)
+               (declare (special hemlock::*completion-mode-possibility*))
+	       (declare (ignore buffer))
+	       hemlock::*completion-mode-possibility*))
+
+
+
 
 ;;; MAXIMUM-MODELINE-PATHNAME-LENGTH-HOOK is called whenever "Maximum Modeline
 ;;; Pathname Length" is set.
@@ -178,17 +156,15 @@ other than :DEFAULT"
 (defun maximum-modeline-pathname-length-hook (name kind where new-value)
   (declare (ignore name new-value))
   (if (eq kind :buffer)
-      (hi::queue-buffer-change where)
-      (dolist (buffer *buffer-list*)
-	(when (and (buffer-modeline-field-p buffer :buffer-pathname)
-		   (buffer-windows buffer))
-	  (hi::queue-buffer-change buffer)))))
+    (note-modeline-change where)
+    (dolist (buffer *buffer-list*)
+      (when (buffer-modeline-field-p buffer :buffer-pathname)
+	(note-modeline-change buffer)))))
 
-(defun buffer-pathname-ml-field-fun (buffer window)
+(defun buffer-pathname-ml-field-fun (buffer)
   "Returns the namestring of buffer's pathname if there is one.  When
    \"Maximum Modeline Pathname Length\" is set, and the namestring is too long,
    return a truncated namestring chopping off leading directory specifications."
-  (declare (ignore window))
   (let ((pn (buffer-pathname buffer)))
     (if pn
 	(let* ((name (namestring pn))
@@ -227,14 +203,8 @@ other than :DEFAULT"
 
 (make-modeline-field
  :name :process-info
- :function #'(lambda (buffer window)
-               (declare (ignore window))
-               (let* ((proc (buffer-process buffer)))
-                 (when proc
-                   (format nil "~a(~d) [~a]"
-                           (ccl::process-name proc)
-                           (ccl::process-serial-number proc)
-                           (ccl::process-whostate proc))))))
+ :function #'(lambda (buffer)
+               (hemlock-ext:buffer-process-description buffer)))
 
 (defparameter *default-modeline-fields*
   (list (modeline-field :modifiedp) ;(modeline-field :hemlock-literal)
@@ -244,17 +214,19 @@ other than :DEFAULT"
   "This is the default value for \"Default Modeline Fields\".")
 
 (defun %init-mode-redisplay ()
-  (add-hook hemlock::buffer-major-mode-hook 'queue-buffer-change)
-  (add-hook hemlock::buffer-minor-mode-hook 'queue-buffer-change)
-  (add-hook hemlock::buffer-name-hook 'queue-buffer-change)
-  (add-hook hemlock::buffer-pathname-hook 'queue-buffer-change)
+  (add-hook hemlock::buffer-major-mode-hook 'note-modeline-change)
+  (add-hook hemlock::buffer-minor-mode-hook 'note-modeline-change)
+  (add-hook hemlock::buffer-name-hook 'note-modeline-change)
+  (add-hook hemlock::buffer-pathname-hook 'note-modeline-change)
   ;; (SETF (BUFFER-MODIFIED ...)) handles updating the modeline;
   ;; it only wants to do so if the buffer's modified state changes.
-;  (add-hook hemlock::buffer-modified-hook 'queue-buffer-change)
-  (add-hook hemlock::window-buffer-hook 'queue-window-change)
+;  (add-hook hemlock::buffer-modified-hook 'note-modeline-change)
 )
 
-(defun queue-buffer-change (buffer &optional something-else another-else)
-  (declare (ignore something-else another-else))
-  (dolist (w (buffer-windows buffer))
-    (invalidate-modeline w)))
+(defun note-modeline-change (buffer &rest more)
+  (declare (ignore more)) ;; used as hooks some of which pass more info
+  (hemlock-ext:invalidate-modeline buffer))
+
+;; Public version
+(defun update-modeline-fields (buffer)
+  (note-modeline-change buffer))

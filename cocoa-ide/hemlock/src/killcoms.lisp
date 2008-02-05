@@ -125,7 +125,7 @@
 
 
 (defun %buffer-push-buffer-mark (b mark activate-region)
-  (cond ((eq (line-buffer (mark-line mark)) b)
+  (cond ((eq (mark-buffer mark) b)
          (setf (mark-kind mark) :right-inserting)
          (let* ((old-mark (hi::buffer-%mark b)))
            (when old-mark
@@ -142,6 +142,9 @@
    This never deactivates the current region.  Mark is returned."
   (%buffer-push-buffer-mark (current-buffer) mark activate-region))
 
+(defun push-new-buffer-mark (mark &optional (activate-region nil))
+  "Pushes a new mark at argument position"
+  (push-buffer-mark (copy-mark mark :right-inserting) activate-region))
 
 (defcommand "Set/Pop Mark" (p)
   "Set or Pop the mark ring.
@@ -151,9 +154,8 @@
    region."
   "Set or Pop the mark ring."
   (cond ((not p)
-	 (push-buffer-mark (copy-mark (current-point)) t)
-	 (when (interactive)
-	   (message "Mark pushed.")))
+	 (push-new-buffer-mark (current-point) t)
+	 (message "Mark pushed."))
 	((= p (value universal-argument-default))
 	 (pop-and-goto-mark-command nil))
 	((= p (expt (value universal-argument-default) 2))
@@ -195,10 +197,10 @@
 	 (start (region-start region))
 	 (end (region-end region))
 	 (point (current-point)))
-    (push-buffer-mark (copy-mark point))
-    (cond (p (push-buffer-mark (copy-mark start) t)
+    (push-new-buffer-mark point)
+    (cond (p (push-new-buffer-mark start t)
 	     (move-mark point end))
-	  (t (push-buffer-mark (copy-mark end) t)
+	  (t (push-new-buffer-mark end t)
 	     (move-mark point start)))))
 
 
@@ -470,8 +472,7 @@
     (cond ((> (ring-length *kill-ring*) idx -1)
 	   (let* ((region (ring-ref *kill-ring* idx))
 		  (point (current-point-for-insertion))
-		  (mark (copy-mark point)))
-	     (push-buffer-mark mark)
+		  (mark (push-new-buffer-mark point)))
 	     (insert-region point region)
 	     (make-region-undo :delete "Un-Kill"
 			       (region (copy-mark mark) (copy-mark point))))

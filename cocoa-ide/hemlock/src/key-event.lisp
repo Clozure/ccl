@@ -1,4 +1,4 @@
-;;; -*- Log: hemlock.log; Package: HEMLOCK-EXT -*-
+;;; -*- Log: hemlock.log; Package: Hemlock-Internals -*-
 ;;;
 ;;; **********************************************************************
 ;;; This code was written as part of the CMU Common Lisp project at
@@ -9,29 +9,31 @@
 ;;;
 ;;; **********************************************************************
 ;;;
-;;; This file implements key-events for representing editor input.  It also
-;;; provides a couple routines to interface this to X11.
+;;; This file implements key-events for representing editor input.
 ;;;
 ;;; Written by Blaine Burks and Bill Chiles.
 ;;;
 
-;;; The following are the implementation dependent parts of this code (what
-;;; you would have to change if you weren't using X11):
-;;;    *modifier-translations*
-;;;    DEFINE-CLX-MODIFIER
-;;;    TRANSLATE-KEY-EVENT
-;;;    TRANSLATE-MOUSE-KEY-EVENT
-;;;    DEFINE-KEYSYM
-;;;    DEFINE-MOUSE-KEYSYM
-;;;    DO-ALPHA-KEY-EVENTS
-;;; If the window system didn't use a keysym mechanism to represent keys, you
-;;; would also need to write something that mapped whatever did encode the
-;;; keys to the keysyms defined with DEFINE-KEYSYM.
-;;;
-
-(in-package :hemlock-ext)
+(in-package :hemlock-internals)
 
 
+;;; Objects involved in key events:
+;;; (1) a KEY-EVENT describes a combination of a KEYSYM and MODIFIERS.  KEY-EVENTS
+;;;   are interned, so there is a unique key-event for each combination of keysym and
+;;;   modifiers.
+;;; (2) A KEYSYM is an object representing a key.  It must be declared to be so via
+;;;  define-keysym.  A KEYSYM must be defined before a key-event based on it can be
+;;;  defined.
+;;; (3) A CODE is a system-dependent fixnum value for a KEYSYM.  It must be defined
+;;; before any events actually occur, but it doesn't need to be defined in order to
+;;; create key-events.
+;;;
+;;; The Keysym can be the same as a code, but separating them deals with a bootstrapping
+;;; problem: keysyms cannot be defined before hemlock is loaded, but hemlock wants to
+;;; define key events while it's loading.  So we define key events using keysyms, and let
+;;; their codes be defined later
+
+
 ;;;; Keysym <==> Name translation.
 
 ;;; Keysyms are named by case-insensitive names.  However, if the name
@@ -78,7 +80,7 @@
 (defun get-name-case-right (string)
   (if (= (length string) 1) string (string-downcase string)))
 
-;;; DEFINE-KEYSYM -- Public.
+;;; DEFINE-KEYSYM -- Public
 ;;;
 (defun define-keysym (keysym preferred-name &rest other-names)
   "This establishes a mapping from preferred-name to keysym for purposes of
@@ -90,10 +92,9 @@
   (dolist (name (cons preferred-name other-names))
     (setf (gethash (get-name-case-right name) *names-to-keysyms*) keysym)))
 
-;;; This is an a-list mapping CLX modifier masks to defined key-event
-;;; modifier names.  DEFINE-CLX-MODIFIER fills this in, so TRANSLATE-KEY-EVENT
-;;; and TRANSLATE-MOUSE-KEY-EVENT can work.
-;;;
+;;; This is an a-list mapping native modifier bit masks to defined key-event
+;;; modifier names.
+;;; 
 (defvar *modifier-translations*)
 
 ;;; This is an ordered a-list mapping defined key-event modifier names to the
@@ -191,9 +192,7 @@
 ;;; DEFINE-MOUSE-KEYSYM -- Public.
 ;;;
 (defun define-mouse-keysym (button keysym name shifted-bit event-key)
-  "This defines keysym named name for the X button cross the X event-key.
-   Shifted-bit is a defined modifier name that TRANSLATE-MOUSE-KEY-EVENT sets
-   in the key-event it returns whenever the X shift bit is on."
+  "This defines keysym named name for the X button cross the X event-key."
   (unless (<= 1 button 5)
     (error "Buttons are number 1-5, not ~D." button))
   (setf (gethash keysym *keysyms-to-names*) (list name))
@@ -211,18 +210,18 @@
 (defstruct (key-event (:print-function %print-key-event)
 		      (:constructor %make-key-event (keysym bits)))
   (bits nil :type fixnum)
-  (keysym nil :type fixnum))
+  (keysym nil))
 
 (defun %print-key-event (object stream ignore)
   (declare (ignore ignore))
   (write-string "#<Key-Event " stream)
-  (print-pretty-key-event object stream)
+  (print-pretty-key object stream)
   (write-char #\> stream))
 
 ;;; This maps Common Lisp CHAR-CODE's to character classes for parsing #k
 ;;; syntax.
 ;;;
-(defvar *key-character-classes* (make-array char-code-limit
+(defvar *key-character-classes* (make-array hemlock-char-code-limit
 					    :initial-element :other))
 
 ;;; These characters are special:
@@ -257,7 +256,7 @@
 ;;; key specifications.  It returns either a VECTOR form or a MAKE-KEY-EVENT
 ;;; form.  Since key-events are unique at runtime, we cannot create them at
 ;;; readtime, returning the constant object from READ.  Wherever a #k appears,
-;;; there's a for that at loadtime or runtime will return the unique key-event
+;;; there's a form that at loadtime or runtime will return the unique key-event
 ;;; or vector of unique key-events.
 ;;;
 (defun parse-key-fun (stream sub-char count)
@@ -269,7 +268,7 @@
 	(unless (char= (read-char stream) #\")
 	  (error "Keys must be delimited by ~S." #\"))
 	;; Skip any leading spaces in the string.
-	(skip-whitespace stream)
+	(peek-char t stream)
 	(multiple-value-setq (char class) (get-key-char stream))
 	(ecase class
 	  ((:letter :other :escaped) (go ID))
@@ -292,7 +291,7 @@
 	(setf (fill-pointer *id-namestring*) 0)
 	(setf bits 0)
 	;; Skip any whitespace between characters.
-	(skip-whitespace stream)
+	(peek-char t stream)
 	(multiple-value-setq (char class) (get-key-char stream))
 	(ecase class
 	  ((:letter :other :escaped) (go ID))
@@ -368,8 +367,6 @@
 (defvar *all-modifier-names* ()
   "A list of all the names of defined modifiers.")
 
-;;; DEFINE-KEY-EVENT-MODIFIER -- Public.
-;;;
 ;;; Note that short-name is pushed into *modifiers-to-internal-masks* after
 ;;; long-name.  PRINT-PRETTY-KEY-EVENT and KEY-EVENT-BITS-MODIFIERS rely on
 ;;; this feature.
@@ -406,25 +403,21 @@
 ;;; default key-event modifiers.
 ;;; 
 
-;;; DEFINE-CLX-MODIFIER -- Public.
+;;; DEFINE-MODIFIER-BIT -- Public.
 ;;;
-(defun define-clx-modifier (clx-mask modifier-name)
-  "This establishes a mapping from clx-mask to a define key-event modifier-name.
-   TRANSLATE-KEY-EVENT and TRANSLATE-MOUSE-KEY-EVENT can only return key-events
-   with bits defined by this routine."
+(defun define-modifier-bit (bit-mask modifier-name)
+  "This establishes a mapping from bit-mask to a define key-event modifier-name."
   (let ((map (assoc modifier-name *modifiers-to-internal-masks*
 		    :test #'string-equal)))
     (unless map (error "~S an undefined modifier name." modifier-name))
-    (push (cons clx-mask (car map)) *modifier-translations*)))
+    (push (cons bit-mask (car map)) *modifier-translations*)))
 
 ;;;
 ;;; RE-INITIALIZE-KEY-EVENTS at the end of this file defines the system
-;;; default clx modifiers, mapping them to some system default key-event
+;;; default modifiers, mapping them to some system default key-event
 ;;; modifiers.
 ;;; 
 
-;;; MAKE-KEY-EVENT-BITS -- Public.
-;;;
 (defun make-key-event-bits (&rest modifier-names)
   "This returns bits suitable for MAKE-KEY-EVENT from the supplied modifier
    names.  If any name is undefined, this signals an error."
@@ -461,11 +454,9 @@
 
 ;;;; Key event lookup -- GET-KEY-EVENT and MAKE-KEY-EVENT.
 
-(defvar *keysym-high-bytes*)
+(defvar *key-events*)
 
-(defconstant modifier-bits-limit (ash 1 modifier-count-limit))
-
-;;; GET-KEY-EVENT -- Internal.
+;;; GET-KEY-EVENT* -- Internal.
 ;;;
 ;;; This finds the key-event specified by keysym and bits.  If the key-event
 ;;; does not already exist, this creates it.  This assumes keysym is defined,
@@ -473,31 +464,31 @@
 ;;; error when the system tries to print it.
 ;;;
 (defun get-key-event* (keysym bits)
-  (let* ((char (code-char keysym)))
+  (let* ((char (and (fixnump keysym) (code-char keysym))))
     (when (and char (standard-char-p char))
       (let* ((mask (key-event-modifier-mask "Shift")))
         (when (logtest bits mask)
           (setq bits (logandc2 bits mask)
                 keysym (char-code (char-upcase char)))))))
-  (let* ((high-byte (ash keysym -8))
-	 (low-byte-vector (svref *keysym-high-bytes* high-byte)))
-    (unless low-byte-vector
-      (let ((new-vector (make-array 256 :initial-element nil)))
-	(setf (svref *keysym-high-bytes* high-byte) new-vector)
-	(setf low-byte-vector new-vector)))
-    (let* ((low-byte (ldb (byte 8 0) keysym))
-	   (bit-vector (svref low-byte-vector low-byte)))
-      (unless bit-vector
-	(let ((new-vector (make-array modifier-bits-limit
-				      :initial-element nil)))
-	  (setf (svref low-byte-vector low-byte) new-vector)
-	  (setf bit-vector new-vector)))
-      (let ((key-event (svref bit-vector bits)))
-	(if key-event
-	    key-event
-	    (setf (svref bit-vector bits) (%make-key-event keysym bits)))))))
+  (let* ((data (cons keysym bits)))
+    (or (gethash data *key-events*)
+	(setf (gethash data *key-events*) (%make-key-event keysym bits)))))
 
-;;; MAKE-KEY-EVENT --  Public.
+;;;
+(defvar *keysym-to-code*)
+(defvar *code-to-keysym*)
+
+(defmacro define-keysym-code (keysym code)
+  `(progn
+     (setf (gethash ,keysym *keysym-to-code*) ,code)
+     (setf (gethash ,code *code-to-keysym*) ,keysym)))
+
+(defun keysym-for-code (code)
+  (or (gethash code *code-to-keysym*) code))
+
+(defun code-for-keysym (keysym)
+  (or (gethash keysym *keysym-to-code*) (and (fixnump keysym) keysym)))
+
 ;;;
 (defun make-key-event (object &optional (bits 0))
   "This returns a key-event described by object with bits.  Object is one of
@@ -506,9 +497,10 @@
    KEY-EVENT-MODIFIER-MASK."
   (etypecase object
     (integer
-     (unless (keysym-names object)
-       (error "~S is an undefined keysym." object))
-     (get-key-event* object bits))
+     (let ((keysym (keysym-for-code object)))
+       (unless (keysym-names keysym)
+	 (error "~S is an undefined code." object))
+       (get-key-event* keysym bits)))
     #|(character
      (let* ((name (char-name object))
 	    (keysym (name-keysym (or name (string object)))))
@@ -547,7 +539,7 @@
   "Returns the character associated with key-event. This is SETF'able."
   (check-type key-event key-event)
   (or (gethash key-event *key-event-characters*)
-      (code-char (key-event-keysym key-event))))
+      (code-char (code-for-keysym (key-event-keysym key-event)))))
 
 (defun %set-key-event-char (key-event character)
   (check-type character character)
@@ -608,13 +600,12 @@
 
 ;;;; PRINT-PRETTY-KEY and PRINT-PRETTY-KEY-EVENT.
 
-;;; PRINT-PRETTY-KEY -- Public.
+;;; PRINT-PRETTY-KEY -- Internal
 ;;;
 (defun print-pretty-key (key &optional (stream *standard-output*) long-names-p)
   "This prints key, a key-event or vector of key-events, to stream in a
    user-expected fashion.  Long-names-p indicates whether modifiers should
    print with their long or short name."
-  (declare (type (or vector key-event) key) (type stream stream))
   (etypecase key
     (key-event (print-pretty-key-event key stream long-names-p))
     (vector
@@ -624,7 +615,7 @@
 	   (print-pretty-key-event key-event stream long-names-p)
 	   (unless (= i length-1) (write-char #\space stream))))))))
 
-;;; PRINT-PRETTY-KEY-EVENT -- Public.
+;;; PRINT-PRETTY-KEY-EVENT -- Internal
 ;;;
 ;;; Note, this makes use of the ordering in the a-list
 ;;; *modifiers-to-internal-masks* by CDDR'ing down it by starting on a short
@@ -648,7 +639,11 @@
     (write-string name stream)
     (when spacep (write-char #\> stream))))
 
-
+;;; PRETTY-KEY-STRING - Public.
+;;;
+(defun pretty-key-string (key &optional long-names-p)
+  (with-output-to-string (s)
+    (print-pretty-key key s long-names-p)))
 
 ;;;; Re-initialization.
 
@@ -657,7 +652,7 @@
 (defun re-initialize-key-events ()
   "This blows away all data associated with keysyms, modifiers, mouse
    translations, and key-event/characters mapping.  Then it re-establishes
-   the system defined key-event modifiers and the system defined CLX
+   the system defined key-event modifiers and the system defined
    modifier mappings to some of those key-event modifiers.
 
    When recompiling this file, you should load it and call this function
@@ -665,15 +660,17 @@
    defining all your keysyms and using #k syntax."
   (setf *keysyms-to-names* (make-hash-table :test #'eql))
   (setf *names-to-keysyms* (make-hash-table :test #'equal))
+  (setf *keysym-to-code* (make-hash-table :test #'eql))
+  (setf *code-to-keysym* (make-hash-table :test #'eql))
   (setf *modifier-translations* ())
   (setf *modifiers-to-internal-masks* ())
   (setf *mouse-translation-info* (make-array 6 :initial-element nil))
   (setf *modifier-count* 0)
   (setf *all-modifier-names* ())
-  (setf *keysym-high-bytes* (make-array 256 :initial-element nil))
+  (setf *key-events* (make-hash-table :test #'equal))
   (setf *key-event-characters* (make-hash-table))
   (setf *character-key-events*
-	(make-array char-code-limit :initial-element nil))
+	(make-array hemlock-char-code-limit :initial-element nil))
   
   (define-key-event-modifier "Hyper" "H")
   (define-key-event-modifier "Super" "S")

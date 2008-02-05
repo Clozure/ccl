@@ -30,9 +30,9 @@
 		 (:print-function %print-hring))
   "Used with Ring-Push and friends to implement ring buffers."
   (first -1 :type fixnum)	   ;The index of the first position used.
-  (bound (required-argument) :type fixnum)   ;The index after the last element.
-  delete-function ;The function  to be called on deletion. 
-  (vector (required-argument) :type simple-vector) ;The vector.
+  (bound -1 :type fixnum)          ;The index after the last element.
+  delete-function                  ;The function  to be called on deletion. 
+  (vector #() :type simple-vector) ;The vector.
   (lock (ccl:make-lock)))
                          
 (defmacro with-ring-locked ((ring) &body body)
@@ -47,7 +47,7 @@
   "Make a ring-buffer which can hold up to Size objects.  Delete-Function
   is a function which is called with each object that falls off the
   end."
-  (unless (and (hemlock-ext:fixnump size) (> size 0))
+  (unless (and (fixnump size) (> size 0))
     (error "Ring size, ~S is not a positive fixnum." size))
   (internal-make-ring :delete-function delete-function
 		      :vector (make-array size)

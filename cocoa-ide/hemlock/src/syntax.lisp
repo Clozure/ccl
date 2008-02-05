@@ -32,39 +32,69 @@
   "This is the cache used to translate attribute/test-function pairs to
   attribute-vector/mask pairs for find-attribute and reverse-find-attribute.")
 
-(eval-when (:compile-toplevel :execute :load-toplevel)
 (defconstant character-attribute-cache-size 13
   "The number of buckets in the *character-attribute-cache*.")
 (defconstant character-attribute-bucket-size 3
   "The number of bits to use in each bucket of the
   *character-attribute-cache*.")
-); eval-when (:compile-toplevel :execute :load-toplevel)
 
-;;;    In addition, since a common pattern in code which uses find-attribute
-;;; is to repeatedly call it with the same function and attribute, we
-;;; remember the last attribute/test-function pair that was used, and check
-;;; if it is the same pair beforehand, thus often avoiding the hastable lookup.
-;;;
-(defvar *last-find-attribute-attribute* ()
-  "The attribute which we last did a find-attribute on.")
-(defvar *last-find-attribute-function* ()
-  "The last test-function used for find-attribute.")
-(defvar *last-find-attribute-vector* ()
-  "The %SP-Find-Character-With-Attribute vector corresponding to the last
-  attribute/function pair used for find-attribute.")
-(defvar *last-find-attribute-mask* ()
-  "The the mask to use with *last-find-attribute-vector* to do a search
-  for the last attribute/test-function pair.")
-(defvar *last-find-attribute-end-wins* ()
-  "The the value of End-Wins for the last attribute/test-function pair.")
 
+(defconstant character-attribute-cache-size 13
+  "The number of buckets in the character-attribute-cache.")
+(defconstant character-attribute-bucket-size 3
+  "The number of bits to use in each bucket of the character-attribute-cache.")
+
+(defstruct (shadow-syntax (:conc-name "SS-"))
+  ;;;    In addition, since a common pattern in code which uses find-attribute
+  ;;; is to repeatedly call it with the same function and attribute, we
+  ;;; remember the last attribute/test-function pair that was used, and check
+  ;;; if it is the same pair beforehand, thus often avoiding the hastable lookup.
+  ;; TODO: another common pattern is to use the same attribute but
+  ;;       different functions (toggling between zerop and not-zerop), so
+  ;;       should use a scheme that handles that - this doesn't.
+  ;; The attribute which we last did a find-attribute on
+  (last-find-attribute-attribute ())
+  ;; The last test-function used for find-attribute.
+  (last-find-attribute-function ())
+  ;; The %SP-Find-Character-With-Attribute vector corresponding to the last
+  ;; attribute/function pair used for find-attribute.
+  (last-find-attribute-vector ())
+  ;; The the mask to use with *last-find-attribute-vector* to do a search
+  ;; for the last attribute/test-function pair.
+  (last-find-attribute-mask ())
+  ;; The the value of End-Wins for the last attribute/test-function pair.
+  (last-find-attribute-end-wins ())
+
+  ;; The last character attribute which was asked for
+  (last-character-attribute-requested nil)
+  ;; The value of the most recent character attribute
+  (value-of-last-character-attribute-requested #() :type (simple-array * (*)))
+
+  ;; list of shadowed bits.
+  (shadow-bit-descriptors ())
+  ;; List of shadowed attribute vectors
+  (shadow-attributes ())
+  ;; Syntax tick count at the time shadow info was computed.
+  (global-syntax-tick -1))
+
+(defvar *global-syntax-tick* 0 "Tick count noting changes in global syntax settings")
+
+(declaim (special *current-buffer*))
+
+
+(declaim (inline current-buffer-shadow-syntax))
+(defun current-buffer-shadow-syntax ()
+  (let ((buffer *current-buffer*))
+    (when buffer
+      (let ((ss (buffer-shadow-syntax buffer)))
+	(if (and ss (eql (ss-global-syntax-tick ss) *global-syntax-tick*))
+	  ss
+	  (progn
+	    (%init-shadow-attributes buffer)
+	    (buffer-shadow-syntax buffer)))))))
 
 (defvar *character-attributes* (make-hash-table :test #'eq)
   "A hash table which translates character attributes to their values.")
-(defvar *last-character-attribute-requested* nil
-  "The last character attribute which was asked for, Do Not Bind.")
-(defvar *value-of-last-character-attribute-requested* nil
-  "The value of the most recent character attribute, Do Not Bind.")
 
 (declaim (special *character-attribute-names*))
 
@@ -88,7 +118,7 @@
 ;;;
 (defvar *all-bit-descriptors* () "The list of all the bit descriptors.")
 
-(eval-when (:compile-toplevel :execute)
+
 (defmacro allocate-bit (vec bit-num)
   `(progn
     (when (= ,bit-num 8)
@@ -96,7 +126,7 @@
     (car (push (make-bit-descriptor
 		:vector ,vec
 		:mask (ash 1 (prog1 ,bit-num (incf ,bit-num))))
-	       *all-bit-descriptors*)))))
+	       *all-bit-descriptors*))))
 ;;;    
 (defun %init-syntax-table ()
   (let ((tab (make-array character-attribute-cache-size))
@@ -109,7 +139,6 @@
 		((= i character-attribute-bucket-size) res)
 	      (push (allocate-bit vec bit-num) res))))))
 
-(eval-when (:compile-toplevel :execute)
 #+NIL
 (defmacro hash-it (attribute function)
   `(abs (rem (logxor (ash (lisp::%sp-make-fixnum ,attribute) -3)
@@ -129,34 +158,33 @@
 ;;; we do the hash-cache lookup and update the *last-find-attribute-<mumble>*
 ;;;
 (defmacro cached-attribute-lookup (attribute function vector mask end-wins)
-  `(if (and (eq ,function *last-find-attribute-function*)
-	    (eq ,attribute *last-find-attribute-attribute*))
-       (setq ,vector *last-find-attribute-vector*
-	     ,mask *last-find-attribute-mask*
-	     ,end-wins *last-find-attribute-end-wins*)
-       (let ((bit (svref *character-attribute-cache*
-			 (hash-it ,attribute ,function))))
-	 ,(do ((res `(multiple-value-setq (,vector ,mask ,end-wins)
-		       (new-cache-attribute ,attribute ,function))
-		    `(let ((b (car bit)))
-		       (cond
-			((and (eq (bit-descriptor-function b)
-				  ,function)
-			      (eq (bit-descriptor-attribute b)
-				  ,attribute))
-			 (setq ,vector (bit-descriptor-vector b)
-			       ,mask (bit-descriptor-mask b)
-			       ,end-wins (bit-descriptor-end-wins b)))
-			(t
-			 (setq bit (cdr bit)) ,res))))
-	       (count 0 (1+ count)))
-	      ((= count character-attribute-bucket-size) res))
-	 (setq *last-find-attribute-attribute* ,attribute
-	       *last-find-attribute-function* ,function
-	       *last-find-attribute-vector* ,vector
-	       *last-find-attribute-mask* ,mask
-	       *last-find-attribute-end-wins* ,end-wins))))
-); eval-when (:compile-toplevel :execute)
+  `(let ((ss (current-buffer-shadow-syntax)))
+     (if (and (eq ,function (ss-last-find-attribute-function ss))
+	      (eq ,attribute (ss-last-find-attribute-attribute ss)))
+       (setq ,vector (ss-last-find-attribute-vector ss)
+	     ,mask (ss-last-find-attribute-mask ss)
+	     ,end-wins (ss-last-find-attribute-end-wins ss))
+       (let ((b (or (loop for b in (ss-shadow-bit-descriptors ss)
+		      when (and (eq (bit-descriptor-attribute b) ,attribute)
+				(eq (bit-descriptor-function b) ,function))
+		      return b)
+		    (loop for b in (svref *character-attribute-cache*
+					  (hash-it ,attribute ,function))
+		      when (and (eq (bit-descriptor-attribute b) ,attribute)
+				(eq (bit-descriptor-function b) ,function))
+		      return b))))
+	 (cond (b 
+		(setq ,vector (bit-descriptor-vector b)
+		      ,mask (bit-descriptor-mask b)
+		      ,end-wins (bit-descriptor-end-wins b)))
+	       (t
+		(multiple-value-setq (,vector ,mask ,end-wins)
+		  (new-cache-attribute ,attribute ,function))))
+	 (setf (ss-last-find-attribute-attribute ss) ,attribute
+	       (ss-last-find-attribute-function ss) ,function
+	       (ss-last-find-attribute-vector ss) ,vector
+	       (ss-last-find-attribute-mask ss) ,mask
+	       (ss-last-find-attribute-end-wins ss) ,end-wins)))))
 
 ;;; NEW-CACHE-ATTRIBUTE  --  Internal
 ;;;
@@ -178,6 +206,7 @@
     (setf (bit-descriptor-attribute bit) attribute
 	  (bit-descriptor-function bit) function
 	  (bit-descriptor-end-wins bit) end-wins)
+    (incf *global-syntax-tick*)
     (setq values (attribute-descriptor-vector values))
     (do ((mask (bit-descriptor-mask bit))
 	 (fun (bit-descriptor-function bit))
@@ -186,8 +215,8 @@
 	((= i syntax-char-code-limit) (values vec mask end-wins))
       (declare (type (simple-array (mod 256)) vec))
       (if (funcall fun (aref (the simple-array values) i))
-	  (setf (aref vec i) (logior (aref vec i) mask))
-	  (setf (aref vec i) (logandc2 (aref vec i) mask))))))
+	(setf (aref vec i) (logior (aref vec i) mask))
+	(setf (aref vec i) (logandc2 (aref vec i) mask))))))
 
 (defun %print-attribute-descriptor (object stream depth)
   (declare (ignore depth))
@@ -217,6 +246,7 @@
       (warn "Character Attribute ~S is being redefined." name))
     (setf (getstring name *character-attribute-names*) attribute)
     (setf (gethash attribute *character-attributes*) new))
+    (incf *global-syntax-tick*)
   name)
 
 ;;; WITH-ATTRIBUTE  --  Internal
@@ -224,59 +254,55 @@
 ;;;    Bind obj to the attribute descriptor corresponding to symbol,
 ;;; giving error if it is not a defined attribute.
 ;;;
-(eval-when (:compile-toplevel :execute)
-(defmacro with-attribute (symbol &body forms)
-  `(let ((obj (gethash ,symbol *character-attributes*)))
-     (unless obj
+(defmacro with-attribute ((obj symbol) &body forms)
+  `(let ((,obj (gethash ,symbol *character-attributes*)))
+     (unless ,obj
        (error "~S is not a defined character attribute." ,symbol))
      ,@forms))
-); eval-when (:compile-toplevel :execute)
 
 (defun character-attribute-name (attribute)
   "Return the string-name of the character-attribute Attribute."
-  (with-attribute attribute
+  (with-attribute (obj attribute)
     (attribute-descriptor-name obj)))
 
 (defun character-attribute-documentation (attribute)
   "Return the documentation for the character-attribute Attribute."
-  (with-attribute attribute
+  (with-attribute (obj attribute)
     (attribute-descriptor-documentation obj)))
 
 (defun character-attribute-hooks (attribute)
   "Return the hook-list for the character-attribute Attribute.  This can
   be set with Setf."
-  (with-attribute attribute
+  (with-attribute (obj attribute)
     (attribute-descriptor-hooks obj)))
 
 (defun %set-character-attribute-hooks (attribute new-value)
-  (with-attribute attribute
+  (with-attribute (obj attribute)
     (setf (attribute-descriptor-hooks obj) new-value)))
-
-(declaim (special *last-character-attribute-requested*
-		    *value-of-last-character-attribute-requested*))
 
 ;;; CHARACTER-ATTRIBUTE  --  Public
 ;;;
 ;;;    Return the value of a character attribute for some character.
 ;;;
-(declaim (inline character-attribute))
 (defun character-attribute (attribute character)
   "Return the value of the the character-attribute Attribute for Character.
   If Character is Nil then return the end-value."
-  (if (and (eq attribute *last-character-attribute-requested*) character)
-      (aref (the simple-array *value-of-last-character-attribute-requested*)
-	    (syntax-char-code character))
-      (sub-character-attribute attribute character)))
+  (let ((ss (current-buffer-shadow-syntax)))
+    (if (and character ss (eq attribute (ss-last-character-attribute-requested ss)))
+      (aref (ss-value-of-last-character-attribute-requested ss) (syntax-char-code character))
+      (sub-character-attribute attribute character))))
 ;;;
 (defun sub-character-attribute (attribute character)
-  (with-attribute attribute
-    (setq *last-character-attribute-requested* attribute)
-    (setq *value-of-last-character-attribute-requested*
-	  (attribute-descriptor-vector obj))
-    (if character
-	(aref (the simple-array *value-of-last-character-attribute-requested*)
-	      (syntax-char-code character))
-	(attribute-descriptor-end-value obj))))
+  (with-attribute (obj attribute)
+    (let* ((ss (current-buffer-shadow-syntax))
+	   (cell (and ss (cdr (assoc obj (ss-shadow-attributes ss) :test #'eq)))))
+      (if character
+	(let ((vec (if cell (car cell) (attribute-descriptor-vector obj))))
+	  (when ss
+	    (setf (ss-last-character-attribute-requested ss) attribute)
+	    (setf (ss-value-of-last-character-attribute-requested ss) vec))
+	  (aref (the simple-array vec) (syntax-char-code character)))
+	(if cell (cdr cell) (attribute-descriptor-end-value obj))))))
 
 ;;; CHARACTER-ATTRIBUTE-P
 ;;;
@@ -290,10 +316,10 @@
 
 ;;; %SET-CHARACTER-ATTRIBUTE  --  Internal
 ;;;
-;;;    Set the value of a character attribute.
+;;;    Set the global value of a character attribute.
 ;;;
 (defun %set-character-attribute (attribute character new-value)
-  (with-attribute attribute
+  (with-attribute (obj attribute)
     (invoke-hook hemlock::character-attribute-hook attribute character new-value)
     (invoke-hook (attribute-descriptor-hooks obj) attribute character new-value)
     (cond
@@ -319,57 +345,57 @@
       (dolist (bit *all-bit-descriptors*)
 	(when (eq (bit-descriptor-attribute bit) attribute)
 	  (setf (bit-descriptor-end-wins bit)
-		(funcall (bit-descriptor-function bit) new-value))))
-      new-value))))
+		(funcall (bit-descriptor-function bit) new-value))))))
+    (incf *global-syntax-tick*)
+    new-value))
 
-(eval-when (:compile-toplevel :execute)
-;;; swap-one-attribute  --  Internal
-;;;
-;;;    Install the mode-local values described by Vals for Attribute, whose
-;;; representation vector is Value.
-;;;
- (defmacro swap-one-attribute (attribute value vals hooks)
-  `(progn
-    ;; Fix up any cached attribute vectors.
-    (dolist (bit *all-bit-descriptors*)
-      (when (eq ,attribute (bit-descriptor-attribute bit))
-	(let ((fun (bit-descriptor-function bit))
-	      (vec (bit-descriptor-vector bit))
-	      (mask (bit-descriptor-mask bit)))
-	  (declare (type (simple-array (mod 256)) vec)
-		   (fixnum mask))
-	  (dolist (char ,vals)
-	    (setf (aref vec (car char))
-		  (if (funcall fun (cdr char))
-		      (logior mask (aref vec (car char)))
-		      (logandc1 mask (aref vec (car char)))))))))
-    ;; Invoke the attribute-hook.
-    (dolist (hook ,hooks)
-      (dolist (char ,vals)
-	(funcall hook ,attribute (code-char (car char)) (cdr char))))
-    ;; Fix up the value vector.
-    (dolist (char ,vals)
-      (rotatef (aref ,value (car char)) (cdr char)))))
-); eval-when (:compile-toplevel :execute)
+;; This is called when change buffer mode.  It used to invoke attribute-descriptor-hooks on
+;; all the shadowed attributes.  We don't do that any more, should update doc if any.
+(defun invalidate-shadow-attributes (buffer)
+  (let ((ss (buffer-shadow-syntax buffer)))
+    (when ss (setf (ss-global-syntax-tick ss) -1))))
 
+(defun %init-one-shadow-attribute (ss desc vals)
+  ;; Shadow all bits for this attribute
+  (loop with key = (attribute-descriptor-keyword desc)
+    for bit in *all-bit-descriptors*
+    when (eq key (bit-descriptor-attribute bit))
+    do (let* ((fun (bit-descriptor-function bit))
+	      (b (or (find-if #'(lambda (b)
+				  (and (eq (bit-descriptor-function b) fun)
+				       (eq (bit-descriptor-attribute b) key)))
+			      (ss-shadow-bit-descriptors ss))
+		     (let ((new (make-bit-descriptor
+				 :attribute key
+				 :function fun
+				 :vector (copy-seq (bit-descriptor-vector bit))
+				 :mask (bit-descriptor-mask bit))))
+		       (push new (ss-shadow-bit-descriptors ss))
+		       new)))
+	      (vec (bit-descriptor-vector b)))
+	 (loop for (code . value) in vals
+	   ;; Since we don't share the shadow vecs, no need to preserve other bits.
+	   do (setf (aref vec code) (if (funcall fun value) #xFF #x00)))))
+  ;; Shadow the attribute values
+  (let ((vec (cadr (or (assoc desc (ss-shadow-attributes ss) :test #'eq)
+		       (let ((new (list* desc 
+					 (copy-seq (attribute-descriptor-vector desc))
+					 (attribute-descriptor-end-value desc))))
+			 (push new (ss-shadow-attributes ss))
+			 new)))))
+    (loop for (code . value) in vals do (setf (aref vec code) value))))
 
-;;; SWAP-CHAR-ATTRIBUTES  --  Internal
-;;;
-;;;    Swap the current values of character attributes and the ones
-;;;specified by "mode".  This is used in Set-Major-Mode.
-;;;
-(defun swap-char-attributes (mode)
-  (dolist (attribute (mode-object-character-attributes mode))
-    (let* ((obj (car attribute))
-	   (sym (attribute-descriptor-keyword obj))
-	   (value (attribute-descriptor-vector obj))
-	   (hooks (attribute-descriptor-hooks obj)))
-      (declare (simple-array value))
-      (swap-one-attribute sym value (cdr attribute) hooks))))
+(defun %init-shadow-attributes (buffer)
+  (let* ((mode (buffer-major-mode-object buffer))
+	 (ss (or (buffer-shadow-syntax buffer)
+		 (setf (buffer-shadow-syntax buffer) (make-shadow-syntax)))))
+    (loop for (desc .  vals) in (mode-object-character-attributes mode)
+      do (%init-one-shadow-attribute ss desc vals))
+    (setf (ss-last-find-attribute-attribute ss) nil)
+    (setf (ss-last-find-attribute-function ss) nil)
+    (setf (ss-global-syntax-tick ss) *global-syntax-tick*)))
 
-
-
-(declaim (special *mode-names* *current-buffer*))
+(declaim (special *mode-names*))
 
 ;;; SHADOW-ATTRIBUTE  --  Public
 ;;;
@@ -385,10 +411,7 @@
     (unless obj (error "~S is not a defined Mode." mode))
     (let* ((current (assoc desc (mode-object-character-attributes obj)))
 	   (code (syntax-char-code character))
-	   (hooks (attribute-descriptor-hooks desc))
-	   (vec (attribute-descriptor-vector desc))
 	   (cons (cons code value)))
-      (declare (simple-array vec))
       (if current
 	  (let ((old (assoc code (cdr current))))
 	    (if old
@@ -396,9 +419,7 @@
 		(push cons (cdr current))))
 	  (push (list desc cons)
 		(mode-object-character-attributes obj)))
-      (when (member obj (buffer-mode-objects *current-buffer*))
-	(let ((vals (list cons)))
-	  (swap-one-attribute attribute vec vals hooks)))
+      (incf *global-syntax-tick*)
       (invoke-hook hemlock::shadow-attribute-hook attribute character value mode)))
   attribute)
 
@@ -415,17 +436,12 @@
     (unless obj
       (error "~S is not a defined Mode." mode))
     (invoke-hook hemlock::shadow-attribute-hook mode attribute character)
-    (let* ((value (attribute-descriptor-vector desc))
-	   (hooks (attribute-descriptor-hooks desc))
-	   (current (assoc desc (mode-object-character-attributes obj)))
+    (let* ((current (assoc desc (mode-object-character-attributes obj)))
 	   (char (assoc (syntax-char-code character) (cdr current))))
-      (declare (simple-array value))
       (unless char
 	(error "Character Attribute ~S is not defined for character ~S ~
 	       in Mode ~S." attribute character mode))
-      (when (member obj (buffer-mode-objects *current-buffer*))
-	(let ((vals (list char)))
-	  (swap-one-attribute attribute value vals hooks)))
+      (incf *global-syntax-tick*)
       (setf (cdr current) (delete char (the list (cdr current))))))
   attribute)
 
@@ -440,7 +456,6 @@
 ;;;    Do hairy cache lookup to find a find-character-with-attribute style
 ;;; vector that we can use to do the search.
 ;;;
-(eval-when (:compile-toplevel :execute)
 (defmacro normal-find-attribute (line start result vector mask)
   `(let ((chars (line-chars ,line)))
      (setq ,result (%sp-find-character-with-attribute
@@ -462,7 +477,7 @@
 	     (%sp-find-character-with-attribute
 	      (current-open-chars) (current-right-open-pos) (current-line-cache-length) ,vector ,mask))
        (when ,result (decf ,result gap))))))
-); eval-when (:compile-toplevel :execute)
+
 ;;;
 (defun find-attribute (mark attribute &optional (test #'not-zerop))
   "Find the next character whose attribute value satisfies test."
@@ -510,7 +525,6 @@
 ;;;
 ;;;    Line find-attribute, only goes backwards.
 ;;;
-(eval-when (:compile-toplevel :execute)
 (defmacro rev-normal-find-attribute (line start result vector mask)
   `(let ((chars (line-chars ,line)))
      (setq ,result (%sp-reverse-find-character-with-attribute
@@ -535,7 +549,6 @@
 	     (%sp-reverse-find-character-with-attribute
 	      (current-open-chars) 0 (current-left-open-pos) ,vector ,mask))))))
 
-); eval-when (:compile-toplevel :execute)
 ;;;
 ;;; This moves the mark so that previous-character satisfies the test.
 (defun reverse-find-attribute (mark attribute &optional (test #'not-zerop))

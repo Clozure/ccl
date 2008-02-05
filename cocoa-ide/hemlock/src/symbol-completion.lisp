@@ -102,7 +102,7 @@
   (list state))
 
 (defmethod dabbrev-sources-in ((state (eql :other-buffers)) context)
-  (let* ((buffers (mapcar #'window-buffer (gui::ordered-hemlock-windows))))
+  (let* ((buffers (mapcar #'hemlock-view-buffer (hemlock-ext:all-hemlock-views))))
     ;; Remove duplicates, always keeping the first occurance (frontmost window)
     (loop for blist on buffers do (setf (cdr blist) (delete (car blist) (cdr blist))))
     (delete (dabbrev.buffer context) buffers)))

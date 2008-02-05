@@ -31,9 +31,6 @@
 (defparameter *hemlock-files*
   '("package"
 
-    ;; Lisp implementation specific stuff goes into one of
-    ;; the next two files.
-    "lispdep"
     "hemlock-ext"                     
 	       
     "decls"                             ;early declarations of functions and stuff
@@ -46,6 +43,8 @@
     "rompsite"
 
     "macros"
+
+    "views"
     "line"
     "ring"
     "vars"
@@ -61,9 +60,7 @@
     "search2"
     "table"
     "modeline"
-    "linimage"
     "pop-up-stream"
-    "cursor"
     "font"
     "streams"
     "main"
@@ -76,6 +73,7 @@
     "undo"
     "killcoms"
     "searchcoms"
+    "isearchcoms"
     "filecoms"
     "doccoms"
     "fill"
@@ -84,15 +82,13 @@
     "listener"
     "comments"
     "icom"
-    "kbdmac"
     "defsyn"
     "edit-defs"
     "register"
     "completion"
     "symbol-completion"
     "bindings"
-    "bindings-gb"                       ;Gilbert's bindings
-    ))  
+    ))
 
 (defun compile-hemlock (&optional force)
   (with-compilation-unit ()

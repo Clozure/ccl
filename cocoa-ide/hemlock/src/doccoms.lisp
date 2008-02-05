@@ -42,8 +42,8 @@
      (what-lossage-command nil))
     (#\m "Describe a mode."
      (describe-mode-command nil))
-    (#\p "Describe commands with mouse/pointer bindings."
-     (describe-pointer-command nil))
+    ;(#\p "Describe commands with mouse/pointer bindings."
+    ; (describe-pointer-command nil))
     (#\w "Find out Where a command is bound."
      (where-is-command nil))
     (#\t "Describe a Lisp object."
@@ -57,7 +57,7 @@
   "List places where a command is bound."
   (declare (ignore p))
   (multiple-value-bind (nam cmd)
-		       (prompt-for-keyword (list *command-names*)
+		       (prompt-for-keyword :tables (list *command-names*)
 					   :prompt "Command: "
 					   :help "Name of command to look for.")
     (let ((bindings (command-bindings cmd)))
@@ -146,7 +146,7 @@
   (declare (ignore p))
   (multiple-value-bind (nam com)
 		       (prompt-for-keyword
-			(list *command-names*)
+			:tables (list *command-names*)
 			:prompt "Describe command: "
 			:help "Name of a command to document.")
     (let ((bindings (command-bindings com)))
@@ -172,34 +172,19 @@
   "Print out the command documentation for a key
   which is prompted for."
   (declare (ignore p))
-  (let ((old-window (current-window)))
-    (unwind-protect
-	(progn
-	  (setf (current-window) hi::*echo-area-window*)
-	  (hi::display-prompt-nicely "Describe key: " nil)
-	  (setf (fill-pointer hi::*prompt-key*) 0)
-	  (loop
-	    (let ((key-event (get-key-event hi::*editor-input*)))
-	      (vector-push-extend key-event hi::*prompt-key*)
-	      (let ((res (get-command hi::*prompt-key* :current)))
-		(hemlock-ext:print-pretty-key-event key-event *echo-area-stream*)
-		(write-char #\space *echo-area-stream*)
-		(cond ((commandp res)
-		       (with-pop-up-display (s :title "Key documentation")
-			 (hemlock-ext:print-pretty-key (copy-seq hi::*prompt-key*) s)
-			 (format s " is bound to ~S.~%" (command-name res))
-			 (format s "Documentation for this command:~%   ~A"
-				 (command-documentation res)))
-		       (return))
-		      ((not (eq res :prefix))
-		       (with-pop-up-display (s :height 1)
-			 (hemlock-ext:print-pretty-key (copy-seq hi::*prompt-key*) s)
-			 (write-string " is not bound to anything." s))
-		       (return)))))))
-      (setf (current-window) old-window))))
+  (multiple-value-bind (key res) (prompt-for-key :prompt "Describe key: "
+						 :must-exist t)
+    (cond ((commandp res)
+	   (with-pop-up-display (s :title "Key documentation")
+	     (write-string (pretty-key-string key) s)
+	     (format s " is bound to ~S.~%" (command-name res))
+	     (format s "Documentation for this command:~%   ~A"
+		     (command-documentation res))))
+	  (t
+	   (with-pop-up-display (s :height 1)
+	     (write-string (pretty-key-string key) s)
+	     (write-string " is not bound to anything." s))))))
 
-
-
 ;;;; Generic describe variable, command, key, attribute.
 
 (defvar *generic-describe-kinds*
@@ -217,7 +202,7 @@
   "Prompt for some Hemlock thing to describe."
   (declare (ignore p))
   (multiple-value-bind (ignore kwd)
-		       (prompt-for-keyword *generic-describe-kinds*
+		       (prompt-for-keyword :tables *generic-describe-kinds*
 					   :default "Variable"
 					   :help "Kind of thing to describe."
 					   :prompt "Kind: ")
@@ -230,7 +215,7 @@
       (:attribute
        (multiple-value-bind (name attr)
 			    (prompt-for-keyword
-			     (list *character-attribute-names*)
+			     :tables (list *character-attribute-names*)
 			     :help "Name of character attribute to describe."
 			     :prompt "Attribute: ")
 	 (print-full-doc name (character-attribute-documentation attr)))))))
@@ -302,11 +287,11 @@
   "Describe a mode showing special bindings for that mode."
   (declare (ignore p))
   (let ((name (or name
-		  (prompt-for-keyword (list *mode-names*)
+		  (prompt-for-keyword :tables (list *mode-names*)
 				      :prompt "Mode: "
 				      :help "Enter mode to describe."
 				      :default
-				      (car (buffer-modes (current-buffer)))))))
+				      (buffer-major-mode (current-buffer))))))
     (with-pop-up-display (s :title (format nil "~A mode" name))
       (format s "~A mode description:~%" name)
       (let ((doc (mode-documentation name)))
@@ -318,7 +303,7 @@
 	   (unless (member (command-name cmd)
 			   *describe-mode-ignore*
 			   :test #'string-equal)
-	     (let ((str (key-to-string key)))
+	     (let ((str (pretty-key-string key)))
 	       (cond ((= (length str) 1)
 		      (write-string str s)
 		      (write-string "  - " s))
@@ -327,12 +312,6 @@
 	       (print-doc (command-documentation cmd) s))))
        :mode name))))
 		    
-(defun key-to-string (key)
-  (with-output-to-string (s)
-    (hemlock-ext:print-pretty-key key s)))
-
-
-
 ;;;; Printing bindings and last N characters typed.
 
 (defcommand "What Lossage" (p)
@@ -344,7 +323,7 @@
       (format s "The last ~D characters typed:~%" num)
       (do ((i (1- num) (1- i)))
 	  ((minusp i))
-	(hemlock-ext:print-pretty-key-event (ring-ref *key-event-history* i) s)
+        (write-string (pretty-key-string (ring-ref *key-event-history* i)) s)
 	(write-char #\space s)))))
 
 (defun print-command-bindings (bindings stream)
@@ -382,6 +361,6 @@
 (defun print-some-keys (keys stream)
   (do ((key keys (cdr key)))
       ((null (cdr key))
-       (hemlock-ext:print-pretty-key (car key) stream))
-    (hemlock-ext:print-pretty-key (car key) stream)
+       (write-string (pretty-key-string (car key)) stream))
+    (write-string (pretty-key-string (car key)) stream)
     (write-string ", " stream)))

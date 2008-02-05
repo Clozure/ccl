@@ -86,7 +86,15 @@
                                               (variable-value 'current-package :buffer (current-buffer)))
                                              *package*))))
 
+(defun get-def-info-and-go-to-it (string package)
+  (multiple-value-bind (fun-name error)
+      (let* ((*package* (ccl:require-type package 'package)))
+        (ignore-errors (values (read-from-string string))))
+    (if error
+      (editor-error "unreadable name: ~s" string)
+      (edit-definition fun-name))))
 
+#|
 ;;; "Edit Command Definition" is a hack due to creeping evolution in
 ;;; GO-TO-DEFINITION.  We specify :function type and a name with "-COMMAND"
 ;;; instead of :command type and the real command name because this causes
@@ -101,15 +109,37 @@
   (multiple-value-bind
       (name command)
       (if p
-	  (multiple-value-bind (key cmd)
-			       (prompt-for-key :prompt "Edit command bound to: ")
-	    (declare (ignore key))
-	    (values (command-name cmd) cmd))
-	  (prompt-for-keyword (list *command-names*)
-			      :prompt "Command to edit: "))
+        (multiple-value-bind (key cmd)
+                             (prompt-for-key :prompt "Edit command bound to: "
+                                             :must-exist t)
+          (declare (ignore key))
+          (values (command-name cmd) cmd))
+        (prompt-for-keyword :tables (list *command-names*)
+                            :prompt "Command to edit: "))
     (go-to-definition (fun-defined-from-pathname (command-function command))
 		      :function
 		      (concatenate 'simple-string name "-COMMAND"))))
+
+;;; FUN-DEFINED-FROM-PATHNAME takes a symbol or function object.  It
+;;; returns a pathname for the file the function was defined in.  If it was
+;;; not defined in some file, then nil is returned.
+;;; 
+(defun fun-defined-from-pathname (function)
+  "Takes a symbol or function and returns the pathname for the file the
+   function was defined in.  If it was not defined in some file, nil is
+   returned."
+  (flet ((true-namestring (path) (namestring (truename path))))
+    (typecase function
+      (function (fun-defined-from-pathname (ccl:function-name function)))
+      (symbol (let* ((info (ccl::%source-files function)))
+                (if (atom info)
+                  (true-namestring info)
+                  (let* ((finfo (assq 'function info)))
+                    (when finfo
+                      (true-namestring
+                       (if (atom finfo)
+                         finfo
+                         (car finfo)))))))))))
 
 ;;; GO-TO-DEFINITION tries to find name in file with a search pattern based
 ;;; on type (defun or defmacro).  File may be translated to another source
@@ -121,7 +151,7 @@
     (cond
      (file
       (setf file (go-to-definition-file file))
-      (let* ((buffer (find-file-command nil file))
+      (let* ((buffer (old-find-file-command nil file))
 	     (point (buffer-point buffer))
 	     (name-len (length name)))
 	(declare (fixnum name-len))
@@ -142,7 +172,7 @@
 			       but this is the defined-in file."
 			      (string-upcase name) *last-go-to-def-string*)))
 	  (if (eq buffer (current-buffer))
-	      (push-buffer-mark (copy-mark point)))
+	      (push-new-buffer-mark point))
 	  (move-mark point def-mark))))
      (t
       (when (or (eq type :unknown-function) (eq type :unknown-macro))
@@ -152,8 +182,9 @@
 	     "~A is not compiled and not defined in current buffer with ~S"
 	     (string-upcase name) *last-go-to-def-string*))
 	  (let ((point (current-point)))
-	    (push-buffer-mark (copy-mark point))
+	    (push-new-buffer-mark point)
 	    (move-mark point m))))))))
+|#
 
 (defparameter *source-file-indicator-defining-operators* ())
 
@@ -272,7 +303,6 @@
 
 
 (defun match-definition-context (mark name indicator package)
-  (declare (ignorable name indicator))
   (pre-command-parse-check mark)
   (when (valid-spot mark t)
     (with-mark ((start mark)
@@ -285,27 +315,28 @@
                       (let* ((*package* package))
                         (values (read-from-string (region-to-string (region start end)))))))
            (match-context-for-indicator start end package indicator)))))
-    
-(defun find-definition-in-buffer (buffer name indicator)
-  (setf (hi::buffer-region-active buffer) nil)
-  (when (symbolp name)
-    (let* ((string (string name))
-           (len (length string))
-           (pattern (get-search-pattern (string name) :forward))
-           (mark (copy-mark (buffer-start-mark buffer)))
-           (package (or
-                     (find-package
-                      (variable-value 'current-package :buffer buffer))
-                     *package*)))
-      (or
-       (loop
-         (let* ((won (find-pattern mark pattern)))
-           (unless won
-             (return))
-           (when (match-definition-context mark name indicator package)
-             (backward-up-list mark)
-             (move-mark (buffer-point buffer) mark)
-             (return t))
-          (unless (character-offset mark len)
-            (return))))
-       (beep)))))
+
+(defun find-definition-in-buffer (name indicator)
+  (let ((buffer (current-buffer)))
+    (setf (hi::buffer-region-active buffer) nil)
+    (when (symbolp name)
+      (let* ((string (string name))
+             (len (length string))
+             (pattern (get-search-pattern string :forward))
+             (mark (copy-mark (buffer-start-mark buffer)))
+             (package (or
+                       (find-package
+                        (variable-value 'current-package :buffer buffer))
+                       *package*)))
+        (or
+         (loop
+           (let* ((won (find-pattern mark pattern)))
+             (unless won
+               (return))
+             (when (match-definition-context mark name indicator package)
+               (backward-up-list mark)
+               (move-mark (buffer-point buffer) mark)
+               (return t))
+             (unless (character-offset mark len)
+               (return))))
+         (editor-error "Couldn't find definition for ~s" name))))))
