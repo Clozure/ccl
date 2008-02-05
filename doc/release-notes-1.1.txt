@@ -1,0 +1,2140 @@
+OpenMCL 1.1-pre-070722
+- This will hopefully be the last set of snapshots whose version
+  number contains the string "pre-"; whether or not the last
+  20 months worth of "1.1-pre-yymmdd" snapshot releases are
+  more or less stable than something without "pre-" in its name
+  doesn't have too much to do much to do with whether or not "pre-"
+  is in the version number (and has lots to do with other things.)
+  I'd like to move to a model that's mostly similar to how things
+  have been (new version every month or two, old versions become
+  obsolete soon after, sometimes changes introduce binary incompatiblity)
+  but drop the "prerelease" designation and change the name of the
+  "testing" directory to something like "current".
+- The FASL version didn't change (for the first time in a long time.)
+  It's probably a lot easier to bootstrap new sources with a new
+  lisp and it's probably desirable to recompile your own source
+  code with the new lisp, but there shouldn't be any user-visible
+  low-level ABI changes that make that mandatory.
+- CCL::WITH-ENCODED-CSTRS (which has been unexported and somewhat
+  broken) is now exported and somewhat less broken.
+
+  (ccl:with-encoded-cstrs ENCODING-NAME ((varI stringI)*) &body body)
+
+  where ENCODING-NAME is a keyword constant that names a character
+  encoding executes BODY in an environment where each variable varI
+  is bound to a nul-terminated, dynamic-extent foreign pointer to
+  an encoded version of the corresponding stringI.
+
+  (ccl:with-cstrs ((x "x")) (#_puts x))
+
+  is functionally equivalent to:
+
+  (ccl:with-encoded-cstrs :iso-8859-1 ((x "x")) (#_puts x))
+
+
+  CCL:WITH-ENCODED-CSTRS doesn't automatically prepend byte-order-marks
+  to its output; the size of the terminating #\NUL depends on the
+  number of octets-per-code-unit in the encoding.
+
+  There are certainly lots of other conventions for expressing
+  the length of foreign strings besides NUL-termination (length in
+  code units, length in octets.)  I'm not sure if it's better to
+  try to come up with high-level interfaces that support those
+  conventions ("with-encoded-string-and-length-in-octets ...")
+  or to try to support mid-level primitives ("number of octets
+  in encoded version of lisp string in specified encoding", etc.)
+
+- STREAM-ERRORs (and their subclasses, including READER-ERROR)
+  try to describe the context in which they occur a little better
+  (e.g., by referencing the file position if available and
+  by trying to show a few surrounding characters when possible.)
+  Since streams are usually buffered, this context information
+  may be incomplete, but it's often much better than nothing.
+
+- Hashing (where some objects are hashed by address) and OpenMCL's
+  GC (which often changes the addresses of lisp objects, possibly
+  invalidating hash tables in which those objects are used as keys)
+  have never interacted well; to minimize the negative effects of
+  this interaction, most primitive functions which access hash
+  tables has disabled the GC while performing that access, secure
+  in the knowledge that hash table keys won't be moving around
+  (because of GC activity in other threads) while the hash table
+  lookup is being performed.
+
+  Disabling and reenabling the GC can be somewhat expensive, both
+  directly (in terms of the primitive operations used to do so)
+  and indirectly (in terms of the cost of - temporarily - not being
+  able to GC when otherwise desirable.)  If the GC runs (and possibly
+  moves a hash-table key) very rarely relative to the frequency of
+  hash-table access - and that's probably true, much of the time -
+  then it seems like it'd be desirable to avoid the overhead of
+  disabling/reenabling the GC on every hash table access, and it'd
+  be correct to do this as long as we're careful about it.
+
+  I was going to try to change all hash-table primitives to try
+  to make them avoid inhibiting/enabling the GC for as long as
+  possible, but wimped out and only did that for GETHASH.  (If
+  another thread could GC while we're accessing a hash table, there
+  can still be weird intercations between things like the GC's
+  handling of weak objects and code which looks at the hash table,
+  and that weirdness seemed easier to deal with in the GETHASH case
+  than in some others.)
+
+  If GETHASH's performance has improved without loss of correctness,
+  then it'd likely be worth trying to make similar changes to
+  REMHASH and CCL::PUTHASH (which implements (SETF (GETHASH ...) ...).
+  If problems are observed or performance still hasn't improved, it'd
+  probably be worth re-thinking some of this.
+
+- Leading tilde (~) characters in physical pathname namestrings
+  are expanded in the way that most shells do:
+
+  "~user/...." can be used to refer to an absolute pathname rooted
+  at the home directory of the user named "user"
+
+  "~/..." can be used to refer to an absulte pathname rooted at
+  the home directory of the current user.
+
+- The break-loop colon commands for showing the contents of
+  stack frames try to present the frame's contents in a way that's
+  (hopefully) more meaningful and useful.  For each stack frame
+  shown in detail, the corresponding function's argument list
+  is printed, followed by the current values of the function's
+  arguments (indented slightly), a blank line, and the current
+  values of the function's local variables (outdented slightly.)
+  The old method of showing a stack frame's "raw" contents is
+  still available as the :RAW break loop command.
+
+  The new style of presenting a stack-frame's contents is also
+  used in the Cocoa IDE.
+
+- It's historically been possible to create stacks (for threads
+  other than the original one) whose size exceeds the nominal
+  OS resource limits for a stack's size.  (OpenMCL's threads
+  use multiple stacks; the stack in question is the one that
+  OpenMCL generally refers to as the "control" or "C" stack.)
+  It's not entirely clear what (if anything) the consequences
+  of exceeding these limits have been, but OpenMCL's GC can
+  use all of the available (C) stack space that it thinks it
+  has under some conditions, and, under OSX/Mach/Darwin, there
+  have been reports of excessive page file creation and paging
+  activity that don't seem related to heap behavior in environments
+  where the GC is running on (and possibly using much of) a stack
+  whose size greatly exceeds the hard resource limit on stack
+  size.
+
+  Trying to determine exactly what was causing the excessive
+  pages got me trapped in a twisty maze of Mach kernel sources,
+  all alike.  I tried to pin C stack size to the hard resource
+  limit on stack size and have not been able to provoke the
+  excessive paging problems since, but am not confident in
+  concluding (yet) that the problems had to do with resource
+  limits being exceeded.
+
+  The hard resource limits on stack size for the OS versions
+  that I have readily available (in bash, do "ulimit -s -H";
+  in tcsh, it's "limit -h s", don't know offhand about other
+  shells) are:
+
+  unlimited on Linux
+  ~512M on FreeBSD
+  ~64M on Darwin
+
+  The effect of observing (rather than exceeding) this limit
+  on the maximum depth of lisp recursion in OpenMCL is:
+
+  * nothing, on x86-64 (the C stack is not used by lisp code
+    on x86-64)
+
+  * visible on ppc32, which uses 4 32-bit words on the control
+    stack for each lisp function invocation
+
+  * more visible on ppc64, which uses 4 64-bit words of control
+    stack for each lisp function invocation.
+
+  That seems to suggest that (given that the actual stack resource
+  limit is a bit under 64M and that OpenMCL signals stack overflow
+  when the stack pointer gets within a few hundred KB of the actual
+  limit) that ppc64 threads are now limited to a maximum of about
+  2000000 function calls.
+
+  (All of this only matters if attempts are made to create threads
+  with large stacks; the default stack sizes in OpenMCL are usually
+  1-2 MB.)
+
+- On a cheerier (and certainly less confusing) note: for the last few
+  years, OpenMCL has shipped with an extended example which provides an
+  integrated development environment (IDE) based on Cocoa; that's often
+  been described as "the demo IDE" and could also be fairly described as
+  "slow", "buggy", "incomplete", and "little more than a proof of
+  concept."
+
+  I think that it's fair to describe the current state of the IDE as
+  being "less slow", "less buggy", "less incomplete", and "much more
+  than a proof of concept" than it has been (e.g., there's been some
+  actual progress over the last few months and there are plans to
+  try to continue working on the IDE and related tools.)  It'd probably
+  be optimistic to call it "usable" in its current state (that may
+  depend on how low one's threshold of usability is), but I hope that
+  people who've been discouraged by the lack of IDE progress over the
+  last few years will see reason to be encouraged (and that anyone
+  interested will submit bug reports, patches, feature requests, code ...)
+
+- There are now "objc-bridge" and "cocoa-ide" subdirectories; by default,
+  REQUIRE will look in these directories for files whose name matches
+  a module name.  Several files were moved from the "examples" directory
+  to "objc-bridge"; other example files, the "OpenMCL.app" skeleton
+  bundle, and the "hemlock" directory were moved to "cocoa-ide".
+
+
+OpenMCL 1.1-pre-070512
+- The FASL version changed (old FASL files won't work with this
+  lisp version), as did the version information which tries to
+  keep the kernel in sync with heap images.  Note that it's generally
+  a lot easier to recompile recent sources with recent images, e.g.,
+  trying to compile 070512 sources with an 070407 image is unlikely
+  to work without tricky bootstrapping.
+- Most of the changes in this release involve the calling sequence
+  used on x86-64.  In very general terms, some kinds of function-call
+  intensive code may see a significant performance boost, most code
+  should see a slight improvement, some code might see a (hopefully
+  very slight) degradation, and anything significantly slower than
+  previous releases should be reported as a bug.
+  It is -possible- that some of these changes may cause errors to
+  be reported differently (the function reported as the function
+  executing when the error ocurred might be different/wrong).  I
+  have not seen as many cases of this as I expected to when making
+  the change, but am also not sure that I fixed all possible cases.
+- The FFI-related reader macros #_, #$, and #& all read a case-sensitive
+  foreign function, constant, or variable name from the input stream
+  and try to find the corresponding definition in the interface files.
+  If the name is prefixed with a #\? - as in #_?foo - the macros
+  return true if the definition could be found and false otherwise.
+  (The general idea is that this might be useful for conditionalizing
+  code in some cases, and there should be -some- way of quietly testing 
+  that something's defined.)
+- There is now support for making the contents of (possibly very large)
+  files accessible as lisp vectors.  (This may be many times faster
+  than something like 
+
+  (let* ((stream (open pathname :direction :input :element-type 'whatever))
+         (vector (make-array (file-size-to-vector-size stream)
+                             :element-type 'whatever)))
+    (read-sequence vector stream))
+
+  but has the similar effect of making the contents of VECTOR match the
+  contents of the file.)
+
+  CCL:MAP-FILE-TO-IVECTOR pathname element-type [Function]
+
+  "element-type" should be a type specifier such that
+  (UPGRADED-ARRAY-ELEMENT-TYPE element-type) is a subtype
+  of either SIGNED-BYTE or UNSIGNED-BYTE.
+
+  Tries to open the file named by "pathname" for reading and to
+  map its contents into the process's address space via #_mmap;
+  if successful, returns a lisp vector of element-type
+  (UPGRADED-ARRAY-ELEMENT-TYPE element-type) which is displaced
+  to an underlying (SIMPLE-ARRAY element-type (*)) whose contents
+  match the mapped file's.
+
+  Because of alignment issues, the mapped file's contents will
+  start a few bytes (4 bytes on 32-bit platforms, 8 bytes on 64-bit
+  platforms) "into" the vector; the displaced array returned by
+  CCL:MAP-FILE-TO-IVECTOR hides this overhead, but its usually
+  more efficient to operate on the underlying simple 1-dimensional
+  array.  Given a displaced array (like the value returned by
+  CCL:MAP-FILE-TO-IVECTOR), the CL function ARRAY-DISPLACEMENT
+  returns the underlying array and the displacement index in elements.
+
+  Currently, only read-only file mapping is supported; the underlying
+  vector will be allocated in read-only memory, and attempts to use
+  (e.g.) (SETF (AREF ...) ...) to modify the mapped vector's contents
+  will result in memory faults.
+  
+  CCL:MAP-FILE-TO-OCTET-VECTOR pathname [Function]
+
+  Equivalent to (CCL:MAP-FILE-TO-IVECTOR pathname '(UNSIGNED-BYTE 8)).
+
+  CCL:UNMAP-IVECTOR displaced-vector
+
+  If the argument is a mapped vector (as returned by
+  MAP-FILE-TO-IVECTOR) that has not yet been "unmapped" by this
+  function, undoes the memory mapping, closes the mapped file, and
+  adjusts its argument so that it's displaced to a 0-length vector.
+
+  CCL:UNMAP-OCTET-VECTOR is an alias for CCL:UNMAP-IVECTOR
+
+  Note that whether a vector's created by MAKE-ARRAY or by mapping
+  a file's contents, it can't have ARRAY-TOTAL-SIZE-LIMIT or more
+  elements.  (ARRAY-TOTAL-SIZE-LIMIT is (EXPT 2 24) in 32-bit OpenMCL
+  and (EXPT 2 56) in 64-bit versions.
+
+- The lisp kernel now tries to signal memory faults that occur when
+  running lisp code as lisp errors.  As a silly example:
+
+  ? (defun foo (x)
+     "Crash and burn if X is not a list"
+     (declare (optimize (speed 3) (safety 0)) (list x))
+     (car x))
+  FOO
+  ? (foo 0)
+  > Error: Fault during read of memory address #x4
+  > While executing: FOO, in process listener(1).
+
+  The fact that things are handled this way (rather than going
+  into the kernel debugger with no easy way of recovering) makes
+  it possible to continue a session without losing work in many
+  cases.  In a trivial example like the one above, it's relatively
+  easy to see that no harm has been done and the error should
+  not be hard to recover from.  In some other cases, it may be
+  true that a buggy function has been scribbling ofer memory for
+  a while before that scribbling resulted in a machine exception.
+
+  Moral: if you get an unexpected "memory fault" error (the
+  condition type is actually CCL::INVALID-MEMORY-ACCESS) and
+  don't understand why the fault occurred and the consequences
+  of continuing in the lisp session where the fault occurred,
+  you should view the state of that session with some suspicion.
+
+  Faults in foreign code (should) still trap into the kernel
+  debugger.  (It'd be nice to be able to treat these as lisp
+  errors with the same caveats as described above, but that
+  is more complicated in some cases and isn't yet implemented.)
+
+- An obscure kernel debugger command - (A), which tries to advance
+  the program counter by one instruction - is now disabled on x86-64.
+  (On the PPC, "one instruction" always meant "4 bytes"; implementing
+  this correctly on x86-64 would require the ability to at least
+  partially disassemble arbitrary x86-64 instructions.)
+
+  On the other hand, the kernel debugger should be able to show
+  FPU registers on x86-64.
+
+
+OpenMCL 1.1-pre-070408
+- The FASL version changed (old FASL files won't work with this
+  lisp version), as did the version information which tries to
+  keep the kernel in sync with heap images.  Note that it's generally
+  a lot easier to recompile recent sources with recent images, e.g.,
+  trying to compile 070408 sources with an 070214 image is unlikely
+  to work without tricky bootstrapping.
+- There's now a Trac bug-tracking/wiki site for OpenMCL at 
+  <http://trac.clozure.com/openmcl>.  It needs bug reports; please
+  visit that site and use the features there to report any bugs
+  that you find.
+- DEFSTATIC (aka DEFGLOBAL)
+  (CCL:DEFSTATIC var value &optional doc-string)
+  is like DEFPARAMETER in that it proclaims the variable "var" to
+  be special, sets its value to "value", and sets the symbol's
+  VARIABLE documentation to the optional doc-string.  It differs
+  from DEFPARAMETER in that it further asserts that the variable
+  should never be bound dynamically in any thread (via LET/LAMBDA/etc.);
+  the compiler treats any attempts to bind a "static" variable as an
+  error.
+  It is legal to change the value of a "static" variable, but since
+  all threads see the same (static) binding of that variable it may
+  be necessary to synchronize assignments made from multiple threads.
+  (A "static" variable binding is effectively a shared, global resource;
+  a dynamic binding is thread-private.)
+  Access to the value of a static variable is typically faster than
+  is access to the value a special variable that's not proclaimed to
+  be "static".
+  This functionality has been in MCL/OpenMCL for a long time under
+  the name CCL:DEFGLOBAL; CCL:DEFGLOBAL is an alias for CCL:DEFSTATIC,
+  but the latter seemed to be a better name.
+- The type of foreign object that a MACPTR points to can now be
+  asserted (this means that a MACPTR object can contain a small
+  integer which identifies the alleged FOREIGN-TYPE of the object that
+  the points to.  RLET, MAKE-RECORD, and MAKE-GCABLE-RECORD (see below)
+  assert the foreign type of the object that the MACPTR object they
+  create (as do some new features of the ObjC bridge, described further
+  below.)
+  PRINT-OBJECT on a MACPTR will try to print information about the
+  asserted type of that pointer, as well as information about where
+  the pointer was allocated (heap, stack) and whether it's scheduled
+  for automatic reclamation by the GC.
+  A few constructs that conceivable should assert the type of the
+  pointers they create (e.g., some flavor of PREF, SLOT-VALUE in
+  the ObjC bridge) don't yet do so.
+  A rather obvious way of exploiting typed pointers - namely, extending
+  DESCRIBE and INSPECT to show the contents of foreign records - is
+  not yet implemented.
+- MAKE-GCABLE-RECORD is like MAKE-RECORD, in that it "makes an instance
+  of a foreign record type".  (Or, to be more banal about it, uses
+  #_malloc to allocate a block of foreign memory of the size of the
+  foreign record type named by its argument.)  MAKE-GCABLE-RECORD
+  additionally tells the lisp garbage collector that it should free
+  the foreign memory when the MACPTR object that describes it becomes
+  garbage.
+  When using "gcable pointers", it's important to remember the
+  distinction between a MACPTR object (which is a lisp object, more-
+  or-less like any other) and the block of foreign memory that the
+  MACPTR object points to.  If a gcable MACPTR is the only thing
+  in the world ("lisp world" or "foreign world") that references
+  the underlying block of foreign memory, then freeing the foreign
+  memory when it becomes impossible to reference it is convenient
+  and sane.  If other lisp MACPTRs reference the underlying block
+  of foreign memory or if the address of that foreign memory is
+  passed to and retained by foreign code, having the GC free the
+  memory may have unpleasant consequences if those other references
+  are used.
+- CCL:FREE (which is mostly just a wrapper around #_free that allows
+  #_free to be called early in the bootstrapping process) is now 
+  exported; if its argument is a gcable pointer (e.g., created via
+  MAKE-GCABLE-POINTER), it will tell the GC that the pointer's
+  foreign memory has been freed "manually" before calling #_free.
+- The mechanisms used to implement locks has changed (for the curious,
+  the changes involve the use of spinlocks rather than a sequence
+  of atomic additions.)  Someone demonstrated a case of deadlock
+  (where a thread was waiting for a lock that was available) under
+  the old implementation.  I'm not sure that I fully understand how
+  that could have happened, but the new implementation at least has
+  the advantage of being a little easier to understand and might be
+  a tiny bit faster.  Please let me know if either of these assumptions
+  was incorrect.
+- An EOF (control-d) in the REPL (when standard input is a tty or pty
+  device) has traditionally caused an exit to the outer break loop
+  (or had no effect if the REPL was not in a break loop).  If
+  CCL:*QUIT-ON-EOF* is set, an EOF causes the lisp to quit.  (It
+  actually invokes a listener-specific method, so in a multi-listener
+  window system environemt, it might simply cause the listener which
+  receives the EOF to exit.)
+  None of this has any effect when running under environments like
+  SLIME, and (as mentioned above) only matters if the standard input
+  devices is a tty or pseudo-tty (where it's possible to continue
+  reading after an EOF has been read.)  If running under an xterm
+  or OSX Terminal.app, standard input is probably a pty; if running
+  in an Emacs shell buffer or under other means under emacs, different
+  types of IPC mechanisms (pipes, sockets) might be used.
+- SAVE-APPLICATION has historically changed the type of all MACPTR
+  objects (turning them into "dead macptrs", since it's generally
+  meaningless to refer to a foreign pointer from a previous session
+  and generally better to get a type error than some more mysterious
+  or severe failure).  This no longer happens for null pointers (pointers
+  to address 0); COMPILE-FILE also now allows null pointers to be referenced
+  as constants in compiled code.
+- Not entirely coincidentally, CCL:+NULL-PTR+ is now defined as a constant
+  (whose value is a null pointer.)  In some cases, it may be more
+  efficient or convenient to pass CCL:+NULL-PTR+ to foreign code than
+  it would be to call (CCL:%NULL-PTR) to "produce" one.
+- Historically, OpenMCL (and MCL) have maintained a list of open file
+  streams in the value of CCL:*OPEN-FILE-STREAMS*; maintaining this
+  list helps to ensure that streams get closed in as orderly a manner
+  as possible when the lisp exits.  The code which accessed this list
+  didn't do so in a thread-safe manner.
+  The list is now maintained in a lexical variable; the function
+  CCL:OPEN-FILE-STREAMS returns a copy of that list, 
+  CCL:NOTE-OPEN-FILE-STREAM adds its argument (a file stream) to the
+  list, and CCL:REMOVE-OPEN-FILE-STREAM removes its argument (a file stream)
+  from the list.  (All of these functions use appropriate locking.)
+- There were a number of timing-related problems related to PROCESS-INTERRUPT
+  (usually involving rapidly and repeatedly interrupting a thread over
+  a long period of time.)  This should be a lot more reliable now
+  (exactly what could go wrong and why and how is all a little hard to
+  describe.) 
+- Some Linux distributions may initialize the user's environment in
+  a way that imposes a soft limit on the amount of virtual memory that
+  a process is allowed to map.  OpenMCL now tries to raise this limit
+  before reserving what may be a very large amount of address space,
+  thanks to a patch from Andi Kleen.
+- There were a number of problems with UTF-16 streams, found and
+  fixed by Takehiko Abe.
+- Takehiko Abe also provided fixes for some code in "ccl:lib;xref.lisp"
+  and in source-file recording/reporting that (still) didn't understand
+  the concept of EQL-SPECIALIZER metaobjects.
+- ObjC bridge and ObjC examples
+  The ObjC bridge provides a few new mechanisms for defining ObjC
+  methods, for calling ObjC "generic functions" (e.g., message sending),
+  and for dealing with frequently-used record types and with differences
+  between 32-bit and (forthcoming) 64-bit ObjC/Cocoa implementations.
+  
+  A lot of macros/functions/other things that really should have been
+  exported from some package for the last few years finally have been
+  exported from the OBJC or NS packages (and a lot of things that have
+  historically been internal to CCL are re-imported into CCL).
+
+  Cocoa (and the underlying Core Graphics libraries) have historically
+  used 32-bit floats and 32-bit integers in data structures that describe
+  geometry, font sizes and metrics, and elsewhere.  64-bit Cocoa will
+  use 64-bit floats and 64-bit integers in many cases.
+
+  The bridge defines the type NS:CGFLOAT as the lisp type of the 
+  preferred float type on the platform, and the constant NS:+CGFLOAT+.
+  On DarwinPPC32, the foreign types :cgfloat, :<NSUI>nteger, and
+  :<NSI>nteger are defined by the bridge (as 32-bit float, 32-bit
+  unsigned integer, and 32-bit signed integer, respectively.); these 
+  types are defined (as 64-bit variants) in the 64-bit interfaces.
+
+  All ObjC classes are properly named, either with a name exported
+  from the NS package (in the case of a predefined class declared in
+  the interface files) or with the name provided in the DEFCLASS
+  form (with :METACLASS NS:+NS-OBJECT) which defines the class from
+  lisp.  The class's lisp name is now proclaimed to be a "static"
+  variable (as if by DEFSTATIC, as described above) and given the
+  class object as its value.  In other words:
+
+(send (find-class 'ns:ns-application) 'shared-application)
+
+  and
+
+(send ns:ns-application 'shared-application)
+
+  are equivalent.  (Since it's not legal to bind a "static" variable,
+  it may be necessary to rename some things so that unrelated
+  variables whose names coincidentally conflict with ObjC class names
+  don't do so.)
+
+- A new reader macro - #/ - reads a sequence of "constituent" characters
+  (including colons) from the stream on which it appears and interns
+  that sequence - with case preserved and colons intact - in a new package
+  whose name is NEXTSTEP-FUNCTIONS, exporting the symbol from that package.
+  This means that the act of reading "#/alloc" returns the the symbol
+  NEXTSTEP-FUNCTIONS:|alloc|, and the act of reading "#/initWithFrame:"
+  returns the symbol NEXTSTEP-FUNCTIONS:|initWithFrame:|.  The intent
+  is that the reader macro can be used to construct symbols whose names
+  match ObjC message names; the reader macro tries to do some sanity
+  checks (such as insisting that a name that contains at least one
+  colon ends in a colon), but isn't totally rigourous about enforcing
+  ObjC message name conventions.
+
+  A symbol read using this macro can be used as an operand in
+  most places where an ObjC message name can be used, such as
+  in the (@SELECTOR ...) construct (which is now OBJC:@SELECTOR, 
+  btw.)
+
+  Marco Baringer proposed the idea of using a reader macro to
+  construct lisp symbols which matched ObjC message names.
+
+- The act of interning a new symbol in the NEXTSTEP-FUNCTIONS
+  package triggers an interface database lookup of Objc methods
+  with the corresponding message name.  If any such information
+  is found, a special type of dispatching function is created
+  and initialized and the weird-looking symbol is given that
+  dispatching function as its function definition.
+
+  The dispatching knows how to call declared ObjC methods defined on
+  the message.  In many cases, all methods have the same foreign type
+  signature, and the dispatching function merely passes any arguments
+  that it receives to a function that does an ObjC message send with
+  the indicated foreign argument and return types.  In other cases,
+  where different ObjC messages have different type signatures, the
+  dispatching function tries to choose a function that handles the
+  right type signature based on the class of the dispatching function's
+  first argument.
+
+  If new information about ObjC methods is introduced (e.g., by
+  using additional interface files or as ObjC methods are defined
+  from lisp), the dispatch function is reinitialized to recognize
+  newly-introduced foreign type signatures.
+
+  The argument and result coercion that the bridge has tradionally
+  supported is supported by the new mechanism (e.g., :<BOOL> arguments
+  can be specified as lisp booleans and :<BOOL> results are returned
+  as lisp boolean values, and an argument value of NIL is coerced to
+  a null pointer if the corresponding argument type is :ID.
+
+  Some ObjC methods accept variable numbers of arguments; the
+  foreign types of non-required arguments are determined by the
+  lisp types of those arguments (e.g., integers are passed as
+  integers, floats as floats, pointers as pointers, record types
+  by reference.)
+
+  Some examples:
+
+;;; #/alloc is a known message.
+? #'#/alloc
+#<OBJC-DISPATCH-FUNCTION NEXTSTEP-FUNCTIONS:|alloc| #x300040E94EBF>
+;;; Sadly, #/foo is not ...
+? #'#/foo
+> Error: Undefined function: NEXTSTEP-FUNCTIONS:|foo|
+
+;;; We can send an "init" message to a newly-allocated instance of
+;;; "NSObject" by:
+
+(send (send ns:ns-object 'alloc) 'init)
+
+;;; or by
+
+(#/init (#/alloc ns:ns-object))
+
+  ObjC methods that "return" structures return them as gcable pointers
+  when called via dispatch functions.  E.g., if "my-window" is an
+  NS:NS-WINDOW instance, then
+
+(#/frame my-window)
+
+  will return a gcable pointer to a structure that describes that window's
+  frame rectangle.  (The good news is that there's no need to use SLET
+  or special structure-returning message send syntax; the bad news is
+  that #_malloc, #_free, and the GC are all involved in the creation
+  and eventual destruction of structure-typed return values.  Unless
+  and until those factors negatively affect performance, the advantages
+  seem to outweigh the disadvantages.)
+
+- Since foreign pointers are now (sometimes, somewhat) typed, it's
+  possible to treat pointers to some foreign types as "instances of
+  built-in classes."  Specifically, a pointer to an :<NSR>ect is
+  recognized as an instance of the built-in class NS:NS-RECT, a
+  pointer to an <NSS>ize is treated as an instance of NS:NS-SIZE,
+  <NSP>oint is recognized as NS:NS-POINT, and <NSR>ange maps to
+  NS:NS-RANGE.  (There are a few other more obscure structure
+  types that get this treatment, and with a little more work the
+  mechanism could be made extensible.)
+
+  For each of these built-in classes:
+
+  - a PRINT-OBJECT method is defined
+
+  - a foreign type name derived from the class name (e.g., :NS-RECT
+    for NS:NS-RECT) is made an alias for the corresponding type
+    (so it's possible to say (RLET ((R :NS-RECT)) ...)).
+
+  - the class is is integrated into the type system (so that 
+    (TYPEP R 'NS:NS-RECT) is fairly efficently implemented.)
+
+  - inlined accessor and setf inverses are defined for the structure
+    type's fields.  In the case of an :<NSR>ect, the fields in question
+    are the fields of the embedded point and size, so NS:NS-RECT-X,
+    NS:NS-RECT-Y, NS:NS-RECT-WIDTH, NS-RECT-HEIGHT and SETF inverses
+    are defined.  The accessors and setter functions typecheck their
+    arguments and the setters handle coercion to the approprate type
+    of CGFLOAT where applicable.
+
+  - an initialization function is defined; (NS:INIT-NS-SIZE s w h) is
+    roughly equivalent to (SETF (NS:NS-SIZE-WIDTH s) w
+    (NS:NS-SIZE-HEIGHT s) h), but might be a little more efficient.
+
+  - a creation function is defined: (NS:NS-MAKE-POINT x y) is basically
+    equivalent to:
+    (LET ((P (MAKE-GCABLE-RECORD :NS-POINT)))
+      (NS:INIT-NS-POINT P X Y)
+      p)
+
+  - a macro is defined which (much like RLET) stack-allocates an
+    instance of the foreign record type, optionally iniitializes
+    that instance, and executes a body of code with a variable
+    bound to that instance.  E.g.
+
+    (ns:with-ns-range (r loc len)
+      (format t "~& range has location ~s, length ~s" 
+         (ns:ns-range-location r) (ns:ns-range-length r)))
+
+    which is probably not the world's most realistic example.
+
+   Note that it's possible to construct a record
+   instance that has a very short useful lifetime:
+
+   (#/initWithFrame: new-view (ns:ns-make-rect 100 100 200 200))
+
+   The rectangle above will -eventually- get reclaimed by the GC;
+   if you don't want to give the GC so much work to do, you might
+   prefer to do:
+
+   (ns:with-ns-rect (r 100 100 200 200)
+     (#/initWithFrame: new-view r))
+
+
+ - The macro OBJC:DEFMETHOD can be used to define ObjC methods.
+   It looks superficially like CL:DEFMETHOD in some respects.
+   The syntax is:
+
+   (OBC:DEFMETHOD name-and-result-type ((receiver-arg-and-class) &rest other-args) &body body)
+
+   where:
+
+   "name-and-result-type" is either an ObjC message name (use #/ !)
+   for methods that return a value of type :ID, or a list of an ObjC
+   message name and a foreign type specifier for methods with a different
+   foreign result type
+
+   "receiver-type-and-class" is a two-element list whose CAR is 
+   a variable name and whose CADR is the lisp name of an ObjC class
+   or metaclass.  The receiver variable name can be any bindable
+   lisp variable name, but SELF (in some package) might be a reasonable
+   choice.  The receiver variable is declared to be "unsettable", i.e.,
+   it is an error to try to change the value of the receiver in the
+   body of the method definition.
+
+   "other-args" are either variable names (denoting parameters of type
+   :ID) or 2-element lists whose first element is a variable name and
+    whose second element is a foreign type specifier.
+
+  For example:
+
+(objc:defmethod (#/characterAtIndex: :unichar)
+    ((self hemlock-buffer-string) (index :<NSUI>nteger))
+  ...)
+  
+  The method "characterAtIndex:", when invoked on an object of class
+  HEMLOCK-BUFFER-STRING with an additional argument of type :<NSU>integer
+  returns a value of type :unichar.)
+
+  Arguments that wind up as some non-:ID pointer type (pointers,
+  records passed by value) are represented as typed foreign pointers
+  (so the higher-level, type-checking accessors can be used on
+  arguments of type :ns-rect, :ns-pointe, etc.)
+
+  Within the body of methods defined via OBJC:DEFMETHOD, the local
+  function CL:CALL-NEXT-METHOD is defined.  It isn't quite as
+  general as CL:CALL-NEXT-METHOD is when used in a CLOS method,
+  but it has some of the same semantics.  It accepts as many arguments
+  as are present in the containing method's "other args" list and
+  invokes version of the containing method that would have been
+  invoked on instances of the receiver's class's superclass with
+  the receiver and other provided arguments.  (The idiom of passing
+  the current method's arguments to the next method is common enough
+  that the CALL-NEXT-METHOD in OBJC:DEFMETHODs should probably do
+  this if it receives no arguments.)
+
+  A method defined via OBJC:DEFMETHOD that returns a structure "by value"
+  can do so by returning a record created via MAKE-GCABLE-RECORD, by
+  returning the value returned via CALL-NEXT-METHOD, or by other similar
+  means.  Behind the scenes, there may be a pre-allocated instance of
+  the record type (used to support native structure-return conventions),
+  and any value returned by the method body will be copied to this
+  internal record instance.  Within the body of a method defined with
+  OBJC:DEFMETHOD that's declared to return a structure type, the local
+  macro OBJC:RETURNING-FOREIGN-STRUCT can be used to access the internal
+  structure:
+
+  (objc:defmethod (#/reallyTinyRectangleAtPoint: :ns-rect) 
+    ((self really-tiny-view) (where :ns-point))
+    (objc:returning-foreign-struct (r)
+      (ns:init-ns-rect r (ns:ns-point-x where) (ns:ns-point-y where)
+                          single-float-epsilon single-float-epsilon)
+      r))
+
+ - If OBJC:DEFMETHOD introduces a new ObjC message, a ... message
+   to that effect.  Sometimes, these messages are merely informative
+   (and barely informative, at that ...), but they may also indicate
+   that a message name is misspelled (or possibly missing a trailing
+   colon.)  If a method is redefined in such a way that it's type
+   signature changes, a continuable error is signaled.
+
+ - there used to be some fairly obscure reasons that led to 
+   MAKE-OBJC-INSTANCE being a bit more efficient than MAKE-INSTANCE
+   in some cases (some of the methods invoked by MAKE-INSTANCE did
+   some extra work to handle Lisp slots even if the class didn't
+   define any Lisp slots.  This work isn't done anymore, and consequently
+   there's less reason to prefer MAKE-OBJC-INSTANCE.  (MAKE-OBJC-INSTANCE
+   is still defined and exported from the OBJC:PACKAGE).
+
+ - the preferred means of loading an add-on framework and processing
+   the declarations in its interfaces has changed several times over
+   the last several months.  The currently preferred (new) way to
+   do that is via the new function OBJC:LOAD-FRAMEWORK
+
+   (OBJC:LOAD-FRAMEWORK framework-name interface-dir)
+
+   where "framework-name" is a string which names the framework and
+   "interface-dir" is a keyword that names the associated set of
+   interfaces.  OBJC:LOAD-FRAMEWORK should find and initialize the 
+   framework bundle (looking in standard framework search paths),
+   introduce new ObjC classes to CLOS, update information about
+   declared messages and their methods' type signatures, adjust
+   affected dispatch functions, and make the interfaces other
+   definitions available.  The order in which it does these
+   things isn't specified, and may change in the future.
+
+ - Most Cocoa-related examples (the demo IDE, the Rubix and Webkit
+   examples) have been rewritten to use the new bridge features.
+   (I may have missed some contributed examples; if people want
+   to convert these, that'd be great.)  It's too early to say
+   whether the new approach is better or worse than the old, but
+   I've (so far) found some of the code easier to read and maintain.
+   We might find that some things that (for instance) SEND does
+   more efficiently could and should be done via SEND (I'm thinking
+   mostly of struct-return stuff), but so far I haven't seen the
+   new stuff keel over.
+
+   The converted code looks like "lisp code with strange-looking
+   function names" at first glance, and that seems about right.
+   The function names might get to look more familiar as the
+   reader becomes more familiar with Cocoa; as someone here pointed
+   out, it's arguably good that the function names are distinctive
+   in that that helps to remind the reader that these are likely
+   lower-level functions that are less tolerant of type- and other
+   errors than the typical lisp function would be.
+
+
+
+OpenMCL 1.1-pre-070214
+- The FASL version changed (old FASL files won't work with this
+  lisp version), as did the version information which tries to
+  keep the kernel in sync with heap images.
+- There are new interface files for all platforms.  These files
+  encode some foreign type information a little differently
+  than older ones did (notably information about foreign functions 
+  that return structures or accept structure args by value.)  The
+  new .cdb files can't be used by older versions of OpenMCL; using
+  older .cdb files with this version is "allowed, but not supported
+  or recommended."
+- Almost all of the changes in functionality since the last (061231)
+  snapshots and since the CVS freeze on 070117 have to do with
+  relatively obscure issues having to do with passing structures
+  to foreign functions by value and/or returning structures from foreign
+  function calls.
+
+  These idioms are fairly rare in traditional C code (though it's
+  fairly common to pass -pointers- to structures by reference
+  and sometimes to return pointers to structures.  There are
+  a few C compiler runtime routines that perform some flavor
+  of integer division and return a two-element structure that
+  contains "quotient" and "remainder" fields, but that's typically
+  about the extent of the use of this idiom.)  The idioms are used
+  much more often in Apple's Carbon and Cooca libraries and in
+  some of the frameworks (CoreGraphics, CoreFoundation) that those
+  libraries are based on.
+
+  OpenMCL's FFI has provided some support for this in the past;
+  notably, it's provided support for (most of the) structure-returning
+  and struct-by-value conventions used on 32-bit PPC Darwin.  In these
+  conventions, a foreign function that returned a structure received
+  a pointer to an instance of that structure type as a first argument,
+  and a function that received a structure argument by value received
+  the structure's contents in 32-bit word-size integer chunks (regardless
+  of the types or sizes of the structure's fields.)  Knowledge of these
+  conventions was hardwired into various parts of the system (e.g.,
+  the interface database), so that it was not generally possible to
+  tell whether a given foreign function returned a structure type
+  (or just happened to take an extra pointer argument.)
+
+  Unfortunately, there are at least 4 other sets of conventions for
+  dealing with structure arguments/return values on the platforms
+  that OpenMCL runs on (and even the DarwinPPC32 conventions weren't
+  fully/correctly implemented.)  OpenMCL's FFI is generally pretty
+  low-level, but to the extent that it's reasonable to talk about
+  "higher level" constructs (EXTERNAL-CALL, SEND, FF-CALL, #_), those
+  higher-level constructs try to enforce uniform syntax and try
+  to hide the platform-specific details in backend-specific functions.
+
+  The impact of these changes should generally be pretty minimal.
+  In a "higher-level" construct used to call a foreign function that
+  returns a structure type, the first parameter in the call should
+  be a pointer to an instance of that structure type.
+
+  For example, if a :rect structure is defined as:
+
+  (def-foreign-type nil
+    (:struct :rect
+      (:width :int)
+      (:height :int)
+      (:x :int)  ; x coordinate of origin
+      (:y :int)))
+
+  and a foreign function named "inset_rect" takes a rect and an integer
+  delta and returns a new :rect "inset" by that delta, a call to that
+  foreign function might look like:
+
+  (rlet ((result :rect))
+    (ff-call *address-of-inset-rect* result (:struct :rect) r :int delta :(:struct rect))
+    ;; or, if "inset_rect" was declared in the interface database:
+    (#_inset_rect result r delta))
+
+
+  A callback that returns a :rect likewise should accept a pointer
+  to an instance of the :rect type as a first (unqualified) argument
+  and explicitly declare that it returns a (:STRUCT :RECT).
+
+  (defcallback *address-of-inset-rect (result (:struct :rect) r :int delta (:struct :rect))
+    (setf (pref result :rect.x) (+ (pref r :rect.x) delta)
+          (pref result :rect.y) (+ (pref r :rect.y) delta)
+          (pref result :rect.width) (- (pref r :rect.width) (* 2 delta))
+          (pref result :rect.height) (- (pref r :rect.height) (* 2 delta))))
+
+  Note that this is very similar to what's been (implicitly) supported
+  on DarwinPPC32; the basic difference is that the return type
+  ("(:STRUCT :RECT)") is explicitly specified (or, in the case of #_,
+  specified in the interface database).  Whether the "result" pointer
+  is actually passed as an argument or not is platform-dependent (on
+  DarwinPPC64, the :rect structure would be "returned" by returning
+  4 :int values in 4 different machine registers), but the same syntax
+  can be used (and hides those details) on all platforms.
+
+  In the examples above, we said that the (presumed source) rectangle
+  was passed by value as a value of type (:struct :rect), and we let
+  the FFI deal with the details.  Historically, this parameter could
+  have been specified as a small unsigned integer N (denoting the 
+  DarwinPPC32 convention of passing the structure value a N 
+  native-word-size integer arguments.)  Again, there are several
+  different conventions for passing and receiving structure values,
+  and it's best to let the FFI decide how to follow those conventions.
+  (Some of those conventions are quite complicated, and depend on
+  the size of the structure as well as the types of its fields.)
+
+  In all cases, a callback which declares a parameter to be of a
+  structure type can treat that parameter as a pointer an instance of
+  that structure type with fields initialized by the caller (as in
+  the case of "r" in the example above.)
+
+  In the ObjC bridge, the DEFINE-OBJC-METHOD macro has always provided
+  syntax for specifiying that the method "returns" a structure. (That
+  syntax is (:struct <struct-type> <parameter-name>). That continues
+  to be supported.
+
+  Apple's ObjC runtime provides different functions (#_objc_msgSend and
+  #_objc_msgSend_stret) to handle the cases of sending messages which
+  return non-structure and structure results.  These low-level functions
+  are very sensitive to whether the structure is actually returned via
+  an "invisible" first argument or not (this is only one of a few different
+  conventions on some platforms.)  OpenMCL's ObjC bridge makes similar
+  distinctions, but uses simple, consistent rules: a message that returns
+  a structure should always be sent via SEND/STRET (or some variant of
+  SEND/STRET) and should have a first parameter of type "pointer to
+  returned structure type", regardless of whether or not that pointer
+  is actually passed to the method implementation or just used as by
+  some platform-specific code to transfer register values.)
+
+  The end result of all of this (several weeks of bootstrapping) is
+  that most things are pretty much the same, at least on DarwinPPC32;
+  only foreign function calls/callbacks that involve passing structures
+  by value or returning structures need change at all, and the changes
+  generally involve being more explicit/declarative about what's going
+  on.  These changes -do- allow these idioms to be used on other
+  (64-bit) platforms, and since they're heavily used in Apple GUI
+  libraries and since 64-bit versions of Carbon and Cocoa are announced
+  features of Leopard, it seemed appropriate to get support for this
+  stuff into the FFI on those platforms and to try to do it in a way
+  that hid the platform-dependent details.  (I didn't expect all of
+  this to take so long.)
+
+- The initial listener PROCESS now persists across SAVE-APPLICATION.
+  This means that (for instance):
+
+  ? (defvar *listener-process* (current-process))
+  *LISTENER-PROCESS*
+  ? (save-application "new.image")
+  shell> openmcl new.image
+  ? (eq (current-process) *listener-process*)
+  T
+  ;; though of course the underlying OS thread, stacks, etc are unlikely
+  ;; to be "equal" in any sense.
+
+  The current process is sometimes used to mark "ownership" of thread-private
+  hash-tables and streams.  (Even though it doesn't make much sense for
+  STREAMs to persist across SAVE-APPLICATION, it does make sense for
+  HASH-TABLEs to do so; HASH-TABLES created with the :PRIVATE T option
+  and "owned" by the initial listener process continue to be owned by
+  that the current listener process in the new image.)
+
+- All of the FFI changes above do seem to allow the Cocoa IDE example
+  to run on ppc64/x86-64 (as well as ppc32) under Leopard, and
+  hopefully that'll soon be true of applications generated via Mikel
+  Evins' Bosco system as well.  The bridge and demo code have been
+  conditionalized to support ObjC 2.0 on 64-bit systems, to avoid
+  deprecated functions and methods, and to support 64-bit Cocoa
+  changes.  Hopefully, this has been done in a way that doesn't break
+  PPC32 Cocoa under Tiger (he said, quickly rushing to the nearest
+  PPC32 Tiger machine and breathing a sigh of relief when the Cocoa
+  listener appeared ..)  64-bit Cocoa sometimes used 64-bit signed and
+  unsigned integers in place of 32-bit integers; accordingly, the
+  foreign types :<NSI>nteger and :<NSUI>nteger are defined (as 32-bit
+  signed/unsigned integers) on 32-bit platforms, and these types are
+  used in some method and type definitions.  (Those integer types are
+  predefined in Objc 2.0, and are 64 bits wide on 64-bit platforms.)
+
+  More pervasively (and a little more problematically), CoreGraphics
+  (and things built on top of it, including Cocoa) uses double-floats
+  instead of single-floats for many things on 64-bit hardware; the
+  difference is abstracted (a little) via the new CGFloat type.
+  This means that (for instance) code which initializes a constant-sized
+  NSRect on a 32-bit machines and has traditionally done so via
+  something like:
+
+  (ns-make-rect 0.0 0.0 500.0 200.0)
+
+  now needs to do something like:
+
+  (ns-make-rect (float 0.0 ccl::+cgfloat-zero+) ..)
+
+  in order to compile and run on both 32-bit and 64-bit platforms.
+
+  where ccl::+cgfloat-zero+ is defined as 1.0f0 on 32-bit platforms
+  and as 1.0d0 on 64-bit machines.  Cases involving constants won't
+  incur any runtime overhead and the occasional runtime overhead in
+  other cases -probably- isn't that great in context (compared to
+  initializing a view hierarchy ...)  but it's certainly ugly to
+  look at.  It's possible that some of this ugliness could be
+  hidden in the bridge/FFI (by making them do the necessary coercions
+  for you), but there are tradeoffs there.
+
+- The ObjC bridge has had a long-standing bug whereby a standalone
+  Cocoa application may have needed to find the interface databases
+  at runtime in order for MAKE-OBJC-INSTANCE and MAKE-INSTANCE of
+  an ObjC class to work.  (These functions needed to be able to
+  send an "init" message to the newly-allocated instance, and needed
+  to know the type signature of that init message in order to do that.)
+  The current scheme tries to avoid this by pre-compiling helper
+  functions to enable calling all known "init" message signatures.
+  (More accurately, all fixed-argument "init" message signatures.)
+  This scheme avoids the need to send messages whose argument
+  and result types are computed at runtime (via %SEND), and %SEND
+  (a) was known to be inefficient and (b) would have a lot of
+  difficulty handling all known structure return/passing conventions
+  on supported platforms.  Accordingly, %SEND has been deprecated
+  (with extreme prejudice, e.g., removed.)
+
+- a couple of little functions are defined (but their names are
+  not yet exported) on x86-64: ccl::rdtsc and ccl::rdtsc64 provide
+  access to the values returned by on-chip cycle counting instructions.
+  For instance:
+
+? (let* ((start (ccl::rdtsc)))
+    (sleep 1) 
+    (- (ccl::rdtsc) start))
+1995065244
+
+  Hmm.  Apparently, the 2.0GHz MacBook I tried that on is actually
+  a 1.995GHz MacBook.
+
+  There are all kinds of ways for rdtsc to lose (and return 
+  inaccurate or misleading results): the cycle counters for
+  each CPU core in a multi-core system aren't necessarily
+  kept in sync, and many modern systems allow CPU clock rates
+  to vary (for power-management reasons) and/or allow the CPU
+  to sleep/hibernate.  OSes seem to offer some support for
+  compensating for these effects, and it seems like ccl::rdtsc
+  and ccl::rdtsc64 can be used to obtain interesting results.
+
+  The RDTSC instruction actually returns an unsigned 64-bit
+  result; apparently, some Intel documentation claims that this
+  value will not "wrap around" to 0 at contemporary clock rates
+  for at least 10 years after the system was booted.  (If you can
+  keep an Intel system running for 9 years between reboots, you 
+  might consider telling Intel that the RDTSC counter wrapped around
+  a year early; they might give you a refund.  Or maybe not.)
+  A non-negative OpenMCL64 fixnum is limited to 60 bits; the
+  ccl::rdtsc function truncates the 64-bit counter value so
+  that it fits in a non-negative fixnum; if the 10 year limit
+  for the 64-bit value is accurate, the 60-bit value would
+  wrap around after about 223 days of uptime.
+
+  ccl::rdtsc64 returns the full 64-bit counter value, but
+  may return a bignum after 223 days of uptime.
+  
+- lots of bug fixes (not all of which involved the FFI or ObjC
+  bridge.)  
+
+  
+
+openmcl 1.1-pre-061231
+- The FASL version changed (old FASL files won't work with this
+  lisp version), as did the version information which tries to
+  keep the kernel in sync with heap images.
+  The binary incompatibility has to do with how a few pages of
+  low memory in the lisp kernel's address space are mapped and
+  used.  OpenMCL was generally assuming that these pages were
+  otherwise unused and could be used to map a small static data
+  area from the heap image file; on some platforms, the dynamic
+  linker may have already allocated data in those unused pages
+  before the lisp kernel even starts to run.  Fixing this involved
+  changing the address of that small static data area slightly,
+  and this caused the addresses of some objects contained within
+  that static data area - notably NIL - to change, as well.
+- This snapshot is otherwise just a set of bug fixes/work-in-progress
+  changes.
+- Even though no supported filesystem actually supports versioned files,
+  OpenMCL now tries to retain PATHNAME-VERSION informaton for physical
+  pathnames.  (The fact that it didn't caused several ANSI test failures.)
+  This change introduced/exposed a few other bugs; I think that I've
+  caught at least the most obvious ones, but it's possible that some
+  new pathname-related bugs have been introduced.
+- The cron job that runs on clozure.com and updates the ChangeLog from
+  CVS commit info stopped running as of a system upgrade in late November.
+  The problem was fixed a couple of weeks ago, so it's once again meaningful
+  to refer to the ChangeLog for details of bug fixes.
+- FSQRT and FSQRTS instructions are "optional" on the PPC.  In practice,
+  that often meant that they are implemented on chips made by IBM and
+  not on chips made by Motorola/FreeScale.  This version of OpenMCL
+  assumes that they're implemented and emulates them if they aren't.
+- OSX 10.2 (Jaguar) and earlier versions are officially no longer
+  supported.  (I honestly don't know if things have actually worked
+  on Jaguar in a while, but some recent changes are known not to
+  work on Jaguar and the kernel now inists on at least Panther on
+  startup.
+OpenMCL 1.1-pre-061205
+- This release is intended to package up the bug fixes since
+  the 061110 tarballs.  There aren't too many changes in 
+  functionality or any deep architectural changes since 061110, 
+  and it should be easy to bootstrap from current sources with 
+  061110 images.
+  (It'd still be a good idea to recompile your code with 
+  up-to-date images, whether you download those images or
+  build them yourself from CVS.)
+- The one (barely) notable change in functionality has to do
+  with how the lisp sets up pathname translations for the
+  "ccl" logical host when the "CCL_DEFAULT_DIRECTORY" environment
+  variable isn't set (e.g., when a shell script isn't used to
+  invoke the lisp.)  Previous versions just used the current
+  directory; this version tries to use the directory containing
+  the current heap image.  The new scheme might get fooled by
+  symbolic links (either following them or not following them
+  could be wrong), but it's more likely to work for people
+  who don't read or understand the discussion of the shell script
+  in the documentation.
+- All (knock wood) bugs that have been reported since the 061110
+  images were released should be fixed.  Well, almost all.  The
+  fixes include:
+
+  - a typo (wrong register) in the "generic" version of the
+    code which implements (SETF AREF) on 2-dimensional arrays
+    on x86-64
+  - incorrect bounds checking on vector references on x86-64,
+    which caused some invalid indices to be treated as valid
+    (usually leading to a segfault).  IIRC, the invalid indices
+    that were erroneously accepted were fixnums whose absolute
+    value was > (expt 2 56).  (More or less.).
+  - Missing stream methods (especially involving string streams)
+    affecting all platforms.
+  - Several bugs involving GCD, some of which were specific to
+    64-bit platforms and some of which affected all platforms.
+    (These bugs sometimes affected results returned by #'/,
+    LCM, and other funtions.)
+
+  - OpenMCL has only ever supported an ELEMENT-TYPE argument of
+   ([signed,unsigned]-byte 8|16|32|64) on binary file streams (with
+   64-bit types supported only on 64-bit platforms.)  It has not
+   previously tried to upgrade a supplied element-type to a supported
+   one (it does now) and any errors that resulted from supplying an
+   element-type that was not supported (and could not be upgraded) were
+   either obscure side-effects or quiet misbehavior; an error (a
+   SIMPLE-ERROR complaining about the unsupported element type) is now
+   signaled as soon as attempts to upgrade to a supported element type
+   fail.  I believe that the current behavior is both compliant and
+   reasonable; it's probably better to discuss that issue on 
+   openmcl-devel than to do so here.
+
+
+OpenMCL 1.1-pre-061110
+- The FASL version changed (old FASL files won't work with this
+  lisp version), as did the version information which tries to
+  keep the kernel in sync with heap images.
+- Several bug fixes (see ChangeLog), and modest-to-moderate
+  performance improvements.  Notably, AREF and (SETF AREF)
+  of 2- and 3-dimensional arrays are open-coded in more cases
+  and are usually at least 5x faster than in previous versions.
+  If the compiler knows that the array in question is a
+  SIMPLE-ARRAY of appropiate dimensionality and knows the
+  array's element-type, the speedup can be much greater.
+  There are certainly opportunities for further improvements
+  here, both in breadth (handling more cases) and depth
+  (eliminating some type-and-bounds checking in safe code,
+  doing parts of index calculations at compile-time when
+  bounds and indices are constants ...), but things are
+  generally improved.
+- QUIT and SAVE-APPLICATION work a little differently; in
+  particular, SAVE-APPLICATION sometimes runs after #_exit
+  is called (via the #_atexit mechanism).
+  The motivation for this change has to do with how some
+  environments (Cocoa, to name one) conflate the ideas of
+  "shutting down the GUI" with "exiting the application".
+  Previous versions of OpenMCL tried to work around this
+  by overriding some internal Cocoa methods; that approach
+  was never particularly attractive and (predictably) it'll
+  break in future OSX releases.
+  The new scheme (which involves letting code run after #_exit
+  has been called) certainly offers other ways to lose; so
+  far, I haven't seen evidence of such lossage.
+- For historical reasons (forgotten historical reasons, in fact)
+  the PPC versions of OpenMCL run with floating-point underflow
+  exceptions disabled (the x86-64 versions enable these exceptions
+  by default.)  This should change soon (as soon as I remember
+  to change it ...); it's unlikely that this will affect much
+  user code, but it's possible that it'll do so.
+OpenMCL 1.1-pre-061024
+- The FASL version changed (old FASL files won't work with this
+  lisp version), as did the version information which tries to
+  keep the kernel in sync with heap images.
+- Linux users: it's possible (depending on the distribution that
+  you use) that the lisp kernel will claim to depend on newer
+  versions of some shared libraries than the versions that you
+  have installed.  This is mostly just an artifact of the GNU
+  linker, which adds version information to dependent library
+  references even though no strong dependency exists.  If you
+  run into this, you should be able to simply cd to the appropriate
+  build directory under ccl/lisp-kernel and do a "make".
+- There's now a port of OpenMCL to FreeBSD/amd64; it claims to be
+  of beta quality.  (The problems that made it too unstable
+  to release as of a few months ago have been fixed;  I stil run
+  into occasional FreeBSD-specific issues, and some such issues
+  may remain.)
+- The Darwin X8664 port is a bit more stable (no longer generates
+  obscure "Trace/BKPT trap" exits or spurious-looking FP exceptions.)
+  I'd never want to pass up a chance to speak ill of Mach, but both
+  of these bugs seemed to be OpenMCL problems rather than Mach kernel
+  problems, as I'd previously more-or-less assumed.
+- I generally don't use SLIME with OpenMCL, but limited testing
+  with the 2006-04-20 verson of SLIME seems to indicate that no
+  changes to SLIME are necessary to work with this version.
+- CHAR-CODE-LIMIT is now #x110000, which means that all Unicode
+  characters can be directly represented.  There is one CHARACTER
+  type (all CHARACTERs are BASE-CHARs) and one string type (all
+  STRINGs are BASE-STRINGs.)  This change (and some other changes
+  in the compiler and runtime) made the heap images a few MB larger
+  than in previous versions.
+- As of Unicode 5.0, only about 100,000 of 1114112./#x110000 CHAR-CODEs
+  are actually defined; the function CODE-CHAR knows that certain
+  ranges of code values (notably #xd800-#xddff) will never be valid
+  character codes and will return NIL for arguments in that range,
+  but may return a non-NIL value (an undefined/non-standard CHARACTER
+  object) for other unassigned code values.
+- The :EXTERNAL-FORMAT argument to OPEN/LOAD/COMPILE-FILE has been
+  extended to allow the stream's character encoding scheme (as well
+  as line-termination conventions) to be specified; see more
+  details below.  MAKE-SOCKET has been extended to allow an
+  :EXTERNAL-FORMAT argument with similar semantics.
+- Strings of the form "u+xxxx" - where "x" is a sequence of one
+  or more hex digits- can be used as as character names to denote
+  the character whose code is the value of the string of hex digits. 
+  (The +  character is actually optional, so  #\u+0020, #\U0020, and
+  #\U+20 all refer to the #\Space character.)  Characters with codes
+  in the range #xa0-#x7ff (IIRC) also have symbolic names (the
+  names from the Unicode standard with spaces replaced with underscores),
+  so #\Greek_Capital_Letter_Epsilon can be used to refer to the character
+  whose CHAR-CODE is #x395.
+- The line-termination convention popularized with the CP/M operating
+  system (and used in its descendants) - e.g., CRLF - is now supported,
+  as is the use of Unicode #\Line_Separator (#\u+2028).
+- About 15-20 character encoding schemes are defined (so far); these
+  include UTF-8/16/32 and the big-endian/little-endian variants of
+  the latter two and ISO-8859-* 8-bit encodings.  (There is not
+  yet any support for traditional (non-Unicode) ways of externally
+  encoding characters used in Asian languages, support for legacy
+  MacOS encodings, legacy Windows/DOS/IBM encodings, ...)  It's hoped
+  that the existing infrastructure will handle most (if not all) of
+  what's missing; that may not be the case for "stateful" encodings
+  (where the way that a given character is encoded/decoded depend
+  on context, like the value of the preceding/following character.)
+- There isn't yet any support for Unicode-aware collation (CHAR>
+  and related CL functions just compare character codes, which
+  can give meaningless results for non-STANDARD-CHARs), case-inversion,
+  or normalization/denormalization.  There's generally good support
+  for this sort of thing in OS-provided libraries (e.g., CoreFoundation
+  on MacOSX), and it's not yet clear whether it'd be best to duplicate
+  that in lisp or leverage library support.
+- Unicode-aware FFI functions and macros are still in a sort of
+  embryonic state if they're there at all; things like WITH-CSTRs
+  continue to exist (and continue to assume an 8-bit character
+  encoding.)
+- Characters that can't be represented in a fixed-width 8-bit
+  character encoding are replaced with #\Sub (= (code-char 26) =
+  ^Z) on output, so if you do something like:
+
+? (format t "~a" #\u+20a0)
+
+  you might see a #\Sub character (however that's displayed on
+  the terminal device/Emacs buffer) or a Euro currency sign or
+  practically anything else (depending on how lisp is configured
+  to encode output to *TERMINAL-IO* and on how the terminal/Emacs
+  is configured to decode its input.
+
+  On output to streams with character encodings that can encode
+  the full range of Unicode - and on input from any stream -
+  "unencodable characters" are represented using the Unicode
+  #\Replacement_Character (= #\U+fffd); the presence of such a
+  character usually indicates that something got lost in translation
+  (data wasn't encoded properly or there was a bug in the decoding
+  process.)
+- Streams encoded in schemes which use more than one octet per code unit
+  (UTF-16, UTF-32, ...) and whose endianness is not explicit will be 
+  written with a leading byte-order-mark character on (new) output and
+  will expect a BOM on input; if a BOM is missing from input data,
+  that data will be assumed to have been serialized in big-endian order.
+  Streams encoded in variants of these schemes whose endianness is
+  explicit (UTF-16BE, UCS-4LE, ...) will not have byte-order-marks written
+  on output or expected on input.  (UTF-8 streams might also contain
+  encoded byte-order-marks; even though UTF-8 uses a single octet per
+  code unit - and possibly more than one code unit per character - this
+  convention is sometimes used to advertise that the stream is UTF-8-
+  encoded.  The current implementation doesn't skip over/ignore leading
+  BOMs on UTF8-encoded input, but it probably should.)
+
+  If the preceding paragraph made little sense, a shorter version is
+  that sometimes the endianness of encoded data matters and there
+  are conventions for expressing the endianness of encoded data; I
+  think that OpenMCL gets it mostly right, but (even if that's true)
+  the real world may be messier.
+- By default, OpenMCL uses ISO-8859-1 encoding for *TERMINAL-IO*
+  and for all streams whose EXTERNAL-FORMAT isn't explicitly specified.
+  (ISO-8859-1 just covers the first 256 Unicode code points, where
+  the first 128 code points are equivalent to US-ASCII.)  That should
+  be pretty much equivalent to what previous versions (that only
+  supported 8-bit characters) did, but it may not be optimal for 
+  users working in a particular locale.  The default for *TERMINAL-IO*
+  can be set via a command-line argument (see below) and this setting
+  persists across calls to SAVE-APPLICATION, but it's not clear that
+  there's a good way of setting it automatically (e.g., by checking
+  the POSIX "locale" settings on startup.)  Thing like POSIX locales
+  aren't always set correctly (even if they're set correctly for
+  the shell/terminal, they may not be set correctly when running
+  under Emacs ...) and in general, *TERMINAL-IO*'s notion of the
+  character encoding it's using and the "terminal device"/Emacs subprocess's
+  notion need to agree (and fonts need to contain glyphs for the
+  right set of characters) in order for everything to "work".  Using
+  ISO-8859-1 as the default seemed to increase the likelyhood that
+  most things would work even if things aren't quite set up ideally
+  (since no character translation occurs for 8-bit characters in
+  ISO-8859-1.)
+- In non-Unicode-related news: the rewrite of OpenMCL's stream code
+  that was started a few months ago should now be complete (no more
+  "missing method for BASIC-STREAM" errors, or at least there shouldn't
+  be any.)
+- I haven't done anything with the Cocoa bridge/demos lately, besides
+  a little bit of smoke-testing.
+
+Some implementation/usage details:
+
+Character encodings.
+
+CHARACTER-ENCODINGs are objects (structures) that're named by keywords
+(:ISO-8859-1, :UTF-8, etc.).  The structures contain attributes of
+the encoding and functions used to encode/decode external data, but
+unless you're trying to define or debug an encoding there's little
+reason to know much about the CHARACTER-ENCODING objects and it's
+generally desirable (and sometimes necessary) to refer to the encoding
+via its name.
+
+Most encodings have "aliases"; the encoding named :ISO-8859-1 can
+also be referred to by the names :LATIN1 and :IBM819, among others.
+Where possible, the keywordized name of an encoding is equivalent
+to the preferred MIME charset name (and the aliases are all registered
+IANA charset names.)
+
+NIL is an alias for the :ISO-8859-1 encoding; it's treated a little
+specially by the I/O system.
+
+The function CCL:DESCRIBE-CHARACTER-ENCODINGS will write descriptions
+of all defined character encodings to *terminal-io*; these descriptions
+include the names of the encoding's aliases and a doc string which
+briefly describes each encoding's properties and intended use.
+
+Line-termination conventions.
+
+As noted in the <=1.0 documentation, the keywords :UNIX, :MACOS, and
+:INFERRED can be used to denote a stream's line-termination conventions.
+(:INFERRED is only useful for FILE-STREAMs that're open for :INPUT or
+:IO.)  In this release, the keyword :CR can also be used to indicate
+that a stream uses #\Return characters for line-termination (equivalent
+to :MACOS), the keyword :UNICODE denotes that the stream uses Unicode
+#\Line_Separator characters to terminate lines, and the keywords :CRLF,
+:CP/M, :MSDOS, :DOS, and :WINDOWS all indicate that lines are terminated
+via a #\Return #\Linefeed sequence.
+
+In some contexts (when specifying EXTERNAL-FORMATs), the keyword :DEFAULT
+can also be used; in this case, it's equivalent to specifying the value
+of the variable CCL:*DEFAULT-LINE-TERMINATION*.  The initial value of
+this variable is :UNIX.
+
+Note that the set of keywords used to denote CHARACTER-ENCODINGs and
+the set of keywords used to denote line-termination conventions is
+disjoint: a keyword denotes at most a character encoding or a line
+termination convention, but never both.
+
+External-formats.
+
+EXTERNAL-FORMATs are also objects (structures) with two read-only
+fields that can be accessed via the functions EXTERNAL-FORMAT-LINE-TERMINATION
+and EXTERNAL-FORMAT-CHARACTER-ENCODING; the values of these fields are
+line-termination-convention-names and character-encoding names as described
+above.
+
+An EXTERNAL-FORMAT object via the function MAKE-EXTERNAL-FORMAT:
+
+MAKE-EXTERNAL-FORMAT &key domain character-encoding line-termination
+
+(Despite the function's name, it doesn't necessarily create a new,
+unique EXTERNAL-FORMAT object: two calls to MAKE-EXTERNAL-FORMAT
+with the same arguments made in the same dynamic environment will
+return the same (eq) object.)
+
+Both the :LINE-TERMINATION and :CHARACTER-ENCODING arguments default
+to :DEFAULT; if :LINE-TERMINATION is specified as or defaults to
+:DEFAULT, the value of CCL:*DEFAULT-LINE-TERMINATION* is used to
+provide a concrete value. 
+
+When the :CHARACTER-ENCODING argument is specifed as/defaults to
+:DEFAULT, the concrete character encoding name that's actually used
+depends on the value of the :DOMAIN argument to MAKE-EXTERNAL-FORMAT.
+The :DOMAIN-ARGUMENT's value can be practically anything; when it's
+the keyword :FILE and the :CHARACTER-ENCODING argument's value is
+:DEFAULT, the concrete character encoding name that's used will be
+the value of the variable CCL:*DEFAULT-FILE-CHARACTER-ENCODING*; the
+initial value of this variable is NIL (which is an alias for :ISO-8859-1).
+If the value of the :DOMAIN argument is :SOCKET and the :CHARACTER-ENCODING
+argument's value is :DEFAULT, the value of 
+CCL:*DEFAULT-SOCKET-CHARACTER-ENCODING* is used as a concrete character
+encoding name.  The initial value of CCL:*DEFAULT-SOCKET-CHARACTER-ENCODING*
+is NIL, again denoting the :ISO-8859-1 encoding.
+If the value of the :DOMAIN argument is anything else, :ISO-8859-1 is
+also used (but there's no way to override this.)  
+
+The result of a call to MAKE-EXTERNAL-FORMAT can be used as the value
+of the :EXTERNAL-FORMAT argument to OPEN, LOAD, COMPILE-FILE, and
+MAKE-SOCKET; it's also possible to use a few shorthand constructs
+in these contexts:
+
+* if ARG is unspecified or specified as :DEFAULT, the value of the
+  variable CCL:*DEFAULT-EXTERNAL-FORMAT* is used.  Since the value
+  of this variable has historically been used to name a default
+  line-termination convention, this case effectively falls into
+  the next one:
+* if ARG is a keyword which names a concrete line-termination convention,
+  an EXTERNAL-FORMAT equivalent to the result of calling
+  (MAKE-EXTERNAL-FORMAT :line-termination ARG)
+   will be used
+* if ARG is a keyword which names a character encoding, an EXTERNAL-FORMAT
+  equvalent to the result of calling 
+  (MAKE-EXTERNAL-FORMAT :character-encoding ARG)
+  will be used
+* if ARG is a list, the result of (APPLY #'MAKE-EXTERNAL-FORMAT ARG)
+  will be used
+
+(When MAKE-EXTERNAL-FORMAT is called to create an EXTERNAL-FORMAT
+object from one of these shorthand designators, the value of the
+:DOMAIN keyword argument is :FILE for OPEN,LOAD, and COMPILE-FILE
+and :SOCKET for MAKE-SOCKET.)
+
+STREAM-EXTERNAL-FORMAT.
+The CL function STREAM-EXTERNAL-FORMAT - which is portably defined
+on FILE-STREAMs - can be applied to any open stream in this release
+and will return an EXTERNAL-FORMAT object when applied to an open
+CHARACTER-STREAM. For open CHARACTER-STREAMs (other than STRING-STREAMs),
+SETF can be used with STREAM-EXTERNAL-FORMAT to change the stream's
+character encoding, line-termination, or both.
+
+If a "shorthand" external-format designator is used in a call to
+(SETF STREAM-EXTERNAL-FORMAT), the "domain" used to construct an
+EXTERNAL-FORMAT is derived from the class of the stream in the
+obvious way (:FILE for FILE-STREAMs, :SOCKET for ... well, for
+sockets ...)
+
+Note that the effect or doing something like:
+
+(let* ((s (open "foo" ... :external-format :utf-8)))
+  ...
+  (unread-char ch s)
+  (eetf (stream-external-format s) :us-ascii)
+  (read-char s))
+
+might or might not be what was intended.  The current behavior is
+that the call to READ-CHAR will return the previously unread character
+CH, which might surprise any code which assumes that the READ-CHAR
+will return something encodable in 7 or 8 bits.  Since functions
+like READ may call UNREAD-CHAR "behind your back", it may or may
+not be obvious that this has even occurred; the best approach to
+dealing with this issue might be to avoid using READ or explicit
+calls to UNREAD-CHAR when processing content encoded in multiple
+external formats.
+
+There's a similar issue with "bivalent" streams (sockets) which
+can do both character and binary I/O with an :ELEMENT-TYPE of
+(UNSIGNED-BYTE 8).  Historically, the sequence:
+
+   (unread-char ch s)
+   (read-byte s)
+
+caused the READ-BYTE to return (CHAR-CODE CH); that made sense
+when everything was implicitly encoded as :ISO-8859-1, but may not
+make any sense anymore.  (The only thing that seems to make sense
+in that case is to clear the unread character and read the next
+octet; that's implemented in some cases but I don't think that
+things are always handled consistently.)
+
+Command-line argument for specifying the character encoding to
+be used for *TERMINAL-IO*.
+
+Shortly after a saved lisp image starts up, it creates the standard
+CL streams (like *STANDARD-OUTPUT*, *TERMINAL-IO*, *QUERY-IO*, etc.);
+most of these streams are usually SYNONYM-STREAMS which reference
+the TWO-WAY-STREAM *TERMINAL-IO*, which is itself comprised of
+a pair of CHARACTER-STREAMs.  The character encoding used for
+any CHARACTER-STREAMs created during this process is the one
+named by the value of the variable CCL:*TERMINAL-CHARACTER-ENCODING-NAME*;
+this value is initially NIL.
+
+The -K or --terminal-encoding command-line argument can be used to
+set the value of this variable (the argument is processed before the
+standard streams are created.)  The string which is the value of
+the -K/--terminal-encoding argument is uppercased and interned in
+the KEYWORD package; if an encoding named by that keyword exists,
+CCL:*TERMINAL-CHARACTER-ENCODING-NAME* is set to the name of that
+encoding.  For example:
+
+shell> openmcl -K utf-8
+
+will have the effect of making the standard CL streams use :UTF-8
+as their character encoding.
+
+(It's probably possible - but a bit awkward - to use (SETF EXTERNAL-FORMAT)
+from one's init file or --eval arguments or similar to change existing
+streams' character encodings; the hard/awkward parts of doing so include
+the difficulty of determining which standard streams are "real" character
+streams and which are aliases/composite streams.)
+
+OpenMCL 1.1-pre-069826
+- There's an (alpha-quality, maybe) port to x86-64 Darwin (e.g., the
+  Mac Pro.)  Some known problems include:
+  
+  * infrequently (but not infrequently enough) the lisp dies on
+    startup with a spurious "Trace/BKPT trap" error message.  This
+    seems to be timing-dependent and (very generally) seems to
+    involve the Mach exception thread not recognizing an exception
+    used to effect exception return.  Sometimes, this shows up
+    as a (:SIGNALED 5) error when REBUILD-CCL runs the lisp to
+    create a new image.
+
+  * some math library primitives (#_asin, for one) generate
+    spurious incidental FP exceptions that have nothing to
+    do with the validity of the arguments or result.  To work around
+    this, the lisp ignores FP exceptions which might have occurred
+    during a call into the math library; that means that it doesn't
+    detect -real- FP exceptions when they're signaled.  (This bug
+    only affects things that call into the system math library;
+    lisp arithmetic operations that're done inline are not affected.)
+
+  * The version of OSX/Darwin that shipped with the Mac Pro is missing
+    some functionality that from OpenMCL's point of view is highly
+    desirable (namely, the ability to keep application-level thread-
+    specific data in a per-thread block of memory addressed by an
+    otherwise unused segment register.)  To get things working (as
+    well as they are), the lisp "shares" the segment register that
+    the pthreads library uses to access thread data.  This scheme
+    isn't intended to be long-lived (and negatively affects
+    performance of things like foreign-function calls, callbacks,
+    and exception handling).
+ 
+  * The .cdb files (libc only for Tiger) in ccl:darwin-x86-headers64;
+    were cross-developed on a Linux x86-64 system, since Apple
+    has not yet released the sources to their x86-64 enabled gcc.
+
+- On all platforms, stream code has been rewritten and often offers
+  better (sometimes substantially better) performance.  OPEN and
+  MAKE-SOCKET have each been extended to take additional keyword
+  arguments.
+
+  :SHARING, which can have the values :PRIVATE (the default), :LOCK,
+  or :EXTERNAL (NIL is also accepted as synonym for :EXTERNAL)
+
+   :PRIVATE specifies that the stream can only be accessed by
+   the thread that created it.  (There was some discussion on openmcl-devel
+   about the idea of "transferring ownership" of a stream; this has
+   not yet been implemented.)  Attempts to do I/O on a stream with
+   :PRIVATE sharing from a thread other than the stream's owner yield
+   an error.
+
+   :LOCK specifies that all access to the stream require the calling
+   thread to obtain a lock; there are separate "read" and "write"
+   locks for IO streams (so it's possible for one thread to read
+   from such a stream while another thread writes to it, for instance.)
+   :LOCK was the implicit default for all streams prior to this change.
+   (See below - under the discussion of the AUTO-FLUSH mechanism -
+   for a discussion of one of the implications of this change that
+   affects SLIME users.)
+
+   :EXTERNAL (or NIL) specifies that I/O primitives enforce no
+   access protocol.  This may be appropriate for some types of application
+   which can control stream access via application-level protocols.  Note
+   that since even the act of reading from a stream changes its internal
+   state (and simultaneous access from multiple threads can therefore
+   lead to corruption of that state), some care must be taken in the
+   design of such protocols.
+
+  The :BASIC keyword argument influences whether or not the stream
+  will be an instance of the class FUNDAMENTAL-STREAM (the superclass
+  from which all Gray stream classes inherit) or a subclass of the
+  built-in class CCL::BASIC-STREAM.  The default value of :BASIC
+  is T and this has effect for FILE-STREAMs created via OPEN;
+  SOCKETs are still always implemented as FUNDAMENTAL (Gray) streams,
+  though this should change soon.
+
+   The tradeoff between FUNDAMENTAL and BASIC streams is entirely
+   between flexibility and (potential or actual) performance.  I/O
+   primitives can recognize BASIC-STREAMs and exploit knowledge of
+   implementation details; FUNDAMENTAL stream classes can be
+   subclassed in a semi-standard way (the Gray streams protocol.)
+
+   For existing stream classes (FILE-STREAMs, SOCKETs, and the
+   internal CCL::FD-STREAM classes used to implement file streams
+   and sockets), a lot of code can be shared between the
+   FUNDAMENTAL and BASIC implementations.  The biggest difference
+   should be that that code can be reached from I/O primitives
+   like READ-CHAR without going through some steps that're there
+   to support generality and extensibility, and skipping those
+   steps when that support isn't needed can improve I/O performance.
+
+   Gray stream methods (STREAM-READ-CHAR) should work on
+   appropriate BASIC-STREAMs.  (There may still be cases where
+   such methods are undefined; such cases should be considered
+   bugs.)  It is not guaranteed that Gray stream methods would
+   ever be called by I/O primitives to read a character from
+   a BASIC-STREAM (though there are still cases where this happens.)
+
+   A simple loop reading 2M characters from a text file runs about
+   10X faster when the file is opened the new defaults (:SHARING :PRIVATE
+   :BASIC T) than it had before these changes were made.  That sounds
+   good, until one realizes that the "equivalent" C loop can be about
+   10X faster still ...
+
+ - Forcing output to interactive streams.
+
+   OpenMCL has long had a (mostly undocumented) mechanism whereby
+   a mostly idle thread wakes up a few (~3) times per second and
+   calls FORCE-OUTPUT on specified OUTPUT-STREAMS; this helps to
+   ensure that streams with which a user would be expected to
+   interact (the output side of *TERMINAL-IO*, listener windows
+   in a GUI, etc.) have all buffered output flushed without
+   requiring application or I/O library code to be concerned about
+   that.
+
+   The SLIME lisp interaction mode for Emacs uses this mechanism,
+   but the changes described above interfere with SLIMEs use of
+   it:  in order to be safely accessed from multiple threads (the
+   SLIME REPL thread and the thread which does the background
+   periodic flushing of buffered output), a stream must have
+   been created with :SHARING :LOCK in effect.  This is no longer
+   the effective default; the code which does the periodic
+   output flushing ignores streams which do not use locks as an
+   access/sharing mechanism.  THIS MEANS THAT BUFFERRED OUTPUT
+   TO SLIME REPLs WILL NOT BE AUTOMATICALLY FLUSHED TO THE SCREEN.
+   A small change to SLIME's "swank-openmcl.lisp" is required
+   to restore this functionality.  First,  a brief description of
+   a couple of new primitives:
+
+   (CCL:ADD-AUTO-FLUSH-STREAM s)
+
+    Adds "s", which should be a "simple" OUTPUT-STREAM as returned
+    by OPEN or MAKE-SOCKET, to a list of streams whose buffered
+    output should be periodically flushed.  If S was not created
+    with :SHARING :LOCK in effect, the stream will have its
+    :SHARING mode changed to put :SHARING :LOCK into effect.
+
+   (CCL:REMOVE-AUTO-FLUSH-STREAM s)
+    
+    Removes S from the internal list of automatically flushed
+    streams.  Does not restore the stream's :SHARING mode, which
+    may have been changed by a previous call to ADD-AUTO-FLUSH-STREAM.
+
+ - SLIME changes
+   In slime:swank-openmcl.lisp, around line 182, the method
+
+(defmethod make-stream-interactive ((stream ccl:fundamental-output-stream))
+  (push stream ccl::*auto-flush-streams*))
+
+   should be changed to use CCL:ADD-AUTOFLUSH-STREAM if it's defined:
+
+(defmethod make-stream-interactive ((stream ccl:fundamental-output-stream))
+  (if (fboundp 'ccl::add-auto-flush-stream)
+    (ccl::add-auto-flush-stream stream)
+    (push stream ccl::*auto-flush-streams*)))
+
+   That's adequate for the moment, since sockets are still 
+   FUNDAMENTAL-STREAMs.  When that changes, some more extensive changes
+   to swank-openmcl.lisp may become necessary.
+
+- on x86-64, floating-point-underflow exceptions are now enabled
+  by default.  (They really should be on ppc as well.)  Again,
+  this affects FP operations that are done in lisp code and
+  the results of FP operations that are reported in response
+  to calls to reasonable (non-Darwin) math libraries.  This
+  can affect whether or not some "potential number"  reader 
+  tokens are representable as numbers, e.g., whether or not
+  attempts to read something like "1.0f-50" signal underflow
+  or are quietly mapped to 0.0f0.
+
+- examples: Phil (from the mailing list) has added code which 
+  supports some of the ffi examples from the documentation.
+
+- Bug fixes: see ChangeLog
+
+
+
+OpenMCL 1.1-pre-060705
+- Bug fixes again.  Some internal changes to support a FreeBSD/AMD64
+  port that's not quite ready.
+
+- :MCL is back on *features*; there seem to be too many packages out
+  there that expect it to be, and there hasn't been enough advance
+  notice of its pending removal.
+    
+OpenMCL 1.1-pre-060623
+- Mostly bug fixes (a CLOS bug that prevented the ObjC bridge from 
+  working, FIXNUM arrays weren't quite finished on PPC)
+
+- Use Tiger inferfaces (from XCode 10.4u SDK) on DarwinPPC32
+
+- Add gl, gtk2, gnome2 interfaces for x86-64.  Add a tiny
+  "gtk2-clock" example, tweak the opengl-ffi (GLUT) example
+  so that it works on x86-64.
+
+- Some changes to the ObjC bridge to support loading additional
+  frameworks; update the WebKit example to use these new features.
+
+- Still an outstanding issue where things like MAKE-OBJC-INSTANCE
+  need access to the interfaces at runtime (and can crash if they
+  aren't available.) 
+
+- Build snapshots for LinuxPPC{32,64}.
+
+OpenMCL 1.1-pre-060608
+- The FASL version changed, as did the version number which pairs
+  the lisp kernel with heap images.  Images saved with older kernels
+  can't be loaded on this one; the images/kernels in the 060608
+  snapshot tarballs should match.
+
+  Most of the ABI changes that caused these version changes were
+  x86-64 specific; some auxiliary stack pointers that had been
+  kept in MMX registers are now kept in per-thread memory. (Signal/
+  exception handlers generally need to be able to access these
+  stack pointers, but at least some versions of the Linux kernel
+  don't reliably pass correct values of the MMX registers in the
+  signal contexts passed to signal handlers.  Moral: some kinds
+  of stack-allocation and foreign-function operations may (or may not)
+  be a few cycles slower, but OpenMCL should be a bit less prone
+  to fatal segfault exceptions.)
+
+  Other than that, most changes since the 060530 snapshots are
+  bugfixes (see the ChangeLog for details).  The x86-64 port has been
+  exercised fairly heavily (if somewhat narrowly) and its welcome
+  banner now claims that it's a beta release.  I think that that's
+  probably fair, and hope that anyone who may have been reluctant to
+  test an alpha release will agree and be less reluctant.
+
+- There's still much more to be done, but some preliminary 1.1 documentation
+  is now online at:
+
+<http://newsite.openmcl.clozure.com/Doc>
+
+  Note that some relative links on "newsite" may be invalid, but the
+  internal links in the Doc directory should work.
+
+  As noted above, it still needs a lot of work; feedback, criticism,
+  and help would all be appreciated.
+
+OpenMCL 1.1-pre-060530
+
+- These release notes have gotten woefully out of date.
+
+- OpenMCL now runs on x86-64 (AMD64, Intel EM64T) systems under Linux.
+  It announces itself as an alpha release in the Welcome banner; it should
+  in fact be very nearly feature-complete (but possibly still buggy.)
+  There's a chicken-and-egg issue in that it needs more testing before
+  it can be formally released and some people may be waiting for a more
+  stable version.
+
+  The build process and most user-visible things should behave the same
+  way as on PPC; using REBUILD-CCL (described below) is generally the
+  simplest way to rebuild from sources.  A few (intentional) differences:
+ 
+  * the lisp kernel is named "lx86cl64", the default heap image is
+    named "LX86CL64" (e.g., the kernel name, case-inverted) and the
+    bootstrapping image is conventionally named "x86-boot64".
+
+  * FASL files have the extension "lx64fsl"
+
+  * the kernel build directory is "ccl/lisp-kernel/linuxx8664"
+
+  * the "openmcl64" shell script can be used to invoke the
+    lisp, as on 64-bit PPC platforms.
+
+Other changes tend to be a little more modest:
+
+- there is now a specialized FIXNUM array element type on all platforms.
+  (distinct from T or (SIGNED-BYTE <machine-word-size>)).  Access to
+  such vectors is a little cheaper than the SIGNED-BYTE case (since
+  elements are known to be fixnums) and a little easier on the GC
+  than the T case (the GC can avoid looking at their contents and
+  there are no associated EGC write-barrier issues.)
+
+- "colon" commands entered into the REPL/break loops don't need to
+  be parenthesized if the command and all operands are on the same
+  line. E.g.
+
+1> :f 0
+
+  and
+
+1> (:f 0)
+
+  are equivalent (and have the effect of examining the raw contents of
+  the 0th stack frame)
+
+- the syntax of the :B (backtrace) break-loop has changed; rather
+  than taking an optional argument which specifies whether or not
+  frame details should be shown, it now accepts keyword arguments
+  for specifying:
+   
+  :start	; unsigned integer: the index of the first frame to show
+  :count	; unsigned integer: the maximum number of frames to show
+  :detailed-p	; boolean: whether or not to show frame detail
+
+- a new break-loop command :NFRAMES returns the number of stack frames
+  accessible to backtrace.  (Both this change and the previous
+  are intended to help deal with deep recursion/stack overflow cases.)
+
+- any command-line arguments that follow a "--" pseudo-argument
+  are not processed by the lisp startup code and are stored
+  (as a list of strings) in CCL:*UNPROCESSED-COMMAND-LINE-ARGUMENTS*.
+  E.g.:
+
+shell> openmcl -- -foo 17
+[...]
+? ccl:*UNPROCESSED-COMMAND-LINE-ARGUMENTS*
+=> ("-foo" "17")
+
+OpenMCL 1.1-pre-060226
+
+- The --thread-stack-size (or -Z)  command-line argument changes the values
+  of the variables used to determine the sizes of the listener thread.
+  The values of these variables will persist accross SAVE-APPLICATION;
+  these values have no effect on the sizes of stacks in threads created
+  under explicit user control.
+
+- New functions:
+
+  (CCL:GC-VERBOSE on-full-gc &optional (on-egc on-full-gc))
+
+  Causes the GC to print (or stop printing ...) informational messages
+  on entry and exit.  The ON-FULL-GC argument controls whether or
+  not these messages are printed on ... a full GC, and the ON-EGC
+  argument (which defaults to the value of the ON-FULL-GC argument)
+  controls whether messages are printed on ephemeral GCs.
+
+  (CCL:GC-VERBOSE-P)
+
+  Returns two values (corresponding to the arguments of the last call
+  to CCL:GC-VERBOSE.)
+
+  (CCL:REBUILD-CCL &key :FULL :CLEAN :KERNEL :FORCE :RELOAD :EXIT 
+                         :RELOAD-ARGUMENTS)
+
+  Depending on the values of its arguments, recompiles lisp and/or
+  kernel sources and optionallly re-generates ("reloads") a heap
+  image.
+
+  Arguments:
+
+  clean   deletes FASL and .o files before performing other steps
+  kernel  rebuilds the lisp kernel
+  force   forces recompilation, even if binary is newer than source
+  reload  tries to rebuild a full heap image after other build steps
+  exit    quits after all other steps
+  full    equivalent to :CLEAN T :KERNEL T :RELOAD T
+  reload-arguments a list of strings, passed as additional arguments
+                   to the reload step.  E.g. '("--thread-stack-size" "128M").
+
+  Output from the :KERNEL and :RELOAD steps is ordinarily only displayed
+  if an error occurs.
+  
+
+- Changes
+
+  TRACE now prints an integer (corresponding to the level of indentation)
+  on each line of output.
+
+  Tracing callbacks is currently broken (it may be reimplemented; if so,
+  it'd be implemented somewhat differently ...)
+
+- Bugs
+
+  Several bugs involving interactions between the GC and (many) active
+  threads have been fixed; at least one such bug remains (the symptom
+  involves a recently allocated  array somehow getting trashed or GCed
+  incorrectly; the  cause has been under investigation for weeks but is 
+  still not known.)
+
+OpenMCL 1.1-pre-060125
+
+- FASL version changed; delete old FASL (.dfsl, .pfsl, .dfsl64, .pfsl64) files
+ 
+- "kernel ABI version" changed; build a new lisp kernel before trying to load/use
+   060125 images.
+
+-  Changes: (see also ChangeLog)
+
+   New variable:
+
+   CCL:*HOST-PAGE-SIZE*
+
+   Initialized on application startup to contain the MMU/OS page size in bytes.
+   This is 4K on PPC platforms (and likely on most? all? x86 platforms).
+
+   New functions:
+
+   CCL:DEFAULT-ALLOCATION-QUANTUM
+
+   Returns an integer, the value of which is used by the lisp kernel when
+   mapping heap memory from the OS.  Mapping requests are usually made in
+   multiples of this value.  
+
+   This value is read-only; currently, it's 64KB on 32-bit platforms and
+   128KB on 64-bit platforms.
+
+
+   CCL:PROCESS-ALLOCATION-QUANTUM p
+
+   Returns the (per-thread) allocation quantum of the process P.  By default,
+   this is the same value as that returned by CCL:DEFAULT-ALLOCATION-QUANTUM,
+   but lower values can be specified on a per-process basis (see below.)
+
+   This value is read-only.
+
+   CCL:CURRENT-PROCESS-ALLOCATION-QUANTUM
+
+   Equivalent to (CCL:PROCESS-ALLOCATION-QUANTUM *CURRENT-PROCESS*),
+   but can be used with SETF to change the current processes's
+   allocation quantum to a value which is between *HOST-PAGE-SIZE* and
+   (DEFAULT-ALLOCATION-QUANTUM), inclusive, and which is a power of 2.
+
+
+   Changes to existing functions:
+
+   Both PROCESS-RUN-FUNCTION and MAKE-PROCESS accept an :ALLOCATION-QUANTUM
+   &key argument, which defaults to the value returned by (DEFAULT-ALLOCATION-QUANTUM).
+   If provided, the value of the argument should should satisfy the same
+   constraints that (SETF (CURRENT-PROCESS-ALLOCATION-QUANTUM) is subject to.
+
+Discussion
+
+In general, larger per-thread allocation quanta are appropriate for programs
+where a relatively small number of threads need to allocate memory frequently
+and small per-thread quanta are appropriate for larger numbers of threads
+that are expected to do small, infrequent memory allocations.
+
+The worst-case scenarios would involve a large number of threads doing
+incidental memory allocation with large quanta (that wastes memory and may
+trigger the GC too frequently) or a small number of threads doing frequent
+memory allocation with small quanta (since such threads could be expected
+to fill up their small per-thread memory allocations quickly and frequently
+and would waste time frequently allocating more small chunks.)
+
+All of these values interact with the GC and EGC thresholds; the ability
+to exercise some control over how much per-threads memory is allocated
+at a time can help to ensure that those interactions are appropriate.
+When these mechanisms are insufficient, applications should consider the
+use of available mechanisms for adjusting GC and EGC thresholds.
+
+
+
+
+OpenMCL 1.1-pre-051027
+
+- A lot of internal changes in the way that special bindings, UNWIND-PROTECT,
+  and WITHOUT-INTERRUPTS are implemented (and in how they interact with
+  each other.
+
+  One user-visible aspect of this is that UNWIND-PROTECT cleanup forms
+  are run with interrupts disabled (the protected form is run with
+  interrupts enabled if they were enabled on entry to the UNWIND-PROTECT.)
+  This means that something like:
+
+  (unwind-protect
+      nil
+    (loop))
+
+  will loop uninterruptibly.
+
+- CCL:WITH-INTERRUPTS-ENABLED &body body executes the body with interrupts
+  enabled.  The example above could be rewritten as:
+
+  (unwind-protect
+      nil
+    (with-interrupts-enabled (loop)))
+
+  and the loop would be interruptible.
+
+  These changes introduce binary incompatibility (the FASL version changed,
+  as did an internal version number that tries to keep the kernel and
+  heap image in synch.)
+
+  Things basically work, but there may be lingering bugs (e.g., as of
+  a little while ago, QUIT didn't work because the initial process
+  was running with interrupts disabled.)
+
+- PROCESS-TERMINATION-SEMAPHORE
+  MAKE-PROCESS and PROCESS-RUN-FUNCTION accept a :TERMINATION-SEMAPHORE
+  argument; processes have a PROCESS-TERMINATION-SEMAPHORE accessor
+  method.  If the argument is specified and non-null, its value should
+  of type SEMAPHORE.
+
+  If a process dies by any means after it's been successfully enabled
+  and it has a non-null termination semaphore "at the time of its death", 
+  that semaphore will be signaled just before the underlying OS thread
+  is destroyed.
+
+  SETF can be used with PROCESS-TERMINATION-SEMAPHORE to change or
+  clear a the termination semaphore of a process.  If the target
+  process is not the current process when this happens, it's possible
+  that the process could die before the SETF takes effect; this
+  possibility must be addressed at the application level (i.e., the
+  implementation doesn't try to synchronize the calling thread and
+  the target in any way.
+
+  A simple example:
+
+  (let* ((s (make-semaphore)))
+    (process-run-function `(:name "sleepy" :termination-semaphore ,s)
+                           #'(lambda () (sleep 10)))
+    (wait-on-semaphore s))
+
+  The calling thread will wait for (roughly) 10 seconds (until the
+  "sleepy" thread has had its nap and signals its termination semaphore.)
+
+- A change that was introduced prior to 0.14.3 led to strange, usually
+  fatal crashes (usually an unhandled bus error, occasionally a cryptic
+  "can't find active area" message and a trip to the kernel debugger)
+  under Darwin.  This was caused by an attempt to use certain Mach
+  primitives to suspend and resume threads (the way that those
+  primitives were used, Mach exception messages were sometimes sent
+  twice if the first send was interrupted, and the second send occurred
+  after the exception had already been handled (because the first send
+  was recieved but not replied to ...)
+
+  1.0 backed out of this change, and used signal handling primitives
+  (instead of Mach primitives) to suspend and resume threads.  I -think-
+  that I understand the issue with the Mach primitives 
+  (#_thread_abort_safely isn't necessary and caused the duplicate
+  exception messages to be sent) and have tried to revert to using
+  the Mach thread suspension mechanisms.  (If unhandled bus errors -
+  that exit to the shell - or cryptic "can't find active area" messages
+  reappear, this experiment will be shown to be a failure.)
+
+  There are some obscure but good reasons for favoring the Mach
+  primiitves, so it'd be good to know if the problem with using them
+  has indeed been identified.
+
+  (The test case involves bad luck and bad timing: two or more
+  threads having pending exceptions at the same time and the thread
+  whose exception is handled first tries to suspend the others, typically
+  on behalf of the GC.  It was possible to run stress tests for many
+  hours in 0.14.3 without encountering the bug, and possible to
+  encounter it under seemingly light loads.)
+
+- INCF and DECF argument order and fixnum arithmetic.
+
+  Bryan fixed some ANSI test failures related to the order in which INCF
+  and DECF evaluate their args.  (One example is:
+
+  (let* ((x 3))
+    (incf x (setq x 5)))
+
+  where the correct answer is 10, not 8.)  We both found that fixing
+  some cases involving INCF caused some OpenMCL code to compile
+  incorrectly and were nervous about introducing these changes fairly
+  late in the development cycle, so we backed out of them prior to
+  the 1.0 code freeze.
+
+  The reasons for the miscompiled code have to do with how the
+  compiler interprets fixnum declarations under typical optimization
+  settings.  If A and B are both declared to be FIXNUMS, then
+  the expression
+
+  (setq a (+ a b))
+
+  will usually compile to a simple ADD instruction (with no overflow
+  checking); if A and B are fixnums, the result will be a fixnum,
+  though if an undetected overflow occurred in the addition, the
+  result might be missing a significant bit.
+
+  There was code in OpenMCL that assumed that
+
+  (incf a b)
+
+  was exactly the same as
+
+  (setq a (+ a b))
+
+  and in fact that was true under the old (incorrect) definition of
+  INCF.  The new definition introduced some temporary bindings:
+
+  (let* ((...)
+         (#:temp (+ a b))
+         (...))
+     (setq a #:temp))
+
+  In this case, the addition was allowed to generate an overflow
+  (no type declaration on #:temp), and the SETQ quietly violated
+  a type declaration (assigning a non-FIXNUM value to A), leading
+  to further problems.
+
+  So far, I found a couple of cases of this in the OpenMCL sources.
+  (FWIW, both functions were originally transliterated from C code
+  and were trying to mimic C's silent overflow behavior.)
+
+  Moral: if you have code that assumes that INCF or DECF expand
+  into simple assignments and are trying to exploit the ways that
+  those assignments interact with type declarations, you may
+  want to review those assumptions.  If you write code that has
+  side effects in the DELTA arguments of INCF or DECF rorms,
+  you'll (hopefully) be pleased to see that Bryan's changes 
+  allow these side-effects to be handled correctly (at the
+  right time.)  If you don't fall into either of these categories,
+  you probably won't notice any difference ...
+
+- 64-bit Linux support
+
+  There's a 64-bit LinuxPPC heap image and some rudimentary (libc-only)
+  64-bit Linux interfaces in the testing directory.
+
+  (Unlike 64-bit Darwin, 64-bit Linux distributions typically provide
+  64-bit versions of "all" standard libraries; I haven't gotten around
+  to building 64-bit gnome/gtk/X11/... interfaces yet, but wouldn't
+  expect there to be a problem.)
+
+  The 64-bit Linux OpenMCL seems to basically work, but ... OpenMCL
+  likes to map its kernel into low addresses (around #x5000); this
+  allows compiled lisp code to use conditional branches to "short"
+  (16-bit) absolute addresses.  Newer Linux kernels provide a
+  "vdso" shared library that's intended to simply communication
+  between the OS kernel and userspace libraries and programs; when
+  a program is mapped at "non-standard" addresses, the vdso gets
+  mapped at address 0.
+
+  I don't fully understand the imlications of this (beyond the fact that
+  indirecting through a NULL pointer will access bits and pieces
+  of the vdso instead of segfaulting.)  As far as I know, this is
+  seen as a minor bug in the Linux kernel, and I -think- that I've
+  seen kernel ChangeLog entries that indicate that the problem's been
+  fixed in the relatively recent past (and will likely start to
+  make it into Linux distributions in the near future.)
+
+  That said - and seeing a library at address 0 certainly makes me a
+  little nervous - the LinuxPPC64 port seems to work at least as
+  well as the DarwinPPC64 port does (i.e., there may be word-size
+  or other bugs lurking around or hiding in plain sight, but it's
+  not usually easy to encounter them.)
+
+- As documented (and as hasn't been true in a long time), EOF
+  from *STANDARD-INPUT* terminates the REPL when the --batch argument
+  is in effect (even if *STANDARD-INPUT* is a tty.)
+
+- QUIT does a FRESH-LINE on and FORCE-OUTPUT to the standard output
+  stream (people had reported that output wasn't always flushed
+  when --batch or --eval was used; 1.0 was better about this than
+  previous versions were, but it still wasn't reliable.)
+
+OpenMCL 1.1-pre-051028
+I had been doing development on G5s, and hadn't noticed that the
+32-bit lisp had been using a 64-bit instruction.  (I'm a little
+confused about how that could have worked; perhaps the 64-bit
+instruction gets emulated by the OS, or perhaps my model of
+whether 64-bit instructions can be executed in 32-bit mode
+is simply incorrect.)
+
+In any case, the 32-bit images produced yesterday don't run on
+G4s (or presumably G3s or older systems.)  Ooops.  New images.
+
+OpenMCL 1.1-pre-051029
+ A function used by both SET-USER-ENVIRONMENT
+and SET-DEVELOPMENT-ENVIRONMENT wasn't properly changing saved bindings
+of *PACKAGE*; the last few 1.1-pre releases have come up in the CCL
+package, as a result.  Ooops again; new images, again.
+
+
+OpenMCL 1.1-pre-051204
+Not a lot of user-visible changes, but the changes that're there
+are a little hard to bootstrap.
+Note that new kernel build directories (darwinppc, darwinppc64,
+linuxppc, linuxppc64, ...) repace the old versions that don't
+have "ppc" in their names.  CVS may not prune the old directories,
+especially if they contain files (.o, random junk).

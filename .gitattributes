@@ -36,6 +36,7 @@ cocoa-ide/preferences.lisp -text
 cocoa-ide/processes-window.lisp -text
 cocoa-ide/start.lisp -text
 compiler/acode-rewrite.lisp -text
+doc/release-notes.txt -text
 examples/cocoa/.cvsignore -text
 examples/cocoa/currency-converter/CurrencyConverter.nib/designable.nib -text
 examples/cocoa/currency-converter/CurrencyConverter.nib/keyedobjects.nib -text
