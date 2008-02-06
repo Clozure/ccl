@@ -984,7 +984,7 @@
     (format t ")")))
 
 (defun xload-initial-packages ()
-  (mapcar #'find-package '("CL" "CCL"  "KEYWORD" "TARGET")))
+  (mapcar #'find-package '("CL" "CCL"  "KEYWORD" "TARGET" "OS")))
 
 
 (defun xfasload (output-file &rest pathnames)
