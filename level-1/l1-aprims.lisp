@@ -917,6 +917,14 @@ terminate the list"
       (or (and (>= code #x80) (%non-standard-upper-case-equivalent c))
           c))))
 
+(defun %non-standard-char-code-upcase (code)
+  (declare (type (mod #x110000) code))
+  (if (>= code #x80)
+    (let* ((upper (%non-standard-upper-case-equivalent (code-char code))))
+      (if upper
+        (char-code upper)
+        code))
+    code))
 
 
 (defun string-start-end (string start end)
