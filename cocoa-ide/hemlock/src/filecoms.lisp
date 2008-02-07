@@ -358,6 +358,7 @@
    If the file is already in some buffer, select that buffer,
    otherwise make a new buffer with the same name as the file and
    read the file into it."
+  (declare (ignore p))
   (hi::open-document))
   
 
