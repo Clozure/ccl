@@ -87,7 +87,9 @@
 	<array>
 		<dict>
 			<key>UTTypeConformsTo</key>
-			<string>public.source-code</string>
+			<array>
+				<string>public.source-code</string>
+			</array>
 			<key>UTTypeDescription</key>
 			<string>Lisp source file</string>
 			<key>UTTypeIdentifier</key>
