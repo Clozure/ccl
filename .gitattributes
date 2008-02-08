@@ -102,6 +102,9 @@ examples/cocoa/easygui/example/view-hierarchy.lisp -text
 examples/cocoa/easygui/new-cocoa-bindings.lisp -text
 examples/cocoa/easygui/package.lisp -text
 examples/cocoa/easygui/views.lisp -text
+examples/cocoa/interface-databases/HOWTO.html -text
+examples/cocoa/interface-databases/HOWTO_files/images/bosco.jpg -text
+examples/cocoa/interface-databases/HOWTO_files/stylesheets/styles.css -text
 lib/late-clos.lisp -text
 library/elf.lisp -text
 lisp-kernel/gc-common.c -text
