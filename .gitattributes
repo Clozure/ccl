@@ -42,7 +42,6 @@ doc/release-notes.txt -text
 examples/cocoa/.cvsignore -text
 examples/cocoa/currency-converter/CurrencyConverter.nib/designable.nib -text
 examples/cocoa/currency-converter/CurrencyConverter.nib/keyedobjects.nib -text
-examples/cocoa/currency-converter/CurrencyConverter.xib -text
 examples/cocoa/currency-converter/HOWTO.html -text
 examples/cocoa/currency-converter/HOWTO_files/images/bosco.jpg -text
 examples/cocoa/currency-converter/HOWTO_files/images/cc1.jpg -text
