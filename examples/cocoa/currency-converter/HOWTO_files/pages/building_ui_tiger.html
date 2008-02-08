@@ -54,7 +54,7 @@
       <p>Make sure the "Application" option is selected in the "Cocoa"
       section and click the "New" button to create a new
       nibfile. InterfaceBuilder creates a new application nibfile, but
-      doesn't immediately save it. The Objective C objects that
+      doesn't immediately save it. The Objective-C objects that
       represent the new application's interface appear in a new
       untitled window:</p>
 
@@ -71,7 +71,7 @@
       file the name "CurrencyConverter.nib"</p>
 
       <div class="note">
-        <p><strong><em>NOTE:</em></strong> Most Objective C application projects use a main
+        <p><strong><em>NOTE:</em></strong> Most Objective-C application projects use a main
         nibfile called "MainMenu.nib", and if you use XCode to create
         a new application project, it creates a nibfile with that
         name. Apple's CurrencyConverter tutorial assumes that the
@@ -88,7 +88,7 @@
           "CurrencyConverter.nib" so that it can coexist with the
           Clozure CL main nibfile without causing any problems.</p>
 
-        <p>This difference between a Lisp project and an Objective C
+        <p>This difference between a Lisp project and an Objective-C
         project might be a little confusing at first. Just try to keep
         in mind that whenever Apple's tutorial refers to the
         "MainMenu.nib" file, it means the file we have just created
@@ -182,7 +182,7 @@
         <h2>Label the Text Fields</h2>
       </div>
 
-      <p>Now add labels to the text fields, to idenitfy their
+      <p>Now add labels to the text fields, to identify their
       purposes for the user. For each text field, drag a Label object
       from the palette and drop it next to the field. (Alternatively,
       you can drop one Label and then duplicate it, just as you can
@@ -196,8 +196,8 @@
       <p>Just as InterfaceBuilder displayed guidelines to help you
       position the text field near the edge of the window, it also
       displays guide lines to help you position the labels near the
-      text fields. Just drag each text field until the blue guide
-      lines appear, and release the label.</p>
+      text fields. Just drag each label until the blue guide lines
+      appear, then release the label.</p>
 
       <p>Now change the text of the labels. Click a label to select
       it. Then show the Inspector by choosing the "Show Inspector"
@@ -232,10 +232,10 @@
       </div>
       
       <p>The first two text fields accept user input; the last
-      displays the result of the conversion. We want the first to text
-      fields to be editable, so users can enter the values to use in
-      the conversion. We don't want the last field to be editable, but
-      we do want users to be able to copy text from it.</p>
+      displays the result of the conversion. We want the first two
+      text fields to be editable, so users can enter the values to use
+      in the conversion. We don't want the last field to be editable,
+      but we do want users to be able to copy text from it.</p>
 
       <p>We can control all this behavior using text-field
       attributes, configurable in the Inspector.</p>
@@ -328,7 +328,7 @@
                    border='0'/>
             </div>
           </p>
-        <p><em>NOTE:</em> This change isn't really enough to get your
+        <p><strong>NOTE:</strong> This change isn't really enough to get your
         application to display the right name for the Application menu
         when it's launched; the <a href="build_app.html">section</a>
         on building the application explains how to make sure the
@@ -397,7 +397,7 @@
 
       <p>Users generally expect to be able to use the Tab key to move
       from one text field to the next in a dialog
-      box. InterfaceBuilder enables you to specify the tanning order
+      box. InterfaceBuilder enables you to specify the tabbing order
       in text fields.</p>
 
       <ol>
@@ -432,18 +432,17 @@
       </div>
 
       <p>The visual elements of your application's user interface are
-      all ready now. The last thing you must do is create descruptions
+      all ready now. The last thing you must do is create descriptions
       of any custom classes used by the application when users
       interact with the interface.</p>
 
       <p>When a user clicks the "Convert" button, it should send a
       message to a custom class that causes the conversion to take
-      place, and the result to be displayed in the "Amount" field. In
-      order for the application to connect the user interface to
-      classes that perform these actions, you must add descriptions of
-      your classes to the nibfile. Fortunately, InterfaceBuilder can
-      create class descriptions and save them in the nibfile for
-      you.</p>
+      place. In order for the application to connect the user
+      interface to classes that perform these actions, you must add
+      descriptions of your classes to the nibfile. Fortunately,
+      InterfaceBuilder can create class descriptions and save them in
+      the nibfile for you.</p>
 
       <div class="section-head">
         <h3>ConverterController</h3>
@@ -553,19 +552,18 @@
         sure the "convert:" action is selected in the "Target/Action"
         view of the Inspector window, then click the "connect" button
         to confirm.</p></li>
-        <li><p>Connect the "ConverterController" instance to text
+        <li><p>Connect the "ConverterController" instance to the text
         fields. Control-drag from the "ConverterController" instance
         to the "Exchange Rate" field. Select "rateField" in the
         "Outlets" view of the Inspector window and click "connect" to
-        confirm. Then repeat this process, connecting "dollarField"
-        to the "Dollars" text field, and "amountField" to the
-        "Amount" field.</p></li>
+        confirm. Then repeat this process, connecting "dollarField" to
+        the "Dollars" text field, and "amountField" to the "Amount"
+        field.</p></li>
         <li><p>Finally, connect the "ConverterController" to the
         "Converter" instance. Control-drag from the
         "ConverterController" instance to the "Converter"
         instance. Select the "converter" outlet in the Inspector
         window and click "connect" to confirm.</p></li>
-        <li><p></p></li>
       </ol>
 
       <p>The nibfile now contains descriptions of the custom classes

@@ -19,15 +19,6 @@
           with Clozure CL
       </h2></div>
 
-    <div class="subtitle">
-      <img src="HOWTO_files/images/bosco.jpg"
-           width="48" height="48" border="0" alt="" 
-           border='0'/>
-    </div>
-
-    <div class="byline">
-      <p>by mikel evins</p>
-    </div>
 
     <div class="body-text">
       <p>This HOWTO guide explains how to use Clozure CL (formerly
@@ -37,7 +28,7 @@
       href="http://developer.apple.com/documentation/Cocoa/Conceptual/ObjCTutorial/index.html">
         Currency Converter</a> example. The most important
         difference between Apple's example and this one is that this
-        one is implemented in Common Lisp instead of Objective C. It
+        one is implemented in Common Lisp instead of Objective-C. It
         uses Clozure CL's Objective-C bridge to provide communication
         between the Lisp code that you write and Apple's Cocoa
         frameworks. The resulting application looks and acts just
@@ -49,12 +40,29 @@
       specific steps needed to build the example using
       Apple's InterfaceBuilder application and Clozure CL.</p>
 
+      <p>An observant programmer will look at the code in this example
+      and say, "well, that's trivial! Why create all those classes and
+      connections and so forth just to perform a multiplcation?" That
+      observation is correct: the actual work done by the Currency
+      Converter application is trivial&mdash;both in the Lisp and the
+      Objective-C versions. The point of this example (and Apple's) is
+      not to show you how to perform a multiplication. The point is to
+      show you how Apple's frameworks implement and support the
+      Model-View-Controller paradigm, and how you can use that support
+      to build Cocoa applications. In fact, the work done by the
+      application is <em>intentionally trivial</em>, to emphasize the
+      frameworks rather than the particulars of the application.</p> 
+
+      <p>This HOWTO has the additional purpose of showing you how
+      Clozure CL makes it possible to do exactly the same thing in
+      Lisp that you can do with Objective-C, so that you will
+      understand how to use Lisp with Apple's frameworks.</p>
+
       <p>The current version of the Clozure CL Objective-C bridge
       includes code that was formerly distributed separately as the
       "Bosco" application framework. Because that framework has been
       integrated with Clozure CL proper, it no longer exists as a
-      separate project. "Bosco" now names only the decorative rodent
-      at the top of this page.</p>
+      separate project.</p>
     </div>
 
     <div class="section-head">
@@ -70,7 +78,7 @@
       keeping the Apple example handy while you work.</p>
 
       <p>In some ways, the Lisp version of the example is simpler
-      than the Objective C example, but the basic concepts are the
+      than the Objective-C example, but the basic concepts are the
       same. In particular, the Lisp example follows the same
       <a
       href="http://developer.apple.com/documentation/Cocoa/Conceptual/ObjCTutorial/02Essence/chapter_2_section_4.html#//apple_ref/doc/uid/TP40000863-CH3-DontLinkElementID_6">

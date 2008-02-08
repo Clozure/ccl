@@ -35,7 +35,7 @@
 
       <p>We'll begin by using Apple's InterfaceBuilder application to
         create a nibfile. The nibfile contains
-        archived versions of the Objective C objects that define the
+        archived versions of the Objective-C objects that define the
         application's user interface. When you launch an application,
         Mac OS X uses the archived objects in the nibfile to create the
         windows and menus you see on the screen. </p>
@@ -69,7 +69,7 @@
       <p>Click the "Application" icon and then click the "Choose" button to
         create an application nibfile. InterfaceBuilder creates a new
         application nibfile, but doesn't immediately save it. The
-        Objective C objects that represent the new application's
+        Objective-C objects that represent the new application's
         interface appear in a new untitled window:</p>
 
       <div class="inline-image">
@@ -90,7 +90,7 @@
       "CurrencyConverter.nib".</p>
 
       <div class="note">
-        <p><strong><em>NOTE:</em></strong> Most Objective C application projects use a main
+        <p><strong><em>NOTE:</em></strong> Most Objective-C application projects use a main
         nibfile called "MainMenu.nib", and if you use XCode to create
         a new application project, it creates a nibfile with that
         name. Apple's CurrencyConverter tutorial assumes that the
@@ -107,7 +107,7 @@
           "CurrencyConverter.nib" so that it can coexist with the
           Clozure CL main nibfile without causing any problems.</p>
 
-        <p>This difference between a Lisp project and an Objective C
+        <p>This difference between a Lisp project and an Objective-C
         project might be a little confusing at first. Just try to keep
         in mind that whenever Apple's tutorial refers to the
         "MainMenu.nib" file, it means the file we have just created
@@ -119,17 +119,17 @@
 
 <p>Skip straight to the part of Apple's tutorial
 called <a href="http://developer.apple.com/documentation/Cocoa/Conceptual/ObjCTutorial/05View/chapter_5_section_1.html#//apple_ref/doc/uid/TP40000863-CH7-SW1">Defining
-    the View: Building the User Interface</a>. Read
-  the introduction to
+the View: Building the User Interface</a>. Read the introduction to
 nibfiles, and follow the instructions to create the Currency Converter
 interface. (Remember that when the tutorial tells you to open and edit
 "MainMenu.nib", you will instead open and edit your
 "CurrencyConverter.nib".) When you reach the end of the section
 called <a href="http://developer.apple.com/documentation/Cocoa/Conceptual/ObjCTutorial/05View/chapter_5_section_5.html#//apple_ref/doc/uid/TP40000863-CH7-DontLinkElementID_38">Test
-    the Interface</a>, and move on to the short section afterward
-  called <a href="http://developer.apple.com/documentation/Cocoa/Conceptual/ObjCTutorial/05View/chapter_5_section_6.html#//apple_ref/doc/uid/TP40000863-CH7-DontLinkElementID_39">What's Next</a>,
-  you are done creating the interface for your
-application. Save your nibfile and continue with the next section.</p>
+the Interface</a>, and move on to the short section afterward
+called <a href="http://developer.apple.com/documentation/Cocoa/Conceptual/ObjCTutorial/05View/chapter_5_section_6.html#//apple_ref/doc/uid/TP40000863-CH7-DontLinkElementID_39">What's
+Next</a>, you are done creating the interface for your
+application. Save your nibfile and continue with the next section of
+this HOWTO.</p>
 
 <div class="section-head">
   <h2>What if You Need to Use InterfaceBuilder 2.x?</h2>
@@ -152,7 +152,7 @@ application. Save your nibfile and continue with the next section.</p>
 
 <p>One other thing: if you are using Mac OS X 10.4.x ("Tiger"), you
   will be able to build Cocoa applications only on PPC Macs. The
-  Clozure CL Objective C support for Intel systems works only on Mac
+  Clozure CL Objective-C support for Intel systems works only on Mac
   OS X 10.5.x ("Leopard").</p>
 
 
@@ -166,23 +166,22 @@ application. Save your nibfile and continue with the next section.</p>
   objects, so that the application can create them with the right
   connections in place.</p>
 
-<p>When you use XCode to write an Objective C application,
-  InterfaceBuilder can read the Objective C header files and use the
+<p>When you use XCode to write an Objective-C application,
+  InterfaceBuilder can read the Objective-C header files and use the
   information in them to create descriptions of the classes in the
-  Objective C code. When the application is written in Lisp,
+  Objective-C code. When the application is written in Lisp,
   InterfaceBuilder can't read the class descriptions from the code,
   and so we'll have to manually tell the nibfile about any classes
   that we use in the user interface.</p>
 
 <p>As you will see in the following sections, we'll use Lisp code to
-  define two Objective C classes: Converter, and
+  define two Objective-C classes: Converter, and
   ConverterController. The Converter class implements the method that
   performs the actual currency conversion for our application; the
   ConverterController class provides communication between the user
-  interface and the Converter object. We need a way to create instaces
-  of these two classes in the nibfile, so that launching the
-  application creates these instances and the connections between them
-  and the rest of the user interface.</p>
+  interface and the Converter object. We need a way to create
+  instances of these two classes in the nibfile, so that launching the
+  application sets up all the objects correctly.</p>
 
 <div class="section-head">
   <h2>Create Instances of Custom Classes</h2>
@@ -240,12 +239,12 @@ application. Save your nibfile and continue with the next section.</p>
              border='0'/>
       </div>
 
-<p>We'll connect each of the "field" outlets to one of the text
-  fields in the CurrencyConverter UI, and we'll connect the
-  "converter" outlet to the Converter instance that we created
-  before. When the application launches, it creates the Converter and
+<p>We'll connect each of the "field" outlets to one of the text fields
+  in the CurrencyConverter UI, and we'll connect the "converter"
+  outlet to the Converter instance that we created before. When the
+  application launches, it creates the Converter and
   ConverterController instances and establishes the connections that
-  we specify in the nibfile.</p>
+  we've specified in the nibfile.</p>
 
 
 <p>First, though, we need to tell the nibfile about actions as well as
@@ -263,7 +262,7 @@ application. Save your nibfile and continue with the next section.</p>
   more complex applications you may need to define many actions and
   outlets.</p>
 
-<p>Now we'll connect outlets to objects and actions.</p>
+<p>Now we'll connect outlets and actions to objects.</p>
 
 <div class="section-head">
   <h2>Add Connections</h2>
