@@ -1,0 +1,262 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <title>Nib-Loading HOWTO</title>
+    <link rel="stylesheet" type="text/css" href="HOWTO_files/stylesheets/styles.css" />
+  </head>
+
+  <body>
+
+    <div class="title">
+      <h1>Nib-Loading HOWTO</h1>
+    </div>
+
+    <div class="body-text">
+      <p>This HOWTO shows how you can load <strong>nibfiles</strong>
+        into a running copy of Clozure CL by evaluating Lisp forms. You
+        might want to load nibfiles this way to test user-interface
+        elements that you are working on for an application project, or
+        to enable an application to dynamically load optional
+        user-interface elements.</p>
+
+    </div>
+
+    <div class="section-head">
+      <h2>Nibfiles</h2>
+    </div>
+
+    <div class="body-text">
+      <p>A large part of developing Cocoa applications is creating
+        user-interface elements using the Cocoa frameworks. Although
+        it's perfectly possible to create any user-interface element
+        just by making method calls against the frameworks, the more
+        standard way to design a user interface is to use Apple's
+        InterfaceBuilder application to
+        create <strong>nibfiles</strong>&mdash;files of archived
+        Objective-C objects that implement the user-interface
+        elements.</p>
+      
+      <p>InterfaceBuilder is an appliaction that ships with Apple's
+        Developer Tools. The Developer Tools are an optional install
+        that comes with Mac OS X. Before you can use this HOWTO, you'll
+        need to make sure that Apple's Developer Tools are installed on
+        your system. Members of Apple's developer programs may download
+        the tools for free from
+        Apple's <href="http://developer.apple.com">developer
+          website</href>, but normally there is no need. You can simply
+        use the optional Developer Tools installer on the Mac OS X
+        system disks to install the tools.</p>
+    </div>
+
+    <div class="section-head">
+      <h2>Using Nibfiles</h2> 
+    </div>
+
+    <div class="body-text">
+      <p>Using InterfaceBuilder, you can quickly and easily create
+        windows, dialog boxes, text fields, buttons, and other
+        user-interface elements. The elements you create with
+        InterfaceBuilder have the standard appearance and behavior
+        specified by Apple's Human Interface Guidelines.</p>
+
+      <p>InterfaceBuilder saves descriptions of these objects
+        in <strong>nibfiles</strong>. These files contain archived
+        representations of Objective-C classes and objects. When you
+        launch an application and it loads a nibfile, the Cocoa runtime
+        creates these Objective-C objects in memory, complete with any
+        instance-variable references to other objects that might have
+        been saved in the nibfile. In short, a nibfile is an archived
+        collection of user-interface objects that Cocoa can quickly and
+        easily revive in memory.</p>
+
+      <p>The normal way that Objective-C programmers use nibfiles is
+        by storing them in an application bundle. The application's
+        Info.plist file (also stored in the bundle) specifies which
+        nibfile is the application's main nibfile, and that file is
+        loaded automatically when the application starts up. The
+        application can dynamically load other nibfiles from the bundle
+        by making method calls.</p>
+
+      <p>Lisp applications written with Clozure CL can also use
+        nibfiles in this same fashion (see the "currency-converter"
+        HOWTO in the "cocoa" examples folder), but Lisp programmers are
+        accustomed to highly interactive development, and might want to
+        simply load an arbitrary nibfile into a running Clozure CL
+        session. Fortunately, this is easy to do.</p>
+    </div>
+
+    <div class="section-head">
+      <h2>How To Load a Nibfile</h2> 
+    </div>
+
+    <div class="body-text">
+      <p>Let's start by loading a very simple nibfile from the Clozure
+        CL Listener window. Start by launching the Clozure CL
+        application.</p>
+
+      <p>In the same directory as this HOWTO file, you'll find a
+        nibfile named "hello.nib". This is an extremely simple nibfile
+        that creates a single Cocoa window with a greeting in it. We'll
+        use forms typed into the Listener window to load it.</p>
+
+      <p>We're going to call the Objective-C class
+        method <code>loadNibFile:externalNameTable:withZone:</code> to
+        load the nibfile into memory, creating the window that is
+        described in the file. First, though, we need to set up some
+        data structures that we'll pass to this method.</p>
+
+      <p>The arguments
+        to <code>loadNibFile:externalNameTable:withZone:</code> are a
+        pathname, a dictionary object, and a memory zone. As with every
+        Objective-C method call, we also pass the object that receives
+        the message, which in this case is the class NSBundle.</p>
+
+      <p>The pathname is just a reference to the nibfile we want to
+        load. The dictionary holds references to objects&mdash;the
+        object that owns the nibfile (in this case, the running
+        NSApplication object), and an array used to hold any toplevel
+        objects in the nibfile. The zone is areference to the area of
+        memory where the nibfile objects will be allocated.</p>
+
+      <p>Don't worry if none of this makes sense to you; the code to
+        create these objects is simple and straightforward, and should
+        help clarify what's going on.</p>
+
+      <div class="section-head">
+        <h3>1. Get the Zone</h3> 
+      </div>
+
+      <p>First, we'll get the zone from the running application. We'll
+        tell Cocoa to allocate the nibfile objects in the same zone that
+        the application uses, so getting a zone is a simple matter of
+        asking the application for the one it's using.</p>
+
+      <p>Before we can ask the application anything, we need a
+        reference to it. We'll ask the class NSApplication to give us a
+        reference to the running application.</p>
+
+      <p>Start by changing to the CCL package; most of the utility
+        functions we'll use are defined in that package:</p>
+
+      <pre>
+        ? (in-package :ccl)
+        #&lt;Package "CCL"&gt;
+      </pre>
+
+      <p>Next, get a reference to the NSApplication class:</p>
+
+      <pre>
+        ? (setf *my-app-class* (#_NSClassFromString (%make-nsstring "NSApplication")))
+        #&lt;OBJC:OBJC-CLASS NS:NS-APPLICATION (#x7FFF704C5C00)&gt;
+      </pre>
+
+      <p>Notice, by the way, that this form allocates an NSString
+        object. We do it this way for the sake of simplicity, but it's
+        not an example of good programming practice. NSStrings are
+        foreign objects, allocated by the Objective-C runtime. They
+        are not garbage-collected by Lisp, and so when you create them
+        they hang around in memory until you manually deallocate them,
+        or until you quit from Clozure CL.</p>
+
+      <p>This simple example goes on to create several foreign objects
+        by evaluating forms in the Listener, storing some of them in
+        global variables. In this example, these objects are never
+        deallocated. It's not a problem in such a small example; we
+        just create a handful of objects at the Listener, and they are
+        disposed of when we quit Clozure CL. But when writing real
+        applications using the Objective-C bridge, you will need to
+        learn to use Cocoa's memory-management discipline so that you
+        can ensure that foreign objects are allocated and deallocated
+        properly.</p>
+
+      <p>Now that we have the application class, we can ask it for a
+        reference to the running application:</p>
+
+      <pre>
+        ? (setf *my-app* (#/sharedApplication *my-app-class*))
+        #&lt;LISP-APPLICATION <LispApplication: 0x1b8e20> (#x1B8E20)&gt;
+        </pre>
+
+        <p>Voilà! We have a reference to the running Clozure CL
+          application object! Now we can ask it for its zone, where it
+          allocates objects in memory:</p>
+
+        <pre>
+          ? (setf *my-zone* (#/zone *my-app*))
+          #&lt;A Foreign Pointer #x8B000&gt;
+        </pre>
+
+        <p>Now we have a reference to the application's zone. We can
+          pass it
+          to <code>loadNibFile:externalNameTable:withZone:</code> to
+          tell it to allocate the nibfile's objects in the
+          application's zone.</p>
+
+        <div class="section-head">
+          <h3>2. Make a Dictionary</h3> 
+        </div>
+
+        <p>The dictionary argument
+          to <code>loadNibFile:externalNameTable:withZone:</code> is used
+          for two purposes. First, we use it to pass an owner object to
+          the method. Some Cocoa objects need to have references to owner
+          objects. For example, a window might need to check with an owner
+          object to determine whether its fields and buttons should be
+          enabled. You supply an owner object in the dictionary, under the
+          key <code>"NSNibOwner"</code>.</p>
+
+        <p>The second purpose of the dictionary object is to collect
+          references to any toplevel objects (such as buttons, text
+          fields, and so on) that the runtime creates when loading the
+          nibfile. To collect these, you pass an NSMutableArray object
+          under the key <code>"NSNibTopLevelObjects"</code>.</p>
+
+        <p>For this first example, we'll pass an owner object (the
+          application object), but we don't need to collect toplevel
+          objects, so we'll omit
+          the <code>"NSNibTopLevelObjects"</code> key.</p>
+
+        <pre>
+          ? (setf *my-dict* (#/dictionaryWithObject:forKey: (@class ns-mutable-dictionary) *my-app* #@"NSNibOwner"))
+          #&lt;NS-MUTABLE-DICTIONARY {
+                                  NSNibOwner = &lt;LispApplication: 0x1b8e10&gt;;
+                                  } (#x137F3DD0)&gt;
+            
+          </pre>
+
+        <div class="section-head">
+          <h3>3. Load the Nibfile</h3> 
+        </div>
+
+        <p>Now that we have the zone and the dictionary we need, we
+        can load the nibfile. We just need to create an NSString with
+        the proper pathname first:</p>
+
+        <pre>
+          ? (setf *nib-path* (%make-nsstring (namestring "/usr/local/openmcl/trunk/source/examples/cocoa/nib-loading/hello.nib")))
+          #&lt;NS-MUTABLE-STRING "/usr/local/openmcl/trunk/source/examples/cocoa/nib-loading/hello.nib" (#x13902C10)&gt;
+        </pre>
+
+        <p>Now we can actually load the nibfile, passing the method
+        the objects we've created:</p>
+
+        <pre>
+          ? (setf *nib-path* (%make-nsstring (namestring "/usr/local/openmcl/trunk/source/examples/cocoa/nib-loading/hello.nib")))
+          #&lt;NS-MUTABLE-STRING "/usr/local/openmcl/trunk/source/examples/cocoa/nib-loading/hello.nib" (#x13902C10)&gt;
+          ? (#/loadNibFile:externalNameTable:withZone: (@class ns-bundle) *nib-path* *my-dict* *my-zone*)
+          T
+        </pre>
+
+        <p>The window defined in the "hello.nib" file should appear
+        on the
+        screen. The <code>loadNibFile:externalNameTable:withZone:</code>
+        method returns <code>T</code> to indicate it loaded the
+        nibfile successfully; if it had failed, it would have
+        returned <code>NIL</code>.</p>
+
+        </div>
+
+      </body>
+    </html>
+
