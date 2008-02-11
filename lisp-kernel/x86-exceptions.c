@@ -1472,6 +1472,9 @@ altstack_suspend_resume_handler(int signum, siginfo_t *info, ExceptionInformatio
 void
 quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
 {
+#ifdef DARWIN_GS_HACK
+  Boolean gs_was_tcr = ensure_gs_pthread();
+#endif
   TCR *tcr = get_tcr(false);
   area *a;
   sigset_t mask;
