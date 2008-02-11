@@ -26,8 +26,10 @@
 (objc:defmethod (#/applicationWillFinishLaunching: :void)
     ((self lisp-application-delegate) notification)
   (declare (ignore notification))
-
-  (initialize-user-interface))
+  (initialize-user-interface)
+  (let* ((c (#/init (#/alloc console-window))))
+    (unless (%null-ptr-p c)
+      (setf (console *nsapp*) c))))
 
 (objc:defmethod (#/applicationWillTerminate: :void)
 		((self lisp-application-delegate) notification)
