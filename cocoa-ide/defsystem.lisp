@@ -61,6 +61,7 @@
     "cocoa-defaults"
     "cocoa-prefs"
     "cocoa-typeout"
+    "console-window"
     "cocoa-window"
     "cocoa-doc"
     "compile-hemlock"
