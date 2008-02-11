@@ -117,9 +117,24 @@
   (declare (ignore sender))
   (#/show (#/sharedPanel lisp-preferences-panel)))
 
-(objc:defmethod (#/toggleTypeout: :void) ((self lisp-application) sender)
-  (declare (ignore sender))
-  (#/show (#/sharedPanel typeout-window)))
+(objc:defmethod (#/toggleConsole: :void) ((self lisp-application) sender)
+  (let* ((console (console self)))
+    (unless (%null-ptr-p console)
+      (if (#/isVisible console)
+        (#/orderOut: console sender)
+        (#/orderFront: console sender)))))
+
+(objc:defmethod (#/validateMenuItem: :<BOOL>) ((self lisp-application)
+                                               item)
+  (let* ((action (#/action item)))
+    (cond ((eql action (@selector #/toggleConsole:))
+           (let* ((console (console self)))
+             (unless (%null-ptr-p console)
+               (if (#/isVisible console)
+                 (#/setTitle: item #@"Hide Console")
+                 (#/setTitle: item #@"Show Console"))
+               t)))
+          (t (call-next-method item)))))
 
 (defmethod ccl::process-exit-application ((process appkit-process) thunk)
   (when (eq process ccl::*initial-process*)
@@ -135,7 +150,8 @@
   (#/stop: *nsapp* +null-ptr+))
 
 (defun event-loop (&optional end-test)
-  (let ((app *NSApp*))
+  (let* ((app *NSApp*)
+         (ccl::*break-on-errors* nil))
     (loop
       (handler-case (let* ((*event-process-reported-conditions* nil))
 		      (if end-test
