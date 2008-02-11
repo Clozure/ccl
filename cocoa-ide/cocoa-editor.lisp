@@ -1801,18 +1801,6 @@
     (unless (%null-ptr-p pane)
       (hemlock-view pane))))
 
-(defun double-%-in (string)
-  ;; Replace any % characters in string with %%, to keep them from
-  ;; being treated as printf directives.
-  (let* ((%pos (position #\% string)))
-    (if %pos
-      (concatenate 'string (subseq string 0 %pos) "%%" (double-%-in (subseq string (1+ %pos))))
-      string)))
-
-(defun nsstring-for-lisp-condition (cond)
-  (%make-nsstring (double-%-in (or (ignore-errors (princ-to-string cond))
-                                   "#<error printing error message>"))))
-
 (objc:defmethod (#/runErrorSheet: :void) ((self hemlock-frame) message)
   #+debug (#_NSLog #@"runErrorSheet: signal = %@" :id signal)
   (#_NSBeginAlertSheet #@"Error in Hemlock command processing" ;title

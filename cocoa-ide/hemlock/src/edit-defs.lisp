@@ -76,15 +76,13 @@
 
 (defcommand "Edit Definition" (p)
   "Prompts for function/macro's definition name and goes to it for editing."
-  "Prompts for function/macro's definition name and goes to it for editing."
   (declare (ignore p))
   (let ((fun-name (prompt-for-string
 		   :prompt "Name: "
 		   :help "Symbol name of function.")))
     (get-def-info-and-go-to-it fun-name (or
-                                             (find-package
-                                              (variable-value 'current-package :buffer (current-buffer)))
-                                             *package*))))
+                                         (buffer-package (current-buffer))
+                                         *package*))))
 
 (defun get-def-info-and-go-to-it (string package)
   (multiple-value-bind (fun-name error)

@@ -235,14 +235,27 @@
 ;;
 ;; debugging
 
+(defun double-%-in (string)
+  ;; Replace any % characters in string with %%, to keep them from
+  ;; being treated as printf directives.
+  (let* ((%pos (position #\% string)))
+    (if %pos
+      (concatenate 'string (subseq string 0 %pos) "%%" (double-%-in (subseq string (1+ %pos))))
+      string)))
+
 (defun log-debug (format-string &rest args)
-  (#_NSLog (ccl::%make-nsstring (apply #'format nil format-string args))))
+  (let ((string (apply #'format nil format-string args)))
+    (#_NSLog (ccl::%make-nsstring (double-%-in string)))))
 
 (defun nslog-condition (c)
   (let* ((rep (format nil "~a" c)))
     (with-cstrs ((str rep))
       (with-nsstr (nsstr str (length rep))
 	(#_NSLog #@"Error in event loop: %@" :address nsstr)))))
+
+(defun nsstring-for-lisp-condition (cond)
+  (%make-nsstring (double-%-in (or (ignore-errors (princ-to-string cond))
+                                   "#<error printing error message>"))))
 
 
 

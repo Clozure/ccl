@@ -452,7 +452,7 @@
 	  ;; area from MARK to the EOL as invalid.
 	  (t
 	   (push-range (cons (mark-charpos mark)
-			     (1+ (line-length (mark-line mark))))
+			     (line-length (mark-line mark)))
 		       info-struct)
 	   ;; The Ending is marked as still being quoted. 
 	   (setf (lisp-info-ending-quoted info-struct) t)
