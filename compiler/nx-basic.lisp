@@ -479,8 +479,7 @@
       (when (and nrefs (neq nrefs 1))
         (format stream " (~D references)" nrefs)))
     (princ ", in " stream)
-    (print-nested-name (reverse (compiler-warning-function-name condition)) stream)
-    (princ "." stream)))
+    (print-nested-name (reverse (compiler-warning-function-name condition)) stream)))
 
 (defun environment-structref-info (name env)
   (let ((defenv (definition-environment env)))
