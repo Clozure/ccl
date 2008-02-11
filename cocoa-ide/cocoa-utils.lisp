@@ -1,4 +1,4 @@
-; -*- Mode: Lisp; Package: GUI; -*-
+; -*- Mode: Lisp; Package: GUI -*-
 
 (in-package "GUI")
 
@@ -191,7 +191,8 @@
 (defconstant $lisp-function-event-subtype 17)
 
 (defclass lisp-application (ns:ns-application)
-    ((termp :foreign-type :<BOOL>))
+    ((termp :foreign-type :<BOOL>)
+     (console :foreign-type :id :accessor console))
   (:metaclass ns:+ns-object))
 
 ;;; I'm not sure if there's another way to recognize events whose
