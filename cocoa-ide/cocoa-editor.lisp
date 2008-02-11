@@ -1705,8 +1705,8 @@
     (unless (%null-ptr-p ts)
       (hemlock-buffer ts))))
 
-(objc:defmethod (#/undoManager :<BOOL>) ((self echo-area-document))
-  nil) ;For now, undo is not supported for echo-areas
+(objc:defmethod #/undoManager ((self echo-area-document))
+  +null-ptr+) ;For now, undo is not supported for echo-areas
 
 (defmethod update-buffer-package ((doc echo-area-document) buffer)
   (declare (ignore buffer)))
