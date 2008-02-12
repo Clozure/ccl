@@ -46,13 +46,13 @@ _align_to_power_of_2(natural n, unsigned power)
 
 #define align_to_power_of_2(n,p) _align_to_power_of_2(((natural)(n)),p)
 
-static inline unsigned long
-_truncate_to_power_of_2(unsigned long n, unsigned power)
+static inline natural
+_truncate_to_power_of_2(natural n, unsigned power)
 {
   return n & ~((1<<power) -1);
 }
 
-#define truncate_to_power_of_2(n,p) _truncate_to_power_of_2((unsigned long)(n),p)
+#define truncate_to_power_of_2(n,p) _truncate_to_power_of_2((natural)(n),p)
 
 LispObj start_lisp(TCR*, LispObj);
 
