@@ -637,6 +637,13 @@ handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valenc
     if (a) {
       handler = protection_handlers[a->why];
       return handler(xp, a, addr);
+    } else {
+      if ((addr >= readonly_area->low) &&
+          (addr < readonly_area->active)) {
+        UnProtectMemory((LogicalAddress)(truncate_to_power_of_2(addr,log2_page_size)),
+                        page_size);
+        return true;
+      }
     }
   }
   if (old_valence == TCR_STATE_LISP) {
