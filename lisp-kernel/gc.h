@@ -213,7 +213,6 @@ void forward_tstack_area(area *);
 void forward_vstack_area(area *);
 void forward_cstack_area(area *);
 LispObj compact_dynamic_heap(void);
-LispObj * skip_over_ivector(natural, LispObj);
 int purify(TCR *, signed_natural);
 int impurify(TCR *, signed_natural);
 
