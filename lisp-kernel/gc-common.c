@@ -814,10 +814,13 @@ update_locref(LispObj *locref)
 void
 forward_gcable_ptrs()
 {
-  LispObj *prev = &(lisp_global(GCABLE_POINTERS)), next;
+  LispObj *prev = &(lisp_global(GCABLE_POINTERS)), next, new;
 
   while ((next = *prev) != (LispObj)NULL) {
-    *prev = node_forwarding_address(next);
+    new = node_forwarding_address(next);
+    if (new != next) {
+      *prev = new;
+    }
     prev = &(((xmacptr *)ptr_from_lispobj(untag(next)))->link);
   }
 }
