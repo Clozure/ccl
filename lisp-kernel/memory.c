@@ -614,3 +614,12 @@ condemn_area_chain(area *a, TCR *tcr)
   UNLOCK(lisp_global(TCR_AREA_LOCK),tcr);
 }
 
+void
+release_readonly_area()
+{
+  area *a = readonly_area;
+  munmap(a->low,align_to_power_of_2(a->active-a->low, log2_page_size));
+  a->active = a->low;
+  a->ndnodes = 0;
+  pure_space_active = pure_space_start;
+}

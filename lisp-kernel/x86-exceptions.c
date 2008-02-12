@@ -156,6 +156,7 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
     arg = xpGPR(xp,Iimm1);
   area *a = active_dynamic_area;
   Boolean egc_was_enabled = (a->older != NULL);
+  
   natural gc_previously_deferred = gc_deferred;
 
   switch (selector) {
@@ -218,33 +219,41 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
     } else {
       full_gc_deferred = 0;
     }
-    if (selector & GC_TRAP_FUNCTION_PURIFY) {
-      purify_from_xp(xp, 0L);
-      gc_from_xp(xp, 0L);
-    }
-    if (selector & GC_TRAP_FUNCTION_SAVE_APPLICATION) {
-      OSErr err;
-      extern OSErr save_application(unsigned);
-      area *vsarea = tcr->vs_area;
-	
-      nrs_TOPLFUNC.vcell = *((LispObj *)(vsarea->high)-1);
-      err = save_application(arg);
-      if (err == noErr) {
-	_exit(0);
+    if (selector > GC_TRAP_FUNCTION_GC) {
+      if (selector & GC_TRAP_FUNCTION_IMPURIFY) {
+        impurify_from_xp(xp, 0L);
+        /*        nrs_GC_EVENT_STATUS_BITS.vcell |= gc_integrity_check_bit; */
+        gc_from_xp(xp, 0L);
+        release_readonly_area();
       }
-      fatal_oserr(": save_application", err);
-    }
-    switch (selector) {
-    case GC_TRAP_FUNCTION_SET_HONS_AREA_SIZE:
-      xpGPR(xp, Iimm0) = 0;
-      break;
-    case GC_TRAP_FUNCTION_FREEZE:
-      a->active = (BytePtr) align_to_power_of_2(a->active, log2_page_size);
-      tenured_area->static_dnodes = area_dnode(a->active, a->low);
-      xpGPR(xp, Iimm0) = tenured_area->static_dnodes << dnode_shift;
-      break;
-    default:
-      break;
+      if (selector & GC_TRAP_FUNCTION_PURIFY) {
+        purify_from_xp(xp, 0L);
+        gc_from_xp(xp, 0L);
+      }
+      if (selector & GC_TRAP_FUNCTION_SAVE_APPLICATION) {
+        OSErr err;
+        extern OSErr save_application(unsigned);
+        area *vsarea = tcr->vs_area;
+	
+        nrs_TOPLFUNC.vcell = *((LispObj *)(vsarea->high)-1);
+        err = save_application(arg);
+        if (err == noErr) {
+          _exit(0);
+        }
+        fatal_oserr(": save_application", err);
+      }
+      switch (selector) {
+      case GC_TRAP_FUNCTION_SET_HONS_AREA_SIZE:
+        xpGPR(xp, Iimm0) = 0;
+        break;
+      case GC_TRAP_FUNCTION_FREEZE:
+        a->active = (BytePtr) align_to_power_of_2(a->active, log2_page_size);
+        tenured_area->static_dnodes = area_dnode(a->active, a->low);
+        xpGPR(xp, Iimm0) = tenured_area->static_dnodes << dnode_shift;
+        break;
+      default:
+        break;
+      }
     }
     if (egc_was_enabled) {
       egc_control(true, NULL);

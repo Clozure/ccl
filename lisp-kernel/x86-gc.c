@@ -1780,6 +1780,7 @@ purify_gcable_ptrs(BytePtr low, BytePtr high, area *to)
     prev = &(((xmacptr *)ptr_from_lispobj(untag(next)))->link);
   }
 }
+
 void 
 purify_headerless_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to)
 {
@@ -2056,9 +2057,21 @@ impurify_noderef(LispObj *p, LispObj low, LispObj high, int delta)
 }
   
 
+void
+impurify_gcable_ptrs(LispObj low, LispObj high, signed_natural delta)
+{
+  LispObj *prev = &(lisp_global(GCABLE_POINTERS)), next;
+
+  while ((*prev) != (LispObj)NULL) {
+    impurify_noderef(prev, low, high, delta);
+    next = *prev;
+    prev = &(((xmacptr *)ptr_from_lispobj(untag(next)))->link);
+  }
+}
+
 
 void
-impurify_xp(ExceptionInformation *xp, LispObj low, LispObj high, int delta)
+impurify_xp(ExceptionInformation *xp, LispObj low, LispObj high, signed_natural delta)
 {
   natural *regs = (natural *) xpGPRvector(xp);
 
@@ -2083,7 +2096,7 @@ impurify_xp(ExceptionInformation *xp, LispObj low, LispObj high, int delta)
 }
 
 void
-impurify_headerless_range(LispObj *start, LispObj *end, LispObj low, LispObj high, int delta)
+impurify_headerless_range(LispObj *start, LispObj *end, LispObj low, LispObj high, signed_natural delta)
 {
   while (start < end) {
     impurify_noderef(start, low, high, delta);
@@ -2093,7 +2106,7 @@ impurify_headerless_range(LispObj *start, LispObj *end, LispObj low, LispObj hig
 
 
 void
-impurify_range(LispObj *start, LispObj *end, LispObj low, LispObj high, int delta)
+impurify_range(LispObj *start, LispObj *end, LispObj low, LispObj high, signed_natural delta)
 {
   LispObj header;
   unsigned tag;
@@ -2165,7 +2178,7 @@ impurify_range(LispObj *start, LispObj *end, LispObj low, LispObj high, int delt
 
 
 void
-impurify_tcr_tlb(TCR *tcr,  LispObj low, LispObj high, int delta)
+impurify_tcr_tlb(TCR *tcr,  LispObj low, LispObj high, signed_natural delta)
 {
   unsigned n = tcr->tlb_limit;
   LispObj *start = tcr->tlb_pointer, *end = (LispObj *) ((BytePtr)start+n);
@@ -2174,7 +2187,7 @@ impurify_tcr_tlb(TCR *tcr,  LispObj low, LispObj high, int delta)
 }
 
 void
-impurify_tcr_xframes(TCR *tcr, LispObj low, LispObj high, int delta)
+impurify_tcr_xframes(TCR *tcr, LispObj low, LispObj high, signed_natural delta)
 {
   xframe_list *xframes;
   ExceptionInformation *xp;
@@ -2190,7 +2203,7 @@ impurify_tcr_xframes(TCR *tcr, LispObj low, LispObj high, int delta)
 }
 
 void
-impurify_tstack_area(area *a, LispObj low, LispObj high, int delta)
+impurify_tstack_area(area *a, LispObj low, LispObj high, signed_natural delta)
 {
   LispObj
     *current,
@@ -2210,7 +2223,7 @@ impurify_tstack_area(area *a, LispObj low, LispObj high, int delta)
   }
 }
 void
-impurify_vstack_area(area *a, LispObj low, LispObj high, int delta)
+impurify_vstack_area(area *a, LispObj low, LispObj high, signed_natural delta)
 {
   LispObj
     *p = (LispObj *) a->active,
@@ -2221,7 +2234,7 @@ impurify_vstack_area(area *a, LispObj low, LispObj high, int delta)
 
 
 void
-impurify_areas(LispObj low, LispObj high, int delta)
+impurify_areas(LispObj low, LispObj high, signed_natural delta)
 {
   area *next_area;
   area_code code;
@@ -2237,9 +2250,6 @@ impurify_areas(LispObj low, LispObj high, int delta)
       break;
       
     case AREA_CSTACK:
-#ifdef PPC
-      impurify_cstack_area(next_area, low, high, delta);
-#endif
       break;
       
     case AREA_STATIC:
@@ -2263,7 +2273,7 @@ impurify(TCR *tcr, signed_natural param)
     BytePtr ro_base = r->low, ro_limit = r->active, oldfree = a->active,
       oldhigh = a->high, newhigh; 
     unsigned n = ro_limit - ro_base;
-    int delta = oldfree-ro_base;
+    signed_natural delta = oldfree-ro_base;
     TCR *other_tcr;
 
     if (n) {
@@ -2288,6 +2298,8 @@ impurify(TCR *tcr, signed_natural param)
         impurify_tcr_tlb(other_tcr, ptr_to_lispobj(ro_base), ptr_to_lispobj(ro_limit), delta);
         other_tcr = other_tcr->next;
       } while (other_tcr != tcr);
+
+      impurify_gcable_ptrs(ptr_to_lispobj(ro_base), ptr_to_lispobj(ro_limit), delta);
       lisp_global(IN_GC) = 0;
     }
     return 0;
