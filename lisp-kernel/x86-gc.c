@@ -1654,26 +1654,11 @@ purify_displaced_object(LispObj obj, area *dest, natural disp)
     header = header_of(obj), 
     new;
   natural 
-    subtag = header_subtag(header), 
-    element_count = header_element_count(header),
+    start = (natural)old,
     physbytes;
 
-  switch(subtag) {
-  case subtag_simple_base_string:
-    physbytes = node_size + (element_count << 2);
-    break;
+  physbytes = ((natural)(skip_over_ivector(start,header))) - start;
 
-#ifndef X86
-  case subtag_code_vector:
-    physbytes = node_size + (element_count << 2);
-    break;
-#endif
-
-  default:
-    Bug(NULL, "Can't purify object at 0x%08x", obj);
-    return obj;
-  }
-  physbytes = (physbytes+(dnode_size-1))&~(dnode_size-1);
   dest->active += physbytes;
 
   new = ptr_to_lispobj(free)+disp;
@@ -1704,9 +1689,6 @@ purify_object(LispObj obj, area *dest)
 }
 
 
-#define FORWARD_ONLY 0
-#define COPY_CODE (1<<0)
-#define COPY_STRINGS (1<<1)
 
 
 /*
@@ -1761,7 +1743,7 @@ interned_pname_bytes_in_range(LispObj *start, LispObj *end)
 }
 
 Boolean
-copy_ivector_reference(LispObj *ref, BytePtr low, BytePtr high, area *dest, int what_to_copy)
+copy_ivector_reference(LispObj *ref, BytePtr low, BytePtr high, area *dest)
 {
   LispObj obj = *ref, header, new;
   natural tag = fulltag_of(obj), header_tag, header_subtag;
@@ -1777,13 +1759,9 @@ copy_ivector_reference(LispObj *ref, BytePtr low, BytePtr high, area *dest, int 
     } else {
       header_tag = fulltag_of(header);
       if (immheader_tag_p(header_tag)) {
-        header_subtag = header_subtag(header);
-        if ((what_to_copy & COPY_STRINGS) && 
-            ((header_subtag == subtag_simple_base_string))) {
-          new = purify_object(obj, dest);
-          *ref = new;
-          changed = (new != obj);
-        }
+        new = purify_object(obj, dest);
+        *ref = new;
+        changed = (new != obj);
       }
     }
   }
@@ -1791,16 +1769,28 @@ copy_ivector_reference(LispObj *ref, BytePtr low, BytePtr high, area *dest, int 
 }
 
 
-void purify_headerless_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to, int what)
+void
+purify_gcable_ptrs(BytePtr low, BytePtr high, area *to)
+{
+  LispObj *prev = &(lisp_global(GCABLE_POINTERS)), next;
+
+  while ((*prev) != (LispObj)NULL) {
+    copy_ivector_reference(prev, low, high, to);
+    next = *prev;
+    prev = &(((xmacptr *)ptr_from_lispobj(untag(next)))->link);
+  }
+}
+void 
+purify_headerless_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to)
 {
   while (start < end) { 
-    copy_ivector_reference(start, low, high, to, what);
+    copy_ivector_reference(start, low, high, to);
     start++;
   }
 }
    
 void
-purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to, int what)
+purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to)
 {
   LispObj header;
   unsigned tag;
@@ -1827,7 +1817,7 @@ purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to, 
           start++;
           nwords -= skip;
           while(skip--) {
-            copy_ivector_reference(start, low, high, to, what);
+            copy_ivector_reference(start, low, high, to);
             start++;
           }
           /* "nwords" is odd at this point: there are (floor nwords 2)
@@ -1836,12 +1826,12 @@ purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to, 
              past the alignment word. */
           nwords >>= 1;
           while(nwords--) {
-            if (copy_ivector_reference(start, low, high, to, what) && hashp) {
+            if (copy_ivector_reference(start, low, high, to) && hashp) {
               hashp->flags |= nhash_key_moved_mask;
               hashp = NULL;
             }
             start++;
-            copy_ivector_reference(start, low, high, to, what);
+            copy_ivector_reference(start, low, high, to);
             start++;
           }
           *start++ = 0;
@@ -1853,15 +1843,15 @@ purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to, 
           }
           start++;
           while(nwords--) {
-            copy_ivector_reference(start, low, high, to, what);
+            copy_ivector_reference(start, low, high, to);
             start++;
           }
         }
       } else {
         /* Not a header, just a cons cell */
-        copy_ivector_reference(start, low, high, to, what);
+        copy_ivector_reference(start, low, high, to);
         start++;
-        copy_ivector_reference(start, low, high, to, what);
+        copy_ivector_reference(start, low, high, to);
         start++;
       }
     }
@@ -1870,7 +1860,7 @@ purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to, 
         
 /* Purify references from tstack areas */
 void
-purify_tstack_area(area *a, BytePtr low, BytePtr high, area *to, int what)
+purify_tstack_area(area *a, BytePtr low, BytePtr high, area *to)
 {
   LispObj
     *current,
@@ -1884,77 +1874,75 @@ purify_tstack_area(area *a, BytePtr low, BytePtr high, area *to, int what)
        current = next) {
     next = (LispObj *) ptr_from_lispobj(*current);
     end = ((next >= start) && (next < limit)) ? next : limit;
-    if (current[1] == 0) {
-      purify_range(current+2, end, low, high, to, what);
-    }
+    purify_range(current+2, end, low, high, to);
   }
 }
 
 /* Purify a vstack area */
 void
-purify_vstack_area(area *a, BytePtr low, BytePtr high, area *to, int what)
+purify_vstack_area(area *a, BytePtr low, BytePtr high, area *to)
 {
   LispObj
     *p = (LispObj *) a->active,
     *q = (LispObj *) a->high;
   
-  purify_headerless_range(p, q, low, high, to, what);
+  purify_headerless_range(p, q, low, high, to);
 }
 
 
 void
-purify_xp(ExceptionInformation *xp, BytePtr low, BytePtr high, area *to, int what)
+purify_xp(ExceptionInformation *xp, BytePtr low, BytePtr high, area *to)
 {
   natural *regs = (natural *) xpGPRvector(xp);
 
 
 #ifdef X8664
-  copy_ivector_reference(&(regs[Iarg_z]), low, high, to, what);
-  copy_ivector_reference(&(regs[Iarg_y]), low, high, to, what);
-  copy_ivector_reference(&(regs[Iarg_x]), low, high, to, what);
-  copy_ivector_reference(&(regs[Isave3]), low, high, to, what);
-  copy_ivector_reference(&(regs[Isave2]), low, high, to, what);
-  copy_ivector_reference(&(regs[Isave1]), low, high, to, what);
-  copy_ivector_reference(&(regs[Isave0]), low, high, to, what);
-  copy_ivector_reference(&(regs[Ifn]), low, high, to, what);
-  copy_ivector_reference(&(regs[Itemp0]), low, high, to, what);
-  copy_ivector_reference(&(regs[Itemp1]), low, high, to, what);
-  copy_ivector_reference(&(regs[Itemp2]), low, high, to, what);
+  copy_ivector_reference(&(regs[Iarg_z]), low, high, to);
+  copy_ivector_reference(&(regs[Iarg_y]), low, high, to);
+  copy_ivector_reference(&(regs[Iarg_x]), low, high, to);
+  copy_ivector_reference(&(regs[Isave3]), low, high, to);
+  copy_ivector_reference(&(regs[Isave2]), low, high, to);
+  copy_ivector_reference(&(regs[Isave1]), low, high, to);
+  copy_ivector_reference(&(regs[Isave0]), low, high, to);
+  copy_ivector_reference(&(regs[Ifn]), low, high, to);
+  copy_ivector_reference(&(regs[Itemp0]), low, high, to);
+  copy_ivector_reference(&(regs[Itemp1]), low, high, to);
+  copy_ivector_reference(&(regs[Itemp2]), low, high, to);
 #if 0
-  purify_locref(&(regs[Iip]), low, high, to, what);
+  purify_locref(&(regs[Iip]), low, high, to);
 #endif
 #else
 #endif
 }
 
 void
-purify_tcr_tlb(TCR *tcr, BytePtr low, BytePtr high, area *to, int what)
+purify_tcr_tlb(TCR *tcr, BytePtr low, BytePtr high, area *to)
 {
   natural n = tcr->tlb_limit;
   LispObj *start = tcr->tlb_pointer, *end = (LispObj *) ((BytePtr)start+n);
 
-  purify_range(start, end, low, high, to, what);
+  purify_range(start, end, low, high, to);
 }
 
 void
-purify_tcr_xframes(TCR *tcr, BytePtr low, BytePtr high, area *to, int what)
+purify_tcr_xframes(TCR *tcr, BytePtr low, BytePtr high, area *to)
 {
   xframe_list *xframes;
   ExceptionInformation *xp;
   
   xp = tcr->gc_context;
   if (xp) {
-    purify_xp(xp, low, high, to, what);
+    purify_xp(xp, low, high, to);
   }
 
   for (xframes = tcr->xframe; xframes; xframes = xframes->prev) {
-    purify_xp(xframes->curr, low, high, to, what);
+    purify_xp(xframes->curr, low, high, to);
   }
 }
 
 
 void
-purify_areas(BytePtr low, BytePtr high, area *target, int what)
+purify_areas(BytePtr low, BytePtr high, area *target)
 {
   area *next_area;
   area_code code;
@@ -1962,22 +1950,19 @@ purify_areas(BytePtr low, BytePtr high, area *target, int what)
   for (next_area = active_dynamic_area; (code = next_area->code) != AREA_VOID; next_area = next_area->succ) {
     switch (code) {
     case AREA_TSTACK:
-      purify_tstack_area(next_area, low, high, target, what);
+      purify_tstack_area(next_area, low, high, target);
       break;
       
     case AREA_VSTACK:
-      purify_vstack_area(next_area, low, high, target, what);
+      purify_vstack_area(next_area, low, high, target);
       break;
       
     case AREA_CSTACK:
-#ifdef PPC
-      purify_cstack_area(next_area, low, high, target, what);
-#endif
       break;
       
     case AREA_STATIC:
     case AREA_DYNAMIC:
-      purify_range((LispObj *) next_area->low, (LispObj *) next_area->active, low, high, target, what);
+      purify_range((LispObj *) next_area->low, (LispObj *) next_area->active, low, high, target);
       break;
       
     default:
@@ -2009,7 +1994,7 @@ purify(TCR *tcr, signed_natural param)
 
 
 
-  max_pure_size = interned_pname_bytes_in_range((LispObj *)(a->low + (static_dnodes_for_area(a) << dnode_shift)), 
+  max_pure_size = unboxed_bytes_in_range((LispObj *)(a->low + (static_dnodes_for_area(a) << dnode_shift)), 
                                          (LispObj *) a->active);
   new_pure_area = extend_readonly_area(max_pure_size);
   if (new_pure_area) {
@@ -2017,11 +2002,7 @@ purify(TCR *tcr, signed_natural param)
     lisp_global(IN_GC) = (1<<fixnumshift);
 
     /* 
-      First, loop thru *all-packages* and purify the pnames of all
-      interned symbols.  Then walk every place that could reference
-      a heap-allocated object (all_areas, the xframe_list) and
-      purify code_vectors (and update the odd case of a shared
-      reference to a pname.)
+
        
       Make the new_pure_area executable, just in case.
 
@@ -2029,50 +2010,18 @@ purify(TCR *tcr, signed_natural param)
       the dynamic heap.)
       */
 
-    {
-      lispsymbol *rawsym = (lispsymbol *)(&(nrs_ALL_PACKAGES));
-      LispObj pkg_list = rawsym->vcell, htab, obj;
-      package *p;
-      cons *c;
-      natural elements, i;
 
-      while (fulltag_of(pkg_list) == fulltag_cons) {
-        c = (cons *) ptr_from_lispobj(untag(pkg_list));
-        p = (package *) ptr_from_lispobj(untag(c->car));
-        pkg_list = c->cdr;
-        c = (cons *) ptr_from_lispobj(untag(p->itab));
-        htab = c->car;
-        elements = header_element_count(header_of(htab));
-        for (i = 1; i<= elements; i++) {
-          obj = deref(htab,i);
-          if (fulltag_of(obj) == fulltag_symbol) {
-            rawsym = (lispsymbol *) ptr_from_lispobj(untag(obj));
-            copy_ivector_reference(&(rawsym->pname), a->low, a->active, new_pure_area, COPY_STRINGS);
-          }
-        }
-        c = (cons *) ptr_from_lispobj(untag(p->etab));
-        htab = c->car;
-        elements = header_element_count(header_of(htab));
-        for (i = 1; i<= elements; i++) {
-          obj = deref(htab,i);
-          if (fulltag_of(obj) == fulltag_symbol) {
-            rawsym = (lispsymbol *) ptr_from_lispobj(untag(obj));
-            copy_ivector_reference(&(rawsym->pname), a->low, a->active, new_pure_area, COPY_STRINGS);
-          }
-        }
-      }
-    }
     
-    purify_areas(a->low, a->active, new_pure_area, FORWARD_ONLY);
+    purify_areas(a->low, a->active, new_pure_area);
     
     other_tcr = tcr;
     do {
-      purify_tcr_xframes(other_tcr, a->low, a->active, new_pure_area, FORWARD_ONLY);
-      purify_tcr_tlb(other_tcr, a->low, a->active, new_pure_area, FORWARD_ONLY);
+      purify_tcr_xframes(other_tcr, a->low, a->active, new_pure_area);
+      purify_tcr_tlb(other_tcr, a->low, a->active, new_pure_area);
       other_tcr = other_tcr->next;
     } while (other_tcr != tcr);
 
-
+    purify_gcable_ptrs(a->low, a->active, new_pure_area);
     {
       natural puresize = (unsigned) (new_pure_area->active-new_pure_start);
       if (puresize != 0) {
