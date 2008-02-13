@@ -148,122 +148,146 @@
 
       <pre>
         ? (setf  *my-app*
-                 (let* ((class-name (%make-nsstring "NSApplication"))
-                        (appclass (#_NSClassFromString class-name)))
-                   (#/release class-name)
-                   (#/sharedApplication appclass)))
+        (let* ((class-name (%make-nsstring "NSApplication"))
+        (appclass (#_NSClassFromString class-name)))
+        (#/release class-name)
+        (#/sharedApplication appclass)))
         #&lt;LISP-APPLICATION &lt;LispApplication: 0x1b8de0&gt; (#x1B8DE0)&gt;
       </pre>
 
       <p>Let's review this form step-by-step.</p>
 
       <p>First of all, it's going to store the returned application
-      object in the variable <code>*my-app*</code>, so that we have it
-      convenient for later use.</p>
+        object in the variable <code>*my-app*</code>, so that we have it
+        convenient for later use.</p>
 
       <p>We need an <code>NSString</code> object that contains the
-      name of the application class, so the code allocates one by
-      calling <code>%make-nsstring</code>. The <code>NSString</code>
-      object is a dynamically-allocated foreign object, not managed by
-      Lisp's garbage-collector, so we'll have to be sure to release it
-      later.</p>
+        name of the application class, so the code allocates one by
+        calling <code>%make-nsstring</code>. The <code>NSString</code>
+        object is a dynamically-allocated foreign object, not managed by
+        Lisp's garbage-collector, so we'll have to be sure to release it
+        later.</p>
 
       <p>The code next uses the class-name to get the
-      actual <code>NSApplication</code> class object, by
-      calling <code>#_NSClassFromString</code>.</p>
+        actual <code>NSApplication</code> class object, by
+        calling <code>#_NSClassFromString</code>.</p>
 
       <p>Finally, after first releasing the <code>NSString</code>
-      object, it calls <code>#/sharedApplication</code> to get the
-      running application object, which turns out to be an instance
-      of <code>LispApplication</code>.</p>
+        object, it calls <code>#/sharedApplication</code> to get the
+        running application object, which turns out to be an instance
+        of <code>LispApplication</code>.</p>
 
-        <p>Voilà! We have a reference to the running Clozure CL
-          application object! Now we can ask it for its zone, where it
-          allocates objects in memory:</p>
+      <p>Voilà! We have a reference to the running Clozure CL
+        application object! Now we can ask it for its zone, where it
+        allocates objects in memory:</p>
 
-        <pre>
-          ? (setf *my-zone* (#/zone *my-app*))
-          #&lt;A Foreign Pointer #x8B000&gt;
-        </pre>
+      <pre>
+        ? (setf *my-zone* (#/zone *my-app*))
+        #&lt;A Foreign Pointer #x8B000&gt;
+      </pre>
 
-        <p>Now we have a reference to the application's zone, which is
-          one of the parameters we need to pass
-          to <code>loadNibFile:externalNameTable:withZone:</code>.</p>
+      <p>Now we have a reference to the application's zone, which is
+        one of the parameters we need to pass
+        to <code>loadNibFile:externalNameTable:withZone:</code>.</p>
 
-        <div class="section-head">
-          <h3>2. Make a Dictionary</h3> 
-        </div>
+      <div class="section-head">
+        <h3>2. Make a Dictionary</h3> 
+      </div>
 
-        <p>The dictionary argument
-          to <code>loadNibFile:externalNameTable:withZone:</code> is
-          used for two purposes: to identify the nibfile's owner, and
-          to collect toplevel objects.</p>
+      <p>The dictionary argument
+        to <code>loadNibFile:externalNameTable:withZone:</code> is
+        used for two purposes: to identify the nibfile's owner, and
+        to collect toplevel objects.</p>
 
-        <p>The nibfile's owner becomes the owner of all the toplevel
-          objects created when the nibfile is loaded, objects such as
-          windows, buttons, and so on. A nibfile's owner manages the
-          objects created when the nibfile is loaded, and provides a
-          way for your code to get references to those objects. You
-          supply an owner object in the dictionary, under the
-          key <code>"NSNibOwner"</code>.</p>
+      <p>The nibfile's owner becomes the owner of all the toplevel
+        objects created when the nibfile is loaded, objects such as
+        windows, buttons, and so on. A nibfile's owner manages the
+        objects created when the nibfile is loaded, and provides a
+        way for your code to get references to those objects. You
+        supply an owner object in the dictionary, under the
+        key <code>"NSNibOwner"</code>.</p>
 
-        <p>The toplevel objects are objects, such as windows, that are
-          created when the nibfile is loaded. To collect these, you
-          can pass an <code>NSMutableArray</code> object under the
-          key <code>"NSNibTopLevelObjects"</code>.</p>
+      <p>The toplevel objects are objects, such as windows, that are
+        created when the nibfile is loaded. To collect these, you
+        can pass an <code>NSMutableArray</code> object under the
+        key <code>"NSNibTopLevelObjects"</code>.</p>
 
-        <p>For this first example, we'll pass an owner object (the
-          application object), but we don't need to collect toplevel
-          objects, so we'll omit
-          the <code>"NSNibTopLevelObjects"</code> key.</p>
+      <p>For this first example, we'll pass an owner object (the
+        application object), but we don't need to collect toplevel
+        objects, so we'll omit
+        the <code>"NSNibTopLevelObjects"</code> key.</p>
 
-        <pre>
-          ? (setf *my-dict* 
-                  (#/dictionaryWithObject:forKey: (@class ns-mutable-dictionary) 
-                                                  *my-app* 
-                                                  #@"NSNibOwner"))
-          #&lt;NS-MUTABLE-DICTIONARY {
-                                  NSNibOwner = &lt;LispApplication: 0x1b8e10&gt;;
-                                  } (#x137F3DD0)&gt;
-            
-          </pre>
+      <pre>
+        ? (setf *my-dict* 
+        (#/dictionaryWithObject:forKey: (@class ns-mutable-dictionary) 
+        *my-app* 
+        #@"NSNibOwner"))
+        #&lt;NS-MUTABLE-DICTIONARY {
+        NSNibOwner = &lt;LispApplication: 0x1b8e10&gt;;
+        } (#x137F3DD0)&gt;
+        
+      </pre>
 
-        <div class="section-head">
-          <h3>3. Load the Nibfile</h3> 
-        </div>
+      <div class="section-head">
+        <h3>3. Load the Nibfile</h3> 
+      </div>
 
-        <p>Now that we have the zone and the dictionary we need, we
+      <p>Now that we have the zone and the dictionary we need, we
         can load the nibfile. We just need to create an NSString with
         the proper pathname first:</p>
 
-        <pre>
-          ? (setf *nib-path* 
-                  (%make-nsstring 
-                     (namestring "/usr/local/openmcl/ccl/examples/cocoa/nib-loading/hello.nib")))
-          #&lt;NS-MUTABLE-STRING "/usr/local/openmcl/ccl/examples/cocoa/nib-loading/hello.nib" (#x13902C10)&gt;
-        </pre>
+      <pre>
+        ? (setf *nib-path* 
+        (%make-nsstring 
+        (namestring "/usr/local/openmcl/ccl/examples/cocoa/nib-loading/hello.nib")))
+        #&lt;NS-MUTABLE-STRING "/usr/local/openmcl/ccl/examples/cocoa/nib-loading/hello.nib" (#x13902C10)&gt;
+      </pre>
 
-        <p>Now we can actually load the nibfile, passing the method
+      <p>Now we can actually load the nibfile, passing the method
         the objects we've created:</p>
 
-        <pre>
-          ? (#/loadNibFile:externalNameTable:withZone: 
-                  (@class ns-bundle)
-                  *nib-path*
-                  *my-dict*
-                  *my-zone*)
-          T
-        </pre>
+      <pre>
+        ? (#/loadNibFile:externalNameTable:withZone: 
+        (@class ns-bundle)
+        *nib-path*
+        *my-dict*
+        *my-zone*)
+        T
+      </pre>
 
-        <p>The window defined in the "hello.nib" file should appear
+      <p>The window defined in the "hello.nib" file should appear
         on the
         screen. The <code>loadNibFile:externalNameTable:withZone:</code>
         method returns <code>T</code> to indicate it loaded the
         nibfile successfully; if it had failed, it would have
         returned <code>NIL</code>.</p>
 
-        </div>
+      <p>At this point we no longer need the pathname and
+        dictionary objects, and we can release them:</p>
 
-      </body>
-    </html>
+      <pre>
+        ? (setf *nib-path* (#/release *nib-path*))
+        NIL
+        ? (setf *my-dict* (#/release *my-dict*))
+        NIL
+      </pre>
+
+      <div class="section-head">
+        <h2>Making a Nib-loading Function</h2> 
+      </div>
+
+      <p>Loading a nibfile seems like something we might want to do
+        repeatedly, and so it makes sense to make it as easy as possible
+        to do. Let's make a single function we can call to load a nib as
+        needed.</p>
+
+
+      <div class="section-head">
+        <h2>What About Unloading Nibfiles?</h2> 
+      </div>
+      
+    </div>
+
+  </body>
+</html>
 
