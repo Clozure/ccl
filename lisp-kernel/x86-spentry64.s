@@ -2075,6 +2075,7 @@ _endsubp(stack_misc_alloc)
 /* node-header'ed misc object (symbols, closures, ...) as well as vector-like   */
 /* objects.   */
 _spentry(gvector)
+        __(subl $node_size,%nargs)
 	__(movq (%rsp,%nargs_q),%imm0)	/* boxed subtype   */
 	__(sarq $fixnumshift,%imm0)
 	__(movq %nargs_q,%imm1)

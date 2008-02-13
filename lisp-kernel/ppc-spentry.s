@@ -946,6 +946,7 @@ _spentry(stack_misc_alloc)
 /* Note that we're guaranteed to win (or force GC, or run out of memory)  */
 /* because nargs < 32K.  */
 _spentry(gvector)
+        __(subi nargs,nargs,node_size)
 	__(ldrx(arg_z,vsp,nargs))
 	__(unbox_fixnum(imm0,arg_z))
         __ifdef([PPC64])
