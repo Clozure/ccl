@@ -24,6 +24,12 @@
                                                                       nib-name context app-zone)))
     (values load-succeeded-p context)))
 
+(setf  *my-app*
+       (let* ((class-name (%make-nsstring "NSApplication"))
+              (appclass (#_NSClassFromString class-name)))
+         (#/release class-name)
+         (#/sharedApplication appclass)))
+
 
 #|
 (ccl::load-nibfile "/usr/local/openmcl/trunk/source/examples/cocoa/nib-loading/hello.nib")
