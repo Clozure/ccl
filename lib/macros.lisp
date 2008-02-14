@@ -3567,3 +3567,33 @@ to be at least partially steppable."
   "Evaluate FORM and return the Nth value (zero based). This involves no
   consing when N is a trivial constant integer."
   `(car (nthcdr ,n (multiple-value-list ,form))))
+
+
+
+(defmacro with-input-timeout (((stream-var &optional (stream-form stream-var)) timeout) &body body)
+  "Execute body with STREAM-VAR bound to STREAM-FORM and with that stream's
+stream-input-timeout set to TIMEOUT."
+  (let* ((old-input-timeout (gensym))
+         (stream (gensym)))
+    `(let* ((,stream ,stream-form)
+            (,stream-var ,stream)
+            (,old-input-timeout (stream-input-timeout ,stream)))
+      (unwind-protect
+           (progn
+             (setf (stream-input-timeout ,stream) ,timeout)
+             ,@body)
+        (setf (stream-input-timeout ,stream) ,old-input-timeout)))))
+
+(defmacro with-output-timeout (((stream-var &optional (stream-form stream-var)) timeout) &body body)
+  "Execute body with STREAM-VAR bound to STREAM-FORM and with that stream's
+stream-output-timeout set to TIMEOUT."
+  (let* ((old-output-timeout (gensym))
+         (stream (gensym)))
+    `(let* ((,stream ,stream-form)
+            (,stream-var ,stream)
+            (,old-output-timeout (stream-output-timeout ,stream)))
+      (unwind-protect
+           (progn
+             (setf (stream-output-timeout ,stream) ,timeout)
+             ,@body)
+        (setf (stream-output-timeout ,stream) ,old-output-timeout)))))
