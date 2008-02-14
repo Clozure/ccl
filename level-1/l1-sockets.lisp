@@ -532,8 +532,6 @@ the socket is not connected."))
 			   type
 			   connect
 			   out-of-band-inline
-                           receive-timeout
-                           send-timeout
 			   &allow-other-keys)
   ;; see man socket(7) tcp(7) ip(7)
   (multiple-value-bind (socket fd) (etypecase fd-or-socket
@@ -561,16 +559,6 @@ the socket is not connected."))
 			#+linux-target #$SOL_TCP
 			#+(or freebsd-target darwin-target) #$IPPROTO_TCP
 			#$TCP_NODELAY 1))
-      (when (and receive-timeout (> receive-timeout 0))
-        (timeval-setsockopt fd
-                            #$SOL_SOCKET
-                            #$SO_RCVTIMEO
-                            receive-timeout))
-      (when (and send-timeout (> send-timeout 0))
-        (timeval-setsockopt fd
-                            #$SOL_SOCKET
-                            #$SO_SNDTIMEO
-                            send-timeout))
       (when (or local-port local-host)
 	(let* ((proto (if (eq type :stream) "tcp" "udp"))
 	       (port-n (if local-port (port-as-inet-port local-port proto) 0))
@@ -616,14 +604,14 @@ the socket is not connected."))
 		    local-port local-host backlog class out-of-band-inline
 		    local-filename remote-filename sharing basic
                     external-format (auto-close t)
-                    receive-timeout send-timeout connect-timeout)
+                    connect-timeout)
   "Create and return a new socket."
   (declare (dynamic-extent keys))
   (declare (ignore type connect remote-host remote-port eol format
 		   keepalive reuse-address nodelay broadcast linger
 		   local-port local-host backlog class out-of-band-inline
 		   local-filename remote-filename sharing basic external-format
-                   auto-close receive-timeout send-timeout connect-timeout))
+                   auto-close  connect-timeout))
   (ecase address-family
     ((:file) (apply #'make-file-socket keys))
     ((nil :internet) (apply #'make-ip-socket keys))))
@@ -709,7 +697,7 @@ the socket is not connected."))
   (apply #'make-file-socket-stream fd keys))
 
 
-(defun make-tcp-stream (fd &key (format :bivalent) external-format (class 'tcp-stream) sharing (basic t) (auto-close t) (receive-timeout 0) &allow-other-keys)
+(defun make-tcp-stream (fd &key (format :bivalent) external-format (class 'tcp-stream) sharing (basic t) (auto-close t)  &allow-other-keys)
   (let* ((external-format (normalize-external-format :socket external-format)))
     (let ((element-type (ecase format
                           ((nil :text) 'character)
@@ -725,8 +713,7 @@ the socket is not connected."))
                       :encoding (external-format-character-encoding external-format)
                       :line-termination (external-format-line-termination external-format)
                       :basic basic
-                      :auto-close auto-close
-                      :interactive (zerop receive-timeout)))))
+                      :auto-close auto-close))))
 
 (defun make-file-socket-stream (fd &key (format :bivalent) external-format (class 'file-socket-stream)  sharing basic (auto-close t) &allow-other-keys)
   (let* ((external-format (normalize-external-format :socket external-format)))
