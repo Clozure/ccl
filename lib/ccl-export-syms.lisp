@@ -560,6 +560,11 @@
      stream-read-vector
      stream-write-vector
 
+     stream-input-timeout
+     stream-output-timeout
+     with-input-timeout
+     with-output-timeout
+
      make-heap-ivector
      dispose-heap-ivector
      ;;
