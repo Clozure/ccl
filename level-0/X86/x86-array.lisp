@@ -163,15 +163,14 @@
                                           v0)
                                   uvector)))
             (#.x8664::subtag-bit-vector
-             (if (eql 0 val)
-               uvector
                (let* ((v0 (case val
                             (1 -1)
+                            (0 0)
                             (t (report-bad-arg val 'bit))))
                       (l0 (ash (the fixnum (+ len 63)) -6)))
                  (declare (type (unsigned-byte 8) v0)
                           (type index l0))
-                 (%%init-ivector64  l0 v0 uvector))))
+                 (%%init-ivector64  l0 v0 uvector)))
             (t (report-bad-arg uvector
                                '(or simple-bit-vector
                                    (simple-array (signed-byte 8) (*))
