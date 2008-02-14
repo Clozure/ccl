@@ -58,6 +58,22 @@
     :io
     :output))
 
+(defun check-io-timeout (timeout)
+  (when timeout
+    (require-type timeout '(real 0 1000000))))
+
+(defmethod stream-input-timeout ((s input-stream))
+  nil)
+
+(defmethod (setf input-stream-timeout) (new (s input-stream))
+  (check-io-timeout new))
+
+(defmethod stream-output-timeout ((s output-stream))
+  nil)
+
+(defmethod (setf stream-output-timeout) (new (s output-stream))
+  (check-io-timeout new))
+
 ;;; Try to return a string containing characters that're near the
 ;;; stream's current position, if that makes sense.  Return NIL
 ;;; if it doesn't make sense.
@@ -417,7 +433,8 @@
   (line-termination nil)
   (unread-char-function 'ioblock-no-char-input)
   (encode-literal-char-code-limit 256)
-  (reserved3 nil))
+  (input-timeout nil)
+  (output-timeout nil))
 
 
 ;;; Functions on ioblocks.  So far, we aren't saying anything
@@ -3769,7 +3786,15 @@
            (synonym-method interactive-stream-p)
            (synonym-method stream-direction)
 	   (synonym-method stream-device direction)
-           (synonym-method stream-surrounding-characters))
+           (synonym-method stream-surrounding-characters)
+           (synonym-method stream-input-timeout)
+           (synonym-method stream-output-timeout))
+
+(defmethod (setf input-stream-timeout) (new (s synonym-stream))
+  (setf (input-stream-timeout (symbol-value (synonym-stream-symbol s))) new))
+
+(defmethod (setf output-stream-timeout) (new (s synonym-stream))
+  (setf (output-stream-timeout (symbol-value (synonym-stream-symbol s))) new))
 
 
 (defmethod stream-write-string ((s synonym-stream) string &optional (start 0) end)
@@ -3828,6 +3853,7 @@
   (two-way-input-method stream-read-list l c)
   (two-way-input-method stream-read-vector v start end)
   (two-way-input-method stream-surrounding-characters)
+  (two-way-input-method stream-input-timeout)
   (two-way-output-method stream-write-char c)
   (two-way-output-method stream-write-byte b)
   (two-way-output-method stream-clear-output)
@@ -3840,7 +3866,14 @@
   (two-way-output-method stream-force-output)
   (two-way-output-method stream-finish-output)
   (two-way-output-method stream-write-list l c)
-  (two-way-output-method stream-write-vector v start end))
+  (two-way-output-method stream-write-vector v start end)
+  (two-way-output-method stream-output-timeout))
+
+(defmethod (setf stream-input-timeout) (new (s two-way-stream))
+  (setf (stream-input-timeout (two-way-stream-input-stream s)) new))
+
+(defmethod (setf stream-output-timeout) (new (s two-way-stream))
+  (setf (stream-output-timeout (two-way-stream-output-stream s)) new))
 
 (defmethod stream-device ((s two-way-stream) direction)
   (case direction
@@ -5200,26 +5233,27 @@
   "Wait until input is available on a given file-descriptor."
   (rlet ((now :timeval))
     (let* ((wait-end 
-            (if timeout
-              (multiple-value-bind (seconds millis) (milliseconds timeout)
-                (#_gettimeofday now (%null-ptr))
-                (setq timeout (+ (* seconds 1000) millis))
-                (+ (timeval->milliseconds now) timeout)))))
+            (when timeout
+              (#_gettimeofday now (%null-ptr))
+              (+ (timeval->milliseconds now) timeout))))
       (loop
-        ;; FD-INPUT-AVAILABLE-P can return NIL (e.g., if the
-        ;; thread receives an interrupt) before a timeout is
-        ;; reached.
-        (when (fd-input-available-p fd (or timeout -1))
-          (return t))
-        ;; If it returned and a timeout was specified, check
-        ;; to see if it's been exceeded.  If so, return NIL;
-        ;; otherwise, adjust the remaining timeout.
-        ;; If there was no timeout, continue to wait forever.
-        (when timeout
-          (#_gettimeofday now (%null-ptr))
-          (setq timeout (- wait-end (timeval->milliseconds now)))
-          (if (<= timeout 0)
-            (return)))))))
+        (multiple-value-bind (win error)
+            (fd-input-available-p fd (or timeout -1))
+          (when win
+            (return (values t nil nil)))
+          (when (eql error 0)         ;timed out
+            (return (values nil t nil)))
+          ;; If it returned and a timeout was specified, check
+          ;; to see if it's been exceeded.  If so, return NIL;
+          ;; otherwise, adjust the remaining timeout.
+          ;; If there was no timeout, continue to wait forever.
+          (unless (eql error (- #$EINTR))
+            (return (values nil nil error)))
+          (when timeout
+            (#_gettimeofday now (%null-ptr))
+            (setq timeout (- wait-end (timeval->milliseconds now)))
+            (if (<= timeout 0)
+              (return (values nil t nil)))))))))
 
 
 (defun process-output-would-block (fd)
@@ -5231,29 +5265,27 @@
   "Wait until output is possible on a given file descriptor."
   (rlet ((now :timeval))
     (let* ((wait-end 
-            (if timeout
-              (multiple-value-bind (seconds millis) (milliseconds timeout)
-                (#_gettimeofday now (%null-ptr))
-                (setq timeout (+ (* seconds 1000) millis))
-                (+ (timeval->milliseconds now) timeout)))))
+            (when timeout
+              (#_gettimeofday now (%null-ptr))
+              (+ (timeval->milliseconds now) timeout))))
       (loop
-        ;; FD-INPUT-AVAILABLE-P can return NIL (e.g., if the
-        ;; thread receives an interrupt) before a timeout is
-        ;; reached.
-        (when (fd-ready-for-output-p fd (or timeout -1))
-          (return t))
-        ;; If it returned and a timeout was specified, check
-        ;; to see if it's been exceeded.  If so, return NIL;
-        ;; otherwise, adjust the remaining timeout.
-        ;; If there was no timeout, continue to wait forever.
-        (when timeout
-          (#_gettimeofday now (%null-ptr))
-          (setq timeout (- wait-end (timeval->milliseconds now)))
-          (if (<= timeout 0)
-            (return)))))))
-
-
-  
+        (multiple-value-bind (win error)
+            (fd-ready-for-output-p fd (or timeout -1))
+          (when win
+            (return (values t nil nil)))
+          (when (eql error 0)
+            (return (values nil t nil)))
+          (unless (eql error (- #$EINTR))
+            (return (values nil nil error)))
+          ;; If it returned and a timeout was specified, check
+          ;; to see if it's been exceeded.  If so, return NIL;
+          ;; otherwise, adjust the remaining timeout.
+          ;; If there was no timeout, continue to wait forever.
+          (when timeout
+            (#_gettimeofday now (%null-ptr))
+            (setq timeout (- wait-end (timeval->milliseconds now)))
+            (if (<= timeout 0)
+              (return (values nil t nil)))))))))
 
 
 
@@ -5268,26 +5300,20 @@
   (rlet ((pollfds (:array (:struct :pollfd) 1)))
     (setf (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.fd) fd
           (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.events) #$POLLIN)
-    (let* ((res (ignoring-eintr (syscall syscalls::poll pollfds 1 (or milliseconds -1)))))
-      (> res 0))))
+    (let* ((res (syscall syscalls::poll pollfds 1 (or milliseconds -1))))
+      (declare (fixnum res))
+      (values (> res 0) res))))
 
 
 (defun fd-ready-for-output-p (fd &optional milliseconds)
   (rlet ((pollfds (:array (:struct :pollfd) 1)))
     (setf (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.fd) fd
           (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.events) #$POLLOUT)
-    (let* ((res (ignoring-eintr (syscall syscalls::poll pollfds 1 (or milliseconds -1)))))
-      (> res 0))))
+    (let* ((res (syscall syscalls::poll pollfds 1 (or milliseconds -1))))
+      (declare (fixnum res))
+      (values (> res 0)  res))))
 
-(defun fd-urgent-data-available-p (fd &optional ticks)
-  (rletZ ((tv :timeval))
-    (ticks-to-timeval ticks tv)
-    (%stack-block ((errfds *fd-set-size*))
-      (fd-zero errfds)
-      (fd-set fd errfds)
-      (let* ((res (#_select (1+ fd) (%null-ptr) (%null-ptr)  errfds
-			    (if ticks tv (%null-ptr)))))
-        (> res 0)))))
+
 
 ;;; FD-streams, built on top of the ioblock mechanism.
 (defclass fd-stream (buffered-stream-mixin fundamental-stream) ())
@@ -5363,11 +5389,21 @@
   (let* ((fd (ioblock-device ioblock))
          (buf (ioblock-inbuf ioblock))
          (bufptr (io-buffer-bufptr buf))
-         (size (io-buffer-size buf)))
+         (size (io-buffer-size buf))
+         (avail nil))
     (setf (io-buffer-idx buf) 0
           (io-buffer-count buf) 0
           (ioblock-eof ioblock) nil)
-      (when (or read-p (stream-listen s))
+      (when (or read-p (setq avail (stream-listen s)))
+        (unless avail
+          (let* ((timeout (ioblock-input-timeout ioblock)))
+            (when timeout
+              (multiple-value-bind (win timedout error)
+                  (process-input-wait fd timeout)
+                (unless win
+                  (if timedout
+                    (error 'input-timeout :stream s)
+                    (stream-io-error s (- error) "read")))))))
         (let* ((n (with-eagain fd :input
 		    (fd-read fd bufptr size))))
           (declare (fixnum n))
@@ -5415,6 +5451,14 @@
 	      (case (%unix-fd-kind fd)
 		(:file (fd-fsync fd))))
 	    octets-to-write)
+        (let* ((timeout (ioblock-output-timeout ioblock)))
+          (when timeout
+            (multiple-value-bind (win timedout error)
+                (process-output-wait fd timeout)
+              (unless win
+                (if timedout
+                  (error 'output-timeout :stream s)
+                  (stream-io-error s (- error) "write"))))))
 	(let* ((written (with-eagain fd :output
 			  (fd-write fd buf octets))))
 	  (declare (fixnum written))
@@ -5758,6 +5802,67 @@ are printed.")
 (defmethod (setf stream-external-format) (new (s buffered-stream-mixin))
   (setf (%ioblock-external-format (stream-ioblock s t))
         (normalize-external-format (stream-domain s) new)))
+
+(defmethod stream-input-timeout ((s basic-input-stream))
+  (let* ((ioblock (basic-stream-ioblock s)))
+    (with-ioblock-input-locked (ioblock)
+      (let* ((timeout (ioblock-input-timeout ioblock)))
+        (when timeout
+          (values (floor timeout 1000.0)))))))
+
+(defmethod (setf stream-input-timeout) (new (s basic-input-stream))
+  (setq new (check-io-timeout new))
+  (let* ((ioblock (basic-stream-ioblock s)))
+    (with-ioblock-input-locked (ioblock)
+      (setf (ioblock-input-timeout ioblock)
+            (if new (round (* new 1000))))
+      new)))
+
+(defmethod stream-output-timeout ((s basic-output-stream))
+  (let* ((ioblock (basic-stream-ioblock s)))
+    (with-ioblock-output-locked (ioblock)
+      (let* ((timeout (ioblock-output-timeout ioblock)))
+        (when timeout
+          (values (floor timeout 1000.0)))))))
+
+(defmethod (setf stream-output-timeout) (new (s basic-output-stream))
+  (setq new (check-io-timeout new))
+  (let* ((ioblock (basic-stream-ioblock s)))
+    (with-ioblock-output-locked (ioblock)
+      (setf (ioblock-output-timeout ioblock)
+            (if new (round (* new 1000))))
+      new)))
+
+
+(defmethod stream-input-timeout ((s buffered-input-stream-mixin))
+  (let* ((ioblock (stream-ioblock s t)))
+    (with-ioblock-input-locked (ioblock)
+      (let* ((timeout (ioblock-input-timeout ioblock)))
+        (when timeout
+          (values (floor timeout 1000.0)))))))
+
+(defmethod (setf stream-input-timeout) (new (s buffered-input-stream-mixin))
+  (setq new (check-io-timeout new))
+  (let* ((ioblock (stream-ioblock s t)))
+    (with-ioblock-input-locked (ioblock)
+      (setf (ioblock-input-timeout ioblock)
+            (if new (round (* new 1000))))
+      new)))
+
+(defmethod stream-output-timeout ((s buffered-output-stream-mixin))
+  (let* ((ioblock (stream-ioblock s t)))
+    (with-ioblock-output-locked (ioblock)
+      (let* ((timeout (ioblock-output-timeout ioblock)))
+        (when timeout
+          (values (floor timeout 1000.0)))))))
+
+(defmethod (setf stream-output-timeout) (new (s buffered-output-stream-mixin))
+  (setq new (check-io-timeout new))
+  (let* ((ioblock (stream-ioblock s t)))
+    (with-ioblock-output-locked (ioblock)
+      (setf (ioblock-output-timeout ioblock)
+            (if new (round (* new 1000))))
+      new)))
 
 
 ; end of L1-streams.lisp
