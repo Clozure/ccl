@@ -10,7 +10,8 @@
    (syslog-out :foreign-type :id :accessor syslog-out)
    (nextra :foreign-type :int)
    (translatebuf :foreign-type :address)
-   (bufsize :foreign-type :int))
+   (bufsize :foreign-type :int)
+   (hidden-by-user :initform nil :accessor console-window-hidden-by-user))
   (:metaclass ns:+ns-object))
 
 
@@ -19,7 +20,8 @@
 
 (objc:defmethod (#/insertString: :void) ((self console-window) string)
   (with-slots ((tv typeout-view)) self
-    (#/makeKeyAndOrderFront: self +null-ptr+)
+    (unless (console-window-hidden-by-user self)
+      (#/makeKeyAndOrderFront: self +null-ptr+))
     (#/insertString: (typeout-view-text-view tv) string)))    
 
 

@@ -120,7 +120,7 @@
 (objc:defmethod (#/toggleConsole: :void) ((self lisp-application) sender)
   (let* ((console (console self)))
     (unless (%null-ptr-p console)
-      (if (#/isVisible console)
+      (if (setf (console-window-hidden-by-user console) (#/isVisible console))
         (#/orderOut: console sender)
         (#/orderFront: console sender)))))
 
