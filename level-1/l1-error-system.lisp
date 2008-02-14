@@ -368,6 +368,20 @@
 (define-condition end-of-file (stream-error) ()
   (:report (lambda (c s)
              (format s "Unexpected end of file ~a" (stream-error-context c)))))
+
+(define-condition io-timeout (stream-error)
+  ())
+
+(define-condition input-timeout (io-timeout)
+  ()
+  (:report (lambda (c s)
+             (format s "Input timeout on ~s" (stream-error-stream c)))))
+(define-condition output-timeout (io-timeout)
+  ()
+  (:report (lambda (c s)
+             (format s "Output timeout on ~s" (stream-error-stream c)))))
+
+
 (define-condition impossible-number (reader-error)
   ((token :initarg :token :reader impossible-number-token)
    (condition :initarg :condition :reader impossible-number-condition))
