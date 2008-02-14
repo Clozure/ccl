@@ -290,9 +290,13 @@
          (index start (1+ index)))
         ((or (atom current) (= index end)) sequence)
      (rplaca (the cons current) item))
-   (do ((index start (1+ index)))
-       ((= index end) sequence)
-     (aset sequence index item))))
+   (if (and (typep sequence 'ivector)
+            (eql start 0)
+            (eql end (uvsize sequence)))
+     (%init-misc item sequence)
+     (do ((index start (1+ index)))
+         ((= index end) sequence)
+       (aset sequence index item)))))
 
 ;;; Replace:
 
