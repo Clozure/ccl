@@ -888,7 +888,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
         (signal-semaphore (external-process-completed p))
         (return))
       (when in-fd
-        (when (fd-input-available-p in-fd 0)
+        (when (fd-input-available-p in-fd 1000)
           (%stack-block ((buf 1024))
             (let* ((n (fd-read in-fd buf 1024)))
               (declare (fixnum n))
