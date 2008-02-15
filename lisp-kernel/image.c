@@ -470,6 +470,7 @@ save_application(unsigned fd)
     case FWDNUM:
     case GC_NUM:
     case STATIC_CONSES:
+    case WEAK_GC_METHOD:
       break;
     default:
       lisp_global(i) = 0;
