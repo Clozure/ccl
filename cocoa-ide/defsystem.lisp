@@ -70,7 +70,7 @@
     "cocoa-listener"
     "cocoa-grep"
     "cocoa-backtrace"
-    "cocoa-inspector"
+    "inspector"
     "preferences"
     "processes-window"
     "apropos-window"

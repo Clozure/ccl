@@ -27,6 +27,8 @@ cocoa-ide/ide-contents/Resources/English.lproj/backtrace.nib/keyedobjects.nib -t
 cocoa-ide/ide-contents/Resources/English.lproj/displaydoc.nib/classes.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/displaydoc.nib/info.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/displaydoc.nib/keyedobjects.nib -text svneol=unset#application/octet-stream
+cocoa-ide/ide-contents/Resources/English.lproj/inspector.nib/designable.nib -text
+cocoa-ide/ide-contents/Resources/English.lproj/inspector.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/preferences.nib/classes.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/preferences.nib/info.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/preferences.nib/keyedobjects.nib -text
@@ -35,6 +37,7 @@ cocoa-ide/ide-contents/Resources/English.lproj/processes.nib/info.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/processes.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/General.tiff -text
 cocoa-ide/ide-contents/Resources/openmcl-icon.icns -text svneol=unset#unset
+cocoa-ide/inspector.lisp -text
 cocoa-ide/preferences.lisp -text
 cocoa-ide/processes-window.lisp -text
 cocoa-ide/start.lisp -text
