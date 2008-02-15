@@ -441,6 +441,7 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
         impurify_from_xp(xp, 0L);
         /*        nrs_GC_EVENT_STATUS_BITS.vcell |= gc_integrity_check_bit; */
         gc_from_xp(xp, 0L);
+        release_readonly_area();
       }
       if (selector & GC_TRAP_FUNCTION_PURIFY) {
         purify_from_xp(xp, 0L);
@@ -904,6 +905,13 @@ handle_protection_violation(ExceptionInformation *xp, siginfo_t *info, TCR *tcr,
     if (area != NULL) {
       handler = protection_handlers[area->why];
       return handler(xp, area, addr);
+    } else {
+      if ((addr >= readonly_area->low) &&
+	  (addr < readonly_area->active)) {
+        UnProtectMemory((LogicalAddress)(truncate_to_power_of_2(addr,log2_page_size)),
+                        page_size);
+	return 0;
+      }
     }
   }
   if (old_valence == TCR_STATE_LISP) {

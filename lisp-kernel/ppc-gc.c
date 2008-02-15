@@ -1727,159 +1727,136 @@ unboxed_bytes_in_range(LispObj *start, LispObj *end)
 
 
   /* 
-     This assumes that it's getting called with a simple-{base,general}-string
-     or code vector as an argument and that there's room for the object in the
+     This assumes that it's getting called with an ivector
+     argument and that there's room for the object in the
      destination area.
   */
 
 
-  LispObj
-    purify_displaced_object(LispObj obj, area *dest, natural disp)
-  {
-    BytePtr 
-      free = dest->active,
-      *old = (BytePtr *) ptr_from_lispobj(untag(obj));
-    LispObj 
-      header = header_of(obj), 
-      new;
-    natural 
-      subtag = header_subtag(header), 
-      element_count = header_element_count(header),
-      physbytes;
+LispObj
+purify_displaced_object(LispObj obj, area *dest, natural disp)
+{
+  BytePtr 
+    free = dest->active,
+    *old = (BytePtr *) ptr_from_lispobj(untag(obj));
+  LispObj 
+    header = header_of(obj), 
+    new;
+  natural 
+    start = (natural)old,
+    physbytes;
 
-    switch(subtag) {
-    case subtag_simple_base_string:
-      physbytes = node_size + (element_count << 2);
-      break;
+  physbytes = ((natural)(skip_over_ivector(start,header))) - start;
+  dest->active += physbytes;
 
-    case subtag_code_vector:
-      physbytes = node_size + (element_count << 2);
-      break;
+  new = ptr_to_lispobj(free)+disp;
 
-    default:
-      Bug(NULL, "Can't purify object at 0x%08x", obj);
-      return obj;
-    }
-    physbytes = (physbytes+(dnode_size-1))&~(dnode_size-1);
-    dest->active += physbytes;
-
-    new = ptr_to_lispobj(free)+disp;
-
-    memcpy(free, (BytePtr)old, physbytes);
-    /* Leave a trail of breadcrumbs.  Or maybe just one breadcrumb. */
-    /* Actually, it's best to always leave a trail, for two reasons.
-       a) We may be walking the same heap that we're leaving forwaring
-       pointers in, so we don't want garbage that we leave behind to
-       look like a header.
-       b) We'd like to be able to forward code-vector locatives, and
-       it's easiest to do so if we leave a {forward_marker, dnode_locative}
-       pair at every doubleword in the old vector.
-    */
-    while(physbytes) {
-      *old++ = (BytePtr) forward_marker;
-      *old++ = (BytePtr) free;
-      free += dnode_size;
-      physbytes -= dnode_size;
-    }
-    return new;
+  memcpy(free, (BytePtr)old, physbytes);
+  /* Leave a trail of breadcrumbs.  Or maybe just one breadcrumb. */
+  /* Actually, it's best to always leave a trail, for two reasons.
+     a) We may be walking the same heap that we're leaving forwaring
+     pointers in, so we don't want garbage that we leave behind to
+     look like a header.
+     b) We'd like to be able to forward code-vector locatives, and
+     it's easiest to do so if we leave a {forward_marker, dnode_locative}
+     pair at every doubleword in the old vector.
+  */
+  while(physbytes) {
+    *old++ = (BytePtr) forward_marker;
+    *old++ = (BytePtr) free;
+    free += dnode_size;
+    physbytes -= dnode_size;
   }
+  return new;
+}
 
-  LispObj
-    purify_object(LispObj obj, area *dest)
-  {
-    return purify_displaced_object(obj, dest, fulltag_of(obj));
-  }
+LispObj
+purify_object(LispObj obj, area *dest)
+{
+  return purify_displaced_object(obj, dest, fulltag_of(obj));
+}
 
 
-#define FORWARD_ONLY 0
-#define COPY_CODE (1<<0)
-#define COPY_STRINGS (1<<1)
 
-  void
-    copy_ivector_reference(LispObj *ref, BytePtr low, BytePtr high, area *dest, int what_to_copy)
-  {
-    LispObj obj = *ref, header;
-    natural tag = fulltag_of(obj), header_tag, header_subtag;
+void
+copy_ivector_reference(LispObj *ref, BytePtr low, BytePtr high, area *dest)
+{
+  LispObj obj = *ref, header;
+  natural tag = fulltag_of(obj), header_tag, header_subtag;
 
-    if ((tag == fulltag_misc) &&
-        (((BytePtr)ptr_from_lispobj(obj)) > low) &&
-        (((BytePtr)ptr_from_lispobj(obj)) < high)) {
-      header = deref(obj, 0);
-      if (header == forward_marker) { /* already copied */
-        *ref = (untag(deref(obj,1)) + tag);
-      } else {
-        header_tag = fulltag_of(header);
-        if (immheader_tag_p(header_tag)) {
-          header_subtag = header_subtag(header);
-          if (((header_subtag == subtag_code_vector) && (what_to_copy & COPY_CODE)) ||
-              ((what_to_copy & COPY_STRINGS) && 
-               ((header_subtag == subtag_simple_base_string)))) {
-            *ref = purify_object(obj, dest);
-          }
-        }
+  if ((tag == fulltag_misc) &&
+      (((BytePtr)ptr_from_lispobj(obj)) > low) &&
+      (((BytePtr)ptr_from_lispobj(obj)) < high)) {
+    header = deref(obj, 0);
+    if (header == forward_marker) { /* already copied */
+      *ref = (untag(deref(obj,1)) + tag);
+    } else {
+      header_tag = fulltag_of(header);
+      if (immheader_tag_p(header_tag)) {
+	*ref = purify_object(obj, dest);
       }
     }
   }
+}
 
-  void
-    purify_locref(LispObj *locaddr, BytePtr low, BytePtr high, area *to, int what)
-  {
+void
+purify_locref(LispObj *locaddr, BytePtr low, BytePtr high, area *to)
+{
 #ifdef PPC
-    LispObj
-      loc = *locaddr,
-      *headerP;
-    opcode
-      *p,
-      insn;
-    natural
-      tag = fulltag_of(loc);
+  LispObj
+    loc = *locaddr,
+    *headerP;
+  opcode
+    *p,
+    insn;
+  natural
+    tag = fulltag_of(loc);
 
-    if (((BytePtr)ptr_from_lispobj(loc) > low) &&
+  if (((BytePtr)ptr_from_lispobj(loc) > low) &&
+      ((BytePtr)ptr_from_lispobj(loc) < high)) {
 
-        ((BytePtr)ptr_from_lispobj(loc) < high)) {
-
-      headerP = (LispObj *)ptr_from_lispobj(untag(loc));
-      switch (tag) {
-      case fulltag_even_fixnum:
-      case fulltag_odd_fixnum:
+    headerP = (LispObj *)ptr_from_lispobj(untag(loc));
+    switch (tag) {
+    case fulltag_even_fixnum:
+    case fulltag_odd_fixnum:
 #ifdef PPC64
-      case fulltag_cons:
-      case fulltag_misc:
+    case fulltag_cons:
+    case fulltag_misc:
 #endif
-        if (*headerP == forward_marker) {
-          *locaddr = (headerP[1]+tag);
-        } else {
-          /* Grovel backwards until the header's found; copy
-             the code vector to to space, then treat it as if it 
-             hasn't already been copied. */
-          p = (opcode *)headerP;
-          do {
-            p -= 2;
-            tag += 8;
-            insn = *p;
+      if (*headerP == forward_marker) {
+	*locaddr = (headerP[1]+tag);
+      } else {
+	/* Grovel backwards until the header's found; copy
+	   the code vector to to space, then treat it as if it 
+	   hasn't already been copied. */
+	p = (opcode *)headerP;
+	do {
+	  p -= 2;
+	  tag += 8;
+	  insn = *p;
 #ifdef PPC64
-          } while (insn != PPC64_CODE_VECTOR_PREFIX);
-          headerP = ((LispObj*)p)-1;
-          *locaddr = purify_displaced_object(((LispObj)headerP), to, tag);
+	} while (insn != PPC64_CODE_VECTOR_PREFIX);
+	headerP = ((LispObj*)p)-1;
+	*locaddr = purify_displaced_object(((LispObj)headerP), to, tag);
 #else
-        } while ((insn & code_header_mask) != subtag_code_vector);
-        *locaddr = purify_displaced_object(ptr_to_lispobj(p), to, tag);
+      } while ((insn & code_header_mask) != subtag_code_vector);
+      *locaddr = purify_displaced_object(ptr_to_lispobj(p), to, tag);
 #endif
-      }
-      break;
+    }
+    break;
 
 #ifndef PPC64
-    case fulltag_misc:
-      copy_ivector_reference(locaddr, low, high, to, what);
-      break;
+  case fulltag_misc:
+    copy_ivector_reference(locaddr, low, high, to);
+    break;
 #endif
-    }
   }
+}
 #endif
 }
 
 void
-purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to, int what)
+purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to)
 {
   LispObj header;
   unsigned tag;
@@ -1894,10 +1871,10 @@ purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to, 
         start = (LispObj *)skip_over_ivector((natural)start, header);
       } else {
         if (!nodeheader_tag_p(tag)) {
-          copy_ivector_reference(start, low, high, to, what);
+          copy_ivector_reference(start, low, high, to);
         }
         start++;
-        copy_ivector_reference(start, low, high, to, what);
+        copy_ivector_reference(start, low, high, to);
         start++;
       }
     }
@@ -1906,7 +1883,7 @@ purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to, 
         
 /* Purify references from tstack areas */
 void
-purify_tstack_area(area *a, BytePtr low, BytePtr high, area *to, int what)
+purify_tstack_area(area *a, BytePtr low, BytePtr high, area *to)
 {
   LispObj
     *current,
@@ -1921,29 +1898,29 @@ purify_tstack_area(area *a, BytePtr low, BytePtr high, area *to, int what)
     next = (LispObj *) ptr_from_lispobj(*current);
     end = ((next >= start) && (next < limit)) ? next : limit;
     if (current[1] == 0) {
-      purify_range(current+2, end, low, high, to, what);
+      purify_range(current+2, end, low, high, to);
     }
   }
 }
 
 /* Purify a vstack area */
 void
-purify_vstack_area(area *a, BytePtr low, BytePtr high, area *to, int what)
+purify_vstack_area(area *a, BytePtr low, BytePtr high, area *to)
 {
   LispObj
     *p = (LispObj *) a->active,
     *q = (LispObj *) a->high;
 
   if (((natural)p) & sizeof(natural)) {
-    copy_ivector_reference(p, low, high, to, what);
+    copy_ivector_reference(p, low, high, to);
     p++;
   }
-  purify_range(p, q, low, high, to, what);
+  purify_range(p, q, low, high, to);
 }
 
-#ifdef PPC
+
 void
-purify_cstack_area(area *a, BytePtr low, BytePtr high, area *to, int what)
+purify_cstack_area(area *a, BytePtr low, BytePtr high, area *to)
 {
   BytePtr
     current,
@@ -1956,21 +1933,19 @@ purify_cstack_area(area *a, BytePtr low, BytePtr high, area *to, int what)
     if (((next - current) == sizeof(lisp_frame)) && 
 	(((((lisp_frame *)current)->savefn) == 0) ||
 	 (fulltag_of(((lisp_frame *)current)->savefn) == fulltag_misc))) {
-      purify_locref(&((lisp_frame *) current)->savelr, low, high, to, what);
+      purify_locref(&((lisp_frame *) current)->savelr, low, high, to);
     } else {
       /* Clear low bits of "next", just in case */
       next = (BytePtr) (((natural)next) & ~(sizeof(natural)-1));
     }
   }
 }
-#endif
 
 void
-purify_xp(ExceptionInformation *xp, BytePtr low, BytePtr high, area *to, int what)
+purify_xp(ExceptionInformation *xp, BytePtr low, BytePtr high, area *to)
 {
   unsigned long *regs = (unsigned long *) xpGPRvector(xp);
 
-#ifdef PPC
   int r;
 
   /* registers >= fn should be treated as roots.
@@ -1978,46 +1953,56 @@ purify_xp(ExceptionInformation *xp, BytePtr low, BytePtr high, area *to, int wha
    */
 
   for (r = fn; r < 32; r++) {
-    copy_ivector_reference((LispObj*) (&(regs[r])), low, high, to, what);
+    copy_ivector_reference((LispObj*) (&(regs[r])), low, high, to);
   };
 
-  purify_locref((LispObj*) (&(regs[loc_pc])), low, high, to, what);
+  purify_locref((LispObj*) (&(regs[loc_pc])), low, high, to);
 
-  purify_locref((LispObj*) (&(xpPC(xp))), low, high, to, what);
-  purify_locref((LispObj*) (&(xpLR(xp))), low, high, to, what);
-  purify_locref((LispObj*) (&(xpCTR(xp))), low, high, to, what);
-#endif
-
+  purify_locref((LispObj*) (&(xpPC(xp))), low, high, to);
+  purify_locref((LispObj*) (&(xpLR(xp))), low, high, to);
+  purify_locref((LispObj*) (&(xpCTR(xp))), low, high, to);
 }
 
 void
-purify_tcr_tlb(TCR *tcr, BytePtr low, BytePtr high, area *to, int what)
+purify_tcr_tlb(TCR *tcr, BytePtr low, BytePtr high, area *to)
 {
   natural n = tcr->tlb_limit;
   LispObj *start = tcr->tlb_pointer, *end = (LispObj *) ((BytePtr)start+n);
 
-  purify_range(start, end, low, high, to, what);
+  purify_range(start, end, low, high, to);
 }
 
 void
-purify_tcr_xframes(TCR *tcr, BytePtr low, BytePtr high, area *to, int what)
+purify_tcr_xframes(TCR *tcr, BytePtr low, BytePtr high, area *to)
 {
   xframe_list *xframes;
   ExceptionInformation *xp;
   
   xp = tcr->gc_context;
   if (xp) {
-    purify_xp(xp, low, high, to, what);
+    purify_xp(xp, low, high, to);
   }
 
   for (xframes = tcr->xframe; xframes; xframes = xframes->prev) {
-    purify_xp(xframes->curr, low, high, to, what);
+    purify_xp(xframes->curr, low, high, to);
+  }
+}
+
+void
+purify_gcable_ptrs(BytePtr low, BytePtr high, area *to)
+{
+  LispObj *prev = &(lisp_global(GCABLE_POINTERS)), next;
+
+  while ((*prev) != (LispObj)NULL) {
+    copy_ivector_reference(prev, low, high, to);
+    next = *prev;
+    prev = &(((xmacptr *)ptr_from_lispobj(untag(next)))->link);
   }
 }
 
 
 void
-purify_areas(BytePtr low, BytePtr high, area *target, int what)
+purify_areas(BytePtr low, BytePtr high, area *target)
 {
   area *next_area;
   area_code code;
@@ -2025,22 +2010,20 @@ purify_areas(BytePtr low, BytePtr high, area *target, int what)
   for (next_area = active_dynamic_area; (code = next_area->code) != AREA_VOID; next_area = next_area->succ) {
     switch (code) {
     case AREA_TSTACK:
-      purify_tstack_area(next_area, low, high, target, what);
+      purify_tstack_area(next_area, low, high, target);
       break;
       
     case AREA_VSTACK:
-      purify_vstack_area(next_area, low, high, target, what);
+      purify_vstack_area(next_area, low, high, target);
       break;
       
     case AREA_CSTACK:
-#ifdef PPC
-      purify_cstack_area(next_area, low, high, target, what);
-#endif
+      purify_cstack_area(next_area, low, high, target);
       break;
       
     case AREA_STATIC:
     case AREA_DYNAMIC:
-      purify_range((LispObj *) next_area->low, (LispObj *) next_area->active, low, high, target, what);
+      purify_range((LispObj *) next_area->low, (LispObj *) next_area->active, low, high, target);
       break;
       
     default:
@@ -2078,62 +2061,17 @@ purify(TCR *tcr, signed_natural param)
     new_pure_start = new_pure_area->active;
     lisp_global(IN_GC) = (1<<fixnumshift);
 
-    /* 
-      First, loop thru *all-packages* and purify the pnames of all
-      interned symbols.  Then walk every place that could reference
-      a heap-allocated object (all_areas, the xframe_list) and
-      purify code_vectors (and update the odd case of a shared
-      reference to a pname.)
-       
-      Make the new_pure_area executable, just in case.
-
-      Caller will typically GC again (and that should recover quite a bit of
-      the dynamic heap.)
-      */
-
-    {
-      lispsymbol *rawsym = (lispsymbol *)(&(nrs_ALL_PACKAGES));
-      LispObj pkg_list = rawsym->vcell, htab, obj;
-      package *p;
-      cons *c;
-      natural elements, i;
-
-      while (fulltag_of(pkg_list) == fulltag_cons) {
-        c = (cons *) ptr_from_lispobj(untag(pkg_list));
-        p = (package *) ptr_from_lispobj(untag(c->car));
-        pkg_list = c->cdr;
-        c = (cons *) ptr_from_lispobj(untag(p->itab));
-        htab = c->car;
-        elements = header_element_count(header_of(htab));
-        for (i = 1; i<= elements; i++) {
-          obj = deref(htab,i);
-          if (fulltag_of(obj) == fulltag_misc) {
-            rawsym = (lispsymbol *) ptr_from_lispobj(untag(obj));
-            copy_ivector_reference(&(rawsym->pname), a->low, a->active, new_pure_area, COPY_STRINGS);
-          }
-        }
-        c = (cons *) ptr_from_lispobj(untag(p->etab));
-        htab = c->car;
-        elements = header_element_count(header_of(htab));
-        for (i = 1; i<= elements; i++) {
-          obj = deref(htab,i);
-          if (fulltag_of(obj) == fulltag_misc) {
-            rawsym = (lispsymbol *) ptr_from_lispobj(untag(obj));
-            copy_ivector_reference(&(rawsym->pname), a->low, a->active, new_pure_area, COPY_STRINGS);
-          }
-        }
-      }
-    }
     
-    purify_areas(a->low, a->active, new_pure_area, COPY_CODE);
+    purify_areas(a->low, a->active, new_pure_area);
     
     other_tcr = tcr;
     do {
-      purify_tcr_xframes(other_tcr, a->low, a->active, new_pure_area, COPY_CODE);
-      purify_tcr_tlb(other_tcr, a->low, a->active, new_pure_area, COPY_CODE);
+      purify_tcr_xframes(other_tcr, a->low, a->active, new_pure_area);
+      purify_tcr_tlb(other_tcr, a->low, a->active, new_pure_area);
       other_tcr = other_tcr->next;
     } while (other_tcr != tcr);
 
+    purify_gcable_ptrs(a->low, a->active, new_pure_area);
 
     {
       natural puresize = (unsigned) (new_pure_area->active-new_pure_start);
@@ -2351,10 +2289,22 @@ impurify_areas(LispObj low, LispObj high, int delta)
   }
 }
 
+void
+impurify_gcable_ptrs(LispObj low, LispObj high, signed_natural delta)
+{
+  LispObj *prev = &(lisp_global(GCABLE_POINTERS)), next;
+
+  while ((*prev) != (LispObj)NULL) {
+    impurify_noderef(prev, low, high, delta);
+    next = *prev;
+    prev = &(((xmacptr *)ptr_from_lispobj(untag(next)))->link);
+  }
+}
+
 int
 impurify(TCR *tcr, signed_natural param)
 {
-  area *r = find_readonly_area();
+  area *r = readonly_area;
 
   if (r) {
     area *a = active_dynamic_area;
@@ -2386,6 +2336,8 @@ impurify(TCR *tcr, signed_natural param)
         impurify_tcr_tlb(other_tcr, ptr_to_lispobj(ro_base), ptr_to_lispobj(ro_limit), delta);
         other_tcr = other_tcr->next;
       } while (other_tcr != tcr);
+
+      impurify_gcable_ptrs(ptr_to_lispobj(ro_base), ptr_to_lispobj(ro_limit), delta);
       lisp_global(IN_GC) = 0;
     }
     return 0;
