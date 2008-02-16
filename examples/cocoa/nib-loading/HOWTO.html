@@ -286,6 +286,44 @@
         <h2>What About Unloading Nibfiles?</h2> 
       </div>
       
+      <p>Cocoa provides no general nibfile-unloading API. Instead, if
+      you want to unload a nib, the accepted approach is to close all
+      the windows associated with a nibfile and release all the
+      toplevel objects. This is one reason that you might want to use
+      the <code>"NSNibTopLevelObjects"</code> key with the dictionary
+      object that you pass
+      to <code>loadNibFile:externalNameTable:withZone:</code>7mdash;to
+      obtain a collection of toplevel objects that you release when
+      the nibfile is no longer needed.</p>
+
+      <p>In document-based Cocoa applications, the main nibfile is
+      usually owned by the application object, and is never unloaded
+      while the appliation runs. Auxliliary nibfiles are normally
+      owned by controller objects, usually instances of
+      <code>NSWindowController</code> subclasses. When you
+      use <code>NSWindowController</code> objects to load nibfiles,
+      they take responsbility for loading and unloading nibfile
+      objects.</p>
+
+      <p>When you're experimenting interactively with nibfile loading,
+      you may not start out by
+      creating <code>NSWindowController</code> objects to load
+      nibfiles, and so you may need to do more of the object
+      management yourself. On the one hand, loading nibfiles by hand
+      is not likely to be the source of major application problems. On
+      the other hand, if you experiement with nib-loading for a long
+      time in an interactive session, it's possible that you'll end up
+      with numerous discarded objects cluttering memory, along with
+      various references to live and possibly released objects. Keep
+      this in mind when using the Listener to explore Cocoa. You can
+      always restore your Lisp system to a clean state by restarting
+      it, but of course you then lose whatever state you have built up
+      in your explorations. It's often a good idea to work from a text
+      file rather than directly in the Listener, so that you have a
+      record of the experimenting you've done. That way, if you need
+      to start fresh (or if you accidentally cause the application to
+      crash), you don't lose all the information you gained.</p>
+
     </div>
 
   </body>
