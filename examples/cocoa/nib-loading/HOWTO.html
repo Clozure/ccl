@@ -281,6 +281,60 @@
         to do. Let's make a single function we can call to load a nib as
         needed.</p>
 
+      <p>The nib-loading function can simply parameterize the file to
+      be loaded, and then perform the sequence of steps covered in the
+      previous section. If we just literally do that, the result will
+      look something like this:</p>
+
+      <pre>
+(defun load-nibfile (nib-path)
+  (let* ((app-class-name (%make-nsstring "NSApplication"))
+         (app-class (#_NSClassFromString class-name))
+         (app (#/sharedApplication appclass))
+         (app-zone (#/zone app))
+         (nib-name (%make-nsstring (namestring nib-path)))
+         (dict (#/dictionaryWithObject:forKey: 
+                (@class ns-mutable-dictionary) app #@"NSNibOwner")))
+    (#/loadNibFile:externalNameTable:withZone: (@class ns-bundle)
+                                               nib-name
+                                               dict
+                                               app-zone)))
+      </pre>
+
+      <p>The trouble with this function is that it leaks two strings
+      and a dictionary every time we call it. We need to release the
+      variables <code>app-class-name</code>, <code>nib-name</code>,
+      and <code>dict</code> before returning. So how about this
+      version instead?</p>
+
+      <pre>
+(defun load-nibfile (nib-path)
+  (let* ((app-class-name (%make-nsstring "NSApplication"))
+         (app-class (#_NSClassFromString class-name))
+         (app (#/sharedApplication appclass))
+         (app-zone (#/zone app))
+         (nib-name (%make-nsstring (namestring nib-path)))
+         (dict (#/dictionaryWithObject:forKey: 
+                (@class ns-mutable-dictionary) app #@"NSNibOwner"))
+         (result (#/loadNibFile:externalNameTable:withZone: (@class ns-bundle)
+                                                            nib-name
+                                                            dict
+                                                            app-zone)))
+    (#/release app-class-name)
+    (#/release nib-name)
+    (#/release dict)
+    result))
+      </pre>
+
+      <p>This version solves the leaking problem by binding the result
+      of the load call to <code>result</code>, then releasing the
+      variables in question before returning the result of the
+      load.</p>
+
+      <p>There's just one more problem: what if we want to use the
+      dictionary to collect the nibfile's toplevel objects, so that we
+      can get access to them from our code? We'll need another version
+      of our function.</p>
 
       <div class="section-head">
         <h2>What About Unloading Nibfiles?</h2> 
@@ -292,17 +346,17 @@
       toplevel objects. This is one reason that you might want to use
       the <code>"NSNibTopLevelObjects"</code> key with the dictionary
       object that you pass
-      to <code>loadNibFile:externalNameTable:withZone:</code>7mdash;to
+      to <code>loadNibFile:externalNameTable:withZone:</code>&mdash;to
       obtain a collection of toplevel objects that you release when
       the nibfile is no longer needed.</p>
 
       <p>In document-based Cocoa applications, the main nibfile is
       usually owned by the application object, and is never unloaded
-      while the appliation runs. Auxliliary nibfiles are normally
+      while the application runs. Auxliliary nibfiles are normally
       owned by controller objects, usually instances of
       <code>NSWindowController</code> subclasses. When you
       use <code>NSWindowController</code> objects to load nibfiles,
-      they take responsbility for loading and unloading nibfile
+      they take responsibility for loading and unloading nibfile
       objects.</p>
 
       <p>When you're experimenting interactively with nibfile loading,
@@ -311,7 +365,7 @@
       nibfiles, and so you may need to do more of the object
       management yourself. On the one hand, loading nibfiles by hand
       is not likely to be the source of major application problems. On
-      the other hand, if you experiement with nib-loading for a long
+      the other hand, if you experiment with nib-loading for a long
       time in an interactive session, it's possible that you'll end up
       with numerous discarded objects cluttering memory, along with
       various references to live and possibly released objects. Keep

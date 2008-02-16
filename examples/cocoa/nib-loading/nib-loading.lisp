@@ -12,25 +12,21 @@
 (in-package :ccl)
 
 (defun load-nibfile (nib-path)
-  (let* ((appclass (#_NSClassFromString (%make-nsstring "NSApplication")))
+  (let* ((app-class-name (%make-nsstring "NSApplication"))
+         (app-class (#_NSClassFromString class-name))
          (app (#/sharedApplication appclass))
          (app-zone (#/zone app))
          (nib-name (%make-nsstring (namestring nib-path)))
-         (toplevel-objects-array (#/arrayWithCapacity: (@class ns-mutable-array) 8))
-         (context (#/dictionaryWithObjectsAndKeys: (@class ns-mutable-dictionary)
-                                                   app #@"NSNibOwner" 
-                                                   toplevel-objects-array #@"NSNibTopLevelObjects"))
-         (load-succeeded-p (#/loadNibFile:externalNameTable:withZone: (@class ns-bundle)
-                                                                      nib-name context app-zone)))
-    (values load-succeeded-p context)))
-
-(setf  *my-app*
-       (let* ((class-name (%make-nsstring "NSApplication"))
-              (appclass (#_NSClassFromString class-name)))
-         (#/release class-name)
-         (#/sharedApplication appclass)))
-
-
+         (dict (#/dictionaryWithObject:forKey: 
+                (@class ns-mutable-dictionary) app #@"NSNibOwner"))
+         (result (#/loadNibFile:externalNameTable:withZone: (@class ns-bundle)
+                                                            nib-name
+                                                            dict
+                                                            app-zone)))
+    (#/release app-class-name)
+    (#/release nib-name)
+    (#/release dict)
+    result))
 #|
 (ccl::load-nibfile "/usr/local/openmcl/trunk/source/examples/cocoa/nib-loading/hello.nib")
 |#
