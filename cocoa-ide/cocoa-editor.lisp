@@ -2944,6 +2944,10 @@
   (cond ((or (null arg)
              (typep arg 'string)
              (typep arg 'pathname))
+         (when arg
+           (unless (probe-file arg)
+             (let ((lpath (merge-pathnames arg *.lisp-pathname*)))
+               (when (probe-file lpath) (setq arg lpath)))))
          (execute-in-gui #'(lambda () (find-or-make-hemlock-view arg))))
         ((ccl::valid-function-name-p arg)
          (hemlock::edit-definition arg)
