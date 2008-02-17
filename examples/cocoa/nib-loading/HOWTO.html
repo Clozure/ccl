@@ -210,12 +210,12 @@
       <p>The toplevel objects are objects, such as windows, that are
         created when the nibfile is loaded. To collect these, you
         can pass an <code>NSMutableArray</code> object under the
-        key <code>"NSNibTopLevelObjects"</code>.</p>
+        key <code>NSNibTopLevelObjects</code>.</p>
 
       <p>For this first example, we'll pass an owner object (the
         application object), but we don't need to collect toplevel
         objects, so we'll omit
-        the <code>"NSNibTopLevelObjects"</code> key.</p>
+        the <code>NSNibTopLevelObjects</code> key.</p>
 
       <pre>
         ? (setf *my-dict* 
@@ -281,8 +281,8 @@
         to do. Let's make a single function we can call to load a nib as
         needed.</p>
 
-      <p>The nib-loading function can simply parameterize the file to
-      be loaded, and then perform the sequence of steps covered in the
+      <p>The nib-loading function can take the file to be loaded as a
+      parameter, and then perform the sequence of steps covered in the
       previous section. If we just literally do that, the result will
       look something like this:</p>
 
@@ -335,6 +335,101 @@
       dictionary to collect the nibfile's toplevel objects, so that we
       can get access to them from our code? We'll need another version
       of our function.</p>
+
+      <p>In order to collect toplevel objects, we'll want to pass an
+      NSMutableArray object in the dictionary, stored under the key
+      <code>NSNibTopLevelObjects</code>. So we first need to create such an
+      array object in the <code>let</code> form:</p>
+
+      <pre>
+(let* (...
+       (objects-array (#/arrayWithCapacity: (@class ns-mutable-array) 16))
+       ...)
+  ...)
+      </pre>
+
+      <p>Now that we have the array in which to store the nibfile's
+      toplevel objects, we need to change the code that creates the
+      dictionary, so that it contains not only the owner object, but
+      also the array we just created:</p>
+
+      <pre>
+  (let* (...
+         (dict (#/dictionaryWithObjectsAndKeys: (@class ns-mutable-dictionary)
+                    app #@"NSNibOwner"
+                    objects-array #&amp;NSToplevelObjects))
+         ...)
+    ...)
+  
+      </pre>
+
+      <p>We'll want to release the <code>NSMutableArray</code>
+      object before returning, but first we need to collect the
+      objects in it. We'll do that by making a local variable to
+      store them, then iterating over the array object to get them all.</p>
+
+      <pre>
+  (let* (...
+         (toplevel-objects (list))
+         ...)
+    (dotimes (i (#/count objects-array))
+      (setf toplevel-objects 
+            (cons (#/objectAtIndex: objects-array i)
+                  toplevel-objects)))
+    ...)
+      </pre>
+
+      <p>After collecting the objects, we can release the array, then
+      return the list of objects. It's still possible we might want
+      to know whether the load succeeded, so we
+      use <code>values</code> to return both the toplevel objects and
+      the success or failure of the load.</p>
+
+      <p>The final version of the nib-loading code looks like
+      this:</p>
+
+      <pre>
+(defun load-nibfile (nib-path)
+  (let* ((app-class-name (%make-nsstring "NSApplication"))
+         (app-class (#_NSClassFromString app-class-name))
+         (app (#/sharedApplication app-class))
+         (app-zone (#/zone app))
+         (nib-name (%make-nsstring (namestring nib-path)))
+         (objects-array (#/arrayWithCapacity: (@class ns-mutable-array) 16))
+         (dict (#/dictionaryWithObjectsAndKeys: (@class ns-mutable-dictionary)
+                    app #@"NSNibOwner"
+                    objects-array #&amp;NSNibToplevelObjects))
+         (toplevel-objects (list))
+         (result (#/loadNibFile:externalNameTable:withZone: (@class ns-bundle)
+                                                            nib-name
+                                                            dict
+                                                            app-zone)))
+    (dotimes (i (#/count objects-array))
+      (setf toplevel-objects 
+            (cons (#/objectAtIndex: objects-array i)
+                  toplevel-objects)))
+    (#/release app-class-name)
+    (#/release nib-name)
+    (#/release dict)
+    (#/release objects-array)
+    (values toplevel-objects result)))
+      </pre>
+
+      <p>Now we can call this function with some suitable nibfile,
+      such as simple "hello.nib" that comes with this HOWTO:</p>
+
+      <pre>
+? (ccl::load-nibfile "hello.nib")
+(#&lt;LISP-APPLICATION &lt;LispApplication: 0x1b8da0&gt; (#x1B8DA0)&gt;
+ #&lt;NS-WINDOW &lt;NSWindow: 0x171344d0&gt; (#x171344D0)&gt;)
+T
+
+      </pre>
+
+      <p>The "Hello!" window appears on the screen, and two values are
+      returned. The first value is the list of toplevel objects that
+      were loaded. The second value, <code>T</code> indicates that the
+      nibfile was loaded successfully.</p>
 
       <div class="section-head">
         <h2>What About Unloading Nibfiles?</h2> 

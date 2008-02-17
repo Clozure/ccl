@@ -13,20 +13,30 @@
 
 (defun load-nibfile (nib-path)
   (let* ((app-class-name (%make-nsstring "NSApplication"))
-         (app-class (#_NSClassFromString class-name))
-         (app (#/sharedApplication appclass))
+         (app-class (#_NSClassFromString app-class-name))
+         (app (#/sharedApplication app-class))
          (app-zone (#/zone app))
          (nib-name (%make-nsstring (namestring nib-path)))
-         (dict (#/dictionaryWithObject:forKey: 
-                (@class ns-mutable-dictionary) app #@"NSNibOwner"))
+         (objects-array (#/arrayWithCapacity: (@class ns-mutable-array) 16))
+         (dict (#/dictionaryWithObjectsAndKeys: (@class ns-mutable-dictionary)
+                    app #@"NSNibOwner"
+                    objects-array #&NSNibTopLevelObjects))
+         (toplevel-objects (list))
          (result (#/loadNibFile:externalNameTable:withZone: (@class ns-bundle)
                                                             nib-name
                                                             dict
                                                             app-zone)))
+    (dotimes (i (#/count objects-array))
+      (setf toplevel-objects 
+            (cons (#/objectAtIndex: objects-array i)
+                  toplevel-objects)))
     (#/release app-class-name)
     (#/release nib-name)
     (#/release dict)
-    result))
+    (#/release objects-array)
+    (values toplevel-objects result)))
+
 #|
 (ccl::load-nibfile "/usr/local/openmcl/trunk/source/examples/cocoa/nib-loading/hello.nib")
 |#
+
