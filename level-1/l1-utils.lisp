@@ -1032,16 +1032,8 @@ vector
 
 
 (defun %set-cstring (ptr string)
-  (let* ((len (length string)))
-    (cond ((typep string 'simple-string)
-           (%copy-ivector-to-ptr string 0 ptr 0 len))
-          ((typep string 'string)
-                  (multiple-value-bind (data offset)
-                      (array-data-and-offset string)
-                    (%copy-ivector-to-ptr data offset ptr 0 len)))
-          (t (report-bad-arg string 'string)))
-    (setf (%get-byte ptr len) 0)
-    string))
+  (%cstr-pointer string ptr)
+  string)
 
 (defsetf %get-cstring %set-cstring)
 
