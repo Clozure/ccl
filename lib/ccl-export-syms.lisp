@@ -565,6 +565,9 @@
      with-input-timeout
      with-output-timeout
 
+     input-timeout
+     output-timeout
+
      make-heap-ivector
      dispose-heap-ivector
      ;;
