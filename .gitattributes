@@ -118,6 +118,7 @@ lib/late-clos.lisp -text
 library/elf.lisp -text
 lisp-kernel/gc-common.c -text
 lisp-kernel/win64/Makefile -text
+lisp-kernel/win64/yasm-redefinition.patch -text
 objc-bridge/objc-package.lisp -text
 objc-bridge/obsolete/README -text
 scripts/ccl -text

@@ -1,0 +1,22 @@
+Index: libyasm/symrec.c
+===================================================================
+--- libyasm/symrec.c	(revision 2037)
++++ libyasm/symrec.c	(working copy)
+@@ -281,10 +281,15 @@
+ yasm_symtab_define_equ(yasm_symtab *symtab, const char *name, yasm_expr *e,
+                        unsigned long line)
+ {
+-    yasm_symrec *rec = symtab_define(symtab, name, SYM_EQU, 1, line);
++    yasm_symrec *rec = yasm_symtab_get(symtab, name);
++	if (rec) {
++		/* redefinition. Emit warning here. */
++	} else {
++		rec = symtab_define(symtab, name, SYM_EQU, 1, line);
++	}
+     if (yasm_error_occurred())
+         return rec;
+-    rec->value.expn = e;
++    rec->value.expn = yasm_expr_simplify(e, 1);
+     rec->status |= YASM_SYM_VALUED;
+     return rec;
+ }
