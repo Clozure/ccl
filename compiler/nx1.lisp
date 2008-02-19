@@ -1771,37 +1771,41 @@
       (nx1-form newval))))
 
 (defnx1 nx1-let let (pairs &body forms &environment old-env)
-  (let* ((vars nil)
-         (vals nil)
-         (varspecs nil))
+  (collect ((vars)
+            (vals)
+            (varbindings))
     (with-nx-declarations (pending)
       (multiple-value-bind (body decls)
                            (parse-body forms *nx-lexical-environment* nil)
         (nx-process-declarations pending decls)
-        ; Make sure that the initforms are processed in the outer
-        ; environment (in case any declaration handlers side-effected
-        ; the environment.)
+        ;; Make sure that the initforms are processed in the outer
+        ;; environment (in case any declaration handlers side-effected
+        ;; the environment.)
+        
         (let* ((*nx-lexical-environment* old-env))
           (dolist (pair pairs)
-            (push (nx-need-var (nx-pair-name pair)) vars)
-            (push (nx1-typed-var-initform pending (car vars) (nx-pair-initform pair)) vals)))
-        (let* ((*nx-bound-vars* (append vars *nx-bound-vars*))
-               (varbindings (nx1-note-var-bindings
-                             (dolist (sym vars varspecs)
-                               (push (nx-new-var pending sym) varspecs))
-                             (setq vals (nreverse vals))))
-               (form 
-                (make-acode 
-                 (%nx1-operator let)
-                 varspecs
-                 vals
-                 (progn
-                   (nx-effect-other-decls pending *nx-lexical-environment*)
-                   (nx1-env-body body old-env))
+            (let* ((sym (nx-need-var (nx-pair-name pair)))
+                   (var (nx-cons-var sym))
+                   (val (nx1-typed-var-initform pending sym (nx-pair-initform pair)))
+                   (binding (nx1-note-var-binding var val)))
+              (vars var)
+              (vals val)
+              (when binding (varbindings binding)))))
+        (let* ((*nx-bound-vars* *nx-bound-vars*)
+               (varbindings (varbindings)))
+          (dolist (v (vars)) (nx-init-var pending v))
+          (let* ((form 
+                  (make-acode 
+                   (%nx1-operator let)
+                   (vars)
+                   (vals)
+                   (progn
+                     (nx-effect-other-decls pending *nx-lexical-environment*)
+                     (nx1-env-body body old-env))
                  *nx-new-p2decls*)))
           (nx1-check-var-bindings varbindings)
-          (nx1-punt-bindings varspecs vals)
-          form)))))
+          (nx1-punt-bindings (vars) (vals))
+          form))))))
 
 
 

@@ -927,15 +927,6 @@ function to the indicated name is true.")
   (dolist (v vars)
     (nx1-punt-var v (pop initforms))))
 
-; at the beginning of a binding construct, note which lexical variables are bound to other
-; variables and the number of setqs done so far on the initform.
-; After executing the body, if neither variable has been closed over,
-; the new variable hasn't been setq'ed, and the old guy wasn't setq'ed
-; in the body, the binding can be punted.
-(defun nx1-note-var-bindings (vars initforms &aux alist)
-  (dolist (var vars alist)
-    (let* ((binding (nx1-note-var-binding var (pop initforms))))
-      (if binding (push binding alist)))))
 
 (defun nx1-note-var-binding (var initform)
   (let* ((init (nx-untyped-form initform))
@@ -960,7 +951,22 @@ function to the indicated name is true.")
                     (afunc-bits afunc) (logior (ash 1 $fbitdownward) (ash 1 $fbitbounddownward)
                                                (the fixnum (afunc-bits afunc))))
               nil)))))))
-                      
+
+
+;;; Process entries involving variables bound to other variables at
+;;; the end of a binding construct.  Each entry is of the form
+;;; (source-var setq-count . target-var), where setq-count is the
+;;; assignment count of TARGET-VAR at the time that the binding's
+;;; initform was evaluated (not, in the case of LET, at the time that
+;;; the bindinw was established.).  If the target isn't closed-over
+;;; and SETQed (somewhere), and wasn't setqed in the body (e.g.,
+;;; still has the same assignment-count as it had when the initform
+;;; was executed), then we can "punt" the source (and replace references
+;;; to it with references to the target.)
+;;; It obviously makes no sense to do this if the source is SPECIAL;
+;;; in some cases (LET), we create the source variable and add it to
+;;; this alist before it's known whether or not the source variable
+;;; is SPECIAL. so we have to ignore that case here.
 (defun nx1-check-var-bindings (alist)
   (dolist (pair alist)
     (let* ((var (car pair))
@@ -968,8 +974,11 @@ function to the indicated name is true.")
            (vbits (nx-var-bits var))
            (target-bits (nx-var-bits target)))
       (unless (or
-               ; var can't be setq'ed or closed; target can't be setq'ed AND closed.
-               (neq (%ilogand vbits (%ilogior (%ilsl $vbitsetq 1) (%ilsl $vbitclosed 1))) 0)
+               ;; var can't be special, setq'ed or closed; target can't be
+               ;; setq'ed AND closed.
+               (neq (%ilogand vbits (%ilogior (%ilsl $vbitsetq 1)
+                                              (%ilsl $vbitclosed 1)
+                                              (%ilsl $vbitspecial 1))) 0)
                (eq (%ilogior (%ilsl $vbitsetq 1) (%ilsl $vbitclosed 1)) 
                    (%ilogand
                      (%ilogior (%ilsl $vbitsetq 1) (%ilsl $vbitclosed 1))
@@ -1232,7 +1241,7 @@ function to the indicated name is true.")
                                      (%ilsl $vbitsetq 1) 
                                      (ash -1 $vbitspecial)
                                      (%ilsl $vbitclosed 1)) varbits))
-          (error "Bug-o-rama - \"punted\" var had bogus bits. ~ 
+          (error "Bug-o-rama - \"punted\" var had bogus bits.
 Or something. Right? ~s ~s" var varbits))
         (let* ((varcount     (%ilogand $vrefmask varbits)) 
                (boundtocount (%ilogand $vrefmask boundtobits)))
