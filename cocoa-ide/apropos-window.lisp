@@ -53,7 +53,7 @@
   (with-slots (table-view text-view) self
     (#/setString: text-view #@"")
     (#/setDelegate: table-view self)
-    (#/setDoubleAction: table-view (@selector #/inspectSelectedSymbol:))))
+    (#/setDoubleAction: table-view (@selector #/definitionForSelectedSymbol:))))
 
 (objc:defmethod #/init ((self apropos-window-controller))
   (prog1
@@ -143,13 +143,24 @@
       (update-apropos-array self))))
 
 (objc:defmethod (#/inspectSelectedSymbol: :void) ((self apropos-window-controller) sender)
-  (let* ((row (#/clickedRow sender)))
+  (declare (ignorable sender))
+  (let* ((row (#/clickedRow (table-view self))))
     (unless (minusp row)
       (with-slots (array-controller symbol-list) self
 	(let* ((number (#/valueForKeyPath: array-controller #@"selection.index"))
 	       (i (#/intValue number))
 	       (sym (elt symbol-list i)))
-	  (cinspect sym))))))
+	  (inspect sym))))))
+
+(objc:defmethod (#/definitionForSelectedSymbol: :void) ((self apropos-window-controller) sender)
+  (declare (ignorable sender))
+  (let* ((row (#/clickedRow (table-view self))))
+    (unless (minusp row)
+      (with-slots (array-controller symbol-list) self
+	(let* ((number (#/valueForKeyPath: array-controller #@"selection.index"))
+	       (i (#/intValue number))
+	       (sym (elt symbol-list i)))
+	  (hemlock::edit-definition sym))))))
 
 ;;; Data source methods for package combo box
 

@@ -9,6 +9,8 @@
 			<dict>
 				<key>apropos</key>
 				<string>id</string>
+				<key>definitionForSelectedSymbol</key>
+				<string>id</string>
 				<key>inspectSelectedSymbol</key>
 				<string>id</string>
 				<key>setPackage</key>
