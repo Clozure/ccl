@@ -76,7 +76,7 @@ pthread_mutex_t *mach_exception_lock;
 #endif
 
 #ifdef DARWIN
-#define SIGNAL_FOR_PROCESS_INTERRUPT SIGEMT
+#define SIGNAL_FOR_PROCESS_INTERRUPT SIGUSR1
 #endif
 #ifdef LINUX
 #define SIGNAL_FOR_PROCESS_INTERRUPT SIGPWR

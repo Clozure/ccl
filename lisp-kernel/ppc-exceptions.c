@@ -807,6 +807,7 @@ protection_handler
    do_hard_stack_overflow,    
    do_hard_stack_overflow,
    do_hard_stack_overflow,
+   do_heap_soft_write
    };
 
 
@@ -1094,6 +1095,13 @@ do_spurious_wp_fault(ExceptionInformation *xp, protected_area_ptr area, BytePtr 
 #pragma unused(xp,area,addr)
 #endif
   return -1;
+}
+
+OSStatus
+do_heap_soft_write(ExceptionInformation *xp, protected_area_ptr area, BytePtr addr)
+{
+  UnProtectMemory((LogicalAddress)(truncate_to_power_of_2(addr, log2_page_size)),page_size);
+  return 0;
 }
 
 /*
