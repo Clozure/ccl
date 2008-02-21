@@ -278,7 +278,7 @@ Welcome to OpenMCL Version whatever (DarwinPPC32)!
 ?
 </programlisting>
         <para>The openmcl shell script will pass all of its arguments
-        to the OpenMCL kernel.  See <xref linkend="invocation"/> for
+        to the OpenMCL kernel.  See <xref linkend="Invocation"/> for
         more information about "args".  When invoked this way, the
         lisp should be able to initialize the
         <literal>"ccl:"</literal> logical host so that its
@@ -291,7 +291,16 @@ Welcome to OpenMCL Version whatever (DarwinPPC32)!
 #P"/Users/alms/my_lisp_stuff/ccl/level-1/level-1.lisp"
 </programlisting>
       </sect2>
-
+      <sect2 id="Invocation">
+	<title>Invocation</title>
+	<para>Assuming that the shell script is properly installed, it can be used to invoke OpenMCL from a shell prompt:
+	<programlisting>
+shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
+	</programlisting>
+	<literal>ccl</literal> will run a 32-bit session;
+	<literal>ccl64</literal> will run a 64-bit session.
+	</para>
+      </sect2>
       <sect2 id="Personal-Customization-with-the-Init-File">
 	<title>Personal Customization with the Init File</title>
         <para>By default OpenMCL will try to load the file
@@ -603,7 +612,7 @@ SLIME home page.</para>
     challenging and experimental way to build, and is not described
     here.</para>
 
-    <sect1 id="building-definitions"><title>>building definitions</title>
+    <sect1 id="building-definitions"><title>building definitions</title>
       <para>The following terms are used in subsequent sections; it
       may be helpful to refer to these definitions.</para>
 
@@ -7529,7 +7538,7 @@ keywords:</para>
 
 	      <listitem>
 		<para>The argument/return values
-		is <link linkend=""Referencing-and-Using-Foreign-Memory-Addresses">a MACPTR</link>.</para>
+		is <link linkend="Referencing-and-Using-Foreign-Memory-Addresses">a MACPTR</link>.</para>
 	      </listitem>
 	    </varlistentry>
 
@@ -9877,7 +9886,7 @@ NIL
 	      
 	      <listitem>
 		<para>NIL or a keyword; the keyword may contain
-		<link linkend="arb30">escaping constructs</link>.</para>
+		<link linkend="Case-sensitivity-of-foreign-names-in-OpenMCL" >escaping constructs</link>.</para>
 	      </listitem>
 	    </varlistentry>
 	    
@@ -10028,7 +10037,7 @@ NIL
 	    <function>make-record</function> could be a function.  However,
 	    that would mean that any stand-alone application using it would
 	    have to include a copy of the interface database
-	    (see <xref linkend="arb25"/>), which is undesireable
+	    (see <xref linkend="The-Interface-Database"/>), which is undesireable
 	    because it's large.
 	  </para>
 	</refsect1>
@@ -10200,7 +10209,7 @@ NIL
 
 	      <listitem>
 		<para>a keyword which names a foreign type or record, as
-		described in <xref linkend="arb45"/>.
+		described in <xref linkend="Foreign-type--record--and-field-names"/>.
 		</para>
 	      </listitem>
 	    </varlistentry>
@@ -10543,7 +10552,7 @@ T
 
 	      <listitem>
 		<para>One of the foreign argument-type keywords, described
-		above, or an equivalent <link linkend="arb23">foreign
+		above, or an equivalent <link linkend="Specifying-And-Using-Foreign-Types">foreign
 		type specifier</link>.</para>
 	      </listitem>
 	    </varlistentry>
@@ -10562,7 +10571,7 @@ T
 
 	      <listitem>
 		<para>One of the foreign argument-type keywords, described
-		above, or an equivalent <link linkend="arb23">foreign
+		above, or an equivalent <link linkend="Specifying-And-Using-Foreign-Types">foreign
 		type specifier</link>.</para>
 	      </listitem>
 	    </varlistentry>
@@ -10657,7 +10666,7 @@ T
 
 	      <listitem>
 		<para>One of the foreign argument-type keywords, described
-		above, or an equivalent <link linkend="arb23">foreign
+		above, or an equivalent <link linkend="Specifying-And-Using-Foreign-Types">foreign
 		type specifier</link>.</para>
 	      </listitem>
 	    </varlistentry>
@@ -10676,7 +10685,7 @@ T
 
 	      <listitem>
 		<para>One of the foreign argument-type keywords, described
-		above, or an equivalent <link linkend="arb23">foreign
+		above, or an equivalent <link linkend="Specifying-And-Using-Foreign-Types">foreign
 		type specifier</link>.</para>
 	      </listitem>
 	    </varlistentry>
@@ -10813,14 +10822,15 @@ T
 	      <term>arg-type-specifer</term>
 
 	      <listitem>
-		<para>One of the foreign argument-type keywords, described
-		above, or an equivalent <link linkend="arb23">foreign
-		type specifier</link>.
-		In addition, if the keyword
+		<para>One of the foreign argument-type keywords,
+		described above, or an equivalent <link
+		linkend="Specifying-And-Using-Foreign-Types">foreign
+		type specifier</link>.  In addition, if the keyword
 		:WITHOUT-INTERRUPTS is specified, the callback will be
-		executed with lisp interrupts disabled if the corresponding
-		var is non-NIL. If :WITHOUT-INTERRUPTS is specified more
-		than once, the rightmost instance wins.</para>
+		executed with lisp interrupts disabled if the
+		corresponding var is non-NIL. If :WITHOUT-INTERRUPTS
+		is specified more than once, the rightmost instance
+		wins.</para>
 	      </listitem>
 	    </varlistentry>
 
@@ -10886,12 +10896,12 @@ T
 	  <para>Reads a symbol from the current input stream, with *PACKAGE*
 	  bound to the &#34;OS&#34; package and with readtable-case preserved.</para>
 	  
-	  <para>Does a lookup on that symbol
-	  in <link linkend="arb25">the OpenMCL interface database</link>,
-	  signalling
-	  an error if no foreign function information can be found for the
-	  symbol in any 
-	  active <link linkend="arb29">interface directory</link>.</para>
+	  <para>Does a lookup on that symbol in <link
+	  linkend="The-Interface-Database">the OpenMCL interface
+	  database</link>, signalling an error if no foreign function
+	  information can be found for the symbol in any active <link
+	  linkend="Using-Interface-Directories">interface
+	  directory</link>.</para>
 
 	  <para>Notes the foreign function information, including the foreign
 	  function&#39;s return type, the number and type of the foreign
@@ -11204,7 +11214,7 @@ T
 	  <title>See Also</title>
 
 	  <simplelist type="inline">
-	    <member><xref linkend="arb35"/></member>
+	    <member><xref linkend="Tutorial--Allocating-Foreign-Data-on-the-Lisp-Heap"/></member>
 	  </simplelist>
 	</refsect1>
 
