@@ -530,12 +530,12 @@ SLIME home page.</para>
         <para><literal>~/.slime/fasl</literal></para>
         <para>You can use a shell command to remove the fasl files, or
         remove them using your system's file browser.</para>
-        <screen><emphasis role="bold">Note for Macintosh
-        Users:</emphasis> The leading "." character in the ".slime"
-        folder's name prevents the Finder from showing this folder to
-        you. If you use the "Go To Folder" menu item in the Finder's
-        "Go" menu, you can type in "~/.slime" and the Finder will show
-        it to you. You can then drag the "fasl" folder to the trash.
+        <screen><emphasis role="bold">Note for Macintosh Users:</emphasis> 
+	The leading "." character in the ".slime" folder's name
+	prevents the Finder from showing this folder to you. If you
+	use the "Go To Folder" menu item in the Finder's "Go" menu,
+	you can type in "~/.slime" and the Finder will show it to
+	you. You can then drag the "fasl" folder to the trash.
 	</screen>
       </sect2>
 
@@ -666,9 +666,9 @@ SLIME home page.</para>
       particular platform.The platform-specific name of the kernel
       build directory is described in FIXTHIS.</para>
 
-      <sect2 id="Platform-specific-filename-conventions">
+      <sect2 id="filename_conventions">
        <title>Platform-specific filename conventions</title>
-       <table>
+       <table id ="Platform-specific-filename-conventions">
 	 <title>Platform-specific filename conventions</title>
 	 <tgroup cols="6">
 	   <thead>
@@ -15689,5 +15689,5 @@ one of the intended uses of the WITH-VECTOR-BUFFER lap macro.</para>
       </refentry>
     </sect1>
   </chapter>
-  <index><title>Symbol Index</title></index>
+  <index id="Symbol-Index"><title>Symbol Index</title></index>
 </book>
