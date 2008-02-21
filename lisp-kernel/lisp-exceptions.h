@@ -96,9 +96,12 @@ exception_init();
 #define debug_entry_bug -1
 #define debug_entry_dbg -2
 
+#ifdef WINDOWS
+#define ALLOW_EXCEPTIONS(context) // blank stare for now
+#else
 #define ALLOW_EXCEPTIONS(context) \
   pthread_sigmask(SIG_SETMASK, &context->uc_sigmask, NULL);
-
+#endif
 
 void
 Fatal(StringPtr, StringPtr);

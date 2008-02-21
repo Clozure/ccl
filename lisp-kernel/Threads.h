@@ -15,8 +15,8 @@
 */
 
 #include <stdlib.h>
-#include <unistd.h>
 #ifndef WINDOWS
+#include <unistd.h>
 #include <sys/mman.h>
 #endif
 #include <stdio.h>
@@ -85,7 +85,13 @@ Boolean extern log_tcr_info;
 
 #ifdef USE_WINDOWS_SEMAPHORES
 
+/* Unimplemented */
+
 typedef void * SEMAPHORE;
+#define SEM_WAIT(s)
+#define SEM_RAISE(s)
+#define SEM_BROADCAST(s, count)
+#define SEM_TIMEDWAIT(s,t)
 
 #endif
 #ifdef USE_POSIX_SEMAPHORES
@@ -112,6 +118,10 @@ void sem_wait_forever(SEMAPHORE s);
 
 #ifdef USE_MACH_SEMAPHORES
 #define SEM_WAIT_FOREVER(s) sem_wait_forever((SEMAPHORE)(natural)s)
+#endif
+
+#ifdef USE_WINDOWS_SEMAPHORES
+#define SEM_WAIT_FOREVER(s) sem_wait_forever((SEMAPHORE)s)
 #endif
 
 typedef struct

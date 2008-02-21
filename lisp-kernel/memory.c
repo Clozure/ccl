@@ -614,6 +614,12 @@ condemn_area_chain(area *a, TCR *tcr)
   UNLOCK(lisp_global(TCR_AREA_LOCK),tcr);
 }
 
+#ifdef WINDOWS
+void
+release_readonly_area()
+{
+}
+#else
 void
 release_readonly_area()
 {
@@ -623,3 +629,4 @@ release_readonly_area()
   a->ndnodes = 0;
   pure_space_active = pure_space_start;
 }
+#endif

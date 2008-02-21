@@ -2263,6 +2263,12 @@ impurify_areas(LispObj low, LispObj high, signed_natural delta)
   }
 }
 
+#ifdef WINDOWS
+int
+impurify(TCR *tcr, signed_natural param)
+{
+}
+#else
 int
 impurify(TCR *tcr, signed_natural param)
 {
@@ -2306,3 +2312,4 @@ impurify(TCR *tcr, signed_natural param)
   }
   return -1;
 }
+#endif

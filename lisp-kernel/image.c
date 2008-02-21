@@ -162,6 +162,12 @@ find_openmcl_image_file_header(int fd, openmcl_image_file_header *header)
   return true;
 }
 
+#ifdef WINDOWS
+void
+load_image_section(int fd, openmcl_image_section_header *sect)
+{
+}
+#else
 void
 load_image_section(int fd, openmcl_image_section_header *sect)
 {
@@ -235,7 +241,14 @@ load_image_section(int fd, openmcl_image_section_header *sect)
   }
   lseek(fd, pos+advance, SEEK_SET);
 }
-    
+#endif
+
+#ifdef WINDOWS
+LispObj
+load_openmcl_image(int fd, openmcl_image_file_header *h)
+{
+}
+#else
 LispObj
 load_openmcl_image(int fd, openmcl_image_file_header *h)
 {
@@ -318,7 +331,8 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
   }
   return image_nil;
 }
-      
+#endif
+ 
 void
 prepare_to_write_dynamic_space()
 {
@@ -517,7 +531,9 @@ save_application(unsigned fd)
   eof_pos = lseek(fd, 0, SEEK_CUR) + sizeof(trailer);
   trailer.delta = (int) (header_pos-eof_pos);
   if (write(fd, &trailer, sizeof(trailer)) == sizeof(trailer)) {
+#ifndef WINDOWS
     fsync(fd);
+#endif
     close(fd);
     return 0;
   } 

@@ -74,7 +74,10 @@
 #endif
 #endif
 
-
+#ifdef VC
+#define inline
+#define __attribute__(x)
+#endif
 
 /* lfuns */
 #define lfun_bits(f) (deref(f,header_element_count(header_of(f))))

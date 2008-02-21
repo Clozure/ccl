@@ -29,8 +29,6 @@
 #endif
 
 
-#include <stdint.h>
-
 #ifdef WIN64
 #include <windows.h>
 typedef long long s64_t;
@@ -42,6 +40,9 @@ typedef unsigned short u16_t;
 typedef signed char s8_t;
 typedef unsigned char u8_t;
 #else
+
+#include <stdint.h>
+
 #ifdef SOLARIS
 /* Solaris doesn't laugh and play like the other children */
 typedef int64_t s64_t;

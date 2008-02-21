@@ -95,7 +95,7 @@
 #define Itemp1      REG_R9
 #define Isp         REG_RSP
 #define Iip         REG_RIP
-#ifdef LINUX
+#if defined(LINUX) || defined(WINDOWS)
 #define Iflags      REG_EFL
 #endif
 

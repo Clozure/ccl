@@ -35,10 +35,10 @@
 #endif
 #include <fcntl.h>
 #include <signal.h>
-#include <unistd.h>
 #include <errno.h>
 #ifndef WINDOWS
 #include <sys/utsname.h>
+#include <unistd.h>
 #endif
 
 #ifdef LINUX
@@ -419,6 +419,12 @@ thread_stack_size = 0;
   an integral number of segments.  remap the entire range.
 */
 
+#ifdef WINDOWS
+void 
+uncommit_pages(void *start, size_t len)
+{
+}
+#else
 void 
 uncommit_pages(void *start, size_t len)
 {
@@ -436,6 +442,7 @@ uncommit_pages(void *start, size_t len)
     }
   }
 }
+#endif
 
 #define TOUCH_PAGES_ON_COMMIT 0
 
@@ -457,6 +464,12 @@ touch_all_pages(void *start, size_t len)
   return true;
 }
 
+#ifdef WINDOWS
+Boolean
+commit_pages(void *start, size_t len)
+{
+}
+#else
 Boolean
 commit_pages(void *start, size_t len)
 {
@@ -488,6 +501,7 @@ commit_pages(void *start, size_t len)
     return false;
   }
 }
+#endif
 
 area *
 find_readonly_area()
@@ -502,6 +516,12 @@ find_readonly_area()
   return NULL;
 }
 
+#ifdef WINDOWS
+area *
+extend_readonly_area(unsigned more)
+{
+}
+#else
 area *
 extend_readonly_area(unsigned more)
 {
@@ -531,6 +551,7 @@ extend_readonly_area(unsigned more)
   }
   return NULL;
 }
+#endif
 
 LispObj image_base=0;
 BytePtr pure_space_start, pure_space_active, pure_space_limit;
@@ -598,7 +619,12 @@ raise_limit()
 } 
 
 
-
+#ifdef WINDOWS
+area *
+create_reserved_area(natural totalsize)
+{
+}
+#else
 area *
 create_reserved_area(natural totalsize)
 {
@@ -704,7 +730,7 @@ create_reserved_area(natural totalsize)
   reserved->markbits = global_mark_ref_bits;
   return reserved;
 }
-
+#endif
 
 void *
 allocate_from_reserved_area(natural size)
@@ -1200,12 +1226,19 @@ process_options(int argc, char *argv[])
 
 pid_t main_thread_pid = (pid_t)0;
 
+#ifdef WINDOWS
+void
+terminate_lisp()
+{
+}
+#else
 void
 terminate_lisp()
 {
   kill(main_thread_pid, SIGKILL);
   _exit(-1);
 }
+#endif
 
 #ifdef DARWIN
 #ifdef PPC64
@@ -1276,6 +1309,12 @@ remap_spjump()
 #endif
 
 #ifdef X8664
+#ifdef WINDOWS
+void
+remap_spjump()
+{
+}
+#else
 void
 remap_spjump()
 {
@@ -1293,6 +1332,7 @@ remap_spjump()
   }
   memmove(new, old, 0x1000);
 }
+#endif
 #endif
 
 void
@@ -1591,7 +1631,9 @@ main(int argc, char *argv[], char *envp[], void *aux)
   lisp_global(STATICALLY_LINKED) = 1 << fixnumshift;
 #endif
   tcr->prev = tcr->next = tcr;
+#ifndef WINDOWS
   lisp_global(INTERRUPT_SIGNAL) = (LispObj) box_fixnum(SIGNAL_FOR_PROCESS_INTERRUPT);
+#endif
   tcr->vs_area->active -= node_size;
   *(--tcr->save_vsp) = nrs_TOPLFUNC.vcell;
   nrs_TOPLFUNC.vcell = lisp_nil;
@@ -1648,6 +1690,10 @@ xStackSpace()
 
 #ifndef DARWIN
 #ifdef WINDOWS
+void *
+xGetSharedLibrary(char *path, int mode)
+{
+}
 #else
 void *
 xGetSharedLibrary(char *path, int mode)
@@ -1782,11 +1828,18 @@ do_fd_clr(int fd, fd_set *fdsetp)
   FD_CLR(fd, fdsetp);
 }
 
+#ifdef WINDOWS
+int
+do_fd_is_set(int fd, fd_set *fdsetp)
+{
+}
+#else
 int
 do_fd_is_set(int fd, fd_set *fdsetp)
 {
   return FD_ISSET(fd,fdsetp);
 }
+#endif
 
 void
 do_fd_zero(fd_set *fdsetp)
@@ -1921,7 +1974,17 @@ report_paging_info_delta(FILE *out, paging_info *start, paging_info *stop)
 }
 
 #else
-#ifndef WINDOWS
+#ifdef WINDOWS
+void
+sample_paging_info(paging_info *stats)
+{
+}
+
+void
+report_paging_info_delta(FILE *out, paging_info *start, paging_info *stop)
+{
+}
+#else
 void
 sample_paging_info(paging_info *stats)
 {

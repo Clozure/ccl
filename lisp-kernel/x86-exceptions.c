@@ -440,7 +440,6 @@ int
 callback_to_lisp (TCR * tcr, LispObj callback_macptr, ExceptionInformation *xp,
                   natural arg1, natural arg2, natural arg3, natural arg4, natural arg5)
 {
-  sigset_t mask;
   natural  callback_ptr, i;
   int delta;
   unsigned old_mxcsr = get_mxcsr();
@@ -626,6 +625,17 @@ is_write_fault(ExceptionInformation *xp, siginfo_t *info)
 #endif
 }
 
+#ifdef WINDOWS
+Boolean
+handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valence)
+{
+}
+
+Boolean
+handle_floating_point_exception(TCR *tcr, ExceptionInformation *xp, siginfo_t *info)
+{
+}
+#else
 Boolean
 handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valence)
 {
@@ -688,6 +698,7 @@ handle_floating_point_exception(TCR *tcr, ExceptionInformation *xp, siginfo_t *i
     return false;
   }
 }
+#endif
 
 Boolean
 extend_tcr_tlb(TCR *tcr, ExceptionInformation *xp)
@@ -790,6 +801,12 @@ get_lisp_string(LispObj lisp_string, char *c_string, natural max)
   c_string[n] = 0;
 }
 
+#ifdef WINDOWS
+Boolean
+handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TCR *tcr, int old_valence)
+{
+}
+#else
 Boolean
 handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TCR *tcr, int old_valence)
 {
@@ -912,7 +929,7 @@ handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TC
     return false;
   }
 }
-
+#endif
 
 /* 
    Current thread has all signals masked.  Before unmasking them,
@@ -965,6 +982,20 @@ unlock_exception_lock_in_handler(TCR *tcr)
    If an interrupt is pending on exception exit, try to ensure
    that the thread sees it as soon as it's able to run.
 */
+#ifdef WINDOWS
+void
+raise_pending_interrupt(TCR *tcr)
+{
+}
+void
+exit_signal_handler(TCR *tcr, int old_valence)
+{
+}
+void
+signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context, TCR *tcr, int old_valence)
+{
+}
+#else
 void
 raise_pending_interrupt(TCR *tcr)
 {
@@ -1028,6 +1059,7 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context, TCR 
   SIGRETURN(context);
 #endif
 }
+#endif
 
 #ifdef DARWIN
 void
@@ -1090,6 +1122,12 @@ typedef fpregset_t copy_ucontext_last_arg_t;
 typedef void * copy_ucontext_last_arg_t;
 #endif
 
+#ifdef WINDOWS
+LispObj *
+copy_ucontext(ExceptionInformation *context, LispObj *current, copy_ucontext_last_arg_t fp)
+{
+}
+#else
 LispObj *
 copy_ucontext(ExceptionInformation *context, LispObj *current, copy_ucontext_last_arg_t fp)
 {
@@ -1108,6 +1146,7 @@ copy_ucontext(ExceptionInformation *context, LispObj *current, copy_ucontext_las
   dest->uc_link = NULL;
   return (LispObj *)dest;
 }
+#endif
 
 LispObj *
 find_foreign_rsp(LispObj rsp, area *foreign_area, TCR *tcr)
@@ -1239,6 +1278,12 @@ stack_pointer_on_vstack_p(LispObj stack_pointer, TCR *tcr)
           ((BytePtr)stack_pointer > a->low));
 }
 
+#ifdef WINDOWS
+void
+interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
+{
+}
+#else
 void
 interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 {
@@ -1309,6 +1354,7 @@ interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 #endif
   SIGRETURN(context);
 }
+#endif
 
 #ifndef USE_SIGALTSTACK
 void
@@ -1363,7 +1409,12 @@ altstack_interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *c
 
 #endif
 
-
+#ifdef WINDOWS
+void
+install_signal_handler(int signo, void * handler)
+{
+}
+#else
 void
 install_signal_handler(int signo, void * handler)
 {
@@ -1388,8 +1439,14 @@ install_signal_handler(int signo, void * handler)
 
   sigaction(signo, &sa, NULL);
 }
+#endif
 
-
+#ifdef WINDOWS
+void
+install_pmcl_exception_handlers()
+{
+}
+#else
 void
 install_pmcl_exception_handlers()
 {
@@ -1426,6 +1483,7 @@ install_pmcl_exception_handlers()
 );
   signal(SIGPIPE, SIG_IGN);
 }
+#endif
 
 #ifndef USE_SIGALTSTACK
 void
@@ -1485,6 +1543,12 @@ altstack_suspend_resume_handler(int signum, siginfo_t *info, ExceptionInformatio
 
 #endif
 
+#ifdef WINDOWS
+void
+quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
+{
+}
+#else
 void
 quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
 {
@@ -1517,6 +1581,7 @@ quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
   pthread_sigmask(SIG_SETMASK,&mask,NULL);
   pthread_exit(NULL);
 }
+#endif
 
 #ifndef USE_SIGALTSTACK
 arbstack_quit_handler(int signum, siginfo_t *info, ExceptionInformation *context)
@@ -1582,6 +1647,12 @@ altstack_quit_handler(int signum, siginfo_t *info, ExceptionInformation *context
 #define QUIT_HANDLER arbstack_quit_handler
 #endif
 
+#ifdef WINDOWS
+void
+thread_signal_setup()
+{
+}
+#else
 void
 thread_signal_setup()
 {
@@ -1590,7 +1661,7 @@ thread_signal_setup()
   install_signal_handler(thread_suspend_signal, (void *)SUSPEND_RESUME_HANDLER);
   install_signal_handler(SIGQUIT, (void *)QUIT_HANDLER);
 }
-
+#endif
 
 void
 enable_fp_exceptions()
@@ -1709,7 +1780,12 @@ recognize_alloc_instruction(pc program_counter)
   return ID_unrecognized_alloc_instruction;
 }
       
-  
+#ifdef WINDOWS  
+void
+pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displacement)
+{
+}
+#else
 void
 pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displacement)
 {
@@ -1872,6 +1948,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
     return;
   }
 }
+#endif
 
 void
 normalize_tcr(ExceptionInformation *xp, TCR *tcr, Boolean is_other_tcr)

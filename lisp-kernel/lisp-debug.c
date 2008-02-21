@@ -70,6 +70,13 @@ debug_command_entry debug_command_entries[];
 #define fpurge __fpurge
 #endif
 
+#ifdef WINDOWS
+void
+fpurge (FILE* file)
+{
+}
+#endif
+
 int
 readc()
 {
@@ -110,6 +117,11 @@ char* Iregnames[] = {"???", "rdi", "rsi", "rdx", "rcx", "r8 ", "r9 ", "rax",
 char* Iregnames[] = {"rax", "rbx", "rcx", "rdx", "rdi", "rsi",
                      "rbp", "rsp", "r8 ", "r9 ", "r10", "r11", "r12", "r13",
                      "r14", "r15", "rip", "rfl"};
+#endif
+#ifdef WINDOWS
+/* is this correct? */
+char* Iregnames[] = {"r8 ","r9 ","r10","r11","r12","r13","r14","r15",
+		     "rdi","rsi","rbp", "rbx", "rdx", "rax", "rcx","rsp"};
 #endif
 #endif
 
@@ -530,6 +542,12 @@ debug_thread_info(ExceptionInformation *xp, siginfo_t *info, int arg)
 }
       
 
+#ifdef WINDOWS
+debug_command_return
+debug_set_gpr(ExceptionInformation *xp, siginfo_t *info, int arg)
+{
+}
+#else
 debug_command_return
 debug_set_gpr(ExceptionInformation *xp, siginfo_t *info, int arg)
 {
@@ -541,7 +559,7 @@ debug_set_gpr(ExceptionInformation *xp, siginfo_t *info, int arg)
   set_xpGPR(xp, arg, val);
   return debug_continue;
 }
-
+#endif
 
 debug_command_return
 debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
@@ -618,6 +636,12 @@ debug_show_fpu(ExceptionInformation *xp, siginfo_t *info, int arg)
   };
   struct xmm *xmmp = (struct xmm *)(xpFPRvector(xp));
 #endif
+#ifdef WINDOWS
+  struct xmm {
+    char fpdata[16];
+  };
+  struct xmm *xmmp; /* XXX: actually get them */
+#endif
 #ifdef FREEBSD
   struct xmmacc *xmmp = xpXMMregs(xp);
 #endif
@@ -639,6 +663,9 @@ debug_show_fpu(ExceptionInformation *xp, siginfo_t *info, int arg)
 #endif
 #ifdef FREEBSD
           (((struct savefpu *)(&(xp)->uc_mcontext.mc_fpstate))->sv_env.en_mxcsr)
+#endif
+#ifdef WINDOWS
+	  0 /* XXX: get from somewhere */
 #endif
           );
 #endif  

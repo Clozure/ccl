@@ -51,6 +51,12 @@ atomic_swap(signed_natural*, signed_natural);
 #define FUTEX_CONTENDED (2)
 #endif
 
+#ifdef WINDOWS
+int
+raise_thread_interrupt(TCR *target)
+{
+}
+#else
 int
 raise_thread_interrupt(TCR *target)
 {
@@ -61,6 +67,7 @@ raise_thread_interrupt(TCR *target)
 #endif
  return pthread_kill((pthread_t)target->osid, SIGNAL_FOR_PROCESS_INTERRUPT);
 }
+#endif
 
 signed_natural
 atomic_incf_by(signed_natural *ptr, signed_natural by)
@@ -107,7 +114,9 @@ get_spin_lock(signed_natural *p, TCR *tcr)
         return;
       }
     }
+#ifndef WINDOWS
     sched_yield();
+#endif
   }
 }
 #endif
@@ -384,12 +393,18 @@ signal_semaphore(SEMAPHORE s)
 }
 
   
+#ifdef WINDOWS
+LispObj
+current_thread_osid()
+{
+}
+#else
 LispObj
 current_thread_osid()
 {
   return (LispObj)ptr_to_lispobj(pthread_self());
 }
-
+#endif
 
 
 int thread_suspend_signal = 0, thread_resume_signal = 0;
@@ -477,6 +492,12 @@ suspend_resume_handler(int signo, siginfo_t *info, ExceptionInformation *context
   end from which it grows.
 */
   
+#ifdef WINDOWS
+void
+os_get_stack_bounds(LispObj q,void **base, natural *size)
+{
+}
+#else
 void
 os_get_stack_bounds(LispObj q,void **base, natural *size)
 {
@@ -507,6 +528,7 @@ os_get_stack_bounds(LispObj q,void **base, natural *size)
 #endif
 
 }
+#endif
 
 void *
 new_semaphore(int count)
@@ -571,6 +593,17 @@ destroy_semaphore(void **s)
   }
 }
 
+#ifdef WINDOWS
+void
+tsd_set(LispObj key, void *datum)
+{
+}
+
+void *
+tsd_get(LispObj key)
+{
+}
+#else
 void
 tsd_set(LispObj key, void *datum)
 {
@@ -582,6 +615,7 @@ tsd_get(LispObj key)
 {
   return pthread_getspecific((pthread_key_t)key);
 }
+#endif
 
 void
 dequeue_tcr(TCR *tcr)
@@ -689,6 +723,12 @@ setup_tcr_extra_segment(TCR *tcr)
 /*
   Caller must hold the area_lock.
 */
+#ifdef WINDOWS
+TCR *
+new_tcr(natural vstack_size, natural tstack_size)
+{
+}
+#else
 TCR *
 new_tcr(natural vstack_size, natural tstack_size)
 {
@@ -757,6 +797,7 @@ new_tcr(natural vstack_size, natural tstack_size)
   tcr->shutdown_count = PTHREAD_DESTRUCTOR_ITERATIONS;
   return tcr;
 }
+#endif
 
 void
 shutdown_thread_tcr(void *arg)
@@ -857,6 +898,9 @@ current_native_thread_id()
 #ifdef SOLARIS
 	  pthread_self()
 #endif
+#ifdef WINDOWS
+	  /* ThreadSelf() */ 23
+#endif
 	  );
 }
 
@@ -920,6 +964,12 @@ register_thread_tcr(TCR *tcr)
 #define MAP_GROWSDOWN 0
 #endif
 
+#ifdef WINDOWS
+Ptr
+create_stack(int size)
+{
+}
+#else
 Ptr
 create_stack(int size)
 {
@@ -939,23 +989,37 @@ create_stack(int size)
   allocation_failure(true, size);
 
 }
-  
+#endif
+
 void *
 allocate_stack(unsigned size)
 {
   return create_stack(size);
 }
 
+#ifdef WINDOWS
+void
+free_stack(void *s)
+{
+}
+#else
 void
 free_stack(void *s)
 {
   size_t size = *((size_t *)s);
   munmap(s, size);
 }
+#endif
 
 Boolean threads_initialized = false;
 
 #ifndef USE_FUTEX
+#ifdef WINDOWS
+void
+count_cpus()
+{
+}
+#else
 void
 count_cpus()
 {
@@ -980,8 +1044,18 @@ count_cpus()
 #endif
 }
 #endif
+#endif
 
-
+#ifdef WINDOWS
+void
+init_threads(void * stack_base, TCR *tcr)
+{
+}
+void *
+lisp_thread_entry(void *param)
+{
+}
+#else
 void
 init_threads(void * stack_base, TCR *tcr)
 {
@@ -1024,7 +1098,7 @@ lisp_thread_entry(void *param)
   pthread_cleanup_pop(true);
 
 }
-
+#endif
 
 void *
 xNewThread(natural control_stack_size,
@@ -1065,7 +1139,12 @@ active_tcr_p(TCR *q)
   return false;
 }
 
-
+#ifdef WINDOWS
+OSErr
+xDisposeThread(TCR *tcr)
+{
+}
+#else
 OSErr
 xDisposeThread(TCR *tcr)
 {
@@ -1077,6 +1156,7 @@ xDisposeThread(TCR *tcr)
   }
   return -50;
 }
+#endif
 
 OSErr
 xYieldToThread(TCR *target)
@@ -1093,7 +1173,15 @@ xThreadCurrentStackSpace(TCR *tcr, unsigned *resultP)
 }
 
 
-
+#ifdef WINDOWS
+LispObj
+create_system_thread(size_t stack_size,
+		     void* stackaddr,
+		     void* (*start_routine)(void *),
+		     void* param)
+{
+}
+#else
 LispObj
 create_system_thread(size_t stack_size,
 		     void* stackaddr,
@@ -1128,6 +1216,7 @@ create_system_thread(size_t stack_size,
   pthread_create(&returned_thread, &attr, start_routine, param);
   return (LispObj) ptr_to_lispobj(returned_thread);
 }
+#endif
 
 TCR *
 get_tcr(Boolean create)
@@ -1150,7 +1239,9 @@ get_tcr(Boolean create)
     SET_TCR_FLAG(current,TCR_FLAG_BIT_FOREIGN);
     register_thread_tcr(current);
 #ifdef DEBUG_TCR_CREATION
+#ifndef WINDOWS
     fprintf(stderr, "\ncreating TCR for pthread 0x%x", pthread_self());
+#endif
 #endif
     current->vs_area->active -= node_size;
     *(--current->save_vsp) = lisp_nil;
@@ -1177,7 +1268,12 @@ get_tcr(Boolean create)
   return current;
 }
 
-
+#ifdef WINDOWS
+Boolean
+suspend_tcr(TCR *tcr)
+{
+}
+#else
 Boolean
 suspend_tcr(TCR *tcr)
 {
@@ -1208,6 +1304,7 @@ suspend_tcr(TCR *tcr)
   }
   return false;
 }
+#endif
 
 Boolean
 tcr_suspend_ack(TCR *tcr)

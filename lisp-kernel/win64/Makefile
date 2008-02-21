@@ -18,11 +18,11 @@ VPATH = ../
 RM = /bin/rm
 # gcc64, as64: until there's a real win64 gcc, assume that gcc and gas
 # are installed under these names
-CC = gcc64
-AS = as64
+CC = x86_64-pc-mingw32-gcc
+AS = x86_64-pc-mingw32-as
 M4 = m4
-LD = ld
-ASFLAGS = --64
+LD = x86_64-pc-mingw32-ld
+ASFLAGS = -g --64
 M4FLAGS = -DWIN64 -DWINDOWS -DX86 -DX8664 -DHAVE_TLS -DEMUTLS
 CDEFINES = -DWIN64 -DWINDOWS -D_REENTRANT -DX86 -DX8664 -D_GNU_SOURCE -DHAVE_TLS -DEMUTLS #-DDISABLE_EGC
 CDEBUG = -gcoff
@@ -62,13 +62,13 @@ CHEADERS = area.h bits.h x86-constants.h lisp-errors.h gc.h lisp.h \
 
 
 KSPOBJ = $(SPOBJ)
-all:	../../wx86cl64
+all:	../../wx86cl64.exe
 
 
-OSLIBS = -ldl -lm -lpthread
+OSLIBS = 
 
 
-../../wx86cl64:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile 
+../../wx86cl64.exe:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile 
 	$(CC)  -m64 $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -o $@ $(USE_LINK_MAP) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
 
 
@@ -79,10 +79,10 @@ $(DEBUGOBJ): $(CHEADERS) lispdcmd.h
 
 
 cclean:
-	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) ../../wx86cl64
+	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) ../../wx86cl64.exe
 
 clean:	cclean
 	$(RM) -f $(SPOBJ)
 
-strip:	../../wx86cl64
-	strip -g ../../wx86cl64
+strip:	../../wx86cl64.exe
+	strip -g ../../wx86cl64.exe

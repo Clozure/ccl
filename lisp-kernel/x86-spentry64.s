@@ -4482,7 +4482,9 @@ _spentry(callback)
 	__(push %rbp)
         __ifdef([HAVE_TLS])
 	 /* TCR initialized for lisp ?   */
+	 __ifndef([WINDOWS]) /* FIXME */
 	 __(movq %fs:current_tcr@TPOFF+tcr.linear,%rax)
+	 __endif
 	 __(testq %rax,%rax)
 	 __(jne 1f)
         __endif
