@@ -2407,7 +2407,7 @@
             (if (= len 1)
               (or dot-ok
                   (signal-reader-error stream "Dot context error in ~s." (%string-from-token tb)))
-              (signal-reader-error stream "Illegal symbol syntax in ~s. (%string-from-token tb)"))
+              (signal-reader-error stream "Illegal symbol syntax in ~s." (%string-from-token tb)))
             ;; Something other than a buffer full of dots.  Thank god.
             (let* ((num (if (null escapes)
                             (handler-case
