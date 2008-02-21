@@ -231,14 +231,26 @@ list, NIL otherwise."
   (defun info-foreign-type-struct (x &optional (ftd *target-ftd*))
     (gethash (make-keyword x) (ftd-struct-definitions ftd)))
   (defun (setf info-foreign-type-struct) (val x &optional (ftd *target-ftd*))
-    (note-foreign-type-ordinal val ftd)
-    (setf (gethash (make-keyword x) (ftd-struct-definitions ftd)) val))
+    (let* ((name (make-keyword x)))
+      (when (gethash name (ftd-union-definitions ftd))
+        (cerror "Define ~s as a struct type"
+                "~s is already defined as a union type"
+                name)
+        (remhash name (ftd-union-definitions ftd)))
+      (note-foreign-type-ordinal val ftd)
+      (setf (gethash name (ftd-struct-definitions ftd)) val)))
 
   (defun info-foreign-type-union (x &optional (ftd *target-ftd*))
     (gethash (make-keyword x) (ftd-union-definitions ftd)))
   (defun (setf info-foreign-type-union) (val x  &optional (ftd *target-ftd*))
+    (let* ((name (make-keyword x)))
+      (when (gethash name (ftd-struct-definitions ftd))
+        (cerror "Define ~s as a union type"
+                "~s is already defined as a struct type"
+                name)
+        (remhash name (ftd-struct-definitions ftd)))
     (note-foreign-type-ordinal val ftd)
-    (setf (gethash (make-keyword x) (ftd-union-definitions ftd)) val))
+    (setf (gethash name (ftd-union-definitions ftd)) val)))
 
   (defun info-foreign-type-enum (x  &optional (ftd *target-ftd*))
     (gethash (make-keyword x) (ftd-enum-definitions ftd)))
