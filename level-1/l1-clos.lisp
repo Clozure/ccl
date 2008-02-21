@@ -2276,15 +2276,17 @@ changing its name to ~s may have serious consequences." class new))
       f)))
 
 (defun dcode-for-universally-applicable-singleton (gf)
-  (let* ((methods (generic-function-methods gf))
-         (method (car methods)))
-    (when (and method
-               (null (cdr methods))
-               (null (method-qualifiers method))
-               (dolist (spec (method-specializers method) t)
-                 (unless (eq spec *t-class*)
-                   (return nil))))
-      (method-function method))))
+  (when (eq (generic-function-method-combination gf)
+            *standard-method-combination*)
+    (let* ((methods (generic-function-methods gf))
+           (method (car methods)))
+      (when (and method
+                 (null (cdr methods))
+                 (null (method-qualifiers method))
+                 (dolist (spec (method-specializers method) t)
+                   (unless (eq spec *t-class*)
+                     (return nil))))
+        (method-function method)))))
 
 (register-non-dt-dcode-function #'dcode-for-universally-applicable-singleton)
 
