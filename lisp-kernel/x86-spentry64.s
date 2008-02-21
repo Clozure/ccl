@@ -557,10 +557,7 @@ local_label(misc_ref_s16):
 	__(ret)
 local_label(misc_ref_bit_vector):
 	__(unbox_fixnum(%arg_z,%imm0))
-	__(movl $63,%imm1_l)
-	__(andb %imm0_b,%imm1_b)
-	__(shrq $6,%imm0)
-	__(btq %imm1,misc_data_offset(%arg_y,%imm0,8))
+	__(btq %imm0,misc_data_offset(%arg_y))
 	__(setc %imm0_b)
 	__(negb %imm0_b)
 	__(andl $fixnum_one,%imm0_l)
@@ -1022,17 +1019,14 @@ local_label(misc_set_u32):
 local_label(misc_set_bit_vector):	
 	__(testq $~fixnumone,%arg_z)
 	__(jne local_label(misc_set_bad))
-	__(unbox_fixnum(%arg_y,%imm1))
-	__(movzbl %imm1_b,%imm0_l)
-	__(andb $63,%imm0_b)
-	__(shrq $6,%imm1)
+	__(unbox_fixnum(%arg_y,%imm0))
 	__(testb %arg_z_b,%arg_z_b)
 	__(je local_label(misc_set_clr_bit))
 local_label(misc_set_set_bit):	
-	__(btsq %imm0,misc_data_offset(%arg_x,%imm1,8))
+	__(btsq %imm0,misc_data_offset(%arg_x))
 	__(ret)
 local_label(misc_set_clr_bit):	
-	__(btrq %imm0,misc_data_offset(%arg_x,%imm1,8))
+	__(btrq %imm0,misc_data_offset(%arg_x))
 	__(ret)
 local_label(misc_set_u8):	
 	__(testq $~(0xff<<fixnumshift),%arg_z)
