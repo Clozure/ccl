@@ -223,7 +223,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
 
 (defvar *current-length* nil) ; must be nil at top level
 
-(defvar *print-catch-errors* t)
+(defvar *print-catch-errors* nil)
 
 ;;;; ======================================================================
 
