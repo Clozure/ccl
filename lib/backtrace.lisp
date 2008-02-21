@@ -131,6 +131,7 @@
                                              &optional (count most-positive-fixnum) (skip-initial 0))
   (let ((*standard-output* *debug-io*)
         (*print-circle* nil)
+        (*print-catch-errors* t)
         (p origin)
         (q (last-frame-ptr context)))
     (dotimes (i skip-initial)
