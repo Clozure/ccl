@@ -4,13 +4,13 @@
 # "bzip2".  All those external dependencies are, of course, less than
 # ideal.
 
-# for Darwin, with DocBook installed via MacPorts
+# for Linux (Fedora; other distros may require some tweaking.)
 
 # The pathname to the xsltproc executable.  Since most alternate
 # translators use Java, this makefile would need to be rewritten to use
 # anything but xsltproc.
 
-XSLTPROC = /opt/local/bin/xsltproc
+XSLTPROC = /usr/bin/xsltproc
 
 
 # On a new system or when using a new version of xsltproc or of the
@@ -31,7 +31,7 @@ EXTRAPARAMS=
 # look on the web for the stylesheets, instead.
 
 
-export XML_CATALOG_FILES = xsl/catalog-macports
+export XML_CATALOG_FILES = xsl/catalog-fedora
 
 # The local stylesheet imports the generic stylesheets and
 # sets some custom parameters.
@@ -66,7 +66,7 @@ XSLTPROCVERSION = $(shell $(XSLTPROC) --version | head -n 1)
 
 all: $(TEMP) $(HTMLFILES) distclean
 
-%.html:%.xml $(XSLFILES) Makefile
+%.html:%.xml $(XSLFILES) Makefile.fedora
 	$(XSLTPROC) \
 		--stringparam root.filename $(basename $(@F)) \
 		--stringparam base.dir $(TEMP)/ \
@@ -78,7 +78,6 @@ all: $(TEMP) $(HTMLFILES) distclean
 		$(STYLESHEET) $<
 	rm -f $(if $(findstring Doc, $(@D)), $(@D)/*.html, $@)
 	mv $(TEMP)/*.html $(@D)/
-        rm -rf $(TEMP)
 
 $(TEMP):
 	mkdir $(TEMP)
