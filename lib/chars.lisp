@@ -107,7 +107,10 @@
     (or (and (>= code (char-code #\A))
              (<= code (char-code #\Z)))
         (and (>= code (char-code #\a))
-             (<= code (char-code #\z))))))
+             (<= code (char-code #\z)))
+        (and (>= code #x80)
+             (or (not (null (%non-standard-upper-case-equivalent c)))
+                 (not (null (%non-standard-lower-case-equivalent c))))))))
   
 (defun alphanumericp (c)
   "Given a character-object argument, ALPHANUMERICP returns T if the
@@ -121,7 +124,7 @@
           (<= code (char-code #\z)))
      (and (>= code (char-code #\A))
           (<= code (char-code #\Z)))
-     (and (> code #x80)
+     (and (>= code #x80)
           (or (not (null (%non-standard-upper-case-equivalent c)))
               (not (null (%non-standard-lower-case-equivalent c))))))))
 
