@@ -43,6 +43,7 @@ examples/cocoa/*fsl
 examples/cocoa/*~.*
 examples/cocoa/easygui/*fsl
 examples/cocoa/easygui/*~.*
+examples/cocoa/easygui/example/*fsl
 examples/rubix/*~.*
 l1-fasls/*fsl
 level-0/*fsl
