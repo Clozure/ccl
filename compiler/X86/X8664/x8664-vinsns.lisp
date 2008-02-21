@@ -49,6 +49,13 @@
   (movq (:%q idx) (:%q dest))
   (shrq (:$ub 3) (:%q dest)))
 
+;;; same as above, but looks better in bit vector contexts
+(define-x8664-vinsn scale-1bit-misc-index (((dest :u64))
+					    ((idx :imm)	; A fixnum
+					     )
+					    ())
+  (movq (:%q idx) (:%q dest))
+  (shrq (:$ub 3) (:%q dest)))
 
 (define-x8664-vinsn misc-ref-u64  (((dest :u64))
                                   ((v :lisp)
@@ -2141,7 +2148,17 @@
   (negb (:%b bitnum))
   (andl (:$l x8664::fixnumone) (:%l bitnum))
   (movl (:%l bitnum) (:%l dest)))
-                                            
+
+(define-x8664-vinsn nref-bit-vector-fixnum (((dest :imm)
+					     (bitnum :s64))
+					    ((bitnum :s64)
+					     (bitvector :lisp))
+					    ())
+  (btq (:%q bitnum) (:@ x8664::misc-data-offset (:%q bitvector)))
+  (setb (:%b bitnum))
+  (negb (:%b bitnum))
+  (andl (:$l x8664::fixnumone) (:%l bitnum))
+  (movl (:%l bitnum) (:%l dest)))                                        
                                                       
 (define-x8664-vinsn misc-ref-c-bit-fixnum (((dest :imm))
                                            ((src :lisp)
@@ -2739,6 +2756,30 @@
                                                (word-index :s64)
                                                (bitnum :u8)))
   (btsq (:%q bitnum) (:@ x8664::misc-data-offset (:%q vec) (:%q word-index) 8)))
+
+;;; In safe code, something else has ensured that the value is of type
+;;; BIT.
+(define-x8664-vinsn nset-variable-bit-to-variable-value (()
+                                                        ((vec :lisp)
+                                                         (index :s64)
+                                                         (value :lisp)))
+  (testb (:%b value) (:%b value))
+  (je :clr)
+  (btsq (:%q index) (:@ x8664::misc-data-offset (:%q vec)))
+  (jmp :done)
+  :clr
+  (btrq (:%q index) (:@ x8664::misc-data-offset (:%q vec)))
+  :done)
+
+(define-x8664-vinsn nset-variable-bit-to-zero (()
+                                              ((vec :lisp)
+                                               (index :s64)))
+  (btrq (:%q index) (:@ x8664::misc-data-offset (:%q vec))))
+
+(define-x8664-vinsn nset-variable-bit-to-one (()
+                                              ((vec :lisp)
+                                               (index :s64)))
+  (btsq (:%q index) (:@ x8664::misc-data-offset (:%q vec))))
 
 (define-x8664-vinsn set-constant-bit-to-zero (()
                                               ((src :lisp)

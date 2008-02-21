@@ -1599,14 +1599,11 @@
            (ensuring-node-target (target vreg)
              (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-1-bit-constant-index arch)))
                (! misc-ref-c-bit-fixnum target src index-known-fixnum)
-               (with-imm-temps
-                   () (word-index bitnum)
-                 (if index-known-fixnum
-                   (progn
-                     (x862-lri seg word-index (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum -6)))
-                     (x862-lri seg bitnum (logand index-known-fixnum #x63)))
-                   (! word-index-and-bitnum-from-index word-index bitnum unscaled-idx))
-                 (! ref-bit-vector-fixnum target bitnum src word-index))))))))
+	       (with-imm-target () bitnum
+		 (if index-known-fixnum
+		   (x862-lri seg bitnum index-known-fixnum)
+		   (! scale-1bit-misc-index bitnum unscaled-idx))
+                 (! nref-bit-vector-fixnum target bitnum src))))))))
     (^)))
 
 ;;; safe = T means assume "vector" is miscobj, do bounds check.
@@ -2264,18 +2261,16 @@
                         (! set-constant-bit-to-one src index-known-fixnum))
                       (progn
                         (! set-constant-bit-to-variable-value src index-known-fixnum val-reg)))
-                    (with-imm-temps () (word-index bit-number)
-                      (if index-known-fixnum
-                        (progn
-                          (x862-lri seg word-index (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum -6)))
-                          (x862-lri seg bit-number (logand index-known-fixnum #x63)))
-                        (! word-index-and-bitnum-from-index word-index bit-number unscaled-idx))
-                      (if constval
-                        (if (zerop constval)
-                          (! set-variable-bit-to-zero src word-index bit-number)
-                          (! set-variable-bit-to-one src word-index bit-number))
-                        (progn
-                          (! set-variable-bit-to-variable-value src word-index bit-number val-reg))))))))))
+		    (progn
+		      (if index-known-fixnum
+			(x862-lri seg scaled-idx index-known-fixnum)
+			(! scale-1bit-misc-index scaled-idx unscaled-idx))
+		      (if constval
+			(if (zerop constval)
+			  (! nset-variable-bit-to-zero src scaled-idx)
+			  (! nset-variable-bit-to-one src scaled-idx))
+			(progn
+			  (! nset-variable-bit-to-variable-value src scaled-idx val-reg))))))))))
       (when (and vreg val-reg) (<- val-reg))
       (^))))
           
