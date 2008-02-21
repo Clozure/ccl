@@ -1234,8 +1234,9 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
   (clear-type-cache)
   (let ((cell (find-class-cell name class)))
     (when cell
-      (if (eq name (%class.name class))
-        (setf (info-type-kind name) :instance))
+      (when class
+        (if (eq name (%class.name class))
+          (setf (info-type-kind name) :instance)))
       (setf (class-cell-class cell) class))
     class))
 
@@ -1284,7 +1285,7 @@ to replace that class with ~s" name old-class new-class)
 (queue-fixup
  (defun set-find-class (name class)
    (setq name (require-type name 'symbol))
-   (let ((cell (find-class-cell name class)))
+   (let ((cell (find-class-cell name t)))
      (declare (type class-cell cell))
        (let ((old-class (class-cell-class cell)))
          (when old-class
