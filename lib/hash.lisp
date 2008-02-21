@@ -217,7 +217,7 @@
         (nkeys (nhti.nkeys state)))
        ((>= index nkeys)
         (setf (nhti.index state) nkeys)
-        (values nil nil nil))
+        nil)
     (declare (fixnum index nkeys)
              (simple-vector keys))
     (let* ((key (svref keys index))
