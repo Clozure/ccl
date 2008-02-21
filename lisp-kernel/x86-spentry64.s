@@ -559,9 +559,8 @@ local_label(misc_ref_bit_vector):
 	__(unbox_fixnum(%arg_z,%imm0))
 	__(btq %imm0,misc_data_offset(%arg_y))
 	__(setc %imm0_b)
-	__(negb %imm0_b)
-	__(andl $fixnum_one,%imm0_l)
-	__(movq %imm0,%arg_z)
+	__(movzbl %imm0_b,%imm0_l)
+	__(imull $fixnumone,%imm0_l,%arg_z_l)
 	__(ret)
 local_label(misc_ref_invalid):
 	__(movq $XBADVEC,%arg_x)
