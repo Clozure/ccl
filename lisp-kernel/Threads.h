@@ -200,8 +200,7 @@ atomic_ior(natural*, natural);
 #define SIG_SUSPEND_THREAD (SIGRTMIN+6)
 #define SIG_RESUME_THREAD (SIG_SUSPEND_THREAD+1)
 #else
-#define SIG_SUSPEND_THREAD SIGUSR1
-#define SIG_RESUME_THREAD SIGUSR2
+#define SIG_SUSPEND_THREAD SIGUSR2
 #endif
 
 extern int thread_suspend_signal, thread_resume_signal;
