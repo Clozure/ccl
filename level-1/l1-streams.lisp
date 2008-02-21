@@ -4486,12 +4486,13 @@
 
 
 (defmethod stream-surrounding-characters ((s string-input-stream))
-  (let* ((ioblock (basic-stream-ioblock s))
-         (start (string-input-stream-ioblock-start ioblock))
-         (idx (string-input-stream-ioblock-index ioblock))
-         (end (string-input-stream-ioblock-end ioblock))
-         (string (string-stream-ioblock-string ioblock)))
-    (subseq string (max (- idx 5) start) (min (+ idx 5) end))))
+  (let* ((ioblock (basic-stream.state s)))
+    (when ioblock
+      (let* ((start (string-input-stream-ioblock-start ioblock))
+             (idx (string-input-stream-ioblock-index ioblock))
+             (end (string-input-stream-ioblock-end ioblock))
+             (string (string-stream-ioblock-string ioblock)))
+        (subseq string (max (- idx 5) start) (min (+ idx 5) end))))))
     
 
 (defmethod stream-position ((s string-input-stream) &optional newpos)
