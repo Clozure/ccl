@@ -452,7 +452,13 @@
       (multiple-value-setq (seed-1 seed-2) (init-random-state-seeds))
       (progn
         (setq state (require-type (or state *random-state*) 'random-state))
-        (setq seed-1 (random.seed-1 state) seed-2 (random.seed-2 state))))
+        #+32-bit-target
+        (setq seed-1 (random.seed-1 state) seed-2 (random.seed-2 state))
+        #+64-bit-target
+        (let* ((seed (random.seed-1 state)))
+          (declare (type (unsigned-byte 32) seed))
+          (setq seed-1 (ldb (byte 16 16) seed)
+                seed-2 (ldb (byte 16 0) seed)))))
     (%cons-random-state seed-1 seed-2)))
 
 (defun random-state-p (thing) (istruct-typep thing 'random-state))
