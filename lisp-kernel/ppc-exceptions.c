@@ -806,8 +806,7 @@ protection_handler
    do_soft_stack_overflow,
    do_hard_stack_overflow,    
    do_hard_stack_overflow,
-   do_hard_stack_overflow,
-   do_heap_soft_write
+   do_hard_stack_overflow
    };
 
 
@@ -1097,12 +1096,6 @@ do_spurious_wp_fault(ExceptionInformation *xp, protected_area_ptr area, BytePtr 
   return -1;
 }
 
-OSStatus
-do_heap_soft_write(ExceptionInformation *xp, protected_area_ptr area, BytePtr addr)
-{
-  UnProtectMemory((LogicalAddress)(truncate_to_power_of_2(addr, log2_page_size)),page_size);
-  return 0;
-}
 
 /*
   We have a couple of choices here.  We can simply unprotect the page
@@ -2185,10 +2178,8 @@ void
 thread_signal_setup()
 {
   thread_suspend_signal = SIG_SUSPEND_THREAD;
-  thread_resume_signal = SIG_RESUME_THREAD;
 
   install_signal_handler(thread_suspend_signal, (void *) suspend_resume_handler);
-  install_signal_handler(thread_resume_signal,  (void *) suspend_resume_handler);
   install_signal_handler(SIGQUIT, (void *)quit_handler);
 }
 
