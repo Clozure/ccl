@@ -76,13 +76,13 @@ ifdef([DarwinAssembler],[
 	
 define([TSP_Alloc_Fixed],[
 	define([TSP_Alloc_Size],[((($1+node_size) & ~(dnode_size-1))+dnode_size)])
-	__(subq [$]TSP_Alloc_Size,%rcontext:tcr.next_tsp)
-        __(movq %rcontext:tcr.save_tsp,%stack_temp)
-        __(movq %rcontext:tcr.next_tsp,$2)
+	__(subq [$]TSP_Alloc_Size,rcontext(tcr.next_tsp))
+        __(movq rcontext(tcr.save_tsp),%stack_temp)
+        __(movq rcontext(tcr.next_tsp),$2)
 	zero_dnodes $2,0,TSP_Alloc_Size
 	__(movq %stack_temp,($2))
         __(movq %rbp,tsp_frame.save_rbp($2))
-        __(movq $2,%rcontext:tcr.save_tsp)
+        __(movq $2,rcontext(tcr.save_tsp))
 	undefine([TSP_Alloc_Size])
 ])
 
@@ -91,9 +91,9 @@ define([TSP_Alloc_Fixed],[
 	
 define([TSP_Alloc_Var],[
 	new_macro_labels()
-        subq $1,%rcontext:tcr.next_tsp
-        __(movq %rcontext:tcr.save_tsp,%stack_temp)
-        __(movq %rcontext:tcr.next_tsp,$2)
+        subq $1,rcontext(tcr.next_tsp)
+        __(movq rcontext(tcr.save_tsp),%stack_temp)
+        __(movq rcontext(tcr.next_tsp),$2)
 	__(jmp macro_label(test))
 macro_label(loop):
 	__(movapd %fpzero,0($2))
@@ -101,11 +101,11 @@ macro_label(loop):
 macro_label(test):	
 	__(subq $dnode_size,$1)
 	__(jge macro_label(loop))
-        __(movq %rcontext:tcr.next_tsp,$2)
+        __(movq rcontext(tcr.next_tsp),$2)
 	__(movd %stack_temp,$1)
 	__(movq $1,($2))
         __(movq %rbp,tsp_frame.save_rbp($2))
-        __(movq $2,%rcontext:tcr.save_tsp)
+        __(movq $2,rcontext(tcr.save_tsp))
 	__(addq $dnode_size,$2)
 ])
 	
@@ -121,15 +121,15 @@ define([Allocate_Catch_Frame],[
 	
 define([Make_Catch],[
 	Allocate_Catch_Frame(%imm2)
-	__(movq %rcontext:tcr.catch_top,%imm0)
-	__(movq %rcontext:tcr.db_link,%imm1)
+	__(movq rcontext(tcr.catch_top),%imm0)
+	__(movq rcontext(tcr.db_link),%imm1)
 	__(movq %arg_z,catch_frame.catch_tag(%imm2))
 	__(movq %imm0,catch_frame.link(%imm2))
 	__(movq [$]$1,catch_frame.mvflag(%imm2))
-	__(movq %rcontext:tcr.xframe,%imm0)
+	__(movq rcontext(tcr.xframe),%imm0)
 	__(movq %rsp,catch_frame.rsp(%imm2))
 	__(movq %rbp,catch_frame.rbp(%imm2))
-        __(movq %rcontext:tcr.foreign_sp,%stack_temp)
+        __(movq rcontext(tcr.foreign_sp),%stack_temp)
 	__(movq %imm1,catch_frame.db_link(%imm2))
 	__(movq %save3,catch_frame._save3(%imm2))
 	__(movq %save2,catch_frame._save2(%imm2))
@@ -138,21 +138,21 @@ define([Make_Catch],[
 	__(movq %imm0,catch_frame.xframe(%imm2))
 	__(movq %stack_temp,catch_frame.foreign_sp(%imm2))
 	__(movq %xfn,catch_frame.pc(%imm2))
-	__(movq %imm2,%rcontext:tcr.catch_top)
+	__(movq %imm2,rcontext(tcr.catch_top))
 ])	
 
 define([nMake_Catch],[
 	Allocate_Catch_Frame(%imm2)
-	__(movq %rcontext:tcr.catch_top,%imm0)
-	__(movq %rcontext:tcr.db_link,%imm1)
+	__(movq rcontext(tcr.catch_top),%imm0)
+	__(movq rcontext(tcr.db_link),%imm1)
 	__(movq %arg_z,catch_frame.catch_tag(%imm2))
 	__(movq %imm0,catch_frame.link(%imm2))
         __(lea node_size(%rsp),%imm0)
 	__(movq [$]$1,catch_frame.mvflag(%imm2))
 	__(movq %imm0,catch_frame.rsp(%imm2))
-	__(movq %rcontext:tcr.xframe,%imm0)
+	__(movq rcontext(tcr.xframe),%imm0)
 	__(movq %rbp,catch_frame.rbp(%imm2))
-        __(movq %rcontext:tcr.foreign_sp,%stack_temp)
+        __(movq rcontext(tcr.foreign_sp),%stack_temp)
 	__(movq %imm1,catch_frame.db_link(%imm2))
 	__(movq %save3,catch_frame._save3(%imm2))
 	__(movq %save2,catch_frame._save2(%imm2))
@@ -161,7 +161,7 @@ define([nMake_Catch],[
 	__(movq %imm0,catch_frame.xframe(%imm2))
 	__(movq %stack_temp,catch_frame.foreign_sp(%imm2))
 	__(movq %xfn,catch_frame.pc(%imm2))
-	__(movq %imm2,%rcontext:tcr.catch_top)
+	__(movq %imm2,rcontext(tcr.catch_top))
 ])	
         	
 	
@@ -182,13 +182,13 @@ define([Cons],[
 /* The instructions where tcr.save_allocptr is tagged are difficult  */
 /* to interrupt; the interrupting code has to recognize and possibly  */
 /* emulate the instructions in between   */
-	__(subq $cons.size-fulltag_cons,%rcontext:tcr.save_allocptr)
-	__(movq %rcontext:tcr.save_allocptr,%allocptr)
-	__(rcmpq(%allocptr,%rcontext:tcr.save_allocbase))
+	__(subq $cons.size-fulltag_cons,rcontext(tcr.save_allocptr))
+	__(movq rcontext(tcr.save_allocptr),%allocptr)
+	__(rcmpq(%allocptr,rcontext(tcr.save_allocbase)))
 	__(jg macro_label(no_trap))
 	uuo_alloc()
 macro_label(no_trap):	
-	__(andb $~fulltagmask,%rcontext:tcr.save_allocptr)
+	__(andb $~fulltagmask,rcontext(tcr.save_allocptr))
 /* Easy to interrupt now that tcr.save_allocptr isn't tagged as a cons    */
 	__(movq $2,cons.cdr(%allocptr))
 	__(movq $1,cons.car(%allocptr))
@@ -210,14 +210,14 @@ define([Misc_Alloc_Internal],[
 /* sequence atomically, as soon as tcr.save_allocptr becomes tagged.  */
                 
 	new_macro_labels()
-	__(subq %imm1,%rcontext:tcr.save_allocptr)
-	__(movq %rcontext:tcr.save_allocptr,%allocptr)
-	__(rcmpq(%allocptr,%rcontext:tcr.save_allocbase))
+	__(subq %imm1,rcontext(tcr.save_allocptr))
+	__(movq rcontext(tcr.save_allocptr),%allocptr)
+	__(rcmpq(%allocptr,rcontext(tcr.save_allocbase)))
 	__(jg macro_label(no_trap))
 	uuo_alloc()
 macro_label(no_trap):	
 	__(movq %imm0,misc_header_offset(%allocptr))
-	__(andb $~fulltagmask,%rcontext:tcr.save_allocptr)
+	__(andb $~fulltagmask,rcontext(tcr.save_allocptr))
 /* Now that tcr.save_allocptr is untagged, it's easier to be interrupted   */
 	ifelse($1,[],[],[
 	 __(mov %allocptr,$1)
@@ -410,15 +410,15 @@ macro_label(done):
 define([aligned_bignum_size],[((~(dnode_size-1)&(node_size+(dnode_size-1)+(4*$1))))])
 
 define([discard_temp_frame],[
-	__(movq %rcontext:tcr.save_tsp,$1)
+	__(movq rcontext(tcr.save_tsp),$1)
 	__(movq ($1),$1)
-        __(movq $1,%rcontext:tcr.save_tsp)
-        __(movq $1,%rcontext:tcr.next_tsp)
+        __(movq $1,rcontext(tcr.save_tsp))
+        __(movq $1,rcontext(tcr.next_tsp))
 
 ])	
 
 define([check_pending_enabled_interrupt],[
-	__(btrq [$]63,%rcontext:tcr.interrupt_pending)
+	__(btrq [$]63,rcontext(tcr.interrupt_pending))
 	__(jnc,pt $1)
 	interrupt_now()
 ])
@@ -430,7 +430,7 @@ define([check_pending_enabled_interrupt],[
 
 define([check_pending_interrupt],[
 	new_macro_labels()
-	__(movq %rcontext:tcr.tlb_pointer,$1)
+	__(movq rcontext(tcr.tlb_pointer),$1)
 	__(cmpq [$]0,INTERRUPT_LEVEL_BINDING_INDEX($1))
 	__(js,pt macro_label(done))
 	check_pending_enabled_interrupt(macro_label(done))
@@ -456,14 +456,14 @@ define([set_gs_base],[
 /* foreign code */        
         
 define([set_foreign_gs_base],[
-        set_gs_base([%rcontext:tcr.osid])
+        set_gs_base([rcontext(tcr.osid)])
 ])
 
 /* %gs addresses the tcr.  Get the linear address of the tcr and */
 /* copy it to $1 */
 
 define([save_tcr_linear],[
-        __(movq %rcontext:tcr.linear,$1)
+        __(movq rcontext(tcr.linear),$1)
 ]) 
 	
 ])

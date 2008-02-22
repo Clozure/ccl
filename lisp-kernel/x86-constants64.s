@@ -214,8 +214,16 @@ define([save0],[r15])
 	define([save0_b],[r15b])
 	define([Rsave0],[15])	
 
+
+ifdef([WINDOWS],[
+/* We keep the TCR pointer in r11 */
+	define([rcontext_reg], r11)
+	define([rcontext],[$1(%rcontext_reg)])
+],[
 /* The TCR can be accessed relative to %gs   */
-define([rcontext],[gs])
+	define([rcontext_reg],[gs])
+	define([rcontext],[%rcontext_reg:$1])
+])
 define([fname],[temp0])
 define([next_method_context],[temp0])
 define([nargs_b],[imm2_b])	
@@ -224,8 +232,7 @@ define([nargs_q],[imm2])
 define([nargs],[imm2_l])
 define([ra0],[temp2])        
 						
-define([xfn],[temp1])	
-
+define([xfn],[temp1])
 
 define([allocptr],[temp0])		
 define([stack_temp],[mm7])
@@ -248,7 +255,7 @@ define([fp13],[xmm13])
 define([fp14],[xmm14])		
 define([fp15],[xmm15])		
 define([fpzero],[fp15])
-	
+
 	
 nbits_in_word = 64
 nbits_in_byte = 8
