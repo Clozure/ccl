@@ -23,7 +23,10 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifndef WINDOWS
 #include <sys/time.h>
+#endif
 
 #ifndef timeradd
 # define timeradd(a, b, result)						      \
@@ -273,7 +276,7 @@ traditional_mark_weak_htabv(LispObj htabv)
 void
 ncircle_mark_weak_htabv(LispObj htabv)
 {
-  int i, skip = hash_table_vector_header_count;;
+  int i, skip = hash_table_vector_header_count;
   hash_table_vector_header *hashp = (hash_table_vector_header *)(untag(htabv));
   natural
     dnode,
@@ -983,9 +986,11 @@ Boolean just_purified_p = false;
   the exception occurred.)
 */
 
-
+#ifdef WINDOWS
+#define get_time(when) /* FIXME */
+#else
 #define get_time(when) gettimeofday(&when, NULL)
-
+#endif
 
 
 #ifdef FORCE_DWS_MARK

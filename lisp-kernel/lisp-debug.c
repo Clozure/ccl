@@ -868,7 +868,9 @@ debug_identify_function(ExceptionInformation *xp, siginfo_t *info)
 #endif
 }
 
+#ifndef WINDOWS
 extern pid_t main_thread_pid;
+#endif
 
 OSStatus
 lisp_Debugger(ExceptionInformation *xp, 
@@ -904,7 +906,11 @@ lisp_Debugger(ExceptionInformation *xp,
   }
   fprintf(stderr, "? for help\n");
   while (state == debug_continue) {
+#ifdef WINDOWS
+    fprintf(stderr, "[%d] OpenMCL kernel debugger: ", 23 /* FIXME */);
+#else
     fprintf(stderr, "[%d] OpenMCL kernel debugger: ", main_thread_pid);
+#endif
     state = apply_debug_command(xp, readc(), info, why);
   }
   switch (state) {

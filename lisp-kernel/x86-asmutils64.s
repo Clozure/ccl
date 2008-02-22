@@ -132,12 +132,22 @@ _endfn
         __endif                        
 
 /* int cpuid (int code, int *pebx, int *pecx, int *pedx)  */
-/*	          %rdi,     %rsi,      %rdx,      %rcx    	     */
+/* UNIX	          %rdi,     %rsi,      %rdx,      %rcx    	     */
+/* WIN		  %ecx,     %rdx,      %r8,       %r9 */    
 _exportfn(C(cpuid))
+	__ifdef([WINDOWS])
+	__(pushq %r8)		/* pecx */
+	__(pushq %r9)		/* pedx */
+	__(movq %rdx, %rsi)     /* pebx */
+	__(pushq %rbx)		/* %rbx is non-volatile */
+	__(xorq %rax, %rax)
+	__(movl %ecx,%eax)
+	__else
 	__(pushq %rdx)		/* pecx */
 	__(pushq %rcx)		/* pedx */
 	__(pushq %rbx)		/* %rbx is non-volatile */
 	__(movq %rdi,%rax)
+	__endif
         __(xorl %ecx,%ecx)
 	__(cpuid)
 	__(movl %ebx,(%rsi))

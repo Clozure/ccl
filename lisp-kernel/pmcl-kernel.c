@@ -1224,14 +1224,14 @@ process_options(int argc, char *argv[])
   }
 }
 
-pid_t main_thread_pid = (pid_t)0;
-
 #ifdef WINDOWS
 void
 terminate_lisp()
 {
 }
 #else
+pid_t main_thread_pid = (pid_t)0;
+
 void
 terminate_lisp()
 {
@@ -1521,7 +1521,9 @@ main(int argc, char *argv[], char *envp[], void *aux)
   }
 #endif
 
+#ifndef WINDOWS
   main_thread_pid = getpid();
+#endif
   tcr_area_lock = (void *)new_recursive_lock();
 
   program_name = argv[0];

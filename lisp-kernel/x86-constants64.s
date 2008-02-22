@@ -19,6 +19,71 @@
 /* do some unboxed arithmetic.   */
 
 
+/*
+
+	Register usage in C calling conventions differ between
+	Darwin/Linux/FreeBSD (which use the AMD-defined ABI) and
+	Windows64 (which uses something else).  The good news is that
+	Win64 did away with the cdecl/stdcall/fastcall madness, there
+	is only one ABI left.  Here's a rundown.
+
+	AMD64^Wx86-64 ABI:
+	 * Integer and pointer function arguments passed (from left to
+	right) in RDI, RSI, RDX, RCX, R8 and R9
+	 * FP arguments are passed in XMM0..XMM7
+	 * rest is passed on stack
+	 * return value in RAX
+	 * Callee must preserve RBP, RBX, R12..R15, MXCSR control bits
+	 * On function entry, x87 mode and DF clear is assumed
+	 * [RSP]..[RSP-128] must not be touched by signal handlers
+
+	Win64 ABI:
+	 * Integer and pointers passed in RCX, RDX, R8, R9
+	 * FP passed in XMM0..XMM3
+	 * rest is passed on stack
+	 * Return value in RAX or XMM0
+	 * Caller (!) responsible for creating and cleaning stack space for
+	spilling integer registers
+	 * Callee must preserve RBP, RBX, RSI, RDI, R12..R15, XMM6..XMM15
+
+	Both want their stack pointers to be 16 byte aligned on call,
+	equivalent to 8 byte offset after call due to pushed return address.
+	
+	http://msdn2.microsoft.com/en-us/library/zthk2dkh(VS.80).aspx
+	http://www.tortall.net/projects/yasm/manual/html/objfmt-win64-exception.html
+	http://www.x86-64.org/documentation/abi.pdf
+
+
+	Lisp register usage:
+
+	Clozure CL renames the physical registers, giving them names
+	based on their usage. An overview:
+
+	imm0..imm2
+	temp0..temp2
+	save0..save3
+	arg_x, arg_y, arg_z
+	fn
+
+	On top of that, further mappings are defined:
+
+	fname, next_method_context: 	temp0
+        nargs:				imm2
+        ra0:				temp2
+        xfn:				temp1
+        allocptr:			temp0
+        stack_temp:			mm7	
+	
+	x86-64 ABI mapping:
+	
+	imm0..imm2:		RAX, RDX, RCX
+	temp0..temp2:		RBX, R9, R10
+	save0..save3:		R15, R14, R12, R11
+	arg_x, arg_y, arg_z:	R8, RDI, RSI
+        fn:			R13	
+	
+*/
+	
 
 /* Redefining these standard register names - with the same _l, _w, _b suffixes  */
 /*  used in lispy symbolic names - allows us to play Stupid M4 Tricks in macros  */
