@@ -45,6 +45,7 @@ compiler/acode-rewrite.lisp -text
 doc/release-notes.txt -text
 doc/src/Makefile.fedora -text
 doc/src/Makefile.macports -text
+doc/src/makehtml -text
 doc/src/openmcl-documentation.xml -text
 doc/src/xsl/catalog -text
 doc/src/xsl/catalog-fedora -text

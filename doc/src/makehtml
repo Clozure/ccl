@@ -1,0 +1,12 @@
+%.html:%.xml $(XSLFILES) Makefile.fedora
+	$(XSLTPROC) \
+		--stringparam root.filename $(basename $(@F)) \
+		--stringparam base.dir $(TEMP)/ \
+		--stringparam openmcl.directory $(@D)/ \
+		--stringparam onechunk \
+			$(if $(findstring Doc, $(@D)), 0, 1) \
+		--stringparam xsltproc.version "$(XSLTPROCVERSION)." \
+		$(EXTRAPARAMS) \
+		$(STYLESHEET) $<
+	rm -f $(if $(findstring Doc, $(@D)), $(@D)/*.html, $@)
+	mv $(TEMP)/*.html $(@D)/
