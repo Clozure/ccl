@@ -96,7 +96,7 @@
     <p>The next argument, the <code>NSRect</code>, is a structure
     that we need only temporarily. Because <code>NSRect</code> values
     appear so often in Cocoa code, Clozure CL provides a handy way to
-    allocate them values temporarily, disposing of them
+    allocate them temporarily, disposing of them
     automatically. The <code>with-ns-rect</code> macro (in
     the <code>NS</code> package) creates an <code>NSRect</code> value,
     and then disposes of it when control leaves the scope of the
@@ -107,11 +107,8 @@
    ...)
     </pre>
 
-    <p>The macro creates a temporary <code>NSRect</code> value,
-    visible to any code in the body of the
-    macro. The <code>NSRect</code> value is automatically dispose at
-    the end of the macro form. We can use this rectangle to initialize
-    the shape of our new window:</p>
+    <p>We can use this rectangle to initialize the shape of our new
+    window:</p>
 
     <pre>
 (ns:with-ns-rect (r 100 100 400 300)
@@ -265,17 +262,19 @@
 NIL
     </pre>
 
-    <p>Now we just need to add the button to the window:</p>
+    <p>Now we just need to add the button to the window. This we do by
+    asking the window for its content view, and asking that view to
+    add the button as a subview:</p>
 
     <pre>
 (#/addSubview: (#/contentView my-window) my-button)
     </pre>
 
     <p>The button appears in the window with the rather uninspired
-    label "Button". Clicking it highlights the button but, since we
+    title "Button". Clicking it highlights the button but, since we
     didn't give it any action to perform, does nothing else.</p>
 
-    <p>We can give the button a more interesting label and, perhaps
+    <p>We can give the button a more interesting title and, perhaps
     more importantly, an action to perform, by passing a string and an
     action to it. First, let's set the button title:</p>
 
@@ -289,7 +288,7 @@ NIL
     </pre>
 
     <p>The button changes to display the text "Hello!". Notice that we
-    are careful to save a reference to the label text and release it
+    are careful to save a reference to the button text and release it
     after changing the button title. The normal memory-management
     policy in Cocoa is that if we allocate an object (like the
     NSString "Hello!") we are responsible for releasing it. Unlike
@@ -322,10 +321,10 @@ NIL
     </pre>
 
     <p>We'll need to define a method to execute in response to the
-    button's message. Action methods accept one argument (inaddition
+    button's message. Action methods accept one argument (in addition
     to the receiver): a sender. Normally Cocoa passes the button
     object itself as the sender argument; the method can do anything
-    it likes (oor nothing at all) with the sender.</p>
+    it likes (or nothing at all) with the sender.</p>
 
     <p>Here's a method that displays an alert dialog:</p>
 
@@ -340,7 +339,8 @@ NIL
     (#_NSRunAlertPanel title msg default-button alt-button other-button)
     (#/release title)
     (#/release msg)
-    (#/release default-button)))
+    (#/release default-button)
+    (#/release other-button)))
     </pre>
 
     <p>Now we can create an instance of the Greeter class and use it
