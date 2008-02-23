@@ -70,7 +70,7 @@ all: $(TEMP) $(HTMLFILES) distclean
 
 include makehtml
 
-install: $(HTMLFILES)
+install: $(HTMLFILES) distclean
 	cp $(HTMLFILES) ../HTML
 
 $(TEMP):
@@ -80,7 +80,7 @@ clean:
 	rm -rf build-*
 
 distclean: clean
-	-find . -type f -name "*~" | xargs rm
+	rm -f *~
 
 # All this rigamarole is to make the pathnames stored in the tarfile
 # have a uniform prefix regardless of where the build directory actually

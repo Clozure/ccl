@@ -21,7 +21,7 @@ XSLTPROC = /opt/local/bin/xsltproc
 # are, you should make sure that the correct catalog file is being used
 # (see below), and, if so, that its contents are correct.
 #EXTRAPARAMS= --load-trace
-EXTRAPARAMS=
+EXTRAPARAMS= --xinclude --nonet
 
 # The catalog file tells the translator where to find XSL stylesheets on the
 # local system.  The first choice here is what should be used for builds
@@ -54,9 +54,11 @@ export TZ = UTC
 
 # Compute some targets.
 
-XMLFILES = $(shell find . -name "*.xml")
+#XMLFILES = $(shell find . -name "*.xml")
+XMLFILES = [0-9][0-9]-*.xml ccl-documentation.xml
 XSLFILES = $(shell find xsl -name "*.xsl")
-HTMLFILES = $(patsubst %.xml,%.html, $(XMLFILES))
+#HTMLFILES = $(patsubst %.xml,%.html, $(XMLFILES))
+HTMLFILES = ccl-documentation.html
 
 # Save the xsltproc version string for use in debugging.
 
