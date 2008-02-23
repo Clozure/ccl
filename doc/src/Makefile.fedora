@@ -54,7 +54,8 @@ export TZ = UTC
 
 # Compute some targets.
 
-XMLFILES = $(shell find . -name "*.xml")
+#XMLFILES = $(shell find . -name "*.xml")
+XMLFILES = openmcl-documentation.xml
 XSLFILES = $(shell find xsl -name "*.xsl")
 HTMLFILES = $(patsubst %.xml,%.html, $(XMLFILES))
 
