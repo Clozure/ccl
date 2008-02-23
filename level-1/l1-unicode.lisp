@@ -177,7 +177,7 @@
 (defun 8-bit-fixed-width-length-of-vector-encoding (vector start end)
   (declare (ignore vector))
   (if (>= end start)
-    (values (- end start) (- end start))
+    (values (- end start) end)
     (values 0 0)))
 
 (defun 8-bit-fixed-width-length-of-memory-encoding (pointer noctets start)
@@ -4721,7 +4721,7 @@ or prepended to output."
   (funcall (character-encoding-length-of-vector-encoding-function encoding)
            vector
            start
-           (- end start)))
+           end))
                                          
 
 (defun decode-string-from-octets (vector &key
