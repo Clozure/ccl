@@ -80,7 +80,11 @@
 	temp0..temp2:		RBX, R9, R10
 	save0..save3:		R15, R14, R12, R11
 	arg_x, arg_y, arg_z:	R8, RDI, RSI
-        fn:			R13	
+        fn:			R13
+        rcontext_reg:		GS
+
+	Win64 specifics:
+        rcontext_reg:		R11
 	
 */
 	
@@ -130,6 +134,8 @@ define([r15_l],[r15d])
 define([r15_w],[r15w])					
 define([r15_b],[r15b])							
 
+/* Registers when using Lisp calling conventions */
+	
 define([imm0],[rax]) 
 	define([imm0_l],[eax])
 	define([imm0_w],[ax])
@@ -256,6 +262,132 @@ define([fp14],[xmm14])
 define([fp15],[xmm15])		
 define([fpzero],[fp15])
 
+/* Registers when running with native C calling conventions */
+
+define([cret],[rax]) 
+	define([cret_l],[eax])
+	define([cret_w],[ax])
+	define([cret_b],[al])
+	define([Rcret],[0])
+	
+define([ctemp0],[r10])
+	define([ctemp0_l],[r10d])
+	define([ctemp0_w],[r10w])
+	define([ctemp0_b],[r10b])
+	define([Rctemp0],[10])
+	
+define([ctemp1],[r11])		
+	define([ctemp1_l],[r11d])
+	define([ctemp1_w],[r11w])
+	define([ctemp1_b],[r11b])
+	define([Rctemp1],[11])
+	
+define([csave0],[rbx])
+	define([csave0_l],[ebx])
+	define([csave0_w],[bx])
+	define([csave0_b],[bl])
+	define([Rcsave0],[3])
+
+define([csave1],[r12])
+	define([csave1_l],[r12d])
+	define([csave1_w],[r12w])
+	define([csave1_b],[r12b])
+	define([Rcsave1],[12])
+	
+define([csave2],[r13])
+	define([csave2_l],[r13d])
+	define([csave2_w],[r13w])
+	define([csave2_b],[r13b])
+	define([Rcsave2],[13])
+	
+define([csave3],[r14])
+	define([csave3_l],[r14d])
+	define([csave3_w],[r14w])
+	define([csave3_b],[r14b])
+	define([Rcsave3],[14])
+		
+define([csave4],[r15])
+	define([csave4_l],[r15d])
+	define([csave4_w],[r15w])
+	define([csave4_b],[r15b])
+	define([Rcsave4],[15])	
+
+ifdef([WINDOWS],[
+
+define([carg0],[rcx])
+	define([carg0_l],[ecx])
+	define([carg0_w],[cx])
+	define([carg0_b],[cl])
+	define([Rcarg0],[1])
+	
+define([carg1],[rdx])
+	define([carg1_l],[edx])
+	define([carg1_w],[dx])
+	define([carg1_b],[dl])
+	define([Rcarg1],[2])
+	
+define([carg2],[r8])
+	define([carg2_l],[r8d])
+	define([carg2_w],[r8w])
+	define([carg2_b],[r8b])
+	define([Rcarg2],[8])
+
+define([carg3],[r9])
+	define([carg3_l],[r9d])
+	define([carg3_w],[r9w])
+	define([carg3_b],[r9b])
+	define([Rcarg3],[9])
+
+define([csave5],[rsi])
+	define([csave5_l],[esi])
+	define([csave5_w],[si])
+	define([csave5_b],[sil])
+	define([csave5_z],[6])
+
+define([csave6],[rdi])
+	define([csave6_l],[edi])
+	define([csave6_w],[di])
+	define([csave6_b],[dil])
+	define([Rcsave6],[7])
+
+],[
+	
+define([carg0],[rdi])
+	define([carg0_l],[edi])
+	define([carg0_w],[di])
+	define([carg0_b],[dil])
+	define([Rcarg0],[7])
+
+define([carg1],[rsi])
+	define([carg1_l],[esi])
+	define([carg1_w],[si])
+	define([carg1_b],[sil])
+	define([carg1_z],[6])
+
+define([carg2],[rdx])
+	define([carg2_l],[edx])
+	define([carg2_w],[dx])
+	define([carg2_b],[dl])
+	define([Rcarg2],[2])
+	
+define([carg3],[rcx])
+	define([carg3_l],[ecx])
+	define([carg3_w],[cx])
+	define([carg3_b],[cl])
+	define([Rcarg3],[1])
+	
+define([carg4],[r8])
+	define([carg4_l],[r8d])
+	define([carg4_w],[r8w])
+	define([carg4_b],[r8b])
+	define([Rcarg4],[8])
+
+define([carg5],[r9])
+	define([carg5_l],[r9d])
+	define([carg5_w],[r9w])
+	define([carg5_b],[r9b])
+	define([Rcarg5],[9])	
+])
 	
 nbits_in_word = 64
 nbits_in_byte = 8

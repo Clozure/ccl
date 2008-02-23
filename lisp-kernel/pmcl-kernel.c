@@ -1367,7 +1367,7 @@ check_os_version(char *progname)
   This should determine the cache block size.  It should also
   probably complain if we don't have (at least) SSE2.
 */
-extern int cpuid(int, int*, int*, int*);
+extern int cpuid(natural, natural*, natural*, natural*);
 
 #define X86_FEATURE_CMOV    (1<<15)
 #define X86_FEATURE_CLFLUSH (1<<19)
@@ -1380,7 +1380,7 @@ extern int cpuid(int, int*, int*, int*);
 Boolean
 check_x86_cpu()
 {
-  int eax, ebx, ecx, edx;
+  natural eax, ebx, ecx, edx;
   
   eax = cpuid(0, &ebx, &ecx, &edx);
 
