@@ -1,0 +1,98 @@
+# -*- coding: unix -*-
+# Use xsltproc and an XSL stylesheet to translate DocBook XML to HTML
+# This require GNU "make", GNU "tar", Posix "find", Posix "date", and
+# "bzip2".  All those external dependencies are, of course, less than
+# ideal.
+
+# for Linux (Fedora; other distros may require some tweaking.)
+
+# The pathname to the xsltproc executable.  Since most alternate
+# translators use Java, this makefile would need to be rewritten to use
+# anything but xsltproc.
+
+XSLTPROC = /usr/bin/xsltproc
+
+
+# On a new system or when using a new version of xsltproc or of the
+# stylesheet packages, it's a good idea to run with --load-trace and
+# peruse the output to  make sure that none of the stylesheets are being
+# pulled over the network.  It's a significant expense, compounded by
+# the fact that they aren't cached across invocations of xsltproc.  If they
+# are, you should make sure that the correct catalog file is being used
+# (see below), and, if so, that its contents are correct.
+#EXTRAPARAMS= --load-trace
+EXTRAPARAMS= 
+
+# The catalog file tells the translator where to find XSL stylesheets on the
+# local system.  The first choice here is what should be used for builds
+# which are going to take place on the clozure.com server.  The second is
+# for when you have installed docbook on OS X using the fink package manager.
+# If neither applies, comment both out, and the translator will automagically
+# look on the web for the stylesheets, instead.
+
+# assumes that you've said "port install docbook-xml" and
+# "port install docbook-xsl" at some point...
+export XML_CATALOG_FILES = /opt/local/etc/xml/catalog
+
+# The local stylesheet imports the generic stylesheets and
+# sets some custom parameters.
+
+STYLESHEET = xsl/openmcl.xsl
+
+# Obtain a temporary ID to be used as the identifier of this invocation of
+# make.
+
+TEMP := build-$(shell date +%s)
+
+# Save the current directory for use in the tarfile target.
+
+CWD := $(shell pwd)
+
+# There's datestamps on the page; let's make sure they're in
+# UTC instead of local time.
+
+export TZ = UTC
+
+# Compute some targets.
+
+XMLFILES = ccl-documentation.xml $(shell find . -name "??-*.xml")
+XSLFILES = $(shell find xsl -name "*.xsl")
+#HTMLFILES = $(patsubst %.xml,%.html, $(XMLFILES))
+HTMLFILES = ccl-documentation.html
+
+# Save the xsltproc version string for use in debugging.
+
+XSLTPROCVERSION = $(shell $(XSLTPROC) --version | head -n 1)
+
+.PHONY: all clean distclean lint
+
+all: $(TEMP) $(HTMLFILES) distclean
+
+$(HTMLFILES): $(XMLFILES) $(XSLFILES) Makefile.leopard
+	$(XSLTPROC) \
+		--xinclude \
+		--stringparam root.filename $(basename $(@F)) \
+		--stringparam base.dir $(TEMP)/ \
+		--stringparam openmcl.directory $(@D)/ \
+		--stringparam onechunk 1 \
+		--stringparam xsltproc.version "$(XSLTPROCVERSION)." \
+		$(EXTRAPARAMS) \
+		$(STYLESHEET) $<
+	rm -f $(if $(findstring Doc, $(@D)), $(@D)/*.html, $@)
+	mv $(TEMP)/*.html $(@D)/
+
+install: $(HTMLFILES)
+	cp $(HTMLFILES) ../HTML
+
+$(TEMP):
+	mkdir $(TEMP)
+
+lint:
+	xmllint --noout --noent --nonet --xinclude ccl-documentation.xml
+
+clean:
+	rm -rf build-*
+
+distclean: clean
+	rm -f *~
+
