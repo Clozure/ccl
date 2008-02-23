@@ -58,7 +58,6 @@ doc/src/12-gc.xml -text
 doc/src/13-implementation.xml -text
 doc/src/14-modifying.xml -text
 doc/src/Makefile.fedora -text
-doc/src/Makefile.leopard -text
 doc/src/Makefile.macports -text
 doc/src/ccl-documentation.xml -text
 doc/src/makehtml -text

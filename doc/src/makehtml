@@ -1,5 +1,6 @@
-%.html:%.xml $(XSLFILES) Makefile.fedora
+%.html:%.xml $(XSLFILES)
 	$(XSLTPROC) \
+		--xinclude \
 		--stringparam root.filename $(basename $(@F)) \
 		--stringparam base.dir $(TEMP)/ \
 		--stringparam openmcl.directory $(@D)/ \
