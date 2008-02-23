@@ -1,0 +1,368 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN" "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd" [
+<!ENTITY rest "<varname>&amp;rest</varname>">
+<!ENTITY key "<varname>&amp;key</varname>">
+<!ENTITY optional "<varname>&amp;optional</varname>">
+<!ENTITY body "<varname>&amp;body</varname>">
+<!ENTITY aux "<varname>&amp;aux</varname>">
+<!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+]>
+
+  <chapter id="Writing-Portable-Extensions-to-the-Object-System-using-the-MetaObject-Protocol">
+    <title>Writing Portable Extensions to the Object System  using the MetaObject Protocol</title>
+
+    <sect1 id="MOP-Overview">
+      <title>Overview</title>
+      <para>OpenMCL supports a fairly large subset of the
+      semi-standard MetaObject Protocol (MOP) for CLOS, as defined in
+      chapters 5 and 6 of "The Art Of The Metaobject Protocol",
+      (Kiczales et al, MIT Press 1991, ISBN 0-262-61074-4); this
+      specification is also available online at
+      http://www.alu.org/mop/index.html.</para>
+    </sect1>
+
+    <sect1 id="MOP-Implementation-status">
+      <title>Implementation status</title>
+      <para>The keyword :openmcl-partial-mop is on *FEATURES* to
+      indicate the presence of this functionality.</para>
+
+      <para>All of the symbols defined in the MOP specification
+      (whether implemented or not) are exported from the "CCL" package
+      and from an "OPENMCL-MOP" package.</para>
+      <para><informaltable><tgroup cols="2" colsep="1"
+      rowsep="1"><colspec align="center" colname="col0" /><colspec
+      align="center" colname="col1" /><thead><row><entry
+      align="center" valign="top"><para>construct</para></entry><entry
+      align="center"
+      valign="top"><para>status</para></entry></row></thead><tbody><row><entry
+      align="center"
+      valign="top"><para>accessor-method-slot-definition</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>add-dependent</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>add-direct-method</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>add-direct-subclass</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>add-method</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>class-default-initargs</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>class-direct-default-initargs</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>class-direct-slots</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>class-direct-subclasses</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>class-direct-superclasses</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>class-finalized-p</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>class-prototype</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>class-slots</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>compute-applicable-methods</para></entry><entry
+      align="center"
+      valign="top"><para>-</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>compute-applicable-methods-using-classes</para></entry><entry
+      align="center"
+      valign="top"><para>-</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>compute-class-precedence-list</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>compute-direct-initargs</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>compute-discriminating-function</para></entry><entry
+      align="center"
+      valign="top"><para>-</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>compute-effective-method</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>compute-effective-slot-definition</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>compute-slots</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>direct-slot-definition-class</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>effective-slot-definition-class</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>ensure-class</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>ensure-class-using-class</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>ensure-generic-function-using-class</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>eql-specializer-object</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>extract-lambda-list</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>extract-specializer-names</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>finalize-inheritance</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>find-method-combination</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>funcallable-standard-instance-access</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>generic-function-argument-precedence-order</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>generic-function-declarations</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>generic-function-lambda-list</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>generic-function-method-class</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>generic-function-method-combination</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>generic-function-methods</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>generic-function-name</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>intern-eql-specializer</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>make-method-lambda</para></entry><entry
+      align="center"
+      valign="top"><para>-</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>map-dependents</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>method-function</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>method-generic-function</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>method-lambda-list</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>method-qualifiers</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>method-specializers</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>reader-method-class</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>remove-dependent</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>remove-direct-method</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>remove-direct-subclass</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>remove-method</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>set-funcallable-instance-function</para></entry><entry
+      align="center"
+      valign="top"><para>-</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>slot-boundp-using-class</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>slot-definition-allocation</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>slot-definition-initargs</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>slot-definition-initform</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>slot-definition-initfunction</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>slot-definition-location</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>slot-definition-name</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>slot-definition-readers</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>slot-definition-type</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>slot-definition-writers</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>slot-makunbound-using-class</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>slot-value-using-class</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>specializer-direct-generic-functions</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>specializer-direct-methods</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>standard-instance-access</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>update-dependent</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>validate-superclass</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row><row><entry
+      align="center"
+      valign="top"><para>writer-method-class</para></entry><entry
+      align="center"
+      valign="top"><para>+</para></entry></row></tbody></tgroup></informaltable></para>
+      
+      <para>Note that those generic functions whose status is "-" in
+      the table above deal with the internals of generic function
+      dispatch and method invocation (the "Generic Function Invocation
+      Protocol".) Method functions are implemented a bit differently
+      in OpenMCL from what the MOP expects, and it's not yet clear if
+      or how this subprotocol can be well-supported.</para>
+      <para>Those constructs that are marked as "+" in the table above
+      are nominally implemented as the MOP document specifies
+      (deviations from the specification should be considered bugs;
+      please report them as such.) Note that some CLOS implementations
+      in widespread use (e.g., PCL) implement some things
+      (ENSURE-CLASS-USING-CLASS comes to mind) a bit differently from
+      what the MOP specifies.</para>
+    </sect1>
+
+    <sect1 id="Concurrency-issues">
+      <title>Concurrency issues</title>
+      <para>The entire CLOS class and generic function hierarchy is
+      effectively a (large, complicated) shared data structure; it's
+      not generally practical for a thread to request exclusive access
+      to all of CLOS, and the effects of volitional modification of
+      the CLOS hierarchy (via clas redefinition, CHANGE-CLASS, etc) in
+      a multithreaded environment aren't always tractable.</para>
+      <para>Native threads exacerbate this problem (in that they
+      increase the opportunities for concurrent modification and
+      access.) The implementation should try to ensure that a thread's
+      view of any subset of the CLOS hierarchy is consistent (to the
+      extent that that's possible) and should try to ensure that
+      incidental modifications of the hierarchy (cache updates, etc.)
+      happen atomically; it's not generally possible for the
+      implementation to guarantee that a thread's view of things is
+      correct and current.</para>
+      <para>If you are loading code and defining classes in the most
+      usual way, which is to say, via the compiler, using only a
+      single thread, these issues are probably not going to affect you
+      much.</para>
+      <para>If, however, you are making finicky changes to the class
+      hierarchy while you're running multiple threads which manipulate
+      objects related to each other, more care is required.  Before
+      doing such a thing, you should know what you're doing and
+      already be aware of what precautions to take, without being
+      told.  That said, if you do it, you should seriously consider
+      what your application's critical data is, and use locks for
+      critical code sections.</para>
+    </sect1>
+  </chapter>

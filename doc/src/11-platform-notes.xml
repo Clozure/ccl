@@ -1,0 +1,1258 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN" "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd" [
+<!ENTITY rest "<varname>&amp;rest</varname>">
+<!ENTITY key "<varname>&amp;key</varname>">
+<!ENTITY optional "<varname>&amp;optional</varname>">
+<!ENTITY body "<varname>&amp;body</varname>">
+<!ENTITY aux "<varname>&amp;aux</varname>">
+<!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+]>
+
+  <chapter id="Platform-specific-notes">
+    <title>Platform-specific notes</title>
+      
+
+    <sect1 id="Platform-specific-overview">
+      <title>Overview</title>
+      <para> The documentation and whatever experience you may have in
+      using OpenMCL under Linux should also apply to using it under
+      Darwin/MacOS X and FreeBSD. There are some differences between
+      the platforms, and these differences are sometimes exposed in
+      the implementation.</para>
+
+
+      <sect2 id="File-system-case">
+	<title>File-system case</title>
+
+	<para>Darwin and MacOS X use HFS+ file systems by default;
+	HFS+ file systems are usually case-insensitive. Most of
+	OpenMCL's filesystem and pathname code assumes that the
+	underlying filesystem is case-sensitive; this assumption
+	extends to functions like EQUAL, which assumes that #p"FOO"
+	and #p"foo" denote different, un-EQUAL filenames. Since
+	Darwin/MacOS X can also use UFS and NFS filesystems, the
+	opposite assumption would be no more correct than the one
+	that's currently made.</para>
+        <para>Whatever the best solution to this problem turns out to be, there are
+some practical considerations. Doing:</para>
+        <programlisting>
+? (save-application "DPPCCL")
+	</programlisting>
+        <para>on 32-bit DarwinPPC has the unfortunate side-effect of
+        trying to overwrite the Darwin OpenMCL kernel, "dppccl", on a
+        case-insensitive filesystem.</para>
+        <para>To work around this, the Darwin OpenMCL kernel expects
+        the default heap image file name to be the kernel's own
+        filename with the string ".image" appended, so the idiom would
+        be:</para>
+        <programlisting>
+? (save-application "dppccl.image")
+	</programlisting>
+      </sect2>
+
+      <sect2 id="Line-Termination-Characters">
+	<title>Line Termination Characters</title>
+        <para>MacOSX effectively supports two distinct line-termination
+	conventions. Programs in its Darwin substrate follow the Unix
+	convention of recognizing #\LineFeed as a line terminator; traditional
+	MacOS programs use #\Return for this purpose.  Many modern
+	GUI programs try to support several different line-termination
+	conventions (on the theory that the user shouldn't be too concerned
+	about what conventions are used an that it probably doesn't matter.
+	Sometimes this is true, other times ... not so much.
+	</para>
+        <para>OpenMCL follows the Unix convention on both Darwin and
+        LinuxPPC, but offers some support for reading and writing
+        files that use other conventions (including traditional MacOS
+        conventions) as well.</para> 
+	<para>This support (and anything like it) is by nature
+	heuristic: it can successfully hide the distinction between
+	newline conventions much of the time, but could mistakenly
+	change the meaning of otherwise correct programs (typically
+	when files contain both #\Return and #\Linefeed characters or
+	when files contain mixtures of text and binary data.) Because
+	of this concern, the default settings of some of the variables
+	that control newline translation and interpretation are
+	somewhat conservative.</para>
+	<para>Although the issue of multiple newline conventions
+	primarily affects MacOSX users, the functionality described
+	here is available under LinuxPPC as well (and may occasionally
+	be useful there.)</para> <para>None of this addresses issues
+	related to the third newline convention ("CRLF") in widespread
+	use (since that convention isn't native to any platform on
+	which OpenMCL currently runs). If OpenMCL is ever ported to
+	such a platform, that issue might be revisited.</para>
+	<para>Note that some MacOS programs (including some versions
+	of commercial MCL) may use HFS file type information to
+	recognize TEXT and other file types and so may fail to
+	recognize files created with OpenMCL or other Darwin
+	applications (regardless of line termination issues.)</para>
+	<para>Unless otherwise noted, the symbols mentioned in this
+	documentation are exported from the CCL package.</para>
+      </sect2>
+
+      <sect2 id="Single-precision-trig---transcendental-functions">
+	<title>Single-precision trig &amp; transcendental functions</title>
+        <para>
+	Despite what Darwin's man pages say, early versions of its math library
+	(up to and including at least OSX 10.2 (Jaguar) don't implement
+	single-precision variants of the transcendental and trig functions
+	(#_sinf, #_atanf, etc.) OpenMCL worked around this by coercing
+	single-precision args to double-precision, calling the
+	double-precision version of the math library function, and coercing
+	the result back to a SINGLE-FLOAT. These steps can introduce rounding
+	errors (and potentially overflow conditions) that might not be present
+	or as severe if true 32-bit variants were available.</para>
+      </sect2>
+
+      <sect2 id="Shared-libraries">
+	<title>Shared libraries</title>
+        <para>Darwin/MacOS X distinguishes between "shared libraries"
+        and "bundles" or "extensions"; Linux and FreeBSD don't. In
+        Darwin, "shared libraries" have the file type "dylib" : the
+        expectation is that this class of file is linked against when
+        executable files are created and loaded by the OS when the
+        executable is launched. The latter class -
+        "bundles/extensions" - are expected to be loaded into and
+        unloaded from a running application, via a mechanism like the
+        one used by OpenMCL's OPEN-SHARED-LIBRARY function.</para>
+      </sect2>
+    </sect1>
+
+    <sect1 id="Unix-Posix-Darwin-Features">
+      <title>Unix/Posix/Darwin Features</title>
+      <para>OpenMCL has several convenience functions which allow you
+      to make Posix (portable Unix) calls without having to use the
+      foreign-function interface.  Each of these corresponds directly
+      to a single Posix function call, as it might be made in C.
+      There is no attempt to make these calls correspond to Lisp
+      idioms, such as <literal>setf</literal>.  This means that their
+      behaviour is simple and predictable.</para>
+      <para>For working with environment variables, there are
+      CCL::GETENV and CCL::SETENV.</para>
+      <para>For working with user and group IDs, there are
+      CCL::GETUID, CCL::SETUID, and CCL::SETGID.  To find the home
+      directory of an arbitrary user, as set in the user database
+      (/etc/passwd), there is CCL::GET-USER-HOME-DIR.</para>
+      <para>For process IDs, there is CCL::GETPID.</para>
+      <para>For the <literal>system()</literal> function, there is
+      CCL::OS-COMMAND.  Ordinarily, it is better - both more efficient
+      and more predictable - to use the features described in <xref
+      linkend="Running-Other-Programs-as-Subprocesses"/>.  However,
+      sometimes you may want to specifically ask the shell to invoke a
+      command for you.</para>
+    </sect1>
+
+    <sect1 id="Cocoa-Programming-in-OpenMCL">
+      <title>Cocoa Programming in OpenMCL</title>
+      <para>Cocoa is one of Apple's APIs for GUI programming; for most
+      purposes, development is considerably faster with Cocoa than
+      with the alternatives.  You should have a little familiarity
+      with it, to better understand this section.</para>
+      <para>A small sample Cocoa program can be invoked by evaluating
+      (REQUIRE 'TINY) and then (CCL::TINY-SETUP). This program
+      provides a simple example of using several of the bridge's
+      capabilities.</para>
+      <para>The Tiny demo creates Cocoa objects dynamically, at
+      runtime, which is always an option.  However, for large
+      applications, it is usually more convenient to create your
+      objects with Apple Interface Builder, and store them in .nib
+      files to be loaded when needed.  Both approaches can be freely
+      mixed in a single program.</para>
+
+      <sect2 id="The-Command-Line-and-the-Window-System">
+	<title>The Command Line and the Window System</title>
+        <para>OpenMCL is ordinarily a command-line application (it
+        doesn't have a connection to the OSX Window server, doesn't
+        have its own menubar or dock icon, etc.) By opening some
+        libraries and jumping through some hoops, it's able to sort of
+        transform itself into a full-fledged GUI application (while
+        retaining its original TTY-based listener.) The general idea
+        is that this hybrid environment can be used to test and
+        protoype UI ideas and the resulting application can eventually
+        be fully transformed into a bundled, double-clickable
+        application. This is to some degree possible, but there needs
+        to be a bit more infrastructure in place before many people
+        would find it easy.</para>
+        <para>Cocoa applications use the NSLog function to write
+        informational/warning/error messages to the application's
+        standard output stream. When launched by the Finder, a GUI
+        application's standard output is diverted to a logging
+        facility that can be monitored with the Console application
+        (found in /Applications/Utilities/Console.app).  In the hybrid
+        environment, the application's standard output stream is
+        usually the initial listener's standard output stream. With
+        two different buffered stream mechanisms trying to write to
+        the same underlying Unix file descriptor, it's not uncommon to
+        see NSLog output mixed with lisp output on the initial
+        listener.</para>
+      </sect2>
+
+      <sect2 id="Writing--and-reading--Cocoa-code">
+	<title>Writing (and reading) Cocoa code</title> <para>The
+	syntax of the constructs used to define Cocoa classes and
+	methods has changed a bit (it was never documented outside of
+	the source code and never too well documented at all), largely
+	as the result of functionality offered by Randall Beer's
+	bridge; the &ldquo;standard name-mapping conventions&rdquo;
+	referenced below are described in his CocoaBridgeDoc.txt file,
+	as are the constructs used to invoke (&ldquo;send messages
+	to&rdquo;) Cocoa methods.</para>
+        <para>All of the symbols described below are currently internal to
+the CCL package.</para>
+	<simplelist type="vert" columns="1">
+	  <member><xref linkend="m_class"/></member>
+	  <member><xref linkend="m_selector"/></member>
+	  <member><xref linkend="m_define-objc-method"/></member>
+	  <member><xref linkend="m_define-objc-class-method"/></member>
+	</simplelist>
+      </sect2>
+
+      <sect2 id="The-Application-Kit-and-Multiple-Threads">
+	<title>The Application Kit and Multiple Threads</title>
+        <para>The Cocoa API is broken into several pieces.  The
+        Application Kit, affectionately called AppKit, is the one
+        which deals with window management, drawing, and handling
+        events.  AppKit really wants all these things to be done by a
+        "distinguished thread".  creation, and drawing to take place
+        on a distinguished thread.</para>
+        <para>Apple has published some guidelines which discuss these
+        issues in some detail; see the Apple Multithreading
+        Documentation, and in particular the guidelines on Using the
+        Application Kit from Multiple Threads.  The upshot is that
+        there can sometimes be unexpected behavior when objects are
+        created in threads other than the distinguished event thread;
+        eg, the event thread sometimes starts performing operations on
+        objects that haven't been fully initialized.</para> <para>It's
+        certainly more convenient to do certain types of exploratory
+        programming by typing things into a listener or evaluating a
+        &ldquo;defun&rdquo; in an Emacs buffer; it may sometimes be
+        necessary to be aware of this issue while doing so.</para>
+        <para>Each thread in the Cocoa runtime system is expected to
+        maintain a current &ldquo;autorelease pool&rdquo; (an instance
+        of the NSAutoreleasePool class); newly created objects are
+        often added to the current autorelease pool (via the
+        -autorelease method), and periodically the current autorelease
+        pool is sent a &ldquo;-release&rdquo; message, which causes it
+        to send &ldquo;-release&rdquo; messages to all of the objects
+        that've been added to it.</para>
+        <para>If the current thread doesn't have a current autorelease
+        pool, the attempt to autorelease any object will result in a
+        severe-looking warning being written via NSLog. The event
+        thread maintains an autorelease pool (it releases the current
+        pool after each event is processed and creates a new one for
+        the next event), so code that only runs in that thread should
+        never provoke any of these severe-looking NSLog
+        messages.</para> <para>To try to suppress these messages (and
+        still participate in the Cocoa memory management scheme), each
+        listener thread (the initial listener and any created via the
+        &ldquo;New Listener&rdquo; command in the IDE) is given a
+        default autorelease pool; there are REPL colon-commands for
+        manipulating the current listener's &ldquo;toplevel
+        auturelease pool&rdquo;.</para>
+        <para>In the current scheme, every time that Cocoa calls lisp
+        code, a lisp error handler is established which maps any lisp
+        conditions to ObjC exceptions and arranges that this exception
+        is raised when the callback to lisp returns. Whenever lisp
+        code invokes a Cocoa method, it does so with an ObjC exception
+        handler in place; this handler maps ObjC exceptions to lisp
+        conditions and signals those conditions.</para> <para>Any
+        unhandled lisp error or ObjC exception that occurs during the
+        execution of the distinguished event thread's event loop
+        causes a message to be NSLog'ed and the event loop to (try to)
+        continue execution. Any error that occurs in other threads is
+        handled at the point of the outermost Cocoa method
+        invocation. (Note that the error is not necessarily
+        &ldquo;handled&rdquo; in the dynamic context in which it
+        occurs.)</para>
+        <para>Both of these behaviors could possibly be improved; both of them
+seem to be substantial improvements over previous behaviors (where,
+for instance, a misspelled message name typically terminated the
+application.)</para>
+      </sect2>
+
+      <sect2 id="Acknowledgement--2-">
+	<title>Acknowledgement</title>
+        <para>The Cocoa bridge was originally developed, and
+        generously contributed by, Randal Beer.</para>
+      </sect2>
+    </sect1>
+
+    <sect1 id="Building-an-Application-Bundle">
+      <title>Building an Application Bundle</title>
+      <para>You may have noticed that (require "COCOA") takes a long
+      time to load.  It is possible to avoid this by saving a Lisp
+      heap image which has everything already loaded.  There is an
+      example file which allows you to do this,
+      "ccl/examples/cocoa-application.lisp", by producing a
+      double-clickable application which runs your program.  First,
+      load your own program.  Then, do:</para>
+      <programlisting>
+? (require "COCOA-APPLICATION")
+      </programlisting>
+      <para>When it finishes, you should be able to double-click the OpenMCL icon
+in the ccl directory, to quickly start your program.</para>
+      <para>The OS may have already decided that OpenMCL.app isn't a valid
+executable bundle, and therefore won't let you double-click it.
+If this happens to you, to force it to reconsider, just update the
+last-modified time of the bundle.  In Terminal:</para>
+      <programlisting>> touch OpenMCL.app
+</programlisting>
+      <para>There is one important caveat.</para>
+      <para>Because of the way that the ObjC bridge currently works, a saved
+image is dependent upon the <emphasis>exact</emphasis> versions of
+the Cocoa libraries which were present when it was saved.
+Specifically, the interface database is.  So, for example, an
+application produced under OS X 10.3.5 will not work under
+OS X 10.3.6.  This is inconvenient when you wish to distribute an
+application you have built this way.</para>
+      <para>Work in this direction is ongoing.  It is worth looking at the project
+"Bosco", by Mikel Evins, which is a template that can be used to build
+application bundles in a different way.  It is
+available here, as part
+of the "Clotho" project, and there is
+here.</para>
+      <para>When an image which had contained ObjC classes (which are also
+CLOS classes) is re-launched, those classes are "revived": all
+preexisting classes have their addresses updated destructively, so that
+existing subclass/superclass/metaclass relationships are maintained.
+It's not possible (and may never be) to preserve foreign
+instances across SAVE-APPLICATION. (It may be the case that NSArchiver
+and NSCoder and related classes offer some approximation of that.)</para>
+    </sect1>
+
+    <sect1 id="Recommended-Reading">
+      <title>Recommended Reading></title>
+      <variablelist>
+	<varlistentry>
+	   <term>
+	     <ulink url="http://developer.apple.com/documentation/Cocoa/">Cocoa Documentation</ulink>
+	   </term>
+
+	   <listitem>
+	     <para>
+	       This is the top page for all of Apple's documentation on
+	       Cocoa.  If you are unfamiliar with Cocoa, it is a good
+	       place to start.
+	     </para>
+	   </listitem>
+	</varlistentry>
+	<varlistentry>
+	  <term>
+	    <ulink url="http://developer.apple.com/documentation/Cocoa/Reference/Foundation/ObjC_classic/index.html">Foundation Reference for Objective-C</ulink>
+	  </term>
+
+	  <listitem>
+	    <para>
+	      This is one of the two most important Cocoa references; it
+	      covers all of the basics, except for GUI programming.  This is
+	      a reference, not a tutorial.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term>
+	    <ulink url="http://developer.apple.com/documentation/Cocoa/Reference/ApplicationKit/ObjC_classic/index.html">Application Kit Reference for Objective-C</ulink>
+	  </term>
+
+	  <listitem>
+	    <para>
+	      This is the other; it covers GUI programming with Cocoa
+	      in considerable depth.  This is a reference, not a tutorial.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term>
+	    <ulink url="http://developer.apple.com/documentation/index.html">Apple Developer Documentation</ulink>
+	  </term>
+
+	  <listitem>
+	    <para>
+	      This is the site which the above two documents are found on;
+	      go here to find the documentation on any other Apple API.
+	      Also go here if you need general guidance about OS X, Carbon,
+	      Cocoa, Core Foundation, or Objective C.
+	    </para>
+	  </listitem>
+	</varlistentry>
+      </variablelist>
+
+    </sect1>
+
+    <sect1 id="Operating-System-Dictionary">
+      <title>Operating-System Dictionary</title>
+
+      <refentry id="f_getenv">
+	<indexterm zone="f_getenv">
+	  <primary>getenv</primary>
+	</indexterm>
+
+	<refnamediv>
+	  <refname>CCL::GETENV</refname>
+	  <refpurpose></refpurpose>
+	  <refclass>Function</refclass>
+	</refnamediv>
+
+	<refsynopsisdiv>
+	  <synopsis><function>getenv</function> name => value</synopsis>
+	</refsynopsisdiv>
+
+	<refsect1>
+	  <title>Arguments and Values</title>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term>name</term>
+
+	      <listitem>
+		<para>a string which is the name of an existing
+		environment variable;
+		case-sensitive</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>value</term>
+
+	      <listitem>
+		<para>if there is an environment variable named
+		<varname>name</varname>, its value, as a string; if there
+		is not, NIL</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</refsect1>
+
+	<refsect1>
+	  <title>Description</title>
+
+	  <para>
+	    Looks up the value of the environment variable named by
+	    <varname>name</varname>, in the OS environment.
+	  </para>
+	</refsect1>
+      </refentry>
+
+      <refentry id="f_setenv">
+	<indexterm zone="f_setenv">
+	  <primary>setenv</primary>
+	</indexterm>
+
+	<refnamediv>
+	  <refname>CCL::SETENV</refname>
+	  <refpurpose></refpurpose>
+	  <refclass>Function</refclass>
+	</refnamediv>
+
+	<refsynopsisdiv>
+	  <synopsis><function>setenv</function> name value => errno</synopsis>
+	</refsynopsisdiv>
+
+	<refsect1>
+	  <title>Arguments and Values</title>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term>name</term>
+
+	      <listitem>
+		<para>a string which is the name of a new or existing
+		environment variable;
+		case-sensitive</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>value</term>
+
+	      <listitem>
+		<para>a string, to be the new value of the
+		environment variable
+		named by <varname>name</varname></para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>errno</term>
+
+	      <listitem>
+		<para>zero if the function call completes successfully;
+		otherwise, a platform-dependent integer which describes
+		the problem</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</refsect1>
+
+	<refsect1>
+	  <title>Description</title>
+
+	  <para>
+	    Sets the value of the environment variable named by
+	    <varname>name</varname>, in the OS environment.  If there is
+	    no such environment
+	    variable, creates it.
+	  </para>
+	</refsect1>
+      </refentry>
+
+      <refentry id="f_current-directory-name">
+	<indexterm zone="f_current-directory-name">
+	  <primary>current-directory-name</primary>
+	</indexterm>
+
+	<refnamediv>
+	  <refname>CCL::CURRENT-DIRECTORY-NAME</refname>
+	  <refpurpose></refpurpose>
+	  <refclass>Function</refclass>
+	</refnamediv>
+
+	<refsynopsisdiv>
+	  <synopsis><function>current-directory-name</function>
+	  => path</synopsis>
+	</refsynopsisdiv>
+
+	<refsect1>
+	  <title>Values</title>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term>path</term>
+
+	      <listitem>
+		<para>a string, an absolute pathname in Posix format - with
+		directory components separated by slashes</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</refsect1>
+
+	<refsect1>
+	  <title>Description</title>
+
+	  <para>
+	    Looks up the current working directory of the OpenMCL process;
+	    unless it has been changed, this is the directory OpenMCL was
+	    started in.
+	  </para>
+	</refsect1>
+      </refentry>
+
+      <refentry id="f_getuid">
+	<indexterm zone="f_getuid">
+	  <primary>getuid</primary>
+	</indexterm>
+
+	<refnamediv>
+	  <refname>CCL::GETUID</refname>
+	  <refpurpose></refpurpose>
+	  <refclass>Function</refclass>
+	</refnamediv>
+
+	<refsynopsisdiv>
+	  <synopsis><function>getuid</function> => uid</synopsis>
+	</refsynopsisdiv>
+
+	<refsect1>
+	  <title>Values</title>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term>uid</term>
+
+	      <listitem>
+		<para>a non-negative integer, identifying a specific user
+		account as defined in the OS user database</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</refsect1>
+
+	<refsect1>
+	  <title>Description</title>
+
+	  <para>
+	    Returns the ("real") user ID of the current user.
+	  </para>
+	</refsect1>
+      </refentry>
+
+      <refentry id="f_setuid">
+	<indexterm zone="f_setuid">
+	  <primary>setuid</primary>
+	</indexterm>
+
+	<refnamediv>
+	  <refname>CCL::SETUID</refname>
+	  <refpurpose></refpurpose>
+	  <refclass>Function</refclass>
+	</refnamediv>
+
+	<refsynopsisdiv>
+	  <synopsis><function>setuid</function> uid => errno</synopsis>
+	</refsynopsisdiv>
+
+	<refsect1>
+	  <title>Arguments and Values</title>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term>uid</term>
+
+	      <listitem>
+		<para>a non-negative integer, identifying a specific user
+		account as defined in the OS user database</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>errno</term>
+
+	      <listitem>
+		<para>zero if the function call completes successfully;
+		otherwise, a platform-dependent integer which describes
+		the problem</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</refsect1>
+
+	<refsect1>
+	  <title>Description</title>
+
+	  <para>
+	    Attempts to change the current user ID (both "real" and
+	    "effective"); fails unless
+	    the OpenMCL process has super-user privileges or the ID
+	    given is that of the current user.
+	  </para>
+	</refsect1>
+      </refentry>
+
+      <refentry id="f_setgid">
+	<indexterm zone="f_setgid">
+	  <primary>setgid</primary>
+	</indexterm>
+
+	<refnamediv>
+	  <refname>CCL::SETGID</refname>
+	  <refpurpose></refpurpose>
+	  <refclass>Function</refclass>
+	</refnamediv>
+
+	<refsynopsisdiv>
+	  <synopsis><function>setgid</function> gid => errno</synopsis>
+	</refsynopsisdiv>
+
+	<refsect1>
+	  <title>Arguments and Values</title>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term>gid</term>
+
+	      <listitem>
+		<para>a non-negative integer, identifying a specific
+		group as defined in the OS user database</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>errno</term>
+
+	      <listitem>
+		<para>zero if the function call completes successfully;
+		otherwise, a platform-dependent integer which describes
+		the problem</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</refsect1>
+
+	<refsect1>
+	  <title>Description</title>
+
+	  <para>
+	    Attempts to change the current group ID (both "real" and
+	    "effective"); fails unless
+	    the OpenMCL process has super-user privileges or the ID
+	    given is that of a group to which the current user belongs.
+	  </para>
+	</refsect1>
+      </refentry>
+
+      <refentry id="f_getpid">
+	<indexterm zone="f_getpid">
+	  <primary>getpid</primary>
+	</indexterm>
+
+	<refnamediv>
+	  <refname>CCL::GETPID</refname>
+	  <refpurpose></refpurpose>
+	  <refclass>Function</refclass>
+	</refnamediv>
+
+	<refsynopsisdiv>
+	  <synopsis><function>getpid</function> => pid</synopsis>
+	</refsynopsisdiv>
+
+	<refsect1>
+	  <title>Values</title>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term>pid</term>
+
+	      <listitem>
+		<para>a non-negative integer, identifying an OS process</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</refsect1>
+
+	<refsect1>
+	  <title>Description</title>
+
+	  <para>
+	    Returns the ID of the OpenMCL OS process.
+	  </para>
+	</refsect1>
+      </refentry>
+
+      <refentry id="f_get-user-home-dir">
+	<indexterm zone="f_get-user-home-dir">
+	  <primary>get-user-home-dir</primary>
+	</indexterm>
+
+	<refnamediv>
+	  <refname>CCL::GET-USER-HOME-DIR</refname>
+	  <refpurpose></refpurpose>
+	  <refclass>Function</refclass>
+	</refnamediv>
+
+	<refsynopsisdiv>
+	  <synopsis><function>get-user-home-dir</function> 
+	  uid => path</synopsis>
+	</refsynopsisdiv>
+
+	<refsect1>
+	  <title>Values</title>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term>uid</term>
+
+	      <listitem>
+		<para>a non-negative integer, identifying a specific user
+		account as defined in the OS user database</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term>path</term>
+
+	      <listitem>
+		<para>a string, an absolute pathname in Posix format - with
+		directory components separated by slashes; or NIL</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</refsect1>
+
+	<refsect1>
+	  <title>Description</title>
+
+	  <para>
+	    Looks up and returns the defined home directory of the user
+	    identified by <varname>uid</varname>.  This value comes from the
+	    OS user database, not from the <varname>$HOME</varname>
+	    environment variable.  Returns NIL if there is no user with
+	    the ID <varname>uid</varname>.
+	  </para>
+	</refsect1>
+      </refentry>
+
+      <refentry id="f_os-command">
+	<indexterm zone="f_os-command">
+	  <primary>os-command</primary>
+	</indexterm>
+
+	<refnamediv>
+	  <refname>CCL::OS-COMMAND</refname>
+	  <refpurpose></refpurpose>
+	  <refclass>Function</refclass>
+	</refnamediv>
+
+	<refsynopsisdiv>
+	  <synopsis><function>os-command</function> command-line
+	  => exit-code</synopsis>
+	</refsynopsisdiv>
+
+	<refsect1>
+	  <title>Values</title>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term>command-line</term>
+
+	      <listitem><para>a string, obeying all the whitespace and
+	      escaping
+	      conventions required by the user's default system shell</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	  <variablelist>
+	    <varlistentry>
+	      <term>exit-code</term>
+
+	      <listitem><para>a non-negative integer, returned as the exit
+	      code of a subprocess; zero indicates success</para></listitem>
+	    </varlistentry>
+	  </variablelist>
+	</refsect1>
+
+	<refsect1>
+	  <title>Description</title>
+
+	  <para>
+	    Invokes the Posix function <function>system()</function>, which
+	    invokes the user's default system shell (such as
+	    sh or tcsh) as a new process, and has that shell execute
+	    <varname>command-line</varname>.
+	  </para>
+	  
+	  <para>
+	    If the shell was able to find the command specified in
+	    <varname>command-line</varname>, then <varname>exit-code</varname>
+	    is the exit code of that command.  If not, it is the exit
+	    code of the shell itself.
+	  </para>
+	</refsect1>
+
+	<refsect1>
+	  <title>Notes</title>
+
+	  <para>
+	    By convention, an exit code of 0 indicates success.  There are
+	    also other conventions; unfortunately, they are OS-specific, and
+	    the portable macros to decode their meaning are implemented
+	    by the system headers as C preprocessor macros.  This means
+	    that there is no good, automated way to make them available
+	    to Lisp.
+	  </para>
+	</refsect1>
+      </refentry>
+
+      <refentry id="m_class">
+	<indexterm zone="m_class">
+	  <primary>@class</primary>
+	</indexterm>
+	
+	<refnamediv>
+	  <refname>CCL::@CLASS</refname>
+	  <refpurpose></refpurpose>
+	  <refclass>Macro</refclass>
+	</refnamediv>
+
+	<refsynopsisdiv>
+	  <synopsis><function>@class</function> class-name</synopsis>
+	</refsynopsisdiv>
+
+	<refsect1>
+	  <title>Arguments and Values</title>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term>class-name</term>
+
+	      <listitem>
+		<para>a string which denotes an existing class name, or a
+		symbol which can be mapped to such a string via the standard
+		name-mapping conventions for class names</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</refsect1>
+
+	<refsect1>
+	  <title>Description</title>
+
+	  <para>Used to refer to a known ObjC class by name. (Via the use
+	  LOAD-TIME-VALUE, the results of a class-name -&#62; class lookup
+	  are cached.)</para>
+
+	  <para>
+	    <function>@class</function> is obsolete as of late 2004, because
+	    find-class now works on ObjC classes.  It is described here
+	    only because some old code still uses it.
+	  </para>
+	</refsect1>
+	</refentry>
+
+	<refentry id="m_selector">
+	  <indexterm zone="m_selector">
+	    <primary>@selector</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>CCL::@SELECTOR</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Macro</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis><function>@selector</function> string</synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Arguments and Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+		<term>string</term>
+
+		<listitem>
+		  <para>a string constant, used to canonically refer to an
+		  ObjC method selector</para>
+		</listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Used to refer to an ObjC method selector (method name). Uses
+	    LOAD-TIME-VALUE to cache the result of a string -&#62; selector
+	    lookup.</para>
+	  </refsect1>
+	</refentry>
+
+	<refentry id="m_define-objc-method">
+	  <indexterm zone="m_define-objc-method">
+	    <primary>define-objc-method</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>CCL::DEFINE-OBJC-METHOD</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Macro</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis><function>define-objc-method</function>
+	    (selector class-name) &body; body</synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Arguments and Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+		<term>selector</term>
+
+		<listitem>
+		  <para>either a string which represents the name of the
+		  selector or a list which describ+es the method's return
+		  type, selector components, and argument types (see below.)
+		  If the first form is used, then the first form in the body
+		  must be a list which describes the selector's argument
+		  types and return value type, as per DEFCALLBACK.</para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term>class-name</term>
+
+		<listitem>
+		  <para>either a string which names an existing ObjC class
+		  name or a list symbol which can map to such a string via the
+		  standard name-mapping conventions for class names. (Note
+		  that the "canonical" lisp class name is such a
+		  symbol)</para>
+		</listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Defines an ObjC-callable method which implements the
+	    specified message selector for instances of the existing ObjC
+	    class class-name.</para>
+	  </refsect1>
+	</refentry>
+
+	<refentry id="m_define-objc-class-method">
+	  <indexterm zone="m_define-objc-class-method">
+	    <primary>define-objc-class-method</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>CCL::DEFINE-OBJC-CLASS-METHOD</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Macro</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis><function>define-objc-class-method</function>
+	    (selector class-name) &body; body</synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Arguments and Values</title>
+
+	    <para>As per DEFINE-OBJC-METHOD</para>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Like DEFINE-OBJC-METHOD, only used to define methods on the
+	    <emphasis>class</emphasis> named by class-name and on its
+	    subclasses.</para>
+
+	    <para>For both DEFINE-OBJC-METHOD and DEFINE-OBJC-CLASS-METHOD, the
+	    "selector" argument can be a list whose first element is a
+	    foreign type specifier for the method's return value type and whose
+	    subsequent elements are either:</para>
+
+	    <itemizedlist>
+	      <listitem>
+		<para>a non-keyword symbol, which can be mapped to a selector string
+		for a parameterless method according to the standard name-mapping
+		conventions for method selectors.</para>
+	      </listitem>
+	      
+	      <listitem>
+		<para>a list of alternating keywords and variable/type specifiers,
+		where the set of keywords can be mapped to a selector string for a
+		parameteriezed method according to the standard name-mapping
+		conventions for method selectors and each variable/type-specifier is
+		either a variable name (denoting a value of type :ID) or a list whose
+		CAR is a variable name and whose CADR is the corresponding
+		argument's foreign type specifier.</para>
+	      </listitem>
+	    </itemizedlist>
+	  </refsect1>
+	</refentry>
+
+	<refentry id="v_alternate-line-terminator">
+	  <indexterm zone="v_alternate-line-terminator">
+	    <primary>*alternate-line-terminator*</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>CCL:*ALTERNATE-LINE-TERMINATOR*</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Variable</refclass>
+	  </refnamediv>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>This variable is currently only used by the standard reader macro
+	    function for #\; (single-line comments); that function reads successive
+	    characters until EOF, a #\NewLine is read, or a character EQL to the
+	    value of *alternate-line-terminator* is read. In OpenMCL for Darwin, the
+	    value of this variable is initially #\Return ; in OpenMCL for LinuxPPC,
+	    it&#39;s initially NIL.</para>
+	    
+	    <para>Their default treatment by the #\; reader macro is the primary way
+	    in which #\Return and #\Linefeed differ syntactally; by extending the
+	    #\; reader macro to (conditionally) treat #\Return as a
+	    comment-terminator, that distinction is eliminated. This seems to make
+	    LOAD and COMPILE-FILE insensitive to line-termination issues in many
+	    cases. It could fail in the (hopefully rare) case where a LF-terminated
+	    (Unix) text file contains embedded #\Return characters, and this
+	    mechanism isn&#39;t adequate to handle cases where newlines are embedded
+	    in string constants or other tokens (and presumably should be translated
+	    from an external convention to the external one) : it doesn&#39;t change
+	    what READ-CHAR or READ-LINE &#34;see&#34;, and that may be necessary to
+	    handle some more complicated cases.</para>
+	  </refsect1>
+	</refentry>
+
+	<refentry id="k_external-format">
+	  <indexterm zone="k_external-format">
+	    <primary>:external-format</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>:EXTERNAL-FORMAT</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Keyword Argument</refclass>
+	  </refnamediv>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Per ANSI CL, OpenMCL supports the :EXTERNAL-FORMAT keyword
+	    argument to the functions OPEN, LOAD, and COMPILE-FILE. This argument is
+	    intended to provide a standard way of providing implementation-dependent
+	    information about the format of files opened with an element-type of
+	    CHARACTER. This argument can meaningfully take on the values :DEFAULT
+	    (the default), :MACOS, :UNIX, or :INFERRED in OpenMCL.</para>
+	    
+	    <para>When defaulted to or specified as :DEFAULT, the format of the file
+	    stream is determined by the value of the variable
+	    CCL:*DEFAULT-EXTERNAL-FORMAT*. See below.</para>
+	    
+	    <para>When specified as :UNIX, all characters are read from and written
+	    to files verbatim.</para>
+	    
+	    <para>When specified as :MACOS, all #\Return characters read from the
+	    file are immediately translated to #\Linefeed (#\Newline); all #\Newline
+	    (#\Linefeed) characters are written externally as #\Return characters.</para>
+	    
+	    <para>When specified as :INFERRED and the file is open for input, the
+	    first bufferful of input data is examined; if a #\Return character
+	    appears in the buffer before the first #\Linefeed, the file stream&#39;s
+	    external-format is set to :MACOS; otherwise, it is set to :UNIX.</para>
+	    
+	    <para>All other values of :EXTERNAL-FORMAT - and any combinations that
+	    don&#39;t make sense, such as trying to infer the format of a
+	    newly-created output file stream - are treated as if :UNIX was
+	    specified. As mentioned above, the :EXTERNAL-FORMAT argument doesn&#39;t
+	    apply to binary file streams.</para>
+	    
+	    <para>The translation performed when :MACOS is specified or inferred has
+	    a somewhat greater chance of doing the right thing than the
+	    *alternate-line-terminator* mechanism does; it probably has a somewhat
+	    greater chance of doing the wrong thing, as well.</para>
+	  </refsect1>
+	</refentry>
+
+	<refentry id="v_default-external-format">
+	  <indexterm zone="v_default-external-format">
+	    <primary>*default-external-format*</primary>
+	  </indexterm>
+	  
+	  <refnamediv>
+	    <refname>CCL:*DEFAULT-EXTERNAL-FORMAT*</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Variable</refclass>
+	  </refnamediv>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>The value of this variable is used when :EXTERNAL-FORMAT is
+	    unspecified or specified as :DEFAULT. It can meaningfully be given any
+	    of the values :UNIX, :MACOS, or :INFERRED, each of which is interpreted
+	    as described above.</para>
+	    
+	    <para>Because there&#39;s some risk that unsolicited newline translation
+	    could have undesirable consequences, the initial value of this variable
+	    in OpenMCL is :UNIX.</para>
+	  </refsect1>
+	</refentry>
+
+	<refentry id="c_ns-lisp-string">
+	  <indexterm zone="c_ns-lisp-string">
+	    <primary>ns-lisp-string</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>CCL::NS-LISP-STRING</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Class</refclass>
+	  </refnamediv>
+
+	  <refsect1>
+	    <title>Superclasses</title>
+
+	    <para>NS:NS-STRING</para>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Initargs</title>
+	    
+	    <variablelist>
+	      <varlistentry>
+		<term>:string</term>
+		
+		<listitem>
+		  <para>
+		    a Lisp string which is to be the content of
+		    the newly-created ns-lisp-string.
+		  </para>
+		</listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>
+	      This class
+	      implements the interface of an NSString, which means that it can
+	      be passed to any Cocoa or Core Foundation function which expects
+	      one.
+	    </para>
+
+	    <para>
+	      The string itself is stored on the Lisp heap, which
+	      means that its memory management is automatic.  However, the
+	      ns-lisp-string object itself is a foreign
+	      object (that is, it has an objc metaclass), and resides on the
+	      foreign heap.  Therefore, it is necessary to explicitly free
+	      it, by sending a dealloc message.
+	    </para>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Examples</title>
+
+	    <para>
+	      You can create an ns-lisp-string with
+	      <function>make-instance</function>, just like
+	      any normal Lisp class:
+	    </para>
+
+	    <programlisting format="linespecific"
+>? (defvar *the-string*
+          (make-instance 'ccl::ns-lisp-string
+                         :string "Hello, Cocoa."))</programlisting>
+	    
+	    <para>
+	      When you are done with the string, you must explicitly
+	      deallocate it:
+	    </para>
+
+	    <programlisting format="linespecific">? (ccl::send *the-string* 'dealloc)</programlisting>
+
+	    <para>
+	      You may wish to use an <function>unwind-protect</function>
+	      form to ensure that this happens:
+	    </para>
+
+	    <programlisting format="linespecific"
+>(let (*the-string*)
+  (unwind-protect (progn (setq *the-string*
+                               (make-instance 'ccl::ns-lisp-string
+                                              :string "Hello, Cocoa."))
+                         (format t "~&amp;The string is ~D characters long.~%"
+                                 (ccl::send *the-string* 'length)))
+    (when *the-string*
+      (ccl::send *the-string* 'dealloc))))</programlisting>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Notes</title>
+
+	    <para>
+	      Currently, ns-lisp-string is defined in
+	      the file ccl/examples/cocoa-backtrace.lisp, which is a
+	      rather awkward place.  It was probably not originally meant
+	      as a public utility at all.  It would be good if it were
+	      moved someplace else.  Use at your own risk.
+	    </para>
+	  </refsect1>
+	</refentry>
+    </sect1>
+  </chapter>

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
+"http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd"[
+<!ENTITY rest "<varname>&amp;rest</varname>">
+<!ENTITY key "<varname>&amp;key</varname>">
+<!ENTITY optional "<varname>&amp;optional</varname>">
+<!ENTITY body "<varname>&amp;body</varname>">
+<!ENTITY aux "<varname>&amp;aux</varname>">
+<!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+]>
+
+<book lang="en">
+ <bookinfo>
+  <title>OpenMCL Documentation</title>
+ </bookinfo>
+
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="01-install.xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="02-build.xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="03-q-and-a.xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="04-threads.xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="05-sockets.xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="06-external-process.xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="07-gray-streams.xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="08-mop.xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="09-ffi.xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="10-objc-bridge.xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="11-platform-notes.xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="12-gc.xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="13-implementation.xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="14-modifying.xml"/>
+
+ <index id="Symbol-Index"><title>Symbol Index</title></index>
+</book>
