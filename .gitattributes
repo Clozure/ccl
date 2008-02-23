@@ -62,6 +62,7 @@ doc/src/Makefile.macports -text
 doc/src/ccl-documentation.xml -text
 doc/src/makehtml -text
 doc/src/openmcl-documentation.xml -text
+doc/src/schemas.xml -text
 doc/src/xsl/catalog -text
 doc/src/xsl/catalog-fedora -text
 doc/src/xsl/catalog-fink -text
