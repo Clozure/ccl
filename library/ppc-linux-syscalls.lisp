@@ -118,7 +118,7 @@
                 :signed-fullword)
 (define-syscall (logior platform-cpu-ppc platform-os-linux)  syscalls::getcwd 182 (:address :unsigned-fullword) :signed-fullword )
 
-
+(define-syscall (logior platform-cpu-ppc platform-os-linux)  syscalls::poll 167 ((:* (:struct :pollfd)) :int :int) :int)
 
 #+notdefinedyet
 (progn
