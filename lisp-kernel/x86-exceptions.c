@@ -873,6 +873,8 @@ handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TC
   case SIGILL:
     if ((program_counter[0] == XUUO_OPCODE_0) &&
 	(program_counter[1] == XUUO_OPCODE_1)) {
+      TCR *target = (TCR *)xpGPR(context, Iarg_z);
+
       switch (program_counter[2]) {
       case XUUO_TLB_TOO_SMALL:
         if (extend_tcr_tlb(tcr,context)) {
@@ -887,6 +889,32 @@ handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TC
 	return true;
 
       case XUUO_SUSPEND_NOW:
+	xpPC(context)+=3;
+	return true;
+
+      case XUUO_INTERRUPT:
+        raise_thread_interrupt(target);
+	xpPC(context)+=3;
+	return true;
+
+      case XUUO_SUSPEND:
+        xpGPR(context,Iimm0) = (LispObj) lisp_suspend_tcr(target);
+	xpPC(context)+=3;
+	return true;
+
+      case XUUO_SUSPEND_ALL:
+        lisp_suspend_other_threads();
+	xpPC(context)+=3;
+	return true;
+
+
+      case XUUO_RESUME:
+        xpGPR(context,Iimm0) = (LispObj) lisp_resume_tcr(target);
+	xpPC(context)+=3;
+	return true;
+        
+      case XUUO_RESUME_ALL:
+        lisp_resume_other_threads();
 	xpPC(context)+=3;
 	return true;
 	
