@@ -755,7 +755,10 @@ the socket is not connected."))
                       :sharing sharing
                       :character-p (not (eq format :binary))
                       :basic basic
-                      :auto-close auto-close))))
+                      :auto-close auto-close
+                      :input-timeout input-timeout
+                      :output-timeout output-timeout
+                      :deadline deadline))))
 
 (defun make-tcp-listener-socket (fd &rest keys &key backlog &allow-other-keys)
   (socket-call nil "listen" (c_listen fd (or backlog 5)))
