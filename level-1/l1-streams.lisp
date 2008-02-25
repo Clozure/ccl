@@ -3060,6 +3060,9 @@
                             character-p
                             encoding
                             line-termination
+                            input-timeout
+                            output-timeout
+                            deadline
                             &allow-other-keys)
   (declare (ignorable element-shift))
   (setq line-termination (cdr (assoc line-termination *canonical-line-termination-conventions*)))
@@ -3152,6 +3155,9 @@
     (let* ((bom-info (and insize encoding (character-encoding-use-byte-order-mark encoding))))
       (when bom-info
         (ioblock-check-input-bom ioblock bom-info sharing)))
+    (setf (ioblock-input-timeout ioblock) input-timeout)
+    (setf (ioblock-output-timeout ioblock) output-timeout)
+    (setf (ioblock-deadline ioblock) deadline)
     ioblock))
 
 ;;; If there's a byte-order-mark (or a reversed byte-order-mark) at
@@ -3283,7 +3289,12 @@
       (4 (ash octets -2))
       (8 (ash octets -3)))))
 
-   
+
+(defun milliseconds-until-deadline (deadline ioblock)
+  (let* ((now (get-internal-real-time)))
+    (if (> now deadline)
+      (error 'communication-deadline-expired :stream (ioblock-stream ioblock))
+      (values (round (- deadline now) (/ internal-time-units-per-second 1000))))))
 
 
 ;;; Note that we can get "bivalent" streams by specifiying :character-p t
@@ -3299,7 +3310,10 @@
                           (basic nil)
                           encoding
                           line-termination
-                          auto-close)
+                          auto-close
+                          input-timeout
+                          output-timeout
+                          deadline)
   (let* ((elements-per-buffer (optimal-buffer-size fd element-type)))
     (when line-termination
       (setq line-termination
@@ -3328,7 +3342,10 @@
                                  :sharing sharing
                                  :character-p character-p
                                  :encoding encoding
-                                 :line-termination line-termination)))
+                                 :line-termination line-termination
+                                 :input-timeout input-timeout
+                                 :output-timeout output-timeout
+                                 :deadline deadline)))
       (if auto-close
         (terminate-when-unreachable stream
                                     (lambda (stream)
@@ -3800,7 +3817,8 @@
 	   (synonym-method stream-device direction)
            (synonym-method stream-surrounding-characters)
            (synonym-method stream-input-timeout)
-           (synonym-method stream-output-timeout))
+           (synonym-method stream-output-timeout)
+           (synonym-method stream-deadline))
 
 (defmethod (setf input-stream-timeout) (new (s synonym-stream))
   (setf (input-stream-timeout (symbol-value (synonym-stream-symbol s))) new))
@@ -3879,13 +3897,17 @@
   (two-way-output-method stream-finish-output)
   (two-way-output-method stream-write-list l c)
   (two-way-output-method stream-write-vector v start end)
-  (two-way-output-method stream-output-timeout))
+  (two-way-output-method stream-output-timeout)
+  (two-way-output-method stream-deadline))
 
 (defmethod (setf stream-input-timeout) (new (s two-way-stream))
   (setf (stream-input-timeout (two-way-stream-input-stream s)) new))
 
 (defmethod (setf stream-output-timeout) (new (s two-way-stream))
   (setf (stream-output-timeout (two-way-stream-output-stream s)) new))
+
+(defmethod (setf stream-deadline) (new (s two-way-stream))
+  (setf (stream-deadline (two-way-stream-output-stream s)) new))
 
 (defmethod stream-device ((s two-way-stream) direction)
   (case direction
@@ -5409,13 +5431,20 @@
           (ioblock-eof ioblock) nil)
       (when (or read-p (setq avail (stream-listen s)))
         (unless avail
-          (let* ((timeout (ioblock-input-timeout ioblock)))
+          (let* ((deadline (ioblock-deadline ioblock))
+                 (timeout
+                  (if deadline
+                    (milliseconds-until-deadline deadline ioblock)
+                    (ioblock-input-timeout ioblock))))
             (when timeout
               (multiple-value-bind (win timedout error)
                   (process-input-wait fd timeout)
                 (unless win
                   (if timedout
-                    (error 'input-timeout :stream s)
+                    (error (if deadline
+                             'communication-deadline-expired
+                             'input-timeout)
+                           :stream s)
                     (stream-io-error s (- error) "read")))))))
         (let* ((n (with-eagain fd :input
 		    (fd-read fd bufptr size))))
@@ -5464,13 +5493,20 @@
 	      (case (%unix-fd-kind fd)
 		(:file (fd-fsync fd))))
 	    octets-to-write)
-        (let* ((timeout (ioblock-output-timeout ioblock)))
+        (let* ((deadline (ioblock-deadline ioblock))
+               (timeout
+                (if deadline
+                  (milliseconds-until-deadline deadline ioblock)
+                  (ioblock-output-timeout ioblock))))
           (when timeout
             (multiple-value-bind (win timedout error)
                 (process-output-wait fd timeout)
               (unless win
                 (if timedout
-                  (error 'output-timeout :stream s)
+                  (error (if deadline
+                           'communication-deadline-expired
+                           'output-timeout)
+                         :stream s)
                   (stream-io-error s (- error) "write"))))))
 	(let* ((written (with-eagain fd :output
 			  (fd-write fd buf octets))))
@@ -5844,6 +5880,18 @@ are printed.")
             (if new (round (* new 1000))))
       new)))
 
+(defmethod stream-deadline ((s basic-output-stream))
+  (let* ((ioblock (basic-stream-ioblock s)))
+    (with-ioblock-output-locked (ioblock)
+      (ioblock-deadline ioblock))))
+ 
+(defmethod (setf stream-deadline) (new (s basic-output-stream))
+  (let* ((ioblock (basic-stream-ioblock s)))
+    (with-ioblock-output-locked (ioblock)
+      (setf (ioblock-deadline ioblock) new)
+      new)))
+
+
 
 (defmethod stream-input-timeout ((s buffered-input-stream-mixin))
   (let* ((ioblock (stream-ioblock s t)))
@@ -5874,6 +5922,18 @@ are printed.")
       (setf (ioblock-output-timeout ioblock)
             (if new (round (* new 1000))))
       new)))
+
+(defmethod stream-deadline ((s buffered-output-stream-mixin))
+  (let* ((ioblock (stream-ioblock s t)))
+    (with-ioblock-output-locked (ioblock)
+      (ioblock-deadline ioblock))))
+ 
+(defmethod (setf stream-deadline) (new (s buffered-output-stream-mixin))
+  (let* ((ioblock (stream-ioblock s t)))
+    (with-ioblock-output-locked (ioblock)
+      (setf (ioblock-deadline ioblock) new)
+      new)))
+
 
 
 ; end of L1-streams.lisp

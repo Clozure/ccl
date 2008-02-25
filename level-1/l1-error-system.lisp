@@ -380,6 +380,12 @@
   ()
   (:report (lambda (c s)
              (format s "Output timeout on ~s" (stream-error-stream c)))))
+(define-condition communication-deadline-expired (io-timeout)
+  ()
+  (:report (lambda (c s)
+             (format s "Communication deadline timeout on ~s" (stream-error-stream c)))))
+ 
+
 
 
 (define-condition impossible-number (reader-error)

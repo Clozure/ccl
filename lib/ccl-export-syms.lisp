@@ -564,9 +564,11 @@
      stream-output-timeout
      with-input-timeout
      with-output-timeout
+     stream-deadline
 
      input-timeout
      output-timeout
+     communication-deadline-expired
 
      make-heap-ivector
      dispose-heap-ivector
