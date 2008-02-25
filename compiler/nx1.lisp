@@ -254,7 +254,7 @@
            (make-acode (%nx1-operator %decls-body) body *nx-new-p2decls*)
            body)))))
 
-(defnx1 nx1-%new-ptr (%new-ptr) (&whole whole size clear-p)
+(defnx1 nx1-%new-ptr (%new-ptr) (&whole whole size &optional clear-p)
   (make-acode (%nx1-operator %new-ptr) (nx1-form size) (nx1-form clear-p)))
 
 ;;; This might also want to look at, e.g., the last form in a progn:
