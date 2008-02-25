@@ -58,6 +58,11 @@
 (defconstant error-cant-take-car 8)
 (defconstant error-cant-take-cdr 9)
 (defconstant error-propagate-suspend 10)
+(defconstant error-interrupt 11)
+(defconstant error-suspend 12)
+(defconstant error-suspend-all 13)
+(defconstant error-resume 14)
+(defconstant error-resume-all 15)
 (defconstant error-cant-call 17)        ; Attempt to funcall something that is not a symbol or function.
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defconstant error-type-error 128)
