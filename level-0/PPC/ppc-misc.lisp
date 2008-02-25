@@ -980,6 +980,36 @@
   (li arg_z t)
   (blr))
 
+(defppclapfunction %%tcr-interrupt ((target arg_z))
+  (check-nargs 1)
+  (uuo_interr arch::error-interrupt rzero)
+  (box-fixnum arg_z imm0)
+  (blr))
+
+(defppclapfunction %suspend-tcr ((target arg_z))
+  (check-nargs 1)
+  (uuo_interr arch::error-suspend rzero)
+  (eq0->boolean arg_z imm0 imm1)
+  (blr))
+
+(defppclapfunction %suspend-other-threads ()
+  (check-nargs 0)
+  (uuo_interr arch::error-suspend-all rzero)
+  (li arg_z nil)
+  (blr))
+
+(defppclapfunction %resume-tcr ((target arg_z))
+  (check-nargs 1)
+  (uuo_interr arch::error-resume rzero)
+  (eq0->boolean arg_z imm0 imm1)
+  (blr))
+
+(defppclapfunction %resume-other-threads ()
+  (check-nargs 0)
+  (uuo_interr arch::error-resume-all rzero)
+  (li arg_z nil)
+  (blr))
+
 (defppclapfunction %atomic-pop-static-cons ()
   (li imm0 (+ target::nil-value (target::kernel-global static-conses)))
   @again

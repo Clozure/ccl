@@ -27,6 +27,11 @@
 #define error_excised_function_call 6
 #define error_too_many_values 7
 #define error_propagate_suspend 10
+#define error_interrupt 11
+#define error_suspend 12
+#define error_suspend_all 13
+#define error_resume 14
+#define error_resume_all 15					
 #define error_cant_call 17
 
 #define error_type_error 128

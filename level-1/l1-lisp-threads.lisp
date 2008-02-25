@@ -343,13 +343,9 @@
   ;; pending interrupt won't have been taken yet.
   ;; When a thread dies, it should try to clear its interrupt-pending
   ;; flag.
-  (or (not (eql 0 (%fixnum-ref tcr target::tcr.interrupt-pending)))
-      (with-macptrs (tcrp)
-        (%setf-macptr-to-object tcrp tcr)
-        (ff-call
-         (%kernel-import target::kernel-import-raise-thread-interrupt)
-         :address tcrp
-         :signed-fullword))))
+  (if (eql 0 (%fixnum-ref tcr target::tcr.interrupt-pending))
+    (%%tcr-interrupt tcr)
+    0))
 
 
 

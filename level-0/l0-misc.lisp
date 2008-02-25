@@ -507,13 +507,7 @@
 ;;; This is intended for use by debugging tools.  It's a horrible thing
 ;;; to do otherwise.  The caller really needs to hold the heap-segment
 ;;; lock; this grabs the tcr queue lock as well.
-(defun %suspend-other-threads ()
-  (ff-call (%kernel-import target::kernel-import-suspend-other-threads)
-           :void))
 
-(defun %resume-other-threads ()
-  (ff-call (%kernel-import target::kernel-import-resume-other-threads)
-           :void))
 
 (defparameter *spin-lock-tries* 1)
 (defparameter *spin-lock-timeouts* 0)
@@ -771,21 +765,7 @@
 
  
   
-(defun %suspend-tcr (tcr)
-  (with-macptrs (tcrp)
-    (%setf-macptr-to-object tcrp tcr)
-    (not (zerop (the fixnum 
-                  (ff-call (%kernel-import target::kernel-import-suspend-tcr)
-                           :address tcrp
-                           :unsigned-fullword))))))
 
-(defun %resume-tcr (tcr)
-  (with-macptrs (tcrp)
-    (%setf-macptr-to-object tcrp tcr)
-    (not (zerop (the fixnum
-                  (ff-call (%kernel-import target::kernel-import-resume-tcr)
-                           :address tcrp
-                           :unsigned-fullword))))))
 
 
 

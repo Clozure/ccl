@@ -1335,10 +1335,31 @@ handle_uuo(ExceptionInformation *xp, opcode the_uuo, pc where)
 
 
   case UUO_INTERR:
-    if (errnum == error_propagate_suspend) {
+    {
+      TCR * target = (TCR *)xpGPR(xp,arg_z);
       status = 0;
-    } else {
-      status = handle_error(xp, errnum, rb, 0,  where);
+      switch (errnum) {
+      case error_propagate_suspend:
+	break;
+      case error_interrupt:
+	xpGPR(xp,imm0) = (LispObj) raise_thread_interrupt(target);
+	break;
+      case error_suspend:
+	xpGPR(xp,imm0) = (LispObj) lisp_suspend_tcr(target);
+	break;
+      case error_suspend_all:
+	lisp_suspend_other_threads();
+	break;
+      case error_resume:
+	xpGPR(xp,imm0) = (LispObj) lisp_suspend_tcr(target);
+	break;
+      case error_resume_all:
+	lisp_resume_other_threads();
+	break;
+      default:
+	status = handle_error(xp, errnum, rb, 0,  where);
+	break;
+      }
     }
     break;
 
