@@ -434,7 +434,8 @@
   (unread-char-function 'ioblock-no-char-input)
   (encode-literal-char-code-limit 256)
   (input-timeout nil)
-  (output-timeout nil))
+  (output-timeout nil)
+  (deadline nil))
 
 
 ;;; Functions on ioblocks.  So far, we aren't saying anything
