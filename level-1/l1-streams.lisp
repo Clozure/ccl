@@ -3270,8 +3270,19 @@
     (:unicode . :unicode)))
 
 
-(defun optimal-buffer-size (fd)
-  (or (nth-value 6 (%fstat fd)) *elements-per-buffer*))
+(defun optimal-buffer-size (fd element-type)
+  (let* ((octets (case (%unix-fd-kind fd)
+                   (:pipe (#_fpathconf fd #$_PC_PIPE_BUF))
+                   (:socket (int-getsockopt fd #$SOL_SOCKET #$SO_SNDLOWAT))
+                   ((:character-special :tty) (#_fpathconf fd #$_PC_MAX_INPUT))
+                   (t (or (nth-value 6 (%fstat fd)) *elements-per-buffer*)))))
+    (case (subtag-bytes (element-type-subtype element-type) 1)
+      (1 octets)
+      (2 (ash octets -1))
+      (4 (ash octets -2))
+      (8 (ash octets -3)))))
+
+   
 
 
 ;;; Note that we can get "bivalent" streams by specifiying :character-p t
@@ -3279,7 +3290,6 @@
 (defun make-fd-stream (fd &key
 			  (direction :input)
 			  (interactive t)
-			  (elements-per-buffer (optimal-buffer-size fd))
 			  (element-type 'character)
 			  (class 'fd-stream)
                           (sharing :private)
@@ -3289,39 +3299,40 @@
                           encoding
                           line-termination
                           auto-close)
-  (when line-termination
-    (setq line-termination
-          (cdr (assoc line-termination *canonical-line-termination-conventions*))))
-  (when basic
-    (setq class (map-to-basic-stream-class-name class))
-    (setq basic (subtypep (find-class class) 'basic-stream)))
-  (let* ((in-p (member direction '(:io :input)))
-         (out-p (member direction '(:io :output)))
-         (class-name (select-stream-class class in-p out-p character-p))
-         (class (find-class class-name))
-         (stream
-          (make-ioblock-stream class
-                               :insize (if in-p elements-per-buffer)
-                               :outsize (if out-p elements-per-buffer)
-                               :device fd
-                               :interactive interactive
-                               :element-type element-type
-                               :advance-function (if in-p
-                                                    (select-stream-advance-function class direction))
-                               :listen-function (if in-p 'fd-stream-listen)
-                               :eofp-function (if in-p 'fd-stream-eofp)
-                               :force-output-function (if out-p
-                                                         (select-stream-force-output-function class direction))
-                               :close-function 'fd-stream-close
-                               :sharing sharing
-                               :character-p character-p
-                               :encoding encoding
-                               :line-termination line-termination)))
-    (if auto-close
-       (terminate-when-unreachable stream
-                                   (lambda (stream)
-                                     (close stream :abort t))))
-    stream))
+  (let* ((elements-per-buffer (optimal-buffer-size fd element-type)))
+    (when line-termination
+      (setq line-termination
+            (cdr (assoc line-termination *canonical-line-termination-conventions*))))
+    (when basic
+      (setq class (map-to-basic-stream-class-name class))
+      (setq basic (subtypep (find-class class) 'basic-stream)))
+    (let* ((in-p (member direction '(:io :input)))
+           (out-p (member direction '(:io :output)))
+           (class-name (select-stream-class class in-p out-p character-p))
+           (class (find-class class-name))
+           (stream
+            (make-ioblock-stream class
+                                 :insize (if in-p elements-per-buffer)
+                                 :outsize (if out-p elements-per-buffer)
+                                 :device fd
+                                 :interactive interactive
+                                 :element-type element-type
+                                 :advance-function (if in-p
+                                                     (select-stream-advance-function class direction))
+                                 :listen-function (if in-p 'fd-stream-listen)
+                                 :eofp-function (if in-p 'fd-stream-eofp)
+                                 :force-output-function (if out-p
+                                                          (select-stream-force-output-function class direction))
+                                 :close-function 'fd-stream-close
+                                 :sharing sharing
+                                 :character-p character-p
+                                 :encoding encoding
+                                 :line-termination line-termination)))
+      (if auto-close
+        (terminate-when-unreachable stream
+                                    (lambda (stream)
+                                      (close stream :abort t))))
+      stream)))
 
   
 ;;;  Fundamental streams.
@@ -5596,7 +5607,6 @@
                                                (t :create)))
                       (external-format :default)
 		      (class 'file-stream)
-                      (elements-per-buffer *elements-per-buffer*)
                       (sharing :private)
                       (basic t))
   "Return a stream which reads from or writes to FILENAME.
@@ -5615,7 +5625,6 @@
 			  element-type
 			  if-exists
 			  if-does-not-exist
-			  elements-per-buffer
 			  class
 			  external-format
                           sharing

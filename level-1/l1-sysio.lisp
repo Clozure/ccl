@@ -724,12 +724,10 @@ is :UNIX.")
 			 element-type
 			 if-exists
 			 if-does-not-exist
-			 elements-per-buffer
 			 class
 			 external-format
                          sharing
                          basic)
-
   (let* ((temp-name nil)
          (dir (pathname-directory filename))
          (filename (if (eq (car dir) :relative)
@@ -783,7 +781,6 @@ is :UNIX.")
             (if (not (eq fd-kind :file))
               (make-fd-stream fd :direction direction
                               :element-type element-type
-                              :elements-per-buffer elements-per-buffer
                               :sharing sharing
                               :basic basic)
               (progn
@@ -795,6 +792,7 @@ is :UNIX.")
                        (io-p (eq direction :io))
                        (char-p (or (eq element-type 'character)
                                    (subtypep element-type 'character)))
+                       (elements-per-buffer (optimal-buffer-size fd element-type))
                        (real-external-format
                         (if char-p
                           (normalize-external-format :file external-format)
