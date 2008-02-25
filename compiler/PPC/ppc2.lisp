@@ -9070,15 +9070,14 @@
 	
 ;------
 
-#+not-yet
-(progn
 
+;;;Make a gcable macptr.
+(defppc2 ppc2-%new-ptr %new-ptr (seg vreg xfer size clear-p )
+  (ppc2-call-fn seg
+                vreg
+                xfer
+                (make-acode (%nx1-operator immediate)
+                            '%new-gcable-ptr)
+                (list nil (list clear-p size))
+                nil))
 
-;Make a gcable macptr.
-(defppc2 ppc2-%new-ptr %new-ptr (b vreg xfer size clear-p )
-  (declare (ignore b vreg xfer size clear-p))
-  (error "%New-ptr is a waste of precious silicon."))
-
-
-
-)
