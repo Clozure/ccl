@@ -9103,16 +9103,23 @@
                              (list nil (list arg))))))))
     
 
+(defx862 x862-%new-ptr %new-ptr (seg vreg xfer size clear-p )
+  (x862-call-fn seg
+                vreg
+                xfer
+                (make-acode (%nx1-operator immediate)
+                            '%new-gcable-ptr)
+                (list nil (list clear-p size))
+                nil))
+
 ;------
 
 #+not-yet
 (progn
 
 
-;Make a gcable macptr.
-(defx862 x862-%new-ptr %new-ptr (b vreg xfer size clear-p )
-  (declare (ignore b vreg xfer size clear-p))
-  (error "%New-ptr is a waste of precious silicon."))
+;;;Make a gcable macptr.
+
 
 
 
