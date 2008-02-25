@@ -2088,7 +2088,7 @@
                (make-acode (%nx1-operator natural-shift-right)
                            (nx1-form num)
                            (make-acode (%nx1-operator fixnum)
-                                       (- amt)))
+                                       (min (1- max) (- amt))))
                (nx1-treat-as-call call))))
           ((and (fixnump amt)
                 (<= 0 amt maxbits)
