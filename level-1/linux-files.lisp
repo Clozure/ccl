@@ -595,7 +595,7 @@ of the shell itself."
       (%get-cstring p))))
 
 ;;; Kind of has something to do with files, and doesn't work in level-0.
-#+linux-target
+#+(or linux-target freebsd-target)
 (defun close-shared-library (lib &key (completely t))
   "If completely is T, set the reference count of library to 0. Otherwise,
 decrements it by 1. In either case, if the reference count becomes 0,
@@ -605,22 +605,22 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
 		(or (shared-library-with-name lib)
 		    (error "Shared library ~s not found." lib))
 		(require-type lib 'shlib)))
-	 (map (shlib.map lib)))
-    (unless (shlib.opened-by-lisp-kernel lib)
-      (when map
+	 (handle (shlib.handle lib)))
+      (when handle
 	(let* ((found nil)
 	       (base (shlib.base lib)))
 	  (do* ()
 	       ((progn		  
-		  (#_dlclose map)
+		  (#_dlclose handle)
 		  (or (not (setq found (shlib-containing-address base)))
 		      (not completely)))))
 	  (when (not found)
 	    (setf (shlib.pathname lib) nil
 	      (shlib.base lib) nil
+              (shlib.handle lib) nil
 	      (shlib.map lib) nil)
             (unload-foreign-variables lib)
-	    (unload-library-entrypoints lib)))))))
+	    (unload-library-entrypoints lib))))))
 
 #+darwin-target
 ;; completely specifies whether to remove it totally from our list

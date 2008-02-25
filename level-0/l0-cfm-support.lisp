@@ -66,7 +66,7 @@
     nil					;'shlib
   shlib.soname
   shlib.pathname
-  shlib.opened-by-lisp-kernel
+  shlib.handle                          ; if explicitly opened
   shlib.map
   shlib.base
   shlib.opencount)
@@ -262,13 +262,12 @@
   (setq *dladdr-entry* (foreign-symbol-entry "dladdr"))
   (when (null *shared-libraries*)
     (%walk-shared-libraries #'shlib-from-map-entry)
-    (dolist (l *shared-libraries*)
       ;;; On Linux, it seems to be necessary to open each of these
       ;;; libraries yet again, specifying the RTLD_GLOBAL flag.
       ;;; On FreeBSD, it seems desirable -not- to do that.
-      #+linux-target
-      (%dlopen-shlib l)
-      (setf (shlib.opened-by-lisp-kernel l) t))))
+    #+linux-target
+    (dolist (l *shared-libraries*)
+      (%dlopen-shlib l))))
 
 (init-shared-libraries)
 
@@ -296,29 +295,29 @@ return an object of type SHLIB that describes the library; if the library
 is already open, increment a reference count. If the library can't be
 loaded, signal a SIMPLE-ERROR which contains an often-cryptic message from
 the operating system."
-  (let* ((link-map
-          (let* ((lib (with-cstrs ((name name))
+  (let* ((handle (with-cstrs ((name name))
                         (ff-call
                          (%kernel-import target::kernel-import-GetSharedLibrary)
                          :address name
                          :unsigned-fullword *dlopen-flags*
-                         :address))))
-            #+linux-target lib
-            #+freebsd-target (if (%null-ptr-p lib)
-                               lib
-                               (rlet ((p :address))
-                                 (if (eql 0 (ff-call
-                                             (foreign-symbol-entry "dlinfo")
-                                             :address lib
-                                             :int #$RTLD_DI_LINKMAP
-                                             :address p
-                                             :int))
-                                   (pref p :address)
-                                   (%null-ptr)))))))
+                         :address)))
+         (link-map #-freebsd-target handle
+                   #+freebsd-target (if (%null-ptr-p handle)
+                                      handle
+                                      (rlet ((p :address))
+                                        (if (eql 0 (ff-call
+                                                    (foreign-symbol-entry "dlinfo")
+                                                    :address handle
+                                                    :int #$RTLD_DI_LINKMAP
+                                                    :address p
+                                                    :int))
+                                          (pref p :address)
+                                          (%null-ptr))))))
     (if (%null-ptr-p link-map)
       (error "Error opening shared library ~s: ~a" name (dlerror))
       (prog1 (let* ((lib (shlib-from-map-entry link-map)))
 	       (incf (shlib.opencount lib))
+               (setf (shlib.handle lib) handle)
 	       lib)
 	(%walk-shared-libraries
 	 #'(lambda (map)
