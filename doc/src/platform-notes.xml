@@ -6,6 +6,7 @@
 <!ENTITY body "<varname>&amp;body</varname>">
 <!ENTITY aux "<varname>&amp;aux</varname>">
 <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+<!ENTITY CCL "<literal>CCL</literal>">
 ]>
 
   <chapter id="Platform-specific-notes">
@@ -15,7 +16,7 @@
     <sect1 id="Platform-specific-overview">
       <title>Overview</title>
       <para> The documentation and whatever experience you may have in
-      using OpenMCL under Linux should also apply to using it under
+      using &CCL; under Linux should also apply to using it under
       Darwin/MacOS X and FreeBSD. There are some differences between
       the platforms, and these differences are sometimes exposed in
       the implementation.</para>
@@ -26,7 +27,7 @@
 
 	<para>Darwin and MacOS X use HFS+ file systems by default;
 	HFS+ file systems are usually case-insensitive. Most of
-	OpenMCL's filesystem and pathname code assumes that the
+	&CCL;'s filesystem and pathname code assumes that the
 	underlying filesystem is case-sensitive; this assumption
 	extends to functions like EQUAL, which assumes that #p"FOO"
 	and #p"foo" denote different, un-EQUAL filenames. Since
@@ -39,9 +40,9 @@ some practical considerations. Doing:</para>
 ? (save-application "DPPCCL")
 	</programlisting>
         <para>on 32-bit DarwinPPC has the unfortunate side-effect of
-        trying to overwrite the Darwin OpenMCL kernel, "dppccl", on a
+        trying to overwrite the Darwin &CCL; kernel, "dppccl", on a
         case-insensitive filesystem.</para>
-        <para>To work around this, the Darwin OpenMCL kernel expects
+        <para>To work around this, the Darwin &CCL; kernel expects
         the default heap image file name to be the kernel's own
         filename with the string ".image" appended, so the idiom would
         be:</para>
@@ -61,7 +62,7 @@ some practical considerations. Doing:</para>
 	about what conventions are used an that it probably doesn't matter.
 	Sometimes this is true, other times ... not so much.
 	</para>
-        <para>OpenMCL follows the Unix convention on both Darwin and
+        <para>&CCL; follows the Unix convention on both Darwin and
         LinuxPPC, but offers some support for reading and writing
         files that use other conventions (including traditional MacOS
         conventions) as well.</para> 
@@ -80,12 +81,12 @@ some practical considerations. Doing:</para>
 	be useful there.)</para> <para>None of this addresses issues
 	related to the third newline convention ("CRLF") in widespread
 	use (since that convention isn't native to any platform on
-	which OpenMCL currently runs). If OpenMCL is ever ported to
+	which &CCL; currently runs). If &CCL; is ever ported to
 	such a platform, that issue might be revisited.</para>
 	<para>Note that some MacOS programs (including some versions
 	of commercial MCL) may use HFS file type information to
 	recognize TEXT and other file types and so may fail to
-	recognize files created with OpenMCL or other Darwin
+	recognize files created with &CCL; or other Darwin
 	applications (regardless of line termination issues.)</para>
 	<para>Unless otherwise noted, the symbols mentioned in this
 	documentation are exported from the CCL package.</para>
@@ -97,7 +98,7 @@ some practical considerations. Doing:</para>
 	Despite what Darwin's man pages say, early versions of its math library
 	(up to and including at least OSX 10.2 (Jaguar) don't implement
 	single-precision variants of the transcendental and trig functions
-	(#_sinf, #_atanf, etc.) OpenMCL worked around this by coercing
+	(#_sinf, #_atanf, etc.) &CCL; worked around this by coercing
 	single-precision args to double-precision, calling the
 	double-precision version of the math library function, and coercing
 	the result back to a SINGLE-FLOAT. These steps can introduce rounding
@@ -115,13 +116,13 @@ some practical considerations. Doing:</para>
         executable is launched. The latter class -
         "bundles/extensions" - are expected to be loaded into and
         unloaded from a running application, via a mechanism like the
-        one used by OpenMCL's OPEN-SHARED-LIBRARY function.</para>
+        one used by &CCL;'s OPEN-SHARED-LIBRARY function.</para>
       </sect2>
     </sect1>
 
     <sect1 id="Unix-Posix-Darwin-Features">
       <title>Unix/Posix/Darwin Features</title>
-      <para>OpenMCL has several convenience functions which allow you
+      <para>&CCL; has several convenience functions which allow you
       to make Posix (portable Unix) calls without having to use the
       foreign-function interface.  Each of these corresponds directly
       to a single Posix function call, as it might be made in C.
@@ -143,8 +144,8 @@ some practical considerations. Doing:</para>
       command for you.</para>
     </sect1>
 
-    <sect1 id="Cocoa-Programming-in-OpenMCL">
-      <title>Cocoa Programming in OpenMCL</title>
+    <sect1 id="Cocoa-Programming-in-&CCL;">
+      <title>Cocoa Programming in &CCL;</title>
       <para>Cocoa is one of Apple's APIs for GUI programming; for most
       purposes, development is considerably faster with Cocoa than
       with the alternatives.  You should have a little familiarity
@@ -162,7 +163,7 @@ some practical considerations. Doing:</para>
 
       <sect2 id="The-Command-Line-and-the-Window-System">
 	<title>The Command Line and the Window System</title>
-        <para>OpenMCL is ordinarily a command-line application (it
+        <para>&CCL; is ordinarily a command-line application (it
         doesn't have a connection to the OSX Window server, doesn't
         have its own menubar or dock icon, etc.) By opening some
         libraries and jumping through some hoops, it's able to sort of
@@ -290,13 +291,13 @@ application.)</para>
       <programlisting>
 ? (require "COCOA-APPLICATION")
       </programlisting>
-      <para>When it finishes, you should be able to double-click the OpenMCL icon
+      <para>When it finishes, you should be able to double-click the &CCL; icon
 in the ccl directory, to quickly start your program.</para>
-      <para>The OS may have already decided that OpenMCL.app isn't a valid
+      <para>The OS may have already decided that &CCL;.app isn't a valid
 executable bundle, and therefore won't let you double-click it.
 If this happens to you, to force it to reconsider, just update the
 last-modified time of the bundle.  In Terminal:</para>
-      <programlisting>> touch OpenMCL.app
+      <programlisting>> touch &CCL;.app
 </programlisting>
       <para>There is one important caveat.</para>
       <para>Because of the way that the ObjC bridge currently works, a saved
@@ -534,8 +535,8 @@ and NSCoder and related classes offer some approximation of that.)</para>
 	  <title>Description</title>
 
 	  <para>
-	    Looks up the current working directory of the OpenMCL process;
-	    unless it has been changed, this is the directory OpenMCL was
+	    Looks up the current working directory of the &CCL; process;
+	    unless it has been changed, this is the directory &CCL; was
 	    started in.
 	  </para>
 	</refsect1>
@@ -626,7 +627,7 @@ and NSCoder and related classes offer some approximation of that.)</para>
 	  <para>
 	    Attempts to change the current user ID (both "real" and
 	    "effective"); fails unless
-	    the OpenMCL process has super-user privileges or the ID
+	    the &CCL; process has super-user privileges or the ID
 	    given is that of the current user.
 	  </para>
 	</refsect1>
@@ -678,7 +679,7 @@ and NSCoder and related classes offer some approximation of that.)</para>
 	  <para>
 	    Attempts to change the current group ID (both "real" and
 	    "effective"); fails unless
-	    the OpenMCL process has super-user privileges or the ID
+	    the &CCL; process has super-user privileges or the ID
 	    given is that of a group to which the current user belongs.
 	  </para>
 	</refsect1>
@@ -717,7 +718,7 @@ and NSCoder and related classes offer some approximation of that.)</para>
 	  <title>Description</title>
 
 	  <para>
-	    Returns the ID of the OpenMCL OS process.
+	    Returns the ID of the &CCL; OS process.
 	  </para>
 	</refsect1>
       </refentry>
@@ -1057,8 +1058,8 @@ and NSCoder and related classes offer some approximation of that.)</para>
 	    <para>This variable is currently only used by the standard reader macro
 	    function for #\; (single-line comments); that function reads successive
 	    characters until EOF, a #\NewLine is read, or a character EQL to the
-	    value of *alternate-line-terminator* is read. In OpenMCL for Darwin, the
-	    value of this variable is initially #\Return ; in OpenMCL for LinuxPPC,
+	    value of *alternate-line-terminator* is read. In &CCL; for Darwin, the
+	    value of this variable is initially #\Return ; in &CCL; for LinuxPPC,
 	    it&#39;s initially NIL.</para>
 	    
 	    <para>Their default treatment by the #\; reader macro is the primary way
@@ -1090,12 +1091,12 @@ and NSCoder and related classes offer some approximation of that.)</para>
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Per ANSI CL, OpenMCL supports the :EXTERNAL-FORMAT keyword
+	    <para>Per ANSI CL, &CCL; supports the :EXTERNAL-FORMAT keyword
 	    argument to the functions OPEN, LOAD, and COMPILE-FILE. This argument is
 	    intended to provide a standard way of providing implementation-dependent
 	    information about the format of files opened with an element-type of
 	    CHARACTER. This argument can meaningfully take on the values :DEFAULT
-	    (the default), :MACOS, :UNIX, or :INFERRED in OpenMCL.</para>
+	    (the default), :MACOS, :UNIX, or :INFERRED in &CCL;.</para>
 	    
 	    <para>When defaulted to or specified as :DEFAULT, the format of the file
 	    stream is determined by the value of the variable
@@ -1147,7 +1148,7 @@ and NSCoder and related classes offer some approximation of that.)</para>
 	    
 	    <para>Because there&#39;s some risk that unsolicited newline translation
 	    could have undesirable consequences, the initial value of this variable
-	    in OpenMCL is :UNIX.</para>
+	    in &CCL; is :UNIX.</para>
 	  </refsect1>
 	</refentry>
 

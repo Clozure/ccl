@@ -6,22 +6,23 @@
 <!ENTITY body "<varname>&amp;body</varname>">
 <!ENTITY aux "<varname>&amp;aux</varname>">
 <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+<!ENTITY CCL "<literal>CCL</literal>">
 ]>
 
-  <chapter id="Modifying-OpenMCL">
-    <title>Modifying OpenMCL</title>
+  <chapter id="Modifying-&CCL;">
+    <title>Modifying &CCL;</title>
 
-    <sect1 id="Contributing-Code-Back-to-the-OpenMCL-Project">
-      <title>Contributing Code Back to the OpenMCL Project</title>
+    <sect1 id="Contributing-Code-Back-to-the-&CCL;-Project">
+      <title>Contributing Code Back to the &CCL; Project</title>
       <para>This section is a placeholder, added as of August 2004.  The
       full text is being written, and will be added as soon as it is
       available.</para>
     </sect1>
 
-    <sect1 id="Using-OpenMCL-in--development--and-in--user--mode">
-      <title>Using OpenMCL in "development" and in  "user" mode</title>
+    <sect1 id="Using-&CCL;-in--development--and-in--user--mode">
+      <title>Using &CCL; in "development" and in  "user" mode</title>
 
-      <para>As it's distributed, OpenMCL starts up with *PACKAGE* set
+      <para>As it's distributed, &CCL; starts up with *PACKAGE* set
       to the CL-USER package and with most predefined functions and
       methods protected against accidental redefinition.  The package
       setting is of course a requirement of ANSI CL, while the
@@ -29,21 +30,21 @@
       programming errors (accidentally redefining a CL or CCL
       function) before those errors have a chance to do much
       damage.</para>
-      <para>These settings may make using OpenMCL to develop OpenMCL a
+      <para>These settings may make using &CCL; to develop &CCL; a
       bit more awkward, since much of that process assumes that the
       CCL package is current (and a primary purpose of that process is
       to redefine some "predefined, builtin functions".) The standard,
-      "routine" ways of building OpenMCL from sources (see ) -
+      "routine" ways of building &CCL; from sources (see ) -
       COMPILE-CCL, XCOMPILE-CCL, and XLOAD-LEVEL-0 - bind *PACKAGE* to
       the "CCL" package and enable the redefinition of predefined
       functions; the symbols COMPILE-CCL, XCOMPILE-CCL, and
       XLOAD-LEVEL-0 are additionally now exported from the "CCL"
       package.</para>
       <para>Some other (more ad-hoc) ways of doing development on
-      OpenMCL - compiling and/or loading individual files,
+      &CCL; - compiling and/or loading individual files,
       incrementally redefining individual functions - may be awkward
       unless one reverts to the mode of operation which was
-      traditionally offered in OpenMCL. (Some OpenMCL source files -
+      traditionally offered in &CCL;. (Some &CCL; source files -
       especially those that comprise the bootstrapping image sources
       and the first few files in the "cold load" sequence - are
       compiled and loaded in the "CCL" package but don't contain
@@ -59,15 +60,15 @@
       likely be pretty confusing.</para>
       <para>"user" and "development" are otherwise very generic terms;
       here they're intended to enforce the distinction between "using"
-      OpenMCL and "developing" it.</para>
-      <para>The initial environment from which OpenMCL images are
+      &CCL; and "developing" it.</para>
+      <para>The initial environment from which &CCL; images are
       saved is one where (SET-USER-ENVIRONMENT T) has just been
       called; in previous versions, it was effectively as if
       (SET-DEVELOPMENT-ENVIRONMENT T) had just been called.</para>
-      <para>Hopefully, most users of OpenMCL can safely ignore these
+      <para>Hopefully, most users of &CCL; can safely ignore these
       issues most of the time. Note that doing (SET-USER-ENVIRONMENT
-      T) after loading one's own code (or 3rd-party code) into OpenMCL
-      would protect that code (as well as OpenMCL's) from accidental
+      T) after loading one's own code (or 3rd-party code) into &CCL;
+      would protect that code (as well as &CCL;'s) from accidental
       redefinition; that may be useful in some cases.</para>
     </sect1>
 
@@ -76,7 +77,7 @@
       <para> In a perfect world, something like this couldn't
       happen:</para>
       <programlisting>
-Welcome to OpenMCL Version x.y!
+Welcome to &CCL; Version x.y!
 ? (defun foo (x)
     (declare (cons x))
     (cdr x))
@@ -106,10 +107,10 @@ deliberately:</para>
 CLASSIFY
 
 ? (classify 0)
-Bug in OpenMCL system code:
+Bug in &CCL; system code:
 I give up. How could this happen ?
 ? for help
-[12345] OpenMCL kernel debugger:
+[12345] &CCL; kernel debugger:
       </programlisting>
       <para>CCL::BUG isn't quite the right tool for this example (a
       call to BREAK or PRINT might do a better job of clearing up the
@@ -126,7 +127,7 @@ I give up. How could this happen ?
 (S)  Find and describe symbol matching specified name
 (B)  Show backtrace
 (X)  Exit from this debugger, asserting that any exception was handled
-(K)  Kill OpenMCL process
+(K)  Kill &CCL; process
 (?)  Show this help
 </programlisting>
       <para>CCL::BUG just does an FF-CALL into the lisp kernel.  If
@@ -149,7 +150,7 @@ CLASSIFY2
 Lisp Breakpoint
  While executing: #&lt;Function CLASSIFY2 #x08476cfe>
 ? for help
-[12345] OpenMCL kernel debugger: ?
+[12345] &CCL; kernel debugger: ?
 (G)  Set specified GPR to new value
 (A)  Advance the program counter by one instruction (use with caution!)
 (D)  Describe the current exception in greater detail
@@ -160,11 +161,11 @@ Lisp Breakpoint
 (B)  Show backtrace
 (X)  Exit from this debugger, asserting that any exception was handled
 (P)  Propagate the exception to another handler (debugger or OS)
-(K)  Kill OpenMCL process
+(K)  Kill &CCL; process
 (?)  Show this help
 </programlisting>
       <para>CCL::DBG takes an argument, whose value is copied into the register
-that OpenMCL uses to return a function's primary value (arg_z, which
+that &CCL; uses to return a function's primary value (arg_z, which
 is r23 on the PowerPC). If we were to choose the (L) option at this point,
 we'd see a dislay like:</para>
       <programlisting>rnil = 0x01836015
@@ -198,8 +199,8 @@ debugger", the output of the (L) and (B) options are often the most
 helpful things to include in a bug report.</para>
     </sect1>
 
-    <sect1 id="Using-AltiVec-in-OpenMCL-LAP-functions">
-      <title>Using AltiVec in OpenMCL LAP functions</title>
+    <sect1 id="Using-AltiVec-in-&CCL;-LAP-functions">
+      <title>Using AltiVec in &CCL; LAP functions</title>
 
       <sect2 id="Overview--16-">
 	<title>Overview</title>
@@ -213,20 +214,20 @@ helpful things to include in a bug report.</para>
         general.  Ideally, there would be some document that
         did.</para>
         <para>This document does explain AltiVec register-usage
-        conventions in OpenMCL and explains the use of some lap macros
+        conventions in &CCL; and explains the use of some lap macros
         that help to enforce those conventions.</para>
         <para>All of the global symbols described below are exported
         from the CCL package. Note that lap macro names, ppc
         instruction names, and (in most cases) register names are
         treated as strings, so this only applies to functions and
         global variable names.</para>
-        <para>Much of the OpenMCL support for AltiVec LAP programming
+        <para>Much of the &CCL; support for AltiVec LAP programming
         is based on work contributed to MCL by Shannon Spires.</para>
       </sect2>
 
       <sect2 id="Register-usage-conventions">
 	<title>Register usage conventions</title>
-        <para>OpenMCL LAP functions that use AltiVec instructions must
+        <para>&CCL; LAP functions that use AltiVec instructions must
         interoperate with each other and with C functions; that
         suggests that they follow C AltiVec register usage
         conventions. (vr0-vr1 scratch, vr2-vr13 parameters/return
@@ -276,7 +277,7 @@ and of saving/restoring any non-volatile vector registers:</para>
   (blr))
 </programlisting>
         <para>AltiVec registers are not preserved by CATCH and UNWIND-PROTECT.
-Since AltiVec is only accessible from LAP in OpenMCL and since LAP
+Since AltiVec is only accessible from LAP in &CCL; and since LAP
 functions rarely use high- level control structures, this should rarely be
 a problem in practice.</para>
         <para>LAP functions which use non-volatile vector registers and which call
@@ -309,7 +310,7 @@ one of the intended uses of the WITH-VECTOR-BUFFER lap macro.</para>
 
 	  <para>Note that these are CERRORs, not warnings, and that
 	  no lisp functions or methods have been defined in the kernel
-	  in MCL or OpenMCL since 1987 or so.</para>
+	  in MCL or &CCL; since 1987 or so.</para>
 	</refsect1>
       </refentry>
 
@@ -382,7 +383,7 @@ one of the intended uses of the WITH-VECTOR-BUFFER lap macro.</para>
 
 	<refsect1>
 	  <title>Description</title>
-	  <para>This variable is intitialized each time an OpenMCL session
+	  <para>This variable is intitialized each time an &CCL; session
 	  starts based on information provided by the lisp kernel. Its value
 	  is true if AltiVec is present and false otherwise. This variable
 	  shouldn't be set by user code.</para>

@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN" "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd">
-  <chapter id="Implementation-Details-of-OpenMCL">
-    <title>Implementation Details of OpenMCL</title>
-    <para>This chapter describes many aspects of OpenMCL's
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN" "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd"[
+<!ENTITY rest "<varname>&amp;rest</varname>">
+<!ENTITY key "<varname>&amp;key</varname>">
+<!ENTITY optional "<varname>&amp;optional</varname>">
+<!ENTITY body "<varname>&amp;body</varname>">
+<!ENTITY aux "<varname>&amp;aux</varname>">
+<!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+<!ENTITY CCL "<literal>CCL</literal>">
+]>
+  <chapter id="Implementation-Details-of-&CCL;">
+    <title>Implementation Details of &CCL;</title>
+    <para>This chapter describes many aspects of &CCL;'s
     implementation as of (roughly) version 1.1.  Details vary a bit
     between the three archutectures (PPC32, PPC64, and X86-64)
     currently supported and those details change over time, so the
@@ -15,12 +23,12 @@
 
     <sect1 id="Threads-and-exceptions">
       <title>Threads and exceptions</title>
-      <para>OpenMCL's threads are "native" (meaning that they're
+      <para>&CCL;'s threads are "native" (meaning that they're
       scheduled and controlled by the operating system.)  Most of the
       implications of this are discussed elsewhere; this section tries
       to describe how threads look from the lisp kernel's perspective
       (and especailly from the GC's point of view.)</para>
-      <para>OpenMCL's runtime system tries to use machine-level
+      <para>&CCL;'s runtime system tries to use machine-level
       exception mechanisms (conditional traps when available, illegal
       instructions, memory access protection in some cases) to detect
       and handle ...  exceptional situations.  These situations
@@ -35,7 +43,7 @@
       (by definition) rarely occurs.</para>
       <para>Some emulated execution environments (the Rosetta PPC
       emulator on x86 versions of OSX) don't provide accurate
-      exception information to exception handling functions. OpenMCL
+      exception information to exception handling functions. &CCL;
       can't run in such environments.</para>
 
       <sect2 id="The-Thread-Context-Record">
@@ -125,9 +133,9 @@
         alert dialogs which falsely claim that an application has
         crashed (when in fact the application in question has
         routinely handled a routine exception.)  On Darwin/OSX,
-        OpenMCL uses Mach thread-level exception handling facilities
+        &CCL; uses Mach thread-level exception handling facilities
         which run before GDB or CrashReporter get a chance to confuse
-        themeselves; OpenMCL's Mach exception handling tries to force
+        themeselves; &CCL;'s Mach exception handling tries to force
         the thread which received a synchronous exception to invoke a
         signal handling function ("as if" signal handling worked more
         usefully under Darwin.)  Mach exception handlers run in a
@@ -138,10 +146,10 @@
         indication that the exception has been handled.  The reply
         from a thread-level exception handler keeps the exception from
         being reported to GDB or CrashReporter and avoids the problems
-        related to those programs.  Since OpenMCL's Mach exception
+        related to those programs.  Since &CCL;'s Mach exception
         handler doesn't claim to handle debugging-related exceptions
         (from breakpoints or single-step operations), it's possible to
-        use GDB to debug OpenMCL.</para>
+        use GDB to debug &CCL;.</para>
         <para>On platforms where signal handling and debugging don't get in each
 other's way, a signal handler is entered with all signals blocked.
 (This behavior is specified in the call to the sigaction() function
@@ -172,7 +180,7 @@ exception lock which serializes exception processing.</para>
         complication: the OS kernel ordinarily allocates the signal
         context and siginfo structures on the stack of the thread
         which received the signal; in practice, that means "wherever
-        RSP is pointing."  OpenMCL's require that the thread's value
+        RSP is pointing."  &CCL;'s require that the thread's value
         stack - where RSP is usually pointing while lisp code is
         running - contain only "nodes" (properly tagged lisp objects),
         and scribbling a signal context all over the value stack would
@@ -213,7 +221,7 @@ exception lock which serializes exception processing.</para>
 
       <sect2 id="Threads-comma---exceptions-comma---and-the-GC">
 	<title>Threads, exceptions, and the GC</title>
-        <para>OpenMCL's GC is not concurrent: when the GC is invoked
+        <para>&CCL;'s GC is not concurrent: when the GC is invoked
         in response to an exception in a particular thread, all other
         lisp threads must stop until the GC's work is done.  The
         thread that triggered the GC iterates over the global TCR
@@ -243,7 +251,7 @@ exception lock which serializes exception processing.</para>
 
       <sect2 id="PC-lusering">
 	<title>PC-lusering</title>
-        <para>It's not quite accurate to say that OpenMCL's compiler
+        <para>It's not quite accurate to say that &CCL;'s compiler
         and runtime follow precise stack and register usage
         conventions at all times; there are a few exceptions:</para>
 
@@ -331,7 +339,7 @@ be easily recognized.</para>
         enforce strict conventions on register and stack usage or
         tolerate ambiguity.</para>
         <para>"Tolerating ambiguity" is an approach taken by some
-        ("conservative") GC schemes; by contrast, OpenMCL's GC is
+        ("conservative") GC schemes; by contrast, &CCL;'s GC is
         "precise", which in this case means that it believes that the
         contents of certain machine registers and stack locations are
         always nodes and that other registers and stack locations are
@@ -365,13 +373,13 @@ be easily recognized.</para>
         pointer if it were to move the underlying object.)</para>
         <para>Such a pointer ("into" the interior of a heap-allocated
         object) is often called a <emphasis>locative</emphasis>; the
-        cases where locatives are allowed in OpenMCL mostly involve
+        cases where locatives are allowed in &CCL; mostly involve
         the behavior of function call and return instructions.  (To be
         technicaly accurate, the other case also arises on x86-64, but
         that case isn't as user-visible.)</para>
         <para>On the PowerPC (both PPC32 and PPC64), all machine
         instructions are 32 bits wide and all in1struction words are
-        allocated on 32-bit boundaries.  In PPC OpenMCL, a CODE-VECTOR
+        allocated on 32-bit boundaries.  In PPC &CCL;, a CODE-VECTOR
         is a specialized type of vector-like object; its elements are
         32-bit PPC machine instructions.  A CODE-VECTOR is an
         attribute of FUNCTION object; a function call involves
@@ -392,7 +400,7 @@ be easily recognized.</para>
         also use the PPC's "count register" (ctr), and if either the
         lr or ctr needs to be stored in memory it needs to first be
         copied to a general-purpose registers.</para>
-        <para>OpenMCL's GC understands that certain registers contain
+        <para>&CCL;'s GC understands that certain registers contain
         these special "pc-locatives" (locatives that point into
         CODE-VECTOR objects); it contains specal support for finding
         the containing CODE-VECTOR object and for adjusting all of
@@ -654,7 +662,7 @@ be easily recognized.</para>
 
       <sect2 id="Tagging-scheme">
 	<title>Tagging scheme</title>
-        <para>OpenMCL always allocates lisp objects on double-node
+        <para>&CCL; always allocates lisp objects on double-node
         (64-bit for 32-bit platforms, 128-bit for 64-bit platforms)
         boundaries; this mean that the low 3 bits (32-bit lisp) or 4
         bits (64-bit lisp) are always 0 and are therefore redundant
@@ -699,7 +707,7 @@ be easily recognized.</para>
         as cheap as possible and using a tag of zero for FIXNUMs helps
         to ensure that it will be.</para> 
 	<para>If we have N available tag bits (N = 3 for 32-bit
-	OpenMCL and N = 4 for 64-bit OpenMCL), this way of
+	&CCL; and N = 4 for 64-bit &CCL;), this way of
 	representing fixnums with the low M bits forced to 0 works as
 	long as M &lt;= N.  The smaller we make M, the larger the
 	values of MOST-POSITIVE-FIXNUM and MOST-NEGATIVE become; the
@@ -728,7 +736,7 @@ be easily recognized.</para>
 	    and the order of CAR and CDR in memory were chosen to allow
 	    smaller, cheaper addressing modes to be used to "cdr down a
 	    list."  That's not a factor on ppc or x86-64,but all
-	    versions of OpenMCL still store the CDR of a CONS cell
+	    versions of &CCL; still store the CDR of a CONS cell
 	    first in memory.  It doesn't matter, but doing it the way
 	    that the host system did made boostrapping to a new target
 	    system a little easier.)
@@ -742,7 +750,7 @@ be easily recognized.</para>
 	    than its role as a SYMBOL is:LISTP has to be true of NIL
 	    and primitives like CAR and CDR do LISTP implicitly when
 	    safe and want that operation to be fast.There are several
-	    possible approaches to this; OpenMCL uses two of them. On
+	    possible approaches to this; &CCL; uses two of them. On
 	    PPC32 and X86-64, NIL is basically a weird CONS cell that
 	    straddles two doublenodes; the tag of NIL is unique and
 	    congruent modulo 4 (modulo 8 on 64-bit) with the tag used
@@ -784,12 +792,12 @@ be easily recognized.</para>
 	    uniformly.There are some disadvantages to that uniform
 	    treatment as well, and the treatment of "memory-allocated
 	    non-CONS objects" isn't entirely uniformaccross all
-	    OpenMCL implementations.  Let's first pretend that
+	    &CCL; implementations.  Let's first pretend that
 	    the treatment is uniform, then discuss the ways in which it
 	    isn't.The "uniform approach" is to treat all
 	    memory-allocated non-CONS objectsas if they were vectors;
 	    this use of the term is a little looser thanwhat's implied
-	    by the CL VECTOR type.  OpenMCL actually uses the
+	    by the CL VECTOR type.  &CCL; actually uses the
 	    term"uvector" to mean "a memory-allocated lisp object
 	    other than a CONS cell,whose first word is a header which
 	    describes the object's type andthe number of elements that
@@ -836,7 +844,7 @@ be easily recognized.</para>
     </sect1>
 
     <sect1 id="Heap-Allocation">
-      <title>Heap Allocation</title> <para>When the OpenMCL kernel
+      <title>Heap Allocation</title> <para>When the &CCL; kernel
       first starts up, a large contiguous chunk of the process's
       address space is mapped as "anonymous, no access"
       memory. ("Large" means different things in different contexts;
@@ -966,7 +974,7 @@ L1
 
       <sect2 id="Heap-growth">
 	<title>Heap growth</title>
-        <para>All OSes on which OpenMCL currently runs use an
+        <para>All OSes on which &CCL; currently runs use an
         "overcommit" memory allocation strategy by default (though
         some of them provide ways of overriding that default.)  What
         this means in general is that the OS doesn't necessarily
@@ -1065,7 +1073,7 @@ have.</para>
         proportional to the length of the pointer chain from some root
         to that object. Rather than storing that pointer chain
         implicitly on the stack (in a series of recursive calls to the
-        mark subroutine), the OpenMCL marker uses mixture of recursion
+        mark subroutine), the &CCL; marker uses mixture of recursion
         and a technique called <emphasis>link inversion</emphasis> to
         store the pointer chain in the objects themselves.  (Recursion
         tends to be simpler and faster; if a recursive step notes that
@@ -1196,7 +1204,7 @@ have.</para>
 
     <sect1 id="The-ephemeral-GC">
       <title>The ephemeral GC</title>
-      <para>In the OpenMCL memory management scheme, the relative age
+      <para>In the &CCL; memory management scheme, the relative age
       of two objects in the dynamic heap can be determined by their
       addresses: if addresses X and Y are both addresses in the
       dynamic heap, X is younger than Y (X was created more recently
@@ -1247,7 +1255,7 @@ have.</para>
       if the other generations were write-protected.</para></footnote> The
       set of pointers that may contain intergenerational references is
       sometimes called <emphasis>the remembered set</emphasis>.</para>
-      <para>In OpenMCL's EGC, the heap is organized exactly the same
+      <para>In &CCL;'s EGC, the heap is organized exactly the same
       as otherwise; "generations" are merely structures which contain
       pointers to regions of the heap (which is already ordered by
       age.) When a generation needs to be GCed, any younger generation
@@ -1332,7 +1340,7 @@ have.</para>
       xdump/faslenv.lisp, level-0/nfasload.lisp, and lib/nfcomp.lisp.
       The information here is only an overview, which might help when
       reading the source.</para>
-      <para>The OpenMCL Fasl format is forked from the old MCL Fasl
+      <para>The &CCL; Fasl format is forked from the old MCL Fasl
       format; there are a few differences, but they are minor.  The
       name "nfasload" comes from the fact that this is the so-called
       "new" Fasl system, which was true in 1986 or so.  The format has
@@ -1378,8 +1386,8 @@ have.</para>
     <sect1 id="The-Objective-C-Bridge--1-">
       <title>The Objective-C Bridge</title>
 
-      <sect2 id="How-OpenMCL-Recognizes-Objective-C-Objects">
-	<title>How OpenMCL Recognizes Objective-C Objects</title>
+      <sect2 id="How-&CCL;-Recognizes-Objective-C-Objects">
+	<title>How &CCL; Recognizes Objective-C Objects</title>
         <para>In most cases, pointers to instances of Objective-C
         classes are recognized as such; the recognition is (and
         probably always will be) slightly heuristic. Basically, any

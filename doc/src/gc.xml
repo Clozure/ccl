@@ -1,11 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN" "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd">
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN" "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd"[
+<!ENTITY rest "<varname>&amp;rest</varname>">
+<!ENTITY key "<varname>&amp;key</varname>">
+<!ENTITY optional "<varname>&amp;optional</varname>">
+<!ENTITY body "<varname>&amp;body</varname>">
+<!ENTITY aux "<varname>&amp;aux</varname>">
+<!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+<!ENTITY CCL "<literal>CCL</literal>">
+]>
   <chapter id="Understanding-and-Configuring-the-Garbage-Collector">
     <title>Understanding and Configuring the Garbage Collector</title>
 
     <sect1 id="Heap-space-allocation">
       <title>Heap space allocation</title>
-      <para>Release 0.10 or later of OpenMCL uses a different memory
+      <para>Release 0.10 or later of &CCL; uses a different memory
       management scheme than previous versions did. Those earlier
       versions would allocate a block of memory (of specified size) at
       startup and would allocate lisp objects within that block. When
@@ -43,7 +51,7 @@
 > openmcl --heap-reserve 8M
 </programlisting>
       <para>would provide an execution environment that's very similar to
-that provided by earlier OpenMCL versions.</para>
+that provided by earlier &CCL; versions.</para>
     </sect1>
 
     <sect1 id="The-Ephemeral-GC">
@@ -117,7 +125,7 @@ that provided by earlier OpenMCL versions.</para>
       overall performance as well; the nature and degree of its impact
       on performance is highly application-dependant.</para>
       <para>Most EGC strategies (including the one employed by
-      OpenMCL) logically or physically divide memory into one or more
+      &CCL;) logically or physically divide memory into one or more
       areas of relatively young objects ("generations") and one or
       more areas of old objects.  Objects that have survived one or
       more GCs as members of a young generation are promoted (or
@@ -130,9 +138,9 @@ that provided by earlier OpenMCL versions.</para>
       well in practive.</para>
       <para>It's important to note that a GC of the youngest
       generation is typically very fast (perhaps a few milliseconds on
-      a modern CPU, depending on various factors), OpenMCL's EGC is
+      a modern CPU, depending on various factors), &CCL;'s EGC is
       not concurrent and doesn't offer realtime guarantees.</para>
-      <para>OpenMCL's EGC maintains three ephemeral generations; all
+      <para>&CCL;'s EGC maintains three ephemeral generations; all
       newly created objects are created as members of the youngest
       generation. Each generation has an associated
       <emphasis>threshold</emphasis>, which indicates the number of
@@ -165,14 +173,14 @@ that provided by earlier OpenMCL versions.</para>
       address range used for consing after the Nth full GC is likely
       to be nearly or entirely identical to the address range used by
       the N+1th full GC.</para>
-      <para>By default (and traditionally in OpenMCL), the GC's policy
+      <para>By default (and traditionally in &CCL;), the GC's policy
       is to "release" the pages in this address range: to advise the
       virtual memory system that the pages contain garbage and any
       physical pages associated with them don't need to be swapped out
       to disk before being reused and to (re-)map the logical address
       range so that the pages will be zero-filled by the virtual
       memory system when they're next accessed.  This policy is
-      intended to reduce the load on the VM system and keep OpenMCL's
+      intended to reduce the load on the VM system and keep &CCL;'s
       working set to a minimum.</para>
       <para>For some programs (especially those that cons at a very
       high rate), the default policy may be less than ideal: releasing
@@ -209,7 +217,7 @@ that provided by earlier OpenMCL versions.</para>
       <para>The image file should be opened and/or mapped in some mode
       which disallows writing to the memory-mapped regions of the file
       from other processes. I'm not sure of how to do that; writing to
-      the file when it's mapped by OpenMCL can have unpredictable and
+      the file when it's mapped by &CCL; can have unpredictable and
       unpleasant results.  SAVE-APPLICATION will delete its output
       file's directory entry and create a new file; one may need to
       exercise care when using file system utilities (like tar, for
@@ -228,7 +236,7 @@ that provided by earlier OpenMCL versions.</para>
       their memory will never be reclaimed, even if they are
       referenced nowhere else in the program.  You may want this
       behaviour.  If you don't, you need weak references.</para>
-      <para>OpenMCL supports weak references with "weak hash tables".
+      <para>&CCL; supports weak references with "weak hash tables".
       Hash tables may be weak with respect to either their keys or
       their values.  To make a hash table with weak keys, invoke
       <literal>make-hash-table</literal> with the option :weak t, or,
@@ -515,7 +523,7 @@ that provided by earlier OpenMCL versions.</para>
 	  <para>If the EGC is currently disabled, puts the indicated
 	  threshold sizes in effect and returns T, otherwise, returns NIL.
 	  (The provided threshold sizes are rounded up to a multiple of
-	  64Kbytes in OpenMCL 0.14 and to a multiple of 32KBytes in earlier
+	  64Kbytes in &CCL; 0.14 and to a multiple of 32KBytes in earlier
 	  versions.)</para>
 	</refsect1>
       </refentry>

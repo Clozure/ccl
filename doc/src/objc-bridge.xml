@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN" "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd">
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN" "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd"[
+<!ENTITY rest "<varname>&amp;rest</varname>">
+<!ENTITY key "<varname>&amp;key</varname>">
+<!ENTITY optional "<varname>&amp;optional</varname>">
+<!ENTITY body "<varname>&amp;body</varname>">
+<!ENTITY aux "<varname>&amp;aux</varname>">
+<!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+<!ENTITY CCL "<literal>CCL</literal>">
+]>
   <chapter id="The-Objective-C-Bridge">
     <title>The Objective-C Bridge</title>
 
@@ -8,7 +16,7 @@
     ObjC objects and classes from Lisp, and to define classes in Lisp
     which can be used by ObjC.</para>
     <para>The ultimate purpose of the ObjC and Cocoa bridges is to
-    make Cocoa as easy as possible to use from OpenMCL, in order to
+    make Cocoa as easy as possible to use from &CCL;, in order to
     support the development of GUI applications and IDEs.  The
     eventual goal, which is much closer than it used to be, is
     complete integration of Cocoa into CLOS (whatever that
@@ -52,7 +60,7 @@ have already been allocated.)</para>
 seconds; it could conceivably be sped up some, but it's never likely
 to be fast.</para>
       <para>When the process is complete, CLOS is aware of several hundred
-new ObjC classes and their metaclasses. OpenMCL's runtime system can
+new ObjC classes and their metaclasses. &CCL;'s runtime system can
 reliably recognize MACPTRs to ObjC classes as being CLASS objects, and
 can (fairly reliably but heuristically) recognize instances of those
 classes (though there are complicating factors here; see below.)
@@ -104,7 +112,7 @@ example above could have been done more verbosely as:</para>
 decides to replace the object and return the new one, instead
 of modifying the existing one.
 In fact, if you leave out the setq and
-then try to view the value of *N*, OpenMCL will freeze.  There's
+then try to view the value of *N*, &CCL; will freeze.  There's
 little reason to ever do it this way; this is just to show
 what's going on.</para>
       <para>You've seen that an ObjC initialization method doesn't have to
@@ -172,7 +180,7 @@ method in your subclass.</para>
 
       <sect2 id="Type-Coercion-for-ObjC-Method-Calls">
 	<title>Type Coercion for ObjC Method Calls</title>
-        <para>OpenMCL's FFI handles many common conversions between
+        <para>&CCL;'s FFI handles many common conversions between
         Lisp and foreign data, such as unboxing floating-point args
         and boxing floating-point results.  The bridge adds a few more
         automatic conversions:</para>
@@ -397,7 +405,7 @@ variable arity message, use
         definition contains the keyword :FOREIGN-TYPE, the slot will
         be a "foreign slot" (i.e. an ObjC instance variable). Be aware
         that it is an error to redefine an ObjC class so that its
-        foreign slots change in any way, and OpenMCL doesn't do
+        foreign slots change in any way, and &CCL; doesn't do
         anything consistent when you try to.</para>
         <para>The value of the :FOREIGN-TYPE initarg should be a
         foreign type specifier. For example, if we wanted (for some

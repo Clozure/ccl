@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN" "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd">
-  <chapter><title>Building OpenMCL from its Source Code</title>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN" "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd"[
+<!ENTITY rest "<varname>&amp;rest</varname>">
+<!ENTITY key "<varname>&amp;key</varname>">
+<!ENTITY optional "<varname>&amp;optional</varname>">
+<!ENTITY body "<varname>&amp;body</varname>">
+<!ENTITY aux "<varname>&amp;aux</varname>">
+<!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+<!ENTITY CCL "<literal>CCL</literal>">
+]>
+  <chapter><title>Building &CCL; from its Source Code</title>
 
-    <para>OpenMCL, like many other Lisp implementations, consists of a
+    <para>&CCL;, like many other Lisp implementations, consists of a
     kernel and a heap image.  The kernel is an ordinary C program, and
     is built with a C compiler.  It provides very basic and
     fundamental facilities, such as memory management, garbage
@@ -19,10 +27,10 @@
     
     <para>Where will you get a working Lisp compiler?  No worries; you
     can use a precompiled copy of a (slightly older and compatible)
-    version of OpenMCL.  For help, read on.</para>
+    version of &CCL;.  For help, read on.</para>
 
     <para>In principle it would be possible to use another Lisp as the
-    host compiler, rather than an old OpenMCL; this would be a
+    host compiler, rather than an old &CCL;; this would be a
     challenging and experimental way to build, and is not described
     here.</para>
 
@@ -36,7 +44,7 @@
       definitions and the external representationof other lisp objects
       in a compact, machine-readable form. fasl is short for
       &ldquo;<literal>FAS</literal>t
-      <literal>L</literal>oading&rdquo;.OpenMCL uses different
+      <literal>L</literal>oading&rdquo;.&CCL; uses different
       pathname types (extensions) to name faslfiles on different
       platforms; see <xref
       linkend="Platform-specific-filename-conventions"/> </para>
@@ -47,7 +55,7 @@
       image into memory, transfer control to somecompiled lisp code
       that the image contains, handle any exceptionsthat occur during
       the execution of that lisp code, and provide variousother forms
-      of runtime support for that code.OpenMCL uses different
+      of runtime support for that code.&CCL; uses different
       filenames to name the lisp kernel fileson different platforms;
       see FIXTHIS.</para>
 
@@ -55,19 +63,19 @@
       a file that can be quickly mapped into aprocess's address space.
       Conceptually, it's not too different from anexecutable file or
       shared library in the OS's native format (ELF orMach-O/dyld
-      format); for historical reasons, OpenMCL's own heap images are in
+      format); for historical reasons, &CCL;'s own heap images are in
       their own (fairly simple) format.The term <literal>full heap
       image</literal> refers to a heap image file thatcontains all of
-      the code and data that comprise OpenMCL.OpenMCL uses different
+      the code and data that comprise &CCL;.&CCL; uses different
       filenames to name the standard full heapimage files on different
       platforms; see FIXTHIS .</para>
 
       <para>A <indexterm><primary>bootstrapping
       image</primary></indexterm> is a minimal heap image used in
-      the process of building OpenMCL itself.  The bootstrapping image
-      containsjust enough code to load the rest of OpenMCL from fasl
+      the process of building &CCL; itself.  The bootstrapping image
+      containsjust enough code to load the rest of &CCL; from fasl
       files.  It mayhelp to think of the bootstrapping image as the
-      egg and the full heapimage as the chicken...OpenMCL uses
+      egg and the full heapimage as the chicken...&CCL; uses
       different filenames to name the standardbootstrapping image
       files on different platforms; see FIXTHIS .</para>
 
@@ -160,7 +168,7 @@
 
     <sect1 id="Setting-Up-to-Build">
       <title>Setting Up to Build</title>
-      <para>There are currently three versions of OpenMCL that you
+      <para>There are currently three versions of &CCL; that you
       might want to use (and therefore might want to build from
       source):</para>
       <itemizedlist>
@@ -172,9 +180,9 @@
 	features and platforms as 1.1, but is distributed and updated
 	differently</para></listitem>
       </itemizedlist>
-      <para>All versions are available for download from the OpenMCL
+      <para>All versions are available for download from the &CCL;
       website in the form of archives that contain everything you need
-      to work with OpenMCL, including the complete sources, a full
+      to work with &CCL;, including the complete sources, a full
       heap image, and the foreign-function interface database.</para>
       <para>Version 1.0 archives are named
       <literal>openmcl-</literal><replaceable>platform</replaceable><literal>-all-1.0.tar.gz</literal>,
@@ -194,10 +202,10 @@
       <para>Because version 1.1 is undergoing active development,
       there may be times when you want to get sources that are more
       recent than the most recent snapshot and use them to build
-      yourself a new bleeding-edge OpenMCL.  In that case, you should
+      yourself a new bleeding-edge &CCL;.  In that case, you should
       download and install the latest snapshot, and then update your
       sources via CVS.  At that point you can rebuild and you'll have
-      the latest and greatest OpenMCL.  The snapshot has CVS
+      the latest and greatest &CCL;.  The snapshot has CVS
       working-copy information in it, so all you need to do to update
       is</para>
       <programlisting>
@@ -230,7 +238,7 @@ $ cvs update -d -P      # create dirs as needed, prune empty ones
     <sect1 id="Building-Everything">
       <title>Building Everything</title>
       <para>Given that you now have everything you need, do the
-      following in a running OpenMCL to bring your Lisp system
+      following in a running &CCL; to bring your Lisp system
       completely up to date.</para>
       <programlisting>
 ? (ccl:rebuild-ccl :full t)
@@ -293,9 +301,9 @@ $ cvs update -d -P      # create dirs as needed, prune empty ones
       in <literal>ccl/lisp-kernel</literal>.</para>
 
       <para>This section gives directions on how to rebuild the Lisp
-      kernel from its source code.  Most OpenMCL users will rarely
+      kernel from its source code.  Most &CCL; users will rarely
       have to do this.  You probably will only need to do it if you are
-      attempting to port OpenMCL to a new architecture or extend or enhance
+      attempting to port &CCL; to a new architecture or extend or enhance
       its kernel in some way.  As mentioned above, this step happens
       automatically when you do
       <programlisting>
@@ -306,7 +314,7 @@ $ cvs update -d -P      # create dirs as needed, prune empty ones
 
       <sect2 id="Kernel-build-prerequisites">
         <title>Kernel build prerequisites</title>
-	<para>The OpenMCL kernel can be bult with the following widely
+	<para>The &CCL; kernel can be bult with the following widely
 	available tools:</para>
         <itemizedlist>
           <listitem><para>cc or gcc- the GNU C compiler</para></listitem>
@@ -359,7 +367,7 @@ shell> make
       code.  Since the heap image already contains a fully-working
       implementation, all we need to do is load it into memory and
       start using it.</para>
-      <para>If you're building a new version of OpenMCL, you need to
+      <para>If you're building a new version of &CCL;, you need to
       build a new heap image.</para>
       <para>(You might also wish to build a heap image if you have a
       large program which it is very complicated or time-consuming to
@@ -371,19 +379,19 @@ shell> make
 
       <sect2 id="Development-cycle">
 	<title>Development cycle</title>
-        <para>Creating a new OpenMCL full heap image consists of the
+        <para>Creating a new &CCL; full heap image consists of the
         following steps:</para>
         <orderedlist>
-          <listitem><para>Using your existing OpenMCL, create a
+          <listitem><para>Using your existing &CCL;, create a
           bootstrapping image</para></listitem>
-          <listitem><para>Using your existing OpenMCL, recompile your
-          updated OpenMCL sources</para></listitem>
-          <listitem><para>Invoke OpenMCL with the bootstrapping image
+          <listitem><para>Using your existing &CCL;, recompile your
+          updated &CCL; sources</para></listitem>
+          <listitem><para>Invoke &CCL; with the bootstrapping image
           you just created (rather than with the existing full heap
           image).</para></listitem>
 	</orderedlist>
-	<para>When you invoke OpenMCL with the bootstrapping image, it
-	will start up, load al of the OpenMCL fasl files, and save out
+	<para>When you invoke &CCL; with the bootstrapping image, it
+	will start up, load al of the &CCL; fasl files, and save out
 	a new full heap image.  Voila.  You've created a new heap
 	image.</para>
         <para>A few points worth noting:</para>
@@ -417,14 +425,14 @@ shell> make
 
       <sect2 id="Generating-a-bootstrapping-image">
         <title>Generating a bootstrapping image</title>
-        <para>The bootstrapping image isn't provided in OpenMCL
+        <para>The bootstrapping image isn't provided in &CCL;
         distributions. It can be built from the source code provided
         in distributions (using a lisp image and kernel provided in
         those distributions) using the procedure described
         below.</para>
 
         <para>The bootstrapping image is built by invoking a special
-        utility inside a running OpenMCL heap image to load files
+        utility inside a running &CCL; heap image to load files
         contained in the <literal>ccl/level-0</literal> directory. The
         bootstrapping image loads several dozen fasl files.  After
         it's done so, it saves a heap image via
@@ -433,10 +441,10 @@ shell> make
 
         <para>Given a source distribution, a lisp kernel, and aheap
         image, one can produce a bootstapping image by first invoking
-        OpenMCL from the shell:</para>
+        &CCL; from the shell:</para>
         <programlisting>
 shell&gt; openmcl
-Welcome to OpenMCL .... !
+Welcome to &CCL; .... !
 ?
 	</programlisting>
 	<para>then calling <literal>ccl:xload-level-0</literal> at the
@@ -481,7 +489,7 @@ Welcome to OpenMCL .... !
         files don't yet exist may produce warnings to that effect
         whenever files are <literal>require</literal>d during
         compilation; those warnings can be safely ignored. Depending
-        on the maturity of the OpenMCL release, calling
+        on the maturity of the &CCL; release, calling
         <literal>compile-ccl</literal> or
         <literal>xcompile-ccl</literal> may also produce several
         warnings about undefined functions, etc. They should be

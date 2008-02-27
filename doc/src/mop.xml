@@ -6,6 +6,7 @@
 <!ENTITY body "<varname>&amp;body</varname>">
 <!ENTITY aux "<varname>&amp;aux</varname>">
 <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+<!ENTITY CCL "<literal>CCL</literal>">
 ]>
 
   <chapter id="Writing-Portable-Extensions-to-the-Object-System-using-the-MetaObject-Protocol">
@@ -13,7 +14,7 @@
 
     <sect1 id="MOP-Overview">
       <title>Overview</title>
-      <para>OpenMCL supports a fairly large subset of the
+      <para>&CCL; supports a fairly large subset of the
       semi-standard MetaObject Protocol (MOP) for CLOS, as defined in
       chapters 5 and 6 of "The Art Of The Metaobject Protocol",
       (Kiczales et al, MIT Press 1991, ISBN 0-262-61074-4); this
@@ -324,7 +325,7 @@
       the table above deal with the internals of generic function
       dispatch and method invocation (the "Generic Function Invocation
       Protocol".) Method functions are implemented a bit differently
-      in OpenMCL from what the MOP expects, and it's not yet clear if
+      in &CCL; from what the MOP expects, and it's not yet clear if
       or how this subprotocol can be well-supported.</para>
       <para>Those constructs that are marked as "+" in the table above
       are nominally implemented as the MOP document specifies

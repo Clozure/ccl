@@ -6,6 +6,7 @@
 <!ENTITY body "<varname>&amp;body</varname>">
 <!ENTITY aux "<varname>&amp;aux</varname>">
 <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+<!ENTITY CCL "<literal>CCL</literal>">
 ]>
 
   <chapter id="Creating-Your-Own-Stream-Classes-with-Gray-Streams">
@@ -77,7 +78,7 @@
       ccl/level-1/l1-sysio.lisp.</para>
       <para>According to the original Gray streams proposal, you
       should inherit from the most specific of the fundamental-*
-      classes which applies.  Using OpenMCL, though, if you want
+      classes which applies.  Using &CCL;, though, if you want
       buffering for better performance, which, unless you know of some
       reason you wouldn't, you do, you should instead inherit from the
       appropriate ccl::buffered-* class The buffering you get this way
@@ -225,9 +226,9 @@ behave in special ways with regard to Gray streams.</para>
 
     <sect1 id="Multibyte-I-O">
       <title>Multibyte I/O</title>
-      <para>All heap-allocated objects in OpenMCL that cannot contain
+      <para>All heap-allocated objects in &CCL; that cannot contain
       pointers to lisp objects are represented as
-      <emphasis>ivectors</emphasis>. OpenMCL provides low-level
+      <emphasis>ivectors</emphasis>. &CCL; provides low-level
       functions, and , to efficiently transfer data between buffered
       streams and ivectors. There's some overlap in functionality
       between the functions described here and the ANSI CL

@@ -6,6 +6,7 @@
 <!ENTITY body "<varname>&amp;body</varname>">
 <!ENTITY aux "<varname>&amp;aux</varname>">
 <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+<!ENTITY CCL "<literal>CCL</literal>">
 ]>
 
   <chapter id="Programming-with-Threads">
@@ -14,13 +15,13 @@
     <sect1 id="Threads-overview">
       <title>Threads Overview</title>
 
-      <para>OpenMCL provides facilities which enable multiple threads
+      <para>&CCL; provides facilities which enable multiple threads
       of execution (<emphasis>threads</emphasis>, sometimes called
       <emphasis>lightweight processes</emphasis> or just
       <emphasis>processes</emphasis>, though the latter term shouldn't
       be confused with the OS's notion of a process) within a lisp
       session. This document describes those facilities and issues
-      related to multitheaded programming in OpenMCL.</para>
+      related to multitheaded programming in &CCL;.</para>
 
       <para>Wherever possible, I'll try to use the term "thread" to
       denote a lisp thread, even though many of the functions in the
@@ -34,7 +35,7 @@
       their own execution context (stacks and registers) and their own
       dynamic binding context.</para>
       
-      <para>Traditionally, OpenMCL's threads have been
+      <para>Traditionally, &CCL;'s threads have been
       <emphasis>cooperatively scheduled</emphasis>: through a
       combination of compiler and runtime suppport, the currently
       executing lisp thread arranged to be interrrupted at certain
@@ -51,12 +52,12 @@
       code; as far as the OS was concerned, there was one native
       thread running in the Lisp image and its stack pointer and other
       registers just happened to change from time to time.</para>
-      <para>Under OpenMCL's cooperative scheduling model, it was
+      <para>Under &CCL;'s cooperative scheduling model, it was
       possible (via the use of the CCL:WITHOUT-INTERRUPTS construct)
       to defer handling of the periodic interrupt that invoked the
       lisp scheduler; it was not uncommon to use WITHOUT-INTERRUPTS to
       gain safe, exclusive access to global data structures. In some
-      code (including much of OpenMCL itself) this idiom was very
+      code (including much of &CCL; itself) this idiom was very
       common: it was (justifiably) believed to be an efficient way of
       inhibiting the execution of other threads for a short period of
       time.</para>
@@ -74,7 +75,7 @@
 
       <para>For a variety of reasons - better utilization of CPU
       resources on single and multiprocessor systems and better
-      integration with the OS in general - threads in OpenMCL 0.14 and
+      integration with the OS in general - threads in &CCL; 0.14 and
       later are <emphasis>preemptively scheduled. </emphasis>In this
       model, lisp threads are native threads and all scheduling
       decisions involving them are made by the OS kernel. (Those
@@ -119,10 +120,10 @@
       <para>As a broad generalization: code that's been aggressively
       tuned to the constraints of the cooperative scheduler may need
       to be redesigned to work well with the preemptive scheduler (and
-      code written to run under OpenMCL's interface to the native
+      code written to run under &CCL;'s interface to the native
       scheduler may be less portable to other CL implementations, many
       of which offer a cooperative scheduler and an API similar to
-      OpenMCL (&lt; 0.14) 's.) At the same time, there's a large
+      &CCL; (&lt; 0.14) 's.) At the same time, there's a large
       overlap in functionality in the two scheduling models, and it'll
       hopefully be possible to write interesting and useful MP code
       that's largely independent of the underlying scheduling
@@ -135,7 +136,7 @@
     <sect1 id="Intentionally--Missing-Functionality">
       <title>(Intentionally) Missing Functionality</title>
       <para>Much of the functionality described above is similar to
-      that provided by OpenMCL's cooperative scheduler, some other
+      that provided by &CCL;'s cooperative scheduler, some other
       parts of which make no sense in a native threads
       implementation.</para>
       <itemizedlist>
@@ -188,7 +189,7 @@
 	  (and to make PROCESS-ENABLE detect this error.)</para>
 	</listitem>
         <listitem>
-	  <para>When native threads that aren't created by OpenMCL
+	  <para>When native threads that aren't created by &CCL;
 	  first call into lisp, a "foreign process" is created, and
 	  that process is given its own set of initial bindings and set
 	  up to look mostly like a process that had been created by
@@ -203,7 +204,7 @@
 
     <sect1 id="Porting-Code-from-the-Old-Thread-Model">
       <title>Porting Code from the Old Thread Model</title>
-      <para>Older versions of OpenMCL used what are often called
+      <para>Older versions of &CCL; used what are often called
       "user-mode threads", a less versatile threading model which does
       not require specific support from the operating system.  This
       section discusses how to port code which was written for that
@@ -233,7 +234,7 @@
 	  a long timehave done so by accident: resource-contention
 	  issues tend to be timing-sensitive, and decoupling thread
 	  scheduling from lisp program execution affects timing. I know
-	  that there is or was code in both OpenMCL and commercial MCL
+	  that there is or was code in both &CCL; and commercial MCL
 	  that was written under the explicit assumption that certain
 	  sequences of open-coded operations were uninterruptable; it's
 	  certainly possible that the same assumptions have been made
@@ -248,7 +249,7 @@
       <sect2 id="backgrount-ti-overview">
         <title>Overview</title>
 	<para>
-	  Unless and until OpenMCL provides alternatives (via window
+	  Unless and until &CCL; provides alternatives (via window
 	  streams, telnet streams, or some other mechanism) all lisp
 	  processes share a common *TERMINAL-IO* stream (and therefore
 	  share *DEBUG-IO*, *QUERY-IO*, and other standard and
@@ -258,7 +259,7 @@
 	  background process writes to the output side of
 	  *TERMINAL-IO*, that may be a little messy and a little
 	  confusing to the user, but it shouldn't really be
-	  catastrophic. All I/O to OpenMCL's buffered streams goes
+	  catastrophic. All I/O to &CCL;'s buffered streams goes
 	  thru a locking mechanism that prevents the worst kinds of
 	  resource-contention problems.</para>
 	  <para>Although the problems associated with terminal output
@@ -285,7 +286,7 @@
 	  some of the time anyway, it doesn't seem to be an
 	  unreasonable one.</para>
 	  <para>In the solution described here (and introduced in
-	  OpenMCL 0.9), the internal stream used to provide terminal
+	  &CCL; 0.9), the internal stream used to provide terminal
 	  input is always locked by some process (the "owning"
 	  process.) The initial process (the process that typically
 	  runs the read-eval-print loop) owns that stream when it's
@@ -293,7 +294,7 @@
 	  background processes can temporarily obtain ownership of the
 	  terminal and relinquish ownership to the previous owner when
 	  they're done with it.</para>
-	  <para>In OpenMCL, BREAK, ERROR, CERROR, Y-OR-N-P,
+	  <para>In &CCL;, BREAK, ERROR, CERROR, Y-OR-N-P,
 	  YES-OR-NO-P, and CCL:GET-STRING- FROM-USER are all defined
 	  in terms of WITH-TERMINAL-INPUT, as are the :TTY
 	  user-interfaces to STEP and INSPECT.</para>
@@ -302,7 +303,7 @@
       <sect2 id="background-terminal-example">
         <title>An example</title>
         <programlisting>
-? Welcome to OpenMCL Version (Beta: linux) 0.9!
+? Welcome to &CCL; Version (Beta: linux) 0.9!
 ?
 
 ? (process-run-function "sleeper" #'(lambda () (sleep 5) (break "broken")))
@@ -349,7 +350,7 @@ Type :? for other options.
 	("B"), process "A" announces that fact, then waits until
 	the initial process regains control.</para>
 	<programlisting>
-? Welcome to OpenMCL Version (Beta: linux) 0.9!
+? Welcome to &CCL; Version (Beta: linux) 0.9!
 ?
 
 ? (process-run-function "sleep-60" #'(lambda () (sleep 60) (break "Huh?")))
@@ -421,7 +422,7 @@ Type :? for other options.
         <para>Existing code that attempts to read from *TERMINAL-IO*
         from a background process will need to be changed to use
         WITH-TERMINAL-INPUT.  Since that code was probably not working
-        reliably in previous versions of OpenMCL, this requirement
+        reliably in previous versions of &CCL;, this requirement
         doesn't seem to be too onerous.</para>
         <para>Note that WITH-TERMINAL-INPUT both requests ownership of
         the terminal input stream and promises to restore that
@@ -431,22 +432,22 @@ Type :? for other options.
       </sect2>
     </sect1>
 
-    <sect1 id="The-Threads-which-OpenMCL-Uses-for-Its-Own-Purposes">
-      <title>The Threads which OpenMCL Uses for Its Own Purposes</title>
+    <sect1 id="The-Threads-which-&CCL;-Uses-for-Its-Own-Purposes">
+      <title>The Threads which &CCL; Uses for Its Own Purposes</title>
       <para>
-In the "tty world", OpenMCL starts out with 2 lisp-level threads:</para>
+In the "tty world", &CCL; starts out with 2 lisp-level threads:</para>
       <programlisting>
 ? :proc
 1 : -> listener     [Active]
 0 :    Initial      [Active]
 </programlisting>
-      <para>If you look at a running OpenMCL with a debugging tool,
+      <para>If you look at a running &CCL; with a debugging tool,
       such as GDB, or Apple's Thread Viewer.app, you'll see an
       additional kernel-level thread on Darwin; this is used by the
       Mach exception-handling mechanism.</para>
       <para>The initial thread, conveniently named "initial", is the
       one that was created by the operating system when it launched
-      OpenMCL.  It maps the heap image into memory, does some
+      &CCL;.  It maps the heap image into memory, does some
       Lisp-level initialization, and, when the Cocoa IDE isn't being
       used, creates the thread "listener", which runs the top-level
       loop that reads input, evaluates it, and prints the
@@ -580,7 +581,7 @@ In the "tty world", OpenMCL starts out with 2 lisp-level threads:</para>
 	      <term>result</term>
 	      <listitem>
 		<para>a list of all lisp processes (threads)
-		known to OpenMCL.</para>
+		known to &CCL;.</para>
 	      </listitem>
 	    </varlistentry>
 	  </variablelist>
@@ -589,7 +590,7 @@ In the "tty world", OpenMCL starts out with 2 lisp-level threads:</para>
 	  <title>Description</title>
 
 	  <para>Returns a list of all lisp processes (threads) known
-	  to OpenMCL as of
+	  to &CCL; as of
 	  the precise instant it&#39;s called. It&#39;s safe to traverse
 	  this list and to modify the cons cells that comprise that list
 	  (it&#39;s freshly consed.) Since other threads can create and kill

@@ -6,6 +6,7 @@
 <!ENTITY body "<varname>&amp;body</varname>">
 <!ENTITY aux "<varname>&amp;aux</varname>">
 <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+<!ENTITY CCL "<literal>CCL</literal>">
 ]>
 
   <chapter id="Programming-with-Sockets">
@@ -14,7 +15,7 @@
     <sect1 id="Sockets-Overview">
       <title>Overview</title>
 
-      <para>OpenMCL supports the socket abstraction for
+      <para>&CCL; supports the socket abstraction for
       interprocess communication. A socket represents a connection to
       another process, typically (but not necessarily) a TCP/IP
       network connection to a client or server running on some other
@@ -22,7 +23,7 @@
       <para>All symbols mentioned in this chapter are exported from
       the CCL package. As of version 0.13, these symbols are
       additionally exported from the OPENMCL-SOCKET package.</para>
-      <para>OpenMCL supports three types of sockets: TCP sockets, UDP
+      <para>&CCL; supports three types of sockets: TCP sockets, UDP
       sockets, and Unix-domain sockets.  This should be enough for all
       but the most esoteric network situations.  All sockets are
       created by <xref linkend="f_make-socket"/>.  The type of socket

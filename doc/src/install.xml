@@ -1,12 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
-"http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd">
+"http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd"[
+<!ENTITY rest "<varname>&amp;rest</varname>">
+<!ENTITY key "<varname>&amp;key</varname>">
+<!ENTITY optional "<varname>&amp;optional</varname>">
+<!ENTITY body "<varname>&amp;body</varname>">
+<!ENTITY aux "<varname>&amp;aux</varname>">
+<!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+<!ENTITY CCL "<literal>CCL</literal>">
+]>
 
- <chapter><title>Obtaining, Installing, and Running OpenMCL</title>
+ <chapter><title>Obtaining, Installing, and Running &CCL;</title>
   
   <sect1><title>Releases and System Requirements</title>
    
-   <para>There are three active versions of OpenMCL.  Version 1.0 was
+   <para>There are three active versions of &CCL;.  Version 1.0 was
    a stable release (released in late 2005); it is no longer under
    active development.  Version 1.1 has been under active development
    since shortly after 1.0 was released; it's been distributed as a
@@ -49,10 +57,10 @@
         <listitem><para>FreeBSD on X86-64 (64-bit implementation)</para></listitem>
       </itemizedlist>
 
-      <para>A 64-bit version of OpenMCL requires a 64-bit processor
+      <para>A 64-bit version of &CCL; requires a 64-bit processor
       (obviously) running a 64-bit OS variant.</para>
       
-      <para>There are ongoing efforts to port OpenMCL to the Windows
+      <para>There are ongoing efforts to port &CCL; to the Windows
       operating system and 32-bit x86 processors.</para>
       
       
@@ -61,8 +69,8 @@
 
       <sect2><title>LinuxPPC</title> 
         
-        <para>OpenMCL versions 1.0 and later run under relatively
-        recent versions of LinuxPPC. All versions of OpenMCL require
+        <para>&CCL; versions 1.0 and later run under relatively
+        recent versions of LinuxPPC. All versions of &CCL; require
         version 2.2.13 (or later) of the Linux kernel and version
         2.1.3 (or later) of the GNU C library (glibc) at a bare
         minimum.</para>
@@ -70,7 +78,7 @@
 
       <sect2><title>LinuxX8664</title> 
 
-        <para>Version 1.1 and later of OpenMCL runs on relatively
+        <para>Version 1.1 and later of &CCL; runs on relatively
         recent Linux distributions for the x86-64 architecture.  It
         requires a Linux with Thread Local Storage support in the
         toolchain and standard libraries, and the New Posix Thread
@@ -85,79 +93,79 @@
         the address space ... it's difficult to enumerate exactly what
         versions of what Linux distributions have what problems.  A
         rule of thumb is that - since much of the development of
-        OpenMCL for x86-64 took place in that time frame - Linux
+        &CCL; for x86-64 took place in that time frame - Linux
         distributions released earlier than early 2006 may have
-        problems running OpenMCL.) </para>
+        problems running &CCL;.) </para>
       </sect2>
 
       <sect2><title>FreeBSD-amd64</title>
-        <para>Versions 1.1 and later of OpenMCL runs on FreeBSD on
+        <para>Versions 1.1 and later of &CCL; runs on FreeBSD on
         x86-64 (FreeBSD releases generally call the platform "and64")
-        OpenMCL should run under FreeBSD 6.0 or later; as of this
+        &CCL; should run under FreeBSD 6.0 or later; as of this
         writing, FreeBSD 7.0 is about to be released and it may be
         necessary for FreeBSD 7 users to install the "compat6x"
-        package in order to use a version of OpenMCL built on FreeBSD
+        package in order to use a version of &CCL; built on FreeBSD
         6.x under FreeBSD 7.  .</para>
       </sect2>
 
       <sect2><title>DarwinPPC-MacOS-X</title>
 
-        <para> OpenMCL 1.0 runs on MacOS X versions 10.2, 10.3 and
+        <para> &CCL; 1.0 runs on MacOS X versions 10.2, 10.3 and
         10.4 on the PowerPC.</para>
 
         <para>Current development on version 1.1 and later takes place
         under OS X versions 10.4 and 10.5 and requires at least
         version 10.3.9</para>
 
-        <para>The 64-bit DarwinPPC version of OpenMCL requires
+        <para>The 64-bit DarwinPPC version of &CCL; requires
         functionality introduced in OSX 10.4 (namely, the ability to
         run 64-bit binaries).  It also, obviously, requires a G5
         processor.</para>
 
-        <para>OpenMCL hasn't been tested under Darwin proper, but
-        OpenMCL doesn't intentionally use any MacOS X features beyond
-        the Darwin subset and therefore it seems likely that OpenMCL
+        <para>&CCL; hasn't been tested under Darwin proper, but
+        &CCL; doesn't intentionally use any MacOS X features beyond
+        the Darwin subset and therefore it seems likely that &CCL;
         would run on PPC Darwin versions that correspond to recent OSX
         versions.</para>
       </sect2>
 
       <sect2><title>Darwinx8664-MacOS-X</title>
-        <para>Versions 1.1 and later of OpenMCL runs on 64-bit
+        <para>Versions 1.1 and later of &CCL; runs on 64-bit
         DarwinX86 (MacOS on Intel).</para>
 
-        <para>OpenMCL Darwinx8664/MacOS X requires a 64-bit processor.
+        <para>&CCL; Darwinx8664/MacOS X requires a 64-bit processor.
         All Macintoshes currently sold by Apple (as of early 2008) and
         all Macintoshes introduced by Apple since August 2006 have
         such processors.  However, the original MacBooks, MacBook Pros
         and Intel iMacs (models introduced in early 2006) used 32-bit
-        Core Duo processors, and so OpenMCL will not (yet) run on
+        Core Duo processors, and so &CCL; will not (yet) run on
         them.</para>
 
       </sect2>
     </sect1>
 
     <sect1><title>Installation</title>
-      <para>Installing OpenMCL consists of</para>
+      <para>Installing &CCL; consists of</para>
       <orderedlist> 
         <listitem>
-          <para>Downloading an appropriate distribution of OpenMCL;</para>
+          <para>Downloading an appropriate distribution of &CCL;;</para>
         </listitem>
         <listitem>
           <para>If necessary, extracting the archive somewhere on your
           computer;</para>
         </listitem>
         <listitem>
-          <para>Configuring a shell script so OpenMCL can locate
+          <para>Configuring a shell script so &CCL; can locate
           necessary library files and other auxilliary files.</para>
         </listitem>
       </orderedlist>
 
-      <sect2><title>Downloading and untarring OpenMCL binary source
-      releases</title> <para> OpenMCL releases and snapshots are
+      <sect2><title>Downloading and untarring &CCL; binary source
+      releases</title> <para> &CCL; releases and snapshots are
       distributed as tarballs (compressed tar archives).</para>
 
       <para>Tarballs of version 1.0 for supported platforms are
-      available from the download page of the OpenMCL website.</para>
+      available from the download page of the &CCL; website.</para>
 
       <para>Tarballs of the latest development snapshots of version
       1.1, along with release notes, are available from the testing
@@ -188,11 +196,11 @@ shell&gt; tar xvzf <emphasis>path-to-downloaded-openmcl-archive.tar.gz</emphasis
 
       <para>Once the <literal>ccl</literal> directory is installed,
       it's necessary to install and configure a shell script
-      distributed with OpenMCL before using it.</para>
+      distributed with &CCL; before using it.</para>
       </sect2>
 
       <sect2><title>The-openmcl-Shell-Script"</title>
-      <para>OpenMCL needs to be able to find the
+      <para>&CCL; needs to be able to find the
       <literal>ccl</literal> directory in order to support features
       such as <literal>require</literal> and
       <literal>provide</literal>, access to foreign interface
@@ -201,17 +209,17 @@ shell&gt; tar xvzf <emphasis>path-to-downloaded-openmcl-archive.tar.gz</emphasis
       translations for the <literal>"ccl:"</literal> logical host.  If
       this logical host isn't defined (or isn't defined correctly),
       some things might work, some things might not... and it'll
-      generally be hard to invoke and use OpenMCL productively.</para>
+      generally be hard to invoke and use &CCL; productively.</para>
 
-        <para>OpenMCL uses the value of the environment variable
+        <para>&CCL; uses the value of the environment variable
         <literal>CCL_DEFAULT_DIRECTORY</literal> to determine the
         filesystem location of the <literal>ccl</literal> directory;
         the openmcl shell script is intended to provide a way to
-        invoke OpenMCL with that environment variable set
+        invoke &CCL; with that environment variable set
         correctly.</para>
         <para>There are two versions of the shell script:
         <literal>"ccl/scripts/openmcl"</literal> is used to invoke
-        32-bit implementations of OpenMCL and
+        32-bit implementations of &CCL; and
         <literal>"ccl/scripts/openmcl64"</literal> is used to invoke
         64-bit implementations.</para>
         <para>To use the script:</para>
@@ -227,7 +235,7 @@ shell&gt; tar xvzf <emphasis>path-to-downloaded-openmcl-archive.tar.gz</emphasis
             there is an existing definition of thevariable, the
             openmcl script will not override it.The shell script sets
             a local variable (<literal>OPENMCL_KERNEL</literal>) to
-            the standard name of the OpenMCL kernel approprate for the
+            the standard name of the &CCL; kernel approprate for the
             platform (asdetermined by 'uname -s'.) You might prefer to
             set this variable manually in the shell script</para>
           </listitem>
@@ -241,7 +249,7 @@ shell&gt; tar xvzf <emphasis>path-to-downloaded-openmcl-archive.tar.gz</emphasis
             of "openmcl64".
             <warning>
 	      <para>The above command won't work if you are not the
-	      owner of the installed copy of OpenMCL. In that case,
+	      owner of the installed copy of &CCL;. In that case,
 	      you can use the "sudo" command like this:</para>
               <para><literal>$ sudo chmod +x
               ~/openmcl/ccl/scripts/openmcl64</literal></para>
@@ -260,21 +268,21 @@ shell&gt; tar xvzf <emphasis>path-to-downloaded-openmcl-archive.tar.gz</emphasis
         </orderedlist>
 
         <para>Once this is done, it should be possible to invoke
-        OpenMCL by typing <literal>openmcl</literal> at a shell
+        &CCL; by typing <literal>openmcl</literal> at a shell
         prompt:</para>
         <programlisting>
 &gt; openmcl [args ...]
-Welcome to OpenMCL Version whatever (DarwinPPC32)!
+Welcome to &CCL; Version whatever (DarwinPPC32)!
 ?
 </programlisting>
         <para>The openmcl shell script will pass all of its arguments
-        to the OpenMCL kernel.  See <xref linkend="Invocation"/> for
+        to the &CCL; kernel.  See <xref linkend="Invocation"/> for
         more information about "args".  When invoked this way, the
         lisp should be able to initialize the
         <literal>"ccl:"</literal> logical host so that its
         translations refer to the <literal>"ccl"</literal>
         directory. To test this, you can call
-        <literal>probe-file</literal> in OpenMCL's read-eval-print
+        <literal>probe-file</literal> in &CCL;'s read-eval-print
         loop:</para>
         <programlisting>
 ? (probe-file "ccl:level-1;level-1.lisp")  ;will return the physical pathname of the file
@@ -283,7 +291,7 @@ Welcome to OpenMCL Version whatever (DarwinPPC32)!
       </sect2>
       <sect2 id="Invocation">
 	<title>Invocation</title>
-	<para>Assuming that the shell script is properly installed, it can be used to invoke OpenMCL from a shell prompt:
+	<para>Assuming that the shell script is properly installed, it can be used to invoke &CCL; from a shell prompt:
 	<programlisting>
 shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
 	</programlisting>
@@ -293,7 +301,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
       </sect2>
       <sect2 id="Personal-Customization-with-the-Init-File">
 	<title>Personal Customization with the Init File</title>
-        <para>By default OpenMCL will try to load the file
+        <para>By default &CCL; will try to load the file
         <literal>"home:openmcl-init.lisp"</literal> or the compiled
 	
         <literal>"home:openmcl-init.fasl"</literal> upon starting
@@ -302,7 +310,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
         file (for example because it does not exist) no action is
         taken; an error is not signalled.</para>
         <para>The <literal>"home:"</literal> prefix to the filename is
-        a Common Lisp logical host, which OpenMCL initializes to refer
+        a Common Lisp logical host, which &CCL; initializes to refer
         to your home directory, so this looks for either of the files
         <literal>~/openmcl-init.lisp</literal> or
         <literal>~/openmcl-init.fasl</literal>.</para>
@@ -310,14 +318,14 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
         Lisp code is, you can put anything you want in it.  For
         example, you can change the working directory, and load
         packages which you use frequently.</para>
-        <para>To suppress the loading of this init-file, invoke OpenMCL with the
+        <para>To suppress the loading of this init-file, invoke &CCL; with the
 <literal>--no-init</literal> option.</para>
       </sect2>
 
       <sect2 id="Some--hopefully--useful-options">
 	<title>Some (hopefully) useful options</title>
         <para> The exact set of command-line arguments accepted by
-        OpenMCL may vary slightly from release to release;
+        &CCL; may vary slightly from release to release;
         <literal>openmcl --help</literal> will provide a definitive
         (if somewhat terse) summary of the options accepted by the
         current implementation and then exit. Some of those options
@@ -330,13 +338,13 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
 
 	  <listitem>
 	    <para>-b (or --batch). Execute in &#34;batch mode&#34;. End-of-file
-	    from *STANDARD-INPUT* will cause OpenMCL to exit, as will attempts to
+	    from *STANDARD-INPUT* will cause &CCL; to exit, as will attempts to
 	    enter a break loop.</para>
 	  </listitem>
 
 	  <listitem>
 	    <para>-n (or --no-init). If this option is given, the init file
-	    is not loaded.  This is useful if OpenMCL is being invoked by a
+	    is not loaded.  This is useful if &CCL; is being invoked by a
 	    shell script which should not be affected by whatever
 	    customizations a user might have in place.
 	    </para>
@@ -365,15 +373,15 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
       </sect2>
     </sect1>
 
-    <sect1 id="Using-OpenMCL-with-GNU-Emacs-and-SLIME">
-      <title>Using OpenMCL with GNU Emacs and SLIME</title>
-      <para>A very common way to use OpenMCL is to run it within the
+    <sect1 id="Using-&CCL;-with-GNU-Emacs-and-SLIME">
+      <title>Using &CCL; with GNU Emacs and SLIME</title>
+      <para>A very common way to use &CCL; is to run it within the
       GNU Emacs editor, using a Lisp interface called SLIME ("Superior
       Lisp Interaction Mode for Emacs"). SLIME is an Emacs package
       designed to provide good support within Emacs for any of several
       Common Lisp implementations; one of the supported
-      implementations is OpenMCL. This page describes how you can
-      download SLIME and set it up to work with your OpenMCL
+      implementations is &CCL;. This page describes how you can
+      download SLIME and set it up to work with your &CCL;
       installation.</para>
       <para>Why use SLIME? With SLIME, you can do the following things from within
 an Emacs editing session:</para>
@@ -417,14 +425,14 @@ SLIME home page.</para>
               you like Aquamacs then you can use SLIME right away,
               without getting and installing it separately. You just
               need to tell SLIME where to find your installation of
-              OpenMCL. (See FIXTHIS.)</para>
+              &CCL;. (See FIXTHIS.)</para>
             </warning>
 	  </para>
 	  </listitem>
           <listitem>
-            <para>You have a working copy of OpenMCL, installed in
+            <para>You have a working copy of &CCL;, installed in
             <literal>"~/openmcl/ccl"</literal>If you prefer to install
-            OpenMCL in some directory other
+            &CCL; in some directory other
             than<literal>"~/openmcl/ccl"</literal> then these
             instructions still work, but you must remember to use your
             path to your ccl directory instead of theone that we give
@@ -477,9 +485,9 @@ SLIME home page.</para>
 
       <sect2 id="Telling-Emacs-About-SLIME">
 	<title>Telling Emacs About SLIME</title>
-        <para> Once SLIME and OpenMCL are installed, you just need to
+        <para> Once SLIME and &CCL; are installed, you just need to
         add a line to your "~/.emacs" file that tells SLIME where to
-        find the script that runs OpenMCL:</para>
+        find the script that runs &CCL;:</para>
         <para><literal>(setq inferior-lisp-program "~/openmcl/ccl/scripts/openmcl64")</literal></para>
         <para>or</para>
         <para><literal>(setq inferior-lisp-program "~/openmcl/ccl/scripts/openmcl")</literal></para>
@@ -488,27 +496,27 @@ SLIME home page.</para>
         </warning>
       </sect2>
 
-      <sect2 id="Running-OpenMCL-with-SLIME">
-	<title>Running OpenMCL with SLIME</title>
+      <sect2 id="Running-&CCL;-with-SLIME">
+	<title>Running &CCL; with SLIME</title>
         <para>Once the preparations in the previous section are
         complete, exit Emacs and restart it, to ensure that it reads
         the changes you made in your ".emacs" file (alternatively, you
         could tell Emacs to reload the ".emacs" file). If all went
-        well, you should now be ready to run OpenMCL using
+        well, you should now be ready to run &CCL; using
         SLIME.</para>
-        <para>To run OpenMCL, execute the command "M-x slime". SLIME
-        should start an OpenMCL session in a new buffer.  (If you are
+        <para>To run &CCL;, execute the command "M-x slime". SLIME
+        should start an &CCL; session in a new buffer.  (If you are
         unfamiliar with the Emacs notation "M-x command", see the GNU
         Emacs FAQ; specifically, take a look at questions 1, 2, and
         128.)</para>
       </sect2>
 
-      <sect2 id="What-if-a-New-Version-of-OpenMCL-Breaks-SLIME-">
-	<title>What if a New Version of OpenMCL Breaks SLIME?</title>
-	<para>Sometimes you'll get a new version of OpenMCL, set up
+      <sect2 id="What-if-a-New-Version-of-&CCL;-Breaks-SLIME-">
+	<title>What if a New Version of &CCL; Breaks SLIME?</title>
+	<para>Sometimes you'll get a new version of &CCL;, set up
 	Emacs to use it with SLIME, and SLIME will fail. Most likely
-	what has happened is that the new version of OpenMCL has a
-	change in the output files produced by the compiler (OpenMCL
+	what has happened is that the new version of &CCL; has a
+	change in the output files produced by the compiler (&CCL;
 	developers will say "the fasl version has changed." fasl
 	stands for "fast load" aka compiled files). This
 	problem is easy to fix: just delete the existing SLIME fasl
@@ -532,19 +540,19 @@ SLIME home page.</para>
       <sect2 id="Known-Bugs">
 	<title>Known Bugs</title>
 	<para>SLIME has not been updated to account for recent changes
-	made in OpenMCL to support x86-64 processors. You may run into
+	made in &CCL; to support x86-64 processors. You may run into
 	bugs running on those platforms.</para>
         <para>The SLIME backtrace sometimes shows incorrect information.</para>
         <para><literal>return-from-frame</literal> and
         <literal>apply-in-frame</literal> do not work reliably.  (If
         they work at all, it's pure luck.)</para>
         <para>Some versions of Emacs on the Macintosh may have trouble
-        finding the shell script that runs OpenMCL unless you specify
+        finding the shell script that runs &CCL; unless you specify
         a full path to it. See the above section "Telling Emacs About
         SLIME" to learn how to specify the path to the shell
         script.</para>
-        <para>For more help with OpenMCL on Mac OS X, consult the
-        OpenMCL mailing lists.</para>
+        <para>For more help with &CCL; on Mac OS X, consult the
+        &CCL; mailing lists.</para>
       </sect2>
     </sect1>
 
@@ -568,7 +576,7 @@ SLIME home page.</para>
       "as is", and that no other party is legally or otherwise
       responsible for any consequences of your decision to use
       it.</para>
-      <para>If you've developed OpenMCL examples that you'd like to
+      <para>If you've developed &CCL; examples that you'd like to
       see added to the distribution, please send mail to let me
       know. Any such contributions would be welcome and appreciated
       (as would bug fixes and improvements to the existing

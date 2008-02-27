@@ -7,41 +7,42 @@
 <!ENTITY body "<varname>&amp;body</varname>">
 <!ENTITY aux "<varname>&amp;aux</varname>">
 <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+<!ENTITY CCL "<literal>CCL</literal>">
 ]>
 
 <book lang="en">
  <bookinfo>
-  <title>OpenMCL Documentation</title>
+  <title>&CCL; Documentation</title>
  </bookinfo>
 
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
-            href="01-install.xml"/>
+            href="install.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
-            href="02-build.xml"/>
+            href="build.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
-            href="03-q-and-a.xml"/>
+            href="q-and-a.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
-            href="04-threads.xml"/>
+            href="threads.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
-            href="05-sockets.xml"/>
+            href="sockets.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
-            href="06-external-process.xml"/>
+            href="external-process.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
-            href="07-gray-streams.xml"/>
+            href="streams.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
-            href="08-mop.xml"/>
+            href="mop.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
-            href="09-ffi.xml"/>
+            href="ffi.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
-            href="10-objc-bridge.xml"/>
+            href="objc-bridge.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
-            href="11-platform-notes.xml"/>
+            href="platform-notes.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
-            href="12-gc.xml"/>
+            href="gc.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
-            href="13-implementation.xml"/>
+            href="implementation.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
-            href="14-modifying.xml"/>
+            href="modifying.xml"/>
 
  <index id="Symbol-Index"><title>Symbol Index</title></index>
 </book>

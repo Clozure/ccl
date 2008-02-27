@@ -6,6 +6,7 @@
 <!ENTITY body "<varname>&amp;body</varname>">
 <!ENTITY aux "<varname>&amp;aux</varname>">
 <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+<!ENTITY CCL "<literal>CCL</literal>">
 ]>
 
   <chapter id="Running-Other-Programs-as-Subprocesses">
@@ -13,7 +14,7 @@
 
     <sect1 id="Subprocess-Overview">
       <title>Overview</title>
-      <para>OpenMCL provides primitives to run external Unix programs,
+      <para>&CCL; provides primitives to run external Unix programs,
       to select and connect Lisp streams to their input and output
       sources, to (optionally) wait for their completion and to check
       their execution and exit status.</para>
@@ -38,20 +39,20 @@
 ;;; Let the shell expand wildcards.
 ? (run-program "sh" '("-c" "ls *.lisp") :output t)
 </programlisting>
-      <para>These last examples will only produce output if OpenMCL's
+      <para>These last examples will only produce output if &CCL;'s
       current directory contains .lisp files, of course.</para>
     </sect1>
 
     <sect1 id="Limitations-and-known-bugs">
       <title>Limitations and known bugs</title>
       <itemizedlist>
-        <listitem><para>OpenMCL and the external processs may get
+        <listitem><para>&CCL; and the external processs may get
         confused about whoowns which streams when input, output, or
         error are specified as T and wait is specified as
         NIL.</para></listitem>
         <listitem><para>External processes that need to talk to a
         terminal device may not work properly; the environment (SLIME,
-        ILISP) under which OpenMCL is run can affect
+        ILISP) under which &CCL; is run can affect
         this.</para></listitem>
       
       </itemizedlist>
@@ -135,7 +136,7 @@
 
 		    <listitem>
 		      <para>T Specifies that the EXTERNAL-PROCESS should use
-		      the input source with which OpenMCL was invoked.</para>
+		      the input source with which &CCL; was invoked.</para>
 		    </listitem>
 
 		    <listitem>
@@ -214,7 +215,7 @@
 		<listitem>
 		  <para>A user-defined function of one argument (the
 		  EXTERNAL-PROCESS structure.) This function is called
-		  whenever OpenMCL detects a change in the staus of the
+		  whenever &CCL; detects a change in the staus of the
 		  EXTERNAL-PROCESS.</para>
 		</listitem>
 	      </varlistentry>

@@ -6,6 +6,7 @@
 <!ENTITY body "<varname>&amp;body</varname>">
 <!ENTITY aux "<varname>&amp;aux</varname>">
 <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+<!ENTITY CCL "<literal>CCL</literal>">
 ]>
 
   <chapter id="The-Foreign-Function-Interface">
@@ -16,20 +17,20 @@
 
       <sect2 id="Overview-foreign-types">
 	<title>Overview</title>
-        <para>OpenMCL provides a fairly rich language for defining and
+        <para>&CCL; provides a fairly rich language for defining and
         specifying foreign data types (this language is derived from
         CMUCL's "alien type" system.)</para>
         <para>In practice, most foreign type definitions are
-        introduced into OpenMCL via its interface database (see ),
+        introduced into &CCL; via its interface database (see ),
         though it's also possible to define foreign types
         interactively and/or programmatically.</para>
-        <para>OpenMCL's foreign type system is "evolving" (a polite
+        <para>&CCL;'s foreign type system is "evolving" (a polite
         word for not-quite-complete): there are some inconsistencies
         involving package usage, for instance. Symbols used in foreign
         type specifiers <emphasis>should</emphasis> be keywords, but
         this convention isn't always enforced.</para>
         <para>Foreign type, record, and field names are
-        case-sensitive; OpenMCL uses some escaping conventions (see )
+        case-sensitive; &CCL; uses some escaping conventions (see )
         to allow keywords to be used to denote these names.</para>
       </sect2>
 
@@ -92,7 +93,7 @@
 	    <emphasis>X</emphasis>". Although multiplearray dimensions
 	    are allowed by the :array constructor,
 	    only single-dimensioned arrays are (at all) well-supported
-	    in OpenMCL.</para>
+	    in &CCL;.</para>
 	  </listitem>
         </itemizedlist>
       </sect2>
@@ -103,15 +104,15 @@
 
       <sect2 id="Overview-foreign-calls">
 	<title>Overview</title>
-        <para>OpenMCL provides a number of constructs for calling
+        <para>&CCL; provides a number of constructs for calling
         foreign functions from Lisp code (all of them based on the
-        function CCL:%FF-CALL).  In many cases, OpenMCL's interface
+        function CCL:%FF-CALL).  In many cases, &CCL;'s interface
         translator (see ) provides information about the foreign
         function's entrypoint name and argument and return types; this
         enables the use of the #_ reader macro (described below),
         which may be more concise and/or more readable than other
         constructs.</para>
-        <para>OpenMCL also provides a mechanism for defining
+        <para>&CCL; also provides a mechanism for defining
         <emphasis>callbacks</emphasis>: lisp functions which can be
         called from foreign code.</para>
         <para>There's no supported way to directly pass lisp data to
@@ -242,7 +243,7 @@ keywords:</para>
           <para>PowerPC machine instructions are always aligned on
           32-bit boundaries, so the two least significant bits of the
           first instruction ("entrypoint") of a foreign function are
-          always 0. OpenMCL often represents an entrypoint address as
+          always 0. &CCL; often represents an entrypoint address as
           a fixnum that's binary-equivalent to the entrypoint address:
           if<emphasis> E</emphasis> is an entrypoint address expressed
           as a signed 32-bit integer, then (ash <emphasis>E</emphasis>
@@ -251,12 +252,12 @@ keywords:</para>
           MACPTR (see FIXTHIS), but that's somewhat less efficient.</para>
           <para>Although it's possible to use fixnums or macptrs to
           represent entrypoint addresses, it's somewhat cumbersome to
-          do so. OpenMCL can cache the addresses of named external
+          do so. &CCL; can cache the addresses of named external
           functions in structure-like objects of type
           CCL:EXTERNAL-ENTRY-POINT (sometimes abbreviated as EEP).
           Through the use of LOAD-TIME-VALUE, compiled lisp functions
           are able to reference EEPs as constants; the use of an
-          indirection allows OpenMCL runtime system to ensure that the
+          indirection allows &CCL; runtime system to ensure that the
           EEP's address is current and correct.</para>
         </sect3>
       </sect2>
@@ -286,7 +287,7 @@ keywords:</para>
           <para>For a variety of technical reasons, it isn't generally
           possible to directly reference arbitrary absolute addresses
           (such as those returned by the C library function malloc(),
-          for instance) in OpenMCL. In OpenMCL (and in MCL), such
+          for instance) in &CCL;. In &CCL; (and in MCL), such
           addresses need to be <emphasis>encapsulated</emphasis> in
           objects of type CCL:MACPTR; one can think of a MACPTR as
           being a specialized type of structure whose sole purpose is
@@ -390,7 +391,7 @@ keywords:</para>
           variable event has dynamic extent (that value won't be
           referenced once control leaves the extent of the binding of
           that variable.) Common Lisp allows us to make such an
-          assertion via a DYNAMIC-EXTENT declaration; OpenMCL's
+          assertion via a DYNAMIC-EXTENT declaration; &CCL;'s
           compiler can recognize the "primitive MACPTR-creating
           operation" involved and can replace it with an equivalent
           operation that stack-allocates the MACPTR object. If we're
@@ -410,7 +411,7 @@ keywords:</para>
           <para>The idiom of binding one or more variables to
           stack-allocated MACPTRs, then destructively modifying those
           MACPTRs before executing a body of code is common enough
-          that OpenMCL provides a macro (WITH-MACPTRS) that handles
+          that &CCL; provides a macro (WITH-MACPTRS) that handles
           all of the gory details. The following version of
           GET-NEXT-EVENT is semantically equivalent to the previous
           version, but hopefully a bit more concise:</para>
@@ -445,7 +446,7 @@ keywords:</para>
           <para>In the idiomatic code above, both the MACPTR P and the
           block of memory that's being allocated and freed have
           dynamic extent and are therefore good candidates for stack
-          allocation. OpenMCL provides the %STACK-BLOCK macro, which
+          allocation. &CCL; provides the %STACK-BLOCK macro, which
           executes a body of code with one or more variables bound to
           stack-allocated MACPTRs which encapsulate the addresses of
           stack-allocated blocks of foreign memory. Using
@@ -466,13 +467,13 @@ keywords:</para>
           <para>Reading from, writing to, allocating, and freeing
           foreign memory are all potentially dangerous operations;
           this is no less true when these operations are performed in
-          OpenMCL than when they're done in C or some other
+          &CCL; than when they're done in C or some other
           lower-level language. In addition, destructive operations on
           Lisp objects be dangerous, as can stack allocation if it's
           abused (if DYNAMIC-EXTENT declarations are violated.)
           Correct use of the constructs and primitives described here
           is reliable and safe; slightly incorrect use of these
-          constructs and primitives can crash OpenMCL.</para>
+          constructs and primitives can crash &CCL;.</para>
         </sect3>
       </sect2>
 
@@ -1234,7 +1235,7 @@ keywords:</para>
 
       <sect2 id="interface-database-Overview">
 	<title>Overview</title>
-        <para>OpenMCL uses a set of database files which contain
+        <para>&CCL; uses a set of database files which contain
         foreign type, record, constant, and function definitions
         derived from the operating system's header files, be that
         Linux or Darwin.  An archive containing these database files
@@ -1242,7 +1243,7 @@ keywords:</para>
         available; see the Distributions page for information about
         obtaining current interface database files.</para>
         <para>Not surprisingly, different platforms use different database files.</para>
-        <para>OpenMCL defines reader macros that consult these databases:</para>
+        <para>&CCL; defines reader macros that consult these databases:</para>
 	<itemizedlist>
           <listitem>
 	    <para>#$foo looks up the value of the constant definition of foo</para>
@@ -1267,9 +1268,9 @@ keywords:</para>
         structure/union, and field names (when used in the RREF/PREF
         and RLET macros) will cause these database files to be
         consulted.</para>
-        <para>Since the OpenMCL sources contain instances of these
+        <para>Since the &CCL; sources contain instances of these
         reader macros (and references to foreign record types and
-        fields), compiling OpenMCL from those sources depends on the
+        fields), compiling &CCL; from those sources depends on the
         ability to find and use (see <xref
         linkend="Building-the-heap-image"/>).</para>
       </sect2>
@@ -1278,7 +1279,7 @@ keywords:</para>
         <title>Other issues:</title>
         <itemizedlist>
           <listitem>
-	    <para>OpenMCL now preserves the case of external symbols
+	    <para>&CCL; now preserves the case of external symbols
 	    in itsdatabase files. See for information about case in
 	    foreign symbol names.</para>
 	  </listitem>
@@ -1372,11 +1373,11 @@ headers/libc/types.cdb
         package of interest.</para>
         <para>Hopefully, this scheme will also make it easier to
         distribute patches and bug fixes.</para>
-        <para>OpenMCL maintains a list of directories; when looking
+        <para>&CCL; maintains a list of directories; when looking
         for a foreign type, constant, function, or record definition,
         it'll consult the database files in each directory on that
         list. Initially, the list contains an entry for the "libc"
-        interface directory. OpenMCL needs to be explicitly told to
+        interface directory. &CCL; needs to be explicitly told to
         look in other interface directories should it need to do
         so.</para>
       </sect2>
@@ -1441,12 +1442,12 @@ h-to-ffi.sh `foo-config -cflags` /usr/include/foo/foo.h</programlisting>
       <sect2 id="Shared-Library-Overview">
 	<title>Overview</title>
 
-        <para>OpenMCL provides facilities to open and close shared
+        <para>&CCL; provides facilities to open and close shared
         libraries.</para>
         <para>"Opening" a shared library, which is done with <xref
         linkend="f_open-shared-library"/>, maps the library's code and
-        data into OpenMCL's address space and makes its exported
-        symbols accessible to OpenMCL.</para>
+        data into &CCL;'s address space and makes its exported
+        symbols accessible to &CCL;.</para>
         <para>"Closing" a shared library, which is done with <xref
         linkend="f_close-shared-library"/>, unmaps the library's code
         and and removes the library's symbols from the global
@@ -1455,7 +1456,7 @@ h-to-ffi.sh `foo-config -cflags` /usr/include/foo/foo.h</programlisting>
         libm, libdl under Linux, and the "system" library under
         Darwin) are opened by the lisp kernel and can't be
         closed.</para>
-        <para>OpenMCL uses data structures of type
+        <para>&CCL; uses data structures of type
         EXTERNAL-ENTRY-POINT to map a foreign function name (string)
         to that foreign function's <emphasis>current</emphasis>
         address. (A function's address may vary from session to
@@ -1472,7 +1473,7 @@ h-to-ffi.sh `foo-config -cflags` /usr/include/foo/foo.h</programlisting>
         chance" attempt to resolve it. Attempting to resolve an
         entrypoint that was defined in a closed library will cause an
         attempt to reopen that library.</para>
-        <para>OpenMCL keeps track of all libraries that have been
+        <para>&CCL; keeps track of all libraries that have been
         opened in a lisp session. When a saved application is first
         started, an attempt is made to reopen all libraries that were
         open when the image was saved, and an attempt is made to
@@ -1541,7 +1542,7 @@ h-to-ffi.sh `foo-config -cflags` /usr/include/foo/foo.h</programlisting>
           </listitem>
 	</itemizedlist>
         <para>Thanks to Michael Klingbeil for getting both kinds of
-        Darwin shared libraries working in OpenMCL.</para>
+        Darwin shared libraries working in &CCL;.</para>
       </sect2>
     </sect1>
 
@@ -1550,7 +1551,7 @@ h-to-ffi.sh `foo-config -cflags` /usr/include/foo/foo.h</programlisting>
 
       <sect2 id="Inteface-translator-overview">
 	<title>Overview</title>
-	<para>OpenMCL uses an interface translation system based on the FFIGEN
+	<para>&CCL; uses an interface translation system based on the FFIGEN
 	system, which is described at
 	http://www.ccs.neu.edu/home/lth/ffigen/.
 	The interface translator makes
@@ -1566,7 +1567,7 @@ h-to-ffi.sh `foo-config -cflags` /usr/include/foo/foo.h</programlisting>
         parsing.</para>
         <para>The original FFIGEN system used a modified version of
         the LCC C compiler to produce .ffi files. Since many LinuxPPC
-        header files contain GCC-specific constructs, OpenMCL's
+        header files contain GCC-specific constructs, &CCL;'s
         translation system uses a modified version of GCC (called,
         somewhat confusingly, ffigen.)</para>
         <para>A version of ffigen based on GCC-4.0 was developed
@@ -1594,8 +1595,8 @@ h-to-ffi.sh `foo-config -cflags` /usr/include/foo/foo.h</programlisting>
         C preprocessor and the ffigen program with appropriate
         arguments.</para>
         <para>For each interface directory (see FIXTHIS)
-        <emphasis>subdir</emphasis> distributed with OpenMCL, a shell
-        script (distributed with OpenMCL as
+        <emphasis>subdir</emphasis> distributed with &CCL;, a shell
+        script (distributed with &CCL; as
         "ccl:headers;<emphasis>subdir</emphasis>;C;populate.sh"
         ("ccl:darwin-headers;<emphasis>subdir</emphasis>;C;populate.sh"
         for Darwin)) calls h-to-ffi.sh on a large number of the header
@@ -1637,7 +1638,7 @@ h-to-ffi.sh `foo-config -cflags` /usr/include/foo/foo.h</programlisting>
 	    script.</para>
 	  </listitem>
 	  <listitem>
-	    <para>Run OpenMCL:
+	    <para>Run &CCL;:
             <programlisting>
 ? (require "PARSE-FFI")
 PARSE-FFI
@@ -1652,16 +1653,16 @@ PARSE-FFI
       </sect2>
     </sect1>
 
-    <sect1 id="Case-sensitivity-of-foreign-names-in-OpenMCL">
-      <title>Case-sensitivity of foreign names in OpenMCL</title>
+    <sect1 id="Case-sensitivity-of-foreign-names-in-&CCL;">
+      <title>Case-sensitivity of foreign names in &CCL;</title>
 
       <sect2 id="Case-sensitivity-overview">
 	<title>Overview</title>
-	<para>As of release 0.11, OpenMCL addresses the fact that
+	<para>As of release 0.11, &CCL; addresses the fact that
 	foreign type, constant, record, field, and function nams are
 	case-sensitive and provides mechanisms to refer to these names
 	via lisp symbols.</para>
-        <para>Previous versions of OpenMCL have tried to ignore that
+        <para>Previous versions of &CCL; have tried to ignore that
         fact, under the belief that case conflicts were rare and that
         many users (and implementors) would prefer not to deal with
         case-related issues. The fact that some information in the
@@ -1682,7 +1683,7 @@ PARSE-FFI
       <sect2 id="Foreign-constant-and-function-names">
 	<title>Foreign constant and function names</title>
         <para>The primary way of referring to foreign constant and
-        function names in OpenMCL is via the #$ and #_ reader
+        function names in &CCL; is via the #$ and #_ reader
         macros. These reader macro functions each read a symbol into
         the "OS" package, look up its constant or function definition
         in the interface database, and assign the value of the
@@ -1719,7 +1720,7 @@ PARSE-FFI
 	specify foreign type, record, and field names (especially
 	given that many traditional POSIX structure, type, and field
 	names are entirely lowercase.)</para>
-        <para>The approach taken by OpenMCL is to allow the symbols
+        <para>The approach taken by &CCL; is to allow the symbols
         (keywords) used to denote foreign type, record, and field
         names to contain angle brackets (<literal>&lt;</literal> and
         <literal>&gt;</literal>). Such symbols are translated to
@@ -1744,7 +1745,7 @@ PARSE-FFI
 	<para>There may be many ways of "escaping" (with angle
 	brackets) sequences of upper-case and non-lower-case
 	characters in a symbol used to denote a foreign name. When
-	translating in the other direction, OpenMCL always escapes the
+	translating in the other direction, &CCL; always escapes the
 	longest sequence that starts with an upper-case character and
 	doesn't contain a lower-case character.</para>
         <para>It's often preferable to use this canonical form of a
@@ -1757,7 +1758,7 @@ PARSE-FFI
         both surrounding characters need to be.)</para>
         <para>Older POSIX code tends to use lower-case exclusively for
         type, record, and field names; there are only a few cases in
-        the OpenMCL sources where mixed-case names need to be
+        the &CCL; sources where mixed-case names need to be
         escaped.</para>
 	
       </sect2>
@@ -1778,14 +1779,14 @@ PARSE-FFI
 
     <sect1 id="Tutorial--Using-Basic-Calls-and-Types">
       <title>Tutorial: Using Basic Calls and Types</title>
-      <para>This tutorial is meant to cover the basics of OpenMCL for
+      <para>This tutorial is meant to cover the basics of &CCL; for
       calling external C functions and passing data back and forth.
       These basics will provide the foundation for more advanced
       techniques which will allow access to the various external
       libraries and toolkits.</para>
       <para>The first step is to start with a simple C dynamic library
       in order to actually observe what is actually passing between
-      OpenMCL and C.  So, some C code is in order:</para>
+      &CCL; and C.  So, some C code is in order:</para>
       <para>Create the file typetest.c, and put the following code
       into it:</para>
       <programlisting>
@@ -1850,7 +1851,7 @@ gcc -dynamiclib -Wall -o libtypetest.dylib typetest.c \
       The output filename is "libtypetest.dylib".  Notice that we
       chose a name which follows the normal OS X convention, being in
       the form "libXXXXX.dylib", so that other programs can link to
-      the library.  OpenMCL doesn't need it to be this way, but it is
+      the library.  &CCL; doesn't need it to be this way, but it is
       a good idea to adhere to existing conventions.</para>
       <para>The -install_name flag is primarily used when building OS
       X "bundles".  In this case, we are not using it, so we put a
@@ -1858,11 +1859,11 @@ gcc -dynamiclib -Wall -o libtypetest.dylib typetest.c \
       typetest in a bundle, the -install_name argument would be a
       relative path from some "current" directory.</para>
       <para>After creating this library, the first step is to tell
-      OpenMCL to open the dynamic library.  This is done by calling
+      &CCL; to open the dynamic library.  This is done by calling
       .</para>
       <programlisting>
 
-Welcome to OpenMCL Version (Beta: Darwin) 0.14.2-040506!
+Welcome to &CCL; Version (Beta: Darwin) 0.14.2-040506!
 
 ? (open-shared-library "/Users/andewl/openmcl/libtypetest.dylib")
 #&lt;SHLIB /Users/andewl/openmcl/libtypetest.dylib #x638EF3E&gt;
@@ -1874,7 +1875,7 @@ Welcome to OpenMCL Version (Beta: Darwin) 0.14.2-040506!
       because software should never rely on its starting directory
       being anything in particular.</para>
       <para>This command returns a reference to the opened shared library, and
-OpenMCL also adds one to the global variable
+&CCL; also adds one to the global variable
 <literal>ccl::*shared-libraries*</literal>:</para>
       <programlisting>
 
@@ -1916,7 +1917,7 @@ OpenMCL also adds one to the global variable
 ? (external "functiondoesnotexist")
 #&lt;EXTERNAL-ENTRY-POINT "functiondoesnotexist" {unresolved}  #x638E3F6>
 </programlisting>
-      <para>The "unresolved" tells us that OpenMCL wasn't able to find this
+      <para>The "unresolved" tells us that &CCL; wasn't able to find this
       function, which means you would get an error, "Can't resolve foreign
       symbol," if you tried to call it.</para>
       <para>These external function references also are stored in a
@@ -2058,13 +2059,13 @@ d_d_test(double data)
 gcc -dynamiclib -Wall -o libtypetest.dylib typetest.c \
     -install_name ./libtypetest.dylib
 </programlisting>
-      <para>Now, restart OpenMCL.  This step is required because
-      OpenMCL cannot close and reload a dynamic library on OS
+      <para>Now, restart &CCL;.  This step is required because
+      &CCL; cannot close and reload a dynamic library on OS
       X.</para>
       <para>Have you restarted?  Okay, try out the new code:</para>
       <programlisting>
 
-Welcome to OpenMCL Version (Beta: Darwin) 0.14.2-040506!
+Welcome to &CCL; Version (Beta: Darwin) 0.14.2-040506!
 
 ? (open-shared-library "/Users/andewl/openmcl/libtypetest.dylib")
 #&lt;SHLIB /Users/andewl/openmcl/libtypetest.dylib #x638EF3E>
@@ -2106,13 +2107,13 @@ Exited  sl_sl_test:
       </programlisting>
       <para>Ouch.  The C function changes the value with no warning
       that something is wrong.  Even worse, it manages to pass the
-      original value back to OpenMCL, which hides the fact that
+      original value back to &CCL;, which hides the fact that
       something is wrong.</para>
       <para>Finally, let's take a look at doing this with
       floating-point numbers.</para>
       <programlisting>
 
-Welcome to OpenMCL Version (Beta: Darwin) 0.14.2-040506!
+Welcome to &CCL; Version (Beta: Darwin) 0.14.2-040506!
 
 ? (open-shared-library "/Users/andewl/openmcl/libtypetest.dylib")
 #&lt;SHLIB /Users/andewl/openmcl/libtypetest.dylib #x638EF3E>
@@ -2137,7 +2138,7 @@ you tried to pass :double-float 1.0e2 to external-call, Lisp would
 be nice enough to notice and give you a type error.  Don't get the
 :double-float wrong, though, because then there's no protection.</para>
       <para>Congratulations!  You now know how to call external C functions from
-within OpenMCL, and pass numbers back and forth.  Now that the basic
+within &CCL;, and pass numbers back and forth.  Now that the basic
 mechanics of calling and passing work, the next step is to examine how
 to pass more complex data structures around.</para>
 
@@ -2215,7 +2216,7 @@ to pass more complex data structures around.</para>
       <para>And, so, on to the code...</para>
       <para>As in the last tutorial, our first step
       is to create a local dynamic library in order to help show
-      what is actually going on between OpenMCL and C.  So, create the file
+      what is actually going on between &CCL; and C.  So, create the file
       ptrtest.c, with the following code:</para>
       <programlisting>
 #include &lt;stdio.h&gt;
@@ -2276,7 +2277,7 @@ gcc -dynamiclib -Wall -o libptrtest.dylib ptrtest.c -install_name ./libptrtest.d
       </programlisting>
       <para>If that command doesn't make sense to you, feel free to go back
 and read about it at .</para>
-      <para>Now, start OpenMCL and enter:</para>
+      <para>Now, start &CCL; and enter:</para>
       <programlisting>
 ? ;; make-heap-ivector courtesy of Gary Byers
 (defun make-heap-ivector (element-count element-type)
@@ -2302,9 +2303,9 @@ DISPOSE-HEAP-IVECTOR
       matter, because you don't need to change them.</para>
       <para>The function <literal>make-heap-ivector</literal> is the
       primary tool for allocating objects in heap memory.  It
-      allocates a fixed-size OpenMCL object in heap memory.  It
+      allocates a fixed-size &CCL; object in heap memory.  It
       returns both an array reference, which can be used directly from
-      OpenMCL, and a <literal>macptr</literal>, which can be used to
+      &CCL;, and a <literal>macptr</literal>, which can be used to
       access the underlying memory directly.  For example:</para>
       <programlisting>
 ? ;; Create an array of 3 4-byte-long integers
@@ -2404,8 +2405,8 @@ a
       <literal>reverse_int_array</literal>.  The C function reverses
       the contents of the array in-place; that is, it doesn't make a
       new array, just keeps the same one and reverses what's in it.
-      Finally, the C function passes control back to OpenMCL.  Since
-      the allocated array memory has been directly modifed, OpenMCL
+      Finally, the C function passes control back to &CCL;.  Since
+      the allocated array memory has been directly modifed, &CCL;
       reflects those changes directly in the array as well.</para>
       <para>There is one final bit of housekeeping to deal with.
       Before moving on, the memory needs to be deallocated:</para>
@@ -2464,7 +2465,7 @@ NIL
       <para>If you can make sure all of these are true, you can at
       least ensure that the foreign pointer is deallocated when the
       encapsulating object is about to become garbage, by using
-      OpenMCL's nonstandard "termination" mechanism, which is
+      &CCL;'s nonstandard "termination" mechanism, which is
       essentially the same as what Java and other languages call
       "finialization".</para>
       <para>Termination is a way of asking the garbage collector to
@@ -2558,7 +2559,7 @@ NIL
 	      
 	      <listitem>
 		<para>NIL or a keyword; the keyword may contain
-		<link linkend="Case-sensitivity-of-foreign-names-in-OpenMCL" >escaping constructs</link>.</para>
+		<link linkend="Case-sensitivity-of-foreign-names-in-&CCL;" >escaping constructs</link>.</para>
 	      </listitem>
 	    </varlistentry>
 	    
@@ -2912,7 +2913,7 @@ NIL
 	<refnamediv>
 	  <refname>OPEN-SHARED-LIBRARY</refname>
 	  <refpurpose>Asks the operating system to load a shared library
-	  for OpenMCL to use.</refpurpose>
+	  for &CCL; to use.</refpurpose>
 	  <refclass>Function</refclass>
 	</refnamediv>
 	
@@ -3569,7 +3570,7 @@ T
 	  bound to the &#34;OS&#34; package and with readtable-case preserved.</para>
 	  
 	  <para>Does a lookup on that symbol in <link
-	  linkend="The-Interface-Database">the OpenMCL interface
+	  linkend="The-Interface-Database">the &CCL; interface
 	  database</link>, signalling an error if no foreign function
 	  information can be found for the symbol in any active <link
 	  linkend="Using-Interface-Directories">interface
@@ -3618,7 +3619,7 @@ T
 	<refsect1>
 	  <title>Description</title>
 
-	  <para>In OpenMCL 0.14.2 and later, the #? reader macro can be used to
+	  <para>In &CCL; 0.14.2 and later, the #? reader macro can be used to
 	  access foreign variables; this functionality depends on the presence of
 	  &#34;vars.cdb&#34; files in the interface database. The current behavior
 	  of the #? reader macro is to:</para>
@@ -3626,7 +3627,7 @@ T
 	  <para>Read a symbol from the current input stream, with *PACKAGE*
 	  bound to the &#34;OS&#34; package and with readtable-case preserved.</para>
 	  
-	  <para>Use that symbol&#39;s pname to access the OpenMCL interface
+	  <para>Use that symbol&#39;s pname to access the &CCL; interface
 	  database, signalling an error if no appropriate foreign variable
 	  information can be found with that name in any active interface
 	  directory.</para>
@@ -3702,7 +3703,7 @@ T
 	<refsect1>
 	  <title>Description</title>
 
-	  <para>Tells OpenMCL to add the interface directory denoted by
+	  <para>Tells &CCL; to add the interface directory denoted by
 	  dir-id to the list of interface directories which it consults for
 	  foreign type and function information. Arranges that that
 	  directory is searched before any others.</para>
@@ -3713,7 +3714,7 @@ T
 	  If the named directory doesn&#39;t exist in the file system
 	  or doesn&#39;t
 	  contain a set of database files, a runtime error may occur
-	  when OpenMCL
+	  when &CCL;
 	  tries to open some database file in that directory, and it
 	  will try to
 	  open such a database file whenever it needs to find any
@@ -3784,7 +3785,7 @@ T
 	<refsect1>
 	  <title>Description</title>
 
-	  <para>Tells OpenMCL to remove the interface directory denoted by
+	  <para>Tells &CCL; to remove the interface directory denoted by
 	  dir-id from the list of interface directories which are
 	  consulted for
 	  foreign type and function information. Returns T if the directory
