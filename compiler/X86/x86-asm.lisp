@@ -3208,7 +3208,7 @@
    (def-x8664-opcode cvtsd2sil ((:anymem :insert-memory) (:reg32 :insert-modrm-reg))
      #x0f2c #o000 #x00 #xf2)
 
-   ;;; cvttss2si.  This does rounding (as opposed to truncation).
+   ;;; cvttss2si.  This does truncation (as opposed to rounding).
    (def-x8664-opcode cvttss2siq ((:regxmm :insert-xmm-rm) (:reg64 :insert-modrm-reg))
      #x0f2c #o300 #x48 #xf3)
    (def-x8664-opcode cvttss2siq ((:anymem :insert-memory) (:reg64 :insert-modrm-reg))
