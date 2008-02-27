@@ -1232,7 +1232,9 @@ __(tra(local_label(_threw_one_value_dont_unbind)))
 	__(movq catch_frame._save0(%temp0),%save0)
 	__(movq catch_frame._save1(%temp0),%save1)
 	__(movq catch_frame._save2(%temp0),%save2)
+	__ifndef([WINDOWS])
 	__(movq catch_frame._save3(%temp0),%save3)
+	__endif
 	__(movq %imm1,rcontext(tcr.catch_top))
 	__(movq catch_frame.pc(%temp0),%ra0)
 	__(lea -(tsp_frame.fixed_overhead+fulltag_misc)(%temp0),%imm1)
@@ -1276,7 +1278,9 @@ local_label(_threw_multiple_push_test):
 	__(movq catch_frame._save0(%temp0),%save0)
 	__(movq catch_frame._save1(%temp0),%save1)
 	__(movq catch_frame._save2(%temp0),%save2)
+	__ifndef([WINDOWS])
 	__(movq catch_frame._save3(%temp0),%save3)
+	__endif
 	__(movq %imm1,rcontext(tcr.catch_top))
 	__(movq catch_frame.pc(%temp0),%ra0)
 	__(lea -(tsp_frame.fixed_overhead+fulltag_misc)(%temp0),%imm1)
@@ -1331,7 +1335,9 @@ local_label(_nthrowv_push_test):
 	__(movq %save0,rcontext(tcr.xframe))
 	__(movq %save2,%rsp)
 	__(movq catch_frame.rbp(%temp0),%rbp)
+	__ifndef([WINDOWS])
 	__(movq catch_frame._save3(%temp0),%save3)
+	__endif
 	__(movq catch_frame._save2(%temp0),%save2)
 	__(movq catch_frame._save1(%temp0),%save1)
 	__(movq catch_frame._save0(%temp0),%save0)
@@ -1351,7 +1357,9 @@ local_label(_nthrowv_do_unwind):
 	__(push catch_frame._save0(%temp0))
 	__(push catch_frame._save1(%temp0))
 	__(push catch_frame._save2(%temp0))
+	__ifndef([WINDOWS])
 	__(push catch_frame._save3(%temp0))
+	__endif
 	__(push catch_frame.pc(%temp0))
 	__(movq catch_frame.rbp(%temp0),%rbp)
         __(movq catch_frame.xframe(%temp0),%stack_temp)
@@ -1381,7 +1389,9 @@ local_label(_nthrowv_tpushtest):
 	__(subl $node_size,%nargs)
 	__(jns local_label(_nthrowv_tpushloop))
 	__(pop %xfn)
+	__ifndef([WINDOWS])
 	__(pop %save3)
+	__endif
 	__(pop %save2)
 	__(pop %save1)
 	__(pop %save0)
@@ -1457,7 +1467,9 @@ local_label(_nthrow1v_dont_unbind):
 	__(movq %save0,rcontext(tcr.xframe))
 	__(movq catch_frame.rsp(%temp0),%rsp)
 	__(movq catch_frame.rbp(%temp0),%rbp)
+	__ifndef([WINDOWS])
 	__(movq catch_frame._save3(%temp0),%save3)
+	__endif
 	__(movq catch_frame._save2(%temp0),%save2)
 	__(movq catch_frame._save1(%temp0),%save1)
 	__(movq catch_frame._save0(%temp0),%save0)
@@ -1479,7 +1491,9 @@ local_label(_nthrow1v_do_unwind):
 	__(movq catch_frame._save0(%temp0),%save0)
 	__(movq catch_frame._save1(%temp0),%save1)
 	__(movq catch_frame._save2(%temp0),%save2)
+	__ifndef([WINDOWS])
 	__(movq catch_frame._save3(%temp0),%save3)
+	__endif
 	__(movq catch_frame.pc(%temp0),%xfn)
 	__(movq catch_frame.rbp(%temp0),%rbp)
 	__(movq catch_frame.rsp(%temp0),%rsp)
@@ -2258,7 +2272,8 @@ local_label(even):
 4:	__(subq $fixnumone,%arg_y)
 	__(jge 3b)
 	/* Push the %saveN registers, so that we can use them in this loop   */
-	__(push %save3)
+	/* Also, borrow %arg_y for a bit */
+	__(push %arg_y)
 	__(push %save2)
 	__(push %save1)
 	__(push %save0)
@@ -2268,9 +2283,9 @@ local_label(even):
 	/* %save1 is the end of the provided keyword/value pairs (the old %tsp).   */
 	__(movq %imm0,%save2)
 	/* %save2 is the length of the keyword vector   */
-5:	__(movq (%arg_z),%save3)	/* %save3 is current keyword   */
+5:	__(movq (%arg_z),%arg_y)	/* %arg_y is current keyword   */
 	__(xorl %imm0_l,%imm0_l)
-        __(cmpq $nrs.kallowotherkeys,%save3)
+        __(cmpq $nrs.kallowotherkeys,%arg_y)
         __(jne local_label(next_keyvect_entry))
         __(btsq $keyword_flags_seen_aok_bit,%temp1)
         __(jc local_label(next_keyvect_entry))
@@ -2278,14 +2293,14 @@ local_label(even):
 	__(je local_label(next_keyvect_entry))
 	__(btsq $keyword_flags_aok_bit,%temp1)
 	__(jmp local_label(next_keyvect_entry))
-6:	__(cmpq misc_data_offset(%arg_x,%imm0),%save3)
+6:	__(cmpq misc_data_offset(%arg_x,%imm0),%arg_y)
 	__(jne 7f)
 	/* Got a match; have we already seen this keyword ?   */
 	__(negq %imm0)
 	__(cmpb $fulltag_nil,-node_size*2(%save0,%imm0,2))
 	__(jne 9f)	/* already seen keyword, ignore this value   */
-	__(movq node_size(%arg_z),%save3)
-	__(movq %save3,-node_size(%save0,%imm0,2))
+	__(movq node_size(%arg_z),%arg_y)
+	__(movq %arg_y,-node_size(%save0,%imm0,2))
 	__(movl $t_value,-node_size*2(%save0,%imm0,2))
 	__(jmp 9f)
 7:	__(addq $node_size,%imm0)
@@ -2294,7 +2309,7 @@ local_label(next_keyvect_entry):
 	__(jne 6b)
 	/* Didn't match anything in the keyword vector. Is the keyword  */
 	/* :allow-other-keys ?   */
-	__(cmpq $nrs.kallowotherkeys,%save3)
+	__(cmpq $nrs.kallowotherkeys,%arg_y)
 	__(je 9f)               /* :allow-other-keys is never "unknown" */
 8:	__(btsq $keyword_flags_unknown_keys_bit,%temp1)
 9:	__(addq $dnode_size,%arg_z)
@@ -2303,7 +2318,7 @@ local_label(next_keyvect_entry):
 	__(pop %save0)
 	__(pop %save1)
 	__(pop %save2)
-	__(pop %save3)
+	__(pop %arg_y)
 	/* If the function takes an &rest arg, or if we got an unrecognized  */
 	/* keyword and don't allow that, copy the incoming keyword/value  */
 	/* pairs from the temp stack back to the value stack   */
@@ -2900,23 +2915,24 @@ local_label(push_pair_test):
 	__(subb $1,%imm1_b)
 	__(jge local_label(push_pair_loop))
 	/* Push the %saveN registers, so that we can use them in this loop   */
+	/* Also, borrow %arg_z */
 	__(push %save0)
 	__(push %save1)
 	__(push %save2)
-	__(push %save3)
+	__(push %arg_z)
 	/* save0 points to the 0th value/supplied-p pair   */
 	__(movq %arg_y,%save0)
 	/* save1 is the length of the keyword vector   */
 	__(vector_length(%arg_x,%save1))
 	/* save2 is the current keyword   */
-	/* save3 is the value of the current keyword   */
+	/* arg_z is the value of the current keyword   */
 	__(xorl %imm0_l,%imm0_l)	/* count unknown keywords seen   */
 local_label(match_keys_loop):
 	__(compare_reg_to_nil(%arg_reg))
 	__(je local_label(matched_keys))
 	__(_car(%arg_reg,%save2))
 	__(_cdr(%arg_reg,%arg_reg))
-	__(_car(%arg_reg,%save3))
+	__(_car(%arg_reg,%arg_z))
 	__(_cdr(%arg_reg,%arg_reg))
 	__(xorl %arg_y_l,%arg_y_l)
 	__(jmp local_label(match_test))
@@ -2935,7 +2951,7 @@ local_label(match_test):
 	__(btsl $seen_aok_bit,%nargs)
 	__(jc local_label(match_keys_loop))
 	/* First time we've seen :allow-other-keys.  Maybe set aok_bit.   */
-	__(compare_reg_to_nil(%save3))
+	__(compare_reg_to_nil(%arg_z))
 	__(je local_label(match_keys_loop))
 	__(btsl $aok_bit,%nargs)
 	__(jmp local_label(match_keys_loop))
@@ -2944,18 +2960,18 @@ local_label(matched):
 	__(negq %arg_y)
 	__(cmpb $fulltag_nil,-node_size*2(%save0,%arg_y,2))
 	__(jne local_label(match_keys_loop))
-	__(movq %save3,-node_size(%save0,%arg_y,2))
+	__(movq %arg_z,-node_size(%save0,%arg_y,2))
 	__(movl $t_value,-node_size*2(%save0,%arg_y,2))
 	__(cmpq $nrs.kallowotherkeys,%save2)
 	__(jne local_label(match_keys_loop))
 	__(btsl $seen_aok_bit,%nargs)
 	__(jnc local_label(match_keys_loop))
-	__(compare_reg_to_nil(%save3))
+	__(compare_reg_to_nil(%arg_z))
 	__(je local_label(match_keys_loop))
 	__(btsl $aok_bit,%nargs)
 	__(jmp local_label(match_keys_loop))
 local_label(matched_keys):		
-	__(pop %save3)
+	__(pop %arg_z)
 	__(pop %save2)
 	__(pop %save1)
 	__(pop %save0)

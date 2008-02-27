@@ -131,7 +131,9 @@ define([Make_Catch],[
 	__(movq %rbp,catch_frame.rbp(%imm2))
         __(movq rcontext(tcr.foreign_sp),%stack_temp)
 	__(movq %imm1,catch_frame.db_link(%imm2))
+	__ifndef([WINDOWS])
 	__(movq %save3,catch_frame._save3(%imm2))
+	__endif
 	__(movq %save2,catch_frame._save2(%imm2))
 	__(movq %save1,catch_frame._save1(%imm2))
 	__(movq %save0,catch_frame._save0(%imm2))
@@ -154,7 +156,9 @@ define([nMake_Catch],[
 	__(movq %rbp,catch_frame.rbp(%imm2))
         __(movq rcontext(tcr.foreign_sp),%stack_temp)
 	__(movq %imm1,catch_frame.db_link(%imm2))
+	__ifndef([WINDOWS])
 	__(movq %save3,catch_frame._save3(%imm2))
+	__endif
 	__(movq %save2,catch_frame._save2(%imm2))
 	__(movq %save1,catch_frame._save1(%imm2))
 	__(movq %save0,catch_frame._save0(%imm2))
