@@ -3950,7 +3950,9 @@ LocalLabelPrefix[]ffcall:
 	__(push %save0)
 	__(push %save1)
 	__(push %save2)
-	__(push %save3)         /* 10 registers pushed after %rbp */
+	__ifndef([WINDOWS])
+	__(push %save3)         /* 11 registers pushed after %rbp */
+	__endif
 	__(movq %rsp,rcontext(tcr.save_vsp))
         __(movq %rbp,rcontext(tcr.save_rbp))
 	__(movq $TCR_STATE_FOREIGN,rcontext(tcr.valence))
@@ -3978,15 +3980,23 @@ LocalLabelPrefix[]ffcall:
          __(movq %save1,%imm1)
          __(movq %save2,%imm0)
         __endif
+	__ifdef([WINDOWS])
+	/* Preserve TCR pointer */
+	__(movq %rcontext_reg, %save0)
+	__endif
 LocalLabelPrefix[]ffcall_setup: 
 	__(addq $2*node_size,%rsp)
         __(movq %imm1,%r11)
-	__(pop %rdi)
-	__(pop %rsi)
-	__(pop %rdx)
-	__(pop %rcx)
-	__(pop %r8)
-	__(pop %r9)
+	__(pop %carg0)
+	__(pop %carg1)
+	__(pop %carg2)
+	__(pop %carg3)
+	__ifdef([WINDOWS])
+	__(sub $20, %rsp) /* Make room for arg register spill */
+	__else
+	__(pop %carg4)
+	__(pop %carg5)
+	__endif
 LocalLabelPrefix[]ffcall_setup_end: 
 LocalLabelPrefix[]ffcall_call:
 	__(call *%r11)
@@ -4001,8 +4011,13 @@ LocalLabelPrefix[]ffcall_call_end:
          __(movq %save1,%rax)
          __(movq %save2,%rdx)
         __endif
-	__(movq %rsp,rcontext(tcr.foreign_sp))        
+	__ifdef([WINDOWS])
+	__(movq %save0, %rcontext_reg)
+	__endif
+	__(movq %rsp,rcontext(tcr.foreign_sp))
+	__ifndef([WINDOWS])
 	__(clr %save3)
+	__endif
 	__(clr %save2)
 	__(clr %save1)
 	__(clr %save0)
@@ -4024,7 +4039,9 @@ LocalLabelPrefix[]ffcall_call_end:
 	__(movq rcontext(tcr.save_vsp),%rsp)
         __(movq rcontext(tcr.save_rbp),%rbp)
 	__(movq $TCR_STATE_LISP,rcontext(tcr.valence))
+	__ifndef([WINDOWS])
 	__(pop %save3)
+	__endif
 	__(pop %save2)
 	__(pop %save1)
 	__(pop %save0)
@@ -4146,7 +4163,9 @@ LocalLabelPrefix[]ffcall_return_registers:
 	__(push %save0)
 	__(push %save1)
 	__(push %save2)
+	__ifndef([WINDOWS])
 	__(push %save3)
+	__endif
         __(movq macptr.address(%arg_y),%rbx)  /* %rbx non-volatile */
 	__(push %fn)
 	__(movq %rsp,rcontext(tcr.save_vsp))
@@ -4176,15 +4195,23 @@ LocalLabelPrefix[]ffcall_return_registers:
          __(movq %save1,%imm0)
          __(movq %save2,%imm1)
         __endif
+	__ifdef([WINDOWS])
+	/* Preserve TCR pointer */
+	__(movq %rcontext_reg, %save0)
+	__endif
         __(movq %imm1,%r11)
 LocalLabelPrefix[]ffcall_return_registers_setup: 
 	__(addq $2*node_size,%rsp)
-	__(pop %rdi)
-	__(pop %rsi)
-	__(pop %rdx)
-	__(pop %rcx)
-	__(pop %r8)
-	__(pop %r9)
+	__(pop %carg0)
+	__(pop %carg1)
+	__(pop %carg2)
+	__(pop %carg3)
+	__ifdef([WINDOWS])
+	__(sub $20, %rsp) /* Make room for arg register spill */
+	__else
+	__(pop %carg4)
+	__(pop %carg5)
+	__endif
 LocalLabelPrefix[]ffcall_return_registers_setup_end: 
 LocalLabelPrefix[]ffcall_return_registers_call:
 	__(call *%r11)
@@ -4203,8 +4230,13 @@ LocalLabelPrefix[]ffcall_return_registers_call_end:
          __(movsd 16(%save2),%xmm0)
          __(movsd 24(%save2),%xmm1)
         __endif
+	__ifdef([WINDOWS])
+	__(movq %save0, %rcontext_reg)
+	__endif
 	__(movq %rsp,rcontext(tcr.foreign_sp))        
+	__ifndef([WINDOWS])
 	__(clr %save3)
+	__endif
 	__(clr %save2)
 	__(clr %save1)
 	__(clr %save0)
@@ -4227,7 +4259,9 @@ LocalLabelPrefix[]ffcall_return_registers_call_end:
         __(movq rcontext(tcr.save_rbp),%rbp)
 	__(movq $TCR_STATE_LISP,rcontext(tcr.valence))
 	__(pop %fn)
+	__ifndef([WINDOWS])
 	__(pop %save3)
+	__endif
 	__(pop %save2)
 	__(pop %save1)
 	__(pop %save0)
