@@ -799,6 +799,8 @@ allocate_dynamic_area(natural initsize)
   a->h = start;
   a->softprot = NULL;
   a->hardprot = NULL;
+  lisp_global(HEAP_START) = ptr_to_lispobj(a->low);
+  lisp_global(HEAP_END) = ptr_to_lispobj(a->high);
   ensure_gc_structures_writable();
   return a;
  }

@@ -318,8 +318,6 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
         add_area_holding_area_lock(a);
         break;
       case AREA_DYNAMIC:
-	lisp_global(HEAP_START) = ptr_to_lispobj(a->low);
-	lisp_global(HEAP_END) = ptr_to_lispobj(a->high);
         if (bias) {
           relocate_area_contents(a, bias);
         }
