@@ -3278,11 +3278,15 @@
 
 
 (defun optimal-buffer-size (fd element-type)
-  (let* ((octets (case (%unix-fd-kind fd)
+  (let* ((nominal (or (nth-value 6 (%fstat fd)) *elements-per-buffer*))
+         (octets (case (%unix-fd-kind fd)
                    (:pipe (#_fpathconf fd #$_PC_PIPE_BUF))
-                   (:socket (int-getsockopt fd #$SOL_SOCKET #$SO_SNDLOWAT))
+                   (:socket
+                    #+linux-target nominal
+                    #-linux-target 
+                    (int-getsockopt fd #$SOL_SOCKET #$SO_SNDLOWAT))
                    ((:character-special :tty) (#_fpathconf fd #$_PC_MAX_INPUT))
-                   (t (or (nth-value 6 (%fstat fd)) *elements-per-buffer*)))))
+                   (t nominal))))
     (case (subtag-bytes (element-type-subtype element-type) 1)
       (1 octets)
       (2 (ash octets -1))
