@@ -144,7 +144,7 @@ some practical considerations. Doing:</para>
       command for you.</para>
     </sect1>
 
-    <sect1 id="Cocoa-Programming-in-&CCL;">
+    <sect1 id="Cocoa-Programming-in-CCL">
       <title>Cocoa Programming in &CCL;</title>
       <para>Cocoa is one of Apple's APIs for GUI programming; for most
       purposes, development is considerably faster with Cocoa than

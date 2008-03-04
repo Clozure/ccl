@@ -373,7 +373,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
       </sect2>
     </sect1>
 
-    <sect1 id="Using-&CCL;-with-GNU-Emacs-and-SLIME">
+    <sect1 id="Using-CCL-with-GNU-Emacs-and-SLIME">
       <title>Using &CCL; with GNU Emacs and SLIME</title>
       <para>A very common way to use &CCL; is to run it within the
       GNU Emacs editor, using a Lisp interface called SLIME ("Superior
@@ -496,7 +496,7 @@ SLIME home page.</para>
         </warning>
       </sect2>
 
-      <sect2 id="Running-&CCL;-with-SLIME">
+      <sect2 id="Running-CCL-with-SLIME">
 	<title>Running &CCL; with SLIME</title>
         <para>Once the preparations in the previous section are
         complete, exit Emacs and restart it, to ensure that it reads
@@ -511,7 +511,7 @@ SLIME home page.</para>
         128.)</para>
       </sect2>
 
-      <sect2 id="What-if-a-New-Version-of-&CCL;-Breaks-SLIME-">
+      <sect2 id="What-if-a-New-Version-of-CCL-Breaks-SLIME-">
 	<title>What if a New Version of &CCL; Breaks SLIME?</title>
 	<para>Sometimes you'll get a new version of &CCL;, set up
 	Emacs to use it with SLIME, and SLIME will fail. Most likely

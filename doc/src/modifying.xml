@@ -9,17 +9,17 @@
 <!ENTITY CCL "<literal>CCL</literal>">
 ]>
 
-  <chapter id="Modifying-&CCL;">
+  <chapter id="Modifying-CCL">
     <title>Modifying &CCL;</title>
 
-    <sect1 id="Contributing-Code-Back-to-the-&CCL;-Project">
+    <sect1 id="Contributing-Code-Back-to-the-CCL-Project">
       <title>Contributing Code Back to the &CCL; Project</title>
       <para>This section is a placeholder, added as of August 2004.  The
       full text is being written, and will be added as soon as it is
       available.</para>
     </sect1>
 
-    <sect1 id="Using-&CCL;-in--development--and-in--user--mode">
+    <sect1 id="Using-CCL-in--development--and-in--user--mode">
       <title>Using &CCL; in "development" and in  "user" mode</title>
 
       <para>As it's distributed, &CCL; starts up with *PACKAGE* set
@@ -199,7 +199,7 @@ debugger", the output of the (L) and (B) options are often the most
 helpful things to include in a bug report.</para>
     </sect1>
 
-    <sect1 id="Using-AltiVec-in-&CCL;-LAP-functions">
+    <sect1 id="Using-AltiVec-in-CCL-LAP-functions">
       <title>Using AltiVec in &CCL; LAP functions</title>
 
       <sect2 id="Overview--16-">

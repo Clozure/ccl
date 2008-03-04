@@ -432,7 +432,7 @@ Type :? for other options.
       </sect2>
     </sect1>
 
-    <sect1 id="The-Threads-which-&CCL;-Uses-for-Its-Own-Purposes">
+    <sect1 id="The-Threads-which-CCL-Uses-for-Its-Own-Purposes">
       <title>The Threads which &CCL; Uses for Its Own Purposes</title>
       <para>
 In the "tty world", &CCL; starts out with 2 lisp-level threads:</para>

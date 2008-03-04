@@ -1653,7 +1653,7 @@ PARSE-FFI
       </sect2>
     </sect1>
 
-    <sect1 id="Case-sensitivity-of-foreign-names-in-&CCL;">
+    <sect1 id="Case-sensitivity-of-foreign-names-in-CCL">
       <title>Case-sensitivity of foreign names in &CCL;</title>
 
       <sect2 id="Case-sensitivity-overview">
@@ -2559,7 +2559,7 @@ NIL
 	      
 	      <listitem>
 		<para>NIL or a keyword; the keyword may contain
-		<link linkend="Case-sensitivity-of-foreign-names-in-&CCL;" >escaping constructs</link>.</para>
+		<link linkend="Case-sensitivity-of-foreign-names-in-CCL" >escaping constructs</link>.</para>
 	      </listitem>
 	    </varlistentry>
 	    

@@ -8,7 +8,7 @@
 <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
 <!ENTITY CCL "<literal>CCL</literal>">
 ]>
-  <chapter id="Implementation-Details-of-&CCL;">
+  <chapter id="Implementation-Details-of-CCL">
     <title>Implementation Details of &CCL;</title>
     <para>This chapter describes many aspects of &CCL;'s
     implementation as of (roughly) version 1.1.  Details vary a bit
@@ -1386,7 +1386,7 @@ have.</para>
     <sect1 id="The-Objective-C-Bridge--1-">
       <title>The Objective-C Bridge</title>
 
-      <sect2 id="How-&CCL;-Recognizes-Objective-C-Objects">
+      <sect2 id="How-CCL-Recognizes-Objective-C-Objects">
 	<title>How &CCL; Recognizes Objective-C Objects</title>
         <para>In most cases, pointers to instances of Objective-C
         classes are recognized as such; the recognition is (and
