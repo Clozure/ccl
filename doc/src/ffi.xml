@@ -9,54 +9,54 @@
 <!ENTITY CCL "<literal>CCL</literal>">
 ]>
 
-  <chapter id="The-Foreign-Function-Interface">
-    <title>The Foreign-Function Interface</title>
-
-    <sect1 id="Specifying-And-Using-Foreign-Types">
-      <title>Specifying And Using Foreign Types</title>
-
-      <sect2 id="Overview-foreign-types">
-	<title>Overview</title>
-        <para>&CCL; provides a fairly rich language for defining and
-        specifying foreign data types (this language is derived from
-        CMUCL's "alien type" system.)</para>
-        <para>In practice, most foreign type definitions are
-        introduced into &CCL; via its interface database (see ),
-        though it's also possible to define foreign types
-        interactively and/or programmatically.</para>
-        <para>&CCL;'s foreign type system is "evolving" (a polite
-        word for not-quite-complete): there are some inconsistencies
-        involving package usage, for instance. Symbols used in foreign
-        type specifiers <emphasis>should</emphasis> be keywords, but
-        this convention isn't always enforced.</para>
-        <para>Foreign type, record, and field names are
-        case-sensitive; &CCL; uses some escaping conventions (see )
-        to allow keywords to be used to denote these names.</para>
+<chapter id="The-Foreign-Function-Interface">
+  <title>The Foreign-Function Interface</title>
+  
+  <sect1 id="Specifying-And-Using-Foreign-Types">
+    <title>Specifying And Using Foreign Types</title>
+    
+    <sect2 id="Overview-foreign-types">
+      <title>Overview</title>
+      <para>&CCL; provides a fairly rich language for defining and
+      specifying foreign data types (this language is derived from
+      CMUCL's "alien type" system.)</para>
+      <para>In practice, most foreign type definitions are
+      introduced into &CCL; via its interface database (see ),
+      though it's also possible to define foreign types
+      interactively and/or programmatically.</para>
+      <para>&CCL;'s foreign type system is "evolving" (a polite word
+      for not-quite-complete): there are some inconsistencies
+      involving package usage, for instance. Symbols used in foreign
+      type specifiers <emphasis>should</emphasis> be keywords, but
+      this convention isn't always enforced.</para> <para>Foreign
+      type, record, and field names are case-sensitive; &CCL; uses
+      some escaping conventions (see ) to allow keywords to be used to
+      denote these names.</para>
       </sect2>
 
       <sect2 id="Syntax-of-Foreign-Type-Specifiers">
         <title>Syntax of Foreign Type Specifiers</title>
         <itemizedlist>
           <listitem>
-	    <para>Some foreign types are builtin: keywords denote
-	    primitive,builtin types such as the IEEE-double-float type
-	    (denoted:DOUBLE-FLOAT), in much the same way as certain
-	    symbols(CONS, FIXNUM,etc.) define primitive CL
-	    types.</para>
-	  </listitem>
+            <para>Some foreign types are builtin: keywords denote
+            primitive,builtin types such as the IEEE-double-float type
+            (denoted:DOUBLE-FLOAT), in much the same way as certain
+            symbols(CONS, FIXNUM,etc.) define primitive CL
+            types.</para>
+          </listitem>
           <listitem>
-	    <para>Constructors such as :SIGNED and :UNSIGNED can be
-	    used to denotesigned and unsigned integer subtypes
-	    (analogous to the CL typespecifiers SIGNED-BYTE and
-	    UNSIGNED-BYTE.) :SIGNED is shorthand for(:SIGNED 32) and
-	    :UNSIGNED is shorthand for (:UNSIGNED 32).</para>
-	  </listitem>
+            <para>Constructors such as :SIGNED and :UNSIGNED can be
+            used to denotesigned and unsigned integer subtypes
+            (analogous to the CL typespecifiers SIGNED-BYTE and
+            UNSIGNED-BYTE.) :SIGNED is shorthand for(:SIGNED 32) and
+            :UNSIGNED is shorthand for (:UNSIGNED 32).</para>
+          </listitem>
           <listitem>
-	    <para>Aliases for other (perhaps more complicated) types
-	    can bedefined via CCL:DEF-FOREIGN-TYPE (sort of like
-	    CL:DEFTYPE or the Ctypedef facility). The type :CHAR is
-	    defined as an alias for (:SIGNED8) on some platforms, as
-	    (:UNSIGNED 8) on others.</para>
+            <para>Aliases for other (perhaps more complicated) types
+            can bedefined via CCL:DEF-FOREIGN-TYPE (sort of like
+            CL:DEFTYPE or the Ctypedef facility). The type :CHAR is
+            defined as an alias for (:SIGNED8) on some platforms, as
+            (:UNSIGNED 8) on others.</para>
 	  </listitem>
           <listitem>
 	    <para>The construct (:STRUCT <emphasis>name</emphasis>)
@@ -1349,7 +1349,7 @@ headers/libc/types.cdb
         used in the database creation process.</para>
         <para>As one might assume, the database files in each of these
         subdirectories contain foreign type, constant, and function
-        definitions - as well as ObjC class and method info -that
+        definitions - as well as Objective-C class and method info -that
         correspond (roughly) to the information contained in the
         header files associated with a "-dev" package in a Linux
         distribution.  "libc" corresponds pretty closely to the
@@ -1775,6 +1775,44 @@ PARSE-FFI
 (rlet ((w :&lt;w&gt;INDOW)))
 </programlisting>
       </sect2>
+    </sect1>
+
+    <sect1 id="Reading-Foreign-Names">
+      <title>Reading Foreign Names</title> <para>Clozure Common Lisp
+      provides several reader macros to make it more convenient to
+      handle foreign type, function, variable, and constant
+      names. Each of these reader macros reads symbols preserving the
+      case of the source text, and selects an appropriate package in
+      which to intern the resulting symbol. These reader macros are
+      especially useful when your Lisp code interacts extensively with
+      a foreign library&mdash;for example, when using Mac OS X's Cocoa
+      frameworks.</para>
+
+      <para>These reader macros include "#_" to read foreign function
+      names, "#&amp;" to read foreign variable names (note that in
+      earlier versions of OpenMCL the reader macro "#?" was used for
+      this same purpose), "#$" to read foreign constant names, "#/" to
+      read the names of foreign Objective-C methods, and "#>" to read
+      keywords that can be used as the names of types, records, and
+      accessors.</para>
+
+      <para>All of these reader macros preserve the case of the text
+      that they read; beyond that similarity, each performs some
+      additional work, unique to each reader macro, to create symbols
+      suitable for a particular use. For example, the function,
+      variable, and constant reader macros intern the resulting symbol
+      in the "OS" package of the running platform, but the reader
+      macro for Objective-C method names interns symbols in the
+      "NEXTSTEP-FUNCTIONS" package.</para>
+
+      <para>You are likely to see these reader macros used extensively
+      in Lisp code that works with foreign libraries; for example,
+      Clozure CL IDE code, which defines numerous Objective-C classes
+      and methods, uses these reader macros extensively.</para>
+
+      <para>For more detailed descriptions of each of these reader
+      macros, see the Foreign-Function-Interface Dictionary
+      section.</para>
     </sect1>
 
     <sect1 id="Tutorial--Using-Basic-Calls-and-Types">
@@ -3552,120 +3590,349 @@ T
 	</refsect1>
       </refentry>
 
-      <refentry id="rm_sharpsign-underscore">
-	<indexterm zone="rm_sharpsign-underscore">
-	  <primary>#_</primary>
-	</indexterm>
 
-	<refnamediv>
-	  <refname>#_</refname>
-	  <refpurpose></refpurpose>
-	  <refclass>Reader Macro</refclass>
-	</refnamediv>
+<refentry id="rm_sharpsign-underscore">
+  <indexterm zone="rm_sharpsign-underscore">
+	<primary>#_</primary>
+  </indexterm>
 
-	<refsect1>
-	  <title>Description</title>
+  <refnamediv>
+	<refname>#_</refname>
+	<refpurpose></refpurpose>
+	<refclass>Reader Macro</refclass>
+  </refnamediv>
 
-	  <para>Reads a symbol from the current input stream, with *PACKAGE*
+  <refsect1>
+	<title>Description</title>
+
+	<para>Reads a symbol from the current input stream, with *PACKAGE*
 	  bound to the &#34;OS&#34; package and with readtable-case preserved.</para>
-	  
-	  <para>Does a lookup on that symbol in <link
-	  linkend="The-Interface-Database">the &CCL; interface
-	  database</link>, signalling an error if no foreign function
+	
+	<para>Does a lookup on that symbol in <link
+	                                         linkend="The-Interface-Database">the &CCL; interface
+	    database</link>, signalling an error if no foreign function
 	  information can be found for the symbol in any active <link
-	  linkend="Using-Interface-Directories">interface
-	  directory</link>.</para>
+	                                                           linkend="Using-Interface-Directories">interface
+	    directory</link>.</para>
 
-	  <para>Notes the foreign function information, including the foreign
+	<para>Notes the foreign function information, including the foreign
 	  function&#39;s return type, the number and type of the foreign
 	  function&#39;s required arguments, and an indication of whether or
 	  not the function accepts additional arguments (via e.g., the
 	  &#34;varargs&#34; mechanism in C).</para>
 
-	  <para>Defines a macroexpansion function on the symbol, which expand
+	<para>Defines a macroexpansion function on the symbol, which expand
 	  macro calls involving the symbol into EXTERNAL-CALL forms where
 	  foreign argument type specifiers for required arguments and the
-	  return value specifer are provided from the information ind the
+	  return value specifer are provided from the information in the
 	  database.</para>
 
-	  <para>Returns the symbol.</para>
+	<para>Returns the symbol.</para>
 
-	  <para>The effect of these steps is that it&#39;s possible to call
+	<para>The effect of these steps is that it&#39;s possible to call
 	  foreign functions that take fixed numbers of arguments by simply
 	  providing argument values, as in:</para>
 
-	  <programlisting format="linespecific">(#_isatty fd)
-(#_read fd buf n)</programlisting>
+	<programlisting format="linespecific">(#_isatty fd)
+      (#_read fd buf n)</programlisting>
 
-	  <para>and to call foreign functions that take variable numbers of
+	<para>and to call foreign functions that take variable numbers of
 	  arguments by specifying the types of non-required args, as in:</para>
 
-	  <programlisting format="linespecific">(with-cstrs ((format-string &#34;the answer is: %d&#34;))
-  (#_printf format-string :int answer))</programlisting>
-	</refsect1>
-      </refentry>
+	<programlisting format="linespecific">(with-cstrs ((format-string &#34;the answer is: %d&#34;))
+      (#_printf format-string :int answer))</programlisting>
 
-      <refentry id="rm_sharpsign-questionmark">
-	<indexterm zone="rm_sharpsign-questionmark">
-	  <primary>#?</primary>
-	</indexterm>
+    <para>You can query whether a given name is defined in the
+      interface databases by appending the '?' character to the reader
+      macro; for example:</para>
 
-	<refnamediv>
-	  <refname>#?</refname>
-	  <refpurpose></refpurpose>
-	  <refclass>Reader Macro</refclass>
-	</refnamediv>
+    <programlisting>
+      CL-USER&gt; #_?printf
+      T
+      CL-USER&gt; #_?foo
+      NIL
+    </programlisting>
 
-	<refsect1>
-	  <title>Description</title>
+  </refsect1>
+</refentry>
 
-	  <para>In &CCL; 0.14.2 and later, the #? reader macro can be used to
+<refentry id="rm_sharpsign-ampersand">
+  <indexterm zone="rm_sharpsign-ampersand">
+	<primary>#&amp;</primary>
+  </indexterm>
+
+  <refnamediv>
+	<refname>#&amp;</refname>
+	<refpurpose></refpurpose>
+	<refclass>Reader Macro</refclass>
+  </refnamediv>
+
+  <refsect1>
+	<title>Description</title>
+
+	<para>In &CCL; 1.2 and later, the #&amp; reader macro can be used to
 	  access foreign variables; this functionality depends on the presence of
 	  &#34;vars.cdb&#34; files in the interface database. The current behavior
-	  of the #? reader macro is to:</para>
+	  of the #&amp; reader macro is to:</para>
 
-	  <para>Read a symbol from the current input stream, with *PACKAGE*
+	<para>Read a symbol from the current input stream, with *PACKAGE*
 	  bound to the &#34;OS&#34; package and with readtable-case preserved.</para>
-	  
-	  <para>Use that symbol&#39;s pname to access the &CCL; interface
+	
+	<para>Use that symbol&#39;s pname to access the &CCL; interface
 	  database, signalling an error if no appropriate foreign variable
 	  information can be found with that name in any active interface
 	  directory.</para>
 
-	  <para>Use type information recorded in the database to construct a
+	<para>Use type information recorded in the database to construct a
 	  form which can be used to access the foreign variable, and return
 	  that form.</para>
 
-	  <para>Please note that the set of foreign variables declared in header files
+	<para>Please note that the set of foreign variables declared in header files
 	  may or may not match the set of foreign variables exported from
 	  libraries (we&#39;re generally talking about C and Unix here ...). When
-	  they do match, the form constructed by the #? reader macro manages the
+	  they do match, the form constructed by the #&amp; reader macro manages the
 	  details of resolving and tracking changes to the foreign variable&#39;s
 	  address.</para>
 
-	  <para>Future extensions (via prefix arguments to the reader macro) may
+	<para>Future extensions (via prefix arguments to the reader macro) may
 	  offer additional behavior; it might be convenient (for instance) to be
 	  able to access the address of a foreign variable without dereferencing
 	  that address.</para>
 
-	  <para>Foreign variables in C code tend to be platform- and
+	<para>Foreign variables in C code tend to be platform- and
 	  packge-specific (the canonical example - &#34;errno&#34; - is typically
 	  not a variable when threads are involved. )</para>
 
-	  <para>In LinuxPPC, </para>
+	<para>In LinuxPPC, </para>
 
-	  <programlisting>? #?stderr</programlisting>
+	<programlisting>? #&amp;stderr</programlisting>
 
-	  <para>returns a pointer to the stdio error stream (&#34;stderr&#34; is a
+	<para>returns a pointer to the stdio error stream (&#34;stderr&#34; is a
 	  macro under OSX/Darwin).</para>
 
-	  <para>On both LinuxPPC and DarwinPPC, </para>
+	<para>On both LinuxPPC and DarwinPPC, </para>
 
-	  <programlisting>? #?sys_errlist</programlisting>
+	<programlisting>? #&amp;sys_errlist</programlisting>
 
-	  <para>returns a pointer to a C array of C error message strings.</para>
-	</refsect1>
-      </refentry>
+	<para>returns a pointer to a C array of C error message strings.</para>
+
+    <para>You can query whether a given name is defined in the
+      interface databases by appending the '?' character to the reader
+      macro; for example:</para>
+
+    <programlisting>
+      CL-USER&gt; #&amp;?sys_errlist
+      T
+      CL-USER&gt; #&amp;?foo
+      NIL
+    </programlisting>
+
+  </refsect1>
+</refentry>
+
+<refentry id="rm_sharpsign-dollarsign">
+  <indexterm zone="rm_sharpsign-dollarsign">
+    <primary>#$</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>#$</refname>
+    <refpurpose></refpurpose>
+    <refclass>Reader Macro</refclass>
+  </refnamediv>
+  
+  <refsect1>
+    <title>Description</title>
+    
+	<para>In &CCL; 0.14.2 and later, the #? reader macro can be used
+	  to access foreign constants; this functionality depends on the
+	  presence of &#34;constants.cdb&#34; files in the interface
+	  database. The current behavior of the #$ reader macro is
+	  to:</para>
+
+	<para>Read a symbol from the current input stream, with
+	  *PACKAGE* bound to the &#34;OS&#34; package and with
+	  readtable-case preserved.</para>
+	
+	<para>Use that symbol&#39;s pname to access the &CCL; interface
+	  database, signalling an error if no appropriate foreign constant
+	  information can be found with that name in any active interface
+	  directory.</para>
+
+	<para>Use type information recorded in the database to construct a
+	  form which can be used to access the foreign constant, and return
+	  that form.</para>
+
+	<para>Please note that the set of foreign constants declared in
+	  header files may or may not match the set of foreign constants
+	  exported from libraries. When they do match, the form
+	  constructed by the #$ reader macro manages the details of
+	  resolving and tracking changes to the foreign constant's
+	  address.</para>
+
+    <para>You can query whether a given name is defined in the
+      interface databases by appending the '?' character to the reader
+      macro; for example:</para>
+
+    <programlisting>
+      CL-USER&gt; #$?SO_KEEPALIVE
+      T
+      CL-USER&gt; #$?foo
+      NIL
+    </programlisting>
+
+  </refsect1>
+</refentry>
+
+<refentry id="rm_sharpsign-slash">
+  <indexterm zone="rm_sharpsign-slash">
+    <primary>#/</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>#/</refname>
+    <refpurpose></refpurpose>
+    <refclass>Reader Macro</refclass>
+  </refnamediv>
+  
+  <refsect1>
+    <title>Description</title>
+    
+	<para>In &CCL; 1.2 and later, the #/ reader macro can be used to
+	  access foreign functions on the Darwin platform. The current
+	  behavior of the #/ reader macro is to:</para>
+
+	<para>Read a symbol from the current input stream, with
+	  *PACKAGE* bound to the "NEXTSTEP-FUNCTIONS" package, with
+	  readtable-case preserved, and with any colons included.</para>
+
+    <para>Do limited sanity-checking on the resulting symbol; for
+      example, any name that contains at least one colon is required
+      also to end with a colon, to conform to Objective-C
+      method-naming conventions.</para>
+
+    <para>Export the resulting symbol from the "NEXTSTEP-FUNCTIONS"
+      package and return it.</para>
+
+    <para>For example, reading "#/alloc" interns and returns
+      NEXTSTEP-FUNCTIONS:|alloc|. Reading "#/initWithFrame:" interns
+      and returns NEXTSTEP-FUNCTIONS:|initWithFrame:|.</para>
+
+    <para>A symbol read using this macro can be used as an operand
+      in most places where an Objective-C message name can be used, such as
+      in the (OBJ:@SELECTOR ...) construct.</para>
+
+    <para>Please note: the reader macro is not rigorous about
+      enforcing Objective-C method-naming conventions. Despite the
+      simple checking done by the reader macro, it may still be
+      possible to use it to construct invalid names.</para>
+
+    <para>The act of interning a new symbol in the
+      NEXTSTEP-FUNCTIONS package triggers an interface database lookup
+      of Objective-C methods with the corresponding message name.  If any
+      such information is found, a special type of dispatching
+      function is created and initialized and the new symbol is given
+      the newly-created dispatching function as its function
+      definition.</para>
+
+    <para>The dispatching knows how to call declared Objective-C methods
+      defined on the message. In many cases, all methods have the same
+      foreign type signature, and the dispatching function merely
+      passes any arguments that it receives to a function that does an
+      Objective-C message send with the indicated foreign argument and return
+      types. In other cases, where different Objective-C messages have
+      different type signatures, the dispatching function tries to
+      choose a function that handles the right type signature based on
+      the class of the dispatching function's first argument.</para>
+	
+    <para>If new information about Objective-C methods is introduced
+      (e.g., by using additional interface files or as Objective-C
+      methods are defined from lisp), the dispatch function is
+      reinitialized to recognize newly-introduced foreign type
+      signatures.</para>
+
+    <para>The argument and result coercion that the bridge has
+      tradionally supported is supported by the new mechanism (e.g.,
+      :&lt;BOOL&gt; arguments can be specified as lisp booleans and :&lt;BOOL&gt;
+      results are returned as lisp boolean values, and an argument
+      value of NIL is coerced to a null pointer if the corresponding
+      argument type is :ID.</para>
+
+    <para>Some Objective-C methods accept variable numbers of
+      arguments; the foreign types of non-required arguments are
+      determined by the lisp types of those arguments (e.g., integers
+      are passed as integers, floats as floats, pointers as pointers,
+      record types by reference.)</para>
+
+    <para>Examples:</para>
+
+    <programlisting>
+      ;;; #/alloc is a known message.
+      ? #'#/alloc
+      #&lt;OBJC-DISPATCH-FUNCTION NEXTSTEP-FUNCTIONS:|alloc| #x300040E94EBF&gt;
+      ;;; Sadly, #/foo is not ...
+      ? #'#/foo
+      &gt; Error: Undefined function: NEXTSTEP-FUNCTIONS:|foo|
+
+      ;;; We can send an "init" message to a newly-allocated instance of
+      ;;; "NSObject" by:
+
+      (send (send ns:ns-object 'alloc) 'init)
+
+      ;;; or by
+
+      (#/init (#/alloc ns:ns-object))
+    </programlisting>
+
+    <para>Objective-C methods that "return" structures return them
+      as garbage-collectable pointers when called via dispatch
+      functions.  For example, if "my-window" is an NS:NS-WINDOW
+      instance, then</para>
+
+    <programlisting>
+      (#/frame my-window)
+    </programlisting>
+
+    <para>returns a garbage-collectable pointer to a structure that
+      describes that window's frame rectangle. This convention means
+      that there's no need to use SLET or special structure-returning
+      message send syntax; keep in mind, though, that #_malloc,
+      #_free, and the GC are all involved in the creation and eventual
+      destruction of structure-typed return values. In some programs
+      these operations may have an impact on performance.</para>
+
+  </refsect1>
+</refentry>
+
+<refentry id="rm_sharpsign-greaterthan">
+  <indexterm zone="rm_sharpsign-greaterthan">
+    <primary>#&gt;</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>#&gt;</refname>
+    <refpurpose></refpurpose>
+    <refclass>Reader Macro</refclass>
+  </refnamediv>
+  
+  <refsect1>
+    <title>Description</title>
+    
+    <para>In Clozure CL 1.2 and later, the #&gt; reader macro reads
+      the following text as a keyword, preserving the case of the
+      text. For example:</para>
+
+    <programlisting>
+      CL-USER&gt; #&gt;FooBar
+      :&lt;F&gt;OO&lt;B&gt;AR
+    </programlisting>
+
+    <para>The resulting keyword can be used as the name of foreign
+      types, records, and accessors.</para>
+    
+  </refsect1>
+</refentry>
+
 
       <refentry id="f_use-interface-dir">
 	<indexterm zone="f_use-interface-dir">
