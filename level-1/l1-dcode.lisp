@@ -123,8 +123,21 @@
                            (or (logbitp $lfbits-keys-bit newbits)
                                (logbitp $lfbits-rest-bit newbits)
                                (logbitp $lfbits-restv-bit newbits))))
-            (error "New lambda list ~s of generic function ~s is not
-congruent with lambda lists of existing methods." lambda-list gf)))
+            (cerror (format nil
+                            "Remove ~d method~:p from the generic-function and ~
+                             change its lambda list."
+                            (length (%gf-methods gf)))
+                    "New lambda list of generic function ~s is not congruent ~
+                     with lambda lists of existing methods.~%~
+                     Generic-function's   : ~s~%~
+                     Method's lambda-list : ~s~%"
+                    gf lambda-list (%method-lambda-list (car methods)))
+            (loop
+               (let ((methods (%gf-methods gf)))
+                 (if methods
+                     (remove-method gf (car methods))
+                     (return))))
+            (%set-defgeneric-keys gf nil)))
         (when lambda-list-p
           (setf (%gf-%lambda-list gf) lambda-list
                 (%gf-dispatch-table-keyvect dt) keyvect))

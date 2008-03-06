@@ -1228,7 +1228,9 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
               (when (eq name (%class.name class))
                 (return class)))))
         (when (or errorp (not (symbolp name)))
-          (error "Class named ~S not found." name)))))
+          (cerror "Try finding the class again"
+                  "Class named ~S not found." name)
+          (find-class name errorp environment)))))
 
 (defun set-find-class (name class)
   (clear-type-cache)
@@ -2349,9 +2351,12 @@ to replace that class with ~s" name old-class new-class)
 (defmethod find-method ((generic-function standard-generic-function)
                         method-qualifiers specializers &optional (errorp t))
   (dolist (m (%gf-methods generic-function)
-	   (if errorp
-	     (error "~s has no method for ~s ~s"
-		    generic-function method-qualifiers specializers)))
+	   (when errorp
+             (cerror "Try finding the method again"
+                     "~s has no method for ~s ~s"
+                     generic-function method-qualifiers specializers)
+             (find-method generic-function method-qualifiers specializers
+                          errorp)))
     (flet ((err ()
 	     (error "Wrong number of specializers: ~s" specializers)))
       (let ((ss (%method-specializers m))
@@ -2597,14 +2602,30 @@ to replace that class with ~s" name old-class new-class)
   (let* ((class (class-of instance))
 	   (slotd (find-slotd slot-name (%class-slots class))))
       (if slotd
-	(slot-value-using-class class instance slotd)
-	(values (slot-missing class instance slot-name 'slot-value)))))
+       (slot-value-using-class class instance slotd)
+       (restart-case
+           (values (slot-missing class instance slot-name 'slot-value))
+         (continue ()
+           :report "Try accessing the slot again"
+           (slot-value instance slot-name))
+         (use-value (value)
+           :report "Return a value"
+           :interactive (lambda ()
+                          (format *query-io* "~&Value to use: ")
+                          (list (read *query-io*)))
+           value)))))
     
 
 
 (defmethod slot-unbound (class instance slot-name)
   (declare (ignore class))
-  (error 'unbound-slot :name slot-name :instance instance))
+  (restart-case (error 'unbound-slot :name slot-name :instance instance)
+    (use-value (value)
+      :report "Return a value"
+      :interactive (lambda ()
+                     (format *query-io* "~&Value to use: ")
+                     (list (read *query-io*)))
+      value)))
 
 
 
@@ -3278,7 +3299,9 @@ to replace that class with ~s" name old-class new-class)
   (%add-standard-method-to-standard-gf generic-function method))
 
 (defmethod no-applicable-method (gf &rest args)
-  (error "No applicable method for args:~% ~s~% to ~s" args gf))
+  (cerror "Try calling it again"
+          "No applicable method for args:~% ~s~% to ~s" args gf)
+  (apply #'no-applicable-method gf args))
 
 
 (defmethod no-applicable-primary-method (gf methods)
