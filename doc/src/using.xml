@@ -23,4 +23,131 @@
       the standard.</para>
   </sect1>
 
+  <sect1 id="Trace"><title>Trace</title>
+
+  <para>
+    &CCL;'s tracing facility is invoked by an extended version of the Common Lisp
+    <varname>trace</varname> macro.  Extensions allow tracing of methods, as well as finer control
+    over tracing actions.
+  </para>
+
+
+  <para>
+  <command><varname>TRACE</varname> {<replaceable>spec</replaceable> |
+  (<replaceable>spec</replaceable> {<replaceable>option-key</replaceable>
+  <replaceable>value</replaceable>}*)}* [Macro]</command>
+  </para>
+
+  <para>
+    The <varname>trace</varname> macro encapsulates the function named by
+    <replaceable>spec</replaceable>, causing trace actions to take place on entry and exit from the
+    function.  The default actions print a message on function entry and exit.
+  </para>
+
+  <para>
+    Invoking <varname>(trace)</varname> without arguments returns a list of functions being traced.
+  </para>
+      
+  <para>
+    A <replaceable>spec</replaceable> is either a symbol that is the name of a function, or an
+    expression of the form <varname>(setf <replaceable>symbol</replaceable>)</varname>, or a
+    specific method of a generic function in the form <varname>(:method
+    <replaceable>gf-name</replaceable> {<replaceable>qualifier</replaceable>}* (
+    {<replaceable>specializer</replaceable>}* ) )</varname>, where a
+    <replaceable>specializer</replaceable> can be the name of a class or an <varname>EQL</varname>
+    specializer.
+  </para>
+
+   <para>By default, whenever a traced function is entered or exited, a short message is printed
+   on <varname>*trace-output*</varname> showing the arguments on entry and values on exit.
+   The following <replaceable>option-keys</replaceable> can be used to modify this behavior:</para>
+
+   <variablelist>
+     <varlistentry>
+       <term><varname>:before</varname></term>
+       <listitem>
+	 <para>specifies the action to be taken just before the traced function is entered.  The
+	 value is one of:</para>
+	 <variablelist>
+	   <varlistentry>
+	     <term><varname>:print</varname></term>
+	     <listitem>
+	       <para>The default, prints a short indented message showing the function name and the invocation arguments </para>
+	     </listitem>
+	   </varlistentry>
+	   <varlistentry>
+	     <term><varname>:break</varname></term>
+	     <listitem>
+	     <para>Enters the debugger after printing the standard function entry message</para>
+	     </listitem>
+	   </varlistentry>
+	   <varlistentry>
+	     <term><replaceable>function</replaceable></term>
+	     <listitem>
+	       <para>Any other value is interpreted as a function to
+	       call on entry instead of printing the standard entry
+	       message.  It is called with its first argument being
+	       the name of the function being traced, the
+	       remaining arguments being all the arguments to the function
+	       being traced, and ccl:*trace-level* bound to the current
+	       nesting level of trace actions.
+	       </para>
+	     </listitem>
+	   </varlistentry>
+	 </variablelist>
+       </listitem>
+     </varlistentry>
+
+     <varlistentry>
+       <term><varname>:after</varname></term>
+       <listitem>
+	 <para>specifies the action to be taken just after the traced function exits.  The
+	 value is one of:</para>
+	 <variablelist>
+	   <varlistentry>
+	     <term><varname>:print</varname></term>
+	     <listitem>
+	       <para>The default, prints a short indented message showing the function name and the
+	       returned values </para>
+	     </listitem>
+	   </varlistentry>
+	   <varlistentry>
+	     <term><varname>:break</varname></term>
+	     <listitem>
+	     <para>Enters the debugger after printing the standard function exit message</para>
+	     </listitem>
+	   </varlistentry>
+	   <varlistentry>
+	     <term><replaceable>function</replaceable></term>
+	     <listitem>
+	       <para>Any other value is interpreted as a function to
+	       call on exit instead of printing the standard exit
+	       message.  It is called with its first argument being
+	       the name of the function being traced, the
+	       remaining arguments being all the values returned by the function
+	       being traced, and ccl:*trace-level* bound to the current
+	       nesting level of trace actions.
+	       </para>
+	     </listitem>
+	   </varlistentry>
+	 </variablelist>
+       </listitem>
+     </varlistentry>
+
+
+     <varlistentry>
+       <term><varname>:backtrace</varname></term>
+       <listitem>
+	 <para>If true, requests that a stack backtrace (in brief format) be printed whenever the function is
+	 invoked. The value can be an integer, in which case it is the maximum number of frames to
+	 print. Otherwise, all frames are shown.
+	 </para>
+       </listitem>
+     </varlistentry>
+
+
+
+   </variablelist>
+  </sect1>
+
 </chapter>
