@@ -150,4 +150,24 @@
    </variablelist>
   </sect1>
 
+  <sect1 id="Strings-and-Pathanmes"><title>Strings and Pathnames</title>
+    <sect2>
+      <title>OS X (Darwin)</title>
+
+      <para>Clozure CL assumes that pathname strings are decomposed UTF-8.</para>
+    </sect2>
+    <sect2>
+      <title>Linux</title>
+
+      <para>Pathname strings are treated as null-terminated strings
+        encoded according to the current locale.</para>
+    </sect2>
+    <sect2>
+      <title>FreeBSD</title>
+
+      <para>Pathname strings are treated as null-terminated strings
+        encoded according to the current locale; a future release may
+        change this convention to use UTF-8.</para>
+    </sect2>
+  </sect1>
 </chapter>

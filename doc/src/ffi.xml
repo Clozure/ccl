@@ -1153,6 +1153,76 @@ keywords:</para>
 	  </variablelist>
 	</sect3>
 
+<sect3>
+  <title>with-encoded-cstrs [Macro]</title>
+
+  <variablelist>
+	<varlistentry>
+	  <term>Syntax</term>
+
+	  <listitem>
+		<para>with-encoded-cstrs ENCODING-NAME (varI stringI)* &#38;body body</para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term>Description</term>
+
+	  <listitem>
+		<para>Executes body in an environment in which each varI is
+		  bound to a macptr which encapsulates the %address of a
+		  stack-allocated region of into which each stringI (and a
+		  trailing NUL character) has been copied. Returns whatever
+		  value(s) body returns.</para>
+
+        <para>ENCODING-NAME is a keyword constant that names a
+          character encoding. Each foreign string is encoded in the
+          named encoding. Each foreign string has dynamic
+          extent.</para>
+
+        <para>WITH-ENCODED-CSTRS does not automatically prepend
+        bte-order marks to its output; the size of the terminating
+        #\NUL character depends on the number of octets per code unit
+        in the encoding.</para>
+
+        <para>The expression</para>
+
+        <programlisting>(ccl:with-cstrs ((x "x")) (#_puts x))</programlisting>
+
+        <para>is functionally equivalent to</para>
+
+        <programlisting>(ccl:with-encoded-cstrs :iso-8859-1 ((x "x")) (#_puts x))</programlisting>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term>Arguments</term>
+
+	  <listitem>
+		<para>&#x00A0;</para>
+
+		<variablelist>
+		  <varlistentry>
+		    <term>varI</term>
+
+		    <listitem>
+		      <para>A symbol (variable name)</para>
+		    </listitem>
+		  </varlistentry>
+
+		  <varlistentry>
+		    <term>stringI</term>
+
+		    <listitem>
+		      <para>An expression which should evaluate to a lisp string</para>
+		    </listitem>
+		  </varlistentry>
+		</variablelist>
+	  </listitem>
+	</varlistentry>
+  </variablelist>
+</sect3>
+
 	<sect3>
 	  <title>%get-cstring [Function]</title>
 

@@ -50,6 +50,7 @@ doc/src/ccl-documentation.xml -text
 doc/src/external-process.xml -text
 doc/src/ffi.xml -text
 doc/src/gc.xml -text
+doc/src/ide.xml -text
 doc/src/implementation.xml -text
 doc/src/install.xml -text
 doc/src/makehtml -text

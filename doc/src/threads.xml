@@ -164,43 +164,70 @@
       </itemizedlist>
     </sect1>
 
-    <sect1 id="Implementation-Decisions-and-Open-Questions">
-      <title>Implementation Decisions and Open Questions</title>
-      <para> As of August 2003:</para>
-      <itemizedlist>
-        <listitem>
-	  <para>It's not clear that exposing
-	  PROCESS-SUSPEND/PROCESS-RESUME is a good idea: it's not clear
-	  that they offer ways to win, and it's clear that they offer
-	  ways to lose.</para>
-	</listitem>
-        <listitem>
-	  <para>It has traditionally been possible to reset and enable
-	  a process that's "exhausted" . (As used here, the
-	  term"exhausted" means that the process's initial function
-	  hasrun and returned and the underlying native thread has
-	  beendeallocated.) One of the principle uses of PROCESS-RESET
-	  is to "recycle" threads; enabling an exhausted process
-	  involves creating a new native thread (and stacks and
-	  synchronization objects and ...),and this is the sort of
-	  overhead that such a recycling scheme is seeking to avoid. It
-	  might be worth trying to tighten things up and declare that
-	  it's an error to apply PROCESS-ENABLE to an exhausted thread
-	  (and to make PROCESS-ENABLE detect this error.)</para>
-	</listitem>
-        <listitem>
-	  <para>When native threads that aren't created by &CCL;
-	  first call into lisp, a "foreign process" is created, and
-	  that process is given its own set of initial bindings and set
-	  up to look mostly like a process that had been created by
-	  MAKE-PROCESS. The life cycle of a foreign process is
-	  certainly different from that of a lisp-created one: it
-	  doesn't make sense to reset/preset/enable a foreign process,
-	  and attempts to perform these operations should be
-	  detectedand treated as errors.</para>
-	</listitem>
-      </itemizedlist>
-    </sect1>
+
+<sect1 id="Implementation-Decisions-and-Open-Questions">
+  <title>Implementation Decisions and Open Questions</title>
+  <sect2>
+    <title>Thread Stack Sizes</title>
+    <para>When you use MAKE-PROCESS to create a thread, you can
+      specify a stack size. &CCL; does not impose a limit on the stack
+      size you choose, but there is some evidence that choosing a
+      stack size larger than the operating system's limit can cause
+      excessive paging activity, at least on some operating
+      systems.</para>
+    <para>The maximum stack size is operating-system-dependent. You
+      can use shell commands to determine what it is on your
+      platform. In bash, use "ulimit -s -H" to find the limit; in
+      tcsh, use "limit -h s".</para>
+    <para>This issue does not affect programs that create threads
+      using the default stack size, which you can do either by
+      specifying no value for the :stack-size argument to
+      MAKE-PROCESS, or by specifying the value
+      CCL::*default-control-stack-size*.</para>
+    <para>If your program creates threads with a specified stack size,
+    and that size is larger than the OS-specified limit, you may want
+    to consider reducing the stack size in order to avoid possible
+    excessive paging activity.</para>
+  </sect2>
+  <sect2>
+    <title> As of August 2003:</title>
+    <itemizedlist>
+      <listitem>
+	    <para>It's not clear that exposing
+	      PROCESS-SUSPEND/PROCESS-RESUME is a good idea: it's not clear
+	      that they offer ways to win, and it's clear that they offer
+	      ways to lose.</para>
+	  </listitem>
+      <listitem>
+	    <para>It has traditionally been possible to reset and enable
+	      a process that's "exhausted" . (As used here, the
+	      term"exhausted" means that the process's initial function
+	      hasrun and returned and the underlying native thread has
+	      beendeallocated.) One of the principle uses of PROCESS-RESET
+	      is to "recycle" threads; enabling an exhausted process
+	      involves creating a new native thread (and stacks and
+	      synchronization objects and ...),and this is the sort of
+	      overhead that such a recycling scheme is seeking to avoid. It
+	      might be worth trying to tighten things up and declare that
+	      it's an error to apply PROCESS-ENABLE to an exhausted thread
+	      (and to make PROCESS-ENABLE detect this error.)</para>
+	  </listitem>
+      <listitem>
+	    <para>When native threads that aren't created by &CCL;
+	      first call into lisp, a "foreign process" is created, and
+	      that process is given its own set of initial bindings and set
+	      up to look mostly like a process that had been created by
+	      MAKE-PROCESS. The life cycle of a foreign process is
+	      certainly different from that of a lisp-created one: it
+	      doesn't make sense to reset/preset/enable a foreign process,
+	      and attempts to perform these operations should be
+	      detectedand treated as errors.</para>
+	  </listitem>
+    </itemizedlist>
+  </sect2>
+</sect1>
+
+
 
     <sect1 id="Porting-Code-from-the-Old-Thread-Model">
       <title>Porting Code from the Old Thread Model</title>

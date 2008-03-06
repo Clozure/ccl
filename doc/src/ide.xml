@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
+          "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd"[
+          <!ENTITY rest "<varname>&amp;rest</varname>">
+          <!ENTITY key "<varname>&amp;key</varname>">
+          <!ENTITY optional "<varname>&amp;optional</varname>">
+          <!ENTITY body "<varname>&amp;body</varname>">
+          <!ENTITY aux "<varname>&amp;aux</varname>">
+          <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+          <!ENTITY CCL "<literal>CCL</literal>">
+          ]>
+
+<chapter><title>The &CCL; IDE</title>
+  
+  <sect1><title>Introduction</title>
+    
+    <para>Clozure CL ships with the source code for a simple Cocoa
+      integrated development environment that runs on Mac OS X. This
+      chapter describes how to build and use that environment,
+      referred to hereafter simply as "the IDE".</para>
+
+    <para>The IDE is still in a preliminary state, and may lack many
+    features you would expect to find in a polished Cocoa
+    application. It does, however, provide a text editor and listener
+    windows, an inspector for Lisp data structures, and a means of
+    easily building a Cocoa application in Lisp. In addition, its
+    source code provides an example of a fairly complex Cocoa
+    application written in Lisp.</para>
+
+    <para>A more rudimentary version of the Clozure CL IDE has been
+      included for several years with the distribution. The current
+      version of the IDE has seen the addition of numerous features
+      and many bugfixes. Although it's by no means a finished product,
+      we hope it will prove more useful than previous versions, and we
+      plan additional work on the IDE for future releases.</para>
+  </sect1>
+
+  <sect1><title>Building the IDE</title>
+    
+    <para>Building the Clozure CL IDE is now a very simple
+    process.</para>
+
+    <orderedlist>
+      <listitem>
+        <para>In a shell session, cd to the ccl directory.</para>
+      </listitem>
+      <listitem>
+        <para>Run ccl from the shell. The easiest way to do this is
+        generally to execute the openmcl or openmcl64 command.</para>
+      </listitem>
+      <listitem>
+        <para>Evaluate the form <code language="lisp">(require :cocoa-application)</code></para>
+      </listitem>
+    </orderedlist>
+
+    <para>Clozure CL compiles and loads the various subsystems that
+      make up the IDE, then constructs a Cocoa application bundle
+      named "Clozure CL.app" and saves the Lisp image into
+      it. Normally &CCL; creates the application bundle in the root
+      directory of the &CCL; distribution.</para>
+
+  </sect1>
+
+  <sect1><title>Running the IDE</title>
+    
+    <para>After it has been built, you can run the "Clozure CL.app"
+      application normally, by double-clicking its icon.</para>
+  </sect1>
+
+
+
+</chapter>
