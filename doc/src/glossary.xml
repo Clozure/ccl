@@ -15,6 +15,27 @@
 	<title>Glossary of Terms</title>
   </glossaryinfo>
 
+  <glossdiv id="A">
+	<!-- ******************** A ********************  -->
+	<title>A</title>
+
+	<glossentry id="application_bundle">
+	  <glossterm>application bundle</glossterm>
+
+	  <glossdef>
+
+		<para>A specially-structured directory that Mac OS X
+		recognizes as a
+		launchable <glossterm linkend="Cocoa">Cocoa</glossterm>
+		application. Graphical applications on Mac OS X are
+		represented as application bundles.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
   <glossdiv id="C">
 	<!-- ******************** C ********************  -->
 	<title>C</title>
@@ -29,7 +50,17 @@
 		X.</para>
 
 	  </glossdef>
+	</glossentry>
+    
+	<glossentry id="creator_code">
+	  <glossterm>creator code</glossterm>
 
+	  <glossdef>
+
+		<para>A four-character identifier used in Mac OS X to uniquely
+		identify an application.</para>
+
+	  </glossdef>
 	</glossentry>
     
   </glossdiv>
@@ -72,6 +103,20 @@
 
 	</glossentry>
     
+	<glossentry id="InterfaceBuilder">
+	  <glossterm>InterfaceBuilder</glossterm>
+
+	  <glossdef>
+
+		<para>An application supplied by Apple with their developer
+		tools that can be used to interactively build user-interface
+		elements for <glossterm linkend="Cocoa">Cocoa</glossterm>
+		applications.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
   </glossdiv>
 
   <glossdiv id="L">
@@ -94,7 +139,33 @@
     
   </glossdiv>
 
+  <glossdiv id="N">
+	<!-- ******************** N ********************  -->
+	<title>N</title>
+
+	<glossentry id="nibfile">
+	  <glossterm>nibfile</glossterm>
+
+	  <glossdef>
+
+		<para>A data file created by
+		Apple's <glossterm linkend="InterfaceBuilder">InterfaceBuilder</glossterm>
+		application, which contains archived Objective-C objects that
+		define user-interface elements for
+		a <glossterm linkend="Cocoa">Cocoa</glossterm>
+		application. Under Mac OS
+		X, <glossterm linkend="Cocoa">Cocoa</glossterm> applications
+		typically create their user interface elements by reading
+		nibfiles and unarchiving the objects in them.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
   <glossdiv id="R">
+
 	<!-- ******************** R ********************  -->
 	<title>R</title>
 

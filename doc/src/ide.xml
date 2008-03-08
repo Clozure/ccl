@@ -20,12 +20,12 @@
       referred to hereafter simply as "the IDE".</para>
 
     <para>The IDE is still in a preliminary state, and may lack many
-    features you would expect to find in a polished Cocoa
-    application. It does, however, provide a text editor and listener
-    windows, an inspector for Lisp data structures, and a means of
-    easily building a Cocoa application in Lisp. In addition, its
-    source code provides an example of a fairly complex Cocoa
-    application written in Lisp.</para>
+      features you would expect to find in a polished Cocoa
+      application. It does, however, provide a text editor and listener
+      windows, an inspector for Lisp data structures, and a means of
+      easily building a Cocoa application in Lisp. In addition, its
+      source code provides an example of a fairly complex Cocoa
+      application written in Lisp.</para>
 
     <para>A more rudimentary version of the Clozure CL IDE has been
       included for several years with the distribution. The current
@@ -38,7 +38,7 @@
   <sect1><title>Building the IDE</title>
     
     <para>Building the Clozure CL IDE is now a very simple
-    process.</para>
+      process.</para>
 
     <orderedlist>
       <listitem>
@@ -46,7 +46,7 @@
       </listitem>
       <listitem>
         <para>Run ccl from the shell. The easiest way to do this is
-        generally to execute the openmcl or openmcl64 command.</para>
+          generally to execute the openmcl or openmcl64 command.</para>
       </listitem>
       <listitem>
         <para>Evaluate the form <code language="lisp">(require :cocoa-application)</code></para>
@@ -54,21 +54,21 @@
     </orderedlist>
 
     <para>For example, assuming that the &CCL; distribution is
-    installed in "/usr/local/ccl", the following sequence of shell
-    interactions builds the IDE:</para>
+      installed in "/usr/local/ccl", the following sequence of shell
+      interactions builds the IDE:</para>
 
     <programlisting>
-oshirion:ccl mikel$ openmcl64
-Welcome to Clozure Common Lisp Version 1.2-r8516MS  (DarwinX8664)!
-? (require :cocoa-application)
-;Loading #P"ccl:cocoa-ide;fasls;cocoa-utils.dx64fsl.newest"...
-;Loading #P"ccl:cocoa-ide;fasls;cocoa-defaults.dx64fsl.newest"...
+      oshirion:ccl mikel$ openmcl64
+      Welcome to Clozure Common Lisp Version 1.2-r8516MS  (DarwinX8664)!
+      ? (require :cocoa-application)
+      ;Loading #P"ccl:cocoa-ide;fasls;cocoa-utils.dx64fsl.newest"...
+      ;Loading #P"ccl:cocoa-ide;fasls;cocoa-defaults.dx64fsl.newest"...
 
-  [...many lines of "Compiling" and "Loading" omitted...]
+      [...many lines of "Compiling" and "Loading" omitted...]
 
-Saving application to /usr/local/ccl/Clozure CL.app/
+      Saving application to /usr/local/ccl/Clozure CL.app/
 
-oshirion:ccl mikel$ 
+      oshirion:ccl mikel$ 
 
     </programlisting>
 
@@ -86,7 +86,7 @@ oshirion:ccl mikel$
       application normally, by double-clicking its icon. When
       launched, the IDE initially displays a
       single <glossterm linkend="listener_window">listener
-      window</glossterm> that you can use to interact with Lisp. You
+        window</glossterm> that you can use to interact with Lisp. You
       can type Lisp expressions for evaluation at the prompt in the
       listener window. You can also
       use <glossterm linkend="hemlock">Hemlock</glossterm> editing
@@ -108,68 +108,68 @@ oshirion:ccl mikel$
         the File menu.</para>
 
       <para>Editor windows
-      implement <glossterm linkend="hemlock">Hemlock</glossterm>
-      editing commands. You can use all the editing and customization
-      features of Hemlock within any editor window (including listener
-      windows).</para>
+        implement <glossterm linkend="hemlock">Hemlock</glossterm>
+        editing commands. You can use all the editing and customization
+        features of Hemlock within any editor window (including listener
+        windows).</para>
     </sect2>
     
     <sect2>
       <title>The Lisp Menu</title>
       <para>The Lisp menu provides several commands for interacting
-      with the running Lisp session, in addition to the ways you can
-      interact with it by evaluating expressions. You can evaluate a
-      selected range of text in any editing buffer. You can compile
-      and load the contents of editor windows (please note that in the
-      current version, &CCL; compiles and loads the contents of the
-      file associated with an editor window; that means that if you
-      try to load or compile a window that has not been saved to a
-      file, the result is an error).</para>
+        with the running Lisp session, in addition to the ways you can
+        interact with it by evaluating expressions. You can evaluate a
+        selected range of text in any editing buffer. You can compile
+        and load the contents of editor windows (please note that in the
+        current version, &CCL; compiles and loads the contents of the
+        file associated with an editor window; that means that if you
+        try to load or compile a window that has not been saved to a
+        file, the result is an error).</para>
 
       <para>You can interrupt computations, trigger breaks, and select
-      restarts from the Lisp menu. You can also display a backtrace or
-      open the <link linkend="section_inspector_window">Inspector
-      window</link>.</para>
+        restarts from the Lisp menu. You can also display a backtrace or
+        open the <link linkend="section_inspector_window">Inspector
+          window</link>.</para>
     </sect2>
 
     <sect2>
       <title>The Tools Menu</title>
       <para>The tools menu provides access to the Apropos and
-      Processes windows. The Apropos window searches the running Lisp
-      image for symbols that match any text you enter. You can use the
-      Apropos window to quickly find function names and other useful
-      symbols. The Processes window lists all threads running in the
-      current Lisp session. If you double-click a process entry, &CCL;
-      opens an <link linkend="section_inspector_window">Inspector
-      window</link> on that process.</para>
+        Processes windows. The Apropos window searches the running Lisp
+        image for symbols that match any text you enter. You can use the
+        Apropos window to quickly find function names and other useful
+        symbols. The Processes window lists all threads running in the
+        current Lisp session. If you double-click a process entry, &CCL;
+        opens an <link linkend="section_inspector_window">Inspector
+          window</link> on that process.</para>
     </sect2>
 
     <sect2>
       <title>The Inspector Window</title>
       <anchor id="section_inspector_window"/>
       <para>The Inspector window displays information about a Lisp
-      value. The information displayed varies from the very simple, in
-      the case of a simple data value such as a character, to the
-      complex, in the case of structured data such as lists or CLOS
-      objects. The lefthand column of the window's display shows the
-      names of the object's attributes; the righthand column shows the
-      values associated with those attributes. You can inspect the
-      values in the righthand column by double-clicking them.</para>
+        value. The information displayed varies from the very simple, in
+        the case of a simple data value such as a character, to the
+        complex, in the case of structured data such as lists or CLOS
+        objects. The lefthand column of the window's display shows the
+        names of the object's attributes; the righthand column shows the
+        values associated with those attributes. You can inspect the
+        values in the righthand column by double-clicking them.</para>
 
       <para>Inspecting a value in the righthand column changes the
-      Inspector window to display the double-clicked object. You can
-      quickly navigate the fields of structured data this way,
-      inspecting objects and the objects that they refer
-      to. Navigation buttons at the top left of the window enable you
-      to retrace your steps, backing up to return to previously-viewed
-      objects, and going forward again to objects you navigated into
-      previously.</para>
+        Inspector window to display the double-clicked object. You can
+        quickly navigate the fields of structured data this way,
+        inspecting objects and the objects that they refer
+        to. Navigation buttons at the top left of the window enable you
+        to retrace your steps, backing up to return to previously-viewed
+        objects, and going forward again to objects you navigated into
+        previously.</para>
 
       <para>You can change the contents of a structured object by
-      evaluating expressions in a listener window. The refresh button
-      (marked with a curved arrow) updates the display of the
-      Inspector window, enabling you to quickly see the results of
-      changing a data structure.</para>
+        evaluating expressions in a listener window. The refresh button
+        (marked with a curved arrow) updates the display of the
+        Inspector window, enabling you to quickly see the results of
+        changing a data structure.</para>
     </sect2>
 
   </sect1>
@@ -177,24 +177,186 @@ oshirion:ccl mikel$
   <sect1><title>IDE Sources</title>
     
     <para>&CCL; builds the IDE from sources in the "objc-bridge" and
-    "cocoa-ide" directories in the &CCL; distribution. The IDE as a
-    whole is a relatively complicated application, and is probably not
-    the best place to look when you are first trying to understand how
-    to build Cocoa applications. For that, you might benefit more from
-    the examples in the "examples/cocoa/" directory. Once you are
-    familiar with those examples, though, and have some experience
-    building your own application features using Cocoa and the
-    Objective-C bridge, you might browse through the IDE sources to
-    see how it implements its features.</para>
+      "cocoa-ide" directories in the &CCL; distribution. The IDE as a
+      whole is a relatively complicated application, and is probably not
+      the best place to look when you are first trying to understand how
+      to build Cocoa applications. For that, you might benefit more from
+      the examples in the "examples/cocoa/" directory. Once you are
+      familiar with those examples, though, and have some experience
+      building your own application features using Cocoa and the
+      Objective-C bridge, you might browse through the IDE sources to
+      see how it implements its features.</para>
 
     <para>The search path for &CCL;'s <code>REQUIRE</code> feature
-    includes the "objc-bridge" and "cocoa-ide" directories. You can
-    load features defined in these directories by
-    using <code>REQUIRE</code>. For example, if you want to use the
-    Cocoa features of &CCL; from a terminal session (or from an Emacs
-    session using SLIE or ILISP), you can evaluate <code>(require
-    :cocoa)</code>.</para>
+      includes the "objc-bridge" and "cocoa-ide" directories. You can
+      load features defined in these directories by
+      using <code>REQUIRE</code>. For example, if you want to use the
+      Cocoa features of &CCL; from a terminal session (or from an Emacs
+      session using SLIE or ILISP), you can evaluate <code>(require
+        :cocoa)</code>.</para>
   </sect1>
 
+  <sect1><title>The Application Builder</title>
+    
+    <para>One important feature of the IDE currently has no Cocoa user
+      interface: the application builder. The application builder
+      constructs a
+      Cocoa <glossterm linkend="application_bundle">application
+        bundle</glossterm> that runs a Lisp image when double-clicked. You
+      can use the application builder to create Cocoa applications in
+      Lisp. These applications are exactly like Cocoa applications
+      created with XCode and Objective-C, except that they are written
+      in Lisp.</para>
+
+    <para>To make the application builder available, evaluate the
+      expression <code>(require :build-application)</code>. &CCL; loads
+      the required subsystems, if necessary.</para>
+
+    <para>
+      <command><varname>BUILD-APPLICATION</varname> <varname>&amp;key</varname>
+        (<parameter>name</parameter> <replaceable>"MyApplication"</replaceable>)
+        (<parameter>type-string</parameter> <replaceable>"APPL"</replaceable>)
+        (<parameter>creator-string</parameter> <replaceable>"OMCL"</replaceable>)
+        (<parameter>directory</parameter> <replaceable>(current-directory)</replaceable>)
+        (<parameter>nibfiles</parameter> <replaceable>NIL</replaceable>)
+        (<parameter>main-nib-name</parameter> <replaceable>NIL</replaceable>)
+        (<parameter>application-class</parameter> <replaceable>'GUI::COCOA-APPLICATION</replaceable>)
+        (<parameter>toplevel-function</parameter> <replaceable>NIL</replaceable>)
+        [Function]</command>
+    </para>
+
+    <para>
+      The <varname>build-application</varname> function constructs an
+      application bundle, populates it with the files needed to satisfy
+      Mac OS X that the bundle is a launchable application, and saves an
+      executable Lisp image to the proper subdirectory of the
+      bundle. Assuming that the saved Lisp image contains correct code,
+      a user can subsequently launch the resulting Cocoa application by
+      double-clicking its icon in the Finder, and the saved Lisp
+      environment runs.
+    </para>
+
+    <para>The keyword arguments control various aspects of application
+      bundle as <code>BUILD-APPLICATION</code> builds it.</para>
+    <variablelist>
+
+      <varlistentry>
+        <term><varname>name</varname></term>
+        <listitem>
+          <para>Specifies the application name of the
+            bundle. <code>BUILD-APPLICATION</code> creates an application
+            bundle whose name is given by this parameter, with the
+            extension ".app" appended. For example, using the default
+            value for this parameter results in a bundle named
+            "MyApplication.app".</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><varname>type-string</varname></term>
+        <listitem>
+          <para>Specifies type of bundle to create. You should normally
+            never need to change the default value, which Mac OS X uses to
+            identify application bundles.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><varname>creator-string</varname></term>
+        <listitem>
+          <para>Specifies the <glossterm linkend="creator_code">creator
+              code</glossterm>, which uniquely identifies the application
+            under Mac OS X. The default creator code is that of &CCL;. For
+            more information about reserving and assigning creator codes,
+            see
+            Apple's <ulink url="http://developer.apple.com/datatype/index.html">developer
+              page</ulink> on the topic.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><varname>directory</varname></term>
+        <listitem>
+          <para>The directory in which <code>BUILD-APPLICATION</code>
+            creates the application bundle. By default, it creates the
+            bundle in the current working directory. Unless you
+            use <code>CURRENT-DIRECTORY</code> to set the working
+            directory, the bundle may be created in some unexpected place,
+            so it's safest to specify a full pathname for this argument. A
+            typical value might be <code>"/Users/foo/Desktop/"</code>
+            (assuming, of course, that your username is "foo").</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><varname>nibfiles</varname></term>
+        <listitem>
+          <para>A list of pathnames, where each pathname identifies
+            a <glossterm linkend="nibfile">nibfile</glossterm> created
+            with
+            Apple's <glossterm linkend="InterfaceBuilder">InterfaceBuilder</glossterm>
+            application. <code>BUILD-APPLICATION</code> copies each
+            nibfile into the appropriate place in the application bundle,
+            enabling the application to load user-interface elements from
+            them as-needed. It is safest to provide full pathnames to the
+            nibfiles in the list. Each nibfile must be in ".nib" format,
+            not ".xib" format, in order that the application can load
+            it.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><varname>main-nib-name</varname></term>
+        <listitem>
+          <para>The name of
+            the <glossterm linkend="nibfile">nibfile</glossterm> to load
+            initially when launching. The user-interface defined in this
+            nibfile becomes the application's main interface. You must
+            supply the name of a suitable nibfile for this parameter, or
+            the resulting application uses the &CCL; user
+            interface.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><varname>application-class</varname></term>
+        <listitem>
+          <para>The name of the application's CLOS class. The defaut
+            value is the class provided by &CCL; for graphical
+            applications. Supply the name of your application class if you
+            implement one. If not, &CCL; uses the default class.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><varname>toplevel-function</varname></term>
+        <listitem>
+          <para>The toplevel function that runs when the application
+            launches. Normally the default value, which is &CCL;'s
+            toplevel, works well, but in some cases you may wish to
+            customize the behavior of the application's toplevel. The best
+            source of information about writing your own toplevel is the
+            &CCL; source code, especially the implementations
+            of <code>TOPLEVEL-FUNCTION</code> in
+            "ccl/level-1/l1-application.lisp"</para>
+        </listitem>
+      </varlistentry>
+
+    </variablelist>
+
+    <para>Please note that <code>BUILD-APPLICATION</code> is a work in
+    progress. It can easily build a working Cocoa application, but it
+    still has limitations that may in some cases prove
+    inconvenient. For example, in the current version it provides no
+    easy way to specify an application delegate different from the
+    default. If you find the current limitations
+    of <code>BUILD-APPLICATION</code> too restrictive, and want to rty
+    extending it for your use, you can find the source code for it
+    in "ccl/cocoa-ide/build-application.lisp".</para>
+
+    <para>For more information on how to
+    use <code>BUILD-APPLICATION</code>, see the Currency Converter
+    example in "ccl/examples/cocoa/currency-converter/".</para>
+  </sect1>
 
 </chapter>
