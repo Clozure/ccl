@@ -34,6 +34,26 @@
     
   </glossdiv>
 
+  <glossdiv id="H">
+	<!-- ******************** H ********************  -->
+	<title>H</title>
+
+	<glossentry id="hemlock">
+	  <glossterm>Hemlock</glossterm>
+
+	  <glossdef>
+
+		<para>A text editor, written in Common Lisp, similar in
+		features to Emacs. Hemlock was originally developed as part of
+		CMU Common Lisp. A portable version of Hemlock is built into
+		the &CCL; <glossterm linkend="IDE">IDE</glossterm>.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
   <glossdiv id="I">
 	<!-- ******************** I ********************  -->
 	<title>I</title>

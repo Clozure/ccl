@@ -53,6 +53,25 @@
       </listitem>
     </orderedlist>
 
+    <para>For example, assuming that the &CCL; distribution is
+    installed in "/usr/local/ccl", the following sequence of shell
+    interactions builds the IDE:</para>
+
+    <programlisting>
+oshirion:ccl mikel$ openmcl64
+Welcome to Clozure Common Lisp Version 1.2-r8516MS  (DarwinX8664)!
+? (require :cocoa-application)
+;Loading #P"ccl:cocoa-ide;fasls;cocoa-utils.dx64fsl.newest"...
+;Loading #P"ccl:cocoa-ide;fasls;cocoa-defaults.dx64fsl.newest"...
+
+  [...many lines of "Compiling" and "Loading" omitted...]
+
+Saving application to /usr/local/ccl/Clozure CL.app/
+
+oshirion:ccl mikel$ 
+
+    </programlisting>
+
     <para>Clozure CL compiles and loads the various subsystems that
       make up the IDE, then constructs a Cocoa application bundle
       named "Clozure CL.app" and saves the Lisp image into
@@ -67,10 +86,115 @@
       application normally, by double-clicking its icon. When
       launched, the IDE initially displays a
       single <glossterm linkend="listener_window">listener
-      window</glossterm> that you can use to interact with
-      Lisp.</para>
+      window</glossterm> that you can use to interact with Lisp. You
+      can type Lisp expressions for evaluation at the prompt in the
+      listener window. You can also
+      use <glossterm linkend="hemlock">Hemlock</glossterm> editing
+      commands to edit the text of expressions in the listener
+      window.</para>
+
   </sect1>
 
+  <sect1>
+    <title>IDE Features</title>
+
+    <sect2>
+      <title>Editor Windows</title>
+      <para>You can open an editor window either by choosing Open from
+        the File menu and then selecting a text file, or by choosing
+        New from the File menu. You can also evaluate the
+        expression <code>(ed)</code> in the listener window; in that
+        case &CCL; creates a new window as if you had chosen New from
+        the File menu.</para>
+
+      <para>Editor windows
+      implement <glossterm linkend="hemlock">Hemlock</glossterm>
+      editing commands. You can use all the editing and customization
+      features of Hemlock within any editor window (including listener
+      windows).</para>
+    </sect2>
+    
+    <sect2>
+      <title>The Lisp Menu</title>
+      <para>The Lisp menu provides several commands for interacting
+      with the running Lisp session, in addition to the ways you can
+      interact with it by evaluating expressions. You can evaluate a
+      selected range of text in any editing buffer. You can compile
+      and load the contents of editor windows (please note that in the
+      current version, &CCL; compiles and loads the contents of the
+      file associated with an editor window; that means that if you
+      try to load or compile a window that has not been saved to a
+      file, the result is an error).</para>
+
+      <para>You can interrupt computations, trigger breaks, and select
+      restarts from the Lisp menu. You can also display a backtrace or
+      open the <link linkend="section_inspector_window">Inspector
+      window</link>.</para>
+    </sect2>
+
+    <sect2>
+      <title>The Tools Menu</title>
+      <para>The tools menu provides access to the Apropos and
+      Processes windows. The Apropos window searches the running Lisp
+      image for symbols that match any text you enter. You can use the
+      Apropos window to quickly find function names and other useful
+      symbols. The Processes window lists all threads running in the
+      current Lisp session. If you double-click a process entry, &CCL;
+      opens an <link linkend="section_inspector_window">Inspector
+      window</link> on that process.</para>
+    </sect2>
+
+    <sect2>
+      <title>The Inspector Window</title>
+      <anchor id="section_inspector_window"/>
+      <para>The Inspector window displays information about a Lisp
+      value. The information displayed varies from the very simple, in
+      the case of a simple data value such as a character, to the
+      complex, in the case of structured data such as lists or CLOS
+      objects. The lefthand column of the window's display shows the
+      names of the object's attributes; the righthand column shows the
+      values associated with those attributes. You can inspect the
+      values in the righthand column by double-clicking them.</para>
+
+      <para>Inspecting a value in the righthand column changes the
+      Inspector window to display the double-clicked object. You can
+      quickly navigate the fields of structured data this way,
+      inspecting objects and the objects that they refer
+      to. Navigation buttons at the top left of the window enable you
+      to retrace your steps, backing up to return to previously-viewed
+      objects, and going forward again to objects you navigated into
+      previously.</para>
+
+      <para>You can change the contents of a structured object by
+      evaluating expressions in a listener window. The refresh button
+      (marked with a curved arrow) updates the display of the
+      Inspector window, enabling you to quickly see the results of
+      changing a data structure.</para>
+    </sect2>
+
+  </sect1>
+  
+  <sect1><title>IDE Sources</title>
+    
+    <para>&CCL; builds the IDE from sources in the "objc-bridge" and
+    "cocoa-ide" directories in the &CCL; distribution. The IDE as a
+    whole is a relatively complicated application, and is probably not
+    the best place to look when you are first trying to understand how
+    to build Cocoa applications. For that, you might benefit more from
+    the examples in the "examples/cocoa/" directory. Once you are
+    familiar with those examples, though, and have some experience
+    building your own application features using Cocoa and the
+    Objective-C bridge, you might browse through the IDE sources to
+    see how it implements its features.</para>
+
+    <para>The search path for &CCL;'s <code>REQUIRE</code> feature
+    includes the "objc-bridge" and "cocoa-ide" directories. You can
+    load features defined in these directories by
+    using <code>REQUIRE</code>. For example, if you want to use the
+    Cocoa features of &CCL; from a terminal session (or from an Emacs
+    session using SLIE or ILISP), you can evaluate <code>(require
+    :cocoa)</code>.</para>
+  </sect1>
 
 
 </chapter>
