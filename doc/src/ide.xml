@@ -64,7 +64,11 @@
   <sect1><title>Running the IDE</title>
     
     <para>After it has been built, you can run the "Clozure CL.app"
-      application normally, by double-clicking its icon.</para>
+      application normally, by double-clicking its icon. When
+      launched, the IDE initially displays a
+      single <glossterm linkend="listener_window">listener
+      window</glossterm> that you can use to interact with
+      Lisp.</para>
   </sect1>
 
 

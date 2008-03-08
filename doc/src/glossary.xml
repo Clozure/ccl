@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
+          "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd"[
+          <!ENTITY rest "<varname>&amp;rest</varname>">
+          <!ENTITY key "<varname>&amp;key</varname>">
+          <!ENTITY optional "<varname>&amp;optional</varname>">
+          <!ENTITY body "<varname>&amp;body</varname>">
+          <!ENTITY aux "<varname>&amp;aux</varname>">
+          <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+          <!ENTITY CCL "<literal>CCL</literal>">
+          ]>
+
+<glossary id="glossary">
+  <glossaryinfo>
+	<title>Glossary of Terms</title>
+  </glossaryinfo>
+
+  <glossdiv id="C">
+	<!-- ******************** C ********************  -->
+	<title>C</title>
+
+	<glossentry id="Cocoa">
+	  <glossterm>Cocoa</glossterm>
+
+	  <glossdef>
+
+		<para>The standard user-interface libraries and frameworks
+		provided by Apple for development of applications on Mac OS
+		X.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
+  <glossdiv id="I">
+	<!-- ******************** I ********************  -->
+	<title>I</title>
+
+	<glossentry id="IDE">
+	  <glossterm>IDE</glossterm>
+
+	  <glossdef>
+
+		<para>"Integrated Development Environment". In the context of
+		&CCL;, "the IDE" refers to the experimental <glossterm linkend="Cocoa">Cocoa</glossterm>
+		windowing development environment provided in source form with
+		&CCL; distributions.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
+  <glossdiv id="L">
+	<!-- ******************** L ********************  -->
+	<title>L</title>
+
+	<glossentry id="listener_window">
+	  <glossterm>listener window</glossterm>
+
+	  <glossdef>
+
+		<para>In the <glossterm linkend="IDE">IDE</glossterm>,
+		a <glossterm linkend="Cocoa">Cocoa</glossterm>
+		window that contains a pseudo-terminal session that
+		communicates with a Lisp <glossterm linkend="REPL">REPL</glossterm>.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
+  <glossdiv id="R">
+	<!-- ******************** R ********************  -->
+	<title>R</title>
+
+	<glossentry id="REPL">
+	  <glossterm>REPL</glossterm>
+
+	  <glossdef>
+
+		<para>"Read-eval-print loop". The interactive shell provided
+		by &CCL; for interaction with Lisp.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
+</glossary>
+
