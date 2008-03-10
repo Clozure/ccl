@@ -213,7 +213,7 @@
       the required subsystems, if necessary.</para>
 
     <para>
-      <command><varname>BUILD-APPLICATION</varname> <varname>&amp;key</varname>
+      <command><varname>BUILD-APPLICATION</varname> <varname>&key;</varname>
         (<parameter>name</parameter> <replaceable>"MyApplication"</replaceable>)
         (<parameter>type-string</parameter> <replaceable>"APPL"</replaceable>)
         (<parameter>creator-string</parameter> <replaceable>"OMCL"</replaceable>)

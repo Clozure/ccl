@@ -244,6 +244,38 @@
 
 	</glossentry>
     
+	<glossentry id="special_variable">
+	  <glossterm>special variable</glossterm>
+
+	  <glossdef>
+
+		<para>A variable whose binding is in the dynamic
+		environment. Special variables are essentally equivalent to
+		global variables in languages other than Lisp. A special
+		variable binding is visible in any lexical environment, so
+		long as a lexical binding has not shadowed it.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+	<glossentry id="static_variable">
+	  <glossterm>static variable</glossterm>
+
+	  <glossdef>
+
+		<para>In &CCL;, a variable whose value is shared across all
+		threads, and which may not be dynamically rebound. Changing a
+		static variable's value in one thread causes all threads to
+		see the new value. Attempting to dynamically rebind the
+		variable (for instance, by using <code>LET</code>, or using
+		the variable name as a parameter in a <code>LAMBDA</code>
+		form) signals an error.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
   </glossdiv>
 
   <glossdiv id="T">
