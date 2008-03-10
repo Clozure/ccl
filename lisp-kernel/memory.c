@@ -75,7 +75,7 @@ zalloc(natural size)
 }
 
 int
-ProtectMemory(LogicalAddress addr, int nbytes)
+ProtectMemory(LogicalAddress addr, natural nbytes)
 {
   int status = mprotect(addr, nbytes, PROT_READ | PROT_EXEC);
   
@@ -87,7 +87,7 @@ ProtectMemory(LogicalAddress addr, int nbytes)
 }
 
 int
-UnProtectMemory(LogicalAddress addr, int nbytes)
+UnProtectMemory(LogicalAddress addr, natural nbytes)
 {
   return mprotect(addr, nbytes, PROT_READ|PROT_WRITE|PROT_EXEC);
 }

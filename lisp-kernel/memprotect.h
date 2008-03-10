@@ -45,10 +45,10 @@ void *mmap(void *, size_t, int, int, int, off_t);
 #endif
 
 int
-ProtectMemory(LogicalAddress, int);
+ProtectMemory(LogicalAddress, natural);
 
 int
-UnProtectMemory(LogicalAddress, int);
+UnProtectMemory(LogicalAddress, natural);
 
 typedef enum {
   kNotProtected,		/* At least not at the moment. */
