@@ -4239,7 +4239,7 @@ big-endian order."
   val)
 
 (defun (setf %little-endian-u8-ref-u32) (val u8-vector idx)
-  (declare (type (unsigned-byte 16) val)
+  (declare (type (unsigned-byte 32) val)
            (type (simple-array (unsigned-byte 8) (*)) u8-vector)
            (fixnum idx))
   (setf (aref u8-vector idx) (ldb (byte 8 0) val)
@@ -4250,7 +4250,7 @@ big-endian order."
 
 
 ;;; UTF-32/UCS-4, native byte order
-(define-character-encoding #+big-endian-target :utf-32be #-big-endian-target :utf32-le
+(define-character-encoding #+big-endian-target :utf-32be #-big-endian-target :utf32le
   #+big-endian-target
   "A 32-bit, fixed-length encoding in which all Unicode characters
 encoded in a single 32-bit word. The encoded data is implicitly big-endian;
