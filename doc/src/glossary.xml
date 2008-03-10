@@ -65,6 +65,25 @@
     
   </glossdiv>
 
+  <glossdiv id="D">
+	<!-- ******************** D ********************  -->
+	<title>D</title>
+
+	<glossentry id="displaced-array">
+	  <glossterm>displaced array</glossterm>
+
+	  <glossdef>
+
+		<para>An array with no storage of its own for elements, which
+		points to the storage of another array, called its
+		target. Reading or writing the elements of the displaced array
+		returns or changes the contents of the target.</para>
+
+	  </glossdef>
+	</glossentry>
+
+  </glossdiv>
+
   <glossdiv id="H">
 	<!-- ******************** H ********************  -->
 	<title>H</title>
@@ -139,6 +158,30 @@
     
   </glossdiv>
 
+  <glossdiv id="M">
+	<!-- ******************** M ********************  -->
+	<title>M</title>
+
+	<glossentry id="memory_mapped_file">
+	  <glossterm>memory-mapped file</glossterm>
+
+	  <glossdef>
+
+		<para>A file whose contents are accessible as a range of
+		memory addresses. Some operating systems support this feature,
+		in which the virtual memory subsystem arranges for a range of
+		virtual memory addresses to point to the contents of an open
+		file. Programs can then gain access to the file's contents by
+		operating on memory addresses in that range. Access to the
+		file's contents is valid only as long as the file remains
+		open.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
   <glossdiv id="N">
 	<!-- ******************** N ********************  -->
 	<title>N</title>
@@ -176,6 +219,48 @@
 
 		<para>"Read-eval-print loop". The interactive shell provided
 		by &CCL; for interaction with Lisp.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
+  <glossdiv id="S">
+
+	<!-- ******************** S ********************  -->
+	<title>S</title>
+
+	<glossentry id="s-expression">
+	  <glossterm>s-expression</glossterm>
+
+	  <glossdef>
+
+		<para>The simplest, most general element of Lisp syntax. An
+		s-expression may be an atom (such as a symbol, integer, or
+		string), or it may be a list of s-expressions.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
+  <glossdiv id="T">
+
+	<!-- ******************** T ********************  -->
+	<title>T</title>
+
+	<glossentry id="type-specifier">
+	  <glossterm>type-specifier</glossterm>
+
+	  <glossdef>
+
+		<para>An expression that denotes a type. Type specifiers may
+		be symbols (such as <code>CONS</code>
+		and <code>STRING</code>), or they may be more complex
+		<glossterm linkend="s-expression">S-expressions</glossterm>
+		(such as (UNSIGNED-BYTE 8)).</para>
 
 	  </glossdef>
 

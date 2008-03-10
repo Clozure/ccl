@@ -72,7 +72,7 @@ a
 
       <para>For the most part, this is only relevant when you are
       trying to insert debug code into your event handlers.  The SLIME
-      listener runs in a thread where the standard stream varaiables
+      listener runs in a thread where the standard stream variables
       (like <literal>*STANDARD-OUTPUT* and</literal> and
       <literal>*TERMINAL-IO*</literal> are bound to the stream used to
       communicate with Emacs; the Cocoa event thread has its own

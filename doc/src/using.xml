@@ -25,129 +25,127 @@
 
   <sect1 id="Trace"><title>Trace</title>
 
-  <para>
-    &CCL;'s tracing facility is invoked by an extended version of the Common Lisp
-    <varname>trace</varname> macro.  Extensions allow tracing of methods, as well as finer control
-    over tracing actions.
-  </para>
+    <para>
+      &CCL;'s tracing facility is invoked by an extended version of the Common Lisp
+      <varname>trace</varname> macro.  Extensions allow tracing of methods, as well as finer control
+      over tracing actions.
+    </para>
 
 
-  <para>
-  <command><varname>TRACE</varname> {<replaceable>spec</replaceable> |
-  (<replaceable>spec</replaceable> {<replaceable>option-key</replaceable>
-  <replaceable>value</replaceable>}*)}* [Macro]</command>
-  </para>
+    <para>
+      <command><varname>TRACE</varname> {<replaceable>spec</replaceable> |
+        (<replaceable>spec</replaceable> {<replaceable>option-key</replaceable>
+        <replaceable>value</replaceable>}*)}* [Macro]</command>
+    </para>
 
-  <para>
-    The <varname>trace</varname> macro encapsulates the function named by
-    <replaceable>spec</replaceable>, causing trace actions to take place on entry and exit from the
-    function.  The default actions print a message on function entry and exit.
-  </para>
+    <para>
+      The <varname>trace</varname> macro encapsulates the function named by
+      <replaceable>spec</replaceable>, causing trace actions to take place on entry and exit from the
+      function.  The default actions print a message on function entry and exit.
+    </para>
 
-  <para>
-    Invoking <varname>(trace)</varname> without arguments returns a list of functions being traced.
-  </para>
-      
-  <para>
-    A <replaceable>spec</replaceable> is either a symbol that is the name of a function, or an
-    expression of the form <varname>(setf <replaceable>symbol</replaceable>)</varname>, or a
-    specific method of a generic function in the form <varname>(:method
-    <replaceable>gf-name</replaceable> {<replaceable>qualifier</replaceable>}* (
-    {<replaceable>specializer</replaceable>}* ) )</varname>, where a
-    <replaceable>specializer</replaceable> can be the name of a class or an <varname>EQL</varname>
-    specializer.
-  </para>
+    <para>
+      Invoking <varname>(trace)</varname> without arguments returns a list of functions being traced.
+    </para>
+    
+    <para>
+      A <replaceable>spec</replaceable> is either a symbol that is the name of a function, or an
+      expression of the form <varname>(setf <replaceable>symbol</replaceable>)</varname>, or a
+      specific method of a generic function in the form <varname>(:method
+        <replaceable>gf-name</replaceable> {<replaceable>qualifier</replaceable>}* (
+        {<replaceable>specializer</replaceable>}* ) )</varname>, where a
+      <replaceable>specializer</replaceable> can be the name of a class or an <varname>EQL</varname>
+      specializer.
+    </para>
 
-   <para>By default, whenever a traced function is entered or exited, a short message is printed
-   on <varname>*trace-output*</varname> showing the arguments on entry and values on exit.
-   The following <replaceable>option-keys</replaceable> can be used to modify this behavior:</para>
+    <para>By default, whenever a traced function is entered or exited, a short message is printed
+      on <varname>*trace-output*</varname> showing the arguments on entry and values on exit.
+      The following <replaceable>option-keys</replaceable> can be used to modify this behavior:</para>
 
-   <variablelist>
-     <varlistentry>
-       <term><varname>:before</varname></term>
-       <listitem>
-	 <para>specifies the action to be taken just before the traced function is entered.  The
-	 value is one of:</para>
-	 <variablelist>
-	   <varlistentry>
-	     <term><varname>:print</varname></term>
-	     <listitem>
-	       <para>The default, prints a short indented message showing the function name and the invocation arguments </para>
-	     </listitem>
-	   </varlistentry>
-	   <varlistentry>
-	     <term><varname>:break</varname></term>
-	     <listitem>
-	     <para>Enters the debugger after printing the standard function entry message</para>
-	     </listitem>
-	   </varlistentry>
-	   <varlistentry>
-	     <term><replaceable>function</replaceable></term>
-	     <listitem>
-	       <para>Any other value is interpreted as a function to
-	       call on entry instead of printing the standard entry
-	       message.  It is called with its first argument being
-	       the name of the function being traced, the
-	       remaining arguments being all the arguments to the function
-	       being traced, and ccl:*trace-level* bound to the current
-	       nesting level of trace actions.
-	       </para>
-	     </listitem>
-	   </varlistentry>
-	 </variablelist>
-       </listitem>
-     </varlistentry>
+    <variablelist>
+      <varlistentry>
+        <term><varname>:before</varname></term>
+        <listitem>
+	      <para>specifies the action to be taken just before the traced function is entered.  The
+	        value is one of:</para>
+	      <variablelist>
+	        <varlistentry>
+	          <term><varname>:print</varname></term>
+	          <listitem>
+	            <para>The default, prints a short indented message showing the function name and the invocation arguments </para>
+	          </listitem>
+	        </varlistentry>
+	        <varlistentry>
+	          <term><varname>:break</varname></term>
+	          <listitem>
+	            <para>Enters the debugger after printing the standard function entry message</para>
+	          </listitem>
+	        </varlistentry>
+	        <varlistentry>
+	          <term><replaceable>function</replaceable></term>
+	          <listitem>
+	            <para>Any other value is interpreted as a function to
+	              call on entry instead of printing the standard entry
+	              message.  It is called with its first argument being
+	              the name of the function being traced, the
+	              remaining arguments being all the arguments to the function
+	              being traced, and ccl:*trace-level* bound to the current
+	              nesting level of trace actions.
+	            </para>
+	          </listitem>
+	        </varlistentry>
+	      </variablelist>
+        </listitem>
+      </varlistentry>
 
-     <varlistentry>
-       <term><varname>:after</varname></term>
-       <listitem>
-	 <para>specifies the action to be taken just after the traced function exits.  The
-	 value is one of:</para>
-	 <variablelist>
-	   <varlistentry>
-	     <term><varname>:print</varname></term>
-	     <listitem>
-	       <para>The default, prints a short indented message showing the function name and the
-	       returned values </para>
-	     </listitem>
-	   </varlistentry>
-	   <varlistentry>
-	     <term><varname>:break</varname></term>
-	     <listitem>
-	     <para>Enters the debugger after printing the standard function exit message</para>
-	     </listitem>
-	   </varlistentry>
-	   <varlistentry>
-	     <term><replaceable>function</replaceable></term>
-	     <listitem>
-	       <para>Any other value is interpreted as a function to
-	       call on exit instead of printing the standard exit
-	       message.  It is called with its first argument being
-	       the name of the function being traced, the
-	       remaining arguments being all the values returned by the function
-	       being traced, and ccl:*trace-level* bound to the current
-	       nesting level of trace actions.
-	       </para>
-	     </listitem>
-	   </varlistentry>
-	 </variablelist>
-       </listitem>
-     </varlistentry>
-
-
-     <varlistentry>
-       <term><varname>:backtrace</varname></term>
-       <listitem>
-	 <para>If true, requests that a stack backtrace (in brief format) be printed whenever the function is
-	 invoked. The value can be an integer, in which case it is the maximum number of frames to
-	 print. Otherwise, all frames are shown.
-	 </para>
-       </listitem>
-     </varlistentry>
+      <varlistentry>
+        <term><varname>:after</varname></term>
+        <listitem>
+	      <para>specifies the action to be taken just after the traced function exits.  The
+	        value is one of:</para>
+	      <variablelist>
+	        <varlistentry>
+	          <term><varname>:print</varname></term>
+	          <listitem>
+	            <para>The default, prints a short indented message showing the function name and the
+	              returned values </para>
+	          </listitem>
+	        </varlistentry>
+	        <varlistentry>
+	          <term><varname>:break</varname></term>
+	          <listitem>
+	            <para>Enters the debugger after printing the standard function exit message</para>
+	          </listitem>
+	        </varlistentry>
+	        <varlistentry>
+	          <term><replaceable>function</replaceable></term>
+	          <listitem>
+	            <para>Any other value is interpreted as a function to
+	              call on exit instead of printing the standard exit
+	              message.  It is called with its first argument being
+	              the name of the function being traced, the
+	              remaining arguments being all the values returned by the function
+	              being traced, and ccl:*trace-level* bound to the current
+	              nesting level of trace actions.
+	            </para>
+	          </listitem>
+	        </varlistentry>
+	      </variablelist>
+        </listitem>
+      </varlistentry>
 
 
+      <varlistentry>
+        <term><varname>:backtrace</varname></term>
+        <listitem>
+	      <para>If true, requests that a stack backtrace (in brief format) be printed whenever the function is
+	        invoked. The value can be an integer, in which case it is the maximum number of frames to
+	        print. Otherwise, all frames are shown.
+	      </para>
+        </listitem>
+      </varlistentry>
 
-   </variablelist>
+    </variablelist>
   </sect1>
 
   <sect1 id="Strings-and-Pathanmes"><title>Strings and Pathnames</title>
@@ -170,4 +168,158 @@
         change this convention to use UTF-8.</para>
     </sect2>
   </sect1>
+
+<sect1 id="Memory-Mapped-Files">
+  <title>Memory-mapped Files</title>
+  <para>In release 1.2 and later, &CCL;
+    supports <glossterm linkend="memory_mapped_file">memory-mapped
+      files</glossterm>. On operating systems that support memory-mapped
+    files (including Mac OS X, Linux, and FreeBSD), the operating
+    system can arrange for a range of virtual memory addresses to
+    refer to the contents of an open file. As long as the file remains
+    open, programs can read values from the file by reading addresses
+    in the mapped range.</para>
+
+  <para>Using memory-mapped files may in some cases be more
+    efficient than reading the contents of a file into a data
+    structure in memory.</para>
+
+  <para>&CCL; provides the
+    functions <code>CCL:MAP-FILE-TO-IVECTOR</code>
+    and <code>CCL:MAP-FILE-TO-OCTET-VECTOR</code> to support
+    memory-mapping. These functions return vectors whose contents are
+    the contents of memory-mapped files. Reading an element of such a
+    vector returns data from the correponding position in the
+    file.</para>
+
+  <para>Without memory-mapped files, a common idiom for reading the
+  contents of files might be something like this:</para>
+
+  <programlisting>
+  (let* ((stream (open pathname :direction :input :element-type '(unsigned-byte 8)))
+         (vector (make-array (file-size-to-vector-size stream)
+                             :element-type '(unsigned-byte 8))))
+    (read-sequence vector stream))
+  </programlisting>
+
+  <para>Using a memory-mapped files has a result that is the same in
+  that, like the above example, it returns a vector whose contents are
+  the same as the contents of the file. It differs in that the above
+  example creates a new vector in memory and copies the file's
+  contents into it; using a memory-mapped file instead arranges for
+  the vector's elements to point to the file's contents on disk
+  directly, without copying them into memory first.</para>
+
+  <para>The vectors returned by <code>CCL:MAP-FILE-TO-IVECTOR</code>
+    and <code>CCL:MAP-FILE-TO-OCTET-VECTOR</code> are read-only; any
+    attempt to change an element of a vector returned by these
+    functions results in a memory-access error. &CCL; does not
+    currently support writing data to memory-mapped files.</para>
+
+  <para>Vectors created by <code>CCL:MAP-FILE-TO-IVECTOR</code>
+    and <code>CCL:MAP-FILE-TO-OCTET-VECTOR</code> are required to
+    respect &CCL;'s limit on the total size of an array. That means
+    that you cannot use these functions to create a vector longer
+    than <code>ARRAY-TOTAL-SIZE-LIMIT</code>, even if the filesystem
+    supports file sizes that are larger. The value
+    of <code>ARRAY-TOTAL-SIZE-LIMIT</code> is <code>(EXPT 2 24)</code>
+    on 32-but platforms; and <code>(EXPT 2 56)</code> on 64-bit
+    platforms.</para>
+
+  <para>
+    <command><varname>CCL:MAP-FILE-TO-IVECTOR</varname>
+      <parameter>pathname</parameter>
+      <parameter>element-type</parameter>
+      [Function]</command>
+  </para>
+
+  <variablelist>
+      <varlistentry>
+        <term><varname>pathname</varname></term>
+        <listitem>
+          <para>The pathname of the file to be memory-mapped.</para>
+        </listitem>
+      </varlistentry>
+    
+      <varlistentry>
+        <term><varname>element-type</varname></term>
+        <listitem>
+          <para>The element-type of the vector to be
+          created. Specified as
+          a <glossterm linkend="type-specifier">type-specifier</glossterm>
+          that names a subtype of either <code>SIGNED-BYTE</code>
+          or <code>UNSIGNED-BYTE</code>.</para>
+        </listitem>
+      </varlistentry>
+  </variablelist>
+
+
+    <para>
+      The <varname>map-file-to-ivector</varname> function tries to
+      open the file at <parameter>pathname</parameter> for reading. If
+      successful, the function maps the file's contents to a range of
+      virtual addresses. If successful, it returns a read-only vector
+      whose element-type is given
+      by <parameter>element-type</parameter>, and whose contents are
+      the contents of the memory-mapped file.
+    </para>
+
+    <para>The returned vector is
+    a <glossterm linkend="displaced-array">displaced-array</glossterm>
+    whose element-type is <code>(UPGRADED-ARRAY-ELEMENT-TYPE
+    element-type)</code>. The target of the displaced array is a
+    vector of type <code>(SIMPLE-ARRAY element-type (*))</code> whose
+    elements are the contents of the memory-mapped file.</para>
+
+    <para>Because of alignment issues, the mapped file's contents
+      start a few bytes (4 bytes on 32-bit platforms, 8 bytes on
+      64-bit platforms) into the vector. The displaced array returned
+      by <code>CCL:MAP-FILE-TO-IVECTOR</code> hides this overhead, but
+      it's usually more efficient to operate on the underlying simple
+      1-dimensional array.  Given a displaced array (like the value
+      returned by <code>CCL:MAP-FILE-TO-IVECTOR</code>), the function
+      <code>ARRAY-DISPLACEMENT</code> returns the underlying array and
+      the displacement index in elements.
+    </para>
+
+    <para>Currently, &CCL; supports only read operations on
+    memory-mapped files. If you try to change the contents of an array
+    returned by <varname>map-file-to-ivector</varname>, &CCL; signals
+    a memory error.</para>
+
+  <para>
+    <command><varname>CCL:UNMAP-IVECTOR</varname>
+      <parameter>displaced-array</parameter>
+      [Function]</command>
+  </para>
+
+  <para>If the argument is a displaced-array returned
+   by <varname>map-file-to-ivector</varname>, and if it has not yet
+   been unmapped by this function,
+   then <varname>unmap-ivector</varname> undoes the memory mapping,
+   closes the mapped file, and changes the displaced-array so that its
+   target is an empty vector (of length zero).</para>
+
+  <para>
+    <command><varname>CCL:MAP-FILE-TO-OCTET-VECTOR</varname>
+      <parameter>pathname</parameter>
+      [Function]</command>
+  </para>
+
+  <para>This function is a synonym for <code>(CCL:MAP-FILE-TO-IVECTOR
+  pathname '(UNSIGNED-BYTE 8))</code> It is provided as a convenience
+  for the common case of memory-mapping a file as a vector of
+  bytes.</para>
+
+  <para>
+    <command><varname>CCL:UNMAP-OCTET-VECTOR</varname>
+      <parameter>displaced-array</parameter>
+      [Function]</command>
+  </para>
+
+  <para>This function is a synonym
+  for <code>(CCL:UNMAP-IVECTOR)</code></para>
+</sect1>
+
+
 </chapter>
