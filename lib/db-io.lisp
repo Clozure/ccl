@@ -1467,7 +1467,7 @@ satisfy the optional predicate PREDICATE."
 	     (incf nupper)
 	     (setq state :upper)))
 	  (:upper
-	   (when (lower-case-p ch)
+	   (unless (upper-case-p ch)
 	     (setq state :lower))))))))
 
 (defun escape-foreign-name (in &optional
@@ -1488,7 +1488,7 @@ satisfy the optional predicate PREDICATE."
 	     (cond ((and (upper-case-p ch) (eq state :lower))
 		    (outch #\<)
 		    (setq state :upper))
-		   ((and (lower-case-p ch) (eq state :upper))
+		   ((and (not (upper-case-p ch)) (eq state :upper))
 		    (outch #\>)
 		    (setq state :lower)))
 	     (outch (char-upcase ch)))))))
