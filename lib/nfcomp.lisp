@@ -476,6 +476,7 @@ Will differ from *compiling-file* during an INCLUDE")
     (compiler-let (fcomp-compiler-let body env processing-mode))
     (locally (fcomp-locally body env processing-mode))
     (macrolet (fcomp-macrolet body env processing-mode))
+    (symbol-macrolet (fcomp-symbol-macrolet body env processing-mode))
     ((%include include) (fcomp-include form env processing-mode))
     (t
      ;;Need to macroexpand to see if get more progn's/eval-when's and so should
