@@ -199,6 +199,8 @@
     (:lexical-mismatch . invalid-arguments)
     (:environment-mismatch . invalid-arguments)
     (:ignore . style-warning)
+    (:result-ignored . style-warning)
+    (:lambda . style-warning)
     (:unused . style-warning)))
 
 
