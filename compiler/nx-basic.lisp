@@ -439,8 +439,9 @@
          (push w warnings)))
     warnings))
 
-; This is called by, e.g., note-function-info & so can't be -too- funky ...
-;;; don't call proclaimed-inline-p or proclaimed-notinline-p with alphatized crap
+;;; This is called by, e.g., note-function-info & so can't be -too- funky ...
+;;; don't call proclaimed-inline-p or proclaimed-notinline-p with
+;;; alphatized crap
 
 (defun nx-declared-inline-p (sym env)
   (setq sym (maybe-setf-function-name sym))
@@ -454,6 +455,37 @@
         (return-from nx-declared-inline-p (eq (cddr decl) 'inline))))
     (setq env (lexenv.parent-env env))))
 
+(defun report-compile-time-argument-mismatch (condition stream)
+  (destructuring-bind (callee reason args spread-p)
+      (compiler-warning-args condition)
+    (format stream "In the ~a ~s with arguments ~:s,~%  "
+            (if spread-p "application of" "call to")
+            callee
+            args)
+    (case (car reason)
+      (:toomany
+       (destructuring-bind (provided max)
+           (cdr reason)
+         (format stream "~d argument~p were provided, but at most ~d ~a accepted~&  by " provided provided max (if (eql max 1) "is" "are"))))
+      (:toofew
+       (destructuring-bind (provided min)
+           (cdr reason)
+         (format stream "~d argument~p were provided, but at least ~d ~a required~&  by " provided provided min (if (eql min 1) "is" "are") )))
+      (:odd-keywords
+       (let* ((tail (cadr reason)))
+         (format stream "the variable portion of the argument list ~s contains an odd number~&  of arguments and so can't be used to initialize keyword parameters~&  for " tail)))
+      (:unknown-keyword
+       (destructuring-bind (badguy goodguys)
+           (cdr reason)
+         (format stream "the keyword argument ~s is not one of ~s, which are recognized~&  by " badguy goodguys))))
+    (format stream
+            (ecase (compiler-warning-warning-type condition)       
+              (:global-mismatch "the current global definition of ~s.")
+              (:environment-mismatch "the definition of ~s visible in the current compilation unit.")
+              (:lexical-mismatch "the lexically visible definition of ~s"))
+            callee)))
+
+
 (defparameter *compiler-warning-formats*
   '((:special . "Undeclared free variable ~S")
     (:unused . "Unused lexical variable ~S")
@@ -463,23 +495,27 @@
     (:unknown-type-declaration . "Unknown type ~S")
     (:macro-used-before-definition . "Macro function ~S was used before it was defined")
     (:unsettable . "Shouldn't assign to variable ~S")
-    (:global-mismatch . "Function call arguments don't match current definition of ~S")
-    (:environment-mismatch . "Function call arguments don't match visible definition of ~S")
+    (:global-mismatch . report-compile-time-argument-mismatch)
+    (:environment-mismatch . report-compile-time-argument-mismatch)
+    (:lexical-mismatch . report-compile-time-argument-mismatch)    
     (:type . "Type declarations violated in ~S")
     (:type-conflict . "Conflicting type declarations for ~S")
-    (:special-fbinding . "Attempt to bind compiler special name: ~s. Result undefined")))
+    (:special-fbinding . "Attempt to bind compiler special name: ~s. Result undefined")
+    (:lambda . "Suspicious lambda-list: ~s")
+    (:result-ignored . "Function result ignored in call to ~s.")))
 
 (defun report-compiler-warning (condition stream)
   (let* ((warning-type (compiler-warning-warning-type condition))
-         (format-string (or (cdr (assq warning-type *compiler-warning-formats*))
-                            (format nil "~S compiler warning with args ~~S"
-                                    warning-type))))
-    (apply #'format stream format-string (compiler-warning-args condition))
+         (format-string (cdr (assq warning-type *compiler-warning-formats*))))
+    (format stream "In ")
+    (print-nested-name (reverse (compiler-warning-function-name condition)) stream)
+    (format stream ": ")
+    (if (typep format-string 'string)
+      (apply #'format stream format-string (compiler-warning-args condition))
+      (funcall format-string condition stream))
     (let ((nrefs (compiler-warning-nrefs condition)))
       (when (and nrefs (neq nrefs 1))
-        (format stream " (~D references)" nrefs)))
-    (princ ", in " stream)
-    (print-nested-name (reverse (compiler-warning-function-name condition)) stream)))
+        (format stream " (~D references)" nrefs)))))
 
 (defun environment-structref-info (name env)
   (let ((defenv (definition-environment env)))
