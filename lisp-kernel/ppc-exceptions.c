@@ -1351,7 +1351,7 @@ handle_uuo(ExceptionInformation *xp, opcode the_uuo, pc where)
 	lisp_suspend_other_threads();
 	break;
       case error_resume:
-	xpGPR(xp,imm0) = (LispObj) lisp_suspend_tcr(target);
+	xpGPR(xp,imm0) = (LispObj) lisp_resume_tcr(target);
 	break;
       case error_resume_all:
 	lisp_resume_other_threads();
