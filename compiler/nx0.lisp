@@ -1719,6 +1719,18 @@ Or something. Right? ~s ~s" var varbits))
           *nx-warnings*)
   nil)
 
+(defun p2-whine (afunc about &rest forms)
+  (let* ((warning (make-condition (or (cdr (assq about *compiler-whining-conditions*)) 'compiler-warning)
+                                  :function-name (list (afunc-name afunc))
+                                  :warning-type about
+                                  :args (or forms (list nil)))))
+    (push warning (afunc-warnings afunc))
+    (do* ((p (afunc-parent afunc) (afunc-parent p)))
+         ((null p) warning)
+      (let* ((pname (afunc-name p)))
+        (push pname (compiler-warning-function-name warning))
+        (push warning (afunc-warnings p))))))
+
 (defun nx1-type-intersect (form type1 type2 &optional env)
   (declare (ignore env)) ; use it when deftype records info in env.  Fix this then ...
   (let* ((ctype1 (if (typep type1 'ctype) type1 (specifier-type type1)))
@@ -1775,7 +1787,7 @@ Or something. Right? ~s ~s" var varbits))
       form
       (list (%nx1-operator typed-form) type form))))
 
-; Wimpy.
+;;; Wimpy.
 (defun nx1-call-result-type (sym &optional (args nil args-p) spread-p)
   (let* ((env *nx-lexical-environment*)
          (global-def nil)
@@ -1791,11 +1803,10 @@ Or something. Right? ~s ~s" var varbits))
                (not (functionp (setq global-def (fboundp sym)))))
       (nx1-whine :undefined-function sym))
     (when (and args-p (setq somedef (or lexenv-def defenv-def global-def)))
-      (multiple-value-bind (deftype required max minargs maxargs)
-                           (nx1-check-call-args somedef args spread-p)
+      (multiple-value-bind (deftype  reason)
+          (nx1-check-call-args somedef args spread-p)
         (when deftype
-          (nx1-whine (if (eq deftype :lexical-mismatch) :environment-mismatch deftype)
-                     sym required max minargs maxargs))))
+          (nx1-whine deftype sym reason args spread-p))))
     (nx-target-type *nx-form-type*)))
 
 (defun find-ftype-decl (sym env)
@@ -1812,11 +1823,18 @@ Or something. Right? ~s ~s" var varbits))
     (setq env (lexenv.parent-env env))))
 
 (defun innermost-lfun-bits-keyvect (def)
- (declare (notinline innermost-lfun-bits-keyvect))
-  (let* ((gf-p (standard-generic-function-p def)))
-    (unless gf-p
-      (let ((inner-def (closure-function (find-unencapsulated-definition def))))
-        (values (lfun-bits inner-def)(lfun-keyvect inner-def))))))
+  (declare (notinline innermost-lfun-bits-keyvect))
+  (let* ((inner-def (closure-function (find-unencapsulated-definition def)))
+         (bits (lfun-bits inner-def))
+         (keys (lfun-keyvect inner-def)))
+    (declare (fixnum bits))
+    (when (and (eq (ash 1 $lfbits-gfn-bit)
+                   (logand bits (logior (ash 1 $lfbits-gfn-bit)
+                                        (ash 1 $lfbits-method-bit))))
+               (logbitp $lfbits-keys-bit bits))
+      (setq bits (logior (ash 1 $lfbits-aok-bit) bits)
+            keys nil))
+    (values bits keys)))
 
 
 (defun nx1-check-call-args (def arglist spread-p)
@@ -1824,7 +1842,8 @@ Or something. Right? ~s ~s" var varbits))
                     :global-mismatch
                     (if (istruct-typep def 'afunc)
                       :lexical-mismatch
-                      :environment-mismatch))))
+                      :environment-mismatch)))
+         (reason nil))
     (multiple-value-bind (bits keyvect)
                          (case deftype
                            (:global-mismatch (innermost-lfun-bits-keyvect def))
@@ -1845,10 +1864,12 @@ Or something. Right? ~s ~s" var varbits))
           ;; match the definition, complain.  If "spread-p" is true,
           ;; we can only be sure of the case when more than the
           ;; required number of args have been supplied.
-          (if (or (and (not spread-p) (< minargs required))
-                  (and max (or (> minargs max)) (if maxargs (> maxargs max)))
-                  (nx1-find-bogus-keywords arglist spread-p bits keyvect))
-            (values deftype required max minargs maxargs)))))))
+          (if (or (if (and (not spread-p) (< minargs required))
+                    (setq reason `(:toofew ,minargs ,required)))
+                  (if (and max (or (> minargs max)) (if maxargs (> maxargs max)))
+                    (setq reason (list :toomany (if (> minargs max) minargs maxargs) max)))
+                  (setq reason (nx1-find-bogus-keywords arglist spread-p bits keyvect)))
+            (values deftype reason)))))))
 
 (defun nx1-find-bogus-keywords (args spread-p bits keyvect)
   (declare (fixnum bits))
@@ -1856,17 +1877,20 @@ Or something. Right? ~s ~s" var varbits))
     (setq keyvect nil))                 ; only check for even length tail
   (when (and (logbitp $lfbits-keys-bit bits) 
              (not spread-p))     ; Can't be sure, last argform may contain :allow-other-keys
-    (do* ((key-args (nthcdr (+ (ldb $lfbits-numreq bits)  (ldb $lfbits-numopt bits)) args) (cddr key-args)))
+    (do* ((key-values (nthcdr (+ (ldb $lfbits-numreq bits)  (ldb $lfbits-numopt bits)) args))
+          (key-args key-values  (cddr key-args)))
          ((null key-args))
       (if (null (cdr key-args))
-        (return t)
+        (return (list :odd-keywords key-values))
         (when keyvect
           (let* ((keyword (%car key-args)))
             (unless (constantp keyword)
               (return nil))
             (unless (eq keyword :allow-other-keys)
-              (unless (position (nx-unquote keyword) keyvect)
-                (return t)))))))))
+              (unless (position (nx-unquote keyword) keyvect)                
+                (return (list :unknown-keyword
+                              (nx-unquote keyword)
+                              (coerce keyvect 'list)))))))))))
 
 ;;; we can save some space by going through subprims to call "builtin"
 ;;; functions for us.
@@ -1888,18 +1912,17 @@ Or something. Right? ~s ~s" var varbits))
                      (nx1-arglist arglist (if spread-p 1 (backend-num-arg-regs *target-backend*)))
                      spread-p)))))
   
-; If "sym" is an expression (not a symbol which names a function), the caller has already
-; alphatized it.
+;;; If "sym" is an expression (not a symbol which names a function),
+;;; the caller has already alphatized it.
 (defun nx1-call (sym args &optional spread-p global-only)
   (nx1-verify-length args 0 nil)
   (let ((args-in-regs (if spread-p 1 (backend-num-arg-regs *target-backend*))))
     (if (nx-self-call-p sym global-only)
-      ; Should check for downward functions here as well.
-      (multiple-value-bind (deftype required max minargs maxargs)
+      ;; Should check for downward functions here as well.
+      (multiple-value-bind (deftype reason)
                            (nx1-check-call-args *nx-current-function* args spread-p)
         (when deftype
-          (nx1-whine (if (eq deftype :lexical-mismatch) :environment-mismatch deftype)
-                     sym required max minargs maxargs))
+          (nx1-whine deftype sym reason args spread-p))
         (make-acode (%nx1-operator self-call) (nx1-arglist args args-in-regs) spread-p))
       (multiple-value-bind (lambda-form containing-env token) (nx-inline-expansion sym *nx-lexical-environment* global-only)
         (or (nx1-expand-inline-call lambda-form containing-env token args spread-p *nx-lexical-environment*)
@@ -2388,3 +2411,7 @@ Or something. Right? ~s ~s" var varbits))
 (defun nx-error-context ()
   (or *nx-cur-func-name* "an anonymous function"))
 
+(defparameter *warn-if-function-result-ignored*
+  '(sort stable-sort delete delete-if delete-if-not remf nreverse
+    nunion nset-intersection)
+  "Names of functions whos result(s) should ordinarily be used, because of their side-effects or lack of them.")
