@@ -374,7 +374,7 @@ binding of that symbol is used - or an integer index into the frame's set of loc
     (fresh-line out)
     (dolist (val values) (write val :stream out) (terpri out))))
 
-(defparameter *listener-prompt-format* "~[?~:;~:*~d>~] ")
+(defparameter *listener-prompt-format* "~[?~:;~:*~d >~] ")
 
   
 (defun print-listener-prompt (stream &optional (force t))
