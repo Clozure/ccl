@@ -220,7 +220,7 @@ if it contains no alphabetic characters."
               maximize displayOffset into indentation1
               collect `#(,x ,(string-arg (subseq str sortOffset)) ,sortOffset ,displayOffset) into tmpList1
               finally  (return (values `#(,@tmpList1) indentation1))))
-    (setq TEMPVECTor (sort tmpVector #'(lambda (symPair1 symPair2)
+    (setq TMPVECTor (sort tmpVector #'(lambda (symPair1 symPair2)
                                          (string-lessp (aref symPair1 1) (aref symPair2 1)))))
     (values tmpVector ; each element is a vector of `#(,sym sortable-string-for-sym)
             indentation)))
