@@ -1679,12 +1679,26 @@ to open."
 
 (defsetf type-predicate set-type-predicate)
 
+(defun adjust-defmethod-lambda-list (ll)
+  ;; If the lambda list contains &key, ensure that it also contains
+  ;; &allow-other-keys
+  (if (or (not (memq '&key ll))
+          (memq '&allow-other-keys ll))
+    ll
+    (if (memq '&aux ll)
+      (let* ((ll (copy-list ll))
+             (aux (memq '&aux ll)))
+        (setf (car aux) '&allow-other-keys
+              (cdr aux) (cons '&aux (cdr aux)))
+        ll)
+      (append ll '(&allow-other-keys)))))
+
 (defmacro defmethod (name &rest args &environment env)
   (multiple-value-bind (function-form specializers-form qualifiers lambda-list documentation specializers)
                        (parse-defmethod name args env)    
     `(progn
        (eval-when (:compile-toplevel)
-         (note-function-info ',name nil ,env))
+         (note-function-info ',name '(lambda ,(adjust-defmethod-lambda-list lambda-list)) ,env))
        (compiler-let ((*nx-method-warning-name* 
                        (list ',name
                              ,@(mapcar #'(lambda (x) `',x) qualifiers)
@@ -1955,7 +1969,7 @@ to open."
     (let ((gf (gensym)))
       `(progn
          (eval-when (:compile-toplevel)
-           (note-function-info ',function-name nil ,env))
+           (note-function-info ',function-name '(lambda ,lambda-list nil) ,env))
          (let ((,gf (%defgeneric
                      ',function-name ',lambda-list ',method-combination ',generic-function-class 
                      ',(apply #'append options))))
