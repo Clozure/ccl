@@ -307,6 +307,7 @@
                             (files t)         ;; include files
 			    (all t)           ;; include Unix dot files (other than dot and dot dot)
 			    (directory-pathnames t) ;; return directories as directory-pathname-p's.
+                            (include-emacs-lockfiles nil) ;; inculde .#foo
 			    test              ;; Only return pathnames matching test
 			    (follow-links t)) ;; return truename's of matching files.
   "Return a list of PATHNAMEs, each the TRUENAME of a file that matched the
@@ -319,6 +320,7 @@
 		     :all all
 		     :directory-pathnames directory-pathnames
 		     :test test
+                     :include-emacs-lockfiles include-emacs-lockfiles
 		     :follow-links follow-links))
 	 (path (full-pathname (merge-pathnames path) :no-error nil))
 	 (dir (directory-namestring path)))
@@ -377,6 +379,7 @@
 	(test (getf keys :test))
 	(follow-links (getf keys :follow-links))
 	(all (getf keys :all))
+        (include-emacs-lockfiles (getf keys :include-emacs-lockfiles))
         (result ())
         sub dir-list ans)
     (if (not (or name type))
@@ -389,6 +392,9 @@
       (with-open-dir (dirent dir)
 	(while (setq sub (%read-dir dirent))
 	  (when (and (or all (neq (%schar sub 0) #\.))
+                     (or include-emacs-lockfiles
+                         (and (>= (length sub) 2)
+                              (not (string= sub ".#" :end1 2))))
 		     (not (string= sub "."))
 		     (not (string= sub ".."))
 		     (%file*= name type sub))
@@ -406,11 +412,6 @@
 	      (push (if follow-links (or (probe-file ans) ans) ans) result))))))
     result))
 
-; now for samson:**:*c*:**: we get samson:ccl:crap:barf: twice because
-; it matches in two ways
-; 1) **=ccl *c*=crap **=barf
-; 2) **= nothing *c*=ccl **=crap:barf
-; called to match a **
 (defun %all-directories (dir rest path so-far keys)
   (let ((do-files nil)
         (do-dirs nil)
