@@ -33,15 +33,18 @@
 
 
     <para>
-      <command><varname>TRACE</varname> {<replaceable>spec</replaceable> |
-        (<replaceable>spec</replaceable> {<replaceable>option-key</replaceable>
-        <replaceable>value</replaceable>}*)}* [Macro]</command>
+    <command><varname>TRACE</varname> {<replaceable>keyword</replaceable>
+    <replaceable>global-value</replaceable>}* {<replaceable>spec</replaceable> |
+    (<replaceable>spec</replaceable> {<replaceable>keyword</replaceable>
+    <replaceable>local-value</replaceable>}*)}* [Macro]</command>
     </para>
 
     <para>
-      The <varname>trace</varname> macro encapsulates the function named by
-      <replaceable>spec</replaceable>, causing trace actions to take place on entry and exit from the
-      function.  The default actions print a message on function entry and exit.
+      The <varname>trace</varname> macro encapsulates the functions named by
+      <replaceable>spec</replaceable>s, causing trace actions to take place on entry and
+      exit from each function.  The default actions print a message on function entry and
+      exit. <replaceable>Keyword</replaceable>/<replaceable>value</replaceable> options
+      can be used to specify changes in the default behavior.
     </para>
 
     <para>
@@ -52,57 +55,317 @@
       A <replaceable>spec</replaceable> is either a symbol that is the name of a function, or an
       expression of the form <varname>(setf <replaceable>symbol</replaceable>)</varname>, or a
       specific method of a generic function in the form <varname>(:method
-        <replaceable>gf-name</replaceable> {<replaceable>qualifier</replaceable>}* (
-        {<replaceable>specializer</replaceable>}* ) )</varname>, where a
+      <replaceable>gf-name</replaceable> {<replaceable>qualifier</replaceable>}*
+      ({<replaceable>specializer</replaceable>}*))</varname>, where a
       <replaceable>specializer</replaceable> can be the name of a class or an <varname>EQL</varname>
       specializer.
     </para>
 
-    <para>By default, whenever a traced function is entered or exited, a short message is printed
-      on <varname>*trace-output*</varname> showing the arguments on entry and values on exit.
-      The following <replaceable>option-keys</replaceable> can be used to modify this behavior:</para>
+    <para>
+      A <replaceable>spec</replaceable> can also be a string naming a package, or equivalently a
+      list <varname>(:package <replaceable>package-name</replaceable>)</varname>, in order to
+      request that all functions in the package to be traced.
+    </para>
+
+    <para>
+      By default, whenever a traced function is entered or exited, a short message is
+      printed on <varname>*trace-output*</varname> showing the arguments on entry and
+      values on exit.  Options specified as key/value pairs can be used to modify this
+      behavior.  Options preceding the function <replaceable>spec</replaceable>s apply to
+      all the functions being traced.  Options specified along with a
+      <replaceable>spec</replaceable> apply to that spec only and override any
+      global options. The following options are supported:
+    </para>
 
     <variablelist>
+
       <varlistentry>
-        <term><varname>:before</varname></term>
-        <listitem>
-	      <para>specifies the action to be taken just before the traced function is entered.  The
-	        value is one of:</para>
-	      <variablelist>
-	        <varlistentry>
-	          <term><varname>:print</varname></term>
-	          <listitem>
-	            <para>The default, prints a short indented message showing the function name and the invocation arguments </para>
-	          </listitem>
-	        </varlistentry>
-	        <varlistentry>
-	          <term><varname>:break</varname></term>
-	          <listitem>
-	            <para>Enters the debugger after printing the standard function entry message</para>
-	          </listitem>
-	        </varlistentry>
-	        <varlistentry>
-	          <term><replaceable>function</replaceable></term>
-	          <listitem>
-	            <para>Any other value is interpreted as a function to
-	              call on entry instead of printing the standard entry
-	              message.  It is called with its first argument being
-	              the name of the function being traced, the
-	              remaining arguments being all the arguments to the function
-	              being traced, and ccl:*trace-level* bound to the current
-	              nesting level of trace actions.
-	            </para>
-	          </listitem>
-	        </varlistentry>
-	      </variablelist>
-        </listitem>
+	<term><varname>:methods {T | nil}</varname></term>
+	<listitem>
+	  <para> If true, and if applied to a <replaceable>spec</replaceable> naming a generic
+	  function, arranges to trace all the methods of the generic function in addition to the
+	  generic function itself.
+	  </para>
+	</listitem>
       </varlistentry>
 
       <varlistentry>
-        <term><varname>:after</varname></term>
+	<term><varname>:if <replaceable>form</replaceable></varname></term>
+	<term><varname>:condition <replaceable>form</replaceable></varname></term>
+	<listitem>
+	  <para> Evaluates <replaceable>form</replaceable> whenever the function being traced is
+	  about to be entered, and inhibits all trace actions if <replaceable>form</replaceable>
+	  returns nil. The form may reference the lexical variable <varname>ccl::args</varname>,
+	  which is a list of the arguments in this call. <varname>:condition</varname> is just a
+	  synonym for <varname>:if</varname>, though if both are specified, both must return non-nil.
+	  </para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><varname>:before-if <replaceable>form</replaceable></varname></term>
+	<listitem>
+	  <para> Evaluates <replaceable>form</replaceable> whenever the function being traced is
+	  about to be entered, and inhibits the entry trace actions if
+	  <replaceable>form</replaceable> returns nil.  The form may reference the lexical variable
+	  <varname>ccl::args</varname>, which is a list of the arguments in this call. If both
+	  <varname>:if</varname> and <varname>:before-if</varname> are specified, both must return
+	  non-nil in order for the before entry actions to happen.
+	  </para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><varname>:after-if <replaceable>form</replaceable></varname></term>
+	<listitem>
+	  <para> Evaluates <replaceable>form</replaceable> whenever the function being traced has
+	  just exited, and inhibits the exit trace actions if <replaceable>form</replaceable>
+	  returns nil.  The form may reference the lexical variable <varname>ccl::vals</varname>,
+	  which is a list of values returned by this call. If both <varname>:if</varname> and
+	  <varname>:after-if</varname> are specified, both must return non-nil in order for the
+	  after exit actions to happen.
+	  </para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><varname>:print-before <replaceable>form</replaceable></varname></term>
+	<listitem>
+	  <para> Evaluates <replaceable>form</replaceable> whenever the function being traced is
+	  about to be entered, and prints the result before printing the standard entry message.
+	  The form may reference the lexical variable <varname>ccl::args</varname>, which is a list
+	  of the arguments in this call.  To see multiple forms, use <varname>values</varname>:
+	  <varname>:print-before (values (one-thing) (another-thing))</varname>.
+	  </para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><varname>:print-after <replaceable>form</replaceable></varname></term>
+	<listitem>
+	  <para> Evaluates <replaceable>form</replaceable> whenever the function being traced has
+	  just exited, and prints the result after printing the standard exit message.  The form may
+	  reference the lexical variable <varname>ccl::vals</varname>, which is a list of values
+	  returned by this call. To see multiple forms, use <varname>values</varname>:
+	  <varname>:print-after (values (one-thing) (another-thing))</varname>.
+	  </para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><varname>:print <replaceable>form</replaceable></varname></term>
+	<listitem>
+	  <para>Equivalent to <varname>:print-before <replaceable>form</replaceable> :print-after <replaceable>form</replaceable></varname>.
+	  </para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><varname>:eval-before <replaceable>form</replaceable></varname></term>
+	<listitem>
+	  <para>Evaluates <replaceable>form</replaceable> whenever the function being traced is
+	  about to be entered.  The form may reference the lexical variable
+	  <varname>ccl::args</varname>, which is a list of the arguments in this call.
+	  </para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><varname>:eval-after <replaceable>form</replaceable></varname></term>
+	<listitem>
+	  <para>Evaluates <replaceable>form</replaceable> whenever the function being has just
+	  exited.  The form may reference the lexical variable <varname>ccl::vals</varname>, which
+	  is a list of values returned by this call.
+	  </para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><varname>:eval <replaceable>form</replaceable></varname></term>
+	<listitem>
+	  <para>Equivalent to <varname>:eval-before <replaceable>form</replaceable>
+	  :eval-after <replaceable>form</replaceable></varname>.
+	  </para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><varname>:break-before <replaceable>form</replaceable></varname></term>
+	<listitem>
+	  <para>Evaluates <replaceable>form</replaceable> whenever the function being traced is
+	  about to be entered, and if the result is non-nil, enters a debugger break loop.  The form
+	  may reference the lexical variable <varname>ccl::args</varname>, which is a list of the
+	  arguments in this call.
+	  </para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><varname>:break-after <replaceable>form</replaceable></varname></term>
+	<listitem>
+	  <para>Evaluates <replaceable>form</replaceable> whenever the function being traced has
+	  just exited, and if the result is non-nil, enters a debugger break loop. The form may
+	  reference the lexical variable <varname>ccl::vals</varname>, which is a list of values
+	  returned by this call.
+	  </para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><varname>:break <replaceable>form</replaceable></varname></term>
+	<listitem>
+	  <para>Equivalent to <varname>:break-before <replaceable>form</replaceable> :break-after <replaceable>form</replaceable></varname>.
+	  </para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><varname>:backtrace-before <replaceable>form</replaceable></varname></term>
+	<term><varname>:backtrace <replaceable>form</replaceable></varname></term>
+	<listitem>
+	  <para>Evaluates <replaceable>form</replaceable> whenever the function being traced is
+	  about to be entered.  The form may reference the lexical variable
+	  <varname>ccl::args</varname>, which is a list of the arguments in this call. The value
+	  returned by <replaceable>form</replaceable> is intepreted as follows:
+	  </para>
+
+	  <variablelist>
+
+	    <varlistentry>
+	      <term><varname>nil</varname></term>
+	      <listitem><para>does nothing</para></listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term><varname>:detailed</varname></term>
+	      <listitem><para>prints a detailed backtrace to
+	      <varname>*trace-output*</varname>.</para></listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term><varname>(:detailed <replaceable>integer</replaceable>)</varname></term>
+	      <listitem><para>prints the top <replaceable>integer</replaceable> frames of detailed
+	      backtrace to <varname>*trace-output*</varname>.
+	      </para></listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term><replaceable>integer</replaceable></term>
+	      <listitem><para>prints top <replaceable>integer</replaceable> frames of a terse
+	      backtrace to <varname>*trace-output*</varname>.
+	      </para></listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>anything else</term>
+	      <listitem><para>prints a terse backtrace to <varname>*trace-output*</varname>.
+	      </para></listitem>
+	    </varlistentry>
+	  </variablelist>
+	  <para>
+	    Note that unlike with the other options, <varname>:backtrace</varname> is equivalent to
+	    <varname>:backtrace-before</varname> only, not both before and after, since it's usually
+	    not helpful to print the same backtrace both before and after the function call.
+	  </para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><varname>:backtrace-after <replaceable>form</replaceable></varname></term>
+	<listitem>
+	  <para>Evaluates <replaceable>form</replaceable> whenever the function being traced has
+	  just exited.  The form may reference the lexical variable <varname>ccl::vals</varname>,
+	  which is a list of values returned by this call. The value returned by
+	  <replaceable>form</replaceable> is intepreted as follows:
+	  </para>
+
+	  <variablelist>
+
+	    <varlistentry>
+	      <term><varname>nil</varname></term>
+	      <listitem><para>does nothing</para></listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term><varname>:detailed</varname></term>
+	      <listitem><para>prints a detailed backtrace to
+	      <varname>*trace-output*</varname>.</para></listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term><varname>(:detailed <replaceable>integer</replaceable>)</varname></term>
+	      <listitem><para>prints the top <replaceable>integer</replaceable> frames of detailed
+	      backtrace to <varname>*trace-output*</varname>.
+	      </para></listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term><replaceable>integer</replaceable></term>
+	      <listitem><para>prints top <replaceable>integer</replaceable> frames of a terse
+	      backtrace to <varname>*trace-output*</varname>.
+	      </para></listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>anything else</term>
+	      <listitem><para>prints a terse backtrace to <varname>*trace-output*</varname>.
+	      </para></listitem>
+	    </varlistentry>
+	  </variablelist>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+       <term><varname>:before</varname> <replaceable>action</replaceable></term>
+       <listitem>
+	  <para>specifies the action to be taken just before the traced function is entered.  <replaceable>action</replaceable> is one of:</para>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term><varname>:print</varname></term>
+	      <listitem>
+		<para>The default, prints a short indented message showing the function name and the invocation arguments</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term><varname>:break</varname></term>
+	      <listitem>
+		<para>Equivalent to <varname>:before :print :break-before t</varname></para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term><varname>:backtrace</varname></term>
+	      <listitem>
+		<para>Equivalent to <varname>:before :print :backtrace-before t</varname></para>
+	      </listitem>
+	    </varlistentry>
+
+
+	    <varlistentry>
+	      <term><replaceable>function</replaceable></term>
+	      <listitem>
+		<para>
+                  Any other value is interpreted as a function to call on entry instead of
+                  printing the standard entry message.  It is called with its first
+                  argument being the name of the function being traced, the remaining
+                  arguments being all the arguments to the function being traced, and
+                  <varname>ccl:*trace-level*</varname> bound to the current nesting level
+                  of trace actions. </para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+
+        <term><varname>:after</varname> <replaceable>action</replaceable></term>
         <listitem>
-	      <para>specifies the action to be taken just after the traced function exits.  The
-	        value is one of:</para>
+
+	      <para>specifies the action to be taken just after the traced function exits.  <replaceable>action</replaceable> is one of:</para>
+
 	      <variablelist>
 	        <varlistentry>
 	          <term><varname>:print</varname></term>
@@ -111,12 +374,21 @@
 	              returned values </para>
 	          </listitem>
 	        </varlistentry>
+
 	        <varlistentry>
 	          <term><varname>:break</varname></term>
 	          <listitem>
-	            <para>Enters the debugger after printing the standard function exit message</para>
+	            <para>Equivalent to <varname>:after :print :break-after t</varname></para>
 	          </listitem>
 	        </varlistentry>
+
+		<varlistentry>
+		  <term><varname>:backtrace</varname></term>
+		  <listitem>
+		    <para>Equivalent to <varname>:after :print :backtrace-after t</varname></para>
+		  </listitem>
+		</varlistentry>
+
 	        <varlistentry>
 	          <term><replaceable>function</replaceable></term>
 	          <listitem>
@@ -134,18 +406,24 @@
         </listitem>
       </varlistentry>
 
-
-      <varlistentry>
-        <term><varname>:backtrace</varname></term>
-        <listitem>
-	      <para>If true, requests that a stack backtrace (in brief format) be printed whenever the function is
-	        invoked. The value can be an integer, in which case it is the maximum number of frames to
-	        print. Otherwise, all frames are shown.
-	      </para>
-        </listitem>
-      </varlistentry>
-
     </variablelist>
+
+
+    <para>
+    <command><varname>CCL:*TRACE-LEVEL*</varname> [Variable]</command>
+    </para>
+
+    <para>Variable bound to the current nesting level during execution of before and after trace actions.</para>
+
+    <para>
+      <command><varname>CCL:TRACE-FUNCTION</varname> <replaceable>spec</replaceable> &key; {<replaceable>keyword</replaceable> <replaceable>value</replaceable>}*  [Function]</command>
+    </para>
+      
+    <para>
+      This is a functional version of the TRACE macro.  <replaceable>spec</replaceable> and
+      <replaceable>keyword</replaceable>s are as for TRACE, except that all arguments are evaluated.
+    </para>
+
   </sect1>
 
   <sect1 id="Strings-and-Pathanmes"><title>Strings and Pathnames</title>

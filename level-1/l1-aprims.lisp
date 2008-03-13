@@ -242,6 +242,8 @@ terminate the list"
            (setf (gethash setf-package-sym %setf-function-name-inverses%) sym
                  (gethash sym %setf-function-names%) setf-package-sym)))))
 
+(defun existing-setf-function-name (sym)
+  (gethash sym %setf-function-names%))
 
 (defun maybe-setf-name (sym)
   (let* ((other (gethash sym %setf-function-name-inverses%)))

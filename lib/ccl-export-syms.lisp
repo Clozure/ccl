@@ -61,6 +61,7 @@
      *trace-print-level*
      *trace-print-length*
      *trace-bar-frequency*
+     trace-function
      *ignore-extra-close-parenthesis*
      advise
      unadvise
