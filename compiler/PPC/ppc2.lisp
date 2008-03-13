@@ -6106,6 +6106,12 @@
     (ppc2-nil seg vreg xfer)))
 
 (defppc2 ppc2-call call (seg vreg xfer fn arglist &optional spread-p)
+  (when (and (null vreg)
+             (acode-p fn)
+             (eq (acode-operator fn) (%nx1-operator immediate)))
+    (let* ((name (cadr fn)))
+      (when (memq name *warn-if-function-result-ignored*)
+        (p2-whine *ppc2-cur-afunc*  :result-ignored name))))
   (ppc2-call-fn seg vreg xfer fn arglist spread-p))
 
 (defppc2 ppc2-self-call self-call (seg vreg xfer arglist &optional spread-p)
