@@ -207,21 +207,21 @@ if it contains no alphabetic characters."
   ;;; First precompute the stylized string form of the symbols as they will be compared
   ;;; and calculate the maximum indent
   (multiple-value-bind (tmpVector indentation)
-                       (let (sortOffset
-                             displayOffset
-                             str)
-                         (loop for x in thelist do
-                           (multiple-value-setq (str sortOffset displayOffset)
-                                    (if search-string
-                                      (find-str-in-sym search-string x)
-                                      (find-sym-alpha-part           x)))
+      (let (sortOffset
+            displayOffset
+            str)
+        (loop for x in thelist do
+              (multiple-value-setq (str sortOffset displayOffset)
+                (if search-string
+                  (find-str-in-sym search-string x)
+                  (find-sym-alpha-part           x)))
                            
                            
-                               maximize displayOffset into indentation1
-                               collect `#(,x ,(string-arg (subseq str sortOffset)) ,sortOffset ,displayOffset) into tmpList1
-                               finally  (return (values `#(,@tmpList1) indentation1))))
-    (sort tmpVector #'(lambda (symPair1 symPair2)
-                       (string-lessp (aref symPair1 1) (aref symPair2 1))))
+              maximize displayOffset into indentation1
+              collect `#(,x ,(string-arg (subseq str sortOffset)) ,sortOffset ,displayOffset) into tmpList1
+              finally  (return (values `#(,@tmpList1) indentation1))))
+    (setq TEMPVECTor (sort tmpVector #'(lambda (symPair1 symPair2)
+                                         (string-lessp (aref symPair1 1) (aref symPair2 1)))))
     (values tmpVector ; each element is a vector of `#(,sym sortable-string-for-sym)
             indentation)))
 
