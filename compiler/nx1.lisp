@@ -1834,7 +1834,7 @@
             (setq body (nx1-env-body body old-env))
             (while req
               (when (null arglist)
-                (nx-error "Not enough args in Lambda form: ~S ~S." lambda-list args))
+                (nx-error "Not enough args ~S for (LAMBDA ~s ...)" args lambda-list))
               (let* ((var (pop req))
                      (val (pop arglist))
                      (binding (nx1-note-var-binding var val)))
@@ -1856,7 +1856,7 @@
                       arglist (%cdr arglist))))
             (if arglist
               (when (and (not keys) (not rest))
-                (nx-error "Extra args in Lambda form: ~S ~S." lambda-list args))
+                (nx-error "Extra args ~s for (LAMBDA ~s ,,,)" args lambda-list))
               (when rest
                 (push rest vars*) (push *nx-nil* vals*)
                 (nx1-punt-bindings (cons rest nil) (cons *nx-nil* nil))
@@ -1914,8 +1914,8 @@
                     (unless (or (setq idx (position (%cadr arg) keyvect))
                                 (eq (%cadr arg) :allow-other-keys)
                                 (and kallowother (symbolp (%cadr arg))))
-                      (nx-error "Invalid keyword in Lambda form: ~S ~S."
-                                lambda-list args))
+                      (nx-error "Invalid keyword ~s in ~s for (LAMBDA ~S ...)"
+                                (%cadr arg) args lambda-list))
                     (when (and idx (null (%svref keyargs idx)))
                       (setq hit t)
                       (%svset keyargs idx n))))))
