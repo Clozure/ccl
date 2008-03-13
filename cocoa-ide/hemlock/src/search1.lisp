@@ -451,7 +451,7 @@
 	(t
 	 (setf (search-pattern-search-function old)
 	       #'insensitive-find-string-once-backward-method)
-	 (nreverse folded-string)))
+	 (setq folded-string (nreverse folded-string))))
       (let ((hashed-string (search-hash-string folded-string)))
 	(setf (string-insensitive-hashed-string old) hashed-string
 	      (string-insensitive-folded-string old) folded-string)
@@ -564,7 +564,7 @@
 	(t
 	 (setf (search-pattern-search-function old)
 	       #'sensitive-find-string-once-backward-method)
-	 (nreverse string)))
+	 (setq string (nreverse string))))
       (setf (string-sensitive-string old) string)
       (setf (string-sensitive-jumps old)
 	    (compute-boyer-moore-jumps

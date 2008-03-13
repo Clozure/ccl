@@ -250,9 +250,10 @@
 	  (when (and (not (find sym seq :test #'eq))
 		     (dabbrev-match-p context (symbol-name sym)))
 	    (vector-push-extend sym seq))))
-      (stable-sort seq #'(lambda (s1 s2)
-			   (and (or (boundp s1) (fboundp s1))
-				(not (or (boundp s2) (fboundp s2))))))
+      (setq seq
+	    (stable-sort seq #'(lambda (s1 s2)
+				 (and (or (boundp s1) (fboundp s1))
+				      (not (or (boundp s2) (fboundp s2)))))))
       ;; Now convert to strings - and downcase for inserting in buffer.
       (dotimes (i (length seq))
 	(setf (aref seq i) (string-downcase (symbol-name (aref seq i))))))
