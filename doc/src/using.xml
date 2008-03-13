@@ -185,8 +185,8 @@
       structure in memory.</para>
 
     <para>&CCL; provides the
-      functions <code>CCL:MAP-FILE-TO-IVECTOR</code>
-      and <code>CCL:MAP-FILE-TO-OCTET-VECTOR</code> to support
+      functions <varname>CCL:MAP-FILE-TO-IVECTOR</varname>
+      and <varname>CCL:MAP-FILE-TO-OCTET-VECTOR</varname> to support
       memory-mapping. These functions return vectors whose contents are
       the contents of memory-mapped files. Reading an element of such a
       vector returns data from the correponding position in the
@@ -195,12 +195,12 @@
     <para>Without memory-mapped files, a common idiom for reading the
       contents of files might be something like this:</para>
 
-    <programlisting>
+    <para><programlisting>
 (let* ((stream (open pathname :direction :input :element-type '(unsigned-byte 8)))
        (vector (make-array (file-size-to-vector-size stream)
                            :element-type '(unsigned-byte 8))))
   (read-sequence vector stream))
-    </programlisting>
+    </programlisting></para>
 
     <para>Using a memory-mapped files has a result that is the same in
       that, like the above example, it returns a vector whose contents are
@@ -210,20 +210,20 @@
       the vector's elements to point to the file's contents on disk
       directly, without copying them into memory first.</para>
 
-    <para>The vectors returned by <code>CCL:MAP-FILE-TO-IVECTOR</code>
-      and <code>CCL:MAP-FILE-TO-OCTET-VECTOR</code> are read-only; any
+    <para>The vectors returned by <varname>CCL:MAP-FILE-TO-IVECTOR</varname>
+      and <varname>CCL:MAP-FILE-TO-OCTET-VECTOR</varname> are read-only; any
       attempt to change an element of a vector returned by these
       functions results in a memory-access error. &CCL; does not
       currently support writing data to memory-mapped files.</para>
 
-    <para>Vectors created by <code>CCL:MAP-FILE-TO-IVECTOR</code>
-      and <code>CCL:MAP-FILE-TO-OCTET-VECTOR</code> are required to
+    <para>Vectors created by <varname>CCL:MAP-FILE-TO-IVECTOR</varname>
+      and <varname>CCL:MAP-FILE-TO-OCTET-VECTOR</varname> are required to
       respect &CCL;'s limit on the total size of an array. That means
       that you cannot use these functions to create a vector longer
-      than <code>ARRAY-TOTAL-SIZE-LIMIT</code>, even if the filesystem
+      than <varname>ARRAY-TOTAL-SIZE-LIMIT</varname>, even if the filesystem
       supports file sizes that are larger. The value
-      of <code>ARRAY-TOTAL-SIZE-LIMIT</code> is <code>(EXPT 2 24)</code>
-      on 32-but platforms; and <code>(EXPT 2 56)</code> on 64-bit
+      of <varname>ARRAY-TOTAL-SIZE-LIMIT</varname> is <varname>(EXPT 2 24)</varname>
+      on 32-but platforms; and <varname>(EXPT 2 56)</varname> on 64-bit
       platforms.</para>
 
     <para>
@@ -247,8 +247,8 @@
           <para>The element-type of the vector to be
             created. Specified as
             a <glossterm linkend="type-specifier">type-specifier</glossterm>
-            that names a subtype of either <code>SIGNED-BYTE</code>
-            or <code>UNSIGNED-BYTE</code>.</para>
+            that names a subtype of either <varname>SIGNED-BYTE</varname>
+            or <varname>UNSIGNED-BYTE</varname>.</para>
         </listitem>
       </varlistentry>
     </variablelist>
@@ -266,19 +266,19 @@
 
     <para>The returned vector is
       a <glossterm linkend="displaced-array">displaced-array</glossterm>
-      whose element-type is <code>(UPGRADED-ARRAY-ELEMENT-TYPE
-        element-type)</code>. The target of the displaced array is a
-      vector of type <code>(SIMPLE-ARRAY element-type (*))</code> whose
+      whose element-type is <varname>(UPGRADED-ARRAY-ELEMENT-TYPE
+        element-type)</varname>. The target of the displaced array is a
+      vector of type <varname>(SIMPLE-ARRAY element-type (*))</varname> whose
       elements are the contents of the memory-mapped file.</para>
 
     <para>Because of alignment issues, the mapped file's contents
       start a few bytes (4 bytes on 32-bit platforms, 8 bytes on
       64-bit platforms) into the vector. The displaced array returned
-      by <code>CCL:MAP-FILE-TO-IVECTOR</code> hides this overhead, but
+      by <varname>CCL:MAP-FILE-TO-IVECTOR</varname> hides this overhead, but
       it's usually more efficient to operate on the underlying simple
       1-dimensional array.  Given a displaced array (like the value
-      returned by <code>CCL:MAP-FILE-TO-IVECTOR</code>), the function
-      <code>ARRAY-DISPLACEMENT</code> returns the underlying array and
+      returned by <varname>CCL:MAP-FILE-TO-IVECTOR</varname>), the function
+      <varname>ARRAY-DISPLACEMENT</varname> returns the underlying array and
       the displacement index in elements.
     </para>
 
@@ -306,8 +306,8 @@
         [Function]</command>
     </para>
 
-    <para>This function is a synonym for <code>(CCL:MAP-FILE-TO-IVECTOR
-        pathname '(UNSIGNED-BYTE 8))</code> It is provided as a convenience
+    <para>This function is a synonym for <varname>(CCL:MAP-FILE-TO-IVECTOR
+        pathname '(UNSIGNED-BYTE 8))</varname> It is provided as a convenience
       for the common case of memory-mapping a file as a vector of
       bytes.</para>
 
@@ -318,10 +318,10 @@
     </para>
 
     <para>This function is a synonym
-      for <code>(CCL:UNMAP-IVECTOR)</code></para>
+      for <varname>(CCL:UNMAP-IVECTOR)</varname></para>
   </sect1>
 
-  <sect1 id="Static Variables">
+  <sect1 id="Static_Variables">
     <title>Static Variables</title>
 
     <para>&CCL; supports the definition
@@ -332,8 +332,8 @@
     in one thread changes it for all threads.</para> 
 
     <para>Attempting to dynamically rebind a static variable (for
-    instance, by using <code>LET</code>, or using the variable name as
-    a parameter in a <code>LAMBDA</code> form) signals an
+    instance, by using <varname>LET</varname>, or using the variable name as
+    a parameter in a <varname>LAMBDA</varname> form) signals an
     error. Static variables are shared global resources; a dynamic
     binding is private to a single thread.</para>
 
@@ -354,7 +354,7 @@
       <command><varname>DEFSTATIC</varname>
         <parameter>var</parameter>
         <parameter>value</parameter>
-        <varname>&key;</varname>
+        &key;
         <parameter>doc-string</parameter>
         [Macro]</command>
     </para>
@@ -387,7 +387,7 @@
       variable <glossterm linkend="special_variable">special</glossterm>,
       assigns the variable the supplied value, and assigns
       the <varname>doc-string</varname> to the
-      variable's <code>VARIABLE</code> documentation. Marks the
+      variable's <varname>VARIABLE</varname> documentation. Marks the
       variable static, preventing any attempt to dynamically rebind
       it. Any attempt to dynamically rebind <varname>var</varname>
       signals an error.</para>
