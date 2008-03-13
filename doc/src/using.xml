@@ -33,7 +33,8 @@
 
 
     <para>
-    <command><varname>TRACE</varname> {<replaceable>keyword</replaceable>
+    <indexterm zone="trace"/>
+    <command><varname id="trace">TRACE</varname> {<replaceable>keyword</replaceable>
     <replaceable>global-value</replaceable>}* {<replaceable>spec</replaceable> |
     (<replaceable>spec</replaceable> {<replaceable>keyword</replaceable>
     <replaceable>local-value</replaceable>}*)}* [Macro]</command>
@@ -410,19 +411,56 @@
 
 
     <para>
-    <command><varname>CCL:*TRACE-LEVEL*</varname> [Variable]</command>
+      <indexterm zone="trace-level"/>
+      <command><varname id="trace-level">CCL:*TRACE-LEVEL*</varname>    [Variable]</command>
     </para>
 
-    <para>Variable bound to the current nesting level during execution of before and after trace actions.</para>
+    <para>Variable bound to the current nesting level during execution of before and after trace actions.  The default printing actions use it to determine the amount of indentation.</para>
 
     <para>
-      <command><varname>CCL:TRACE-FUNCTION</varname> <replaceable>spec</replaceable> &key; {<replaceable>keyword</replaceable> <replaceable>value</replaceable>}*  [Function]</command>
+      <indexterm zone="trace-max-indent"/>
+      <command><varname id="trace-max-indent">CCL:*TRACE-MAX-INDENT*</varname>    [Variable]</command>
+    </para>
+
+    <para>The default before and after print actions will not indent by more than the value of <varname>ccl:*trace-max-indent*</varname> regardless of the current trace level.</para>
+
+    <para>
+      <indexterm zone="trace-function"/>
+      <command><varname id="trace-function">CCL:TRACE-FUNCTION</varname> <replaceable>spec</replaceable> &key; {<replaceable>keyword</replaceable> <replaceable>value</replaceable>}*    [Function]</command>
     </para>
       
     <para>
       This is a functional version of the TRACE macro.  <replaceable>spec</replaceable> and
       <replaceable>keyword</replaceable>s are as for TRACE, except that all arguments are evaluated.
     </para>
+
+    <para>
+      <indexterm zone="trace-print-level"/>
+      <command><varname id="trace-print-level">CCL:*TRACE-PRINT-LEVEL*</varname>   [Variable]</command>
+    </para>
+
+    <para>The default print actions bind <varname>CL:*PRINT-LEVEL*</varname> to this value while
+    printing. Note that this rebinding is only in effect during the default entry and exit messages.
+    It does not apply to printing of <varname>:print-before/:print-after</varname> forms or any
+    explicit printing done by user code.</para>
+
+    <para>
+      <indexterm zone="trace-print-length"/>
+      <command><varname id="trace-print-length">CCL:*TRACE-PRINT-LENGTH*</varname>    [Variable]</command>
+    </para>
+  
+    <para>The default print actions bind <varname>CL:*PRINT-LENGTH*</varname> to this value while
+    printing. Note that this rebinding is only in effect during the default entry and exit messages.
+    It does not apply to printing of <varname>:print-before/:print-after</varname> forms or any
+    explicit printing done by user code.</para>
+
+    <para>
+      <indexterm zone="trace-bar-frequency"/>
+      <command><varname id="trace-bar-frequency">CCL:*TRACE-BAR-FREQUENCY*</varname>    [Variable]</command>
+    </para>
+
+    <para>By default, this is nil. If non-nil it should be a integer, and the default entry and exit messages will print a | instead of space every this many levels of indentation.</para>
+
 
   </sect1>
 
@@ -505,7 +543,8 @@
       platforms.</para>
 
     <para>
-      <command><varname>CCL:MAP-FILE-TO-IVECTOR</varname>
+      <indexterm zone="map-file-to-ivector"/>
+      <command><varname id="map-file-to-ivector">CCL:MAP-FILE-TO-IVECTOR</varname>
         <parameter>pathname</parameter>
         <parameter>element-type</parameter>
         [Function]</command>
@@ -566,7 +605,8 @@
       a memory error.</para>
 
     <para>
-      <command><varname>CCL:UNMAP-IVECTOR</varname>
+      <indexterm zone="unmap-ivector"/>
+      <command><varname id="unmap-ivector">CCL:UNMAP-IVECTOR</varname>
         <parameter>displaced-array</parameter>
         [Function]</command>
     </para>
@@ -579,7 +619,8 @@
       target is an empty vector (of length zero).</para>
 
     <para>
-      <command><varname>CCL:MAP-FILE-TO-OCTET-VECTOR</varname>
+      <indexterm zone="map-file-to-octet-vector"/>
+      <command><varname id="map-file-to-octet-vector">CCL:MAP-FILE-TO-OCTET-VECTOR</varname>
         <parameter>pathname</parameter>
         [Function]</command>
     </para>
@@ -590,7 +631,8 @@
       bytes.</para>
 
     <para>
-      <command><varname>CCL:UNMAP-OCTET-VECTOR</varname>
+      <indexterm zone="unmap-octet-vector"/>
+      <command><varname id="unmap-octet-vector">CCL:UNMAP-OCTET-VECTOR</varname>
         <parameter>displaced-array</parameter>
         [Function]</command>
     </para>
@@ -629,7 +671,8 @@
     static.</para>
 
     <para>
-      <command><varname>DEFSTATIC</varname>
+      <indexterm zone="defstatic"/>
+      <command><varname id="defstatic">DEFSTATIC</varname>
         <parameter>var</parameter>
         <parameter>value</parameter>
         &key;
