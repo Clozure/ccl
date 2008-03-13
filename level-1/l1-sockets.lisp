@@ -498,7 +498,7 @@ safer to mess with directly as there is less magic going on."))
   (local-socket-info (socket-device socket) :host socket))
 
 (defmethod local-filename ((socket socket))
-  (local-socket-filename socket))
+  (local-socket-filename (socket-device socket) socket))
 
 (defgeneric remote-host (socket)
   (:documentation
