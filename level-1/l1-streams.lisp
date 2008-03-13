@@ -5562,9 +5562,8 @@
     'selection-input-stream
     (error "Can't create that type of stream.")))
 
-(defun make-selection-input-stream (fd &key peer-fd (elements-per-buffer *elements-per-buffer*) encoding)
+(defun make-selection-input-stream (fd &key peer-fd  encoding)
   (let* ((s (make-fd-stream fd
-                            :elements-per-buffer elements-per-buffer
                             :class 'selection-input-stream
                             :sharing :lock
                             :encoding encoding)))
