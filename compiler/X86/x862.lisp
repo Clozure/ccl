@@ -6394,6 +6394,12 @@
     (x862-nil seg vreg xfer)))
 
 (defx862 x862-call call (seg vreg xfer fn arglist &optional spread-p)
+  (when (and (null vreg)
+             (acode-p fn)
+             (eq (acode-operator fn) (%nx1-operator immediate)))
+    (let* ((name (cadr fn)))
+      (when (memq name *warn-if-function-result-ignored*)
+        (p2-whine *x862-cur-afunc*  :result-ignored name))))
   (x862-call-fn seg vreg xfer fn arglist spread-p))
 
 (defx862 x862-self-call self-call (seg vreg xfer arglist &optional spread-p)
