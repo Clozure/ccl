@@ -328,7 +328,7 @@
                             (defenv.defined definition-env)))
              (info nil))
         (when (lambda-expression-p lambda-expression)
-          (multiple-value-bind (lfbits keyvect) (encode-lambda-list lambda-expression t)
+          (multiple-value-bind (lfbits keyvect) (encode-lambda-list (cadr lambda-expression) t)
             (setq info (cons (cons lfbits keyvect) 
                              (retain-lambda-expression name lambda-expression env)))))
           (if already
