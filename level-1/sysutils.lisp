@@ -585,7 +585,9 @@
       (when (or init-p (not (equalp w-file last-w-file)))
         (format s "~&;~A warnings " (if (null eval-p) "Compiler" "Interpreter"))
         (if w-file (format s "for ~S :" w-file) (princ ":" s)))
-      (format s "~&;   ~A" w))
+      (let* ((indenting-stream (make-indenting-string-output-stream #\; 4)))
+        (format indenting-stream "~%~a" w)
+        (format s "~a" (get-output-stream-string indenting-stream))))
     (values harsh-p any-p w-file)))
 
 ;;;; Assorted mumble-P type predicates. 
