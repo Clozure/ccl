@@ -91,6 +91,7 @@ whose name or ID matches <p>, or to any process if <p> is null"
 
 
 (define-toplevel-command :break pop () "exit current break loop" (abort-break))
+(define-toplevel-command :break a () "exit current break loop" (abort-break))
 (define-toplevel-command :break go () "continue" (continue))
 (define-toplevel-command :break q () "return to toplevel" (toplevel))
 (define-toplevel-command :break r () "list restarts"
@@ -132,8 +133,10 @@ whose name or ID matches <p>, or to any process if <p> is null"
                           :count count
                           :start-frame-number (or start 0))))
 
-(define-toplevel-command :break c (n) "Choose restart <n>"
-   (select-restart n))
+(define-toplevel-command :break c (&optional n) "Choose restart <n>. If no <n>, continue"
+  (if n
+   (select-restart n)
+   (continue)))
 
 (define-toplevel-command :break f (n) "Show backtrace frame <n>"
    (print-call-history :origin *break-frame*
