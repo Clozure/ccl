@@ -293,20 +293,24 @@
     (method (%method-function spec))))
 
 
-(defun %trace-function-spec-p (spec &optional define-if-not undefined-ok)
+(defun %trace-function-spec-p (spec &optional define-if-not undefined-ok (error-p t))
   ;; weed out macros and special-forms
   (typecase spec
     (symbol
-     (when (or (null spec)(special-operator-p spec)(macro-function spec))
-       (error "Cannot trace or advise ~S." spec))
-     (let ((res (or (fboundp spec)(and define-if-not
-                                       (progn (warn "~S was undefined" spec)
-                                              (%fhave spec (%function 'trace-null-def)))))))
-       (when (not res)
-	 (if undefined-ok
+     (if (or (null spec)(special-operator-p spec)(macro-function spec))
+       (if error-p
+	 (error "Cannot trace or advise ~S" spec)
+	 (values nil nil))
+       (let ((res (or (fboundp spec)(and define-if-not
+					 (progn (warn "~S was undefined" spec)
+						(%fhave spec (%function 'trace-null-def)))))))
+	 (if res
+	   (values res spec)
+	   (if undefined-ok
 	     (values nil spec)
-	   (error "~S is undefined." spec)))
-       (values res spec)))
+	     (if error-p
+	       (error "~S is undefined." spec)
+	       (values nil nil)))))))
     (method
      (values (%method-function spec) spec))
     (cons
@@ -316,7 +320,7 @@
               (qualifiers (butlast (cddr spec)))
               (specializers (car (last (cddr spec))))
               method)
-          (require-type specializers 'list)
+          (setq specializers (require-type specializers 'list))
           (prog ()
             AGN
             (cond ((setq method
@@ -325,16 +329,21 @@
                   (define-if-not
                     (when (define-undefined-method spec gf qualifiers specializers)
                       (go AGN)))
-                  (t (error "Method ~s qualifiers ~s specializers ~s not found."
-                            gf qualifiers specializers))))))
+                  (t (if error-p
+		       (error "Method ~s qualifiers ~s specializers ~s not found."
+			      gf qualifiers specializers)
+		       (return (values nil nil))))))))
        (setf
         (let ((name-or-fn (setf-function-spec-name spec)))
           (cond ((symbolp name-or-fn)(%trace-function-spec-p name-or-fn))
-                ((functionp name-or-fn) ; its anonymous - give it a name
+                ((functionp name-or-fn) ; it's anonymous - give it a name
                  (let ((newname (gensym)))
                    (%fhave newname name-or-fn)
                    (store-setf-method (cadr spec) newname)
-                   (values name-or-fn newname))))))))))
+                   (values name-or-fn newname))))))))
+    (t (if error-p
+	 (error "Invalid trace spec ~s" spec)
+	 (values nil nil)))))
     
 
 (defun trace-null-def (&rest ignore)
@@ -355,22 +364,25 @@
       (when def (warn "~S was undefined" spec))
       def)))
 
+(defun traceable-symbol-p (sym)
+  (and sym
+       (not (special-operator-p sym))
+       (not (macro-function sym))
+       (fboundp sym)))
+
 (defun %trace-package (pkg &rest args)
   (declare (dynamic-extent args))
-  (setq pkg (pkg-arg pkg))
   (do-present-symbols (sym pkg)
     ;; Don't auto-trace imported symbols, because too often these are imported
     ;; system functions...
     (when (eq (symbol-package sym) pkg)
-      (unless (or (null sym)
-		  (special-operator-p sym)
-		  (macro-function sym)
-		  (not (fboundp sym)))
+      (when (traceable-symbol-p sym)
 	(apply #'trace-function sym args))
       (when (or (%setf-method sym)
-		;; Not really right.  Should construct the name and check if fboundp.
+		;; Not really right.  Should construct the name if doesn't exist.
 		;; But that would create a lot of garbage for little gain...
-		(existing-setf-function-name sym))
+		(let ((name (existing-setf-function-name sym)))
+                  (traceable-symbol-p name)))
 	(apply #'trace-function `(setf ,sym) args)))))
 
 (defun trace-print-body (print-form)
@@ -412,26 +424,50 @@
 				  :count (or count most-positive-fixnum))
 	      (terpri *trace-output*))))))))
 
-(defun trace-function (sym &rest args &key before after methods
-			   (if t) (before-if t) (after-if t)
-			   print print-before print-after
-			   eval eval-before eval-after
-			   break break-before break-after
-			   backtrace backtrace-before backtrace-after
-			   define-if-not
-			   ;; Some synonyms, just to be nice
-			   (condition t) (if-before t) (if-after t))
+(defun trace-inside-frame-p (name)
+  (if (packagep name)
+    (map-call-frames #'(lambda (p)
+                         (let* ((fn (cfp-lfun p))
+                                (fname (and fn (function-name fn)))
+                                (sym (typecase fname
+                                       (method (method-name fname))
+                                       (cons (and (setf-function-name-p fname) (cadr fname)))
+                                       (symbol fname)
+                                       (t nil))))
+                           (when (and sym (eq (symbol-package sym) name))
+                             (return-from trace-inside-frame-p t)))))
+    (let ((fn (typecase name
+                (symbol (fboundp name))
+                (method (%method-function name)))))
+      (when fn
+        (map-call-frames #'(lambda (p)
+                             (when (eq (cfp-lfun p) fn)
+                               (return-from trace-inside-frame-p t))))))))
+
+(defun trace-package-spec (spec)
+  (when (or (stringp spec)
+            (packagep spec)
+            (and (consp spec) (eq (car spec) :package)))
+    (let ((pkg (if (consp spec)
+                 (destructuring-bind (pkg) (cdr spec) pkg)
+                 spec)))
+      (pkg-arg pkg))))
+
+(defun trace-function (spec &rest args &key before after methods
+                            (if t) (before-if t) (after-if t)
+                            print print-before print-after
+                            eval eval-before eval-after
+                            break break-before break-after
+                            backtrace backtrace-before backtrace-after
+                            inside
+                            define-if-not
+                            ;; Some synonyms, just to be nice
+                            (condition t) (if-before t) (if-after t) (wherein nil))
 
   (declare (dynamic-extent args))
-  (when (or (stringp sym)
-	    (packagep sym)
-	    (and (consp sym) (eq (car sym) :package)))
-    (return-from trace-function
-      (apply #'%trace-package
-	     (if (consp sym)
-	       (destructuring-bind (pkg) (cdr sym) pkg)
-	       sym)
-	     args)))
+  (let ((pkg (trace-package-spec spec)))
+    (when pkg
+      (return-from trace-function (apply #'%trace-package pkg args))))
 
   ;; A little bit of dwim, after all this _is_ an interactive tool...
   (unless (eq condition t)
@@ -440,6 +476,10 @@
     (setq before-if (if (eq before-if t) if-before `(and ,before-if ,if-before))))
   (unless (eq if-after t)
     (setq after-if (if (eq after-if t) if-after `(and ,after-if ,if-after))))
+  (when (and inside (trace-spec-p inside))
+    (setq inside (list inside)))
+  (when wherein
+    (setq inside (append inside (if (trace-spec-p wherein) (list wherein) wherein))))
   (case break
     (:before (setq break-before (or break-before t) break nil))
     (:after (setq break-after (or break-after t) break nil)))
@@ -483,35 +523,43 @@
   (when (or (non-nil-symbol-p after) (functionp after))
     (setq after `',after))
 
+  (when inside
+    (let ((tests (loop for spec in inside
+		       as name = (or (trace-package-spec spec)
+                                     (nth-value 1 (%trace-function-spec-p spec nil nil nil))
+				     (error "Cannot trace inside ~s" spec))
+		       collect `(trace-inside-frame-p ',name))))
+      (setq if `(and ,if (or ,@tests)))))
+
   (setq eval-before `(,@(trace-print-body print-before)
 		      ,@(trace-print-body print)
 		      ,@(and eval-before `(,eval-before))
 		      ,@(and eval `(,eval))
-		      ,@(and before `((apply ,before ',sym args)))
+		      ,@(and before `((apply ,before ',spec args)))
 		      ,@(trace-backtrace-body backtrace-before)
 		      ,@(and break-before `((when ,break-before
 					      (force-output *trace-output*)
-					      (break "~s trace entry: ~s" ',sym args))))))
+					      (break "~s trace entry: ~s" ',spec args))))))
   (setq eval-after `(,@(trace-backtrace-body backtrace-after)
-		     ,@(and after `((apply ,after ',sym vals)))
+		     ,@(and after `((apply ,after ',spec vals)))
 		     ,@(and eval `(,eval))
 		     ,@(and eval-after `(,eval-after))
 		     ,@(trace-print-body print)
 		     ,@(trace-print-body print-after)
 		     ,@(and break-after `((when ,break-after
 					    (force-output *trace-output*)
-					    (break "~s trace exit: ~s" ',sym vals))))))
+					    (break "~s trace exit: ~s" ',spec vals))))))
 
   (prog1
       (block %trace-block
 	;;
 	;; see if we're a callback
 	;;
-	(when (and (typep sym 'symbol)
-		   (boundp sym)
-		   (macptrp (symbol-value sym)))
+	(when (and (typep spec 'symbol)
+		   (boundp spec)
+		   (macptrp (symbol-value spec)))
 	  (let ((len (length %pascal-functions%))
-		(sym-name (symbol-name sym)))
+		(sym-name (symbol-name spec)))
 	    (declare (fixnum len))
 	    (dotimes (i len)
 	      (let ((pfe (%svref %pascal-functions% i)))
@@ -524,7 +572,7 @@
 			`(,@(if before `((:before . ,before)))
 			  ,@(if after `((:after . ,after)))
 			  ,@(if backtrace `((:backtrace . ,backtrace)))))
-		  (push sym *trace-pfun-list*)))))
+		  (push spec *trace-pfun-list*)))))
 	  (return-from %trace-block))
 	;;
 	;; now look for tracible methods.
@@ -534,10 +582,10 @@
 	;; If we're neither, signal an error.
 	;;
 	(multiple-value-bind (def trace-thing) 
-	    (%trace-function-spec-p sym define-if-not)
+	    (%trace-function-spec-p spec define-if-not)
 	  (when (null def)
 	    (return-from trace-function
-	      (warn "Trace does not understand ~S, ignored." sym)))
+	      (warn "Trace does not understand ~S, ignored." spec)))
 	  (when (%traced-p trace-thing)
 	    (%untrace-1 trace-thing)
 	    (setq def (%trace-fboundp trace-thing)))
@@ -561,11 +609,11 @@
 	  (let* ((newsym (gensym "TRACE"))
 		 (method-p (typep trace-thing 'method))
 		 (newdef (trace-global-def 
-			  sym newsym if before-if eval-before after-if eval-after method-p)))
+			  spec newsym if before-if eval-before after-if eval-after method-p)))
 	    (when method-p
 	      (copy-method-function-bits def newdef))
 	    (without-interrupts
-	      (multiple-value-bind (ignore gf-dcode) (encapsulate trace-thing def 'trace sym newsym)
+	      (multiple-value-bind (ignore gf-dcode) (encapsulate trace-thing def 'trace spec newsym)
 		(declare (ignore ignore))
 		(cond (gf-dcode 
 		       (setf (%gf-dcode def)
@@ -576,7 +624,7 @@
 		       (remove-obsoleted-combined-methods trace-thing)
 		       newdef)))))))
     (when *trace-hook*
-      (apply *trace-hook* sym args))))
+      (apply *trace-hook* spec args))))
 
 
 ;; sym is either a symbol or a method
@@ -677,10 +725,14 @@ functions are called."
       `(%trace-0 ',syms ',options))
     `(%trace-list)))
 
+(defun trace-spec-p (arg)
+  (or (atom arg)
+      (memq (car arg) '(:method setf :package))))
+
+
 (defun %trace-0 (syms &optional global-options)
   (dolist (spec syms)
-    (if (or (atom spec)
-	    (memq (car spec) '(:method setf :package)))
+    (if (trace-spec-p spec)
       (apply #'trace-function spec global-options)
       (apply #'trace-function (append spec global-options)))))
 
@@ -691,7 +743,6 @@ functions are called."
     (dolist (x *trace-pfun-list*)
       (push x res))
     res))
-
 
 ;; this week def is the name of an uninterned gensym whose fn-cell is original def
 

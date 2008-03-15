@@ -91,6 +91,20 @@
       </varlistentry>
 
       <varlistentry>
+	<term><varname>:inside <replaceable>outside-spec</replaceable>
+	                       | ({<replaceable>outside-spec</replaceable>}*)</varname></term>
+	<listitem>
+	  <para>Inhibits all trace actions unless the current
+	  invocation of the function being traced is inside one of the
+	  <replaceable>outside-spec</replaceable>'s, i.e. unless a function named by one of the
+	  <replaceable>outside-spec</replaceable>'s is currently on the stack.
+	  <replaceable>outside-spec</replaceable> can name a function, a
+	  method, or a package, as above.
+	  </para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
 	<term><varname>:if <replaceable>form</replaceable></varname></term>
 	<term><varname>:condition <replaceable>form</replaceable></varname></term>
 	<listitem>

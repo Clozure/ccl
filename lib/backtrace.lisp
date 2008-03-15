@@ -46,6 +46,20 @@
         (%resume-tcr tcr)))
     (values)))
 
+(defun map-call-frames (fn &key context
+			   (origin (%get-frame-ptr))
+			   (start-frame-number 0)
+			   (include-internal nil))
+  (let* ((tcr (if context (bt.tcr context) (%current-tcr))))
+    (if (eq tcr (%current-tcr))
+      (%map-call-frames-internal fn context origin include-internal start-frame-number)
+      (unwind-protect
+	   (progn
+	     (%suspend-tcr tcr)
+	     (%map-call-frames-internal fn context origin include-internal start-frame-number))
+	(%resume-tcr tcr))))
+  nil)
+
 (defun %show-stack-frame (p context lfun pc)
   (handler-case
       (multiple-value-bind (count vsp parent-vsp) (count-values-in-frame p context)
@@ -127,6 +141,21 @@
         (when (or (cfp-lfun p) include-internal)
           (frames p))))))
     
+(defun %map-call-frames-internal (fn context origin include-internal skip-initial)
+  (let ((*standard-output* *debug-io*)
+        (*print-circle* nil)
+        (p origin)
+        (q (last-frame-ptr context)))
+    (dotimes (i skip-initial)
+      (setq p (parent-frame p context))
+      (when (or (null p) (eq p q) (%stack< q p context))
+        (return (setq p nil))))
+    (do* ((p p (parent-frame p context)))
+         ((or (null p) (eq p q) (%stack< q p context)) nil)
+      (when (or include-internal
+		(and (not (catch-csp-p p context)) (cfp-lfun p)))
+	(funcall fn p)))))
+
 (defun %print-call-history-internal (context origin detailed-p
                                              &optional (count most-positive-fixnum) (skip-initial 0))
   (let ((*standard-output* *debug-io*)
