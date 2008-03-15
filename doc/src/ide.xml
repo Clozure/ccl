@@ -14,25 +14,21 @@
   
   <sect1><title>Introduction</title>
     
-    <para>Clozure CL ships with the source code for a simple Cocoa
-      integrated development environment that runs on Mac OS X. This
-      chapter describes how to build and use that environment,
-      referred to hereafter simply as "the IDE".</para>
+    <para>Clozure CL ships with the complete source code for an integrated
+    development environment written using Cocoa on Mac OS X. This
+    chapter describes how to build and use that environment,
+    referred to hereafter simply as "the IDE".</para>
 
-    <para>The IDE is still in a preliminary state, and may lack many
-      features you would expect to find in a polished Cocoa
-      application. It does, however, provide a text editor and listener
+    <para>The IDE provides a programmable text editor, listener
       windows, an inspector for Lisp data structures, and a means of
       easily building a Cocoa application in Lisp. In addition, its
       source code provides an example of a fairly complex Cocoa
       application written in Lisp.</para>
 
-    <para>A more rudimentary version of the Clozure CL IDE has been
-      included for several years with the distribution. The current
-      version of the IDE has seen the addition of numerous features
-      and many bugfixes. Although it's by no means a finished product,
-      we hope it will prove more useful than previous versions, and we
-      plan additional work on the IDE for future releases.</para>
+    <para>The current version of the IDE has seen the addition of numerous
+    features and many bugfixes. Although it's by no means a finished product,
+    we hope it will prove more useful than previous versions, and we
+    plan additional work on the IDE for future releases.</para>
   </sect1>
 
   <sect1><title>Building the IDE</title>
@@ -213,7 +209,8 @@
       the required subsystems, if necessary.</para>
 
     <para>
-      <command><varname>BUILD-APPLICATION</varname> <varname>&key;</varname>
+      <indexterm zone="build-application"/>
+      <command><varname id="build-application">BUILD-APPLICATION</varname> <varname>&key;</varname>
         (<parameter>name</parameter> <replaceable>"MyApplication"</replaceable>)
         (<parameter>type-string</parameter> <replaceable>"APPL"</replaceable>)
         (<parameter>creator-string</parameter> <replaceable>"OMCL"</replaceable>)
