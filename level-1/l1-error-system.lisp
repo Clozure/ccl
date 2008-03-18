@@ -672,24 +672,28 @@
 
 ;; Some simple restarts for simple error conditions.  Callable from the kernel.
 
-(defun find-unique-homonym (name &optional test)
-  (let ((pname (and name (symbolp name) (symbol-name name)))
-	(other-name nil))
-    (dolist (pkg (list-all-packages) other-name)
-      (let ((candidate (find-symbol pname pkg)))
-	(when (and candidate
-		   (not (eq candidate name))
-		   (or (null test) (funcall test candidate)))
-	  (when (and other-name (neq other-name candidate))
-	    (return nil)) ;; more than one, too complicated, give up
-	  (setq other-name candidate))))))
-
+(defun find-unique-homonyms (name &optional (test (constantly t)))
+  (loop
+    with symbol = (if (consp name) (second name) name)
+    with pname = (symbol-name symbol)
+    for package in (list-all-packages)
+    for other-package-symbol = (find-symbol pname package)
+    for canditate = (and other-package-symbol
+			 (neq other-package-symbol symbol)
+			 (if (consp name)
+			   (list (first name) other-package-symbol)
+			   other-package-symbol))
+    when (and canditate
+              (funcall test canditate))
+    collect canditate))
 
 (def-kernel-restart $xvunbnd %default-unbound-variable-restarts (frame-ptr cell-name)
   (unless *level-1-loaded*
     (dbg cell-name))       ;  user should never see this.
   (let ((condition (make-condition 'unbound-variable :name cell-name))
-	(other-variable (find-unique-homonym cell-name #'boundp)))
+	(other-variables (find-unique-homonyms cell-name (lambda (name)
+                                                           (and (not (keywordp name))
+                                                                (boundp name))))))
     (flet ((new-value ()
              (catch-cancel
               (return-from new-value
@@ -701,10 +705,17 @@
         (continue ()
                   :report (lambda (s) (format s "Retry getting the value of ~S." cell-name))
                   (symbol-value cell-name))
-        (use-homonym ()
-                     :test (lambda (c) (and (or (null c) (eq c condition)) other-variable))
-                     :report (lambda (s) (format s "Use the value of ~s this time." other-variable))
-                     (symbol-value other-variable))
+        (use-homonym (homonym)
+                     :test (lambda (c) (and (or (null c) (eq c condition)) other-variables))
+                     :report (lambda (s)
+                               (if (= 1 (length other-variables))
+                                 (format s "Use the value of ~s this time." (first other-variables))
+                                 (format s "Use one of the homonyms ~{~S or ~} this time." other-variables)))
+                     :interactive (lambda ()
+                                    (if (= 1 (length other-variables))
+                                      other-variables
+                                      (select-item-from-list other-variables :window-title "Select homonym to use")))
+                     (symbol-value homonym))
         (use-value (value)
                    :interactive new-value
                    :report (lambda (s) (format s "Specify a value of ~S to use this time." cell-name))
@@ -936,15 +947,22 @@
   (let ((condition (make-condition 'undefined-function-call
                                    :name function-name
                                    :function-arguments args))
-	(other-function (find-unique-homonym function-name #'fboundp)))
+	(other-functions (find-unique-homonyms function-name #'fboundp)))
     (restart-case (%error condition nil frame-ptr)
       (continue ()
                 :report (lambda (s) (format s "Retry applying ~S to ~S." function-name args))
                 (apply function-name args))
-      (use-homonym ()
-                   :test (lambda (c) (and (or (null c) (eq c condition)) other-function))
-                   :report (lambda (s) (format s "Apply ~s to ~S this time." other-function args))
-                   (apply other-function args))
+      (use-homonym (function-name)
+                   :test (lambda (c) (and (or (null c) (eq c condition)) other-functions))
+                   :report (lambda (s)
+                             (if (= 1 (length other-functions))
+                               (format s "Apply ~s to ~S this time." (first other-functions) args)
+                               (format s "Apply one of ~{~S or ~} to ~S this time.")))
+                   :interactive (lambda ()
+                                  (if (= 1 (length other-functions))
+                                    other-functions
+                                    (select-item-from-list other-functions :window-title "Select homonym to use")))
+                   (apply (fdefinition function-name) args))
       (use-value (function)
                  :interactive (lambda ()
                                 (format *query-io* "Function to apply instead of ~s :" function-name)
