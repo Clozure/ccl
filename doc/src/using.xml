@@ -15,7 +15,7 @@
     
     <para>The Common Lisp standard allows considerable latitude in the
       details of an implementation, and each particular Common Lisp
-      system has some idiosyncracies. This chapter describes ordinary <code>foo</code>
+      system has some idiosyncracies. This chapter describes ordinary
       user-level features of &CCL;, including features that may be
       part of the Common Lisp standard, but which may have quirks or
       details in the &CCL; implementation that are not described by
@@ -23,7 +23,7 @@
 
   </sect1>
 
-  <sect1 id="m_trace0"><title>Trace</title>
+  <sect1 id="Trace"><title>Trace</title>
 
   <para>
     &CCL;'s tracing facility is invoked by an extended version of the Common Lisp
@@ -479,9 +479,9 @@
 
   <sect1 id="Unicode"><title>Unicode</title>
 
-  <para>All characters and strings in Clozure CL fully support Unicode
+  <para>All characters and strings in &CCL; fully support Unicode
   by using UTF-32. There is only one <literal>CHARACTER</literal> type
-  and one <literal>STRING</literal> in Clozure CL.  There has been a
+  and one <literal>STRING</literal> in &CCL;.  There has been a
   lot of discussion about this decision which can be found by
   searching the openmcl-devel archives at <ulink
   url="http://clozure.com/pipermail/openmcl-devel/"/>.  Suffice it to
@@ -489,7 +489,7 @@
   UTF-32 outweigh the space disadvantage.</para>
 
   <sect2><title>Characters</title>
-  <para>There is one <literal>CHARACTER</literal> type in Clozure CL.
+  <para>There is one <literal>CHARACTER</literal> type in &CCL;.
   All <literal>CHARACTER</literal>s are <literal>BASE-CHAR</literal>s.
   <varname>CHAR-CODE-LIMIT</varname> is now
   <literal>#x110000</literal>, which means that all Unicode characters
@@ -502,7 +502,7 @@
   arguments in that range, but may return a non-<literal>NIL</literal>
   value (an undefined/non-standard <literal>CHARACTER</literal>
   object) for other unassigned code values.</para>
-  <para>Clozure CL supports character names of the form
+  <para>&CCL; supports character names of the form
   <literal>u+xxxx</literal> - where <literal>x</literal> is a sequence
   of one or more hex digits.  The value of the hex digits denotes the
   code of the character.  The <literal>+</literal> character is
@@ -608,11 +608,11 @@
   
 
   <sect2 id="Character-Encodings"><title>Character Encodings</title>
-  <para>Internally, all characters and strings in Clozure CL are in
+  <para>Internally, all characters and strings in &CCL; are in
   UTF-32.  Externally, files or socket streams may encode characters
   in a wide variety of ways.  The International Organization for
   Standardization, widely known as ISO defines a number of these
-  character encodings.  Clozure CL implements a number of these
+  character encodings.  &CCL; implements a number of these
   encodings as detailed below.  These encodings are part of the
   specification of external formats (see <xref
   linkend="External-Formats"/>.  When reading from a stream,
@@ -840,14 +840,14 @@
 
   <sect2 id="Predefined-Logical-Hosts"><title>Predefined Logical Hosts</title>
 
-  <para>Clozure CL sets up logical pathname translations for logical hosts:  <literal>ccl</literal> and <literal>home</literal></para>
+  <para>&CCL; sets up logical pathname translations for logical hosts:  <literal>ccl</literal> and <literal>home</literal></para>
 
   <indexterm><primary>CCL Logical Host</primary></indexterm>
   <para>The <literal>CCL</literal> logical host should point to the
   <literal>ccl</literal> directory.  It is used for a variety of
-  purposes by Clozure CL including: locating Clozure CL source code,
+  purposes by &CCL; including: locating &CCL; source code,
   <literal>require</literal> and <literal>provide</literal>, accessing
-  foreign function information, and the Clozure CL build process. It
+  foreign function information, and the &CCL; build process. It
   is set to the value of the environment variable
   <varname>CCL_DEFAULT_DIRECTORY</varname>, which is set by the
   openmcl shell script <xref linkend="The-openmcl-Shell-Script"/>.  If
@@ -859,7 +859,7 @@
   <sect2>
     <title>OS X (Darwin)</title>
     
-    <para>Clozure CL assumes that pathname strings are decomposed UTF-8.</para>
+    <para>&CCL; assumes that pathname strings are decomposed UTF-8.</para>
   </sect2>
   <sect2>
     <title>Linux</title>

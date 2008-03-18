@@ -57,7 +57,7 @@
 
     <sect2 id="Open-File-Streams">
       <title>Open File Streams</title>
-      <para>Historically, Clozure CL and MCL maintained a list of open
+      <para>Historically, &CCL; and MCL maintained a list of open
       file streams in the value of
       <literal>CCL:*OPEN-FILE-STREAMS*</literal>.  This functionality
       has been replaced with the thread-safe function:

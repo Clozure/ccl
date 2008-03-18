@@ -200,7 +200,7 @@ shell&gt; tar xvzf <emphasis>path-to-downloaded-openmcl-archive.tar.gz</emphasis
       </sect2>
 
       <sect2 id="The-openmcl-Shell-Script"><title>The openmcl Shell Script"</title>
-      <para>Clozure CL needs to be able to find the
+      <para>&CCL; needs to be able to find the
       <literal>ccl</literal> directory in order to support features
       such as <literal>require</literal> and
       <literal>provide</literal>, access to foreign interface

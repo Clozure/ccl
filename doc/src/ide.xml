@@ -14,7 +14,7 @@
   
   <sect1><title>Introduction</title>
     
-    <para>Clozure CL ships with the complete source code for an integrated
+    <para>&CCL; ships with the complete source code for an integrated
     development environment written using Cocoa on Mac OS X. This
     chapter describes how to build and use that environment,
     referred to hereafter simply as "the IDE".</para>
@@ -33,7 +33,7 @@
 
   <sect1><title>Building the IDE</title>
     
-    <para>Building the Clozure CL IDE is now a very simple
+    <para>Building the &CCL; IDE is now a very simple
       process.</para>
 
     <orderedlist>
@@ -68,7 +68,7 @@
 
     </programlisting>
 
-    <para>Clozure CL compiles and loads the various subsystems that
+    <para>&CCL; compiles and loads the various subsystems that
       make up the IDE, then constructs a Cocoa application bundle
       named "Clozure CL.app" and saves the Lisp image into
       it. Normally &CCL; creates the application bundle in the root

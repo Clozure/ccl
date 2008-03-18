@@ -1909,7 +1909,7 @@
 
     <para>You are likely to see these reader macros used extensively
       in Lisp code that works with foreign libraries; for example,
-      Clozure CL IDE code, which defines numerous Objective-C classes
+      &CCL; IDE code, which defines numerous Objective-C classes
       and methods, uses these reader macros extensively.</para>
 
     <para>For more detailed descriptions of each of these reader
@@ -4143,7 +4143,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
       <refsect1>
         <title>Description</title>
         
-        <para>In Clozure CL 1.2 and later, the #&gt; reader macro reads
+        <para>In &CCL; 1.2 and later, the #&gt; reader macro reads
           the following text as a keyword, preserving the case of the
           text. For example:</para>
 
