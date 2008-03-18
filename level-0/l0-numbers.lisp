@@ -588,10 +588,11 @@
 ;;;
 
 (defun build-ratio (num den)
-  (if (minusp den)(setq num (- num) den (- den)))
-  (if (eql den 1)
-    num
-    (%make-ratio num den)))
+  (if (minusp den) (setq num (- num) den (- den)))
+  (case den
+    (0 (divide-by-zero-error 'build-ratio num den))
+    (1 num)
+    (t (%make-ratio num den))))
 
 
 
