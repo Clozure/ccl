@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN" "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd" [
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
 <!ENTITY rest "<varname>&amp;rest</varname>">
 <!ENTITY key "<varname>&amp;key</varname>">
 <!ENTITY optional "<varname>&amp;optional</varname>">
 <!ENTITY body "<varname>&amp;body</varname>">
 <!ENTITY aux "<varname>&amp;aux</varname>">
 <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
-<!ENTITY CCL "<literal>CCL</literal>">
+<!ENTITY CCL "Clozure CL">
 ]>
 
   <chapter id="Platform-specific-notes">
@@ -21,6 +21,19 @@
       the platforms, and these differences are sometimes exposed in
       the implementation.</para>
 
+      <sect2 id="differences-between-32-bit-and-64-bit-implementations">
+	<title>Differences Between 32-bit and 64-bit implementations</title>
+
+	<para>Fixnums on 32-bit systems use 30 bits and are in the
+	range XXX through YYY.  Fixnums on 64-bit systems use 61-bits
+	and are in the range XXX through YYY. (see <xref
+	linkend="Tagging-scheme"/>)</para>
+
+	<para>Since we have much larger fixnums on 64-bit systems,
+	<varname>INTERNAL-TIME-UNITS-PER-SECOND</varname> is 1000000
+	on 64-bit systems but remains 1000 on 32-bit systems.  This
+	enables much finer grained timing on 64-bit systems.</para>
+      </sect2>
 
       <sect2 id="File-system-case">
 	<title>File-system case</title>
@@ -34,8 +47,8 @@
 	Darwin/MacOS X can also use UFS and NFS filesystems, the
 	opposite assumption would be no more correct than the one
 	that's currently made.</para>
-        <para>Whatever the best solution to this problem turns out to be, there are
-some practical considerations. Doing:</para>
+        <para>Whatever the best solution to this problem turns out to
+        be, there are some practical considerations. Doing:</para>
         <programlisting>
 ? (save-application "DPPCCL")
 	</programlisting>

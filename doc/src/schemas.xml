@@ -1,3 +1,4 @@
 <locatingRules xmlns="http://thaiopensource.com/ns/locating-rules/1.0">
 <documentElement prefix="" localName="chapter" typeId="DocBook"/>
+<typeId id="DocBook" uri="docbook-rng-4.5/docbook.rnc"/>
 </locatingRules>

@@ -57,15 +57,16 @@
 	</xsl:call-template>
       </xsl:variable>
 
-      <xsl:apply-templates/>
-      <xsl:call-template name="process.footnotes"/>
-
       <xsl:if test="contains($toc.params, 'toc')">
 	<xsl:call-template name="component.toc.separator"/>
 	<xsl:call-template name="component.toc">
 	  <xsl:with-param name="toc.title.p" select="contains($toc.params, 'title')"/>
 	</xsl:call-template>
       </xsl:if>
+
+      <xsl:apply-templates/>
+      <xsl:call-template name="process.footnotes"/>
+
     </div>
   </xsl:template>
 

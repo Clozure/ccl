@@ -42,23 +42,22 @@
 	  <xsl:attribute name="href">
 	    <xsl:call-template name="href.target"/>
 	  </xsl:attribute>
-	  <xsl:call-template name="refentry.title"/>
 	</a>
+	<strong>[<xsl:value-of select="refnamediv/refclass"/>]</strong><br/>
+	<code><xsl:apply-templates select="refsynopsisdiv/synopsis/node()"/></code>
+
       </div>
       <div class="refentrytitle">
 	<xsl:value-of select="refnamediv/refpurpose"/>
       </div>
     </p>
-
-    <xsl:choose>
-      <xsl:when test="$onechunk != 0 and parent::*">
-	<xsl:apply-imports/>
-      </xsl:when>
-      <xsl:otherwise>
-	<xsl:call-template name="process-chunk-element"/>
-      </xsl:otherwise>
-    </xsl:choose>
+    <p>
+      <div>
+	<xsl:apply-templates select="refsect1"/>
+      </div>
+    </p>
   </xsl:template>
+
 
   <xsl:template match="refentry" mode="xref-to">
     <b>

@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
-          "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd"[
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd"[
           <!ENTITY rest "<varname>&amp;rest</varname>">
           <!ENTITY key "<varname>&amp;key</varname>">
           <!ENTITY optional "<varname>&amp;optional</varname>">
           <!ENTITY body "<varname>&amp;body</varname>">
           <!ENTITY aux "<varname>&amp;aux</varname>">
           <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
-          <!ENTITY CCL "<literal>CCL</literal>">
+          <!ENTITY CCL "Clozure CL">
           ]>
 
 <chapter><title>Using &CCL;</title>
@@ -16,21 +15,21 @@
     
     <para>The Common Lisp standard allows considerable latitude in the
       details of an implementation, and each particular Common Lisp
-      system has some idiosyncracies. This chapter describes ordinary
+      system has some idiosyncracies. This chapter describes ordinary <code>foo</code>
       user-level features of &CCL;, including features that may be
       part of the Common Lisp standard, but which may have quirks or
       details in the &CCL; implementation that are not described by
       the standard.</para>
+
   </sect1>
 
-  <sect1 id="Trace"><title>Trace</title>
+  <sect1 id="m_trace0"><title>Trace</title>
 
-    <para>
-      &CCL;'s tracing facility is invoked by an extended version of the Common Lisp
-      <varname>trace</varname> macro.  Extensions allow tracing of methods, as well as finer control
-      over tracing actions.
-    </para>
-
+  <para>
+    &CCL;'s tracing facility is invoked by an extended version of the Common Lisp
+    <varname>trace</varname> macro.  Extensions allow tracing of methods, as well as finer control
+    over tracing actions.
+  </para>
 
     <para>
     <indexterm zone="trace"/>
@@ -478,25 +477,403 @@
 
   </sect1>
 
-  <sect1 id="Strings-and-Pathanmes"><title>Strings and Pathnames</title>
-    <sect2>
-      <title>OS X (Darwin)</title>
+  <sect1 id="Unicode"><title>Unicode</title>
 
-      <para>Clozure CL assumes that pathname strings are decomposed UTF-8.</para>
-    </sect2>
-    <sect2>
-      <title>Linux</title>
+  <para>All characters and strings in Clozure CL fully support Unicode
+  by using UTF-32. There is only one <literal>CHARACTER</literal> type
+  and one <literal>STRING</literal> in Clozure CL.  There has been a
+  lot of discussion about this decision which can be found by
+  searching the openmcl-devel archives at <ulink
+  url="http://clozure.com/pipermail/openmcl-devel/"/>.  Suffice it to
+  say that we decided that the simplicity and speed advantages of
+  UTF-32 outweigh the space disadvantage.</para>
 
-      <para>Pathname strings are treated as null-terminated strings
-        encoded according to the current locale.</para>
-    </sect2>
-    <sect2>
-      <title>FreeBSD</title>
+  <sect2><title>Characters</title>
+  <para>There is one <literal>CHARACTER</literal> type in Clozure CL.
+  All <literal>CHARACTER</literal>s are <literal>BASE-CHAR</literal>s.
+  <varname>CHAR-CODE-LIMIT</varname> is now
+  <literal>#x110000</literal>, which means that all Unicode characters
+  can be directly represented.  As of Unicode 5.0, only about 100,000
+  of 1,114,112 possible <literal>CHAR-CODE</literal>s are actually
+  defined. The function <function>CODE-CHAR</function> knows that
+  certain ranges of code values (notably
+  <literal>#xd800</literal>-<literal>#xddff</literal>) will never be
+  valid character codes and will return <literal>NIL</literal> for
+  arguments in that range, but may return a non-<literal>NIL</literal>
+  value (an undefined/non-standard <literal>CHARACTER</literal>
+  object) for other unassigned code values.</para>
+  <para>Clozure CL supports character names of the form
+  <literal>u+xxxx</literal> - where <literal>x</literal> is a sequence
+  of one or more hex digits.  The value of the hex digits denotes the
+  code of the character.  The <literal>+</literal> character is
+  optional, so <literal>#\u+0020</literal>,
+  <literal>#\U0020</literal>, and <literal>#\U+20</literal> all refer
+  to the <literal>#\Space</literal> character.</para>
+  <para>Characters with codes in the range
+  <literal>#xa0</literal>-<literal>#x7ff</literal> also have symbolic
+  names These are the names from the Unicode standard with spaces
+  replaced by underscores.  So
+  <literal>#\Greek_Capital_Letter_Epsilon</literal> can be used to
+  refer to the character whose <function>CHAR-CODE</function> is
+  <literal>#x395</literal>.</para>
+  </sect2>
 
-      <para>Pathname strings are treated as null-terminated strings
-        encoded according to the current locale; a future release may
-        change this convention to use UTF-8.</para>
-    </sect2>
+  <sect2 id="External-Formats"><title>External Formats</title>
+  <para><function>OPEN</function>, <function>LOAD</function>, and
+  <function>COMPILE-FILE</function> all take an
+  <literal>:EXTERNAL-FORMAT</literal> keyword argument.  The value of
+  <literal>:EXTERNAL-FORMAT</literal> can be
+  <literal>:DEFAULT</literal> (the default value), a line termination
+  keyword <xref linkend="Line-Termination-Keywords"/><xref
+  linkend="k_external-format"/>, a character encoding keyword <xref
+  linkend="Character-Encodings"/>, a plist with keys:
+  <literal>:CHARACTER-ENCODING</literal> and
+  <literal>:LINE-TERMINATION</literal>, or an external-format object
+  created using <function>CCL::MAKE-EXTERNAL-FORMAT</function>.  If
+  <literal>:DEFAULT</literal> is specified, then the value of
+  <varname>CCL:*DEFAULT-EXTERNAL-FORMAT*</varname> is used.  If no
+  line-termination is specified, then the value of
+  <varname>CCL:*DEFAULT-LINE-TERMINATION*</varname> is used.  If no
+  character encoding is specified, then
+  <varname>CCL:*DEFAULT-FILE-CHARACTER-ENCODING*</varname> is used for
+  file streams and
+  <varname>CCL:*DEFAULT-SOCKET-CHARACTER-ENCODING*</varname> is used
+  for socket streams.  The default, default character encoding is
+  <literal>NIL</literal> which is a synonym for <literal>:ISO-8859-1</literal>
+  </para>
+  </sect2>
+
+  <sect2 id="Line-Termination-Keywords"><title>Line Termination Keywords</title>
+  <para>Line termination keywords indicate which characters are used
+  to indicate the end of a line.  On input, the external line
+  termination characters are replaced by <literal>#\Newline</literal>
+  and on output, <literal>#\Newline</literal>s are converted to the
+  external line termination characters.</para>
+  <table id="Line-Termination-Table" frame='all'><title>Line Termination Keywords</title>
+  <tgroup cols='2' align='left' colsep='1' rowsep='1'>
+    <thead>
+      <row>
+	<entry>keyword</entry>
+	<entry>character(s)</entry>
+      </row>
+    </thead>
+    <tbody>
+      <row>
+	<entry><literal>:UNIX</literal></entry>
+	<entry><literal>#\Linefeed</literal></entry>
+      </row>
+      <row>
+	<entry><literal>:MACOS</literal></entry>
+	<entry><literal>#\Return</literal></entry>
+      </row>
+      <row>
+	<entry><literal>:CR</literal></entry>
+	<entry><literal>#\Return</literal></entry>
+      </row>
+      <row>
+	<entry><literal>:CRLF</literal></entry>
+	<entry><literal>#\Return #\Linefeed</literal></entry>
+      </row>
+      <row>
+	<entry><literal>:CP/M</literal></entry>
+	<entry><literal>#\Return #\Linefeed</literal></entry>
+      </row>
+      <row>
+	<entry><literal>:MSDOS</literal></entry>
+	<entry><literal>#\Return #\Linefeed</literal></entry>
+      </row>
+      <row>
+	<entry><literal>:DOS</literal></entry>
+	<entry><literal>#\Return #\Linefeed</literal></entry>
+      </row>
+      <row>
+	<entry><literal>:WINDOWS</literal></entry>
+	<entry><literal>#\Return #\Linefeed</literal></entry>
+      </row>
+      <row>
+	<entry><literal>:INFERRED</literal></entry>
+	<entry>see below</entry>
+      </row>
+      <row>
+	<entry><literal>:UNICODE</literal></entry>
+	<entry><literal>#\Line_Separator</literal></entry>
+      </row>
+    </tbody>
+  </tgroup>
+  </table>
+  <para><literal>:INFERRED</literal> means try to guess a stream's
+  line-termination conventions.  It is only useful for
+  <literal>FILE-STREAM</literal>s that're open for <literal>:INPUT</literal> or <literal>:IO</literal>.  The first buffer full of data is examined, and if a <literal>#\Return</literal> character occurs before any <literal>#\Linefeed</literal> character, then the line termination type is set to <literal>:MACOS</literal>, otherwise it is set to <literal>:UNIX</literal>.</para>
+  </sect2>
+  
+
+  <sect2 id="Character-Encodings"><title>Character Encodings</title>
+  <para>Internally, all characters and strings in Clozure CL are in
+  UTF-32.  Externally, files or socket streams may encode characters
+  in a wide variety of ways.  The International Organization for
+  Standardization, widely known as ISO defines a number of these
+  character encodings.  Clozure CL implements a number of these
+  encodings as detailed below.  These encodings are part of the
+  specification of external formats (see <xref
+  linkend="External-Formats"/>.  When reading from a stream,
+  characters are converted from the specified external character
+  encoding to UTF-32.  When writing to a stream, characters are
+  converted from UTF-32 to the specified character encoding.  Here is
+  a list of character encoding keywords used to specify a standard
+  character encoding.</para>
+  <variablelist>
+    <varlistentry><term><literal>:ISO-8859-1</literal></term>
+       <listitem><para>An 8-bit, fixed-width character encoding in
+       which all character codes map to their Unicode
+       equivalents. Intended to support most characters used in most
+       Western European languages.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:ISO-8859-2</literal></term>
+       <listitem><para>An 8-bit, fixed-width character encoding in
+       which codes #x00-#x9f map to their Unicode equivalents and
+       other codes map to other Unicode character values.  Intended to
+       provide most characters found in most languages used in
+       Central/Eastern Europe.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:ISO-8859-3</literal></term>
+       <listitem><para>An 8-bit, fixed-width character encoding in
+       which codes #x00-#x9f map to their Unicode equivalents and
+       other codes map to other Unicode character values.  Intended to
+       provide most characters found in most languages used in
+       Southern Europe.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:ISO-8859-4</literal></term>
+       <listitem><para>An 8-bit, fixed-width character encoding in
+       which codes #x00-#x9f map to their Unicode equivalents and
+       other codes map to other Unicode character values.  Intended to
+       provide most characters found in most languages used in
+       Northern Europe.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:ISO-8859-5</literal></term>
+       <listitem><para>An 8-bit, fixed-width character encoding in
+       which codes #x00-#x9f map to their Unicode equivalents and
+       other codes map to other Unicode character values.  Intended to
+       provide most characters found in the Cyrillic
+       alphabet.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:ISO-8859-6</literal></term>
+       <listitem><para>An 8-bit, fixed-width character encoding in
+       which codes #x00-#x9f map to their Unicode equivalents and
+       other codes map to other Unicode character values.  Intended to
+       provide most characters found in the Arabic
+       alphabet.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:ISO-8859-7</literal></term>
+       <listitem><para>An 8-bit, fixed-width character encoding in
+       which codes #x00-#x9f map to their Unicode equivalents and
+       other codes map to other Unicode character values.  Intended to
+       provide most characters found in the Greek
+       alphabet.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:ISO-8859-8</literal></term>
+       <listitem><para>An 8-bit, fixed-width character encoding in
+       which codes #x00-#x9f map to their Unicode equivalents and
+       other codes map to other Unicode character values.  Intended to
+       provide most characters found in the Hebrew
+       alphabet.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:ISO-8859-9</literal></term>
+       <listitem><para>An 8-bit, fixed-width character encoding in
+       which codes #x00-#xcf map to their Unicode equivalents and
+       other codes map to other Unicode character values.  Intended to
+       provide most characters found in the Turkish
+       alphabet.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:ISO-8859-10</literal></term>
+       <listitem><para>An 8-bit, fixed-width character encoding in
+       which codes #x00-#x9f map to their Unicode equivalents and
+       other codes map to other Unicode character values.  Intended to
+       provide most characters found in Nordic
+       alphabets.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:ISO-8859-11</literal></term>
+       <listitem><para>An 8-bit, fixed-width character encoding in
+       which codes #x00-#x9f map to their Unicode equivalents and
+       other codes map to other Unicode character values.  Intended to
+       provide most characters found the Thai
+       alphabet.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:ISO-8859-13</literal></term>
+       <listitem><para>An 8-bit, fixed-width character encoding in
+       which codes #x00-#x9f map to their Unicode equivalents and
+       other codes map to other Unicode character values.  Intended to
+       provide most characters found in Baltic
+       alphabets.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:ISO-8859-14</literal></term>
+       <listitem><para>An 8-bit, fixed-width character encoding in
+       which codes #x00-#x9f map to their Unicode equivalents and
+       other codes map to other Unicode character values.  Intended to
+       provide most characters found in Celtic
+       languages.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:ISO-8859-15</literal></term>
+       <listitem><para>An 8-bit, fixed-width character encoding in
+       which codes #x00-#x9f map to their Unicode equivalents and
+       other codes map to other Unicode character values.  Intended to
+       provide most characters found in Western European languages
+       (including the Euro sign and some other characters missing from
+       ISO-8859-1.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:ISO-8859-16</literal></term>
+       <listitem><para>An 8-bit, fixed-width character encoding in
+       which codes #x00-#x9f map to their Unicode equivalents and
+       other codes map to other Unicode character values.  Intended to
+       provide most characters found in Southeast European
+       languages.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:MACINTOSH</literal></term>
+       <listitem><para>An 8-bit, fixed-width character encoding in
+       which codes #x00-#x7f map to their Unicode equivalents and
+       other codes map to other Unicode character values.
+       Traditionally used on Classic MacOS to encode characters used
+       in western languages.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:UCS-2</literal></term>
+       <listitem><para>A 16-bit, fixed-length encoding in which
+       characters with CHAR-CODEs less than #x10000 can be encoded in
+       a single 16-bit word.  The endianness of the encoded data is
+       indicated by the endianness of a byte-order-mark character
+       (#u+feff) prepended to the data; in the absence of such a
+       character on input, the data is assumed to be in big-endian
+       order.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:UCS-2BE</literal></term>
+       <listitem><para>A 16-bit, fixed-length encoding in which
+       characters with CHAR-CODEs less than #x10000 can be encoded in
+       a single 16-bit big-endian word. The encoded data is implicitly
+       big-endian; byte-order-mark characters are not interpreted on
+       input or prepended to output.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:UCS-2LE</literal></term>
+       <listitem><para>A 16-bit, fixed-length encoding in which
+       characters with CHAR-CODEs less than #x10000 can be encoded in
+       a single 16-bit little-endian word. The encoded data is
+       implicitly little-endian; byte-order-mark characters are not
+       interpreted on input or prepended to output.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:US-ASCII</literal></term>
+       <listitem><para>An 7-bit, fixed-width character encoding in
+       which all character codes map to their Unicode
+       equivalents. </para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:UTF-16</literal></term>
+       <listitem><para>A 16-bit, variable-length encoding in which
+       characters with CHAR-CODEs less than #x10000 can be encoded in
+       a single 16-bit word and characters with larger codes can be
+       encoded in a pair of 16-bit words.  The endianness of the
+       encoded data is indicated by the endianness of a
+       byte-order-mark character (#u+feff) prepended to the data; in
+       the absence of such a character on input, the data is assumed
+       to be in big-endian order. Output is written in native
+       byte-order with a leading byte-order mark.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:UTF-16BE</literal></term>
+       <listitem><para>A 16-bit, variable-length encoding in which
+       characters with CHAR-CODEs less than #x10000 can be encoded in
+       a single 16-bit big-endian word and characters with larger
+       codes can be encoded in a pair of 16-bit big-endian words.  The
+       endianness of the encoded data is implicit in the encoding;
+       byte-order-mark characters are not interpreted on input or
+       prepended to output.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:UTF-16LE</literal></term>
+       <listitem><para>A 16-bit, variable-length encoding in which
+       characters with CHAR-CODEs less than #x10000 can be encoded in
+       a single 16-bit little-endian word and characters with larger
+       codes can be encoded in a pair of 16-bit little-endian words.
+       The endianness of the encoded data is implicit in the encoding;
+       byte-order-mark characters are not interpreted on input or
+       prepended to output.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:UTF-32</literal></term>
+       <listitem><para>A 32-bit, fixed-length encoding in which all
+       Unicode characters can be encoded in a single 32-bit word.  The
+       endianness of the encoded data is indicated by the endianness
+       of a byte-order-mark character (#u+feff) prepended to the data;
+       in the absence of such a character on input, input data is
+       assumed to be in big-endian order.  Output is written in native
+       byte order with a leading byte-order mark.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:UTF-32BE</literal></term>
+       <listitem><para>A 32-bit, fixed-length encoding in which all
+       Unicode characters encoded in a single 32-bit word. The encoded
+       data is implicitly big-endian; byte-order-mark characters are
+       not interpreted on input or prepended to
+       output.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:UTF-8</literal></term>
+       <listitem><para>An 8-bit, variable-length character encoding in
+       which characters with CHAR-CODEs in the range #x00-#x7f can be
+       encoded in a single octet; characters with larger code values
+       can be encoded in 2 to 4 bytes.</para></listitem>
+     </varlistentry>
+    <varlistentry><term><literal>:UTF32LE</literal></term>
+       <listitem><para>A 32-bit, fixed-length encoding in which all
+       Unicode characters can encoded in a single 32-bit word. The
+       encoded data is implicitly little-endian; byte-order-mark
+       characters are not interpreted on input or prepended to
+       output.</para></listitem>
+     </varlistentry>
+  </variablelist>
+  </sect2>
+  </sect1>
+
+  <sect1 id="Pathanmes"><title>Pathnames</title>
+
+  <sect2>
+    <title>Pathname Expansion</title>
+    <para>Leading tilde (~) characters in physical pathname namestrings
+    are expanded in the way that most shells do:</para>
+    
+    <para><literal>"~user/..."</literal> can be used to refer to an absolute pathname rooted
+    at the home directory of the user named "user".</para>
+    
+    <para><literal>"~/..."</literal> can be used to refer to an absolute pathname rooted at
+    the home directory of the current user.</para>
+  </sect2>
+
+  <sect2 id="Predefined-Logical-Hosts"><title>Predefined Logical Hosts</title>
+
+  <para>Clozure CL sets up logical pathname translations for logical hosts:  <literal>ccl</literal> and <literal>home</literal></para>
+
+  <indexterm><primary>CCL Logical Host</primary></indexterm>
+  <para>The <literal>CCL</literal> logical host should point to the
+  <literal>ccl</literal> directory.  It is used for a variety of
+  purposes by Clozure CL including: locating Clozure CL source code,
+  <literal>require</literal> and <literal>provide</literal>, accessing
+  foreign function information, and the Clozure CL build process. It
+  is set to the value of the environment variable
+  <varname>CCL_DEFAULT_DIRECTORY</varname>, which is set by the
+  openmcl shell script <xref linkend="The-openmcl-Shell-Script"/>.  If
+  <varname>CCL_DEFAULT_DIRECTORY</varname> is not set, then it is set
+  to the directory containing the current heap image.</para>
+  </sect2>
+  
+  
+  <sect2>
+    <title>OS X (Darwin)</title>
+    
+    <para>Clozure CL assumes that pathname strings are decomposed UTF-8.</para>
+  </sect2>
+  <sect2>
+    <title>Linux</title>
+    
+    <para>Pathname strings are treated as null-terminated strings
+    encoded according to the current locale.</para>
+  </sect2>
+  <sect2>
+    <title>FreeBSD</title>
+    
+    <para>Pathname strings are treated as null-terminated strings
+    encoded according to the current locale; a future release may
+    change this convention to use UTF-8.</para>
+  </sect2>
   </sect1>
 
   <sect1 id="Memory-Mapped-Files">

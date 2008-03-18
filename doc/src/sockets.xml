@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN" "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd" [
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
 <!ENTITY rest "<varname>&amp;rest</varname>">
 <!ENTITY key "<varname>&amp;key</varname>">
 <!ENTITY optional "<varname>&amp;optional</varname>">
 <!ENTITY body "<varname>&amp;body</varname>">
 <!ENTITY aux "<varname>&amp;aux</varname>">
 <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
-<!ENTITY CCL "<literal>CCL</literal>">
+<!ENTITY CCL "Clozure CL">
 ]>
 
   <chapter id="Programming-with-Sockets">
@@ -105,11 +105,12 @@
 	</refnamediv>
 
 	<refsynopsisdiv>
-	  <synopsis><function>make-socket</function>
-	  &key; address-family type connect eol format
-	  remote-host remote-port local-host local-port local-filename
-	  remote-filename keepalive reuse-address nodelay broadcast linger
-	  backlog</synopsis>
+	  <synopsis><function>make-socket</function> &key;
+	  address-family type connect eol format remote-host
+	  remote-port local-host local-port local-filename
+	  remote-filename keepalive reuse-address nodelay broadcast
+	  linger backlog input-timeout output-timeout connect-timeout
+	  auto-close deadline</synopsis>
 	</refsynopsisdiv>
 
 	<refsect1>
@@ -299,6 +300,74 @@
 		systems.</para>
 	      </listitem>
 	    </varlistentry>
+
+	    <varlistentry>
+	      <term>input-timeout</term>
+
+	      <listitem>
+		<para>The number of seconds before an input operation
+		times out.  Must be a real number between zero and one
+		million.  If an input operation takes longer than the
+		specified number of seconds, an
+		<literal>input-timeout</literal> error is signalled.
+		(see <xref
+		linkend="Stream-Timeouts-And-Deadlines"/>)</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>output-timeout</term>
+
+	      <listitem>
+		<para>The number of seconds before an output operation
+		times out.  Must be a real number between zero and one
+		million.  If an output operation takes longer than the
+		specified number of seconds, an
+		<literal>output-timeout</literal> error is signalled.
+		(see <xref
+		linkend="Stream-Timeouts-And-Deadlines"/>)</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>connect-timeout</term>
+
+	      <listitem>
+		<para>The number of seconds before a connection
+		attempt times out. [TODO: what are acceptable values?]
+		If a connection attempt takes longer than the
+		specified number of seconds, a
+		<literal>socket-error</literal> is signalled.  This
+		can be useful if the specified interval is shorter
+		than the interval that the OS's socket layer imposes,
+		which is sometimes a minute or two.</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>auto-close</term>
+
+	      <listitem>
+		<para>When non-nil, any resulting socket stream will
+		be closed when the GC can prove that the stream is
+		unreferenced.  This is done via CCL's termination
+		mechanism [TODO add xref].</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term>deadline</term>
+
+	      <listitem>
+		<para>Specifies an absolute time in
+		internal-time-units.  If an I/O operation on the
+		stream does not complete before the deadline then a
+		<literal>COMMUNICATION-DEADLINE-EXPIRED</literal>
+		error is signalled.  A deadline takes precedence over
+		any input/output timeouts that may be set.  (see <xref
+		linkend="Stream-Timeouts-And-Deadlines"/>)</para>
+	      </listitem>
+	    </varlistentry>
+
 	  </variablelist>
 	</refsect1>
 

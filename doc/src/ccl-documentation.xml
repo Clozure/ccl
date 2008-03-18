@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
-"http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd"[
+"http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd"[
 <!ENTITY rest "<varname>&amp;rest</varname>">
 <!ENTITY key "<varname>&amp;key</varname>">
 <!ENTITY optional "<varname>&amp;optional</varname>">
 <!ENTITY body "<varname>&amp;body</varname>">
 <!ENTITY aux "<varname>&amp;aux</varname>">
 <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
-<!ENTITY CCL "<literal>CCL</literal>">
+<!ENTITY CCL "Clozure CL">
 ]>
 
 <book lang="en">
  <bookinfo>
   <title>&CCL; Documentation</title>
  </bookinfo>
-
+<!-- -->
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
             href="install.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"

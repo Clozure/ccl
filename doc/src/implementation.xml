@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN" "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd"[
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd"[
 <!ENTITY rest "<varname>&amp;rest</varname>">
 <!ENTITY key "<varname>&amp;key</varname>">
 <!ENTITY optional "<varname>&amp;optional</varname>">
 <!ENTITY body "<varname>&amp;body</varname>">
 <!ENTITY aux "<varname>&amp;aux</varname>">
 <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
-<!ENTITY CCL "<literal>CCL</literal>">
+<!ENTITY CCL "Clozure CL">
 ]>
   <chapter id="Implementation-Details-of-CCL">
     <title>Implementation Details of &CCL;</title>
@@ -42,7 +42,7 @@
       case via a lighter-weight mechanism when that exceptional case
       (by definition) rarely occurs.</para>
       <para>Some emulated execution environments (the Rosetta PPC
-      emulator on x86 versions of OSX) don't provide accurate
+      emulator on x86 versions of Mac OS X) don't provide accurate
       exception information to exception handling functions. &CCL;
       can't run in such environments.</para>
 

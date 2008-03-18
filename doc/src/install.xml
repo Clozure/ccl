@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
-"http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd"[
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN"
+"http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd"[
 <!ENTITY rest "<varname>&amp;rest</varname>">
 <!ENTITY key "<varname>&amp;key</varname>">
 <!ENTITY optional "<varname>&amp;optional</varname>">
 <!ENTITY body "<varname>&amp;body</varname>">
 <!ENTITY aux "<varname>&amp;aux</varname>">
 <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
-<!ENTITY CCL "<literal>CCL</literal>">
+<!ENTITY CCL "Clozure CL">
 ]>
 
  <chapter><title>Obtaining, Installing, and Running &CCL;</title>
@@ -199,8 +199,8 @@ shell&gt; tar xvzf <emphasis>path-to-downloaded-openmcl-archive.tar.gz</emphasis
       distributed with &CCL; before using it.</para>
       </sect2>
 
-      <sect2><title>The-openmcl-Shell-Script"</title>
-      <para>&CCL; needs to be able to find the
+      <sect2 id="The-openmcl-Shell-Script"><title>The openmcl Shell Script"</title>
+      <para>Clozure CL needs to be able to find the
       <literal>ccl</literal> directory in order to support features
       such as <literal>require</literal> and
       <literal>provide</literal>, access to foreign interface

@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN" "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd" [
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
 <!ENTITY rest "<varname>&amp;rest</varname>">
 <!ENTITY key "<varname>&amp;key</varname>">
 <!ENTITY optional "<varname>&amp;optional</varname>">
 <!ENTITY body "<varname>&amp;body</varname>">
 <!ENTITY aux "<varname>&amp;aux</varname>">
 <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
-<!ENTITY CCL "<literal>CCL</literal>">
+<!ENTITY CCL "Clozure CL">
 ]>
 
   <chapter id="Programming-with-Threads">
@@ -2945,9 +2945,7 @@ In the "tty world", &CCL; starts out with 2 lisp-level threads:</para>
 	    <varlistentry>
 	      <term>timeout</term>
 	      <listitem>
-		<para>either NIL, or a time interval in seconds.  May be any
-		non-negative real number the <function>floor</function> of
-		which fits in 32 bits.  The default is NIL.</para>
+		<para>either NIL or a time interval in milliseconds.  Must be a non-negative integer.  The default is NIL.</para>
 	      </listitem>
 	    </varlistentry>
 	  </variablelist>
@@ -3008,7 +3006,8 @@ In the "tty world", &CCL; starts out with 2 lisp-level threads:</para>
 	</refnamediv>
 
 	<refsynopsisdiv>
-	  <synopsis><function>process-output-wait</function> fd</synopsis>
+	  <synopsis><function>process-output-wait</function>
+	  fd  &optional; timeout</synopsis>
 	</refsynopsisdiv>
 
 	<refsect1>
@@ -3023,13 +3022,20 @@ In the "tty world", &CCL; starts out with 2 lisp-level threads:</para>
 		I/O connection.  See <xref linkend="f_stream-device"/>.</para>
 	      </listitem>
 	    </varlistentry>
+	    <varlistentry>
+	      <term>timeout</term>
+	      <listitem>
+		<para>either NIL or a time interval in milliseconds.  Must be a non-negative integer.  The default is NIL.</para>
+	      </listitem>
+	    </varlistentry>
 	  </variablelist>
 	</refsect1>
 
 	<refsect1>
 	  <title>Description</title>
 
-	  <para>Wait until output is possible on <varname>fd</varname>.
+	  <para>Wait until output is possible on <varname>fd</varname> or until <varname>timeout</varname>, if
+	  it is not NIL, has been exceeded.
 	  This uses the <function>select()</function> system call, and is
 	  generally a fairly
 	  efficient way of blocking while waiting to output.</para>
