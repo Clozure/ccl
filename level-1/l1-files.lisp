@@ -1138,7 +1138,6 @@ a host-structure or string."
   (let ((*load-pathname* file-name)
         (*load-truename* file-name)
         (source-file file-name)
-        constructed-source-file
         ;; Don't bind these: let OPTIMIZE proclamations/declamations
         ;; persist, unless debugging.
         #|
@@ -1170,49 +1169,65 @@ a host-structure or string."
            (*loading-files* (cons file-name (specialv *loading-files*)))
            (*loading-file-source-file* (namestring source-file))) ;reset by fasload to logical name stored in the file?
       (declare (special *loading-files* *loading-file-source-file*))
-      (unwind-protect
-        (progn
-          (when verbose
-            (format t "~&;Loading ~S..." *load-pathname*)
-            (force-output))
-          (cond ((fasl-file-p file-name)
-                 (flet ((attempt-load (file-name)
-                          (multiple-value-bind (winp err) 
-                              (%fasload (native-translated-namestring file-name))
-                            (if (not winp) 
-                              (%err-disp err)))))
-                   (let ((*fasload-print* print))
-                     (declare (special *fasload-print*))
-                     (setq constructed-source-file (make-pathname :defaults file-name :type (pathname-type *.lisp-pathname*)))
-                     (when (equalp source-file *load-truename*)
-                       (when (probe-file constructed-source-file)
-                         (setq source-file constructed-source-file)))
-                     (if (and source-file
-                              (not (equalp source-file file-name))
-                              (probe-file source-file))
-                       ;;really need restart-case-if instead of duplicating code below
-                       (restart-case
-                         (attempt-load file-name)
-                         #+ignore
-                         (load-other () :report (lambda (x) (format s "load other file"))
-                                     (return-from
-                                       %load
-                                       (%load (choose-file-dialog) verbose print if-does-not-exist)))
-                         (load-source 
-                          ()
-                          :report (lambda (s) 
-                                    (format s "Attempt to load ~s instead of ~s" 
-                                            source-file *load-pathname*))
-                          (return-from 
-                            %load
-                            (%load source-file verbose print if-does-not-exist  external-format))))
-                       ;;duplicated code
-                       (attempt-load file-name)))))
-                (t 
-                 (with-open-file (stream file-name
-					 :element-type 'base-char
-					 :external-format external-format)
-                   (load-from-stream stream print))))))))
+      (when verbose
+	(format t "~&;Loading ~S..." *load-pathname*)
+	(force-output))
+      (cond ((fasl-file-p file-name)
+	     (let ((*fasload-print* print)
+		   (restart-setup nil)
+		   (restart-source nil)
+		   (restart-fasl nil))
+	       (declare (special *fasload-print*))
+	       (flet ((restart-test (c)
+			(unless restart-setup
+			  (setq restart-setup t)
+			  (let ((source *loading-file-source-file*)
+				(fasl *load-pathname*))
+			    (when (and (not (typep c 'file-error))
+				       source
+				       fasl
+				       (setq source (probe-file source))
+				       (setq fasl (probe-file fasl))
+				       (not (equalp source fasl)))
+			      (setq restart-fasl (namestring *load-pathname*)
+				    restart-source *loading-file-source-file*))))
+			(not (null restart-fasl)))
+		      (fname (p)
+			#-versioned-file-system
+			(namestring (make-pathname :version :unspecific :defaults p))
+			#+versioned-file-system
+			(namestring p)))
+		 (restart-case (multiple-value-bind (winp err) 
+				   (%fasload (native-translated-namestring file-name))
+				 (if (not winp) 
+				   (%err-disp err)))
+		   (load-source 
+		    ()
+		    :test restart-test
+		    :report (lambda (s) 
+			      (format s "Load ~s instead of ~s" 
+				      (fname restart-source) (fname restart-fasl)))
+		    (%load source-file verbose print if-does-not-exist external-format))
+		   (recompile
+		    ()
+		    :test restart-test
+		    :report (lambda (s)
+			      (let ((*print-circle* NIL))
+				(format s
+					(if (equalp
+					     restart-source
+					     (make-pathname :type (pathname-type *.lisp-pathname*)
+							    :defaults restart-fasl))
+					  "Compile ~s and then load ~s again"
+					  "Compile ~s into ~s then load ~:*~s again")
+					(fname restart-source) (fname restart-fasl))))
+		    (compile-file restart-source :output-file restart-fasl)
+		    (%load restart-fasl verbose print if-does-not-exist external-format))))))
+	    (t 
+	     (with-open-file (stream file-name
+				     :element-type 'base-char
+				     :external-format external-format)
+	       (load-from-stream stream print))))))
   file-name)
 
 (defun load-from-stream (stream print &aux (eof-val (list ())) val)
