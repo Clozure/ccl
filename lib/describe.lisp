@@ -1885,7 +1885,7 @@
                                        :inspector (make-inspector thing)
 					 :level 0)))
 
-(defglobal *default-inspector-ui-creation-function* 'tty-inspect)
+(defparameter *default-inspector-ui-creation-function* 'tty-inspect)
        
 
 (defun inspect (thing)
