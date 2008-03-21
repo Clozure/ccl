@@ -618,7 +618,12 @@
   (declare (dynamic-extent init-list))
   (if (subtypep name 'condition)
     (apply #'make-instance name init-list)
-    (error "~S is not a defined condition type name" name)))
+    (let ((class (if (classp name)
+		   name
+		   (find-class name)))) ;; elicit an error if no such class
+      (unless (class-finalized-p class)
+	(finalize-inheritance class)) ;; elicit an error if forward refs.
+      (error "~S is not a condition class" class))))
 
 (defmethod print-object ((c condition) stream)
   (if *print-escape* 

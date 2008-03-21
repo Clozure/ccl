@@ -555,8 +555,8 @@
   (labels ((scan-forward-refs (class seen)
              (unless (memq class seen)
                (or (if (forward-referenced-class-p class) class)
-                   (progn
-                     (push class seen)
+                   (let ((seen (cons class seen)))
+		     (declare (dynamic-extent seen))
                      (dolist (s (%class-direct-superclasses class))
                        (when (eq s original)
                          (error "circular class hierarchy: the class ~s is a superclass of at least one of its superclasses (~s)." original class))
@@ -564,12 +564,31 @@
                          (when fwdref (return fwdref)))))))))
     (scan-forward-refs original ())))
 
+(defun class-forward-referenced-superclasses (original)
+  (labels ((scan-forward-refs (class seen fwdrefs)
+             (unless (memq class seen)
+	       (if (forward-referenced-class-p class)
+		 (push class fwdrefs)
+		 (let ((seen (cons class seen)))
+		   (declare (dynamic-extent seen))
+		   (dolist (s (%class-direct-superclasses class))
+		     (when (eq s original)
+		       (error "circular class hierarchy: the class ~s is a superclass of at least one of its superclasses (~s)." original class))
+		     (setq fwdrefs (scan-forward-refs s seen fwdrefs))))))
+	     fwdrefs))
+    (scan-forward-refs original () ())))
+  
+
 
 (defmethod compute-class-precedence-list ((class class))
-  (let* ((fwdref (class-has-a-forward-referenced-superclass-p class)))
-    (when fwdref
-      (error "~&Class ~s can't be finalized because at least one of its superclasses (~s) is a FORWARD-REFERENCED-CLASS." class fwdref)))
-  (compute-cpl class))
+  (let* ((fwdrefs (class-forward-referenced-superclasses class)))
+    (if fwdrefs
+      (if (cdr fwdrefs)
+	(error "Class ~s can't be finalized because superclasses ~s are not defined yet"
+	       class (mapcar #'%class-name fwdrefs))
+	(error "Class ~s can't be finalized because superclass ~s is not defined yet"
+	       class (%class-name (car fwdrefs))))
+      (compute-cpl class))))
 
 ;;; Classes that can't be instantiated via MAKE-INSTANCE have no
 ;;; initargs caches.
