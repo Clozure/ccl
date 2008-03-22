@@ -616,6 +616,15 @@
     (eval-when (:load-toplevel :execute)
       (%define-symbol-macro ',name ',expansion))))
 
+(defun record-function-info (name info env)
+  (let* ((definition-env (definition-environment env)))
+    (if definition-env
+      (let* ((already (assq name (defenv.defined definition-env))))
+        (if already
+          (if info (%rplacd already info))
+          (push (cons name info) (defenv.defined definition-env)))
+        info))))
+
 ;; ---- allow inlining setf functions
 (defmacro defun (spec args &body body &environment env &aux global-name inline-spec)
   "Define a function at top level."
@@ -1693,12 +1702,22 @@ to open."
         ll)
       (append ll '(&allow-other-keys)))))
 
+(defun encode-gf-lambda-list (lambda-list)
+  (let* ((bits (encode-lambda-list lambda-list)))
+    (declare (fixnum bits))
+    (if (logbitp $lfbits-keys-bit bits)
+      (logior bits (ash 1 $lfbits-aok-bit))
+      bits)))
+
 (defmacro defmethod (name &rest args &environment env)
   (multiple-value-bind (function-form specializers-form qualifiers lambda-list documentation specializers)
                        (parse-defmethod name args env)    
     `(progn
        (eval-when (:compile-toplevel)
-         (note-function-info ',name '(lambda ,(adjust-defmethod-lambda-list lambda-list)) ,env))
+         (record-function-info ',(maybe-setf-function-name name)
+                              ',(list (list (encode-gf-lambda-list
+                                             lambda-list)))
+                              ,env))
        (compiler-let ((*nx-method-warning-name* 
                        (list ',name
                              ,@(mapcar #'(lambda (x) `',x) qualifiers)
@@ -1869,8 +1888,10 @@ to open."
 		      (allocation-p nil)
 		      (documentation nil)
 		      (documentation-p nil)
-		      (readers nil)
-		      (writers nil))
+                      (readers nil)
+		      (writers nil)
+                      (reader-info (list (cons (dpb 1 $lfbits-numreq 0) nil)))
+                      (writer-info (list (cons (dpb 2 $lfbits-numreq 0) nil))))
                  (when (memq slot-name slot-names)
                    (SIGNAL-PROGRAM-error "Multiple slots named ~S in DEFCLASS ~S" slot-name class-name))
                  (push slot-name slot-names)
@@ -1881,17 +1902,17 @@ to open."
                    (case (car options)
                      (:reader
                       (setq name (cadr options))
-		      (push name signatures)
+		      (push (cons name reader-info) signatures)
                       (push name readers))
                      (:writer                      
                       (setq name (cadr options))
-                      (push name signatures)
+                      (push (cons name writer-info) signatures)
                       (push name writers))
                      (:accessor
                       (setq name (cadr options))
-                      (push name signatures)
+                      (push (cons name reader-info) signatures)
                       (push name readers)
-                      (push `(setf ,name) signatures)
+                      (push (cons (setf-function-name name) writer-info) signatures)
                       (push `(setf ,name) writers))
                      (:initarg
                       (push (require-type (cadr options) 'symbol) initargs))
@@ -1945,7 +1966,7 @@ to open."
 	    (eval-when (:compile-toplevel)
 	      (%compile-time-defclass ',class-name ,env)
 	      (progn
-		,@(mapcar #'(lambda (s) `(note-function-info ',s nil ,env))
+		,@(mapcar #'(lambda (sig) `(record-function-info ',(car sig) ',(cdr sig) ,env))
 			  signatures)))
 	      (ensure-class-for-defclass ',class-name
 			    :direct-superclasses ',direct-superclasses
@@ -1963,18 +1984,20 @@ to open."
         (t (%badarg (car rest) '(or (and null symbol) list)))))
 
 (defmacro defgeneric (function-name lambda-list &rest options-and-methods &environment env)
-  (fboundp function-name)             ; type-check
+  (fboundp function-name)               ; type-check
   (multiple-value-bind (method-combination generic-function-class options methods)
-                       (parse-defgeneric function-name t lambda-list options-and-methods)
+      (parse-defgeneric function-name t lambda-list options-and-methods)
     (let ((gf (gensym)))
       `(progn
-         (eval-when (:compile-toplevel)
-           (note-function-info ',function-name '(lambda ,lambda-list nil) ,env))
-         (let ((,gf (%defgeneric
-                     ',function-name ',lambda-list ',method-combination ',generic-function-class 
-                     ',(apply #'append options))))
-           (%set-defgeneric-methods ,gf ,@methods)
-           ,gf)))))
+        (eval-when (:compile-toplevel)
+          (record-function-info ',(maybe-setf-function-name function-name)
+                                 ',(list (list (encode-gf-lambda-list lambda-list)))
+                                 ,env))
+        (let ((,gf (%defgeneric
+                    ',function-name ',lambda-list ',method-combination ',generic-function-class 
+                    ',(apply #'append options))))
+          (%set-defgeneric-methods ,gf ,@methods)
+          ,gf)))))
 
 
 
