@@ -551,12 +551,33 @@
       (let* ((file nil)
              (init t))
         (dolist (w warnings)
-          (let ((wfname (car (compiler-warning-args w))))
+          (let* ((args (compiler-warning-args w))
+                 (wfname (car args))
+                (def nil))
             (when (if (typep w 'undefined-function-reference)
-                    (not (or (fboundp wfname)
-                             (assq wfname defs))))
+                    (not (setq def (or (fboundp wfname)
+                                       (assq wfname defs)))))
               (multiple-value-setq (harsh any file) (signal-compiler-warning w init file harsh any))
-              (setq init nil))))))
+              (setq init nil))
+            ;; Check args in call to forward-referenenced function.
+            (when (and def (cdr args))
+              (destructuring-bind (arglist spread-p)
+                  (cdr args)
+                (multiple-value-bind (deftype reason)
+                    (nx1-check-call-args def arglist spread-p)
+                  (when deftype
+                    (let* ((w2 (make-condition
+                                'invalid-arguments
+                                :file-name (compiler-warning-file-name w)
+                                :function-name (compiler-warning-function-name w)
+                                :warning-type deftype
+                                :args (list (car args) reason arglist spread-p))))
+                      (setf (compiler-warning-stream-position w2)
+                            (compiler-warning-stream-position w))
+
+                    (multiple-value-setq (harsh any file)
+                      (signal-compiler-warning w2 init file harsh any))
+                    (setq init nil))))))))))
     (values any harsh parent)))
 
 (defun print-nested-name (name-list stream)
