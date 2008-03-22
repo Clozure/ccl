@@ -423,20 +423,25 @@
      (eval-when (:load-toplevel :execute)
        ,@body))))
 
+;;; If warnings have more than a single entry on their
+;;; args slot, don't merge them.
 (defun merge-compiler-warnings (old-warnings)
   (let ((warnings nil))
     (dolist (w old-warnings)
-      (if
-        (dolist (w1 warnings t) 
-          (let ((w1-args (compiler-warning-args w1)))
-            (when (and (eq (compiler-warning-warning-type w)
-                           (compiler-warning-warning-type w1))
-                       w1-args
-                       (eq (%car (compiler-warning-args w))
-                           (%car w1-args)))
-              (incf (compiler-warning-nrefs w1))
-              (return))))
-         (push w warnings)))
+      (let* ((w-args (compiler-warning-args w)))
+        (if
+          (or (cdr w-args)
+              (dolist (w1 warnings t) 
+                (let ((w1-args (compiler-warning-args w1)))
+                  (when (and (eq (compiler-warning-warning-type w)
+                                 (compiler-warning-warning-type w1))
+                             w1-args
+                             (null (cdr w1-args))
+                             (eq (%car w-args)
+                                 (%car w1-args)))
+                    (incf (compiler-warning-nrefs w1))
+                    (return)))))
+          (push w warnings))))
     warnings))
 
 ;;; This is called by, e.g., note-function-info & so can't be -too- funky ...
@@ -480,8 +485,8 @@
          (format stream "the keyword argument ~s is not one of ~s, which are recognized~&  by " badguy goodguys))))
     (format stream
             (ecase (compiler-warning-warning-type condition)       
-              (:global-mismatch "the current global definition of ~s.")
-              (:environment-mismatch "the definition of ~s visible in the current compilation unit.")
+              (:global-mismatch "the current global definition of ~s")
+              (:environment-mismatch "the definition of ~s visible in the current compilation unit")
               (:lexical-mismatch "the lexically visible definition of ~s"))
             callee)))
 
@@ -502,7 +507,7 @@
     (:type-conflict . "Conflicting type declarations for ~S")
     (:special-fbinding . "Attempt to bind compiler special name: ~s. Result undefined")
     (:lambda . "Suspicious lambda-list: ~s")
-    (:result-ignored . "Function result ignored in call to ~s.")))
+    (:result-ignored . "Function result ignored in call to ~s")))
 
 (defun report-compiler-warning (condition stream)
   (let* ((warning-type (compiler-warning-warning-type condition))
@@ -513,6 +518,7 @@
     (if (typep format-string 'string)
       (apply #'format stream format-string (compiler-warning-args condition))
       (funcall format-string condition stream))
+    (format stream ".")
     (let ((nrefs (compiler-warning-nrefs condition)))
       (when (and nrefs (neq nrefs 1))
         (format stream " (~D references)" nrefs)))))
