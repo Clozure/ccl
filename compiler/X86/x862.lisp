@@ -5529,11 +5529,13 @@
                 ;; non-zero, ensure that at least that many were
                 ;; received.  If there's an upper bound, enforce it.
                 
-                (when rev-fixed
-                  (x862-reserve-vstack-lcells num-fixed)                    
-                  (! check-min-nargs num-fixed))
-                (when max-args
-                  (! check-max-nargs max-args))
+                (cond (rev-fixed
+                       (x862-reserve-vstack-lcells num-fixed)
+                       (if max-args
+                         (! check-min-max-nargs num-fixed max-args)
+                         (! check-min-nargs num-fixed)))
+                      (max-args
+                       (! check-max-nargs max-args)))
                 (if (not (or rest keys))
                   (if (<= (+ num-fixed num-opt) $numx8664argregs)
                     (! save-lisp-context-no-stack-args)
