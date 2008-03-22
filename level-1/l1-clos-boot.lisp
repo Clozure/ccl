@@ -318,8 +318,8 @@
         (when keyp (setq bits (%ilogior (%ilsl $lfbits-keys-bit 1) bits)))
         (when aokp (setq bits (%ilogior (%ilsl $lfbits-aok-bit 1) bits)))
         (if return-keys?
-          (values bits (apply #'vector (nreverse key-list)))
-          bits)))))
+          (values bits (if key-list (apply #'vector (nreverse key-list)) #()))
+          (values bits nil))))))
 
 (defun pair-arg-p (thing &optional lambda-list-ok supplied-p-ok keyword-nesting-ok)
   (or (symbol-arg-p thing lambda-list-ok) ; nil ok in destructuring case
