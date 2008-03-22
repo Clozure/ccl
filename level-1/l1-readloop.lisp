@@ -316,27 +316,26 @@
            (definition-environment env t))
     lambda-expression))
 
-; This is different from AUGMENT-ENVIRONMENT.
-; If "info" is a lambda expression, then
-;  record a cons whose CAR is (encoded-lfun-bits . keyvect) and whose cdr
-;  is the lambda expression iff the function named by "name" is 
-;  declared/proclaimed INLINE in env
-(defun note-function-info (name lambda-expression env)
-  (let ((definition-env (definition-environment env)))
-    (if definition-env
-      (let* ((already (assq (setq name (maybe-setf-function-name name))
-                            (defenv.defined definition-env)))
-             (info nil))
-        (when (lambda-expression-p lambda-expression)
-          (multiple-value-bind (lfbits keyvect) (encode-lambda-list (cadr lambda-expression) t)
-            (setq info (cons (cons lfbits keyvect) 
-                             (retain-lambda-expression name lambda-expression env)))))
-          (if already
-            (if info (%rplacd already info))
-            (push (cons name info) (defenv.defined definition-env)))))
-    name))
 
-; And this is different from FUNCTION-INFORMATION.
+        
+
+;;; This is different from AUGMENT-ENVIRONMENT.
+;;; If "info" is a lambda expression, then
+;;;  record a cons whose CAR is (encoded-lfun-bits . keyvect) and whose cdr
+;;;  is the lambda expression iff the function named by "name" is 
+;;;  declared/proclaimed INLINE in env
+(defun note-function-info (name lambda-expression env)
+  (let* ((info nil)
+         (name (maybe-setf-function-name name)))
+    (when (lambda-expression-p lambda-expression)
+      (multiple-value-bind (lfbits keyvect) (encode-lambda-list (cadr lambda-expression) t)
+        (setq info (cons (cons lfbits keyvect) 
+                         (retain-lambda-expression name lambda-expression env)))))
+    (record-function-info name info env))
+  name)
+
+
+;;; And this is different from FUNCTION-INFORMATION.
 (defun retrieve-environment-function-info (name env)
  (let ((defenv (definition-environment env)))
    (if defenv (assq (maybe-setf-function-name name) (defenv.defined defenv)))))
@@ -346,7 +345,7 @@
     (setf-function-name (cadr name))
     name))
 
-; Must differ from -something-, but not sure what ... 
+;;; Must differ from -something-, but not sure what ... 
 (defun note-variable-info (name info env)
   (let ((definition-env (definition-environment env)))
     (if definition-env (push (cons name info) (defenv.specials definition-env)))
