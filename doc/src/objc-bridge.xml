@@ -217,9 +217,9 @@
         is done most easily and safely with <xref linkend="m_rlet"/>.
         We do it like this:</para>
       <programlisting>
-        (rlet ((r :&lt;NSR>ect))
-        (send/stret r v1 'bounds)
-        (send v2 :set-bounds r))
+(rlet ((r :&lt;NSR&gt;ect))
+          (send/stret r v1 'bounds)
+          (send v2 :set-bounds r))
       </programlisting>
       <para>The rlet allocates the storage (but doesn't initialize
         it), and makes sure that it will be deallocated when we're
@@ -237,15 +237,15 @@
         variables to foreign structures in one step.  The example
         above could have been written more tersely as:</para>
       <programlisting>
-        (slet ((r (send v1 'bounds)))
-        (send v2 :set-bounds r))
+(slet ((r (send v1 'bounds)))
+      (send v2 :set-bounds r))
 	  </programlisting>
       <para>Second, when one call to <literal>send</literal> is made
         inside another, the inner one has an implicit
         <literal>slet</literal> around it.  So, one could in fact
         just write:</para>
       <programlisting>
-        (send v1 :set-bounds (send v2 'bounds))
+(send v1 :set-bounds (send v2 'bounds))
       </programlisting>
       <para>There are also several psuedo-functions provided for convenience
         by the Objective-C compiler, to make objects of specific types. The
@@ -253,17 +253,17 @@
         NS-MAKE-RANGE, NS-MAKE-RECT, and NS-MAKE-SIZE.</para>
       <para>These pseudo-functions can be used within an SLET initform:</para>
       <programlisting>
-        (slet ((p (ns-make-point 100.0 200.0)))
-        (send w :set-frame-origin p))
+(slet ((p (ns-make-point 100.0 200.0)))
+      (send w :set-frame-origin p))
       </programlisting>
       <para>Or within a call to <literal>send</literal>:</para>
       <programlisting>
-        (send w :set-origin (ns-make-point 100.0 200.0))
+(send w :set-origin (ns-make-point 100.0 200.0))
       </programlisting>
       <para>However, since these aren't real functions, a call like the
         following won't work:</para>
       <programlisting>
-        (setq p (ns-make-point 100.0 200.0))
+(setq p (ns-make-point 100.0 200.0))
       </programlisting>
       <para>To extract fields from these objects, there are also some
         convenience macros: NS-MAX-RANGE, NS-MIN-X,
@@ -282,13 +282,13 @@
         of arguments. Perhaps the most common examples involve
         formatted strings:</para>
       <programlisting>
-        [NSClass stringWithFormat: "%f %f" x y]
+[NSClass stringWithFormat: "%f %f" x y]
       </programlisting>
       <para>In Lisp, this would be written:</para>
       <programlisting>
-        (send (find-class 'ns:ns-string)
-        :string-with-format #@"%f %f"
-        (:double-float x :double-float y))
+(send (find-class 'ns:ns-string)
+      :string-with-format #@"%f %f"
+      (:double-float x :double-float y))
       </programlisting>
       <para>Note that it's necessary to specify the foreign types of the
         variables (in this example, :double-float), because the
@@ -316,7 +316,7 @@
         which you can do with either a DECLARE or a THE form.  For
         example:</para>
       <programlisting>
-        (send (the ns:ns-window w) 'center)
+(send (the ns:ns-window w) 'center)
 	  </programlisting>
       <para>Note that there is no way in Objective-C to name the class of a
         class.  Thus the bridge provides a declaration, @METACLASS.
@@ -324,9 +324,9 @@
         of the <emphasis>class</emphasis> "NSColor" is (@metaclass
         ns:ns-color):</para>
       <programlisting>
-        (let ((c (find-class 'ns:ns-color)))
-        (declare ((ccl::@metaclass ns:ns-color) c))
-        (send c 'white-color))
+(let ((c (find-class 'ns:ns-color)))
+  (declare ((ccl::@metaclass ns:ns-color) c))
+  (send c 'white-color))
       </programlisting>
       <para>The other case that alllows optimization is when only
         the message is known at compile-time, but its type signature
@@ -350,7 +350,7 @@
         any other major change, such as loading an external framework,
         you should rebuild the table:</para>
       <programlisting>
-        ? (update-type-signatures)
+? (update-type-signatures)
       </programlisting>
       <para>Because <literal>send</literal> and its relatives
         <literal>send-super</literal>, <literal>send/stret</literal>,
@@ -391,9 +391,9 @@
       NS:NS-WINDOW (that, for simplicity's sake, doesn't define any
       new slots), we could do:</para>
     <programlisting>
-      (defclass example-window (ns:ns-window)
-      ()
-      (:metaclass ns:+ns-object))
+(defclass example-window (ns:ns-window)
+  ()
+  (:metaclass ns:+ns-object))
     </programlisting>
     <para>That'll create a new Objective-C class named EXAMPLE-WINDOW whose
       metaclass is the class named +EXAMPLE-WINDOW. The class will be
@@ -416,11 +416,11 @@
         instance variable to keep that information in), we could
         say:</para>
       <programlisting>
-        (defclass key-event-counting-window (ns:ns-window)
-        ((key-event-count :foreign-type :int
-        :initform 0
-        :accessor window-key-event-count))
-        (:metaclass ns:+ns-object))
+(defclass key-event-counting-window (ns:ns-window)
+  ((key-event-count :foreign-type :int
+                    :initform 0
+                    :accessor window-key-event-count))
+  (:metaclass ns:+ns-object))
       </programlisting>
       <para>Foreign slots are always SLOT-BOUNDP, and the initform
         above is redundant: foreign slots are initialized to binary
@@ -434,11 +434,11 @@
         pretty-much normal lisp slot that'll happen to be associated
         with "an instance of a foreign class". For instance:</para>
       <programlisting>
-        (defclass hemlock-buffer-string (ns:ns-string)
-        ((hemlock-buffer :type hi::hemlock-buffer
-        :initform hi::%make-hemlock-buffer
-        :accessor string-hemlock-buffer))
-        (:metaclass ns:+ns-object))
+(defclass hemlock-buffer-string (ns:ns-string)
+  ((hemlock-buffer :type hi::hemlock-buffer
+                   :initform hi::%make-hemlock-buffer
+                   :accessor string-hemlock-buffer))
+  (:metaclass ns:+ns-object))
 	  </programlisting>
       <para>As one might expect, this has memory-management
         implications: we have to maintain an association between a
@@ -470,10 +470,10 @@
       of define-objc-method, so I'm going to do it with some short
       examples.  Let us define a class to use in them:</para>
     <programlisting>
-      (defclass data-window-controller (ns:ns-window-controller)
-      ((window :foreign-type :id :accessor window)
-      (data :initform nil :accessor data))
-      (:metaclass ns:+ns-object))
+(defclass data-window-controller (ns:ns-window-controller)
+  ((window :foreign-type :id :accessor window)
+   (data :initform nil :accessor data))
+  (:metaclass ns:+ns-object))
     </programlisting>
     <para>There's nothing special about this class.  It inherits
       from ns:ns-window-controller.  It has two slots:
@@ -484,9 +484,9 @@
       no arguments.  It happens to be an initialization method, but
       that's not important:</para>
     <programlisting>
-      (define-objc-method ((:id get-window)
-      data-window-controller)
-      (window self))
+(define-objc-method ((:id get-window)
+                     data-window-controller)
+    (window self))
     </programlisting>
     <para>The return type of this method is the foreign type :id,
       which is used for all Objective-C objects.  The name of the method is
@@ -499,13 +499,13 @@
       the name of the method without a parameter was an ordinary
       symbol, but with a parameter, it's a keyword:</para>
     <programlisting>
-      (define-objc-method ((:id :init-with-multiplier (:int multiplier))
-      data-window-controller)
-      (setf (data self) (make-array 100))
-      (dotimes (i 100)
-      (setf (aref (data self) i)
-      (* i multiplier)))
-      self)
+(define-objc-method ((:id :init-with-multiplier (:int multiplier))
+                     data-window-controller)
+    (setf (data self) (make-array 100))
+  (dotimes (i 100)
+    (setf (aref (data self) i)
+          (* i multiplier)))
+  self)
     </programlisting>
     <para>To Objective-C code which uses the class, the name of this
       method is "initWithMultiplier:".  The name of the parameter is
@@ -515,15 +515,15 @@
       method.</para>
     <para>Here's an example with more than one parameter:</para>
     <programlisting>
-      (define-objc-method ((:id :init-with-multiplier (:int multiplier)
-      :and-addend (:int addend))
-      data-window-controller)
-      (setf (data self) (make-array size))
-      (dotimes (i 100)
-      (setf (aref (data self) i)
-      (+ (* i multiplier)
-      addend)))
-      self)
+(define-objc-method ((:id :init-with-multiplier (:int multiplier)
+                          :and-addend (:int addend))
+                     data-window-controller)
+    (setf (data self) (make-array size))
+  (dotimes (i 100)
+    (setf (aref (data self) i)
+          (+ (* i multiplier)
+             addend)))
+  self)
     </programlisting>
     <para>To Objective-C, the name of this method is
       "initWithMultiplier:andAddend:".  Both parameters are of type
@@ -534,12 +534,12 @@
       so-called "void method".  Where our other methods said :id, this
       one says :void for the return type:</para>
     <programlisting>
-      (define-objc-method ((:void :take-action (:id sender))
-      data-window-controller)
-      (declare (ignore sender))
-      (dotimes (i 100)
-      (setf (aref (data self) i)
-      (- (aref (data self) i)))))
+(define-objc-method ((:void :take-action (:id sender))
+                     data-window-controller)
+    (declare (ignore sender))
+  (dotimes (i 100)
+    (setf (aref (data self) i)
+          (- (aref (data self) i)))))
     </programlisting>
     <para>This method would be called "takeAction:" in Objective-C.  The
       convention for methods that are going to be used as Cocoa
@@ -551,17 +551,17 @@
     <para>There is also an alternate syntax, illustrated here.  The
       following two method definitions are equivalent:</para>
     <programlisting>
-      (define-objc-method ("applicationShouldTerminate:"
-      "LispApplicationDelegate")
-      (:id sender :&lt;BOOL>)
+(define-objc-method ("applicationShouldTerminate:"
+                     "LispApplicationDelegate")
+    (:id sender :&lt;BOOL>)
+         (declare (ignore sender))
+         nil)
+  
+  (define-objc-method ((:&lt;BOOL>
+                        :application-should-terminate sender)
+                       lisp-application-delegate)
       (declare (ignore sender))
-      nil)
-
-      (define-objc-method ((:&lt;BOOL>
-      :application-should-terminate sender)
-      lisp-application-delegate)
-      (declare (ignore sender))
-      nil)
+    nil)
     </programlisting>
     <sect2 id="Method-Redefinition-Constraints">
 	  <title>Method Redefinition Constraints</title>
@@ -617,16 +617,16 @@
       translation. This is useful for a one-time exception.  For
       example:</para>
     <programlisting>
-      (ccl::make-objc-instance "WiErDclass")
-      (ccl::send o "WiErDmEsSaGe:WithARG:" x y)
+(ccl::make-objc-instance "WiErDclass")
+(ccl::send o "WiErDmEsSaGe:WithARG:" x y)
     </programlisting>
     <para>Alternatively, you can define a special translation rule
       for your exception.  This is useful for an exceptional name that
       you need to use througout your code.  Some examples:</para>
     <programlisting>
-      (ccl::define-classname-translation "WiErDclass" wierd-class)
-      (ccl::define-message-translation "WiErDmEsSaGe:WithARG:" (:weird-message :with-arg))
-      (ccl::define-init-translation "WiErDiNiT:WITHOPTION:" (:weird-init :option))
+(ccl::define-classname-translation "WiErDclass" wierd-class)
+(ccl::define-message-translation "WiErDmEsSaGe:WithARG:" (:weird-message :with-arg))
+(ccl::define-init-translation "WiErDiNiT:WITHOPTION:" (:weird-init :option))
     </programlisting>
     <para>The normal rule in Objective-C names is that each word begins with a
       capital letter (except possibly the first).  Using this rule
@@ -636,7 +636,7 @@
       etc. Most common special words used in Cocoa are already defined
       in the bridge, but you can define new ones as follows:</para>
     <programlisting>
-      (ccl::define-special-objc-word "QuickDraw")
+(ccl::define-special-objc-word "QuickDraw")
     </programlisting>
     <para>Note that message keywords in a SEND such as (SEND V
       :MOUSE P :IN-RECT R) may look like the keyword arguments in a
