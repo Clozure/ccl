@@ -29,6 +29,65 @@
     also provides some convenience facilities for working with
     Cocoa.</para>
 
+  <sect1 id="Objective-C-Changes-1.2">
+    <title>Changes in 1.2</title>
+
+    <para>Version 1.2 of &CCL; exports most of the useful symbols
+    described in this chapter; in previous releases, most of them were
+    private in the <code>CCL</code> package.</para>
+
+    <para>There are several new reader macros that make it much more
+    conveinent than before to refer to several classes of symbols used
+    with the Objective-C bridge. For a full description of these
+    reader-macros, see
+    the <link linkend="anchor_Foreign-Function-Interface-Dictionary">Foreign-Function-Interface
+    Dictionary</link>, especially the entries at the beginning,
+    describing reader macros.</para>
+
+    <para>As in previous releases, 32-bit versions of &CCL; use 32-bit
+    floats and integers in data structures that describe geometry,
+    font sizes and metrics, and so on. 64-bit versions of &CCL; use
+    64-bit values where appropriate.</para>
+
+    <para>The Objective-C bridge defines the
+      type <code>NS:CGFLOAT</code> as the Lisp type of the preferred
+      floating-point type on the current platform, and defines the
+      constant <code>NS:+CGFLOAT+</code>.  On DarwinPPC32, the foreign
+      types <code>:cgfloat</code>, <code>:&lt;NSUI&gt;nteger</code>,
+      and
+      <code>:&lt;NSI&gt;nteger</code> are defined by the Objective-C
+      bridge (as 32-bit float, 32-bit unsigned integer, and 32-bit
+      signed integer, respectively); these types are defined as 64-bit
+      variants in the 64-bit interfaces.</para>
+
+    <para>Every Objective-C class is now properly named, either with a
+      name exported from the <code>NS</code> package (in the case of a
+      predefined class declared in the interface files) or with the
+      name provided in the <code>DEFCLASS</code> form (with <code>:METACLASS</code>
+      <code>NS:+NS-OBJECT</code>) which defines the class from Lisp.
+      The class's Lisp name is now proclaimed to be a "static"
+      variable (as if by <code>DEFSTATIC</code>, as described in the
+      <link linkend="Static_Variables">"Static Variables"
+      section</link>) and given the class object as its value.  In
+      other words:</para>
+
+    <programlisting>
+(send (find-class 'ns:ns-application) 'shared-application)
+    </programlisting>
+
+  <para>and</para>
+
+    <programlisting>
+(send ns:ns-application 'shared-application)
+    </programlisting>
+
+  <para>are equivalent.  (Since it's not legal to bind a "static"
+  variable, it may be necessary to rename some things so that
+  unrelated variables whose names coincidentally conflict with
+  Objective-C class names don't do so.)</para>
+
+  </sect1>
+
   <sect1 id="Using-Objective-C-Classes">
     <title>Using Objective-C Classes</title>
 
@@ -328,7 +387,7 @@
   (declare ((ccl::@metaclass ns:ns-color) c))
   (send c 'white-color))
       </programlisting>
-      <para>The other case that alllows optimization is when only
+      <para>The other case that allows optimization is when only
         the message is known at compile-time, but its type signature
         is unique. Of the more-than-6000 messages currently provided
         by Cocoa, only about 50 of them have nonunique type
@@ -462,8 +521,10 @@
       to define Objective-C methods, it is only possible to define methods
       belonging to Objective-C classes which have been defined in
       Lisp.</para>
-    <para>The macro <literal>define-objc-method</literal> is used
-      for this.  As described in , the names of Objective-C methods are
+    <para>The macro <literal>define-objc-method</literal> is used for
+      this.  As described in the
+      section <link linkend="Calling-Objective-C-Methods">Calling
+      Objective-C Methods</link>, the names of Objective-C methods are
       broken into pieces, each piece followed by a parameter.  The
       types of all parameters must be explicitly declared.</para>
     <para>Right now, I'm not sure how to formally describe the usage
@@ -480,9 +541,8 @@
       <literal>window</literal> is a foreign slot, stored in the Objective-C
       world; and <literal>data</literal> is an ordinary slot, stored
       in the Lisp world.</para>
-    <para>Here is an example of how to define a method which takes
-      no arguments.  It happens to be an initialization method, but
-      that's not important:</para>
+    <para>Here is an example of how to define a method which takes no
+      arguments:</para>
     <programlisting>
 (define-objc-method ((:id get-window)
                      data-window-controller)
@@ -501,7 +561,7 @@
     <programlisting>
 (define-objc-method ((:id :init-with-multiplier (:int multiplier))
                      data-window-controller)
-    (setf (data self) (make-array 100))
+  (setf (data self) (make-array 100))
   (dotimes (i 100)
     (setf (aref (data self) i)
           (* i multiplier)))
@@ -518,7 +578,7 @@
 (define-objc-method ((:id :init-with-multiplier (:int multiplier)
                           :and-addend (:int addend))
                      data-window-controller)
-    (setf (data self) (make-array size))
+  (setf (data self) (make-array size))
   (dotimes (i 100)
     (setf (aref (data self) i)
           (+ (* i multiplier)
@@ -536,7 +596,7 @@
     <programlisting>
 (define-objc-method ((:void :take-action (:id sender))
                      data-window-controller)
-    (declare (ignore sender))
+  (declare (ignore sender))
   (dotimes (i 100)
     (setf (aref (data self) i)
           (- (aref (data self) i)))))
@@ -554,13 +614,13 @@
 (define-objc-method ("applicationShouldTerminate:"
                      "LispApplicationDelegate")
     (:id sender :&lt;BOOL>)
-         (declare (ignore sender))
-         nil)
+    (declare (ignore sender))
+    nil)
   
-  (define-objc-method ((:&lt;BOOL>
+(define-objc-method ((:&lt;BOOL>
                         :application-should-terminate sender)
                        lisp-application-delegate)
-      (declare (ignore sender))
+    (declare (ignore sender))
     nil)
     </programlisting>
     <sect2 id="Method-Redefinition-Constraints">

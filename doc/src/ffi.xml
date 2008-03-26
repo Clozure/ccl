@@ -2673,7 +2673,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
   <!-- ******************************************  -->
   <sect1>
     <title>The Foreign-Function-Interface Dictionary</title>
-    
+    <anchor id="anchor_Foreign-Function-Interface-Dictionary"/>
     <!-- ====================================  -->
     <refentry id="rm_sharpsign-underscore">
       <indexterm zone="rm_sharpsign-underscore">
