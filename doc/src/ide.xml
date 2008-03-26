@@ -193,7 +193,7 @@
   </sect1>
 
   <sect1><title>The Application Builder</title>
-    
+    <anchor id="application_builder"/>
     <para>One important feature of the IDE currently has no Cocoa user
       interface: the application builder. The application builder
       constructs a

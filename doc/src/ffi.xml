@@ -384,11 +384,11 @@
       </sect3>
 
       <sect3 id="Stack-allocation-of---and-destructive-operations-on---MACPTRs-">
-        <title>Stack allocation of - and destructive operations on - MACPTRs.</title>
+        <title>Stack allocation of&mdash;and destructive operations on&mdash;MACPTRs.</title>
 	    <para>If certain conditions held in the environment in which
-	      GET-NEXT-EVENT ran - namely, if it was guaranteed that
+	      GET-NEXT-EVENT ran&mdash;namely, if it was guaranteed that
 	      neither NULL-EVENT-P nor HANDLE-EVENT cached or otherwise
-	      retained their arguments (the "event" pointer) - there'd be
+	      retained their arguments (the "event" pointer)&mdash;there'd be
 	      a few alternatives to the naive approach. One of those
 	      approaches would be to use the primitive function
 	      %SETF-MACPTR (described in greater detail below) to
@@ -424,13 +424,13 @@
           cost), we could move the binding back inside the
           loop:</para>
         <programlisting>
-          (defun get-next-event ()
-          (loop
-          (let* ((event (%null-ptr))) ; (%NULL-PTR) is shorthand for (%INT-TO-PTR 0)
-          (declare (dynamic-extent event))
-          (%setf-macptr event (#_get_next_window_system_event))
-          (unless (null-event-p event)
-          (handle-event event)))))
+(defun get-next-event ()
+  (loop
+     (let* ((event (%null-ptr))) ; (%NULL-PTR) is shorthand for (%INT-TO-PTR 0)
+       (declare (dynamic-extent event))
+       (%setf-macptr event (#_get_next_window_system_event))
+       (unless (null-event-p event)
+         (handle-event event)))))
         </programlisting>
         <para>The idiom of binding one or more variables to
           stack-allocated MACPTRs, then destructively modifying those
@@ -487,7 +487,7 @@
       </sect3>
 
       <sect3 id="Caveats-">
-	    <title>Caveats.</title>
+	    <title>Caveats</title>
         <para>Reading from, writing to, allocating, and freeing
           foreign memory are all potentially dangerous operations;
           this is no less true when these operations are performed in
@@ -2327,7 +2327,7 @@ d_d_test(double data)
       always a bad idea; however, allocating it into the heap at least
       offers more protection than direct stack allocation.</para>
     <para>The big disadvantage to allocating data on the heap is
-      that it must be explicitly deallocated - you need to "free" it
+      that it must be explicitly deallocated&mdash;you need to "free" it
       when you're done with it.  Ordinarily, in Lisp, you wouldn't
       allocate memory yourself, and the garbage collector would know
       about it, so you wouldn't have to think about it again.  When
@@ -2347,7 +2347,7 @@ d_d_test(double data)
       where it moved, the way that Lisp code does.  If you allocate
       data manually, you can pass it to foreign code and know that no
       matter what that code needs to do with it, it will be able to,
-      until you deallocated it.  Of course, you'd better be sure it's
+      until you deallocate it.  Of course, you'd better be sure it's
       done before you do.  Otherwise, your program will be unstable
       and might crash sometime in the future, and you'll have trouble
       figuring out what caused the trouble, because there won't be
@@ -2674,1143 +2674,6 @@ reverse_int_ptr_ptrtest(int **ptrs)
   <sect1>
     <title>The Foreign-Function-Interface Dictionary</title>
     
-    <!-- ====================================  -->
-    <refentry id="m_def-foreign-type">
-	  <indexterm zone="m_def-foreign-type">
-	    <primary>def-foreign-type</primary>
-	  </indexterm>
-
-	  <refnamediv>
-	    <refname>DEF-FOREIGN-TYPE</refname>
-	    <refpurpose></refpurpose>
-	    <refclass>Macro</refclass>
-	  </refnamediv>
-
-	  <refsynopsisdiv>
-	    <synopsis>
-	      <function>def-foreign-type</function> name foreign-type-spec
-	    </synopsis>
-	  </refsynopsisdiv>
-
-	  <refsect1>
-	    <title>Values</title>
-
-	    <variablelist>
-	      <varlistentry>
-	        <term>name</term>
-	        
-	        <listitem>
-		      <para>NIL or a keyword; the keyword may contain
-		        <link linkend="Case-sensitivity-of-foreign-names-in-CCL" >escaping constructs</link>.</para>
-	        </listitem>
-	      </varlistentry>
-	      
-	      <varlistentry>
-	        <term>foreign-type-spec</term>
-	        
-	        <listitem>
-		      <para>A foreign type specifier, whose syntax is (loosely)
-		        defined above.</para>
-	        </listitem>
-	      </varlistentry>
-	    </variablelist>
-	  </refsect1>
-
-	  <refsect1>
-	    <title>Description</title>
-
-	    <para>If name is non-NIL, defines name to be an alias for the
-	      foreign type specified by foreign-type-spec. If foreign-type-spec
-	      is a named structure or union type, additionally defines that
-	      structure or union type.</para>
-	    
-	    <para>If name is NIL, foreign-type-spec must be a named foreign
-	      struct or union definition, in which case the foreign structure
-	      or
-	      union definition is put in effect.</para>
-	    
-	    <para>Note that there are two separate namespaces for foreign
-	      type names, one for the names of ordinary types and one for
-	      the names of structs and unions.  Which one
-	      <varname>name</varname> refers to depends on
-	      <varname>foreign-type-spec</varname> in the obvious manner.
-	    </para>
-	  </refsect1>
-    </refentry>
-
-    
-    <!-- ====================================  -->
-    <refentry id="m_make-record">
-	  <indexterm zone="m_make-record">
-	    <primary>make-record</primary>
-	  </indexterm>
-
-	  <refnamediv>
-        <anchor id="anchor_make-record"/>
-	    <refname>MAKE-RECORD</refname>
-	    <refpurpose></refpurpose>
-	    <refclass>Macro</refclass>
-	  </refnamediv>
-
-	  <refsynopsisdiv>
-	    <synopsis>
-	      <function>make-record</function> typespec
-	      &rest; initforms => result
-	    </synopsis>
-	  </refsynopsisdiv>
-
-	  <refsect1>
-	    <title>Values</title>
-
-	    <variablelist>
-	      <varlistentry>
-	        <term>typespec</term>
-
-	        <listitem>
-		      <para>A foreign type specifier, or a keyword which is used
-		        as the name of a foreign struct or union.</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>initforms</term>
-
-	        <listitem>
-		      <para>If the type denoted by <varname>typespec</varname>
-		        is scalar, a single value appropriate for that type;
-		        otherwise, a list of alternating field names and
-		        values appropriate for the types of those fields.</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>result</term>
-
-	        <listitem>
-		      <para>
-		        A <type>macptr</type> which encapsulates the address of a
-		        newly-allocated record on the foreign heap.
-		      </para>
-	        </listitem>
-	      </varlistentry>
-	    </variablelist>
-	  </refsect1>
-
-	  <refsect1>
-	    <title>Description</title>
-
-	    <para>
-	      Expands into code which allocates and initalizes
-	      an instance of the type 
-	      denoted by <varname>typespec</varname>, on the foreign
-	      heap.  The record is allocated using the C function
-	      <function>malloc</function>, and the user of
-	      <function>make-record</function> must explicitly call
-	      the C function <function>free</function> to deallocate the
-	      record, when it is no longer needed.
-	    </para>
-
-	    <para>
-	      If <varname>initforms</varname> is provided, its value
-	      or values are used in the initialization.  When the type
-	      is a scalar, <varname>initforms</varname> is either a single
-	      value which can be coerced to that type, or no value, in which
-	      case binary 0 is used.  When the type is a <type>struct</type>,
-	      <varname>initforms</varname> is a list, giving field names
-	      and the values for each.  Each field is treated in the same way
-	      as a scalar is: If a value for it is given, it must be
-	      coerceable to the field's type; if not, binary 0 is used.
-	    </para>
-
-	    <para>
-	      When the type is an array, <varname>initforms</varname> may
-	      not be provided, because <function>make-record</function>
-	      cannot initialize its values.  <function>make-record</function>
-	      is also unable to initialize fields of a <type>struct</type>
-	      which are themselves
-	      <type>struct</type>s.  The user of
-	      <function>make-record</function> should set these values
-	      by another means.
-	    </para>
-
-	    <para>
-	      A possibly-significant limitation is that it must be possible to
-	      find the foreign type at the time the macro is expanded;
-	      <function>make-record</function> signals an error if this is
-	      not the case.
-	    </para>
-	  </refsect1>
-
-	  <refsect1>
-	    <title>Notes</title>
-
-	    <para>
-	      It is inconvenient that <function>make-record</function> is a
-	      macro, because this means that <varname>typespec</varname>
-	      cannot be a variable; it must be an immediate value.
-	    </para>
-	    
-	    <para>
-	      If it weren't for this requirement,
-	      <function>make-record</function> could be a function.  However,
-	      that would mean that any stand-alone application using it would
-	      have to include a copy of the interface database
-	      (see <xref linkend="The-Interface-Database"/>), which is undesireable
-	      because it's large.
-	    </para>
-	  </refsect1>
-    </refentry>
-
-    <!-- ====================================  -->
-    <refentry id="m_makegcable--record">
-      <indexterm zone="m_make-record">
-	    <primary>make-gcable-record</primary>
-      </indexterm>
-
-      <refnamediv>
-	    <refname>MAKE-GCABLE-RECORD</refname>
-	    <refpurpose></refpurpose>
-	    <refclass>Macro</refclass>
-      </refnamediv>
-
-      <refsynopsisdiv>
-	    <synopsis>
-	      <function>make-gcable-record</function> typespec
-	      &rest; initforms => result
-	    </synopsis>
-      </refsynopsisdiv>
-
-      <refsect1>
-	    <title>Values</title>
-
-	    <variablelist>
-	      <varlistentry>
-	        <term>typespec</term>
-
-	        <listitem>
-		      <para>A foreign type specifier, or a keyword which is used
-		        as the name of a foreign struct or union.</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>initforms</term>
-
-	        <listitem>
-		      <para>If the type denoted by <varname>typespec</varname>
-		        is scalar, a single value appropriate for that type;
-		        otherwise, a list of alternating field names and
-		        values appropriate for the types of those fields.</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>result</term>
-
-	        <listitem>
-		      <para>
-		        A <type>macptr</type> which encapsulates the address of a
-		        newly-allocated record on the foreign heap. The foreign
-		        object returned by <function>make-gcable-record</function>
-		        is freed when the garbage collector determines that
-		        the <code>MACPTR</code> object that describes it is
-		        unreachable.</para>
-	        </listitem>
-	      </varlistentry>
-	    </variablelist>
-      </refsect1>
-
-      <refsect1>
-	    <title>Description</title>
-
-	    <para>
-	      Allocates a block of foreign memory suitable to hold the foreign
-	      type described by <code>typespec</code>, in the same manner
-	      as <link linkend="anchor_make-record">MAKE-RECORD</link>. In
-	      addition, <code>MAKE-GCABLE-RECORD</code> marks the
-	      returned object gcable; in other words, it informs the garbage
-	      collector that it may reclaim the object when it becomes
-	      unreachable.
-	    </para>
-
-        <para>In all other respects, <code>MAKE-GCABLE-RECORD</code> works
-          the same way
-          as <link linkend="anchor_make-record">MAKE-RECORD</link></para>
-
-        <para> When using gcable pointers, it's important to remember the
-          distinction between a <code>MACPTR</code> object (which is a
-          lisp object, more or less like any other) and the block of
-          foreign memory that the <code>MACPTR</code> object points to.
-          If a gcable <code>MACPTR</code> object is the only thing in the
-          world (lisp world or foreign world) that references the
-          underlying block of foreign memory, then freeing the foreign
-          memory when it becomes impossible to reference it is convenient
-          and sane.  If other lisp <code>MACPTR</code>s reference the
-          underlying block of foreign memory or if the address of that
-          foreign memory is passed to and retained by foreign code, having
-          the GC free the memory may have unpleasant consequences if those
-          other references are used.</para>
-
-        <para>Take care, therefore, not to create a gcable record unless
-          you are sure that the returned <code>MACPTR</code> will be the
-          only reference to the allocated memory that will ever be
-          used.</para>
-      </refsect1>
-
-    </refentry>
-
-
-
-    <!-- ====================================  -->
-    <refentry id="m_rlet">
-	  <indexterm zone="m_rlet">
-	    <primary>rlet</primary>
-	  </indexterm>
-
-	  <refnamediv>
-	    <refname>RLET</refname>
-	    <refpurpose></refpurpose>
-	    <refclass>Macro</refclass>
-	  </refnamediv>
-
-	  <refsynopsisdiv>
-	    <synopsis>
-	      <function>rlet</function> (var typespec &rest; initforms)*
-	      &body; body
-	    </synopsis>
-	  </refsynopsisdiv>
-
-	  <refsect1>
-	    <title>Values</title>
-
-	    <variablelist>
-	      <varlistentry>
-	        <term>var</term>
-
-	        <listitem>
-		      <para>A symbol (a lisp variable)</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>typespec</term>
-
-	        <listitem>
-		      <para>A foreign type specifier or foreign record name.</para>
-	        </listitem>
-	      </varlistentry>
-
-          <varlistentry>
-	        <term>initforms</term>
-
-	        <listitem>
-		      <para>As described above, for
-		        <xref linkend="m_make-record"/></para>
-	        </listitem>
-	      </varlistentry>
-	    </variablelist>
-	  </refsect1>
-
-	  <refsect1>
-	    <title>Description</title>
-
-	    <para>Executes <varname>body</varname>
-	      in an environment in which each var is bound
-	      to <link linkend="Referencing-and-Using-Foreign-Memory-Addresses">a MACPTR</link> encapsulating the
-	      address of a stack-allocated foreign memory block, allocated and
-	      initialized from typespec and initforms as per
-	      <xref linkend="m_make-record"/>.
-	      Returns whatever value(s) <varname>body</varname>
-	      returns.</para>
-	    
-	    <para>Record fields that aren&#39;t explicitly initialized have
-	      unspecified contents.</para>
-	  </refsect1>
-    </refentry>
-
-    <!-- ====================================  -->
-    <refentry id="m_rletz">
-	  <indexterm zone="m_rletz">
-	    <primary>rletz</primary>
-	  </indexterm>
-
-	  <refnamediv>
-	    <refname>RLETZ</refname>
-	    <refpurpose></refpurpose>
-	    <refclass>Macro</refclass>
-	  </refnamediv>
-
-	  <refsynopsisdiv>
-	    <synopsis>
-	      <function>rletz</function> (var typespec &rest; initforms)*
-	      &body; body
-	    </synopsis>
-	  </refsynopsisdiv>
-
-	  <refsect1>
-	    <title>Values</title>
-
-	    <variablelist>
-	      <varlistentry>
-	        <term>var</term>
-
-	        <listitem>
-		      <para>A symbol (a lisp variable)</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>typespec</term>
-
-	        <listitem>
-		      <para>A foreign type specifier or foreign record name.</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>initforms</term>
-
-	        <listitem>
-		      <para>As described above, for ccl:make-record</para>
-	        </listitem>
-	      </varlistentry>
-	    </variablelist>
-	  </refsect1>
-
-	  <refsect1>
-	    <title>Description</title>
-
-	    <para>Executes body in an environment in which each var is
-	      bound to <link
-	                  linkend="Referencing-and-Using-Foreign-Memory-Addresses">a
-	        MACPTR</link> encapuslating the address of a stack-allocated
-	      foreign memory block, allocated and initialized from
-	      typespec and initforms as ccl:make-record.</para>
-	    
-	    <para>Returns whatever value(s) body returns.</para>
-
-	    <para>Unlike rlet, record fields that aren&#39;t explicitly
-	      initialized are set to binary 0.</para>
-	  </refsect1>
-    </refentry>
-
-    <!-- ====================================  -->
-    <refentry id="m_pref">
-	  <indexterm zone="m_pref">
-	    <primary>pref</primary>
-	  </indexterm>
-
-	  <refnamediv>
-	    <refname>PREF</refname>
-	    <refpurpose></refpurpose>
-	    <refclass>Macro</refclass>
-	  </refnamediv>
-
-	  <refsynopsisdiv>
-	    <synopsis>
-	      <function>pref</function> ptr accessor-form
-	    </synopsis>
-
-	  </refsynopsisdiv>
-
-	  <refsect1>
-	    <title>Values</title>
-
-	    <variablelist>
-	      <varlistentry>
-	        <term>ptr</term>
-
-	        <listitem>
-		      <para><link linkend="Referencing-and-Using-Foreign-Memory-Addresses">a MACPTR</link>.</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>accessor-form</term>
-
-	        <listitem>
-		      <para>a keyword which names a foreign type or record, as
-		        described in <xref linkend="Foreign-type--record--and-field-names"/>.
-		      </para>
-	        </listitem>
-	      </varlistentry>
-	    </variablelist>
-	  </refsect1>
-
-	  <refsect1>
-	    <title>Description</title>
-
-	    <para>References an instance of a foreign type (or a component of
-	      a foreign type) accessible via ptr.</para>
-	    
-	    <para>Expands into code which references the indicated scalar type
-	      or component, or returns a pointer to a composite type.</para>
-	    
-	    <para>PREF can be used with SETF.</para>
-	    
-	    <para>RREF is a deprecated alternative to PREF. It accepts a
-	      :STORAGE keyword and rather loudly ignores it.</para>
-	  </refsect1>
-    </refentry>
-
-    <!-- ====================================  -->
-    <refentry id="f_open-shared-library">
-	  <indexterm zone="f_open-shared-library">
-	    <primary>open-shared-library</primary>
-	  </indexterm>
-	  
-	  <refnamediv>
-	    <refname>OPEN-SHARED-LIBRARY</refname>
-	    <refpurpose>Asks the operating system to load a shared library
-	      for &CCL; to use.</refpurpose>
-	    <refclass>Function</refclass>
-	  </refnamediv>
-	  
-	  <refsynopsisdiv>
-	    <synopsis>
-	      <function>open-shared-library</function> name => library
-	    </synopsis>
-	  </refsynopsisdiv>
-	  
-	  <refsect1>
-	    <title>Values</title>
-	    
-	    <variablelist>
-	      <varlistentry>
-	        <term>name</term>	
-	        <listitem>
-		      <para>A SIMPLE-STRING which is presumed to be the so-name of
-		        or a filesystem path to the library.</para>
-	        </listitem>
-	      </varlistentry>
-	      
-	      <varlistentry>
-	        <term>library</term>
-	        <listitem>
-		      <para>An object of type SHLIB which describes the
-		        library denoted by <varname>name</varname>.</para>
-	        </listitem>
-	      </varlistentry>
-	    </variablelist>
-	  </refsect1>
-	  
-	  <refsect1>
-	    <title>Description</title>
-
-	    <para>If the library denoted by <varname>name</varname> can
-	      be loaded by the
-	      operating system, returns an object of type SHLIB that describes
-	      the library; if the library is already open, increments a
-	      reference count. If the library can&#39;t be loaded, signals a
-	      SIMPLE-ERROR which contains an often-cryptic message from the
-	      operating system.</para>
-	  </refsect1>
-
-	  <refsect1>
-	    <title>Examples</title>
-
-	    <programlisting format="linespecific">;;; Try to do something simple.
-          ? (open-shared-library &#34;libgtk.so&#34;)
-          &#62; Error: Error opening shared library &#34;libgtk.so&#34;: /usr/lib/libgtk.so: undefined symbol: gdk_threads_mutex
-          &#62; While executing: OPEN-SHARED-LIBRARY
-
-          ;;; Grovel around, curse, and try to find out where &#34;gdk_threads_mutex&#34;
-          ;;; might be defined. Then try again:
-
-          ? (open-shared-library &#34;libgdk.so&#34;)
-          #&#60;SHLIB libgdk.so #x3046DBB6&#62;
-
-          ? (open-shared-library &#34;libgtk.so&#34;)
-          #&#60;SHLIB libgtk.so #x3046DC86&#62;
-
-          ;;; Reference an external symbol defined in one of those libraries.
-
-          ? (external &#34;gtk_main&#34;)
-          #&#60;EXTERNAL-ENTRY-POINT &#34;gtk_main&#34; (#x012C3004) libgtk.so #x3046FE46&#62;
-
-          ;;; Close those libraries.
-
-          ? (close-shared-library &#34;libgtk.so&#34;)
-          T
-
-          ? (close-shared-library &#34;libgdk.so&#34;)
-          T
-
-          ;;; Reference the external symbol again.
-
-          ? (external &#34;gtk_main&#34;)
-          #&#60;EXTERNAL-ENTRY-POINT &#34;gtk_main&#34; {unresolved} libgtk.so #x3046FE46&#62;</programlisting>
-	  </refsect1>
-
-	  <refsect1>
-	    <title>Notes</title>
-
-	    <para>It would be helpful to describe what an soname is and give
-	      examples of one.</para>
-
-	    <para>Does the SHLIB still get returned if the library is
-	      already open?</para>
-	  </refsect1>
-    </refentry>
-
-    <!-- ====================================  -->
-    <refentry id="f_close-shared-library">
-	  <indexterm zone="f_close-shared-library">
-	    <primary>close-shared-library</primary>
-	  </indexterm>
-
-	  <refnamediv>
-	    <refname>CLOSE-SHARED-LIBRARY</refname>
-	    <refpurpose>Stops using a shared library, informing the operating
-	      system that it can be unloaded if appropriate.</refpurpose>
-	    <refclass>Function</refclass>
-	  </refnamediv>
-
-	  <refsynopsisdiv>
-	    <synopsis>
-	      <function>close-shared-library</function> library &key;
-	      completely</synopsis>
-	  </refsynopsisdiv>
-
-	  <refsect1>
-	    <title>Values</title>
-
-	    <variablelist>
-	      <varlistentry>
-	        <term>library</term>
-
-	        <listitem>
-		      <para>either an object of type SHLIB, or a string which
-		        designates one by its so-name.</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>completely</term>
-
-	        <listitem>
-		      <para>a boolean.  The default is T.</para>
-	        </listitem>
-	      </varlistentry>
-	    </variablelist>
-	  </refsect1>
-
-	  <refsect1>
-	    <title>Description</title>
-
-	    <para>If <varname>completely</varname> is T, sets the
-	      reference count of <varname>library</varname> to 0.  Otherwise,
-	      decrements it by 1.  In either case, if the reference count
-	      becomes 0, <function>close-shared-library</function>
-	      frees all memory resources consumed <varname>library</varname>
-	      and
-	      causes any EXTERNAL-ENTRY-POINTs known to be defined by it to
-	      become unresolved.</para>
-	  </refsect1>
-    </refentry>
-
-    <!-- ====================================  -->
-    <refentry id="m_external">
-	  <indexterm zone="m_external">
-	    <primary>external</primary>
-	  </indexterm>
-	  
-	  <refnamediv>
-	    <refname>EXTERNAL</refname>
-	    <refpurpose>Resolves a reference to an external symbol which
-	      is defined in a shared library.</refpurpose>
-	    <refclass>Macro</refclass>
-	  </refnamediv>
-
-	  <refsynopsisdiv>
-	    <synopsis>
-	      <function>external</function> name => entry
-	    </synopsis>
-	  </refsynopsisdiv>
-
-	  <refsect1>
-	    <title>Values</title>
-
-	    <variablelist>
-	      <varlistentry>
-	        <term>name</term>
-	        <listitem>
-		      <para>
-		        a simple-string which names an external symbol.
-		        Case-sensitive.
-		      </para>
-	        </listitem>
-	      </varlistentry>
-	      <varlistentry>
-	        <term>entry</term>
-	        <listitem>
-		      <para>
-		        an object of type EXTERNAL-ENTRY-POINT which maintains
-		        the address of the foreign symbol named by
-		        <varname>name</varname>.
-		      </para>
-	        </listitem>
-	      </varlistentry>
-	    </variablelist>
-	  </refsect1>
-
-	  <refsect1>
-	    <title>Description</title>
-
-	    <para>If there is already an EXTERNAL-ENTRY-POINT for
-	      the symbol named by <varname>name</varname>, finds it and
-	      returns it.  If not, creates one and returns it.</para>
-
-	    <para>Tries to resolve the entry point to a memory address,
-	      and identify the containing library.</para>
-
-	    <para>Be aware that under Darwin, external functions which
-	      are callable from C have underscores prepended to their names,
-	      as in "_fopen".</para>
-	  </refsect1>
-    </refentry>
-
-    <!-- ====================================  -->
-    <refentry id="f_Pff-call">
-	  <indexterm zone="f_Pff-call">
-	    <primary>%ff-call</primary>
-	  </indexterm>
-
-	  <refnamediv>
-	    <refname>%FF-CALL</refname>
-	    <refpurpose></refpurpose>
-	    <refclass>Function</refclass>
-	  </refnamediv>
-
-	  <refsynopsisdiv>
-	    <synopsis>
-	      <function>%ff-call</function> entrypoint
-	      {arg-type-keyword arg}* &optional; result-type-keyword
-	    </synopsis>
-	  </refsynopsisdiv>
-
-	  <refsect1>
-	    <title>Values</title>
-
-	    <variablelist>
-	      <varlistentry>
-	        <term>entrypoint</term>
-	        
-	        <listitem>
-		      <para>A fixnum or MACPTR</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>arg-type-keyword</term>
-
-	        <listitem>
-		      <para>One of the foreign argument-type keywords, described
-		        above</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>arg</term>
-
-	        <listitem>
-		      <para>A lisp value of type indicated by the corresponding
-		        arg-type-keyword</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>result-type-keyword</term>
-
-	        <listitem>
-		      <para>One of the foreign argument-type keywords, described
-		        above</para>
-	        </listitem>
-	      </varlistentry>
-	    </variablelist>
-	  </refsect1>
-
-	  <refsect1>
-	    <title>Description</title>
-
-	    <para>Calls the foreign function at address entrypoint passing the
-	      values of each arg as a foreign argument of type indicated by the
-	      corresponding arg-type-keyword. Returns the foreign function
-	      result (coerced to a Lisp object of type indicated by
-	      result-type-keyword), or NIL if result-type-keyword is :VOID or
-	      NIL</para>
-	  </refsect1>
-    </refentry>
-
-    <!-- ====================================  -->
-    <refentry id="m_ff-call">
-	  <indexterm zone="m_ff-call">
-	    <primary>ff-call</primary>
-	  </indexterm>
-
-	  <refnamediv>
-	    <refname>FF-CALL</refname>
-	    <refpurpose></refpurpose>
-	    <refclass>Macro</refclass>
-	  </refnamediv>
-
-	  <refsynopsisdiv>
-	    <synopsis>
-	      <function>ff-call</function> entrypoint
-	      {arg-type-specifier arg}* &optional; result-type-specifier
-	    </synopsis>
-	  </refsynopsisdiv>
-
-	  <refsect1>
-	    <title>Values</title>
-
-	    <variablelist>
-	      <varlistentry>
-	        <term>entrypoint</term>
-
-	        <listitem>
-		      <para>A fixnum or MACPTR</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>arg-type-specifer</term>
-
-	        <listitem>
-		      <para>One of the foreign argument-type keywords, described
-		        above, or an equivalent <link linkend="Specifying-And-Using-Foreign-Types">foreign
-		          type specifier</link>.</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>arg</term>
-
-	        <listitem>
-		      <para>A lisp value of type indicated by the corresponding
-		        arg-type-specifier</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>result-type-specifier</term>
-
-	        <listitem>
-		      <para>One of the foreign argument-type keywords, described
-		        above, or an equivalent <link linkend="Specifying-And-Using-Foreign-Types">foreign
-		          type specifier</link>.</para>
-	        </listitem>
-	      </varlistentry>
-	    </variablelist>
-	  </refsect1>
-
-	  <refsect1>
-	    <title>Description</title>
-
-	    <para>Calls the foreign function at address entrypoint passing the
-	      values of each arg as a foreign argument of type indicated by the
-	      corresponding arg-type-specifier. Returns the foreign function
-	      result (coerced to a Lisp object of type indicated by
-	      result-type-specifier), or NIL if result-type-specifer is :VOID or
-	      NIL</para>
-	  </refsect1>
-    </refentry>
-
-    <!-- ====================================  -->
-    <refentry id="f_Preference-external-entry-point">
-	  <indexterm zone="f_Preference-external-entry-point">
-	    <primary>%reference-external-entry-point</primary>
-	  </indexterm>
-
-	  <refnamediv>
-	    <refname>%REFERENCE-EXTERNAL-ENTRY-POINT</refname>
-	    <refpurpose></refpurpose>
-	    <refclass>Function</refclass>
-	  </refnamediv>
-
-	  <refsynopsisdiv>
-	    <synopsis>
-	      <function>%reference-external-entry-point</function> eep
-	    </synopsis>
-	  </refsynopsisdiv>
-
-	  <refsect1>
-	    <title>Values</title>
-
-	    <variablelist>
-	      <varlistentry>
-	        <term>eep</term>
-
-	        <listitem>
-		      <para>An EXTERNAL-ENTRY-POINT, as obtained by the EXTERNAL
-		        macro.</para>
-	        </listitem>
-	      </varlistentry>
-	    </variablelist>
-	  </refsect1>
-
-	  <refsect1>
-	    <title>Description</title>
-
-	    <para>Tries to resolve the address of the EXTERNAL-ENTRY-POINT
-	      eep; returns a fixnum representation of that address if
-	      successful, else signals an error.</para>
-	  </refsect1>
-    </refentry>
-
-    <!-- ====================================  -->
-    <refentry id="m_external-call">
-	  <indexterm zone="m_external-call">
-	    <primary>external-call</primary>
-	  </indexterm>
-
-	  <refnamediv>
-	    <refname>EXTERNAL-CALL</refname>
-	    <refpurpose></refpurpose>
-	    <refclass>Macro</refclass>
-	  </refnamediv>
-
-	  <refsynopsisdiv>
-	    <synopsis>
-	      <function>external-call</function> name
-	      {arg-type-specifier arg}* &optional; result-type-specifier
-	    </synopsis>
-	  </refsynopsisdiv>
-
-	  <refsect1>
-	    <title>Values</title>
-
-	    <variablelist>
-	      <varlistentry>
-	        <term>name</term>
-
-	        <listitem>
-		      <para>A lisp string. See external, above.</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>arg-type-specifer</term>
-
-	        <listitem>
-		      <para>One of the foreign argument-type keywords, described
-		        above, or an equivalent <link linkend="Specifying-And-Using-Foreign-Types">foreign
-		          type specifier</link>.</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>arg</term>
-
-	        <listitem>
-		      <para>A lisp value of type indicated by the corresponding
-		        arg-type-specifier</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>result-type-specifier</term>
-
-	        <listitem>
-		      <para>One of the foreign argument-type keywords, described
-		        above, or an equivalent <link linkend="Specifying-And-Using-Foreign-Types">foreign
-		          type specifier</link>.</para>
-	        </listitem>
-	      </varlistentry>
-	    </variablelist>
-	  </refsect1>
-
-	  <refsect1>
-	    <title>Description</title>
-
-	    <para>Calls the foreign function at the address obtained by
-	      resolving the external-entry-point associated with name, passing
-	      the values of each arg as a foreign argument of type indicated by
-	      the corresponding arg-type-specifier. Returns the foreign function
-	      result (coerced to a Lisp object of type indicated by
-	      result-type-specifier), or NIL if result-type-specifer is :VOID or
-	      NIL</para>
-	  </refsect1>
-    </refentry>
-
-    <!-- ====================================  -->
-    <refentry id="f_foreign-symbol-entry">
-	  <indexterm zone="f_foreign-symbol-entry">
-	    <primary>foreign-symbol-entry</primary>
-	  </indexterm>
-
-	  <refnamediv>
-	    <refname>FOREIGN-SYMBOL-ENTRY</refname>
-	    <refpurpose></refpurpose>
-	    <refclass>Function</refclass>
-	  </refnamediv>
-
-	  <refsynopsisdiv>
-	    <synopsis>
-	      <function>foreign-symbol-entry</function> name
-	    </synopsis>
-	  </refsynopsisdiv>
-
-	  <refsect1>
-	    <title>Values</title>
-
-	    <variablelist>
-	      <varlistentry>
-	        <term>name</term>
-
-	        <listitem>
-		      <para>A lisp string.</para>
-	        </listitem>
-	      </varlistentry>
-	    </variablelist>
-	  </refsect1>
-
-	  <refsect1>
-	    <title>Description</title>
-
-	    <para>Tries to resolve the address of the foreign symbol name. If
-	      successful, returns a fixnum representation of that address, else
-	      returns NIL.</para>
-	  </refsect1>
-    </refentry>
-
-    <!-- ====================================  -->
-    <refentry id="f_foreign-symbol-address">
-	  <indexterm zone="f_foreign-symbol-address">
-	    <primary>foreign-symbol-address</primary>
-	  </indexterm>
-
-	  <refnamediv>
-	    <refname>FOREIGN-SYMBOL-ADDRESS</refname>
-	    <refpurpose></refpurpose>
-	    <refclass>Function</refclass>
-	  </refnamediv>
-
-	  <refsynopsisdiv>
-	    <synopsis>
-	      <function>foreign-symbol-address</function> name
-	    </synopsis>
-	  </refsynopsisdiv>
-
-	  <refsect1>
-	    <title>Values</title>
-
-	    <variablelist>
-	      <varlistentry>
-	        <term>name</term>
-
-	        <listitem>
-		      <para>A lisp string.</para>
-	        </listitem>
-	      </varlistentry>
-	    </variablelist>
-	  </refsect1>
-
-	  <refsect1>
-	    <title>Description</title>
-
-	    <para>Tries to resolve the address of the foreign symbol
-	      name. If successful, returns that address encapsulated in
-	      <link
-	         linkend="Referencing-and-Using-Foreign-Memory-Addresses">a
-	        MACPTR</link>, else returns NIL.</para>
-	  </refsect1>
-    </refentry>
-
-    <!-- ====================================  -->
-    <refentry id="m_defcallback">
-	  <indexterm zone="m_defcallback">
-	    <primary>defcallback</primary>
-	  </indexterm>
-
-	  <refnamediv>
-	    <refname>DEFCALLBACK</refname>
-	    <refpurpose></refpurpose>
-	    <refclass>Macro</refclass>
-	  </refnamediv>
-
-	  <refsynopsisdiv>
-	    <synopsis>
-	      <function>defcallback</function> name
-	      ({arg-type-specifier var}* &optional; result-type-specifier)
-	      &body; body
-	    </synopsis>
-	  </refsynopsisdiv>
-
-	  <refsect1>
-	    <title>Values</title>
-
-	    <variablelist>
-	      <varlistentry>
-	        <term>name</term>
-
-	        <listitem>
-		      <para>A symbol which can be made into a special variable</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>arg-type-specifer</term>
-
-	        <listitem>
-		      <para>One of the foreign argument-type keywords,
-		        described above, or an equivalent <link
-		                                             linkend="Specifying-And-Using-Foreign-Types">foreign
-		          type specifier</link>.  In addition, if the keyword
-		        :WITHOUT-INTERRUPTS is specified, the callback will be
-		        executed with lisp interrupts disabled if the
-		        corresponding var is non-NIL. If :WITHOUT-INTERRUPTS
-		        is specified more than once, the rightmost instance
-		        wins.</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>var</term>
-
-	        <listitem>
-		      <para>A symbol (lisp variable), which will be bound to a
-		        value of the specified type.</para>
-	        </listitem>
-	      </varlistentry>
-
-	      <varlistentry>
-	        <term>body</term>
-
-	        <listitem>
-		      <para>A sequence of lisp forms, which should return a value
-		        which can be coerced to the specified result-type.</para>
-	        </listitem>
-	      </varlistentry>
-	    </variablelist>
-	  </refsect1>
-
-	  <refsect1>
-	    <title>Description</title>
-
-	    <para>Proclaims <varname>name</varname>
-	      to be a special variable; sets its value to a
-	      MACPTR which, when called by foreign code, calls a lisp function
-	      which expects foreign arguments of the specified types and which
-	      returns a foreign value of the specified result type. Any argument
-	      variables which correspond to foreign arguments of type :ADDRESS
-	      are bound to stack-allocated MACPTRs.</para>
-	    
-	    <para>If <varname>name</varname>
-	      is already a callback function pointer, its value is
-	      not changed; instead, it&#39;s arranged
-	      that an
-	      updated version of the lisp callback function will be called.
-	      This feature allows for callback functions to be redefined
-	      incrementally, just like Lisp functions are.</para>
-
-	    <para><function>defcallback</function>
-	      returns the callback pointer, e.g., the
-	      value of <varname>name</varname>.</para>
-	  </refsect1>
-    </refentry>
-
-
     <!-- ====================================  -->
     <refentry id="rm_sharpsign-underscore">
       <indexterm zone="rm_sharpsign-underscore">
@@ -4143,7 +3006,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
       <refsect1>
         <title>Description</title>
         
-        <para>In &CCL; 1.2 and later, the #&gt; reader macro reads
+        <para>In Clozure CL 1.2 and later, the #&gt; reader macro reads
           the following text as a keyword, preserving the case of the
           text. For example:</para>
 
@@ -4158,23 +3021,23 @@ reverse_int_ptr_ptrtest(int **ptrs)
       </refsect1>
     </refentry>
 
-
     <!-- ====================================  -->
-    <refentry id="f_use-interface-dir">
-	  <indexterm zone="f_use-interface-dir">
-	    <primary>use-interface-dir</primary>
+    <refentry id="f_close-shared-library">
+	  <indexterm zone="f_close-shared-library">
+	    <primary>close-shared-library</primary>
 	  </indexterm>
 
 	  <refnamediv>
-	    <refname>USE-INTERFACE-DIR</refname>
-	    <refpurpose></refpurpose>
+	    <refname>CLOSE-SHARED-LIBRARY</refname>
+	    <refpurpose>Stops using a shared library, informing the operating
+	      system that it can be unloaded if appropriate.</refpurpose>
 	    <refclass>Function</refclass>
 	  </refnamediv>
 
 	  <refsynopsisdiv>
 	    <synopsis>
-	      <function>use-interface-dir</function> dir-id
-	    </synopsis>
+	      <function>close-shared-library</function> library &key;
+	      completely</synopsis>
 	  </refsynopsisdiv>
 
 	  <refsect1>
@@ -4182,12 +3045,19 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>dir-id</term>
+	        <term>library</term>
 
 	        <listitem>
-		      <para>A keyword whose pname, mapped to lower case, names a
-		        subdirectory of &#34;ccl:headers;&#34; (or
-		        "ccl:darwin-headers;")</para>
+		      <para>either an object of type SHLIB, or a string which
+		        designates one by its so-name.</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>completely</term>
+
+	        <listitem>
+		      <para>a boolean.  The default is T.</para>
 	        </listitem>
 	      </varlistentry>
 	    </variablelist>
@@ -4196,68 +3066,931 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Tells &CCL; to add the interface directory denoted by
-	      dir-id to the list of interface directories which it consults for
-	      foreign type and function information. Arranges that that
-	      directory is searched before any others.</para>
+	    <para>If <varname>completely</varname> is T, sets the
+	      reference count of <varname>library</varname> to 0.  Otherwise,
+	      decrements it by 1.  In either case, if the reference count
+	      becomes 0, <function>close-shared-library</function>
+	      frees all memory resources consumed <varname>library</varname>
+	      and
+	      causes any EXTERNAL-ENTRY-POINTs known to be defined by it to
+	      become unresolved.</para>
+	  </refsect1>
+    </refentry>
 
-	    <para>Note that <function>use-interface-dir</function>
-	      merely adds an entry
-	      to a search list.
-	      If the named directory doesn&#39;t exist in the file system
-	      or doesn&#39;t
-	      contain a set of database files, a runtime error may occur
-	      when &CCL;
-	      tries to open some database file in that directory, and it
-	      will try to
-	      open such a database file whenever it needs to find any
-	      foreign type or
-	      function information. <xref linkend="f_unuse-interface-dir"/>
-	      may come in
-	      handy in that case.</para>
+    <!-- ====================================  -->
+    <refentry id="m_defcallback">
+	  <indexterm zone="m_defcallback">
+	    <primary>defcallback</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>DEFCALLBACK</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Macro</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis>
+	      <function>defcallback</function> name
+	      ({arg-type-specifier var}* &optional; result-type-specifier)
+	      &body; body
+	    </synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>name</term>
+
+	        <listitem>
+		      <para>A symbol which can be made into a special variable</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>arg-type-specifer</term>
+
+	        <listitem>
+		      <para>One of the foreign argument-type keywords,
+		        described above, or an equivalent <link
+		                                             linkend="Specifying-And-Using-Foreign-Types">foreign
+		          type specifier</link>.  In addition, if the keyword
+		        :WITHOUT-INTERRUPTS is specified, the callback will be
+		        executed with lisp interrupts disabled if the
+		        corresponding var is non-NIL. If :WITHOUT-INTERRUPTS
+		        is specified more than once, the rightmost instance
+		        wins.</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>var</term>
+
+	        <listitem>
+		      <para>A symbol (lisp variable), which will be bound to a
+		        value of the specified type.</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>body</term>
+
+	        <listitem>
+		      <para>A sequence of lisp forms, which should return a value
+		        which can be coerced to the specified result-type.</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Proclaims <varname>name</varname>
+	      to be a special variable; sets its value to a
+	      MACPTR which, when called by foreign code, calls a lisp function
+	      which expects foreign arguments of the specified types and which
+	      returns a foreign value of the specified result type. Any argument
+	      variables which correspond to foreign arguments of type :ADDRESS
+	      are bound to stack-allocated MACPTRs.</para>
+	    
+	    <para>If <varname>name</varname>
+	      is already a callback function pointer, its value is
+	      not changed; instead, it&#39;s arranged
+	      that an
+	      updated version of the lisp callback function will be called.
+	      This feature allows for callback functions to be redefined
+	      incrementally, just like Lisp functions are.</para>
+
+	    <para><function>defcallback</function>
+	      returns the callback pointer, e.g., the
+	      value of <varname>name</varname>.</para>
+	  </refsect1>
+    </refentry>
+
+    <!-- ====================================  -->
+    <refentry id="m_def-foreign-type">
+	  <indexterm zone="m_def-foreign-type">
+	    <primary>def-foreign-type</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>DEF-FOREIGN-TYPE</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Macro</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis>
+	      <function>def-foreign-type</function> name foreign-type-spec
+	    </synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>name</term>
+	        
+	        <listitem>
+		      <para>NIL or a keyword; the keyword may contain
+		        <link linkend="Case-sensitivity-of-foreign-names-in-CCL" >escaping constructs</link>.</para>
+	        </listitem>
+	      </varlistentry>
+	      
+	      <varlistentry>
+	        <term>foreign-type-spec</term>
+	        
+	        <listitem>
+		      <para>A foreign type specifier, whose syntax is (loosely)
+		        defined above.</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>If name is non-NIL, defines name to be an alias for the
+	      foreign type specified by foreign-type-spec. If foreign-type-spec
+	      is a named structure or union type, additionally defines that
+	      structure or union type.</para>
+	    
+	    <para>If name is NIL, foreign-type-spec must be a named foreign
+	      struct or union definition, in which case the foreign structure
+	      or
+	      union definition is put in effect.</para>
+	    
+	    <para>Note that there are two separate namespaces for foreign
+	      type names, one for the names of ordinary types and one for
+	      the names of structs and unions.  Which one
+	      <varname>name</varname> refers to depends on
+	      <varname>foreign-type-spec</varname> in the obvious manner.
+	    </para>
+	  </refsect1>
+    </refentry>
+
+    <!-- ====================================  -->
+    <refentry id="m_external">
+	  <indexterm zone="m_external">
+	    <primary>external</primary>
+	  </indexterm>
+	  
+	  <refnamediv>
+	    <refname>EXTERNAL</refname>
+	    <refpurpose>Resolves a reference to an external symbol which
+	      is defined in a shared library.</refpurpose>
+	    <refclass>Macro</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis>
+	      <function>external</function> name => entry
+	    </synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>name</term>
+	        <listitem>
+		      <para>
+		        a simple-string which names an external symbol.
+		        Case-sensitive.
+		      </para>
+	        </listitem>
+	      </varlistentry>
+	      <varlistentry>
+	        <term>entry</term>
+	        <listitem>
+		      <para>
+		        an object of type EXTERNAL-ENTRY-POINT which maintains
+		        the address of the foreign symbol named by
+		        <varname>name</varname>.
+		      </para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>If there is already an EXTERNAL-ENTRY-POINT for
+	      the symbol named by <varname>name</varname>, finds it and
+	      returns it.  If not, creates one and returns it.</para>
+
+	    <para>Tries to resolve the entry point to a memory address,
+	      and identify the containing library.</para>
+
+	    <para>Be aware that under Darwin, external functions which
+	      are callable from C have underscores prepended to their names,
+	      as in "_fopen".</para>
+	  </refsect1>
+    </refentry>
+
+    <!-- ====================================  -->
+    <refentry id="m_external-call">
+	  <indexterm zone="m_external-call">
+	    <primary>external-call</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>EXTERNAL-CALL</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Macro</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis>
+	      <function>external-call</function> name
+	      {arg-type-specifier arg}* &optional; result-type-specifier
+	    </synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>name</term>
+
+	        <listitem>
+		      <para>A lisp string. See external, above.</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>arg-type-specifer</term>
+
+	        <listitem>
+		      <para>One of the foreign argument-type keywords, described
+		        above, or an equivalent <link linkend="Specifying-And-Using-Foreign-Types">foreign
+		          type specifier</link>.</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>arg</term>
+
+	        <listitem>
+		      <para>A lisp value of type indicated by the corresponding
+		        arg-type-specifier</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>result-type-specifier</term>
+
+	        <listitem>
+		      <para>One of the foreign argument-type keywords, described
+		        above, or an equivalent <link linkend="Specifying-And-Using-Foreign-Types">foreign
+		          type specifier</link>.</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Calls the foreign function at the address obtained by
+	      resolving the external-entry-point associated with name, passing
+	      the values of each arg as a foreign argument of type indicated by
+	      the corresponding arg-type-specifier. Returns the foreign function
+	      result (coerced to a Lisp object of type indicated by
+	      result-type-specifier), or NIL if result-type-specifer is :VOID or
+	      NIL</para>
+	  </refsect1>
+    </refentry>
+
+    <!-- ====================================  -->
+    <refentry id="f_Pff-call">
+	  <indexterm zone="f_Pff-call">
+	    <primary>%ff-call</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>%FF-CALL</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis>
+	      <function>%ff-call</function> entrypoint
+	      {arg-type-keyword arg}* &optional; result-type-keyword
+	    </synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>entrypoint</term>
+	        
+	        <listitem>
+		      <para>A fixnum or MACPTR</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>arg-type-keyword</term>
+
+	        <listitem>
+		      <para>One of the foreign argument-type keywords, described
+		        above</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>arg</term>
+
+	        <listitem>
+		      <para>A lisp value of type indicated by the corresponding
+		        arg-type-keyword</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>result-type-keyword</term>
+
+	        <listitem>
+		      <para>One of the foreign argument-type keywords, described
+		        above</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Calls the foreign function at address entrypoint passing the
+	      values of each arg as a foreign argument of type indicated by the
+	      corresponding arg-type-keyword. Returns the foreign function
+	      result (coerced to a Lisp object of type indicated by
+	      result-type-keyword), or NIL if result-type-keyword is :VOID or
+	      NIL</para>
+	  </refsect1>
+    </refentry>
+
+    <!-- ====================================  -->
+    <refentry id="m_ff-call">
+	  <indexterm zone="m_ff-call">
+	    <primary>ff-call</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>FF-CALL</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Macro</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis>
+	      <function>ff-call</function> entrypoint
+	      {arg-type-specifier arg}* &optional; result-type-specifier
+	    </synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>entrypoint</term>
+
+	        <listitem>
+		      <para>A fixnum or MACPTR</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>arg-type-specifer</term>
+
+	        <listitem>
+		      <para>One of the foreign argument-type keywords, described
+		        above, or an equivalent <link linkend="Specifying-And-Using-Foreign-Types">foreign
+		          type specifier</link>.</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>arg</term>
+
+	        <listitem>
+		      <para>A lisp value of type indicated by the corresponding
+		        arg-type-specifier</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>result-type-specifier</term>
+
+	        <listitem>
+		      <para>One of the foreign argument-type keywords, described
+		        above, or an equivalent <link linkend="Specifying-And-Using-Foreign-Types">foreign
+		          type specifier</link>.</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Calls the foreign function at address entrypoint passing the
+	      values of each arg as a foreign argument of type indicated by the
+	      corresponding arg-type-specifier. Returns the foreign function
+	      result (coerced to a Lisp object of type indicated by
+	      result-type-specifier), or NIL if result-type-specifer is :VOID or
+	      NIL</para>
+	  </refsect1>
+    </refentry>
+
+    <!-- ====================================  -->
+    <refentry id="f_foreign-symbol-address">
+	  <indexterm zone="f_foreign-symbol-address">
+	    <primary>foreign-symbol-address</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>FOREIGN-SYMBOL-ADDRESS</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis>
+	      <function>foreign-symbol-address</function> name
+	    </synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>name</term>
+
+	        <listitem>
+		      <para>A lisp string.</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Tries to resolve the address of the foreign symbol
+	      name. If successful, returns that address encapsulated in
+	      <link
+	         linkend="Referencing-and-Using-Foreign-Memory-Addresses">a
+	        MACPTR</link>, else returns NIL.</para>
+	  </refsect1>
+    </refentry>
+
+    <!-- ====================================  -->
+    <refentry id="f_foreign-symbol-entry">
+	  <indexterm zone="f_foreign-symbol-entry">
+	    <primary>foreign-symbol-entry</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>FOREIGN-SYMBOL-ENTRY</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis>
+	      <function>foreign-symbol-entry</function> name
+	    </synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>name</term>
+
+	        <listitem>
+		      <para>A lisp string.</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Tries to resolve the address of the foreign symbol name. If
+	      successful, returns a fixnum representation of that address, else
+	      returns NIL.</para>
+	  </refsect1>
+    </refentry>
+
+    <!-- ====================================  -->
+    <refentry id="f_free">
+      <indexterm zone="f_free">
+        <primary>free</primary>
+      </indexterm>
+      
+      <refnamediv>
+        <refname>FREE</refname>
+        <refpurpose></refpurpose>
+        <refclass>Function</refclass>
+      </refnamediv>
+      
+	  <refsynopsisdiv>
+	    <synopsis>
+	      <function>free</function> ptr
+	    </synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>ptr</term>
+
+	        <listitem>
+		      <para>A <code>MACPTR</code> that points to a block of
+		      foreign, heap-allocated memory.</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+      <refsect1>
+        <title>Description</title>
+        
+        <para>In Clozure CL 1.2 and later, the <code>CCL:FREE</code>
+          function invokes the foreign <code>free</code> function from
+          the platform's standard C library to deallocate a block of
+          foreign memory.</para>
+
+        <para>Previous versions of &CCL; implemented this function,
+          but it was not exported.</para>
+
+        <para>If the argument to <code>CCL:FREE</code> is a gcable
+        pointer (for example, an object reurned
+        by <code>MAKE-GCABLE-RECORD</code>)
+        then <code>CCL:FREE</code> informs the garbage collector that
+        the foreign memory has been deallocated before calling the
+        foreign <code>free</code> function.</para>
+        
+      </refsect1>
+    </refentry>
+
+    <!-- ====================================  -->
+    <refentry id="m_makegcable--record">
+      <indexterm zone="m_make-record">
+	    <primary>make-gcable-record</primary>
+      </indexterm>
+
+      <refnamediv>
+	    <refname>MAKE-GCABLE-RECORD</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Macro</refclass>
+      </refnamediv>
+
+      <refsynopsisdiv>
+	    <synopsis>
+	      <function>make-gcable-record</function> typespec
+	      &rest; initforms => result
+	    </synopsis>
+      </refsynopsisdiv>
+
+      <refsect1>
+	    <title>Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>typespec</term>
+
+	        <listitem>
+		      <para>A foreign type specifier, or a keyword which is used
+		        as the name of a foreign struct or union.</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>initforms</term>
+
+	        <listitem>
+		      <para>If the type denoted by <varname>typespec</varname>
+		        is scalar, a single value appropriate for that type;
+		        otherwise, a list of alternating field names and
+		        values appropriate for the types of those fields.</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>result</term>
+
+	        <listitem>
+		      <para>
+		        A <type>macptr</type> which encapsulates the address of a
+		        newly-allocated record on the foreign heap. The foreign
+		        object returned by <function>make-gcable-record</function>
+		        is freed when the garbage collector determines that
+		        the <code>MACPTR</code> object that describes it is
+		        unreachable.</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+      </refsect1>
+
+      <refsect1>
+	    <title>Description</title>
+
+	    <para>
+	      Allocates a block of foreign memory suitable to hold the foreign
+	      type described by <code>typespec</code>, in the same manner
+	      as <link linkend="anchor_make-record">MAKE-RECORD</link>. In
+	      addition, <code>MAKE-GCABLE-RECORD</code> marks the
+	      returned object gcable; in other words, it informs the garbage
+	      collector that it may reclaim the object when it becomes
+	      unreachable.
+	    </para>
+
+        <para>In all other respects, <code>MAKE-GCABLE-RECORD</code> works
+          the same way
+          as <link linkend="anchor_make-record">MAKE-RECORD</link></para>
+
+        <para> When using gcable pointers, it's important to remember the
+          distinction between a <code>MACPTR</code> object (which is a
+          lisp object, more or less like any other) and the block of
+          foreign memory that the <code>MACPTR</code> object points to.
+          If a gcable <code>MACPTR</code> object is the only thing in the
+          world (lisp world or foreign world) that references the
+          underlying block of foreign memory, then freeing the foreign
+          memory when it becomes impossible to reference it is convenient
+          and sane.  If other lisp <code>MACPTR</code>s reference the
+          underlying block of foreign memory or if the address of that
+          foreign memory is passed to and retained by foreign code, having
+          the GC free the memory may have unpleasant consequences if those
+          other references are used.</para>
+
+        <para>Take care, therefore, not to create a gcable record unless
+          you are sure that the returned <code>MACPTR</code> will be the
+          only reference to the allocated memory that will ever be
+          used.</para>
+      </refsect1>
+
+    </refentry>
+
+
+    <!-- ====================================  -->
+    <refentry id="m_make-record">
+	  <indexterm zone="m_make-record">
+	    <primary>make-record</primary>
+	  </indexterm>
+
+	  <refnamediv>
+        <anchor id="anchor_make-record"/>
+	    <refname>MAKE-RECORD</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Macro</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis>
+	      <function>make-record</function> typespec
+	      &rest; initforms => result
+	    </synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>typespec</term>
+
+	        <listitem>
+		      <para>A foreign type specifier, or a keyword which is used
+		        as the name of a foreign struct or union.</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>initforms</term>
+
+	        <listitem>
+		      <para>If the type denoted by <varname>typespec</varname>
+		        is scalar, a single value appropriate for that type;
+		        otherwise, a list of alternating field names and
+		        values appropriate for the types of those fields.</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>result</term>
+
+	        <listitem>
+		      <para>
+		        A <type>macptr</type> which encapsulates the address of a
+		        newly-allocated record on the foreign heap.
+		      </para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>
+	      Expands into code which allocates and initalizes
+	      an instance of the type 
+	      denoted by <varname>typespec</varname>, on the foreign
+	      heap.  The record is allocated using the C function
+	      <function>malloc</function>, and the user of
+	      <function>make-record</function> must explicitly call
+	      the function <function>CCL:FREE</function> to deallocate the
+	      record, when it is no longer needed.
+	    </para>
+
+	    <para>
+	      If <varname>initforms</varname> is provided, its value
+	      or values are used in the initialization.  When the type
+	      is a scalar, <varname>initforms</varname> is either a single
+	      value which can be coerced to that type, or no value, in which
+	      case binary 0 is used.  When the type is a <type>struct</type>,
+	      <varname>initforms</varname> is a list, giving field names
+	      and the values for each.  Each field is treated in the same way
+	      as a scalar is: If a value for it is given, it must be
+	      coerceable to the field's type; if not, binary 0 is used.
+	    </para>
+
+	    <para>
+	      When the type is an array, <varname>initforms</varname> may
+	      not be provided, because <function>make-record</function>
+	      cannot initialize its values.  <function>make-record</function>
+	      is also unable to initialize fields of a <type>struct</type>
+	      which are themselves
+	      <type>struct</type>s.  The user of
+	      <function>make-record</function> should set these values
+	      by another means.
+	    </para>
+
+	    <para>
+	      A possibly-significant limitation is that it must be possible to
+	      find the foreign type at the time the macro is expanded;
+	      <function>make-record</function> signals an error if this is
+	      not the case.
+	    </para>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Notes</title>
+
+	    <para>
+	      It is inconvenient that <function>make-record</function> is a
+	      macro, because this means that <varname>typespec</varname>
+	      cannot be a variable; it must be an immediate value.
+	    </para>
+	    
+	    <para>
+	      If it weren't for this requirement,
+	      <function>make-record</function> could be a function.  However,
+	      that would mean that any stand-alone application using it would
+	      have to include a copy of the interface database
+	      (see <xref linkend="The-Interface-Database"/>), which is undesireable
+	      because it's large.
+	    </para>
+	  </refsect1>
+    </refentry>
+
+    <!-- ====================================  -->
+    <refentry id="f_open-shared-library">
+	  <indexterm zone="f_open-shared-library">
+	    <primary>open-shared-library</primary>
+	  </indexterm>
+	  
+	  <refnamediv>
+	    <refname>OPEN-SHARED-LIBRARY</refname>
+	    <refpurpose>Asks the operating system to load a shared library
+	      for &CCL; to use.</refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+	  
+	  <refsynopsisdiv>
+	    <synopsis>
+	      <function>open-shared-library</function> name => library
+	    </synopsis>
+	  </refsynopsisdiv>
+	  
+	  <refsect1>
+	    <title>Values</title>
+	    
+	    <variablelist>
+	      <varlistentry>
+	        <term>name</term>	
+	        <listitem>
+		      <para>A SIMPLE-STRING which is presumed to be the so-name of
+		        or a filesystem path to the library.</para>
+	        </listitem>
+	      </varlistentry>
+	      
+	      <varlistentry>
+	        <term>library</term>
+	        <listitem>
+		      <para>An object of type SHLIB which describes the
+		        library denoted by <varname>name</varname>.</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+	  
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>If the library denoted by <varname>name</varname> can
+	      be loaded by the
+	      operating system, returns an object of type SHLIB that describes
+	      the library; if the library is already open, increments a
+	      reference count. If the library can&#39;t be loaded, signals a
+	      SIMPLE-ERROR which contains an often-cryptic message from the
+	      operating system.</para>
 	  </refsect1>
 
 	  <refsect1>
 	    <title>Examples</title>
 
-	    <para>One typically wants interface information to be
-	      available at compile-time (or, in many cases, at read-time).
-	      A typical idiom would be:</para>
+	    <programlisting format="linespecific">;;; Try to do something simple.
+          ? (open-shared-library &#34;libgtk.so&#34;)
+          &#62; Error: Error opening shared library &#34;libgtk.so&#34;: /usr/lib/libgtk.so: undefined symbol: gdk_threads_mutex
+          &#62; While executing: OPEN-SHARED-LIBRARY
 
-	    <programlisting format="linespecific">(eval-when (:compile-toplevel :execute)
-          (use-interface-dir :GTK))</programlisting>
+          ;;; Grovel around, curse, and try to find out where &#34;gdk_threads_mutex&#34;
+          ;;; might be defined. Then try again:
 
-	    <para>Using the :GTK interface directory makes available
-	      information on
-	      foreign types, functions, and constants.  It's generally
-	      necessary to
-	      load foreign libraries before actually calling the
-	      foreign code, which for GTK can be done like this:</para>
+          ? (open-shared-library &#34;libgdk.so&#34;)
+          #&#60;SHLIB libgdk.so #x3046DBB6&#62;
 
-	    <programlisting>(load-gtk-libraries)</programlisting>
+          ? (open-shared-library &#34;libgtk.so&#34;)
+          #&#60;SHLIB libgtk.so #x3046DC86&#62;
 
-	    <para>It should now be possible to do things like:</para>
+          ;;; Reference an external symbol defined in one of those libraries.
 
-	    <programlisting>(#_gtk_widget_destroy w)</programlisting>
+          ? (external &#34;gtk_main&#34;)
+          #&#60;EXTERNAL-ENTRY-POINT &#34;gtk_main&#34; (#x012C3004) libgtk.so #x3046FE46&#62;
+
+          ;;; Close those libraries.
+
+          ? (close-shared-library &#34;libgtk.so&#34;)
+          T
+
+          ? (close-shared-library &#34;libgdk.so&#34;)
+          T
+
+          ;;; Reference the external symbol again.
+
+          ? (external &#34;gtk_main&#34;)
+          #&#60;EXTERNAL-ENTRY-POINT &#34;gtk_main&#34; {unresolved} libgtk.so #x3046FE46&#62;</programlisting>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Notes</title>
+
+	    <para>It would be helpful to describe what an soname is and give
+	      examples of one.</para>
+
+	    <para>Does the SHLIB still get returned if the library is
+	      already open?</para>
 	  </refsect1>
     </refentry>
-
+    
     <!-- ====================================  -->
-    <refentry id="f_unuse-interface-dir">
-	  <indexterm zone="f_unuse-interface-dir">
-	    <primary>unuse-interface-dir</primary>
+    <refentry id="m_pref">
+	  <indexterm zone="m_pref">
+	    <primary>pref</primary>
 	  </indexterm>
 
 	  <refnamediv>
-	    <refname>UNUSE-INTERFACE-DIR</refname>
+	    <refname>PREF</refname>
 	    <refpurpose></refpurpose>
-	    <refclass>Function</refclass>
+	    <refclass>Macro</refclass>
 	  </refnamediv>
 
 	  <refsynopsisdiv>
 	    <synopsis>
-	      <function>unuse-interface-dir</function> dir-id
+	      <function>pref</function> ptr accessor-form
 	    </synopsis>
+
 	  </refsynopsisdiv>
 
 	  <refsect1>
@@ -4265,12 +3998,20 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>dir-id</term>
+	        <term>ptr</term>
 
 	        <listitem>
-		      <para>A keyword whose pname, mapped to lower case, names a
-		        subdirectory of &#34;ccl:headers;&#34; (or
-		        "ccl:darwin-headers;")</para>
+		      <para><link linkend="Referencing-and-Using-Foreign-Memory-Addresses">a MACPTR</link>.</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>accessor-form</term>
+
+	        <listitem>
+		      <para>a keyword which names a foreign type or record, as
+		        described in <xref linkend="Foreign-type--record--and-field-names"/>.
+		      </para>
 	        </listitem>
 	      </varlistentry>
 	    </variablelist>
@@ -4279,11 +4020,191 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Tells &CCL; to remove the interface directory denoted by
-	      dir-id from the list of interface directories which are
-	      consulted for
-	      foreign type and function information. Returns T if the directory
-	      was on the search list, NIL otherwise.</para>
+	    <para>References an instance of a foreign type (or a component of
+	      a foreign type) accessible via ptr.</para>
+	    
+	    <para>Expands into code which references the indicated scalar type
+	      or component, or returns a pointer to a composite type.</para>
+	    
+	    <para>PREF can be used with SETF.</para>
+	    
+	    <para>RREF is a deprecated alternative to PREF. It accepts a
+	      :STORAGE keyword and rather loudly ignores it.</para>
+	  </refsect1>
+    </refentry>
+
+    <!-- ====================================  -->
+    <refentry id="f_Preference-external-entry-point">
+	  <indexterm zone="f_Preference-external-entry-point">
+	    <primary>%reference-external-entry-point</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>%REFERENCE-EXTERNAL-ENTRY-POINT</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis>
+	      <function>%reference-external-entry-point</function> eep
+	    </synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>eep</term>
+
+	        <listitem>
+		      <para>An EXTERNAL-ENTRY-POINT, as obtained by the EXTERNAL
+		        macro.</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Tries to resolve the address of the EXTERNAL-ENTRY-POINT
+	      eep; returns a fixnum representation of that address if
+	      successful, else signals an error.</para>
+	  </refsect1>
+    </refentry>
+
+    <!-- ====================================  -->
+    <refentry id="m_rlet">
+	  <indexterm zone="m_rlet">
+	    <primary>rlet</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>RLET</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Macro</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis>
+	      <function>rlet</function> (var typespec &rest; initforms)*
+	      &body; body
+	    </synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>var</term>
+
+	        <listitem>
+		      <para>A symbol (a lisp variable)</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>typespec</term>
+
+	        <listitem>
+		      <para>A foreign type specifier or foreign record name.</para>
+	        </listitem>
+	      </varlistentry>
+
+          <varlistentry>
+	        <term>initforms</term>
+
+	        <listitem>
+		      <para>As described above, for
+		        <xref linkend="m_make-record"/></para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Executes <varname>body</varname>
+	      in an environment in which each var is bound
+	      to <link linkend="Referencing-and-Using-Foreign-Memory-Addresses">a MACPTR</link> encapsulating the
+	      address of a stack-allocated foreign memory block, allocated and
+	      initialized from typespec and initforms as per
+	      <xref linkend="m_make-record"/>.
+	      Returns whatever value(s) <varname>body</varname>
+	      returns.</para>
+	    
+	    <para>Record fields that aren&#39;t explicitly initialized have
+	      unspecified contents.</para>
+	  </refsect1>
+    </refentry>
+
+    <!-- ====================================  -->
+    <refentry id="m_rletz">
+	  <indexterm zone="m_rletz">
+	    <primary>rletz</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>RLETZ</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Macro</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis>
+	      <function>rletz</function> (var typespec &rest; initforms)*
+	      &body; body
+	    </synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>var</term>
+
+	        <listitem>
+		      <para>A symbol (a lisp variable)</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>typespec</term>
+
+	        <listitem>
+		      <para>A foreign type specifier or foreign record name.</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>initforms</term>
+
+	        <listitem>
+		      <para>As described above, for ccl:make-record</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Executes body in an environment in which each var is
+	      bound to <link
+	                  linkend="Referencing-and-Using-Foreign-Memory-Addresses">a
+	        MACPTR</link> encapuslating the address of a stack-allocated
+	      foreign memory block, allocated and initialized from
+	      typespec and initforms as ccl:make-record.</para>
+	    
+	    <para>Returns whatever value(s) body returns.</para>
+
+	    <para>Unlike rlet, record fields that aren&#39;t explicitly
+	      initialized are set to binary 0.</para>
 	  </refsect1>
     </refentry>
 
@@ -4386,6 +4307,134 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	    </simplelist>
 	  </refsect1>
 
+    </refentry>
+
+     <!-- ====================================  -->
+    <refentry id="f_unuse-interface-dir">
+	  <indexterm zone="f_unuse-interface-dir">
+	    <primary>unuse-interface-dir</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>UNUSE-INTERFACE-DIR</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis>
+	      <function>unuse-interface-dir</function> dir-id
+	    </synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>dir-id</term>
+
+	        <listitem>
+		      <para>A keyword whose pname, mapped to lower case, names a
+		        subdirectory of &#34;ccl:headers;&#34; (or
+		        "ccl:darwin-headers;")</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Tells &CCL; to remove the interface directory denoted by
+	      dir-id from the list of interface directories which are
+	      consulted for
+	      foreign type and function information. Returns T if the directory
+	      was on the search list, NIL otherwise.</para>
+	  </refsect1>
+    </refentry>
+
+   <!-- ====================================  -->
+    <refentry id="f_use-interface-dir">
+	  <indexterm zone="f_use-interface-dir">
+	    <primary>use-interface-dir</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>USE-INTERFACE-DIR</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis>
+	      <function>use-interface-dir</function> dir-id
+	    </synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>dir-id</term>
+
+	        <listitem>
+		      <para>A keyword whose pname, mapped to lower case, names a
+		        subdirectory of &#34;ccl:headers;&#34; (or
+		        "ccl:darwin-headers;")</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Tells &CCL; to add the interface directory denoted by
+	      dir-id to the list of interface directories which it consults for
+	      foreign type and function information. Arranges that that
+	      directory is searched before any others.</para>
+
+	    <para>Note that <function>use-interface-dir</function>
+	      merely adds an entry
+	      to a search list.
+	      If the named directory doesn&#39;t exist in the file system
+	      or doesn&#39;t
+	      contain a set of database files, a runtime error may occur
+	      when &CCL;
+	      tries to open some database file in that directory, and it
+	      will try to
+	      open such a database file whenever it needs to find any
+	      foreign type or
+	      function information. <xref linkend="f_unuse-interface-dir"/>
+	      may come in
+	      handy in that case.</para>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Examples</title>
+
+	    <para>One typically wants interface information to be
+	      available at compile-time (or, in many cases, at read-time).
+	      A typical idiom would be:</para>
+
+	    <programlisting format="linespecific">(eval-when (:compile-toplevel :execute)
+          (use-interface-dir :GTK))</programlisting>
+
+	    <para>Using the :GTK interface directory makes available
+	      information on
+	      foreign types, functions, and constants.  It's generally
+	      necessary to
+	      load foreign libraries before actually calling the
+	      foreign code, which for GTK can be done like this:</para>
+
+	    <programlisting>(load-gtk-libraries)</programlisting>
+
+	    <para>It should now be possible to do things like:</para>
+
+	    <programlisting>(#_gtk_widget_destroy w)</programlisting>
+	  </refsect1>
     </refentry>
 
   </sect1>

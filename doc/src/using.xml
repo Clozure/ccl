@@ -11,6 +11,7 @@
 
 <chapter><title>Using &CCL;</title>
   
+  <!-- ============================================================ -->
   <sect1><title>Introduction</title>
     
     <para>The Common Lisp standard allows considerable latitude in the
@@ -19,10 +20,13 @@
       user-level features of &CCL;, including features that may be
       part of the Common Lisp standard, but which may have quirks or
       details in the &CCL; implementation that are not described by
-      the standard.</para>
+      the standard. It also describes extensions to the standard; that
+      is, features of &CCL; that are not part of the Common Lisp
+      standard at all.</para>
 
   </sect1>
 
+  <!-- ============================================================ -->
   <sect1 id="Trace"><title>Trace</title>
 
   <para>
@@ -1032,6 +1036,7 @@
       for <varname>(CCL:UNMAP-IVECTOR)</varname></para>
   </sect1>
 
+  <!-- ============================================================ -->
   <sect1 id="Static_Variables">
     <title>Static Variables</title>
 
@@ -1103,6 +1108,214 @@
       variable static, preventing any attempt to dynamically rebind
       it. Any attempt to dynamically rebind <varname>var</varname>
       signals an error.</para>
+  </sect1>
+
+  <!-- ============================================================ -->
+  <sect1 id="Saving-Applications">
+	<indexterm zone="Saving-Applications">
+	  <primary>save-application</primary>
+	</indexterm>
+    <title>Saving Applications</title>
+
+    <para>&CCL; provides the
+    function <code>CCL:SAVE-APPLICATION</code>, which creates a file
+    containing an archived Lisp memory image.</para>
+
+    <para>&CCL; consists of a small executable called the
+    Lisp <glossterm linkend="lisp_image">kernel</glossterm>, which
+    implements the very lowest level features of the Lisp system, and
+    an <glossterm linkend="lisp_image">image</glossterm>, which
+    contains the in-memory representation of most of the Lisp system,
+    including functions, data structures, variables, and so on. When
+    you start &CCL;, you are launching the kernel, which then locates
+    and reads an image file, restoring the archived image in
+    memory. Once the image is fully restored, the Lisp system is
+    running.</para>
+
+    <para>Using <code>CCL:SAVE-APPLICATION</code>, you can create a
+    file that contains a modified image, one that includes any changes
+    you've made to the running Lisp system. If you later pass your
+    image file to the &CCL; kernel as a command-line parameter, it
+    then loads your image file instead of its default one, and &CCL;
+    starts up with your modifications.</para>
+
+    <para>If this scenario seems to you like a convenient way to
+    create an application, that's just as intended. You can create an
+    application by modifying the running Lisp until it does what you
+    want, then use <code>CCL:SAVE-APPLICATION</code> to preserve your
+    changes and later load them for use.</para>
+
+    <para>In fact, you can go further than that. You can replace
+    &CCL;'s <glossterm linkend="toplevel_function">toplevel
+    function</glossterm> with your own, and then, when the image is
+    loaded, the Lisp system immediately performs your tasks rather
+    than the default tasks that make it a Lisp development system. If
+    you save an image in which you have done this, the resulting Lisp
+    system is your tool rather than a Lisp development system.</para>
+
+    <para>You can go a step further still. You can
+    tell <code>CCL:SAVE-APPLICATION</code> to prepend the Lisp kernel
+    to the image file. Doing this makes the resulting image into a
+    self-contained executable binary. When you run the resulting file,
+    the Lisp kernel immediately loads the attached image file and runs
+    your saved system. The Lisp system that starts up can have any
+    behavior you choose. It can be a Lisp development system, but with
+    your customizations; or it can immediately perform some task of
+    your design, making it a specialized tool rather than a general
+    development system.</para>
+
+    <para>In other words, you can develop any application you like by
+    interactively modifying &CCL; until it does what you want, then
+    using <code>CCL:SAVE-APPLICATION</code> to preserve your changes
+    in an executable image.</para>
+
+    <para>On Mac OS X,
+    the <link linkend="application_builder">application builder</link>
+    uses <code>CCL:SAVE-APPLICATION</code> to create the executable
+    portion of the <glossterm linkend="application_bundle">application
+    bundle</glossterm>. Double-clicking the application bundle runs
+    the executable image created
+    by <code>CCL:SAVE-APPLICATION</code>.</para>
+
+    <para>Also on Mac OS X, &CCL; supports an object type
+    called <code>MACPTR</code>, which is the type of pointers into the
+    foreign (Mac OS) heap. Examples of
+    commonly-user <code>MACPTR</code> objects are Cocoa windows and
+    other dynamically-allocated Mac OS sytem objects.</para>
+
+    <para>Because a <code>MACPTR</code> object is a pointer into a
+    foreign heap that exists for the lifetime of the running Lisp
+    provess, and because a saved image is used by loading it into a
+    brand new Lisp process, saved <code>MACPTR</code> objects cannot
+    be relied on to point to the same things when reconstituted from a
+    saved image. In fact, a restored <code>MACPTR</code> object might
+    point to anything at all&mdash;for example an arbitrary location
+    in the middle of a block of code, or a completely nonexistent
+    virtual address.</para> 
+
+    <para>For that reason, <code>CCL:SAVE-APPLICATION</code> converts
+    all <code>MACPTR</code> objects to <code>DEAD-MACPTR</code>
+    objects when writing them to an image
+    file. A <code>DAED-MACPTR</code> is functionally identical to
+    a <code>MACPTR</code>, except that code that operates
+    on <code>MACPTR</code> objects distinguishes them
+    from <code>DEAD-MACPTR</code> objects and can handle them
+    appropriately&mdash;signaling errors, for example.</para>
+
+    <para>As of &CCL; 1.2, there is one exception to the conversion
+    of <code>MACPTR</code> to <code>DEAD-MACPTR</code> objects:
+    a <code>MACPTR</code> object that points to the address 0 is not
+    converted, because address 0 can always be relied upon to refer to
+    the same thing.</para>
+
+	<indexterm zone="Saving-Applications">
+	  <primary>+NULL-PTR+</primary>
+	</indexterm>
+    <para>As of &CCL; 1.2, the constant <code>CCL:+NULL-PTR+</code>
+    refers to a <code>MACPTR</code> object that points to address 0.</para>
+
+    <para>On all supported platforms, you can
+    use <code>CCL:SAVE-APPLICATION</code> to create a command-line
+    tool that runs the same way any command-line program
+    does. Alternatively, if you choose not to prepend the kernel, you
+    can save an image and then later run it by passing it as a
+    command-line parameter to the <code>opencml</code>
+    or <code>opencml64</code> script.</para>
+
+    <para>
+      <indexterm zone="save-application"/>
+      <command><varname id="save-application">SAVE-APPLICATION</varname>
+        <parameter>filename</parameter>
+        &key;
+        <parameter>toplevel-function</parameter>
+        <parameter>init-file</parameter>
+        <parameter>error-handler</parameter>
+        <parameter>application-class</parameter>
+        <parameter>clear-clos-caches</parameter>
+        <parameter>(purify t)</parameter>
+        <parameter>impurify</parameter>
+        <parameter>(mode #o644)</parameter>
+        <parameter>prepend-kernel</parameter>
+        [Function]</command>
+    </para>
+    
+    <variablelist>
+      <varlistentry>
+        <term><varname>filename</varname></term>
+        <listitem>
+          <para>The pathname of the file to be created when &CCL;
+          saves the application.</para>
+        </listitem>
+      </varlistentry>
+      
+      <varlistentry>
+        <term><varname>toplevel-function</varname></term>
+        <listitem>
+          <para>The function to be executed after startup is
+            complete. The toplevel is a function of no arguments that
+            performs whatever actions the lisp system should perform
+            when launched with this image.</para>
+          <para>If this parameter is not supplied, &CCL; uses its
+          default toplevel. The default toplevel runs
+          the <glossterm linkend="REPL">read-eval-print
+          loop</glossterm>.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><varname>init-file</varname></term>
+        <listitem>
+          <para>The pathname of a Lisp file to be loaded when the
+          image starts up. You can place initialization expressions in
+          this file, and use it to customize the behavior of the Lisp
+          system when it starts up.</para>
+        </listitem>
+      </varlistentry>
+      
+      <varlistentry>
+        <term><varname>error-handler</varname></term>
+        <listitem>
+          <para>The error-handling mode for the saved image. The
+          supplied value determines what happens when an error is not
+          handled by the saved image. Valid values
+          are <code>:quit</code> (Lisp exits with an error
+          message); <code>:quit-quietly</code> (Lisp exits without an
+          error message); or <code>:listener</code> (Lisp enters a
+          break loop, enabling you to debug the problem by interacting
+          in a listener). If you don't supply this parameter, the
+          saved image uses the default error handler
+          (<code>:listener</code>).</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><varname>application-class</varname></term>
+        <listitem>
+          <para>The CLOS class that represents the saved Lisp
+          application. Normally you don't need to supply this
+          parameter; <code>CCL:SAVE-APPLICATION</code> uses the
+          class <code>CCL:LISP-DEVELOPMENT-SYSTEM</code>. In some
+          cases you may choose to create a custom application class;
+          in that case, pass the name of the class as the value for
+          this parameter.</para>
+        </listitem>
+      </varlistentry>
+      
+      <varlistentry>
+        <term><varname>clear-clos-caches</varname></term>
+        <listitem>
+          <para>If true, ensures that CLOS caches are emptied before
+          saving the image. Normally you don't need to supply this
+          parameter, but if for some reason you want to ensure the
+          CLOS caches are clear when the image starts up, you can pass
+          any true value.</para>
+        </listitem>
+      </varlistentry>
+      
+      
+    </variablelist>
+
+    <para></para>
   </sect1>
 
 </chapter>

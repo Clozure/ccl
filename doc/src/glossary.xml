@@ -122,6 +122,23 @@
 
 	</glossentry>
     
+	<glossentry id="lisp_image">
+	  <glossterm>image</glossterm>
+
+	  <glossdef>
+
+		<para>The in-memory state of a running Lisp system, containing
+		functions, data structures, variables, and so on. Also, a file
+		containing archived versions of these data in a format that
+		can be loaded and reconstituted by the
+		Lisp <glossterm linkend="lisp_image">kernel</glossterm>. A
+		working &CCL; system consists of the kernel and
+		an <glossterm linkend="lisp_image">image</glossterm>.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
 	<glossentry id="InterfaceBuilder">
 	  <glossterm>InterfaceBuilder</glossterm>
 
@@ -131,6 +148,26 @@
 		tools that can be used to interactively build user-interface
 		elements for <glossterm linkend="Cocoa">Cocoa</glossterm>
 		applications.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
+  <glossdiv id="K">
+	<!-- ******************** K ********************  -->
+	<title>K</title>
+
+	<glossentry id="lisp_kernel">
+	  <glossterm>kernel</glossterm>
+
+	  <glossdef>
+
+		<para>The binary executable program that implements the lowest
+		levels of the Lisp system. A working &CCL; system consists of
+		the kernel and
+		an <glossterm linkend="lisp_image">image</glossterm>.</para>
 
 	  </glossdef>
 
@@ -283,6 +320,23 @@
 	<!-- ******************** T ********************  -->
 	<title>T</title>
 
+	<glossentry id="toplevel_function">
+	  <glossterm>toplevel function</glossterm>
+
+	  <glossdef>
+
+		<para>The function executed by Lisp automatically once its
+		startup is complete. &CCL;'s default toplevel is the
+		interactive <glossterm linkend="REPL">read-eval-print
+		loop</glossterm> that you normally use to interact with
+		Lisp. You can, however, replace the toplevel with a function
+		of your own design, changing &CCL; from a Lisp development
+		system into some tool of your making.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
 	<glossentry id="type-specifier">
 	  <glossterm>type-specifier</glossterm>
 
