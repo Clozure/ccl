@@ -54,6 +54,111 @@
           and <code>INSPECT</code>.</para>
       </sect3>
 
+      <sect3 id="foreign-type-classes">
+        <title>Foreign Types as Classes</title>
+        <para>Some types of foreign pointers take advantage of the
+          support for type annotations, and pointers of these types
+          can be treated as instances of known classes. Specifically,
+          a pointer to an <code>:&lt;NSR&gt;ect</code> is recognized
+          as an instance of the built-in
+          class <code>NS:NS-RECT</code>, a pointer to
+          an <code>&lt;NSS&gt;ize</code> is treated as an instance
+          of <code>NS:NS-SIZE</code>, a pointer to
+          an <code>&lt;NSP&gt;oint</code> is recognized as an
+          instsance of <code>NS:NS-POINT</code>, and a pointer to
+          an <code>&lt;NSR&gt;ange</code> is recognized as an
+          instance of <code>NS:NS-RANGE</code>.</para>
+
+        <para>A few more obscure structure types also support this
+        mechanism, and it's possible that a future version will
+        support user definition of similar type mappings.</para>
+
+        <para>This support for foreign types as classes provides the
+        following conveniences for each supported type:</para>
+
+      <itemizedlist>
+        <listitem>
+          <para>a <code>PRINT-OBJECT</code> method is defined</para>
+        </listitem>
+        <listitem>
+          <para>a foreign type name is created and treated as an alias
+          for the corresponding type. As an example, the
+          name <code>:NS-RECT</code> is a name for the type that
+          corresponds to <code>NS:NS-RECT</code>, and you can
+          use <code>:NS-RECT</code> as a type designator
+          in <link linkend="anchor_rlet"><code>RLET</code></link> forms to
+          specify a structure of type <code>NS-RECT</code>.</para>
+        </listitem>
+        <listitem>
+          <para>the class is integrated into the type system so that
+            <code>(TYPEP R 'NS:NS-RECT)</code> is implemented with
+            fair efficiency.</para>
+        </listitem>
+        <listitem>
+          <para>inlined accessor and <code>SETF</code> inverses are
+            defined for the structure type's fields.  In the case of
+            an <code>&lt;NSR*gt;ect</code>, for example, the fields in
+            question are the fields of the embedded point and size, so
+            that <code>NS:NS-RECT-X</code>, <code>NS:NS-RECT-Y</code>, <code>NS:NS-RECT-WIDTH</code>,
+            <code>NS-RECT-HEIGHT</code> and <code>SETF</code> inverses
+            are defined.  The accessors and setter functions typecheck
+            their arguments and the setters handle coercion to the
+            approprate type of <code>CGFLOAT</code> where
+            applicable.</para>
+        </listitem>
+        <listitem>
+          <para>an initialization function is defined; for
+            example,</para> 
+
+          <programlisting>
+(NS:INIT-NS-SIZE s w h)
+          </programlisting>
+
+          <para>is roughly equivalent to</para>
+
+          <programlisting>
+(SETF (NS:NS-SIZE-WIDTH s) w
+      (NS:NS-SIZE-HEIGHT s) h)
+          </programlisting>
+
+          <para>but might be a little more efficient.</para>
+        </listitem>
+        <listitem>
+          <para>a creation function is defined; for
+            example</para>
+
+          <programlisting>
+(NS:NS-MAKE-POINT x y)
+          </programlisting> 
+
+          <para>is functionally equivalent to</para>
+
+          <programlisting>
+(LET ((P (MAKE-GCABLE-RECORD :NS-POINT)))
+  (NS:INIT-NS-POINT P X Y)
+  p)
+          </programlisting>
+
+        </listitem>
+        <listitem>
+          <para>a macro is defined which, like <code>RLET</code>,
+            stack-allocates an instance of the foreign record type,
+            optionally iniitializes that instance, and executes a body
+            of code with a variable bound to that instance.</para>
+
+          <para>For example,</para>
+          <programlisting>
+(ns:with-ns-range (r loc len)
+  (format t "~&amp; range has location ~s, length ~s" 
+     (ns:ns-range-location r) (ns:ns-range-length r)))
+          </programlisting>
+        </listitem>
+        <listitem>
+          <para></para>
+        </listitem>
+      </itemizedlist>
+      </sect3>
+
     </sect2>
 
     <sect2 id="Syntax-of-Foreign-Type-Specifiers">
@@ -4076,6 +4181,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
     </refentry>
 
     <!-- ====================================  -->
+    <anchor id="anchor_rlet"/>
     <refentry id="m_rlet">
 	  <indexterm zone="m_rlet">
 	    <primary>rlet</primary>
