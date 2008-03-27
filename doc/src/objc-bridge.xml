@@ -514,6 +514,7 @@
   </sect1>
 
   <sect1 id="Defining-Objective-C-Methods">
+    <anchor id="anchor_Defining-Objective-C-Methods"/>
     <title>Defining Objective-C Methods</title>
     <para>In Objective-C, unlike in CLOS, every method belongs to some
       particular class.  This is probably not a strange concept to
@@ -521,44 +522,64 @@
       to define Objective-C methods, it is only possible to define methods
       belonging to Objective-C classes which have been defined in
       Lisp.</para>
-    <para>The macro <literal>define-objc-method</literal> is used for
-      this.  As described in the
-      section <link linkend="Calling-Objective-C-Methods">Calling
-      Objective-C Methods</link>, the names of Objective-C methods are
-      broken into pieces, each piece followed by a parameter.  The
-      types of all parameters must be explicitly declared.</para>
-    <para>Right now, I'm not sure how to formally describe the usage
-      of define-objc-method, so I'm going to do it with some short
-      examples.  Let us define a class to use in them:</para>
-    <programlisting>
+    <para>You can use either of two different macros to define methods
+    on Objective-C classes. <literal>define-objc-method</literal>
+    accepts a two-element list containing a message selector name and
+    a class name, and a body. <literal>objc:defmethod</literal>
+    superficially resembles the normal
+    CLOS <literal>defmethod</literal>, but creates methods on
+    Objective-C classes with the same restrictions as those created
+    by <literal>define-objc-method</literal>.</para>
+
+    <sect2>
+      <title>Using <literal>define-objc-method</literal></title>
+      <para>As described in the
+        section <link linkend="Calling-Objective-C-Methods">Calling
+        Objective-C Methods</link>, the names of Objective-C methods
+        are broken into pieces, each piece followed by a parameter.
+        The types of all parameters must be explicitly
+        declared.</para>
+      <para>Consider a few examples, meant to illustrate the use
+        of <literal>define-objc-method</literal>. Let us define a
+        class to use in them:</para>
+
+      <programlisting>
 (defclass data-window-controller (ns:ns-window-controller)
   ((window :foreign-type :id :accessor window)
    (data :initform nil :accessor data))
   (:metaclass ns:+ns-object))
-    </programlisting>
-    <para>There's nothing special about this class.  It inherits
-      from ns:ns-window-controller.  It has two slots:
-      <literal>window</literal> is a foreign slot, stored in the Objective-C
-      world; and <literal>data</literal> is an ordinary slot, stored
-      in the Lisp world.</para>
-    <para>Here is an example of how to define a method which takes no
-      arguments:</para>
-    <programlisting>
+      </programlisting>
+
+      <para>There's nothing special about this class.  It inherits from
+        <literal>ns:ns-window-controller</literal>.  It has two slots:
+        <literal>window</literal> is a foreign slot, stored in the Objective-C
+        world; and <literal>data</literal> is an ordinary slot, stored
+        in the Lisp world.</para>
+
+      <para>Here is an example of how to define a method which takes no
+        arguments:</para>
+
+      <programlisting>
 (define-objc-method ((:id get-window)
                      data-window-controller)
     (window self))
-    </programlisting>
-    <para>The return type of this method is the foreign type :id,
-      which is used for all Objective-C objects.  The name of the method is
-      <literal>get-window</literal>.  The body of the method is the
-      single line (window self).  The variable <literal>self</literal>
-      is bound, within the body, to the instance which is receiving
-      the message.  The call to <literal>window</literal> uses the
-      CLOS accessor to get the value of the window field.</para>
-    <para>Here's an example which takes a parameter.  Notice that
-      the name of the method without a parameter was an ordinary
-      symbol, but with a parameter, it's a keyword:</para>
-    <programlisting>
+      </programlisting>
+
+      <para>The return type of this method is the foreign type :id,
+        which is used for all Objective-C objects.  The name of the
+        method is
+        <literal>get-window</literal>.  The body of the method is the
+        single line <literal>(window self)</literal>.  The
+        variable <literal>self</literal> is bound, within the body, to
+        the instance that is receiving the message.  The call
+        to <literal>window</literal> uses the CLOS accessor to get the
+        value of the window field.</para>
+
+      <para>Here's an example that takes a parameter.  Notice that the
+        name of the method without a parameter was an ordinary symbol,
+        but with a parameter, it's a keyword:</para>
+
+      <programlisting>
 (define-objc-method ((:id :init-with-multiplier (:int multiplier))
                      data-window-controller)
   (setf (data self) (make-array 100))
@@ -566,15 +587,20 @@
     (setf (aref (data self) i)
           (* i multiplier)))
   self)
-    </programlisting>
-    <para>To Objective-C code which uses the class, the name of this
-      method is "initWithMultiplier:".  The name of the parameter is
-      <literal>multiplier</literal>, and its type is :int.  The body
-      of the method does some meaningless things.  Then it returns
-      <literal>self</literal>, because this is an initialization
-      method.</para>
-    <para>Here's an example with more than one parameter:</para>
-    <programlisting>
+      </programlisting>
+
+      <para>To Objective-C code that uses the class, the name of this
+        method is <literal>initWithMultiplier:</literal>.  The name of
+        the parameter is
+        <literal>multiplier</literal>, and its type
+        is <literal>:int</literal>.  The body of the method does some
+        meaningless things.  Then it returns
+        <literal>self</literal>, because this is an initialization
+        method.</para>
+
+      <para>Here's an example with more than one parameter:</para>
+
+      <programlisting>
 (define-objc-method ((:id :init-with-multiplier (:int multiplier)
                           :and-addend (:int addend))
                      data-window-controller)
@@ -584,33 +610,41 @@
           (+ (* i multiplier)
              addend)))
   self)
-    </programlisting>
-    <para>To Objective-C, the name of this method is
-      "initWithMultiplier:andAddend:".  Both parameters are of type
-      :int; the first is named <literal>multiplier</literal>, and the
-      second is <literal>addend</literal>.  Again, the method returns
-      <literal>self</literal>.</para>
-    <para>Here is a method which does not return any value, a
-      so-called "void method".  Where our other methods said :id, this
-      one says :void for the return type:</para>
-    <programlisting>
+      </programlisting>
+
+      <para>To Objective-C, the name of this method is
+        <literal>initWithMultiplier:andAddend:</literal>.  Both
+        parameters are of type <literal>:int</literal>; the first is
+        named <literal>multiplier</literal>, and the second
+        is <literal>addend</literal>.  Again, the method returns
+        <literal>self</literal>.</para>
+
+      <para>Here is a method that does not return any value, a so-called
+        "void method".  Where our other methods
+        said <literal>:id</literal>, this one
+        says <literal>:void</literal> for the return type:</para>
+
+      <programlisting>
 (define-objc-method ((:void :take-action (:id sender))
                      data-window-controller)
   (declare (ignore sender))
   (dotimes (i 100)
     (setf (aref (data self) i)
           (- (aref (data self) i)))))
-    </programlisting>
-    <para>This method would be called "takeAction:" in Objective-C.  The
-      convention for methods that are going to be used as Cocoa
-      actions is that they take one parameter, which is the object
-      responsible for triggering the action.  However, this method
-      doesn't actually need to use that parameter, so it explicitly
-      ignores it to avoid a compiler warning.  As promised, the method
-      doesn't return any value.</para>
-    <para>There is also an alternate syntax, illustrated here.  The
-      following two method definitions are equivalent:</para>
-    <programlisting>
+      </programlisting>
+
+      <para>This method would be called <literal>takeAction:</literal>
+        in Objective-C.  The convention for methods that are going to be
+        used as Cocoa actions is that they take one parameter, which is
+        the object responsible for triggering the action.  However, this
+        method doesn't actually need to use that parameter, so it
+        explicitly ignores it to avoid a compiler warning.  As promised,
+        the method doesn't return any value.</para>
+
+      <para>There is also an alternate syntax, illustrated here.  The
+        following two method definitions are equivalent:</para>
+
+      <programlisting>
 (define-objc-method ("applicationShouldTerminate:"
                      "LispApplicationDelegate")
     (:id sender :&lt;BOOL>)
@@ -622,7 +656,111 @@
                        lisp-application-delegate)
     (declare (ignore sender))
     nil)
-    </programlisting>
+      </programlisting>
+      </sect2>
+
+    <sect2>
+      <anchor id="anchor_Using-objc-defmethod"/>
+
+	  <title>Using <literal>objc:defmethod</literal></title>
+
+      <para>The macro <literal>OBJC:DEFMETHOD</literal> can be used to
+        define Objective-C methods.  It looks superficially like
+        <literal>CL:DEFMETHOD</literal> in some respects.</para>
+
+      <para>Its syntax is</para>
+
+      <programlisting>
+(OBC:DEFMETHOD name-and-result-type 
+               ((receiver-arg-and-class) &rest; other-args) 
+      &body; body)
+      </programlisting>
+
+      <para><literal>name-and-result-type</literal> is either an
+        Objective-C message name, for methods that return a value of
+        type <literal>:ID</literal>, or a list containing an
+        Objective-C message name and a foreign type specifier for
+        methods with a different foreign result type.</para>
+
+      <para><literal>receiver-arg-and-class</literal> is a two-element
+        list whose first element is a variable name and whose second
+        element is the Lisp name of an Objective-C class or metaclass.
+        The receiver variable name can be any bindable lisp variable
+        name, but <literal>SELF</literal> might be a reasonable
+        choice.  The receiver variable is declared to be "unsettable";
+        i.e., it is an error to try to change the value of the
+        receiver in the body of the method definition.</para>
+
+      <para><literal>other-args</literal> are either variable names
+            (denoting parameters of type <literal>:ID</literal>) or
+            2-element lists whose first element is a variable name and
+            whose second element is a foreign type specifier.</para>
+
+      <para>Consider this example:</para>
+
+      <programlisting>
+(objc:defmethod (#/characterAtIndex: :unichar)
+    ((self hemlock-buffer-string) (index :&lt;NSUI&gt;nteger))
+  ...)
+      </programlisting>
+
+      <para>The method <literal>characterAtIndex:</literal>, when
+        invoked on an object of
+        class <literal>HEMLOCK-BUFFER-STRING</literal> with an
+        additional argument of
+        type <literal>:&lt;NSU&gt;integer</literal> returns a value of
+        type
+        <literal>:unichar</literal>.</para>
+
+      <para>Arguments that wind up as some pointer type other
+        than <literal>:ID</literal> (e.g. pointers, records passed by
+        value) are represented as typed foreign pointers, so that the
+        higher-level, type-checking accessors can be used on arguments
+        of
+        type <literal>:ns-rect</literal>, <literal>:ns-point</literal>,
+        and so on.</para>
+
+      <para>Within the body of methods defined
+        via <literal>OBJC:DEFMETHOD</literal>, the local function
+        <literal>CL:CALL-NEXT-METHOD</literal> is defined.  It isn't
+        quite as general as <literal>CL:CALL-NEXT-METHOD</literal> is
+        when used in a CLOS method, but it has some of the same
+        semantics.  It accepts as many arguments as are present in the
+        containing method's <literal>other-args</literal> list and
+        invokes version of the containing method that would have been
+        invoked on instances of the receiver's class's superclass with
+        the receiver and other provided arguments.  (The idiom of
+        passing the current method's arguments to the next method is
+        common enough that the <literal>CALL-NEXT-METHOD</literal> in
+        <literal>OBJC:DEFMETHODs</literal> should probably do this if
+        it receives no arguments.)</para>
+
+      <para>A method defined via <literal>OBJC:DEFMETHOD</literal>
+        that returns a structure "by value" can do so by returning a
+        record created via <literal>MAKE-GCABLE-RECORD</literal>, by
+        returning the value returned
+        via <literal>CALL-NEXT-METHOD</literal>, or by other similar
+        means. Behind the scenes, there may be a pre-allocated
+        instance of the record type (used to support native
+        structure-return conventions), and any value returned by the
+        method body will be copied to this internal record instance.
+        Within the body of a method defined
+        with <literal>OBJC:DEFMETHOD</literal> that's declared to
+        return a structure type, the local macro
+        <literal>OBJC:RETURNING-FOREIGN-STRUCT</literal> can be used
+        to access the internal structure. For example:</para>
+
+       <programlisting>
+(objc:defmethod (#/reallyTinyRectangleAtPoint: :ns-rect) 
+  ((self really-tiny-view) (where :ns-point))
+  (objc:returning-foreign-struct (r)
+    (ns:init-ns-rect r (ns:ns-point-x where) (ns:ns-point-y where)
+                        single-float-epsilon single-float-epsilon)
+    r))
+       </programlisting>
+     
+    </sect2>
+
     <sect2 id="Method-Redefinition-Constraints">
 	  <title>Method Redefinition Constraints</title>
       <para>Objective C was not designed, as Lisp was, with runtime
