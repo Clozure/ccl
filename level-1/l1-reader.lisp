@@ -1810,7 +1810,7 @@
                 ("Line_Separator" . #\u+2028)
                 ("Paragraph_Separator" . #\u+2029)
                 ("Replacement_Character" . #\u+fffd)
-                ))
+                ("Skull_And_Crossbones" . #\u+2620)))
   (destructuring-bind (name . char) pair
     (register-character-name name char)))
 
