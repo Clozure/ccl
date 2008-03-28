@@ -658,10 +658,14 @@ Will differ from *compiling-file* during an INCLUDE")
             (defenv.functions definition-env)))
     name))
 
-(defun define-compile-time-symbol-macro (name expansion env)
-  (let* ((definition-env (definition-environment env)))
-    (if definition-env
-      (push (cons name expansion) (defenv.symbol-macros definition-env)))
+(defun define-compile-time-macro (name lambda-expression env)
+  (let ((definition-env (definition-environment env)))
+    (when definition-env
+      (push (list* name 
+                   'macro 
+                   (compile-named-function lambda-expression name env)) 
+            (defenv.functions definition-env))
+      (record-function-info name (cons nil 'macro) env))
     name))
 
 
