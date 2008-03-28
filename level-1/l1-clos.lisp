@@ -2302,6 +2302,7 @@ changing its name to ~s may have serious consequences." class new))
       (when (and method
                  (null (cdr methods))
                  (null (method-qualifiers method))
+                 (not (logbitp $lfbits-keys-bit (lfun-bits (method-function method))))
                  (dolist (spec (method-specializers method) t)
                    (unless (eq spec *t-class*)
                      (return nil))))
