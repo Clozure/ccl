@@ -76,6 +76,7 @@
                                   (close-streams t)
                                   (class 'process)
                                   (control-stack-size *default-control-stack-size*)
+                                  (auto-flush t)
                                   (value-stack-size *default-value-stack-size*)
                                   (temp-stack-size *default-temp-stack-size*)
                                   (echoing t)
@@ -99,7 +100,8 @@
                                     input-stream output-stream))))
 			    (unwind-protect
 				 (progn
-                                   (add-auto-flush-stream output-stream)
+                                   (when auto-flush
+                                     (add-auto-flush-stream output-stream))
 				   (let* ((shared-input
 					   (input-stream-shared-resource
 					    input-stream)))
