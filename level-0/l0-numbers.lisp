@@ -707,12 +707,10 @@
           (if (eql gcd 1)
             (build-ratio x y)
             (build-ratio (%fixnum-truncate x gcd) (%fixnum-truncate y gcd))))))
-    (if (eql y 0)
-      (error 'division-by-zero :operation '/ :operands (list x y))
       (let ((gcd (gcd x y)))
         (if (eql gcd 1)
           (build-ratio x y)
-          (build-ratio (truncate x gcd) (truncate y gcd)))))))
+          (build-ratio (truncate x gcd) (truncate y gcd))))))
 
 
 
