@@ -550,34 +550,49 @@
             parent t)
       (let* ((file nil)
              (init t))
-        (dolist (w warnings)
-          (let* ((args (compiler-warning-args w))
-                 (wfname (car args))
-                (def nil))
-            (when (if (typep w 'undefined-function-reference)
-                    (not (setq def (or (fboundp wfname)
-                                       (assq wfname defs)))))
-              (multiple-value-setq (harsh any file) (signal-compiler-warning w init file harsh any))
-              (setq init nil))
-            ;; Check args in call to forward-referenenced function.
-            (when (and (typep def 'function) (cdr args))
-              (destructuring-bind (arglist spread-p)
-                  (cdr args)
-                (multiple-value-bind (deftype reason)
-                    (nx1-check-call-args def arglist spread-p)
-                  (when deftype
-                    (let* ((w2 (make-condition
-                                'invalid-arguments
-                                :file-name (compiler-warning-file-name w)
-                                :function-name (compiler-warning-function-name w)
-                                :warning-type deftype
-                                :args (list (car args) reason arglist spread-p))))
-                      (setf (compiler-warning-stream-position w2)
-                            (compiler-warning-stream-position w))
-
-                    (multiple-value-setq (harsh any file)
-                      (signal-compiler-warning w2 init file harsh any))
-                    (setq init nil))))))))))
+        (flet ((signal-warning (w)
+                 (multiple-value-setq (harsh any file) (signal-compiler-warning w init file harsh any))
+                 (setq init nil)))
+          (dolist (w warnings)
+            (let* ((args (compiler-warning-args w))
+                   (wfname (car args))
+                   (def nil))
+              (when (if (typep w 'undefined-function-reference)
+                      (not (setq def (or (assq wfname defs)
+                                         (let* ((global (fboundp wfname)))
+                                           (if (typep global 'function)
+                                             global))))))
+                (signal-warning w))
+              ;; Check args in call to forward-referenenced function.
+              (if (or (typep def 'function)
+                      (and (consp def)
+                           (consp (cdr def))
+                           (cadr def)))
+                (when (cdr args)
+                  (destructuring-bind (arglist spread-p)
+                      (cdr args)
+                    (multiple-value-bind (deftype reason)
+                        (nx1-check-call-args def arglist spread-p)
+                      (when deftype
+                        (let* ((w2 (make-condition
+                                    'invalid-arguments
+                                    :file-name (compiler-warning-file-name w)
+                                    :function-name (compiler-warning-function-name w)
+                                    :warning-type deftype
+                                    :args (list (car args) reason arglist spread-p))))
+                          (setf (compiler-warning-stream-position w2)
+                                (compiler-warning-stream-position w))
+                          (signal-warning w2))))))
+                (if def
+                  (let* ((w2 (make-condition
+                              'macro-used-before-definition
+                              :file-name (compiler-warning-file-name w)
+                              :function-name (compiler-warning-function-name w)
+                              :warning-type :macro-used-before-definition
+                              :args (list (car args)))))
+                    (setf (compiler-warning-stream-position w2)
+                          (compiler-warning-stream-position w))
+                    (signal-warning w2)))))))))
     (values any harsh parent)))
 
 (defun print-nested-name (name-list stream)
