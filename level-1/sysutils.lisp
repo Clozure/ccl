@@ -560,7 +560,7 @@
               (multiple-value-setq (harsh any file) (signal-compiler-warning w init file harsh any))
               (setq init nil))
             ;; Check args in call to forward-referenenced function.
-            (when (and def (cdr args))
+            (when (and (typep def 'function) (cdr args))
               (destructuring-bind (arglist spread-p)
                   (cdr args)
                 (multiple-value-bind (deftype reason)
