@@ -5477,6 +5477,7 @@
 (defx862 x862-lambda lambda-list (seg vreg xfer req opt rest keys auxen body p2decls)
   (with-x86-local-vinsn-macros (seg vreg xfer)
     (let* ((stack-consed-rest nil)
+           (next-method-var-scope-info nil)
            (lexprp (if (consp rest) (progn (setq rest (car rest)) t)))
            (rest-var-bits (and rest (nx-var-bits rest)))
            (rest-ignored-p (and rest (not lexprp) (%ilogbitp $vbitignore rest-var-bits)))
@@ -5639,7 +5640,9 @@
                   *x862-tail-nargs* max-args)
             (@ (setq *x862-tail-label* (backend-get-next-label))))
           (when method-var
-            (x862-seq-bind-var seg method-var x8664::next-method-context))
+            (x862-seq-bind-var seg method-var x8664::next-method-context)
+            (when *x862-recorded-symbols*
+              (setq next-method-var-scope-info (pop *x862-recorded-symbols*))))
           ;; If any arguments are still in arg_x, arg_y, arg_z, that's
           ;; because they weren't vpushed in a "simple" entry case and
           ;; belong in some NVR.  Put them in their NVRs, so that we
@@ -5663,7 +5666,9 @@
             (x862-open-undo $undostkblk))
           (setq *x862-entry-vstack* *x862-vstack*)
           (setq reserved-lcells (x862-collect-lcells :reserved))
-          (x862-bind-lambda seg reserved-lcells req opt rest keys auxen optsupvloc arg-regs lexprp inherited-vars))
+          (x862-bind-lambda seg reserved-lcells req opt rest keys auxen optsupvloc arg-regs lexprp inherited-vars)
+          (when next-method-var-scope-info
+            (push next-method-var-scope-info *x862-recorded-symbols*)))
         (when method-var (x862-heap-cons-next-method-var seg method-var))
         (x862-form seg vreg xfer body)
         (x862-close-lambda seg req opt rest keys auxen)
