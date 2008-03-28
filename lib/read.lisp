@@ -153,8 +153,10 @@
   (flet ((parse-integer-not-integer-string (s)
 	   (error 'parse-integer-not-integer-string :string s)))
     (declare (inline not-integer-string-error))
-    (when (null end)
-      (setq end (length string)))
+    (unless (typep string 'string)
+      (setq string (require-type string 'string)))
+    (setq end (check-sequence-bounds string start end))
+    (setq radix (%validate-radix radix))
     (let ((index (do ((i start (1+ i)))
 		     ((= i end)
 		      (if junk-allowed
