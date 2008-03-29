@@ -56,7 +56,7 @@
   (unless (probe-file (make-pathname :defaults nil
                                      :directory (pathname-directory (translate-logical-pathname filename))))
     (error "Directory containing ~s does not exist." filename))
-  (let* ((kind (%unix-file-kind (namestring (translate-logical-pathname filename)))))
+  (let* ((kind (%unix-file-kind (native-translated-namestring filename))))
     (when (and kind (not (eq kind :file )))
       (error "~S is not a regular file." filename)))
   (let* ((ip *initial-process*)

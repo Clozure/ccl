@@ -395,12 +395,12 @@
   (%str-cat (case name
 	      ((nil :unspecific) "")
 	      (:wild "*")
-	      (t (%path-std-quotes name nil ".")))
+	      (t (%path-std-quotes name "*;:" ".")))
 	    (if (or type version)
 	      (%str-cat (case type
 			  ((nil) ".")
 			  (:wild ".*")
-			  (t (%str-cat "." (%path-std-quotes type nil "."))))
+			  (t (%str-cat "." (%path-std-quotes type "*;:" "."))))
 			(case version
 			  ((nil) "")
 			  (:newest ".newest")
@@ -1005,6 +1005,10 @@ a host-structure or string."
 
 
 ;Standardize pathname quoting, so can do EQUAL.
+;; Subtle point: when keep-quoted is NIL, arg is assumed native,
+;; and therefore escape characters are made quoted.
+;; if keep-quoted is not NIL, e.g. if it's "", arg is assumed
+;;   to be escaped already, so escape chars are interpreted as quotes.
 ;; Note that this can't be used to remove quotes because it
 ;; always keeps the escape character quoted.
 (defun %path-std-quotes (arg keep-quoted make-quoted)

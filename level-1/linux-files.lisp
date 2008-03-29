@@ -333,8 +333,8 @@ given is that of a group to which the current user belongs."
 	    ((eql kind #$S_IFCHR) :character-special)
 	    (t :special)))))
 
-(defun %unix-file-kind (path &optional check-for-link)
-  (%file-kind (nth-value 1 (%stat (native-translated-namestring path) check-for-link))))
+(defun %unix-file-kind (native-namestring &optional check-for-link)
+  (%file-kind (nth-value 1 (%stat native-namestring check-for-link))))
 
 (defun %unix-fd-kind (fd)
   (if (isatty fd)
