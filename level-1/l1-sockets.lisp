@@ -661,17 +661,17 @@ the socket is not connected."))
     (unless (< fd 0)
       (fd-close fd))))
 
-(defun %socket-connect (fd addr addrlen &optional timeout)
-  (let* ((err (c_connect fd addr addrlen timeout)))
+(defun %socket-connect (fd addr addrlen &optional timeout-in-milliseconds)
+  (let* ((err (c_connect fd addr addrlen timeout-in-milliseconds)))
     (declare (fixnum err))
-    (unless (eql err 0) (socket-error nil "connect" err))))
+    (unless (eql err 0) (fd-close fd) (socket-error nil "connect" err))))
     
-(defun inet-connect (fd host-n port-n &optional connect-timeout)
+(defun inet-connect (fd host-n port-n &optional timeout-in-milliseconds)
   (rlet ((sockaddr :sockaddr_in))
     (setf (pref sockaddr :sockaddr_in.sin_family) #$AF_INET
           (pref sockaddr :sockaddr_in.sin_port) port-n
           (pref sockaddr :sockaddr_in.sin_addr.s_addr) host-n)
-    (%socket-connect fd sockaddr (record-length :sockaddr_in) connect-timeout)))
+    (%socket-connect fd sockaddr (record-length :sockaddr_in) timeout-in-milliseconds)))
                
 (defun file-socket-connect (fd remote-filename)
   (rletz ((sockaddr :sockaddr_un))
@@ -683,12 +683,20 @@ the socket is not connected."))
                                   &key remote-host
 				  remote-port
                                   connect-timeout
+                                  deadline
 				  &allow-other-keys)
-  (inet-connect fd
-		(host-as-inet-host remote-host)
-		(port-as-inet-port remote-port "tcp")
-                connect-timeout)
-  (apply #'make-tcp-stream fd keys))
+  (let* ((timeout-in-milliseconds
+          (if deadline
+            (max (round (- deadline (get-internal-real-time))
+                        (/ internal-time-units-per-second 1000))
+                 0)
+            (if connect-timeout
+              (round (* connect-timeout 1000))))))
+    (inet-connect fd
+                  (host-as-inet-host remote-host)
+                  (port-as-inet-port remote-port "tcp")
+                  timeout-in-milliseconds)
+    (apply #'make-tcp-stream fd keys)))
 
 (defun make-file-stream-socket (fd &rest keys
                                    &key remote-filename
@@ -1219,7 +1227,7 @@ unsigned IP address."
 ;;; wait in #_select (or the equivalent).  There's a good rant
 ;;; about these issues in:
 ;;; <http://www.madore.org/~david/computers/connect-intr.html>
-(defun c_connect (sockfd addr len &optional timeout)
+(defun c_connect (sockfd addr len &optional timeout-in-milliseconds)
   (let* ((flags (fd-get-flags sockfd)))
     (unwind-protect
          (progn
@@ -1242,7 +1250,7 @@ unsigned IP address."
                              (%%get-unsigned-longlong params 16) len)
                        (syscall syscalls::socketcall 3 params)))))
              (cond ((or (eql err (- #$EINPROGRESS)) (eql err (- #$EINTR)))
-                    (if (process-output-wait sockfd timeout)
+                    (if (process-output-wait sockfd timeout-in-milliseconds)
                       (- (int-getsockopt sockfd #$SOL_SOCKET #$SO_ERROR))
                       (- #$ETIMEDOUT)))
                    (t err))))
