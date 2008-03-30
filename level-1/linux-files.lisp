@@ -962,7 +962,12 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
 		(setf (external-process-pid proc) child-pid)
 		(add-external-process proc)
 		(signal-semaphore (external-process-signal proc))
-                (monitor-external-process proc)))))
+                (monitor-external-process proc))
+               (t
+                ;; Fork failed
+                (setf (external-process-%status proc) :error
+                      (external-process-%exit-code proc) (%get-errno))
+                (signal-semaphore (external-process-signal proc))))))
    (external-process-args proc)))
 
 		
@@ -1030,7 +1035,10 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
       (when (and wait (external-process-pid proc))
         (with-interrupts-enabled
             (wait-on-semaphore (external-process-completed proc)))))
-    (and (external-process-pid proc) proc)))
+    (and (or (external-process-pid proc)
+             (if (eq (external-process-%status proc) :error)
+               (error "Fork failed in ~s: ~s" proc (%strerror (external-process-%exit-code proc)))))
+             (external-process-%status proc)) proc))
 
 
 
