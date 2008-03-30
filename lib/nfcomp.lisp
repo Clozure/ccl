@@ -649,14 +649,7 @@ Will differ from *compiling-file* during an INCLUDE")
             (fcomp-output-form $fasl-defvar-init env sym (or fn (eval-constant valform)) (eval-constant doc))
             (fcomp-random-toplevel-form (macroexpand-1 form env) env)))))))
       
-(defun define-compile-time-macro (name lambda-expression env)
-  (let ((definition-env (definition-environment env)))
-    (if definition-env
-      (push (list* name 
-                   'macro 
-                   (compile-named-function lambda-expression name env)) 
-            (defenv.functions definition-env)))
-    name))
+
 
 (defun define-compile-time-macro (name lambda-expression env)
   (let ((definition-env (definition-environment env)))
@@ -666,6 +659,12 @@ Will differ from *compiling-file* during an INCLUDE")
                    (compile-named-function lambda-expression name env)) 
             (defenv.functions definition-env))
       (record-function-info name (cons nil 'macro) env))
+    name))
+
+(defun define-compile-time-symbol-macro (name expansion env)
+  (let* ((definition-env (definition-environment env)))
+    (if definition-env
+      (push (cons name expansion) (defenv.symbol-macros definition-env)))
     name))
 
 
