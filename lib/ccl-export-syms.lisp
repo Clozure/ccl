@@ -53,6 +53,7 @@
      *backtrace-print-level*
      *backtrace-print-length*
      *backtrace-show-internal-frames*
+     *backtrace-format*
      *quit-on-eof*
      compiler-macroexpand
      compiler-macroexpand-1

@@ -27,6 +27,40 @@
 (defparameter *backtrace-print-level* 2)
 (defparameter *backtrace-print-length* 5)
 
+(defparameter *backtrace-format* :traditional
+  "If :TRADITIONAL, shows calls to non-toplevel functions using FUNCALL, and shows frame address values.
+   If :DIRECT, uses a more streamlined format.")
+
+(defun backtrace-as-list (&key
+                          context
+                          (origin (%get-frame-ptr))
+                          (count most-positive-fixnum)
+                          (start-frame-number 0)
+                          (stream *debug-io*)
+                          (print-level *backtrace-print-level*)
+                          (print-length *backtrace-print-length*)
+                          (show-internal-frames *backtrace-show-internal-frames*))
+  "Returns a list representing the backtrace.
+Each element in the list is a list that describes the call in one stack frame:
+   (function arg1 arg2 ...)
+The arguments are represented by strings, the function is a symbol or a function
+object."
+  (when (null count) (setq count most-positive-fixnum))
+  (let* ((tcr (if context (bt.tcr context) (%current-tcr)))
+         (*debug-io* stream)
+         (*backtrace-print-level* print-level)
+         (*backtrace-print-length* print-length)
+         (*backtrace-show-internal-frames* show-internal-frames)
+         (*backtrace-format* :list))
+    (if (eq tcr (%current-tcr))
+      (%backtrace-as-list-internal context origin count start-frame-number)
+      (unwind-protect
+           (progn
+             (%suspend-tcr tcr)
+             (%backtrace-as-list-internal context origin count start-frame-number))
+        (%resume-tcr tcr)))))
+
+
 ;;; This PRINTS the call history on *DEBUG-IO*.  It's more dangerous
 ;;; (because of stack consing) to actually return it.
                                
@@ -34,15 +68,25 @@
                                 (origin (%get-frame-ptr))
                                 (detailed-p t)
                                 (count most-positive-fixnum)
-                                (start-frame-number 0))
-  (let* ((tcr (if context (bt.tcr context) (%current-tcr))))          
+                                (start-frame-number 0)
+                                (stream *debug-io*)
+                                (print-level *backtrace-print-level*)
+                                (print-length *backtrace-print-length*)
+                                (show-internal-frames *backtrace-show-internal-frames*)
+                                (format *backtrace-format*))
+  (when (null count) (setq count most-positive-fixnum))
+  (let* ((tcr (if context (bt.tcr context) (%current-tcr)))
+         (*debug-io* stream)
+         (*backtrace-print-level* print-level)
+         (*backtrace-print-length* print-length)
+         (*backtrace-show-internal-frames* show-internal-frames)
+         (*backtrace-format* format))
     (if (eq tcr (%current-tcr))
-      (%print-call-history-internal context origin detailed-p (or count most-positive-fixnum) start-frame-number)
+      (%print-call-history-internal context origin detailed-p count start-frame-number)
       (unwind-protect
            (progn
              (%suspend-tcr tcr )
-             (%print-call-history-internal context origin  detailed-p
-                                           count start-frame-number))
+             (%print-call-history-internal context origin detailed-p count start-frame-number))
         (%resume-tcr tcr)))
     (values)))
 
@@ -81,7 +125,10 @@
   (handler-case
       (let* ((unavailable (cons nil nil)))
 	(multiple-value-bind (args locals) (arguments-and-locals context p lfun pc unavailable)
-	  (format t "~&  ~s" (arglist-from-map lfun))
+          (case *backtrace-format*
+            (:direct
+               (format t "~&     Arguments: ~:s" (arglist-from-map lfun)))
+            (t (format t "~&  ~s" (arglist-from-map lfun))))
 	  (let* ((*print-length* *backtrace-print-length*)
 		 (*print-level* *backtrace-print-level*))
 	    (flet ((show-pair (pair prefix)
@@ -90,45 +137,67 @@
 		       (if (eq val unavailable)
 			 (format t "#<Unavailable>")
 			 (format t "~s" val)))))
-	      (dolist (arg args)
-		(show-pair arg "   "))
-	      (terpri)
-	      (terpri)
-	      (dolist (loc locals)
-		(show-pair loc "  "))))))
+              (case *backtrace-format*
+                (:direct
+                   (when args
+                     (dolist (arg args)
+                       (show-pair arg "       ")))
+                   (when locals
+                     ;; This shows all bindings (including specials), but help on debugger
+                     ;; commands refers to "locals", so say both words...
+                     (format t "~&     Local bindings:")
+                     (dolist (loc locals)
+                       (show-pair loc "       "))))
+                (t
+                   (dolist (arg args)
+                     (show-pair arg "   "))
+                   (terpri)
+                   (terpri)
+                   (dolist (loc locals)
+                     (show-pair loc "  "))))))))
     (error () (format t "#<error printing args and locals>")))
   (terpri)
   (terpri))
 
 
 (defun backtrace-call-arguments (context cfp lfun pc)
-  (collect ((call))
-    (let* ((name (function-name lfun)))
-      (if (function-is-current-definition? lfun)
-        (call name)
-        (progn
-          (call 'funcall)
-          (call `(function ,(concatenate 'string "#<" (%lfun-name-string lfun) ">")))))
-      (if (and pc (<= pc target::arg-check-trap-pc-limit))
-        (append (call) (arg-check-call-arguments cfp lfun))
-        (multiple-value-bind (req opt restp keys)
-            (function-args lfun)
-          (when (or (not (eql 0 req)) (not (eql 0 opt)) restp keys)
-            (let* ((arglist (arglist-from-map lfun)))
-              (if (or (null arglist) (null pc))
-                (call "???")
-                (progn
-                  (dotimes (i req)
-                    (let* ((val (argument-value context cfp lfun pc (pop arglist))))
-                      (if (eq val (%unbound-marker))
-                        (call "?")
-                        (call (let* ((*print-length* *backtrace-print-length*)
-                                     (*print-level* *backtrace-print-level*))
-                                (format nil "~s" val))))))
-                  (if (or restp keys (not (eql opt 0)))
-                    (call "[...]"))))))
-          (call))))))
-
+  (nconc (let* ((name (function-name lfun)))
+           (if (function-is-current-definition? lfun)
+             (list name)
+             (case *backtrace-format*
+               (:direct
+                  (list (format nil "~s" lfun)))
+               (:list
+                  (if (lfun-closure-p lfun) ;; could be stack consed
+                    (list 'funcall (format nil "~s" lfun))
+                    (list lfun)))
+               (t (list 'funcall `(function ,(concatenate 'string "#<" (%lfun-name-string lfun) ">")))))))
+         (if (and pc (<= pc target::arg-check-trap-pc-limit))
+           (arg-check-call-arguments cfp lfun)
+           (collect ((call))
+             (multiple-value-bind (req opt restp keys)
+                 (function-args lfun)
+               (when (or (not (eql 0 req)) (not (eql 0 opt)) restp keys)
+                 (let* ((arglist (arglist-from-map lfun)))
+                   (if (or (null arglist) (null pc))
+                     (call "???")
+                     (progn
+                       (dotimes (i req)
+                         (let* ((val (argument-value context cfp lfun pc (pop arglist))))
+                           (if (eq val (%unbound-marker))
+                             (call "?")
+                             (call (let* ((*print-length* *backtrace-print-length*)
+                                          (*print-level* *backtrace-print-level*))
+                                     (format nil "~s" val))))))
+                       (case *backtrace-format*
+                         (:direct
+                            (when (not (eql opt 0)) (call "[&optional ...]"))
+                            (if keys
+                              (call "[&key ...]")
+                              (when restp (call "[&rest ...]"))))
+                         (t (if (or restp keys (not (eql opt 0)))
+                              (call "[...]"))))))))
+               (call))))))
 
 ;;; Return a list of "interesting" frame addresses in context, most
 ;;; recent first.
@@ -156,6 +225,33 @@
 		(and (not (catch-csp-p p context)) (cfp-lfun p)))
 	(funcall fn p)))))
 
+(defun %backtrace-as-list-internal (context origin count skip-initial)
+  (let ((*print-catch-errors* t)
+        (p origin)
+        (q (last-frame-ptr context)))
+    (dotimes (i skip-initial)
+      (setq p (parent-frame p context))
+      (when (or (null p) (eq p q) (%stack< q p context))
+        (return (setq p nil))))
+    (do* ((frame-number (or skip-initial 0) (1+ frame-number))
+          (i 0 (1+ i))
+          (p p (parent-frame p context))
+          (r '()))
+        ((or (null p) (eq p q) (%stack< q p context)
+             (>= i count))
+         (nreverse r))
+      (declare (fixnum frame-number i))
+      (when (or (not (catch-csp-p p context))
+                *backtrace-show-internal-frames*)
+        (multiple-value-bind (lfun pc) (cfp-lfun p)
+          (when (or lfun *backtrace-show-internal-frames*)
+            (push
+             (if lfun
+               (backtrace-call-arguments context p lfun pc)
+               "?????")
+             r)))))))
+
+  
 (defun %print-call-history-internal (context origin detailed-p
                                              &optional (count most-positive-fixnum) (skip-initial 0))
   (let ((*standard-output* *debug-io*)
@@ -180,15 +276,29 @@
           (when (or lfun *backtrace-show-internal-frames*)
             (unless (and (typep detailed-p 'fixnum)
                          (not (= (the fixnum detailed-p) frame-number)))
-              (format t "~&~c(~x) : ~D ~a ~d"
-                      (if (exception-frame-p p)  #\* #\space)
-                      (index->address p) frame-number
-                      (if lfun (backtrace-call-arguments context p lfun pc))
-                      pc)
+              (%show-stack-frame-label frame-number p context lfun pc detailed-p)
               (when detailed-p
                 (if (eq detailed-p :raw)
                   (%show-stack-frame p context lfun pc)
                   (%show-args-and-locals p context lfun pc))))))))))
+
+(defun %show-stack-frame-label (frame-number p context lfun pc detailed-p)
+  (case *backtrace-format*
+    (:direct
+       (let ((call (backtrace-call-arguments context p lfun pc)))
+         (format t "~&~3D: ~a ~a~@d~:[~; [Exception]~]"
+                 frame-number
+                 (if lfun
+                   (if detailed-p (car call) call)
+                   "<non-function frame>")
+                 "at pc "
+                 pc
+                 (exception-frame-p p))))
+    (t (format t "~&~c(~x) : ~D ~a ~d"
+                      (if (exception-frame-p p)  #\* #\space)
+                      (index->address p) frame-number
+                      (if lfun (backtrace-call-arguments context p lfun pc))
+                      pc))))
 
 
 (defun %access-lisp-data (vstack-index)
