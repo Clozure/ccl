@@ -65,7 +65,7 @@
           an <code>&lt;NSS&gt;ize</code> is treated as an instance
           of <code>NS:NS-SIZE</code>, a pointer to
           an <code>&lt;NSP&gt;oint</code> is recognized as an
-          instsance of <code>NS:NS-POINT</code>, and a pointer to
+          instance of <code>NS:NS-POINT</code>, and a pointer to
           an <code>&lt;NSR&gt;ange</code> is recognized as an
           instance of <code>NS:NS-RANGE</code>.</para>
 
@@ -103,7 +103,7 @@
             <code>NS-RECT-HEIGHT</code> and <code>SETF</code> inverses
             are defined.  The accessors and setter functions typecheck
             their arguments and the setters handle coercion to the
-            approprate type of <code>CGFLOAT</code> where
+            appropriate type of <code>CGFLOAT</code> where
             applicable.</para>
         </listitem>
         <listitem>
@@ -143,7 +143,7 @@
         <listitem>
           <para>a macro is defined which, like <code>RLET</code>,
             stack-allocates an instance of the foreign record type,
-            optionally iniitializes that instance, and executes a body
+            optionally initializes that instance, and executes a body
             of code with a variable bound to that instance.</para>
 
           <para>For example,</para>
@@ -173,51 +173,51 @@
         </listitem>
         <listitem>
           <para>Constructors such as :SIGNED and :UNSIGNED can be
-            used to denotesigned and unsigned integer subtypes
-            (analogous to the CL typespecifiers SIGNED-BYTE and
+            used to denote signed and unsigned integer subtypes
+            (analogous to the CL type specifiers SIGNED-BYTE and
             UNSIGNED-BYTE.) :SIGNED is shorthand for(:SIGNED 32) and
             :UNSIGNED is shorthand for (:UNSIGNED 32).</para>
         </listitem>
         <listitem>
           <para>Aliases for other (perhaps more complicated) types
-            can bedefined via CCL:DEF-FOREIGN-TYPE (sort of like
-            CL:DEFTYPE or the Ctypedef facility). The type :CHAR is
+            can be defined via CCL:DEF-FOREIGN-TYPE (sort of like
+            CL:DEFTYPE or the C typedef facility). The type :CHAR is
             defined as an alias for (:SIGNED8) on some platforms, as
             (:UNSIGNED 8) on others.</para>
 	    </listitem>
         <listitem>
 	      <para>The construct (:STRUCT <emphasis>name</emphasis>)
-	        can be used torefer to a named structure type; (:UNION
+	        can be used to refer to a named structure type; (:UNION
 	        <emphasis>name</emphasis>)can be used to refer to a named
-	        union type. It isn't necessary toenumerate a structure or
-	        union type's fields in order to refer tothe type.</para>
+	        union type. It isn't necessary to enumerate a structure or
+	        union type's fields in order to refer to the type.</para>
 	    </listitem>
         <listitem>
 	      <para>If <emphasis>X</emphasis> is a valid foreign type
 	        reference,then (:* <emphasis>X</emphasis>) denotes the
-	        foreign type "pointerto<emphasis> X</emphasis>". By
-	        convention, (:* T) denotes ananonymous pointer type,
+	        foreign type "pointer to<emphasis> X</emphasis>". By
+	        convention, (:* T) denotes an anonymous pointer type,
 	        vaguely equivalent to "void*" in C.</para>
 	    </listitem>
         <listitem>
 	      <para>If a fieldlist is a list of lists, each of whose CAR
 	        is a foreign field name (keyword) and whose CADR is a
 	        foreign type specifier, then (:STRUCT
-	        <emphasis>name</emphasis> ,@fieldlist) is adefinition of
+	        <emphasis>name</emphasis> ,@fieldlist) is a definition of
 	        the structure type <emphasis>name</emphasis>,
 	        and (:UNION<emphasis> name</emphasis> ,@fieldlist) is a
-	        definition of theunion type
+	        definition of the union type
 	        <emphasis>name</emphasis>. Note that it's necessary
-	        todefine a structure or union type in order to include
+	        to define a structure or union type in order to include
 	        that type in a structure, union, or array, but only
-	        necessary to "refer to" a strucure or union type in order
+	        necessary to "refer to" a structure or union type in order
 	        to define a type alias or a pointer type.</para>
 	    </listitem>
 	    <listitem>
 	      <para>If <emphasis>X</emphasis> is a defined foreign type
 	        , then (:array <emphasis>X</emphasis> &amp;rest dims)
-	        denotes the foreigntype "array of
-	        <emphasis>X</emphasis>". Although multiplearray dimensions
+	        denotes the foreign type "array of
+	        <emphasis>X</emphasis>". Although multiple array dimensions
 	        are allowed by the :array constructor,
 	        only single-dimensioned arrays are (at all) well-supported
 	        in &CCL;.</para>
@@ -245,7 +245,7 @@
         called from foreign code.</para>
       <para>There's no supported way to directly pass lisp data to
         foreign functions: scalar lisp data must be coerced to an
-        equivalent foreign representatation, and lisp arrays (notably
+        equivalent foreign representation, and lisp arrays (notably
         strings) must be copied to non-GCed memory.</para>
 
       <sect3 id="Type-Designators-for-Arguments-and-Return-Values">
@@ -361,7 +361,7 @@
           function.  Exactly which foreign structures are passed
 	      by value and how is very dependent on the Application
 	      Binary Interface (ABI) of the platform; unless you're
-	      very familar with ABI detatils (some of which are quite
+	      very familiar with ABI details (some of which are quite
 	      baroque), it's often easier to let higher-level constructs
 	      deal with these details.</para>
       </sect3>
@@ -399,7 +399,7 @@
         don't return a meaningful value.</para>
 	  <para><emphasis>Exactly</emphasis> how a C function that's
 	    defined to return a foreign structure does so is dependent on
-	    the ABI (and on the size ad composition of the structure/union
+	    the ABI (and on the size and composition of the structure/union
 	    in many cases.)</para>
     </sect2>
   </sect1>
@@ -424,7 +424,7 @@
           address.</para>
         <para>It's sometimes convenient to blur the distinction
           between a MACPTR and the address it represents; it's
-          sometimes necessary to maintain that distiction. It's
+          sometimes necessary to maintain that distinction. It's
           important to remember that a MACPTR is (generally) a
           first-class Lisp object in the same sense that a CONS cell
           is: it'll get GCed when it's no longer possible to reference
@@ -446,10 +446,10 @@
 	    <itemizedlist>
           <listitem>
 	        <para>Creating a MACPTR with a specified address, usually
-	          via thefunction CCL:%INT-TO-PTR.</para>
+	          via the function CCL:%INT-TO-PTR.</para>
 	      </listitem>
           <listitem>
-	        <para>Referencing the return valueof a foreign function
+	        <para>Referencing the return value of a foreign function
 	          call (see )that's specified to return an address.</para>
 	      </listitem>
           <listitem>
@@ -482,7 +482,7 @@
           a new MACPTR object.  Ignoring for the sake of argument the
           question of whether this code fragment exhibits a good way
           to poll for external events (it doesn't), it's not hard to
-          imagine that this loop could execute several millon times
+          imagine that this loop could execute several million times
           per second (producing several million MACPTRs per second.)
           Clearly, the "naive" approach is impractical in many
           cases.</para>
@@ -751,7 +751,7 @@
 
 	        <listitem>
 		      <para>References and returns an unsigned integer composed from the
-		        width bits found bit-offsetbits from the address encapsulated by
+		        width bits found bit-offset bits from the address encapsulated by
 		        ptr. (The least significant bit of the result is the value of
 		        (%get-bit ptr (1- (+ bit-offset width))). Can be used with SETF.</para>
 	        </listitem>
@@ -1310,7 +1310,7 @@
                 extent.</para>
 
               <para>WITH-ENCODED-CSTRS does not automatically prepend
-                bte-order marks to its output; the size of the terminating
+                byte-order marks to its output; the size of the terminating
                 #\NUL character depends on the number of octets per code unit
                 in the encoding.</para>
 
@@ -1479,9 +1479,11 @@
       <title>Other issues:</title>
       <itemizedlist>
         <listitem>
-	      <para>&CCL; now preserves the case of external symbols
-	        in itsdatabase files. See for information about case in
-	        foreign symbol names.</para>
+	      <para>&CCL; now preserves the case of external symbols in
+	        its database
+	        files. See <link linkend="Case-sensitivity-of-foreign-names-in-CCL">Case-sensitivity
+	        of foreign names in &CCL;</link> for information about
+	        case in foreign symbol names.</para>
 	    </listitem>
 	    <listitem>
 	      <para>The Linux databases are derived from a somewhat
@@ -1520,7 +1522,7 @@
         headers/gnome/C/
         headers/gnome/C/populate.sh
         headers/gnome/constants.cdb
-        headers/gnome/functions.cb
+        headers/gnome/functions.cdb
         headers/gnome/records.cdb
         headers/gnome/objc-classes.cdb
         headers/gnome/objc-methods.cdb
@@ -1555,7 +1557,7 @@
         header files associated with a "-dev" package in a Linux
         distribution.  "libc" corresponds pretty closely to the
         interfaces associated with "glibc/libc6" header files, "gl"
-        corresponds to an "openGL+GLUT" developmnent package, "gtk"
+        corresponds to an "openGL+GLUT" development package, "gtk"
         and "gnome" contain interface information from the GTK+1.2 and
         GNOME libraries, respectively.</para>
       <para>For Darwin, the "ccl:darwin-headers" directory contains
@@ -1681,7 +1683,7 @@
         opened in a lisp session. When a saved application is first
         started, an attempt is made to reopen all libraries that were
         open when the image was saved, and an attempt is made to
-        resolve all entrypoints that had been referenced when the
+        resolve all entry points that had been referenced when the
         image was saved. Either of these attempts can fail "quietly",
         leaving some entry points in an unresolved state.</para>
       <para>Linux shared libraries can be referred to either by a
@@ -1692,7 +1694,7 @@
         filesystem links and other means) to refer to a library via
         several names; the library's soname is often the most
         appropriate identifier.</para>
-      <para>sonames are often less version-specific than other names
+      <para>so names are often less version-specific than other names
         for libraries; a program that refers to a library by the name
         "libc.so.6" is more portable than one which refers to
         "libc-2.1.3.so" or to "libc-2.2.3.so", even though the latter
@@ -1726,17 +1728,17 @@
 	  <para>Darwin shared libraries come in two (basic) flavors:</para>
 	  <itemizedlist>
         <listitem>
-	      <para>"dylibs" (which often have the extension".dylib")
-	        are primarily intended to be linked against atcompile/link
+	      <para>"dylibs" (which often have the extension".dylib") are
+	        primarily intended to be linked against at compile/link
 	        time. They can be loaded dynamically,<emphasis>but can't
-	          be unloaded</emphasis>. Accordingly,OPEN-SHARED-LIBRARY
+	        be unloaded</emphasis>. Accordingly,OPEN-SHARED-LIBRARY
 	        can be used to open a .dylib-style library;calling
-	        CLOSE-SHARED-LIBRARY on the result of such a callproduces
-	        a warning, and has no other effect.It appears that (due to
-	        an OS bug) attempts to open .dylibshared-libraries that
-	        are already open can cause memory corruptionunless the
-	        full pathname of the .dylib file is specified on thefirst
-	        and all subsequent calls.</para>
+	        CLOSE-SHARED-LIBRARY on the result of such a call produces
+	        a warning, and has no other effect. It appears that (due
+	        to an OS bug) attempts to open .dylib shared-libraries
+	        that are already open can cause memory corruption unless
+	        the full pathname of the .dylib file is specified on the
+	        first and all subsequent calls.</para>
 	    </listitem>
         <listitem>
 	      <para>"bundles" are intended to serve as application
@@ -1754,7 +1756,7 @@
   <sect1 id="The-Interface-Translator">
     <title>The Interface Translator</title>
 
-    <sect2 id="Inteface-translator-overview">
+    <sect2 id="Interface-translator-overview">
 	  <title>Overview</title>
 	  <para>&CCL; uses an interface translation system based on the FFIGEN
 	    system, which is described at
@@ -1826,7 +1828,7 @@
 	    <listitem>
 	      <para>Ensure that the FFIGEN program is installed. See
 	        the"README" file in the source or binary archive for
-	        specificinstallation instructions.This example assumes
+	        specific installation instructions.This example assumes
 	        LinuxPPC; for 32-bit DarwinPPC,
 	        substitute"ccl:darwin-headers;" for "ccl:headers;".  For
 	        64-bit DarwinPPC,substitute
@@ -1836,10 +1838,10 @@
 	      <para>Edit the
 	        "ccl:headers;<emphasis>subdir</emphasis>;C;populate.sh"shell
 	        script. When you're confident that the files
-	        andpreprocessor options match your environment, cd to
+	        and preprocessor options match your environment, cd to
 	        the"ccl:headers;<emphasis>subdir</emphasis>;C;" directory
-	        andinvoke ./populate.sh. Repeat this step until you're
-	        able tocleanly translate all files refrenced in the shell
+	        and invoke ./populate.sh. Repeat this step until you're
+	        able to cleanly translate all files referenced in the shell
 	        script.</para>
 	    </listitem>
 	    <listitem>
@@ -1872,7 +1874,7 @@
         fact, under the belief that case conflicts were rare and that
         many users (and implementors) would prefer not to deal with
         case-related issues. The fact that some information in the
-        interface databases was incomplete or inaccessable because of
+        interface databases was incomplete or inaccessible because of
         this policy made it clearer that the policy was untenable. I
         can't claim that the approach described here is aesthetically
         pleasing, but I can honestly say that it's less unpleasant
@@ -1938,14 +1940,14 @@
 	    </listitem>
         <listitem>
 	      <para>Any alphabetic characters in the symbol's pname
-	        thataren't enclosed in angle brackets are treated as
+	        that aren't enclosed in angle brackets are treated as
 	        lower-case,regardless of the value of READTABLE-CASE and
 	        regardless of the case in which they were written.</para>
 	    </listitem>
         <listitem>
 	      <para>Alphabetic characters that appear within angle
-	        brackets aremapped to upper-case, again regardless of how
-	        they were written orinterned.</para>
+	        brackets are mapped to upper-case, again regardless of how
+	        they were written or interned.</para>
 	    </listitem>
       </itemizedlist>
 	  <para>There may be many ways of "escaping" (with angle
@@ -2651,7 +2653,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
       the contents of the array in-place; that is, it doesn't make a
       new array, just keeps the same one and reverses what's in it.
       Finally, the C function passes control back to &CCL;.  Since
-      the allocated array memory has been directly modifed, &CCL;
+      the allocated array memory has been directly modified, &CCL;
       reflects those changes directly in the array as well.</para>
     <para>There is one final bit of housekeeping to deal with.
       Before moving on, the memory needs to be deallocated:</para>
@@ -2712,7 +2714,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
       encapsulating object is about to become garbage, by using
       &CCL;'s nonstandard "termination" mechanism, which is
       essentially the same as what Java and other languages call
-      "finialization".</para>
+      "finalization".</para>
     <para>Termination is a way of asking the garbage collector to
       let you know when it's about to destroy an object which isn't
       used anymore.  Before destroying the object, it calls a function
@@ -2761,7 +2763,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
       <literal>ccl:terminate-when-unreachable</literal> call.</para>
     <para>If it makes sense to say that the foreign object should
       live as long as there's Lisp code that references it (through
-      the encapsulating obect) and no longer, this is one way of doing
+      the encapsulating object) and no longer, this is one way of doing
       that.</para>
     <para>Now we've covered passing basic types back and forth with
       C, and we've done the same with pointers.  You may think this is
@@ -2890,7 +2892,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      that address.</para>
 
 	    <para>Foreign variables in C code tend to be platform- and
-	      packge-specific (the canonical example - &#34;errno&#34; - is typically
+	      package-specific (the canonical example - &#34;errno&#34; - is typically
 	      not a variable when threads are involved. )</para>
 
 	    <para>In LinuxPPC, </para>
@@ -3044,7 +3046,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           signatures.</para>
 
         <para>The argument and result coercion that the bridge has
-          tradionally supported is supported by the new mechanism (e.g.,
+          traditionally supported is supported by the new mechanism (e.g.,
           :&lt;BOOL&gt; arguments can be specified as lisp booleans and :&lt;BOOL&gt;
           results are returned as lisp boolean values, and an argument
           value of NIL is coerced to a null pointer if the corresponding
@@ -3749,7 +3751,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           but it was not exported.</para>
 
         <para>If the argument to <code>CCL:FREE</code> is a gcable
-        pointer (for example, an object reurned
+        pointer (for example, an object returned
         by <code>MAKE-GCABLE-RECORD</code>)
         then <code>CCL:FREE</code> informs the garbage collector that
         the foreign memory has been deallocated before calling the
@@ -3918,7 +3920,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	    <title>Description</title>
 
 	    <para>
-	      Expands into code which allocates and initalizes
+	      Expands into code which allocates and initializes
 	      an instance of the type 
 	      denoted by <varname>typespec</varname>, on the foreign
 	      heap.  The record is allocated using the C function
@@ -3973,7 +3975,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      <function>make-record</function> could be a function.  However,
 	      that would mean that any stand-alone application using it would
 	      have to include a copy of the interface database
-	      (see <xref linkend="The-Interface-Database"/>), which is undesireable
+	      (see <xref linkend="The-Interface-Database"/>), which is undesirable
 	      because it's large.
 	    </para>
 	  </refsect1>
@@ -4303,7 +4305,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	    <para>Executes body in an environment in which each var is
 	      bound to <link
 	                  linkend="Referencing-and-Using-Foreign-Memory-Addresses">a
-	        MACPTR</link> encapuslating the address of a stack-allocated
+	        MACPTR</link> encapsulating the address of a stack-allocated
 	      foreign memory block, allocated and initialized from
 	      typespec and initforms as ccl:make-record.</para>
 	    

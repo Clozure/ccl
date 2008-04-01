@@ -29,15 +29,16 @@
     also provides some convenience facilities for working with
     Cocoa.</para>
 
+  <!-- ============================================================ -->
   <sect1 id="Objective-C-Changes-1.2">
     <title>Changes in 1.2</title>
 
     <para>Version 1.2 of &CCL; exports most of the useful symbols
     described in this chapter; in previous releases, most of them were
-    private in the <code>CCL</code> package.</para>
+    private in the <literal>CCL</literal> package.</para>
 
     <para>There are several new reader macros that make it much more
-    conveinent than before to refer to several classes of symbols used
+    convenient than before to refer to several classes of symbols used
     with the Objective-C bridge. For a full description of these
     reader-macros, see
     the <link linkend="anchor_Foreign-Function-Interface-Dictionary">Foreign-Function-Interface
@@ -50,23 +51,23 @@
     64-bit values where appropriate.</para>
 
     <para>The Objective-C bridge defines the
-      type <code>NS:CGFLOAT</code> as the Lisp type of the preferred
+      type <literal>NS:CGFLOAT</literal> as the Lisp type of the preferred
       floating-point type on the current platform, and defines the
-      constant <code>NS:+CGFLOAT+</code>.  On DarwinPPC32, the foreign
-      types <code>:cgfloat</code>, <code>:&lt;NSUI&gt;nteger</code>,
+      constant <literal>NS:+CGFLOAT+</literal>.  On DarwinPPC32, the foreign
+      types <literal>:cgfloat</literal>, <literal>:&lt;NSUI&gt;nteger</literal>,
       and
-      <code>:&lt;NSI&gt;nteger</code> are defined by the Objective-C
+      <literal>:&lt;NSI&gt;nteger</literal> are defined by the Objective-C
       bridge (as 32-bit float, 32-bit unsigned integer, and 32-bit
       signed integer, respectively); these types are defined as 64-bit
       variants in the 64-bit interfaces.</para>
 
     <para>Every Objective-C class is now properly named, either with a
-      name exported from the <code>NS</code> package (in the case of a
+      name exported from the <literal>NS</literal> package (in the case of a
       predefined class declared in the interface files) or with the
-      name provided in the <code>DEFCLASS</code> form (with <code>:METACLASS</code>
-      <code>NS:+NS-OBJECT</code>) which defines the class from Lisp.
+      name provided in the <literal>DEFCLASS</literal> form (with <literal>:METACLASS</literal>
+      <literal>NS:+NS-OBJECT</literal>) which defines the class from Lisp.
       The class's Lisp name is now proclaimed to be a "static"
-      variable (as if by <code>DEFSTATIC</code>, as described in the
+      variable (as if by <literal>DEFSTATIC</literal>, as described in the
       <link linkend="Static_Variables">"Static Variables"
       section</link>) and given the class object as its value.  In
       other words:</para>
@@ -88,6 +89,7 @@
 
   </sect1>
 
+  <!-- ============================================================ -->
   <sect1 id="Using-Objective-C-Classes">
     <title>Using Objective-C Classes</title>
 
@@ -139,6 +141,7 @@
       it. As we can see, NS:NS-WINDOWs have lots of interesting slots.</para>
   </sect1>
 
+  <!-- ============================================================ -->
   <sect1 id="Instantiating-Objective-C-Objects">
     <title>Instantiating Objective-C Objects</title>
     <para>Making an instance of an Objective-C class (whether the class in
@@ -159,7 +162,7 @@
     </programlisting>
     <para>Allocating an instance of an Objective-C class involves sending the
       class an "alloc" message, and then using those initargs that
-      <emphasis>don't</emphasis> correspond to slot initags as the
+      <emphasis>don't</emphasis> correspond to slot initargs as the
       "init" message to be sent to the newly-allocated instance.  So, the
       example above could have been done more verbosely as:</para>
     <programlisting>
@@ -198,8 +201,22 @@
     <para>This example calls (make-instance) with no initargs.  When you
       do this, the object is only allocated, and not initialized.  It
       then sends the "init" message to do the initialization by hand.</para>
+
+    <para>There is an alternative API for instantiating Objective-C
+      classes. You can
+      call <literal>OBJC:MAKE-OBJC-INSTANCE</literal>, passing it the
+      name of the Objective-C class as a string. In previous
+      releases, <literal>OBJC:MAKE-OBJC-INSTANCE</literal> could be
+      more efficient than <literal>OBJC:MAKE-INSTANCE</literal> in
+      cases where the class did not define any Lisp slots; this is no
+      longer the case. You can now
+      regard <literal>OBJC:MAKE-OBJC-INSTANCE</literal> as completely
+      equivalent to <literal>OBJC:MAKE-INSTANCE</literal>, except that
+      you can pass a string for the classname, which may be convenient
+      in the case that the classname is in some way unusual.</para>
   </sect1>
 
+  <!-- ============================================================ -->
   <sect1 id="Calling-Objective-C-Methods">
     <title>Calling Objective-C Methods</title>
     <para>In Objective-C, methods are called "messages", and there's
@@ -306,7 +323,7 @@
       <programlisting>
 (send v1 :set-bounds (send v2 'bounds))
       </programlisting>
-      <para>There are also several psuedo-functions provided for convenience
+      <para>There are also several pseudo-functions provided for convenience
         by the Objective-C compiler, to make objects of specific types. The
         following are currently supported by the bridge: NS-MAKE-POINT,
         NS-MAKE-RANGE, NS-MAKE-RECT, and NS-MAKE-SIZE.</para>
@@ -427,6 +444,7 @@
     </sect2>
   </sect1>
 
+  <!-- ============================================================ -->
   <sect1 id="Defining-Objective-C-Classes">
     <title>Defining Objective-C Classes</title>
     <para>You can define your own foreign classes, which can then be
@@ -513,6 +531,7 @@
     </sect2>
   </sect1>
 
+  <!-- ============================================================ -->
   <sect1 id="Defining-Objective-C-Methods">
     <anchor id="anchor_Defining-Objective-C-Methods"/>
     <title>Defining Objective-C Methods</title>
@@ -522,14 +541,15 @@
       to define Objective-C methods, it is only possible to define methods
       belonging to Objective-C classes which have been defined in
       Lisp.</para>
+
     <para>You can use either of two different macros to define methods
-    on Objective-C classes. <literal>define-objc-method</literal>
-    accepts a two-element list containing a message selector name and
-    a class name, and a body. <literal>objc:defmethod</literal>
-    superficially resembles the normal
-    CLOS <literal>defmethod</literal>, but creates methods on
-    Objective-C classes with the same restrictions as those created
-    by <literal>define-objc-method</literal>.</para>
+      on Objective-C classes. <literal>define-objc-method</literal>
+      accepts a two-element list containing a message selector name
+      and a class name, and a body. <literal>objc:defmethod</literal>
+      superficially resembles the normal
+      CLOS <literal>defmethod</literal>, but creates methods on
+      Objective-C classes with the same restrictions as those created
+      by <literal>define-objc-method</literal>.</para>
 
     <sect2>
       <title>Using <literal>define-objc-method</literal></title>
@@ -759,6 +779,13 @@
     r))
        </programlisting>
      
+       <para>If the <literal>OBJC:DEFMETHOD</literal> creates a new
+       method, then it displays a message to that effect. These
+       messages may be helpful in catching errors in the names of
+       method definitions. In addition, if
+       a <literal>OBJC:DEFMETHOD</literal> form redefines a method in
+       a way that changes its type signature, &CCL; signals a
+       continuable error.</para>
     </sect2>
 
     <sect2 id="Method-Redefinition-Constraints">
@@ -767,7 +794,7 @@
         redefinition in mind.  So, there are a few constraints about
         how and when you can replace the definition of an Objective C
         method.  Currently, if you break these rules, nothing will
-        collapse, but the behaviour will be confusing; so
+        collapse, but the behavior will be confusing; so
         don't.</para>
       <para>Objective C methods can be redefined at runtime, but
         their signatures shouldn't change.  That is, the types of the
@@ -782,11 +809,53 @@
     </sect2>
   </sect1>
 
+  <!-- ============================================================ -->
+  <sect1 id="Loading-Objc-Frameworks">
+    <title>Loading Frameworks</title>
+
+    <para>On Mac OS X, a framework is a structured directory
+      containing one or more shared libraries along with metadata such
+      as C and Objective-C header files. In some cases, frameworks may
+      also contain additional items such as executables.</para>
+
+    <para>Loading a framework means opening the shared libraries and
+      processing any declarations so that &CCL; can subsequently call
+      its entry points and use its data structures. &CCL; provides the
+      function <literal>OBJC:LOAD-FRAMEWORK</literal> for this
+      purpose.</para>
+
+    <programlisting>
+(OBJC:LOAD-FRAMEWORK framework-name interface-dir)
+    </programlisting>
+
+    <para><literal>framework-name</literal> is a string that names the
+    framework (for example, "Foundation", or "Cocoa"),
+    and <literal>interface-dir</literal> is a keyword that names the
+    set of interface databases associated with the named framework
+    (for example, <literal>:foundation</literal>,
+    or <literal>:cocoa</literal>).</para>
+
+    <para>Assuming that interface databases for the named frameworks
+    exist on the standard search
+    path, <literal>OBJC:LOAD-FRAMEWORK</literal> finds and initializes
+    the framework bundle by searching OS X's standard framework search
+    paths. Loading the named framework may create new Objective-C
+    classes and methods, add foreign type descriptions and entry
+    points, and adjust &CCL;'s dispatch functions.</para>
+
+    <para>If interface databases don't exist for a framework you want
+    to use, you will need to create them. For more information about
+    creating interface databases,
+    see <link linkend="Creating-new-interface-directories">Creating
+    new interface directories</link>.</para>
+  </sect1>
+
+  <!-- ============================================================ -->
   <sect1 id="How-Objective-C-Names-are-Mapped-to-Lisp-Symbols">
     <title>How Objective-C Names are Mapped to Lisp Symbols</title>
     <para>There is a standard set of naming conventions for Cocoa
       classes, messages, etc.  As long as they are followed, the
-      bridge is fairly good at automaticallly translating between Objective-C
+      bridge is fairly good at automatically translating between Objective-C
       and Lisp names.</para>
     <para>For example, "NSOpenGLView" becomes ns:ns-opengl-view;
       "NSURLHandleClient" becomes ns:ns-url-handle-client; and
@@ -820,7 +889,7 @@
     </programlisting>
     <para>Alternatively, you can define a special translation rule
       for your exception.  This is useful for an exceptional name that
-      you need to use througout your code.  Some examples:</para>
+      you need to use throughout your code.  Some examples:</para>
     <programlisting>
 (ccl::define-classname-translation "WiErDclass" wierd-class)
 (ccl::define-message-translation "WiErDmEsSaGe:WithARG:" (:weird-message :with-arg))

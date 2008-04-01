@@ -141,7 +141,7 @@
       to a single Posix function call, as it might be made in C.
       There is no attempt to make these calls correspond to Lisp
       idioms, such as <literal>setf</literal>.  This means that their
-      behaviour is simple and predictable.</para>
+      behavior is simple and predictable.</para>
     <para>For working with environment variables, there are
       CCL::GETENV and CCL::SETENV.</para>
     <para>For working with user and group IDs, there are
@@ -249,7 +249,7 @@
         -autorelease method), and periodically the current autorelease
         pool is sent a &ldquo;-release&rdquo; message, which causes it
         to send &ldquo;-release&rdquo; messages to all of the objects
-        that've been added to it.</para>
+        that have been added to it.</para>
       <para>If the current thread doesn't have a current autorelease
         pool, the attempt to autorelease any object will result in a
         severe-looking warning being written via NSLog. The event
@@ -263,7 +263,7 @@
         &ldquo;New Listener&rdquo; command in the IDE) is given a
         default autorelease pool; there are REPL colon-commands for
         manipulating the current listener's &ldquo;toplevel
-        auturelease pool&rdquo;.</para>
+        autorelease pool&rdquo;.</para>
       <para>In the current scheme, every time that Cocoa calls lisp
         code, a lisp error handler is established which maps any lisp
         conditions to ObjC exceptions and arranges that this exception
@@ -288,7 +288,7 @@
     <sect2 id="Acknowledgement--2-">
 	  <title>Acknowledgement</title>
       <para>The Cocoa bridge was originally developed, and
-        generously contributed by, Randal Beer.</para>
+        generously contributed by, Randall Beer.</para>
     </sect2>
   </sect1>
 
@@ -320,12 +320,6 @@
       application produced under OS X 10.3.5 will not work under
       OS X 10.3.6.  This is inconvenient when you wish to distribute an
       application you have built this way.</para>
-    <para>Work in this direction is ongoing.  It is worth looking at the project
-      "Bosco", by Mikel Evins, which is a template that can be used to build
-      application bundles in a different way.  It is
-      available here, as part
-      of the "Clotho" project, and there is
-      here.</para>
     <para>When an image which had contained ObjC classes (which are also
       CLOS classes) is re-launched, those classes are "revived": all
       preexisting classes have their addresses updated destructively, so that
@@ -1047,7 +1041,7 @@
 
 		      <listitem>
 		        <para>either a string which represents the name of the
-		          selector or a list which describ+es the method's return
+		          selector or a list which describes the method's return
 		          type, selector components, and argument types (see below.)
 		          If the first form is used, then the first form in the body
 		          must be a list which describes the selector's argument
@@ -1122,7 +1116,7 @@
 	        <listitem>
 		      <para>a list of alternating keywords and variable/type specifiers,
 		        where the set of keywords can be mapped to a selector string for a
-		        parameteriezed method according to the standard name-mapping
+		        parameterized method according to the standard name-mapping
 		        conventions for method selectors and each variable/type-specifier is
 		        either a variable name (denoting a value of type :ID) or a list whose
 		        CAR is a variable name and whose CADR is the corresponding
@@ -1154,7 +1148,7 @@
 	        it&#39;s initially NIL.</para>
 	      
 	      <para>Their default treatment by the #\; reader macro is the primary way
-	        in which #\Return and #\Linefeed differ syntactally; by extending the
+	        in which #\Return and #\Linefeed differ syntactically; by extending the
 	        #\; reader macro to (conditionally) treat #\Return as a
 	        comment-terminator, that distinction is eliminated. This seems to make
 	        LOAD and COMPILE-FILE insensitive to line-termination issues in many
@@ -1201,7 +1195,7 @@
 	        (#\Linefeed) characters are written externally as #\Return characters.</para>
 	      
 	      <para>When specified as :INFERRED and the file is open for input, the
-	        first bufferful of input data is examined; if a #\Return character
+	        first buffer-full of input data is examined; if a #\Return character
 	        appears in the buffer before the first #\Linefeed, the file stream&#39;s
 	        external-format is set to :MACOS; otherwise, it is set to :UNIX.</para>
 	      

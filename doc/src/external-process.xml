@@ -46,8 +46,8 @@
     <sect1 id="Limitations-and-known-bugs">
       <title>Limitations and known bugs</title>
       <itemizedlist>
-        <listitem><para>&CCL; and the external processs may get
-        confused about whoowns which streams when input, output, or
+        <listitem><para>&CCL; and the external process may get
+        confused about who owns which streams when input, output, or
         error are specified as T and wait is specified as
         NIL.</para></listitem>
         <listitem><para>External processes that need to talk to a
@@ -215,7 +215,7 @@
 		<listitem>
 		  <para>A user-defined function of one argument (the
 		  EXTERNAL-PROCESS structure.) This function is called
-		  whenever &CCL; detects a change in the staus of the
+		  whenever &CCL; detects a change in the status of the
 		  EXTERNAL-PROCESS.</para>
 		</listitem>
 	      </varlistentry>
@@ -272,7 +272,7 @@
 	    <title>Description</title>
 
 	    <para>Sends the specified "signal" to the specified
-	    external process. (Typically, it would only be useful tocall
+	    external process. (Typically, it would only be useful to call
 	    this function if the EXTERNAL-PROCESS was created with :WAIT
 	    NIL. ) Returns T if successful; signals an error otherwise.</para>
 	  </refsect1>

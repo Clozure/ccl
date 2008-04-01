@@ -27,7 +27,7 @@
       data grows and shrinks. After the initial heap image loads and
       after each full GC, the lisp kernel will try to ensure that a
       specified amount (the "lisp-heap-gc-threshold") of free memory
-      is available. The inital value of this kernel variable is 16MB
+      is available. The initial value of this kernel variable is 16MB
       on 32-bit implementations and 32MB on 64-bit implementations ;
       it can be manipulated from Lisp (see below.)</para>
       <para>The large reserved memory block consumes very little in
@@ -115,7 +115,7 @@ that provided by earlier &CCL; versions.</para>
       reclaiming newly-created objects quickly, it's less often
       necessary to do more expensive GCs of the entire heap in order
       to reclaim unreferenced memory.  In some environments, the
-      pauses associated with such full GCs can be noticable and
+      pauses associated with such full GCs can be noticeable and
       disruptive, and minimizing the frequency (and sometimes the
       duration) of these pauses is probably the EGC's primary goal
       (though there may be other benefits, such as increased locality
@@ -123,7 +123,7 @@ that provided by earlier &CCL; versions.</para>
       leads to slightly longer execution times (and slightly higher,
       amortized GC time), but there are cases where it can improve
       overall performance as well; the nature and degree of its impact
-      on performance is highly application-dependant.</para>
+      on performance is highly application-dependent.</para>
       <para>Most EGC strategies (including the one employed by
       &CCL;) logically or physically divide memory into one or more
       areas of relatively young objects ("generations") and one or
@@ -135,7 +135,7 @@ that provided by earlier &CCL; versions.</para>
       if a full GC proves that there are no live references to them.
       This filtering process isn't perfect - a certain amount of
       premature tenuring may take place - but it usually works very
-      well in practive.</para>
+      well in practice.</para>
       <para>It's important to note that a GC of the youngest
       generation is typically very fast (perhaps a few milliseconds on
       a modern CPU, depending on various factors), &CCL;'s EGC is
@@ -184,7 +184,7 @@ that provided by earlier &CCL; versions.</para>
       working set to a minimum.</para>
       <para>For some programs (especially those that cons at a very
       high rate), the default policy may be less than ideal: releasing
-      pages that're going to be needed almost immediately - and
+      pages that are going to be needed almost immediately - and
       zero-fill-faulting them back in, lazily - incurs unnecessary
       overhead. (There's a false economy associated with minimizing
       the size of the working set if it's just going to shoot back up
@@ -235,7 +235,7 @@ that provided by earlier &CCL; versions.</para>
       list.  Therefore, they will never be garbage-collected, and
       their memory will never be reclaimed, even if they are
       referenced nowhere else in the program.  You may want this
-      behaviour.  If you don't, you need weak references.</para>
+      behavior.  If you don't, you need weak references.</para>
       <para>&CCL; supports weak references with "weak hash tables".
       Hash tables may be weak with respect to either their keys or
       their values.  To make a hash table with weak keys, invoke

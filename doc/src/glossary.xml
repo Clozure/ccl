@@ -287,7 +287,7 @@
 	  <glossdef>
 
 		<para>A variable whose binding is in the dynamic
-		environment. Special variables are essentally equivalent to
+		environment. Special variables are essentially equivalent to
 		global variables in languages other than Lisp. A special
 		variable binding is visible in any lexical environment, so
 		long as a lexical binding has not shadowed it.</para>

@@ -27,7 +27,7 @@
       scheduled and controlled by the operating system.)  Most of the
       implications of this are discussed elsewhere; this section tries
       to describe how threads look from the lisp kernel's perspective
-      (and especailly from the GC's point of view.)</para>
+      (and especially from the GC's point of view.)</para>
       <para>&CCL;'s runtime system tries to use machine-level
       exception mechanisms (conditional traps when available, illegal
       instructions, memory access protection in some cases) to detect
@@ -92,7 +92,7 @@
         value should be preserved across the call) are saved on the
         thread's value stack, and (on x86-64) RSP is switched to the
         control stack.  A field in the TCR (tcr.valence) is then set
-        to indicate that the thread is running foreigm code, foreign
+        to indicate that the thread is running foreign code, foreign
         argument registers are loaded from a frame on the foreign
         stack, and the foreign function is called. (That's a little
         oversimplified and possibly inaccurate, but the important
@@ -114,7 +114,7 @@
         pressed) and synchronous hardware-level events (like trying to
         execute an illegal instruction or access protected memory.)
         It makes some sense to defer ("block") handling of
-        aysnchronous signals so that some critical code sequences
+        asynchronous signals so that some critical code sequences
         complete without interruption; since it's generally not
         possible for a thread to proceed after a synchronous exception
         unless and until its state is modified by an exception
@@ -135,7 +135,7 @@
         routinely handled a routine exception.)  On Darwin/OSX,
         &CCL; uses Mach thread-level exception handling facilities
         which run before GDB or CrashReporter get a chance to confuse
-        themeselves; &CCL;'s Mach exception handling tries to force
+        themselves; &CCL;'s Mach exception handling tries to force
         the thread which received a synchronous exception to invoke a
         signal handling function ("as if" signal handling worked more
         usefully under Darwin.)  Mach exception handlers run in a
@@ -154,8 +154,8 @@
         get in each other's way, a signal handler is entered with all
         signals blocked.  (This behavior is specified in the call to
         the sigaction() function which established the signal
-        handler.)  The signal handler recieves three arguments from
-        the OS kernel; the first is an intger which identifies the
+        handler.)  The signal handler receives three arguments from
+        the OS kernel; the first is an integer which identifies the
         signal, the second is a pointer to an object of type
         "siginfo_t", which may or may not contain a few fields that
         would help to identify the cause of the exception, and the
@@ -172,7 +172,7 @@
         processing.</para>
         <para>On Darwin, the Mach exception thread creates a signal
         context (and maybe a siginfo_t structure), stores the signal
-        context in the thread's TCR, sets the TCR field wich describes
+        context in the thread's TCR, sets the TCR field which describes
         the thread's state, and arranges that the thread resume
         execution at its signal handling function (with a signal
         handler, possibly NULL siginfo_t, and signal context as
@@ -192,7 +192,7 @@
         consistency, the sigaltstack() mechanism is used to cause the
         signal to be delivered on (and the signal context and siginfo
         to be allocated on) a special stack area (the last few pages
-        of the thread's cntrol stack, in practice.  When the signal
+        of the thread's control stack, in practice.  When the signal
         handler runs, it (carefully) copies the signal context and
         siginfo to the thread's control stack and makes RSP point into
         that stack before invoking the "real" signal handler.  (The
@@ -232,7 +232,7 @@
         list, sending each other thread a distinguished "suspend"
         signal, then iterates over the list again, waiting for a
         per-thread semaphore that indicates that the thread has
-        received the "suspend" signal and responded appropriatedly.
+        received the "suspend" signal and responded appropriately.
         Once all other threads have acknowledged the request to
         suspend themselves, the GC thread can run the GC proper (after
         doing any necessary <xref linkend="PC-lusering"/>.)  Once the
@@ -264,11 +264,11 @@
 	    <para>On both PPC and x86-64 platforms, consing isn't
 	    fully atomic.It takes at least a few instructions to
 	    allocate an object in memory(and slap a header on it if
-	    necesssary); if a thread is interrupted inthe middle of
+	    necessary); if a thread is interrupted in the middle of
 	    that instruction sequence, the new object may or may
-	    nothave been created or fully initialized at the point in
-	    time that theinterrupt occurred.  (There are actually a
-	    few different states ofpartial initialization)</para>
+	    not have been created or fully initialized at the point in
+	    time that the interrupt occurred.  (There are actually a
+	    few different states of partial initialization)</para>
 	  </listitem>
 	  <listitem>
 	    <para>On the PPC, the common act of building a lisp
@@ -305,9 +305,9 @@
         sequences is small, and fortunately it's fairly easy for the
         interrupting thread to recognize when the interrupted thread
         is in the middle of such a sequence.  When this is detected,
-        the interrupting thread modfies the state of the interrupted
+        the interrupting thread modifies the state of the interrupted
         thread (modifying its PC and other registers) so that it is no
-        longer in the middle of such a sequenece (it's either backed
+        longer in the middle of such a sequence (it's either backed
         out of it or the remaining instructions are emulated.)</para>
         <para>This works because (a) many of the troublesome
         instruction sequences are PPC-specific and it's relatively
@@ -382,7 +382,7 @@
         <para>Once we've decided that a given machine word is a node,
         a <xref linkend="Tagging-scheme"/> describes how the node's
         value and type are encoded in that machine word.</para>
-        <para>Most of this - so far - has discussed thigs from the
+        <para>Most of this - so far - has discussed things from the
         GC's very low-level perspective.  From a much higher point of
         view, lisp functions accept nodes as arguments, return nodes
         as values, and (usually) perform some operations on those
@@ -406,10 +406,10 @@
         object) is often called a <emphasis>locative</emphasis>; the
         cases where locatives are allowed in &CCL; mostly involve
         the behavior of function call and return instructions.  (To be
-        technicaly accurate, the other case also arises on x86-64, but
+        technically accurate, the other case also arises on x86-64, but
         that case isn't as user-visible.)</para>
         <para>On the PowerPC (both PPC32 and PPC64), all machine
-        instructions are 32 bits wide and all in1struction words are
+        instructions are 32 bits wide and all instruction words are
         allocated on 32-bit boundaries.  In PPC &CCL;, a CODE-VECTOR
         is a specialized type of vector-like object; its elements are
         32-bit PPC machine instructions.  A CODE-VECTOR is an
@@ -422,7 +422,7 @@
         code vector); since PPC instructions are always 32 bits wide
         and aligned on 32-bit boundaries, the low two bits of the PC
         are always 0.  If the function executes a call (simple call
-        instrucions have the mnemonic "bl" on the PPC, which stands
+        instructions have the mnemonic "bl" on the PPC, which stands
         for "branch and link"), the address of the next instruction
         (also a word-aligned locative into a code-vector) is copied
         into the special- purpose PPC "link register" (lr); a function
@@ -433,12 +433,12 @@
         copied to a general-purpose register.</para>
         <para>&CCL;'s GC understands that certain registers contain
         these special "pc-locatives" (locatives that point into
-        CODE-VECTOR objects); it contains specal support for finding
+        CODE-VECTOR objects); it contains special support for finding
         the containing CODE-VECTOR object and for adjusting all of
         these "pc-locatives" if the containing object is moved in
         memory.  The first part of that - finding the containing
         object - is possible and practical on the PPC because of
-        architectural artifcacts (fixed-width instructions and arcana
+        architectural artifacts (fixed-width instructions and arcana
         of instruction encoding.)  It's not possible on x86-64, but
         fortunately not necessary either (though the second part -
         adjusting the PC/RIP when the containing object moves) is both
@@ -501,7 +501,7 @@
 	      may have become garbage.)  On x86-64, the RSP register
 	      addresses the top of the value stack when running lisp
 	      code; that address is saved in the TCR when running
-	      foreign code.  On the PPC, a dedicated regiter (VSP,
+	      foreign code.  On the PPC, a dedicated register (VSP,
 	      currently r15) is used to address the top of the value
 	      stack when running lisp code, and the VSP value is saved
 	      in the TCR when running foreign code.  The value stack
@@ -531,7 +531,7 @@
 	      the second word is 0) or immediate (otherwise.)  On
 	      x86-64, where temp stack frames always contain nodes,
 	      the second word is always 0.  The temp stack grows down.
-	      It usually takes several instuctions to allocate and
+	      It usually takes several instructions to allocate and
 	      safely initialize a temp stack frame that's intended to
 	      contain nodes, and the GC has to recognize the case
 	      where a thread is in the process of allocating and
@@ -594,7 +594,7 @@
 	      <para>11 "node" registers.</para>
 	      <para>All other registers (RBX, RSI, RDI, and R8-R15)
 	      are asserted to contain node values at (almost) all
-	      times; legacy "string" operationsthat implicitly use RSI
+	      times; legacy "string" operations that implicitly use RSI
 	      and/or RDI are not used.</para>
 	    </listitem>
 	  </itemizedlist>
@@ -617,7 +617,7 @@
 	      <itemizedlist>
 		<listitem>
 		  <para>r0 (symbolic name rzero) always contains the
-		  value 0 when runninglisp code.  Its value is
+		  value 0 when running lisp code.  Its value is
 		  sometimes read as 0 when it's used as the base
 		  register in a memory address; keeping the value 0
 		  there is sometimes convenient and avoids
@@ -650,7 +650,7 @@
 		  current thread's temp stack.</para>
 		</listitem>
 		<listitem>
-		  <para>r13 is used to hold the TCR on PPC32 sytems;
+		  <para>r13 is used to hold the TCR on PPC32 systems;
 		  it's not used on PPC64.</para>
 		</listitem>
 		<listitem>
@@ -716,7 +716,7 @@
         Since such instructions would typically be used to access the
         fields of things like CONS cells and structures, it's
         desirable that that the tags chosen for CONS cells and
-        structures allow the use of these intructions as opposed to
+        structures allow the use of these instructions as opposed to
         more expensive alternatives.)</para>
         <para>One architecture-dependent tagging trick that works well
         on all architectures is to use a tag of 0 for FIXNUMs: a
@@ -754,7 +754,7 @@
 	    <para>CONS cells always contain exactly 2 elements and are
 	    usually fairly common.It therefore makes sense to give
 	    CONS cells their own tag.  Unlike the fixnum case - where a
-	    tag value of 0 had positive implications - theredoesn't
+	    tag value of 0 had positive implications - there doesn't
 	    seem to be any advantage to using any particular value.
 	    (A longtime ago - in the case of 68K MCL - the CONS tag
 	    and the order of CAR and CDR in memory were chosen to allow
@@ -815,11 +815,11 @@
 	    else - memory-allocated objects that aren't CONS cells -
 	    uniformly.There are some disadvantages to that uniform
 	    treatment as well, and the treatment of "memory-allocated
-	    non-CONS objects" isn't entirely uniform accross all
+	    non-CONS objects" isn't entirely uniform across all
 	    &CCL; implementations.  Let's first pretend that
 	    the treatment is uniform, then discuss the ways in which it
 	    isn't.The "uniform approach" is to treat all
-	    memory-allocated non-CONS objectsas if they were vectors;
+	    memory-allocated non-CONS objects as if they were vectors;
 	    this use of the term is a little looser than what's implied
 	    by the CL VECTOR type.  &CCL; actually uses the
 	    term "uvector" to mean "a memory-allocated lisp object
@@ -879,7 +879,7 @@
       used to try to reserve less than the default.)</para>
       <para>Reserving address space that can't (yet) be read or
       written to doesn't cost much; in particular, it doesn't require
-      that correspinding swap space or physical memory be available.
+      that corresponding swap space or physical memory be available.
       Marking the address range as being "mapped" helps to ensure that
       other things (results from random calls to malloc(), dynamically
       loaded shared libraries) won't be allocated in this region that
@@ -907,7 +907,7 @@
         registers when running lisp code; on x86-664, these values are
         maintained in the current threads's TCR.  (An "empty" heap
         segment is one whose high pointer and low pointer are equal.)
-        When a thread is not in the midde of allocating something, the
+        When a thread is not in the middle of allocating something, the
         low 3 or 4 bits of the high and low pointers are clear (the
         pointers are doublenode-aligned.)</para>
         <para>A thread tries to allocate an object whose physical size
@@ -973,7 +973,7 @@ L1
         end of the heap are mapped read-write.</para>
         <para>If a thread traps while trying to allocate memory, the
         thread goes through the usual exception-handling protocol (to
-        ensure that any oher thread that GCs "sees" the state of the
+        ensure that any other thread that GCs "sees" the state of the
         trapping thread and to serialize exception handling.)  When
         the exception handler runs, it determines the nature and size
         of the failed allocation and tries to complete the allocation
@@ -986,7 +986,7 @@ L1
         segment allocation trap handler may invoke a full or ephemeral
         GC before returning a new segment.  It's worth noting that the
         [E]GC is triggered based on the number of and size of these
-        segments that've been allocated since the last GC; it doesn't
+        segments that have been allocated since the last GC; it doesn't
         have much to do with how "full" each of those per-thread
         segments are.  It's possible for a large number of threads to
         do fairly incidental memory allocation and trigger the GC as a
@@ -1015,7 +1015,7 @@ L1
         code would be able to "cleanly" signal an out-of-memory
         condition if lisp is ... out of memory</para>
 	<para>I don't know that I've ever seen an abrupt out-of-memory
-	failure that wasn't preceeded by several minutes of excessive
+	failure that wasn't preceded by several minutes of excessive
 	paging activity.  The most expedient course in cases like this
 	is to either (a) use less memory or (b) get more memory; it's
 	generally hard to use memory that you don't have.</para>
@@ -1043,7 +1043,7 @@ L1
 	<listitem>
 	  <para>the relocation table, which contains a native word for
 	  every 32 or 64 doublenodes in the dynamic heap, plus an
-	  extra word used to keep trackof the end of the heap.</para>
+	  extra word used to keep track of the end of the heap.</para>
 	</listitem>
       </orderedlist>
       <para>The total GC space overhead is therefore on the order of
@@ -1054,7 +1054,7 @@ L1
 	<title>Mark phase</title>
         <para>Each doublenode in the dynamic heap has a corresponding
         bit in the markbits vector. (For any doublenode in the heap,
-        the index of its mark bit is determined by subtracing the
+        the index of its mark bit is determined by subtracting the
         address of the start of the heap from the address of the
         object and dividing the result by 8 or 16.) The GC knows the
         markbit index of the free pointer, so determining that the
@@ -1114,7 +1114,7 @@ L1
               </footnote>
 	      , </emphasis>the vector which contains the
 	      internal symbols of the current package is marked on
-	      entry to the mark phasebut the symbols themselves are
+	      entry to the mark phase, but the symbols themselves are
 	      not marked at this time. Near the end of the mark phase,
 	      symbols referenced from this vector which are
 	      not otherwise marked are marked if and only if they're
@@ -1149,7 +1149,7 @@ L1
 	(size_of_doublenode * &lt;the number of unmarked markbits that
 	precede it>)) or alternately (&lt;the base of the heap> +
 	(size_of_doublenode * &lt;the number of marked markbits that
-	preced it &gt;)). Rather than count the number of preceding
+	precede it &gt;)). Rather than count the number of preceding
 	markbits each time, the relocation table is used to precompute
 	an approximation of the forwarding addresses for all
 	doublewords. Given this approximate address and a pointer into
@@ -1221,7 +1221,7 @@ L1
         invoked the GC. If sufficient memory has been freed to satisfy
         any allocation request that may have triggered the GC, the
         exception handler returns; otherwise, a "seriously low on
-        memory" condition is signalled, possibly after releasing a
+        memory" condition is signaled, possibly after releasing a
         small emergency pool of memory.</para>
       </sect2>
     </sect1>
@@ -1247,7 +1247,7 @@ L1
 	</listitem>
 	<listitem>
 	  <para>old objects can only point to newer objects as the
-	  result of adestructive modification (e.g., via
+	  result of a destructive modification (e.g., via
 	  SETF.)</para>
 	</listitem>
       </itemizedlist>
@@ -1292,7 +1292,7 @@ L1
       given GC is "ephemeral",</para>
       <itemizedlist>
         <listitem>
-	  <para>the "base of the heap" used to determine anobject's
+	  <para>the "base of the heap" used to determine an object's
 	  markbit address is the base of the generation
 	  being collected;</para>
 	</listitem>
@@ -1309,11 +1309,11 @@ L1
 	</listitem>
         <listitem>
 	  <para>the intergenerational references table is used to
-	  findadditional roots for the mark and forward phases. If a
+	  find additional roots for the mark and forward phases. If a
 	  bit is set inthe intergenerational references table, that
-	  means that thecorresponding doubleword (in some "old"
-	  generation, insome "earlier" part of the heap) may have had
-	  a pointerto an object in a younger generation stored into
+	  means that the corresponding doubleword (in some "old"
+	  generation, in some "earlier" part of the heap) may have had
+	  a pointer to an object in a younger generation stored into
 	  it.</para>
 	</listitem>
       
@@ -1428,7 +1428,7 @@ L1
         but we may need to give similar treatment to foreign objects
         that are introduced to the lisp runtime in other ways (as
         function arguments, return values, SLOT-VALUE results, etc. as
-        well as those instances that're created under lisp
+        well as those instances that are created under lisp
         control.)</para>
         <para>This doesn't all work yet (in fact, not much of it works
         yet); in practice, this has not yet been as much of a problem

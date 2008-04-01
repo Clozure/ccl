@@ -156,7 +156,7 @@
         </listitem>
         <listitem>
           <para>Configuring a shell script so &CCL; can locate
-          necessary library files and other auxilliary files.</para>
+          necessary library files and other auxiliary files.</para>
         </listitem>
       </orderedlist>
 
@@ -199,7 +199,7 @@ shell&gt; tar xvzf <emphasis>path-to-downloaded-openmcl-archive.tar.gz</emphasis
       distributed with &CCL; before using it.</para>
       </sect2>
 
-      <sect2 id="The-openmcl-Shell-Script"><title>The openmcl Shell Script"</title>
+      <sect2 id="The-openmcl-Shell-Script"><title>The openmcl Shell Script</title>
       <para>&CCL; needs to be able to find the
       <literal>ccl</literal> directory in order to support features
       such as <literal>require</literal> and
@@ -236,7 +236,7 @@ shell&gt; tar xvzf <emphasis>path-to-downloaded-openmcl-archive.tar.gz</emphasis
             openmcl script will not override it.The shell script sets
             a local variable (<literal>OPENMCL_KERNEL</literal>) to
             the standard name of the &CCL; kernel approprate for the
-            platform (asdetermined by 'uname -s'.) You might prefer to
+            platform (as determined by 'uname -s'.) You might prefer to
             set this variable manually in the shell script</para>
           </listitem>
 
@@ -245,7 +245,7 @@ shell&gt; tar xvzf <emphasis>path-to-downloaded-openmcl-archive.tar.gz</emphasis
             example:<literal>$ chmod +x
             ~/openmcl/ccl/scripts/openmcl64</literal>This command
             grants execute permission to the named script. If you
-            areusing a 32-bit platform, substitute "openmcl" in place
+            are using a 32-bit platform, substitute "openmcl" in place
             of "openmcl64".
             <warning>
 	      <para>The above command won't work if you are not the
@@ -308,7 +308,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
         up. It does this by executing <literal>(load
         "home:openmcl-init")</literal>.  If it is unable to load the
         file (for example because it does not exist) no action is
-        taken; an error is not signalled.</para>
+        taken; an error is not signaled.</para>
         <para>The <literal>"home:"</literal> prefix to the filename is
         a Common Lisp logical host, which &CCL; initializes to refer
         to your home directory, so this looks for either of the files
@@ -413,19 +413,19 @@ SLIME home page.</para>
 	    GNU Emacs,these instructions should still work; SLIME
 	    supports XEmacs Version21. Mac OS X includes an Emacs
 	    installation.  If you want to look into different versions,
-	    you can check out theEmacsWiki, whichmaintains a
+	    you can check out theEmacsWiki, which maintains a
 	    page,EmacsForMacOS,that provides much more information
 	    about using Emacs on the Mac.
             <warning>
               <para>A popular version of Emacs among Mac users is
               Aquamacs. This application is a version of GNU Emacs
               with a number of customizations meant to make it behave
-              more like a standard Maciontosh application, with
+              more like a standard Macintosh application, with
               windows, a menubar, etc.  Aquamacs includes SLIME; if
               you like Aquamacs then you can use SLIME right away,
               without getting and installing it separately. You just
               need to tell SLIME where to find your installation of
-              &CCL;. (See FIXTHIS.)</para>
+              &CCL;.</para>
             </warning>
 	  </para>
 	  </listitem>
@@ -435,7 +435,7 @@ SLIME home page.</para>
             &CCL; in some directory other
             than<literal>"~/openmcl/ccl"</literal> then these
             instructions still work, but you must remember to use your
-            path to your ccl directory instead of theone that we give
+            path to your ccl directory instead of the one that we give
             here.</para>
           </listitem>
           <listitem>
@@ -444,7 +444,7 @@ SLIME home page.</para>
             doesn't exist on your system, you can just create it.If
             you prefer to install Emacs add-ons in some place other
             than<literal>"~/emacs/site/"</literal> then you must
-            remember to use your path toEmacs add-ons in place of
+            remember to use your path to Emacs add-ons in place of
             ours.</para>
           </listitem>
         

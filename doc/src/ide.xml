@@ -147,7 +147,7 @@
         value. The information displayed varies from the very simple, in
         the case of a simple data value such as a character, to the
         complex, in the case of structured data such as lists or CLOS
-        objects. The lefthand column of the window's display shows the
+        objects. The left-hand column of the window's display shows the
         names of the object's attributes; the righthand column shows the
         values associated with those attributes. You can inspect the
         values in the righthand column by double-clicking them.</para>
@@ -188,7 +188,7 @@
       load features defined in these directories by
       using <code>REQUIRE</code>. For example, if you want to use the
       Cocoa features of &CCL; from a terminal session (or from an Emacs
-      session using SLIE or ILISP), you can evaluate <code>(require
+      session using SLIME or ILISP), you can evaluate <code>(require
         :cocoa)</code>.</para>
   </sect1>
 
@@ -318,7 +318,7 @@
       <varlistentry>
         <term><varname>application-class</varname></term>
         <listitem>
-          <para>The name of the application's CLOS class. The defaut
+          <para>The name of the application's CLOS class. The default
             value is the class provided by &CCL; for graphical
             applications. Supply the name of your application class if you
             implement one. If not, &CCL; uses the default class.</para>
@@ -347,7 +347,7 @@
     inconvenient. For example, in the current version it provides no
     easy way to specify an application delegate different from the
     default. If you find the current limitations
-    of <code>BUILD-APPLICATION</code> too restrictive, and want to rty
+    of <code>BUILD-APPLICATION</code> too restrictive, and want to try
     extending it for your use, you can find the source code for it
     in "ccl/cocoa-ide/build-application.lisp".</para>
 

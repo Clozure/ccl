@@ -37,7 +37,7 @@
 	    <para>A buffered bi-directional stream over a TCP/IP connection.
 	    tcp-stream is a subclass of stream, and you can read and write to it
 	    using all the usual stream functions. Created by (make-socket
-	    :addess-family :internet :type :stream :connect :active ...) or by
+	    :address-family :internet :type :stream :connect :active ...) or by
 	    (accept-connection ...).</para>
 	  </listitem>
 	</varlistentry>

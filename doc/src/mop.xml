@@ -342,7 +342,7 @@
       effectively a (large, complicated) shared data structure; it's
       not generally practical for a thread to request exclusive access
       to all of CLOS, and the effects of volitional modification of
-      the CLOS hierarchy (via clas redefinition, CHANGE-CLASS, etc) in
+      the CLOS hierarchy (via class redefinition, CHANGE-CLASS, etc) in
       a multithreaded environment aren't always tractable.</para>
       <para>Native threads exacerbate this problem (in that they
       increase the opportunities for concurrent modification and
