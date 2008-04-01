@@ -10,16 +10,16 @@
 ]>
   <chapter id="Implementation-Details-of-CCL">
     <title>Implementation Details of &CCL;</title>
-    <para>This chapter describes many aspects of &CCL;'s
-    implementation as of (roughly) version 1.1.  Details vary a bit
-    between the three archutectures (PPC32, PPC64, and X86-64)
+    <para>This chapter describes many aspects of OpenMCL's
+    implementation as of (roughly) version 1.1. Details vary a bit
+    between the three architectures (PPC32, PPC64, and x86-64)
     currently supported and those details change over time, so the
     definitive reference is the source code (especially some files in
     the ccl/compiler/ directory whose names contain the string "arch"
-    and some files in the ccl/lisp-kernel/ directory whose namee
-    contain the string "constants".)  Hopefully, this chapter will
-    make it easier for someone who's interested to read and understand
-    the contents of those files.</para>
+    and some files in the ccl/lisp-kernel/ directory whose names
+    contain the string "constants".) Hopefully, this chapter will make
+    it easier for someone who's interested to read and understand the
+    contents of those files.</para>
 
     <sect1 id="Threads-and-exceptions">
       <title>Threads and exceptions</title>
@@ -112,7 +112,7 @@
         process both asynchronous OS-level events (such as the result
         of the keyboard driver noticing that ^C or ^Z has been
         pressed) and synchronous hardware-level events (like trying to
-        execute and illegal instruction or access protected memory.)
+        execute an illegal instruction or access protected memory.)
         It makes some sense to defer ("block") handling of
         aysnchronous signals so that some critical code sequences
         complete without interruption; since it's generally not
@@ -150,23 +150,26 @@
         handler doesn't claim to handle debugging-related exceptions
         (from breakpoints or single-step operations), it's possible to
         use GDB to debug &CCL;.</para>
-        <para>On platforms where signal handling and debugging don't get in each
-other's way, a signal handler is entered with all signals blocked.
-(This behavior is specified in the call to the sigaction() function
-which established the signal handler.)  The signal handler recieves
-three arguments from the OS kernel; the first is an intger which
-identifies the signal, the second is a pointer to an object of
-type "siginfo_t", which may or may not contain a few fields that
-would help to identify the cause of the exception, and the third
-argument is a pointer to a data structure (called a "ucontext"
-or something similar) which contains machine-dependent information
-about the state of the tread at the time that the exception/signal
-occurred.  While asynchronous signals are blocked, the signal handler
-stores the pointer to its third argument (the "signal context") in
-a field in the current thread's TCR, sets some bits in another TCR
-field to indicate that the thread is now waiting to handle an
-exception, unblocks asynchronous signals, and waits for a global
-exception lock which serializes exception processing.</para>
+        <para>On platforms where signal handling and debugging don't
+        get in each other's way, a signal handler is entered with all
+        signals blocked.  (This behavior is specified in the call to
+        the sigaction() function which established the signal
+        handler.)  The signal handler recieves three arguments from
+        the OS kernel; the first is an intger which identifies the
+        signal, the second is a pointer to an object of type
+        "siginfo_t", which may or may not contain a few fields that
+        would help to identify the cause of the exception, and the
+        third argument is a pointer to a data structure (called a
+        "ucontext" or something similar) which contains
+        machine-dependent information about the state of the tread at
+        the time that the exception/signal occurred.  While
+        asynchronous signals are blocked, the signal handler stores
+        the pointer to its third argument (the "signal context") in a
+        field in the current thread's TCR, sets some bits in another
+        TCR field to indicate that the thread is now waiting to handle
+        an exception, unblocks asynchronous signals, and waits for a
+        global exception lock which serializes exception
+        processing.</para>
         <para>On Darwin, the Mach exception thread creates a signal
         context (and maybe a siginfo_t structure), stores the signal
         context in the thread's TCR, sets the TCR field wich describes
@@ -180,20 +183,21 @@ exception lock which serializes exception processing.</para>
         complication: the OS kernel ordinarily allocates the signal
         context and siginfo structures on the stack of the thread
         which received the signal; in practice, that means "wherever
-        RSP is pointing."  &CCL;'s require that the thread's value
-        stack - where RSP is usually pointing while lisp code is
-        running - contain only "nodes" (properly tagged lisp objects),
-        and scribbling a signal context all over the value stack would
-        violate this requirement.  To maintain consistency, the
-        sigaltstack() mechanism is used to cause the signal to be
-        delivered on (and the signal context and siginfo to be
-        allocated on) a special stack area (the last few pages of the
-        thread's cntrol stack, in practice.  When the signal handler
-        runs, it (carefully) copies the signal context and siginfo to
-        the thread's control stack and makes RSP point into that stack
-        before invoking the "real" signal handler.  (The effect of
-        this hack is that the "real" signal handler always runs on the
-        thread's control stack.)</para>
+        RSP is pointing."  &CCL;'s <xref
+        linkend="Register-and-stack-usage-conventions"/> require that
+        the thread's value stack - where RSP is usually pointing while
+        lisp code is running - contain only "nodes" (properly tagged
+        lisp objects), and scribbling a signal context all over the
+        value stack would violate this requirement.  To maintain
+        consistency, the sigaltstack() mechanism is used to cause the
+        signal to be delivered on (and the signal context and siginfo
+        to be allocated on) a special stack area (the last few pages
+        of the thread's cntrol stack, in practice.  When the signal
+        handler runs, it (carefully) copies the signal context and
+        siginfo to the thread's control stack and makes RSP point into
+        that stack before invoking the "real" signal handler.  (The
+        effect of this hack is that the "real" signal handler always
+        runs on the thread's control stack.)</para>
         <para>Once the exception handler has obtained the global
         exception lock, it uses the values of the signal number,
         siginfo_t, and signal context arguments to determine the
@@ -213,7 +217,7 @@ exception lock which serializes exception processing.</para>
         reports the exception as "unhandled", and the kernel debugger
         is invoked.</para>
         <para>If the kernel exception handler identifies the
-        exception' cause as being a transient out-of-memory condition
+        exception's cause as being a transient out-of-memory condition
         (indicating that the current thread needs more memory to cons
         in), it tries to make that memory available.  In some cases,
         doing so involves invoking the GC.</para>
@@ -221,8 +225,8 @@ exception lock which serializes exception processing.</para>
 
       <sect2 id="Threads-comma---exceptions-comma---and-the-GC">
 	<title>Threads, exceptions, and the GC</title>
-        <para>&CCL;'s GC is not concurrent: when the GC is invoked
-        in response to an exception in a particular thread, all other
+        <para>&CCL;'s GC is not concurrent: when the GC is invoked in
+        response to an exception in a particular thread, all other
         lisp threads must stop until the GC's work is done.  The
         thread that triggered the GC iterates over the global TCR
         list, sending each other thread a distinguished "suspend"
@@ -231,10 +235,10 @@ exception lock which serializes exception processing.</para>
         received the "suspend" signal and responded appropriatedly.
         Once all other threads have acknowledged the request to
         suspend themselves, the GC thread can run the GC proper (after
-        doing any necessary .)  Once the GC's completed its work, the
-        thread that invoked the GC iterates over the global TCR list,
-        raising a per-thread "resume" semaphore for each other
-        thread.</para>
+        doing any necessary <xref linkend="PC-lusering"/>.)  Once the
+        GC's completed its work, the thread that invoked the GC
+        iterates over the global TCR list, raising a per-thread
+        "resume" semaphore for each other thread.</para>
         <para>The signal handler for the asynchronous "suspend" signal
         is entered with all asynchronous signals blocked.  It saves
         its signal-context argument in a TCR slot, raises the tcr's
@@ -257,36 +261,60 @@ exception lock which serializes exception processing.</para>
 
 	<itemizedlist>
           <listitem>
-<para>On both PPC and x86-64 platforms, consing isn't fully atomic.It takes at least a few instructions to allocate an object in memory(and slap a header on it if necesssary); if a thread is interrupted inthe middle of that instruction sequence, the new object may or may nothave been created or fully initialized at the point in time that theinterrupt occurred.  (There are actually a few different states ofpartial initialization)</para>
-</listitem>
+	    <para>On both PPC and x86-64 platforms, consing isn't
+	    fully atomic.It takes at least a few instructions to
+	    allocate an object in memory(and slap a header on it if
+	    necesssary); if a thread is interrupted inthe middle of
+	    that instruction sequence, the new object may or may
+	    nothave been created or fully initialized at the point in
+	    time that theinterrupt occurred.  (There are actually a
+	    few different states ofpartial initialization)</para>
+	  </listitem>
+	  <listitem>
+	    <para>On the PPC, the common act of building a lisp
+	    control stack frame involves allocating a four-word frame
+	    and storing three register values into that frame.  (The
+	    fourth word - the back pointer to the previous frame - is
+	    automatically set when the frame is allocated.)  The
+	    previous contents of those three words are unknown (there
+	    might have been a foreign stack frame at the same address a
+	    few instructions earlier),so interrupting a thread that's
+	    in the process of initializing a PPC control stack frame
+	    isn't GC-safe.</para>
+	  </listitem>
           <listitem>
-<para>On the PPC, the common act of building a lisp control stack frameinvolves allocating a four-word frame and storing three register valuesinto that frame.  (The fourth word - the back pointer to the previousframe - is automatically set when the frame is allocated.)  The previouscontents of those three words are unknown (there might have been aforeign stack frame at the same address a few instructions earlier),so interrupting a thread that's in the process of initializing aPPC control stack frame isn't GC-safe.</para>
-</listitem>
+	    <para>There are similar problems with the initialization
+	    of temp stackframes on the PPC.  (Allocation and
+	    initialization doesn't happen atomically, and the newly
+	    allocated stack memory may have undefined contents.)</para>
+	  </listitem>
           <listitem>
-<para>There are similar problems with the initialization of temp stackframes on the PPC.  (Allocation and initialization doesn't happenatomically, and the newly allocated stack memory may have undefinedcontents.)</para>
-</listitem>
+	    <para><xref linkend="The-ephemeral-GC"/>'s write barrier
+	    has to be implemented atomically (i.e.,both an
+	    intergenerational store and the update of a
+	    corresponding reference bit has to happen without
+	    interruption, or neither of these events can
+	    happen.)</para>
+	  </listitem>
           <listitem>
-<para>'s write barrier has to be implemented atomically (i.e.,both an intergenerational store and the update of a correspondingreference bit has to happen without interruption, or neither of theseevents can happen.)</para>
-</listitem>
-          <listitem>
-<para>There are a few more similar cases.</para>
-</listitem>
-        
+	    <para>There are a few more similar cases.</para>
+	  </listitem>
         </itemizedlist>
 
-        <para>Fortunately, the number of these non-atomic instruction sequences is
-small, and fortunately it's fairly easy for the interrupting thread
-to recognize when the interrupted thread is in the middle of such
-a sequence.  When this is detected, the interrupting thread modfies
-the state of the interrupted thread (modifying its PC and other
-registers) so that it is no longer in the middle of such a sequenece
-(it's either backed out of it or the remaining instructions are
-emulated.)</para>
-        <para>This works because (a) many of the troublesome instruction sequences
-are PPC-specific and it's relatively easy to partially disassemble the
-instructions surrounding the interrupted thread's PC on the PPC and
-(b) those instruction sequences are heavily stylized and intended to
-be easily recognized.</para>
+        <para>Fortunately, the number of these non-atomic instruction
+        sequences is small, and fortunately it's fairly easy for the
+        interrupting thread to recognize when the interrupted thread
+        is in the middle of such a sequence.  When this is detected,
+        the interrupting thread modfies the state of the interrupted
+        thread (modifying its PC and other registers) so that it is no
+        longer in the middle of such a sequenece (it's either backed
+        out of it or the remaining instructions are emulated.)</para>
+        <para>This works because (a) many of the troublesome
+        instruction sequences are PPC-specific and it's relatively
+        easy to partially disassemble the instructions surrounding the
+        interrupted thread's PC on the PPC and (b) those instruction
+        sequences are heavily stylized and intended to be easily
+        recognized.</para>
       </sect2>
     </sect1>
 
@@ -348,10 +376,12 @@ be easily recognized.</para>
         preemptively scheduled means that a GC could occur (because of
         activity in some other thread) on any instruction boundary,
         which in turn means that the compiler and runtime system must
-        follow precise at all times.</para>
+        follow precise <xref
+        linkend="Register-and-stack-usage-conventions"/> at all
+        times.</para>
         <para>Once we've decided that a given machine word is a node,
-        a describes how the node's value and type are encoded in that
-        machine word.</para>
+        a <xref linkend="Tagging-scheme"/> describes how the node's
+        value and type are encoded in that machine word.</para>
         <para>Most of this - so far - has discussed thigs from the
         GC's very low-level perspective.  From a much higher point of
         view, lisp functions accept nodes as arguments, return nodes
@@ -359,7 +389,8 @@ be easily recognized.</para>
         arguments in order to produce those results.  (In many cases,
         the operations in question involve raw non-node values.)
         Higher-level parts of the lisp type system (functions like
-        TYPE-OF and CLASS-OF, etc.) depend on the .</para>
+        TYPE-OF and CLASS-OF, etc.) depend on the <xref
+        linkend="Tagging-scheme"/>.</para>
       </sect2>
 
       <sect2 id="pc-locatives-on-the-PPC">
@@ -399,7 +430,7 @@ be easily recognized.</para>
         instruction.  Some cases of function call and return might
         also use the PPC's "count register" (ctr), and if either the
         lr or ctr needs to be stored in memory it needs to first be
-        copied to a general-purpose registers.</para>
+        copied to a general-purpose register.</para>
         <para>&CCL;'s GC understands that certain registers contain
         these special "pc-locatives" (locatives that point into
         CODE-VECTOR objects); it contains specal support for finding
@@ -438,22 +469,23 @@ be easily recognized.</para>
 	      the value to which the value-stack pointer (see below)
 	      should be restored on function exit.  On the PPC, the GC
 	      has to look at control-stack frames, identify which of
-	      those frames are lisp frames, and treat the contents
-	      ofthe saved function slot as a node (and handle the
-	      return address locative specially.)  On x86-64, the
-	      control stack is used for dynamic-extent allocation of
-	      immediate objects.  Since the control stack never
-	      contains nodes on x86-64, the GC ignores it on that
-	      platform.  Alignment of the control stack follows the
-	      ABI conventions of the platform (at least at any point
-	      in time where foreign code could run.)  On PPC, the r1
+	      those frames are lisp frames, and treat the contents of
+	      the saved function slot as a node (and handle the return
+	      address locative specially.)  On x86-64, the control
+	      stack is used for dynamic-extent allocation of immediate
+	      objects.  Since the control stack never contains nodes
+	      on x86-64, the GC ignores it on that platform.
+	      Alignment of the control stack follows the ABI
+	      conventions of the platform (at least at any point in
+	      time where foreign code could run.)  On PPC, the r1
 	      register always points to the top of the current
 	      thread's control stack; on x86-64, the RSP register
 	      points to the top of the current thread's control stack
 	      when the thread is running foreign code and the address
 	      of the top of the control stack is kept in the thread's
-	      TCR see when not running foreign code.  The control
-	      stack "grows down."</para>
+	      TCR (see <xref linkend="The-Thread-Context-Record"/>
+	      when not running foreign code.  The control stack "grows
+	      down."</para>
 	    </listitem>
             <listitem>
 	      <para>A "value stack".  On both platforms, all values on
@@ -538,57 +570,46 @@ be easily recognized.</para>
           <para>On x86-64, the static register partitioning scheme involves:</para>
 	  <itemizedlist>
             <listitem>
-	      <para>(only) two "immediate" registers.The RAX and RDX
-	      registers are used as the implicit operands andresults
-	      of some extended-precision multiply and divide
-	      instructionswhich generally involve non-node values;
-	      since their use in theseinstructions means that they
-	      can't be guaranteed to contain nodevalues at all times,
-	      it's natural to put these registers in the"immediate"
-	      set.  RAX is generally given the symbolic name
-	      "imm0",and RDX is given the symbolic name "imm1"; you
-	      may see these namesin disassembled code, usually in
-	      operations involving type checking,array indexing, and
+	      <para>(only) three "immediate" registers.</para>
+	      <para>The RAX, RCX, and RDX registers are used as the
+	      implicit operands and results of some extended-precision
+	      multiply and divide instructions which generally involve
+	      non-node values; since their use in these instructions
+	      means that they can't be guaranteed to contain node
+	      values at all times, it's natural to put these registers
+	      in the "immediate" set. RAX is generally given the
+	      symbolic name "imm0", RDX is given the symbolic name
+	      "imm1" and RCX is given the symbolic name "imm2"; you
+	      may see these names in disassembled code, usually in
+	      operations involving type checking, array indexing, and
 	      foreign memory and function access.</para>
 	    </listitem>
             <listitem>
-	      <para>(only) two "dedicated" registers.RSP and RBP have
-	      dedicated functionality dictated by the hardwareand
-	      calling conventions.  (There are a few places where RBP
-	      istemporarily used as an extra immediate
-	      register.)</para>
+	      <para>(only) two "dedicated" registers.</para>
+	      <para>RSP and RBP have
+	      dedicated functionality dictated by the hardware and
+	      calling conventions.</para>
 	    </listitem>
             <listitem>
-	      <para>12 "node" registers.All other registers (RBX, RCX,
-	      RSI, RDI, and R8-R15) are asserted tocontain node values
-	      at (almost) all times; legacy "string" operationsthat
-	      implicitly use RSI and/or RDI are not used.  Shift and
-	      rotateintructions which shift/rotate by a variable
-	      number of bits arerequired by the architecture to use
-	      the low byte of RCX (the traditionalCL register) as the
-	      implicit shift count; when it's necessary to keepa
-	      non-node shift count in the low byte of RCX, the upper 7
-	      bytes ofthe register are zeroed (so that
-	      misinterpetation of the immediatevalue in RCX as a node
-	      will not have negative GC affects.  (The GCmight briefly
-	      treate it as a node, but since it's not pointing
-	      anywherenear the lisp heap it'll soon lose interest in
-	      it.)Legacy instructions that use RCX (or some portions
-	      of it) as a loopcounter can not be used (since such
-	      instructions might introducenon-node values into
-	      RCX.)</para>
-</listitem>
+	      <para>11 "node" registers.</para>
+	      <para>All other registers (RBX, RSI, RDI, and R8-R15)
+	      are asserted to contain node values at (almost) all
+	      times; legacy "string" operationsthat implicitly use RSI
+	      and/or RDI are not used.</para>
+	    </listitem>
 	  </itemizedlist>
-          <para>On the PPC, the static register partitioning scheme involves:</para>
+          <para>On the PPC, the static register partitioning scheme
+          involves:</para>
 
 	  <itemizedlist>
             <listitem>
-	      <para>6 "immediate" registersRegisters r3-r8 are given
-	      the symbolic names imm0-imm5.  As a RISCarchitecture
+	      <para>6 "immediate" registers.</para>
+	      <para>Registers r3-r8 are given
+	      the symbolic names imm0-imm5.  As a RISC architecture
 	      with simpler addressing modes, the PPC probably
-	      usesimmediate registers a bit more often than the CISC
-	      x86-64 does, butthey're generally used for the same sort
-	      of things (type checking,array indexing, FFI,
+	      uses immediate registers a bit more often than the CISC
+	      x86-64 does, but they're generally used for the same sort
+	      of things (type checking, array indexing, FFI,
 	      etc.)</para>
 	    </listitem>
 	    <listitem>
@@ -597,9 +618,9 @@ be easily recognized.</para>
 		<listitem>
 		  <para>r0 (symbolic name rzero) always contains the
 		  value 0 when runninglisp code.  Its value is
-		  sometimes read as 0 when it's used as thebase
+		  sometimes read as 0 when it's used as the base
 		  register in a memory address; keeping the value 0
-		  there issometimes convenient and avoids
+		  there is sometimes convenient and avoids
 		  asymmetry.</para>
 		</listitem>
 		<listitem>
@@ -608,7 +629,7 @@ be easily recognized.</para>
 		</listitem>
                 <listitem>
 		  <para>r2 is used to hold the current thread's TCR on
-		  ppc64 systems; it'snot used on ppc32.</para>
+		  ppc64 systems; it's not used on ppc32.</para>
 		</listitem>
                 <listitem>
 		  <para>r9 and r10 (symbolic names allocptr and
@@ -625,10 +646,12 @@ be easily recognized.</para>
 		  interpreted.</para>
 		</listitem>
                 <listitem>
-		  <para>r12 (symbolic name tsp) holds the top of the current thread's temp stack.</para>
+		  <para>r12 (symbolic name tsp) holds the top of the
+		  current thread's temp stack.</para>
 		</listitem>
 		<listitem>
-		  <para>r13 is used to hold the TCR on PPC32 sytems; it's not used on PPC64.</para>
+		  <para>r13 is used to hold the TCR on PPC32 sytems;
+		  it's not used on PPC64.</para>
 		</listitem>
 		<listitem>
 		  <para>r14 (symbolic name loc-pc) is used to copy
@@ -652,8 +675,9 @@ be easily recognized.</para>
 	      </para>
 	    </listitem>
             <listitem>
-	      <para>17 "node" registersr15-r31 are always treated as
-	      node registers</para>
+	      <para>17 "node" registers</para>
+	      <para>r15-r31 are always treated as node
+	      registers</para>
 	    </listitem>
 	    
           </itemizedlist>
@@ -729,7 +753,7 @@ be easily recognized.</para>
 	  <listitem>
 	    <para>CONS cells always contain exactly 2 elements and are
 	    usually fairly common.It therefore makes sense to give
-	    CONS cells their own tag.  Unlike thefixnum case - where a
+	    CONS cells their own tag.  Unlike the fixnum case - where a
 	    tag value of 0 had positive implications - theredoesn't
 	    seem to be any advantage to using any particular value.
 	    (A longtime ago - in the case of 68K MCL - the CONS tag
@@ -743,7 +767,7 @@ be easily recognized.</para>
 	    </para>
 	  </listitem>
 	  <listitem>
-	    <para>Any way you look at it, NIL is a bit ... unusual.NIL
+	    <para>Any way you look at it, NIL is a bit ... unusual. NIL
 	    is both a SYMBOL and a LIST (as well as being a canonical
 	    truth value and probably a few other things.)  Its role as
 	    a LIST is probably much more important to most programs
@@ -768,74 +792,74 @@ be easily recognized.</para>
 	    from a tagged pointer as a CONS cell's CDR and CAR would be.
 	    NIL's pname is set to NIL (SYMBOL-NAME checks for this and
 	    returns the string "NIL"), and LISTP (and therefore safe
-	    CAR and CDR) have to check for (OR NULL CONSP).At least in
+	    CAR and CDR) have to check for (OR NULL CONSP). At least in
 	    the case of CAR and CDR, the fact that the PPC has multiple
 	    condition-code fields keeps that extra test from
 	    being prohibitively expensive.</para>
 	  </listitem>
 	  <listitem>
-	    <para>Some objects are immediate.(but not FIXNUMs).This is
+	    <para>Some objects are immediate (but not FIXNUMs).This is
 	    true of CHARACTERs and, on 64-bit platforms,
 	    SINGLE-FLOATs.It's also true of some nodes used in the
-	    runtime system (specialvalues used to indicate unbound
-	    variables and slots, for instance.)On 64-bit platforms,
-	    SINGLE-FLOATs have their own unique tag (makingthem a
+	    runtime system (special values used to indicate unbound
+	    variables and slots, for instance.) On 64-bit platforms,
+	    SINGLE-FLOATs have their own unique tag (making them a
 	    little easier to recognize; on all platforms, CHARACTERs
-	    sharea tag with other immediate objects (unbound markers)
-	    but are easyto recognize (by looking at several of their
-	    low bits.)  The GCtreats any node with an immediate tag
-	    (and any node with a fixnumtag) as a leaf.</para>
+	    share a tag with other immediate objects (unbound markers)
+	    but are easy to recognize (by looking at several of their
+	    low bits.)  The GC treats any node with an immediate tag
+	    (and any node with a fixnum tag) as a leaf.</para>
 	  </listitem>
           <listitem>
 	    <para>There are some advantages to treating everything
 	    else - memory-allocated objects that aren't CONS cells -
 	    uniformly.There are some disadvantages to that uniform
 	    treatment as well, and the treatment of "memory-allocated
-	    non-CONS objects" isn't entirely uniformaccross all
+	    non-CONS objects" isn't entirely uniform accross all
 	    &CCL; implementations.  Let's first pretend that
 	    the treatment is uniform, then discuss the ways in which it
 	    isn't.The "uniform approach" is to treat all
 	    memory-allocated non-CONS objectsas if they were vectors;
-	    this use of the term is a little looser thanwhat's implied
+	    this use of the term is a little looser than what's implied
 	    by the CL VECTOR type.  &CCL; actually uses the
-	    term"uvector" to mean "a memory-allocated lisp object
+	    term "uvector" to mean "a memory-allocated lisp object
 	    other than a CONS cell,whose first word is a header which
-	    describes the object's type andthe number of elements that
-	    it contains."  In this view, a SYMBOL isa UVECTOR, as is a
+	    describes the object's type and the number of elements that
+	    it contains."  In this view, a SYMBOL is a UVECTOR, as is a
 	    STRING, a STANDARD-INSTANCE, a CL array or vector,a
 	    FUNCTION, and even a DOUBLE-FLOAT.In the PPC
 	    implementations (where things are a little more
 	    ... uniform),a single tag value is used to denote any
-	    uvector; in order to determinesomething more specific
-	    about the type of the object in question, it'snecessary to
+	    uvector; in order to determine something more specific
+	    about the type of the object in question, it's necessary to
 	    fetch the low byte of the header word from memory.  On
-	    thex86-64 platform, certain types of uvectors - SYMBOLs
+	    the x86-64 platform, certain types of uvectors - SYMBOLs
 	    and FUNCTIONs -are given their own unique tags.  The good
-	    news about the x86-64 approachis that SYMBOLs and
-	    FUNCTIONs can be recognized without referencingmemory; the
-	    slightly bad news is that primitive operations that workon
+	    news about the x86-64 approach is that SYMBOLs and
+	    FUNCTIONs can be recognized without referencing memory; the
+	    slightly bad news is that primitive operations that work on
 	    UVECTOR-tagged objects - like the function CCL:UVREF -
-	    don't workon SYMBOLs or FUNCTIONs on x86-64 (but -do- work
-	    on those types of objectsin the PPC ports.)The header word
-	    which precedes a UVECTOR's data in memory contains 8bits
+	    don't work on SYMBOLs or FUNCTIONs on x86-64 (but -do- work
+	    on those types of objects in the PPC ports.) The header word
+	    which precedes a UVECTOR's data in memory contains 8 bits
 	    of type information in the low byte and either 24 or 56
 	    bits of"element-count" information in the rest of the
-	    word.  (This is wherethe sometimes-limiting value of 2^24
-	    for ARRAY-TOTAL-SIZE-LIMIT onPPC32 platforms comes from.)
-	    The low byte of the header - sometimescalled the uvector's
-	    subtag - is itself tagged (which means thatthe header is
-	    tagged.)  The (3 or 4) tag bits in the subtag are usedto
+	    word.  (This is where the sometimes-limiting value of 2^24
+	    for ARRAY-TOTAL-SIZE-LIMIT on PPC32 platforms comes from.)
+	    The low byte of the header - sometimes called the uvector's
+	    subtag - is itself tagged (which means that the header is
+	    tagged.)  The (3 or 4) tag bits in the subtag are used to
 	    determine whether the uvector's elements are nodes or
 	    immediates.(A UVECTOR whose elements are nodes is called a
-	    GVECTOR; a UVECTORwhose elements are immediates is called
-	    an IVECTOR.  This terminologycame from Spice Lisp, which
-	    was a predecessor of CMUCL.)Even though a uvector header
-	    is tagged, a header is not a node.  There'sno (supported)
-	    way to get your hands on one in lisp and doing so couldbe
+	    GVECTOR; a UVECTOR whose elements are immediates is called
+	    an IVECTOR.  This terminology came from Spice Lisp, which
+	    was a predecessor of CMUCL.)  Even though a uvector header
+	    is tagged, a header is not a node.  There's no (supported)
+	    way to get your hands on one in lisp and doing so could be
 	    dangerous.  (If the value of a header wound up in a lisp
-	    noderegister and that register wound up getting pushed on
-	    a thread's valuestack, the GC might misinterpret that
-	    situation to mean that therewas a stack-allocated UVECTOR
+	    node register and that register wound up getting pushed on
+	    a thread's value stack, the GC might misinterpret that
+	    situation to mean that there was a stack-allocated UVECTOR
 	    on the value stack.)</para>
 	  </listitem>
         
@@ -844,21 +868,20 @@ be easily recognized.</para>
     </sect1>
 
     <sect1 id="Heap-Allocation">
-      <title>Heap Allocation</title> <para>When the &CCL; kernel
-      first starts up, a large contiguous chunk of the process's
-      address space is mapped as "anonymous, no access"
-      memory. ("Large" means different things in different contexts;
-      on LinuxPPC32, it means "about 1 gigabyte", on DarwinPPC32, it
-      means "about 2 gigabytes", and on current 64-bit platforms it
-      ranges from 128 to 512 gigabytes, depending on OS. These values
-      are both defaults and upper limits; the --heap-reserve
-      argument can be used to try to reserve less than the
-      default.)</para>
+      <title>Heap Allocation</title> <para>When the &CCL; kernel first
+      starts up, a large contiguous chunk of the process's address
+      space is mapped as "anonymous, no access" memory. ("Large" means
+      different things in different contexts; on LinuxPPC32, it means
+      "about 1 gigabyte", on DarwinPPC32, it means "about 2
+      gigabytes", and on current 64-bit platforms it ranges from 128
+      to 512 gigabytes, depending on OS. These values are both
+      defaults and upper limits; the --heap-reserve argument can be
+      used to try to reserve less than the default.)</para>
       <para>Reserving address space that can't (yet) be read or
       written to doesn't cost much; in particular, it doesn't require
       that correspinding swap space or physical memory be available.
       Marking the address range as being "mapped" helps to ensure that
-      other things (result from random calls to malloc(), dynamically
+      other things (results from random calls to malloc(), dynamically
       loaded shared libraries) won't be allocated in this region that
       lisp has reserved for its own heap growth.</para>
       <para>A small portion (around 1/32 on 32-bit platforms and 1/64
@@ -879,8 +902,8 @@ be easily recognized.</para>
 	<title>Per-thread object allocation</title>
         <para>Each lisp thread has a private "reserved memory
         segment"; when a thread starts up, its reserved memory segment
-        is empty.  PPC ports maintain the highest unallocated addres
-        and he lowest allocated address in the current segment in
+        is empty.  PPC ports maintain the highest unallocated address
+        and the lowest allocatable address in the current segment in
         registers when running lisp code; on x86-664, these values are
         maintained in the current threads's TCR.  (An "empty" heap
         segment is one whose high pointer and low pointer are equal.)
@@ -916,8 +939,8 @@ be easily recognized.</para>
   (STW ARG_Y 3 ALLOCPTR)        ; set the CAR
   (MR ARG_Z ALLOCPTR)           ; arg_z is the new CONS cell
   (RLWINM ALLOCPTR ALLOCPTR 0 0 28)     ; clear tag bits
-</programlisting>
-        <para>On x86-64, the idea's similar but the implementation is
+	</programlisting>
+	<para>On x86-64, the idea's similar but the implementation is
         different.  The high and low pointers to the current thread's
         reserved segment are kept in the TCR, which is addressed by
         the gs segment register. An x86-64 CONS cell is 16 bytes wide
@@ -991,11 +1014,11 @@ L1
         need it, for instance.)  It's also not guaranteed that lisp
         code would be able to "cleanly" signal an out-of-memory
         condition if lisp is ... out of memory</para>
-        <para>I don't know that I've ever seen an abrupt out-of-memory failure that
-wasn't preceeded by several minutes of excessive paging activity.  The
-most expedient course in cases like this is to either (a) use less memory
-or (b) get more memory; it's generally hard to use memory that you don't
-have.</para>
+	<para>I don't know that I've ever seen an abrupt out-of-memory
+	failure that wasn't preceeded by several minutes of excessive
+	paging activity.  The most expedient course in cases like this
+	is to either (a) use less memory or (b) get more memory; it's
+	generally hard to use memory that you don't have.</para>
       </sect2>
     </sect1>
 
@@ -1007,13 +1030,14 @@ have.</para>
       algorithms don't compact the live data but instead traverse the
       garbage to rebuild free-lists; their execution time is therefore
       a factor of the total heap size.)</para>
-      <para>As mentioned in , two auxiliary data structures
-      (proportional to the size of the lisp heap) are maintained. These are</para>
+      <para>As mentioned in <xref linkend="Heap-Allocation"/>, two
+      auxiliary data structures (proportional to the size of the lisp
+      heap) are maintained. These are</para>
       <orderedlist>
 	<listitem>
 	  <para>the markbits bitvector, which contains a bit for
-	  everydoublenode in the dynamic heap (plus a few extra words
-	  for alignmentand so that sub-bitvectors can start on word
+	  every doublenode in the dynamic heap (plus a few extra words
+	  for alignment and so that sub-bitvectors can start on word
 	  boundaries.)</para>
 	</listitem>
 	<listitem>
@@ -1041,7 +1065,7 @@ have.</para>
         zeroed before the mark phase begins. An object is
         <emphasis>marked</emphasis> if the markbits of all of its
         constituent doublewords are set and unmarked otherwise;
-        setting an object's markbits involves setting the corrsponding
+        setting an object's markbits involves setting the corresponding
         markbits of all constituent doublenodes in the object.</para>
         <para>The mark phase traverses each root. If the tag of the
         value of the root indicates that it's a non-immediate node
@@ -1062,7 +1086,7 @@ have.</para>
 	  </listitem>
 	  <listitem>
 	    <para>Otherwise, the object is a gvector. Recursively mark
-	    itselements.</para>
+	    its elements.</para>
 	  </listitem>
 	</orderedlist>
         <para>Marking an object thus involves ensuring that its mark
@@ -1084,23 +1108,23 @@ have.</para>
 	<listitem>
 	  <para>To support a feature called <emphasis>GCTWA
               <footnote>
-		<para>I believe that theacronym comes from MACLISP,
-		where it stood for "Garbage Collection ofTruly
+		<para>I believe that the acronym comes from MACLISP,
+		where it stood for "Garbage Collection of Truly
 		Worthless Atoms".</para>
               </footnote>
 	      , </emphasis>the vector which contains the
-	      internalsymbols of the current package is marked on
+	      internal symbols of the current package is marked on
 	      entry to the mark phasebut the symbols themselves are
-	      not marked at this time. Near the endof the mark phase,
+	      not marked at this time. Near the end of the mark phase,
 	      symbols referenced from this vector which are
-	      nototherwise marked are marked if and only if they're
-	      somehowdistinguishable from newly created symbols (by
-	      virtue of their havingfunction bindings, value bindings,
+	      not otherwise marked are marked if and only if they're
+	      somehow distinguishable from newly created symbols (by
+	      virtue of their having function bindings, value bindings,
 	      plists, or other attributes.)</para>
 	</listitem>
 	<listitem>
 	  <para>Pools have their first element set to NIL before any
-	  otherelements are marked.</para>
+	  other elements are marked.</para>
 	</listitem>
 	<listitem>
 	  <para>All hash tables have certain fields (used to cache
@@ -1113,9 +1137,9 @@ have.</para>
 	  them.</para>
 	</listitem>
 	</orderedlist>
-        <para>At the end of the mark phase, the markbits of all objects which
-	are transitively reachable from the roots are set and all other markbits
-	are clear.</para>
+        <para>At the end of the mark phase, the markbits of all
+        objects which are transitively reachable from the roots are
+        set and all other markbits are clear.</para>
       </sect2>
 
       <sect2 id="Relocation-phase">
@@ -1294,67 +1318,50 @@ have.</para>
 	</listitem>
       
       </itemizedlist>
-      <para>The intergenerational references table is maintained
-      indirectly: whenever a setf operation that may introduce an
-      intergenerational reference occurs, a pointer to the doubleword
-      being stored into is pushed onto the <emphasis>memo
-      buffer</emphasis>, which is a stack whos top is addressed by the
-      memo register. Whenever the memo buffer overflows<tip><para>A
-      guard page at the end of the memo buffer simplifies overflow
-      detection.</para></tip> when the EGC is active, the handler
-      scans the buffer and sets bits in the intergenerational
-      references table for each doubleword address it finds in the
-      buffer that belongs to some generation other than the youngest;
-      the same scan is performed on entry to any ephemeral GC.  After
-      (possibly) performing this scan, the handler resets the memo
-      register to point to the bottom of the memo stack; this means
-      that when the EGC is inactive, the memo buffer is constantly
-      being filled and emptied for no apparent reason.</para>
       <para>With one exception (the implicit setfs that occur on entry
       to and exit from the binding of a special variable), all setfs
       that might introduce an intergenerational reference must be
-      memoized.<tip><para>Note that the implicit setfs that occur when
+      memoized.@footnote{Note that the implicit setfs that occur when
       initializing an object - as in the case of a call to cons or
       vector - can't introduce intergenerational references, since the
       newly created object is always younger than the objects used to
-      initialize it.</para></tip> It's always safe to push any cons
-      cell or gvector locative onto the memo stack; it's never safe to
-      push anything else.</para>
+      initialize it.} It's always safe to push any cons cell or
+      gvector locative onto the memo stack; it's never safe to push
+      anything else.
+      </para>
+
       <para>Typically, the intergenerational references bitvector is
       sparse: a relatively small number of old locations are stored
       into, although some of them may have been stored into many
       times. The routine that scans the memoization buffer does a lot
       of work and usually does it fairly often; it uses a simple,
       brute-force method but might run faster if it was smarter about
-      recognizing addresses that it'd already seen.</para>
+      recognizing addresses that it'd already seen.
+      </para>
+
       <para>When the EGC mark and forward phases scan the
       intergenerational reference bits, they can clear any bits that
       denote doublewords that definitely do not contain
-      intergenerational references.</para>
+      intergenerational references.
+      </para>
     </sect1>
 
     <sect1 id="Fasl-files">
       <title>Fasl files</title>
-      <para>The information in this section was current in November
-      2004.  Saving and loading of Fasl files is implemented in
+      <para>Saving and loading of Fasl files is implemented in
       xdump/faslenv.lisp, level-0/nfasload.lisp, and lib/nfcomp.lisp.
       The information here is only an overview, which might help when
       reading the source.</para>
       <para>The &CCL; Fasl format is forked from the old MCL Fasl
       format; there are a few differences, but they are minor.  The
       name "nfasload" comes from the fact that this is the so-called
-      "new" Fasl system, which was true in 1986 or so.  The format has
-      held up well, although it would certainly need extensions to
-      deal with 64-bit data, and some other modernization might be
-      possible.</para>
+      "new" Fasl system, which was true in 1986 or so.  </para>
       <para>A Fasl file begins with a "file header", which contains
       version information and a count of the following "blocks".
       There's typically only one "block" per Fasl file.  The blocks
       are part of a mechanism for combining multiple logical files
       into a single physical file, in order to simplify the
-      distribution of precompiled programs.  (Nobody seems to be doing
-      anything interesting with this feature, at the moment, probably
-      because it isn't documented.)</para>
+      distribution of precompiled programs. </para>
       <para>Each block begins with a header for itself, which just
       describes the size of the data that follows.</para>
       <para>The data in each block is treated as a simple stream of
