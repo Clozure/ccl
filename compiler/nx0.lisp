@@ -1262,7 +1262,25 @@ Or something. Right? ~s ~s" var varbits))
                                  load-time-eval-token)
   (if q
      (setf (afunc-parent p) q))
-  (setf (afunc-name p) name)
+
+  ;; In the case of a method function, the name will get reset at load time to the
+  ;; method object.  However, during compilation, we want any inner functions to use
+  ;; the fully qualified method name, so store that.
+  (when (method-lambda-p lambda-form)
+    (setq name (or *nx-method-warning-name* name)))
+
+  (setf (afunc-name p)
+        (let ((parent-name (and (afunc-parent p) (afunc-name (afunc-parent p)))))
+          (if parent-name
+            (if (and (consp parent-name) (eq (%car parent-name) :internal))
+              (if name
+                `(:internal ,name ,@(cdr parent-name))
+                parent-name)
+              (if name
+                `(:internal ,name ,parent-name)
+                `(:internal ,parent-name)))
+            name)))
+
   (unless (lambda-expression-p lambda-form)
     (nx-error "~S is not a valid lambda expression." lambda-form))
   (let* ((*nx-current-function* p)
@@ -1285,8 +1303,7 @@ Or something. Right? ~s ~s" var varbits))
          (*nx-parsing-lambda-decls* nil)
          (*nx-next-method-var* (if q *nx-next-method-var*))
          (*nx-call-next-method-function* (if q *nx-call-next-method-function*))
-         (*nx-cur-func-name* (or (and (method-lambda-p lambda-form) *nx-method-warning-name*)
-                                name)))
+         (*nx-cur-func-name* name))
     (if (%non-empty-environment-p *nx-lexical-environment*)
       (setf (afunc-bits p) (logior (ash 1 $fbitnonnullenv) (the fixnum (afunc-bits p)))))
     (multiple-value-bind (body decls)
