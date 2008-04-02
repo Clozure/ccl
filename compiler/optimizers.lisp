@@ -1405,7 +1405,7 @@
                      (format (numeric-ctype-format ctype))
                      (type (if (eq class 'float)
                              (or format class)
-                             class)))
+                             (or class 'real))))
                 (cond ((and low (eql low high) (or (not (eq class 'float))
                                                    format))
                        `(eql ,thing ,low))
@@ -1443,7 +1443,8 @@
                             (typep ,temp ',(bounded-float 'double-float low high)))))))
                       (t
                        (let* ((temp (gensym)))
-                         (if (and (typep low 'fixnum) (typep high 'fixnum))
+                         (if (and (typep low 'fixnum) (typep high 'fixnum)
+                                  (eq class 'integer))
                            (setq type 'fixnum))
                          (if (or low high)
                            `(let* ((,temp ,thing))
