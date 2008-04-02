@@ -1052,7 +1052,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
 (defun check-pid (pid &optional (flags (logior  #$WNOHANG #$WUNTRACED)))
   (declare (fixnum pid))
   (rlet ((status :signed))
-    (let* ((retval (#_waitpid pid status flags)))
+    (let* ((retval (ff-call-ignoring-eintr (#_waitpid pid status flags))))
       (declare (fixnum retval))
       (if (= retval pid)
 	(pref status :signed)
