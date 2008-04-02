@@ -1,0 +1,48 @@
+This directory contains a partial Common Lisp standards compliance
+test suite.
+
+To run the tests, load doit.lsp.  This will load and
+run the tests.  To just load the tests, load gclload1.lsp
+and gclload2.lsp.
+
+Individual tests may be run by (rt:do-test '<test name>).
+
+Tests can be invoked from the makefile setting the enviroment variable
+LISP to the lisp executable to be tested, then invoking
+
+   make test
+     Run tests with test bodies EVALed.
+
+   make test-compiled
+     Run tests with test bodies compiled before being EVALed.
+
+Please tell me when you find incorrect test cases.
+
+	Paul Dietz
+	dietz@dls.net
+
+--------------------------------
+
+(30 Jun 2003) I've decided to add metainformation to the tests,
+in the form of :<attribute> <value> pairs after DEFTEST.  Also,
+I've added a DEFNOTE form to define note objects whose names
+can be attached to properties of tests, to enable selective
+disabling of classes of tests.
+
+The file doit.lsp disables some contentious tests under certain
+implementations using the note mechanism.  If any implementor
+wishes that some of these tests be inhibited in their implementation,
+please contact me and I will add code to do so.
+
+--------------------------------
+
+NOTE!!!
+
+This test suite is not intended to rank Common Lisp implementations.
+The tests have not be selected to reflect the importance or
+relative frequency of different CL features.  Implementations may
+even have extended the CL standard (arguably a good thing) in
+a way that causes certain tests to fail.
+
+
+

@@ -1,0 +1,12 @@
+;-*- Mode:     Lisp -*-
+;;;; Author:   Paul Dietz
+;;;; Created:  Sat Mar  7 23:30:22 1998
+;;;; Contains: Allegro CL defsystem for RT testing system
+
+(defsystem :rt-acl
+  (:default-pathname #.(directory-namestring (truename *LOAD-PATHNAME*))
+   :default-file-type "lsp")
+  (:definitions
+      "rt-package"
+      "rt"))
+

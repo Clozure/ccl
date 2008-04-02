@@ -1,0 +1,117 @@
+Things to do to the test suite (not a complete list)
+
+1. subtypep and typep on complex types
+
+2. Refactor random type/element-of-type code.  There's too much
+  duplication.
+
+3. More type tests on array types
+
+4. Extend random subtypep tester to array types. (complex types already added,
+  but should extend generator of random real types)
+
+5. Add JA's long form define-method-combination tests (from clisp),
+  or write own (partially done)
+
+6. adjust-array (need to add specialized integer arrays other than
+  bit vectors, and float vectors)
+
+7. Address synonym-stream issues (from Duane Rettig)
+
+8. accuracy tests for numeric functions
+
+9. Test that the streams operators that manipulate files
+  do the right things with *default-pathname-defaults*.
+
+10. Two-arg tests of FILE-POSITION on binary streams.
+
+11. Address issues with broadcast streams (C. Rhodes) -- apparent
+   contradictions in the spec.
+
+17. Tests that have an argument that provides a return value for special
+  conditions (like eof) that happens to be the same as a normal value the
+  functions would return (suggested by CR).
+
+18. Add random tests for COERCE (the result either is either typep of the
+ second arg (except for rational stuff) or a type-error is signalled.)
+
+19. Add two missing tests from CLOS (spotted by Bruno Haible):
+
+;; Shared slot remains shared.
+;; CLHS 4.3.6.: "The value of a slot that is specified as shared both in the old
+;;               class and in the new class is retained."
+(multiple-value-bind (value condition)
+    (ignore-errors
+      (defclass foo74 () ((size :initarg :size :initform 1 :allocation :class)))
+      (setq i (make-instance 'foo74))
+      (defclass foo74 () ((size :initarg :size :initform 2 :allocation :class) (other)))
+      (slot-value i 'size))
+  (list value (type-of condition)))
+Expected: (1 NULL)
+Got:      (2 NULL)
+
+(progn
+  (defclass foo92b (foo92a) ((s :initarg :s)))
+  (defclass foo92a () ())
+  (let ((x (make-instance 'foo92b :s 5)) (update-counter 0))
+    (defclass foo92b (foo92a) ((s) (s1) (s2))) ; still subclass of foo92a
+    (slot-value x 's)
+    (defmethod update-instance-for-redefined-class ((object foo92b) added-slots discarded-slots property-list &rest initargs)
+      (incf update-counter))
+    (make-instances-obsolete 'foo92a)
+    (slot-value x 's)
+    update-counter))
+Expected: 1
+Got:      0
+
+21. The random tester showed (SETF AREF) wasn't being tested enough.  Add tests.
+
+22. Add more symbol printing tests.  In particular, there doesn't appear to
+ be a test that (princ :foo) >> :FOO  (noticed by PG in ABCL)
+
+23. Modify rt so that when failing tests are reported, they are grouped by
+  :notes and the :notes comment is printed out.  This will help explain
+  what the failures mean.
+
+28. Add tests for reading/printing with packages with weird names (lower case letters,
+  digits, etc.)
+
+30. Add more pathname equality tests to equal.lsp
+
+34. (from C Rhodes) Test that CERROR allows additional arguments after a
+  condition designating itself to be used in the continue format control.
+
+36. Add tests for bad default-initargs in object constructors.
+
+37. Add tests that  methods on initialize-instance and
+   shared-initialize receive defaulted initargs from compiled
+   make-instance
+
+38, Floating point tests must be expanded.
+  -- Add tests for the floating point inspection functions (decode-float, etc.)
+  -- Add tests of -0.0 vs. 0.0 consistency (a bug here affected abcl)
+  -- transcendantal functions
+
+39. There are various constraints that things defined at the top level become
+  available at compile time.  Test these constraints.
+
+40, Check that OPEN, etc. do pathname merging.
+
+41. Add tests for MOD, REM
+
+42. Add randomized tests for BIT-* functions (requested by piso on #lisp)
+  (partially done; tests on simple bit vectors going to a new bit vector
+   have been added; should add in-place versions and operations on non-simple
+   bit-vectors and non-vector arrays)
+
+43. Add tests for structs that defining subtypes using :include doesn't change
+    the parent type(s).  (This came up in ABCL.)
+
+44. Add tests for SPECIAL declarations in MACROLET (requested by piso on #lisp)
+  (partially done)
+
+45. Sweep files for missing order-of-execution tests
+
+46. Add tests that class objects are valid class specifiers in method definitions.
+
+47. Test that :import-from in DEFPACKAGE can take a package object.
