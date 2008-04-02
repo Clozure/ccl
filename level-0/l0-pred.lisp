@@ -129,7 +129,7 @@
                        (ash 1 ppc64::subtag-bignum)
                        (ash 1 ppc64::subtag-ratio))))
     #+x8664-target
-    (if (< typecode x8664::nbits-in-word)
+    (if (<= typecode x8664::subtag-double-float)
       (logbitp (the (integer 0 #.x8664::subtag-double-float) typecode)
                (logior (ash 1 x8664::tag-fixnum)
                        (ash 1 x8664::subtag-bignum)
