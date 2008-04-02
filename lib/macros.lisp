@@ -2645,14 +2645,11 @@ defcallback returns the callback pointer, e.g., the value of name."
   not of the specified type. If an error is signalled and the restart is
   used to return, this can only return if the STORE-VALUE restart is
   invoked. In that case it will store into PLACE and start over."
-  `(progn
-     (setf ,place 
-           (ensure-value-of-type 
-            ,place 
-            ',typespec 
-            ',place 
-            ,string))
-     nil))
+  (let* ((val (gensym)))
+    `(do* ((,val ,place ,place))
+          ((typep ,val ',typespec))
+      (setf ,place (%check-type ,val ',typespec ',place ,string)))))
+
 
 
 
@@ -3553,7 +3550,17 @@ to be at least partially steppable."
   (let* ((res (gensym))
          (eintr (symbol-value (read-from-string "#$EINTR"))))
     `(loop
-      (let* ((,res ,@body))
+      (let* ((,res (progn ,@body)))
+        (unless (eql ,res (- ,eintr))
+          (return ,res))))))
+
+(defmacro ff-call-ignoring-eintr (&body body)
+  (let* ((res (gensym))
+         (eintr (symbol-value (read-from-string "#$EINTR"))))
+    `(loop
+      (let* ((,res (progn ,@body)))
+        (when (< ,res 0)
+          (setq ,res (%get-errno)))
         (unless (eql ,res (- ,eintr))
           (return ,res))))))
 
