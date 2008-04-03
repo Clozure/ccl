@@ -16,7 +16,6 @@
   <!-- xsl:include href="site-navigator.xsl"/ -->
   <xsl:include href="footer.xsl"/>
   <xsl:include href="minor-customizations.xsl"/>
-  <xsl:include href="directory-fixes.xsl"/>
   <xsl:include href="optional-onechunk.xsl"/>
 
   <xsl:include href="http://docbook.sourceforge.net/release/xsl/current/html/chunk-code.xsl"/>

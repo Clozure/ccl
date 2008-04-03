@@ -14,6 +14,140 @@
 
   <sect1 id="CCL-Stream-Extensions">
     <title>Stream Extensions</title>
+
+    <sect2><title>Stream External Encoding</title>
+    <para>Clozure CL streams have an external-encoding attribute that
+    may be read using
+    <function>STREAM-EXTERNAL-ENCODING</function> and set using <function>(SETF
+    STREAM-EXTERNAL-ENCODING)</function>.
+    </para>
+    </sect2>
+
+    <sect2 id="Additional-Open-Keywords">
+      <title>Additional keywords for OPEN and MAKE-SOCKET</title>
+      <para><function>OPEN</function> and
+      <function>MAKE-SOCKET</function> have each been extended to take
+      the additional keyword arguments: <literal>:CLASS</literal>,
+      <literal>:SHARING</literal>, and
+      <literal>:BASIC</literal>.</para>
+
+    <variablelist>
+      <varlistentry>
+	<term><literal>:CLASS</literal></term>
+	<listitem>
+	  <para>A symbol that names the desired class of the stream.
+	  The specified class must inherit from
+	  <literal>FILE-STREAM</literal> for
+	  <function>OPEN</function>.</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term><literal>:SHARING</literal></term>
+	<listitem>
+	  <para>Specifies how a stream can be used by multiple
+	  threads.  The possible values are:
+	  <literal>:PRIVATE</literal>, <literal>:LOCK</literal> and
+	  <literal>:EXTERNAL</literal>. <literal>:PRIVATE</literal> is
+	  the default.  <literal>NIL</literal> is also accepted as a
+	  synonym for <literal>:EXTERNAL</literal>.</para>
+	  <variablelist>
+	    <varlistentry>
+	      <term><literal>:PRIVATE</literal></term>
+	      <listitem>
+		<para>Specifies that the stream can only be accessed
+		by the thread that created it.  This is the default.
+		(There was some discussion on openmcl-devel about the
+		idea of "transferring ownership" of a stream; this has
+		not yet been implemented.)  Attempts to do I/O on a
+		stream with :PRIVATE sharing from a thread other than
+		the stream's owner yield an error.</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><literal>:LOCK</literal></term>
+	      <listitem>
+		<para>Specifies that all access to the stream require
+		the calling thread to obtain a lock. There are
+		separate "read" and "write" locks for IO streams.
+		This makes it possible for instance, for one thread to
+		read from such a stream while another thread writes to
+		it.  (see also <xref linkend="f_make-read-write-lock"/>
+		<xref linkend="m_with-read-lock"/> <xref
+		linkend="m_with-write-lock"/>)</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><literal>:EXTERNAL</literal></term>
+	      <listitem>
+		<para>Specifies that I/O primitives enforce no access
+		protocol.  This may be appropriate for some types of
+		application which can control stream access via
+		application-level protocols.  Note that since even the
+		act of reading from a stream changes its internal
+		state (and simultaneous access from multiple threads
+		can therefore lead to corruption of that state), some
+		care must be taken in the design of such protocols.</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term><literal>:BASIC</literal></term>
+	<listitem>
+	  <para>A boolean that indicates whether or not the stream is
+	  a Gray stream, i.e. whether or not the stream is an instance
+	  of <literal>FUNDAMENTAL-STREAM</literal> or
+	  <literal>CCL::BASIC-STREAM</literal>(see <xref
+	  linkend="Basic-Versus-Fundamental-Streams"/>).  Defaults to
+	  <literal>T</literal>.</para>
+	</listitem>
+      </varlistentry>
+    </variablelist>
+
+    </sect2>
+
+    <sect2 id="Basic-Versus-Fundamental-Streams">
+      <title>Basic Versus Fundamental Streams</title>
+      <para>Gray streams (see <xref
+      linkend="Creating-Your-Own-Stream-Classes-with-Gray-Streams"/>)
+      all inherit from <literal>FUNDAMENTAL-STREAM</literal> whereas
+      basic streams inherit from <literal>CCL::BASIC-STREAM</literal>.
+      The tradeoff between FUNDAMENTAL and BASIC streams is entirely
+      between flexibility and performance, potential or actual.  I/O
+      primitives can recognize BASIC-STREAMs and exploit knowledge of
+      implementation details. FUNDAMENTAL stream classes can be
+      subclassed and extended in a standard way (the Gray streams
+      protocol).</para>
+
+      <para>For existing stream classes (FILE-STREAMs, SOCKETs, and
+      the internal CCL::FD-STREAM classes used to implement file
+      streams and sockets), a lot of code can be shared between the
+      FUNDAMENTAL and BASIC implementations.  The biggest difference
+      should be that that code can be reached from I/O primitives like
+      READ-CHAR without going through some steps that're there to
+      support generality and extensibility, and skipping those steps
+      when that support isn't needed can improve I/O performance.
+      </para>
+
+      <para>The Gray stream method
+      <function>STREAM-READ-CHAR</function> should work on appropriate
+      <literal>BASIC-STREAM</literal>s.  (There may still be cases
+      where such methods are undefined; such cases should be
+      considered bugs.)  It is not guaranteed that Gray stream methods
+      would ever be called by I/O primitives to read a character from
+      a <literal>BASIC-STREAM</literal>, though there are still cases
+      where this happens.</para>
+
+      <para>A simple loop reading 2M characters from a text file runs
+      about 10X faster when the file is opened the new defaults
+      <literal>(:SHARING :PRIVATE :BASIC T)</literal> than it had
+      before these changes were made.  That sounds good, until one
+      realizes that the "equivalent" C loop can be about 10X faster
+      still ...</para>
+    </sect2>
+
+
     <sect2 id="Stream-Timeouts-And-Deadlines">
       <title>Stream Timeouts and Deadlines</title>
       <indexterm>

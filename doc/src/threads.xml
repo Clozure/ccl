@@ -167,7 +167,7 @@
 
   <sect1 id="Implementation-Decisions-and-Open-Questions">
     <title>Implementation Decisions and Open Questions</title>
-    <sect2>
+    <sect2 id="Thread-Stack-Sizes">
       <title>Thread Stack Sizes</title>
       <para>When you use MAKE-PROCESS to create a thread, you can
         specify a stack size. &CCL; does not impose a limit on the stack

@@ -39,13 +39,19 @@
     <p>
       <div class="refentrytitle">
 	<a>
-	  <xsl:attribute name="href">
-	    <xsl:call-template name="href.target"/>
+	  <xsl:attribute name="id">
+	    <xsl:value-of select="@id"/>
 	  </xsl:attribute>
 	</a>
 	<strong>[<xsl:value-of select="refnamediv/refclass"/>]</strong><br/>
-	<code><xsl:apply-templates select="refsynopsisdiv/synopsis/node()"/></code>
-
+	<xsl:choose>
+	  <xsl:when test="refsynopsisdiv/synopsis">
+	    <code><xsl:apply-templates select="refsynopsisdiv/synopsis/node()"/></code>
+	  </xsl:when>
+	  <xsl:otherwise>
+	    <code><xsl:value-of select="refnamediv/refname"/></code>
+	  </xsl:otherwise>
+	</xsl:choose>
       </div>
       <div class="refentrytitle">
 	<xsl:value-of select="refnamediv/refpurpose"/>

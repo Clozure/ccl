@@ -75,6 +75,7 @@ doc/src/q-and-a.xml -text
 doc/src/schemas.xml -text
 doc/src/sockets.xml -text
 doc/src/streams.xml -text
+doc/src/templates/function -text
 doc/src/threads.xml -text
 doc/src/using.xml -text
 doc/src/xsl/catalog -text

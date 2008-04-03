@@ -76,7 +76,8 @@
         minimum.</para>
       </sect2>
 
-      <sect2><title>LinuxX8664</title> 
+      <sect2><title>Linux
+X8664</title> 
 
         <para>Version 1.1 and later of &CCL; runs on relatively
         recent Linux distributions for the x86-64 architecture.  It
@@ -123,7 +124,7 @@
         processor.</para>
 
         <para>&CCL; hasn't been tested under Darwin proper, but
-        &CCL; doesn't intentionally use any MacOS X features beyond
+        &CCL; doesn't intentionally use any Mac OS X features beyond
         the Darwin subset and therefore it seems likely that &CCL;
         would run on PPC Darwin versions that correspond to recent OSX
         versions.</para>
@@ -144,60 +145,106 @@
       </sect2>
     </sect1>
 
-    <sect1><title>Installation</title>
-      <para>Installing &CCL; consists of</para>
-      <orderedlist> 
-        <listitem>
-          <para>Downloading an appropriate distribution of &CCL;;</para>
-        </listitem>
-        <listitem>
-          <para>If necessary, extracting the archive somewhere on your
-          computer;</para>
-        </listitem>
-        <listitem>
-          <para>Configuring a shell script so &CCL; can locate
-          necessary library files and other auxiliary files.</para>
-        </listitem>
-      </orderedlist>
 
-      <sect2><title>Downloading and untarring &CCL; binary source
-      releases</title> <para> &CCL; releases and snapshots are
-      distributed as tarballs (compressed tar archives).</para>
+    <sect1><title>Obtaining Clozure CL</title>
+      <para>There two main ways to obtain Clozure CL.  For Mac OS X,
+      there are disk images that can be used to install Clozure CL in
+      the usual Macintosh way.  For other OSes (or for Mac OS X),
+      Subversion is the best way to obtain Clozure CL.  Tarballs are
+      available for those who prefer them, but Subversion is simpler
+      and more flexible.</para>
 
-      <para>Tarballs of version 1.0 for supported platforms are
-      available from the download page of the &CCL; website.</para>
+      <para> There are three popular ways to use Clozure CL: as a
+      stand-alone double-clickable application (Mac OS X only), as a
+      command-line application, or with EMACS and SLIME.  These are
+      described in the following sections.</para>
 
-      <para>Tarballs of the latest development snapshots of version
-      1.1, along with release notes, are available from the testing
-      directory on Clozure.com.</para>
-      <para>Both the release and snapshot archives contain a directory
-      named <literal>ccl</literal>, which in turn contains a number of
-      files and subdirectories.  The <literal>ccl</literal> directory
-      can reside anywhere in the filesystem, assuming appropriate
-      permissions. If you wanted the <literal>ccl</literal> directory
-      to reside in <literal>``~/openmcl/ccl''</literal> and the
-      directory <literal>``~/openmcl/''</literal> already existed, you
-      could do anything equivalent to:</para>
+    <sect2><title>The Mac Way</title>
+      <para>If you are using Mac OS X then Clozure CL can be installed
+      and used in the usual Macintosh way.  A disk image is downloaded
+      and mounted, then Clozure CL is dragged to the Applications
+      folder.  After that you can double-click on the Clozure CL
+      application to run it.  The disk images are found at <ulink
+      url="ftp://clozure.com/pub/testing/"/> </para>
+
+      <para>In order to locate Clozure CL source code (and for other
+      reasons <xref linkend="Predefined-Logical-Hosts"/>) the
+      <literal>ccl</literal> directory should either be in the same
+      directory as the Clozure CL application, or the Clozure CL
+      application should be in the <literal>ccl</literal> directory.
+      If you use a shell, then the
+      <varname>CCL_DEFAULT_DIRECTORY</varname> environment variable
+      can be set to explicitly indicate the location of the
+      <literal>ccl</literal> directory.</para>
+    </sect2>
+ 
+
+    <sect2><title>Getting Clozure CL with Subversion</title>
+      <para>It is very easy to download, install, and build Clozure CL
+      using Subversion.  This is the preferred way to get either the
+      latest, or a specific version of Clozure CL (unless you're
+      using the Mac Way).  Subversion is a source code control system
+      that is in wide usage.  Most modern OSes come with subversion
+      pre-installed. A complete, buildable and runnable set of Clozure
+      CL sources and binaries can be retrieved by doing one subversion
+      checkout.</para>
+
+      <para>First, make sure that Subversion is installed on your
+      system.  Bring up a command line shell and type:
       <programlisting>
-shell&gt; cd ~/openmcl
-shell&gt; tar xvzf <emphasis>path-to-downloaded-openmcl-archive.tar.gz</emphasis>
+        <![CDATA[
+shell> svn]]>
+      </programlisting> 
+      If Subversion is installed, it will say something like:
+      <programlisting>
+        <![CDATA[
+Type 'svn help' for usage]]>
       </programlisting>
-      <para><emphasis>Important Note for Macintosh Users:</emphasis>
-      Double-clicking the archive in the Finder may work, but it also
-      may have unintended side-effects.  In some versions of the Mac
-      OS double-clicking an archive will invoke Stuffit, which may try
-      to replace linefeeds with carriage returns as it extracts
-      files. Also, tar can be used to merge the archive contents into
-      an existing <literal>ccl</literal> directory, whereas
-      double-clicking in the Finder will create a new directory named
-      <literal>ccl 2</literal> (or <literal>ccl 3</literal>, or...)
-      Bottom line is that you're better off using tar from the
-      shell.</para>
+      If Subversion is not installed, it will say something
+      like:
+      <programlisting>
+        <![CDATA[
+-bash: svn: command not found]]>
+      </programlisting>
+      If subversion is not installed, you'll need to figure out how to
+     install it on your OS.</para>
 
-      <para>Once the <literal>ccl</literal> directory is installed,
-      it's necessary to install and configure a shell script
-      distributed with &CCL; before using it.</para>
-      </sect2>
+     <para>Create the directory where Clozure CL will live, <literal>cd</literal> to that directory, then type a Subversion checkout command.  For example:
+
+      <programlisting>
+        <![CDATA[
+joe:~> mkdir ccl
+joe:~> cd ccl
+joe:ccl> svn co svn+ssh://svn.clozure.com/usr/local/publicsvn/openmcl]]>
+      </programlisting>
+      Once the checkout is complete you can build Clozure CL by doing:
+      <programlisting>
+        <![CDATA[
+joe:ccl> ./dx86cl64
+Welcome to Clozure Common Lisp Version 1.2  (DarwinX8664)!
+? (rebuild-ccl :full t)
+<lots of compilation output>
+? (quit)
+joe:ccl>]]>
+      </programlisting>
+      </para>
+    </sect2>
+
+    <sect2><title>Tarballs</title>
+      <para>Tarballs are available at <ulink
+      url="ftp://clozure.com/pub/testing/"/>.  These should be
+      downloaded and extracted onto your local disk.  Then a shell
+      script should be edited to set
+      <varname>CCL_DEFAULT_DIRECTORY</varname> and start up the
+      appropriate Clozure CL kernel. <xref
+      linkend="The-openmcl-Shell-Script"/> </para>
+    </sect2>
+    </sect1>
+
+    <sect1><title>Command Line Set Up</title>
+    <para>Sometimes it is convenient to use Clozure CL from a Unix
+    shell command line.  This is especially true when using Clozure CL
+    as a way to run Common Lisp utilities.</para>
 
       <sect2 id="The-openmcl-Shell-Script"><title>The openmcl Shell Script</title>
       <para>&CCL; needs to be able to find the
@@ -299,7 +346,8 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
 	<literal>ccl64</literal> will run a 64-bit session.
 	</para>
       </sect2>
-      <sect2 id="Personal-Customization-with-the-Init-File">
+    </sect1>
+      <sect1 id="Personal-Customization-with-the-Init-File">
 	<title>Personal Customization with the Init File</title>
         <para>By default &CCL; will try to load the file
         <literal>"home:openmcl-init.lisp"</literal> or the compiled
@@ -320,47 +368,137 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
         packages which you use frequently.</para>
         <para>To suppress the loading of this init-file, invoke &CCL; with the
 <literal>--no-init</literal> option.</para>
-      </sect2>
+      </sect1>
 
-      <sect2 id="Some--hopefully--useful-options">
-	<title>Some (hopefully) useful options</title>
-        <para> The exact set of command-line arguments accepted by
-        &CCL; may vary slightly from release to release;
-        <literal>openmcl --help</literal> will provide a definitive
-        (if somewhat terse) summary of the options accepted by the
-        current implementation and then exit. Some of those options
-        are described below.</para>
+      <sect1 id="Command-Line-Options">
+	<title>Command Line Options</title>
+        <para>When using Clozure CL from the command line, these
+        options may be used to modify its behavior.  The exact set of
+        Clozure CL command-line arguments may vary per platform and
+        slowly changes over time.  The current set of command line
+        options may be retrieved by using the
+        <literal>--help</literal> option.</para>
 	<itemizedlist>
 	  <listitem>
-	    <para>-S (or --stack-size). Specify the size of the initial process
-	    stack.</para>
+	    <para><literal>-h</literal> (or
+	    <literal>--help</literal>).  Provides a definitive (if
+	    somewhat terse) summary of the command line options
+	    accepted by the Clozure CL implementation and then
+	    exits.</para>
 	  </listitem>
 
 	  <listitem>
-	    <para>-b (or --batch). Execute in &#34;batch mode&#34;. End-of-file
-	    from *STANDARD-INPUT* will cause &CCL; to exit, as will attempts to
+	    <para><literal>-V</literal> (or
+	    <literal>--version</literal>).  Prints the version of
+	    Clozure CL then exits.  This is the same thing that is
+	    returned by
+	    <function>LISP-APPLICATION-VERSION</function>.</para>
+	  </listitem>
+
+	  <listitem>
+	    <para><literal>-K</literal>
+	    <parameter>character-encoding-name</parameter> (or
+	    <literal>--terminal-encoding</literal>
+	    <parameter>character-encoding-name</parameter>).
+	    Specifies the character encoding to use for
+	    <varname>*TERMINAL-IO*</varname> (see <xref
+	    linkend="Character-Encodings"/>).  Specifically, the
+	    <parameter>character-encoding-name</parameter> string
+	    is uppercased and interned in the KEYWORD package. If an
+	    encoding named by that keyword exists,
+	     <varname>CCL:*TERMINAL-CHARACTER-ENCODING-NAME*</varname> is set to the name
+	    of that encoding.   <varname>CCL:*TERMINAL-CHARACTER-ENCODING-NAME*</varname> defaults to <literal>NIL</literal>, which
+	    is a synonym for <literal>:ISO-8859-1</literal>.</para>
+	    <para>For example:
+	    <programlisting>
+	      <![CDATA[shell> ccl -K utf-8]]>
+	    </programlisting>
+	    will have the effect of making the standard CL streams use
+	    <literal>:UTF-8</literal> as their character
+	    encoding.</para>
+	  </listitem>
+
+	  <listitem>
+	    <para><literal>-n</literal> (or
+	    <literal>--no-init</literal>). If this option is given,
+	    the init file is not loaded.  This is useful if &CCL; is
+	    being invoked by a shell script which should not be
+	    affected by whatever customizations a user might have in
+	    place.</para>
+	  </listitem>
+
+	  <listitem>
+	    <para><literal>-e</literal> <parameter>form</parameter>
+	    (or <literal>--eval</literal>). An expression is read (via
+	    <function>READ-FROM-STRING</function>) from the string
+	    <parameter>form</parameter> and evaluated. If
+	    <parameter>form</parameter> contains shell metacharacters,
+	    it may be necessary to escape or quote them to prevent the
+	    shell from interpreting them.</para>
+	  </listitem>
+
+	  <listitem>
+	    <para><literal>-l</literal> <parameter>path</parameter>
+	    (or <literal>--load</literal>
+	    <parameter>path</parameter>). Loads file specified by
+	    <parameter>path</parameter>.</para>
+	  </listitem>
+
+	  <listitem>
+	    <para><literal>-T</literal> <parameter>n</parameter> (or
+	    <literal>--set-lisp-heap-gc-threshold</literal>
+	    <parameter>n</parameter>).  Sets the Lisp gc threshold to
+	    <parameter>n</parameter>. (see <xref
+	    linkend="GC-Page-reclamation-policy"/></para>
+	  </listitem>
+
+	  <listitem>
+	    <para><literal>-Q</literal> (or
+	    <literal>--quiet</literal>). Suppresses printing of
+	    heralds and prompts when the <literal>--batch</literal>
+	    command line option is specified.</para>
+	  </listitem>
+
+	  <listitem>
+	    <para><literal>-R</literal> <parameter>n</parameter> (or
+	    <literal>--heap-reserve</literal>). Reserves
+	    <parameter>n</parameter> bytes for heap expansion.  The
+	    default is <literal> 549755813888</literal>.  (see <xref
+	    linkend="Heap-space-allocation"/>)</para>
+	  </listitem>
+
+	  <listitem>
+	    <para><literal>-S</literal> <parameter>n</parameter> (or
+	    <literal>--stack-size</literal> <parameter>n</parameter>). Sets the size of the
+	    initial control stack to <parameter>n</parameter>. (see <xref
+	    linkend="Thread-Stack-Sizes"/>)</para>
+	  </listitem>
+
+	  <listitem>
+	    <para><literal>-Z</literal> <parameter>n</parameter> (or
+	    <literal>--thread-stack-size</literal>
+	    <parameter>n</parameter>). Sets the size of the first
+	    thread's stack to <parameter>n</parameter>. (see <xref
+	    linkend="Thread-Stack-Sizes"/>)</para>
+	  </listitem>
+
+	  <listitem>
+	    <para><literal>-b</literal> (or <literal>--batch</literal>). Execute in "batch mode". End-of-file
+	    from <varname>*STANDARD-INPUT*</varname> will cause &CCL; to exit, as will attempts to
 	    enter a break loop.</para>
 	  </listitem>
 
 	  <listitem>
-	    <para>-n (or --no-init). If this option is given, the init file
-	    is not loaded.  This is useful if &CCL; is being invoked by a
-	    shell script which should not be affected by whatever
-	    customizations a user might have in place.
-	    </para>
+	    <para><literal>--no-sigtrap</literal> An obscure option for running under GDB.</para>
 	  </listitem>
 
 	  <listitem>
-	    <para>-e &#60;form&#62; (or --eval &#60;form&#62;). An expression is
-	    read (via READ-FROM-STRING from the string &#60;form&#62; and
-	    evaluated. If &#60;form&#62; contains shell metacharacters, it may be
-	    necessary to escape or quote them to prevent the shell from
-	    interpreting them.</para>
-	  </listitem>
-
-	  <listitem>
-	    <para>-l &#62;path&#62; (or --load &#60;path&#62;). Executes (load
-	    &#34;&#60;path&#62;&#34;).</para>
+	    <para><literal>-I</literal>
+	    <parameter>image-name</parameter> (or
+	    <literal>--image-name</literal>
+	    <parameter>image-name</parameter>). Specifies the image
+	    name for the kernel to load.  Defaults to the kernel name
+	    with ".image" appended.</para>
 	  </listitem>
 	</itemizedlist>
 
@@ -370,8 +508,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
         the command line, after the init file (if there is one) is
         loaded and before the toplevel read-eval-print loop is
         entered.</para>
-      </sect2>
-    </sect1>
+      </sect1>
 
     <sect1 id="Using-CCL-with-GNU-Emacs-and-SLIME">
       <title>Using &CCL; with GNU Emacs and SLIME</title>

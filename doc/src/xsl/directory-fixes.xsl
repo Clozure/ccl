@@ -24,12 +24,7 @@
     </xsl:call-template>
   </xsl:param>
 
-  <xsl:param name="html.stylesheet">
-    <xsl:value-of select="$openmcl.base"/>
-    <xsl:text>openmcl.css</xsl:text>
-  </xsl:param>
-
-  <!-- Be aware that href.target.uri cannot be defined in this file,
+   <!-- Be aware that href.target.uri cannot be defined in this file,
        because it would be overridden by the definition in
        optional-onechunk.xsl. -->
 

@@ -72,8 +72,8 @@
       redefinition; that may be useful in some cases.</para>
     </sect1>
 
-    <sect1 id="Debugging-facilities-in-the-lisp-kernel">
-      <title>Debugging facilities in the lisp kernel</title>
+    <sect1 id="kernel-debugger">
+      <title>The Kernel Debugger</title>
       <para> In a perfect world, something like this couldn't
       happen:</para>
       <programlisting>
