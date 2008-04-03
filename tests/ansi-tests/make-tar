@@ -1,2 +1,0 @@
-rm -f binary/* rt/binary/*
-tar cvf cltest.tar README *.system *.lsp make-tar binary/ rt/*.system rt/*.lsp rt/*.txt rt/binary/
