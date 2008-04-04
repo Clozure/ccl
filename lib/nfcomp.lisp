@@ -658,7 +658,7 @@ Will differ from *compiling-file* during an INCLUDE")
                    'macro 
                    (compile-named-function lambda-expression name env)) 
             (defenv.functions definition-env))
-      (record-function-info name (cons nil 'macro) env))
+      (record-function-info name (list (cons nil 'macro)) env))
     name))
 
 (defun define-compile-time-symbol-macro (name expansion env)
