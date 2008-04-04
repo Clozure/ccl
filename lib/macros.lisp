@@ -660,7 +660,7 @@
 
 (defmacro %defvar-init (var initform doc)
   `(unless (%defvar ',var ,doc)
-     (setq ,var ,initform)))
+    (set ',var ,initform)))
 
 (defmacro defvar (&environment env var &optional (value () value-p) doc)
   "Define a global variable at top level. Declare the variable
