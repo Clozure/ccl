@@ -1067,11 +1067,12 @@
     (setf (xload-symbol-value (xload-copy-symbol '*xload-cold-load-functions*))
           (xload-save-list (setq *xload-cold-load-functions*
                                  (nreverse *xload-cold-load-functions*))))
-    (let* ((svnrev (local-svn-revision)))
+    (let* ((svnrev (local-svn-revision))
+           (tree (svn-tree)))
       (setf (xload-symbol-value (xload-copy-symbol '*openmcl-svn-revision*))
             (typecase svnrev
               (fixnum (ash svnrev *xload-target-fixnumshift*))
-              (string (xload-save-string svnrev))
+              (string (xload-save-string (if tree (format nil "~a-~a" svnrev tree) svnrev)))
               (t *xload-target-nil*))))
     (let* ((experimental-features *build-time-optional-features*))
       (setf (xload-symbol-value (xload-copy-symbol '*optional-features*))
