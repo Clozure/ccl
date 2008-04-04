@@ -708,6 +708,48 @@ are running on, or NIL if we can't find any useful information."
 
 (%fhave 'df #'disassemble)
 
+(defun svn-info-component (component)
+  (let* ((component-length (length component)))
+  (with-output-to-string (s)
+    (multiple-value-bind (status exit-code)
+        (external-process-status
+         (run-program "svn"  (list "info" (native-translated-namestring "ccl:")):output s))
+      (when (and (eq :exited status) (zerop exit-code))
+        (with-input-from-string (output (get-output-stream-string s))
+            (do* ((line (read-line output nil nil) (read-line output nil nil)))
+                 ((null line))
+              (when (and (>= (length line) component-length)
+                         (string= component line :end2 component-length))
+                (return-from svn-info-component
+                  (string-trim " " (subseq line component-length)))))))))))
+
+(defun svn-url () (svn-info-component "URL:"))
+(defun svn-repository () (svn-info-component "Repository Root:"))
+
+;;; Try to say something about what tree (trunk, a branch, a release)
+;;; we were built from. If the URL (relative to the repository)
+;;; starts with "branches", return the second component of the
+;;; relative URL, otherwise return the first component.
+(defun svn-tree ()
+  (let* ((repo (svn-repository))
+         (url (svn-url)))
+    (or 
+     (if (and repo url)
+       (let* ((repo-len (length repo)))
+         (when (and (> (length url) repo-len)
+                    (string= repo url :end2 repo-len))
+           ;; Cheat: do pathname parsing here.
+           (let* ((path (pathname (ensure-directory-namestring (subseq url repo-len))))
+                  (dir (cdr (pathname-directory path))))
+             (when (string= "ccl" (car (last dir)))
+               (if (string= (car dir) "branches")
+                 (cadr dir)
+                 (car dir))))))))))
+
+
+
+        
+                         
 (defun local-svn-revision ()
   (or
    ;; svn2cvs uses a .svnrev file to sync CVS and SVN; if present,
@@ -717,7 +759,7 @@ are running on, or NIL if we can't find any useful information."
    (with-output-to-string (s)
     (multiple-value-bind (status exit-code)
         (external-process-status
-         (run-program "svnversion"  (list  (native-translated-namestring "ccl:") "/trunk/ccl"):output s))
+         (run-program "svnversion"  (list  (native-translated-namestring "ccl:") (or (svn-url) "")):output s))
       (when (and (eq :exited status) (zerop exit-code))
         (with-input-from-string (output (get-output-stream-string s))
           (let* ((line (read-line output nil nil)))
