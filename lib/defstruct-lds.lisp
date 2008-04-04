@@ -360,10 +360,11 @@
 (defun defstruct-copier (sd copier env)
   `(progn
      (eval-when (:compile-toplevel)
-       (note-function-info ',copier nil ,env))
+       (record-function-info ',copier (list (list (encode-lambda-list '(x)))) ,env))
      (fset ',copier
-           ,(if (eq (sd-type sd) 'list) '#'copy-list '#'copy-uvector))))
-; (put 'COPY-SHIP 'nx-alias 'copy-list)
+           ,(if (eq (sd-type sd) 'list) '#'copy-list '#'copy-uvector))
+     (record-source-file ',copier 'function)))
+;;; (put 'COPY-SHIP 'nx-alias 'copy-list)
 
 (defun defstruct-predicate (sd named predicate &aux (arg (gensym)))
   (let* ((sd-name (sd-name sd))

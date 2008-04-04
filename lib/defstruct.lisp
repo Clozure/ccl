@@ -213,10 +213,11 @@
         (unless (sd-refname-pos-in-included-struct sd name)
           (push name defs))))
     (setq defs (nreverse defs))
-    `(progn
-       (eval-when (:compile-toplevel)
-         ,@(mapcar #'(lambda (name) `(note-function-info ',name nil ,env)) defs))
-       (declaim (inline ,@defs)))))
+    (let* ((info (list (cons (dpb 1 $lfbits-numreq 0) nil))))
+      `(progn
+        (eval-when (:compile-toplevel)
+          ,@(mapcar #'(lambda (name) `(record-function-info ',name ',info ,env)) defs))
+        (declaim (inline ,@defs))))))
 
 ;;;Used by setf and whatever...
 (defun defstruct-ref-transform (predicate-or-type-and-refinfo args)
