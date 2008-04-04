@@ -563,11 +563,12 @@
                                            (if (typep global 'function)
                                              global))))))
                 (signal-warning w))
-              ;; Check args in call to forward-referenenced function.
+              ;; Check args in call to forward-referenced function.
               (if (or (typep def 'function)
                       (and (consp def)
                            (consp (cdr def))
-                           (cadr def)))
+                           (consp (cadr def))
+                           (caadr def)))
                 (when (cdr args)
                   (destructuring-bind (arglist spread-p)
                       (cdr args)
@@ -583,7 +584,11 @@
                           (setf (compiler-warning-stream-position w2)
                                 (compiler-warning-stream-position w))
                           (signal-warning w2))))))
-                (if def
+                (if (or (and (consp def)
+                             (consp (cdr def))
+                             (consp (cadr def))
+                             (eq (cdadr def) 'macro))
+                        (typep def 'simple-vector))
                   (let* ((w2 (make-condition
                               'macro-used-before-definition
                               :file-name (compiler-warning-file-name w)
