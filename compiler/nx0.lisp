@@ -1920,7 +1920,12 @@ Or something. Right? ~s ~s" var varbits))
   (if afunc
     (make-acode (%nx1-operator lexical-function-call) afunc (nx1-arglist arglist (if spread-p 1 (backend-num-arg-regs *target-backend*))) spread-p)
     (let* ((builtin (unless spread-p (nx1-builtin-function-offset global-name))))
-      (if builtin
+      (if (and builtin
+               (let* ((bits (lfun-bits (fboundp global-name))))
+                 (and bits (eql (logand $lfbits-args-mask bits)
+                                (dpb (length arglist)
+                                     $lfbits-numreq
+                                     0)))))
         (make-acode (%nx1-operator builtin-call) 
                     (make-acode (%nx1-operator fixnum) builtin)
                     (nx1-arglist arglist))
