@@ -742,9 +742,12 @@ are running on, or NIL if we can't find any useful information."
            (let* ((path (pathname (ensure-directory-namestring (subseq url repo-len))))
                   (dir (cdr (pathname-directory path))))
              (when (string= "ccl" (car (last dir)))
-               (if (string= (car dir) "branches")
-                 (cadr dir)
-                 (car dir))))))))))
+               (let* ((base (car dir)))
+                 (unless (or (string= base "release")
+                             (string= base "releases"))
+                   (if (string= base "branches")
+                     (cadr dir)
+                     (car dir))))))))))))
 
 
 
