@@ -9,7 +9,7 @@
 <!ENTITY CCL "Clozure CL">
 ]>
   <chapter><title>Building &CCL; from its Source Code</title>
-
+    <anchor id="Building-CCL"/>
     <para>&CCL;, like many other Lisp implementations, consists of a
     kernel and a heap image.  The kernel is an ordinary C program, and
     is built with a C compiler.  It provides very basic and

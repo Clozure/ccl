@@ -45,6 +45,7 @@ compiler/acode-rewrite.lisp -text
 doc/release-notes.txt -text
 doc/src/Makefile.fedora -text
 doc/src/Makefile.macports -text
+doc/src/about.xml -text
 doc/src/build.xml -text
 doc/src/ccl-documentation.xml -text
 doc/src/docbook-rng-4.5/calstblx.rnc -text

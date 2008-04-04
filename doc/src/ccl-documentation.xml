@@ -16,6 +16,8 @@
  </bookinfo>
 <!-- -->
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="about.xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
             href="install.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
             href="build.xml"/>
