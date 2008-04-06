@@ -49,7 +49,7 @@ LD = ld64
 
 ### The -seg1addr and -pagezero_size arguments below are nonsense;
 ### early versions of ld64 were/are broken.
-LDFLAGS = -M -arch ppc64 -dynamic  -o $@ -e start -pagezero_size 0x1000 -seg1addr 0x1000 -sectalign __TEXT __text 0x1000
+LDFLAGS = -macosx_version_min 10.3.9 -M -arch ppc64 -dynamic  -o $@ -e start -pagezero_size 0x1000 -seg1addr 0x1000 -sectalign __TEXT __text 0x1000
 AS = as
 M4 = gm4
 M4FLAGS = -DDARWIN -DPPC -DPPC64
