@@ -49,7 +49,7 @@ LD = ld64
 
 ### The -seg1addr and -pagezero_size arguments below are nonsense;
 ### early versions of ld64 were/are broken.
-LDFLAGS = -macosx_version_min 10.3.9 -M -arch ppc64 -dynamic  -o $@ -e start -pagezero_size 0x1000 -seg1addr 0x1000 -sectalign __TEXT __text 0x1000
+LDFLAGS = -macosx_version_min 10.4 -M -arch ppc64 -dynamic  -o $@ -e start -pagezero_size 0x1000 -seg1addr 0x1000 -sectalign __TEXT __text 0x1000
 AS = as
 M4 = gm4
 M4FLAGS = -DDARWIN -DPPC -DPPC64
@@ -61,7 +61,7 @@ COPT = #-O2
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c  $< -arch ppc64 -m64 $(CDEFINES) $(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) -mmacosx-version-min=10.3.9 -o $@
+	$(CC) -c $< -arch ppc64 -m64 $(CDEFINES) $(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) -mmacosx-version-min=10.4 -isysroot /Developer/SDKs/MacOSX10.4u.sdk -o $@
 
 SPOBJ = ppc-spjump.o ppc-spentry.o ppc-subprims.o 
 ASMOBJ = ppc-asmutils.o imports.o
@@ -82,7 +82,7 @@ CHEADERS = area.h bits.h ppc-constants.h lisp-errors.h gc.h lisp.h \
 # Subprims linked into the kernel ?
 # Yes:
 
-KSPOBJ= $(SPOBJ)
+sh	KSPOBJ= $(SPOBJ)
 all:	../../dppccl64
 
 
