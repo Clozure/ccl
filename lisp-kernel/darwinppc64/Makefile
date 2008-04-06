@@ -82,7 +82,7 @@ CHEADERS = area.h bits.h ppc-constants.h lisp-errors.h gc.h lisp.h \
 # Subprims linked into the kernel ?
 # Yes:
 
-sh	KSPOBJ= $(SPOBJ)
+KSPOBJ= $(SPOBJ)
 all:	../../dppccl64
 
 
