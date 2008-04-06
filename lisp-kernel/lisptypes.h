@@ -102,10 +102,10 @@ typedef struct mcontext *MCONTEXT_T;
 #endif
 #define UC_MCONTEXT(UC) UC->uc_mcontext
 #endif /* WORD_SIZE */
-#ifndef __DARWIN_UNIX03
-#define __DARWIN_UNIX03 0
-#endif
-#if !__DARWIN_UNIX03
+
+
+
+#ifndef _STRUCT_UCONTEXT
 #define __ss ss
 #define __es es
 #define __fs fs
