@@ -1130,7 +1130,7 @@
         foreign function information, and the &CCL; build process. It
         is set to the value of the environment variable
         <varname>CCL_DEFAULT_DIRECTORY</varname>, which is set by the
-        openmcl shell script <xref linkend="The-openmcl-Shell-Script"/>.  If
+        openmcl shell script <xref linkend="The-ccl-Shell-Script"/>.  If
         <varname>CCL_DEFAULT_DIRECTORY</varname> is not set, then it is set
         to the directory containing the current heap image.</para>
     </sect2>

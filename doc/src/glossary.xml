@@ -84,6 +84,23 @@
 
   </glossdiv>
 
+  <glossdiv id="F">
+	<!-- ******************** F ********************  -->
+	<title>F</title>
+
+	<glossentry id="fasl-file">
+	  <glossterm>fasl file</glossterm>
+
+	  <glossdef>
+
+		<para>A file containing compiled lisp code that the Lisp is
+		able to quickly load and use. A "fast-load" file.</para>
+
+	  </glossdef>
+	</glossentry>
+
+  </glossdiv>
+
   <glossdiv id="H">
 	<!-- ******************** H ********************  -->
 	<title>H</title>
@@ -131,7 +148,7 @@
 		functions, data structures, variables, and so on. Also, a file
 		containing archived versions of these data in a format that
 		can be loaded and reconstituted by the
-		Lisp <glossterm linkend="lisp_image">kernel</glossterm>. A
+		Lisp <glossterm linkend="lisp_kernel">kernel</glossterm>. A
 		working &CCL; system consists of the kernel and
 		an <glossterm linkend="lisp_image">image</glossterm>.</para>
 

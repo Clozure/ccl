@@ -22,17 +22,19 @@
 
     <para>When it was forked from MCL in 1998, the new Lisp was named
       OpenMCL. Recently, Clozure renamed its Lisp to &CCL;, partly
-      because its parent product, MCL, has lately been released as
-      open source. Clozure thought it might be confusing if there were
-      two independent open-source projects, one called "OpenMCL", and
-      the other called "(open) MCL". In addition, the new name
-      reflects &CCL;'s current status as the flagship product of
-      Clozure Associates, and also refers to its ancestry: in its
-      early years, MCL was known as Coral Common Lisp, or
-      "CCL". Because of that heritage, the package used for most
-      implementation-specific symbols in &CCL; has always been named
-      "CCL"; with the adoption of the name &CCL;, that package name
-      once again refers to the name of the Lisp.</para>
+      because its ancestor MCL has lately been released as open
+      source. Clozure thought it might be confusing for users if there
+      were two independent open-source projects with such similar
+      names. The new name also reflects &CCL;'s current status as the
+      flagship product of Clozure Associates.</para> 
+
+    <para>Furthermore, the new name refers to &CCL;'s ancestry: in its
+      early years, MCL was known as Coral Common Lisp, or "CCL". For
+      years the package that contains most of &CCL;'s
+      implementation-specific symbols has been named "CCL", an acronym
+      that once stood for the name of the Lisp product. It seems
+      fitting that "CCL" once again stands for the name of the
+      product.</para>
 
     <para>Some commands and source files may still refer to "OpenMCL"
       instead of &CCL;.</para>

@@ -17,76 +17,85 @@
     collection, and bootstrapping.  All the higher-level features are
     written in Lisp, and compiled into the heap image.  Both parts are
     needed to have a working Lisp implementation; neither the kernel
-    nor the heap image can stand on their own.</para>
+    nor the heap image can stand alone.</para>
 
     <para>You may already know that, when you have a C compiler which
-    is written in C, to build the compiler, you need to already have a
-    C compiler available.  The heap image includes a Lisp compiler,
-    which is written in Lisp.  Therefore, you need a working Lisp
-    compiler in order to build the heap image!</para>
+    is written in C, you need a working C compiler to build the
+    compiler. Similarly, the &CCL; heap image includes a Lisp
+    compiler, which is written in Lisp. You therefore need a working
+    Lisp compiler in order to build the Lisp heap image.</para>
     
     <para>Where will you get a working Lisp compiler?  No worries; you
     can use a precompiled copy of a (slightly older and compatible)
-    version of &CCL;.  For help, read on.</para>
+    version of &CCL;. This section explains how to do all this.</para>
 
-    <para>In principle it would be possible to use another Lisp as the
-    host compiler, rather than an old &CCL;; this would be a
-    challenging and experimental way to build, and is not described
-    here.</para>
+    <para>In principle it should be possible to use another
+    implementation of Common Lisp as the host compiler, rather than an
+    older &CCL;; this would be a challenging and experimental way to
+    build, and is not described here.</para>
 
     <sect1 id="building-definitions"><title>Building Definitions</title>
       <para>The following terms are used in subsequent sections; it
       may be helpful to refer to these definitions.</para>
 
-      <para><indexterm><primary>fasl files</primary></indexterm> are
-      the object files produced by<literal>compile-file</literal>.
-      fasl files store the machine codeassociated with function
-      definitions and the external representationof other lisp objects
-      in a compact, machine-readable form. fasl is short for
+      <para><indexterm><primary>fasl
+      files</primary></indexterm><glossterm linkend="fasl-file">fasl
+      files</glossterm> are the object files produced
+      by <literal>compile-file</literal>.  fasl files store the
+      machine code associated with function definitions and the
+      external representation of other lisp objects in a compact,
+      machine-readable form. fasl is short for
       &ldquo;<literal>FAS</literal>t
-      <literal>L</literal>oading&rdquo;.&CCL; uses different
-      pathname types (extensions) to name faslfiles on different
-      platforms; see <xref
-      linkend="Platform-specific-filename-conventions"/> </para>
+      <literal>L</literal>oading&rdquo;. &CCL; uses different pathname
+      types (extensions) to name fasl files on different platforms;
+      see
+      <xref linkend="Platform-specific-filename-conventions"/> </para>
 
-      <para>The <indexterm><primary>lisp kernel</primary></indexterm> is
-      a C program (with a fair amount ofplatform-specific assembly
-      language code as well.)  Its basic job isto map a lisp heap
-      image into memory, transfer control to somecompiled lisp code
-      that the image contains, handle any exceptionsthat occur during
-      the execution of that lisp code, and provide variousother forms
-      of runtime support for that code.&CCL; uses different
-      filenames to name the lisp kernel fileson different platforms;
-      see FIXTHIS.</para>
+      <para>The <indexterm><primary>lisp
+      kernel</primary></indexterm> <glossterm linkend="lisp_kernel">Lisp
+      kernel</glossterm> is a C program with a fair amount of
+      platform-specific assembly language code. Its basic job is to
+      map a lisp heap image into memory, transfer control to some
+      compiled lisp code that the image contains, handle any
+      exceptions that occur during the execution of that lisp code,
+      and provide various other forms of runtime support for that
+      code. &CCL; uses different filenames to name the lisp kernel
+      files on different platforms; see
+      <xref linkend="Platform-specific-filename-conventions"/>.</para>
 
-      <para>A <indexterm><primary>heap image</primary></indexterm> is
-      a file that can be quickly mapped into aprocess's address space.
-      Conceptually, it's not too different from anexecutable file or
-      shared library in the OS's native format (ELF orMach-O/dyld
-      format); for historical reasons, &CCL;'s own heap images are in
-      their own (fairly simple) format.The term <literal>full heap
-      image</literal> refers to a heap image file thatcontains all of
-      the code and data that comprise &CCL;.&CCL; uses different
-      filenames to name the standard full heapimage files on different
-      platforms; see FIXTHIS .</para>
+      <para>A <indexterm><primary>heap
+      image</primary></indexterm> <glossterm linkend="lisp_image">heap
+      image</glossterm> is a file that can be quickly mapped into a
+      process' address space. Conceptually, it's not too different
+      from an executable file or shared library in the OS's native
+      format (ELF orMach-O/dyld format); for historical reasons,
+      &CCL;'s own heap images are in their own (fairly simple)
+      format. The term <literal>full heap image</literal> refers to a
+      heap image file that contains all of the code and data that
+      comprise &CCL;. &CCL; uses different filenames to name the
+      standard full heap image files on different platforms; see
+      <xref linkend="Platform-specific-filename-conventions"/>.</para>
 
       <para>A <indexterm><primary>bootstrapping
-      image</primary></indexterm> is a minimal heap image used in
-      the process of building &CCL; itself.  The bootstrapping image
-      containsjust enough code to load the rest of &CCL; from fasl
-      files.  It mayhelp to think of the bootstrapping image as the
-      egg and the full heapimage as the chicken...&CCL; uses
-      different filenames to name the standardbootstrapping image
-      files on different platforms; see FIXTHIS .</para>
+      image</primary></indexterm> bootstrapping image is a minimal
+      heap image used in the process of building &CCL; itself.  The
+      bootstrapping image contains just enough code to load the rest
+      of &CCL; from fasl files.  It may help to think of the
+      bootstrapping image as the egg and the full heap image as the
+      chicken. &CCL; uses different filenames to name the standard
+      bootstrapping image files on different platforms; see
+      <xref linkend="Platform-specific-filename-conventions"/>
+      .</para>
 
       <para>Each supported platform (and possibly a few
       as-yet-unsupported ones) has a uniquely named subdirectory of
       <literal>ccl/lisp-kernel/</literal>; each such
       <indexterm><primary>kernel build directory</primary></indexterm>
       contains a Makefile and may contain some auxiliary files (linker
-      scripts, etc.) that are used to build the lispkernel on a
+      scripts, etc.) that are used to build the lisp kernel on a
       particular platform.The platform-specific name of the kernel
-      build directory is described in FIXTHIS.</para>
+      build directory is described in
+      <xref linkend="Platform-specific-filename-conventions"/>.</para>
 
       <sect2 id="filename_conventions">
        <title>Platform-specific filename conventions</title>
