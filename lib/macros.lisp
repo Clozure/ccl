@@ -1961,7 +1961,15 @@ to open."
                                                      (cdr opt)))) other-options)))))
 	(let* ((direct-superclasses superclasses)
 	       (direct-slot-specs (mapcar #'canonicalize-slot-spec slots))
-	       (other-options (apply #'append (mapcar #'canonicalize-defclass-option class-options ))))
+	       (other-options (apply #'append (mapcar #'canonicalize-defclass-option class-options )))
+	       (keyvect (class-keyvect class-name other-options)))
+	  (when (vectorp keyvect)
+	    (let ((illegal (loop for arg in other-options by #'cddr
+			      as key = (if (quoted-form-p arg) (%cadr arg) arg)
+			      unless (or (eq key :metaclass) (find key keyvect)) collect key)))
+	      (when illegal
+		(signal-program-error "Class option~p~{ ~s~} is not one of ~s"
+				      (length illegal) illegal keyvect))))
 	  `(progn
 	    (eval-when (:compile-toplevel)
 	      (%compile-time-defclass ',class-name ,env)

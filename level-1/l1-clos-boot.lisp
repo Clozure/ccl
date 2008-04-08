@@ -3020,7 +3020,17 @@ to replace that class with ~s" name old-class new-class)
       initvect)))
 
 
-(defun compute-initargs-vector (instance class functions)
+;; This is used for compile-time defclass option checking.
+(defun class-keyvect (class-arg initargs)
+  (let* ((class (if (typep class-arg 'class) class-arg (find-class class-arg nil)))
+	 (meta-arg (getf initargs :metaclass (if (and class (not (typep class 'forward-referenced-class)))
+					       (class-of class)
+					       *standard-class-class*)))
+	 (meta-spec (if (quoted-form-p meta-arg) (%cadr meta-arg) meta-arg))
+	 (meta (if (typep meta-spec 'class) meta-spec (find-class meta-spec))))
+    (compute-initargs-vector class meta (list #'initialize-instance #'allocate-instance #'shared-initialize) t)))
+
+(defun compute-initargs-vector (instance class functions &optional require-rest)
   (let ((initargs (class-slot-initargs class))
         (cpl (%inited-class-cpl class)))
     (dolist (f functions)         ; for all the functions passed
@@ -3033,8 +3043,10 @@ to replace that class with ~s" name old-class new-class)
                   (eql instance (eql-specializer-object spec))
                   (memq spec cpl))
             (let* ((func (%inner-method-function method))
-                   (keyvect (if (logbitp $lfbits-aok-bit (lfun-bits func))
-                              (return-from compute-initargs-vector t)
+                   (keyvect (if (and (logbitp $lfbits-aok-bit (lfun-bits func))
+				     (or (not require-rest)
+					 (logbitp $lfbits-rest-bit (lfun-bits func))))
+			      (return-from compute-initargs-vector t)
                               (lfun-keyvect func))))
               (dovector (key keyvect)
                 (pushnew key initargs)))))))   ; add all of the method's keys
