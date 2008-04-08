@@ -1476,8 +1476,8 @@
           ((not (or atsign colon))
            (write-char char stream))
           ((and (< code 32) atsign)
-           (if (%str-member (setq char (code-char (logxor code 64)))
-                            "@CGHIJKLM[\\]^_")
+	   (setq char (code-char (logxor code 64)))
+           (if (or colon (%str-member char "@CGHIJKLM[\\]^_"))
                (princ name stream)
                (progn
                  (write-char #\^ stream)
