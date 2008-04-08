@@ -4317,9 +4317,11 @@
 
 
 
-(defun ppc2-ref-symbol-value (seg vreg xfer sym check-boundp)  
+(defun ppc2-ref-symbol-value (seg vreg xfer sym check-boundp)
+  (declare (ignorable check-boundp))
+  (setq check-boundp (not *ppc2-reckless*))
   (with-ppc-local-vinsn-macros (seg vreg xfer)
-    (when vreg
+    (when (or check-boundp vreg)
         (if (eq sym '*interrupt-level*)
           (ensuring-node-target (target vreg)
             (! ref-interrupt-level target))
