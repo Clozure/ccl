@@ -4186,7 +4186,7 @@
 (defun make-broadcast-stream (&rest streams)
   (dolist (s streams (make-instance 'broadcast-stream :streams streams))
     (unless (output-stream-p s)
-      (error "~s is not an output stream." s))))
+      (report-bad-arg s '(satisfies output-stream-p)))))
 
 
 
