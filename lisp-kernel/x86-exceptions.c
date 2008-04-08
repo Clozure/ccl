@@ -433,8 +433,6 @@ handle_alloc_trap(ExceptionInformation *xp, TCR *tcr)
   return true;
 }
 
-extern natural get_mxcsr();
-extern void set_mxcsr(natural);
   
 int
 callback_to_lisp (TCR * tcr, LispObj callback_macptr, ExceptionInformation *xp,

@@ -175,3 +175,6 @@ void setup_sigaltstack(area *);
 #define RECOVER_FN_FROM_RIP_DISP_OFFSET 3 /* displacement word is 3 bytes in */
 #define RECOVER_FN_FROM_RIP_WORD0 0x8d4c /* 0x4c 0x8d, little-endian */
 #define RECOVER_FN_FROM_RIP_BYTE2 0x2d  /* third byte of opcode */
+
+extern natural get_mxcsr();
+extern void set_mxcsr(natural);
