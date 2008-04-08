@@ -114,6 +114,8 @@ Boolean running_under_rosetta = false;
 #endif
 #include "Threads.h"
 
+#include <fenv.h>
+
 #ifndef MAP_NORESERVE
 #define MAP_NORESERVE (0)
 #endif
@@ -1436,6 +1438,37 @@ ensure_gs_available(char *progname)
 #endif
 #endif
 
+Boolean 
+bogus_fp_exceptions = false;
+
+typedef
+float (*float_arg_returns_float)(float);
+
+float
+fcallf(float_arg_returns_float fun, float arg)
+{
+  return fun(arg);
+}
+
+void
+check_bogus_fp_exceptions()
+{
+#ifdef X8664
+  float asinf(float),result;
+    
+
+  natural save_mxcsr = get_mxcsr(), post_mxcsr;
+  set_mxcsr(0x1f80);
+
+  result = fcallf(asinf, 1.0);
+  post_mxcsr = get_mxcsr();
+  set_mxcsr(save_mxcsr);
+  if (post_mxcsr & (FE_ALL_EXCEPT & (~FE_INEXACT))) {
+    bogus_fp_exceptions = true;
+  }
+#endif
+}
+
 main(int argc, char *argv[], char *envp[], void *aux)
 {
   extern int page_size;
@@ -1455,6 +1488,7 @@ main(int argc, char *argv[], char *envp[], void *aux)
   real_executable_name = determine_executable_name(argv[0]);
   page_size = getpagesize();
 
+  check_bogus_fp_exceptions();
 #ifdef LINUX
 #ifdef X8664
   ensure_gs_available(real_executable_name);
