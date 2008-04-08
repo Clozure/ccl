@@ -2142,9 +2142,9 @@ Or something. Right? ~s ~s" var varbits))
     (and local-p (eq :function type))))
 
            
-; This guy has to return multiple values.
-; The arguments have already been transformed; if they're all constant (or quoted), try
-; to evaluate the expression at compile-time.
+;;; This guy has to return multiple values.  The arguments have
+;;; already been transformed; if they're all constant (or quoted), try
+;;; to evaluate the expression at compile-time.
 (defun nx-constant-fold (original-call &optional (environment *nx-lexical-environment*) &aux 
                                        (fn (car original-call)) form mv foldable foldfn)
   (flet ((quotify (x) (if (self-evaluating-p x) x (list 'quote x))))
@@ -2160,21 +2160,23 @@ Or something. Right? ~s ~s" var varbits))
       (if foldfn
         (funcall foldfn original-call environment)
         (progn
-            (let ((args nil))
-              (dolist (arg (cdr original-call) (setq args (nreverse args)))
-                (if (quoted-form-p arg)
-                  (setq arg (%cadr arg))
-                  (unless (self-evaluating-p arg) (return-from nx-constant-fold (values original-call nil))))
-                (push arg args))
+          (let ((args nil))
+            (dolist (arg (cdr original-call) (setq args (nreverse args)))
+              (if (quoted-form-p arg)
+                (setq arg (%cadr arg))
+                (unless (self-evaluating-p arg) (return-from nx-constant-fold (values original-call nil))))
+              (push arg args))
+            (if (nx1-check-call-args (fboundp fn) args nil)
+              (return-from nx-constant-fold (values original-call nil))
               (setq form (multiple-value-list 
-                          (handler-case (apply fn args)
-                            (error (condition)
-                                   (warn "Error: \"~A\" ~&signalled during compile-time evaluation of ~S ."
-                                         condition original-call)
-                                   (return-from nx-constant-fold
-                                     (values `(locally (declare (notinline ,fn))
-                                                ,original-call)
-                                             t)))))))
+                             (handler-case (apply fn args)
+                               (error (condition)
+                                      (warn "Error: \"~A\" ~&signalled during compile-time evaluation of ~S ."
+                                            condition original-call)
+                                      (return-from nx-constant-fold
+                                        (values `(locally (declare (notinline ,fn))
+                                                  ,original-call)
+                                                t))))))))
           (if form
             (if (null (%cdr form))
               (setq form (%car form))
