@@ -1871,7 +1871,7 @@
 
 
 (define-compiler-macro lockp (lock)
-  (let* ((tag (nx-lookup-target-uvector-subtag :simple-string)))
+  (let* ((tag (nx-lookup-target-uvector-subtag :lock)))
     `(eq ,tag (typecode ,lock))))
 
 
