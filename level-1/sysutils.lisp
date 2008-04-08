@@ -749,6 +749,40 @@
 
 (setq *type-system-initialized* t)
 
+;;; Try to map from a CTYPE describing some array/stream
+;;; element-type to a target-specific typecode, catching
+;;; cases that CTYPE-SUBTYPE missed.
+
+(defun harder-ctype-subtype (ctype)
+  (cond ((csubtypep ctype (load-time-value (specifier-type 'bit)))
+         target::subtag-bit-vector)
+        ((csubtypep ctype (load-time-value (specifier-type '(unsigned-byte 8))))
+         target::subtag-u8-vector)
+        ((csubtypep ctype (load-time-value (specifier-type '(unsigned-byte 16))))
+         target::subtag-u16-vector)
+        ((csubtypep ctype (load-time-value (specifier-type '(unsigned-byte 32))))
+         target::subtag-u32-vector)
+        #+64-bit-target
+        ((csubtypep ctype (load-time-value (specifier-type '(unsigned-byte 64))))
+         target::subtag-u64-vector)
+        ((csubtypep ctype (load-time-value (specifier-type '(signed-byte 8))))
+         target::subtag-s8-vector)
+        ((csubtypep ctype (load-time-value (specifier-type '(signed-byte 16))))
+         target::subtag-s16-vector)
+        #+32-bit-target
+        ((csubtypep ctype (load-time-value (specifier-type `(integer ,target::target-most-negative-fixnum ,target::target-most-positive-fixnum))))
+         target::subtag-fixnum-vector)
+        ((csubtypep ctype (load-time-value (specifier-type '(signed-byte 32))))
+         target::subtag-s32-vector)
+        #+64-bit-target
+        ((csubtypep ctype (load-time-value (specifier-type `(integer ,target::target-most-negative-fixnum ,target::target-most-positive-fixnum))))
+         target::subtag-fixnum-vector)
+        #+64-bit-target
+        ((csubtypep ctype (load-time-value (specifier-type '(signed-byte 64))))
+         target::subtag-s64-vector)
+        (t target::subtag-simple-vector)))
+
+
 #+count-gf-calls
 (progn
 ;;; Call-counting for generic functions.  We overload the
