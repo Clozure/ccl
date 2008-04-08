@@ -753,6 +753,7 @@ is :UNIX.")
 	(:input (setq if-exists :ignored))
 	((:io :output) nil)
 	(t (report-bad-arg direction '(member :input :output :io :probe))))
+      (check-pathname-not-wild filename) ;; probe-file-x misses wild versions....
       (multiple-value-bind (native-truename kind)(probe-file-x filename)
 	(if native-truename
 	  (if (eq kind :directory)

@@ -151,12 +151,16 @@
   (or (probe-file path)
       (signal-file-error $err-no-file path)))
 
-(defun probe-file (path)
-  "Return a pathname which is the truename of the file if it exists, or NIL
-  otherwise. An error of type FILE-ERROR is signaled if pathname is wild."
+(defun check-pathname-not-wild (path)
   (when (wild-pathname-p path)
     (error 'file-error :error-type "Inappropriate use of wild pathname ~s"
 	   :pathname path))
+  path)
+
+(defun probe-file (path)
+  "Return a pathname which is the truename of the file if it exists, or NIL
+  otherwise. An error of type FILE-ERROR is signaled if pathname is wild."
+  (check-pathname-not-wild path)
   (let* ((native (native-translated-namestring path))
          (realpath (%realpath native))
          (kind (if realpath (%unix-file-kind realpath))))
@@ -267,7 +271,7 @@
 ; I thought I wanted to call this from elsewhere but perhaps not
 (defun absolute-directory-list (dirlist)
   ; just make relative absolute and remove ups where possible
-  (when (eq (car dirlist) :relative)
+  (when (or (null dirlist) (eq (car dirlist) :relative))
     (let ((default (mac-default-directory)) default-dir)
       (when default
         (setq default-dir (%pathname-directory default))
@@ -1087,6 +1091,8 @@ a host-structure or string."
   (let ((full-name (full-pathname file-name :no-error nil))
         (kind nil))
     (when full-name
+      (when (eq (pathname-host file-name) :unspecific) ;; if physical pathname to begin with, force absolute
+	(setq file-name full-name))
       (let ((file-type (pathname-type full-name)))
         (if (and file-type (neq file-type :unspecific))
           (values (probe-file full-name) file-name file-name)

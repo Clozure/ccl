@@ -381,8 +381,11 @@
 (defun %host-component-match-p (path-host wild-host)
   ;; Note that %component-match-p is case sensitive.  Need a
   ;; case-insensitive version for hosts. 
-  (or (string-equal path-host wild-host)
-      (%component-match-p path-host wild-host)))
+  ;; In addition, host components do not support wildcards.
+  (or (eq path-host wild-host)
+      (and (stringp path-host)
+	   (stringp wild-host)
+	   (string-equal path-host wild-host))))
 
 (defun pathname-match-p (pathname wildname)
   "Pathname matches the wildname template?"
