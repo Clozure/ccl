@@ -4029,14 +4029,12 @@ LocalLabelPrefix[]ffcall_call_end:
 	__(clr %temp0)
 	__(clr %fn)
 	__(pxor %fpzero,%fpzero)
-        /* Darwin's math library seems to be pretty casual
-           about causing spurious FP exceptions */
-        __ifdef([DARWIN])
-         __(movl %arg_x_l,rcontext(tcr.ffi_exception))
-        __else
-         __(stmxcsr rcontext(tcr.ffi_exception))
-        __endif
-	__(movq rcontext(tcr.save_vsp),%rsp)
+        __(cmpb $0,C(bogus_fp_exceptions)(%rip))
+        __(je 0f)
+        __(movl %arg_x_l,rcontext(tcr.ffi_exception))
+        __(jmp 1f)
+0:      __(stmxcsr rcontext(tcr.ffi_exception))
+1:      __(movq rcontext(tcr.save_vsp),%rsp)
         __(movq rcontext(tcr.save_rbp),%rbp)
 	__(movq $TCR_STATE_LISP,rcontext(tcr.valence))
 	__ifndef([WINDOWS])
@@ -4248,14 +4246,12 @@ LocalLabelPrefix[]ffcall_return_registers_call_end:
 	__(clr %temp0)
 	__(clr %fn)
 	__(pxor %fpzero,%fpzero)
-        /* Darwin's math library seems to be pretty casual
-           about causing spurious FP exceptions */
-        __ifdef([DARWIN])
-         __(movl %arg_x_l,rcontext(tcr.ffi_exception))
-        __else
-         __(stmxcsr rcontext(tcr.ffi_exception))
-        __endif
-	__(movq rcontext(tcr.save_vsp),%rsp)
+        __(cmpb $0,C(bogus_fp_exceptions)(%rip))
+        __(je 0f)
+        __(movl %arg_x_l,rcontext(tcr.ffi_exception))
+        __(jmp 1f)
+0:      __(stmxcsr rcontext(tcr.ffi_exception))
+1:      __(movq rcontext(tcr.save_vsp),%rsp)
         __(movq rcontext(tcr.save_rbp),%rbp)
 	__(movq $TCR_STATE_LISP,rcontext(tcr.valence))
 	__(pop %fn)
