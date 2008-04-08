@@ -590,4 +590,70 @@
         (format t "~&~a" (get-output-stream-string s))
         t))))
 
-                           
+(defmacro with-preserved-working-directory ((&optional dir) &body body)
+  (let ((wd (gensym)))
+    `(let ((,wd (mac-default-directory)))
+       (unwind-protect
+	    (progn 
+	      ,@(when dir `((cwd ,dir)))
+	      ,@body)
+	 (cwd ,wd)))))
+
+(defun ensure-tests-loaded (&key force full)
+  (unless (and (find-package "REGRESSION-TEST") (not force))
+    (if (probe-file "ccl:tests;ansi-tests;")
+      (when full
+	(cwd "ccl:tests;")
+	(run-program "svn" '("update")))
+      (let* ((svn (probe-file "ccl:.svn;entries"))
+	     (repo (and svn
+			(with-open-file (s svn)
+			  (loop as line =  (read-line s nil) while line
+			     do (when (search "://" line)
+				  (setq line (read-line s))
+				  (return (and (search "://" line) line)))))))
+	     (s (make-string-output-stream)))
+	(when repo
+	  (format t "~&Checking out test suite into ccl:tests;~%")
+	  (cwd "ccl:")
+	  (multiple-value-bind (status exit-code)
+	      (external-process-status
+	       (run-program "svn" (list "checkout" (format nil "~a/trunk/tests" repo) "tests")
+			    :output s
+			    :error s))
+	    (unless (and (eq status :exited)
+			 (eql exit-code 0))
+	      (error "Failed to check out test suite: ~%~a" (get-output-stream-string s)))))))
+    (cwd "ccl:tests;ansi-tests;")
+    (run-program "make" '("-k" "clean"))
+    (map nil 'delete-file (directory "*.*fsl"))
+    ;; Muffle the typecase "clause ignored" warnings, since there is really nothing we can do about
+    ;; it without making the test suite non-portable across platforms...
+    (handler-bind ((warning (lambda (c)
+			      (when (and (typep c 'compiler-warning)
+					 (eq (compiler-warning-warning-type c) :program-error)
+					 (typep (car (compiler-warning-args c)) 'simple-warning)
+					 (or
+					  (string-equal
+					   (simple-condition-format-control (car (compiler-warning-args c)))
+					   "Clause ~S ignored in ~S form - shadowed by ~S .")
+					  ;; Might as well ignore these as well, they're intentional.
+					  (string-equal
+					   (simple-condition-format-control (car (compiler-warning-args c)))
+					   "Duplicate keyform ~s in ~s statement.")))
+				(muffle-warning c)))))
+      ;; This loads the infrastructure
+      (load "ccl:tests;ansi-tests;gclload1.lsp")
+      ;; This loads the actual tests
+      (load "ccl:tests;ansi-tests;gclload2.lsp"))))
+
+(defun test-ccl (&key force full verbose (catch-errors t))
+  (with-preserved-working-directory ()
+    (ensure-tests-loaded :force force :full full)
+    (cwd "ccl:tests;ansi-tests;")
+    (let ((do-tests (find-symbol "DO-TESTS" "REGRESSION-TEST"))
+	  (*suppress-compiler-warnings* t)
+	  (*print-catch-errors* nil))
+      (time (funcall do-tests :verbose verbose :compile t :catch-errors catch-errors)))
+    ;; Ok, here we would run any of our own tests.
+    ))

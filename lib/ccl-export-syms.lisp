@@ -610,6 +610,7 @@
      xcompile-ccl
      xload-level-0
      rebuild-ccl
+     test-ccl
      defglobal
 
      getenv
