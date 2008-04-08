@@ -788,7 +788,10 @@ minimum number of elements to add if it must be extended."
 	    ((single-float short-float) target::subtag-single-float-vector)
 	    (t target::subtag-simple-vector)))
 	 (t target::subtag-simple-vector))))
-    (t target::subtag-simple-vector)))
+    (named-ctype ; *, T, etc.
+     target::subtag-simple-vector)
+    (t
+     (harder-ctype-subtype ctype))))
 
 (defun %set-simple-array-p (array)
   (setf (%svref array  target::arrayh.flags-cell)
