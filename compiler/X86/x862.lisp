@@ -4365,8 +4365,8 @@
   (declare (ignorable check-boundp))
   (setq check-boundp (not *x862-reckless*))
   (with-x86-local-vinsn-macros (seg vreg xfer)
-    (when vreg
-        (if (eq sym '*interrupt-level*)
+    (when (or check-boundp vreg)
+      (if (eq sym '*interrupt-level*)
           (ensuring-node-target (target vreg)
             (! ref-interrupt-level target))
           (if *x862-open-code-inline*
