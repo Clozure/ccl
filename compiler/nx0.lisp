@@ -1785,6 +1785,8 @@ Or something. Right? ~s ~s" var varbits))
     (if (symbolp sym)
       (let* ((*nx-sfname* sym) special)
         (if (and (setq special (gethash sym *nx1-alphatizers*))
+                 (or (not (functionp (fboundp sym)))
+                     (< (safety-optimize-quantity env) 3))
                  ;(not (nx-lexical-finfo sym env))
                  (not (nx-declared-notinline-p sym *nx-lexical-environment*)))
           (funcall special form env) ; pass environment arg ...
@@ -1916,10 +1918,12 @@ Or something. Right? ~s ~s" var varbits))
 (defun nx1-builtin-function-offset (name)
    (arch::builtin-function-name-offset name))
 
-(defun nx1-call-form (global-name afunc arglist spread-p)
+(defun nx1-call-form (global-name afunc arglist spread-p  &optional (env *nx-lexical-environment*))
   (if afunc
     (make-acode (%nx1-operator lexical-function-call) afunc (nx1-arglist arglist (if spread-p 1 (backend-num-arg-regs *target-backend*))) spread-p)
-    (let* ((builtin (unless spread-p (nx1-builtin-function-offset global-name))))
+    (let* ((builtin (unless (or spread-p
+                                (eql 3 (safety-optimize-quantity env)))
+                      (nx1-builtin-function-offset global-name))))
       (if (and builtin
                (let* ((bits (lfun-bits (fboundp global-name))))
                  (and bits (eql (logand $lfbits-args-mask bits)
