@@ -4322,7 +4322,8 @@
   (setq check-boundp (not *ppc2-reckless*))
   (with-ppc-local-vinsn-macros (seg vreg xfer)
     (when (or check-boundp vreg)
-        (if (eq sym '*interrupt-level*)
+      (unless vreg (setq vreg ($ ppc::arg_z)))
+      (if (eq sym '*interrupt-level*)
           (ensuring-node-target (target vreg)
             (! ref-interrupt-level target))
           (if *ppc2-open-code-inline*
