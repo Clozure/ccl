@@ -26,6 +26,7 @@
   '(:common-lisp
     :openmcl
     :ccl
+    :ccl-1.2
     :clozure
     :clozure-common-lisp
     :ansi-cl
