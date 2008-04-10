@@ -25,6 +25,7 @@
 (defparameter *features*
   '(:common-lisp
     :openmcl
+    :ccl
     :clozure
     :clozure-common-lisp
     :ansi-cl
@@ -87,7 +88,7 @@
     #+darwin-target :darwin
     #+linux-target :linux
     #+freebsd-target :freebsd
-    :mcl                                ;deprecated
+    ;; :mcl                                ;deprecated
     )
   "a list of symbols that describe features provided by the
    implementation")
