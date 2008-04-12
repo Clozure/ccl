@@ -134,10 +134,10 @@
         :address (ccl::external-call "_CFRunLoopGetMain" :address))
        ;;; Set the OSX Window Server's notion of the name of the
        ;;; current process.
-       (%stack-block ((psn 8))
-         (ccl::external-call "_GetCurrentProcess" :address psn)
+       (rlet ((psn #>ProcessSerialNumber))
+         (#_GetCurrentProcess psn)
          (with-cstrs ((name "simple OpenGL example"))
-           (ccl::external-call "_CPSSetProcessName" :address psn :address name))))
+           (ccl::external-call "_CPSSetProcessName" :address psn :address name :void))))
      (main)))
 
 ; (main)
