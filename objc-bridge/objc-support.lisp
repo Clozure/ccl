@@ -186,12 +186,15 @@
 (defun retain-objc-instance (instance)
   (#/retain instance))
 
-
+;;; May have to create/release autorelease pools before the bridge
+;;; is fully reinitialized, so use low-level OBJC-MESSAGE-SEND
+;;; and @class.
 (defun create-autorelease-pool ()
-  (#/init (#/alloc ns:ns-autorelease-pool)))
+  (objc-message-send
+   (objc-message-send (@class "NSAutoreleasePool") "alloc") "init"))
 
 (defun release-autorelease-pool (p)
-  (#/release p))
+  (objc-message-send p "release" :void))
 
 
 #-ascii-only
@@ -485,6 +488,8 @@ NSObjects describe themselves in more detail than others."
             (%ptr-to-int p))))
 
                                          
+(defmethod terminate ((instance objc:objc-object))
+  (objc-message-send instance "release"))
 
 
 (provide "OBJC-SUPPORT")

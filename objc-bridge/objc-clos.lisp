@@ -741,8 +741,6 @@
                 (register-canonical-objc-instance instance raw-ptr))))))
     instance))
 
-(defmethod terminate ((instance objc:objc-object))
-  (objc-message-send instance "release"))
 
 
 
