@@ -97,7 +97,7 @@
 	   (p nil))
       (unless (minusp row)
 	(setq p (svref processes row))
-	(cinspect p)
+	(inspect p)
 	(#/refresh: self self)))))
 
 ;;; table view delegate methods
