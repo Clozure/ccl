@@ -642,7 +642,9 @@
       ;; This loads the infrastructure
       (load "ccl:tests;ansi-tests;gclload1.lsp")
       ;; This loads the actual tests
-      (load "ccl:tests;ansi-tests;gclload2.lsp"))))
+      (load "ccl:tests;ansi-tests;gclload2.lsp")
+      ;; And our own tests
+      (load "ccl:tests;ansi-tests;ccl.lsp"))))
 
 (defun test-ccl (&key force full verbose (catch-errors t))
   (with-preserved-working-directory ()
