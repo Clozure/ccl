@@ -599,7 +599,7 @@
 	      ,@body)
 	 (cwd ,wd)))))
 
-(defun ensure-tests-loaded (&key force full)
+(defun ensure-tests-loaded (&key force update)
   (unless (and (find-package "REGRESSION-TEST") (not force))
     (if (probe-file "ccl:tests;ansi-tests;")
       (when update
