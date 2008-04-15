@@ -602,7 +602,7 @@
 (defun ensure-tests-loaded (&key force full)
   (unless (and (find-package "REGRESSION-TEST") (not force))
     (if (probe-file "ccl:tests;ansi-tests;")
-      (when full
+      (when update
 	(cwd "ccl:tests;")
 	(run-program "svn" '("update")))
       (let* ((svn (probe-file "ccl:.svn;entries"))
@@ -646,9 +646,9 @@
       ;; And our own tests
       (load "ccl:tests;ansi-tests;ccl.lsp"))))
 
-(defun test-ccl (&key force full verbose (catch-errors t))
+(defun test-ccl (&key force (update t) verbose (catch-errors t))
   (with-preserved-working-directory ()
-    (ensure-tests-loaded :force force :full full)
+    (ensure-tests-loaded :force force :update update)
     (cwd "ccl:tests;ansi-tests;")
     (let ((do-tests (find-symbol "DO-TESTS" "REGRESSION-TEST"))
 	  (*suppress-compiler-warnings* t)
