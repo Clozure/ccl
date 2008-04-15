@@ -24,106 +24,84 @@
 
 (defpackage "CHUD"
   (:use "CL" "CCL")
-  (:export "METER" "PREPARE-METERING" "*SPATCH-DIRECTORY-PATH*"
+  (:export "METER" "PREPARE-METERING" "SHARK-SESSION-PATH"
            "LAUNCH-SHARK" "CLEANUP-SPATCH-FILES" "RESET-METERING"))
   
 (in-package "CHUD")
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (progn
+    #-darwin-target
+    (error "This code is Darwin/MacOSX-specific.")))
 
-(defparameter *CHUD-library-path*
-  "/System/Library/PrivateFrameworks/CHUD.Framework/CHUD"
-  "This seems to move around with every release.")
 
-(defparameter *shark-app-path* "/Developer/Applications/Performance\ Tools/Shark.app")
+(defparameter *shark-session-path* nil)
 
-(defparameter *spatch-directory-path* nil
-  "If non-NIL, should be a pathname whose directory component matches the
-\"Patch FIles\" search path in Shark's Preferences.  When this variable
-is NIL, USER-HOMEDIR-PATHNAME is used instead.")
+(defparameter *shark-session-native-namestring* nil)
 
-(eval-when (:load-toplevel :execute)
-  (open-shared-library (namestring *CHUD-library-path*)))
+(defparameter *shark-config-file* nil "Full pathname of .cfg file to use for profiling, or NIL.")
 
-(eval-when (:compile-toplevel :execute)
-  (use-interface-dir :chud))
+(defun finder-open-file (namestring)
+  "Open the file named by NAMESTRING, as if it was double-clicked on
+in the finder"
+  (run-program "/usr/bin/open" (list namestring) :output nil))
 
-;;; CHUD apparently has this notion of global, persistent
-;;; "status" (the result returned by the last operation.)
-;;; I have not idea whether or not that's thread-specific;
-;;; there doesn't seem to be any other way of getting a
-;;; string that describes an error code.
-(defun chud-get-status-string ()
-  (with-macptrs ((s (#_chudGetStatusStr)))
-    (if (%null-ptr-p s)
-      ""
-      (%get-cstring s))))
+(defun ensure-shark-session-path ()
+  (unless *shark-session-path*
+    (multiple-value-bind (second minute hour date month year)
+	(decode-universal-time (get-universal-time))
+      (let* ((subdir (format nil "profiling-session-~A-~d_~d-~d-~d_~d.~d.~d"
+			     (pathname-name
+			      (car
+			       ccl::*command-line-argument-list*))
+			     (ccl::getpid)
+			     month
+			     date
+			     year
+			     hour
+			     minute
+			     second))
+	     (dir (make-pathname :directory (append (pathname-directory (user-homedir-pathname)) (list subdir)) :defaults nil))
+	     (native-name (ccl::native-untranslated-namestring dir)))
+	(ensure-directories-exist dir)
+	(finder-open-file native-name)
+	(setenv "SHARK_SEARCH_PATH_PATCH_FILES" native-name)
+	(setq *shark-session-native-namestring*
+	      native-name
+	      *shark-session-path* dir))))
+  *shark-session-path*)
 
-(defun chud-check-error (result context)
-  (or (eql result #$chudSuccess)
-      (error "CHUD error ~d (~a) while ~a. " result (chud-get-status-string) context)))
+;;; This is cheesy: it should watch for directory changes (or something)
+;;; rather than guessing how long it'll take for an mshark file to appear
+;;; in the session directory.
+(defun wait-and-open-mshark-file (path delay)
+  (process-run-function "mshark file watch"
+			(lambda ()
+			  (sleep delay)
+			  (let* ((path (make-pathname
+					:host nil
+					:directory
+					(pathname-directory path)
+					:name "*"
+					:type "mshark"
+					:defaults nil))
+				 (mshark
+				  (ignore-errors (car (last (directory path))))))
+			    (when mshark
+			      (finder-open-file
+			       (ccl::native-untranslated-namestring mshark)))))))
+
+
   
-(defun chud-is-initialized ()
-  (not (eql (#_chudIsInitialized) 0)))
 
-(defparameter *chud-supported-major-version* 4)
-(defparameter *chud-supported-minor-version* 1)
+(defvar *shark-process* nil)
+(defvar *sampling* nil)
 
-;; Don't know if it makes sense to worry about max supported versions
-;; as well.
-
-(defun check-chud-version ()
-  (let* ((version (#_chudFrameworkVersion))
-         (major (ldb (byte 8 24) version))
-         (minor (ldb (byte 8 12) version)))
-    (or (and (>= major *chud-supported-major-version*)
-             (when (= major *chud-supported-major-version*)
-               (>= minor *chud-supported-minor-version*)))
-        (warn "The installed CHUD framework is version ~d.~d.  ~
-The minimum version supported by this interface is ~d.~d."
-              major minor *chud-supported-major-version*
-              *chud-supported-minor-version*))))
-    
-
-(defun initialize-chud ()
-  (or (chud-is-initialized)
-      (and (check-chud-version)
-           (chud-check-error (#_chudInitialize) "initializing CHUD"))))
-
-(defun acquired-remote-access ()
-  (eql #$true (#_chudIsRemoteAccessAcquired)))
-  
-;;; If we've already successfully called (#_chudAcquireRemoteAccess),
-;;; we can call it again without error (e.g., it's a no-op in that
-;;; case.)  However, we can successfully release it at most once.
-
-(defun acquire-remote-access ()
-  (or (acquired-remote-access)
-      (chud-check-error (#_chudAcquireRemoteAccess) "acquiring remote access")))
-
-(defun release-remote-access ()
-  (chud-check-error (#_chudReleaseRemoteAccess) "releasing remote access"))
-
-(defun start-remote-perf-monitor (label)
-  (with-cstrs ((clabel (format nil "~a" label)))
-    (chud-check-error (#_chudStartRemotePerfMonitor clabel)
-                      "starting performance monitor")))
-
-(defun stop-remote-perf-monitor ()
-  (chud-check-error (#_chudStopRemotePerfMonitor)
-                    "stopping performance monitor"))
-
-(defun setup-timer (duration frequency)
-  (#_chudSetupTimer frequency
-                    #$chudMicroSeconds
-                    0
-                    #$chudMicroSeconds
-                    duration))
-
-(defun get-readonly-area-bounds ()
+#+ppc-target
+(defun get-static-function-area-bounds ()
   (ccl::do-gc-areas (a)
     (when (eql(ccl::%fixnum-ref a target::area.code)
-              #+ppc-target ccl::area-readonly
-              #+x8664-target ccl::area-managed-static)
+               ccl::area-readonly)
       (return
         (values (ash (ccl::%fixnum-ref a target::area.low) target::fixnumshift)
                 (ash (ccl::%fixnum-ref a target::area.active) target::fixnumshift))))))
@@ -133,10 +111,13 @@ The minimum version supported by this interface is ~d.~d."
     (subseq (nsubstitute #\0 #\# (nsubstitute #\. #\Space name)) 1)))
 
 (defun print-shark-spatch-record (fn &optional (stream t))
-  (let* ((code-vector (uvref fn 0))
+  (let* ((code-vector #+ppc-target (uvref fn 0) #-ppc-target fn)
          (startaddr (+ (ccl::%address-of code-vector)
-                       target::misc-data-offset))
-         (endaddr (+ startaddr (* target::node-size (uvsize code-vector)))))
+                       #+ppc32-target target::misc-data-offset
+		       #-ppc32-target 0))
+         (endaddr (+ startaddr (* 4 (- (uvsize code-vector)
+				       #+ppc64-target 2
+				       #-ppc64-target 1)))))
     ;; i hope all lisp sym characters are allowed... we'll see
     (format stream "{~%~@
                         ~a~@
@@ -183,15 +164,15 @@ The minimum version supported by this interface is ~d.~d."
         
                            
 (defun generate-shark-spatch-file ()
-  (ccl::purify)
+  #+ppc-target (ccl::purify)
+  #+x86-target (ccl::freeze)
   (multiple-value-bind (pure-low pure-high)
-      (get-readonly-area-bounds)
+      (get-static-function-area-bounds)
     (let* ((functions (identify-functions-with-pure-code pure-low pure-high)))
       (with-open-file (f (make-pathname
                           :host nil
                           :directory (pathname-directory
-                                      (or *spatch-directory-path*
-                                          (user-homedir-pathname)))
+                                      (ensure-shark-session-path))
                           :name (format nil "~a_~D"
                                         (pathname-name
                                          (car
@@ -205,58 +186,51 @@ The minimum version supported by this interface is ~d.~d."
           (print-shark-spatch-record (svref functions i) f))
         (format f "!SHARK_SPATCH_END~%"))) t))
 
-(defun cleanup-spatch-files ()
-  (dolist (f (directory
-              (make-pathname
-               :host nil
-               :directory
-               (pathname-directory
-                (or *spatch-directory-path*
-                    (user-homedir-pathname)))
-               :name :wild
-               :type "spatch")))
-    (delete-file f)))
+(defun terminate-shark-process ()
+  (when *shark-process*
+    (signal-external-process *shark-process* #$SIGUSR2))
+  (setq *shark-process* nil
+	*sampling* nil))
+
+(defun toggle-sampling ()
+  (if *shark-process*
+    (progn
+      (signal-external-process *shark-process* (if *sampling* #$SIGUSR2 #$SIGUSR1))
+      (setq *sampling* (not *sampling*)))
+    (warn "No active shark procsss")))
+
+(defun enable-sampling ()
+  (unless *sampling* (toggle-sampling)))
+
+(defun disable-sampling ()
+  (when *sampling* (toggle-sampling)))
+
+(defun ensure-shark-process (reset)
+  (when (or (null *shark-process*) reset)
+    (terminate-shark-process)
+    (generate-shark-spatch-file)
+    (let* ((args (list "-b" "-r" "-a" (format nil "~d" (ccl::getpid))
+			     "-d" *shark-session-native-namestring*)))
+      (when *shark-config-file*
+	(push (ccl::native-untranslated-namestring *shark-config-file*)
+	      args)
+	(push "-m" args))
+      (setq *shark-process*
+	    (run-program "/usr/bin/shark"
+			 args
+			 :output t
+			 :wait nil))
+      (sleep 5))))
 
 
-(defun launch-shark ()
-  (run-program "/usr/bin/open" (list *shark-app-path*)))
-
-  
-(defun reset-metering ()
-  (when (acquired-remote-access)
-    (release-remote-access)
-    (format t "~&Note: it may be desirable to quit and restart Shark.")
-    t))
-    
-(defun prepare-metering ()
-  (launch-shark)
-  (generate-shark-spatch-file)
-  (initialize-chud)
-  (loop
-    (when (ignore-errors (acquire-remote-access))
-      (return))
-    ;; Yes, this is lame.
-    (loop (when (y-or-n-p "Is Shark in Remote mode yet?")
-            (return)))))
-
-(defmacro meter (form &key (duration 0) (frequency 1))
-  (let* ((started (gensym)))
-    `(let* ((,started nil))
-      (unless (and (chud-is-initialized)
-                   (acquired-remote-access))
-        (prepare-metering))
-      (setup-timer ,duration ,frequency)
+(defmacro meter (form &key reset)
+    `(progn
+      (ensure-shark-process ,reset)
       (unwind-protect
          (progn
-           (setq ,started (start-remote-perf-monitor ',form))
+           (enable-sampling)
            ,form)
-        (when ,started (stop-remote-perf-monitor))))))
+        (disable-sampling)
+	(wait-and-open-mshark-file *shark-session-path* 5))))
 
-(defun chud-cleanup ()
-  (when (chud-is-initialized)
-    (when (acquired-remote-access)
-      (ignore-errors (release-remote-access)))
-    (#_chudCleanup))
-  (cleanup-spatch-files))
-  
-(pushnew 'chud-cleanup *lisp-cleanup-functions*)
+
