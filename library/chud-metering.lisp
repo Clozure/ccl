@@ -37,6 +37,8 @@
 
 (defparameter *shark-session-path* nil)
 
+(defloadvar *written-spatch-file* nil)
+
 (defparameter *shark-session-native-namestring* nil)
 
 (defparameter *shark-config-file* nil "Full pathname of .cfg file to use for profiling, or NIL.")
@@ -64,7 +66,6 @@ in the finder"
 	     (dir (make-pathname :directory (append (pathname-directory (user-homedir-pathname)) (list subdir)) :defaults nil))
 	     (native-name (ccl::native-untranslated-namestring dir)))
 	(ensure-directories-exist dir)
-	(finder-open-file native-name)
 	(setenv "SHARK_SEARCH_PATH_PATCH_FILES" native-name)
 	(setq *shark-session-native-namestring*
 	      native-name
@@ -184,7 +185,9 @@ in the finder"
         (format f "!SHARK_SPATCH_BEGIN~%")
         (dotimes (i (length functions))
           (print-shark-spatch-record (svref functions i) f))
-        (format f "!SHARK_SPATCH_END~%"))) t))
+        (format f "!SHARK_SPATCH_END~%")))
+    (setq *written-spatch-file* t)
+    t))
 
 (defun terminate-shark-process ()
   (when *shark-process*
@@ -195,7 +198,7 @@ in the finder"
 (defun toggle-sampling ()
   (if *shark-process*
     (progn
-      (signal-external-process *shark-process* (if *sampling* #$SIGUSR2 #$SIGUSR1))
+      (signal-external-process *shark-process* #$SIGUSR1)
       (setq *sampling* (not *sampling*)))
     (warn "No active shark procsss")))
 
@@ -205,11 +208,12 @@ in the finder"
 (defun disable-sampling ()
   (when *sampling* (toggle-sampling)))
 
-(defun ensure-shark-process (reset)
+(defun ensure-shark-process (reset hook)
   (when (or (null *shark-process*) reset)
     (terminate-shark-process)
-    (generate-shark-spatch-file)
-    (let* ((args (list "-b" "-r" "-a" (format nil "~d" (ccl::getpid))
+    (when (or reset (not *written-spatch-file*))
+      (generate-shark-spatch-file))
+    (let* ((args (list "-b" "-1" "-a" (format nil "~d" (ccl::getpid))
 			     "-d" *shark-session-native-namestring*)))
       (when *shark-config-file*
 	(push (ccl::native-untranslated-namestring *shark-config-file*)
@@ -218,19 +222,50 @@ in the finder"
       (setq *shark-process*
 	    (run-program "/usr/bin/shark"
 			 args
-			 :output t
+			 :output :stream
+			 :status-hook hook
 			 :wait nil))
-      (sleep 5))))
+      (let* ((output (external-process-output-stream *shark-process*)))
+	(do* ((line (read-line output nil nil) (read-line output nil nil)))
+	     ((null line))
+	  (when (search "ready." line :key #'char-downcase)
+	    (return)))))))
+
+(defun display-shark-session-file (line)
+  (let* ((last-quote (position #\' line :from-end t))
+	 (first-quote (and last-quote (position #\' line :end (1- last-quote) :from-end t)))
+	 (path (and first-quote  (subseq line (1+ first-quote) last-quote))))
+    (when path (finder-open-file path))))
+    
+(defun scan-shark-process-output (p)
+  (with-interrupts-enabled 
+      (let* ((out (ccl::external-process-output p)))
+	(do* ((line (read-line out nil nil) (read-line out nil nil)))
+	     ((null line))
+	  (when (search "Created session file:" line)
+	    (display-shark-session-file line)
+	    (return))))))
+
 
 
 (defmacro meter (form &key reset)
-    `(progn
-      (ensure-shark-process ,reset)
+  (let* ((hook (gensym))
+	 (block (gensym))
+	 (process (gensym)))
+    `(block ,block
+      (flet ((,hook (p)
+	       (when (or (eq (external-process-status p) :exited)
+			 (eq (external-process-status p) :signaled))
+		 (setq *shark-process* nil
+		       *sampling* nil))))
+      (ensure-shark-process ,reset #',hook)
       (unwind-protect
          (progn
            (enable-sampling)
            ,form)
         (disable-sampling)
-	(wait-and-open-mshark-file *shark-session-path* 5))))
+	(let* ((,process *shark-process*))
+	  (when ,process
+	    (scan-shark-process-output ,process))))))))
 
 
