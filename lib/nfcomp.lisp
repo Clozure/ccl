@@ -906,7 +906,8 @@ Will differ from *compiling-file* during an INCLUDE")
 (defun fasl-scan (forms)
   (let* ((*fasdump-hash* (make-hash-table :size (length forms)          ; Crude estimate
                                           :rehash-threshold 0.9
-                                          :test 'eq))
+                                          :test 'eq
+					  :shared nil))
          (*make-load-form-hash* (make-hash-table :test 'eq))
          (*fasdump-read-package* nil)
          (*fasdump-global-offsets* nil)
