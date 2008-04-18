@@ -4363,9 +4363,10 @@
             (setf (ioblock-charpos ioblock) (the fixnum (- end (the fixnum nlpos))))
             (incf (ioblock-charpos ioblock) num-chars))
           num-chars)
+      (declare (fixnum src dest end))
       (let* ((char (schar string src)))
         (if (eql char #\Newline)
-          (setq nlpos src))
+          (setq nlpos (the fixnum (1+ src))))
         (setf (schar out dest) char)))))
 
 
