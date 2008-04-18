@@ -72,40 +72,12 @@ in the finder"
 	      *shark-session-path* dir))))
   *shark-session-path*)
 
-;;; This is cheesy: it should watch for directory changes (or something)
-;;; rather than guessing how long it'll take for an mshark file to appear
-;;; in the session directory.
-(defun wait-and-open-mshark-file (path delay)
-  (process-run-function "mshark file watch"
-			(lambda ()
-			  (sleep delay)
-			  (let* ((path (make-pathname
-					:host nil
-					:directory
-					(pathname-directory path)
-					:name "*"
-					:type "mshark"
-					:defaults nil))
-				 (mshark
-				  (ignore-errors (car (last (directory path))))))
-			    (when mshark
-			      (finder-open-file
-			       (ccl::native-untranslated-namestring mshark)))))))
-
 
   
 
 (defvar *shark-process* nil)
 (defvar *sampling* nil)
 
-#+ppc-target
-(defun get-static-function-area-bounds ()
-  (ccl::do-gc-areas (a)
-    (when (eql(ccl::%fixnum-ref a target::area.code)
-               ccl::area-readonly)
-      (return
-        (values (ash (ccl::%fixnum-ref a target::area.low) target::fixnumshift)
-                (ash (ccl::%fixnum-ref a target::area.active) target::fixnumshift))))))
 
 (defun safe-shark-function-name (function)
   (let* ((name (format nil "~s" function)))
@@ -114,9 +86,15 @@ in the finder"
 (defun print-shark-spatch-record (fn &optional (stream t))
   (let* ((code-vector #+ppc-target (uvref fn 0) #-ppc-target fn)
          (startaddr (+ (ccl::%address-of code-vector)
+                       #+x8664-target 0
                        #+ppc32-target target::misc-data-offset
 		       #-ppc32-target 0))
-         (endaddr (+ startaddr (* 4 (- (uvsize code-vector)
+         (endaddr (+ startaddr
+                     #+x8664-target
+                     (1+ (ash (1- (ccl::%function-code-words fn)
+                                  ) target::word-shift))
+                     #+ppc-target
+                     (* 4 (- (uvsize code-vector)
 				       #+ppc64-target 2
 				       #-ppc64-target 1)))))
     ;; i hope all lisp sym characters are allowed... we'll see
@@ -131,63 +109,87 @@ in the finder"
             #+32-bit-target "0x~8,'0x" #+64-bit-target "0x~16,'0x"
             endaddr)))
 
-(defun identify-functions-with-pure-code (pure-low pure-high)
-  (let* ((hash (make-hash-table :test #'eq)))
-    (ccl::%map-lfuns #'(lambda (f)
-                         (let* ((code-vector #+ppc-target (ccl:uvref f 0)
-                                             #+x8664-target (ccl::function-to-function-vector f))
-                                (startaddr (+ (ccl::%address-of code-vector)
-                                              target::misc-data-offset)))
-                           (when (and (>= startaddr pure-low)
-                                      (< startaddr pure-high))
-                             (push f (gethash code-vector hash))))))
-    (let* ((n 0))
-      (declare (fixnum n))
-      (maphash #'(lambda (k v)
-                   (declare (ignore k))
-                   (if (null (cdr v))
-                     (incf n)))
-               hash)
-      (let* ((functions (make-array n))
-             (i 0))
+#+x8664-target
+(ccl::defx86lapfunction dynamic-dnode ((x arg_z))
+  (movq (% x) (% imm0))
+  (ref-global x86::heap-start arg_y)
+  (subq (% arg_y) (% imm0))
+  (shrq ($ x8664::dnode-shift) (% imm0))
+  (box-fixnum imm0 arg_z)
+  (single-value-return))
+
+#+x8664-target
+(defun identify-functions-with-pure-code ()
+  (ccl::collect ((functions))
+    (block walk
+      (let* ((frozen-dnodes (ccl::frozen-space-dnodes)))
+        (ccl::%map-areas (lambda (o)
+                           (when (>= (dynamic-dnode o) frozen-dnodes)
+                             (return-from walk nil))
+                           (when (typep o 'ccl::function-vector)
+                             (functions (ccl::function-vector-to-function o))))
+                         ccl::area-dynamic
+                         ccl::area-dynamic
+                         )))
+    (functions)))
+
+#+ppc-target
+(defun identify-functions-with-pure-code ()
+  (multiple-value-bind (pure-low pure-high)
+                                 
+      (ccl::do-gc-areas (a)
+        (when (eql(ccl::%fixnum-ref a target::area.code)
+                  ccl::area-readonly)
+          (return
+            (values (ash (ccl::%fixnum-ref a target::area.low) target::fixnumshift)
+                    (ash (ccl::%fixnum-ref a target::area.active) target::fixnumshift)))))
+    (let* ((hash (make-hash-table :test #'eq)))
+      (ccl::%map-lfuns #'(lambda (f)
+                           (let* ((code-vector  (ccl:uvref f 0))
+                                  (startaddr (+ (ccl::%address-of code-vector)
+                                                target::misc-data-offset)))
+                             (when (and (>= startaddr pure-low)
+                                        (< startaddr pure-high))
+                               (push f (gethash code-vector hash))))))
+      (let* ((n 0))
+        (declare (fixnum n))
         (maphash #'(lambda (k v)
                      (declare (ignore k))
-                     (when (null (cdr v))
-                       (setf (svref functions i) (car v)
-                             i (1+ i))))
+                     (if (null (cdr v))
+                       (incf n)))
                  hash)
-        (sort functions
-              #'(lambda (x y)
-                  (< (ccl::%address-of #+ppc-target (uvref x 0)
-                                       #+x8664-target x)
-                     (ccl::%address-of #+ppc-target (uvref y 0)
-                                       #+x8664-target y))))))))
+        (let* ((functions ()))
+          (maphash #'(lambda (k v)
+                       (declare (ignore k))
+                       (when (null (cdr v))
+                         (push (car v) functions)))
+                   hash)
+          (sort functions
+                #'(lambda (x y)
+                    (< (ccl::%address-of (uvref x 0) )
+                       (ccl::%address-of  (uvref y 0))))))))))
         
                            
 (defun generate-shark-spatch-file ()
   #+ppc-target (ccl::purify)
   #+x86-target (ccl::freeze)
-  (multiple-value-bind (pure-low pure-high)
-      (get-static-function-area-bounds)
-    (let* ((functions (identify-functions-with-pure-code pure-low pure-high)))
-      (with-open-file (f (make-pathname
-                          :host nil
-                          :directory (pathname-directory
-                                      (ensure-shark-session-path))
-                          :name (format nil "~a_~D"
-                                        (pathname-name
-                                         (car
-                                          ccl::*command-line-argument-list*))
-                                        (ccl::getpid))
-                          :type "spatch")
-                         :direction :output
-                         :if-exists :supersede)
-        (format f "!SHARK_SPATCH_BEGIN~%")
-        (dotimes (i (length functions))
-          (print-shark-spatch-record (svref functions i) f))
-        (format f "!SHARK_SPATCH_END~%")))
-    (setq *written-spatch-file* t)
-    t))
+  (let* ((functions (identify-functions-with-pure-code)))
+    (with-open-file (f (make-pathname
+                        :host nil
+                        :directory (pathname-directory
+                                    (ensure-shark-session-path))
+                        :name (format nil "~a_~D"
+                                      (pathname-name
+                                       (car
+                                        ccl::*command-line-argument-list*))
+                                      (ccl::getpid))
+                        :type "spatch")
+                       :direction :output
+                       :if-exists :supersede)
+      (format f "!SHARK_SPATCH_BEGIN~%")
+      (dolist (fun functions)
+        (print-shark-spatch-record fun f))
+      (format f "!SHARK_SPATCH_END~%"))))
 
 (defun terminate-shark-process ()
   (when *shark-process*
@@ -228,7 +230,9 @@ in the finder"
       (let* ((output (external-process-output-stream *shark-process*)))
 	(do* ((line (read-line output nil nil) (read-line output nil nil)))
 	     ((null line))
+          (format t "~&~a" line)
 	  (when (search "ready." line :key #'char-downcase)
+            (sleep 1)
 	    (return)))))))
 
 (defun display-shark-session-file (line)
@@ -242,6 +246,7 @@ in the finder"
       (let* ((out (ccl::external-process-output p)))
 	(do* ((line (read-line out nil nil) (read-line out nil nil)))
 	     ((null line))
+          (format t "~&~a" line)
 	  (when (search "Created session file:" line)
 	    (display-shark-session-file line)
 	    (return))))))
