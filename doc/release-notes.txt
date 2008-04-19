@@ -17,6 +17,41 @@ decided to rename OpenMCL to "Clozure CL" (or "CCL").  There are still
 references to the old name in URLs, bits and pieces of the lisp itself,
 mailing lists, and elsewhere.]
 
+Obtaining Clozure CL
+--------------------
+Gzip'ed tar archives of Clozure CL 1.2  are available via anonymous FTP
+from:
+
+<ftp://clozure.com/pub/release/1.2>
+
+in files whose names are of the form
+clozurecl-1.2-[RELEASE-LEVEL-]PLATFORM.tar.gz
+
+where
+RELEASE-LEVEL may be "rcN" to indicate "release candidate N", or absent, and
+PLATFORM is one of "linuxppc", "darwinppc", "linuxx8664", "darwinx8664", or
+"freebsdx8664".  The "ppc" archives contain 32- and 64-bit binaries and
+interfaces; the x8664 archives are (still) 64-bit only.  All archives
+contain full sources and documentation, and also svn 1.4x metainformation
+(see below.)
+
+It's also possible to check out content equivalent to any of these
+archives by using an "svn" client (again, see below.).  The URL is of the
+form:
+
+http://svn.clozure.com/publicsvn/openmcl/release/1.2/PLATFORM/ccl
+
+where PLATFORM is defined as above.
+
+To check out a fresh copy of the current CCL 1.2 distribution for DarwinPPC,
+one would do something like:
+
+shell> cd some-directory-that-doesn't-have-a-ccl-subdirectory
+shell> svn co http://svn.clozure.com/publicsvn/openmcl/release/1.2/darwinppc/ccl
+
+We plan on making disk images (.dmg files) containing the Cocaa IDE and
+the full CCL distribution available in the near future.
+
 Documentation
 -------------
 
@@ -28,6 +63,15 @@ A recent version of the HTML documentation is also included in the
 distribution, along with the DocBook source from which it's derived.
 These release notes describe some important recent (for some value
 of "recent") changes.
+
+Bug Reporting
+-------------
+
+Please use the trac instance at 
+
+<http://trac.clozure.com/openmcl>
+
+to review existing bug reports and submit new ones.
 
 CVS out, SVN in:
 ---------------
@@ -66,5 +110,106 @@ install something more up-to-date), you ignore the tarballs and just
 check out the full CCL distribution (sources, binaries, interfaces
 ...) via svn.
 
+Quick guide to svn:
+------------------
+shell> cd ccl           # wherever that is ...
+shell> svn update       # try to synch working copy with svn repository
+
+shell> svn revert <files> # discard local changes to <files>, recover
+                          # versions from last update.
+
+svn notes/issues
+----------------
+
+svn does a fairly good job of handling binary files, and in fact the
+CCL lisp kernel, heap image, and interface database files are maintained
+in svn.  (One benefit of this scheme is that it may be a little easier
+to distribute modified heap images that reflect changes that may be hard
+to bootstrap from source.)  Occasionally, an "svn update" operation may
+fail to replace a locally-modified copy of a binary file; when this
+happens, one way to recover is to use "svn revert" to discard local
+changes.
+
+The "Welcome ..." banner (and the string returned by
+LISP-IMPLEMENTATION-VERSION) contain the repository's revision number
+(an integer that increases whenever any file in the CCL repository
+changes) as of the time that the lisp image is built.  If there are
+locally-modified files (including re-compiled kernels or heap images)
+in the working copy, the revision number may contain a trailing "M"
+character; this isn't very significant, but might be a little mysterious.
+
+1.1 release notes
+-----------------
+All of the information contained in the file ccl/doc/release-notes-1.1.txt
+should be incorporated into the documentation; people who didn't use
+the 1.1 "snapshot" releases might find that file to be worth skimming.
+Some highlights include:
+
+ - use of Unicode internally, and support for reading and writing streams
+encoded in many commonly-used character encoding schemes.
+ - support for 64-bit x86 (amd64/x86-64) hardware (32-bit Intel support
+is under active development, but is not yet ready for public consumption.)
+ - many changes to the Cocoa Bridge, lots of enhancements to the Cocoa-based
+IDE (which runs on 32-bit DarwinPPC under Tiger and Leopard and on 64-bit
+DarwinX8664 on Leopard.
+ - lots of other changes (didn't I already write down descriptions of
+them somewhere ?
+
+More recent changes
+-------------------
+
+- The keywords :MCL and :OPENMCL-HASH-CONSING have been removed from
+*FEATURES*, and the keywords :CLOZURE-COMMON-LISP, :CCL and :CCL-1.2
+have been added.  :OPENMCL-HASH-CONSING denoted an experimental
+feature that was never used, and the presence of :MCL created some
+confusion (OpenMCL/CCL and commercial MCL have been diverging for
+about 10 years now, and many of the things that typically need read-time
+conditionalization - pathname syntax, threading, networking ... - need
+to be conditionalized differently for the two implementations.)  Code
+that has used the presence/absence of the :MCL feature to conditionalize
+for OpenMCL may need to be reviewed.
+
+The presence of :CCL-1.2 should be viewed as "features described in the
+Clozure CL 1.2 documentation are present", i.e., "this is at least version
+1.2 of CCL".
+
+There should also be a "simple" keyword denoting the OS name - :LINUX,
+:DARWIN, or :FREEBSD.
+
+- sockets support :CONNECT-TIMEOUT arguments and streams (including sockets)
+support :READ-TIMEOUT and :WRITE-TIMEOUT arguments in their creation functions
+(OPEN, MAKE-SOCKET, etc.)  An active socket connect operation that takes
+longer than the number of seconds specified in the socket's :CONNECT-TIMEOUT
+argument - or an I/O operation that takes longer than the applicable
+:READ-TIMEOUT or :WRITE-TIMEOUT's argument - will cause an error to be
+signaled.
+
+- profiling via Apple's CHUD tools (finally) works on 64-bit versions of
+CCL.  See ccl/library/chud-metering.txt for details.
+
+- profiling on x86-64 Linux - using the 'oprofile' profiler - is now 
+supported (or, more accurately, it's possible to generate symbolic 
+information that allows 'oprofile' and related tools to give meaningful
+names to lisp functions.)  See ccl/library/oprofile.txt for details.
+
+- on OSX/Darwin, pathnames are now recognized as being encoded in
+"decomposed UTF-8", which isn't quite as bad as it sounds.  (This
+should mean that pathnames that contain non-ASCII characters should
+be handled correctly.)
+
+- in the Cocoa IDE, Hemlock editor commands now run in the main event
+thread (they used to run in a dedicated, per-window thread), and many
+other aspects of Hemlock/Cocoa integration have been simplified and
+improved.  Aside from offering greater stability, these changes make
+the Hemlock programming interface a lot more tractable.  People
+interested in writing Hemlock editor commands for use in the IDE may
+find a revised version of the Hemlock Command Implementor's Manual
+<http://trac.clozure.com/openmcl/wiki/HemlockProgrammer> useful.
+
+When run as a standalone application, the IDE provides a "console"
+window which displays diagnostic output that otherwise only appears
+in the system logs.
+
+- lots of bug fixes, smaller changes, and performance improvements.
 
 
