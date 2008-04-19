@@ -1,6 +1,6 @@
 ;;;-*-Mode: LISP; Package: (CHUD (:USE CL CCL)) -*-
 ;;;
-;;;   Copyright (C) 2005 Clozure Associates and contributors
+;;;   Copyright (C) 2005,2008 Clozure Associates and contributors
 ;;;   This file is part of OpenMCL.  
 ;;;
 ;;;   OpenMCL is licensed under the terms of the Lisp Lesser GNU Public
@@ -24,8 +24,7 @@
 
 (defpackage "CHUD"
   (:use "CL" "CCL")
-  (:export "METER" "PREPARE-METERING" "SHARK-SESSION-PATH"
-           "LAUNCH-SHARK" "CLEANUP-SPATCH-FILES" "RESET-METERING"))
+  (:export "METER" "*SHARK-CONFIG-FILE*"))
   
 (in-package "CHUD")
 
@@ -75,8 +74,10 @@ in the finder"
 
   
 
-(defvar *shark-process* nil)
-(defvar *sampling* nil)
+(defloadvar *shark-process* nil)
+(defloadvar *sampling* nil)
+
+(defloadvar *debug-shark-process-output* nil)
 
 
 (defun safe-shark-function-name (function)
@@ -120,6 +121,7 @@ in the finder"
 
 #+x8664-target
 (defun identify-functions-with-pure-code ()
+  (ccl::freeze)
   (ccl::collect ((functions))
     (block walk
       (let* ((frozen-dnodes (ccl::frozen-space-dnodes)))
@@ -135,6 +137,7 @@ in the finder"
 
 #+ppc-target
 (defun identify-functions-with-pure-code ()
+  (ccl:purify)
   (multiple-value-bind (pure-low pure-high)
                                  
       (ccl::do-gc-areas (a)
@@ -170,9 +173,9 @@ in the finder"
                        (ccl::%address-of  (uvref y 0))))))))))
         
                            
+
+
 (defun generate-shark-spatch-file ()
-  #+ppc-target (ccl::purify)
-  #+x86-target (ccl::freeze)
   (let* ((functions (identify-functions-with-pure-code)))
     (with-open-file (f (make-pathname
                         :host nil
@@ -230,7 +233,8 @@ in the finder"
       (let* ((output (external-process-output-stream *shark-process*)))
 	(do* ((line (read-line output nil nil) (read-line output nil nil)))
 	     ((null line))
-          (format t "~&~a" line)
+	  (when *debug-shark-process-output*
+	    (format t "~&~a" line))
 	  (when (search "ready." line :key #'char-downcase)
             (sleep 1)
 	    (return)))))))
@@ -246,14 +250,15 @@ in the finder"
       (let* ((out (ccl::external-process-output p)))
 	(do* ((line (read-line out nil nil) (read-line out nil nil)))
 	     ((null line))
-          (format t "~&~a" line)
+	  (when *debug-shark-process-output*
+	    (format t "~&~a" line))
 	  (when (search "Created session file:" line)
 	    (display-shark-session-file line)
 	    (return))))))
 
 
 
-(defmacro meter (form &key reset)
+(defmacro meter (form &key reset debug-output)
   (let* ((hook (gensym))
 	 (block (gensym))
 	 (process (gensym)))
@@ -263,14 +268,16 @@ in the finder"
 			 (eq (external-process-status p) :signaled))
 		 (setq *shark-process* nil
 		       *sampling* nil))))
-      (ensure-shark-process ,reset #',hook)
-      (unwind-protect
-         (progn
-           (enable-sampling)
-           ,form)
-        (disable-sampling)
-	(let* ((,process *shark-process*))
-	  (when ,process
-	    (scan-shark-process-output ,process))))))))
+	(let* ((*debug-shark-process-output* ,debug-output))
+	  (ensure-shark-process ,reset #',hook)
+	  (unwind-protect
+	       (progn
+		 (enable-sampling)
+		 ,form)
+	    (disable-sampling)
+	    (let* ((,process *shark-process*))
+	      (when ,process
+		(scan-shark-process-output ,process)))))))))
 
-
+;;; Try to clean up after ourselves when the lisp quits.
+(pushnew 'terminate-shark-process ccl::*save-exit-functions*)

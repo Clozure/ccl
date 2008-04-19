@@ -1,182 +1,156 @@
-Using Apple's CHUD metering tools from OpenMCL
+Using Apple's CHUD metering tools from CCL
+==========================================
 
- Prerequisites
+Prerequisites
+-------------
 
 Apple's CHUD metering tools are available (as of this writing) from:
 
 <ftp://ftp.apple.com/developer/Tool_Chest/Testing_-_Debugging/Performance_tools/>. 
 
-There are also some CHUD packages distributed with some recent
-versions of Xcode; the standalone versions available via FTP seem to
-work much better with the OpenMCL interface. Both versions 4.1.1 and
-4.2.2 of the CHUD tools seem to work reasonably well; earlier versions
-provide a different ABI, and it's not known whether any future
-versions will be compatible.
+The CHUD tools are also generally bundled with Apple's XCode tools.
+CBUD 4.5.0 (which seems to be bundled with XCode 3.0) seems to work
+well with this interface; later versions may have problems.
+Versions of CHUD as old as 4.1.1 may work with 32-bit PPC versions
+of CCL; later versions (not sure exactly -what- versions) added
+x86, ppc64, and x86-64 support.
 
-There don't seem to be any versions of CHUD that can deal with 64-bit
-processes.
+One way to tell whether any version of the CHUD tools is installed
+is to try to invoke the "shark" command-line program (/usr/bin/shark)
+from the shell:
 
-Ensure that either version 4.1.1 or 4.2.2 of the CHUD tools are
-installed. One side-effect of installation is that the folder "
-/Developer/Applications/Performance Tools" will have been created and
-will contain an application called "Shark". Double-click on Shark; in
-its "Preferences" window's "Search Paths" pane, use the "+" button to
-add your home directory to the "Patch Files" search path.
+shell> shark --help
 
- Background
+and verifying that that prints a usage summary.
 
-CHUD's Shark application is a user interface to its low-level
-performance monitoring facilities; those facilities provide access to
-high-resolution timers, on-chip debugging information, and OS
-performance counters. Shark allows the user to run sampling sessions,
-which record information about the context in which sampling events
-(such as timer interrupts) occur; at the end of the session, Shark
-processes the sampled data and presents a browsable interface which
-shows the processes, threads, and functions associated with those
-events.
+CHUD consists of several components, including command-line programs,
+GUI applications, kernel extensions, and "frameworks" (collections of
+libraries, headers, and other resources which applications can use to
+access functionality provided by the other components.)  Past versions
+of CCL/OpenMCL have used the CHUD framework libraries to control the
+CHUD profiler.  Even though the rest of CHUD is currently 64-bit aware,
+the frameworks are unfortunately still only available as 32-bit libraries,
+so the traditional way of controlling the profiling facility from OpenMCL
+has only worked from DarwinPPC32 versions.
 
-For many processes, Shark can identify functions (the range of
-addresses corresponding to the address of the first and last
-instructions in the function) by interpreting symbolic information
-contained in the executable file. This strategy enables it to identify
-C and assembler functions in OpenMCL's lisp kernel, but doesn't help
-much in identifying Lisp functions. Fortunately, Shark does have the
-ability to read "patch files" , which associate symbolic names to
-regions of a process's address space), and fortunately OpenMCL can be
-told to move the machine code (the "code vector") associated with a
-compiled function to a static memory area (so that the addresses of
-the first and last instructions in a compiled lisp function remain
-constant); it's possible to assign fixed addresses to the code vectors
-of all functions in the lisp at a given time, and to give symbolic
-names to the memory regions that delimit those code vectors.
+Two of the CHUD component programs are of particular interest:
 
-The process of moving code vectors to a static (and incidentally
-read-only) memory area is sometimes referred to as "purification".
+1) The "Shark" application (often installed in
+"/Developer/Applications/Performance Tools/Shark.app"), which provides
+a graphical user interface for exploring and analyzing profiling results
+and provides tools for creating "sampling configurations" (see below),
+among other things.
 
- A Sampling Sample
+2) the "shark" program ("/usr/bin/shark"), which can be used to control
+the CHUD profiling facility and to collect sampling data, which can then
+be displayed and analyzed in Shark.app.
 
-There's a little bit of flexibility in the order in which these steps
-are performed, but for the sake of argument we'll pretend here that
-there isn't.
+The fact that these two (substantially different) programs have names that
+differ only in alphabetic case may be confusing.  The discussion below
+tries to consistently distinguish between "the shark program" and "the
+Shark application".
 
-1) Run Shark, and put it in "remote" mode.
+Usage synopsis
+--------------
 
-Run Shark. Ensure that it's in "Programmatic (Remote)" mode by
-selecting that option from the "Sampling" menu, or by pressing the key
-equivalent "command-shift-R". In the main Shark window, ensure that
-the sampling type is set to "Time Profile", select "Process" (instead
-of "Everything" ) from the next popup, and doing so should cause the
-third popup to select "Remote Client".
-
-2) Meter some code in OpenMCL.
-
-In OpenMCL, do:
-
-? (require "CHUD-METERING")
-
-and ensure that the code that you want to profile is defined.
-
-? (defun fact (n)
-    (if (zerop n)
-      1
-      (* n (fact (1- n)))))
+? (defun fact (n) (if (zerop n) 1 (* n (fact (1- n)))))
 FACT
-? (defun fact-n-m-times (m n)
-    (dotimes (i m)
-      (fact n)))
-FACT-N-M-TIMES
+? (require "CHUD-METERING")
+"CHUD-METERING"
+("CHUD-METERING")
+? (chud:meter (null (fact 10000)))
+NIL	      ; since that large number is not NULL
 
-Then run something with metering enabled:
+and, a few seconds after the result is returned, a file whose
+name is of the form "session_nnn.mshark" will open in Shark.app.
 
-? (CHUD:METER (fact-n-m-times 1000 1000))
+The fist time that CHUD:METER is used in a lisp session, it'll do a
+few things to prepare subsequent profiling sessions.  Those things
+include:
 
-The first time that CHUD:METER is invoked in a lisp session, it'll:
+1) creating a directory to store files that are related to using
+the CHUD tools in this lisp session.  This directory is created in
+the user's home directory and has a name of the form:
 
-1. Ensure that Shark is running
+profiling-session-<lisp-kernel>-<pid>_<mm>-<dd>-<yyyy>_<h>.<m>.<s>
 
-2. Move the code vectors of all functions to a static 
-   memory area.
+where <pid> is the lisp's process id, <lisp-kernel> is the name of
+the lisp kernel (of all things ...), and the other values provide
+a timestamp.
 
-3. Write a Shark "spatch" file to the user's home 
-   directory (which is where we configure Shark to look 
-   for such files back in the "Prerequisites" section.)
-   See also CHUD:*SPATCH-DIRECTORY-PATH*.
+2) does whatever needs to be done to ensure that currently-defined
+lisp functions don't move around as the result of GC activity, then
+writes a text file describing the names and addresses of those functions
+to the profiling-session directory created above.  (The naming conventions
+for and format of that file are described in
 
-4. Try to ensure that Shark is running in "remote" mode. 
-   (I don't know of any way in which this can be ensured 
-   programatically, so it'll just keep asking whether or 
-   not Shark's in remote mode until you say "y" and the 
-   lisp metering code detects that that's the case.)
+<http://developer.apple.com/documentation/DeveloperTools/Conceptual/SharkUserGuide/MiscellaneousTopics/chapter_951_section_4.html#//apple_ref/doc/uid/TP40005233-CH14-DontLinkElementID_42>
 
-Those steps may take anywhere from "a few" to "several" seconds; steps
-2 and 3 are probably the most expensive and depend on how many
-functions are in the lisp image, how big they are, etc.
+3) run the shark program ("/usr/bin/shark") and wait until it's ready to
+receive signals that control its operation.
 
-On every invocation of CHUD:METER, it'll tell Shark to start a
-metering session, execute the form which is its required argument,
-tell Shark to stop the session, and return the form's result(s).
+This startup activity typically takes a few seconds; after it's been
+completed, subsequent use of CHUD:METER doesn't involve that overhead.
+(See the discussion of :RESET below.)
 
-After it's been told to stop the sampling session, Shark will analyze
-the sampling data it obtained and display the results. In this
-example, it's reasonable to assume that some CCL package functions
-related to bignum multiplication dominate the execution time. Lisp
-functions that show up in Shark's session window will claim to be
-defined in the SPATCH library; their "names" will generally look like
-their printed representations.
+After any startup activity is complete, CHUD:METER arranges to send
+a "start profiling" signal to the running shark program, executes
+the form, sends a "stop profiling" signal to the shark program, and
+reads its diagnostic output, looking for the name of the ".mshark"
+file it produces.  If it's able to find this filename, it arranges
+for "Shark.app" to open it
 
- Limitations
+Profiling "configurations".
+--------------------------
 
-It's generally tempting to start redefining functions that have
-longer-than-expected execution times. That's possibly the right thing
-to do in general, but (because of the way that the spatch mechanism
-works) it's hard to get meaningful results: Shark can only give names
-to lisp functions that're in its .spatch file, and will continue to
-use cached informaton from that .spatch file until it quits. General
-(GC-able) lisp functions - whose code-vectors might move around in
-memory - tend to confuse Shark (and at least some versions get
-confused enough that they may crash while trying to report time spent
-in functions that aren't where they used to be ...)
+By default, a shark profiling session will:
+a) use "time based" sampling, to periodically interrupt the lisp
+   process and note the value of the program counter and at least
+   a few levels of call history.
+b) do this sampling once every millisecond
+c) run for up to 30 seconds, unless told to stop earlier.
 
-After things get a little bit out-of-whack (in terms of newly defined
-lisp functions), it's often necessary to quit both Shark and OpenMCL,
-load the new-and-improved code into the lisp, and try again, hoping
-for better results.
+This is known as "the default configuration"; it's possible to use
+items on the "Config" menu in the Shark application to create alternate
+configurations which provide different kinds of profiling parameters
+and to save these configurations in files for subsequent reuse.
+(The set of things that CHUD knows how to monitor is large and interesting.)
 
-After CHUD:METER has done its first-time setup, it's generally
-necessary to quit both Shark and OpenMCL if either quits in order to
-get them back in synch again.
+You use alternate profiling configurations (created and "exported" via
+Shark.app) with CHUD:METER, but the interface is a little awkward.
 
-Despite these limitations, it's probably fair to say that this is way,
-way better than nothing.
+Reference
+---------
 
- Reference
+CHUD:*SHARK-CONFIG-FILE*   [Variable]
 
-(CHUD:METER form &key (duration 0) (frequency 1))  [Macro]
+When non-null, this should be the pathname of an alternate profiling
+configuration file created by the "Config Editor" in Shark.app.
 
-Ensures that access to the "remote sampling facility" (Shark, usually)
-has been acquired, ensure that code vectors have been purified and
-that an spatch file for the current process is writen to the directory
-named by CHUD:*SPATCH-DIRECTORY-PATH* (or the user's home directory),
-and starts and stops the sampling facility around execution of <form>.
-Returns whatever values execution of <form> returns.
+(CHUD:METER form &key (reset nil) (debug-output nil))  [Macro]
 
-Arguments
-  <form>        an arbitrary lisp expression
-  <frequency>   sampling frequency in milliseconds
-  <duration>    total number of sampling intervals, 0 implies "infinite".
+Executes FORM (an arbitrary lisp form) and returns whatever result(s)
+it returns, with CHUD profiling enabled during the form's execution.
+Tries to determine the name of the session file (*.mshark) to which
+the shark program wrote profiling data and opens this file in the
+Shark application.
 
-It seems that the <frequency> and <duration> arguments have no effect;
-the sampling frequency and duration can be set via Shark's "configuration
-editor" dialog.
+Arguments:
 
-CHUD:*SPATCH-DIRECTORY-PATH*  [Special Variable]
+debug-output   - when non-nil, causes output generated by the shark program to
+                 be echoed to *TERMINAL-IO*.  For debugging.
+reset          - when non-nil, terminates any running instance of the
+                 shark program created by previous invocations of CHUD:METER
+                 in this lisp session, generates a new .spatch file 
+                 (describing the names and addresses of lisp functions),
+                 and starts a new instance of the shark program; if
+                 CHUD:*SHARK-CONFIG-FILE* is non-NIL when this new instance
+                 is started, that instance is told to use the specified
+                 config file for profiling (in lieu of the default profiling
+                 configuration.)
 
-If non-NIL, should be a pathname whose directory component matches the
-"Patch FIles" search path in Shark's Preferences.  When this variable
-is NIL, USER-HOMEDIR-PATHNAME is used instead.
-
-
- Acknowledgments
+Acknowledgments
+---------------
 
 Both Dan Knapp and Hamilton Link have posted similar CHUD interfaces
 to openmcl-devel in the past; Hamilton's also reported bugs in the
