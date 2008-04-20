@@ -14,7 +14,8 @@ Kiyoshi Mizumaru <maru@krc.sony.co.jp>, Robert P. Goldman
 (bugfixes).  Marco Antoniotti <marcoxa@cs.nyu.edu> added support for
 MK:DEFSYSTEM which includes the files load-asdf-install.lisp,
 loader.lisp, and finally split-sequence.lisp which has its own
-copyright notice.
+copyright notice. ASDF-Install is currently maintained by Gary King
+<gwking@metabang.com> and is hosted on Common-Lisp.net.
 
 The complete code distributed with this archive (asdf-install.tar.gz)
 is copyrighted by the above-mentioned authors and governed by the

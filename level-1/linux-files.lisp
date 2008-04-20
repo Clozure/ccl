@@ -539,9 +539,14 @@ given is that of a group to which the current user belongs."
   (#_closedir DIR))
 
 (defun %read-dir (dir)
-  (let* ((res (#_readdir dir)))
-    (unless (%null-ptr-p res)
-      (get-foreign-namestring (pref res :dirent.d_name)))))
+  (rlet ((entry #>dirent)
+         (presult :address +null-ptr+))
+    (let* ((err (#_readdir_r dir entry presult))
+           (result (%get-ptr presult)))
+      (declare (fixnum err) (dynamic-extent result))
+      (when (zerop err)
+        (unless (%null-ptr-p result)
+          (get-foreign-namestring (pref result #>dirent.d_name)))))))
 
 (defun tcgetpgrp (fd)
   (#_tcgetpgrp fd))

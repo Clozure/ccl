@@ -54,14 +54,17 @@ export TZ = UTC
 
 # Compute some targets.
 
-XMLFILES = $(wildcard [0-9][0-9]-*.xml) ccl-documentation.xml
+XMLFILES = $(wildcard *.xml)
 XSLFILES = $(shell find xsl -name "*.xsl")
-#HTMLFILES = $(patsubst %.xml,%.html, $(XMLFILES))
 HTMLFILES = ccl-documentation.html
 
 # Save the xsltproc version string for use in debugging.
 
 XSLTPROCVERSION = $(shell $(XSLTPROC) --version | head -n 1)
+
+# Try to determine the svn revishion
+SVNREV = $(shell /usr/bin/svnversion)
+
 
 .PHONY: all clean distclean
 
@@ -70,7 +73,7 @@ all: $(TEMP) $(HTMLFILES) distclean
 include makehtml
 
 install: $(HTMLFILES) distclean
-	cp $(HTMLFILES) ../HTML
+	cp $(HTMLFILES) ../
 
 $(TEMP):
 	mkdir $(TEMP)

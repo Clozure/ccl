@@ -22,30 +22,9 @@
     <p class="footer">
       <xsl:variable name="now" select="date:date-time()"/>
       <xsl:text>This document was last modified at </xsl:text>
-      <xsl:choose>
-	<xsl:when test="date:hour-in-day($now) = 0">
-	  <xsl:text>12:</xsl:text>
-	  <xsl:number value="date:minute-in-hour($now)" format="01"/>
-	  <xsl:text> AM</xsl:text>
-	</xsl:when>
-	<xsl:when test="date:hour-in-day($now) &lt; 12">
-	  <xsl:value-of select="date:hour-in-day($now)"/>
-	  <xsl:text>:</xsl:text>
-	  <xsl:number value="date:minute-in-hour($now)" format="01"/>
-	  <xsl:text> AM</xsl:text>
-	</xsl:when>
-	<xsl:when test="date:hour-in-day($now) = 12">
-	  <xsl:text>12:</xsl:text>
-	  <xsl:number value="date:minute-in-hour($now)" format="01"/>
-	  <xsl:text> PM</xsl:text>
-	</xsl:when>
-	<xsl:otherwise>
-	  <xsl:value-of select="date:hour-in-day($now) - 12"/>
-	  <xsl:text>:</xsl:text>
-	  <xsl:number value="date:minute-in-hour($now)" format="01"/>
-	  <xsl:text> PM</xsl:text>
-	</xsl:otherwise>
-      </xsl:choose>
+      <xsl:value-of select="date:hour-in-day($now)"/>
+      <xsl:text>:</xsl:text>
+      <xsl:value-of select="date:minute-in-hour($now)"/>     
       <xsl:text> on </xsl:text>
       <xsl:value-of select="date:month-name($now)"/>
       <xsl:text> </xsl:text>
@@ -57,6 +36,9 @@
       <xsl:text>It uses version </xsl:text>
       <xsl:value-of select="$VERSION"/>
       <xsl:text> of the Norman Walsh Docbook stylesheets.</xsl:text>
+      <br/>
+      <xsl:text>Built from subversion rev </xsl:text>
+      <xsl:value-of select="$svnrev"/>
       <br/>
       <xsl:value-of select="$xsltproc.version"/>
     </p>

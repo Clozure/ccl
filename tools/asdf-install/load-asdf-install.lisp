@@ -4,10 +4,10 @@
 ;;; Generic loader for ASDF-INSTALL.
 
 (eval-when (:load-toplevel :execute)
-  (unless (find-package "ASDF-INSTALL-LOADER")
-    (make-package "ASDF-INSTALL-LOADER" :use '("COMMON-LISP"))))
+  (unless (find-package '#:asdf-install-loader)
+    (make-package '#:asdf-install-loader :use '(#:common-lisp))))
 
-(in-package "ASDF-INSTALL-LOADER")
+(in-package :asdf-install-loader)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *asdf-install-directory*
@@ -66,32 +66,11 @@
       (load-and-or-compile "ASDF-INSTALL-LIBRARY:defpackage.lisp")
       (load-and-or-compile "ASDF-INSTALL-LIBRARY:port.lisp")
 
-      (unless (find-package "SPLIT-SEQUENCE")
+      (unless (find-package '#:split-sequence)
         (load-and-or-compile "ASDF-INSTALL-LIBRARY:split-sequence.lisp"))
 
-      #|
-      ;; Implementation dependencies (in alphabetical order).
-      #+allegro
-      (load-and-or-compile "ASDF-INSTALL-LIBRARY:impl-dependent;allegro.lisp")
-
-      #+clisp
-      (load-and-or-compile "ASDF-INSTALL-LIBRARY:impl-dependent;clisp.lisp")
-
-      #+(or cmu sbcl) ; They are still very similar.
-      (load-and-or-compile "ASDF-INSTALL-LIBRARY:impl-dependent;cmucl.lisp")
-
-      #+digitool
-      (load-and-or-compile "ASDF-INSTALL-LIBRARY:digitool.lisp")
-
-      #+lcl
-      (load-and-or-compile "ASDF-INSTALL-LIBRARY:impl-dependent;lcl.lisp")
-
-      #+lispworks
-      (load-and-or-compile "ASDF-INSTALL-LIBRARY:impl-dependent;lispworks.lisp")
-      |#
-
-
       (load-and-or-compile "ASDF-INSTALL-LIBRARY:installer.lisp")
+
       ;; (load-and-or-compile "ASDF-INSTALL-LIBRARY:loader.lisp")
 
       ))
@@ -99,7 +78,7 @@
   (provide 'asdf-install)
 
   ;; To clean a minimum (and to make things difficult to debug)...
-  ;; (delete-package "ASDF-INSTALL-LOADER")
+  ;; (delete-package '#:asdf-install-loader)
   )
 
 

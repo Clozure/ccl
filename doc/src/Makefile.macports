@@ -12,6 +12,9 @@
 
 XSLTPROC = /usr/bin/xsltproc
 
+# Try to determine the svn revishion
+SVNREV = $(shell /usr/bin/svnversion)
+
 
 # On a new system or when using a new version of xsltproc or of the
 # stylesheet packages, it's a good idea to run with --load-trace and
@@ -57,7 +60,7 @@ export TZ = UTC
 
 # Compute some targets.
 
-XMLFILES = $(wildcard [0-9][0-9]-*.xml) ccl-documentation.xml
+XMLFILES = $(wildcard *.xml)
 XSLFILES = $(shell find xsl -name "*.xsl")
 HTMLFILES = ccl-documentation.html
 
@@ -72,7 +75,7 @@ all: $(TEMP) $(HTMLFILES) distclean
 include makehtml
 
 install: $(HTMLFILES) distclean
-	cp $(HTMLFILES) ../HTML
+	cp $(HTMLFILES) ../
 
 $(TEMP):
 	mkdir $(TEMP)
