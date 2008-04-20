@@ -7,6 +7,7 @@
 		--stringparam onechunk \
 			$(if $(findstring Doc, $(@D)), 0, 1) \
 		--stringparam xsltproc.version "$(XSLTPROCVERSION)." \
+                --stringparam svnrev "$(SVNREV)"\
 		$(EXTRAPARAMS) \
 		$(STYLESHEET) $<
 	rm -f $(if $(findstring Doc, $(@D)), $(@D)/*.html, $@)

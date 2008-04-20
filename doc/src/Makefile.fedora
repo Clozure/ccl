@@ -63,6 +63,10 @@ HTMLFILES = ccl-documentation.html
 
 XSLTPROCVERSION = $(shell $(XSLTPROC) --version | head -n 1)
 
+# Try to determine the svn revishion
+SVNREV = $(shell /usr/bin/svnversion)
+
+
 .PHONY: all clean distclean
 
 all: $(TEMP) $(HTMLFILES) distclean
