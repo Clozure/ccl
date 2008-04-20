@@ -1694,7 +1694,8 @@ result-type-specifer is :VOID or NIL"
       (canonicalize-foreign-type-ordinal '(:struct :dbm-constant))
       (canonicalize-foreign-type-ordinal '(:* (:struct :hostent)))
       (canonicalize-foreign-type-ordinal '(:array :int 2))
-      (canonicalize-foreign-type-ordinal '(:array (:struct :pollfd) 1)))))
+      (canonicalize-foreign-type-ordinal '(:array (:struct :pollfd) 1))
+      (canonicalize-foreign-type-ordinal '(:struct :dirent)))))
 
 (defun install-standard-foreign-types (ftd)
   (let* ((*target-ftd* ftd)
