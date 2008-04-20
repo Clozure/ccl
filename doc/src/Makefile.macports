@@ -60,7 +60,7 @@ export TZ = UTC
 
 # Compute some targets.
 
-XMLFILES = $(wildcard [0-9][0-9]-*.xml) ccl-documentation.xml
+XMLFILES = $(wildcard *.xml)
 XSLFILES = $(shell find xsl -name "*.xsl")
 HTMLFILES = ccl-documentation.html
 

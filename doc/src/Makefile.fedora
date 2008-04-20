@@ -54,9 +54,8 @@ export TZ = UTC
 
 # Compute some targets.
 
-XMLFILES = $(wildcard [0-9][0-9]-*.xml) ccl-documentation.xml
+XMLFILES = $(wildcard *.xml)
 XSLFILES = $(shell find xsl -name "*.xsl")
-#HTMLFILES = $(patsubst %.xml,%.html, $(XMLFILES))
 HTMLFILES = ccl-documentation.html
 
 # Save the xsltproc version string for use in debugging.
