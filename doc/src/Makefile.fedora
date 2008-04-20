@@ -73,7 +73,7 @@ all: $(TEMP) $(HTMLFILES) distclean
 include makehtml
 
 install: $(HTMLFILES) distclean
-	cp $(HTMLFILES) ../HTML
+	cp $(HTMLFILES) ../
 
 $(TEMP):
 	mkdir $(TEMP)
