@@ -42,7 +42,7 @@
       </listitem>
       <listitem>
         <para>Run ccl from the shell. The easiest way to do this is
-          generally to execute the openmcl or openmcl64 command.</para>
+          generally to execute the ccl or ccl64 command.</para>
       </listitem>
       <listitem>
         <para>Evaluate the form <code language="lisp">(require :cocoa-application)</code></para>
@@ -54,17 +54,17 @@
       interactions builds the IDE:</para>
 
     <programlisting>
-      oshirion:ccl mikel$ openmcl64
-      Welcome to Clozure Common Lisp Version 1.2-r8516MS  (DarwinX8664)!
-      ? (require :cocoa-application)
-      ;Loading #P"ccl:cocoa-ide;fasls;cocoa-utils.dx64fsl.newest"...
-      ;Loading #P"ccl:cocoa-ide;fasls;cocoa-defaults.dx64fsl.newest"...
+oshirion:ccl mikel$ ccl64
+Welcome to Clozure Common Lisp Version 1.2-r9198M-trunk  (DarwinX8664)!
+? (require :cocoa-application)
+;Loading #P"ccl:cocoa-ide;fasls;cocoa-utils.dx64fsl.newest"...
+;Loading #P"ccl:cocoa-ide;fasls;cocoa-defaults.dx64fsl.newest"...
 
-      [...many lines of "Compiling" and "Loading" omitted...]
+[...many lines of "Compiling" and "Loading" omitted...]
 
-      Saving application to /usr/local/ccl/Clozure CL.app/
+Saving application to /usr/local/ccl/Clozure CL.app/
 
-      oshirion:ccl mikel$ 
+oshirion:ccl mikel$ 
 
     </programlisting>
 

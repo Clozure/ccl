@@ -220,7 +220,7 @@
 (defparameter *aluminum-margin* 5.0f0)
 
 (defun run-rubix-demo ()
-  (let* ((w (ccl::new-cocoa-window :class (find-class 'rubix-window)
+  (let* ((w (gui::new-cocoa-window :class (find-class 'rubix-window)
 				   :title "Rubix Cube"
 				   :height 250
 				   :width 250

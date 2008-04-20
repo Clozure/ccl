@@ -599,19 +599,14 @@
 	      ,@body)
 	 (cwd ,wd)))))
 
-(defun ensure-tests-loaded (&key force full)
+(defun ensure-tests-loaded (&key force update)
   (unless (and (find-package "REGRESSION-TEST") (not force))
     (if (probe-file "ccl:tests;ansi-tests;")
-      (when full
+      (when update
 	(cwd "ccl:tests;")
 	(run-program "svn" '("update")))
       (let* ((svn (probe-file "ccl:.svn;entries"))
-	     (repo (and svn
-			(with-open-file (s svn)
-			  (loop as line =  (read-line s nil) while line
-			     do (when (search "://" line)
-				  (setq line (read-line s))
-				  (return (and (search "://" line) line)))))))
+	     (repo (and svn (svn-repository)))
 	     (s (make-string-output-stream)))
 	(when repo
 	  (format t "~&Checking out test suite into ccl:tests;~%")
@@ -630,26 +625,30 @@
     ;; Muffle the typecase "clause ignored" warnings, since there is really nothing we can do about
     ;; it without making the test suite non-portable across platforms...
     (handler-bind ((warning (lambda (c)
-			      (when (and (typep c 'compiler-warning)
-					 (eq (compiler-warning-warning-type c) :program-error)
-					 (typep (car (compiler-warning-args c)) 'simple-warning)
-					 (or
-					  (string-equal
-					   (simple-condition-format-control (car (compiler-warning-args c)))
-					   "Clause ~S ignored in ~S form - shadowed by ~S .")
-					  ;; Might as well ignore these as well, they're intentional.
-					  (string-equal
-					   (simple-condition-format-control (car (compiler-warning-args c)))
-					   "Duplicate keyform ~s in ~s statement.")))
+			      (when (let ((w (or (and (typep c 'compiler-warning)
+                                                      (eq (compiler-warning-warning-type c) :program-error)
+                                                      (car (compiler-warning-args c)))
+                                                 c)))
+                                      (and (typep w 'simple-warning)
+                                           (or 
+                                            (string-equal
+                                             (simple-condition-format-control w)
+                                             "Clause ~S ignored in ~S form - shadowed by ~S .")
+                                            ;; Might as well ignore these as well, they're intentional.
+                                            (string-equal
+                                             (simple-condition-format-control w)
+                                             "Duplicate keyform ~s in ~s statement."))))
 				(muffle-warning c)))))
       ;; This loads the infrastructure
       (load "ccl:tests;ansi-tests;gclload1.lsp")
       ;; This loads the actual tests
-      (load "ccl:tests;ansi-tests;gclload2.lsp"))))
+      (load "ccl:tests;ansi-tests;gclload2.lsp")
+      ;; And our own tests
+      (load "ccl:tests;ansi-tests;ccl.lsp"))))
 
-(defun test-ccl (&key force full verbose (catch-errors t))
+(defun test-ccl (&key force (update t) verbose (catch-errors t))
   (with-preserved-working-directory ()
-    (ensure-tests-loaded :force force :full full)
+    (ensure-tests-loaded :force force :update update)
     (cwd "ccl:tests;ansi-tests;")
     (let ((do-tests (find-symbol "DO-TESTS" "REGRESSION-TEST"))
 	  (*suppress-compiler-warnings* t)

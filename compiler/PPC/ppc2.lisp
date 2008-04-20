@@ -2018,7 +2018,7 @@
              (unless (and (eql (hard-regspec-value src) ppc::arg_x)
                           (eql (hard-regspec-value unscaled-idx) ppc::arg_y)
                           (eql (hard-regspec-value val-reg) ppc::arg_z))
-               (nx-error "Bug: invalid register targeting for gvset: ~s" (list src unscaled-idx val-reg)))
+               (compiler-bug "Bug: invalid register targeting for gvset: ~s" (list src unscaled-idx val-reg)))
              (! call-subprim-3 val-reg (subprim-name->offset '.SPgvset) src unscaled-idx val-reg))
             (is-node
              (if (and index-known-fixnum (<= index-known-fixnum
@@ -5002,7 +5002,7 @@
               (if *ppc2-open-code-inline*
                 (! unbind-interrupt-level-inline)
                 (! unbind-interrupt-level)))
-            (nx-error "unknown payback token ~s" r)))))))
+            (compiler-bug "unknown payback token ~s" r)))))))
 
 (defun ppc2-spread-lambda-list (seg listform whole req opt rest keys 
                                     &optional enclosing-ea cdr-p)

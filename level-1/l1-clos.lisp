@@ -1808,6 +1808,7 @@ changing its name to ~s may have serious consequences." class new))
             class)
       (%slot-ref (instance.slots instance) location)
       (no-applicable-method (%gf-dispatch-table-gf dt) instance))))
+(register-dcode-proto #'singleton-reader-dcode *gf-proto-one-arg*)
 
 ;;; Dcode for a GF whose methods are all reader-methods which access a
 ;;; slot in one or more classes which have multiple subclasses, all of
@@ -1821,6 +1822,7 @@ changing its name to ~s may have serious consequences." class new))
             classes)
       (%slot-ref (instance.slots instance) location)
       (no-applicable-method (%gf-dispatch-table-gf dt) instance))))
+(register-dcode-proto #'reader-constant-location-dcode *gf-proto-one-arg*)
 
 ;;; Dcode for a GF whose methods are all reader-methods which access a
 ;;; slot in one or more classes which have multiple subclasses, all of
@@ -1837,6 +1839,7 @@ changing its name to ~s may have serious consequences." class new))
                                             (%inited-class-cpl class))))
       (%slot-ref (instance.slots instance) location)
       (no-applicable-method (%gf-dispatch-table-gf dt) instance))))
+(register-dcode-proto #'reader-constant-location-inherited-from-single-class-dcode *gf-proto-one-arg*)
 
 ;;; Dcode for a GF whose methods are all reader-methods which access a
 ;;; slot in one or more classes which have multiple subclasses, all of
@@ -1853,6 +1856,7 @@ changing its name to ~s may have serious consequences." class new))
           (when (memq defining-class cpl) (return t)))
       (%slot-ref (instance.slots instance) location)
       (no-applicable-method (%gf-dispatch-table-gf dt) instance))))
+(register-dcode-proto #'reader-constant-location-inherited-from-multiple-classes-dcode *gf-proto-one-arg*)
 
 
 ;;; Similar to the case above, but we use an alist to map classes
@@ -1868,6 +1872,7 @@ changing its name to ~s may have serious consequences." class new))
     (if location
       (%slot-ref (instance.slots instance) location)
       (no-applicable-method (%gf-dispatch-table-gf dt) instance))))
+(register-dcode-proto #'reader-variable-location-dcode *gf-proto-one-arg*)
 
 (defun class-and-slot-location-alist (classes slot-name)
   (let* ((alist nil))
@@ -1992,11 +1997,13 @@ changing its name to ~s may have serious consequences." class new))
     (if mf
       (funcall mf arg1 arg2)
       (%%1st-two-arg-dcode dt arg1 arg2))))
+(register-dcode-proto #'reader-variable-location-dcode *gf-proto-two-arg*)
 
 (defun %%one-arg-eql-method-hack-dcode (dt arg)
   (let* ((mf (if (typep arg 'symbol) (get arg dt))))
     (if mf
       (funcall mf arg))))
+(register-dcode-proto #'%%one-arg-eql-method-hack-dcode *gf-proto-one-arg*)
 
 (defun install-eql-method-hack-dcode (gf)
   (let* ((bits (inner-lfun-bits gf))

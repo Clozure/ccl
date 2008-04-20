@@ -780,6 +780,16 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;; generic-function dcode ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; dcode functions using other than *gf-proto*
+(defparameter dcode-proto-alist ())
+
+(defun register-dcode-proto (dcode proto)
+  (let ((a (assoc dcode dcode-proto-alist)))
+    (if a
+      (setf (cdr a) proto)
+      (push (cons dcode proto) dcode-proto-alist))))
+
+
 ;;; Simple case for generic-functions with no specializers
 ;;; Why anyone would want to do this I can't imagine.
 
@@ -816,12 +826,13 @@
 (defun %%one-arg-dcode (dt  arg)
   (let ((method (%find-1st-arg-combined-method dt arg)))
     (funcall method arg)))
+(register-dcode-proto #'%%one-arg-dcode *gf-proto-one-arg*)
 
 ;;; two args - specialized on first
 (defun %%1st-two-arg-dcode (dt arg1 arg2)
   (let ((method (%find-1st-arg-combined-method dt arg1)))
     (funcall method arg1 arg2)))
-
+(register-dcode-proto #'%%1st-two-arg-dcode *gf-proto-two-arg*)
 
 
 ;;;  arg is dispatch-table and argnum is in the dispatch table

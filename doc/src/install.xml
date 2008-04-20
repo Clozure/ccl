@@ -14,34 +14,14 @@
   
   <sect1><title>Releases and System Requirements</title>
     
-    <para>There are three active versions of &CCL;.  Version 1.0 was a
-      stable release (released in late 2005); it is no longer under
-      active development.  Version 1.1 has been under active
-      development since shortly after 1.0 was released; it's been
-      distributed as a series of development "snapshots" and CVS
-      updates.  1.1 snapshots have introduced support for x86-64
-      platforms, internal use of Unicode, and many other features, but
-      have presented something of a moving target.  Version 1.2
-      (released in early 2008) is intended to be a more stable release
-      and provide a more predictable release schedule, and to make it
-      a bit easier for users who wish to track the "bleeding edge" of
-      development to do so.</para>
+    <para>Version 1.2 is the latest release of &CCL; as of April
+    2008. It is intended to be a more stable release and follow a more
+    regular release schedule than previous versions.  It is easier for
+    users who wish to track the "bleeding edge" of development to do
+    so.</para>
 
-    <para>Version 1.0 is available for three platform configurations:</para>
-    <itemizedlist>
-      <listitem>
-        <para>Linux on PowerPC (32-bit implementation)</para>
-      </listitem>
-      <listitem>
-        <para>Mac OS X on PowerPC (32-bit implementation)</para>
-      </listitem>
-      <listitem>
-        <para>Mac OS X on PowerPC (64-bit implementation)</para>
-      </listitem>
-    </itemizedlist>
-
-    <para>Versions 1.1 and 1.2 are available for five platform
-      configurations:</para>
+   <para>Versions 1.2 is available for five platform
+   configurations:</para>
     <itemizedlist>
       <listitem>
         <para>Linux on PowerPC (32-bit and 64-bit implementations)</para>
@@ -60,62 +40,61 @@
 
     <para>A 64-bit version of &CCL; requires a 64-bit processor
       running a 64-bit OS variant.</para>
-    
+      
     <para>There are ongoing efforts to port &CCL; to the Windows
       operating system and to 32-bit x86 processors.</para>
-    
     
     <para>Additional platform-specific information is given in the
       following subsections.</para>
 
+    <para>Older versions are still available for downloading as
+    tarballs.  Version 1.0 was a stable release released in late 2005.
+    Version 1.1 was under active development until late 2007.  A final
+    1.1 release was never made.  It was distributed as a series of
+    development "snapshots" and CVS updates.  1.1 snapshots introduced
+    support for x86-64 platforms, internal use of Unicode, and many
+    other features, but were a moving target. </para>
+
     <sect2><title>LinuxPPC</title> 
       
-      <para>&CCL; versions 1.0 and later run under relatively
-        recent versions of LinuxPPC. All versions of &CCL; require
-        version 2.2.13 (or later) of the Linux kernel and version
-        2.1.3 (or later) of the GNU C library (glibc) at a bare
-        minimum.</para>
+      <para>&CCL; requires version 2.2.13 (or later) of the Linux
+      kernel and version 2.1.3 (or later) of the GNU C library (glibc)
+      at a bare minimum.</para>
     </sect2>
 
     <sect2><title>Linux X8664</title> 
 
-      <para>Version 1.1 and later of &CCL; runs on relatively recent
-        Linux distributions for the x86-64 architecture.  It requires
-        a Linux with Thread Local Storage support in the toolchain and
-        standard libraries, and the New Posix Thread Library (NPTL).
-        Fortunately, these features seem to be present in all current
-        Linux distributions for x86-64, though there may be some
-        problems with early Linux distributions for x86-64. Some GCC
-        versions older than 4.0 on Linux have been known to have
-        problems compiling some of the C code in the kernel; some very
-        old Linux distributions don't follow the current ABI standards
-        wrt segment register usage; some early Linux kernels for
-        x86-64 had problems mapping large regions of the address
-        space; and so on. It's difficult to enumerate exactly what
-        versions of what Linux distributions have what problems.  A
-        rule of thumb is that&mdash;because much of the development of
-        &CCL; for x86-64 took place in that time frame&mdash;Linux
-        distributions released earlier than early 2006 may have
-        problems running &CCL;. </para>
+      <para>&CCL; runs on relatively recent Linux distributions for
+      the x86-64 architecture.  It requires a Linux with Thread Local
+      Storage support in the toolchain and standard libraries, and the
+      New Posix Thread Library (NPTL).  Fortunately, these features
+      seem to be present in all current Linux distributions for
+      x86-64, though there may be some problems with early Linux
+      distributions for x86-64. Some GCC versions older than 4.0 on
+      Linux have been known to have problems compiling some of the C
+      code in the kernel; some very old Linux distributions don't
+      follow the current ABI standards wrt segment register usage;
+      some early Linux kernels for x86-64 had problems mapping large
+      regions of the address space; and so on. It's difficult to
+      enumerate exactly what versions of what Linux distributions have
+      what problems.  A rule of thumb is that&mdash;because much of
+      the development of &CCL; for x86-64 took place in that time
+      frame&mdash;Linux distributions released earlier than early 2006
+      may have problems running &CCL;. </para>
     </sect2>
 
-    <sect2><title>FreeBSD-amd64</title>
-      <para>Versions 1.1 and later of &CCL; runs on FreeBSD on x86-64
-        (FreeBSD releases generally call the platform "amd64").  &CCL;
-        should run under FreeBSD 6.0 or later; as of this writing,
-        FreeBSD 7.0 is about to be released and it may be necessary
-        for FreeBSD 7 users to install the "compat6x" package in order
-        to use a version of &CCL; built on FreeBSD 6.x.</para>
+    <sect2><title>FreeBSD-amd64</title> <para>&CCL; runs on FreeBSD on
+    x86-64 (FreeBSD releases generally call the platform "amd64").
+    &CCL; should run under FreeBSD 6.0 or later; as of this writing,
+    FreeBSD 7.0 is about to be released and it may be necessary for
+    FreeBSD 7 users to install the "compat6x" package in order to use
+    a version of &CCL; built on FreeBSD 6.x.</para>
     </sect2>
 
     <sect2><title>DarwinPPC-MacOS-X</title>
 
-      <para> &CCL; 1.0 runs on MacOS X versions 10.2, 10.3 and
-        10.4 on the PowerPC.</para>
-
-      <para>Current development on version 1.1 and later takes place
-        under OS X versions 10.4 and 10.5 and requires at least
-        version 10.3.9</para>
+      <para> &CCL; runs under OS X versions 10.4 and 10.5 and requires
+      at least version 10.3.9</para>
 
       <para>The 64-bit DarwinPPC version of &CCL; requires
         functionality introduced in OSX 10.4 (namely, the ability to
@@ -129,9 +108,8 @@
         versions.</para>
     </sect2>
 
-    <sect2><title>Darwinx8664-MacOS-X</title>
-      <para>Versions 1.1 and later of &CCL; run on 64-bit DarwinX86
-        (MacOS on Intel).</para>
+    <sect2><title>Darwinx8664-MacOS-X</title> <para>&CCL; runs on
+    64-bit DarwinX86 (Mac OS X on Intel).</para>
 
       <para>&CCL; Darwinx8664/MacOS X requires a 64-bit processor.
         All Macintoshes currently sold by Apple (as of early 2008) and
@@ -147,12 +125,16 @@
 
   <sect1><title>Obtaining Clozure CL</title>
     <para>There two main ways to obtain Clozure CL.  For Mac OS X,
-      there are disk images that can be used to install Clozure CL in
-      the usual Macintosh way. For other OSes, Subversion is the best
-      way to obtain Clozure CL, and Mac OS X users can also use
-      Subversion if they prefer to. Tarballs are available for those
-      who prefer them, but Subversion is simpler and more
-      flexible.</para>
+    there are disk images that can be used to install Clozure CL in
+    the usual Macintosh way. For other OSes, Subversion is the best
+    way to obtain Clozure CL.  Mac OS X users can also use Subversion
+    if they prefer. Tarballs are available for those who prefer them,
+    but if you have Subversion installed, it is simpler and more
+    flexible to use Subversion than tarballs.  It is easier to keep up
+    with the bleeding edge if you are using Subversion, since disk
+    images and tarballs are generated much less frequently than
+    changes to Subversion.
+    </para>
 
     <para> There are three popular ways to use Clozure CL: as a
       stand-alone double-clickable application (Mac OS X only), as a
@@ -167,9 +149,9 @@
          run it.  The disk images are available at
          <ulink url="ftp://clozure.com/pub/testing/"/> </para>
 
-      <para>So that &CCL; can locate its source code (and for other
+      <para>So that &CCL; can locate its source code, and for other
         reasons explained in
-        <xref linkend="Predefined-Logical-Hosts"/>) you should either put the
+        <xref linkend="Predefined-Logical-Hosts"/>, you should either put the
         <literal>ccl</literal> directory in the same directory as the
         Clozure CL application, or else put the Clozure CL application
         in the <literal>ccl</literal> directory.  If you use a shell,
@@ -185,16 +167,68 @@
 
     <sect2><title>Getting Clozure CL with Subversion</title>
       <para>It is very easy to download, install, and build Clozure CL
-        using Subversion. Unless you're using the Mac Way, this is the
-        preferred way to get either the latest, or a specific version
-        of Clozure CL.  Subversion is a source code control system
-        that is in wide usage.  Most modern OSes come with subversion
-        pre-installed. A complete, buildable and runnable set of
-        Clozure CL sources and binaries can be retrieved by doing one
-        subversion checkout.</para>
+      using Subversion. This is the preferred way to get either the
+      latest, or a specific version of Clozure CL, unless you prefer
+      the Mac Way.  Subversion is a source code control system that is
+      in wide usage.  Most modern OSes come with subversion
+      pre-installed. A complete, buildable and runnable set of Clozure
+      CL sources and binaries can be retrieved by doing one subversion
+      checkout.</para>
 
-      <para>First, make sure that Subversion is installed on your
-        system.  Bring up a command line shell and type:
+
+      <para>One subversion command will create a
+      <literal>ccl</literal> directory with runnable binaries, and a
+      complete set of buildable sources.  To get the bleeding edge
+      Clozure CL for Darwin x8664, at the command line type:</para>
+
+        <programlisting>
+          <![CDATA[
+svn co http://svn.clozure.com/publicsvn/openmcl/trunk/darwinx8664/ccl]]>
+        </programlisting>
+
+	<para>To get the 1.2 version of Clozure CL type:</para>
+        <programlisting>
+          <![CDATA[
+svn co http://svn.clozure.com/publicsvn/openmcl/releases/1.2/darwinx8664/ccl]]>
+        </programlisting>
+
+        
+        <para>These examples fetch the complete sources and binaries
+        for the Darwin X8664 build of &CCL;. You can fetch a different
+        version by substituting its name in place of
+        "darwinx8664". Current available versions are:</para>
+
+        <itemizedlist>
+          <listitem><para>darwinppc</para></listitem>
+          <listitem><para>darwinx8664</para></listitem>
+          <listitem><para>freebsdx8664</para></listitem>
+          <listitem><para>linuxppc</para></listitem>
+          <listitem><para>linuxx8664</para></listitem>
+        </itemizedlist>
+
+        <para>These distributions contain complete sources and
+        binaries. They use Subversion's "externals" features to share
+        common sources; the majority of source code is the same across
+        all versions.</para> 
+
+        <para>Once the checkout is complete you can build Clozure CL by
+        running the lisp kernel and executing
+        the <literal>rebuild-ccl</literal> function. For
+        example:</para>
+
+        <programlisting>
+          <![CDATA[
+joe:ccl> ./dx86cl64
+Welcome to Clozure Common Lisp Version 1.2  (DarwinX8664)!
+? (rebuild-ccl :full t)
+<lots of compilation output>
+  ? (quit)
+  joe:ccl>]]>
+        </programlisting>
+	<sect3 id="Checking-Subversion-Installation"><title>Checking Subversion Installation</title>
+      <para>If <literal>svn co</literal> doesn't work, then make sure
+      that Subversion is installed on your system.  Bring up a command
+      line shell and type:
         <programlisting>
           <![CDATA[
 shell> svn]]>
@@ -214,62 +248,18 @@ Type 'svn help' for usage]]>
         to install it on your OS. You can find information about
         obtaining and installing Subversion at
         the <ulink url="http://subversion.tigris.org/project_packages.html">Subversion
-        Packages page</ulink>.</para>
+        Packages page</ulink>.</para></sect3>
 
-      <para>Create the directory where Clozure CL will live, <literal>cd</literal> to that directory, then type a Subversion checkout command.  For example:</para>
-
-        <programlisting>
-          <![CDATA[
-joe:~> mkdir ccl
-joe:~> cd ccl
-joe:ccl> svn co http://svn.clozure.com/publicsvn/openmcl/trunk/darwinx8664]]>
-        </programlisting>
-        
-        <para>This example fetches the complete sources and binaries
-        for the Darwin X8664 build of &CCL;. You can fetch a different
-        version by substituting its name in place of
-        "darwinx8664". Current available versions are:</para>
-
-        <itemizedlist>
-          <listitem><para>darwinppc</para></listitem>
-          <listitem><para>darwinx8664</para></listitem>
-          <listitem><para>freebsdx8664</para></listitem>
-          <listitem><para>linuxppc</para></listitem>
-          <listitem><para>linuxx8664</para></listitem>
-        </itemizedlist>
-
-        <para>These distributions contain complete sources and
-        binaries. They use Subversion's "externals" features to share
-        common sources; the majority of source code is the same across
-        all versions.</para>
-
-        <para>Once the checkout is complete you can build Clozure CL by
-        running the lisp kernel and executing
-        the <literal>rebuild-ccl</literal> function. For
-        example:</para>
-
-        <programlisting>
-          <![CDATA[
-joe:ccl> ./dx86cl64
-Welcome to Clozure Common Lisp Version 1.2  (DarwinX8664)!
-? (rebuild-ccl :full t)
-<lots of compilation output>
-  ? (quit)
-  joe:ccl>]]>
-        </programlisting>
     </sect2>
 
     <sect2><title>Tarballs</title>
-      <para>Tarballs are available at
-                                         <ulink url="ftp://clozure.com/pub/testing/"/>.
-                                         Download and extract one on
-                                         your local disk.  Then edit
-                                         the &CCL; shell script to set
-                                         the value of
-        <varname>CCL_DEFAULT_DIRECTORY</varname> and start up the
-        appropriate Clozure CL kernel. See
-        <xref linkend="The-ccl-Shell-Script"/> for more
-        information about the &CCL; shell scripts.</para>
+      <para>Tarballs are available at <ulink
+      url="ftp://clozure.com/pub/testing/"/>.  Download and extract
+      one on your local disk.  Then edit the &CCL; shell script to set
+      the value of <varname>CCL_DEFAULT_DIRECTORY</varname> and start
+      up the appropriate Clozure CL kernel. See <xref
+      linkend="The-ccl-Shell-Script"/> for more information about the
+      &CCL; shell scripts.</para>
     </sect2>
   </sect1>
 
@@ -306,6 +296,15 @@ Welcome to Clozure Common Lisp Version 1.2  (DarwinX8664)!
         64-bit implementations.</para>
       <para>To use the script:</para>
       <orderedlist>
+	<listitem>
+	  <para>Copy the script to a directory that is on your
+	  <varname>PATH</varname>.  This is often
+	  <literal>/usr/local/bin</literal> or
+	  <literal>~/bin</literal>.  It is better to do this than to
+	  add <literal>ccl/scripts</literal> to your
+	  <varname>PATH</varname> since the script needs to be edited,
+	  it will show up as modified to Subversion.</para>
+	</listitem>
         <listitem>
           <para>Edit the definition of
             <literal>CCL_DEFAULT_DIRECTORY</literal> near the
@@ -345,30 +344,35 @@ Welcome to Clozure Common Lisp Version 1.2  (DarwinX8664)!
                 administrator.</para>
           </warning></para>
         </listitem>
-        <listitem>
-          <para>Install the shell script somewhere on your shell's
-            search path, or add the location of the shell script to
-            your <literal>PATH</literal> environment variable.</para>
-        </listitem>
       </orderedlist>
+
+      <para>Note that most people won't need both
+      <literal>ccl</literal> and <literal>ccl64</literal> scripts.
+      You only need both if you sometimes run 32-bit Clozure CL and
+      sometimes run 64-bit Clozure CL.  You can rename the script that
+      you use to whatever you want.  For example, if you are on a
+      64-bit system, and you only use Clozure CL in 64-bit mode, then
+      you can rename <literal>ccl64</literal> to
+      <literal>ccl</literal> so that you only need to type
+      "<literal>ccl</literal>" to run it.</para>
 
       <para>Once this is done, it should be possible to invoke &CCL;
         by typing <literal>ccl</literal>
         or <literal>ccl64</literal> at a shell prompt:</para>
       <programlisting>
 &gt; ccl [args ...]
-Welcome to &CCL; Version whatever (DarwinPPC32)!
+Welcome to &CCL; Version 1.2 (DarwinPPC32)!
 ?
       </programlisting>
+      
       <para>The ccl shell script passes all of its arguments to the
-        &CCL; kernel.  See <xref linkend="Invocation"/> for more
-        information about these arguments.  When invoked this way, the
-        Lisp should be able to initialize the
-        <literal>"ccl:"</literal> logical host so that its
-        translations refer to the <literal>"ccl"</literal>
-        directory. To test this, you can call
-        <literal>probe-file</literal> in &CCL;'s read-eval-print
-        loop:</para>
+      &CCL; kernel.  See <xref linkend="Invocation"/> for more
+      information about these arguments.  When invoked this way, the
+      Lisp should be able to initialize the <literal>"ccl:"</literal>
+      logical host so that its translations refer to the
+      <literal>"ccl"</literal> directory. To test this, you can call
+      <literal>probe-file</literal> in &CCL;'s read-eval-print
+      loop:</para>
       <programlisting>
 ? (probe-file "ccl:level-1;level-1.lisp")  ;returns the physical pathname of the file
 #P"/Users/alms/my_lisp_stuff/ccl/level-1/level-1.lisp"
@@ -735,12 +739,11 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
 
   <sect1 id="Example-Programs">
     <title>Example Programs</title>
-    <para>Beginning with release 0.9, a number (ok, a
-      <emphasis>small</emphasis> number, at least initially) of
-      example programs are distributed in the "ccl:examples;"
-      directory of the source distribution. See the
-      README-OPENMCL-EXAMPLES text file in that directory for
-      information about prerequisites and usage.</para>
+    <para>A number (ok, a <emphasis>small</emphasis> number), of
+    example programs are distributed in the "ccl:examples;" directory
+    of the source distribution. See the README-OPENMCL-EXAMPLES text
+    file in that directory for information about prerequisites and
+    usage.</para>
     <para>Some of the example programs are derived from C examples
       in textbooks, etc.; in those cases, the original author and work
       are cited in the source code.</para>

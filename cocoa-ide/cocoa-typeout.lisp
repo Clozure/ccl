@@ -37,6 +37,7 @@
 
 
 (objc:defmethod #/initWithFrame: ((self typeout-view) (frame :<NSR>ect))
+  (declare (special *default-font-name* *default-font-size*))
   (call-next-method frame)
   (let* ((scrollview (make-instance 'ns:ns-scroll-view
                                     :with-frame frame))

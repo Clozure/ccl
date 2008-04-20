@@ -1049,10 +1049,6 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
       (when dcode (return dcode)))))
 
            
-(defparameter dcode-proto-alist
-  (list (cons #'%%one-arg-dcode *gf-proto-one-arg*)
-        (cons #'%%1st-two-arg-dcode *gf-proto-two-arg*)))
-    
 (defun compute-dcode (gf &optional dt)
   (setq gf (require-type gf 'standard-generic-function))
   (unless dt (setq dt (%gf-dispatch-table gf)))

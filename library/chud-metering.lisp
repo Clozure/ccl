@@ -1,6 +1,6 @@
 ;;;-*-Mode: LISP; Package: (CHUD (:USE CL CCL)) -*-
 ;;;
-;;;   Copyright (C) 2005 Clozure Associates and contributors
+;;;   Copyright (C) 2005,2008 Clozure Associates and contributors
 ;;;   This file is part of OpenMCL.  
 ;;;
 ;;;   OpenMCL is licensed under the terms of the Lisp Lesser GNU Public
@@ -24,119 +24,80 @@
 
 (defpackage "CHUD"
   (:use "CL" "CCL")
-  (:export "METER" "PREPARE-METERING" "*SPATCH-DIRECTORY-PATH*"
-           "LAUNCH-SHARK" "CLEANUP-SPATCH-FILES" "RESET-METERING"))
+  (:export "METER" "*SHARK-CONFIG-FILE*"))
   
 (in-package "CHUD")
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (progn
+    #-darwin-target
+    (error "This code is Darwin/MacOSX-specific.")))
 
-(defparameter *CHUD-library-path*
-  "/System/Library/PrivateFrameworks/CHUD.Framework/CHUD"
-  "This seems to move around with every release.")
 
-(defparameter *shark-app-path* "/Developer/Applications/Performance\ Tools/Shark.app")
+(defparameter *shark-session-path* nil)
 
-(defparameter *spatch-directory-path* nil
-  "If non-NIL, should be a pathname whose directory component matches the
-\"Patch FIles\" search path in Shark's Preferences.  When this variable
-is NIL, USER-HOMEDIR-PATHNAME is used instead.")
+(defloadvar *written-spatch-file* nil)
 
-(eval-when (:load-toplevel :execute)
-  (open-shared-library (namestring *CHUD-library-path*)))
+(defparameter *shark-session-native-namestring* nil)
 
-(eval-when (:compile-toplevel :execute)
-  (use-interface-dir :chud))
+(defparameter *shark-config-file* nil "Full pathname of .cfg file to use for profiling, or NIL.")
 
-;;; CHUD apparently has this notion of global, persistent
-;;; "status" (the result returned by the last operation.)
-;;; I have not idea whether or not that's thread-specific;
-;;; there doesn't seem to be any other way of getting a
-;;; string that describes an error code.
-(defun chud-get-status-string ()
-  (with-macptrs ((s (#_chudGetStatusStr)))
-    (if (%null-ptr-p s)
-      ""
-      (%get-cstring s))))
+(defun finder-open-file (namestring)
+  "Open the file named by NAMESTRING, as if it was double-clicked on
+in the finder"
+  (run-program "/usr/bin/open" (list namestring) :output nil))
 
-(defun chud-check-error (result context)
-  (or (eql result #$chudSuccess)
-      (error "CHUD error ~d (~a) while ~a. " result (chud-get-status-string) context)))
+(defun ensure-shark-session-path ()
+  (unless *shark-session-path*
+    (multiple-value-bind (second minute hour date month year)
+	(decode-universal-time (get-universal-time))
+      (let* ((subdir (format nil "profiling-session-~A-~d_~d-~d-~d_~d.~d.~d"
+			     (pathname-name
+			      (car
+			       ccl::*command-line-argument-list*))
+			     (ccl::getpid)
+			     month
+			     date
+			     year
+			     hour
+			     minute
+			     second))
+	     (dir (make-pathname :directory (append (pathname-directory (user-homedir-pathname)) (list subdir)) :defaults nil))
+	     (native-name (ccl::native-untranslated-namestring dir)))
+	(ensure-directories-exist dir)
+	(setenv "SHARK_SEARCH_PATH_PATCH_FILES" native-name)
+	(setq *shark-session-native-namestring*
+	      native-name
+	      *shark-session-path* dir))))
+  *shark-session-path*)
+
+
   
-(defun chud-is-initialized ()
-  (not (eql (#_chudIsInitialized) 0)))
 
-(defparameter *chud-supported-major-version* 4)
-(defparameter *chud-supported-minor-version* 1)
+(defloadvar *shark-process* nil)
+(defloadvar *sampling* nil)
 
-;; Don't know if it makes sense to worry about max supported versions
-;; as well.
+(defloadvar *debug-shark-process-output* nil)
 
-(defun check-chud-version ()
-  (let* ((version (#_chudFrameworkVersion))
-         (major (ldb (byte 8 24) version))
-         (minor (ldb (byte 8 12) version)))
-    (or (and (>= major *chud-supported-major-version*)
-             (when (= major *chud-supported-major-version*)
-               (>= minor *chud-supported-minor-version*)))
-        (warn "The installed CHUD framework is version ~d.~d.  ~
-The minimum version supported by this interface is ~d.~d."
-              major minor *chud-supported-major-version*
-              *chud-supported-minor-version*))))
-    
-
-(defun initialize-chud ()
-  (or (chud-is-initialized)
-      (and (check-chud-version)
-           (chud-check-error (#_chudInitialize) "initializing CHUD"))))
-
-(defun acquired-remote-access ()
-  (eql #$true (#_chudIsRemoteAccessAcquired)))
-  
-;;; If we've already successfully called (#_chudAcquireRemoteAccess),
-;;; we can call it again without error (e.g., it's a no-op in that
-;;; case.)  However, we can successfully release it at most once.
-
-(defun acquire-remote-access ()
-  (or (acquired-remote-access)
-      (chud-check-error (#_chudAcquireRemoteAccess) "acquiring remote access")))
-
-(defun release-remote-access ()
-  (chud-check-error (#_chudReleaseRemoteAccess) "releasing remote access"))
-
-(defun start-remote-perf-monitor (label)
-  (with-cstrs ((clabel (format nil "~a" label)))
-    (chud-check-error (#_chudStartRemotePerfMonitor clabel)
-                      "starting performance monitor")))
-
-(defun stop-remote-perf-monitor ()
-  (chud-check-error (#_chudStopRemotePerfMonitor)
-                    "stopping performance monitor"))
-
-(defun setup-timer (duration frequency)
-  (#_chudSetupTimer frequency
-                    #$chudMicroSeconds
-                    0
-                    #$chudMicroSeconds
-                    duration))
-
-(defun get-readonly-area-bounds ()
-  (ccl::do-gc-areas (a)
-    (when (eql(ccl::%fixnum-ref a target::area.code)
-              #+ppc-target ccl::area-readonly
-              #+x8664-target ccl::area-managed-static)
-      (return
-        (values (ash (ccl::%fixnum-ref a target::area.low) target::fixnumshift)
-                (ash (ccl::%fixnum-ref a target::area.active) target::fixnumshift))))))
 
 (defun safe-shark-function-name (function)
   (let* ((name (format nil "~s" function)))
     (subseq (nsubstitute #\0 #\# (nsubstitute #\. #\Space name)) 1)))
 
 (defun print-shark-spatch-record (fn &optional (stream t))
-  (let* ((code-vector (uvref fn 0))
+  (let* ((code-vector #+ppc-target (uvref fn 0) #-ppc-target fn)
          (startaddr (+ (ccl::%address-of code-vector)
-                       target::misc-data-offset))
-         (endaddr (+ startaddr (* target::node-size (uvsize code-vector)))))
+                       #+x8664-target 0
+                       #+ppc32-target target::misc-data-offset
+		       #-ppc32-target 0))
+         (endaddr (+ startaddr
+                     #+x8664-target
+                     (1+ (ash (1- (ccl::%function-code-words fn)
+                                  ) target::word-shift))
+                     #+ppc-target
+                     (* 4 (- (uvsize code-vector)
+				       #+ppc64-target 2
+				       #-ppc64-target 1)))))
     ;; i hope all lisp sym characters are allowed... we'll see
     (format stream "{~%~@
                         ~a~@
@@ -149,114 +110,174 @@ The minimum version supported by this interface is ~d.~d."
             #+32-bit-target "0x~8,'0x" #+64-bit-target "0x~16,'0x"
             endaddr)))
 
-(defun identify-functions-with-pure-code (pure-low pure-high)
-  (let* ((hash (make-hash-table :test #'eq)))
-    (ccl::%map-lfuns #'(lambda (f)
-                         (let* ((code-vector #+ppc-target (ccl:uvref f 0)
-                                             #+x8664-target (ccl::function-to-function-vector f))
-                                (startaddr (+ (ccl::%address-of code-vector)
-                                              target::misc-data-offset)))
-                           (when (and (>= startaddr pure-low)
-                                      (< startaddr pure-high))
-                             (push f (gethash code-vector hash))))))
-    (let* ((n 0))
-      (declare (fixnum n))
-      (maphash #'(lambda (k v)
-                   (declare (ignore k))
-                   (if (null (cdr v))
-                     (incf n)))
-               hash)
-      (let* ((functions (make-array n))
-             (i 0))
+#+x8664-target
+(ccl::defx86lapfunction dynamic-dnode ((x arg_z))
+  (movq (% x) (% imm0))
+  (ref-global x86::heap-start arg_y)
+  (subq (% arg_y) (% imm0))
+  (shrq ($ x8664::dnode-shift) (% imm0))
+  (box-fixnum imm0 arg_z)
+  (single-value-return))
+
+#+x8664-target
+(defun identify-functions-with-pure-code ()
+  (ccl::freeze)
+  (ccl::collect ((functions))
+    (block walk
+      (let* ((frozen-dnodes (ccl::frozen-space-dnodes)))
+        (ccl::%map-areas (lambda (o)
+                           (when (>= (dynamic-dnode o) frozen-dnodes)
+                             (return-from walk nil))
+                           (when (typep o 'ccl::function-vector)
+                             (functions (ccl::function-vector-to-function o))))
+                         ccl::area-dynamic
+                         ccl::area-dynamic
+                         )))
+    (functions)))
+
+#+ppc-target
+(defun identify-functions-with-pure-code ()
+  (ccl:purify)
+  (multiple-value-bind (pure-low pure-high)
+                                 
+      (ccl::do-gc-areas (a)
+        (when (eql(ccl::%fixnum-ref a target::area.code)
+                  ccl::area-readonly)
+          (return
+            (values (ash (ccl::%fixnum-ref a target::area.low) target::fixnumshift)
+                    (ash (ccl::%fixnum-ref a target::area.active) target::fixnumshift)))))
+    (let* ((hash (make-hash-table :test #'eq)))
+      (ccl::%map-lfuns #'(lambda (f)
+                           (let* ((code-vector  (ccl:uvref f 0))
+                                  (startaddr (+ (ccl::%address-of code-vector)
+                                                target::misc-data-offset)))
+                             (when (and (>= startaddr pure-low)
+                                        (< startaddr pure-high))
+                               (push f (gethash code-vector hash))))))
+      (let* ((n 0))
+        (declare (fixnum n))
         (maphash #'(lambda (k v)
                      (declare (ignore k))
-                     (when (null (cdr v))
-                       (setf (svref functions i) (car v)
-                             i (1+ i))))
+                     (if (null (cdr v))
+                       (incf n)))
                  hash)
-        (sort functions
-              #'(lambda (x y)
-                  (< (ccl::%address-of #+ppc-target (uvref x 0)
-                                       #+x8664-target x)
-                     (ccl::%address-of #+ppc-target (uvref y 0)
-                                       #+x8664-target y))))))))
+        (let* ((functions ()))
+          (maphash #'(lambda (k v)
+                       (declare (ignore k))
+                       (when (null (cdr v))
+                         (push (car v) functions)))
+                   hash)
+          (sort functions
+                #'(lambda (x y)
+                    (< (ccl::%address-of (uvref x 0) )
+                       (ccl::%address-of  (uvref y 0))))))))))
         
                            
+
+
 (defun generate-shark-spatch-file ()
-  (ccl::purify)
-  (multiple-value-bind (pure-low pure-high)
-      (get-readonly-area-bounds)
-    (let* ((functions (identify-functions-with-pure-code pure-low pure-high)))
-      (with-open-file (f (make-pathname
-                          :host nil
-                          :directory (pathname-directory
-                                      (or *spatch-directory-path*
-                                          (user-homedir-pathname)))
-                          :name (format nil "~a_~D"
-                                        (pathname-name
-                                         (car
-                                          ccl::*command-line-argument-list*))
-                                        (ccl::getpid))
-                          :type "spatch")
-                         :direction :output
-                         :if-exists :supersede)
-        (format f "!SHARK_SPATCH_BEGIN~%")
-        (dotimes (i (length functions))
-          (print-shark-spatch-record (svref functions i) f))
-        (format f "!SHARK_SPATCH_END~%"))) t))
+  (let* ((functions (identify-functions-with-pure-code)))
+    (with-open-file (f (make-pathname
+                        :host nil
+                        :directory (pathname-directory
+                                    (ensure-shark-session-path))
+                        :name (format nil "~a_~D"
+                                      (pathname-name
+                                       (car
+                                        ccl::*command-line-argument-list*))
+                                      (ccl::getpid))
+                        :type "spatch")
+                       :direction :output
+                       :if-exists :supersede)
+      (format f "!SHARK_SPATCH_BEGIN~%")
+      (dolist (fun functions)
+        (print-shark-spatch-record fun f))
+      (format f "!SHARK_SPATCH_END~%"))))
 
-(defun cleanup-spatch-files ()
-  (dolist (f (directory
-              (make-pathname
-               :host nil
-               :directory
-               (pathname-directory
-                (or *spatch-directory-path*
-                    (user-homedir-pathname)))
-               :name :wild
-               :type "spatch")))
-    (delete-file f)))
+(defun terminate-shark-process ()
+  (when *shark-process*
+    (signal-external-process *shark-process* #$SIGUSR2))
+  (setq *shark-process* nil
+	*sampling* nil))
 
+(defun toggle-sampling ()
+  (if *shark-process*
+    (progn
+      (signal-external-process *shark-process* #$SIGUSR1)
+      (setq *sampling* (not *sampling*)))
+    (warn "No active shark procsss")))
 
-(defun launch-shark ()
-  (run-program "/usr/bin/open" (list *shark-app-path*)))
+(defun enable-sampling ()
+  (unless *sampling* (toggle-sampling)))
 
-  
-(defun reset-metering ()
-  (when (acquired-remote-access)
-    (release-remote-access)
-    (format t "~&Note: it may be desirable to quit and restart Shark.")
-    t))
+(defun disable-sampling ()
+  (when *sampling* (toggle-sampling)))
+
+(defun ensure-shark-process (reset hook)
+  (when (or (null *shark-process*) reset)
+    (terminate-shark-process)
+    (when (or reset (not *written-spatch-file*))
+      (generate-shark-spatch-file))
+    (let* ((args (list "-b" "-1" "-a" (format nil "~d" (ccl::getpid))
+			     "-d" *shark-session-native-namestring*)))
+      (when *shark-config-file*
+	(push (ccl::native-untranslated-namestring *shark-config-file*)
+	      args)
+	(push "-m" args))
+      (setq *shark-process*
+	    (run-program "/usr/bin/shark"
+			 args
+			 :output :stream
+			 :status-hook hook
+			 :wait nil))
+      (let* ((output (external-process-output-stream *shark-process*)))
+	(do* ((line (read-line output nil nil) (read-line output nil nil)))
+	     ((null line))
+	  (when *debug-shark-process-output*
+	    (format t "~&~a" line))
+	  (when (search "ready." line :key #'char-downcase)
+            (sleep 1)
+	    (return)))))))
+
+(defun display-shark-session-file (line)
+  (let* ((last-quote (position #\' line :from-end t))
+	 (first-quote (and last-quote (position #\' line :end (1- last-quote) :from-end t)))
+	 (path (and first-quote  (subseq line (1+ first-quote) last-quote))))
+    (when path (finder-open-file path))))
     
-(defun prepare-metering ()
-  (launch-shark)
-  (generate-shark-spatch-file)
-  (initialize-chud)
-  (loop
-    (when (ignore-errors (acquire-remote-access))
-      (return))
-    ;; Yes, this is lame.
-    (loop (when (y-or-n-p "Is Shark in Remote mode yet?")
-            (return)))))
+(defun scan-shark-process-output (p)
+  (with-interrupts-enabled 
+      (let* ((out (ccl::external-process-output p)))
+	(do* ((line (read-line out nil nil) (read-line out nil nil)))
+	     ((null line))
+	  (when *debug-shark-process-output*
+	    (format t "~&~a" line))
+	  (when (search "Created session file:" line)
+	    (display-shark-session-file line)
+	    (return))))))
 
-(defmacro meter (form &key (duration 0) (frequency 1))
-  (let* ((started (gensym)))
-    `(let* ((,started nil))
-      (unless (and (chud-is-initialized)
-                   (acquired-remote-access))
-        (prepare-metering))
-      (setup-timer ,duration ,frequency)
-      (unwind-protect
-         (progn
-           (setq ,started (start-remote-perf-monitor ',form))
-           ,form)
-        (when ,started (stop-remote-perf-monitor))))))
 
-(defun chud-cleanup ()
-  (when (chud-is-initialized)
-    (when (acquired-remote-access)
-      (ignore-errors (release-remote-access)))
-    (#_chudCleanup))
-  (cleanup-spatch-files))
-  
-(pushnew 'chud-cleanup *lisp-cleanup-functions*)
+
+(defmacro meter (form &key reset debug-output)
+  (let* ((hook (gensym))
+	 (block (gensym))
+	 (process (gensym)))
+    `(block ,block
+      (flet ((,hook (p)
+	       (when (or (eq (external-process-status p) :exited)
+			 (eq (external-process-status p) :signaled))
+		 (setq *shark-process* nil
+		       *sampling* nil))))
+	(let* ((*debug-shark-process-output* ,debug-output))
+	  (ensure-shark-process ,reset #',hook)
+	  (unwind-protect
+	       (progn
+		 (enable-sampling)
+		 ,form)
+	    (disable-sampling)
+	    (let* ((,process *shark-process*))
+	      (when ,process
+		(scan-shark-process-output ,process)))))))))
+
+;;; Try to clean up after ourselves when the lisp quits.
+(pushnew 'terminate-shark-process ccl::*save-exit-functions*)

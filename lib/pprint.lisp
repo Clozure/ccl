@@ -1538,7 +1538,7 @@
   (when (typep xp 'xp-stream)(setq xp (slot-value xp 'xp-structure)))
   (cond ((vectorp array) (pretty-vector xp array))
 	((zerop (array-rank array))
-	 (write-string++ "#0A " xp 0 4)
+	 (write-string++ "#0A" xp 0 3)
 	 (write+ (aref array) xp))
 	(T (pretty-non-vector xp array))))
 

@@ -42,6 +42,7 @@ cocoa-ide/preferences.lisp -text
 cocoa-ide/processes-window.lisp -text
 cocoa-ide/start.lisp -text
 compiler/acode-rewrite.lisp -text
+doc/ccl-documentation.html -text
 doc/release-notes.txt -text
 doc/src/Makefile.fedora -text
 doc/src/Makefile.macports -text
@@ -169,6 +170,7 @@ examples/cocoa/ui-elements/HOWTO_files/stylesheets/styles.css -text
 lib/late-clos.lisp -text
 library/elf.lisp -text
 library/mach-o-symbols.lisp -text
+library/oprofile.txt -text
 lisp-kernel/gc-common.c -text
 lisp-kernel/win64/Makefile -text
 lisp-kernel/win64/yasm-redefinition.patch -text

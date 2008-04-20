@@ -542,7 +542,7 @@
                          `(setf ,res ,value)
                          (default-setf form value env))))))))))
           ((oddp temp)
-           (error "Odd number of args to SETF : ~s." args))
+	   (signal-program-error "Odd number of args to SETF : ~s." args))
           (t (do* ((a args (cddr a)) (l nil))
                   ((null a) `(progn ,@(nreverse l)))
                (push `(setf ,(car a) ,(cadr a)) l))))))
@@ -868,12 +868,12 @@ are no Forms, OR returns NIL."
          (body ())
          otherwise-seen-p)
     (flet ((bad-clause (c) 
-             (error "Invalid clause ~S in ~S form." c construct)))
+             (signal-program-error "Invalid clause ~S in ~S form." c construct)))
       (dolist (clause clauses)
         (if (atom clause)
             (bad-clause clause))
         (if otherwise-seen-p
-            (error "OTHERWISE must be final clause in ~S form." construct))
+            (signal-program-error "OTHERWISE must be final clause in ~S form." construct))
         (destructuring-bind (typespec &body consequents) clause
           (when (eq construct 'typecase)
             (if (eq typespec 'otherwise)
@@ -993,7 +993,7 @@ are no Forms, OR returns NIL."
        (unless (symbolp sym) (report-bad-arg sym 'symbol))
        (when (nth-value 1 (macroexpand-1 sym env))
          (return `(psetf ,@pairs))))
-     (error "Uneven number of args in the call ~S" call))))
+     (signal-program-error "Uneven number of args in the call ~S" call))))
 
 ; generates body for psetq.
 ; "pairs" is a proper list whose length is not odd.
@@ -1676,7 +1676,7 @@ to open."
 
 (defun with-specs-aux (name spec-list original-body)
   (multiple-value-bind (body decls) (parse-body original-body nil)
-    (when decls (error "declarations not allowed in ~s" original-body))
+    (when decls (signal-program-error "declarations not allowed in ~s" original-body))
     (setq body (cons 'progn body))
     (dolist (spec (reverse spec-list))
       (setq body (list name spec body)))
@@ -2097,7 +2097,7 @@ to open."
     (dolist (option options)
       (unless (and (consp option)
                    (consp (%cdr option)))
-        (error "Invalid option ~s ." option))
+        (signal-program-error "Invalid option ~s ." option))
       (ecase (%car option)
 	(:default-initargs 
 	    (unless (plistp (cdr option)) 
@@ -2107,13 +2107,13 @@ to open."
 	      (push (setq default-initargs-p option) classopts))) 
         (:documentation 
 	 (unless (null (%cddr option)) 
-	   (error "Invalid option ~s ." option)) 
+	   (signal-program-error "Invalid option ~s ." option)) 
 	 (if docp
 	   (setq duplicate t)
            (push (setq docp option) classopts)))
         (:report 
 	 (unless (null (%cddr option)) 
-	   (error "Invalid option ~s ." option)) 
+	   (signal-program-error "Invalid option ~s ." option)) 
          (if reporter
            (setq duplicate t)
            (progn
@@ -2122,10 +2122,10 @@ to open."
                (setq reporter `(function ,reporter))
                (if (stringp reporter)
                  (setq reporter `(function (lambda (c s) (declare (ignore c)) (write-string ,reporter s))))
-                 (error "~a expression is not a string, symbol, or lambda expression ." (%car option))))
+                 (signal-program-error "~a expression is not a string, symbol, or lambda expression ." (%car option))))
              (setq reporter `((defmethod report-condition ((c ,name) s)
                                 (funcall ,reporter c s))))))))
-      (if duplicate (error "Duplicate option ~s ." option)))
+      (if duplicate (signal-program-error "Duplicate option ~s ." option)))
     `(progn
        (defclass ,name ,(or supers '(condition)) ,slots ,@classopts)
        ,@reporter
@@ -2758,9 +2758,9 @@ defcallback returns the callback pointer, e.g., the value of name."
             ((and (listp slot-entry) (cdr slot-entry) (null (cddr slot-entry))
                   (symbolp (car slot-entry)) (symbolp (cadr slot-entry)))
              (setq var (car slot-entry) slot-name (cadr slot-entry)))
-            (t (error "Malformed slot-entry: ~a to with-slot-values.~@
-                       Should be a symbol or a list of two symbols."
-                      slot-entry)))
+            (t (signal-program-error "Malformed slot-entry: ~a to with-slot-values.~@
+                                      Should be a symbol or a list of two symbols."
+				     slot-entry)))
       (push `(,var (slot-value ,instance ',slot-name)) bindings))
     `(let ((,instance ,instance-form))
        (let ,(nreverse bindings)
@@ -2779,9 +2779,9 @@ setq can be used to set the value of the slot."
             ((and (listp slot-entry) (cdr slot-entry) (null (cddr slot-entry))
                   (symbolp (car slot-entry)) (symbolp (cadr slot-entry)))
              (setq var (car slot-entry) slot-name (cadr slot-entry)))
-            (t (error "Malformed slot-entry: ~a to with-slots.~@
-                       Should be a symbol or a list of two symbols."
-                      slot-entry)))
+            (t (signal-program-error "Malformed slot-entry: ~a to with-slots.~@
+                                      Should be a symbol or a list of two symbols."
+				     slot-entry)))
       (push `(,var (slot-value ,instance ',slot-name)) bindings))
     `(let ((,instance ,instance-form))
        ,@(if bindings 
@@ -2800,9 +2800,9 @@ slot-entry. Both setf and setq can be used to set the value of the slot."
       (cond ((and (listp slot-entry) (cdr slot-entry) (null (cddr slot-entry))
                   (symbolp (car slot-entry)) (symbolp (cadr slot-entry)))
              (setq var (car slot-entry) reader (cadr slot-entry)))
-            (t (error "Malformed slot-entry: ~a to with-accessors.~@
-                       Should be a list of two symbols."
-                      slot-entry)))
+            (t (signal-program-error "Malformed slot-entry: ~a to with-accessors.~@
+                                     Should be a list of two symbols."
+				     slot-entry)))
       (push `(,var (,reader ,instance)) bindings))
     `(let ((,instance ,instance-form))
        ,@(if bindings 
@@ -2938,13 +2938,13 @@ to binary 0."
                     (nconc result
                            `((setf ,(%foreign-access-form name ftype 0 nil)
                               ,(car inits)))))
-              (error "Unexpected or malformed initialization forms: ~s in field type: ~s"
-                     inits record-name))))))))
+              (signal-program-error "Unexpected or malformed initialization forms: ~s in field type: ~s"
+				    inits record-name))))))))
 
 (defun %foreign-record-field-forms (ptr record-type record-name inits)
   (unless (evenp (length inits))
-    (error "Unexpected or malformed initialization forms: ~s in field type: ~s"
-                     inits record-name))
+    (signal-program-error "Unexpected or malformed initialization forms: ~s in field type: ~s"
+			  inits record-name))
   (let* ((result ()))
     (do* ()
 	 ((null inits)
@@ -2975,8 +2975,8 @@ to binary 0."
          (bits (ensure-foreign-type-bits ftype))
 	 (bytes (if bits
 		  (ceiling bits 8)
-		  (error "Unknown size for foreign type ~S."
-			 (unparse-foreign-type ftype))))
+		  (signal-program-error "Unknown size for foreign type ~S."
+					(unparse-foreign-type ftype))))
 	 (p (gensym))
 	 (bzero (read-from-string "#_bzero")))    
     `(let* ((,p (,allocator ,bytes)))
@@ -3153,7 +3153,7 @@ element-type is numeric."
         `(multiple-value-bind (,base ,offset)
           (%symbol-binding-address ',place)
           (%atomic-incf-node ,delta ,base ,offset)))
-      (error "~S is not a special variable"  place))))
+      (signal-program-error "~S is not a special variable"  place))))
     
 (defmacro atomic-incf (place)
   `(atomic-incf-decf ,place 1))
@@ -3172,7 +3172,7 @@ element-type is numeric."
   (dolist (x binds)
     (unless (and (listp x)
                  (= (length x) 2))
-      (error "Malformed iterate variable spec: ~S." x)))
+      (signal-program-error "Malformed iterate variable spec: ~S." x)))
 
   `(labels ((,name ,(mapcar #'first binds) ,@body))
      (,name ,@(mapcar #'second binds))))
@@ -3210,7 +3210,7 @@ element-type is numeric."
       `(progn ,@body)
       (let ((spec (first specs)))
         (when (/= (length spec) 2)
-          (error "Malformed Once-Only binding spec: ~S." spec))
+          (signal-program-error "Malformed ~s binding spec: ~S." 'once-only spec))
         (let ((name (first spec))
               (exp-temp (gensym)))
           `(let ((,exp-temp ,(second spec))
@@ -3271,7 +3271,7 @@ element-type is numeric."
         (binds ()))
     (dolist (spec collections)
       (unless (<= 1 (length spec) 3)
-        (error "Malformed collection specifier: ~S." spec))
+        (signal-program-error "Malformed collection specifier: ~S." spec))
       (let ((n-value (gensym))
             (name (first spec))
             (default (second spec))
@@ -3332,7 +3332,7 @@ element-type is numeric."
                  (values (require-global-symbol p env) nil)
                  (if (and (consp (%cdr p)) (null (%cddr p)))
                    (values (require-global-symbol (%car p) env) (%cadr p))
-                   (error "Invalid variable initialization form : ~s")))))
+                   (signal-program-error "Invalid variable initialization form : ~s")))))
         (declare (inline pair-name-value))
         (dolist (v vars)
           (let* ((oldval (gensym))
@@ -3369,7 +3369,7 @@ element-type is numeric."
         `(multiple-value-bind (,base ,offset)
           (ccl::%symbol-binding-address ',place)
           (ccl::%store-node-conditional ,offset ,base ,old-value ,new-value)))
-      (error "~s is not a special variable ." place))
+      (signal-program-error "~s is not a special variable ." place))
     (let* ((sym (car place))
            (struct-transform (or (ccl::environment-structref-info sym env)
                                  (gethash sym ccl::%structure-refs%))))
@@ -3381,7 +3381,7 @@ element-type is numeric."
           `(let* ((,v ,(cadr place)))
             (ccl::store-gvector-conditional ,(caddr place)
              ,v ,old-value ,new-value)))
-        (error "Don't know how to do conditional store to ~s" place)))))
+        (signal-program-error "Don't know how to do conditional store to ~s" place)))))
 
 (defmacro step (form)
   "The form is evaluated with single stepping enabled. Function calls

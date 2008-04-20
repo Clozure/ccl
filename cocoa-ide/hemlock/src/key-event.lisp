@@ -116,6 +116,7 @@
 ;;; for the button cross event-key.  If the information is undefined, this
 ;;; signals an error.
 ;;;
+#+unused
 (defun mouse-translation-info (button event-key info)
   (let ((event-dispatch (svref *mouse-translation-info* button)))
     (unless event-dispatch

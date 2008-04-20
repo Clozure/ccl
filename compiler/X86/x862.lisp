@@ -2166,7 +2166,7 @@
              (unless (and (eql (hard-regspec-value src) x8664::arg_x)
                           (eql (hard-regspec-value unscaled-idx) x8664::arg_y)
                           (eql (hard-regspec-value val-reg) x8664::arg_z))
-               (nx-error "Bug: invalid register targeting for gvset: ~s" (list src unscaled-idx val-reg)))
+               (compiler-bug "Bug: invalid register targeting for gvset: ~s" (list src unscaled-idx val-reg)))
              (! call-subprim-3 val-reg (subprim-name->offset '.SPgvset) src unscaled-idx val-reg))
             (is-node
              (if (and index-known-fixnum (<= index-known-fixnum
@@ -5027,7 +5027,7 @@
                 (let* ((*available-backend-node-temps* (bitclr x8664::arg_z (bitclr x8664::rcx *available-backend-node-temps*))))
                   (! unbind-interrupt-level-inline))
                 (! unbind-interrupt-level)))
-            (nx-error "unknown payback token ~s" r)))))))
+            (compiler-bug "unknown payback token ~s" r)))))))
 
 (defun x862-spread-lambda-list (seg listform whole req opt rest keys 
                                     &optional enclosing-ea cdr-p)

@@ -153,7 +153,7 @@
                           (typep (car rawval) 'keyword))
                  (setq val-p t value (cddr rawval))))))
         (if val-p
-          (cinspect value))))))
+          (inspect value))))))
 
 
 
