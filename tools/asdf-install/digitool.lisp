@@ -5,7 +5,7 @@
 ;;; 2004-01-18 james.anderson@setf.de additions for MCL
 ;;; 2008-01-22 added exit-code checks to call-system
 
-(in-package :asdf-install)
+(in-package #:asdf-install)
 
 #+:digitool
 (let ((getenv-fn 0)

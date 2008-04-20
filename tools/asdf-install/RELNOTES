@@ -1,0 +1,5 @@
+12 Sept 2006 gwking@metabang.com
+
+   * added :where parameter to install
+   * now uses more tempoary files
+   * changed selection of locations - 0 is always abort, can use symbols / strings

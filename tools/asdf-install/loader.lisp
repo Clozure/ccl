@@ -2,10 +2,15 @@
 
 (eval-when (:load-toplevel)
   (unless (find-package 'asdf)
-    (require 'asdf))
+    (require 'asdf)))
+
+(eval-when (:load-toplevel)
+  (unless (find-package 'asdf)
+    (error "ASDF-Install requires ASDF to load"))    
   (let ((asdf::*verbose-out* nil))
     (require 'asdf-install)))
 
+#+sbcl
 (defun run ()
   (handler-case
       (apply #'asdf-install:install (cdr *posix-argv*))
