@@ -513,7 +513,7 @@
     values.</para>
 
     <para>&CCL; supports character names of the form
-    <literal>u+xxxx</literal> - where <literal>x</literal> is a
+    <literal>u+xxxx</literal>&mdash;where <literal>x</literal> is a
     sequence of one or more hex digits.  The value of the hex digits
     denotes the code of the character.  The <literal>+</literal>
     character is optional, so <literal>#\u+0020</literal>,
@@ -529,8 +529,7 @@
     <literal>#x395</literal>.  To see the complete list of supported
     character names, look just below the definition for
     <function>register-character-name</function> in
-    <literal>ccl:level-1;l1-reader.lisp</literal> see the complete
-    list of char</para>
+    <literal>ccl:level-1;l1-reader.lisp</literal>.</para>
   </sect2>
 
 
@@ -544,7 +543,7 @@
     linkend="Line-Termination-Keywords"/>), a character encoding
     keyword (see <xref linkend="Character-Encodings"/>), an
     external-format object created using
-    <function>CCL::MAKE-EXTERNAL-FORMAT</function>(see <xref
+    <function>CCL::MAKE-EXTERNAL-FORMAT</function> (see <xref
     linkend="f_make-external-format"/>), or a plist with keys:
     <literal>:DOMAIN</literal>, <literal>:CHARACTER-ENCODING</literal>
     and <literal>:LINE-TERMINATION</literal>.  If
@@ -649,9 +648,9 @@
 	    </listitem>
 	  </varlistentry>
 	  <varlistentry>
-	    <term>[result]</term>
+	    <term>external-format</term>
 	    <listitem>
-	      <para>[description]</para>
+	      <para>An external-format object as described above.</para>
 	    </listitem>
 	  </varlistentry>
 	</variablelist>
@@ -660,10 +659,10 @@
       <refsect1>
 	<title>Description</title>
 	
-	<para>Despite the function's name, it doesn't necessarily
-	create a new, unique EXTERNAL-FORMAT object: two calls to
-	MAKE-EXTERNAL-FORMAT with the same arguments made in the
-	same dynamic environment will return the same (eq) object.
+	<para>Despite the function's name, it doesn't necessarily create a
+	new, unique EXTERNAL-FORMAT object: two calls to
+	MAKE-EXTERNAL-FORMAT with the same arguments made in the same
+	dynamic environment return the same (eq) object.
 	</para>
       </refsect1>
     </refentry>
@@ -768,10 +767,10 @@
 
     <sect3><title>Encoding Problems</title>
       <para>On output to streams with character encodings that can
-      encode the full range of Unicode - and on input from any stream
-      - "unencodable characters" are represented using the Unicode
-      #\Replacement_Character (= #\U+fffd); the presence of such a
-      character usually indicates that something got lost in
+      encode the full range of Unicode&mdash;and on input from any
+      stream&mdash;"unencodable characters" are represented using the
+      Unicode #\Replacement_Character (= #\U+fffd); the presence of
+      such a character usually indicates that something got lost in
       translation.  Either data wasn't encoded properly or there was a
       bug in the decoding process.</para>
     </sect3>
@@ -787,17 +786,17 @@
       used with UTF-8 character encodings, where it is simply used to
       indicate that the encoding is UTF-8.)</para>
 
-      <para>Clozure CL will write a byte order mark as the first
-      character of a file or socket stream when the endianness of the
-      character encoding is not explicit.  Clozure CL also expects a
-      byte order mark on input from streams where the endianness is
-      not explicit. If a byte order mark is missing from input data,
-      that data is assumed to be in big-endian order.</para>
+      <para>Clozure CL writes a byte order mark as the first character
+      of a file or socket stream when the endianness of the character
+      encoding is not explicit.  Clozure CL also expects a byte order
+      mark on input from streams where the endianness is not
+      explicit. If a byte order mark is missing from input data, that
+      data is assumed to be in big-endian order.</para>
 
       <para>A byte order mark from a UTF-8 encoded input stream is not
-      treated specially and and will just appear as normal character
-      from the input stream.  It is probably a good idea to skip over
-      this character.</para>
+      treated specially and just appears as a normal character from
+      the input stream.  It is probably a good idea to skip over this
+      character.</para>
     </sect3>
 
   <sect3><title><function>DESCRIBE-CHARACTER-ENCODINGS</function></title>
