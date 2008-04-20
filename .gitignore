@@ -36,8 +36,6 @@ compiler/PPC/*~.*
 compiler/PPC/PPC32/*~.*
 compiler/PPC/PPC64/*~.*
 compiler/X86/*~.*
-doc/HTML/*.html
-doc/INFO/*.info
 doc/src/*html
 doc/src/build*
 examples/*~.*
