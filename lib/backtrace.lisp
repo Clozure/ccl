@@ -629,8 +629,8 @@ object."
                  (nlocals (- (length vars) nargs))
                  (local-vars (append (nthcdr nargs vars) (inherited-vars)))
                  (local-indices (append (nthcdr nargs map-indices) (inherited-indices)))
-                 (arg-vars (nbutlast vars nlocals))
-                 (arg-indices (nbutlast map-indices nlocals)))
+                 (arg-vars (if (<= nlocals 0) vars (nbutlast vars nlocals)))
+                 (arg-indices (if (<= nlocals 0) map-indices (nbutlast map-indices nlocals))))
             (flet ((get-arg-value (name)
                      (let* ((pos (position name arg-vars :test #'eq)))
                        (when pos
