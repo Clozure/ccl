@@ -1561,7 +1561,8 @@ satisfy the optional predicate PREDICATE."
       (setq done (logbitp 7 b) val (logior val (ash (logand b #x7f) shift))))))
        
   
-;; Should return a FOREIGN-TYPE structure.
+;; Should return a FOREIGN-TYPE structure (except if suppress-typedef-expansion is true, may
+;; return a symbol for encoded-type-named-type-ref)
 (defun %decode-type (buf p ftd &optional suppress-typedef-expansion)
   (declare (type macptr buf) (fixnum p))
   (let* ((q (1+ p)))

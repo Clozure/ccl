@@ -66,7 +66,7 @@
     (tree-node-set-right node new)))
 
 (defstruct (splay-tree (:constructor %make-splay-tree))
-  (root nil :type (or null splay-tree-node))
+  (root nil #|:type (or null splay-tree-node)|#)
   equal                                 ; true if x = y
   less                                  ; true if x < y
   (count 0)

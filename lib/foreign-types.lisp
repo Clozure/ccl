@@ -885,7 +885,7 @@ Which one name refers to depends on foreign-type-spec in the obvious manner."
 ;;;; The POINTER type.
 
 (def-foreign-type-class (pointer :include (foreign-value))
-  (to *void-foreign-type* :type foreign-type))
+  (to *void-foreign-type* :type (or symbol foreign-type)))
 
 
 
