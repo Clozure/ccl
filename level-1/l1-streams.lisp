@@ -370,7 +370,8 @@
 ;;; elements output to the buffer.
 
 (defstruct io-buffer
-  (buffer nil :type (or (simple-array * (*)) null))
+               ;; This type is too complex during bootstrapping.
+  (buffer nil #|:type (or (simple-array * (*)) null)|#)
   (bufptr nil :type (or macptr null))
   (size 0 :type fixnum)			; size (in octets) of buffer
   (idx 0 :type fixnum)			; index of next element
@@ -396,8 +397,8 @@
   (outbuf nil :type (or null io-buffer))
   (element-type 'character)
   (element-shift 0 :type fixnum)        ;element shift count
-  (charpos 0 :type (or nil fixnum))     ;position of cursor
-  (device -1 :type fixnum)              ;file descriptor
+  (charpos 0 :type (or null fixnum))     ;position of cursor
+  (device -1 :type (or null fixnum))     ;file descriptor
   (advance-function 'ioblock-advance)
   (listen-function 'ioblock-listen)
   (eofp-function 'ioblock-eofp)

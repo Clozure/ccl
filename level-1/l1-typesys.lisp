@@ -1477,6 +1477,9 @@
         *universal-type*
         res)))
 
+(defun standardized-type-specifier (spec)
+  (type-specifier (specifier-type spec)))
+
 (defun modified-numeric-type (base
 			      &key
 			      (class      (numeric-ctype-class      base))

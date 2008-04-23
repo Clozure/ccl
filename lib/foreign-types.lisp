@@ -184,7 +184,7 @@ list, NIL otherwise."
           (t 1)))
 
   (defstruct foreign-type-class
-    (name nil :type symbol)
+    (name nil #|:type symbol|#)
     (include nil :type (or null foreign-type-class))
     (unparse nil :type (or null function))
     (type= nil :type (or null function))
@@ -198,7 +198,6 @@ list, NIL otherwise."
     (arg-tn nil :type (or null function))
     (result-tn nil :type (or null function))
     (subtypep nil :type (or null function)))
-
 
   (defvar *foreign-type-classes* (make-hash-table :test #'eq))
 

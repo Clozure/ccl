@@ -176,18 +176,27 @@
 	 (apply #'effective-slot-definition-class class initargs)
 	 initargs))
 
+;; Bootstrapping version, replaced in l1-typesys
+(defun standardized-type-specifier (spec)
+  (when (and (consp spec)
+             (memq (%car spec) '(and or))
+             (consp (%cdr spec))
+             (null (%cddr spec)))
+    (setq spec (%cadr spec)))
+  (if (consp spec)
+    (cons (%car spec) (mapcar #'standardized-type-specifier (%cdr spec)))
+    (or (cdr (assoc spec '((string . base-string))))
+        spec)))
+
 ;;; The type of an effective slot definition is the intersection of
 ;;; the types of the direct slot definitions it's initialized from.
 (defun dslotd-type-intersection (direct-slots)
   (or (dolist (dslotd direct-slots t)
         (unless (eq t (%slot-definition-type dslotd))
           (return)))
-      (type-specifier
-       (specifier-type `(and ,@(mapcar #'(lambda (d)
-                                           (or (%slot-definition-type d)
-                                               t))
-                                       direct-slots))))))
-
+      (standardized-type-specifier
+       `(and ,@(mapcar #'(lambda (d) (or (%slot-definition-type d) t))
+                       direct-slots)))))
 
 (defmethod compute-effective-slot-definition ((class slots-class)
                                               name
@@ -266,8 +275,8 @@
         (setf (%slot-definition-location (car islotds)) loc))))
 
 ;;; Should eventually do something here.
-(defmethod compute-slots ((s structure-class))
-  (call-next-method))
+;(defmethod compute-slots ((s structure-class))
+;  (call-next-method))
 
 (defmethod direct-slot-definition-class ((class structure-class) &rest initargs)
   (declare (ignore initargs))

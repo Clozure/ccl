@@ -159,7 +159,7 @@
 
 (cl:defstruct (pprint-dispatch-table (:conc-name nil) (:copier nil))
   (conses-with-cars (make-hash-table :test #'eq) :type hash-table)
-  (structures (make-hash-table :test #'eq) :type hash-table)
+  (structures (make-hash-table :test #'eq) :type (or null hash-table))
   (others nil :type list))
 
 ;The list and the hash-tables contain entries of the

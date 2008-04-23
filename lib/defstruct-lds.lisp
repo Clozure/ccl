@@ -209,21 +209,23 @@
       (setq named offset offset (%i+ offset 1)))
     (when (stringp (%car slots))
       (setq documentation (%car slots) slots (%cdr slots)))
-    (let (name args read-only initform)
+    (let (name args read-only initform slot-type)
       (while slots
          (if (atom (%car slots))
            (setq name (%car slots) args ())
            (setq name (%caar slots) args (%cdar slots)))
          (unless (symbolp name) (go bad-slot))
-         (setq read-only nil initform (pop args))
+         (setq read-only nil initform (pop args) slot-type t)
          (while args
             (when (atom (cdr args)) (go bad-slot))
-            (cond ((eq (%car args) :type) )
+            ;; To do: check for multiple/incompatible options.
+            (cond ((eq (%car args) :type)
+                   (setq slot-type (%cadr args)))
                   ((eq (%car args) :read-only)
                    (setq read-only (%cadr args)))
                   (t (go bad-slot)))
             (setq args (%cddr args)))
-         (push (make-ssd name initform offset read-only) slot-list)
+         (push (make-ssd name initform offset read-only slot-type) slot-list)
          (setq slots (%cdr slots) offset (%i+ offset 1))))
 
     (setq slot-list (nreverse slot-list))
@@ -326,7 +328,10 @@
     (cond ((memq arg lambda-list-keywords)
            (setq arg-kind arg))
           ((setq slot (named-ssd arg (sd-slots sd)))
-           (when (or (eq arg-kind '&optional) (eq arg-kind '&key))
+           (when (or (eq arg-kind '&optional) (eq arg-kind '&key)
+                     ;; for &aux variables, init value is implementation-defined, however it's not supposed
+                     ;; to signal a type error until slot is assigned, so might as well just use the initform.
+                     (eq arg-kind '&aux))
              (setq arg (list arg (ssd-initform slot))))
            (push slot used-slots))
           ((and (consp arg) (setq slot (named-ssd (if (consp (%car arg)) (%cadar arg) (%car arg)) (sd-slots sd))))
