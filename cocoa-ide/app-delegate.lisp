@@ -67,6 +67,19 @@
 	  (make-instance 'apropos-window-controller)))
   (#/showWindow: *apropos-window-controller* self))
 
+(objc:defmethod (#/showSearchFiles: :void) ((self lisp-application-delegate)
+                                            sender)
+  ;;If command key is pressed, always make a new window
+  ;;otherwise bring frontmost search files window to the front
+  (declare (ignore sender))
+  (let ((w nil))
+    (if (or (current-event-command-key-p)
+            (null (setf w (first-window-with-controller-type 'search-files-window-controller))))
+      (let* ((wc (make-instance 'search-files-window-controller)))
+        (setf w (#/window wc))
+        (#/setWindowController: w wc))
+      (#/makeKeyAndOrderFront: w self))))
+
 (objc:defmethod (#/newListener: :void) ((self lisp-application-delegate)
                                         sender)
   (declare (ignore sender))

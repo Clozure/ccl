@@ -75,6 +75,7 @@
     "processes-window"
     "apropos-window"
     "app-delegate"
+    "search-files"
     "start"
     ))
 

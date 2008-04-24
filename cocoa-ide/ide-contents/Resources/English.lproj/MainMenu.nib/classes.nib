@@ -54,6 +54,8 @@
 				<string>id</string>
 				<key>showProcessesWindow</key>
 				<string>id</string>
+				<key>showSearchFiles</key>
+				<string>id</string>
 			</dict>
 			<key>CLASS</key>
 			<string>FirstResponder</string>

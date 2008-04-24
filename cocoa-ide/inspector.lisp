@@ -39,6 +39,10 @@ Maybe get rid of contextual menus when main menu handles everything
 Make preferences for fonts, key commands
 |#
 
+(defvar @ nil)
+(defvar @@ nil)
+(defvar @@@ nil)
+
 (defclass ninspector-window-controller (ns:ns-window-controller)
   ((table-view :foreign-type :id :accessor table-view) ;IBOutlet set by nib file
    (property-column :foreign-type :id :accessor property-column) ;IBOutlet
@@ -56,6 +60,7 @@ Make preferences for fonts, key commands
   (:metaclass ns:+ns-object))
 
 (objc:defmethod #/init ((self ninspector-window-controller))
+  (#/setShouldCascadeWindows: self t)
   (#/initWithWindowNibName: self #@"inspector"))
 
 (defmethod lisp-inspector ((wc ninspector-window-controller))
@@ -104,7 +109,6 @@ Make preferences for fonts, key commands
       (#/setTarget: mi2 self)
       (#/setAction: mi2 (@selector #/editSelectionSource:)))
     (#/setMenu: table-view item-menu)
-    ;(#/setTitle: (#/window self) #@"FooBar") ;TODO figure out how to set window title
     ))
 
 (objc:defmethod (#/inspectSelectionInPlace: :void) ((wc ninspector-window-controller) sender)
@@ -114,7 +118,7 @@ Make preferences for fonts, key commands
         (let ((ii (get-child (inspector-item wc) row)))
           (if (and (< next-index (fill-pointer viewed-inspector-items))
                    (eq ii (aref viewed-inspector-items next-index)))
-            ;;If the ii is the same and the next history item, then just go forward in history
+            ;;If the ii is the same as the next history item, then just go forward in history
             (set-current-inspector-item wc next-index)
             ;;Otherwise forget the forward history
             (push-inspector-item wc ii)))))))
@@ -205,11 +209,16 @@ Make preferences for fonts, key commands
   (setf (inspector-item wc) ii))
 
 (defmethod (setf inspector-item) ((ii inspector-item) (wc ninspector-window-controller))
+  (setf @@@ @@
+        @@ @
+        @ (inspector-object ii))
   (setf (slot-value wc 'inspector-item) ii)
-  (#/window wc) ;makes sure there is a window
-  (let* ((title (inspector-item-ob-string ii)))
-      (#/setStringValue: (object-label wc) title)
-      (#/reloadData (table-view wc))))
+  (let* ((w (#/window wc))
+         (title (inspector-item-ob-string ii)))
+    (#/setTitle: w (%make-nsstring (concatenate 'string  "Inspector: " 
+                                                (lisp-string-from-nsstring title))))
+    (#/setStringValue: (object-label wc) title)
+    (#/reloadData (table-view wc))))
 
 (defun ninspect (object)
   (execute-in-gui #'(lambda () (make-inspector object))))

@@ -108,13 +108,23 @@
                                               (cgfloat blue)
                                               (cgfloat (or alpha 1.0))))
 
-(defun windows ()
-  (let* ((win-arr (#/orderedWindows *NSApp*))
-	 (ret nil))
+(defun map-windows (fn)
+  (let ((win-arr (#/orderedWindows *NSApp*)))
     (dotimes (i (#/count win-arr))
-      (push (#/objectAtIndex: win-arr i) ret))
+      (funcall fn (#/objectAtIndex: win-arr i)))))
+
+(defun windows ()
+  (let* ((ret nil))
+    (map-windows #'(lambda (w) (push w ret)))
     (nreverse ret)))
 
+(defun first-window-satisfying-predicate (pred)
+  (block foo
+    (map-windows #'(lambda (w) (when (funcall pred w)
+                                 (return-from foo w))))))  
+
+(defun first-window-with-controller-type (controller-type)
+  (first-window-satisfying-predicate #'(lambda (w) (typep (#/windowController w) controller-type))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -195,6 +205,14 @@
      (console :foreign-type :id :accessor console))
   (:metaclass ns:+ns-object))
 
+(defmethod current-event-modifier-p (modifier-mask)
+  (let* ((event (#/currentEvent *nsapp*))
+         (modifiers (#/modifierFlags event)))
+    (logtest modifier-mask modifiers)))
+
+(defmethod current-event-command-key-p ()
+  (current-event-modifier-p #$NSCommandKeyMask))
+
 ;;; I'm not sure if there's another way to recognize events whose
 ;;; type is #$NSApplicationDefined.
 (objc:defmethod (#/sendEvent: :void) ((self lisp-application) e)
@@ -230,6 +248,21 @@
     (if result-handler
       (multiple-value-call result-handler (funcall thunk))
       (funcall thunk))))
+
+(defun choose-directory-dialog ()
+  (execute-in-gui #'(lambda ()
+                      (let ((op (#/openPanel ns:ns-open-panel)))
+                        (#/setAllowsMultipleSelection: op nil)
+                        (#/setCanChooseDirectories: op t)
+                        (#/setCanChooseFiles: op nil)
+                        (when (eql (#/runModalForTypes: op +null-ptr+) #$NSOKButton)
+                          ;; #/stringByStandardizingPath seems to strip trailing slashes
+                         (let* ((path (#/retain (#/stringByAppendingString:
+                                        (#/stringByStandardizingPath
+                                         (#/objectAtIndex: (#/filenames op) 0))
+                                        #@"/"))))
+                            path))))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

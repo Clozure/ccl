@@ -20,6 +20,8 @@ cocoa-ide/ide-contents/Resources/Encodings.tiff -text
 cocoa-ide/ide-contents/Resources/English.lproj/Credits.html -text
 cocoa-ide/ide-contents/Resources/English.lproj/MainMenu.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/OpenmclInspector.nib/keyedobjects.nib -text
+cocoa-ide/ide-contents/Resources/English.lproj/SearchFiles.nib/designable.nib -text
+cocoa-ide/ide-contents/Resources/English.lproj/SearchFiles.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/apropos.nib/classes.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/apropos.nib/info.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/apropos.nib/keyedobjects.nib -text
@@ -40,6 +42,7 @@ cocoa-ide/ide-contents/Resources/openmcl-icon.icns -text svneol=unset#unset
 cocoa-ide/inspector.lisp -text
 cocoa-ide/preferences.lisp -text
 cocoa-ide/processes-window.lisp -text
+cocoa-ide/search-files.lisp -text
 cocoa-ide/start.lisp -text
 compiler/acode-rewrite.lisp -text
 doc/ccl-documentation.html -text
