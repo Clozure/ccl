@@ -54,13 +54,14 @@
                               safety)))) ; trust-declarations
                #'(lambda (env)
                    (>= (speed-optimize-quantity env)
-                       (+ (space-optimize-quantity env) 2)))   ; open-code-inline
+                       (+ (space-optimize-quantity env) 2)))    ; open-code-inline
                #'(lambda (env)
                    (and (eq (speed-optimize-quantity env) 3) 
                         (eq (safety-optimize-quantity env) 0)))   ; inhibit-safety-checking
                #'(lambda (env)
-                   (and (eq (speed-optimize-quantity env) 3) 
-                        (eq (safety-optimize-quantity env) 0)))   ; inhibit-event-polling
+                   (let* ((safety (safety-optimize-quantity env)))
+                     (or (eq safety 3)
+                         (> safety (speed-optimize-quantity env)))))          ;the-typechecks 
                #'(lambda (env)
                    (neq (debug-optimize-quantity env) 3))   ; inline-self-calls
                #'(lambda (env)
@@ -80,22 +81,22 @@
                                    (trust-declarations nil td-p)
                                    (open-code-inline nil oci-p)
                                    (inhibit-safety-checking nil ischeck-p)
-                                   (inhibit-event-polling nil iep-p)
                                    (inline-self-calls nil iscall-p)
                                    (allow-transforms nil at-p)
                                    (force-boundp-checks nil fb-p)
-                                   (allow-constant-substitution nil acs-p))
+                                   (allow-constant-substitution nil acs-p)
+                                   (the-typechecks nil tt-p))
     (let ((p (copy-uvector policy)))
       (if atr-p (setf (policy.allow-tail-recursion-elimination p) allow-tail-recursion-elimination))
       (if ira-p (setf (policy.inhibit-register-allocation p) inhibit-register-allocation))
       (if td-p (setf (policy.trust-declarations p) trust-declarations))
       (if oci-p (setf (policy.open-code-inline p) open-code-inline))
       (if ischeck-p (setf (policy.inhibit-safety-checking p) inhibit-safety-checking))
-      (if iep-p (setf (policy.inhibit-event-checking p) inhibit-event-polling))
       (if iscall-p (setf (policy.inline-self-calls p) inline-self-calls))
       (if at-p (setf (policy.allow-transforms p) allow-transforms))
       (if fb-p (setf (policy.force-boundp-checks p) force-boundp-checks))
       (if acs-p (setf (policy.allow-constant-substitution p) allow-constant-substitution))
+      (if tt-p (setf (policy.the-typechecks p) the-typechecks))
       p))
   (defun %default-compiler-policy () policy))
 
