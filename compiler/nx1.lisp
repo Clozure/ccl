@@ -19,8 +19,8 @@
 ;;; Wimp out, but don't choke on (the (values ...) form)
 (defnx1 nx1-the the (&whole call typespec form &environment env)
   (if (and (self-evaluating-p form)
-               (not (typep form typespec))
-               (progn (nx1-whine :type call) t))
+           (not (typep form typespec))
+           (progn (nx1-whine :type call) t))
     (setq typespec t))
   ;; Allow VALUES types here (or user-defined types that
   ;; expand to VALUES types).
@@ -32,11 +32,19 @@
          (transformed (nx-transform form env)))
     (if (and (consp transformed)
              (eq (car transformed) 'the))
-        (setq transformed form))
-    (make-acode
-     (%nx1-operator typed-form)
-     typespec
-     (nx1-transformed-form transformed env))))
+      (setq transformed form))
+    ;; Doing this in this bizarre way may be a little easier
+    ;; to bootstrap.
+    (if (nx-the-typechecks env)
+      (make-acode
+       (%nx1-operator typed-form)
+       typespec
+       (nx1-transformed-form transformed env)
+       t)
+      (make-acode
+       (%nx1-operator typed-form)
+       typespec
+       (nx1-transformed-form transformed env)))))
 
 (defnx1 nx1-struct-ref struct-ref (&whole whole structure offset)
   (if (not (fixnump (setq offset (nx-get-fixnum offset))))
