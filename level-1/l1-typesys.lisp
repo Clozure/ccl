@@ -1396,6 +1396,7 @@
     (cons-ctype
      (and (cacheable-ctype-p (cons-ctype-car-ctype ctype))
 	  (cacheable-ctype-p (cons-ctype-cdr-ctype ctype))))
+    (unknown-ctype nil)
     ;; Anything else ?  Simple things (numbers, classes) can't lose.
     (t t)))
 		
