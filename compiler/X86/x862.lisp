@@ -5780,9 +5780,10 @@
 (defx862 x862-svset svset (seg vreg xfer vector index value)
    (x862-vset seg vreg xfer :simple-vector vector  index value (nx-lookup-target-uvector-subtag :simple-vector)))
 
-(defx862 x862-typed-form typed-form (seg vreg xfer typespec form)
-  (declare (ignore typespec)) ; Boy, do we ever !
-  (x862-form seg vreg xfer form))
+(defx862 x862-typed-form typed-form (seg vreg xfer typespec form &optional check)
+  (if check
+    (x862-typechecked-form seg vreg xfer typespec form)
+    (x862-form seg vreg xfer form)))
 
 (defx862 x862-%primitive %primitive (seg vreg xfer &rest ignore)
   (declare (ignore seg vreg xfer ignore))
@@ -8263,6 +8264,66 @@
   (def-x862-require x862-require-s8 require-u32)
   (def-x862-require x862-require-s8 require-s64)
   (def-x862-require x862-require-s8 require-u64))
+
+(defun x862-typechecked-form (seg vreg xfer typespec form)
+  (with-x86-local-vinsn-macros (seg vreg xfer)
+    (let* ((op
+            (cond ((eq typespec 'fixnum) (%nx1-operator require-fixnum))
+                  ((eq typespec 'integer) (%nx1-operator require-integer))
+                  ((memq typespec '(base-char character))
+                   (%nx1-operator require-character))
+                  ((eq typespec 'symbol) (%nx1-operator require-symbol))
+                  ((eq typespec 'list) (%nx1-operator require-list))
+                  ((eq typespec 'real) (%nx1-operator require-real))
+                  ((memq typespec '(simple-base-string simple-string))
+                   (%nx1-operator require-simple-string))
+                  ((eq typespec 'number) (%nx1-operator require-number))
+                  ((eq typespec 'simple-vector) (%nx1-operator require-simple-vector))
+                  (t
+                   (let* ((ctype (specifier-type typespec)))
+                     (cond ((type= ctype (load-time-value (specifier-type '(signed-byte 8))))
+                            (%nx1-operator require-s8))
+                           ((type= ctype (load-time-value (specifier-type '(unsigned-byte 8))))
+                            (%nx1-operator require-u8))
+                           ((type= ctype (load-time-value (specifier-type '(signed-byte 16))))
+                            (%nx1-operator require-s16))
+                           ((type= ctype (load-time-value (specifier-type '(unsigned-byte 16))))
+                            (%nx1-operator require-u16))
+                           ((type= ctype (load-time-value (specifier-type '(signed-byte 32))))                            
+                            (%nx1-operator require-s32))
+                           ((type= ctype (load-time-value (specifier-type '(unsigned-byte 32))))
+                            (%nx1-operator require-u32))
+                           ((type= ctype (load-time-value (specifier-type '(signed-byte 64))))
+                            (%nx1-operator require-s64))
+                           ((type= ctype (load-time-value (specifier-type '(unsigned-byte 64))))
+                            (%nx1-operator require-u64))))))))
+      (if op
+        (x862-use-operator op seg vreg xfer form)
+        (if (or (eq typespec t)
+                (eq typespec '*))
+          (x862-form seg vreg xfer form)
+          (let* ((ok (backend-get-next-label)))
+            (x862-one-targeted-reg-form seg form ($ x8664::arg_y))
+            (x862-store-immediate seg typespec ($ x8664::arg_z))
+            (x862-store-immediate seg 'typep ($ x8664::fname))
+            (x862-set-nargs seg 2)
+            (x862-vpush-register seg ($ x8664::arg_y))
+            (! call-known-symbol ($ x8664::arg_z))
+            (! compare-to-nil ($ x8664::arg_z))
+            (x862-vpop-register seg ($ x8664::arg_y))
+            (! cbranch-false (aref *backend-labels* ok) x86::x86-e-bits)
+            (x862-lri seg ($ x8664::arg_x) (ash $XWRONGTYPE *x862-target-fixnum-shift*))
+            (x862-store-immediate seg typespec ($ x8664::arg_z))
+            (x862-set-nargs seg 3)
+            (! ksignalerr)
+            (@ ok)
+            (<- ($ x8664::arg_y))
+            (^)))))))
+          
+          
+                  
+                  
+                   
 
 (defx862 x862-%badarg2 %badarg2 (seg vreg xfer badthing goodthing)
   (x862-two-targeted-reg-forms seg badthing ($ x8664::arg_y) goodthing ($ x8664::arg_z))
