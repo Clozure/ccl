@@ -43,7 +43,7 @@
 (defconstant numsides 12)
 
 (objc:defmethod (#/drawRect: :void) ((self demo-view) (rect :<NSR>ect))
-  (declare (ignore rect))
+  (declare (ignorable rect))
   (let* ((bounds (#/bounds self))
          (width (ns:ns-rect-width bounds))
          (height (ns:ns-rect-height bounds)))
