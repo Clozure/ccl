@@ -304,9 +304,7 @@ function to the indicated name is true.")
 (defun nx-allow-transforms (env)
   (nx-apply-env-hook policy.allow-transforms env))
 
-(defun nx-inhibit-eventchecks (env)
-  (unless (eq (safety-optimize-quantity env) 3)
-    (nx-apply-env-hook policy.inhibit-event-checking env)))
+
 
 (defun nx-force-boundp-checks (var env)
   (or (eq (safety-optimize-quantity env) 3)
@@ -314,6 +312,9 @@ function to the indicated name is true.")
 
 (defun nx-substititute-constant-value (symbol value env)
   (nx-apply-env-hook policy.allow-constant-substitution symbol value env))
+
+(defun nx-the-typechecks (env)
+  (nx-apply-env-hook policy.the-typechecks env))
 
 #-bccl
 (defun nx1-default-operator ()
@@ -696,7 +697,6 @@ function to the indicated name is true.")
       (setq *nx-new-p2decls* 
             (%ilogior 
              (if (nx-tailcalls env) $decl_tailcalls 0)
-             (if (nx-inhibit-eventchecks env) $decl_eventchk 0)
              (if (nx-open-code-in-line env) $decl_opencodeinline 0)
              (if (nx-inhibit-safety-checking env) $decl_unsafe 0)
              (if (nx-trust-declarations env) $decl_trustdecls 0))))))
