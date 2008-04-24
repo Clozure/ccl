@@ -66,7 +66,7 @@
   policy.trust-declarations
   policy.open-code-inline
   policy.inhibit-safety-checking
-  policy.inhibit-event-checking
+  policy.the-typechecks
   policy.inline-self-calls
   policy.allow-transforms
   policy.force-boundp-checks
