@@ -27,19 +27,12 @@
 ;;; in future, we may add options to suppress the copying of
 ;;; dev-environment nibfiles.
 
-#|
-temporarily removed for debugging
-(save-application image-path
-                      :application-class application-class
-                      :toplevel-function toplevel-function
-                      :prepend-kernel t)
-|#
-
 (defun build-application (&key
                           (name "MyApplication")
                           (type-string "APPL")
                           (creator-string "OMCL")
                           (directory (current-directory))
+                          (copy-ide-resources t) ; whether to copy the IDE's resources
                           (nibfiles nil) ; a list of user-specified nibfiles
                                         ; to be copied into the app bundle
                           (main-nib-name) ; the name of the nib that is to be loaded
@@ -58,9 +51,10 @@ temporarily removed for debugging
                                               :main-nib-name main-nib-name))
          (image-path (namestring (path app-bundle "Contents" "MacOS" name))))
     ;; copy IDE resources to the bundle
-    (recursive-copy-directory (path ide-bundle-path "Contents" "Resources/")
-                              (path app-bundle  "Contents" "Resources/")
-                              :if-exists :overwrite)
+    (when copy-ide-resources
+      (recursive-copy-directory (path ide-bundle-path "Contents" "Resources/")
+                                (path app-bundle  "Contents" "Resources/")
+                                :if-exists :overwrite))
     ;; copy user nibfiles into the bundle
     (when nibfiles
       (let ((nib-paths (mapcar #'pathname nibfiles)))
