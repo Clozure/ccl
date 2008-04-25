@@ -83,6 +83,20 @@
                        :if-exists :supersede)
     (format out "~A~A" package-type bundle-signature)))
 
+;;; READ-INFO-PLIST info-path
+;;; returns a newly-created NSDictionary with the contents
+;;; of the plist file at INFO-PATH 
+(defun read-info-plist (info-path)
+  (let* ((info-path (pathname info-path)) ; make sure it's a pathname to start
+         (verified-path (probe-file info-path)))
+    (assert (and verified-path
+                 (string-equal (pathname-type verified-path) "plist"))
+            (info-path)
+            "The input path for READ-INFO-PLIST must be the name of a valid 'plist' file.")
+    (let* ((info-path-str (namestring info-path)))
+      (#/dictionaryWithContentsOfFile: ns:ns-mutable-dictionary 
+                                       info-path-str))))
+
 ;;; WRITE-INFO-PLIST path name package-type bundle-signature
 ;;; Reads the Info.plist file of the running IDE application
 ;;; into an NSMutableDictionary; sets the name, package-type,
@@ -130,10 +144,7 @@
                             #@"NSMainNibFile"))
       (#/writeToFile:atomically: info-dict app-plist-path-str #$YES))))
 
-(defun read-info-plist (info-path)
-  (let* ((info-path-str (namestring info-path)))
-    (#/dictionaryWithContentsOfFile: ns:ns-mutable-dictionary 
-                                     info-path-str)))
+
 
 ;;; MAKE-APPLICATION-BUNDLE name package-type bundle-signature project-path
 ;;; Build the directory structure of a Cocoa application bundle and
