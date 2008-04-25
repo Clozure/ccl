@@ -94,7 +94,7 @@
 ;;;       copied from the IDE. Should separate the IDE-specific
 ;;;       behavior from more general behavior that can be used
 ;;;       by the batch builder, which does not depend on the IDE.
-(defun write-info-plist (path name package-type bundle-signature
+(defun write-info-plist (out-path name package-type bundle-signature
                          &key main-nib-name)
   ;; read the Info.plist of the IDE app, change
   ;; the fields needed, write the results to PATH
@@ -119,7 +119,7 @@
                                                        ide-plist-path-str))
            (app-name-key (%make-nsstring "CFBundleExecutable"))
            (app-name-str (%make-nsstring name))
-           (app-plist-path-str (%make-nsstring (namestring path))))
+           (app-plist-path-str (%make-nsstring (namestring out-path))))
       (#/setValue:forKey: info-dict bundle-name-str bundle-name-key)
       (#/setValue:forKey: info-dict app-name-str app-name-key)
       (#/setValue:forKey: info-dict type-str type-key)
@@ -129,6 +129,11 @@
                             (%make-nsstring main-nib-name)
                             #@"NSMainNibFile"))
       (#/writeToFile:atomically: info-dict app-plist-path-str #$YES))))
+
+(defun read-info-plist (info-path)
+  (let* ((info-path-str (namestring info-path)))
+    (#/dictionaryWithContentsOfFile: ns:ns-mutable-dictionary 
+                                     info-path-str)))
 
 ;;; MAKE-APPLICATION-BUNDLE name package-type bundle-signature project-path
 ;;; Build the directory structure of a Cocoa application bundle and
