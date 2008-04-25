@@ -17,7 +17,6 @@
 ;;; application-building tools for building and copying bundles,
 ;;; resource directories, and magic files used by OSX applications.
 
-
 (defun copy-nibfile (srcnib dest-directory &key (if-exists :overwrite))
   (setq if-exists (require-type if-exists '(member :overwrite :error)))
   (let* ((basename (basename srcnib))
@@ -37,21 +36,26 @@
 ;;; returns the final component of a pathname--that is, the
 ;;; filename (with type extension) if it names a file, or the
 ;;; last directory name if it names a directory
-;;; TODO: perhaps BASENAME should check the file or directory
-;;;       named by PATH and ensure that, if the named file
-;;;       or directory exists, then the choice of returning
-;;;       a file or directory is based on what the actual target
-;;;       is, rather than on what the text of PATH suggests?
 
 (defun basename (path)
-  (let* ((dir (pathname-directory path))
+  ;; first probe to see whether the path exists.  if it does, then
+  ;; PROBE-FILE returns a canonical pathname for it which, among other
+  ;; things, ensures the pathame represents a directory if it's really
+  ;; a directory, and a file if it's really a file
+  (let* ((path (or (probe-file path)
+                   path))
+         (dir (pathname-directory path))
          (name (pathname-name path))
          (type (pathname-type path)))
     (if name
         (if type
             (make-pathname :name name :type type)
             (make-pathname :name name))
-        (make-pathname :directory (first (last dir))))))
+        ;; it's possible to have a pathname with a type but no name
+        ;; e.g. "/Users/foo/.emacs"
+        (if type
+            (make-pathname :type type)
+            (make-pathname :directory (first (last dir)))))))
 
 ;;; PATH (&rest components)
 ;;; returns a pathname. The input COMPONENTS are treated as 
