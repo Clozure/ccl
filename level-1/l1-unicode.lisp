@@ -267,8 +267,8 @@ characters used in most Western European languages."
   )
 
 (define-character-encoding :us-ascii
-  "An 7-bit, fixed-width character encoding in which all character
-codes map to their Unicode equivalents. "
+  "A 7-bit, fixed-width character encoding in which all character
+codes map to their Unicode equivalents."
 
   :aliases '(:csASCII :cp637 :IBM637 :us :ISO646-US :ascii :ISO-ir-6)
   :stream-encode-function
