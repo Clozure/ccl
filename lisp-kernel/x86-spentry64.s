@@ -1939,7 +1939,6 @@ _spentry(progvsave)
 
 8:	__(movq $XIMPROPERLIST,%arg_y)
 	__(set_nargs(2))
-        __(push %ra0)
 	__(jmp _SPksignalerr)
 9:	/* Whew 	  */
 
