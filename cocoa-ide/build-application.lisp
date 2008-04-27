@@ -28,9 +28,9 @@
 ;;; dev-environment nibfiles.
 
 (defun build-application (&key
-                          (name "MyApplication")
-                          (type-string "APPL")
-                          (creator-string "OMCL")
+                          (name $default-application-bundle-name)
+                          (type-string $default-application-type-string)
+                          (creator-string $default-application-creator-string)
                           (directory (current-directory))
                           (copy-ide-resources t) ; whether to copy the IDE's resources
                           (nibfiles nil) ; a list of user-specified nibfiles
@@ -70,4 +70,10 @@
                       :toplevel-function toplevel-function
                       :prepend-kernel t)))
 
-
+#|
+(require :build-application)
+(load "/usr/local/ccl/trunk/source/cocoa-ide/builder-utilities.lisp")
+(ccl::build-application :name "Foo"
+                        :directory "/Users/mikel/Desktop"
+                        :copy-ide-resources t)
+|#

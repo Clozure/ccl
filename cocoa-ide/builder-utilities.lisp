@@ -17,6 +17,43 @@
 ;;; application-building tools for building and copying bundles,
 ;;; resource directories, and magic files used by OSX applications.
 
+;;; DEFAULTS
+;;; Some useful default values for use when creating application bundles
+
+(defparameter $default-application-bundle-name "MyApplication")
+(defparameter $default-application-type-string "APPL")
+(defparameter $default-application-creator-string "OMCL")
+(defparameter $default-application-version-number "1.0")
+
+;;; defaults related to Info.plist files
+
+(defparameter $default-info-plist-development-region "English")
+(defparameter $default-info-plist-executable $default-application-bundle-name)
+(defparameter $default-info-plist-getInfo-string (format nil "~A Copyright ~C 2008" 
+                                                         $default-application-version-number
+                                                         #\Copyright_Sign))
+(defparameter $default-info-plist-help-book-folder (format nil "~AHelp" $default-application-bundle-name))
+(defparameter $default-info-plist-help-book-name (format nil "~A Help" $default-application-bundle-name))
+(defparameter $default-info-plist-icon-file (format nil "~A.icns" $default-application-bundle-name))
+(defparameter $default-info-plist-bundle-identifier (format nil "com.clozure.ccl.apps.~A" 
+                                                            (string-downcase $default-application-bundle-name)))
+(defparameter $default-info-dictionary-version "6.0")
+(defparameter $default-info-plist-bundle-name $default-application-bundle-name)
+(defparameter $default-info-plist-bundle-package-type "APPL")
+(defparameter $default-info-plist-short-version-string $default-application-version-number)
+(defparameter $default-info-plist-bundle-signature "OMCL")
+(defparameter $default-info-plist-version $default-application-version-number)
+(defparameter $default-info-plist-has-localized-display-name 0)
+(defparameter $default-info-plist-minimum-system-version "10.5")
+(defparameter $default-info-plist-main-nib-file "MainMenu")
+(defparameter $default-info-plist-principal-class "LispApplication")
+
+
+;;; COPY-NIBFILE (srcnib dest-directory &key (if-exists :overwrite))
+;;; Copies a nibfile (which may in fact be a directory) to the
+;;; destination path (which may already exist, and may need to
+;;; be overwritten
+
 (defun copy-nibfile (srcnib dest-directory &key (if-exists :overwrite))
   (setq if-exists (require-type if-exists '(member :overwrite :error)))
   (let* ((basename (basename srcnib))
@@ -83,6 +120,29 @@
                        :if-exists :supersede)
     (format out "~A~A" package-type bundle-signature)))
 
+;;; MAKE-INFO-PLIST
+;;; returns a newly-created NSDictionary with contents
+;;; specified by the input parameters
+(defun make-info-plist (&key
+                        (development-region $default-info-plist-development-region)
+                        (executable $default-info-plist-executable)
+                        (getinfo-string $default-info-plist-getinfo-string)
+                        (help-book-folder $default-info-plist-help-book-folder)
+                        (help-book-name $default-info-plist-help-book-name)
+                        (icon-file $default-info-plist-icon-file)
+                        (bundle-identifier $default-info-plist-bundle-identifier)
+                        (dictionary-version $default-info-dictionary-version)
+                        (bundle-name $default-info-plist-bundle-name)
+                        (bundle-package-type $default-info-plist-bundle-package-type)
+                        (short-version-string $default-info-plist-short-version-string)
+                        (bundle-signature $default-info-plist-bundle-signature)
+                        (version $default-info-plist-version)
+                        (has-localized-display-name $default-info-plist-has-localized-display-name)
+                        (minimum-system-version $default-info-plist-minimum-system-version)
+                        (main-nib-file $default-info-plist-main-nib-file)
+                        (principal-class $default-info-plist-principal-class))
+  (error "Not yet implemented"))
+
 ;;; READ-INFO-PLIST info-path
 ;;; returns a newly-created NSDictionary with the contents
 ;;; of the plist file at INFO-PATH 
@@ -129,8 +189,7 @@
 			     (lisp-string-from-nsstring ide-bundle-path-nsstring)))
            (ide-plist-path-str (namestring (path ide-bundle-path 
                                                  "Contents" "Info.plist")))
-           (info-dict (#/dictionaryWithContentsOfFile: ns:ns-mutable-dictionary 
-                                                       ide-plist-path-str))
+           (info-dict (read-info-plist ide-plist-path-str))
            (app-name-key (%make-nsstring "CFBundleExecutable"))
            (app-name-str (%make-nsstring name))
            (app-plist-path-str (%make-nsstring (namestring out-path))))
