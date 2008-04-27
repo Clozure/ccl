@@ -1694,7 +1694,7 @@ rwlock_wlock(rwlock *rw, TCR *tcr, struct timespec *waitfor)
     err = semaphore_maybe_timedwait(rw->writer_signal, waitfor);
     LOCK_SPINLOCK(rw->spin,tcr);
     rw->blocked_writers--;
-    if (err = EINTR) {
+    if (err == EINTR) {
       err = 0;
     }
     if (err) {
