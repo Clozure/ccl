@@ -404,7 +404,6 @@
     (%eval-redef %reference-external-entry-point (x))
     )
   
-  (%eval-redef listp (x))
   (%eval-redef %get-bit (ptr offset))
   (%eval-redef %set-bit (ptr offset val))
   (%eval-redef %get-double-float (ptr &optional (offset 0))

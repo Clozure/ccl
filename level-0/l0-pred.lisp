@@ -918,3 +918,6 @@
   (= (the fixnum (fulltag x)) target::fulltag-misc))
 
 (setf (type-predicate 'uvector) 'uvectorp)
+
+(defun listp (x)
+  (listp x))
