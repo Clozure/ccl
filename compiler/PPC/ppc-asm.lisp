@@ -240,7 +240,7 @@
    (ppc-op $mb 5 6)
    (ppc-op $me 5 1 )
    (ppc-op $mbe 5 6 nil nil ccl::operand-optional $ppc-operand-next)
-   (ppc-op $mbe-aux 32 0 insert-mbe extract-mbe)
+   (ppc-op $mbe-aux 10 1 insert-mbe extract-mbe)
    (ppc-op $mb6 6 5 insert-mb6 extract-mb6)
    (ppc-op $nb 6 11 insert-nb extract-nb)
    (ppc-op $nsi 16 0 insert-nsi extract-nsi $ppc-operand-negative $ppc-operand-signed)
