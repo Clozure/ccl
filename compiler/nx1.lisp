@@ -287,7 +287,8 @@
 ;;; (assuming, of course, that anyone should ...)
 (defun nx-untyped-form (form)
   (while (and (consp form)
-              (eq (%car form) (%nx1-operator typed-form)))
+              (eq (%car form) (%nx1-operator typed-form))
+              (null (nth 3 form)))
     (setq form (%caddr form)))
   form)
 
