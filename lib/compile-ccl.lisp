@@ -648,11 +648,12 @@
 
 (defun test-ccl (&key force (update t) verbose (catch-errors t))
   (with-preserved-working-directory ()
-    (ensure-tests-loaded :force force :update update)
-    (cwd "ccl:tests;ansi-tests;")
-    (let ((do-tests (find-symbol "DO-TESTS" "REGRESSION-TEST"))
-	  (*suppress-compiler-warnings* t)
-	  (*print-catch-errors* nil))
-      (time (funcall do-tests :verbose verbose :compile t :catch-errors catch-errors)))
-    ;; Ok, here we would run any of our own tests.
-    ))
+    (let* ((*package* (find-package "CL-USER")))
+      (ensure-tests-loaded :force force :update update)
+      (cwd "ccl:tests;ansi-tests;")
+      (let ((do-tests (find-symbol "DO-TESTS" "REGRESSION-TEST"))
+            (*suppress-compiler-warnings* t)
+            (*print-catch-errors* nil))
+        (time (funcall do-tests :verbose verbose :compile t :catch-errors catch-errors)))
+      ;; Ok, here we would run any of our own tests.
+      )))
