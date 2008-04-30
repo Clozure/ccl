@@ -13,20 +13,10 @@
 
 (in-package :ccl)
 
-;;; about copying nibfiles
 
-;;; when building an app bundle, we copy nibfiles from the development
-;;; environment appplication bundle into the newly-created application
-;;; bundle. If user-supplied nibfiles are given the same names as
-;;; nibfiles from the development environment, we signal an error and
-;;; refuse to copy the user nibfiles. This treatment ensures that users
-;;; will not accidentally clobber dev-environment nibfiles, but also
-;;; means that they must give unique names to their own nibs in order
-;;; to use them with their saved applications.
-
-;;; in future, we may add options to suppress the copying of
-;;; dev-environment nibfiles.
-
+;;; TODO: 
+;;;  1. make a way to specify a user-defined Info.plist in build-application
+;;;  2. make a way to specify a user-defined app delegate in build-application
 (defun build-application (&key
                           (name $default-application-bundle-name)
                           (type-string $default-application-type-string)
@@ -41,20 +31,29 @@
                           (application-class 'gui::cocoa-application)
                           (toplevel-function nil))
 
-  (let* ((ide-bundle (#/mainBundle ns:ns-bundle))
+  (let* ((info-plist (if copy-ide-resources
+                         (get-ide-bundle-info-plist)
+                         (make-info-dict)))
+         (ide-bundle (#/mainBundle ns:ns-bundle))
          (ide-bundle-path-nsstring (#/bundlePath ide-bundle))
          (ide-bundle-path (pathname 
                            (ensure-directory-pathname 
                             (lisp-string-from-nsstring ide-bundle-path-nsstring))))
          ;; create the bundle directory
-         (app-bundle (make-application-bundle name type-string creator-string directory
-                                              :main-nib-name main-nib-name))
+         (app-bundle (make-application-bundle :name name 
+                                              :project-path directory))
          (image-path (namestring (path app-bundle "Contents" "MacOS" name))))
     ;; copy IDE resources to the bundle
     (when copy-ide-resources
       (recursive-copy-directory (path ide-bundle-path "Contents" "Resources/")
                                 (path app-bundle  "Contents" "Resources/")
                                 :if-exists :overwrite))
+    ;; write Info.plist
+    (write-info-plist info-plist (path app-bundle "Contents" "Info.plist")
+                      name type-string creator-string :main-nib-name main-nib-name)
+    ;; write Pkginfo
+    (write-pkginfo (path app-bundle "Contents" "PkgInfo")
+                   type-string creator-string)
     ;; copy user nibfiles into the bundle
     (when nibfiles
       (let ((nib-paths (mapcar #'pathname nibfiles)))

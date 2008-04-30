@@ -17,8 +17,10 @@
 ;;; application-building tools for building and copying bundles,
 ;;; resource directories, and magic files used by OSX applications.
 
-;;; DEFAULTS
-;;; Some useful default values for use when creating application bundles
+(defun %temp-nsstring (s) (#/autorelease (%make-nsstring s)))
+
+;;; Info Defaults
+;;; Some useful values for use when creating application bundles
 
 (defparameter $default-application-bundle-name "MyApplication")
 (defparameter $default-application-type-string "APPL")
@@ -26,28 +28,56 @@
 (defparameter $default-application-version-number "1.0")
 
 ;;; defaults related to Info.plist files
-
+(defparameter $cfbundle-development-region-key #@"CFBundleDevelopmentRegion")
 (defparameter $default-info-plist-development-region "English")
-(defparameter $default-info-plist-executable $default-application-bundle-name)
-(defparameter $default-info-plist-getInfo-string (format nil "~A Copyright ~C 2008" 
-                                                         $default-application-version-number
-                                                         #\Copyright_Sign))
-(defparameter $default-info-plist-help-book-folder (format nil "~AHelp" $default-application-bundle-name))
-(defparameter $default-info-plist-help-book-name (format nil "~A Help" $default-application-bundle-name))
-(defparameter $default-info-plist-icon-file (format nil "~A.icns" $default-application-bundle-name))
-(defparameter $default-info-plist-bundle-identifier (format nil "com.clozure.ccl.apps.~A" 
-                                                            (string-downcase $default-application-bundle-name)))
-(defparameter $default-info-dictionary-version "6.0")
-(defparameter $default-info-plist-bundle-name $default-application-bundle-name)
-(defparameter $default-info-plist-bundle-package-type "APPL")
-(defparameter $default-info-plist-short-version-string $default-application-version-number)
-(defparameter $default-info-plist-bundle-signature "OMCL")
-(defparameter $default-info-plist-version $default-application-version-number)
-(defparameter $default-info-plist-has-localized-display-name 0)
-(defparameter $default-info-plist-minimum-system-version "10.5")
-(defparameter $default-info-plist-main-nib-file "MainMenu")
-(defparameter $default-info-plist-principal-class "LispApplication")
 
+(defparameter $cfbundle-executable-key #@"CFBundleExecutable")
+(defparameter $default-info-plist-executable $default-application-bundle-name)
+
+(defparameter $cfbundle-getinfo-string-key #@"CFBundleGetInfoString")
+(defparameter $default-info-plist-getInfo-string "\"1.0 Copyright © 2008\"")
+
+(defparameter $cfbundle-help-book-folder-key #@"CFBundleHelpBookFolder")
+(defparameter $default-info-plist-help-book-folder "MyApplicationHelp")
+
+(defparameter $cfbundle-help-book-name-key #@"CFBundleHelpBookName")
+(defparameter $default-info-plist-help-book-name "\"MyApplication Help\"")
+
+(defparameter $cfbundle-icon-file-key #@"CFBundleIconFile")
+(defparameter $default-info-plist-icon-file "\"MyApplication.icns\"")
+
+(defparameter $cfbundle-bundle-identifier-key #@"CFBundleIdentifier")
+(defparameter $default-info-plist-bundle-identifier "\"com.clozure.apps.myapplication\"")
+
+(defparameter $cfbundle-dictionary-version-key #@"CFBundleInfoDictionaryVersion")
+(defparameter $default-info-dictionary-version "\"6.0\"")
+
+(defparameter $cfbundle-bundle-name-key #@"CFBundleName")
+(defparameter $default-info-plist-bundle-name "MyApplication")
+
+(defparameter $cfbundle-bundle-package-type-key #@"CFBundlePackageType")
+(defparameter $default-info-plist-bundle-package-type "APPL")
+
+(defparameter $cfbundle-short-version-string-key #@"CFBundleShortVersionString")
+(defparameter $default-info-plist-short-version-string "\"1.0\"")
+
+(defparameter $cfbundle-bundle-signature-key #@"CFBundleSignature")
+(defparameter $default-info-plist-bundle-signature "OMCL")
+
+(defparameter $cfbundle-version-key #@"CFBundleVersion")
+(defparameter $default-info-plist-version "\"1.0\"")
+
+(defparameter $ls-has-localized-display-name-key #@"LSHasLocalizedDisplayName")
+(defparameter $default-info-plist-has-localized-display-name "0")
+
+(defparameter $ls-minimum-system-version-key #@"LSMinimumSystemVersion")
+(defparameter $default-info-plist-minimum-system-version "\"10.5\"")
+
+(defparameter $ns-main-nib-file-key #@"NSMainNibFile")
+(defparameter $default-info-plist-main-nib-file "MainMenu")
+
+(defparameter $ns-principal-class-key #@"NSPrincipalClass")
+(defparameter $default-info-plist-principal-class "LispApplication")
 
 ;;; COPY-NIBFILE (srcnib dest-directory &key (if-exists :overwrite))
 ;;; Copies a nibfile (which may in fact be a directory) to the
@@ -120,28 +150,46 @@
                        :if-exists :supersede)
     (format out "~A~A" package-type bundle-signature)))
 
-;;; MAKE-INFO-PLIST
+;;; MAKE-INFO-DICT
 ;;; returns a newly-created NSDictionary with contents
 ;;; specified by the input parameters
-(defun make-info-plist (&key
-                        (development-region $default-info-plist-development-region)
-                        (executable $default-info-plist-executable)
-                        (getinfo-string $default-info-plist-getinfo-string)
-                        (help-book-folder $default-info-plist-help-book-folder)
-                        (help-book-name $default-info-plist-help-book-name)
-                        (icon-file $default-info-plist-icon-file)
-                        (bundle-identifier $default-info-plist-bundle-identifier)
-                        (dictionary-version $default-info-dictionary-version)
-                        (bundle-name $default-info-plist-bundle-name)
-                        (bundle-package-type $default-info-plist-bundle-package-type)
-                        (short-version-string $default-info-plist-short-version-string)
-                        (bundle-signature $default-info-plist-bundle-signature)
-                        (version $default-info-plist-version)
-                        (has-localized-display-name $default-info-plist-has-localized-display-name)
-                        (minimum-system-version $default-info-plist-minimum-system-version)
-                        (main-nib-file $default-info-plist-main-nib-file)
-                        (principal-class $default-info-plist-principal-class))
-  (error "Not yet implemented"))
+(defun make-info-dict (&key
+                       (development-region $default-info-plist-development-region)
+                       (executable $default-info-plist-executable)
+                       (getinfo-string $default-info-plist-getinfo-string)
+                       (help-book-folder $default-info-plist-help-book-folder)
+                       (help-book-name $default-info-plist-help-book-name)
+                       (icon-file $default-info-plist-icon-file)
+                       (bundle-identifier $default-info-plist-bundle-identifier)
+                       (dictionary-version $default-info-dictionary-version)
+                       (bundle-name $default-info-plist-bundle-name)
+                       (bundle-package-type $default-info-plist-bundle-package-type)
+                       (short-version-string $default-info-plist-short-version-string)
+                       (bundle-signature $default-info-plist-bundle-signature)
+                       (version $default-info-plist-version)
+                       (has-localized-display-name $default-info-plist-has-localized-display-name)
+                       (minimum-system-version $default-info-plist-minimum-system-version)
+                       (main-nib-file $default-info-plist-main-nib-file)
+                       (principal-class $default-info-plist-principal-class))
+  (#/dictionaryWithObjectsAndKeys: ns:ns-dictionary
+                                   (%temp-nsstring development-region) $cfbundle-development-region-key
+                                   (%temp-nsstring executable) $cfbundle-executable-key
+                                   (%temp-nsstring getinfo-string) $cfbundle-getinfo-string-key
+                                   (%temp-nsstring help-book-folder) $cfbundle-help-book-folder-key
+                                   (%temp-nsstring help-book-name) $cfbundle-help-book-name-key
+                                   (%temp-nsstring icon-file) $cfbundle-icon-file-key
+                                   (%temp-nsstring bundle-identifier) $cfbundle-bundle-identifier-key
+                                   (%temp-nsstring dictionary-version) $cfbundle-dictionary-version-key
+                                   (%temp-nsstring bundle-name) $cfbundle-bundle-name-key
+                                   (%temp-nsstring bundle-package-type) $cfbundle-bundle-package-type-key
+                                   (%temp-nsstring short-version-string) $cfbundle-short-version-string-key
+                                   (%temp-nsstring bundle-signature) $cfbundle-bundle-signature-key
+                                   (%temp-nsstring version) $cfbundle-version-key
+                                   (%temp-nsstring has-localized-display-name) $ls-has-localized-display-name-key
+                                   (%temp-nsstring minimum-system-version) $ls-minimum-system-version-key
+                                   (%temp-nsstring main-nib-file) $ns-main-nib-file-key
+                                   (%temp-nsstring principal-class) $ns-principal-class-key
+                                   +null-ptr+))
 
 ;;; READ-INFO-PLIST info-path
 ;;; returns a newly-created NSDictionary with the contents
@@ -157,69 +205,63 @@
       (#/dictionaryWithContentsOfFile: ns:ns-mutable-dictionary 
                                        info-path-str))))
 
-;;; WRITE-INFO-PLIST path name package-type bundle-signature
-;;; Reads the Info.plist file of the running IDE application
-;;; into an NSMutableDictionary; sets the name, package-type,
-;;; and bundle-signature from the inputs; writes the changed
-;;; dictionary to a new Info.plist file at PATH.
-;;;
-;;; TODO: this function is extremely specialized to the case
-;;;       of writing an Info.plist for an app bundle that is
-;;;       copied from the IDE. Should separate the IDE-specific
-;;;       behavior from more general behavior that can be used
-;;;       by the batch builder, which does not depend on the IDE.
-(defun write-info-plist (out-path name package-type bundle-signature
+(defun info-dict-from-specification (spec)
+  (cond
+    ((typep spec 'ns:ns-dictionary) spec)
+    ((and (typep spec 'pathname)
+          (string-equal (pathname-type spec) "plist")
+          (probe-file spec)) (read-info-plist spec))
+    (t (error "Argument to INFO-DICT-FROM-SPECIFICATION must be the pathname of a valid plist file or an instance of NSDictionary"))))
+
+;;; WRITE-INFO-PLIST info-plist path name package-type bundle-signature 
+;;; sets the name, package-type, and bundle-signature of the
+;;; info-plist from the inputs; writes the changed dictionary to a new
+;;; Info.plist file at PATH.
+
+(defun write-info-plist (info-dict out-path name package-type bundle-signature
                          &key main-nib-name)
-  ;; read the Info.plist of the IDE app, change
-  ;; the fields needed, write the results to PATH
+  ;; change the fields needed, write the results to PATH
   (assert (or (null main-nib-name)
               (stringp main-nib-name))
           (main-nib-name)
           "The main-nib-name must be a string or NIL, not ~S" main-nib-name)
   (with-autorelease-pool
-    (let* ((bundle-name-key (%make-nsstring "CFBundleName"))
-           (bundle-name-str (%make-nsstring name))
-           (type-key (%make-nsstring "CFBundlePackageType"))
+    (let* ((bundle-name-str (%make-nsstring name))
            (type-str (%make-nsstring package-type))
-           (sig-key (%make-nsstring "CFBundleSignature"))
            (sig-str (%make-nsstring bundle-signature))
-           (ide-bundle (#/mainBundle ns:ns-bundle))
-           (ide-bundle-path-nsstring (#/bundlePath ide-bundle))
-           (ide-bundle-path (ensure-directory-pathname 
-			     (lisp-string-from-nsstring ide-bundle-path-nsstring)))
-           (ide-plist-path-str (namestring (path ide-bundle-path 
-                                                 "Contents" "Info.plist")))
-           (info-dict (read-info-plist ide-plist-path-str))
-           (app-name-key (%make-nsstring "CFBundleExecutable"))
            (app-name-str (%make-nsstring name))
            (app-plist-path-str (%make-nsstring (namestring out-path))))
-      (#/setValue:forKey: info-dict bundle-name-str bundle-name-key)
-      (#/setValue:forKey: info-dict app-name-str app-name-key)
-      (#/setValue:forKey: info-dict type-str type-key)
-      (#/setValue:forKey: info-dict sig-str sig-key)
+      (#/setValue:forKey: info-dict bundle-name-str $cfbundle-bundle-name-key)
+      (#/setValue:forKey: info-dict app-name-str $cfbundle-executable-key)
+      (#/setValue:forKey: info-dict type-str $cfbundle-bundle-package-type-key)
+      (#/setValue:forKey: info-dict sig-str $cfbundle-bundle-signature-key)
       (when main-nib-name
         (#/setValue:forKey: info-dict 
                             (%make-nsstring main-nib-name)
-                            #@"NSMainNibFile"))
+                            $ns-main-nib-file-key))
       (#/writeToFile:atomically: info-dict app-plist-path-str #$YES))))
 
-
+(defun get-ide-bundle-info-plist ()
+  (let* ((ide-bundle (#/mainBundle ns:ns-bundle))
+         (ide-bundle-path-nsstring (#/bundlePath ide-bundle))
+         (ide-bundle-path (ensure-directory-pathname 
+                           (lisp-string-from-nsstring ide-bundle-path-nsstring)))
+         (ide-plist-path-str (namestring (path ide-bundle-path 
+                                               "Contents" "Info.plist"))))
+    (read-info-plist ide-plist-path-str)))
 
 ;;; MAKE-APPLICATION-BUNDLE name package-type bundle-signature project-path
 ;;; Build the directory structure of a Cocoa application bundle and
 ;;; populate it with the required PkgInfo and Info.plist files.
-(defun make-application-bundle (name package-type bundle-signature project-path
-                                &key main-nib-name)
+(defun make-application-bundle (&key 
+                                (name $default-application-bundle-name)
+                                (project-path (current-directory)))
   (let* ((app-bundle (path project-path 
-			   (ensure-directory-pathname (concatenate 'string name ".app"))))
+                           (ensure-directory-pathname (concatenate 'string name ".app"))))
          (contents-dir (path app-bundle (ensure-directory-pathname "Contents")))
          (macos-dir (path contents-dir (ensure-directory-pathname "MacOS")))
          (rsrc-dir (path contents-dir  "Resources" 
                          (ensure-directory-pathname "English.lproj"))))
     (ensure-directories-exist macos-dir)
     (ensure-directories-exist rsrc-dir)
-    (write-info-plist (path app-bundle "Contents" "Info.plist")
-                      name package-type bundle-signature :main-nib-name main-nib-name)
-    (write-pkginfo (path app-bundle "Contents" "PkgInfo")
-                   package-type bundle-signature)
     app-bundle))
