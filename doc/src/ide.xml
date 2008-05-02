@@ -216,6 +216,7 @@ oshirion:ccl mikel$
         (<parameter>creator-string</parameter> <replaceable>"OMCL"</replaceable>)
         (<parameter>directory</parameter> <replaceable>(current-directory)</replaceable>)
         (<parameter>copy-ide-resources</parameter> <replaceable>t</replaceable>)
+        (<parameter>info-plist</parameter> <replaceable>NIL</replaceable>)
         (<parameter>nibfiles</parameter> <replaceable>NIL</replaceable>)
         (<parameter>main-nib-name</parameter> <replaceable>NIL</replaceable>)
         (<parameter>application-class</parameter> <replaceable>'GUI::COCOA-APPLICATION</replaceable>)
@@ -304,6 +305,24 @@ oshirion:ccl mikel$
             for the value of this parameter, in which case the IDE
             resources are not copied into your application
             bundle.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><varname>info-plist</varname></term>
+        <listitem>
+          <para>A user-supplied NSDictionary object that defines the
+          contents of the Info.plist file to be written to the
+          application bundle. The default value
+          is <literal>NIL</literal>, which specifies that the
+          Info.plist from the IDE is to be used
+          if <replaceable>copy-ide-resources</replaceable> is true,
+          and a new dictionary created with default values is to be
+          used otherwise. You can create a suitable NSDictionary
+          object using the
+          function <literal>make-info-dict</literal>. For details on
+          the parameters to this function, see its definition in
+          "ccl/cocoa-ide/builder-utilities.lisp".</para>
         </listitem>
       </varlistentry>
 

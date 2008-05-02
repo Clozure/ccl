@@ -80,6 +80,7 @@
 (defparameter $default-info-plist-principal-class "LispApplication")
 
 ;;; COPY-NIBFILE (srcnib dest-directory &key (if-exists :overwrite))
+;;; ------------------------------------------------------------------------
 ;;; Copies a nibfile (which may in fact be a directory) to the
 ;;; destination path (which may already exist, and may need to
 ;;; be overwritten
@@ -100,6 +101,7 @@
         (copy-file srcnib dest))))
 
 ;;; BASENAME path
+;;; ------------------------------------------------------------------------
 ;;; returns the final component of a pathname--that is, the
 ;;; filename (with type extension) if it names a file, or the
 ;;; last directory name if it names a directory
@@ -125,6 +127,7 @@
             (make-pathname :directory (first (last dir)))))))
 
 ;;; PATH (&rest components)
+;;; ------------------------------------------------------------------------
 ;;; returns a pathname. The input COMPONENTS are treated as 
 ;;; directory names, each contained in the one to the left, except
 ;;; for the last. The last is treated as a directory if it ends
@@ -139,6 +142,7 @@
 
 
 ;;; WRITE-PKGINFO path package-type bundle-signature
+;;; ------------------------------------------------------------------------
 ;;; Writes a PkgInfo file of the sort used by Cocoa applications
 ;;; to identify their package types and signatures. Writes
 ;;; PACKAGE-TYPE and BUNDLE-SIGNATURE to the file at PATH,
@@ -151,6 +155,7 @@
     (format out "~A~A" package-type bundle-signature)))
 
 ;;; MAKE-INFO-DICT
+;;; ------------------------------------------------------------------------
 ;;; returns a newly-created NSDictionary with contents
 ;;; specified by the input parameters
 (defun make-info-dict (&key
@@ -192,6 +197,7 @@
                                    +null-ptr+))
 
 ;;; READ-INFO-PLIST info-path
+;;; ------------------------------------------------------------------------
 ;;; returns a newly-created NSDictionary with the contents
 ;;; of the plist file at INFO-PATH 
 (defun read-info-plist (info-path)
@@ -205,15 +211,8 @@
       (#/dictionaryWithContentsOfFile: ns:ns-mutable-dictionary 
                                        info-path-str))))
 
-(defun info-dict-from-specification (spec)
-  (cond
-    ((typep spec 'ns:ns-dictionary) spec)
-    ((and (typep spec 'pathname)
-          (string-equal (pathname-type spec) "plist")
-          (probe-file spec)) (read-info-plist spec))
-    (t (error "Argument to INFO-DICT-FROM-SPECIFICATION must be the pathname of a valid plist file or an instance of NSDictionary"))))
-
 ;;; WRITE-INFO-PLIST info-plist path name package-type bundle-signature 
+;;; ------------------------------------------------------------------------
 ;;; sets the name, package-type, and bundle-signature of the
 ;;; info-plist from the inputs; writes the changed dictionary to a new
 ;;; Info.plist file at PATH.
@@ -241,6 +240,22 @@
                             $ns-main-nib-file-key))
       (#/writeToFile:atomically: info-dict app-plist-path-str #$YES))))
 
+;;; GET-IDE-BUNDLE-PATH
+;;; ------------------------------------------------------------------------
+;;; Returns the llisp pathname of the running IDE bundle
+
+(defun get-ide-bundle-path ()
+  (let* ((ide-bundle (#/mainBundle ns:ns-bundle))
+         (ide-bundle-path-nsstring (#/bundlePath ide-bundle)))
+    (pathname 
+     (ensure-directory-pathname 
+      (lisp-string-from-nsstring ide-bundle-path-nsstring)))))
+
+;;; GET-IDE-BUNDLE-INFO-PLIST
+;;; ------------------------------------------------------------------------
+;;; Returns an NSDictionary instance created by reading the Info.plist
+;;; file from the running IDE's application bundle
+
 (defun get-ide-bundle-info-plist ()
   (let* ((ide-bundle (#/mainBundle ns:ns-bundle))
          (ide-bundle-path-nsstring (#/bundlePath ide-bundle))
@@ -251,6 +266,7 @@
     (read-info-plist ide-plist-path-str)))
 
 ;;; MAKE-APPLICATION-BUNDLE name package-type bundle-signature project-path
+;;; ------------------------------------------------------------------------
 ;;; Build the directory structure of a Cocoa application bundle and
 ;;; populate it with the required PkgInfo and Info.plist files.
 (defun make-application-bundle (&key 
