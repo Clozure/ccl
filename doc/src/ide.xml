@@ -215,6 +215,7 @@ oshirion:ccl mikel$
         (<parameter>type-string</parameter> <replaceable>"APPL"</replaceable>)
         (<parameter>creator-string</parameter> <replaceable>"OMCL"</replaceable>)
         (<parameter>directory</parameter> <replaceable>(current-directory)</replaceable>)
+        (<parameter>copy-ide-resources</parameter> <replaceable>t</replaceable>)
         (<parameter>nibfiles</parameter> <replaceable>NIL</replaceable>)
         (<parameter>main-nib-name</parameter> <replaceable>NIL</replaceable>)
         (<parameter>application-class</parameter> <replaceable>'GUI::COCOA-APPLICATION</replaceable>)
@@ -286,6 +287,27 @@ oshirion:ccl mikel$
       </varlistentry>
 
       <varlistentry>
+        <term><varname>copy-ide-resources</varname></term>
+        <listitem>
+          <para>Whether to copy the resource files from the IDE's
+            application bundle. By
+            default, <code>BUILD-APPLICATION</code> copies nibfiles
+            and other resources from the IDE to the newly-created
+            application bundle. This option is often useful when you
+            are developing a new application, because it enables your
+            built application to have a fully-functional user
+            interface even before you have finished designing one. By
+            default, the application uses the application menu and
+            other UI elements of the IDE until you specify
+            otherwise. Once your application's UI is fully
+            implemented, you may choose to pass <literal>NIL</literal>
+            for the value of this parameter, in which case the IDE
+            resources are not copied into your application
+            bundle.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><varname>nibfiles</varname></term>
         <listitem>
           <para>A list of pathnames, where each pathname identifies
@@ -341,15 +363,41 @@ oshirion:ccl mikel$
 
     </variablelist>
 
-    <para>Please note that <code>BUILD-APPLICATION</code> is a work in
+    <para><code>BUILD-APPLICATION</code> creates a folder named
+      "<replaceable>name</replaceable>.app" in the
+      directory <replaceable>directory</replaceable>. Inside that
+      folder, it creates the "Contents" folder that Mac OS X
+      application bundles are expected to contain, and populates it
+      with the "MacOS" and "Resources" folders, and the "Info.plist"
+      and "PkgInfo" files that must be present in a working
+      application bundle. It takes the contents of the "Info.plist"
+      and "PkgInfo" files from the parameters
+      to <code>BUILD-APPLICATION</code>. If <replaceable>copy-ide-resources</replaceable>
+      is true then it copies the contents of the "Resources" folder
+      from the "Resources" folder of the running IDE.</para>
+
+    <para>The work needed to produce a running Cocoa application is
+    very minimal. In fact, if you
+    supply <code>BUILD-APPLICATION</code> with a valid nibfile and
+    pathnames, it builds a running Cocoa application that displays
+    your UI. It doesn't need you to write any code at all to do
+    this. Of course, the resulting application doesn't do anything
+    apart from displaying the UI defined in the nibfile. If you want
+    your UI to accomplish anything, you need to write the code to
+    handle its events. But the path to a running application with your
+    UI in it is very short indeed.</para>
+
+   <para>Please note that <code>BUILD-APPLICATION</code> is a work in
     progress. It can easily build a working Cocoa application, but it
     still has limitations that may in some cases prove
     inconvenient. For example, in the current version it provides no
     easy way to specify an application delegate different from the
     default. If you find the current limitations
     of <code>BUILD-APPLICATION</code> too restrictive, and want to try
-    extending it for your use, you can find the source code for it
-    in "ccl/cocoa-ide/build-application.lisp".</para>
+    extending it for your use, you can find the source code for it in
+    "ccl/cocoa-ide/build-application.lisp". You can see the default
+    values used to populate the "Info.plist" file in
+    "ccl/cocoa-ide/builder-utilities.lisp".</para>
 
     <para>For more information on how to
     use <code>BUILD-APPLICATION</code>, see the Currency Converter
