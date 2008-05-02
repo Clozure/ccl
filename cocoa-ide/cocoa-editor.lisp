@@ -997,7 +997,8 @@
      (r :<NSR>ect)
      color
      (flag :<BOOL>))
-  (unless (#/editingInProgress (#/textStorage self))
+  (unless (or (not (eq ccl::*current-process* ccl::*initial-process*))
+              (#/editingInProgress (#/textStorage self)))
     (unless (eql #$NO (text-view-blink-enabled self))
       (let* ((layout (#/layoutManager self))
              (container (#/textContainer self))
