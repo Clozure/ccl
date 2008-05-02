@@ -85,7 +85,7 @@
 (define-syscall (logior platform-os-freebsd platform-cpu-x86 platform-word-size-64)  syscalls::kill 37 (:signed-fullword :unsigned-fullword) :signed-fullword )
 (define-syscall (logior platform-os-freebsd platform-cpu-x86 platform-word-size-64)  syscalls::rename 128 (:address :address) :signed-fullword )
 (define-syscall (logior platform-os-freebsd platform-cpu-x86 platform-word-size-64)  syscalls::mkdir 136 (:address :unsigned-fullword) :signed-fullword )
-(define-syscall (logior platform-os-freebsd platform-cpu-x86 platform-word-size-64)  syscalls::rmdir 17 (:address) :signed-fullword )
+(define-syscall (logior platform-os-freebsd platform-cpu-x86 platform-word-size-64)  syscalls::rmdir 137 (:address) :signed-fullword )
 (define-syscall (logior platform-os-freebsd platform-cpu-x86 platform-word-size-64)  syscalls::dup 41 (:unsigned-fullword) :signed-fullword )
 (define-syscall (logior platform-os-freebsd platform-cpu-x86 platform-word-size-64)  syscalls::pipe 42 (:address) :signed-fullword )
 (define-syscall (logior platform-os-freebsd platform-cpu-x86 platform-word-size-64)  syscalls::times 100 (:address) :unsigned-fullword )
