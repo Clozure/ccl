@@ -242,7 +242,7 @@
                 (proto (cdr (assq orig-decode dcode-proto-alist)))
                 ) ; <<
            (setf (%gf-dcode def) orig-decode)
-           (replace-function-code def (or proto *gf-proto*)))
+           (replace-function-code def (or proto #'funcallable-trampoline)))
          (setf (car (%combined-method-methods (%gf-dcode def))) newdef))
        (typecase spec
          (symbol (%fhave spec newdef))

@@ -802,6 +802,9 @@
         (%apply-lexpr-tail-wise method args))
       (apply method args))))
 
+(register-dcode-proto #'%%0-arg-dcode *gf-proto*)
+
+
 (defun dcode-too-few-args (arg-count cm-or-gf)
   (error (make-condition 'too-few-arguments
                          :nargs arg-count
