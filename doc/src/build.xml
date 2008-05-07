@@ -34,7 +34,9 @@
     older &CCL;; this would be a challenging and experimental way to
     build, and is not described here.</para>
 
-  <sect1 id="building-definitions"><title>Building Definitions</title>
+  <!-- =========================================================== -->
+  <sect1 id="building-definitions">
+    <title>Building Definitions</title>
     <para>The following terms are used in subsequent sections; it
       may be helpful to refer to these definitions.</para>
 
@@ -97,6 +99,7 @@
       build directory is described in
       <xref linkend="Platform-specific-filename-conventions"/>.</para>
 
+    <!-- ******************************************************** -->
     <sect2 id="filename_conventions">
       <title>Platform-specific filename conventions</title>
       <table id ="Platform-specific-filename-conventions">
@@ -175,6 +178,7 @@
     </sect2>
   </sect1>
 
+  <!-- =========================================================== -->
   <sect1 id="Setting-Up-to-Build">
     <title>Setting Up to Build</title>
     <para>There are currently three versions of &CCL; that you
@@ -186,7 +190,7 @@
           runs on more platforms (including x86-64 platforms) and
           supports Unicode</para></listitem>
 	  <listitem><para>Version 1.2 - supports (at least) all of the
-	      features and platforms as 1.1, but is distributed and updated
+	      features and platforms of 1.1, but is distributed and updated
 	      differently</para></listitem>
     </itemizedlist>
     <para>All versions are available for download from the &CCL;
@@ -244,6 +248,7 @@ $ cvs update -d -P      # create dirs as needed, prune empty ones
     
   </sect1>
 
+  <!-- =========================================================== -->
   <sect1 id="Building-Everything">
     <title>Building Everything</title>
     <para>Given that you now have everything you need, do the
@@ -295,6 +300,7 @@ $ cvs update -d -P      # create dirs as needed, prune empty ones
       described below.</para>
   </sect1>
 
+  <!-- =========================================================== -->
   <sect1 id="Building-the-kernel">
     <title>Building the kernel</title>
     <para>The Lisp kernel is the executable that you run to use
@@ -323,6 +329,7 @@ $ cvs update -d -P      # create dirs as needed, prune empty ones
     </para>
 
 
+    <!-- ******************************************************** -->
     <sect2 id="Kernel-build-prerequisites">
       <title>Kernel build prerequisites</title>
 	  <para>The &CCL; kernel can be bult with the following widely
@@ -349,6 +356,8 @@ $ cvs update -d -P      # create dirs as needed, prune empty ones
 
 	  </para>
     </sect2>
+
+    <!-- ******************************************************** -->
     <sect2 id="kernel-build-command">
 	  <title>Using "make" to build the lisp kernel</title>
       <para>With those tools in place, do:
@@ -363,6 +372,8 @@ shell> make
 	  </para>
     </sect2>
   </sect1>
+
+  <!-- =========================================================== -->
   <sect1 id="Building-the-heap-image">
     <title>Building the heap image</title>
     <para>The initial heap image is loaded by the Lisp kernel, and
@@ -388,6 +399,7 @@ shell> make
       created by calling the function
       <literal>ccl:save-application</literal>.)</para>
 
+    <!-- ******************************************************** -->
     <sect2 id="Development-cycle">
 	  <title>Development cycle</title>
       <para>Creating a new &CCL; full heap image consists of the
@@ -434,6 +446,7 @@ shell> make
         to produce a new heap image.</para>
     </sect2>
 
+    <!-- ******************************************************** -->
     <sect2 id="Generating-a-bootstrapping-image">
       <title>Generating a bootstrapping image</title>
       <para>The bootstrapping image isn't provided in &CCL;
@@ -454,7 +467,7 @@ shell> make
         image, one can produce a bootstrapping image by first invoking
         &CCL; from the shell:</para>
       <programlisting>
-shell&gt; openmcl
+shell&gt; ccl
 Welcome to &CCL; .... !
 ?
 	  </programlisting>
@@ -479,6 +492,7 @@ Welcome to &CCL; .... !
       <para>forces recompilation of the level-0 sources.</para>
     </sect2>
 
+    <!-- ******************************************************** -->
     <sect2 id="Generating-fasl-files">
       <title>Generating fasl files</title>
 	  <para> Calling:</para>
@@ -507,6 +521,7 @@ Welcome to &CCL; .... !
         cleaned up at some point.</para>
     </sect2>
 
+    <!-- ******************************************************** -->
     <sect2 id="Building-a-full-image-from-a-bootstrapping-image">
 	  <title>Building a full image from a bootstrapping image</title>
 	  <para>To build a full image from a bootstrapping image, just

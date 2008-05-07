@@ -75,7 +75,7 @@
       operations such as I/O.</para></listitem>
       <listitem><para>Full Unicode support.</para></listitem>
       <listitem><para>Full SLIME integration.</para></listitem>
-      <listitem><para>An IDE on the Mac OS X, fully integrated with
+      <listitem><para>An IDE on Mac OS X, fully integrated with
       the Macintosh window system and User Interface
       standards.</para></listitem>
       <listitem><para>Excellent debugging facilities. The names of all
@@ -84,7 +84,7 @@
       including a powerful bridge to Objective-C and Cocoa on Mac OS
       X.</para></listitem>
       <listitem><para>Many extensions including: files mapped to
-      Common Lisp vectors for fast file I/O; thread local hash tables
+      Common Lisp vectors for fast file I/O; thread-local hash tables
       and streams to eliminate locking overhead; cons hashing support;
       and much more</para></listitem>
       <listitem><para>Very efficient use of memory</para></listitem>

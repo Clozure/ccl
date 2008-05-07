@@ -12,6 +12,7 @@
 
 <chapter><title>Obtaining, Installing, and Running &CCL;</title>
   
+  <!-- ============================================================ -->
   <sect1><title>Releases and System Requirements</title>
     
     <para>Version 1.2 is the latest release of &CCL; as of April
@@ -48,13 +49,14 @@
       following subsections.</para>
 
     <para>Older versions are still available for downloading as
-    tarballs.  Version 1.0 was a stable release released in late 2005.
+    tarballs.  Version 1.0 was a stable version released in late 2005.
     Version 1.1 was under active development until late 2007.  A final
     1.1 release was never made.  It was distributed as a series of
     development "snapshots" and CVS updates.  1.1 snapshots introduced
     support for x86-64 platforms, internal use of Unicode, and many
-    other features, but were a moving target. </para>
+    other features, but were moving targets. </para>
 
+    <!-- ***************************************************** -->
     <sect2><title>LinuxPPC</title> 
       
       <para>&CCL; requires version 2.2.13 (or later) of the Linux
@@ -62,6 +64,7 @@
       at a bare minimum.</para>
     </sect2>
 
+    <!-- ***************************************************** -->
     <sect2><title>Linux X8664</title> 
 
       <para>&CCL; runs on relatively recent Linux distributions for
@@ -73,16 +76,17 @@
       distributions for x86-64. Some GCC versions older than 4.0 on
       Linux have been known to have problems compiling some of the C
       code in the kernel; some very old Linux distributions don't
-      follow the current ABI standards wrt segment register usage;
-      some early Linux kernels for x86-64 had problems mapping large
-      regions of the address space; and so on. It's difficult to
-      enumerate exactly what versions of what Linux distributions have
+      follow the current ABI standards with regard to segment register
+      usage; some early Linux kernels for x86-64 had problems mapping
+      large regions of the address space; and so on. It's difficult to
+      enumerate exactly what versions of which Linux distributions have
       what problems.  A rule of thumb is that&mdash;because much of
       the development of &CCL; for x86-64 took place in that time
       frame&mdash;Linux distributions released earlier than early 2006
       may have problems running &CCL;. </para>
     </sect2>
 
+    <!-- ***************************************************** -->
     <sect2><title>FreeBSD-amd64</title> <para>&CCL; runs on FreeBSD on
     x86-64 (FreeBSD releases generally call the platform "amd64").
     &CCL; should run under FreeBSD 6.0 or later; as of this writing,
@@ -91,6 +95,7 @@
     a version of &CCL; built on FreeBSD 6.x.</para>
     </sect2>
 
+    <!-- ***************************************************** -->
     <sect2><title>DarwinPPC-MacOS-X</title>
 
       <para> &CCL; runs under OS X versions 10.4 and 10.5 and requires
@@ -108,6 +113,7 @@
         versions.</para>
     </sect2>
 
+    <!-- ***************************************************** -->
     <sect2><title>Darwinx8664-MacOS-X</title> <para>&CCL; runs on
     64-bit DarwinX86 (Mac OS X on Intel).</para>
 
@@ -123,6 +129,7 @@
   </sect1>
 
 
+  <!-- ============================================================ -->
   <sect1><title>Obtaining Clozure CL</title>
     <para>There two main ways to obtain Clozure CL.  For Mac OS X,
     there are disk images that can be used to install Clozure CL in
@@ -141,6 +148,7 @@
       command-line application, or with EMACS and SLIME. The following
       sections describe these options.</para>
 
+    <!-- ***************************************************** -->
     <sect2><title>The Mac Way</title>
       <para>If you are using Mac OS X then you can install and use
          Clozure CL in the usual Macintosh way.  Download and mount a
@@ -165,6 +173,7 @@
     </sect2>
     
 
+    <!-- ***************************************************** -->
     <sect2><title>Getting Clozure CL with Subversion</title>
       <para>It is very easy to download, install, and build Clozure CL
       using Subversion. This is the preferred way to get either the
@@ -176,7 +185,7 @@
       checkout.</para>
 
 
-      <para>One subversion command will create a
+      <para>One subversion command creates a
       <literal>ccl</literal> directory with runnable binaries, and a
       complete set of buildable sources.  To get the bleeding edge
       Clozure CL for Darwin x8664, at the command line type:</para>
@@ -221,7 +230,9 @@ svn co http://svn.clozure.com/publicsvn/openmcl/releases/1.2/darwinx8664/ccl]]>
 joe:ccl> ./dx86cl64
 Welcome to Clozure Common Lisp Version 1.2  (DarwinX8664)!
 ? (rebuild-ccl :full t)
+
 <lots of compilation output>
+
   ? (quit)
   joe:ccl>]]>
         </programlisting>
@@ -233,12 +244,12 @@ Welcome to Clozure Common Lisp Version 1.2  (DarwinX8664)!
           <![CDATA[
 shell> svn]]>
         </programlisting> 
-        If Subversion is installed, it will say something like:
+        If Subversion is installed, you will see something like:
         <programlisting>
           <![CDATA[
 Type 'svn help' for usage]]>
         </programlisting>
-        If Subversion is not installed, it will say something
+        If Subversion is not installed, you will see something
         like:
         <programlisting>
           <![CDATA[
@@ -252,6 +263,7 @@ Type 'svn help' for usage]]>
 
     </sect2>
 
+    <!-- ***************************************************** -->
     <sect2><title>Tarballs</title>
       <para>Tarballs are available at <ulink
       url="ftp://clozure.com/pub/testing/"/>.  Download and extract
@@ -263,11 +275,13 @@ Type 'svn help' for usage]]>
     </sect2>
   </sect1>
 
+  <!-- ============================================================ -->
   <sect1><title>Command Line Set Up</title>
     <para>Sometimes it's convenient to use Clozure CL from a Unix
       shell command line.  This is especially true when using Clozure
       CL as a way to run Common Lisp utilities.</para>
 
+    <!-- ***************************************************** -->
     <sect2 id="The-ccl-Shell-Script"><title>The ccl Shell Script</title>
       <para>&CCL; needs to be able to find the
         <literal>ccl</literal> directory in order to support features
@@ -302,8 +316,9 @@ Type 'svn help' for usage]]>
 	  <literal>/usr/local/bin</literal> or
 	  <literal>~/bin</literal>.  It is better to do this than to
 	  add <literal>ccl/scripts</literal> to your
-	  <varname>PATH</varname> since the script needs to be edited,
-	  it will show up as modified to Subversion.</para>
+	  <varname>PATH</varname>, because the script needs to be edited,
+	  and editing it in-place means that Subversion sees the script as
+	  modified..</para>
 	</listitem>
         <listitem>
           <para>Edit the definition of
@@ -378,6 +393,8 @@ Welcome to &CCL; Version 1.2 (DarwinPPC32)!
 #P"/Users/alms/my_lisp_stuff/ccl/level-1/level-1.lisp"
       </programlisting>
     </sect2>
+
+    <!-- ***************************************************** -->
     <sect2 id="Invocation">
 	  <title>Invocation</title>
 	  <para>Assuming that the shell script is properly installed, it can be used to invoke &CCL; from a shell prompt:
@@ -389,14 +406,18 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
 	  </para>
     </sect2>
   </sect1>
+
+  <!-- ============================================================ -->
   <sect1 id="Personal-Customization-with-the-Init-File">
 	<title>Personal Customization with the Init File</title>
     <para>By default &CCL; tries to load the file
-      <literal>"home:openmcl-init.lisp"</literal> or the compiled
+      <literal>"home:ccl-init.lisp"</literal> or the compiled
 	  
-      <literal>"home:openmcl-init.fasl"</literal> upon starting up. It
-      does this by executing <literal>(load
-      "home:openmcl-init")</literal>.  If it's unable to load the file
+      <literal>"home:ccl-init.fasl"</literal> upon starting up. For
+      the sake of backward compatibility, it also tries to load the
+      file <literal>"home:openmcl-init.lisp"</literal>, or its compiled
+      equivalent. &CCL; does this by executing <literal>(load
+      "home:ccl-init")</literal>.  If it's unable to load the file
       (for example because the file doesn't exist), &CCL; doesn't
       signal an error or warning, it just completes its startup
       normally.</para>
@@ -404,8 +425,8 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
       Common Lisp logical host, which &CCL; initializes to refer to
       your home directory. &CCL; therefore looks for either of the
       files
-      <literal>~/openmcl-init.lisp</literal> or
-      <literal>~/openmcl-init.fasl</literal>.</para>
+      <literal>~/ccl-init.lisp</literal> or
+      <literal>~/ccl-init.fasl</literal>.</para>
     <para>Because the init file is loaded the same way as normal Lisp
       code is, you can put anything you want in it.  For example, you
       can change the working directory, and load packages that you use
@@ -414,9 +435,10 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
       <literal>--no-init</literal> option.</para>
   </sect1>
 
+  <!-- ============================================================ -->
   <sect1 id="Command-Line-Options">
 	<title>Command Line Options</title>
-    <para>When using Clozure CL from the command line, these
+    <para>When using Clozure CL from the command line, the following
       options may be used to modify its behavior.  The exact set of
       Clozure CL command-line arguments may vary per platform and
       slowly changes over time.  The current set of command line
@@ -434,8 +456,8 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
 	  <listitem>
 	    <para><literal>-V</literal> (or
 	      <literal>--version</literal>).  Prints the version of
-	      Clozure CL then exits.  This is the same thing that is
-	      returned by
+	      Clozure CL then exits.  The version string is the same value
+	      that is returned by
 	      <function>LISP-APPLICATION-VERSION</function>.</para>
 	  </listitem>
 
@@ -457,18 +479,17 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
 	      <programlisting>
 <![CDATA[shell> ccl -K utf-8]]>
 	      </programlisting>
-	      will have the effect of making the standard CL streams use
+	      has the effect of making the standard CL streams use
 	      <literal>:UTF-8</literal> as their character
 	      encoding.</para>
 	  </listitem>
 
 	  <listitem>
 	    <para><literal>-n</literal> (or
-	      <literal>--no-init</literal>). If this option is given,
-	      the init file is not loaded.  This is useful if &CCL; is
-	      being invoked by a shell script which should not be
-	      affected by whatever customizations a user might have in
-	      place.</para>
+	      <literal>--no-init</literal>). If this option is given, the
+	      init file is not loaded.  This is useful if &CCL; is being
+	      invoked by a shell script that should not be affected by
+	      whatever customizations a user might have in place.</para>
 	  </listitem>
 
 	  <listitem>
@@ -528,7 +549,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
 
 	  <listitem>
 	    <para><literal>-b</literal> (or <literal>--batch</literal>). Execute in "batch mode". End-of-file
-	      from <varname>*STANDARD-INPUT*</varname> will cause &CCL; to exit, as will attempts to
+	      from <varname>*STANDARD-INPUT*</varname> causes &CCL; to exit, as do attempts to
 	      enter a break loop.</para>
 	  </listitem>
 
@@ -554,6 +575,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
       entered.</para>
   </sect1>
 
+  <!-- ============================================================ -->
   <sect1 id="Using-CCL-with-GNU-Emacs-and-SLIME">
     <title>Using &CCL; with GNU Emacs and SLIME</title>
     <para>A very common way to use &CCL; is to run it within the
@@ -582,6 +604,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
       plus documentation, tutorials, and instructional
       screencasts.</para>
 
+    <!-- ***************************************************** -->
     <sect2 id="Assumptions-and-Requirements">
 	  <title>Assumptions and Requirements</title>
       <para>In order to simplify these instructions, we'll make
@@ -591,22 +614,23 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
         <listitem>
 	      <para>You have a working installation of GNU Emacs. If you
 	        don't have a working copy of GNU Emacs, see the web page on
-	        obtaining Emacs.  If you prefer to use XEmacs instead of
-	        GNU Emacs,these instructions should still work; SLIME
-	        supports XEmacs Version21. Mac OS X includes an Emacs
-	        installation.  If you want to look into different versions,
-	        you can check out theEmacsWiki, which maintains a
-	        page,EmacsForMacOS,that provides much more information
+	        <ulink url="http://www.gnu.org/software/emacs/#Obtaining">obtaining
+	        Emacs</ulink>.  If you prefer to use XEmacs instead of GNU
+	        Emacs, these instructions should still work; SLIME supports
+	        XEmacs Version21. Mac OS X includes an Emacs installation.
+	        If you want to look into different versions, you can check
+	        out theEmacsWiki, which maintains a
+	        page, EmacsForMacOS, that provides much more information
 	        about using Emacs on the Mac.</para>
           <para>A popular version of Emacs among Mac users is
-            Aquamacs. This application is a version of GNU Emacs
-            with a number of customizations meant to make it behave
-            more like a standard Macintosh application, with
-            windows, a menubar, etc.  Aquamacs includes SLIME; if
-            you like Aquamacs then you can use SLIME right away,
-            without getting and installing it separately. You just
-            need to tell SLIME where to find your installation of
-            &CCL;.</para>
+            <ulink url="http://aquamacs.org/">Aquamacs</ulink>. This
+            application is a version of GNU Emacs with a number of
+            customizations meant to make it behave more like a
+            standard Macintosh application, with windows, a menubar,
+            etc.  Aquamacs includes SLIME; if you like Aquamacs then
+            you can use SLIME right away, without getting and
+            installing it separately. You just need to tell SLIME
+            where to find your installation of &CCL;.</para>
 	    </listitem>
         <listitem>
           <para>You have a working copy of &CCL;, installed in
@@ -630,6 +654,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
       </itemizedlist>
     </sect2>
 
+    <!-- ***************************************************** -->
     <sect2 id="Getting_Slime"><title>Getting SLIME</title>       
 
       <para>You can get SLIME from the SLIME Home Page. Stable
@@ -649,6 +674,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
         named "slime" that contains the SLIME distribution.</para>
     </sect2>
 
+    <!-- ***************************************************** -->
     <sect2><title>Installing SLIME</title> 
 
       <para>Once you have the "slime" folder described in the previous
@@ -662,6 +688,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
 
     </sect2>
 
+    <!-- ***************************************************** -->
     <sect2 id="Telling-Emacs-About-SLIME">
 	  <title>Telling Emacs About SLIME</title>
       <para> Once SLIME and &CCL; are installed, you just need to
@@ -675,6 +702,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
       </warning>
     </sect2>
 
+    <!-- ***************************************************** -->
     <sect2 id="Running-CCL-with-SLIME">
 	  <title>Running &CCL; with SLIME</title>
       <para>Once the preparations in the previous section are
@@ -690,6 +718,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
         128.)</para>
     </sect2>
 
+    <!-- ***************************************************** -->
     <sect2 id="What-if-a-New-Version-of-CCL-Breaks-SLIME-">
 	  <title>What if a New Version of &CCL; Breaks SLIME?</title>
 	  <para>Sometimes you'll get a new version of &CCL;, set up
@@ -716,6 +745,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
 	  </para>
     </sect2>
 
+    <!-- ***************************************************** -->
     <sect2 id="Known-Bugs">
 	  <title>Known Bugs</title>
 	  <para>SLIME has not been updated to account for recent changes
@@ -737,6 +767,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
     </sect2>
   </sect1>
 
+  <!-- ============================================================ -->
   <sect1 id="Example-Programs">
     <title>Example Programs</title>
     <para>A number (ok, a <emphasis>small</emphasis> number), of
@@ -749,7 +780,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
       are cited in the source code.</para>
     <para>Unless the original author or contributor claims other
       rights, you're free to incorporate any of this example code or
-      derivative thereof in any of you're own works without
+      derivative thereof in any of your own works without
       restriction. In doing so, you agree that the code was provided
       "as is", and that no other party is legally or otherwise
       responsible for any consequences of your decision to use
