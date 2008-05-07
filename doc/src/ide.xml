@@ -12,6 +12,7 @@
 
 <chapter><title>The &CCL; IDE</title>
   
+  <!-- ================================================================ -->
   <sect1><title>Introduction</title>
     
     <para>&CCL; ships with the complete source code for an integrated
@@ -31,6 +32,7 @@
     plan additional work on the IDE for future releases.</para>
   </sect1>
 
+  <!-- ================================================================ -->
   <sect1><title>Building the IDE</title>
     
     <para>Building the &CCL; IDE is now a very simple
@@ -76,6 +78,7 @@ oshirion:ccl mikel$
 
   </sect1>
 
+  <!-- ================================================================ -->
   <sect1><title>Running the IDE</title>
     
     <para>After it has been built, you can run the "Clozure CL.app"
@@ -91,6 +94,7 @@ oshirion:ccl mikel$
 
   </sect1>
 
+  <!-- ================================================================ -->
   <sect1>
     <title>IDE Features</title>
 
@@ -170,6 +174,7 @@ oshirion:ccl mikel$
 
   </sect1>
   
+  <!-- ================================================================ -->
   <sect1><title>IDE Sources</title>
     
     <para>&CCL; builds the IDE from sources in the "objc-bridge" and
@@ -192,6 +197,7 @@ oshirion:ccl mikel$
         :cocoa)</code>.</para>
   </sect1>
 
+  <!-- ================================================================ -->
   <sect1><title>The Application Builder</title>
     <anchor id="application_builder"/>
     <para>One important feature of the IDE currently has no Cocoa user
@@ -421,6 +427,55 @@ oshirion:ccl mikel$
     <para>For more information on how to
     use <code>BUILD-APPLICATION</code>, see the Currency Converter
     example in "ccl/examples/cocoa/currency-converter/".</para>
+
+    <!-- ***************************************************** -->
+    <sect2>
+      <title>Running the Application Builder From the Command
+      Line</title>
+
+      <para>It's possible to automate use of the application builder
+        by running a call to <literal>CCL:BUILD-APPLICATION</literal>
+        from the terminal command line. For example, the following
+        command, entered at a shell prompt in Mac OS X's Terminal
+        window, builds a working copy of the &CCL; environment called
+        "Foo.app":</para>
+
+      <programlisting>
+ccl -b -e "(require :cocoa)" -e "(require :build-application)" -e "(ccl::build-application :name \"Foo\")"
+      </programlisting>
+
+      <para>You can use the same method to automate building your
+      Lisp/Cocoa applications. &CCL; handles each Lisp expressions
+      passed with a <literal>-e</literal> argument in order, so you
+      can simply evaluate a sequence of Lisp expressions as in the
+      above example to build your application, ending with a call
+      to <literal>CCL:BUILD-APPLICATION</literal>. The call
+      to <literal>CCL:BUILD-APPLICATION</literal> can process all the
+      same arguments as if you evaluated it in a Listener window in
+      the &CCL; IDE.</para>
+
+      <para>Building a substantial Cocoa application (rather than just
+      reproducing the Lisp environment using defaults, as is done in
+      the above example) is likely to involve a relatively complicated
+      sequence of loading source files and perhaps evaluating Lisp
+      forms. You might be best served to place your command line in a
+      shell script that you can more easily edit and test.</para>
+
+      <para>One potentially complicated issue concerns loading all
+        your Lisp source files in the right order. You might consider
+        using ASDF to define and load a system that includes all the
+        parts of your application before
+        calling <literal>CCL:BUILD-APPLICATION</literal>. ASDF is a
+        "another system-definition facility", a sort
+        of <literal>make</literal> for Lisp, and is included in the
+        &CCL; distribution. You can read more about ASDF at the ASDF
+        <ulink url="http://constantly.at/lisp/asdf/">home
+        page</ulink>.</para>
+
+      <para>Alternatively, you could use the standard features of
+        Common Lisp to load your application's files in the proper
+        order.</para>
+    </sect2>
   </sect1>
 
 </chapter>
