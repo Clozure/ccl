@@ -182,6 +182,7 @@ objc-bridge/obsolete/README -text
 scripts/ccl -text
 scripts/ccl64 -text
 scripts/http-to-ssh -text
+scripts/makedmg -text
 scripts/svn-switch -text
 tools/asdf-install/RELNOTES -text
 tools/asdf-install/changes.text -text

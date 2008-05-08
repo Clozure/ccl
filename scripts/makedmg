@@ -1,0 +1,13 @@
+
+#!/bin/sh
+#
+# Creates a disk image from the current directory
+# The resulting dmg file is placed in the parent directory
+#
+# The volume name of the disk image is the final component
+# of the current directory name.
+# The file name is the same with ".dmg" appended.
+
+DIRNAME=${PWD##*/}
+
+hdiutil create -fs HFS+ -srcfolder . -volname ${DIRNAME} ../${DIRNAME}.dmg
