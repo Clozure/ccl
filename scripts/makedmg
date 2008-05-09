@@ -1,8 +1,10 @@
 
 #!/bin/sh
 #
-# Creates a disk image from the current directory
+# Creates a compresses disk image from the current directory
 # The resulting dmg file is placed in the parent directory
+#
+# This script first deletes any fasl files "*fsl"
 #
 # The volume name of the disk image is the final component
 # of the current directory name.
@@ -10,4 +12,7 @@
 
 DIRNAME=${PWD##*/}
 
-hdiutil create -fs HFS+ -srcfolder . -volname ${DIRNAME} ../${DIRNAME}.dmg
+find . -name "*fsl" -exec rm -f {} \;
+hdiutil create -fs HFS+ -srcfolder . -volname ${DIRNAME} ../${DIRNAME}x.dmg
+hdiutil convert ../${DIRNAME}x.dmg -format UDBZ -o ../${DIRNAME}.dmg
+rm ../${DIRNAME}x.dmg
