@@ -3766,22 +3766,22 @@ in native byte-order with a leading byte-order mark."
                        t)
                       (t #+little-endian-target t)))))
        (do* ((i start)
-             (j (+ 2 i) (+ 2 i))
+             (j (+ 2 i) (+ 2 j))
              (nchars 0))
             ((> j end)
-             (if (= i end) (values nchars i))
-             (let* ((code (if swap
-                            (%reversed-u8-ref-u16 vector i)
-                            (%native-u8-ref-u16 vector i)))
-                    (nexti (+ i (if (or (< code #xd800)
-                                        (>= code #xdc00))
-                                  2
-                                  4))))
-               (declare (type (unsigned-byte 16) code)
-                        (fixnum nexti))
-               (if (> nexti end)
-                 (return (values nchars i))
-                 (setq i nexti nchars (1+ nchars)))))))))
+             (if (= i end) (values nchars i)))
+         (let* ((code (if swap
+                        (%reversed-u8-ref-u16 vector i)
+                        (%native-u8-ref-u16 vector i)))
+                (nexti (+ i (if (or (< code #xd800)
+                                    (>= code #xdc00))
+                              2
+                              4))))
+           (declare (type (unsigned-byte 16) code)
+                    (fixnum nexti))
+           (if (> nexti end)
+             (return (values nchars i))
+             (setq i nexti nchars (1+ nchars))))))))
   :length-of-memory-encoding-function
   (nfunction
    utf-16-length-of-memory-encoding
