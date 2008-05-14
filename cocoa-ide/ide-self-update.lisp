@@ -53,6 +53,10 @@
 ;;; Lisp. This function infers where the Subversion data should be; it
 ;;; does not check to see whether it's really there
 
+;;; TODO: there is a good chance this path will be of a form like this:
+;;; #P"/usr/local/ccl/trunk/darwinx8664/ccl/Clozure CL.app/Contents/MacOS/dx86cl64"
+;;; need a way to be sure we find the proper CCL directory for the app bundle
+
 (defun lisp-subversion-data-pathname ()
   (merge-pathnames ".svn/"
                    (make-pathname :directory (pathname-directory (ccl::lisp-command-pathname)))))
