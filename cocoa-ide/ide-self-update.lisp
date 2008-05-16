@@ -14,52 +14,34 @@
 ;;; IDE: decide how and whether to handle cvs self-updates.
 ;;; see the cvs/svn code in update-ccl in compile-ccl.lisp
 
-;;; How to self-update the IDE from the svn repo
+;;; use GUI::FIND-CCL-DIRECTORY to find the effective CCL directory
+;;; (it gracefully handles the case where we are running from an
+;;; app bundle, as well as the case where we are not)
+
+;;; How to self-update the IDE from the svn or cvs repo
 ;;; 1. Find the ccl directory that corresponds to the running image
-;;; 2. find the .svn directory
-;;; 3. read the .svn/entries file to determine whether we need to
-;;;    authenticate
-;;; 4. make sure we have auth tokens if we need them
-;;; 5. record the svn version before we start (so we can roll back
-;;;    if things go horribly wrong)
-;;; 6. run svn status to check for potential merge conflicts before starting 
-;;;    the update
-;;; 7. construct the svn command:
-;;;    a. cd to the proper CCL directory
-;;;    b. run svn update
-;;; 8. check the outcome of the update:
-;;;    a. if okay, run queue a full-rebuild, and a rebuild of the IDE
-;;;       (need to make some infrastructure for queuing these activities
-;;;        and running them on next launch)
-;;;    b. if not okay, warn the user, and offer to roll back to the 
-;;;       previously-recorded version (need to make some infrastructure for
-;;;       running a rollback)
-
-;;; LISP-COMMAND-PATHNAME
-;;; ---------------------
-;;; returns the pathname of the running Lisp kernel binary
-;;; (pathname-directory (lisp-command-pathname)) should give the CCL
-;;; directory for that lisp
-
-(defun lisp-command-pathname () 
-  (pathname (car ccl::*command-line-argument-list*)))
-
-(defun effective-ccl-directory ()
-    (make-pathname :directory (pathname-directory (lisp-command-pathname))))
-
-;;; LISP-SUBVERSION-DATA-PATHNAME
-;;; ---------------------
-;;; returns the pathname of the subversion metadata for the running
-;;; Lisp. This function infers where the Subversion data should be; it
-;;; does not check to see whether it's really there
-
-;;; TODO: there is a good chance this path will be of a form like this:
-;;; #P"/usr/local/ccl/trunk/darwinx8664/ccl/Clozure CL.app/Contents/MacOS/dx86cl64"
-;;; need a way to be sure we find the proper CCL directory for the app bundle
-
-(defun lisp-subversion-data-pathname ()
-  (merge-pathnames ".svn/"
-                   (make-pathname :directory (pathname-directory (ccl::lisp-command-pathname)))))
+;;; 2. determine whether this is an svn or cvs checkout
+;;; 3. SVN:
+;;;   a. find the .svn directory
+;;;   b. run svn info to get the svn URL
+;;;   c. determine from the URL whether we need to authenticate
+;;;   d. get auth tokens if we need them
+;;;   d. record the svn revision before we start (so we can roll back
+;;;      if things go horribly wrong)
+;;;   e. run svn status to check for potential merge conflicts before starting 
+;;;      the update
+;;;   f. construct the svn command:
+;;;       i. cd to the proper CCL directory
+;;;      ii. run svn update
+;;;   g. run the svn command with external-process-status.
+;;;   h.  check the status of the external command for success or failure:
+;;;      i. if okay, queue a full-rebuild, and a rebuild of the IDE
+;;;         (need to make some infrastructure for queuing these activities
+;;;         and running them on next launch, or immediately in an external process)
+;;;     ii. if not okay, warn the user, and offer to roll back to the 
+;;;         previously-recorded version (need to make some infrastructure for
+;;;         running a rollback)
+;;; TODO: make a cvs version if needed
 
 ;;; VALIDATE-SVN-DATA-PATHNAME p
 ;;; ---------------------
