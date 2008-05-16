@@ -336,7 +336,7 @@ prepare_to_write_dynamic_space()
 {
   area *a = active_dynamic_area;
   LispObj 
-    *start = (LispObj *)(a->low + (tenured_area->static_dnodes << dnode_shift)),
+    *start = (LispObj *)(a->low),
     *end = (LispObj *) (a->active),
     x1;
   int tag, subtag, element_count;

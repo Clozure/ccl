@@ -1793,7 +1793,9 @@ copy_ivector_reference(LispObj *ref, BytePtr low, BytePtr high, area *dest)
     } else {
       header_tag = fulltag_of(header);
       if (immheader_tag_p(header_tag)) {
-	*ref = purify_object(obj, dest);
+        if (header_subtag(header) != subtag_macptr) {
+          *ref = purify_object(obj, dest);
+        }
       }
     }
   }
