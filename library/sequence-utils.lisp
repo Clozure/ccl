@@ -2,15 +2,18 @@
 ;;;; ***********************************************************************
 ;;;; FILE IDENTIFICATION
 ;;;;
-;;;; Name:          split-if.lisp
-;;;; Version:       0.1
+;;;; Name:          sequence-utils.lisp
+;;;; Version:       0.2
 ;;;; Project:       utilities
-;;;; Purpose:       utilities for splitting sequences
+;;;; Purpose:       utilities for working with sequences
 ;;;;
 ;;;; ***********************************************************************
 
 (in-package "CCL")
 
+;;; -----------------------------------------------------------------
+;;; splitting sequences
+;;; -----------------------------------------------------------------
 
 ;;; Split a sequence SEQ at each point where TEST is true 
 ;;; DIR should be one of :BEFORE, :AFTER or :ELIDE
@@ -40,3 +43,50 @@
                        (string-trim '(#\return #\newline) s))
                      (split-if (lambda (c) (member c '(#\return #\newline) :test #'char=))
                                text))))
+
+;;; -----------------------------------------------------------------
+;;; matching subsequences
+;;; -----------------------------------------------------------------
+
+(defun match-subsequence (subseq seq &key (test #'eql) (start 0))
+  (let ((max-index (1- (length seq))))
+    (block matching
+      ;; search for mismatches
+      (dotimes (i (length subseq))
+        (let ((pos (+ start i)))
+          (when (or (> pos max-index)
+                    (not (funcall test (elt seq pos)
+                                  (elt subseq i))))
+            (return-from matching nil))))
+      ;; no mismatches found; return true
+      (return-from matching t))))
+
+(defun %find-matching-subsequence-backward (subseq seq &key (test #'eql) (start 0) end)
+  (let ((end (or end (length seq)))
+        (pos end)
+        (min-index (or start 0)))
+    (block finding
+      (dotimes (i (- (length seq) start))
+        (setf pos (- end i))
+        (if (<= pos min-index)
+            (return-from finding nil)
+            (when (match-subsequence subseq seq :test test :start pos)
+              (return-from finding pos))))
+      nil)))
+
+(defun %find-matching-subsequence-forward (subseq seq &key (test #'eql) (start 0) end)
+  (let ((pos start)
+        (max-index (or end (length seq))))
+    (block finding
+      (dotimes (i (- (length seq) start))
+        (setf pos (+ start i))
+        (if (>= pos max-index)
+            (return-from finding nil)
+            (when (match-subsequence subseq seq :test test :start pos)
+              (return-from finding pos))))
+      nil)))
+
+(defun find-matching-subsequence (subseq seq &key (test #'eql) (start 0) end from-end)
+  (if from-end
+      (%find-matching-subsequence-backward subseq seq :test test :start start :end end)
+      (%find-matching-subsequence-forward subseq seq :test test :start start :end end)))
