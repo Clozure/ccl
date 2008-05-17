@@ -175,7 +175,7 @@ lib/late-clos.lisp -text
 library/elf.lisp -text
 library/mach-o-symbols.lisp -text
 library/oprofile.txt -text
-library/split-if.lisp -text
+library/sequence-utils.lisp -text
 lisp-kernel/gc-common.c -text
 lisp-kernel/win64/Makefile -text
 lisp-kernel/win64/yasm-redefinition.patch -text

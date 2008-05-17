@@ -67,12 +67,22 @@
 ;;; is of the form:
 ;;;  URL: yatta-yatta
 ;;; where yatta-yatta is the repository URL of the checked out directory
-;;; Another piece of information we want opos up here, too: the
+;;; Another piece of information we want shows Up here, too: the
 ;;; current revision, on a line of the form:
 ;;; Revision: foobar
 
+(defun split-svn-info-line (line)
+  (let* ((split-sequence ": ")
+         (split-index (find-matching-subsequence split-sequence line :test #'char=))
+         (prefix (subseq line 0 split-index))
+         (suffix (subseq line (if split-index
+                                  (+ split-index (length split-sequence))
+                                  (length line)))))
+    (list prefix suffix)))
+
 (defun parse-svn-info (info-string)
-  info-string)
+  (let ((info-lines (split-lines info-string)))
+    (mapcar #'split-svn-info-line info-lines)))
 
 (defun get-svn-info (p)
   (parse-svn-info
