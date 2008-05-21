@@ -47,6 +47,7 @@ cocoa-ide/search-files.lisp -text
 cocoa-ide/start.lisp -text
 compiler/acode-rewrite.lisp -text
 doc/ccl-documentation.html -text
+doc/doc-splitter.lisp -text
 doc/release-notes.txt -text
 doc/src/Makefile.fedora -text
 doc/src/Makefile.macports -text
