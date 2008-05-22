@@ -205,8 +205,7 @@
                     nconc (doc-file-collect-hrefs subnode hash)))
            (href (and (eq (cnode-tag node) :a)
                       (cnode-attribute-value node :href))))
-      (when (and href (position #\# href))
-        (assert (eql (char href 0) #\#))
+      (when (and href (eql 0 (position #\# href)))
         (let ((name (gethash (subseq href 1) hash)))
           (unless name
              (warn "Couldn't find the split file id for href ~s" href))
