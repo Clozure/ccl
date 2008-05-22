@@ -78,6 +78,7 @@ doc/src/modifying.xml -text
 doc/src/mop.xml -text
 doc/src/objc-bridge.xml -text
 doc/src/platform-notes.xml -text
+doc/src/profile.xml -text
 doc/src/q-and-a.xml -text
 doc/src/schemas.xml -text
 doc/src/sockets.xml -text

@@ -26,8 +26,6 @@
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
             href="ide.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
-            href="q-and-a.xml"/>
-<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
             href="threads.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
             href="sockets.xml"/>
@@ -37,6 +35,8 @@
             href="streams.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
             href="mop.xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="profile.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
             href="ffi.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
@@ -49,6 +49,8 @@
             href="implementation.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
             href="modifying.xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="q-and-a.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
             href="glossary.xml"/>
 
