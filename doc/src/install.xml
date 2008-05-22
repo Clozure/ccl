@@ -367,7 +367,7 @@ Type 'svn help' for usage]]>
       sometimes run 64-bit &CCL;.  You can rename the script that
       you use to whatever you want.  For example, if you are on a
       64-bit system, and you only use &CCL; in 64-bit mode, then
-      you can rename  literal>ccl64</literal> to
+      you can rename  <literal>ccl64</literal> to
       <literal>ccl</literal> so that you only need to type
       "<literal>ccl</literal>" to run it.</para>
 
