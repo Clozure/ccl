@@ -1987,7 +1987,7 @@
 
   <!-- ******************************************  -->
   <sect1 id="Reading-Foreign-Names">
-    <title>Reading Foreign Names</title> <para>Clozure Common Lisp
+    <title>Reading Foreign Names</title> <para>&CCL;
       provides several reader macros to make it more convenient to
       handle foreign type, function, variable, and constant
       names. Each of these reader macros reads symbols preserving the
@@ -3113,7 +3113,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
       <refsect1>
         <title>Description</title>
         
-        <para>In Clozure CL 1.2 and later, the #&gt; reader macro reads
+        <para>In &CCL; 1.2 and later, the #&gt; reader macro reads
           the following text as a keyword, preserving the case of the
           text. For example:</para>
 
@@ -3742,7 +3742,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
       <refsect1>
         <title>Description</title>
         
-        <para>In Clozure CL 1.2 and later, the <code>CCL:FREE</code>
+        <para>In &CCL; 1.2 and later, the <code>CCL:FREE</code>
           function invokes the foreign <code>free</code> function from
           the platform's standard C library to deallocate a block of
           foreign memory.</para>

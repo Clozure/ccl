@@ -16,7 +16,7 @@
     
     <para>&CCL; is a fast, mature, open source Common Lisp
       implementation that runs on Linux, Mac OS X and BSD on either
-      Intel x86-64 or PPC. Clozure CL was forked from Macintosh Common
+      Intel x86-64 or PPC. &CCL; was forked from Macintosh Common
       Lisp (MCL) in 1998 and the development has been entirely separate
       since. Ports to IA32 and Windows are under development.</para>
 
@@ -68,7 +68,7 @@
       benchmarks.</para></listitem>
       <listitem><para>Robust and stable. Customers report that their
       CPU-intensive, multi-threaded applications run for extended
-      periods on Clozure CL without difficulty.</para></listitem>
+      periods on &CCL; without difficulty.</para></listitem>
       <listitem><para>Full native OS threads on all platforms. Threads
       are automatically distributed across multiple cores. The API
       includes support for shared memory, locking, and blocking for OS

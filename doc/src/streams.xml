@@ -16,7 +16,7 @@
     <title>Stream Extensions</title>
 
     <sect2><title>Stream External Encoding</title>
-    <para>Clozure CL streams have an external-encoding attribute that
+    <para>&CCL; streams have an external-encoding attribute that
     may be read using
     <function>STREAM-EXTERNAL-ENCODING</function> and set using <function>(SETF
     STREAM-EXTERNAL-ENCODING)</function>.

@@ -130,11 +130,11 @@
 
 
   <!-- ============================================================ -->
-  <sect1><title>Obtaining Clozure CL</title>
-    <para>There two main ways to obtain Clozure CL.  For Mac OS X,
-    there are disk images that can be used to install Clozure CL in
+  <sect1><title>Obtaining &CCL;</title>
+    <para>There two main ways to obtain &CCL;.  For Mac OS X,
+    there are disk images that can be used to install &CCL; in
     the usual Macintosh way. For other OSes, Subversion is the best
-    way to obtain Clozure CL.  Mac OS X users can also use Subversion
+    way to obtain &CCL;.  Mac OS X users can also use Subversion
     if they prefer. Tarballs are available for those who prefer them,
     but if you have Subversion installed, it is simpler and more
     flexible to use Subversion than tarballs.  It is easier to keep up
@@ -143,7 +143,7 @@
     changes to Subversion.
     </para>
 
-    <para> There are three popular ways to use Clozure CL: as a
+    <para> There are three popular ways to use &CCL;: as a
       stand-alone double-clickable application (Mac OS X only), as a
       command-line application, or with EMACS and SLIME. The following
       sections describe these options.</para>
@@ -151,7 +151,7 @@
     <!-- ***************************************************** -->
     <sect2><title>The Mac Way</title>
       <para>If you are using Mac OS X then you can install and use
-         Clozure CL in the usual Macintosh way.  Download and mount a
+         &CCL; in the usual Macintosh way.  Download and mount a
          disk image, then drag Clozure CL to the Applications folder.
          After that you can double-click the Clozure CL application to
          run it.  The disk images are available at
@@ -174,28 +174,28 @@
     
 
     <!-- ***************************************************** -->
-    <sect2><title>Getting Clozure CL with Subversion</title>
-      <para>It is very easy to download, install, and build Clozure CL
+    <sect2><title>Getting &CCL; with Subversion</title>
+      <para>It is very easy to download, install, and build &CCL;
       using Subversion. This is the preferred way to get either the
-      latest, or a specific version of Clozure CL, unless you prefer
+      latest, or a specific version of &CCL;, unless you prefer
       the Mac Way.  Subversion is a source code control system that is
       in wide usage.  Most modern OSes come with subversion
-      pre-installed. A complete, buildable and runnable set of Clozure
-      CL sources and binaries can be retrieved by doing one subversion
+      pre-installed. A complete, buildable and runnable set of &CCL;
+      sources and binaries can be retrieved by doing one subversion
       checkout.</para>
 
 
       <para>One subversion command creates a
       <literal>ccl</literal> directory with runnable binaries, and a
       complete set of buildable sources.  To get the bleeding edge
-      Clozure CL for Darwin x8664, at the command line type:</para>
+      &CCL; for Darwin x8664, at the command line type:</para>
 
         <programlisting>
           <![CDATA[
 svn co http://svn.clozure.com/publicsvn/openmcl/trunk/darwinx8664/ccl]]>
         </programlisting>
 
-	<para>To get the 1.2 version of Clozure CL type:</para>
+	<para>To get the 1.2 version of &CCL; type:</para>
         <programlisting>
           <![CDATA[
 svn co http://svn.clozure.com/publicsvn/openmcl/releases/1.2/darwinx8664/ccl]]>
@@ -220,7 +220,7 @@ svn co http://svn.clozure.com/publicsvn/openmcl/releases/1.2/darwinx8664/ccl]]>
         common sources; the majority of source code is the same across
         all versions.</para> 
 
-        <para>Once the checkout is complete you can build Clozure CL by
+        <para>Once the checkout is complete you can build &CCL; by
         running the lisp kernel and executing
         the <literal>rebuild-ccl</literal> function. For
         example:</para>
@@ -269,7 +269,7 @@ Type 'svn help' for usage]]>
       url="ftp://clozure.com/pub/testing/"/>.  Download and extract
       one on your local disk.  Then edit the &CCL; shell script to set
       the value of <varname>CCL_DEFAULT_DIRECTORY</varname> and start
-      up the appropriate Clozure CL kernel. See <xref
+      up the appropriate &CCL; kernel. See <xref
       linkend="The-ccl-Shell-Script"/> for more information about the
       &CCL; shell scripts.</para>
     </sect2>
@@ -277,9 +277,9 @@ Type 'svn help' for usage]]>
 
   <!-- ============================================================ -->
   <sect1><title>Command Line Set Up</title>
-    <para>Sometimes it's convenient to use Clozure CL from a Unix
-      shell command line.  This is especially true when using Clozure
-      CL as a way to run Common Lisp utilities.</para>
+    <para>Sometimes it's convenient to use &CCL; from a Unix
+      shell command line.  This is especially true when using &CCL;
+      as a way to run Common Lisp utilities.</para>
 
     <!-- ***************************************************** -->
     <sect2 id="The-ccl-Shell-Script"><title>The ccl Shell Script</title>
@@ -363,11 +363,11 @@ Type 'svn help' for usage]]>
 
       <para>Note that most people won't need both
       <literal>ccl</literal> and <literal>ccl64</literal> scripts.
-      You only need both if you sometimes run 32-bit Clozure CL and
-      sometimes run 64-bit Clozure CL.  You can rename the script that
+      You only need both if you sometimes run 32-bit &CCL; and
+      sometimes run 64-bit &CCL;.  You can rename the script that
       you use to whatever you want.  For example, if you are on a
-      64-bit system, and you only use Clozure CL in 64-bit mode, then
-      you can rename <literal>ccl64</literal> to
+      64-bit system, and you only use &CCL; in 64-bit mode, then
+      you can rename  literal>ccl64</literal> to
       <literal>ccl</literal> so that you only need to type
       "<literal>ccl</literal>" to run it.</para>
 
@@ -438,9 +438,9 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
   <!-- ============================================================ -->
   <sect1 id="Command-Line-Options">
 	<title>Command Line Options</title>
-    <para>When using Clozure CL from the command line, the following
+    <para>When using &CCL; from the command line, the following
       options may be used to modify its behavior.  The exact set of
-      Clozure CL command-line arguments may vary per platform and
+      &CCL; command-line arguments may vary per platform and
       slowly changes over time.  The current set of command line
       options may be retrieved by using the
       <literal>--help</literal> option.</para>
@@ -449,14 +449,14 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
 	    <para><literal>-h</literal> (or
 	      <literal>--help</literal>).  Provides a definitive (if
 	      somewhat terse) summary of the command line options
-	      accepted by the Clozure CL implementation and then
+	      accepted by the &CCL; implementation and then
 	      exits.</para>
 	  </listitem>
 
 	  <listitem>
 	    <para><literal>-V</literal> (or
 	      <literal>--version</literal>).  Prints the version of
-	      Clozure CL then exits.  The version string is the same value
+	      &CCL; then exits.  The version string is the same value
 	      that is returned by
 	      <function>LISP-APPLICATION-VERSION</function>.</para>
 	  </listitem>

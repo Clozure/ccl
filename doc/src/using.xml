@@ -609,7 +609,7 @@
 	      format is to be used.  Its value can be almost
 	      anything.  It defaults to <literal>NIL</literal>.
 	      There are two domains that have a pre-defined meaning in
-	      Clozure CL: <literal>:FILE</literal> indicates
+	      &CCL;: <literal>:FILE</literal> indicates
 	      encoding for a file in the file system and
 	      <literal>:SOCKET</literal> indicates i/o to/from a
 	      socket.  The value of <parameter>domain</parameter>
@@ -786,9 +786,9 @@
       used with UTF-8 character encodings, where it is simply used to
       indicate that the encoding is UTF-8.)</para>
 
-      <para>Clozure CL writes a byte order mark as the first character
+      <para>&CCL; writes a byte order mark as the first character
       of a file or socket stream when the endianness of the character
-      encoding is not explicit.  Clozure CL also expects a byte order
+      encoding is not explicit.  &CCL; also expects a byte order
       mark on input from streams where the endianness is not
       explicit. If a byte order mark is missing from input data, that
       data is assumed to be in big-endian order.</para>
@@ -800,7 +800,7 @@
     </sect3>
 
   <sect3><title><function>DESCRIBE-CHARACTER-ENCODINGS</function></title>
-    <para>The set of character encodings supported by Clozure CL can be
+    <para>The set of character encodings supported by &CCL; can be
     retrieved by calling
     <function>CCL:DESCRIBE-CHARACTER-ENCODINGS</function>.</para>
 
@@ -860,7 +860,7 @@
        which all character codes map to their Unicode
        equivalents. Intended to support most characters used in most
        Western European languages.</para>
-       <para>Clozure CL uses ISO-8859-1 encoding for
+       <para>&CCL; uses ISO-8859-1 encoding for
        <varname>*TERMINAL-IO*</varname> and for all streams whose
        EXTERNAL-FORMAT isn't explicitly specified.  The default for
        <varname>*TERMINAL-IO*</varname> can be set via the
@@ -870,7 +870,7 @@
        <para>ISO-8859-1 just covers the first 256 Unicode code
        points, where the first 128 code points are equivalent to
        US-ASCII.  That should be pretty much equivalent to what
-       earliers versions of Clozure CL did that only supported 8-bit characters,
+       earliers versions of &CCL; did that only supported 8-bit characters,
        but it may not be optimal for users working in a particular
        locale.</para>
        <para>Aliases: <literal>:ISO_8859-1, :LATIN1, :L1,
