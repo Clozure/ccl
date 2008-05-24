@@ -793,7 +793,7 @@
   (shrq (:$ub x8664::num-subtag-bits) (:%q temp))
   (shlq (:$ub x8664::fixnumshift) (:%q temp))
   (rcmpq (:%q idx) (:%q temp))
-  (jge :bad)
+  (jae :bad)
 
   (:anchored-uuo-section :resume)
   :bad
