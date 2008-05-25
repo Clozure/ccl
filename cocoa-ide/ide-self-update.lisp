@@ -104,9 +104,16 @@
 (objc:defmethod #/windowNibName ((self authentication-window-controller))
   #@"Authenticate")
 
+(defparameter *authentication-window-controller* nil)
+
 (defun pose-authentication-window ()
-  (let ((controller (make-instance 'authentication-window-controller)))
-    (#/initWithWindowNibName: controller #@"Authenticate")
-    controller
+  (unless *authentication-window-controller*
+    (setf *authentication-window-controller* 
+          (make-instance 'authentication-window-controller))
+    (#/initWithWindowNibName: *authentication-window-controller* #@"Authenticate"))
+  (unless (#/isWindowLoaded *authentication-window-controller*)
+    (#/loadWindow *authentication-window-controller* *authentication-window-controller*))
+  (let ((window (#/window *authentication-window-controller*)))
     ;;(#/runModalForWindow: ccl::*nsapp* window)
-    ))
+    window))
+
