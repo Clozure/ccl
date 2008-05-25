@@ -95,3 +95,18 @@
 ;;; URL is an http:: URL; if it's an svn+ssh URL, then we do need
 ;;; to authenticate
 
+(defclass authentication-window-controller (ns:ns-window-controller)
+    ((authentication-window :foreign-type :id :reader authentication-window)
+     (username-field :foreign-type :id :reader authentication-window-username-field)
+     (password-field :foreign-type :id :reader authentication-window-password-field))
+  (:metaclass ns:+ns-object))
+
+(objc:defmethod #/windowNibName ((self authentication-window-controller))
+  #@"Authenticate")
+
+(defun pose-authentication-window ()
+  (let ((controller (make-instance 'authentication-window-controller)))
+    (#/initWithWindowNibName: controller #@"Authenticate")
+    controller
+    ;;(#/runModalForWindow: ccl::*nsapp* window)
+    ))
