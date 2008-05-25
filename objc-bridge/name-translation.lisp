@@ -16,7 +16,7 @@
 
 (in-package "CCL")
 
-(require :split-if)
+(require "SEQUENCE-UTILS")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;                         Special ObjC Words                             ;;;;

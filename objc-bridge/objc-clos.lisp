@@ -36,7 +36,7 @@
   #+gnu-objc
   (use-interface-dir :gnustep))
 
-(require :split-if)
+(require "SEQUENCE-UTILS")
 ;;; We need OBJC-FOREIGN-ARG-TYPE from the bridge to process ivar types
 (require "BRIDGE")
 
