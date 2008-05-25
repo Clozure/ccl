@@ -17,6 +17,8 @@ cocoa-ide/ide-bundle.lisp -text
 cocoa-ide/ide-contents/Resources/Appearance.tiff -text
 cocoa-ide/ide-contents/Resources/Documentation.icns -text
 cocoa-ide/ide-contents/Resources/Encodings.tiff -text
+cocoa-ide/ide-contents/Resources/English.lproj/Authenticate.nib/designable.nib -text
+cocoa-ide/ide-contents/Resources/English.lproj/Authenticate.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/Credits.html -text
 cocoa-ide/ide-contents/Resources/English.lproj/MainMenu.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/OpenmclInspector.nib/keyedobjects.nib -text

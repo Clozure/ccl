@@ -88,3 +88,10 @@
   (parse-svn-info
    (with-output-to-string (out)
      (run-program "svn" `("info" ,(namestring p)) :output out))))
+
+;;; we infer from the information in the URL field of the svn info
+;;; whether we need to authenticate. The assumed criteria in this
+;;; implementation are that we don't need to authenticate if the
+;;; URL is an http:: URL; if it's an svn+ssh URL, then we do need
+;;; to authenticate
+
