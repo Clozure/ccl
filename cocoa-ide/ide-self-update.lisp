@@ -113,7 +113,7 @@
     (#/initWithWindowNibName: *authentication-window-controller* #@"Authenticate"))
   (unless (#/isWindowLoaded *authentication-window-controller*)
     (#/loadWindow *authentication-window-controller*))
-  (let ((window (#/window *authentication-window-controller*)))
+  (let ((window (authentication-window *authentication-window-controller*)))
     ;;(#/runModalForWindow: ccl::*nsapp* window)
     window))
 
