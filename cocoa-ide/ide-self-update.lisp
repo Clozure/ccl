@@ -114,6 +114,10 @@
   (unless (#/isWindowLoaded *authentication-window-controller*)
     (#/loadWindow *authentication-window-controller*))
   (let ((window (authentication-window *authentication-window-controller*)))
+    ;; TODO: if we run modal here, say from the listener, we'll get
+    ;; stuck forever in a modal event loop from which there is no
+    ;; exit. need to set up the context from which we can run the
+    ;; modal dialog and extract the user-supplied data and exit the modal loop
     ;;(#/runModalForWindow: ccl::*nsapp* window)
     window))
 
