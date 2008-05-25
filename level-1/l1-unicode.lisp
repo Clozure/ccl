@@ -3704,13 +3704,18 @@ in native byte-order with a leading byte-order mark."
          (declare (type (mod #x110000) code)
                   (fixnum p highbits))
          (cond ((< highbits 0)
-                (setf (%get-unsigned-word pointer idx) code)
+                (setf (%get-unsigned-word pointer idx) #+big-endian-target code #+little-endian-target (%swap-u16 code))
                 (incf idx 2))
                (t
-                (setf (%get-unsigned-word pointer idx) (logior #xd800 (the fixnum (ash highbits -10))))
-
-                (setf (%get-unsigned-word pointer (the fixnum (+ idx 2))) (logior #xdc00 (the fixnum (logand highbits #x3ff))))
-                (incf idx 4)))))))
+                (let* ((w1 (logior #xd800 (the fixnum (ash highbits -10))))
+                       (w2 (logior #xdc00 (the fixnum (logand highbits #x3ff)))))
+                  (declare (type (unsigned-byte 16) w1 w2))
+                (setf (%get-unsigned-word pointer idx)
+                      #+big-endian-target w1 #+little-endian-target (%swap-u16 w1))
+                (setf (%get-unsigned-word pointer (the fixnum (+ idx 2)))
+                      #+big-endian-target w2
+                      #+little-endian-target (%swap-u16 w2))
+                (incf idx 4))))))))
   :memory-decode-function
   (nfunction
    utf-16-memory-decode
@@ -3798,9 +3803,10 @@ in native byte-order with a leading byte-order mark."
                        t)
                       (t #+little-endian-target t)))))
        (do* ((i start)
+             (j (+ i 2) (+ i 2))
+             (end (+ start noctets))
              (nchars 0 (1+ nchars)))
-            ((>= i noctets)
-             (if (= i noctets) nchars))
+            ((> j end) (values nchars i))
          (let* ((code (%get-unsigned-word pointer i)))
            (declare (type (unsigned-byte 16) code))
            (if swap (setq code (%swap-u16 code)))
@@ -4788,6 +4794,23 @@ or prepended to output."
           (array-data-and-offset s)
         (funcall (character-encoding-memory-encode-function encoding)
                  data pointer offset (+ data-offset (or start 0)) (+ data-offset (or end (length s))))))))
+
+(defun get-encoded-string (encoding-name pointer noctets)
+  (let* ((encoding (ensure-character-encoding encoding-name)))
+    (multiple-value-bind (nchars nused)
+        (funcall (character-encoding-length-of-memory-encoding-function encoding)
+                 pointer
+                 noctets
+                 0)
+      (let* ((string (make-string nchars)))
+        (funcall (character-encoding-memory-decode-function encoding)
+                 pointer
+                 nused
+                 0
+                 string)
+        string))))
+        
+
       
 
 
