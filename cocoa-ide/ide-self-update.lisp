@@ -95,6 +95,8 @@
 ;;; URL is an http:: URL; if it's an svn+ssh URL, then we do need
 ;;; to authenticate
 
+(defparameter *authentication-window-controller* nil)
+
 (defclass authentication-window-controller (ns:ns-window-controller)
     ((authentication-window :foreign-type :id :reader authentication-window)
      (username-field :foreign-type :id :reader authentication-window-username-field)
@@ -113,8 +115,6 @@
   (declare (ignore sender))
   (#/stopModalWithCode: (#/sharedApplication (@class ns-application)) 2)
   (#/orderOut: (authentication-window *authentication-window-controller*) +null-ptr+))
-
-(defparameter *authentication-window-controller* nil)
 
 (defun get-auth-window ()
   (unless *authentication-window-controller*
