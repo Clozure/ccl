@@ -104,9 +104,17 @@
 (objc:defmethod #/windowNibName ((self authentication-window-controller))
   #@"Authenticate")
 
+(objc:defmethod #/authOkay: ((self authentication-window-controller) sender)
+  (#/stopModalWithCode: (#/sharedApplication (@class ns-application)) 1)
+  (#/orderOut: (authentication-window *authentication-window-controller*) nil))
+
+(objc:defmethod #/authCancel: ((self authentication-window-controller) sender)
+  (#/stopModalWithCode: (#/sharedApplication (@class ns-application)) 2)
+  (#/orderOut: (authentication-window *authentication-window-controller*) nil))
+
 (defparameter *authentication-window-controller* nil)
 
-(defun pose-authentication-window ()
+(defun get-auth-window ()
   (unless *authentication-window-controller*
     (setf *authentication-window-controller* 
           (make-instance 'authentication-window-controller))
@@ -114,10 +122,18 @@
   (unless (#/isWindowLoaded *authentication-window-controller*)
     (#/loadWindow *authentication-window-controller*))
   (let ((window (authentication-window *authentication-window-controller*)))
-    ;; TODO: if we run modal here, say from the listener, we'll get
-    ;; stuck forever in a modal event loop from which there is no
-    ;; exit. need to set up the context from which we can run the
-    ;; modal dialog and extract the user-supplied data and exit the modal loop
-    ;;(#/runModalForWindow: ccl::*nsapp* window)
-    window))
+    (if (or (null window)
+            (%null-ptr-p window))
+        nil
+        window)))
 
+(defun get-svn-auth-data ()
+  (let ((auth-window (get-auth-window)))
+    (if auth-window
+        (let ((window-status (#/runModalForWindow: (#/sharedApplication (@class ns-application))
+                                                   auth-window)))
+          (if (zerop window-status)
+              nil
+              (cons (#/stringValue (authentication-window-username-field *authentication-window-controller*))
+                    (#/stringValue (authentication-window-password-field *authentication-window-controller*)))))
+        nil)))
