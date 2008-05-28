@@ -113,7 +113,7 @@
 
 (objc:defmethod #/authCancel: ((self authentication-window-controller) sender)
   (declare (ignore sender))
-  (#/stopModalWithCode: (#/sharedApplication (@class ns-application)) 2)
+  (#/stopModalWithCode: (#/sharedApplication (@class ns-application)) 0)
   (#/orderOut: (authentication-window *authentication-window-controller*) +null-ptr+))
 
 (defun get-auth-window ()
@@ -131,10 +131,10 @@
 
 (defun get-svn-auth-data ()
   (let ((auth-window (get-auth-window)))
-    (if auth-window
+    (If auth-window
         (let ((window-status (#/runModalForWindow: (#/sharedApplication (@class ns-application))
                                                    auth-window)))
-          (if (zerop window-status)
+          (If (zerop window-status)
               nil
               (cons (#/stringValue (authentication-window-username-field *authentication-window-controller*))
                     (#/stringValue (authentication-window-password-field *authentication-window-controller*)))))
