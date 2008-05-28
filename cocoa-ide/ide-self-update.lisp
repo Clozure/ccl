@@ -106,11 +106,11 @@
 
 (objc:defmethod #/authOkay: ((self authentication-window-controller) sender)
   (#/stopModalWithCode: (#/sharedApplication (@class ns-application)) 1)
-  (#/orderOut: (authentication-window *authentication-window-controller*) nil))
+  (#/orderOut: (authentication-window *authentication-window-controller*) +null-ptr+))
 
 (objc:defmethod #/authCancel: ((self authentication-window-controller) sender)
   (#/stopModalWithCode: (#/sharedApplication (@class ns-application)) 2)
-  (#/orderOut: (authentication-window *authentication-window-controller*) nil))
+  (#/orderOut: (authentication-window *authentication-window-controller*) +null-ptr+))
 
 (defparameter *authentication-window-controller* nil)
 
