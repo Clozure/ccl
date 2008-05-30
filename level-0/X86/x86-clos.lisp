@@ -133,7 +133,7 @@
   (rcmpq (% imm1) (% imm0))
   (movq (@ 'table (% fn)) (% temp0))
   (ja @missing)
-  (shrq ($ x8664::word-shift) (% rdx))
+  (shrq ($ 1) (% rdx))
   (movl (@ x8664::misc-data-offset (% temp1) (% imm1)) (%l imm1))
   (testl (%l imm1) (%l imm1))
   (je @missing)
