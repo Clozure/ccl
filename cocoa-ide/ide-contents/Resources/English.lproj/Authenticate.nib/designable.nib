@@ -3,7 +3,7 @@
 	<data>
 		<int key="IBDocument.SystemTarget">1050</int>
 		<string key="IBDocument.SystemVersion">9C7010</string>
-		<string key="IBDocument.InterfaceBuilderVersion">658</string>
+		<string key="IBDocument.InterfaceBuilderVersion">667</string>
 		<string key="IBDocument.AppKitVersion">949.26</string>
 		<string key="IBDocument.HIToolboxVersion">352.00</string>
 		<object class="NSMutableArray" key="IBDocument.EditedObjectIDs">
@@ -145,7 +145,7 @@
 						<object class="NSButton" id="558609978">
 							<reference key="NSNextResponder" ref="1006"/>
 							<int key="NSvFlags">268</int>
-							<string key="NSFrame">{{201, 12}, {96, 32}}</string>
+							<string key="NSFrame">{{105, 12}, {96, 32}}</string>
 							<reference key="NSSuperview" ref="1006"/>
 							<bool key="NSEnabled">YES</bool>
 							<object class="NSButtonCell" key="NSCell" id="637871713">
@@ -165,19 +165,19 @@
 						<object class="NSButton" id="455713151">
 							<reference key="NSNextResponder" ref="1006"/>
 							<int key="NSvFlags">268</int>
-							<string key="NSFrame">{{105, 12}, {96, 32}}</string>
+							<string key="NSFrame">{{201, 12}, {96, 32}}</string>
 							<reference key="NSSuperview" ref="1006"/>
 							<bool key="NSEnabled">YES</bool>
 							<object class="NSButtonCell" key="NSCell" id="746299643">
 								<int key="NSCellFlags">67239424</int>
 								<int key="NSCellFlags2">134217728</int>
-								<string key="NSContents">Send</string>
+								<string key="NSContents">Okay</string>
 								<reference key="NSSupport" ref="1051702825"/>
 								<reference key="NSControlView" ref="455713151"/>
 								<int key="NSButtonFlags">-2038284033</int>
 								<int key="NSButtonFlags2">129</int>
 								<string key="NSAlternateContents"/>
-								<string key="NSKeyEquivalent"/>
+								<string type="base64-UTF8" key="NSKeyEquivalent">DQ</string>
 								<int key="NSPeriodicDelay">200</int>
 								<int key="NSPeriodicInterval">25</int>
 							</object>
@@ -281,8 +281,8 @@
 							<reference ref="92683132"/>
 							<reference ref="332937101"/>
 							<reference ref="52143535"/>
-							<reference ref="558609978"/>
 							<reference ref="455713151"/>
+							<reference ref="558609978"/>
 						</object>
 						<reference key="parent" ref="1005"/>
 					</object>

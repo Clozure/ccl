@@ -136,6 +136,9 @@
                                                    auth-window)))
           (If (zerop window-status)
               nil
-              (cons (#/stringValue (authentication-window-username-field *authentication-window-controller*))
-                    (#/stringValue (authentication-window-password-field *authentication-window-controller*)))))
+              (let  ((username (lisp-string-from-nsstring (#/stringValue (authentication-window-username-field 
+                                                                          *authentication-window-controller*))))
+                     (password (lisp-string-from-nsstring (#/stringValue (authentication-window-password-field 
+                                                                          *authentication-window-controller*)))))
+                (cons username password))))
         nil)))
