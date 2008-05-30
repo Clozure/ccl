@@ -106,12 +106,12 @@
 (objc:defmethod #/windowNibName ((self authentication-window-controller))
   #@"Authenticate")
 
-(objc:defmethod #/authOkay: ((self authentication-window-controller) sender)
+(objc:defmethod (#/authOkay: :void) ((self authentication-window-controller) sender)
   (declare (ignore sender))
   (#/stopModalWithCode: (#/sharedApplication (@class ns-application)) 1)
   (#/orderOut: (authentication-window *authentication-window-controller*) +null-ptr+))
 
-(objc:defmethod #/authCancel: ((self authentication-window-controller) sender)
+(objc:defmethod (#/authCancel: :void) ((self authentication-window-controller) sender)
   (declare (ignore sender))
   (#/stopModalWithCode: (#/sharedApplication (@class ns-application)) 0)
   (#/orderOut: (authentication-window *authentication-window-controller*) +null-ptr+))
