@@ -56,6 +56,8 @@
 				<string>id</string>
 				<key>showSearchFiles</key>
 				<string>id</string>
+				<key>updateCCL</key>
+				<string>id</string>
 			</dict>
 			<key>CLASS</key>
 			<string>FirstResponder</string>

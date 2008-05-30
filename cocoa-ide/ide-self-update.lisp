@@ -43,6 +43,10 @@
 ;;;         running a rollback)
 ;;; TODO: make a cvs version if needed
 
+;;; -----------------------------------------------------------------
+;;; svn metadata utils
+;;; -----------------------------------------------------------------
+
 ;;; VALIDATE-SVN-DATA-PATHNAME p
 ;;; ---------------------
 ;;; returns TRUE if P is really an existing directory that appears to
@@ -89,6 +93,10 @@
    (with-output-to-string (out)
      (run-program "svn" `("info" ,(namestring p)) :output out))))
 
+;;; -----------------------------------------------------------------
+;;; authentication utils, for use with source control
+;;; -----------------------------------------------------------------
+
 ;;; we infer from the information in the URL field of the svn info
 ;;; whether we need to authenticate. The assumed criteria in this
 ;;; implementation are that we don't need to authenticate if the
@@ -131,10 +139,10 @@
 
 (defun get-svn-auth-data ()
   (let ((auth-window (get-auth-window)))
-    (If auth-window
+    (if auth-window
         (let ((window-status (#/runModalForWindow: (#/sharedApplication (@class ns-application))
                                                    auth-window)))
-          (If (zerop window-status)
+          (if (zerop window-status)
               nil
               (let  ((username (lisp-string-from-nsstring (#/stringValue (authentication-window-username-field 
                                                                           *authentication-window-controller*))))
@@ -142,3 +150,37 @@
                                                                           *authentication-window-controller*)))))
                 (cons username password))))
         nil)))
+
+
+;;; -----------------------------------------------------------------
+;;; app delegate extensions to handle self-update UI
+;;; -----------------------------------------------------------------
+
+(defparameter *update-ccl-window-controller* nil)
+
+(defclass update-ccl-window-controller (ns:ns-window-controller)
+    ((update-window :foreign-type :id :reader update-window))
+  (:metaclass ns:+ns-object))
+
+(objc:defmethod #/windowNibName ((self update-ccl-window-controller))
+  #@"updateCCL")
+
+(objc:defmethod (#/updateCCLOkay: :void) ((self update-ccl-window-controller) sender)
+  (declare (ignore sender))
+  (#/stopModalWithCode: (#/sharedApplication (@class ns-application)) 1)
+  (#/orderOut: (update-window *update-ccl-window-controller*) +null-ptr+))
+
+(objc:defmethod (#/updateCCLCancel: :void) ((self update-ccl-window-controller) sender)
+  (declare (ignore sender))
+  (#/stopModalWithCode: (#/sharedApplication (@class ns-application)) 0)
+  (#/orderOut: (update-window *update-ccl-window-controller*) +null-ptr+))
+
+(objc:defmethod (#/updateCCL: :void) ((self lisp-application-delegate)
+						sender)
+  (declare (ignore sender))
+  (when (null *update-ccl-window-controller*)
+    (setf *update-ccl-window-controller*
+	  (make-instance 'update-ccl-window-controller))
+    (#/initWithWindowNibName: *update-ccl-window-controller* #@"updateCCL"))
+  (#/showWindow: *update-ccl-window-controller* self))
+
