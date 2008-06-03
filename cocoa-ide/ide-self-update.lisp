@@ -183,6 +183,8 @@
 	  (make-instance 'update-ccl-window-controller))
     (#/initWithWindowNibName: *update-ccl-window-controller* #@"updateCCL"))
   ;;(#/showWindow: *update-ccl-window-controller* self)
+  (unless (#/isWindowLoaded *update-ccl-window-controller*)
+    (#/loadWindow *update-ccl-window-controller*))
   (#/runModalForWindow: (#/sharedApplication (@class ns-application)) 
                         (update-window *update-ccl-window-controller*)))
 
