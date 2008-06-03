@@ -28,7 +28,7 @@
 			<object class="NSWindowTemplate" id="1005">
 				<int key="NSWindowStyleMask">271</int>
 				<int key="NSWindowBacking">2</int>
-				<string key="NSWindowRect">{{196, 364}, {381, 146}}</string>
+				<string key="NSWindowRect">{{196, 387}, {381, 123}}</string>
 				<int key="NSWTFlags">536870912</int>
 				<string key="NSWindowTitle">Update CCL</string>
 				<string key="NSWindowClass">NSWindow</string>
@@ -42,15 +42,13 @@
 						<object class="NSTextField" id="380836188">
 							<reference key="NSNextResponder" ref="1006"/>
 							<int key="NSvFlags">268</int>
-							<string key="NSFrame">{{17, 75}, {347, 51}}</string>
+							<string key="NSFrame">{{17, 52}, {347, 51}}</string>
 							<reference key="NSSuperview" ref="1006"/>
 							<bool key="NSEnabled">YES</bool>
 							<object class="NSTextFieldCell" key="NSCell" id="759012394">
 								<int key="NSCellFlags">67239424</int>
 								<int key="NSCellFlags2">272891904</int>
-								<string type="base64-UTF8" key="NSContents">U29vbiB0aGlzIHdpbmRvdyB3aWxsIG9mZmVyIGEgd2F5IHRvIGF1dG9tYXRpY2FsbHkgdXBkYXRlIEND
-TCdzIHNvdXJjZXMgZnJvbSB0aGUgbWFpbiByZXBvc2l0b3J5LCBhbmQgcmVidWlsZCBDQ0wgZnJvbSB0
-aG9zZSB1cGRhdGVkIHNvdXJjZXMuA</string>
+								<string key="NSContents">Update the CCL sources from the master Subversion repository.</string>
 								<object class="NSFont" key="NSSupport">
 									<string key="NSName">LucidaGrande</string>
 									<double key="NSSize">1.300000e+01</double>
@@ -80,13 +78,13 @@ aG9zZSB1cGRhdGVkIHNvdXJjZXMuA</string>
 						<object class="NSButton" id="653458570">
 							<reference key="NSNextResponder" ref="1006"/>
 							<int key="NSvFlags">268</int>
-							<string key="NSFrame">{{271, 35}, {96, 32}}</string>
+							<string key="NSFrame">{{271, 12}, {96, 32}}</string>
 							<reference key="NSSuperview" ref="1006"/>
 							<bool key="NSEnabled">YES</bool>
 							<object class="NSButtonCell" key="NSCell" id="125824421">
 								<int key="NSCellFlags">67239424</int>
 								<int key="NSCellFlags2">134217728</int>
-								<string key="NSContents">Okay</string>
+								<string key="NSContents">Update</string>
 								<object class="NSFont" key="NSSupport" id="679436182">
 									<string key="NSName">LucidaGrande</string>
 									<double key="NSSize">1.300000e+01</double>
@@ -104,7 +102,7 @@ aG9zZSB1cGRhdGVkIHNvdXJjZXMuA</string>
 						<object class="NSButton" id="626795059">
 							<reference key="NSNextResponder" ref="1006"/>
 							<int key="NSvFlags">268</int>
-							<string key="NSFrame">{{175, 35}, {96, 32}}</string>
+							<string key="NSFrame">{{175, 12}, {96, 32}}</string>
 							<reference key="NSSuperview" ref="1006"/>
 							<bool key="NSEnabled">YES</bool>
 							<object class="NSButtonCell" key="NSCell" id="360805428">
@@ -122,7 +120,7 @@ aG9zZSB1cGRhdGVkIHNvdXJjZXMuA</string>
 							</object>
 						</object>
 					</object>
-					<string key="NSFrameSize">{381, 146}</string>
+					<string key="NSFrameSize">{381, 123}</string>
 					<reference key="NSSuperview"/>
 				</object>
 				<string key="NSScreenRect">{{0, 0}, {1680, 1028}}</string>
@@ -252,9 +250,9 @@ aG9zZSB1cGRhdGVkIHNvdXJjZXMuA</string>
 					<string>com.apple.InterfaceBuilder.CocoaPlugin</string>
 					<string>com.apple.InterfaceBuilder.CocoaPlugin</string>
 					<string>com.apple.InterfaceBuilder.CocoaPlugin</string>
-					<string>{{323, 810}, {381, 146}}</string>
+					<string>{{323, 833}, {381, 123}}</string>
 					<string>com.apple.InterfaceBuilder.CocoaPlugin</string>
-					<string>{{323, 810}, {381, 146}}</string>
+					<string>{{323, 833}, {381, 123}}</string>
 					<integer value="1"/>
 					<string>{196, 240}</string>
 					<string>{{357, 418}, {480, 270}}</string>
