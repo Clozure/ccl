@@ -182,5 +182,7 @@
     (setf *update-ccl-window-controller*
 	  (make-instance 'update-ccl-window-controller))
     (#/initWithWindowNibName: *update-ccl-window-controller* #@"updateCCL"))
-  (#/showWindow: *update-ccl-window-controller* self))
+  ;;(#/showWindow: *update-ccl-window-controller* self)
+  (#/runModalForWindow: (#/sharedApplication (@class ns-application)) 
+                        (update-window *update-ccl-window-controller*)))
 
