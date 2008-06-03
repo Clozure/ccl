@@ -1263,6 +1263,9 @@ Or something. Right? ~s ~s" var varbits))
     `(block ,tag
        (,handler (catch 'program-error-handler (return-from ,tag (progn ,@body)))))))
 
+(defun runtime-program-error-form (c)
+  `(signal-program-error "Invalid program: ~a" ,(princ-to-string c)))
+
 (defun nx1-compile-lambda (name lambda-form &optional
                                  (p (make-afunc))
                                  q
@@ -1319,7 +1322,7 @@ Or something. Right? ~s ~s" var varbits))
     (setf (afunc-lambdaform p) lambda-form)
     (with-program-error-handler
 	(lambda (c)
-	  (setf (afunc-acode p) (nx1-lambda () `((error ',c)) nil)))
+	  (setf (afunc-acode p) (nx1-lambda () `(,(runtime-program-error-form c)) nil)))
       (handler-bind ((warning (lambda (c)
 				(nx1-whine :program-error c)
 				(muffle-warning c)))
@@ -1331,7 +1334,7 @@ Or something. Right? ~s ~s" var varbits))
 				      (nx1-whine :program-error c)
 				      (throw 'program-error-handler c))))
 	(multiple-value-bind (body decls)
-	    (with-program-error-handler (lambda (c) `(error ',c))
+	    (with-program-error-handler (lambda (c) (runtime-program-error-form c))
 	      (parse-body (%cddr lambda-form) *nx-lexical-environment* t))
 	  (setf (afunc-acode p) (nx1-lambda (%cadr lambda-form) body decls)))))
 
@@ -1617,7 +1620,7 @@ Or something. Right? ~s ~s" var varbits))
 (defun nx1-typed-form (original env)
   (let ((form (with-program-error-handler
 		  (lambda (c)
-		    (nx-transform `(error ',c) env))
+		    (nx-transform (runtime-program-error-form c) env))
 		(nx-transform original env))))
     (nx1-transformed-form form env)))
 
