@@ -155,17 +155,70 @@
 ;;; svn updates
 ;;; -----------------------------------------------------------------
 
+(defun alert (&key 
+              (title "Alert")
+              (message "Something happened.")
+              (default-button "Okay")
+              alternate-button
+              other-button)
+  (let ((nstitle (%make-nsstring title))
+        (nsmessage (%make-nsstring message))
+        (ns-default-button (%make-nsstring default-button))
+        (ns-alternate-button (or (and alternate-button (%make-nsstring alternate-button))
+                                 +null-ptr+))
+        (ns-other-button (or (and other-button (%make-nsstring other-button))
+                             +null-ptr+)))
+    (#_NSRunAlertPanel nstitle nsmessage ns-default-button ns-alternate-button ns-other-button)
+    (#/release nstitle)
+    (#/release nsmessage)
+    (#/release ns-default-button)
+    (unless (eql ns-alternate-button +null-ptr+)
+      (#/release ns-alternate-button))
+    (unless (eql ns-other-button +null-ptr+)
+      (#/release ns-other-button))))
+
+(defun valid-revision-number-for-svn-update? (rev)
+  (and (stringp rev)
+       (plusp (length rev))))
+
+(defun valid-repository-for-svn-update? (url)
+  (and (stringp url)
+       ;; TODO: examine the url to see if it makes sense
+       ))
+
+(defun valid-directory-for-svn-update? (dir)
+  (and dir
+       (probe-file dir)
+       (directoryp dir)
+       (validate-svn-data-pathname (merge-pathnames ".svn/" dir))))
+
+(defun svn-update-ccl (&key directory repository last-revision)
+  (cond
+    ((not (valid-directory-for-svn-update? directory)) 
+     (alert :title "Update Failed"
+            :message (format nil "Subversion update failed. CCL directory '~A' doesn't exist, or lacks valid Subversion metadata."
+                             directory)))
+    ((not (valid-repository-for-svn-update? repository))
+     (alert :title "Update Failed"
+            :message (format nil "Subversion update failed. The supplied repository URL is invalid: '~A'"
+                             repository)))
+    ((not (valid-revision-number-for-svn-update? last-revision))
+     (alert :title "Update Failed"
+            :message (format nil "Subversion update failed. CCL found an invalid revision number for the current working copy: '~A'"
+                             last-revision)))
+    (t (alert :title "Update Succeeded"
+              :message "Subversion update succeeded. Soon we will actually run the update when it succeeds."))))
+
+(defun run-svn-update-for-directory (dir)
+  (let* ((svn-info (get-svn-info dir))
+         (revision-entry (assoc "Revision" svn-info :test #'string=))
+         (revision (and revision-entry (second revision-entry)))
+         (url-entry (assoc "URL" svn-info :test #'string=))
+         (url (and url-entry (second url-entry))))
+    (svn-update-ccl :directory dir :repository url :last-revision revision)))
+  
 (defun run-svn-update ()
-  (format t "~%running svn self-update...~%")
-  (let* ((ccl-dir (gui::find-ccl-directory))
-         (ccl-svn-dir (merge-pathnames ".svn/" ccl-dir)))
-    (if (validate-svn-data-pathname ccl-svn-dir)
-        (format t "~%updating...~%")
-        (#_NSRunInformationalAlertPanel #@"Self-update Cancelled"
-                                        #@"Subversion self-update failed because the running Lisp's CCL directory does not appear to be under revision control (it doesn't exist, or doesn't contain a '.svn/' subdirectory)."
-                                        #@"Okay"
-                                        +null-ptr+
-                                        +null-ptr+))))
+  (run-svn-update-for-directory (gui::find-ccl-directory)))
 
 ;;; -----------------------------------------------------------------
 ;;; app delegate extensions to handle self-update UI
