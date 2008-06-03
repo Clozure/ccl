@@ -151,6 +151,21 @@
                 (cons username password))))
         nil)))
 
+;;; -----------------------------------------------------------------
+;;; svn updates
+;;; -----------------------------------------------------------------
+
+(defun run-svn-update ()
+  (format t "~%running svn self-update...~%")
+  (let* ((ccl-dir (gui::find-ccl-directory))
+         (ccl-svn-dir (merge-pathnames ".svn/" ccl-dir)))
+    (if (validate-svn-data-pathname ccl-svn-dir)
+        (format t "~%updating...~%")
+        (#_NSRunInformationalAlertPanel #@"Self-update Cancelled"
+                                        #@"Subversion self-update failed because the running Lisp's CCL directory does not appear to be under revision control (it doesn't exist, or doesn't contain a '.svn/' subdirectory)."
+                                        #@"Okay"
+                                        +null-ptr+
+                                        +null-ptr+))))
 
 ;;; -----------------------------------------------------------------
 ;;; app delegate extensions to handle self-update UI
@@ -168,6 +183,7 @@
 (objc:defmethod (#/updateCCLOkay: :void) ((self update-ccl-window-controller) sender)
   (declare (ignore sender))
   (#/stopModalWithCode: (#/sharedApplication (@class ns-application)) 1)
+  (run-svn-update)
   (#/orderOut: (update-window *update-ccl-window-controller*) +null-ptr+))
 
 (objc:defmethod (#/updateCCLCancel: :void) ((self update-ccl-window-controller) sender)
