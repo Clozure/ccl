@@ -77,7 +77,7 @@ in the finder"
 (defloadvar *shark-process* nil)
 (defloadvar *sampling* nil)
 
-(defloadvar *debug-shark-process-output* nil)
+(defvar *debug-shark-process-output* nil)
 
 
 (defun safe-shark-function-name (function)
