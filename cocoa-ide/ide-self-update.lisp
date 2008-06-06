@@ -40,6 +40,20 @@
 ;;; url utils
 ;;; -----------------------------------------------------------------
 
+;;; URL-P thing
+;;; -----------------------------------------------------------------
+;;; returns true if THING is a string that appears to contain a URL,
+;;; NIL otherwise
+
+(defmethod url-p (thing)
+  (declare (ignore thing))
+  nil)
+
+(defmethod url-p ((url string))
+  (if (find-matching-subsequence "://" url)
+      t
+      nil))
+
 ;;; URL-PROTOCOL url
 ;;; -----------------------------------------------------------------
 ;;; returns the protocol pprtion of the URL, or NIL if none
@@ -119,6 +133,14 @@
 (defmethod get-svn-info ((p pathname))
   (get-svn-info (namestring p)))
 
+(defmethod svn-repository ((p string))
+  (let* ((info (get-svn-info p))
+         (repo-entry (assoc "URL" info :test #'string=)))
+    (when repo-entry (second repo-entry))))
+
+(defmethod svn-repository ((p pathname))
+  (svn-repository (namestring p)))
+
 (defmethod svn-revision ((p string))
   (let* ((info (get-svn-info p))
          (revision-entry (assoc "Revision" info :test #'string=)))
@@ -133,12 +155,6 @@
 ;;; NOTE: currently unused, because we do not update from the GUI
 ;;;       in the case that authentication is required. code left here
 ;;;       for future reference
-
-;;; we infer from the information in the URL field of the svn info
-;;; whether we need to authenticate. The assumed criteria in this
-;;; implementation are that we don't need to authenticate if the
-;;; URL is an http:: URL; if it's an svn+ssh URL, then we do need
-;;; to authenticate
 
 (defparameter *authentication-window-controller* nil)
 
@@ -197,9 +213,7 @@
        (plusp (length rev))))
 
 (defun valid-repository-for-svn-update? (url)
-  (and (stringp url)
-       ;; TODO: examine the url to see if it makes sense
-       ))
+  (url-p url))
 
 (defun valid-directory-for-svn-update? (dir)
   (and dir
@@ -235,6 +249,16 @@
   
 (defun run-svn-update ()
   (run-svn-update-for-directory (gui::find-ccl-directory)))
+
+(defun svn-update-available-p ()
+  (let ((ccl-dir (gui::find-ccl-directory)))
+    (if (valid-directory-for-svn-update? ccl-dir)
+        ;; compare revision number of working copy with repo
+        (let* ((repo (svn-repository ccl-dir))
+               (local-revision (read-from-string (svn-revision ccl-dir)))
+               (repo-revision (read-from-string (svn-revision repo))))
+          (< local-revision repo-revision))
+        nil)))
 
 ;;; -----------------------------------------------------------------
 ;;; app delegate extensions to handle self-update UI
