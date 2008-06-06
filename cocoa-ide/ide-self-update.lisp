@@ -232,9 +232,13 @@
   (let ((ccl-dir (gui::find-ccl-directory)))
     (if (valid-directory-for-svn-update? ccl-dir)
         ;; compare revision number of working copy with repo
-        (let* ((repo (svn-repository))
-               (local-revision (read-from-string (svn-revision ccl-dir)))
-               (repo-revision (read-from-string (svn-revision repo))))
+        (let* ((local-revision (read-from-string (svn-revision)))
+               (repo (svn-repository))
+               (repo-info (parse-svn-info (svn-info repo)))
+               (repo-revision-entry (assoc "Revision:" repo-info :test #'string=))
+               (repo-revision (or (and repo-revision-entry
+                                       (read-from-string (second repo-revision-entry)))
+                                  0)))
           (< local-revision repo-revision))
         nil)))
 
