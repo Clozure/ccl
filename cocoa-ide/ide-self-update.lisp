@@ -285,14 +285,20 @@
   (#/orderOut: (update-window *update-ccl-window-controller*) +null-ptr+))
 
 (objc:defmethod (#/updateCCL: :void) ((self lisp-application-delegate)
-						sender)
+                                      sender)
   (declare (ignore sender))
-  (when (null *update-ccl-window-controller*)
-    (setf *update-ccl-window-controller*
-	  (make-instance 'update-ccl-window-controller))
-    (#/initWithWindowNibName: *update-ccl-window-controller* #@"updateCCL"))
-  (unless (#/isWindowLoaded *update-ccl-window-controller*)
-    (#/loadWindow *update-ccl-window-controller*))
-  (#/runModalForWindow: (#/sharedApplication (@class ns-application)) 
-                        (update-window *update-ccl-window-controller*)))
+  (if (svn-update-available-p)
+      ;; newer version in the repo; display the update window
+      (progn
+        (when (null *update-ccl-window-controller*)
+          (setf *update-ccl-window-controller*
+                (make-instance 'update-ccl-window-controller))
+          (#/initWithWindowNibName: *update-ccl-window-controller* #@"updateCCL"))
+        (unless (#/isWindowLoaded *update-ccl-window-controller*)
+          (#/loadWindow *update-ccl-window-controller*))
+        (#/runModalForWindow: (#/sharedApplication (@class ns-application)) 
+                              (update-window *update-ccl-window-controller*)))
+      ;; no newer version available; display an informative alert window
+      (gui::alert-window :title "No Update Available"
+                         :message "No update is available. Your copy of CCL is up-to-date.")))
 
