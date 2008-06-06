@@ -127,27 +127,8 @@
   (let ((info-lines (split-lines info-string)))
     (mapcar #'split-svn-info-line info-lines)))
 
-(defmethod get-svn-info ((p string))
-  (parse-svn-info (svn-info p)))
-
-(defmethod get-svn-info ((p pathname))
-  (get-svn-info (namestring p)))
-
-(defmethod svn-repository ((p string))
-  (let* ((info (get-svn-info p))
-         (repo-entry (assoc "URL" info :test #'string=)))
-    (when repo-entry (second repo-entry))))
-
-(defmethod svn-repository ((p pathname))
-  (svn-repository (namestring p)))
-
-(defmethod svn-revision ((p string))
-  (let* ((info (get-svn-info p))
-         (revision-entry (assoc "Revision" info :test #'string=)))
-    (when revision-entry (second revision-entry))))
-
-(defmethod svn-revision ((p pathname))
-  (svn-revision (namestring p)))
+(defun svn-revision ()
+  (svn-info-component "Revision:"))
 
 ;;; -----------------------------------------------------------------
 ;;; authentication utils, for use with source control
@@ -240,11 +221,8 @@
                      :message "Subversion update succeeded. Soon we will actually run the update when it succeeds."))))
 
 (defun run-svn-update-for-directory (dir)
-  (let* ((svn-info (get-svn-info dir))
-         (revision-entry (assoc "Revision" svn-info :test #'string=))
-         (revision (and revision-entry (second revision-entry)))
-         (url-entry (assoc "URL" svn-info :test #'string=))
-         (url (and url-entry (second url-entry))))
+  (let* ((revision (svn-info-component "Revision:"))
+         (url (svn-url)))
     (svn-update-ccl :directory dir :repository url :last-revision revision)))
   
 (defun run-svn-update ()
