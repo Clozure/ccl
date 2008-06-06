@@ -10,49 +10,18 @@
 ;;;; ***********************************************************************
 
 (in-package :ccl)
-
-;;; IDE: decide how and whether to handle cvs self-updates.
-;;; see the cvs/svn code in update-ccl in compile-ccl.lisp
-
-;;; use GUI::FIND-CCL-DIRECTORY to find the effective CCL directory
-;;; (it gracefully handles the case where we are running from an
-;;; app bundle, as well as the case where we are not)
-
-;;; How to self-update the IDE from the svn or cvs repo
-;;; 1. Find the ccl directory that corresponds to the running image
-;;; 2. determine whether this is an svn or cvs checkout
-;;; 3. SVN:
-;;;   a. find the .svn directory
-;;;   b. run svn info to get the svn URL
-;;;   c. determine from the URL whether we need to authenticate
-;;;   d. get auth tokens if we need them
-;;;   d. record the svn revision before we start (so we can roll back
-;;;      if things go horribly wrong)
-;;;   e. run svn status to check for potential merge conflicts before starting 
-;;;      the update
-;;;   f. construct the svn command:
-;;;       i. cd to the proper CCL directory
-;;;      ii. run svn update
-;;;   g. run the svn command with external-process-status.
-;;;   h.  check the status of the external command for success or failure:
-;;;      i. if okay, queue a full-rebuild, and a rebuild of the IDE
-;;;         (need to make some infrastructure for queuing these activities
-;;;         and running them on next launch, or immediately in an external process)
-;;;     ii. if not okay, warn the user, and offer to roll back to the 
-;;;         previously-recorded version (need to make some infrastructure for
-;;;         running a rollback)
-;;; TODO: make a cvs version if needed
+(require :sequence-utils)
 
 ;;; -----------------------------------------------------------------
 ;;; svn metadata utils
 ;;; -----------------------------------------------------------------
 
 ;;; VALIDATE-SVN-DATA-PATHNAME p
-;;; ---------------------
+;;; -----------------------------------------------------------------
 ;;; returns TRUE if P is really an existing directory that appears to
-;;; contain valid Subversion metadata; FALSE otherwise
+;;; contain valid Subversion metadata; NIL otherwise
 
-(defun validate-svn-data-pathname (p)
+(defmethod validate-svn-data-pathname ((p pathname))
   (and (probe-file p)
        (directoryp p)
        (string= ".svn" (first (last (pathname-directory p))))
@@ -64,18 +33,74 @@
          (every (lambda (f) (probe-file (merge-pathnames f p))) 
                 subversion-metafiles))))
 
-;;; given a valid-looking .svn directory, we should be able to use
-;;; the svn executable to get the repository URL. we call:
-;;;  svn info
-;;; and get a big block of info text. one line of the output
-;;; is of the form:
-;;;  URL: yatta-yatta
-;;; where yatta-yatta is the repository URL of the checked out directory
-;;; Another piece of information we want shows Up here, too: the
-;;; current revision, on a line of the form:
-;;; Revision: foobar
+(defmethod validate-svn-data-pathname ((p string))
+  (validate-svn-data-pathname (pathname p)))
 
-(defun split-svn-info-line (line)
+;;; -----------------------------------------------------------------
+;;; url utils
+;;; -----------------------------------------------------------------
+
+;;; URL-PROTOCOL url
+;;; -----------------------------------------------------------------
+;;; returns the protocol pprtion of the URL, or NIL if none
+;;; can be identified
+
+(defmethod url-protocol ((url string))
+  (let ((index (find-matching-subsequence "://" url)))
+    (if index
+        (subseq url 0 index)
+        nil)))
+
+;;; URL-HOST url
+;;; -----------------------------------------------------------------
+;;; returns two values:
+;;; 1. the hostname of the URL
+;;; 2. the username portion of the host segment, if any, or NIL
+
+(defmethod url-host ((url string))
+  (let* ((protocol-marker "://")
+         (protocol-marker-index (find-matching-subsequence protocol-marker url)))
+    (if protocol-marker-index
+        (let* ((protocol-end-index (+ protocol-marker-index (length protocol-marker)))
+               (host-end-index (find-matching-subsequence "/" url :start protocol-end-index))
+               (host-segment (subseq url protocol-end-index host-end-index))
+               (username-terminus-index (find-matching-subsequence "@" host-segment))
+               (username (if username-terminus-index
+                             (subseq host-segment 0 username-terminus-index)
+                             nil))
+               (host (if username-terminus-index
+                         (subseq host-segment (1+ username-terminus-index))
+                         host-segment)))
+          (values host username))
+        nil)))
+
+;;; URL-PATH url
+;;; -----------------------------------------------------------------
+;;; returns the pathname portion of a URL, or NIL if none can be identified
+
+(defmethod url-path ((url string))
+  (let* ((protocol-marker "://")
+         (protocol-marker-index (find-matching-subsequence protocol-marker url)))
+    (if protocol-marker-index
+        (let* ((protocol-end-index (+ protocol-marker-index (length protocol-marker)))
+               (host-end-index (find-matching-subsequence "/" url :start protocol-end-index)))
+          (if host-end-index
+              (subseq url host-end-index)
+              nil))
+        nil)))
+
+;;; -----------------------------------------------------------------
+;;; getting svn info
+;;; -----------------------------------------------------------------
+
+(defmethod svn-info ((p string))
+  (with-output-to-string (out)
+     (run-program "svn" `("info" ,p) :output out)))
+
+(defmethod svn-info ((p pathname))
+  (svn-info (namestring p)))
+
+(defmethod split-svn-info-line ((line string))
   (let* ((split-sequence ": ")
          (split-index (find-matching-subsequence split-sequence line :test #'char=))
          (prefix (subseq line 0 split-index))
@@ -84,18 +109,30 @@
                                   (length line)))))
     (list prefix suffix)))
 
-(defun parse-svn-info (info-string)
+(defmethod parse-svn-info ((info-string string))
   (let ((info-lines (split-lines info-string)))
     (mapcar #'split-svn-info-line info-lines)))
 
-(defun get-svn-info (p)
-  (parse-svn-info
-   (with-output-to-string (out)
-     (run-program "svn" `("info" ,(namestring p)) :output out))))
+(defmethod get-svn-info ((p string))
+  (parse-svn-info (svn-info p)))
+
+(defmethod get-svn-info ((p pathname))
+  (get-svn-info (namestring p)))
+
+(defmethod svn-revision ((p string))
+  (let* ((info (get-svn-info p))
+         (revision-entry (assoc "Revision" info :test #'string=)))
+    (when revision-entry (second revision-entry))))
+
+(defmethod svn-revision ((p pathname))
+  (svn-revision (namestring p)))
 
 ;;; -----------------------------------------------------------------
 ;;; authentication utils, for use with source control
 ;;; -----------------------------------------------------------------
+;;; NOTE: currently unused, because we do not update from the GUI
+;;;       in the case that authentication is required. code left here
+;;;       for future reference
 
 ;;; we infer from the information in the URL field of the svn info
 ;;; whether we need to authenticate. The assumed criteria in this
@@ -155,28 +192,6 @@
 ;;; svn updates
 ;;; -----------------------------------------------------------------
 
-(defun alert (&key 
-              (title "Alert")
-              (message "Something happened.")
-              (default-button "Okay")
-              alternate-button
-              other-button)
-  (let ((nstitle (%make-nsstring title))
-        (nsmessage (%make-nsstring message))
-        (ns-default-button (%make-nsstring default-button))
-        (ns-alternate-button (or (and alternate-button (%make-nsstring alternate-button))
-                                 +null-ptr+))
-        (ns-other-button (or (and other-button (%make-nsstring other-button))
-                             +null-ptr+)))
-    (#_NSRunAlertPanel nstitle nsmessage ns-default-button ns-alternate-button ns-other-button)
-    (#/release nstitle)
-    (#/release nsmessage)
-    (#/release ns-default-button)
-    (unless (eql ns-alternate-button +null-ptr+)
-      (#/release ns-alternate-button))
-    (unless (eql ns-other-button +null-ptr+)
-      (#/release ns-other-button))))
-
 (defun valid-revision-number-for-svn-update? (rev)
   (and (stringp rev)
        (plusp (length rev))))
@@ -195,19 +210,20 @@
 (defun svn-update-ccl (&key directory repository last-revision)
   (cond
     ((not (valid-directory-for-svn-update? directory)) 
-     (alert :title "Update Failed"
-            :message (format nil "Subversion update failed. CCL directory '~A' doesn't exist, or lacks valid Subversion metadata."
-                             directory)))
+     (gui::alert-window :title "Update Failed"
+                   :message (format nil 
+                                    "Subversion update failed. CCL directory '~A' doesn't exist, or lacks valid Subversion metadata."
+                                    directory)))
     ((not (valid-repository-for-svn-update? repository))
-     (alert :title "Update Failed"
-            :message (format nil "Subversion update failed. The supplied repository URL is invalid: '~A'"
-                             repository)))
+     (gui::alert-window :title "Update Failed"
+                   :message (format nil "Subversion update failed. The supplied repository URL is invalid: '~A'"
+                                    repository)))
     ((not (valid-revision-number-for-svn-update? last-revision))
-     (alert :title "Update Failed"
-            :message (format nil "Subversion update failed. CCL found an invalid revision number for the current working copy: '~A'"
-                             last-revision)))
-    (t (alert :title "Update Succeeded"
-              :message "Subversion update succeeded. Soon we will actually run the update when it succeeds."))))
+     (gui::alert-window :title "Update Failed"
+                   :message (format nil "Subversion update failed. CCL found an invalid revision number for the current working copy: '~A'"
+                                    last-revision)))
+    (t (gui::alert-window :title "Update Succeeded"
+                     :message "Subversion update succeeded. Soon we will actually run the update when it succeeds."))))
 
 (defun run-svn-update-for-directory (dir)
   (let* ((svn-info (get-svn-info dir))
@@ -251,7 +267,6 @@
     (setf *update-ccl-window-controller*
 	  (make-instance 'update-ccl-window-controller))
     (#/initWithWindowNibName: *update-ccl-window-controller* #@"updateCCL"))
-  ;;(#/showWindow: *update-ccl-window-controller* self)
   (unless (#/isWindowLoaded *update-ccl-window-controller*)
     (#/loadWindow *update-ccl-window-controller*))
   (#/runModalForWindow: (#/sharedApplication (@class ns-application)) 

@@ -297,3 +297,28 @@
 
 (defmethod assume-not-editing ((whatever t)))
 
+;;; -----------------------------------------------------------------
+;;; utility to display a Cocoa alert window
+;;; -----------------------------------------------------------------
+
+(defun alert-window (&key 
+                     (title "Alert")
+                     (message "Something happened.")
+                     (default-button "Okay")
+                     alternate-button
+                     other-button)
+  (let ((nstitle (%make-nsstring title))
+        (nsmessage (%make-nsstring message))
+        (ns-default-button (%make-nsstring default-button))
+        (ns-alternate-button (or (and alternate-button (%make-nsstring alternate-button))
+                                 +null-ptr+))
+        (ns-other-button (or (and other-button (%make-nsstring other-button))
+                             +null-ptr+)))
+    (#_NSRunAlertPanel nstitle nsmessage ns-default-button ns-alternate-button ns-other-button)
+    (#/release nstitle)
+    (#/release nsmessage)
+    (#/release ns-default-button)
+    (unless (eql ns-alternate-button +null-ptr+)
+      (#/release ns-alternate-button))
+    (unless (eql ns-other-button +null-ptr+)
+      (#/release ns-other-button))))
