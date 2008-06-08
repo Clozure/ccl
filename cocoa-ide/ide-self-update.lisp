@@ -104,12 +104,26 @@
         nil)))
 
 ;;; -----------------------------------------------------------------
-;;; getting svn info
+;;; running svn commands
 ;;; -----------------------------------------------------------------
 
 (defmethod svn-info ((p string))
   (with-output-to-string (out)
      (run-program "svn" `("info" ,p) :output out)))
+
+(defmethod svn-update ((p string))
+  (let ((result-status nil))
+    (run-program "svn" `("update" ,p) 
+               :status-hook (lambda (ep) 
+                              (multiple-value-bind (status status-code) 
+                                  (external-process-status ep)
+                                (when (eql status :exited)
+                                  (setf result-status status-code)))))
+    result-status))
+
+;;; -----------------------------------------------------------------
+;;; parsing info
+;;; -----------------------------------------------------------------
 
 (defmethod svn-info ((p pathname))
   (svn-info (namestring p)))
@@ -206,19 +220,25 @@
   (cond
     ((not (valid-directory-for-svn-update? directory)) 
      (gui::alert-window :title "Update Failed"
-                   :message (format nil 
-                                    "Subversion update failed. CCL directory '~A' doesn't exist, or lacks valid Subversion metadata."
-                                    directory)))
+                        :message (format nil 
+                                         "Subversion update failed. CCL directory '~A' is not a valid working copy."
+                                         directory)))
     ((not (valid-repository-for-svn-update? repository))
      (gui::alert-window :title "Update Failed"
-                   :message (format nil "Subversion update failed. The supplied repository URL is invalid: '~A'"
-                                    repository)))
+                        :message (format nil "Subversion update failed. The supplied repository URL is invalid: '~A'"
+                                         repository)))
     ((not (valid-revision-number-for-svn-update? last-revision))
      (gui::alert-window :title "Update Failed"
-                   :message (format nil "Subversion update failed. CCL found an invalid revision number for the current working copy: '~A'"
-                                    last-revision)))
-    (t (gui::alert-window :title "Update Succeeded"
-                     :message "Subversion update succeeded. Soon we will actually run the update when it succeeds."))))
+                        :message (format nil "Subversion update failed. CCL found an invalid revision number ('~A') for '~A'"
+                                         last-revision directory)))
+    (t (let ((status (svn-update directory)))
+         (if (zerop status)
+             (gui::alert-window :title "Update Succeeded"
+                        :message (format nil "Subversion updated CCL source directory '~A'. CCL needs to be rebuilt."
+                                         directory))
+             (gui::alert-window :title "Update Failed"
+                        :message (format nil "Subversion update of CCL directory '~A' failed with error code ~A."
+                                         directory status)))))))
 
 (defun run-svn-update-for-directory (dir)
   (let* ((revision (svn-info-component "Revision:"))
