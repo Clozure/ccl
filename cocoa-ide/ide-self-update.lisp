@@ -235,7 +235,7 @@
         (let* ((local-revision (read-from-string (svn-revision)))
                (repo (svn-repository))
                (repo-info (parse-svn-info (svn-info repo)))
-               (repo-revision-entry (assoc "Revision:" repo-info :test #'string=))
+               (repo-revision-entry (assoc "Revision" repo-info :test #'string=))
                (repo-revision (or (and repo-revision-entry
                                        (read-from-string (second repo-revision-entry)))
                                   0)))
