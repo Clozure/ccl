@@ -121,6 +121,9 @@
                                   (setf result-status status-code)))))
     result-status))
 
+(defmethod svn-update ((p pathname))
+  (svn-update (namestring p)))
+
 ;;; -----------------------------------------------------------------
 ;;; parsing info
 ;;; -----------------------------------------------------------------
