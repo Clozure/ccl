@@ -13,6 +13,31 @@
 (require :sequence-utils)
 
 ;;; -----------------------------------------------------------------
+;;; IDE automated self-rebuild
+;;; -----------------------------------------------------------------
+;;; normally we run the self-rebuild after an update from the
+;;; source repo. the steps are:
+;;; 1. rename Clozure CL.app to Clozure CL-last.app
+;;;    (check for older versions and rename with a numbering scheme)
+;;; 2. run an external process that starts ccl and evaluates (rebuild-ccl :full t)
+;;; 3. run an external process that starts ccl and evaluates (require :cocoa-application)
+;;; 4. quit the current IDE (with a farewell message to the effect that the IDE has been rebuilt)
+;;; 5. relaunch the IDE (?) 
+;;; (for a simple way to quit and relaunch, see http://www.cocoabuilder.com/archive/message/cocoa/2008/3/3/200352)
+
+(defun ide-self-rebuild ()
+  (let* ((ccl-dir (gui::find-ccl-directory))
+         (bundle (probe-file (merge-pathnames "Clozure CL.app" ccl-dir))))
+    (if bundle
+        (let* ((lisp (merge-pathnames (standard-kernel-name) ccl-dir)))
+          lisp)
+        ;; else: the bundle doesn't seem to be there
+        (gui::alert-window :title "Rebuilding CCL Failed"
+                        :message (format nil 
+                                         "Can't find the application '~A'."
+                                         bundle)))))
+
+;;; -----------------------------------------------------------------
 ;;; svn metadata utils
 ;;; -----------------------------------------------------------------
 
@@ -236,9 +261,12 @@
                                          last-revision directory)))
     (t (let ((status (svn-update directory)))
          (if (zerop status)
-             (gui::alert-window :title "Update Succeeded"
+             (progn
+               ;; notify the user that the update succeeded and we'll now rebuild
+               (gui::alert-window :title "Update Succeeded"
                         :message (format nil "Subversion updated CCL source directory '~A'. CCL needs to be rebuilt."
                                          directory))
+               (ide-self-rebuild))
              (gui::alert-window :title "Update Failed"
                         :message (format nil "Subversion update of CCL directory '~A' failed with error code ~A."
                                          directory status)))))))
