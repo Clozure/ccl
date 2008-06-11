@@ -3531,7 +3531,7 @@
   (do* ((i start (1+ i)))
        ((= i end) end)
     (declare (fixnum i))
-    (let* ((b (read-byte stream)))
+    (let* ((b (read-byte stream nil :eof)))
       (if (eq b :eof)
 	(return i)
 	(setf (uvref vector i) b)))))
@@ -3700,7 +3700,7 @@
 	(i 0 (1+ i)))
        ((= i count) count)
     (declare (fixnum i))
-    (let* ((b (read-byte stream)))
+    (let* ((b (read-byte stream nil :eof)))
       (if (eq b :eof)
 	(return i)
 	(rplaca tail b)))))
@@ -3709,16 +3709,7 @@
 
 
 
-(defmethod stream-read-vector ((stream binary-input-stream)
-			       vector start end)
-  (declare (fixnum start end))
-  (do* ((i start (1+ i)))
-       ((= i end) end)
-    (declare (fixnum i))
-    (let* ((b (read-byte stream)))
-      (if (eq b :eof)
-	(return i)
-	(setf (uvref vector i) b)))))
+
 
 (defun stream-is-closed (s)
   (error "~s is closed" s))
