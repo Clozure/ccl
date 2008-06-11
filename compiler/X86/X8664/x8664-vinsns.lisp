@@ -793,7 +793,7 @@
   (shrq (:$ub x8664::num-subtag-bits) (:%q temp))
   (shlq (:$ub x8664::fixnumshift) (:%q temp))
   (rcmpq (:%q idx) (:%q temp))
-  (jge :bad)
+  (jae :bad)
 
   (:anchored-uuo-section :resume)
   :bad
@@ -3231,7 +3231,7 @@
   :loop
   (rcmpl (:%l imm) (:%l nargs))
   (movl (:%l x8664::arg_y) (:%l x8664::arg_z))
-  (cmovll (:@ x8664::t-offset (:%l x8664::arg_y)) (:%l  x8664::arg_z))
+  (cmovll (:@ (+ x8664::t-offset x8664::symbol.vcell) (:%l x8664::arg_y)) (:%l  x8664::arg_z))
   (addl (:$b x8664::node-size) (:%l imm))
   (rcmpl (:%l imm) (:$l (:apply ash num-opt x8664::fixnumshift)))
   (pushq (:%q x8664::arg_z))
@@ -3242,7 +3242,7 @@
                                         ((temp :u64)))
   (testl (:%l x8664::nargs) (:%l x8664::nargs))
   (movl (:$l x8664::nil-value) (:%l temp))
-  (cmovnel (:@ x8664::t-offset (:%l temp)) (:%l temp))
+  (cmovnel (:@ (+ x8664::t-offset x8664::symbol.vcell) (:%l temp)) (:%l temp))
   (pushq (:%q temp)))
 
 (define-x8664-vinsn two-opt-supplied-p (()
@@ -3252,8 +3252,8 @@
   (rcmpl (:%l x8664::nargs) (:$b x8664::node-size))
   (movl (:$l x8664::nil-value) (:%l temp0))
   (movl (:%l temp0) (:%l temp1))
-  (cmovael (:@ x8664::t-offset (:%l temp0)) (:%l temp0))
-  (cmoval (:@ x8664::t-offset (:%l temp1)) (:%l temp1))
+  (cmovael (:@ (+ x8664::t-offset x8664::symbol.vcell) (:%l temp0)) (:%l temp0))
+  (cmoval (:@ (+ x8664::t-offset x8664::symbol.vcell) (:%l temp1)) (:%l temp1))
   (pushq (:%q temp0))
   (pushq (:%q temp1)))
 
