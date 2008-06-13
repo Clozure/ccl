@@ -300,7 +300,7 @@
 ;;; -----------------------------------------------------------------
 ;;; utility to display a Cocoa alert window
 ;;; -----------------------------------------------------------------
-
+;;; TODO: Currently this form gives no indication which button was clicked. Probably it should do so.
 (defun alert-window (&key 
                      (title "Alert")
                      (message "Something happened.")
