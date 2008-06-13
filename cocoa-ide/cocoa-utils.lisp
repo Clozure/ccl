@@ -322,3 +322,7 @@
       (#/release ns-alternate-button))
     (unless (eql ns-other-button +null-ptr+)
       (#/release ns-other-button))))
+
+(defmacro with-modal-progress-dialog (title message &body body)
+  )
+

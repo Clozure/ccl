@@ -133,8 +133,19 @@
 ;;; -----------------------------------------------------------------
 
 (defmethod svn-info ((p string))
-  (with-output-to-string (out)
-     (run-program "svn" `("info" ,p) :output out)))
+  (let* ((result-status nil)
+         (info (with-output-to-string (out)
+                 (run-program "svn" `("info" ,p) 
+                              :output out
+                              :status-hook (lambda (ep) 
+                                             (multiple-value-bind (status status-code) 
+                                                 (external-process-status ep)
+                                               (when (eql status :exited)
+                                                 (setf result-status status-code))))))))
+    (values info result-status)))
+
+(defmethod svn-info ((p pathname))
+  (svn-info (namestring p)))
 
 (defmethod svn-update ((p string))
   (let ((result-status nil))
@@ -152,9 +163,6 @@
 ;;; -----------------------------------------------------------------
 ;;; parsing info
 ;;; -----------------------------------------------------------------
-
-(defmethod svn-info ((p pathname))
-  (svn-info (namestring p)))
 
 (defmethod split-svn-info-line ((line string))
   (let* ((split-sequence ": ")
