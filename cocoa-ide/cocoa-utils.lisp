@@ -359,6 +359,7 @@
               (progn
                 (#/setTitle: window nstitle)
                 (#/setIndeterminate: progress-bar #$YES)
+                (#/setUsesThreadedAnimation: progress-bar #$YES)
                 (#/setStringValue: message-field nsmessage)
                 (#/makeKeyAndOrderFront: window +null-ptr+)
                 (let ((modal-session (#/beginModalSessionForWindow: ccl::*nsapp* window)))
