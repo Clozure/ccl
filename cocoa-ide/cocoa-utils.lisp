@@ -323,6 +323,52 @@
     (unless (eql ns-other-button +null-ptr+)
       (#/release ns-other-button))))
 
+;;; -----------------------------------------------------------------
+;;; utility to display a Cocoa progress window
+;;; -----------------------------------------------------------------
+
+(defparameter *progress-window-controller* nil)
+
+(defclass progress-window-controller (ns:ns-window-controller)
+    ((progress-window :foreign-type :id :reader progress-window)
+     (message-field :foreign-type :id :reader progress-window-message-field)
+     (progress-bar :foreign-type :id :reader progress-window-progress-bar))
+  (:metaclass ns:+ns-object))
+
+(defun get-progress-window ()
+  (unless *progress-window-controller*
+    (setf *progress-window-controller* 
+          (make-instance 'progress-window-controller))
+    (#/initWithWindowNibName: *progress-window-controller* #@"ProgressWindow"))
+  (unless (#/isWindowLoaded *progress-window-controller*)
+    (#/loadWindow *progress-window-controller*))
+  (let ((window (progress-window *progress-window-controller*)))
+    (if (or (null window)
+            (%null-ptr-p window))
+        nil
+        window)))
+
 (defmacro with-modal-progress-dialog (title message &body body)
-  )
+  `(let* ((nstitle (%make-nsstring ,title))
+          (nsmessage (%make-nsstring ,message))
+          (window (get-progress-window))
+          (progress-bar (progress-window-progress-bar *progress-window-controller*))
+          (message-field (progress-window-message-field *progress-window-controller*)))
+     (unwind-protect 
+          (if window
+              (progn
+                (#/setTitle: window nstitle)
+                (#/setIndeterminate: progress-bar #$YES)
+                (#/setStringValue: message-field nsmessage)
+                (#/makeKeyAndOrderFront: window +null-ptr+)
+                (let ((modal-session (#/beginModalSessionForWindow: ccl::*nsapp* window)))
+                  (#/startAnimation: progress-bar +null-ptr+)
+                  ,@body
+                  (#/stopAnimation: progress-bar +null-ptr+)
+                  (#/orderOut: window +null-ptr+)
+                  (#/endModalSession: ccl::*nsapp* modal-session)))
+              (alert-window :title "Failure"
+                            :message "Unable to load the modal progress window"))
+       (#/release nstitle)
+       (#/release nsmessage))))
 
