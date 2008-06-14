@@ -364,12 +364,15 @@
                 (#/makeKeyAndOrderFront: window +null-ptr+)
                 (let ((modal-session (#/beginModalSessionForWindow: ccl::*nsapp* window)))
                   (#/startAnimation: progress-bar +null-ptr+)
-                  ,@body
-                  (#/stopAnimation: progress-bar +null-ptr+)
-                  (#/orderOut: window +null-ptr+)
-                  (#/endModalSession: ccl::*nsapp* modal-session)))
-              (alert-window :title "Failure"
-                            :message "Unable to load the modal progress window"))
+                  (let ((result (progn ,@body)))
+                    (#/stopAnimation: progress-bar +null-ptr+)
+                    (#/orderOut: window +null-ptr+)
+                    (#/endModalSession: ccl::*nsapp* modal-session)
+                    result)))
+              (progn
+                (alert-window :title "Failure"
+                            :message "Unable to load the modal progress window")
+                nil))
        (#/release nstitle)
        (#/release nsmessage))))
 
