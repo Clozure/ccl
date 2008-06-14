@@ -317,8 +317,10 @@
 (objc:defmethod (#/updateCCLOkay: :void) ((self update-ccl-window-controller) sender)
   (declare (ignore sender))
   (#/stopModalWithCode: (#/sharedApplication (@class ns-application)) 1)
-  (run-svn-update)
-  (#/orderOut: (update-window *update-ccl-window-controller*) +null-ptr+))
+  (#/orderOut: (update-window *update-ccl-window-controller*) +null-ptr+)
+  (gui::with-modal-progress-dialog "Updating..."
+    "Getting changes from Subversion"
+   (run-svn-update)))
 
 (objc:defmethod (#/updateCCLCancel: :void) ((self update-ccl-window-controller) sender)
   (declare (ignore sender))
@@ -328,7 +330,9 @@
 (objc:defmethod (#/updateCCL: :void) ((self lisp-application-delegate)
                                       sender)
   (declare (ignore sender))
-  (if (svn-update-available-p)
+  (if (gui::with-modal-progress-dialog "Checking for Updates..."
+        "Checking for new CCL changes..."
+       (svn-update-available-p))
       ;; newer version in the repo; display the update window
       (progn
         (when (null *update-ccl-window-controller*)
