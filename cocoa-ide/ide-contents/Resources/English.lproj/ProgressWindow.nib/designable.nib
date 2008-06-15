@@ -8,7 +8,7 @@
 		<string key="IBDocument.HIToolboxVersion">352.00</string>
 		<object class="NSMutableArray" key="IBDocument.EditedObjectIDs">
 			<bool key="EncodedWithXMLCoder">YES</bool>
-			<integer value="1" id="9"/>
+			<integer value="2"/>
 		</object>
 		<object class="NSArray" key="IBDocument.PluginDependencies">
 			<bool key="EncodedWithXMLCoder">YES</bool>
@@ -28,7 +28,7 @@
 			<object class="NSWindowTemplate" id="1005">
 				<int key="NSWindowStyleMask">257</int>
 				<int key="NSWindowBacking">2</int>
-				<string key="NSWindowRect">{{196, 420}, {300, 90}}</string>
+				<string key="NSWindowRect">{{196, 415}, {426, 95}}</string>
 				<int key="NSWTFlags">536870912</int>
 				<string key="NSWindowTitle">Progress</string>
 				<string key="NSWindowClass">NSWindow</string>
@@ -43,7 +43,7 @@
 							<reference key="NSNextResponder" ref="1006"/>
 							<int key="NSvFlags">1292</int>
 							<object class="NSPSMatrix" key="NSDrawMatrix"/>
-							<string key="NSFrame">{{18, 16}, {264, 20}}</string>
+							<string key="NSFrame">{{18, 16}, {390, 20}}</string>
 							<reference key="NSSuperview" ref="1006"/>
 							<int key="NSpiFlags">16394</int>
 							<double key="NSMinValue">2.000000e+01</double>
@@ -52,12 +52,12 @@
 						<object class="NSTextField" id="697868892">
 							<reference key="NSNextResponder" ref="1006"/>
 							<int key="NSvFlags">268</int>
-							<string key="NSFrame">{{17, 53}, {266, 17}}</string>
+							<string key="NSFrame">{{17, 44}, {392, 31}}</string>
 							<reference key="NSSuperview" ref="1006"/>
 							<bool key="NSEnabled">YES</bool>
 							<object class="NSTextFieldCell" key="NSCell" id="875141224">
 								<int key="NSCellFlags">67239424</int>
-								<int key="NSCellFlags2">138674176</int>
+								<int key="NSCellFlags2">4456448</int>
 								<string key="NSContents">Running a time-consuming process...</string>
 								<object class="NSFont" key="NSSupport">
 									<string key="NSName">LucidaGrande</string>
@@ -86,7 +86,7 @@
 							</object>
 						</object>
 					</object>
-					<string key="NSFrameSize">{300, 90}</string>
+					<string key="NSFrameSize">{426, 95}</string>
 					<reference key="NSSuperview"/>
 				</object>
 				<string key="NSScreenRect">{{0, 0}, {1680, 1028}}</string>
@@ -221,10 +221,10 @@
 					<string>com.apple.InterfaceBuilder.CocoaPlugin</string>
 					<string>com.apple.InterfaceBuilder.CocoaPlugin</string>
 					<string>com.apple.InterfaceBuilder.CocoaPlugin</string>
-					<string>{{225, 992}, {300, 90}}</string>
+					<string>{{225, 987}, {426, 95}}</string>
 					<string>com.apple.InterfaceBuilder.CocoaPlugin</string>
-					<string>{{225, 992}, {300, 90}}</string>
-					<reference ref="9"/>
+					<string>{{225, 987}, {426, 95}}</string>
+					<integer value="1"/>
 					<string>{196, 240}</string>
 					<string>{{357, 418}, {480, 270}}</string>
 					<string>com.apple.InterfaceBuilder.CocoaPlugin</string>

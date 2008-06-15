@@ -363,7 +363,7 @@
   (#/stopModalWithCode: (#/sharedApplication (@class ns-application)) 1)
   (#/orderOut: (update-window *update-ccl-window-controller*) +null-ptr+)
   (gui::with-modal-progress-dialog "Updating..."
-    "Getting changes from Subversion"
+    "Getting changes from the CCL Repository..."
    (run-svn-update))
   (ide-self-rebuild))
 

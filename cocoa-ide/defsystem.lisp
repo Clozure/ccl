@@ -64,7 +64,6 @@
     "console-window"
     "cocoa-window"
     "cocoa-doc"
-    "ide-self-update"
     "compile-hemlock"
     "hemlock"  ;; treated specially below, compile-hemlock must come before.
     "cocoa-editor"
@@ -76,6 +75,7 @@
     "processes-window"
     "apropos-window"
     "app-delegate"
+    "ide-self-update"
     "search-files"
     "start"
     ))
