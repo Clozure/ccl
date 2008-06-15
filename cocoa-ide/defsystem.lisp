@@ -64,6 +64,7 @@
     "console-window"
     "cocoa-window"
     "cocoa-doc"
+    "ide-self-update"
     "compile-hemlock"
     "hemlock"  ;; treated specially below, compile-hemlock must come before.
     "cocoa-editor"

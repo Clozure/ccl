@@ -29,8 +29,52 @@
   (let* ((ccl-dir (gui::find-ccl-directory))
          (bundle (probe-file (merge-pathnames "Clozure CL.app" ccl-dir))))
     (if bundle
-        (let* ((lisp (merge-pathnames (standard-kernel-name) ccl-dir)))
-          lisp)
+        ;; found the bundle; proceed with rebuilding...
+        (let* ((result-status nil)
+               (lisp (merge-pathnames (standard-kernel-name) ccl-dir)))
+          (gui::with-modal-progress-dialog "Rebuilding" "Rebuilding Clozure CL (please wait)..."
+                                           (run-program lisp `("-e" "(rebuild-ccl :full t)") 
+                                                        ::status-hook (lambda (ep) 
+                                                                        (multiple-value-bind (status status-code) 
+                                                                            (external-process-status ep)
+                                                                          (when (eql status :exited)
+                                                                            (setf result-status status-code))))))
+          (if (zerop result-status)
+              ;; rebuild succeeded; continue...
+              (let* ((old-bundle (merge-pathnames "Clozure CL-last.app" ccl-dir)))
+                ;; if there is already an old bundle, delete it
+                (when (probe-file old-bundle)
+                  (recursive-delete-directory old-bundle))
+                ;; rename the current bundle to the old-bundle
+                (rename-file bundle old-bundle)
+                ;; rebuild the IDE
+                (setf result-status nil)
+                (gui::with-modal-progress-dialog "Rebuilding" "Rebuilding the IDE (please wait)..."
+                                                 (run-program lisp `("-e" "(require :cocoa-application)") 
+                                                              ::status-hook (lambda (ep) 
+                                                                              (multiple-value-bind (status status-code) 
+                                                                                  (external-process-status ep)
+                                                                                (when (eql status :exited)
+                                                                                  (setf result-status status-code))))))
+                (if (zerop result-status)
+                    ;; inform the user that the IDE is rebuilt and we will quit
+                    (progn
+                      (gui::alert-window :title "Rebuilding IDE Succeeded"
+                                 :message (format nil 
+                                                  "Clozure CL is rebuilt; you can start the new IDE after this copy quits."))
+                      (quit))
+                    ;; warn the user that the IDE rebuild failed and we will quit
+                    (progn
+                      (gui::alert-window :title "Rebuilding IDE Failed"
+                                 :message (format nil 
+                                                  "Rebuilding the IDE failed with error code ~A. The previous IDE has been moved to ~A."
+                                                  result-status old-bundle))
+                      (quit))))
+              ;; warn the user that rebuilding failed and exit
+              (gui::alert-window :title "Rebuilding CCL Failed"
+                                 :message (format nil 
+                                                  "Clozure CL exited with error status = ~A"
+                                                  result-status))))
         ;; else: the bundle doesn't seem to be there
         (gui::alert-window :title "Rebuilding CCL Failed"
                         :message (format nil 
@@ -320,7 +364,8 @@
   (#/orderOut: (update-window *update-ccl-window-controller*) +null-ptr+)
   (gui::with-modal-progress-dialog "Updating..."
     "Getting changes from Subversion"
-   (run-svn-update)))
+   (run-svn-update))
+  (ide-self-rebuild))
 
 (objc:defmethod (#/updateCCLCancel: :void) ((self update-ccl-window-controller) sender)
   (declare (ignore sender))
