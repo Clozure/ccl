@@ -1322,7 +1322,7 @@ Or something. Right? ~s ~s" var varbits))
     (setf (afunc-lambdaform p) lambda-form)
     (with-program-error-handler
 	(lambda (c)
-	  (setf (afunc-acode p) (nx1-lambda () `(,(runtime-program-error-form c)) nil)))
+	  (setf (afunc-acode p) (nx1-lambda '(&rest args) `(args ,(runtime-program-error-form c)) nil)))
       (handler-bind ((warning (lambda (c)
 				(nx1-whine :program-error c)
 				(muffle-warning c)))
