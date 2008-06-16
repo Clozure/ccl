@@ -432,11 +432,11 @@ NSObjects describe themselves in more detail than others."
       (with-cstrs ((cnamestring namestring))
         (with-nsstr (nsnamestring cnamestring (length namestring))
           (with-autorelease-pool
-              (let* ((bundle (send (@class "NSBundle")
-                                   :bundle-with-path nsnamestring)))
+              (let* ((bundle (objc-message-send (@class "NSBundle")
+                                                "bundleWithPath:"
+                                                :id nsnamestring :id)))
                 (unless (%null-ptr-p bundle)
-                  (coerce-from-bool
-                   (objc-message-send bundle "load" :<BOOL>))))))))))
+                  (objc-message-send bundle "load" :<BOOL>)))))))))
 
 
 (defun load-objc-extension-framework (name)
