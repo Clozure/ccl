@@ -2400,7 +2400,7 @@ _spentry(stack_cons_rest_arg)
 	__(movl %nargs,%imm1_l)
 	__(subl %imm0_l,%imm1_l)
 	__(movl $nil_value,%arg_z_l)
-	__(je 2f)	/* empty list ; make an empty TSP frame   */
+	__(jle 2f)	/* empty list ; make an empty TSP frame   */
 	__(addq %imm1,%imm1)
 	__(cmpq $(tstack_alloc_limit-dnode_size),%imm1)
 	__(ja 3f)	/* make empty frame, then heap-cons   */
