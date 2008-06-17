@@ -120,6 +120,7 @@
 (objc:defmethod (#/toggleConsole: :void) ((self lisp-application) sender)
   (let* ((console (console self)))
     (unless (%null-ptr-p console)
+      (mark-console-output-available console nil)
       (if (setf (console-window-hidden-by-user console) (#/isVisible console))
         (#/orderOut: console sender)
         (#/orderFront: console sender)))))
@@ -131,8 +132,8 @@
            (let* ((console (console self)))
              (unless (%null-ptr-p console)
                (if (#/isVisible console)
-                 (#/setTitle: item #@"Hide Console")
-                 (#/setTitle: item #@"Show Console"))
+                 (#/setTitle: item #@"Hide System Console")
+                 (#/setTitle: item #@"Show System Console"))
                t)))
           (t (call-next-method item)))))
 

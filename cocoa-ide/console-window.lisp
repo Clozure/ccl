@@ -11,8 +11,10 @@
    (nextra :foreign-type :int)
    (translatebuf :foreign-type :address)
    (bufsize :foreign-type :int)
-   (hidden-by-user :initform nil :accessor console-window-hidden-by-user))
+   (hidden-by-user :initform t :accessor console-window-hidden-by-user))
   (:metaclass ns:+ns-object))
+
+(defconstant $system-console-menu-item-tag 1)
 
 
 ;;; Insert/append a string to the console-window's text view,
@@ -20,10 +22,20 @@
 
 (objc:defmethod (#/insertString: :void) ((self console-window) string)
   (with-slots ((tv typeout-view)) self
-    (unless (console-window-hidden-by-user self)
+    (if (console-window-hidden-by-user self)
+      (mark-console-output-available self t)
       (#/makeKeyAndOrderFront: self +null-ptr+))
-    (#/insertString: (typeout-view-text-view tv) string)))    
+    (#/insertString: (typeout-view-text-view tv) string)))
 
+(defmethod mark-console-output-available ((self console-window) available-p)
+  (let* ((menu (#/windowsMenu *nsapp*))
+         (menu-ref (ccl::external-call "__NSGetCarbonMenu" :address menu :address))
+         (index (#/indexOfItemWithTag: menu $system-console-menu-item-tag)))
+    (when (< index 0)
+      (setq index (#/indexOfItemWithTitle: menu #@"Show System Console")))
+    (when (> index 0)
+      (ccl::external-call "_SetItemMark" :id menu-ref :integer (1+ index)
+                          :integer (if available-p #$diamondMark 0)))))
 
 ;;; Process a chunkful of data
 (objc:defmethod (#/processData: :void) ((self console-window) data)
