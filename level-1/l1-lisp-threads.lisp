@@ -282,9 +282,12 @@
   (let* ((tcr (macptr->fixnum
                (ff-call
                 (%kernel-import target::kernel-import-newthread)
-                :unsigned-fullword cs-size
-                :unsigned-fullword vs-size
-                :unsigned-fullword ts-size
+                #+64-bit-target :unsigned-doubleword
+                #+32-bit-target :unsigned-fullword cs-size
+                #+64-bit-target :unsigned-doubleword
+                #+32-bit-target :unsigned-fullword vs-size
+                #+64-bit-target :unsigned-doubleword
+                #+32-bit-target :unsigned-fullword ts-size
                 :address))))
     (declare (fixum tcr))
     (if (zerop tcr)
