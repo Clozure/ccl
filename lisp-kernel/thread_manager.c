@@ -733,8 +733,8 @@ TCR *
 new_tcr(natural vstack_size, natural tstack_size)
 {
   extern area
-    *allocate_vstack_holding_area_lock(unsigned),
-    *allocate_tstack_holding_area_lock(unsigned);
+    *allocate_vstack_holding_area_lock(natural),
+    *allocate_tstack_holding_area_lock(natural);
   area *a;
   int i;
   sigset_t sigmask;
@@ -971,17 +971,17 @@ create_stack(int size)
 }
 #else
 Ptr
-create_stack(int size)
+create_stack(natural size)
 {
   Ptr p;
   size=align_to_power_of_2(size, log2_page_size);
   p = (Ptr) mmap(NULL,
-		     (size_t)size,
-		     PROT_READ | PROT_WRITE | PROT_EXEC,
-		     MAP_PRIVATE | MAP_ANON | MAP_GROWSDOWN,
-		     -1,	/* Darwin insists on this when not mmap()ing
-				 a real fd */
-		     0);
+                 (size_t)size,
+                 PROT_READ | PROT_WRITE | PROT_EXEC,
+                 MAP_PRIVATE | MAP_ANON | MAP_GROWSDOWN,
+                 -1,	/* Darwin insists on this when not mmap()ing
+                           a real fd */
+                 0);
   if (p != (Ptr)(-1)) {
     *((size_t *)p) = size;
     return p;
@@ -992,7 +992,7 @@ create_stack(int size)
 #endif
 
 void *
-allocate_stack(unsigned size)
+allocate_stack(natural size)
 {
   return create_stack(size);
 }
@@ -1074,7 +1074,7 @@ void *
 lisp_thread_entry(void *param)
 {
   thread_activation *activation = (thread_activation *)param;
-  TCR *tcr = new_tcr(activation->vsize, activation->vsize);
+  TCR *tcr = new_tcr(activation->vsize, activation->tsize);
   sigset_t mask, old_mask;
 
   sigemptyset(&mask);
