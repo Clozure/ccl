@@ -1239,85 +1239,51 @@
 ; for its test-not fn, so I special cased the call to member. --- cfry
 
 (defun remove-duplicates (sequence &key (test #'eql) test-not (start 0) 
-      from-end (end (length sequence)) key)
+      from-end end key)
   "The elements of SEQUENCE are compared pairwise, and if any two match,
    the one occurring earlier is discarded, unless FROM-END is true, in
    which case the one later in the sequence is discarded. The resulting
    sequence is returned.
 
    The :TEST-NOT argument is deprecated."
+  (setq end (check-sequence-bounds sequence start end))
   (delete-duplicates (copy-seq sequence) :from-end from-end :test test
                      :test-not test-not :start start :end end :key key))
 
 ;;; Delete-Duplicates:
 
-(defresource *eq-hash-resource* :constructor (make-hash-table :test #'eq)
-  :destructor #'clrhash)
-
-(defresource *eql-hash-resource* :constructor (make-hash-table :test #'eql)
-  :destructor #'clrhash)
-
-(defresource *equal-hash-resource* :constructor (make-hash-table :test #'equal)
-  :destructor #'clrhash)
-
-(defresource *equalp-hash-resource* :constructor (make-hash-table :test #'equalp)
-  :destructor #'clrhash)
-
 (defun list-delete-duplicates* (list test test-not key from-end start end)
-  ;(%print "test:" test "test-not:" test-not "key:" key)
-  (let (res)
-    (cond 
-     ((and (> (- end start) 10) (not test-not) ;(eq key #'identity)
-           (cond ((or (eq test 'eq)(eq test #'eq))(setq res *eq-hash-resource*))
-                 ((or (eq test 'eql)(eq test #'eql))(setq res *eql-hash-resource*))
-                 ((or (eq test 'equal)(eq test  #'equal))
-                  (setq res *equal-hash-resource*))
-                 ((or (eq test 'equalp)(eq test #'equalp))
-                  (setq res *equalp-hash-resource*))))
-      (when (not from-end)(setq list (nreverse list))) ; who cares about which end?
-      (let* (prev)
-        (using-resource (table res)
-          (do* ((rest (nthcdr start list) (%cdr rest))
-                (index start (%i+ 1 index)))
-               ((or (eq index end)(null rest)))
-            (declare (fixnum index start end))
-            (let ((thing (funcall key (%car rest))))
-              (cond ((gethash thing table)
-                     (%rplacd prev (%cdr rest)))
-                    (t (setf (gethash thing table) t)
-                       (setq prev rest))))))
-        (if from-end list (nreverse list))))
-     (T 
-      (let ((handle (cons nil list)))
-        (do ((current  (nthcdr start list) (cdr current))
-             (previous (nthcdr start handle))
-             (index start (1+ index)))
-            ((or (= index end) (null current)) 
-             (cdr handle))
-          ;(%print "outer loop top current:" current "previous:" previous)
-          (if (do ((x (if from-end 
-                        (nthcdr (1+ start) handle)
-                        (cdr current))
-                      (cdr x))
-                   (i (1+ index) (1+ i)))
-                  ((or (null x) 
-                       (and (not from-end) (= i end)) 
-                       (eq x current)) 
-                   nil)
-                ;(%print "inner loop top x:" x "i:" i)
-                (if (list-delete-duplicates*-aux current x test test-not key)		                         
-                  (return t)))
-            (rplacd previous (cdr current))
-            (setq previous (cdr previous)))))))))
+  ;;(%print "test:" test "test-not:" test-not "key:" key)
+  (let ((handle (cons nil list)))
+    (do ((current  (nthcdr start list) (cdr current))
+         (previous (nthcdr start handle))
+         (index start (1+ index)))
+        ((or (= index end) (null current)) 
+         (cdr handle))
+      ;;(%print "outer loop top current:" current "previous:" previous)
+      (if (do ((x (if from-end 
+                    (nthcdr (1+ start) handle)
+                    (cdr current))
+                  (cdr x))
+               (i (1+ index) (1+ i)))
+              ((or (null x) 
+                   (and (not from-end) (= i end)) 
+                   (eq x current)) 
+               nil)
+            ;;(%print "inner loop top x:" x "i:" i)
+            (if (list-delete-duplicates*-aux current x test test-not key)
+              (return t)))
+        (rplacd previous (cdr current))
+        (setq previous (cdr previous))))))
 
 (defun list-delete-duplicates*-aux (current x test test-not key)
-     (if test-not
-       (not (funcall test-not 
-                     (funcall key (car current))
-                     (funcall key (car x))))
-       (funcall test 
-                (funcall key (car current)) 
-                (funcall key (car x)))))
+  (if test-not
+    (not (funcall test-not 
+                  (funcall key (car current))
+                  (funcall key (car x))))
+    (funcall test 
+             (funcall key (car current)) 
+             (funcall key (car x)))))
 
 
 (defun vector-delete-duplicates* (vector test test-not key from-end start end 
@@ -1342,11 +1308,11 @@
    discarded.  The resulting sequence, which may be formed by destroying the
    given sequence, is returned.
    Sequences of type STR have a NEW str returned."
-  (unless end (setq end (length sequence)))
+  (setq end (check-sequence-bounds sequence start end))
   (unless key (setq key #'identity))
   (seq-dispatch sequence
     (if sequence
-	      (list-delete-duplicates* sequence test test-not key from-end start end))
+      (list-delete-duplicates* sequence test test-not key from-end start end))
     (vector-delete-duplicates* sequence test test-not key from-end start end)))
 
 (defun list-substitute* (pred new list start end count key 
