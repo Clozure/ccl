@@ -165,8 +165,8 @@ To avoid deallocation, use RETAINING-OBJECTS"))
 
 (defparameter *view-class-to-ns-class-map*
               '((static-text-view . ns:ns-text-field)
-                (text-input-view . ns:ns-text-field)
                 (password-input-view . ns:ns-secure-text-field)
+                (text-input-view . ns:ns-text-field)
                 (push-button-view . ns:ns-button)
                 (form-view . ns:ns-form)
                 (form-cell-view . ns:ns-form-cell)
