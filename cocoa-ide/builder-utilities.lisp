@@ -176,7 +176,7 @@
                        (minimum-system-version $default-info-plist-minimum-system-version)
                        (main-nib-file $default-info-plist-main-nib-file)
                        (principal-class $default-info-plist-principal-class))
-  (#/dictionaryWithObjectsAndKeys: ns:ns-dictionary
+  (#/dictionaryWithObjectsAndKeys: ns:ns-mutable-dictionary
                                    (%temp-nsstring development-region) $cfbundle-development-region-key
                                    (%temp-nsstring executable) $cfbundle-executable-key
                                    (%temp-nsstring getinfo-string) $cfbundle-getinfo-string-key
