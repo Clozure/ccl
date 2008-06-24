@@ -76,40 +76,7 @@
                       :toplevel-function toplevel-function
                       :prepend-kernel t)))
 
-;;; BUILD-APPLICATION-PROJECT
-;;; ------------------------------------------------------------------------
-;;; Runs a separate process that builds an application bundle and
-;;; saves an executable lisp image into it. Populates the bundle
-;;; directory with the files needed to run the lisp image when the
-;;; bundle is double-clicked. Pass a lisp source file as the value for
-;;; :project-file; the builder loads that file before saving the
-;;; application. The intended use of the project file is to load any
-;;; Lisp code that should be a part of the image before saving it.
 
-(defun build-application-project (&key
-                                  (name $default-application-bundle-name)
-                                  (project-file nil)
-                                  (type-string $default-application-type-string)
-                                  (creator-string $default-application-creator-string)
-                                  (directory (current-directory))
-                                  (copy-ide-resources t) ; whether to copy the IDE's resources
-                                  (info-plist nil) ; optional user-defined info-plist
-                                  (nibfiles nil) ; a list of user-specified nibfiles
-                                        ; to be copied into the app bundle
-                                  (main-nib-name) ; the name of the nib that is to be loaded
-                                        ; as the app's main. this name gets written
-                                        ; into the Info.plist on the "NSMainNibFile" key
-                                  (application-class 'gui::cocoa-application)
-                                  (toplevel-function nil))
-  ;; 1. build the command line for the remote ccl process
-  ;;  - require all the needed subsystems:
-  ;;    - cocoa
-  ;;    - builder-utilities
-  ;;    - build-application
-  ;;  - load the project file
-  ;;  - call build-application
-  ;; 2. run the remote process with the constructed command line
-  )
 
 #|
 (require :build-application)

@@ -79,6 +79,18 @@
 (defparameter $ns-principal-class-key #@"NSPrincipalClass")
 (defparameter $default-info-plist-principal-class "LispApplication")
 
+;;; keys for document-types dicts
+(defparameter $cfbundle-type-extensions-key #@"CFBundleTypeExtensions")
+(defparameter $cfbundle-type-icon-file-key #@"CFBundleTypeIconFile")
+(defparameter $cfbundle-type-mime-types-key #@"CFBundleTypeMIMETypes")
+(defparameter $cfbundle-type-name-key #@"CFBundleTypeName")
+(defparameter $cfbundle-type-ostypes-key #@"CFBundleTypeOSTypes")
+(defparameter $cfbundle-type-role-key #@"CFBundleTypeRole")
+(defparameter $ls-item-content-types-key #@"LSItemContentTypes")
+(defparameter $ls-type-is-package-key #@"LSTypeIsPackage")
+(defparameter $ns-document-class-key #@"NSDocumentClass")
+(defparameter $ns-exportable-as-key #@"NSExportableAs")
+
 ;;; COPY-NIBFILE (srcnib dest-directory &key (if-exists :overwrite))
 ;;; ------------------------------------------------------------------------
 ;;; Copies a nibfile (which may in fact be a directory) to the
@@ -195,6 +207,28 @@
                                    (%temp-nsstring main-nib-file) $ns-main-nib-file-key
                                    (%temp-nsstring principal-class) $ns-principal-class-key
                                    +null-ptr+))
+
+(defun make-doctype-dict (&key
+                          (extensions nil)
+                          (icon-file "Icons.icns")
+                          (mime-types nil)
+                          (type-name nil)
+                          (ostypes nil)
+                          (role nil)
+                          (ls-item-content-types nil)
+                          (bundlep nil)
+                          (document-class nil)
+                          (exportable-as nil))
+  ;; certain values are required
+  (assert (or ls-item-content-types extensions mime-types ostypes)
+          ()
+          "You must supply a list of strings as the value for one of the keywords :ls-item-content-types, :extensions, :mime-types, or :ostypes")
+  (assert type-name () "You must supply a string as a value for the keyword :type-name")
+  (assert role () 
+          "You must supply one of the strings \"Editor\", \"Viewer\", \"Shell\", or \"None\" as a value for the keyword :role")
+  (assert document-class ()
+          "You must supply the name of an NSDocument subclass (as a string) as the value of the keyword :document-class")
+  )
 
 ;;; READ-INFO-PLIST info-path
 ;;; ------------------------------------------------------------------------
