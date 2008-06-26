@@ -38,6 +38,20 @@
   (setq *interactive-abort-process* nil)
   )
 
+(defun clear-ioblock-streams ()
+  (%map-areas (lambda (o)
+                (if (typep o 'basic-stream)
+		  (let ((s (basic-stream.state o)))
+		    (when (and (typep s 'ioblock)
+                               (ioblock-device s)
+                               (>= (ioblock-device s) 0))
+		      (setf (basic-stream.state o) nil)))
+                  (if (typep o 'buffered-stream-mixin)
+		    (let ((s (slot-value o 'ioblock)))
+		      (when (and (typep s 'ioblock)
+                                 (ioblock-device s)
+                                 (>= (ioblock-device s) 0))
+			(setf (slot-value o 'ioblock) nil))))))))
 
 (defun save-application (filename
                          &rest rest
@@ -116,6 +130,7 @@
                          (dolist (f *save-exit-functions*)
                            (funcall f))
                          (kill-lisp-pointers)
+                         (clear-ioblock-streams)
                          (%set-toplevel
                           #'(lambda ()
                               (%set-toplevel #'(lambda ()

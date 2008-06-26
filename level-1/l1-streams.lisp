@@ -312,6 +312,8 @@
   (declare (ignore abort))
   (open-stream-p stream))
 
+(defmethod close-for-termination ((stream stream) abort)
+  (close stream :abort abort))
 
 
 (defmethod open-stream-p ((x t))
@@ -2487,9 +2489,12 @@
 	  (incf i avail)
 	  (decf need avail))))))
 
-(defun %ioblock-close (ioblock)
-  (let* ((stream (ioblock-stream ioblock)))
+;;; Thread must own ioblock lock(s).
+(defun %%ioblock-close (ioblock)
+  (when (ioblock-device ioblock)
+    (let* ((stream (ioblock-stream ioblock)))
       (funcall (ioblock-close-function ioblock) stream ioblock)
+      (setf (ioblock-device ioblock) nil)
       (setf (stream-ioblock stream) nil)
       (let* ((in-iobuf (ioblock-inbuf ioblock))
              (out-iobuf (ioblock-outbuf ioblock))
@@ -2509,7 +2514,24 @@
         (when out-iobuf
           (setf (io-buffer-buffer out-iobuf) nil
                 (io-buffer-bufptr out-iobuf) nil
-                (ioblock-outbuf ioblock) nil)))))
+                (ioblock-outbuf ioblock) nil))
+        t))))
+
+(defun %ioblock-close (ioblock)
+  (let* ((in-lock (ioblock-inbuf-lock ioblock))
+         (out-lock (ioblock-outbuf-lock ioblock)))
+    (if in-lock
+      (with-lock-grabbed (in-lock)
+        (if (and out-lock (not (eq out-lock in-lock)))
+          (with-lock-grabbed (out-lock)
+            (%%ioblock-close ioblock))
+          (%%ioblock-close ioblock)))
+      (if out-lock
+        (with-lock-grabbed (out-lock)
+          (%%ioblock-close ioblock))
+        (progn
+          (check-ioblock-owner ioblock)
+          (%%ioblock-close ioblock))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3354,7 +3376,7 @@
       (if auto-close
         (terminate-when-unreachable stream
                                     (lambda (stream)
-                                      (close stream :abort t))))
+                                      (close-for-termination stream t))))
       stream)))
 
   
@@ -4233,6 +4255,7 @@
                              (setf (pool.data %string-output-stream-ioblocks%)
                                    (ioblock-stream data)
                                    (ioblock-stream data) stream
+                                   (ioblock-device data) -1
                                    (ioblock-charpos data) 0
                                    (string-output-stream-ioblock-index data) 0))
                            data)))))
@@ -4245,7 +4268,6 @@
     (initialize-basic-stream stream :element-type 'character)
     (let* ((ioblock (create-string-output-stream-ioblock
                      :stream stream
-                     :device nil
                      :string string
                      :element-type 'character
                      :write-char-function write-char-function
@@ -4665,7 +4687,6 @@
            (ioblock (make-string-input-stream-ioblock
                      :stream stream
                      :offset offset
-                     :device nil
                      :string data
                      :start start
                      :index start
@@ -4786,10 +4807,19 @@
     (when ioblock
       (%ioblock-close ioblock))))
 
+
 (defmethod close :before ((stream buffered-output-stream-mixin) &key abort)
   (unless abort
     (when (open-stream-p stream)
       (stream-force-output stream))))
+
+(defmethod close-for-termination ((stream buffered-output-stream-mixin) abort)
+  ;; This method should only be invoked via the termination mechanism,
+  ;; so it can safely assume that there's no contention for the stream.
+  (let* ((ioblock (stream-ioblock stream nil)))
+    (when ioblock (setf (ioblock-owner ioblock) nil)))
+  (close stream :abort abort))
+
 
 (defmethod interactive-stream-p ((stream buffered-stream-mixin))
   (let* ((ioblock (stream-ioblock stream nil)))
@@ -4802,6 +4832,12 @@
     (when ioblock
       (%ioblock-close ioblock))))
 
+(defmethod close-for-termination  ((stream basic-stream) abort)
+  (let* ((ioblock (basic-stream.state stream)))
+    (when ioblock (setf (ioblock-owner ioblock) nil)))
+  (close stream :abort abort))
+
+  
 
 (defmethod open-stream-p ((stream basic-stream))
   (not (null (basic-stream.state stream))))
@@ -5465,11 +5501,11 @@
 (defun fd-stream-close (s ioblock)
   (cancel-terminate-when-unreachable s)
   (when (ioblock-dirty ioblock)
-    (stream-finish-output s))
+    (stream-force-output s))
   (let* ((fd (ioblock-device ioblock)))
     (when fd
       (setf (ioblock-device ioblock) nil)
-      (fd-close fd))))
+      (if (>= fd 0) (fd-close fd)))))
 
 (defun fd-stream-force-output (s ioblock count finish-p)
   (when (or (ioblock-dirty ioblock) finish-p)

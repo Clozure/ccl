@@ -3444,15 +3444,7 @@ to be at least partially steppable."
 
 (declare-arch-specific-macro area-succ)
 
-(defmacro with-ioblock-lock-grabbed ((lock)
-                                       &body body)
-  `(with-lock-grabbed (,lock)
-    ,@body))
 
-(defmacro with-ioblock-lock-grabbed-maybe ((lock)
-					   &body body)
-  `(with-lock-grabbed-maybe (,lock)
-    ,@body))
 
 
 (defmacro do-gc-areas ((area) &body body)
@@ -3467,12 +3459,20 @@ to be at least partially steppable."
          ,@body))))
 
 (defmacro with-ioblock-input-lock-grabbed ((ioblock) &body body)
-  `(with-lock-grabbed ((ioblock-inbuf-lock ,ioblock))
-    ,@body))
+  (let* ((i (gensym)))
+    `(let* ((,i ,ioblock))
+      (with-lock-grabbed ((ioblock-inbuf-lock ,i))
+        (cond ((ioblock-device ,i)
+               ,@body)
+              (t (stream-is-closed (ioblock-stream ,i))))))))
 
 (defmacro with-ioblock-output-lock-grabbed ((ioblock) &body body)
-  `(with-lock-grabbed ((ioblock-outbuf-lock ,ioblock))
-    ,@body))
+  (let* ((i (gensym)))
+    `(let* ((,i ,ioblock))
+      (with-lock-grabbed ((ioblock-outbuf-lock ,i))
+        (cond ((ioblock-device ,i)
+               ,@body)
+              (t (stream-is-closed (ioblock-stream ,i))))))))
   
 
 (defmacro with-stream-ioblock-input ((ioblock stream &key
@@ -3502,7 +3502,9 @@ to be at least partially steppable."
                                   (ioblock-inbuf-lock ,ioblock))))
       (if ,lock
         (with-lock-grabbed (,lock)
-          ,@body)
+          (cond ((ioblock-device ,ioblock)
+                 ,@body)
+                (t (stream-is-closed (ioblock-stream ,ioblock)))))
         (progn
           (check-ioblock-owner ,ioblock)
           ,@body)))))
@@ -3513,7 +3515,9 @@ to be at least partially steppable."
                                   (ioblock-outbuf-lock ,ioblock))))
       (if ,lock
         (with-lock-grabbed (,lock)
-          ,@body)
+          (cond ((ioblock-device ,ioblock)
+                 ,@body)
+                (t (stream-is-closed (ioblock-stream ,ioblock)))))
         (progn
           (check-ioblock-owner ,ioblock)
           ,@body)))))
@@ -3523,10 +3527,12 @@ to be at least partially steppable."
 (defmacro with-ioblock-output-locked-maybe ((ioblock) &body body)
   (let* ((lock (gensym)))
     `(let* ((,lock (locally (declare (optimize (speed 3) (safety 0)))
-                                  (ioblock-outbuf-lock ,ioblock))))
+                     (ioblock-outbuf-lock ,ioblock))))
       (if ,lock
-        (with-lock-grabbed-maybe (,lock)
-          ,@body)
+        (with-lock-grabbed (,lock)
+          (cond ((ioblock-device ,ioblock)
+                 ,@body)
+                (t (stream-is-closed (ioblock-stream ,ioblock)))))
         (progn
           (check-ioblock-owner ,ioblock)
           ,@body)))))
