@@ -833,7 +833,19 @@
   (movq (% rax) (% arg_z))
   (single-value-return))
   
+(defx86lapfunction %staticp ((x arg_z))
+  (check-nargs 1)
+  (ref-global tenured-area temp0)
+  (movq (% x) (% imm0))
+  (subq (@ target::area.low (% temp0)) (% imm0))
+  (shrq ($ target::dnode-shift) (% imm0))
+  (cmpq (@ target::area.static-dnodes (% temp0)) (% imm0))
+  (leaq (@ (% imm0) target::fixnumone) (% arg_z))
+  (movl ($ target::nil-value) (%l imm0))
+  (cmovaeq (% imm0) (% arg_z))
+  (single-value-return))
 
+        
 
   
 
