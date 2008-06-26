@@ -1025,6 +1025,19 @@
   (li imm0 target::reservation-discharge)
   (strcx. rzero rzero imm0)
   (blr))
+
+(defppclapfunction %staticp ((x arg_z))
+  (check-nargs 1)
+  (ref-global temp0 tenured-area)
+  (ldr imm1 target::area.low temp0)
+  (sub imm0 x imm1)
+  (ldr imm1 target::area.static-dnodes temp0)
+  (srri imm0 imm0 target::dnode-shift)
+  (li arg_z nil)
+  (cmplr imm0 imm1)
+  (bgelr)
+  (box-fixnum arg_z imm0)
+  (blr))
   
 
 ; end of ppc-misc.lisp
