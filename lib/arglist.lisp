@@ -204,7 +204,7 @@
               (opt)
               (keys))
       (let* ((rest nil)
-             (map (if (> pc target::arg-check-trap-pc-limit)
+             (map (if (and pc (> pc target::arg-check-trap-pc-limit))
                     (car (function-symbol-map lfun)))))
         (if (and map pc)
           (let ((total (+ nreq nopt (if (or restp lexprp) 1 0) (or nkeys 0)))
