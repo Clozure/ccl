@@ -3311,7 +3311,7 @@ to replace that class with ~s" name old-class new-class)
 (defmethod no-applicable-method (gf &rest args)
   (cerror "Try calling it again"
           "No applicable method for args:~% ~s~% to ~s" args gf)
-  (apply #'no-applicable-method gf args))
+  (apply gf args))
 
 
 (defmethod no-applicable-primary-method (gf methods)
