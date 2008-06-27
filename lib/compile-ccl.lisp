@@ -642,9 +642,11 @@
       ;; This loads the infrastructure
       (load "ccl:tests;ansi-tests;gclload1.lsp")
       ;; This loads the actual tests
-      (load "ccl:tests;ansi-tests;gclload2.lsp")
-      ;; And our own tests
-      (load "ccl:tests;ansi-tests;ccl.lsp"))))
+      (let ((redef-var (find-symbol "*WARN-IF-REDEFINE-TEST*" :REGRESSION-TEST)))
+	(progv (list redef-var) (list (if force nil (symbol-value redef-var)))
+	  (load "ccl:tests;ansi-tests;gclload2.lsp")
+	  ;; And our own tests
+	  (load "ccl:tests;ansi-tests;ccl.lsp"))))))
 
 (defun test-ccl (&key force (update t) verbose (catch-errors t))
   (with-preserved-working-directory ()
