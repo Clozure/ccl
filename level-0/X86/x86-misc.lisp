@@ -845,7 +845,13 @@
   (cmovaeq (% imm0) (% arg_z))
   (single-value-return))
 
-        
+(defx86lapfunction %static-inverse-cons ((n arg_z))
+  (check-nargs 1)
+  (ref-global tenured-area temp0)
+  (movq (@ target::area.low (% temp0)) (% imm0))
+  (leaq (@ target::fulltag-cons (% imm0) (% n) 2) (% arg_z))
+  (single-value-return))
+
 
   
 
