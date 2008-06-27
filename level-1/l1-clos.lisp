@@ -1438,10 +1438,7 @@ governs whether DEFCLASS makes that distinction or not.")
 (defmethod initialize-instance :before ((instance generic-function)
                                        &key &allow-other-keys)
 
-  (replace-function-code instance *gf-proto*)
-  (setf (gf.dcode instance) #'%%0-arg-dcode))
-        
-                                       
+  (setf (%gf-dcode instance)  #'%%0-arg-dcode))
 
 (defmethod initialize-instance :after ((gf standard-generic-function)
 				       &key
@@ -1704,8 +1701,7 @@ changing its name to ~s may have serious consequences." class new))
     (error "~S is not a funcallable instance" funcallable-instance))
   (unless (functionp function)
     (error "~S is not a function" function))
-  (replace-function-code funcallable-instance #'funcallable-trampoline)
-  (setf (gf.dcode funcallable-instance) function))
+  (setf (%gf-dcode funcallable-instance) function))
 
 (defmethod reinitialize-instance ((slotd slot-definition) &key &allow-other-keys)
   (error "Can't reinitialize ~s" slotd))
@@ -2029,9 +2025,6 @@ changing its name to ~s may have serious consequences." class new))
                  #'%%1st-two-arg-eql-method-hack-dcode)
                 (t
                  #'%%1st-arg-eql-method-hack-dcode)))))
-
-  
-  
 
 
 (defun maybe-hack-eql-methods (gf)

@@ -134,11 +134,11 @@
   (or (global-function-p function)
       (pascal-function-p function)
       (let ((name (function-name function)))
-        (and name (function-encapsulation name) name))
+        (and name (function-encapsulated-p name) name))
       (let ((caller function) next)
         (loop
           (setq next (gethash caller *function-parent-table*))
-          (if  next           
+          (if  next
             (cond ((consp next)
                    (when (null the-list)(push function the-list))
                    (return

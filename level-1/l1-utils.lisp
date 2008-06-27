@@ -377,8 +377,6 @@
   "This function simply returns what was passed to it."
   x)
 
-(%fhave 'find-unencapsulated-definition #'identity)
-
 (defun coerce-to-function (arg)
   (if (functionp arg)
     arg

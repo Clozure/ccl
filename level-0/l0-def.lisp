@@ -89,16 +89,6 @@
           (declare (ignore fn))
           nil))
 
-(%fhave '%traced-p  ;Redefined in encapsulate - used in l1-io
-        (qlfun bootstrapping-%traced-p (fn)
-          (declare (ignore fn))
-          nil))
-
-(%fhave '%advised-p  ;Redefined in encapsulate used in l1-io
-        (qlfun bootstrapping-%advised-p (fn)
-          (declare (ignore fn))
-          nil))
-
 (%fhave 'set-function-info (qlfun set-function-info  (name info)
                                   (if (typep info 'string)
                                     (set-documentation name 'function info))

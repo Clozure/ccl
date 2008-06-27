@@ -536,25 +536,19 @@
 )
 ;;;;;;;;;;;;;;;;;;;;;;;;;;; defmethod support ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(%fhave 'function-encapsulation ;Redefined in encapsulate
-        (qlfun bootstrapping-function-encapsulation (name)
-          (declare (ignore name))
-          nil))
-
 (%fhave '%move-method-encapsulations-maybe ; Redefined in encapsulate
         (qlfun boot-%move-method-encapsulations-maybe (m1 m2)
           (declare (ignore m1 m2))
           nil))
 
-
 (%fhave 'find-unencapsulated-definition  ;Redefined in encapsulate
-        (qlfun bootstrapping-unenecapsulated-def (spec)
-          (values
-           (typecase spec
-             (symbol (fboundp spec))
-             (method (%method-function spec))
-             (t spec))
-           spec)))
+        (qlfun bootstrapping-find-unencapsulated-definition (fn)
+	  fn))
+
+(%fhave 'function-encapsulated-p  ;Redefined in encapsulate
+        (qlfun bootstrapping-function-encapsulated-p (fn)
+	  (declare (ignore fn))
+          nil))
 
 (let* ((class-wrapper-random-state (make-random-state))
        (class-wrapper-random-state-lock (make-lock)))
@@ -566,11 +560,9 @@
 
 
 (defun %inner-method-function (method)
-  (let ((f (%method-function method)))
-    (when (function-encapsulation f)
-      (setq f (find-unencapsulated-definition f)))
-    (closure-function f)))
-
+  (closure-function
+   (find-unencapsulated-definition
+    (%method-function method))))
 
 (defun copy-method-function-bits (from to)
   (let ((new-bits (logior (logand (logior (lsh 1 $lfbits-method-bit)
@@ -707,10 +699,6 @@
     method))
         
 
-(defun forget-encapsulations (name)
-  (declare (ignore name))
-  nil)
-
 (defun %anonymous-method (function specializers qualifiers  lambda-list &optional documentation
                                    &aux name method-class)
   (let ((inner-function (closure-function function)))
@@ -775,9 +763,7 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 (defun %method-function-method (method-function)
   (setq method-function
         (closure-function
-         (if (function-encapsulation method-function)
-           (find-unencapsulated-definition method-function)
-           method-function)))
+         (find-unencapsulated-definition method-function)))
   (setq method-function (require-type method-function 'method-function))
   (lfun-name method-function))
 
@@ -1092,27 +1078,15 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
                   (min multi-method-index min-index)
                   multi-method-index)
                 0))
-        (let* ((old-dcode (%gf-dcode gf))
-               (encapsulated-dcode-cons (and (combined-method-p old-dcode)
-                                             (eq '%%call-gf-encapsulation 
-                                                 (function-name (%combined-method-dcode old-dcode)))
-                                             (cdr (%combined-method-methods old-dcode)))))
-          (when (or non-dt (neq dcode (if encapsulated-dcode-cons (cdr encapsulated-dcode-cons) old-dcode))
+        (let* ((old-dcode (%gf-dcode (find-unencapsulated-definition gf))))
+          (when (or non-dt
+		    (neq dcode old-dcode)
                     (neq multi-method-index (%gf-dispatch-table-argnum dt)))
-            (let* ((proto (if non-dt
-                            #'funcallable-trampoline
-                            (or (cdr (assq dcode dcode-proto-alist)) *gf-proto*))))
-              (clear-gf-dispatch-table dt)
-              (setf (%gf-dispatch-table-argnum dt) multi-method-index)
-              (if encapsulated-dcode-cons ; and more?
-                (let ((old-gf (car encapsulated-dcode-cons)))
-                  (if (not (typep old-gf 'generic-function))
-                    (error "Confused"))
-                  ;(setf (uvref old-gf 0)(uvref proto 0))
-                  (setf (cdr encapsulated-dcode-cons) dcode))
-                (progn 
-                  (setf (%gf-dcode gf) dcode)
-                  (replace-function-code gf proto))))))
+            (clear-gf-dispatch-table dt)
+            (setf (%gf-dispatch-table-argnum dt) multi-method-index)
+            (if (function-encapsulated-p gf)
+	      (%set-encapsulated-gf-dcode gf dcode)
+	      (setf (%gf-dcode gf) dcode))))
         (values dcode multi-method-index)))))
 
 (defun inherits-from-standard-generic-function-p (class)

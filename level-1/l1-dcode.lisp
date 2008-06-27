@@ -514,12 +514,15 @@
   ;(require-type gf 'standard-generic-function)
   (gf.dcode gf))
 
-(defun %set-gf-dcode (gf val)
-  (setf (gf.dcode gf) val))
+(defun %set-gf-dcode (gf dcode)
+  (let ((gf (require-type gf 'standard-generic-function))
+        (dcode (require-type dcode 'function)))
+    (replace-function-code gf (or (cdr (assq dcode dcode-proto-alist))
+                                  #'funcallable-trampoline))
+    (setf (gf.dcode gf) dcode)))
 
 (defun %set-gf-dispatch-table (gf val)
   (setf (gf.dispatch-table gf) val))
-
 
 (defun %combined-method-methods  (cm)
   ;(require-type cm 'combined-method)
@@ -824,7 +827,7 @@
       (when (null args) (dcode-too-few-args 0 (%gf-dispatch-table-gf dt)))
       (let ((method (%find-1st-arg-combined-method dt (%car args))))
         (apply method args)))))
-
+(register-dcode-proto #'%%1st-arg-dcode *gf-proto*)
 
 (defun %%one-arg-dcode (dt  arg)
   (let ((method (%find-1st-arg-combined-method dt arg)))
@@ -853,7 +856,7 @@
       (when (>= argnum args-len) (dcode-too-few-args args-len (%gf-dispatch-table-gf dt)))
       (let ((method (%find-nth-arg-combined-method dt (%lexpr-ref args args-len argnum) args)))
 	(%apply-lexpr-tail-wise method args)))))
-
+(register-dcode-proto #'%%nth-arg-dcode *gf-proto*)
 
 (defun 0-arg-combined-method-trap (gf)
   (let* ((methods (%gf-methods gf))

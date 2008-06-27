@@ -1232,6 +1232,16 @@ result-type-keyword is :VOID or NIL"
   (bctr))
 
 
+(defun %copy-function (proto &optional target)
+  (let* ((total-size (uvsize proto))
+         (new (or target (allocate-typed-vector :function total-size))))
+    (declare (fixnum total-size))
+    (when target
+      (unless (eql total-size (uvsize target))
+        (error "Wrong size target ~s" target)))
+    (%copy-gvector-to-gvector proto 0 new 0 total-size)
+    new))
+
 (defun replace-function-code (target-fn proto-fn)
   (if (typep target-fn 'function)
     (if (typep proto-fn 'function)
