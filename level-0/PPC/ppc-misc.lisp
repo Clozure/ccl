@@ -1038,6 +1038,15 @@
   (bgelr)
   (box-fixnum arg_z imm0)
   (blr))
+
+(defppclapfunction %static-inverse-cons ((n arg_z))
+  (check-nargs 1)
+  (ref-global temp0 tenured-area)
+  (ldr imm1 target::area.low temp0)
+  (add imm1 n imm1)
+  (add imm1 n imm1)
+  (la arg_z target::fulltag-cons imm1)
+  (blr))
   
 
 ; end of ppc-misc.lisp
