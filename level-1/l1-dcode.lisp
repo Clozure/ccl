@@ -515,7 +515,7 @@
   (gf.dcode gf))
 
 (defun %set-gf-dcode (gf dcode)
-  (let ((gf (require-type gf 'standard-generic-function))
+  (let ((gf (require-type gf 'funcallable-standard-object))
         (dcode (require-type dcode 'function)))
     (replace-function-code gf (or (cdr (assq dcode dcode-proto-alist))
                                   #'funcallable-trampoline))
