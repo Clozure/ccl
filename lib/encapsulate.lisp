@@ -117,6 +117,11 @@
 (defun function-encapsulated-p (fn-or-method)
   (get-encapsulation fn-or-method))
 
+(defun %encap-fboundp (thing)
+  (etypecase thing
+    (symbol (fboundp thing))
+    (method (%method-function thing))))
+  
 (defun %encap-binding (thing)
   (require-type (etypecase thing
                   (symbol (fboundp thing))
@@ -164,20 +169,25 @@
 
 (defun remove-encapsulation (cap)
   (let* ((owner (encapsulation-owner cap))
-         (cur-def (%encap-binding owner))
+         (cur-def (%encap-fboundp owner))
          (old-def (encapsulation-old-def cap)))
-    (assert (eq cap (get-encapsulation cur-def)))
-    (set-encapsulation-owner old-def owner)
     (typecase owner
       (symbol
-       (cond ((standard-generic-function-p cur-def)
+       (cond ((or (null cur-def)
+                  (not (eq cap (get-encapsulation cur-def))))
+              ;; rebound behind our back, oh well.
+              nil)
+             ((standard-generic-function-p cur-def)
               (remhash (%gf-dcode cur-def) *encapsulation-table*)
+              (set-encapsulation-owner old-def owner)
               (setf (%gf-dcode cur-def) (%gf-dcode old-def)))
              (t
               (remhash cur-def *encapsulation-table*)
+              (set-encapsulation-owner old-def owner)
               (%fhave owner old-def))))
       (method
        (remhash cur-def *encapsulation-table*)
+       (set-encapsulation-owner old-def owner)
        (setf (%method-function owner) old-def)
        (remove-obsoleted-combined-methods owner)))))
 
