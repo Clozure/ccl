@@ -66,6 +66,20 @@
 (defvar *fasl-target-big-endian* *fasl-host-big-endian*)
 (defvar *fcomp-external-format* :default)
 
+(defvar *fasl-break-on-program-errors* #+ccl-0711 nil #-ccl-0711 :defer
+  "Controls what happens when the compiler detects PROGRAM-ERROR's during file compilation.
+
+  If T, the compiler signals an error immediately when it detects the program-error.
+
+  If :DEFER, program errors are reported as compiler warnings, and in addition, an error
+    is signalled at the end of file compilation.  This allows all warnings for the file
+    to be reported, but prevents the creation of a fasl file.
+
+  If NIL, program errors are treated the same as any other error condition detected by
+   the compiler, i.e. they are reported as compiler warnings and do not cause any
+   error to be signalled at compile time.")
+  
+
 (defvar *compile-print* nil ; Might wind up getting called *compile-FILE-print*
   "The default for the :PRINT argument to COMPILE-FILE.")
 
@@ -109,7 +123,8 @@ Will differ from *compiling-file* during an INCLUDE")
                          (save-local-symbols *fasl-save-local-symbols*)
                          (save-doc-strings *fasl-save-doc-strings*)
                          (save-definitions *fasl-save-definitions*)
-			 (external-format :default)
+                         (break-on-program-errors *fasl-break-on-program-errors*)
+                         (external-format :default)
                          force)
   "Compile INPUT-FILE, producing a corresponding fasl file and returning
    its filename."
@@ -120,7 +135,9 @@ Will differ from *compiling-file* during an INCLUDE")
     (loop
 	(restart-case
 	 (return (%compile-file src output-file verbose print load features
-				save-local-symbols save-doc-strings save-definitions force backend external-format))
+                                save-local-symbols save-doc-strings save-definitions
+                                break-on-program-errors
+                                force backend external-format))
 	 (retry-compile-file ()
 			     :report (lambda (stream) (format stream "Retry compiling ~s" src))
 			     nil)
@@ -130,7 +147,9 @@ Will differ from *compiling-file* during an INCLUDE")
 
 
 (defun %compile-file (src output-file verbose print load features
-                          save-local-symbols save-doc-strings save-definitions force target-backend external-format
+                          save-local-symbols save-doc-strings save-definitions
+                          break-on-program-errors
+                          force target-backend external-format
 			  &aux orig-src)
 
   (setq orig-src (merge-pathnames src))
@@ -165,6 +184,7 @@ Will differ from *compiling-file* during an INCLUDE")
              (*fasl-save-local-symbols* save-local-symbols)
              (*fasl-save-doc-strings* save-doc-strings)
              (*fasl-save-definitions* save-definitions)
+             (*fasl-break-on-program-errors* break-on-program-errors)
              (*fcomp-warnings-header* nil)
              (*compile-file-pathname* orig-src)
              (*compile-file-truename* (truename src))
@@ -191,12 +211,17 @@ Will differ from *compiling-file* during an INCLUDE")
             (when *compile-verbose* (fresh-line))
             (multiple-value-bind (any harsh) (report-deferred-warnings)
               (setq *fasl-warnings-signalled-p* (or *fasl-warnings-signalled-p* any)
-                    *fasl-non-style-warnings-signalled-p* (or *fasl-non-style-warnings-signalled-p* harsh))))
+                    *fasl-non-style-warnings-signalled-p* (if (eq harsh :very) :very
+							      (or *fasl-non-style-warnings-signalled-p* harsh)))))
+          (when (and *fasl-break-on-program-errors* (eq *fasl-non-style-warnings-signalled-p* :very))
+            (cerror "create the output file despite the errors"
+                    "Serious errors encountered during compilation of ~s"
+                    src))
           (fasl-scan-forms-and-dump-file forms output-file lexenv)))
       (when load (load output-file :verbose (or verbose *load-verbose*)))
       (values (truename (pathname output-file)) 
               *fasl-warnings-signalled-p* 
-              *fasl-non-style-warnings-signalled-p*))))
+              (and *fasl-non-style-warnings-signalled-p* t)))))
 
 (defvar *fcomp-locked-hash-tables*)
 (defvar *fcomp-load-forms-environment* nil)
@@ -838,7 +863,8 @@ Will differ from *compiling-file* during an INCLUDE")
 ;;; file.  The result will not be funcalled.  This really shouldn't bother
 ;;; making an lfun, but it's simpler this way...
 (defun fcomp-named-function (def name env)
-  (let* ((env (new-lexical-environment env)))
+  (let* ((env (new-lexical-environment env))
+         (*nx-break-on-program-errors* (not (memq *fasl-break-on-program-errors* '(nil :defer)))))
     (multiple-value-bind (lfun warnings)
                          (compile-named-function
                           def name
