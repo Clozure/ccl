@@ -187,7 +187,7 @@ ensure_stack_limit(size_t stack_size)
 */
 
 BytePtr
-allocate_lisp_stack(unsigned useable,
+allocate_lisp_stack(natural useable,
                     unsigned softsize,
                     unsigned hardsize,
                     lisp_protection_kind softkind,
@@ -197,7 +197,7 @@ allocate_lisp_stack(unsigned useable,
                     protected_area_ptr *softp,
                     protected_area_ptr *hardp)
 {
-  void *allocate_stack(unsigned);
+  void *allocate_stack(natural);
   void free_stack(void *);
   natural size = useable+softsize+hardsize;
   natural overhead;
@@ -247,7 +247,7 @@ allocate_lisp_stack(unsigned useable,
 */
 area *
 allocate_lisp_stack_area(area_code stack_type,
-                         unsigned useable, 
+                         natural usable,
                          unsigned softsize, 
                          unsigned hardsize, 
                          lisp_protection_kind softkind, 
@@ -259,7 +259,7 @@ allocate_lisp_stack_area(area_code stack_type,
   area *a = NULL;
   protected_area_ptr soft_area=NULL, hard_area=NULL;
 
-  bottom = allocate_lisp_stack(useable, 
+  bottom = allocate_lisp_stack(usable, 
                                softsize, 
                                hardsize, 
                                softkind, 
@@ -300,7 +300,7 @@ register_cstack_holding_area_lock(BytePtr bottom, natural size)
   
 
 area*
-allocate_vstack_holding_area_lock(unsigned usable)
+allocate_vstack_holding_area_lock(natural usable)
 {
   return allocate_lisp_stack_area(AREA_VSTACK, 
 				  usable > MIN_VSTACK_SIZE ?
@@ -312,7 +312,7 @@ allocate_vstack_holding_area_lock(unsigned usable)
 }
 
 area *
-allocate_tstack_holding_area_lock(unsigned usable)
+allocate_tstack_holding_area_lock(natural usable)
 {
   return allocate_lisp_stack_area(AREA_TSTACK, 
                                   usable > MIN_TSTACK_SIZE ?

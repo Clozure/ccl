@@ -215,6 +215,9 @@ atomic_ior(natural*, natural);
 
 extern int thread_suspend_signal, thread_resume_signal;
 
+void *
+allocate_stack(natural);
+
 void
 suspend_resume_handler(int, siginfo_t *, ExceptionInformation *);
 
