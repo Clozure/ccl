@@ -717,14 +717,29 @@ return that address encapsulated in a MACPTR, else returns NIL."
       (let* ((win nil)
 	     (lose nil))
 	(dolist (lib *shared-libraries*)
-	  (let* ((map (shlib.map lib)))
+	  (let* ((map (shlib.map lib))
+                 (handle (shlib.handle lib)))
 	    (unless map
 	      (with-cstrs ((soname (shlib.soname lib)))
-		(setq map (ff-call
-			   (%kernel-import target::kernel-import-GetSharedLibrary)
-			   :address soname
-			   :unsigned-fullword *dlopen-flags*
-			   :address))
+		(setq handle
+                      (ff-call
+                       (%kernel-import target::kernel-import-GetSharedLibrary)
+                       :address soname
+                       :unsigned-fullword *dlopen-flags*
+                       :address))
+                #-freebsd-target (setq map handle)
+                #+freebsd-target (setq map
+                                       (if (%null-ptr-p handle)
+                                      handle
+                                      (rlet ((p :address))
+                                        (if (eql 0 (ff-call
+                                                    (foreign-symbol-entry "dlinfo")
+                                                    :address handle
+                                                    :int #$RTLD_DI_LINKMAP
+                                                    :address p
+                                                    :int))
+                                          (pref p :address)
+                                          (%null-ptr)))))
 		(if (%null-ptr-p map)
 		  (setq lose t)
 		  (setf (shlib.pathname lib)
@@ -732,6 +747,7 @@ return that address encapsulated in a MACPTR, else returns NIL."
 			(shlib.base lib)
 			(%int-to-ptr (pref map :link_map.l_addr))
 			(shlib.map lib) map
+                        (shlib.handle lib) handle
 			win t))))))
 	(when (or (not lose) (not win)) (return)))))
 )
