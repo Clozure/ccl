@@ -507,12 +507,7 @@ is :UNIX.")
 ;;; to read this time is (+ where-it-was-last-time what-we-read-last-time.)
 (defun input-file-ioblock-advance (stream file-ioblock read-p)
   (let* ((newpos (+ (file-ioblock-octet-pos file-ioblock)
-		    (io-buffer-count (file-ioblock-inbuf file-ioblock))))
-	 (curpos (ioblock-octets-to-elements
-		  file-ioblock
-		  (file-octet-filepos file-ioblock))))
-    (unless (eql newpos curpos)
-      (error "Expected newpos to be ~d, fd is at ~d" newpos curpos))
+		    (io-buffer-count (file-ioblock-inbuf file-ioblock)))))
     (setf (file-ioblock-octet-pos file-ioblock) newpos)
     (fd-stream-advance stream file-ioblock read-p)))
 
@@ -534,14 +529,9 @@ is :UNIX.")
 
 		    
 (defun output-file-force-output (stream file-ioblock count finish-p)
-  ;; Check to see if we're where we think we should be.
-  (let* ((curpos (file-ioblock-octet-pos file-ioblock)))
-    (unless (eql curpos (file-octet-filepos file-ioblock))
-      (error "Expected newpos to be ~d, fd is at ~d"
-	     curpos (file-octet-filepos file-ioblock)))
-    (let* ((n (fd-stream-force-output stream file-ioblock count finish-p)))
-      (incf (file-ioblock-octet-pos file-ioblock) (or n 0))
-      n)))
+  (let* ((n (fd-stream-force-output stream file-ioblock count finish-p)))
+    (incf (file-ioblock-octet-pos file-ioblock) (or n 0))
+    n))
 
 ;;; Can't be sure where the underlying fd is positioned, so seek first.
 (defun io-file-force-output (stream file-ioblock count finish-p)
