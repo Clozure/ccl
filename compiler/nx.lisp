@@ -161,8 +161,13 @@
 
 (defparameter *nx-discard-xref-info-hook* nil)
 
-(defun compile-named-function
-    (def &optional name env keep-lambda keep-symbols policy *load-time-eval-token* target)
+(defun compile-named-function (def &rest args)
+ ;; -- TEMP -- bootstrapping a version using keyword args.
+ (ignore-errors
+   (destructuring-bind (&key name env keep-lambda keep-symbols policy load-time-eval-token target) args
+     (setq args (list name env keep-lambda keep-symbols policy load-time-eval-token target))))
+ (destructuring-bind (&optional name env keep-lambda keep-symbols policy *load-time-eval-token* target) args
+ ;; 
   (when (and name *nx-discard-xref-info-hook*)
     (funcall *nx-discard-xref-info-hook* name))
   (setq 
@@ -186,6 +191,7 @@
             (if keep-lambda (if (lambda-expression-p keep-lambda) keep-lambda def))
             keep-symbols)))))
   (values (afunc-lfun def) (afunc-warnings def)))
+)
 
 
   
