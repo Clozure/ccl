@@ -599,7 +599,7 @@
 	      ,@body)
 	 (cwd ,wd)))))
 
-(defun ensure-tests-loaded (&key force update)
+(defun ensure-tests-loaded (&key force update ansi ccl)
   (unless (and (find-package "REGRESSION-TEST") (not force))
     (if (probe-file "ccl:tests;ansi-tests;")
       (when update
@@ -644,17 +644,18 @@
       ;; This loads the actual tests
       (let ((redef-var (find-symbol "*WARN-IF-REDEFINE-TEST*" :REGRESSION-TEST)))
 	(progv (list redef-var) (list (if force nil (symbol-value redef-var)))
-	  (load "ccl:tests;ansi-tests;gclload2.lsp")
+          (when ansi
+            (load "ccl:tests;ansi-tests;gclload2.lsp"))
 	  ;; And our own tests
-	  (load "ccl:tests;ansi-tests;ccl.lsp"))))))
+          (when ccl
+            (load "ccl:tests;ansi-tests;ccl.lsp")))))))
 
-(defun test-ccl (&key force (update t) verbose (catch-errors t))
+(defun test-ccl (&key force (update t) verbose (catch-errors t) (ansi t) (ccl t))
   (with-preserved-working-directory ()
     (let* ((*package* (find-package "CL-USER")))
-      (ensure-tests-loaded :force force :update update)
+      (ensure-tests-loaded :force force :update update :ansi ansi :ccl ccl)
       (cwd "ccl:tests;ansi-tests;")
       (let ((do-tests (find-symbol "DO-TESTS" "REGRESSION-TEST"))
-            (*suppress-compiler-warnings* t)
             (*print-catch-errors* nil))
         (time (funcall do-tests :verbose verbose :compile t :catch-errors catch-errors)))
       ;; Ok, here we would run any of our own tests.
