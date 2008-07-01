@@ -1622,11 +1622,10 @@ Or something. Right? ~s ~s" var varbits))
       (nx1-typed-form form *nx-lexical-environment*))))
 
 (defun nx1-typed-form (original env)
-  (let ((form (with-program-error-handler
-		  (lambda (c)
-		    (nx-transform (runtime-program-error-form c) env))
-		(nx-transform original env))))
-    (nx1-transformed-form form env)))
+  (with-program-error-handler
+      (lambda (c)
+        (nx1-transformed-form (nx-transform (runtime-program-error-form c) env) env))
+    (nx1-transformed-form (nx-transform original env) env)))
 
 (defun nx1-transformed-form (form &optional (env *nx-lexical-environment*))
   (if (consp form)
