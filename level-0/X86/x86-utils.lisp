@@ -500,17 +500,21 @@ be somewhat larger than what was specified)."
   (single-value-return))
 
 (defx86lapfunction true ()
+  (pop (% ra0))
   (subq ($ '3) (% nargs.q))
   (leaq (@ '2 (% rsp) (% nargs.q)) (% imm0))
   (cmovaq (% imm0) (% rsp))
   (movl ($ x8664::t-value) (%l arg_z))
+  (push (% ra0))
   (single-value-return))
 
 (defx86lapfunction false ()
+  (pop (% ra0))
   (subq ($ '3) (% nargs.q))
   (leaq (@ '2 (% rsp) (% nargs.q)) (% imm0))
   (cmovaq (% imm0) (% rsp))
   (movl ($ x8664::nil) (%l arg_z))
+  (push (% ra0))
   (single-value-return))
 
 
