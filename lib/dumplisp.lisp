@@ -130,6 +130,7 @@
                          (dolist (f *save-exit-functions*)
                            (funcall f))
                          (kill-lisp-pointers)
+                         #-ppc-target
                          (clear-ioblock-streams)
                          (%set-toplevel
                           #'(lambda ()
