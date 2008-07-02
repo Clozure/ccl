@@ -29,12 +29,20 @@
 ;;;; Standard CL IO frobs
 
 
+(declaim (inline %real-print-stream))
+(defun %real-print-stream (&optional (stream nil))
+  (cond ((null stream)
+         *standard-output*)
+        ((eq stream t)
+         *terminal-io*)
+        (t stream)))
+
 ;;; OK, EOFP isn't CL ...
 (defun eofp (&optional (stream *standard-input*))
   (stream-eofp stream))
 
 (defun force-output (&optional stream)
-  (stream-force-output (real-print-stream stream))
+  (stream-force-output (%real-print-stream stream))
   nil)
 
 (defun listen (&optional (stream *standard-input*))
@@ -44,8 +52,11 @@
 (defun fresh-line (&optional (output-stream *standard-output*))
   "Output #\Newline only if the OUTPUT-STREAM is not already at the
 start of a line.  Return T if #\Newline needed."
-  (stream-fresh-line (real-print-stream output-stream)))
+  (stream-fresh-line (%real-print-stream output-stream)))
 
+(defun column (&optional stream)
+  (let* ((stream (%real-print-stream stream)))
+    (stream-line-column stream)))
 
 (defun clear-input (&optional input-stream)
   "Clear any available input from INPUT-STREAM."
@@ -54,18 +65,18 @@ start of a line.  Return T if #\Newline needed."
 
 (defun write-char (char &optional (output-stream nil))
   "Output CHAR to OUTPUT-STREAM."
-  (let* ((stream (real-print-stream output-stream)))
+  (let* ((stream (%real-print-stream output-stream)))
     (if (typep stream 'basic-stream)
       (let* ((ioblock (basic-stream-ioblock stream)))
         (funcall (ioblock-write-char-function ioblock) ioblock char))
-      (stream-write-char (real-print-stream output-stream) char))
+      (stream-write-char stream char))
     char))
 
 (defun write-string (string &optional output-stream &key (start 0 start-p)
 			    (end nil end-p))
   "Write the characters of the subsequence of STRING bounded by START
 and END to OUTPUT-STREAM."
-  (let* ((stream (real-print-stream output-stream)))
+  (let* ((stream (%real-print-stream output-stream)))
     (if (typep stream 'basic-stream)
       (let* ((ioblock (basic-stream-ioblock stream)))
         (with-ioblock-output-locked (ioblock) 
@@ -94,17 +105,16 @@ and END to OUTPUT-STREAM."
                           &key (start 0) (end (length string)))
   "Write the characters of the subsequence of STRING bounded by START
 and END to OUTPUT-STREAM then output a #\Newline at end."
-  (let ((stream (real-print-stream output-stream)))
-    (write-string string stream :start start :end end)
-    (terpri stream)
-    string))
+  (write-string string output-stream :start start :end end)
+  (terpri output-stream)
+  string)
 
 (defun terpri (&optional (stream *standard-output*))
-  (let* ((stream (real-print-stream stream)))
+  (let* ((stream (%real-print-stream stream)))
     (if (typep stream 'basic-stream)
       (let* ((ioblock (basic-stream-ioblock stream)))
         (funcall (ioblock-write-char-function ioblock) ioblock #\newline))
-      (stream-write-char  (real-print-stream stream) #\newline))
+      (stream-write-char stream #\newline))
     nil))
 
 ;;;; ----------------------------------------------------------------------
@@ -688,7 +698,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
 (defun print-a-float (float stream &optional exp-p nanning)
   (let ((strlen 0) (exponent-char (float-exponent-char float)))
     (declare (fixnum strlen))
-    (setq stream (real-print-stream stream))
+    (setq stream (%real-print-stream stream))
     (if (and (not nanning)(nan-or-infinity-p float))
       (print-a-nan float stream)    
       (multiple-value-bind (string before-pt #|after-pt|#)
@@ -1673,13 +1683,14 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
          *terminal-io*)
         ((streamp stream)
          stream)
+        ;; This never gets called because streamp is true for xp-structure...
         ((istruct-typep stream 'xp-structure)
          (get-xp-stream stream))
         (t
          (report-bad-arg stream '(or stream (member nil t))))))
 
 (defun write-1 (object stream &optional levels-left)
-  (setq stream (real-print-stream stream))
+  (setq stream (%real-print-stream stream))
   (when (not levels-left)
     (setq levels-left
           (if *current-level* 
@@ -1820,7 +1831,6 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
 (defun print (object &optional stream)
   "Output a newline, the mostly READable printed representation of OBJECT, and
   space to the specified STREAM."
-  (setq stream (real-print-stream stream))
   (terpri stream)
   (let ((*print-escape* t))
     (write-1 object stream))

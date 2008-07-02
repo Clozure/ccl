@@ -103,6 +103,9 @@
 (defmethod stream-element-type ((x t))
   (report-bad-arg x 'stream))
 
+(defmethod stream-force-output ((x t))
+  (report-bad-arg x 'stream))
+
 (defmethod stream-position ((s stream) &optional newpos)
   (declare (ignore newpos)))
 
@@ -3267,7 +3270,7 @@
 			    &allow-other-keys)
   (declare (dynamic-extent initargs))
   (let* ((s
-          (if (subtypep class (find-class 'basic-stream))
+          (if (subtypep class 'basic-stream)
             (apply #'make-basic-stream-instance class :allow-other-keys t initargs)
             (apply #'make-instance class :allow-other-keys t initargs))))
     (apply #'init-stream-ioblock s initargs)
@@ -3306,7 +3309,7 @@
                    (:pipe (#_fpathconf fd #$_PC_PIPE_BUF))
                    (:socket
                     #+linux-target nominal
-                    #-linux-target 
+                    #-linux-target
                     (int-getsockopt fd #$SOL_SOCKET #$SO_SNDLOWAT))
                    ((:character-special :tty) (#_fpathconf fd #$_PC_MAX_INPUT))
                    (t nominal))))
@@ -3726,10 +3729,6 @@
       (if (eq b :eof)
 	(return i)
 	(rplaca tail b)))))
-
-
-
-
 
 
 
@@ -4341,7 +4340,7 @@
     (setf (ioblock-charpos ioblock) 0)
     (incf (ioblock-charpos ioblock)))
   (if (= index len)
-      (let* ((newlen (+ len len))      ;non-zero !
+      (let* ((newlen (if (zerop len) 20 (+ len len)))      ;non-zero !
              (new (make-string newlen)))
         (%copy-ivector-to-ivector string 0 new 0 (the fixnum (ash len 2)))
         (setq string new)
@@ -4806,7 +4805,6 @@
   (let* ((ioblock (stream-ioblock stream nil)))
     (when ioblock
       (%ioblock-close ioblock))))
-
 
 (defmethod close :before ((stream buffered-output-stream-mixin) &key abort)
   (unless abort
@@ -5591,7 +5589,7 @@
     'selection-input-stream
     (error "Can't create that type of stream.")))
 
-(defun make-selection-input-stream (fd &key peer-fd  encoding)
+(defun make-selection-input-stream (fd &key peer-fd encoding)
   (let* ((s (make-fd-stream fd
                             :class 'selection-input-stream
                             :sharing :lock
@@ -5760,7 +5758,7 @@
          (shared-resource
 	  (if (typep stream 'two-way-stream)
 	    (input-stream-shared-resource
-	     (two-way-stream-input-stream *terminal-io*)))))
+	     (two-way-stream-input-stream stream)))))
     (when shared-resource (%yield-shared-resource shared-resource process))))
 
 (defun %restore-terminal-input (&optional took-it)
@@ -5850,10 +5848,6 @@ are printed.")
                 (or last-form-in-selection *verbose-eval-selection*))))))
 
                              
-(defun column (&optional stream)
-  (let* ((stream (real-print-stream stream)))
-    (stream-line-column stream)))        
-
 (defun (setf %ioblock-external-format) (ef ioblock)
   (let* ((encoding (get-character-encoding (external-format-character-encoding ef)))
          (line-termination (external-format-line-termination ef)))
