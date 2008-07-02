@@ -724,11 +724,11 @@ before doing so.")
                      vector-key (%svref vector vector-index))
                (cond ((setq foundp (and (not (eq vector-key free-hash-key-marker))
                                         (not (eq vector-key deleted-hash-key-marker))))
-                      #+no
-                      (setf (nhash.vector.cache-key vector) vector-key
-                            (nhash.vector.cache-value vector) value
-                            (nhash.vector.cache-idx vector) (vector-index->index
-                                                             vector-index))
+                      (when (nhash.owner hash)
+                        (setf (nhash.vector.cache-key vector) vector-key
+                              (nhash.vector.cache-value vector) value
+                              (nhash.vector.cache-idx vector) (vector-index->index
+                                                               vector-index)))
                       (return))
                      ((%needs-rehashing-p hash)
                       (%lock-gc-lock)
@@ -809,6 +809,8 @@ before doing so.")
   (declare (optimize (speed 3) (space 0)))
   (unless (hash-table-p hash)
     (report-bad-arg hash 'hash-table))
+  (if (eq key (%unbound-marker))
+    (error "Can't use ~s as a hash-table key" (%unbound-marker)))
   (with-lock-context
     (without-interrupts
      (block protected
@@ -1688,6 +1690,8 @@ before doing so.")
   (unless (hash-table-p hash)
     (report-bad-arg hash 'hash-table))
   (or (nhash.read-only hash)
+      (when (nhash.owner hash)
+        (error "Hash~table ~s is thread-private and can't be made read-only for that reason" hash))
       (with-lock-context
         (without-interrupts
          (write-lock-hash-table hash)
