@@ -566,7 +566,7 @@
                                       element-count))
          (vector (%alloc-misc element-count
                               ppc32::subtag-double-float-vector)))
-    (declare (fixnum subtag element-count size-in-bytes))
+    (declare (fixnum element-count size-in-bytes))
     (%epushval s vector)
     (%fasl-read-n-bytes s vector (- ppc32::misc-dfloat-offset
                                     ppc32::misc-data-offset)
@@ -580,7 +580,7 @@
   (let* ((element-count (%fasl-read-count s))
          (size-in-bytes (* 4 element-count))
          (vector (allocate-typed-vector :code-vector element-count)))
-    (declare (fixnum subtag element-count size-in-bytes))
+    (declare (fixnum element-count size-in-bytes))
     (%epushval s vector)
     (%fasl-read-n-bytes s vector 0 size-in-bytes)
     (%make-code-executable vector)

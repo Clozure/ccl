@@ -533,7 +533,7 @@
 
 ; Set the nth saved register to value.
 (defun set-saved-register (value n lfun pc child last-catch srv)
-  (declare (ignore lfun pc child) (dynamic-extent saved-register-values))
+  (declare (ignore lfun pc child) (dynamic-extent))
   (let ((j (- target::node-size n))
         (unresolved (srv.unresolved srv))
         (addr (srv.register-n srv n)))

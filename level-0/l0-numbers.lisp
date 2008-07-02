@@ -1834,7 +1834,7 @@ What we do is use 2b and 2^n so we can do arithemetic mod 2^32 instead of
          (dividend (%alloc-misc long-words target::subtag-bignum))
          (16-bit-dividend dividend)
          (index 1))
-    (declare (fixnum long-words words words-2 index bits)
+    (declare (fixnum long-words index bits)
              (dynamic-extent dividend)
              (type (simple-array (unsigned-byte 16) (*)) 16-bit-dividend)       ; lie
              (optimize (speed 3) (safety 0)))

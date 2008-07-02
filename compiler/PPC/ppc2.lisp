@@ -723,7 +723,7 @@
   (when (and ea nregs)
     (with-ppc-local-vinsn-macros (seg)
       (let* ((first (- 32 nregs)))
-        (declare (fixnum cell first n))
+        (declare (fixnum first))
         (! restore-nvrs first from-fp (- *ppc2-vstack* ea))))))
 
 
@@ -5255,7 +5255,7 @@
            pregs
            (reserved-lcells nil)
            (*ppc2-vstack* 0))
-      (declare (type (unsigned-byte 16) num-req num-opt num-inh reqvloc))
+      (declare (type (unsigned-byte 16) num-req num-opt num-inh))
       (with-ppc-p2-declarations p2decls
         (setq *ppc2-inhibit-register-allocation*
               (setq no-regs (%ilogbitp $fbitnoregs fbits)))
@@ -6295,7 +6295,7 @@
     (let* ((*ppc2-vstack* *ppc2-vstack*)
            (*ppc2-top-vstack-lcell* *ppc2-top-vstack-lcell*)
            (nargs (ppc2-arglist seg arglist)))
-      (declare (fixnum args))
+      (declare (fixnum nargs))
       (when (> nargs 1)
         (ppc2-set-nargs seg (1- nargs))
         (! list*))
@@ -8456,7 +8456,6 @@
   (let* ((*ppc2-vstack* *ppc2-vstack*)
          (*ppc2-top-vstack-lcell* *ppc2-top-vstack-lcell*)
          (*ppc2-cstack* *ppc2-cstack*))
-    (declare (fixnum nextarg))
     (! alloc-c-frame (the fixnum
                        (+ (the fixnum (length argvals))
                           (the fixnnum
@@ -8514,7 +8513,7 @@
          (nfpr-args 0)
          (ngpr-args 0)
          (fp-loads ()))
-      (declare (fixnum  nshort-floats ndouble-floats nfpr-args ngpr-args narg-words
+      (declare (fixnum  nsingle-floats ndouble-floats nfpr-args ngpr-args nother-words
                         gpr-offset other-offset single-float-offset double-float-offset))
       (dolist (argspec argspecs)
         (case argspec
@@ -8683,7 +8682,6 @@
          (*ppc2-top-vstack-lcell* *ppc2-top-vstack-lcell*)
          (*ppc2-cstack* *ppc2-cstack*)
          (return-registers nil))
-    (declare (fixnum nextarg))
     (! alloc-c-frame (the fixnum
                        (+ (the fixnum (length argvals)) 
                           (the fixnnum

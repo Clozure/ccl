@@ -46,7 +46,6 @@
   (max-vinsn-args 0 :type fixnum))
 
 (defmethod print-object ((p opcode) stream)
-  (declare (ignore depth))
   (print-unreadable-object (p stream :type t) 
     (format stream "~a" (string (opcode-name p)))))
 

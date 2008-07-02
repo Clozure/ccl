@@ -730,7 +730,7 @@
                (when negate-res
                  (negate-bignum-in-place result))
                (%normalize-bignum-macro result ))))
-      (declare (dynamic-extent do-it))
+      (declare (dynamic-extent #'do-it))
       (if bignum-plus-p
         (do-it bignum (if fixnum-plus-p fixnum (- fixnum))  negate-res)
         (with-bignum-buffers ((b1 (the fixnum (1+ bignum-len))))
@@ -1517,7 +1517,7 @@
                        (if (not (fixnump the-res))
                          (if x-plusp (copy-bignum the-res) (negate-bignum the-res))
                          (if x-plusp the-res (the fixnum (- (the fixnum the-res)))))))))))))))
-      (declare (dynamic-extent do-it))
+      (declare (dynamic-extent #'do-it))
       (with-negated-bignum-buffers x1 y1 do-it))))
 
 
@@ -1600,7 +1600,7 @@
          (y-minus (minusp y))         
          (y (if y-minus (- y) y)))
     (declare (fixnum y))
-    (declare (type bignum-index len-x len-q))
+    (declare (type bignum-index len-x))
     (declare (dynamic-extent maybe-q))
     (let* ((r-h 0)
            (r-l 0)
@@ -1622,7 +1622,7 @@
          (y-minus (minusp y))         
          (y (if y-minus (- y) y)))
     (declare (fixnum y))
-    (declare (type bignum-index len-x len-q))
+    (declare (type bignum-index len-x))
       (let* (;(LEN-Q (%BIGNUM-LENGTH Q))
              (r-h 0)
              (r-l 0)
@@ -1859,7 +1859,6 @@
 ;;;
 
 (defun %normalize-bignum (res)
-  (declare (ignore len))
   ;(declare (optimize (speed 3)(safety 0)))
   (%normalize-bignum-2 t res))
 

@@ -316,7 +316,7 @@
       (setf (uvref code-vector (+ start 4)) (ash start 2))
       (let* ((namelen (length pname))
              (pos (ash (the fixnum (+ start 5)) 2)))
-        (declare (fixnum namelen nwords pos))
+        (declare (fixnum namelen pos))
         (out-byte code-vector pos (ldb (byte 8 8) namelen))
         (incf pos)
         (out-byte code-vector pos (ldb (byte 8 0) namelen))
