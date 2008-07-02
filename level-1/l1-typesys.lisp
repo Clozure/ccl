@@ -1466,7 +1466,8 @@
 ;;;    Like VALUES-SPECIFIER-TYPE, except that we guarantee to never return a
 ;;; VALUES type.
 ;;; 
-(defun specifier-type (x)
+(defun specifier-type (x &optional env)
+  (declare (ignore env))
   (let ((res (values-specifier-type x)))
     (when (values-ctype-p res)
       (signal-program-error "VALUES type illegal in this context:~%  ~S" x))

@@ -703,7 +703,7 @@ are running on, or NIL if we can't find any useful information."
     (if (typep fun 'compiled-lexical-closure)
         (setq fun (closure-function fun)))
     (when (lambda-expression-p fun)
-      (setq fun (compile-named-function fun nil)))
+      (setq fun (compile-named-function fun)))
     fun))
 
 (%fhave 'df #'disassemble)

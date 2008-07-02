@@ -731,7 +731,7 @@ functions are called."
 
 
 (defun compile-named-function-warn (fn name)
-  (multiple-value-bind (result warnings)(compile-named-function fn name)    
+  (multiple-value-bind (result warnings)(compile-named-function fn :name name)
     (when warnings 
       (let ((first t))
         (dolist (w warnings)

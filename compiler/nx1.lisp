@@ -93,7 +93,8 @@
           name
           (cons
            'macro
-           (multiple-value-bind (function warnings) (compile-named-function (parse-macro name arglist mbody old-env) name  old-env)
+           (multiple-value-bind (function warnings)
+               (compile-named-function (parse-macro name arglist mbody old-env) :name name :env old-env)
              (setq *nx-warnings* (append *nx-warnings* warnings))
              function)))
          (lexenv.functions new-env))))
@@ -1067,7 +1068,9 @@
   (if *nx-load-time-eval-token*
     (multiple-value-bind (function warnings)
                          (compile-named-function 
-                          `(lambda () ,form) nil nil nil nil nil *nx-load-time-eval-token* (backend-name *target-backend*))
+                          `(lambda () ,form)
+                          :load-time-eval-token *nx-load-time-eval-token*
+                          :target (backend-name *target-backend*))
       (setq *nx-warnings* (append *nx-warnings* warnings))
       (nx1-immediate (list *nx-load-time-eval-token* `(funcall ,function))))
     (nx1-immediate (eval form))))

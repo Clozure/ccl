@@ -9212,13 +9212,7 @@
                          (backend-target-foreign-type-data backend)
                          *target-ftd*)))
     (multiple-value-bind (xlfun warnings)
-        (compile-named-function def nil
-                                nil
-                                nil
-                                nil
-                                nil
-                                nil
-                                target)
+        (compile-named-function def :target target)
       (signal-or-defer-warnings warnings nil)
       (when disassemble
         (format t "~%~%")

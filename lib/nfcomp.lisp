@@ -270,8 +270,8 @@ Will differ from *compiling-file* during an INCLUDE")
                                 (setq *fasl-non-style-warnings-signalled-p* t))
                               (signal c))))
       (funcall (compile-named-function
-                `(lambda () ,form) nil env nil nil
-                *compile-time-evaluation-policy*)))))
+                `(lambda () ,form)
+                :env env :policy *compile-time-evaluation-policy*)))))
 
 
 ;;; No methods by default, not even for structures.  This really sux.
@@ -681,7 +681,7 @@ Will differ from *compiling-file* during an INCLUDE")
     (when definition-env
       (push (list* name 
                    'macro 
-                   (compile-named-function lambda-expression name env)) 
+                   (compile-named-function lambda-expression :name name :env env))
             (defenv.functions definition-env))
       (record-function-info name (list (cons nil 'macro)) env))
     name))
@@ -866,14 +866,14 @@ Will differ from *compiling-file* during an INCLUDE")
   (let* ((env (new-lexical-environment env))
          (*nx-break-on-program-errors* (not (memq *fasl-break-on-program-errors* '(nil :defer)))))
     (multiple-value-bind (lfun warnings)
-                         (compile-named-function
-                          def name
-                          env
-                          *fasl-save-definitions*
-                          *fasl-save-local-symbols*
-                          *default-file-compilation-policy*
-                          cfasl-load-time-eval-sym
-			  *fasl-target*)
+        (compile-named-function def
+                                :name name
+                                :env env
+                                :keep-lambda *fasl-save-definitions*
+                                :keep-symbols *fasl-save-local-symbols*
+                                :policy *default-file-compilation-policy*
+                                :load-time-eval-token cfasl-load-time-eval-sym
+                                :target *fasl-target*)
       (fcomp-signal-or-defer-warnings warnings env)
       lfun)))
 

@@ -87,7 +87,10 @@
   (multiple-value-bind (lfun warnings)
                        (if (functionp def)
                          def
-                         (compile-named-function def spec nil *save-definitions* *save-local-symbols*))
+                         (compile-named-function def
+                                                 :name spec
+                                                 :keep-lambda *save-definitions*
+                                                 :keep-symbols *save-local-symbols*))
     (let ((harsh nil) (some nil) (init t))
       (dolist (w warnings)
         (multiple-value-setq (harsh some) (signal-compiler-warning w init nil harsh some))
@@ -120,23 +123,18 @@
                          *target-ftd*))
          (*target-backend* (or backend *target-backend*)))
     (multiple-value-bind (xlfun warnings)
-        (compile-named-function def nil
-                                nil
-                                nil
-                                nil
-                                nil
-                                nil
-                                target)
+        (compile-named-function def :target target)
       (signal-or-defer-warnings warnings nil)
       (ppc-xdisassemble xlfun :target target)
       xlfun)))
   
 (defun compile-user-function (def name &optional env)
   (multiple-value-bind (lfun warnings)
-                       (compile-named-function def name
-                                               env
-                                               *save-definitions*
-                                               *save-local-symbols*)
+                       (compile-named-function def
+                                               :name name
+                                               :env env
+                                               :keep-lambda *save-definitions*
+                                               :keep-symbols *save-local-symbols*)
     (signal-or-defer-warnings warnings env)
     lfun))
 
