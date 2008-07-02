@@ -69,7 +69,7 @@
                  (setq selectors-so-far
                        (append compound selectors-so-far))
                  compound))))
-      (declare (dynamic-extent maybe-compound))
+      (declare (dynamic-extent #'maybe-compound))
       `(block ,block
          (tagbody 
            ,tag

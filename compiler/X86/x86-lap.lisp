@@ -1370,7 +1370,7 @@
                          (incf nbytes (frag-length frag)))))
          (code-words (ash code-bytes (- target::word-shift)))
          (function-vector (allocate-typed-vector :function code-words)))
-    (declare (fixnum num-constants code-bytes code-words))
+    (declare (fixnum code-bytes code-words))
     (let* ((target-offset 0))
       (declare (fixnum target-offset))
       (do-dll-nodes (frag frag-list)

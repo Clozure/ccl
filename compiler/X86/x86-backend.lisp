@@ -55,7 +55,6 @@
   (when (consp form)
     (let* ((name (string (car form)))
            (templates (gethash name x86::*x86-opcode-template-lists*)))
-      (declare (fixnum node-size))
       (when templates
         (flet ((optype (thing)
                  (x86-encode-vinsn-operand-type thing backend)))
@@ -148,7 +147,7 @@
              (if (member vname name-list :test #'eq)
                (error "Duplicate name ~s in vinsn ~s" vname vinsn-name)
                (push vname name-list))))
-      (declare (dynamic-extent valid-spec-name add-spec-name))
+      (declare (dynamic-extent #'valid-spec-name #'add-spec-name))
       (when (consp vinsn-name)
         (setq attrs (encode-vinsn-attributes (cdr vinsn-name))
               vinsn-name (car vinsn-name)))

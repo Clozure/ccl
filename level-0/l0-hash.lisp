@@ -1148,7 +1148,7 @@ before doing so.")
          (count (- length $nhash.vector_overhead))
          (vector-index (index->vector-index (fast-mod hash-code (ash count -1))))
          (table-key (%svref vector vector-index)))
-    (declare (fixnum hash-code length count entries vector-index))
+    (declare (fixnum hash-code length count vector-index))
     (if (or (eq key table-key)
             (eq table-key free-hash-key-marker))
       vector-index

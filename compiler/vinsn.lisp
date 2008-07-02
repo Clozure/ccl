@@ -369,7 +369,7 @@
          (*available-backend-imm-temps* *available-backend-imm-temps*)
          (*available-backend-crf-temps* *available-backend-crf-temps*))
     (declare (fixnum nvp ntemps nsupp)
-             (list result-specs temp-specs arg-specs))
+             (list temp-specs))
     (unless (= nsupp nra)
       (error "Vinsn ~A expects ~D result/argument specs, received ~D ."
              (vinsn-template-name template) nra nsupp))
@@ -610,7 +610,6 @@
 ;;; Create a flow graph from vinsns and return the entry node.
 (defun create-flow-graph (vinsns)
   (let* ((nodes ()))
-    (declare (fixnum id))
     (flet ((label->fgn (label) (dll-node-pred label)))
       (loop
 	  (multiple-value-bind (label last) (remove-last-basic-block vinsns)
@@ -621,6 +620,7 @@
 			   (if (vinsn-attribute-p (dll-node-pred last) :branch)
 			     (make-condnode id)
 			     (make-jumpnode id)))))
+              (declare (fixnum id))
 	      (insert-dll-node-after label node last)
 	      (push node nodes))))
       (dolist (node nodes nodes)

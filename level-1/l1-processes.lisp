@@ -165,7 +165,6 @@
                           (termination-semaphore ())
                           (allocation-quantum (default-allocation-quantum)))
   "Create and return a new process."
-  (declare (ignore flavor))
   (let* ((p (make-instance
 	     class
 	     :name name

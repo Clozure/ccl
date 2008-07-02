@@ -65,7 +65,7 @@
 			 prepend-kernel
 			 )
   (declare (ignore toplevel-function error-handler application-class
-                   resources clear-clos-caches init-file impurify
+                   clear-clos-caches init-file impurify
 		   mode prepend-kernel))
   (unless (probe-file (make-pathname :defaults nil
                                      :directory (pathname-directory (translate-logical-pathname filename))))

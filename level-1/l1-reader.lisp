@@ -2402,7 +2402,7 @@
       (unless *read-suppress* 
         (let* ((string (token.string tb))
                (len (token.opos tb)))
-          (declare (fixnum len ndots nondots))
+          (declare (fixnum len))
           (if (not nondots)
             (if (= len 1)
               (or dot-ok

@@ -4947,7 +4947,7 @@
       (when (neq 0 nlevels)
         (let* ((num-temp-frames 0)
                (num-c-frames 0))
-          (declare (fixnum numnlispareas num-c-frames))
+          (declare (fixnum num-temp-frames num-c-frames))
           (flet ((pop-temp-frames ()
                    (dotimes (i num-temp-frames)
                      (! discard-temp-frame)))
@@ -5504,7 +5504,7 @@
            pregs
            (reserved-lcells nil)
            (*x862-vstack* 0))
-      (declare (type (unsigned-byte 16) num-req num-opt num-inh reqvloc))
+      (declare (type (unsigned-byte 16) num-req num-opt num-inh))
       (with-x86-p2-declarations p2decls
         (setq *x862-inhibit-register-allocation*
               (setq no-regs (%ilogbitp $fbitnoregs fbits)))
@@ -6588,7 +6588,7 @@
     (let* ((*x862-vstack* *x862-vstack*)
            (*x862-top-vstack-lcell* *x862-top-vstack-lcell*)
            (nargs (x862-formlist seg (car arglist) (cadr arglist))))
-      (declare (fixnum args))
+      (declare (fixnum nargs))
       (when (> nargs 1)
         (x862-set-nargs seg (1- nargs))
         (! list*))
@@ -8546,7 +8546,7 @@
          (nother-words 0)
          (ngpr-args 0)
          (simple-foreign-args nil))
-      (declare (fixnum   ngpr-args narg-words
+      (declare (fixnum  ngpr-args nother-words
                         gpr-offset other-offset))
       (dolist (argspec argspecs)
         (declare (ignorable argspec))
@@ -8646,7 +8646,7 @@
          (simple-foreign-args nil)
          (fp-loads ())
          (return-registers ()))
-      (declare (fixnum  nshort-floats ndouble-floats nfpr-args ngpr-args narg-words
+      (declare (fixnum  nsingle-floats ndouble-floats nfpr-args ngpr-args nother-words
                         gpr-offset other-offset single-float-offset double-float-offset))
       (dolist (argspec argspecs)
         (case argspec

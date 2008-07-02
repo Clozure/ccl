@@ -64,7 +64,7 @@
          (buffer (faslstate.iobuffer s))
          (bufptr (%get-ptr buffer)))
     (declare (dynamic-extent bufptr)
-             (type macptr buffer bufptr pb))
+             (type macptr buffer bufptr))
     (%setf-macptr bufptr (%inc-ptr buffer target::node-size))
     (setf (%get-ptr buffer) bufptr)
     (let* ((n (fd-read fd bufptr $fasl-buf-len)))
@@ -160,7 +160,7 @@
          (copy t)
          (n nchars)
          (str (faslstate.faslstr s)))
-    (declare (fixnum n nbytes))
+    (declare (fixnum n nchars))
     (if (> n (length str))
         (setq str (make-string n :element-type 'base-char))
         (setq copy nil))
@@ -196,7 +196,6 @@
 
 
 (defun %fasl-vmake-symbol (s &optional idx)
-  (declare (fixnum subtype))
   (let* ((n (%fasl-read-count s))
          (str (make-string n :element-type 'base-char)))
     (declare (fixnum n))
@@ -206,7 +205,6 @@
       (%epushval s sym))))
 
 (defun %fasl-nvmake-symbol (s &optional idx)
-  (declare (fixnum subtype))
   (let* ((n (%fasl-read-count s))
          (str (make-string n :element-type 'base-char)))
     (declare (fixnum n))
@@ -550,7 +548,7 @@
   (let* ((element-count (%fasl-read-count s))
          (size-in-bytes (* element-count 4))
          (num (%alloc-misc element-count target::subtag-bignum)))
-    (declare (fixnum subtag element-count size-in-bytes))
+    (declare (fixnum element-count size-in-bytes))
     (%fasl-read-n-bytes s num 0 size-in-bytes)
     (setq num (%normalize-bignum-2 t num))
     (%epushval s num)

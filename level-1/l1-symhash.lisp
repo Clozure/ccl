@@ -418,7 +418,7 @@
              (itab (pkg.itab package))
              (ivec (car itab))
              (icount&limit (cdr itab)))
-        (declare (type cons etab itab icount&limit))
+        (declare (type cons itab icount&limit))
         (setf (svref evec external-offset) (package-deleted-marker))
         (setf (svref ivec internal-offset) (%symbol->symptr foundsym))
         (if (eql (setf (car icount&limit)

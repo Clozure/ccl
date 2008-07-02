@@ -2352,7 +2352,6 @@ has immediate effect."
    any of :INHERITED :EXTERNAL :INTERNAL."
   (setq mname (require-type mname 'symbol))
   (let ((state (make-symbol "WITH-PACKAGE-ITERATOR_STATE")))
-    (declare (fixnum types))
     (dolist (type (push first-type other-types))
       (ecase type
         ((:external :internal :inherited))))

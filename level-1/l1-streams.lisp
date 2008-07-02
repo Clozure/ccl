@@ -2373,7 +2373,7 @@
   (do* ((i start (1+ i))
         (rcf (ioblock-read-char-when-locked-function ioblock)))
        ((= i end) end)
-    (declare (fixnum i need))
+    (declare (fixnum i))
     (let* ((ch (funcall rcf ioblock)))
       (if (eq ch :eof)
 	(return i))
@@ -2661,7 +2661,7 @@
 ;;; If we do newline translation, we probably can't be too clever about reading/writing
 ;;; strings.
 (defun %ioblock-write-simple-string-with-newline-translation (ioblock string start-pos num-chars)
-  (declare (fixnum start-char num-chars) (simple-string string))
+  (declare (fixnum start-pos num-chars) (simple-string string))
   (let* ((col (ioblock-charpos ioblock))
          (wcf (ioblock-write-char-when-locked-function ioblock)))
     (declare (fixnum col))

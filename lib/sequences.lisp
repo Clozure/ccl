@@ -721,7 +721,7 @@
          (temp (make-list (length sequences)))
          (maxcnt (seq-dispatch result-sequence (length result-sequence) (array-total-size result-sequence)))
          (rseq result-sequence))
-    (declare (fixnum cnt nargs maxcnt))
+    (declare (fixnum nargs maxcnt))
     (declare (dynamic-extent temp))
     ; this declaration is maybe bogus
     (dolist (seq sequences)
@@ -1681,7 +1681,7 @@
   (do* ((index start (1+ index))
         (count 0))
        ((= index end) count)
-    (declare (fixnum index count limit))
+    (declare (fixnum index count))
     (when (funcall test item  (funcall key (aref sequence index)))
       (incf count))))
 
@@ -1700,7 +1700,7 @@
   (do* ((index start (1+ index))
         (count 0))
        ((= index end) count)
-    (declare (fixnum index count limit))
+    (declare (fixnum index count))
     (unless (funcall test-not item (funcall key (aref sequence index)))
       (incf count))))
 

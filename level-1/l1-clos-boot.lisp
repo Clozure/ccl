@@ -2450,7 +2450,7 @@ to replace that class with ~s" name old-class new-class)
 	  (slot-vector.instance new-slots) copy)))
 
 (defmethod initialize-instance ((instance standard-object) &rest initargs)
-  (declare (dynamic-extent ini targs))
+  (declare (dynamic-extent initargs))
   (apply 'shared-initialize instance t initargs))
 
 
@@ -3100,12 +3100,12 @@ to replace that class with ~s" name old-class new-class)
 	 (num-new-instance-slots (length new-instance-slots-vector))
 	 (new-object (allocate-instance new-class)))
     (declare (fixnum num-new-instance-slots)
-	     (simple-vector new-instance-slots old-instance-slots))
+	     (simple-vector new-instance-slots-vector old-instance-slots-vector))
     ;; Retain local slots shared between the new class and the old.
     (do* ((new-pos 0 (1+ new-pos))
 	  (new-slot-location 1 (1+ new-slot-location)))
 	 ((= new-pos num-new-instance-slots))
-      (declare (fixnum new-pos new-slot-vector-pos))
+      (declare (fixnum new-pos new-slot-location))
       (let* ((old-pos (position (svref new-instance-slots-vector new-pos)
 				old-instance-slots-vector :test #'eq)))
 	(when old-pos

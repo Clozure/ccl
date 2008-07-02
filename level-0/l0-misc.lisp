@@ -632,7 +632,7 @@
   (let* ((self (%current-tcr))
          (level *interrupt-level*)
          (ptr (recursive-lock-ptr lock)))
-    (declare (fixnum self val))
+    (declare (fixnum self))
     (note-lock-wait lock)
     (without-interrupts
      (cond ((eql self (%get-object ptr target::lockptr.owner))

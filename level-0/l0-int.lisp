@@ -124,7 +124,7 @@
                     ;; ;better-bignum-print?
                     )  ; warn
                (declare (dynamic-extent temstring)
-                        (fixnum i strlen rem))
+                        (fixnum i strlen))
                (flet ((do-it (newbig)
                         (print-bignum-2 newbig radix temstring digit-string)))
                  (declare (dynamic-extent #'do-it))

@@ -490,7 +490,7 @@
   (unless (typep subtag 'fixnum)
     (setq subtag (type-keyword-code subtag)))
   (locally
-      (declare (fixnum subtype len))
+      (declare (fixnum subtag len))
       (multiple-value-bind (cell-addr data offset)
           (target-word-size-case
            (32 (xload-alloc-fullwords *xload-dynamic-space* *xload-target-fulltag-misc* len))
@@ -500,7 +500,7 @@
         cell-addr)))
 
 (defun xload-make-word-ivector (subtag len space)
-  (declare (fixnum subtype len))
+  (declare (fixnum subtag len))
     (multiple-value-bind (cell-addr data offset) (xload-alloc-fullwords space  *xload-target-fulltag-misc* len)
       (declare (fixnum offset))
       (setf (natural-ref data (+ offset *xload-target-misc-header-offset*)) (make-xload-header len subtag))
@@ -615,7 +615,7 @@
   (unless (typep subtag 'fixnum)
     (setq subtag (type-keyword-code subtag)))
   (locally
-      (declare (fixnum subtype nelements))
+      (declare (fixnum subtag nelements))
     (multiple-value-bind (addr v o) (xload-alloc space *xload-target-fulltag-misc* (xload-dnode-align (xload-subtag-bytes subtag nelements)))
       (declare (fixnum o))
       (setf (natural-ref v (the fixnum (- o *xload-target-fulltag-misc*))) (make-xload-header nelements subtag))
@@ -814,14 +814,14 @@
 ;;; Read a string from fasl file, save it to readonly-space.
 (defun %xload-fasl-vreadstr (s)
   (multiple-value-bind (str n new-p) (%fasl-vreadstr s)
-    (declare (fixnum n subtype))
+    (declare (fixnum n))
     (values (xload-save-string str n) str n new-p)))
 
 ;;; Read a string from fasl file, save it to readonly-space.
 ;;; (assumes variable-length encoding.)
 (defun %xload-fasl-nvreadstr (s)
   (multiple-value-bind (str n new-p) (%fasl-nvreadstr s)
-    (declare (fixnum n subtype))
+    (declare (fixnum n))
     (values (xload-save-string str n) str n new-p)))
 
 (defun xload-clone-packages (packages)
