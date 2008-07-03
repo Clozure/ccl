@@ -130,6 +130,41 @@ oshirion:ccl mikel$
         restarts from the Lisp menu. You can also display a backtrace or
         open the <link linkend="section_inspector_window">Inspector
           window</link>.</para>
+
+      <sect3>
+        <title>Checking for Updates</title>
+        <para>At the bottom of the Lisp menu is an item entitled
+        "Check for Updates". If your copy of &CCL; came from the
+        Clozure Subversion server (which is the preferred source), and
+        if your internet connection is working, then you can select
+        this menu item to check for updates to your copy of
+        &CCL;.</para>
+
+        <para>When you select "Check for Updates", &CCL; uses the svn
+        program to query the Clozure Subversion repository and
+        determine whether new updates to &CCL; are available. (This
+        means that on Mac OS X versions earlier than 10.5, you must
+        ensure that the Subversion client software is installed before
+        using the "Check for Updates" feature. See
+        the <ulink url="http://www.wikihow.com/Install-Subversion-on-Mac-OS-X">wikiHow
+        page</ulink> on installing Subversion for more information.)
+        If updates are available, &CCL; automatically downloads and
+        installs them. After a successful download, &CCL; rebuilds
+        itself, and then rebuilds the IDE on the newly-rebuilt
+        Lisp. Once this process is finished, you should quit the
+        running IDE and start the newly built one (which will be in
+        the same place that the old one was).</para>
+
+        <para>Normally, &CCL; can install updates and rebuild itself
+        without any problems. Occasionally, an unforeseen problem
+        (such as a network outage, or a hardware failure) might
+        interrupt the self-rebuilding process, and leave your copy of
+        &CCL; unusable. If you are expecting to update your copy of
+        &CCL; frequently, it might be prudent to keep a backup copy of
+        your working environment ready in case of such
+        situtations. You can also always obtain a full, fresh copy of
+        &CCL; from Clozure's repository..</para>
+      </sect3>
     </sect2>
 
     <sect2>
