@@ -1069,6 +1069,8 @@
     (multiple-value-bind (function warnings)
                          (compile-named-function 
                           `(lambda () ,form)
+                          ;; pass in the definition env for special decls
+                          :env (definition-environment env)
                           :load-time-eval-token *nx-load-time-eval-token*
                           :target (backend-name *target-backend*))
       (setq *nx-warnings* (append *nx-warnings* warnings))
