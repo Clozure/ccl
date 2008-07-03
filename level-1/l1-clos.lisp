@@ -365,7 +365,7 @@
 				map
 				table
 				(dpb 1 $lfbits-numreq
-				     (ash 1 $lfbits-noname-bit)))
+				     (ash -1 $lfbits-noname-bit)))
               #+x86-target
               (%clone-x86-function (if small
 					  #'%small-map-slot-id-lookup
@@ -373,7 +373,7 @@
                                    map
                                    table
                                    (dpb 1 $lfbits-numreq
-				     (ash 1 $lfbits-noname-bit))))
+				     (ash -1 $lfbits-noname-bit))))
 	     (class (%wrapper-class wrapper))
 	     (get-f
               #+ppc-target
