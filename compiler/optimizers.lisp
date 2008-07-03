@@ -1,13 +1,13 @@
 ;;;-*- Mode: Lisp; Package: CCL -*-
 ;;;
 ;;;   Copyright (C) 1994-2001 Digitool, Inc
-;;;   This file is part of OpenMCL.  
+;;;   This file is part of OpenMCL.
 ;;;
 ;;;   OpenMCL is licensed under the terms of the Lisp Lesser GNU Public
 ;;;   License , known as the LLGPL and distributed with OpenMCL as the
 ;;;   file "LICENSE".  The LLGPL consists of a preamble and the LGPL,
 ;;;   which is distributed with OpenMCL as the file "LGPL".  Where these
-;;;   conflict, the preamble takes precedence.  
+;;;   conflict, the preamble takes precedence.
 ;;;
 ;;;   OpenMCL is referenced in the preamble as the "LIBRARY."
 ;;;
@@ -57,7 +57,7 @@
       (setq handler nil))
     (let* ((bits (%symbol-bits name)))
       (declare (fixnum bits))
-      (%symbol-bits name (logior 
+      (%symbol-bits name (logior
                           (if handler (logior (ash 1 $sym_fbit_fold_subforms) (ash 1 $sym_fbit_constant_fold))
                               (ash 1 $sym_fbit_constant_fold))
                           bits)))
@@ -117,7 +117,7 @@
             (if (nx-form-typep arg 'fixnum env)
               (push arg targs)
               (return)))
-        (return 
+        (return
          (fixnumify (nreverse targs) op))))
     call))
 
@@ -143,7 +143,7 @@
                                   (key nil key-p))
                             keys
           (declare (ignore test-not))
-          (if (and test-p 
+          (if (and test-p
                    (not test-not-p)
                    (or (not key-p)
                        (and (consp key)
@@ -152,7 +152,7 @@
                             (or (eq (%car key) 'function)
                                 (eq (%car key) 'quote))
                             (eq (%cadr key) 'identity)))
-                   (consp test) 
+                   (consp test)
                    (consp (%cdr test))
                    (null (%cddr test))
                    (or (eq (%car test) 'function)
@@ -202,7 +202,7 @@
       (if constants
         (let* ((op (car call))
                (constant (if (cdr constants) (handler-case (apply op constants)
-                                               (error (c) (declare (ignore c)) 
+                                               (error (c) (declare (ignore c))
                                                       (return-from fold-constant-subforms (values call t))))
                              (car constants))))
           (values (if forms (cons op (cons constant (reverse forms))) constant) t))
@@ -255,7 +255,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 ;;; The new (roughly alphabetical) order.
-;;; 
+;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;; Compiler macros on functions can assume that their arguments have
@@ -301,11 +301,11 @@
 (define-compiler-macro 1+ (x)
   `(+ ,x 1))
 
-(define-compiler-macro append  (&whole call 
-                                       &optional arg0 
-                                       &rest 
-                                       (&whole tail 
-                                               &optional (junk nil arg1-p) 
+(define-compiler-macro append  (&whole call
+                                       &optional arg0
+                                       &rest
+                                       (&whole tail
+                                               &optional (junk nil arg1-p)
                                                &rest more))
   ;(append (list x y z) A) -> (list* x y z A)
   (if (and arg1-p
@@ -337,7 +337,7 @@
       `(let* ((,class-cell (load-time-value (find-class-cell ',name t))))
         (apply (class-cell-instantiate ,class-cell) ,class-cell ,@args)))
     (let ((original-fn fn))
-      (if (and arg0 
+      (if (and arg0
                (null args)
                (consp fn)
                (eq (%car fn) 'function)
@@ -367,7 +367,7 @@
                (every (lambda (x) (equal-iff-eql-p (car x) env)) (%cadr list))))
     `(asseql ,item ,list)
     call))
-  
+
 (define-compiler-macro asseql (&whole call &environment env item list)
   (if (or (eql-iff-eq-p item env)
           (and (quoted-form-p list)
@@ -423,7 +423,7 @@
 
 (define-compiler-macro caaaar (form)
   `(car (caaar ,form)))
-  
+
 (define-compiler-macro caaadr (form)
   `(car (caadr ,form)))
 
@@ -447,7 +447,7 @@
 
 (define-compiler-macro cdaaar (form)
   `(cdr (caaar ,form)))
-  
+
 (define-compiler-macro cdaadr (form)
   `(cdr (caadr ,form)))
 
@@ -491,7 +491,7 @@
       (t call))
      call))
 
-(define-compiler-macro dotimes (&whole call (i n &optional result) 
+(define-compiler-macro dotimes (&whole call (i n &optional result)
                                        &body body
                                        &environment env)
   (multiple-value-bind (body decls) (parse-body body env)
@@ -546,7 +546,7 @@
     (multiple-value-bind (true true-win) (nx-transform true env)
       (multiple-value-bind (false false-win) (nx-transform false env)
         (if (or (quoted-form-p test) (self-evaluating-p test))
-          (if (eval test) 
+          (if (eval test)
             true
             false)
           (if (or test-win true-win false-win)
@@ -625,10 +625,26 @@
       call
       `(progn ,@body))))
 
+(defun specifier-type-if-known (typespec &optional env)
+  (handler-case (specifier-type typespec env)
+    (parse-unknown-type (c) (values nil (parse-unknown-type-specifier c)))
+    (error () nil)))
 
-(defun target-element-type-type-keyword (typespec)
-  (let* ((ctype (ignore-errors (specifier-type `(array ,typespec)))))
-    (if (or (null ctype) (typep ctype 'unknown-ctype))
+#+debugging-version
+(defun specifier-type-if-known (typespec &optional env)
+  (handler-bind ((parse-unknown-type (lambda (c)
+                                       (break "caught unknown-type ~s" c)
+                                       (return-from specifier-type-if-known
+                                         (values nil (parse-unknown-type-specifier c)))))
+                 (error (lambda (c)
+                          (break "caught error ~s" c)
+                          (return-from specifier-type-if-known nil))))
+    (specifier-type typespec env)))
+
+
+(defun target-element-type-type-keyword (typespec &optional env)
+  (let* ((ctype (specifier-type-if-known `(array ,typespec) env)))
+    (if (null ctype)
       (progn
         (nx1-whine :unknown-type-declaration typespec)
         nil)
@@ -666,15 +682,17 @@
           ;; Wimp out
           (setf (array-ctype-dimensions ctype)
                 '*))))
-    (let* ((element-type (specifier-type (if element-type-p (nx-unquote element-type) t))))
+    (let* ((typespec (if element-type-p (nx-unquote element-type) t))
+           (element-type (or (specifier-type-if-known typespec env)
+                             (make-unknown-ctype :specifier typespec))))
       (setf (array-ctype-element-type ctype) element-type)
       (if (typep element-type 'unknown-ctype)
         (setf (array-ctype-specialized-element-type ctype) *wild-type*)
         (specialize-array-type ctype)))
     (type-specifier ctype)))
 
-      
-      
+
+
 (define-compiler-macro make-array (&whole call &environment env dims &rest keys)
   (if (constant-keywords-p keys)
     (destructuring-bind (&key (element-type t element-type-p)
@@ -683,7 +701,7 @@
                               (adjustable () adjustable-p)
                               (fill-pointer () fill-pointer-p)
                               (initial-element () initial-element-p)
-                              (initial-contents () initial-contents-p)) 
+                              (initial-contents () initial-contents-p))
         keys
       (declare (ignorable element-type element-type-p
                           displaced-to displaced-to-p
@@ -693,7 +711,7 @@
                           initial-element initial-element-p
                           initial-contents initial-contents-p))
       (let* ((element-type-keyword nil)
-             (expansion 
+             (expansion
               (cond ((and initial-element-p initial-contents-p)
                      (nx1-whine 'illegal-arguments call)
                      call)
@@ -701,32 +719,32 @@
                      (if (or initial-element-p initial-contents-p element-type-p)
                        (comp-make-array-1 dims keys)
                        (comp-make-displaced-array dims keys)))
-                    ((or displaced-index-offset-p 
+                    ((or displaced-index-offset-p
                          (not (constantp element-type))
                          (null (setq element-type-keyword
                                      (target-element-type-type-keyword
-                                      (eval element-type)))))
+                                      (eval element-type) env))))
                      (comp-make-array-1 dims keys))
-                    ((and (typep element-type-keyword 'keyword) 
-                          (nx-form-typep dims 'fixnum env) 
-                          (null (or adjustable fill-pointer initial-contents 
-                                    initial-contents-p))) 
-                     (if 
-                       (or (null initial-element-p) 
-                           (cond ((eql element-type-keyword :double-float-vector) 
-                                  (eql initial-element 0.0d0)) 
-                                 ((eql element-type-keyword :single-float-vector) 
-                                  (eql initial-element 0.0s0)) 
-                                 ((eql element-type :simple-string) 
+                    ((and (typep element-type-keyword 'keyword)
+                          (nx-form-typep dims 'fixnum env)
+                          (null (or adjustable fill-pointer initial-contents
+                                    initial-contents-p)))
+                     (if
+                       (or (null initial-element-p)
+                           (cond ((eql element-type-keyword :double-float-vector)
+                                  (eql initial-element 0.0d0))
+                                 ((eql element-type-keyword :single-float-vector)
+                                  (eql initial-element 0.0s0))
+                                 ((eql element-type :simple-string)
                                   (eql initial-element #\Null))
                                  (t (eql initial-element 0))))
-                       `(allocate-typed-vector ,element-type-keyword ,dims) 
-                       `(allocate-typed-vector ,element-type-keyword ,dims ,initial-element))) 
+                       `(allocate-typed-vector ,element-type-keyword ,dims)
+                       `(allocate-typed-vector ,element-type-keyword ,dims ,initial-element)))
                     (t                        ;Should do more here
                      (comp-make-uarray dims keys (type-keyword-code element-type-keyword)))))
              (type (infer-array-type dims element-type element-type-p displaced-to-p fill-pointer-p adjustable-p env)))
         `(the ,type ,expansion)))
-        
+
         call))
 
 (defun comp-make-displaced-array (dims keys)
@@ -761,7 +779,7 @@
 (defun comp-make-array-1 (dims keys)
   (let* ((call-list (make-list 10 :initial-element nil))
 	 (dims-var (make-symbol "DIMS"))
-         (let-list (comp-nuke-keys keys                                   
+         (let-list (comp-nuke-keys keys
                                    '((:element-type 0 1)
                                      (:displaced-to 2)
                                      (:displaced-index-offset 3)
@@ -807,7 +825,7 @@
 
 
 
-                                 
+
 
 (define-compiler-macro mapc  (&whole call fn lst &rest more)
   (if more
@@ -847,7 +865,7 @@
                (every (lambda (elt) (equal-iff-eql-p elt env)) (%cadr list))))
     `(memeql ,item ,list)
     call))
-  
+
 (define-compiler-macro memeql (&whole call &environment env item list)
   (if (or (eql-iff-eq-p item env)
           (and (quoted-form-p list)
@@ -892,7 +910,7 @@
 (define-compiler-macro nthcdr (&whole call &environment env count list)
   (if (and (fixnump count)
            (%i>= count 0)
-           (%i< count 4))  
+           (%i< count 4))
      (if (%izerop count)
        `(require-type ,list 'list)
        `(,(svref '#(cdr cddr cdddr) (%i- count 1)) ,list))
@@ -917,11 +935,11 @@
 ;;; optimize settings], ;but I don't think this can be done just with
 ;;; optimizers... For now, at least try to get it to become (%car
 ;;; (<typecheck> foo)).
-(define-compiler-macro require-type (&whole call &environment env arg type)
+(define-compiler-macro require-type (&whole call &environment env arg type &aux ctype)
   (cond ((and (or (eq type t)
                   (and (quoted-form-p type)
                        (setq type (%cadr type))))
-	      (not (typep (specifier-type type) 'unknown-ctype)))	 
+              (setq ctype (specifier-type-if-known type env)))
          (cond ((nx-form-typep arg type env) arg)
                ((eq type 'simple-vector)
                 `(the simple-vector (require-simple-vector ,arg)))
@@ -941,28 +959,28 @@
                 `(the number (require-number ,arg)))
                ((eq type 'symbol)
                 `(the symbol (require-symbol ,arg)))
-               ((type= (specifier-type type)
+               ((type= ctype
                        (specifier-type '(signed-byte 8)))
-                `(the (signed-byte 8) (require-s8 ,arg)))               
-               ((type= (specifier-type type)
+                `(the (signed-byte 8) (require-s8 ,arg)))
+               ((type= ctype
                        (specifier-type '(unsigned-byte 8)))
                 `(the (unsigned-byte 8) (require-u8 ,arg)))
-               ((type= (specifier-type type)
+               ((type= ctype
                        (specifier-type '(signed-byte 16)))
                 `(the (signed-byte 16) (require-s16 ,arg)))
-               ((type= (specifier-type type)
+               ((type= ctype
                        (specifier-type '(unsigned-byte 16)))
-                `(the (unsigned-byte 16) (require-u16 ,arg)))               
-               ((type= (specifier-type type)
+                `(the (unsigned-byte 16) (require-u16 ,arg)))
+               ((type= ctype
                        (specifier-type '(signed-byte 32)))
                 `(the (signed-byte 32) (require-s32 ,arg)))
-               ((type= (specifier-type type)
+               ((type= ctype
                        (specifier-type '(unsigned-byte 32)))
                 `(the (unsigned-byte 32) (require-u32 ,arg)))
-               ((type= (specifier-type type)
+               ((type= ctype
                        (specifier-type '(signed-byte 64)))
                 `(the (signed-byte 64) (require-s64 ,arg)))
-               ((type= (specifier-type type)
+               ((type= ctype
                        (specifier-type '(unsigned-byte 64)))
                 `(the (unsigned-byte 64) (require-u64 ,arg)))
                #+nil
@@ -1162,8 +1180,8 @@
                  (declare (dynamic-extent ,temp-var))
                  (dolist (,elt-var ,sequence (%cdr ,result-var))
                    (,loop-test (funcall ,test (funcall ,key ,elt-var))
-                               (setq ,temp-var 
-                                     (%cdr 
+                               (setq ,temp-var
+                                     (%cdr
                                       (%rplacd ,temp-var (list ,elt-var)))))))))
           call))
       call)))
@@ -1282,7 +1300,7 @@
   (if (nx-form-typep n0 'fixnum env)
     `(not (logbitp 0 (the fixnum ,n0)))
     w))
-  
+
 
 (define-compiler-macro logandc2 (n0 n1)
   (let ((n1var (gensym))
@@ -1322,7 +1340,7 @@
             (if n0p
               `(require-type ,n0 'integer)
               identity)))))))
-          
+
 (define-compiler-macro logand (&whole w &rest all)
   (declare (ignore all))
   (transform-logop w -1 'logand-2))
@@ -1345,15 +1363,15 @@
            (nx-form-typep n2 'fixnum env))
     `(not (eql 0 (logand ,n1 ,n2)))
     w))
-  
+
 
 (defmacro defsynonym (from to)
   ;Should maybe check for circularities.
   `(progn
      (setf (compiler-macro-function ',from) nil)
      (let ((pair (assq ',from *nx-synonyms*)))
-       (if pair (rplacd pair ',to) 
-           (push (cons ',from ',to) 
+       (if pair (rplacd pair ',to)
+           (push (cons ',from ',to)
                  *nx-synonyms*))
        ',to)))
 
@@ -1480,12 +1498,12 @@
                                     `((eq (%svref ,temp target::vectorH.logsize-cell) ,(car dims)))))))))))))
         `(array-%%typep ,thing ,ctype))))))
 
-                              
-  
+
+
 (defun optimize-typep (thing type env)
   ;; returns a new form, or nil if it can't optimize
-  (let* ((ctype (ignore-errors (specifier-type type))))
-    (when (and ctype (not (typep ctype 'unknown-ctype)))
+  (let* ((ctype (specifier-type-if-known type env)))
+    (when ctype
       (let* ((type (type-specifier ctype))
              (predicate (if (typep type 'symbol) (type-predicate type))))
         (if (and predicate (symbolp predicate))
@@ -1508,10 +1526,10 @@
                             `(builtin-typep ,thing (load-time-value (find-builtin-cell ',type))))
                            (t nil)))
                     ((consp type)
-                     (cond 
+                     (cond
                        ((info-type-builtin type) ; byte types
                         `(builtin-typep ,thing (load-time-value (find-builtin-cell ',type))))
-                       (t 
+                       (t
                         (case (%car type)
                           (satisfies `(funcall ',(cadr type) ,thing))
                           (eql `(eql ,thing ',(cadr type)))
@@ -1531,11 +1549,10 @@
                     (t nil))))))))
 
 (define-compiler-macro typep  (&whole call &environment env thing type &optional e)
-  (declare (ignore e))
   (if (quoted-form-p type)
-    (if (constantp thing)
-      (typep (if (quoted-form-p thing) (%cadr thing) thing) (%cadr type))
-      (or (optimize-typep thing (%cadr type) env)
+    (if (and (constantp thing) (specifier-type-if-known type env))
+      (typep (if (quoted-form-p thing) (%cadr thing) thing) (%cadr type) env)
+      (or (and (null e) (optimize-typep thing (%cadr type) env))
           call))
     (if (eq type t)
       `(progn ,thing t)
@@ -1684,7 +1701,7 @@
 
 
 
-                       
+
 (defsynonym %get-unsigned-byte %get-byte)
 (defsynonym %get-unsigned-word %get-word)
 (defsynonym %get-signed-long %get-long)
@@ -1788,10 +1805,10 @@
 
 (define-compiler-macro aref (&whole call a &rest subscripts &environment env)
   (let* ((ctype (if (nx-form-typep a 'array env)
-                  (specifier-type (nx-form-type a env))))
+                  (specifier-type (nx-form-type a env) env)))
          (type (if ctype (type-specifier (array-ctype-specialized-element-type ctype))))
          (useful (unless (or (eq type *) (eq type t))
-                   type)))  
+                   type)))
     (if (= 2 (length subscripts))
       (setq call `(%aref2 ,a ,@subscripts))
       (if (= 3 (length subscripts))
@@ -1867,15 +1884,14 @@
         (= ,gtype ,(nx-lookup-target-uvector-subtag :simple-string))))))
 
 
-(defsetf %misc-ref %misc-set)
 
+(defsetf %misc-ref %misc-set)
 
 (define-compiler-macro lockp (lock)
   (let* ((tag (nx-lookup-target-uvector-subtag :lock)))
     `(eq ,tag (typecode ,lock))))
 
-
-(define-compiler-macro integerp (thing)  
+(define-compiler-macro integerp (thing)
   (let* ((typecode (gensym))
          (fixnum-tag (arch::target-fixnum-tag (backend-target-arch *target-backend*)))
          (bignum-tag (nx-lookup-target-uvector-subtag :bignum)))
@@ -1884,7 +1900,7 @@
       (if (= ,typecode ,fixnum-tag)
         t
         (= ,typecode ,bignum-tag)))))
-       
+
 (define-compiler-macro %composite-pointer-ref (size pointer offset)
   (if (constantp size)
     `(%inc-ptr ,pointer ,offset)
@@ -1984,7 +2000,7 @@
       call)))
 
 (define-compiler-macro float (&whole call number &optional (other 0.0f0 other-p) &environment env)
-  
+
   (cond ((and (typep other 'single-float)
               (nx-form-typep number 'double-float env))
          `(the single-float (%double-to-single ,number)))

@@ -2378,8 +2378,8 @@ Or something. Right? ~s ~s" var varbits))
 (defun nx-form-typep (arg type &optional (env *nx-lexical-environment*))
   (setq type (nx-target-type (type-expand type)))
   (if (constantp arg)
-    (typep (nx-unquote arg) type)
-    (subtypep (nx-form-type arg env) type)))
+    (typep (nx-unquote arg) type env)
+    (subtypep (nx-form-type arg env) type env)))
 
 
 (defun nx-binary-fixnum-op-p (form1 form2 env &optional ignore-result-type)

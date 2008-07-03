@@ -471,7 +471,8 @@
 (defmacro define-type-method ((class method &rest more-methods)
 			            lambda-list &body body)
   `(progn
-     (let* ((fn #'(lambda ,lambda-list ,@body)))
+     (let* ((fn (nfunction (,class ,method ,@more-methods)
+                           (lambda ,lambda-list ,@body))))
        ,@(mapcar #'(lambda (method)
 		         `(setf (%svref
 			           (type-class-or-lose ',class)
@@ -743,8 +744,8 @@
 (define-type-method (constant :simple-=) (type1 type2)
   (type= (constant-ctype-type type1) (constant-ctype-type type2)))
 
-(def-type-translator constant-argument (type)
-  (make-constant-ctype :type (specifier-type type)))
+(def-type-translator constant-argument (type &environment env)
+  (make-constant-ctype :type (specifier-type type env)))
 
 
 ;;; Parse-Args-Types  --  Internal
@@ -754,26 +755,27 @@
 ;;; for both FUNCTION and VALUES types.
 ;;;
 
-(defun parse-args-types (lambda-list result)
+(defun parse-args-types (lambda-list result &optional env)
   (multiple-value-bind (required optional restp rest keyp keys allowp aux)
 		           (parse-lambda-list lambda-list)
     (when aux
       (error "&Aux in a FUNCTION or VALUES type: ~S." lambda-list))
-    (setf (args-ctype-required result) (mapcar #'specifier-type required))
-    (setf (args-ctype-optional result) (mapcar #'specifier-type optional))
-    (setf (args-ctype-rest result) (if restp (specifier-type rest) nil))
-    (setf (args-ctype-keyp result) keyp)
-    (let* ((key-info ()))
-      (dolist (key keys)
+    (flet ((parse (spec) (specifier-type spec env)))
+      (setf (args-ctype-required result) (mapcar #'parse required))
+      (setf (args-ctype-optional result) (mapcar #'parse optional))
+      (setf (args-ctype-rest result) (if restp (parse rest) nil))
+      (setf (args-ctype-keyp result) keyp)
+      (let* ((key-info ()))
+        (dolist (key keys)
 	  (when (or (atom key) (/= (length key) 2))
 	    (signal-program-error "Keyword type description is not a two-list: ~S." key))
 	  (let ((kwd (first key)))
 	    (when (member kwd key-info :test #'eq :key #'(lambda (x) (key-info-name x)))
 	      (signal-program-error "Repeated keyword ~S in lambda list: ~S." kwd lambda-list))
 	    (push (make-key-info :name kwd
-                               :type (specifier-type (second key))) key-info)))
-      (setf (args-ctype-keywords result) (nreverse key-info)))
-    (setf (args-ctype-allowp result) allowp)))
+                                 :type (parse (second key))) key-info)))
+        (setf (args-ctype-keywords result) (nreverse key-info)))
+      (setf (args-ctype-allowp result) allowp))))
 
 ;;; Unparse-Args-Types  --  Internal
 ;;;
@@ -806,17 +808,17 @@
 
     (nreverse result)))
 
-(def-type-translator function (&optional (args '*) (result '*))
+(def-type-translator function (&optional (args '*) (result '*) &environment env)
   (let ((res (make-function-ctype
-	        :returns (values-specifier-type result))))
+	        :returns (values-specifier-type result env))))
     (if (eq args '*)
 	(setf (function-ctype-wild-args res) t)
-	(parse-args-types args res))
+	(parse-args-types args res env))
     res))
 
-(def-type-translator values (&rest values)
+(def-type-translator values (&rest values &environment env)
   (let ((res (make-values-ctype)))
-    (parse-args-types values res)
+    (parse-args-types values res env)
     (when (or (values-ctype-keyp res) (values-ctype-allowp res))
       (signal-program-error "&KEY or &ALLOW-OTHER-KEYS in values type: ~s"
 			    res))
@@ -1328,15 +1330,21 @@
 ;;; off Structure types as a special case.
 ;;;
 
-(defun values-specifier-type-internal (orig)
+(defun values-specifier-type-internal (orig env)
   (or (info-type-builtin orig) ; this table could contain bytes etal and ands ors nots of built-in types - no classes
       
-      (let ((spec (type-expand orig)))
+      ;; Now that we have our hands on the environment, we could pass it into type-expand,
+      ;; but we'd have no way of knowing whether the expansion depended on the env, so
+      ;; we wouldn't know if the result is safe to cache.   So for now don't let type
+      ;; expanders see the env, which just means they won't see compile-time types.
+      (let ((spec (type-expand orig #+not-yet env)))
         (cond
          ((and (not (eq spec orig))
                (info-type-builtin spec)))
-         ((eq (info-type-kind spec) :instance)
-          (let* ((class-ctype (%class.ctype (find-class spec))))
+         ((or (eq (info-type-kind spec) :instance)
+              (and (symbolp spec)
+                   (typep (find-class spec nil env) 'compile-time-class)))
+          (let* ((class-ctype (%class.ctype (find-class spec t env))))
             (or (class-ctype-translation class-ctype)
                 class-ctype)))
          ((typep spec 'class)
@@ -1348,7 +1356,7 @@
          (t
           (let* ((lspec (if (atom spec) (list spec) spec))
                  (fun (info-type-translator (car lspec))))
-            (cond (fun (funcall fun lspec nil))
+            (cond (fun (funcall fun lspec env))
                   ((or (and (consp spec) (symbolp (car spec)))
                        (symbolp spec))
                    (when *type-system-initialized*
@@ -1362,6 +1370,11 @@
 (eval-when (:compile-toplevel :execute)
   (defconstant type-cache-size (ash 1 12))
   (defconstant type-cache-mask (1- type-cache-size)))
+
+(defun compile-time-ctype-p (ctype)
+  (and (typep ctype 'class-ctype)
+       (typep (class-ctype-class ctype) 'compile-time-class)))
+
 
 ;;; We can get in trouble if we try to cache certain kinds of ctypes,
 ;;; notably MEMBER types which refer to objects which might
@@ -1397,6 +1410,8 @@
      (and (cacheable-ctype-p (cons-ctype-car-ctype ctype))
 	  (cacheable-ctype-p (cons-ctype-cdr-ctype ctype))))
     (unknown-ctype nil)
+    (class-ctype
+     (not (typep (class-ctype-class ctype) 'compile-time-class)))
     ;; Anything else ?  Simple things (numbers, classes) can't lose.
     (t t)))
 		
@@ -1419,12 +1434,12 @@
     (incf ncleared)
     nil)
 
-  (defun values-specifier-type (spec)
+  (defun values-specifier-type (spec &optional env)
     (if (typep spec 'class)
       (let* ((class-ctype (%class.ctype spec)))
         (or (class-ctype-translation class-ctype) class-ctype))
       (if locked
-        (or (values-specifier-type-internal spec)
+        (or (values-specifier-type-internal spec env)
             (make-unknown-ctype :specifier spec))
         (unwind-protect
           (progn
@@ -1437,7 +1452,7 @@
                   (progn
                     (incf hits)
                     (svref type-cache-ctypes idx))
-                  (let* ((ctype (values-specifier-type-internal spec)))
+                  (let* ((ctype (values-specifier-type-internal spec env)))
                     (if ctype
 		      (progn
 			(when (cacheable-ctype-p ctype)
@@ -1445,7 +1460,7 @@
 				(svref type-cache-ctypes idx) ctype))
 			ctype)
                       (make-unknown-ctype :specifier spec)))))
-              (values-specifier-type-internal spec)))
+              (values-specifier-type-internal spec env)))
           (setq locked nil)))))
   
   (defun type-cache-hit-rate ()
@@ -1467,20 +1482,21 @@
 ;;; VALUES type.
 ;;; 
 (defun specifier-type (x &optional env)
-  (declare (ignore env))
-  (let ((res (values-specifier-type x)))
+  (let ((res (values-specifier-type x env)))
     (when (values-ctype-p res)
       (signal-program-error "VALUES type illegal in this context:~%  ~S" x))
     res))
 
-(defun single-value-specifier-type (x)
-  (let ((res (specifier-type x)))
+(defun single-value-specifier-type (x &optional env)
+  (let ((res (specifier-type x env)))
     (if (eq res *wild-type*)
         *universal-type*
         res)))
 
-(defun standardized-type-specifier (spec)
-  (type-specifier (specifier-type spec)))
+(defun standardized-type-specifier (spec &optional env)
+  (handler-case
+      (type-specifier (specifier-type spec env))
+    (parse-unknown-type () spec)))
 
 (defun modified-numeric-type (base
 			      &key
@@ -1845,13 +1861,13 @@
 (define-type-method (negation :simple-=) (type1 type2)
   (type= (negation-ctype-type type1) (negation-ctype-type type2)))
 
-(def-type-translator not (typespec)
-  (let* ((not-type (specifier-type typespec))
+(def-type-translator not (typespec &environment env)
+  (let* ((not-type (specifier-type typespec env))
 	 (spec (type-specifier not-type)))
     (cond
       ;; canonicalize (NOT (NOT FOO))
       ((and (listp spec) (eq (car spec) 'not))
-       (specifier-type (cadr spec)))
+       (specifier-type (cadr spec) env))
       ;; canonicalize (NOT NIL) and (NOT T)
       ((eq not-type *empty-type*) *universal-type*)
       ((eq not-type *universal-type*) *empty-type*)
@@ -1890,12 +1906,12 @@
       ((intersection-ctype-p not-type)
        (apply #'type-union
 	      (mapcar #'(lambda (x)
-			  (specifier-type `(not ,(type-specifier x))))
+			  (specifier-type `(not ,(type-specifier x)) env))
 		      (intersection-ctype-types not-type))))
       ((union-ctype-p not-type)
        (apply #'type-intersection
 	      (mapcar #'(lambda (x)
-			  (specifier-type `(not ,(type-specifier x))))
+			  (specifier-type `(not ,(type-specifier x)) env))
 		      (union-ctype-types not-type))))
       ((member-ctype-p not-type)
        (let ((members (member-ctype-members not-type)))
@@ -1935,29 +1951,29 @@
        (make-negation-ctype :type not-type))
       ((cons-ctype-p not-type)
        (type-union
-	(make-negation-ctype :type (specifier-type 'cons))
+	(make-negation-ctype :type (specifier-type 'cons env))
 	(cond
 	  ((and (not (eq (cons-ctype-car-ctype not-type) *universal-type*))
 		(not (eq (cons-ctype-cdr-ctype not-type) *universal-type*)))
 	   (type-union
 	    (make-cons-ctype
 	     (specifier-type `(not ,(type-specifier
-				     (cons-ctype-car-ctype not-type))))
+				     (cons-ctype-car-ctype not-type))) env)
 	     *universal-type*)
 	    (make-cons-ctype
 	     *universal-type*
 	     (specifier-type `(not ,(type-specifier
-				     (cons-ctype-cdr-ctype not-type)))))))
+				     (cons-ctype-cdr-ctype not-type))) env))))
 	  ((not (eq (cons-ctype-car-ctype not-type) *universal-type*))
 	   (make-cons-ctype
 	    (specifier-type `(not ,(type-specifier
-				    (cons-ctype-car-ctype not-type))))
+				    (cons-ctype-car-ctype not-type))) env)
 	    *universal-type*))
 	  ((not (eq (cons-ctype-cdr-ctype not-type) *universal-type*))
 	   (make-cons-ctype
 	    *universal-type*
 	    (specifier-type `(not ,(type-specifier
-				    (cons-ctype-cdr-ctype not-type))))))
+				    (cons-ctype-cdr-ctype not-type))) env)))
 	  (t (error "Weird CONS type ~S" not-type)))))
       (t (make-negation-ctype :type not-type)))))
 
@@ -2298,7 +2314,7 @@
 (setf (info-type-kind 'number) :primitive
       (info-type-builtin 'number) (make-numeric-ctype :complexp nil))
 
-(def-type-translator complex (&optional spec)
+(def-type-translator complex (&optional spec &environment env)
   (if (eq spec '*)
       (make-numeric-ctype :complexp :complex)
       (labels ((not-numeric ()
@@ -2337,7 +2353,7 @@
                                 (complex1 (car numbers))))))
                    (t                   ; punt on harder stuff for now
                     (not-real)))))
-        (let ((ctype (specifier-type spec)))
+        (let ((ctype (specifier-type spec env)))
           (do-complex ctype)))))
 
 ;;; Check-Bound  --  Internal
@@ -2816,16 +2832,16 @@
      (signal-program-error "Array dimensions is not a list, integer or *:~%  ~S"
 			   dims))))
 
-(def-type-translator array (&optional element-type dimensions)
+(def-type-translator array (&optional element-type dimensions &environment env)
   (specialize-array-type
    (make-array-ctype :dimensions (check-array-dimensions dimensions)
 		     :complexp :maybe
-		     :element-type (specifier-type element-type))))
+		     :element-type (specifier-type element-type env))))
 
-(def-type-translator simple-array (&optional element-type dimensions)
+(def-type-translator simple-array (&optional element-type dimensions &environment env)
   (specialize-array-type
    (make-array-ctype :dimensions (check-array-dimensions dimensions)
-		         :element-type (specifier-type element-type)
+		         :element-type (specifier-type element-type env)
 		         :complexp nil)))
 
 ;;; Order matters here.
@@ -3097,9 +3113,9 @@
 
 
 
-(def-type-translator or (&rest type-specifiers)
+(def-type-translator or (&rest type-specifiers &environment env)
   (apply #'type-union
-	 (mapcar #'specifier-type type-specifiers)))
+	 (mapcar #'(lambda (spec) (specifier-type spec env)) type-specifiers)))
 
 
 ;;; Intersection types
@@ -3199,9 +3215,9 @@
 	       (setf accumulator
 		     (type-intersection accumulator union))))))))
 
-(def-type-translator and (&rest type-specifiers)
+(def-type-translator and (&rest type-specifiers &environment env)
   (apply #'type-intersection
-	 (mapcar #'specifier-type
+	 (mapcar #'(lambda (spec) (specifier-type spec env))
 		 type-specifiers)))
 
 ;;; cons-ctype
@@ -3225,9 +3241,9 @@
 
 (setf (type-predicate 'cons-ctype) 'cons-ctype-p)
   
-(def-type-translator cons (&optional (car-type-spec '*) (cdr-type-spec '*))
-  (make-cons-ctype (specifier-type car-type-spec)
-                   (specifier-type cdr-type-spec)))
+(def-type-translator cons (&optional (car-type-spec '*) (cdr-type-spec '*) &environment env)
+  (make-cons-ctype (specifier-type car-type-spec env)
+                   (specifier-type cdr-type-spec env)))
 
 (define-type-method (cons :unparse) (type)
   (let* ((car-spec (type-specifier (cons-ctype-car-ctype type)))
@@ -3412,7 +3428,8 @@
     (if (and class1 class2)
       (if (memq class2 (class-direct-superclasses class1))
 	(values t t)
-	(if (class-has-a-forward-referenced-superclass-p class1)
+	(if (or (class-has-a-forward-referenced-superclass-p class1)
+                (typep class1 'compile-time-class))
 	  (values nil nil)
 	  (let ((supers (%inited-class-cpl class1)))
 	    (if (memq class2 supers)
@@ -3436,7 +3453,10 @@
   (assert (not (eq type1 type2)))
   (let* ((class1 (if (class-ctype-p type1) (class-ctype-class type1)))
          (class2 (if (class-ctype-p type2) (class-ctype-class type2))))
-    (if (and class1 class2)
+    (if (and class1
+             (not (typep class1 'compile-time-class))
+             class2
+             (not (typep class2 'compile-time-class)))
       (cond ((subclassp class1 class2)
              type1)
             ((subclassp class2 class1)

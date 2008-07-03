@@ -29,7 +29,6 @@
 (require 'backquote)
 (require 'defstruct-macros)
 
-
 (defmacro short-fixnum-p (fixnum)
   `(and (fixnump ,fixnum) (< (integer-length ,fixnum) 16)))
 
@@ -144,7 +143,6 @@ Will differ from *compiling-file* during an INCLUDE")
 	 (skip-compile-file ()
 			    :report (lambda (stream) (format stream "Skip compiling ~s" src))
 			    (return))))))
-
 
 (defun %compile-file (src output-file verbose print load features
                           save-local-symbols save-doc-strings save-definitions
@@ -776,6 +774,9 @@ Will differ from *compiling-file* during an INCLUDE")
 (defun define-compile-time-structure (sd refnames predicate env)
   (let ((defenv (definition-environment env)))
     (when defenv
+      (when (non-nil-symbolp (sd-name sd))
+        (push (make-instance 'compile-time-class :name (sd-name sd))
+              (defenv.classes defenv)))
       (setf (defenv.structures defenv) (alist-adjoin (sd-name sd) sd (defenv.structures defenv)))
       (let* ((structrefs (defenv.structrefs defenv)))
         (when (and (null (sd-type sd))

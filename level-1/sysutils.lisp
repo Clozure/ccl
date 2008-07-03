@@ -294,11 +294,10 @@
 
 (defun typep (object type &optional env)
   "Is OBJECT of type TYPE?"
-  (declare (ignore env))
   (let* ((pred (if (symbolp type) (type-predicate type))))
     (if pred
       (funcall pred object)
-      (values (%typep object type)))))
+      (values (%typep object (if env (specifier-type type env) type))))))
 
 
 
@@ -340,12 +339,11 @@
 ; Subtypep.
 
 (defun subtypep (type1 type2 &optional env)
-  (declare (ignore env))
   "Return two values indicating the relationship between type1 and type2.
   If values are T and T, type1 definitely is a subtype of type2.
   If values are NIL and T, type1 definitely is not a subtype of type2.
   If values are NIL and NIL, it couldn't be determined."
-  (csubtypep (specifier-type type1) (specifier-type type2)))
+  (csubtypep (specifier-type type1 env) (specifier-type type2 env)))
 
 
 
