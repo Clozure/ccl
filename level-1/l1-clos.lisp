@@ -154,6 +154,8 @@
 (defmethod class-default-initargs ((class class)))
 (defmethod class-direct-default-initargs ((class class)))
 
+(defmethod compile-time-class-p ((class class)) nil)
+
 (defmethod direct-slot-definition-class ((class std-class) &key (allocation :instance) &allow-other-keys)
   (unless (member allocation '(:instance :class))
     (report-bad-arg allocation '(member (:instance :class))))
@@ -571,7 +573,8 @@
                          (error "circular class hierarchy: the class ~s is a superclass of at least one of its superclasses (~s)." original class))
                        (let* ((fwdref (scan-forward-refs s seen)))
                          (when fwdref (return fwdref)))))))))
-    (scan-forward-refs original ())))
+    (or (compile-time-class-p original)
+        (scan-forward-refs original ()))))
 
 (defun class-forward-referenced-superclasses (original)
   (labels ((scan-forward-refs (class seen fwdrefs)
@@ -624,9 +627,7 @@
 	     (not (class-has-a-forward-referenced-superclass-p class)))
     (finalize-inheritance class)
     (return-from update-class))
-  (when (or finalizep
-	    (class-finalized-p class)
-	    (not (class-has-a-forward-referenced-superclass-p class)))
+  (when (or finalizep (class-finalized-p class))
     (let* ((cpl (update-cpl class (compute-class-precedence-list  class))))
       ;; This -should- be made to work for structure classes
       (update-slots class (compute-slots class))
@@ -1191,6 +1192,12 @@ governs whether DEFCLASS makes that distinction or not.")
 
 ;;; For %compile-time-defclass
 (defclass compile-time-class (class) ())
+
+(defmethod compile-time-class-p ((class compile-time-class))
+  t)
+
+(defmethod class-finalized-p ((class compile-time-class))
+  nil)
 
 
 (defclass structure-slot-definition (slot-definition) ())
