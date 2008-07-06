@@ -17,10 +17,6 @@
 #include "lispdcmd.h"
 #include <stdio.h>
 
-const char *
-foreign_name_and_offset(void *frame, unsigned *delta)
-{
-}
 
 
 void
@@ -54,9 +50,7 @@ print_lisp_frame(lisp_frame *frame)
 Boolean
 lisp_frame_p(lisp_frame *f)
 {
-  LispObj fun, ra;
-  unsigned offset;
-  int sdisp;
+  LispObj ra;
 
   if (f) {
     ra = f->tra;
@@ -65,16 +59,6 @@ lisp_frame_p(lisp_frame *f)
     }
 
     if (tag_of(ra) == tag_tra) {
-#if 0
-      if ((*((unsigned short *)ra) == RECOVER_FN_FROM_RIP_WORD0) &&
-          (*((unsigned char *)(ra+2)) == RECOVER_FN_FROM_RIP_BYTE2)) {
-        sdisp = (*(int *) (ra+3));
-        fun = RECOVER_FN_FROM_RIP_LENGTH+ra+sdisp;
-      }
-      if (fulltag_of(fun) == fulltag_function) {
-        return true;
-      }
-#endif
       return true;
     } else if ((ra == lisp_global(LEXPR_RETURN)) ||
 	       (ra == lisp_global(LEXPR_RETURN1V))) {
@@ -139,6 +123,10 @@ plbt_sp(LispObj currentRBP)
     char *ilevel = interrupt_level_description(tcr);
     vs_area = tcr->vs_area;
     cs_area = tcr->cs_area;
+    if ((((LispObj) ptr_to_lispobj(vs_area->low)) > currentRBP) ||
+        (((LispObj) ptr_to_lispobj(vs_area->high)) < currentRBP)) {
+      currentRBP = (LispObj) (tcr->save_rbp);
+    }
     if ((((LispObj) ptr_to_lispobj(vs_area->low)) > currentRBP) ||
         (((LispObj) ptr_to_lispobj(vs_area->high)) < currentRBP)) {
       Dprintf("\nFramepointer [#x%lX] in unknown area.", currentRBP);
