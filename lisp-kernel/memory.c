@@ -39,7 +39,7 @@ void
 allocation_failure(Boolean pointerp, natural size)
 {
   char buf[64];
-  sprintf(buf, "Can't allocate %s of size %d bytes.", pointerp ? "pointer" : "handle", size);
+  sprintf(buf, "Can't allocate %s of size %ld bytes.", pointerp ? "pointer" : "handle", size);
   Fatal(":   Kernel memory allocation failure.  ", buf);
 }
 
@@ -199,10 +199,8 @@ Boolean
 resize_dynamic_heap(BytePtr newfree, 
 		    natural free_space_size)
 {
-  extern int page_size;
   area *a = active_dynamic_area;
-  BytePtr newlimit, protptr, zptr;
-  int psize = page_size;
+  BytePtr newlimit;
   if (free_space_size) {
     BytePtr lowptr = a->active;
     newlimit = lowptr + align_to_power_of_2(newfree-lowptr+free_space_size,
@@ -410,10 +408,8 @@ tenure_to_area(area *target)
   area *a = active_dynamic_area, *child;
   BytePtr 
     curfree = a->active,
-    target_low = target->low,
-    tenured_low = tenured_area->low;
+    target_low = target->low;
   natural 
-    dynamic_dnodes = area_dnode(curfree, a->low),
     new_tenured_dnodes = area_dnode(curfree, tenured_area->low);
   bitvector 
     refbits = tenured_area->refbits,
@@ -495,8 +491,6 @@ egc_control(Boolean activate, BytePtr curfree)
       a->active = curfree;
     }
     if (activate) {
-      LispObj *heap_start = ptr_from_lispobj(lisp_global(HEAP_START));
-
       a->older = g1_area;
       tenure_to_area(tenured_area);
       egc_is_active = true;

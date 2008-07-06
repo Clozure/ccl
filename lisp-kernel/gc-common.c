@@ -279,14 +279,12 @@ ncircle_mark_weak_htabv(LispObj htabv)
   int i, skip = hash_table_vector_header_count;
   hash_table_vector_header *hashp = (hash_table_vector_header *)(untag(htabv));
   natural
-    dnode,
     npairs = (header_element_count(hashp->header) - 
               (hash_table_vector_header_count - 1)) >> 1;
-  LispObj *pairp = (LispObj*) (hashp+1), weakelement;
+  LispObj *pairp = (LispObj*) (hashp+1);
   Boolean 
     weak_on_value = ((hashp->flags & nhash_weak_value_mask) != 0);
-  bitvector markbits = GCmarkbits;
-  int tag;
+
 
   for (i = 2; i <= skip; i++) {
     rmark(deref(htabv,i));
@@ -422,7 +420,6 @@ traditional_markhtabvs()
 {
   LispObj this, header, pending;
   int subtag;
-  bitvector markbits = GCmarkbits;
   hash_table_vector_header *hashp;
   Boolean marked_new;
 
@@ -447,7 +444,7 @@ traditional_markhtabvs()
           }
         }
       } else if (subtag == subtag_hash_vector) {
-        natural elements = header_element_count(header), i;
+        natural elements = header_element_count(header);
 
         hashp = (hash_table_vector_header *) ptr_from_lispobj(untag(this));
         if (hashp->flags & nhash_weak_mask) {
@@ -506,8 +503,6 @@ ncircle_markhtabvs()
 {
   LispObj this, header, pending = 0;
   int subtag;
-  bitvector markbits = GCmarkbits;
-  hash_table_vector_header *hashp;
   Boolean marked_new;
 
   /* First, process any weak hash tables that may have
@@ -924,7 +919,7 @@ forward_tcr_tlb(TCR *tcr)
 void
 reclaim_static_dnodes()
 {
-  natural nstatic = tenured_area->static_dnodes, i, bits, mask, bitnum;
+  natural nstatic = tenured_area->static_dnodes, i, bits, bitnum;
   cons *c = (cons *)tenured_area->low, *d;
   bitvector bitsp = GCmarkbits;
   LispObj head = lisp_global(STATIC_CONSES);
@@ -1001,14 +996,12 @@ Boolean just_purified_p = false;
 void 
 gc(TCR *tcr, signed_natural param)
 {
-  xframe_list *xframes = (tcr->xframe);
   struct timeval start, stop;
   area *a = active_dynamic_area, *to = NULL, *from = NULL, *note = NULL;
   unsigned timeidx = 1;
   paging_info paging_info_start;
-  xframe_list *x;
   LispObj
-    pkg,
+    pkg = 0,
     itabvec = 0;
   BytePtr oldfree = a->active;
   TCR *other_tcr;
@@ -1233,7 +1226,6 @@ gc(TCR *tcr, signed_natural param)
       for (i = 0; i < n; i++, raw++) {
         sym = *raw;
         if (is_symbol_fulltag(sym)) {
-          lispsymbol *rawsym = (lispsymbol *)ptr_from_lispobj(untag(sym));
           natural dnode = gc_area_dnode(sym);
 
           if ((dnode < GCndnodes_in_area) &&

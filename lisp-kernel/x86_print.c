@@ -253,8 +253,7 @@ sprint_symbol(LispObj o)
   lispsymbol *rawsym = (lispsymbol *) ptr_from_lispobj(untag(o));
   LispObj 
     pname = rawsym->pname,
-    package = rawsym->package_predicate,
-    pname_header = header_of(pname);
+    package = rawsym->package_predicate;
 
   if (fulltag_of(package) == fulltag_cons) {
     package = car(package);
@@ -317,7 +316,7 @@ void
 sprint_tra(LispObj o, int depth)
 {
   signed sdisp;
-  unsigned disp;
+  unsigned disp = 0;
   LispObj f = 0;
 
   if ((*((unsigned short *)o) == RECOVER_FN_FROM_RIP_WORD0) &&

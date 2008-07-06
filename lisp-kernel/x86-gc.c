@@ -143,7 +143,7 @@ check_all_mark_bits(LispObj *nodepointer)
 void
 check_range(LispObj *start, LispObj *end, Boolean header_allowed)
 {
-  LispObj node, *current = start, *prev;
+  LispObj node, *current = start, *prev = NULL;
   int tag;
   natural elements;
 
@@ -411,7 +411,7 @@ rmark(LispObj n)
 {
   int tag_n = fulltag_of(n);
   bitvector markbits = GCmarkbits;
-  natural dnode, bits, *bitsp, mask, original_n = n;
+  natural dnode, bits, *bitsp, mask;
 
   if (!is_node_fulltag(tag_n)) {
     return;
@@ -1438,9 +1438,6 @@ compact_dynamic_heap()
     diff;
   int tag;
   bitvector markbits = GCmarkbits;
-    /* keep track of whether or not we saw any
-       code_vector headers, and only flush cache if so. */
-  Boolean GCrelocated_code_vector = false;
 
   if (dnode < GCndnodes_in_area) {
     lisp_global(FWDNUM) += (1<<fixnum_shift);
@@ -1746,7 +1743,7 @@ Boolean
 copy_ivector_reference(LispObj *ref, BytePtr low, BytePtr high, area *dest)
 {
   LispObj obj = *ref, header, new;
-  natural tag = fulltag_of(obj), header_tag, header_subtag;
+  natural tag = fulltag_of(obj), header_tag;
   Boolean changed = false;
 
   if ((tag == fulltag_misc) &&
@@ -1992,7 +1989,6 @@ purify(TCR *tcr, signed_natural param)
 
   TCR  *other_tcr;
   natural max_pure_size;
-  OSErr err;
   BytePtr new_pure_start;
 
 

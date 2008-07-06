@@ -438,7 +438,7 @@ int
 callback_to_lisp (TCR * tcr, LispObj callback_macptr, ExceptionInformation *xp,
                   natural arg1, natural arg2, natural arg3, natural arg4, natural arg5)
 {
-  natural  callback_ptr, i;
+  natural  callback_ptr;
   int delta;
   unsigned old_mxcsr = get_mxcsr();
 
@@ -678,9 +678,8 @@ handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valenc
 Boolean
 handle_floating_point_exception(TCR *tcr, ExceptionInformation *xp, siginfo_t *info)
 {
-  int code = info->si_code, rfn = 0, skip;
-  pc program_counter = (pc)xpPC(xp);
-  LispObj rpc = (LispObj) program_counter, xcf, cmain = nrs_CMAIN.vcell,
+  int code = info->si_code, skip;
+  LispObj  xcf, cmain = nrs_CMAIN.vcell,
 
     save_rbp = xpGPR(xp,Irbp), save_vsp = xpGPR(xp,Isp);
 
@@ -1182,7 +1181,7 @@ find_foreign_rsp(LispObj rsp, area *foreign_area, TCR *tcr)
       ((BytePtr)rsp > foreign_area->high)) {
     rsp = (LispObj)(tcr->foreign_sp);
   }
-  return (LispObj *) ((rsp-128 & ~15));
+  return (LispObj *) (((rsp-128) & ~15));
 }
 
 
@@ -1578,9 +1577,6 @@ quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
 void
 quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
 {
-#ifdef DARWIN_GS_HACK
-  Boolean gs_was_tcr = ensure_gs_pthread();
-#endif
   TCR *tcr = get_tcr(false);
   area *a;
   sigset_t mask;
@@ -1610,6 +1606,7 @@ quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
 #endif
 
 #ifndef USE_SIGALTSTACK
+void
 arbstack_quit_handler(int signum, siginfo_t *info, ExceptionInformation *context)
 {
 #ifdef DARWIN_GS_HACK
@@ -1916,7 +1913,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
   }
   if ((program_counter >= &egc_write_barrier_start) &&
       (program_counter < &egc_write_barrier_end)) {
-    LispObj *ea = 0, val, root;
+    LispObj *ea = 0, val, root = 0;
     bitvector refbits = (bitvector)(lisp_global(REFBITS));
     Boolean need_store = true, need_check_memo = true, need_memoize_root = false;
 
@@ -1980,7 +1977,7 @@ void
 normalize_tcr(ExceptionInformation *xp, TCR *tcr, Boolean is_other_tcr)
 {
   void *cur_allocptr = (void *)(tcr->save_allocptr);
-  LispObj lisprsp, lisptsp;
+  LispObj lisprsp;
   area *a;
 
   if (xp) {
@@ -2025,7 +2022,6 @@ gc_like_from_xp(ExceptionInformation *xp,
                 signed_natural param)
 {
   TCR *tcr = get_tcr(false), *other_tcr;
-  ExceptionInformation* other_xp;
   int result;
   signed_natural inhibit;
 
@@ -2241,7 +2237,6 @@ fatal_mach_error(char *format, ...);
 void
 restore_mach_thread_state(mach_port_t thread, ExceptionInformation *pseudosigcontext)
 {
-  int i, j;
   kern_return_t kret;
 #if WORD_SIZE == 64
   MCONTEXT_T mc = UC_MCONTEXT(pseudosigcontext);
@@ -2318,15 +2313,13 @@ create_thread_context_frame(mach_port_t thread,
                             )
 {
   mach_msg_type_number_t thread_state_count;
-  kern_return_t result;
-  int i,j;
   ExceptionInformation *pseudosigcontext;
 #ifdef X8664
   MCONTEXT_T mc;
 #else
   struct mcontext *mc;
 #endif
-  natural stackp, backlink;
+  natural stackp;
 
   
   stackp = (LispObj) find_foreign_rsp(ts->__rsp,tcr->cs_area,tcr);
@@ -2412,8 +2405,7 @@ setup_signal_frame(mach_port_t thread,
   x86_thread_state_t new_ts;
 #endif
   ExceptionInformation *pseudosigcontext;
-  int i, j, old_valence = tcr->valence;
-  kern_return_t result;
+  int  old_valence = tcr->valence;
   natural stackp, *stackpp;
   siginfo_t *info;
 
@@ -2523,7 +2515,7 @@ catch_exception_raise(mach_port_t exception_port,
 		      exception_data_t code_vector,
 		      mach_msg_type_number_t code_count)
 {
-  int signum = 0, code = *code_vector, code1;
+  int signum = 0, code = *code_vector;
   TCR *tcr = TCR_FROM_EXCEPTION_PORT(exception_port);
   kern_return_t kret, call_kret;
 #ifdef X8664
@@ -2806,7 +2798,6 @@ setup_mach_exception_handling(TCR *tcr)
 {
   mach_port_t 
     thread_exception_port = TCR_TO_EXCEPTION_PORT(tcr),
-    target_thread = pthread_mach_thread_np((pthread_t)ptr_from_lispobj(tcr->osid)),
     task_self = mach_task_self();
   kern_return_t kret;
 

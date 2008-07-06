@@ -1107,7 +1107,6 @@ xNewThread(natural control_stack_size,
 
 {
   thread_activation activation;
-  TCR *current = get_tcr(false);
 
 
   activation.tsize = temp_stack_size;
@@ -1356,7 +1355,7 @@ lisp_suspend_tcr(TCR *tcr)
 Boolean
 resume_tcr(TCR *tcr)
 {
-  int suspend_count = atomic_decf(&(tcr->suspend_count)), err;
+  int suspend_count = atomic_decf(&(tcr->suspend_count));
   if (suspend_count == 0) {
 #ifdef DARWIN
     if (tcr->flags & (1<<TCR_FLAG_BIT_ALT_SUSPEND)) {
@@ -1573,7 +1572,7 @@ rwlock_new()
   extern int cache_block_size;
 
   void *p = calloc(1,sizeof(rwlock)+cache_block_size-1);
-  rwlock *rw;
+  rwlock *rw = NULL;;
   
   if (p) {
     rw = (rwlock *) ((((natural)p)+cache_block_size-1) & (~(cache_block_size-1)));

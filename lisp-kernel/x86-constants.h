@@ -37,7 +37,7 @@
 #endif
 
 #define dnode_size (node_size*2)
-#define dnode_shift node_shift+1
+#define dnode_shift (node_shift+1)
 
 #define INTERRUPT_LEVEL_BINDING_INDEX (1)
 

@@ -89,7 +89,7 @@ find_symbol(char *name)
 {
   area *a =  ((area *) (ptr_from_lispobj(lisp_global(ALL_AREAS))))->succ;
   area_code code;
-  LispObj sym;
+  LispObj sym = 0;
 
   while ((code = a->code) != AREA_VOID) {
     if ((code == AREA_STATIC) ||

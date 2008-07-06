@@ -202,7 +202,6 @@ allocate_lisp_stack(natural useable,
   natural size = useable+softsize+hardsize;
   natural overhead;
   BytePtr base, softlimit, hardlimit;
-  OSErr err;
   Ptr h = allocate_stack(size+4095);
   protected_area_ptr hprotp = NULL, sprotp;
 
@@ -476,7 +475,7 @@ Boolean
 commit_pages(void *start, size_t len)
 {
   if (len != 0) {
-    int i, err;
+    int i;
     void *addr;
 
     for (i = 0; i < 3; i++) {
@@ -502,6 +501,7 @@ commit_pages(void *start, size_t len)
     }
     return false;
   }
+  return true;
 }
 #endif
 
@@ -531,7 +531,8 @@ extend_readonly_area(unsigned more)
   unsigned mask;
   BytePtr new_start, new_end;
 
-  if (a = find_readonly_area()) {
+  a = find_readonly_area();
+  if (a) {
     if ((a->active + more) > a->high) {
       return NULL;
     }
@@ -630,17 +631,13 @@ create_reserved_area(natural totalsize)
 area *
 create_reserved_area(natural totalsize)
 {
-  OSErr err;
   Ptr h;
-  natural base, n;
+  natural base;
   BytePtr 
     end, 
     lastbyte, 
     start, 
-    protstart, 
-    p, 
-    want = (BytePtr)IMAGE_BASE_ADDRESS,
-    try2;
+    want = (BytePtr)IMAGE_BASE_ADDRESS;
   area *reserved;
   Boolean fixed_map_ok = false;
 
@@ -688,7 +685,7 @@ create_reserved_area(natural totalsize)
   start = mmap((void *)want,
 	       totalsize + heap_segment_size,
 	       PROT_NONE,
-	       MAP_PRIVATE | MAP_ANON | (fixed_map_ok ? MAP_FIXED : 0, MAP_NORESERVE),
+	       MAP_PRIVATE | MAP_ANON | (fixed_map_ok ? MAP_FIXED : 0) | MAP_NORESERVE,
 	       -1,
 	       0);
   if (start == MAP_FAILED) {
@@ -761,7 +758,6 @@ ensure_gc_structures_writable()
 {
   natural 
     ndnodes = area_dnode(lisp_global(HEAP_END),lisp_global(HEAP_START)),
-    npages = (lisp_global(HEAP_END)-lisp_global(HEAP_START)) >> log2_page_size,
     markbits_size = (3*sizeof(LispObj))+((ndnodes+7)>>3),
     reloctab_size = (sizeof(LispObj)*(((ndnodes+((1<<bitmap_shift)-1))>>bitmap_shift)+1));
   BytePtr 
@@ -875,6 +871,7 @@ sigint_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 void
 register_sigint_handler()
 {
+  extern void install_signal_handler(int, void*);
   install_signal_handler(SIGINT, (void *)sigint_handler);
 }
 
@@ -1117,7 +1114,7 @@ process_options(int argc, char *argv[])
 	}
       } else if ((flag = (strncmp(arg, "-R", 2) == 0)) ||
 		 (strcmp(arg, "--heap-reserve") == 0)) {
-	natural reserved_size;
+	natural reserved_size = reserved_area_size;
 
 	if (flag && arg[2]) {
 	  val = arg+2;
@@ -1345,9 +1342,28 @@ check_os_version(char *progname)
 #ifdef WINDOWS
 #else
   struct utsname uts;
+  long got, want;
+  char *got_end,*want_end;
+  want = strtoul(min_os_version,&want_end,10);
 
   uname(&uts);
-  if (strcmp(uts.release, min_os_version) < 0) {
+  got = strtoul(uts.release,&got_end,10);
+
+  while (got == want) {
+    if (*want_end == '.') {
+      want = strtoul(want_end+1,&want_end,10);
+      got = 0;
+      if (*got_end == '.') {
+        got = strtoul(got_end+1,&got_end,10);
+      } else {
+        break;
+      }
+    } else {
+      break;
+    }
+  }
+
+  if (got < want) {
     fprintf(stderr, "\n%s requires %s version %s or later; the current version is %s.\n", progname, uts.sysname, min_os_version, uts.release);
     exit(1);
   }
@@ -1469,6 +1485,7 @@ check_bogus_fp_exceptions()
 #endif
 }
 
+int
 main(int argc, char *argv[], char *envp[], void *aux)
 {
   extern int page_size;
@@ -1477,12 +1494,9 @@ main(int argc, char *argv[], char *envp[], void *aux)
   extern int altivec_present;
 #endif
   extern LispObj load_image(char *);
-  long resp;
-  BytePtr stack_end;
   area *a;
   BytePtr stack_base, current_sp = (BytePtr) current_stack_pointer();
   TCR *tcr;
-  int i;
 
   check_os_version(argv[0]);
   real_executable_name = determine_executable_name(argv[0]);
