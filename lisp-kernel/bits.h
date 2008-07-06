@@ -135,6 +135,10 @@ current_stack_pointer(void);
 static __inline__ unsigned
 count_leading_zeros(natural w) __attribute__((always_inline));
 
+
+/* Beware: on some platforms, __builtin_clz[ll](0) returns an undefined
+   result */
+
 static __inline__ unsigned
 count_leading_zeros(natural w)
 {
