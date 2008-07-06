@@ -458,7 +458,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
 	      <literal>--version</literal>).  Prints the version of
 	      &CCL; then exits.  The version string is the same value
 	      that is returned by
-	      <function>LISP-APPLICATION-VERSION</function>.</para>
+	      <function>LISP-IMPLEMENTATION-VERSION</function>.</para>
 	  </listitem>
 
 	  <listitem>

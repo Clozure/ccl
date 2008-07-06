@@ -38,7 +38,7 @@
 (defvar *standard-version-argument*
   (make-command-line-argument
    :keyword :version
-   :help-string "print (LISP-APPLICATION-VERSION) and exit"
+   :help-string "print (LISP-IMPLEMENTATION-VERSION) and exit"
    :option-char #\V
    :long-name "version"))
 
