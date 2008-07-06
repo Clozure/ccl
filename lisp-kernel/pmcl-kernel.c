@@ -1336,6 +1336,7 @@ remap_spjump()
 #endif
 #endif
 
+
 void
 check_os_version(char *progname)
 {
