@@ -29,6 +29,7 @@
 
 #ifndef WINDOWS
 #include <sys/socket.h>
+#include <dlfcn.h>
 #endif
 #include <sys/stat.h>
 
@@ -64,6 +65,26 @@ typedef struct {
 
 extern
 debug_command_entry debug_command_entries[];
+
+Boolean lisp_debugger_in_foreign_code = false;
+
+char *
+foreign_name_and_offset(natural addr, int *delta)
+{
+  Dl_info info;
+  char *ret = NULL;
+
+  if (delta) {
+    *delta = 0;
+  }
+#ifndef WINDOWS
+  if (dladdr((void *)addr, &info)) {
+    ret = (char *)info.dli_sname;
+    *delta = ((natural)addr - (natural)info.dli_saddr);
+  }
+#endif
+  return ret;
+}
 
 
 #if defined(LINUX) || defined(SOLARIS)
@@ -364,54 +385,56 @@ describe_ppc_trap(ExceptionInformation *xp)
 debug_command_return
 debug_lisp_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
 {
+  if (lisp_debugger_in_foreign_code == false) {
 #ifdef PPC
-  TCR *xpcontext = (TCR *)ptr_from_lispobj(xpGPR(xp, rcontext));
+    TCR *xpcontext = (TCR *)ptr_from_lispobj(xpGPR(xp, rcontext));
 
-  fprintf(stderr, "rcontext = 0x%lX ", xpcontext);
-  if (!active_tcr_p(xpcontext)) {
-    fprintf(stderr, "(INVALID)\n");
-  } else {
-    fprintf(stderr, "\nnargs = %d\n", xpGPR(xp, nargs) >> fixnumshift);
-    show_lisp_register(xp, "fn", fn);
-    show_lisp_register(xp, "arg_z", arg_z);
-    show_lisp_register(xp, "arg_y", arg_y);
-    show_lisp_register(xp, "arg_x", arg_x);
-    show_lisp_register(xp, "temp0", temp0);
-    show_lisp_register(xp, "temp1/next_method_context", temp1);
-    show_lisp_register(xp, "temp2/nfn", temp2);
-    show_lisp_register(xp, "temp3/fname", temp3);
-    /*    show_lisp_register(xp, "new_fn", new_fn); */
-    show_lisp_register(xp, "save0", save0);
-    show_lisp_register(xp, "save1", save1);
-    show_lisp_register(xp, "save2", save2);
-    show_lisp_register(xp, "save3", save3);
-    show_lisp_register(xp, "save4", save4);
-    show_lisp_register(xp, "save5", save5);
-    show_lisp_register(xp, "save6", save6);
-    show_lisp_register(xp, "save7", save7);
-  }
+    fprintf(stderr, "rcontext = 0x%lX ", xpcontext);
+    if (!active_tcr_p(xpcontext)) {
+      fprintf(stderr, "(INVALID)\n");
+    } else {
+      fprintf(stderr, "\nnargs = %d\n", xpGPR(xp, nargs) >> fixnumshift);
+      show_lisp_register(xp, "fn", fn);
+      show_lisp_register(xp, "arg_z", arg_z);
+      show_lisp_register(xp, "arg_y", arg_y);
+      show_lisp_register(xp, "arg_x", arg_x);
+      show_lisp_register(xp, "temp0", temp0);
+      show_lisp_register(xp, "temp1/next_method_context", temp1);
+      show_lisp_register(xp, "temp2/nfn", temp2);
+      show_lisp_register(xp, "temp3/fname", temp3);
+      /*    show_lisp_register(xp, "new_fn", new_fn); */
+      show_lisp_register(xp, "save0", save0);
+      show_lisp_register(xp, "save1", save1);
+      show_lisp_register(xp, "save2", save2);
+      show_lisp_register(xp, "save3", save3);
+      show_lisp_register(xp, "save4", save4);
+      show_lisp_register(xp, "save5", save5);
+      show_lisp_register(xp, "save6", save6);
+      show_lisp_register(xp, "save7", save7);
+    }
 #endif
 #ifdef X8664
 
-  show_lisp_register(xp, "arg_z", Iarg_z);
-  show_lisp_register(xp, "arg_y", Iarg_y);
-  show_lisp_register(xp, "arg_x", Iarg_x);
-  fprintf(stderr,"------\n");
-  show_lisp_register(xp, "fn", Ifn);
-  fprintf(stderr,"------\n");
-  show_lisp_register(xp, "save0", Isave0);
-  show_lisp_register(xp, "save1", Isave1);
-  show_lisp_register(xp, "save2", Isave2);
-  show_lisp_register(xp, "save3", Isave3);
-  fprintf(stderr,"------\n");
-  show_lisp_register(xp, "temp0", Itemp0);
-  show_lisp_register(xp, "temp1", Itemp1);
-  show_lisp_register(xp, "temp2", Itemp2);
-  fprintf(stderr,"------\n");
-  if (tag_of(xpGPR(xp,Inargs)) == tag_fixnum) {
-    fprintf(stderr,"%%cx (nargs) = %d (maybe)\n", unbox_fixnum(xpGPR(xp,Inargs)&0xffff));
-  }
+    show_lisp_register(xp, "arg_z", Iarg_z);
+    show_lisp_register(xp, "arg_y", Iarg_y);
+    show_lisp_register(xp, "arg_x", Iarg_x);
+    fprintf(stderr,"------\n");
+    show_lisp_register(xp, "fn", Ifn);
+    fprintf(stderr,"------\n");
+    show_lisp_register(xp, "save0", Isave0);
+    show_lisp_register(xp, "save1", Isave1);
+    show_lisp_register(xp, "save2", Isave2);
+    show_lisp_register(xp, "save3", Isave3);
+    fprintf(stderr,"------\n");
+    show_lisp_register(xp, "temp0", Itemp0);
+    show_lisp_register(xp, "temp1", Itemp1);
+    show_lisp_register(xp, "temp2", Itemp2);
+    fprintf(stderr,"------\n");
+    if (tag_of(xpGPR(xp,Inargs)) == tag_fixnum) {
+      fprintf(stderr,"%%rcx (nargs) = %d (maybe)\n", unbox_fixnum(xpGPR(xp,Inargs)&0xffff));
+    }
 #endif
+  }
   return debug_continue;
 }
 
@@ -564,9 +587,9 @@ debug_set_gpr(ExceptionInformation *xp, siginfo_t *info, int arg)
 debug_command_return
 debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
 {
-  int a, b, c, d, i;
 
 #ifdef PPC
+  int a, b, c, d, i;
 #ifdef PPC64
   for (a = 0, b = 16; a < 16; a++, b++) {
     fprintf(stderr,"r%02d = 0x%016lX    r%02d = 0x%016lX\n",
@@ -598,15 +621,15 @@ debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
 #endif
 
 #ifdef X8664
-  fprintf(stderr,"%rax = 0x%016lX      %r8  = 0x%016lX\n", xpGPR(xp,REG_RAX),xpGPR(xp,REG_R8));
-  fprintf(stderr,"%rcx = 0x%016lX      %r9  = 0x%016lX\n", xpGPR(xp,REG_RCX),xpGPR(xp,REG_R9));
-  fprintf(stderr,"%rdx = 0x%016lX      %r10 = 0x%016lX\n", xpGPR(xp,REG_RDX),xpGPR(xp,REG_R10));
-  fprintf(stderr,"%rbx = 0x%016lX      %r11 = 0x%016lX\n", xpGPR(xp,REG_RBX),xpGPR(xp,REG_R11));
-  fprintf(stderr,"%rsp = 0x%016lX      %r12 = 0x%016lX\n", xpGPR(xp,REG_RSP),xpGPR(xp,REG_R12));
-  fprintf(stderr,"%rbp = 0x%016lX      %r13 = 0x%016lX\n", xpGPR(xp,REG_RBP),xpGPR(xp,REG_R13));
-  fprintf(stderr,"%rsi = 0x%016lX      %r14 = 0x%016lX\n", xpGPR(xp,REG_RSI),xpGPR(xp,REG_R14));
-  fprintf(stderr,"%rdi = 0x%016lX      %r15 = 0x%016lX\n", xpGPR(xp,REG_RDI),xpGPR(xp,REG_R15));
-  fprintf(stderr,"%rip = 0x%016lX   %rflags = 0x%016lX\n",
+  fprintf(stderr,"%%rax = 0x%016lX      %%r8  = 0x%016lX\n", xpGPR(xp,REG_RAX),xpGPR(xp,REG_R8));
+  fprintf(stderr,"%%rcx = 0x%016lX      %%r9  = 0x%016lX\n", xpGPR(xp,REG_RCX),xpGPR(xp,REG_R9));
+  fprintf(stderr,"%%rdx = 0x%016lX      %%r10 = 0x%016lX\n", xpGPR(xp,REG_RDX),xpGPR(xp,REG_R10));
+  fprintf(stderr,"%%rbx = 0x%016lX      %%r11 = 0x%016lX\n", xpGPR(xp,REG_RBX),xpGPR(xp,REG_R11));
+  fprintf(stderr,"%%rsp = 0x%016lX      %%r12 = 0x%016lX\n", xpGPR(xp,REG_RSP),xpGPR(xp,REG_R12));
+  fprintf(stderr,"%%rbp = 0x%016lX      %%r13 = 0x%016lX\n", xpGPR(xp,REG_RBP),xpGPR(xp,REG_R13));
+  fprintf(stderr,"%%rsi = 0x%%016lX     %%r14 = 0x%016lX\n", xpGPR(xp,REG_RSI),xpGPR(xp,REG_R14));
+  fprintf(stderr,"%%rdi = 0x%016lX      %%r15 = 0x%016lX\n", xpGPR(xp,REG_RDI),xpGPR(xp,REG_R15));
+  fprintf(stderr,"%%rip = 0x%016lX   %%rflags = 0x%016lX\n",
 	  xpGPR(xp, Iip), xpGPR(xp, Iflags));
 #endif
   return debug_continue;
@@ -862,7 +885,15 @@ debug_identify_function(ExceptionInformation *xp, siginfo_t *info)
         fprintf(stderr, " While executing: %s\n", print_lisp_object(f));
       }
     } else {
-      fprintf(stderr, " In foreign code at address 0x%08lx\n", xpPC(xp));
+      int disp;
+      char *foreign_name;
+      natural where = (natural)xpPC(xp);
+
+      fprintf(stderr, " In foreign code at address 0x%08lx\n", where);
+      foreign_name = foreign_name_and_offset(where, &disp);
+      if (foreign_name) {
+        fprintf(stderr, "  [%s + %d]\n", foreign_name, disp);
+      }
     }
   }
 #endif
@@ -871,6 +902,7 @@ debug_identify_function(ExceptionInformation *xp, siginfo_t *info)
 #ifndef WINDOWS
 extern pid_t main_thread_pid;
 #endif
+
 
 OSStatus
 lisp_Debugger(ExceptionInformation *xp, 
@@ -891,8 +923,16 @@ lisp_Debugger(ExceptionInformation *xp,
   vfprintf(stderr, message, args);
   fprintf(stderr, "\n");
   va_end(args);
-  if (in_foreign_code) {
+  
+  lisp_debugger_in_foreign_code = in_foreign_code;
+  if (in_foreign_code) {    
+    char *foreign_name;
+    int disp;
     fprintf(stderr, "Exception occurred while executing foreign code\n");
+    foreign_name = foreign_name_and_offset((natural)xpPC(xp), &disp);
+    if (foreign_name) {
+      fprintf(stderr, " at %s + %d\n", foreign_name, disp);
+    }
   }
 
   if (lisp_global(BATCH_FLAG)) {
