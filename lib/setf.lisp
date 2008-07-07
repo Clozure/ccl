@@ -83,10 +83,13 @@
                     (vars nil)
                     (vals nil))
                 (dolist (x (cdr form))
+                  ;; Rebinding defeats optimizations, so avoid it if can.
+                  (if (constantp x environment)
+                    (push x args)
                     (let ((var (gensym)))
                       (push var vars)
                       (push var args)
-                      (push x vals)))
+                      (push x vals))))
                 (setq args (nreverse args))
                 (values (nreverse vars) 
                         (nreverse vals) 
@@ -479,32 +482,41 @@ decremented by the second argument, DELTA, which defaults to 1."
 		       (get-setf-expansion (cons function args) env)
     ;; Make sure the place is one that we can handle.
     ;;Mainly to insure against cases of ldb and mask-field and such creeping in.
-    (cond ((and (eq (car (last args)) (car (last vals)))
-                (eq (car (last getter)) (car (last dummies)))
-                newval
-                (null (cdr newval))
-                (eq (car (last setter)) (car newval))
-                (eq (car (last setter 2)) (car (last dummies))))
-           ; (setf (foo ... argn) bar) -> (set-foo ... argn bar)
-           (values dummies vals newval
-                   `(apply+ (function ,(car setter))
-                            ,@(butlast dummies)
-                            ,@(last dummies)
-                            ,(car newval))
-	           `(apply (function ,(car getter)) ,@(cdr getter))))
-          ((and (eq (car (last args)) (car (last vals)))
-                (eq (car (last getter)) (car (last dummies)))
-                newval
-                (null (cdr newval))
-                (eq (car setter) 'funcall)
-                (eq (third setter) (car newval))
-                (eq (car (last setter)) (car (last dummies))))
-           ; (setf (foo ... argn) bar) -> (funcall #'(setf foo) bar ... argn)  [with bindings for evaluation order]
-           (values dummies vals newval
-                   `(apply ,@(cdr setter))
-                   `(apply (function ,(car getter)) ,@(cdr getter))))
-          (t (error "Apply of ~S is not understood as a location for Setf."
-		    function)))))
+    (let* ((last-arg (car (last args)))
+           (last-val (car (last vals)))
+           (last-dummy (car (last dummies)))
+           (last-getter (car (last getter)))
+           (last2-setter (car (last setter 2)))
+           (last-setter (car (last setter))))
+      (cond ((and (or (and (eq last-arg last-val)
+                           (eq last-getter last-dummy))
+                      (eq last-arg last-getter))
+                  newval
+                  (null (cdr newval))
+                  (eq last-setter (car newval))
+                  (or (and (eq last-arg last-val)
+                           (eq last2-setter last-dummy))
+                      (eq last-arg last2-setter)))
+             ;; (setf (foo ... argn) bar) -> (set-foo ... argn bar)
+             (values dummies vals newval
+                     `(apply+ (function ,(car setter)) ,@(cdr setter))
+                     `(apply (function ,(car getter)) ,@(cdr getter))))
+            ((and (or (and (eq last-arg last-val)
+                           (eq last-getter last-dummy))
+                      (eq last-arg last-getter))
+                  newval
+                  (null (cdr newval))
+                  (eq (car setter) 'funcall)
+                  (eq (third setter) (car newval))
+                  (or (and (eq last-arg last-val)
+                           (eq last-setter last-dummy))
+                      (eq last-arg last-setter)))
+             ;; (setf (foo ... argn) bar) -> (funcall #'(setf foo) bar ... argn)  [with bindings for evaluation order]
+             (values dummies vals newval
+                     `(apply ,@(cdr setter))
+                     `(apply (function ,(car getter)) ,@(cdr getter))))
+            (t (error "Apply of ~S is not understood as a location for Setf."
+                      function))))))
 
 ;;These are the supporting functions for the am-style hard-cases of setf.
 (defun assoc-2-lists (list1 list2)
