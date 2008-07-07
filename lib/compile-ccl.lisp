@@ -650,13 +650,16 @@
           (when ccl
             (load "ccl:tests;ansi-tests;ccl.lsp")))))))
 
-(defun test-ccl (&key force (update t) verbose (catch-errors t) (ansi t) (ccl t))
+(defun test-ccl (&key force (update t) verbose (catch-errors t) (ansi t) (ccl t)
+                      optimization-settings)
   (with-preserved-working-directory ()
     (let* ((*package* (find-package "CL-USER")))
       (ensure-tests-loaded :force force :update update :ansi ansi :ccl ccl)
       (cwd "ccl:tests;ansi-tests;")
       (let ((do-tests (find-symbol "DO-TESTS" "REGRESSION-TEST"))
             (*print-catch-errors* nil))
-        (time (funcall do-tests :verbose verbose :compile t :catch-errors catch-errors)))
+        (time (funcall do-tests :verbose verbose :compile t
+                       :catch-errors catch-errors
+                       :optimization-settings (or optimization-settings '((safety 2))))))
       ;; Ok, here we would run any of our own tests.
       )))
