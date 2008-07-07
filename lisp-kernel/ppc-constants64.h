@@ -236,7 +236,7 @@ typedef struct c_frame {
   natural crsave;
   natural savelr;
   natural unused[2];
-  natural savetoc;		/* Used with CFM (and on Linux.)
+  natural savetoc;		/* Used with CFM (and on Linux.) */
   natural params[8];		/* Space for callee to save r3-r10 */
 } c_frame;
 
