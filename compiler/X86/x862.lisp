@@ -6163,6 +6163,7 @@
         (! fixnum->char target reg)))
     (^)))
 
+#+not-yet
 (defx862 x862-%valid-code-char %valid-code-char (seg vreg xfer c)
   (let* ((reg (x862-one-untargeted-reg-form seg c x8664::arg_z)))
     ;; Typecheck even if result unused.
