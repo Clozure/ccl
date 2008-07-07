@@ -2059,3 +2059,15 @@
                                 (vector-list-search sequence1 sequence2)
                                 (vector-vector-search sequence1 sequence2))))))
 
+(defun make-string (size &key (initial-element () initial-element-p) (element-type 'character element-type-p))
+  "Given a character count and an optional fill character, makes and returns
+   a new string COUNT long filled with the fill character."
+  (when (and initial-element-p (not (typep initial-element 'character)))
+    (report-bad-arg initial-element 'character))
+  (when (and element-type-p
+             (not (or (member element-type '(character base-char standard-char))
+                      (subtypep element-type 'character))))
+    (error ":element-type ~S is not a subtype of CHARACTER" element-type))
+  (if initial-element-p
+      (make-string size :element-type 'base-char :initial-element initial-element)
+      (make-string size :element-type 'base-char)))
