@@ -585,8 +585,8 @@ debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
 {
 
 #ifdef PPC
-  int a, b, c, d;;
 #ifdef PPC64
+  int a, b;
   for (a = 0, b = 16; a < 16; a++, b++) {
     fprintf(stderr,"r%02d = 0x%016lX    r%02d = 0x%016lX\n",
 	    a, xpGPR(xp, a),
@@ -602,6 +602,7 @@ debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
   fprintf(stderr,"DAR = 0x%016lX  DSISR = 0x%08X\n",
 	  xpDAR(xp), xpDSISR(xp));
 #else
+  int a, b, c, d;;
   for (a = 0, b = 8, c = 16, d = 24; a < 8; a++, b++, c++, d++) {
     fprintf(stderr,"r%02d = 0x%08X  r%02d = 0x%08X  r%02d = 0x%08X  r%02d = 0x%08X\n",
 	    a, xpGPR(xp, a),
