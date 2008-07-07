@@ -6163,6 +6163,15 @@
         (! fixnum->char target reg)))
     (^)))
 
+(defx862 x862-%valid-code-char %valid-code-char (seg vreg xfer c)
+  (let* ((reg (x862-one-untargeted-reg-form seg c x8664::arg_z)))
+    ;; Typecheck even if result unused.
+    (unless *x862-reckless* (! require-char-code reg))
+    (if vreg
+      (ensuring-node-target (target vreg)
+        (! code-char->char target reg)))
+    (^)))
+
 (defun x862-eq-test (seg vreg xfer cc form1 form2)
   (with-x86-local-vinsn-macros (seg)
     (multiple-value-bind (cr-bit true-p) (acode-condition-to-x86-cr-bit cc)
