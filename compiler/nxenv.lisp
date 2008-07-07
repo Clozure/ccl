@@ -28,50 +28,7 @@
 #+ppc-target (require "PPCENV")
 #+x8664-target (require "X8664ENV")
 
-(defconstant $afunc-size 
-  (def-accessors (afunc) %svref
-    ()                                    ; 'afunc
-    afunc-acode
-    afunc-parent
-    afunc-vars
-    afunc-inherited-vars
-    afunc-blocks
-    afunc-tags
-    afunc-inner-functions
-    afunc-name
-    afunc-bits
-    afunc-lfun
-    afunc-environment
-    afunc-lambdaform
-    afunc-argsword
-    afunc-ref-form
-    afunc-warnings
-    afunc-fn-refcount
-    afunc-fn-downward-refcount
-    afunc-all-vars
-    afunc-callers
-    afunc-vcells
-    afunc-fcells
-    afunc-fwd-refs
-    afunc-lfun-info
-    afunc-linkmap
-))
-
 ;
-
-(def-accessors (compiler-policy) uvref
-  nil                                   ; 'compiler-policy
-  policy.allow-tail-recursion-elimination
-  policy.inhibit-register-allocation
-  policy.trust-declarations
-  policy.open-code-inline
-  policy.inhibit-safety-checking
-  policy.the-typechecks
-  policy.inline-self-calls
-  policy.allow-transforms
-  policy.force-boundp-checks
-  policy.allow-constant-substitution
-  policy.misc)
 
 (defconstant $vbittemporary 16)    ; a compiler temporary
 (defconstant $vbitreg 17)          ; really wants to live in a register.
@@ -223,6 +180,8 @@
      (lap . 0)
      (lap-inline . 0)
      (%function . #.operator-single-valued-mask)
+     #+not-yet
+     (%valid-code-char . #.(logior operator-single-valued-mask operator-acode-subforms-mask operator-side-effect-free-mask))
      (%ttagp . #.(logior operator-cc-invertable-mask operator-single-valued-mask))
      (%ttag . #.operator-single-valued-mask)  
      (uvsize . #.operator-single-valued-mask)
@@ -470,6 +429,7 @@
 (defconstant $fbitembeddedlap 7)
 (defconstant $fbitruntimedef 8)
 (defconstant $fbitnonnullenv 9)
+(defconstant $fbitccoverage 10)
 
 (defconstant $eaclosedbit 24)
 
@@ -537,13 +497,6 @@
   " A big help this is ..."
   `(consp ,x))
 
-(defmacro defnx2 (name locative arglist &body forms)
-  (multiple-value-bind (body decls)
-                       (parse-body forms nil t)
-    (let ((fn `(nfunction ,name (lambda ,arglist ,@decls (block ,name .,body)))))
-    `(progn
-       (record-source-file ',name 'function)
-       (svset *nx2-specials* (%ilogand operator-id-mask (%nx1-operator ,locative)) ,fn)))))
 
 (defmacro defnxdecl (sym lambda-list &body forms)
   (multiple-value-bind (body decls) (parse-body forms nil t)
@@ -563,16 +516,6 @@
     (with-declarations (,pending *nx-lexical-environment* *nx-lexical-environment*)
       ,@body)))
 
-	  
-
-(defmacro with-p2-declarations (declsform &body body)
-  `(let* ((*nx2-tail-allow* *nx2-tail-allow*)
-          (*nx2-reckless* *nx2-reckless*)
-          (*nx2-inhibit-eventchecks* *nx2-inhibit-eventchecks*)
-          (*nx2-open-code-inline* *nx2-open-code-inline*)
-          (*nx2-trust-declarations* *nx2-trust-declarations*))
-     (nx2-decls ,declsform)
-     ,@body))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
 

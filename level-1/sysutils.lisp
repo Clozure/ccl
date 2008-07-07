@@ -524,13 +524,6 @@
 ; Special variables are evil, but I can't think of a better way to do this.
 
 (defparameter *outstanding-deferred-warnings* nil)
-(def-accessors (deferred-warnings) %svref
-  nil
-  deferred-warnings.parent
-  deferred-warnings.warnings
-  deferred-warnings.defs
-  deferred-warnings.flags ; might use to distinguish interactive case/compile-file
-)
 
 (defun %defer-warnings (override &optional flags)
   (%istruct 'deferred-warnings (unless override *outstanding-deferred-warnings*) nil nil flags))

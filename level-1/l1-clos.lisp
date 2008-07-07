@@ -1666,7 +1666,7 @@ governs whether DEFCLASS makes that distinction or not.")
 (defmethod (setf class-name) (new (class class))
   (check-type new symbol)
   (when (and (standard-instance-p class)
-             (%class.kernel-p class)
+             (%class-kernel-p class)
              (not (eq new (%class.name class)))
              *warn-if-redefine-kernel*)
     (cerror "Change the name of ~s to ~s."

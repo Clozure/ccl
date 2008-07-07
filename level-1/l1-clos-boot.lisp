@@ -39,6 +39,23 @@
 (defun %class-name (class)
   (%class.name class))
 
+(defun %class-info (class)
+  (%class.info class))
+
+
+(defun %class-kernel-p (class)
+  (car (%class-info class)))
+
+(defun (setf %class-kernel-p) (new class)
+  (setf (car (%class-info class)) new))
+
+(defun %class-proper-name (class)
+  (cdr (%class-info class)))
+
+(defun (setf %class-proper-name) (new class)
+  (setf (cdr (%class-info class)) new))
+
+
 (defun %class-own-wrapper (class)
   (%class.own-wrapper class))
 
@@ -1243,7 +1260,7 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 
 (defun check-setf-find-class-protected-class (old-class new-class name)
   (when (and (standard-instance-p old-class)
-	     (%class.kernel-p old-class)
+	     (%class-kernel-p old-class)
 	     *warn-if-redefine-kernel*
 	     ;; EQL might be necessary on foreign classes
 	     (not (eq new-class old-class)))
@@ -1251,7 +1268,7 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 	    "The class name ~s currently denotes the class ~s that
 marked as being a critical part of the system; an attempt is being made
 to replace that class with ~s" name old-class new-class)
-    (setf (%class.kernel-p old-class) nil)))
+    (setf (%class-kernel-p old-class) nil)))
 
 
 (queue-fixup

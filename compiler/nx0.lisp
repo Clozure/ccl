@@ -27,7 +27,7 @@
   mdecls)
 
 ; Phony AFUNC "defstruct":
-(defun make-afunc (&aux (v (allocate-typed-vector :istruct $afunc-size nil)))
+(defun make-afunc (&aux (v (%make-afunc)))
   (setf (%svref v 0) 'afunc)
   (setf (afunc-fn-refcount v) 0)
   (setf (afunc-fn-downward-refcount v) 0)

@@ -39,40 +39,9 @@
 
 
 
-(def-accessor-macros %svref
-  nil                                 ; 'external-entry-point
-  eep.address
-  eep.name
-  eep.container)
-
-(defun %cons-external-entry-point (name &optional container)
-  (%istruct 'external-entry-point nil name container))
 
 (defun external-entry-point-p (x)
   (istruct-typep x 'external-entry-point))
-
-(def-accessor-macros %svref
-    nil                                 ;'foreign-variable
-  fv.addr                               ; a MACPTR, or nil
-  fv.name                               ; a string
-  fv.type                               ; a foreign type
-  fv.container                          ; containing library
-  )
-
-(defun %cons-foreign-variable (name type &optional container)
-  (%istruct 'foreign-variable nil name type container))
-
-(def-accessor-macros %svref
-    nil					;'shlib
-  shlib.soname
-  shlib.pathname
-  shlib.handle                          ; if explicitly opened
-  shlib.map
-  shlib.base
-  shlib.opencount)
-
-(defun %cons-shlib (soname pathname map base)
-  (%istruct 'shlib soname pathname nil map base 0))
 
 (defvar *rtld-next*)
 (defvar *rtld-default*)

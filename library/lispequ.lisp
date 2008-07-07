@@ -138,9 +138,10 @@
 (defconstant $lfbits-rest-bit 15)
 (defconstant $lfbits-aok-bit 16)
 (defconstant $lfbits-numinh (byte 6 17))
-(defconstant $lfbits-symmap-bit 23)
+(defconstant $lfbits-info-bit 23)
+(defconstant $lfbits-symmap-bit 23) ;; bootstrapping
 (defconstant $lfbits-trampoline-bit 24)
-(defconstant $lfbits-evaluated-bit 25)
+(defconstant $lfbits-code-coverage-bit 25)
 (defconstant $lfbits-cm-bit 26)         ; combined-method
 (defconstant $lfbits-nextmeth-bit 26)   ; or call-next-method with method-bit
 (defconstant $lfbits-gfn-bit 27)        ; generic-function
@@ -931,6 +932,8 @@
   %wrapper-slot-id-value                ; "fast" SLOT-VALUE function
   %wrapper-set-slot-id-value            ; "fast" (SETF SLOT-VALUE) function
   %wrapper-cpl                          ; cached cpl of %wrapper-class or NIL
+  %wrapper-class-ordinal                ; cached copy of class-ordinal
+  %wrapper-cpl-bits                     ; bitvector representation of cpl
 )
 
 ;; Use the wrapper-class-slots for info on obsolete & forwarded instances
@@ -979,6 +982,11 @@
   %class.subclasses                     ; class-direct-subclasses
   %class.dependents			; arbitrary dependents
   %class.ctype
+  %class.direct-slots                   ; local slots
+  %class.slots                          ; all slots
+  %class.info                           ; cons of kernel-p, proper-name
+  %class.local-default-initargs         ; local default initargs alist
+  %class.default-initargs               ; all default initargs if initialized.
 )
 
 
@@ -993,11 +1001,11 @@
   nil					;   subclasses,
   nil					;   dependents,
   nil					;   ctype.
-  %class.direct-slots                   ; local slots
-  %class.slots                          ; all slots
-  %class.kernel-p			; true if a non-redefinable class
-  %class.local-default-initargs         ; local default initargs alist
-  %class.default-initargs               ; all default initargs if initialized.
+  nil                                   ; local slots
+  nil                                   ; all slots
+  nil                                ; true if a non-redefinable class
+  nil                                   ; local default initargs alist
+  nil                           ; all default initargs if initialized.
   %class.alist                          ; other stuff about the class.
   %class.make-instance-initargs         ; (vector of) valid initargs to make-instance
   %class.reinit-initargs                ; valid initargs to reinitialize-instance
@@ -1018,17 +1026,56 @@
 	     (instance.hash ,instance) (strip-tag-to-fixnum ,instance))
        ,instance)))
  
-(defmacro %cons-built-in-class (name)
-  `(%instance-vector *built-in-class-wrapper* nil nil ,name nil nil nil nil nil nil))
 
+
+
+(defmacro %cons-built-in-class (name)
+  `(%instance-vector  *built-in-class-wrapper*
+    nil                                 ;direct-methods
+    nil                                 ;prototype
+    ,name                               ;name
+    nil                                 ;precedence-list
+    nil                                 ;own-wrapper
+    nil                                 ;direct-superclasses
+    nil                                 ;direct-subclasses
+    nil                                 ;dependents
+    nil                                 ;class-ctype
+    nil                                 ;direct-slots
+    nil                                 ;slots
+    (cons nil nil)                      ;info
+    nil                                 ;direct-default-initargs
+    nil                                 ;default-initargs
+    ))
 
 (defmacro %cons-standard-class (name &optional
                                      (metaclass-wrapper '*standard-class-wrapper*))
   `(%instance-vector  ,metaclass-wrapper
-                      nil nil ,name nil nil nil nil nil nil nil nil
-                      nil nil nil nil nil nil nil nil)
-
+    nil                                 ;direct-methods
+    nil                                 ;prototype
+    ,name                               ;name
+    nil                                 ;precedence-list
+    nil                                 ;own-wrapper
+    nil                                 ;direct-superclasses
+    nil                                 ;direct-subclasses
+    nil                                 ;dependents
+    nil                                 ;class-ctype
+    nil                                 ;direct-slots
+    nil                                 ;slots
+    (cons nil nil)                      ;info
+    nil                                 ;direct-default-initargs
+    nil                                 ;default-initargs
+    nil                                 ;alist
+    nil                                 ;make-instance-initargs
+    nil                                 ;reinit-initargs
+    nil                                 ;redefined-initargs
+    nil                                 ;changed-initargs
+    )
 )
+
+
+
+(defconstant max-class-ordinal (ash 1 20))
+
 
 (def-accessors () standard-instance-instance-location-access
   nil					; backptr
@@ -1316,6 +1363,241 @@
 
 (defmacro make-class-cell (name) `(%istruct 'class-cell ,name nil '%make-instance nil))
 
+;;; Map between TYPE-SPECIFIERS and CTYPEs
+(def-accessors (type-cell) %svref
+  nil
+  type-cell-type-specifier
+  type-cell-ctype)
+
+(defmacro make-type-cell (specifier) `(%istruct 'type-cell ,specifier nil))
+
+;;; Map between package names and packages, sometimes.
+(def-accessors (package-ref) %svref
+  nil
+  package-ref.name                      ; a string
+  package-ref.pkg                       ; a package or NIL
+  )
+
+(defmacro make-package-ref (name) `(%istruct 'package-ref (string ,name) nil))
+
+
+(def-accessor-macros %svref
+  nil                                 ; 'external-entry-point
+  eep.address
+  eep.name
+  eep.container)
+
+(defmacro %cons-external-entry-point (name &optional container)
+  `(%istruct 'external-entry-point nil ,name ,container))
+
+(def-accessor-macros %svref
+    nil                                 ;'foreign-variable
+  fv.addr                               ; a MACPTR, or nil
+  fv.name                               ; a string
+  fv.type                               ; a foreign type
+  fv.container                          ; containing library
+  )
+
+(defun %cons-foreign-variable (name type &optional container)
+  (%istruct 'foreign-variable nil name type container))
+
+(def-accessor-macros %svref
+    nil					;'shlib
+  shlib.soname
+  shlib.pathname
+  shlib.handle                          ; if explicitly opened
+  shlib.map
+  shlib.base
+  shlib.opencount)
+
+(defmacro %cons-shlib (soname pathname map base)
+  `(%istruct 'shlib ,soname ,pathname nil ,map ,base 0))
+
+(def-accessors uvref ; %svref
+    ()                                  ;'entry
+  entry-test                          ;predicate function or count of higher priority others.
+  entry-fn                            ;pprint function
+  entry-full-spec                     ;list of priority and type specifier
+  )
+
+(def-accessors %svref
+    ()                                  ; 'xp-structure
+  xp-base-stream ;;The stream io eventually goes to.
+  xp-linel ;;The line length to use for formatting.
+  xp-line-limit ;;If non-NIL the max number of lines to print.
+  xp-line-no ;;number of next line to be printed.
+  xp-char-mode ;;NIL :UP :DOWN :CAP0 :CAP1 :CAPW
+  xp-char-mode-counter                  ;depth of nesting of ~(...~)
+  xp-depth-in-blocks ;;Number of logical blocks at QRIGHT that 
+  ;;are started but not ended.              
+  xp-block-stack 
+  xp-block-stack-ptr
+  ;;This stack is pushed and popped in accordance with the way blocks are 
+  ;;nested at the moment they are entered into the queue.  It contains the 
+  ;;following block specific value.
+  ;;SECTION-START total position where the section (see AIM-1102)
+  ;;that is rightmost in the queue started.
+  xp-buffer
+  xp-charpos
+  xp-buffer-ptr 
+  xp-buffer-offset
+  ;;This is a vector of characters (eg a string) that builds up the
+  ;;line images that will be printed out.  BUFFER-PTR is the
+  ;;buffer position where the next character should be inserted in
+  ;;the string.  CHARPOS is the output character position of the
+  ;;first character in the buffer (non-zero only if a partial line
+  ;;has been output).  BUFFER-OFFSET is used in computing total lengths.
+  ;;It is changed to reflect all shifting and insertion of prefixes so that
+  ;;total length computes things as they would be if they were 
+  ;;all on one line.  Positions are kept three different ways
+  ;; Buffer position (eg BUFFER-PTR)
+  ;; Line position (eg (+ BUFFER-PTR CHARPOS)).  Indentations are stored in this form.
+  ;; Total position if all on one line (eg (+ BUFFER-PTR BUFFER-OFFSET))
+  ;;  Positions are stored in this form.
+  xp-queue
+  xp-qleft
+  xp-qright
+  ;;This holds a queue of action descriptors.  QLEFT and QRIGHT
+  ;;point to the next entry to dequeue and the last entry enqueued
+  ;;respectively.  The queue is empty when
+  ;;(> QLEFT QRIGHT).  The queue entries have several parts:
+  ;;QTYPE one of :NEWLINE/:IND/:START-BLOCK/:END-BLOCK
+  ;;QKIND :LINEAR/:MISER/:FILL/:MANDATORY or :UNCONDITIONAL/:FRESH
+  ;; or :BLOCK/:CURRENT
+  ;;QPOS total position corresponding to this entry
+  ;;QDEPTH depth in blocks of this entry.
+  ;;QEND offset to entry marking end of section this entry starts. (NIL until known.)
+  ;; Only :start-block and non-literal :newline entries can start sections.
+  ;;QOFFSET offset to :END-BLOCK for :START-BLOCK (NIL until known).
+  ;;QARG for :IND indentation delta
+  ;;     for :START-BLOCK suffix in the block if any.
+  ;;                      or if per-line-prefix then cons of suffix and
+  ;;                      per-line-prefix.
+  ;;     for :END-BLOCK suffix for the block if any.
+  xp-prefix
+  ;;this stores the prefix that should be used at the start of the line
+  xp-prefix-stack
+  xp-prefix-stack-ptr
+  ;;This stack is pushed and popped in accordance with the way blocks 
+  ;;are nested at the moment things are taken off the queue and printed.
+  ;;It contains the following block specific values.
+  ;;PREFIX-PTR current length of PREFIX.
+  ;;SUFFIX-PTR current length of pending suffix
+  ;;NON-BLANK-PREFIX-PTR current length of non-blank prefix.
+  ;;INITIAL-PREFIX-PTR prefix-ptr at the start of this block.
+  ;;SECTION-START-LINE line-no value at last non-literal break at this level.
+  xp-suffix
+  ;;this stores the suffixes that have to be printed to close of the current
+  ;;open blocks.  For convenient in popping, the whole suffix
+  ;;is stored in reverse order.
+  xp-stream  ;;; the xp-stream containing this structure
+  xp-string-stream ;; string-stream for output until first circularity (in case none)
+  )
+
+  (def-accessors (afunc) %svref
+    ()                                    ; 'afunc
+    afunc-acode
+    afunc-parent
+    afunc-vars
+    afunc-inherited-vars
+    afunc-blocks
+    afunc-tags
+    afunc-inner-functions
+    afunc-name
+    afunc-bits
+    afunc-lfun
+    afunc-environment
+    afunc-lambdaform
+    afunc-argsword
+    afunc-ref-form
+    afunc-warnings
+    afunc-fn-refcount
+    afunc-fn-downward-refcount
+    afunc-all-vars
+    afunc-callers
+    afunc-vcells
+    afunc-fcells
+    afunc-fwd-refs
+    afunc-lfun-info
+    afunc-linkmap)
+
+(declaim (inline %make-afunc))
+
+(defmacro %make-afunc ()
+  `(%istruct 'afunc
+    nil                                 ;afunc-acode
+    nil                                 ;afunc-parent
+    nil                                 ;afunc-vars
+    nil                                 ;afunc-inherited-vars
+    nil                                 ;afunc-blocks
+    nil                                 ;afunc-tags
+    nil                                 ;afunc-inner-functions
+    nil                                 ;afunc-name
+    nil                                 ;afunc-bits
+    nil                                 ;afunc-lfun
+    nil                                 ;afunc-environment
+    nil                                 ;afunc-lambdaform
+    nil                                 ;afunc-argsword
+    nil                                 ;afunc-ref-form
+    nil                                 ;afunc-warnings
+    nil                                 ;afunc-fn-refcount
+    nil                                 ;afunc-fn-downward-refcount
+    nil                                 ;afunc-all-vars
+    nil                                 ;afunc-callers
+    nil                                 ;afunc-vcells
+    nil                                 ;afunc-fcells
+    nil                                 ;afunc-fwd-refs
+    nil                                 ;afunc-lfun-info
+    nil                                 ;afunc-linkmap
+    ))
+
+
+(def-accessors (compiler-policy) uvref
+  nil                                   ; 'compiler-policy
+  policy.allow-tail-recursion-elimination
+  policy.inhibit-register-allocation
+  policy.trust-declarations
+  policy.open-code-inline
+  policy.inhibit-safety-checking
+  policy.the-typechecks
+  policy.inline-self-calls
+  policy.allow-transforms
+  policy.force-boundp-checks
+  policy.allow-constant-substitution
+  policy.misc)
+
+
+(def-accessors (deferred-warnings) %svref
+  nil
+  deferred-warnings.parent
+  deferred-warnings.warnings
+  deferred-warnings.defs
+  deferred-warnings.flags ; might use to distinguish interactive case/compile-file
+)
+
+;;; loader framework istruct
+(def-accessors (faslapi) %svref
+  ()
+  ;; these represent all users of faslstate.iobuffer, .bufcount, and
+  ;; .faslfd -- I think these are all the important file- and
+  ;; buffer-IO-specific slots in faslstate; encapsulating these allows
+  ;; sophisticated users to load fasl data from nonstandard sources
+  ;; without too much trouble
+  faslapi.fasl-open
+  faslapi.fasl-close
+  faslapi.fasl-init-buffer
+  faslapi.fasl-set-file-pos
+  faslapi.fasl-get-file-pos
+  faslapi.fasl-read-buffer
+  faslapi.fasl-read-byte
+  faslapi.fasl-read-n-bytes)
+
+
+(defmacro istruct-cell-name (cell)
+  `(car ,cell))
+
+(defmacro istruct-cell-info (cell)
+  `(cdr ,cell))
 
 (provide "LISPEQU")
 

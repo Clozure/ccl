@@ -37,22 +37,6 @@
   faslstate.faslgsymbols
   faslstate.fasldispatch)
 
-;;; loader framework istruct
-(def-accessors (faslapi) %svref
-  ()
-  ;; these represent all users of faslstate.iobuffer, .bufcount, and
-  ;; .faslfd -- I think these are all the important file- and
-  ;; buffer-IO-specific slots in faslstate; encapsulating these allows
-  ;; sophisticated users to load fasl data from nonstandard sources
-  ;; without too much trouble
-  faslapi.fasl-open
-  faslapi.fasl-close
-  faslapi.fasl-init-buffer
-  faslapi.fasl-set-file-pos
-  faslapi.fasl-get-file-pos
-  faslapi.fasl-read-buffer
-  faslapi.fasl-read-byte
-  faslapi.fasl-read-n-bytes)
 
 (defconstant numfaslops 80 "Number of fasl file opcodes, roughly")
 (defconstant $fasl-epush-bit 7)

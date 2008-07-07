@@ -126,6 +126,18 @@
 (defvar *ipd* nil ;see initialization at end of file.
   "initial print dispatch table.")
 
+(eval-when (:compile-toplevel :execute)
+  (declaim (inline xp-structure-p)))
+
+(defun xp-structure-p (x)
+  (istruct-typep x 'xp-structure))
+
+
+(defun entry-p (x)
+  (istruct-typep x 'entry))
+
+  
+
 ;default (bad) definitions for the non-portable functions
 
 (eval-when (:execute :load-toplevel :compile-toplevel)
@@ -166,18 +178,8 @@
 ;following form.  When stored in the hash tables, the test entry is 
 ;the number of entries in the OTHERS list that have a higher priority.
 
-(progn
-(eval-when (:compile-toplevel :execute)
-  (def-accessors uvref ; %svref
-    ()                                  ;'entry
-    entry-test                          ;predicate function or count of higher priority others.
-    entry-fn                            ;pprint function
-    entry-full-spec                     ;list of priority and type specifier
-    ))
-
 (defun make-entry (&key test fn full-spec)
   (%istruct 'entry test fn full-spec))
-)
 
 (defun copy-pprint-dispatch (&optional (table *print-pprint-dispatch*))
   (let* ((table (if (null table)
@@ -363,82 +365,6 @@
   (defvar suffix-min-size 256.)) 
 
 (progn
-  (eval-when (:compile-toplevel :execute)
-    (def-accessors %svref
-        ()                              ; 'xp-structure
-      xp-base-stream;;The stream io eventually goes to.
-      xp-linel;;The line length to use for formatting.
-      xp-line-limit;;If non-NIL the max number of lines to print.
-      xp-line-no;;number of next line to be printed.
-      xp-char-mode;;NIL :UP :DOWN :CAP0 :CAP1 :CAPW
-      xp-char-mode-counter              ;depth of nesting of ~(...~)
-      xp-depth-in-blocks;;Number of logical blocks at QRIGHT that 
-      ;;are started but not ended.              
-      xp-block-stack 
-      xp-block-stack-ptr
-      ;;This stack is pushed and popped in accordance with the way blocks are 
-      ;;nested at the moment they are entered into the queue.  It contains the 
-      ;;following block specific value.
-      ;;SECTION-START total position where the section (see AIM-1102)
-      ;;that is rightmost in the queue started.
-      xp-buffer
-      xp-charpos
-      xp-buffer-ptr 
-      xp-buffer-offset
-      ;;This is a vector of characters (eg a string) that builds up the
-      ;;line images that will be printed out.  BUFFER-PTR is the
-      ;;buffer position where the next character should be inserted in
-      ;;the string.  CHARPOS is the output character position of the
-      ;;first character in the buffer (non-zero only if a partial line
-      ;;has been output).  BUFFER-OFFSET is used in computing total lengths.
-      ;;It is changed to reflect all shifting and insertion of prefixes so that
-      ;;total length computes things as they would be if they were 
-      ;;all on one line.  Positions are kept three different ways
-      ;; Buffer position (eg BUFFER-PTR)
-      ;; Line position (eg (+ BUFFER-PTR CHARPOS)).  Indentations are stored in this form.
-      ;; Total position if all on one line (eg (+ BUFFER-PTR BUFFER-OFFSET))
-      ;;  Positions are stored in this form.
-      xp-queue
-      xp-qleft
-      xp-qright
-      ;;This holds a queue of action descriptors.  QLEFT and QRIGHT
-      ;;point to the next entry to dequeue and the last entry enqueued
-      ;;respectively.  The queue is empty when
-      ;;(> QLEFT QRIGHT).  The queue entries have several parts:
-      ;;QTYPE one of :NEWLINE/:IND/:START-BLOCK/:END-BLOCK
-      ;;QKIND :LINEAR/:MISER/:FILL/:MANDATORY or :UNCONDITIONAL/:FRESH
-      ;; or :BLOCK/:CURRENT
-      ;;QPOS total position corresponding to this entry
-      ;;QDEPTH depth in blocks of this entry.
-      ;;QEND offset to entry marking end of section this entry starts. (NIL until known.)
-      ;; Only :start-block and non-literal :newline entries can start sections.
-      ;;QOFFSET offset to :END-BLOCK for :START-BLOCK (NIL until known).
-      ;;QARG for :IND indentation delta
-      ;;     for :START-BLOCK suffix in the block if any.
-      ;;                      or if per-line-prefix then cons of suffix and
-      ;;                      per-line-prefix.
-      ;;     for :END-BLOCK suffix for the block if any.
-      xp-prefix
-      ;;this stores the prefix that should be used at the start of the line
-      xp-prefix-stack
-      xp-prefix-stack-ptr
-      ;;This stack is pushed and popped in accordance with the way blocks 
-      ;;are nested at the moment things are taken off the queue and printed.
-      ;;It contains the following block specific values.
-      ;;PREFIX-PTR current length of PREFIX.
-      ;;SUFFIX-PTR current length of pending suffix
-      ;;NON-BLANK-PREFIX-PTR current length of non-blank prefix.
-      ;;INITIAL-PREFIX-PTR prefix-ptr at the start of this block.
-      ;;SECTION-START-LINE line-no value at last non-literal break at this level.
-      xp-suffix
-      ;;this stores the suffixes that have to be printed to close of the current
-      ;;open blocks.  For convenient in popping, the whole suffix
-      ;;is stored in reverse order.
-      xp-stream  ;;; the xp-stream containing this structure
-      xp-string-stream;; string-stream for output until first circularity (in case none)
-      )
-    )
-
   (setf (symbol-function 'xp-stream-stream) #'(lambda (s) (xp-stream s)))
 
   (defmethod streamp ((x xp-structure)) t)
@@ -481,8 +407,7 @@
   (defmethod write-internal-1 ((xp-struc xp-structure) object level list-kludge)
     (write-internal-1 (xp-stream xp-struc) object level list-kludge))
 
-  (defmacro xp-structure-p (x)
-    `(istruct-typep ,x 'xp-structure))
+
 
   (defun get-xp-stream (pp)
     (xp-stream pp))
