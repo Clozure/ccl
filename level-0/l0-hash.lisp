@@ -614,7 +614,7 @@ before doing so.")
 (defun clrhash (hash)
   "This removes all the entries from HASH-TABLE and returns the hash table
    itself."
-  (unless (hash-table-p hash)
+  (unless (typep hash 'hash-table)
     (report-bad-arg hash 'hash-table))
   (with-lock-context
     (without-interrupts
@@ -698,7 +698,7 @@ before doing so.")
   "Finds the entry in HASH-TABLE whose key is KEY and returns the associated
    value and T as multiple values, or returns DEFAULT and NIL if there is no
    such entry. Entries can be added using SETF."
-  (unless (hash-table-p hash)
+  (unless (typep hash 'hash-table)
     (report-bad-arg hash 'hash-table))
   (let* ((value nil)
          (vector-key nil)
@@ -748,7 +748,7 @@ before doing so.")
 (defun remhash (key hash)
   "Remove the entry in HASH-TABLE associated with KEY. Return T if there
    was such an entry, or NIL if not."
-  (unless (hash-table-p hash)
+  (unless (typep hash 'hash-table)
     (setq hash (require-type hash 'hash-table)))
   (let* ((foundp nil))
     (with-lock-context
@@ -807,7 +807,7 @@ before doing so.")
 
 (defun puthash (key hash default &optional (value default))
   (declare (optimize (speed 3) (space 0)))
-  (unless (hash-table-p hash)
+  (unless (typep hash 'hash-table)
     (report-bad-arg hash 'hash-table))
   (if (eq key (%unbound-marker))
     (error "Can't use ~s as a hash-table key" (%unbound-marker)))
@@ -883,7 +883,7 @@ before doing so.")
      
 
 (defun grow-hash-table (hash)
-  (unless (hash-table-p hash)
+  (unless (typep hash 'hash-table)
     (setq hash (require-type hash 'hash-table)))
   (%grow-hash-table hash))
 
@@ -1574,7 +1574,7 @@ before doing so.")
                    (when (not (consp key))
                      (return (values hash address-p)))
                    (setq key (cdr key)))))
-              ((hash-table-p key)
+              ((typep key 'hash-table)
                (equalphash-hash-table key))
               ; what are the dudes called that contain bits? they are uvectors but not gvectors?
               ; ivectors.
@@ -1687,7 +1687,7 @@ before doing so.")
     vector))
 
 (defun assert-hash-table-readonly (hash)
-  (unless (hash-table-p hash)
+  (unless (typep hash 'hash-table)
     (report-bad-arg hash 'hash-table))
   (or (nhash.read-only hash)
       (when (nhash.owner hash)
@@ -1709,24 +1709,24 @@ before doing so.")
 ;; This is dangerous, if multiple threads are accessing a read-only
 ;; hash table. Use it responsibly.
 (defun assert-hash-table-writeable (hash)
-  (unless (hash-table-p hash)
+  (unless (typep hash 'hash-table)
     (report-bad-arg hash 'hash-table))
   (when (nhash.read-only hash)
     (setf (nhash.read-only hash) nil)
     t))
 
 (defun readonly-hash-table-p (hash)
-  (unless (hash-table-p hash)
+  (unless (typep hash 'hash-table)
     (report-bad-arg hash 'hash-table))
   (nhash.read-only hash))
 
 (defun hash-table-owner (hash)
-  (unless (hash-table-p hash)
+  (unless (typep hash 'hash-table)
     (report-bad-arg hash 'hash-table))
   (nhash.owner hash))
 
 (defun claim-hash-table (hash &optional steal)
-  (unless (hash-table-p hash)
+  (unless (typep hash 'hash-table)
     (report-bad-arg hash 'hash-table))
   (let* ((owner (nhash.owner hash)))
     (if owner
@@ -1744,7 +1744,7 @@ before doing so.")
 
 
 (defun enumerate-hash-keys (hash out)
-  (unless (hash-table-p hash)
+  (unless (typep hash 'hash-table)
     (report-bad-arg hash 'hash-table))
   (with-lock-context
     (without-interrupts
@@ -1766,7 +1766,7 @@ before doing so.")
              (incf out-idx))))))))
 
 (defun enumerate-hash-keys-and-values (hash keys values)
-  (unless (hash-table-p hash)
+  (unless (typep hash 'hash-table)
     (report-bad-arg hash 'hash-table))
   (with-lock-context
     (without-interrupts
