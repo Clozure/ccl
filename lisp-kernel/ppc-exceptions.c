@@ -691,7 +691,6 @@ gc_like_from_xp(ExceptionInformation *xp,
                 signed_natural param)
 {
   TCR *tcr = TCR_FROM_TSD(xpGPR(xp, rcontext)), *other_tcr;
-  ExceptionInformation* other_xp;
   int result;
   signed_natural inhibit;
 
@@ -1225,7 +1224,6 @@ PMCL_exception_handler(int xnum,
                        siginfo_t *info,
                        int old_valence)
 {
-  unsigned oldMQ;
   OSStatus status = -1;
   pc program_counter;
   opcode instruction = 0;
@@ -1279,7 +1277,7 @@ OSStatus
 handle_fpux_binop(ExceptionInformation *xp, pc where)
 {
   OSStatus err;
-  opcode *there = (opcode *) where, instr, errnum;
+  opcode *there = (opcode *) where, instr, errnum = 0;
   int i = TRAP_LOOKUP_TRIES, delta = 0;
   
   while (i--) {
@@ -1317,8 +1315,6 @@ handle_uuo(ExceptionInformation *xp, opcode the_uuo, pc where)
 #endif
   unsigned 
     minor = UUO_MINOR(the_uuo),
-    rt = 0x1f & (the_uuo >> 21),
-    ra = 0x1f & (the_uuo >> 16),
     rb = 0x1f & (the_uuo >> 11),
     errnum = 0x3ff & (the_uuo >> 16);
 
@@ -1436,8 +1432,7 @@ void
 callback_to_lisp (LispObj callback_macptr, ExceptionInformation *xp,
                   natural arg1, natural arg2, natural arg3, natural arg4, natural arg5)
 {
-  sigset_t mask;
-  natural  callback_ptr, i;
+  natural  callback_ptr;
   area *a;
 
   TCR *tcr = TCR_FROM_TSD(xpGPR(xp, rcontext));
@@ -1497,13 +1492,7 @@ allocate_no_stack (natural size)
 OSStatus
 handle_trap(ExceptionInformation *xp, opcode the_trap, pc where, siginfo_t *info)
 {
-  unsigned  instr, err_arg1 = 0, err_arg2 = 0, err_arg3 = 0;
-  int       ra, rs, fn_reg = 0;
-  char *    error_msg = NULL;
-  char      name[kNameBufLen];
   LispObj   cmain = nrs_CMAIN.vcell;
-  Boolean   event_poll_p = false;
-  int old_interrupt_level = 0;
   TCR *tcr = TCR_FROM_TSD(xpGPR(xp, rcontext));
 
   /* If we got here, "the_trap" is either a TRI or a TR instruction.
@@ -1684,7 +1673,6 @@ is_conditional_trap(opcode instr)
 OSStatus
 handle_error(ExceptionInformation *xp, unsigned errnum, unsigned rb, unsigned continuable, pc where)
 {
-  LispObj   pname;
   LispObj   errdisp = nrs_ERRDISP.vcell;
 
   if ((fulltag_of(errdisp) == fulltag_misc) &&
@@ -1864,7 +1852,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
 
   if ((program_counter < &egc_write_barrier_end) && 
       (program_counter >= &egc_write_barrier_start)) {
-    LispObj *ea = 0, val, root;
+    LispObj *ea = 0, val = 0, root = 0;
     bitvector refbits = (bitvector)(lisp_global(REFBITS));
     Boolean need_store = true, need_check_memo = true, need_memoize_root = false;
 
@@ -2380,7 +2368,6 @@ fatal_mach_error(char *format, ...);
 void
 restore_mach_thread_state(mach_port_t thread, ExceptionInformation *pseudosigcontext)
 {
-  int i, j;
   kern_return_t kret;
   MCONTEXT_T mc = UC_MCONTEXT(pseudosigcontext);
 
@@ -2451,7 +2438,6 @@ create_thread_context_frame(mach_port_t thread,
 #endif
   mach_msg_type_number_t thread_state_count;
   kern_return_t result;
-  int i,j;
   ExceptionInformation *pseudosigcontext;
   MCONTEXT_T mc;
   natural stackp, backlink;
@@ -2545,10 +2531,8 @@ setup_signal_frame(mach_port_t thread,
 #else
   ppc_thread_state_t ts;
 #endif
-  mach_msg_type_number_t thread_state_count;
   ExceptionInformation *pseudosigcontext;
-  int i, j, old_valence = tcr->valence;
-  kern_return_t result;
+  int old_valence = tcr->valence;
   natural stackp;
 
 #ifdef DEBUG_MACH_EXCEPTIONS
@@ -2987,7 +2971,6 @@ setup_mach_exception_handling(TCR *tcr)
 {
   mach_port_t 
     thread_exception_port = TCR_TO_EXCEPTION_PORT(tcr),
-    target_thread = pthread_mach_thread_np((pthread_t)ptr_from_lispobj(tcr->osid)),
     task_self = mach_task_self();
   kern_return_t kret;
 

@@ -319,25 +319,3 @@ plbt(ExceptionInformation *xp)
   plbt_sp(xpGPR(xp, sp));
 }
     
-const char *
-foreign_name_and_offset(void *frame, unsigned *delta)
-{
-  Dl_info info;
-#if defined(LINUX) && !defined(PPC64)
-  void *pc = (void *) (((eabi_c_frame *)frame)->savelr);
-#else
-  void *pc = (void *) (((c_frame *)frame)->savelr);
-#endif
-#ifndef STATIC
-  if (dladdr(pc, &info)) {
-    if (delta) {
-      *delta = (unsigned long )pc - (unsigned long)info.dli_saddr;
-    }
-    return info.dli_sname;
-  }
-#endif
-  if (delta) {
-    *delta = 0;
-  }
-  return NULL;
-}

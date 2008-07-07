@@ -181,15 +181,12 @@ void
 describe_ppc_illegal(ExceptionInformation *xp)
 {
   pc where = xpPC(xp);
-  opcode the_uuo = *where, instr2;
+  opcode the_uuo = *where;
   Boolean described = false;
 
   if (IS_UUO(the_uuo)) {
     unsigned 
       minor = UUO_MINOR(the_uuo),
-      rt = 0x1f & (the_uuo >> 21),
-      ra = 0x1f & (the_uuo >> 16),
-      rb = 0x1f & (the_uuo >> 11),
       errnum = 0x3ff & (the_uuo >> 16);
 
     switch(minor) {
@@ -225,8 +222,7 @@ describe_ppc_trap(ExceptionInformation *xp)
 {
   pc where = xpPC(xp);
   opcode the_trap = *where, instr;
-  int  err_arg1, err_arg2, ra, rs;
-  char *name = NULL;
+  int err_arg2, ra, rs;
   Boolean identified = false;
 
   if ((the_trap & OP_MASK) == OP(major_opcode_TRI)) {
@@ -589,7 +585,7 @@ debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
 {
 
 #ifdef PPC
-  int a, b, c, d, i;
+  int a, b, c, d;;
 #ifdef PPC64
   for (a = 0, b = 16; a < 16; a++, b++) {
     fprintf(stderr,"r%02d = 0x%016lX    r%02d = 0x%016lX\n",
@@ -644,8 +640,8 @@ debug_show_fpu(ExceptionInformation *xp, siginfo_t *info, int arg)
   dp = xpFPRvector(xp);
   np = (int *) dp;
   
-  for (i = 0; i < 32; i++) {
-    fprintf(stderr, "f%02d : 0x%08X%08X (%f)\n", i,  *np++, *np++, *dp++);
+  for (i = 0; i < 32; i++, np+=2) {
+    fprintf(stderr, "f%02d : 0x%08X%08X (%f)\n", i,  np[0], np[1], *dp++);
   }
   fprintf(stderr, "FPSCR = %08X\n", xpFPSCR(xp));
 #endif

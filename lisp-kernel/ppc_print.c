@@ -231,8 +231,7 @@ sprint_symbol(LispObj o)
   lispsymbol *rawsym = (lispsymbol *) ptr_from_lispobj(untag(o));
   LispObj 
     pname = rawsym->pname,
-    package = rawsym->package_predicate,
-    pname_header = header_of(pname);
+    package = rawsym->package_predicate;
 
 #ifdef PPC64
   if (o == lisp_nil) {

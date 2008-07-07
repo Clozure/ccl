@@ -120,7 +120,7 @@ check_node(LispObj n)
 void
 check_range(LispObj *start, LispObj *end, Boolean header_allowed)
 {
-  LispObj node, *current = start, *prev;
+  LispObj node, *current = start, *prev = NULL;
   int tag;
   natural elements;
 
@@ -1782,7 +1782,7 @@ void
 copy_ivector_reference(LispObj *ref, BytePtr low, BytePtr high, area *dest)
 {
   LispObj obj = *ref, header;
-  natural tag = fulltag_of(obj), header_tag, header_subtag;
+  natural tag = fulltag_of(obj), header_tag;
 
   if ((tag == fulltag_misc) &&
       (((BytePtr)ptr_from_lispobj(obj)) > low) &&
@@ -2052,7 +2052,6 @@ purify(TCR *tcr, signed_natural param)
 
   TCR  *other_tcr;
   natural max_pure_size;
-  OSErr err;
   BytePtr new_pure_start;
 
 
