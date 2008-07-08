@@ -79,3 +79,5 @@ handle SIG40 pass nostop noprint
 handle SIG41 pass nostop noprint
 handle SIG42 pass nostop noprint
 handle SIGPWR pass nostop noprint
+handle SIGQUIT pass nostop noprint
+
