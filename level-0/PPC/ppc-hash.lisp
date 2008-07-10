@@ -27,18 +27,34 @@
 
 ;;; This should stay in LAP so that it's fast
 ;;; Equivalent to cl:mod when both args are positive fixnums
-#+ppc32-target
 (defppclapfunction fast-mod ((number arg_y) (divisor arg_z))
-  (divwu imm0 number divisor)
-  (mullw arg_z imm0 divisor)
+  #+ppc32-target
+  (progn
+    (divwu imm0 number divisor)
+    (mullw arg_z imm0 divisor))
+  #+ppc64-target
+  (progn
+    (divdu imm0 number divisor)
+    (mulld arg_z imm0 divisor))
   (subf arg_z arg_z number)
   (blr))
 
-#+ppc64-target
-(defppclapfunction fast-mod ((number arg_y) (divisor arg_z))
-  (divdu imm0 number divisor)
-  (mulld arg_z imm0 divisor)
-  (subf arg_z arg_z number)
+
+(defppclapfunction fast-mod-3 ((number arg_x) (divisor arg_y) (recip arg_z))
+  (unbox-fixnum imm0 number)
+  #+ppc32-target
+  (progn
+    (mulhw imm1 imm0 recip)
+    (mullw imm0 imm1 divisor))
+  #+ppc64-target
+  (progn
+    (mulhd imm1 imm0 recip)
+    (mulld imm0 imm1 divisor))
+  (sub number number imm0)
+  (sub number number divisor)
+  (srari imm0 number (1- target::nbits-in-word))
+  (and divisor divisor imm0)
+  (add arg_z number divisor)
   (blr))
 
 #+ppc32-target
