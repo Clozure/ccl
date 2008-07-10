@@ -60,12 +60,16 @@ raise_thread_interrupt(TCR *target)
 int
 raise_thread_interrupt(TCR *target)
 {
+  pthread_t thread = (pthread_t)target->osid;
 #ifdef DARWIN_not_yet
   if (use_mach_exception_handling) {
     return mach_raise_thread_interrupt(target);
   }
 #endif
- return pthread_kill((pthread_t)target->osid, SIGNAL_FOR_PROCESS_INTERRUPT);
+  if (thread != (pthread_t) 0) {
+    return pthread_kill(thread, SIGNAL_FOR_PROCESS_INTERRUPT);
+  }
+  return ESRCH;
 }
 #endif
 
@@ -179,7 +183,6 @@ unlock_futex(natural *p)
 int
 lock_recursive_lock(RECURSIVE_LOCK m, TCR *tcr)
 {
-  natural val;
   if (tcr == NULL) {
     tcr = get_tcr(true);
   }
@@ -231,7 +234,7 @@ unlock_recursive_lock(RECURSIVE_LOCK m, TCR *tcr)
 int
 unlock_recursive_lock(RECURSIVE_LOCK m, TCR *tcr)
 {
-  int ret = EPERM, pending;
+  int ret = EPERM;
 
    if (tcr == NULL) {
     tcr = get_tcr(true);
@@ -1107,7 +1110,6 @@ xNewThread(natural control_stack_size,
 
 {
   thread_activation activation;
-  TCR *current = get_tcr(false);
 
 
   activation.tsize = temp_stack_size;
@@ -1278,6 +1280,7 @@ Boolean
 suspend_tcr(TCR *tcr)
 {
   int suspend_count = atomic_incf(&(tcr->suspend_count));
+  pthread_t thread;
   if (suspend_count == 1) {
 #if SUSPEND_RESUME_VERBOSE
     fprintf(stderr,"Suspending 0x%x\n", tcr);
@@ -1288,7 +1291,9 @@ suspend_tcr(TCR *tcr)
       return true;
     }
 #endif
-    if (pthread_kill((pthread_t)(tcr->osid), thread_suspend_signal) == 0) {
+    thread = (pthread_t)(tcr->osid);
+    if ((thread != (pthread_t) 0) &&
+        (pthread_kill(thread, thread_suspend_signal) == 0)) {
       SET_TCR_FLAG(tcr,TCR_FLAG_BIT_SUSPEND_ACK_PENDING);
     } else {
       /* A problem using pthread_kill.  On Darwin, this can happen
@@ -1356,7 +1361,7 @@ lisp_suspend_tcr(TCR *tcr)
 Boolean
 resume_tcr(TCR *tcr)
 {
-  int suspend_count = atomic_decf(&(tcr->suspend_count)), err;
+  int suspend_count = atomic_decf(&(tcr->suspend_count));
   if (suspend_count == 0) {
 #ifdef DARWIN
     if (tcr->flags & (1<<TCR_FLAG_BIT_ALT_SUSPEND)) {
@@ -1573,7 +1578,7 @@ rwlock_new()
   extern int cache_block_size;
 
   void *p = calloc(1,sizeof(rwlock)+cache_block_size-1);
-  rwlock *rw;
+  rwlock *rw = NULL;;
   
   if (p) {
     rw = (rwlock *) ((((natural)p)+cache_block_size-1) & (~(cache_block_size-1)));
