@@ -31,7 +31,7 @@
 (defconstant $nhash.lock-map-count-mask #xffff)
 (defconstant $nhash.lock-not-while-rehashing #x-20001)
 
-; The hash.vector cell contains a vector with 8 longwords of overhead
+; The hash.vector cell contains a vector with some longwords of overhead
 ; followed by alternating keys and values.
 ; A key of $undefined denotes an empty or deleted value
 ; The value will be $undefined for empty values, or NIL for deleted values.
@@ -46,11 +46,14 @@
   nhash.vector.cache-idx                ; index of last cached key/value pair
   nhash.vector.cache-key                ; cached key
   nhash.vector.cache-value              ; cached value
+  nhash.vector.size                     ; number of entries in table
+  nhash.vector.size-reciprocal          ; shifted reciprocal of nhash.vector.size
   )
+
 
 ; number of longwords of overhead in nhash.vector.
 ; Must be a multiple of 2 or INDEX parameters in LAP code will not be tagged as fixnums.
-(defconstant $nhash.vector_overhead 10)
+(defconstant $nhash.vector_overhead 12)
 
 (defconstant $nhash_weak_bit 12)        ; weak hash table
 (defconstant $nhash_weak_value_bit 11)  ; weak on value vice key if this bit set

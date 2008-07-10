@@ -37,6 +37,23 @@
   (single-value-return))
 
 
+;; Faster mod based on Bruce Hoult's Dylan version, modified to use a branch-free max.
+(defx86lapfunction fast-mod-3 ((number arg_x) (divisor arg_y) (recip arg_z))
+  (mov (% number) (% imm0))
+  (shrq ($ target::fixnumshift) (% imm0))
+  (mov (% recip) (% imm1))
+  (mul (% imm1)) ;; -> hi word in imm1 (unboxed)
+  (mov (% divisor) (% imm0))
+  (mul (% imm1)) ;; -> lo word in imm0 (boxed)
+  (subq (% imm0) (% number))
+  (subq (% divisor) (% number))
+  (mov (% number) (% arg_z))
+  (mov (% number) (% imm0))
+  (sar ($ (1- target::nbits-in-word)) (% imm0))
+  (andq (% imm0) (% divisor))
+  (addq (% divisor) (% arg_z))
+  (single-value-return))
+
 (defx86lapfunction %dfloat-hash ((key arg_z))
   (movq (@ x8664::double-float.value (% key)) (% imm0))
   (box-fixnum imm0 arg_z)
