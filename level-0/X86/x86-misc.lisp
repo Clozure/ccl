@@ -79,13 +79,53 @@
     (single-value-return 4)))
 
 
+(defun %copy-ivector-to-ivector (src src-byte-offset dest dest-byte-offset nbytes)
+  (declare (fixnum src-byte-offset dest-byte-offset nbytes))
+  (if (or (eq src dest)
+          (not (eql 0 src-byte-offset))
+          (not (eql 0 dest-byte-offset))
+          (< nbytes 8))
+    (%copy-ivector-to-ivector-bytes src src-byte-offset dest dest-byte-offset nbytes)
+    (%copy-ivector-to-ivector-words src dest (ash nbytes -3) (logand nbytes 7))))
 
-(defx86lapfunction %copy-ivector-to-ivector ((src-offset 16) 
-                                             (src-byte-offset 8)
-                                             #|(ra 0)|#
-                                             (dest arg_x)
-                                             (dest-byte-offset arg_y)
-                                             (nbytes arg_z))
+(defx86lapfunction %copy-ivector-to-ivector-words ((src 8)
+                                                   #|(ra 0)|#
+                                                   (dest arg_x)
+                                                   (nwords arg_y)
+                                                   (nbytes arg_z))
+  (let ((rsrc temp0)
+         (ridx imm1)
+         (rval imm0))
+    (xorl (%l ridx) (%l ridx))
+    (movq (@ src (% rsp)) (% rsrc))
+    (jmp @word-test)
+    @word-loop
+    (movq (@ x8664::misc-data-offset (% rsrc) (% ridx)) (% rval))
+    (movq (% rval) (@ x8664::misc-data-offset (% dest) (% ridx)))
+    (addq ($ 8) (% ridx))
+    @word-test
+    (cmpq (% ridx) (% nwords))
+    (jne @word-loop)
+    (jmp @byte-test)
+    @byte-loop
+    (movb (@ x8664::misc-data-offset (% rsrc) (% ridx)) (%b rval))
+    (movb (%b rval) (@ x8664::misc-data-offset (% dest) (% ridx)))
+    (addq ($ 1) (% ridx))
+    @byte-test
+    (subq ($ '1) (% nbytes))
+    (jns @byte-loop)
+    (movq (% dest) (% arg_z))
+    (single-value-return 3)))
+          
+    
+    
+
+(defx86lapfunction %copy-ivector-to-ivector-bytes ((src-offset 16) 
+                                                   (src-byte-offset 8)
+                                                   #|(ra 0)|#
+                                                   (dest arg_x)
+                                                   (dest-byte-offset arg_y)
+                                                   (nbytes arg_z))
   (let ((rsrc temp0)
         (rsrc-byte-offset temp1))
     (movq (@ src-byte-offset (% rsp)) (% rsrc-byte-offset))
