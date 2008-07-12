@@ -702,7 +702,7 @@
     (let* ((r (realpart x))
            (i (imagpart x)))
       (complex (* (cos r) (cosh i))
-               (* (sin r) (sinh i))))
+               (- (* (sin r) (sinh i)))))
     (if (typep x 'double-float)
       (%double-float-cos! x (%make-dfloat))
       #+32-bit-target
