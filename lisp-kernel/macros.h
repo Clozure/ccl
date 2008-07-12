@@ -21,8 +21,8 @@
 #ifndef __macros__
 #define __macros__
 
-#define ptr_to_lispobj(p) ((LispObj)((unsigned_of_pointer_size)(p)))
-#define ptr_from_lispobj(o) ((LispObj*)((unsigned_of_pointer_size)(o)))
+#define ptr_to_lispobj(p) ((LispObj)(p))
+#define ptr_from_lispobj(o) ((LispObj*)(o))
 #define lisp_reg_p(reg)  ((reg) >= fn)
 
 #define fulltag_of(o)  ((o) & fulltagmask)
@@ -31,7 +31,7 @@
 #define node_aligned(o) ((o) & ~tagmask)
 #define indirect_node(o) (*(LispObj *)(node_aligned(o)))
 
-#define deref(o,n) (*((LispObj*) (ptr_from_lispobj(untag((LispObj)o)))+(n)))
+#define deref(o,n) ((((LispObj*) (untag((LispObj)o))))[(n)])
 #define header_of(o) deref(o,0)
 
 #define header_subtag(h) ((h) & subtagmask)

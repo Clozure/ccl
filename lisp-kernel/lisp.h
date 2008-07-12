@@ -59,6 +59,9 @@ LispObj start_lisp(TCR*, LispObj);
 size_t
 ensure_stack_limit(size_t);
 
+char *
+print_lisp_object(LispObj);
+
 #include "kernel-globals.h"
 #endif
 

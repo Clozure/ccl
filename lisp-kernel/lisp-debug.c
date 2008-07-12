@@ -427,7 +427,7 @@ debug_lisp_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
     show_lisp_register(xp, "temp2", Itemp2);
     fprintf(stderr,"------\n");
     if (tag_of(xpGPR(xp,Inargs)) == tag_fixnum) {
-      fprintf(stderr,"%%rcx (nargs) = %d (maybe)\n", unbox_fixnum(xpGPR(xp,Inargs)&0xffff));
+      fprintf(stderr,"%%rcx (nargs) = %ld (maybe)\n", unbox_fixnum(xpGPR(xp,Inargs)&0xffff));
     }
 #endif
   }
@@ -624,7 +624,7 @@ debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
   fprintf(stderr,"%%rbx = 0x%016lX      %%r11 = 0x%016lX\n", xpGPR(xp,REG_RBX),xpGPR(xp,REG_R11));
   fprintf(stderr,"%%rsp = 0x%016lX      %%r12 = 0x%016lX\n", xpGPR(xp,REG_RSP),xpGPR(xp,REG_R12));
   fprintf(stderr,"%%rbp = 0x%016lX      %%r13 = 0x%016lX\n", xpGPR(xp,REG_RBP),xpGPR(xp,REG_R13));
-  fprintf(stderr,"%%rsi = 0x%%016lX     %%r14 = 0x%016lX\n", xpGPR(xp,REG_RSI),xpGPR(xp,REG_R14));
+  fprintf(stderr,"%%rsi = 0x%016lX      %%r14 = 0x%016lX\n", xpGPR(xp,REG_RSI),xpGPR(xp,REG_R14));
   fprintf(stderr,"%%rdi = 0x%016lX      %%r15 = 0x%016lX\n", xpGPR(xp,REG_RDI),xpGPR(xp,REG_R15));
   fprintf(stderr,"%%rip = 0x%016lX   %%rflags = 0x%016lX\n",
 	  xpGPR(xp, Iip), xpGPR(xp, Iflags));

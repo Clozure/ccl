@@ -311,6 +311,8 @@ typedef struct hash_table_vector_header {
   LispObj cache_idx;            /* index of last cached pair */
   LispObj cache_key;            /* value of last cached key */
   LispObj cache_value;          /* last cached value */
+  LispObj size;                 /* number of entries in table */
+  LispObj size_reciprocal;      /* shifted reciprocal of size */
 } hash_table_vector_header;
 
 /*

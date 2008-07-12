@@ -531,8 +531,7 @@ extend_readonly_area(unsigned more)
   unsigned mask;
   BytePtr new_start, new_end;
 
-  a = find_readonly_area();
-  if (a) {
+  if ((a = find_readonly_area()) != NULL) {
     if ((a->active + more) > a->high) {
       return NULL;
     }
@@ -944,7 +943,7 @@ default_image_name(char *orig)
     }
   }
   work = base;
-  while (c = *work) {
+  while ((c = *work) != '\0') {
     if (islower(c)) {
       *work++ = toupper(c);
     } else {
@@ -1485,6 +1484,7 @@ check_bogus_fp_exceptions()
   }
 #endif
 }
+
 
 int
 main(int argc, char *argv[], char *envp[], void *aux)
@@ -2047,7 +2047,7 @@ sample_paging_info(paging_info *stats)
 void
 report_paging_info_delta(FILE *out, paging_info *start, paging_info *stop)
 {
-  fprintf(out,";;; %d soft faults, %d faults, %d pageins\n\n",
+  fprintf(out,";;; %ld soft faults, %ld faults, %ld pageins\n\n",
           stop->ru_minflt-start->ru_minflt,
           stop->ru_majflt-start->ru_majflt,
           stop->ru_nswap-start->ru_nswap);

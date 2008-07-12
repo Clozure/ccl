@@ -1343,7 +1343,7 @@ gc(TCR *tcr, signed_natural param)
     lispsymbol * total_gc_microseconds = (lispsymbol *) &(nrs_TOTAL_GC_MICROSECONDS);
     lispsymbol * total_bytes_freed = (lispsymbol *) &(nrs_TOTAL_BYTES_FREED);
     LispObj val;
-    struct timeval *timeinfo, elapsed;
+    struct timeval *timeinfo, elapsed = {0, 0};
 
     val = total_gc_microseconds->vcell;
     if ((fulltag_of(val) == fulltag_misc) &&

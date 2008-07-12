@@ -155,7 +155,7 @@ lock_recursive_lock(RECURSIVE_LOCK m, TCR *tcr)
 #else /* USE_FUTEX */
 
 static void inline
-lock_futex(natural *p)
+lock_futex(signed_natural *p)
 {
   
   while (1) {
@@ -172,7 +172,7 @@ lock_futex(natural *p)
 }
 
 static void inline
-unlock_futex(natural *p)
+unlock_futex(signed_natural *p)
 {
   if (atomic_decf(p) != FUTEX_AVAIL) {
     *p = FUTEX_AVAIL;
