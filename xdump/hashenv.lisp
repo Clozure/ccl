@@ -35,6 +35,7 @@
 ; followed by alternating keys and values.
 ; A key of $undefined denotes an empty or deleted value
 ; The value will be $undefined for empty values, or NIL for deleted values.
+;; If you change anything here, also update the kernel def in XXX-constantsNN.h
 (def-accessors () %svref
   nhash.vector.link                     ; GC link for weak vectors
   nhash.vector.flags                    ; a fixnum of flags
