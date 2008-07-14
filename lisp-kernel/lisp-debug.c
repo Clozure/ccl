@@ -665,6 +665,9 @@ debug_show_fpu(ExceptionInformation *xp, siginfo_t *info, int arg)
 #ifdef FREEBSD
   struct xmmacc *xmmp = xpXMMregs(xp);
 #endif
+#ifdef SOLARIS
+  upad128_t *xmmp = xpXMMregs(xp);
+#endif
   float *sp;
 
 
@@ -683,6 +686,9 @@ debug_show_fpu(ExceptionInformation *xp, siginfo_t *info, int arg)
 #endif
 #ifdef FREEBSD
           (((struct savefpu *)(&(xp)->uc_mcontext.mc_fpstate))->sv_env.en_mxcsr)
+#endif
+#ifdef SOLARIS
+	  xp->uc_mcontext.fpregs.fp_reg_set.fpchip_state.xstatus
 #endif
 #ifdef WINDOWS
 	  0 /* XXX: get from somewhere */
