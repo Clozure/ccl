@@ -1445,7 +1445,7 @@ governs whether DEFCLASS makes that distinction or not.")
      &allow-other-keys)
   (declare (dynamic-extent keys) (ignorable function-name))
   (multiple-value-bind (gf-class initargs)
-x      (normalize-egf-keys keys gf)
+      (normalize-egf-keys keys gf)
     (unless (eq gf-class (class-of gf))
       (when *error-on-gf-class-redefinition*
         (cerror (format nil "Change the class of ~s to ~s." gf gf-class)
