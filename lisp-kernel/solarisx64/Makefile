@@ -21,7 +21,12 @@ AS = /usr/sfw/bin/gas
 # and more buggy than /opt/sfw/bin/gm4, which is available on the 
 # "Solaris companion" disk.  Do you get the impression that the people
 # who put this stuff together aren't paying much attention ?
-M4 = /opt/sfw/bin/gm4
+# Marching forward: as of the OpenSolais 0805 (snv_86) release, there
+# doesn't seem to be any way of obtaining a non-broken GNU m4 from Sun.
+# I just downloaded the source to 1.4.11 and installed it in /usr/local/bin;
+# I didn't try blastwave.org or sunfreeware.com; there might be working
+# packages there
+M4 = /usr/local/bin/m4
 CC = /usr/sfw/bin/gcc
 ASFLAGS = --64
 M4FLAGS = -DSOLARIS -DX86 -DX8664
@@ -39,7 +44,7 @@ COPT = #-O2
 SPOBJ = pad.o x86-spjump64.o x86-spentry64.o x86-subprims64.o
 ASMOBJ = x86-asmutils64.o imports.o
 
-COBJ  = pmcl-kernel.o x86-gc.o bits.o  x86-exceptions.o \
+COBJ  = pmcl-kernel.o gc-common.o x86-gc.o bits.o  x86-exceptions.o \
 	image.o thread_manager.o lisp-debug.o memory.o
 
 DEBUGOBJ = lispdcmd.o plprint.o plsym.o xlbt.o x86_print.o
