@@ -41,13 +41,14 @@
 
 
 (defppclapfunction fast-mod-3 ((number arg_x) (divisor arg_y) (recip arg_z))
-  (unbox-fixnum imm0 number)
   #+ppc32-target
   (progn
+    (srwi imm0 number ppc32::fixnumshift)
     (mulhw imm1 imm0 recip)
     (mullw imm0 imm1 divisor))
   #+ppc64-target
   (progn
+    (srdi imm0 number ppc64::fixnumshift)
     (mulhd imm1 imm0 recip)
     (mulld imm0 imm1 divisor))
   (sub number number imm0)
