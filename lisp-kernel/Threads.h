@@ -26,6 +26,11 @@
 #include <errno.h>
 #include <limits.h>
 
+#ifdef SOLARIS
+#include <sys/syscall.h>
+#include <sys/lwp.h>
+#endif
+
 #undef USE_MACH_SEMAPHORES
 #define USE_POSIX_SEMAPHORES
 #undef USE_WINDOWS_SEMAPHORES
