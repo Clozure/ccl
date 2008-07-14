@@ -717,6 +717,10 @@ setup_tcr_extra_segment(TCR *tcr)
   /* There's no way to do this yet.  See DARWIN_GS_HACK */
   /* darwin_set_x8664_fs_reg(tcr); */
 #endif
+#ifdef SOLARIS
+  /* Chris Curtis found this and suggested the use of syscall here */
+  syscall(SYS_lwp_private,_LWP_SETPRIVATE, _LWP_GSBASE, tcr);
+#endif
 }
 
 #endif
