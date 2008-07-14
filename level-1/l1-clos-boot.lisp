@@ -3104,6 +3104,12 @@ to replace that class with ~s" name old-class new-class)
   (declare (dynamic-extent initargs))
   (%change-class instance new-class initargs))
 
+(defmethod change-class ((instance funcallable-standard-object)
+                         (new-class funcallable-standard-class)
+                         &rest initargs &key &allow-other-keys)
+  (declare (dynamic-extent initargs))
+  (%change-class instance new-class initargs))
+  
 
 (defun %change-class (object new-class initargs)
   (let* ((old-class (class-of object))
