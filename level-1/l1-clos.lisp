@@ -1425,6 +1425,18 @@ governs whether DEFCLASS makes that distinction or not.")
 		      initargs)))
       (setf (fdefinition function-name) gf))))
 
+(defparameter *error-on-gf-class-redefinition* nil
+  "The MOP spec requires ENSURE-GENERIC-FUNCTION-USING-CLASS of an
+   existing gf to signal an error if the :GENERIC-FUNCTION-CLASS
+   argument specifies a class other than the existing gf's class.
+   ANSI CL allows this kind of redefinition if the classes are
+   \"compatible\", but doesn't define what compatibility means
+   in this case.  When *ERROR-ON-GF-CLASS-REDEFINITION* is true,
+   a continuable error is signaled.
+
+   Historically, Clozure CL CERRORed, but didn't offer a useful
+   CHANGE-CLASS method that would change the GF's class")
+
 (defmethod ensure-generic-function-using-class
     ((gf generic-function)
      function-name
@@ -1433,11 +1445,12 @@ governs whether DEFCLASS makes that distinction or not.")
      &allow-other-keys)
   (declare (dynamic-extent keys) (ignorable function-name))
   (multiple-value-bind (gf-class initargs)
-      (normalize-egf-keys keys gf)
+x      (normalize-egf-keys keys gf)
     (unless (eq gf-class (class-of gf))
-      (cerror (format nil "Change the class of ~s to ~s." gf gf-class)
-	      "The class of the existing generic function ~s is not ~s"
-	      gf gf-class)
+      (when *error-on-gf-class-redefinition*
+        (cerror (format nil "Change the class of ~s to ~s." gf gf-class)
+                "The class of the existing generic function ~s is not ~s"
+                gf gf-class))
       (change-class gf gf-class))
     (apply #'reinitialize-instance gf initargs)))
 
