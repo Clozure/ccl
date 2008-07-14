@@ -65,7 +65,7 @@ pthread_mutex_t *mach_exception_lock;
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
 #define xpPC(x) xpGPR(x,Iip)
-#define xpMMXreg(x,n)  *((natural *)(&(x)->uc_mcontext.fpregs.fp_reg_set.fpchip_state.st[n]))
+#define xpXMMregs(x)(&((x)->uc_mcontext.fpregs.fp_reg_set.fpchip_state.xmm[0]))
 #endif
 #endif
 
@@ -143,6 +143,12 @@ extern void freebsd_sigreturn(ExceptionInformation *);
 /* The x86 version of sigreturn just needs the context argument; the
    hidden, magic "flavor" argument that sigtramp uses is ignored. */
 #define SIGRETURN(context) DarwinSigReturn(context)
+#endif
+
+#ifdef SOLARIS
+#define SIGNUM_FOR_INTN_TRAP SIGSEGV
+#define IS_MAYBE_INT_TRAP(info,xp) (((info->si_code) &0x7f) == 0)
+#define SIGRETURN(context)
 #endif
 
 /* Please go away. */
