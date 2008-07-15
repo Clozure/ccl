@@ -350,7 +350,7 @@ unsigned unsigned_max(unsigned x, unsigned y)
 #define MAXIMUM_MAPPABLE_MEMORY (512L<<30L)
 #endif
 #ifdef SOLARIS
-#define MAXIMUM_MAPPABLE_MEMORY (1024L<<30L)
+#define MAXIMUM_MAPPABLE_MEMORY (128L<<30L)
 #endif
 #ifdef LINUX
 #ifdef X8664
@@ -680,7 +680,7 @@ create_reserved_area(natural totalsize)
 #ifdef SOLARIS
   fixed_map_ok = true;
 #endif
-  raise_limit();
+  raise_limit();                /* From Andi Kleen: observe rlimits */
   start = mmap((void *)want,
 	       totalsize + heap_segment_size,
 	       PROT_NONE,
@@ -1956,7 +1956,7 @@ set_errno(int val)
 void *
 xFindSymbol(void* handle, char *name)
 {
-#if defined(LINUX) || defined(FREEBSD)
+#if defined(LINUX) || defined(FREEBSD) || defined(SOLARIS)
   return dlsym(handle, name);
 #endif
 #ifdef DARWIN
@@ -1985,7 +1985,7 @@ xFindSymbol(void* handle, char *name)
 void *
 get_r_debug()
 {
-#if defined(LINUX) || defined(FREEBSD)
+#if defined(LINUX) || defined(FREEBSD) || defined(SOLARIS)
 #if WORD_SIZE == 64
   extern Elf64_Dyn _DYNAMIC[];
   Elf64_Dyn *dp;

@@ -147,8 +147,8 @@ extern void freebsd_sigreturn(ExceptionInformation *);
 
 #ifdef SOLARIS
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV
-#define IS_MAYBE_INT_TRAP(info,xp) (((info->si_code) &0x7f) == 0)
-#define SIGRETURN(context)
+#define IS_MAYBE_INT_TRAP(info,xp) (((info)->si_code) == SEGV_MAPERR)
+#define SIGRETURN(context) setcontext(context)
 #endif
 
 /* Please go away. */

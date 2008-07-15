@@ -90,11 +90,13 @@ int
 UnProtectMemory(LogicalAddress addr, natural nbytes)
 {
 #ifdef SOLARIS
-  return addr == mmap(addr,nbytes,PROT_READ|PROT_WRITE|PROT_EXEC,
-		      MAP_PRIVATE | MAP_FIXED | MAP_ANON,-1,0);
-#else
-  return mprotect(addr, nbytes, PROT_READ|PROT_WRITE|PROT_EXEC);
+  if (nbytes > page_size) {
+    return addr != mmap(addr,nbytes,PROT_READ|PROT_WRITE|PROT_EXEC,
+                        MAP_PRIVATE | MAP_FIXED | MAP_ANON,-1,0);
+  }
 #endif
+  return mprotect(addr, nbytes, PROT_READ|PROT_WRITE|PROT_EXEC);
+
 }
 
 void
