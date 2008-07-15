@@ -184,6 +184,7 @@ library/elf.lisp -text
 library/mach-o-symbols.lisp -text
 library/oprofile.txt -text
 library/sequence-utils.lisp -text
+library/x8664-solaris-syscalls.lisp -text
 lisp-kernel/gc-common.c -text
 lisp-kernel/win64/Makefile -text
 lisp-kernel/win64/yasm-redefinition.patch -text
