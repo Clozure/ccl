@@ -255,7 +255,7 @@
            (operands (cdr expression))
            (noperands (length operands)))
       (case operator
-        (c::resolve-type (let* ((foreign-type  (parse-c-ffi-type (car operands))))
+        (c::resolve-type (let* ((foreign-type  (ignore-errors (parse-c-ffi-type (car operands)))))
                            (when foreign-type
                              (setf (cdr expression) nil
                                    (car expression) foreign-type)
@@ -280,7 +280,7 @@
 		  (c::+ operand)
                   (c::~ (lognot operand))
                   (c::size-of
-                   (let* ((bits (ensure-foreign-type-bits operand)))
+                   (let* ((bits (ignore-errors (ensure-foreign-type-bits operand))))
                      (when bits
                        (ash (+ bits 7) -3))))
                   (t
