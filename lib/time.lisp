@@ -66,7 +66,9 @@
         (if (%null-ptr-p ltm)
           (values 0 nil)
           (progn
-            (values (floor (pref tm :tm.tm_gmtoff) -60)
+            (values (floor #-solaris-target (pref tm :tm.tm_gmtoff)
+                           #+solaris-target #&altzone
+                           -60)
                     (unless toobig (not (zerop (pref tm :tm.tm_isdst)))))))))))
 
 

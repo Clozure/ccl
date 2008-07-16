@@ -132,7 +132,8 @@
              (:linuxppc64 'ffi-linuxppc64)
              (:linuxx8664 'ffi-linuxx8664)
              (:darwinx8664 'ffi-darwinx8664)
-             (:freebsdx8664 'ffi-freebsdx8664)))))
+             (:freebsdx8664 'ffi-freebsdx8664)
+             (:solarisx8664 'ffi-solarisx8664)))))
 
 
 (defun target-compiler-modules (&optional (target
@@ -209,7 +210,7 @@
 	    ((:linuxppc32 :darwinppc32 :linuxppc64 :darwinppc64)
 	     '(ppc-error-signal ppc-trap-support
 	       ppc-threads-utils ppc-callback-support))
-            ((:linuxx8664 :freebsdx8664 :darwinx8664)
+            ((:linuxx8664 :freebsdx8664 :darwinx8664 :solarisx8664)
              '(x86-error-signal x86-trap-support
                x86-threads-utils x86-callback-support)))))
 
@@ -423,7 +424,8 @@
     (:linuxppc64 "ppc-boot64")
     (:linuxx8664 "x86-boot64")
     (:freebsdx8664 "fx86-boot64")
-    (:darwinx8664 "x86-boot64.image")))
+    (:darwinx8664 "x86-boot64.image")
+    (:solarisx8664 "sx86-boot64")))
 
 (defun standard-kernel-name (&optional (target (backend-name *host-backend*)))
   (ecase target
@@ -433,7 +435,8 @@
     (:linuxppc64 "ppccl64")
     (:linuxx8664 "lx86cl64")
     (:freebsdx8664 "fx86cl64")
-    (:darwinx8664 "dx86cl64")))
+    (:darwinx8664 "dx86cl64")
+    (:solarisx8664 "sx86cl64")))
 
 (defun standard-image-name (&optional (target (backend-name *host-backend*)))
   (ecase target
@@ -443,7 +446,8 @@
     (:linuxppc64 "PPCCL64")
     (:linuxx8664 "LX86CL64")
     (:freebsdx8664 "FX86CL64")
-    (:darwinx8664 "dx86cl64.image")))
+    (:darwinx8664 "dx86cl64.image")
+    (:solarisx8664 "SX86CL64")))
 
 (defun kernel-build-directory (&optional (target (backend-name *host-backend*)))
   (ecase target
@@ -453,7 +457,8 @@
     (:linuxppc64 "linuxppc64")
     (:linuxx8664 "linuxx8664")
     (:freebsdx8664 "freebsdx8664")
-    (:darwinx8664 "darwinx8664")))
+    (:darwinx8664 "darwinx8664")
+    (:solarisx8664 "solarisx64")))
 
 (defparameter *known-optional-features* '(:lock-accouting :count-gf-calls :monitor-futex-wait))
 (defvar *build-time-optional-features* nil)

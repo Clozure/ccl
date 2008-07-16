@@ -85,7 +85,8 @@
                         (:linuxppc64 "ccl:headers64;")
                         (:linuxx8664 "ccl:x86-headers64;")
                         (:darwinx8664 "ccl:darwin-x86-headers64;")
-                        (:freebsdx8664 "ccl:freebsd-headers64;"))
+                        (:freebsdx8664 "ccl:freebsd-headers64;")
+                        (:solarisx8664 "ccl:solarisx64-headers;"))
                     :interface-package-name
                     #.(ftd-interface-package-name *target-ftd*)
                     :attributes
@@ -1417,6 +1418,10 @@ result-type-specifer is :VOID or NIL"
 	(format out "~a" (shlib.soname container))))))
 
 (make-built-in-class 'foreign-variable *istruct-class*)
+
+(defun %cons-foreign-variable (name type &optional container)
+  (%istruct 'foreign-variable nil name type container))
+
 
 (defmethod make-load-form ((fv foreign-variable) &optional env)
   (declare (ignore env))

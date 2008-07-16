@@ -87,6 +87,13 @@ are running on, or NIL if we can't find any useful information."
                 (if (eql 0 (#_sysctl mib 2 ret oldsize (%null-ptr) 0))
                   (%get-cstring ret)
                   1)))
+            #+solaris-target
+            (rlet ((info :processor_info_t))
+              (do* ((i 0 (1+ i)))
+                   ((and (= 0 (#_processor_info i info))
+                         (= (pref info :processor_info_t.pi_state)
+                            #$P_ONLINE))
+                    (%get-cstring (pref info :processor_info_t.pi_processor_type)))))
             )))
 
 
