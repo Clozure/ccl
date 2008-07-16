@@ -158,6 +158,8 @@
   (require "DARWINX8664-SYSCALLS")
   #+freebsdx8664-target
   (require "X8664-FREEBSD-SYSCALLS")
+  #+solarisx8664-target
+  (require "X8664-SOLARIS-SYSCALLS")
   )
 
 (define-condition socket-error (simple-stream-error)
@@ -435,11 +437,13 @@ safer to mess with directly as there is less magic going on."))
 	     (socket-call socket "getsockname" (c_getsockname fd sockaddr namelen))
 	     (when (= #$AF_INET (pref sockaddr :sockaddr_in.sin_family))
 	       (ecase type
-		 (:host (ntohl (pref sockaddr :sockaddr_in.sin_addr.s_addr)))
+		 (:host (ntohl (pref sockaddr
+                                     #-solaris-target :sockaddr_in.sin_addr.s_addr
+                                     #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr)))
 		 (:port (ntohs (pref sockaddr :sockaddr_in.sin_port))))))))
 
 (defun path-from-unix-address (addr)
-  (when (= #$AF_LOCAL (pref addr :sockaddr_un.sun_family))
+  (when (= #$AF_UNIX (pref addr :sockaddr_un.sun_family))
     #+darwin-target
     (%str-from-ptr (pref addr :sockaddr_un.sun_path)
 		   (- (pref addr :sockaddr_un.sun_len) 2))
@@ -471,7 +475,9 @@ safer to mess with directly as there is less magic going on."))
 		  (t
 		   (when (= #$AF_INET (pref sockaddr :sockaddr_in.sin_family))
 		     (ecase type
-		       (:host (ntohl (pref sockaddr :sockaddr_in.sin_addr.s_addr)))
+		       (:host (ntohl (pref sockaddr
+                                           #-solaris-target :sockaddr_in.sin_addr.s_addr
+                                           #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr)))
 		       (:port (ntohs  (pref sockaddr :sockaddr_in.sin_port)))))))))))
 
 (defun remote-socket-filename (socket)
@@ -557,7 +563,7 @@ the socket is not connected."))
       (when nodelay
 	(int-setsockopt fd
 			#+linux-target #$SOL_TCP
-			#+(or freebsd-target darwin-target) #$IPPROTO_TCP
+			#-linux-target #$IPPROTO_TCP
 			#$TCP_NODELAY 1))
       (when (or local-port local-host)
 	(let* ((proto (if (eq type :stream) "tcp" "udp"))
@@ -571,7 +577,10 @@ the socket is not connected."))
 	  (rletz ((sockaddr :sockaddr_in))
 		 (setf (pref sockaddr :sockaddr_in.sin_family) #$AF_INET
 		       (pref sockaddr :sockaddr_in.sin_port) port-n
-		       (pref sockaddr :sockaddr_in.sin_addr.s_addr) host-n)
+		       (pref sockaddr
+                             #-solaris-target :sockaddr_in.sin_addr.s_addr
+                             #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr
+                             ) host-n)
 		 (socket-call socket "bind" (c_bind fd sockaddr (record-length :sockaddr_in)))))))
     (when (and (eq address-family :file)
 	       (eq connect :passive)
@@ -650,7 +659,7 @@ the socket is not connected."))
 (defun make-stream-file-socket (&rest keys &key connect &allow-other-keys &aux (fd -1))
   (unwind-protect
     (let (socket)
-      (setq fd (socket-call nil "socket" (c_socket #$PF_LOCAL #$SOCK_STREAM 0)))
+      (setq fd (socket-call nil "socket" (c_socket #$PF_UNIX #$SOCK_STREAM 0)))
       (apply #'set-socket-options fd keys)
       (setq socket
 	    (ecase connect
@@ -670,7 +679,10 @@ the socket is not connected."))
   (rlet ((sockaddr :sockaddr_in))
     (setf (pref sockaddr :sockaddr_in.sin_family) #$AF_INET
           (pref sockaddr :sockaddr_in.sin_port) port-n
-          (pref sockaddr :sockaddr_in.sin_addr.s_addr) host-n)
+          (pref sockaddr
+                #-solaris-target :sockaddr_in.sin_addr.s_addr
+                #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr
+                ) host-n)
     (%socket-connect fd sockaddr (record-length :sockaddr_in) timeout-in-milliseconds)))
                
 (defun file-socket-connect (fd remote-filename)
@@ -789,11 +801,11 @@ the socket is not connected."))
 	     (if (and async (< res 0)
 		      (or (eql res (- #$ENETDOWN))
 			  (eql res (- #+linux-target #$EPROTO
-				      #+(or darwin-target freebsd-target) #$EPROTOTYPE))
+				      #-linux-target  #$EPROTOTYPE))
 			  (eql res (- #$ENOPROTOOPT))
 			  (eql res (- #$EHOSTDOWN))
 			  (eql res (- #+linux-target #$ENONET
-				      #+(or darwin-target freebsd-target) #$ENETDOWN))
+				      #-linux-target #$ENETDOWN))
 			  (eql res (- #$EHOSTUNREACH))
 			  (eql res (- #$EOPNOTSUPP))
 			  (eql res (- #$ENETUNREACH))))
@@ -874,7 +886,9 @@ accept-connection on it again."))
 			    (remote-socket-info socket :port))))
     (rlet ((sockaddr :sockaddr_in))
       (setf (pref sockaddr :sockaddr_in.sin_family) #$AF_INET)
-      (setf (pref sockaddr :sockaddr_in.sin_addr.s_addr)
+      (setf (pref sockaddr
+                  #-solaris-target :sockaddr_in.sin_addr.s_addr
+                  #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr)
 	    (if remote-host (host-as-inet-host remote-host) #$INADDR_ANY))
       (setf (pref sockaddr :sockaddr_in.sin_port)
 	    (if remote-port (port-as-inet-port remote-port "udp") 0))
@@ -901,7 +915,10 @@ a packet to arrive. Returns four values:
     (rlet ((sockaddr :sockaddr_in)
 	   (namelen :signed))
       (setf (pref sockaddr :sockaddr_in.sin_family) #$AF_INET)
-      (setf (pref sockaddr :sockaddr_in.sin_addr.s_addr) #$INADDR_ANY)
+      (setf (pref sockaddr
+                  #-solaris-target :sockaddr_in.sin_addr.s_addr
+                  #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr)
+            #$INADDR_ANY)
       (setf (pref sockaddr :sockaddr_in.sin_port) 0)
       (setf (pref namelen :signed) (record-length :sockaddr_in))
       (%stack-block ((bufptr size))
@@ -925,7 +942,9 @@ a packet to arrive. Returns four values:
 		    (t 
 		     (subseq vec vec-offset (+ vec-offset ret-size))))
 	      ret-size
-	      (ntohl (pref sockaddr :sockaddr_in.sin_addr.s_addr))
+	      (ntohl (pref sockaddr
+                           #-solaris-target :sockaddr_in.sin_addr.s_addr
+                           #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr))
 	      (ntohs (pref sockaddr :sockaddr_in.sin_port))))))
 
 (defgeneric shutdown (socket &key direction)
@@ -1130,7 +1149,7 @@ unsigned IP address."
 ;;; a single word that should be passed by value.  The FFI translator
 ;;; seems to lose the :struct, so just using #_ doesn't work (that
 ;;; sounds like a bug in the FFI translator.)
-#+(or darwin-target linuxx8664-target freebsd-target)
+#+(or darwin-target linuxx8664-target freebsd-target solaris-target)
 (defun _inet_ntoa (addr)
   (with-macptrs ((p))
     (%setf-macptr p (external-call #+darwin-target "_inet_ntoa"
@@ -1146,17 +1165,22 @@ unsigned IP address."
       (let* ((result #+freebsd-target (#___inet_aton name addr)
                      #-freebsd-target (#_inet_aton name addr)))
 	(unless (eql result 0)
-	  (pref addr :in_addr.s_addr))))))
+	  (pref addr
+                #-solaris-target :in_addr.s_addr
+                #+solaris-target #>in_addr.S_un.S_addr
+                ))))))
 
 (defun c_socket_1 (domain type protocol)
-  #-linuxppc-target
+  #-(or linuxppc-target solaris-target)
   (syscall syscalls::socket domain type protocol)
   #+linuxppc-target
   (rlet ((params (:array :unsigned-long 3)))
     (setf (paref params (:* :unsigned-long) 0) domain
           (paref params (:* :unsigned-long) 1) type
           (paref params (:* :unsigned-long) 2) protocol)
-    (syscall syscalls::socketcall 1 params)))
+    (syscall syscalls::socketcall 1 params))
+  #+solaris-target
+  (syscall syscalls::so_socket domain type protocol +null-ptr+ #$SOV_DEFAULT))
 
 (defun c_socket (domain type protocol)
   (let* ((fd (c_socket_1 domain type protocol)))
@@ -1179,7 +1203,7 @@ unsigned IP address."
            (namelen (length name))
            (pathlen (sockaddr_un-path-len))
            (copylen (min (1- pathlen) namelen)))
-      (setf (pref addr :sockaddr_un.sun_family) #$AF_LOCAL)
+      (setf (pref addr :sockaddr_un.sun_family) #$AF_UNIX)
       (let* ((sun-path (pref addr :sockaddr_un.sun_path)))
         (dotimes (i copylen)
           (setf (%get-unsigned-byte sun-path i)
@@ -1202,7 +1226,7 @@ unsigned IP address."
       
 
 (defun c_bind (sockfd sockaddr addrlen)
-  #+(or darwin-target linuxx8664-target freebsd-target)
+  #-linuxppc-target
   (progn
     #+(or darwin-target freebsd-target)
     (setf (pref sockaddr :sockaddr_in.sin_len) addrlen)
@@ -1233,7 +1257,7 @@ unsigned IP address."
          (progn
            (fd-set-flags sockfd (logior flags #$O_NONBLOCK))
            (let* ((err 
-                   #+(or darwin-target linuxx8664-target freebsd-target)
+                   #-linuxppc-target
                    (syscall syscalls::connect sockfd addr len)
                    #+linuxppc-target
                    (progn
@@ -1257,7 +1281,7 @@ unsigned IP address."
       (fd-set-flags sockfd flags))))
 
 (defun c_listen (sockfd backlog)
-  #+(or darwin-target linuxx8664-target freebsd-target)
+  #-linuxppc-target
   (syscall syscalls::listen sockfd backlog)
   #+linuxppc-target
   (progn
@@ -1274,7 +1298,7 @@ unsigned IP address."
 
 (defun c_accept (sockfd addrp addrlenp)
   (ignoring-eintr 
-   #+(or darwin-target linuxx8664-target freebsd-target)
+   #-linuxppc-target
    (syscall syscalls::accept sockfd addrp addrlenp)
    #+linuxppc-target
    (progn
@@ -1292,7 +1316,7 @@ unsigned IP address."
        (syscall syscalls::socketcall 5 params)))))
 
 (defun c_getsockname (sockfd addrp addrlenp)
-  #+(or darwin-target linuxx8664-target freebsd-target)
+  #-linuxppc-target
   (syscall syscalls::getsockname sockfd addrp addrlenp)
   #+linuxppc-target
   (progn
@@ -1310,7 +1334,7 @@ unsigned IP address."
       (syscall syscalls::socketcall 6 params))))
 
 (defun c_getpeername (sockfd addrp addrlenp)
-  #+(or darwin-target linuxx8664-target freebsd-target)
+  #-linuxppc-target
   (syscall syscalls::getpeername sockfd addrp addrlenp)
   #+linuxppc-target
   (progn
@@ -1328,7 +1352,7 @@ unsigned IP address."
       (syscall syscalls::socketcall 7 params))))
 
 (defun c_socketpair (domain type protocol socketsptr)
-  #+(or darwin-target linuxx8664-target freebsd-target)
+  #-(or linuxppc-target solaris-target)
   (syscall syscalls::socketpair domain type protocol socketsptr)
   #+linuxppc-target
   (progn
@@ -1345,12 +1369,30 @@ unsigned IP address."
             (%%get-unsigned-longlong params 8) type
             (%%get-unsigned-longlong params 16) protocol
             (%get-ptr params 24) socketsptr)
-      (syscall syscalls::socketcall 8 params))))
+      (syscall syscalls::socketcall 8 params)))
+  #+solaris-target
+  (let* ((fd1 (syscall syscalls::so_socket domain type protocol +null-ptr+ #$SOV_DEFAULT)))
+    (if (>= fd1 0)
+      (let* ((fd2 (syscall syscalls::so_socket domain type protocol +null-ptr+ #$SOV_DEFAULT)))
+        (if (>= fd2 0)
+          (progn
+            (setf (paref socketsptr (:* :int) 0) fd1
+                  (paref socketsptr (:* :int) 1) fd2)
+            (let* ((res (syscall syscalls::so_socketpair socketsptr)))
+              (when (< res 0)
+                (fd-close fd1)
+                (fd-close fd2))
+              res))
+          (progn
+            (fd-close fd1)
+            fd2)))
+      fd1)))
+
 
 
 
 (defun c_sendto (sockfd msgptr len flags addrp addrlen)
-  #+(or darwin-target linuxx8664-target freebsd-target)
+  #-linuxppc-target
   (syscall syscalls::sendto sockfd msgptr len flags addrp addrlen)
   #+linuxppc-target
   (progn
@@ -1374,7 +1416,7 @@ unsigned IP address."
       (syscall syscalls::socketcall 11 params))))
 
 (defun c_recvfrom (sockfd bufptr len flags addrp addrlenp)
-  #+(or darwin-target linuxx8664-target freebsd-target)
+  #-linuxppc-target
   (syscall syscalls::recvfrom sockfd bufptr len flags addrp addrlenp)
   #+linuxppc-target
   (progn
@@ -1398,7 +1440,7 @@ unsigned IP address."
       (syscall syscalls::socketcall 12 params))))
 
 (defun c_shutdown (sockfd how)
-  #+(or darwin-target linuxx8664-target freebsd-target)
+  #-linuxppc-target
   (syscall syscalls::shutdown sockfd how)
   #+linuxppc-target
   (progn
@@ -1414,7 +1456,7 @@ unsigned IP address."
       (syscall syscalls::socketcall 13 params))))
 
 (defun c_setsockopt (sockfd level optname optvalp optlen)
-  #+(or darwin-target linuxx8664-target freebsd-target)
+  #-linux-ppc-target
   (syscall syscalls::setsockopt sockfd level optname optvalp optlen)
   #+linuxppc-target
   (progn
@@ -1436,7 +1478,7 @@ unsigned IP address."
       (syscall syscalls::socketcall 14 params))))
 
 (defun c_getsockopt (sockfd level optname optvalp optlenp)
-  #+(or darwin-target linuxx8664-target freebsd-target)
+  #-linuxppc-target
   (syscall syscalls::getsockopt sockfd level optname optvalp optlenp)
   #+linuxppc-target
   (progn
@@ -1458,7 +1500,7 @@ unsigned IP address."
       (syscall syscalls::socketcall 15 params))))
 
 (defun c_sendmsg (sockfd msghdrp flags)
-  #+(or darwin-target linuxx8664-target freebsd-target)
+  #-linuxppc-target
   (syscall syscalls::sendmsg sockfd msghdrp flags)
   #+linuxppc-target
   (progn
@@ -1476,7 +1518,7 @@ unsigned IP address."
       (syscall syscalls::socketcall 16 params))))
 
 (defun c_recvmsg (sockfd msghdrp flags)
-  #+(or darwin-target linuxx8664-target freebsd-target)
+  #-linuxppc-target
   (syscall syscalls::recvmsg sockfd msghdrp flags)
   #+linuxppc-target
   (progn
@@ -1507,6 +1549,7 @@ unsigned IP address."
       (format t "~&~8,'0x: " (%ptr-to-int (%inc-ptr p i))))
     (format t " ~2,'0x" (%get-byte p i))))
 
+#-solaris-target
 (defun %get-ip-interfaces ()
   (rlet ((p :address (%null-ptr)))
     (if (zerop (#_getifaddrs p))
@@ -1518,14 +1561,17 @@ unsigned IP address."
                (when (and (not (%null-ptr-p addr))
                           (eql (pref addr :sockaddr.sa_family) #$AF_INET))
                  (push (make-ip-interface
-				   :name (%get-cstring (pref q :ifaddrs.ifa_name))
-				   :addr (pref addr :sockaddr_in.sin_addr.s_addr)
-				   :netmask (pref (pref q :ifaddrs.ifa_netmask)
-						  :sockaddr_in.sin_addr.s_addr)
-				   :flags (pref q :ifaddrs.ifa_flags)
-				   :address-family #$AF_INET)
-                       res))))
-        (#_freeifaddrs (pref p :address))))))
+                        :name (%get-cstring (pref q :ifaddrs.ifa_name))
+                        :addr (pref addr
+                                    #-solaris-target :sockaddr_in.sin_addr.s_addr
+                                    #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr))
+                                   
+                       :netmask (pref (pref q :ifaddrs.ifa_netmask)
+                                      :sockaddr_in.sin_addr.s_addr)
+                       :flags (pref q :ifaddrs.ifa_flags)
+                       :address-family #$AF_INET)
+                 res)))
+      (#_freeifaddrs (pref p :address))))))
 
 
 (defloadvar *ip-interfaces* ())
