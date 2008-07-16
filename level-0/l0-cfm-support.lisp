@@ -43,13 +43,20 @@
 (defun external-entry-point-p (x)
   (istruct-typep x 'external-entry-point))
 
+;;; On both Linux and FreeBSD, RTLD_NEXT and RTLD_DEFAULT behave
+;;; the same way wrt symbols defined somewhere other than the lisp
+;;; kernel.  On Solaris, RTLD_DEFAULT will return the address of
+;;; an imported symbol's procedure linkage table entry if the symbol
+;;; has a plt entry (e.g., if it happens to be referenced by the
+;;; lisp kernel.)  *RTLD-NEXT* is therefore a slightly better
+;;; default; we've traditionaly used *RTLD-DEFAULT*.
 (defvar *rtld-next*)
 (defvar *rtld-default*)
 (setq *rtld-next* (%incf-ptr (%null-ptr) -1)
       *rtld-default* (%int-to-ptr #+(or linux-target darwin-target)  0
 				  #-(or linux-target darwin-target)  -2))
 
-#+(or linux-target freebsd-target)
+#+(or linux-target freebsd-target solaris-target)
 (progn
 
 (defvar *dladdr-entry*)
@@ -98,7 +105,7 @@
     
 (defvar *shared-libraries* nil)
 
-#+(or linux-target freebsd-target)
+#+(or linux-target freebsd-target solaris-target)
 (progn
 
 (defun soname-ptr-from-link-map (map)
@@ -136,9 +143,9 @@
                                (let* ((disp (%get-signed-natural
                                              dynamic-entries
                                              target::node-size)))
-                                 #+freebsd-target
+                                 #+(or freebsd-target solaris-target)
                                  (%inc-ptr (pref map :link_map.l_addr) disp)
-                                 #-freebsd-target
+                                 #-(or freebsd-target solaris-target)
                                  (%int-to-ptr 
                                   (if (< disp 0) 
                                     (+ disp (pref map :link_map.l_addr))
@@ -431,13 +438,13 @@ the operating system."
 
 (defun ensure-open-shlib (c force)
   (if (or (shlib.map c) (not force))
-    *rtld-default*
+    *rtld-next*
     (error "Shared library not open: ~s" (shlib.soname c))))
 
 (defun resolve-container (c force)
   (if c
     (ensure-open-shlib c force)
-    *rtld-default*
+    *rtld-next*
     ))
 
 
@@ -453,7 +460,7 @@ the operating system."
 ;;; function addresses on at least a 16-byte boundary, but some
 ;;; linkers don't quite get the concept ...)
 
-(defun foreign-symbol-entry (name &optional (handle *rtld-default*))
+(defun foreign-symbol-entry (name &optional (handle *rtld-next*))
   "Try to resolve the address of the foreign symbol name. If successful,
 return a fixnum representation of that address, else return NIL."
   (with-cstrs ((n name))
@@ -475,7 +482,7 @@ return a fixnum representation of that address, else return NIL."
 
 (defvar *statically-linked* nil)
 
-#+(or linux-target freebsd-target)
+#+(or linux-target freebsd-target solaris-target)
 (progn
 
 (defun %library-base-containing-address (address)
@@ -580,7 +587,7 @@ return a fixnum representation of that address, else return NIL."
 ;; end Darwin progn
 )
 
-#-(or linux-target darwin-target freebsd-target)
+#-(or linux-target darwin-target freebsd-target solaris-target)
 (defun shlib-containing-entry (entry &optional name)
   (declare (ignore entry name))
   *rtld-default*)
@@ -602,7 +609,7 @@ return a fixnum representation of that address, else return NIL."
 
 
 
-(defun foreign-symbol-address (name &optional (map *rtld-default*))
+(defun foreign-symbol-address (name &optional (map *rtld-next*))
   "Try to resolve the address of the foreign symbol name. If successful,
 return that address encapsulated in a MACPTR, else returns NIL."
   (with-cstrs ((n name))
@@ -629,6 +636,8 @@ return that address encapsulated in a MACPTR, else returns NIL."
     (resolve-eep eep nil)
     eep))
 
+
+
 (defun load-fv (name type)
   (let* ((fv (or (gethash name (fvs)) (setf (gethash name *fvs*) (%cons-foreign-variable name type)))))
     (resolve-foreign-variable fv nil)
@@ -639,7 +648,7 @@ return that address encapsulated in a MACPTR, else returns NIL."
 
 
 
-#+(or linux-target freebsd-target)
+#+(or linux-target freebsd-target solaris-target)
 (progn
 ;;; It's assumed that the set of libraries that the OS has open
 ;;; (accessible via the _dl_loaded global variable) is a subset of
@@ -727,7 +736,7 @@ return that address encapsulated in a MACPTR, else returns NIL."
   (setq *statically-linked* (not (eql 0 (%get-kernel-global 'statically-linked))))
   (%revive-macptr *rtld-next*)
   (%revive-macptr *rtld-default*)
-  #+(or linux-target freebsd-target)
+  #+(or linux-target freebsd-target solaris-target)
   (unless *statically-linked*
     (setq *dladdr-entry* (foreign-symbol-entry "dladdr"))
     (revive-shared-libraries)
