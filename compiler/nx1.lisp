@@ -1327,7 +1327,7 @@
     (ecase (backend-name *target-backend*)
       (:linuxppc32 (%nx1-operator eabi-ff-call))
       ((:darwinppc32 :linuxppc64 :darwinppc64) (%nx1-operator poweropen-ff-call))
-      ((:linuxx8664 :freebsdx8664 :darwinx8664) (%nx1-operator ff-call)))))
+      ((:linuxx8664 :freebsdx8664 :darwinx8664 :solarisx8664) (%nx1-operator ff-call)))))
 
 (defnx1 nx1-syscall ((%syscall)) (idx &rest arg-specs-and-result-spec)
   (flet ((map-to-representation-types (list)
@@ -1347,7 +1347,7 @@
              (:linuxppc32 (%nx1-operator eabi-syscall))
              ((:darwinppc32 :darwinppc64 :linuxppc64)
               (%nx1-operator poweropen-syscall))
-             ((:linuxx8664 :freebsdx8664 :darwinx8664) (%nx1-operator syscall))))))
+             ((:linuxx8664 :freebsdx8664 :darwinx8664 :solarisx8664) (%nx1-operator syscall))))))
 
 (defun nx1-ff-call-internal (address-expression arg-specs-and-result-spec operator )
   (let* ((specs ())         
