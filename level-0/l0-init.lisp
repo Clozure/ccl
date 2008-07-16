@@ -30,7 +30,7 @@
     :clozure
     :clozure-common-lisp
     :ansi-cl
-    :unix
+    #-windows-target :unix
     :openmcl-unicode-strings
     ;; Threads and MOP stuff is pretty redundant.
     :openmcl-native-threads
@@ -77,6 +77,11 @@
     #+darwinx86-target :darwinx86-target
     #+darwinx8664-target :darwinx8664-target
     #+darwinx8664-target :darwinx8664-host
+    #+solaris-target :solaris-host
+    #+solaris-target :solaris-target
+    #+solarisx86-target :solarisx86-target
+    #+solarisx8664-target :solarisx8664-target
+    #+solarisx8664-target :solarisx8664-host
     #+poweropen-target :poweropen-target
     #+64-bit-target :64-bit-target
     #+64-bit-target :64-bit-host
@@ -89,6 +94,7 @@
     #+darwin-target :darwin
     #+linux-target :linux
     #+freebsd-target :freebsd
+    #+solaris-target :solaris
     ;; :mcl                                ;deprecated
     )
   "a list of symbols that describe features provided by the
