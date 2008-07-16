@@ -27,6 +27,8 @@
   (require "DARWINX8664-SYSCALLS")
   #+(and freebsd-target x8664-target)
   (require "X8664-FREEBSD-SYSCALLS")
+  #+(and solaris-target x8664-target)
+  (require "X8664-SOLARIS-SYSCALLS")
   )
 
 
@@ -265,16 +267,16 @@ given is that of a group to which the current user belongs."
        t
        (pref stat :stat.st_mode)
        (pref stat :stat.st_size)
-       #+linux-target
+       #+(or linux-target solaris-target)
        (pref stat :stat.st_mtim.tv_sec)
-       #-linux-target
+       #-(or linux-target solaris-target)
        (pref stat :stat.st_mtimespec.tv_sec)
        (pref stat :stat.st_ino)
        (pref stat :stat.st_uid)
        (pref stat :stat.st_blksize)
-       #+linux-target
+       #+(or linux-target solaris-target)
        (round (pref stat :stat.st_mtim.tv_nsec) 1000)
-       #-linux-target
+       #-(or linux-target solaris-target)
        (round (pref stat :stat.st_mtimespec.tv_nsec) 1000)
        (pref stat :stat.st_gid))
       (values nil nil nil nil nil nil nil)))
@@ -345,7 +347,8 @@ given is that of a group to which the current user belongs."
   (if (eql 0 result)
     (%get-cstring (%inc-ptr buf (* #+linux-target #$_UTSNAME_LENGTH
 				   #+darwin-target #$_SYS_NAMELEN
-                                   #+freebsd-target #$SYS_NMLN idx)))
+                                   #+(or freebsd-target solaris-target) #$SYS_NMLN
+                                   idx)))
     "unknown"))
 
 (defun copy-file-attributes (source-path dest-path)
@@ -392,11 +395,19 @@ given is that of a group to which the current user belongs."
   (%stack-block ((buf (* #$SYS_NMLN 5)))
     (%uts-string (#___xuname #$SYS_NMLN buf) idx buf)))
 
+#+solaris-target
+(defun %uname (idx)
+  (%stack-block ((buf (* #$SYS_NMLN 5)))
+    (%uts-string (#_uname buf) idx buf)))
+
 (defun fd-dup (fd)
   (syscall syscalls::dup fd))
 
 (defun fd-fsync (fd)
-  (syscall syscalls::fsync fd))
+  #-solaris-target
+  (syscall syscalls::fsync fd)
+  #+solaris-target
+  (syscall syscalls::fdsync fd #$FSYNC))
 
 (defun fd-get-flags (fd)
   (syscall syscalls::fcntl fd #$F_GETFL))
@@ -492,7 +503,11 @@ given is that of a group to which the current user belongs."
 
 
 (defun %%rusage (usage &optional (who #$RUSAGE_SELF))
-  (syscall syscalls::getrusage who usage))
+  #-solaris-target
+  (syscall syscalls::getrusage who usage)
+  #+solaris-target
+  (syscall syscalls::rusagesys #$_RUSAGESYS_GETRUSAGE who usage)
+  )
 
 
 
@@ -600,7 +615,7 @@ of the shell itself."
       (%get-cstring p))))
 
 ;;; Kind of has something to do with files, and doesn't work in level-0.
-#+(or linux-target freebsd-target)
+#+(or linux-target freebsd-target solaris-target)
 (defun close-shared-library (lib &key (completely t))
   "If completely is T, set the reference count of library to 0. Otherwise,
 decrements it by 1. In either case, if the reference count becomes 0,
@@ -933,7 +948,9 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                                :stopped
                                :signaled)
                              signal
-                             (logtest #$WCOREFLAG statusflags)))))
+                             (logtest #-solaris-target #$WCOREFLAG
+                                      #+solaris-target #$WCOREFLG
+                                      statusflags)))))
                  (setf (external-process-%status p) status
                        (external-process-%exit-code p) code
                        (external-process-core p) core)
@@ -1248,11 +1265,12 @@ created with :WAIT NIL.) Return T if successful; signal an error otherwise."
                                                    count))
                 (pref info :host_basic_info.max_cpus)
                 1))
-            #+linux-target
+            #+(or linux-target solaris-target)
             (or
              (let* ((n (#_sysconf #$_SC_NPROCESSORS_ONLN)))
                (declare (fixnum n))
                (if (> n 0) n))
+             #+linux-target
              (ignore-errors
                (with-open-file (p "/proc/cpuinfo")
                  (let* ((ncpu 0)

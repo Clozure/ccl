@@ -27,7 +27,9 @@
   #+darwinx8664-target
   (require "DARWINX8664-SYSCALLS")
   #+freebsdx8664-target
-  (require "X8664-FREEBSD-SYSCALLS"))
+  (require "X8664-FREEBSD-SYSCALLS")
+  #+solarisx8664-target
+  (require "X8664-SOLARIS-SYSCALLS"))
 
 ;;;
 

@@ -129,6 +129,34 @@
       15                                ;r15
       )))
 
+#+solarisx8664-target
+(progn
+  (defconstant gp-regs-offset (+ (get-field-offset :ucontext.uc_mcontext)
+                                 (get-field-offset :mcontext_t.gregs)))
+  (defmacro xp-gp-regs (xp) xp)
+  (defconstant flags-register-offset #$REG_RFL)
+  (defconstant rip-register-offset #$REG_RIP)
+  (defun xp-mxcsr (xp)
+    (pref xp :ucontext.uc_mcontext.fpregs.fp_reg_set.fpchip_state.mxcsr))
+  (defparameter *encoded-gpr-to-indexed-gpr*
+    #(14                                ;rax
+      13                                ;rcx
+      12                                ;rdx
+      11                                ;rbx
+      20                                ;rsp
+      10                                ;rbp
+      9                                 ;rsi
+      8                                 ;rdi
+      7                                 ;r8
+      6                                 ;r9
+      5                                 ;r10
+      4                                 ;r11
+      3                                 ;r12
+      2                                 ;r13
+      1                                 ;r14
+      0                                 ;r15
+      )))
+
 (defun indexed-gpr-lisp (xp igpr)
   (%get-object (xp-gp-regs xp) (+ gp-regs-offset (ash igpr x8664::word-shift))))
 (defun (setf indexed-gpr-lisp) (new xp igpr)
