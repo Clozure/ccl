@@ -27,6 +27,8 @@
   (require "DARWINX8664-SYSCALLS")
   #+freebsd-target
   (require "X8664-FREEBSD-SYSCALLS")
+  #+solarisx8664-target
+  (require "X8664-SOLARIS-SYSCALLS")
   )
 
 
@@ -224,7 +226,15 @@
        (fd-lseek fd curpos #$SEEK_SET)))))
 
 (defun fd-ftruncate (fd new)
-  (syscall syscalls::ftruncate fd new))
+  #-solaris-target
+  (syscall syscalls::ftruncate fd new)
+  #+solaris-target
+  (rlet ((lck #>flock))
+    (setf (pref lck :flock.l_whence) 0
+          (pref lck :flock.l_start) new
+          (pref lck :flock.l_type) #$F_WRLCK
+          (pref lck :flock.l_len) 0)
+    (syscall syscalls::fcntl fd #$F_FREESP lck)))
 
 (defun %string-to-stderr (str)
   (with-cstrs ((s str))
