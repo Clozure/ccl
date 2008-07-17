@@ -60,6 +60,17 @@ if [ -z "$OPENMCL_KERNEL" ]; then
       ;;
     esac
     ;;
+    SunOS)
+    case `uname -m` in
+      i86pc)
+      OPENMCL_KERNEL=sx86cl64
+      ;;
+      *)
+      echo "unsupported architecture"
+      exit 1
+      ;;
+    esac
+    ;;
     *)
     echo "Can't determine host OS.  Fix this."
     exit 1
