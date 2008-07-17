@@ -187,6 +187,7 @@ library/oprofile.txt -text
 library/sequence-utils.lisp -text
 library/x8664-solaris-syscalls.lisp -text
 lisp-kernel/gc-common.c -text
+lisp-kernel/solarisx64/.gdbinit -text
 lisp-kernel/win64/Makefile -text
 lisp-kernel/win64/yasm-redefinition.patch -text
 objc-bridge/objc-package.lisp -text
