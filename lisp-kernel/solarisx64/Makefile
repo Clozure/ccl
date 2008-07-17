@@ -28,7 +28,7 @@ AS = /usr/sfw/bin/gas
 # packages there
 M4 = /usr/local/bin/m4
 CC = /usr/sfw/bin/gcc
-ASFLAGS = --64
+ASFLAGS = --64 --divide
 M4FLAGS = -DSOLARIS -DX86 -DX8664
 CDEFINES = -DSOLARIS -D_REENTRANT -DX86 -DX8664 -D__EXTENSIONS__ -DHAVE_TLS -DDISABLE_EGC
 CDEBUG = -g
