@@ -85,7 +85,7 @@ pthread_mutex_t *mach_exception_lock;
 #define SIGNAL_FOR_PROCESS_INTERRUPT SIGEMT
 #endif
 #ifdef SOLARIS
-#define SIGNAL_FOR_PROCESS_INTERRUPT SIGEMT
+#define SIGNAL_FOR_PROCESS_INTERRUPT SIGUSR1
 #endif
 
 

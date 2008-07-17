@@ -211,9 +211,8 @@ atomic_ior(natural*, natural);
 #define CLR_TCR_FLAG(t,bit) atomic_and(&(t->flags),~(1L<<bit))
 
 
-#ifdef SIGRTMIN
+#if defined(SIGRTMIN) && !defined(SOLARIS)
 #define SIG_SUSPEND_THREAD (SIGRTMIN+6)
-#define SIG_RESUME_THREAD (SIG_SUSPEND_THREAD+1)
 #else
 #define SIG_SUSPEND_THREAD SIGUSR2
 #endif
