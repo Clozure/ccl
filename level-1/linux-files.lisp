@@ -583,7 +583,17 @@ environment variable. Returns NIL if there is no user with the ID uid."
     (do* ((buflen 512 (* 2 buflen)))
          ()
       (%stack-block ((buf buflen))
-        (let* ((err (#_getpwuid_r userid pwd buf buflen result)))
+        (let* ((err
+                #-solaris-target
+                 (#_getpwuid_r userid pwd buf buflen result)
+                 #+solaris-target
+                 (external-call "__posix_getpwuid_r"
+                                :uid_t userid
+                                :address pwd
+                                :address buf
+                                :int buflen
+                                :address result
+                                :int)))
           (if (eql 0 err)
             (return (get-foreign-namestring (pref pwd :passwd.pw_dir)))
             (unless (eql err #$ERANGE)
