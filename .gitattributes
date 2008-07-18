@@ -209,3 +209,4 @@ tools/asdf-install/deprecated.lisp -text
 tools/asdf-install/lift-standard.config -text
 tools/asdf-install/notes.text -text
 tools/asdf-install/variables.lisp -text
+xdump/xx8632-fasload.lisp -text
