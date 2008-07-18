@@ -725,7 +725,53 @@ setup_tcr_extra_segment(TCR *tcr)
 
 #endif
 
+#ifdef X8632
+#ifdef DARWIN
+#include <architecture/i386/table.h>
+#include <architecture/i386/sel.h>
+#include <i386/user_ldt.h>
 
+void setup_tcr_extra_segment(TCR *tcr)
+{
+    uintptr_t addr = (uintptr_t)tcr;
+    unsigned int size = sizeof(*tcr);
+    ldt_entry_t desc;
+    sel_t sel;
+    int i;
+
+    desc.data.limit00 = (size - 1) & 0xffff;
+    desc.data.limit16 = ((size - 1) >> 16) & 0xf;
+    desc.data.base00 = addr & 0xffff;
+    desc.data.base16 = (addr >> 16) & 0xff;
+    desc.data.base24 = (addr >> 24) & 0xff;
+    desc.data.type = DESC_DATA_WRITE;
+    desc.data.dpl = USER_PRIV;
+    desc.data.present = 1;
+    desc.data.stksz = DESC_CODE_32B;
+    desc.data.granular = DESC_GRAN_BYTE;
+    
+    i = i386_set_ldt(LDT_AUTO_ALLOC, &desc, 1);
+
+    if (i < 0) {
+	perror("i386_set_ldt");
+    } else {
+	sel.index = i;
+	sel.rpl = USER_PRIV;
+	sel.ti = SEL_LDT;
+	tcr->ldt_selector = sel;
+    }
+}
+
+void free_tcr_extra_segment(TCR *tcr)
+{
+  /* load %fs with null segement selector */
+  __asm__ volatile ("mov %0,%%fs" : : "r"(0));
+  if (i386_set_ldt(tcr->ldt_selector.index, NULL, 1) < 0)
+    perror("i386_set_ldt");
+  tcr->ldt_selector = NULL_SEL;
+}
+#endif
+#endif
 
 /*
   Caller must hold the area_lock.
@@ -750,13 +796,19 @@ new_tcr(natural vstack_size, natural tstack_size)
   pthread_sigmask(SIG_SETMASK,&sigmask, NULL);
 #ifdef HAVE_TLS
   TCR *tcr = &current_tcr;
-#else
+#else /* no TLS */
   TCR *tcr = allocate_tcr();
+#ifdef X8632
+  setup_tcr_extra_segment(tcr);
+#endif
 #endif
 
-#ifdef X8664
+#ifdef X86
   setup_tcr_extra_segment(tcr);
   tcr->linear = tcr;
+#ifdef X8632
+  tcr->node_regs_mask = X8632_DEFAULT_NODE_REGS_MASK;
+#endif
 #endif
 
 #if (WORD_SIZE == 64)
@@ -855,6 +907,11 @@ shutdown_thread_tcr(void *arg)
     tcr->termination_semaphore = NULL;
 #ifdef HAVE_TLS
     dequeue_tcr(tcr);
+#endif
+#ifdef DARWIN
+#ifdef X8632
+    free_tcr_extra_segment(tcr);
+#endif
 #endif
     UNLOCK(lisp_global(TCR_AREA_LOCK),tcr);
     if (termination_semaphore) {
@@ -1256,6 +1313,9 @@ get_tcr(Boolean create)
 #endif
 #ifdef X8664
 #define NSAVEREGS 4
+#endif
+#ifdef X8632
+#define NSAVEREGS 0
 #endif
     for (i = 0; i < NSAVEREGS; i++) {
       *(--current->save_vsp) = 0;
