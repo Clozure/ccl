@@ -602,13 +602,28 @@ mark_tcr_xframes(TCR *tcr)
 
   xp = tcr->gc_context;
   if (xp) {
+#ifndef X8632
     mark_xp(xp);
+#else
+    mark_xp(xp, tcr->node_regs_mask);
+#endif
   }
+#ifdef X8632
+  mark_root(tcr->save0);
+  mark_root(tcr->save1);
+  mark_root(tcr->save2);
+  mark_root(tcr->save3);
+  mark_root(tcr->next_method_context);
+#endif
   
   for (xframes = (xframe_list *) tcr->xframe; 
        xframes; 
        xframes = xframes->prev) {
+#ifndef X8632
       mark_xp(xframes->curr);
+#else
+      mark_xp(xframes->curr, xframes->node_regs_mask);
+#endif
   }
 }
       
