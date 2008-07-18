@@ -1564,14 +1564,13 @@ unsigned IP address."
                         :name (%get-cstring (pref q :ifaddrs.ifa_name))
                         :addr (pref addr
                                     #-solaris-target :sockaddr_in.sin_addr.s_addr
-                                    #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr))
-                                   
-                       :netmask (pref (pref q :ifaddrs.ifa_netmask)
-                                      :sockaddr_in.sin_addr.s_addr)
-                       :flags (pref q :ifaddrs.ifa_flags)
-                       :address-family #$AF_INET)
-                 res)))
-      (#_freeifaddrs (pref p :address))))))
+                                    #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr)
+			:netmask (pref (pref q :ifaddrs.ifa_netmask)
+				       :sockaddr_in.sin_addr.s_addr)
+			:flags (pref q :ifaddrs.ifa_flags)
+			:address-family #$AF_INET)
+		       res))))
+	(#_freeifaddrs (pref p :address))))))
 
 
 (defloadvar *ip-interfaces* ())
