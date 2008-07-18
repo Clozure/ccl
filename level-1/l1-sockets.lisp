@@ -1098,6 +1098,22 @@ unsigned IP address."
 		 (%get-cstring (pref (%get-ptr hp) :hostent.h_name))
 	       (values nil (- (pref herr :signed)))))))))))
 
+#+solaris-target
+(defun c_gethostbyaddr (addr)
+  (rlet ((hostent :hostent)
+	 (herr :signed)
+	 (addrp :unsigned))
+    (setf (pref addrp :unsigned) addr)
+    (do* ((buflen 1024 (+ buflen buflen))) ()
+      (declare (fixnum buflen))
+      (%stack-block ((buf buflen))
+	(let* ((res (#_gethostbyaddr_r addrp (record-length :unsigned) #$AF_INET
+				       hostent buf buflen herr)))
+          (if (%null-ptr-p res)
+            (unless (eql (%get-errno) (- #$ERANGE))
+              (return (values nil (- (pref herr :signed)))))
+            (return (%get-cstring (pref res :hostent.h_name)))))))))
+
 #+(or darwin-target freebsd-target)
 (defun c_gethostbyname (name)
   (with-cstrs ((name (string name)))
@@ -1127,6 +1143,24 @@ unsigned IP address."
 		   (%get-unsigned-long
 		    (%get-ptr (pref (%get-ptr hp) :hostent.h_addr_list)))
 		   (values nil (- err))))))))))))
+
+#+solaris-target
+(defun c_gethostbyname (name)
+  (with-cstrs ((name (string name)))
+    (rlet ((hostent :hostent)
+           (herr :signed 0))
+       (do* ((buflen 1024 (+ buflen buflen))) ()
+         (declare (fixnum buflen))
+         (%stack-block ((buf buflen))
+           (setf (pref herr :signed) 0)
+           (let* ((res (#_gethostbyname_r name hostent buf buflen herr)))
+             (if (%null-ptr-p res)
+               (unless (eql (%get-errno) (- #$ERANGE))
+                 (return (values nil (- (pref herr :signed)))))
+               (return
+                 (%get-unsigned-long
+                  (%get-ptr (pref res :hostent.h_addr_list)))))))))))
+  
 
 (defun _getservbyname (name proto)
   (with-cstrs ((name (string name))
@@ -1562,15 +1596,84 @@ unsigned IP address."
                           (eql (pref addr :sockaddr.sa_family) #$AF_INET))
                  (push (make-ip-interface
                         :name (%get-cstring (pref q :ifaddrs.ifa_name))
-                        :addr (pref addr
-                                    #-solaris-target :sockaddr_in.sin_addr.s_addr
-                                    #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr)
-			:netmask (pref (pref q :ifaddrs.ifa_netmask)
-				       :sockaddr_in.sin_addr.s_addr)
-			:flags (pref q :ifaddrs.ifa_flags)
-			:address-family #$AF_INET)
-		       res))))
-	(#_freeifaddrs (pref p :address))))))
+                        :addr (pref addr :sockaddr_in.sin_addr.s_addr)
+                        :netmask (pref (pref q :ifaddrs.ifa_netmask)
+                                       :sockaddr_in.sin_addr.s_addr)
+                        :flags (pref q :ifaddrs.ifa_flags)
+                        :address-family #$AF_INET)
+                       res))))
+        (#_freeifaddrs (pref p :address))))))
+
+#+solaris-target
+(progn
+  ;;; Interface translator has trouble with a lot of ioctl constants.
+  (eval-when (:compile-toplevel :execute)
+    (defconstant os::|SIOCGLIFNUM| #xc00c6982)
+    (defconstant os::|SIOCGLIFCONF| #xc01069a5)
+    (defconstant os::|SIOCGLIFADDR| #xc0786971)
+    (defconstant os::|SIOCGLIFFLAGS| #xc0786975)
+    (defconstant os::|SIOCGLIFNETMASK| #xc078697d)
+    )
+
+(defun %get-ip-interfaces ()
+  (let* ((sock (c_socket #$AF_INET #$SOCK_DGRAM #$IPPROTO_UDP))
+         (res nil))
+    (when (>= sock 0)
+      (unwind-protect
+           (let* ((flags (logior #$LIFC_NOXMIT #$LIFC_TEMPORARY #$LIFC_ALLZONES))
+                  (ninterfaces (rlet ((lifnum :lifnum
+                                        :lifn_flags flags
+                                        :lifn_family #$AF_INET
+                                        :lifn_count 0))
+                                 (#_ioctl sock os::SIOCGLIFNUM :address lifnum)
+                                 (pref lifnum :lifnum.lifn_count))))
+             (declare (fixnum ninterfaces))
+             (when (> ninterfaces 0)
+               (let* ((bufsize (* ninterfaces (record-length :lifreq))))
+                 (%stack-block ((buf bufsize :clear t))
+                   (rlet ((lifc :lifconf
+                            :lifc_family #$AF_INET
+                            :lifc_flags flags
+                            :lifc_len bufsize
+                            :lifc_lifcu.lifcu_buf buf))
+                     (when (>= (#_ioctl sock os::SIOCGLIFCONF :address lifc) 0)
+                       (do* ((i 0 (1+ i))
+                             (p (pref lifc :lifconf.lifc_lifcu.lifcu_buf)
+                                (%inc-ptr p (record-length :lifreq))))
+                            ((= i ninterfaces))
+                         (let* ((name (%get-cstring (pref p :lifreq.lifr_name)))
+                                (address-family (pref p :lifreq.lifr_lifru.lifru_addr.ss_family))
+                                (if-flags nil)
+                                (address nil)
+                                (netmask nil))
+                           (if (>= (#_ioctl sock os::SIOCGLIFFLAGS :address p)
+                                   0)
+                             (setq if-flags (pref p :lifreq.lifr_lifru.lifru_flags)))
+                           (if (>= (#_ioctl sock os::SIOCGLIFADDR :address p)
+                                   0)
+                             (setq address (pref
+                                            (pref p :lifreq.lifr_lifru.lifru_addr)
+                                            #>sockaddr_in.sin_addr.S_un.S_addr)))
+                           (if (>= (#_ioctl sock os::SIOCGLIFNETMASK :address p)
+                                   0)
+                             (setq netmask (pref
+                                            (pref p :lifreq.lifr_lifru.lifru_subnet)
+                                            #>sockaddr_in.sin_addr.S_un.S_addr)))
+                             
+                           (push (make-ip-interface
+                                  :name name
+                                  :addr address
+                                  :netmask netmask
+                                  :flags if-flags
+                                  :address-family address-family)
+                                 res)))))))))
+        (fd-close sock)))
+    res))
+)
+
+             
+
+      
 
 
 (defloadvar *ip-interfaces* ())
