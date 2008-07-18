@@ -86,6 +86,10 @@ extern LispObj lisp_nil;
 #define nrs_symbol(s) (((lispsymbol *) 0x13020)[(s)])
 #endif
 
+#ifdef X8632
+#define lisp_global(g) (((LispObj *) 0x13000)[(g)])
+#define nrs_symbol(s) (((lispsymbol *) 0x13008)[(s)])
+#endif
 
 #define nrs_T 				(nrs_symbol(0))		/* t */
 #define nrs_NILSYM			(nrs_symbol(1))		/* nil */
