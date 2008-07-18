@@ -37,6 +37,14 @@ typedef u8_t opcode, *pc;
 #define xpPC(x) (xpGPR(x,Iip))
 #define xpFPRvector(x) ((natural *)(&(UC_MCONTEXT(x)->__fs.__fpu_xmm0)))
 #define xpMMXreg(x,n)  (xpFPRvector(x)[n])
+#else /* X8632 */
+#define xpGPRvector(x) ((natural *)(&((x)->uc_mcontext->__ss.__eax)))
+#define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
+#define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
+#define xpPC(x) (xpGPR(x,Iip))
+#define xpFPRvector(x) ((natural *)(&((x)->uc_mcontext->__fs.__fpu_xmm0)))
+/* are you ready for this? */
+#define xpMMXreg(x,n) *((natural *)&((&((x)->uc_mcontext->__fs.__fpu_stmm0))[n]))
 #endif
 #include <mach/mach.h>
 #include <mach/mach_error.h>
@@ -184,3 +192,12 @@ void setup_sigaltstack(area *);
 
 extern natural get_mxcsr();
 extern void set_mxcsr(natural);
+
+#ifdef X8632
+/* The 32-bit immediate value in the instruction
+ * "(mov ($ 0x12345678) (% fn))" at a tagged return address
+ * refers to the associated function.
+ */
+#define RECOVER_FN_OPCODE 0xbf
+#define RECOVER_FN_LENGTH 5
+#endif
