@@ -138,6 +138,14 @@ typedef ucontext_t ExceptionInformation;
 #define UC_MCONTEXT(UC) UC->uc_mcontext
 #endif /* _STRUCT_MCONTEXT64 */
 #endif /* X86_64 */
+
+#ifdef X8632
+/* Assume rational <i386/ucontext.h> */
+#define UC_MCONTEXT(UC) UC->uc_mcontext
+typedef mcontext_t MCONTEXT_T;
+typedef ucontext_t ExceptionInformation;
+#endif
+
 #endif /* #ifdef DARWIN */
 
 #ifdef LINUX
