@@ -42,27 +42,44 @@ check_node(LispObj n)
   switch (tag) {
   case fulltag_even_fixnum:
   case fulltag_odd_fixnum:
+#ifdef X8632
+  case fulltag_imm:
+#endif
+#ifdef X8664
   case fulltag_imm_0:
   case fulltag_imm_1:
+#endif
     return;
 
+#ifdef X8664
   case fulltag_nil:
     if (n != lisp_nil) {
       Bug(NULL,"Object tagged as nil, not nil : 0x%08x", n);
     }
     return;
+#endif
 
-
+#ifdef X8632
+  case fulltag_nodeheader:
+  case fulltag_immheader:
+#endif
+#ifdef X8664
   case fulltag_nodeheader_0: 
   case fulltag_nodeheader_1: 
   case fulltag_immheader_0: 
   case fulltag_immheader_1: 
   case fulltag_immheader_2: 
+#endif
     Bug(NULL, "Header not expected : 0x%lx", n);
     return;
 
+#ifdef X8632
+  case fulltag_tra:
+#endif
+#ifdef X8664
   case fulltag_tra_0:
   case fulltag_tra_1:
+#endif
     a = heap_area_containing((BytePtr)ptr_from_lispobj(n));
     if (a == NULL) {
       a = active_dynamic_area;
@@ -75,6 +92,21 @@ check_node(LispObj n)
     /* tra points into the heap.  Check displacement, then
        check the function it (should) identify.
     */
+#ifdef X8632
+    {
+      LispObj fun = 0;
+
+      if (*(unsigned char *)n == RECOVER_FN_OPCODE)
+	fun = *(LispObj *)(n + 1);
+      if (fun == 0 ||
+	 (header_subtag(header_of(fun)) != subtag_function) ||
+	 (heap_area_containing((BytePtr)ptr_from_lispobj(fun)) != a)) {
+	Bug(NULL, "TRA at 0x%x has bad function address 0x%x\n", n, fun);
+      }
+      n = fun;
+    }
+#endif
+#ifdef X8664
     {
       int disp = 0;
       LispObj m = n;
@@ -90,13 +122,16 @@ check_node(LispObj n)
         Bug(NULL, "TRA at 0x%lx has bad displacement %d\n", n, disp);
       }
     }
+#endif
     /* Otherwise, fall through and check the header on the function
        that the tra references */
 
   case fulltag_misc:
   case fulltag_cons:
+#ifdef X8664
   case fulltag_symbol:
   case fulltag_function:
+#endif
     a = heap_area_containing((BytePtr)ptr_from_lispobj(n));
     
     if (a == NULL) {
@@ -162,7 +197,11 @@ check_range(LispObj *start, LispObj *end, Boolean header_allowed)
       }
       elements = header_element_count(node) | 1;
       if (header_subtag(node) == subtag_function) {
+#ifdef X8632
+	int skip = *(unsigned short *)current;
+#else
         int skip = *(int *)current;
+#endif
         current += skip;
         elements -= skip;
       }
@@ -248,6 +287,16 @@ mark_root(LispObj n)
     return;
   }
 
+#ifdef X8632
+  if (tag_n == fulltag_tra) {
+    if (*(unsigned char *)n == RECOVER_FN_OPCODE) {
+      n = *(LispObj *)(n + 1);
+      tag_n = fulltag_misc;
+    } else
+      return;
+  }
+#endif
+#ifdef X8664
   if (tag_of(n) == tag_tra) {
     if ((*((unsigned short *)n) == RECOVER_FN_FROM_RIP_WORD0) &&
         (*((unsigned char *)(n+2)) == RECOVER_FN_FROM_RIP_BYTE2)) {
@@ -259,6 +308,7 @@ mark_root(LispObj n)
       return;
     }
   }
+#endif
 
 
   dnode = gc_area_dnode(n);
@@ -290,7 +340,7 @@ mark_root(LispObj n)
 
     tag_n = fulltag_of(header);
 
-
+#ifdef X8664
     if ((nodeheader_tag_p(tag_n)) ||
         (tag_n == ivector_class_64_bit)) {
       total_size_in_bytes = 8 + (element_count<<3);
@@ -306,6 +356,22 @@ mark_root(LispObj n)
         total_size_in_bytes = 8 + (element_count<<1);
       }
     }
+#endif
+#ifdef X8632
+    if ((tag_n == fulltag_nodeheader) ||
+        (subtag <= max_32_bit_ivector_subtag)) {
+      total_size_in_bytes = 4 + (element_count<<2);
+    } else if (subtag <= max_8_bit_ivector_subtag) {
+      total_size_in_bytes = 4 + element_count;
+    } else if (subtag <= max_16_bit_ivector_subtag) {
+      total_size_in_bytes = 4 + (element_count<<1);
+    } else if (subtag == subtag_double_float_vector) {
+      total_size_in_bytes = 8 + (element_count<<3);
+    } else {
+      total_size_in_bytes = 4 + ((element_count+7)>>3);
+    }
+#endif
+
 
     suffix_dnodes = ((total_size_in_bytes+(dnode_size-1))>>dnode_shift) -1;
 
@@ -342,7 +408,11 @@ mark_root(LispObj n)
       }
 
       if (subtag == subtag_function) {
+#ifdef X8632
+	prefix_nodes = (natural) ((unsigned short) deref(base,1));
+#else
 	prefix_nodes = (natural) ((int) deref(base,1));
+#endif
         if (prefix_nodes > element_count) {
           Bug(NULL, "Function 0x%lx trashed",n);
         }
@@ -395,10 +465,11 @@ mark_ephemeral_root(LispObj n)
 
 #ifdef X8664
 #define RMARK_PREV_ROOT fulltag_imm_1 /* fulltag of 'undefined' value */
-#define RMARK_PREV_CAR fulltag_nil /* fulltag_nil + node_size. Coincidence ? I think not. */
+#define RMARK_PREV_CAR fulltag_nil /* fulltag_cons + node_size. Coincidence ? I think not. */
 #else
+#define RMARK_PREV_ROOT fulltag_imm /* fulltag of 'undefined' value */
+#define RMARK_PREV_CAR fulltag_odd_fixnum 
 #endif
-
 
 
 /*
@@ -417,6 +488,17 @@ rmark(LispObj n)
     return;
   }
 
+#ifdef X8632
+  if (tag_n == fulltag_tra) {
+    if (*(unsigned char *)n == RECOVER_FN_OPCODE) {
+      n = *(LispObj *)(n + 1);
+      tag_n = fulltag_misc;
+    } else {
+      return;
+    }
+  }
+#endif
+#ifdef X8664
   if (tag_of(n) == tag_tra) {
     if ((*((unsigned short *)n) == RECOVER_FN_FROM_RIP_WORD0) &&
         (*((unsigned char *)(n+2)) == RECOVER_FN_FROM_RIP_BYTE2)) {
@@ -427,6 +509,7 @@ rmark(LispObj n)
       return;
     }
   }
+#endif
 
   dnode = gc_area_dnode(n);
   if (dnode >= GCndnodes_in_area) {
@@ -454,6 +537,7 @@ rmark(LispObj n)
 
       tag_n = fulltag_of(header);
 
+#ifdef X8664
       if ((nodeheader_tag_p(tag_n)) ||
           (tag_n == ivector_class_64_bit)) {
         total_size_in_bytes = 8 + (element_count<<3);
@@ -469,6 +553,21 @@ rmark(LispObj n)
           total_size_in_bytes = 8 + (element_count<<1);
         }
       }
+#else
+      if ((tag_n == fulltag_nodeheader) ||
+	  (subtag <= max_32_bit_ivector_subtag)) {
+	total_size_in_bytes = 4 + (element_count<<2);
+      } else if (subtag <= max_8_bit_ivector_subtag) {
+	total_size_in_bytes = 4 + element_count;
+      } else if (subtag <= max_16_bit_ivector_subtag) {
+	total_size_in_bytes = 4 + (element_count<<1);
+      } else if (subtag == subtag_double_float_vector) {
+	total_size_in_bytes = 8 + (element_count<<3);
+      } else {
+	total_size_in_bytes = 4 + ((element_count+7)>>3);
+      }
+#endif
+
       suffix_dnodes = ((total_size_in_bytes+(dnode_size-1))>>dnode_shift)-1;
 
       if (suffix_dnodes) {
@@ -511,10 +610,15 @@ rmark(LispObj n)
       nmark = element_count;
 
       if (subtag == subtag_function) {
-        if ((int)base[1] >= nmark) {
+#ifdef X8664
+	int code_words = (int)base[1];
+#else
+	int code_words = (unsigned short)base[1];
+#endif
+        if (code_words >= nmark) {
           Bug(NULL,"Bad function at 0x%lx",n);
         }
-	nmark -= (int)base[1];
+	nmark -= code_words;
       }
 
       while (nmark--) {
@@ -529,7 +633,6 @@ rmark(LispObj n)
 
     }
   } else {
-
     /* This is all a bit more complicated than the PPC version:
 
        - a symbol-vector can be referenced via either a FULLTAG-MISC
@@ -616,10 +719,12 @@ rmark(LispObj n)
     switch(tag_n) {
     case tag_misc:
     case fulltag_misc:
+#ifdef X8664
     case tag_symbol:
     case fulltag_symbol:
     case tag_function:
     case fulltag_function:
+#endif
       goto ClimbVector;
 
     case RMARK_PREV_ROOT:
@@ -631,7 +736,7 @@ rmark(LispObj n)
     case RMARK_PREV_CAR:
       goto ClimbCar;
 
-      /* default: abort() */
+    default: abort();
     }
 
   DescendCons:
@@ -640,7 +745,11 @@ rmark(LispObj n)
 
   MarkCons:
     next = deref(this,1);
+#ifdef X8632
+    this += (RMARK_PREV_CAR-fulltag_cons);
+#else
     this += node_size;
+#endif
     tag_n = fulltag_of(next);
     if (!is_node_fulltag(tag_n)) goto MarkCdr;
     dnode = gc_area_dnode(next);
@@ -658,7 +767,11 @@ rmark(LispObj n)
 
   MarkCdr:
     next = deref(this, 0);
+#ifdef X8632
+    this -= (RMARK_PREV_CAR-fulltag_cons);
+#else
     this -= node_size;
+#endif
     tag_n = fulltag_of(next);
     if (!is_node_fulltag(tag_n)) goto Climb;
     dnode = gc_area_dnode(next);
@@ -675,6 +788,7 @@ rmark(LispObj n)
     this = next;
 
   MarkVector:
+#ifdef X8664
     if ((tag_n == fulltag_tra_0) ||
         (tag_n == fulltag_tra_1)) {
       int disp = (*(int *) (n+3)) + RECOVER_FN_FROM_RIP_LENGTH;
@@ -715,6 +829,57 @@ rmark(LispObj n)
         total_size_in_bytes = 8 + (element_count<<1);
       }
     }
+#else
+    if (tag_n == fulltag_tra) {
+      LispObj fn = *(LispObj *)(n + 1);
+
+      base = (LispObj *)untag(fn);
+      header = *(natural *)base;
+      subtag = header_subtag(header);
+      boundary = base + (unsigned short)base[1];
+      /*
+       * On x8632, the upper 24 bits of the boundary word are zero.
+       * Functions on x8632 can be no more than 2^16 words (or 2^24
+       * bytes) long (including the self-reference table but excluding
+       * any constants).  Therefore, we can do the same basic thing
+       * that the x8664 port does: namely, we keep the byte
+       * displacement from the address of the object (tagged tra or
+       * fulltag_misc) that references the function to the address of
+       * the boundary marker in those 24 bits, recovering it when
+       * we've finished marking the function vector.
+       */
+      *((int *)boundary) &= 0xff;
+      *((int *)boundary) |= ((this-(LispObj)boundary) << 8);
+      this = (LispObj)(base)+fulltag_misc;
+      dnode = gc_area_dnode(this);
+      set_bit(markbits,dnode);
+    } else {
+      base = (LispObj *) ptr_from_lispobj(untag(this));
+      header = *((natural *) base);
+      subtag = header_subtag(header);
+      if (subtag == subtag_function) {
+        boundary = base + (unsigned short)base[1];
+	*((int *)boundary) &= 0xff;
+        *((int *)boundary) |= ((this-((LispObj)boundary)) << 8);
+      }
+    }
+    element_count = header_element_count(header);
+    tag_n = fulltag_of(header);
+
+    if ((tag_n == fulltag_nodeheader) ||
+	(subtag <= max_32_bit_ivector_subtag)) {
+      total_size_in_bytes = 4 + (element_count<<2);
+    } else if (subtag <= max_8_bit_ivector_subtag) {
+      total_size_in_bytes = 4 + element_count;
+    } else if (subtag <= max_16_bit_ivector_subtag) {
+      total_size_in_bytes = 4 + (element_count<<1);
+    } else if (subtag == subtag_double_float_vector) {
+      total_size_in_bytes = 8 + (element_count<<3);
+    } else {
+      total_size_in_bytes = 4 + ((element_count+7)>>3);
+    }
+#endif
+
     suffix_dnodes = ((total_size_in_bytes+(dnode_size-1))>>dnode_shift)-1;
     
     if (suffix_dnodes) {
@@ -757,8 +922,14 @@ rmark(LispObj n)
   MarkVectorLoop:
     this -= node_size;
     next = indirect_node(this);
+#ifdef X8664
     if ((tag_of(this) == tag_function) &&
         (header_subtag(next) == function_boundary_marker)) goto MarkFunctionDone;
+#else
+    if ((tag_of(this) == tag_misc) &&
+        (header_subtag(next) == function_boundary_marker)) goto MarkFunctionDone;
+#endif
+
     tag_n = fulltag_of(next);
     if (nodeheader_tag_p(tag_n)) goto MarkVectorDone;
     if (!is_node_fulltag(tag_n)) goto MarkVectorLoop;
@@ -784,9 +955,14 @@ rmark(LispObj n)
 
   MarkFunctionDone:
     boundary = (LispObj *)(node_aligned(this));
+#ifdef X8664
     this = ((LispObj)boundary) + (((int *)boundary)[1]);
     (((int *)boundary)[1]) = 0;
+#else
+    this = ((LispObj)boundary) + ((*((int *)boundary)) >> 8);
+    ((int *)boundary)[0] &= 0xff;
     goto Climb;
+#endif
   }
 }
 
@@ -799,7 +975,7 @@ skip_over_ivector(natural start, LispObj header)
     nbytes;
 
 
-
+#ifdef X8664
   switch (fulltag_of(header)) {
   case ivector_class_64_bit:
     nbytes = element_count << 3;
@@ -818,7 +994,20 @@ skip_over_ivector(natural start, LispObj header)
     }
   }
   return ptr_from_lispobj(start+(~15 & (nbytes + 8 + 15)));
-
+#else
+  if (subtag <= max_32_bit_ivector_subtag) {
+    nbytes = element_count << 2;
+  } else if (subtag <= max_8_bit_ivector_subtag) {
+    nbytes = element_count;
+  } else if (subtag <= max_16_bit_ivector_subtag) {
+    nbytes = element_count << 1;
+  } else if (subtag == subtag_double_float_vector) {
+    nbytes = 4 + (element_count << 3);
+  } else {
+    nbytes = (element_count+7) >> 3;
+  }
+  return ptr_from_lispobj(start+(~7 & (nbytes + 4 + 7)));
+#endif
 }
 
 
@@ -838,7 +1027,11 @@ check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits)
       start = skip_over_ivector(ptr_to_lispobj(start), x1);
     } else {
       if (header_subtag(x1) == subtag_function) {
+#ifdef X8632
+	int skip = (unsigned short)deref(start,1);
+#else
         int skip = (int) deref(start,1);
+#endif
         start += ((1+skip)&~1);
         x1 = *start;
         tag = fulltag_of(x1);
@@ -1013,7 +1206,11 @@ mark_simple_area_range(LispObj *start, LispObj *end)
 
       base = start + element_count + 1;
       if (subtag == subtag_function) {
+#ifdef X8632
+	element_count -= (unsigned short)start[1];
+#else
 	element_count -= (int)start[1];
+#endif
       }
       while(element_count--) {
 	mark_root(*--base);
@@ -1074,6 +1271,7 @@ mark_cstack_area(area *a)
 
 
 /* Mark the lisp objects in an exception frame */
+#ifdef X8664
 void
 mark_xp(ExceptionInformation *xp)
 {
@@ -1112,13 +1310,43 @@ mark_xp(ExceptionInformation *xp)
     }
   }
 }
+#else
+void
+mark_xp(ExceptionInformation *xp, natural node_regs_mask)
+{
+  natural *regs = (natural *) xpGPRvector(xp), dnode;
+  LispObj eip;
+  int i;
 
+  if (node_regs_mask & (1<<0)) mark_root(regs[REG_EAX]);
+  if (node_regs_mask & (1<<1)) mark_root(regs[REG_EBX]);
+  if (node_regs_mask & (1<<2)) mark_root(regs[REG_ECX]);
+  if (node_regs_mask & (1<<3)) mark_root(regs[REG_EDX]);
+  if (node_regs_mask & (1<<4)) mark_root(regs[REG_ESP]);
+  if (node_regs_mask & (1<<5)) mark_root(regs[REG_EBP]);
+  if (node_regs_mask & (1<<6)) mark_root(regs[REG_ESI]);
+  if (node_regs_mask & (1<<7)) mark_root(regs[REG_EDI]);
 
-      
-
-
-
-
+  /* If the EIP isn't pointing into a marked function, we're probably
+     in trouble.  We can -maybe- recover from that if it's tagged as a
+     TRA. */
+  eip = regs[Ieip];
+  dnode = gc_area_dnode(eip);
+  if ((dnode < GCndnodes_in_area) &&
+      (! ref_bit(GCmarkbits,dnode))) {
+    if (fulltag_of(eip) == fulltag_tra) {
+      mark_root(eip);
+    } else if ((fulltag_of(eip) == fulltag_misc) &&
+               (header_subtag(header_of(eip)) == subtag_function) &&
+               (*(unsigned char *)eip == RECOVER_FN_OPCODE) &&
+	       (*(LispObj *)(eip + 1)) == eip) {
+      mark_root(eip);
+    } else {
+      Bug(NULL, "Can't find function for eip 0x%4x", eip);
+    }
+  }
+}
+#endif
 
 /* A "pagelet" contains 32 doublewords.  The relocation table contains
    a word for each pagelet which defines the lowest address to which
@@ -1216,7 +1444,7 @@ dnode_forwarding_address(natural dnode, int tag_n)
   }
 }
 #else
-
+#ifdef X8664
 /* Quicker, dirtier */
 LispObj
 dnode_forwarding_address(natural dnode, int tag_n)
@@ -1242,6 +1470,55 @@ dnode_forwarding_address(natural dnode, int tag_n)
   }
   return new;
 }
+#endif
+#ifdef X8632
+LispObj
+dnode_forwarding_address(natural dnode, int tag_n)
+{
+  natural pagelet, nbits;
+  unsigned short near_bits;
+  LispObj new;
+
+  if (GCDebug) {
+    if (! ref_bit(GCdynamic_markbits, dnode)) {
+      Bug(NULL, "unmarked object being forwarded!\n");
+    }
+  }
+
+  pagelet = dnode >> 5;
+  nbits = dnode & 0x1f;
+  /* On little-endian x86, we have to flip the low bit of dnode>>4 to
+     get the near_bits from the appropriate half-word. */
+  near_bits = ((unsigned short *)GCdynamic_markbits)[(dnode>>4)^1];
+
+  if (nbits < 16) {
+    new = GCrelocptr[pagelet] + tag_n;;
+    /* Increment "new" by the count of 1 bits which precede the dnode */
+    if (near_bits == 0xffff) {
+      return (new + (nbits << 3));
+    } else {
+      near_bits &= (0xffff0000 >> nbits);
+      if (nbits > 7) {
+        new += one_bits(near_bits & 0xff);
+      }
+      return (new + (one_bits(near_bits >> 8))); 
+    }
+  } else {
+    new = GCrelocptr[pagelet+1] + tag_n;
+    nbits = 32-nbits;
+
+    if (near_bits == 0xffff) {
+      return (new - (nbits << 3));
+    } else {
+      near_bits &= (1<<nbits)-1;
+      if (nbits > 7) {
+        new -= one_bits(near_bits >> 8);
+      }
+      return (new - one_bits(near_bits & 0xff));
+    }
+  }
+}
+#endif
 #endif
 
 LispObj
@@ -1314,7 +1591,11 @@ forward_range(LispObj *range_start, LispObj *range_end)
         *p++ = 0;
       } else {
 	if (header_subtag(node) == subtag_function) {
+#ifdef X8632
+	  int skip = (unsigned short)(p[1]);
+#else
 	  int skip = (int)(p[1]);
+#endif
 	  p += skip;
 	  nwords -= skip;
 	}
@@ -1378,7 +1659,7 @@ forward_cstack_area(area *a)
 {
 }
 
-
+#ifdef X8664
 void
 forward_xp(ExceptionInformation *xp)
 {
@@ -1397,6 +1678,24 @@ forward_xp(ExceptionInformation *xp)
   update_noderef(&(regs[Itemp2]));
   update_locref(&(regs[Iip]));
 }
+#else
+void
+forward_xp(ExceptionInformation *xp, natural node_regs_mask)
+{
+  natural *regs = (natural *) xpGPRvector(xp);
+
+  if (node_regs_mask & (1<<0)) update_noderef(&regs[REG_EAX]);
+  if (node_regs_mask & (1<<1)) update_noderef(&regs[REG_EBX]);
+  if (node_regs_mask & (1<<2)) update_noderef(&regs[REG_ECX]);
+  if (node_regs_mask & (1<<3)) update_noderef(&regs[REG_EDX]);
+  if (node_regs_mask & (1<<4)) update_noderef(&regs[REG_ESP]);
+  if (node_regs_mask & (1<<5)) update_noderef(&regs[REG_EBP]);
+  if (node_regs_mask & (1<<6)) update_noderef(&regs[REG_ESI]);
+  if (node_regs_mask & (1<<7)) update_noderef(&regs[REG_EDI]);
+
+  update_locref(&(regs[Iip]));
+}
+#endif
 
 
 void
@@ -1407,15 +1706,43 @@ forward_tcr_xframes(TCR *tcr)
 
   xp = tcr->gc_context;
   if (xp) {
+#ifdef X8664
     forward_xp(xp);
+#else
+    forward_xp(xp, tcr->node_regs_mask);
+
+    update_noderef(&tcr->save0);
+    update_noderef(&tcr->save1);
+    update_noderef(&tcr->save2);
+    update_noderef(&tcr->save3);
+#endif
   }
   for (xframes = tcr->xframe; xframes; xframes = xframes->prev) {
+#ifdef X8664
     forward_xp(xframes->curr);
+#else
+    forward_xp(xframes->curr, xframes->node_regs_mask);
+#endif
   }
 }
 
 
+#ifdef X8632
+void
+update_self_references(LispObj *node)
+{
+  LispObj fn = fulltag_misc + (LispObj)node;
+  unsigned char *p = (unsigned char *)node;
+  natural i, offset;
 
+  i = ((unsigned short *)node)[2];
+  offset = node[--i];
+  while (offset) {
+    *(LispObj *)(p + offset) = fn;
+    offset = node[--i];
+  }    
+}
+#endif
 
 /*
   Compact the dynamic heap (from GCfirstunmarked through its end.)
@@ -1478,12 +1805,20 @@ compact_dynamic_heap()
           node_dnodes = (elements+2)>>1;
           dnode += node_dnodes;
 	  if (header_subtag(node) == subtag_function) {
+#ifdef X8632
+	    int skip = *((unsigned short *)src);
+	    LispObj *f = dest;
+#else
 	    int skip = *((int *)src);
+#endif
 	    *dest++ = node;
 	    elements -= skip;
 	    while(skip--) {
 	      *dest++ = *src++;
 	    }
+#ifdef X8632
+	    update_self_references(f);
+#endif
 	    while(elements--) {
 	      *dest++ = node_forwarding_address(*src++);
 	    }
@@ -1539,7 +1874,7 @@ compact_dynamic_heap()
           elements = header_element_count(node);
           tag = header_subtag(node);
 
-
+#ifdef X8664
           switch(fulltag_of(tag)) {
           case ivector_class_64_bit:
             imm_dnodes = ((elements+1)+1)>>1;
@@ -1556,6 +1891,21 @@ compact_dynamic_heap()
               imm_dnodes = (((elements+4)+7)>>3);
             }
           }
+#endif
+#ifdef X8632
+          if (tag <= max_32_bit_ivector_subtag) {
+            imm_dnodes = (((elements+1)+1)>>1);
+          } else if (tag <= max_8_bit_ivector_subtag) {
+            imm_dnodes = (((elements+4)+7)>>3);
+          } else if (tag <= max_16_bit_ivector_subtag) {
+            imm_dnodes = (((elements+2)+3)>>2);
+          } else if (tag == subtag_bit_vector) {
+            imm_dnodes = (((elements+32)+63)>>6);
+          } else {
+            imm_dnodes = elements+1;
+          }
+#endif
+
           dnode += imm_dnodes;
           while (--imm_dnodes) {
             *dest++ = *src++;
@@ -1570,9 +1920,7 @@ compact_dynamic_heap()
           bitidx++;
         }
       }
-  
     }
-
   }
   return ptr_to_lispobj(dest);
 }
@@ -1605,6 +1953,7 @@ unboxed_bytes_in_range(LispObj *start, LispObj *end)
       } else {
         subtag = header_subtag(header);
 
+#ifdef X8664
         switch(fulltag_of(header)) {
         case ivector_class_64_bit:
           bytes = 8 + (elements<<3);
@@ -1622,6 +1971,21 @@ unboxed_bytes_in_range(LispObj *start, LispObj *end)
             bytes = 8 + (elements<<1);
           }
         }
+#endif
+#ifdef X8632
+          if (subtag <= max_32_bit_ivector_subtag) {
+            bytes = 4 + (elements<<2);
+          } else if (subtag <= max_8_bit_ivector_subtag) {
+            bytes = 4 + elements;
+          } else if (subtag <= max_16_bit_ivector_subtag) {
+            bytes = 4 + (elements<<1);
+          } else if (subtag == subtag_double_float_vector) {
+            bytes = 8 + (elements<<3);
+          } else {
+            bytes = 4 + ((elements+7)>>3);
+          }
+#endif
+
         bytes = (bytes+dnode_size-1) & ~(dnode_size-1);
         total += bytes;
         start += (bytes >> node_shift);
@@ -1783,7 +2147,11 @@ purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to)
           *start++ = 0;
         } else {
           if (header_subtag(header) == subtag_function) {
+#ifdef X8632
+            int skip = (unsigned short)(start[1]);
+#else
             int skip = (int)(start[1]);
+#endif
             start += skip;
             nwords -= skip;
           }
