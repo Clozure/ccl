@@ -48,11 +48,17 @@ ifdef([X8664],[
 	include(x86-constants32.s)
 ])						
 
-/* registers, as used in destrucuring-bind/macro-bind   */
-
+/* registers, as used in destructuring-bind/macro-bind   */
+ifdef([X8664],[
 define([whole_reg],[temp1])
 define([arg_reg],[temp0])
 define([keyvect_reg],[arg_x])
+],[
+define([arg_reg],[temp1])
+define([arg_reg_b],[temp1_b])
+define([keyvect_reg],[arg_y])
+])
+
 define([initopt_bit],[24])
 define([keyp_bit],[25]) /*  note that keyp can be true even when 0 keys.   */
 define([aok_bit],[26])
