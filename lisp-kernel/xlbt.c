@@ -28,6 +28,24 @@ print_lisp_frame(lisp_frame *frame)
   if (pc == lisp_global(RET1VALN)) {
     pc = frame->xtra;
   }
+#ifdef X8632
+  if (fulltag_of(pc) == fulltag_tra) {
+    if (*((unsigned char *)pc) == RECOVER_FN_OPCODE) {
+      natural n = *((natural *)(pc + 1));
+      fun = (LispObj)n;
+    }
+    if (fun && header_subtag(header_of(fun)) == subtag_function) {
+      delta = pc - fun;
+      Dprintf("(#x%08X) #x%08X : %s + %d", frame, pc, print_lisp_object(fun), delta);
+      return;
+    }
+  }
+  if (pc == 0) {
+    fun = ((xcf *)frame)->nominal_function;
+    Dprintf("(#x%08X) #x%08X : %s + ??", frame, pc, print_lisp_object(fun));
+    return;
+  }
+#else
   if (tag_of(pc) == tag_tra) {
     if ((*((unsigned short *)pc) == RECOVER_FN_FROM_RIP_WORD0) &&
         (*((unsigned char *)(pc+2)) == RECOVER_FN_FROM_RIP_BYTE2)) {
@@ -45,6 +63,7 @@ print_lisp_frame(lisp_frame *frame)
     Dprintf("(#x%016lX) #x%016lX : %s + ??", frame, pc, print_lisp_object(fun));
     return;
   }
+#endif
 }
 
 Boolean
@@ -58,7 +77,11 @@ lisp_frame_p(lisp_frame *f)
       ra = f->xtra;
     }
 
+#ifdef X8632
+    if (fulltag_of(ra) == fulltag_tra) {
+#else
     if (tag_of(ra) == tag_tra) {
+#endif
       return true;
     } else if ((ra == lisp_global(LEXPR_RETURN)) ||
 	       (ra == lisp_global(LEXPR_RETURN1V))) {
@@ -125,7 +148,11 @@ plbt_sp(LispObj currentRBP)
     cs_area = tcr->cs_area;
     if ((((LispObj) ptr_to_lispobj(vs_area->low)) > currentRBP) ||
         (((LispObj) ptr_to_lispobj(vs_area->high)) < currentRBP)) {
+#ifdef X8664
       currentRBP = (LispObj) (tcr->save_rbp);
+#else
+      currentRBP = (LispObj) (tcr->save_ebp);
+#endif
     }
     if ((((LispObj) ptr_to_lispobj(vs_area->low)) > currentRBP) ||
         (((LispObj) ptr_to_lispobj(vs_area->high)) < currentRBP)) {
@@ -142,5 +169,9 @@ plbt_sp(LispObj currentRBP)
 void
 plbt(ExceptionInformation *xp)
 {
+#ifdef X8632
+  plbt_sp(xpGPR(xp,Iebp));
+#else
   plbt_sp(xpGPR(xp,Irbp));
+#endif
 }
