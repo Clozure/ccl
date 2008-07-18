@@ -71,6 +71,9 @@
 			(1UL<<fulltag_immheader_2))
 
 #define immheader_tag_p(tag) ((1<<(tag)) & IMMHEADER_MASK)
+#else
+#define nodeheader_tag_p(tag) (tag == fulltag_nodeheader)
+#define immheader_tag_p(tag) (tag == fulltag_immheader)
 #endif
 #endif
 
