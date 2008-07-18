@@ -163,7 +163,8 @@
 
 
 (defun xload-target-consp (addr)
-  (= *xload-target-fulltag-cons* (logand addr *xload-target-fulltagmask*)))
+  (and (= *xload-target-fulltag-cons* (logand addr *xload-target-fulltagmask*))
+       (not (= addr *xload-target-nil*))))
 
 
 (defun xload-target-listp (addr)
@@ -1665,6 +1666,36 @@
   (let* ((path (%fasl-expr s)))
     (setq *xload-loading-file-source-file* path)))
 
+;;; Use the offsets in the self-reference table to replace the :self
+;;; in (movl ($ :self) (% fn)) wih the function's actual address.
+;;; (x8632 only)
+(defun xload-fixup-self-references (addr)
+  (let* ((imm-word-count (xload-u16-at-address
+			  (+ addr *xload-target-misc-data-offset*))))
+    (do* ((i (- imm-word-count 2) (1- i))
+	  (offset (xload-%fullword-ref addr i) (xload-%fullword-ref addr i)))
+	 ((zerop offset))
+      (setf (xload-u8-at-address (+ *xload-target-misc-header-offset*
+				    addr
+				    offset
+				    0))
+				 (ldb (byte 8 0) addr)
+	    (xload-u8-at-address (+ *xload-target-misc-header-offset*
+				    addr
+				    offset
+				    1))
+				 (ldb (byte 8 8) addr)
+	    (xload-u8-at-address (+ *xload-target-misc-header-offset*
+				    addr
+				    offset
+				    2))
+				 (ldb (byte 8 16) addr)
+	    (xload-u8-at-address (+ *xload-target-misc-header-offset*
+				    addr
+				    offset
+				    3))
+				 (ldb (byte 8 24) addr)))))
+      
 (defxloadfaslop $fasl-clfun (s)
   (let* ((size-in-elements (%fasl-read-count s))
          (size-of-code (%fasl-read-count s)))
@@ -1681,6 +1712,8 @@
         (%epushval s function)
         (%fasl-read-n-bytes s v (+ o *xload-target-misc-data-offset*)
                             (ash size-of-code *xload-target-fixnumshift*))
+	(target-arch-case
+	 (:x8632 (xload-fixup-self-references vector)))
         (do* ((numconst (- size-in-elements size-of-code))
               (i 0 (1+ i))
               (constidx size-of-code (1+ constidx)))
