@@ -28,7 +28,7 @@
 
 
 
-#ifdef PPC64
+#if defined(PPC64) || defined(X8632)
 #define RELOCATABLE_FULLTAG_MASK \
   ((1<<fulltag_cons)|(1<<fulltag_misc))
 #else
@@ -290,8 +290,12 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
 	image_nil = (LispObj)(a->low + 8 + 8 + (1024*4) + fulltag_nil);
 #endif
 #endif
+#ifdef X86
 #ifdef X8664
 	image_nil = (LispObj)(a->low) + (1024*4) + fulltag_nil;
+#else
+	image_nil = (LispObj)(a->low) + (1024*4) + fulltag_cons;
+#endif
 #endif
 	set_nil(image_nil);
 	if (bias) {
