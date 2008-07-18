@@ -1699,7 +1699,11 @@ result-type-specifer is :VOID or NIL"
       (canonicalize-foreign-type-ordinal '(:* (:struct :hostent)))
       (canonicalize-foreign-type-ordinal '(:array :int 2))
       (canonicalize-foreign-type-ordinal '(:array (:struct :pollfd) 1))
-      (canonicalize-foreign-type-ordinal '(:struct :dirent)))))
+      (canonicalize-foreign-type-ordinal '(:struct :dirent))
+      (canonicalize-foreign-type-ordinal #+solaris-target '(:struct :flock) #-solaris-target nil)
+      (canonicalize-foreign-type-ordinal #+solaris-target '(:struct :lifnum) #-solaris-target nil)
+      (canonicalize-foreign-type-ordinal #+solaris-target '(:struct :lifconf) #-solaris-target nil)
+      )))
 
 (defun install-standard-foreign-types (ftd)
   (let* ((*target-ftd* ftd)
