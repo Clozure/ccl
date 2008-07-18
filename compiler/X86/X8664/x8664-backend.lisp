@@ -118,7 +118,7 @@
                 :lisp-context-register x8664::gs
                 ))
 
-#+solarisx64-target
+#+solarisx86-target
 (defvar *solarisx8664-backend*
   (make-backend :lookup-opcode 'lookup-x86-opcode
 		:lookup-macro #'false
