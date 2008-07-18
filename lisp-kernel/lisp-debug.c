@@ -146,6 +146,29 @@ char* Iregnames[] = {"r8 ","r9 ","r10","r11","r12","r13","r14","r15",
 #endif
 #endif
 
+#ifdef X8632
+#ifdef DARWIN
+char *Iregnames[] = {"eax", "ebx", "ecx", "edx", "edi", "esi",
+		     "ebp", "???", "efl", "eip"};
+#endif
+#endif
+
+#ifdef X8632
+int bit_for_regnum(int r)
+{
+  switch (r) {
+  case REG_EAX: return 1<<0;
+  case REG_ECX: return 1<<1;
+  case REG_EDX: return 1<<2;
+  case REG_EBX: return 1<<3;
+  case REG_ESP: return 1<<4;
+  case REG_EBP: return 1<<5;
+  case REG_ESI: return 1<<6;
+  case REG_EDI: return 1<<7;
+  }
+}
+#endif
+
 void
 show_lisp_register(ExceptionInformation *xp, char *label, int r)
 {
@@ -155,8 +178,21 @@ show_lisp_register(ExceptionInformation *xp, char *label, int r)
 #ifdef PPC
   fprintf(stderr, "r%02d (%s) = %s\n", r, label, print_lisp_object(val));
 #endif
-#ifdef X86
+#ifdef X8664
   fprintf(stderr, "%%%s (%s) = %s\n",Iregnames[r], label, print_lisp_object(val));
+#endif
+#ifdef X8632
+  {
+    TCR *tcr = get_tcr(false);
+    char *s;
+
+    if (tcr && (tcr->node_regs_mask & bit_for_regnum(r)) == 0)
+      s = "marked as unboxed";
+    else
+      s = print_lisp_object(val);
+
+    fprintf(stderr, "%%%s (%s) = %s\n", Iregnames[r], label, s);
+  }
 #endif
 
 }
@@ -431,6 +467,21 @@ debug_lisp_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
     }
 #endif
   }
+
+#ifdef X8632
+  show_lisp_register(xp, "arg_z", Iarg_z);
+  show_lisp_register(xp, "arg_y", Iarg_y);
+  fprintf(stderr,"------\n");
+  show_lisp_register(xp, "fn", Ifn);
+  fprintf(stderr,"------\n");
+  show_lisp_register(xp, "temp0", Itemp0);
+  show_lisp_register(xp, "temp1", Itemp1);
+  fprintf(stderr,"------\n");
+  if (tag_of(xpGPR(xp,Inargs)) == tag_fixnum) {
+    fprintf(stderr,"%%edx (nargs) = %d (maybe)\n", unbox_fixnum(xpGPR(xp,Inargs)));
+  }
+#endif
+  
   return debug_continue;
 }
 
@@ -629,6 +680,20 @@ debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
   fprintf(stderr,"%%rip = 0x%016lX   %%rflags = 0x%016lX\n",
 	  xpGPR(xp, Iip), xpGPR(xp, Iflags));
 #endif
+
+#ifdef X8632
+  fprintf(stderr, "%%eax = 0x%08X\n", xpGPR(xp, REG_EAX));
+  fprintf(stderr, "%%ecx = 0x%08X\n", xpGPR(xp, REG_ECX));
+  fprintf(stderr, "%%edx = 0x%08X\n", xpGPR(xp, REG_EDX));
+  fprintf(stderr, "%%ebx = 0x%08X\n", xpGPR(xp, REG_EBX));
+  fprintf(stderr, "%%esp = 0x%08X\n", xpGPR(xp, REG_ESP));
+  fprintf(stderr, "%%ebp = 0x%08X\n", xpGPR(xp, REG_EBP));
+  fprintf(stderr, "%%esi = 0x%08X\n", xpGPR(xp, REG_ESI));
+  fprintf(stderr, "%%edi = 0x%08X\n", xpGPR(xp, REG_EDI));
+  fprintf(stderr, "%%eip = 0x%08X\n", xpGPR(xp, REG_EIP));
+  fprintf(stderr, "%%eflags = 0x%08X\n", xpGPR(xp, REG_EFL));
+#endif
+
   return debug_continue;
 }
 
@@ -695,6 +760,24 @@ debug_show_fpu(ExceptionInformation *xp, siginfo_t *info, int arg)
 #endif
           );
 #endif  
+#ifdef X8632
+#ifdef DARWIN
+  struct xmm {
+    char fpdata[8];
+  };
+  struct xmm *xmmp = (struct xmm *)(xpFPRvector(xp));
+
+  for (i = 0; i < 8; i++, xmmp++) {
+    float *sp = (float *)xmmp;
+    dp = (double *)xmmp;
+    np = (int *)xmmp;
+    fprintf(stderr, "f%1d: 0x%08x (%e), 0x%08x%08x (%e)\n", i, *np,
+	    (double)(*sp), np[1], np[0], *dp);
+  }
+  fprintf(stderr, "mxcsr = 0x%08x\n", UC_MCONTEXT(xp)->__fs.__fpu_mxcsr);
+#endif
+#endif
+
   return debug_continue;
 }
 
@@ -941,6 +1024,21 @@ lisp_Debugger(ExceptionInformation *xp,
   if (lisp_global(BATCH_FLAG)) {
     abort();
   }
+#ifdef DARWIN
+#ifdef X8664
+  if (xp) {
+    extern void *_sigtramp();
+    extern int os_major_version;
+
+    if (xpPC(xp) == (natural)_sigtramp) {
+      xp = (ExceptionInformation *) xpGPR(xp, REG_R8);
+      fprintf(stderr, "Exception raised at _sigtramp; using context passed to _sigtramp.  Raw register values (R) may be more interesting then lisp values or lisp backtrace\n");
+    }
+  }
+#endif
+#endif
+
+
   if (xp) {
     if (why > debug_entry_exception) {
       debug_identify_exception(xp, info, why);
