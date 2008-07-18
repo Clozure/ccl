@@ -41,10 +41,16 @@
 ;; Lists
 
 (defmacro %car (x)
-  `(car (the cons ,x)))
+  `(car (the list ,x)))
+
+(defmacro set-%car (x y)
+  `(setf (car (the cons ,x)) ,y))
 
 (defmacro %cdr (x)
-  `(cdr (the cons ,x)))
+  `(cdr (the list ,x)))
+
+(defmacro set-%cdr (x y)
+  `(setf (cdr (the cons ,x)) ,y))
 
 (defmacro %caar (x)
  `(%car (%car ,x)))
@@ -569,8 +575,10 @@
 ;; happen at compile-time
 (defsetf elt set-elt)
 (defsetf car set-car)
+(defsetf %car set-%car)
 (defsetf first set-car)
 (defsetf cdr set-cdr)
+(defsetf %cdr set-%cdr)
 (defsetf rest set-cdr)
 (defsetf uvref uvset)
 (defsetf aref aset)
