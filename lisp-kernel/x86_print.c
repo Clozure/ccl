@@ -265,6 +265,18 @@ sprint_symbol(LispObj o)
   add_lisp_base_string(pname);
 }
 
+#ifdef X8632
+LispObj
+nth_immediate(LispObj o, unsigned n)
+{
+  u16_t imm_word_count = *(u16_t *)(o + misc_data_offset);
+  natural *constants = (natural *)((char *)o + misc_data_offset + (imm_word_count << 2));
+  LispObj result = (LispObj)(constants[n-1]);
+
+  return result;
+}
+#endif
+
 void
 sprint_function(LispObj o, int depth)
 {
@@ -302,6 +314,18 @@ sprint_function(LispObj o, int depth)
       }
       sprint_specializers_list(method_specializers, depth);
       add_char(' ');
+    } else if (lfbits & lfbits_gfn_mask) {
+      LispObj gf_slots;
+      LispObj gf_name;
+
+      add_c_string("Generic Function ");
+
+#ifdef X8632
+      gf_slots = nth_immediate(o, 2);
+      gf_name = deref(gf_slots, 2);
+      sprint_lisp_object(gf_name, depth);
+      add_char(' ');
+#endif
     } else {
       add_c_string("Function ");
       sprint_lisp_object(name, depth);
@@ -315,6 +339,7 @@ sprint_function(LispObj o, int depth)
 void
 sprint_tra(LispObj o, int depth)
 {
+#ifdef X8664
   signed sdisp;
   unsigned disp = 0;
   LispObj f = 0;
@@ -335,6 +360,25 @@ sprint_tra(LispObj o, int depth)
     add_c_string("(tra ?) : ");
     sprint_unsigned_hex(o);
   }
+#else
+  LispObj f = 0;
+  unsigned disp = 0;
+
+  if (*(unsigned char *)o == RECOVER_FN_OPCODE) {
+    f = (LispObj)(*((natural *)(o + 1)));
+    disp = o - f;
+  }
+
+  if (f && header_subtag(header_of(f)) == subtag_function) {
+    add_c_string("tagged return address: ");
+    sprint_function(f, depth);
+    add_c_string(" + ");
+    sprint_unsigned_decimal(disp);
+  } else {
+    add_c_string("(tra ?) : ");
+    sprint_unsigned_hex(o);
+  }
+#endif
 }
 	       
 void
@@ -472,6 +516,8 @@ sprint_lisp_object(LispObj o, int depth)
     case fulltag_nodeheader_0:
     case fulltag_nodeheader_1:
 #else
+    case fulltag_immheader:
+    case fulltag_nodeheader:
 #endif      
       add_c_string("#<header ? ");
       sprint_unsigned_hex(o);
@@ -482,6 +528,7 @@ sprint_lisp_object(LispObj o, int depth)
     case fulltag_imm_0:
     case fulltag_imm_1:
 #else
+    case fulltag_imm:
 #endif
       if (o == unbound) {
         add_c_string("#<Unbound>");
@@ -492,7 +539,7 @@ sprint_lisp_object(LispObj o, int depth)
           if ((c >= ' ') && (c < 0x7f)) {
             add_char(c);
           } else {
-            sprintf(numbuf, "%o", c);
+            sprintf(numbuf, "%#o", c);
             add_c_string(numbuf);
           }
 #ifdef X8664
@@ -510,8 +557,10 @@ sprint_lisp_object(LispObj o, int depth)
         }
       }
       break;
-   
+
+#ifdef X8664
     case fulltag_nil:
+#endif
     case fulltag_cons:
       sprint_list(o, depth);
       break;
@@ -520,6 +569,7 @@ sprint_lisp_object(LispObj o, int depth)
       sprint_vector(o, depth);
       break;
 
+#ifdef X8664
     case fulltag_symbol:
       sprint_symbol(o);
       break;
@@ -527,9 +577,14 @@ sprint_lisp_object(LispObj o, int depth)
     case fulltag_function:
       sprint_function(o, depth);
       break;
+#endif
 
+#ifdef X8664
     case fulltag_tra_0:
     case fulltag_tra_1:
+#else
+    case fulltag_tra:
+#endif
       sprint_tra(o,depth);
       break;
     }
