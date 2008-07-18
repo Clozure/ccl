@@ -124,6 +124,9 @@ current_stack_pointer(void)
 #ifdef X8664
   register natural _sp __asm__("%rsp");
 #endif
+#ifdef X8632
+  register natural _sp __asm__("%esp");
+#endif
   return _sp;
 }
 #else
