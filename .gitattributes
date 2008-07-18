@@ -191,6 +191,7 @@ lisp-kernel/solarisx64/.gdbinit -text
 lisp-kernel/win64/Makefile -text
 lisp-kernel/win64/yasm-redefinition.patch -text
 lisp-kernel/x86-asmutils32.s -text
+lisp-kernel/x86-spentry32.s -text
 lisp-kernel/x86-spjump32.s -text
 objc-bridge/objc-package.lisp -text
 objc-bridge/obsolete/README -text
