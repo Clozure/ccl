@@ -277,18 +277,19 @@ the operating system."
                          :address name
                          :unsigned-fullword *dlopen-flags*
                          :address)))
-         (link-map #-freebsd-target handle
-                   #+freebsd-target (if (%null-ptr-p handle)
-                                      handle
-                                      (rlet ((p :address))
-                                        (if (eql 0 (ff-call
-                                                    (foreign-symbol-entry "dlinfo")
-                                                    :address handle
-                                                    :int #$RTLD_DI_LINKMAP
-                                                    :address p
-                                                    :int))
-                                          (pref p :address)
-                                          (%null-ptr))))))
+         (link-map #-(or freebsd-target solaris-target) handle
+                   #+(or freebsd-target solaris-target)
+                   (if (%null-ptr-p handle)
+                     handle
+                     (rlet ((p :address))
+                       (if (eql 0 (ff-call
+                                   (foreign-symbol-entry "dlinfo")
+                                   :address handle
+                                   :int #$RTLD_DI_LINKMAP
+                                   :address p
+                                   :int))
+                         (pref p :address)
+                         (%null-ptr))))))
     (if (%null-ptr-p link-map)
       (error "Error opening shared library ~s: ~a" name (dlerror))
       (prog1 (let* ((lib (shlib-from-map-entry link-map)))
@@ -705,19 +706,20 @@ return that address encapsulated in a MACPTR, else returns NIL."
                        :address soname
                        :unsigned-fullword *dlopen-flags*
                        :address))
-                #-freebsd-target (setq map handle)
-                #+freebsd-target (setq map
-                                       (if (%null-ptr-p handle)
-                                      handle
-                                      (rlet ((p :address))
-                                        (if (eql 0 (ff-call
-                                                    (foreign-symbol-entry "dlinfo")
-                                                    :address handle
-                                                    :int #$RTLD_DI_LINKMAP
-                                                    :address p
-                                                    :int))
-                                          (pref p :address)
-                                          (%null-ptr)))))
+                #-(or freebsd-target solaris-target) (setq map handle)
+                #+(or freebsd-target solaris-target)
+                (setq map
+                      (if (%null-ptr-p handle)
+                        handle
+                        (rlet ((p :address))
+                          (if (eql 0 (ff-call
+                                      (foreign-symbol-entry "dlinfo")
+                                      :address handle
+                                      :int #$RTLD_DI_LINKMAP
+                                      :address p
+                                      :int))
+                            (pref p :address)
+                            (%null-ptr)))))
 		(if (%null-ptr-p map)
 		  (setq lose t)
 		  (setf (shlib.pathname lib)
