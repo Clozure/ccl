@@ -1685,60 +1685,6 @@ purify_object(LispObj obj, area *dest)
   return purify_displaced_object(obj, dest, fulltag_of(obj));
 }
 
-
-
-
-/*
-  This may overestimate a bit, if the same symbol is accessible from multiple
-  packages.
-*/
-natural
-interned_pname_bytes_in_range(LispObj *start, LispObj *end)
-{
-  lispsymbol *rawsym = (lispsymbol *)(&(nrs_ALL_PACKAGES));
-  LispObj pkg_list = rawsym->vcell, htab, obj, pname, pname_header;
-  package *p;
-  cons *c;
-  natural elements, i, nbytes = 0;
-
-  while (fulltag_of(pkg_list) == fulltag_cons) {
-    c = (cons *) ptr_from_lispobj(untag(pkg_list));
-    p = (package *) ptr_from_lispobj(untag(c->car));
-    pkg_list = c->cdr;
-    c = (cons *) ptr_from_lispobj(untag(p->itab));
-    htab = c->car;
-    elements = header_element_count(header_of(htab));
-    for (i = 1; i<= elements; i++) {
-      obj = deref(htab,i);
-      if (fulltag_of(obj) == fulltag_symbol) {
-        rawsym = (lispsymbol *) ptr_from_lispobj(untag(obj));
-        pname = rawsym->pname;
-
-        if ((pname >= (LispObj)start) && (pname < (LispObj)end)) {
-          pname_header = header_of(pname);
-          nbytes += ((8 + (header_element_count(pname_header)<<2) + 15) &~15);
-        }
-      }
-    }
-    c = (cons *) ptr_from_lispobj(untag(p->etab));
-    htab = c->car;
-    elements = header_element_count(header_of(htab));
-    for (i = 1; i<= elements; i++) {
-      obj = deref(htab,i);
-      if (fulltag_of(obj) == fulltag_symbol) {
-        rawsym = (lispsymbol *) ptr_from_lispobj(untag(obj));
-        pname = rawsym->pname;
-
-        if ((pname >= (LispObj)start) && (pname < (LispObj)end)) {
-          pname_header = header_of(pname);
-          nbytes += ((8 + (header_element_count(pname_header)<<2) + 15) &~15);
-        }
-      }
-    }
-  }
-  return nbytes;
-}
-
 Boolean
 copy_ivector_reference(LispObj *ref, BytePtr low, BytePtr high, area *dest)
 {
