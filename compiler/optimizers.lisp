@@ -121,18 +121,26 @@
          (fixnumify (nreverse targs) op))))
     call))
 
-;;; True if arg is an alternating list of keywords and args,
-;;; only recognizes keywords in keyword package.
-;;; Historical note: this used to try to ensure that the
-;;; keyword appeared at most once.  Why ? (Even before
-;;; destructuring, pl-search/getf would have dtrt.)
+;;; True if arg is an alternating list of keywords and args, only
+;;; recognizes keywords in keyword package.  Historical note: this
+;;; used to try to ensure that the keyword appeared at most once.  Why
+;;; ? (Even before destructuring, pl-search/getf would have dtrt.)
+;;; Side effects: it's not the right thing to simply pick the value
+;;; associated with the first occurrence of a keyword if the value
+;;; associated with subsequent occurrence could have a side-effect.
+;;; (We -can- ignore a duplicate key if the associated value is
+;;; side-effect free.)
 (defun constant-keywords-p (keys)
   (when (plistp keys)
-    (while keys
-      (unless (keywordp (%car keys))
-        (return-from constant-keywords-p nil))
-      (setq keys (%cddr keys)))
-    t))
+    (do* ((seen ())
+          (keys keys (cddr keys)))
+         ((null keys) t)
+      (let* ((key (car keys)))
+        (if (or (not (keywordp key))
+                (and (memq key seen)
+                     (not (constantp (cadr keys)))))
+          (return))
+        (push key seen)))))
 
 (defun remove-explicit-test-keyword-from-test-testnot-key (item list keys default alist testonly)
   (if (null keys)
@@ -682,13 +690,17 @@
           ;; Wimp out
           (setf (array-ctype-dimensions ctype)
                 '*))))
-    (let* ((typespec (if element-type-p (nx-unquote element-type) t))
+    (let* ((typespec (if element-type-p
+                       (if (constantp element-type)
+                         (nx-unquote element-type)
+                         '*)
+                       t))
            (element-type (or (specifier-type-if-known typespec env)
                              (make-unknown-ctype :specifier typespec))))
       (setf (array-ctype-element-type ctype) element-type)
       (if (typep element-type 'unknown-ctype)
-        (setf (array-ctype-specialized-element-type ctype) *wild-type*)
-        (specialize-array-type ctype)))
+        (setf (array-ctype-element-type ctype) *wild-type*))
+      (specialize-array-type ctype))
     (type-specifier ctype)))
 
 
@@ -794,7 +806,8 @@
 
 (defun comp-nuke-keys (keys key-list call-list &optional required-bindings)
   ; side effects call list, returns a let-list
-  (let ((let-list (reverse required-bindings)))
+  (let* ((let-list (reverse required-bindings))
+         (seen nil))
     (do ((lst keys (cddr lst)))
         ((null lst) nil)
       (let* ((key (car lst))
@@ -803,12 +816,14 @@
              (vpos (cadr ass))
              (ppos (caddr ass)))
         (when ass
-          (when (not (constantp val))
-            (let ((gen (gensym)))
-              (setq let-list (cons (list gen val) let-list)) ; reverse him
-              (setq val gen)))
-          (rplaca (nthcdr vpos call-list) val)
-          (if ppos (rplaca (nthcdr ppos call-list) t)))))
+          (unless (memq vpos seen)
+            (push vpos seen)
+            (when (not (constantp val))
+              (let ((gen (gensym)))
+                (setq let-list (cons (list gen val) let-list)) ; reverse him
+                (setq val gen)))
+            (rplaca (nthcdr vpos call-list) val)
+            (if ppos (rplaca (nthcdr ppos call-list) t))))))
     (nreverse let-list)))
 
 (define-compiler-macro make-instance (&whole call class &rest initargs)
@@ -1496,7 +1511,7 @@
                           (eql (ldb target::arrayH.flags-cell-subtag-byte (the fixnum (%svref ,temp target::arrayH.flags-cell))) ,typecode)
                           ,@(unless (eq (car dims) '*)
                                     `((eq (%svref ,temp target::vectorH.logsize-cell) ,(car dims)))))))))))))
-        `(array-%%typep ,thing ,ctype))))))
+        `(values (array-%%typep ,thing ,ctype)))))))
 
 
 
@@ -1875,7 +1890,7 @@
   (let* ((gthing (gensym))
          (gtype (gensym)))
     `(let* ((,gthing ,thing)
-            (,gtype (typecode ,thing)))
+            (,gtype (typecode ,gthing)))
       (declare (type (unsigned-byte 8) ,gtype))
       (if (= ,gtype ,(nx-lookup-target-uvector-subtag :vector-header))
         (= (the (unsigned-byte 8)
@@ -1929,10 +1944,14 @@
       `(progn (char-code ,ch) t))
     (if (null (cdr others))
       (let* ((third (car others))
-             (code (gensym)))
-        `(let* ((,code (%char-code (char-upcase ,ch))))
-          (and (eq ,code (setq ,code (%char-code (char-upcase ,other))))
-           (eq ,code (%char-code (char-upcase ,third))))))
+             (code (gensym))
+             (code2 (gensym))
+             (code3 (gensym)))
+        `(let* ((,code (%char-code (char-upcase ,ch)))
+                (,code2 (%char-code (char-upcase ,other)))
+                (,code3 (%char-code (char-upcase ,third))))
+          (and (eq ,code ,code2)
+           (eq ,code2 ,code3))))
       call)))
 
 (define-compiler-macro char/= (&whole call ch &optional (other nil other-p) &rest others)
@@ -1950,11 +1969,15 @@
       `(progn (char-code ,ch) t))
     (if (null (cdr others))
       (let* ((third (car others))
-             (code (gensym)))
-        `(let* ((,code (char-code ,ch)))
-          (declare (fixnum ,code))
-          (and (< ,code (setq ,code (char-code ,other)))
-           (< ,code (the fixnum (char-code ,third))))))
+             (code (gensym))
+             (code2 (gensym))
+             (code3 (gensym)))
+        `(let* ((,code (char-code ,ch))
+                (,code2 (char-code ,other))
+                (,code3 (char-code ,third)))
+          (declare (fixnum ,code ,code2 ,code3))
+          (and (< ,code ,code2)
+           (< ,code2 ,code3))))
       call)))
 
 (define-compiler-macro char<= (&whole call ch &optional (other nil other-p) &rest others)
@@ -1964,11 +1987,15 @@
       `(progn (char-code ,ch) t))
     (if (null (cdr others))
       (let* ((third (car others))
-             (code (gensym)))
-        `(let* ((,code (char-code ,ch)))
-          (declare (fixnum ,code))
-          (and (<= ,code (setq ,code (char-code ,other)))
-           (<= ,code (the fixnum (char-code ,third))))))
+             (code (gensym))
+             (code2 (gensym))
+             (code3 (gensym)))
+        `(let* ((,code (char-code ,ch))
+                (,code2 (char-code ,other))
+                (,code3 (char-code ,third)))
+          (declare (fixnum ,code ,code2 ,code3))
+          (and (<= ,code ,code2)
+           (<= ,code2 ,code3))))
       call)))
 
 (define-compiler-macro char> (&whole call ch &optional (other nil other-p) &rest others)
@@ -1978,11 +2005,15 @@
       `(progn (char-code ,ch) t))
     (if (null (cdr others))
       (let* ((third (car others))
-             (code (gensym)))
-        `(let* ((,code (char-code ,ch)))
-          (declare (fixnum ,code))
-          (and (> ,code (setq ,code (char-code ,other)))
-           (> ,code (the fixnum (char-code ,third))))))
+             (code (gensym))
+             (code2 (gensym))
+             (code3 (gensym)))
+        `(let* ((,code (char-code ,ch))
+                (,code2 (char-code ,other))
+                (,code3 (char-code ,third)))
+          (declare (fixnum ,code ,code2 ,code3))
+          (and (> ,code ,code2)
+           (> ,code2 ,code3))))
       call)))
 
 (define-compiler-macro char>= (&whole call ch &optional (other nil other-p) &rest others)
@@ -1992,11 +2023,15 @@
       `(progn (char-code ,ch) t))
     (if (null (cdr others))
       (let* ((third (car others))
-             (code (gensym)))
-        `(let* ((,code (char-code ,ch)))
-          (declare (fixnum ,code))
-          (and (>= ,code (setq ,code (char-code ,other)))
-           (>= ,code (the fixnum (char-code ,third))))))
+             (code (gensym))
+             (code2 (gensym))
+             (code3 (gensym)))
+        `(let* ((,code (char-code ,ch))
+                (,code2 (char-code ,other))
+                (,code3 (char-code ,third)))
+          (declare (fixnum ,code ,code2 ,code3))
+          (and (>= ,code ,code2)
+           (>= ,code2 ,code3))))
       call)))
 
 (define-compiler-macro float (&whole call number &optional (other 0.0f0 other-p) &environment env)
