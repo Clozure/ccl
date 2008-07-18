@@ -151,9 +151,12 @@ natural gc_deferred = 0, full_gc_deferred = 0;
 Boolean
 handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
 {
-  LispObj 
-    selector = xpGPR(xp,Iimm0), 
-    arg = xpGPR(xp,Iimm1);
+  LispObj selector = xpGPR(xp,Iimm0);
+#ifdef X8664
+  LispObj arg = xpGPR(xp,Iimm1);
+#else
+  LispObj arg = xpMMXreg(xp,Imm0);
+#endif
   area *a = active_dynamic_area;
   Boolean egc_was_enabled = (a->older != NULL);
   
@@ -166,7 +169,11 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
     break;
 
   case GC_TRAP_FUNCTION_CONFIGURE_EGC:
+#ifdef X8664
     a->threshold = unbox_fixnum(xpGPR(xp, Iarg_x));
+#else
+    a->threshold = unbox_fixnum(xpGPR(xp, Itemp0));
+#endif
     g1_area->threshold = unbox_fixnum(xpGPR(xp, Iarg_y));
     g2_area->threshold = unbox_fixnum(xpGPR(xp, Iarg_z));
     xpGPR(xp,Iarg_z) = lisp_nil+t_offset;
@@ -282,12 +289,24 @@ push_on_lisp_stack(ExceptionInformation *xp, LispObj value)
 void
 finish_function_entry(ExceptionInformation *xp)
 {
+#ifdef X8664
   natural nargs = (xpGPR(xp,Inargs)&0xffff)>> fixnumshift;
-  signed_natural disp = nargs-3;
+#else
+  natural nargs = xpGPR(xp,Inargs)>>fixnumshift;
+#endif
+  signed_natural disp;
   LispObj *vsp =  (LispObj *) xpGPR(xp,Isp), ra = *vsp++;
    
   xpGPR(xp,Isp) = (LispObj) vsp;
 
+#ifdef X8664
+  disp = nargs - 3;
+#endif
+#ifdef X8632
+  disp = nargs - 2;
+#endif
+
+#ifdef X8664
   if (disp > 0) {               /* implies that nargs > 3 */
     vsp[disp] = xpGPR(xp,Irbp);
     vsp[disp+1] = ra;
@@ -309,6 +328,27 @@ finish_function_entry(ExceptionInformation *xp)
       push_on_lisp_stack(xp,xpGPR(xp,Iarg_z));
     }
   }
+#endif
+#ifdef X8632
+  if (disp > 0) {               /* implies that nargs > 2 */
+    vsp[disp] = xpGPR(xp,Iebp);
+    vsp[disp+1] = ra;
+    xpGPR(xp,Iebp) = (LispObj)(vsp+disp);
+    xpGPR(xp,Isp) = (LispObj)vsp;
+    push_on_lisp_stack(xp,xpGPR(xp,Iarg_y));
+    push_on_lisp_stack(xp,xpGPR(xp,Iarg_z));
+  } else {
+    push_on_lisp_stack(xp,ra);
+    push_on_lisp_stack(xp,xpGPR(xp,Iebp));
+    xpGPR(xp,Iebp) = xpGPR(xp,Isp);
+    if (nargs == 2) {
+      push_on_lisp_stack(xp,xpGPR(xp,Iarg_y));
+    }
+    if (nargs >= 1) {
+      push_on_lisp_stack(xp,xpGPR(xp,Iarg_z));
+    }
+  }
+#endif
 }
 
 Boolean
@@ -334,6 +374,8 @@ create_exception_callback_frame(ExceptionInformation *xp, TCR *tcr)
 
   f = xpGPR(xp,Ifn);
   tra = *(LispObj*)(xpGPR(xp,Isp));
+
+#ifdef X8664
   if (tag_of(tra) == tag_tra) {
     if ((*((unsigned short *)tra) == RECOVER_FN_FROM_RIP_WORD0) &&
         (*((unsigned char *)(tra+2)) == RECOVER_FN_FROM_RIP_BYTE2)) {
@@ -346,10 +388,28 @@ create_exception_callback_frame(ExceptionInformation *xp, TCR *tcr)
   } else {
     tra = 0;
   }
+#endif
+#ifdef X8632
+  if (fulltag_of(tra) == fulltag_tra) {
+    if (*(unsigned char *)tra == RECOVER_FN_OPCODE) {
+      tra_f = (LispObj)*(LispObj *)(tra + 1);
+    }
+    if (tra_f && header_subtag(header_of(tra_f)) != subtag_function) {
+      tra_f = 0;
+    }
+  } else {
+    tra = 0;
+  }
+#endif
 
   abs_pc = (LispObj)xpPC(xp);
 
+#ifdef X8664
   if (fulltag_of(f) == fulltag_function) {
+#else
+  if (fulltag_of(f) == fulltag_misc &&
+      header_subtag(header_of(f)) == subtag_function) {
+#endif
     nominal_function = f;
   } else {
     if (tra_f) {
@@ -388,8 +448,13 @@ create_exception_callback_frame(ExceptionInformation *xp, TCR *tcr)
   push_on_lisp_stack(xp,relative_pc);
   push_on_lisp_stack(xp,nominal_function);
   push_on_lisp_stack(xp,0);
+#ifdef X8664
   push_on_lisp_stack(xp,xpGPR(xp,Irbp));
   xpGPR(xp,Irbp) = xpGPR(xp,Isp);
+#else
+  push_on_lisp_stack(xp,xpGPR(xp,Iebp));
+  xpGPR(xp,Iebp) = xpGPR(xp,Isp);
+#endif
   return xpGPR(xp,Isp);
 }
 
@@ -407,7 +472,11 @@ handle_alloc_trap(ExceptionInformation *xp, TCR *tcr)
   cur_allocptr = xpGPR(xp,Iallocptr);
   allocptr_tag = fulltag_of(cur_allocptr);
   if (allocptr_tag == fulltag_misc) {
+#ifdef X8664
     disp = xpGPR(xp,Iimm1);
+#else
+    disp = xpGPR(xp,Iimm0);
+#endif
   } else {
     disp = dnode_size-fulltag_cons;
   }
@@ -441,13 +510,30 @@ callback_to_lisp (TCR * tcr, LispObj callback_macptr, ExceptionInformation *xp,
   natural  callback_ptr;
   int delta;
   unsigned old_mxcsr = get_mxcsr();
+#ifdef X8632
+  natural saved_node_regs_mask = tcr->node_regs_mask;
+  LispObj *vsp = (LispObj *)xpGPR(xp, Isp);
+#endif
 
   set_mxcsr(0x1f80);
 
   /* Put the active stack pointers where .SPcallback expects them */
+#ifdef X8664
   tcr->save_vsp = (LispObj *) xpGPR(xp, Isp);
   tcr->save_rbp = (LispObj *) xpGPR(xp, Irbp);
+#else
+  tcr->node_regs_mask = X8632_DEFAULT_NODE_REGS_MASK;
 
+  *--vsp = tcr->save0;
+  *--vsp = tcr->save1;
+  *--vsp = tcr->save2;
+  *--vsp = tcr->save3;
+  *--vsp = tcr->next_method_context;
+  xpGPR(xp, Isp) = (LispObj)vsp;
+
+  tcr->save_vsp = (LispObj *)xpGPR(xp, Isp);
+  tcr->save_ebp = (LispObj *)xpGPR(xp, Iebp);
+#endif
 
   /* Call back.  The caller of this function may have modified stack/frame
      pointers (and at least should have called prepare_for_callback()).
@@ -456,6 +542,17 @@ callback_to_lisp (TCR * tcr, LispObj callback_macptr, ExceptionInformation *xp,
   UNLOCK(lisp_global(EXCEPTION_LOCK), tcr);
   delta = ((int (*)())callback_ptr) (xp, arg1, arg2, arg3, arg4, arg5);
   LOCK(lisp_global(EXCEPTION_LOCK), tcr);
+
+#ifdef X8632
+  tcr->next_method_context = *vsp++;
+  tcr->save3 = *vsp++;
+  tcr->save2 = *vsp++;
+  tcr->save1 = *vsp++;
+  tcr->save0 = *vsp++;
+  xpGPR(xp, Isp) = (LispObj)vsp;
+
+  tcr->node_regs_mask = saved_node_regs_mask;
+#endif
   set_mxcsr(old_mxcsr);
   return delta;
 }
@@ -463,14 +560,22 @@ callback_to_lisp (TCR * tcr, LispObj callback_macptr, ExceptionInformation *xp,
 void
 callback_for_interrupt(TCR *tcr, ExceptionInformation *xp)
 {
-  LispObj save_rbp = xpGPR(xp,Irbp),
-    *save_vsp = (LispObj *)xpGPR(xp,Isp),
+  LispObj *save_vsp = (LispObj *)xpGPR(xp,Isp),
     word_beyond_vsp = save_vsp[-1],
     xcf = create_exception_callback_frame(xp, tcr);
   int save_errno = errno;
-  
+#ifdef X8664
+  LispObj save_rbp = xpGPR(xp,Irbp);
+#else
+  LispObj save_ebp = xpGPR(xp,Iebp);
+#endif
+
   callback_to_lisp(tcr, nrs_CMAIN.vcell,xp, xcf, 0, 0, 0, 0);
+#ifdef X8664
   xpGPR(xp,Irbp) = save_rbp;
+#else
+  xpGPR(xp,Iebp) = save_ebp;
+#endif
   xpGPR(xp,Isp) = (LispObj)save_vsp;
   save_vsp[-1] = word_beyond_vsp;
   errno = save_errno;
@@ -482,7 +587,12 @@ handle_error(TCR *tcr, ExceptionInformation *xp)
   pc program_counter = (pc)xpPC(xp);
   unsigned char op0 = program_counter[0], op1 = program_counter[1];
   LispObj rpc, errdisp = nrs_ERRDISP.vcell,
-    save_rbp = xpGPR(xp,Irbp), save_vsp = xpGPR(xp,Isp), xcf0;
+    save_vsp = xpGPR(xp,Isp), xcf0;
+#ifdef X8664
+  LispObj save_rbp = xpGPR(xp,Irbp);
+#else
+  LispObj save_ebp = xpGPR(xp,Iebp);
+#endif
   int skip;
 
   if ((fulltag_of(errdisp) == fulltag_misc) &&
@@ -506,7 +616,11 @@ handle_error(TCR *tcr, ExceptionInformation *xp)
         
       skip = 0;
     }
+#ifdef X8664
     xpGPR(xp,Irbp) = save_rbp;
+#else
+    xpGPR(xp,Iebp) = save_ebp;
+#endif
     xpGPR(xp,Isp) = save_vsp;
     if ((op0 == 0xcd) && (op1 == 0xc7)) {
       /* Continue after an undefined function call. The function
@@ -520,12 +634,23 @@ handle_error(TCR *tcr, ExceptionInformation *xp)
          called when we resume.
       */
       LispObj *vsp =(LispObj *)save_vsp, ra = *vsp;
+#ifdef X8664
       int nargs = (xpGPR(xp, Inargs) & 0xffff)>>fixnumshift;
-      
+#else
+      int nargs = xpGPR(xp, Inargs)>>fixnumshift;
+#endif
+
+#ifdef X8664
       if (nargs > 3) {
         xpGPR(xp,Isp)=(LispObj) (vsp + (1 + 2 + (nargs - 3)));
         push_on_lisp_stack(xp,ra);
       }
+#else
+      if (nargs > 2) {
+        xpGPR(xp,Isp)=(LispObj) (vsp + (1 + 2 + (nargs - 2)));
+        push_on_lisp_stack(xp,ra);
+      }
+#endif
       xpPC(xp) = xpGPR(xp,Ifn);
       xpGPR(xp,Inargs) = 1<<fixnumshift;
     } else {
@@ -581,8 +706,12 @@ do_soft_stack_overflow(ExceptionInformation *xp, protected_area_ptr prot_area, B
       */
   lisp_protection_kind which = prot_area->why;
   Boolean on_TSP = (which == kTSPsoftguard);
-  LispObj save_rbp = xpGPR(xp,Irbp), 
-    save_vsp = xpGPR(xp,Isp), 
+#ifdef X8664
+  LispObj save_rbp = xpGPR(xp,Irbp);
+#else
+  LispObj save_ebp = xpGPR(xp,Iebp);
+#endif
+  LispObj save_vsp = xpGPR(xp,Isp), 
     xcf,
     cmain = nrs_CMAIN.vcell;
   area *a;
@@ -601,7 +730,11 @@ do_soft_stack_overflow(ExceptionInformation *xp, protected_area_ptr prot_area, B
     unprotect_area(soft);
     xcf = create_exception_callback_frame(xp, tcr);
     skip = callback_to_lisp(tcr, nrs_CMAIN.vcell, xp, xcf, SIGSEGV, on_TSP, 0, 0);
+#ifdef X8664
     xpGPR(xp,Irbp) = save_rbp;
+#else
+    xpGPR(xp,Iebp) = save_ebp;
+#endif
     xpGPR(xp,Isp) = save_vsp;
     xpPC(xp) += skip;
     return true;
@@ -613,7 +746,11 @@ Boolean
 is_write_fault(ExceptionInformation *xp, siginfo_t *info)
 {
 #ifdef DARWIN
+#ifdef X8664
   return (UC_MCONTEXT(xp)->__es.__err & 0x2) != 0;
+#else
+  return (xp->uc_mcontext->__es.__err & 0x2) != 0;
+#endif
 #endif
 #ifdef LINUX
   return (xpGPR(xp,REG_ERR) & 0x2) != 0;
@@ -680,15 +817,23 @@ handle_floating_point_exception(TCR *tcr, ExceptionInformation *xp, siginfo_t *i
 {
   int code = info->si_code, skip;
   LispObj  xcf, cmain = nrs_CMAIN.vcell,
-
-    save_rbp = xpGPR(xp,Irbp), save_vsp = xpGPR(xp,Isp);
+    save_vsp = xpGPR(xp,Isp);
+#ifdef X8664
+  LispObj save_rbp = xpGPR(xp,Irbp);
+#else
+  LispObj save_ebp = xpGPR(xp,Iebp);
+#endif
 
   if ((fulltag_of(cmain) == fulltag_misc) &&
       (header_subtag(header_of(cmain)) == subtag_macptr)) {
     xcf = create_exception_callback_frame(xp, tcr);
     skip = callback_to_lisp(tcr, cmain, xp, xcf, SIGFPE, code, 0, 0);
     xpPC(xp) += skip;
+#ifdef X8664
     xpGPR(xp,Irbp) = save_rbp;
+#else
+    xpGPR(xp,Iebp) = save_ebp;
+#endif
     xpGPR(xp,Isp) = save_vsp;
     return true;
   } else {
@@ -985,6 +1130,9 @@ wait_for_exception_lock_in_handler(TCR *tcr,
   fprintf(stderr, "0x%x has exception lock\n", tcr);
 #endif
   xf->curr = context;
+#ifdef X8632
+  xf->node_regs_mask = tcr->node_regs_mask;
+#endif
   xf->prev = tcr->xframe;
   tcr->xframe =  xf;
   tcr->pending_exception_context = NULL;
@@ -995,6 +1143,9 @@ void
 unlock_exception_lock_in_handler(TCR *tcr)
 {
   tcr->pending_exception_context = tcr->xframe->curr;
+#ifdef X8632
+  tcr->node_regs_mask = tcr->xframe->node_regs_mask;
+#endif
   tcr->xframe = tcr->xframe->prev;
   tcr->valence = TCR_STATE_EXCEPTION_RETURN;
   UNLOCK(lisp_global(EXCEPTION_LOCK),tcr);
@@ -1321,7 +1472,11 @@ interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
         (tcr->valence != TCR_STATE_LISP) ||
         (tcr->unwinding != 0) ||
         ! stack_pointer_on_vstack_p(xpGPR(context,Isp), tcr) ||
+#ifdef X8664
         ! stack_pointer_on_vstack_p(xpGPR(context,Irbp), tcr)) {
+#else
+        ! stack_pointer_on_vstack_p(xpGPR(context,Iebp), tcr)) {
+#endif
       tcr->interrupt_pending = (1L << (nbits_in_word - 1L));
     } else {
       LispObj cmain = nrs_CMAIN.vcell;
@@ -1769,6 +1924,7 @@ extern opcode egc_write_barrier_start, egc_write_barrier_end,
    know the sizes of each of these instructions.
 */
 
+#ifdef X8664
 opcode load_allocptr_reg_from_tcr_save_allocptr_instruction[] =
   {0x65,0x48,0x8b,0x1c,0x25,0xd8,0x00,0x00,0x00};
 opcode compare_allocptr_reg_to_tcr_save_allocbase_instruction[] =
@@ -1781,7 +1937,6 @@ opcode clear_tcr_save_allocptr_tag_instruction[] =
   {0x65,0x80,0x24,0x25,0xd8,0x00,0x00,0x00,0xf0};
 opcode set_allocptr_header_instruction[] =
   {0x48,0x89,0x43,0xf3};
-
 
 alloc_instruction_id
 recognize_alloc_instruction(pc program_counter)
@@ -1802,7 +1957,38 @@ recognize_alloc_instruction(pc program_counter)
   }
   return ID_unrecognized_alloc_instruction;
 }
-      
+#endif
+#ifdef X8632
+opcode load_allocptr_reg_from_tcr_save_allocptr_instruction[] =
+  {0x64,0x8b,0x0d,0x84,0x00,0x00,0x00};
+opcode compare_allocptr_reg_to_tcr_save_allocbase_instruction[] =
+  {0x64,0x3b,0x0d,0x88,0x00,0x00,0x00};
+opcode branch_around_alloc_trap_instruction[] =
+  {0x7f,0x02};
+opcode alloc_trap_instruction[] =
+  {0xcd,0xc5};
+opcode clear_tcr_save_allocptr_tag_instruction[] =
+  {0x64,0x80,0x25,0x84,0x00,0x00,0x00,0xf8};
+opcode set_allocptr_header_instruction[] =
+  {0x0f,0x7e,0x41,0xfa};
+
+alloc_instruction_id
+recognize_alloc_instruction(pc program_counter)
+{
+  switch(program_counter[0]) {
+  case 0xcd: return ID_alloc_trap_instruction;
+  case 0x7f: return ID_branch_around_alloc_trap_instruction;
+  case 0x0f: return ID_set_allocptr_header_instruction;
+  case 0x64: 
+    switch(program_counter[1]) {
+    case 0x80: return ID_clear_tcr_save_allocptr_tag_instruction;
+    case 0x3b: return ID_compare_allocptr_reg_to_tcr_save_allocbase_instruction;
+    case 0x8b: return ID_load_allocptr_reg_from_tcr_save_allocptr_instruction;
+    }
+  }
+  return ID_unrecognized_alloc_instruction;
+}
+#endif      
 #ifdef WINDOWS  
 void
 pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displacement)
@@ -1817,10 +2003,16 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
 
   if (allocptr_tag != 0) {
     alloc_instruction_id state = recognize_alloc_instruction(program_counter);
+#ifdef X8664
     signed_natural 
       disp = (allocptr_tag == fulltag_cons) ?
       sizeof(cons) - fulltag_cons :
       xpGPR(xp,Iimm1);
+#else
+      signed_natural disp = (allocptr_tag == fulltag_cons) ?
+      sizeof(cons) - fulltag_cons :
+      xpMMXreg(xp,Imm0);
+#endif
     LispObj new_vector;
 
     if ((state == ID_unrecognized_alloc_instruction) ||
@@ -1830,9 +2022,10 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
     }
     switch(state) {
     case ID_set_allocptr_header_instruction:
-      /* We were consing a vector and we won.  Set the header of the new vector
-         (in the allocptr register) to the header in %rax and skip over this
-         instruction, then fall into the next case. */
+      /* We were consing a vector and we won.  Set the header of the
+         new vector (in the allocptr register) to the header in
+         %eax/%rax and skip over this instruction, then fall into the
+         next case. */
       new_vector = xpGPR(xp,Iallocptr);
       deref(new_vector,0) = xpGPR(xp,Iimm0);
 
@@ -1862,7 +2055,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
       }
       break;
     case ID_branch_around_alloc_trap_instruction:
-      /* If we'd take the branch - which is a 'jg" - around the alloc trap,
+      /* If we'd take the branch - which is a "jg" - around the alloc trap,
          we might as well finish the allocation.  Otherwise, back out of the
          attempt. */
       {
@@ -1927,17 +2120,29 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
       }
       /* The conditional store succeeded.  Set the refbit, return to ra0 */
       val = xpGPR(xp,Iarg_z);
+#ifdef X8664
       ea = (LispObj*)(xpGPR(xp,Iarg_x) + (unbox_fixnum((signed_natural)
                                                        xpGPR(xp,Itemp0))));
+#else
+      ea = (LispObj *)(misc_data_offset + xpGPR(xp,Itemp1) + xpGPR(xp,Itemp0));
+#endif
       xpGPR(xp,Iarg_z) = t_value;
       need_store = false;
     } else if (program_counter >= &egc_set_hash_key) {
+#ifdef X8664
       root = xpGPR(xp,Iarg_x);
+#else
+      root = xpGPR(xp,Itemp0);
+#endif
       ea = (LispObj *) (root+xpGPR(xp,Iarg_y)+misc_data_offset);
       val = xpGPR(xp,Iarg_z);
       need_memoize_root = true;
     } else if (program_counter >= &egc_gvset) {
+#ifdef X8664
       ea = (LispObj *) (xpGPR(xp,Iarg_x)+xpGPR(xp,Iarg_y)+misc_data_offset);
+#else
+      ea = (LispObj *) (xpGPR(xp,Itemp0)+xpGPR(xp,Iarg_y)+misc_data_offset);
+#endif
       val = xpGPR(xp,Iarg_z);
     } else if (program_counter >= &egc_rplacd) {
       ea = (LispObj *) untag(xpGPR(xp,Iarg_y));
@@ -1964,9 +2169,9 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
       /* These subprimitives are called via CALL/RET; need
          to pop the return address off the stack and set
          the PC there. */
-      LispObj *rsp = (LispObj *)xpGPR(xp,Isp), ra = *rsp++;
+      LispObj *sp = (LispObj *)xpGPR(xp,Isp), ra = *sp++;
       xpPC(xp) = ra;
-      xpGPR(xp,Isp)=(LispObj)rsp;
+      xpGPR(xp,Isp)=(LispObj)sp;
     }
     return;
   }
@@ -2241,15 +2446,21 @@ restore_mach_thread_state(mach_port_t thread, ExceptionInformation *pseudosigcon
 #if WORD_SIZE == 64
   MCONTEXT_T mc = UC_MCONTEXT(pseudosigcontext);
 #else
-  struct mcontext * mc = UC_MCONTEXT(pseudosigcontext);
+  mcontext_t mc = UC_MCONTEXT(pseudosigcontext);
 #endif
 
   /* Set the thread's FP state from the pseudosigcontext */
+#if WORD_SIZE == 64
   kret = thread_set_state(thread,
                           x86_FLOAT_STATE64,
                           (thread_state_t)&(mc->__fs),
                           x86_FLOAT_STATE64_COUNT);
-
+#else
+  kret = thread_set_state(thread,
+                          x86_FLOAT_STATE32,
+                          (thread_state_t)&(mc->__fs),
+                          x86_FLOAT_STATE32_COUNT);
+#endif
   MACH_CHECK_ERROR("setting thread FP state", kret);
 
   /* The thread'll be as good as new ... */
@@ -2308,7 +2519,7 @@ create_thread_context_frame(mach_port_t thread,
 #ifdef X8664
                             x86_thread_state64_t *ts
 #else
-                            x86_thread_state_t *ts
+                            x86_thread_state32_t *ts
 #endif
                             )
 {
@@ -2317,13 +2528,16 @@ create_thread_context_frame(mach_port_t thread,
 #ifdef X8664
   MCONTEXT_T mc;
 #else
-  struct mcontext *mc;
+  mcontext_t mc;
 #endif
   natural stackp;
 
-  
+#ifdef X8664  
   stackp = (LispObj) find_foreign_rsp(ts->__rsp,tcr->cs_area,tcr);
   stackp = TRUNC_DOWN(stackp, C_REDZONE_LEN, C_STK_ALIGN);
+#else
+  stackp = (LispObj) find_foreign_rsp(ts->__esp, tcr->cs_area, tcr);
+#endif
   stackp = TRUNC_DOWN(stackp, sizeof(siginfo_t), C_STK_ALIGN);
   if (info_ptr) {
     *info_ptr = (siginfo_t *)stackp;
@@ -2332,34 +2546,35 @@ create_thread_context_frame(mach_port_t thread,
   pseudosigcontext = (ExceptionInformation *) ptr_from_lispobj(stackp);
 
   stackp = TRUNC_DOWN(stackp, sizeof(*mc), C_STK_ALIGN);
-#ifdef X8664
   mc = (MCONTEXT_T) ptr_from_lispobj(stackp);
-#else
-  mc = (struct mcontext *) ptr_from_lispobj(stackp);
-#endif
   
   memmove(&(mc->__ss),ts,sizeof(*ts));
 
+#ifdef X8664
   thread_state_count = x86_FLOAT_STATE64_COUNT;
   thread_get_state(thread,
 		   x86_FLOAT_STATE64,
 		   (thread_state_t)&(mc->__fs),
 		   &thread_state_count);
 
-
-#ifdef X8664
   thread_state_count = x86_EXCEPTION_STATE64_COUNT;
-#else
-  thread_state_count = x86_EXCEPTION_STATE_COUNT;
-#endif
   thread_get_state(thread,
-#ifdef X8664
                    x86_EXCEPTION_STATE64,
-#else
-		   x86_EXCEPTION_STATE,
-#endif
 		   (thread_state_t)&(mc->__es),
 		   &thread_state_count);
+#else
+  thread_state_count = x86_FLOAT_STATE32_COUNT;
+  thread_get_state(thread,
+		   x86_FLOAT_STATE32,
+		   (thread_state_t)&(mc->__fs),
+		   &thread_state_count);
+
+  thread_state_count = x86_EXCEPTION_STATE32_COUNT;
+  thread_get_state(thread,
+                   x86_EXCEPTION_STATE32,
+		   (thread_state_t)&(mc->__es),
+		   &thread_state_count);
+#endif
 
 
   UC_MCONTEXT(pseudosigcontext) = mc;
@@ -2395,14 +2610,14 @@ setup_signal_frame(mach_port_t thread,
 #ifdef X8664
                    x86_thread_state64_t *ts
 #else
-                   x86_thread_state_t *ts
+                   x86_thread_state32_t *ts
 #endif
                    )
 {
 #ifdef X8664
   x86_thread_state64_t new_ts;
 #else
-  x86_thread_state_t new_ts;
+  x86_thread_state32_t new_ts;
 #endif
   ExceptionInformation *pseudosigcontext;
   int  old_valence = tcr->valence;
@@ -2434,6 +2649,7 @@ setup_signal_frame(mach_port_t thread,
      args) when the thread's resumed.
   */
 
+#ifdef X8664
   new_ts.__rip = (natural) handler_address;
   stackpp = (natural *)stackp;
   *--stackpp = (natural)pseudo_sigreturn;
@@ -2445,7 +2661,32 @@ setup_signal_frame(mach_port_t thread,
   new_ts.__r8 = (natural)old_valence;
   new_ts.__rsp = stackp;
   new_ts.__rflags = ts->__rflags;
+#else
+#define USER_CS 0x17
+#define USER_DS 0x1f
+  bzero(&new_ts, sizeof(new_ts));
+  new_ts.__cs = ts->__cs;
+  new_ts.__ss = ts->__ss;
+  new_ts.__ds = ts->__ds;
+  new_ts.__es = ts->__es;
+  new_ts.__fs = ts->__fs;
+  new_ts.__gs = ts->__gs;
 
+  new_ts.__eip = (natural)handler_address;
+  stackpp = (natural *)stackp;
+  *--stackpp = 0;		/* alignment */
+  *--stackpp = 0;
+  *--stackpp = 0;
+  *--stackpp = (natural)old_valence;
+  *--stackpp = (natural)tcr;
+  *--stackpp = (natural)pseudosigcontext;
+  *--stackpp = (natural)info;
+  *--stackpp = (natural)signum;
+  *--stackpp = (natural)pseudo_sigreturn;
+  stackp = (natural)stackpp;
+  new_ts.__esp = stackp;
+  new_ts.__eflags = ts->__eflags;
+#endif
 
 #ifdef X8664
   thread_set_state(thread,
@@ -2454,9 +2695,9 @@ setup_signal_frame(mach_port_t thread,
                    x86_THREAD_STATE64_COUNT);
 #else
   thread_set_state(thread, 
-		   x86_THREAD_STATE,
+		   x86_THREAD_STATE32,
 		   (thread_state_t)&new_ts,
-		   x86_THREAD_STATE_COUNT);
+		   x86_THREAD_STATE32_COUNT);
 #endif
 #ifdef DEBUG_MACH_EXCEPTIONS
   fprintf(stderr,"Set up exception context for 0x%x at 0x%x\n", tcr, tcr->pending_exception_context);
@@ -2497,7 +2738,7 @@ setup_signal_frame(mach_port_t thread,
 #ifdef X8664
 #define ts_pc(t) t.__rip
 #else
-#define ts_pc(t) t.eip
+#define ts_pc(t) t.__eip
 #endif
 
 #ifdef DARWIN_USE_PSEUDO_SIGRETURN
@@ -2521,7 +2762,7 @@ catch_exception_raise(mach_port_t exception_port,
 #ifdef X8664
   x86_thread_state64_t ts;
 #else
-  x86_thread_state_t ts;
+  x86_thread_state32_t ts;
 #endif
   mach_msg_type_number_t thread_state_count;
 
@@ -2549,11 +2790,12 @@ catch_exception_raise(mach_port_t exception_port,
     } while (call_kret == KERN_ABORTED);
   MACH_CHECK_ERROR("getting thread state",call_kret);
 #else
-    thread_state_count = x86_THREAD_STATE_COUNT;
-    thread_get_state(thread,
-                     x86_THREAD_STATE,
-                     (thread_state_t)&ts,
-                     &thread_state_count);
+    thread_state_count = x86_THREAD_STATE32_COUNT;
+    call_kret = thread_get_state(thread,
+				 x86_THREAD_STATE32,
+				 (thread_state_t)&ts,
+				 &thread_state_count);
+    MACH_CHECK_ERROR("getting thread state",call_kret);
 #endif
     if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_EXCEPTION)) {
       CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_EXCEPTION);
@@ -2907,7 +3149,7 @@ mach_suspend_tcr(TCR *tcr)
                      (thread_state_t)&ts,
                      &thread_state_count);
 #else
-    x86_thread_state_t ts;
+    x86_thread_state32_t ts;
     thread_state_count = x86_THREAD_STATE_COUNT;
     thread_get_state(mach_thread,
                      x86_THREAD_STATE,
