@@ -9134,9 +9134,10 @@
                               (eq (acode-operator form)
                                   (%nx1-operator immediate))
                               (typep (cadr form) 'real))
-                       (cadr form))))))
-    (if real
-      (x862-immediate seg vreg xfer (float real 0.0d0))
+                       (cadr form)))))
+         (dconst (and real (ignore-errors (float real 0.0d0)))))
+    (if dconst
+      (x862-immediate seg vreg xfer dconst)
       (if (x862-form-typep arg 'single-float)
         (x862-use-operator (%nx1-operator %single-to-double)
                            seg
@@ -9164,9 +9165,10 @@
                               (eq (acode-operator form)
                                   (%nx1-operator immediate))
                               (typep (cadr form) 'real))
-                       (cadr form))))))
-    (if real
-      (x862-immediate seg vreg xfer (float real 0.0f0))
+                       (cadr form)))))
+         (sconst (and real (ignore-errors (float real 0.0f0)))))
+    (if sconst
+      (x862-immediate seg vreg xfer sconst)
       (if (x862-form-typep arg 'double-float)
         (x862-use-operator (%nx1-operator %double-to-single)
                            seg
