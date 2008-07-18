@@ -49,6 +49,9 @@
 				       (1<<fulltag_symbol)  | \
 				       (1<<fulltag_function)))
 #else
+#define is_node_fulltag(f)  ((1<<(f))&((1<<fulltag_cons) | \
+				       (1<<fulltag_misc) | \
+				       (1<<fulltag_tra)))
 #endif
 #endif
 
@@ -99,7 +102,7 @@ typedef unsigned char qnode;
 #define gc_area_dnode(w)  area_dnode(w,GCarealow)
 #define gc_dynamic_area_dnode(w) area_dnode(w,GCareadynamiclow)
 
-#ifdef PPC64
+#if defined(PPC64) || defined(X8632)
 #define forward_marker subtag_forward_marker
 #else
 #define forward_marker fulltag_nil
@@ -197,7 +200,11 @@ weak_process_fun markhtabvs;
 
 void mark_root(LispObj);
 void rmark(LispObj);
+#ifdef X8632
+void mark_xp(ExceptionInformation *, natural);
+#else
 void mark_xp(ExceptionInformation *);
+#endif
 LispObj dnode_forwarding_address(natural, int);
 LispObj locative_forwarding_address(LispObj);
 void check_refmap_consistency(LispObj *, LispObj *, bitvector);
