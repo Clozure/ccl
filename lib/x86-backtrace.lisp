@@ -37,7 +37,7 @@
   (dpb (ldb (byte 2 14) mask) (byte 2 2) (ldb (byte 2 11) mask)))
 
 (defun xcf-p (p)
-  (eql 0 (%fixnum-ref p x8664::lisp-frame.return-address)))
+  (eql 0 (%fixnum-ref p target::lisp-frame.return-address)))
 
 (defun %current-xcf ()
   (do* ((q (%get-frame-ptr) (%%frame-backlink q)))
@@ -47,21 +47,23 @@
 
 ;;; Try to determine the program counter value, relative to an xcf's nominal function.
 (defun pc-from-xcf (xcf)
-  (let* ((nominal-function (%fixnum-ref xcf x8664::xcf.nominal-function))
-         (containing-object (%fixnum-ref xcf x8664::xcf.containing-object)))
+  (let* ((nominal-function (%fixnum-ref xcf target::xcf.nominal-function))
+         (containing-object (%fixnum-ref xcf target::xcf.containing-object)))
     (when (typep nominal-function 'function)
       (if (eq containing-object (function-to-function-vector nominal-function))
-        (- (%fixnum-ref xcf x8664::xcf.relative-pc)
-           x8664::tag-function)
-        (let* ((tra (%fixnum-ref xcf x8664::xcf.ra0)))
-          (if (and (= (lisptag tra) x8664::tag-tra)
+        (- (%fixnum-ref xcf target::xcf.relative-pc)
+	   #+x8632-target x8632::fulltag-misc
+	   #+x8664-target x8664::tag-function)
+        (let* ((tra (%fixnum-ref xcf target::xcf.ra0)))
+          (if (and #+x8664-target (= (lisptag tra) x8664::tag-tra)
+		   #+x8632-target (= (fulltag tra) x8632::fulltag-tra)
                    (eq nominal-function (%return-address-function tra)))
             (%return-address-offset tra)))))))
             
 (defun cfp-lfun (p)
   (if (xcf-p p)
     (values
-     (%fixnum-ref p x8664::xcf.nominal-function)
+     (%fixnum-ref p target::xcf.nominal-function)
      (pc-from-xcf p))
     (%cfp-lfun p)))
 
@@ -227,9 +229,9 @@
 (defun vsp-limits (frame context)
   (let* ((parent (parent-frame frame context)))
     (if (xcf-p frame)
-      (values (+ frame (ash x8664::xcf.size (- x8664::word-shift)))
+      (values (+ frame (ash target::xcf.size (- target::word-shift)))
               parent)
-      (let* ((tra (%fixnum-ref frame x8664::lisp-frame.return-address)))
+      (let* ((tra (%fixnum-ref frame target::lisp-frame.return-address)))
         (values (+ frame 2 (if (eq tra (%get-kernel-global ret1valaddr)) 1 0))
                 parent)))))
 
@@ -239,7 +241,11 @@
          (last-catch nil))
     (loop
       (unless catch (return last-catch))
-      (let ((catch-fp (uvref catch target::catch-frame.rbp-cell)))
+      (let ((catch-fp (uvref catch
+			     #+x8632-target
+			     x8632::catch-frame.ebp-cell
+			     #+x8664-target
+			     x8664::catch-frame.rbp-cell)))
         (when (%stack< fp catch-fp context) (return last-catch))
         (setq last-catch catch
               catch (next-catch catch))))))
