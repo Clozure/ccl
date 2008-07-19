@@ -184,7 +184,8 @@
 
               (when restp
                 (push (if lexprp '&lexpr '&rest) res)
-                (push (if (> idx 0) (elt map (decf idx)) 'the-rest) res))                  (when nkeys
+                (push (if (> idx 0) (elt map (decf idx)) 'the-rest) res))
+	      (when nkeys
                 (push '&key res)
                 (let ((keyvect (lfun-keyvect lfun)))
                   (dotimes (i (length keyvect))
@@ -218,8 +219,9 @@
                   (dotimes (x (the fixnum nopt))
                     (opt (if (> idx 0) (elt map (decf idx)) (make-arg "OPT" x)))))
                 (when (or restp lexprp)
-                  (setq rest (if (> idx 0) (elt map (decf idx)) 'the-rest)))                (when nkeys
-                                                                                              (dotimes (i (the fixnum nkeys))
+                  (setq rest (if (> idx 0) (elt map (decf idx)) 'the-rest)))
+                (when nkeys
+		  (dotimes (i (the fixnum nkeys))
                     (keys (if (> idx 0) (elt map (decf idx)) (make-arg "KEY" i)))))))))
         (values (not (null map)) (req) (opt) rest (keys))))))
               
