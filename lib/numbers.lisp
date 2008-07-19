@@ -694,7 +694,7 @@
     (if (typep x 'double-float)
       (%double-float-sinh! x (%make-dfloat))
       #+32-bit-target
-      (ppc32::with-stack-short-floats ((sx x))
+      (target::with-stack-short-floats ((sx x))
 	(%single-float-sinh! sx (%make-sfloat)))
       #+64-bit-target
         (%single-float-sinh (%short-float x)))))
@@ -707,7 +707,7 @@
     (if (typep x 'double-float)
       (%double-float-cosh! x (%make-dfloat))
       #+32-bit-target
-      (ppc32::with-stack-short-floats ((sx x))
+      (target::with-stack-short-floats ((sx x))
 	(%single-float-cosh! sx (%make-sfloat)))
       #+64-bit-target
       (%single-float-cosh (%short-float x)))))
@@ -719,7 +719,7 @@
     (if (typep x 'double-float)
       (%double-float-tanh! x (%make-dfloat))
       #+32-bit-target
-      (ppc32::with-stack-short-floats ((sx x))
+      (target::with-stack-short-floats ((sx x))
 	(%single-float-tanh! sx (%make-sfloat)))
       #+64-bit-target
       (%single-float-tanh (%short-float x)))))
@@ -731,7 +731,7 @@
     (if (typep x 'double-float)
       (%double-float-asinh! x (%make-dfloat))
       #+32-bit-target
-      (ppc32::with-stack-short-floats ((sx x))
+      (target::with-stack-short-floats ((sx x))
 	(%single-float-asinh! sx (%make-sfloat)))
       #+64-bit-target
       (%single-float-asinh (%short-float x)))))
@@ -742,7 +742,7 @@
     (if (typep x 'double-float)
       (%double-float-acosh! x (%make-dfloat))
       #+32-bit-target
-      (ppc32::with-stack-short-floats ((sx x))
+      (target::with-stack-short-floats ((sx x))
 	(%single-float-acosh! sx (%make-sfloat)))
       #+64-bit-target
       (%single-float-acosh (%short-float x)))
