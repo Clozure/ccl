@@ -474,6 +474,12 @@ return a fixnum representation of that address, else return NIL."
 			     :address))
       (unless (%null-ptr-p addr)	; No function can have address 0
 	(or (macptr->fixnum addr) (%inc-ptr addr 0))))
+    #+x8632-target
+    (let* ((addr (ff-call (%kernel-import target::kernel-import-FindSymbol)
+			  :address handle
+			  :address n
+			  :unsigned-fullword)))
+      (unless (eql 0 addr) addr))
     #+x8664-target
     (let* ((addr (ff-call (%kernel-import target::kernel-import-FindSymbol)
                           :address handle
