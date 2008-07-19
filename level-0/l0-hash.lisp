@@ -225,9 +225,9 @@
   (let* ((typecode (typecode key)))
     (declare (fixnum typecode))
     (or (= typecode target::subtag-macptr)
-        #+ppc32-target
-        (and (>= typecode ppc32::min-numeric-subtag)
-             (<= typecode ppc32::max-numeric-subtag))
+        #+(or ppc32-target x8632-target)
+        (and (>= typecode target::min-numeric-subtag)
+             (<= typecode target::max-numeric-subtag))
         #+64-bit-target
         (or (= typecode target::subtag-bignum)
             (= typecode target::subtag-double-float)
@@ -1525,7 +1525,7 @@ before doing so.")
         (if ap (setq addressp t)))
       (when (<= (decf limit) 0)
         (setq hash (the fixnum (+ (the fixnum (rotate-hash-code hash))
-                                  #.(mixup-hash-code 11))))
+                                  (the fixnum (mixup-hash-code 11)))))
         (return)))
     (values hash addressp)))
 
@@ -1557,15 +1557,15 @@ before doing so.")
           (if ap (setq addressp t)))
         (when (<= (decf limit) 0)
           (setq hash (the fixnum (+ (the fixnum (rotate-hash-code hash))
-                                    #.(mixup-hash-code 11))))
+                                    (the fixnum (mixup-hash-code 11)))))
           (return))
         (incf offset))
       (values hash addressp))))
 
 (defun %%equalphash-aux (limit key)
   (if (<= limit 0) 
-    #.(mixup-hash-code 11)
-    (if (null key) #.(mixup-hash-code 17)
+    (mixup-hash-code 11)
+    (if (null key) (mixup-hash-code 17)
         (cond ((consp key)
                (let ((hash 0)
                      address-p)
@@ -1616,7 +1616,7 @@ before doing so.")
 
 (defun sxhash (s-expr)
   "Computes a hash code for S-EXPR and returns it as an integer."
-  (logand (sxhash-aux s-expr 7 17) most-positive-fixnum))
+  (logand (sxhash-aux s-expr 7 17) target::target-most-positive-fixnum))
 
 (defun sxhash-aux (expr counter key)
   (declare (fixnum counter))
@@ -1637,12 +1637,12 @@ before doing so.")
 
 
 
-#+ppc32-target
+#+(or ppc32-target x8632-target)
 (defun immediate-p (thing)
   (let* ((tag (lisptag thing)))
     (declare (fixnum tag))
-    (or (= tag ppc32::tag-fixnum)
-        (= tag ppc32::tag-imm))))
+    (or (= tag target::tag-fixnum)
+        (= tag target::tag-imm))))
 
 #+ppc64-target
 (defun immediate-p (thing)
