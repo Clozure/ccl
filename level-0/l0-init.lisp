@@ -51,6 +51,8 @@
     #+ppc32-target :ppc32-host
     #+ppc64-target :ppc64-target
     #+ppc64-target :ppc64-host
+    #+x8632-target :x8632-target
+    #+x8632-target :x8632-host
     #+x8664-target :x86-64
     #+x8664-target :x86_64
     #+x86-target :x86-target
@@ -75,6 +77,8 @@
     #+darwin-target :darwin-host
     #+darwin-target :darwin-target
     #+darwinx86-target :darwinx86-target
+    #+darwinx8632-target :darwinx8632-target
+    #+darwinx8632-target :darwinx8632-host
     #+darwinx8664-target :darwinx8664-target
     #+darwinx8664-target :darwinx8664-host
     #+solaris-target :solaris-host
