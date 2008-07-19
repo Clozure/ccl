@@ -182,6 +182,17 @@ examples/cocoa/nib-loading/nib-loading.lisp -text
 examples/cocoa/ui-elements/HOWTO.html -text
 examples/cocoa/ui-elements/HOWTO_files/images/bosco.jpg -text
 examples/cocoa/ui-elements/HOWTO_files/stylesheets/styles.css -text
+level-0/X86/X8632/x8632-array.lisp -text
+level-0/X86/X8632/x8632-bignum.lisp -text
+level-0/X86/X8632/x8632-clos.lisp -text
+level-0/X86/X8632/x8632-def.lisp -text
+level-0/X86/X8632/x8632-float.lisp -text
+level-0/X86/X8632/x8632-hash.lisp -text
+level-0/X86/X8632/x8632-misc.lisp -text
+level-0/X86/X8632/x8632-numbers.lisp -text
+level-0/X86/X8632/x8632-pred.lisp -text
+level-0/X86/X8632/x8632-symbol.lisp -text
+level-0/X86/X8632/x8632-utils.lisp -text
 lib/ffi-darwinx8632.lisp -text
 lib/ffi-solarisx8664.lisp -text
 lib/late-clos.lisp -text
