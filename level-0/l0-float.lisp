@@ -343,7 +343,7 @@
          (let ((float (%make-dfloat)))
            (%copy-ptr-to-ivector f 0 float (* 4 target::double-float.value-cell) 8)
            float))
-        (t (error "Ilegal arg ~s to %copy-float" f))))
+        (t (error "Illegal arg ~s to %copy-float" f))))
 
 (defun float-precision (float)     ; not used - not in cltl2 index ?
   "Return a non-negative number of significant digits in its float argument.
