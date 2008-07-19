@@ -216,8 +216,8 @@
                     "many"
                     "few")))
 	(if too-many
-	  (format s "Too many arguments in call to ~s:~&~d arguments provided, at most ~d accepted. " fn scaled-nargs max)
-	  (format s "Too few arguments in call to ~s:~&~d arguments provided, at least ~d required. " fn  scaled-nargs min))))))
+	  (format s "Too many arguments in call to ~s:~&~d argument~:p provided, at most ~d accepted. " fn scaled-nargs max)
+	  (format s "Too few arguments in call to ~s:~&~d argument~:p provided, at least ~d required. " fn  scaled-nargs min))))))
 
 
 
