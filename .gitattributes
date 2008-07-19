@@ -51,6 +51,9 @@ cocoa-ide/preferences.lisp -text
 cocoa-ide/processes-window.lisp -text
 cocoa-ide/search-files.lisp -text
 cocoa-ide/start.lisp -text
+compiler/X86/X8632/x8632-arch.lisp -text
+compiler/X86/X8632/x8632-backend.lisp -text
+compiler/X86/X8632/x8632-vinsns.lisp -text
 compiler/acode-rewrite.lisp -text
 doc/ccl-documentation.html -text
 doc/doc-splitter.lisp -text
