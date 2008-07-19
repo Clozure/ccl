@@ -190,7 +190,7 @@ methods that are marked as being predefined signal continuable errors.")
 
 
 (defvar *compile-definitions* t
-  "When non-NIL and the evaluator's lexical environment contains no
+  "When non-NIL and the evaluator's lexical environment contains no
   lexical entities, causes FUNCTION and NFUNCTION forms to be compiled.")
 #|
 (defvar *fast-eval* ()
