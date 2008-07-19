@@ -83,6 +83,7 @@
                         (:darwinppc32 "ccl:darwin-headers;")
                         (:darwinppc64 "ccl:darwin-headers64;")
                         (:linuxppc64 "ccl:headers64;")
+			(:darwinx8632 "ccl:darwin-x86-headers;")
                         (:linuxx8664 "ccl:x86-headers64;")
                         (:darwinx8664 "ccl:darwin-x86-headers64;")
                         (:freebsdx8664 "ccl:freebsd-headers64;")
@@ -1763,7 +1764,12 @@ result-type-specifer is :VOID or NIL"
 
     (def-foreign-type-translator array (ele-type &rest dims)
       (when dims
-        (unless (typep (first dims) '(or index null))
+	;; cross-compiling kludge. replaces '(or index null)
+        (unless (typep (first dims) `(or
+				      ,(target-word-size-case
+					(32 '(integer 0 #.(expt 2 24)))
+					(64 '(integer 0 #.(expt 2 56))))
+				      null))
           (error "First dimension is not a non-negative fixnum or NIL: ~S"
                  (first dims)))
         (let ((loser (find-if-not #'(lambda (x) (typep x 'index))
