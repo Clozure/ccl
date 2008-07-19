@@ -1702,7 +1702,7 @@ to replace that class with ~s" name old-class new-class)
   (make-built-in-class 'integer (find-class 'rational))
   (defstatic *fixnum-class* (make-built-in-class 'fixnum (find-class 'integer)))
 
-  #+x8664-target
+  #+x86-target
   (defstatic *tagged-return-address-class* (make-built-in-class 'tagged-return-address))
   (make-built-in-class 'bignum (find-class 'integer))
   
@@ -1854,6 +1854,21 @@ to replace that class with ~s" name old-class new-class)
             (find-class 'bit-vector)
             *t-class*
             *t-class*))
+
+  #+x8632-target
+  (defparameter *ivector-vector-classes*
+    (vector (find-class 'short-float-vector)
+            (find-class 'unsigned-long-vector)
+            (find-class 'long-vector)
+            (find-class 'fixnum-vector)
+            (find-class 'base-string)
+            (find-class 'unsigned-byte-vector)
+            (find-class 'byte-vector)
+            *t-class*
+            (find-class 'unsigned-word-vector)
+            (find-class 'word-vector)
+            (find-class 'double-float-vector)
+            (find-class 'bit-vector)))
 
   #+x8664-target
   (progn
@@ -2088,6 +2103,16 @@ to replace that class with ~s" name old-class new-class)
                 (%svref v (+ slice ppc64::fulltag-imm-1)) *immediate-class*
                 (%svref v (+ slice ppc64::fulltag-imm-2)) *immediate-class*
                 (%svref v (+ slice ppc64::fulltag-imm-3)) *immediate-class*))
+        #+x8632-target
+        (do* ((slice 0 (+ 8 slice))
+	      (cons-fn #'(lambda (x) (if (null x) *null-class* *cons-class*))))
+             ((= slice 256))
+          (declare (type (unsigned-byte 8) slice))
+          (setf (%svref v (+ slice x8632::fulltag-even-fixnum)) *fixnum-class*
+                (%svref v (+ slice x8632::fulltag-odd-fixnum))  *fixnum-class*
+                (%svref v (+ slice x8632::fulltag-cons)) cons-fn
+                (%svref v (+ slice x8632::fulltag-tra)) *tagged-return-address-class*
+                (%svref v (+ slice x8632::fulltag-imm)) *immediate-class*))
         #+x8664-target
         (do* ((slice 0 (+ 16 slice)))
              ((= slice 256))
@@ -2107,7 +2132,7 @@ to replace that class with ~s" name old-class new-class)
           (map-subtag target::subtag-double-float double-float)
           (map-subtag target::subtag-single-float short-float)
           (map-subtag target::subtag-dead-macptr ivector)
-          #-x8664-target
+          #-x86-target
           (map-subtag target::subtag-code-vector code-vector)
           #+ppc32-target
           (map-subtag ppc32::subtag-creole-object creole-object)
@@ -2165,7 +2190,9 @@ to replace that class with ~s" name old-class new-class)
               #'(lambda (b) (basic-stream.class b)))
         (setf (%svref v target::subtag-instance)
               #'%class-of-instance)
-        (setf (%svref v #+ppc-target target::subtag-symbol #+x86-target target::tag-symbol)
+        (setf (%svref v #+ppc-target target::subtag-symbol
+		      #+x8632-target target::subtag-symbol
+		      #+x8664-target target::tag-symbol)
               #-ppc64-target
               #'(lambda (s) (if (eq (symbol-package s) *keyword-package*)
                               *keyword-class*
@@ -2180,7 +2207,8 @@ to replace that class with ~s" name old-class new-class)
         
         (setf (%svref v
                       #+ppc-target target::subtag-function
-                      #+x86-target target::tag-function) 
+                      #+x8632-target target::subtag-function
+                      #+x8664-target target::tag-function) 
               class-of-function-function)
         (setf (%svref v target::subtag-vectorH)
               #'(lambda (v)
@@ -2194,7 +2222,10 @@ to replace that class with ~s" name old-class new-class)
                               (ash (the fixnum (- subtype ppc32::min-cl-ivector-subtag))
                                    (- ppc32::ntagbits))
                               #+ppc64-target
-                              (ash (the fixnum (logand subtype #x7f)) (- ppc64::nlowtagbits)))
+                              (ash (the fixnum (logand subtype #x7f)) (- ppc64::nlowtagbits))
+			      #+x8632-target
+			      (ash (the fixnum (- subtype x8632::min-cl-ivector-subtag))
+				   (- x8632::ntagbits)))
                       #+x8664-target
                       (let* ((class (logand x8664::fulltagmask subtype))
                              (idx (ash subtype (- x8664::ntagbits))))
