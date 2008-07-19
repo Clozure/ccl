@@ -1,4 +1,4 @@
-%.html:%.xml $(XSLFILES)
+$(HTMLFILES): $(XMLFILES) $(XSLFILES)
 	$(XSLTPROC) \
 		--xinclude \
 		--stringparam root.filename $(basename $(@F)) \
