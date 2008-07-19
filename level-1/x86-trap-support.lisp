@@ -157,42 +157,71 @@
       0                                 ;r15
       )))
 
+#+darwinx8632-target
+(progn
+  (defconstant gp-regs-offset 0)
+  (defmacro xp-gp-regs (xp)
+    `(pref (pref ,xp :ucontext.uc_mcontext) :mcontext.ss))
+  (defun xp-mxcsr (xp)
+    (%get-unsigned-long (pref (pref xp :ucontext.uc_mcontext) :mcontext.fs) 32))
+  (defconstant flags-register-offset 9)
+  (defconstant eip-register-offset 10)
+  (defparameter *encoded-gpr-to-indexed-gpr*
+    #(0					;eax
+      2					;ecx
+      3					;edx
+      1					;ebx
+      7					;esp
+      6					;ebp
+      5					;esi
+      4					;edi
+      )))
+
 (defun indexed-gpr-lisp (xp igpr)
-  (%get-object (xp-gp-regs xp) (+ gp-regs-offset (ash igpr x8664::word-shift))))
+  (%get-object (xp-gp-regs xp) (+ gp-regs-offset (ash igpr target::word-shift))))
 (defun (setf indexed-gpr-lisp) (new xp igpr)
-  (%set-object (xp-gp-regs xp) (+ gp-regs-offset (ash igpr x8664::word-shift)) new))
+  (%set-object (xp-gp-regs xp) (+ gp-regs-offset (ash igpr target::word-shift)) new))
 (defun encoded-gpr-lisp (xp gpr)
   (indexed-gpr-lisp xp (aref *encoded-gpr-to-indexed-gpr* gpr)))
 (defun (setf encoded-gpr-lisp) (new xp gpr)
   (setf (indexed-gpr-lisp xp (aref *encoded-gpr-to-indexed-gpr* gpr)) new))
 (defun indexed-gpr-integer (xp igpr)
-  (%get-signed-long-long (xp-gp-regs xp) (+ gp-regs-offset (ash igpr x8664::word-shift))))
+  #+x8664-target
+  (%get-signed-long-long (xp-gp-regs xp) (+ gp-regs-offset (ash igpr x8664::word-shift)))
+  #+x8632-target
+  (%get-signed-long (xp-gp-regs xp) (+ gp-regs-offset (ash igpr x8632::word-shift))))
 (defun (setf indexed-gpr-integer) (new xp igpr)
   (setf
+   #+x8664-target
    (%get-signed-long-long (xp-gp-regs xp) (+ gp-regs-offset (ash igpr x8664::word-shift)))
+   #+x8632-target
+   (%get-signed-long (xp-gp-regs xp) (+ gp-regs-offset (ash igpr x8632::word-shift)))
    new))
 (defun encoded-gpr-integer (xp gpr)
   (indexed-gpr-integer xp (aref *encoded-gpr-to-indexed-gpr* gpr)))
 (defun (setf encoded-gpr-integer) (new xp gpr)
   (setf (indexed-gpr-integer xp (aref *encoded-gpr-to-indexed-gpr* gpr)) new))
 (defun indexed-gpr-macptr (xp igpr)
-  (%get-ptr (xp-gp-regs xp) (+ gp-regs-offset (ash igpr x8664::word-shift))))
+  (%get-ptr (xp-gp-regs xp) (+ gp-regs-offset (ash igpr target::word-shift))))
 (defun (setf indexed-gpr-macptr) (new xp igpr)
-  (setf (%get-ptr (xp-gp-regs xp) (+ gp-regs-offset (ash igpr x8664::word-shift))) new))
+  (setf (%get-ptr (xp-gp-regs xp) (+ gp-regs-offset (ash igpr target::word-shift))) new))
 (defun indexed-gpr-macptr (xp igpr)
-  (%get-ptr (xp-gp-regs xp) (+ gp-regs-offset (ash igpr x8664::word-shift))))
+  (%get-ptr (xp-gp-regs xp) (+ gp-regs-offset (ash igpr target::word-shift))))
 (defun encoded-gpr-macptr (xp gpr)
   (indexed-gpr-macptr xp (aref *encoded-gpr-to-indexed-gpr* gpr)))
 (defun (setf encoded-gpr-macptr) (new xp gpr)
   (setf (indexed-gpr-macptr xp (aref *encoded-gpr-to-indexed-gpr* gpr)) new))
 (defun xp-flags-register (xp)
-  (%get-signed-long-long (xp-gp-regs xp) (+ gp-regs-offset (ash flags-register-offset x8664::fixnumshift))))
+  #+x8664-target
+  (%get-signed-long-long (xp-gp-regs xp) (+ gp-regs-offset (ash flags-register-offset x8664::fixnumshift)))
+  #+x8632-target
+  (%get-signed-long (xp-gp-regs xp) (+ gp-regs-offset (ash flags-register-offset x8632::fixnumshift))))
   
 
 
 (defun %get-xcf-byte (xcf-ptr delta)
-  (let* ((containing-object (%get-object xcf-ptr x8664::xcf.containing-object))
-         (byte-offset (%get-object xcf-ptr x8664::xcf.relative-pc)))
+  (let* ((containing-object (%get-object xcf-ptr target::xcf.containing-object))
+         (byte-offset (%get-object xcf-ptr target::xcf.relative-pc)))
     (if containing-object
       (locally (declare (optimize (speed 3) (safety 0))
                         (type (simple-array (unsigned-byte 8) (*)) containing-object))
