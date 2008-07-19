@@ -251,7 +251,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
 ;; *print-string-length*
 ;; for things like *print-level* which must [no longer] be integers > 0
 (defun get-*print-frob* (symbol
-                         &optional (nil-means most-positive-fixnum)
+                         &optional (nil-means target::target-most-positive-fixnum)
                          (t-means nil))
   (declare (type symbol symbol))
   (let ((value (symbol-value symbol)))
@@ -266,7 +266,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
     (cond ((null value)
            nil-means)
           ((and (integerp value)) ; (> value 0))
-           (min (max value -1) value most-positive-fixnum))
+           (min (max value -1) value target::target-most-positive-fixnum))
           ((and t-means (eq value 't))
            t-means)
           (t
@@ -399,7 +399,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
 (defun backtranslate-level (level)
   (let ((print-level (get-*print-frob* '*print-level*)))
     (if (not (and level print-level))
-      most-positive-fixnum
+      target::target-most-positive-fixnum
       (if (> level print-level)
         ;; wtf!
         1
@@ -1254,7 +1254,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
                             (%i<= length (get-*print-frob* 
                                           '*print-simple-vector*
                                           0
-                                          most-positive-fixnum))))
+                                          target::target-most-positive-fixnum))))
                (pp-start-block stream "#(")
                (do ((i 0 (%i+ i 1))
                     (l print-length (%i- l 1)))
@@ -1696,7 +1696,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
           (if *current-level* 
             (if *print-level*
               (- *print-level* *current-level*)
-              most-positive-fixnum)
+              target::target-most-positive-fixnum)
             (%current-write-level% stream t))))
   (cond 
    ((< levels-left 0)
@@ -1704,7 +1704,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
     (stream-write-entire-string stream "#"))
    (t (write-internal stream
                       object 
-                      (min levels-left most-positive-fixnum)
+                      (min levels-left target::target-most-positive-fixnum)
                       nil)))
   object)
 

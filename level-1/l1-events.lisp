@@ -176,7 +176,7 @@
     (let ((task (find-named-periodic-task name)))
       (when task
         (if (setq *%periodic-tasks%* (delete task *%periodic-tasks%*))
-          (let* ((min-ticks most-positive-fixnum))
+          (let* ((min-ticks target::target-most-positive-fixnum))
             (dolist (other *%periodic-tasks%*
                      (set-periodic-task-interval (/ min-ticks (float *ticks-per-second*))))
               (let* ((other-ticks
