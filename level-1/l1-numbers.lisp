@@ -473,22 +473,13 @@
     (%df-check-exception-2 'expt b e (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+(and ppc32-target (not darwinppc-target))
+#+32-bit-target
 (defun %single-float-expt! (b e result)
   (declare (single-float b e result))
-  (ppc32::with-stack-short-floats ((temp))
+  (target::with-stack-short-floats ((temp))
     (%setf-short-float temp (#_powf b e))
     (%sf-check-exception-2 'expt b e (%ffi-exception-status))
     (%setf-short-float result TEMP)))
-
-#+(and ppc32-target darwinppc-target)
-(defun %single-float-expt! (b e result)
-  (declare (single-float b e result))
-  (with-stack-double-floats ((b2 b)
-			     (e2 e)
-			     (result2))
-    (%double-float-expt! b2 e2 result2)
-    (%double-float->short-float result2 result)))
 
 #+64-bit-target
 (defun %single-float-expt (b e)
@@ -504,21 +495,13 @@
     (%df-check-exception-1 'sin n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+(and ppc32-target (not darwinppc-target))
+#+32-bit-target
 (defun %single-float-sin! (n result)
   (declare (single-float n result))
-  (ppc32::with-stack-short-floats ((temp))
+  (target::with-stack-short-floats ((temp))
     (%setf-short-float TEMP (#_sinf n))
     (%sf-check-exception-1 'sin n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
-
-#+(and ppc32-target darwinppc-target)
-(defun %single-float-sin! (n result)
-  (declare (single-float n result))
-  (with-stack-double-floats ((n2 n)
-			     (result2))
-    (%double-float-sin! n2 result2)
-    (%double-float->short-float result2 result)))
 
 #+64-bit-target
 (defun %single-float-sin (n)
@@ -534,21 +517,13 @@
     (%df-check-exception-1 'cos n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+(and ppc32-target (not darwinppc-target))
+#+32-bit-target
 (defun %single-float-cos! (n result)
   (declare (single-float n result))
-  (ppc32::with-stack-short-floats ((temp))
+  (target::with-stack-short-floats ((temp))
     (%setf-short-float TEMP (#_cosf n))
     (%sf-check-exception-1 'cos n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
-
-#+(and ppc32-target darwinppc-target)
-(defun %single-float-cos! (n result)
-  (declare (single-float n result))
-  (with-stack-double-floats ((n2 n)
-			     (result2))
-    (%double-float-cos! n2 result2)
-    (%double-float->short-float result2 result)))
 
 #+64-bit-target
 (defun %single-float-cos (n)
@@ -564,21 +539,13 @@
     (%df-check-exception-1 'acos n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+(and ppc32-target (not darwinppc-target))
+#+32-bit-target
 (defun %single-float-acos! (n result)
   (declare (single-float n result))
-  (ppc32::with-stack-short-floats ((temp))
+  (target::with-stack-short-floats ((temp))
     (%setf-short-float TEMP (#_acosf n))
     (%sf-check-exception-1 'acos n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
-
-#+(and ppc32-target darwinppc-target)
-(defun %single-float-acos! (n result)
-  (declare (single-float n result))
-  (with-stack-double-floats ((n2 n)
-			     (result2))
-    (%double-float-acos! n2 result2)
-    (%double-float->short-float result2 result)))
 
 #+64-bit-target
 (defun %single-float-acos (n)
@@ -594,21 +561,13 @@
     (%df-check-exception-1 'asin n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+(and ppc32-target (not darwinppc-target))
+#+32-bit-target
 (defun %single-float-asin! (n result)
   (declare (single-float n result))
-  (ppc32::with-stack-short-floats ((temp))
+  (target::with-stack-short-floats ((temp))
     (%setf-short-float TEMP (#_asinf n))
     (%sf-check-exception-1 'asin n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
-
-#+(and ppc32-target darwinppc-target) 
-(defun %single-float-asin! (n result)
-  (declare (single-float n result))
-  (with-stack-double-floats ((n2 n)
-			     (result2))
-    (%double-float-asin! n2 result2)
-    (%double-float->short-float result2 result)))
 
 #+64-bit-target
 (defun %single-float-asin (n)
@@ -624,21 +583,13 @@
     (%df-check-exception-1 'cosh n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+(and ppc32-target (not darwinppc-target))
+#+32-bit-target
 (defun %single-float-cosh! (n result)
   (declare (single-float n result))
-  (ppc32::with-stack-short-floats ((temp))
+  (target::with-stack-short-floats ((temp))
     (%setf-short-float TEMP (#_coshf n))
     (%sf-check-exception-1 'cosh n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
-
-#+(and ppc32-target darwinppc-target)
-(defun %single-float-cosh! (n result)
-  (declare (single-float n result))
-  (with-stack-double-floats ((n2 n)
-			     (result2))
-    (%double-float-cosh! n2 result2)
-    (%double-float->short-float result2 result)))
 
 #+64-bit-target
 (defun %single-float-cosh (n)
@@ -647,7 +598,6 @@
     (%sf-check-exception-1 'cosh n (%ffi-exception-status))
     result))
 
-
 (defun %double-float-log! (n result)
   (declare (double-float n result))
   (with-stack-double-floats ((temp))
@@ -655,24 +605,13 @@
     (%df-check-exception-1 'log n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+ppc32-target
-(progn
-#-darwinppc-target
+#+32-bit-target
 (defun %single-float-log! (n result)
   (declare (single-float n result))
-  (ppc32::with-stack-short-floats ((temp))
+  (target::with-stack-short-floats ((temp))
     (%setf-short-float TEMP (#_logf n))
     (%sf-check-exception-1 'log n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
-
-#+darwinppc-target
-(defun %single-float-log! (n result)
-  (declare (single-float n result))
-  (with-stack-double-floats ((n2 n)
-			     (result2))
-    (%double-float-log! n2 result2)
-    (%double-float->short-float result2 result)))
-)
 
 #+64-bit-target
 (defun %single-float-log (n)
@@ -687,21 +626,13 @@
     (%df-check-exception-1 'tan n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+(and ppc32-target (not darwinppc-target))
+#+32-bit-target
 (defun %single-float-tan! (n result)
   (declare (single-float n result))
-  (ppc32::with-stack-short-floats ((temp))
+  (target::with-stack-short-floats ((temp))
     (%setf-short-float TEMP (#_tanf n))
     (%sf-check-exception-1 'tan n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
-
-#+(and ppc32-target darwinppc-target)
-(defun %single-float-tan! (n result)
-  (declare (single-float n result))
-  (with-stack-double-floats ((n2 n)
-			     (result2))
-    (%double-float-tan! n2 result2)
-    (%double-float->short-float result2 result)))
 
 #+64-bit-target
 (defun %single-float-tan (n)
@@ -718,21 +649,13 @@
     (%setf-double-float result TEMP)))
 
 
-#+(and ppc32-target (not darwinppc-target))
+#+32-bit-target
 (defun %single-float-atan! (n result)
   (declare (single-float n result))
-  (ppc32::with-stack-short-floats ((temp))
+  (target::with-stack-short-floats ((temp))
     (%setf-short-float TEMP (#_atanf n))
     (%sf-check-exception-1 'atan n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
-
-#+(and ppc32-target darwinppc-target)
-(defun %single-float-atan! (n result)
-  (declare (single-float n result))
-  (with-stack-double-floats ((n2 n)
-			     (result2))
-    (%double-float-atan! n2 result2)
-    (%double-float->short-float result2 result)))
 
 #+64-bit-target
 (defun %single-float-atan (n)
@@ -748,22 +671,13 @@
     (%df-check-exception-2 'atan2 x y (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+(and ppc32-target (not darwinppc-target))
+#+32-bit-target
 (defun %single-float-atan2! (x y result)
   (declare (single-float x y result))
-  (ppc32::with-stack-short-floats ((temp))
+  (target::with-stack-short-floats ((temp))
     (%setf-short-float TEMP (#_atan2f x y))
     (%sf-check-exception-2 'atan2 x y (%ffi-exception-status))
     (%setf-short-float result TEMP)))
-
-#+(and ppc32-target darwinppc-target)
-(defun %single-float-atan2! (x y result)
-  (declare (single-float x y result))
-  (with-stack-double-floats ((x2 x)
-			     (y2 y)
-			     (result2))
-    (%double-float-atan2! x2 y2 result2)
-    (%double-float->short-float result2 result)))
 
 #+64-bit-target
 (defun %single-float-atan2 (x y)
@@ -779,21 +693,13 @@
     (%df-check-exception-1 'exp n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+(and ppc32-target (not darwinppc-target))
+#+32-bit-target
 (defun %single-float-exp! (n result)
   (declare (single-float n result))
-  (ppc32::with-stack-short-floats ((temp))
+  (target::with-stack-short-floats ((temp))
     (%setf-short-float TEMP (#_expf n))
     (%sf-check-exception-1 'exp n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
-
-#+(and ppc32-target darwinppc-target)
-(defun %single-float-exp! (n result)
-  (declare (single-float n result))
-  (with-stack-double-floats ((n2 n)
-			     (result2))
-    (%double-float-exp! n2 result2)
-    (%double-float->short-float result2 result)))
 
 #+64-bit-target
 (defun %single-float-exp (n)
@@ -809,21 +715,13 @@
     (%df-check-exception-1 'sinh n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+(and ppc32-target (not darwinppc-target))
+#+32-bit-target
 (defun %single-float-sinh! (n result)
   (declare (single-float n result))
-  (ppc32::with-stack-short-floats ((temp))
+  (target::with-stack-short-floats ((temp))
     (%setf-short-float TEMP (#_sinhf n))
     (%sf-check-exception-1 'sinh n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
-
-#+(and darwinppc-target ppc32-target)
-(defun %single-float-sinh! (n result)
-  (declare (single-float n result))
-  (with-stack-double-floats ((n2 n)
-			     (result2))
-    (%double-float-sinh! n2 result2)
-    (%double-float->short-float result2 result)))
 
 #+64-bit-target
 (defun %single-float-sinh (n)
@@ -832,8 +730,6 @@
     (%sf-check-exception-1 'sinh n (%ffi-exception-status))
     result))
 
-
-
 (defun %double-float-tanh! (n result)
   (declare (double-float n result))
   (with-stack-double-floats ((temp))
@@ -841,22 +737,13 @@
     (%df-check-exception-1 'tanh n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-
-#+(and ppc32-target (not darwinppc-target))
+#+32-bit-target
 (defun %single-float-tanh! (n result)
   (declare (single-float n result))
-  (ppc32::with-stack-short-floats ((temp))
+  (target::with-stack-short-floats ((temp))
     (%setf-short-float TEMP (#_tanhf n))
     (%sf-check-exception-1 'tanh n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
-
-#+(and ppc32-target darwinppc-target)
-(defun %single-float-tanh! (n result)
-  (declare (single-float n result))
-  (with-stack-double-floats ((n2 n)
-			     (result2))
-    (%double-float-tanh! n2 result2)
-    (%double-float->short-float result2 result)))
 
 #+64-bit-target
 (defun %single-float-tanh (n)
@@ -873,21 +760,13 @@
     (%setf-double-float result TEMP)))
 
 
-#+(and ppc32-target (not darwinppc-target))
+#+32-bit-target
 (defun %single-float-asinh! (n result)
   (declare (single-float n result))
-  (ppc32::with-stack-short-floats ((temp))
+  (target::with-stack-short-floats ((temp))
     (%setf-short-float TEMP (#_asinhf n))
     (%sf-check-exception-1 'asinh n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
-
-#+(and ppc32-target darwinppc-target)
-(defun %single-float-asinh! (n result)
-  (declare (single-float n result))
-  (with-stack-double-floats ((n2 n)
-			     (result2))
-    (%double-float-asinh! n2 result2)
-    (%double-float->short-float result2 result)))
 
 #+64-bit-target
 (defun %single-float-asinh (n)
@@ -903,21 +782,13 @@
     (%df-check-exception-1 'acosh n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+(and ppc32-target (not darwinppc-target))
+#+32-bit-target
 (defun %single-float-acosh! (n result)
   (declare (single-float n result))
-  (ppc32::with-stack-short-floats ((temp))
+  (target::with-stack-short-floats ((temp))
     (%setf-short-float TEMP (#_acoshf n))
     (%sf-check-exception-1 'acosh n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
-
-#+(and ppc32-target darwinppc-target)
-(defun %single-float-acosh! (n result)
-  (declare (single-float n result))
-  (with-stack-double-floats ((n2 n)
-			     (result2))
-    (%double-float-acosh! n2 result2)
-    (%double-float->short-float result2 result)))
 
 #+64-bit-target
 (defun %single-float-acosh (n)
@@ -933,21 +804,13 @@
     (%df-check-exception-1 'atanh n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+(and ppc32-target (not darwinppc-target))
+#+32-bit-target
 (defun %single-float-atanh! (n result)
   (declare (single-float n result)) 
-  (ppc32::with-stack-short-floats ((temp))
+  (target::with-stack-short-floats ((temp))
     (%setf-short-float TEMP (#_atanhf n))
     (%sf-check-exception-1 'atanh n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
-
-#+(and ppc32-target darwinppc-target)
-(defun %single-float-atanh! (n result)
-  (declare (single-float n result))
-  (with-stack-double-floats ((n2 n)
-			     (result2))
-    (%double-float-atanh! n2 result2)
-    (%double-float->short-float result2 result)))
 
 #+64-bit-target
 (defun %single-float-atanh (n)
