@@ -679,7 +679,9 @@
 		    (res (%allocate-bignum len-res)) )
 	       (declare (bignum-index len-a len-b len-res))
 	       (if (and (>= len-a 16)
-			(>= len-b 16))
+			(>= len-b 16)
+			#+x8632-target
+			nil)
 		 (let* ((ubytes (* len-a 4))
 			(vbytes (* len-b 4))
 			(rbytes (* len-res 4)))
@@ -1993,13 +1995,13 @@
                                (let* ((hi-u (%bignum-ref-hi u 0)))
                                  (declare (fixnum hi-u))
                                  (= hi-u (the fixnum
-                                           (logand hi-u (ash most-positive-fixnum -16)))))
+                                           (logand hi-u (ash target::target-most-positive-fixnum -16)))))
                                (uvref u 0)))
                    (fix-v (and (= v-len 1)
                                (let* ((hi-v (%bignum-ref-hi v 0)))
                                  (declare (fixnum hi-v))
                                  (= hi-v (the fixnum
-                                           (logand hi-v (ash most-positive-fixnum -16)))))
+                                           (logand hi-v (ash target::target-most-positive-fixnum -16)))))
                                (uvref v 0))))
               (if fix-v
                 (if fix-u
