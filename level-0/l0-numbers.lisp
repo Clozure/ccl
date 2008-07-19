@@ -466,7 +466,7 @@
   (declare (short-float sfloat) (fixnum int))
   (if (and (eq int 0)(= sfloat 0.0s0))
     0
-    (#+32-bit-target ppc32::with-stack-short-floats #+32-bit-target ((s1 int))
+    (#+32-bit-target target::with-stack-short-floats #+32-bit-target ((s1 int))
      #-32-bit-target let* #-32-bit-target ((s1 (%int-to-sfloat int)))
                      (locally
                          (declare (short-float s1))
@@ -1067,8 +1067,8 @@
              (values res 
                      (%double-float--2 fnum (%double-float*-2! (%double-float res f2) ,divisor f2))))))
        (truncate-rat-sfloat (number divisor)
-         #+ppc32-target
-         `(ppc32::with-stack-short-floats ((fnum ,number)
+         #+32-bit-target
+         `(target::with-stack-short-floats ((fnum ,number)
                                            (f2))
            (let ((res (%unary-truncate (%short-float/-2! fnum ,divisor f2))))
              (values res 
@@ -1084,7 +1084,7 @@
          )
     (number-case number
       (fixnum
-       (if (eql number most-negative-fixnum)
+       (if (eql number target::target-most-negative-fixnum)
          (if (zerop divisor)
            (error 'division-by-zero :operation 'truncate :operands (list number divisor))
            (with-small-bignum-buffers ((bn number))
@@ -1102,7 +1102,7 @@
                     (values q (- number (* q divisor))))))))
       (bignum (number-case divisor
                 (fixnum (if (eq divisor 1) (values number 0)
-                          (if (eq divisor most-negative-fixnum);; << aargh
+                          (if (eq divisor target::target-most-negative-fixnum);; << aargh
                             (with-small-bignum-buffers ((bd divisor))
                               (bignum-truncate number bd))
                             (bignum-truncate-by-fixnum number divisor))))
@@ -1117,8 +1117,8 @@
                        (values res (- number res)))
                      (number-case divisor
                        (short-float
-                        #+ppc32-target
-                        (ppc32::with-stack-short-floats ((f2))
+                        #+32-bit-target
+                        (target::with-stack-short-floats ((f2))
                           (let ((res (%unary-truncate (%short-float/-2! number divisor f2))))
                             (values res 
                                     (%short-float--2
@@ -1133,8 +1133,8 @@
                                        (* (the short-float (%short-float res))
                                           (the short-float divisor))))))
                        ((fixnum bignum ratio)
-                        #+ppc32-target
-                        (ppc32::with-stack-short-floats ((fdiv divisor)
+                        #+32-bit-target
+                        (target::with-stack-short-floats ((fdiv divisor)
                                                          (f2))
                           (let ((res (%unary-truncate (%short-float/-2! number fdiv f2))))
                             (values res 
@@ -1192,8 +1192,8 @@
                                       (f2))
          (%unary-truncate (%double-float/-2! fnum ,divisor f2))))
      (truncate-rat-sfloat (number divisor)
-       #+ppc32-target
-       `(ppc32::with-stack-short-floats ((fnum ,number)
+       #+32-bit-target
+       `(target::with-stack-short-floats ((fnum ,number)
                                       (f2))
          (%unary-truncate (%short-float/-2! fnum ,divisor f2)))
        #+64-bit-target
@@ -1202,7 +1202,7 @@
                            (the short-float ,divisor))))))
     (number-case number
     (fixnum
-     (if (eql number most-negative-fixnum)
+     (if (eql number target::target-most-negative-fixnum)
        (if (zerop divisor)
          (error 'division-by-zero :operation 'truncate :operands (list number divisor))
          (with-small-bignum-buffers ((bn number))
@@ -1220,7 +1220,7 @@
                   q)))))
      (bignum (number-case divisor
                (fixnum (if (eq divisor 1) number
-                         (if (eq divisor most-negative-fixnum)
+                         (if (eq divisor target::target-most-negative-fixnum)
                            (with-small-bignum-buffers ((bd divisor))
                              (bignum-truncate number bd :no-rem))
                            (bignum-truncate-by-fixnum number divisor))))
@@ -1251,8 +1251,8 @@
                       RES)
                     (number-case divisor
                       ((fixnum bignum ratio)
-                       #+ppc32-target
-                       (ppc32::with-stack-short-floats ((fdiv divisor)
+                       #+32-bit-target
+                       (target::with-stack-short-floats ((fdiv divisor)
                                                  (f2))
                          (let ((res (%unary-truncate (%short-float/-2! number fdiv f2))))
                            RES))
@@ -1260,8 +1260,8 @@
                        (%unary-truncate (/ (the short-float number)
                                            (the short-float (%short-float divisor)))))
                       (short-float
-                       #+ppc32-target
-                       (ppc32::with-stack-short-floats ((ddiv divisor)
+                       #+32-bit-target
+                       (target::with-stack-short-floats ((ddiv divisor)
                                                       (f2))
                          (%unary-truncate (%short-float/-2! number ddiv f2)))
                        #+64-bit-target
@@ -1473,7 +1473,7 @@
     (bignum
      (number-case divisor
        (fixnum
-        (if (eq divisor most-negative-fixnum)
+        (if (eq divisor target::target-most-negative-fixnum)
           (nth-value 1 (truncate number divisor))
           (bignum-truncate-by-fixnum-no-quo number divisor)))
        (bignum
@@ -1719,7 +1719,7 @@
                                     (primary-ip-interface-address)
                                     (mixup-hash-code
                                      (logand (get-internal-real-time)
-                                             (1- most-positive-fixnum))))))
+                                             (1- target::target-most-positive-fixnum))))))
 	 (high (ldb (byte 16 16) (if (zerop ticks) #x10000 ticks)))
 	 (low (ldb (byte 16 0) ticks)))
     (declare (fixnum high low))
@@ -1836,18 +1836,25 @@ What we do is use 2b and 2^n so we can do arithemetic mod 2^32 instead of
          (index 1))
     (declare (fixnum long-words index bits)
              (dynamic-extent dividend)
-             (type (simple-array (unsigned-byte 16) (*)) 16-bit-dividend)       ; lie
+             (type (simple-array (unsigned-byte 16) (*)) 16-bit-dividend) ;lie
              (optimize (speed 3) (safety 0)))
     (loop
-      ;; This had better inline due to the lie above, or it will error
-      (setf (aref 16-bit-dividend index) (%next-random-seed state))
-      (decf half-words)
-      (when (<= half-words 0) (return))
-      (setf (aref 16-bit-dividend (the fixnum (1- index)))
-            (%next-random-seed state))
-      (decf half-words)
-      (when (<= half-words 0) (return))
-      (incf index 2))
+       ;; This had better inline due to the lie above, or it will error
+       #+big-endian-target
+       (setf (aref 16-bit-dividend index) (%next-random-seed state))
+       #+little-endian-target
+       (setf (aref 16-bit-dividend (the fixnum (1- index)))
+	     (%next-random-seed state))
+       (decf half-words)
+       (when (<= half-words 0) (return))
+       #+big-endian-target
+       (setf (aref 16-bit-dividend (the fixnum (1- index)))
+	     (%next-random-seed state))
+       #+little-endian-target
+       (setf (aref 16-bit-dividend index) (%next-random-seed state))
+       (decf half-words)
+       (when (<= half-words 0) (return))
+       (incf index 2))
     ;; The bignum code expects normalized bignums
     (let* ((result (mod dividend number)))
       (if (eq dividend result)
@@ -1855,7 +1862,7 @@ What we do is use 2b and 2^n so we can do arithemetic mod 2^32 instead of
 	result))))
 
 (defun %float-random (number state)
-  (let ((ratio (gvector :ratio (random most-positive-fixnum state) most-positive-fixnum)))
+  (let ((ratio (gvector :ratio (random target::target-most-positive-fixnum state) target::target-most-positive-fixnum)))
     (declare (dynamic-extent ratio))
     (* number ratio)))
 
@@ -1869,7 +1876,7 @@ What we do is use 2b and 2^n so we can do arithemetic mod 2^32 instead of
     (let ((n (gensym)))
       `(let ((,n ,nexp))
          (if (minusp (the fixnum ,n))
-           (if (eq ,n most-negative-fixnum)
+           (if (eq ,n target::target-most-negative-fixnum)
              (- ,n)
              (the fixnum (- (the fixnum ,n))))
            ,n))))
@@ -1893,25 +1900,25 @@ What we do is use 2b and 2^n so we can do arithemetic mod 2^32 instead of
         (fixnum 
          (number-case n2
           (fixnum
-	   (if (eql n1 most-negative-fixnum)
-	     (if (eql n2 most-negative-fixnum)
-	       (- most-negative-fixnum)
-	       (bignum-fixnum-gcd (- most-negative-fixnum) (abs n2)))
-	     (if (eql n2 most-negative-fixnum)
-	       (bignum-fixnum-gcd (- most-negative-fixnum) (abs n1))
+	   (if (eql n1 target::target-most-negative-fixnum)
+	     (if (eql n2 target::target-most-negative-fixnum)
+	       (- target::target-most-negative-fixnum)
+	       (bignum-fixnum-gcd (- target::target-most-negative-fixnum) (abs n2)))
+	     (if (eql n2 target::target-most-negative-fixnum)
+	       (bignum-fixnum-gcd (- target::target-most-negative-fixnum) (abs n1))
 	       (locally
 		   (declare (optimize (speed 3) (safety 0))
 			    (fixnum n1 n2))
 		 (if (minusp n1)(setq n1 (the fixnum (- n1))))
 		 (if (minusp n2)(setq n2 (the fixnum (- n2))))
                (%fixnum-gcd n1 n2)))))
-           (bignum (if (eql n1 most-negative-fixnum)
-		     (%bignum-bignum-gcd n2 (- most-negative-fixnum))
+           (bignum (if (eql n1 target::target-most-negative-fixnum)
+		     (%bignum-bignum-gcd n2 (- target::target-most-negative-fixnum))
 		     (bignum-fixnum-gcd (bignum-abs n2)(fixnum-abs n1))))))
 	(bignum
 	 (number-case n2
 	   (fixnum
-            (if (eql n2 most-negative-fixnum)
+            (if (eql n2 target::target-most-negative-fixnum)
               (%bignum-bignum-gcd (bignum-abs n1)(fixnum-abs n2))
               (bignum-fixnum-gcd (bignum-abs n1)(fixnum-abs n2))))
 	   (bignum (%bignum-bignum-gcd n1 n2))))))))
