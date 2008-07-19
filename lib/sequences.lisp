@@ -168,16 +168,16 @@
 				   dest
 				   0
 				   (the fixnum (ash n 2))))
-	;; DOUBLE-FLOAT vectors have extra alignment padding on ppc32.
-	#+ppc32-target
-	(#.ppc32::subtag-double-float-vector
+	;; DOUBLE-FLOAT vectors have extra alignment padding on ppc32/x8632.
+	#+(or ppc32-target x8632-target)
+	(#.target::subtag-double-float-vector
 	 (%copy-ivector-to-ivector src
 				   (the fixnum (+ (the fixnum (ash start 3))
-						  (- ppc32::misc-dfloat-offset
-						     ppc32::misc-data-offset)))
+						  (- target::misc-dfloat-offset
+						     target::misc-data-offset)))
 				   dest
-				   (- ppc32::misc-dfloat-offset
-						     ppc32::misc-data-offset)
+				   (- target::misc-dfloat-offset
+						     target::misc-data-offset)
 				   (the fixnum (ash n 3))))
 	#+64-bit-target
 	((#.target::subtag-double-float-vector
@@ -545,7 +545,7 @@
 
 (defun some-xx-multi (caller at-end predicate first-seq sequences)
   (let* ((sequences (cons first-seq sequences))
-         (min-vector-length most-positive-fixnum)
+         (min-vector-length target::target-most-positive-fixnum)
          (arg-slice (make-list (list-length sequences)))
          (cur-slice arg-slice)
          (not-result (negating-quantifier-p caller))
@@ -907,14 +907,14 @@
 
 (defun check-count (c)
   (if c
-    (min (max (require-type c 'integer) 0) most-positive-fixnum)
-    most-positive-fixnum))
+    (min (max (require-type c 'integer) 0) target::target-most-positive-fixnum)
+    target::target-most-positive-fixnum))
 
 ;;; Delete:
 
 (defun list-delete-1 (item list from-end test test-not start end count key 
                            &aux (temp list)  revp)
-  (unless end (setq end most-positive-fixnum))
+  (unless end (setq end target::target-most-positive-fixnum))
   (when (and from-end count)
     (let ((len (length temp)))
       (if (not (%i< start len))
@@ -936,7 +936,7 @@
 
 (defun list-delete-very-simple (item list start end count)
   (unless start (setq start 0))
-  (unless end (setq end most-positive-fixnum))
+  (unless end (setq end target::target-most-positive-fixnum))
   (setq count (check-count count))
   (do* ((handle (cons nil list))
         (splice handle)
@@ -955,7 +955,7 @@
 
 (defun list-delete-moderately-complex (item list start end count test test-not key)
   (unless start (setq start 0))
-  (unless end (setq end most-positive-fixnum))
+  (unless end (setq end target::target-most-positive-fixnum))
   (setq count (check-count count))
   (do* ((handle (cons nil list))
         (splice handle)
@@ -975,7 +975,7 @@
 (defun list-delete (item list &key from-end test test-not (start 0)
                          end count key 
                          &aux (temp list)  revp)
-  (unless end (setq end most-positive-fixnum))
+  (unless end (setq end target::target-most-positive-fixnum))
   (when (and from-end count)
     (let ((len (length temp)))
       (if (not (%i< start len))
@@ -1443,7 +1443,7 @@
 
 (defun nsubstitute (new old sequence &key from-end (test #'eql) test-not 
                         end 
-                        (count most-positive-fixnum) (key #'identity) (start 0))
+                        (count target::target-most-positive-fixnum) (key #'identity) (start 0))
   "Return a sequence of the same kind as SEQUENCE with the same elements
   except that all elements equal to OLD are replaced with NEW. The SEQUENCE
   may be destructively modified. See manual for details."
@@ -1496,7 +1496,7 @@
 
 (defun nsubstitute-if (new test sequence &key from-end (start 0)
                            end  
-                           (count most-positive-fixnum) (key #'identity))
+                           (count target::target-most-positive-fixnum) (key #'identity))
   "Return a sequence of the same kind as SEQUENCE with the same elements
    except that all elements satisfying the PRED are replaced with NEW. 
    SEQUENCE may be destructively modified. See manual for details."
@@ -1512,7 +1512,7 @@
 ;;; NSubstitute-If-Not:
 
 (defun nsubstitute-if-not (new test sequence &key from-end (start 0)
-                               end (count most-positive-fixnum) (key #'identity))
+                               end (count target::target-most-positive-fixnum) (key #'identity))
   "Return a sequence of the same kind as SEQUENCE with the same elements
    except that all elements not satisfying the TEST are replaced with NEW.
    SEQUENCE may be destructively modified. See manual for details."
