@@ -337,10 +337,12 @@
   (let* ((size-in-elements (%fasl-read-count s))
          (size-of-code (%fasl-read-count s))
          (vector (%alloc-misc size-in-elements target::subtag-function))
-         (function (%function-vector-to-function vector)))
+         (function (function-vector-to-function vector)))
     (declare (fixnum size-in-elements size-of-code))
     (%epushval s function)
     (%fasl-read-n-bytes s vector 0 (ash size-of-code target::word-shift))
+    #+x8632-target
+    (%update-self-references vector)
     (do* ((numconst (- size-in-elements size-of-code))
           (i 0 (1+ i))
           (constidx size-of-code (1+ constidx)))
@@ -500,7 +502,7 @@
          (element-count (%fasl-read-count s))
          (size-in-bytes (subtag-bytes subtag element-count))
          (vector (%alloc-misc element-count subtag))
-         (byte-offset (or #+ppc32-target (if (= subtag ppc32::subtag-double-float-vector) 4) 0)))
+         (byte-offset (or #+32-bit-target (if (= subtag target::subtag-double-float-vector) 4) 0)))
     (declare (fixnum subtag element-count size-in-bytes))
     (%epushval s vector)
     (%fasl-read-n-bytes s vector byte-offset size-in-bytes)
@@ -560,16 +562,16 @@
 (deffaslop $fasl-double-float-vector (s)
   #+64-bit-target
   (fasl-read-ivector s target::subtag-double-float-vector)
-  #+ppc32-target
+  #+32-bit-target
   (let* ((element-count (%fasl-read-count s))
-         (size-in-bytes (subtag-bytes ppc32::subtag-double-float-vector
+         (size-in-bytes (subtag-bytes target::subtag-double-float-vector
                                       element-count))
          (vector (%alloc-misc element-count
-                              ppc32::subtag-double-float-vector)))
+                              target::subtag-double-float-vector)))
     (declare (fixnum element-count size-in-bytes))
     (%epushval s vector)
-    (%fasl-read-n-bytes s vector (- ppc32::misc-dfloat-offset
-                                    ppc32::misc-data-offset)
+    (%fasl-read-n-bytes s vector (- target::misc-dfloat-offset
+                                    target::misc-data-offset)
                         size-in-bytes)
     vector))
 
