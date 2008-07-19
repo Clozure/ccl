@@ -175,6 +175,8 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "PPC32-ARCH" "ppc32-arch") 
       #+ppc64-target
       (bin-load-provide "PPC64-ARCH" "ppc64-arch")
+      #+x8632-target
+      (bin-load-provide "X8632-ARCH" "x8632-arch")
       #+x8664-target
       (bin-load-provide "X8664-ARCH" "x8664-arch")
       (bin-load-provide "VREG" "vreg")
@@ -242,6 +244,8 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "FFI-DARWINPPC64" "ffi-darwinppc64")
       #+(and ppc64-target linux-target)
       (bin-load-provide "FFI-LINUXPPC64" "ffi-linuxppc64")
+      #+(and x8632-target darwin-target)
+      (bin-load-provide "FFI-DARWINX8632" "ffi-darwinx8632")
       #+(and x8664-target linux-target)  
       (bin-load-provide "FFI-LINUXX8664" "ffi-linuxx8664")
       #+(and x8664-target darwin-target)  
