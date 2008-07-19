@@ -24,6 +24,8 @@
   (require "X8664-LINUX-SYSCALLS")
   #+darwinppc-target
   (require "DARWINPPC-SYSCALLS")
+  #+darwinx8632-target
+  (require "DARWINX8632-SYSCALLS")
   #+darwinx8664-target
   (require "DARWINX8664-SYSCALLS")
   #+freebsdx8664-target
@@ -245,6 +247,9 @@
         #+ppc64-target
         (= (logand subtag ppc64::lowtagmask)
            ppc64::lowtag-immheader)
+        #+x8632-target
+        (= (logand subtag x8632::fulltagmask)
+	   x8632::fulltag-immheader)
         #+x8664-target
         (logbitp (the (mod 16) (logand subtag x8664::fulltagmask))
                  (logior (ash 1 x8664::fulltag-immheader-0)
@@ -5849,7 +5854,7 @@ are printed.")
                 (selection-input-stream-pathname stream)
                 (or last-form-in-selection *verbose-eval-selection*))))))
 
-                             
+
 (defun (setf %ioblock-external-format) (ef ioblock)
   (let* ((encoding (get-character-encoding (external-format-character-encoding ef)))
          (line-termination (external-format-line-termination ef)))
