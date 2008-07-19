@@ -91,9 +91,9 @@
   (or (fixnump x)
       (let* ((typecode (typecode x)))
         (declare (fixnum typecode))
-        #+ppc32-target
-        (and (>= typecode ppc32::min-numeric-subtag)
-             (<= typecode ppc32::max-rational-subtag))
+        #+(or ppc32-target x8632-target)
+        (and (>= typecode target::min-numeric-subtag)
+             (<= typecode target::max-rational-subtag))
         #+(or ppc64-target x8664-target)
         (cond ((= typecode target::subtag-bignum) t)
               ((= typecode target::subtag-ratio) t)))))
@@ -116,10 +116,10 @@
   "Return true if OBJECT is a REAL, and NIL otherwise."
   (let* ((typecode (typecode x)))
     (declare (fixnum typecode))
-    #+ppc32-target
-    (or (= typecode ppc32::tag-fixnum)
-        (and (>= typecode ppc32::min-numeric-subtag)
-             (<= typecode ppc32::max-real-subtag)))
+    #+(or ppc32-target x8632-target)
+    (or (= typecode target::tag-fixnum)
+        (and (>= typecode target::min-numeric-subtag)
+             (<= typecode target::max-real-subtag)))
     #+ppc64-target
     (if (<= typecode ppc64::subtag-double-float)
       (logbitp (the (integer 0 #.ppc64::subtag-double-float) typecode)
@@ -145,10 +145,10 @@
   "Return true if OBJECT is a NUMBER, and NIL otherwise."
   (let* ((typecode (typecode x)))
     (declare (fixnum typecode))
-    #+ppc32-target
-    (or (= typecode ppc32::tag-fixnum)
-        (and (>= typecode ppc32::min-numeric-subtag)
-             (<= typecode ppc32::max-numeric-subtag)))
+    #+(or ppc32-target x8632-target)
+    (or (= typecode target::tag-fixnum)
+        (and (>= typecode target::min-numeric-subtag)
+             (<= typecode target::max-numeric-subtag)))
     #+ppc64-target
     (if (<= typecode ppc64::subtag-double-float)
       (logbitp (the (integer 0 #.ppc64::subtag-double-float) typecode)
@@ -224,8 +224,8 @@
 ;;; Note that this is true of symbols and functions and many other
 ;;; things that it wasn't true of on the 68K.
 (defun gvectorp (x)
-  #+ppc32-target
-  (= (the fixnum (logand (the fixnum (typecode x)) ppc32::fulltagmask)) ppc32::fulltag-nodeheader)
+  #+(or ppc32-target x8632-target)
+  (= (the fixnum (logand (the fixnum (typecode x)) target::fulltagmask)) target::fulltag-nodeheader)
   #+ppc64-target
   (= (the fixnum (logand (the fixnum (typecode x)) ppc64::lowtagmask)) ppc64::lowtag-nodeheader)
   #+x8664-target
@@ -239,9 +239,9 @@
 (setf (type-predicate 'gvector) 'gvectorp)
 
 (defun ivectorp (x)
-  #+ppc32-target
-    (= (the fixnum (logand (the fixnum (typecode x)) ppc32::fulltagmask))
-       ppc32::fulltag-immheader)
+  #+(or ppc32-target x8632-target)
+  (= (the fixnum (logand (the fixnum (typecode x)) target::fulltagmask))
+     target::fulltag-immheader)
   #+ppc64-target
   (= (the fixnum (logand (the fixnum (typecode x)) ppc64::lowtagmask)) ppc64::lowtag-immheader)
   #+x8664-target
@@ -255,7 +255,7 @@
 (setf (type-predicate 'ivector) 'ivectorp)
 
 (defun miscobjp (x)
-  #+(or ppc32-target x8664-target)
+  #+(or ppc32-target x8632-target x8664-target)
   (= (the fixnum (lisptag x)) target::tag-misc)
   #+ppc64-target
   (= (the fixnum (fulltag x)) ppc64::fulltag-misc)
@@ -690,6 +690,127 @@
 );#+ppc64-target
 
 
+#+x8632-target
+(progn
+(defparameter *nodeheader-types*
+  #(bogus                               ; 0
+    ratio                               ; 1
+    bogus                               ; 2
+    complex                             ; 3
+    catch-frame                         ; 4
+    function                            ; 5
+    lisp-thread                         ; 6 (basic-stream?)
+    symbol                              ; 7
+    lock                                ; 8
+    hash-table-vector                   ; 9
+    pool                                ; 10
+    population                          ; 11 (weak?)
+    package                             ; 12
+    slot-vector				; 13
+    standard-instance                   ; 14
+    structure                           ; 15
+    internal-structure                  ; 16
+    value-cell                          ; 17
+    xfunction                           ; 18
+    array-header                        ; 19
+    vector-header                       ; 20
+    simple-vector                       ; 21
+    bogus                               ; 22
+    bogus                               ; 23
+    bogus                               ; 24
+    bogus                               ; 25
+    bogus                               ; 26
+    bogus                               ; 27
+    bogus                               ; 28
+    bogus                               ; 29
+    bogus                               ; 30
+    bogus                               ; 31
+    ))
+
+
+(defparameter *immheader-types*
+  #(bignum                              ; 0
+    short-float                         ; 1
+    double-float                        ; 2
+    macptr                              ; 3
+    dead-macptr                         ; 4
+    code-vector                         ; 5
+    creole-object                       ; 6
+    ;; 8-19 are unused
+    xcode-vector                        ; 7
+    bogus                               ; 8
+    bogus                               ; 9
+    bogus                               ; 10
+    bogus                               ; 11
+    bogus                               ; 12
+    bogus                               ; 13
+    bogus                               ; 14
+    bogus                               ; 15
+    bogus                               ; 16
+    bogus                               ; 17
+    bogus                               ; 18
+    bogus                               ; 19
+    simple-short-float-vector           ; 20
+    simple-unsigned-long-vector         ; 21
+    simple-signed-long-vector           ; 22
+    simple-fixnum-vector                ; 23
+    simple-base-string                  ; 24
+    simple-unsigned-byte-vector         ; 25
+    simple-signed-byte-vector           ; 26
+    bogus                               ; 27
+    simple-unsigned-word-vector         ; 28
+    simple-signed-word-vector           ; 29
+    simple-double-float-vector          ; 30
+    simple-bit-vector                   ; 31
+    ))
+
+(defun %type-of (thing)
+  (let* ((typecode (typecode thing)))
+    (declare (fixnum typecode))
+    (if (= typecode x8632::tag-fixnum)
+      'fixnum
+      (if (= typecode x8632::tag-list)	;a misnomer on x8632...
+	(if (= typecode x8632::fulltag-cons)
+	  (if thing 'cons 'null)
+	  'tagged-return-address)
+        (if (= typecode x8632::tag-imm)
+          (if (base-char-p thing)
+            'base-char
+            'immediate)
+	  (if (= typecode x8632::subtag-macptr)
+	    (if (classp thing)
+	      (class-name thing)
+	      'macptr)
+	    (let* ((tag-type (logand typecode x8632::fulltagmask))
+		   (tag-val (ash typecode (- x8632::ntagbits))))
+	      (declare (fixnum tag-type tag-val))
+	      (if (/= tag-type x8632::fulltag-nodeheader)
+		(%svref *immheader-types* tag-val)
+		(let ((type (%svref *nodeheader-types* tag-val)))
+		  (if (eq type 'function)
+		    (let ((bits (lfun-bits thing)))
+		      (declare (fixnum bits))
+		      (if (logbitp $lfbits-trampoline-bit bits)
+			(let ((inner-fn (closure-function thing)))
+                          (if (neq inner-fn thing)
+                            (let ((inner-bits (lfun-bits inner-fn)))
+                              (if (logbitp $lfbits-method-bit inner-bits)
+                                'compiled-lexical-closure
+                                (if (logbitp $lfbits-gfn-bit inner-bits)
+                                  'standard-generic-function ; not precisely - see class-of
+                                  (if (logbitp  $lfbits-cm-bit inner-bits)
+                                    'combined-method
+                                    'compiled-lexical-closure))))
+                            'compiled-lexical-closure))
+                        (if (logbitp  $lfbits-method-bit bits)
+                          'method-function          
+                          'compiled-function)))
+		    (if (eq type 'lock)
+		      (or (uvref thing x8632::lock.kind-cell)
+			  type)
+		      type)))))))))))
+
+) ;x8632-target
 
 #+x8664-target
 (progn
@@ -893,9 +1014,9 @@
 
 (defun symbolp (thing)
   "Return true if OBJECT is a SYMBOL, and NIL otherwise."
-  #+ppc32-target
+  #+(or ppc32-target x8632-target)
   (if thing
-    (= (the fixnum (typecode thing)) ppc32::subtag-symbol)
+    (= (the fixnum (typecode thing)) target::subtag-symbol)
     t)
   #+ppc64-target
   (= (the fixnum (typecode thing)) ppc64::subtag-symbol)
