@@ -41,7 +41,9 @@
 
 
 (defun catch-frame-sp (catch)
-  (uvref catch x8664::catch-frame.rbp-cell))
+  (uvref catch
+	 #+x8632-target x8632::catch-frame.ebp-cell
+	 #+x8664-target x8664::catch-frame.rbp-cell))
 
 ;;; Sure would be nice to have &optional in defppclapfunction arglists
 ;;; Sure would be nice not to do this at runtime.
@@ -99,7 +101,17 @@
                        (lfun-bits #'%fixnum-set-natural)))))
 
 
+#+x8632-target
+(defun valid-subtag-p (subtag)
+  (declare (fixnum subtag))
+  (let* ((tagval (ldb (byte (- x8632::num-subtag-bits x8632::ntagbits) x8632::ntagbits) subtag)))
+    (declare (fixnum tagval))
+    (case (logand subtag x8632::fulltagmask)
+      (#. x8632::fulltag-immheader (not (eq (%svref *immheader-types* tagval) 'bogus)))
+      (#. x8632::fulltag-nodeheader (not (eq (%svref *nodeheader-types* tagval) 'bogus)))
+      (t nil))))
 
+#+x8664-target
 (defun valid-subtag-p (subtag)
   (declare (fixnum subtag))
   (let* ((tagval (logand x8664::fulltagmask subtag))
@@ -119,6 +131,16 @@
                 (%svref *nodeheader-1-types* high4))
                (t 'bogus))))))
 
+#+x8632-target
+(defun valid-header-p (thing)
+  (let* ((fulltag (fulltag thing)))
+    (declare (fixnum fulltag))
+    (case fulltag
+      (#.x8632::fulltag-misc (valid-subtag-p (typecode thing)))
+      ((#.x8632::fulltag-immheader #.x8632::fulltag-nodeheader) nil)
+      (t t))))
+
+#+x8664-target
 (defun valid-header-p (thing)
   (let* ((fulltag (fulltag thing)))
     (declare (fixnum fulltag))
@@ -144,11 +166,27 @@
       (#.x8664::fulltag-nil (null thing))
       (t nil))))
              
-      
-                                     
-               
+#+x8632-target
+(defun bogus-thing-p (x)
+  (when x
+    (or (not (valid-header-p x))
+        (let ((tag (lisptag x))
+	      (fulltag (fulltag x)))
+          (unless (or (eql tag x8632::tag-fixnum)
+                      (eql tag x8632::tag-imm)
+                      (in-any-consing-area-p x)
+		      (temporary-cons-p x)
+		      (and (or (typep x 'function)
+			       (typep x 'gvector))
+			   (on-any-tsp-stack x))
+		      (and (eql fulltag x8632::fulltag-tra)
+			   (eql 0 (%return-address-offset x)))
+		      (and (typep x 'ivector)
+			   (on-any-csp-stack x))
+		      (%heap-ivector-p x))
+	    t)))))
 
-
+#+x8664-target
 (defun bogus-thing-p (x)
   (when x
     (or (not (valid-header-p x))
