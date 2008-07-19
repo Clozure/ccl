@@ -192,9 +192,9 @@ terminate the list"
       (progn
 	(unless (typep index 'unsigned-byte)
 	  (report-bad-arg index 'unsigned-byte))
-	(do* ((n index (- n most-positive-fixnum)))
+	(do* ((n index (- n target::target-most-positive-fixnum)))
 	     ((typep n 'fixnum) (nthcdr n list))
-	  (unless (setq list (nthcdr most-positive-fixnum list))
+	  (unless (setq list (nthcdr target::target-most-positive-fixnum list))
 	    (return))))))
 
 
@@ -540,6 +540,30 @@ terminate the list"
     (if  (= subtype ppc32::subtag-simple-vector) t
         (svref array-element-subtypes 
                (ash (- subtype ppc32::min-cl-ivector-subtag) (- ppc32::ntagbits)))))
+  )
+
+#+x8632-target
+(progn
+  (defparameter array-element-subtypes
+    #(single-float 
+      (unsigned-byte 32)
+      (signed-byte 32)
+      fixnum
+      base-char                         ;ucs4
+      (unsigned-byte 8)
+      (signed-byte 8)
+      base-char
+      (unsigned-byte 16)
+      (signed-byte 16)
+      double-float
+      bit))
+  
+  ;; given uvector subtype - what is the corresponding element-type
+  (defun element-subtype-type (subtype)
+    (declare (fixnum subtype))
+    (if  (= subtype x8632::subtag-simple-vector) t
+        (svref array-element-subtypes 
+               (ash (- subtype x8632::min-cl-ivector-subtag) (- x8632::ntagbits)))))
   )
 
 #+ppc64-target
