@@ -77,13 +77,13 @@
 
 
 (eval-when (:compile-toplevel :execute)
-  #+ppc32-target
+  #+32-bit-target
   (defmacro need-use-eql-macro (key)
     `(let* ((typecode (typecode ,key)))
        (declare (fixnum typecode))
-       (or (= typecode ppc32::subtag-macptr)
-           (and (>= typecode ppc32::min-numeric-subtag)
-                (<= typecode ppc32::max-numeric-subtag)))))
+       (or (= typecode target::subtag-macptr)
+           (and (>= typecode target::min-numeric-subtag)
+                (<= typecode target::max-numeric-subtag)))))
   #+64-bit-target
   (defmacro need-use-eql-macro (key)
     `(let* ((typecode (typecode ,key)))
