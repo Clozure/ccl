@@ -70,8 +70,8 @@
                     (char-code #\Sub)))))
         (when nul-terminated
           (setf (%get-byte pointer n) 0)))
-      nil))
-  (%cstr-segment-pointer string pointer 0 (length string) nul-terminated))
+      nil)
+    (%cstr-segment-pointer string pointer 0 (length string) nul-terminated)))
 
 (defun %cstr-segment-pointer (string pointer start end &optional (nul-terminated t))
   (declare (fixnum start end))
