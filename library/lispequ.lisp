@@ -217,7 +217,7 @@
   )
 
 (defmacro package-deleted-marker ()
-  (%unbound-marker))
+  `(%unbound-marker))
 
 
 
@@ -601,20 +601,7 @@
   pkg-iter.remaining-steps              ; steps to be processed
 )
 
-
 ;;;;;;;;;;;;;
-
-(defconstant $catch.tag 0)
-(defconstant $catch.mvflag (+ $catch.tag 4))
-(defconstant $catch.dblink (+ $catch.mvflag 4))
-(defconstant $catch.vsp (+ $catch.dblink 4))
-(defconstant $catch.regs (+ $catch.vsp 4))
-(defconstant $catch.link (+ $catch.regs (* 4 5)))
-(defconstant $catch.scgvll (+ $catch.link 4))
-(defconstant $catch.cs_area (+ $catch.scgvll 4))
-(defconstant $catch.pc (+ $catch.cs_area 4))
-(defconstant $catchfsize (+ $catch.pc 4))
-
 
 ;;; Bits in *gc-event-status-bits*
 (defconstant $gc-retain-pages-bit 0)
