@@ -121,9 +121,9 @@
 ; and there's a better chance that users would see this message.
 (defun bug (arg)
   (if (typep arg 'simple-base-string)
-    #+x8664-target
+    #+x86-target
     (debug-trap-with-string arg)
-    #-x8664-target
+    #-x86-target
     (let* ((len (length arg)))
       (%stack-block ((buf (1+ len)))
         (%cstr-pointer arg buf)
