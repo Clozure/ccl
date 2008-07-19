@@ -16,6 +16,8 @@
 
 
 (in-package "CCL")
+#+x8664-target
+(progn
 
 (defx86lapfunction %address-of ((arg arg_z))
   ;; %address-of a fixnum is a fixnum, just for spite.
@@ -520,3 +522,4 @@ be somewhat larger than what was specified)."
 
 
 ;;; end
+) ; #+x8664-target

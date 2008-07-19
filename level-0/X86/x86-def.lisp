@@ -15,6 +15,8 @@
 ;;;   http://opensource.franz.com/preamble.html
 
 (in-package "CCL")
+#+x8664-target
+(progn
 
 (defx86lapfunction %function-vector-to-function ((arg arg_z))
   (trap-unless-typecode= arg x8664::subtag-function)
@@ -701,3 +703,4 @@
                                  
 
 ;;; end of x86-def.lisp
+) ; #+x8664-target

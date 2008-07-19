@@ -18,6 +18,8 @@
 
 
 (in-package "CCL")
+#+x8664-target
+(progn
 
 ;;; Copy N bytes from pointer src, starting at byte offset src-offset,
 ;;; to ivector dest, starting at offset dest-offset.
@@ -896,3 +898,4 @@
   
 
 ;;; end of x86-misc.lisp
+) ; #+x8664-target

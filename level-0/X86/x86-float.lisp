@@ -15,6 +15,8 @@
 ;;;   http://opensource.franz.com/preamble.html
 
 (in-package "CCL")
+#+x8664-target
+(progn
 
 (eval-when (:compile-toplevel :execute)
   (require "NUMBER-MACROS")
@@ -454,3 +456,4 @@
   (single-value-return))
 
 ;;; end of x86-float.lisp
+) ; #+x8664-target

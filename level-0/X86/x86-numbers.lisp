@@ -17,6 +17,8 @@
 
 
 (in-package "CCL")
+#+x8664-target
+(progn
 
 
 
@@ -189,3 +191,4 @@
 
 
 ;;; End of x86-numbers.lisp
+) ; #+x8664-target

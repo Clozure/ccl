@@ -15,6 +15,8 @@
 ;;;   http://opensource.franz.com/preamble.html
 
 (in-package "CCL")
+#+x8664-target
+(progn
 
 (eval-when (:compile-toplevel :execute)
   (require "X86-LAPMACROS"))
@@ -185,3 +187,4 @@ numbers with the same type and value."
 
 
 
+) ; #+x8664-target

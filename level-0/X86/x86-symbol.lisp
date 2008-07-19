@@ -15,6 +15,8 @@
 ;;;   http://opensource.franz.com/preamble.html
 
 (in-package "CCL")
+#+x8664-target
+(progn
 
 (eval-when (:compile-toplevel :execute)
   (require "X8664-ARCH")
@@ -160,3 +162,4 @@
     (movq (% accum) (% arg_z))
     @done
     (single-value-return)))
+) ; #+x8664-target

@@ -16,6 +16,9 @@
 
 (in-package "CCL")
 
+#+x8664-target
+(progn
+
 ;;; It's easier to keep this is LAP; we want to play around with its
 ;;; constants.
 
@@ -268,3 +271,4 @@
 
 
 
+) ; #+x8664-target

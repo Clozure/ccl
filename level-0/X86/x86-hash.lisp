@@ -18,6 +18,8 @@
 
 
 (in-package "CCL")
+#+x8664-target
+(progn
 
 (eval-when (:compile-toplevel :execute)
   (require "HASHENV" "ccl:xdump;hashenv"))
@@ -118,3 +120,4 @@
   (single-value-return))
 
 ;;; end of x86-hash.lisp
+) ; #+x8664-target
