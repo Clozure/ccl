@@ -38,6 +38,8 @@
 (require "PPC32-ARCH")
 #+ppc64-target
 (require "PPC64-ARCH")
+#+x8632-target
+(require "X8632-ARCH")
 #+x8664-target
 (require "X8664-ARCH")
 ) ;eval-when (:compile-toplevel :execute)
@@ -1000,6 +1002,8 @@ Will differ from *compiling-file* during an INCLUDE")
           #.ppc64::fulltag-imm-1
           #.ppc64::fulltag-imm-2
           #.ppc64::fulltag-imm-3))
+	#+x8632-target
+	(#.x8632::tag-imm)
         #+x8664-target
         ((#.x8664::fulltag-imm-0
           #.x8664::fulltag-imm-1))
@@ -1009,6 +1013,8 @@ Will differ from *compiling-file* during an INCLUDE")
            (= (the fixnum (logand type-code ppc32::full-tag-mask)) ppc32::fulltag-immheader)
            #+ppc64-target
            (= (the fixnum (logand type-code ppc64::lowtagmask)) ppc64::lowtag-immheader)
+	   #+x8632-target
+	   (= (the fixnum (logand type-code x8632::fulltagmask)) x8632::fulltag-immheader)
            #+x8664-target
            (and (= (the fixnum (lisptag exp)) x8664::tag-misc)
                 (logbitp (the (unsigned-byte 16) (logand type-code x8664::fulltagmask))
@@ -1021,7 +1027,8 @@ Will differ from *compiling-file* during an INCLUDE")
            (case type-code
              ((#.target::subtag-pool #.target::subtag-weak #.target::subtag-lock) (fasl-unknown exp))
              (#+ppc-target #.target::subtag-symbol
-                           #+x86-target #.target::tag-symbol (fasl-scan-symbol exp))
+	      #+x8632-target #.target::subtag-symbol
+              #+x8664-target #.target::tag-symbol (fasl-scan-symbol exp))
              ((#.target::subtag-instance #.target::subtag-struct)
               (fasl-scan-user-form exp))
              (#.target::subtag-package (fasl-scan-ref exp))
@@ -1032,7 +1039,9 @@ Will differ from *compiling-file* during an INCLUDE")
                     (fasl-lock-hash-table exp))
                   (fasl-scan-user-form exp))
                 (fasl-scan-gvector exp)))
-             #+x86-target
+	     #+x8632-target
+	     (#.target::subtag-function (fasl-scan-clfun exp))
+             #+x8664-target
              (#.target::tag-function (fasl-scan-clfun exp))
              (t (fasl-scan-gvector exp)))))))))
               
@@ -1061,7 +1070,7 @@ Will differ from *compiling-file* during an INCLUDE")
 
 #+x86-target
 (defun fasl-scan-clfun (f)
-  (let* ((fv (%function-to-function-vector f))
+  (let* ((fv (function-to-function-vector f))
          (size (uvsize fv))
          (ncode-words (%function-code-words f)))
     (fasl-scan-ref f)
@@ -1428,12 +1437,12 @@ Will differ from *compiling-file* during an INCLUDE")
            (= (typecode (uvref f 0)) target::subtag-u8-vector))
     (fasl-xdump-clfun f)
     (let* ((code-size (%function-code-words f))
-           (function-vector (%function-to-function-vector f))
+           (function-vector (function-to-function-vector f))
            (function-size (uvsize function-vector)))
       (fasl-out-opcode $fasl-clfun f)
       (fasl-out-count function-size)
       (fasl-out-count code-size)
-      (fasl-out-ivect function-vector 0 (ash code-size 3))
+      (fasl-out-ivect function-vector 0 (ash code-size target::word-shift))
       (do* ((k code-size (1+ k)))
            ((= k function-size))
         (declare (fixnum k))
@@ -1442,32 +1451,45 @@ Will differ from *compiling-file* during an INCLUDE")
 
   
 
-;;; Write a "concatenated function"; for now, assume that the target
-;;; is x8664.
+;;; Write a "concatenated function".
 (defun fasl-xdump-clfun (f)
-  (let* ((code (uvref f 0))
-         (code-size (dpb (uvref code 3)
-                         (byte 8 24)
-                         (dpb (uvref code 2)
-                              (byte 8 16)
-                              (dpb (uvref code 1)
-                                   (byte 8 8)
-                                   (uvref code 0)))))
-         (function-size (ash (uvsize code) -3)))
-    (assert (= (- function-size code-size) (1- (uvsize f))))
-    (fasl-out-opcode $fasl-clfun f)
-    (fasl-out-count function-size)
-    (fasl-out-count code-size)
-    (fasl-out-ivect code 0 (ash code-size 3))
-    (do* ((i 1 (1+ i))
-          (n (uvsize f)))
-         ((= i n))
-      (declare (fixnum i n))
-      (fasl-dump-form (%svref f i)))))
-    
-                         
-
-
+  (target-arch-case
+   (:x8632
+    (let* ((code (uvref f 0))
+	   (function-size (ash (uvsize code) -2))
+	   (imm-words (dpb (uvref code 1) (byte 8 8) (uvref code 0)))
+	   (imm-bytes (ash imm-words 2))
+	   (other-words (- function-size imm-words)))
+      (assert (= other-words (1- (uvsize f))))
+      (fasl-out-opcode $fasl-clfun f)
+      (fasl-out-count function-size)
+      (fasl-out-count imm-words)
+      (fasl-out-ivect code 0 imm-bytes)
+      (do ((i 1 (1+ i))
+	   (n (uvsize f)))
+	  ((= i n))
+	(declare (fixnum i n))
+	(fasl-dump-form (%svref f i)))))
+   (:x8664
+    (let* ((code (uvref f 0))
+	   (code-size (dpb (uvref code 3)
+			   (byte 8 24)
+			   (dpb (uvref code 2)
+				(byte 8 16)
+				(dpb (uvref code 1)
+				     (byte 8 8)
+				     (uvref code 0)))))
+	   (function-size (ash (uvsize code) -3)))
+      (assert (= (- function-size code-size) (1- (uvsize f))))
+      (fasl-out-opcode $fasl-clfun f)
+      (fasl-out-count function-size)
+      (fasl-out-count code-size)
+      (fasl-out-ivect code 0 (ash code-size 3))
+      (do* ((i 1 (1+ i))
+	    (n (uvsize f)))
+	   ((= i n))
+	(declare (fixnum i n))
+	(fasl-dump-form (%svref f i)))))))
 
 (defun fasl-dump-codevector (c)
   (if (and (not (eq *fasl-backend* *host-backend*))
