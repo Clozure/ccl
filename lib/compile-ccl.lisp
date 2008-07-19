@@ -54,14 +54,15 @@
 ))
 
 (defparameter *x86-compiler-modules*
-  '(x86-arch
+  '(x8632-arch
+    x8664-arch
+    x86-arch
+    x8632env
+    x8664env
     x86-asm
     x86-lap
-    x8664-arch
-    x8664env
     x86-backend
-    )
-  )
+))
 
 (defparameter *ppc32-compiler-backend-modules*
   '(ppc32-backend ppc32-vinsns))
@@ -87,6 +88,7 @@
 
 
 (defparameter *ppc-xload-modules* '(xppcfasload xfasload heap-image ))
+(defparameter *x8632-xload-modules* '(xx8632fasload xfasload heap-image ))
 (defparameter *x8664-xload-modules* '(xx8664fasload xfasload heap-image ))
 
 
@@ -105,6 +107,7 @@
 					(backend-target-arch-name *host-backend*)))
   (case target
     ((:ppc32 :ppc64) *ppc-xload-modules*)
+    (:x8632 *x8632-xload-modules*)
     (:x8664 *x8664-xload-modules*)))
 
 
@@ -130,6 +133,7 @@
              (:darwinppc32 'ffi-darwinppc32)
              (:darwinppc64 'ffi-darwinppc64)
              (:linuxppc64 'ffi-linuxppc64)
+	     (:darwinx8632 'ffi-darwinx8632)
              (:linuxx8664 'ffi-linuxx8664)
              (:darwinx8664 'ffi-darwinx8664)
              (:freebsdx8664 'ffi-freebsdx8664)
@@ -146,6 +150,9 @@
     (:ppc64 (append *ppc-compiler-modules*
                     *ppc64-compiler-backend-modules*
                     *ppc-compiler-backend-modules*))
+    (:x8632 (append *x86-compiler-modules*
+                    *x8632-compiler-backend-modules*
+                    *x86-compiler-backend-modules*))
     (:x8664 (append *x86-compiler-modules*
                     *x8664-compiler-backend-modules*
                     *x86-compiler-backend-modules*))))
@@ -162,7 +169,7 @@
   (append *other-lib-modules*
 	  (case target
 	    ((:ppc32 :ppc64) '(ppc-backtrace ppc-disassemble))
-            (:x8664 '(x86-backtrace x86-disassemble)))))
+            ((:x8632 :x8664) '(x86-backtrace x86-disassemble)))))
 	  
 
 (defun target-lib-modules (&optional (backend-name
@@ -210,7 +217,8 @@
 	    ((:linuxppc32 :darwinppc32 :linuxppc64 :darwinppc64)
 	     '(ppc-error-signal ppc-trap-support
 	       ppc-threads-utils ppc-callback-support))
-            ((:linuxx8664 :freebsdx8664 :darwinx8664 :solarisx8664)
+            ((:linuxx8664 :freebsdx8664 :darwinx8664 :solarisx8664
+	      :darwinx8632)
              '(x86-error-signal x86-trap-support
                x86-threads-utils x86-callback-support)))))
 
@@ -422,6 +430,7 @@
     (:linuxppc32 "ppc-boot")
     (:darwinppc64 "ppc-boot64.image")
     (:linuxppc64 "ppc-boot64")
+    (:darwinx8632 "x86-boot32.image")
     (:linuxx8664 "x86-boot64")
     (:freebsdx8664 "fx86-boot64")
     (:darwinx8664 "x86-boot64.image")
@@ -432,6 +441,7 @@
     (:darwinppc32 "dppccl")
     (:linuxppc32 "ppccl")
     (:darwinppc64 "dppccl64")
+    (:darwinx8632 "dx86cl")
     (:linuxppc64 "ppccl64")
     (:linuxx8664 "lx86cl64")
     (:freebsdx8664 "fx86cl64")
@@ -444,6 +454,7 @@
     (:linuxppc32 "PPCCL")
     (:darwinppc64 "dppccl64.image")
     (:linuxppc64 "PPCCL64")
+    (:darwinx8632 "dx86cl.image")
     (:linuxx8664 "LX86CL64")
     (:freebsdx8664 "FX86CL64")
     (:darwinx8664 "dx86cl64.image")
@@ -455,6 +466,7 @@
     (:linuxppc32 "linuxppc")
     (:darwinppc64 "darwinppc64")
     (:linuxppc64 "linuxppc64")
+    (:darwinx8632 "darwinx8632")
     (:linuxx8664 "linuxx8664")
     (:freebsdx8664 "freebsdx8664")
     (:darwinx8664 "darwinx8664")
