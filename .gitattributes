@@ -179,8 +179,10 @@ examples/cocoa/nib-loading/nib-loading.lisp -text
 examples/cocoa/ui-elements/HOWTO.html -text
 examples/cocoa/ui-elements/HOWTO_files/images/bosco.jpg -text
 examples/cocoa/ui-elements/HOWTO_files/stylesheets/styles.css -text
+lib/ffi-darwinx8632.lisp -text
 lib/ffi-solarisx8664.lisp -text
 lib/late-clos.lisp -text
+lib/x8632env.lisp -text
 library/darwinx8632-syscalls.lisp -text
 library/elf.lisp -text
 library/mach-o-symbols.lisp -text
