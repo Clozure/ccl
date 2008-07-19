@@ -1971,7 +1971,9 @@ xFindSymbol(void* handle, char *name)
 #else
   natural address = 0;
 
-  if (handle == NULL) {
+  if ((handle == NULL) ||
+      (handle == (void *)-1) ||
+      (handle == (void *)-2)){
     if (NSIsSymbolNameDefined(name)) { /* Keep dyld_lookup from crashing */
       _dyld_lookup_and_bind(name, (void *) &address, (void*) NULL);
     }
