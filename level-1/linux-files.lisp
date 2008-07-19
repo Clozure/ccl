@@ -23,6 +23,8 @@
   (require "X8664-LINUX-SYSCALLS")
   #+darwinppc-target
   (require "DARWINPPC-SYSCALLS")
+  #+darwinx8632-target
+  (require "DARWINX8632-SYSCALLS")
   #+darwinx8664-target
   (require "DARWINX8664-SYSCALLS")
   #+(and freebsd-target x8664-target)
