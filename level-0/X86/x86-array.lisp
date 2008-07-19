@@ -16,6 +16,9 @@
 
 (in-package "CCL")
 
+#+x8664-target
+(progn
+
 (eval-when (:compile-toplevel :execute)
   #+x8632-target
   (require "X8632-ARCH")
@@ -279,7 +282,7 @@
 
 (defx86lapfunction %boole-xor ((idx 8) #|(ra 0)|# (b0 arg_x) (b1 arg_y) (dest arg_z))
   (movq (@ idx (% rsp)) (% temp0))
-n  (movq (@ x8664::misc-data-offset (% b0) (% temp0)) (% imm0))
+  (movq (@ x8664::misc-data-offset (% b0) (% temp0)) (% imm0))
   (xorq (@ x8664::misc-data-offset (% b1) (% temp0)) (% imm0))
   (movq (% imm0) (@ x8664::misc-data-offset (% dest) (% temp0)))
   (single-value-return 3))
@@ -394,4 +397,6 @@ n  (movq (@ x8664::misc-data-offset (% b0) (% temp0)) (% imm0))
   (discard-reserved-frame)
   (push (% ra0))
   (jmp-subprim .SPaset3))
+
+)  ; #+x8664-target
 
