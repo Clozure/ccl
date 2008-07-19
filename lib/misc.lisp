@@ -693,6 +693,7 @@ are running on, or NIL if we can't find any useful information."
   it is not already compiled, the compiler is called to produce something to
   disassemble."
   (#+ppc-target ppc-xdisassemble
+   #+x8632-target x8632-xdisassemble
    #+x8664-target x8664-xdisassemble
    (require-type (function-for-disassembly thing) 'compiled-function)))
 
