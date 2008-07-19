@@ -92,6 +92,21 @@
      unused
      unused))
 
+#+x8632-target
+(defconstant x8632::*immheader-array-types*
+  '#(short-float
+     (unsigned-byte 32)
+     (signed-byte 32)
+     fixnum
+     character
+     (unsigned-byte 8)
+     (signed-byte 8)
+     unused
+     (unsigned-byte 16)
+     (signed-byte 16)
+     double-float
+     bit))
+
 #+x8664-target
 (progn
 (defconstant x8664::*immheader-0-array-types*
@@ -171,6 +186,10 @@
              (ash (the fixnum (- subtag ppc32::min-cl-ivector-subtag)) -3)
              #+ppc64-target
              (ash (the fixnum (logand subtag #x7f)) (- ppc64::nlowtagbits)))
+      #+x8632-target
+      (svref x8632::*immheader-array-types*
+	     (ash (the fixnum (- subtag x8632::min-cl-ivector-subtag))
+		  (- x8632::ntagbits)))
       #+x8664-target
       (let* ((class (logand subtag x8664::fulltagmask))
              (idx (ash subtag (- x8664::ntagbits))))
@@ -701,6 +720,24 @@ minimum number of elements to add if it must be extended."
          (total-bits (ash element-count element-bit-shift)))
     (declare (fixnum ivector-class element-bit-shift total-bits))
     (ash (the fixnum (+ 7 total-bits)) -3)))
+
+#+x8632-target
+(defun subtag-bytes (subtag element-count)
+  (declare (fixnum subtag element-count))
+  (unless (= #.x8632::fulltag-immheader (logand subtag #.x8632::fulltagmask))
+    (error "Not an ivector subtag: ~s" subtag))
+  (let* ((element-bit-shift
+          (if (<= subtag x8632::max-32-bit-ivector-subtag)
+            5
+            (if (<= subtag x8632::max-8-bit-ivector-subtag)
+              3
+              (if (<= subtag x8632::max-16-bit-ivector-subtag)
+                4
+                (if (= subtag x8632::subtag-double-float-vector)
+                  6
+                  0)))))
+         (total-bits (ash element-count element-bit-shift)))
+    (ash (+ 7 total-bits) -3)))
 
 #+x8664-target
 (defun subtag-bytes (subtag element-count)
