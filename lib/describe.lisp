@@ -1725,6 +1725,11 @@
                target::lisp-frame.savevsp)
               (ccl::%fixnum-ref (ccl::%fixnum-ref tcr target::tcr.vs-area)
                                 target::area.high))))
+#+x8632-target
+(defun make-vsp-stack-range (tcr bt-info)
+  (list (cons (ccl::%svref (ccl::bt.top-catch bt-info) target::catch-frame.esp-cell)
+              (ccl::%fixnum-ref (ccl::%fixnum-ref tcr target::tcr.vs-area)
+                                target::area.high))))
 
 #+x8664-target
 (defun make-vsp-stack-range (tcr bt-info)
@@ -1735,6 +1740,12 @@
 #+ppc-target
 (defun make-csp-stack-range (tcr bt-info)
   (list (cons (ccl::%svref (ccl::bt.top-catch bt-info) target::catch-frame.csp-cell)
+              (ccl::%fixnum-ref (ccl::%fixnum-ref tcr target::tcr.cs-area)
+                                target::area.high))))
+
+#+x8632-target
+(defun make-csp-stack-range (tcr bt-info)
+  (list (cons (ccl::%svref (ccl::bt.top-catch bt-info) target::catch-frame.foreign-sp-cell)
               (ccl::%fixnum-ref (ccl::%fixnum-ref tcr target::tcr.cs-area)
                                 target::area.high))))
 
