@@ -34,7 +34,7 @@
 (defun backtrace-as-list (&key
                           context
                           (origin (%get-frame-ptr))
-                          (count most-positive-fixnum)
+                          (count target::target-most-positive-fixnum)
                           (start-frame-number 0)
                           (stream *debug-io*)
                           (print-level *backtrace-print-level*)
@@ -45,7 +45,7 @@ Each element in the list is a list that describes the call in one stack frame:
    (function arg1 arg2 ...)
 The arguments are represented by strings, the function is a symbol or a function
 object."
-  (when (null count) (setq count most-positive-fixnum))
+  (when (null count) (setq count target::target-most-positive-fixnum))
   (let* ((tcr (if context (bt.tcr context) (%current-tcr)))
          (*debug-io* stream)
          (*backtrace-print-level* print-level)
@@ -67,14 +67,14 @@ object."
 (defun print-call-history (&key context
                                 (origin (%get-frame-ptr))
                                 (detailed-p t)
-                                (count most-positive-fixnum)
+                                (count target::target-most-positive-fixnum)
                                 (start-frame-number 0)
                                 (stream *debug-io*)
                                 (print-level *backtrace-print-level*)
                                 (print-length *backtrace-print-length*)
                                 (show-internal-frames *backtrace-show-internal-frames*)
                                 (format *backtrace-format*))
-  (when (null count) (setq count most-positive-fixnum))
+  (when (null count) (setq count target::target-most-positive-fixnum))
   (let* ((tcr (if context (bt.tcr context) (%current-tcr)))
          (*debug-io* stream)
          (*backtrace-print-level* print-level)
@@ -253,7 +253,7 @@ object."
 
   
 (defun %print-call-history-internal (context origin detailed-p
-                                             &optional (count most-positive-fixnum) (skip-initial 0))
+                                             &optional (count target::target-most-positive-fixnum) (skip-initial 0))
   (let ((*standard-output* *debug-io*)
         (*print-circle* nil)
         (*print-catch-errors* t)
