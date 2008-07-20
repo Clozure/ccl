@@ -25,9 +25,10 @@ DD=${CCL_DEFAULT_DIRECTORY}
 
 if [ -z "$OPENMCL_KERNEL" ]; then
   case `uname -s` in
-    Darwin)
-    OPENMCL_KERNEL=dppccl
-    ;;
+    Darwin) case `arch` in
+              ppc*) OPENMCL_KERNEL=dppccl ;;
+              i386) OPENMCL_KERNEL=dx86cl ;;
+            esac ;;
     Linux)
     OPENMCL_KERNEL=ppccl
     ;;
