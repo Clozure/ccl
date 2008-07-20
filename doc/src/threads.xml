@@ -1740,7 +1740,7 @@ Type :? for other options.
 	    <title>See Also</title>
 	    
 	    <simplelist type="inline">
-	      <member><xref linkend="f_process-wait-with-timeout"/></member>
+<	      <member><xref linkend="f_process-wait-with-timeout"/></member>
 	    </simplelist>
 	  </refsect1>
     </refentry>
@@ -2019,7 +2019,7 @@ Type :? for other options.
 	      <xref linkend="f_process-wait"/>, except for returning T.
 	      Otherwise, <varname>function</varname> will be tested repeatedly,
 	      in the same
-	      kind of test/yield loop as in <xref linkend="f_process-wait"/>>
+	      kind of test/yield loop as in <xref linkend="f_process-wait"/>
 	      until either <varname>function</varname> returns true,
 	      or the duration <varname>ticks</varname> has been exceeded.
 	    </para>
@@ -3255,6 +3255,71 @@ Type :? for other options.
 	      <member><xref linkend="f_process-output-wait"/></member>
 	    </simplelist>
 	  </refsect1>
+    </refentry>
+
+    <refentry id="f_join-process">
+      <indexterm zone="f_join-process">
+	<primary>join-process</primary>
+      </indexterm>
+
+      <refnamediv>
+	<refname>JOIN-PROCESS</refname>
+	<refpurpose>Waits for a specified process to complete and
+	returns the values that that process's initial function
+	returned.</refpurpose>
+	<refclass>Function</refclass>
+      </refnamediv>
+
+      <refsynopsisdiv>
+	<synopsis><function>join-process</function> process
+	&optional; default => values</synopsis>
+      </refsynopsisdiv>
+      
+      <refsect1>
+	<title>Arguments and Values</title>
+
+	<variablelist>
+	  <varlistentry>
+	    <term>process</term>
+	    <listitem>
+	      <para>a process, typically created by <xref
+	      linkend="f_process-run-function"/> or by <xref
+	      linkend="f_make-process"/></para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term>default</term>
+	    <listitem>
+	      <para>A default value to be returned if the specified
+	      process doesn't exit normally.</para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term>values</term>
+	    <listitem>
+	      <para>The values returned by the specified process's
+	      initial function if that function returns, or the value
+	      of the default argument, otherwise.</para>
+	    </listitem>
+	  </varlistentry>
+	</variablelist>
+      </refsect1>
+
+      <refsect1>
+	<title>Description</title>
+	<para>Waits for the specified process to terminate.  If the
+	process terminates "normally" (if its initial function
+	returns), returns the values that that initial function
+	returnes.  If the process does not terminate normally (e.g.,
+	if it's terminated via <xref linkend="f_process-kill"/> and a
+	default argument is provided, returns the value of that
+	default argument.  If the process doesn't terminate normally
+	and no default argument is provided, signals an error.</para>
+	
+	<para>A process can't successfully join itself, and only one
+	process can successfully receive notification of another process's
+	termination.</para>
+      </refsect1>
     </refentry>
 
   </sect1>
