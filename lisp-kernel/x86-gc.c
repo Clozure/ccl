@@ -961,8 +961,8 @@ rmark(LispObj n)
 #else
     this = ((LispObj)boundary) + ((*((int *)boundary)) >> 8);
     ((int *)boundary)[0] &= 0xff;
-    goto Climb;
 #endif
+    goto Climb;
   }
 }
 
