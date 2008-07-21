@@ -900,6 +900,12 @@ forward_memoized_area(area *a, natural num_memo_dnodes)
       if (new != x2) {
         *p = new;
         if (memo_dnode < hash_dnode_limit) {
+          /* If this code is reached, 'hashp' is non-NULL and pointing
+             at the header of a hash_table_vector, and 'memo_dnode' identifies
+             a pair of words inside the hash_table_vector.  It may be
+             hard for program analysis tools to recognize that, but I
+             believe that warnings about 'hashp' being NULL here can
+             be safely ignored. */
           hashp->flags |= nhash_key_moved_mask;
           hash_dnode_limit = 0;
           hashp = NULL;
