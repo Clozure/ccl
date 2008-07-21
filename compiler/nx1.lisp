@@ -804,6 +804,11 @@
   (nx1-1d-vref env arr dim0 t))
 
 (defnx1 nx1-%aref2 ((%aref2)) (&whole whole &environment env arr i j)
+  ;; Bleah.  Breaks modularity.  Specialize later.
+  (target-arch-case
+   (:x8632
+    (return-from nx1-%aref2 (nx1-treat-as-call whole))))
+
   (let* ((arch (backend-target-arch *target-backend*))
          (ctype (specifier-type (nx-form-type arr env)))
          (atype (if (csubtypep ctype (specifier-type '(array * (* *)))) ctype))
@@ -831,6 +836,11 @@
                   (nx1-form j)))))
 
 (defnx1 nx1-%aref3 ((%aref3)) (&whole whole &environment env arr i j k)
+  ;; Bleah.  Breaks modularity.  Specialize later.
+  (target-arch-case
+   (:x8632
+    (return-from nx1-%aref3 (nx1-treat-as-call whole))))
+
   (let* ((arch (backend-target-arch *target-backend*))
          (ctype (specifier-type (nx-form-type arr env)))
          (atype (if (csubtypep ctype (specifier-type '(array * (* * *)))) ctype))
@@ -902,6 +912,11 @@
        (nx1-treat-as-call whole)))
             
 (defnx1 nx1-%aset2 ((%aset2)) (&whole whole &environment env arr i j new)
+  ;; Bleah.  Breaks modularity.  Specialize later.
+  (target-arch-case
+   (:x8632
+    (return-from nx1-%aset2 (nx1-treat-as-call whole))))
+
   (let* ((arch (backend-target-arch *target-backend*))
          (ctype (specifier-type (nx-form-type arr env)))
          (atype (if (csubtypep ctype (specifier-type '(array * (* *)))) ctype))
@@ -932,6 +947,11 @@
                   (nx1-form new)))))
 
 (defnx1 nx1-%aset3 ((%aset3)) (&whole whole &environment env arr i j k new)
+  ;; Bleah.  Breaks modularity.  Specialize later.
+  (target-arch-case
+   (:x8632
+    (return-from nx1-%aset3 (nx1-treat-as-call whole))))
+
   (let* ((arch (backend-target-arch *target-backend*))
          (ctype (specifier-type (nx-form-type arr env)))
          (atype (if (csubtypep ctype (specifier-type '(array * (* * *)))) ctype))
@@ -1327,6 +1347,7 @@
     (ecase (backend-name *target-backend*)
       (:linuxppc32 (%nx1-operator eabi-ff-call))
       ((:darwinppc32 :linuxppc64 :darwinppc64) (%nx1-operator poweropen-ff-call))
+      (:darwinx8632 (%nx1-operator i386-ff-call))
       ((:linuxx8664 :freebsdx8664 :darwinx8664 :solarisx8664) (%nx1-operator ff-call)))))
 
 (defnx1 nx1-syscall ((%syscall)) (idx &rest arg-specs-and-result-spec)
@@ -1347,6 +1368,7 @@
              (:linuxppc32 (%nx1-operator eabi-syscall))
              ((:darwinppc32 :darwinppc64 :linuxppc64)
               (%nx1-operator poweropen-syscall))
+	     (:darwinx8632 (%nx1-operator i386-syscall))
              ((:linuxx8664 :freebsdx8664 :darwinx8664 :solarisx8664) (%nx1-operator syscall))))))
 
 (defun nx1-ff-call-internal (address-expression arg-specs-and-result-spec operator )
