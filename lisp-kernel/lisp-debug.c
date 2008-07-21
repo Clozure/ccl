@@ -80,7 +80,9 @@ foreign_name_and_offset(natural addr, int *delta)
 #ifndef WINDOWS
   if (dladdr((void *)addr, &info)) {
     ret = (char *)info.dli_sname;
-    *delta = ((natural)addr - (natural)info.dli_saddr);
+    if (delta) {
+      *delta = ((natural)addr - (natural)info.dli_saddr);
+    }
   }
 #endif
   return ret;
