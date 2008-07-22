@@ -1596,6 +1596,8 @@ suspend_other_threads(Boolean for_gc)
 void
 lisp_suspend_other_threads()
 {
+  TCR *current = get_tcr(true);
+  LOCK(lisp_global(TCR_AREA_LOCK),current);
   suspend_other_threads(false);
 }
 
@@ -1631,7 +1633,9 @@ resume_other_threads(Boolean for_gc)
 void
 lisp_resume_other_threads()
 {
+  TCR *current = get_tcr(true);
   resume_other_threads(false);
+  UNLOCK(lisp_global(TCR_AREA_LOCK),current);
 }
 
 
