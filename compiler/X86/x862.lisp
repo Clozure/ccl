@@ -5343,7 +5343,7 @@
                    (setq tail (cdr tail)))
                  (x86-emit-instruction-from-vinsn
                   (svref (target-arch-case
-                          (:x8664 x86::*x8664-opcode-templates*)) (car f))
+                          (:x8664 x86::*x86-opcode-templates*)) (car f))
                   head
                   frag-list
                   instruction

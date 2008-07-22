@@ -202,14 +202,13 @@
 
 
 (defun x86-lap-macro-function (name)
-  (gethash (string name) #|(backend-lap-macros *target-backend*)|#
-           *x86-lap-macros*))
+  (gethash (string name) (backend-lap-macros *target-backend*)))
 
 (defun (setf x86-lap-macro-function) (def name)
   (let* ((s (string name)))
     (when (gethash s x86::*x86-opcode-template-lists*)
       (error "~s already defines an x86 instruction . " name))
-    (setf (gethash s *x86-lap-macros* #|(backend-lap-macros *x86-backend*)|#) def)))
+    (setf (gethash s (backend-lap-macros *x86-backend*)) def)))
 
 (defmacro defx86lapmacro (name arglist &body body)
   `(progn
@@ -380,7 +379,7 @@
 
 (defun lookup-x86-register (regname designator)
   (let* ((r (typecase regname
-              (symbol (or (gethash (string regname) x86::*x86-registers*)
+              (symbol (or (gethash (string regname) x86::*x8664-registers*)
                           (if (eq regname :rcontext)
                             (svref x86::*x8664-register-entries*
                                    (ccl::backend-lisp-context-register *target-backend*)))
@@ -390,7 +389,7 @@
                                       (>= val 0)
                                       (< val (length x86::*x8664-register-entries*))
                                       (svref x86::*x8664-register-entries* val))))))
-              (string (gethash regname x86::*x86-registers*))
+              (string (gethash regname x86::*x8664-registers*))
               (fixnum (if (and (typep regname 'fixnum)
                                       (>= regname 0)
                                       (< regname (length x86::*x8664-register-entries*)))
@@ -1321,7 +1320,7 @@
                                       (symbolp name)
                                       (not (constant-symbol-p name))
                                       (or (not (gethash (string name)
-                                                        x86::*x86-registers*))
+                                                        x86::*x8664-registers*))
                                           (error "Symbol ~s already names and x86 register" name))
                                       name)
                                  (error 

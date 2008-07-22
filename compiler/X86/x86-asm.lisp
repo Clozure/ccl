@@ -3414,7 +3414,7 @@
 (dotimes (i (length *x8664-opcode-templates*))
   (setf (x86-opcode-template-ordinal (svref *x8664-opcode-templates* i)) i))
   
-    
+(defparameter *x86-opcode-templates* *x8664-opcode-templates*)
       
 (defparameter *x86-32-opcode-template-lists*
   (make-hash-table :test #'equalp))
@@ -3447,7 +3447,7 @@
        *x86-64-opcode-template-lists*))
     t))
 
-(defparameter *x86-opcode-template-lists* ())
+(defparameter *x86-opcode-template-lists* *x86-64-opcode-template-lists*)
 
 (defvar *x8632-registers* (make-hash-table :test #'equalp))
 (defvar *x8664-registers* (make-hash-table :test #'equalp))
