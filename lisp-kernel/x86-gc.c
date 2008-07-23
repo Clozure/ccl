@@ -2303,12 +2303,12 @@ purify(TCR *tcr, signed_natural param)
 
   TCR  *other_tcr;
   natural max_pure_size;
-  BytePtr new_pure_start;
+  BytePtr new_pure_start,
+    low = (a->low + (static_dnodes_for_area(a) << dnode_shift)),
+    high = a->active;
 
 
-
-  max_pure_size = unboxed_bytes_in_range((LispObj *)(a->low + (static_dnodes_for_area(a) << dnode_shift)), 
-                                         (LispObj *) a->active);
+  max_pure_size = unboxed_bytes_in_range((LispObj *) low, (LispObj *) high);
   new_pure_area = extend_readonly_area(max_pure_size);
   if (new_pure_area) {
     new_pure_start = new_pure_area->active;
@@ -2325,16 +2325,16 @@ purify(TCR *tcr, signed_natural param)
 
 
     
-    purify_areas(a->low, a->active, new_pure_area);
+    purify_areas(low, high, new_pure_area);
     
     other_tcr = tcr;
     do {
-      purify_tcr_xframes(other_tcr, a->low, a->active, new_pure_area);
-      purify_tcr_tlb(other_tcr, a->low, a->active, new_pure_area);
+      purify_tcr_xframes(other_tcr, low, high, new_pure_area);
+      purify_tcr_tlb(other_tcr, low, high, new_pure_area);
       other_tcr = other_tcr->next;
     } while (other_tcr != tcr);
 
-    purify_gcable_ptrs(a->low, a->active, new_pure_area);
+    purify_gcable_ptrs(low, high, new_pure_area);
     {
       natural puresize = (unsigned) (new_pure_area->active-new_pure_start);
       if (puresize != 0) {
