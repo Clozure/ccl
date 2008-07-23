@@ -146,10 +146,10 @@
 
 (defmacro defx86reg (alias known)
   (let* ((known-entry (gensym)))
-    `(let* ((,known-entry (gethash ,(string known) x86::*x86-registers*)))
+    `(let* ((,known-entry (gethash ,(string known) x86::*x8664-registers*)))
       (unless ,known-entry
         (error "register ~a not defined" ',known))
-      (setf (gethash ,(string alias) x86::*x86-registers*) ,known-entry)
+      (setf (gethash ,(string alias) x86::*x8664-registers*) ,known-entry)
       (unless (gethash ,(string-downcase (string known)) *x8664-symbolic-register-names*)
         (setf (gethash ,(string-downcase (string known)) *x8664-symbolic-register-names*)
               (string-downcase ,(string alias))))
