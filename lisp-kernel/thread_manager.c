@@ -529,7 +529,14 @@ os_get_stack_bounds(LispObj q,void **base, natural *size)
   *base = (void *)((natural)temp_base + temp_size);
   *size = temp_size;
 #endif
-
+#ifdef SOLARIS
+  stack_t st;
+  
+  thr_stksegment(&st);
+  *size = st.ss_size;
+  *base = st.ss_sp;
+  
+#endif
 }
 #endif
 
