@@ -346,7 +346,7 @@ given is that of a group to which the current user belongs."
     (%file-kind (nth-value 1 (%fstat fd)))))
 
 (defun %uts-string (result idx buf)
-  (if (eql 0 result)
+  (if (>= result 0)
     (%get-cstring (%inc-ptr buf (* #+linux-target #$_UTSNAME_LENGTH
 				   #+darwin-target #$_SYS_NAMELEN
                                    #+(or freebsd-target solaris-target) #$SYS_NMLN
@@ -508,7 +508,7 @@ given is that of a group to which the current user belongs."
   #-solaris-target
   (syscall syscalls::getrusage who usage)
   #+solaris-target
-  (syscall syscalls::rusagesys #$_RUSAGESYS_GETRUSAGE who usage)
+  (#_getrusage who usage)
   )
 
 
