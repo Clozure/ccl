@@ -90,6 +90,13 @@
       ;;(format t "~& opcode ordinals changed in ~s: ~s" vinsn-template changed)
       (flet ((update-instruction (i)
                (when (consp i)
+                 ;; An :ANCHORED-UUO directive contains a real
+                 ;; (vinsn-encoded) instruction (typically a UUO) in
+                 ;; its cadr.  Other directives won't contain embedded
+                 ;; instructions and whatever's in their CARs won't
+                 ;; match in the assoc below.
+                 (when (eq (car i) :anchored-uuo)
+                   (setq i (cadr i)))
                  (let* ((pair (assoc (car i) changed :test #'eq)))
                    (when pair
                      (setf (car i) (cdr pair)))))))
