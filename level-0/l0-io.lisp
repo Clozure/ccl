@@ -84,7 +84,7 @@
              (setf (%get-unsigned-byte pointer (the fixnum (+ idx 2)))
                    (logior #x80 (the fixnum (logand #x3f (the fixnum (ash code -6))))))
              (setf (%get-unsigned-byte pointer (the fixnum (+ idx 3)))
-                   (logand #x3f code))
+                   (logior #x80 (logand #x3f code)))
              (incf idx 4))))))
 
 (defun utf-8-memory-decode (pointer noctets idx string)
@@ -150,22 +150,24 @@
   (do* ((i start)
         (end (+ start noctets))
         (nchars 0 (1+ nchars)))
-       ((= i end) (values nchars i))
+       ((= i end) (values nchars (- i start)))
     (let* ((code (%get-unsigned-byte pointer i))
-           (nexti (+ i (cond ((< code #x80) 1)
+           (nexti (+ i (cond ((< code #xc2) 1)
                              ((< code #xe0) 2)
                              ((< code #xf0) 3)
-                             (t 4)))))
+                             ((< code #xf8) 4)
+                             (t 1)))))
       (declare (type (unsigned-byte 8) code))
       (if (> nexti end)
-        (return (values nchars i))
+        (return (values nchars (- i start)))
         (setq i nexti)))))
 
 
 
 ;;; write nbytes bytes from buffer buf to file-descriptor fd.
 (defun fd-write (fd buf nbytes)
-  (ignoring-eintr (syscall syscalls::write fd buf nbytes)))
+  (ignoring-eintr 
+   (syscall syscalls::write fd buf nbytes)))
 
 (defun fd-read (fd buf nbytes)
   (ignoring-eintr (syscall syscalls::read fd buf nbytes)))
