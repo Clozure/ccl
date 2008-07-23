@@ -917,7 +917,7 @@
       (when explicit-seg-prefix
         (push explicit-seg-prefix prefixes)))
     (cond
-      ((logtest (x86::encode-opcode-modifier :jump) opcode-modifier)
+      ((logtest (x86::encode-opcode-flags :jump) opcode-modifier)
        ;; a variable-length pc-relative branch, possibly preceded
        ;; by prefixes (used for branch prediction, mostly.)
        (x86-output-branch frag-list insn))
