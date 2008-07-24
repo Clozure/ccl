@@ -752,7 +752,7 @@ is_write_fault(ExceptionInformation *xp, siginfo_t *info)
   return (xp->uc_mcontext->__es.__err & 0x2) != 0;
 #endif
 #endif
-#ifdef LINUX
+#if defined(LINUX) || defined(SOLARIS)
   return (xpGPR(xp,REG_ERR) & 0x2) != 0;
 #endif
 #ifdef FREEBSD
@@ -962,37 +962,38 @@ handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TC
          not otherwise implemented causes a "protecton fault".  Of
          course that has nothing to do with accessing protected
          memory; of course, most Unices act as if it did.*/
-      if (*program_counter == INTN_OPCODE) {
-	program_counter++;
-	switch (*program_counter) {
-	case UUO_ALLOC_TRAP:
-	  if (handle_alloc_trap(context, tcr)) {
-	    xpPC(context) += 2;	/* we might have GCed. */
-	    return true;
-	  }
-	  break;
-	case UUO_GC_TRAP:
-	  if (handle_gc_trap(context, tcr)) {
-	    xpPC(context) += 2;
-	    return true;
-	  }
-	  break;
-	  
-	case UUO_DEBUG_TRAP:
-	  xpPC(context) = (natural) (program_counter+1);
-	  lisp_Debugger(context, info, debug_entry_dbg, false, "Lisp Breakpoint");
-	  return true;
-
-	case UUO_DEBUG_TRAP_WITH_STRING:
-	  xpPC(context) = (natural) (program_counter+1);
+      if ((program_counter != NULL) &&
+          (*program_counter == INTN_OPCODE)) {
+        program_counter++;
+        switch (*program_counter) {
+        case UUO_ALLOC_TRAP:
+          if (handle_alloc_trap(context, tcr)) {
+            xpPC(context) += 2;	/* we might have GCed. */
+            return true;
+          }
+          break;
+        case UUO_GC_TRAP:
+          if (handle_gc_trap(context, tcr)) {
+            xpPC(context) += 2;
+            return true;
+          }
+          break;
+            
+        case UUO_DEBUG_TRAP:
+          xpPC(context) = (natural) (program_counter+1);
+          lisp_Debugger(context, info, debug_entry_dbg, false, "Lisp Breakpoint");
+          return true;
+            
+        case UUO_DEBUG_TRAP_WITH_STRING:
+          xpPC(context) = (natural) (program_counter+1);
           {
             char msg[512];
-
+              
             get_lisp_string(xpGPR(context,Iarg_z),msg, sizeof(msg)-1);
             lisp_Debugger(context, info, debug_entry_dbg, false, msg);
           }
-	  return true;
-          
+          return true;
+            
         default:
           return handle_error(tcr, context);
 	}
