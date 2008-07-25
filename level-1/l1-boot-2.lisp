@@ -175,9 +175,9 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "PPC32-ARCH" "ppc32-arch") 
       #+ppc64-target
       (bin-load-provide "PPC64-ARCH" "ppc64-arch")
-      #+x8632-target
+      #+x86-target
       (bin-load-provide "X8632-ARCH" "x8632-arch")
-      #+x8664-target
+      #+x86-target
       (bin-load-provide "X8664-ARCH" "x8664-arch")
       (bin-load-provide "VREG" "vreg")
       
