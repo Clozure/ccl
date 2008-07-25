@@ -334,7 +334,8 @@
   (x86-dis-make-reg-operand (svref x86::*x86-float-regs* (x86-ds-rm ds))))
 
 (defun op-indire (ds bytemode sizeflag)
-  (when (zerop (x86-ds-prefixes ds))
+  (when (and (x86-ds-mode-64 ds)
+	     (zerop (x86-ds-prefixes ds)))
     (setf (x86-ds-rex ds) (logior #x48 (x86-ds-rex ds))))
   (op-e ds bytemode sizeflag))
 
@@ -2364,7 +2365,7 @@
                (let* ((entry (x86::x86-register-operand-entry thing)))
                  (eq entry (if (x86-ds-mode-64 ds)
                              (x86::x86-reg64 13)
-                             (x86::x86-reg32 6))))))
+                             (x86::x86-reg32 x8632::fn))))))
            (is-rip (thing)
              (if (and (typep thing 'x86::x86-register-operand)
                       (x86-ds-mode-64 ds))
@@ -2429,7 +2430,9 @@
            (let* ((disp (is-disp-only op0)))
              (when disp
                (let* ((info (find (early-x86-lap-expression-value disp)
-                                  x8664::*x8664-subprims*
+				  (if (x86-ds-mode-64 ds)
+				    x8664::*x8664-subprims*
+				    x8632::*x8632-subprims*)
                                   :key #'subprimitive-info-offset)))
                  (when info (setf (x86::x86-memory-operand-disp op0)
                                   (subprimitive-info-name info)))))))
@@ -2666,7 +2669,7 @@
              (eq (x86::x86-register-operand-entry base)
                  (if (x86-ds-mode-64 ds)
                    (x86::x86-reg64 13)
-                   (x86::x86-reg32 6)))
+                   (x86::x86-reg32 x8632::fn)))
              (null index)
              (or (eql scale 0) (null scale))
              (and (if (typep disp 'constant-x86-lap-expression)
@@ -2679,7 +2682,9 @@
                   (>= val (x86-ds-code-limit ds))))
       (let* ((diff (- val (x86-ds-code-limit ds)))
              (constant (uvref (x86-ds-constants-vector ds)
-                              (1+ (ash diff -3)))))
+			      (1+ (ash diff (if (x86-ds-mode-64 ds)
+					      (- x8664::word-shift)
+					      (- x8632::word-shift)))))))
         `(@ ',constant ,(unparse-x86-lap-operand base ds)))
       (collect ((subforms))
         (subforms '@)
@@ -2756,6 +2761,30 @@
         (do-dll-nodes (instruction (x86-dis-block-instructions block))
           (setq seq (funcall collect-function ds instruction seq)))))))
 
+(defun x8632-disassemble-xfunction (xfunction &key (symbolic-names
+                                                         x8632::*x8632-symbolic-register-names*) (collect-function #'x86-print-disassembled-instruction))
+  (check-type xfunction xfunction)
+  (check-type (uvref xfunction 0) (simple-array (unsigned-byte 8) (*)))
+  (let* ((ds (make-x86-disassembly-state
+	      :mode-64 nil
+              :code-vector (uvref xfunction 0)
+              :constants-vector xfunction
+              :entry-point 2
+              :code-pointer 0           ; for next-u16 below
+              :symbolic-names symbolic-names
+              :pending-labels (list 2)))
+         (blocks (x86-ds-blocks ds)))
+    (setf (x86-ds-code-limit ds) (ash (x86-ds-next-u16 ds) 2))
+    (do* ()
+         ((null (x86-ds-pending-labels ds)))
+      (let* ((lab (pop (x86-ds-pending-labels ds))))
+        (or (x86-dis-find-label lab blocks)
+            (x86-disassemble-new-block ds lab))))
+    (let* ((seq 0))
+      (do-dll-nodes (block blocks)
+        (do-dll-nodes (instruction (x86-dis-block-instructions block))
+          (setq seq (funcall collect-function ds instruction seq)))))))
+
 #+x8664-target
 (defun x8664-xdisassemble (function &optional (collect-function #'x86-print-disassembled-instruction ))
   (let* ((fv (%function-to-function-vector function))
@@ -2773,6 +2802,26 @@
           (j 1 (1+ j)))
          ((= k function-size-in-words)
           (x8664-disassemble-xfunction xfunction :collect-function collect-function))
+      (declare (fixnum j k))
+      (setf (uvref xfunction j) (uvref fv k)))))
+
+#+x8632-target
+(defun x8632-xdisassemble (function &optional (collect-function #'x86-print-disassembled-instruction ))
+  (let* ((fv (function-to-function-vector function))
+         (function-size-in-words (uvsize fv))
+         (code-words (%function-code-words function))
+         (ncode-bytes (ash function-size-in-words x8632::word-shift))
+         (code-bytes (make-array ncode-bytes
+                                 :element-type '(unsigned-byte 8)))
+         (numimms (- function-size-in-words code-words))
+         (xfunction (%alloc-misc (the fixnum (1+ numimms)) target::subtag-xfunction)))
+    (declare (fixnum code-words ncode-bytes numimms))
+    (%copy-ivector-to-ivector fv 0 code-bytes 0 ncode-bytes)
+    (setf (uvref xfunction 0) code-bytes)
+    (do* ((k code-words (1+ k))
+          (j 1 (1+ j)))
+         ((= k function-size-in-words)
+          (x8632-disassemble-xfunction xfunction :collect-function collect-function))
       (declare (fixnum j k))
       (setf (uvref xfunction j) (uvref fv k)))))
 
