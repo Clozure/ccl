@@ -680,8 +680,14 @@
   (:anchored-uuo-section :resume)
   :bad
   (:anchored-uuo (uuo-error-reg-not-tag (:%q object) (:$ub x8664::fulltag-cons))))
-                                         
-                                          
+
+(define-x8664-vinsn set-z-flag-if-consp (()
+                                         ((object :lisp))
+                                         ((tag :u8)))
+  (movb (:%b object) (:%b tag))
+  (andb (:$b x8664::fulltagmask) (:%b tag))
+  (cmpb (:$b x8664::fulltag-cons) (:%b tag)))
+
 (define-x8664-vinsn trap-unless-uvector (()
                                          ((object :lisp))
                                          ((tag :u8)))
