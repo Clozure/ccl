@@ -1521,7 +1521,9 @@
     (emit-x86-lap-label frag-list entry-code-tag)
     (x86-lap-form '(movl ($ :self) (% x8632::fn)) frag-list instruction main-frag-list exception-frag-list)
     (dolist (f forms)
-      (x86-lap-form f frag-list instruction main-frag-list exception-frag-list))
+      (setq frag-list (x86-lap-form f frag-list instruction main-frag-list exception-frag-list)))
+    (setq frag-list main-frag-list)
+    (merge-dll-nodes frag-list exception-frag-list)
     (x86-lap-directive frag-list :align 2)
     (when *x86-lap-fixed-code-words*
       ;; We have a code-size that we're trying to get to.  We need to
