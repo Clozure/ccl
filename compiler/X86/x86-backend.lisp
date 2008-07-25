@@ -35,10 +35,17 @@
         (:% (ecase (arch::target-lisp-node-size (backend-target-arch backend))
               (8 (x86::encode-operand-type :reg64))
               (4 (x86::encode-operand-type :reg32))))
+	(:%acc (ecase (arch::target-lisp-node-size (backend-target-arch backend))
+              (8 (x86::encode-operand-type :reg64 :acc))
+              (4 (x86::encode-operand-type :reg32 :acc))))
         (:%q (x86::encode-operand-type :reg64))
+        (:%accq (x86::encode-operand-type :reg64 :acc))
         (:%l (x86::encode-operand-type :reg32))
+        (:%accl (x86::encode-operand-type :reg32 :acc))
         (:%w (x86::encode-operand-type :reg16))
+        (:%accw (x86::encode-operand-type :reg16 :acc))
         (:%b (x86::encode-operand-type :reg8))
+        (:%accb (x86::encode-operand-type :reg8 :acc))
         (:%xmm (x86::encode-operand-type :regxmm))
         (:%mmx (x86::encode-operand-type :regmmx))
         (:@ (x86::encode-operand-type :anymem))
@@ -49,7 +56,8 @@
         (:$l (x86::encode-operand-type :imm32s))
         (:$ul  (x86::encode-operand-type :imm32))
         (:$q (x86::encode-operand-type :imm64))
-        (:%shift (x86::encode-operand-type :shiftcount :reg8))))))
+        (:%shift (x86::encode-operand-type :shiftcount :reg8))
+	(:$self (x86::encode-operand-type :self))))))
 
 (defun lookup-x86-opcode (form backend)
   (when (consp form)
@@ -270,8 +278,10 @@
                               (cons :@
                                     (simplify-memory-operand (cdr op))))
                              ((member (car op)
-                                      '(:% :%q :%l :%w :%b :$ :$1 :$b :$ub :$w :$l
-                                        :$ul :$q :%mmx :%xmm :%shift))
+                                      '(:% :%q :%l :%w :%b
+					:%acc :%accq :%accl :%accw :%accb
+					:$ :$1 :$b :$ub :$w :$l
+                                        :$ul :$q :%mmx :%xmm :%shift :$self))
                               (simplify-simple-operand (cadr op)))
                              (t
                               (simplify-simple-operand op)))))
