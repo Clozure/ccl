@@ -451,6 +451,8 @@
   kind                                  ; '0 = recursive-lock, '1 = rwlock
   writer                                ;tcr of owning thread or 0
   name
+  whostate
+  whostate-2
   )
 
 
