@@ -114,6 +114,21 @@
 (defun (setf frag-ref) (new frag index)
   (setf (%vector-list-ref (frag-code-buffer frag) index) new))
 
+;;; get/set little-endian 32 bit word in frag at index
+(defun frag-ref-32 (frag index)
+  (let ((result 0))
+    (setf (ldb (byte 8 0) result) (frag-ref frag index)
+	  (ldb (byte 8 8) result) (frag-ref frag (+ index 1))
+	  (ldb (byte 8 16) result) (frag-ref frag (+ index 2))
+	  (ldb (byte 8 24) result) (frag-ref frag (+ index 3)))
+    result))
+
+(defun (setf frag-ref-32) (new frag index)
+  (setf (frag-ref frag index) (ldb (byte 8 0) new)
+	(frag-ref frag (+ index 1)) (ldb (byte 8 8) new)
+	(frag-ref frag (+ index 2)) (ldb (byte 8 16) new)
+	(frag-ref frag (+ index 3)) (ldb (byte 8 24) new)))
+
 (defun frag-length (frag)
   (frag-position frag))
 
@@ -194,12 +209,9 @@
 
 (defvar *x86-lap-labels* ())
 (defvar *x86-lap-constants* ())
-(defparameter *x86-lap-entry-offset* 15)
+(defparameter *x86-lap-entry-offset* nil)
 (defparameter *x86-lap-fixed-code-words* nil)
-(defvar *x86-lap-macros* (make-hash-table :test #'equalp))
 (defvar *x86-lap-lfun-bits* 0)
-
-
 
 (defun x86-lap-macro-function (name)
   (gethash (string name) (backend-lap-macros *target-backend*)))
@@ -207,8 +219,8 @@
 (defun (setf x86-lap-macro-function) (def name)
   (let* ((s (string name)))
     (when (gethash s x86::*x86-opcode-template-lists*)
-      (error "~s already defines an x86 instruction . " name))
-    (setf (gethash s (backend-lap-macros *x86-backend*)) def)))
+      (error "~s already defines an x86 instruction." name))
+    (setf (gethash s (backend-lap-macros *target-backend*)) def)))
 
 (defmacro defx86lapmacro (name arglist &body body)
   `(progn
@@ -378,32 +390,42 @@
 
 
 (defun lookup-x86-register (regname designator)
-  (let* ((r (typecase regname
-              (symbol (or (gethash (string regname) x86::*x8664-registers*)
+  (let* ((registers (target-arch-case (:x8632 x86::*x8632-registers*)
+				      (:x8664 x86::*x8664-registers*)))
+	 (register-entries (target-arch-case (:x8632 x86::*x8632-register-entries*)
+					     (:x8664 x86::*x8664-register-entries*)))
+	 (r (typecase regname
+              (symbol (or (gethash (string regname) registers)
                           (if (eq regname :rcontext)
-                            (svref x86::*x8664-register-entries*
+                            (svref register-entries
                                    (ccl::backend-lisp-context-register *target-backend*)))
                           (and (boundp regname)
                                (let* ((val (symbol-value regname)))
                                  (and (typep val 'fixnum)
                                       (>= val 0)
-                                      (< val (length x86::*x8664-register-entries*))
-                                      (svref x86::*x8664-register-entries* val))))))
-              (string (gethash regname x86::*x8664-registers*))
+                                      (< val (length register-entries))
+                                      (svref register-entries val))))))
+              (string (gethash regname registers))
               (fixnum (if (and (typep regname 'fixnum)
                                       (>= regname 0)
-                                      (< regname (length x86::*x8664-register-entries*)))
-                        (svref x86::*x8664-register-entries* regname))))))
+                                      (< regname (length register-entries)))
+                        (svref register-entries regname))))))
                                
     (when r
       (if (eq designator :%)
         r
-        (let* ((regtype (x86::reg-entry-reg-type r)))
-          (unless (logtest regtype (x86::encode-operand-type :reg8 :reg16 :reg32 :reg64))
+        (let* ((regtype (x86::reg-entry-reg-type r))
+	       (oktypes (target-arch-case
+			(:x8632 (x86::encode-operand-type :reg8 :reg16 :reg32))
+			(:x8664 (x86::encode-operand-type :reg8 :reg16 :reg32 :reg64)))))
+          (unless (logtest regtype oktypes)
             (error "Designator ~a can't be used with register ~a"
                    designator (x86::reg-entry-reg-name r)))
           (case designator
-            (:%b (x86::x86-reg8 r))
+            (:%b (if (x86-byte-reg-p (x86::reg-entry-reg-name r))
+		   (x86::x86-reg8 r)
+		   (error "Designator ~a can't be used with register ~a"
+			  designator (x86::reg-entry-reg-name r))))
             (:%w (x86::x86-reg16 r))
             (:%l (x86::x86-reg32 r))
             (:%q (x86::x86-reg64 r))))))))
@@ -412,7 +434,8 @@
   (let* ((r (if (typep form 'symbol)
               (lookup-x86-register form :%))))
     (if r
-      (x86::reg-entry-ordinal64 r)
+      (target-arch-case (:x8632 (x86::reg-entry-ordinal32 r))
+			(:x8664 (x86::reg-entry-ordinal64 r)))
       (multiple-value-bind (val condition)
           (ignore-errors (eval form))
         (if condition
@@ -420,7 +443,20 @@
                  condition form)
           val)))))
 
+(defun x86-acc-reg-p (regname)
+  (let ((r (lookup-x86-register regname :%)))
+    (if r
+      (logtest (x86::encode-operand-type :acc) (x86::reg-entry-reg-type r)))))
 
+(defun x86-byte-reg-p (regname)
+  (let ((r (lookup-x86-register regname :%)))
+    (if r
+      (target-arch-case
+       (:x8632
+	(or (<= (x86::reg-entry-reg-num r) x8632::ebx)
+	    (member (x86::reg-entry-reg-name r) '("ah" "ch" "dh" "bh") :test #'string=)))
+       (:x8664 t)))))
+      
 ;;; It may seem strange to have an expression language in a lisp-based
 ;;; assembler, since lisp is itself a fairly reasonable expression
 ;;; language and EVAL is (in this context, at least) an adequate evaluation
@@ -531,7 +567,7 @@
       (when (quoted-form-p form)
         (let* ((val (cadr form)))
           (if (typep val 'fixnum)
-            (setq form (ash val 3 #|x8664::fixnumshift|#))
+	    (setq form (ash val (arch::target-fixnum-shift (backend-target-arch *target-backend*))))
             (let* ((constant-label (ensure-x86-lap-constant-label val )))
               (setq form `(:^ ,(x86-lap-label-name constant-label)))))))
       (if (null form)
@@ -681,6 +717,9 @@
                         (type (if val
                                 (smallest-imm-type val)
                                 (x86::encode-operand-type :imm32s))))
+		   ;; special case
+		   (when (eq val :self)
+		     (setq type (x86::encode-operand-type :self)))
                    (x86::make-x86-immediate-operand :type type
                                              :value expr))))
               ((setq designator (x86-register-designator form))
@@ -702,7 +741,10 @@
   (setf (x86::x86-instruction-opcode-template i) template
         (x86::x86-instruction-base-opcode i) (x86::x86-opcode-template-base-opcode template)
         (x86::x86-instruction-modrm-byte i) (x86::x86-opcode-template-modrm-byte template)
-        (x86::x86-instruction-rex-prefix i) (x86::x86-opcode-template-rex-prefix template)
+        (x86::x86-instruction-rex-prefix i) (target-arch-case
+					     (:x8632 nil)
+					     (:x8664
+					      (x86::x86-opcode-template-rex-prefix template)))
         (x86::x86-instruction-sib-byte i) nil
         (x86::x86-instruction-seg-prefix i) nil
         (x86::x86-instruction-disp i) nil
@@ -864,7 +906,7 @@
 
 
               
-
+;;; xxx - might want to omit disp64 when doing 32 bit code
 (defun optimize-displacement-type (disp)
   (if disp
     (let* ((value (early-x86-lap-expression-value disp)))
@@ -908,16 +950,15 @@
                           (x86::x86-instruction-base-opcode insn)
                           (x86::x86-instruction-extra insn)))
 
-
 (defun x86-generate-instruction-code (frag-list insn)
   (let* ((template (x86::x86-instruction-opcode-template insn))
-         (opcode-modifier (x86::x86-opcode-template-flags template))
+         (flags (x86::x86-opcode-template-flags template))
          (prefixes (x86::x86-opcode-template-prefixes template)))
     (let* ((explicit-seg-prefix (x86::x86-instruction-seg-prefix insn)))
       (when explicit-seg-prefix
         (push explicit-seg-prefix prefixes)))
     (cond
-      ((logtest (x86::encode-opcode-flags :jump) opcode-modifier)
+      ((logtest (x86::encode-opcode-flags :jump) flags)
        ;; a variable-length pc-relative branch, possibly preceded
        ;; by prefixes (used for branch prediction, mostly.)
        (x86-output-branch frag-list insn))
@@ -1008,7 +1049,18 @@
                    (frag-list-push-16 frag-list (logand val #xffff))
                    (if (logtest optype (x86::encode-operand-type :imm64))
                      (frag-list-push-64 frag-list val)
-                     (frag-list-push-32 frag-list val))))))))))
+		     ;; magic value denoting function object's
+		     ;; actual runtime address
+		     (if (logtest optype (x86::encode-operand-type :self))
+		       (let* ((frag (frag-list-current frag-list))
+			      (pos (frag-list-position frag-list)))
+			 (frag-list-push-32 frag-list 0)
+			 (push (make-reloc :type :self
+					   :arg 0
+					   :frag frag
+					   :pos pos)
+			       (frag-relocs frag)))
+		       (frag-list-push-32 frag-list val)))))))))))
     (let* ((frag (frag-list-current frag-list)))
       (if (eq (car (frag-type frag)) :pending-talign)
         (finish-pending-talign-frag frag-list)))))
@@ -1134,7 +1186,7 @@
   ;; next instruction, so we repeat this process until we can
   ;; make it all the way through the frag-list.
   (loop
-    (let* ((address 8))
+    (let* ((address (target-arch-case (:x8632 4) (:x8664 8)))) ;after header
       (declare (fixnum address))
       (when (do-dll-nodes (frag frag-list t)
               (setf (frag-address frag) address)
@@ -1279,8 +1331,8 @@
                     (:expr8 (emit-byte frag pos  (x86-lap-expression-value arg)))
                     (:expr16 (emit-short frag pos (x86-lap-expression-value arg)))
                     (:expr32 (emit-long frag pos (x86-lap-expression-value arg)))
-                    (:expr64 (emit-quad frag pos (x86-lap-expression-value arg)))))))))))))
-                             
+                    (:expr64 (emit-quad frag pos (x86-lap-expression-value arg)))
+		    (:self (emit-long frag pos (x86-lap-expression-value arg)))))))))))))
 
 (defun frag-emit-nops (frag count)
   (let* ((nnops (ash (+ count 3) -2))
@@ -1320,8 +1372,10 @@
                                       (symbolp name)
                                       (not (constant-symbol-p name))
                                       (or (not (gethash (string name)
-                                                        x86::*x8664-registers*))
-                                          (error "Symbol ~s already names and x86 register" name))
+							(target-arch-case
+							 (:x8632 x86::*x8632-registers*)
+							 (:x8664 x86::*x8664-registers*))))
+                                          (error "Symbol ~s already names an x86 register" name))
                                       name)
                                  (error 
                                   "~S is not a bindable symbol name ." name))))
@@ -1352,6 +1406,8 @@
       (let* ((nbytes 0))
         (do-dll-nodes (frag frag-list)
           (incf nbytes (frag-length frag)))
+	#+x8632-target
+	(when (>= nbytes (ash 1 18)) (compiler-function-overflow))
         (let* ((code-vector (make-array nbytes
                                         :element-type '(unsigned-byte 8)))
                (target-offset 0))
@@ -1383,13 +1439,21 @@
         (setf (uvref function-vector (decf last)) debug-info))
       (dolist (c constants)
         (setf (uvref function-vector (decf last)) (car c)))
-      (%function-vector-to-function function-vector))))
+      #+x8632-target
+      (%update-self-references function-vector)
+      (function-vector-to-function function-vector))))
 
-
-      
 (defun %define-x86-lap-function (name forms &optional (bits 0))
+  (target-arch-case
+   (:x8632
+    (%define-x8632-lap-function name forms bits))
+   (:x8664
+    (%define-x8664-lap-function name forms bits))))
+
+(defun %define-x8664-lap-function (name forms &optional (bits 0))
   (let* ((*x86-lap-labels* ())
          (*x86-lap-constants* ())
+	 (*x86-lap-entry-offset* x8664::fulltag-function)
          (*x86-lap-fixed-code-words* nil)
          (*x86-lap-lfun-bits* bits)
          (end-code-tag (gensym))
@@ -1434,6 +1498,81 @@
                             #'cross-create-x86-function)
              name frag-list *x86-lap-constants* *x86-lap-lfun-bits* nil)))
 
+(defun %define-x8632-lap-function (name forms &optional (bits 0))
+  (let* ((*x86-lap-labels* ())
+         (*x86-lap-constants* ())
+	 (*x86-lap-entry-offset* x8632::fulltag-misc)
+         (*x86-lap-fixed-code-words* nil)
+         (*x86-lap-lfun-bits* bits)
+	 (srt-tag (gensym))
+         (end-code-tag (gensym))
+         (entry-code-tag (gensym))
+         (instruction (x86::make-x86-instruction))
+         (main-frag-list (make-frag-list))
+         (exception-frag-list (make-frag-list))
+         (frag-list main-frag-list))
+    (make-x86-lap-label entry-code-tag)
+    (make-x86-lap-label srt-tag)
+    (make-x86-lap-label end-code-tag)
+    ;; count of 32-bit words from header to function boundary
+    ;; marker, inclusive.
+    (x86-lap-directive frag-list :short `(ash (+ (- (:^ ,end-code-tag) 4)
+						 *x86-lap-entry-offset*) -2))
+    (emit-x86-lap-label frag-list entry-code-tag)
+    (x86-lap-form '(movl ($ :self) (% x8632::fn)) frag-list instruction main-frag-list exception-frag-list)
+    (dolist (f forms)
+      (x86-lap-form f frag-list instruction main-frag-list exception-frag-list))
+    (x86-lap-directive frag-list :align 2)
+    (when *x86-lap-fixed-code-words*
+      ;; We have a code-size that we're trying to get to.  We need to
+      ;; include the self-reference table in the code-size, so decrement
+      ;; the size of the padding we would otherwise insert by the srt size.
+      (let ((srt-words 1))		;for zero between end of code and srt
+	(do-dll-nodes (frag frag-list)
+	  (dolist (reloc (frag-relocs frag))
+	    (when (eq (reloc-type reloc) :self)
+	      (incf srt-words))))
+	(decf *x86-lap-fixed-code-words* srt-words)
+	(if (plusp *x86-lap-fixed-code-words*)
+	  (x86-lap-directive frag-list :org (ash *x86-lap-fixed-code-words* 2)))))
+    ;; self reference table
+    (x86-lap-directive frag-list :long 0)
+    (emit-x86-lap-label frag-list srt-tag)
+    ;; reserve space for self-reference offsets
+    (do-dll-nodes (frag frag-list)
+      (dolist (reloc (frag-relocs frag))
+	(when (eq (reloc-type reloc) :self)
+	  (x86-lap-directive frag-list :long 0))))
+    (x86-lap-directive frag-list :long x8632::function-boundary-marker)
+    (emit-x86-lap-label frag-list end-code-tag)
+    (dolist (c (reverse *x86-lap-constants*))
+      (emit-x86-lap-label frag-list (x86-lap-label-name (cdr c)))
+      (x86-lap-directive frag-list :long 0))
+    (when name
+      (x86-lap-directive frag-list :long 0))
+    ;; room for lfun-bits
+    (x86-lap-directive frag-list :long 0)
+    (relax-frag-list frag-list)
+    (apply-relocs frag-list)
+    (fill-for-alignment frag-list)
+    ;; determine start of self-reference-table
+    (let* ((label (find srt-tag *x86-lap-labels* :test #'eq
+						 :key #'x86-lap-label-name))
+	   (srt-frag (x86-lap-label-frag label))
+	   (srt-index (x86-lap-label-offset label)))
+      ;; fill in self-reference offsets
+      (do-dll-nodes (frag frag-list)
+	(dolist (reloc (frag-relocs frag))
+	  (when (eq (reloc-type reloc) :self)
+	    (setf (frag-ref-32 srt-frag srt-index)
+		  (+ (frag-address frag) (reloc-pos reloc)))
+	    (incf srt-index 4)))))
+    ;;(show-frag-bytes frag-list)
+    (funcall #-x8632-target #'cross-create-x86-function
+             #+x8632-target (if (eq *target-backend* *host-backend*)
+			      #'create-x86-function
+			      #'cross-create-x86-function)
+             name frag-list *x86-lap-constants* *x86-lap-lfun-bits* nil)))
 
 (defmacro defx86lapfunction (&environment env name arglist &body body
                              &aux doc)
@@ -1445,11 +1584,30 @@
   `(progn
      (eval-when (:compile-toplevel)
        (note-function-info ',name t ,env))
-     #-x86-target
+     #-x8664-target
      (progn
        (eval-when (:load-toplevel)
          (%defun (nfunction ,name (lambda (&lap 0) (x86-lap-function ,name ,arglist ,@body))) ,doc))
        (eval-when (:execute)
          (%define-x86-lap-function ',name '((let ,arglist ,@body)))))
-     #+x86-target	; just shorthand for defun
+     #+x8664-target	; just shorthand for defun
+     (%defun (nfunction ,name (lambda (&lap 0) (x86-lap-function ,name ,arglist ,@body))) ,doc)))
+
+(defmacro defx8632lapfunction (&environment env name arglist &body body
+                             &aux doc)
+  (if (not (endp body))
+      (and (stringp (car body))
+           (cdr body)
+           (setq doc (car body))
+           (setq body (cdr body))))
+  `(progn
+     (eval-when (:compile-toplevel)
+       (note-function-info ',name t ,env))
+     #-x8632-target
+     (progn
+       (eval-when (:load-toplevel)
+         (%defun (nfunction ,name (lambda (&lap 0) (x86-lap-function ,name ,arglist ,@body))) ,doc))
+       (eval-when (:execute)
+         (%define-x8632-lap-function ',name '((let ,arglist ,@body)))))
+     #+x8632-target
      (%defun (nfunction ,name (lambda (&lap 0) (x86-lap-function ,name ,arglist ,@body))) ,doc)))
