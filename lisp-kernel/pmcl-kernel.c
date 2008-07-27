@@ -1961,7 +1961,7 @@ xFindSymbol(void* handle, char *name)
 #endif
 #ifdef DARWIN
 #if defined(PPC64) || defined(X86)
-  if (handle == NULL) {
+  if ((handle == NULL) || (handle == ((void *) -1))) {
     handle = RTLD_DEFAULT;
   }    
   if (*name == '_') {
