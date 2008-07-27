@@ -1029,15 +1029,19 @@
 ;This prints out a line of stuff.
 
 (defun output-line (xp Qentry)
-  (flet ((find-not-char-reverse (char buffer out-point)
-           (do ((i (%i- out-point 1) (%i- i 1)))
-               (nil)
-             (cond ((%i< i 0)(return nil))
-                   ((neq (schar buffer i) char)
-                    (return i))))))
+  (flet ((find-not-char-reverse (buffer out-point)
+	   (declare (type simple-base-string buffer) (type fixnum out-point))
+	   (do ((i (%i- out-point 1) (%i- i 1)))
+	       ((%i< i 0) nil)
+	     (when (or (neq (schar buffer i) #\Space)
+		       ;; Don't match possibly-quoted space ("possibly" because the #\\ itself might be 
+		       ;; quoted; don't bother checking for that, no big harm leaving the space even if
+		       ;; not totally necessary).
+		       (and (%i< 0 i) (eq (schar buffer (%i- i 1)) #\\)))
+	       (return i)))))
     (let* ((queue (xp-queue xp))
            (out-point (BP<-TP xp (xpq-pos queue Qentry)))
-	   (last-non-blank (find-not-char-reverse #\space (xp-buffer xp) out-point))
+	   (last-non-blank (find-not-char-reverse (xp-buffer xp) out-point))
 	   (end (cond ((memq (xpq-kind queue Qentry) '(:fresh :unconditional)) out-point)
 		      (last-non-blank (%i+ 1 last-non-blank))
 		      (T 0)))
