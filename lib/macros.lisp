@@ -229,7 +229,7 @@
   `(values (%badarg ,@args)))
 
 (defmacro %cons-restart (name action report interactive test)
- `(gvector :istruct 'restart ,name ,action ,report ,interactive ,test))
+ `(%istruct 'restart ,name ,action ,report ,interactive ,test))
 
 (defmacro restart-bind (clauses &body body)
   "Executes forms in a dynamic context where the given restart bindings are
@@ -941,7 +941,7 @@ are no Forms, OR returns NIL."
       ,@body)))
 
 (defmacro make-destructure-state (tail whole lambda)
-  `(gvector :istruct 'destructure-state ,tail ,whole ,lambda))
+  `(%istruct 'destructure-state ,tail ,whole ,lambda))
 
 
 ; This is supposedly ANSI CL.
