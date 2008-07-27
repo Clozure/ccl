@@ -397,7 +397,7 @@
   (setf (lisp-thread.initial-function.args thread)
 	(cons function args)))
 
-(defun thread-enable (thread termination-semaphore allocation-quantum &optional (timeout target::target-most-positive-fixnum))
+(defun thread-enable (thread termination-semaphore allocation-quantum &optional (timeout (* 60 60 24)))
   (let* ((tcr (or (lisp-thread.tcr thread) (new-tcr-for-thread thread))))
     (with-macptrs (s)
       (%setf-macptr-to-object s (%fixnum-ref tcr target::tcr.reset-completion))
