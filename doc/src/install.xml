@@ -198,7 +198,7 @@ svn co http://svn.clozure.com/publicsvn/openmcl/trunk/darwinx8664/ccl]]>
 	<para>To get the 1.2 version of &CCL; type:</para>
         <programlisting>
           <![CDATA[
-svn co http://svn.clozure.com/publicsvn/openmcl/releases/1.2/darwinx8664/ccl]]>
+svn co http://svn.clozure.com/publicsvn/openmcl/release/1.2/darwinx8664/ccl]]>
         </programlisting>
 
         
