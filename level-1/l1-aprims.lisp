@@ -49,7 +49,7 @@
 (def-standard-initial-binding *locks-pending* ())
 (def-standard-initial-binding *lock-conses* (make-list 20)))
 (def-standard-initial-binding *whostate* "Reset")
-(setq *whostate* "Active")
+(setq *whostate* "Reset")
 (def-standard-initial-binding *error-print-length* 20)
 (def-standard-initial-binding *error-print-level* 8)
 

@@ -216,7 +216,21 @@
   "Return a string which describes the status of a specified process."
   (if (process-exhausted-p p)
     "Exhausted"
-    (symbol-value-in-process '*whostate* p)))
+    (let* ((loc nil))
+    (if (eq p *current-process*)
+      (setq loc (%tcr-binding-location (%current-tcr) '*whostate*))
+      (let* ((tcr (process-tcr p)))
+        (without-interrupts
+         (unwind-protect
+              (progn
+                (%suspend-tcr tcr)
+                (setq loc (%tcr-binding-location tcr '*whostate*)))
+           (%resume-tcr tcr)))))
+    (if loc
+      (%fixnum-ref loc)
+      (if (eq p *initial-process*)
+        "Active"
+        "Reset")))))
 
 (defun (setf process-whostate) (new p)
   (unless (process-exhausted-p p)
@@ -251,10 +265,12 @@
     (setf (symbol-value-in-tcr sym (process-tcr process)) value)))
 
 
-(defun process-enable (p &optional (wait 1))
+(defun process-enable (p &optional (wait (* 60 60 24) wait-p))
   "Begin executing the initial function of a specified process."
   (setq p (require-type p 'process))
   (not-in-current-process p 'process-enable)
+  (when wait-p
+    (check-type wait (unsigned-byte 32)))
   (unless (car (process-initial-form p))
     (error "Process ~s has not been preset.  Use PROCESS-PRESET to preset the process." p))
   (let* ((thread (process-thread p)))
