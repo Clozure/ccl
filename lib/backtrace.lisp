@@ -582,7 +582,7 @@ object."
                (pos (if (typep name 'unsigned-byte)
                       name
                       (position name names :from-end t))))
-          (if (and pos (< pos nargs))
+          (if pos
             (map-entry-value context cfp lfun pc (nth pos indices) unavailable)
             unavailable))
         unavailable))))
