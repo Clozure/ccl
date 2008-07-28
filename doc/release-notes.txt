@@ -1,7 +1,6 @@
 ClozureCL 1.2
 =============
 
-
 Welcome to the first ClozureCL (aka OpenMCL) release in about 2.5 years!
 (There have been a lot of 1.1-prerelease snapshots in that time frame,
 and there's been a lot of development activity; hopefully, it'll be
