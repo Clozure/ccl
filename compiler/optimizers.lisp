@@ -1799,9 +1799,13 @@
           (if ,nvar (consp ,nvar) t)))
       `(eql (lisptag ,n) ,cons-tag))))
 
-(define-compiler-macro consp (n)
-  (let* ((cons-tag (arch::target-cons-tag (backend-target-arch *target-backend*))))
-  `(eql (fulltag ,n) ,cons-tag)))
+(define-compiler-macro consp (&whole call n)
+  (let* ((arch (backend-target-arch *target-backend*))
+	 (cons-tag (arch::target-cons-tag arch))
+	 (nil-tag (arch::target-null-tag arch)))
+    (if (= nil-tag cons-tag)
+      call
+      `(eql (fulltag ,n) ,cons-tag))))
 
 (define-compiler-macro bignump (n)
   `(eql (typecode ,n) ,(nx-lookup-target-uvector-subtag :bignum)))
