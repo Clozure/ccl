@@ -273,6 +273,32 @@
   (uuo-error-too-many-args)
   :ok)
 
+(define-x8632-vinsn check-min-max-nargs (()
+                                         ((min :u16const)
+                                          (max :u16)))
+  :resume
+  ((:pred = min 1)
+   (testl (:%l x8632::nargs) (:%l x8632::nargs))
+   (je :toofew))
+  ((:not (:pred = min 1))
+   ((:pred < min 32)
+    (rcmpl (:%l x8632::nargs) (:$b (:apply ash min x8632::word-shift))))
+   ((:pred >= min 32)
+    (rcmpl (:%l x8632::nargs) (:$l (:apply ash min x8632::word-shift))))
+   (jb :toofew))
+  ((:pred < max 32)
+   (rcmpl (:%l x8632::nargs) (:$b (:apply ash max x8632::word-shift))))
+  ((:pred >= max 32)
+   (rcmpl (:%l x8632::nargs) (:$l (:apply ash max x8632::word-shift))))
+  (ja :toomany)
+  
+  (:anchored-uuo-section :resume)
+  :toofew
+  (:anchored-uuo (uuo-error-too-few-args))
+  (:anchored-uuo-section :resume)
+  :toomany
+  (:anchored-uuo (uuo-error-too-many-args)))
+
 (define-x8632-vinsn default-1-arg (()
                                    ((min :u16const)))
   ((:pred < min 32)
@@ -435,9 +461,18 @@
                                     ((arg0 t)))
   (cmpl (:$l x8632::nil-value) (:%l arg0)))
 
+(define-x8632-vinsn compare-to-t (()
+				  ((arg0 t)))
+  (cmpl (:$l x8632::t-value) (:%l arg0)))
+
 (define-x8632-vinsn ref-constant (((dest :lisp))
                                   ((lab :label)))
   (movl (:@ (:^ lab) (:%l x8632::fn)) (:%l dest)))
+
+(define-x8632-vinsn compare-constant-to-register (()
+                                                  ((lab :label)
+                                                   (reg :lisp)))
+  (cmpl (:@ (:^ lab) (:%l x8632::fn)) (:%l reg)))
 
 (define-x8632-vinsn (vpush-constant :push :node :vsp) (()
                                                        ((lab :label)))
@@ -3151,7 +3186,7 @@
   (movb (:$b #xbf) (:@ (+ x8632::misc-data-offset 2) (:%l closure))) ;movl $self, %fn
   (movl (:%l closure) (:@ (+ x8632::misc-data-offset 3) (:%l closure)))
   (movb (:$b #xff) (:@ (+ x8632::misc-data-offset 7) (:%l closure))) ;jmp
-  (movl (:$l #x0050b425) (:@ (+ x8632::misc-data-offset 8) (:%l closure))) ;.SPcall-closure
+  (movl (:$l #x0150b425) (:@ (+ x8632::misc-data-offset 8) (:%l closure))) ;.SPcall-closure
   ;; already aligned
   ;; (movl ($ 0) (:@ (+ x8632::misc-data-offset 12))) ;"end" of self-references
   (movb (:$b 7) (:@ (+ x8632::misc-data-offset 16) (:%l closure))) ;self-reference offset
@@ -3658,22 +3693,20 @@
    ((:pred >= nfixed 32)
     (subl (:$l (:apply ash nfixed x8632::word-shift)) (:%l x8632::nargs)))))
 
-;; num-opt in imm0
 (define-x8632-vinsn opt-supplied-p (()
-                                    ())
-  (subl (:%l x8632::nargs) (:%l x8632::imm0))
-  (jmp :push-t-test)
-  :push-t-loop
-  (pushl (:$l x8632::t-value))
-  :push-t-test
-  (subl (:$b x8632::node-size) (:%l x8632::nargs))
-  (jge :push-t-loop)
-  (jmp :push-nil-test)
-  :push-nil-loop
-  (pushl (:$l x8632::nil-value))
-  :push-nil-test
-  (subl (:$b x8632::node-size) (:%l x8632::imm0))
-  (jge :push-nil-loop))
+                                    ((num-opt :u16const))
+                                    ((nargs (:u32 #.x8632::nargs))
+                                     (imm :imm)))
+  (xorl (:%l imm) (:%l imm))
+  (movl (:$l x8632::nil-value) (:%l x8632::arg_y))
+  :loop
+  (rcmpl (:%l imm) (:%l nargs))
+  (movl (:%l x8632::arg_y) (:%l x8632::arg_z))
+  (cmovll (:@ (+ x8632::t-offset x8632::symbol.vcell) (:%l x8632::arg_y)) (:%l  x8632::arg_z))
+  (addl (:$b x8632::node-size) (:%l imm))
+  (rcmpl (:%l imm) (:$l (:apply ash num-opt x8632::fixnumshift)))
+  (pushl (:%l x8632::arg_z))
+  (jne :loop))
 
 (define-x8632-vinsn one-opt-supplied-p (()
                                         ()
@@ -3863,6 +3896,10 @@
 							())
   (movl (:@ (:%seg :rcontext) x8632::tcr.save3) (:%l dest))
   (movss (:%xmm x8632::fpzero) (:@ (:%seg :rcontext) x8632::tcr.save3)))
+
+(define-x8632-vinsn align-loop-head (()
+				     ())
+  (:align 4))
 
 (queue-fixup
  (fixup-x86-vinsn-templates
