@@ -17,7 +17,8 @@
    (rate-field :foreign-type :id :accessor rate-field))
   (:metaclass ns:+ns-object))
 
-(objc:defmethod #/convert: ((self converter-controller) sender)
+(objc:defmethod (#/convert: :void) ((self converter-controller) sender)
+  (declare (ignore sender))
   (let* ((conv (converter self))
          (dollar-field (dollar-field self))
          (rate-field (rate-field self))
