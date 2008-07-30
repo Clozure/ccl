@@ -169,7 +169,7 @@
   (getvheader imm0 temp1)
   (ldr temp0 'table nfn)
   (header-length imm5 imm0)
-  (cmplw imm3 imm5)
+  (cmplr imm3 imm5)
   #+ppc64-target (srdi imm3 imm3 1)
   (la imm0 target::misc-data-offset imm3)
   (bge @missing)
