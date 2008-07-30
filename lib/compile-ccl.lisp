@@ -483,7 +483,7 @@
       (setq full t))
     (when full
       (setq clean t kernel t reload t))
-    (when update (update-ccl))
+    (when update (update-ccl :verbose (not (eq update :quiet))))
     (let* ((cd (current-directory)))
       (unwind-protect
            (progn
@@ -589,23 +589,73 @@
           (format t "~%~%;[Parsing .ffi files again to resolve forward-referenced constants]")
           (funcall f dirname target))))))
 
-(defun update-ccl ()
-  (let* ((cvs-update "cvs -q update -d -P")
-         (svn-update "svn update")
-         (use-cvs (probe-file "ccl:\.svnrev"))
-         (s (make-string-output-stream)))
-    (multiple-value-bind (status exit-code)
-        (external-process-status
-         (run-program "/bin/sh"
-                      (list "-c"
-                            (format nil "cd ~a && ~a"
-                                    (native-translated-namestring "ccl:")
-                                    (if use-cvs cvs-update svn-update)))
-                      :output s))
-      (when (and (eq status :exited)
-                 (eql exit-code 0))
-        (format t "~&~a" (get-output-stream-string s))
-        t))))
+(defun update-ccl (&key (verbose t))
+  (let* ((changed ())
+         (conflicts ()))
+    (with-output-to-string (out)
+      (with-preserved-working-directory ("ccl:")                     
+        (when verbose (format t "~&;Running 'svn update'."))
+        (multiple-value-bind (status exit-code)
+            (external-process-status
+             (run-program "svn" '("update") :output out :error t))
+          (when verbose (format t "~&;'svn update' complete."))
+          (if (not (and (eq status :exited)
+                        (eql exit-code 0)))
+            (error "Running \"svn update\" produced exit status ~s, code ~s." status exit-code)
+            (let* ((sout (get-output-stream-string out))
+                   (added ())
+                   (deleted ())
+                   (updated ())
+                   (merged ())
+                   (binaries (list (standard-kernel-name) (standard-image-name ))))
+              (flet ((svn-revert (string)
+                       (multiple-value-bind (status exit-code)
+                           (external-process-status (run-program "svn" `("revert" ,string)))
+                         (when (and (eq status :exited) (eql exit-code 0))
+                           (setq conflicts (delete string conflicts :test #'string=))
+                           (push string updated)))))
+                (with-input-from-string (in sout)
+                  (do* ((line (read-line in nil nil) (read-line in nil nil)))
+                       ((null line))
+                    (when (and (> (length line) 2)
+                               (eql #\space (schar line 1)))
+                      (let* ((path (string-trim " " (subseq line 2))))
+                        (case (schar line 0)
+                          (#\A (push path added))
+                          (#\D (push path deleted))
+                          (#\U (push path updated))
+                          (#\G (push path merged))
+                          (#\C (push path conflicts)))))))
+                ;; If the kernel and/or image conflict, use "svn revert"
+                ;; to replace the working copies with the (just updated)
+                ;; repository versions.
+                (setq changed (if (or added deleted updated merged conflicts) t))
+              
+                (dolist (f binaries)
+                  (when (member f conflicts :test #'string=)
+                    (svn-revert f)))
+                ;; If there are any remaining conflicts, offer
+                ;; to revert them.
+                (when conflicts
+                  (with-preserved-working-directory ()
+                    (cerror "Discard local changes to these files (using 'svn revert'."
+                            "'svn update' was unable to merge local changes to the following file~p with the updated versions:~{~&~s~~}" (length conflicts) conflicts)
+                    (dolist (c (copy-list conflicts))
+                      (svn-revert c))))
+                ;; Report other changes, if verbose.
+                (when (and verbose
+                           (or added deleted updated merged conflicts))
+                  (format t "~&;Changes from svn update:")
+                  (flet ((show-changes (herald files)
+                           (when files
+                             (format t "~&; ~a:~{~&;  ~a~}"
+                                     herald files))))
+                    (show-changes "Conflicting files" conflicts)
+                    (show-changes "New files/directories" added)
+                    (show-changes "Deleted files/directories" deleted)
+                    (show-changes "Updated files" updated)
+                    (show-changes "Files with local changes, successfully merged" merged)))))))))
+    (values changed conflicts)))
 
 (defmacro with-preserved-working-directory ((&optional dir) &body body)
   (let ((wd (gensym)))
