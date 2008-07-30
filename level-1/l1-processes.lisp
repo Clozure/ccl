@@ -264,14 +264,16 @@
     (setf (symbol-value-in-tcr sym (process-tcr process)) value)))
 
 
-(defun process-enable (p &optional (wait (* 60 60 24)))
+(defun process-enable (p &optional (wait (* 60 60 24) wait-p))
   "Begin executing the initial function of a specified process."
   (setq p (require-type p 'process))
   (not-in-current-process p 'process-enable)
+  (when wait-p
+    (check-type wait (unsigned-byte 32)))
   (unless (car (process-initial-form p))
     (error "Process ~s has not been preset.  Use PROCESS-PRESET to preset the process." p))
   (let* ((thread (process-thread p)))
-    (do* ((total-wait wait (+ total-wait (or wait 0))))
+    (do* ((total-wait wait (+ total-wait wait)))
 	 ((thread-enable thread (process-termination-semaphore p) (1- (integer-length (process-allocation-quantum p)))  wait)
 	  p)
       (cerror "Keep trying."
