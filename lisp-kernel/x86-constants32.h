@@ -278,6 +278,8 @@ typedef struct hash_table_vector_header {
   LispObj cache_idx;            /* index of last cached pair */
   LispObj cache_key;            /* value of last cached key */
   LispObj cache_value;          /* last cached value */
+  LispObj size;                 /* number of entries in table */
+  LispObj size_reciprocal;      /* shifted reciprocal of size */
 } hash_table_vector_header;
 
 /*
@@ -429,10 +431,11 @@ typedef struct tcr {
     natural unboxed0;
     natural unboxed1;
     LispObj next_method_context; /* used in lieu of register */
+    natural save_eflags;
 } TCR;
 
-#define nil_value (0x3000 + (fulltag_cons))
-#define t_value (0x3008 + (fulltag_misc))
+#define nil_value (0x13000 + (fulltag_cons))
+#define t_value (0x13008 + (fulltag_misc))
 #define t_offset (t_value-nil_value)
 #define misc_header_offset -fulltag_misc
 #define misc_data_offset misc_header_offset + node_size
