@@ -195,8 +195,8 @@ misc_subtag_offset = misc_header_offset
 misc_data_offset = misc_header_offset+node_size
 misc_dfloat_offset = misc_header_offset+8
 
-nil_value = (0x3000 + fulltag_cons)
-t_value = (0x3008 + fulltag_misc)
+nil_value = (0x13000 + fulltag_cons)
+t_value = (0x13008 + fulltag_misc)
 t_offset = (t_value-nil_value)
 misc_bias = fulltag_misc
 cons_bias = fulltag_cons
@@ -295,7 +295,7 @@ cons_bias = fulltag_cons
 
 symbol_extra = symbol.size-fulltag_misc
 
-	_struct(nrs,0x3008)
+	_struct(nrs,0x13008)
 	 _struct_pad(fulltag_misc)
 	 _struct_label(tsym)
 	 _struct_pad(symbol_extra)	/* t */
@@ -532,6 +532,7 @@ TCR_BIAS = 0
 	 _word(unboxed0)
 	 _word(unboxed1)
 	 _node(next_method_context)
+	 _word(save_eflags)
         _ends
 
 TCR_FLAG_BIT_FOREIGN = fixnum_shift
@@ -541,12 +542,13 @@ TCR_FLAG_BIT_PROPAGATE_EXCEPTION = (fixnumshift+3)
 TCR_FLAG_BIT_SUSPEND_ACK_PENDING = (fixnumshift+4)
 TCR_FLAG_BIT_PENDING_EXCEPTION = (fixnumshift+5)
 TCR_FLAG_BIT_FOREIGN_EXCEPTION = (fixnumshift+6)
+TCR_FLAG_BIT_PENDING_SUSPEND = (fixnumshift+7)
 
 target_most_positive_fixnum = 536870911
 target_most_negative_fixnum = -536870912
 call_arguments_limit = 8192
 
-lisp_globals_limit = 0x3000
+lisp_globals_limit = 0x13000
         
 INTERRUPT_LEVEL_BINDING_INDEX = fixnumone
 
