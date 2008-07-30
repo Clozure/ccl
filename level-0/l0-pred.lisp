@@ -699,7 +699,7 @@
     complex                             ; 3
     catch-frame                         ; 4
     function                            ; 5
-    lisp-thread                         ; 6 (basic-stream?)
+    basic-stream			; 6
     symbol                              ; 7
     lock                                ; 8
     hash-table-vector                   ; 9
@@ -736,7 +736,6 @@
     dead-macptr                         ; 4
     code-vector                         ; 5
     creole-object                       ; 6
-    ;; 8-19 are unused
     xcode-vector                        ; 7
     bogus                               ; 8
     bogus                               ; 9
