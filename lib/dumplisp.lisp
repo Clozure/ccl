@@ -40,18 +40,27 @@
 
 (defun clear-ioblock-streams ()
   (%map-areas (lambda (o)
-                (if (typep o 'basic-stream)
-		  (let ((s (basic-stream.state o)))
-		    (when (and (typep s 'ioblock)
-                               (ioblock-device s)
-                               (>= (ioblock-device s) 0))
-		      (setf (basic-stream.state o) nil)))
-                  (if (typep o 'buffered-stream-mixin)
-		    (let ((s (slot-value o 'ioblock)))
-		      (when (and (typep s 'ioblock)
+                  (if (typep o 'basic-stream)
+                    (let ((s (basic-stream.state o)))
+                      (when (and (typep s 'ioblock)
                                  (ioblock-device s)
                                  (>= (ioblock-device s) 0))
-			(setf (slot-value o 'ioblock) nil))))))))
+                        (setf (basic-stream.state o) nil)))
+                    ;; Have to be careful with use of TYPEP here (and
+                    ;; in the little bit of Lisp code that runs before
+                    ;; the image is saved.)  We may have just done
+                    ;; things to forget about (per-session) foreign
+                    ;; class addresses, and calling TYPEP on a pointer
+                    ;; to such a class might cause us to remember
+                    ;; those per-session addresses and confuse the
+                    ;; startup code.
+                    (if (and (eql (tyepcode o) target::subtag-instance)
+                             (typep o 'buffered-stream-mixin))
+                      (let ((s (slot-value o 'ioblock)))
+                        (when (and (typep s 'ioblock)
+                                   (ioblock-device s)
+                                   (>= (ioblock-device s) 0))
+                          (setf (slot-value o 'ioblock) nil))))))))
 
 (defun save-application (filename
                          &rest rest
@@ -130,7 +139,6 @@
                          (dolist (f *save-exit-functions*)
                            (funcall f))
                          (kill-lisp-pointers)
-                         #-ppc-target
                          (clear-ioblock-streams)
                          (%set-toplevel
                           #'(lambda ()
