@@ -373,8 +373,8 @@
 ;;; CONS.  This way, CAR and CDR can just check the tag, and
 ;;; CONSP/RPLACA/RPLACD can check the tag and complain if the argument
 ;;; is NIL.
-(defconstant nil-value (+ #x3000 fulltag-cons))
-(defconstant t-value (+ #x3008 fulltag-misc))
+(defconstant nil-value (+ #x13000 fulltag-cons))
+(defconstant t-value (+ #x13008 fulltag-misc))
 (defconstant t-offset (- t-value nil-value))
 
 (defconstant misc-bias fulltag-misc)
@@ -613,6 +613,7 @@
   unboxed0				;unboxed scratch locations
   unboxed1
   next-method-context			;used in lieu of register
+  save-eflags
 )
 
 (defconstant interrupt-level-binding-index (ash 1 fixnumshift))
@@ -625,6 +626,17 @@
   waiting
   malloced-ptr
   spinlock)
+
+(define-storage-layout rwlock 0
+  spin
+  state
+  blocked-writers
+  blocked-readers
+  writer
+  reader-signal
+  writer-signal
+  malloced-ptr
+  )
 
 (defmacro define-header (name element-count subtag)
   `(defconstant ,name (logior (ash ,element-count num-subtag-bits) ,subtag)))
@@ -824,7 +836,7 @@
           (+ 4 (ash element-count 3)))))))
 
 (defparameter *x8632-subprims-shift* 2)
-(defconstant x8632-subprims-base #x5000)
+(defconstant x8632-subprims-base #x15000)
 
 (declaim (special *x8632-subprims*))
 
@@ -1197,5 +1209,11 @@
 
 (defconstant recover-fn-opcode-byte #b10111111) ;when %fn is %edi
 (defconstant recover-fn-address-offset 1)
+
+;;; For backtrace: the relative PC of an argument-check trap
+;;; must be less than or equal to this value.  (Because of
+;;; the way that we do "anchored" UUOs, it should always be =.)
+;;; (maybe not = on x8632)
+(defconstant arg-check-trap-pc-limit 7)
 
 (provide "X8632-ARCH")
