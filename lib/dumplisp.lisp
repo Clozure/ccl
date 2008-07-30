@@ -54,7 +54,7 @@
                     ;; to such a class might cause us to remember
                     ;; those per-session addresses and confuse the
                     ;; startup code.
-                    (if (and (eql (tyepcode o) target::subtag-instance)
+                    (if (and (eql (typecode o) target::subtag-instance)
                              (typep o 'buffered-stream-mixin))
                       (let ((s (slot-value o 'ioblock)))
                         (when (and (typep s 'ioblock)
