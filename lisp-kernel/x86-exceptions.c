@@ -562,13 +562,13 @@ callback_for_interrupt(TCR *tcr, ExceptionInformation *xp)
 {
   LispObj *save_vsp = (LispObj *)xpGPR(xp,Isp),
     word_beyond_vsp = save_vsp[-1],
+#ifdef X8664
+    save_rbp = xpGPR(xp,Irbp),
+#else
+    save_ebp = xpGPR(xp,Iebp),
+#endif
     xcf = create_exception_callback_frame(xp, tcr);
   int save_errno = errno;
-#ifdef X8664
-  LispObj save_rbp = xpGPR(xp,Irbp);
-#else
-  LispObj save_ebp = xpGPR(xp,Iebp);
-#endif
 
   callback_to_lisp(tcr, nrs_CMAIN.vcell,xp, xcf, 0, 0, 0, 0);
 #ifdef X8664
