@@ -1027,6 +1027,7 @@ _spentry(syscall)
 	/* preserve state of direction flag */
 	__(pushfl)
 	__(popl rcontext(tcr.save_eflags))
+	__(cld)
 	__(emms)
 	__(pop %ebp)		/* backlink */
 	__(unbox_fixnum(%arg_z,%eax))	/* syscall number */
@@ -1079,6 +1080,7 @@ _spentry(syscall2)
 	/* preserve state of direction flag */
 	__(pushfl)
 	__(popl rcontext(tcr.save_eflags))
+	__(cld)
 	__(emms)
 	__(pop %ebp)		/* backlink */
 	__(unbox_fixnum(%arg_z,%eax))	/* syscall number */
@@ -4040,6 +4042,7 @@ LocalLabelPrefix[]ffcall:
 	/* preserve state of direction flag */
 	__(pushfl)
 	__(popl rcontext(tcr.save_eflags))
+	__(cld)
 	__(stmxcsr rcontext(tcr.lisp_mxcsr))
 	__(emms)
 	__(ldmxcsr rcontext(tcr.foreign_mxcsr))
