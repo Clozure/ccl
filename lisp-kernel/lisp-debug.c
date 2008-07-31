@@ -188,8 +188,10 @@ show_lisp_register(ExceptionInformation *xp, char *label, int r)
     TCR *tcr = get_tcr(false);
     char *s;
 
-    if (tcr && (tcr->node_regs_mask & bit_for_regnum(r)) == 0)
-      s = "marked as unboxed";
+    if (r == REG_EDX && (xpGPR(xp, REG_EFL) & EFL_DF))
+      s = "marked as unboxed (DF set)";
+    else if (tcr && (tcr->node_regs_mask & bit_for_regnum(r)) == 0)
+      s = "marked as unboxed (node_regs_mask)";
     else
       s = print_lisp_object(val);
 
