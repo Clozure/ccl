@@ -39,7 +39,7 @@
    :nil-relative-symbols x86::*x86-nil-relative-symbols*
    :static-space-init-function 'x8632-initialize-static-space
    :purespace-reserve (ash 1 26)
-   :static-space-address (ash 2 12)
+   :static-space-address (+ (ash 1 16) (ash 2 12))
 ))
 
 (add-xload-backend *x8632-darwin-xload-backend*)
