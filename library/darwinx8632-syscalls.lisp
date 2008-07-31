@@ -74,6 +74,7 @@
 (define-syscall (logior platform-os-darwin platform-cpu-x86 platform-word-size-32) syscalls::lseek 199 (:unsigned-fullword :signed-doubleword :unsigned-fullword) :signed-doubleword )
 (define-syscall (logior platform-os-darwin platform-cpu-x86 platform-word-size-32) syscalls::truncate 200 (:address :unsigned-doubleword) :signed-fullword )
 (define-syscall (logior platform-os-darwin platform-cpu-x86 platform-word-size-32) syscalls::ftruncate 201 (:unsigned-fullword :unsigned-doubleword) :signed-fullword )
+(define-syscall (logior platform-os-darwin platform-cpu-x86 platform-word-size-32) syscalls::poll 230 ((:* (:struct :pollfd)) :int :int) :int)
 
 #+notdefinedyet
 (progn
