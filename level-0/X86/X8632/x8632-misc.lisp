@@ -442,56 +442,6 @@
   @done
   (single-value-return))
 
-;;; Return true iff we were able to increment a non-negative
-;;; lock._value
-(defx8632lapfunction %try-read-lock-rwlock ((lock arg_z))
-  (check-nargs 1)
-  (mark-as-imm temp0)
-  (let ((imm1 temp0))
-    @try
-    (movl (@ x8632::lock._value (% lock)) (% eax))
-    (movl (% eax) (% imm1))
-    (addl ($ '1) (% imm1))
-    (jle @fail)
-    (lock)
-    (cmpxchgl (% imm1) (@ x8632::lock._value (% lock)))
-    (jne @try)
-    (mark-as-node temp0)
-    (single-value-return)		; return the lock
-    @fail
-    (mark-as-node temp0)
-    (movl ($ x8632::nil-value) (% arg_z))
-    (single-value-return)))
-
-(defx8632lapfunction unlock-rwlock ((lock arg_z))
-  (cmpl ($ 0) (@ x8632::lock._value (% lock)))
-  (jle @unlock-write)
-  @unlock-read
-  (mark-as-imm temp0)
-  (let ((imm1 temp0))
-    (movl (@ x8632::lock._value (% lock)) (% eax))
-    (lea (@ '-1 (% imm0)) (% imm1))
-    (lock)
-    (cmpxchgl (% imm1) (@ x8632::lock._value (% lock)))
-    (jne @unlock-read))
-  (mark-as-node temp0)
-  (single-value-return)
-  @unlock-write
-  ;;; If we aren't the writer, return NIL.
-  ;;; If we are and the value's about to go to 0, clear the writer field.
-  (movl (@ x8632::lock.writer (% lock)) (% imm0))
-  (cmpl (% imm0) (@ (% :rcontext) x8632::tcr.linear))
-  (jne @fail)
-  (cmpl ($ '-1) (@ x8632::lock._value (% lock)))
-  (jne @still-owner)
-  (movss (% fpzero) (@ x8632::lock.writer (% lock)))
-  @still-owner
-  (addl ($ '1) (@ x8632::lock._value (% lock)))
-  (single-value-return)
-  @fail
-  (movl ($ x8632::nil-value) (%l arg_z))
-  (single-value-return))
-
 (defx8632lapfunction %atomic-incf-node ((by 4) #|(ra 0)|# (node arg_y) (disp arg_z))
   (check-nargs 3)
   (mark-as-imm temp0)
@@ -615,7 +565,7 @@
   (mark-as-node temp1)
   (single-value-return 3))
 
-(defx86lapfunction %ptr-store-fixnum-conditional ((ptr 4) #|(ra 0)|# (expected-oldval arg_y) (newval arg_z))
+(defx8632lapfunction %ptr-store-fixnum-conditional ((ptr 4) #|(ra 0)|# (expected-oldval arg_y) (newval arg_z))
   (mark-as-imm temp0)
   (let ((address temp0))
     (movl (@ ptr (% esp)) (% temp1))
@@ -631,6 +581,13 @@
     (movl (% imm0) (% arg_z)))
   (mark-as-node temp0)
   (single-value-return 3))
+
+(defx8632lapfunction xchgl ((newval arg_y) (ptr arg_z))
+  (unbox-fixnum newval imm0)
+  (macptr-ptr ptr arg_y)		;better be aligned
+  (xchgl (% imm0) (@ (% arg_y)))
+  (box-fixnum imm0 arg_z)
+  (single-value-return))
 
 (defx8632lapfunction %macptr->dead-macptr ((macptr arg_z))
   (check-nargs 1)
@@ -707,4 +664,116 @@
   (setne (%b imm0))
   (andl ($ x8632::t-offset) (%l imm0))
   (lea (@ x8632::nil-value (% imm0)) (% arg_z))
+  (single-value-return))
+
+(defx8632lapfunction debug-trap-with-string ((arg arg_z))
+  (check-nargs 1)
+  (uuo-error-debug-trap-with-string)
+  (single-value-return))
+
+(defx8632lapfunction %%tcr-interrupt ((target arg_z))
+  (check-nargs 1)
+  (ud2a)
+  (:byte 4)
+  (box-fixnum imm0 arg_z)
+  (single-value-return))
+
+(defx8632lapfunction %suspend-tcr ((target arg_z))
+  (check-nargs 1)
+  (ud2a)
+  (:byte 5)
+  (testl (%l imm0) (%l imm0))
+  (movl ($ target::nil-value) (%l arg_z))
+  (cmovel (@ target::t-offset (% arg_z)) (%l arg_z))
+  (single-value-return))
+
+(defx8632lapfunction %suspend-other-threads ()
+  (check-nargs 0)
+  (ud2a)
+  (:byte 6)
+  (movl ($ target::nil-value) (%l arg_z))
+  (single-value-return))
+
+(defx8632lapfunction %resume-tcr ((target arg_z))
+  (check-nargs 1)
+  (ud2a)
+  (:byte 7)
+  (testl (%l imm0) (%l imm0))
+  (movl ($ target::nil-value) (%l arg_z))
+  (cmovel (@ target::t-offset (% arg_z)) (%l arg_z))
+  (single-value-return))
+
+(defx8632lapfunction %resume-other-threads ()
+  (check-nargs 0)
+  (ud2a)
+  (:byte 8)
+  (movl ($ target::nil-value) (%l arg_z))
+  (single-value-return))
+
+(defx8632lapfunction %get-spin-lock ((p arg_z))
+  (check-nargs 1)
+  (save-simple-frame)
+  (push (% arg_z))
+  @again
+  (mark-as-imm temp1)
+  (movl (@ -4 (% ebp)) (% arg_z))
+  (macptr-ptr arg_z temp1)
+  (movl (@ '*spin-lock-tries* (% fn)) (% arg_y))
+  (movl (@ '*spin-lock-timeouts* (% fn)) (% arg_z))
+  (movl (@ target::symbol.vcell (% arg_y)) (% arg_y))
+  (movl (@ (% :rcontext) x8664::tcr.linear) (% temp0))
+  @try-swap
+  (xorl (% eax) (% eax))
+  (lock)
+  (cmpxchgl (% temp0) (@ (% temp1)))
+  (je @done)
+  @spin
+  (pause)
+  (cmpl ($ 0) (@ (% temp1)))
+  (je @try-swap)
+  (subl ($ '1) (% arg_y))
+  (jne @spin)
+  @wait
+  (addl ($ x8632::fixnumone) (@ x8632::symbol.vcell (% arg_z)))
+  (mark-as-node temp1)
+  (call-symbol yield 0)
+  (jmp @again)
+  @done
+  (mark-as-node temp1)
+  (movl (@ -4 (% ebp)) (% arg_z))
+  (restore-simple-frame)
+  (single-value-return))
+
+;;; future %%apply-in-frame-proto would go here
+
+(defx8632lapfunction %atomic-pop-static-cons ()
+  @again
+  (movl (@ (+ x8632::nil-value (x8632::kernel-global static-conses))) (% eax))
+  (testl ($ x8632::nil-value) (% eax))
+  (jz @lose)
+  (%cdr eax temp0)
+  (lock)
+  (cmpxchgl (% temp0) (@ (+ x8632::nil-value (x8632::kernel-global static-conses))))
+  (jnz @again)
+  @lose
+  (movl (% eax) (% arg_z))
+  (single-value-return))
+
+(defx8632lapfunction %staticp ((x arg_z))
+  (check-nargs 1)
+  (ref-global tenured-area temp0)
+  (movl (% x) (% imm0))
+  (subl (@ target::area.low (% temp0)) (% imm0))
+  (shrl ($ target::dnode-shift) (% imm0))
+  (cmpl (@ target::area.static-dnodes (% temp0)) (% imm0))
+  (leal (@ (% imm0) target::fixnumone) (% arg_z))
+  (movl ($ target::nil-value) (%l imm0))
+  (cmovael (% imm0) (% arg_z))
+  (single-value-return))
+
+(defx8632lapfunction %static-inverse-cons ((n arg_z))
+  (check-nargs 1)
+  (ref-global tenured-area temp0)
+  (movl (@ target::area.low (% temp0)) (% imm0))
+  (leal (@ target::fulltag-cons (% imm0) (% n) 2) (% arg_z))
   (single-value-return))
