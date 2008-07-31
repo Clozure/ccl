@@ -721,7 +721,7 @@
   (movl (@ '*spin-lock-tries* (% fn)) (% arg_y))
   (movl (@ '*spin-lock-timeouts* (% fn)) (% arg_z))
   (movl (@ target::symbol.vcell (% arg_y)) (% arg_y))
-  (movl (@ (% :rcontext) x8664::tcr.linear) (% temp0))
+  (movl (@ (% :rcontext) x8632::tcr.linear) (% temp0))
   @try-swap
   (xorl (% eax) (% eax))
   (lock)
