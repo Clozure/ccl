@@ -1602,7 +1602,7 @@ main(int argc, char *argv[], char *envp[], void *aux)
   set_nil(load_image(image_name));
   lisp_global(TCR_AREA_LOCK) = ptr_to_lispobj(tcr_area_lock);
 
-#ifdef X8664
+#ifdef X86
   lisp_global(SUBPRIMS_BASE) = (LispObj)((1<<16)+(5<<10));
 #else
   lisp_global(SUBPRIMS_BASE) = (LispObj)(5<<10);
