@@ -557,7 +557,7 @@ given is that of a group to which the current user belongs."
 
 (defun %read-dir (dir)
   (rlet ((entry #>dirent)
-         (presult :address +null-ptr+))
+         (presult :address (%null-ptr)))
     (let* ((err (#_readdir_r dir entry presult))
            (result (%get-ptr presult)))
       (declare (fixnum err) (dynamic-extent result))
