@@ -1321,7 +1321,13 @@ mark_xp(ExceptionInformation *xp, natural node_regs_mask)
   if (node_regs_mask & (1<<0)) mark_root(regs[REG_EAX]);
   if (node_regs_mask & (1<<1)) mark_root(regs[REG_EBX]);
   if (node_regs_mask & (1<<2)) mark_root(regs[REG_ECX]);
-  if (node_regs_mask & (1<<3)) mark_root(regs[REG_EDX]);
+
+  if (regs[REG_EFL] & EFL_DF) {
+    /* DF set means EDX should be treated as an imm reg */
+    ;
+  } else
+    if (node_regs_mask & (1<<3)) mark_root(regs[REG_EDX]);
+
   if (node_regs_mask & (1<<4)) mark_root(regs[REG_ESP]);
   if (node_regs_mask & (1<<5)) mark_root(regs[REG_EBP]);
   if (node_regs_mask & (1<<6)) mark_root(regs[REG_ESI]);
@@ -1687,7 +1693,13 @@ forward_xp(ExceptionInformation *xp, natural node_regs_mask)
   if (node_regs_mask & (1<<0)) update_noderef(&regs[REG_EAX]);
   if (node_regs_mask & (1<<1)) update_noderef(&regs[REG_EBX]);
   if (node_regs_mask & (1<<2)) update_noderef(&regs[REG_ECX]);
-  if (node_regs_mask & (1<<3)) update_noderef(&regs[REG_EDX]);
+
+  if (regs[REG_EFL] & EFL_DF) {
+    /* then EDX is an imm reg */
+    ;
+  } else
+    if (node_regs_mask & (1<<3)) update_noderef(&regs[REG_EDX]);
+
   if (node_regs_mask & (1<<4)) update_noderef(&regs[REG_ESP]);
   if (node_regs_mask & (1<<5)) update_noderef(&regs[REG_EBP]);
   if (node_regs_mask & (1<<6)) update_noderef(&regs[REG_ESI]);
@@ -1715,6 +1727,7 @@ forward_tcr_xframes(TCR *tcr)
     update_noderef(&tcr->save1);
     update_noderef(&tcr->save2);
     update_noderef(&tcr->save3);
+    update_noderef(&tcr->next_method_context);
 #endif
   }
   for (xframes = tcr->xframe; xframes; xframes = xframes->prev) {
