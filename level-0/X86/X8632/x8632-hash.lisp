@@ -19,6 +19,30 @@
   (mark-as-node temp1)
   (single-value-return))
 
+;; Faster mod based on Bruce Hoult's Dylan version, modified to use a
+;; branch-free max.
+(defx8632lapfunction fast-mod-3 ((number 4) #|(ra 0)|# (divisor arg_y) (recip arg_z))
+  (std)					;temp1 now unboxed
+  (let ((imm1 temp1)
+	(n temp0))
+    (movl (@ number (% esp)) (% n))
+    (movl (% n) (% imm0))
+    (sarl ($ target::fixnumshift) (% imm0))
+    (mov (% recip) (% imm1))
+    (mul (% imm1)) ;; -> hi word in imm1 (unboxed)
+    (mov (% divisor) (% imm0))
+    (mul (% imm1)) ;; -> lo word in imm0 (boxed)
+    (subl (% imm0) (% n))
+    (subl (% divisor) (% n))
+    (mov (% n) (% arg_z))
+    (mov (% n) (% imm0))
+    (sar ($ (1- target::nbits-in-word)) (% imm0))
+    (andl (% imm0) (% divisor))
+    (addl (% divisor) (% arg_z)))
+  (xorl (% temp1) (% temp1))
+  (cld)					;temp1 now boxed
+  (single-value-return 3))
+
 (defx8632lapfunction %dfloat-hash ((key arg_z))
   (movl (@ x8632::double-float.value (% key)) (% imm0))
   (addl (@ x8632::double-float.val-high (% key)) (% imm0))
