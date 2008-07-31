@@ -87,6 +87,10 @@
   nhti.values
   nhti.nkeys)
 
+#+x8632-target
+(defconstant +nil-hash+ 201404780)
+
+#-x8632-target
 (defconstant +nil-hash+ (mixup-hash-code (%pname-hash "NIL" 3)))
 
 
