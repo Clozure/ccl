@@ -89,6 +89,23 @@
       (declare (fixnum k) (list imms))
       (setf (%svref newv k) (car imms)))))
 
+(defun %copy-function (proto &optional target)
+  (let* ((protov (function-to-function-vector proto))
+         (code-words (%function-code-words proto))
+         (total-words (uvsize protov))
+         (newv (if target
+                 (function-to-function-vector target)
+                 (allocate-typed-vector :function total-words))))
+    (declare (fixnum code-words total-words))
+    (when target
+      (unless (and (eql code-words (%function-code-words target))
+                   (eql total-words (uvsize newv)))
+        (error "Wrong size target ~s" target)))
+    (%copy-ivector-to-ivector protov 0 newv 0 (the fixnum (ash code-words target::word-shift)))
+    (loop for k fixnum from code-words below total-words
+      do (setf (%svref newv k) (%svref protov k)))
+    (function-vector-to-function newv)))
+
 (defun replace-function-code (target proto)
   (let* ((target-words (%function-code-words target))
          (proto-words (%function-code-words proto)))
