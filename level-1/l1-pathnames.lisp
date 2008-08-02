@@ -631,14 +631,7 @@
   (let* ((dirpath (getenv "CCL_DEFAULT_DIRECTORY")))
     (if dirpath
       (native-to-directory-pathname dirpath)
-      (let* ((directory-containing-heap-image
-              (make-pathname :directory (pathname-directory (%realpath (heap-image-name)))))
-             (rpath (merge-pathnames
-		     #+darwinppc-target "../Resources/ccl/"
-		     #+linux-target "Resources/ccl/"
-                     directory-containing-heap-image)))
-	(or (probe-file rpath)
-            directory-containing-heap-image)))))
+      (make-pathname :directory (pathname-directory (%realpath (heap-image-name)))))))
 
 
 (defun user-homedir-pathname (&optional host)
