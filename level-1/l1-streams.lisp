@@ -3430,7 +3430,7 @@
 
 
 (defmethod (setf stream-external-format) (new (s character-stream))
-  (check-type new 'external-format)
+  (check-type new external-format)
   (stream-external-format s))
 
 
