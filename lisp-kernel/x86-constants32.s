@@ -250,6 +250,13 @@ cons_bias = fulltag_cons
          _struct_label(data_offset)
         _ends
 
+	_struct(csp_frame,0)
+         _node(backlink)
+         _node(save_ebp)
+         _struct_label(fixed_overhead)
+         _struct_label(data_offset)
+        _ends
+
         _structf(symbol)
          _node(pname)
          _node(vcell)
