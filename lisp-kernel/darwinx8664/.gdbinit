@@ -17,12 +17,12 @@ define pname
  x86pname $arg0
 end
 
-define l
+define pl
  call print_lisp_object($arg0)
 end
 
 define lw
- l $r13
+ pl $r13
 end
 
 define clobber_breakpoint
@@ -30,29 +30,21 @@ define clobber_breakpoint
 end
 
 define arg_z
- l $rsi
+ pl $rsi
 end
 
 define arg_y
- l $rdi
+ pl $rdi
 end
 
 define arg_x
- l $r8
+ pl $r8
 end
 
 define bx
- l $rbx
+ pl $rbx
 end
 
-define showlist
-  set $l=$arg0
-  while $l != 0x200b
-   set $car = *((LispObj *)($l+5))
-   set $l =  *((LispObj *)($l-3))
-   l $car
-  end
-end
 
 define lbt
  call plbt_sp($rbp)
@@ -82,4 +74,5 @@ handle SIGEMT pass nostop noprint
 handle SIGTTIN nopass nostop noprint
 # Work around Leopard bug du jour
 handle SIGSYS pass nostop noprint
+handle SIGQUIT pass nostop noprint
 
