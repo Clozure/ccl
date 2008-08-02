@@ -149,11 +149,15 @@
             (fd-write 1 s (%cstrlen s)))
 	  (#_ _exit 0))
         (let* ((encoding (assoc :terminal-encoding opts)))
-          (if encoding
-            (setq *terminal-character-encoding-name*
-                  (if (cdr encoding)
+          (when (cdr encoding)
+            (let* ((encoding-name
                     (let* ((*package* (find-package "KEYWORD")))
-                      (ignore-errors (read-from-string (cdr encoding))))))))))
+                      (ignore-errors (read-from-string (cdr encoding))))))
+              (when encoding-name
+                (let* ((character-encoding (lookup-character-encoding encoding-name)))
+                  (when character-encoding
+                    (setq *terminal-character-encoding-name*
+                          (character-encoding-name character-encoding))))))))))
     (%usage-exit
      (format nil
 	     (case error-flag
@@ -177,7 +181,9 @@
       (parse-application-arguments a)
     (setq *unprocessed-command-line-arguments* rest-arg)
     (process-application-arguments a error-flag options args)
-    (initialize-interactive-streams)))
+    (let* ((encoding (lookup-character-encoding *terminal-character-encoding-name*)))
+      (when encoding
+         (set-terminal-encoding (character-encoding-name encoding))))))
 
 (defmethod application-version-string ((a application))
   "Return a string which (arbitrarily) represents the application version.
