@@ -222,12 +222,13 @@
   
 
 (defun restore-lisp-pointers ()
+  (setq *interactive-streams-initialized* nil)
   (%revive-system-locks)
   (refresh-external-entrypoints)
   (restore-pascal-functions)
-  (dolist (f (reverse *lisp-system-pointer-functions*))
-    (funcall f))
-  (let ((restore-lisp-fns *restore-lisp-functions*)
+  (initialize-interactive-streams)
+  (let ((system-ptr-fns (reverse *lisp-system-pointer-functions*))
+        (restore-lisp-fns *restore-lisp-functions*)
         (user-pointer-fns *lisp-user-pointer-functions*)
         (lisp-startup-fns *lisp-startup-functions*))
     (unwind-protect
@@ -238,6 +239,7 @@
                      (continue "Skip (possibly crucial) startup function ~s."
                                (if (symbolp f) f (function-name f)))
                      (funcall f)))))
+          (dolist (f system-ptr-fns) (funcall call-with-restart f))
           (dolist (f restore-lisp-fns) (funcall call-with-restart f))
           (dolist (f (reverse user-pointer-fns)) (funcall call-with-restart f))
           (dolist (f (reverse lisp-startup-fns)) (funcall call-with-restart f))))
