@@ -27,7 +27,7 @@
 	(n temp0))
     (movl (@ number (% esp)) (% n))
     (movl (% n) (% imm0))
-    (sarl ($ target::fixnumshift) (% imm0))
+    (shrl ($ target::fixnumshift) (% imm0)) ;logical shift is intentional
     (mov (% recip) (% imm1))
     (mul (% imm1)) ;; -> hi word in imm1 (unboxed)
     (mov (% divisor) (% imm0))
