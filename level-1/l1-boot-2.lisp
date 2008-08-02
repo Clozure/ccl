@@ -91,7 +91,7 @@ present and false otherwise. This variable shouldn't be set by user code.")
 ;;; since there may not be any valid streams to write an error
 ;;; message to.
 
-(defloadvar *interactive-streams-initialized* nil)
+(defglobal *interactive-streams-initialized* nil)
 
 (defun initialize-interactive-streams ()
   (let* ((encoding (lookup-character-encoding *terminal-character-encoding-name*))
@@ -156,7 +156,14 @@ present and false otherwise. This variable shouldn't be set by user code.")
 (def-standard-initial-binding *query-io*)
 
 
-
+(defun set-terminal-encoding (encoding-name)
+  (let* ((exformat (normalize-external-format t encoding-name)))
+    (setf (stream-external-format *stdin*) exformat
+          (stream-external-format *stdout*) exformat
+          (stream-external-format *stdout*) exformat
+          (stream-external-format *terminal-input*) exformat
+          (stream-external-format *terminal-output*) exformat))
+  encoding-name)
 
 (catch :toplevel
     (macrolet ((l1-load-provide (module path)
