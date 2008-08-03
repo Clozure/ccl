@@ -160,7 +160,7 @@ present and false otherwise. This variable shouldn't be set by user code.")
   (let* ((exformat (normalize-external-format t encoding-name)))
     (setf (stream-external-format *stdin*) exformat
           (stream-external-format *stdout*) exformat
-          (stream-external-format *stdout*) exformat
+          (stream-external-format *stderr*) exformat
           (stream-external-format *terminal-input*) exformat
           (stream-external-format *terminal-output*) exformat))
   encoding-name)
