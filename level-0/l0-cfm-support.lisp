@@ -21,7 +21,31 @@
 
 
 
-
+;;; We have several different conventions for representing an
+;;; "entry" (a foreign symbol address, possibly represented as
+;;; something cheaper than a MACPTR.)  Destructively modify
+;;; ADDR so that it points to where ENTRY points.
+(defun entry->addr (entry addr)
+  #+ppc32-target
+  ;; On PPC32, all function addresses have their low 2 bits clear;
+  ;; so do fixnums.
+  (%setf-macptr-to-object addr entry)
+  #+ppc64-target
+  ;; On PPC64, some addresses can use the fixnum trick.  In other
+  ;; cases, an "entry" is just a MACPTR.
+  (if (typep entry 'fixnum)
+    (%setf-macptr-to-object addr entry)
+    (%setf-macptr addr entry))
+  ;; On x86, an "entry" is just an integer.  There might elswehere be
+  ;; some advantage in treating those integers as signed (they might
+  ;; be more likely to be fixnums, for instance), so ensure that they
+  ;; aren't.
+  #+x86-target
+  (%setf-macptr addr (%int-to-ptr
+                      (if (< entry 0)
+                        (logand entry (1- (ash 1 target::nbits-in-word)))
+                        entry)))
+  #-(or ppc-target x86-target) (dbg "Fix entry->addr"))
 
 
 
@@ -511,7 +535,7 @@ return a fixnum representation of that address, else return NIL."
 (defun shlib-containing-entry (entry &optional name)
   (unless *statically-linked*
     (with-macptrs (p)
-      (%setf-macptr-to-object p entry)
+      (entry->addr entry p)
       (shlib-containing-address p name))))
 )
 
@@ -524,8 +548,11 @@ return a fixnum representation of that address, else return NIL."
 (defvar *nsaddress-of-symbol*)
 (defvar *nsmodule-for-symbol*)
 (defvar *ns-is-symbol-name-defined-in-image*)
+(defvar *dladdr-entry* 0)
 
 (defun setup-lookup-calls ()
+  #+notyet
+  (setq *dladdr-entry* (foreign-symbol-entry "_dladdr"))
   (setq *dyld-image-count* (foreign-symbol-entry "__dyld_image_count"))
   (setq *dyld-get-image-header* (foreign-symbol-entry "__dyld_get_image_header"))
   (setq *dyld-get-image-name* (foreign-symbol-entry "__dyld_get_image_name"))
@@ -548,7 +575,7 @@ return a fixnum representation of that address, else return NIL."
 ;;; operation)
 ;;;
 
-(defun shlib-containing-address (addr name)
+(defun legacy-shlib-containing-address (addr name)
   (dotimes (i (ff-call *dyld-image-count* :unsigned-fullword))
     (let ((header (ff-call *dyld-get-image-header* :unsigned-fullword i :address)))
       (when (and (not (%null-ptr-p header))
@@ -584,11 +611,27 @@ return a fixnum representation of that address, else return NIL."
                       ;; make sure that this shared library is on *shared-libraries*
                       (return (shared-library-from-header-module-or-name libheader libmodule libname)))))))))))))
 
+(defun shlib-containing-address (address name)
+  (if (zerop *dladdr-entry*)
+    (legacy-shlib-containing-address address name)
+    ;; Bootstrapping.  RLET might be clearer here.
+    (%stack-block ((info (record-length #>Dl_info) :clear t))
+      (unless (zerop (ff-call *dladdr-entry*
+                              :address address
+                              :address info
+                              :signed-fullword))
+        (let* ((addr (pref info #>Dl_info.dli_fbase)))
+          (format t "~&name = ~s" (pref info  #>Dl_info.dli_fname))
+          
+          (dolist (lib *shared-libraries*)
+            (when (eql (shlib.base lib) addr)
+              (return lib))))))))
+
 (defun shlib-containing-entry (entry &optional name)
-  (when (not name)
-  	(error "shared library name must be non-NIL."))
+  (unless name
+    (error "foreign name must be non-NIL."))
   (with-macptrs (addr)
-    (%setf-macptr-to-object addr entry)
+    (entry->addr entry addr)
     (shlib-containing-address addr name)))
 
 ;; end Darwin progn
