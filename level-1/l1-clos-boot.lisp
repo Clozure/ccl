@@ -1402,7 +1402,7 @@ to replace that class with ~s" name old-class new-class)
 (defun make-istruct-class (name &rest supers)
   (let* ((class (apply #'make-built-in-class name supers))
          (cell (register-istruct-cell name)))
-    (setf (istruct-cell-info cell) (%class.own-wrapper class))
+    (set-istruct-cell-info cell (%class.own-wrapper class))
     class))
 
 ;;; This will be filled in below.  Need it defined now as it goes in
