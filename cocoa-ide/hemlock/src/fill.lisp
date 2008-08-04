@@ -223,7 +223,9 @@
 	  :value val  :buffer (current-buffer))
 	(message "Fill Prefix now ~:[empty~;~:*~S~]" val)))))
 
-(declaim (optimize (speed 2))); turn off byte compilation.
+#+cmucl
+(eval-when (:compile-toplevel)
+  (declaim (optimize (speed 2)))); turn off byte compilation.
 
 ;;;; -- Auto Filling --
 
