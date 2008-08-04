@@ -86,7 +86,7 @@
 
 
 (defmacro %istruct (istruct-name &rest initial-values)
-  `(gvector :ISTRUCT ,istruct-name ,@initial-values))
+  `(gvector :ISTRUCT (register-istruct-cell ,istruct-name) ,@initial-values))
 
 
 (defmacro %cons-resource (constructor &optional destructor initializer)
