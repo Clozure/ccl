@@ -48,7 +48,7 @@
 (defconstant $fasl-buf-len 2048)
 (defmacro deffaslop (n arglist &body body)
   `(setf (svref *fasl-dispatch-table* ,n)
-         #'(lambda ,arglist ,@body)))
+         (nfunction ,n (lambda ,arglist ,@body))))
 
 
 (defconstant $fasl-noop 0)              ;<nada:zilch>.  
