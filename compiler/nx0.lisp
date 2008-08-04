@@ -28,7 +28,6 @@
 
 ; Phony AFUNC "defstruct":
 (defun make-afunc (&aux (v (%make-afunc)))
-  (setf (%svref v 0) 'afunc)
   (setf (afunc-fn-refcount v) 0)
   (setf (afunc-fn-downward-refcount v) 0)
   (setf (afunc-bits v) 0)
@@ -1095,7 +1094,7 @@ function to the indicated name is true.")
   (when target
     (let* ((intervening-functions nil))
       (do* ((env current-env (lexenv.parent-env env)))
-           ((or (eq env target) (null env) (eq (%svref env 0) 'definition-environment)))
+           ((or (eq env target) (null env) (istruct-typep env 'definition-environment)))
         (let* ((fn (lexenv.lambda env)))
           (when fn (push fn intervening-functions))))
       (let* ((result target))
@@ -1165,7 +1164,7 @@ function to the indicated name is true.")
     (multiple-value-bind 
       (info afunc)
       (do* ((env *nx-lexical-environment* (lexenv.parent-env env))
-            (continue env (and env (neq (%svref env 0) 'definition-environment)))
+            (continue env (and env (not (istruct-typep env 'definition-environment))))
             (binder current-function (or (if continue (lexenv.lambda env)) binder)))
            ((or (not continue) (and (neq binder current-function) current-only)) 
             (values nil nil))
