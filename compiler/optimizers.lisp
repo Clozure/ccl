@@ -2086,5 +2086,14 @@
       `(let* ((,val ,x))
         (and (integerp ,val) (not (< ,val 0)))))))
 
+(define-compiler-macro register-istruct-cell (&whole w arg)
+  (if (and (quoted-form-p arg)
+           (cadr arg)
+           (typep (cadr arg) 'symbol))
+    `',(register-istruct-cell (cadr arg))
+    w))
+
+
+
 (provide "OPTIMIZERS")
 
