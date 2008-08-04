@@ -23,7 +23,7 @@
 
 (defmacro defxloadfaslop (n arglist &body body)
   `(setf (svref *xload-fasl-dispatch-table* ,n)
-         #'(lambda ,arglist ,@body)))
+         (nfunction ,n (lambda ,arglist ,@body))))
 
 (defmacro xload-copy-faslop (n)
   `(let* ((n ,n))
@@ -350,6 +350,9 @@
 (defparameter *xload-cold-load-functions* nil)
 (defparameter *xload-cold-load-documentation* nil)
 (defparameter *xload-loading-file-source-file* nil)
+(defparameter *xload-loading-toplevel-location* nil)
+(defparameter *xload-early-class-cells* nil)
+(defparameter *xload-early-istruct-cells* nil)
 
 (defparameter *xload-pure-code-p* t)     ; when T, subprims are copied to readonly space
                                         ; and code vectors are allocated there, reference subprims
@@ -697,6 +700,18 @@
       (setf (natural-ref v (the fixnum (+ offset *xload-target-cdr-offset*))) new))
     (error "Not a cons: #x~x" addr)))
 
+(defun xload-caar (addr)
+  (xload-car (xload-car addr)))
+
+(defun xload-cadr (addr)
+  (xload-car (xload-cdr addr)))
+
+(defun xload-cdar (addr)
+  (xload-cdr (xload-car addr)))
+
+(defun xload-cddr (addr)
+  (xload-cdr (xload-cdr addr)))
+
 (defun xload-symbol-value (addr)
   (unless (= *xload-target-fulltag-for-symbols*
              (logand addr *xload-target-fulltagmask*))
@@ -748,7 +763,20 @@
       (setf (xload-%svref addr target::symbol.plist-cell)
             (xload-make-cons *xload-target-nil* new)))
     new))
-      
+
+;;; Emulate REGISTER-ISTRUCT-CELL, kinda.  Maintain
+;;; *xload-early-istruct-istruct-cells* in the image.
+(defun xload-register-istruct-cell (xsym)
+  (do* ((alist *xload-early-istruct-cells* (xload-cdr alist)))
+       ((= alist *xload-target-nil*)
+        (let* ((pair (xload-make-cons xsym *xload-target-nil*)))
+          (setq *xload-early-istruct-cells*
+                (xload-make-cons pair *xload-early-istruct-cells*))
+          pair))
+    (let* ((pair (xload-car alist)))
+      (when (= (xload-car pair) xsym)
+        (return pair)))))
+
   
 ;;; This handles constants set to themselves.  Unless
 ;;; PRESERVE-CONSTANTNESS is true, the symbol's $sym_vbit_const bit is
@@ -892,6 +920,7 @@
              (*package* *ccl-package*)   ; maybe just *package*
              (*loading-files* (cons path *loading-files*))
              (*xload-loading-file-source-file* nil)
+             (*xload-loading-toplevel-location* nil)
              (*loading-file-source-file* (namestring source-file)))
         (when *load-verbose*
 	  (format t "~&;Loading ~S..." *load-pathname*)
@@ -992,6 +1021,8 @@
   (let* ((*xload-symbols* (make-hash-table :test #'eq))
          (*xload-symbol-addresses* (make-hash-table :test #'eql))
          (*xload-spaces* nil)
+         (*xload-early-class-cells* nil)
+         (*xload-early-istruct-cells* *xload-target-nil*)
          (*xload-readonly-space* (init-xload-space *xload-readonly-space-address* *xload-readonly-space-size* area-readonly))
          (*xload-dynamic-space* (init-xload-space *xload-dynamic-space-address* *xload-dynamic-space-size* area-dynamic))
 	 (*xload-static-space* (init-xload-space *xload-static-space-address* *xload-static-space-size* area-static))
@@ -1001,6 +1032,7 @@
          (*xload-cold-load-functions* nil)
          (*xload-cold-load-documentation* nil)
          (*xload-loading-file-source-file* nil)
+         (*xload-loading-toplevel-location* nil)
          (*xload-aliased-package-addresses* nil)
          (*xload-special-binding-indices*
           (make-hash-table :test #'eql))
@@ -1068,6 +1100,12 @@
     (setf (xload-symbol-value (xload-copy-symbol '*xload-cold-load-functions*))
           (xload-save-list (setq *xload-cold-load-functions*
                                  (nreverse *xload-cold-load-functions*))))
+    #+notyet
+    (when *xload-early-class-cells*
+      (setf (xload-symbol-value (xload-copy-symbol '*early-class-cells*))
+            (xload-save-list (mapcar #'xload-save-list *xload-early-class-cells*))))
+    (setf (xload-symbol-value (xload-copy-symbol '*istruct-cells*))
+          *xload-early-istruct-cells*)
     (let* ((svnrev (local-svn-revision))
            (tree (svn-tree)))
       (setf (xload-symbol-value (xload-copy-symbol '*openmcl-svn-revision*))
@@ -1369,8 +1407,35 @@
 
 (defxloadfaslop $fasl-eval (s)
   (let* ((expr (%fasl-expr-preserve-epush s)))
-    (error "Can't evaluate expression ~s in cold load ." expr)
-    (%epushval s (eval expr))))         ; could maybe evaluate symbols, constants ...
+    (cond #+notyet
+          ((and (xload-target-consp expr)
+                (eq (xload-lookup-symbol-address (xload-car expr))
+                    'find-class-cell)
+                (xload-target-consp (xload-car (xload-cdr expr)))
+                (eq (xload-lookup-symbol-address (xload-car (xload-car (xload-cdr expr))))
+                    'quote))
+           (let* ((class-name (xload-cadr (xload-cadr expr)))
+                  (cell (cdr (assoc class-name *xload-early-class-cells*))))
+             (unless cell
+               (setq cell (xload-make-gvector :istruct 5))
+               (setf (xload-%svref cell 0) (xload-register-istruct-cell
+                                            (xload-copy-symbol 'class-cell)))
+               (setf (xload-%svref cell 1) class-name)
+               (setf (xload-%svref cell 2) *xload-target-nil*)
+               (setf (xload-%svref cell 3) (xload-copy-symbol '%make-instance))
+               (setf (xload-%svref cell 4) *xload-target-nil*)
+               (push (cons class-name cell) *xload-early-class-cells*))
+             (%epushval s cell)))
+          ((and (xload-target-consp expr)
+                (eq (xload-lookup-symbol-address (xload-car expr))
+                    'register-istruct-cell)
+                (xload-target-consp (xload-cadr expr))
+                (eq (xload-lookup-symbol-address (xload-cdar expr))
+                    'quote))
+           (%epushval s (xload-register-istruct-cell (xload-cadr (xload-cadr expr)))))
+          (t
+           (error "Can't evaluate expression ~s in cold load ." expr)
+           (%epushval s (eval expr))))))         ; could maybe evaluate symbols, constants ...
 
 
 (defun xload-target-subtype (name)
@@ -1534,6 +1599,7 @@
 
 
 (defun xload-record-source-file (symaddr indicator)
+  ;; need to do something with *xload-loading-toplevel-location*
   (when *xload-record-source-file-p*
     (when (or (eq indicator 'function)
               (eq indicator 'variable))
@@ -1666,6 +1732,11 @@
   (let* ((path (%fasl-expr s)))
     (setq *xload-loading-file-source-file* path)))
 
+(defxloadfaslop $fasl-toplevel-location (s)
+  (%cant-epush s)
+  (let* ((location (%fasl-expr s)))
+    (setq *xload-loading-toplevel-location* location)))
+
 ;;; Use the offsets in the self-reference table to replace the :self
 ;;; in (movl ($ :self) (% fn)) wih the function's actual address.
 ;;; (x8632 only)
@@ -1721,6 +1792,10 @@
               (setf (faslstate.faslval s) function))
           (declare (fixnum i numconst constidx))
           (setf (xload-%svref vector constidx) (%fasl-expr s)))))))
+
+(defxloadfaslop $fasl-istruct-cell (s)
+  (%epushval s (xload-register-istruct-cell (%fasl-expr-preserve-epush s))))
+
 
 
 (defparameter *xcompile-features* nil)
