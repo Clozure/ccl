@@ -1390,7 +1390,6 @@ result-type-specifer is :VOID or NIL"
            `(%ff-call ,entry) args))
 	
 	  
-(make-built-in-class 'external-entry-point *istruct-class*)
 
 (defmethod make-load-form ((eep external-entry-point) &optional env)
   (declare (ignore env))
@@ -1418,7 +1417,6 @@ result-type-specifer is :VOID or NIL"
 				    (not (%null-ptr-p container))))
 	(format out "~a" (shlib.soname container))))))
 
-(make-built-in-class 'foreign-variable *istruct-class*)
 
 (defun %cons-foreign-variable (name type &optional container)
   (%istruct 'foreign-variable nil name type container))
@@ -1443,7 +1441,6 @@ result-type-specifer is :VOID or NIL"
 				    (not (%null-ptr-p container))))
 	(format out "~a" (shlib.soname container))))))
 
-(make-built-in-class 'shlib *istruct-class*)
 
 (defmethod print-object ((s shlib) stream)
   (print-unreadable-object (s stream :type t :identity t)
