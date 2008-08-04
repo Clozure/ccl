@@ -108,3 +108,21 @@
     @done
     (single-value-return)))
 
+(defx8632lapfunction %string-hash ((start 4) #|(ra 0)|# (str arg_y) (len arg_z))
+  (let ((accum imm0)
+        (offset temp0))
+    (movl (@ start (% esp)) (% offset))
+    (xorl (% accum) (% accum))
+    (testl (% len) (% len))
+    (jz @done)
+    @loop8
+    (roll ($ 5) (%l accum))
+    (xorl (@ x8632::misc-data-offset (% str) (% offset)) (%l accum))
+    (addl ($ '1) (% offset))
+    (subl ($ '1) (% len))
+    (jnz @loop8)
+    (shll ($ 5) (% accum))
+    (shrl ($ (- 5 x8632::fixnumshift)) (% accum))
+    (movl (% accum) (% arg_z))
+    @done
+    (single-value-return 3)))
