@@ -63,11 +63,14 @@
      (nx1-form newval))))
 
 (defnx1 nx1-istruct-typep ((istruct-typep)) (&whole whole thing type &environment env)
+   #-bootstrap-istruct (declare (ignore thing type))
+   #-bootstrap-istruct (nx1-treat-as-call whole)
+   #+bootstrap-istruct
   (if (and (quoted-form-p type) (symbolp (cadr type)))
     (make-acode (%nx1-operator istruct-typep)
                 (nx1-immediate :eq)
                 (nx1-form thing)
-                (nx1-form type))
+                (nx1-form `(register-istruct-cell type)))
     (nx1-treat-as-call whole)))
 
 (defnx1 nx1-make-list make-list (&whole whole size &rest keys &environment env)
