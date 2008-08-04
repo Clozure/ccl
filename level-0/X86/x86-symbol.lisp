@@ -130,8 +130,8 @@
         (offset imm1))
     (xorq (% offset) (% offset))
     (xorq (% accum) (% accum))
-    (cmpq ($ 0) (% len))
-    (jz.pn @done)
+    (testq (% len) (% len))
+    (jz @done)
     @loop8
     (roll ($ 5) (%l accum))
     (xorl (@ x8664::misc-data-offset (% str) (% offset) 4) (%l accum))
@@ -149,8 +149,8 @@
         (offset imm1))
     (unbox-fixnum start offset)
     (xorq (% accum) (% accum))
-    (cmpq ($ 0) (% len))
-    (jz.pn @done)
+    (testq (% len) (% len))
+    (jz @done)
     @loop8
     (roll ($ 5) (%l accum))
     (xorl (@ x8664::misc-data-offset (% str) (% offset) 4) (%l accum))
