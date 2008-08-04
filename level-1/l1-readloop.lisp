@@ -249,7 +249,7 @@
       (report-bad-arg env 'lexical-environment))
     (do* ((env env (lexenv.parent-env env)))
          ((null env))
-      (if (eq (%svref env 0) 'definition-environment)
+      (if (istruct-typep env 'definition-environment)
 	(let* ((info (assq sym (defenv.symbol-macros env))))
 	  (if info
 	    (return-from %symbol-macroexpand-1 (values (expand-it (cdr info)) t))
