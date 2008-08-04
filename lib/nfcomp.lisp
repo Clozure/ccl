@@ -1033,7 +1033,7 @@ Will differ from *compiling-file* during an INCLUDE")
               (fasl-scan-user-form exp))
              (#.target::subtag-package (fasl-scan-ref exp))
              (#.target::subtag-istruct
-              (if (memq (uvref exp 0) *istruct-make-load-form-types*)
+              (if (memq (istruct-type-name exp) *istruct-make-load-form-types*)
                 (progn
                   (if (hash-table-p exp)
                     (fasl-lock-hash-table exp))

@@ -486,7 +486,7 @@
 
 (defun ctype-p (x)
   (and (eql (typecode x) target::subtag-istruct)
-       (memq (%svref x 0) 
+       (memq (istruct-type-name x)
              '#.(cons 'ctype 
                       (cons 'unknown-ctype                             
                             (append (mapcar #'class-name 
@@ -1380,7 +1380,7 @@
 ;;; notably MEMBER types which refer to objects which might
 ;;; be stack-allocated or might be EQUAL without being EQL.
 (defun cacheable-ctype-p (ctype)
-  (case (%svref ctype 0)
+  (case (istruct-cell-name (%svref ctype 0))
     (member-ctype
      (dolist (m (member-ctype-members ctype) t)
        (when (or (typep m 'cons)
@@ -1400,7 +1400,7 @@
 	  (every #'(lambda (info)
 		     (cacheable-ctype-p (key-info-type info)))
 		 (values-ctype-keywords ctype))
-	  (or (not (eq (%svref ctype 0) 'function-ctype))
+	  (or (not (eq (istruct-cell-name (%svref ctype 0)) 'function-ctype))
 	      (let* ((result (function-ctype-returns ctype)))
 		(or (null result)
 		    (cacheable-ctype-p result))))))
@@ -3403,7 +3403,7 @@
 (setf (type-predicate 'class-ctype) 'class-ctype-p)
 
 (defun args-ctype-p (x) (and (eql (typecode x) target::subtag-istruct)
-                             (member (%svref x 0)
+                             (member (istruct-type-name x)
                                      '(args-ctype values-ctype function-ctype))))
 
 (defun function-ctype-p (x) (istruct-typep x 'function-ctype))

@@ -150,7 +150,7 @@
                                 (if (proclaimed-notinline-p name)
 				  (push '(inline . notinline) decls)))))
                   (values nil nil decls))))
-          (if (eq (uvref contour 0) 'definition-environment)
+          (if (istruct-typep contour 'definition-environment)
             (if (assq name (defenv.functions contour))
               (return (values :macro nil nil))
               (progn (setq root nil) (process-new-fdecls (defenv.fdecls contour))))
@@ -184,7 +184,7 @@
 			       not-a-symbol-macro)
 		     (setq vartype :symbol-macro)))))
              (return))
-            ((eq (setq envtype (%svref env 0)) 'definition-environment)
+            ((eq (setq envtype (istruct-type-name env)) 'definition-environment)
              (cond ((assq var (defenv.constants env))
                     (setq vartype :constant)
                     (return))
@@ -233,7 +233,7 @@
 ; Type declarations affect all references.
 (defun nx-declared-type (sym &optional (env *nx-lexical-environment*))
   (loop
-    (when (or (null env) (eq (uvref env 0) 'definition-environment)) (return))
+    (when (or (null env) (istruct-typep env 'definition-environment)) (return))
     (dolist (decl (lexenv.vdecls env))
       (if (and (eq (car decl) sym)
                (eq (cadr decl) 'type))

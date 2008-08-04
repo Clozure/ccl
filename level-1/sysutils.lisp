@@ -234,7 +234,7 @@
        ((or array complex) (type-specifier (ctype-of form)))
        (t
 	(if (eql (typecode form) target::subtag-istruct)
-	  (%svref form 0)
+	  (istruct-type-name form)
 	  (let* ((class (class-of form))
 		 (class-name (class-name class)))
 	    (if (eq class (find-class class-name nil))

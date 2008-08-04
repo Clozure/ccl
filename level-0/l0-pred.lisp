@@ -373,8 +373,8 @@
 			   (incf y-pos))))))))
 	(if (= x-type y-type)
 	    (if (= x-type target::subtag-istruct)
-		(and (let* ((structname (%svref x 0)))
-		       (and (eq structname (%svref y 0))
+		(and (let* ((structname (istruct-cell-name (%svref x 0))))
+		       (and (eq structname (istruct-cell-name (%svref y 0)))
 			    (or (eq structname 'pathname)
 				(eq structname 'logical-pathname)))
                        (locally
