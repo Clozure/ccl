@@ -1579,23 +1579,9 @@
 
 
 (defmacro istruct-cell-name (cell)
-  #-later
-  (let* ((temp (gensym)))
-    `(let* ((,temp ,cell))
-      (if (atom ,temp)
-        ,temp
-        (car ,temp))))
-  #+later
   `(car ,cell))
 
 (defmacro istruct-cell-info (cell)
-  #-later
-  (let* ((temp (gensym)))
-    `(let* ((,temp ,cell))
-      (if (consp ,temp)
-        (cdr ,temp)
-        (%class.own-wrapper (find-class ,temp)))))
-  #+later
   `(cdr ,cell))
 
 (provide "LISPEQU")

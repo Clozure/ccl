@@ -1009,11 +1009,7 @@
 
 (defun istruct-typep (thing type)
   (if (= (the fixnum (typecode thing)) target::subtag-istruct)
-    (let* ((cell (%svref thing 0)))
-      (eq (if (atom cell) cell (car cell))
-          (if (atom type) type (car type))))
-    #+istruct-bootstrap
-    (eq (%svref thing 0) type)))
+    (eq (istruct-cell-name (%svref thing 0)) type)))
 
 (defun istruct-type-name (thing)
   (if (= (the fixnum (typecode thing)) target::subtag-istruct)
