@@ -1492,7 +1492,7 @@ unsigned IP address."
       (syscall syscalls::socketcall 13 params))))
 
 (defun c_setsockopt (sockfd level optname optvalp optlen)
-  #-linux-ppc-target
+  #-linuxppc-target
   (syscall syscalls::setsockopt sockfd level optname optvalp optlen)
   #+linuxppc-target
   (progn
