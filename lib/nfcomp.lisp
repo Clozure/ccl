@@ -1086,12 +1086,27 @@ Will differ from *compiling-file* during an INCLUDE")
            (eql (typecode (%cadr form)) target::subtag-xfunction))
        (null (%cddr form))))
 
+;;; We currently represent istruct-cells as conses.  That's not
+;;; incredibly efficient (among other things, we have to do this
+;;; check when scanning/dumping any list, but it's probably not
+;;; worth burning a tag on them.  There are currently about 50
+;;; entries on the *istruct-cells* list.
+(defun istruct-cell-p (x)
+  #-bootstrap-istruct (declare (ignore x))
+  #+bootstrap-istruct
+  (and (consp x)
+       (typep (%car x) 'symbol)
+       (atom (%cdr x))
+       (not (null (memq x *istruct-cells*)))))
+
 (defun fasl-scan-list (list)
   (cond ((eq (%car list) cfasl-load-time-eval-sym)
          (let ((form (car (%cdr list))))
            (fasl-scan-form (if (funcall-lfun-p form)
                              (%cadr form)
                              form))))
+        ((istruct-cell-p list)
+         (fasl-scan-form (%car list)))        
         (t (when list
              (fasl-scan-ref list)
              (fasl-scan-form (%car list))
@@ -1564,6 +1579,9 @@ Will differ from *compiling-file* during an INCLUDE")
              (progn
                (fasl-out-byte opcode)
                (fasl-dump-form form)))))
+        ((istruct-cell-p list)
+         (fasl-out-opcode $fasl-istruct-cell (car list))
+         (fasl-dump-symbol (car list)))       
         (t (fasl-dump-cons list))))
 
 (defun fasl-dump-cons (cons &aux (end cons) (cdr-len 0))

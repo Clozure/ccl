@@ -121,6 +121,8 @@
 (defconstant $fasl-nvintern 67)         ;<pkg:expr><nvstring> Make a sym in pkg.
 (defconstant $fasl-nvmksym 68)          ;<nvstring> Make a string
 (defconstant $fasl-nvstr 69)            ;<nvstring> Make an uninterned symbol
+(defconstant $fasl-toplevel-location 70);<expr> - Set *loading-toplevel-location* to <expr>
+(defconstant $fasl-istruct-cell 71)     ;<expr> register istruct cell for expr
 
 
 ;;; <string> means <size><size bytes> (this is no longer used)

@@ -686,6 +686,8 @@
 (deffaslop $fasl-provide (s)
   (provide (%fasl-expr s)))    
 
+(deffaslop $fasl-istruct-cell (s)
+  (%epushval s (register-istruct-cell (%fasl-expr-preserve-epush s))))
 
 ;;; The loader itself
 

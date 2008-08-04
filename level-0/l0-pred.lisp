@@ -1009,7 +1009,33 @@
 
 (defun istruct-typep (thing type)
   (if (= (the fixnum (typecode thing)) target::subtag-istruct)
+    (let* ((cell (%svref thing 0)))
+      (eq (if (atom cell) cell (car cell))
+          (if (atom type) type (car type))))
+    #+istruct-bootstrap
     (eq (%svref thing 0) type)))
+
+(defun istruct-type-name (thing)
+  (if (= (the fixnum (typecode thing)) target::subtag-istruct)
+    (istruct-cell-name (%svref thing 0))))
+
+
+;;; This is actually set to an alist in the xloader.
+(defparameter *istruct-cells* nil)
+
+;;; This should only ever push anything on the list in the cold
+;;; load (e.g., when running single-threaded.)
+(defun register-istruct-cell (name)
+  (or (assq name *istruct-cells*)
+      (let* ((pair (cons name nil)))
+        (push pair *istruct-cells*)
+        pair)))
+
+(defun set-istruct-cell-info (cell info)
+  (etypecase cell
+    (cons (%rplacd cell info)))
+  info)
+
 
 (defun symbolp (thing)
   "Return true if OBJECT is a SYMBOL, and NIL otherwise."
