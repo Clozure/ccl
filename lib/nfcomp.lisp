@@ -1088,12 +1088,10 @@ Will differ from *compiling-file* during an INCLUDE")
 
 ;;; We currently represent istruct-cells as conses.  That's not
 ;;; incredibly efficient (among other things, we have to do this
-;;; check when scanning/dumping any list, but it's probably not
+;;; check when scanning/dumping any list), but it's probably not
 ;;; worth burning a tag on them.  There are currently about 50
 ;;; entries on the *istruct-cells* list.
 (defun istruct-cell-p (x)
-  #-bootstrap-istruct (declare (ignore x))
-  #+bootstrap-istruct
   (and (consp x)
        (typep (%car x) 'symbol)
        (atom (%cdr x))
