@@ -181,9 +181,7 @@
      (lap . 0)
      (lap-inline . 0)
      (%function . #.operator-single-valued-mask)
-     #+not-yet
      (%valid-code-char . #.(logior operator-single-valued-mask operator-acode-subforms-mask operator-side-effect-free-mask))
-     (%ttagp . #.(logior operator-cc-invertable-mask operator-single-valued-mask))
      (%ttag . #.operator-single-valued-mask)  
      (uvsize . #.operator-single-valued-mask)
      (endp . #.(logior operator-single-valued-mask operator-acode-subforms-mask operator-side-effect-free-mask operator-cc-invertable-mask))
