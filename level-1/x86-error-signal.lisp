@@ -267,7 +267,7 @@
           (if (and (= op0 #xcd)
                    (>= op1 #x70))
             (cond ((< op1 #x90)
-                   (setq skip 3)
+                   (setq skip (%check-anchored-uuo xcf 3))
                    (setq *error-reentry-count* 0)
                    (setf (encoded-gpr-lisp xp (ldb (byte 4 0) op1))
                          (%slot-unbound-trap
@@ -275,6 +275,7 @@
                           (encoded-gpr-lisp xp (ldb (byte 4 0) op2))
                           frame-ptr)))
                   ((< op1 #xa0)
+		   (setq skip (%check-anchored-uuo xcf 2))
                    ;; #x9x - register X is a symbol.  It's unbound.
                    (%kernel-restart-internal $xvunbnd
                                              (list
@@ -283,13 +284,14 @@
                                                (ldb (byte 4 0) op1)))
                                              frame-ptr))
                   ((< op1 #xb0)
+		   (setq skip (%check-anchored-uuo xcf 2))
                    (%err-disp-internal $xfunbnd
                                        (list (encoded-gpr-lisp
                                               xp
                                               (ldb (byte 4 0) op1)))
                                        frame-ptr))
                   ((< op1 #xc0)
-                   (setq skip 3)
+		   (setq skip (%check-anchored-uuo xcf 3))
                    (%err-disp-internal 
                     #.(car (rassoc 'type-error *kernel-simple-error-classes*))
                     (list (encoded-gpr-lisp
@@ -298,16 +300,19 @@
                           (logandc2 op2 arch::error-type-error))
                     frame-ptr))
                   ((= op1 #xc0)
+                   (setq skip (%check-anchored-uuo xcf 2))
                    (%error 'too-few-arguments
                            (list :nargs (xp-argument-count xp)
                                  :fn fn)
                            frame-ptr))
                   ((= op1 #xc1)
+                   (setq skip (%check-anchored-uuo xcf 2))
                    (%error 'too-many-arguments
                            (list :nargs (xp-argument-count xp)
                                  :fn fn)
                            frame-ptr))
                   ((= op1 #xc2)
+                   (setq skip (%check-anchored-uuo xcf 2))
                    (let* ((flags (xp-flags-register xp))
                           (nargs (xp-argument-count xp))
                           (carry-bit (logbitp x86::x86-carry-flag-bit flags)))
@@ -321,11 +326,13 @@
                                      :fn fn)
                                frame-ptr))))
                   ((= op1 #xc3)         ;array rank
+                   (setq skip (%check-anchored-uuo xcf 3))
                    (%err-disp-internal $XNDIMS
                                        (list (encoded-gpr-lisp xp (ldb (byte 4 4) op2))
                                              (encoded-gpr-lisp xp (ldb (byte 4 0) op2)))
                                        frame-ptr))
                   ((= op1 #xc6)
+                   (setq skip (%check-anchored-uuo xcf 2))
                    (%error (make-condition 'type-error
                                            :datum (encoded-gpr-lisp xp x8632::temp0)
                                            :expected-type '(or symbol function)
@@ -336,19 +343,20 @@
                    (handle-udf-call xp frame-ptr)
                    (setq skip 0))
                   ((or (= op1 #xc8) (= op1 #xcb))
-                   (setq skip 3)
+                   (setq skip (%check-anchored-uuo xcf 3))
                    (%error (%rsc-string $xarroob)
                            (list (encoded-gpr-lisp xp (ldb (byte 4 4) op2))
                                  (encoded-gpr-lisp xp (ldb (byte 4 0) op2)))
                            frame-ptr))
                   ((= op1 #xc9)
+                   (setq skip (%check-anchored-uuo xcf 2))
                    (%err-disp-internal $xnotfun
                                        (list (encoded-gpr-lisp xp x8632::temp0))
                                        frame-ptr))
                   ;; #xca = uuo-error-debug-trap
                   ((= op1 #xcc)
                    ;; external entry point or foreign variable
-                   (setq skip 3)
+                   (setq skip (%check-anchored-uuo xcf 3))
                    (let* ((eep-or-fv (encoded-gpr-lisp xp (ldb (byte 4 4) op2))))
                      (etypecase eep-or-fv
                        (external-entry-point
@@ -360,7 +368,7 @@
                         (setf (encoded-gpr-lisp xp (ldb (byte 4 0) op2))
                               (fv.addr eep-or-fv))))))
                   ((< op1 #xe0)
-                   (setq skip 3)
+                   (setq skip (%check-anchored-uuo xcf 3))
                    (if (= op2 x8632::subtag-catch-frame)
                      (%error (make-condition 'cant-throw-error
                                              :tag (encoded-gpr-lisp
@@ -387,6 +395,7 @@
                                nil
                                frame-ptr))))
                   ((< op1 #xf0)
+                   (setq skip (%check-anchored-uuo xcf 2))
                    (%error (make-condition 'type-error
                                            :datum (encoded-gpr-lisp
                                                    xp
@@ -395,6 +404,7 @@
                            nil
                            frame-ptr))
                   (t
+                   (setq skip (%check-anchored-uuo xcf 2))
                    (%error (make-condition 'type-error
                                            :datum (encoded-gpr-lisp
                                                    xp
