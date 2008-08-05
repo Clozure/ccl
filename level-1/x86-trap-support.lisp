@@ -233,12 +233,13 @@
 ;;; word preceding the current relative PC and return -1, else return skip.
 (defun %check-anchored-uuo (xcf skip)
   (if (eql 0 (%get-xcf-byte xcf skip))
-    (let* ((new-rpc (+ target::tag-function
+    (let* ((new-rpc (+ #+x8664-target target::tag-function
+		       #+x8632-target target::tag-misc
                        (logior (ash (%get-xcf-byte xcf -1) 24)
                                (ash (%get-xcf-byte xcf -2) 16)
                                (ash (%get-xcf-byte xcf -3) 8)
                                (%get-xcf-byte xcf -4)))))
-      (%set-object xcf x8664::xcf.relative-pc new-rpc)
+      (%set-object xcf target::xcf.relative-pc new-rpc)
       -1)
     skip))
                             
