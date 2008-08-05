@@ -2157,6 +2157,9 @@
            (%kernel-restart $xnopkg (package-ref.pkg ,r)))))
       w)))
 
+(define-compiler-macro get-character-encoding (&whole w name)
+  (or (if (typep name 'keyword) (lookup-character-encoding name))
+      w))
 
 (provide "OPTIMIZERS")
 
