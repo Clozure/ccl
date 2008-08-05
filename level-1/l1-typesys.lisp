@@ -4182,6 +4182,8 @@
 ;;; Better than nothing, arguably.
 (deftype function-name () `(or symbol setf-function-name))
 
+(deftype valid-char-code () `(satisfies valid-char-code-p))
+
 )                                       ; end of LET* sleaze
 
 (defun array-or-union-ctype-element-type (ctype)
