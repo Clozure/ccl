@@ -138,14 +138,22 @@
 (defun get-register-value (address last-catch index)
   (if address
     (%fixnum-ref address)
-    (uvref last-catch (+ index target::catch-frame.save-save3-cell))))
+    (uvref last-catch (+ index 
+			 #+x8632-target
+			 x8632::catch-frame.db-link-cell
+			 #+x8664-target
+			 x8664::catch-frame.save-save3-cell))))
 
 ;;; Inverse of get-register-value
 
 (defun set-register-value (value address last-catch index)
   (if address
     (%fixnum-set address value)
-    (setf (uvref last-catch (+ index target::catch-frame.save-save3-cell))
+    (setf (uvref last-catch (+ index
+			       #+x8632-target
+			       x8632::catch-frame.db-link-cell
+			       #+x8664-target
+			       x8664::catch-frame.save-save3-cell))
           value)))
 
 (defun %find-register-argument-value (context cfp regval bad)
@@ -294,7 +302,8 @@
              (%fixnum-ref tsp target::tsp-frame.backptr)))
        ((zerop tsp) nil)
     (declare (fixnum tsp))
-    (when (> (the fixnum (%fixnum-ref tsp target::tsp-frame.rbp))
+    (when (> (the fixnum (%fixnum-ref tsp #+x8632-target x8632::tsp-frame.ebp
+				          #+x8664-target x8664::tsp-frame.rbp))
              target)
       (return tsp))))
 
@@ -308,7 +317,8 @@
              (%fixnum-ref cfp target::csp-frame.backptr)))
        ((zerop cfp))
     (declare (fixnum cfp))
-    (let* ((rbp (%fixnum-ref cfp target::csp-frame.rbp)))
+    (let* ((rbp (%fixnum-ref cfp #+x8632-target x8632::csp-frame.ebp
+			         #+x8664-target x8664::csp-frame.rbp)))
       (declare (fixnum rbp))
       (if (> rbp target)
         (return cfp)
@@ -323,7 +333,8 @@
               (%fixnum-ref tsp target::tsp-frame.backptr)))
        ()
     (declare (fixnum tsp next))
-    (let* ((rbp (%fixnum-ref tsp target::tsp-frame.rbp)))
+    (let* ((rbp (%fixnum-ref tsp #+x8632-target x8632::tsp-frame.ebp
+			         #+x8664-target x8664::tsp-frame.rbp)))
       (declare (fixnum rbp))
       (if (zerop rbp)
         (return (values nil nil))
