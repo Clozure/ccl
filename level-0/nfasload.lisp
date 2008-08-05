@@ -360,7 +360,7 @@
   (let* ((size-in-elements (%fasl-read-count s))
          (size-of-code (%fasl-read-count s))
          (vector (%alloc-misc size-in-elements target::subtag-function))
-         (function (%function-vector-to-function vector)))
+         (function (function-vector-to-function vector)))
     (declare (fixnum size-in-elements size-of-code))
     (%epushval s function)
     (%fasl-read-n-bytes s vector 0 (ash size-of-code target::word-shift))
