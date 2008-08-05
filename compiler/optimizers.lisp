@@ -142,6 +142,7 @@
           (return))
         (push key seen)))))
 
+
 (defun remove-explicit-test-keyword-from-test-testnot-key (item list keys default alist testonly)
   (if (null keys)
     `(,default ,item ,list)
@@ -568,6 +569,11 @@
       `(progn ,shift 0)
       call)))
 
+(defun string-designator-p (object)
+  (typecase object
+    (character t)
+    (symbol t)
+    (string t)))
 
 (define-compiler-macro ldb (&whole call &environment env byte integer)
    (cond ((and (integerp byte) (> byte 0))
@@ -778,15 +784,15 @@
     `(%make-simple-array ,subtype ,dims)
     (let* ((call-list (make-list 6))
            (dims-var (make-symbol "DIMS"))
-         (let-list (comp-nuke-keys keys
-                                   '((:adjustable 0)
-                                     (:fill-pointer 1)
-                                     (:initial-element 2 3)
-                                     (:initial-contents 4 5))
-                                   call-list
-				   `((,dims-var ,dims)))))
-    `(let ,let-list
-       (make-uarray-1 ,subtype ,dims-var ,@call-list nil nil)))))
+           (let-list (comp-nuke-keys keys
+                                     '((:adjustable 0)
+                                       (:fill-pointer 1)
+                                       (:initial-element 2 3)
+                                       (:initial-contents 4 5))
+                                     call-list
+                                     `((,dims-var ,dims)))))
+      `(let ,let-list
+        (make-uarray-1 ,subtype ,dims-var ,@call-list nil nil)))))
 
 (defun comp-make-array-1 (dims keys)
   (let* ((call-list (make-list 10 :initial-element nil))
@@ -1910,6 +1916,11 @@
   (let* ((tag (nx-lookup-target-uvector-subtag :lock)))
     `(eq ,tag (typecode ,lock))))
 
+(define-compiler-macro structurep (s)
+  (let* ((tag (nx-lookup-target-uvector-subtag :struct)))
+    `(eq ,tag (typecode ,s))))
+  
+
 (define-compiler-macro integerp (thing)
   (let* ((typecode (gensym))
          (fixnum-tag (arch::target-fixnum-tag (backend-target-arch *target-backend*)))
@@ -1935,10 +1946,14 @@
       `(progn (char-code ,ch) t))
     (if (null (cdr others))
       (let* ((third (car others))
-             (code (gensym)))
-        `(let* ((,code (char-code ,ch)))
-          (and (eq ,code (setq ,code (char-code ,other)))
-           (eq ,code (char-code ,third)))))
+             (code (gensym))
+             (code2 (gensym))
+             (code3 (gensym)))
+        `(let* ((,code (char-code ,ch))
+                (,code2 (char-code ,other))
+                (,code3 (char-code ,third)))
+          (and (eq ,code ,code2)
+           (eq ,code2 ,code3))))
       call)))
 
 (define-compiler-macro char-equal (&whole call ch &optional (other nil other-p) &rest others)
@@ -1955,7 +1970,7 @@
                 (,code2 (%char-code (char-upcase ,other)))
                 (,code3 (%char-code (char-upcase ,third))))
           (and (eq ,code ,code2)
-           (eq ,code2 ,code3))))
+           (eq ,code ,code3))))
       call)))
 
 (define-compiler-macro char/= (&whole call ch &optional (other nil other-p) &rest others)
@@ -1976,6 +1991,8 @@
              (code (gensym))
              (code2 (gensym))
              (code3 (gensym)))
+        ;; We have to evaluate all forms for side-effects.
+        ;; Hopefully, there won't be any
         `(let* ((,code (char-code ,ch))
                 (,code2 (char-code ,other))
                 (,code3 (char-code ,third)))
@@ -2093,6 +2110,52 @@
     `',(register-istruct-cell (cadr arg))
     w))
 
+;;; Try to use "package-references" to speed up package lookup when
+;;; a package name is used as a constant argument to some functions.
+
+(defun package-ref-form (arg)
+  (when (and arg (constantp arg) (typep (setq arg (nx-unquote arg))
+                                        '(or symbol string)))
+    `(load-time-value (register-package-ref ,(string arg)))))
+
+
+
+(define-compiler-macro intern (&whole w string &optional package)
+  (let* ((ref (package-ref-form package)))
+    (if (or ref
+            (setq ref (and (consp package)
+                           (eq (car package) 'find-package)
+                           (consp (cdr package))
+                           (null (cddr package))
+                           (package-ref-form (cadr package)))))
+      `(%pkg-ref-intern ,string ,ref)
+      w)))
+
+(define-compiler-macro find-symbol (&whole w string &optional package)
+  (let* ((ref (package-ref-form package)))
+    (if (or ref
+            (setq ref (and (consp package)
+                           (eq (car package) 'find-package)
+                           (consp (cdr package))
+                           (null (cddr package))
+                           (package-ref-form (cadr package)))))
+      `(%pkg-ref-find-symbol ,string ,ref)
+      w)))
+
+(define-compiler-macro find-package (&whole w package)
+  (let* ((ref (package-ref-form package)))
+    (if ref
+      `(package-ref.pkg ,ref)
+      w)))
+
+(define-compiler-macro pkg-arg (&whole w package &optional allow-deleted)
+  (let* ((ref (unless allow-deleted (package-ref-form package))))
+    (if ref
+      (let* ((r (gensym)))
+        `(let* ((,r ,ref))
+          (or (package-ref.pkg ,ref)
+           (%kernel-restart $xnopkg (package-ref.pkg ,r)))))
+      w)))
 
 
 (provide "OPTIMIZERS")
