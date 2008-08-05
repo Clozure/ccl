@@ -1655,26 +1655,15 @@ to open."
 
 (defmacro with-encoded-cstr ((encoding-name (sym string &optional start end))
                              &rest body &environment env)
-  (let* ((encoding (get-character-encoding encoding-name))
-         (str (gensym))
-         (len (gensym))
-         (nzeros (floor (character-encoding-code-unit-size encoding) 8)))
-    (collect ((trailing-zeros))
-      (case nzeros
-        (1 (trailing-zeros `(setf (%get-unsigned-byte ,sym ,len) 0)))
-        (2 (trailing-zeros `(setf (%get-unsigned-word ,sym ,len) 0)))
-        (4 (trailing-zeros `(setf (%get-unsigned-long ,sym ,len) 0)))
-        (t 
-         (dotimes (i nzeros)
-           (trailing-zeros `(setf (%get-unsigned-byte ,sym (the fixnum (+ ,len ,i))) 0)))))
+  (let* ((encoding (gensym))
+         (str (gensym)))
       (multiple-value-bind (body decls) (parse-body body env nil)
-        `(let* ((,str ,string))
-          (%stack-block ((,sym (cstring-encoded-length-in-bytes ,encoding ,str ,start ,end)))
+        `(let* ((,str ,string)
+                (,encoding (get-character-encoding ,encoding-name)))
+          (%stack-block ((,sym (cstring-encoded-length-in-bytes ,encoding ,str ,start ,end) :clear t))
             ,@decls
-            (let* ((,len (encode-string-to-memory ,encoding ,sym 0 ,str ,start ,end)))
-              (declare (fixnum ,len))
-              ,@(trailing-zeros)
-              ,@body)))))))
+            (encode-string-to-memory ,encoding ,sym 0 ,str ,start ,end)
+            ,@body)))))
 
 (defmacro with-encoded-cstrs (encoding-name bindings &body body)
   (with-specs-aux 'with-encoded-cstr (mapcar #'(lambda (b)
