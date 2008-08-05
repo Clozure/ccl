@@ -76,8 +76,9 @@
   ;; Returns the number of octets needed to encode STRING between START and END
   octets-in-string-function              ;(STRING START END)
 
-  ;; Returns the number of (full) characters encoded in VECTOR, and the index
-  ;; of the first octet not used to encode them. (The second value may be less than END).
+  ;; Returns the number of (full) characters encoded in VECTOR, and
+  ;; the index the index of the first octet not used to encode
+  ;; them. (The second value may be less than END.
   length-of-vector-encoding-function    ;(VECTOR START END) 
 
   ;; Returns the number of (full) characters encoded in memory at (+ POINTER START)
@@ -112,8 +113,7 @@
 
 (defconstant byte-order-mark #\u+feff)
 (defconstant byte-order-mark-char-code (char-code byte-order-mark))
-(defconstant swapped-byte-order-mark #\u+fffe)
-(defconstant swapped-byte-order-mark-char-code (char-code swapped-byte-order-mark))
+(defconstant swapped-byte-order-mark-char-code #xfffe)
 
 
 (defmethod default-character-encoding ((domain t))
@@ -178,11 +178,11 @@
   (declare (ignore vector))
   (if (>= end start)
     (values (- end start) end)
-    (values 0 0)))
+    (values 0 start)))
 
 (defun 8-bit-fixed-width-length-of-memory-encoding (pointer noctets start)
   (declare (ignore pointer start))
-  noctets)
+  (values noctets noctets))
 
 (define-character-encoding :iso-8859-1
   "An 8-bit, fixed-width character encoding in which all character
@@ -2988,7 +2988,7 @@ bytes."
                                     (< (the fixnum (logxor s2 #x80)) #x40)
                                     (or (>= 1st-unit #xe1)
                                         (>= s1 #xa0)))
-                             (code-char (the fixnum
+                             (or (code-char (the fixnum
                                           (logior (the fixnum
                                                     (ash (the fixnum (logand 1st-unit #xf))
                                                          12))
@@ -2998,6 +2998,7 @@ bytes."
                                                        (ash (the fixnum (logand s1 #x3f))
                                                             6))
                                                      (the fixnum (logand s2 #x3f)))))))
+                                 #\Replacement_Character)
                              #\Replacement_Character)
                            (if (< 1st-unit #xf8)
                              (let* ((s3 (funcall next-unit-function stream)))
@@ -3062,7 +3063,8 @@ bytes."
                          (logior #x80 (the fixnum (logand #x3f (the fixnum (ash code -12))))))
                    (setf (aref vector (the fixnum (+ idx 2)))
                          (logior #x80 (the fixnum (logand #x3f (the fixnum (ash code -6))))))
-                   (setf (aref vector (the fixnum (+ idx 3))) (logand #x3f code))
+                   (setf (aref vector (the fixnum (+ idx 3)))
+                         (logior #x80 (logand #x3f code)))
                    (incf idx 4)))))))
     :vector-decode-function
     (nfunction
@@ -3140,13 +3142,14 @@ bytes."
        (do* ((i start)
              (nchars 0))
             ((>= i end)
-             (if (= i end) (values nchars i)))
+             (values nchars i))
          (declare (fixnum i))
          (let* ((code (aref vector i))
-                (nexti (+ i (cond ((< code #x80) 1)
+                (nexti (+ i (cond ((< code #xc2) 1)
                                   ((< code #xe0) 2)
                                   ((< code #xf0) 3)
-                                  (t 4)))))
+                                  ((< code #xf8) 4)
+                                  (t 1)))))
            (declare (type (unsigned-byte 8) code))
            (if (> nexti end)
              (return (values nchars i))
@@ -3637,6 +3640,8 @@ in native byte-order with a leading byte-order mark."
    (lambda (string vector idx start end)
      (declare (type (simple-array (unsigned-byte 8) (*)) vector)
               (fixnum idx))
+     (setf (%native-u8-ref-u16 vector idx) byte-order-mark-char-code)
+     (incf idx 2)
      (do* ((i start (1+ i)))
             ((>= i end) idx)
          (declare (fixnum i))
@@ -3661,7 +3666,8 @@ in native byte-order with a leading byte-order mark."
    (lambda (vector idx noctets string)
      (declare (type (simple-array (unsigned-byte 16) (*)) vector)
               (type index idx))
-     (let* ((swap (if (>= noctets 2)
+     (let* ((origin idx)
+            (swap (if (>= noctets 2)
                     (case (%native-u8-ref-u16 vector idx)
                       (#.byte-order-mark-char-code
                        (incf idx 2) nil)
@@ -3669,7 +3675,7 @@ in native byte-order with a leading byte-order mark."
                        (incf idx 2) t)
                       (t #+little-endian-target t)))))
        (do* ((i 0 (1+ i))
-             (end (+ idx noctets))
+             (end (+ origin noctets))
              (index idx))
             ((= index end) index)
          (declare (fixnum i end index))
@@ -3697,6 +3703,9 @@ in native byte-order with a leading byte-order mark."
    utf-16-memory-encode
    (lambda (string pointer idx start end)
      (declare (fixnum idx))
+     ;; Output a BOM.
+     (setf (%get-unsigned-word pointer idx) byte-order-mark-char-code)
+     (incf idx 2)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
        (let* ((code (char-code (schar string i)))
@@ -3704,18 +3713,13 @@ in native byte-order with a leading byte-order mark."
          (declare (type (mod #x110000) code)
                   (fixnum highbits))
          (cond ((< highbits 0)
-                (setf (%get-unsigned-word pointer idx) #+big-endian-target code #+little-endian-target (%swap-u16 code))
+                (setf (%get-unsigned-word pointer idx) code)
                 (incf idx 2))
                (t
-                (let* ((w1 (logior #xd800 (the fixnum (ash highbits -10))))
-                       (w2 (logior #xdc00 (the fixnum (logand highbits #x3ff)))))
-                  (declare (type (unsigned-byte 16) w1 w2))
-                (setf (%get-unsigned-word pointer idx)
-                      #+big-endian-target w1 #+little-endian-target (%swap-u16 w1))
+                (setf (%get-unsigned-word pointer idx) (logior #xd800 (the fixnum (ash highbits -10))))
                 (setf (%get-unsigned-word pointer (the fixnum (+ idx 2)))
-                      #+big-endian-target w2
-                      #+little-endian-target (%swap-u16 w2))
-                (incf idx 4))))))))
+                      (logior #xdc00 (the fixnum (logand highbits #x3ff))))
+                (incf idx 4)))))))
   :memory-decode-function
   (nfunction
    utf-16-memory-decode
@@ -3755,13 +3759,16 @@ in native byte-order with a leading byte-order mark."
                            (utf-16-combine-surrogate-pairs 1st-unit 2nd-unit)))))))
              (setf (schar string i) (or char #\Replacement_Character))))))))
   :octets-in-string-function
-  #'utf-16-octets-in-string
+  (nfunction
+   utf-16-bom-octets-in-string
+   (lambda (string start end)
+     (+ 2 (utf-16-octets-in-string string start end))))
   :length-of-vector-encoding-function
   (nfunction
    utf-16-length-of-vector-encoding
    (lambda (vector start end)
      (declare (type (simple-array (unsigned-byte 16) (*)) vector))
-     (let* ((swap (when (> end start)
+     (let* ((swap (when (>= end (+ start 2))
                     (case (%native-u8-ref-u16 vector start)
                       (#.byte-order-mark-char-code
                        (incf start 2)
@@ -3774,7 +3781,7 @@ in native byte-order with a leading byte-order mark."
              (j (+ 2 i) (+ 2 j))
              (nchars 0))
             ((> j end)
-             (if (= i end) (values nchars i)))
+             (values nchars i))
          (let* ((code (if swap
                         (%reversed-u8-ref-u16 vector i)
                         (%native-u8-ref-u16 vector i)))
@@ -3791,30 +3798,37 @@ in native byte-order with a leading byte-order mark."
   (nfunction
    utf-16-length-of-memory-encoding
    (lambda (pointer noctets start)
-     (let* ((swap (when (>= noctets 2)
+     (declare (fixnum noctets start))
+     (when (oddp noctets)
+       (setq noctets (1- noctets)))
+     (let* ((origin start)
+            (swap (when (>= noctets 2)
                     (case (%get-unsigned-word pointer (+ start start))
                       (#.byte-order-mark-char-code
                        (incf start 2)
-                       (decf noctets 2)
                        nil)
                       (#.swapped-byte-order-mark-char-code
                        (incf start 2)
-                       (decf noctets 2)
                        t)
                       (t #+little-endian-target t)))))
+       (declare (fixnum origin))
        (do* ((i start)
              (j (+ i 2) (+ i 2))
-             (end (+ start noctets))
+             (end (+ origin noctets))
              (nchars 0 (1+ nchars)))
-            ((> j end) (values nchars i))
+            ((> j end) (values nchars (- i origin)))
+         (declare (fixnum (i j end nchars)))
          (let* ((code (%get-unsigned-word pointer i)))
            (declare (type (unsigned-byte 16) code))
            (if swap (setq code (%swap-u16 code)))
-           (incf i
-                 (if (or (< code #xd800)
-                         (>= code #xdc00))
-                   2
-                   4)))))))
+           (let* ((nexti (+ i (if (or (< code #xd800)
+                                      (>= code #xdc00))
+                                2
+                                4))))
+             (declare (fixnum nexti))
+             (if (> nexti end)
+               (return (values nchars (- i origin)))
+               (setq i nexti))))))))
   :decode-literal-code-unit-limit #xd800
   :encode-literal-char-code-limit #x10000  
   :use-byte-order-mark
@@ -3846,6 +3860,16 @@ in native byte-order with a leading byte-order mark."
   (if (>= end start)
     (* 2 (- end start))
     0))
+
+(defun ucs-2-length-of-vector-encoding (vector start end)
+  (declare (ignore vector))
+  (let* ((noctets (max (- end start) 0)))
+    (values (ash noctets -1) (+ start (logandc2 noctets 1)))))
+
+(defun ucs-2-length-of-memory-encoding (pointer noctets start)
+  (declare (ignore pointer start))
+  (values (ash noctets -1) (logandc2 noctets 1)))
+
 
 
 ;;; UCS-2, native byte order
@@ -3927,20 +3951,9 @@ to output."
   :octets-in-string-function
   #'ucs-2-octets-in-string
   :length-of-vector-encoding-function
-  (nfunction
-   native-ucs-2-length-of-vector-encoding
-   (lambda (vector start end)
-     (declare (ignore vector))
-     (do* ((i start (1+ i))
-           (j (+ i 2) (+ i 2))
-           (nchars 0 (1+ nchars)))
-          ((> j end) (values nchars i)))))
+  #'ucs-2-length-of-vector-encoding
   :length-of-memory-encoding-function
-  (nfunction
-   native-ucs-2-length-of-memory-encoding
-   (lambda (pointer noctets start)
-     (declare (ignore pointer))
-     (values (floor noctets 2) (+ start noctets))))
+  #'ucs-2-length-of-memory-encoding
   :decode-literal-code-unit-limit #x10000
   :encode-literal-char-code-limit #x10000  
   :nul-encoding #(0 0)
@@ -4026,20 +4039,9 @@ to output."
   :octets-in-string-function
   #'ucs-2-octets-in-string
   :length-of-vector-encoding-function
-  (nfunction
-   reversed-ucs-2-length-of-vector-encoding
-   (lambda (vector start end)
-     (declare (ignore vector))
-     (do* ((i start (1+ i))
-           (j (+ i 2) (+ i 2))
-           (nchars 0 (1+ nchars)))
-          ((> j end) (values nchars i)))))
+  #'ucs-2-length-of-vector-encoding
   :length-of-memory-encoding-function
-  (nfunction
-   reversed-ucs-2-length-of-memory-encoding
-   (lambda (pointer noctets start)
-     (declare (ignore pointer))
-     (values (floor noctets 2) (+ start noctets))))
+  #'ucs-2-length-of-memory-encoding
   :decode-literal-code-unit-limit #x10000
   :encode-literal-char-code-limit #x10000
   :nul-encoding #(0 0)
@@ -4065,6 +4067,8 @@ big-endian order."
    (lambda (string vector idx start end)
      (declare (type (simple-array (unsigned-byte 8) (*)) vector)
               (fixnum idx))
+     (setf (%native-u8-ref-u16 vector idx) byte-order-mark-char-code)
+     (incf idx 2)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
        (let* ((char (schar string i))
@@ -4104,6 +4108,8 @@ big-endian order."
    ucs-2-memory-encode
    (lambda (string pointer idx start end)
      (declare (fixnum idx))
+     (setf (%get-unsigned-word pointer idx) byte-order-mark-char-code)
+     (incf idx 2)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
        (let* ((code (char-code (schar string i))))
@@ -4138,29 +4144,37 @@ big-endian order."
          (if swap (setq 1st-unit (%swap-u16 1st-unit)))
          (setf (schar string i) (or (code-char 1st-unit) #\Replacement_Character)))))))
   :octets-in-string-function
-  #'ucs-2-octets-in-string
+  (nfunction
+   ucs-2-bom-octets-in-string
+   (lambda (string start end)
+     (+ 2 (ucs-2-octets-in-string string start end))))
   :length-of-vector-encoding-function
   (nfunction
    ucs-2-length-of-vector-encoding
    (lambda (vector start end)
-     (declare (ignore vector))
-     (do* ((i start (1+ i))
-           (j (+ i 2) (+ i 2))
+     (declare (fixnum start end))
+     (when (>= end (+ start 2))
+       (let* ((maybe-bom (%native-u8-ref-u16 vector start)))
+         (declare (type (unsigned-byte 16) maybe-bom))
+         (when (or (= maybe-bom byte-order-mark-char-code)
+                   (= maybe-bom swapped-byte-order-mark-char-code))
+           (incf start 2))))
+     (do* ((i start j)
+           (j (+ i 2) (+ j 2))
            (nchars 0 (1+ nchars)))
           ((> j end) (values nchars i)))))
   :length-of-memory-encoding-function
   (nfunction
    ucs-2-length-of-memory-encoding
    (lambda (pointer noctets start)
-     (when (> noctets 1)
-       (case (%get-unsigned-word pointer )
-         (#.byte-order-mark-char-code
-          (incf start 2)
-          (decf noctets 2))
-         (#.swapped-byte-order-mark-char-code
-          (incf start 2)
-          (decf noctets 2))))
-     (values (floor noctets 2) (+ start noctets))))
+     (let* ((skip 
+             (when (> noctets 1)
+               (case (%get-unsigned-word pointer start)
+                 (#.byte-order-mark-char-code
+                  2)
+                 (#.swapped-byte-order-mark-char-code
+                  2)))))
+     (values (ash (- noctets skip) -1) (logandc2 noctets 1)))))
   :decode-literal-code-unit-limit #x10000
   :encode-literal-char-code-limit #x10000  
   :use-byte-order-mark
@@ -4337,8 +4351,8 @@ or prepended to output."
    native-ucs-4-length-of-vector-encoding
    (lambda (vector start end)
      (declare (ignore vector))
-     (do* ((i start (1+ i))
-           (j (+ i 4) (+ i 4))
+     (do* ((i start j)
+           (j (+ i 4) (+ j 4))
            (nchars 0 (1+ nchars)))
           ((> j end) (values nchars i)))))
   :length-of-memory-encoding-function
@@ -4346,7 +4360,7 @@ or prepended to output."
    native-ucs-4-length-of-memory-encoding
    (lambda (pointer noctets start)
      (declare (ignore pointer))
-     (values (floor noctets 4) (+ start noctets))))
+     (values (ash noctets -2) (+ start (logandc2 noctets 3)))))
   :decode-literal-code-unit-limit #x110000
   :encode-literal-char-code-limit #x110000
   :nul-encoding #(0 0 0 0)
@@ -4435,8 +4449,8 @@ or prepended to output."
    reversed-ucs-4-length-of-vector-encoding
    (lambda (vector start end)
      (declare (ignore vector))
-     (do* ((i start (1+ i))
-           (j (+ i 4) (+ i 4))
+     (do* ((i start j)
+           (j (+ i 4) (+ j 4))
            (nchars 0 (1+ nchars)))
           ((> j end) (values nchars i)))))
   :length-of-memory-encoding-function
@@ -4444,7 +4458,7 @@ or prepended to output."
    reversed-ucs-4-length-of-memory-encoding
    (lambda (pointer noctets start)
      (declare (ignore pointer))
-     (values (floor noctets 4) (+ start noctets))))
+     (values (ash noctets -2) (+ start (logandc2 noctets 3)))))
   :decode-literal-code-unit-limit #x110000
   :encode-literal-char-code-limit #x110000
   :nul-encoding #(0 0 0 0)  
@@ -4453,7 +4467,7 @@ or prepended to output."
 (define-character-encoding :utf-32
     "A 32-bit, fixed-length encoding in which all Unicode characters can be encoded in a single 32-bit word.  The endianness of the encoded data is indicated by the endianness of a byte-order-mark character (#\u+feff) prepended to the data; in the absence of such a character on input, input data is assumed to be in big-endian order.  Output is written in native byte order with a leading byte-order mark."
     
-  :aliases '(:utf-4)
+  :aliases '(:ucs-4)
   :max-units-per-char 1
   :code-unit-size 32
   :native-endianness t                  ;not necessarily true.
@@ -4467,6 +4481,8 @@ or prepended to output."
    (lambda (string vector idx start end)
      (declare (type (simple-array (unsigned-byte 8) (*)) vector)
               (fixnum idx))
+     (setf (%native-u8-ref-u32 vector idx) byte-order-mark-char-code)
+     (incf idx 4)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
        (let* ((char (schar string i))
@@ -4506,7 +4522,8 @@ or prepended to output."
    utf-32-memory-encode
    (lambda (string pointer idx start end)
      (declare (fixnum idx))
-
+     (setf (%get-unsigned-long pointer idx) byte-order-mark-char-code)
+     (incf idx 4)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
        (let* ((code (char-code (schar string i))))
@@ -4540,21 +4557,29 @@ or prepended to output."
                                       (code-char 1st-unit))
                                     #\Replacement_Character)))))))
   :octets-in-string-function
-  #'ucs-4-octets-in-string
+  (nfunction
+   utf-32-bom-octets-in-string
+   (lambda (string start end)
+     (+ 4 (ucs-4-octets-in-string string start end))))
   :length-of-vector-encoding-function
   (nfunction
    utf-32-length-of-vector-encoding
    (lambda (vector start end)
-     (declare (ignore vector))
-     (do* ((i start (1+ i))
-           (j (+ i 2) (+ i 2))
+     (when (>= end (+ start 4))
+       (let* ((maybe-bom (%native-u8-ref-u32 vector start)))
+         (declare (type (unsigned-byte 32) maybe-bom))
+         (when (or (= maybe-bom byte-order-mark-char-code)
+                   (= maybe-bom swapped-byte-order-mark-char-code))
+           (incf start 4))))
+     (do* ((i start j)
+           (j (+ i 4) (+ J 4))
            (nchars 0 (1+ nchars)))
           ((> j end) (values nchars i)))))
   :length-of-memory-encoding-function
   (nfunction
    utf-32-length-of-memory-encoding
    (lambda (pointer noctets start)
-     (when (> noctets 1)
+     (when (> noctets 3)
        (case (%get-unsigned-long pointer )
          (#.byte-order-mark-char-code
           (incf start 4)
@@ -4562,7 +4587,7 @@ or prepended to output."
          (#.swapped-byte-order-mark-char-code
           (incf start 4)
           (decf noctets 4))))
-     (values (floor noctets 4) (+ start noctets))))
+     (values (ash noctets -2) (+ start (logandc2 noctets 3)))))
   :decode-literal-code-unit-limit #x110000
   :encode-literal-char-code-limit #x110000  
   :use-byte-order-mark
@@ -4603,7 +4628,7 @@ or prepended to output."
 (defvar *unicode-newline-string* (make-string 1 :initial-element #\Line_Separator))
 (defvar *cr-newline-string* (make-string 1 :initial-element #\Return))
 (defvar *crlf-newline-string* (make-array 2 :element-type 'character :initial-contents '(#\Return #\Linefeed)))
-(defvar *nul-string (make-string 1 :initial-element #\Nul))
+(defvar *nul-string* (make-string 1 :initial-element #\Nul))
 
 (defun string-size-in-octets (string &key
                                      (start 0)
