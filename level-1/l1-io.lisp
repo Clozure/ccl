@@ -1606,7 +1606,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
 
 ; This special-casing for wrappers is cheaper than consing a class
 (defun write-an-istruct (istruct stream level)
-  (let* ((type (uvref istruct 0))
+  (let* ((type (istruct-cell-name (uvref istruct 0)))
          (wrapper-p  (eq type 'class-wrapper)))
     (print-unreadable-object (istruct stream :identity t)
       (write-internal stream type (%i- level 1) nil)
