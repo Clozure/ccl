@@ -837,7 +837,7 @@
     ratio
     complex
     structure
-    istruct
+    internal-structure
     value-cell
     xfunction
     lock
