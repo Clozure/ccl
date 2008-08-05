@@ -506,6 +506,14 @@
   return-address
   xtra)
 
+(define-storage-layout tsp-frame 0
+  backptr
+  ebp)
+
+(define-storage-layout csp-frame 0
+  backptr
+  ebp)
+
 (define-storage-layout xcf 0            ;"exception callback frame"
   backptr
   return-address                        ; always 0
@@ -514,7 +522,9 @@
   containing-object
   xp
   ra0
-  )
+  foreign-sp				;value of tcr.foreign_sp
+  prev-xframe				;tcr.xframe before exception
+  )					;(last 2 needed by apply-in-frame)
 
 ;;; The kernel uses these (rather generically named) structures
 ;;; to keep track of various memory regions it (or the lisp) is
