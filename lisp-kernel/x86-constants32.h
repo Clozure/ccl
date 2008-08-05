@@ -221,6 +221,8 @@ typedef struct exception_callback_frame {
     LispObj containing_uvector;	/* the uvector that contains the relative PC or NIL */
     LispObj xp;			/* exception context */
     LispObj ra0;		/* value of ra0 from context */
+    LispObj foreign_sp;		/* foreign sp at the time that exception occurred */
+    LispObj prev_xframe;	/* so %apply-in-frame can unwind it */
 } xcf;
 
 /* The GC (at least) needs to know what a
