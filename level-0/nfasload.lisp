@@ -41,7 +41,15 @@
 (eval-when (:execute :compile-toplevel)
   (assert (= 80 numfaslops)))
 
+
+
+
+
 (defvar *fasl-dispatch-table* #80(%bad-fasl))
+
+
+
+
 
 (defun %bad-fasl (s)
   (error "bad opcode near position ~d in FASL file ~s"
@@ -237,10 +245,25 @@
           (ensure-binding-index symbol))
         (%epushval s symbol)))))
 
+(defvar *package-refs*)
+(setq *package-refs* (make-hash-table :test #'equal))
+
+(defun register-package-ref (name)
+  (or (gethash name *package-refs*)
+      (setf (gethash name *package-refs*) (make-package-ref name))))
+
+(dolist (p %all-packages%)
+  (dolist (name (pkg.names p))
+    (setf (package-ref.pkg (register-package-ref name)) p)))
+
+
 (defun find-package (name)
-  (if (packagep name) 
+  (if (typep  name 'package)
     name
     (%find-pkg (string name))))
+
+(defun %pkg-ref-find-package (ref)
+  (package-ref.pkg ref))
 
 (defun set-package (name &aux (pkg (find-package name)))
   (if pkg
@@ -337,7 +360,7 @@
   (let* ((size-in-elements (%fasl-read-count s))
          (size-of-code (%fasl-read-count s))
          (vector (%alloc-misc size-in-elements target::subtag-function))
-         (function (function-vector-to-function vector)))
+         (function (%function-vector-to-function vector)))
     (declare (fixnum size-in-elements size-of-code))
     (%epushval s function)
     (%fasl-read-n-bytes s vector 0 (ash size-of-code target::word-shift))
@@ -493,7 +516,11 @@
              (let ((f (%car form)))
                (and (symbolp f)
                     (functionp (fboundp f)))))
-      (apply (%car form) (%cdr form))
+      (do* ((tail (%cdr form) (%cdr tail)))
+           ((null tail) (apply (%car form) (%cdr form)))
+        (let* ((head (car tail)))
+          (when (and (consp head) (eq (car head) 'quote))
+            (setf (car tail) (cadr head)))))
       (error "Can't eval yet: ~s" form))))
 
 
@@ -688,6 +715,9 @@
 
 (deffaslop $fasl-istruct-cell (s)
   (%epushval s (register-istruct-cell (%fasl-expr-preserve-epush s))))
+
+
+
 
 ;;; The loader itself
 

@@ -23,7 +23,15 @@
                                          (:invert . -1) (:studly . -2)))
   (defmacro readtable-case-keywords () `',readtable-case-keywords))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defmethod make-load-form ((ref package-ref) &optional env)
+  (declare (ignore env))
+  `(register-package-ref ',(package-ref.name ref)))
+
+(defmethod print-object ((ref package-ref) stream)
+  (print-unreadable-object (ref stream :type t :identity t)
+    (format stream "for ~s [~s]" (package-ref.name ref) (package-ref.pkg ref))))
 
 ;;; Maps character names to characters
 (defvar *name->char* (make-hash-table :test #'equalp))

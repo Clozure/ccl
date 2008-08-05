@@ -140,7 +140,12 @@
   (with-package-lock (package)
     (let* ((names (pkg.names package)))
       (declare (type cons names))
+      (dolist (n names)
+        (let* ((ref (register-package-ref n)))
+          (setf (package-ref.pkg ref) nil)))
       (rplaca names (new-package-name new-name package))
+      (let* ((ref (register-package-ref (car names))))
+        (setf (package-ref.pkg ref) package))
       (rplacd names nil))
     (%add-nicknames new-nicknames package)))
 
@@ -192,11 +197,13 @@
                       nil
                       (make-read-write-lock)
                       nil)))
-      (use-package use pkg)
-      (%add-nicknames nicknames pkg)
-      (with-package-list-write-lock
-          (push pkg %all-packages%))
-      pkg))
+    (let* ((ref (register-package-ref name)))
+      (setf (package-ref.pkg ref) pkg))
+    (use-package use pkg)
+    (%add-nicknames nicknames pkg)
+    (with-package-list-write-lock
+        (push pkg %all-packages%))
+    pkg))
 
 (defun new-package-name (name &optional package)
   (do* ((prompt "Enter package name to use instead of ~S ."))
@@ -253,7 +260,10 @@
   (let ((names (pkg.names package)))
     (dolist (name nicknames package)
       (let* ((ok-name (new-package-nickname name package)))
-        (if ok-name (push ok-name (cdr names)))))))
+        (when ok-name
+          (let* ((ref (register-package-ref ok-name)))
+            (setf (package-ref.pkg ref) package)
+            (push ok-name (cdr names))))))))
 
 (defun find-symbol (string &optional package)
   "Return the symbol named STRING in PACKAGE. If such a symbol is found
@@ -261,17 +271,25 @@
   how the symbol is accessible. If no symbol is found then both values
   are NIL."
   (multiple-value-bind (sym flag)
-                       (%findsym (ensure-simple-string string) (pkg-arg (or package *package*)))
+      (%findsym (ensure-simple-string string) (pkg-arg (or package *package*)))
     (values sym flag)))
 
+(defun %pkg-ref-find-symbol (string ref)
+  (multiple-value-bind (sym flag)
+      (%findsym (ensure-simple-string string)
+                (or (package-ref.pkg ref)
+                    (setf (package-ref.pkg ref)
+                          (%find-pkg (package-ref.name ref)))))
+    (values sym flag)))
+    
 ;;; Somewhat saner interface to %find-symbol
 (defun %findsym (string package)
   (%find-symbol string (length string) package))
 
-(defun intern (str &optional (package *package*))
-  "Return a symbol in PACKAGE having the specified NAME, creating it
-  if necessary."
-  (setq package (pkg-arg package))
+(eval-when (:compile-toplevel)
+  (declaim (inline %intern)))
+
+(defun %intern (str package)
   (setq str (ensure-simple-string str))
   (with-package-lock (package)
    (multiple-value-bind (symbol where internal-offset external-offset) 
@@ -279,6 +297,17 @@
      (if where
        (values symbol where)
        (values (%add-symbol str package internal-offset external-offset) nil)))))
+
+
+(defun intern (str &optional (package *package*))
+  "Return a symbol in PACKAGE having the specified NAME, creating it
+  if necessary."
+  (%intern str (pkg-arg package)))
+
+(defun %pkg-ref-intern (str ref)
+  (%intern str (or (package-ref.pkg ref)
+                   (setf (package-ref.pkg ref)
+                         (%find-pkg (package-ref.name ref))))))
 
 (defun unintern (symbol &optional (package *package*))
   "Makes SYMBOL no longer present in PACKAGE. If SYMBOL was present
@@ -612,6 +641,9 @@
     (unuse-package (car (pkg.used package)) package))
   (setf (pkg.shadowed package) nil)
   (setq %all-packages% (nremove package %all-packages%))
+  (dolist (n (pkg.names package))
+    (let* ((ref (register-package-ref n)))
+      (setf (package-ref.pkg ref) nil)))
   (setf (pkg.names package) nil)
   (let* ((ivec (car (pkg.itab package)))
          (evec (car (pkg.etab package)))
@@ -690,7 +722,7 @@
   (if (eq use :default) (setq use *make-package-use-defaults*))
   (let* ((pkg (find-package name)))
     (if pkg
-      ; Restarts could offer several ways of fixing this.
+      ;; Restarts could offer several ways of fixing this.
       (unless (string= (package-name pkg) name)
         (cerror "Redefine ~*~S"
                 "~S is already a nickname for ~S" name pkg))
