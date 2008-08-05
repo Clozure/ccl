@@ -2065,7 +2065,7 @@ to open."
 ;;; Do they really expect that each condition type has a unique method on PRINT-OBJECT
 ;;; which tests *print-escape* ?  Scary if so ...
 
-(defmacro define-condition (name (&rest supers) &optional ((&rest slots)) &body options)
+(defmacro define-condition (name (&rest supers) (&rest slots) &body options)
   "DEFINE-CONDITION Name (Parent-Type*) (Slot-Spec*) Option*
    Define NAME as a condition type. This new type inherits slots and its
    report function from the specified PARENT-TYPEs. A slot spec is a list of:
@@ -2126,6 +2126,10 @@ to open."
     `(progn
        (defclass ,name ,(or supers '(condition)) ,slots ,@classopts)
        ,@reporter
+       ;; defclass will record name as a class, we only want
+      #+new-record-source
+       (remove-definition-source 'class ',name)
+       (record-source-file ',name 'condition)
        ',name)))
 
 (defmacro with-condition-restarts (&environment env condition restarts &body body)

@@ -59,7 +59,7 @@
                        (print-not-readable-object c)
                        (print-not-readable-stream c))))))
 
-(define-condition simple-warning (simple-condition warning))
+(define-condition simple-warning (simple-condition warning) ())
 
 (define-condition compiler-warning (warning)
   ((file-name :initarg :file-name :initform nil :accessor compiler-warning-file-name)
@@ -70,16 +70,16 @@
    (nrefs :initform 1 :accessor compiler-warning-nrefs))
   (:report report-compiler-warning))
 
-(define-condition style-warning (compiler-warning))
-(define-condition undefined-function-reference (style-warning))
-(define-condition macro-used-before-definition (compiler-warning))
-(define-condition invalid-arguments (style-warning))
-(define-condition invalid-arguments-global (style-warning))
+(define-condition style-warning (compiler-warning) ())
+(define-condition undefined-function-reference (style-warning) ())
+(define-condition macro-used-before-definition (compiler-warning) ())
+(define-condition invalid-arguments (style-warning) ())
+(define-condition invalid-arguments-global (style-warning) ())
 
-(define-condition simple-error (simple-condition error))
+(define-condition simple-error (simple-condition error) ())
 
-(define-condition simple-storage-condition (simple-condition storage-condition))
-(define-condition stack-overflow-condition (simple-storage-condition))
+(define-condition simple-storage-condition (simple-condition storage-condition)())
+(define-condition stack-overflow-condition (simple-storage-condition) ())
 
 (define-condition invalid-memory-access (storage-condition)
   ((address :initarg :address)
@@ -175,11 +175,11 @@
                      (type-error-datum c)
                      (type-error-expected-type c)))))
 
-(define-condition simple-type-error (simple-condition type-error))
+(define-condition simple-type-error (simple-condition type-error) ())
 
 
 
-(define-condition program-error (error))
+(define-condition program-error (error) ())
 (define-condition simple-program-error (simple-condition program-error)
   ((context :initarg :context :reader simple-program-error-context :initform nil)))
 
@@ -190,7 +190,7 @@
 			     :format-control (if (fixnump string) (%rsc-string string) string)
 			     :format-arguments args))))
 
-(define-condition simple-destructuring-error (simple-program-error))
+(define-condition simple-destructuring-error (simple-program-error) ())
 
 (define-condition wrong-number-of-arguments (program-error)
   ((nargs :initform nil
@@ -198,9 +198,9 @@
    (fn :initform nil :initarg :fn :reader wrong-number-of-arguments-fn))
   (:report report-argument-mismatch))
        
-(define-condition too-many-arguments (wrong-number-of-arguments))
+(define-condition too-many-arguments (wrong-number-of-arguments) ())
 
-(define-condition too-few-arguments (wrong-number-of-arguments))
+(define-condition too-few-arguments (wrong-number-of-arguments) ())
 
 (defun report-argument-mismatch (c s)
   (let* ((nargs-provided (wrong-number-of-arguments-nargs c))
@@ -241,7 +241,7 @@
              (compile-time-error-context c)
              (format nil "~a" c)))))
 
-(define-condition control-error (error))
+(define-condition control-error (error) ())
 
 (define-condition cant-throw-error (control-error)
   ((tag :initarg :tag))
@@ -478,12 +478,12 @@
                          (arithmetic-error-operation c) 
                          operands))))))
 
-(define-condition division-by-zero (arithmetic-error))
+(define-condition division-by-zero (arithmetic-error) ())
   
-(define-condition floating-point-underflow (arithmetic-error))
-(define-condition floating-point-overflow (arithmetic-error))
-(define-condition floating-point-inexact (arithmetic-error))
-(define-condition floating-point-invalid-operation (arithmetic-error))
+(define-condition floating-point-underflow (arithmetic-error) ())
+(define-condition floating-point-overflow (arithmetic-error) ())
+(define-condition floating-point-inexact (arithmetic-error) ())
+(define-condition floating-point-invalid-operation (arithmetic-error) ())
 
 (define-condition compiler-bug (simple-error)
   ()
