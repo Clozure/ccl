@@ -833,13 +833,13 @@ are running on, or NIL if we can't find any useful information."
                      (%svref *immheader-types* (ash i -2)))
                     ((= lowtag ppc64::lowtag-nodeheader)
                      (%svref *nodeheader-types* (ash i -2)))))))
-    #+ppc32-target
+    #+(or ppc32-target x8632-target)
     (dotimes (i 256)
-      (let* ((fulltag (logand i ppc32::fulltagmask)))
+      (let* ((fulltag (logand i target::fulltagmask)))
         (setf (%svref a i)
-              (cond ((= fulltag ppc32::fulltag-immheader)
+              (cond ((= fulltag target::fulltag-immheader)
                      (%svref *immheader-types* (ash i -3)))
-                    ((= fulltag ppc32::fulltag-nodeheader)
+                    ((= fulltag target::fulltag-nodeheader)
                      (%svref *nodeheader-types* (ash i -3)))))))
     a))
 
