@@ -297,12 +297,9 @@
 
 (define-x8664-vinsn set-nargs (()
 			       ((n :s16const)))
-
-  ((:pred < n 16)
-   (xorl (:%l x8664::nargs ) (:%l x8664::nargs ))
-   ((:pred > n 0)
-    (addl (:$b (:apply ash n x8664::word-shift)) (:%l  x8664::nargs))))
-  ((:pred >= n 16)
+  ((:pred = n 0)
+   (xorl (:%l x8664::nargs ) (:%l x8664::nargs )))
+  ((:not (:pred = n 0))
    (movl (:$l (:apply ash n x8664::word-shift)) (:%l x8664::nargs ))))
 
 (define-x8664-vinsn check-exact-nargs (()
@@ -1241,7 +1238,7 @@
        :label))
      ((header (:u64 #.x8664::imm0))
       (scaled-size (:u64 #.x8664::imm1))))
-  (jno.pt no-overflow)
+  (jno no-overflow)
   (movq (:%q val) (:%q scaled-size))
   (sarq (:$ub x8664::fixnumshift) (:%q scaled-size))
   (movq (:$q #xe000000000000000) (:%q header))
@@ -1907,9 +1904,9 @@
   (pushq (:@ (:%seg :rcontext) x8664::tcr.db-link))
   (movq (:$l 0) (:@ x8664::interrupt-level-binding-index (:%q temp)))
   (movq (:%q x8664::rsp) (:@ (:%seg :rcontext) x8664::tcr.db-link))
-  (jns.pt :done)
+  (jns :done)
   (btrq (:$ub 63) (:@ (:%seg :rcontext) x8664::tcr.interrupt-pending))
-  (jae.pt :done)
+  (jae :done)
   (ud2a)
   (:byte 2)
   :done)
@@ -1946,11 +1943,11 @@
   (movq (:@ #|binding.link|# (:%q link)) (:%q link))
   (movq (:%q oldval) (:@ x8664::interrupt-level-binding-index (:%q tlb)))
   (movq (:%q link) (:@ (:%seg :rcontext) x8664::tcr.db-link))
-  (jns.pt :done)
+  (jns :done)
   (testq (:%q oldval) (:%q oldval))
-  (js.pt :done)
+  (js :done)
   (btrq (:$ub 63) (:@ (:%seg :rcontext) x8664::tcr.interrupt-pending))
-  (jae.pt :done)
+  (jae :done)
   (ud2a)
   (:byte 2)
   :done)  
@@ -2164,7 +2161,14 @@
   (setc (:%b bitnum))
   (movzbl (:%b bitnum) (:%l bitnum))
   (imull (:$b x8664::fixnumone) (:%l bitnum) (:%l dest)))
-                                                      
+
+
+(define-x8664-vinsn nref-bit-vector-flags (()
+					    ((bitnum :s64)
+					     (bitvector :lisp))
+					    ())
+  (btq (:%q bitnum) (:@ x8664::misc-data-offset (:%q bitvector))))
+
 (define-x8664-vinsn misc-ref-c-bit-fixnum (((dest :imm))
                                            ((src :lisp)
                                             (idx :u64const))
@@ -2174,6 +2178,14 @@
   (setc (:%b temp))
   (movzbl (:%b temp) (:%l temp))
   (imull (:$b x8664::fixnumone) (:%l temp) (:%l dest)))
+
+
+(define-x8664-vinsn misc-ref-c-bit-flags (()
+                                           ((src :lisp)
+                                            (idx :u64const))
+                                          )
+  (btq (:$ub (:apply logand 63 idx))
+       (:@ (:apply + x8664::misc-data-offset (:apply ash (:apply ash idx -6) x8664::word-shift)) (:%q src))))
 
 (define-x8664-vinsn deref-macptr (((addr :address))
 				  ((src :lisp))
@@ -2827,7 +2839,7 @@
   :again
   (movl (:%l object) (:%l tag))
   (andl (:$b x8664::fixnummask) (:%l tag))
-  (je.pt :got-it)
+  (je :got-it)
   (cmpl (:$b x8664::tag-misc) (:%l tag))
   (jne :bad)
   (cmpb (:$b x8664::subtag-bignum) (:@ x8664::misc-subtag-offset (:%q object)))
@@ -3042,7 +3054,7 @@
   :again
   (testl (:$l x8664::fixnummask) (:%l object))
   (movl (:%l object) (:%l tag))
-  (je.pt :ok)
+  (je :ok)
   (andl (:$b x8664::fulltagmask) (:%l tag))
   (cmpl (:$b x8664::fulltag-misc) (:%l tag))
   (jne :bad)
@@ -3059,14 +3071,14 @@
   :again
   (testl (:$l x8664::fixnummask) (:%l object))
   (movq (:%q object) (:%q tag))
-  (je.pt :ok-if-non-negative)
+  (je :ok-if-non-negative)
   (andl (:$b x8664::fulltagmask) (:%l tag))
   (cmpl (:$b x8664::fulltag-misc) (:%l tag))
   (jne :bad)
   (cmpq (:$l x8664::two-digit-bignum-header) (:@ x8664::misc-header-offset (:%q object)))
   (je :two)
   (cmpq (:$l x8664::three-digit-bignum-header) (:@ x8664::misc-header-offset (:%q object)))
-  (jne.pn :bad)
+  (jne :bad)
   (cmpl (:$b 0) (:@ (+ x8664::misc-data-offset 8) (:%q object)))
   (je :ok)
   (jmp :bad)
@@ -3608,8 +3620,12 @@
 				  ((src :imm))
 				  ((temp :u32)))
   (movl (:%l src) (:%l temp))
-  (sarl (:$ub (+ x8664::fixnumshift 11)) (:%l temp))
+  (sarl (:$ub (+ x8664::fixnumshift 1)) (:%l temp))
+  (cmpl (:$l (ash #xfffe -1)) (:%l temp))
+  (je :bad-if-eq)
+  (sarl (:$ub (- 11 1)) (:%l temp))
   (cmpl (:$b (ash #xd800 -11))(:%l temp))
+  :bad-if-eq
   (movl (:$l x8664::nil-value) (:%l temp))
   (cmovel (:%l temp) (:%l dest))
   (je :done)
@@ -3618,7 +3634,19 @@
                 (:apply %hard-regspec-value src)))
    (movl (:%l src) (:%l dest)))
   (shll (:$ub (- x8664::charcode-shift x8664::fixnumshift)) (:%l dest))
-  (addb (:$b x8664::subtag-character) (:%b dest))
+  (addl (:$b x8664::subtag-character) (:%l dest))
+  :done)
+
+;;; src is known to be a code for which CODE-CHAR returns non-nil.
+(define-x8664-vinsn code-char->char (((dest :lisp))
+				  ((src :imm))
+				  ())
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (movl (:%l src) (:%l dest)))
+  (shll (:$ub (- x8664::charcode-shift x8664::fixnumshift)) (:%l dest))
+  (addl (:$b x8664::subtag-character) (:%l dest))
   :done)
 
 
@@ -3907,6 +3935,9 @@
                                             (index :s64)))
   (movss (:@ (:%q src) (:%q index)) (:%xmm dest)))
 
+(define-x8664-vinsn zero-extend-nargs (()
+                                       ())
+  (movzwl (:%w x8664::nargs) (:%l x8664::nargs)))
 
 (define-x8664-vinsn load-adl (()
 			      ((n :u32const)))
