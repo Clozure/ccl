@@ -1658,7 +1658,7 @@
     (movl (:$self 0) (:%l x8632::fn))))
 
 (defmacro define-x8632-subprim-jump-vinsn ((name &rest other-attrs) spno)
-  `(define-x8632-vinsn (,name :jump :jumpLR ,@other-attrs) (() ())
+  `(define-x8632-vinsn (,name :jumpLR ,@other-attrs) (() ())
     (jmp (:@ ,spno))))
 
 (define-x8632-vinsn (nthrowvalues :call :subprim-call) (()
@@ -3441,7 +3441,7 @@
 ;;; a JUMP (to a possibly unknown destination).  If the destination's
 ;;; really known, it should probably be inlined (stack-cleanup, value
 ;;; transfer & jump ...)
-(define-x8632-vinsn (throw :jump :jump-unknown) (()
+(define-x8632-vinsn (throw :jump-unknown) (()
 						 ()
                                                  ((entry (:label 1))
 						  (ra (:lisp #.x8632::ra0))))
@@ -3449,7 +3449,8 @@
   (:talign 5)
   (jmp (:@ .SPthrow))
   :back
-  (movl (:$self 0) (:%l x8632::fn)))
+  (movl (:$self 0) (:%l x8632::fn))
+  (uuo-error-reg-not-tag (:%l x8632::temp0) (:$ub x8632::subtag-catch-frame)))
 
 (define-x8632-vinsn unbox-base-char (((dest :u32))
 				     ((src :lisp)))
