@@ -2206,5 +2206,9 @@
   (or (if (typep name 'keyword) (lookup-character-encoding name))
       w))
 
+(define-compiler-macro read-char (&optional stream (eof-error-p t) eof-value recursive-p)
+  `(read-char-internal ,stream ,eof-error-p (values ,eof-value ,recursive-p)))
+
+
 (provide "OPTIMIZERS")
 
