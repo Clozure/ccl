@@ -390,13 +390,14 @@ mark_pc_root(LispObj xpc)
         header;
       opcode *program_counter;
 
-      for(program_counter=(opcode *)ptr_from_lispobj(xpc & ~4);
-          dnode < GCndnodes_in_area;
-          program_counter-=2, --dnode) {
+      for(program_counter=(opcode *)ptr_from_lispobj(xpc & ~7);
+	  (LispObj)program_counter >= GCarealow;
+          program_counter-=2) {
         if (*program_counter == PPC64_CODE_VECTOR_PREFIX) {
           headerP = ((LispObj *)program_counter)-1;
           header = *headerP;
-          set_n_bits(GCmarkbits, dnode, (2+header_element_count(header))>>1);
+	  dnode = gc_area_dnode(headerP);
+          set_n_bits(GCmarkbits, dnode, (8+(header_element_count(header)<<2)+(dnode_size-1))>>dnode_shift);
           return;
         }
       }
