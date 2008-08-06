@@ -6691,9 +6691,8 @@
         (! fixnum->char target reg)))
     (^)))
 
-#+notyet
 (defx862 x862-%valid-code-char %valid-code-char (seg vreg xfer c)
-  (let* ((reg (x862-one-untargeted-reg-form seg c x8664::arg_z)))
+  (let* ((reg (x862-one-untargeted-reg-form seg c *x862-arg-z*)))
     (when *x862-full-safety* (! require-char-code reg))
     (if vreg
       (ensuring-node-target (target vreg)
