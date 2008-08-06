@@ -50,19 +50,23 @@
 	  (values string t))
 	(values string nil)))))
 
+(eval-when (:compile-toplevel)
+  (declaim (inline read-char-internal)))
+
+(defun read-char-internal (input-stream eof-error-p eof-value)
+  (declare (optimize (speed 3) (space 0)))
+  (check-eof
+   (if (or (typep input-stream 'basic-stream)
+           (typep (setq input-stream (designated-input-stream input-stream))
+                  'basic-stream))
+     (let* ((ioblock (basic-stream-ioblock input-stream)))
+       (funcall (ioblock-read-char-function ioblock) ioblock))
+     (stream-read-char input-stream))
+   input-stream eof-error-p eof-value))
+
 (defun read-char (&optional input-stream (eof-error-p t) eof-value recursive-p)
-  (declare (ignore recursive-p)
-           (optimize (speed 3) (space 0)))
-  (setq input-stream (designated-input-stream input-stream))
-  (if (typep input-stream 'basic-stream)
-    (let* ((ioblock (basic-stream-ioblock input-stream)))
-      (check-eof
-       (funcall (ioblock-read-char-function ioblock) ioblock)
-       input-stream eof-error-p eof-value))
-    (check-eof (stream-read-char input-stream)
-               input-stream
-               eof-error-p
-               eof-value)))
+  (declare (ignore recursive-p))
+  (read-char-internal input-stream eof-error-p eof-value))
 
 (defun unread-char (char &optional input-stream)
   (let* ((input-stream (designated-input-stream input-stream)))
