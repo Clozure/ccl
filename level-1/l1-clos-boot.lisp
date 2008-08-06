@@ -1172,6 +1172,27 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
                         
 ;;;;;;;;;;;;;;;;;;;;;;;;  Instances and classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(declaim (inline non-standard-instance-class-wrapper))
+
+(defun non-standard-instance-class-wrapper (instance)
+  (let* ((typecode (typecode instance)))
+    (declare (type (unsigned-byte 8) typecode))
+    (cond ((eql typecode target::subtag-istruct)
+           (istruct-cell-info (%svref instance 0)))
+          ((eql typecode target::subtag-basic-stream)
+           (%class.own-wrapper (basic-stream.class instance)))
+          ((typep instance 'funcallable-standard-object)
+           (gf.instance.class-wrapper instance))
+          ((eql typecode target::subtag-macptr)
+           (foreign-instance-class-wrapper instance))
+          (t (%class.own-wrapper (class-of instance))))))
+
+(defun instance-class-wrapper (instance)
+  (if (= (typecode instance) target::subtag-instance)
+    (instance.class-wrapper instance)
+    (non-standard-instance-class-wrapper instance)))
+
+
 (defvar %find-classes% (make-hash-table :test 'eq))
 
 (defun class-cell-typep (form class-cell)
@@ -3535,21 +3556,7 @@ to replace that class with ~s" name old-class new-class)
 
 (setf (fdefinition '%do-remove-direct-method) #'remove-direct-method)
 
-(defmethod instance-class-wrapper (x)
-  (%class.own-wrapper (class-of x)))
 
-(defmethod instance-class-wrapper ((instance standard-object))
-  (if (%standard-instance-p instance)
-    (instance.class-wrapper instance)
-    (if (typep instance 'macptr)
-      (foreign-instance-class-wrapper instance)
-      (%class.own-wrapper (class-of instance)))))
-
-(defmethod instance-class-wrapper ((instance standard-generic-function))
-  (gf.instance.class-wrapper  instance))
-
-
-				   
 
 (defun generic-function-wrapper (gf)
   (unless (inherits-from-standard-generic-function-p (class-of gf))

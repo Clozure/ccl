@@ -1713,8 +1713,7 @@ changing its name to ~s may have serious consequences." class new))
 
 
 
-(defmethod instance-class-wrapper ((instance funcallable-standard-object))
-  (gf.instance.class-wrapper  instance))
+
 
 (defun set-funcallable-instance-function (funcallable-instance function)
   (unless (typep funcallable-instance 'funcallable-standard-object)
