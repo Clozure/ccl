@@ -49,12 +49,13 @@
 (defconstant $vsetqmask #xff00)
 (defconstant $vrefmask #xff)
 
-(defconstant $decl_optimize (%ilsl 16 0))
-(defconstant $decl_tailcalls (%ilsl 16 1))
-(defconstant $decl_opencodeinline (%ilsl 16 4))
-(defconstant $decl_eventchk (%ilsl 16 8))
-(defconstant $decl_unsafe (%ilsl 16 16))
-(defconstant $decl_trustdecls (%ilsl 16 32))
+(defconstant $decl_optimize (%ilsl 16 0))  ; today's chuckle
+(defconstant $decl_tailcalls (ash 1 16))
+(defconstant $decl_opencodeinline (ash 4 16))
+(defconstant $decl_eventchk (ash 8 16))
+(defconstant $decl_unsafe (ash 16 16))
+(defconstant $decl_trustdecls (ash 32 16))
+(defconstant $decl_full_safety (ash 64 16))
 
 (defconstant $regnote-ea 1)
 
