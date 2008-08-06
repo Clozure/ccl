@@ -72,7 +72,8 @@
   `(let* ((*x862-tail-allow* *x862-tail-allow*)
           (*x862-reckless* *x862-reckless*)
           (*x862-open-code-inline* *x862-open-code-inline*)
-          (*x862-trust-declarations* *x862-trust-declarations*))
+          (*x862-trust-declarations* *x862-trust-declarations*)
+          (*x862-full-safety* *x862-full-safety*))
      (x862-decls ,declsform)
      ,@body))
 
@@ -189,6 +190,7 @@
 (defvar *x862-tail-nargs* nil)
 (defvar *x862-tail-allow* t)
 (defvar *x862-reckless* nil)
+(defvar *x862-full-safety* nil)
 (defvar *x862-trust-declarations* nil)
 (defvar *x862-entry-vstack* nil)
 (defvar *x862-fixed-nargs* nil)
@@ -583,6 +585,7 @@
            (*x862-inhibit-register-allocation* nil)
            (*x862-tail-allow* t)
            (*x862-reckless* nil)
+           (*x862-full-safety* nil)
            (*x862-trust-declarations* t)
            (*x862-entry-vstack* nil)
            (*x862-fixed-nargs* nil)
@@ -820,6 +823,7 @@
     (locally (declare (fixnum decls))
       (setq *x862-tail-allow* (neq 0 (%ilogand2 $decl_tailcalls decls))
             *x862-open-code-inline* (neq 0 (%ilogand2 $decl_opencodeinline decls))
+            *x862-full-safety* (neq 0 (%ilogand2 $decl_full_safety decls))
             *x862-reckless* (neq 0 (%ilogand2 $decl_unsafe decls))
             *x862-trust-declarations* (neq 0 (%ilogand2 $decl_trustdecls decls))))))
 
@@ -6687,11 +6691,10 @@
         (! fixnum->char target reg)))
     (^)))
 
-#+not-yet
+#+notyet
 (defx862 x862-%valid-code-char %valid-code-char (seg vreg xfer c)
-  (let* ((reg (x862-one-untargeted-reg-form seg c *x862-arg-z*)))
-    ;; Typecheck even if result unused.
-    (unless *x862-reckless* (! require-char-code reg))
+  (let* ((reg (x862-one-untargeted-reg-form seg c x8664::arg_z)))
+    (when *x862-full-safety* (! require-char-code reg))
     (if vreg
       (ensuring-node-target (target vreg)
         (! code-char->char target reg)))

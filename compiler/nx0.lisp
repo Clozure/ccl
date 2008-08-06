@@ -704,12 +704,15 @@ function to the indicated name is true.")
                                      (and name (not (nx-declared-notinline-p name env))))))
       (unless (nx-allow-register-allocation env)
         (nx-inhibit-register-allocation))
-      (setq *nx-new-p2decls* 
-            (%ilogior 
-             (if (nx-tailcalls env) $decl_tailcalls 0)
-             (if (nx-open-code-in-line env) $decl_opencodeinline 0)
-             (if (nx-inhibit-safety-checking env) $decl_unsafe 0)
-             (if (nx-trust-declarations env) $decl_trustdecls 0))))))
+            (setq *nx-new-p2decls*
+            (if (eql (safety-optimize-quantity env) 3)
+              (logior $decl_full_safety
+                      (if (nx-tailcalls env) $decl_tailcalls 0))
+              (%ilogior 
+               (if (nx-tailcalls env) $decl_tailcalls 0)
+               (if (nx-open-code-in-line env) $decl_opencodeinline 0)
+               (if (nx-inhibit-safety-checking env) $decl_unsafe 0)
+               (if (nx-trust-declarations env) $decl_trustdecls 0)))))))
 
 #|     
 (defun nx-find-misc-decl (declname env)
