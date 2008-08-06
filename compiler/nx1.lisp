@@ -172,7 +172,9 @@
 (defnx1 nx1-code-char ((code-char)) (arg &environment env)
   (make-acode (if (nx-form-typep arg '(unsigned-byte 8) env)
                 (%nx1-operator %code-char)
-                (%nx1-operator code-char))
+                (if (nx-form-typep arg 'valid-char-code env)
+                  (%nx1-operator %valid-code-char)
+                  (%nx1-operator code-char)))
               (nx1-form arg)))
 
 (defnx1 nx1-char-code ((char-code)) (arg &environment env)
