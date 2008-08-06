@@ -26,15 +26,18 @@
 ;;; generic functions with "real", official names.
 
 
-(declaim (inline instance-slots))
+(declaim (inline instance-slots %non-standard-instance-slots))
+(defun %non-standard-instance-slots (instance typecode)
+  (cond ((eql typecode target::subtag-macptr) (foreign-slots-vector instance))
+        ((or (typep instance 'standard-generic-function)
+             (typep instance 'funcallable-standard-object))
+         (gf.slots instance))
+        (t  (error "Don't know how to find slots of ~s" instance))))
+
 (defun instance-slots (instance)
   (let* ((typecode (typecode instance)))
     (cond ((eql typecode target::subtag-instance) (instance.slots instance))
-	  ((eql typecode target::subtag-macptr) (foreign-slots-vector instance))
-	  ((or (typep instance 'standard-generic-function)
-               (typep instance 'funcallable-standard-object))
-           (gf.slots instance))
-	  (t  (error "Don't know how to find slots of ~s" instance)))))
+          (t (%non-standard-instance-slots instance typecode)))))
 
 (defun %class-name (class)
   (%class.name class))
