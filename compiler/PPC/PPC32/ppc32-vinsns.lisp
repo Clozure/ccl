@@ -2542,16 +2542,26 @@
                                   ((src :imm))
                                   ((temp :u32)
                                    (crf0 (:crf 0))))
+  (srwi temp src (+ ppc32::fixnumshift 1))
+  (cmplwi temp (ash #xffff -1))
   (srwi temp src (+ ppc32::fixnumshift 11))
+  (beq :bad)
   (cmpwi temp 27)
   (slwi dest src (- ppc32::charcode-shift ppc32::fixnumshift))
   (bne+ :ok)
+  :bad
   (li dest ppc32::nil-value)
   (b :done)
   :ok
   (addi dest dest ppc32::subtag-character)
   :done)
 
+;;; src is known to be a code for which CODE-CHAR returns non-nil.
+(define-ppc32-vinsn code-char->char (((dest :lisp))
+				     ((src :imm))
+				     ())
+  (slwi dest src (- ppc32::charcode-shift ppc32::fixnum-shift))
+  (addi dest dest ppc32::subtag-character))
 
 (define-ppc32-vinsn u32->char (((dest :lisp))
                               ((src :u32))

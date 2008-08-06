@@ -2550,15 +2550,26 @@
 				  ((src :imm))
 				  ((temp :u64)
                                    (crf0 (:crf 0))))
+  (srdi temp src (+ ppc64::fixnumshift 1))
+  (cmpldi temp (ash #xffff -1))
   (srdi temp src (+ ppc64::fixnumshift 11))
+  (beq :bad)
   (cmpdi temp 27)
   (sldi dest src (- ppc64::charcode-shift ppc64::fixnumshift))
   (bne+ :ok)
+  :bad
   (li dest ppc64::nil-value)
   (b :done)
   :ok
   (addi dest dest ppc64::subtag-character)
   :done)
+
+(define-ppc64-vinsn code-char->char (((dest :lisp))
+				     ((src :imm))
+                               ())
+  (sldi dest src (- ppc64::charcode-shift ppc64::fixnumshift))
+  (ori dest dest ppc64::subtag-character))
+
 
 (define-ppc64-vinsn u32->char (((dest :lisp))
 			      ((src :u32))
