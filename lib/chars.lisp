@@ -80,8 +80,7 @@
 
 
 
-(defun %non-standard-lower-case-equivalent (char)
-  (gethash char *non-standard-upper-to-lower*))
+
 
 
 
@@ -124,7 +123,7 @@
           (<= code (char-code #\z)))
      (and (>= code (char-code #\A))
           (<= code (char-code #\Z)))
-     (and (>= code #x80)
+     (and (> code #x80)
           (or (not (null (%non-standard-upper-case-equivalent c)))
               (not (null (%non-standard-lower-case-equivalent c))))))))
 
@@ -302,10 +301,9 @@
               (t (format nil "U+~4,'0x" code))))))
 
 
-(defun string-downcase (string &key start end)
+(defun string-downcase (string &key (start 0) end)
   (setq string (copy-string-arg string))
-  (if (not start) (setq start 0)(require-type start 'fixnum))
-  (if (not end)(setq end (length string))(require-type end 'fixnum))
+  (setq end (check-sequence-bounds string start end))
   (%strdown string start end))
 
 
@@ -325,7 +323,7 @@
                                   (+ code (- (char-code #\a)(char-code #\A)))))
                     (if (>= code #x80)
                       (%non-standard-lower-case-equivalent ch)))))
-      (declare (character ch) (type (mod #x11000) code))
+      (declare (character ch) (type (mod #x110000) code))
       (when lower
         (setf (schar string i) lower)))))
 
@@ -342,13 +340,12 @@
      (setq len (length string)))
     (character
      (return-from copy-string-arg
-                    (make-string 1 :initial-element string :element-type (type-of string)))))
+                    (make-string 1 :initial-element string ))))
   (%substr string org (+ len org)))     
 
-(defun string-upcase (string &key start end)
+(defun string-upcase (string &key (start 0) end)
   (setq string (copy-string-arg string))
-  (if (not start) (setq start 0)(require-type start 'fixnum))
-  (if (not end)(setq end (length string))(require-type end 'fixnum))
+  (setq end (check-sequence-bounds string start end))
   (%strup string start end))
 
 (defun %strup (string start end)
@@ -367,16 +364,15 @@
                                   (- code (- (char-code #\a)(char-code #\A)))))
                     (if (>= code #x80)
                       (%non-standard-upper-case-equivalent ch)))))
-      (declare (character ch) (type (mod #x11000) code))
+      (declare (character ch) (type (mod #x110000) code))
       (when upper
         (setf (schar string i) upper)))))
 
 
 
-(defun string-capitalize (string &key start end)
+(defun string-capitalize (string &key (start 0) end)
   (setq string (copy-string-arg string))
-  (if (not start) (setq start 0)(require-type start 'fixnum))
-  (if (not end)(setq end (length string))(require-type end 'fixnum))
+  (setq end (check-sequence-bounds string start end))
   (%strcap string start end))
 
 (defun %strcap (string start end)
@@ -401,32 +397,35 @@
 
 
 
-(defun nstring-downcase (string &key start end)
+(defun nstring-downcase (string &key (start 0) end)
   (etypecase string
     (string
-     (if (not start) (setq start 0)(require-type start 'fixnum))
-     (if (not end)(setq end (length string))(require-type end 'fixnum))
-     (multiple-value-bind (sstring org) (array-data-and-offset string)
-       (%strdown sstring (+ start org)(+ end org)))
+     (setq end (check-sequence-bounds string start end))
+     (if (typep string 'simple-string)
+       (%strdown string start end)
+       (multiple-value-bind (data offset) (array-data-and-offset string)
+         (%strdown data (+ start offset) (+ end offset))))
      string)))
 
-(defun nstring-upcase (string &key start end)
+(defun nstring-upcase (string &key (start 0) end)
   (etypecase string
     (string
-     (if (not start) (setq start 0)(require-type start 'fixnum))
-     (if (not end)(setq end (length string))(require-type end 'fixnum))
-     (multiple-value-bind (sstring org) (array-data-and-offset string)
-       (%strup sstring (+ start org)(+ end org)))
+     (setq end (check-sequence-bounds string start end))
+     (if (typep string 'simple-string)
+       (%strup string start end)
+       (multiple-value-bind (data offset) (array-data-and-offset string)
+         (%strup data (+ start offset) (+ end offset))))
      string)))
 
 
-(defun nstring-capitalize (string &key start end)
+(defun nstring-capitalize (string &key (start 0) end)
   (etypecase string
     (string
-     (if (not start) (setq start 0)(require-type start 'fixnum))
-     (if (not end)(setq end (length string))(require-type end 'fixnum))
-     (multiple-value-bind (sstring org) (array-data-and-offset string)
-       (%strcap sstring (+ start org)(+ end org)))
+     (setq end (check-sequence-bounds string start end))
+     (if (typep string 'simple-string)
+       (%strcap string start end)
+       (multiple-value-bind (data offset) (array-data-and-offset string)
+         (%strcap data (+ start offset) (+ end offset))))
      string)))
 
 
@@ -444,31 +443,29 @@
     (if (and (typep string2 'simple-string)(null start2)(null end2))
       (setq start2 0 end2 (length string2))
       (multiple-value-setq (string2 start2 end2)(string-start-end string2 start2 end2)))
-    (setq istart1 (%i- start1 istart1))        
+    (setq istart1 (%i- start1 istart1))
     (let* ((val t))
       (declare (optimize (speed 3)(safety 0)))
       (do* ((i start1 (%i+ 1 i))
             (j start2 (%i+ 1 j)))
            ()
         (when (eq i end1)
-          (when (neq j end2)(setq val -1))
+          (when (neq j end2)
+            (setq val -1))
           (return))
         (when (eq j end2)
           (setq end1 i)
-          (setq val 1)(return))
+          (setq val 1)
+          (return))
         (let ((code1 (%scharcode string1 i))
               (code2 (%scharcode string2 j)))
           (declare (fixnum code1 code2))
           (if (and (>= code1 (char-code #\a))
                    (<= code1 (char-code #\z)))
-            (setq code1 (- code1 (- (char-code #\a) (char-code #\A))))
-            (if (> code1 #x80)
-              (setq code1 (%non-standard-char-code-upcase code1))))
+            (setq code1 (- code1 (- (char-code #\a) (char-code #\A)))))
           (if (and (>= code2 (char-code #\a))
                    (<= code2 (char-code #\z)))
-            (setq code2 (- code2 (- (char-code #\a) (char-code #\A))))
-            (if (> code2 #x80)
-              (setq code2 (%non-standard-char-code-upcase code2))))
+            (setq code2 (- code2 (- (char-code #\a) (char-code #\A)))))
           (unless (= code1 code2)            
             (setq val (if (%i< code1 code2) -1 1))
             (setq end1 i)
@@ -504,11 +501,145 @@
   (multiple-value-bind (result pos) (string-compare string1 start1 end1 string2 start2 end2)
     (if (eq result -1) nil pos)))
 
+(declaim (inline %string-start-end))
+(defun %string-start-end (string)
+  (etypecase string
+    (string (multiple-value-bind (data offset)
+                (array-data-and-offset string)
+              (declare (fixnum offset))
+              (values data offset (+ offset (length string)))))
+    (symbol (let* ((pname (symbol-name string)))
+              (values pname 0 (length pname))))
+    (character (let* ((data (make-string 1)))
+                 (setf (schar data 0) string)
+                 (values data 0 1)))))
+                       
+;;; This is generally a bit faster then the version that deals with
+;;; user-supplied bounds, both because the caller avoids passing
+;;; some extra arguments and because those bounds don't need to be
+;;; validated.
+(defun %fixed-string-equal (string1 string2)
+  (let* ((start1 0)
+         (end1 0)
+         (start2 0)
+         (end2 0))
+    (declare (fixnum start1 end1 start2 end2))
+    (if (typep string1 'simple-string)
+      (setq end1 (uvsize string1))
+      (multiple-value-setq (string1 start1 end1)
+        (%string-start-end string1)))
+    (if (typep string2 'simple-string)
+      (setq end2 (uvsize string2))
+      (multiple-value-setq (string2 start2 end2)
+        (%string-start-end string2)))
+    (locally
+        (declare (optimize (speed 3)(safety 0))
+                 (simple-string string1 string2))
+      (when (= (the fixnum (- end1 start1))
+               (the fixnum (- end2 start2)))
+        (do* ((i start1 (1+ i))
+              (j start2 (1+ j))
+              (map *lower-to-upper*))
+             ((= i end1) t)
+          (declare (fixnum i j))
+          (let ((code1 (%scharcode string1 i))
+                (code2 (%scharcode string2 j)))
+            (declare (type (mod #x110000) code1 code2))
+            (unless (= code1 code2)
+              (unless (= (the (mod #x110000) (%char-code-case-fold code1 map))
+                         (the (mod #x110000) (%char-code-case-fold code2 map)))
+                (return)))))))))
+
+;;; Some of the start1/end1/start2/end2 args may be bogus.
+(defun %bounded-string-equal (string1 string2 start1 end1 start2 end2)
+  (let* ((disp1 nil)
+         (len1 0)
+         (disp2 nil)
+         (len2 0))
+    (declare (fixnum len1 len2))
+    (if (typep string1 'simple-string)
+      (setq len1 (length (the simple-string string1)))
+      (etypecase string1
+        (string (setq len1 (length string1))
+                (multiple-value-setq (string1 disp1)
+                  (array-data-and-offset string1)))
+        (symbol (setq string1 (symbol-name string1)
+                      len1 (length (the simple-string string1))))
+        (character (setq string1 (make-string 1 :initial-element string1)
+                         len1 1))))
+    (if (typep string2 'simple-string)
+      (setq len2 (length (the sumple-string string2)))
+      (etypecase string2
+        (string (setq len2 (length string2))
+                (multiple-value-setq (string2 disp2)
+                  (array-data-and-offset string2)))
+        (symbol (setq string2 (symbol-name string2)
+                      len1 (length (the simple-string string2))))
+        (character (setq string2 (make-string 1 :initial-element string2)
+                         len1 1))))
+    (flet ((bad-index (index vector) (error "Index ~s is invalid for ~s" index vector)))
+      (if (null start1)
+        (setq start1 0)
+        (when (or (not (typep start1 'fixnum))
+                  (< (the fixnum start1) 0))
+          (bad-index start1 string1)))
+      (if (null end1)
+        (setq end1 len1)
+        (when (or (not (typep end1 'fixnum))
+                  (< (the fixnum end1) 0)
+                  (> (the fixnum end1) len1))
+          (bad-index end1 string1)))
+      (locally (declare (fixnum start1 end1))
+        (if (> start1 end1)
+          (error ":start1 argument ~s exceeds :end1 argument ~s" start1 end1))
+        (when disp1
+          (locally (declare (fixnum disp1))
+            (incf start1 disp1)
+            (incf end1 disp1)))
+        (if (null start2)
+          (setq start2 0)
+          (when (or (not (typep start2 'fixnum))
+                    (< (the fixnum start2) 0))
+            (bad-index start2 string2)))
+        (if (null end2)
+          (setq end2 len2)
+          (when (or (not (typep end2 'fixnum))
+                    (< (the fixnum end2) 0)
+                    (> (the fixnum end2) len2))
+            (bad-index end2 string2)))
+        (locally (declare (fixnum start2 end2))
+          (if (> start2 end2)
+            (error ":start2 argument ~s exceeds :end2 argument ~s" start1 end1))
+          (when disp2
+            (locally (declare (fixnum disp2))
+              (incf start2 disp2)
+              (incf end2 disp2)))
+          (locally
+              (declare (optimize (speed 3)(safety 0))
+                       (simple-string string1 string2))
+            (when (= (the fixnum (- end1 start1))
+                     (the fixnum (- end2 start2)))
+              (do* ((i start1 (1+ i))
+                    (j start2 (1+ j))
+                    (map *lower-to-upper*))
+                   ((= i end1) t)
+                (declare (fixnum i j))
+                (let ((code1 (%scharcode string1 i))
+                      (code2 (%scharcode string2 j)))
+                  (declare (type (mod #x110000) code1 code2))
+                  (unless (= code1 code2)
+                    (unless (= (the (mod #x110000) (%char-code-case-fold code1 map))
+                               (the (mod #x110000) (%char-code-case-fold code2 map)))
+                      (return))))))))))))
+
 (defun string-equal (string1 string2 &key start1 end1 start2 end2)
   "Given two strings (string1 and string2), and optional integers start1,
   start2, end1 and end2, compares characters in string1 to characters in
   string2 (using char-equal)."
-  (eq t (string-compare string1 start1 end1 string2 start2 end2)))
+  (if (or start1 end1 start2 end2)
+    (%bounded-string-equal string1 string2 start1 end1 start2 end2)
+    (%fixed-string-equal string1 string2)))
+
 
 
 (defun string-lessp (string1 string2 &key start1 end1 start2 end2)
@@ -518,7 +649,7 @@
   (multiple-value-bind (result pos)(string-compare string1 start1 end1 string2 start2 end2)
     (if (eq result -1) pos nil)))
 
-; forget script-manager - just do codes
+;;; forget script-manager - just do codes
 (defun string-cmp (string1 start1 end1 string2 start2 end2)
   (let ((istart1 (or start1 0)))
     (if (and (typep string1 'simple-string)(null start1)(null end1))
