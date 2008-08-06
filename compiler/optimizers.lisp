@@ -1959,16 +1959,16 @@
 (define-compiler-macro char-equal (&whole call ch &optional (other nil other-p) &rest others)
   (if (null others)
     (if other-p
-      `(eq (%char-code (char-upcase ,ch)) (%char-code (char-upcase ,other)))
+      `(eq (%char-code-upcase (char-code ,ch)) (%char-code-upcase (char-code ,other)))
       `(progn (char-code ,ch) t))
     (if (null (cdr others))
       (let* ((third (car others))
              (code (gensym))
              (code2 (gensym))
              (code3 (gensym)))
-        `(let* ((,code (%char-code (char-upcase ,ch)))
-                (,code2 (%char-code (char-upcase ,other)))
-                (,code3 (%char-code (char-upcase ,third))))
+        `(let* ((,code (%char-code-upcase (char-code ,ch)))
+                (,code2 (%char-code-upcase (char-code ,other)))
+                (,code3 (%char-code-upcase (char-code ,third))))
           (and (eq ,code ,code2)
            (eq ,code ,code3))))
       call)))
@@ -2103,12 +2103,16 @@
       `(let* ((,val ,x))
         (and (integerp ,val) (not (< ,val 0)))))))
 
-(define-compiler-macro register-istruct-cell (&whole w arg)
-  (if (and (quoted-form-p arg)
-           (cadr arg)
-           (typep (cadr arg) 'symbol))
-    `',(register-istruct-cell (cadr arg))
-    w))
+(define-compiler-macro string-equal (&whole w s1 s2 &rest keys)
+  (if (null keys)
+    `(%fixed-string-equal ,s1 ,s2)
+    (let* ((s1-arg (gensym))
+           (s2-arg (gensym)))
+      `(funcall
+        (lambda (,s1-arg ,s2-arg &key start1 end1 start2 end2)
+          (%bounded-string-equal ,s1-arg ,s2-arg start1 end1 start2 end2))
+        ,s1 ,s2 ,@keys))))
+
 
 ;;; Try to use "package-references" to speed up package lookup when
 ;;; a package name is used as a constant argument to some functions.
@@ -2156,6 +2160,47 @@
           (or (package-ref.pkg ,ref)
            (%kernel-restart $xnopkg (package-ref.pkg ,r)))))
       w)))
+
+
+
+(define-compiler-macro %char-code-case-fold (&whole w code vector &environment env)
+  (if (nx-open-code-in-line env)
+    (let* ((c (gensym))
+           (table (gensym)))
+      `(let* ((,c ,code)
+              (,table ,vector))
+        (declare (type (mod #x110000) ,c)
+                 (type (simple-array (signed-byte 16) (*)) ,table))
+        (if (< ,c (length ,table))
+          (the fixnum (+ ,c (the (signed-byte 16)
+                              (locally (declare (optimize (speed 3) (safety 0)))
+                                (aref ,table ,c)))))
+          ,c)))
+    w))
+        
+(define-compiler-macro %char-code-upcase (&whole w code &environment env)
+  (if (typep code '(mod #x110000))
+    (%char-code-upcase code)
+    `(%char-code-case-fold ,code *lower-to-upper*)))
+
+(define-compiler-macro %char-code-downcase (&whole w code &environment env)
+  (if (typep code '(mod #x110000))
+    (%char-code-downcase code)
+    `(%char-code-case-fold ,code *upper-to-lower*)))
+
+(define-compiler-macro char-upcase (char)
+  `(code-char (the valid-char-code (%char-code-upcase (char-code ,char)))))
+
+(define-compiler-macro char-downcase (char)
+  `(code-char (the valid-char-code (%char-code-downcase (char-code ,char)))))
+
+
+(define-compiler-macro register-istruct-cell (&whole w arg)
+  (if (and (quoted-form-p arg)
+           (cadr arg)
+           (typep (cadr arg) 'symbol))
+    `',(register-istruct-cell (cadr arg))
+    w))
 
 (define-compiler-macro get-character-encoding (&whole w name)
   (or (if (typep name 'keyword) (lookup-character-encoding name))
