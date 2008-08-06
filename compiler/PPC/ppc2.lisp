@@ -46,7 +46,8 @@
   `(let* ((*ppc2-tail-allow* *ppc2-tail-allow*)
           (*ppc2-reckless* *ppc2-reckless*)
           (*ppc2-open-code-inline* *ppc2-open-code-inline*)
-          (*ppc2-trust-declarations* *ppc2-trust-declarations*))
+          (*ppc2-trust-declarations* *ppc2-trust-declarations*)
+	  (*ppc2-full-safety* *ppc2-full-safety*))
      (ppc2-decls ,declsform)
      ,@body))
 
@@ -161,6 +162,7 @@
 (defvar *ppc2-tail-nargs* nil)
 (defvar *ppc2-tail-allow* t)
 (defvar *ppc2-reckless* nil)
+(defvar *ppc2-full-safety* nil)
 (defvar *ppc2-trust-declarations* nil)
 (defvar *ppc2-entry-vstack* nil)
 (defvar *ppc2-fixed-nargs* nil)
@@ -426,6 +428,7 @@
            (*ppc2-inhibit-register-allocation* nil)
            (*ppc2-tail-allow* t)
            (*ppc2-reckless* nil)
+	   (*ppc2-full-safety* nil)
            (*ppc2-trust-declarations* t)
            (*ppc2-entry-vstack* nil)
            (*ppc2-fixed-nargs* nil)
@@ -586,6 +589,7 @@
     (locally (declare (fixnum decls))
       (setq *ppc2-tail-allow* (neq 0 (%ilogand2 $decl_tailcalls decls))
             *ppc2-open-code-inline* (neq 0 (%ilogand2 $decl_opencodeinline decls))
+	    *ppc2-full-safety* (neq 0 (%ilogand2 $decl_full_safety decls))
             *ppc2-reckless* (neq 0 (%ilogand2 $decl_unsafe decls))
             *ppc2-trust-declarations* (neq 0 (%ilogand2 $decl_trustdecls decls))))))
 
@@ -5893,6 +5897,14 @@
     (if vreg
       (ensuring-node-target (target vreg)
         (! fixnum->char target reg)))
+    (^)))
+
+(defppc2 ppc2-%valid-code-char %valid-code-char (seg vreg xfer c)
+  (let* ((reg (ppc2-one-untargeted-reg-form seg c ppc::arg_z)))
+    (when *ppc2-full-safety* (! require-char-code reg))
+    (if vreg
+      (ensuring-node-target (target vreg)
+        (! code-char->char target reg)))
     (^)))
 
 (defppc2 ppc2-eq eq (seg vreg xfer cc form1 form2)
