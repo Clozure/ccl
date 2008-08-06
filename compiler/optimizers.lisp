@@ -2094,7 +2094,27 @@
   (if (and (constantp instance)
            (eql (typecode instance) (nx-lookup-target-uvector-subtag :instance)))
     `(instance.slots ,instance)
-    w))
+    (let* ((itemp (gensym))
+           (typecode (gensym)))
+      `(let* ((,itemp ,instance)
+              (,typecode (typecode ,itemp)))
+        (declare (type (unsigned-byte 8) ,typecode))
+        (if (eql ,typecode ,(nx-lookup-target-uvector-subtag :instance))
+          (instance.slots ,itemp)
+          (%non-standard-instance-slots ,itemp ,typecode))))))
+
+
+(define-compiler-macro instance-class-wrapper (instance)
+  (let* ((itemp (gensym)))
+    `(let* ((,itemp ,instance))
+      (if (eql (the (unsigned-byte 8) (typecode ,itemp))
+               ,(nx-lookup-target-uvector-subtag :instance))
+        (instance.class-wrapper ,itemp)
+        (non-standard-instance-class-wrapper ,itemp)))))
+
+;; Instance must be a standard-instance.
+(define-compiler-macro %class-of-instance (instance)
+  `(%wrapper-class (instance.class-wrapper ,instance)))
 
 (define-compiler-macro unsigned-byte-p (x)
   (if (typep (nx-unquote x) 'unsigned-byte)
