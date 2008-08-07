@@ -2338,9 +2338,6 @@ gc_from_xp(ExceptionInformation *xp, signed_natural param)
 #define TCR_FROM_EXCEPTION_PORT(p) ((TCR *)((natural)p))
 #define TCR_TO_EXCEPTION_PORT(tcr) ((mach_port_t)((natural)(tcr)))
 
-#if USE_MACH_EXCEPTION_LOCK
-pthread_mutex_t _mach_exception_lock, *mach_exception_lock;
-#endif
 extern void pseudo_sigreturn(void);
 
 
@@ -2774,13 +2771,7 @@ catch_exception_raise(mach_port_t exception_port,
 #endif
 
 
-  if (
-#if USE_MACH_EXCEPTION_LOCK
-      pthread_mutex_trylock(mach_exception_lock) == 0
-#else
-      1
-#endif
-      ) {
+  if (1) {
 #ifdef X8664
     do {
       thread_state_count = x86_THREAD_STATE64_COUNT;
@@ -2854,27 +2845,6 @@ catch_exception_raise(mach_port_t exception_port,
         kret = 17;
       }
     }
-#if USE_MACH_EXCEPTION_LOCK
-#ifdef DEBUG_MACH_EXCEPTIONS
-    fprintf(stderr, "releasing Mach exception lock in exception thread\n");
-#endif
-    pthread_mutex_unlock(mach_exception_lock);
-#endif
-  } else {
-    SET_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_EXCEPTION);
-      
-#if 0
-    fprintf(stderr, "deferring pending exception in 0x%x\n", tcr);
-#endif
-    kret = KERN_SUCCESS;
-    if (tcr == gc_tcr) {
-      int i;
-      write(1, "exception in GC thread. Sleeping for 60 seconds\n",sizeof("exception in GC thread.  Sleeping for 60 seconds\n"));
-      for (i = 0; i < 60; i++) {
-        sleep(1);
-      }
-      _exit(EX_SOFTWARE);
-    }
   }
   return kret;
 }
@@ -2922,10 +2892,6 @@ mach_exception_port_set()
   static mach_port_t __exception_port_set = MACH_PORT_NULL;
   kern_return_t kret;  
   if (__exception_port_set == MACH_PORT_NULL) {
-#if USE_MACH_EXCEPTION_LOCK
-    mach_exception_lock = &_mach_exception_lock;
-    pthread_mutex_init(mach_exception_lock, NULL);
-#endif
 
     kret = mach_port_allocate(mach_task_self(),
 			      MACH_PORT_RIGHT_PORT_SET,

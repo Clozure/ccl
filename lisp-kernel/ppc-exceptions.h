@@ -387,9 +387,6 @@ int altivec_available;
 #include <mach/machine/thread_state.h>
 #include <mach/machine/thread_status.h>
 
-#if USE_MACH_EXCEPTION_LOCK
-pthread_mutex_t *mach_exception_lock;
-#endif
 #endif
 
 /* Yet another way to look at a branch instruction ... */

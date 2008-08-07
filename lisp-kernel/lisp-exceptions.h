@@ -139,10 +139,6 @@ symbol_name( unsigned, char *, size_t );
 size_t
 exception_fn_name( ExceptionInformation *, int, char *, size_t );
 
-/* Need to define this here */
-#ifdef DARWIN
-#define USE_MACH_EXCEPTION_LOCK 0
-#endif
 
 
 #ifdef PPC

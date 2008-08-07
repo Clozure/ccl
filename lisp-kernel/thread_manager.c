@@ -17,15 +17,6 @@
 
 #include "Threads.h"
 
-/*
-   If we suspend via signals - and if the "suspend" signal is maked
-   in the handler for that signal - then it's not possible to suspend
-   a thread that's still waiting to be resumed (which is what
-   WAIT_FOR_RESUME_ACK is all about.)
-*/
-#define WAIT_FOR_RESUME_ACK 0
-#define RESUME_VIA_RESUME_SEMAPHORE 1
-#define SUSPEND_RESUME_VERBOSE 0
 
 typedef struct {
   TCR *tcr;
@@ -426,7 +417,7 @@ get_interrupt_tcr(Boolean create)
   return get_tcr(create);
 }
   
-  void
+void
 suspend_resume_handler(int signo, siginfo_t *info, ExceptionInformation *context)
 {
 #ifdef DARWIN_GS_HACK
@@ -437,43 +428,10 @@ suspend_resume_handler(int signo, siginfo_t *info, ExceptionInformation *context
   if (TCR_INTERRUPT_LEVEL(tcr) <= (-2<<fixnumshift)) {
     SET_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_SUSPEND);
   } else {
-    if (signo == thread_suspend_signal) {
-#if 0
-      sigset_t wait_for;
-#endif
-
-      tcr->suspend_context = context;
-#if 0
-      sigfillset(&wait_for);
-#endif
-      SEM_RAISE(tcr->suspend);
-#if 0
-      sigdelset(&wait_for, thread_resume_signal);
-#endif
-#if 1
-#if RESUME_VIA_RESUME_SEMAPHORE
-      SEM_WAIT_FOREVER(tcr->resume);
-#if SUSPEND_RESUME_VERBOSE
-      fprintf(stderr, "got  resume in 0x%x\n",tcr);
-#endif
-      tcr->suspend_context = NULL;
-#else
-      sigsuspend(&wait_for);
-#endif
-#else
-    do {
-      sigsuspend(&wait_for);
-    } while (tcr->suspend_context);
-#endif  
-    } else {
-      tcr->suspend_context = NULL;
-#if SUSEPEND_RESUME_VERBOSE
-      fprintf(stderr,"got  resume in in 0x%x\n",tcr);
-#endif
-    }
-#if WAIT_FOR_RESUME_ACK
+    tcr->suspend_context = context;
     SEM_RAISE(tcr->suspend);
-#endif
+    SEM_WAIT_FOREVER(tcr->resume);
+    tcr->suspend_context = NULL;
   }
 #ifdef DARWIN_GS_HACK
   if (gs_was_tcr) {
@@ -1353,15 +1311,6 @@ suspend_tcr(TCR *tcr)
   int suspend_count = atomic_incf(&(tcr->suspend_count));
   pthread_t thread;
   if (suspend_count == 1) {
-#if SUSPEND_RESUME_VERBOSE
-    fprintf(stderr,"Suspending 0x%x\n", tcr);
-#endif
-#ifdef DARWIN_nope
-    if (mach_suspend_tcr(tcr)) {
-      SET_TCR_FLAG(tcr,TCR_FLAG_BIT_ALT_SUSPEND);
-      return true;
-    }
-#endif
     thread = (pthread_t)(tcr->osid);
     if ((thread != (pthread_t) 0) &&
         (pthread_kill(thread, thread_suspend_signal) == 0)) {
@@ -1388,10 +1337,6 @@ tcr_suspend_ack(TCR *tcr)
   if (tcr->flags & (1<<TCR_FLAG_BIT_SUSPEND_ACK_PENDING)) {
     SEM_WAIT_FOREVER(tcr->suspend);
     tcr->flags &= ~(1<<TCR_FLAG_BIT_SUSPEND_ACK_PENDING);
-#if SUSPEND_RESUME_VERBOSE
-    fprintf(stderr,"Suspend ack from 0x%x\n", tcr);
-#endif
-
   }
   return true;
 }
@@ -1406,24 +1351,10 @@ lisp_suspend_tcr(TCR *tcr)
   TCR *current = get_tcr(true);
   
   LOCK(lisp_global(TCR_AREA_LOCK),current);
-#ifdef DARWIN
-#if USE_MACH_EXCEPTION_LOCK
-  if (use_mach_exception_handling) {
-    pthread_mutex_lock(mach_exception_lock);
-  }
-#endif
-#endif
   suspended = suspend_tcr(tcr);
   if (suspended) {
     while (!tcr_suspend_ack(tcr));
   }
-#ifdef DARWIN
-#if USE_MACH_EXCEPTION_LOCK
-  if (use_mach_exception_handling) {
-    pthread_mutex_unlock(mach_exception_lock);
-  }
-#endif
-#endif
   UNLOCK(lisp_global(TCR_AREA_LOCK),current);
   return suspended;
 }
@@ -1434,48 +1365,15 @@ resume_tcr(TCR *tcr)
 {
   int suspend_count = atomic_decf(&(tcr->suspend_count));
   if (suspend_count == 0) {
-#ifdef DARWIN
-    if (tcr->flags & (1<<TCR_FLAG_BIT_ALT_SUSPEND)) {
-#if SUSPEND_RESUME_VERBOSE
-    fprintf(stderr,"Mach resume to 0x%x\n", tcr);
-#endif
-      mach_resume_tcr(tcr);
+    void *s = (tcr->resume);
+    if (s != NULL) {
+      SEM_RAISE(s);
       return true;
     }
-#endif
-#if RESUME_VIA_RESUME_SEMAPHORE
-    SEM_RAISE(tcr->resume);
-#else
-    if ((err = (pthread_kill((pthread_t)(tcr->osid), thread_resume_signal))) != 0) {
-      Bug(NULL, "pthread_kill returned %d on thread #x%x", err, tcr->osid);
-    }
-#endif
-#if SUSPEND_RESUME_VERBOSE
-    fprintf(stderr, "Sent resume to 0x%x\n", tcr);
-#endif
-    return true;
   }
   return false;
 }
 
-void
-wait_for_resumption(TCR *tcr)
-{
-  if (tcr->suspend_count == 0) {
-#ifdef DARWIN
-    if (tcr->flags & (1<<TCR_FLAG_BIT_ALT_SUSPEND)) {
-      tcr->flags &= ~(1<<TCR_FLAG_BIT_ALT_SUSPEND);
-      return;
-  }
-#endif
-#if WAIT_FOR_RESUME_ACK
-#if SUSPEND_RESUME_VERBOSE
-    fprintf(stderr, "waiting for resume in 0x%x\n",tcr);
-#endif
-    SEM_WAIT_FOREVER(tcr->suspend);
-#endif
-  }
-}
     
 
 
@@ -1487,7 +1385,6 @@ lisp_resume_tcr(TCR *tcr)
   
   LOCK(lisp_global(TCR_AREA_LOCK),current);
   resumed = resume_tcr(tcr);
-  wait_for_resumption(tcr);
   UNLOCK(lisp_global(TCR_AREA_LOCK), current);
   return resumed;
 }
@@ -1553,16 +1450,6 @@ suspend_other_threads(Boolean for_gc)
   Boolean all_acked;
 
   LOCK(lisp_global(TCR_AREA_LOCK), current);
-#ifdef DARWIN
-#if USE_MACH_EXCEPTION_LOCK
-  if (for_gc && use_mach_exception_handling) {
-#if SUSPEND_RESUME_VERBOSE
-    fprintf(stderr, "obtaining Mach exception lock in GC thread 0x%x\n", current);
-#endif
-    pthread_mutex_lock(mach_exception_lock);
-  }
-#endif
-#endif
   for (other = current->next; other != current; other = other->next) {
     if ((other->osid != 0)) {
       suspend_tcr(other);
@@ -1603,8 +1490,6 @@ suspend_other_threads(Boolean for_gc)
 void
 lisp_suspend_other_threads()
 {
-  TCR *current = get_tcr(true);
-  LOCK(lisp_global(TCR_AREA_LOCK),current);
   suspend_other_threads(false);
 }
 
@@ -1617,32 +1502,14 @@ resume_other_threads(Boolean for_gc)
       resume_tcr(other);
     }
   }
-  for (other = current->next; other != current; other = other->next) {
-    if ((other->osid != 0)) {
-      wait_for_resumption(other);
-    }
-  }
   free_freed_tcrs();
-#ifdef DARWIN
-#if USE_MACH_EXCEPTION_LOCK
-  if (for_gc && use_mach_exception_handling) {
-#if SUSPEND_RESUME_VERBOSE
-    fprintf(stderr, "releasing Mach exception lock in GC thread 0x%x\n", current);
-#endif
-    pthread_mutex_unlock(mach_exception_lock);
-  }
-#endif
-#endif
-
   UNLOCK(lisp_global(TCR_AREA_LOCK), current);
 }
 
 void
 lisp_resume_other_threads()
 {
-  TCR *current = get_tcr(true);
   resume_other_threads(false);
-  UNLOCK(lisp_global(TCR_AREA_LOCK),current);
 }
 
 
