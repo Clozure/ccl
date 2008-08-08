@@ -621,7 +621,7 @@ define([check_pending_enabled_interrupt],[
 ])],[
 define([check_pending_enabled_interrupt],[
 	__(btrq [$]63,rcontext(tcr.interrupt_pending))
-	__(jnc,pt $1)
+	__(jnc $1)
 	interrupt_now()
 ])])
 	
