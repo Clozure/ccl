@@ -989,7 +989,7 @@
 (defppclapfunction %suspend-tcr ((target arg_z))
   (check-nargs 1)
   (uuo_interr arch::error-suspend rzero)
-  (eq0->boolean arg_z imm0 imm1)
+  (ne0->boolean arg_z imm0 imm1)
   (blr))
 
 (defppclapfunction %suspend-other-threads ()
@@ -1001,7 +1001,7 @@
 (defppclapfunction %resume-tcr ((target arg_z))
   (check-nargs 1)
   (uuo_interr arch::error-resume rzero)
-  (eq0->boolean arg_z imm0 imm1)
+  (ne0->boolean arg_z imm0 imm1)
   (blr))
 
 (defppclapfunction %resume-other-threads ()

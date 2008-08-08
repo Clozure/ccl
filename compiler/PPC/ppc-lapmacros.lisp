@@ -620,6 +620,21 @@
       (srdi ,temp ,temp 6)              ; temp = (src == 0), C-wise
       (bit0->boolean ,dest ,temp ,temp)))))
 
+(defppclapmacro ne0->boolean (dest src temp)
+  (target-arch-case
+   (:ppc32
+    `(progn
+      (cntlzw ,temp ,src)                
+      (slw ,temp ,src ,temp)
+      (srwi ,temp ,temp 31)
+      (bit0->boolean ,dest ,temp ,temp)))
+   (:ppc64
+    `(progn
+      (cntlzd ,temp ,src)
+      (sld ,temp ,src ,temp)
+      (srdi ,temp ,temp 63) 
+      (bit0->boolean ,dest ,temp ,temp)))))
+
 (defppclapmacro eq->boolean (dest rx ry temp)
   `(progn
      (sub ,temp ,rx ,ry)
