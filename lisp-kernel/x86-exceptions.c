@@ -2136,9 +2136,6 @@ gc_from_xp(ExceptionInformation *xp, signed_natural param)
 #define TCR_FROM_EXCEPTION_PORT(p) ((TCR *)((natural)p))
 #define TCR_TO_EXCEPTION_PORT(tcr) ((mach_port_t)((natural)(tcr)))
 
-#if USE_MACH_EXCEPTION_LOCK
-pthread_mutex_t _mach_exception_lock, *mach_exception_lock;
-#endif
 extern void pseudo_sigreturn(void);
 
 
@@ -2540,107 +2537,73 @@ catch_exception_raise(mach_port_t exception_port,
 #endif
 
 
-  if (
-#if USE_MACH_EXCEPTION_LOCK
-      pthread_mutex_trylock(mach_exception_lock) == 0
-#else
-      1
-#endif
-      ) {
 #ifdef X8664
-    do {
-      thread_state_count = x86_THREAD_STATE64_COUNT;
-      call_kret = thread_get_state(thread,
-                                   x86_THREAD_STATE64,
-                                   (thread_state_t)&ts,
-                                   &thread_state_count);
-    } while (call_kret == KERN_ABORTED);
+  do {
+    thread_state_count = x86_THREAD_STATE64_COUNT;
+    call_kret = thread_get_state(thread,
+                                 x86_THREAD_STATE64,
+                                 (thread_state_t)&ts,
+                                 &thread_state_count);
+  } while (call_kret == KERN_ABORTED);
   MACH_CHECK_ERROR("getting thread state",call_kret);
 #else
-    thread_state_count = x86_THREAD_STATE_COUNT;
-    thread_get_state(thread,
-                     x86_THREAD_STATE,
-                     (thread_state_t)&ts,
-                     &thread_state_count);
+  thread_state_count = x86_THREAD_STATE_COUNT;
+  thread_get_state(thread,
+                   x86_THREAD_STATE,
+                   (thread_state_t)&ts,
+                   &thread_state_count);
 #endif
-    if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_EXCEPTION)) {
-      CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_EXCEPTION);
-    } 
-    if ((code == EXC_I386_GPFLT) &&
-        ((natural)(ts_pc(ts)) == (natural)pseudo_sigreturn)) {
-      kret = do_pseudo_sigreturn(thread, tcr);
-#if 0
-      fprintf(stderr, "Exception return in 0x%x\n",tcr);
-#endif
-    } else if (tcr->flags & (1<<TCR_FLAG_BIT_PROPAGATE_EXCEPTION)) {
-      CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PROPAGATE_EXCEPTION);
-      kret = 17;
-    } else {
-      switch (exception) {
-      case EXC_BAD_ACCESS:
-        if (code == EXC_I386_GPFLT) {
-          signum = SIGSEGV;
-        } else {
-          signum = SIGBUS;
-        }
-        break;
-        
-      case EXC_BAD_INSTRUCTION:
-        if (code == EXC_I386_GPFLT) {
-          signum = SIGSEGV;
-        } else {
-          signum = SIGILL;
-        }
-        break;
-          
-      case EXC_SOFTWARE:
-        signum = SIGILL;
-        break;
-        
-      case EXC_ARITHMETIC:
-        signum = SIGFPE;
-        break;
-        
-      default:
-        break;
-      }
-      if (signum) {
-        kret = setup_signal_frame(thread,
-                                  (void *)DARWIN_EXCEPTION_HANDLER,
-                                  signum,
-                                  code,
-                                  tcr, 
-                                  &ts);
-#if 0
-        fprintf(stderr, "Setup pseudosignal handling in 0x%x\n",tcr);
-#endif
-        
-      } else {
-        kret = 17;
-      }
-    }
-#if USE_MACH_EXCEPTION_LOCK
-#ifdef DEBUG_MACH_EXCEPTIONS
-    fprintf(stderr, "releasing Mach exception lock in exception thread\n");
-#endif
-    pthread_mutex_unlock(mach_exception_lock);
-#endif
+  if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_EXCEPTION)) {
+    CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_EXCEPTION);
+  } 
+  if ((code == EXC_I386_GPFLT) &&
+      ((natural)(ts_pc(ts)) == (natural)pseudo_sigreturn)) {
+    kret = do_pseudo_sigreturn(thread, tcr);
+  } else if (tcr->flags & (1<<TCR_FLAG_BIT_PROPAGATE_EXCEPTION)) {
+    CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PROPAGATE_EXCEPTION);
+    kret = 17;
   } else {
-    SET_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_EXCEPTION);
-      
-#if 0
-    fprintf(stderr, "deferring pending exception in 0x%x\n", tcr);
-#endif
-    kret = KERN_SUCCESS;
-    if (tcr == gc_tcr) {
-      int i;
-      write(1, "exception in GC thread. Sleeping for 60 seconds\n",sizeof("exception in GC thread.  Sleeping for 60 seconds\n"));
-      for (i = 0; i < 60; i++) {
-        sleep(1);
+    switch (exception) {
+    case EXC_BAD_ACCESS:
+      if (code == EXC_I386_GPFLT) {
+        signum = SIGSEGV;
+      } else {
+        signum = SIGBUS;
       }
-      _exit(EX_SOFTWARE);
+      break;
+        
+    case EXC_BAD_INSTRUCTION:
+      if (code == EXC_I386_GPFLT) {
+        signum = SIGSEGV;
+      } else {
+        signum = SIGILL;
+      }
+      break;
+          
+    case EXC_SOFTWARE:
+      signum = SIGILL;
+      break;
+        
+    case EXC_ARITHMETIC:
+      signum = SIGFPE;
+      break;
+        
+    default:
+      break;
+    }
+    if (signum) {
+      kret = setup_signal_frame(thread,
+                                (void *)DARWIN_EXCEPTION_HANDLER,
+                                signum,
+                                code,
+                                tcr, 
+                                &ts);
+        
+    } else {
+      kret = 17;
     }
   }
+  
   return kret;
 }
 

@@ -2278,9 +2278,6 @@ exception_init()
 #define TCR_TO_EXCEPTION_PORT(tcr) ((mach_port_t)((natural)(tcr)))
 
 
-#if USE_MACH_EXCEPTION_LOCK
-pthread_mutex_t _mach_exception_lock, *mach_exception_lock;
-#endif
 
 #define LISP_EXCEPTIONS_HANDLED_MASK \
  (EXC_MASK_SOFTWARE | EXC_MASK_BAD_ACCESS | EXC_MASK_BAD_INSTRUCTION | EXC_MASK_ARITHMETIC)
@@ -2704,93 +2701,62 @@ catch_exception_raise(mach_port_t exception_port,
   TCR *tcr = TCR_FROM_EXCEPTION_PORT(exception_port);
   kern_return_t kret;
 
-#ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(stderr, "obtaining Mach exception lock in exception thread\n");
-#endif
 
-  if (
-#if USE_MACH_EXCEPTION_LOCK
-    pthread_mutex_trylock(mach_exception_lock) == 0
-#else
-    1
-#endif
-    ) {
-    if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_EXCEPTION)) {
-      CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_EXCEPTION);
-    } 
-    if ((exception == EXC_BAD_INSTRUCTION) &&
-        (code_vector[0] == EXC_PPC_UNIPL_INST) &&
-        (((code1 = code_vector[1]) == (int)pseudo_sigreturn) ||
-         (code1 == (int)enable_fp_exceptions) ||
-         (code1 == (int)disable_fp_exceptions))) {
-      if (code1 == (int)pseudo_sigreturn) {
-        kret = do_pseudo_sigreturn(thread, tcr);
+  if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_EXCEPTION)) {
+    CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_EXCEPTION);
+  } 
+  if ((exception == EXC_BAD_INSTRUCTION) &&
+      (code_vector[0] == EXC_PPC_UNIPL_INST) &&
+      (((code1 = code_vector[1]) == (int)pseudo_sigreturn) ||
+       (code1 == (int)enable_fp_exceptions) ||
+       (code1 == (int)disable_fp_exceptions))) {
+    if (code1 == (int)pseudo_sigreturn) {
+      kret = do_pseudo_sigreturn(thread, tcr);
 #if 0
       fprintf(stderr, "Exception return in 0x%x\n",tcr);
 #endif
         
-      } else if (code1 == (int)enable_fp_exceptions) {
-        kret = thread_set_fp_exceptions_enabled(thread, true);
-      } else kret =  thread_set_fp_exceptions_enabled(thread, false);
-    } else if (tcr->flags & (1<<TCR_FLAG_BIT_PROPAGATE_EXCEPTION)) {
-      CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PROPAGATE_EXCEPTION);
-      kret = 17;
-    } else {
-      switch (exception) {
-      case EXC_BAD_ACCESS:
-        signum = SIGSEGV;
-        break;
+    } else if (code1 == (int)enable_fp_exceptions) {
+      kret = thread_set_fp_exceptions_enabled(thread, true);
+    } else kret =  thread_set_fp_exceptions_enabled(thread, false);
+  } else if (tcr->flags & (1<<TCR_FLAG_BIT_PROPAGATE_EXCEPTION)) {
+    CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PROPAGATE_EXCEPTION);
+    kret = 17;
+  } else {
+    switch (exception) {
+    case EXC_BAD_ACCESS:
+      signum = SIGSEGV;
+      break;
         
-      case EXC_BAD_INSTRUCTION:
-        signum = SIGILL;
-        break;
+    case EXC_BAD_INSTRUCTION:
+      signum = SIGILL;
+      break;
       
-      case EXC_SOFTWARE:
-        if (code == EXC_PPC_TRAP) {
-          signum = SIGTRAP;
-        }
-        break;
-      
-      case EXC_ARITHMETIC:
-        signum = SIGFPE;
-        break;
-
-      default:
-        break;
+    case EXC_SOFTWARE:
+      if (code == EXC_PPC_TRAP) {
+        signum = SIGTRAP;
       }
-      if (signum) {
-        kret = setup_signal_frame(thread,
-                                  (void *)pseudo_signal_handler,
-                                  signum,
-                                  code,
-                                  tcr);
+      break;
+      
+    case EXC_ARITHMETIC:
+      signum = SIGFPE;
+      break;
+
+    default:
+      break;
+    }
+    if (signum) {
+      kret = setup_signal_frame(thread,
+                                (void *)pseudo_signal_handler,
+                                signum,
+                                code,
+                                tcr);
 #if 0
       fprintf(stderr, "Setup pseudosignal handling in 0x%x\n",tcr);
 #endif
 
-      } else {
-        kret = 17;
-      }
-    }
-#if USE_MACH_EXCEPTION_LOCK
-#ifdef DEBUG_MACH_EXCEPTIONS
-    fprintf(stderr, "releasing Mach exception lock in exception thread\n");
-#endif
-    pthread_mutex_unlock(mach_exception_lock);
-#endif
-  } else {
-    SET_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_EXCEPTION);
-#if 0
-    fprintf(stderr, "deferring pending exception in 0x%x\n", tcr);
-#endif
-    kret = 0;
-    if (tcr == gc_tcr) {
-      int i;
-      write(1, "exception in GC thread. Sleeping for 60 seconds\n",sizeof("exception in GC thread.  Sleeping for 60 seconds\n"));
-      for (i = 0; i < 60; i++) {
-        sleep(1);
-      }
-      _exit(EX_SOFTWARE);
+    } else {
+      kret = 17;
     }
   }
   return kret;
@@ -2869,10 +2835,6 @@ mach_exception_port_set()
   static mach_port_t __exception_port_set = MACH_PORT_NULL;
   kern_return_t kret;  
   if (__exception_port_set == MACH_PORT_NULL) {
-#if USE_MACH_EXCEPTION_LOCK
-    mach_exception_lock = &_mach_exception_lock;
-    pthread_mutex_init(mach_exception_lock, NULL);
-#endif
     kret = mach_port_allocate(mach_task_self(),
 			      MACH_PORT_RIGHT_PORT_SET,
 			      &__exception_port_set);
@@ -3147,10 +3109,6 @@ mach_raise_thread_interrupt(TCR *target)
   mach_msg_type_number_t info_count = THREAD_BASIC_INFO_COUNT;
 
   LOCK(lisp_global(TCR_AREA_LOCK), current);
-#if USE_MACH_EXCEPTION_LOCK
-  pthread_mutex_lock(mach_exception_lock);
-#endif
-
   if (suspend_mach_thread(mach_thread)) {
     if (thread_info(mach_thread,
                     THREAD_BASIC_INFO,
@@ -3177,9 +3135,6 @@ mach_raise_thread_interrupt(TCR *target)
     thread_resume(mach_thread);
     
   }
-#if USE_MACH_EXCEPTION_LOCK
-  pthread_mutex_unlock(mach_exception_lock);
-#endif
   UNLOCK(lisp_global(TCR_AREA_LOCK), current);
   return 0;
 }
