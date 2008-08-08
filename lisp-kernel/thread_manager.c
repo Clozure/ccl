@@ -438,12 +438,7 @@ suspend_resume_handler(int signo, siginfo_t *info, ExceptionInformation *context
     set_gs_address(tcr);
   }
 #endif
-#ifdef DARWIN
-  DarwinSigReturn(context);
-#endif
-#ifdef FREEBSD
-  freebsd_sigreturn(context);
-#endif
+  SIGRETURN(context);
 }
 
   
