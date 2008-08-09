@@ -25,9 +25,6 @@
   (declare (ignore create))
   (cons type nil))
 
-(defun find-class-cell (type create?)
-  (declare (ignore create?))
-  (make-class-cell type))
 
 (defun builtin-typep (form cell)
   (typep form (class-cell-name cell)))
@@ -1001,10 +998,23 @@
 (defun istructp (form)
   (= (the fixnum (typecode form)) target::subtag-istruct))
 
+
+;;; Not to be conused with STRUCTURE-TYPE-P, defined in ccl:lib;pprint.lisp.
+;;; (If you've ever been "conused", I'm sure you know just how painful
+;;; that can be.)
+
+;;; In the short term (bootstrapping), expect TYPE to be a a SYMBOL.
+;;; If THING is a structure instance (has typecode subtag-struct),
+;;; its 0th element is either a list of symbols (traditional, legacy
+;;; case) or a list of CLASS-CELLs.
 (defun structure-typep (thing type)
   (if (= (the fixnum (typecode thing)) target::subtag-struct)
-    (if (memq type (%svref thing 0))
-      t)))
+    (dolist (i (%svref thing 0))
+      (if (or (eq i type)
+              (and (not (symbolp i))
+                   (eq (class-cell-name i) type)))
+        (return t)))))
+
 
 
 (defun istruct-typep (thing type)
@@ -1063,3 +1073,36 @@
 
 (defun listp (x)
   (listp x))
+
+(defparameter *type-cells* nil)
+
+
+
+(defparameter *type-cells-lock* nil)
+
+
+;;; The weird handling to the special variables here has to do with
+;;; xload issues.
+(defun register-type-cell (specifier)
+  (with-lock-grabbed ((or *type-cells-lock*
+                         (setq *type-cells-lock* (make-lock))))
+    (unless *type-cells*
+      (setq *type-cells* (make-hash-table :test 'equal)))
+    (or (values (gethash specifier *type-cells*))
+        (setf (gethash specifier *type-cells*)
+              (make-type-cell specifier)))))
+
+
+(defvar %find-classes% nil)
+
+(setq %find-classes% (make-hash-table :test 'eq))
+
+
+(defun find-class-cell (name create?)
+  (unless %find-classes%
+    (dbg name))
+  (let ((cell (gethash name %find-classes%)))
+    (or cell
+        (and create?
+             (setf (gethash name %find-classes%) (make-class-cell name))))))
+

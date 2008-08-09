@@ -1196,7 +1196,6 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
     (non-standard-instance-class-wrapper instance)))
 
 
-(defvar %find-classes% (make-hash-table :test 'eq))
 
 (defun class-cell-typep (form class-cell)
   (locally (declare (type class-cell  class-cell))
@@ -1222,11 +1221,7 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 
 
 
-(defun find-class-cell (name create?)
-  (let ((cell (gethash name %find-classes%)))
-    (or cell
-        (and create?
-             (setf (gethash name %find-classes%) (make-class-cell name))))))
+
 
 
 (defun find-class (name &optional (errorp t) environment)
