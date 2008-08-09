@@ -677,9 +677,10 @@
   (check-nargs 1)
   (ud2a)
   (:byte 5)
+  (movzbl (%b imm0) (%l imm0))
   (testl (%l imm0) (%l imm0))
   (movl ($ target::nil-value) (%l arg_z))
-  (cmovel (@ target::t-offset (% arg_z)) (%l arg_z))
+  (cmovnel (@ (+ target::t-offset target::symbol.vcell) (% arg_z)) (%l arg_z))
   (single-value-return))
 
 (defx86lapfunction %suspend-other-threads ()
@@ -693,9 +694,10 @@
   (check-nargs 1)
   (ud2a)
   (:byte 7)
+  (movzbl (%b imm0) (%l imm0))
   (testl (%l imm0) (%l imm0))
   (movl ($ target::nil-value) (%l arg_z))
-  (cmovel (@ target::t-offset (% arg_z)) (%l arg_z))
+  (cmovnel (@ (+ target::t-offset target::symbol.vcell) (% arg_z)) (%l arg_z))
   (single-value-return))
 
 (defx86lapfunction %resume-other-threads ()
