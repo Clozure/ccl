@@ -80,8 +80,14 @@
 (defmacro sd-set-print-function (sd value) `(svset ,sd 5 ,value))
 (defmacro sd-refnames (sd) `(svref ,sd 6))
 
-(defmacro struct-name (struct) `(car (uvref ,struct 0)))
-(defmacro struct-def (struct) `(gethash (car (uvref ,struct 0)) %defstructs%))
+(defmacro struct-name (struct)
+  (let* ((temp (gensym)))
+    `(let* ((,temp (car (uvref ,struct 0))))
+      (if (istruct-typep ,temp 'class-cell)
+        (class-cell-name ,temp)
+        ,temp))))
+
+(defmacro struct-def (struct) `(gethash (struct-name ,struct) %defstructs%))
 
 ;Can use this to let the printer print with print-function, reader read with
 ;constructor and slot-names, inspector inspect with slot-names.
