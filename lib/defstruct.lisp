@@ -74,7 +74,12 @@
     (if (consp type-and-refinfo) (%cdr type-and-refinfo) type-and-refinfo)))
 
 (defun %structure-class-of (thing)
-  (find-class (struct-name thing)))
+  (let* ((cell (car (uvref thing 0))))
+    (if (istruct-typep cell 'class-cell)
+      (or (class-cell-class cell)
+          (setf (class-cell-class cell)
+                (find-class (class-cell-name cell))))
+      (find-class cell))))
 
 ;These might want to compiler-transform into non-typechecking versions...
 (defun struct-ref (struct offset)
