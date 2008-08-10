@@ -21,7 +21,6 @@
 (require "FASLENV" "ccl:xdump;faslenv")
 
 
-
 (defconstant $primsizes (make-array 23
                                     :element-type '(unsigned-byte 16)
                                     :initial-contents
@@ -313,7 +312,7 @@
 (defun %fasl-nvpackage (s)
   (multiple-value-bind (str len new-p) (%fasl-nvreadstr s)
     (let* ((p (%find-pkg str len)))
-      (%epushval s (or p (%kernel-restart $XNOPKG (if new-p str (%fasl-copystr str len))))))))
+      (%epushval s (or p  (%kernel-restart $XNOPKG (if new-p str (%fasl-copystr str len))))))))
 
 (defun %fasl-vlistX (s dotp)
   (let* ((len (%fasl-read-count s)))
@@ -711,7 +710,7 @@
   (push (string module-name) *modules*))
 
 (deffaslop $fasl-provide (s)
-  (provide (%fasl-expr s)))    
+  (provide (%fasl-expr s)))
 
 (deffaslop $fasl-istruct-cell (s)
   (%epushval s (register-istruct-cell (%fasl-expr-preserve-epush s))))
@@ -1074,7 +1073,8 @@
   #'(lambda ()
       (declare (special *xload-cold-load-functions*
                         *xload-cold-load-documentation*
-                        *xload-startup-file*))
+                        *xload-startup-file*
+                        *early-class-cells*))
       (%set-tcr-toplevel-function (%current-tcr) nil) ; should get reset by l1-boot.
       (setq %system-locks% (%cons-population nil))
       ;; Need to make %ALL-PACKAGES-LOCK% early, so that we can casually
@@ -1082,6 +1082,8 @@
       (setq %all-packages-lock% (make-read-write-lock))
       (dolist (f (prog1 *xload-cold-load-functions* (setq *xload-cold-load-functions* nil)))
         (funcall f))
+      (dolist (pair (prog1 *early-class-cells* (setq *early-class-cells* nil)))
+        (setf (gethash (car pair) %find-classes%) (cdr pair)))
       (dolist (p %all-packages%)
         (%resize-htab (pkg.itab p))
         (%resize-htab (pkg.etab p)))
