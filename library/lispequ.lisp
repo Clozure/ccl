@@ -1233,6 +1233,8 @@
   foreign-object-domain-instance-class-wrapper ; function: returns wrapper of object's class
   foreign-object-domain-class-own-wrapper ; function: returns class own wrapper if class
   foreign-object-domain-slots-vector	; returns slots vector of object or nil
+  foreign-object-domain-class-ordinal   ; returns class ordinal if class
+  foreign-object-domain-set-class-ordinal  ; sets class ordinal if class
   )
 
 ;;; Hash table accessors.
