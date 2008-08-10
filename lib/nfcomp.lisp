@@ -1057,7 +1057,7 @@ Will differ from *compiling-file* during an INCLUDE")
     external-entry-point foreign-variable
     ctype unknown-ctype class-ctype foreign-ctype union-ctype member-ctype 
     array-ctype numeric-ctype hairy-ctype named-ctype constant-ctype args-ctype
-    hash-table))
+    hash-table package-ref type-cell class-cell slot-id))
 
 
 
