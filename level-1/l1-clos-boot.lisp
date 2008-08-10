@@ -1336,6 +1336,10 @@ to replace that class with ~s" name old-class new-class)
 ||#
 
 
+(defglobal *next-class-ordinal* 0)
+
+(defun %next-class-ordinal ()
+  (%atomic-incf-node 1 '*next-class-ordinal* target::symbol.vcell))
 
 ;;; Initialized after built-in-class is made
 (defvar *built-in-class-wrapper* nil)
@@ -1343,16 +1347,32 @@ to replace that class with ~s" name old-class new-class)
 (defun make-class-ctype (class)
   (%istruct 'class-ctype *class-type-class* nil class nil))
 
+(defun %class-ordinal (class &optional no-error)
+  (if (standard-instance-p class)
+    (instance.hash class)
+    (if (typep class 'macptr)
+      (foreign-class-ordinal class)
+      (unless no-error
+        (error "Can't determine ordinal of ~s" class)))))
 
-(defvar *t-class* (let* ((class (%cons-built-in-class 't))
-                         (wrapper (%cons-wrapper class (new-class-wrapper-hash-index)))
-                         (cpl (list class)))
-                    (setf (%class.cpl class) cpl)
-                    (setf (%wrapper-cpl wrapper) cpl)
-                    (setf (%class.own-wrapper class) wrapper)
-                    (setf (%class.ctype class) (make-class-ctype class))
-                    (setf (find-class 't) class)
-                    class))
+(defun (setf %class-ordinal) (new class &optional no-error)
+  (if (standard-instance-p class)
+    (setf (instance.hash class) new)
+    (if (typep class 'macptr)
+      (setf (foreign-class-ordinal class) new)
+      (unless no-error
+        (error "Can't set ordinal of class ~s to ~s" class new)))))
+
+(defvar *t-class* (let* ((class (%cons-built-in-class 't)))
+                    (setf (instance.hash class) 0)
+                    (let* ((cpl (list class))
+                           (wrapper (%cons-wrapper class (new-class-wrapper-hash-index))))
+                      (setf (%class.cpl class) cpl)
+                      (setf (%wrapper-cpl wrapper) cpl)
+                      (setf (%class.own-wrapper class) wrapper)
+                      (setf (%class.ctype class) (make-class-ctype class))
+                      (setf (find-class 't) class)
+                      class)))
 
 (defun compute-cpl (class)
   (flet ((%real-class-cpl (class)
@@ -1390,6 +1410,21 @@ to replace that class with ~s" name old-class new-class)
           (return)))
       cpl)))
 
+(defun make-cpl-bits (cpl)
+  (when cpl
+    (let* ((max 0))
+      (declare (fixnum max))
+      (dolist (class cpl)
+        (let* ((ordinal (instance.hash class)))
+          (declare (fixnum ordinal))
+          (when (> ordinal max)
+            (setq max ordinal))))
+      (let* ((bits (make-array (the fixnum (1+ max)) :element-type 'bit)))
+        (dolist (class cpl bits)
+          (let* ((ordinal (instance.hash class)))
+            (setf (sbit bits ordinal) 1)))))))
+
+
 (defun make-built-in-class (name &rest supers)
   (if (null supers)
     (setq supers (list *t-class*))
@@ -1402,7 +1437,9 @@ to replace that class with ~s" name old-class new-class)
         ;Must be debugging.  Give a try at redefinition...
         (dolist (sup (%class.local-supers class))
           (setf (%class.subclasses sup) (nremove class (%class.subclasses sup)))))
-      (setq class (%cons-built-in-class name)))
+      (progn
+        (setq class (%cons-built-in-class name))
+        (setf (instance.hash class) (%next-class-ordinal))))
     (dolist (sup supers)
       (setf (%class.subclasses sup) (cons class (%class.subclasses sup))))
     (setf (%class.local-supers class) supers)
@@ -1437,6 +1474,7 @@ to replace that class with ~s" name old-class new-class)
   (let ((class (if (find-class name nil)
                  (error "Attempt to remake standard class ~s" name)
                  (%cons-standard-class name metaclass-wrapper))))
+    (setf (instance.hash class) (%next-class-ordinal))
     (if (null supers)
       (setq supers (list *standard-class-class*))
       (do ((supers supers (cdr supers))
@@ -1966,9 +2004,11 @@ to replace that class with ~s" name old-class new-class)
   (defun make-foreign-object-domain (&key index name recognize class-of classp
                                           instance-class-wrapper
                                           class-own-wrapper
-                                          slots-vector)
+                                          slots-vector class-ordinal
+                                          set-class-ordinal)
     (%istruct 'foreign-object-domain index name recognize class-of classp
-              instance-class-wrapper class-own-wrapper slots-vector))
+              instance-class-wrapper class-own-wrapper slots-vector
+              class-ordinal set-class-ordinal))
   
   (let* ((n-foreign-object-domains 0)
          (foreign-object-domains (make-array 10))
@@ -1980,7 +2020,9 @@ to replace that class with ~s" name old-class new-class)
                                            classp
                                            instance-class-wrapper
                                            class-own-wrapper
-                                           slots-vector)
+                                           slots-vector
+                                           class-ordinal
+                                           set-class-ordinal)
       (with-lock-grabbed (foreign-object-domain-lock)
         (dotimes (i n-foreign-object-domains)
           (let* ((already (svref foreign-object-domains i)))
@@ -1992,7 +2034,10 @@ to replace that class with ~s" name old-class new-class)
                     instance-class-wrapper
                     (foreign-object-domain-class-own-wrapper already)
                     class-own-wrapper
-                    (foreign-object-domain-slots-vector already) slots-vector)
+                    (foreign-object-domain-slots-vector already) slots-vector
+                    (foreign-object-domain-class-ordinal already) class-ordinal
+                    (foreign-object-domain-set-class-ordinal already)
+                    set-class-ordinal)
               (return-from register-foreign-object-domain i))))
         (let* ((i n-foreign-object-domains)
                (new (make-foreign-object-domain :index i
@@ -2005,7 +2050,9 @@ to replace that class with ~s" name old-class new-class)
                                                 :class-own-wrapper
                                                 class-own-wrapper
                                                 :slots-vector
-                                                slots-vector)))
+                                                slots-vector
+                                                :class-ordinal class-ordinal
+                                                :set-class-ordinal set-class-ordinal)))
           (incf n-foreign-object-domains)
           (if (= i (length foreign-object-domains))
             (setq foreign-object-domains (%extend-vector i foreign-object-domains (* i 2))))
@@ -2021,6 +2068,10 @@ to replace that class with ~s" name old-class new-class)
       (funcall (foreign-object-domain-class-own-wrapper (svref foreign-object-domains (%macptr-domain p))) p))
     (defun foreign-slots-vector (p)
       (funcall (foreign-object-domain-slots-vector (svref foreign-object-domains (%macptr-domain p))) p))
+    (defun foreign-class-ordinal (p)
+      (funcall (foreign-object-domain-class-ordinal (svref foreign-object-domains (%macptr-domain p))) p))
+    (defun (setf foreign-class-ordinal) (new p)
+      (funcall (foreign-object-domain-set-class-ordinal (svref foreign-object-domains (%macptr-domain p))) p new))
     (defun classify-foreign-pointer (p)
       (do* ((i (1- n-foreign-object-domains) (1- i)))
            ((zerop i) (error "this can't happen"))

@@ -722,6 +722,7 @@
   (add-accessor-methods class direct-slots))
 
 (defmethod initialize-instance :before ((class class) &key &allow-other-keys)
+  (setf (%class-ordinal class) (%next-class-ordinal))
   (setf (%class.ctype class) (make-class-ctype class)))
 
 (defun ensure-class-metaclass-and-initargs (class args)
