@@ -1672,7 +1672,7 @@ governs whether DEFCLASS makes that distinction or not.")
 
 (defmethod make-load-form ((c class-cell) &optional env)
   (declare (ignore env))
-  `(find-class-cell ,(class-cell-name c)))
+  `(find-class-cell ',(class-cell-name c)))
 
 
 
