@@ -286,6 +286,16 @@
     value
     `(require-type ,value ',slot-type)))
 
+(defun make-class-cells-list (class-names)
+  (if (and (consp class-names)
+           (eq (car class-names) 'quote)
+           (consp (cdr class-names))
+           (null (cddr class-names))
+           (listp (cadr class-names))
+           (every #'symbolp (cadr class-names)))
+    `',(mapcar (lambda (name) (find-class-cell name t)) (cadr class-names))
+    class-names))
+
 (defun defstruct-constructor (sd constructor &aux (offset 0)
                                                   (args ())
                                                   (values ())
@@ -299,7 +309,9 @@
       (push nil values)
       (setq offset (%i+ offset 1)))
     (if (fixnump (setq name (ssd-name slot)))
-      (push (wrap-with-type-check (ssd-initform slot) slot) values)
+      (if (eql 0 name)
+        (push (make-class-cells-list (ssd-initform slot)) values) 
+        (push (wrap-with-type-check (ssd-initform slot) slot) values))
       (let* ((temp (make-symbol (symbol-name name))))
         (push (list (list (make-keyword name) temp) (ssd-initform slot)) args)
         (push (wrap-with-type-check temp slot) values)))
@@ -318,10 +330,10 @@
     (push (defstruct-boa-constructor sd boa) list)))
 
 (defun defstruct-boa-constructor (sd boa &aux (args ())
-                                              (used-slots ())
-                                              (values ())
-                                              (offset 0)
-                                              arg-kind slot slot-offset)
+                                     (used-slots ())
+                                     (values ())
+                                     (offset 0)
+                                     arg-kind slot slot-offset)
   (unless (verify-lambda-list (cadr boa))
     (error "Invalid lambda-list in ~S ." (cons :constructor boa)))
   (dolist (arg (cadr boa))
@@ -329,8 +341,11 @@
            (setq arg-kind arg))
           ((setq slot (named-ssd arg (sd-slots sd)))
            (when (or (eq arg-kind '&optional) (eq arg-kind '&key)
-                     ;; for &aux variables, init value is implementation-defined, however it's not supposed
-                     ;; to signal a type error until slot is assigned, so might as well just use the initform.
+                     ;; for &aux variables, init value is
+                     ;; implementation-defined, however it's not
+                     ;; supposed to signal a type error until slot is
+                     ;; assigned, so might as well just use the
+                     ;; initform.
                      (eq arg-kind '&aux))
              (setq arg (list arg (ssd-initform slot))))
            (push slot used-slots))
@@ -345,22 +360,24 @@
       (push nil values)
       (setq offset (%i+ offset 1)))
     (push (if (memq slot used-slots) (ssd-name slot)
+            (if (eql 0 (ssd-name slot))
+              (make-class-cells-list (ssd-initform slot))
               (if (constantp (ssd-initform slot)) (ssd-initform slot)
-                  (progn
-                    (unless (eq arg-kind '&aux)
-                      (push (setq arg-kind '&aux) args))
-                    (push (list (ssd-name slot) (ssd-initform slot)) args)
-                    (ssd-name slot))))
+                (progn
+                  (unless (eq arg-kind '&aux)
+                    (push (setq arg-kind '&aux) args))
+                  (push (list (ssd-name slot) (ssd-initform slot)) args)
+                  (ssd-name slot)))))
           values)
     (setq offset (%i+ offset 1)))
   (setq values (mapcar #'wrap-with-type-check (nreverse values) (sd-slots sd)))
   `(defun ,(car boa) ,(nreverse args)
-     ,(case (setq slot (defstruct-reftype (sd-type sd)))
-          (#.$defstruct-nth `(list ,@values))
-          (#.target::subtag-simple-vector `(vector ,@values))
-          ((#.target::subtag-struct #.$defstruct-struct)
-           `(gvector :struct ,@values))
-          (t `(uvector ,slot ,@values)))))
+    ,(case (setq slot (defstruct-reftype (sd-type sd)))
+           (#.$defstruct-nth `(list ,@values))
+           (#.target::subtag-simple-vector `(vector ,@values))
+           ((#.target::subtag-struct #.$defstruct-struct)
+            `(gvector :struct ,@values))
+           (t `(uvector ,slot ,@values)))))
 
 (defun defstruct-copier (sd copier env)
   `(progn
@@ -369,17 +386,18 @@
      (fset ',copier
            ,(if (eq (sd-type sd) 'list) '#'copy-list '#'copy-uvector))
      (record-source-file ',copier 'function)))
-;;; (put 'COPY-SHIP 'nx-alias 'copy-list)
+; (put 'COPY-SHIP 'nx-alias 'copy-list)
 
 (defun defstruct-predicate (sd named predicate &aux (arg (gensym)))
   (let* ((sd-name (sd-name sd))
          (body
           (case (sd-type sd)
-            ((nil) `(structure-typep ,arg ',sd-name))
+            ((nil) `(structure-typep ,arg ',(find-class-cell sd-name t)))
             ((list) `(and (consp ,arg) (eq (nth ,named ,arg) ',sd-name)))
             (t `(and (uvector-subtype-p ,arg ,(defstruct-reftype (sd-type sd)))
                (< ,named (uvsize ,arg))
                (eq (uvref ,arg ,named) ',sd-name))))))
-    `((setf (symbol-function ',predicate) #'(lambda (,arg) ,body)))))
+    `((setf (symbol-function ',predicate) #'(lambda (,arg) ,body))
+      (record-source-file ',predicate 'function))))
 
 ; End of defstruct-lds.lisp
