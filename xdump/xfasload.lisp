@@ -1100,10 +1100,8 @@
     (setf (xload-symbol-value (xload-copy-symbol '*xload-cold-load-functions*))
           (xload-save-list (setq *xload-cold-load-functions*
                                  (nreverse *xload-cold-load-functions*))))
-    #+notyet
-    (when *xload-early-class-cells*
-      (setf (xload-symbol-value (xload-copy-symbol '*early-class-cells*))
-            (xload-save-list (mapcar #'xload-save-list *xload-early-class-cells*))))
+    (setf (xload-symbol-value (xload-copy-symbol '*early-class-cells*))
+          (xload-save-list (mapcar #'xload-save-list *xload-early-class-cells*)))
     (setf (xload-symbol-value (xload-copy-symbol '*istruct-cells*))
           *xload-early-istruct-cells*)
     (let* ((svnrev (local-svn-revision))
@@ -1407,8 +1405,7 @@
 
 (defxloadfaslop $fasl-eval (s)
   (let* ((expr (%fasl-expr-preserve-epush s)))
-    (cond #+notyet
-          ((and (xload-target-consp expr)
+    (cond ((and (xload-target-consp expr)
                 (eq (xload-lookup-symbol-address (xload-car expr))
                     'find-class-cell)
                 (xload-target-consp (xload-car (xload-cdr expr)))
