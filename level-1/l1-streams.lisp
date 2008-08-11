@@ -3317,7 +3317,9 @@
                    (:socket
                     #+linux-target nominal
                     #-linux-target
-                    (int-getsockopt fd #$SOL_SOCKET #$SO_SNDLOWAT))
+                    (int-getsockopt fd #$SOL_SOCKET
+                                    #+solaris-target #$SO_SNDBUF
+                                    #-solaris-target #$SO_SNDLOWAT))
                    ((:character-special :tty) (#_fpathconf fd #$_PC_MAX_INPUT))
                    (t nominal))))
     (case (subtag-bytes (element-type-subtype element-type) 1)
@@ -3325,6 +3327,9 @@
       (2 (ash octets -1))
       (4 (ash octets -2))
       (8 (ash octets -3)))))
+
+
+
 
 
 (defun milliseconds-until-deadline (deadline ioblock)
