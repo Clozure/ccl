@@ -1419,6 +1419,8 @@ result-type-specifer is :VOID or NIL"
 
 
 
+(defun %cons-foreign-variable (name type &optional container)
+  (%istruct 'foreign-variable nil name type container))
 
 (defmethod make-load-form ((fv foreign-variable) &optional env)
   (declare (ignore env))

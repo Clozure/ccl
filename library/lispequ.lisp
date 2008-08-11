@@ -1389,8 +1389,6 @@
   fv.container                          ; containing library
   )
 
-(defun %cons-foreign-variable (name type &optional container)
-  (%istruct 'foreign-variable nil name type container))
 
 (def-accessor-macros %svref
     nil					;'shlib
