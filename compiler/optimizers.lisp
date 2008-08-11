@@ -1529,45 +1529,56 @@
              (predicate (if (typep type 'symbol) (type-predicate type))))
         (if (and predicate (symbolp predicate))
           `(,predicate ,thing)
-          (or (optimize-ctypep thing ctype)
-              (cond ((symbolp type)
-                     (cond ((%deftype-expander type)
-                            ;; recurse here, rather than returning the
-                            ;; partially-expanded form mostly since it doesn't
-                            ;; seem to further optimize the result otherwise
-                            (let ((expanded-type (type-expand type)))
-                              (or (optimize-typep thing expanded-type env)
-                                  ;; at least do the first expansion
-                                  `(typep ,thing ',expanded-type))))
-                           ((structure-class-p type env)
-                            `(structure-typep ,thing ',type))
-                           ((find-class type nil env)
-                            `(class-cell-typep ,thing (load-time-value (find-class-cell ',type t))))
-                           ((info-type-builtin type) ; bootstrap troubles here?
+          (let* ((pair (assq type *istruct-cells*))
+                 (class (and pair (%wrapper-class (istruct-cell-info pair)))))
+            (if (and class (not (%class-direct-subclasses class)))
+              `(istruct-typep ,thing ',type)              
+              (or (optimize-ctypep thing ctype)
+                  (cond ((symbolp type)
+                         (cond ((%deftype-expander type)
+                                ;; recurse here, rather than returning the
+                                ;; partially-expanded form mostly since it doesn't
+                                ;; seem to further optimize the result otherwise
+                                (let ((expanded-type (type-expand type)))
+                                  (or (optimize-typep thing expanded-type env)
+                                      ;; at least do the first expansion
+                                      `(typep ,thing ',expanded-type))))
+                               ((structure-class-p type env)
+                                `(structure-typep ,thing ',(find-class-cell type t)))
+                               ((find-class type nil env)
+                                (let* ((class (find-class type nil nil))
+                                       (fname 
+                                        (if (or (null class)
+                                                (and (subtypep class 'standard-object)
+                                                     (not (subtypep class 'foreign-standard-object))))
+                                          'std-instance-class-cell-typep
+                                          'class-cell-typep)))
+                                  `(,fname ,thing (load-time-value (find-class-cell ',type t)))))
+                               ((info-type-builtin type) ; bootstrap troubles here?
+                                `(builtin-typep ,thing (load-time-value (find-builtin-cell ',type))))
+                               (t nil)))
+                        ((consp type)
+                         (cond
+                           ((info-type-builtin type) ; byte types
                             `(builtin-typep ,thing (load-time-value (find-builtin-cell ',type))))
-                           (t nil)))
-                    ((consp type)
-                     (cond
-                       ((info-type-builtin type) ; byte types
-                        `(builtin-typep ,thing (load-time-value (find-builtin-cell ',type))))
-                       (t
-                        (case (%car type)
-                          (satisfies `(funcall ',(cadr type) ,thing))
-                          (eql `(eql ,thing ',(cadr type)))
-                          (member `(not (null (member ,thing ',(%cdr type)))))
-                          (not `(not (typep ,thing ',(cadr type))))
-                          ((or and)
-                           (let ((thing-sym (gensym)))
-                             `(let ((,thing-sym ,thing))
-                               (,(%car type)
-                                ,@(mapcar #'(lambda (type-spec)
-                                              (or (optimize-typep thing-sym type-spec env)
-                                                  `(typep ,thing-sym ',type-spec)))
-                                          (%cdr type))))))
-                          ((signed-byte unsigned-byte integer mod) ; more byte types
-                           `(builtin-typep ,thing (load-time-value (find-builtin-cell ',type))))
-                          (t nil)))))
-                    (t nil))))))))
+                           (t
+                            (case (%car type)
+                              (satisfies `(funcall ',(cadr type) ,thing))
+                              (eql `(eql ,thing ',(cadr type)))
+                              (member `(not (null (member ,thing ',(%cdr type)))))
+                              (not `(not (typep ,thing ',(cadr type))))
+                              ((or and)
+                               (let ((thing-sym (gensym)))
+                                 `(let ((,thing-sym ,thing))
+                                   (,(%car type)
+                                    ,@(mapcar #'(lambda (type-spec)
+                                                  (or (optimize-typep thing-sym type-spec env)
+                                                      `(typep ,thing-sym ',type-spec)))
+                                              (%cdr type))))))
+                              ((signed-byte unsigned-byte integer mod) ; more byte types
+                               `(builtin-typep ,thing (load-time-value (find-builtin-cell ',type))))
+                              (t nil)))))
+                        (t nil))))))))))
 
 (define-compiler-macro typep  (&whole call &environment env thing type &optional e)
   (if (quoted-form-p type)
@@ -1578,6 +1589,16 @@
     (if (eq type t)
       `(progn ,thing t)
       call)))
+
+(define-compiler-macro structure-typep (&whole w thing type)
+  (if (not (quoted-form-p type))
+    (progn
+      (warn "Non-qouted structure-type in ~s" w)
+      w)
+    (let* ((type (nx-unquote type)))
+      (if (symbolp type)
+        `(structure-typep ,thing ',(find-class-cell type t))
+        w))))
 
 (define-compiler-macro true (&rest args)
   `(progn
@@ -1721,7 +1742,13 @@
       whole)))
 
 
-
+(define-compiler-macro slot-boundp (&whole whole instance slot-name-form)
+  (let* ((name (and (quoted-form-p slot-name-form)
+                    (typep (cadr slot-name-form) 'symbol)
+                    (cadr slot-name-form))))
+    (if name
+      `(slot-id-boundp ,instance (load-time-value (ensure-slot-id ',name)))
+      whole)))
 
 (defsynonym %get-unsigned-byte %get-byte)
 (defsynonym %get-unsigned-word %get-word)
@@ -1877,6 +1904,111 @@
     whole))
 
 
+(define-compiler-macro write-string (&environment env &whole call
+                                                  string &optional (stream nil) &rest keys)
+  (if (nx-form-typep string 'simple-string env)
+    (if keys
+      `((lambda (string stream &key start end) 
+          (write-simple-string string stream start end))
+        ,string ,stream ,@keys)
+      `(write-simple-string ,string ,stream 0 nil))
+    call))
+
+(define-compiler-macro format (&environment env &whole call stream string &rest args)
+  (if (stringp string)
+    (cond ((string-equal string "~a")
+           (destructuring-bind (object) args
+             (cond ((null stream)
+                    `(princ-to-string ,object))
+                   ((or (eq stream t) (nx-form-typep stream 'stream env))
+                    `(progn (princ ,object ,(and (neq stream t) stream)) nil))
+                   (t `(let ((stream ,stream)
+                             (object ,object))
+                         (if (or (null stream) (stringp stream))
+                           (format-to-string stream ,string object)
+                           (progn (princ object (and (neq stream t) stream)) nil)))))))
+          ((string-equal string "~s")
+           (destructuring-bind (object) args
+             (cond ((null stream)
+                    `(prin1-to-string ,object))
+                   ((or (eq stream t) (nx-form-typep stream 'stream env))
+                    `(progn (prin1 ,object ,(and (neq stream t) stream)) nil))
+                   (t `(let ((stream ,stream)
+                             (object ,object))
+                         (if (or (null stream) (stringp stream))
+                           (format-to-string stream ,string object)
+                           (progn (prin1 object (and (neq stream t) stream)) nil)))))))
+          ((and (null (position #\~ string)) (null args))
+           (cond ((null stream)
+                  string)
+                 ((or (eq stream t) (nx-form-typep stream 'stream env))
+                  `(progn (write-string ,string ,(and (neq stream t) stream)) nil))
+                 (t `(let ((stream ,stream))
+                       (if (or (null stream) (stringp stream))
+                         (format-to-string stream ,string)
+                         (progn (write-string ,string (and (neq stream t) stream)) nil))))))
+          ((optimize-format-call stream string args env))
+          (t call))
+    call))
+
+(defun count-known-format-args (string start end)
+  (declare (fixnum start end))
+  (loop with count = 0
+        do (setq start (position #\~ string :start start :end end))
+        when (null start)
+          do (return count)
+        unless (< (incf start) end)
+          do (return nil)
+        do (let ((ch (aref string start)))
+             (cond ((memq ch '(#\a #\A #\s #\S)) (incf count))
+                   ((memq ch '(#\~ #\% #\&)))
+                   (t (return nil)))
+             (incf start))))
+
+(defun optimize-format-call (stream string args env)
+  (let* ((start (or (search "~/" string)
+                    (return-from optimize-format-call nil)))
+         (ipos (+ start 2))
+         (epos (or (position #\/ string :start ipos)
+                   (return-from optimize-format-call nil)))
+         (nargs (or (count-known-format-args string 0 start)
+                    (return-from optimize-format-call nil))))
+    (when (and
+           ;; Must be able to split args
+           (< nargs (length args))
+           ;; Don't deal with packages
+           (not (position #\: string :start ipos :end epos)))
+      (let* ((func (intern (string-upcase (subseq string ipos epos)) :cl-user))
+             (prev (and (< 0 start) (subseq string 0 start)))
+             (prev-args (subseq args 0 nargs))
+             (rest (and (< (1+ epos) (length string)) (subseq string (1+ epos))))
+             (rest-args (nthcdr nargs args))
+             (obj (pop rest-args))
+             (stream-var (gensym))
+             (body `(,@(and prev `((format ,stream-var ,prev ,@prev-args)))
+                       (,func ,stream-var ,obj nil nil)
+                       ,(if rest `(format ,stream-var ,rest ,@rest-args) `nil))))
+        (cond ((null stream)
+               `(with-output-to-string (,stream-var)
+                  (declare (type stream ,stream-var))
+                  ,@body))
+              ((or (eq stream t) (nx-form-typep stream 'stream env))
+               `(let ((,stream-var ,(if (eq stream t) '*standard-output* stream)))
+                  (declare (type stream ,stream-var))
+                  ,@body))
+              (t
+               `(let ((,stream-var ,stream))
+                  (if (or (null ,stream-var) (stringp ,stream-var))
+                    (format-to-string ,stream-var ,string ,@args)
+                    (let ((,stream-var
+                           (if (eq ,stream-var t) *standard-output* ,stream-var)))
+                      ;; For the purposes of body, it's ok to assume stream-var
+                      ;; is a stream. method dispatch will signal any errors
+                      ;; at runtime if it's not true...
+                      (declare (type stream ,stream-var))
+                      ,@body)))))))))
+
+
 (define-compiler-macro sbit (&environment env &whole call v &optional sub0 &rest others)
   (if (and sub0 (null others))
     `(aref (the simple-bit-vector ,v) ,sub0)
@@ -1930,6 +2062,33 @@
       (if (= ,typecode ,fixnum-tag)
         t
         (= ,typecode ,bignum-tag)))))
+
+(define-compiler-macro realp (&whole call x)
+  (if (not (eq *host-backend* *target-backend*))
+    call
+    (let* ((typecode (gensym)))
+      `(let* ((,typecode (typecode ,x)))
+        (declare (type (unsigned-byte 8) ,typecode))
+        #+ppc32-target
+        (or (= ,typecode ppc32::tag-fixnum)
+         (and (>= ,typecode ppc32::min-numeric-subtag)
+          (<= ,typecode ppc32::max-real-subtag)))
+        #+ppc64-target
+        (if (<= ,typecode ppc64::subtag-double-float)
+          (logbitp (the (integer 0 #.ppc64::subtag-double-float) ,typecode)
+                   (logior (ash 1 ppc64::tag-fixnum)
+                           (ash 1 ppc64::subtag-single-float)
+                           (ash 1 ppc64::subtag-double-float)
+                           (ash 1 ppc64::subtag-bignum)
+                           (ash 1 ppc64::subtag-ratio))))
+        #+x8664-target
+        (if (<= ,typecode x8664::subtag-double-float)
+          (logbitp (the (integer 0 #.x8664::subtag-double-float) ,typecode)
+                   (logior (ash 1 x8664::tag-fixnum)
+                           (ash 1 x8664::subtag-bignum)
+                           (ash 1 x8664::tag-single-float)
+                           (ash 1 x8664::subtag-double-float)
+                           (ash 1 x8664::subtag-ratio))))))))
 
 (define-compiler-macro %composite-pointer-ref (size pointer offset)
   (if (constantp size)
@@ -2103,7 +2262,6 @@
           (instance.slots ,itemp)
           (%non-standard-instance-slots ,itemp ,typecode))))))
 
-
 (define-compiler-macro instance-class-wrapper (instance)
   (let* ((itemp (gensym)))
     `(let* ((,itemp ,instance))
@@ -2116,12 +2274,52 @@
 (define-compiler-macro %class-of-instance (instance)
   `(%wrapper-class (instance.class-wrapper ,instance)))
 
+(define-compiler-macro standard-object-p (thing)
+  (let* ((temp (gensym))
+         (typecode (gensym)))
+    `(let* ((,temp ,thing)
+            (,typecode (typecode ,temp)))
+      (declare (type (unsigned-byte 8) ,typecode))
+      (if (= ,typecode ,(nx-lookup-target-uvector-subtag :instance))
+        (instance.class-wrapper ,temp)
+        (if (= ,typecode ,(nx-lookup-target-uvector-subtag :macptr))
+          (foreign-instance-class-wrapper ,temp))))))
+
+(define-compiler-macro %class-ordinal (class &optional error)
+  (let* ((temp (gensym)))
+    `(let* ((,temp ,class))
+      (if (eql (the (unsigned-byte 8) (typecode ,temp))
+               ,(nx-lookup-target-uvector-subtag :instance))
+        (instance.hash ,temp)
+        (funcall '%class-ordinal ,temp ,error)))))
+
+(define-compiler-macro native-class-p (class)
+  (let* ((temp (gensym)))
+    `(let* ((,temp ,class))
+      (if (eql (the (unsigned-byte 8) (typecode ,temp))
+               ,(nx-lookup-target-uvector-subtag :instance))
+        (< (the fixnum (instance.hash ,temp)) max-class-ordinal)))))
+  
+
+
 (define-compiler-macro unsigned-byte-p (x)
   (if (typep (nx-unquote x) 'unsigned-byte)
     t
     (let* ((val (gensym)))
       `(let* ((,val ,x))
         (and (integerp ,val) (not (< ,val 0)))))))
+
+(define-compiler-macro subtypep (&whole w t1 t2 &optional rtenv  &environment env)
+  (if (and (consp t1)
+           (consp (cdr t1))
+           (null (cddr t1))
+           (eq (car t1) 'type-of))
+    ;; People really write code like this.  I've seen it.
+    `(typep ,(cadr t1) ,t2 ,@(and rtenv `(,rtenv)))
+    (if (and (null rtenv) (quoted-form-p t2))
+      `(cell-csubtypep-2 ,t1 (load-time-value (register-type-cell ,t2)))
+      w)))
+
 
 (define-compiler-macro string-equal (&whole w s1 s2 &rest keys)
   (if (null keys)
@@ -2132,7 +2330,6 @@
         (lambda (,s1-arg ,s2-arg &key start1 end1 start2 end2)
           (%bounded-string-equal ,s1-arg ,s2-arg start1 end1 start2 end2))
         ,s1 ,s2 ,@keys))))
-
 
 ;;; Try to use "package-references" to speed up package lookup when
 ;;; a package name is used as a constant argument to some functions.
