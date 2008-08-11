@@ -148,7 +148,7 @@
 (defvar *hash-table-class*
   (progn
 ;    #+sparc-target (dbg)
-    (make-built-in-class 'hash-table *istruct-class*)))
+    (find-class 'hash-table)))
 
 (setf (type-predicate 'hash-table) 'hash-table-p)
 
