@@ -994,6 +994,22 @@
 
 
 
+(defun %check-type (value typespec placename typename)
+  (let ((condition (make-condition 'type-error 
+                                   :datum value
+                                   :expected-type typespec)))
+    (if typename
+      (setf (slot-value condition 'format-control)
+            (format nil "value ~~S is not ~A (~~S)." typename)))
+    (restart-case (%error condition nil (%get-frame-ptr))
+                  (store-value (newval)
+                               :report (lambda (s)
+                                         (format s "Assign a new value of type ~a to ~s" typespec placename))
+                               :interactive (lambda ()
+                                              (format *query-io* "~&New value for ~S :" placename)
+                                              (list (eval (read))))
+                               newval))))
+
 
 ; This has to be defined fairly early (assuming, of course, that it "has" to be defined at all ...
 
