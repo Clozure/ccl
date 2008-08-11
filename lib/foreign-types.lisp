@@ -1410,6 +1410,8 @@ result-type-specifer is :VOID or NIL"
           (format out " (#x~16,'0x) " (if (typep addr 'integer)
                                         (logand #xffffffffffffffff (ash addr 2))
                                         (%ptr-to-int addr))))
+	#+x8632-target
+	(format out " (#x~8,'0x) " addr)
         #+x8664-target
         (format out " (#x~16,'0x) " addr)
 	(format out " {unresolved} "))
