@@ -64,6 +64,7 @@ handle_uuo(ExceptionInformation *, opcode, pc);
    versions.  See below for details.
 */
 #define DarwinSigReturn(context)
+#define SIGRETURN(context)
 #endif
 
 #ifdef DARWIN
@@ -127,7 +128,11 @@ handle_uuo(ExceptionInformation *, opcode, pc);
 #else
 #define DarwinSigReturn(x) (UC_MCONTEXT(x)->ss.xer)^=0x80
 #endif
+#define SIGRETURN(context) DarwinSigReturn(context)
 #endif
+
+
+
 
 
 
