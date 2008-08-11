@@ -2069,10 +2069,10 @@
     (let* ((typecode (gensym)))
       `(let* ((,typecode (typecode ,x)))
         (declare (type (unsigned-byte 8) ,typecode))
-        #+ppc32-target
-        (or (= ,typecode ppc32::tag-fixnum)
-         (and (>= ,typecode ppc32::min-numeric-subtag)
-          (<= ,typecode ppc32::max-real-subtag)))
+        #+(or ppc32-target x8632-target)
+        (or (= ,typecode target::tag-fixnum)
+         (and (>= ,typecode target::min-numeric-subtag)
+          (<= ,typecode target::max-real-subtag)))
         #+ppc64-target
         (if (<= ,typecode ppc64::subtag-double-float)
           (logbitp (the (integer 0 #.ppc64::subtag-double-float) ,typecode)
