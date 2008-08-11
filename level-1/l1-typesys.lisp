@@ -177,6 +177,13 @@
   (declare (ignore env))
   `(specifier-type ',(type-specifier c)))
 
+(defmethod make-load-form ((cell type-cell) &optional env)
+  (declare (ignore env))
+  `(register-type-cell `,(type-cell-type-specifier cell)))
+
+(defmethod print-object ((cell type-cell) stream)
+  (print-unreadable-object (cell stream :type t :identity t)
+    (format stream "for ~s" (type-cell-type-specifier cell))))
 
 (defun make-key-info (&key name type)
   (%istruct 'key-info name type))
@@ -1105,6 +1112,28 @@
 	 (invoke-type-method :simple-subtypep :complex-subtypep-arg2
 			     type1 type2
 			     :complex-arg1 :complex-subtypep-arg1))))
+
+;;; Type1 is a type-epecifier; type2 is a TYPE-CELL which may cache
+;;; a mapping between a type-specifier and a CTYPE.
+(defun cell-csubtypep-2 (type-specifier type-cell)
+  (let* ((type1 (specifier-type type-specifier))
+         (type2 (or (type-cell-ctype type-cell)
+                    (let* ((ctype (specifier-type
+                                   (type-cell-type-specifier type-cell))))
+                      (when (cacheable-ctype-p ctype)
+                        (setf (type-cell-ctype type-cell) ctype))
+                      ctype))))
+    (cond ((or (eq type1 type2)
+               (eq type1 *empty-type*)
+               (eq type2 *wild-type*))
+           (values t t))
+          (t
+           (invoke-type-method :simple-subtypep :complex-subtypep-arg2
+                               type1 type2
+                               :complex-arg1 :complex-subtypep-arg1)))))
+                              
+
+
 ;;; Type=  --  Interface
 ;;;
 ;;;    If two types are definitely equivalent, return true.  The second value
@@ -1644,7 +1673,8 @@
             specifier))
 
 (defun hairy-ctype-p (x)
-  (istruct-typep x 'hairy-ctype))
+  (or (istruct-typep x 'hairy-ctype)
+      (istruct-typep x 'unknown-ctype)))
 
 (setf (type-predicate 'hairy-ctype) 'hairy-ctype-p)
 
@@ -3595,7 +3625,11 @@
 	   (satisfies
 	    (let ((fun (second hairy-spec)))
 	      (cond ((and (symbolp fun) (fboundp fun))
-		     (values (not (null (ignore-errors (funcall fun obj)))) t))
+                     ;; Binding *BREAK-ON-SIGNALS* here is a modularity
+                     ;; violation intended to improve the signal-to-noise
+                     ;; ratio on a mailing list.
+		     (values (not (null (let* ((*break-on-signals* nil))
+                                          (ignore-errors (funcall fun obj))))) t))
 		    (t
 		     (values nil nil))))))))))
 

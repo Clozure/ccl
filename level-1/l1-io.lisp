@@ -101,6 +101,26 @@ and END to OUTPUT-STREAM."
         (stream-write-string stream string start end)))
   string))
 
+(defun write-simple-string (string output-stream start end)
+  "Write the characters of the subsequence of simple-string STRING bounded by START
+and END to OUTPUT-STREAM."
+  (let* ((stream (%real-print-stream output-stream))
+         (string (the simple-string string))) ;; typecheck at high safety.
+    (if (typep stream 'basic-stream)
+      (let* ((ioblock (basic-stream-ioblock stream))
+             (start (or start 0)))
+        (with-ioblock-output-locked (ioblock) 
+          (if (and (eq start 0) (null end))
+            (funcall (ioblock-write-simple-string-function ioblock)
+                     ioblock string 0 (length string))
+            (let* ((end (check-sequence-bounds string start end)))
+              (funcall (ioblock-write-simple-string-function ioblock)
+                       ioblock string start  (%i- end start))))))
+      (if (and (not start) (not end))
+        (stream-write-string stream string)
+        (stream-write-string stream string start end)))
+    string))
+
 (defun write-line (string &optional output-stream
                           &key (start 0) (end (length string)))
   "Write the characters of the subsequence of STRING bounded by START
@@ -941,7 +961,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
 (defun write-escaped-string (string stream &optional (delim #\"))
   (declare (type string string) (type character delim)
            (type stream stream))
-  (stream-write-char stream delim)
+  (write-char delim stream)
   (do* ((limit (length string))
         (i 0 (1+ i)))
        ((= i limit))
@@ -949,9 +969,9 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
     (let* ((char (char string i))
            (needs-escape? (%char-needs-escape-p char #\\ delim)))
       (if needs-escape?
-          (stream-write-char stream #\\))
-      (stream-write-char stream char)))
-  (stream-write-char stream delim))
+          (write-char #\\ stream))
+      (write-char char stream)))
+  (write-char delim stream))
 
 
 ;;;; ----------------------------------------------------------------------

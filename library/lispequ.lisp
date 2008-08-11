@@ -947,7 +947,9 @@
 
 (defmacro %cons-wrapper (class &optional 
                                (hash-index '(new-class-wrapper-hash-index)))
-  `(%istruct 'class-wrapper ,hash-index ,class nil nil #'slot-id-lookup-no-slots nil nil #'%slot-id-ref-missing #'%slot-id-set-missing nil))
+  (let* ((c (gensym)))
+  `(let* ((,c ,class))
+    (%istruct 'class-wrapper ,hash-index ,c nil nil #'slot-id-lookup-no-slots nil nil #'%slot-id-ref-missing #'%slot-id-set-missing nil (%class-ordinal ,c t) nil))))
 
 
 (defmacro %instance-class (instance)
@@ -1317,7 +1319,7 @@
 
 ;;; "basic" (e.g., builtin, non-extensible) streams.
 (def-accessors (basic-stream) %svref
-  basic-stream.wrapper                  ; a class wrapper
+  basic-stream.wrapper                  ; a class wrapper object
   basic-stream.flags                    ; fixnum; bits.
   basic-stream.state                    ; typically an ioblock
   basic-stream.info                     ; a plist for less-often-used things.
@@ -1387,6 +1389,8 @@
   fv.container                          ; containing library
   )
 
+(defun %cons-foreign-variable (name type &optional container)
+  (%istruct 'foreign-variable nil name type container))
 
 (def-accessor-macros %svref
     nil					;'shlib
@@ -1481,34 +1485,32 @@
   xp-string-stream ;; string-stream for output until first circularity (in case none)
   )
 
-  (def-accessors (afunc) %svref
-    ()                                    ; 'afunc
-    afunc-acode
-    afunc-parent
-    afunc-vars
-    afunc-inherited-vars
-    afunc-blocks
-    afunc-tags
-    afunc-inner-functions
-    afunc-name
-    afunc-bits
-    afunc-lfun
-    afunc-environment
-    afunc-lambdaform
-    afunc-argsword
-    afunc-ref-form
-    afunc-warnings
-    afunc-fn-refcount
-    afunc-fn-downward-refcount
-    afunc-all-vars
-    afunc-callers
-    afunc-vcells
-    afunc-fcells
-    afunc-fwd-refs
-    afunc-lfun-info
-    afunc-linkmap)
-
-(declaim (inline %make-afunc))
+(def-accessors (afunc) %svref
+  ()                                    ; 'afunc
+  afunc-acode
+  afunc-parent
+  afunc-vars
+  afunc-inherited-vars
+  afunc-blocks
+  afunc-tags
+  afunc-inner-functions
+  afunc-name
+  afunc-bits
+  afunc-lfun
+  afunc-environment
+  afunc-lambdaform
+  afunc-argsword
+  afunc-ref-form
+  afunc-warnings
+  afunc-fn-refcount
+  afunc-fn-downward-refcount
+  afunc-all-vars
+  afunc-callers
+  afunc-vcells
+  afunc-fcells
+  afunc-fwd-refs
+  afunc-lfun-info
+  afunc-linkmap)
 
 (defmacro %make-afunc ()
   `(%istruct 'afunc

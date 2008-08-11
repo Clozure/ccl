@@ -268,6 +268,93 @@
     (multiple-value-bind (expansion win) (gethash sym *symbol-macros*)
       (if win (values (expand-it expansion) t) (values sym nil)))))
 
+(defun macroexpand-all (form &optional (env (new-lexical-environment)))
+  "Recursivly expand all macros in FORM."
+  (flet ((mexpand (forms env)
+           (mapcar (lambda (form) (macroexpand-all form env)) forms)))
+    (macrolet ((destructuring-bind-body (binds form &body body)
+                 (if (eql '&body (first (last binds)))
+                   (let ((&body (gensym "&BODY")))
+                     `(destructuring-bind ,(append (butlast binds) (list '&body &body))
+                          ,form
+                        (multiple-value-bind (body decls)
+                            (parse-body ,&body env nil)
+                          ,@body)))
+                   `(destructuring-bind ,binds ,form ,@body))))
+      (multiple-value-bind (expansion win)
+          (macroexpand-1 form env)
+        (if win
+          (macroexpand-all expansion env)
+          (if (atom form)
+            form
+            (case (first form)
+              (macrolet
+               (destructuring-bind-body (macros &body) (rest form)
+                (setf env (augment-environment env
+                                               :macro (mapcar (lambda (macro)
+                                                                (destructuring-bind
+                                                                      (name arglist &body body)
+                                                                    macro
+                                                                  (list name (enclose (parse-macro name arglist body env)))))
+                                                              macros)
+                                               :declare (decl-specs-from-declarations decls)))
+                (let ((body (mexpand body env)))
+                  (if decls
+                    `(locally ,@decls ,@body)
+                    `(progn ,@body)))))
+              (symbol-macrolet
+               (destructuring-bind-body (symbol-macros &body) (rest form)
+                (setf env (augment-environment env :symbol-macro symbol-macros :declare (decl-specs-from-declarations decls)))
+                (let ((body (mexpand body env)))
+                  (if decls
+                    `(locally ,@decls ,@body)
+                    `(progn ,@body)))))
+              ((let let* compiler-let)
+               (destructuring-bind-body (bindings &body) (rest form)
+                `(,(first form)
+                   ,(mapcar (lambda (binding)
+                              
+                              (if (listp binding)
+                                (list (first binding) (macroexpand-all (second binding) env))
+                                binding))
+                            bindings)
+                   ,@decls
+                   ,@(mexpand body env))))
+              ((flet labels)
+               (destructuring-bind-body (bindings &body) (rest form)
+                `(,(first form)
+                   ,(mapcar (lambda (binding)
+                              (list* (first binding) (cdr (macroexpand-all `(lambda ,@(rest binding)) env))))
+                            bindings)
+                   ,@decls
+                   ,@(mexpand body env))))
+              (nfunction (list* 'nfunction (second form) (macroexpand-all (third form) env)))
+              (function
+                 (if (and (consp (second form))
+                          (eql 'lambda (first (second form))))
+                   (destructuring-bind (lambda arglist &body body&decls)
+                       (second form)
+                     (declare (ignore lambda))
+                     (multiple-value-bind (body decls)
+                         (parse-body body&decls env)
+                       `(lambda ,arglist ,@decls ,@(mexpand body env))))
+                   form))
+              ((eval-when the locally block return-from)
+                 (list* (first form) (second form) (mexpand (cddr form) env)))
+              (setq
+                 `(setq ,@(loop for (name value) on (rest form) by #'cddr
+                                collect name
+                                collect (macroexpand-all value env))))
+              ((go quote) form)
+              ((fbind with-c-frame with-variable-c-frame ppc-lap-function)
+               (error "Unable to macroexpand ~S." form))
+              ((catch if load-time-value multiple-value-call multiple-value-prog1 progn
+                progv tagbody throw unwind-protect)
+               (cons (first form) (mexpand (rest form) env)))
+              (t
+               ;; need to check that (first form) is either fboundp or a local function...
+               (cons (first form) (mexpand (rest form) env))))))))))
+
 (defun macroexpand-1 (form &optional env &aux fn)
   "If form is a macro (or symbol macro), expand it once. Return two values,
    the expanded form and a T-or-NIL flag indicating whether the form was, in
@@ -316,9 +403,6 @@
            (definition-environment env t))
     lambda-expression))
 
-
-        
-
 ;;; This is different from AUGMENT-ENVIRONMENT.
 ;;; If "info" is a lambda expression, then
 ;;;  record a cons whose CAR is (encoded-lfun-bits . keyvect) and whose cdr
@@ -334,8 +418,7 @@
     (record-function-info name info env))
   name)
 
-
-;;; And this is different from FUNCTION-INFORMATION.
+; And this is different from FUNCTION-INFORMATION.
 (defun retrieve-environment-function-info (name env)
  (let ((defenv (definition-environment env)))
    (if defenv (assq (maybe-setf-function-name name) (defenv.defined defenv)))))

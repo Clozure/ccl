@@ -39,12 +39,22 @@
     (cond ((eql typecode target::subtag-instance) (instance.slots instance))
           (t (%non-standard-instance-slots instance typecode)))))
 
+
+;;; True if X is a class but not a foreign-class.
+(defun native-class-p (x)
+  (if (%standard-instance-p x)
+    (< (the fixnum (instance.hash x)) max-class-ordinal)))
+
 (defun %class-name (class)
-  (%class.name class))
+  (if (native-class-p class)
+    (%class.name class)
+    (class-name class)))
 
 (defun %class-info (class)
-  (%class.info class))
-
+  (if (native-class-p class)
+    (%class.info class)
+    (class-info class)))
+  
 
 (defun %class-kernel-p (class)
   (car (%class-info class)))
@@ -60,14 +70,15 @@
 
 
 (defun %class-own-wrapper (class)
-  (%class.own-wrapper class))
+  (if (native-class-p class)
+    (%class.own-wrapper class)
+   (class-own-wrapper class)))
 
 (defun (setf %class-own-wrapper) (new class)
   (setf (%class.own-wrapper class) new))
 
 (defun %class-alist (class)
-  (if (typep class 'slots-class)
-    (%class.alist class)))
+  (%class.alist class))
 
 (defun (setf %class-alist) (new class)
   (if (typep class 'slots-class)
@@ -75,23 +86,30 @@
     new))
 
 (defun %class-slots (class)
-  (if (typep class 'slots-class)
-    (%class.slots class)))
+  (if (native-class-p class)
+    (%class.slots class)
+    (class-slots class)))
 
 (defun (setf %class-slots) (new class)
-  (if (typep class 'slots-class)
+  (if (native-class-p class)
     (setf (%class.slots class) new)
-    new))
+    (setf (class-slots class) new)))
 
 (defun %class-direct-slots (class)
-  (if (typep class 'slots-class)
-    (%class.direct-slots class)))
+  (if (native-class-p class)
+    (%class.direct-slots class)
+    (class-direct-slots class)))
 
 (defun (setf %class-direct-slots) (new class)
-  (if (typep class 'slots-class)
-    (setf (%class.direct-slots class) new))
-  new)
-  
+  (if (native-class-p class)
+    (setf (%class.direct-slots class) new)
+    (setf (class-direct-slots class) new)))
+
+
+
+
+
+
 (defun %class-direct-superclasses (class)
   (%class.local-supers class))
 
@@ -228,6 +246,8 @@
   )
 
 
+
+
 (defun %slot-id-lookup-obsolete (instance slot-id)
   (update-obsolete-instance instance)
   (funcall (%wrapper-slot-id->slotd (instance.class-wrapper instance))
@@ -338,8 +358,8 @@
         (when keyp (setq bits (%ilogior (%ilsl $lfbits-keys-bit 1) bits)))
         (when aokp (setq bits (%ilogior (%ilsl $lfbits-aok-bit 1) bits)))
         (if return-keys?
-          (values bits (if key-list (apply #'vector (nreverse key-list)) #()))
-          (values bits nil))))))
+          (values bits (apply #'vector (nreverse key-list)))
+          bits)))))
 
 (defun pair-arg-p (thing &optional lambda-list-ok supplied-p-ok keyword-nesting-ok)
   (or (symbol-arg-p thing lambda-list-ok) ; nil ok in destructuring case
@@ -570,6 +590,11 @@
 	  (declare (ignore fn))
           nil))
 
+(defparameter *uniquify-dcode* #+unique-dcode t #-unique-dcode nil
+  "If true, each gf will get its own unique copy of its dcode.  Not recommended for
+   real use (for one thing, it's known to break gf tracing), but may be helpful for
+   profiling")
+
 (let* ((class-wrapper-random-state (make-random-state))
        (class-wrapper-random-state-lock (make-lock)))
 
@@ -697,26 +722,31 @@
       specializers
       (mapcar #'canonicalize-specializer specializers))))
 
+(defparameter *sealed-clos-world* nil "When true, class and method definition -at least - are disallowed.")
+
 (defun ensure-method (name specializers &rest keys &key (documentation nil doc-p) qualifiers
                            &allow-other-keys)
   (declare (dynamic-extent keys))
-  (setq specializers (canonicalize-specializers specializers))
-  (let* ((gf (ensure-generic-function name))
-         (method (apply #'%make-method-instance
-                        (%gf-method-class gf)
-                        :name name
-                        :specializers specializers
-                        keys))
-         (old-method (when (%gf-methods gf)
-                       (ignore-errors
-                         (find-method gf qualifiers specializers nil)))))
+  (if *sealed-clos-world*
+    (error "Method (re)definition is not allowed in this environment.")
+    (progn
+      (setq specializers (canonicalize-specializers specializers))
+      (let* ((gf (ensure-generic-function name))
+             (method (apply #'%make-method-instance
+                            (%gf-method-class gf)
+                            :name name
+                            :specializers specializers
+                            keys))
+             (old-method (when (%gf-methods gf)
+                           (ignore-errors
+                             (find-method gf qualifiers specializers nil)))))
 
-    (%add-method gf method)
-    (when (and doc-p *save-doc-strings*)
-      (set-documentation method t documentation))
-    (record-source-file method 'method)
-    (when old-method (%move-method-encapsulations-maybe old-method method))
-    method))
+        (%add-method gf method)
+        (when (and doc-p *save-doc-strings*)
+          (set-documentation method t documentation))
+        (record-source-file method 'method)
+        (when old-method (%move-method-encapsulations-maybe old-method method))
+        method))))
         
 
 (defun %anonymous-method (function specializers qualifiers  lambda-list &optional documentation
@@ -837,6 +867,11 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 (defun %add-method (gf method)
   (%add-standard-method-to-standard-gf gf method))
 
+;; Redefined in l1-clos.lisp
+(defun maybe-remove-make-instance-optimization (gfn method)
+  (declare (ignore gfn method))
+  nil)
+
 (defun %add-standard-method-to-standard-gf (gfn method)
   (when (%method-gf method)
     (error "~s is already a method of ~s." method (%method-gf method)))
@@ -846,6 +881,7 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 	 (specializers (%method-specializers method))
 	 (qualifiers (%method-qualifiers method)))
     (remove-obsoleted-combined-methods method dt specializers)
+    (maybe-remove-make-instance-optimization gfn method)
     (apply #'invalidate-initargs-vector-for-gf gfn specializers)
     (dolist (m methods)
       (when (and (equal specializers (%method-specializers m))
@@ -919,9 +955,9 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
   (with-hash-table-iterator (m %find-classes%)
     (loop
       (multiple-value-bind (found name cell) (m)
-        (declare (list cell))
+        (declare (type class-cell cell))
         (unless found (return))
-        (when (cdr cell)
+        (when cell
           (funcall function name (class-cell-class cell)))))))
 
 
@@ -964,25 +1000,26 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
        (when gf (setq dt (%gf-dispatch-table gf)))))
    (when dt
      (if specializers
-       (let* ((argnum (%gf-dispatch-table-argnum dt))
-              (class (nth argnum specializers))
-              (size (%gf-dispatch-table-size dt))
-              (index 0))
-         (clear-accessor-method-offsets (%gf-dispatch-table-gf dt) method)
-         (if (typep class 'eql-specializer)
-           (setq class (class-of (eql-specializer-object class))))
-         (while (%i< index size)
-           (let* ((wrapper (%gf-dispatch-table-ref dt index))
-                  hash-index-0?
-                  (cpl (and wrapper
-                            (not (setq hash-index-0?
-                                       (eql 0 (%wrapper-hash-index wrapper))))
-                            (%inited-class-cpl
-                             (require-type (%wrapper-class wrapper) 'class)))))
-             (when (or hash-index-0? (and cpl (cpl-index class cpl)))
-               (setf (%gf-dispatch-table-ref dt index) *obsolete-wrapper*
-                     (%gf-dispatch-table-ref dt (%i+ index 1)) *gf-dispatch-bug*))
-             (setq index (%i+ index 2)))))
+       (let* ((argnum (%gf-dispatch-table-argnum dt)))
+         (when (>= argnum 0)
+           (let ((class (nth argnum specializers))
+                 (size (%gf-dispatch-table-size dt))
+                 (index 0))
+             (clear-accessor-method-offsets (%gf-dispatch-table-gf dt) method)
+             (if (typep class 'eql-specializer)
+                 (setq class (class-of (eql-specializer-object class))))
+             (while (%i< index size)
+               (let* ((wrapper (%gf-dispatch-table-ref dt index))
+                      hash-index-0?
+                      (cpl (and wrapper
+                                (not (setq hash-index-0?
+                                           (eql 0 (%wrapper-hash-index wrapper))))
+                                (%inited-class-cpl
+                                 (require-type (%wrapper-class wrapper) 'class)))))
+                 (when (or hash-index-0? (and cpl (cpl-index class cpl)))
+                   (setf (%gf-dispatch-table-ref dt index) *obsolete-wrapper*
+                         (%gf-dispatch-table-ref dt (%i+ index 1)) *gf-dispatch-bug*))
+                 (setq index (%i+ index 2)))))))
        (setf (%gf-dispatch-table-ref dt 1) nil)))))   ; clear 0-arg gf cm
 
 ;;; SETQ'd below after the GF's exist.
@@ -991,15 +1028,15 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 ;;; Called by %add-method, %remove-method
 (defun invalidate-initargs-vector-for-gf (gf &optional first-specializer &rest other-specializers)
   (declare (ignore other-specializers))
-  (when (and first-specializer (typep first-specializer 'class))        ; no eql methods or gfs with no specializers need apply
+  (when (and first-specializer (typep first-specializer 'class)) ; no eql methods or gfs with no specializers need apply
     (let ((indices (cdr (assq gf *initialization-invalidation-alist*))))
       (when indices
         (labels ((invalidate (class indices)
-                             (when (std-class-p class)   ; catch the class named T
-                               (dolist (index indices)
-                                 (setf (standard-instance-instance-location-access class index) nil)))
-                             (dolist (subclass (%class.subclasses class))
-                               (invalidate subclass indices))))
+                   (when (std-class-p class) ; catch the class named T
+                     (dolist (index indices)
+                       (setf (standard-instance-instance-location-access class index) nil)))
+                   (dolist (subclass (%class.subclasses class))
+                     (invalidate subclass indices))))
           (invalidate first-specializer indices))))))
 
 ;;; Return two values:
@@ -1007,7 +1044,7 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 ;;;    all the specializers are T or only the first one is T
 ;;; 2) the index of the first non-T specializer
 (defun multi-method-index (method &aux (i 0) index)
-  (dolist (s (%method-specializers method) (values nil index))
+  (dolist (s (%method.specializers method) (values nil index))
     (unless (eq s *t-class*)
       (unless index (setq index i))
       (unless (eql i 0) (return (values index index))))
@@ -1040,12 +1077,16 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
       (slot-value instance 'x)))
 
 
-           
-  
 (defvar *writer-method-function-proto*
   #'(lambda (new instance)
       (set-slot-value instance 'x new)))
 
+(defun dcode-for-gf (gf dcode)
+  (if *uniquify-dcode*
+    (let ((new-dcode (%copy-function dcode)))
+      (lfun-name new-dcode (list (lfun-name dcode) (lfun-name gf)))
+      new-dcode)
+    dcode))
 
 (defstatic *non-dt-dcode-functions* () "List of functions which return a dcode function for the GF which is their argument.  The dcode functions will be caled with all of the incoming arguments.")
 
@@ -1054,7 +1095,6 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
     (let* ((dcode (funcall f gf)))
       (when dcode (return dcode)))))
 
-           
 (defun compute-dcode (gf &optional dt)
   (setq gf (require-type gf 'standard-generic-function))
   (unless dt (setq dt (%gf-dispatch-table gf)))
@@ -1180,37 +1220,76 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 (defun non-standard-instance-class-wrapper (instance)
   (let* ((typecode (typecode instance)))
     (declare (type (unsigned-byte 8) typecode))
-    (cond ((eql typecode target::subtag-istruct)
+    (cond ((eql typecode target::subtag-struct)
+           (%class.own-wrapper
+            (class-cell-class (car (%svref instance 0)))))
+          ((eql typecode target::subtag-istruct)
            (istruct-cell-info (%svref instance 0)))
           ((eql typecode target::subtag-basic-stream)
            (basic-stream.wrapper instance))
           ((typep instance 'funcallable-standard-object)
            (gf.instance.class-wrapper instance))
-          ((eql typecode target::subtag-macptr)
-           (foreign-instance-class-wrapper instance))
+          ((eql typecode target::subtag-macptr) (foreign-instance-class-wrapper instance))
           (t (%class.own-wrapper (class-of instance))))))
 
 (defun instance-class-wrapper (instance)
-  (if (= (typecode instance) target::subtag-instance)
+  (if (= (typecode instance)  target::subtag-instance)
     (instance.class-wrapper instance)
     (non-standard-instance-class-wrapper instance)))
 
 
+(defun std-instance-class-cell-typep (form class-cell)
+  (declare (type class-cell  class-cell))
+  (let* ((typecode (typecode form))
+         (wrapper (cond ((= typecode target::subtag-instance)
+                         (instance.class-wrapper form))
+                        ((= typecode target::subtag-basic-stream)
+                         (basic-stream.wrapper form))
+                        (t nil))))
+    (declare (type (unsigned-byte 8) typecode))
+    (when wrapper
+      (loop
+        (let ((class (class-cell-class class-cell)))
+          (if class
+            (let* ((ordinal (%class-ordinal class))
+                   (bits (or (%wrapper-cpl-bits wrapper)
+                             (make-cpl-bits (%inited-class-cpl (%wrapper-class wrapper))))))
+              (declare (fixnum ordinal))
+              (return
+                (if bits
+                  (locally (declare (simple-bit-vector bits)
+                                    (optimize (speed 3) (safety 0)))
+                    (if (< ordinal (length bits))
+                      (not (eql 0 (sbit bits ordinal))))))))
+            (let* ((name (class-cell-name class-cell))
+                   (new-cell (find-class-cell name nil)))
+              (unless
+                  (if (and new-cell (not (eq class-cell new-cell)))
+                    (setq class-cell new-cell class (class-cell-class class-cell))
+                    (return (typep form name)))))))))))
 
 (defun class-cell-typep (form class-cell)
   (locally (declare (type class-cell  class-cell))
+    (loop
     (let ((class (class-cell-class class-cell)))
-      (loop
-        (if class
-          (let* ((wrapper (if (%standard-instance-p form)
-                            (instance.class-wrapper form)
-                            (instance-class-wrapper form))))
-            (return
-              (not (null (memq class (or (%wrapper-cpl wrapper)
-                                         (%inited-class-cpl (%wrapper-class wrapper))))))))
-          (if (setq class (find-class (class-cell-name class-cell) nil))
-            (setf (class-cell-class class-cell) class)
-            (return (typep form (class-cell-name class-cell)))))))))
+      (if class
+        (let* ((ordinal (%class-ordinal class))
+               (wrapper (instance-class-wrapper form))
+               (bits (or (%wrapper-cpl-bits wrapper)
+                         (make-cpl-bits (%inited-class-cpl (%wrapper-class wrapper))))))
+          (declare (fixnum ordinal))
+          (return
+            (if bits
+              (locally (declare (simple-bit-vector bits)
+                                (optimize (speed 3) (safety 0)))
+                  (if (< ordinal (length bits))
+                    (not (eql 0 (sbit bits ordinal))))))))
+        (let* ((name (class-cell-name class-cell))
+               (new-cell (find-class-cell name nil)))
+          (unless
+              (if (and new-cell (not (eq class-cell new-cell)))
+                (setq class-cell new-cell class (class-cell-class class-cell))
+                (return (typep form name))))))))))
 
 
 
@@ -1218,8 +1297,6 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
   (if (class-cell-typep arg class-cell)
     arg
     (%kernel-restart $xwrongtype arg (car class-cell))))
-
-
 
 
 
@@ -1238,14 +1315,24 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
                   "Class named ~S not found." name)
           (find-class name errorp environment)))))
 
+(defun update-class-proper-names (name old-class new-class)
+  (when (and old-class
+             (not (eq old-class new-class))
+             (eq (%class-proper-name old-class) name))
+    (setf (%class-proper-name old-class) nil))
+  (when (and new-class (eq (%class-name new-class) name))
+    (setf (%class-proper-name new-class) name)))
+
+
 (defun set-find-class (name class)
   (clear-type-cache)
-  (let ((cell (find-class-cell name class)))
-    (when cell
-      (when class
-        (if (eq name (%class.name class))
-          (setf (info-type-kind name) :instance)))
-      (setf (class-cell-class cell) class))
+  (let* ((cell (find-class-cell name t))
+         (old-class (class-cell-class cell)))
+    (when class
+      (if (eq name (%class.name class))
+        (setf (info-type-kind name) :instance)))
+    (setf (class-cell-class cell) class)
+    (update-class-proper-names name old-class class)
     class))
 
 
@@ -1293,18 +1380,19 @@ to replace that class with ~s" name old-class new-class)
 (queue-fixup
  (defun set-find-class (name class)
    (setq name (require-type name 'symbol))
-   (let ((cell (find-class-cell name t)))
+   (let* ((cell (find-class-cell name t))
+          (old-class (class-cell-class cell)))
      (declare (type class-cell cell))
-       (let ((old-class (class-cell-class cell)))
-         (when old-class
-           (when (eq (%class.name old-class) name)
-             (setf (info-type-kind name) nil)
-             (clear-type-cache))
-           (when *warn-if-redefine-kernel*
-             (check-setf-find-class-protected-class old-class class name))))
+     (when old-class
+       (when (eq (%class.name old-class) name)
+         (setf (info-type-kind name) nil)
+         (clear-type-cache))
+       (when *warn-if-redefine-kernel*
+         (check-setf-find-class-protected-class old-class class name)))
      (when (null class)
        (when cell
          (setf (class-cell-class cell) nil))
+       (update-class-proper-names name old-class class)
        (return-from set-find-class nil))
      (setq class (require-type class 'class))
      (when (built-in-type-p name)
@@ -1317,6 +1405,7 @@ to replace that class with ~s" name old-class new-class)
                  `(find-class ',name) name 'deftype)
          (%deftype name nil nil))
        (setf (info-type-kind name) :instance))
+     (update-class-proper-names name old-class class)
      (setf (class-cell-class cell) class)))
  )                                      ; end of queue-fixup
 
@@ -1334,7 +1423,6 @@ to replace that class with ~s" name old-class new-class)
           (%i+ index 3)                 ; '3 = 24 bytes = 6 longwords in lap.
           1))))
 ||#
-
 
 (defglobal *next-class-ordinal* 0)
 
@@ -1362,6 +1450,7 @@ to replace that class with ~s" name old-class new-class)
       (setf (foreign-class-ordinal class) new)
       (unless no-error
         (error "Can't set ordinal of class ~s to ~s" class new)))))
+
 
 (defvar *t-class* (let* ((class (%cons-built-in-class 't)))
                     (setf (instance.hash class) 0)
@@ -1424,7 +1513,7 @@ to replace that class with ~s" name old-class new-class)
           (let* ((ordinal (instance.hash class)))
             (setf (sbit bits ordinal) 1)))))))
 
-
+          
 (defun make-built-in-class (name &rest supers)
   (if (null supers)
     (setq supers (list *t-class*))
@@ -1447,7 +1536,9 @@ to replace that class with ~s" name old-class new-class)
            (cpl (compute-cpl class)))
       (setf (%class.cpl class) cpl)
       (setf (%class.own-wrapper class) wrapper)
-      (setf (%wrapper-cpl wrapper) cpl))
+      (setf (%wrapper-cpl wrapper) cpl
+            (%wrapper-cpl-bits wrapper) (make-cpl-bits cpl)
+            (%wrapper-class-ordinal wrapper) (%class-ordinal class)))
     (setf (%class.ctype class)  (make-class-ctype class))
     (setf (find-class name) class)
     (dolist (sub (%class.subclasses class))   ; Only non-nil if redefining
@@ -1458,7 +1549,7 @@ to replace that class with ~s" name old-class new-class)
 (defun make-istruct-class (name &rest supers)
   (let* ((class (apply #'make-built-in-class name supers))
          (cell (register-istruct-cell name)))
-    (set-istruct-cell-info cell (%class.own-wrapper class))
+    (setf (istruct-cell-info cell) (%class.own-wrapper class))
     class))
 
 ;;; This will be filled in below.  Need it defined now as it goes in
@@ -1492,12 +1583,15 @@ to replace that class with ~s" name old-class new-class)
                        own-wrapper)
                      (%cons-wrapper class))))
       (setf (%class.cpl class) cpl
-            (%wrapper-instance-slots wrapper) (vector)            
+            (%wrapper-instance-slots wrapper) (vector)
             (%class.own-wrapper class) wrapper
             (%class.ctype class) (make-class-ctype class)
             (%class.slots class) nil
+            (%wrapper-class-ordinal wrapper) (%class-ordinal class)
             (%wrapper-cpl wrapper) cpl
-            (find-class name) class)
+            (%wrapper-cpl-bits wrapper) (make-cpl-bits cpl)
+            (find-class name) class
+            )
       (dolist (sup supers)
         (setf (%class.subclasses sup) (cons class (%class.subclasses sup))))
       class)))
@@ -1574,6 +1668,7 @@ to replace that class with ~s" name old-class new-class)
 ;;; Replace its wrapper and the circle is closed.
 (setf (%class.own-wrapper *standard-class-class*) *standard-class-wrapper*
       (%wrapper-class *standard-class-wrapper*) *standard-class-class*
+      (%wrapper-class-ordinal *standard-class-wrapper*) (%class-ordinal *standard-class-class*)
       (%wrapper-instance-slots *standard-class-wrapper*) (vector))
 
 (defstatic *built-in-class-class* (make-standard-class 'built-in-class *class-class*))
@@ -1646,13 +1741,13 @@ to replace that class with ~s" name old-class new-class)
 (defstatic effective-slot-definition-class (make-standard-class 'effective-slot-definition
                                                               *slot-definition-class*))
 (defstatic *standard-slot-definition-class* (make-standard-class 'standard-slot-definition
-                                                              *slot-definition-class*))
+                                                                 *slot-definition-class*))
 (defstatic *standard-direct-slot-definition-class* (make-class
-                                                 'standard-direct-slot-definition
-                                                 *standard-class-wrapper*
-                                                 (list
-                                                  *standard-slot-definition-class*
-                                                  direct-slot-definition-class)))
+                                                    'standard-direct-slot-definition
+                                                    *standard-class-wrapper*
+                                                    (list
+                                                     *standard-slot-definition-class*
+                                                     direct-slot-definition-class)))
 
 (defstatic *standard-effective-slot-definition-class* (make-class
                                                     'standard-effective-slot-definition
@@ -1667,6 +1762,9 @@ to replace that class with ~s" name old-class new-class)
 
 
 
+
+
+  
 
 (let ((*dont-find-class-optimize* t)
       (ordinal-type-class-alist ())
@@ -1759,7 +1857,7 @@ to replace that class with ~s" name old-class new-class)
   (make-istruct-class 'foreign-variable *istruct-class*)
   (make-istruct-class 'external-entry-point *istruct-class*)
   (make-istruct-class 'shlib *istruct-class*)
-		      
+
   (make-built-in-class 'complex (find-class 'number))
   (make-built-in-class 'real (find-class 'number))
   (defstatic *float-class* (make-built-in-class 'float (find-class 'real)))
@@ -2354,14 +2452,11 @@ to replace that class with ~s" name old-class new-class)
   )                                     ; end let
 
 
-;;; Can't use typep at bootstrapping time.
+
 (defun classp (x)
-  (or (and (typep x 'macptr) (foreign-classp x))		; often faster
-      (let ((wrapper (standard-object-p x)))
-	(or
-	 (and wrapper
-	      (let ((super (%wrapper-class wrapper)))
-		(memq *class-class* (%inited-class-cpl super t))))))))
+  (if (%standard-instance-p x)
+    (< (the fixnum (instance.hash x)) max-class-ordinal)
+    (and (typep x 'macptr) (foreign-classp x))))
 
 (set-type-predicate 'class 'classp)
 
@@ -2614,7 +2709,9 @@ to replace that class with ~s" name old-class new-class)
 ;;; Slot-value, slot-boundp, slot-makunbound, etc.
 (declaim (inline find-slotd))
 (defun find-slotd (name slots)
-  (find name slots :key #'%slot-definition-name))
+  (dolist (slotd slots)
+    (when (eq name (standard-slot-definition.name slotd))
+      (return slotd))))
 
 (declaim (inline %std-slot-vector-value))
 
@@ -2648,7 +2745,9 @@ to replace that class with ~s" name old-class new-class)
 	       (instance.class-wrapper slotd))
 	   (eq *standard-class-wrapper* (instance.class-wrapper class)))
     (%std-slot-vector-value (instance-slots instance) slotd)
-    (slot-value-using-class class instance slotd)))
+    (if (= (the fixnum (typecode instance)) target::subtag-struct)
+      (struct-ref instance (standard-effective-slot-definition.location slotd))
+      (slot-value-using-class class instance slotd))))
 
 
 (declaim (inline  %set-std-slot-vector-value))
@@ -2692,9 +2791,12 @@ to replace that class with ~s" name old-class new-class)
 	   (eq *standard-class-wrapper* (instance.class-wrapper class)))
     ;; Not safe to use instance.slots here, since the instance is not
     ;; definitely of type SUBTAG-INSTANCE.  (Anyway, INSTANCE-SLOTS
-    ;; should be inlined here.
+    ;; should be inlined here.)
     (%set-std-slot-vector-value (instance-slots instance) slotd new)
-    (setf (slot-value-using-class class instance slotd) new)))
+    (if (structurep instance)
+      (setf (struct-ref instance (standard-effective-slot-definition.location slotd))
+            new)
+      (setf (slot-value-using-class class instance slotd) new))))
 
 (defmethod slot-value-using-class ((class funcallable-standard-class)
 				   instance
@@ -2709,22 +2811,30 @@ to replace that class with ~s" name old-class new-class)
   (%set-std-slot-vector-value (gf.slots instance) slotd new))
 
 (defun slot-value (instance slot-name)
-  (let* ((class (class-of instance))
-	   (slotd (find-slotd slot-name (%class-slots class))))
-      (if slotd
-       (slot-value-using-class class instance slotd)
-       (restart-case
-           (values (slot-missing class instance slot-name 'slot-value))
+  (let* ((wrapper
+          (let* ((w (instance-class-wrapper instance)))
+            (if (eql 0 (%wrapper-hash-index w))
+              (instance.class-wrapper (update-obsolete-instance instance))
+              w)))
+         (class (%wrapper-class wrapper))
+         (slotd (find-slotd slot-name (if (%standard-instance-p class)
+                                        (%class.slots class)
+                                        (class-slots class)))))
+    (if slotd
+      (%maybe-std-slot-value-using-class class instance slotd)
+      (if (typep slot-name 'symbol)
+        (restart-case
+         (values (slot-missing class instance slot-name 'slot-value))
          (continue ()
-           :report "Try accessing the slot again"
-           (slot-value instance slot-name))
+                   :report "Try accessing the slot again"
+                   (slot-value instance slot-name))
          (use-value (value)
-           :report "Return a value"
-           :interactive (lambda ()
-                          (format *query-io* "~&Value to use: ")
-                          (list (read *query-io*)))
-           value)))))
-    
+                    :report "Return a value"
+                    :interactive (lambda ()
+                                   (format *query-io* "~&Value to use: ")
+                                   (list (read *query-io*)))
+                    value))
+        (report-bad-arg slot-name 'symbol)))))
 
 
 (defmethod slot-unbound (class instance slot-name)
@@ -2751,13 +2861,22 @@ to replace that class with ~s" name old-class new-class)
 
 
 (defun set-slot-value (instance name value)
-  (let* ((class (class-of instance))
-	     (slotd (find-slotd  name (%class-slots class))))
-	(if slotd
-	  (setf (slot-value-using-class class instance slotd) value)
-	  (progn	    
-	    (slot-missing class instance name 'setf value)
-	    value))))
+  (let* ((wrapper
+          (let* ((w (instance-class-wrapper instance)))
+            (if (eql 0 (%wrapper-hash-index w))
+              (instance.class-wrapper (update-obsolete-instance instance))
+              w)))
+         (class (%wrapper-class wrapper))
+         (slotd (find-slotd name (if (%standard-instance-p class)
+                                   (%class.slots class)
+                                   (class-slots class)))))
+    (if slotd
+      (%maybe-std-setf-slot-value-using-class class instance slotd value)
+      (if (typep name 'symbol)
+        (progn	    
+          (slot-missing class instance name 'setf value)
+          value)
+        (report-bad-arg name 'symbol)))))
 
 (defsetf slot-value set-slot-value)
 
@@ -2780,6 +2899,16 @@ to replace that class with ~s" name old-class new-class)
        (error "Slot definition ~s has invalid location ~s (allocation ~s)."
 		slotd loc (slot-definition-allocation slotd))))))
 
+(defun %maybe-std-slot-boundp-using-class (class instance slotd)
+  (if (and (eql (typecode class) target::subtag-instance)
+	   (eql (typecode slotd) target::subtag-instance)
+	   (eq *standard-effective-slot-definition-class-wrapper*
+	       (instance.class-wrapper slotd))
+	   (eq *standard-class-wrapper* (instance.class-wrapper class)))
+    (%std-slot-vector-boundp (instance-slots instance) slotd)
+    (slot-boundp-using-class class instance slotd)))
+
+
 (defmethod slot-boundp-using-class ((class standard-class)
 				    instance
 				    (slotd standard-effective-slot-definition))
@@ -2795,11 +2924,20 @@ to replace that class with ~s" name old-class new-class)
 
 
 (defun slot-boundp (instance name)
-  (let* ((class (class-of instance))
-	 (slotd (find-slotd name (%class-slots class))))
+  (let* ((wrapper
+          (let* ((w (instance-class-wrapper instance)))
+            (if (eql 0 (%wrapper-hash-index w))
+              (instance.class-wrapper (update-obsolete-instance instance))
+              w)))
+         (class (%wrapper-class wrapper))
+         (slotd (find-slotd name (if (%standard-instance-p class)
+                                   (%class.slots class)
+                                   (class-slots class)))))
     (if slotd
-      (slot-boundp-using-class class instance slotd)
-      (values (slot-missing class instance name 'slot-boundp)))))
+      (%maybe-std-slot-boundp-using-class class instance slotd)
+      (if (typep name 'symbol)
+        (values (slot-missing class instance name 'slot-boundp))
+        (report-bad-arg name 'symbol)))))
 
 (defun slot-value-if-bound (instance name &optional default)
   (if (slot-boundp instance name)
@@ -2813,15 +2951,21 @@ to replace that class with ~s" name old-class new-class)
 
 
 (defun slot-id-value (instance slot-id)
-  (let* ((wrapper (or (standard-object-p instance)
-                    (%class-own-wrapper (class-of instance)))))
+  (let* ((wrapper (instance-class-wrapper instance)))
     (funcall (%wrapper-slot-id-value wrapper) instance slot-id)))
 
 (defun set-slot-id-value (instance slot-id value)
-  (let* ((wrapper (or (standard-object-p instance)
-                    (%class-own-wrapper (class-of instance)))))
+  (let* ((wrapper (instance-class-wrapper instance)))
     (funcall (%wrapper-set-slot-id-value wrapper) instance slot-id value)))
 
+(defun slot-id-boundp (instance slot-id)
+  (let* ((wrapper (instance-class-wrapper instance))
+         (class (%wrapper-class wrapper))
+         (slotd (funcall (%wrapper-slot-id->slotd wrapper) instance slot-id)))
+    (if slotd
+      (%maybe-std-slot-boundp-using-class class instance slotd)
+      (values (slot-missing class instance (slot-id.name slot-id) 'slot-boundp)))))
+  
 ;;; returns nil if (apply gf args) wil cause an error because of the
 ;;; non-existance of a method (or if GF is not a generic function or the name
 ;;; of a generic function).
@@ -2904,6 +3048,7 @@ to replace that class with ~s" name old-class new-class)
      (when forwarding-info
        (setf (%wrapper-hash-index wrapper) 0
              (%wrapper-cpl wrapper) nil
+             (%wrapper-cpl-bits wrapper) nil
              (%wrapper-instance-slots wrapper) 0
              (%wrapper-forwarding-info wrapper) forwarding-info
 	     (%wrapper-slot-id->slotd wrapper) #'%slot-id-lookup-obsolete
@@ -3195,13 +3340,11 @@ to replace that class with ~s" name old-class new-class)
 (defun maybe-update-obsolete-instance (instance)
   (let ((wrapper (standard-object-p instance)))
     (unless wrapper
-      (if (standard-generic-function-p instance)
-        (setq wrapper (generic-function-wrapper instance))
-        (when (typep instance 'funcallable-standard-object)
-          (setq wrapper (gf.instance.class-wrapper instance))))
+              (when (typep instance 'funcallable-standard-object)
+          (setq wrapper (gf.instance.class-wrapper instance)))
       
       (unless wrapper
-        (report-bad-arg instance '(or standard-object standard-generic-function))))
+        (report-bad-arg instance '(or standard-object funcallable-standard-object))))
     (when (eql 0 (%wrapper-hash-index wrapper))
       (update-obsolete-instance instance)))
   instance)
@@ -3227,12 +3370,6 @@ to replace that class with ~s" name old-class new-class)
   (declare (dynamic-extent initargs))
   (%change-class instance new-class initargs))
 
-(defmethod change-class ((instance funcallable-standard-object)
-                         (new-class funcallable-standard-class)
-                         &rest initargs &key &allow-other-keys)
-  (declare (dynamic-extent initargs))
-  (%change-class instance new-class initargs))
-  
 
 (defun %change-class (object new-class initargs)
   (let* ((old-class (class-of object))
@@ -3430,7 +3567,7 @@ to replace that class with ~s" name old-class new-class)
 
 (defmethod no-applicable-method (gf &rest args)
   (cerror "Try calling it again"
-          "No applicable method for args:~% ~s~% to ~s" args gf)
+          "There is no applicable method for the generic function:~%  ~s~%when called with arguments:~%  ~s" gf args)
   (apply gf args))
 
 
@@ -3607,10 +3744,11 @@ to replace that class with ~s" name old-class new-class)
 
 
 
-(defun generic-function-wrapper (gf)
-  (unless (inherits-from-standard-generic-function-p (class-of gf))
-    (%badarg gf 'standard-generic-function))
-  (gf.instance.class-wrapper gf))
+
+
+				   
+
+
 
 (defvar *make-load-form-saving-slots-hash* (make-hash-table :test 'eq))
 
@@ -3667,7 +3805,8 @@ to replace that class with ~s" name old-class new-class)
          (sd (or (gethash class-name %defstructs%)
                  (error "Can't find structure named ~s" class-name)))
          (res (make-structure-vector (sd-size sd))))
-    (setf (%svref res 0) (sd-superclasses sd))
+    (setf (%svref res 0) (mapcar (lambda (x)
+                                   (find-class-cell x t)) (sd-superclasses sd)))
     res))
 
 

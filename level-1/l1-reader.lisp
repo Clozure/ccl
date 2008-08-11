@@ -2231,7 +2231,6 @@
     (when (< ipos (the fixnum (token.opos token)))
       (setf (token.ipos token) (the fixnum (1+ ipos)))
       (%schar (token.string token) ipos))))
-
       
 (defun input-stream-arg (stream)
   (cond ((null stream) *standard-input*)

@@ -149,10 +149,6 @@
 	   name type initfunction initform initargs allocation
 	   documentation class nil (ensure-slot-id name) #'true)))
 
-(defmethod class-slots ((class class)))
-(defmethod class-direct-slots ((class class)))
-(defmethod class-default-initargs ((class class)))
-(defmethod class-direct-default-initargs ((class class)))
 
 (defmethod compile-time-class-p ((class class)) nil)
 
@@ -504,9 +500,10 @@
 
 
 (defun forward-referenced-class-p (class)
-  (typep class 'forward-referenced-class))
+  (and (%standard-instance-p class)
+       (eq (%class-of-instance class) *forward-referenced-class-class*)))
 
-;;; This uses the primary class information to sort a class'es slots
+;;; This uses the primary class information to sort the slots of a class.
 (defun sort-effective-instance-slotds (slotds class cpl)
   (let (primary-slotds
         primary-slotds-class
@@ -635,7 +632,8 @@
       (%flush-initargs-caches class)
       (let* ((wrapper (%class-own-wrapper class)))
         (when wrapper
-          (setf (%wrapper-cpl wrapper) cpl)))))
+          (setf (%wrapper-cpl wrapper) cpl
+                (%wrapper-cpl-bits wrapper) (make-cpl-bits cpl))))))
   (unless finalizep
     (dolist (sub (%class-direct-subclasses class))
       (update-class sub nil))))
@@ -774,18 +772,29 @@
     (apply #'reinitialize-instance class initargs)
     (setf (find-class name) class)))
 	   
+;; Can't go with optimize-make-instance-for-class-name because
+;; ensure-class-using-class is called before that is defined.
+(defun pessimize-make-instance-for-class-name (class-name)
+  (let ((cell (find-class-cell class-name nil)))
+    (when cell
+      (setf (class-cell-instantiate cell) '%make-instance))))
+
 ;;; Redefine an existing (not forward-referenced) class.
 (defmethod ensure-class-using-class ((class class) name &rest keys &key)
   (multiple-value-bind (metaclass initargs)
       (ensure-class-metaclass-and-initargs class keys)
     (unless (eq (class-of class) metaclass)
       (error "Can't change metaclass of ~s to ~s." class metaclass))
+    (pessimize-make-instance-for-class-name name)
     (apply #'reinitialize-instance class initargs)
     (setf (find-class name) class)))
 
 
 (defun ensure-class (name &rest keys &key &allow-other-keys)
-  (apply #'ensure-class-using-class (find-class name nil) name keys))
+  (declare (special *sealed-clos-world*))
+  (if *sealed-clos-world*
+    (error "Class (re)definition is not allowed in this environment")
+    (apply #'ensure-class-using-class (find-class name nil) name keys)))
 
 (defparameter *defclass-redefines-improperly-named-classes-pedantically* 
    t
@@ -795,18 +804,22 @@ redefines existing classes regardless of their CLASS-NAME.  This variable
 governs whether DEFCLASS makes that distinction or not.")
 
 (defun ensure-class-for-defclass (name &rest keys &key &allow-other-keys)
-  (record-source-file name 'class)
-  ;; Maybe record source-file information for accessors as well
-  ;; We should probably record them as "accessors of the class", since
-  ;; there won't be any other explicit defining form associated with
-  ;; them.
-  (let* ((existing-class (find-class name nil)))
-    (when (and *defclass-redefines-improperly-named-classes-pedantically* 
-               existing-class 
-              (not (eq (class-name existing-class) name)))
-      ;; Class isn't properly named; act like it didn't exist
-      (setq existing-class nil))
-    (apply #'ensure-class-using-class existing-class name keys)))
+  (declare (special *sealed-clos-world*))
+  (if *sealed-clos-world*
+    (error "Class (re)definition is not allowed in this environment")
+    (progn
+      (record-source-file name 'class)
+      ;; Maybe record source-file information for accessors as well
+      ;; We should probably record them as "accessors of the class", since
+      ;; there won't be any other explicit defining form associated with
+      ;; them.
+      (let* ((existing-class (find-class name nil)))
+        (when (and *defclass-redefines-improperly-named-classes-pedantically* 
+                   existing-class 
+                   (not (eq (class-name existing-class) name)))
+          ;; Class isn't properly named; act like it didn't exist
+          (setq existing-class nil))
+        (apply #'ensure-class-using-class existing-class name keys)))))
 
 
 
@@ -995,7 +1008,16 @@ governs whether DEFCLASS makes that distinction or not.")
    (:name direct-superclasses  :initform nil  :initfunction ,#'false :readers (class-direct-superclasses))
    (:name direct-subclasses  :initform nil  :initfunction ,#'false :readers (class-direct-subclasses))
    (:name dependents :initform nil :initfunction ,#'false)
-   (:name class-ctype :initform nil :initfunction ,#'false))
+   (:name class-ctype :initform nil :initfunction ,#'false)
+   (:name direct-slots :initform nil :initfunction ,#'false
+                  :readers (class-direct-slots)
+		  :writers ((setf class-direct-slots)))
+   (:name slots :initform nil :initfunction ,#'false
+    :readers (class-slots)
+    :writers ((setf class-slots)))
+   (:name info :initform (cons nil nil) :initfunction ,(lambda () (cons nil nil)) :readers (class-info))
+   (:name direct-default-initargs  :initform nil  :initfunction ,#'false :readers (class-direct-default-initargs))
+   (:name default-initargs :initform nil  :initfunction ,#'false :readers (class-default-initargs)))
  :primary-p t)
 
 (%ensure-class-preserving-wrapper
@@ -1012,15 +1034,7 @@ governs whether DEFCLASS makes that distinction or not.")
 (%ensure-class-preserving-wrapper
  'slots-class
  :direct-superclasses '(class)
- :direct-slots `((:name direct-slots :initform nil :initfunction ,#'false
-		   :readers (class-direct-slots)
-		  :writers ((setf class-direct-slots)))
-                 (:name slots :initform nil :initfunction ,#'false
-		   :readers (class-slots))
-		 (:name kernel-p :initform nil :initfunction ,#'false)
-                 (:name direct-default-initargs  :initform nil  :initfunction ,#'false :readers (class-direct-default-initargs))
-                 (:name default-initargs :initform nil  :initfunction ,#'false :readers (class-default-initargs))
-                 (:name alist :initform nil  :initfunction ,#'false))
+ :direct-slots `((:name alist :initform nil  :initfunction ,#'false))
  :primary-p t)
 
 ;;; This class exists only so that standard-class & funcallable-standard-class
@@ -1128,7 +1142,6 @@ governs whether DEFCLASS makes that distinction or not.")
 		 (:name writers :initargs (:writers) :initform nil
 		  :initfunction ,#'false :readers (slot-definition-writers))))
 
-
 (%ensure-class-preserving-wrapper
  'effective-slot-definition
  :direct-superclasses '(slot-definition)
@@ -1158,7 +1171,6 @@ governs whether DEFCLASS makes that distinction or not.")
  'standard-direct-slot-definition
  :direct-superclasses '(standard-slot-definition direct-slot-definition)
 )
-
 
 (%ensure-class-preserving-wrapper
  'standard-effective-slot-definition
@@ -1235,7 +1247,9 @@ governs whether DEFCLASS makes that distinction or not.")
     (let* ((wrapper (or (%class-own-wrapper class)
                         (setf (%class-own-wrapper class) (%cons-wrapper class))))
            (cpl (compute-cpl class)))
-      (setf (%wrapper-cpl wrapper) cpl))))
+      (setf (%class.cpl class) cpl)
+      (setf (%wrapper-cpl wrapper) cpl
+            (%wrapper-cpl-bits wrapper) (make-cpl-bits cpl)))))
               
 
                                      
@@ -1313,7 +1327,7 @@ governs whether DEFCLASS makes that distinction or not.")
       #'(lambda (new class)
 	  (setf (slot-value class 'direct-superclasses) new))
       (fdefinition '%class-direct-subclasses) #'class-direct-subclasses
-      (fdefinition '%class-own-wrapper) #'class-own-wrapper
+      ;(fdefinition '%class-own-wrapper) #'class-own-wrapper
       (fdefinition '(setf %class-own-wrapper)) #'(setf class-own-wrapper)
 )
 
@@ -1458,7 +1472,6 @@ governs whether DEFCLASS makes that distinction or not.")
 
 (defmethod initialize-instance :before ((instance generic-function)
                                        &key &allow-other-keys)
-
   (setf (%gf-dcode instance)  #'%%0-arg-dcode))
 
 (defmethod initialize-instance :after ((gf standard-generic-function)
@@ -1700,6 +1713,9 @@ changing its name to ~s may have serious consequences." class new))
     (setf (info-type-kind new) :instance)
     (clear-type-cache))
   (reinitialize-instance class :name new)
+  (setf (%class-proper-name class)
+        (if (eq (find-class new nil) class)
+          new))
   new)
 
 
@@ -1806,9 +1822,10 @@ changing its name to ~s may have serious consequences." class new))
     (optimize-dispatching-for-gf gf)))
 
 (defun optimize-dispatching-for-gf (gf)
-  (let* ((dcode (%gf-dcode gf)))
-    (when (or (eq dcode #'%%one-arg-dcode)
-              (eq dcode #'%%nth-arg-dcode))
+  (let* ((dcode (%gf-dcode gf))
+         (name (function-name dcode)))
+    (when (or (eq name '%%one-arg-dcode)
+              (eq name '%%nth-arg-dcode))
       (let ((methods (generic-function-methods gf)))
         (when (and methods (null (cdr methods)))
           (when (or (eq #'%%one-arg-dcode dcode)
@@ -1820,19 +1837,26 @@ changing its name to ~s may have serious consequences." class new))
                                 (and (eql argnum 1) (eq (car spec) *t-class*))))))
             (override-one-method-one-arg-dcode gf (car methods))))))))
 
+(defparameter *unique-reader-dcode-functions* t)
+
 ;;; dcode for a GF with a single reader method which accesses
 ;;; a slot in a class that has no subclasses (that restriction
 ;;; makes typechecking simpler and also ensures that the slot's
 ;;; location is correct.)
 (defun singleton-reader-dcode (dt instance)
   (declare (optimize (speed 3) (safety 0)))
-  (let* ((class (%svref dt %gf-dispatch-table-first-data))
+  (let* ((wrapper (%svref dt %gf-dispatch-table-first-data))
          (location (%svref dt (1+ %gf-dispatch-table-first-data))))
     (if (eq (if (eq (typecode instance) target::subtag-instance)
-              (%class-of-instance instance))
-            class)
+              (instance.class-wrapper instance))
+            wrapper)
       (%slot-ref (instance.slots instance) location)
-      (no-applicable-method (%gf-dispatch-table-gf dt) instance))))
+      (cond ((and (eq (typecode instance) target::subtag-instance)
+                  (eq 0 (%wrapper-hash-index (instance.class-wrapper instance)))
+                  (progn (update-obsolete-instance instance)
+                         (eq (instance.class-wrapper instance) wrapper)))
+             (%slot-ref (instance.slots instance) location))
+            (t (no-applicable-method (%gf-dispatch-table-gf dt) instance))))))
 (register-dcode-proto #'singleton-reader-dcode *gf-proto-one-arg*)
 
 ;;; Dcode for a GF whose methods are all reader-methods which access a
@@ -1840,31 +1864,69 @@ changing its name to ~s may have serious consequences." class new))
 ;;; which (by luck or design) have the same slot-definition location.
 (defun reader-constant-location-dcode (dt instance)
   (declare (optimize (speed 3) (safety 0)))
-  (let* ((classes (%svref dt %gf-dispatch-table-first-data))
-         (location (%svref dt (1+ %gf-dispatch-table-first-data))))
     (if (memq (if (eq (typecode instance) target::subtag-instance)
               (%class-of-instance instance))
-            classes)
-      (%slot-ref (instance.slots instance) location)
-      (no-applicable-method (%gf-dispatch-table-gf dt) instance))))
+              (%svref dt %gf-dispatch-table-first-data))
+      (%slot-ref (instance.slots instance) (%svref dt (1+ %gf-dispatch-table-first-data)))
+      (no-applicable-method (%gf-dispatch-table-gf dt) instance)))
 (register-dcode-proto #'reader-constant-location-dcode *gf-proto-one-arg*)
 
 ;;; Dcode for a GF whose methods are all reader-methods which access a
 ;;; slot in one or more classes which have multiple subclasses, all of
 ;;; which (by luck or design) have the same slot-definition location.
-;;; The number of classes is for which the method is applicable is
-;;; large, but all are subclasses of a single class
+;;; The number of classes for which the method is applicable is
+;;; potentially large, but all are subclasses of a single class
 (defun reader-constant-location-inherited-from-single-class-dcode (dt instance)
   (declare (optimize (speed 3) (safety 0)))
-  (let* ((defining-class (%svref dt %gf-dispatch-table-first-data))
-         (location (%svref dt (1+ %gf-dispatch-table-first-data)))
-         (class (if (eq (typecode instance) target::subtag-instance)
-                  (%class-of-instance instance))))
-    (if (and class (memq defining-class (or (%class.cpl class)
-                                            (%inited-class-cpl class))))
-      (%slot-ref (instance.slots instance) location)
+  (let* ((defining-class-ordinal (%svref dt %gf-dispatch-table-first-data))
+         (bits  (let* ((wrapper
+                        (if (eq (typecode instance) target::subtag-instance)
+                          (instance.class-wrapper instance))))
+                  (when wrapper (or (%wrapper-cpl-bits wrapper)
+                                    (make-cpl-bits (%inited-class-cpl
+                                                    (%wrapper-class wrapper))))))))
+    (declare (fixnum defining-class-ordinal))
+    (if (and bits
+             (< defining-class-ordinal (the fixnum (uvsize bits)))
+             (not (eql 0 (sbit bits defining-class-ordinal))))
+      (%slot-ref (instance.slots instance) (%svref dt (1+ %gf-dispatch-table-first-data)))
       (no-applicable-method (%gf-dispatch-table-gf dt) instance))))
 (register-dcode-proto #'reader-constant-location-inherited-from-single-class-dcode *gf-proto-one-arg*)
+
+;;; It may be faster to make individual functions that take their
+;;; "parameters" (defining class ordinal, slot location) as constants.
+;;; It may not be.  Use *unique-reader-dcode-functions* to decide
+;;; whether or not to do so.
+(defun make-reader-constant-location-inherited-from-single-class-dcode
+    (defining-class-ordinal location gf)
+  (if *unique-reader-dcode-functions*
+    (let* ((gf-name (function-name gf)))
+      (values
+       (%make-function 
+        `(slot-reader for ,gf-name)
+        `(lambda (instance)
+          (locally (declare (optimize (speed 3) (safety 0)))
+            (let* ((bits (let* ((wrapper
+                                 (if (eq (typecode instance) target::subtag-instance)
+                                   (instance.class-wrapper instance))))
+                           (when wrapper (or (%wrapper-cpl-bits wrapper)
+                                             (make-cpl-bits (%inited-class-cpl
+                                                             (%wrapper-class wrapper))))))))
+              (if (and bits
+                       (< ,defining-class-ordinal (the fixnum (uvsize bits)))
+                       (not (eql 0 (sbit bits ,defining-class-ordinal))))
+                (%slot-ref (instance.slots instance) ,location)
+                (no-applicable-method (function ,gf-name) instance)))))
+        nil)
+       #'funcallable-trampoline))
+    (let* ((dt (gf.dispatch-table gf)))
+      (setf (%svref dt %gf-dispatch-table-first-data)
+            defining-class-ordinal
+            (%svref dt (1+ %gf-dispatch-table-first-data))
+            location)
+      (values
+       (dcode-for-gf gf #'reader-constant-location-inherited-from-single-class-dcode)
+       (cdr (assq #'reader-constant-location-inherited-from-single-class-dcode dcode-proto-alist))))))
 
 ;;; Dcode for a GF whose methods are all reader-methods which access a
 ;;; slot in one or more classes which have multiple subclasses, all of
@@ -1873,13 +1935,18 @@ changing its name to ~s may have serious consequences." class new))
 ;;; large, but all are subclasses of one of a (small) set of defining classes.
 (defun reader-constant-location-inherited-from-multiple-classes-dcode (dt instance)
   (declare (optimize (speed 3) (safety 0)))
-  (let* ((location (%svref dt (1+ %gf-dispatch-table-first-data)))
-         (class (if (eq (typecode instance) target::subtag-instance)
-                  (%class-of-instance instance)))
-         (cpl (if class (or (%class.cpl class) (%inited-class-cpl class)))))
-    (if (dolist (defining-class (%svref dt %gf-dispatch-table-first-data))
-          (when (memq defining-class cpl) (return t)))
-      (%slot-ref (instance.slots instance) location)
+  (let* ((wrapper (if (eq (typecode instance) target::subtag-instance)
+                    (instance.class-wrapper instance)))
+         (bits (if wrapper (or (%wrapper-cpl-bits wrapper)
+                               (make-cpl-bits (%inited-class-cpl (%wrapper-class wrapper))))))
+         (nbits (if bits (uvsize bits) 0)))
+    (declare (fixnum nbits))
+    (if (dolist (ordinal (%svref dt %gf-dispatch-table-first-data))
+          (declare (fixnum ordinal))
+          (when (and (< ordinal nbits)
+                     (not (eql 0 (sbit bits ordinal))))
+            (return t)))
+      (%slot-ref (instance.slots instance) (%svref dt (1+ %gf-dispatch-table-first-data)))
       (no-applicable-method (%gf-dispatch-table-gf dt) instance))))
 (register-dcode-proto #'reader-constant-location-inherited-from-multiple-classes-dcode *gf-proto-one-arg*)
 
@@ -1931,6 +1998,8 @@ changing its name to ~s may have serious consequences." class new))
                   (when (subtypep class other) (return nil))))
           (unique class))))))
 
+
+
 ;;; Try to replace gf dispatch with something faster in f.
 (defun %snap-reader-method (f)
   (when (slot-boundp f 'methods)
@@ -1959,12 +2028,13 @@ changing its name to ~s may have serious consequences." class new))
               ;; of the alist pairs - are small, positive fixnums.
               (when (every (lambda (pair) (typep (cdr pair) 'fixnum)) alist)
                 (clear-gf-dispatch-table dt)
+                (setf (%gf-dispatch-table-argnum dt) -1) ;mark as non-standard
                 (cond ((null (cdr alist))
                        ;; Method is only applicable to a single class.
                        (destructuring-bind (class . location) (car alist)
-                         (setf (%svref dt %gf-dispatch-table-first-data) class
+                         (setf (%svref dt %gf-dispatch-table-first-data) (%class.own-wrapper class)
                                (%svref dt (1+ %gf-dispatch-table-first-data)) location
-                               (gf.dcode f) #'singleton-reader-dcode)))
+                               (gf.dcode f) (dcode-for-gf f #'singleton-reader-dcode))))
                       ((dolist (other (cdr alist) t)
                          (unless (eq (cdr other) loc)
                            (return)))
@@ -1977,30 +2047,28 @@ changing its name to ~s may have serious consequences." class new))
                                 (mapcar #'car alist)
                                 (%svref dt (1+ %gf-dispatch-table-first-data))
                                 loc
-                                (gf.dcode f) #'reader-constant-location-dcode))
+                                (gf.dcode f) (dcode-for-gf f #'reader-constant-location-dcode)))
                          ((null (cdr (setq classes (remove-subclasses-from-class-list classes))))
                           ;; Lots of classes, all subclasses of a single class
-                          (setf (%svref dt %gf-dispatch-table-first-data)
-                                (car classes)
-                                (%svref dt (1+ %gf-dispatch-table-first-data))
-                                loc
-                                (gf.dcode f)
-                                #'reader-constant-location-inherited-from-single-class-dcode))
+                          (multiple-value-bind (dcode trampoline)
+                              (make-reader-constant-location-inherited-from-single-class-dcode (%class-ordinal (car classes)) loc f)
+                            (setf (gf.dcode f) dcode)
+                            (replace-function-code f trampoline)))
                          (t
                           ;; Multple classes.  We should probably check
                           ;; to see they're disjoint
                           (setf (%svref dt %gf-dispatch-table-first-data)
-                                classes
+                                (mapcar #'%class-ordinal classes)
                                 (%svref dt (1+ %gf-dispatch-table-first-data))
                                 loc
                                 (gf.dcode f)
-                                #'reader-constant-location-inherited-from-multiple-classes-dcode))))
+                                (dcode-for-gf f #'reader-constant-location-inherited-from-multiple-classes-dcode)))))
                       (t
                        ;; Multiple classes; the slot's location varies.
                        (setf (%svref dt %gf-dispatch-table-first-data)
                              alist
                              
-                             (gf.dcode f) #'reader-variable-location-dcode)))))))))))
+                             (gf.dcode f) (dcode-for-gf f #'reader-variable-location-dcode))))))))))))
 
 ;;; Hack-o-rama: GF has nothing but primary methods, first (and only non-T)
 ;;; specializers are all EQL specializers whose objects are symbols.
@@ -2016,13 +2084,14 @@ changing its name to ~s may have serious consequences." class new))
         (%apply-lexpr-tail-wise mf args))
       ;;; Let %%1st-arg-dcode deal with it.
       (%%1st-arg-dcode dt args))))
+(register-dcode-proto #'%%1st-arg-eql-method-hack-dcode *gf-proto*)
 
 (defun %%1st-two-arg-eql-method-hack-dcode (dt arg1 arg2)
   (let* ((mf (if (typep arg1 'symbol) (get arg1 dt))))
     (if mf
       (funcall mf arg1 arg2)
       (%%1st-two-arg-dcode dt arg1 arg2))))
-(register-dcode-proto #'reader-variable-location-dcode *gf-proto-two-arg*)
+(register-dcode-proto #'%%1st-two-arg-eql-method-hack-dcode *gf-proto-two-arg*)
 
 (defun %%one-arg-eql-method-hack-dcode (dt arg)
   (let* ((mf (if (typep arg 'symbol) (get arg dt))))
@@ -2039,13 +2108,13 @@ changing its name to ~s may have serious consequences." class new))
                           (logbitp $lfbits-keys-bit bits)
                           (logbitp $lfbits-aok-bit bits))))
     (setf (%gf-dcode gf)
-          (cond ((and (eql nreq 1) (null other-args?))
-                 #'%%one-arg-eql-method-hack-dcode)
-                ((and (eql nreq 2) (null other-args?))
-                 #'%%1st-two-arg-eql-method-hack-dcode)
-                (t
-                 #'%%1st-arg-eql-method-hack-dcode)))))
-
+          (dcode-for-gf gf
+                        (cond ((and (eql nreq 1) (null other-args?))
+                               #'%%one-arg-eql-method-hack-dcode)
+                              ((and (eql nreq 2) (null other-args?))
+                               #'%%1st-two-arg-eql-method-hack-dcode)
+                              (t
+                               #'%%1st-arg-eql-method-hack-dcode))))))
 
 (defun maybe-hack-eql-methods (gf)
   (let* ((methods (generic-function-methods gf)))
@@ -2292,13 +2361,27 @@ changing its name to ~s may have serious consequences." class new))
                             class-name c))))
            %find-classes%))
 
+;; Redefined from bootstrapping verison in l1-clos-boot.lisp
+;; Remove the make-instance optimization if the user is adding
+;; a method on initialize-instance, allocate-instance, or shared-initialize
+(defun maybe-remove-make-instance-optimization (gfn method)
+  (when (or (eq gfn #'allocate-instance)
+            (eq gfn #'initialize-instance)
+            (eq gfn #'shared-initialize))
+    (let* ((specializer (car (method-specializers method)))
+           (cell (and (typep specializer 'class)
+                      (gethash (class-name specializer) %find-classes%))))
+      (when cell
+        (setf (class-cell-instantiate cell) '%make-instance)))))            
+
 ;;; Iterate over all known GFs; try to optimize their dcode in cases
 ;;; involving reader methods.
 
 (defun snap-reader-methods (&key known-sealed-world
                                  (check-conflicts t)
                                  (optimize-make-instance t))
-  (declare (ignore check-conflicts))
+  (declare (ignore check-conflicts)
+           (special *sealed-clos-world*))
   (unless known-sealed-world
     (cerror "Proceed, if it's known that no new classes or methods will be defined."
             "Optimizing reader methods in this way is only safe if it's known that no new classes or methods will be defined."))
@@ -2310,6 +2393,7 @@ changing its name to ~s may have serious consequences." class new))
       (incf ngf)
       (when (%snap-reader-method f)
         (incf nwin)))
+    (setq *sealed-clos-world* t)
     (values ngf nwin 0)))
 
 (defun register-non-dt-dcode-function (f)
@@ -2323,6 +2407,26 @@ changing its name to ~s may have serious consequences." class new))
         (push f *non-dt-dcode-functions*))
       f)))
 
+(defun pessimize-clos ()
+  (declare (special *sealed-clos-world*))
+  (when *sealed-clos-world*
+    ;; Undo MAKE-INSTANCE optimization
+    (maphash (lambda (class-name class-cell)
+               (declare (ignore class-name))
+               (setf (class-cell-instantiate class-cell) '%make-instance))
+             %find-classes%)
+    ;; Un-snap reader methods, undo other GF optimizations.
+    (dolist (f (population-data %all-gfs%))
+      (let* ((dt (%gf-dispatch-table f)))
+        (clear-gf-dispatch-table dt)
+        (compute-dcode f)))
+    (setq *sealed-clos-world* nil)
+    t))
+
+;;; If there's a single method (with standard method combination) on
+;;; GF and all of that method's arguments are specialized to the T
+;;; class - and if the method doesn't accept &key - we can just have
+;;; the generic function call the method-function
 (defun dcode-for-universally-applicable-singleton (gf)
   (when (eq (generic-function-method-combination gf)
             *standard-method-combination*)
@@ -2338,8 +2442,3 @@ changing its name to ~s may have serious consequences." class new))
         (method-function method)))))
 
 (register-non-dt-dcode-function #'dcode-for-universally-applicable-singleton)
-
-
-
-
-      

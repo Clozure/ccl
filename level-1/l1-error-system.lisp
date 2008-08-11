@@ -78,7 +78,7 @@
 
 (define-condition simple-error (simple-condition error) ())
 
-(define-condition simple-storage-condition (simple-condition storage-condition)())
+(define-condition simple-storage-condition (simple-condition storage-condition) ())
 (define-condition stack-overflow-condition (simple-storage-condition) ())
 
 (define-condition invalid-memory-access (storage-condition)
@@ -135,7 +135,6 @@
 
 (define-condition cant-construct-arglist (improper-list)
   ())
-
 
 
 (let* ((magic-token '("Unbound")))
@@ -491,6 +490,14 @@
                   (format stream "Compiler bug or inconsistency:~%")
                   (apply #'format stream (simple-condition-format-control c)
                          (simple-condition-format-arguments c)))))
+
+(define-condition external-process-creation-failure (serious-condition)
+  ((proc :initarg :proc))
+  (:report (lambda (c stream)
+             (with-slots (proc) c
+               (let* ((code (external-process-%exit-code proc)))
+                 (format stream "Fork failed in ~s: ~a. " proc (if (eql code -1) "random lisp error" (%strerror code))))))))
+   
                          
 (defun restartp (thing) 
   (istruct-typep thing 'restart))
@@ -986,21 +993,6 @@
                    (apply (setf (symbol-function function-name) function) args)))))
 
 
-(defun %check-type (value typespec placename typename)
-  (let ((condition (make-condition 'type-error 
-                                   :datum value
-                                   :expected-type typespec)))
-    (if typename
-      (setf (slot-value condition 'format-control)
-            (format nil "value ~~S is not ~A (~~S)." typename)))
-    (restart-case (%error condition nil (%get-frame-ptr))
-                  (store-value (newval)
-                               :report (lambda (s)
-                                         (format s "Assign a new value of type ~a to ~s" typespec placename))
-                               :interactive (lambda ()
-                                              (format *query-io* "~&New value for ~S :" placename)
-                                              (list (eval (read))))
-                               newval))))
 
 
 ; This has to be defined fairly early (assuming, of course, that it "has" to be defined at all ...

@@ -422,15 +422,10 @@
 
 (defun %cons-random-state (seed-1 seed-2)
   #+32-bit-target
-  (%istruct
-   'random-state
-   seed-1
-   seed-2)
+  (%istruct 'random-state seed-1 seed-2)
   #+64-bit-target
-  (%istruct
-   'random-state
-   (the fixnum (+ (the fixnum seed-2)
-                  (the fixnum (ash (the fixnum seed-1) 16))))))
+  (%istruct 'random-state (the fixnum (+ (the fixnum seed-2)
+                          (the fixnum (ash (the fixnum seed-1) 16))))))
 
 ;;; random associated stuff except for the print-object method which
 ;;; is still in "lib;numbers.lisp"

@@ -295,14 +295,16 @@
   "Resume a specified process which had previously been suspended
 by process-suspend."
   (setq p (require-type p 'process))
-  (%resume-tcr (process-tcr p)))
+  (let* ((tcr (process-tcr p)))
+    (and tcr (%resume-tcr tcr))))
 
 (defun process-suspend (p)
   "Suspend a specified process."
   (setq p (require-type p 'process))
   (if (eq p *current-process*)
     (error "Suspending the current process can't work.  ~&(If the documentation claims otherwise, it's incorrect.)")
-    (%suspend-tcr (process-tcr p))))
+    (let* ((tcr (process-tcr p)))
+      (and tcr (%suspend-tcr tcr)))))
 
 (defun process-suspend-count (p)
   "Return the number of currently-pending suspensions applicable to

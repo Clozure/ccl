@@ -90,17 +90,15 @@ whose name or ID matches <p>, or to any process if <p> is null"
 
 
 
+(defun list-restarts ()
+  (format *debug-io* "~&>   Type (:C <n>) to invoke one of the following restarts:")
+  (display-restarts))
+
 (define-toplevel-command :break pop () "exit current break loop" (abort-break))
 (define-toplevel-command :break a () "exit current break loop" (abort-break))
 (define-toplevel-command :break go () "continue" (continue))
 (define-toplevel-command :break q () "return to toplevel" (toplevel))
-(define-toplevel-command :break r () "list restarts"
-  (format t "~&   (:C <n>) can be used to invoke one of the following restarts in this break loop:")
-  (let* ((r (apply #'vector (compute-restarts *break-condition*))))
-    (dotimes (i (length r) (terpri))
-      (format *debug-io* "~&~d. ~a" i (svref r i)))))
-
-;;; From Marco Baringer 2003/03/18
+(define-toplevel-command :break r () "list restarts" (list-restarts))
 
 (define-toplevel-command :break set (n frame value) "Set <n>th item of frame <frame> to <value>"
   (let* ((frame-sp (nth-raw-frame frame *break-frame* nil)))
@@ -109,13 +107,16 @@ whose name or ID matches <p>, or to any process if <p> is null"
         (format *debug-io* "No frame with number ~D~%" frame))))
 
 (define-toplevel-command :break nframes ()
-                         "print the number of stack frames accessible from this break loop"
-                         (do* ((p *break-frame* (parent-frame p nil))
-                               (i 0 (1+ i))
-                               (last (last-frame-ptr)))
-                              ((eql p last) (toplevel-print (list i)))))
+  "print the number of stack frames accessible from this break loop"
+  (do* ((p *break-frame* (parent-frame p nil))
+        (i 0 (1+ i))
+        (last (last-frame-ptr)))
+      ((eql p last) (toplevel-print (list i)))))
 
 (define-toplevel-command :global ? () "help"
+  (format t "~&The following toplevel commands are available:")
+  (when *default-integer-command*
+    (format t "~& <n>  ~8Tthe same as (~s <n>)" (car *default-integer-command*)))
   (dolist (g *active-toplevel-commands*)
     (dolist (c (cdr g))
       (let* ((command (car c))
@@ -123,7 +124,8 @@ whose name or ID matches <p>, or to any process if <p> is null"
 	     (args (cdddr c)))
 	(if args
 	  (format t "~& (~S~{ ~A~}) ~8T~A" command args doc)
-	  (format t "~& ~S  ~8T~A" command doc))))))
+	  (format t "~& ~S  ~8T~A" command doc)))))
+  (format t "~&Any other form is evaluated and its results are printed out."))
 
 
 (define-toplevel-command :break b (&key start count show-frame-contents) "backtrace"
@@ -241,17 +243,32 @@ binding of that symbol is used - or an integer index into the frame's set of loc
 
 (%use-toplevel-commands :global)
 
+(defparameter *toplevel-commands-dwim* t "If true, tries to interpret otherwise-erroneous toplevel
+expressions as commands")
+
+(defvar *default-integer-command* nil
+  "If non-nil, should be (keyword  min max)), causing integers between min and max to be
+  interpreted as (keyword integer)")
+
 (defun check-toplevel-command (form)
+  (when (and *default-integer-command*
+             (integerp form)
+             (<= (cadr *default-integer-command*) form (caddr *default-integer-command*)))
+    (setq form `(,(car *default-integer-command*) ,form)))
   (let* ((cmd (if (consp form) (car form) form))
          (args (if (consp form) (cdr form))))
-    (if (keywordp cmd)
+    (when (or (keywordp cmd)
+              (and *toplevel-commands-dwim*
+                   (non-nil-symbol-p cmd)
+                   (not (if (consp form) (fboundp cmd) (boundp cmd)))
+                   ;; Use find-symbol so don't make unneeded keywords.
+                   (setq cmd (find-symbol (symbol-name cmd) :keyword))))
+      (when (eq cmd :help) (setq cmd :?))
       (dolist (g *active-toplevel-commands*)
-	(when
-	    (let* ((pair (assoc cmd (cdr g))))
-	      (if pair 
-		(progn (apply (cadr pair) args)
-		       t)))
-	  (return t))))))
+        (let* ((pair (assoc cmd (cdr g))))
+          (when pair 
+            (apply (cadr pair) args)
+            (return t)))))))
 
 (defparameter *quit-on-eof* nil)
 
@@ -263,13 +280,18 @@ binding of that symbol is used - or an integer index into the frame's set of loc
 (defun read-loop (&key (input-stream *standard-input*)
                        (output-stream *standard-output*)
                        (break-level *break-level*)
-		       (prompt-function #'(lambda (stream) (print-listener-prompt stream t))))
+		       (prompt-function #'(lambda (stream)
+                                            (when (and *show-available-restarts* *break-condition*)
+                                              (list-restarts)
+                                              (setf *show-available-restarts* nil))
+                                            (print-listener-prompt stream t))))
   (let* ((*break-level* break-level)
          (*last-break-level* break-level)
          *loading-file-source-file*
          *in-read-loop*
          *** ** * +++ ++ + /// // / -
-         (eof-value (cons nil nil)))
+         (eof-value (cons nil nil))
+         (*show-available-restarts* (and *show-restarts-on-break* *break-condition*)))
     (declare (dynamic-extent eof-value))
     (loop
       (restart-case
@@ -557,6 +579,8 @@ binding of that symbol is used - or an integer index into the frame's set of loc
 (defvar *break-condition* nil "condition argument to innermost break-loop.")
 (defvar *break-frame* nil "frame-pointer arg to break-loop")
 (defvar *break-loop-when-uninterruptable* t)
+(defvar *show-restarts-on-break* #+ccl-0711 t #-ccl-0711 nil)
+(defvar *show-available-restarts* nil)
 
 (defvar *error-reentry-count* 0)
 
@@ -608,10 +632,10 @@ binding of that symbol is used - or an integer index into the frame's set of loc
                  (*print-level* *error-print-level*)
                  (*print-length* *error-print-length*)
 					;(*print-pretty* nil)
-                 (*print-array* nil))
-            (format t "~&> Type :GO to continue, :POP to abort, :R for a list of available restarts.")
-            (format t "~&> If continued: ~A~%" continue))
-          (format t "~&> Type :POP to abort, :R for a list of available restarts.~%"))
+                   (*print-array* nil))
+              (format t "~&> Type :GO to continue, :POP to abort, :R for a list of available restarts.")
+              (format t "~&> If continued: ~A~%" continue))
+            (format t "~&> Type :POP to abort, :R for a list of available restarts.~%"))
         (format t "~&> Type :? for other options.")
         (terpri)
         (force-output)
@@ -623,21 +647,20 @@ binding of that symbol is used - or an integer index into the frame's set of loc
               (progn
                 (application-ui-operation *application*
                                           :enter-backtrace-context context)
-                  (read-loop :break-level (1+ *break-level*)
-                             :input-stream *debug-io*
-                             :output-stream *debug-io*))
+                (read-loop :break-level (1+ *break-level*)
+                           :input-stream *debug-io*
+                           :output-stream *debug-io*))
            (application-ui-operation *application* :exit-backtrace-context
                                      context)))))))
 
 
 
 (defun display-restarts (&optional (condition *break-condition*))
-  (let ((i 0))
-    (format t "~&[Pretend that these are buttons.]")
-    (dolist (r (compute-restarts condition) i)
-      (format t "~&~a : ~A" i r)
-      (setq i (%i+ i 1)))
-    (fresh-line nil)))
+  (loop
+    for restart in (compute-restarts condition)
+    for count upfrom 0
+    do (format *debug-io* "~&~D. ~A" count restart)
+    finally (fresh-line *debug-io*)))
 
 (defun select-restart (n &optional (condition *break-condition*))
   (let* ((restarts (compute-restarts condition)))

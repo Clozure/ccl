@@ -25,7 +25,7 @@
 (eval-when (eval compile #-bccl load)  ;Load-time as well so CCL can use it.
   (defmacro defformat (char name &rest def)
     `(progn
-       (add-format-char ,char (function (lambda . ,def)))
+       (add-format-char ,char (nfunction ,name (lambda . ,def)))
        ',name))
   )
 
@@ -63,9 +63,12 @@
 ; control string.  The directive may modify *format-index*, but not
 ; *format-control-string* and *format-length*, before returning.
 
-(defun sub-format (stream *format-index* *format-length* &aux (string *format-control-string*) char)
-  (prog* ((length *format-length*) (i *format-index*) (lastpos i))
-    (declare (fixnum i length lastpos))
+(defun sub-format (stream *format-index* *format-length* &aux char)
+  (prog* ((string (require-type *format-control-string* 'simple-string))
+          (length *format-length*)
+          (i *format-index*)
+          (lastpos i))
+    (declare (fixnum i length lastpos) (type simple-string string))
     (go START)
     EOF-ERROR
     (setq *format-index* *format-length*)
@@ -78,7 +81,7 @@
       (when (eq char #\~)
         (let* ((limit (the fixnum (1- i))))
           (unless (= limit lastpos) 
-            (write-string string stream :start  lastpos :end limit)))
+            (write-simple-string string stream  lastpos limit)))
         (let ((params nil) (fn) (colon nil) (atsign nil))
           (block nil
             (tagbody
@@ -131,7 +134,7 @@
                 lastpos i))))))
 
 
-#|
+#||
 (eval-when (load)
   ;The non-consing version.
 (defun sub-format (stream *format-index* *format-length*)
@@ -283,19 +286,20 @@ done
     ))
 ) ;end of eval-when (load)
 
-|#
+||#
 
-;Interim definitions
+;;;Interim definitions
 
-;This function is shadowed by CCL in order to use ~{ to print error messages.
+;;;This function is shadowed by CCL in order to use ~{ to print error messages.
 (defun format (stream control-string &rest format-arguments)
   (declare (dynamic-extent format-arguments))
-  (when (eq stream t) (setq stream *standard-output*))
   (when (null stream)
    (return-from format 
     (with-output-to-string (x)
      (apply #'format x control-string format-arguments))))
-  (unless (streamp stream) (report-bad-arg stream 'stream))
+  (if (eq stream t)
+    (setq stream *standard-output*)
+    (unless (streamp stream) (report-bad-arg stream 'stream)))
   (if (functionp control-string)
     (apply control-string stream format-arguments)
     (progn

@@ -1418,8 +1418,6 @@ result-type-specifer is :VOID or NIL"
 	(format out "~a" (shlib.soname container))))))
 
 
-(defun %cons-foreign-variable (name type &optional container)
-  (%istruct 'foreign-variable nil name type container))
 
 
 (defmethod make-load-form ((fv foreign-variable) &optional env)

@@ -232,14 +232,14 @@
 	  'bignum
 	  '(integer  #.(1+ target::target-most-positive-fixnum))))
        ((or array complex) (type-specifier (ctype-of form)))
+       (single-float 'single-float)
+       (double-float 'double-float)
        (t
 	(if (eql (typecode form) target::subtag-istruct)
 	  (istruct-type-name form)
-	  (let* ((class (class-of form))
-		 (class-name (class-name class)))
-	    (if (eq class (find-class class-name nil))
-	      class-name
-	      class))))))))
+	  (let* ((class (class-of form)))
+            (or (%class-proper-name class)
+                class))))))))
 
 ;;; Create the list-style description of an array.
 
@@ -524,6 +524,7 @@
 ; Special variables are evil, but I can't think of a better way to do this.
 
 (defparameter *outstanding-deferred-warnings* nil)
+
 
 (defun %defer-warnings (override &optional flags)
   (%istruct 'deferred-warnings (unless override *outstanding-deferred-warnings*) nil nil flags))

@@ -627,23 +627,32 @@
 	(setq s-start (1+ s-start))))))
       
              
+
 (defun ccl-directory ()
   (let* ((dirpath (getenv "CCL_DEFAULT_DIRECTORY")))
     (if dirpath
       (native-to-directory-pathname dirpath)
       (make-pathname :directory (pathname-directory (%realpath (heap-image-name)))))))
 
-
 (defun user-homedir-pathname (&optional host)
   "Return the home directory of the user as a pathname."
-  (declare (ignore host))  
-  (let* ((native (get-user-home-dir (getuid))))
-    (if native
-      (native-to-directory-pathname native))))
+  (declare (ignore host))
+  (let* ((native
+          (ignore-errors
+            (truename
+             (native-to-directory-pathname (or #+ccl-0711 (getenv "HOME")
+                                               (get-user-home-dir (getuid))))))))
+    (if (and native (eq :absolute (car (pathname-directory native))))
+      native
+      ;; Another plausible choice here is
+      ;; #p"/tmp/.hidden-directory-of-some-irc-bot-in-eastern-europe/"
+      ;; Of course, that might already be the value of $HOME.  Anyway,
+      ;; the user's home directory just contains "config files" (like
+      ;; SSH keys), and spoofing it can't hurt anything.
+      (make-pathname :directory '(:absolute) :defaults nil))))
 
 
 
-(defloadvar *user-homedir-pathname* (user-homedir-pathname))
 
 (defun translate-logical-pathname (pathname &key)
   "Translate PATHNAME to a physical pathname, which is returned."
@@ -660,6 +669,9 @@
 	       (translate-logical-pathname
 		(translate-pathname pathname (car rule) (cadr rule)))
 	       (signal-file-error $xnotranslation pathname)))))))
+
+(defloadvar *user-homedir-pathname* (user-homedir-pathname))
+
 
 ;;; Hide this from COMPILE-FILE, for obscure cross-compilation reasons
 

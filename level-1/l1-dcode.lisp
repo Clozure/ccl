@@ -293,39 +293,25 @@
 
 
 (defun %find-1st-arg-combined-method (dt arg)
-  (declare (optimize (speed 3)(safety 0)))
-  (flet ((get-wrapper (arg)
-           (if (not (%standard-instance-p arg))
-	     (or (and (typep arg 'macptr)
-		      (foreign-instance-class-wrapper arg))
-                 (and (generic-function-p arg)
-                      (gf.instance.class-wrapper arg))
-		 (let* ((class (class-of arg)))
-		   (or (%class.own-wrapper class)
-		       (progn
-			 (update-class class nil)
-			 (%class.own-wrapper class)))))
-             (instance.class-wrapper arg))))
-    (declare (inline get-wrapper))
-    (let ((wrapper (get-wrapper arg)))
-      (when (eql 0 (%wrapper-hash-index wrapper))
-        (update-obsolete-instance arg)
-        (setq wrapper (get-wrapper arg)))
-      (let* ((mask (%gf-dispatch-table-mask dt))
-             (index (%ilsl 1 (%ilogand mask (%wrapper-hash-index wrapper))))
-             table-wrapper flag)
-        (declare (fixnum index mask))
-        (loop 
-          (if (eq (setq table-wrapper (%gf-dispatch-table-ref dt index)) wrapper)
-            (return (%gf-dispatch-table-ref dt  (the fixnum (1+ index))))
-            (progn
-              (when (null (%gf-dispatch-table-ref dt (the fixnum (1+ index))))
-                (if (or (neq table-wrapper (%unbound-marker))
-                        (eql 0 flag))
-                  (without-interrupts   ; why?
-                   (return (1st-arg-combined-method-trap (%gf-dispatch-table-gf dt) wrapper arg))) ; the only difference?
-                  (setq flag 0 index -2)))
-              (setq index (+ 2 index)))))))))
+  (let ((wrapper (instance-class-wrapper arg)))
+    (when (eql 0 (%wrapper-hash-index wrapper))
+      (update-obsolete-instance arg)
+      (setq wrapper (instance-class-wrapper arg)))
+    (let* ((mask (%gf-dispatch-table-mask dt))
+           (index (%ilsl 1 (%ilogand mask (%wrapper-hash-index wrapper))))
+           table-wrapper flag)
+      (declare (fixnum index mask))
+      (loop 
+        (if (eq (setq table-wrapper (%gf-dispatch-table-ref dt index)) wrapper)
+          (return (%gf-dispatch-table-ref dt  (the fixnum (1+ index))))
+          (progn
+            (when (null (%gf-dispatch-table-ref dt (the fixnum (1+ index))))
+              (if (or (neq table-wrapper (%unbound-marker))
+                      (eql 0 flag))
+                (without-interrupts     ; why?
+                 (return (1st-arg-combined-method-trap (%gf-dispatch-table-gf dt) wrapper arg))) ; the only difference?
+                (setq flag 0 index -2)))
+            (setq index (+ 2 index))))))))
 
 ;;; for calls from outside - e.g. stream-reader
 (defun find-1st-arg-combined-method (gf arg)
@@ -337,42 +323,29 @@
 ;;; seems unlikely
 (defun %find-nth-arg-combined-method (dt arg args)  
   (declare (optimize (speed 3)(safety 0)))
-  (flet ((get-wrapper (arg)
-           (if (not (%standard-instance-p arg))
-	     (or (and (typep arg 'macptr)
-		      (foreign-instance-class-wrapper arg))
-                 (and (generic-function-p arg)
-                      (gf.instance.class-wrapper arg))
-		 (let* ((class (class-of arg)))
-		   (or (%class.own-wrapper class)
-		       (progn
-			 (update-class class nil)
-			 (%class.own-wrapper class)))))
-             (instance.class-wrapper arg))))
-    (declare (inline get-wrapper))
-    (let ((wrapper (get-wrapper arg)))
-      (when (eql 0 (%wrapper-hash-index wrapper))
-        (update-obsolete-instance arg)
-        (setq wrapper (get-wrapper arg)))
-      (let* ((mask (%gf-dispatch-table-mask dt))
-             (index (%ilsl 1 (%ilogand mask (%wrapper-hash-index wrapper))))
-             table-wrapper flag)
-        (declare (fixnum index mask))
-        (loop 
-          (if (eq (setq table-wrapper (%gf-dispatch-table-ref dt index)) wrapper)
-            (return (%gf-dispatch-table-ref dt (the fixnum (1+ index))))
-            (progn
-              (when (null (%gf-dispatch-table-ref dt (the fixnum (1+ index))))
-                (if (or (neq table-wrapper (%unbound-marker))
-                        (eql 0 flag))
-                  (without-interrupts ; why?
-                   (let ((gf (%gf-dispatch-table-gf dt)))
-                     (if (listp args)
-                       (return (nth-arg-combined-method-trap-0 gf dt wrapper args))
-                       (with-list-from-lexpr (args-list args)
-                         (return (nth-arg-combined-method-trap-0 gf dt wrapper args-list))))))
-                  (setq flag 0 index -2)))
-              (setq index (+ 2 index)))))))))
+  (let ((wrapper (instance-class-wrapper arg)))
+    (when (eql 0 (%wrapper-hash-index wrapper))
+      (update-obsolete-instance arg)
+      (setq wrapper (instance-class-wrapper arg)))
+    (let* ((mask (%gf-dispatch-table-mask dt))
+           (index (%ilsl 1 (%ilogand mask (%wrapper-hash-index wrapper))))
+           table-wrapper flag)
+      (declare (fixnum index mask))
+      (loop 
+        (if (eq (setq table-wrapper (%gf-dispatch-table-ref dt index)) wrapper)
+          (return (%gf-dispatch-table-ref dt (the fixnum (1+ index))))
+          (progn
+            (when (null (%gf-dispatch-table-ref dt (the fixnum (1+ index))))
+              (if (or (neq table-wrapper (%unbound-marker))
+                      (eql 0 flag))
+                (without-interrupts     ; why?
+                 (let ((gf (%gf-dispatch-table-gf dt)))
+                   (if (listp args)
+                     (return (nth-arg-combined-method-trap-0 gf dt wrapper args))
+                     (with-list-from-lexpr (args-list args)
+                       (return (nth-arg-combined-method-trap-0 gf dt wrapper args-list))))))
+                (setq flag 0 index -2)))
+            (setq index (+ 2 index))))))))
 
 
 
@@ -538,6 +511,7 @@
 (defun %set-combined-method-dcode (cm val)
   (setf (combined-method.dcode cm) val))
 
+(declaim (inline funcallable-instance-p))
 (defun funcallable-instance-p (thing)
   (when (typep thing 'function)
     (let ((bits (lfun-bits-known-function thing)))
@@ -546,22 +520,26 @@
 	  (logand bits (logior (ash 1 $lfbits-gfn-bit)
 			       (ash 1 $lfbits-method-bit)))))))
 
+(setf (type-predicate 'funcallable-standard-object) 'funcallable-instance-p)
+
 (defstatic *generic-function-class-wrapper* nil)
 (defstatic *standard-generic-function-class-wrapper* nil)
 
 (defun generic-function-p (thing)
-  (and (typep thing 'function)
-       (let ((bits (lfun-bits-known-function thing)))
-	 (declare (fixnum bits))
-	 (eq (ash 1 $lfbits-gfn-bit)
-	     (logand bits (logior (ash 1 $lfbits-gfn-bit)
-				  (ash 1 $lfbits-method-bit)))))
+  (and (typep thing 'funcallable-standard-object)
        (let* ((wrapper (gf.instance.class-wrapper thing)))
          ;; In practice, many generic-functions are standard-generic-functions.
          (or (eq *standard-generic-function-class-wrapper* wrapper)
              (eq *generic-function-class-wrapper* wrapper)
-             (memq  *generic-function-class*
-		  (%inited-class-cpl (class-of thing)))))))
+             (let* ((bits (or (%wrapper-cpl-bits wrapper)
+                              (make-cpl-bits (%inited-class-cpl (%wrapper-class wrapper)))))
+                    (ordinal (%wrapper-class-ordinal *generic-function-class-wrapper*)))
+               (and bits ordinal
+                    (locally (declare (simple-bit-vector bits)
+                                      (fixnum ordinal)
+                                      (optimize (speed 3) (safety 0)))
+                      (and (< ordinal (length bits))
+                           (eql 1 (sbit bits ordinal))))))))))
 
 
 (defun standard-generic-function-p (thing)
@@ -806,7 +784,6 @@
       (apply method args))))
 
 (register-dcode-proto #'%%0-arg-dcode *gf-proto*)
-
 
 (defun dcode-too-few-args (arg-count cm-or-gf)
   (error (make-condition 'too-few-arguments
@@ -1531,6 +1508,7 @@
         (if thing 
           (%apply-lexpr (cdr thing) args)
           (%apply-lexpr (cddr stuff) args))))))
+
 
 
 (defun %%hash-table-combined-method-dcode (stuff args)

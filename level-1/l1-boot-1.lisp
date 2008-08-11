@@ -102,11 +102,9 @@
 
 
 ; only do these if exist
-(defun init-logical-directories ()  
-  (let ((startup (mac-default-directory)))
-    (replace-base-translation "home:" (or (user-homedir-pathname) startup))
-    (replace-base-translation "ccl:" (ccl-directory))
-    ))
+(defun init-logical-directories ()
+  (replace-base-translation "home:"  (user-homedir-pathname))
+  (replace-base-translation "ccl:" (ccl-directory)))
 
 (push #'init-logical-directories *lisp-system-pointer-functions*)
 
