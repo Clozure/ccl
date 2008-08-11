@@ -139,7 +139,7 @@
 (define-syscall (logior platform-os-solaris platform-cpu-x86 platform-word-size-64) syscalls::execve 59 () :void)
 (define-syscall (logior platform-os-solaris platform-cpu-x86 platform-word-size-64) syscalls::umask 60 () :void)
 (define-syscall (logior platform-os-solaris platform-cpu-x86 platform-word-size-64) syscalls::chroot 61 () :void)
-(define-syscall (logior platform-os-solaris platform-cpu-x86 platform-word-size-64) syscalls::fcntl 62 (:int :int :int) :int :min-args 2)
+(define-syscall (logior platform-os-solaris platform-cpu-x86 platform-word-size-64) syscalls::fcntl 62 (:int :int :address) :int :min-args 2)
 (define-syscall (logior platform-os-solaris platform-cpu-x86 platform-word-size-64) syscalls::ulimit 63 () :void)
 (define-syscall (logior platform-os-solaris platform-cpu-x86 platform-word-size-64) syscalls::reserved_64 64 #|| 64 reserved ||# () :void)
 (define-syscall (logior platform-os-solaris platform-cpu-x86 platform-word-size-64) syscalls::reserved_65 65 #|| 65 reserved ||# () :void)
