@@ -1317,7 +1317,7 @@
 
 ;;; "basic" (e.g., builtin, non-extensible) streams.
 (def-accessors (basic-stream) %svref
-  basic-stream.class                    ; a class object
+  basic-stream.wrapper                  ; a class wrapper
   basic-stream.flags                    ; fixnum; bits.
   basic-stream.state                    ; typically an ioblock
   basic-stream.info                     ; a plist for less-often-used things.

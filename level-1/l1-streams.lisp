@@ -518,8 +518,8 @@
              (idx (io-buffer-idx inbuf))
              (count (io-buffer-count inbuf)))
         (unless (= count 0)
-          (let* ((start (max (- idx (* 5 size)) 0))
-                 (end (min (+ idx (* 5 size)) count))
+          (let* ((start (max (- idx (* 10 size)) 0))
+                 (end (min (+ idx (* 10 size)) count))
                  (string (make-string (funcall (character-encoding-length-of-vector-encoding-function encoding) buffer start end))))
             (funcall (character-encoding-vector-decode-function encoding)
                      buffer
@@ -3652,8 +3652,8 @@
 
 (defun allocate-basic-stream (class)
   (if (subtypep class 'basic-file-stream)
-    (gvector :basic-stream class 0 nil nil nil nil nil)
-    (gvector :basic-stream class 0 nil nil)))
+    (gvector :basic-stream (%class-own-wrapper class) 0 nil nil nil nil nil)
+    (gvector :basic-stream (%class-own-wrapper class) 0 nil nil)))
 
 
 (defmethod initialize-basic-stream ((s basic-stream) &key &allow-other-keys)
@@ -4227,6 +4227,7 @@
   (index 0))
 
 (defstatic *string-output-stream-class* (make-built-in-class 'string-output-stream 'string-stream 'basic-character-output-stream))
+(defstatic *string-output-stream-class-wrapper* (%class-own-wrapper *string-output-stream-class*))
 
 (defstatic *fill-pointer-string-output-stream-class* (make-built-in-class 'fill-pointer-string-output-stream 'string-output-stream))
 
@@ -4244,8 +4245,8 @@
 ;;; Should only be used for a stream whose class is exactly
 ;;; *string-output-stream-class* 
 (defun %close-string-output-stream (stream ioblock)
-  (when (eq (basic-stream.class stream)
-            *string-output-stream-class*)
+  (when (eq (basic-stream.wrapper stream)
+            *string-output-stream-class-wrapper*)
     (without-interrupts
      (setf (ioblock-stream ioblock) (pool.data %string-output-stream-ioblocks%)
            (pool.data %string-output-stream-ioblocks%) ioblock))))
@@ -4253,8 +4254,8 @@
 (defun create-string-output-stream-ioblock (&rest keys &key stream &allow-other-keys)
   (declare (dynamic-extent keys))
   (let* ((recycled (and stream
-                        (eq (basic-stream.class stream)
-                            *string-output-stream-class*)
+                        (eq (basic-stream.wrapper stream)
+                            *string-output-stream-class-wrapper*)
                         (without-interrupts
                          (let* ((data (pool.data %string-output-stream-ioblocks%)))
                            (when data
@@ -4400,8 +4401,11 @@
         (setf (string-output-stream-ioblock-index ioblock) newpos)))))
 
 (defun make-simple-string-output-stream ()
+  ;; There's a good chance that we'll get a recycled ioblock
+  ;; that already has a string; if not, we defer actually
+  ;; creating a usable string until write-char
   (%%make-string-output-stream *string-output-stream-class*
-                               (make-string 40)
+                               ""
                                'string-output-stream-ioblock-write-char
                                'string-output-stream-ioblock-write-simple-string))
 
@@ -4459,7 +4463,7 @@
 ;;;One way to indent on newlines:
 
 (defstatic *indenting-string-output-stream-class* (make-built-in-class 'indenting-string-output-stream 'string-output-stream))
-
+(defstatic *indenting-string-output-stream-class-wrapper* (%class-own-wrapper *indenting-string-output-stream-class*))
 
 
 (defun indenting-string-stream-ioblock-write-char (ioblock c)
@@ -4500,13 +4504,13 @@
 
 (defun (setf indenting-string-output-stream-indent) (new stream)
   (if (and (typep stream 'basic-stream)
-           (eq (basic-stream.class stream) *indenting-string-output-stream-class*))
+           (eq (basic-stream.wrapper stream) *indenting-string-output-stream-class-wrapper*))
     (setf (getf (basic-stream.info stream) 'indent) new)
     (report-bad-arg stream 'indenting-string-output-stream)))
 
 
 (defun get-output-stream-string (s)
-  (let* ((class (if (typep s 'basic-stream) (basic-stream.class s))))
+ (let* ((class (if (typep s 'basic-stream) (%wrapper-class (basic-stream.wrapper s)))))
     (or (eq class *string-output-stream-class*)
         (eq class *truncating-string-output-stream-class*)
         (eq class *indenting-string-output-stream-class*)
@@ -4526,7 +4530,7 @@
 
 ;;; String input streams.
 (defstatic *string-input-stream-class* (make-built-in-class 'string-input-stream 'string-stream 'basic-character-input-stream))
-
+(defstatic *string-input-stream-class-wrapper* (%class-own-wrapper *string-input-stream-class*))
 (defstruct (string-input-stream-ioblock (:include string-stream-ioblock))
   (start 0)
   index
@@ -4537,7 +4541,7 @@
 
 (defun string-input-stream-index (s)
   (if (and (typep s 'basic-stream)
-           (eq *string-input-stream-class* (basic-stream.class s)))
+           (eq *string-input-stream-class-wrapper* (basic-stream.wrapper s)))
     (let* ((ioblock (basic-stream-ioblock s)))
       (- (string-input-stream-ioblock-index ioblock)
          (string-input-stream-ioblock-offset ioblock)))
@@ -4551,7 +4555,7 @@
              (idx (string-input-stream-ioblock-index ioblock))
              (end (string-input-stream-ioblock-end ioblock))
              (string (string-stream-ioblock-string ioblock)))
-        (subseq string (max (- idx 5) start) (min (+ idx 5) end))))))
+        (subseq string (max (- idx 10) start) (min (+ idx 10) end))))))
     
 
 (defmethod stream-position ((s string-input-stream) &optional newpos)
@@ -4709,7 +4713,7 @@
       stream)))
 
 (defun string-stream-string (s)
-  (let* ((class (if (typep s 'basic-stream) (basic-stream.class s))))
+  (let* ((class (if (typep s 'basic-stream) (%wrapper-class (basic-stream.wrapper s)))))
     (or (eq class *string-output-stream-class*)
         (eq class *truncating-string-output-stream-class*)
         (eq class *indenting-string-output-stream-class*)
