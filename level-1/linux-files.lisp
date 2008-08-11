@@ -412,10 +412,18 @@ given is that of a group to which the current user belongs."
   (syscall syscalls::fdsync fd #$FSYNC))
 
 (defun fd-get-flags (fd)
-  (syscall syscalls::fcntl fd #$F_GETFL))
+  (let* ((result (#_fcntl fd #$F_GETFL)))
+    (declare (fixnum result))
+    (if (< result 0)
+      (%get-errno)
+      result)))
 
 (defun fd-set-flags (fd new)
-  (syscall syscalls::fcntl fd #$F_SETFL new))
+  (let* ((result (#_fcntl fd #$F_SETFL :int new)))
+    (declare (fixnum result))
+    (if (< result 0)
+      (%get-errno)
+      result)))
 
 (defun fd-set-flag (fd mask)
   (let* ((old (fd-get-flags fd)))
