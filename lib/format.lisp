@@ -360,6 +360,14 @@
 		 (do-sub-format stream))))))
 	nil))))
 
+(defun format-to-string (string control-string &rest format-arguments)
+  (declare (dynamic-extent format-arguments))
+  (if string
+    (with-output-to-string (stream string)
+      (apply #'format stream control-string format-arguments))
+    (with-output-to-string (stream)
+      (apply #'format stream control-string format-arguments))))
+
 (defun do-sub-format (stream)
   (let (errorp)
     (setq errorp
