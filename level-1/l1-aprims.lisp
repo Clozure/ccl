@@ -40,6 +40,13 @@
     (record-source-file symbol 'variable)
     symbol))
 
+(defstatic *kernel-tcr-area-lock* (%make-lock (%null-ptr) "Kernal tcr-area-lock"))
+
+(def-ccl-pointers area-lock ()
+  (let* ((p (recursive-lock-ptr *kernel-tcr-area-lock*)))
+    (%revive-macptr p)
+    (%get-kernel-global-ptr area-lock p)))
+
 (def-standard-initial-binding *package*)
 (def-standard-initial-binding *gensym-counter* 0)
 (def-standard-initial-binding *random-state* (initialize-random-state #xFBF1 9))
