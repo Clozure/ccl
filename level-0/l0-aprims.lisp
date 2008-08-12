@@ -132,10 +132,13 @@
 (defun make-recursive-lock ()
   (make-lock nil))
 
+(defun %make-lock (pointer name)
+  (gvector :lock pointer 'recursive-lock 0 name nil nil))
+
 (defun make-lock (&optional name)
   "Create and return a lock object, which can be used for synchronization
 between threads."
-  (gvector :lock (%make-recursive-lock-ptr) 'recursive-lock 0 name nil nil))
+  (%make-lock (%make-recursive-lock-ptr) name))
 
 (defun lock-name (lock)
   (uvref (require-type lock 'lock) target::lock.name-cell))
