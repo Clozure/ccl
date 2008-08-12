@@ -54,7 +54,7 @@
 ;;; For now, if the time won't fit in a :time_t, use an arbitrary time
 ;;; value to get the time zone and assume that DST was -not- in effect.
 (defun get-timezone (time)
-  (let* ((toobig (not (typep time '(unsigned-byte
+  (let* ((toobig (not (typep time '(signed-byte
                                     #+32-bit-target 32
                                     #+64-bit-target 64)))))
     (when toobig
