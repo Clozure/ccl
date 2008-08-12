@@ -45,10 +45,10 @@
 ;;; Traps unless sym is NIL or some other symbol.  If NIL, return
 ;;; nilsym
 (defx86lapfunction %symbol->symptr ((sym arg_z))
-  (let ((tag imm0 ))
+  (let ((tag imm0))
     (movq ($ (+ x8664::nil-value x8664::nilsym-offset)) (% tag))
     (cmp-reg-to-nil sym)
-    (cmoveq (% sym) (% tag))
+    (cmoveq (% tag) (% sym))
     (je :done)
     (trap-unless-fulltag= sym x8664::fulltag-symbol)
     :done

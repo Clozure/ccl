@@ -30,7 +30,7 @@
   (let ((tag imm0))
     (movl ($ (+ x8632::nil-value x8632::nilsym-offset)) (% tag))
     (cmp-reg-to-nil sym)
-    (cmove (% sym) (% tag))
+    (cmove (% tag) (% sym))
     (je :done)
     (trap-unless-typecode= sym x8632::subtag-symbol)
     :done
