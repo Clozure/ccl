@@ -380,6 +380,12 @@ be somewhat larger than what was specified)."
   (movl ($ x8632::nil-value) (%l arg_z))
   (single-value-return))
 
+(defx8632lapfunction freeze ()
+  "Do a full GC, then consider all heap-allocated objects which survive to be non-relocatable."
+  (movl ($ arch::gc-trap-function-freeze) (% imm0))
+  (uuo-gc-trap)
+  (jmp-subprim .SPmakeu32))
+
 ;;; offset is a fixnum, one of the x8632::kernel-import-xxx constants.
 ;;; Returns that kernel import, a fixnum.
 (defx8632lapfunction %kernel-import ((offset arg_z))
