@@ -9432,12 +9432,10 @@
 	       (<- fpreg)))
 	    ((eq resultspec :unsigned-doubleword)
 	     (ensuring-node-target (target vreg)
-	       ;; xxx -- need to ensure that edx is marked as an imm reg
 	       (! makeu64)
 	       (x862-copy-register seg target ($ *x862-arg-z*))))
 	    ((eq resultspec :signed-doubleword)
 	     (ensuring-node-target (target vreg)
-	       ;; xxx -- need to ensure that edx is marked as an imm reg
 	       (! makes64)
 	       (x862-copy-register seg target ($ *x862-arg-z*))))
 	    (t
