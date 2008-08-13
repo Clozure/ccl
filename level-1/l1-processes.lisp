@@ -210,26 +210,36 @@
     (or (null thread)
 	(thread-exhausted-p thread))))
   
-
+;;; This should be way more concerned about being correct and thread-safe
+;;; than about being quick: it's generally only called while printing
+;;; or debugging, and there are all kinds of subtle race conditions
+;;; here.
 (defun process-whostate (p)
   "Return a string which describes the status of a specified process."
-  (if (process-exhausted-p p)
-    "Exhausted"
-    (let* ((loc nil))
-    (if (eq p *current-process*)
-      (setq loc (%tcr-binding-location (%current-tcr) '*whostate*))
-      (let* ((tcr (process-tcr p)))
-        (without-interrupts
-         (unwind-protect
-              (progn
-                (%suspend-tcr tcr)
-                (setq loc (%tcr-binding-location tcr '*whostate*)))
-           (%resume-tcr tcr)))))
-    (if loc
-      (%fixnum-ref loc)
-      (if (eq p *initial-process*)
-        "Active"
-        "Reset")))))
+    (let* ((ip *initial-process*))
+      (cond ((eq p *current-process*)
+             (if (%tcr-binding-location (%current-tcr) '*whostate*)
+               *whostate*
+               (if (eq p ip)
+                 "Active"
+                 "Reset")))
+            (t
+             (without-interrupts
+              (with-lock-grabbed (*kernel-exception-lock*)
+               (with-lock-grabbed (*kernel-tcr-area-lock*)
+                 (let* ((tcr (process-tcr p)))
+                   (if tcr
+                     (unwind-protect
+                          (let* ((loc nil))
+                            (%suspend-tcr tcr)
+                            (setq loc (%tcr-binding-location tcr '*whostate*))
+                            (if loc
+                              (%fixnum-ref loc)
+                              (if (eq p ip)
+                                "Active"
+                                "Reset")))
+                       (%resume-tcr tcr))
+                     "Exhausted")))))))))
 
 (defun (setf process-whostate) (new p)
   (unless (process-exhausted-p p)
@@ -256,12 +266,28 @@
 (defun symbol-value-in-process (sym process)
   (if (eq process *current-process*)
     (symbol-value sym)
-    (symbol-value-in-tcr sym (process-tcr process))))
+    (let* ((val
+            (without-interrupts
+             (with-lock-grabbed (*kernel-exception-lock*)
+               (with-lock-grabbed (*kernel-tcr-area-lock*)
+                 (let* ((tcr (process-tcr process)))
+                   (if tcr
+                     (symbol-value-in-tcr sym tcr)
+                     (%sym-global-value sym))))))))
+      (if (eq val (%unbound-marker))
+        ;; This might want to be a CELL-ERROR.
+        (error "~S is unbound in ~S." sym process)
+        val))))
 
 (defun (setf symbol-value-in-process) (value sym process)
   (if (eq process *current-process*)
     (setf (symbol-value sym) value)
-    (setf (symbol-value-in-tcr sym (process-tcr process)) value)))
+    (with-lock-grabbed (*kernel-exception-lock*)
+      (with-lock-grabbed (*kernel-tcr-area-lock*)
+        (let* ((tcr (process-tcr process)))
+          (if tcr
+            (setf (symbol-value-in-tcr sym tcr) value)
+            (%set-sym-global-value sym value)))))))
 
 
 (defun process-enable (p &optional (wait (* 60 60 24) wait-p))
