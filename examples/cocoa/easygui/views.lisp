@@ -262,14 +262,16 @@ To avoid deallocation, use RETAINING-OBJECTS"))
 
 (defmethod initialize-view :after ((view slider-view))
   (with-slots (discrete-tick-marks-p tick-mark-count min-value max-value) view
-     (cond ((and (not (slot-boundp view 'tick-mark-count))
-                 (slot-boundp view 'discrete-tick-marks-p)
-                 (/= (length tick-mark-values) tick-mark-count))
-            (error "Incompatible tick mark specification: ~A doesn't match ~
-                     count of ~A" tick-mark-values tick-mark-values))
-           ((or (not (slot-boundp view 'max-value))
-                (not (slot-boundp view 'min-value)))
-            (error "A slider view needs both :min-value and :max-value set.")))
+     (cond 
+       #| BUG: tick-mark-values is not defined.
+       ((and (not (slot-boundp view 'tick-mark-count))
+       (slot-boundp view 'discrete-tick-marks-p)
+       (/= (length tick-mark-values) tick-mark-count))
+       (error "Incompatible tick mark specification: ~A doesn't match ~
+       count of ~A" tick-mark-values tick-mark-values))|#
+       ((or (not (slot-boundp view 'max-value))
+            (not (slot-boundp view 'min-value)))
+        (error "A slider view needs both :min-value and :max-value set.")))
      (dcc (#/setMinValue: (cocoa-ref view) (float min-value ns:+cgfloat-zero+)))
      (dcc (#/setMaxValue: (cocoa-ref view) (float max-value ns:+cgfloat-zero+)))
      (when (slot-boundp view 'tick-mark-count)
