@@ -35,33 +35,34 @@
     (floor 1000000000 *ticks-per-second*))
 
 (defun %nanosleep (seconds nanoseconds)
-  (rlet ((a :timespec)
-         (b :timespec))
-    (setf (pref a :timespec.tv_sec) seconds
-          (pref a :timespec.tv_nsec) nanoseconds)
-    (let* ((aptr a)
-           (bptr b))
-      (loop
-        (let* ((result 
-                (external-call #+darwin-target "_nanosleep"
-                               #-darwin-target "nanosleep"
-                               :address aptr
-                               :address bptr
-                               :signed-fullword)))
-          (declare (type (signed-byte 32) result))
-          (if (and (< result 0)
-                   (eql (%get-errno) (- #$EINTR)))
-            ;; x86-64 Leopard bug.
-            (let* ((asec (pref aptr :timespec.tv_sec))
-                   (bsec (pref bptr :timespec.tv_sec)))
-              (if (and (>= bsec 0)
-                       (or (< bsec asec)
-                           (and (= bsec asec)
-                                (< (pref bptr :timespec.tv_nsec)
-                                   (pref aptr :timespec.tv_nsec)))))
-                (psetq aptr bptr bptr aptr)
-                (return)))
-            (return)))))))
+  (with-process-whostate ("Sleep")
+    (rlet ((a :timespec)
+           (b :timespec))
+      (setf (pref a :timespec.tv_sec) seconds
+            (pref a :timespec.tv_nsec) nanoseconds)
+      (let* ((aptr a)
+             (bptr b))
+        (loop
+          (let* ((result 
+                  (external-call #+darwin-target "_nanosleep"
+                                 #-darwin-target "nanosleep"
+                                 :address aptr
+                                 :address bptr
+                                 :signed-fullword)))
+            (declare (type (signed-byte 32) result))
+            (if (and (< result 0)
+                     (eql (%get-errno) (- #$EINTR)))
+              ;; x86-64 Leopard bug.
+              (let* ((asec (pref aptr :timespec.tv_sec))
+                     (bsec (pref bptr :timespec.tv_sec)))
+                (if (and (>= bsec 0)
+                         (or (< bsec asec)
+                             (and (= bsec asec)
+                                  (< (pref bptr :timespec.tv_nsec)
+                                     (pref aptr :timespec.tv_nsec)))))
+                  (psetq aptr bptr bptr aptr)
+                  (return)))
+              (return))))))))
 
 
 (defun timeval->ticks (tv)
@@ -320,20 +321,11 @@
 (defun tcr-flags (tcr)
   (%fixnum-ref tcr target::tcr.flags))
 
-(defun tcr-exhausted-p (tcr)
-  (or (null tcr)
-      (eql tcr 0)
-      (unless (logbitp arch::tcr-flag-bit-awaiting-preset
-		       (the fixnum (tcr-flags tcr)))
-	(let* ((vs-area (%fixnum-ref tcr target::tcr.vs-area)))
-	  (declare (fixnum vs-area))
-	  (or (zerop vs-area)
-	      (eq (%fixnum-ref vs-area target::area.high)
-		  (%fixnum-ref tcr target::tcr.save-vsp)))))))
+
 
 (defun thread-exhausted-p (thread)
   (or (null thread)
-      (tcr-exhausted-p (lisp-thread.tcr thread))))
+      (null (lisp-thread.tcr thread))))
 
 (defun thread-total-run-time (thread)
   (unless (thread-exhausted-p thread)
