@@ -42,10 +42,15 @@
 
 (defstatic *kernel-tcr-area-lock* (%make-lock (%null-ptr) "Kernal tcr-area-lock"))
 
-(def-ccl-pointers area-lock ()
-  (let* ((p (recursive-lock-ptr *kernel-tcr-area-lock*)))
+(defstatic *kernel-exception-lock* (%make-lock (%null-ptr) "Kernal exception-lock"))
+  
+(def-ccl-pointers kernel-locks ()
+  (let* ((p (recursive-lock-ptr *kernel-tcr-area-lock*))
+         (q (recursive-lock-ptr *kernel-exception-lock*)))
     (%revive-macptr p)
-    (%get-kernel-global-ptr area-lock p)))
+    (%revive-macptr q)
+    (%get-kernel-global-ptr area-lock p)
+    (%get-kernel-global-ptr exception-lock q)))
 
 (def-standard-initial-binding *package*)
 (def-standard-initial-binding *gensym-counter* 0)
