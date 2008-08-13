@@ -858,9 +858,9 @@ shutdown_thread_tcr(void *arg)
     destroy_semaphore(&tcr->resume);
     destroy_semaphore(&tcr->reset_completion);
     destroy_semaphore(&tcr->activate);
+    tcr->tlb_limit = 0;
     free(tcr->tlb_pointer);
     tcr->tlb_pointer = NULL;
-    tcr->tlb_limit = 0;
     tcr->osid = 0;
     tcr->interrupt_pending = 0;
     termination_semaphore = tcr->termination_semaphore;
