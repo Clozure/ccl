@@ -467,6 +467,7 @@ os_get_stack_bounds(LispObj q,void **base, natural *size)
 
   pthread_getattr_np(p,&attr);
   pthread_attr_getstack(&attr, base, size);
+  pthread_attr_destroy(&attr);
   *(natural *)base += *size;
 #endif
 #ifdef FREEBSD
@@ -481,6 +482,7 @@ os_get_stack_bounds(LispObj q,void **base, natural *size)
   pthread_attr_getstacksize(&attr,&temp_size);
   *base = (void *)((natural)temp_base + temp_size);
   *size = temp_size;
+  pthread_attr_destroy(&attr);
 #endif
 #ifdef SOLARIS
   stack_t st;
@@ -548,6 +550,7 @@ destroy_semaphore(void **s)
   if (*s) {
 #ifdef USE_POSIX_SEMAPHORES
     sem_destroy((sem_t *)*s);
+    free(*s);
 #endif
 #ifdef USE_MACH_SEMAPHORES
     semaphore_destroy(mach_task_self(),((semaphore_t)(natural) *s));
@@ -1237,6 +1240,7 @@ create_system_thread(size_t stack_size,
      I think that's just about enough ... create the thread.
   */
   pthread_create(&returned_thread, &attr, start_routine, param);
+  pthread_attr_destroy(&attr);
   return (LispObj) ptr_to_lispobj(returned_thread);
 }
 #endif
