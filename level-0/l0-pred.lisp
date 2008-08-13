@@ -1002,18 +1002,18 @@
 ;;; Not to be conused with STRUCTURE-TYPE-P, defined in ccl:lib;pprint.lisp.
 ;;; (If you've ever been "conused", I'm sure you know just how painful
 ;;; that can be.)
-
-;;; In the short term (bootstrapping), expect TYPE to be a a SYMBOL.
-;;; If THING is a structure instance (has typecode subtag-struct),
-;;; its 0th element is either a list of symbols (traditional, legacy
-;;; case) or a list of CLASS-CELLs.
 (defun structure-typep (thing type)
   (if (= (the fixnum (typecode thing)) target::subtag-struct)
-    (dolist (i (%svref thing 0))
-      (if (or (eq i type)
-              (and (not (symbolp i))
-                   (eq (class-cell-name i) type)))
-        (return t)))))
+
+
+    (let* ((types (%svref thing 0)))
+      (if (typep type 'symbol)
+        (dolist (x types)
+          (when (eq (class-cell-name x) type)
+            (return t)))
+        (dolist (x types)
+          (when (eq x type)
+            (return t)))))))
 
 
 
