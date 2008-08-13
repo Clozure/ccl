@@ -165,7 +165,27 @@
                                     (error "~s has no slots." p)))
           (#.objc-flag-class (id->objc-class-slots-vector index))
           (#.objc-flag-metaclass (id->objc-metaclass-slots-vector index)))))
-	  
+
+(defun %objc-domain-class-ordinal (p)
+  (let* ((type (%macptr-type p))
+	 (flags (ldb objc-type-flags type))
+	 (index (ldb objc-type-index type)))
+    (declare (fixnum type flags index))
+    (ecase flags
+      (#.objc-flag-instance nil)
+      (#.objc-flag-class (objc-class-id->ordinal index))
+      (#.objc-flag-metaclass (objc-metaclass-id->ordinal index)))))
+
+(defun %set-objc-domain-class-ordinal (p new)
+  (let* ((type (%macptr-type p))
+	 (flags (ldb objc-type-flags type))
+	 (index (ldb objc-type-index type)))
+    (declare (fixnum type flags index))
+    (ecase flags
+      (#.objc-flag-instance nil)
+      (#.objc-flag-class (setf (objc-class-id->ordinal index) new))
+      (#.objc-flag-metaclass (setf (objc-metaclass-id->ordinal index) new)))))
+
 (defloadvar *objc-object-domain*
     (register-foreign-object-domain :objc
 				:recognize #'recognize-objc-object
@@ -175,7 +195,10 @@
 				#'%objc-domain-instance-class-wrapper
 				:class-own-wrapper
 				#'%objc-domain-class-own-wrapper
-				:slots-vector #'%objc-domain-slots-vector))
+				:slots-vector #'%objc-domain-slots-vector
+				:class-ordinal #'%objc-domain-class-ordinal
+				:set-class-ordinal
+				#'%set-objc-domain-class-ordinal))
 
 ;;; P is known to be a (possibly null!) instance of some ObjC class.
 (defun %set-objc-instance-type (p)
