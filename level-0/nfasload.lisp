@@ -246,10 +246,21 @@
 
 (defvar *package-refs*)
 (setq *package-refs* (make-hash-table :test #'equal))
+(defvar *package-refs-lock*)
+(setq *package-refs-lock* (make-lock))
 
 (defun register-package-ref (name)
-  (or (gethash name *package-refs*)
-      (setf (gethash name *package-refs*) (make-package-ref name))))
+  (let* ((ref
+          (or (gethash name *package-refs*)
+              (with-lock-grabbed (*package-refs-lock*)
+                (or
+                 (gethash name *package-refs*) ; check again
+                 (let* ((r (make-package-ref name)))
+                   (setf (gethash name *package-refs*) r)))))))
+    (unless (package-ref.pkg ref)
+      (setf (package-ref.pkg ref) (find-package name)))
+    ref))
+
 
 (dolist (p %all-packages%)
   (dolist (name (pkg.names p))
