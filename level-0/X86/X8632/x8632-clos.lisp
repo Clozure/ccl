@@ -13,7 +13,7 @@
   (movl (% arg_y) (% imm0))
   (shrl ($ x8632::word-shift) (% imm0))
   (movzbl (@ x8632::misc-data-offset (% temp1) (% imm0)) (%l imm0))
-  (shll ($ x8632::word-shift) (% imm0))
+  ;(shll ($ x8632::word-shift) (% imm0))
   @have-table-index
   (movl (@ 'table (% fn)) (% temp0))
   (movl (@ x8632::misc-data-offset (% temp0) (% imm0) 4) (% arg_z))
