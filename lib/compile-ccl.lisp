@@ -472,7 +472,26 @@
     (:darwinx8664 "darwinx8664")
     (:solarisx8664 "solarisx64")))
 
-(defparameter *known-optional-features* '(:lock-accouting :count-gf-calls :monitor-futex-wait))
+;;; If we distribute (e.g.) 32- and 64-bit versions for the same
+;;; machine and OS in the same svn directory, return the name of the
+;;; peer backend, or NIL. For example., the peer of :linuxppc64 is
+;;; :linuxppc32.  Note that this may change over time.
+;;; Return NIL if the concept doesn't apply.
+(defun peer-platform (&optional (target (backend-name *host-backend*)))
+  (let* ((pairs '((:darwinppc32 . :darwinppc64)
+                  (:linuxppc32 . :linuxppc64)
+                  (:darwinx8632 . :darwinx8664))))
+    (or (cdr (assoc target pairs))
+        (car (rassoc target pairs)))))
+
+(defun make-program (&optional (target (backend-name *host-backend*)))
+  ;; The Solaris "make" program is too clever to understand -C, so
+  ;; use GNU make (installed as "gmake").
+  (case target
+    (:solarisx8664 "gmake")
+    (t "make")))
+
+(defparameter *known-optional-features* '(:count-gf-calls :monitor-futex-wait))
 (defvar *build-time-optional-features* nil)
 
 
@@ -509,7 +528,7 @@
                                       (multiple-value-bind
                                           (status exit-code)
                                           (external-process-status 
-                                           (run-program "make"
+                                           (run-program (make-program)
                                                         (list "-k" "-C" 
                                                               (format nil "lisp-kernel/~a"
                                                                       (kernel-build-directory))
@@ -517,7 +536,7 @@
                                                             
                                                               (format nil "~d" (1+ (cpu-count))))
                                                         :output s
-                                                        :error s))
+                                                        :error :output))
                                         (if (and (eq :exited status) (zerop exit-code))
                                           (progn
                                             (format t "~&;Kernel built successfully.")
@@ -607,7 +626,11 @@
                    (deleted ())
                    (updated ())
                    (merged ())
-                   (binaries (list (standard-kernel-name) (standard-image-name ))))
+                   (binaries (list (standard-kernel-name) (standard-image-name )))
+                   (peer (peer-platform)))
+              (when peer
+                (push (standard-kernel-name peer) binaries)
+                (push (standard-image-name peer) binaries))
               (flet ((svn-revert (string)
                        (multiple-value-bind (status exit-code)
                            (external-process-status (run-program "svn" `("revert" ,string)))
