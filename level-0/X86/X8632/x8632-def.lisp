@@ -381,28 +381,26 @@
   (popl (@ (% :rcontext) x8632::tcr.save1))	; and magic arg in the spill area
   (discard-reserved-frame)
   (movl (% args) (@ (% :rcontext) x8632::tcr.save2))	;in case of error
-  (xorl (% imm0) (% imm0))
-  (push (% imm0))		;reserve frame (might discard it
-  (push (% imm0))		;if nothing is passed on stack)
+  (set-nargs 0)
+  (pushl ($ target::reserved-frame-marker))		;reserve frame (might discard it
+  (pushl ($ target::reserved-frame-marker))		;if nothing is passed on stack)
   (cmp-reg-to-nil arg_z)
   (je @done)
-  (mark-as-imm temp0)
   @loop
-  (extract-fulltag arg_z temp0)
-  (cmpb ($ x8632::fulltag-cons) (% temp0.b)) ;nil is a cons on x8632, but we
+  (extract-fulltag arg_z imm0)
+  (cmpb ($ x8632::fulltag-cons) (% imm0.b)) ;nil is a cons on x8632, but we
   (jne @bad)				     ; checked for it already.
   (%car arg_z temp1)
   (%cdr arg_z arg_z)
-  (add ($ '1) (% imm0))			;shorter than lea (imm0 is eax)
+  (add ($ '1) (% nargs))			;shorter than lea (imm0 is eax)
   (cmp-reg-to-nil arg_z)
   (push (% temp1))
   (jne @loop)
-  (mark-as-node temp0)
   @done
-  ;; arg_y about to get clobbered; put function into xfn.
-  (movl (% function) (% xfn))		;aka temp1
-  ;; imm0 (aka nargs) contains number of args just pushed
-  (test (% imm0) (% imm0))
+  ;; arg_y about to get clobbered; put function into tcr save area.
+  (movl (% function) (@ (% :rcontext) target::tcr.save3))
+  ;; temp1 (aka nargs) contains number of args just pushed
+  (test (% nargs) (% nargs))
   (jne @pop)
   @discard-and-go
   (discard-reserved-frame)
@@ -416,12 +414,12 @@
   (je @discard-and-go)
   @go
   (pushl (@ (% :rcontext) x8632::tcr.save0))	 ;return address
+  (pushl (@ (% :rcontext) x8632::tcr.save3))
   (movl (@ (% :rcontext) x8632::tcr.save1) (% next-method-context)) ;aka temp0
   (movapd (% fpzero) (@ (% :rcontext) x8632::tcr.save0)) ;clear out spill area
-  (jmp (% xfn))				 ;aka temp1
+  (ret)				 ;aka temp1
   @bad
-  (mark-as-node temp0)
-  (addl (% imm0) (% esp))
+  (addl (% nargs) (% esp))
   (movl (@ (% :rcontext) x8632::tcr.save1) (% arg_z)) ;saved args
   (movapd (% fpzero) (@ (% :rcontext) x8632::tcr.save0)) ;clear out spill area
   (movl ($ '#.$XNOSPREAD) (% arg_y))
