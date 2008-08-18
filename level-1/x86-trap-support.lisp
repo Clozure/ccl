@@ -234,7 +234,7 @@
 (defun %check-anchored-uuo (xcf skip)
   (if (eql 0 (%get-xcf-byte xcf skip))
     (let* ((new-rpc (+ #+x8664-target target::tag-function
-		       #+x8632-target target::tag-misc
+		       #+x8632-target target::fulltag-misc
                        (logior (ash (%get-xcf-byte xcf -1) 24)
                                (ash (%get-xcf-byte xcf -2) 16)
                                (ash (%get-xcf-byte xcf -3) 8)
