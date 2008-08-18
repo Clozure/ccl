@@ -160,8 +160,7 @@
 ;;; processed.  There's embedded data and alignment padding in OpenMCL
 ;;; x86 functions and this approach means that we won't try to
 ;;; disassemble any of that; if the compiler generates any unreachable
-
-;;; code, we won't seen that, either.
+;;; code, we won't see that, either.
 
 ;;; There might be a large number of blocks, in which case
 ;;; keeping them in a search tree might be a better idea.
@@ -2357,6 +2356,8 @@
   ;; is relative to the FN register, generate a constant reference.
   ;; If the instruction is adding a displacement to RIP, note
   ;; the effective address as a label reference.
+  ;; On ia32, if op0 is a 32-bit immediate and op1 is (% fn),
+  ;; treat the immediate as :self.
   (let* ((op0 (x86-di-op0 instruction))
          (op1 (x86-di-op1 instruction))
          (entry-ea (x86-ds-entry-point ds)))
@@ -2436,6 +2437,17 @@
                                   :key #'subprimitive-info-offset)))
                  (when info (setf (x86::x86-memory-operand-disp op0)
                                   (subprimitive-info-name info)))))))
+          (t
+           (unless (x86-ds-mode-64 ds)
+             (when (and (is-fn op1)
+                        (typep op0 'x86::x86-immediate-operand)
+                        ;; Not sure what else would have an
+                        ;; immediate source and %fn as destination,
+                        ;; but check for this.
+                        (equal (x86-di-mnemonic instruction) "movl"))
+               (setf (x86-di-mnemonic instruction) "recover-fn"
+                     (x86-di-op0 instruction) nil
+                     (x86-di-op0 instruction) nil))))
 
           )))
     instruction))
@@ -2827,7 +2839,7 @@
 
 (defun disassemble-list (function)
   (collect ((instructions))
-    (x8664-xdisassemble
+    (#+x8632-target x8632-xdisassemble #+x8664-target x8664-xdisassemble
      function
      #'(lambda (ds instruction seq)
          (collect ((insn))
