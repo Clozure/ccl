@@ -2599,12 +2599,6 @@ defcallback returns the callback pointer, e.g., the value of name."
         body))))
 
 
-(defmacro errchk (form)
-  (let* ((res (gensym)))
-    `(let* ((,res ,form))
-       (if (eql 0 ,res)
-         0
-         (signal-posix-error ,res)))))
 
 (defmacro define-toplevel-command (group-name name arglist &body body &environment env)
   (let* ((key (make-keyword name)))
