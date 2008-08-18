@@ -378,7 +378,7 @@
 						 (args arg_z))
   ;; Similar to above.
   (popl (@ (% :rcontext) x8632::tcr.save0))	;save return address
-  (popl (@ (% :rcontext) x8632::tcr.save1))	; and magic arg in the spill area
+  (popl (@ (% :rcontext) x8632::tcr.next-method-context))	;
   (discard-reserved-frame)
   (movl (% args) (@ (% :rcontext) x8632::tcr.save2))	;in case of error
   (set-nargs 0)
@@ -390,15 +390,14 @@
   (extract-fulltag arg_z imm0)
   (cmpb ($ x8632::fulltag-cons) (% imm0.b)) ;nil is a cons on x8632, but we
   (jne @bad)				     ; checked for it already.
-  (%car arg_z temp1)
-  (%cdr arg_z arg_z)
   (add ($ '1) (% nargs))			;shorter than lea (imm0 is eax)
+  (pushl (@ target::cons.car (% arg_z)))
+  (%cdr arg_z arg_z)
   (cmp-reg-to-nil arg_z)
-  (push (% temp1))
   (jne @loop)
   @done
-  ;; arg_y about to get clobbered; put function into tcr save area.
-  (movl (% function) (@ (% :rcontext) target::tcr.save3))
+  ;; arg_y about to get clobbered; put function into temp0
+  (movl (% function) (% temp0))
   ;; temp1 (aka nargs) contains number of args just pushed
   (test (% nargs) (% nargs))
   (jne @pop)
@@ -414,10 +413,8 @@
   (je @discard-and-go)
   @go
   (pushl (@ (% :rcontext) x8632::tcr.save0))	 ;return address
-  (pushl (@ (% :rcontext) x8632::tcr.save3))
-  (movl (@ (% :rcontext) x8632::tcr.save1) (% next-method-context)) ;aka temp0
   (movapd (% fpzero) (@ (% :rcontext) x8632::tcr.save0)) ;clear out spill area
-  (ret)				 ;aka temp1
+  (jmp (% temp0))
   @bad
   (addl (% nargs) (% esp))
   (movl (@ (% :rcontext) x8632::tcr.save1) (% arg_z)) ;saved args
