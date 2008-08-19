@@ -611,7 +611,13 @@ handle_error(TCR *tcr, ExceptionInformation *xp)
       if (container == lisp_nil) {
         xpPC(xp) = rpc;
       } else {
-        xpPC(xp) = (LispObj)(&(deref(container,1)))+rpc;
+        xpPC(xp) = (LispObj)(&(deref(container,
+#ifdef X8664
+                                     1
+#else
+                                     0
+#endif
+)))+rpc;
       }
         
       skip = 0;
