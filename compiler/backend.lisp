@@ -102,6 +102,23 @@
   (or (cdr (assq name *mode-name-value-alist*))
       (error "Unknown gpr mode name: ~s" name)))
 
+(defparameter *mode-specifier-types*
+  (vector
+   (specifier-type t)                   ;:lisp
+   (specifier-type '(unsigned-byte 32)) ;:u32
+   (specifier-type '(signed-byte 32))   ;:s32
+   (specifier-type '(unsigned-byte 16)) ;:u16
+   (specifier-type '(signed-byte 16))   ;:s16
+   (specifier-type '(unsigned-byte 8))  ;:u8
+   (specifier-type '(signed-byte 8))    ;:s8
+   (specifier-type 'macptr)             ;:address
+   (specifier-type '(unsigned-byte 64)) ;:u64
+   (specifier-type '(signed-byte 64)))) ;:s64
+
+(defun mode-specifier-type (mode-name)
+  (svref *mode-specifier-types* (gpr-mode-name-value mode-name)))
+   
+
 (defun use-node-temp (n)
   (declare (fixnum n))
   (if (logbitp n *available-backend-node-temps*)
