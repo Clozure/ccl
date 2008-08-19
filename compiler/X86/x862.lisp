@@ -2971,14 +2971,16 @@
 
 
   
-(defun x862-long-constant-p (form)
-  (setq form (acode-unwrapped-form form))
-  (or (acode-fixnum-form-p form)
-      (and (acode-p form)
-           (eq (acode-operator form) (%nx1-operator immediate))
-           (setq form (%cadr form))
-           (if (integerp form) 
-             form))))
+(defun x862-integer-constant-p (form mode)
+  (let* ((val 
+         (or (acode-fixnum-form-p (setq form (acode-unwrapped-form form)))
+             (and (acode-p form)
+                  (eq (acode-operator form) (%nx1-operator immediate))
+                  (setq form (%cadr form))
+                  (if (typep form 'integer)
+                    form)))))
+    (and val (%typep val (mode-specifier-type mode)) val)))
+         
 
 
 (defun x86-side-effect-free-form-p (form)
@@ -3031,12 +3033,6 @@
     (x862-formlist seg (car args) (cadr args))))
 
 
-
-
-;;; treat form as a 32-bit immediate value and load it into immreg.
-;;; This is the "lenient" version of 32-bit-ness; OSTYPEs and chars
-;;; count, and we don't care about the integer's sign.
-
 (defun x862-unboxed-integer-arg-to-reg (seg form immreg &optional ffi-arg-type)
   (let* ((mode (ecase ffi-arg-type
                  ((nil) :natural)
@@ -3050,12 +3046,14 @@
                  (:signed-doubleword :s64)))
          (modeval (gpr-mode-name-value mode)))
     (with-x86-local-vinsn-macros (seg)
-      (let* ((value (x862-long-constant-p form)))
+      (let* ((value (x862-integer-constant-p form mode)))
         (if value
           (progn
             (unless (typep immreg 'lreg)
               (setq immreg (make-unwired-lreg immreg :mode modeval)))
-            (x862-lri seg immreg value)
+            (if (< value 0)
+              (x862-lri seg immreg value)
+              (x862-lriu seg immreg value))
             immreg)
           (progn 
             (x862-one-targeted-reg-form seg form (make-wired-lreg *x862-imm0* :mode modeval))))))))
@@ -5153,22 +5151,7 @@
     (x862-make-compound-cd (x862-cd-false cd) (x862-cd-true cd) (logbitp $backend-mvpass-bit cd))
     cd))
 
-(defun x862-long-constant-p (form)
-  (setq form (acode-unwrapped-form form))
-  (or (acode-fixnum-form-p form)
-      (and (acode-p form)
-           (eq (acode-operator form) (%nx1-operator immediate))
-           (setq form (%cadr form))
-           (if (integerp form) 
-             form
-             (progn
-               (if (symbolp form) (setq form (symbol-name form)))
-               (if (and (stringp form) (eql (length form) 4))
-                 (logior (ash (%char-code (char form 0)) 24)
-                         (ash (%char-code (char form 1)) 16)
-                         (ash (%char-code (char form 2)) 8)
-                         (%char-code (char form 3)))
-                 (if (characterp form) (%char-code form))))))))
+
 
 ;;; execute body, cleanup afterwards (if need to)
 (defun x862-undo-body (seg vreg xfer body old-stack)
