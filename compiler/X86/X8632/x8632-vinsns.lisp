@@ -237,39 +237,45 @@
 
 (define-x8632-vinsn check-exact-nargs (()
                                        ((n :u16const)))
+  :resume
   ((:pred = n 0)
    (testl (:%l x8632::nargs) (:%l x8632::nargs)))
   ((:and (:pred > n 0) (:pred < n 32))
    (cmpl (:$b (:apply ash n x8632::fixnumshift)) (:%l x8632::nargs)))
   ((:pred >= n 32)
    (cmpl (:$l (:apply ash n x8632::fixnumshift)) (:%l x8632::nargs)))
-  (jz :ok)
-  (uuo-error-wrong-number-of-args)
-  :ok)
+  (jne :bad)
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-wrong-number-of-args)))
 
 (define-x8632-vinsn check-min-nargs (()
 				     ((min :u16const)))
+  :resume
   ((:pred = min 1)
    (testl (:%l x8632::nargs) (:%l x8632::nargs))
-   (jnz :ok))
+   (je :toofew))
   ((:not (:pred = min 1))
    ((:and (:pred > min 1) (:pred < min 32))
     (rcmpl (:%l x8632::nargs) (:$b (:apply ash min x8632::fixnumshift))))
    ((:pred >= min 32)
     (rcmpl (:%l x8632::nargs) (:$l (:apply ash min x8632::fixnumshift))))
-   (jae :ok))
-  (uuo-error-too-few-args)
-  :ok)
+   (jb :toofew))
+  (:anchored-uuo-section :resume)
+  :toofew
+  (:anchored-uuo (uuo-error-too-few-args)))
 
 (define-x8632-vinsn check-max-nargs (()
 				     ((n :u16const)))
+  :resume
   ((:pred < n 32)
    (rcmpl (:%l x8632::nargs) (:$b (:apply ash n x8632::fixnumshift))))
   ((:pred >= n 32)
    (rcmpl (:%l x8632::nargs) (:$l (:apply ash n x8632::fixnumshift))))
-  (jbe :ok)
-  (uuo-error-too-many-args)
-  :ok)
+  (ja :bad)
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-too-many-args)))
 
 (define-x8632-vinsn check-min-max-nargs (()
                                          ((min :u16const)
@@ -514,11 +520,13 @@
 
 (define-x8632-vinsn trap-unless-bit (()
                                      ((value :lisp)))
+  :resume
   (testl (:$l (lognot x8632::fixnumone)) (:%l value))
-  (je :ok)
-  (uuo-error-reg-not-type (:%l value) (:$ub arch::error-object-not-bit))
-  :ok
-  )
+  (jne :bad)
+
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-type (:%l value) (:$ub arch::error-object-not-bit))))
 
 ;;; note that NIL is just a distinguished CONS.
 ;;; the tag formerly known as fulltag-nil is now
@@ -526,26 +534,31 @@
 (define-x8632-vinsn trap-unless-list (()
 				      ((object :lisp))
 				      ((tag :u8)))
+  :resume
   (movl (:% object) (:% tag))
   (andl (:$b x8632::fulltagmask) (:% tag))
   (cmpl (:$b x8632::fulltag-cons) (:% tag))
-  (je :ok)
-  (uuo-error-reg-not-list (:%l object))
-  :ok)
+  (jne :bad)
+
+  (:anchored-uuo-section :resume)
+  :bad  
+  (:anchored-uuo (uuo-error-reg-not-list (:%l object))))
 
 (define-x8632-vinsn trap-unless-cons (()
 				      ((object :lisp))
 				      ((tag :u8)))
   ;; special check for NIL (which is a distinguished CONS on x8632)
+  :resume
   (cmpl (:$l x8632::nil-value) (:%l object))
   (je :bad)
   (movl (:%l object) (:%l tag))
   (andl (:$b x8632::fulltagmask) (:%l tag))
   (cmpl (:$b x8632::fulltag-cons) (:%l tag))
-  (je :ok)
+  (jne :bad)
+
+  (:anchored-uuo-section :resume)
   :bad
-  (uuo-error-reg-not-tag (:%l object) (:$ub x8632::fulltag-cons))
-  :ok)
+  (:anchored-uuo (uuo-error-reg-not-tag (:%l object) (:$ub x8632::fulltag-cons))))
 
 (define-x8632-vinsn set-z-flag-if-consp (()
 					 ((object :lisp))
@@ -561,30 +574,39 @@
 (define-x8632-vinsn trap-unless-uvector (()
                                          ((object :lisp))
                                          ((tag :u8)))
+  :resume
   (movl (:%l object) (:%l tag))
   (andl (:$b x8632::tagmask) (:%l tag))
   (cmpl (:$b x8632::tag-misc) (:%l tag))
-  (jz :ok)
-  (uuo-error-reg-not-tag (:%l object) (:$ub x8632::tag-misc))
-  :ok)
+  (jne :bad)
+
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-tag (:%l object) (:$ub x8632::tag-misc))))
 
 (define-x8632-vinsn trap-unless-character (()
 					   ((object :lisp))
 					   ((tag :u8)))
   ;; xxx can't be sure that object will be in a byte-accessible register
+  :resume
   (movl (:%l object) (:%l tag))
   (cmpb (:$b x8632::subtag-character) (:%b tag))
-  (je :ok)
-  (uuo-error-reg-not-tag (:%l object) (:$ub x8632::subtag-character))
-  :ok)
+  (jne :bad)
+
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo(uuo-error-reg-not-tag (:%l object) (:$ub x8632::subtag-character))))
 
 (define-x8632-vinsn trap-unless-fixnum (()
                                         ((object :lisp))
                                         ())
+  :resume
   (testl (:$l x8632::tagmask) (:%l object))
-  (je :ok)
-  (uuo-error-reg-not-fixnum (:%l object))
-  :ok)
+  (jne :bad)
+
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-fixnum (:%l object))))
 
 (define-x8632-vinsn set-flags-from-lisptag (()
                                             ((reg :lisp)))
@@ -594,6 +616,7 @@
 					   ((object :lisp)
 					    (tagval :u8const))
 					   ((tag :u8)))
+  :resume
   (movl (:%l object) (:%l tag))
   ((:pred = (:apply %hard-regspec-value tag) x8632::eax)
    ;; accumulator
@@ -606,13 +629,16 @@
   (movb (:@ x8632::misc-subtag-offset (:%l object)) (:%b tag))
   :have-tag
   (cmpb (:$b tagval) (:%b tag))
-  (je :ok)
-  (uuo-error-reg-not-tag (:%l object) (:$ub tagval))
-  :ok)
+  (jne :bad)
+
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-tag (:%l object) (:$ub tagval))))
 
 (define-x8632-vinsn trap-unless-single-float (()
                                               ((object :lisp))
                                               ((tag :u8)))
+  :resume
   (movl (:%l object) (:%l tag))
   (andl (:$b x8632::tagmask) (:%l tag))
   (cmpl (:$b x8632::tag-misc) (:%l tag))
@@ -620,14 +646,16 @@
   ;; xxx tag might not be byte-accessible
   (movb (:@ x8632::misc-subtag-offset (:%l object)) (:%b tag))
   (cmpb (:$b x8632::subtag-single-float) (:%b tag))
-  (je :ok)
+  (jne :bad)
+
+  (:anchored-uuo-section :resume)
   :bad
-  (uuo-error-reg-not-tag (:%l object) (:$ub x8632::subtag-single-float))
-  :ok)
+  (:anchored-uuo (uuo-error-reg-not-tag (:%l object) (:$ub x8632::subtag-single-float))))
 
 (define-x8632-vinsn trap-unless-double-float (()
                                               ((object :lisp))
                                               ((tag :u8)))
+  :resume
   (movl (:%l object) (:%l tag))
   (andl (:$b x8632::tagmask) (:%l tag))
   (cmpl (:$b x8632::tag-misc) (:%l tag))
@@ -635,14 +663,16 @@
   ;; xxx tag might not be byte-accessible
   (movb (:@ x8632::misc-subtag-offset (:%l object)) (:%b tag))
   (cmpb (:$b x8632::subtag-double-float) (:%b tag))
-  (je :ok)
+  (jne :bad)
+
+  (:anchored-uuo-section :resume)
   :bad
-  (uuo-error-reg-not-tag (:%l object) (:$ub x8632::subtag-double-float))
-  :ok)
+  (:anchored-uuo (uuo-error-reg-not-tag (:%l object) (:$ub x8632::subtag-double-float))))
 
 (define-x8632-vinsn trap-unless-macptr (()
                                         ((object :lisp))
                                         ((tag :u8)))
+  :resume
   (movl (:%l object) (:%l tag))
   (andl (:$b x8632::tagmask) (:%l tag))
   (cmpl (:$b x8632::tag-misc) (:%l tag))
@@ -651,14 +681,17 @@
   (movb (:@ x8632::misc-subtag-offset (:%l object)) (:%b tag))
   :have-tag
   (cmpl (:$b x8632::subtag-macptr) (:%l tag))
-  (je :ok)
-  (uuo-error-reg-not-tag (:%l object) (:$ub x8632::subtag-macptr))
-  :ok)
+  (jne :bad)
+
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-tag (:%l object) (:$ub x8632::subtag-macptr))))
 
 (define-x8632-vinsn check-misc-bound (()
 				      ((idx :imm)
 				       (v :lisp))
 				      ((temp :u32)))
+  :resume
   (movl (:@ x8632::misc-header-offset (:%l v)) (:%l temp))
   ((:and (:pred >= (:apply %hard-regspec-value temp) x8632::eax)
 	 (:pred <= (:apply %hard-regspec-value temp) x8632::ebx))
@@ -668,9 +701,11 @@
    (shrl (:$ub x8632::num-subtag-bits) (:%l temp))
    (shll (:$ub x8632::fixnumshift) (:%l temp)))
   (rcmpl (:%l idx) (:%l temp))
-  (jb :ok)
-  (uuo-error-vector-bounds (:%l idx) (:%l v))
-  :ok)
+  (jae :bad)
+
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-vector-bounds (:%l idx) (:%l v))))
 
 (define-x8632-vinsn %cdr (((dest :lisp))
 			  ((src :lisp)))
@@ -836,13 +871,16 @@
 
 (define-x8632-vinsn unbox-u8 (((dest :u8))
 			      ((src :lisp)))
+  :resume
   (movl (:$l (lognot (ash #xff x8632::fixnumshift))) (:%l dest))
   (andl (:% src) (:% dest))
-  (je :ok)
-  (uuo-error-reg-not-type (:%l src) (:$ub arch::error-object-not-unsigned-byte-8))
-  :ok
+  (jne :bad)
   (movl (:%l src) (:%l dest))
-  (shrl (:$ub x8632::fixnumshift) (:%l dest)))
+  (shrl (:$ub x8632::fixnumshift) (:%l dest))
+
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-type (:%l src) (:$ub arch::error-object-not-unsigned-byte-8))))
 
 (define-x8632-vinsn %unbox-u8 (((dest :u8))
 			      ((src :lisp)))
@@ -852,6 +890,7 @@
 
 (define-x8632-vinsn unbox-s8 (((dest :s8))
 			      ((src :lisp)))
+  :resume
   (movl (:%l src) (:%l dest))
   (shll (:$ub (- x8632::nbits-in-word (+ 8 x8632::fixnumshift))) (:%l dest))
   (sarl (:$ub (- x8632::nbits-in-word (+ 8 x8632::fixnumshift))) (:%l dest))
@@ -860,19 +899,21 @@
   (testl (:$l x8632::fixnummask) (:%l dest))
   (jne :bad)
   (sarl (:$ub x8632::fixnumshift) (:%l dest))
-  (jmp :got-it)
+
+  (:anchored-uuo-section :resume)
   :bad
-  (uuo-error-reg-not-type (:%l src) (:$ub arch::error-object-not-signed-byte-8))
-  :got-it)
+  (:anchored-uuo (uuo-error-reg-not-type (:%l src) (:$ub arch::error-object-not-signed-byte-8))))
 
 (define-x8632-vinsn unbox-u16 (((dest :u16))
 			      ((src :lisp)))
+  :resume
   (testl (:$l (lognot (ash #xffff x8632::fixnumshift))) (:% src))
   (movl (:%l src) (:%l dest))
-  (je :ok)
-  (uuo-error-reg-not-type (:%l src) (:$ub arch::error-object-not-unsigned-byte-16))
-  :ok
-  (shrl (:$ub x8632::fixnumshift) (:%l dest)))
+  (jne :bad)
+  (shrl (:$ub x8632::fixnumshift) (:%l dest))
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-type (:%l src) (:$ub arch::error-object-not-unsigned-byte-16))))
 
 (define-x8632-vinsn %unbox-u16 (((dest :u16))
 			      ((src :lisp)))
@@ -881,17 +922,19 @@
 
 (define-x8632-vinsn unbox-s16 (((dest :s16))
 			      ((src :lisp)))
+  :resume
   (movl (:%l src) (:%l dest))
   (shll (:$ub (- x8632::nbits-in-word (+ 16 x8632::fixnumshift))) (:%l dest))
   (sarl (:$ub (- x8632::nbits-in-word (+ 16 x8632::fixnumshift))) (:%l dest))
   (cmpl (:%l src) (:%l dest))
   (jne :bad)
   (testl (:$l x8632::fixnummask) (:%l dest))
-  (je :got-it)
+  (jne :bad)
+  (sarl (:$ub x8632::fixnumshift) (:%l dest))
+
+  (:anchored-uuo-section :resume)
   :bad
-  (uuo-error-reg-not-type (:%l src) (:$ub arch::error-object-not-signed-byte-16))
-  :got-it
-  (sarl (:$ub x8632::fixnumshift) (:%l dest)))
+  (:anchored-uuo (uuo-error-reg-not-type (:%l src) (:$ub arch::error-object-not-signed-byte-16))))
 
 (define-x8632-vinsn %unbox-s16 (((dest :s16))
                                 ((src :lisp)))
@@ -904,6 +947,7 @@
 ;;;  c) it's a bignum of length 2 and the sign-digit is 0.
 (define-x8632-vinsn unbox-u32 (((dest :u32))
                                ((src :lisp)))
+  :resume
   (movl (:$l (lognot (ash x8632::target-most-positive-fixnum x8632::fixnumshift))) (:%l dest))
   (testl (:%l dest) (:%l src))
   (movl (:%l src) (:%l dest))
@@ -921,19 +965,23 @@
   (jne :bad)
   (movl (:@ x8632::misc-data-offset (:%l src)) (:%l dest))
   (testl (:%l dest) (:%l dest))
-  (jns :done)
-  :bad
-  (uuo-error-reg-not-type (:%l src) (:$ub arch::error-object-not-unsigned-byte-32))
+  (js :bad)
+  (jmp :done)
   :two
   (movl (:@ (+ 4 x8632::misc-data-offset) (:%l src)) (:%l dest))
   (testl (:%l dest) (:%l dest))
   (jne :bad)
   (movl (:@ x8632::misc-data-offset (:%l src)) (:%l dest))
-  :done)
+  :done
+  
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-type (:%l src) (:$ub arch::error-object-not-unsigned-byte-32))))
 
 ;;; xxx -- review this again later
 (define-x8632-vinsn unbox-s32 (((dest :s32))
                                ((src :lisp)))
+  :resume
   (movl (:%l src) (:%l dest))
   (sarl (:$ub x8632::fixnumshift) (:%l dest))
   ;; Was it a fixnum ?
@@ -946,10 +994,12 @@
   (jne :bad)
   (cmpl (:$l x8632::two-digit-bignum-header) (:@ x8632::misc-header-offset (:%l src)))
   (movl (:@ x8632::misc-data-offset (:%l src)) (:%l dest))
-  (je :done)
+  (jne :bad)
+  :done
+
+  (:anchored-uuo-section :resume)
   :bad
-  (uuo-error-reg-not-type (:%l src) (:$ub arch::error-object-not-signed-byte-32))
-  :done)
+  (:anchored-uuo (uuo-error-reg-not-type (:%l src) (:$ub arch::error-object-not-signed-byte-32))))
 
 
 ;;; xxx -- sigh...
@@ -1503,6 +1553,7 @@
 (define-x8632-vinsn pass-multiple-values (()
                                           ()
                                           ((tag :u8)))
+  :resume
   (movb (:%b x8632::temp0) (:%b tag))
   (andb (:$b x8632::tagmask) (:%b tag))
   (cmpb (:$b x8632::tag-misc) (:%b tag))
@@ -1516,11 +1567,9 @@
   :go
   (pushl (:@ (+ x8632::nil-value (x8632::%kernel-global 'x86::ret1valaddr))))
   (jmp (:%l x8632::fn))
+  (:anchored-uuo-section :resume)
   :bad
-  (uuo-error-not-callable)
-  ;; If we don't do this (and leave %fn as a TRA into itself), reporting
-  ;; the error is likely a little harder.  Tough.
-  ;; (leaq (@ (:apply - (:^ :bad)) (:%q x8664::rn)) (:%q x8664::fn))
+  (:anchored-uuo (uuo-error-not-callable))
 )
 
 
@@ -2264,10 +2313,11 @@
    (testb (:$b x8632::fixnummask) (:%b object)))
   ((:pred > (:apply %hard-regspec-value object) x8632::ebx)
    (testl (:$l x8632::fixnummask) (:%l object)))
-  (je :got-it)
-  (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-fixnum))
-  (jmp :again)
-  :got-it)
+  (jne :bad)
+
+  (:anchored-uuo-section :again)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-fixnum))))
 
 (define-x8632-vinsn require-integer (()
                                      ((object :lisp))
@@ -2291,11 +2341,12 @@
    (cmpl (:$l x8632::tag-misc) (:%l tag)))
   (jne :bad)
   (cmpb (:$b x8632::subtag-bignum) (:@ x8632::misc-subtag-offset (:%l object)))
-  (je :got-it)
+  (jne :bad)
+  :got-it
+
+  (:anchored-uuo-section :again)
   :bad
-  (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-integer))
-  (jmp :again)
-  :got-it)
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-integer))))
 
 (define-x8632-vinsn require-simple-vector (()
                                            ((object :lisp))
@@ -2306,11 +2357,11 @@
   (cmpb (:$b x8632::tag-misc) (:%b tag))
   (jne :bad)
   (cmpb (:$b x8632::subtag-simple-vector) (:@ x8632::misc-subtag-offset (:%l object)))
-  (je :got-it)
+  (jne :bad)
+
+  (:anchored-uuo-section :again)
   :bad
-  (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-simple-vector))
-  (jmp :again)
-  :got-it)
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-simple-vector))))
 
 (define-x8632-vinsn require-simple-string (()
                                            ((object :lisp))
@@ -2321,78 +2372,82 @@
   (cmpb (:$b x8632::tag-misc) (:%b tag))
   (jne :bad)
   (cmpb (:$b x8632::subtag-simple-base-string) (:@ x8632::misc-subtag-offset (:%l object)))
-  (je :got-it)
+  (jne :bad)
+
+  (:anchored-uuo-section :again)
   :bad
-  (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-simple-string))
-  (jmp :again)
-  :got-it)
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-simple-string))))
 
 
 ;;; naive
 (define-x8632-vinsn require-real (()
                                     ((object :lisp))
-                                    ((tag :u8)))
+                                    ((tag :u8)
+                                     (mask :lisp)))
   :again
   (movl (:%l object) (:%l tag))
-  (andb (:$b x8632::tagmask) (:%b tag))
-  (cmpb (:$b x8632::tag-fixnum) (:%b tag))
-  (je :good)
+  (andl (:$b x8632::tagmask) (:%l tag))
   (cmpb (:$b x8632::tag-misc) (:%b tag))
-  (jne :bad)
+  (jne :have-tag)
   (movb (:@ x8632::misc-subtag-offset (:%l object)) (:%b tag))
-  (cmpb (:$b x8632::subtag-single-float) (:%b tag))
-  (je :good)
-  (cmpb (:$b x8632::subtag-double-float) (:%b tag))
-  (je :good)
-  (cmpb (:$b x8632::subtag-bignum) (:%b tag))
-  (je :good)
-  (cmpb (:$b x8632::subtag-ratio) (:%b tag))
-  (je :good)
+  :have-tag
+  (cmpb (:$b (1- (- x8632::nbits-in-word x8632::fixnumshift))) (:%b tag))
+  (movl (:$l (ash (logior (ash 1 x8632::tag-fixnum)
+                          (ash 1 x8632::subtag-single-float)
+                          (ash 1 x8632::subtag-double-float)
+                          (ash 1 x8632::subtag-bignum)
+                          (ash 1 x8632::subtag-ratio))
+                  x8632::fixnumshift)) (:%l mask))
+  (ja :bad)
+  (addl (:$b x8632::fixnumshift) (:%l tag))
+  (btl (:%l tag) (:%l mask))
+  (jnc :bad)
+
+  (:anchored-uuo-section :again)
   :bad
-  (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-real))
-  (jmp :again)
-  :good)
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-real))))
 
 ;;; naive
 (define-x8632-vinsn require-number (()
                                     ((object :lisp))
-                                    ((tag :u8)))
+                                    ((tag :u8)
+                                     (mask :lisp)))
   :again
   (movl (:%l object) (:%l tag))
-  (andb (:$b x8632::tagmask) (:%b tag))
-  (cmpb (:$b x8632::tag-fixnum) (:%b tag))
-  (je :good)
+  (andl (:$b x8632::tagmask) (:%l tag))
   (cmpb (:$b x8632::tag-misc) (:%b tag))
-  (jne :bad)
+  (jne :have-tag)
   (movb (:@ x8632::misc-subtag-offset (:%l object)) (:%b tag))
-  (cmpb (:$b x8632::subtag-single-float) (:%b tag))
-  (je :good)
-  (cmpb (:$b x8632::subtag-double-float) (:%b tag))
-  (je :good)
-  (cmpb (:$b x8632::subtag-bignum) (:%b tag))
-  (je :good)
-  (cmpb (:$b x8632::subtag-ratio) (:%b tag))
-  (je :good)
-  (cmpb (:$b x8632::subtag-complex) (:%b tag))
-  (je :good)
+  :have-tag
+  (cmpb (:$b (1- (- x8632::nbits-in-word x8632::fixnumshift))) (:%b tag))
+  (movl (:$l (ash (logior (ash 1 x8632::tag-fixnum)
+                          (ash 1 x8632::subtag-single-float)
+                          (ash 1 x8632::subtag-double-float)
+                          (ash 1 x8632::subtag-bignum)
+                          (ash 1 x8632::subtag-ratio)
+                          (ash 1 x8632::subtag-complex))
+                  x8632::fixnumshift)) (:%l mask))
+  (ja :bad)
+  (addl (:$b x8632::fixnumshift) (:%l tag))
+  (btl (:%l tag) (:%l mask))
+  (jnc :bad)
+
+  (:anchored-uuo-section :again)
   :bad
-  (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-number))
-  (jmp :again)
-  :good)
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-number))))
 
 (define-x8632-vinsn require-list (()
                                   ((object :lisp))
                                   ((tag :u8)))
   :again
-  (cmpl (:$l x8632::nil-value) (:%l object))
-  (je :good)
   (movl (:%l object) (:%l tag))
   (andb (:$b x8632::fulltagmask) (:%b tag))
   (cmpb (:$b x8632::fulltag-cons) (:%b tag))
-  (je :good)
-  (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-list))
-  (jmp :again)
-  :good)
+  (jne :bad)
+
+  (:anchored-uuo-section :again)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-list))))
 
 (define-x8632-vinsn require-symbol (()
                                     ((object :lisp))
@@ -2405,22 +2460,23 @@
   (cmpb (:$b x8632::tag-misc) (:%b tag))
   (jne :bad)
   (cmpb (:$b x8632::subtag-symbol) (:@ x8632::misc-subtag-offset (:%l object)))
-  (je :got-it)
+  (jne :bad)
+  :got-it
+  
+  (:anchored-uuo-section :again)
   :bad
-  (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-symbol))
-  (jmp :again)
-  :got-it)
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-symbol)))
+)
 
 (define-x8632-vinsn require-character (()
-				       ((object :lisp))
-				       ((tag :u8)))
+				       ((object :lisp)))
   :again
-  (movl (:%l object) (:%l tag))
   (cmpb (:$b x8632::subtag-character) (:%b object))
-  (je :ok)
-  (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-character))
-  (jmp :again)
-  :ok)
+  (jne :bad)
+
+  (:anchored-uuo-section :again)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-character))))
 
 (define-x8632-vinsn require-s8 (()
 				((object :lisp))
@@ -2431,11 +2487,11 @@
   (sarl (:$ub (- x8632::nbits-in-word 8)) (:%l tag))
   (shll (:$ub x8632::fixnumshift) (:%l tag))
   (cmpl (:%l object) (:%l tag))
-  (je :ok)
+  (jne :bad)
+
+  (:anchored-uuo-section :again)
   :bad
-  (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-signed-byte-8))
-  (jmp :again)
-  :ok)
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-signed-byte-8))))
 
 (define-x8632-vinsn require-u8 (()
 				((object :lisp))
@@ -2443,10 +2499,11 @@
   :again
   (movl (:$l (lognot (ash #xff x8632::fixnumshift))) (:%l tag))
   (andl (:%l object) (:%l tag))
-  (je :ok)
-  (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-unsigned-byte-8))
-  (jmp :again)
-  :ok)
+  (jne :bad)
+
+  (:anchored-uuo-section :again)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-unsigned-byte-8))))
 
 (define-x8632-vinsn require-s16 (()
 				((object :lisp))
@@ -2457,11 +2514,11 @@
   (sarl (:$ub (- x8632::nbits-in-word 16)) (:%l tag))
   (shll (:$ub x8632::fixnumshift) (:%l tag))
   (cmpl (:%l object) (:%l tag))
-  (je :ok)
+  (jne :bad)
+
+  (:anchored-uuo-section :again)
   :bad
-  (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-signed-byte-16))
-  (jmp :again)
-  :ok)
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-signed-byte-16))))
 
 (define-x8632-vinsn require-u16 (()
 				((object :lisp))
@@ -2469,10 +2526,11 @@
   :again
   (movl (:$l (lognot (ash #xffff x8632::fixnumshift))) (:%l tag))
   (andl (:%l object) (:%l tag))
-  (je :ok)
-  (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-unsigned-byte-16))
-  (jmp :again)
-  :ok)
+  (jne :bad)
+
+  (:anchored-uuo-section :again)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-unsigned-byte-16))))
 
 (define-x8632-vinsn require-s32 (()
 				 ((object :lisp))
@@ -2485,11 +2543,12 @@
   (cmpl (:$l x8632::fulltag-misc) (:%l tag))
   (jne :bad)
   (cmpl (:$l x8632::one-digit-bignum-header) (:@ x8632::misc-header-offset (:%l object)))
-  (je :ok)
+  (jne :bad)
+  :ok
+  
+  (:anchored-uuo-section :again)
   :bad
-  (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-signed-byte-32))
-  (jmp :again)
-  :ok)
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-signed-byte-32))))
 
 (define-x8632-vinsn require-u32 (()
 				 ((object :lisp))
@@ -2528,11 +2587,12 @@
   (cmpl (:$l x8632::fulltag-misc) (:%l tag))
   (jne :bad)
   (cmpl (:$l x8632::two-digit-bignum-header) (:@ x8632::misc-header-offset (:%l object)))
-  (jne :ok)
+  (jne :bad)
+  :ok
+
+  (:anchored-uuo-section :again)
   :bad
-  (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-signed-byte-64))
-  (jmp :again)
-  :ok)
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-signed-byte-64))))
 
 (define-x8632-vinsn require-u64 (()
 				 ((object :lisp))
@@ -2567,11 +2627,11 @@
   (testb (:$b x8632::fixnummask) (:%b object))
   (jne :bad)
   (cmpl (:$l (ash #x110000 x8632::fixnumshift)) (:%l object))
-  (jb :ok)
+  (jae :bad)
+
+  (:anchored-uuo-section :again)
   :bad
-  (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-mod-char-code-limit))
-  (jmp :again)
-  :ok)
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-mod-char-code-limit))))
 
 (define-x8632-vinsn mask-base-char (((dest :u8))
                                     ((src :lisp)))
@@ -2703,6 +2763,7 @@
 (define-x8632-vinsn %symbol->symptr (((dest :lisp))
                                      ((src :lisp))
                                      ((tag :u8)))
+  :resume
   (cmpl (:$l x8632::nil-value) (:%l src))
   (je :nilsym)
   (movl (:%l src) (:%l tag))
@@ -2717,11 +2778,14 @@
                 (:apply %hard-regspec-value src)))
    (movl (:% src) (:% dest)))
   (jmp :ok)
-  :bad
-  (uuo-error-reg-not-tag (:%l src) (:$ub x8632::subtag-symbol))
   :nilsym
   (movl (:$l (+ x8632::nil-value x8632::nilsym-offset)) (:%l dest))
-  :ok)
+  :ok
+  
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-tag (:%l src) (:$ub x8632::subtag-symbol))))
+
 
 (define-x8632-vinsn zero-double-float-register (((dest :double-float))
                                                 ())
@@ -3177,6 +3241,7 @@
 (define-x8632-vinsn tail-funcall (()
                                   ()
                                   ((tag :u8)))
+  :resume
   (movl (:%l x8632::temp0) (:%l tag))
   ((:pred = (:apply %hard-regspec-value tag) x8632::eax)
    (andl (:$b x8632::tagmask) (:%accl tag))
@@ -3193,8 +3258,10 @@
   (jne :bad)
   :go
   (jmp (:%l x8632::temp0))
+
+  (:anchored-uuo-section :resume)
   :bad
-  (uuo-error-not-callable))
+  (:anchored-uuo (uuo-error-not-callable)))
 
 ;;; Magic numbers in here include the address of .SPcall-closure.
 
@@ -3228,6 +3295,7 @@
 					     ((src (:lisp (:ne dest))))
 					     ((table :imm)
 					      (idx :imm)))
+  :resume
   (movl (:@ x8632::symbol.binding-index (:%l src)) (:%l idx))
   (rcmpl (:%l idx) (:@ (:%seg :rcontext) x8632::tcr.tlb-limit))
   (movl (:@ (:%seg :rcontext) x8632::tcr.tlb-pointer) (:%l table))
@@ -3239,9 +3307,11 @@
   (movl (:@ x8632::symbol.vcell (:%l src)) (:%l dest))
   :test
   (cmpl (:$l x8632::unbound-marker) (:%l dest))
-  (jne :done)
-  (uuo-error-unbound (:%l src))
-  :done)
+  (je :bad)
+
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-unbound (:%l src))))
 
 (define-x8632-vinsn (%ref-symbol-value :call :subprim-call)
     (((val :lisp))
@@ -3429,6 +3499,7 @@
 (define-x8632-vinsn symbol-function (((val :lisp))
                                      ((sym (:lisp (:ne val))))
                                      ((tag :u8)))
+  :resume
   (movl (:@ x8632::symbol.fcell (:%l sym)) (:%l val))
   (movl (:%l val) (:%l tag))
   (andb (:$b x8632::tagmask) (:%b tag))
@@ -3436,10 +3507,11 @@
   (jne :bad)
   (movb (:@ x8632::misc-subtag-offset (:%l val)) (:%b tag))
   (cmpb (:$b x8632::subtag-function) (:%b tag))
-  (je :ok)
+  (jne :bad)
+
+  (:anchored-uuo-section :resume)
   :bad
-  (uuo-error-udf (:%l sym))
-  :ok)
+  (:anchored-uuo (uuo-error-udf (:%l sym))))
 
 (define-x8632-subprim-jump-vinsn (tail-call-fn-slide) .SPtcallnfnslide)
 
@@ -3641,12 +3713,15 @@
 
 (define-x8632-vinsn eep.address (((dest t))
 				 ((src (:lisp (:ne dest )))))
+  :resume
   (movl (:@ (+ (ash 1 x8632::word-shift) x8632::misc-data-offset) (:%l src))
         (:%l dest))
   (cmpl (:$l x8632::nil-value) (:%l dest))
-  (jne :ok)
-  (uuo-error-eep-unresolved (:%l src) (:%l dest))
-  :ok)
+  (je :bad)
+
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-eep-unresolved (:%l src) (:%l dest))))
 
 (define-x8632-subprim-lea-jmp-vinsn (heap-cons-rest-arg) .SPheap-cons-rest-arg)
 
@@ -3666,11 +3741,14 @@
 (define-x8632-vinsn  %slot-ref (((dest :lisp))
 				((instance (:lisp (:ne dest)))
 				 (index :lisp)))
+  :resume
   (movl (:@ x8632::misc-data-offset (:%l instance) (:%l index)) (:%l dest))
   (cmpl (:$l x8632::slot-unbound-marker) (:%l dest))
-  (jne :ok)
-  (uuo-error-slot-unbound (:%l dest) (:%l instance) (:%l index))
-  :ok)
+  (je :bad)
+
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-slot-unbound (:%l dest) (:%l instance) (:%l index))))
 
 
 
