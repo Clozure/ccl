@@ -4457,10 +4457,7 @@
 
 (defun make-truncating-string-stream (len)
   (%%make-string-output-stream *truncating-string-output-stream-class*
-                               (make-array len
-				     :element-type 'character
-				     :fill-pointer 0
-				     :adjustable nil)
+                               (make-string len)
                                'truncating-string-output-stream-ioblock-write-char
                                'truncating-string-output-stream-ioblock-write-simple-string))
                                
