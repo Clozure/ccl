@@ -2642,6 +2642,7 @@ _endsubp(tcallnfnvsp)
 /* to it, and return the macptr.  Size (in bytes, boxed) is in arg_z */
 /* on entry; macptr in arg_z on exit. */
 _spentry(makestackblock)
+        __(check_cstack_alignment())
 	__(unbox_fixnum(%arg_z,%imm0))
 	__(dnode_align(%imm0,tsp_frame.fixed_overhead+macptr.size,%imm0))
 	__(cmpl $tstack_alloc_limit,%imm0)
@@ -4169,7 +4170,12 @@ _spentry(callback)
 	__(addl $node_size,%esp)
 	/* linear TCR addr now in %eax */
 	__(movw tcr.ldt_selector(%eax), %rcontext_reg)
-	__(push rcontext(tcr.foreign_sp))
+
+        /* ebp is 16-byte aligned, and we've pushed 4 words.  Make
+          sure that when we push old foreign_sp, %esp will be 16-byte
+          aligned again */
+        __(subl $12,%esp)        
+ 	__(push rcontext(tcr.foreign_sp))
 	__(movl %esp,rcontext(tcr.foreign_sp))
 	__(clr %arg_z)
 	/* arg_y contains callback index */
@@ -4187,6 +4193,7 @@ _spentry(callback)
 	__(movl $nrs.callbacks,%fname)
 	__(push $local_label(back_from_callback))
 	__(set_nargs(2))
+        __(check_cstack_alignment())
 	__(jump_fname())
 __(tra(local_label(back_from_callback)))
 	__(movl %esp,rcontext(tcr.save_vsp))
@@ -4196,6 +4203,7 @@ __(tra(local_label(back_from_callback)))
 	__(stmxcsr rcontext(tcr.lisp_mxcsr))
 	__(emms)
 	__(pop rcontext(tcr.foreign_sp))
+        __(addl $12,%esp)       /* discard alignment padding */
         __(ldmxcsr rcontext(tcr.foreign_mxcsr))
 	__(pop %ebp)
 	__(pop %ebx)
