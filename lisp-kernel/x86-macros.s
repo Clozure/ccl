@@ -700,3 +700,11 @@ define([mark_as_imm],[
 ])
 ])
 
+define([check_cstack_alignment],[
+        new_macro_labels()
+        __(testb [$]7,rcontext(tcr.foreign_sp))
+        __(je macro_label(done))
+        __(hlt)
+macro_label(done):
+])
+                        
