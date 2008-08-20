@@ -82,7 +82,7 @@ doc/src/glossary.xml -text
 doc/src/ide.xml -text
 doc/src/implementation.xml -text
 doc/src/install.xml -text
-doc/src/makehtml -text
+doc/src/makefile-common -text
 doc/src/modifying.xml -text
 doc/src/mop.xml -text
 doc/src/objc-bridge.xml -text
