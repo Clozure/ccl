@@ -1740,7 +1740,7 @@ Type :? for other options.
 	    <title>See Also</title>
 	    
 	    <simplelist type="inline">
-<	      <member><xref linkend="f_process-wait-with-timeout"/></member>
+	      <member><xref linkend="f_process-wait-with-timeout"/></member>
 	    </simplelist>
 	  </refsect1>
     </refentry>
