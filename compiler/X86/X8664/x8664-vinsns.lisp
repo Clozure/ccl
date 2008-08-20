@@ -638,6 +638,18 @@
         (:pred > intval 2147483647))
    (movq (:$q (:apply logand #xffffffffffffffff intval)) (:%q dest))))
 
+(define-x8664-vinsn (lriu :constant-ref) (((dest :imm))
+                                         ((intval :u64const))
+                                         ())
+  ((:pred = intval 0)
+   (xorl (:%l dest) (:%l dest)))
+  ((:and (:pred /= intval 0)
+         (:pred >= intval  -2147483648)
+         (:pred <= intval 2147483647))
+   (movq (:$l intval) (:%q dest)))
+  ((:or (:pred < intval  -2147483648)
+        (:pred > intval 2147483647))
+   (movq (:$q (:apply logand #xffffffffffffffff intval)) (:%q dest))))
 
 (define-x8664-vinsn trap-unless-bit (()
                                      ((value :lisp)))
