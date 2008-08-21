@@ -5780,6 +5780,11 @@
                             (compiler-bug
                              "unknown vinsn label ~s" valform))))
                      ((atom valform) valform)
+                     ((eq (car valform) :rcontext)
+                      (if (>= (backend-lisp-context-register *target-backend*)
+                              x86::+x86-segment-register-offset+)
+                        (mapcar #'parse-operand-form `(:rcontext ,(cadr valform) nil nil nil))
+                        (mapcar #'parse-operand-form `(nil ,(cadr valform) :rcontext nil nil))))
                      ((atom (cdr valform)) (svref vp (car valform)))
                      ((eq (car valform) :@)
                       (mapcar #'parse-operand-form (cdr valform)))
