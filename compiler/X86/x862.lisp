@@ -5782,7 +5782,9 @@
                      ((atom valform) valform)
                      ((eq (car valform) :rcontext)
                       (if (>= (backend-lisp-context-register *target-backend*)
-                              x86::+x86-segment-register-offset+)
+                              (target-arch-case
+                               (:x8632 x86::+x8632-segment-register-offset+)
+                               (:x8664 x86::+x8664-segment-register-offset+)))
                         (mapcar #'parse-operand-form `(:rcontext ,(cadr valform) nil nil nil))
                         (mapcar #'parse-operand-form `(nil ,(cadr valform) :rcontext nil nil))))
                      ((atom (cdr valform)) (svref vp (car valform)))
