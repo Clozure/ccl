@@ -726,7 +726,9 @@
                                                     :value expr))))
               ((eq head :rcontext)
                (if (>= (backend-lisp-context-register *target-backend*)
-                       x86::+x86-segment-register-offset+)
+                       (target-arch-case
+                        (:x8632 x86::+x8632-segment-register-offset+)
+                        (:x8664 x86::+x8664-segment-register-offset+)))
                  (parse-x86-memory-operand `((% :rcontext) ,(cadr form)))
                  (parse-x86-memory-operand `(,(cadr form) (% :rcontext)))))
               ((setq designator (x86-register-designator form))
