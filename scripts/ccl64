@@ -71,6 +71,10 @@ if [ -z "$OPENMCL_KERNEL" ]; then
       ;;
     esac
     ;;
+    CYGWIN*)
+    OPENMCL_KERNEL=wx86cl64.exe
+    CCL_DEFAULT_DIRECTORY="C:/cygwin$CCL_DEFAULT_DIRECTORY"
+    ;;
     *)
     echo "Can't determine host OS.  Fix this."
     exit 1
