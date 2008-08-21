@@ -147,20 +147,7 @@
 	    "SOCKET-ERROR-SITUATION"
 	    "WITH-OPEN-SOCKET"))
 
-(eval-when (:compile-toplevel :execute)
-  #+linuxppc-target
-  (require "PPC-LINUX-SYSCALLS")
-  #+linuxx8664-target
-  (require "X8664-LINUX-SYSCALLS")
-  #+darwinppc-target
-  (require "DARWINPPC-SYSCALLS")
-  #+darwinx8664-target
-  (require "DARWINX8664-SYSCALLS")
-  #+freebsdx8664-target
-  (require "X8664-FREEBSD-SYSCALLS")
-  #+solarisx8664-target
-  (require "X8664-SOLARIS-SYSCALLS")
-  )
+
 
 (define-condition socket-error (simple-stream-error)
   ((code :initarg :code :reader socket-error-code)
@@ -1207,16 +1194,7 @@ unsigned IP address."
                 ))))))
 
 (defun c_socket_1 (domain type protocol)
-  #-(or linuxppc-target solaris-target)
-  (syscall syscalls::socket domain type protocol)
-  #+linuxppc-target
-  (rlet ((params (:array :unsigned-long 3)))
-    (setf (paref params (:* :unsigned-long) 0) domain
-          (paref params (:* :unsigned-long) 1) type
-          (paref params (:* :unsigned-long) 2) protocol)
-    (syscall syscalls::socketcall 1 params))
-  #+solaris-target
-  (syscall syscalls::so_socket domain type protocol +null-ptr+ #$SOV_DEFAULT))
+  (int-errno-call (#_socket domain type protocol)))
 
 (defun c_socket (domain type protocol)
   (let* ((fd (c_socket_1 domain type protocol)))
@@ -1262,25 +1240,7 @@ unsigned IP address."
       
 
 (defun c_bind (sockfd sockaddr addrlen)
-  #-linuxppc-target
-  (progn
-    #+(or darwin-target freebsd-target)
-    (setf (pref sockaddr :sockaddr_in.sin_len) addrlen)
-    (syscall syscalls::bind sockfd sockaddr addrlen))
-  #+linuxppc-target
-  (progn
-    #+ppc32-target
-    (%stack-block ((params 12))
-      (setf (%get-long params 0) sockfd
-            (%get-ptr params 4) sockaddr
-            (%get-long params 8) addrlen)
-      (syscall syscalls::socketcall 2 params))
-    #+ppc64-target
-    (%stack-block ((params 24))
-      (setf (%%get-unsigned-longlong params 0) sockfd
-            (%get-ptr params 8) sockaddr
-            (%%get-unsigned-longlong params 16) addrlen)
-      (syscall syscalls::socketcall 2 params))))
+  (int-errno-call (#_bind sockfd sockaddr addrlen)))
 
 
 ;;; If attempts to connnect are interrupted, we basically have to
@@ -1292,23 +1252,7 @@ unsigned IP address."
     (unwind-protect
          (progn
            (fd-set-flags sockfd (logior flags #$O_NONBLOCK))
-           (let* ((err 
-                   #-linuxppc-target
-                   (syscall syscalls::connect sockfd addr len)
-                   #+linuxppc-target
-                   (progn
-                     #+ppc32-target
-                     (%stack-block ((params 12))
-                       (setf (%get-long params 0) sockfd
-                             (%get-ptr params 4) addr
-                             (%get-long params 8) len)
-                       (syscall syscalls::socketcall 3 params))
-                     #+ppc64-target
-                     (%stack-block ((params 24))
-                       (setf (%%get-unsigned-longlong params 0) sockfd
-                             (%get-ptr params 8) addr
-                             (%%get-unsigned-longlong params 16) len)
-                       (syscall syscalls::socketcall 3 params)))))
+           (let* ((err (int-errno-call (#_connect sockfd addr len))))
              (cond ((or (eql err (- #$EINPROGRESS)) (eql err (- #$EINTR)))
                     (if (process-output-wait sockfd timeout-in-milliseconds)
                       (- (int-getsockopt sockfd #$SOL_SOCKET #$SO_ERROR))
@@ -1317,259 +1261,42 @@ unsigned IP address."
       (fd-set-flags sockfd flags))))
 
 (defun c_listen (sockfd backlog)
-  #-linuxppc-target
-  (syscall syscalls::listen sockfd backlog)
-  #+linuxppc-target
-  (progn
-    #+ppc32-target
-    (%stack-block ((params 8))
-      (setf (%get-long params 0) sockfd
-            (%get-long params 4) backlog)
-      (syscall syscalls::socketcall 4 params))
-    #+ppc64-target
-    (%stack-block ((params 16))
-      (setf (%%get-unsigned-longlong params 0) sockfd
-            (%%get-unsigned-longlong params 8) backlog)
-      (syscall syscalls::socketcall 4 params))))
+  (int-errno-call (#_listen sockfd backlog)))
 
 (defun c_accept (sockfd addrp addrlenp)
-  (ignoring-eintr 
-   #-linuxppc-target
-   (syscall syscalls::accept sockfd addrp addrlenp)
-   #+linuxppc-target
-   (progn
-     #+ppc32-target
-     (%stack-block ((params 12))
-       (setf (%get-long params 0) sockfd
-             (%get-ptr params 4) addrp
-             (%get-ptr params 8) addrlenp)
-       (syscall syscalls::socketcall 5 params))
-     #+ppc64-target
-     (%stack-block ((params 24))
-       (setf (%%get-unsigned-longlong params 0) sockfd
-             (%get-ptr params 8) addrp
-             (%get-ptr params 16) addrlenp)
-       (syscall syscalls::socketcall 5 params)))))
+  (ignoring-eintr
+   (int-errno-call (#_accept sockfd addrp addrlenp))))
 
 (defun c_getsockname (sockfd addrp addrlenp)
-  #-linuxppc-target
-  (syscall syscalls::getsockname sockfd addrp addrlenp)
-  #+linuxppc-target
-  (progn
-    #+ppc32-target
-    (%stack-block ((params 12))
-      (setf (%get-long params 0) sockfd
-            (%get-ptr params 4) addrp
-            (%get-ptr params 8) addrlenp)
-      (syscall syscalls::socketcall 6 params))
-    #+ppc64-target
-    (%stack-block ((params 24))
-      (setf (%%get-unsigned-longlong params 0) sockfd
-            (%get-ptr params 8) addrp
-            (%get-ptr params 16) addrlenp)
-      (syscall syscalls::socketcall 6 params))))
+  (int-errno-call (#_getsockname sockfd addrp addrlenp)))
 
 (defun c_getpeername (sockfd addrp addrlenp)
-  #-linuxppc-target
-  (syscall syscalls::getpeername sockfd addrp addrlenp)
-  #+linuxppc-target
-  (progn
-    #+ppc32-target
-    (%stack-block ((params 12))
-      (setf (%get-long params 0) sockfd
-            (%get-ptr params 4) addrp
-            (%get-ptr params 8) addrlenp)
-      (syscall syscalls::socketcall 7 params))
-    #+ppc64-target
-    (%stack-block ((params 24))
-      (setf (%%get-unsigned-longlong params 0) sockfd
-            (%get-ptr params 8) addrp
-            (%get-ptr params 16) addrlenp)
-      (syscall syscalls::socketcall 7 params))))
+  (int-errno-call (#_getpeername sockfd addrp addrlenp)))
 
 (defun c_socketpair (domain type protocol socketsptr)
-  #-(or linuxppc-target solaris-target)
-  (syscall syscalls::socketpair domain type protocol socketsptr)
-  #+linuxppc-target
-  (progn
-    #+ppc32-target
-    (%stack-block ((params 16))
-      (setf (%get-long params 0) domain
-            (%get-long params 4) type
-            (%get-long params 8) protocol
-            (%get-ptr params 12) socketsptr)
-      (syscall syscalls::socketcall 8 params))
-    #+ppc64-target
-    (%stack-block ((params 32))
-      (setf (%%get-unsigned-longlong params 0) domain
-            (%%get-unsigned-longlong params 8) type
-            (%%get-unsigned-longlong params 16) protocol
-            (%get-ptr params 24) socketsptr)
-      (syscall syscalls::socketcall 8 params)))
-  #+solaris-target
-  (let* ((fd1 (syscall syscalls::so_socket domain type protocol +null-ptr+ #$SOV_DEFAULT)))
-    (if (>= fd1 0)
-      (let* ((fd2 (syscall syscalls::so_socket domain type protocol +null-ptr+ #$SOV_DEFAULT)))
-        (if (>= fd2 0)
-          (progn
-            (setf (paref socketsptr (:* :int) 0) fd1
-                  (paref socketsptr (:* :int) 1) fd2)
-            (let* ((res (syscall syscalls::so_socketpair socketsptr)))
-              (when (< res 0)
-                (fd-close fd1)
-                (fd-close fd2))
-              res))
-          (progn
-            (fd-close fd1)
-            fd2)))
-      fd1)))
-
-
+  (int-errno-call (#_socketpair domain type protocol socketsptr)))
 
 
 (defun c_sendto (sockfd msgptr len flags addrp addrlen)
-  #-linuxppc-target
-  (syscall syscalls::sendto sockfd msgptr len flags addrp addrlen)
-  #+linuxppc-target
-  (progn
-    #+ppc32-target
-    (%stack-block ((params 24))
-      (setf (%get-long params 0) sockfd
-            (%get-ptr params  4) msgptr
-            (%get-long params 8) len
-            (%get-long params 12) flags
-            (%get-ptr params  16) addrp
-            (%get-long params 20) addrlen)
-      (syscall syscalls::socketcall 11 params))
-    #+ppc64-target
-    (%stack-block ((params 48))
-      (setf (%%get-unsigned-longlong params 0) sockfd
-            (%get-ptr params  8) msgptr
-            (%%get-unsigned-longlong params 16) len
-            (%%get-unsigned-longlong params 24) flags
-            (%get-ptr params  32) addrp
-            (%%get-unsigned-longlong params 40) addrlen)
-      (syscall syscalls::socketcall 11 params))))
+  (int-errno-call (#_sendto sockfd msgptr len flags addrp addrlen)))
 
 (defun c_recvfrom (sockfd bufptr len flags addrp addrlenp)
-  #-linuxppc-target
-  (syscall syscalls::recvfrom sockfd bufptr len flags addrp addrlenp)
-  #+linuxppc-target
-  (progn
-    #+ppc32-target
-    (%stack-block ((params 24))
-      (setf (%get-long params 0) sockfd
-            (%get-ptr params  4) bufptr
-            (%get-long params 8) len
-            (%get-long params 12) flags
-            (%get-ptr params  16) addrp
-            (%get-ptr params  20) addrlenp)
-      (syscall syscalls::socketcall 12 params))
-    #+ppc64-target
-    (%stack-block ((params 48))
-      (setf (%get-long params 0) sockfd
-            (%get-ptr params  8) bufptr
-            (%get-long params 16) len
-            (%get-long params 24) flags
-            (%get-ptr params  32) addrp
-            (%get-ptr params  40) addrlenp)
-      (syscall syscalls::socketcall 12 params))))
+  (int-errno-call (#_recvfrom sockfd bufptr len flags addrp addrlenp)))
 
 (defun c_shutdown (sockfd how)
-  #-linuxppc-target
-  (syscall syscalls::shutdown sockfd how)
-  #+linuxppc-target
-  (progn
-    #+ppc32-target
-    (%stack-block ((params 8))
-      (setf (%get-long params 0) sockfd
-            (%get-long params 4) how)
-      (syscall syscalls::socketcall 13 params))
-    #+ppc64-target
-    (%stack-block ((params 16))
-      (setf (%%get-unsigned-longlong params 0) sockfd
-            (%%get-unsigned-longlong params 8) how)
-      (syscall syscalls::socketcall 13 params))))
+  (int-errno-call (#_shutdown sockfd how)))
 
 (defun c_setsockopt (sockfd level optname optvalp optlen)
-  #-linuxppc-target
-  (syscall syscalls::setsockopt sockfd level optname optvalp optlen)
-  #+linuxppc-target
-  (progn
-    #+ppc32-target
-    (%stack-block ((params 20))
-      (setf (%get-long params 0) sockfd
-            (%get-long params 4) level
-            (%get-long params 8) optname
-            (%get-ptr params 12) optvalp
-            (%get-long params 16) optlen)
-      (syscall syscalls::socketcall 14 params))
-    #+ppc64-target
-    (%stack-block ((params 40))
-      (setf (%%get-unsigned-longlong params 0) sockfd
-            (%%get-unsigned-longlong params 8) level
-            (%%get-unsigned-longlong params 16) optname
-            (%get-ptr params 24) optvalp
-            (%%get-unsigned-longlong params 32) optlen)
-      (syscall syscalls::socketcall 14 params))))
+  (int-errno-call (#_setsockopt sockfd level optname optvalp optlen)))
 
 (defun c_getsockopt (sockfd level optname optvalp optlenp)
-  #-linuxppc-target
-  (syscall syscalls::getsockopt sockfd level optname optvalp optlenp)
-  #+linuxppc-target
-  (progn
-    #+ppc32-target
-    (%stack-block ((params 20))
-      (setf (%get-long params 0) sockfd
-            (%get-long params 4) level
-            (%get-long params 8) optname
-            (%get-ptr params 12) optvalp
-            (%get-ptr params 16) optlenp)
-      (syscall syscalls::socketcall 15 params))
-    #+ppc64-target
-    (%stack-block ((params 40))
-      (setf (%%get-unsigned-longlong params 0) sockfd
-            (%%get-unsigned-longlong params 8) level
-            (%%get-unsigned-longlong params 16) optname
-            (%get-ptr params 24) optvalp
-            (%get-ptr params 32) optlenp)
-      (syscall syscalls::socketcall 15 params))))
+  (int-errno-call (#_getsockopt sockfd level optname optvalp optlenp)))
 
 (defun c_sendmsg (sockfd msghdrp flags)
-  #-linuxppc-target
-  (syscall syscalls::sendmsg sockfd msghdrp flags)
-  #+linuxppc-target
-  (progn
-    #+ppc32-target
-    (%stack-block ((params 12))
-      (setf (%get-long params 0) sockfd
-            (%get-ptr params 4) msghdrp
-            (%get-long params 8) flags)
-      (syscall syscalls::socketcall 16 params))
-    #+ppc64-target
-    (%stack-block ((params 24))
-      (setf (%%get-unsigned-longlong params 0) sockfd
-            (%get-ptr params 8) msghdrp
-            (%%get-unsigned-longlong params 16) flags)
-      (syscall syscalls::socketcall 16 params))))
+  (int-errno-call (#_sendmsg sockfd msghdrp flags)))
 
 (defun c_recvmsg (sockfd msghdrp flags)
-  #-linuxppc-target
-  (syscall syscalls::recvmsg sockfd msghdrp flags)
-  #+linuxppc-target
-  (progn
-    #+ppc32-target
-    (%stack-block ((params 12))
-      (setf (%get-long params 0) sockfd
-            (%get-ptr params 4) msghdrp
-            (%get-long params 8) flags)
-      (syscall syscalls::socketcall 17 params))
-    #+ppc64-target
-    (%stack-block ((params 24))
-      (setf (%%get-unsigned-longlong params 0) sockfd
-            (%get-ptr params 8) msghdrp
-            (%%get-unsigned-longlong params 16) flags)
-      (syscall syscalls::socketcall 17 params))))
+  (int-errno-call   (#_recvmsg sockfd msghdrp flags)))
 
 ;;; Return a list of currently configured interfaces, a la ifconfig.
 (defstruct ip-interface

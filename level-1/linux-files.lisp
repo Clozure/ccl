@@ -16,23 +16,6 @@
 
 (in-package "CCL")
 
-(eval-when (:compile-toplevel :execute)
-  #+linuxppc-target
-  (require "PPC-LINUX-SYSCALLS")
-  #+linuxx8664-target
-  (require "X8664-LINUX-SYSCALLS")
-  #+darwinppc-target
-  (require "DARWINPPC-SYSCALLS")
-  #+darwinx8632-target
-  (require "DARWINX8632-SYSCALLS")
-  #+darwinx8664-target
-  (require "DARWINX8664-SYSCALLS")
-  #+(and freebsd-target x8664-target)
-  (require "X8664-FREEBSD-SYSCALLS")
-  #+(and solaris-target x8664-target)
-  (require "X8664-SOLARIS-SYSCALLS")
-  )
-
 
 (defun get-foreign-namestring (pointer)
   ;; On Darwin, foreign namestrings are encoded in UTF-8 and
@@ -209,7 +192,7 @@ it has been changed, this is the directory OpenMCL was started in."
 
 (defun %chdir (dirname)
   (with-filename-cstrs ((dirname dirname))
-    (syscall syscalls::chdir dirname)))
+    (int-errno-call (#_chdir dirname))))
 
 (defun %mkdir (name mode)
   (let* ((name name)
@@ -217,7 +200,7 @@ it has been changed, this is the directory OpenMCL was started in."
     (when (and (> len 0) (eql (char name (1- len)) #\/))
       (setq name (subseq name 0 (1- len))))
     (with-filename-cstrs ((name name))
-      (syscall syscalls::mkdir name mode))))
+      (int-errno-call (#_mkdir name mode)))))
 
 (defun %rmdir (name)
   (let* ((last (1- (length name))))
@@ -225,7 +208,7 @@ it has been changed, this is the directory OpenMCL was started in."
       (when (and (>= last 0)
 		 (eql (%get-byte name last) (char-code #\/)))
 	(setf (%get-byte name last) 0))
-    (syscall syscalls::rmdir name))))
+      (int-errno-call (#_rmdir name)))))
 
 
 (defun getenv (key)
@@ -250,13 +233,13 @@ environment. If there is no such environment variable, create it."
   "Attempt to change the current user ID (both real and effective);
 fails unless the OpenMCL process has super-user privileges or the ID
 given is that of the current user."
-  (syscall syscalls::setuid uid))
+  (int-errno-call (#_setuid uid)))
 
 (defun setgid (uid)
   "Attempt to change the current group ID (both real and effective);
 fails unless the OpenMCL process has super-user privileges or the ID
 given is that of a group to which the current user belongs."
-  (syscall syscalls::setgid uid))
+  (int-errno-call (#_setgid uid)))
   
 
 ;;; On Linux, "stat" & friends are implemented in terms of deeper,
@@ -290,7 +273,7 @@ given is that of a group to which the current user belongs."
      #+linux-target
      (#_ __xstat #$_STAT_VER_LINUX cname stat)
      #-linux-target
-     (syscall syscalls::stat cname stat)
+     (#_stat cname stat)
      stat)))
 
 (defun %%fstat (fd stat)
@@ -298,7 +281,7 @@ given is that of a group to which the current user belongs."
    #+linux-target
    (#_ __fxstat #$_STAT_VER_LINUX fd stat)
    #-linux-target
-   (syscall syscalls::fstat fd stat)
+   (#_fstat fd stat)
    stat))
 
 (defun %%lstat (name stat)
@@ -307,7 +290,7 @@ given is that of a group to which the current user belongs."
      #+linux-target
      (#_ __lxstat #$_STAT_VER_LINUX cname stat)
      #-linux-target
-     (syscall syscalls::lstat cname stat)
+     (#_lstat cname stat)
      stat)))
 
 
@@ -385,7 +368,7 @@ given is that of a group to which the current user belongs."
 #+linux-target
 (defun %uname (idx)
   (%stack-block ((buf (* #$_UTSNAME_LENGTH 6)))  
-    (%uts-string (syscall syscalls::uname buf) idx buf)))
+    (%uts-string (#_uname buf) idx buf)))
 
 #+darwin-target
 (defun %uname (idx)
@@ -403,27 +386,16 @@ given is that of a group to which the current user belongs."
     (%uts-string (#_uname buf) idx buf)))
 
 (defun fd-dup (fd)
-  (syscall syscalls::dup fd))
+  (int-errno-call (#_dup fd)))
 
 (defun fd-fsync (fd)
-  #-solaris-target
-  (syscall syscalls::fsync fd)
-  #+solaris-target
-  (syscall syscalls::fdsync fd #$FSYNC))
+  (int-errno-call (#_fsync fd)))
 
 (defun fd-get-flags (fd)
-  (let* ((result (#_fcntl fd #$F_GETFL)))
-    (declare (fixnum result))
-    (if (< result 0)
-      (%get-errno)
-      result)))
+  (int-errno-call (#_fcntl fd #$F_GETFL)))
 
 (defun fd-set-flags (fd new)
-  (let* ((result (#_fcntl fd #$F_SETFL :int new)))
-    (declare (fixnum result))
-    (if (< result 0)
-      (%get-errno)
-      result)))
+  (int-errno-call (#_fcntl fd #$F_SETFL :int new)))
 
 (defun fd-set-flag (fd mask)
   (let* ((old (fd-get-flags fd)))
@@ -513,11 +485,7 @@ given is that of a group to which the current user belongs."
 
 
 (defun %%rusage (usage &optional (who #$RUSAGE_SELF))
-  #-solaris-target
-  (syscall syscalls::getrusage who usage)
-  #+solaris-target
-  (#_getrusage who usage)
-  )
+  (int-errno-call (#_getrusage who usage)))
 
 
 
@@ -578,11 +546,11 @@ given is that of a group to which the current user belongs."
 
 (defun getpid ()
   "Return the ID of the OpenMCL OS process."
-  (syscall syscalls::getpid))
+  (int-errno-call (#_getpid)))
 
 (defun getuid ()
   "Return the (real) user ID of the current user."
-  (syscall syscalls::getuid))
+  (int-errno-call (#_getuid)))
 
 (defun get-user-home-dir (userid)
   "Look up and return the defined home directory of the user identified
@@ -611,7 +579,7 @@ environment variable. Returns NIL if there is no user with the ID uid."
 
 (defun %delete-file (name)
   (with-cstrs ((n name))
-    (syscall syscalls::unlink n)))
+    (int-errno-call (#_unlink n))))
 
 (defun os-command (string)
   "Invoke the Posix function system(), which invokes the user's default
@@ -747,13 +715,6 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
     (declare (fixnum fd))
     (#_close fd)))
 
-
-
-
-
-
-;;; I believe that the Darwin/FreeBSD syscall infterface is rather ... odd.
-;;; Use libc's interface.
 (defun pipe ()
   ;;  (rlet ((filedes (:array :int 2)))
   (%stack-block ((filedes 8))
@@ -1152,10 +1113,10 @@ identifies it."
 it would only be useful to call this function if the EXTERNAL-PROCESS was
 created with :WAIT NIL.) Return T if successful; signal an error otherwise."
   (require-type proc 'external-process)
-  (let* ((pid (external-process-pid proc))
-	 (error (syscall syscalls::kill pid signal)))
-    (or (eql error 0)
-	(%errno-disp error))))
+  (let* ((pid (external-process-pid proc)))
+    (when pid
+      (int-errno-call (#_kill pid signal)))))
+
 
 ;;; EOF on a TTY is transient, but I'm less sure of other cases.
 (defun eof-transient-p (fd)
