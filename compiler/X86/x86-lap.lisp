@@ -704,6 +704,8 @@
 ;;; (% x) -> register
 ;;; ($ x) -> immediate
 ;;; (@ x) -> memory operand
+;;; (:rcontext x) -> memory operand, using segment register or gpr
+;;; (:self fn) -> self-reference
 ;;; x -> labelref
 (defun parse-x86-operand (form)
   (if (consp form)
@@ -721,7 +723,12 @@
 		   (when (eq val :self)
 		     (setq type (x86::encode-operand-type :self)))
                    (x86::make-x86-immediate-operand :type type
-                                             :value expr))))
+                                                    :value expr))))
+              ((eq head :rcontext)
+               (if (>= (backend-lisp-context-register *target-backend*)
+                       x86::+x86-segment-register-offset+)
+                 (parse-x86-memory-operand `((% :rcontext) ,(cadr form)))
+                 (parse-x86-memory-operand `(,(cadr form) (% :rcontext)))))
               ((setq designator (x86-register-designator form))
                (destructuring-bind (reg) (cdr form)
                  (parse-x86-register-operand reg designator)))

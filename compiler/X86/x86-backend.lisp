@@ -49,6 +49,7 @@
         (:%xmm (x86::encode-operand-type :regxmm))
         (:%mmx (x86::encode-operand-type :regmmx))
         (:@ (x86::encode-operand-type :anymem))
+        (:rcontext (x86::encode-operand-type :anymem))
         (:$1 (x86::encode-operand-type :imm1) )
         (:$b (x86::encode-operand-type :imm8s ))
         (:$ub (x86::encode-operand-type :imm8))
@@ -277,6 +278,9 @@
                              ((eq (car op) :@)
                               (cons :@
                                     (simplify-memory-operand (cdr op))))
+                             ((eq (car op) :rcontext)
+                              (list :rcontext
+                                    (simplify-simple-operand (cadr op))))
                              ((member (car op)
                                       '(:% :%q :%l :%w :%b
 					:%acc :%accq :%accl :%accw :%accb
