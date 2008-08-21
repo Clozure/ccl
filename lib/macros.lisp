@@ -3649,3 +3649,14 @@ stream-output-timeout set to TIMEOUT."
              (setf (stream-output-timeout ,stream) ,timeout)
              ,@body)
         (setf (stream-output-timeout ,stream) ,old-output-timeout)))))
+
+;;; FORM returns a signed integer.  If it's non-negative, return that
+;;; value, otherwise, return the (negative) errnor value returned by
+;;; %GET-ERRNO
+(defmacro int-errno-call (form)
+  (let* ((value (gensym)))
+    `(let* ((,value ,form))
+      (if (< ,value 0)
+        (%get-errno)
+        ,value))))
+
