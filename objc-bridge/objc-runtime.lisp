@@ -2842,7 +2842,7 @@ argument lisp string."
   #+apple-objc (#_method_getNumberOfArguments m)
   #+gnu-objc (#_method_get_number_of_arguments m))
 
-#+(and apple-objc (not apple-objc-2.0))
+#+(and apple-objc (not apple-objc-2.0) ppc-target)
 (progn
 (defloadvar *original-deallocate-hook*
         #&_dealloc)
