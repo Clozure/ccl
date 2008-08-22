@@ -505,6 +505,16 @@ satisfy the optional predicate PREDICATE."
                                                        "-" string)))))))
 
 
+(defstruct (ffi-transparent-union (:include ffi-mem-block)
+                                  (:constructor
+                                   make-ffi-transparent-union (&key
+                                                               string name
+                                                               &aux
+                                                               (anon-global-id
+                                                                (unless name
+                                                                  (concatenate 'string
+                                                                               *ffi-prefix*
+                                                                               "-" string)))))))
 (defstruct (ffi-struct (:include ffi-mem-block)
                        (:constructor
                        make-ffi-struct (&key
@@ -540,6 +550,9 @@ satisfy the optional predicate PREDICATE."
 
 (defun ffi-union-reference (u)
   (or (ffi-union-name u) (ffi-union-anon-global-id u)))
+
+(defun ffi-transparent-union-reference (u)
+  (or (ffi-transparent-union-name u) (ffi-transparent-union-anon-global-id u)))
 
 (defstruct (ffi-function (:include ffi-type))
   arglist
@@ -590,7 +603,9 @@ satisfy the optional predicate PREDICATE."
                           `(:struct ,name)
                           (if (eql ch #\u)
                             `(:union ,name)
-                            name)))
+                            (if (eql ch #\U)
+                              `(:transparent-union ,name)
+                              name))))
                       (cdr (assoc ch *arg-spec-encoding*)))))
           (if result
             (args val)
@@ -1099,6 +1114,8 @@ satisfy the optional predicate PREDICATE."
   (defconstant encoded-type-anon-struct-ref 16) ; <tag>
   (defconstant encoded-type-anon-union-ref 17) ; <tag>
   (defconstant encoded-type-bitfield-marker 18) ; <nbits>
+  (defconstant encoded-type-named-transparent-union-ref 19) ; <name>
+  (defconstant encoded-type-anon-transparent-union-ref 20)  ;<tag>
   )
 
 
@@ -1144,6 +1161,18 @@ satisfy the optional predicate PREDICATE."
         ,@(encode-name name)
         ,@(encode-ffi-field-list (ffi-union-fields u)))
       `(,(logior encoded-type-anon-union-ref alt-align-in-bytes-mask)
+        ,@(encode-ffi-field-list (ffi-union-fields u))))))
+
+(defun encode-ffi-transparent-union (u)
+  (let* ((name (ffi-transparent-union-name u))
+	 (alt-align-in-bytes-mask (ash (or (ffi-transparent-union-alt-alignment-bits u)
+                                           0)
+                                       (- 5 3))))
+    (if name
+      `(,(logior encoded-type-named-transparent-union-ref alt-align-in-bytes-mask)
+        ,@(encode-name name)
+        ,@(encode-ffi-field-list (ffi-union-fields u)))
+      `(,(logior encoded-type-anon-transparent-union-ref alt-align-in-bytes-mask)
         ,@(encode-ffi-field-list (ffi-union-fields u))))))
 
 (defun encode-ffi-struct (s)
@@ -1288,6 +1317,16 @@ satisfy the optional predicate PREDICATE."
              (logior encoded-type-named-union-ref alt-align-bytes-mask)
              (logior encoded-type-anon-union-ref alt-align-bytes-mask))
         ,@(encode-name (ffi-union-reference u)))))
+     (:transparent-union
+      (let* ((u (cadr spec))
+             (name (ffi-transparent-union-name u))
+	     (alt-align-bytes-mask (ash (or (ffi-union-alt-alignment-bits u)
+					    0)
+					(- 5 3)))	     )
+      `(,(if name
+             (logior encoded-type-named-transparent-union-ref alt-align-bytes-mask)
+             (logior encoded-type-anon-transparent-union-ref alt-align-bytes-mask))
+        ,@(encode-name (ffi-transparent-union-reference u)))))
      (:typedef
       `(,encoded-type-named-type-ref ,@(encode-name (ffi-typedef-name (cadr spec)))))
      (:pointer
@@ -1339,10 +1378,11 @@ satisfy the optional predicate PREDICATE."
 		    (if (<= nbits 64)
 		      `(#\l)
 		      '(#\?)))))))))))
-    ((:struct :union)
-     `(,(if (eq (car spec) :struct)
-                #\r
-                #\u)
+    ((:struct :union :transparent-union)
+     `(,(ecase (car spec)
+          (:struct #\r)
+          (:union #\u)
+          (:transparent-union #\U))
            ,@(encode-name (ffi-struct-reference (cadr spec)))))
     (:typedef
      `(#\t ,@(encode-name (ffi-typedef-name (cadr spec)))))
@@ -1439,6 +1479,8 @@ satisfy the optional predicate PREDICATE."
 (defun save-ffi-union (cdbm u)
   (db-write-byte-list cdbm (ffi-union-reference u) (encode-ffi-union u)))
 
+(defun save-ffi-transparent-union (cdbm u)
+  (db-write-byte-list cdbm (ffi-transparent-union-reference u) (encode-ffi-transparent-union u)))
 
 
 (defun db-define-var (cdbm name type)
@@ -1630,7 +1672,19 @@ satisfy the optional predicate PREDICATE."
                            (make-foreign-record-type :kind :union
                                                      :name name)))
                  qq)))
-      ((#.encoded-type-anon-struct-ref #.encoded-type-anon-union-ref)
+      (#.encoded-type-named-transparent-union-ref
+       (multiple-value-bind (name qq) (%decode-name buf q)
+         (let* ((already (info-foreign-type-union name)))
+           (when already
+             (setf (foreign-record-type-kind already) :transparent-union))
+           (values (or already
+                     (setf (info-foreign-type-union name)
+                           (make-foreign-record-type :kind :transparent-union
+                                                     :name name)))
+                 qq))))
+      ((#.encoded-type-anon-struct-ref
+        #.encoded-type-anon-union-ref
+        #.encoded-type-anon-transparent-union-ref)
        (multiple-value-bind (tag qq) (%decode-name buf q t)
          (values (load-record tag) qq))))))
 
@@ -1716,7 +1770,7 @@ satisfy the optional predicate PREDICATE."
                      (unless imported-offset
                        (setf (foreign-record-field-offset field) offset))
                      (setq total-bits (+ offset bits))))
-          (:union (setq total-bits (max total-bits bits))))))
+          ((:union :transparent-union) (setq total-bits (max total-bits bits))))))
     (setf (foreign-record-type-fields rtype) parsed-fields
           (foreign-record-type-alignment rtype) (or
 						 alt-align
@@ -1737,7 +1791,9 @@ satisfy the optional predicate PREDICATE."
     (declare (fixnum rbyte rcode ralign-in-bytes))
     (multiple-value-bind (name q)
         (case rcode
-          ((#.encoded-type-anon-struct-ref #.encoded-type-anon-union-ref)
+          ((#.encoded-type-anon-struct-ref
+            #.encoded-type-anon-union-ref
+            #.encoded-type-anon-transparent-union-ref)
            (values nil (1+ p)))
           (t
            (%decode-name buf (1+ p))))
@@ -1750,11 +1806,17 @@ satisfy the optional predicate PREDICATE."
                          (make-foreign-record-type :kind :struct :name name)))
                (or (info-foreign-type-union name)
                    (setf (info-foreign-type-union name)
-                         (make-foreign-record-type :kind :union :name name))))
+                         (make-foreign-record-type :kind
+                                                   (if (eql rcode encoded-type-named-union-ref)
+                                                     :union
+                                                     :transparent-union)
+                                                   :name name))))
              (make-foreign-record-type
               :kind (if (eql rcode encoded-type-anon-struct-ref)
                       :struct
-                      :union)
+                      (if (eql rcode encoded-type-anon-union-ref)
+                        :union
+                        :transparent-union))
               :name name)))
        (%decode-field-list buf q ftd)
        alt-align))))

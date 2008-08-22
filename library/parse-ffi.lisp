@@ -43,6 +43,8 @@
 (defvar *ffi-global-typedefs* nil)
 (defvar *ffi-unions*)
 (defvar *ffi-global-unions* nil)
+(defvar *ffi-transparent-unions* nil)
+(defvar *ffi-global-transparent-unions* nil)
 (defvar *ffi-structs*)
 (defvar *ffi-global-structs* nil)
 (defvar *ffi-functions*)
@@ -72,6 +74,13 @@
             (make-ffi-union :string string
                             :name (unless (digit-char-p (schar string 0))
                                     (escape-foreign-name string))))))
+
+(defun find-or-create-ffi-transparent-union (string)
+  (or (gethash string *ffi-transparent-unions*)
+      (setf (gethash string *ffi-transparent-unions*)
+            (make-ffi-transparent-union :string string
+                                        :name (unless (digit-char-p (schar string 0))
+                                                (escape-foreign-name string))))))
 
 (defun find-or-create-ffi-objc-class (string)
   (or (gethash string *ffi-objc-classes*)
@@ -357,6 +366,8 @@
     (:typedef (list :typedef (find-or-create-ffi-typedef (cadr spec))))
     (:struct-ref (list :struct (find-or-create-ffi-struct (cadr spec))))
     (:union-ref (list :union (find-or-create-ffi-union (cadr spec))))
+    (:transparent-union-ref
+     (list :transparent-union (find-or-create-ffi-transparent-union (cadr spec))))
     (:enum-ref `(:primitive :signed))
     (:function `(:primitive (* t)))
     (:pointer (list :pointer (reference-ffi-type (cadr spec))))
@@ -421,6 +432,19 @@
 	(setf (ffi-union-alt-alignment-bits union) (cadr alignform)))
       (unless (ffi-union-fields union)
 	(setf (ffi-union-fields union)
+	      (process-ffi-fieldlist fields)))
+      union)))
+
+(defun process-ffi-transparent-union (form)
+  (destructuring-bind (source-info string fields &optional alignform)
+      (cdr form)
+    (declare (ignore source-info))
+    (let* ((union (find-or-create-ffi-transparent-union string)))
+      (setf (ffi-transparent-union-ordinal union) (incf *ffi-ordinal*))
+      (when alignform
+	(setf (ffi-transparent-union-alt-alignment-bits union) (cadr alignform)))
+      (unless (ffi-transparent-union-fields union)
+	(setf (ffi-transparent-union-fields union)
 	      (process-ffi-fieldlist fields)))
       union)))
 
@@ -540,6 +564,7 @@
     (:typedef (define-typedef-from-ffi-info (cadr spec)))
     (:struct (ensure-struct-defined (cadr spec)))
     (:union (ensure-union-defined (cadr spec)))
+    (:transparent-union (ensure-transparent-union-defined (cadr spec)))
     (:pointer (ensure-referenced-type-defined (cadr spec)))
     (:array (ensure-referenced-type-defined (caddr spec)))
     (:function (dolist (arg (ffi-function-arglist (cadr spec)))
@@ -567,6 +592,10 @@
   (when *ffi-global-unions*
     (setf (gethash (ffi-union-reference u) *ffi-global-unions*) u)))
 
+(defun record-global-transparent-union (u)
+  (when *ffi-global-transparent-unions*
+    (setf (gethash (ffi-transparent-union-reference u) *ffi-global-transparent-unions*) u)))
+
 (defun define-union-from-ffi-info (u)
   (unless (ffi-union-defined u)
     (setf (ffi-union-defined u) t)
@@ -575,11 +604,25 @@
       (let* ((fields (ffi-union-fields u)))
         (ensure-fields-defined fields)))))
 
+(defun define-transparent-union-from-ffi-info (u)
+  (unless (ffi-transparent-union-defined u)
+    (setf (ffi-transparent-union-defined u) t)
+    (record-global-transparent-union u)
+    (when (ffi-transparent-union-name u)
+      (let* ((fields (ffi-transparent-union-fields u)))
+        (ensure-fields-defined fields)))))
+
 (defun ensure-union-defined (u)
   (let* ((name (ffi-union-name u)))
     (if name
       (define-union-from-ffi-info u)
       (ensure-fields-defined (ffi-union-fields u)))))
+
+(defun ensure-transparent-union-defined (u)
+  (let* ((name (ffi-transparent-union-name u)))
+    (if name
+      (define-transparent-union-from-ffi-info u)
+      (ensure-fields-defined (ffi-transparent-union-fields u)))))
 
 (defun record-global-struct (s)
   (when *ffi-global-structs*
@@ -609,7 +652,7 @@
     (record-global-typedef def)
     (let* ((target (ffi-typedef-type def)))
       (unless (and (consp target)
-		   (member (car target) '(:struct :union :primitive)))
+		   (member (car target) '(:struct :union :transparent-union :primitive)))
 	(ensure-referenced-type-defined target)))))
 
 (defun record-global-constant (name val)
@@ -629,7 +672,7 @@
 
 (defun ffi-record-type-p (typeref)
   (case (car typeref)
-    ((:struct :union) t)
+    ((:struct :union :transparent-union) t)
     (:typedef (ffi-record-type-p (ffi-typedef-type (cadr typeref))))
     (t nil)))
 
@@ -658,6 +701,7 @@
 (defun parse-ffi (inpath)
   (let* ((*ffi-typedefs* (make-hash-table :test 'string= :hash-function 'sxhash))
          (*ffi-unions* (make-hash-table :test 'string= :hash-function 'sxhash))
+         (*ffi-transparent-unions* (make-hash-table :test 'string= :hash-function 'sxhash))
          (*ffi-structs* (make-hash-table :test 'string= :hash-function 'sxhash))
          (*ffi-objc-classes* (make-hash-table :test 'string= :hash-function 'sxhash)) 
          (argument-macros (make-hash-table :test 'equal)))
@@ -690,7 +734,8 @@
                 (:var (push (process-ffi-var form) defined-vars))
                 (:enum-ident (push (process-ffi-enum-ident form) defined-constants))
                 (:enum (process-ffi-enum form))
-                (:union (push (process-ffi-union form) defined-types)))))
+                (:union (push (process-ffi-union form) defined-types))
+                (:transparent-union (push (process-ffi-transparent-union form) defined-types)))))
           (multiple-value-bind (new-constants new-macros)
               (process-defined-macros defined-macros (reverse defined-constants) argument-macros)
 	    ;; If we're really lucky, we might be able to turn some C macros
@@ -705,6 +750,7 @@
               (typecase x
                 (ffi-struct (define-struct-from-ffi-info x))
                 (ffi-union (define-union-from-ffi-info x))
+                (ffi-transparent-union (define-transparent-union-from-ffi-info x))
                 (ffi-typedef (define-typedef-from-ffi-info x))
                 (ffi-objc-class (define-objc-class-from-ffi-info x))))
             (dolist (f defined-functions) (emit-function-decl f))))))))
@@ -724,6 +770,7 @@
           (getf (ftd-attributes ftd) :prepend-underscores))
 	 (*ffi-global-typedefs* (make-hash-table :test 'string= :hash-function 'sxhash))
 	 (*ffi-global-unions* (make-hash-table :test 'string= :hash-function 'sxhash))
+         (*ffi-global-transparent-unions* (make-hash-table :test 'string= :hash-function 'sxhash))
 	 (*ffi-global-structs* (make-hash-table :test 'string= :hash-function 'sxhash))
          (*ffi-global-objc-classes* (make-hash-table :test 'string= :hash-function 'sxhash))
          (*ffi-global-objc-messages* (make-hash-table :test 'string= :hash-function 'sxhash)) 
@@ -756,6 +803,11 @@
 		   (declare (ignore name))
                    (save-ffi-union records-cdbm def))
 	       *ffi-global-unions*)
+      (maphash #'(lambda (name def)
+                   (declare (ignore name))
+                   (save-ffi-transparent-union records-cdbm def))
+               *ffi-global-transparent-unions*)
+                         
       (maphash #'(lambda (name def)
 		   (declare (ignore name))
 		   (save-ffi-struct records-cdbm def))

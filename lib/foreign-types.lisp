@@ -999,7 +999,7 @@ Which one name refers to depends on foreign-type-spec in the obvious manner."
   (make-load-form-saving-slots f :environment env))
 
 (def-foreign-type-class (record :include mem-block)
-  (kind :struct :type (member :struct :union))
+  (kind :struct :type (member :struct :union :transparent-union))
   (name nil :type (or symbol null))
   (fields nil :type list)
   ;; For, e.g., records defined with #pragma options align=mac68k
@@ -1017,12 +1017,13 @@ Which one name refers to depends on foreign-type-spec in the obvious manner."
                    (or
                     (ecase kind
                       (:struct (info-foreign-type-struct name ftd))
-                      (:union (info-foreign-type-union name ftd)))
+                      ((:union :transparent-union) (info-foreign-type-union name ftd)))
                     (case kind
                       (:struct (setf (info-foreign-type-struct name ftd)
                                      (make-foreign-record-type :name name :kind :struct)))
-                      (:union  (setf (info-foreign-type-union name ftd)
-                                     (make-foreign-record-type :name name :kind :union)))))
+                      ((:union :transparent-union)
+                       (setf (info-foreign-type-union name ftd)
+                                     (make-foreign-record-type :name name :kind kind)))))
                    (make-foreign-record-type :kind kind))))
     (when fields
       (multiple-value-bind (parsed-fields alignment bits)
@@ -1086,7 +1087,7 @@ Which one name refers to depends on foreign-type-spec in the obvious manner."
                  (setf (foreign-record-field-offset parsed-field) offset)
                  (setf (foreign-record-field-bits parsed-field) bits)
                  (setf total-bits (+ offset bits))))
-              (:union
+              ((:union :transparent-union)
                (setf total-bits (max total-bits bits)))))))
       (values (parsed-fields)
               (or alt-alignment overall-alignment)
@@ -1108,6 +1109,7 @@ Which one name refers to depends on foreign-type-spec in the obvious manner."
   `(,(case (foreign-record-type-kind type)
        (:struct :struct)
        (:union :union)
+       (:transparent-union :transparent-union)
        (t '???))
     ,(foreign-record-type-name type)
     ,@(unless (member type *record-types-already-unparsed* :test #'eq)
@@ -1760,6 +1762,9 @@ result-type-specifer is :VOID or NIL"
     
     (def-foreign-type-translator union (name &rest fields)
       (parse-foreign-record-type :union name fields))
+
+    (def-foreign-type-translator transparent-union (name &rest fields)
+      (parse-foreign-record-type :transparent-union name fields))
 
     (def-foreign-type-translator array (ele-type &rest dims)
       (when dims
