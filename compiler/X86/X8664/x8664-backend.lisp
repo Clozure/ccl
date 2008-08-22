@@ -403,6 +403,12 @@
                     (argforms arg-type-spec)
                     (argforms arg-value-form))
                   (let* ((ftype (parse-foreign-type arg-type-spec)))
+                    (when (and (typep ftype 'foreign-record-type)
+                             (eq (foreign-record-type-kind ftype) :transparent-union))
+                      (ensure-foreign-type-bits ftype)
+                      (setq ftype (foreign-record-field-type
+                                   (car (foreign-record-type-fields ftype)))
+                            arg-type-spec (foreign-type-to-representation-type ftype)))
                     (if (typep ftype 'foreign-record-type)
                       (multiple-value-bind (first8 second8)
                           (x8664::classify-record-type ftype)
