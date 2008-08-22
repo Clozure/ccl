@@ -71,7 +71,12 @@
 #include "gc.h"
 
 #ifdef USE_FUTEX
-#include <linux/futex.h>
+#ifndef FUTEX_WAIT
+#define FUTEX_WAIT (0)
+#endif
+#ifndef FUTEX_WAKE
+#define FUTEX_WAKE (1)
+#endif
 #include <sys/syscall.h>
 #endif
 
