@@ -9389,6 +9389,14 @@
 	       (x862-form seg ptr nil valform))
 	     (! set-c-arg ptr offset))
 	   (incf offset))
+          ((:signed-doubleword :unsigned-doubleword)
+           (x862-one-targeted-reg-form seg valform x8632::arg_z)
+           ;; Subprims return 64-bit result in mm0
+           (if (eq spec :unsigned-doubleword)
+             (! getu64)
+             (! gets64))
+           (! set-c-arg-from-mm0 offset)
+           (incf offset 2))
 	  (t
 	   (if (typep spec 'unsigned-byte)
 	     (progn
