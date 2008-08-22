@@ -28,7 +28,7 @@
 					*openmcl-minor-version*
 					(unless (zerop *openmcl-revision*)
 					  *openmcl-revision*)
-					(format nil "~a-RC1" *openmcl-svn-revision*)
+					(format nil "~a" *openmcl-svn-revision*)
                                         *optional-features*
                                         *openmcl-dev-level*))
 
