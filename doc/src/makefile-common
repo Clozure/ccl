@@ -39,7 +39,21 @@ SVNREV = $(shell /usr/bin/svnversion)
 .PHONY: all clean distclean show
 
 
-include makehtml
+$(HTMLFILES): $(XMLFILES)  $(XSLFILES)
+	$(XSLTPROC) \
+		--xinclude \
+		--stringparam root.filename $(basename $(@F)) \
+		--stringparam base.dir $(TEMP)/ \
+		--stringparam openmcl.directory $(@D)/ \
+		--stringparam onechunk \
+			$(if $(findstring Doc, $(@D)), 0, 1) \
+		--stringparam xsltproc.version "$(XSLTPROCVERSION)." \
+                --stringparam svnrev "$(SVNREV)"\
+		$(EXTRAPARAMS) \
+		$(STYLESHEET) ccl-documentation.xml
+	rm -f $(if $(findstring Doc, $(@D)), $(@D)/*.html, $@)
+	mv $(TEMP)/*.html $(@D)/
+
 
 all: ${TEMP} ${HTMLFILES} distclean
 	echo ${HTMLFILES}
@@ -52,8 +66,8 @@ $(TEMP):
 	mkdir $(TEMP)
 
 clean:
-	rm -rf build-* ${HTMLFILES}
+	rm -rf build-*
 
-distclean: clean
+distclean: clean 
 	rm -f *~
 
