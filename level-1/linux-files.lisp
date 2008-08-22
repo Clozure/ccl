@@ -1027,8 +1027,11 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                  (external-process-output proc) out-stream
                  (external-process-error proc) error-stream)
            (process-run-function
-            (format nil "Monitor thread for external process ~a" args)
-                    
+            (list :name
+                  (format nil "Monitor thread for external process ~a" args)
+                  :stack-size (ash 128 10)
+                  :vstack-size (ash 128 10)
+                  :tstack-size (ash 128 10))
             #'run-external-process proc in-fd out-fd error-fd env)
            (wait-on-semaphore (external-process-signal proc))
            )
