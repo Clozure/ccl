@@ -794,3 +794,21 @@
   (movl (@ target::area.low (% temp0)) (% imm0))
   (leal (@ target::fulltag-cons (% imm0) (% n) 2) (% arg_z))
   (single-value-return))
+
+;;; Get the thread-specific value of %fs.
+(defx8632lapfunction %get-fs-register ()
+  (xorl (% imm0) (% imm0))
+  (:byte #x66)                          ;movw %fs,%ax
+  (:byte #x8c)
+  (:byte #xe0)
+  (box-fixnum imm0 arg_z)
+  (single-value-return))
+
+(defx86lapfunction %get-gs-register ()
+  (xorl (% imm0) (% imm0))
+  (:byte #x66)                          ;movw %gs,%ax
+  (:byte #x8c)
+  (:byte #xe8)
+  (box-fixnum imm0 arg_z)
+  (single-value-return))
+  
