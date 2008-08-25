@@ -1030,6 +1030,9 @@ _spentry(syscall)
 	__(cld)
 	__(emms)
 	__(pop %ebp)		/* backlink */
+        __(lea 15(%esp),%edx)
+        __(andl $-16,%edx)
+        __(movl %edx,%esp)
 	__(unbox_fixnum(%arg_z,%eax))	/* syscall number */
 	__(movl $local_label(back_from_sysenter),%edx)
 	__(push %edx)
@@ -1083,6 +1086,9 @@ _spentry(syscall2)
 	__(cld)
 	__(emms)
 	__(pop %ebp)		/* backlink */
+        __(lea 15(%esp),%edx)
+        __(andl $-16,%edx)
+        __(movl %edx,%esp)
 	__(unbox_fixnum(%arg_z,%eax))	/* syscall number */
 	__(pushl $local_label(back_from_syscall))
 	__(int $0x80)
@@ -4054,7 +4060,10 @@ LocalLabelPrefix[]ffcall:
 	__(ldmxcsr rcontext(tcr.foreign_mxcsr))
 	__(movl (%esp),%ebp)
 LocalLabelPrefix[]ffcall_setup:
-	__(addl $node_size,%esp)
+        __(lea 15(%esp),%ecx)
+        __(andl $-16,%ecx)
+        __(movl %ecx,%esp)
+/*	__(addl $node_size,%esp) */
 LocalLabelPrefix[]ffcall_call:
 	__(call *%eax)
 LocalLabelPrefix[]ffcall_call_end:
