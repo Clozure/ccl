@@ -591,7 +591,7 @@
 	   (with-variable-c-frame
 	       total-words frame
 	       (%setf-macptr-to-object argptr frame)
-	       (let* ((offset 4))
+	       (let* ((offset 8))
 		 (do* ((i 0 (1+ i))
 		       (specs specs-and-vals (cddr specs))
 		       (spec (car specs) (car specs))
