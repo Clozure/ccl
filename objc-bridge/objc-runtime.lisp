@@ -538,10 +538,34 @@
 (defconstant JB-MASK 80)
 )
 
+;;; I think that we know where these constants come from.
+#+x8632-target
+(progn
+  (defconstant JB-FPCW 0)
+  (defconstant JB-MASK 4)
+  (defconstant JB-MXCSR 8)
+  (defconstant JB-EBX 12)
+  (defconstant JB-ECX 16)
+  (defconstant JB-EDX 20)
+  (defconstant JB-EDI 24)
+  (defconstant JB-ESI 28)
+  (defconstant JB-EBP 32)
+  (defconstant JB-ESP 36)
+  (defconstant JB-SS 40)
+  (defconstant JB-EFLAGS 44)
+  (defconstant JB-EIP 48)
+  (defconstant JB-CS 52)
+  (defconstant JB-DS 56)
+  (defconstant JB-ES 60)
+  (defconstant JB-FS 64)
+  (defconstant JB-GS 68)
+
+
+  )
 
  
 
-;;; A malloc'ed pointer to thre words of machine code.  The first
+;;; A malloc'ed pointer to three words of machine code.  The first
 ;;; instruction copies the address of the trampoline callback from r14
 ;;; to the count register.  The second instruction (rather obviously)
 ;;; copies r15 to r4.  A C function passes its second argument in r4,
@@ -570,6 +594,7 @@
                  :void)
         p)))
 
+;;; This isn't used; it isn't right, either.
 #+x8664-target
 (defloadvar *setjmp-catch-rip-code*
     (let* ((code-bytes '(#x4c #x89 #xe6     ; movq %r12, %rsi
@@ -578,7 +603,17 @@
            (p (malloc nbytes)))
       (dotimes (i nbytes p)
         (setf (%get-unsigned-byte p i) (pop code-bytes)))))
-         
+
+#+x8632-target
+(defloadvar *setjmp-catch-rip-code*
+    (let* ((code-bytes '(#x83 #xec #x10 ; subl $16,%esp
+                         #x89 #x04 #x24 ; movl %eax,(%esp)
+                         #x89 #x7c #x24 #x04   ; movl %edi,4(%esp)
+                         #xff #xd3))    ; call *%ebx
+           (nbytes (length code-bytes))
+           (p (malloc nbytes)))
+      (dotimes (i nbytes p)
+        (setf (%get-unsigned-byte p i) (pop code-bytes)))))
 
 ;;; Catch frames are allocated on a stack, so it's OK to pass their
 ;;; addresses around to foreign code.
@@ -613,6 +648,28 @@
   (%set-object jmp-buf JB-r12 catch-frame)
   t)
 
+#+x8632-target
+;;; Ugh.  Apple stores segment register values in jmp_bufs.  You know,
+;;; since they're so volatile and everything.
+(defun %associate-jmp-buf-with-catch-frame (jmp-buf catch-frame c-frame)
+  (setf (%get-unsigned-word jmp-buf JB-FS) (%get-fs-register)
+        (%get-unsigned-word jmp-buf JB-GS) (%get-gs-register)
+        (%get-unsigned-word jmp-buf JB-CS) #x17
+        (%get-unsigned-word jmp-buf JB-DS) #x1f
+        (%get-unsigned-word jmp-buf JB-ES) #x1f
+        (%get-unsigned-word jmp-buf JB-SS) #x1f)
+  (%set-object jmp-buf JB-ESP c-frame)
+  (%set-object jmp-buf JB-EBP c-frame)
+  (setf (%get-unsigned-long jmp-buf JB-MXCSR) #x1f80
+        (%get-unsigned-long jmp-buf JB-FPCW) #x37f
+        (%get-unsigned-long jmp-buf JB-MASK) 0)
+  (setf (%get-ptr jmp-buf JB-EBX) throw-to-catch-frame
+        (%get-ptr jmp-buf JB-EIP) *setjmp-catch-rip-code*)
+  (%set-object jmp-buf JB-EDI catch-frame)
+  t)
+  
+
+        
 
 )
 
@@ -2046,14 +2103,14 @@ argument lisp string."
 	      max-parm-end
 	      arg-info))))
 
-#+x8664-target
+#+x86-target
 (defun encode-objc-method-arglist (arglist result-spec)
   (let* ((offset 0)
 	 (arg-info
           (let* ((result nil))
 		(dolist (argspec arglist (nreverse result))
 		  (let* ((arg (parse-foreign-type argspec))
-                         (delta 8))
+                         (delta target::node-size))
 		    (typecase arg
 		      (foreign-double-float-type)
 		      (foreign-single-float-type)
@@ -2061,10 +2118,10 @@ argument lisp string."
 		      (foreign-integer-type)
 		      (foreign-record-type
 		       (let* ((bits (ensure-foreign-type-bits arg)))
-			 (setq delta (ceiling bits 8))))
+			 (setq delta (ceiling bits target::node-size))))
 		      (t (break "argspec = ~s, arg = ~s" argspec arg)))
 		    (push (list (encode-objc-type arg) offset) result)
-                    (setq offset (* 8 (ceiling (+ offset delta) 8))))))))
+                    (setq offset (* target::node-size (ceiling (+ offset delta) target::node-size))))))))
     (let* ((max-parm-end offset))
       (format nil "~a~d~:{~a~d~}"
 	      (encode-objc-type

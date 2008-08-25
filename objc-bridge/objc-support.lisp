@@ -310,6 +310,18 @@ instance variable."
 
 )
 
+#+x8632-target
+(progn
+(defun objc-callback-error-return (condition return-value-pointer return-address-pointer)
+  (declare (ignorable oondition return-value-pointer return-address-pointer))
+  #||
+  (process-debug-condition *current-process* condition (%get-frame-ptr))
+  (let* ((addr (%reference-external-entry-point (load-time-value (external "__NSRaiseError")))))
+    (setf (%get-unsigned-long ) )
+  (setf (%get-ptr return-value-pointer 0) (ns-exception condition))
+  ||#
+  nil)
+)
 
 )
 
