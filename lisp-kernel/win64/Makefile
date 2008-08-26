@@ -24,9 +24,9 @@ M4 = m4
 LD = x86_64-pc-mingw32-ld
 ASFLAGS = -g --64
 M4FLAGS = -DWIN64 -DWINDOWS -DX86 -DX8664 -DHAVE_TLS -DEMUTLS
-CDEFINES = -DWIN64 -DWINDOWS -D_REENTRANT -DX86 -DX8664 -D_GNU_SOURCE -DHAVE_TLS -DEMUTLS #-DDISABLE_EGC
+CDEFINES = -DWIN64 -DWINDOWS -D_REENTRANT -DX86 -DX8664 -D_GNU_SOURCE -DHAVE_TLS -DEMUTLS
 CDEBUG = -g
-COPT = -O0
+COPT = -O2
 
 # If the linker supports a "--hash-style=" option, use traditional
 # SysV hash tables.  (If it doesn't support that option, assume
@@ -38,17 +38,27 @@ else
 HASH_STYLE="-Wl,--hash-style=sysv"
 endif
 
+# There may be some confusion about whether or not C symbols have
+# leading underscores or not.  The assembler sources seem to
+# expect them to and mingw import libs seem to use them, but
+# it's not clear whether or not native win64 libraries use this
+# convention (and I'm not sure whether the Cygwin-hosted win64
+# toolchain behaves the same was as when hosted on Linux ...
+# The compiler default seems to be to use them; if we want to
+# suppress their use, uncomment the following:
+
+SUPPRESS_UNDERSCORES=#-fno-leading-underscore
 
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) -fno-leading-underscore -m64 -o $@
+	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) ${SUPPRESS_UNDERSCORES} -m64 -o $@
 
 SPOBJ = pad.o x86-spjump64.o x86-spentry64.o x86-subprims64.o
 ASMOBJ = x86-asmutils64.o imports.o
 
 COBJ  = pmcl-kernel.o gc-common.o x86-gc.o bits.o  x86-exceptions.o \
-	image.o thread_manager.o lisp-debug.o memory.o
+	image.o thread_manager.o lisp-debug.o memory.o windows-calls.o
 
 DEBUGOBJ = lispdcmd.o plprint.o plsym.o xlbt.o x86_print.o
 KERNELOBJ= $(COBJ) x86-asmutils64.o  imports.o
@@ -65,11 +75,11 @@ KSPOBJ = $(SPOBJ)
 all:	../../wx86cl64.exe
 
 
-OSLIBS = 
+OSLIBS = -lpsapi -lws2_32
 
 
-../../wx86cl64.exe:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile 
-	$(CC)  -m64 $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -o $@ $(USE_LINK_MAP) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
+../../wx86cl64.exe:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile pei-x86-64.x
+	$(CC) -Wl,--image-base=0x10000 -Wl,-script=pei-x86-64.x -m64 $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -o $@ $(USE_LINK_MAP) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
 
 
 $(SPOBJ): $(SPINC)
