@@ -5039,9 +5039,6 @@ _spentry(unused_5)
         __(int $3)
 _endsubp(unused_5)
 
-_spentry(unused_6)
-        __(int $3)
-_endsubp(unused_6)
 
         __ifdef([DARWIN])
         .if 1
@@ -5122,6 +5119,10 @@ LEFDEffcall_return_registers:
         .endif
         __endif
         
+_spentry(unused_6)
+        __(int $3)
+Xspentry_end:           
+_endsubp(unused_6)
         
         .data
         .globl C(spentry_start)
