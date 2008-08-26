@@ -208,6 +208,7 @@ lisp-kernel/darwinx8632/Makefile -text
 lisp-kernel/gc-common.c -text
 lisp-kernel/solarisx64/.gdbinit -text
 lisp-kernel/win64/Makefile -text
+lisp-kernel/win64/pei-x86-64.x -text
 lisp-kernel/win64/yasm-redefinition.patch -text
 lisp-kernel/windows-calls.c -text
 lisp-kernel/x86-asmutils32.s -text
