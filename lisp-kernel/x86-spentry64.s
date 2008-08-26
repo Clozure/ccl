@@ -5123,3 +5123,8 @@ LEFDEffcall_return_registers:
         __endif
         
         
+        .data
+        .globl C(spentry_start)
+        .globl C(spentry_end)
+C(spentry_start):       .quad Xspentry_start
+C(spentry_end):         .quad Xspentry_end
