@@ -39,7 +39,8 @@ define([jump_builtin],[
 
         
 
-_spentry(bad_funcall)	
+_spentry(bad_funcall)
+Xspentry_start:         
 	.globl C(bad_funcall)	
 __(tra(C(bad_funcall)))
 	__(uuo_error_not_callable)
@@ -3928,12 +3929,12 @@ LocalLabelPrefix[]ffcall:
 	__(push %arg_y)
 	__(push %arg_z)
 	__(push %fn)
-	__(push %save0)
-	__(push %save1)
-	__(push %save2)
 	__ifndef([WINDOWS])
-	__(push %save3)         /* 11 registers pushed after %rbp */
+	__(push %save3)  
 	__endif
+	__(push %save2)
+	__(push %save1)
+	__(push %save0)       /* 10 or 11 registers pushed after %rbp */
 	__(movq %rsp,rcontext(tcr.save_vsp))
         __(movq %rbp,rcontext(tcr.save_rbp))
 	__(movq $TCR_STATE_FOREIGN,rcontext(tcr.valence))
@@ -3954,46 +3955,53 @@ LocalLabelPrefix[]ffcall:
             Note that dereferencing the entrypoint from
             foreign code has never been safe (unless it's
             a fixnum */
-         __(save_tcr_linear(%save0))
-         __(movq %imm1,%save1)
-         __(movq %imm0,%save2)
+         __(save_tcr_linear(%csave0))
+         __(movq %imm1,%csave1)
+         __(movq %imm0,%csave2)
          __(set_foreign_gs_base())
-         __(movq %save1,%imm1)
-         __(movq %save2,%imm0)
+         __(movq %csave1,%imm1)
+         __(movq %csave2,%imm0)
         __endif
 	__ifdef([WINDOWS])
 	/* Preserve TCR pointer */
-	__(movq %rcontext_reg, %save0)
+	__(movq %rcontext_reg, %csave0)
 	__endif
 LocalLabelPrefix[]ffcall_setup: 
 	__(addq $2*node_size,%rsp)
         __(movq %imm1,%r11)
-	__(pop %carg0)
-	__(pop %carg1)
-	__(pop %carg2)
-	__(pop %carg3)
-	__ifdef([WINDOWS])
-	__(sub $20, %rsp) /* Make room for arg register spill */
-	__else
-	__(pop %carg4)
-	__(pop %carg5)
+        __ifdef([WINDOWS])
+         /* Leave 0x20 bytes of register spill area on stack */
+         __(movq (%rsp),%carg0)
+         __(movq 8(%rsp),%carg1)
+         __(movq 16(%rsp),%carg2)
+         __(movq 24(%rsp),%carg3)
+        __else
+	 __(pop %carg0)
+	 __(pop %carg1)
+	 __(pop %carg2)
+	 __(pop %carg3)
+	 __(pop %carg4)
+	 __(pop %carg5)
 	__endif
 LocalLabelPrefix[]ffcall_setup_end: 
 LocalLabelPrefix[]ffcall_call:
 	__(call *%r11)
 LocalLabelPrefix[]ffcall_call_end:               
+	__ifdef([WINDOWS])
+	__(add $0x20,%rsp)
+	__endif
 	__(movq %rbp,%rsp)
         __ifdef([DARWIN_GS_HACK])
-         /* %rax/%rdx contains the return value (maybe), %save0 still
+         /* %rax/%rdx contains the return value (maybe), %csave1 still
             contains the linear tcr address.  Preserve %rax/%rdx here. */
-         __(movq %rax,%save1)
-         __(movq %rdx,%save2)
-         __(set_gs_base(%save0))
-         __(movq %save1,%rax)
-         __(movq %save2,%rdx)
+         __(movq %rax,%csave1)
+         __(movq %rdx,%csave2)
+         __(set_gs_base(%csave0))
+         __(movq %csave1,%rax)
+         __(movq %csave2,%rdx)
         __endif
 	__ifdef([WINDOWS])
-	__(movq %save0, %rcontext_reg)
+	__(movq %csave0, %rcontext_reg)
 	__endif
 	__(movq %rsp,rcontext(tcr.foreign_sp))
 	__ifndef([WINDOWS])
@@ -4018,12 +4026,12 @@ LocalLabelPrefix[]ffcall_call_end:
 1:      __(movq rcontext(tcr.save_vsp),%rsp)
         __(movq rcontext(tcr.save_rbp),%rbp)
 	__(movq $TCR_STATE_LISP,rcontext(tcr.valence))
+	__(pop %save0)
+	__(pop %save1)
+	__(pop %save2)
 	__ifndef([WINDOWS])
 	__(pop %save3)
 	__endif
-	__(pop %save2)
-	__(pop %save1)
-	__(pop %save0)
 	__(pop %fn)
 	__(pop %arg_z)
 	__(pop %arg_y)
@@ -4139,13 +4147,13 @@ LocalLabelPrefix[]ffcall_return_registers:
 	__(push %arg_x)
 	__(push %arg_y)
 	__(push %arg_z)
-	__(push %save0)
-	__(push %save1)
-	__(push %save2)
 	__ifndef([WINDOWS])
 	__(push %save3)
 	__endif
-        __(movq macptr.address(%arg_y),%rbx)  /* %rbx non-volatile */
+	__(push %save2)
+	__(push %save1)
+	__(push %save0)
+        __(movq macptr.address(%arg_y),%csave0)  /* %rbx non-volatile */
 	__(push %fn)
 	__(movq %rsp,rcontext(tcr.save_vsp))
         __(movq %rbp,rcontext(tcr.save_rbp))
@@ -4161,22 +4169,22 @@ LocalLabelPrefix[]ffcall_return_registers:
             xmm argument info; the lisp registers are
             all saved, and the foreign arguments are
             on the foreign stack (about to be popped
-            off).  Save the linear TCR address in %save0/%r15
+            off).  Save the linear TCR address in %csave1/%r12
             so that we can restore it later, and preserve
             the entrypoint somewhere where C won't bash it.
             Note that dereferencing the entrypoint from
             foreign code has never been safe (unless it's
             a fixnum */
-         __(save_tcr_linear(%save0))
-         __(movq %imm0,%save1)
-         __(movq %imm1,%save2)
+         __(save_tcr_linear(%csave1))
+         __(movq %imm0,%csave2)
+         __(movq %imm1,%csave3)
          __(set_foreign_gs_base())
-         __(movq %save1,%imm0)
-         __(movq %save2,%imm1)
+         __(movq %csave2,%imm0)
+         __(movq %csave3,%imm1)
         __endif
 	__ifdef([WINDOWS])
 	/* Preserve TCR pointer */
-	__(movq %rcontext_reg, %save0)
+	__(movq %rcontext_reg, %csave1)
 	__endif
         __(movq %imm1,%r11)
 LocalLabelPrefix[]ffcall_return_registers_setup: 
@@ -4186,7 +4194,7 @@ LocalLabelPrefix[]ffcall_return_registers_setup:
 	__(pop %carg2)
 	__(pop %carg3)
 	__ifdef([WINDOWS])
-	__(sub $20, %rsp) /* Make room for arg register spill */
+	__(sub $0x20, %rsp) /* Make room for arg register spill */
 	__else
 	__(pop %carg4)
 	__(pop %carg5)
@@ -4194,23 +4202,26 @@ LocalLabelPrefix[]ffcall_return_registers_setup:
 LocalLabelPrefix[]ffcall_return_registers_setup_end: 
 LocalLabelPrefix[]ffcall_return_registers_call:
 	__(call *%r11)
-LocalLabelPrefix[]ffcall_return_registers_call_end:               
-        __(movq %rax,(%rbx))
-        __(movq %rdx,8(%rbx))
-        __(movsd %xmm0,16(%rbx))
-        __(movsd %xmm1,24(%rbx))
+LocalLabelPrefix[]ffcall_return_registers_call_end:
+	__ifdef([WINDOWS])
+	__(add $0x20, %rsp)
+	__endif
+        __(movq %rax,(%csave0))
+        __(movq %rdx,8(%csave0))
+        __(movsd %xmm0,16(%csave0))
+        __(movsd %xmm1,24(%csave0))
 	__(movq %rbp,%rsp)
         __ifdef([DARWIN_GS_HACK])
          /* %rax/%rdx contains the return value (maybe), %save0 still
             contains the linear tcr address.  Preserve %rax/%rdx here. */
-         __(set_gs_base(%save0))
-         __(movq (%save2),%rax)
-         __(movq 8(%save2),%rdx)
-         __(movsd 16(%save2),%xmm0)
-         __(movsd 24(%save2),%xmm1)
+         __(set_gs_base(%csave1))
+         __(movq (%csave3),%rax)
+         __(movq 8(%csave3),%rdx)
+         __(movsd 16(%csave3),%xmm0)
+         __(movsd 24(%csave3),%xmm1)
         __endif
 	__ifdef([WINDOWS])
-	__(movq %save0, %rcontext_reg)
+	__(movq %csave1, %rcontext_reg)
 	__endif
 	__(movq %rsp,rcontext(tcr.foreign_sp))        
 	__ifndef([WINDOWS])
@@ -4236,12 +4247,12 @@ LocalLabelPrefix[]ffcall_return_registers_call_end:
         __(movq rcontext(tcr.save_rbp),%rbp)
 	__(movq $TCR_STATE_LISP,rcontext(tcr.valence))
 	__(pop %fn)
+	__(pop %save0)
+	__(pop %save1)
+	__(pop %save2)
 	__ifndef([WINDOWS])
 	__(pop %save3)
 	__endif
-	__(pop %save2)
-	__(pop %save1)
-	__(pop %save0)
 	__(pop %arg_z)
 	__(pop %arg_y)
 	__(pop %arg_x)
@@ -4348,10 +4359,12 @@ _spentry(syscall)
 	__(push %arg_x)
 	__(push %arg_y)
 	__(push %arg_z)
-	__(push %save0)
-	__(push %save1)
+        __ifndef([WINDOWS])
+	 __(push %save3)
+        __endif
 	__(push %save2)
-	__(push %save3)
+	__(push %save1)
+	__(push %save0)
 	__(push %fn)
 	__(movq %rsp,rcontext(tcr.save_vsp))
         __(movq %rbp,rcontext(tcr.save_rbp))
@@ -4360,22 +4373,39 @@ _spentry(syscall)
 	__(emms)
 	__(movq (%rsp),%rbp)
 	__(addq $2*node_size,%rsp)
-	__(unbox_fixnum(%arg_z,%rax))
-	__(pop %rdi)
-	__(pop %rsi)
-	__(pop %rdx)
-	__(pop %r10)		/*  syscalls take 4th param in %r10, not %rcx   */
-	__(pop %r8)
-	__(pop %r9)
-	__(syscall)
-        __ifdef([SYSCALL_SETS_CARRY_ON_ERROR])
-         __(jnc 0f)
-         __(negq %rax)
+        __ifdef([WINDOWS])
+         __(lea C(windows_syscall_table)(%rip),%rax)
+         __(movq %rcontext_reg,%csave0)
+         __(pop %carg0)
+         __(pop %carg1)
+         __(pop %carg2)
+         __(pop %carg3)
+         __(subq $0x20,%rsp)
+         __(call *(%rax,%arg_z))
+         __(addq $0x20,%rsp)
+        __else
+	 __(unbox_fixnum(%arg_z,%rax))
+	 __(pop %rdi)
+	 __(pop %rsi)
+	 __(pop %rdx)
+	 __(pop %r10)		/*  syscalls take 4th param in %r10, not %rcx   */
+	 __(pop %r8)
+	 __(pop %r9)
+	 __(syscall)
+         __ifdef([SYSCALL_SETS_CARRY_ON_ERROR])
+          __(jnc 0f)
+          __(negq %rax)
 0:      
-        __endif        
+         __endif
+        __endif
+        __ifdef([WINDOWS])
+         __(movq %csave0,%rcontext_reg)
+        __endif
 	__(movq %rbp,%rsp)
-	__(movq %rsp,rcontext(tcr.foreign_sp))        
-	__(clr %save3)
+	__(movq %rsp,rcontext(tcr.foreign_sp))
+        __ifndef([WINDOWS])
+	 __(clr %save3)
+        __endif
 	__(clr %save2)
 	__(clr %save1)
 	__(clr %save0)
@@ -4391,10 +4421,12 @@ _spentry(syscall)
         __(movq rcontext(tcr.save_rbp),%rbp)
 	__(movq $TCR_STATE_LISP,rcontext(tcr.valence))
 	__(pop %fn)
-	__(pop %save3)
-	__(pop %save2)
-	__(pop %save1)
 	__(pop %save0)
+	__(pop %save1)
+	__(pop %save2)
+        __ifndef([WINDOWS])
+	 __(pop %save3)
+        __endif
 	__(pop %arg_z)
 	__(pop %arg_y)
 	__(pop %arg_x)
@@ -4478,20 +4510,29 @@ _endsubp(spread_lexprz)
 
 
 
-/* Callback index in %r11 	  */
+/* Callback index in %r11 */
 _spentry(callback)
 	__(push %rbp)
 	__(movq %rsp,%rbp)
 	/* C scalar args   */
-	__(push %rdi)	/* -8(%rbp)   */
-	__(push %rsi)
-	__(push %rdx)
-	__(push %rcx)
-	__(push %r8)
-	__(push %r9)
+	__(push %carg0)	/* -8(%rbp)   */
+	__(push %carg1)
+	__(push %carg2)
+	__(push %carg3)
+	__ifndef([WINDOWS])
+	__(push %carg4)
+	__(push %carg5)
+	__endif
 	/* FP arg regs   */
+	__ifdef([WINDOWS])
+	__(subq $4*8,%rsp)
+	__(movq %xmm0,3*8(%rsp))	/* -40(%rbp) */
+	__(movq %xmm1,2*8(%rsp))
+	__(movq %xmm2,1*8(%rsp))
+	__(movq %xmm3,0*8(%rsp))
+	__else
 	__(subq $8*8,%rsp)
-	__(movq %xmm0,7*8(%rsp))	/* -56(%rbp)   */
+	__(movq %xmm0,7*8(%rsp))	/* -56(%rbp) */
 	__(movq %xmm1,6*8(%rsp))
 	__(movq %xmm2,5*8(%rsp))
 	__(movq %xmm3,4*8(%rsp))
@@ -4499,38 +4540,53 @@ _spentry(callback)
 	__(movq %xmm5,2*8(%rsp))
 	__(movq %xmm6,1*8(%rsp))
 	__(movq %xmm7,0*8(%rsp))
+	__endif
+	__ifndef([WINDOWS])
+	__endif
 	/* C NVRs   */
-	__(push %r12)
-	__(push %r13)
-	__(push %r14)
-	__(push %r15)
-	__(push %rbx)
+	__(push %csave0)
+	__(push %csave1)
+	__(push %csave2)
+	__(push %csave3)
+	__(push %csave4)
+	__ifdef([WINDOWS])
+	__(push %csave5)
+	__(push %csave6)
+	__endif
 	__(push %rbp)
+	__(movq %r11,%csave0)
         __ifdef([HAVE_TLS])
 	 /* TCR initialized for lisp ?   */
 	 __ifndef([WINDOWS]) /* FIXME */
 	 __(movq %fs:current_tcr@TPOFF+tcr.linear,%rax)
-	 __endif
 	 __(testq %rax,%rax)
 	 __(jne 1f)
+	 __endif
         __endif
-	__(movq %r11,%r12)
 	__(ref_global(get_tcr,%rax))
-	__(movq $1,%rdi)
+	__(movq $1,%carg0)
+	__ifdef([WINDOWS])
+	__(sub $0x20, %rsp)
+	__endif
 	__(call *%rax)
+	__ifdef([WINDOWS])
+	__(add $0x20, %rsp)
+	__(movq %rax, %rcontext_reg)
+	__endif	
         __ifdef([DARWIN_GS_HACK])
          /* linear TCR address in now in %rax; callback index was
             saved in %r12 a moment ago. */
          __(set_gs_base(%rax))
         __endif
-	__(movq %r12,%r11)
 1:	/* Align foreign stack for lisp   */
         __(pushq rcontext(tcr.save_rbp)) /* mark cstack frame's "owner" */
 	__(pushq rcontext(tcr.foreign_sp))
 	/* init lisp registers   */
-	__(movq %r11,%rax)
+	__(movq %csave0,%rax)
 	__(movq %rsp,rcontext(tcr.foreign_sp))
+	__ifndef([WINDOWS])
 	__(clr %save3)
+	__endif
 	__(clr %save2)
 	__(clr %save1)
 	__(clr %save0)
@@ -4547,10 +4603,12 @@ _spentry(callback)
 	__(movq %rbp,%arg_z)
         __(movq rcontext(tcr.save_rbp),%rbp)
 	__(movq $TCR_STATE_LISP,rcontext(tcr.valence))
-        __(movq (%rsp),%save3)
-        __(movq 8(%rsp),%save2)
-        __(movq 16(%rsp),%save1)
-        __(movq 24(%rsp),%save0)
+        __(movq (%rsp),%save0)
+        __(movq 8(%rsp),%save1)
+        __(movq 16(%rsp),%save2)
+        __ifndef([WINDOWS])
+         __(movq 24(%rsp),%save3)
+        __endif
         __(stmxcsr rcontext(tcr.foreign_mxcsr))
         __(andb $~mxcsr_all_exceptions,rcontext(tcr.foreign_mxcsr))
 	__(ldmxcsr rcontext(tcr.lisp_mxcsr))
@@ -4574,11 +4632,15 @@ __(tra(local_label(back_from_callback)))
          __(set_foreign_gs_base())
         __endif
 	__(pop %rbp)
-	__(pop %rbx)
-	__(pop %r15)
-	__(pop %r14)
-	__(pop %r13)
-	__(pop %r12)
+	__ifdef([WINDOWS])
+	__(pop %csave6)
+	__(pop %csave5)
+	__endif
+	__(pop %csave4)
+	__(pop %csave3)
+	__(pop %csave2)
+	__(pop %csave1)
+	__(pop %csave0)
 	__(movq -8(%rbp),%rax)
         __(movq -16(%rbp),%rdx)
 	__(movq -24(%rbp),%xmm0)

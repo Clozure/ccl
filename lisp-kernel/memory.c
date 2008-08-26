@@ -20,11 +20,13 @@
 #include "Threads.h"
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
 #include <stdarg.h>
 #include <errno.h>
 #include <stdio.h>
+#include <unistd.h>
 #ifdef LINUX
 #include <strings.h>
 #include <fpu_control.h>
@@ -35,11 +37,13 @@
 #include <sys/mman.h>
 #endif
 
+#define DEBUG_MEMORY 0
+
 void
 allocation_failure(Boolean pointerp, natural size)
 {
   char buf[64];
-  sprintf(buf, "Can't allocate %s of size %ld bytes.", pointerp ? "pointer" : "handle", size);
+  sprintf(buf, "Can't allocate %s of size %Id bytes.", pointerp ? "pointer" : "handle", size);
   Fatal(":   Kernel memory allocation failure.  ", buf);
 }
 
@@ -74,22 +78,337 @@ zalloc(natural size)
   return p;
 }
 
+#ifdef DARWIN
+#if WORD_SIZE == 64
+#define vm_region vm_region_64
+#endif
+
+/*
+  Check to see if the specified address is unmapped by trying to get
+  information about the mapped address at or beyond the target.  If
+  the difference between the target address and the next mapped address
+  is >= len, we can safely mmap len bytes at addr.
+*/
+Boolean
+address_unmapped_p(char *addr, natural len)
+{
+  vm_address_t vm_addr = (vm_address_t)addr;
+  vm_size_t vm_size;
+#if WORD_SIZE == 64
+  vm_region_basic_info_data_64_t vm_info;
+#else
+  vm_region_basic_info_data_t vm_info;
+#endif
+#if WORD_SIZE == 64
+  mach_msg_type_number_t vm_info_size = VM_REGION_BASIC_INFO_COUNT_64;
+#else
+  mach_msg_type_number_t vm_info_size = VM_REGION_BASIC_INFO_COUNT;
+#endif
+  mach_port_t vm_object_name = (mach_port_t) 0;
+  kern_return_t kret;
+
+  kret = vm_region(mach_task_self(),
+		   &vm_addr,
+		   &vm_size,
+#if WORD_SIZE == 64
+                   VM_REGION_BASIC_INFO_64,
+#else
+		   VM_REGION_BASIC_INFO,
+#endif
+		   (vm_region_info_t)&vm_info,
+		   &vm_info_size,
+		   &vm_object_name);
+  if (kret != KERN_SUCCESS) {
+    return false;
+  }
+
+  return vm_addr >= (vm_address_t)(addr+len);
+}
+#endif
+
+
+  /*
+    Through trial and error, we've found that IMAGE_BASE_ADDRESS is
+    likely to reside near the beginning of an unmapped block of memory
+    that's at least 1GB in size.  We'd like to load the heap image's
+    sections relative to IMAGE_BASE_ADDRESS; if we're able to do so,
+    that'd allow us to file-map those sections (and would enable us to
+    avoid having to relocate references in the data sections.)
+
+    In short, we'd like to reserve 1GB starting at IMAGE_BASE_ADDRESS
+    by creating an anonymous mapping with mmap().
+
+    If we try to insist that mmap() map a 1GB block at
+    IMAGE_BASE_ADDRESS exactly (by specifying the MAP_FIXED flag),
+    mmap() will gleefully clobber any mapped memory that's already
+    there.  (That region's empty at this writing, but some future
+    version of the OS might decide to put something there.)
+
+    If we don't specify MAP_FIXED, mmap() is free to treat the address
+    we give it as a hint; Linux seems to accept the hint if doing so
+    wouldn't cause a problem.  Naturally, that behavior's too useful
+    for Darwin (or perhaps too inconvenient for it): it'll often
+    return another address, even if the hint would have worked fine.
+
+    We call address_unmapped_p() to ask Mach whether using MAP_FIXED
+    would conflict with anything.  Until we discover a need to do 
+    otherwise, we'll assume that if Linux's mmap() fails to take the
+    hint, it's because of a legitimate conflict.
+
+    If Linux starts ignoring hints, we can parse /proc/<pid>/maps
+    to implement an address_unmapped_p() for Linux.
+  */
+
+LogicalAddress
+ReserveMemoryForHeap(LogicalAddress want, natural totalsize)
+{
+  LogicalAddress start;
+  Boolean fixed_map_ok = false;
+#ifdef DARWIN
+  fixed_map_ok = address_unmapped_p(want,totalsize);
+#endif
+#ifdef SOLARIS
+  fixed_map_ok = true;
+#endif
+  raise_limit();
+#ifdef WINDOWS
+  start = VirtualAlloc((void *)want,
+		       totalsize + heap_segment_size,
+		       MEM_RESERVE,
+		       PAGE_NOACCESS);
+  if (!start) {
+    fprintf(stderr, "Can't get desired heap address at 0x%Ix\n", want);
+    start = VirtualAlloc(0,
+			 totalsize + heap_segment_size,
+			 MEM_RESERVE,
+			 PAGE_NOACCESS);
+    if (!start) {
+      wperror("VirtualAlloc");
+      return NULL;
+    }
+  }
+#else
+  start = mmap((void *)want,
+	       totalsize + heap_segment_size,
+	       PROT_NONE,
+	       MAP_PRIVATE | MAP_ANON | (fixed_map_ok ? MAP_FIXED : 0) | MAP_NORESERVE,
+	       -1,
+	       0);
+  if (start == MAP_FAILED) {
+    perror("Initial mmap");
+    return NULL;
+  }
+
+  if (start != want) {
+    munmap(start, totalsize+heap_segment_size);
+    start = (void *)((((natural)start)+heap_segment_size-1) & ~(heap_segment_size-1));
+    if(mmap(start, totalsize, PROT_NONE, MAP_PRIVATE | MAP_ANON | MAP_FIXED | MAP_NORESERVE, -1, 0) != start) {
+      return NULL;
+    }
+  }
+  mprotect(start, totalsize, PROT_NONE);
+#endif
+#if DEBUG_MEMORY
+  fprintf(stderr, "Reserving heap at 0x%Ix, size 0x%Ix\n", start, totalsize);
+#endif
+  return start;
+}
+
+int
+CommitMemory (LogicalAddress start, natural len) {
+  LogicalAddress rc;
+#if DEBUG_MEMORY
+  fprintf(stderr, "Committing memory at 0x%Ix, size 0x%Ix\n", start, len);
+#endif
+#ifdef WINDOWS
+  if ((start < ((LogicalAddress)nil_value)) &&
+      (((LogicalAddress)nil_value) < (start+len))) {
+    /* nil area is in the executable on Windows, do nothing */
+    return true;
+  }
+  rc = VirtualAlloc(start, len, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+  if (!rc) {
+    wperror("CommitMemory VirtualAlloc");
+    return false;
+  }
+  return true;
+#else
+  int i, err;
+  void *addr;
+
+  for (i = 0; i < 3; i++) {
+    addr = mmap(start, len, MEMPROTECT_RWX, MAP_PRIVATE|MAP_ANON|MAP_FIXED, -1, 0);
+    if (addr == start) {
+      return true;
+    } else {
+      mmap(addr, len, MEMPROTECT_NONE, MAP_PRIVATE|MAP_ANON|MAP_FIXED, -1, 0);
+    }
+  }
+  return false;
+#endif
+}
+
+void
+UnCommitMemory (LogicalAddress start, natural len) {
+#if DEBUG_MEMORY
+  fprintf(stderr, "Uncommitting memory at 0x%Ix, size 0x%Ix\n", start, len);
+#endif
+#ifdef WINDOWS
+  int rc = VirtualFree(start, len, MEM_DECOMMIT);
+  if (!rc) {
+    wperror("UnCommitMemory VirtualFree");
+    Fatal("mmap error", "");
+    return;
+  }
+#else
+  if (len) {
+    madvise(start, len, MADV_DONTNEED);
+    if (mmap(start, len, MEMPROTECT_NONE, MAP_PRIVATE|MAP_ANON|MAP_FIXED, -1, 0)
+	!= start) {
+      int err = errno;
+      Fatal("mmap error", "");
+      fprintf(stderr, "errno = %d", err);
+    }
+  }
+#endif
+}
+
+
+LogicalAddress
+MapMemory(LogicalAddress addr, natural nbytes, int protection)
+{
+#if DEBUG_MEMORY
+  fprintf(stderr, "Mapping memory at 0x%Ix, size 0x%Ix\n", addr, nbytes);
+#endif
+#ifdef WINDOWS
+  return VirtualAlloc(addr, nbytes, MEM_RESERVE|MEM_COMMIT, MEMPROTECT_RWX);
+#else
+  return mmap(addr, nbytes, protection, MAP_PRIVATE|MAP_ANON|MAP_FIXED, -1, 0);
+#endif
+}
+
+LogicalAddress
+MapMemoryForStack(natural nbytes)
+{
+#if DEBUG_MEMORY
+  fprintf(stderr, "Mapping stack of size 0x%Ix\n", nbytes);
+#endif
+#ifdef WINDOWS
+  return VirtualAlloc(0, nbytes, MEM_RESERVE|MEM_COMMIT, MEMPROTECT_RWX);
+#else
+  return mmap(NULL, nbytes, MEMPROTECT_RWX, MAP_PRIVATE|MAP_ANON|MAP_GROWSDOWN, -1, 0);
+#endif
+}
+
+int
+UnMapMemory(LogicalAddress addr, natural nbytes)
+{
+#if DEBUG_MEMORY
+  fprintf(stderr, "Unmapping memory at 0x%Ix, size 0x%Ix\n", addr, nbytes);
+#endif
+#ifdef WINDOWS
+  /* Can't MEM_RELEASE here because we only want to free a chunk */
+  return VirtualFree(addr, nbytes, MEM_DECOMMIT);
+#else
+  return munmap(addr, nbytes);
+#endif
+}
+
 int
 ProtectMemory(LogicalAddress addr, natural nbytes)
 {
+#if DEBUG_MEMORY
+  fprintf(stderr, "Protecting memory at 0x%Ix, size 0x%Ix\n", addr, nbytes);
+#endif
+#ifdef WINDOWS
+  DWORD oldProtect;
+  BOOL status = VirtualProtect(addr, nbytes, MEMPROTECT_RX, &oldProtect);
+  
+  if(!status) {
+    wperror("ProtectMemory VirtualProtect");
+    Bug(NULL, "couldn't protect %Id bytes at %x, errno = %d", nbytes, addr, status);
+  }
+  return status;
+#else
   int status = mprotect(addr, nbytes, PROT_READ | PROT_EXEC);
   
   if (status) {
     status = errno;
-    Bug(NULL, "couldn't protect %d bytes at %x, errno = %d", nbytes, addr, status);
+    Bug(NULL, "couldn't protect %Id bytes at %Ix, errno = %d", nbytes, addr, status);
   }
   return status;
+#endif
 }
 
 int
 UnProtectMemory(LogicalAddress addr, natural nbytes)
 {
+#if DEBUG_MEMORY
+  fprintf(stderr, "Unprotecting memory at 0x%Ix, size 0x%Ix\n", addr, nbytes);
+#endif
+#ifdef WINDOWS
+  DWORD oldProtect;
+  return VirtualProtect(addr, nbytes, MEMPROTECT_RWX, &oldProtect);
+#else
   return mprotect(addr, nbytes, PROT_READ|PROT_WRITE|PROT_EXEC);
+#endif
+}
+
+int
+MapFile(LogicalAddress addr, natural pos, natural nbytes, int permissions, int fd) 
+{
+#ifdef WINDOWS
+#if 0
+  /* Lots of hair in here: mostly alignment issues, but also address space reservation */
+  HANDLE hFile, hFileMapping;
+  LPVOID rc;
+  DWORD desiredAccess;
+
+  if (permissions == MEMPROTECT_RWX) {
+    permissions |= PAGE_WRITECOPY;
+    desiredAccess = FILE_MAP_READ|FILE_MAP_WRITE|FILE_MAP_COPY|FILE_MAP_EXECUTE;
+  } else {
+    desiredAccess = FILE_MAP_READ|FILE_MAP_COPY|FILE_MAP_EXECUTE;
+  }
+
+  hFile = _get_osfhandle(fd);
+  hFileMapping = CreateFileMapping(hFile, NULL, permissions,
+				   (nbytes >> 32), (nbytes & 0xffffffff), NULL);
+  
+  if (!hFileMapping) {
+    wperror("CreateFileMapping");
+    return false;
+  }
+
+  rc = MapViewOfFileEx(hFileMapping,
+		       desiredAccess,
+		       (pos >> 32),
+		       (pos & 0xffffffff),
+		       nbytes,
+		       addr);
+#else
+  size_t count, total = 0;
+  size_t opos;
+
+  opos = lseek(fd, 0, SEEK_CUR);
+  CommitMemory(addr, nbytes);
+  lseek(fd, pos, SEEK_SET);
+
+  while (total < nbytes) {
+    count = read(fd, addr + total, nbytes - total);
+    total += count;
+    // fprintf(stderr, "read %Id bytes, for a total of %Id out of %Id so far\n", count, total, nbytes);
+    if (!(count > 0))
+      return false;
+  }
+
+  lseek(fd, opos, SEEK_SET);
+
+  return true;
+#endif
+#else
+  return mmap(addr, nbytes, permissions, MAP_PRIVATE|MAP_FIXED, fd, pos) != MAP_FAILED;
+#endif
 }
 
 void
@@ -199,8 +518,10 @@ Boolean
 resize_dynamic_heap(BytePtr newfree, 
 		    natural free_space_size)
 {
+  extern int page_size;
   area *a = active_dynamic_area;
-  BytePtr newlimit;
+  BytePtr newlimit, protptr, zptr;
+  int psize = page_size;
   if (free_space_size) {
     BytePtr lowptr = a->active;
     newlimit = lowptr + align_to_power_of_2(newfree-lowptr+free_space_size,
@@ -408,8 +729,10 @@ tenure_to_area(area *target)
   area *a = active_dynamic_area, *child;
   BytePtr 
     curfree = a->active,
-    target_low = target->low;
+    target_low = target->low,
+    tenured_low = tenured_area->low;
   natural 
+    dynamic_dnodes = area_dnode(curfree, a->low),
     new_tenured_dnodes = area_dnode(curfree, tenured_area->low);
   bitvector 
     refbits = tenured_area->refbits,
@@ -608,19 +931,12 @@ condemn_area_chain(area *a, TCR *tcr)
   UNLOCK(lisp_global(TCR_AREA_LOCK),tcr);
 }
 
-#ifdef WINDOWS
-void
-release_readonly_area()
-{
-}
-#else
 void
 release_readonly_area()
 {
   area *a = readonly_area;
-  munmap(a->low,align_to_power_of_2(a->active-a->low, log2_page_size));
+  UnMapMemory(a->low,align_to_power_of_2(a->active-a->low, log2_page_size));
   a->active = a->low;
   a->ndnodes = 0;
   pure_space_active = pure_space_start;
 }
-#endif

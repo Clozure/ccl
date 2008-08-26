@@ -14,6 +14,9 @@
    http://opensource.franz.com/preamble.html
 */
 
+#ifndef X86_EXCEPTIONS_H
+#define X86_EXCEPTIONS_H 1
+
 typedef u8_t opcode, *pc;
 
 #ifdef LINUX
@@ -23,6 +26,7 @@ typedef u8_t opcode, *pc;
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
 #define xpPC(x) (xpGPR(x,Iip))
 #define xpMMXreg(x,n)  *((natural *)(&((x)->uc_mcontext.fpregs->_st[n])))
+#define eflags_register(xp) xpGPR(xp,Iflags)
 #endif
 #endif
 
@@ -35,6 +39,7 @@ typedef u8_t opcode, *pc;
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
 #define xpPC(x) (xpGPR(x,Iip))
+#define eflags_register(xp) xpGPR(xp,Iflags)
 #define xpFPRvector(x) ((natural *)(&(UC_MCONTEXT(x)->__fs.__fpu_xmm0)))
 #define xpMMXreg(x,n)  (xpFPRvector(x)[n])
 #else /* X8632 */
@@ -42,6 +47,7 @@ typedef u8_t opcode, *pc;
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
 #define xpPC(x) (xpGPR(x,Iip))
+#define eflags_register(xp) xpGPR(xp,Iflags)
 #define xpFPRvector(x) ((natural *)(&((x)->uc_mcontext->__fs.__fpu_xmm0)))
 /* are you ready for this? */
 #define xpMMXreg(x,n) *((natural *)&((&((x)->uc_mcontext->__fs.__fpu_stmm0))[n]))
@@ -61,6 +67,7 @@ pthread_mutex_t *mach_exception_lock;
 #define xpGPRvector(x) ((natural *)(&((x)->uc_mcontext)))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
+#define eflags_register(xp) xpGPR(xp,Iflags)
 #define xpPC(x) xpGPR(x,Iip)
 #define xpMMXreg(x,n) *((natural *)(&(((struct savefpu *)(&(x)->uc_mcontext.mc_fpstate))->sv_fp[n])))
 #define xpXMMregs(x)(&(((struct savefpu *)(&(x)->uc_mcontext.mc_fpstate))->sv_xmm[0]))
@@ -73,14 +80,16 @@ pthread_mutex_t *mach_exception_lock;
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
 #define xpPC(x) xpGPR(x,Iip)
+#define eflags_register(xp) xpGPR(xp,Iflags)
 #define xpXMMregs(x)(&((x)->uc_mcontext.fpregs.fp_reg_set.fpchip_state.xmm[0]))
 #endif
 #endif
 
 #ifdef WIN64
-#define xpGPRvector(x) ((DWORD64 *)((x)->ContextRecord))
+#define xpGPRvector(x) ((DWORD64 *)(&(x)->Rax))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define xpPC(x) xpGPR(x,Iip)
+#define eflags_register(xp) xp->EFlags
 #endif
 
 #ifdef DARWIN
@@ -94,6 +103,9 @@ pthread_mutex_t *mach_exception_lock;
 #endif
 #ifdef SOLARIS
 #define SIGNAL_FOR_PROCESS_INTERRUPT SIGUSR1
+#endif
+#ifdef WINDOWS
+#define SIGNAL_FOR_PROCESS_INTERRUPT SIGINT
 #endif
 
 
@@ -159,6 +171,15 @@ extern void freebsd_sigreturn(ExceptionInformation *);
 #define SIGRETURN(context) setcontext(context)
 #endif
 
+#ifdef WINDOWS
+#define SIGNUM_FOR_INTN_TRAP SIGSEGV /* Also fake */
+#define IS_MAYBE_INT_TRAP(info,xp) \
+  ((info->ExceptionCode == EXCEPTION_ACCESS_VIOLATION) &&       \
+   (info->ExceptionInformation[0]==0) &&                       \
+   (info->ExceptionInformation[1]==(ULONG_PTR)(-1L)))
+#define SIGRETURN(context)      /* for now */
+#endif
+
 /* Please go away. */
 #ifdef DARWIN_GS_HACK
 extern Boolean ensure_gs_pthread(void);
@@ -193,6 +214,13 @@ void setup_sigaltstack(area *);
 extern natural get_mxcsr();
 extern void set_mxcsr(natural);
 
+#ifdef WINDOWS
+typedef struct {
+  HANDLE h;
+  OVERLAPPED *o;
+} pending_io;
+#endif
+
 #ifdef X8632
 /* The 32-bit immediate value in the instruction
  * "(mov ($ 0x12345678) (% fn))" at a tagged return address
@@ -201,3 +229,6 @@ extern void set_mxcsr(natural);
 #define RECOVER_FN_OPCODE 0xbf
 #define RECOVER_FN_LENGTH 5
 #endif
+
+#endif /* X86_EXCEPTIONS_H */
+

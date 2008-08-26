@@ -43,9 +43,89 @@ atomic_swap(signed_natural*, signed_natural);
 #endif
 
 #ifdef WINDOWS
+extern pc spentry_start, spentry_end,subprims_start,subprims_end;
+extern pc restore_win64_context_start, restore_win64_context_end,
+  restore_win64_context_load_rcx, restore_win64_context_iret;
+
+extern void interrupt_handler(int, siginfo_t *, ExceptionInformation *);
+
+BOOL (*pCancelIoEx)(HANDLE, OVERLAPPED*) = NULL;
+
+
+extern void *windows_find_symbol(void*, char*);
+
 int
 raise_thread_interrupt(TCR *target)
 {
+  /* GCC doesn't align CONTEXT corrcectly */
+  char _contextbuf[sizeof(CONTEXT)+__alignof(CONTEXT)];
+  CONTEXT  *pcontext;
+  HANDLE hthread = (HANDLE)(target->osid);
+  pc where;
+  area *cs = target->cs_area, *ts = target->cs_area;
+  DWORD rc;
+  BOOL io_pending;
+
+  pcontext = (CONTEXT *)((((natural)&_contextbuf)+15)&~15);
+  rc = SuspendThread(hthread);
+  if (rc == -1) {
+    return -1;
+  }
+  /* What if the suspend count is > 1 at this point ?  I don't think
+     that that matters, but I'm not sure */
+  pcontext->ContextFlags = CONTEXT_ALL;
+  rc = GetThreadContext(hthread, pcontext);
+  if (rc == 0) {
+    wperror("GetThreadContext");
+  }
+
+  where = (pc)(xpPC(pcontext));
+  
+  if ((target->valence != TCR_STATE_LISP) ||
+      (TCR_INTERRUPT_LEVEL(target) < 0) ||
+      (target->unwinding != 0) ||
+      (!((where < (pc)lisp_global(HEAP_END)) &&
+         (where >= (pc)lisp_global(HEAP_START))) &&
+       !((where < spentry_end) && (where >= spentry_start)) &&
+       !((where < subprims_end) && (where >= subprims_start)) &&
+       !((where < (pc) 0x16000) &&
+         (where >= (pc) 0x15000)) &&
+       !((where < (pc) (ts->high)) &&
+         (where >= (pc) (ts->low))))) {
+    /* If the thread's in a blocking syscall, it'd be nice to
+       get it out of that state here. */
+    GetThreadIOPendingFlag(hthread,&io_pending);
+    target->interrupt_pending = (1LL << (nbits_in_word - 1LL));
+    ResumeThread(hthread);
+    if (io_pending) {
+      pending_io * pending = (pending_io *) (target->foreign_exception_status);
+      if (pCancelIoEx) {
+        pCancelIoEx(pending->h, pending->o);
+      } else {
+        CancelIo(pending->h);
+      }
+    }
+    return 0;
+  } else {
+    /* Thread is running lisp code with interupts enabled.  Set it
+       so that it calls out and then returns to the context,
+       handling any necessary pc-lusering. */
+    LispObj foreign_rsp = (((LispObj)(target->foreign_sp))-0x200)&~15;
+    CONTEXT *icontext = ((CONTEXT *) foreign_rsp) -1;
+    icontext = (CONTEXT *)(((LispObj)icontext)&~15);
+    
+    *icontext = *pcontext;
+    
+    xpGPR(pcontext,REG_RCX) = SIGNAL_FOR_PROCESS_INTERRUPT;
+    xpGPR(pcontext,REG_RDX) = 0;
+    xpGPR(pcontext,REG_R8) = (LispObj) icontext;
+    xpGPR(pcontext,REG_RSP) = (LispObj)(((LispObj *)icontext)-1);
+    *(((LispObj *)icontext)-1) = (LispObj)raise_thread_interrupt;
+    xpPC(pcontext) = (LispObj)interrupt_handler;
+    SetThreadContext(hthread,pcontext);
+    ResumeThread(hthread);
+    return 0;
+  }
 }
 #else
 int
@@ -328,14 +408,17 @@ sem_wait_forever(SEMAPHORE s)
     q.tv_sec += 1;
     status = SEM_TIMEDWAIT(s,&q);
 #endif
+#ifdef USE_WINDOWS_SEMAPHORES
+    status = (WaitForSingleObject(s,1000L) == WAIT_TIMEOUT) ? 1 : 0;
+#endif
   } while (status != 0);
 }
 
 int
 wait_on_semaphore(void *s, int seconds, int millis)
 {
-  int nanos = (millis % 1000) * 1000000;
 #ifdef USE_POSIX_SEMAPHORES
+  int nanos = (millis % 1000) * 1000000;
   int status;
 
   struct timespec q;
@@ -355,6 +438,7 @@ wait_on_semaphore(void *s, int seconds, int millis)
   return status;
 #endif
 #ifdef USE_MACH_SEMAPHORES
+  int nanos = (millis % 1000) * 1000000;
   mach_timespec_t q = {seconds, nanos};
   int status = SEM_TIMEDWAIT(s, q);
 
@@ -365,6 +449,17 @@ wait_on_semaphore(void *s, int seconds, int millis)
   case KERN_ABORTED: return EINTR;
   default: return EINVAL;
   }
+#endif
+#ifdef USE_WINDOWS_SEMAPHORES
+  switch (WaitForSingleObject(s, seconds*1000L+(DWORD)millis)) {
+  case WAIT_OBJECT_0:
+    return 0;
+  case WAIT_TIMEOUT:
+    return ETIMEDOUT;
+  default:
+    break;
+  }
+  return EINVAL;
 
 #endif
 }
@@ -391,6 +486,25 @@ signal_semaphore(SEMAPHORE s)
 LispObj
 current_thread_osid()
 {
+  TCR *tcr = get_tcr(false);
+  LispObj current = 0;
+
+  if (tcr) {
+    current = tcr->osid;
+  }
+  if (current == 0) {
+    DuplicateHandle(GetCurrentProcess(),
+                    GetCurrentThread(),
+                    GetCurrentProcess(),
+                    &current,
+                    0,
+                    FALSE,
+                    DUPLICATE_SAME_ACCESS);
+    if (tcr) {
+      tcr->osid = current;
+    }
+  }
+  return current;
 }
 #else
 LispObj
@@ -450,14 +564,22 @@ suspend_resume_handler(int signo, siginfo_t *info, ExceptionInformation *context
   
 #ifdef WINDOWS
 void
-os_get_stack_bounds(LispObj q,void **base, natural *size)
+os_get_current_thread_stack_bounds(void **base, natural *size)
 {
+  natural natbase;
+  MEMORY_BASIC_INFORMATION info;
+  void *addr = (void *)current_stack_pointer();
+  
+  VirtualQuery(addr, &info, sizeof(info));
+  natbase = (natural)info.BaseAddress+info.RegionSize;
+  *size = natbase - (natural)(info.AllocationBase);
+  *base = (void *)natbase;
 }
 #else
 void
-os_get_stack_bounds(LispObj q,void **base, natural *size)
+os_get_current_thread_stack_bounds(void **base, natural *size)
 {
-  pthread_t p = (pthread_t)(q);
+  pthread_t p = pthread_self();
 #ifdef DARWIN
   *base = pthread_get_stackaddr_np(p);
   *size = pthread_get_stacksize_np(p);
@@ -508,6 +630,9 @@ new_semaphore(int count)
   semaphore_create(mach_task_self(),&s, SYNC_POLICY_FIFO, count);
   return (void *)(natural)s;
 #endif
+#ifdef USE_WINDOWS_SEMAPHORES
+  return CreateSemaphore(NULL, count, 0x7fffL, NULL);
+#endif
 }
 
 RECURSIVE_LOCK
@@ -555,6 +680,9 @@ destroy_semaphore(void **s)
 #ifdef USE_MACH_SEMAPHORES
     semaphore_destroy(mach_task_self(),((semaphore_t)(natural) *s));
 #endif
+#ifdef USE_WINDOWS_SEMAPHORES
+    CloseHandle(*s);
+#endif
     *s=NULL;
   }
 }
@@ -563,11 +691,13 @@ destroy_semaphore(void **s)
 void
 tsd_set(LispObj key, void *datum)
 {
+  TlsSetValue((DWORD)key, datum);
 }
 
 void *
 tsd_get(LispObj key)
 {
+  return TlsGetValue((DWORD)key);
 }
 #else
 void
@@ -739,12 +869,6 @@ void free_tcr_extra_segment(TCR *tcr)
 /*
   Caller must hold the area_lock.
 */
-#ifdef WINDOWS
-TCR *
-new_tcr(natural vstack_size, natural tstack_size)
-{
-}
-#else
 TCR *
 new_tcr(natural vstack_size, natural tstack_size)
 {
@@ -753,10 +877,13 @@ new_tcr(natural vstack_size, natural tstack_size)
     *allocate_tstack_holding_area_lock(natural);
   area *a;
   int i;
+#ifndef WINDOWS
   sigset_t sigmask;
 
   sigemptyset(&sigmask);
   pthread_sigmask(SIG_SETMASK,&sigmask, NULL);
+#endif
+
 #ifdef HAVE_TLS
   TCR *tcr = &current_tcr;
 #else /* no TLS */
@@ -816,10 +943,11 @@ new_tcr(natural vstack_size, natural tstack_size)
     tcr->tlb_pointer[i] = (LispObj) no_thread_local_binding_marker;
   }
   TCR_INTERRUPT_LEVEL(tcr) = (LispObj) (-1<<fixnum_shift);
+#ifndef WINDOWS
   tcr->shutdown_count = PTHREAD_DESTRUCTOR_ITERATIONS;
+#endif
   return tcr;
 }
-#endif
 
 void
 shutdown_thread_tcr(void *arg)
@@ -926,7 +1054,7 @@ current_native_thread_id()
 	  pthread_self()
 #endif
 #ifdef WINDOWS
-	  /* ThreadSelf() */ 23
+	  GetCurrentThreadId()
 #endif
 	  );
 }
@@ -979,7 +1107,7 @@ register_thread_tcr(TCR *tcr)
   void *stack_base = NULL;
   natural stack_size = 0;
 
-  os_get_stack_bounds(current_thread_osid(),&stack_base, &stack_size);
+  os_get_current_thread_stack_bounds(&stack_base, &stack_size);
   thread_init_tcr(tcr, stack_base, stack_size);
   enqueue_tcr(tcr);
 }
@@ -991,24 +1119,12 @@ register_thread_tcr(TCR *tcr)
 #define MAP_GROWSDOWN 0
 #endif
 
-#ifdef WINDOWS
-Ptr
-create_stack(int size)
-{
-}
-#else
 Ptr
 create_stack(natural size)
 {
   Ptr p;
   size=align_to_power_of_2(size, log2_page_size);
-  p = (Ptr) mmap(NULL,
-                 (size_t)size,
-                 PROT_READ | PROT_WRITE | PROT_EXEC,
-                 MAP_PRIVATE | MAP_ANON | MAP_GROWSDOWN,
-                 -1,	/* Darwin insists on this when not mmap()ing
-                           a real fd */
-                 0);
+  p = (Ptr) MapMemoryForStack((size_t)size);
   if (p != (Ptr)(-1)) {
     *((size_t *)p) = size;
     return p;
@@ -1016,7 +1132,6 @@ create_stack(natural size)
   allocation_failure(true, size);
 
 }
-#endif
 
 void *
 allocate_stack(natural size)
@@ -1024,19 +1139,12 @@ allocate_stack(natural size)
   return create_stack(size);
 }
 
-#ifdef WINDOWS
-void
-free_stack(void *s)
-{
-}
-#else
 void
 free_stack(void *s)
 {
   size_t size = *((size_t *)s);
-  munmap(s, size);
+  UnMapMemory(s, size);
 }
-#endif
 
 Boolean threads_initialized = false;
 
@@ -1045,6 +1153,12 @@ Boolean threads_initialized = false;
 void
 count_cpus()
 {
+  SYSTEM_INFO si;
+
+  GetSystemInfo(&si);
+  if (si.dwNumberOfProcessors > 1) {
+    spin_lock_tries = 1024;
+  }
 }
 #else
 void
@@ -1073,23 +1187,18 @@ count_cpus()
 #endif
 #endif
 
-#ifdef WINDOWS
-void
-init_threads(void * stack_base, TCR *tcr)
-{
-}
-void *
-lisp_thread_entry(void *param)
-{
-}
-#else
 void
 init_threads(void * stack_base, TCR *tcr)
 {
   lisp_global(INITIAL_TCR) = (LispObj)ptr_to_lispobj(tcr);
+#ifdef WINDOWS
+  lisp_global(TCR_KEY) = TlsAlloc();
+  pCancelIoEx = windows_find_symbol(NULL, "CancelIoEx");
+#else
   pthread_key_create((pthread_key_t *)&(lisp_global(TCR_KEY)), shutdown_thread_tcr);
   thread_signal_setup();
-
+#endif
+ 
 #ifndef USE_FUTEX
   count_cpus();
 #endif
@@ -1097,19 +1206,27 @@ init_threads(void * stack_base, TCR *tcr)
 }
 
 
+#ifdef WINDOWS
+unsigned
+#else
 void *
+#endif
 lisp_thread_entry(void *param)
 {
   thread_activation *activation = (thread_activation *)param;
   TCR *tcr = new_tcr(activation->vsize, activation->tsize);
+#ifndef WINDOWS
   sigset_t mask, old_mask;
 
   sigemptyset(&mask);
   pthread_sigmask(SIG_SETMASK, &mask, &old_mask);
+#endif
 
   register_thread_tcr(tcr);
 
+#ifndef WINDOWS
   pthread_cleanup_push(tcr_cleanup,(void *)tcr);
+#endif
   tcr->vs_area->active -= node_size;
   *(--tcr->save_vsp) = lisp_nil;
   enable_fp_exceptions();
@@ -1122,10 +1239,17 @@ lisp_thread_entry(void *param)
     /* Now go run some lisp code */
     start_lisp(TCR_TO_TSD(tcr),0);
   } while (tcr->flags & (1<<TCR_FLAG_BIT_AWAITING_PRESET));
+#ifndef WINDOWS
   pthread_cleanup_pop(true);
-
-}
+#else
+  tcr_cleanup(tcr);
 #endif
+#ifdef WINDOWS
+  return 0;
+#else
+  return NULL;
+#endif
+}
 
 void *
 xNewThread(natural control_stack_size,
@@ -1169,6 +1293,7 @@ active_tcr_p(TCR *q)
 OSErr
 xDisposeThread(TCR *tcr)
 {
+  return 0;                     /* I don't think that this is ever called. */
 }
 #else
 OSErr
@@ -1203,9 +1328,24 @@ xThreadCurrentStackSpace(TCR *tcr, unsigned *resultP)
 LispObj
 create_system_thread(size_t stack_size,
 		     void* stackaddr,
-		     void* (*start_routine)(void *),
+		     unsigned (*start_routine)(void *),
 		     void* param)
 {
+  HANDLE thread_handle;
+
+  stack_size = ((stack_size+(((1<<16)-1)))&~((1<<16)-1));
+
+  thread_handle = (HANDLE)_beginthreadex(NULL, 
+                                         0/*stack_size*/,
+                                         start_routine,
+                                         param,
+                                         0, 
+                                         NULL);
+
+  if (thread_handle == NULL) {
+    wperror("CreateThread");
+  }
+  return (LispObj) ptr_to_lispobj(thread_handle);
 }
 #else
 LispObj
@@ -1299,9 +1439,124 @@ get_tcr(Boolean create)
 }
 
 #ifdef WINDOWS
+
 Boolean
 suspend_tcr(TCR *tcr)
 {
+  int suspend_count = atomic_incf(&(tcr->suspend_count));
+  DWORD rc;
+  if (suspend_count == 1) {
+    /* Can't seem to get gcc to align a CONTEXT structure correctly */
+    char _contextbuf[sizeof(CONTEXT)+__alignof(CONTEXT)];
+
+    CONTEXT *suspend_context, *pcontext;
+    HANDLE hthread = (HANDLE)(tcr->osid);
+    pc where;
+    area *cs = tcr->cs_area;
+    LispObj foreign_rsp;
+
+    pcontext = (CONTEXT *)((((natural)&_contextbuf)+15)&~15);
+
+    rc = SuspendThread(hthread);
+    if (rc == -1) {
+      /* If the thread's simply dead, we should handle that here */
+      wperror("SuspendThread");
+      return false;
+    }
+    pcontext->ContextFlags = CONTEXT_ALL;
+    rc = GetThreadContext(hthread, pcontext);
+    if (rc == 0) {
+      wperror("GetThreadContext");
+    }
+    where = (pc)(xpPC(pcontext));
+
+    if (tcr->valence == TCR_STATE_LISP) {
+      if ((where >= restore_win64_context_start) &&
+          (where < restore_win64_context_end)) {
+        /* Thread has started to return from an exception. */
+        if (where < restore_win64_context_load_rcx) {
+          /* In the process of restoring registers; context still in
+             %rcx.  Just make our suspend_context be the context
+             we're trying to restore, so that we'll resume from
+             the suspend in the same context that we're trying to
+             restore */
+          *pcontext = * (CONTEXT *)(pcontext->Rcx);
+        } else {
+          /* Most of the context has already been restored; fix %rcx
+             if need be, then restore ss:rsp, cs:rip, and flags. */
+          x64_iret_frame *iret_frame = (x64_iret_frame *) (pcontext->Rsp);
+          if (where == restore_win64_context_load_rcx) {
+            pcontext->Rcx = ((CONTEXT*)(pcontext->Rcx))->Rcx;
+          }
+          pcontext->Rip = iret_frame->Rip;
+          pcontext->SegCs = (WORD) iret_frame->Cs;
+          pcontext->EFlags = (DWORD) iret_frame->Rflags;
+          pcontext->Rsp = iret_frame->Rsp;
+          pcontext->SegSs = (WORD) iret_frame->Ss;
+        }
+        tcr->suspend_context = NULL;
+      } else {
+        area *ts = tcr->ts_area;
+        /* If we're in the lisp heap, or in x86-spentry64.o, or in
+           x86-subprims64.o, or in the subprims jump table at #x15000,
+           or on the tstack ... we're just executing lisp code.  Otherwise,
+           we got an exception while executing lisp code, but haven't
+           yet entered the handler yet (still in Windows exception glue
+           or switching stacks or something.)  In the latter case, we
+           basically want to get to he handler and have it notice
+           the pending exception request, and suspend the thread at that
+           point. */
+        if (!((where < (pc)lisp_global(HEAP_END)) &&
+              (where >= (pc)lisp_global(HEAP_START))) &&
+            !((where < spentry_end) && (where >= spentry_start)) &&
+            !((where < subprims_end) && (where >= subprims_start)) &&
+            !((where < (pc) 0x16000) &&
+              (where >= (pc) 0x15000)) &&
+            !((where < (pc) (ts->high)) &&
+              (where >= (pc) (ts->low)))) {
+          /* The thread has lisp valence, but is not executing code
+             where we expect lisp code to be and is not exiting from
+             an exception handler.  That pretty much means that it's
+             on its way into an exception handler; we have to handshake
+             until it enters an exception-wait state. */
+          /* There are likely race conditions here */
+          SET_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_SUSPEND);
+          ResumeThread(hthread);
+          SEM_WAIT_FOREVER(tcr->suspend);
+          SuspendThread(hthread);
+          /* The thread is either waiting for its resume semaphore to
+             be signaled or is about to wait.  Signal it now, while
+             the thread's suspended. */
+          SEM_RAISE(tcr->resume);
+          pcontext->ContextFlags = CONTEXT_ALL;
+          GetThreadContext(hthread, pcontext);
+        }
+      }
+    } else {
+      if (tcr->valence == TCR_STATE_EXCEPTION_RETURN) {
+        *pcontext = *tcr->pending_exception_context;
+        tcr->pending_exception_context = NULL;
+        tcr->valence = TCR_STATE_LISP;
+      }
+    }
+
+    /* If the context's stack pointer is pointing into the cs_area,
+       copy the context below the stack pointer. else copy it
+       below tcr->foreign_rsp. */
+    foreign_rsp = xpGPR(pcontext,Isp);
+
+    if ((foreign_rsp < (LispObj)(cs->low)) ||
+        (foreign_rsp >= (LispObj)(cs->high))) {
+      foreign_rsp = (LispObj)(tcr->foreign_sp);
+    }
+    foreign_rsp -= 0x200;
+    foreign_rsp &= ~15;
+    suspend_context = (CONTEXT *)(foreign_rsp)-1;
+    *suspend_context = *pcontext;
+    tcr->suspend_context = suspend_context;
+    return true;
+  }
+  return false;
 }
 #else
 Boolean
@@ -1330,6 +1585,13 @@ suspend_tcr(TCR *tcr)
 }
 #endif
 
+#ifdef WINDOWS
+Boolean
+tcr_suspend_ack(TCR *tcr)
+{
+  return true;
+}
+#else
 Boolean
 tcr_suspend_ack(TCR *tcr)
 {
@@ -1339,7 +1601,7 @@ tcr_suspend_ack(TCR *tcr)
   }
   return true;
 }
-
+#endif
       
 
 
@@ -1358,7 +1620,31 @@ lisp_suspend_tcr(TCR *tcr)
   return suspended;
 }
 	 
+#ifdef WINDOWS
+Boolean
+resume_tcr(TCR *tcr)
+{
+  int suspend_count = atomic_decf(&(tcr->suspend_count)), err;
+  DWORD rc;
+  if (suspend_count == 0) {
+    CONTEXT *context = tcr->suspend_context;
+    HANDLE hthread = (HANDLE)(tcr->osid);
 
+    if (context == NULL) {
+      Bug(NULL, "no suspend_context for TCR = 0x%Ix", (natural)tcr);
+    }
+    tcr->suspend_context = NULL;
+    SetThreadContext(hthread,context);
+    rc = ResumeThread(hthread);
+    if (rc == -1) {
+      wperror("ResumeThread");
+      return false;
+    }
+    return true;
+  }
+  return false;
+}   
+#else
 Boolean
 resume_tcr(TCR *tcr)
 {
@@ -1372,6 +1658,7 @@ resume_tcr(TCR *tcr)
   }
   return false;
 }
+#endif
 
     
 

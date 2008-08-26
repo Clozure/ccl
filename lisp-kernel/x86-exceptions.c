@@ -37,7 +37,11 @@
 #ifndef WINDOWS
 #include <sys/syslog.h>
 #endif
-
+#ifdef WINDOWS
+#include <windows.h>
+#include <winternl.h>
+#include <ntstatus.h>
+#endif
 
 int
 page_size = 4096;
@@ -766,24 +770,17 @@ is_write_fault(ExceptionInformation *xp, siginfo_t *info)
 #endif
 }
 
-#ifdef WINDOWS
-Boolean
-handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valence)
-{
-}
-
-Boolean
-handle_floating_point_exception(TCR *tcr, ExceptionInformation *xp, siginfo_t *info)
-{
-}
-#else
 Boolean
 handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valence)
 {
 #ifdef FREEBSD
   BytePtr addr = (BytePtr) xp->uc_mcontext.mc_addr;
 #else
+#ifdef WINDOWS
+  BytePtr addr = NULL;          /* FIX THIS */
+#else
   BytePtr addr = (BytePtr) info->si_addr;
+#endif
 #endif
 
   if (addr && (addr == tcr->safe_ref_address)) {
@@ -821,7 +818,7 @@ handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valenc
 Boolean
 handle_floating_point_exception(TCR *tcr, ExceptionInformation *xp, siginfo_t *info)
 {
-  int code = info->si_code, skip;
+  int code,skip;
   LispObj  xcf, cmain = nrs_CMAIN.vcell,
     save_vsp = xpGPR(xp,Isp);
 #ifdef X8664
@@ -829,6 +826,11 @@ handle_floating_point_exception(TCR *tcr, ExceptionInformation *xp, siginfo_t *i
 #else
   LispObj save_ebp = xpGPR(xp,Iebp);
 #endif
+#ifdef WINDOWS
+  code = info->ExceptionCode;
+#else
+  code = info->si_code;
+#endif  
 
   if ((fulltag_of(cmain) == fulltag_misc) &&
       (header_subtag(header_of(cmain)) == subtag_macptr)) {
@@ -846,7 +848,7 @@ handle_floating_point_exception(TCR *tcr, ExceptionInformation *xp, siginfo_t *i
     return false;
   }
 }
-#endif
+
 
 Boolean
 extend_tcr_tlb(TCR *tcr, ExceptionInformation *xp)
@@ -949,12 +951,6 @@ get_lisp_string(LispObj lisp_string, char *c_string, natural max)
   c_string[n] = 0;
 }
 
-#ifdef WINDOWS
-Boolean
-handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TCR *tcr, int old_valence)
-{
-}
-#else
 Boolean
 handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TCR *tcr, int old_valence)
 {
@@ -994,12 +990,12 @@ handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TC
           xpPC(context) = (natural) (program_counter+1);
           {
             char msg[512];
-              
+
             get_lisp_string(xpGPR(context,Iarg_z),msg, sizeof(msg)-1);
             lisp_Debugger(context, info, debug_entry_dbg, false, msg);
           }
-          return true;
-            
+	  return true;
+          
         default:
           return handle_error(tcr, context);
 	}
@@ -1106,7 +1102,7 @@ handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TC
     return false;
   }
 }
-#endif
+
 
 /* 
    Current thread has all signals masked.  Before unmasking them,
@@ -1122,7 +1118,15 @@ prepare_to_wait_for_exception_lock(TCR *tcr, ExceptionInformation *context)
   tcr->pending_exception_context = context;
   tcr->valence = TCR_STATE_EXCEPTION_WAIT;
 
+#ifdef WINDOWS
+  if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_SUSPEND)) {
+    CLR_TCR_FLAG(tcr, TCR_FLAG_BIT_PENDING_SUSPEND);
+    SEM_RAISE(tcr->suspend);
+    SEM_WAIT_FOREVER(tcr->resume);
+  }
+#else
   ALLOW_EXCEPTIONS(context);
+#endif
   return old_valence;
 }  
 
@@ -1305,12 +1309,7 @@ typedef fpregset_t copy_ucontext_last_arg_t;
 typedef void * copy_ucontext_last_arg_t;
 #endif
 
-#ifdef WINDOWS
-LispObj *
-copy_ucontext(ExceptionInformation *context, LispObj *current, copy_ucontext_last_arg_t fp)
-{
-}
-#else
+#ifndef WINDOWS
 LispObj *
 copy_ucontext(ExceptionInformation *context, LispObj *current, copy_ucontext_last_arg_t fp)
 {
@@ -1330,6 +1329,7 @@ copy_ucontext(ExceptionInformation *context, LispObj *current, copy_ucontext_las
   return (LispObj *)dest;
 }
 #endif
+
 
 LispObj *
 find_foreign_rsp(LispObj rsp, area *foreign_area, TCR *tcr)
@@ -1353,6 +1353,7 @@ bogus_signal_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
 }
 #endif
 
+#ifndef WINDOWS
 void
 handle_signal_on_foreign_stack(TCR *tcr,
                                void *handler, 
@@ -1398,8 +1399,10 @@ handle_signal_on_foreign_stack(TCR *tcr,
 #endif
   switch_to_foreign_stack(foreign_rsp,handler,signum,info_copy,xp);
 }
+#endif
 
 
+#ifndef WINDOWS
 #ifndef USE_SIGALTSTACK
 void
 arbstack_signal_handler(int signum, siginfo_t *info, ExceptionInformation *context)
@@ -1451,6 +1454,7 @@ altstack_signal_handler(int signum, siginfo_t *info, ExceptionInformation  *cont
 );
 }
 #endif
+#endif
 
 Boolean
 stack_pointer_on_vstack_p(LispObj stack_pointer, TCR *tcr)
@@ -1462,11 +1466,9 @@ stack_pointer_on_vstack_p(LispObj stack_pointer, TCR *tcr)
 }
 
 #ifdef WINDOWS
-void
-interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
-{
-}
-#else
+extern LONG restore_win64_context(ExceptionInformation *, TCR *, int;);
+#endif
+
 void
 interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 {
@@ -1474,6 +1476,8 @@ interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
   Boolean gs_was_tcr = ensure_gs_pthread();
 #endif
   TCR *tcr = get_interrupt_tcr(false);
+  int old_valence = tcr->valence;
+
   if (tcr) {
     if ((TCR_INTERRUPT_LEVEL(tcr) < 0) ||
         (tcr->valence != TCR_STATE_LISP) ||
@@ -1484,7 +1488,7 @@ interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 #else
         ! stack_pointer_on_vstack_p(xpGPR(context,Iebp), tcr)) {
 #endif
-      tcr->interrupt_pending = (1L << (nbits_in_word - 1L));
+      tcr->interrupt_pending = (((natural) 1)<< (nbits_in_word - ((natural)1)));
     } else {
       LispObj cmain = nrs_CMAIN.vcell;
 
@@ -1495,7 +1499,6 @@ interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
         */
 
         xframe_list xframe_link;
-        int old_valence;
         signed_natural alloc_displacement = 0;
         LispObj 
           *next_tsp = tcr->next_tsp,
@@ -1530,7 +1533,9 @@ interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
         }
         tcr->flags |= old_foreign_exception;
         unlock_exception_lock_in_handler(tcr);
+#ifndef WINDOWS
         exit_signal_handler(tcr, old_valence);
+#endif
       }
     }
   }
@@ -1539,10 +1544,15 @@ interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
     set_gs_address(tcr);
   }
 #endif
+#ifdef WINDOWS
+  restore_win64_context(context,tcr,old_valence);
+#else
   SIGRETURN(context);
-}
 #endif
+}
 
+
+#ifndef WINDOWS
 #ifndef USE_SIGALTSTACK
 void
 arbstack_interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
@@ -1595,13 +1605,9 @@ altstack_interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *c
 }
 
 #endif
+#endif
 
-#ifdef WINDOWS
-void
-install_signal_handler(int signo, void * handler)
-{
-}
-#else
+#ifndef WINDOWS
 void
 install_signal_handler(int signo, void * handler)
 {
@@ -1629,9 +1635,134 @@ install_signal_handler(int signo, void * handler)
 #endif
 
 #ifdef WINDOWS
+BOOL 
+ControlEventHandler(DWORD event)
+{
+  switch(event) {
+  case CTRL_C_EVENT:
+    lisp_global(INTFLAG) = (1 << fixnumshift);
+    return TRUE;
+    break;
+  default:
+    return FALSE;
+  }
+}
+
+int
+map_windows_exception_code_to_posix_signal(DWORD code)
+{
+  switch (code) {
+  case EXCEPTION_ACCESS_VIOLATION:
+    return SIGSEGV;
+  case EXCEPTION_FLT_DENORMAL_OPERAND:
+  case EXCEPTION_FLT_DIVIDE_BY_ZERO:
+  case EXCEPTION_FLT_INEXACT_RESULT:
+  case EXCEPTION_FLT_INVALID_OPERATION:
+  case EXCEPTION_FLT_OVERFLOW:
+  case EXCEPTION_FLT_STACK_CHECK:
+  case EXCEPTION_FLT_UNDERFLOW:
+  case EXCEPTION_INT_DIVIDE_BY_ZERO:
+  case EXCEPTION_INT_OVERFLOW:
+    return SIGFPE;
+  case EXCEPTION_PRIV_INSTRUCTION:
+  case EXCEPTION_ILLEGAL_INSTRUCTION:
+    return SIGILL;
+  case EXCEPTION_IN_PAGE_ERROR:
+    return SIGBUS;
+  case DBG_PRINTEXCEPTION_C:
+    return DBG_PRINTEXCEPTION_C;
+  default:
+    return -1;
+  }
+}
+
+
+LONG
+windows_exception_handler(EXCEPTION_POINTERS *exception_pointers)
+{
+  TCR *tcr = get_tcr(false);
+  DWORD code = exception_pointers->ExceptionRecord->ExceptionCode;
+  int old_valence, signal_number;
+  ExceptionInformation *context = exception_pointers->ContextRecord;
+  siginfo_t *info = exception_pointers->ExceptionRecord;
+  xframe_list xframes;
+
+  old_valence = prepare_to_wait_for_exception_lock(tcr, context);
+  wait_for_exception_lock_in_handler(tcr, context, &xframes);
+
+  signal_number = map_windows_exception_code_to_posix_signal(code);
+  
+  if (!handle_exception(signal_number, info, context, tcr, old_valence)) {
+    char msg[512];
+    Boolean foreign = (old_valence != TCR_STATE_LISP);
+
+    snprintf(msg, sizeof(msg), "Unhandled exception %d (windows code 0x%x) at 0x%Ix, context->regs at 0x%Ix", signal_number, code, xpPC(context), (natural)xpGPRvector(context));
+    
+    if (lisp_Debugger(context, info, signal_number,  foreign, msg)) {
+      SET_TCR_FLAG(tcr,TCR_FLAG_BIT_PROPAGATE_EXCEPTION);
+    }
+  }
+  unlock_exception_lock_in_handler(tcr);
+  return restore_win64_context(context, tcr, old_valence);
+}
+
+LONG windows_switch_to_foreign_stack(LispObj, void*, void*);
+
+LONG
+handle_windows_exception_on_foreign_stack(TCR *tcr,
+                                          CONTEXT *context,
+                                          void *handler,
+                                          EXCEPTION_POINTERS *original_ep)
+{
+  LispObj foreign_rsp = 
+    (LispObj) find_foreign_rsp(xpGPR(context,Isp), tcr->cs_area, tcr);
+  CONTEXT *new_context;
+  siginfo_t *new_info;
+  EXCEPTION_POINTERS *new_ep;
+
+  new_context = ((CONTEXT *)(foreign_rsp&~15))-1;
+  *new_context = *context;
+  foreign_rsp = (LispObj)new_context;
+  new_info = ((siginfo_t *)(foreign_rsp&~15))-1;
+  *new_info = *original_ep->ExceptionRecord;
+  foreign_rsp = (LispObj)new_info;
+  new_ep = ((EXCEPTION_POINTERS *)(foreign_rsp&~15))-1;
+  foreign_rsp = (LispObj)new_ep & ~15;
+  new_ep->ContextRecord = new_context;
+  new_ep->ExceptionRecord = new_info;
+  return windows_switch_to_foreign_stack(foreign_rsp,handler,new_ep);
+}
+
+LONG
+windows_arbstack_exception_handler(EXCEPTION_POINTERS *exception_pointers)
+{
+  DWORD code = exception_pointers->ExceptionRecord->ExceptionCode;
+  
+  if ((code & 0x80000000L) == 0) {
+    return EXCEPTION_CONTINUE_SEARCH;
+  } else {
+    TCR *tcr = get_interrupt_tcr(false);
+    area *vs = tcr->vs_area;
+    BytePtr current_sp = (BytePtr) current_stack_pointer();
+    struct _TEB *teb = NtCurrentTeb();
+    
+    if ((current_sp >= vs->low) &&
+        (current_sp < vs->high)) {
+      return
+        handle_windows_exception_on_foreign_stack(tcr,
+                                                  exception_pointers->ContextRecord,
+                                                  windows_exception_handler,
+                                                  exception_pointers);
+    }
+    return windows_exception_handler(exception_pointers);
+  }
+}
+
+
 void
 install_pmcl_exception_handlers()
 {
+  AddVectoredExceptionHandler(1,windows_arbstack_exception_handler);
 }
 #else
 void
@@ -1672,6 +1803,7 @@ install_pmcl_exception_handlers()
 }
 #endif
 
+#ifndef WINDOWS
 #ifndef USE_SIGALTSTACK
 void
 arbstack_suspend_resume_handler(int signum, siginfo_t *info, ExceptionInformation  *context)
@@ -1727,7 +1859,7 @@ altstack_suspend_resume_handler(int signum, siginfo_t *info, ExceptionInformatio
 #endif
                                  );
 }
-
+#endif
 #endif
 
 #ifdef WINDOWS
@@ -1739,6 +1871,9 @@ quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
 void
 quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
 {
+#ifdef DARWIN_GS_HACK
+  Boolean gs_was_tcr = ensure_gs_pthread();
+#endif
   TCR *tcr = get_tcr(false);
   area *a;
   sigset_t mask;
@@ -1767,6 +1902,7 @@ quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
 }
 #endif
 
+#ifndef WINDOWS
 #ifndef USE_SIGALTSTACK
 void
 arbstack_quit_handler(int signum, siginfo_t *info, ExceptionInformation *context)
@@ -1822,6 +1958,7 @@ altstack_quit_handler(int signum, siginfo_t *info, ExceptionInformation *context
 #endif
                                  );
 }
+#endif
 #endif
 
 #ifdef USE_SIGALTSTACK
@@ -1933,17 +2070,34 @@ extern opcode egc_write_barrier_start, egc_write_barrier_end,
 
 #ifdef X8664
 opcode load_allocptr_reg_from_tcr_save_allocptr_instruction[] =
-  {0x65,0x48,0x8b,0x1c,0x25,0xd8,0x00,0x00,0x00};
+#ifdef WINDOWS
+  {0x49,0x8b,0x9b,0xd8,0x00,0x00,0x00}
+#else
+  {0x65,0x48,0x8b,0x1c,0x25,0xd8,0x00,0x00,0x00}
+#endif
+;
 opcode compare_allocptr_reg_to_tcr_save_allocbase_instruction[] =
-  {0x65,0x48,0x3b,0x1c,0x25,0xe0,0x00,0x00,0x00};
+#ifdef WINDOWS
+  {0x49,0x3b,0x9b,0xe0,0x00,0x00,0x00}
+#else
+  {0x65,0x48,0x3b,0x1c,0x25,0xe0,0x00,0x00,0x00}
+#endif
+
+;
 opcode branch_around_alloc_trap_instruction[] =
   {0x7f,0x02};
 opcode alloc_trap_instruction[] =
   {0xcd,0xc5};
 opcode clear_tcr_save_allocptr_tag_instruction[] =
-  {0x65,0x80,0x24,0x25,0xd8,0x00,0x00,0x00,0xf0};
+#ifdef WINDOWS
+  {0x41,0x80,0xa3,0xd8,0x00,0x00,0x00,0xf0}
+#else
+  {0x65,0x80,0x24,0x25,0xd8,0x00,0x00,0x00,0xf0}
+#endif
+;
 opcode set_allocptr_header_instruction[] =
   {0x48,0x89,0x43,0xf3};
+
 
 alloc_instruction_id
 recognize_alloc_instruction(pc program_counter)
@@ -1952,6 +2106,14 @@ recognize_alloc_instruction(pc program_counter)
   case 0xcd: return ID_alloc_trap_instruction;
   case 0x7f: return ID_branch_around_alloc_trap_instruction;
   case 0x48: return ID_set_allocptr_header_instruction;
+#ifdef WINDOWS
+  case 0x41: return ID_clear_tcr_save_allocptr_tag_instruction;
+  case 0x49:
+    switch(program_counter[1]) {
+    case 0x8b: return ID_load_allocptr_reg_from_tcr_save_allocptr_instruction;
+    case 0x3b: return ID_compare_allocptr_reg_to_tcr_save_allocbase_instruction;
+    }
+#else
   case 0x65: 
     switch(program_counter[1]) {
     case 0x80: return ID_clear_tcr_save_allocptr_tag_instruction;
@@ -1961,6 +2123,8 @@ recognize_alloc_instruction(pc program_counter)
       case 0x8b: return ID_load_allocptr_reg_from_tcr_save_allocptr_instruction;
       }
     }
+#endif
+  default: break;
   }
   return ID_unrecognized_alloc_instruction;
 }
@@ -1996,12 +2160,7 @@ recognize_alloc_instruction(pc program_counter)
   return ID_unrecognized_alloc_instruction;
 }
 #endif      
-#ifdef WINDOWS  
-void
-pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displacement)
-{
-}
-#else
+
 void
 pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displacement)
 {
@@ -2029,10 +2188,9 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
     }
     switch(state) {
     case ID_set_allocptr_header_instruction:
-      /* We were consing a vector and we won.  Set the header of the
-         new vector (in the allocptr register) to the header in
-         %eax/%rax and skip over this instruction, then fall into the
-         next case. */
+      /* We were consing a vector and we won.  Set the header of the new vector
+         (in the allocptr register) to the header in %rax and skip over this
+         instruction, then fall into the next case. */
       new_vector = xpGPR(xp,Iallocptr);
       deref(new_vector,0) = xpGPR(xp,Iimm0);
 
@@ -2066,7 +2224,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
          we might as well finish the allocation.  Otherwise, back out of the
          attempt. */
       {
-        int flags = (int)xpGPR(xp,Iflags);
+        int flags = (int)eflags_register(xp);
         
         if ((!(flags & (1 << X86_ZERO_FLAG_BIT))) &&
             ((flags & (1 << X86_SIGN_FLAG_BIT)) ==
@@ -2108,6 +2266,8 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
         tcr->save_allocptr = (void *)(VOID_ALLOCPTR-disp);
       }
       break;
+    default: 
+      break;
     }
     return;
   }
@@ -2120,7 +2280,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
     if (program_counter >= &egc_store_node_conditional) {
       if ((program_counter < &egc_store_node_conditional_success_test) ||
           ((program_counter == &egc_store_node_conditional_success_test) &&
-           !(xpGPR(xp, Iflags) & (1 << X86_ZERO_FLAG_BIT)))) {
+           !(eflags_register(xp) & (1 << X86_ZERO_FLAG_BIT)))) {
         /* Back up the PC, try again */
         xpPC(xp) = (LispObj) &egc_store_node_conditional;
         return;
@@ -2183,7 +2343,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
     return;
   }
 }
-#endif
+
 
 void
 normalize_tcr(ExceptionInformation *xp, TCR *tcr, Boolean is_other_tcr)

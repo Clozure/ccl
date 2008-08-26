@@ -75,7 +75,7 @@ print_lisp_object(LispObj);
 #define PLATFORM_OS_SOLARIS 2
 #define PLATFORM_OS_DARWIN 3
 #define PLATFORM_OS_FREEBSD 4
-#define PLATFORM_OS_WINDOWS 6
+#define PLATFORM_OS_WINDOWS 5
 
 #ifdef LINUX
 #define PLATFORM_OS PLATFORM_OS_LINUX
@@ -115,4 +115,10 @@ print_lisp_object(LispObj);
 
 #define PLATFORM (PLATFORM_OS|PLATFORM_CPU|PLATFORM_WORD_SIZE)
 
+Boolean check_for_embedded_image (char *);
+natural xStackSpace();
+void init_threads(void *, TCR *);
 
+#ifdef WINDOWS
+void wperror(char *);
+#endif

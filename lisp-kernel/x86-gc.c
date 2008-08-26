@@ -2405,7 +2405,9 @@ impurify_xp(ExceptionInformation *xp, LispObj low, LispObj high, signed_natural 
   impurify_noderef(&(regs[Iarg_z]), low, high, delta);
   impurify_noderef(&(regs[Iarg_y]), low, high, delta);
   impurify_noderef(&(regs[Iarg_x]), low, high, delta);
+#ifndef WINDOWS
   impurify_noderef(&(regs[Isave3]), low, high, delta);
+#endif
   impurify_noderef(&(regs[Isave2]), low, high, delta);
   impurify_noderef(&(regs[Isave1]), low, high, delta);
   impurify_noderef(&(regs[Isave0]), low, high, delta);
@@ -2588,12 +2590,6 @@ impurify_areas(LispObj low, LispObj high, signed_natural delta)
   }
 }
 
-#ifdef WINDOWS
-int
-impurify(TCR *tcr, signed_natural param)
-{
-}
-#else
 int
 impurify(TCR *tcr, signed_natural param)
 {
@@ -2616,7 +2612,7 @@ impurify(TCR *tcr, signed_natural param)
       }
       a->active += n;
       memmove(oldfree, ro_base, n);
-      munmap((void *)ro_base, n);
+      UnMapMemory((void *)ro_base, n);
       a->ndnodes = area_dnode(a, a->active);
       pure_space_active = r->active = r->low;
       r->ndnodes = 0;
@@ -2637,4 +2633,3 @@ impurify(TCR *tcr, signed_natural param)
   }
   return -1;
 }
-#endif

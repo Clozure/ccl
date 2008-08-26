@@ -161,7 +161,7 @@ typedef struct ucontext ExceptionInformation;
 #endif
 
 #ifdef WIN64
-typedef EXCEPTION_POINTERS ExceptionInformation;
+typedef CONTEXT ExceptionInformation;
 #endif
 
 typedef u32_t lisp_char_code;

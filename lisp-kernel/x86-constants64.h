@@ -57,25 +57,24 @@
 #endif
 
 #ifdef WIN64
-/* DWORD64 indices in CONTEXT */
-#define REG_RAX     15
-#define REG_RCX     16
-#define REG_RDX     17
-#define REG_RBX     18
-#define REG_RSP     19
-#define REG_RBP     20
-#define REG_RSI     21
-#define REG_RDI     22
-#define REG_R8      23
-#define REG_R9      24
-#define REG_R10     25
-#define REG_R11     26
-#define REG_R12     27
-#define REG_R13     28
-#define REG_R14     29
-#define REG_R15     30
-#define REG_RIP     31
-#define REG_EFL      8  /* In the high 32 bits of the 64-bit word at index 8 */
+/* DWORD64 indices in &(CONTEXT->Rax) */
+#define REG_RAX     0
+#define REG_RCX     1
+#define REG_RDX     2
+#define REG_RBX     3
+#define REG_RSP     4
+#define REG_RBP     5
+#define REG_RSI     6
+#define REG_RDI     7
+#define REG_R8      8
+#define REG_R9      9
+#define REG_R10     10
+#define REG_R11     11
+#define REG_R12     12
+#define REG_R13     13
+#define REG_R14     14
+#define REG_R15     15
+#define REG_RIP     16
 #endif
 /* Define indices of the GPRs in the mcontext component of a ucontext */
 #define Itemp0      REG_RBX
@@ -531,6 +530,14 @@ typedef struct tcr {
 } TCR;
 
 #define t_offset (t_value-nil_value)
+
+typedef struct {
+  natural Rip;
+  natural Cs;                   /* in low 16 bits */
+  natural Rflags;               /* in low 32 bits */
+  natural Rsp;
+  natural Ss;                   /* in low 16 bits*/
+} x64_iret_frame;
 
 /* 
   These were previously global variables.  There are lots of implicit

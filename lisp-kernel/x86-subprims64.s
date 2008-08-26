@@ -31,6 +31,7 @@
 
 
 _exportfn(toplevel_loop)
+Xsubprims_start:        	
 	__(push %rbp)
 	__(movq %rsp,%rbp)
 	/* Switch to the lisp stack */
@@ -81,7 +82,8 @@ local_label(back_to_c):
 /*  being a Boolean which indicates whether the thread should try to */
 /* "reset" itself or start running lisp code.  Both of these arguments */
 /* are currently ignored (the TCR is maintained in a segment register and */
-/*  the reset/panic code doesn't work ...) */
+/*  the reset/panic code doesn't work ...), except on Windows, where we use */
+/* the first arg to set up the TCR register */	
    
 _exportfn(C(start_lisp))
 	__(push %rbp)
@@ -94,7 +96,7 @@ _exportfn(C(start_lisp))
 	__ifdef([WINDOWS])
 	__(push %csave5)
 	__(push %csave6)
-	/* FIXME: set up %rcontext_reg a.k.a. r11 */
+	__(movq %carg0,%rcontext_reg)
 	__endif
         __ifdef([DARWIN_GS_HACK])
          __(set_gs_base())
@@ -140,5 +142,13 @@ _exportfn(C(start_lisp))
 	__(movl $nil_value,%eax)
 	__(leave)
 	__(ret)
+Xsubprims_end:           
 _endfn
-		
+
+        .data
+        .globl C(subprims_start)
+        .globl C(subprims_end)
+C(subprims_start):      .quad Xsubprims_start
+C(subprims_end):        .quad Xsubprims_end
+        .text
+                                

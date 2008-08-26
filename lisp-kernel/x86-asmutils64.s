@@ -206,5 +206,85 @@ _exportfn(C(set_gs_address))
         __(syscall)
         __(ret)
 _endfn
-        __endif		
+        __endif
+
+        __ifdef([WIN64])
+/* %rcx = CONTEXT, %rdx = tcr, %r8 = old_valence.  This pretty
+   much has to be uninterruptible */        
+_exportfn(C(restore_win64_context))
+Xrestore_win64_context_start: 	
+        __(subq $0x38,%rsp)
+        __(xorl %eax,%eax)
+        __(movq %r8,tcr.valence(%rdx))
+        __(movq %rax,tcr.pending_exception_context(%rdx))
+        __(fxrstor win64_context.fpstate(%rcx))
+        __(movapd win64_context.Xmm0(%rcx),%xmm0)
+        __(movapd win64_context.Xmm1(%rcx),%xmm1)
+        __(movapd win64_context.Xmm2(%rcx),%xmm2)
+        __(movapd win64_context.Xmm3(%rcx),%xmm3)
+        __(movapd win64_context.Xmm4(%rcx),%xmm4)
+        __(movapd win64_context.Xmm5(%rcx),%xmm5)
+        __(movapd win64_context.Xmm6(%rcx),%xmm6)
+        __(movapd win64_context.Xmm7(%rcx),%xmm7)
+        __(movapd win64_context.Xmm8(%rcx),%xmm8)
+        __(movapd win64_context.Xmm9(%rcx),%xmm9)
+        __(movapd win64_context.Xmm10(%rcx),%xmm10)
+        __(movapd win64_context.Xmm11(%rcx),%xmm11)
+        __(movapd win64_context.Xmm12(%rcx),%xmm12)
+        __(movapd win64_context.Xmm13(%rcx),%xmm13)
+        __(movapd win64_context.Xmm14(%rcx),%xmm14)
+        __(movapd win64_context.Xmm15(%rcx),%xmm15)
+        __(ldmxcsr win64_context.MxCsr(%rcx))
+        __(movw win64_context.SegSs(%rcx),%ax)
+        __(movw %ax,0x20(%rsp))
+        __(movq win64_context.Rsp(%rcx),%rax)
+        __(movq %rax,0x18(%rsp))
+        __(movl win64_context.EFlags(%rcx),%eax)
+        __(movl %eax,0x10(%rsp))
+        __(movw win64_context.SegCs(%rcx),%ax)
+        __(movw %ax,8(%rsp))
+        __(movq win64_context.Rip(%rcx),%rax)
+        __(movq %rax,(%rsp))
+        __(movq win64_context.Rax(%rcx),%rax)
+        __(movq win64_context.Rbx(%rcx),%rbx)
+        __(movq win64_context.Rdx(%rcx),%rdx)
+        __(movq win64_context.Rdi(%rcx),%rdi)
+        __(movq win64_context.Rsi(%rcx),%rsi)
+        __(movq win64_context.Rbp(%rcx),%rbp)
+        __(movq win64_context.R8(%rcx),%r8)
+        __(movq win64_context.R9(%rcx),%r9)
+        __(movq win64_context.R10(%rcx),%r10)
+        __(movq win64_context.R11(%rcx),%r11)
+        __(movq win64_context.R12(%rcx),%r12)
+        __(movq win64_context.R13(%rcx),%r13)
+        __(movq win64_context.R14(%rcx),%r14)
+        __(movq win64_context.R15(%rcx),%r15)
+Xrestore_win64_context_load_rcx:                
+        __(movq win64_context.Rcx(%rcx),%rcx)
+Xrestore_win64_context_iret:            
+        __(iretq)
+Xrestore_win64_context_end:             
+        __(nop)
+_endfn
+	
+_exportfn(C(windows_switch_to_foreign_stack))
+        __(pop %rax)
+        __(lea -0x20(%rcx),%rsp)
+        __(push %rax)
+        __(movq %r8,%rcx)
+        __(jmp *%rdx)
+_endfn        
+
+        .data
+        .globl C(restore_win64_context_start)
+        .globl C(restore_win64_context_end)
+        .globl C(restore_win64_context_load_rcx)
+        .globl C(restore_win64_context_iret)
+C(restore_win64_context_start):  .quad Xrestore_win64_context_start
+C(restore_win64_context_end): .quad Xrestore_win64_context_end
+C(restore_win64_context_load_rcx):  .quad Xrestore_win64_context_load_rcx
+C(restore_win64_context_iret): .quad Xrestore_win64_context_iret
+
+        __endif
+                
 	_endfile

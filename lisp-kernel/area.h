@@ -172,7 +172,7 @@ typedef struct area_list {
 #endif
 #ifdef WINDOWS
 #ifdef X8664
-#define IMAGE_BASE_ADDRESS 0x300000000000LL
+#define IMAGE_BASE_ADDRESS 0x100000000LL
 #endif
 #endif
 

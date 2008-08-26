@@ -120,6 +120,28 @@ Boolean running_under_rosetta = false;
 #define MAP_NORESERVE (0)
 #endif
 
+#ifdef WINDOWS
+#include <windows.h>
+#include <stdio.h>
+void
+wperror(char* message)
+{
+  char* buffer;
+  DWORD last_error = GetLastError();
+  
+  FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER|
+		FORMAT_MESSAGE_FROM_SYSTEM|
+		FORMAT_MESSAGE_IGNORE_INSERTS,
+		NULL,
+		last_error,
+		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+		(LPTSTR)&buffer,
+		0, NULL);
+  fprintf(stderr, "%s: 0x%x %s\n", message, (unsigned) last_error, buffer);
+  LocalFree(buffer);
+}
+#endif
+
 LispObj lisp_nil = (LispObj) 0;
 bitvector global_mark_ref_bits = NULL;
 
@@ -157,6 +179,18 @@ size_t
 ensure_stack_limit(size_t stack_size)
 {
 #ifdef WINDOWS
+
+  /* On Windows, the stack is allocated on thread creation.  For the
+     initial thread, the loader does that, and we cannot change the
+     stack size after the fact.  For threads we create, we can set the
+     stack size.  A possible solution is putting the initial thread
+     asleep and using only runtime-created threads.
+
+     For now, just refuse any attempt to set another stack size, and
+     return the linker default. */
+
+  return 0x200000;
+
 #else
   struct rlimit limits;
   rlim_t cur_stack_limit, max_stack_limit;
@@ -361,7 +395,8 @@ unsigned unsigned_max(unsigned x, unsigned y)
 #endif
 #endif
 #ifdef WINDOWS
-#define MAXIMUM_MAPPABLE_MEMORY (512<<30LL)
+/* Supposedly, the high-end version of Vista allow 128GB of pageable memory */
+#define MAXIMUM_MAPPABLE_MEMORY (120LL<<30LL)
 #endif
 #else
 #ifdef DARWIN
@@ -420,30 +455,11 @@ thread_stack_size = 0;
   an integral number of segments.  remap the entire range.
 */
 
-#ifdef WINDOWS
 void 
 uncommit_pages(void *start, size_t len)
 {
+  UnCommitMemory(start, len);
 }
-#else
-void 
-uncommit_pages(void *start, size_t len)
-{
-  if (len) {
-    madvise(start, len, MADV_DONTNEED);
-    if (mmap(start, 
-	     len, 
-	     PROT_NONE, 
-	     MAP_PRIVATE | MAP_FIXED | MAP_ANON,
-	     -1,
-	     0) != start) {
-      int err = errno;
-      Fatal("mmap error", "");
-      fprintf(stderr, "errno = %d", err);
-    }
-  }
-}
-#endif
 
 #define TOUCH_PAGES_ON_COMMIT 0
 
@@ -465,45 +481,18 @@ touch_all_pages(void *start, size_t len)
   return true;
 }
 
-#ifdef WINDOWS
-Boolean
-commit_pages(void *start, size_t len)
-{
-}
-#else
 Boolean
 commit_pages(void *start, size_t len)
 {
   if (len != 0) {
-    int i;
-    void *addr;
-
-    for (i = 0; i < 3; i++) {
-      addr = mmap(start, 
-		  len, 
-		  PROT_READ | PROT_WRITE | PROT_EXEC,
-		  MAP_PRIVATE | MAP_FIXED | MAP_ANON,
-		  -1,
-		  0);
-      if (addr == start) {
-        if (touch_all_pages(start, len)) {
-          return true;
-        }
-        else {
-          mmap(start,
-               len,
-               PROT_NONE,
-               MAP_PRIVATE | MAP_FIXED | MAP_ANON,
-               -1,
-               0);
-        }
+    if (CommitMemory(start, len)) {
+      if (touch_all_pages(start, len)) {
+	return true;
       }
     }
-    return false;
   }
   return true;
 }
-#endif
 
 area *
 find_readonly_area()
@@ -518,12 +507,6 @@ find_readonly_area()
   return NULL;
 }
 
-#ifdef WINDOWS
-area *
-extend_readonly_area(unsigned more)
-{
-}
-#else
 area *
 extend_readonly_area(unsigned more)
 {
@@ -541,71 +524,17 @@ extend_readonly_area(unsigned more)
     }
     new_start = (BytePtr)(align_to_power_of_2(a->active,log2_page_size));
     new_end = (BytePtr)(align_to_power_of_2(a->active+more,log2_page_size));
-    if (mmap(new_start,
-             new_end-new_start,
-             PROT_READ | PROT_WRITE | PROT_EXEC,
-             MAP_PRIVATE | MAP_ANON | MAP_FIXED,
-             -1,
-             0) != new_start) {
+    if (!CommitMemory(new_start, new_end-new_start)) {
       return NULL;
     }
     return a;
   }
   return NULL;
 }
-#endif
 
 LispObj image_base=0;
 BytePtr pure_space_start, pure_space_active, pure_space_limit;
 BytePtr static_space_start, static_space_active, static_space_limit;
-
-#ifdef DARWIN
-#if WORD_SIZE == 64
-#define vm_region vm_region_64
-#endif
-
-/*
-  Check to see if the specified address is unmapped by trying to get
-  information about the mapped address at or beyond the target.  If
-  the difference between the target address and the next mapped address
-  is >= len, we can safely mmap len bytes at addr.
-*/
-Boolean
-address_unmapped_p(char *addr, natural len)
-{
-  vm_address_t vm_addr = (vm_address_t)addr;
-  vm_size_t vm_size;
-#if WORD_SIZE == 64
-  vm_region_basic_info_data_64_t vm_info;
-#else
-  vm_region_basic_info_data_t vm_info;
-#endif
-#if WORD_SIZE == 64
-  mach_msg_type_number_t vm_info_size = VM_REGION_BASIC_INFO_COUNT_64;
-#else
-  mach_msg_type_number_t vm_info_size = VM_REGION_BASIC_INFO_COUNT;
-#endif
-  mach_port_t vm_object_name = (mach_port_t) 0;
-  kern_return_t kret;
-
-  kret = vm_region(mach_task_self(),
-		   &vm_addr,
-		   &vm_size,
-#if WORD_SIZE == 64
-                   VM_REGION_BASIC_INFO_64,
-#else
-		   VM_REGION_BASIC_INFO,
-#endif
-		   (vm_region_info_t)&vm_info,
-		   &vm_info_size,
-		   &vm_object_name);
-  if (kret != KERN_SUCCESS) {
-    return false;
-  }
-
-  return vm_addr >= (vm_address_t)(addr+len);
-}
-#endif
 
 void
 raise_limit()
@@ -621,12 +550,6 @@ raise_limit()
 } 
 
 
-#ifdef WINDOWS
-area *
-create_reserved_area(natural totalsize)
-{
-}
-#else
 area *
 create_reserved_area(natural totalsize)
 {
@@ -638,68 +561,10 @@ create_reserved_area(natural totalsize)
     start, 
     want = (BytePtr)IMAGE_BASE_ADDRESS;
   area *reserved;
-  Boolean fixed_map_ok = false;
-
-  /*
-    Through trial and error, we've found that IMAGE_BASE_ADDRESS is
-    likely to reside near the beginning of an unmapped block of memory
-    that's at least 1GB in size.  We'd like to load the heap image's
-    sections relative to IMAGE_BASE_ADDRESS; if we're able to do so,
-    that'd allow us to file-map those sections (and would enable us to
-    avoid having to relocate references in the data sections.)
-
-    In short, we'd like to reserve 1GB starting at IMAGE_BASE_ADDRESS
-    by creating an anonymous mapping with mmap().
-
-    If we try to insist that mmap() map a 1GB block at
-    IMAGE_BASE_ADDRESS exactly (by specifying the MAP_FIXED flag),
-    mmap() will gleefully clobber any mapped memory that's already
-    there.  (That region's empty at this writing, but some future
-    version of the OS might decide to put something there.)
-
-    If we don't specify MAP_FIXED, mmap() is free to treat the address
-    we give it as a hint; Linux seems to accept the hint if doing so
-    wouldn't cause a problem.  Naturally, that behavior's too useful
-    for Darwin (or perhaps too inconvenient for it): it'll often
-    return another address, even if the hint would have worked fine.
-
-    We call address_unmapped_p() to ask Mach whether using MAP_FIXED
-    would conflict with anything.  Until we discover a need to do 
-    otherwise, we'll assume that if Linux's mmap() fails to take the
-    hint, it's because of a legitimate conflict.
-
-    If Linux starts ignoring hints, we can parse /proc/<pid>/maps
-    to implement an address_unmapped_p() for Linux.
-  */
 
   totalsize = align_to_power_of_2((void *)totalsize, log2_heap_segment_size);
 
-#ifdef DARWIN
-  fixed_map_ok = address_unmapped_p(want,totalsize);
-#endif
-#ifdef SOLARIS
-  fixed_map_ok = true;
-#endif
-  raise_limit();                /* From Andi Kleen: observe rlimits */
-  start = mmap((void *)want,
-	       totalsize + heap_segment_size,
-	       PROT_NONE,
-	       MAP_PRIVATE | MAP_ANON | (fixed_map_ok ? MAP_FIXED : 0) | MAP_NORESERVE,
-	       -1,
-	       0);
-  if (start == MAP_FAILED) {
-    perror("Initial mmap");
-    return NULL;
-  }
-
-  if (start != want) {
-    munmap(start, totalsize+heap_segment_size);
-    start = (void *)((((natural)start)+heap_segment_size-1) & ~(heap_segment_size-1));
-    if(mmap(start, totalsize, PROT_NONE, MAP_PRIVATE | MAP_ANON | MAP_FIXED | MAP_NORESERVE, -1, 0) != start) {
-      return NULL;
-    }
-  }
-  mprotect(start, totalsize, PROT_NONE);
+  start = ReserveMemoryForHeap(want, totalsize);
 
   h = (Ptr) start;
   base = (natural) start;
@@ -728,7 +593,6 @@ create_reserved_area(natural totalsize)
   reserved->markbits = global_mark_ref_bits;
   return reserved;
 }
-#endif
 
 void *
 allocate_from_reserved_area(natural size)
@@ -764,11 +628,13 @@ ensure_gc_structures_writable()
     new_markbits_limit = ((BytePtr)global_mark_ref_bits)+markbits_size;
 
   if (new_reloctab_limit > reloctab_limit) {
+    CommitMemory(global_reloctab, reloctab_size);
     UnProtectMemory(global_reloctab, reloctab_size);
     reloctab_limit = new_reloctab_limit;
   }
   
   if (new_markbits_limit > markbits_limit) {
+    CommitMemory(global_mark_ref_bits, markbits_size);
     UnProtectMemory(global_mark_ref_bits, markbits_size);
     markbits_limit = new_markbits_limit;
   }
@@ -792,7 +658,7 @@ allocate_dynamic_area(natural initsize)
   add_area_holding_area_lock(a);
   a->markbits = reserved_area->markbits;
   reserved_area->markbits = NULL;
-  UnProtectMemory(start, end-start);
+  CommitMemory(start, end-start);
   a->h = start;
   a->softprot = NULL;
   a->hardprot = NULL;
@@ -870,8 +736,15 @@ sigint_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 void
 register_sigint_handler()
 {
-  extern void install_signal_handler(int, void*);
+#ifdef WINDOWS
+  extern BOOL ControlEventHandler(DWORD);
+
+  signal(SIGINT, SIG_IGN);
+
+  SetConsoleCtrlHandler(ControlEventHandler,TRUE);
+#else
   install_signal_handler(SIGINT, (void *)sigint_handler);
+#endif
 }
 
 
@@ -879,12 +752,17 @@ register_sigint_handler()
 BytePtr
 initial_stack_bottom()
 {
+#ifndef WINDOWS
   extern char **environ;
   char *p = *environ;
   while (*p) {
     p += (1+strlen(p));
   }
   return (BytePtr)((((natural) p) +4095) & ~4095);
+#endif
+#ifdef WINDOWS
+  return (BytePtr)((current_stack_pointer() + 4095) & ~ 4095);
+#endif
 }
 
 
@@ -910,7 +788,24 @@ area *
 set_nil(LispObj);
 
 
-#ifdef DARWIN
+#if defined(DARWIN) || defined(WINDOWS)
+#ifdef WINDOWS
+/* Chop the trailing ".exe" from the kernel image name */
+char *
+chop_exe_suffix(char *path)
+{
+  int len = strlen(path);
+  char *copy = malloc(len+1), *tail;
+
+  strcpy(copy,path);
+  tail = strrchr(copy, '.');
+  if (tail) {
+    *tail = 0;
+  }
+  return copy;
+}
+#endif
+
 /* 
    The underlying file system may be case-insensitive (e.g., HFS),
    so we can't just case-invert the kernel's name.
@@ -919,11 +814,16 @@ set_nil(LispObj);
 char *
 default_image_name(char *orig)
 {
-  int len = strlen(orig) + strlen(".image") + 1;
+#ifdef WINDOWS
+  char *path = chop_exe_suffix(orig);
+#else
+  char *path = orig;
+#endif
+  int len = strlen(path) + strlen(".image") + 1;
   char *copy = (char *) malloc(len);
 
   if (copy) {
-    strcpy(copy, orig);
+    strcpy(copy, path);
     strcat(copy, ".image");
   }
   return copy;
@@ -1002,6 +902,17 @@ determine_executable_name(char *argv0)
   }
   return argv0;
 #endif
+#ifdef WINDOWS
+  char path[PATH_MAX], *p;
+  int len = GetModuleFileName(NULL, path, PATH_MAX);
+  if (len > 0) {
+    p = malloc(len + 1);
+    memmove(p, path, len);
+    p[len] = 0;
+    return p;
+  }
+  return argv0;
+#endif
 }
 
 void
@@ -1016,8 +927,8 @@ usage_exit(char *herald, int exit_status, char* other_args)
   if (other_args && *other_args) {
     fputs(other_args, stderr);
   }
-  fprintf(stderr, "\t-R, --heap-reserve <n>: reserve <n> (default: %ld)\n",
-	  reserved_area_size);
+  fprintf(stderr, "\t-R, --heap-reserve <n>: reserve <n> (default: %lld)\n",
+	  (u64_t) reserved_area_size);
   fprintf(stderr, "\t\t bytes for heap expansion\n");
   fprintf(stderr, "\t-S, --stack-size <n>: set  size of initial thread's control stack to <n>\n");
   fprintf(stderr, "\t-Z, --thread-stack-size <n>: set default size of first (listener)  thread's stacks based on <n>\n");
@@ -1228,6 +1139,7 @@ process_options(int argc, char *argv[])
 void
 terminate_lisp()
 {
+  ExitProcess(EXIT_FAILURE);
 }
 #else
 pid_t main_thread_pid = (pid_t)0;
@@ -1302,7 +1214,7 @@ remap_spjump()
       *work = ((instr >> 26) << 26) | disp;
     }
     xMakeDataExecutable(new, (void*)work-(void*)new);
-    mprotect(new, 0x1000, PROT_READ | PROT_EXEC);
+    ProtectMemory(new, 0x1000);
   }
 }
 #endif
@@ -1310,9 +1222,25 @@ remap_spjump()
 
 #ifdef X8664
 #ifdef WINDOWS
+
+/* By using linker tricks, we ensure there's memory between 0x11000
+   and 0x21000, so we just need to fix permissions and copy the spjump
+   table. */
+
 void
 remap_spjump()
 {
+  extern opcode spjump_start;
+  DWORD old_protect;
+
+  if (!VirtualProtect((pc) 0x15000,
+		      0x1000,
+		      PAGE_EXECUTE_READ,
+		      &old_protect)) {
+    wperror("VirtualProtect spjump");
+    _exit(1);
+  }
+  memmove((pc) 0x15000, &spjump_start, 0x1000);
 }
 #else
 void
@@ -1340,6 +1268,7 @@ void
 check_os_version(char *progname)
 {
 #ifdef WINDOWS
+  /* We should be able to run with any version of Windows that actually gets here executing the binary, so don't do anything for now. */
 #else
   struct utsname uts;
   long got, want;
@@ -1487,7 +1416,11 @@ check_bogus_fp_exceptions()
 
 
 int
-main(int argc, char *argv[], char *envp[], void *aux)
+main(int argc, char *argv[]
+#ifndef WINDOWS
+, char *envp[], void *aux
+#endif
+)
 {
   extern int page_size;
 
@@ -1499,9 +1432,22 @@ main(int argc, char *argv[], char *envp[], void *aux)
   BytePtr stack_base, current_sp = (BytePtr) current_stack_pointer();
   TCR *tcr;
 
+
+#ifdef WINDOWS
+  extern void init_winsock(void);
+  extern void init_windows_io(void);
+
+  _fmode = O_BINARY;
+  _setmode(1, O_BINARY);
+  _setmode(2, O_BINARY);
+  setvbuf(stderr, NULL, _IONBF, 0);
+  init_winsock();
+  init_windows_io();
+#endif
+
   check_os_version(argv[0]);
   real_executable_name = determine_executable_name(argv[0]);
-  page_size = getpagesize();
+  page_size = getpagesize(); /* Implement with GetSystemInfo on Windows w/o MinGW */
 
   check_bogus_fp_exceptions();
 #ifdef LINUX
@@ -1735,7 +1681,7 @@ xMakeDataExecutable(void *start, unsigned long nbytes)
 #endif
 }
 
-int
+natural
 xStackSpace()
 {
   return initial_stack_size+CSTACK_HARDPROT+CSTACK_SOFTPROT;
@@ -1746,6 +1692,7 @@ xStackSpace()
 void *
 xGetSharedLibrary(char *path, int mode)
 {
+  return NULL;                  /* fix this */
 }
 #else
 void *
@@ -1881,18 +1828,12 @@ do_fd_clr(int fd, fd_set *fdsetp)
   FD_CLR(fd, fdsetp);
 }
 
-#ifdef WINDOWS
-int
-do_fd_is_set(int fd, fd_set *fdsetp)
-{
-}
-#else
 int
 do_fd_is_set(int fd, fd_set *fdsetp)
 {
   return FD_ISSET(fd,fdsetp);
 }
-#endif
+
 
 void
 do_fd_zero(fd_set *fdsetp)
@@ -1901,6 +1842,7 @@ do_fd_zero(fd_set *fdsetp)
 }
 
 #include "image.h"
+
 
 
 Boolean
@@ -1937,7 +1879,11 @@ load_image(char *path)
     }
   }
   if (image_nil == 0) {
+#ifdef WINDOWS
+    wperror("Couldn't load lisp heap image");
+#else
     fprintf(stderr, "Couldn't load lisp heap image from %s:\n%s\n", path, strerror(errno));
+#endif
     exit(-1);
   }
   return image_nil;
@@ -1981,6 +1927,10 @@ xFindSymbol(void* handle, char *name)
   }
   Bug(NULL, "How did this happen ?");
 #endif
+#endif
+#ifdef WINDOWS
+  extern void *windows_find_symbol(void *, char *);
+  return windows_find_symbol(handle, name);
 #endif
 }
 

@@ -23,6 +23,9 @@
 #ifndef WINDOWS
 #include <pthread.h>
 #endif
+#ifdef WINDOWS
+#include <process.h>
+#endif
 #include <errno.h>
 #include <limits.h>
 
@@ -95,13 +98,11 @@ Boolean extern log_tcr_info;
 
 #ifdef USE_WINDOWS_SEMAPHORES
 
-/* Unimplemented */
-
 typedef void * SEMAPHORE;
-#define SEM_WAIT(s)
-#define SEM_RAISE(s)
-#define SEM_BROADCAST(s, count)
-#define SEM_TIMEDWAIT(s,t)
+#define SEM_WAIT(s) WaitForSingleObject(s,INFINITE)
+#define SEM_RAISE(s) ReleaseSemaphore(s, 1L, NULL)
+#define SEM_BROADCAST(s, count) do {while(count) {SEM_RAISE(s);(count)--;}}while(0)
+#define SEM_TIMEDWAIT(s,t) WaitOnSingleObject(s,t)
 
 #endif
 #ifdef USE_POSIX_SEMAPHORES
@@ -171,7 +172,12 @@ TCR *initial_thread_tcr;
 
 LispObj create_system_thread(size_t stack_size, 
 			     void* stackaddr,
-			     void* (*start_routine)(void *),
+#ifdef WINDOWS
+                             unsigned (*start_routine)(void *)
+#else
+			     void* (*start_routine)(void *)
+#endif
+                             ,
 			     void* param);
 
 TCR *get_tcr(Boolean);

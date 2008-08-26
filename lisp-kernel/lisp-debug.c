@@ -142,9 +142,8 @@ char* Iregnames[] = {"rax", "rbx", "rcx", "rdx", "rdi", "rsi",
                      "r14", "r15", "rip", "rfl"};
 #endif
 #ifdef WINDOWS
-/* is this correct? */
-char* Iregnames[] = {"r8 ","r9 ","r10","r11","r12","r13","r14","r15",
-		     "rdi","rsi","rbp", "rbx", "rdx", "rax", "rcx","rsp"};
+char* Iregnames[] = {"rax ","rcx ","rdx","rbx","rsp","rrbp","rsi","rdi",
+		     "r8","r9","r10", "r11", "r12", "r13", "r14","r15"};
 #endif
 #endif
 
@@ -174,6 +173,8 @@ int bit_for_regnum(int r)
 void
 show_lisp_register(ExceptionInformation *xp, char *label, int r)
 {
+
+  extern char* print_lisp_object(LispObj);
 
   LispObj val = xpGPR(xp, r);
 
@@ -583,6 +584,7 @@ debug_command_return
 debug_show_symbol(ExceptionInformation *xp, siginfo_t *info, int arg)
 {
   char *pname = debug_get_string_value("symbol name");
+  extern void *plsym(ExceptionInformation *,char*);
   
   if (pname != NULL) {
     plsym(xp, pname);
@@ -598,17 +600,17 @@ debug_thread_info(ExceptionInformation *xp, siginfo_t *info, int arg)
   if (tcr) {
     area *vs_area = tcr->vs_area, *cs_area = tcr->cs_area;
 
-    fprintf(stderr, "Current Thread Context Record (tcr) = 0x%lx\n", tcr);
-    fprintf(stderr, "Control (C) stack area:  low = 0x%lx, high = 0x%lx\n",
-            cs_area->low, cs_area->high);
-    fprintf(stderr, "Value (lisp) stack area: low = 0x%lx, high = 0x%lx\n",
-            vs_area->low, vs_area->high);
-    fprintf(stderr, "Exception stack pointer = 0x%lx\n",
+    fprintf(stderr, "Current Thread Context Record (tcr) = %p\n", (u64_t)(natural)tcr);
+    fprintf(stderr, "Control (C) stack area:  low = 0x%llx, high = 0x%llx\n",
+            (u64_t)(natural)(cs_area->low), (u64_t)(natural)(cs_area->high));
+    fprintf(stderr, "Value (lisp) stack area: low = 0x%llx, high = 0x%llx\n",
+            (u64_t)(natural)(vs_area->low), (u64_t)(natural)vs_area->high);
+    fprintf(stderr, "Exception stack pointer = 0x%llx\n",
 #ifdef PPC
-            xpGPR(xp,1)
+            (u64_t) (natural)(xpGPR(xp,1))
 #endif
 #ifdef X86
-            xpGPR(xp,Isp)
+            (u64_t) (natural)(xpGPR(xp,Isp))
 #endif
             );
   }
@@ -616,12 +618,6 @@ debug_thread_info(ExceptionInformation *xp, siginfo_t *info, int arg)
 }
       
 
-#ifdef WINDOWS
-debug_command_return
-debug_set_gpr(ExceptionInformation *xp, siginfo_t *info, int arg)
-{
-}
-#else
 debug_command_return
 debug_set_gpr(ExceptionInformation *xp, siginfo_t *info, int arg)
 {
@@ -630,10 +626,9 @@ debug_set_gpr(ExceptionInformation *xp, siginfo_t *info, int arg)
 
   sprintf(buf, "value for GPR %d", arg);
   val = debug_get_natural_value(buf);
-  set_xpGPR(xp, arg, val);
+  xpGPR(xp,arg) = val;
   return debug_continue;
 }
-#endif
 
 debug_command_return
 debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
@@ -936,7 +931,7 @@ apply_debug_command(ExceptionInformation *xp, int c, siginfo_t *info, int why)
     debug_command f;
     c = toupper(c);
 
-    for (entry = debug_command_entries; f = entry->f; entry++) {
+    for (entry = debug_command_entries; (f = entry->f) != NULL; entry++) {
       if (toupper(entry->c) == c) {
 	/* If we have an XP or don't need one, call the function */
 	if ((xp || !(entry->flags & DEBUG_COMMAND_FLAG_REQUIRE_XP)) &&
@@ -1028,21 +1023,6 @@ lisp_Debugger(ExceptionInformation *xp,
   if (lisp_global(BATCH_FLAG)) {
     abort();
   }
-#ifdef DARWIN
-#ifdef X8664
-  if (xp) {
-    extern void *_sigtramp();
-    extern int os_major_version;
-
-    if (xpPC(xp) == (natural)_sigtramp) {
-      xp = (ExceptionInformation *) xpGPR(xp, REG_R8);
-      fprintf(stderr, "Exception raised at _sigtramp; using context passed to _sigtramp.  Raw register values (R) may be more interesting then lisp values or lisp backtrace\n");
-    }
-  }
-#endif
-#endif
-
-
   if (xp) {
     if (why > debug_entry_exception) {
       debug_identify_exception(xp, info, why);
@@ -1052,7 +1032,7 @@ lisp_Debugger(ExceptionInformation *xp,
   fprintf(stderr, "? for help\n");
   while (state == debug_continue) {
 #ifdef WINDOWS
-    fprintf(stderr, "[%d] OpenMCL kernel debugger: ", 23 /* FIXME */);
+    fprintf(stderr, "[%d] OpenMCL kernel debugger: ", (int)GetCurrentProcessId());
 #else
     fprintf(stderr, "[%d] OpenMCL kernel debugger: ", main_thread_pid);
 #endif
@@ -1071,6 +1051,8 @@ lisp_Debugger(ExceptionInformation *xp,
     return -1;
   case debug_kill:
     terminate_lisp();
+  default:
+    return 0;
   }
 }
 

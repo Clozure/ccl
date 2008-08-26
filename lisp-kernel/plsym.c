@@ -24,7 +24,7 @@ describe_symbol(LispObj sym)
 #ifdef fulltag_symbol
   sym += (fulltag_symbol-fulltag_misc);
 #endif
-  Dprintf("Symbol %s at #x%lX", print_lisp_object(sym), sym);
+  Dprintf("Symbol %s at #x%llX", print_lisp_object(sym), (u64_t) sym);
   Dprintf("  value    : %s", print_lisp_object(rawsym->vcell));
   if (function != nrs_UDF.vcell) {
     Dprintf("  function : %s", print_lisp_object(function));

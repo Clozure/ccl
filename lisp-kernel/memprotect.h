@@ -29,26 +29,54 @@
 #endif
 
 #ifdef WINDOWS
-#define PROT_NONE (0)
-#define PROT_READ (1)
-#define PROT_WRITE (2)
-#define PROT_EXEC (3)
-
-#define MAP_PRIVATE (1)
-#define MAP_FIXED (2)
-#define MAP_ANON (3)
-
-void *mmap(void *, size_t, int, int, int, off_t);
-
 #define MAP_FAILED ((void *)(-1))
 
+#define MEMPROTECT_NONE PAGE_NOACCESS
+#define MEMPROTECT_RO   PAGE_READONLY
+#define MEMPROTECT_RW   PAGE_READWRITE
+#define MEMPROTECT_RX   PAGE_EXECUTE_READ
+#define MEMPROTECT_RWX  PAGE_EXECUTE_READWRITE
+
+#else
+
+#define MEMPROTECT_NONE PROT_NONE
+#define MEMPROTECT_RO   PROT_READ
+#define MEMPROTECT_RW   (PROT_READ|PROT_WRITE)
+#define MEMPROTECT_RX   (PROT_READ|PROT_EXEC)
+#define MEMPROTECT_RWX  (PROT_READ|PROT_WRITE|PROT_EXEC)
+#ifndef MAP_GROWSDOWN
+#define MAP_GROWSDOWN (0)
 #endif
+
+
+#endif
+
+LogicalAddress
+ReserveMemoryForHeap(LogicalAddress want, natural totalsize);
+
+int
+CommitMemory (LogicalAddress start, natural len);
+
+void
+UnCommitMemory (LogicalAddress start, natural len);
+
+LogicalAddress
+MapMemory(LogicalAddress addr, natural nbytes, int protection);
+
+LogicalAddress
+MapMemoryForStack(natural nbytes);
+
+int
+UnMapMemory(LogicalAddress addr, natural nbytes);
 
 int
 ProtectMemory(LogicalAddress, natural);
 
 int
 UnProtectMemory(LogicalAddress, natural);
+
+int
+MapFile(LogicalAddress addr, natural pos, natural nbytes, int permissions, int fd);
 
 typedef enum {
   kNotProtected,		/* At least not at the moment. */

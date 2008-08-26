@@ -162,12 +162,6 @@ find_openmcl_image_file_header(int fd, openmcl_image_file_header *header)
   return true;
 }
 
-#ifdef WINDOWS
-void
-load_image_section(int fd, openmcl_image_section_header *sect)
-{
-}
-#else
 void
 load_image_section(int fd, openmcl_image_section_header *sect)
 {
@@ -182,13 +176,11 @@ load_image_section(int fd, openmcl_image_section_header *sect)
   advance = mem_size;
   switch(sect->code) {
   case AREA_READONLY:
-    addr = mmap(pure_space_active,
-		align_to_power_of_2(mem_size,log2_page_size),
-		PROT_READ | PROT_EXEC,
-		MAP_PRIVATE | MAP_FIXED,
-		fd,
-		pos);
-    if (addr != pure_space_active) {
+    if (!MapFile(pure_space_active,
+		 pos,
+		 align_to_power_of_2(mem_size,log2_page_size),
+		 MEMPROTECT_RX,
+		 fd)) {
       return;
     }
     a = new_area(pure_space_active, pure_space_limit, AREA_READONLY);
@@ -198,13 +190,11 @@ load_image_section(int fd, openmcl_image_section_header *sect)
     break;
 
   case AREA_STATIC:
-    addr = mmap(static_space_active,
-		align_to_power_of_2(mem_size,log2_page_size),
-		PROT_READ | PROT_WRITE | PROT_EXEC,
-		MAP_PRIVATE | MAP_FIXED,
-		fd,
-		pos);
-    if (addr != static_space_active) {
+    if (!MapFile(static_space_active,
+		 pos,
+		 align_to_power_of_2(mem_size,log2_page_size),
+		 MEMPROTECT_RWX,
+		 fd)) {
       return;
     }
     a = new_area(static_space_active, static_space_limit, AREA_STATIC);
@@ -215,16 +205,13 @@ load_image_section(int fd, openmcl_image_section_header *sect)
 
   case AREA_DYNAMIC:
     a = allocate_dynamic_area(mem_size);
-    addr = mmap(a->low,
-		align_to_power_of_2(mem_size,log2_page_size),
-                PROT_READ | PROT_WRITE | PROT_EXEC,
-                MAP_PRIVATE | MAP_FIXED,
-                fd,
-                pos);
-    if (addr != a->low) {
+    if (!MapFile(a->low,
+		 pos,
+		 align_to_power_of_2(mem_size,log2_page_size),
+		 MEMPROTECT_RWX,
+		 fd)) {
       return;
     }
-
 
     a->static_dnodes = sect->static_dnodes;
     sect->area = a;
@@ -241,14 +228,7 @@ load_image_section(int fd, openmcl_image_section_header *sect)
   }
   lseek(fd, pos+advance, SEEK_SET);
 }
-#endif
 
-#ifdef WINDOWS
-LispObj
-load_openmcl_image(int fd, openmcl_image_file_header *h)
-{
-}
-#else
 LispObj
 load_openmcl_image(int fd, openmcl_image_file_header *h)
 {
@@ -333,7 +313,6 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
   }
   return image_nil;
 }
-#endif
  
 void
 prepare_to_write_dynamic_space()
