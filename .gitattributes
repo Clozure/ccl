@@ -209,6 +209,7 @@ lisp-kernel/gc-common.c -text
 lisp-kernel/solarisx64/.gdbinit -text
 lisp-kernel/win64/Makefile -text
 lisp-kernel/win64/yasm-redefinition.patch -text
+lisp-kernel/windows-calls.c -text
 lisp-kernel/x86-asmutils32.s -text
 lisp-kernel/x86-constants32.h -text
 lisp-kernel/x86-constants32.s -text
