@@ -31,6 +31,8 @@
   (require "X8664-FREEBSD-SYSCALLS")
   #+solarisx8664-target
   (require "X8664-SOLARIS-SYSCALLS")
+  #+win64-target
+  (require "X86-WIN64-SYSCALLS")
   )
 
 
@@ -50,6 +52,20 @@
                   (if (< code #x10000)
                     3
                     4))))))
+    0))
+
+(defun utf-16-octets-in-string (string start end)
+  (if (>= end start)
+    (do* ((noctets 0)
+          (i start (1+ i)))
+         ((= i end) noctets)
+      (declare (fixnum noctets))
+      (let* ((code (char-code (schar string i))))
+        (declare (type (mod #x110000) code))
+        (incf noctets
+              (if (< code #x10000)
+                2
+                4))))
     0))
 
 (defun utf-8-memory-encode (string pointer idx start end)
@@ -86,6 +102,23 @@
              (setf (%get-unsigned-byte pointer (the fixnum (+ idx 3)))
                    (logior #x80 (logand #x3f code)))
              (incf idx 4))))))
+
+(defun native-utf-16-memory-encode (string pointer idx start end)
+  (declare (fixnum idx))
+  (do* ((i start (1+ i)))
+       ((>= i end) idx)
+    (let* ((code (char-code (schar string i)))
+           (highbits (- code #x10000)))
+      (declare (type (mod #x110000) code)
+               (fixnum  highbits))
+      (cond ((< highbits 0)
+             (setf (%get-unsigned-word pointer idx) code)
+             (incf idx 2))
+            (t
+             (setf (%get-unsigned-word pointer idx) (logior #xd800 (the fixnum (ash highbits -10))))
+             (incf idx 2)
+             (setf (%get-unsigned-word pointer idx) (logior #xdc00 (the fixnum (logand highbits #x3ff))))
+             (incf idx 2))))))
 
 (defun utf-8-memory-decode (pointer noctets idx string)
   (declare (fixnum noctets idx))
@@ -174,7 +207,10 @@
 
 
 (defun fd-open (path flags &optional (create-mode #o666))
-  (#+darwin-target with-utf-8-cstrs #-darwin-target with-cstrs ((p path))
+  (#+darwin-target with-utf-8-cstrs
+   #+windows-target with-native-utf-16-cstrs
+   #-(or darwin-target windows-target) with-cstrs
+   ((p path))
     (let* ((fd (syscall syscalls::open p flags create-mode)))
       (declare (fixnum fd))
       (when (or (= fd (- #$EMFILE))

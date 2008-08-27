@@ -210,7 +210,7 @@
 
 (defx8632lapfunction %current-tsp ()
   (check-nargs 0)
-  (movl (@ (% :rcontext) x8632::tcr.save-tsp) (% arg_z))
+  (movl (:rcontext x8632::tcr.save-tsp) (% arg_z))
   (single-value-return))
 
 
@@ -270,7 +270,7 @@
 (defx8632lapfunction %catch-top ((tcr arg_z))
   (check-nargs 1)
   (movl ($ x8632::nil-value) (% arg_y))
-  (movl (@ (% :rcontext) x8632::tcr.catch-top) (% arg_z))
+  (movl (:rcontext x8632::tcr.catch-top) (% arg_z))
   (testb (%b arg_z) (%b arg_z))
   (cmovel (% arg_y) (% arg_z))
   (single-value-return))
@@ -291,7 +291,7 @@
 
 (defx8632lapfunction %save-standard-binding-list ((bindings arg_z))
   (mark-as-imm temp0)
-  (movl (@ (% :rcontext) x8632::tcr.vs-area) (% imm0))
+  (movl (:rcontext x8632::tcr.vs-area) (% imm0))
   (movl (@ x8632::area.high (% imm0)) (% temp0))
   (subl ($ x8632::node-size) (% temp0))
   (movl (% bindings) (@ (% temp0)))
@@ -300,7 +300,7 @@
 
 (defx8632lapfunction %saved-bindings-address ()
   (mark-as-imm temp0)
-  (movl (@ (% :rcontext) x8632::tcr.vs-area) (% imm0))
+  (movl (:rcontext x8632::tcr.vs-area) (% imm0))
   (movl (@ x8632::area.high (% imm0)) (% temp0))
   (leal (@ (- x8632::node-size) (% temp0)) (% arg_z))
   (mark-as-node temp0)
@@ -338,10 +338,10 @@
   ;; * Put function somewhere safe until we're ready to jump to it
   ;; * Set nargs to 0, then spread "args" on stack (clobbers regs)
   ;; * Jump to function (saved previously)
-  (popl (@ (% :rcontext) x8632::tcr.save0))	;return address
-  (popl (@ (% :rcontext) x8632::tcr.next-method-context)) ;magic arg
+  (popl (:rcontext x8632::tcr.save0))	;return address
+  (popl (:rcontext x8632::tcr.next-method-context)) ;magic arg
   (discard-reserved-frame)
-  (movl (% function) (@ (% :rcontext) x8632::tcr.save1))
+  (movl (% function) (:rcontext x8632::tcr.save1))
   (set-nargs 0)
   (movl (@ (% args)) (% temp0))		;lexpr-count
   (movl (% temp0) (% nargs))
@@ -367,9 +367,9 @@
   (jb @go)
   (jmp @two)
   @go
-  (pushl (@ (% :rcontext) x8632::tcr.save0))	 ;return address
-  (movl (@ (% :rcontext) x8632::tcr.save1) (% temp0)) ;function
-  (movapd (% fpzero) (@ (% :rcontext) x8632::tcr.save0)) ;clear spill area
+  (pushl (:rcontext x8632::tcr.save0))	 ;return address
+  (movl (:rcontext x8632::tcr.save1) (% temp0)) ;function
+  (movapd (% fpzero) (:rcontext x8632::tcr.save0)) ;clear spill area
   (jmp (% temp0)))
 
 (defx8632lapfunction %apply-with-method-context ((magic 4)
@@ -377,10 +377,10 @@
 						 (function arg_y)
 						 (args arg_z))
   ;; Similar to above.
-  (popl (@ (% :rcontext) x8632::tcr.save0))	;save return address
-  (popl (@ (% :rcontext) x8632::tcr.next-method-context))	;
+  (popl (:rcontext x8632::tcr.save0))	;save return address
+  (popl (:rcontext x8632::tcr.next-method-context))	;
   (discard-reserved-frame)
-  (movl (% args) (@ (% :rcontext) x8632::tcr.save2))	;in case of error
+  (movl (% args) (:rcontext x8632::tcr.save2))	;in case of error
   (set-nargs 0)
   (pushl ($ target::reserved-frame-marker))		;reserve frame (might discard it
   (pushl ($ target::reserved-frame-marker))		;if nothing is passed on stack)
@@ -412,13 +412,13 @@
   (pop (% arg_y))
   (je @discard-and-go)
   @go
-  (pushl (@ (% :rcontext) x8632::tcr.save0))	 ;return address
-  (movapd (% fpzero) (@ (% :rcontext) x8632::tcr.save0)) ;clear out spill area
+  (pushl (:rcontext x8632::tcr.save0))	 ;return address
+  (movapd (% fpzero) (:rcontext x8632::tcr.save0)) ;clear out spill area
   (jmp (% temp0))
   @bad
   (addl (% nargs) (% esp))
-  (movl (@ (% :rcontext) x8632::tcr.save1) (% arg_z)) ;saved args
-  (movapd (% fpzero) (@ (% :rcontext) x8632::tcr.save0)) ;clear out spill area
+  (movl (:rcontext x8632::tcr.save1) (% arg_z)) ;saved args
+  (movapd (% fpzero) (:rcontext x8632::tcr.save0)) ;clear out spill area
   (movl ($ '#.$XNOSPREAD) (% arg_y))
   (set-nargs 2)
   (jmp-subprim .SPksignalerr))
@@ -473,7 +473,7 @@
   (x86-lap-function apply+ ()
    (:arglist (function arg1 arg2 &rest other-args))
    (check-nargs 3 nil)
-   (popl (@ (% :rcontext) x8632::tcr.save0))	;save return address
+   (popl (:rcontext x8632::tcr.save0))	;save return address
    ;; only two arg regs on x8632, so the caller will always push a frame
    (movl (% arg_z) (% temp0))           ; last
    (movl (% arg_y) (% arg_z))           ; butlast
@@ -481,7 +481,7 @@
    (movd (% temp1) (% mm0))		;save nargs (aka temp1) for later
    ;; Do .SPspreadargz inline here
    (xorl (%l temp1) (%l temp1))
-   (movl (% arg_z) (@ (% :rcontext) x8632::tcr.save1)) ; save in case of error
+   (movl (% arg_z) (:rcontext x8632::tcr.save1)) ; save in case of error
    (cmp-reg-to-nil arg_z)
    (je @done)
    ;;(mark-as-imm temp1)
@@ -504,13 +504,13 @@
    (pop (% arg_y))
    (addl ($ '1) (% nargs))
    (load-constant funcall temp0)
-   (pushl (@ (% :rcontext) x8632::tcr.save0))	;return address
-   (movapd (% fpzero) (@ (% :rcontext) x8632::tcr.save0)) ;clear out spill area
+   (pushl (:rcontext x8632::tcr.save0))	;return address
+   (movapd (% fpzero) (:rcontext x8632::tcr.save0)) ;clear out spill area
    (jmp-subprim .SPfuncall)
    @bad				      ;error spreading list.
    (add (% temp1) (% esp))	      ;discard whatever's been pushed
-   (movl (@ (% :rcontext) x8632::tcr.save1) (% arg_z))
-   (movapd (% fpzero) (@ (% :rcontext) x8632::tcr.save0)) ;clear out spill area
+   (movl (:rcontext x8632::tcr.save1) (% arg_z))
+   (movapd (% fpzero) (:rcontext x8632::tcr.save0)) ;clear out spill area
    (movl ($ '#.$XNOSPREAD) (% arg_y))
    (set-nargs 2)
    (jmp-subprim .SPksignalerr) ))
@@ -534,9 +534,9 @@
   (call-subprim .SPffcall)
   ;; there might be an fp result on x87 stack, so don't use
   ;; any mmx instructions until the result has been read.
-  (movd (@ (% :rcontext) x8632::tcr.foreign-sp) (% xmm0))
+  (movd (:rcontext x8632::tcr.foreign-sp) (% xmm0))
   (movd (% xmm0) (@ (% frame)))
-  (movl (% frame) (@ (% :rcontext) x8632::tcr.foreign-sp))
+  (movl (% frame) (:rcontext x8632::tcr.foreign-sp))
   (cmpl ($ '1) (@ -4 (% ebp)))
   (je @single)
   (jg @double)

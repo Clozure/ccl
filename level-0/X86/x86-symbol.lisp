@@ -91,8 +91,8 @@
 ;;; the underlying symbol vector as a first return value.
 (defx86lapfunction %symptr-binding-address ((symptr arg_z))
   (movq (@ x8664::symbol.binding-index (% symptr)) (% arg_y))
-  (rcmp (% arg_y) (@ (% :rcontext) x8664::tcr.tlb-limit))
-  (movq (@ (% :rcontext) x8664::tcr.tlb-pointer) (% arg_x))
+  (rcmp (% arg_y) (:rcontext x8664::tcr.tlb-limit))
+  (movq (:rcontext x8664::tcr.tlb-pointer) (% arg_x))
   (jae @sym)
   (cmpb ($ x8664::no-thread-local-binding-marker) (@ (% arg_x) (% arg_y)))
   (je @sym)

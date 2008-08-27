@@ -65,6 +65,7 @@ level-0/PPC/PPC64/*.pfsl
 level-0/PPC/PPC64/*~.*
 level-0/X86/*fsl
 level-0/X86/*~.*
+level-0/X86/X8632/*.dx32fsl
 level-0/X86/X8664/*fsl
 level-0/X86/X8664/*~.*
 level-1/*~.*

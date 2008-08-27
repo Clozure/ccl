@@ -198,8 +198,8 @@
 ;;; Return the MXCSR value in effect after the last ff-call.
 (defx86lapfunction %get-post-ffi-mxcsr ()
   (xor (% arg_z) (% arg_z))
-  (movl (@ (% :rcontext) x8664::tcr.ffi-exception) (%l imm0))
-  (movl (%l arg_z) (@ (% :rcontext) x8664::tcr.ffi-exception))
+  (movl (:rcontext x8664::tcr.ffi-exception) (%l imm0))
+  (movl (%l arg_z) (:rcontext x8664::tcr.ffi-exception))
   (box-fixnum imm0 arg_z)
   (single-value-return))
 

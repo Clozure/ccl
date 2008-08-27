@@ -804,7 +804,7 @@
   (box-fixnum imm0 arg_z)
   (single-value-return))
 
-(defx86lapfunction %get-gs-register ()
+(defx8632lapfunction %get-gs-register ()
   (xorl (% imm0) (% imm0))
   (:byte #x66)                          ;movw %gs,%ax
   (:byte #x8c)

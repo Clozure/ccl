@@ -45,12 +45,12 @@
         (temp temp1))
 
     ; update active pointer for tsp area.
-    (movq (@ (% :rcontext) x8664::tcr.ts-area) (% address))
-    (movq (@ (% :rcontext) x8664::tcr.save-tsp) (% temp))
+    (movq (:rcontext x8664::tcr.ts-area) (% address))
+    (movq (:rcontext x8664::tcr.save-tsp) (% temp))
     (movq (% temp) (@ x8664::area.active (% address)))
     
     ;; Update active pointer for vsp area.
-    (movq (@ (% :rcontext) x8664::tcr.vs-area) (% address))
+    (movq (:rcontext x8664::tcr.vs-area) (% address))
     (movq (% rsp) (@ x8664::area.active (% address)))
 
     (ref-global all-areas arg_z)
@@ -216,14 +216,14 @@
     (ref-global tenured-area a)
     (movq (@ x8664::area.low (% a)) (% obj))
     (subq ($ (- x8664::cons.size x8664::fulltag-cons))
-          (@ (% :rcontext) x8664::tcr.save-allocptr))
-    (movq (@ (% :rcontext) x8664::tcr.save-allocptr) (% allocptr))
-    (cmpq (@ (% :rcontext) x8664::tcr.save-allocbase) (% allocptr))
+          (:rcontext x8664::tcr.save-allocptr))
+    (movq (:rcontext x8664::tcr.save-allocptr) (% allocptr))
+    (cmpq (:rcontext x8664::tcr.save-allocbase) (% allocptr))
     (jg @ok)
     (uuo-alloc)
     @ok
     (andb ($ (lognot x8664::fulltagmask))
-          (@ (% :rcontext) x8664::tcr.save-allocptr))
+          (:rcontext x8664::tcr.save-allocptr))
     (movq (% allocptr) (% limit))
     (jmp @test)
     @loop

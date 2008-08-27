@@ -81,6 +81,10 @@
     #+darwinx8632-target :darwinx8632-host
     #+darwinx8664-target :darwinx8664-target
     #+darwinx8664-target :darwinx8664-host
+    #+windows-target :windows-host
+    #+windows-target :windows-target
+    #+win64-target :win64-target
+    #+win64-target :win64-host
     #+solaris-target :solaris-host
     #+solaris-target :solaris-target
     #+solarisx86-target :solarisx86-target
@@ -99,6 +103,7 @@
     #+linux-target :linux
     #+freebsd-target :freebsd
     #+solaris-target :solaris
+    #+windows-target :windows
     ;; :mcl                                ;deprecated
     )
   "a list of symbols that describe features provided by the

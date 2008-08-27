@@ -22,7 +22,7 @@
 
 #+x8664-target
 (defx86lapfunction %get-errno ()
-  (movq (@ (% :rcontext) x8664::tcr.errno-loc) (% imm1))
+  (movq (:rcontext x8664::tcr.errno-loc) (% imm1))
   (movslq (@ (% imm1)) (% imm0))
   (movss (% fpzero) (@ (% imm1)))
   (negq (% imm0))
@@ -31,11 +31,11 @@
 
 #+x8632-target
 (defx8632lapfunction %get-errno ()
-  (movl (@ (% :rcontext) x8632::tcr.errno-loc) (% imm0))
+  (movl (:rcontext x8632::tcr.errno-loc) (% imm0))
   (movl (@ (% imm0)) (% imm0))
   (neg (% imm0))
   (box-fixnum imm0 arg_z)
-  (movl (@ (% :rcontext) x8632::tcr.errno-loc) (% imm0))
+  (movl (:rcontext x8632::tcr.errno-loc) (% imm0))
   (movss (% fpzero) (@ (% imm0)))
   (single-value-return))
 

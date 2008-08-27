@@ -57,8 +57,8 @@
 ;;; the underlying symbol vector as a first return value.
 (defx8632lapfunction %symptr-binding-address ((symptr arg_z))
   (movl (@ x8632::symbol.binding-index (% symptr)) (% arg_y))
-  (rcmp (% arg_y) (@ (% :rcontext) x8632::tcr.tlb-limit))
-  (movl (@ (% :rcontext) x8632::tcr.tlb-pointer) (% temp0))
+  (rcmp (% arg_y) (:rcontext x8632::tcr.tlb-limit))
+  (movl (:rcontext x8632::tcr.tlb-pointer) (% temp0))
   (jae @sym)
   (cmpb ($ x8632::subtag-no-thread-local-binding) (@ (% temp0) (% arg_y)))
   (je @sym)

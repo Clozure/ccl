@@ -215,10 +215,10 @@
     (single-value-return 4)))
 
 (defx86lapfunction %heap-bytes-allocated ()
-  (movq (@ (% :rcontext) x8664::tcr.save-allocptr) (% temp1))
-  (movq (@ (% :rcontext) x8664::tcr.last-allocptr) (% temp0))
+  (movq (:rcontext x8664::tcr.save-allocptr) (% temp1))
+  (movq (:rcontext x8664::tcr.last-allocptr) (% temp0))
   (cmpq ($ -16) (% temp1))
-  (movq (@ (% :rcontext) x8664::tcr.total-bytes-allocated) (% imm0))
+  (movq (:rcontext x8664::tcr.total-bytes-allocated) (% imm0))
   (jz @go)
   (movq (% temp0) (% temp2))
   (subq (% temp1) (% temp0))
@@ -314,23 +314,23 @@
   (single-value-return))
 
 (defx86lapfunction interrupt-level ()
-  (movq (@ (% :rcontext) x8664::tcr.tlb-pointer) (% imm1))
+  (movq (:rcontext x8664::tcr.tlb-pointer) (% imm1))
   (movq (@ x8664::interrupt-level-binding-index (% imm1)) (% arg_z))
   (single-value-return))
 
 (defx86lapfunction set-interrupt-level ((new arg_z))
-  (movq (@ (% :rcontext) x8664::tcr.tlb-pointer) (% imm1))
+  (movq (:rcontext x8664::tcr.tlb-pointer) (% imm1))
   (trap-unless-fixnum new)
   (movq (% new) (@ x8664::interrupt-level-binding-index (% imm1)))
   (single-value-return))
 
 (defx86lapfunction %current-tcr ()
-  (movq (@ (% :rcontext) x8664::tcr.linear) (% arg_z))
+  (movq (:rcontext x8664::tcr.linear) (% arg_z))
   (single-value-return))
 
 (defx86lapfunction %tcr-toplevel-function ((tcr arg_z))
   (check-nargs 1)
-  (cmpq (% tcr) (@ (% :rcontext) x8664::tcr.linear))
+  (cmpq (% tcr) (:rcontext x8664::tcr.linear))
   (movq (% rsp) (% imm0))
   (movq (@ x8664::tcr.vs-area (% tcr)) (% temp0))
   (movq (@ x8664::area.high (% temp0)) (% imm1))
@@ -344,7 +344,7 @@
 
 (defx86lapfunction %set-tcr-toplevel-function ((tcr arg_y) (fun arg_z))
   (check-nargs 2)
-  (cmpq (% tcr) (@ (% :rcontext) x8664::tcr.linear))
+  (cmpq (% tcr) (:rcontext x8664::tcr.linear))
   (movq (% rsp) (% imm0))
   (movq (@ x8664::tcr.vs-area (% tcr)) (% temp0))
   (movq (@ x8664::area.high (% temp0)) (% imm1))
@@ -607,13 +607,13 @@
   (push (% save0))
   (push (% save1))
   (push (% save2))
-  (push (% save3))
+  (push (% save3))                      ; this'd be the TCR on Win64.
   (set-nargs 4)
   (jmp-subprim .SPvalues))
 
 
 (defx86lapfunction %current-db-link ()
-  (movq (@ (% :rcontext) x8664::tcr.db-link) (% arg_z))
+  (movq (:rcontext x8664::tcr.db-link) (% arg_z))
   (single-value-return))
 
 (defx86lapfunction %no-thread-local-binding-marker ()
@@ -642,12 +642,12 @@
   (save-simple-frame)
   (macptr-ptr src imm0)
   (leaq (@ (:^ done) (% fn)) (% ra0))
-  (movq (% imm0) (@ (% :rcontext) x8664::tcr.safe-ref-address))
+  (movq (% imm0) (:rcontext x8664::tcr.safe-ref-address))
   (movq (@ (% imm0)) (% imm0))
   (jmp done)
   (:tra done)
   (recover-fn-from-rip)
-  (movq ($ 0) (@ (% :rcontext) x8664::tcr.safe-ref-address))
+  (movq ($ 0) (:rcontext x8664::tcr.safe-ref-address))
   (movq (% imm0) (@ x8664::macptr.address (% dest)))
   (restore-simple-frame)
   (single-value-return))
@@ -657,7 +657,7 @@
 ;;; it still called ?
 
 (defx86lapfunction %check-deferred-gc ()
-  (btq ($ (+ arch::tcr-flag-bit-pending-suspend target::fixnumshift)) (@ (% :rcontext) x8664::tcr.flags))
+  (btq ($ (+ arch::tcr-flag-bit-pending-suspend target::fixnumshift)) (:rcontext x8664::tcr.flags))
   (movl ($ x8664::nil-value) (% arg_z.l))
   (jae @done)
   (ud2a)
@@ -715,7 +715,7 @@
   (movq (@ '*spin-lock-tries* (% fn)) (% temp0))
   (movq (@ '*spin-lock-timeouts* (% fn)) (% temp1))
   (movq (@ target::symbol.vcell (% temp0)) (% temp0))
-  (movq (@ (% :rcontext) x8664::tcr.linear) (% arg_y))
+  (movq (:rcontext x8664::tcr.linear) (% arg_y))
   @try-swap
   (xorq (% rax) (% rax))
   (lock)
@@ -742,6 +742,8 @@
 ;;; restoring registers.  Its parameters are thus kept in constants,
 ;;; and this protoype is cloned (with the right parameters).
 
+;;; For win64 (which doesn't really have a "save3" register), the code
+;;; which instantiates this should always set save3-offset to 0.
 (defx86lapfunction %%apply-in-frame-proto ()
   (:fixed-constants (target-frame target-catch target-db-link target-xcf target-tsp target-foreign-sp save0-offset save1-offset save2-offset save3-offset function args))
   (check-nargs 0)
@@ -749,7 +751,7 @@
   (movq (@ 'target-catch (% fn)) (% temp0))
   (xorl (%l imm0) (%l imm0))
   (cmpb ($ x8664::fulltag-nil) (%b temp0))
-  (movq (@ (% :rcontext) target::tcr.catch-top) (% arg_z))
+  (movq (:rcontext target::tcr.catch-top) (% arg_z))
   (jz @did-catch)
   @find-catch
   (testq (% arg_z) (% arg_z))
@@ -818,8 +820,8 @@
   ;; the foreign sp right.
   (movq (@ target::xcf.prev-xframe (% arg_z)) (% temp0))
   (movq (@ target::xcf.foreign-sp (% arg_z)) (% imm0))
-  (movq (% temp0) (@ (% :rcontext) target::tcr.xframe))
-  (movq (% imm0) (@ (% :rcontext) target::tcr.foreign-sp))
+  (movq (% temp0) (:rcontext target::tcr.xframe))
+  (movq (% imm0) (:rcontext target::tcr.foreign-sp))
   ;; All done processing the xcf.  NVRs may have been
   ;; saved between the last catch/last xcf and the
   ;; target frame.  The save-n-offset parameter/constants
@@ -831,12 +833,12 @@
   (cmpb ($ x8664::fulltag-nil) (%b imm0))
   (movq (@ 'target-foreign-sp (% fn)) (% temp0))
   (je @no-tsp)
-  (movq (% imm0) (@ (% :rcontext) target::tcr.save-tsp))
-  (movq (% imm0) (@ (% :rcontext) target::tcr.next-tsp))
+  (movq (% imm0) (:rcontext target::tcr.save-tsp))
+  (movq (% imm0) (:rcontext target::tcr.next-tsp))
   @no-tsp
   (cmpb ($ x8664::fulltag-nil) (%b temp0))
   (je @no-sp)
-  (movq (% temp0) (@ (% :rcontext) target::tcr.foreign-sp))
+  (movq (% temp0) (:rcontext target::tcr.foreign-sp))
   @no-sp
   (movq (@ 'target-frame (% fn)) (% rbp))
   (movq (@ 'save0-offset (% fn)) (% arg_x))

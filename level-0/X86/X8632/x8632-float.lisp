@@ -265,8 +265,8 @@
 
 ;;; Return the MXCSR as a fixnum
 (defx8632lapfunction %get-mxcsr ()
-  (stmxcsr (@ (% :rcontext) x8632::tcr.scratch-mxcsr))
-  (movl (@ (% :rcontext) x8632::tcr.scratch-mxcsr) (% imm0))
+  (stmxcsr (:rcontext x8632::tcr.scratch-mxcsr))
+  (movl (:rcontext x8632::tcr.scratch-mxcsr) (% imm0))
   (box-fixnum imm0 arg_z)
   (single-value-return))
 
@@ -276,8 +276,8 @@
 (defx8632lapfunction %set-mxcsr ((val arg_z))
   (unbox-fixnum val imm0)
   (andl ($ x86::mxcsr-write-mask) (% imm0))
-  (movl (% imm0) (@ (% :rcontext) x8632::tcr.scratch-mxcsr))
-  (ldmxcsr (@ (% :rcontext) x8632::tcr.scratch-mxcsr))
+  (movl (% imm0) (:rcontext x8632::tcr.scratch-mxcsr))
+  (ldmxcsr (:rcontext x8632::tcr.scratch-mxcsr))
   (single-value-return))
 
 
@@ -305,8 +305,8 @@
 ;;; Return the MXCSR value in effect after the last ff-call.
 (defx8632lapfunction %get-post-ffi-mxcsr ()
   (xor (% arg_z) (% arg_z))
-  (movl (@ (% :rcontext) x8632::tcr.ffi-exception) (%l imm0))
-  (movl (%l arg_z) (@ (% :rcontext) x8632::tcr.ffi-exception))
+  (movl (:rcontext x8632::tcr.ffi-exception) (%l imm0))
+  (movl (%l arg_z) (:rcontext x8632::tcr.ffi-exception))
   (box-fixnum imm0 arg_z)
   (single-value-return))
 

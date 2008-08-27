@@ -783,7 +783,7 @@
 ;;; in two halves.  (cf. Knuth, 4.3.1, exercise 16)
 (defx8632lapfunction %floor-loop-quo ((x 8) (res 4) #|(ra 0)|# (yhi arg_y) (ylo arg_z))
   (compose-digit yhi ylo imm0)
-  (movl (% imm0) (@ (% :rcontext) x8632::tcr.unboxed0))
+  (movl (% imm0) (:rcontext x8632::tcr.unboxed0))
   (pop (% temp0))
   (pop (% arg_z))			;res
   (pop (% arg_y))			;x
@@ -797,7 +797,7 @@
     (jmp @next)
     @loop
     (movl (@ x8632::misc-data-offset (% bignum) (% temp0)) (% eax))
-    (divl (@ (% :rcontext) x8632::tcr.unboxed0))
+    (divl (:rcontext x8632::tcr.unboxed0))
     (movl (% eax) (@ x8632::misc-data-offset (% result) (% temp0)))
     @next
     (subl ($ '1) (% temp0))
@@ -821,7 +821,7 @@
 ;;; Could avoid using tcr.unboxed0 if it matters...
 (defx8632lapfunction %floor-loop-no-quo ((x 4) #|(ra 0)|# (yhi arg_y) (ylo arg_z))
   (compose-digit yhi ylo imm0)
-  (movl (% imm0) (@ (% :rcontext) x8632::tcr.unboxed0))
+  (movl (% imm0) (:rcontext x8632::tcr.unboxed0))
   (pop (% temp0))
   (pop (% arg_y))
   (discard-reserved-frame)
@@ -834,7 +834,7 @@
     (jmp @next)
     @loop
     (movl (@ x8632::misc-data-offset (% bignum) (% temp0)) (% eax))
-    (divl (@ (% :rcontext) x8632::tcr.unboxed0))
+    (divl (:rcontext x8632::tcr.unboxed0))
     ;;(movl (% eax) (@ x8632::misc-data-offset (% result) (% temp0)))
     @next
     (subl ($ '1) (% temp0))

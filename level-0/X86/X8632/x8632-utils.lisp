@@ -24,12 +24,12 @@
         (temp temp1))
 
     ; update active pointer for tsp area.
-    (movl (@ (% :rcontext) x8632::tcr.ts-area) (% address))
-    (movl (@ (% :rcontext) x8632::tcr.save-tsp) (% temp))
+    (movl (:rcontext x8632::tcr.ts-area) (% address))
+    (movl (:rcontext x8632::tcr.save-tsp) (% temp))
     (movl (% temp) (@ x8632::area.active (% address)))
     
     ;; Update active pointer for vsp area.
-    (movl (@ (% :rcontext) x8632::tcr.vs-area) (% address))
+    (movl (:rcontext x8632::tcr.vs-area) (% address))
     (movl (% esp) (@ x8632::area.active (% address)))
 
     (ref-global all-areas arg_z)
@@ -173,14 +173,14 @@
     (save-simple-frame)
     (push (% f))
     (subl ($ (- x8632::cons.size x8632::fulltag-cons))
-	  (@ (% :rcontext) x8632::tcr.save-allocptr))
-    (movl (@ (% :rcontext) x8632::tcr.save-allocptr) (% allocptr)) ;aka temp0
-    (cmpl (@ (% :rcontext) x8632::tcr.save-allocbase) (% allocptr))
+	  (:rcontext x8632::tcr.save-allocptr))
+    (movl (:rcontext x8632::tcr.save-allocptr) (% allocptr)) ;aka temp0
+    (cmpl (:rcontext x8632::tcr.save-allocbase) (% allocptr))
     (jg @ok)
     (uuo-alloc)
     @ok
     (andb ($ (lognot x8632::fulltagmask))
-	  (@ (% :rcontext) x8632::tcr.save-allocptr))
+	  (:rcontext x8632::tcr.save-allocptr))
     (push (% allocptr))			;sentinel
     (ref-global tenured-area a)
     (movl (@ x8632::area.low (% a)) (% obj))

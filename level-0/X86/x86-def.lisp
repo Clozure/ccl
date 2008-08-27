@@ -234,7 +234,7 @@
 
 (defx86lapfunction %current-tsp ()
   (check-nargs 0)
-  (movq (@ (% :rcontext) x8664::tcr.save-tsp) (% arg_z))
+  (movq (:rcontext x8664::tcr.save-tsp) (% arg_z))
   (single-value-return))
 
 
@@ -297,7 +297,7 @@
 (defx86lapfunction %catch-top ((tcr arg_z))
   (check-nargs 1)
   (movl ($ x8664::nil-value) (%l arg_y))
-  (movq (@ (% :rcontext) x8664::tcr.catch-top) (% arg_z))
+  (movq (:rcontext x8664::tcr.catch-top) (% arg_z))
   (testb (%b arg_z) (%b arg_z))
   (cmoveq (% arg_y) (% arg_z))
   (single-value-return))
@@ -319,14 +319,14 @@
   (single-value-return))
 
 (defx86lapfunction %save-standard-binding-list ((bindings arg_z))
-  (movq (@ (% :rcontext) x8664::tcr.vs-area) (% imm0))
+  (movq (:rcontext x8664::tcr.vs-area) (% imm0))
   (movq (@ x8664::area.high (% imm0)) (% imm1))
   (subq ($ x8664::node-size) (% imm1))
   (movq (% bindings) (@ (% imm1)))
   (single-value-return))
 
 (defx86lapfunction %saved-bindings-address ()
-  (movq (@ (% :rcontext) x8664::tcr.vs-area) (% imm0))
+  (movq (:rcontext x8664::tcr.vs-area) (% imm0))
   (movq (@ x8664::area.high (% imm0)) (% imm1))
   (lea (@ (- x8664::node-size) (% imm1)) (% arg_z))
   (single-value-return))
@@ -579,9 +579,9 @@
   (movq (@ 48 (% temp0)) (% fp6))
   (movq (@ 56 (% temp0)) (% fp7))
   (call-subprim .SPffcall)
-  (movq (@ (% :rcontext) x8664::tcr.foreign-sp) (% mm5))
+  (movq (:rcontext x8664::tcr.foreign-sp) (% mm5))
   (movq (% mm5) (@ (% frame)))
-  (movq (% frame) (@ (% :rcontext) x8664::tcr.foreign-sp))
+  (movq (% frame) (:rcontext x8664::tcr.foreign-sp))
   (movq (% rax) (@ 8 (% frame)))
   (movq (% fp0) (@ 16 (% frame)))
   (movl ($ nil) (%l arg_z))
