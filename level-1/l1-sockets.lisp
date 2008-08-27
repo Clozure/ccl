@@ -47,7 +47,27 @@
 	    SOCKET-ERROR-CODE
 	    SOCKET-ERROR-IDENTIFIER
 	    SOCKET-ERROR-SITUATION
-	    WITH-OPEN-SOCKET)))
+	    WITH-OPEN-SOCKET))
+  #+windows-target
+  (defmacro check-winsock-error (form)
+    (let* ((val (gensym)))
+      `(let* ((,val ,form))
+        (if (< ,val 0)
+          (%get-winsock-error)
+          ,val))))
+  (defmacro check-socket-error (form)
+    #+windows-target `(check-winsock-error ,form)
+    #-windows-target `(int-errno-call ,form))
+  )
+
+(declaim (inline socket-handle))
+(defun socket-handle (fd)
+  #+windows-target (#__get_osfhandle fd)
+  #-windows-target fd)
+
+#+windows-target
+(defun %get-winsock-error ()
+  (- (#_WSAGetLastError)))
 
 ;;; The PPC is big-endian (uses network byte order), which makes
 ;;; things like #_htonl and #_htonl no-ops.  These functions aren't
@@ -1194,7 +1214,18 @@ unsigned IP address."
                 ))))))
 
 (defun c_socket_1 (domain type protocol)
-  (int-errno-call (#_socket domain type protocol)))
+  #-windows-target (int-errno-call (#_socket domain type protocol))
+  #+windows-target (let* ((handle (#_socket domain type protocol)))
+                     (if (< handle 0)
+                       (%get-winsock-error)
+                       (let* ((fd (#__open_osfhandle handle 0)))
+                         (if (< fd 0)
+                           (progn
+                             (#_CloseHandle handle)
+                             (%get-errno))
+                           fd)))))
+
+
 
 (defun c_socket (domain type protocol)
   (let* ((fd (c_socket_1 domain type protocol)))
@@ -1240,7 +1271,7 @@ unsigned IP address."
       
 
 (defun c_bind (sockfd sockaddr addrlen)
-  (int-errno-call (#_bind sockfd sockaddr addrlen)))
+  (check-socket-error (#_bind (socket-handle sockfd) sockaddr addrlen)))
 
 
 ;;; If attempts to connnect are interrupted, we basically have to
@@ -1252,7 +1283,7 @@ unsigned IP address."
     (unwind-protect
          (progn
            (fd-set-flags sockfd (logior flags #$O_NONBLOCK))
-           (let* ((err (int-errno-call (#_connect sockfd addr len))))
+           (let* ((err (check-socket-error (#_connect (socket-handle sockfd) addr len))))
              (cond ((or (eql err (- #$EINPROGRESS)) (eql err (- #$EINTR)))
                     (if (process-output-wait sockfd timeout-in-milliseconds)
                       (- (int-getsockopt sockfd #$SOL_SOCKET #$SO_ERROR))
@@ -1261,42 +1292,42 @@ unsigned IP address."
       (fd-set-flags sockfd flags))))
 
 (defun c_listen (sockfd backlog)
-  (int-errno-call (#_listen sockfd backlog)))
+  (check-socket-error (#_listen (socket-handle sockfd) backlog)))
 
 (defun c_accept (sockfd addrp addrlenp)
   (ignoring-eintr
-   (int-errno-call (#_accept sockfd addrp addrlenp))))
+   (check-socket-error (#_accept (socket-handle sockfd) addrp addrlenp))))
 
 (defun c_getsockname (sockfd addrp addrlenp)
-  (int-errno-call (#_getsockname sockfd addrp addrlenp)))
+  (check-socket-error (#_getsockname (socket-handle sockfd) addrp addrlenp)))
 
 (defun c_getpeername (sockfd addrp addrlenp)
-  (int-errno-call (#_getpeername sockfd addrp addrlenp)))
+  (check-socket-error (#_getpeername (socket-handle sockfd) addrp addrlenp)))
 
 (defun c_socketpair (domain type protocol socketsptr)
-  (int-errno-call (#_socketpair domain type protocol socketsptr)))
+  (check-socket-error (#_socketpair domain type protocol socketsptr)))
 
 
 (defun c_sendto (sockfd msgptr len flags addrp addrlen)
-  (int-errno-call (#_sendto sockfd msgptr len flags addrp addrlen)))
+  (check-socket-error (#_sendto (socket-handle sockfd) msgptr len flags addrp addrlen)))
 
 (defun c_recvfrom (sockfd bufptr len flags addrp addrlenp)
-  (int-errno-call (#_recvfrom sockfd bufptr len flags addrp addrlenp)))
+  (check-socket-error (#_recvfrom (socket-handle sockfd) bufptr len flags addrp addrlenp)))
 
 (defun c_shutdown (sockfd how)
-  (int-errno-call (#_shutdown sockfd how)))
+  (check-socket-error (#_shutdown (socket-handle sockfd) how)))
 
 (defun c_setsockopt (sockfd level optname optvalp optlen)
-  (int-errno-call (#_setsockopt sockfd level optname optvalp optlen)))
+  (check-socket-error (#_setsockopt (socket-handle sockfd) level optname optvalp optlen)))
 
 (defun c_getsockopt (sockfd level optname optvalp optlenp)
-  (int-errno-call (#_getsockopt sockfd level optname optvalp optlenp)))
+  (check-socket-error (#_getsockopt (socket-handle sockfd) level optname optvalp optlenp)))
 
 (defun c_sendmsg (sockfd msghdrp flags)
-  (int-errno-call (#_sendmsg sockfd msghdrp flags)))
+  (check-socket-error (#_sendmsg (socket-handle sockfd) msghdrp flags)))
 
 (defun c_recvmsg (sockfd msghdrp flags)
-  (int-errno-call   (#_recvmsg sockfd msghdrp flags)))
+  (check-socket-error   (#_recvmsg (socket-handle sockfd) msghdrp flags)))
 
 ;;; Return a list of currently configured interfaces, a la ifconfig.
 (defstruct ip-interface
