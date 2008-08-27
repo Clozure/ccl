@@ -1457,8 +1457,9 @@ to replace that class with ~s" name old-class new-class)
                     (let* ((cpl (list class))
                            (wrapper (%cons-wrapper class (new-class-wrapper-hash-index))))
                       (setf (%class.cpl class) cpl)
-                      (setf (%wrapper-cpl wrapper) cpl)
-                      (setf (%class.own-wrapper class) wrapper)
+                      (setf (%wrapper-cpl wrapper) cpl
+                            (%class.own-wrapper class) wrapper
+                            (%wrapper-cpl-bits wrapper) #*1)
                       (setf (%class.ctype class) (make-class-ctype class))
                       (setf (find-class 't) class)
                       class)))
