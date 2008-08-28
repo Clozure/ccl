@@ -141,6 +141,32 @@ typedef ucontext_t ExceptionInformation;
 
 #ifdef X8632
 /* Assume rational <i386/ucontext.h> */
+/* Sadly, we can't make that assumption, since Apple renamed things
+   for Leopard. Yow!  Are we standards-compliant yet ? */
+/* In the long term, we probably want to use the leopard-compliant
+   names (with leading __ prefixes).  In the shorter term, we want
+   kernels compiled on Leopard to run on Tiger (and not reference
+   foo$UNIX2003 and similar nonsense, and that means getting the old
+   names (without leading __ prefixes.)  Confused yet ? */
+
+/* #if STILL_SUPPORT_TIGER */
+#define __ss ss
+#define __ds ds
+#define __es es
+#define __cs cs
+#define __fs fs
+#define __gs gs
+#define __eax eax
+#define __esp esp
+#define __eip eip
+#define __eflags eflags
+#define __fpu_xmm0 fpu_xmm0
+#define __fpu_mxcsr fpu_mxcsr
+#define __fpu_stmm0 fpu_stmm0
+#define __err err
+#define __faultvaddr faultvaddr
+/* #endif STILL_SUPPORT_TIGER */
+
 #define UC_MCONTEXT(UC) UC->uc_mcontext
 typedef mcontext_t MCONTEXT_T;
 typedef ucontext_t ExceptionInformation;
