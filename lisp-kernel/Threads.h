@@ -45,6 +45,12 @@
 #ifdef WINDOWS
 #define USE_WINDOWS_SEMAPHORES 1
 #undef USE_POSIX_SEMAPHORES
+#ifdef WIN32
+struct timespec {
+  int tv_sec;
+  int tv_nsec;
+};
+#endif
 #endif
 
 #ifdef USE_POSIX_SEMAPHORES
