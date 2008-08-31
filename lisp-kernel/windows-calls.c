@@ -44,9 +44,152 @@
 #include <stdio.h>
 
 
-
+#ifndef WIN32
 #define _dosmaperr mingw_dosmaperr
-
+#else
+void
+_dosmaperr(unsigned long oserrno)
+{
+  switch(oserrno) {
+  case  ERROR_INVALID_FUNCTION:
+    errno = EINVAL;
+    break;
+  case ERROR_FILE_NOT_FOUND:
+    errno = ENOENT;
+    break;
+  case ERROR_PATH_NOT_FOUND:
+    errno = ENOENT;
+    break;
+  case  ERROR_TOO_MANY_OPEN_FILES:
+    errno = EMFILE;
+    break;
+  case  ERROR_ACCESS_DENIED:
+    errno = EACCES;
+    break;
+  case  ERROR_ARENA_TRASHED:
+    errno = ENOMEM;
+    break;
+  case  ERROR_NOT_ENOUGH_MEMORY:
+    errno = ENOMEM;
+    break;
+  case  ERROR_INVALID_BLOCK:
+    errno = ENOMEM;
+    break;
+  case  ERROR_BAD_ENVIRONMENT:
+    errno = E2BIG;
+    break;
+  case  ERROR_BAD_FORMAT:
+    errno = ENOEXEC;
+    break;
+  case  ERROR_INVALID_ACCESS:
+    errno = EINVAL;
+    break;
+  case  ERROR_INVALID_DATA:
+    errno = EINVAL;
+    break;
+  case  ERROR_INVALID_DRIVE:
+    errno = ENOENT;
+    break;
+  case  ERROR_CURRENT_DIRECTORY:
+    errno = EACCES;
+    break;
+  case  ERROR_NOT_SAME_DEVICE:
+    errno = EXDEV;
+    break;
+  case  ERROR_NO_MORE_FILES:
+    errno = ENOENT;
+    break;
+  case  ERROR_LOCK_VIOLATION:
+    errno = EACCES;
+    break;
+  case  ERROR_BAD_NETPATH:
+    errno = ENOENT;
+    break;
+  case  ERROR_NETWORK_ACCESS_DENIED:
+    errno = EACCES;
+    break;
+  case  ERROR_BAD_NET_NAME:
+    errno = ENOENT;
+    break;
+  case  ERROR_FILE_EXISTS:
+    errno = EEXIST;
+    break;
+  case  ERROR_CANNOT_MAKE:
+    errno = EACCES;
+    break;
+  case  ERROR_FAIL_I24:
+    errno = EACCES;
+    break;
+  case  ERROR_INVALID_PARAMETER:
+    errno = EINVAL;
+    break;
+  case  ERROR_NO_PROC_SLOTS:
+    errno = EAGAIN;
+    break;
+  case  ERROR_DRIVE_LOCKED:
+    errno = EACCES;
+    break;
+  case  ERROR_BROKEN_PIPE:
+    errno = EPIPE;
+    break;
+  case  ERROR_DISK_FULL:
+    errno = ENOSPC;
+    break;
+  case  ERROR_INVALID_TARGET_HANDLE:
+    errno = EBADF;
+    break;
+  case  ERROR_INVALID_HANDLE:
+    errno = EINVAL;
+    break;
+  case  ERROR_WAIT_NO_CHILDREN:
+    errno = ECHILD;
+    break;
+  case  ERROR_CHILD_NOT_COMPLETE:
+    errno = ECHILD;
+    break;
+  case  ERROR_DIRECT_ACCESS_HANDLE:
+    errno = EBADF;
+    break;
+  case  ERROR_NEGATIVE_SEEK:
+    errno = EINVAL;
+    break;
+  case  ERROR_SEEK_ON_DEVICE:   
+    errno = EACCES;
+    break;
+  case  ERROR_DIR_NOT_EMPTY:
+    errno = ENOTEMPTY;
+    break;
+  case  ERROR_NOT_LOCKED:
+    errno = EACCES;
+    break;
+  case  ERROR_BAD_PATHNAME:
+    errno = ENOENT;
+    break;
+  case  ERROR_MAX_THRDS_REACHED:
+    errno = EAGAIN;
+    break;
+  case  ERROR_LOCK_FAILED:
+    errno = EACCES;
+    break;
+  case  ERROR_ALREADY_EXISTS:
+    errno = EEXIST;
+    break;
+  case  ERROR_FILENAME_EXCED_RANGE:
+    errno = ENOENT;
+    break;
+  case  ERROR_NESTING_NOT_ALLOWED:
+    errno = EAGAIN;
+    break;
+  case  ERROR_NOT_ENOUGH_QUOTA:
+    errno = ENOMEM;
+    break;
+  default:
+    errno = EINVAL;
+    break;
+  }
+}
+    
+#endif
 
 #define WSYSCALL_RETURN(form) \
   do { \
@@ -237,26 +380,26 @@ windows_fchmod(int fd, int mode)
 }
 
 __int64
-windows_lseek(int fd, _off64_t offset, int whence)
+windows_lseek(int fd, __int64 offset, int whence)
 {
   WSYSCALL_RETURN(lseek64(fd, offset, whence));
 }
 
 __int64
-windows_stat(wchar_t *path, struct _stat64 *buf)
+windows_stat(wchar_t *path, struct __stat64 *buf)
 {
   WSYSCALL_RETURN(_wstat64(path,buf));
 }
 
 __int64
-windows_fstat(int fd, struct _stat64 *buf)
+windows_fstat(int fd, struct __stat64 *buf)
 {
   WSYSCALL_RETURN(_fstat64(fd,buf));
 }
 
 
 __int64
-windows_ftruncate(int fd, _off64_t new_size)
+windows_ftruncate(int fd, __int64 new_size)
 {
   /* Note that _ftruncate only allows 32-bit length */
   WSYSCALL_RETURN(ftruncate(fd,(off_t)new_size));
