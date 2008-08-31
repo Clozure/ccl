@@ -167,5 +167,40 @@ _exportfn(C(put_vector_registers))
 	__(ret)
 _endfn				
 
+        __ifdef([WIN32])
+_exportfn(C(restore_windows_context))
+Xrestore_windows_context_start:
+        __(hlt)
+Xrestore_windows_context_load_rcx:                
+        __(nop)
+Xrestore_windows_context_iret:            
+        __(iretl)
+Xrestore_windows_context_end:             
+        __(nop)
+_endfn
+	
+_exportfn(C(windows_switch_to_foreign_stack))
+        __(pop %eax)
+        __(pop %ecx)            /* new %esp */
+        __(pop %edx)            /* handler */
+        __(pop %edx)            /* arg */
+        __(movl %ecx,%esp)
+        __(subl $0x10,%esp)
+        __(movl %edx,(%esp))
+        __(push %eax)
+        __(jmp *%edx)
+_endfn        
+
+        .data
+        .globl C(restore_windows_context_start)
+        .globl C(restore_windows_context_end)
+        .globl C(restore_windows_context_load_rcx)
+        .globl C(restore_windows_context_iret)
+C(restore_windows_context_start):  .long Xrestore_windows_context_start
+C(restore_windows_context_end): .long Xrestore_windows_context_end
+C(restore_windows_context_load_rcx):  .long Xrestore_windows_context_load_rcx
+C(restore_windows_context_iret): .long Xrestore_windows_context_iret
+
+        __endif
 	_endfile
 
