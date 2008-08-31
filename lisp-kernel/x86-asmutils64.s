@@ -211,8 +211,8 @@ _endfn
         __ifdef([WIN64])
 /* %rcx = CONTEXT, %rdx = tcr, %r8 = old_valence.  This pretty
    much has to be uninterruptible */        
-_exportfn(C(restore_win64_context))
-Xrestore_win64_context_start: 	
+_exportfn(C(restore_windows_context))
+Xrestore_windows_context_start: 	
         __(subq $0x38,%rsp)
         __(xorl %eax,%eax)
         __(movq %r8,tcr.valence(%rdx))
@@ -259,11 +259,11 @@ Xrestore_win64_context_start:
         __(movq win64_context.R13(%rcx),%r13)
         __(movq win64_context.R14(%rcx),%r14)
         __(movq win64_context.R15(%rcx),%r15)
-Xrestore_win64_context_load_rcx:                
+Xrestore_windows_context_load_rcx:                
         __(movq win64_context.Rcx(%rcx),%rcx)
-Xrestore_win64_context_iret:            
+Xrestore_windows_context_iret:            
         __(iretq)
-Xrestore_win64_context_end:             
+Xrestore_windows_context_end:             
         __(nop)
 _endfn
 	
@@ -276,14 +276,14 @@ _exportfn(C(windows_switch_to_foreign_stack))
 _endfn        
 
         .data
-        .globl C(restore_win64_context_start)
-        .globl C(restore_win64_context_end)
-        .globl C(restore_win64_context_load_rcx)
-        .globl C(restore_win64_context_iret)
-C(restore_win64_context_start):  .quad Xrestore_win64_context_start
-C(restore_win64_context_end): .quad Xrestore_win64_context_end
-C(restore_win64_context_load_rcx):  .quad Xrestore_win64_context_load_rcx
-C(restore_win64_context_iret): .quad Xrestore_win64_context_iret
+        .globl C(restore_windows_context_start)
+        .globl C(restore_windows_context_end)
+        .globl C(restore_windows_context_load_rcx)
+        .globl C(restore_windows_context_iret)
+C(restore_windows_context_start):  .quad Xrestore_windows_context_start
+C(restore_windows_context_end): .quad Xrestore_windows_context_end
+C(restore_windows_context_load_rcx):  .quad Xrestore_windows_context_load_rcx
+C(restore_windows_context_iret): .quad Xrestore_windows_context_iret
 
         __endif
                 
