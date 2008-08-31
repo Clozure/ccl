@@ -15,6 +15,7 @@
 
 
 _exportfn(toplevel_loop)
+Xsubprims_start:        	
 	__(push %ebp)
 	__(movl %esp,%ebp)
 	/* Switch to the lisp stack */
@@ -93,5 +94,14 @@ _exportfn(C(start_lisp))
 	__(movl $nil_value, %eax)
 	__(leave)
 	__(ret)
+Xsubprims_end:           
 _endfn
+
+        .data
+        .globl C(subprims_start)
+        .globl C(subprims_end)
+C(subprims_start):      .long Xsubprims_start
+C(subprims_end):        .long Xsubprims_end
+        .text
+
 
