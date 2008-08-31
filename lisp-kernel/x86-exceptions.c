@@ -39,8 +39,10 @@
 #endif
 #ifdef WINDOWS
 #include <windows.h>
+#ifdef WIN64
 #include <winternl.h>
 #include <ntstatus.h>
+#endif
 #endif
 
 int
@@ -1465,9 +1467,9 @@ stack_pointer_on_vstack_p(LispObj stack_pointer, TCR *tcr)
           ((BytePtr)stack_pointer > a->low));
 }
 
-#ifdef WINDOWS
-extern LONG restore_win64_context(ExceptionInformation *, TCR *, int;);
-#endif
+
+extern DWORD restore_windows_context(ExceptionInformation *, TCR *, int);
+
 
 void
 interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
@@ -1545,7 +1547,7 @@ interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
   }
 #endif
 #ifdef WINDOWS
-  restore_win64_context(context,tcr,old_valence);
+  restore_windows_context(context,tcr,old_valence);
 #else
   SIGRETURN(context);
 #endif
@@ -1636,7 +1638,7 @@ install_signal_handler(int signo, void * handler)
 
 #ifdef WINDOWS
 BOOL 
-ControlEventHandler(DWORD event)
+CALLBACK ControlEventHandler(DWORD event)
 {
   switch(event) {
   case CTRL_C_EVENT:
@@ -1669,8 +1671,6 @@ map_windows_exception_code_to_posix_signal(DWORD code)
     return SIGILL;
   case EXCEPTION_IN_PAGE_ERROR:
     return SIGBUS;
-  case DBG_PRINTEXCEPTION_C:
-    return DBG_PRINTEXCEPTION_C;
   default:
     return -1;
   }
@@ -1703,7 +1703,7 @@ windows_exception_handler(EXCEPTION_POINTERS *exception_pointers)
     }
   }
   unlock_exception_lock_in_handler(tcr);
-  return restore_win64_context(context, tcr, old_valence);
+  return restore_windows_context(context, tcr, old_valence);
 }
 
 LONG windows_switch_to_foreign_stack(LispObj, void*, void*);
