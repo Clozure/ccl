@@ -167,7 +167,7 @@ _exportfn(C(put_vector_registers))
 	__(ret)
 _endfn				
 
-        __ifdef([WIN32])
+        __ifdef([WIN_32])
 _exportfn(C(restore_windows_context))
 Xrestore_windows_context_start:
         __(hlt)

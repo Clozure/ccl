@@ -44,7 +44,7 @@
 #include <stdio.h>
 
 
-#ifndef WIN32
+#ifndef WIN_32
 #define _dosmaperr mingw_dosmaperr
 #else
 void
