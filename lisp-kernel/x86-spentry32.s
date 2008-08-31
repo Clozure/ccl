@@ -19,6 +19,7 @@ define([jump_builtin],[
 ])
 
 _spentry(bad_funcall)
+Xspentry_start:                 
 	.globl C(bad_funcall)
 __(tra(C(bad_funcall)))
 	__(uuo_error_not_callable)
@@ -4500,9 +4501,6 @@ _spentry(breakpoint)
         __(int $3)
 _endsubp(breakpoint)
 
-_spentry(unused_6)
-        __(int $3)
-_endsubp(unused_6)
 
 /* %temp1 = array, %temp0 = i,%arg_y = j, %arg_z = k */
 /*
@@ -4595,3 +4593,14 @@ _spentry(aset3)
         __(jmp 8b)
 _endsubp(aset3)
 */
+
+_spentry(unused_6)
+        __(int $3)
+Xspentry_end:           
+_endsubp(unused_6)
+        .data
+        .globl C(spentry_start)
+        .globl C(spentry_end)
+C(spentry_start):       .long Xspentry_start
+C(spentry_end):         .long Xspentry_end
+        
