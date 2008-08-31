@@ -71,7 +71,9 @@ Boolean lisp_debugger_in_foreign_code = false;
 char *
 foreign_name_and_offset(natural addr, int *delta)
 {
+#ifndef WINDOWS
   Dl_info info;
+#endif
   char *ret = NULL;
 
   if (delta) {
@@ -151,6 +153,10 @@ char* Iregnames[] = {"rax ","rcx ","rdx","rbx","rsp","rrbp","rsi","rdi",
 #ifdef DARWIN
 char *Iregnames[] = {"eax", "ebx", "ecx", "edx", "edi", "esi",
 		     "ebp", "???", "efl", "eip"};
+#endif
+#ifdef WINDOWS
+char *Iregnames[] = {"edi", "esi", "ebx", "edx", "ecx", "eax",
+                     "ebp", "eip", "???", "efl", "esp"};
 #endif
 #endif
 
