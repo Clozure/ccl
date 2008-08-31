@@ -44,8 +44,8 @@ atomic_swap(signed_natural*, signed_natural);
 
 #ifdef WINDOWS
 extern pc spentry_start, spentry_end,subprims_start,subprims_end;
-extern pc restore_win64_context_start, restore_win64_context_end,
-  restore_win64_context_load_rcx, restore_win64_context_iret;
+extern pc restore_windows_context_start, restore_windows_context_end,
+  restore_windows_context_load_rcx, restore_windows_context_iret;
 
 extern void interrupt_handler(int, siginfo_t *, ExceptionInformation *);
 
@@ -115,12 +115,16 @@ raise_thread_interrupt(TCR *target)
     icontext = (CONTEXT *)(((LispObj)icontext)&~15);
     
     *icontext = *pcontext;
-    
+
+#ifdef WIN64    
     xpGPR(pcontext,REG_RCX) = SIGNAL_FOR_PROCESS_INTERRUPT;
     xpGPR(pcontext,REG_RDX) = 0;
     xpGPR(pcontext,REG_R8) = (LispObj) icontext;
     xpGPR(pcontext,REG_RSP) = (LispObj)(((LispObj *)icontext)-1);
     *(((LispObj *)icontext)-1) = (LispObj)raise_thread_interrupt;
+#else
+#warning need interrupt setup for win32
+#endif
     xpPC(pcontext) = (LispObj)interrupt_handler;
     SetThreadContext(hthread,pcontext);
     ResumeThread(hthread);
@@ -455,7 +459,7 @@ wait_on_semaphore(void *s, int seconds, int millis)
   case WAIT_OBJECT_0:
     return 0;
   case WAIT_TIMEOUT:
-    return ETIMEDOUT;
+    return WAIT_TIMEOUT;
   default:
     break;
   }
@@ -496,7 +500,7 @@ current_thread_osid()
     DuplicateHandle(GetCurrentProcess(),
                     GetCurrentThread(),
                     GetCurrentProcess(),
-                    &current,
+                    (LPHANDLE)(&current),
                     0,
                     FALSE,
                     DUPLICATE_SAME_ACCESS);
@@ -864,6 +868,20 @@ void free_tcr_extra_segment(TCR *tcr)
   tcr->ldt_selector = NULL_SEL;
 }
 #endif
+
+#ifdef WINDOWS
+void
+setup_tcr_extra_segment(TCR *tcr)
+{
+}
+
+void 
+free_tcr_extra_segment(TCR *tcr)
+{
+}
+
+
+#endif
 #endif
 
 /*
@@ -999,10 +1017,8 @@ shutdown_thread_tcr(void *arg)
 #ifdef HAVE_TLS
     dequeue_tcr(tcr);
 #endif
-#ifdef DARWIN
 #ifdef X8632
     free_tcr_extra_segment(tcr);
-#endif
 #endif
     UNLOCK(lisp_global(TCR_AREA_LOCK),tcr);
     if (termination_semaphore) {
@@ -1471,21 +1487,24 @@ suspend_tcr(TCR *tcr)
     where = (pc)(xpPC(pcontext));
 
     if (tcr->valence == TCR_STATE_LISP) {
-      if ((where >= restore_win64_context_start) &&
-          (where < restore_win64_context_end)) {
+      if ((where >= restore_windows_context_start) &&
+          (where < restore_windows_context_end)) {
         /* Thread has started to return from an exception. */
-        if (where < restore_win64_context_load_rcx) {
+        if (where < restore_windows_context_load_rcx) {
           /* In the process of restoring registers; context still in
              %rcx.  Just make our suspend_context be the context
              we're trying to restore, so that we'll resume from
              the suspend in the same context that we're trying to
              restore */
+#ifdef WIN64
           *pcontext = * (CONTEXT *)(pcontext->Rcx);
+#endif
         } else {
           /* Most of the context has already been restored; fix %rcx
              if need be, then restore ss:rsp, cs:rip, and flags. */
+#ifdef WIN64
           x64_iret_frame *iret_frame = (x64_iret_frame *) (pcontext->Rsp);
-          if (where == restore_win64_context_load_rcx) {
+          if (where == restore_windows_context_load_rcx) {
             pcontext->Rcx = ((CONTEXT*)(pcontext->Rcx))->Rcx;
           }
           pcontext->Rip = iret_frame->Rip;
@@ -1493,6 +1512,9 @@ suspend_tcr(TCR *tcr)
           pcontext->EFlags = (DWORD) iret_frame->Rflags;
           pcontext->Rsp = iret_frame->Rsp;
           pcontext->SegSs = (WORD) iret_frame->Ss;
+#else
+#warning need context setup for win32
+#endif
         }
         tcr->suspend_context = NULL;
       } else {
