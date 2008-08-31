@@ -405,6 +405,9 @@ unsigned unsigned_max(unsigned x, unsigned y)
 #ifdef LINUX
 #define MAXIMUM_MAPPABLE_MEMORY (1U<<30)
 #endif
+#ifdef WINDOWS
+#define MAXIMUM_MAPPABLE_MEMORY (1U<<30)
+#endif
 #endif
 
 natural
@@ -737,7 +740,7 @@ void
 register_sigint_handler()
 {
 #ifdef WINDOWS
-  extern BOOL ControlEventHandler(DWORD);
+  extern BOOL CALLBACK ControlEventHandler(DWORD);
 
   signal(SIGINT, SIG_IGN);
 
@@ -1879,11 +1882,7 @@ load_image(char *path)
     }
   }
   if (image_nil == 0) {
-#ifdef WINDOWS
-    wperror("Couldn't load lisp heap image");
-#else
     fprintf(stderr, "Couldn't load lisp heap image from %s:\n%s\n", path, strerror(errno));
-#endif
     exit(-1);
   }
   return image_nil;
