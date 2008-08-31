@@ -29,7 +29,7 @@
 #endif
 
 
-#ifdef WIN64
+#ifdef WINDOWS
 #include <windows.h>
 typedef long long s64_t;
 typedef unsigned long long u64_t;
@@ -186,7 +186,7 @@ typedef struct __ucontext ExceptionInformation;
 typedef struct ucontext ExceptionInformation;
 #endif
 
-#ifdef WIN64
+#ifdef WINDOWS
 typedef CONTEXT ExceptionInformation;
 #endif
 
