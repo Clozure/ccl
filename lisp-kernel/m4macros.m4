@@ -70,7 +70,7 @@ ifdef([SOLARIS],[define([SYSstabs],[ELFstabs])
 	       define([StartTextLabel],[.Ltext0])
 	       define([EndTextLabel],[.Letext])])
 
-ifdef([WIN64],[define([SYSstabs],[COFFstabs])
+ifdef([WINDOWS],[define([SYSstabs],[COFFstabs])
                define([CNamesNeedUnderscores],[])
                define([LocalLabelPrefix],[L])])
 
@@ -155,7 +155,7 @@ define([__pwd__],substr(pwd0,0,decr(len(pwd0)))[/])
 /*   starts .text section  */
 
 
-define([_beginfile],[ifdef([WIN64],[
+define([_beginfile],[ifdef([WINDOWS],[
         .file 1 "__file__"
         .text
 ],[
@@ -171,7 +171,7 @@ StartTextLabel():
 ])])
 
 define([_endfile],[
-ifdef([WIN64],[
+ifdef([WINDOWS],[
 ],[
 	.stabs "",N_SO,0,0,EndTextLabel()
 EndTextLabel():
@@ -325,6 +325,8 @@ equate_if_defined([SOLARIS])
 equate_if_defined([WIN64])
 equate_if_defined([PPC64])
 equate_if_defined([X8664])
+equate_if_defined([WIN32])
+equate_if_defined([WINDOWS])
 
 equate_if_defined([HAVE_TLS])
 /* DARWIN_GS_HACK is hopefully short-lived */
