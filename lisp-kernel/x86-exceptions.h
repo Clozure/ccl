@@ -85,11 +85,20 @@ pthread_mutex_t *mach_exception_lock;
 #endif
 #endif
 
-#ifdef WIN64
+#ifdef WINDOWS
+#ifdef X8664
 #define xpGPRvector(x) ((DWORD64 *)(&(x)->Rax))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define xpPC(x) xpGPR(x,Iip)
 #define eflags_register(xp) xp->EFlags
+#else
+#define xpGPRvector(x) ((DWORD *)(&(x)->Edi))
+#define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
+#define xpPC(x) xpGPR(x,Iip)
+#define eflags_register(xp) xp->EFlags
+#define xpFPRvector(x) ((natural *)(&(x->ExtendedRegisters[10*16])))
+#define xpMMXreg(x,n)  (xpFPRvector(x)[n])
+#endif
 #endif
 
 #ifdef DARWIN
@@ -106,7 +115,14 @@ pthread_mutex_t *mach_exception_lock;
 #endif
 #ifdef WINDOWS
 #define SIGNAL_FOR_PROCESS_INTERRUPT SIGINT
+#ifndef SIGBUS
+#define SIGBUS 10
 #endif
+#ifndef CONTEXT_ALL
+#define CONTEXT_ALL (CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_SEGMENTS | CONTEXT_FLOATING_POINT | CONTEXT_DEBUG_REGISTERS | CONTEXT_EXTENDED_REGISTERS)
+#endif
+#endif
+
 
 
 void switch_to_foreign_stack(void*, ...);
