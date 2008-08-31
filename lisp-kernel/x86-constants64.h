@@ -56,7 +56,7 @@
 #define REG_RSP 23
 #endif
 
-#ifdef WIN64
+#ifdef WIN_64
 /* DWORD64 indices in &(CONTEXT->Rax) */
 #define REG_RAX     0
 #define REG_RCX     1

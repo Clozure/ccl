@@ -39,7 +39,7 @@
 #endif
 #ifdef WINDOWS
 #include <windows.h>
-#ifdef WIN64
+#ifdef WIN_64
 #include <winternl.h>
 #include <ntstatus.h>
 #endif

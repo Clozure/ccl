@@ -208,7 +208,7 @@ _exportfn(C(set_gs_address))
 _endfn
         __endif
 
-        __ifdef([WIN64])
+        __ifdef([WIN_64])
 /* %rcx = CONTEXT, %rdx = tcr, %r8 = old_valence.  This pretty
    much has to be uninterruptible */        
 _exportfn(C(restore_windows_context))

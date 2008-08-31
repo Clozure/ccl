@@ -116,7 +116,7 @@ raise_thread_interrupt(TCR *target)
     
     *icontext = *pcontext;
 
-#ifdef WIN64    
+#ifdef WIN_64    
     xpGPR(pcontext,REG_RCX) = SIGNAL_FOR_PROCESS_INTERRUPT;
     xpGPR(pcontext,REG_RDX) = 0;
     xpGPR(pcontext,REG_R8) = (LispObj) icontext;
@@ -1496,7 +1496,7 @@ suspend_tcr(TCR *tcr)
              we're trying to restore, so that we'll resume from
              the suspend in the same context that we're trying to
              restore */
-#ifdef WIN64
+#ifdef WIN_64
           *pcontext = * (CONTEXT *)(pcontext->Rcx);
 #endif
         } else {
