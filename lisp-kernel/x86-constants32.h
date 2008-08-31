@@ -12,6 +12,20 @@
 #define REG_EIP 10
 #endif
 
+#ifdef WINDOWS
+/* Offsets relative to _CONTEXT.Edi */
+#define REG_EDI 0
+#define REG_ESI 1
+#define REG_EBX 2
+#define REG_EDX 3
+#define REG_ECX 4
+#define REG_EAX 5
+#define REG_EBP 6
+#define REG_EIP 7
+#define REG_EFL 9
+#define REG_ESP 10
+#endif
+
 /* Indicies of GPRs in the mcontext component of a ucontext */
 #define Iimm0  REG_EAX
 #define Iarg_z REG_EBX
@@ -363,6 +377,8 @@ typedef struct doh_block {
 
 #ifdef DARWIN
 #include <architecture/i386/sel.h>
+#else
+typedef unsigned short sel_t;   /* for now */
 #endif
 
 #define TCR_BIAS 0
@@ -444,3 +460,7 @@ typedef struct tcr {
 
 #define heap_segment_size 0x00010000
 #define log2_heap_segment_size 16
+
+#ifndef EFL_DF
+#define EFL_DF 1024
+#endif
