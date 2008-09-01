@@ -1468,8 +1468,9 @@ stack_pointer_on_vstack_p(LispObj stack_pointer, TCR *tcr)
 }
 
 
+#ifdef WINDOWS
 extern DWORD restore_windows_context(ExceptionInformation *, TCR *, int);
-
+#endif
 
 void
 interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
