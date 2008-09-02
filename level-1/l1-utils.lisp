@@ -660,6 +660,11 @@ unsigned-byte
 vector
 ))
 
+;; Redefined in sysutils.
+(%fhave 'type-specifier-p
+        (qlfun bootstrapping-type-specifier-p (name)
+          (memq name *cl-types*)))
+
 (defun proclaim (spec)
   (case (car spec)
     (special (apply #'proclaim-special (%cdr spec)))
