@@ -674,7 +674,9 @@ vector
     (ftype (apply #'proclaim-ftype (%cdr spec)))
     ;(function (proclaim-ftype (cons 'function (cddr spec)) (cadr spec)))
     (t (unless (memq (%car spec) *nx-known-declarations*) ;not really right...
-         (if (memq (%car spec) *cl-types*)
+         ;; Any type name is now (ANSI CL) a valid declaration.
+         (if (and (symbolp (%car spec))
+                  (type-specifier-p (%car spec)))
            (apply #'proclaim-type spec)
            (warn "Unknown declaration specifier(s) in ~S" spec))))))
 
