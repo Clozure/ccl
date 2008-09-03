@@ -66,12 +66,12 @@
     (with-lock-grabbed (read-lock)
       (loop
         (when cur-sstream
-          #+gz (log-debug "About to recursively read from sstring in env: ~s" cur-env)
+          #+debug (log-debug "About to recursively read from sstring in env: ~s" cur-env)
           (let* ((env cur-env)
                  (form (progv (car env) (cdr env)
                          (ccl::read-toplevel-form cur-sstream eof-value)))
                  (last-form-in-selection (not (listen cur-sstream))))
-            #+gz (log-debug " --> ~s" form)
+            #+debug (log-debug " --> ~s" form)
             (when last-form-in-selection
               (setf cur-sstream nil cur-env nil))
             (return (values form env (or last-form-in-selection ccl::*verbose-eval-selection*)))))

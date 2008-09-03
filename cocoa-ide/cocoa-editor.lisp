@@ -896,7 +896,7 @@
   (let* ((view (hemlock-view self))
 	 ;; quote-p means handle characters natively
 	 (quote-p (and view (hi::hemlock-view-quote-next-p view))))
-    #+GZ (log-debug "~&quote-p ~s event ~s" quote-p event)
+    #+debug (log-debug "~&quote-p ~s event ~s" quote-p event)
     (if (or (null view)
 	    (#/hasMarkedText self)
 	    (and quote-p (zerop (#/length (#/characters event))))) ;; dead key, e.g. option-E
@@ -1678,7 +1678,7 @@
       tv)))
 
 (defmethod hemlock-ext:change-active-pane ((view hi:hemlock-view) new-pane)
-  #+GZ (log-debug "change active pane to ~s" new-pane)
+  #+debug (log-debug "change active pane to ~s" new-pane)
   (let* ((pane (hi::hemlock-view-pane view))
 	 (text-view (text-pane-text-view pane))
 	 (tv (ecase new-pane
@@ -2822,7 +2822,7 @@
   #+debug (#_NSLog #@"Paste: sender = %@" :id sender)
   (let* ((pb (general-pasteboard))
          (string (progn (#/types pb) (#/stringForType: pb #&NSStringPboardType))))
-    #+GZ (log-debug "   string = ~s" string)
+    #+debug (log-debug "   string = ~s" string)
     (unless (%null-ptr-p string)
       (unless (zerop (ns:ns-range-length (#/rangeOfString: string *ns-cr-string*)))
         (setq string (make-instance 'ns:ns-mutable-string :with-string string))
@@ -2864,7 +2864,7 @@
                      (#/sharedDocumentController hemlock-document-controller)
                      +null-ptr+)
                     *last-document-created*))))
-      #+gz (log-debug "created ~s" doc)
+      #+debug (log-debug "created ~s" doc)
       (when (%null-ptr-p doc)
         (error "Couldn't open ~s: ~a" pathname
                (let ((error (pref perror :id)))

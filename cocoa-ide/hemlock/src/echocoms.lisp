@@ -354,7 +354,7 @@
          (key-event (last-key-event-typed)))
     (multiple-value-bind (res exit-p)
                          (funcall (eps-parse-verification-function eps) eps key-event)
-      #+GZ (log-debug "Key Input Hander: res: ~s exit-p ~s" res exit-p)
+      #+debug (log-debug "Key Input Hander: res: ~s exit-p ~s" res exit-p)
       (cond (exit-p
 	     (unless (eq exit-p :confirmed)
 	       (append-key-name key-event))

@@ -162,7 +162,7 @@
 					       (#/distantFuture ns:ns-date))|#
 			(#/run app)))
 	(error (c) (nslog-condition c)))
-      #+GZ (log-debug "~&runMode exited, end-test: ~s isRunning ~s quitting: ~s" end-test (#/isRunning app) ccl::*quitting*)
+      #+debug (log-debug "~&runMode exited, end-test: ~s isRunning ~s quitting: ~s" end-test (#/isRunning app) ccl::*quitting*)
       (when (or (and end-test (funcall end-test))
 		(and ccl::*quitting* (not (#/isRunning app))))
 	(return)))))

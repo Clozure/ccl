@@ -181,13 +181,13 @@
   (funcall (command-function command) p))
 
 (defmethod execute-hemlock-key ((view hemlock-view) key)
-  #+gz (log-debug "~&execute-hemlock-key ~s" key)
+  #+debug (log-debug "~&execute-hemlock-key ~s" key)
   (with-output-to-listener
    (if (or (symbolp key) (functionp key))
      (funcall key)
      (multiple-value-bind (main-binding transparent-bindings)
                           (get-command-binding-for-key view key)
-       #+gz (log-debug "~&  binding ~s ~s" main-binding transparent-bindings)
+       #+debug (log-debug "~&  binding ~s ~s" main-binding transparent-bindings)
        (ring-push key *key-event-history*)
        (when main-binding
          (let* ((*last-last-command-type* (shiftf (hemlock-last-command-type view) nil))
@@ -233,7 +233,7 @@
 
 (defmethod handle-hemlock-event ((view hemlock-view) key)
   ;; Key can also be a function, in which case it will get executed in the view event context
-  #+GZ (log-debug "handle-hemlock-event ~s~:[~; (recursive)~]"
+  #+debug (log-debug "handle-hemlock-event ~s~:[~; (recursive)~]"
                   key
                   (and (eq view *current-view*)
                        (eq (hemlock-view-current-buffer view) *current-buffer*)))

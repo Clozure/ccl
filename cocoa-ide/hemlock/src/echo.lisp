@@ -169,7 +169,7 @@
 		(hemlock-ext:change-active-pane view :echo))
 	      (with-standard-standard-output
 		  (gui::event-loop #'(lambda () (eps-parse-results eps))))
-	      #+gz (log-debug "~&Event loop exited!, results = ~s" (eps-parse-results eps)))
+	      #+debug (log-debug "~&Event loop exited!, results = ~s" (eps-parse-results eps)))
 	 (unless old-eps
 	   (hemlock-ext:change-active-pane view :text))
 	 (setf (hemlock-prompted-input-state view) old-eps)
@@ -180,7 +180,7 @@
 	 (abort-to-toplevel))))))
 
 (defun exit-echo-parse (eps results)
-  #+gz (log-debug "~&exit echo parse, results = ~s" results)
+  #+debug (log-debug "~&exit echo parse, results = ~s" results)
   ;; Must be set to non-nil to indicate parse done.
   (setf (eps-parse-results eps) (or results '(nil)))
   (gui::stop-event-loop) ;; this just marks it for dead then returns.
