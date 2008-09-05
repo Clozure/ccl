@@ -1546,11 +1546,21 @@
                                ((structure-class-p type env)
                                 `(structure-typep ,thing ',(find-class-cell type t)))
                                ((find-class type nil env)
+                                ;; If we know for sure that the class
+                                ;; is one whose instances are all
+                                ;; STANDARD-INSTANCEs (not funcallable,
+                                ;; not foreign), we can use
+                                ;; STD-INSTANCE-CLASS-CELL-TYPEP, which
+                                ;; can be a little faster then the more
+                                ;; general CLASS-CELL-TYPEP.  We can
+                                ;; only be sure of that if the class
+                                ;; exists (as a non-COMPILE-TIME-CLASS)
                                 (let* ((class (find-class type nil nil))
                                        (fname 
-                                        (if (or (null class)
-                                                (and (subtypep class 'standard-object)
-                                                     (not (subtypep class 'foreign-standard-object))))
+                                        (if (and class
+                                                 (subtypep class 'standard-object)
+                                                 (not (subtypep class 'foreign-standard-object))
+                                                 (not (subtypep class 'funcallable-standard-object)))
                                           'std-instance-class-cell-typep
                                           'class-cell-typep)))
                                   `(,fname ,thing (load-time-value (find-class-cell ',type t)))))
