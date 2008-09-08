@@ -425,6 +425,31 @@
           string))
     (declare (fixnum end))))
 
+;;; Assumes that pointer is terminated by a 0-valued 16-bit word
+;;; and that it points to a valid utf-16 string with native endianness.
+(defun %get-native-utf-16-cstring (pointer)
+  (do* ((nchars 0 (1+ nchars))
+        (i 0 (+ i 2))
+        (code (%get-unsigned-word pointer i) (%get-unsigned-word pointer i)))
+       ((zerop code)
+        (do* ((string (make-string nchars))
+              (out 0 (1+ out))
+              (i 0 (+ i 2)))
+             ((= out nchars) string)
+          (declare (fixnum i out))
+          (let* ((code (%get-unsigned-word pointer i)))
+            (declare (type (unsigned-byte 16) code))
+            (when (and (>= code #xd800)
+                       (< code #xdc00))
+              (incf i 2)
+              (let* ((code2 (%get-unsigned-word pointer i)))
+                (declare (type (unsigned-byte 16) code2))
+                (setq code (utf-16-combine-surrogate-pairs code code2))))
+            (setf (schar string out) (code-char code)))))
+    (when (and (>= code #xd800) (< code #xdc00))
+      (incf i 2))))
+
+
 ;;; This is mostly here so we can bootstrap shared libs without
 ;;; having to bootstrap #_strcmp.
 ;;; Return true if the cstrings are equal, false otherwise.
