@@ -1717,7 +1717,7 @@ result-type-specifer is :VOID or NIL"
       ;; We don't use foreign type ordinals when cross-compiling,
       ;; so the read-time conditionalization is OK here.
       #+(or linux-target darwin-target solaris-target freebsd-target)
-      (dolist (spec *canonical-unix-foreign-types)
+      (dolist (spec *canonical-unix-foreign-types*)
         (canonicalize-foreign-type-ordinal spec))
       (dolist (spec (ftd-platform-ordinal-types ftd))
         (canonicalize-foreign-type-ordinal spec)))))
