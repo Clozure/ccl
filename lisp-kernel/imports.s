@@ -83,7 +83,21 @@ import_ptrs_start:
         defimport(rwlock_unlock)
         defimport(recursive_lock_trylock)
 	defimport(foreign_name_and_offset)
-
+        defimport(lisp_read)
+        defimport(lisp_write)
+        defimport(lisp_open)
+        defimport(lisp_fchmod)
+        defimport(lisp_lseek)
+        defimport(lisp_close)
+        defimport(lisp_ftruncate)
+        defimport(lisp_stat)
+        defimport(lisp_fstat)
+        defimport(lisp_futex)
+        defimport(lisp_opendir)
+        defimport(lisp_readdir)
+        defimport(lisp_closedir)
+        
+   
         .globl C(import_ptrs_base)
 C(import_ptrs_base):
 	PTR(import_ptrs_start)
