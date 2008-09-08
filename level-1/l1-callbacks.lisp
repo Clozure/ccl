@@ -141,18 +141,25 @@
 
 ;;; 
 (defun %make-executable-page ()
+  #-windows-target
   (#_mmap (%null-ptr)
           (#_getpagesize)
           (logior #$PROT_READ #$PROT_WRITE #$PROT_EXEC)
           (logior #$MAP_PRIVATE #$MAP_ANON)
           -1
-          0))
+          0)
+  #+windows-target
+  (#_VirtualAlloc (%null-ptr)
+                  (ash 1 16)            ; should use GetSystemInfo
+                  (logior #$MEM_RESERVE #$MEM_COMMIT)
+                  #$PAGE_EXECUTE_READWRITE)
+  )
 
 (defstatic *available-bytes-for-callbacks* 0)
 (defstatic *current-callback-page* nil)
 
 (defun reset-callback-storage ()
-  (setq *available-bytes-for-callbacks* (#_getpagesize)
+  (setq *available-bytes-for-callbacks* #-windows-target (#_getpagesize) #+windows-target (ash 1 16)
         *current-callback-page* (%make-executable-page)))
 
 (defun %allocate-callback-pointer (n)
