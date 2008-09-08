@@ -77,8 +77,8 @@
 (defvar *rtld-next*)
 (defvar *rtld-default*)
 (setq *rtld-next* (%incf-ptr (%null-ptr) -1)
-      *rtld-default* (%int-to-ptr #+(or linux-target darwin-target)  0
-				  #-(or linux-target darwin-target)  -2))
+      *rtld-default* (%int-to-ptr #+(or linux-target darwin-target wwindow-target)  0
+				  #-(or linux-target darwin-target windows-target)  -2))
 
 #+(or linux-target freebsd-target solaris-target)
 (progn
@@ -458,6 +458,138 @@ the operating system."
 	(when (or (not lose) (not win)) (return)))))
 
 ;;; end darwin-target
+  )  
+
+#+windows-target
+(progn
+  (defvar *current-process-handle*)
+  (defvar *enum-process-modules-addr*)
+  (defvar *get-module-file-name-addr*)
+  (defvar *get-module-base-name-addr*)
+  (defvar *get-module-handle-ex-addr*)
+
+
+  (defun init-windows-ffi ()
+    (setq *current-process-handle* (ff-call (foreign-symbol-entry "GetCurrentProcess") :address)) 
+    (setq *enum-process-modules-addr* (foreign-symbol-entry "EnumProcessModules"))   
+    (setq *get-module-file-name-addr* (foreign-symbol-entry "GetModuleFileNameA"))
+    (setq *get-module-base-name-addr* (foreign-symbol-entry "GetModuleBaseNameA"))
+    (setq *get-module-handle-ex-addr* (foreign-symbol-entry "GetModuleHandleExA")))
+
+  (init-windows-ffi)
+  
+  (defun hmodule-pathname (hmodule)
+    (do* ((bufsize 64))
+         ()
+      (%stack-block ((name bufsize))
+        (let* ((needed (ff-call *get-module-file-name-addr*
+                                :address *current-process-handle*
+                                :address hmodule
+                                :address name
+                                :signed-fullword bufsize
+                                :signed-fullword)))
+          (if (eql 0 needed)
+            (return nil)
+            (if (< bufsize needed)
+              (setq bufsize needed)
+              (return (%str-from-ptr name needed))))))))
+
+  (defun hmodule-basename (hmodule)
+    (do* ((bufsize 64))
+         ()
+      (%stack-block ((name bufsize))
+        (let* ((needed (ff-call *get-module-base-name-addr*
+                                :address *current-process-handle*
+                                :address hmodule
+                                :address name
+                                :signed-fullword bufsize
+                                :signed-fullword)))
+          (if (eql 0 needed)
+            (return nil)
+            (if (< bufsize needed)
+              (setq bufsize needed)
+              (return (%str-from-ptr name needed))))))))
+
+  (defun existing-shlib-for-hmodule (hmodule)
+    (dolist (shlib *shared-libraries*)
+      (when (eql hmodule (shlib.map shlib)) (return shlib))))
+      
+  
+  (defun shared-library-from-hmodule (hmodule)
+    (or (existing-shlib-for-hmodule hmodule)
+        (let* ((shlib (%cons-shlib (hmodule-basename hmodule)
+                                   (hmodule-pathname hmodule)
+                                   hmodule
+                                   hmodule)))
+          (push shlib *shared-libraries*)
+          shlib)))
+
+  (defun for-each-loaded-module (f)
+    (let* ((have (* 16 (record-length #>HMODULE))))
+      (rlet ((pneed #>DWORD))
+        (loop
+          (%stack-block ((modules have))
+            (ff-call *enum-process-modules-addr*
+                     :address *current-process-handle*
+                     :address modules
+                     #>DWORD have
+                     :address pneed)
+            (let* ((need (pref pneed #>DWORD)))
+              (if (> need have)
+                (setq have need)
+                (return
+                  (do* ((i 0 (+ i (record-length #>HMODULE))))
+                       ((= i need))
+                    (funcall f (%get-ptr modules i)))))))))))
+
+  (defun init-shared-libraries ()
+    (for-each-loaded-module #'shared-library-from-hmodule))
+  
+  (defun shlib-containing-entry (addr &optional name)
+    (with-macptrs ((p (%int-to-ptr addr)))
+      (shlib-containing-address p name)))
+
+  (defun shlib-containing-address (addr &optional name)
+    (declare (ignore name))
+    (rlet ((phmodule :address +null-ptr+))
+      (let* ((found (ff-call *get-module-handle-ex-addr*
+                             #>DWORD (logior
+                                      #$GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+                                      #$GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT)
+                             :address addr
+                             :address phmodule
+                             #>BOOL)))
+        (unless (eql 0 found)
+          (let* ((hmodule (pref phmodule :address)))
+            (dolist (lib *shared-libraries*)
+              (when (eql (shlib.map lib)  hmodule)
+                (return lib))))))))
+
+
+  (defun open-shared-library (name)
+    "If the library denoted by name can be loaded by the operating system,
+return an object of type SHLIB that describes the library; if the library
+is already open, increment a reference count. If the library can't be
+loaded, signal a SIMPLE-ERROR which contains an often-cryptic message from
+the operating system."
+    (let* ((hmodule (with-cstrs ((name name))
+                      (ff-call
+                       (%kernel-import target::kernel-import-GetSharedLibrary)
+                       :address name
+                       :unsigned-fullword 0
+                       :address)))
+           (shlib (unless (%null-ptr-p hmodule)
+                    (shared-library-from-hmodule hmodule))))
+      (if shlib
+        (progn
+          (incf (shlib.opencount shlib))
+          (setf (shlib.handle shlib) hmodule)
+          shlib)
+        (error "Can't open shared library ~s" name))))
+
+(init-shared-libraries)
+
+;;; end windows-target
 )  
 
 
@@ -637,7 +769,7 @@ return a fixnum representation of that address, else return NIL."
 ;; end Darwin progn
 )
 
-#-(or linux-target darwin-target freebsd-target solaris-target)
+#-(or linux-target darwin-target freebsd-target solaris-target windows-target)
 (defun shlib-containing-entry (entry &optional name)
   (declare (ignore entry name))
   *rtld-default*)
@@ -685,8 +817,6 @@ return that address encapsulated in a MACPTR, else returns NIL."
   (let* ((eep (or (gethash name (eeps)) (setf (gethash name *eeps*) (%cons-external-entry-point name)))))
     (resolve-eep eep nil)
     eep))
-
-
 
 (defun load-fv (name type)
   (let* ((fv (or (gethash name (fvs)) (setf (gethash name *fvs*) (%cons-foreign-variable name type)))))
