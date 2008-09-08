@@ -16,23 +16,6 @@
 ;;;   http://opensource.franz.com/preamble.html
 
 (in-package "CCL")
-
-(eval-when (:compile-toplevel :execute)
-  #+linuxppc-target
-  (require "PPC-LINUX-SYSCALLS")
-  #+linuxx8664-target
-  (require "X8664-LINUX-SYSCALLS")
-  #+darwinppc-target
-  (require "DARWINPPC-SYSCALLS")
-  #+darwinx8632-target
-  (require "DARWINX8632-SYSCALLS")
-  #+darwinx8664-target
-  (require "DARWINX8664-SYSCALLS")
-  #+freebsdx8664-target
-  (require "X8664-FREEBSD-SYSCALLS")
-  #+solarisx8664-target
-  (require "X8664-SOLARIS-SYSCALLS"))
-
 ;;;
 
 (defclass stream ()
@@ -3311,8 +3294,11 @@
 
 
 (defun optimal-buffer-size (fd element-type)
-  (let* ((nominal (or (nth-value 6 (%fstat fd)) *elements-per-buffer*))
-         (octets (case (%unix-fd-kind fd)
+  #+windows-target (declare (ignore fd))
+  (let* ((nominal #-windows-target (or (nth-value 6 (%fstat fd)) *elements-per-buffer*))
+         (octets #+windows-target #$BUFSIZ
+                 #-windows-target
+                 (case (%unix-fd-kind fd)
                    (:pipe (#_fpathconf fd #$_PC_PIPE_BUF))
                    (:socket
                     #+linux-target nominal
@@ -5264,7 +5250,7 @@
   (fd-input-available-p fd 0)
   #-freebsd-target
   (rlet ((arg (* :char) (%null-ptr)))
-    (when (zerop (syscall syscalls::ioctl fd #$FIONREAD arg))
+    (when (zerop (int-errno-call (#_ioctl fd #$FIONREAD :address arg)))
       (let* ((avail (pref arg :long)))
 	(and (> avail 0) avail)))))
 
@@ -5304,6 +5290,9 @@
                                  :unsigned-fullword)))))
 
 (defun process-input-would-block (fd)
+  #+windows-target (declare (ignore fd))
+  #+windows-target t
+  #-windows-target
   (if (logtest #$O_NONBLOCK (the fixnum (fd-get-flags fd)))
     (process-input-wait fd)
     (- #$ETIMEDOUT)))
@@ -5336,6 +5325,9 @@
 
 
 (defun process-output-would-block (fd)
+  #+windows-target (declare (ignore fd))
+  #+windows-target t
+  #-windows-target
   (if (logtest #$O_NONBLOCK (the fixnum (fd-get-flags fd)))
     (process-output-wait fd)
     (- #$ETIMEDOUT)))
@@ -5379,7 +5371,7 @@
   (rlet ((pollfds (:array (:struct :pollfd) 1)))
     (setf (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.fd) fd
           (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.events) #$POLLIN)
-    (let* ((res (syscall syscalls::poll pollfds 1 (or milliseconds -1))))
+    (let* ((res (int-errno-call (#_poll pollfds 1 (or milliseconds -1)))))
       (declare (fixnum res))
       (values (> res 0) res))))
 
@@ -5388,7 +5380,7 @@
   (rlet ((pollfds (:array (:struct :pollfd) 1)))
     (setf (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.fd) fd
           (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.events) #$POLLOUT)
-    (let* ((res (syscall syscalls::poll pollfds 1 (or milliseconds -1))))
+    (let* ((res (int-errno-call (#_poll pollfds 1 (or milliseconds -1)))))
       (declare (fixnum res))
       (values (> res 0)  res))))
 
