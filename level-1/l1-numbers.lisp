@@ -747,6 +747,25 @@
     (%sf-check-exception-1 'tanh n (%ffi-exception-status))
     result))
 
+#+windows-target
+(progn
+(defun %double-float-asinh! (n result)
+  (%setf-double-float
+   result
+   (log (+ n (sqrt (1+ (* n n)))))))
+
+#+32-bit-target
+(defun %single-float-asinh! (n result)
+  (%setf-short-float
+   result
+   (log (+ n (sqrt (1+ (* n n)))))))
+
+#+64-bit-target
+(defun %single-float-asinh (n)
+  (log (+ n (sqrt (1+ (* n n)))))))
+
+#-windows-target
+(progn
 (defun %double-float-asinh! (n result)
   (declare (double-float n result))
   (with-stack-double-floats ((temp))
@@ -769,7 +788,29 @@
   (let* ((result (#_asinhf n)))
     (%sf-check-exception-1 'asinh n (%ffi-exception-status))
     result))
+)
 
+#+windows-target
+(progn
+(defun %double-float-acosh! (n result)
+  (%setf-double-float
+   result
+   (* 2 (log (+ (sqrt (/ (+ n 1) 2)) (sqrt (/ (- n 1) 2)))))))
+
+#+32-bit-target
+(defun %single-float-acosh! (n result)
+  (%setf-short-float
+   result
+   (* 2 (log (+ (sqrt (/ (+ n 1) 2)) (sqrt (/ (- n 1) 2)))))))
+
+#+64-bit-target
+(defun %single-float-acosh (n)
+  (* 2 (log (+ (sqrt (/ (+ n 1) 2)) (sqrt (/ (- n 1) 2))))))
+
+)
+
+#-windows-target
+(progn
 (defun %double-float-acosh! (n result)
   (declare (double-float n result))
   (with-stack-double-floats ((temp))
@@ -791,7 +832,35 @@
   (let* ((result (#_acoshf n)))
     (%sf-check-exception-1 'acosh n (%ffi-exception-status))
     result))
+)
 
+#+windows-target
+(progn
+(defun %double-float-atanh! (n result)
+  (%setf-double-float
+   result
+   (/ (- (log (1+ n))
+         (log (- 1 n)))
+      2)))
+
+#+32-bit-target
+(defun %single-float-atanh! (n result)
+  (%setf-short-float
+   result
+   (/ (- (log (1+ n))
+         (log (- 1 n)))
+      2)))
+
+#+64-bit-target
+(defun %single-float-atanh (n)
+  (/ (- (log (1+ n))
+        (log (- 1 n)))
+     2))
+
+)
+
+#-windows-target
+(progn
 (defun %double-float-atanh! (n result)
   (declare (double-float n result))
   (with-stack-double-floats ((temp))
@@ -813,7 +882,4 @@
   (let* ((result (#_atanhf n)))
     (%sf-check-exception-1 'atanh n (%ffi-exception-status))
     result))
-
-
-
-
+)
