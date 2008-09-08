@@ -14,23 +14,6 @@
    http://opensource.franz.com/preamble.html
 */
 
-/*
-   These aren't really system calls; they're just C runtime functions
-   that (a) are built in to the lisp, so they can be called early
-   in the cold load, before the FFI is initialized and (b) return negated
-   error code on failure, so that it's not necessary to separately
-   fetch errno.
-
-   It's reasonable to consider replacing these things with wrappers
-   around native functionality (ReadFile, etc.) someday.
-
-   The order of the entries in windows_syscall_table[] should match
-   the order of syscall indices defined in
-   "ccl:library;x86-win64-syscalls.lisp".
-
-   One last time: these aren't really system calls.
-*/
-
 #include "lisp.h"
 #include "x86-exceptions.h"
 #include <io.h>
@@ -191,20 +174,10 @@ _dosmaperr(unsigned long oserrno)
     
 #endif
 
-#define WSYSCALL_RETURN(form) \
-  do { \
-    int __result = form; \
-\
-    if (__result < 0){ \
-      return -errno; \
-    } \
-    return __result; \
-  } while (0)
 
 
-
-__int64
-windows_open(wchar_t *path, int flag, int mode)
+int
+lisp_open(wchar_t *path, int flag, int mode)
 {
   int fd;
   HANDLE hfile;
@@ -298,14 +271,14 @@ windows_open(wchar_t *path, int flag, int mode)
   return fd;
 }
 
-__int64
-windows_close(int fd)
+int
+lisp_close(int fd)
 {
-  WSYSCALL_RETURN(close(fd));
+  return close(fd);
 }
 
-__int64
-windows_read(int fd, void *buf, unsigned int count)
+int
+lisp_read(int fd, void *buf, unsigned int count)
 {
   HANDLE hfile;
   OVERLAPPED overlapped;
@@ -345,7 +318,7 @@ windows_read(int fd, void *buf, unsigned int count)
   if (err != ERROR_IO_PENDING) {
     _dosmaperr(err);
     tcr->foreign_exception_status = 0;
-    return -errno;
+    return -1;
   }
   
   /* We block here */
@@ -359,72 +332,74 @@ windows_read(int fd, void *buf, unsigned int count)
   switch (err) {
   case ERROR_HANDLE_EOF: 
     return 0;
-  case ERROR_OPERATION_ABORTED: 
-    return -EINTR;
+  case ERROR_OPERATION_ABORTED:
+    errno = EINTR;
+    return -1;
   default:
     _dosmaperr(err);
-    return -errno;
+    return -1;
   }
 }
 
-__int64
-windows_write(int fd, void *buf, unsigned int count)
+int
+lisp_write(int fd, void *buf, unsigned int count)
 {
-  WSYSCALL_RETURN( _write(fd, buf, count));
+  return _write(fd, buf, count);
 }
 
-__int64
-windows_fchmod(int fd, int mode)
+int
+lisp_fchmod(int fd, int mode)
 {
-  return -ENOSYS;
+  errno = ENOSYS
+  return -1;
 }
 
-__int64
-windows_lseek(int fd, __int64 offset, int whence)
+off_t
+lisp_lseek(int fd, __int64 offset, int whence)
 {
-  WSYSCALL_RETURN(lseek64(fd, offset, whence));
+  return lseek64(fd, offset, whence);
 }
 
-__int64
-windows_stat(wchar_t *path, struct __stat64 *buf)
+int
+lisp_stat(wchar_t *path, struct __stat64 *buf)
 {
-  WSYSCALL_RETURN(_wstat64(path,buf));
+  return _wstat64(path,buf);
 }
 
-__int64
+int
 windows_fstat(int fd, struct __stat64 *buf)
 {
-  WSYSCALL_RETURN(_fstat64(fd,buf));
+  return _fstat64(fd,buf);
 }
 
 
 __int64
-windows_ftruncate(int fd, __int64 new_size)
+lisp_ftruncate(int fd, __int64 new_size)
 {
   /* Note that _ftruncate only allows 32-bit length */
-  WSYSCALL_RETURN(ftruncate(fd,(off_t)new_size));
+  return ftruncate(fd,(off_t)new_size);
 }
 
 _WDIR *
-windows_opendir(wchar_t *path)
+lisp_opendir(wchar_t *path)
 {
   return _wopendir(path);
 }
 
 struct _wdirent *
-windows_readdir(_WDIR *dir)
+lisp_readdir(_WDIR *dir)
 {
   return _wreaddir(dir);
 }
 
 __int64
-windows_closedir(_WDIR *dir)
+lisp_closedir(_WDIR *dir)
 {
   WSYSCALL_RETURN(_wclosedir(dir));
 }
 
-__int64
-windows_pipe(int fd[2])
+int
+lisp_pipe(int fd[2])
 {
   HANDLE input, output;
   SECURITY_ATTRIBUTES sa;
@@ -443,22 +418,6 @@ windows_pipe(int fd[2])
   return 0;
 }
 
-void *
-windows_syscall_table[] = {
-  windows_open,
-  windows_close,
-  windows_read,
-  windows_write,
-  windows_fchmod,
-  windows_lseek,
-  windows_stat,
-  windows_fstat,
-  windows_ftruncate,
-  windows_opendir,
-  windows_readdir,
-  windows_closedir,
-  windows_pipe
-};
 
 HMODULE *modules = NULL;
 DWORD cbmodules = 0;
