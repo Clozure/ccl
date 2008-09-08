@@ -38,7 +38,6 @@
   (defconstant futex-avail 0)
   (defconstant futex-locked 1)
   (defconstant futex-contended 2)
-  (require "X8664-LINUX-SYSCALLS")
   (declaim (inline %lock-futex %unlock-futex)))
 
 ;;; Miscellany.
@@ -554,7 +553,9 @@
   #-monitor-futex-wait
   (defun futex-wait (p val whostate)
     (with-process-whostate (whostate)
-      (syscall syscalls::futex p FUTEX-WAIT val (%null-ptr) (%null-ptr) 0)))
+      (int-errno-ffcall
+       (%kernel-import target::kernel-import-lisp-futex)
+       :address p :int FUTEX-WAIT :int val :address (%null-ptr) :address (%null-ptr) :int 0 :int)))
   #+monitor-futex-wait
   (progn
     (defparameter *total-futex-wait-calls* 0)
@@ -563,7 +564,9 @@
       (with-process-whostate (whostate)
         (let* ((start (get-internal-real-time)))
           (incf *total-futex-wait-calls*)
-          (syscall syscalls::futex p FUTEX-WAIT val (%null-ptr) (%null-ptr) 0)
+          (int-errno-ffcall
+           (%kernel-import target::kernel-import-lisp-futex)
+           :address p :int FUTEX-WAIT :int val :address (%null-ptr) :address (%null-ptr) :int 0 :int)
           (incf *total-futex-wait-times* (- (get-internal-real-time) start)))))))
     
 
@@ -571,7 +574,8 @@
 
 #+futex
 (defun futex-wake (p n)
-  (syscall syscalls::futex p FUTEX-WAKE n (%null-ptr) (%null-ptr) 0))
+  (int-errno-ffcall (%kernel-import target::kernel-import-lisp-futex)
+                    :address p :int FUTEX-WAKE :int n :address (%null-ptr) :address (%null-ptr) :int 0 :int))
 
 #+futex
 (defun %lock-futex (p wait-level lock fwhostate)
