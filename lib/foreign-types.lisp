@@ -46,6 +46,14 @@
 
 (defconstant max-canonical-foreign-type-ordinal 100)
 
+;;; Some foreign types are "common" (POSIXy things that're available
+;;; on most platforms; some are very platform-specific.  It's getting
+;;; to be a mess to keep those separate by reader conditionalization,
+;;; so use the first 50 ordinals for "common" foreign types and the
+;;; next 50 for platform-specific stuff.
+
+(defconstant max-common-foreign-type-ordinal 50)
+
 ;;; This is intended to try to encapsulate foreign type stuff, to
 ;;; ease cross-compilation (among other things.)
 
@@ -71,7 +79,8 @@
   (ordinal-lock (make-lock))
   (ordinal-types (make-hash-table :test #'eq :weak :value))
   (pointer-types (make-hash-table :test #'eq))
-  (array-types (make-hash-table :test #'equal)))
+  (array-types (make-hash-table :test #'equal))
+  (platform-ordinal-types ()))
 
 
 
@@ -1664,7 +1673,13 @@ result-type-specifer is :VOID or NIL"
                         'foreign-float-type)
                (return t)))))))
 
-
+(defparameter *canonical-unix-foreign-types*
+  '((:struct :timespec)
+    (:struct :timeval)
+    (:struct :stat)
+    (:struct :passwd)
+    #>Dl_info))
+    
 (defun canonicalize-foreign-type-ordinals (ftd)
   (let* ((canonical-ordinal 0))          ; used for :VOID
     (flet ((canonicalize-foreign-type-ordinal (spec)
@@ -1681,19 +1696,12 @@ result-type-specifer is :VOID or NIL"
       (canonicalize-foreign-type-ordinal :unsigned)
       (canonicalize-foreign-type-ordinal #+64-bit-target :long #-64-bit-target nil)
       (canonicalize-foreign-type-ordinal :address)
-      (canonicalize-foreign-type-ordinal #-darwin-target
-                                         :<D>l_info
-                                         #+darwin-target nil)
-      (canonicalize-foreign-type-ordinal '(:struct :timespec))
-      (canonicalize-foreign-type-ordinal '(:struct :timeval))
       (canonicalize-foreign-type-ordinal '(:struct :sockaddr_in))
       (canonicalize-foreign-type-ordinal '(:struct :sockaddr_un))
       (canonicalize-foreign-type-ordinal '(:struct :linger))
       (canonicalize-foreign-type-ordinal '(:struct :hostent))
       (canonicalize-foreign-type-ordinal '(:array :unsigned-long 3))
       (canonicalize-foreign-type-ordinal '(:* :char))
-      (canonicalize-foreign-type-ordinal '(:struct :stat))
-      (canonicalize-foreign-type-ordinal '(:struct :passwd))
       (canonicalize-foreign-type-ordinal #+darwin-target '(:struct :host_basic_info) #-darwin-target nil)
       (canonicalize-foreign-type-ordinal '(:struct :in_addr))
       (canonicalize-foreign-type-ordinal '(:struct :cdb-datum))
@@ -1705,7 +1713,14 @@ result-type-specifer is :VOID or NIL"
       (canonicalize-foreign-type-ordinal #+solaris-target '(:struct :flock) #-solaris-target nil)
       (canonicalize-foreign-type-ordinal #+solaris-target '(:struct :lifnum) #-solaris-target nil)
       (canonicalize-foreign-type-ordinal #+solaris-target '(:struct :lifconf) #-solaris-target nil)
-      )))
+      (setq canonical-ordinal (1- max-common-foreign-type-ordinal))
+      ;; We don't use foreign type ordinals when cross-compiling,
+      ;; so the read-time conditionalization is OK here.
+      #+(or linux-target darwin-target solaris-target freebsd-target)
+      (dolist (spec *canonical-unix-foreign-types)
+        (canonicalize-foreign-type-ordinal spec))
+      (dolist (spec (ftd-platform-ordinal-types ftd))
+        (canonicalize-foreign-type-ordinal spec)))))
 
 (defun install-standard-foreign-types (ftd)
   (let* ((*target-ftd* ftd)
