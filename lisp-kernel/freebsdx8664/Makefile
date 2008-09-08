@@ -31,7 +31,7 @@ SPOBJ = pad.o x86-spjump64.o x86-spentry64.o x86-subprims64.o
 ASMOBJ = x86-asmutils64.o imports.o
 
 COBJ  = pmcl-kernel.o gc-common.o  x86-gc.o bits.o  x86-exceptions.o \
-	image.o thread_manager.o lisp-debug.o memory.o
+	image.o thread_manager.o lisp-debug.o memory.o unix-calls.o
 
 DEBUGOBJ = lispdcmd.o plprint.o plsym.o xlbt.o x86_print.o
 KERNELOBJ= $(COBJ) x86-asmutils64.o  imports.o
