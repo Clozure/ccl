@@ -672,7 +672,7 @@ given is that of a group to which the current user belongs."
            :int))
 
 (defun %read-dir (dir)
-  (let* ((res (ff-call (%kernel-import target::kernel-import-lisp-closedir)
+  (let* ((res (ff-call (%kernel-import target::kernel-import-lisp-readdir)
                        :address dir
                        :address)))
     (unless (%null-ptr-p res)
