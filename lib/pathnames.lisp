@@ -81,6 +81,8 @@
 (defun unix-rename (old-name new-name)
   (with-cstrs ((old old-name)
                (new new-name))
+    #+windows-target
+    (#__unlink new)
     (let* ((res (#_rename old new)))
       (declare (fixnum res))
       (if (zerop res)
