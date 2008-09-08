@@ -102,9 +102,18 @@
 
 ;; Reverse of above, take native namestring and make a Lisp pathname.
 (defun native-to-pathname (name)
-  (pathname (%path-std-quotes name nil "*;:")))
+  (pathname (%path-std-quotes name nil
+                              #+windows-target "*;"
+                              #-windows-target "*;:")))
 
 (defun native-to-directory-pathname (name)
+  #+windows-target
+  (let* ((len (length name)))
+    (when (and (> len 1) (not (or (eql (schar name (1- len)) #\/)
+                                  (eql (schar name (1- len)) #\\))))
+      (setq name (%str-cat name "/")))
+    (string-to-pathname (strip-drive-for-now name)))
+  #-windows-target
   (make-directory-pathname  :device nil :directory (%path-std-quotes name nil "*;:")))
 
 ;;; Make a pathname which names the specified directory; use
@@ -118,8 +127,20 @@
                  :version nil))
 
 		   
+(defun %shrink-vector (vector to-size)
+  (cond ((eq (length vector) to-size)
+         vector)
+        ((array-has-fill-pointer-p vector)
+         (setf (fill-pointer vector) to-size)
+         vector)
+        (t (subseq vector 0 to-size))))
 
 (defun namestring-unquote (name)
+  #+(and windows-target bogus)
+  (when (and (> (length name) 1)
+             (eql (schar name 1) #\|))
+    (setq name (subseq name 0))
+    (setf (schar name 1) #\:))
   (let ((esc *pathname-escape-character*))
     (if (position esc name)
       (multiple-value-bind (sstr start end) (get-sstring name)
@@ -268,7 +289,7 @@
 
 
 
-; I thought I wanted to call this from elsewhere but perhaps not
+;;; I thought I wanted to call this from elsewhere but perhaps not
 (defun absolute-directory-list (dirlist)
   ; just make relative absolute and remove ups where possible
   (when (or (null dirlist) (eq (car dirlist) :relative))
@@ -313,9 +334,16 @@
 
 (defun namestring (path)
   "Construct the full (name)string form of the pathname."
-  (%str-cat (host-namestring path)
+  (%str-cat (device-namestring path)
+            (host-namestring path)
 	    (directory-namestring path)
 	    (file-namestring path)))
+
+(defun device-namestring (path)
+  (let* ((device (pathname-device path)))
+    (if (and device (not (eq device :unspecific)))
+      (%str-cat device ":")
+      "")))
 
 (defun host-namestring (path)
   "Return a string representation of the name of the host in the pathname."
@@ -455,10 +483,10 @@
       (setq nam (file-namestring-from-parts nam typ ver))
       (%str-cat host dir nam))))
 
-(defun cons-pathname (dir name type &optional host version)
+(defun cons-pathname (dir name type &optional host version device)
   (if (neq host :unspecific)
     (%cons-logical-pathname dir name type host version)
-    (%cons-pathname dir name type version)))
+    (%cons-pathname dir name type version device)))
 
 (defun pathname (path)
   "Convert thing (a pathname, string or stream) into a pathname."
@@ -480,12 +508,13 @@
                                             (defaults *default-pathname-defaults*))
   (require-type reference-host '(or null string))
   (multiple-value-bind (sstr start end) (get-sstring string start end)
+    #-windows-target
     (if (and (> end start)
              (eql (schar sstr start) #\~))
       (setq sstr (tilde-expand (subseq sstr start end))
             start 0
             end (length sstr)))
-    (let (directory name type host version (start-pos start) (end-pos end) has-slashes)
+    (let (directory name type host version device (start-pos start) (end-pos end) has-slashes)
       (multiple-value-setq (host start-pos has-slashes) (pathname-host-sstr sstr start-pos end-pos))
       (cond ((and host (neq host :unspecific))
              (when (and reference-host (not (string-equal reference-host host)))
@@ -499,6 +528,15 @@
 	     (when has-slashes
 	       (error "Illegal logical namestring ~S" (%substr sstr start end)))
              (setq host reference-host)))
+      #+windows-target
+      (when (and (eq host :unspecific)
+                 (eql start-pos 0)
+                 (eql (position #\: sstr) 1))
+        (let* ((ch (schar sstr 0)))
+          (when (and (alpha-char-p ch)
+                     (standard-char-p ch))
+            (setq device (make-string 1 :initial-element ch)
+                  start-pos 2))))
       (multiple-value-setq (directory start-pos) (pathname-directory-sstr sstr start-pos end-pos host))
       (unless (eq host :unspecific)
 	(multiple-value-setq (version end-pos) (pathname-version-sstr sstr start-pos end-pos)))
@@ -507,7 +545,7 @@
       (unless (eq start-pos end-pos)
         (setq name (%std-name-component (%substr sstr start-pos end-pos))))
       (if (eq host :unspecific)
-	(%cons-pathname directory name type version)
+	(%cons-pathname directory name type :newest device)
         (%cons-logical-pathname directory name type host version)))))
 
 (defun parse-namestring (thing &optional host (defaults *default-pathname-defaults*)
@@ -528,8 +566,19 @@
 
 
 
+(defun %std-device-component (device host)
+  (when (and (or (null host) (eq host :unspecific))
+             (and device (not (eq device :unspecific))))
+    #+windows-target
+    (unless (and (typep device 'string)
+                 (eql (length device) 1)
+                 (alpha-char-p (char device 0))
+                 (standard-char-p (char device 0)))
+      (error "Invalid pathname device ~s" device))
+    device))
+    
 (defun make-pathname (&key (host nil host-p) 
-                           device
+                           (device nil device-p)
                            (directory nil directory-p)
                            (name nil name-p)
                            (type nil type-p)
@@ -538,7 +587,6 @@
                            &aux path)
   "Makes a new pathname from the component arguments. Note that host is
 a host-structure or string."
-  (declare (ignore device))
   (when case (setq case (require-type case pathname-case-type)))
   (if (null host-p)
     (let ((defaulted-defaults (if defaults-p defaults *default-pathname-defaults*)))
@@ -550,6 +598,9 @@ a host-structure or string."
     (setq directory (%std-directory-component directory host)))
   (if (and defaults (not directory-p))
     (setq directory (pathname-directory defaults)))
+  (if (and defaults (not device-p))
+    (setq device (pathname-device defaults)))
+  (setq device (%std-device-component device host))
   (setq name
         (if name-p
              (%std-name-component name)
@@ -565,7 +616,7 @@ a host-structure or string."
 		    (and defaults (pathname-version defaults)))))
   (setq path
         (if (eq host :unspecific)
-          (%cons-pathname directory name type version)
+          (%cons-pathname directory name type version device)
           (%cons-logical-pathname
 	   (or directory
 	       (unless directory-p '(:absolute)))
@@ -643,8 +694,10 @@ a host-structure or string."
          (path-host (pathname-host path))
          (path-name (pathname-name path))
 	 (path-type (pathname-type path))
+         (path-device (pathname-device path))
          (default-dir (and defaults (pathname-directory defaults)))
          (default-host (and defaults (pathname-host defaults)))
+         (default-device (and defaults (pathname-device defaults)))
          ; take host from defaults iff path-dir is logical or absent - huh? 
          (host (cond ((or (null path-host)  ; added 7/96
                           (and (eq path-host :unspecific)
@@ -670,15 +723,17 @@ a host-structure or string."
 		      (cond ((not path-name)
 			     (or (and defaults (pathname-version defaults))
                                  default-version))
-			    (t default-version)))))
+			    (t default-version))))
+         (device (or path-device default-device)))
     (if (and (pathnamep path)
              (eq dir (%pathname-directory path))
              (eq nam path-name)
              (eq typ (%pathname-type path))
              (eq host path-host)
+             (eq device path-device)
              (eq version (pathname-version path)))
       path 
-      (cons-pathname dir nam typ host version))))
+      (cons-pathname dir nam typ host version device))))
 
 (defun directory-pathname-p (path)
   (let ((name (pathname-name path))(type (pathname-type path)))
@@ -725,7 +780,10 @@ a host-structure or string."
 (defun pathname-device (thing &key case)
   "Return PATHNAME's device."
   (declare (ignore case))
-  (cond ((typep (pathname thing) 'logical-pathname) :unspecific)))
+  (let* ((p (pathname thing)))
+    (etypecase p
+      (logical-pathname :unspecific)
+      (pathname (%physical-pathname-device p)))))
 
 
 
@@ -750,6 +808,11 @@ a host-structure or string."
                              end (length sstr)))
 		     (multiple-value-bind (host pos2) (pathname-host-sstr sstr start end)
 		       (unless (eq host :unspecific) (setq logical-p t))
+                       #+windows-target
+                       (unless logical-p
+                         (if (and (> end 1)
+                                  (eql (schar sstr 1) #\:))
+                           (setq pos2 2)))
                       (pathname-directory-sstr sstr pos2 end host))))
 		  (t (report-bad-arg path pathname-arg-type)))))
     (if (and case (neq case :local))
