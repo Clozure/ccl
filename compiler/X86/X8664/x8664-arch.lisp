@@ -827,6 +827,19 @@
   rwlock-unlock
   recursive-lock-trylock
   foreign-name-and-offset
+  lisp-read
+  lisp-write
+  lisp-open
+  lisp-fchmod
+  lisp-lseek
+  lisp-close
+  lisp-ftruncate
+  lisp-stat
+  lisp-fstat
+  lisp-futex
+  lisp-opendir
+  lisp-readdir
+  lisp-closedir
 )
 
 (defmacro nrs-offset (name)
