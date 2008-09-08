@@ -129,7 +129,7 @@
   (unless *interactive-streams-initialized*
     (bug (format nil "Error during early application initialization:~%
 ~a" condition))
-    (#_exit #$EX_SOFTWARE))
+    (#_exit #-windows-target #$EX_SOFTWARE #+windows-target #$EXIT_FAILURE))
   (application-error *application* condition error-pointer)
   (application-error
    *application*
