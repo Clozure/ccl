@@ -29,11 +29,14 @@
 (setf (type-predicate 'lisp-thread) 'lisp-thread-p)
 
 (defloadvar *ticks-per-second*
+    #+windows-target 1000
+    #-windows-target
     (#_sysconf #$_SC_CLK_TCK))
 
 (defloadvar *ns-per-tick*
     (floor 1000000000 *ticks-per-second*))
 
+#-windows-target
 (defun %nanosleep (seconds nanoseconds)
   (with-process-whostate ("Sleep")
     (rlet ((a :timespec)
@@ -69,6 +72,7 @@
   (+ (* *ticks-per-second* (pref tv :timeval.tv_sec))
      (round (pref tv :timeval.tv_usec) (floor 1000000 *ticks-per-second*))))
 
+#-windows-target
 (defloadvar *lisp-start-timeval*
     (progn
       (let* ((r (make-record :timeval)))
@@ -82,6 +86,7 @@
 (defun get-internal-real-time ()
   "Return the real time in the internal time format. (See
   INTERNAL-TIME-UNITS-PER-SECOND.) This is useful for finding elapsed time."
+  #-windows-target
   (rlet ((tv :timeval))
     (#_gettimeofday tv (%null-ptr))
     (let* ((units (truncate (the fixnum (pref tv :timeval.tv_usec)) (/ 1000000 internal-time-units-per-second)))
@@ -97,7 +102,14 @@
         (progn
           (setq *internal-real-time-session-seconds*
                 (pref tv :timeval.tv_sec))
-          units)))))
+          units))))
+  #+windows-target
+  (rlet ((ft #>FILETIME))
+    (#_GetSystemTimeAsFileTime ft)
+    (values
+     (floor (dpb (pref ft #>FILETIME.dwHighDateTime) (byte 32 32)
+                (pref ft #>FILETIME.dwLowDateTime))
+           (floor 10000000 internal-time-units-per-second)))))
 
 (defun get-tick-count ()
   (values (floor (get-internal-real-time)
@@ -416,6 +428,9 @@
       (when pthread
         (setf (lisp-thread.tcr thread) nil
               (lisp-thread.state thread) :exit)
+        #+windows-target
+        (#_TerminateThread pthread #$EXIT_FAILURE)
+        #-windows-target
         (#_pthread_kill pthread #$SIGQUIT)))))
 
 ;;; This returns the underlying pthread, whatever that is.
