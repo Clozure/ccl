@@ -147,6 +147,34 @@
                 :lisp-context-register x8664::gs
                 ))
 
+#+win64-target
+(defvar *win64-backend*
+  (make-backend :lookup-opcode 'lookup-x86-opcode
+		:lookup-macro #'false
+                :lap-opcodes x86::*x86-opcode-templates*
+                :define-vinsn 'define-x86-vinsn
+		:p2-dispatch *x862-specials*
+		:p2-vinsn-templates *x8664-vinsn-templates*
+		:p2-template-hash-name '*x8664-vinsn-templates*
+		:p2-compile 'x862-compile
+		:target-specific-features
+		'(:x8664 :x86-target :win64-target :windows-target :x8664-target
+                  :winx64-target                  
+                  :little-endian-target
+                  :64-bit-target)
+		:target-fasl-pathname (make-pathname :type "wx64fsl")
+		:target-platform (logior platform-cpu-x86
+                                         platform-os-windows
+                                         platform-word-size-64)
+		:target-os :win64
+		:name :win64
+		:target-arch-name :x8664
+		:target-foreign-type-data nil
+                :target-arch x8664::*x8664-target-arch*
+                :platform-syscall-mask (logior platform-os-windows platform-cpu-x86 platform-word-size-64)
+                :lisp-context-register x8664::r11
+                ))
+
 #+(or linuxx86-target (not x86-target))
 (pushnew *linuxx8664-backend* *known-x8664-backends* :key #'backend-name)
 
@@ -159,6 +187,9 @@
 
 #+solarisx86-target
 (pushnew *solarisx8664-backend* *known-x8664-backends* :key #'backend-name)
+
+#+win64-target
+(pushnew *win64-backend* *known-x8664-backends* :key #'backend-name)
 
 (defvar *x8664-backend* (car *known-x8664-backends*))
 
@@ -251,7 +282,25 @@
                            :callback-bindings-function
                            (intern "GENERATE-CALLBACK-BINDINGS" "X86-SOLARIS64")
                            :callback-return-value-function
-                           (intern "GENERATE-CALLBACK-RETURN-VALUE" "X86-SOLARIS64"))))))
+                           (intern "GENERATE-CALLBACK-RETURN-VALUE" "X86-SOLARIS64")))
+                (:win64
+                 (make-ftd :interface-db-directory
+                           (if (eq backend *host-backend*)
+                             "ccl:win64-headers;"
+                             "ccl:cross-win64-headers;")
+                           :interface-package-name "WIN64"
+                           :attributes '(:bits-per-word  64
+                                         :struct-by-value t
+                                         :bits-per-long 32)
+                           :ff-call-expand-function
+                           (intern "EXPAND-FF-CALL" "WIN64")
+                           :ff-call-struct-return-by-implicit-arg-function
+                           (intern "RECORD-TYPE-RETURNS-STRUCTURE-AS-FIRST-ARG"
+                                   "WIN64")
+                           :callback-bindings-function
+                           (intern "GENERATE-CALLBACK-BINDINGS" "WIN64")
+                           :callback-return-value-function
+                           (intern "GENERATE-CALLBACK-RETURN-VALUE" "WIN64"))))))
         (install-standard-foreign-types ftd)
         (use-interface-dir :libc ftd)
         (setf (backend-target-foreign-type-data backend) ftd))))
