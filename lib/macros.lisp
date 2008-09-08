@@ -1640,7 +1640,22 @@ to open."
 
 
 
-
+(defmacro with-native-utf-16-cstr ((sym str) &body body)
+  (let* ((data (gensym))
+         (offset (gensym))
+         (string (gensym))
+         (len (gensym))
+         (noctets (gensym))
+         (end (gensym)))
+    `(let* ((,string ,str)
+            (,len (length ,string)))
+      (multiple-value-bind (,data ,offset) (array-data-and-offset ,string)
+        (let* ((,end (+ ,offset ,len))
+               (,noctets (utf-16-octets-in-string ,data ,offset ,end)))
+          (%stack-block ((,sym (1+ ,noctets)))
+            (native-utf-16-memory-encode ,data ,sym 0 ,offset ,end)
+            (setf (%get-unsigned-word ,sym ,noctets) 0)
+            ,@body))))))
 
 (defmacro with-pointers (speclist &body body)
    (with-specs-aux 'with-pointer speclist body))
@@ -1652,6 +1667,9 @@ to open."
 
 (defmacro with-utf-8-cstrs (speclist &body body)
    (with-specs-aux 'with-utf-8-cstr speclist body))
+
+(defmacro with-native-utf-16-cstrs (speclist &body body)
+  (with-specs-aux 'with-native-utf-16-cstr speclist body))
 
 (defmacro with-encoded-cstr ((encoding-name (sym string &optional start end))
                              &rest body &environment env)
@@ -3660,3 +3678,5 @@ stream-output-timeout set to TIMEOUT."
         (%get-errno)
         ,value))))
 
+(defmacro int-errno-ffcall (entry &rest args)
+  `(int-errno-call (ff-call ,entry ,@args)))
