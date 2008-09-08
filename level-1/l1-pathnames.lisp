@@ -26,7 +26,12 @@
 (defun heap-image-name ()
   (let* ((p (%null-ptr)))
     (declare (dynamic-extent p))
-    (%get-cstring (%get-kernel-global-ptr 'image-name p))))
+    #-windows-target
+    (%get-cstring (%get-kernel-global-ptr 'image-name p))
+    #+windows-target
+    (strip-drive-for-now
+     (nbackslash-to-forward-slash
+      (%get-cstring (%get-kernel-global-ptr 'image-name p))))))
 
 (defloadvar *heap-image-name* (heap-image-name))
 
@@ -314,38 +319,39 @@
   "Use the source pathname to translate the from-wildname's wild and
    unspecified elements into a completed to-pathname based on the to-wildname."
   (when (not (pathnamep source)) (setq source (pathname source)))
-  (flet ((foo-error (source from)
-	   (error "Source ~S and from-wildname ~S do not match" source from)))
-    (let (r-host r-device r-directory r-name r-type r-version s-host f-host t-host)
+  (flet ((translate-pathname-component-mismatch (component-name source from)
+	   (error "~S components of source ~S and from-wildname ~S do not match" component-name source from)))
+    (let (r-host  r-directory r-name r-type r-version s-host f-host t-host t-device)
       (setq s-host (pathname-host source))
       (setq f-host (pathname-host from-wildname))
       (setq t-host (pathname-host to-wildname))
-      (if (not (%host-component-match-p s-host f-host)) (foo-error source from-wildname))
+      (setq t-device (pathname-device to-wildname))
+      (if (not (%host-component-match-p s-host f-host)) (translate-pathname-component-mismatch 'pathname-host source from-wildname))
       (setq r-host (translate-component s-host f-host t-host reversible))
       (let ((s-dir (%std-directory-component (pathname-directory source) s-host))
             (f-dir (%std-directory-component (pathname-directory from-wildname) f-host))
             (t-dir (%std-directory-component (pathname-directory to-wildname) t-host)))
         (let ((match (%pathname-match-directory s-dir f-dir)))
-          (if (not match)(foo-error source from-wildname))
+          (if (not match)(translate-pathname-component-mismatch 'pathname-directory source from-wildname))
           (setq r-directory  (translate-directory s-dir f-dir t-dir reversible t-host))))
       (let ((s-name (pathname-name source))
             (f-name (pathname-name from-wildname))
             (t-name (pathname-name to-wildname)))
-        (if (not (%component-match-p s-name f-name))(foo-error source from-wildname))        
+        (if (not (%component-match-p s-name f-name))(translate-pathname-component-mismatch 'pathname-name  source from-wildname))        
         (setq r-name (translate-component s-name f-name t-name reversible)))
       (let ((s-type (pathname-type source))
             (f-type (pathname-type from-wildname))
             (t-type (pathname-type to-wildname)))
-        (if (not (%component-match-p s-type f-type))(foo-error source from-wildname))
+        (if (not (%component-match-p s-type f-type))(translate-pathname-component-mismatch 'pathname-component source from-wildname))
         (setq r-type (translate-component s-type f-type t-type reversible)))
       (let ((s-version (pathname-version source))
             (f-version (pathname-version from-wildname))
             (t-version (pathname-version to-wildname)))
-        (if (not (%component-match-p s-version f-version))(foo-error source from-wildname))
+        (if (not (%component-match-p s-version f-version)) (translate-pathname-component-mismatch 'pathname-version source from-wildname))
         (setq r-version (translate-component s-version f-version t-version reversible))
         ;(if (eq r-version :unspecific)(setq r-version nil))
         )
-      (make-pathname :device r-device :host r-host :directory r-directory
+      (make-pathname :device t-device :host r-host :directory r-directory
                      :name r-name :type r-type :version r-version :defaults nil)
       )))
 
@@ -661,7 +667,9 @@
     (cond ((eq host :unspecific) pathname)
 	  ((null host) (%cons-pathname (pathname-directory pathname)
 				       (pathname-name pathname)
-				       (pathname-type pathname)))
+				       (pathname-type pathname)
+                                       (pathname-version pathname)
+                                       (pathname-device pathname)))
 	  (t
 	   (let ((rule (assoc pathname (logical-pathname-translations host)
 			      :test #'pathname-match-p)))  ; how can they match if hosts neq??
