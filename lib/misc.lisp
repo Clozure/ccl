@@ -29,12 +29,32 @@
 
 (defun machine-instance ()
   "Return a string giving the name of the local machine."
-  (%uname 1))
+  #-windows-target (%uname 1)
+  #+windows-target
+  (rlet ((nsize #>DWORD 0))
+    (if (eql 0 (#_GetComputerNameExW #$ComputerNameDnsFullyQualified
+                                     +null-ptr+
+                                     nsize))
+      (%stack-block ((buf (* 2 (pref nsize #>DWORD))))
+        (#_GetComputerNameExW #$ComputerNameDnsFullyQualified
+                              buf
+                              nsize)
+        (%get-native-utf-16-cstring buf))
+      "localhost"))
+  )
 
 
 (defun machine-type ()
   "Returns a string describing the type of the local machine."
-  (%uname 4))
+  #-windows-target (%uname 4)
+  #+windows-target
+  (rlet ((info #>SYSTEM_INFO))
+    (#_GetSystemInfo info)
+    (case (pref info #>SYSTEM_INFO.nil.nil.wProcessorArchitecture)
+      (#.#$PROCESSOR_ARCHITECTURE_AMD64 "x64")
+      (#.#$PROCESSOR_ARCHITECTURE_INTEL "x86")
+      (t "unknown")))
+  )
 
 
 
@@ -94,18 +114,35 @@ are running on, or NIL if we can't find any useful information."
                          (= (pref info :processor_info_t.pi_state)
                             #$P_ONLINE))
                     (%get-cstring (pref info :processor_info_t.pi_processor_type)))))
+            #+windows-target
+            (getenv "PROCESSOR_IDENTIFIER")
             )))
 
 
 (defun software-type ()
   "Return a string describing the supporting software."
-  (%uname 0))
+  #-windows-target (%uname 0)
+  #+windows-target "Microsoft Windows")
 
 
 (defun software-version ()
   "Return a string describing version of the supporting software, or NIL
    if not available."
-  (%uname 2))
+  #-windows-target (%uname 2)
+  #+windows-target
+  (rletZ ((info #>OSVERSIONINFOEX))
+    (setf (pref info #>OSVERSIONINFOEX.dwOSVersionInfoSize)
+          (record-length #>OSVERSIONINFOEX))
+    (#_GetVersionExA info)
+    (format nil "~d.~d Build ~d (~a)"
+            (pref info #>OSVERSIONINFOEX.dwMajorVersion)
+            (pref info #>OSVERSIONINFOEX.dwMinorVersion)
+            (pref info #>OSVERSIONINFOEX.dwBuildNumber)
+            (if (eql (pref info #>OSVERSIONINFOEX.wProductType)
+                     #$VER_NT_WORKSTATION)
+              "Workstation"
+              "Server")))
+  )
 
 
 
@@ -374,6 +411,27 @@ are running on, or NIL if we can't find any useful information."
 
 ;;
 
+
+(defun %page-fault-info ()
+  #-(or darwin-target windows-target)
+  (rlet ((usage :rusage))
+    (%%rusage usage)
+    (values (pref usage :rusage.ru_minflt)
+            (pref usage :rusage.ru_majflt)
+            (pref usage :rusage.ru_nswap)))
+  #+darwin-target
+  (rlet ((count #>mach_msg_type_number_t #$TASK_EVENTS_INFO_COUNT)
+         (info #>task_events_info))
+    (#_task_info (#_mach_task_self) #$TASK_EVENTS_INFO info count)
+    (values (pref info #>task_events_info.cow_faults)
+            (pref info #>task_events_info.faults)
+            (pref info #>task_events_info.pageins)))
+  #+windows-target
+  ;; Um, don't know how to determine this, or anything like it.
+  (values 0 0 0))
+
+
+          
 (defparameter *report-time-function* nil
   "If non-NULL, should be a function which accepts the following
    keyword arguments:
@@ -427,57 +485,45 @@ are running on, or NIL if we can't find any useful information."
            (if (typep i 'fixnum)
              0
              (* (logand (+ 2 (uvsize i)) (lognot 1)) 4))))
-    (rlet ((start :rusage)
-	   (stop :rusage)
-	   (timediff :timeval))
-      (let* ((initial-real-time (get-internal-real-time))
-	     (initial-gc-time (gctime))
-	     (initial-consed (total-bytes-allocated))           
-	     (initial-overhead (integer-size-in-bytes initial-consed)))
-	(%%rusage start)
-	(let* ((results (multiple-value-list (funcall thunk))))
-          (declare (dynamic-extent results))
-	  (%%rusage stop)	  
-	  (let* ((new-consed (total-bytes-allocated))		     
-		 (bytes-consed
-		  (- new-consed (+ initial-overhead initial-consed)))
-		 (elapsed-real-time
-		  (- (get-internal-real-time) initial-real-time))
-		 (elapsed-gc-time (- (gctime) initial-gc-time))
-		 (elapsed-user-time
-		  (progn
-		    (%sub-timevals timediff
-				   (pref stop :rusage.ru_utime)
-				   (pref start :rusage.ru_utime))
-                    (ecase internal-time-units-per-second
-                      (1000000 (timeval->microseconds timediff))
-                      (1000 (timeval->milliseconds timediff)))))
-		 (elapsed-system-time
-		  (progn
-		    (%sub-timevals timediff
-				   (pref stop :rusage.ru_stime)
-				   (pref start :rusage.ru_stime))
-                    (ecase internal-time-units-per-second
-                      (1000000 (timeval->microseconds timediff))
-                      (1000 (timeval->milliseconds timediff)))))
-		 (elapsed-minor (- (pref stop :rusage.ru_minflt)
-				   (pref start :rusage.ru_minflt)))
-		 (elapsed-major (- (pref stop :rusage.ru_majflt)
-				   (pref start :rusage.ru_majflt)))
-		 (elapsed-swaps (- (pref stop :rusage.ru_nswap)
-				   (pref start :rusage.ru_nswap))))
-            (funcall (or *report-time-function*
-                         #'standard-report-time)
-                     :form form
-                     :results results
-                     :elapsed-time elapsed-real-time
-                     :user-time elapsed-user-time
-                     :system-time elapsed-system-time
-                     :gc-time elapsed-gc-time
-                     :bytes-allocated bytes-consed
-                     :minor-page-faults elapsed-minor
-                     :major-page-faults elapsed-major
-                     :swaps elapsed-swaps)))))))
+    (multiple-value-bind (user-start system-start)
+        (%internal-run-time)
+      (multiple-value-bind (minor-start major-start swaps-start)
+          (%page-fault-info)
+        (let* ((initial-real-time (get-internal-real-time))
+               (initial-gc-time (gctime))
+               (initial-consed (total-bytes-allocated))           
+               (initial-overhead (integer-size-in-bytes initial-consed)))
+          (let* ((results (multiple-value-list (funcall thunk))))
+            (declare (dynamic-extent results))
+            (multiple-value-bind (user-end system-end)
+                (%internal-run-time)
+              (multiple-value-bind (minor-end major-end swaps-end)
+                  (%page-fault-info)
+                (let* ((new-consed (total-bytes-allocated))		     
+                       (bytes-consed
+                        (- new-consed (+ initial-overhead initial-consed)))
+                       (elapsed-real-time
+                        (- (get-internal-real-time) initial-real-time))
+                       (elapsed-gc-time (- (gctime) initial-gc-time))
+                       (elapsed-user-time
+                        (- user-end user-start))
+                       (elapsed-system-time
+                        (- system-end system-start))
+                       (elapsed-minor (- minor-end minor-start))
+                       (elapsed-major (- major-end major-start))
+                       (elapsed-swaps (- swaps-end swaps-start)))
+                  (funcall (or *report-time-function*
+                               #'standard-report-time)
+                           :form form
+                           :results results
+                           :elapsed-time elapsed-real-time
+                           :user-time elapsed-user-time
+                           :system-time elapsed-system-time
+                           :gc-time elapsed-gc-time
+                           :bytes-allocated bytes-consed
+                           :minor-page-faults elapsed-minor
+                           :major-page-faults elapsed-major
+                           :swaps elapsed-swaps))))))))))
 
 
 
@@ -716,6 +762,10 @@ are running on, or NIL if we can't find any useful information."
 
 (%fhave 'df #'disassemble)
 
+(defloadvar *use-cygwin-svn*
+    #+windows-target (not (null (getenv "CYGWIN")))
+    #-windows-target nil)
+
 (defun svn-info-component (component)
   (let* ((component-length (length component)))
   (with-output-to-string (s)
@@ -768,14 +818,17 @@ are running on, or NIL if we can't find any useful information."
    (with-open-file (f "ccl:\\.svnrev" :direction :input :if-does-not-exist nil)
      (when f (read f)))
    (with-output-to-string (s)
-    (multiple-value-bind (status exit-code)
-        (external-process-status
-         (run-program "svnversion"  (list  (native-translated-namestring "ccl:") (or (svn-url) "")):output s))
-      (when (and (eq :exited status) (zerop exit-code))
-        (with-input-from-string (output (get-output-stream-string s))
-          (let* ((line (read-line output nil nil)))
-            (when (and line (parse-integer line :junk-allowed t) )
-              (return-from local-svn-revision line)))))))))
+     (let* ((root (native-translated-namestring "ccl:")))
+       (when *use-cygwin-svn*
+         (setq root (cygpath root)))
+       (multiple-value-bind (status exit-code)
+           (external-process-status
+            (run-program "svnversion"  (list  (native-translated-namestring "ccl:") (or (svn-url) "")):output s))
+         (when (and (eq :exited status) (zerop exit-code))
+           (with-input-from-string (output (get-output-stream-string s))
+             (let* ((line (read-line output nil nil)))
+               (when (and line (parse-integer line :junk-allowed t) )
+                 (return-from local-svn-revision line))))))))))
 
 
 ;;; Scan the heap, collecting infomation on the primitive object types
