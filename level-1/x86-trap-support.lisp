@@ -157,6 +157,32 @@
       0                                 ;r15
       )))
 
+#+win64-target
+(progn
+  (defconstant gp-regs-offset (get-field-offset #>CONTEXT.Rax))
+  (defmacro xp-gp-regs (xp) xp)
+  (defconstant rip-register-offset 16)
+  (defun xp-mxcsr (xp)
+    (pref xp #>CONTEXT.MxCsr))
+  (defparameter *encoded-gpr-to-indexed-gpr*
+    #(0					;rax
+      1					;rcx
+      2					;rdx
+      3					;rbx
+      4                                 ;rsp
+      5					;rbp
+      6                                 ;rsi
+      7                                 ;rdi
+      8                                 ;r8
+      9                                 ;r9
+      10				;r10
+      11                                ;r11
+      12				;r12
+      13				;r13
+      14				;r14
+      15                                ;r15
+      )))
+
 #+darwinx8632-target
 (progn
   (defconstant gp-regs-offset 0)
@@ -212,6 +238,8 @@
 (defun (setf encoded-gpr-macptr) (new xp gpr)
   (setf (indexed-gpr-macptr xp (aref *encoded-gpr-to-indexed-gpr* gpr)) new))
 (defun xp-flags-register (xp)
+  #+windows-target (pref xp #>CONTEXT.EFlags)
+  #-windows-target
   #+x8664-target
   (%get-signed-long-long (xp-gp-regs xp) (+ gp-regs-offset (ash flags-register-offset x8664::fixnumshift)))
   #+x8632-target
