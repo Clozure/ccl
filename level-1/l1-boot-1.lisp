@@ -39,7 +39,8 @@
     (,platform-os-linux . :linux)
     (,platform-os-solaris . :solaris)
     (,platform-os-darwin . :darwin)
-    (,platform-os-freebsd . :freebsd)))
+    (,platform-os-freebsd . :freebsd)
+    (,platform-os-windows . :windows)))
 
 (defparameter *platform-cpu-names*
   `((,platform-cpu-ppc . :ppc)
@@ -72,6 +73,7 @@
 
 (defun replace-base-translation (host-dir new-base-dir)
   (let* ((host (pathname-host host-dir))
+         (device (pathname-device new-base-dir))
          (host-dir (full-pathname host-dir))
          (trans (logical-pathname-translations host))
          (host-wild (merge-pathnames "**/*.*" host-dir)))
@@ -87,7 +89,8 @@
               (list (car pair)
                     (merge-pathnames 
                      (make-pathname 
-                      :defaults nil 
+                      :defaults nil
+                      :device device
                       :directory (append new-base-dir
                                          (nthcdr (length host-dir) 
                                                  (pathname-directory rhs))))
