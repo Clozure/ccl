@@ -45,14 +45,21 @@
 (defun get-universal-time ()
   "Return a single integer for the current time of
    day in universal time format."
+  #-windows-target
   (rlet ((tv :timeval))
     (#_gettimeofday tv (%null-ptr))
-    (+ (pref tv :timeval.tv_sec) unix-to-universal-time)))
+    (+ (pref tv :timeval.tv_sec) unix-to-universal-time))
+  #+windows-target
+  (rlet ((ft #>FILETIME))
+    (#_GetSystemTimeAsFileTime ft)
+    (windows-filetime-to-universal-time ft)))
+
 
 ;;; This should stop using #_localtime_r: not all times can be represented
 ;;; as a signed natural offset from the start of Unix time.
 ;;; For now, if the time won't fit in a :time_t, use an arbitrary time
 ;;; value to get the time zone and assume that DST was -not- in effect.
+#-windows-target
 (defun get-timezone (time)
   (let* ((toobig (not (typep time '(signed-byte
                                     #+32-bit-target 32
@@ -70,6 +77,19 @@
                            #+solaris-target #&altzone
                            -60)
                     (unless toobig (not (zerop (pref tm :tm.tm_isdst)))))))))))
+
+#+windows-target
+(defun get-timezone (time)
+  (declare (ignore time))
+  (rlet ((tzinfo #>TIME_ZONE_INFORMATION))
+    (let* ((id (#_GetTimeZoneInformation tzinfo))
+           (minutes-west (pref tzinfo #>TIME_ZONE_INFORMATION.Bias))
+           (is-dst (= id #$TIME_ZONE_ID_DAYLIGHT)))
+      (values (floor (+ minutes-west
+                        (if is-dst
+                          (pref tzinfo #>TIME_ZONE_INFORMATION.DaylightBias)
+                          0)))
+              is-dst))))
 
 
 
@@ -195,21 +215,49 @@
   "This function causes execution to be suspended for N seconds. N may
   be any non-negative, non-complex number."
   (when (minusp seconds) (report-bad-arg seconds '(real 0 *)))
+  #-windows-target
   (multiple-value-bind (secs nanos)
       (nanoseconds seconds)
-    (%nanosleep secs nanos)))
+    (%nanosleep secs nanos))
+  #+windows-target
+  (let* ((millis (round (* seconds 1000))))
+    (#_SleepEx millis 1)
+    nil))
 
-(defun get-internal-run-time ()
-  "Return the run time in the internal time format. (See
-  INTERNAL-TIME-UNITS-PER-SECOND.) This is useful for finding CPU usage."
+
+(defun %internal-run-time ()
+  ;; Returns user and system times in internal-time-units as multiple values.
+  #-windows-target
   (rlet ((usage :rusage))
     (%%rusage usage)
     (let* ((user-seconds (pref usage :rusage.ru_utime.tv_sec))
            (system-seconds (pref usage :rusage.ru_stime.tv_sec))
            (user-micros (pref usage :rusage.ru_utime.tv_usec))
            (system-micros (pref usage :rusage.ru_stime.tv_usec)))
-      (+ (* (+ user-seconds system-seconds) internal-time-units-per-second)
-         (round (+ user-micros system-micros) (floor 1000000 internal-time-units-per-second))))))
+      (values (+ (* user-seconds internal-time-units-per-second)
+                 (round user-micros (floor 1000000 internal-time-units-per-second)))
+              (+ (* system-seconds internal-time-units-per-second)
+                 (round system-micros (floor 1000000 internal-time-units-per-second))))))
+  #+windows-target
+  (rlet ((start #>FILETIME)
+         (end #>FILETIME)
+         (kernel #>FILETIME)
+         (user #>FILETIME))
+    (#_GetProcessTimes (#_GetCurrentProcess) start end kernel user)
+    (let* ((user-100ns (dpb (pref user #>FILETIME.dwHighDateTime)
+                            (byte 32 32)
+                            (pref user #>FILETIME.dwLowDateTime)))
+           (kernel-100ns (dpb (pref kernel #>FILETIME.dwHighDateTime)
+                            (byte 32 32)
+                            (pref kernel #>FILETIME.dwLowDateTime)))
+           (convert (floor 10000000 internal-time-units-per-second)))
+      (values (floor user-100ns convert) (floor kernel-100ns convert)))))
+
+(defun get-internal-run-time ()
+  "Return the run time in the internal time format. (See
+  INTERNAL-TIME-UNITS-PER-SECOND.) This is useful for finding CPU usage."
+  (multiple-value-bind (user sys) (%internal-run-time)
+    (+ user sys)))
 
 
 
