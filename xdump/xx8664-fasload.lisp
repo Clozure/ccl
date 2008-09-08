@@ -134,6 +134,25 @@
 
 (add-xload-backend *x8664-solaris-xload-backend*)
 
+(defparameter *x8664-windows-xload-backend*
+  (make-backend-xload-info
+   :name  :win64
+   :macro-apply-code-function 'x8664-fixup-macro-apply-code
+   :closure-trampoline-code *x8664-closure-trampoline-code*
+   :udf-code *x8664-udf-code*
+   :default-image-name "ccl:ccl;wx86-boot64.image"
+   :default-startup-file-name "level-1.wx64fsl"
+   :subdirs '("ccl:level-0;X86;X8664;" "ccl:level-0;X86;")
+   :compiler-target-name :win64
+   :image-base-address #x100000000
+   :nil-relative-symbols x86::*x86-nil-relative-symbols*
+   :static-space-init-function 'x8664-initialize-static-space
+   :purespace-reserve (ash 1 30)
+   :static-space-address (+ (ash 1 16) (ash 2 12))
+))
+
+(add-xload-backend *x8664-windows-xload-backend*)
+
 #+x8664-target
 (progn
   #+linux-target
@@ -143,7 +162,9 @@
   #+darwin-target
   (setq *xload-default-backend* *x8664-darwin-xload-backend*)
   #+solaris-target
-  (setq *xload-default-backend* *x8664-solaris-xload-backend*))
+  (setq *xload-default-backend* *x8664-solaris-xload-backend*)
+  #+windows-target
+  (setq *xload-default-backend* *x8664-windows-xload-backend*))
 
 
 
