@@ -605,17 +605,23 @@ C(egc_set_hash_key):
         __(isync)
         __(blr)
         
-/* This is a little trickier: the first instruction clears the EQ bit in CR0; */
-/* the only way that it can get set is if the conditional store succeeds.   */
-/* So: */
-/*   a) if we're interrupted on the first instruction, or if we're  */
-/*      interrupted on a subsequent instruction but CR0[EQ] is clear, the  */
-/*      condtional store hasn't succeeded yet.  We don't have to adjust the  */
-/*      PC in this case; when the thread's resumed, the conditional store */
-/*      will be (re-)attempted and will eventually either succeed or fail. */
-/*   b) if the CR0[EQ] bit is set (on some instruction other than the first), */
-/*      the handler can decide if/how to handle memoization.  The handler */
-/*      should set the PC to the LR, and set arg_z to T. */
+/*
+   Interrupt handling (in pc_luser_xp()) notes:	
+   If we are in this function and before the test which follows the
+   conditional (at egc_store_node_conditional), or at that test
+   and cr0[eq] is clear, pc_luser_xp() should just let this continue
+   (we either haven't done the store conditional yet, or got a
+   possibly transient failure.)  If we're at that test and the
+   cr0[EQ] bit is set, then the conditional store succeeded and
+   we have to atomically memoize the possible intergenerational
+   reference.  Note that the local labels 4 and 5 are at or beyond
+  'egc_write_barrier_end'
+
+   N.B:	it's not possible to really understand what's going on just
+   by the state of the cr0[eq] bit.  A transient failure in the
+   conditional stores that handle memoization might clear cr0[eq]
+   without having completed the memoization.
+*/
 
         .globl C(egc_store_node_conditional)
         .globl C(egc_write_barrier_end)
@@ -629,6 +635,8 @@ C(egc_store_node_conditional):
         __(cmpr(cr1,temp1,arg_y))
         __(bne cr1,3f)
         __(strcx(arg_z,arg_x,imm4))
+	.globl C(egc_store_node_conditional_test)
+C(egc_store_node_conditional_test):	
         __(bne 1b)
         __(isync)
         __(add imm0,imm4,arg_x)
@@ -650,9 +658,9 @@ C(egc_store_node_conditional):
         __(bne- 2b)
         __(isync)
         __(b 5f)
+C(egc_write_barrier_end):
 3:      __(li imm0,RESERVATION_DISCHARGE)
         __(strcx(rzero,0,imm0))
-C(egc_write_barrier_end):
 4:      __(li arg_z,nil_value)
         __(blr)
 5:      __(li arg_z,t_value)

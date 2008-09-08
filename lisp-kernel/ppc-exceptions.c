@@ -1831,6 +1831,7 @@ extern opcode
   egc_write_barrier_start,
   egc_write_barrier_end, 
   egc_store_node_conditional, 
+  egc_store_node_conditional_test,
   egc_set_hash_key,
   egc_gvset,
   egc_rplaca,
@@ -1857,17 +1858,19 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
     Boolean need_store = true, need_check_memo = true, need_memoize_root = false;
 
     if (program_counter >= &egc_store_node_conditional) {
-      if ((program_counter == &egc_store_node_conditional) || ! (xpCCR(xp) & 0x20000000)) {
-        /* The conditional store either hasn't been attempted yet, or
-           has failed.  No need to adjust the PC, or do memoization. */
-        return;
+      if ((program_counter < &egc_store_node_conditional_test) ||
+	  ((program_counter == &egc_store_node_conditional_test) &&
+	   (! (xpCCR(xp) & 0x20000000)))) {
+	/* The conditional store either hasn't been attempted yet, or
+	   has failed.  No need to adjust the PC, or do memoization. */
+	return;
       }
-      val = xpGPR(xp,arg_z);
       ea = (LispObj*)(xpGPR(xp,arg_x) + xpGPR(xp,imm4));
       xpGPR(xp,arg_z) = t_value;
       need_store = false;
     } else if (program_counter >= &egc_set_hash_key) {
       root = xpGPR(xp,arg_x);
+      val = xpGPR(xp,arg_z);
       ea = (LispObj *) (root+xpGPR(xp,arg_y)+misc_data_offset);
       need_memoize_root = true;
     } else if (program_counter >= &egc_gvset) {
