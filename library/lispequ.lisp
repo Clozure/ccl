@@ -266,7 +266,8 @@
   %pathname-directory
   %pathname-name
   %pathname-type
-  %physical-pathname-version)
+  %physical-pathname-version
+  %physical-pathname-device)
 
 (def-accessors (logical-pathname) %svref
   ()                                    ; 'logical-pathname
@@ -276,8 +277,8 @@
   %logical-pathname-host
   %logical-pathname-version)
 
-(defmacro %cons-pathname (directory name type &optional version)
-  `(%istruct 'pathname ,directory ,name ,type ,version))
+(defmacro %cons-pathname (directory name type &optional version device)
+  `(%istruct 'pathname ,directory ,name ,type ,version ,device))
 
 (defmacro %cons-logical-pathname (directory name type host version)
   `(%istruct 'logical-pathname ,directory ,name ,type ,host ,version))
