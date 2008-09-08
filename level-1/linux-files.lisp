@@ -660,26 +660,26 @@ given is that of a group to which the current user belongs."
 
 (defun %open-dir (namestring)
   (with-filename-cstrs ((name namestring))
-    (let* ((DIR #+windows-target (syscall syscalls::opendir name)
-                #-windows-target (#_opendir name)))
+    (let* ((DIR (ff-call (%kernel-import target::kernel-global-lisp-opendir)
+                         :address name
+                         :address)))
       (unless (%null-ptr-p DIR)
 	DIR))))
 
 (defun close-dir (dir)
-  #+windows-target (syscall syscalls::closedir DIR)
-  #-windows-target (#_closedir DIR))
+  (ff-call (%kernel-import target::kernel-global-lisp-closedir)
+           :address dir
+           :int))
 
-#-windows-target                        ;want a reentrant version, anyhow
 (defun %read-dir (dir)
-  (let* ((res (#_readdir dir)))
+  (let* ((res (ff-call (%kernel-import target::kernel-global-lisp-closedir)
+                       :address dir
+                       :address)))
     (unless (%null-ptr-p res)
-      (get-foreign-namestring (pref res :dirent.d_name)))))
+      (get-foreign-namestring (pref res
+                                    #+windows-target :_wdirent.d_name
+                                    #-windows-target :dirent.d_name)))))
 
-#+windows-target
-(defun %read-dir (dir)
-  (let* ((res (syscall syscalls::readdir dir)))
-    (unless (%null-ptr-p res)
-      (get-foreign-namestring (pref res :_wdirent.d_name)))))
 
 #-windows-target
 (defun tcgetpgrp (fd)
