@@ -914,7 +914,9 @@
             (registers (target-arch-case 
 			(:x8632 (error "no nvrs on x8632"))
 			(:x8664
-			 (list x8664::save0 x8664::save1 x8664::save2 x8664::save3))))
+                         (if (= (backend-lisp-context-register *target-backend*) x8664::save3)
+                           (list x8664::save0 x8664::save1 x8664::save2)
+                           (list x8664::save0 x8664::save1 x8664::save2 x8664::save3)))))
             (regno (pop registers) (pop registers))
             (constant-alist ()))
            ((or (null things) (= n *x862-target-num-save-regs*))
