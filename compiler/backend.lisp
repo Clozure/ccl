@@ -32,6 +32,7 @@
 (defconstant platform-os-solaris 2)
 (defconstant platform-os-darwin 3)
 (defconstant platform-os-freebsd 4)
+(defconstant platform-os-windows 5)
 
 (defstruct backend
   (name :a :type keyword)
