@@ -91,11 +91,29 @@
 
   ;;; Open the file specified by PATHNAME for input and return a
   ;;; file id.
+  #-windows-target
   (defun fid-open-input (pathname)
     (let* ((id (fd-open (cdb-native-namestring pathname) #$O_RDONLY)))
       (if (< id 0)
 	(%errno-disp id pathname)
 	id)))
+  ;; On Windows, open() can't open the same file twice, which breaks
+  ;; bootstrapping.  Use CreateFile instead, and tell it to share.
+  #+windows-target
+  (defun fid-open-input (pathname)
+    (with-filename-cstrs ((name (cdb-native-namestring pathname)))
+      (let* ((handle (%ptr-to-int (#_CreateFileW
+				   name
+				   #$GENERIC_READ
+				   #$FILE_SHARE_READ
+				   (%null-ptr)
+				   #$OPEN_EXISTING
+				   #$FILE_ATTRIBUTE_NORMAL
+				   (%null-ptr)))))
+	(if (eq handle #xffffffffffffffff)
+	  (error "Error opening CDB database ~S" pathname)
+	  (#__open_osfhandle handle #$O_RDONLY)))))
+  
   
   ;;; Read N octets from FID into BUF.  Return #of octets read or error.
   (defun fid-read (fid buf n)
