@@ -166,7 +166,7 @@
 	       (:unknown-option "Unknown option: ~a")
 	       (t "~a"))
 	     opts)
-     #$EX_USAGE
+     #-windows-target #$EX_USAGE #+windows-targt #$EXIT_FAILURE
      (summarize-option-syntax a))))
 	       
 
@@ -255,7 +255,7 @@ Default version returns OpenMCL version info."
   (call-next-method)			; handle help, errors
   (if args
     (%usage-exit (format nil "Unrecognized non-option arguments: ~a" args)
-		 #$EX_USAGE
+		 #-windows-target #$EX_USAGE #+windows-target #$EXIT_FAILURE
 		 (summarize-option-syntax a))
     (progn
       (setq *load-lisp-init-file* (not (assoc :noinit options))
@@ -294,6 +294,9 @@ Default version returns OpenMCL version info."
 (defun housekeeping-loop ()
   (with-standard-abort-handling nil 
     (loop
+      #+windows-target
+      (#_Sleep 333)
+      #-windows-target
       (%nanosleep *periodic-task-seconds* *periodic-task-nanoseconds*)
       (housekeeping))))
   
