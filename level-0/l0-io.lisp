@@ -16,24 +16,7 @@
 
 (in-package "CCL")
 
-(eval-when (:compile-toplevel)
-  #+linuxppc-target
-  (require "PPC-LINUX-SYSCALLS")
-  #+linuxx8664-target
-  (require "X8664-LINUX-SYSCALLS")
-  #+darwinppc-target
-  (require "DARWINPPC-SYSCALLS")
-  #+darwinx8632-target
-  (require "DARWINX8632-SYSCALLS")
-  #+darwinx8664-target
-  (require "DARWINX8664-SYSCALLS")
-  #+freebsd-target
-  (require "X8664-FREEBSD-SYSCALLS")
-  #+solarisx8664-target
-  (require "X8664-SOLARIS-SYSCALLS")
-  #+win64-target
-  (require "X86-WIN64-SYSCALLS")
-  )
+
 
 
 (defun utf-8-octets-in-string (string start end)
@@ -199,11 +182,16 @@
 
 ;;; write nbytes bytes from buffer buf to file-descriptor fd.
 (defun fd-write (fd buf nbytes)
-  (ignoring-eintr 
-   (syscall syscalls::write fd buf nbytes)))
+  (ignoring-eintr
+   (int-errno-ffcall
+    (%kernel-import target::kernel-import-lisp-write)
+             :int fd :address buf :ssize_t nbytes :ssize_t)))
 
 (defun fd-read (fd buf nbytes)
-  (ignoring-eintr (syscall syscalls::read fd buf nbytes)))
+  (ignoring-eintr
+   (int-errno-ffcall
+    (%kernel-import target::kernel-import-lisp-read)
+             :int fd :address buf :ssize_t nbytes :ssize_t)))
 
 
 (defun fd-open (path flags &optional (create-mode #o666))
@@ -211,47 +199,37 @@
    #+windows-target with-native-utf-16-cstrs
    #-(or darwin-target windows-target) with-cstrs
    ((p path))
-    (let* ((fd (syscall syscalls::open p flags create-mode)))
+    (let* ((fd (int-errno-ffcall
+                (%kernel-import target::kernel-import-lisp-open)
+                :address p :int flags :mode_t create-mode :int)))
       (declare (fixnum fd))
       (when (or (= fd (- #$EMFILE))
                 (= fd (- #$EMFILE)))
         (gc)
         (drain-termination-queue)
-        (setq fd (syscall syscalls::open p flags create-mode)))
+        (setq fd (int-errno-ffcall
+                  (%kernel-import target::kernel-import-lisp-open)
+                           :address p :int flags :mode_t create-mode :int)))
       fd)))
 
 (defun fd-chmod (fd mode)
-  (syscall syscalls::fchmod fd mode))
+  (int-errno-ffcall (%kernel-import target::kernel-import-lisp-fchmod)
+                    :int fd
+                    :mode_t mode
+                    :int))
 
-;;; This should really be conditionalized on whether the seek system
-;;; call supports 64-bit offsets or on whether one has to use some
-;;; variant.
-#+(and ppc32-target linux-target)
 (defun fd-lseek (fd offset whence)
-  (let* ((high (ldb (byte 32 32) offset))
-	 (low (ldb (byte 32 0) offset)))
-    (declare (type (unsigned-byte 32) high low))
-    (%stack-block ((pos 8))
-      (let* ((res (syscall syscalls::_llseek fd high low pos whence)))
-	(declare (fixnum res))
-	(if (< res 0)
-	  res
-	  (let* ((pos-high (%get-unsigned-long pos 0))
-		 (pos-low (%get-unsigned-long pos 4)))
-	    (declare (type (unsigned-byte 32) pos-high pos-low))
-	    (if (zerop pos-high)
-	      pos-low
-	      (dpb pos-high (byte 32 32) pos-low))))))))
-
-#-(and ppc32-target linux-target)
-(defun fd-lseek (fd offset whence)
-  #+freebsd-target
-  (syscall syscalls::lseek fd 0 offset whence)
-  #-freebsd-target
-  (syscall syscalls::lseek fd offset whence))
+  (int-errno-ffcall
+   (%kernel-import target::kernel-import-lisp-lseek)
+   :int fd
+   :ssize_t offset
+   :int whence
+   :ssize_t))
 
 (defun fd-close (fd)
-  (syscall syscalls::close fd)) 
+  (int-errno-ffcall (%kernel-import target::kernel-import-lisp-close)
+                    :int fd
+                    :int)) 
 
 (defun fd-tell (fd)
   (fd-lseek fd 0 #$SEEK_CUR))
@@ -266,15 +244,8 @@
        (fd-lseek fd curpos #$SEEK_SET)))))
 
 (defun fd-ftruncate (fd new)
-  #-solaris-target
-  (syscall syscalls::ftruncate fd new)
-  #+solaris-target
-  (rlet ((lck #>flock))
-    (setf (pref lck :flock.l_whence) 0
-          (pref lck :flock.l_start) new
-          (pref lck :flock.l_type) #$F_WRLCK
-          (pref lck :flock.l_len) 0)
-    (syscall syscalls::fcntl fd #$F_FREESP lck)))
+  (int-errno-ffcall (%kernel-import target::kernel-import-lisp-ftruncate)
+                    :int fd :off_t new :int))
 
 (defun %string-to-stderr (str)
   (with-cstrs ((s str))
