@@ -1168,7 +1168,7 @@ of 32KBytes in earlier versions.)"
   (let ((p (make-gcable-macptr $flags_DisposPtr)))
     (%setf-macptr p (malloc size))
     (if clear-p
-      (#_bzero p size))
+      (#_memset p 0 size))
     p))
 
 (defun %gcable-ptr-p (p)

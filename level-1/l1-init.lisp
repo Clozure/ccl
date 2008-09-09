@@ -289,7 +289,7 @@ methods that are marked as being predefined signal continuable errors.")
                                             #.(%foreign-type-or-record-size
                                                :timeval :bytes))
                                            (p (malloc (* 5 timeval-size))))
-                                      (#_bzero p (* 5 timeval-size))
+                                      (#_memset p 0 (* 5 timeval-size))
                                       p))
 
 

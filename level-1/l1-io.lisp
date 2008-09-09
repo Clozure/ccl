@@ -21,7 +21,7 @@
 (defun %new-ptr (size &optional clear-p)
   (let* ((p (malloc size)))
     (if (and clear-p (not (%null-ptr-p p)))
-      (#_bzero p size))
+      (#_memset p 0 size))
     p))
 
 
