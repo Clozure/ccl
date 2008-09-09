@@ -222,9 +222,9 @@
   (int-errno-ffcall
    (%kernel-import target::kernel-import-lisp-lseek)
    :int fd
-   :ssize_t offset
+   :off_t offset
    :int whence
-   :ssize_t))
+   :off_t))
 
 (defun fd-close (fd)
   (int-errno-ffcall (%kernel-import target::kernel-import-lisp-close)
