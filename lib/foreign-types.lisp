@@ -101,6 +101,7 @@
                     #.(ftd-interface-package-name *target-ftd*)
                     :attributes
                     '(:bits-per-word #+64-bit-target 64 #+32-bit-target 32
+                      #+win64-target :bits-per-long #+win64-target 32
                       :signed-char #+darwinppc-target t #-darwinppc-target nil
                       :struct-by-value #+darwinppc-target t #-darwinppc-target nil
                       :struct-return-in-registers #+(or (and darwinppc-target 64-bit-target)) t #-(or (and darwinppc-target 64-bit-target)) nil
@@ -1724,7 +1725,9 @@ result-type-specifer is :VOID or NIL"
 
 (defun install-standard-foreign-types (ftd)
   (let* ((*target-ftd* ftd)
-         (natural-word-size (getf (ftd-attributes ftd) :bits-per-word)))
+         (natural-word-size (getf (ftd-attributes ftd) :bits-per-word))
+         (long-word-size (or (getf (ftd-attributes ftd) :bits-per-long)
+                             natural-word-size)))
 
     (def-foreign-type-translator signed (&optional (bits 32))
       (if (<= bits 64)
@@ -1851,9 +1854,9 @@ result-type-specifer is :VOID or NIL"
     (%def-foreign-type :void *void-foreign-type*)
     (def-foreign-type address (* :void))
     (let* ((signed-long-type (parse-foreign-type
-                              `(:signed ,natural-word-size)))
+                              `(:signed ,long-word-size)))
            (unsigned-long-type (parse-foreign-type
-                                `(:unsigned ,natural-word-size))))
+                                `(:unsigned ,long-word-size))))
       (%def-foreign-type :long signed-long-type ftd)
       (%def-foreign-type :signed-long signed-long-type ftd)
       (%def-foreign-type :unsigned-long unsigned-long-type ftd))
