@@ -5368,6 +5368,9 @@
 	      (pref tv :timeval.tv_usec) us)))))
 
 (defun fd-input-available-p (fd &optional milliseconds)
+  #+windows-target (declare (ignore fd milliseconds))
+  #+windows-target nil
+  #-windows-target
   (rlet ((pollfds (:array (:struct :pollfd) 1)))
     (setf (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.fd) fd
           (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.events) #$POLLIN)
@@ -5377,6 +5380,9 @@
 
 
 (defun fd-ready-for-output-p (fd &optional milliseconds)
+  #+windows-target (declare (ignore fd milliseconds))
+  #+windows-target t
+  #-windows-target
   (rlet ((pollfds (:array (:struct :pollfd) 1)))
     (setf (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.fd) fd
           (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.events) #$POLLOUT)
