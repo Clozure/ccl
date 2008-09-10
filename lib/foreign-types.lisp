@@ -96,7 +96,8 @@
                         (:linuxx8664 "ccl:x86-headers64;")
                         (:darwinx8664 "ccl:darwin-x86-headers64;")
                         (:freebsdx8664 "ccl:freebsd-headers64;")
-                        (:solarisx8664 "ccl:solarisx64-headers;"))
+                        (:solarisx8664 "ccl:solarisx64-headers;")
+                        (:win64 "ccl:win64-headers"))
                     :interface-package-name
                     #.(ftd-interface-package-name *target-ftd*)
                     :attributes
