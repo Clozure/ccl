@@ -65,6 +65,10 @@
     (format s "~A" (backend-name b))))
 
 
+(defun target-os-name (&optional (backend *target-backend*))
+  (cdr (assoc (logand platform-os-mask (backend-target-platform backend))
+              *platform-os-names*)))
+
 
 (defparameter *backend-node-regs* 0)
 (defparameter *backend-node-temps* 0)
