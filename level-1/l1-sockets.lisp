@@ -180,6 +180,7 @@
    (situation :initarg :situation :reader socket-creation-error-situation)))
 
 (defvar *socket-error-identifiers*
+  #-windows-target
   (list #$EADDRINUSE :address-in-use
 	#$ECONNABORTED :connection-aborted
 	#$ENOBUFS :no-buffer-space
@@ -196,7 +197,26 @@
 	#$ECONNRESET :connection-reset
 	#$ESHUTDOWN :shutdown
 	#$EACCES :access-denied
-	#$EPERM :access-denied))
+	#$EPERM :access-denied)
+  #+windows-target
+  (list #$WSAEADDRINUSE :address-in-use
+	#$WSAECONNABORTED :connection-aborted
+	#$WSAENOBUFS :no-buffer-space
+	#$ENOMEM :no-buffer-space
+	#$ENFILE :no-buffer-space
+	#$WSAETIMEDOUT :connection-timed-out
+	#$WSAECONNREFUSED :connection-refused
+	#$WSAENETUNREACH :host-unreachable
+	#$WSAEHOSTUNREACH :host-unreachable
+	#$WSAEHOSTDOWN :host-down
+	#$WSAENETDOWN :network-down
+	#$WSAEADDRNOTAVAIL :address-not-available
+	#$WSAENETRESET :network-reset
+	#$WSAECONNRESET :connection-reset
+	#$WSAESHUTDOWN :shutdown
+	#$EACCES :access-denied
+	#$EPERM :access-denied)
+  )
 
 
 (declaim (inline socket-call))
@@ -205,6 +225,7 @@
     (socket-error stream where res)
     res))
 
+#-windows-target
 (defun %hstrerror (h_errno)
   (with-macptrs ((p (#_hstrerror (abs h_errno))))
     (if p
@@ -445,10 +466,11 @@ safer to mess with directly as there is less magic going on."))
 	     (when (= #$AF_INET (pref sockaddr :sockaddr_in.sin_family))
 	       (ecase type
 		 (:host (ntohl (pref sockaddr
-                                     #-solaris-target :sockaddr_in.sin_addr.s_addr
-                                     #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr)))
+                                     #-(or solaris-target windows-target) :sockaddr_in.sin_addr.s_addr
+                                     #+(or solaris-target windows-target) #>sockaddr_in.sin_addr.S_un.S_addr)))
 		 (:port (ntohs (pref sockaddr :sockaddr_in.sin_port))))))))
 
+#-windows-target
 (defun path-from-unix-address (addr)
   (when (= #$AF_UNIX (pref addr :sockaddr_un.sun_family))
     #+darwin-target
@@ -457,6 +479,7 @@ safer to mess with directly as there is less magic going on."))
     #-darwin-target
     (%get-cstring (pref addr :sockaddr_un.sun_path))))
 
+#-windows-target
 (defun local-socket-filename (fd socket)
   (and fd
        (rlet ((addr :sockaddr_un)
@@ -477,16 +500,17 @@ safer to mess with directly as there is less magic going on."))
 	   (namelen :signed))
 	  (setf (pref namelen :signed) (record-length :sockaddr_in))
 	  (let ((err (c_getpeername fd sockaddr namelen)))
-	    (cond ((eql err (- #$ENOTCONN)) nil)
+	    (cond ((eql err (- #+windows-target #$WSAENOTCONN #-windows-target #$ENOTCONN)) nil)
 		  ((< err 0) (socket-error socket "getpeername" err))
 		  (t
 		   (when (= #$AF_INET (pref sockaddr :sockaddr_in.sin_family))
 		     (ecase type
 		       (:host (ntohl (pref sockaddr
-                                           #-solaris-target :sockaddr_in.sin_addr.s_addr
-                                           #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr)))
+                                           #-(or solaris-target windows-target) :sockaddr_in.sin_addr.s_addr
+                                           #+(or solaris-target windows-target)  #>sockaddr_in.sin_addr.S_un.S_addr)))
 		       (:port (ntohs  (pref sockaddr :sockaddr_in.sin_port)))))))))))
 
+#-windows-target
 (defun remote-socket-filename (socket)
   (with-if (fd (socket-device socket))
     (rlet ((addr :sockaddr_un)
@@ -532,6 +556,23 @@ the socket is not connected."))
 (defmethod remote-filename ((socket socket))
   (remote-socket-filename socket))
   
+(defun set-socket-fd-blocking (fd block-flag)
+  #+windows-target
+  (let* ((handle (socket-handle fd)))
+    (rlet ((argp :u_long (if block-flag 0 1)))
+      (#_ioctlsocket handle #$FIONBIO argp)))
+  #-windows-target
+  (if block-flag
+    (fd-clear-flag fd #$O_NONBLOCK)
+    (fd-set-flag fd #$O_NONBLOCK)))
+
+(defun get-socket-fd-blocking (fd)
+  "returns T iff socket is in blocking mode"
+  #+windows-target (declare (ignore fd))
+  #+windows-target t
+  #-windows-target
+  (not (logtest #$O_NONBLOCK (fd-get-flags fd))))
+
 (defun set-socket-options (fd-or-socket &key 
 			   keepalive
 			   reuse-address
@@ -585,16 +626,14 @@ the socket is not connected."))
 		 (setf (pref sockaddr :sockaddr_in.sin_family) #$AF_INET
 		       (pref sockaddr :sockaddr_in.sin_port) port-n
 		       (pref sockaddr
-                             #-solaris-target :sockaddr_in.sin_addr.s_addr
-                             #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr
+                             #-(or solaris-target windows-target) :sockaddr_in.sin_addr.s_addr
+                             #+(or solaris-target windows-target) #>sockaddr_in.sin_addr.S_un.S_addr
                              ) host-n)
 		 (socket-call socket "bind" (c_bind fd sockaddr (record-length :sockaddr_in)))))))
     (when (and (eq address-family :file)
 	       (eq connect :passive)
 	       local-filename)
-      (bind-unix-socket fd local-filename))    
-    (when (and nil *multiprocessing-socket-io*)
-      (socket-call socket "fcntl" (fd-set-flag fd #$O_NONBLOCK)))))
+      (bind-unix-socket fd local-filename))))
 
 ;; I hope the inline declaration makes the &rest/apply's go away...
 (declaim (inline make-ip-socket))
@@ -687,11 +726,12 @@ the socket is not connected."))
     (setf (pref sockaddr :sockaddr_in.sin_family) #$AF_INET
           (pref sockaddr :sockaddr_in.sin_port) port-n
           (pref sockaddr
-                #-solaris-target :sockaddr_in.sin_addr.s_addr
-                #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr
+                #-(or solaris-target windows-target) :sockaddr_in.sin_addr.s_addr
+                #+(or solaris-target windows-target)  #>sockaddr_in.sin_addr.S_un.S_addr
                 ) host-n)
     (%socket-connect fd sockaddr (record-length :sockaddr_in) timeout-in-milliseconds)))
-               
+
+#-windows-target
 (defun file-socket-connect (fd remote-filename)
   (rletz ((sockaddr :sockaddr_un))
     (init-unix-sockaddr sockaddr remote-filename)
@@ -799,13 +839,16 @@ the socket is not connected."))
 		 :device fd
 		 :keys keys))
 
-(defun socket-accept (fd wait socket)
+(defun socket-accept (fd wait)
   (flet ((_accept (fd async)
 	   (let ((res (c_accept fd (%null-ptr) (%null-ptr))))
 	     (declare (fixnum res))
 	     ;; See the inscrutable note under ERROR HANDLING in
 	     ;; man accept(2). This is my best guess at what they mean...
 	     (if (and async (< res 0)
+                      #+windows-target
+                      (= res #$WSAEWOULDBLOCK)
+                      #-windows-target
 		      (or (eql res (- #$ENETDOWN))
 			  (eql res (- #+linux-target #$EPROTO
 				      #-linux-target  #$EPROTOTYPE))
@@ -824,19 +867,19 @@ the socket is not connected."))
 	  (*multiprocessing-socket-io*
 	    (_accept fd t))
 	  (t
-	    (let ((old (socket-call socket "fcntl" (fd-get-flags fd))))
+	    (let ((was-blocking (get-socket-fd-blocking fd)))
 	      (unwind-protect
 		  (progn
-		    (socket-call socket "fcntl" (fd-set-flags fd (logior old #$O_NONBLOCK)))
+                    (set-socket-fd-blocking fd nil)
 		    (_accept fd t))
-		(socket-call socket "fcntl" (fd-set-flags fd old))))))))
+		(set-socket-fd-blocking fd was-blocking)))))))
 
 (defun accept-socket-connection (socket wait stream-create-function)
   (let ((listen-fd (socket-device socket))
 	(fd -1))
     (unwind-protect
       (progn
-	(setq fd (socket-accept listen-fd wait socket))
+	(setq fd (socket-accept listen-fd wait))
 	(cond ((>= fd 0)
 	       (prog1 (apply stream-create-function fd (socket-keys socket))
 		 (setq fd -1)))
@@ -896,8 +939,8 @@ accept-connection on it again."))
     (rlet ((sockaddr :sockaddr_in))
       (setf (pref sockaddr :sockaddr_in.sin_family) #$AF_INET)
       (setf (pref sockaddr
-                  #-solaris-target :sockaddr_in.sin_addr.s_addr
-                  #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr)
+                  #-(or solaris-target windows-target) :sockaddr_in.sin_addr.s_addr
+                  #+(or solaris-target windows-target)  #>sockaddr_in.sin_addr.S_un.S_addr)
 	    (if remote-host (host-as-inet-host remote-host) #$INADDR_ANY))
       (setf (pref sockaddr :sockaddr_in.sin_port)
 	    (if remote-port (port-as-inet-port remote-port "udp") 0))
@@ -925,8 +968,8 @@ a packet to arrive. Returns four values:
 	   (namelen :signed))
       (setf (pref sockaddr :sockaddr_in.sin_family) #$AF_INET)
       (setf (pref sockaddr
-                  #-solaris-target :sockaddr_in.sin_addr.s_addr
-                  #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr)
+                  #-(or solaris-target windows-target) :sockaddr_in.sin_addr.s_addr
+                  #+(or solaris-target windows-target) #>sockaddr_in.sin_addr.S_un.S_addr)
             #$INADDR_ANY)
       (setf (pref sockaddr :sockaddr_in.sin_port) 0)
       (setf (pref namelen :signed) (record-length :sockaddr_in))
@@ -952,8 +995,8 @@ a packet to arrive. Returns four values:
 		     (subseq vec vec-offset (+ vec-offset ret-size))))
 	      ret-size
 	      (ntohl (pref sockaddr
-                           #-solaris-target :sockaddr_in.sin_addr.s_addr
-                           #+solaris-target #>sockaddr_in.sin_addr.S_un.S_addr))
+                           #-(or solaris-target windows-target) :sockaddr_in.sin_addr.s_addr
+                           #+(or solaris-target windows-target) #>sockaddr_in.sin_addr.S_un.S_addr))
 	      (ntohs (pref sockaddr :sockaddr_in.sin_port))))))
 
 (defgeneric shutdown (socket &key direction)
@@ -1204,6 +1247,7 @@ unsigned IP address."
 
 (defun _inet_aton (string)
   (with-cstrs ((name string))
+    #-windows-target
     (rlet ((addr :in_addr))
       (let* ((result #+freebsd-target (#___inet_aton name addr)
                      #-freebsd-target (#_inet_aton name addr)))
@@ -1211,7 +1255,13 @@ unsigned IP address."
 	  (pref addr
                 #-solaris-target :in_addr.s_addr
                 #+solaris-target #>in_addr.S_un.S_addr
-                ))))))
+                ))))
+    #+windows-target
+    (rlet ((addr :sockaddr_in)
+           (addrlenp :int (record-length :sockaddr_in)))
+      (setf (pref addr :sockaddr_in.sin_family) #$AF_INET)
+      (when (zerop (#_WSAStringToAddressA name #$AF_INET (%null-ptr)  addr addrlenp))
+        (pref addr #>sockaddr_in.sin_addr.S_un.S_addr)))))
 
 (defun c_socket_1 (domain type protocol)
   #-windows-target (int-errno-call (#_socket domain type protocol))
@@ -1237,6 +1287,7 @@ unsigned IP address."
     fd))
       
 
+#-windows-target
 (defun init-unix-sockaddr (addr path)
   (macrolet ((sockaddr_un-path-len ()
                (/ (ensure-foreign-type-bits
@@ -1257,6 +1308,7 @@ unsigned IP address."
                     (char-code #\Sub)
                     code))))))))
 
+#-windows-target
 (defun bind-unix-socket (socketfd path)
   (rletz ((addr :sockaddr_un))
     (init-unix-sockaddr addr path)
@@ -1279,17 +1331,18 @@ unsigned IP address."
 ;;; about these issues in:
 ;;; <http://www.madore.org/~david/computers/connect-intr.html>
 (defun c_connect (sockfd addr len &optional timeout-in-milliseconds)
-  (let* ((flags (fd-get-flags sockfd)))
+  (let* ((was-blocking (get-socket-fd-blocking sockfd)))
     (unwind-protect
          (progn
-           (fd-set-flags sockfd (logior flags #$O_NONBLOCK))
+           (set-socket-fd-blocking sockfd nil)
            (let* ((err (check-socket-error (#_connect (socket-handle sockfd) addr len))))
-             (cond ((or (eql err (- #$EINPROGRESS)) (eql err (- #$EINTR)))
+             (cond ((or (eql err (- #+windows-target #$WSAEINPROGRESS
+                                    #-windows-target #$EINPROGRESS)) (eql err (- #$EINTR)))
                     (if (process-output-wait sockfd timeout-in-milliseconds)
                       (- (int-getsockopt sockfd #$SOL_SOCKET #$SO_ERROR))
-                      (- #$ETIMEDOUT)))
+                      (- #+windows-target #$WSAETIMEDOUT #-windows-target #$ETIMEDOUT)))
                    (t err))))
-      (fd-set-flags sockfd flags))))
+      (set-socket-fd-blocking sockfd was-blocking))))
 
 (defun c_listen (sockfd backlog)
   (check-socket-error (#_listen (socket-handle sockfd) backlog)))
@@ -1304,6 +1357,7 @@ unsigned IP address."
 (defun c_getpeername (sockfd addrp addrlenp)
   (check-socket-error (#_getpeername (socket-handle sockfd) addrp addrlenp)))
 
+#-windows-target
 (defun c_socketpair (domain type protocol socketsptr)
   (check-socket-error (#_socketpair domain type protocol socketsptr)))
 
@@ -1323,9 +1377,11 @@ unsigned IP address."
 (defun c_getsockopt (sockfd level optname optvalp optlenp)
   (check-socket-error (#_getsockopt (socket-handle sockfd) level optname optvalp optlenp)))
 
+#-windows-target
 (defun c_sendmsg (sockfd msghdrp flags)
   (check-socket-error (#_sendmsg (socket-handle sockfd) msghdrp flags)))
 
+#-windows-target
 (defun c_recvmsg (sockfd msghdrp flags)
   (check-socket-error   (#_recvmsg (socket-handle sockfd) msghdrp flags)))
 
@@ -1343,7 +1399,7 @@ unsigned IP address."
       (format t "~&~8,'0x: " (%ptr-to-int (%inc-ptr p i))))
     (format t " ~2,'0x" (%get-byte p i))))
 
-#-solaris-target
+#-(or windows-target solaris-target)
 (defun %get-ip-interfaces ()
   (rlet ((p :address (%null-ptr)))
     (if (zerop (#_getifaddrs p))
