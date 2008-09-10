@@ -625,6 +625,7 @@
   lisp-opendir
   lisp-readdir
   lisp-closedir
+  lisp-pipe
 )
 
 (defmacro nrs-offset (name)
