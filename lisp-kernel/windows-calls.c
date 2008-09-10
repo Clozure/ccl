@@ -350,7 +350,7 @@ lisp_write(int fd, void *buf, unsigned int count)
 int
 lisp_fchmod(int fd, int mode)
 {
-  errno = ENOSYS
+  errno = ENOSYS;
   return -1;
 }
 
@@ -367,9 +367,16 @@ lisp_stat(wchar_t *path, struct __stat64 *buf)
 }
 
 int
-windows_fstat(int fd, struct __stat64 *buf)
+lisp_fstat(int fd, struct __stat64 *buf)
 {
   return _fstat64(fd,buf);
+}
+
+int
+lisp_futex(int *uaddr, int op, int val, void *timeout, int *uaddr2, int val3)
+{
+  errno = ENOSYS;
+  return -1;
 }
 
 
@@ -395,7 +402,7 @@ lisp_readdir(_WDIR *dir)
 __int64
 lisp_closedir(_WDIR *dir)
 {
-  WSYSCALL_RETURN(_wclosedir(dir));
+  return _wclosedir(dir);
 }
 
 int
