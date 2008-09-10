@@ -919,7 +919,7 @@
                            (list x8664::save0 x8664::save1 x8664::save2 x8664::save3)))))
             (regno (pop registers) (pop registers))
             (constant-alist ()))
-           ((or (null things) (= n *x862-target-num-save-regs*))
+           ((or (null things) (null regno))
             (dolist (cell fcells) (%rplacd cell nil))
             (dolist (cell vcells) (%rplacd cell nil))
             (values n constant-alist))
