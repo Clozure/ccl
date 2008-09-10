@@ -114,3 +114,9 @@ lisp_closedir(DIR *dir)
 {
   return closedir(dir);
 }
+
+int
+lisp_pipe(int pipefd[2])
+{
+  return pipe(pipefd);
+}
