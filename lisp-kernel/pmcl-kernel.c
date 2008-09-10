@@ -1238,7 +1238,7 @@ remap_spjump()
 
   if (!VirtualProtect((pc) 0x15000,
 		      0x1000,
-		      PAGE_EXECUTE_READ,
+		      PAGE_EXECUTE_READWRITE,
 		      &old_protect)) {
     wperror("VirtualProtect spjump");
     _exit(1);
