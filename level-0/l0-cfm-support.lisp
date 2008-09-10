@@ -77,7 +77,7 @@
 (defvar *rtld-next*)
 (defvar *rtld-default*)
 (setq *rtld-next* (%incf-ptr (%null-ptr) -1)
-      *rtld-default* (%int-to-ptr #+(or linux-target darwin-target wwindow-target)  0
+      *rtld-default* (%int-to-ptr #+(or linux-target darwin-target windows-target)  0
 				  #-(or linux-target darwin-target windows-target)  -2))
 
 #+(or linux-target freebsd-target solaris-target)
