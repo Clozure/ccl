@@ -228,10 +228,7 @@ it has been changed, this is the directory OpenMCL was started in."
 (defun cd (path)
   (cwd path))
 
-(defmacro with-filename-cstrs (&rest rest)
-  `(#+darwin-target with-utf-8-cstrs
-    #+windows-target with-native-utf-16-cstrs
-    #-(or darwin-target windows-target) with-cstrs ,@rest))
+
 
 
 (defun %chdir (dirname)
@@ -353,7 +350,10 @@ given is that of a group to which the current user belongs."
      #+linux-target
      (#_ __xstat #$_STAT_VER_LINUX cname stat)
      #-linux-target
-     (int-errno-call (#+windows-target #__wstat64 #-windows-target #_stat cname stat))
+     (int-errno-ffcall (%kernel-import target::kernel-import-lisp-stat)
+                       :address cname
+                       :address stat
+                       :int)
      stat)))
 
 (defun %%fstat (fd stat)
@@ -361,7 +361,10 @@ given is that of a group to which the current user belongs."
    #+linux-target
    (#_ __fxstat #$_STAT_VER_LINUX fd stat)
    #-linux-target
-   (int-errno-call (#+windows-target #__fstat64 #-windows-target #_fstat fd stat))
+   (int-errno-ffcall (%kernel-import target::kernel-import-lisp-fstat)
+                     :int fd
+                     :address stat
+                     :int)
    stat))
 
 #-windows-target
