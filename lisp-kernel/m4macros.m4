@@ -185,7 +185,7 @@ define([_startfn],[define([__func_name],$1)
 	.type $1,@function
 ])
 $1:
-ifdef([WIN64],[
+ifdef([WINDOWS],[
 	.def	$1;	.scl	2;	.type	32;	.endef
 ],[
         .stabd 68,0,__line__
@@ -210,7 +210,7 @@ ifdef([LINUX],[
 
 define([_endfn],[
 LocalLabelPrefix[]__func_name[999]:
-ifdef([WIN64],[
+ifdef([WINDOWS],[
 ],[
 	.stabs "",36,0,0,LocalLabelPrefix[]__func_name[999]-__func_name
 	.line __line__
