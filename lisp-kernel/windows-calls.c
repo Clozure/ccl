@@ -432,7 +432,8 @@ DWORD cbmodules = 0;
 void *
 windows_find_symbol(void *handle, char *name)
 {
-  if (handle == ((void *)-2L)) {
+  if ((handle == ((void *)-2L)) ||
+      (handle == ((void *)-1L))) {
     handle = NULL;
   }
   if (handle != NULL) {
