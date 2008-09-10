@@ -683,7 +683,7 @@ debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
   fprintf(stderr,"%%rsi = 0x%016lX      %%r14 = 0x%016lX\n", xpGPR(xp,REG_RSI),xpGPR(xp,REG_R14));
   fprintf(stderr,"%%rdi = 0x%016lX      %%r15 = 0x%016lX\n", xpGPR(xp,REG_RDI),xpGPR(xp,REG_R15));
   fprintf(stderr,"%%rip = 0x%016lX   %%rflags = 0x%016lX\n",
-	  xpGPR(xp, Iip), xpGPR(xp, Iflags));
+	  xpGPR(xp, Iip), eflags_register(xp));
 #endif
 
 #ifdef X8632
