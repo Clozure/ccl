@@ -427,6 +427,7 @@ given is that of a group to which the current user belongs."
                                    idx)))
     "unknown"))
 
+#-windows-target
 (defun copy-file-attributes (source-path dest-path)
   "Copy the mode, owner, group and modification time of source-path to dest-path.
    Returns T if succeeded, NIL if some of the attributes couldn't be copied due to
@@ -876,6 +877,24 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
 
 (defloadvar *max-os-open-files* #-windows-target (#_getdtablesize) #+windows-target 32)
 
+(defun pipe ()
+  ;;  (rlet ((filedes (:array :int 2)))
+  (%stack-block ((filedes 8))
+    (let* ((status (ff-call (%kernel-import target::kernel-import-lisp-pipe)
+                            :address filedes :int))
+           (errno (if (eql status 0) 0 (%get-errno))))
+      (unless (zerop status)
+        (when (or (eql errno (- #$EMFILE))
+                  (eql errno (- #$ENFILE)))
+          (gc)
+          (drain-termination-queue)
+          (setq status (ff-call (%kernel-import target::kernel-import-lisp-pipe)
+                            :address filedes :int)
+                errno (if (zerop status) 0 (%get-errno)))))
+      (if (zerop status)
+        (values (paref filedes (:array :int)  0) (paref filedes (:array :int)  1))
+        (%errno-disp errno)))))
+
 #-windows-target
 (progn
 (defun %execvp (argv)
@@ -892,21 +911,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
     (declare (fixnum fd))
     (#_close fd)))
 
-(defun pipe ()
-  ;;  (rlet ((filedes (:array :int 2)))
-  (%stack-block ((filedes 8))
-    (let* ((status (#_pipe filedes))
-           (errno (if (eql status 0) 0 (%get-errno))))
-      (unless (zerop status)
-        (when (or (eql errno (- #$EMFILE))
-                  (eql errno (- #$ENFILE)))
-          (gc)
-          (drain-termination-queue)
-          (setq status (#_pipe filedes)
-                errno (if (zerop status) 0 (%get-errno)))))
-      (if (zerop status)
-        (values (paref filedes (:array :int)  0) (paref filedes (:array :int)  1))
-        (%errno-disp errno)))))
+
 
 
 
@@ -1518,10 +1523,7 @@ not, why not; and what its result code was if it completed."
   )
 
 
-(defun pipe ()
-  (%stack-block ((filedes 8))
-    (syscall syscalls::pipe filedes)
-    (values (paref filedes (:array :int)  0) (paref filedes (:array :int)  1))))
+
 
 (defun run-external-process (proc in-fd out-fd error-fd &optional env)
   (let* ((args (external-process-args proc))
