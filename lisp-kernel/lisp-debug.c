@@ -674,15 +674,15 @@ debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
 #endif
 
 #ifdef X8664
-  fprintf(stderr,"%%rax = 0x%016lX      %%r8  = 0x%016lX\n", xpGPR(xp,REG_RAX),xpGPR(xp,REG_R8));
-  fprintf(stderr,"%%rcx = 0x%016lX      %%r9  = 0x%016lX\n", xpGPR(xp,REG_RCX),xpGPR(xp,REG_R9));
-  fprintf(stderr,"%%rdx = 0x%016lX      %%r10 = 0x%016lX\n", xpGPR(xp,REG_RDX),xpGPR(xp,REG_R10));
-  fprintf(stderr,"%%rbx = 0x%016lX      %%r11 = 0x%016lX\n", xpGPR(xp,REG_RBX),xpGPR(xp,REG_R11));
-  fprintf(stderr,"%%rsp = 0x%016lX      %%r12 = 0x%016lX\n", xpGPR(xp,REG_RSP),xpGPR(xp,REG_R12));
-  fprintf(stderr,"%%rbp = 0x%016lX      %%r13 = 0x%016lX\n", xpGPR(xp,REG_RBP),xpGPR(xp,REG_R13));
-  fprintf(stderr,"%%rsi = 0x%016lX      %%r14 = 0x%016lX\n", xpGPR(xp,REG_RSI),xpGPR(xp,REG_R14));
-  fprintf(stderr,"%%rdi = 0x%016lX      %%r15 = 0x%016lX\n", xpGPR(xp,REG_RDI),xpGPR(xp,REG_R15));
-  fprintf(stderr,"%%rip = 0x%016lX   %%rflags = 0x%016lX\n",
+  fprintf(stderr,"%%rax = 0x%016llx      %%r8  = 0x%016llx\n", xpGPR(xp,REG_RAX),xpGPR(xp,REG_R8));
+  fprintf(stderr,"%%rcx = 0x%016llx      %%r9  = 0x%016llx\n", xpGPR(xp,REG_RCX),xpGPR(xp,REG_R9));
+  fprintf(stderr,"%%rdx = 0x%016llx      %%r10 = 0x%016llx\n", xpGPR(xp,REG_RDX),xpGPR(xp,REG_R10));
+  fprintf(stderr,"%%rbx = 0x%016llx      %%r11 = 0x%016llx\n", xpGPR(xp,REG_RBX),xpGPR(xp,REG_R11));
+  fprintf(stderr,"%%rsp = 0x%016llx      %%r12 = 0x%016llx\n", xpGPR(xp,REG_RSP),xpGPR(xp,REG_R12));
+  fprintf(stderr,"%%rbp = 0x%016llx      %%r13 = 0x%016llx\n", xpGPR(xp,REG_RBP),xpGPR(xp,REG_R13));
+  fprintf(stderr,"%%rsi = 0x%016llx      %%r14 = 0x%016llx\n", xpGPR(xp,REG_RSI),xpGPR(xp,REG_R14));
+  fprintf(stderr,"%%rdi = 0x%016llx      %%r15 = 0x%016llx\n", xpGPR(xp,REG_RDI),xpGPR(xp,REG_R15));
+  fprintf(stderr,"%%rip = 0x%016llx   %%rflags = 0x%016llx\n",
 	  xpGPR(xp, Iip), eflags_register(xp));
 #endif
 
