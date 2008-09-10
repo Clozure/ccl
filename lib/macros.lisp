@@ -1688,6 +1688,12 @@ to open."
                                                  `(,encoding-name ,b))
                                              bindings) body))
 
+(defmacro with-filename-cstrs (&rest rest)
+  `(,(case (target-os-name)
+      (:darwin 'with-utf-8-cstrs)
+      (:windows 'with-native-utf-16-cstrs)
+      (t 'with-cstrs)) ,@rest))
+
 
 (defun with-specs-aux (name spec-list original-body)
   (multiple-value-bind (body decls) (parse-body original-body nil)
