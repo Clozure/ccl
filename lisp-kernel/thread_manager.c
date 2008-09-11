@@ -96,7 +96,6 @@ raise_thread_interrupt(TCR *target)
        get it out of that state here. */
     GetThreadIOPendingFlag(hthread,&io_pending);
     target->interrupt_pending = (1LL << (nbits_in_word - 1LL));
-    ResumeThread(hthread);
     if (io_pending) {
       pending_io * pending = (pending_io *) (target->foreign_exception_status);
       if (pCancelIoEx) {
@@ -105,6 +104,7 @@ raise_thread_interrupt(TCR *target)
         CancelIo(pending->h);
       }
     }
+    ResumeThread(hthread);
     return 0;
   } else {
     /* Thread is running lisp code with interupts enabled.  Set it
