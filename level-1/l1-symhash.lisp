@@ -306,8 +306,7 @@
 
 (defun %pkg-ref-intern (str ref)
   (%intern str (or (package-ref.pkg ref)
-                   (setf (package-ref.pkg ref)
-                         (%find-pkg (package-ref.name ref))))))
+                   (%kernel-restart $xnopkg (package-ref.name ref)))))
 
 (defun unintern (symbol &optional (package *package*))
   "Makes SYMBOL no longer present in PACKAGE. If SYMBOL was present
