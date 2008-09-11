@@ -21,16 +21,7 @@
 #+windows-target
 (progn
 
-(defun strip-drive-for-now (string)
-  string
-  #+no
-  (or (and (> (length string) 2)
-           (eql (schar string 1) #\:)
-           (let* ((copy (subseq string 0)))
-             (setf (schar copy 0) (char-downcase (schar copy 0)))
-             (setf (schar copy  1) #\|)
-             copy))
-      string))
+
             
 
 (defun nbackslash-to-forward-slash (namestring)
@@ -54,9 +45,8 @@
   ;; rest of the world and most sane people would expect.
   #+darwin-target
   (precompose-simple-string (%get-utf-8-cstring pointer))
-  #+windows-target (strip-drive-for-now
-                    (nbackslash-to-forward-slash
-                     (%get-native-utf-16-cstring pointer)))
+  #+windows-target (nbackslash-to-forward-slash
+                     (%get-native-utf-16-cstring pointer))
   ;; On some other platforms, the namestring is assumed to
   ;; be encoded according to the current locale's character
   ;; encoding (though FreeBSD seems to be moving towards
