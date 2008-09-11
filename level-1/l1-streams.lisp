@@ -3295,7 +3295,7 @@
 
 (defun optimal-buffer-size (fd element-type)
   #+windows-target (declare (ignore fd))
-  (let* ((nominal #-windows-target (or (nth-value 6 (%fstat fd)) *elements-per-buffer*))
+  (let* (#-windows-target (nominal (or (nth-value 6 (%fstat fd)) *elements-per-buffer*))
          (octets #+windows-target #$BUFSIZ
                  #-windows-target
                  (case (%unix-fd-kind fd)
@@ -5246,9 +5246,9 @@
              :unsigned-fullword))
 
 (defun unread-data-available-p (fd)
-  #+freebsd-target
+  #+(or freebsd-target windows-target)
   (fd-input-available-p fd 0)
-  #-freebsd-target
+  #-(or freebsd-target windows-target)
   (rlet ((arg (* :char) (%null-ptr)))
     (when (zerop (int-errno-call (#_ioctl fd #$FIONREAD :address arg)))
       (let* ((avail (pref arg :long)))
