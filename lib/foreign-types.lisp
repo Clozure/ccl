@@ -118,8 +118,8 @@
                     'os::generate-callback-bindings
                     :callback-return-value-function
                     'os::generate-callback-return-value
-                    :platform-foreign-types
-                    #.(case (backend-name *target-backend*)
+                    :platform-ordinal-types
+                    (case (backend-name *target-backend*)
                         (:win64 '((:struct :_stat64)))
                         (t
                          (case (target-os-name *target-backend*)
@@ -1695,16 +1695,16 @@ result-type-specifer is :VOID or NIL"
 
 #+windows-target
 (defparameter *canonical-os-foreign-types*
-  `((#>FILETIME)
-    (#>SYSTEM_INFO)
-    (#>HANDLE)
-    (#>PROCESS_INFORMATION)
-    (#>STARTUPINFO)
+  `(#>FILETIME
+    #>SYSTEM_INFO
+    #>HANDLE
+    #>PROCESS_INFORMATION
+    #>STARTUPINFO
     (:array #>HANDLE 2)
-    (#>DWORD)
-    (#>SYSTEM_LOGICAL_PROCESSOR_INFORMATION)
-    (:array #>wchar_t #.$MAX_PATH)
-    (#>fd_set)))
+    #>DWORD
+    #>SYSTEM_LOGICAL_PROCESSOR_INFORMATION
+    (:array #>wchar_t #.#$MAX_PATH)
+    #>fd_set))
     
     
 (defun canonicalize-foreign-type-ordinals (ftd)
@@ -1729,7 +1729,6 @@ result-type-specifer is :VOID or NIL"
       (canonicalize-foreign-type-ordinal '(:struct :hostent))
       (canonicalize-foreign-type-ordinal '(:array :unsigned-long 3))
       (canonicalize-foreign-type-ordinal '(:* :char))
-      (canonicalize-foreign-type-ordinal #+darwin-target '(:struct :host_basic_info) #-darwin-target nil)
       (canonicalize-foreign-type-ordinal '(:struct :in_addr))
       (canonicalize-foreign-type-ordinal '(:struct :cdb-datum))
       (canonicalize-foreign-type-ordinal '(:struct :dbm-constant))
