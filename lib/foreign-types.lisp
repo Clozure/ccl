@@ -118,7 +118,13 @@
                     'os::generate-callback-bindings
                     :callback-return-value-function
                     'os::generate-callback-return-value
-                    ))
+                    :platform-foreign-types
+                    #.(case (backend-name *target-backend*)
+                        (:win64 '((:struct :_stat64)))
+                        (t
+                         (case (target-os-name *target-backend*)
+                           (:darwin '((:struct :host_basic_info)))
+                           (t ()))))))
                     
 (defvar *target-ftd* *host-ftd*)
 (setf (backend-target-foreign-type-data *host-backend*)
@@ -1675,12 +1681,31 @@ result-type-specifer is :VOID or NIL"
                         'foreign-float-type)
                (return t)))))))
 
-(defparameter *canonical-unix-foreign-types*
+;;; We don't use foreign type ordinals when cross-compiling,
+;;; so the read-time conditionalization is OK here.
+
+#-windows-target
+(defparameter *canonical-os-foreign-types*
   '((:struct :timespec)
     (:struct :timeval)
     (:struct :stat)
     (:struct :passwd)
-    #>Dl_info))
+    #>Dl_info
+    (:array (:struct :pollfd) 1)) )
+
+#+windows-target
+(defparameter *canonical-os-foreign-types*
+  `((#>FILETIME)
+    (#>SYSTEM_INFO)
+    (#>HANDLE)
+    (#>PROCESS_INFORMATION)
+    (#>STARTUPINFO)
+    (:array #>HANDLE 2)
+    (#>DWORD)
+    (#>SYSTEM_LOGICAL_PROCESSOR_INFORMATION)
+    (:array #>wchar_t #.$MAX_PATH)
+    (#>fd_set)))
+    
     
 (defun canonicalize-foreign-type-ordinals (ftd)
   (let* ((canonical-ordinal 0))          ; used for :VOID
@@ -1716,10 +1741,8 @@ result-type-specifer is :VOID or NIL"
       (canonicalize-foreign-type-ordinal #+solaris-target '(:struct :lifnum) #-solaris-target nil)
       (canonicalize-foreign-type-ordinal #+solaris-target '(:struct :lifconf) #-solaris-target nil)
       (setq canonical-ordinal (1- max-common-foreign-type-ordinal))
-      ;; We don't use foreign type ordinals when cross-compiling,
-      ;; so the read-time conditionalization is OK here.
-      #+(or linux-target darwin-target solaris-target freebsd-target)
-      (dolist (spec *canonical-unix-foreign-types*)
+
+      (dolist (spec *canonical-os-foreign-types*)
         (canonicalize-foreign-type-ordinal spec))
       (dolist (spec (ftd-platform-ordinal-types ftd))
         (canonicalize-foreign-type-ordinal spec)))))
