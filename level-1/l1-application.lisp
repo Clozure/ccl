@@ -166,7 +166,7 @@
 	       (:unknown-option "Unknown option: ~a")
 	       (t "~a"))
 	     opts)
-     #-windows-target #$EX_USAGE #+windows-targt #$EXIT_FAILURE
+     #-windows-target #$EX_USAGE #+windows-target #$EXIT_FAILURE
      (summarize-option-syntax a))))
 	       
 
