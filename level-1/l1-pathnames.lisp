@@ -29,9 +29,8 @@
     #-windows-target
     (%get-cstring (%get-kernel-global-ptr 'image-name p))
     #+windows-target
-    (strip-drive-for-now
      (nbackslash-to-forward-slash
-      (%get-cstring (%get-kernel-global-ptr 'image-name p))))))
+      (%get-cstring (%get-kernel-global-ptr 'image-name p)))))
 
 (defloadvar *heap-image-name* (heap-image-name))
 
