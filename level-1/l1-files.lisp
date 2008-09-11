@@ -112,7 +112,7 @@
     (when (and (> len 1) (not (or (eql (schar name (1- len)) #\/)
                                   (eql (schar name (1- len)) #\\))))
       (setq name (%str-cat name "/")))
-    (string-to-pathname (strip-drive-for-now name)))
+    (string-to-pathname name))
   #-windows-target
   (make-directory-pathname  :device nil :directory (%path-std-quotes name nil "*;:")))
 
