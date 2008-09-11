@@ -238,6 +238,7 @@
 (defun socket-error (stream where errno &optional nameserver-p)
   "Creates and signals (via error) one of two socket error 
 conditions, based on the state of the arguments."
+  #+windows-target (declare (ignore nameserver-p))
   (when (< errno 0)
     (setq errno (- errno)))
   (if stream
@@ -250,6 +251,9 @@ conditions, based on the state of the arguments."
 			   ;; in the class definition, just need to remember how...
 			   :format-control "~a (error #~d) during ~a"
 			   :format-arguments (list
+                                              #+windows-target
+                                              (%windows-error-string errno)
+                                              #-windows-target
 					      (if nameserver-p
 						(%hstrerror errno)
 						(%strerror errno))
@@ -262,6 +266,9 @@ conditions, based on the state of the arguments."
 			   ;; in the class definition, just need to remember how...
 			   :format-control "~a (error #~d) during socket creation in ~a"
 			   :format-arguments (list
+                                              #+windows-target
+                                              (%windows-error-string errno)
+                                              #-windows-target
 					      (if nameserver-p
 						(%hstrerror errno)
 						(%strerror errno))
@@ -1166,7 +1173,7 @@ unsigned IP address."
               (return (values nil (- (pref herr :signed)))))
             (return (%get-cstring (pref res :hostent.h_name)))))))))
 
-#+(or darwin-target freebsd-target)
+#+(or darwin-target freebsd-target windows-target)
 (defun c_gethostbyname (name)
   (with-cstrs ((name (string name)))
     (without-interrupts
@@ -1326,6 +1333,27 @@ unsigned IP address."
   (check-socket-error (#_bind (socket-handle sockfd) sockaddr addrlen)))
 
 
+#+windows-target
+(defun windows-connect-wait (sockfd timeout-in-milliseconds)
+  (if (and timeout-in-milliseconds
+           (< timeout-in-milliseconds 0))
+    (setq timeout-in-milliseconds nil))
+  (rlet ((writefds :fd_set)
+         (exceptfds :fd_set)
+         (tv :timeval :tv_sec 0 :tv_usec 0))
+    (let* ((handle (socket-handle sockfd)))
+      (fd-zero writefds)
+      (fd-zero exceptfds)
+      (fd-set handle writefds)
+      (fd-set handle exceptfds)
+      (when timeout-in-milliseconds
+        (multiple-value-bind (seconds milliseconds)
+            (floor timeout-in-milliseconds 1000)
+          (setf (pref tv :timeval.tv_sec) seconds
+                (pref tv :timeval.tv_usec) (* 1000 milliseconds))))
+      (> (#_select 1 (%null-ptr) writefds exceptfds (if timeout-in-milliseconds tv (%null-ptr))) 0))))
+      
+      
 ;;; If attempts to connnect are interrupted, we basically have to
 ;;; wait in #_select (or the equivalent).  There's a good rant
 ;;; about these issues in:
@@ -1337,8 +1365,13 @@ unsigned IP address."
            (set-socket-fd-blocking sockfd nil)
            (let* ((err (check-socket-error (#_connect (socket-handle sockfd) addr len))))
              (cond ((or (eql err (- #+windows-target #$WSAEINPROGRESS
-                                    #-windows-target #$EINPROGRESS)) (eql err (- #$EINTR)))
-                    (if (process-output-wait sockfd timeout-in-milliseconds)
+                                    
+                                    #-windows-target #$EINPROGRESS))
+                        #+windows-target (eql err (- #$WSAEWOULDBLOCK))
+                        (eql err (- #$EINTR)))
+                    (if
+                      #+windows-target (windows-connect-wait sockfd timeout-in-milliseconds)
+                      #-windows-target (process-output-wait sockfd timeout-in-milliseconds)
                       (- (int-getsockopt sockfd #$SOL_SOCKET #$SO_ERROR))
                       (- #+windows-target #$WSAETIMEDOUT #-windows-target #$ETIMEDOUT)))
                    (t err))))
@@ -1412,7 +1445,7 @@ unsigned IP address."
                           (eql (pref addr :sockaddr.sa_family) #$AF_INET))
                  (push (make-ip-interface
                         :name (%get-cstring (pref q :ifaddrs.ifa_name))
-                        :addr (pref addr :sockaddr_in.sin_addr.s_addr)
+                        :addr (ntohl (pref addr :sockaddr_in.sin_addr.s_addr))
                         :netmask (pref (pref q :ifaddrs.ifa_netmask)
                                        :sockaddr_in.sin_addr.s_addr)
                         :flags (pref q :ifaddrs.ifa_flags)
@@ -1478,7 +1511,7 @@ unsigned IP address."
                              
                            (push (make-ip-interface
                                   :name name
-                                  :addr address
+                                  :addr (ntohl address)
                                   :netmask netmask
                                   :flags if-flags
                                   :address-family address-family)
