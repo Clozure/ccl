@@ -277,7 +277,7 @@ lisp_close(int fd)
   return close(fd);
 }
 
-int
+ssize_t
 lisp_read(int fd, void *buf, unsigned int count)
 {
   HANDLE hfile;
@@ -341,7 +341,7 @@ lisp_read(int fd, void *buf, unsigned int count)
   }
 }
 
-int
+ssize_t
 lisp_write(int fd, void *buf, unsigned int count)
 {
   return _write(fd, buf, count);
@@ -465,6 +465,23 @@ windows_find_symbol(void *handle, char *name)
     }
     return NULL;
   }
+}
+
+/* Note that we're using 8-bit strings here */
+
+void *
+windows_open_shared_library(char *path)
+{
+  HMODULE module = (HMODULE)0;
+
+  /* Try to open an existing module in a way that increments its
+     reference count without running any initialization code in
+     the dll. */
+  if (!GetModuleHandleExA(0,path,&module)) {
+    /* If that failed ... */
+    module = LoadLibraryA(path);
+  }
+  return (void *)module;
 }
 
 void
