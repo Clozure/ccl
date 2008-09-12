@@ -926,6 +926,8 @@ return that address encapsulated in a MACPTR, else returns NIL."
   (progn
     (setup-lookup-calls)
     (reopen-user-libraries))
+  #+windows-target
+  (init-windows-ffi)
   (when *eeps*
     (without-interrupts 
      (maphash #'(lambda (k v) 
