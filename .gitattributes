@@ -212,6 +212,7 @@ lisp-kernel/solarisx64/.gdbinit -text
 lisp-kernel/unix-calls.c -text
 lisp-kernel/win32/Makefile -text
 lisp-kernel/win32/pei-ia32.x -text
+lisp-kernel/win64/.gdbinit -text
 lisp-kernel/win64/Makefile -text
 lisp-kernel/win64/pei-x86-64.x -text
 lisp-kernel/win64/yasm-redefinition.patch -text
