@@ -90,3 +90,9 @@
 #define TCR_INTERRUPT_LEVEL(tcr) \
   (((signed_natural *)((tcr)->tlb_pointer))[INTERRUPT_LEVEL_BINDING_INDEX])
 #endif
+
+#ifdef WINDOWS
+#define LSEEK(fd,offset,how) _lseeki64(fd,offset,how)
+#else
+#define LSEEK(fd,offset,how) lseek(fd,offset,how)
+#endif

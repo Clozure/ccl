@@ -390,9 +390,9 @@ MapFile(LogicalAddress addr, natural pos, natural nbytes, int permissions, int f
   size_t count, total = 0;
   size_t opos;
 
-  opos = lseek(fd, 0, SEEK_CUR);
+  opos = LSEEK(fd, 0, SEEK_CUR);
   CommitMemory(addr, nbytes);
-  lseek(fd, pos, SEEK_SET);
+  LSEEK(fd, pos, SEEK_SET);
 
   while (total < nbytes) {
     count = read(fd, addr + total, nbytes - total);
@@ -402,7 +402,7 @@ MapFile(LogicalAddress addr, natural pos, natural nbytes, int permissions, int f
       return false;
   }
 
-  lseek(fd, opos, SEEK_SET);
+  LSEEK(fd, opos, SEEK_SET);
 
   return true;
 #endif

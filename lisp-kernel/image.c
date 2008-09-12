@@ -92,9 +92,9 @@ relocate_area_contents(area *a, LispObj bias)
 off_t
 seek_to_next_page(int fd)
 {
-  off_t pos = lseek(fd, 0, SEEK_CUR);
+  off_t pos = LSEEK(fd, 0, SEEK_CUR);
   pos = align_to_power_of_2(pos, log2_page_size);
-  return lseek(fd, pos, SEEK_SET);
+  return LSEEK(fd, pos, SEEK_SET);
 }
   
 /*
@@ -110,13 +110,13 @@ find_openmcl_image_file_header(int fd, openmcl_image_file_header *header)
   off_t pos;
   unsigned version, flags;
 
-  pos = lseek(fd, 0, SEEK_END);
+  pos = LSEEK(fd, 0, SEEK_END);
   if (pos < 0) {
     return false;
   }
   pos -= sizeof(trailer);
 
-  if (lseek(fd, pos, SEEK_SET) < 0) {
+  if (LSEEK(fd, pos, SEEK_SET) < 0) {
     return false;
   }
   if (read(fd, &trailer, sizeof(trailer)) != sizeof(trailer)) {
@@ -132,7 +132,7 @@ find_openmcl_image_file_header(int fd, openmcl_image_file_header *header)
   if (disp >= 0) {
     return false;
   }
-  if (lseek(fd, disp, SEEK_CUR) < 0) {
+  if (LSEEK(fd, disp, SEEK_CUR) < 0) {
     return false;
   }
   if (read(fd, header, sizeof(openmcl_image_file_header)) !=
@@ -226,7 +226,7 @@ load_image_section(int fd, openmcl_image_section_header *sect)
     return;
     
   }
-  lseek(fd, pos+advance, SEEK_SET);
+  LSEEK(fd, pos+advance, SEEK_SET);
 }
 
 LispObj
@@ -248,7 +248,7 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
       return 0;
     }
 #if WORD_SIZE == 64
-    lseek(fd, section_data_delta, SEEK_CUR);
+    LSEEK(fd, section_data_delta, SEEK_CUR);
 #endif
     for (i = 0; i < nsections; i++, sect++) {
       load_image_section(fd, sect);
@@ -379,7 +379,7 @@ write_file_and_section_headers(int fd,
 {
   *header_pos = seek_to_next_page(fd);
 
-  if (lseek (fd, *header_pos, SEEK_SET) < 0) {
+  if (LSEEK (fd, *header_pos, SEEK_SET) < 0) {
     return errno;
   }
   if (write(fd, file_header, sizeof(*file_header)) != sizeof(*file_header)) {
@@ -496,7 +496,7 @@ save_application(unsigned fd)
 
 #if WORD_SIZE == 64
   seek_to_next_page(fd);
-  section_data_delta = -((lseek(fd,0,SEEK_CUR)+sizeof(fh)+sizeof(sections)) -
+  section_data_delta = -((LSEEK(fd,0,SEEK_CUR)+sizeof(fh)+sizeof(sections)) -
                          image_data_pos);
   fh.section_data_offset_high = (int)(section_data_delta>>32L);
   fh.section_data_offset_low = (unsigned)section_data_delta;
@@ -509,7 +509,7 @@ save_application(unsigned fd)
   trailer.sig0 = IMAGE_SIG0;
   trailer.sig1 = IMAGE_SIG1;
   trailer.sig2 = IMAGE_SIG2;
-  eof_pos = lseek(fd, 0, SEEK_CUR) + sizeof(trailer);
+  eof_pos = LSEEK(fd, 0, SEEK_CUR) + sizeof(trailer);
   trailer.delta = (int) (header_pos-eof_pos);
   if (write(fd, &trailer, sizeof(trailer)) == sizeof(trailer)) {
 #ifndef WINDOWS
