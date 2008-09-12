@@ -1687,7 +1687,6 @@ result-type-specifer is :VOID or NIL"
 #-windows-target
 (defparameter *canonical-os-foreign-types*
   '((:struct :timespec)
-    (:struct :timeval)
     (:struct :stat)
     (:struct :passwd)
     #>Dl_info
@@ -1736,6 +1735,7 @@ result-type-specifer is :VOID or NIL"
       (canonicalize-foreign-type-ordinal '(:array :int 2))
       (canonicalize-foreign-type-ordinal '(:array (:struct :pollfd) 1))
       (canonicalize-foreign-type-ordinal '(:struct :dirent))
+      (canonicalize-foreign-type-ordinal '(:struct :timeval))
       (canonicalize-foreign-type-ordinal #+solaris-target '(:struct :flock) #-solaris-target nil)
       (canonicalize-foreign-type-ordinal #+solaris-target '(:struct :lifnum) #-solaris-target nil)
       (canonicalize-foreign-type-ordinal #+solaris-target '(:struct :lifconf) #-solaris-target nil)
