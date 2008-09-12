@@ -1692,10 +1692,12 @@ xStackSpace()
 
 #ifndef DARWIN
 #ifdef WINDOWS
+extern void *windows_open_shared_library(char *);
+
 void *
 xGetSharedLibrary(char *path, int mode)
 {
-  return NULL;                  /* fix this */
+  return windows_open_shared_library(path);
 }
 #else
 void *
