@@ -779,7 +779,7 @@ handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valenc
   BytePtr addr = (BytePtr) xp->uc_mcontext.mc_addr;
 #else
 #ifdef WINDOWS
-  BytePtr addr = NULL;          /* FIX THIS */
+  BytePtr addr = (BytePtr) info->ExceptionInformation[1];
 #else
   BytePtr addr = (BytePtr) info->si_addr;
 #endif
