@@ -943,7 +943,9 @@ vector
 (defun %str-assoc (str alist)
   (assoc str alist :test #'string-equal))
 
-(defstatic *pathname-escape-character* #\\
+(defstatic *pathname-escape-character*
+  #+windows-target #\'
+  #-windows-target #\\
   "Not CL.  A Coral addition for compatibility between CL spec and the shell.")
 
 
