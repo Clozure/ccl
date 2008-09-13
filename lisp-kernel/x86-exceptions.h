@@ -20,14 +20,12 @@
 typedef u8_t opcode, *pc;
 
 #ifdef LINUX
-#ifdef X8664
 #define xpGPRvector(x) ((natural *)(&((x)->uc_mcontext.gregs)))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
 #define xpPC(x) (xpGPR(x,Iip))
 #define xpMMXreg(x,n)  *((natural *)(&((x)->uc_mcontext.fpregs->_st[n])))
 #define eflags_register(xp) xpGPR(xp,Iflags)
-#endif
 #endif
 
 #ifdef DARWIN
