@@ -869,6 +869,88 @@ void free_tcr_extra_segment(TCR *tcr)
 }
 #endif
 
+#ifdef LINUX
+
+#include <asm/ldt.h>
+#include <sys/syscall.h>
+
+/* see desc_struct in kernel/include/asm-i386/processor.h */
+typedef struct {
+  uint32_t a;
+  uint32_t b;
+} linux_desc_struct;
+
+
+#define desc_avail(d) (((d)->a) == 0)
+
+linux_desc_struct linux_ldt_entries[LDT_ENTRIES];
+
+/* We have to ask the Linux kernel for a copy of the ldt table
+   and manage it ourselves.  It's not clear that this is 
+   thread-safe in general, but we can at least ensure that
+   it's thread-safe wrt lisp threads. */
+
+pthread_mutex_t ldt_lock = PTHREAD_MUTEX_INITIALIZER;  /* simple, non-recursive mutex */
+
+int
+modify_ldt(int func, void *ptr, unsigned long bytecount)
+{
+  return syscall(__NR_modify_ldt, func, ptr, bytecount);
+}
+
+
+void
+setup_tcr_extra_segment(TCR *tcr)
+{
+  int i, n;
+  short sel;
+  struct user_desc u = {1, 0, 0, 1, MODIFY_LDT_CONTENTS_DATA, 0, 0, 0, 1};
+  linux_desc_struct *d = linux_ldt_entries;
+
+  pthread_mutex_lock(&ldt_lock);
+  n = modify_ldt(0,d,LDT_ENTRIES*LDT_ENTRY_SIZE)/LDT_ENTRY_SIZE;
+  for (i = 0; i < n; i++,d++) {
+    if (desc_avail(d)) {
+      break;
+    }
+  }
+  if (i == LDT_ENTRIES) {
+    pthread_mutex_unlock(&ldt_lock);
+    fprintf(stderr, "All 8192 ldt entries in use ?\n");
+    _exit(1);
+  }
+  u.entry_number = i;
+  u.base_addr = (uint32_t)tcr;
+  u.limit = sizeof(tcr);
+  u.limit_in_pages = 0;
+  if (modify_ldt(1,&u,sizeof(struct user_desc)) != 0) {
+    pthread_mutex_unlock(&ldt_lock);
+    fprintf(stderr,"Can't assign LDT entry\n");
+    _exit(1);
+  }
+  sel = (i << 3) | 7;
+  tcr->ldt_selector = sel;
+  pthread_mutex_unlock(&ldt_lock);
+}
+
+void
+free_tcr_extra_segment(TCR *tcr)
+{
+  struct user_desc u = {0, 0, 0, 0, MODIFY_LDT_CONTENTS_DATA, 0, 0, 0, 0};
+  short sel = tcr->ldt_selector;
+
+  pthread_mutex_lock(&ldt_lock);
+  /* load %fs with null segement selector */
+  __asm__ volatile ("mov %0,%%fs" : : "r"(0));
+  tcr->ldt_selector = 0;
+  u.entry_number = (sel>>3);
+  modify_ldt(1,&u,sizeof(struct user_desc));
+  pthread_mutex_unlock(&ldt_lock);
+  
+}
+
+#endif
+
 #ifdef WINDOWS
 void
 setup_tcr_extra_segment(TCR *tcr)
