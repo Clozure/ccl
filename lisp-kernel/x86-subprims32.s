@@ -79,7 +79,7 @@ _exportfn(C(start_lisp))
         __(ldmxcsr rcontext(tcr.lisp_mxcsr))
 	__(movl $TCR_STATE_LISP, rcontext(tcr.valence))
 	__(clr %imm0)
-	__(cmpl $0,_GCDebug)
+	__(cmpl $0,C(GCDebug))
 	__(jne 1f)
 	__(uuo_error_gc_trap)
 1:
