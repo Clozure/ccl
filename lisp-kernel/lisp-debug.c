@@ -154,6 +154,12 @@ char* Iregnames[] = {"rax ","rcx ","rdx","rbx","rsp","rrbp","rsi","rdi",
 char *Iregnames[] = {"eax", "ebx", "ecx", "edx", "edi", "esi",
 		     "ebp", "???", "efl", "eip"};
 #endif
+#ifdef LINUX
+char *Iregnames[] = {"???", "???", "???", "???",
+                     "edi", "esi", "ebp", "esp",
+                     "ebx", "edx", "ecx", "eax",
+                     "???", "???", "eip", "???", "efl"};
+#endif
 #ifdef WINDOWS
 char *Iregnames[] = {"edi", "esi", "ebx", "edx", "ecx", "eax",
                      "ebp", "eip", "???", "efl", "esp"};
