@@ -154,6 +154,8 @@ typedef struct area_list {
 #ifdef LINUX
 #ifdef X8664
 #define IMAGE_BASE_ADDRESS 0x300000000000L
+#else
+#define IMAGE_BASE_ADDRESS 0x04000000
 #endif
 #endif
 #ifdef FREEBSD
