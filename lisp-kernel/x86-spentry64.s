@@ -1878,14 +1878,54 @@ C(egc_store_node_conditional_success_test):
         __(xorb $63,%imm0_b)
         __(lock)
         __(btsq %imm0,(%temp1))
-        .globl C(egc_write_barrier_end)
-C(egc_write_barrier_end):
+	.globl C(egc_store_node_conditional_success_end)
+C(egc_store_node_conditional_success_end):
 2:      __(movl $t_value,%arg_z_l)
 	__(ret)
 3:	__(movl $nil_value,%arg_z_l)
 	__(ret)
 _endsubp(store_node_conditional)
 				
+	_spentry(set_hash_key_conditional)
+        .globl C(egc_set_hash_key_conditional)
+C(egc_set_hash_key_conditional):
+	__(unbox_fixnum(%temp0,%imm1))
+0:	__(movq (%arg_x,%imm1),%temp1)
+	__(cmpq %arg_y,%temp1)
+	__(movq %temp1,%imm0)
+	__(jne 3f)
+	__(lock)
+        __(cmpxchgq %arg_z,(%arg_x,%imm1))
+        .globl C(egc_set_hash_key_conditional_success_test)
+C(egc_set_hash_key_conditional_success_test):
+	__(jne 0b)
+        __(lea (%arg_x,%imm1),%imm0)
+        __(subq lisp_global(heap_start),%imm0)
+        __(shrq $dnode_shift,%imm0)
+        __(cmpq lisp_global(oldspace_dnode_count),%imm0)
+        __(ref_global(refbits,%temp1))
+        __(jae 2f)
+        __(xorb $63,%imm0_b)
+        __(lock)
+        __(btsq %imm0,(%temp1))
+        /* Now memoize the address of the hash vector   */
+        __(movq %arg_x,%imm0)
+        __(subq lisp_global(heap_start),%imm0)
+        __(shrq $dnode_shift,%imm0)
+        __(xorb $63,%imm0_b)
+        __(lock)
+        __(btsq %imm0,(%temp1))
+        .globl C(egc_write_barrier_end)
+C(egc_write_barrier_end):
+2:      __(movl $t_value,%arg_z_l)
+	__(ret)
+3:	__(movl $nil_value,%arg_z_l)
+	__(ret)
+_endsubp(set_hash_key_conditional)
+
+	
+
+
 _spentry(setqsym)
 	__(btq $sym_vbit_const,symbol.flags(%arg_y))
 	__(jae _SPspecset)
@@ -5031,13 +5071,6 @@ _spentry(breakpoint)
         __(int $3)
 _endsubp(breakpoint)
 
-		
-
-
-_spentry(unused_5)
-        __(int $3)
-_endsubp(unused_5)
-
 
         __ifdef([DARWIN])
         .if 1
@@ -5118,10 +5151,10 @@ LEFDEffcall_return_registers:
         .endif
         __endif
         
-_spentry(unused_6)
+_spentry(unused_5)
         __(int $3)
 Xspentry_end:           
-_endsubp(unused_6)
+_endsubp(unused_5)
         
         .data
         .globl C(spentry_start)

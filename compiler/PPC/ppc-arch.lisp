@@ -482,7 +482,7 @@
          (defppcsubprim .SPaset3)
          (defppcsubprim .SPpoweropen-ffcall-return-registers)
          (defppcsubprim .SPnmkunwind)
-         (defppcsubprim .SPunused-6)
+         (defppcsubprim .SPset-hash-key-conditional)
          (defppcsubprim .SPunbind-interrupt-level)
          (defppcsubprim .SPunbind)
          (defppcsubprim .SPunbind-n)

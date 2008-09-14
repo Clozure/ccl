@@ -1243,24 +1243,17 @@
 ;;; Hash table accessors.
 (def-accessors (hash-table) %svref
     nil                                 ; 'HASH-TABLE
-    nhash.rehashF                       ; function: rehashes if necessary
     nhash.keytransF                     ; transform key into (values primary addressp)
     nhash.compareF                      ; comparison function: 0 -> eq, -1 ->eql, else function
     nhash.rehash-bits                   ; bitset (array (unsigned-byte 32)) for rehash
     nhash.vector                        ; N <key,value> pairs; n relatively prime to & larger than all secondary keys
-    nhash.lock                          ; fixnum: bits for grow and rehash
-    nhash.count                         ; Number of entries
+    nhash.lock                          ; flag: non-zero if lock-free
     nhash.owner                         ; tcr of "owning" thread, else NIL.
-    nhash.fixnum                        ; fwdnum kernel-global
-    nhash.gc-count                      ; gc-count kernel-global
     nhash.grow-threshold                ; Max # entries before grow
     nhash.rehash-ratio                  ; inverted rehash-threshold
     nhash.rehash-size			; rehash-size from user
     nhash.puthash-count                 ; number of times table has been rehashed or grown
     nhash.exclusion-lock                ; read-write lock for access
-    nhash.rehash-lock                   ; exclusive lock for rehash
-    nhash.iterator                      ; current hash-table iterator
-    nhash.address-based                 ; hashes based on address
     nhash.find                          ; function: find vector-index
     nhash.find-new                      ; function: find vector-index on put
     nhash.read-only                     ; boolean: true when read-only

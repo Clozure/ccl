@@ -174,7 +174,7 @@ C(spjump_start):
         _spjump(aset3)
         _spjump(poweropen_ffcall_return_registers)
         _spjump(nmkunwind)
-        _spjump(unused_6)
+        _spjump(set_hash_key_conditional)
         _spjump(unbind_interrupt_level)
         _spjump(unbind)
         _spjump(unbind_n)

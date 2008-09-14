@@ -114,6 +114,14 @@
 (defx86lapfunction %set-hash-table-vector-key ((vector arg_x) (index arg_y) (value arg_z))
   (jmp-subprim .SPset-hash-key))
 
+;;; This needs to be done out-of-line, to handle EGC memoization.
+(defx86lapfunction %set-hash-table-vector-key-conditional ((offset 8) #|(ra 0)|# (vector arg_x) (old arg_y) (new arg_z))
+  (movq (@ offset (% rsp)) (% temp0))
+  (save-simple-frame)
+  (call-subprim .SPset-hash-key-conditional)
+  (restore-simple-frame)
+  (single-value-return 3))
+
 ;;; Strip the tag bits to turn x into a fixnum
 (defx86lapfunction strip-tag-to-fixnum ((x arg_z))
   (andb ($ (lognot x8664::fixnummask)) (%b x))

@@ -172,7 +172,7 @@ C(spjump_start):
         _spjump(aset3)
         _spjump(ffcall_return_registers)
         _spjump(unused_5)
-        _spjump(unused_6)
+        _spjump(set_hash_key_conditional)
         _spjump(unbind_interrupt_level)
         _spjump(unbind)
         _spjump(unbind_n)

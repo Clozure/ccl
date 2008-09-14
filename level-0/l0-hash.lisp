@@ -18,88 +18,7 @@
 
 ;;;;;;;;;;;;;
 ;;
-;; hash.lisp
-;; New hash table implementation
-
-;;;;;;;;;;;;;
-;;
-;; Things I didn't do
-;;
-;; Save the 32-bit hash code along with the key so that growing the table can
-;; avoid calling the hashing function (at least until a GC happens during growing).
-;;
-;; Maybe use Knuth's better method for hashing:
-;; find two primes N-2, N.  N is the table size.
-;; First probe is at primary = (mod (funcall (nhash.keytransF h) key) N)
-;; Secondary probes are spaced by (mod (funcall (nhash.keytransF h) key) N-2)
-;; This does a bit better scrambling of the secondary probes, but costs another divide.
-;;
-;; Rethink how finalization is reported to the user.  Maybe have a finalization function which
-;; is called with the hash table and the deleted key & value.
-
-
-;;;;;;;;;;;;;
-;;
-;; Documentation
-;;
-;; MAKE-HASH-TABLE is extended to accept a :HASH-FUNCTION keyword arg which
-;; defaults for the 4 Common Lisp defined :TEST's.  Also, any fbound symbol can
-;; be used for the :TEST argument.  The HASH-FUNCTION is a function of one
-;; argument, the key, which returns two values:
-;;
-;; 1) HASH-CODE
-;; 2) ADDRESSP
-;;
-;; The HASH-CODE can be any object.  If it is a relocateable object (not a
-;; fixnum, short float, or immediate) then ADDRESSP will default to :KEY
-;; and it is an error if NIL is returned for ADDRESSP.
-;;
-;; If ADDRESSP is NIL, the hashing code assumes that no addresses were used
-;; in computing the HASH-CODE.  If ADDRESSP is :KEY (which is the default
-;; if the hash function returns only one value and it is relocateable) then
-;; the hashing code assumes that only the KEY's address was used to compute
-;; the HASH-CODE.  Otherwise, it is assumed that the address of a
-;; component of the key was used to compute the HASH-CODE.
-;;
-;;
-;;
-;; Some (proposed) functions for using in user hashing functions:
-;;
-;; (HASH-CODE object)
-;;
-;; returns two values:
-;;
-;; 1) HASH-CODE
-;; 2) ADDRESSP
-;;
-;; HASH-CODE is the object transformed into a fixnum by changing its tag
-;; bits to a fixnum's tag.  ADDRESSP is true if the object was
-;; relocateable. 
-;;
-;;
-;; (FIXNUM-ADD o1 o2)
-;; Combines two objects additively and returns a fixnum.
-;; If the two objects are fixnums, will be the same as (+ o1 o2) except
-;; that the result can not be a bignum.
-;;
-;; (FIXNUM-MULTIPLY o1 o2)
-;; Combines two objects multiplicatively and returns a fixnum.
-;;
-;; (FIXNUM-FLOOR dividend &optional divisor)
-;; Same as Common Lisp's FLOOR function, but converts the objects into
-;; fixnums before doing the divide and returns two fixnums: quotient &
-;; remainder.
-;;
-;;;;;;;;;;;;;
-;;
-;; Implementation details.
-;;
-;; Hash table vectors have a header that the garbage collector knows about
-;; followed by alternating keys and values.  Empty or deleted slots are
-;; denoted by a key of $undefined.  Empty slots have a value of $undefined.
-;; Deleted slots have a value of NIL.
-;;
-;;
+;; See hash.lisp for documentation
 ;; Five bits in the nhash.vector.flags fixnum interact with the garbage
 ;; collector.  This description uses the symbols that represent bit numbers
 ;; in a fixnum.  $nhash_xxx_bit has a corresponding $nhash_lap_xxx_bit which
@@ -147,8 +66,9 @@
 (eval-when (:compile-toplevel :execute)
   (require "HASHENV" "ccl:xdump;hashenv")
   (require :number-case-macro)
-  (define-symbol-macro free-hash-key-marker (%unbound-marker))
   (define-symbol-macro deleted-hash-key-marker (%slot-unbound-marker))
+  (define-symbol-macro free-hash-marker (%unbound-marker))
+  (define-symbol-macro rehashing-value-marker (%slot-unbound-marker))
   (declaim (inline nhash.vector-size))
   (declaim (inline mixup-hash-code))
   (declaim (inline hash-table-p))
@@ -160,64 +80,55 @@
   (declaim (inline compute-hash-code))
   (declaim (inline eq-hash-find eq-hash-find-for-put))
   (declaim (inline read-lock-hash-table write-lock-hash-table  unlock-hash-table))
-  (declaim (inline %hash-symbol)))
+  (declaim (inline %hash-symbol))
+  (declaim (inline hash-mod))
+  (declaim (inline set-hash-key-conditional set-hash-value-conditional))
+  (declaim (inline hash-lock-free-p lock-free-gethash)))
 
 
 
-(defun %hash-symbol (sym)
-  (if sym    
-    (let* ((vector (%symptr->symvector sym))
-           (cell (%svref vector target::symbol.plist-cell)))
-      (or (car cell)
-          (let* ((pname (%svref vector target::symbol.pname-cell))
-                 (hash (mixup-hash-code (%pname-hash pname (uvsize pname)))))
-            (declare (type (simple-string pname)))
-            (if cell
-              (setf (car cell) hash)
-              (progn
-                (setf (%svref vector target::symbol.plist-cell)
-                      (cons hash nil))
-                hash)))))
-    +nil-hash+))
-              
-
-(defun %cons-hash-table (rehash-function keytrans-function compare-function vector
-                                         threshold rehash-ratio rehash-size address-based find find-new owner)
+(defun %cons-hash-table (keytrans-function compare-function vector
+                         threshold rehash-ratio rehash-size find find-new owner &optional lock-free-p)
   (%istruct
    'HASH-TABLE                          ; type
-   rehash-function                      ; nhash.rehashF
    keytrans-function                    ; nhash.keytransF
    compare-function                     ; nhash.compareF
    nil                                  ; nhash.rehash-bits
    vector                               ; nhash.vector
-   0                                    ; nhash.lock
-   0                                    ; nhash.count
+   (if lock-free-p $nhash.lock-free 0)  ; nhash.lock
    owner                                ; nhash.owner 
-   (get-fwdnum)                         ; nhash.fixnum
-   (gc-count)                           ; nhash.gc-count
    threshold                            ; nhash.grow-threshold
    rehash-ratio                         ; nhash.rehash-ratio
    rehash-size                          ; nhash.rehash-size
    0                                    ; nhash.puthash-count
-   (unless owner
-     (make-read-write-lock))               ; nhash.exclusion-lock
-   nil ;;(make-lock)				; nhash.rehash-lock
-   nil                                  ; nhash.iterator
-   address-based                        ; nhash.address-based
+   (if lock-free-p
+     (make-lock)
+     (unless owner (make-read-write-lock))) ; nhash.exclusion-lock
    find                                 ; nhash.find
    find-new                             ; nhash.find-new
-   nil                                  ; hhash.read-only
+   nil                                  ; nhash.read-only
    ))
 
-
- 
 (defun nhash.vector-size (vector)
   (nhash.vector.size vector))
 
-(eval-when (:compile-toplevel :execute) (declaim (inline hash-mod)))
 (defun hash-mod (hash entries vector)
   (fast-mod-3 hash entries (nhash.vector.size-reciprocal vector)))
 
+;; For lock-free hash tables
+(defun set-hash-key-conditional (index vector old new)
+  (%set-hash-table-vector-key-conditional (%i+ target::misc-data-offset
+                                               (ash (the fixnum index) target::word-shift))
+                                          vector
+                                          old
+                                          new))
+
+(defun set-hash-value-conditional (index vector old new)
+  (store-gvector-conditional (%i+ index 1) vector old new))
+
+(defun hash-lock-free-p (hash)
+  (logtest $nhash.lock-free (the fixnum (nhash.lock hash))))
+ 
 ;;; Is KEY something which can be EQL to something it's not EQ to ?
 ;;; (e.g., is it a number or macptr ?)
 ;;; This can be more general than necessary but shouldn't be less so.
@@ -236,22 +147,21 @@
 
 ;;; Don't rehash at all, unless some key is address-based (directly or
 ;;; indirectly.)
-(defun %needs-rehashing-p (hash)
-  (let ((flags (nhash.vector.flags (nhash.vector hash))))
+(defun %needs-rehashing-p (vector)
+  (let* ((flags (nhash.vector.flags vector)))
     (declare (fixnum flags))
     (if (logbitp $nhash_track_keys_bit flags)
       ;; GC is tracking key movement
       (logbitp $nhash_key_moved_bit flags)
       ;; GC is not tracking key movement
       (if (logbitp $nhash_component_address_bit flags)
-        (not (eql (the fixnum (gc-count)) (the fixnum (nhash.gc-count hash))))))))
+         (not (eql (the fixnum (%get-gc-count)) (the fixnum (nhash.vector.gc-count vector))))))))
 
 (defun %set-does-not-need-rehashing (hash)
-  (get-fwdnum hash)
-  (gc-count hash)
   (let* ((vector (nhash.vector hash))
          (flags (nhash.vector.flags vector)))
     (declare (fixnum flags))
+    (setf (nhash.vector.gc-count vector) (%get-gc-count))
     (when (logbitp $nhash_track_keys_bit flags)
       (setf (nhash.vector.flags vector)
             (logand (lognot (ash 1 $nhash_key_moved_bit)) flags)))))
@@ -261,11 +171,10 @@
 ;;; a fasl file likely needs to be rehashed, and the MAKE-LOAD-FORM
 ;;; for hash tables needs to be able to call this or something similar.
 (defun %set-needs-rehashing (hash)
-  (setf (nhash.fixnum hash)   (the fixnum (1- (the fixnum (get-fwdnum))))
-        (nhash.gc-count hash) (the fixnum (1- (the fixnum (gc-count)))))
   (let* ((vector (nhash.vector hash))
          (flags (nhash.vector.flags vector)))
     (declare (fixnum flags))
+    (setf (nhash.vector.gc-count vector) (the fixnum (1- (the fixnum (%get-gc-count)))))
     (when (logbitp $nhash_track_keys_bit flags)
       (setf (nhash.vector.flags vector) (logior (ash 1 $nhash_key_moved_bit) flags)))))
 
@@ -305,6 +214,22 @@
 (defconstant $nhash-clear-key-bits-mask #xfffff)
 
 
+(defun %hash-symbol (sym)
+  (if sym    
+    (let* ((vector (%symptr->symvector sym))
+           (cell (%svref vector target::symbol.plist-cell)))
+      (or (car cell)
+          (let* ((pname (%svref vector target::symbol.pname-cell))
+                 (hash (mixup-hash-code (%pname-hash pname (uvsize pname)))))
+            (declare (type (simple-string pname)))
+            (if cell
+              (setf (car cell) hash)
+              (progn
+                (setf (%svref vector target::symbol.plist-cell)
+                      (cons hash nil))
+                hash)))))
+    +nil-hash+))
+              
 ;;; Hash on address, or at least on some persistent, immutable
 ;;; attribute of the key.  If all keys are fixnums or immediates (or if
 ;;; that attribute exists), rehashing won't ever be necessary.
@@ -420,19 +345,28 @@
 	(multiple-value-setq (primary addressp) (%%eqhash key))))
     (when addressp
       (when update-hash-flags
-        (let ((flags (nhash.vector.flags vector)))
-          (declare (fixnum flags))
-          (if (eq :key addressp)
-            ;; hash code depended on key's address
-            (unless (logbitp $nhash_component_address_bit flags)
-              (when (not (logbitp $nhash_track_keys_bit flags))
-                (setq flags (bitclr $nhash_key_moved_bit flags)))
-              (setq flags (logior $nhash-track-keys-mask flags)))
-            ;; hash code depended on component address
-            (progn
-              (setq flags (logand (lognot $nhash-track-keys-mask) flags))
-              (setq flags (bitset $nhash_component_address_bit flags))))
-          (setf (nhash.vector.flags vector) flags))))
+        (flet ((new-flags (flags addressp)
+                 (declare (fixnum flags))
+                 (if (eq :key addressp)
+                   ;; hash code depended on key's address
+                   (if (logbitp $nhash_component_address_bit flags)
+                     flags
+                     (logior $nhash-track-keys-mask
+                             (if (logbitp $nhash_track_keys_bit flags)
+                               flags
+                               (bitclr $nhash_key_moved_bit flags))))
+                   ;; hash code depended on component address
+                   (bitset $nhash_component_address_bit
+                           (logand (lognot $nhash-track-keys-mask) flags)))))
+          (declare (inline new-flags))
+          (if (hash-lock-free-p hash)
+            (loop
+                (let* ((flags (nhash.vector.flags vector))
+                       (new-flags (new-flags flags addressp)))
+                  (when (or (eq flags new-flags)
+                            (store-gvector-conditional nhash.vector.flags vector flags new-flags))
+                    (return))))
+            (setf (nhash.vector.flags vector) (new-flags (nhash.vector.flags vector) addressp))))))
     (let* ((entries (nhash.vector-size vector)))
       (declare (fixnum entries))
       (values primary
@@ -455,21 +389,26 @@
 
 (defun %normalize-hash-table-count (hash)
   (let* ((vector (nhash.vector hash))
-         (weak-deletions-count (nhash.vector.weak-deletions-count vector)))
+	 (weak-deletions-count (nhash.vector.weak-deletions-count vector)))
     (declare (fixnum weak-deletions-count))
     (unless (eql 0 weak-deletions-count)
       (setf (nhash.vector.weak-deletions-count vector) 0)
-      (let ((deleted-count (the fixnum
-                             (+ (the fixnum (nhash.vector.deleted-count vector))
-                                weak-deletions-count)))
-            (count (the fixnum (- (the fixnum (nhash.count hash)) weak-deletions-count))))
-        (setf (nhash.vector.deleted-count vector) deleted-count
-              (nhash.count hash) count)))))
+      ;; lock-free hash tables don't maintain deleted-count, since would need to
+      ;; lock and it's not worth it.
+      (unless (hash-lock-free-p hash)
+	(let ((deleted-count (the fixnum
+			       (+ (the fixnum (nhash.vector.deleted-count vector))
+				  weak-deletions-count)))
+	      (count (the fixnum (- (the fixnum (nhash.vector.count vector)) weak-deletions-count))))
+          (setf (nhash.vector.deleted-count vector) deleted-count
+                (nhash.vector.count vector) count))))))
 
 
 (defparameter *shared-hash-table-default* t
   "Be sure that you understand the implications of changing this
 before doing so.")
+
+(defparameter *lock-free-hash-table-default* #+(or gz ccl-0711) t #-(or gz ccl-0711) nil)
 
 (defun make-hash-table (&key (test 'eql)
                              (size 60)
@@ -478,7 +417,8 @@ before doing so.")
                              (hash-function nil)
                              (weak nil)
                              (finalizeable nil)
-                             (address-based t)
+                             (address-based t)  ;; Ignored
+                             (lock-free *lock-free-hash-table-default*)
                              (shared *shared-hash-table-default*))
   "Create and return a new hash table. The keywords are as follows:
      :TEST -- Indicates what kind of test to use.
@@ -492,6 +432,7 @@ before doing so.")
        forcing a rehash. Can be any positive number <=1, with density
        approaching zero as the threshold approaches 0. Density 1 means an
        average of one entry per bucket."
+  (declare (ignore address-based)) ;; TODO: could reinterpret as "warn if becomes address-based"
   (unless (and test (or (functionp test) (symbolp test)))
     (report-bad-arg test '(and (not null) (or symbol function))))
   (unless (or (functionp hash-function) (symbolp hash-function))
@@ -512,8 +453,8 @@ before doing so.")
                    ((or (eq test 'equalp) (eq test #'equalp))
                     (setq test #'equalp) #'%%equalphash)
                    (t (setq test (require-type test 'symbol))
-                   (or hash-function 
-                       (error "non-standard test specified without hash-function")))))
+                      (or hash-function 
+                          (error "non-standard test specified without hash-function")))))
          (find-function
           (case test
             (0 #'eq-hash-find)
@@ -532,35 +473,38 @@ before doing so.")
       (error "Only EQ hash tables can be weak."))
     (when (and finalizeable (not weak))
       (error "Only weak hash tables can be finalizeable."))
-    (multiple-value-bind (size total-size)
+    (multiple-value-bind (grow-threshold total-size)
         (compute-hash-size (1- size) 1 rehash-threshold)
-      (let* ((flags (if weak
-                      (+ (+
-                          (ash 1 $nhash_weak_bit)
-                          (ecase weak
-                            ((t :key) 0)
-                            (:value (ash 1 $nhash_weak_value_bit))))
-                         (if finalizeable (ash 1 $nhash_finalizeable_bit) 0))
-                      0))
+      (let* ((flags (+ (if weak (ash 1 $nhash_weak_bit) 0)
+                       (ecase weak
+                         ((t nil :key) 0)
+                         (:value (ash 1 $nhash_weak_value_bit)))
+                       (if finalizeable (ash 1 $nhash_finalizeable_bit) 0)
+                       (if lock-free (ash 1 $nhash_keys_frozen_bit) 0)))
              (hash (%cons-hash-table 
-                    #'%no-rehash hash-function test
+                    hash-function test
                     (%cons-nhash-vector total-size flags)
-                    size rehash-threshold rehash-size address-based
+                    grow-threshold rehash-threshold rehash-size
                     find-function find-put-function
-                    (unless shared *current-process*))))
+                    (unless shared *current-process*)
+                    lock-free)))
         (setf (nhash.vector.hash (nhash.vector hash)) hash)
         hash))))
 
 (defun compute-hash-size (size rehash-size rehash-ratio)
   (let* ((new-size size))
+    (declare (fixnum size new-size))
     (setq new-size (max 30 (if (fixnump rehash-size)
-                             (+ size rehash-size)
+                             (%i+ size rehash-size)
                              (ceiling (* size rehash-size)))))
     (if (<= new-size size)
       (setq new-size (1+ size)))        ; God save you if you make this happen
     
-    (values new-size 
-            (%hash-size (max (+ new-size 2) (ceiling (* new-size rehash-ratio)))))))
+    (let ((vector-size (%hash-size (max (+ new-size 2) (ceiling (* new-size rehash-ratio))))))
+      ; TODO: perhaps allow more entries, based on actual size:
+      ;  (values (min (floor vector-size rehash-ratio) (%i- vector-size 2)) vector-size))
+      (values new-size vector-size)
+      )))
 
 ;;;  Suggested size is a fixnum: number of pairs.  Return a fixnum >=
 ;;;  that size that is relatively prime to all secondary keys.
@@ -577,11 +521,11 @@ before doing so.")
     (incf suggestion 2)))
 
 
-(defvar *continue-from-readonly-hashtable-lock-error* nil)
+(defvar *continue-from-readonly-hashtable-lock-error* t)
 
 (defun signal-read-only-hash-table-error (hash)
   (cond (*continue-from-readonly-hashtable-lock-error*
-         (cerror "Make the hash-table writable. DANGEROUS! CONTINUE ONLY IF YOU KNOW WHAT YOU'RE DOING!"
+         (cerror "Make the hash-table writable. DANGEROUS! This could damage your lisp if another thread is acccessing this table. CONTINUE ONLY IF YOU KNOW WHAT YOU'RE DOING!"
                  "Hash-table ~s is readonly" hash)
          (assert-hash-table-writeable hash)
          (write-lock-hash-table hash))
@@ -612,39 +556,6 @@ before doing so.")
       (if lock
         (unlock-rwlock lock)))))
 
-
-;;; what if somebody is mapping, growing, rehashing? 
-(defun clrhash (hash)
-  "This removes all the entries from HASH-TABLE and returns the hash table
-   itself."
-  (unless (typep hash 'hash-table)
-    (report-bad-arg hash 'hash-table))
-  (with-lock-context
-    (without-interrupts
-     (write-lock-hash-table hash)
-     (let* ((vector (nhash.vector hash))
-            (size (nhash.vector-size vector))
-            (count (+ size size))
-            (index $nhash.vector_overhead))
-       (declare (fixnum size count index))
-       (dotimes (i count)
-         (setf (%svref vector index) (%unbound-marker))
-         (incf index))
-       (incf (the fixnum (nhash.grow-threshold hash))
-             (the fixnum (+ (the fixnum (nhash.count hash))
-                            (the fixnum (nhash.vector.deleted-count vector)))))
-       (setf (nhash.count hash) 0
-             (nhash.vector.cache-key vector) (%unbound-marker)
-             (nhash.vector.cache-value vector) nil
-             (nhash.vector.finalization-alist vector) nil
-             (nhash.vector.free-alist vector) nil
-             (nhash.vector.weak-deletions-count vector) 0
-             (nhash.vector.deleted-count vector) 0
-             (nhash.vector.flags vector) (logand $nhash_weak_flags_mask
-                                                 (nhash.vector.flags vector))))
-     (unlock-hash-table hash nil)
-     hash)))
-
 (defun index->vector-index (index)
   (declare (fixnum index))
   (the fixnum (+ $nhash.vector_overhead (the fixnum (+ index index)))))
@@ -653,12 +564,14 @@ before doing so.")
   (declare (fixnum index))
   (the fixnum (ash (the fixnum (- index $nhash.vector_overhead)) -1)))
 
-
 (defun hash-table-count (hash)
   "Return the number of entries in the given HASH-TABLE."
-  (require-type hash 'hash-table)
+  (setq hash (require-type hash 'hash-table))
+  (when (hash-lock-free-p hash)
+    ;; We don't try to maintain a running total, so just count.
+    (return-from hash-table-count (lock-free-count-entries hash)))
   (%normalize-hash-table-count hash)
-  (the fixnum (nhash.count hash)))
+  (the fixnum (nhash.vector.count (nhash.vector hash))))
 
 (defun hash-table-rehash-size (hash)
   "Return the rehash-size HASH-TABLE was created with."
@@ -672,9 +585,9 @@ before doing so.")
   "Return a size that can be used with MAKE-HASH-TABLE to create a hash
    table that can hold however many entries HASH-TABLE can hold without
    having to be grown."
-  (%i+ (the fixnum (hash-table-count hash))
-       (the fixnum (nhash.grow-threshold hash))
-       (the fixnum (nhash.vector.deleted-count (nhash.vector hash)))))
+  (let* ((hash (require-type hash 'hash-table))
+         (vector (nhash.vector hash)))
+    (values (floor (nhash.vector.size vector) (nhash.rehash-ratio hash)))))
 
 (defun hash-table-test (hash)
   "Return the test HASH-TABLE was created with."
@@ -691,10 +604,223 @@ before doing so.")
       (if (eql 0 f) #'eq #'eql)
       f)))
 
-;; Finalization-list accessors are in "ccl:lib;hash" because SETF functions
-;;  don't get dumped as "simple" %defuns.
-;; 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; nearly-lock-free hash tables
+;;
+;; A modification of the lock-free hash table algorithm described by Cliff Click Jr.  in
+;; http://blogs.azulsystems.com/cliff/2007/03/a_nonblocking_h.html.
+;;
+;; The modifications have to do with the fact that the goal of the current implementation
+;; is to have thread-safe hash tables with minimal performance penalty on reads, so I don't
+;; bother with aspects of his algorithm that aren't relevant to that goal.
+;;
+;; The main difference from Click's algorithm is that I don't try to do rehashing
+;; concurrently.  Instead, rehashing grabs a lock, so that only one thread can be
+;; rehashing at any given time, and readers/writers will block waiting for the rehashing
+;; to finish.
+;;
+;; In addition, I don't have a separate state for partially inserted key, I reuse the
+;; DELETED state for that.  So in our implementation the following are the possible states
+;; of a hash table entry (where "object" means any object other than the special markers):
+;;
+;; State      Key               Value
+;; DELETED    object            free-hash-marker
+;; IN-USE     object            object
+;; FREE       free-hash-marker  free-hash-marker
+;; REHASHING  object            rehashing-value-marker
+;; REHASHING  free-hash-marker  rehashing-value-marker
+;;
+;; No other states are allowed - at no point in time can a hash table entry be in any
+;; other state.   In addition, the only transition allowed on the Key slot is
+;; free-hash-marker -> object.  Once a key slot is so claimed, it must never change
+;; again (even after the hash vector has been discarded after rehashing, because
+;; there can be some process still looking at it).
+;; In particular, rehashing in place is not an option.  All rehashing creates a new
+;; vector and copies into it.  This means it's kinda risky to use lock-free hash
+;; tables with address-based keys, because they will thrash in low-memory situations,
+;; but we don't disallow it because a particular use might not have this problem.
 
+
+(defun lock-free-rehash (hash)
+  ;;(break "We think we need to rehash ~s" (nhash.vector hash))
+  (with-lock-context
+    (without-interrupts ;; not re-entrant
+      (let ((lock (nhash.exclusion-lock hash)))
+        (%lock-recursive-lock-object lock)
+        ;; TODO: might also want to rehash if deleted entries are a large percentage
+        ;; of all entries, more or less.
+        (when (or (%i<= (nhash.grow-threshold hash) 0) ;; no room
+                  (%needs-rehashing-p (nhash.vector hash))) ;; or keys moved
+          (%lock-free-rehash hash))
+        (%unlock-recursive-lock-object lock)))))
+
+
+;; TODO: This is silly.  We're implementing atomic swap using store-conditional,
+;; but internally store-conditional is probably implemented using some kind of
+;; an atomic swap!!
+(defun atomic-swap-gvector (index gvector value)
+  (loop
+    (let ((old-value (%svref gvector index)))
+      (when (store-gvector-conditional index gvector old-value value)
+        (return old-value)))))
+
+;; Interrupts are disabled and caller has the hash lock on the table, blocking other
+;; threads attempting a rehash.
+;; Other threads might be reading/writing/deleting individual entries, but they
+;; will block if they see a value = rehashing-value-marker.
+;; GC may run, updating the needs-rehashing flags and deleting weak entries in both
+;; old and new vectors.
+(defun %lock-free-rehash (hash)
+  ;; Prevent puthash from adding new entries.  Note this doesn't keep it from undeleting
+  ;; existing entries, so we might still lose, but this makes the odds much smaller.
+  (setf (nhash.grow-threshold hash) 0)
+  (let* ((old-vector (nhash.vector hash))
+         (inherited-flags (logand $nhash_weak_flags_mask (nhash.vector.flags old-vector)))
+         count new-vector grow-threshold vector-size)
+    (tagbody
+     RESTART
+     (setq count (lock-free-count-entries hash))
+     (multiple-value-setq (grow-threshold vector-size)
+       (compute-hash-size count (nhash.rehash-size hash) (nhash.rehash-ratio hash)))
+     (setq new-vector (%cons-nhash-vector vector-size inherited-flags))
+     REHASH
+     (loop for i from $nhash.vector_overhead below (uvsize old-vector) by 2
+       do (let ((value (atomic-swap-gvector (%i+ i 1) old-vector rehashing-value-marker)))
+            (when (eq value rehashing-value-marker) (error "Who else is doing this?"))
+            (unless (eq value free-hash-marker)
+              (let* ((key (%svref old-vector i))
+                     (new-index (%growhash-probe new-vector hash key))
+                     (new-vector-index (index->vector-index new-index)))
+                (setf (%svref new-vector new-vector-index) key)
+                (setf (%svref new-vector (%i+ new-vector-index 1)) value)
+                (when (%i<= (decf grow-threshold) 0)
+                  ;; Too many entries got undeleted while we were rehashing!
+                  (go RESTART))))))
+     (when (%needs-rehashing-p new-vector) ;; keys moved, but at least can use the same new-vector.
+       (%init-misc free-hash-marker new-vector)
+       (%init-nhash-vector new-vector inherited-flags)
+       (go REHASH)))
+    (setf (nhash.vector.hash new-vector) hash)
+    (setf (nhash.grow-threshold hash) grow-threshold)
+    ;; At this point, another thread might decrement the threshold while they're looking at the old
+    ;; vector. That's ok, just means it will be too small and we'll rehash sooner than planned,
+    ;; no big deal.
+    (setf (nhash.vector hash) new-vector)))
+
+
+(defun lock-free-gethash (key hash default)
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (loop
+    (let* ((vector (nhash.vector hash))
+           (vector-index (funcall (the function (nhash.find hash)) hash key)))
+      (declare (fixnum vector-index))
+      ;; Need to punt if vector changed because no way to know whether nhash.find was
+      ;; using old or new vector.
+      (when (eq vector (nhash.vector hash))
+        (cond ((eql vector-index -1)
+               (unless (%needs-rehashing-p vector)
+                 (return-from lock-free-gethash (values default nil))))
+              (t (let ((value (%svref vector (%i+ vector-index 1))))
+                   (unless (eq value rehashing-value-marker)
+                     (if (eq value free-hash-marker)
+                       (return-from lock-free-gethash (values default nil))
+                       (return-from lock-free-gethash (values value t)))))))))
+    ;; We're here because the table needs rehashing or it was getting rehashed while we
+    ;; were searching. Take care of it and try again.
+    (lock-free-rehash hash)))
+
+(defun lock-free-remhash (key hash)
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (loop
+    (let* ((vector (nhash.vector hash))
+           (vector-index (funcall (the function (nhash.find hash)) hash key)))
+      (declare (fixnum vector-index))
+      ;; Need to punt if vector changed because no way to know whether nhash.find was
+      ;; using old or new vector.
+      (when (eq vector (nhash.vector hash))
+        (cond ((eql vector-index -1)
+               (unless (%needs-rehashing-p vector)
+                 (return-from lock-free-remhash nil)))
+              (t (let ((old-value (%svref vector (%i+ vector-index 1))))
+                   (unless (eq old-value rehashing-value-marker)
+                     (when (eq old-value free-hash-marker)
+                       (return-from lock-free-remhash nil))
+                     (when (set-hash-value-conditional vector-index vector old-value free-hash-marker)
+                       (return-from lock-free-remhash t)))))))
+      ;; We're here because the table needs rehashing or it was getting rehashed while we
+      ;; were searching.  Take care of it and try again.
+      (lock-free-rehash hash))))
+
+(defun lock-free-clrhash (hash)
+  (with-lock-context
+    (without-interrupts
+     (let ((lock (nhash.exclusion-lock hash)))
+       (%lock-recursive-lock-object lock) ;; disallow rehashing.
+       (loop
+         with vector = (nhash.vector hash)
+         for i1 fixnum from (%i+ $nhash.vector_overhead 1) below (uvsize vector) by 2
+         do (setf (%svref vector i1) free-hash-marker))
+       (%unlock-recursive-lock-object lock))))
+  hash)
+
+(defun lock-free-puthash (key hash value)
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (when (eq key free-hash-marker)
+    (error "Can't use ~s as a hash-table key" key))
+  (when (or (eq value rehashing-value-marker)
+            (eq value free-hash-marker))
+    (error "Illegal value ~s for storing in a hash table" value))
+  (loop
+    (let* ((vector (nhash.vector  hash))
+           (vector-index (funcall (nhash.find-new hash) hash key)))
+      ;; Need to punt if vector changed because no way to know whether nhash.find-new was
+      ;; using old or new vector.
+      (when (eq vector (nhash.vector hash))
+        (cond ((or (eql vector-index -1)
+                   (eq (%svref vector vector-index) free-hash-marker))
+               (unless (or (%needs-rehashing-p vector)
+                           (%i<= (nhash.grow-threshold hash) 0))
+                 ;; Note if the puthash fails, grow-threshold will end up too small. This
+                 ;; just means we might rehash sooner than absolutely necessary, no real
+                 ;; harm done (the most likely cause of failing is that somebody is
+                 ;; already rehashing anyway).  DON'T try to incf it back on failure --
+                 ;; that risks grow-threshold ending up too big (e.g. if somebody rehashes
+                 ;; before the incf), which _could_ be harmful.
+                 (atomic-decf (nhash.grow-threshold hash))
+                 (if (set-hash-key-conditional vector-index vector free-hash-marker key)
+                   (when (set-hash-value-conditional vector-index vector free-hash-marker value)
+                     (return-from lock-free-puthash value)))))
+              (t (let ((old-value (%svref vector (%i+ vector-index 1))))
+                   (unless (eq old-value rehashing-value-marker)
+                     (when (set-hash-value-conditional vector-index vector old-value value)
+                       (return-from lock-free-puthash value))))))))
+    ;; We're here because the table needs rehashing or it was getting rehashed while we
+    ;; were searching, or no room for new entry, or somebody else claimed the key from
+    ;; under us (that last case doesn't need to retry, but it's unlikely enough that
+    ;; it's not worth checking for).  Take care of it and try again.
+    (lock-free-rehash hash)))
+
+
+(defun lock-free-count-entries (hash)
+  ;; Other threads could be adding/removing entries while we count, some of
+  ;; which will be included in the count (i.e. will be treated as if they
+  ;; happened after counting) and some won't (i.e. will be treated as if
+  ;; they happened before counting), but not necessarily in correlation
+  ;; with their temporal relationship.
+  (loop
+    with vector = (nhash.vector hash)
+    for i fixnum from $nhash.vector_overhead below (uvsize vector) by 2
+    count (and (neq (%svref vector i) free-hash-marker)
+               (let ((value (%svref vector (%i+ i 1))))
+                 (when (eq value rehashing-value-marker)
+                   ;; This table is being rehashed.  Wait for it to be
+                   ;; done and try again.
+                   (lock-free-rehash hash)
+                   (return-from lock-free-count-entries (lock-free-count-entries hash)))
+                 (neq value free-hash-marker)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 (defun gethash (key hash &optional default)
@@ -703,47 +829,48 @@ before doing so.")
    such entry. Entries can be added using SETF."
   (unless (typep hash 'hash-table)
     (report-bad-arg hash 'hash-table))
+  (when (hash-lock-free-p hash)
+    (return-from gethash (lock-free-gethash key hash default)))
   (let* ((value nil)
-         (vector-key nil)
          (gc-locked nil)
          (readonly nil)
          (foundp nil))
     (with-lock-context
       (without-interrupts
-       (setq readonly (eq (read-lock-hash-table hash) :readonly))
-       (let* ((vector (nhash.vector hash)))
-         (if (and (eq key (nhash.vector.cache-key vector))
-                  ;; Check twice: the GC might nuke the cached key/value pair
-                  (progn (setq value (nhash.vector.cache-value vector))
-                         (eq key (nhash.vector.cache-key vector))))
-           (setq foundp t)
-           (loop
-             (let* ((vector-index (funcall (nhash.find hash) hash key)))
-               (declare (fixnum vector-index))
-               ;; Referencing both key and value here - and referencing
-               ;; value first - is an attempt to compensate for the
-               ;; possibility that the GC deletes a weak-on-key pair.
-               (setq value (%svref vector (the fixnum (1+ vector-index)))
-                     vector-key (%svref vector vector-index))
-               (cond ((setq foundp (and (not (eq vector-key free-hash-key-marker))
-                                        (not (eq vector-key deleted-hash-key-marker))))
-                      (when (nhash.owner hash)
-                        (setf (nhash.vector.cache-key vector) vector-key
-                              (nhash.vector.cache-value vector) value
-                              (nhash.vector.cache-idx vector) (vector-index->index
-                                                               vector-index)))
-                      (return))
-                     ((%needs-rehashing-p hash)
-                      (%lock-gc-lock)
-                      (setq gc-locked t)
-                      (unless readonly
-                        (let* ((lock (nhash.exclusion-lock hash)))
-                          (when lock (%promote-rwlock lock))))
-                      (when (%needs-rehashing-p hash)
-                        (%rehash hash)))
-                     (t (return)))))))
-       (when gc-locked (%unlock-gc-lock))
-       (unlock-hash-table hash readonly)))
+        (setq readonly (eq (read-lock-hash-table hash) :readonly))
+        (let* ((vector (nhash.vector hash)))
+          (if (and (eq key (nhash.vector.cache-key vector))
+                   ;; Check twice: the GC might nuke the cached key/value pair
+                   (progn (setq value (nhash.vector.cache-value vector))
+                          (eq key (nhash.vector.cache-key vector))))
+            (setq foundp t)
+            (loop
+              (let* ((vector-index (funcall (nhash.find hash) hash key)))
+                (declare (fixnum vector-index))
+                (cond ((setq foundp (not (eql vector-index -1)))
+                       ;; Referencing both key and value here - and referencing
+                       ;; value first - is an attempt to compensate for the
+                       ;; possibility that the GC deletes a weak-on-key pair.
+                       (setq value (%svref vector (%i+ vector-index 1)))
+                       (when (nhash.owner hash)
+                         (setf (nhash.vector.cache-key vector)
+                               (%svref vector vector-index)
+                               (nhash.vector.cache-value vector)
+                               value
+                               (nhash.vector.cache-idx vector)
+                               (vector-index->index (the fixnum vector-index))))
+                       (return))
+                      ((%needs-rehashing-p vector)
+                       (%lock-gc-lock)
+                       (setq gc-locked t)
+                       (unless readonly
+                         (let* ((lock (nhash.exclusion-lock hash)))
+                           (when lock (%promote-rwlock lock))))
+                       (when (%needs-rehashing-p vector)
+                         (%rehash hash)))
+                      (t (return)))))))
+        (when gc-locked (%unlock-gc-lock))
+        (unlock-hash-table hash readonly)))
     (if foundp
       (values value t)
       (values default nil))))
@@ -753,50 +880,48 @@ before doing so.")
    was such an entry, or NIL if not."
   (unless (typep hash 'hash-table)
     (setq hash (require-type hash 'hash-table)))
+  (when (hash-lock-free-p hash)
+    (return-from remhash (lock-free-remhash key hash)))
   (let* ((foundp nil))
     (with-lock-context
       (without-interrupts
        (write-lock-hash-table hash)
        (%lock-gc-lock)
-       (when (%needs-rehashing-p hash)
-         (%rehash hash))    
        (let* ((vector (nhash.vector hash)))
+         (when (%needs-rehashing-p vector)
+           (%rehash hash))
          (if (eq key (nhash.vector.cache-key vector))
            (progn
-             (setf (nhash.vector.cache-key vector) free-hash-key-marker
+             (setf (nhash.vector.cache-key vector) free-hash-marker
                    (nhash.vector.cache-value vector) nil)
              (let ((vidx (index->vector-index (nhash.vector.cache-idx vector))))
                (setf (%svref vector vidx) deleted-hash-key-marker)
                (setf (%svref vector (the fixnum (1+ vidx))) nil))
              (incf (the fixnum (nhash.vector.deleted-count vector)))
-             (decf (the fixnum (nhash.count hash)))
+             (decf (the fixnum (nhash.vector.count vector)))
              (setq foundp t))
-           (let* ((vector-index (funcall (nhash.find hash) hash key))
-                  (vector-key (%svref vector vector-index)))
+           (let* ((vector-index (funcall (nhash.find hash) hash key)))
              (declare (fixnum vector-index))
-             (when (setq foundp (and (not (eq vector-key free-hash-key-marker))
-                                     (not (eq vector-key deleted-hash-key-marker))))
+             (unless (eql vector-index -1)
                ;; always clear the cache cause I'm too lazy to call the
                ;; comparison function and don't want to keep a possibly
                ;; deleted key from being GC'd
-               (setf (nhash.vector.cache-key vector) free-hash-key-marker
+               (setf (nhash.vector.cache-key vector) free-hash-marker
                      (nhash.vector.cache-value vector) nil)
                ;; Update the count
                (incf (the fixnum (nhash.vector.deleted-count vector)))
-               (decf (the fixnum (nhash.count hash)))
-               ;; Remove a cons from the free-alist if the table is finalizeable
-               (when (logbitp $nhash_finalizeable_bit (nhash.vector.flags vector))
-                 (pop (the list (svref nhash.vector.free-alist vector))))
+               (decf (the fixnum (nhash.vector.count vector)))
                ;; Delete the value from the table.
                (setf (%svref vector vector-index) deleted-hash-key-marker
-                     (%svref vector (the fixnum (1+ vector-index))) nil))))
+                     (%svref vector (the fixnum (1+ vector-index))) nil)
+               (setq foundp t))))
          (when (and foundp
-                    (zerop (the fixnum (nhash.count hash))))
+                    (zerop (the fixnum (nhash.vector.count vector))))
            (do* ((i $nhash.vector_overhead (1+ i))
                  (n (uvsize vector)))
                 ((= i n))
              (declare (fixnum i n))
-             (setf (%svref vector i) free-hash-key-marker))
+             (setf (%svref vector i) free-hash-marker))
            (setf (nhash.grow-threshold hash)
                  (+ (nhash.vector.deleted-count vector)
                     (nhash.vector.weak-deletions-count vector)
@@ -808,12 +933,49 @@ before doing so.")
        (unlock-hash-table hash nil)))
     foundp))
 
+;;; what if somebody is mapping, growing, rehashing? 
+(defun clrhash (hash)
+  "This removes all the entries from HASH-TABLE and returns the hash table
+   itself."
+  (unless (typep hash 'hash-table)
+    (report-bad-arg hash 'hash-table))
+  (when (hash-lock-free-p hash)
+    (return-from clrhash (lock-free-clrhash hash)))
+  (with-lock-context
+    (without-interrupts
+     (write-lock-hash-table hash)
+     (let* ((vector (nhash.vector hash))
+            (size (nhash.vector-size vector))
+            (count (+ size size))
+            (index $nhash.vector_overhead))
+       (declare (fixnum size count index))
+       (dotimes (i count)
+         (setf (%svref vector index) free-hash-marker)
+         (incf index))
+       (incf (the fixnum (nhash.grow-threshold hash))
+             (the fixnum (+ (the fixnum (nhash.vector.count vector))
+                            (the fixnum (nhash.vector.deleted-count vector)))))
+       (setf (nhash.vector.count vector) 0
+             (nhash.vector.cache-key vector) free-hash-marker
+             (nhash.vector.cache-value vector) nil
+             (nhash.vector.finalization-alist vector) nil
+             (nhash.vector.free-alist vector) nil
+             (nhash.vector.weak-deletions-count vector) 0
+             (nhash.vector.deleted-count vector) 0
+             (nhash.vector.flags vector) (logand $nhash_weak_flags_mask
+                                                 (nhash.vector.flags vector))))
+     (unlock-hash-table hash nil)
+     hash)))
+
+
 (defun puthash (key hash default &optional (value default))
   (declare (optimize (speed 3) (space 0)))
   (unless (typep hash 'hash-table)
     (report-bad-arg hash 'hash-table))
-  (if (eq key (%unbound-marker))
-    (error "Can't use ~s as a hash-table key" (%unbound-marker)))
+  (when (hash-lock-free-p hash)
+    (return-from puthash (lock-free-puthash key hash value)))
+  (if (eq key free-hash-marker)
+    (error "Can't use ~s as a hash-table key" key))
   (with-lock-context
     (without-interrupts
      (block protected
@@ -821,9 +983,9 @@ before doing so.")
           (write-lock-hash-table hash)
         AGAIN
           (%lock-gc-lock)
-          (when (%needs-rehashing-p hash)
-            (%rehash hash))
-          (let ((vector (nhash.vector  hash)))     
+          (let ((vector (nhash.vector hash)))
+            (when (%needs-rehashing-p vector)
+              (%rehash hash))
             (when (eq key (nhash.vector.cache-key vector))
               (let* ((idx (nhash.vector.cache-idx vector)))
                 (declare (fixnum idx))
@@ -838,25 +1000,21 @@ before doing so.")
               (cond ((eq old-value deleted-hash-key-marker)
                      (%set-hash-table-vector-key vector vector-index key)
                      (setf (%svref vector (the fixnum (1+ vector-index))) value)
-                     (setf (nhash.count hash) (the fixnum (1+ (the fixnum (nhash.count hash)))))
+                     (incf (the fixnum (nhash.vector.count vector)))
                      ;; Adjust deleted-count
                      (when (> 0 (the fixnum
                                   (decf (the fixnum
                                           (nhash.vector.deleted-count vector)))))
-                       (let ((weak-deletions (nhash.vector.weak-deletions-count vector)))
-                         (declare (fixnum weak-deletions))
-                         (setf (nhash.vector.weak-deletions-count vector) 0)
-                         (incf (the fixnum (nhash.vector.deleted-count vector)) weak-deletions)
-                         (decf (the fixnum (nhash.count hash)) weak-deletions))))
-                    ((eq old-value free-hash-key-marker)
+                       (%normalize-hash-table-count hash)))
+                    ((eq old-value free-hash-marker)
                      (when (eql 0 (nhash.grow-threshold hash))
                        (%unlock-gc-lock)
-                       (grow-hash-table hash)
+                       (%grow-hash-table hash)
                        (go AGAIN))
                      (%set-hash-table-vector-key vector vector-index key)
                      (setf (%svref vector (the fixnum (1+ vector-index))) value)
                      (decf (the fixnum (nhash.grow-threshold hash)))
-                     (incf (the fixnum (nhash.count hash))))
+                     (incf (the fixnum (nhash.vector.count vector))))
                     (t
                      ;; Key was already there, update value.
                      (setf (%svref vector (the fixnum (1+ vector-index))) value)))
@@ -869,15 +1027,17 @@ before doing so.")
 
 
 (defun count-entries (hash)
-  (let* ((vector (nhash.vector hash))
-         (size (uvsize vector))
-         (idx $nhash.vector_overhead)
-         (count 0))
-    (loop
-      (when (neq (%svref vector idx) (%unbound-marker))
-        (incf count))
-      (when (>= (setq idx (+ idx 2)) size)
-        (return count)))))
+  (if (hash-lock-free-p hash)
+    (lock-free-count-entries hash)
+    (let* ((vector (nhash.vector hash))
+           (size (uvsize vector))
+           (idx $nhash.vector_overhead)
+           (count 0))
+      (loop
+        (when (neq (%svref vector idx) free-hash-marker)
+          (incf count))
+        (when (>= (setq idx (+ idx 2)) size)
+          (return count))))))
 
 
 
@@ -896,14 +1056,12 @@ before doing so.")
   (block grow-hash-table
     (%normalize-hash-table-count hash)
     (let* ((old-vector (nhash.vector hash))
-           (old-size (nhash.count hash))
-           (old-total-size (nhash.vector-size old-vector))
+           (old-size (nhash.vector.count old-vector))
+           (old-total-size (nhash.vector.size old-vector))
            (flags 0)
            (flags-sans-weak 0)
-           (weak-flags)
-           rehashF)
+           (weak-flags 0))
       (declare (fixnum old-total-size flags flags-sans-weak weak-flags))    
-      ; well we knew lock was 0 when we called this - is it still 0?
       (when (> (nhash.vector.deleted-count old-vector) 0)
         ;; There are enough deleted entries. Rehash to get rid of them
         (%rehash hash)
@@ -915,17 +1073,15 @@ before doing so.")
           (return-from grow-hash-table ))
         (progn
           (unwind-protect
-            (let ((fwdnum (get-fwdnum))
-                  (gc-count (gc-count))
+            (let ((gc-count (%get-gc-count))
                   vector)
               (setq flags (nhash.vector.flags old-vector)
                     flags-sans-weak (logand flags (logxor -1 $nhash_weak_flags_mask))
-                    weak-flags (logand flags $nhash_weak_flags_mask)
-                    rehashF (nhash.rehashF hash))          
-              (setf (nhash.lock hash) (%ilogior (nhash.lock hash) $nhash.lock-while-growing) ; dont need
-                    (nhash.rehashF hash) #'%am-growing
-                    (nhash.vector.flags old-vector) flags-sans-weak)      ; disable GC weak stuff
+                    weak-flags (logand flags $nhash_weak_flags_mask))
+              (setf (nhash.vector.flags old-vector) flags-sans-weak)      ; disable GC weak stuff
               (%normalize-hash-table-count hash)
+              (when (> (nhash.vector.deleted-count old-vector) 0)
+                (return-from grow-hash-table (%rehash hash)))
               (setq vector (%cons-nhash-vector total-size 0))
               (do* ((index 0 (1+ index))
                     (vector-index (index->vector-index 0) (+ vector-index 2)))
@@ -933,7 +1089,7 @@ before doing so.")
                 (declare (fixnum index vector-index))
                 
                  (let ((key (%svref old-vector vector-index)))
-                   (unless (or (eq key free-hash-key-marker)
+                   (unless (or (eq key free-hash-marker)
                                (eq key deleted-hash-key-marker))
                      (let* ((new-index (%growhash-probe vector hash key))
                             (new-vector-index (index->vector-index new-index)))
@@ -945,75 +1101,25 @@ before doing so.")
                      (nhash.vector.finalization-alist old-vector)
                      (nhash.vector.free-alist vector)
                      (nhash.vector.free-alist old-vector)
+                     (nhash.vector.count vector) old-size
                      (nhash.vector.flags vector)
                      (logior weak-flags (the fixnum (nhash.vector.flags vector))))
                (setf (nhash.rehash-bits hash) nil
                      (nhash.vector hash) vector
                      (nhash.vector.hash vector) hash
-                     (nhash.vector.cache-key vector) (%unbound-marker)
+                     (nhash.vector.cache-key vector) free-hash-marker
                      (nhash.vector.cache-value vector) nil
-                     (nhash.fixnum hash) fwdnum
-                     (nhash.gc-count hash) gc-count
-                     (nhash.grow-threshold hash) (- size (nhash.count hash)))
-               (when (eq #'%am-growing (nhash.rehashF hash))
-                 ;; if not changed to %maybe-rehash then contains no address based keys
-                 (setf (nhash.rehashf hash) #'%no-rehash))
-               (setq rehashF nil)       ; tell clean-up form we finished the loop
-               (when (neq old-size (nhash.count hash))
-                 (cerror "xx" "Somebody messed with count while growing")
-                 (return-from grow-hash-table (grow-hash-table hash )))
-               (when (minusp (nhash.grow-threshold hash))
-                 (cerror "nn" "negative grow-threshold ~S ~s ~s ~s" 
-                         (nhash.grow-threshold hash) size total-size old-size))
+                     (nhash.vector.gc-count vector) gc-count
+                     (nhash.grow-threshold hash) (- size old-size))
+               (setq weak-flags nil)       ; tell clean-up form we finished the loop
                ;; If the old vector's in some static heap, zero it
                ;; so that less garbage is retained.
-	       (%init-misc 0 old-vector)))            
-            (when rehashF
-              (setf (nhash.rehashF hash) rehashF
-                    (nhash.vector.flags old-vector)
+	       (%init-misc 0 old-vector)))
+            (when weak-flags
+              (setf (nhash.vector.flags old-vector)
                     (logior weak-flags (the fixnum (nhash.vector.flags old-vector)))))))))))
 
 
-
-;;; values of nhash.rehashF
-;;; %no-rehash - do nothing
-;;; %maybe-rehash - if doesnt need rehashing - if is rehashing 0 else nil
-;		  if locked 0
-;		  else rehash, return t
-;;; %am-rehashing - 0
-;;; %am-growing   - calls %maybe-rehash
-
-;;; compute-hash-code funcalls it if addressp and maybe-rehash-p
-;;;                  sets to maybe-rehash if addressp and update-maybe-rehash (ie from puthash)
-;;; grow-hash-table sets to %am-growing when doing so, resets to original value when done
-;;; rehash sets to %am-rehashing, then to original when done
-
-(defun %no-rehash (hash)
-  (declare (%noforcestk)
-           (optimize (speed 3) (safety 0))
-           (ignore hash))
-  nil)
-
-(defun %maybe-rehash (hash)
-  (declare (optimize (speed 3) (safety 0)))
-  (cond ((not (%needs-rehashing-p hash))
-         nil)
-        (t (loop
-             (%rehash hash)
-             (unless (%needs-rehashing-p hash)
-               (return))
-             ;(incf n3)
-             )
-           t)))
-
-(defun %am-rehashing (hash)
-  (declare (optimize (speed 3) (safety 0))
-           (ignore hash))
-  0)
-
-(defun %am-growing (hash)
-  (declare (optimize (speed 3) (safety 0)))
-  (%maybe-rehash hash))
 
 (defun general-hash-find (hash key)
   (%hash-probe hash key nil))
@@ -1024,14 +1130,14 @@ before doing so.")
 ;;; returns a single value:
 ;;;   index - the index in the vector for key (where it was or where
 ;;;           to insert if the current key at that index is deleted-hash-key-marker
-;;;           or free-hash-key-marker)
+;;;           or free-hash-marker)
 
 
 
-(defun %hash-probe (hash key update-hash-flags)
+(defun %hash-probe (hash key for-put-p)
   (declare (optimize (speed 3) (space 0)))
   (multiple-value-bind (hash-code index entries)
-                       (compute-hash-code hash key update-hash-flags)
+                       (compute-hash-code hash key for-put-p)
     (locally (declare (fixnum hash-code index entries))
       (let* ((compareF (nhash.compareF hash))
              (vector (nhash.vector hash))
@@ -1046,9 +1152,11 @@ before doing so.")
                        `(progn
                           (setq vector-index (index->vector-index index)
                                 table-key (%svref vector vector-index))
-                          (cond ((eq table-key free-hash-key-marker)
-                                 (return-it (or first-deleted-index
-                                                vector-index)))
+                          (cond ((eq table-key free-hash-marker)
+                                 (return-it (if for-put-p
+                                              (or first-deleted-index
+                                                  vector-index)
+                                              -1)))
                                 ((eq table-key deleted-hash-key-marker)
                                  (when (null first-deleted-index)
                                    (setq first-deleted-index vector-index)))
@@ -1066,9 +1174,10 @@ before doing so.")
                                 (when (>= index entries)
                                   (decf index entries))
                                 (when (eql index initial-index)
-                                  (unless first-deleted-index
-                                    (error "No deleted entries in table"))
-                                  (return-it first-deleted-index))
+                                  (return-it (if for-put-p
+                                               (or first-deleted-index
+                                                   (error "Bug: no deleted entries in table"))
+                                               -1)))
                                 (test-it ,predicate))))))
               (if (fixnump comparef)
                 ;; EQ or EQL hash table
@@ -1097,31 +1206,27 @@ before doing so.")
          (vector-index (index->vector-index (hash-mod hash-code entries vector)))
          (table-key (%svref vector vector-index)))
     (declare (fixnum hash-code  entries vector-index))
-    (if (or (eq key table-key)
-            (eq table-key free-hash-key-marker))
+    (if (eq table-key key)
       vector-index
-      (let* ((secondary-hash (%svref secondary-keys-*-2
-                                     (logand 7 hash-code)))
-             (initial-index vector-index)             
-             (first-deleted-index (if (eq table-key deleted-hash-key-marker)
-                                    vector-index))
-             (count (+ entries entries))
-             (length (+ count $nhash.vector_overhead)))
-        (declare (fixnum secondary-hash initial-index count length))
-        (loop
-          (incf vector-index secondary-hash)
-          (when (>= vector-index length)
-            (decf vector-index count))
-          (setq table-key (%svref vector vector-index))
-          (when (= vector-index initial-index)
-            (return first-deleted-index))
-          (if (eq table-key key)
-            (return vector-index)
-            (if (eq table-key free-hash-key-marker)
-              (return (or first-deleted-index vector-index))
-              (if (and (null first-deleted-index)
-                       (eq table-key deleted-hash-key-marker))
-                (setq first-deleted-index vector-index)))))))))
+      (if (eq table-key free-hash-marker)
+        -1
+        (let* ((secondary-hash (%svref secondary-keys-*-2
+                                       (logand 7 hash-code)))
+               (initial-index vector-index)             
+               (count (+ entries entries))
+               (length (+ count $nhash.vector_overhead)))
+          (declare (fixnum secondary-hash initial-index count length))
+          (loop
+            (incf vector-index secondary-hash)
+            (when (>= vector-index length)
+              (decf vector-index count))
+            (setq table-key (%svref vector vector-index))
+            (when (= vector-index initial-index)
+              (return -1))
+            (if (eq table-key key)
+              (return vector-index)
+              (when (eq table-key free-hash-marker)
+                (return -1)))))))))
 
 ;;; As above, but note whether the key is in some way address-based
 ;;; and update the hash-vector's flags word if so.
@@ -1152,7 +1257,7 @@ before doing so.")
          (table-key (%svref vector vector-index)))
     (declare (fixnum hash-code vector-index))
     (if (or (eq key table-key)
-            (eq table-key free-hash-key-marker))
+            (eq table-key free-hash-marker))
       vector-index
       (let* ((secondary-hash (%svref secondary-keys-*-2
                                      (logand 7 hash-code)))
@@ -1168,10 +1273,11 @@ before doing so.")
             (decf vector-index count))
           (setq table-key (%svref vector vector-index))
           (when (= vector-index initial-index)
-            (return first-deleted-index))
+            (or first-deleted-index
+                (error "Bug: no deleted entries in table")))
           (if (eq table-key key)
             (return vector-index)
-            (if (eq table-key free-hash-key-marker)
+            (if (eq table-key free-hash-marker)
               (return (or first-deleted-index vector-index))
               (if (and (null first-deleted-index)
                        (eq table-key deleted-hash-key-marker))
@@ -1186,31 +1292,27 @@ before doing so.")
            (vector-index (index->vector-index (hash-mod hash-code entries vector)))
            (table-key (%svref vector vector-index)))
       (declare (fixnum hash-code entries vector-index))
-      (if (or (eql key table-key)
-              (eq table-key free-hash-key-marker))
+      (if (eql key table-key)
         vector-index
-        (let* ((secondary-hash (%svref secondary-keys-*-2
-                                       (logand 7 hash-code)))
-               (initial-index vector-index)
-               (first-deleted-index (if (eq table-key deleted-hash-key-marker)
-                                      vector-index))
-               (count (+ entries entries))
-               (length (+ count $nhash.vector_overhead)))
-          (declare (fixnum secondary-hash initial-index count length))
-          (loop
-            (incf vector-index secondary-hash)
-            (when (>= vector-index length)
-              (decf vector-index count))
-            (setq table-key (%svref vector vector-index))
-            (when (= vector-index initial-index)
-              (return first-deleted-index))
-          (if (eql table-key key)
-            (return vector-index)
-            (if (eq table-key free-hash-key-marker)
-              (return (or first-deleted-index vector-index))
-              (if (and (null first-deleted-index)
-                       (eq table-key deleted-hash-key-marker))
-                (setq first-deleted-index vector-index))))))))
+        (if (eq table-key free-hash-marker)
+          -1
+          (let* ((secondary-hash (%svref secondary-keys-*-2
+                                         (logand 7 hash-code)))
+                 (initial-index vector-index)
+                 (count (+ entries entries))
+                 (length (+ count $nhash.vector_overhead)))
+            (declare (fixnum secondary-hash initial-index count length))
+            (loop
+              (incf vector-index secondary-hash)
+              (when (>= vector-index length)
+                (decf vector-index count))
+              (setq table-key (%svref vector vector-index))
+              (when (= vector-index initial-index)
+                (return -1))
+              (if (eql table-key key)
+                (return vector-index)
+                (when (eq table-key free-hash-marker)
+                  (return -1))))))))
     (eq-hash-find hash key)))
 
 (defun eql-hash-find-for-put (hash key)
@@ -1223,7 +1325,7 @@ before doing so.")
            (table-key (%svref vector vector-index)))
       (declare (fixnum hash-code entries vector-index))
       (if (or (eql key table-key)
-              (eq table-key free-hash-key-marker))
+              (eq table-key free-hash-marker))
         vector-index
         (let* ((secondary-hash (%svref secondary-keys-*-2
                                        (logand 7 hash-code)))
@@ -1243,22 +1345,12 @@ before doing so.")
                           (error "Bug: no deleted entries in table"))))
             (if (eql table-key key)
               (return vector-index)
-              (if (eq table-key free-hash-key-marker)
+              (if (eq table-key free-hash-marker)
                 (return (or first-deleted-index vector-index))
                 (if (and (null first-deleted-index)
                          (eq table-key deleted-hash-key-marker))
                   (setq first-deleted-index vector-index))))))))
     (eq-hash-find-for-put hash key)))
-
-;;; Rehash.  Caller should have exclusive access to the hash table
-;;; and have disabled interrupts.
-(defun %rehash (hash)
-  (let* ((vector (nhash.vector hash))
-         (flags (nhash.vector.flags vector))         )
-    (setf (nhash.vector.flags vector)
-          (logand flags $nhash-clear-key-bits-mask))
-    (do-rehash hash)))
-
 
 (defun %make-rehash-bits (hash &optional (size (nhash.vector-size (nhash.vector hash))))
   (declare (fixnum size))
@@ -1269,14 +1361,19 @@ before doing so.")
         (setf (nhash.rehash-bits hash) (make-array size :element-type 'bit :initial-element 0))))
     (fill (the simple-bit-vector rehash-bits) 0)))
 
-(defun do-rehash (hash)
+;;; Rehash.  Caller should have exclusive access to the hash table
+;;; and have disabled interrupts.
+(defun %rehash (hash)
   (let* ((vector (nhash.vector hash))
+         (flags (nhash.vector.flags vector))
          (vector-index (- $nhash.vector_overhead 2))
          (size (nhash.vector-size vector))
          (rehash-bits (%make-rehash-bits hash size))
          (index -1))
-    (declare (fixnum size index vector-index))    
-    (setf (nhash.vector.cache-key vector) (%unbound-marker)
+    (declare (fixnum size index vector-index))
+    (setf (nhash.vector.flags vector)
+          (logand flags $nhash-clear-key-bits-mask))
+    (setf (nhash.vector.cache-key vector) free-hash-marker
           (nhash.vector.cache-value vector) nil)
     (%set-does-not-need-rehashing hash)
     (loop
@@ -1286,7 +1383,7 @@ before doing so.")
         (let* ((key (%svref vector vector-index))
                (deleted (eq key deleted-hash-key-marker)))
           (unless
-            (when (or deleted (eq key free-hash-key-marker))
+            (when (or deleted (eq key free-hash-marker))
               (if deleted  ; one less deleted entry
                 (let ((count (1- (nhash.vector.deleted-count vector))))
                   (declare (fixnum count))
@@ -1295,10 +1392,10 @@ before doing so.")
                     (let ((wdc (nhash.vector.weak-deletions-count vector)))
                       (setf (nhash.vector.weak-deletions-count vector) 0)
                       (incf (nhash.vector.deleted-count vector) wdc)
-                      (decf (nhash.count hash) wdc)))
+                      (decf (nhash.vector.count vector) wdc)))
                   (incf (nhash.grow-threshold hash))
                   ;; Change deleted to free
-                  (setf (%svref vector vector-index) free-hash-key-marker)))
+                  (setf (%svref vector vector-index) free-hash-marker)))
               t)
             (let* ((last-index index)
                    (value (%svref vector (the fixnum (1+ vector-index))))
@@ -1315,11 +1412,11 @@ before doing so.")
 			(declare (fixnum found-vector-index))
                         (when first ; or (eq last-index index) ?
                           (setq first nil)
-                          (setf (%svref vector vector-index) free-hash-key-marker)
-                          (setf (%svref vector (the fixnum (1+ vector-index))) free-hash-key-marker))
+                          (setf (%svref vector vector-index) free-hash-marker)
+                          (setf (%svref vector (the fixnum (1+ vector-index))) free-hash-marker))
                         (%set-hash-table-vector-key vector found-vector-index key)
                         (setf (%svref vector (the fixnum (1+ found-vector-index))) value)                       
-                        (when (or (eq newkey free-hash-key-marker)
+                        (when (or (eq newkey free-hash-marker)
                                   (setq deleted (eq newkey deleted-hash-key-marker)))
                           (when deleted
                             (let ((count (1- (nhash.vector.deleted-count vector))))
@@ -1329,13 +1426,13 @@ before doing so.")
                                 (let ((wdc (nhash.vector.weak-deletions-count vector)))
                                   (setf (nhash.vector.weak-deletions-count vector) 0)
                                   (incf (nhash.vector.deleted-count vector) wdc)
-                                  (decf (nhash.count hash) wdc)))
+                                  (decf (nhash.vector.count vector) wdc)))
                               (incf (nhash.grow-threshold hash))))
                           (return))
                         (when (eq key newkey)
                           (cerror "Delete one of the entries." "Duplicate key: ~s in ~s ~s ~s ~s ~s"
                                   key hash value newvalue index found-index)                       
-                          (decf (nhash.count hash))
+                          (decf (nhash.vector.count vector))
                           (incf (nhash.grow-threshold hash))
                           (return))
                         (setq key newkey
@@ -1375,7 +1472,7 @@ before doing so.")
     (let* ((vector-index (index->vector-index  index))
            (vector-key nil))
       (declare (fixnum vector-index))
-      (if (or (eq free-hash-key-marker
+      (if (or (eq free-hash-marker
                   (setq vector-key (%svref vector vector-index)))
               (eq deleted-hash-key-marker vector-key))
         (return-from %growhash-probe index)
@@ -1385,7 +1482,7 @@ before doing so.")
             (setq index (+ index second))
             (when (>= index entries)
               (setq index (- index entries)))
-            (when (or (eq free-hash-key-marker
+            (when (or (eq free-hash-marker
                           (setq vector-key (%svref vector (index->vector-index index))))
                       (eq deleted-hash-key-marker vector-key))
               (return-from %growhash-probe index))))))))
@@ -1662,35 +1759,29 @@ before doing so.")
 
 
 
-(defun get-fwdnum (&optional hash)
-  (let* ((res (%get-fwdnum)))
-    (if hash
-      (setf (nhash.fixnum hash) res))
-    res))
-
-(defun gc-count (&optional hash)
-   (let ((res (%get-gc-count)))
-    (if hash
-      (setf (nhash.gc-count hash) res)
-      res)))
-
-
 (defun %cons-nhash-vector (size &optional (flags 0))
   (declare (fixnum size))
-  (let* ((vector (%alloc-misc (+ (+ size size) $nhash.vector_overhead) target::subtag-hash-vector (%unbound-marker))))
+  (let* ((vector (%alloc-misc (+ (+ size size) $nhash.vector_overhead) target::subtag-hash-vector free-hash-marker)))
+    (%init-nhash-vector vector flags)
+    vector))
+
+(defun %init-nhash-vector (vector flags)
+  (let ((size (vector-index->index (uvsize vector))))
+    (declare (fixnum size))
     (setf (nhash.vector.link vector) 0
           (nhash.vector.flags vector) flags
+          (nhash.vector.gc-count vector) (%get-gc-count)
           (nhash.vector.free-alist vector) nil
           (nhash.vector.finalization-alist vector) nil
           (nhash.vector.weak-deletions-count vector) 0
           (nhash.vector.hash vector) nil
           (nhash.vector.deleted-count vector) 0
-          (nhash.vector.cache-key vector) (%unbound-marker)
+          (nhash.vector.count vector) 0
+          (nhash.vector.cache-key vector) free-hash-marker
           (nhash.vector.cache-value vector) nil
           (nhash.vector.cache-idx vector) nil
           (nhash.vector.size vector) size
-          (nhash.vector.size-reciprocal vector) (floor (ash 1 (- target::nbits-in-word target::fixnumshift)) size))
-    vector))
+          (nhash.vector.size-reciprocal vector) (floor (ash 1 (- target::nbits-in-word target::fixnumshift)) size))))
 
 (defun assert-hash-table-readonly (hash)
   (unless (typep hash 'hash-table)
@@ -1740,56 +1831,66 @@ before doing so.")
           (when steal
             (setf (nhash.owner hash) *current-process*)))
       (progn
-        (write-lock-hash-table hash)
-        (setf (nhash.exclusion-lock hash) nil
-              (nhash.owner hash) *current-process*)
+        (unless (hash-lock-free-p hash)
+          (write-lock-hash-table hash)
+          (setf (nhash.exclusion-lock hash) nil))
+        (setf (nhash.owner hash) *current-process*)
         t))))
 
   
-  
-
-
-(defun enumerate-hash-keys (hash out)
-  (unless (typep hash 'hash-table)
-    (report-bad-arg hash 'hash-table))
-  (with-lock-context
-    (without-interrupts
-     (let* ((readonly (eq (read-lock-hash-table hash) :readonly)))
-       (do* ((in (nhash.vector hash))
-             (in-idx $nhash.vector_overhead (+ in-idx 2))
-             (insize (uvsize in))
-             (outsize (length out))
-             (out-idx 0))
-            ((or (= in-idx insize)
-                 (= out-idx outsize))
-             (unlock-hash-table hash readonly)
-             out-idx)
-         (declare (fixnum in-idx insize out-idx outsize))
-         (let* ((val (%svref in in-idx)))
-           (unless (or (eq val free-hash-key-marker)
-                       (eq val deleted-hash-key-marker))
-             (setf (%svref out out-idx) val)
-             (incf out-idx))))))))
+;; ** TODO: for lock-free hash tables, we don't need to copy,
+;; we could map over the actual hash table vector, because it's
+;; always valid.
+(defun lock-free-enumerate-hash-keys-and-values (hash keys values)
+  (do* ((in (nhash.vector hash))
+        (in-idx $nhash.vector_overhead (+ in-idx 2))
+        (insize (uvsize in))
+        (outsize (length (or keys values)))
+        (out-idx 0))
+       ((or (= in-idx insize)
+            (= out-idx outsize))
+        out-idx)
+    (declare (fixnum in-idx insize out-idx outsize))
+    (let* ((key (%svref in in-idx)))
+      (unless (eq key free-hash-marker)
+        (let ((val (%svref in (%i+ in-idx 1))))
+          (when (eq val rehashing-value-marker)
+            ;; This table is being rehashed.  Wait to finish and try again
+            (lock-free-rehash hash)
+            (return-from lock-free-enumerate-hash-keys-and-values
+                         (lock-free-enumerate-hash-keys-and-values hash keys values)))
+          (unless (eq val free-hash-marker)
+            (when keys (setf (%svref keys out-idx) key))
+            (when values (setf (%svref values out-idx) val))
+            (incf out-idx)))))))
 
 (defun enumerate-hash-keys-and-values (hash keys values)
   (unless (typep hash 'hash-table)
     (report-bad-arg hash 'hash-table))
+  (when (hash-lock-free-p hash)
+    (return-from enumerate-hash-keys-and-values
+                 (lock-free-enumerate-hash-keys-and-values hash keys values)))
   (with-lock-context
-    (without-interrupts
-     (let* ((readonly (eq (read-lock-hash-table hash) :readonly)))
-       (do* ((in (nhash.vector hash))
-             (in-idx $nhash.vector_overhead (+ in-idx 2))
-             (insize (uvsize in))
-             (outsize (length keys))
-             (out-idx 0))
-            ((or (= in-idx insize)
-                 (= out-idx outsize))
-             (unlock-hash-table hash readonly)
-             out-idx)
-         (declare (fixnum in-idx insize out-idx outsize))
-         (let* ((key (%svref in in-idx)))
-           (unless (or (eq key free-hash-key-marker)
-                       (eq key deleted-hash-key-marker))
-             (setf (%svref keys out-idx) key)
-             (setf (%svref values out-idx) (%svref in (the fixnum (1+ in-idx))))
-             (incf out-idx))))))))
+      (without-interrupts
+       (let* ((readonly (eq (read-lock-hash-table hash) :readonly)))
+         (do* ((in (nhash.vector hash))
+               (in-idx $nhash.vector_overhead (+ in-idx 2))
+               (insize (uvsize in))
+               (outsize (length (or keys values)))
+               (out-idx 0))
+              ((or (= in-idx insize)
+                   (= out-idx outsize))
+               (unlock-hash-table hash readonly)
+               out-idx)
+           (declare (fixnum in-idx insize out-idx outsize))
+           (let* ((key (%svref in in-idx)))
+             (unless (or (eq key free-hash-marker)
+                         (eq key deleted-hash-key-marker))
+               (when keys
+                 (setf (%svref keys out-idx) key))
+               (when values
+                 (setf (%svref values out-idx) (%svref in (%i+ in-idx 1))))
+               (incf out-idx))))))))
+  
+(defun enumerate-hash-keys (hash out)
+  (enumerate-hash-keys-and-values hash out nil))

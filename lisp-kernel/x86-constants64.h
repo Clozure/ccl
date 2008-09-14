@@ -383,11 +383,13 @@ typedef struct hash_table_vector_header {
   LispObj header;
   LispObj link;                 /* If weak */
   LispObj flags;                /* a fixnum; see below */
+  LispObj gc_count;             /* gc-count kernel global */
   LispObj free_alist;           /* preallocated conses for finalization_alist */
   LispObj finalization_alist;   /* key/value alist for finalization */
   LispObj weak_deletions_count; /* incremented when GC deletes weak pair */
   LispObj hash;                 /* backpointer to hash-table */
-  LispObj deleted_count;        /* number of deleted entries */
+  LispObj deleted_count;        /* number of deleted entries [not maintained if lock-free] */
+  LispObj count;                /* number of valid entries [not maintained if lock-free] */
   LispObj cache_idx;            /* index of last cached pair */
   LispObj cache_key;            /* value of last cached key */
   LispObj cache_value;          /* last cached value */
@@ -414,6 +416,8 @@ typedef struct hash_table_vector_header {
 /* finalizable */
 #define nhash_finalizable_mask fixnum_bitmask(10)
 
+/* keys frozen, i.e. don't clobber keys, only values */
+#define nhash_keys_frozen_mask fixnum_bitmask(9)
 
 /* Lfun bits */
 

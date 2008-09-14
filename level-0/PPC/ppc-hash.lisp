@@ -155,6 +155,9 @@
 (defppclapfunction %set-hash-table-vector-key ((vector arg_x) (index arg_y) (value arg_z))
   (ba .SPset-hash-key))
 
+(defppclapfunction %set-hash-table-vector-key-conditional ((offset 0) (vector arg_x) (old arg_y) (new arg_z))
+  (ba .SPset-hash-key-conditional))
+
 ;;; Strip the tag bits to turn x into a fixnum
 (defppclapfunction strip-tag-to-fixnum ((x arg_z))
   (unbox-fixnum imm0 x)

@@ -97,7 +97,8 @@
 ;; Hash table vectors have a header that the garbage collector knows
 ;; about followed by alternating keys and values.  Empty slots have a
 ;; key of (%UNBOUND-MARKER), deleted slots are denoted by a key of
-;; (%SLOT-UNBOUND-MARKER).
+;; (%SLOT-UNBOUND-MARKER), except in the case of "lock-free" hash
+;; tables, which see below.
 ;;
 ;; Four bits in the nhash.vector.flags fixnum interact with the garbage
 ;; collector.  This description uses the symbols that represent bit numbers
@@ -107,7 +108,7 @@
 ;; $nhash.vector-track-keys-byte offsets from the tagged vector.
 ;; The 32 bits of the fixnum at nhash.vector.flags look like:
 ;;
-;;     TK0C0000 00000000 WVF00000 00000000
+;;     TTTTKEC0 00000000 000WVFZ0 00000000
 ;;
 ;;
 ;; $nhash_track_keys_bit         "T" in the diagram above
@@ -138,6 +139,9 @@
 ;;                               If any key/value pairs are removed, they will be added to
 ;;                               the nhash.vector.finalization-alist using cons cells
 ;;                               from nhash.vector.free-alist
+;; $nhash_keys_frozen_bit       "Z" in diagram above.
+;;                               If set, GC will remove weak entries by setting the
+;;                               value to (%slot-unbound-marker), leaving key unchanged.
 
 (in-package "CCL")
 
@@ -163,6 +167,7 @@
       (format stream " (Readonly)"))))
 
 
+#+vaporware
 ;;; Of course, the lisp version of this would be too slow ...
 (defun hash-table-finalization-list (hash-table)
   (unless (hash-table-p hash-table)
@@ -174,6 +179,7 @@
       (nhash.vector.finalization-alist vector)
       (error "~S is not a finalizeable hash table" hash-table))))
 
+#+vaporware
 (defun (setf hash-table-finalization-list) (value hash-table)
   (unless (hash-table-p hash-table)
     (report-bad-arg hash-table 'hash-table))
@@ -240,31 +246,28 @@
 
 (defmethod make-load-form ((hash hash-table) &optional env)
   (declare (ignore env))
-  (let ((rehashF (function-name (nhash.rehashF hash)))
-        (keytransF (nhash.keytransF hash))
+  (%normalize-hash-table-count hash)
+  (let ((keytransF (nhash.keytransF hash))
         (compareF (nhash.compareF hash))
         (vector (nhash.vector hash))
         (private (if (nhash.owner hash) '*current-process*))
-        (count (nhash.count hash)))
+        (lock-free-p (logtest $nhash.lock-free (the fixnum (nhash.lock hash)))))
     (flet ((convert (f)
              (if (or (fixnump f) (symbolp f))
                `',f
                `(symbol-function ',(function-name f)))))
       (values
        `(%cons-hash-table
-         nil nil nil nil ,(nhash.grow-threshold hash) ,(nhash.rehash-ratio hash) ,(nhash.rehash-size hash) ,(nhash.address-based hash) nil nil ,private)
-       `(%initialize-hash-table ,hash ',rehashF ,(convert keytransF) ,(convert compareF)
-                                ',vector ,count)))))
+         nil nil nil ,(nhash.grow-threshold hash) ,(nhash.rehash-ratio hash) ,(nhash.rehash-size hash)
+        nil nil ,private ,lock-free-p)
+       `(%initialize-hash-table ,hash ,(convert keytransF) ,(convert compareF) ',vector)))))
 
 (defun needs-rehashing (hash)
   (%set-needs-rehashing hash))
 
-(defun %initialize-hash-table (hash rehashF keytransF compareF vector count)
-  (setf (nhash.rehashF hash) (symbol-function rehashF)
-        (nhash.keytransF hash) keytransF
-        (nhash.compareF hash) compareF
-        (nhash.vector hash) vector
-        (nhash.count hash) count)
+(defun %initialize-hash-table (hash keytransF compareF vector)
+  (setf (nhash.keytransF hash) keytransF
+        (nhash.compareF hash) compareF)
   (setf (nhash.find hash)
         (case comparef
           (0 #'eq-hash-find)
@@ -275,6 +278,7 @@
           (0 #'eq-hash-find-for-put)
           (-1 #'eql-hash-find-for-put)
           (t #'general-hash-find-for-put)))
+  (setf (nhash.vector hash) vector)
   (%set-needs-rehashing hash))
 
 
@@ -289,16 +293,23 @@
   (without-interrupts
    (let* ((lock (nhash.exclusion-lock hash-table)))
      (if lock
-       (write-lock-rwlock lock)
        (progn
-         (unless (eq (nhash.owner hash-table) *current-process*)
-           (error "Current process doesn't own hash-table ~s" hash-table))))
-     (push hash-table *fcomp-locked-hash-tables*))))
+         (if (hash-lock-free-p hash-table)
+           ;; For lock-free hash tables, this only makes sure nobody is
+           ;; rehashing the table.  It doesn't necessarily stop readers
+           ;; or writers (unless they need to rehash).
+           (grab-lock lock)
+           (write-lock-rwlock lock))
+         (push hash-table *fcomp-locked-hash-tables*))
+       (unless (eq (nhash.owner hash-table) *current-process*)
+         (error "Current process doesn't own hash-table ~s" hash-table))))))
 
 (defun fasl-unlock-hash-tables ()
   (dolist (h *fcomp-locked-hash-tables*)
     (let* ((lock (nhash.exclusion-lock h)))
-      (if lock (unlock-rwlock lock)))))
+      (if (hash-lock-free-p h)
+        (release-lock lock)
+        (unlock-rwlock lock)))))
 
 
 

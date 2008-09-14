@@ -24,26 +24,21 @@
 (defconstant secondary-keys-*-2 #(6 10 14 22 26 34 38 46))
 
 
-;;; undistinguished values of nhash.lock
-(defconstant $nhash.lock-while-growing #x10000)
-(defconstant $nhash.lock-while-rehashing #x20000)
-(defconstant $nhash.lock-grow-or-rehash #x30000)
-(defconstant $nhash.lock-map-count-mask #xffff)
-(defconstant $nhash.lock-not-while-rehashing #x-20001)
+(defconstant $nhash.lock-free #x80000)
 
 ; The hash.vector cell contains a vector with some longwords of overhead
 ; followed by alternating keys and values.
-; A key of $undefined denotes an empty or deleted value
-; The value will be $undefined for empty values, or NIL for deleted values.
 ;; If you change anything here, also update the kernel def in XXX-constantsNN.h
 (def-accessors () %svref
   nhash.vector.link                     ; GC link for weak vectors
   nhash.vector.flags                    ; a fixnum of flags
+  nhash.vector.gc-count                 ; gc-count kernel global
   nhash.vector.free-alist               ; empty alist entries for finalization
   nhash.vector.finalization-alist       ; deleted out key/value pairs put here
   nhash.vector.weak-deletions-count     ; incremented when the GC deletes an element
   nhash.vector.hash                     ; back-pointer
-  nhash.vector.deleted-count            ; number of deleted entries
+  nhash.vector.deleted-count            ; number of deleted entries [not maintained if lock-free]
+  nhash.vector.count                    ; number of valid entries [not maintained if lock-free]
   nhash.vector.cache-idx                ; index of last cached key/value pair
   nhash.vector.cache-key                ; cached key
   nhash.vector.cache-value              ; cached value
@@ -54,19 +49,22 @@
 
 ; number of longwords of overhead in nhash.vector.
 ; Must be a multiple of 2 or INDEX parameters in LAP code will not be tagged as fixnums.
-(defconstant $nhash.vector_overhead 12)
+(defconstant $nhash.vector_overhead 14)
 
 (defconstant $nhash_weak_bit 12)        ; weak hash table
 (defconstant $nhash_weak_value_bit 11)  ; weak on value vice key if this bit set
 (defconstant $nhash_finalizeable_bit 10)
+(defconstant $nhash_keys_frozen_bit 9)  ; GC must not change key slots when deleting
 (defconstant $nhash_weak_flags_mask
-  (bitset $nhash_weak_bit (bitset $nhash_weak_value_bit (bitset $nhash_finalizeable_bit 0))))
+  (bitset $nhash_keys_frozen_bit (bitset $nhash_weak_bit (bitset $nhash_weak_value_bit (bitset $nhash_finalizeable_bit 0)))))
+
 
 (defconstant $nhash_track_keys_bit 28)  ; request GC to track relocation of keys.
 (defconstant $nhash_key_moved_bit 27)   ; set by GC if a key moved.
 (defconstant $nhash_ephemeral_bit 26)   ; set if a hash code was computed using an address
                                         ; in ephemeral space
 (defconstant $nhash_component_address_bit 25) ; a hash code was computed from a key's component
+
 
 
 (defconstant $nhash-growing-bit 16)

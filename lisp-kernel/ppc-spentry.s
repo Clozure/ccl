@@ -614,8 +614,8 @@ C(egc_set_hash_key):
    possibly transient failure.)  If we're at that test and the
    cr0[EQ] bit is set, then the conditional store succeeded and
    we have to atomically memoize the possible intergenerational
-   reference.  Note that the local labels 4 and 5 are at or beyond
-  'egc_write_barrier_end'
+   reference.  Note that the local labels 4 and 5 are in the
+   body of the next subprim (and at or beyond 'egc_write_barrier_end').
 
    N.B:	it's not possible to really understand what's going on just
    by the state of the cr0[eq] bit.  A transient failure in the
@@ -627,13 +627,12 @@ C(egc_set_hash_key):
         .globl C(egc_write_barrier_end)
 _spentry(store_node_conditional)
 C(egc_store_node_conditional):
-        __(crclr 2)              /* 2 = cr0_EQ  */
         __(cmplr(cr2,arg_z,arg_x))
         __(vpop(temp0))
         __(unbox_fixnum(imm4,temp0))
 1:      __(lrarx(temp1,arg_x,imm4))
         __(cmpr(cr1,temp1,arg_y))
-        __(bne cr1,3f)
+        __(bne cr1,5f)
         __(strcx(arg_z,arg_x,imm4))
 	.globl C(egc_store_node_conditional_test)
 C(egc_store_node_conditional_test):	
@@ -650,23 +649,78 @@ C(egc_store_node_conditional_test):
         __(srri(imm0,imm0,bitmap_shift))       
         __(srr(imm3,imm3,imm2))
         __(ref_global(imm2,refbits))
-        __(bge 5f)
+        __(bge 4f)
         __(slri(imm0,imm0,word_shift))
 2:      __(lrarx(imm1,imm2,imm0))
         __(or imm1,imm1,imm3)
         __(strcx( imm1,imm2,imm0))
         __(bne- 2b)
         __(isync)
-        __(b 5f)
-C(egc_write_barrier_end):
-3:      __(li imm0,RESERVATION_DISCHARGE)
-        __(strcx(rzero,0,imm0))
-4:      __(li arg_z,nil_value)
-        __(blr)
-5:      __(li arg_z,t_value)
-        __(blr)
+        __(b 4f)
 
-        
+/* arg_z = new value, arg_y = expected old value, arg_x = hash-vector,
+   vsp[0] = (boxed) byte-offset 
+   Interrupt-related issues are as in store_node_conditional, but
+   we have to do more work to actually do the memoization.*/
+_spentry(set_hash_key_conditional)
+	.globl C(egc_set_hash_key_conditional)
+C(egc_set_hash_key_conditional):
+	__(cmplr(cr2,arg_z,arg_x))
+	__(vpop(imm4))
+	__(unbox_fixnum(imm4,imm4))
+1:	__(lrarx(temp1,arg_x,imm4))
+	__(cmpr(cr1,temp1,arg_y))
+	__(bne cr1,5f)
+	__(strcx(arg_z,arg_x,imm4))
+	.globl C(egc_set_hash_key_conditional_test)
+C(egc_set_hash_key_conditional_test):	
+	__(bne 1b)
+	__(isync)
+	__(add imm0,imm4,arg_x)
+	__(ref_global(imm2,heap_start))
+	__(ref_global(imm1,oldspace_dnode_count))
+	__(sub imm0,imm0,imm2)
+	__(load_highbit(imm3))
+	__(srri(imm0,imm0,dnode_shift))
+	__(cmplr(imm0,imm1))
+	__(extract_bit_shift_count(imm2,imm0))
+	__(srri(imm0,imm0,bitmap_shift))
+	__(srr(imm3,imm3,imm2))
+	__(ref_global(imm2,refbits))
+	__(bge 4f)
+	__(slri(imm0,imm0,word_shift))
+2:	__(lrarx(imm1,imm2,imm0))
+	__(or imm1,imm1,imm3)
+	__(strcx(imm1,imm2,imm0))
+	__(bne- 2b)
+	__(isync)
+	/* Memoize hash table header */		
+        __(ref_global(imm1,heap_start))
+        __(sub imm0,arg_x,imm1)
+        __(srri(imm0,imm0,dnode_shift))
+        __(load_highbit(imm3))
+        __(extract_bit_shift_count(imm4,imm0))
+        __(srri(imm0,imm0,bitmap_shift))
+        __(srr(imm3,imm3,imm4))
+        __(slri(imm0,imm0,word_shift))
+        __(ldrx(imm1,imm2,imm0))
+        __(and. imm1,imm1,imm3)
+        __(bne 4f)
+3:      __(lrarx(imm1,imm2,imm0))
+        __(or imm1,imm1,imm3)
+        __(strcx(imm1,imm2,imm0))
+        __(bne- 3b)
+        __(isync)
+C(egc_write_barrier_end):
+4:	__(li arg_z,t_value)
+	__(blr)
+5:      __(li imm0,RESERVATION_DISCHARGE)
+        __(strcx(rzero,0,imm0))
+	__(li arg_z,nil_value)
+	__(blr)
+	
+	
+	       
 _spentry(conslist)
 	__(li arg_z,nil_value)
 	__(cmpri(nargs,0))
@@ -6881,9 +6935,6 @@ _spentry(nmkunwind)
         __(mr arg_z,arg_y)
         __(b _SPbind_interrupt_level)
 
-_spentry(unused_6)
-         __(b _SPbreakpoint)
-                	
 	
 
 

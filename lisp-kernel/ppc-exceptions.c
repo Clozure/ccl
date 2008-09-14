@@ -1835,7 +1835,9 @@ extern opcode
   egc_set_hash_key,
   egc_gvset,
   egc_rplaca,
-  egc_rplacd;
+  egc_rplacd,
+  egc_set_hash_key_conditional,
+  egc_set_hash_key_conditional_test;
 
 
 extern opcode ffcall_return_window, ffcall_return_window_end;
@@ -1857,7 +1859,17 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
     bitvector refbits = (bitvector)(lisp_global(REFBITS));
     Boolean need_store = true, need_check_memo = true, need_memoize_root = false;
 
-    if (program_counter >= &egc_store_node_conditional) {
+    if (program_counter >= &egc_set_hash_key_conditional) {
+      if ((program_counter < &egc_set_hash_key_conditional_test) ||
+	  ((program_counter == &egc_set_hash_key_conditional_test) &&
+	   (! (xpCCR(xp) & 0x20000000)))) {
+	return;
+      }
+      need_store = false;
+      root = xpGPR(xp,arg_x);
+      ea = (LispObj *) (root+xpGPR(xp,arg_y)+misc_data_offset);
+      need_memoize_root = true;
+    } else if (program_counter >= &egc_store_node_conditional) {
       if ((program_counter < &egc_store_node_conditional_test) ||
 	  ((program_counter == &egc_store_node_conditional_test) &&
 	   (! (xpCCR(xp) & 0x20000000)))) {

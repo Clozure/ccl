@@ -99,6 +99,20 @@
   (push (% temp1))
   (jmp-subprim .SPset-hash-key))
 
+;;; This needs to be done out-of-line, to handle EGC memoization.
+(defx8632lapfunction %set-hash-table-vector-key-conditional ((offset 8)
+                                                             (vector 4)
+                                                             #|(ra 0)|#
+                                                             (old arg_y)
+                                                             (new arg_z))
+  (movl (@ offset (% esp)) (% temp0))
+  (movl (@ vector (% esp)) (% temp1))
+  (save-simple-frame)
+  (call-subprim .SPset-hash-key-conditional)
+  (restore-simple-frame)
+  (single-value-return 4))
+
+
 ;;; Strip the tag bits to turn x into a fixnum
 (defx8632lapfunction strip-tag-to-fixnum ((x arg_z))
   (andb ($ (lognot x8632::fixnummask)) (%b x))

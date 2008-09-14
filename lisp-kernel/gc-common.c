@@ -217,6 +217,8 @@ reaphashv(LispObj hashv)
   LispObj *pairp = (LispObj*) (hashp+1), weakelement;
   Boolean 
     weak_on_value = ((hashp->flags & nhash_weak_value_mask) != 0);
+  Boolean
+    keys_frozen = ((hashp->flags & nhash_keys_frozen_mask) != 0);
   bitvector markbits = GCmarkbits;
   int tag;
 
@@ -231,8 +233,15 @@ reaphashv(LispObj hashv)
       dnode = gc_area_dnode(weakelement);
       if ((dnode < GCndnodes_in_area) && 
           ! ref_bit(markbits, dnode)) {
-        pairp[0] = slot_unbound;
-        pairp[1] = lisp_nil;
+        if (keys_frozen) {
+          if (pairp[1] != slot_unbound) {
+            pairp[1] = unbound;
+          }
+        }
+        else {
+          pairp[0] = slot_unbound;
+          pairp[1] = lisp_nil;
+        }
         hashp->weak_deletions_count += (1<<fixnumshift);
       }
     }

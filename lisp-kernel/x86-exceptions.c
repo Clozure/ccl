@@ -2056,6 +2056,8 @@ setup_sigaltstack(area *a)
 #endif
 
 extern opcode egc_write_barrier_start, egc_write_barrier_end,
+  egc_set_hash_key_conditional, egc_set_hash_key_conditional_success_test,
+  egc_store_node_conditional_success_end,
   egc_store_node_conditional_success_test,egc_store_node_conditional,
   egc_set_hash_key, egc_gvset, egc_rplacd;
 
@@ -2278,7 +2280,27 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
     bitvector refbits = (bitvector)(lisp_global(REFBITS));
     Boolean need_store = true, need_check_memo = true, need_memoize_root = false;
 
-    if (program_counter >= &egc_store_node_conditional) {
+    if (program_counter >= &egc_set_hash_key_conditional) {
+      if ((program_counter < &egc_set_hash_key_conditional_success_test) ||
+          ((program_counter == &egc_set_hash_key_conditional_success_test) &&
+           !(eflags_register(xp) & (1 << X86_ZERO_FLAG_BIT)))) {
+        /* Back up the PC, try again */
+        xpPC(xp) = (LispObj) &egc_set_hash_key_conditional;
+        return;
+      }
+      /* The conditional store succeeded.  Set the refbit, return to ra0 */
+      val = xpGPR(xp,Iarg_z);
+#ifdef X8664
+      root = xpGPR(xp,Iarg_x);
+      ea = (LispObj*)(root + (unbox_fixnum((signed_natural) xpGPR(xp,Itemp0))));
+#else
+      root = xpGPR(xp,Itemp1);
+      ea = (LispObj *)(root + misc_data_offset + xpGPR(xp,Itemp0));
+#endif
+      need_memoize_root = true;
+      need_store = false;
+      xpGPR(xp,Iarg_z) = t_value;
+    } else if (program_counter >= &egc_store_node_conditional) {
       if ((program_counter < &egc_store_node_conditional_success_test) ||
           ((program_counter == &egc_store_node_conditional_success_test) &&
            !(eflags_register(xp) & (1 << X86_ZERO_FLAG_BIT)))) {
@@ -2286,6 +2308,10 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
         xpPC(xp) = (LispObj) &egc_store_node_conditional;
         return;
       }
+      if (program_counter >= &egc_store_node_conditional_success_end) {
+        return;
+      }
+
       /* The conditional store succeeded.  Set the refbit, return to ra0 */
       val = xpGPR(xp,Iarg_z);
 #ifdef X8664

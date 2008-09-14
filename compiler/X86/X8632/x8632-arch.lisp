@@ -1018,7 +1018,7 @@
          (defx8632subprim .SPaset3)
          (defx8632subprim .SPffcall-return-registers)
          (defx8632subprim .SPaset1)
-         (defx8632subprim .SPunused-6)
+         (defx8632subprim .SPset-hash-key-conditional)
          (defx8632subprim .SPunbind-interrupt-level)
          (defx8632subprim .SPunbind)
          (defx8632subprim .SPunbind-n)

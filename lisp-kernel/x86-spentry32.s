@@ -1806,6 +1806,44 @@ C(egc_store_node_conditional_success_test):
 	__(xorb $31,%imm0_b)
 	__(lock)
 	__(btsl %imm0,(%temp1))
+        .globl C(egc_store_node_conditional_success_end)
+C(egc_store_node_conditional_success_end):
+2:	__(movl $t_value,%arg_z)
+	__(ret)
+3:	__(movl $nil_value,%arg_z)
+	__(ret)
+_endsubp(store_node_conditional)
+
+	/* %temp0 = offset, %temp1 = object, %arg_y = old, %arg_z = new */
+_spentry(set_hash_key_conditional)
+        .globl C(egc_set_hash_key_conditional)
+C(egc_set_hash_key_conditional):
+	__(subl $misc_data_offset*fixnumone,%temp0) /* undo pre-added offset */
+	__(sarl $fixnumshift,%temp0)	/* will be fixnum-tagged */
+0:	__(cmpl %arg_y,misc_data_offset(%temp1,%temp0))
+	__(movl misc_data_offset(%temp1,%temp0),%imm0)
+	__(jne 3f)
+	__(lock)
+	__(cmpxchgl %arg_z,misc_data_offset(%temp1,%temp0))
+	.globl C(egc_set_hash_key_conditional_success_test)
+C(egc_set_hash_key_conditional_success_test):
+	__(jne 0b)
+	__(leal misc_data_offset(%temp1,%temp0),%imm0)
+	__(subl lisp_global(heap_start),%imm0)
+	__(shrl $dnode_shift,%imm0)
+	__(cmpl lisp_global(oldspace_dnode_count),%imm0)
+	__(jae 2f)
+	__(ref_global(refbits,%temp0))
+	__(xorb $31,%imm0_b)
+	__(lock)
+	__(btsl %imm0,(%temp0))
+	/* Now memoize the address of the hash vector */
+	__(movl %temp1,%imm0)
+	__(subl lisp_global(heap_start),%imm0)
+	__(shrl $dnode_shift,%imm0)
+	__(xorb $31,%imm0_b)
+	__(lock)
+	__(btsl %imm0,(%temp0))
         .globl C(egc_write_barrier_end)
 C(egc_write_barrier_end):
 2:	__(movl $t_value,%arg_z)
@@ -4596,7 +4634,7 @@ _endsubp(aset3)
 
 _spentry(unused_6)
         __(int $3)
-Xspentry_end:           
+Xspentry_end:
 _endsubp(unused_6)
         .data
         .globl C(spentry_start)
