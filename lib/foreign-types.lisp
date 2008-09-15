@@ -124,6 +124,8 @@
                         (t
                          (case (target-os-name *target-backend*)
                            (:darwin '((:struct :host_basic_info)))
+                           (:solaris '((:struct :lifnum)
+                                       (:struct :lifconf)))
                            (t ()))))))
                     
 (defvar *target-ftd* *host-ftd*)
@@ -1736,9 +1738,7 @@ result-type-specifer is :VOID or NIL"
       (canonicalize-foreign-type-ordinal '(:array (:struct :pollfd) 1))
       (canonicalize-foreign-type-ordinal '(:struct :dirent))
       (canonicalize-foreign-type-ordinal '(:struct :timeval))
-      (canonicalize-foreign-type-ordinal #+solaris-target '(:struct :flock) #-solaris-target nil)
-      (canonicalize-foreign-type-ordinal #+solaris-target '(:struct :lifnum) #-solaris-target nil)
-      (canonicalize-foreign-type-ordinal #+solaris-target '(:struct :lifconf) #-solaris-target nil)
+
       (setq canonical-ordinal (1- max-common-foreign-type-ordinal))
 
       (dolist (spec *canonical-os-foreign-types*)
