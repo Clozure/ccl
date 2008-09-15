@@ -921,7 +921,7 @@ setup_tcr_extra_segment(TCR *tcr)
   }
   u.entry_number = i;
   u.base_addr = (uint32_t)tcr;
-  u.limit = sizeof(tcr);
+  u.limit = sizeof(TCR);
   u.limit_in_pages = 0;
   if (modify_ldt(1,&u,sizeof(struct user_desc)) != 0) {
     pthread_mutex_unlock(&ldt_lock);
