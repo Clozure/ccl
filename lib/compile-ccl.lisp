@@ -138,7 +138,8 @@
              (:darwinx8664 'ffi-darwinx8664)
              (:freebsdx8664 'ffi-freebsdx8664)
              (:solarisx8664 'ffi-solarisx8664)
-             (:win64 'ffi-win64)))))
+             (:win64 'ffi-win64)
+             (:linuxx8632 'ffi-linuxx8632)))))
 
 
 (defun target-compiler-modules (&optional (target
