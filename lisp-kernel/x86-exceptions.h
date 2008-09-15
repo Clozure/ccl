@@ -161,7 +161,11 @@ typedef enum {
 #ifdef LINUX
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV
 #define IS_MAYBE_INT_TRAP(info,xp) (((info->si_code) &0x7f) == 0)
+#ifdef X8664
 #define SIGRETURN(context)
+#else
+#define SIGRETURN(context) setcontext(context)
+#endif
 #endif
 
 #ifdef FREEBSD
