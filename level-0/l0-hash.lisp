@@ -408,7 +408,11 @@
   "Be sure that you understand the implications of changing this
 before doing so.")
 
-(defparameter *lock-free-hash-table-default* #+(or gz ccl-0711) t #-(or gz ccl-0711) nil)
+(defparameter *lock-free-hash-table-default* #+(or gz ccl-0711) :shared #-(or gz ccl-0711) nil
+  "If NIL, hash tables default to using the standard algorithms, with locks for shared tables.
+   If :SHARED, shared hash tables default to using the \"lock-free\" algorithm,
+   which is faster for typical access but slower for rehashing or growing the table.
+   Otherwise, all hash tables default to the lock-free algorithm")
 
 (defun make-hash-table (&key (test 'eql)
                              (size 60)
@@ -442,6 +446,8 @@ before doing so.")
   (unless (or (fixnump rehash-size) (and (realp rehash-size) (< 1.0 rehash-size)))
     (report-bad-arg rehash-size '(or fixnum (real 1 *))))
   (unless (fixnump size) (report-bad-arg size 'fixnum))
+  (when (and (eq lock-free :shared) (not shared))
+    (setq lock-free nil))
   (setq rehash-threshold (/ 1.0 (max 0.01 rehash-threshold)))
   (let* ((default-hash-function
              (cond ((or (eq test 'eq) (eq test #'eq)) 
