@@ -4108,6 +4108,10 @@ LocalLabelPrefix[]ffcall_call:
 LocalLabelPrefix[]ffcall_call_end:
 	__(movl %ebp,%esp)
 	__(movl %esp,rcontext(tcr.foreign_sp))
+        /* The high word of a 64-bit result would be in %edx right now.
+           There doesn't seem to be any other good place to put this,
+           though %edx is often undefined at this point. */
+        __(mov %edx,rcontext(tcr.unboxed1))
 	__(clr %arg_z)
 	__(clr %arg_y)
 	__(clr %temp1)
