@@ -263,6 +263,8 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "FFI-SOLARISX8664" "ffi-solarisx8664")
       #+win64-target
       (bin-load-provide "FFI-WIN64" "ffi-win64")
+      #+linuxx8632-target
+      (bin-load-provide "FFI-LINUXX8632" "ffi-linuxx8632")
       
       (bin-load-provide "DB-IO" "db-io")
 
