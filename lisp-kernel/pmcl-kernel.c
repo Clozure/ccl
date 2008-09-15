@@ -1223,7 +1223,7 @@ remap_spjump()
 #endif
 #endif
 
-#ifdef X8664
+#ifdef X86
 #ifdef WINDOWS
 
 /* By using linker tricks, we ensure there's memory between 0x11000
@@ -1458,7 +1458,7 @@ main(int argc, char *argv[]
   ensure_gs_available(real_executable_name);
 #endif
 #endif
-#if (defined(DARWIN) && defined(PPC64)) || defined(X8664)
+#if (defined(DARWIN) && defined(PPC64)) || defined(X8664) || (defined(X8632) && defined(LINUX))
   remap_spjump();
 #endif
 
