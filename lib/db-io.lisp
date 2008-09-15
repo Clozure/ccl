@@ -1865,7 +1865,7 @@ satisfy the optional predicate PREDICATE."
   (let* ((already (or (info-foreign-type-struct name ftd)
                       (info-foreign-type-union name ftd)))
          (name (unescape-foreign-name name)))
-    (do-interface-dirs (d)
+    (do-interface-dirs (d ftd)
       (let* ((r (%load-foreign-record (db-records d) name ftd already)))
 	(when r (return r))))))
 
