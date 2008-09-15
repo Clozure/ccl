@@ -4712,10 +4712,10 @@
 
 ;;; This returns true if the template's operand types "match" the
 ;;; types of the actual operands.
-(defun match-template-types (template type0 type1 type2)
+(defun match-template-types (template type0 type1 type2 &optional (backend ccl::*target-backend*))
   #+debug
   (format t "~& template = ~s, operand types = ~s" template (list type0 type1 type2))
-  (ccl::target-arch-case
+  (case (ccl::backend-target-arch-name backend)
    (:x8632
     (if (logtest (encode-opcode-flags :cpu64) (x86-opcode-template-flags template))
       (return-from match-template-types nil)))
