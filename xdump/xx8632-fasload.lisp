@@ -44,7 +44,28 @@
 
 (add-xload-backend *x8632-darwin-xload-backend*)
 
+(defparameter *x8632-linux-xload-backend*
+  (make-backend-xload-info
+   :name  :linuxx8632
+   :macro-apply-code-function 'x8632-fixup-macro-apply-code
+   :closure-trampoline-code nil
+   :udf-code *x8632-udf-code*
+   :default-image-name "ccl:ccl;x86-boot32"
+   :default-startup-file-name "level-1.lx32fsl"
+   :subdirs '("ccl:level-0;X86;X8632;" "ccl:level-0;X86;")
+   :compiler-target-name :linuxx8632
+   :image-base-address #x10000000
+   :nil-relative-symbols x86::*x86-nil-relative-symbols*
+   :static-space-init-function 'x8632-initialize-static-space
+   :purespace-reserve (ash 1 26)
+   :static-space-address (+ (ash 1 16) (ash 2 12))
+))
+
+(add-xload-backend *x8632-linux-xload-backend*)
+
 #+x8632-target
 (progn
   #+darwin-target
-  (setq *xload-default-backend* *x8632-darwin-xload-backend*))
+  (setq *xload-default-backend* *x8632-darwin-xload-backend*)
+  #+linux-target
+  (setq *xload-default-backend* *x8632-linux-xload-backend*))
