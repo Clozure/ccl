@@ -924,7 +924,7 @@ Will differ from *compiling-file* during an INCLUDE")
 ;;;;
 ;These should be constants, but it's too much trouble when need to change 'em.
 (defparameter FASL-FILE-ID #xFF00)  ;Overall file format, shouldn't change much
-(defparameter FASL-VERSION #xFF53)  ;Fasl block format.
+(defparameter FASL-VERSION #xFF54)  ;Fasl block format. ($fasl-vers)
 
 (defvar *fasdump-hash*)
 (defvar *fasdump-read-package*)
