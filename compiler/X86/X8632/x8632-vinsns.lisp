@@ -1747,6 +1747,13 @@
   (movl (:@ (:%seg :rcontext) x8632::tcr.foreign-sp) (:%l temp))
   (movsd (:@ (:apply + 8 (:apply ash offset 2)) (:%l temp)) (:%xmm arg)))
 
+;;; .SPffcall has stored %edx in tcr.unboxed1.  Load %mm0 with a 
+;;; 64-bit value composed from %edx:%eax.
+(define-x8632-vinsn get-64-bit-ffcall-result (()
+                                              ())
+  (movl (:%l x8632::eax) (:@ (:%seg :rcontext) x8632::tcr.unboxed0))
+  (movd (:@ (:%seg :rcontext) x8632::tcr.unboxed0) (:%mmx x8632::mm0)))
+
 (define-x8632-subprim-call-vinsn (ff-call)  .SPffcall)
 
 (define-x8632-subprim-call-vinsn (syscall)  .SPsyscall)
