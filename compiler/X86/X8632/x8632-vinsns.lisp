@@ -4067,6 +4067,6 @@
 (queue-fixup
  (fixup-x86-vinsn-templates
   *x8632-vinsn-templates*
-  x86::*x86-opcode-template-lists*))
+  x86::*x86-opcode-template-lists* *x8632-backend*))
 
 (provide "X8632-VINSNS")
