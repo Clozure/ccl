@@ -72,7 +72,7 @@
                  (type1 (optype (pop operands)))
                  (type2 (optype (car operands))))
             (dolist (template templates)
-              (when (x86::match-template-types template type0 type1 type2)
+              (when (x86::match-template-types template type0 type1 type2 backend)
                 (collect ((types))
                   (if type0 (types type0))
                   (if type1 (types type1))
@@ -80,7 +80,7 @@
                   (return (values (x86::x86-opcode-template-ordinal template)
                                   (types))))))))))))
 
-(defun fixup-opcode-ordinals (vinsn-template opcode-templates)
+(defun fixup-opcode-ordinals (vinsn-template opcode-templates &optional (backend *target-backend*))
   (let* ((changed ()))
     (dolist (vinsn-opcode (vinsn-template-opcode-alist vinsn-template))
       (destructuring-bind (old-ordinal name &optional type0 type1 type2) vinsn-opcode
@@ -88,7 +88,7 @@
           (unless opcode-templates
             (error "Unknown X86 instruction - ~a.  Odd, because it was once a known instruction." name))
         (let* ((new-ordinal (dolist (template opcode-templates)
-                              (when (x86::match-template-types template type0 type1 type2)
+                              (when (x86::match-template-types template type0 type1 type2 backend)
                                 (return (x86::x86-opcode-template-ordinal template))))))
           (unless new-ordinal
             (error "No match for opcode ~s in ~s" vinsn-opcode vinsn-template))
@@ -120,12 +120,12 @@
 
 (defparameter *report-missing-vinsns* nil)
 
-(defun fixup-x86-vinsn-templates (template-hash opcode-templates)
+(defun fixup-x86-vinsn-templates (template-hash opcode-templates &optional (backend *target-backend*))
   (maphash #'(lambda (name vinsn-template)
                (if (not (cdr vinsn-template))
                  (when *report-missing-vinsns*
                    (warn "Reference to undefined vinsn ~s" name))
-                 (fixup-opcode-ordinals (cdr vinsn-template) opcode-templates)))
+                 (fixup-opcode-ordinals (cdr vinsn-template) opcode-templates backend)))
            template-hash))
 
 
