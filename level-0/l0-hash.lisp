@@ -19,48 +19,6 @@
 ;;;;;;;;;;;;;
 ;;
 ;; See hash.lisp for documentation
-;; Five bits in the nhash.vector.flags fixnum interact with the garbage
-;; collector.  This description uses the symbols that represent bit numbers
-;; in a fixnum.  $nhash_xxx_bit has a corresponding $nhash_lap_xxx_bit which
-;; gives the byte offset of the bit for LAP code.  The two bytes in
-;; question are at offsets $nhash.vector-weak-byte and
-;; $nhash.vector-track-keys-byte offsets from the tagged vector.
-;; The 32 bits of the fixnum at nhash.vector.flags look like:
-;;
-;;     TK0C0000 00000000 WVF00000 00000000
-;;
-;;
-;; $nhash_track_keys_bit         "T" in the diagram above
-;;                               Sign bit of the longword at $nhash.vector.flags
-;;                               or the byte at $nhash.vector-track-keys-byte.
-;;                               If set, GC tracks relocation of keys in the
-;;                               vector.
-;; $nhash_key_moved_bit          "K" in the diagram above
-;;                               Set by GC to indicate that a key moved.
-;;                               If $nhash_track_keys_bit is clear, this bit is set to
-;;                               indicate that any GC will require a rehash.
-;;                               GC never clears this bit, but may set it if
-;;                               $nhash_track_keys_bit is set.
-;; $nhash_component_address_bit  "C" in the diagram above.
-;;                               Ignored by GC.  Set to indicate that the
-;;                               address of a component of a key was used. 
-;;                               Means that $nhash_track_keys_bit will
-;;                               never be set until all such keys are
-;;                               removed.
-;; $nhash_weak_bit               "W" in the diagram above
-;;                               Sign bit of the byte at $nhash.vector-weak-byte
-;;                               Set to indicate a weak hash table
-;; $nhash_weak_value_bit         "V" in the diagram above
-;;                               If clear, the table is weak on key
-;;                               If set, the table is weak on value
-;; $nhash_finalizeable_bit       "F" in the diagram above
-;;                               If set the table is finalizeable:
-;;                               If any key/value pairs are removed, they will be added to
-;;                               the nhash.vector.finalization-alist using cons cells
-;;                               from nhash.vector.free-alist
-
-
-
 
 
 (eval-when (:compile-toplevel :execute)
@@ -155,7 +113,7 @@
       (logbitp $nhash_key_moved_bit flags)
       ;; GC is not tracking key movement
       (if (logbitp $nhash_component_address_bit flags)
-         (not (eql (the fixnum (%get-gc-count)) (the fixnum (nhash.vector.gc-count vector))))))))
+        (not (eql (the fixnum (%get-gc-count)) (the fixnum (nhash.vector.gc-count vector))))))))
 
 (defun %set-does-not-need-rehashing (hash)
   (let* ((vector (nhash.vector hash))
@@ -772,8 +730,6 @@ before doing so.")
 
 (defun lock-free-puthash (key hash value)
   (declare (optimize (speed 3) (safety 0) (debug 0)))
-  (when (eq key free-hash-marker)
-    (error "Can't use ~s as a hash-table key" key))
   (when (or (eq value rehashing-value-marker)
             (eq value free-hash-marker))
     (error "Illegal value ~s for storing in a hash table" value))
@@ -835,6 +791,9 @@ before doing so.")
    such entry. Entries can be added using SETF."
   (unless (typep hash 'hash-table)
     (report-bad-arg hash 'hash-table))
+  (when (or (eq key free-hash-marker)
+            (eq key deleted-hash-key-marker))
+    (return-from gethash (values default nil)))
   (when (hash-lock-free-p hash)
     (return-from gethash (lock-free-gethash key hash default)))
   (let* ((value nil)
@@ -978,10 +937,11 @@ before doing so.")
   (declare (optimize (speed 3) (space 0)))
   (unless (typep hash 'hash-table)
     (report-bad-arg hash 'hash-table))
+  (when (or (eq key free-hash-marker)
+            (eq key deleted-hash-key-marker))
+    (error "Can't use ~s as a hash-table key" key))
   (when (hash-lock-free-p hash)
     (return-from puthash (lock-free-puthash key hash value)))
-  (if (eq key free-hash-marker)
-    (error "Can't use ~s as a hash-table key" key))
   (with-lock-context
     (without-interrupts
      (block protected
@@ -1066,8 +1026,8 @@ before doing so.")
            (old-total-size (nhash.vector.size old-vector))
            (flags 0)
            (flags-sans-weak 0)
-           (weak-flags 0))
-      (declare (fixnum old-total-size flags flags-sans-weak weak-flags))    
+           (weak-flags nil))
+      (declare (fixnum old-total-size flags flags-sans-weak))
       (when (> (nhash.vector.deleted-count old-vector) 0)
         ;; There are enough deleted entries. Rehash to get rid of them
         (%rehash hash)
@@ -1087,6 +1047,8 @@ before doing so.")
               (setf (nhash.vector.flags old-vector) flags-sans-weak)      ; disable GC weak stuff
               (%normalize-hash-table-count hash)
               (when (> (nhash.vector.deleted-count old-vector) 0)
+                (setf (nhash.vector.flags old-vector) flags)
+                (setq weak-flags nil)
                 (return-from grow-hash-table (%rehash hash)))
               (setq vector (%cons-nhash-vector total-size 0))
               (do* ((index 0 (1+ index))
@@ -1109,7 +1071,8 @@ before doing so.")
                      (nhash.vector.free-alist old-vector)
                      (nhash.vector.count vector) old-size
                      (nhash.vector.flags vector)
-                     (logior weak-flags (the fixnum (nhash.vector.flags vector))))
+                     (logior (the fixnum weak-flags)
+                             (the fixnum (nhash.vector.flags vector))))
                (setf (nhash.rehash-bits hash) nil
                      (nhash.vector hash) vector
                      (nhash.vector.hash vector) hash
@@ -1123,7 +1086,8 @@ before doing so.")
 	       (%init-misc 0 old-vector)))
             (when weak-flags
               (setf (nhash.vector.flags old-vector)
-                    (logior weak-flags (the fixnum (nhash.vector.flags old-vector)))))))))))
+                    (logior (the fixnum weak-flags)
+                            (the fixnum (nhash.vector.flags old-vector)))))))))))
 
 
 
@@ -1279,8 +1243,8 @@ before doing so.")
             (decf vector-index count))
           (setq table-key (%svref vector vector-index))
           (when (= vector-index initial-index)
-            (or first-deleted-index
-                (error "Bug: no deleted entries in table")))
+            (return (or first-deleted-index
+                        (error "Bug: no deleted entries in table"))))
           (if (eq table-key key)
             (return vector-index)
             (if (eq table-key free-hash-marker)
@@ -1877,26 +1841,26 @@ before doing so.")
     (return-from enumerate-hash-keys-and-values
                  (lock-free-enumerate-hash-keys-and-values hash keys values)))
   (with-lock-context
-      (without-interrupts
-       (let* ((readonly (eq (read-lock-hash-table hash) :readonly)))
-         (do* ((in (nhash.vector hash))
-               (in-idx $nhash.vector_overhead (+ in-idx 2))
-               (insize (uvsize in))
-               (outsize (length (or keys values)))
-               (out-idx 0))
-              ((or (= in-idx insize)
-                   (= out-idx outsize))
-               (unlock-hash-table hash readonly)
-               out-idx)
-           (declare (fixnum in-idx insize out-idx outsize))
-           (let* ((key (%svref in in-idx)))
-             (unless (or (eq key free-hash-marker)
-                         (eq key deleted-hash-key-marker))
-               (when keys
-                 (setf (%svref keys out-idx) key))
-               (when values
-                 (setf (%svref values out-idx) (%svref in (%i+ in-idx 1))))
-               (incf out-idx))))))))
-  
+    (without-interrupts
+     (let* ((readonly (eq (read-lock-hash-table hash) :readonly)))
+       (do* ((in (nhash.vector hash))
+             (in-idx $nhash.vector_overhead (+ in-idx 2))
+             (insize (uvsize in))
+             (outsize (length (or keys values)))
+             (out-idx 0))
+           ((or (= in-idx insize)
+                (= out-idx outsize))
+              (unlock-hash-table hash readonly)
+              out-idx)
+         (declare (fixnum in-idx insize out-idx outsize))
+         (let* ((key (%svref in in-idx)))
+           (unless (or (eq key free-hash-marker)
+                       (eq key deleted-hash-key-marker))
+             (when keys
+               (setf (%svref keys out-idx) key))
+             (when values
+               (setf (%svref values out-idx) (%svref in (%i+ in-idx 1))))
+             (incf out-idx))))))))
+
 (defun enumerate-hash-keys (hash out)
   (enumerate-hash-keys-and-values hash out nil))
