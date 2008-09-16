@@ -1266,13 +1266,19 @@ pseudo_signal_handler(int signum, siginfo_t *info, ExceptionInformation  *contex
 
 
 #ifdef LINUX
+/* type of pointer to saved fp state */
+#ifdef X8664
+typedef fpregset_t FPREGS;
+#else
+typedef struct _fpstate *FPREGS;
+#endif
 LispObj *
-copy_fpregs(ExceptionInformation *xp, LispObj *current, fpregset_t *destptr)
+copy_fpregs(ExceptionInformation *xp, LispObj *current, FPREGS *destptr)
 {
-  fpregset_t src = xp->uc_mcontext.fpregs, dest;
+  FPREGS src = (FPREGS)(xp->uc_mcontext.fpregs), dest;
   
   if (src) {
-    dest = ((fpregset_t)current)-1;
+    dest = ((FPREGS)current)-1;
     *dest = *src;
     *destptr = dest;
     current = (LispObj *) dest;
@@ -1300,13 +1306,15 @@ LispObj *
 copy_siginfo(siginfo_t *info, LispObj *current)
 {
   siginfo_t *dest = ((siginfo_t *)current) - 1;
+#if !defined(LINUX) || !defined(X8632)
   dest = (siginfo_t *) (((LispObj)dest)&~15);
+#endif
   *dest = *info;
   return (LispObj *)dest;
 }
 
 #ifdef LINUX
-typedef fpregset_t copy_ucontext_last_arg_t;
+typedef FPREGS copy_ucontext_last_arg_t;
 #else
 typedef void * copy_ucontext_last_arg_t;
 #endif
@@ -1316,13 +1324,15 @@ LispObj *
 copy_ucontext(ExceptionInformation *context, LispObj *current, copy_ucontext_last_arg_t fp)
 {
   ExceptionInformation *dest = ((ExceptionInformation *)current)-1;
+#if !defined(LINUX) || !defined(X8632)
   dest = (ExceptionInformation *) (((LispObj)dest) & ~15);
+#endif
 
   *dest = *context;
   /* Fix it up a little; where's the signal mask allocated, if indeed
      it is "allocated" ? */
 #ifdef LINUX
-  dest->uc_mcontext.fpregs = fp;
+  dest->uc_mcontext.fpregs = (fpregset_t)fp;
 #endif
   dest->uc_stack.ss_sp = 0;
   dest->uc_stack.ss_size = 0;
@@ -1344,6 +1354,38 @@ find_foreign_rsp(LispObj rsp, area *foreign_area, TCR *tcr)
   return (LispObj *) (((rsp-128) & ~15));
 }
 
+#ifdef X8632
+#ifdef LINUX
+/* This is here for debugging.  On entry to a signal handler that
+   receives info and context arguments, the stack should look exactly
+   like this.  The "pretcode field" of the structure is the address
+   of code that does an rt_sigreturn syscall, and rt_sigreturn expects
+   %esp at the time of that syscall to be pointing just past the
+   pretcode field.
+   handle_signal_on_foreign_stack() and helpers have to be very
+   careful to duplicate this "structure" exactly.
+   Note that on x8664 Linux, rt_sigreturn expects a ucontext to
+   be on top of the stack (with a siginfo_t underneath it.)
+   It sort of half-works to do sigreturn via setcontext() on 
+   x8632 Linux, but (a) it may not be available on some distributions
+   and (b) even a relatively modern version of it uses "fldenv" to
+   restore FP context, and "fldenv" isn't nearly good enough.
+*/
+
+struct rt_sigframe {
+	char *pretcode;
+	int sig;
+	siginfo_t  *pinfo;
+	void  *puc;
+	siginfo_t info;
+	struct ucontext uc;
+	struct _fpstate fpstate;
+	char retcode[8];
+};
+struct rt_sigframe *rtsf = 0;
+
+#endif
+#endif
 
 #ifdef DARWIN
 void
@@ -1356,6 +1398,17 @@ bogus_signal_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
 #endif
 
 #ifndef WINDOWS
+/* x8632 Linux requires that the stack-allocated siginfo is nearer
+   the top of stack than the stack-allocated ucontext.  If other
+   platforms care, they expect the ucontext to be nearer the top
+   of stack.
+*/
+
+#if defined(LINUX) && defined(X8632)
+#define UCONTEXT_ON_TOP_OF_STACK 0
+#else
+#define UCONTEXT_ON_TOP_OF_STACK 1
+#endif
 void
 handle_signal_on_foreign_stack(TCR *tcr,
                                void *handler, 
@@ -1369,7 +1422,7 @@ handle_signal_on_foreign_stack(TCR *tcr,
                                )
 {
 #ifdef LINUX
-  fpregset_t fpregs = NULL;
+  FPREGS fpregs = NULL;
 #else
   void *fpregs = NULL;
 #endif
@@ -1386,10 +1439,18 @@ handle_signal_on_foreign_stack(TCR *tcr,
 #ifdef DARWIN
   foreign_rsp = copy_darwin_mcontext(UC_MCONTEXT(context), foreign_rsp, &mcontextp);
 #endif
+#if UCONTEXT_ON_TOP_OF_STACK
+  /* copy info first */
   foreign_rsp = copy_siginfo(info, foreign_rsp);
   info_copy = (siginfo_t *)foreign_rsp;
   foreign_rsp = copy_ucontext(context, foreign_rsp, fpregs);
   xp = (ExceptionInformation *)foreign_rsp;
+#else
+  foreign_rsp = copy_ucontext(context, foreign_rsp, fpregs);
+  xp = (ExceptionInformation *)foreign_rsp;
+  foreign_rsp = copy_siginfo(info, foreign_rsp);
+  info_copy = (siginfo_t *)foreign_rsp;
+#endif
 #ifdef DARWIN
   UC_MCONTEXT(xp) = mcontextp;
 #endif
