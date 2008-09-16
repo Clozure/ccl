@@ -645,7 +645,7 @@ minimum number of elements to add if it must be extended."
     (if (= typecode target::subtag-simple-base-string)
       (locally
         (declare (optimize (speed 3) (safety 0)))
-        (aref (the (simple-array (unsigned-byte 8) (*)) s) i))
+        (aref (the (simple-array (unsigned-byte 32) (*)) s) i))
         (report-bad-arg s 'simple-string))))
 
 
