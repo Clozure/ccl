@@ -593,9 +593,9 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
         ((eq stream t) (setq stream *terminal-io*)))
   (write-unreadable-start object stream)
   (when type
-    (princ (type-of object) stream)
-    (stream-write-char stream #\space))
+    (princ (type-of object) stream))
   (when thunk 
+    (when type (stream-write-char stream #\space))
     (funcall thunk))
   (if id
     (%write-address object stream #\>)
