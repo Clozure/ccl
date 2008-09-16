@@ -25,7 +25,7 @@ typedef struct {
 } thread_activation;
 
 #ifdef HAVE_TLS
-__thread TCR current_tcr;
+__thread TCR __attribute__ ((aligned (16))) current_tcr;
 #endif
 
 extern natural
