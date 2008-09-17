@@ -278,8 +278,7 @@
   (multiple-value-bind (sym flag)
       (%findsym (ensure-simple-string string)
                 (or (package-ref.pkg ref)
-                    (setf (package-ref.pkg ref)
-                          (%find-pkg (package-ref.name ref)))))
+                    (%kernel-restart $xnopkg (package-ref.name ref))))
     (values sym flag)))
     
 ;;; Somewhat saner interface to %find-symbol
