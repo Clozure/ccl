@@ -48,7 +48,8 @@ namestrings.")
 
 ;; bin first
 (defvar *shell-search-paths* '((:absolute "bin")
-                               (:absolute "usr" "bin"))
+                               (:absolute "usr" "bin")
+			       (:absolute "usr" "local" "bin"))
   "A list of places to look for shell commands.")
 
 (defvar *gnu-tar-program*
