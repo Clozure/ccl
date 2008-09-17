@@ -33,5 +33,7 @@ EXTRAPARAMS= --xinclude --nonet
 
 export XML_CATALOG_FILES = xsl/catalog-fedora
 
+CCL=/usr/local/bin/ccl64
+
 include makefile-common
 
