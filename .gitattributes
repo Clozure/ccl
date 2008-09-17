@@ -209,6 +209,7 @@ library/x8664-solaris-syscalls.lisp -text
 lisp-kernel/darwinx8632/.gdbinit -text
 lisp-kernel/darwinx8632/Makefile -text
 lisp-kernel/gc-common.c -text
+lisp-kernel/linuxx8632/.gdbinit -text
 lisp-kernel/linuxx8632/Makefile -text
 lisp-kernel/solarisx64/.gdbinit -text
 lisp-kernel/unix-calls.c -text
