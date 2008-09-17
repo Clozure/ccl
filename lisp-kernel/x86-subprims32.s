@@ -67,7 +67,11 @@ _exportfn(C(start_lisp))
 	__(push %ebx)
 	__(mov 8(%ebp), %ebx)	/* get tcr */
 	__(movw tcr.ldt_selector(%ebx), %rcontext_reg)
+        .if c_stack_16_byte_aligned
 	__(sub $12, %esp) 	/* stack now 16-byte aligned */
+        .else
+        __(andl $~15,%esp)
+        .endif
 	__(clr %arg_z)
 	__(clr %arg_y)	
 	__(clr %temp0)
@@ -86,7 +90,7 @@ _exportfn(C(start_lisp))
 	__(call toplevel_loop)
 	__(movl $TCR_STATE_FOREIGN, rcontext(tcr.valence))
 	__(emms)
-	__(add $12, %esp)	/* discard alignment space */
+        __(leal -3*node_size(%ebp),%esp)
 	__(pop %ebx)
 	__(pop %esi)
 	__(pop %edi)
