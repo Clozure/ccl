@@ -203,6 +203,28 @@
       4					;edi
       )))
 
+#+linuxx8632-target
+(progn
+  (defconstant gp-regs-offset 0)
+  (defmacro xp-gp-regs (xp)
+    `(pref (pref ,xp :ucontext.uc_mcontext) :mcontext_t.gregs))
+  (defun xp-mxcsr (xp)
+    (pref (pref (pref xp :ucontext.uc_mcontext) :mcontext_t.fpregs)
+          :_fpstate.mxcsr))
+  (defconstant flags-register-offset #$REG_EFL)
+  (defconstant eip-register-offset #$REG_EIP)
+  (defparameter *encoded-gpr-to-indexed-gpr*
+    (vector
+     #$REG_EAX                         ;eax
+      #$REG_ECX                         ;ecx
+      #$REG_EDX                         ;edx
+      #$REG_EBX                         ;ebx
+      #$REG_ESP                         ;esp
+      #$REG_EBP                         ;ebp
+      #$REG_ESI                         ;esi
+      #$REG_EDI                         ;edi
+      )))
+
 (defun indexed-gpr-lisp (xp igpr)
   (%get-object (xp-gp-regs xp) (+ gp-regs-offset (ash igpr target::word-shift))))
 (defun (setf indexed-gpr-lisp) (new xp igpr)
