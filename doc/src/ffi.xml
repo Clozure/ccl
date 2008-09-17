@@ -34,7 +34,7 @@
         some escaping conventions (see ) to allow keywords to be used to
         denote these names.</para>
 
-      <sect3 id="type annotations">
+      <sect3 id="type-annotations">
         <title>Type Annotations</title>
         <para>As of version 1.2, &CCL; supports annotating the types of
           foreign pointers on Mac OS X. Forms that create pointers to
@@ -3861,12 +3861,16 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
     <!-- ====================================  -->
     <refentry id="m_make-record">
-	  <indexterm zone="m_make-record">
-	    <primary>make-record</primary>
-	  </indexterm>
-
+      <indexterm zone="m_make-record">
+	<primary>make-record</primary>
+      </indexterm>
+      <refmeta>
+      <refentrytitle>
+	MAKE-RECORD
+	<anchor id="anchor_make-record"/>
+      </refentrytitle>
+      </refmeta>
 	  <refnamediv>
-        <anchor id="anchor_make-record"/>
 	    <refname>MAKE-RECORD</refname>
 	    <refpurpose></refpurpose>
 	    <refclass>Macro</refclass>
@@ -4183,11 +4187,16 @@ reverse_int_ptr_ptrtest(int **ptrs)
     </refentry>
 
     <!-- ====================================  -->
-    <anchor id="anchor_rlet"/>
     <refentry id="m_rlet">
 	  <indexterm zone="m_rlet">
 	    <primary>rlet</primary>
 	  </indexterm>
+	  <refmeta>
+	    <refentrytitle>
+	      RLET
+	      <anchor id="anchor_rlet"/>
+	    </refentrytitle>
+	  </refmeta>
 
 	  <refnamediv>
 	    <refname>RLET</refname>
