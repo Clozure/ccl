@@ -603,6 +603,57 @@
 	            and/or RDI are not used.</para>
 	        </listitem>
 	      </itemizedlist>
+	      <para>
+		On 32-bit x86, the default register partitioning scheme
+		involves:
+	      </para>
+	      <itemizedlist>
+		<listitem>
+		  <para>
+		  A single "immediate" register.
+		  </para>
+		  <para>
+		    The EAX register is given the symbolic name
+		    "imm0".
+		  </para>
+		</listitem>
+		<listitem>
+		  <para>
+		    There are two "dedicated" registers.
+		  </para>
+		  <para>
+		    ESP and EBP have dedicated functionality dictated by the
+		    hardware and calling conventions.
+		  </para>
+		</listitem>
+		<listitem>
+		  <para>
+		    5 "node" registers.
+		  </para>
+		  <para>
+		    The remaining registers, (EBX, ECX, EDX, ESI, EDI) normally
+		    contain node values.  As on x86-64, string instructions
+		    that implicity use ESI and EDI are not used.
+		  </para>
+		</listitem>
+	      </itemizedlist>
+	      <para>
+		There are times when this default partitioning scheme is
+		inadequate.  As mentioned in the x86-64 section, there are
+		instructions like the extended-precision MUL and DIV which
+		require the use of EAX and EDX.  We therefore need a way to
+		change this partitioning at run-time.
+	      </para>
+	      <para>
+		Two schemes are employed.  The first uses a mask in the TCR
+		that contains a bit for each register.  If the bit is set,
+		the register is interpreted by the GC as a node register; if it's
+		clear, the register is treated as an immediate register.  The
+		second scheme uses the direction flag in the EFLAGS register.
+		If DF is set, EDX is treated as an immediate register.
+		(We don't use the string instructions, so DF isn't otherwise
+		used.)
+	      </para>
 
           <para>On the PPC, the static register partitioning scheme
             involves:</para>
@@ -803,7 +854,11 @@
 	          NULL CONSP). At least in the case of CAR and CDR, the
 	          fact that the PPC has multiple condition-code fields
 	          keeps that extra test from being prohibitively
-	          expensive.</para>
+	          expensive.  On IA-32, we can't afford to dedicate a tag to
+		  NIL. NIL is therefore just a distinguished CONS
+		  cell, and we have to explicitly check for a NIL argument
+		  in CONSP/RPLACA/RPLACD.
+		</para>
 	      </listitem>
 	      <listitem>
 	        <para>Some objects are immediate (but not FIXNUMs). This
@@ -856,7 +911,7 @@
 	          the low byte and either 24 or 56 bits of "element-count"
 	          information in the rest of the word.  (This is where the
 	          sometimes-limiting value of 2^24 for
-	          ARRAY-TOTAL-SIZE-LIMIT on PPC32 platforms comes from.)
+	          ARRAY-TOTAL-SIZE-LIMIT on 32-bit platforms comes from.)
 	          The low byte of the header&mdash;sometimes called the
 	          uvector's subtag&mdash;is itself tagged (which means
 	          that the header is tagged.)  The (3 or 4) tag bits in
