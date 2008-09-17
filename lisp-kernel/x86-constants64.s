@@ -1040,6 +1040,7 @@ lisp_globals_limit = 0x13000
         
 INTERRUPT_LEVEL_BINDING_INDEX = fixnumone
 
-	
+c_stack_16_byte_aligned = 1
+        	
 		        
                 
