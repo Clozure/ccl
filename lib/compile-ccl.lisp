@@ -626,7 +626,7 @@
         (when verbose (format t "~&;Running 'svn update'."))
         (multiple-value-bind (status exit-code)
             (external-process-status
-             (run-program "svn" '("update") :output out :error t))
+             (run-program "svn" '("update" "--non-interactive") :output out :error t))
           (when verbose (format t "~&;'svn update' complete."))
           (if (not (and (eq status :exited)
                         (eql exit-code 0)))
