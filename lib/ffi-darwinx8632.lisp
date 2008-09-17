@@ -148,14 +148,23 @@
       ;; Would have been mapped to :VOID unless record-type was <= 64 bits
       (format t "~&need to return structure ~s by value" return-type)
       (let* ((return-type-keyword (foreign-type-to-representation-type return-type)))
-	`(setf (,
-		(case return-type-keyword
-		  (:address '%get-ptr)
-		  (:signed-doubleword '%%get-signed-longlong)
-		  (:unsigned-doubleword '%%get-unsigned-longlong)
-		  (:double-float '%get-double-float)
-		  (:single-float '%get-single-float)
-		  (:unsigned-fullword '%get-unsigned-long)
-		  (t '%get-signed-long)
-		  ) ,stack-ptr 8) ,result)))))
+        (ccl::collect ((forms))
+          (forms 'progn)
+          (case return-type-keyword
+            (:single-float
+             (forms `(setf (%get-unsigned-byte ,stack-ptr -16) 1)))
+            (:double-float
+             (forms `(setf (%get-unsigned-byte ,stack-ptr -16) 2))))
+          (forms
+           `(setf (,
+                   (case return-type-keyword
+                     (:address '%get-ptr)
+                     (:signed-doubleword '%%get-signed-longlong)
+                     (:unsigned-doubleword '%%get-unsigned-longlong)
+                     (:double-float '%get-double-float)
+                     (:single-float '%get-single-float)
+                     (:unsigned-fullword '%get-unsigned-long)
+                     (t '%get-signed-long)
+                     ) ,stack-ptr -8) ,result))
+          (forms))))))
 
