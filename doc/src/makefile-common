@@ -61,6 +61,7 @@ all: ${TEMP} ${HTMLFILES} distclean
 
 install: $(HTMLFILES) distclean
 	cp $(HTMLFILES) ../
+	$(CCL) -b -n -l ../doc-splitter -e '(doc-splitter:split-doc-file "ccl-documentation.html" "../manual/")' </dev/null
 
 $(TEMP):
 	mkdir $(TEMP)
