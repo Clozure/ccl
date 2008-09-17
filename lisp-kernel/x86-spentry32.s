@@ -4209,6 +4209,13 @@ _spentry(callback)
 	/* C scalar args are already on the stack. */
 	/* arg word 0 at 8(%ebp), word 1 at 12(%ebp), etc. */
 
+        /* Reserve some space for results, relative to the
+           current %ebp.  We may need quite a bit of it. */
+        __(subl $24,%esp)
+        __(movl $0,-16(%ebp)) /* No FP result */
+        /* If the C stack is 16-byte aligned by convention,
+           it should still be, and this'll be a NOP. */
+        __(andl $~15,%esp)
 	/* C NVRs */
 	__(push %edi)
 	__(push %esi)
@@ -4226,7 +4233,8 @@ _spentry(callback)
         /* ebp is 16-byte aligned, and we've pushed 4 words.  Make
           sure that when we push old foreign_sp, %esp will be 16-byte
           aligned again */
-        __(subl $12,%esp)        
+        __(subl $8,%esp)
+        __(pushl rcontext(tcr.save_ebp))  /* mark cstack frame's "owner" */
  	__(push rcontext(tcr.foreign_sp))
 	__(movl %esp,rcontext(tcr.foreign_sp))
 	__(clr %arg_z)
@@ -4243,9 +4251,9 @@ _spentry(callback)
 	__(andb $~mxcsr_all_exceptions,rcontext(tcr.foreign_mxcsr))
 	__(ldmxcsr rcontext(tcr.lisp_mxcsr))
 	__(movl $nrs.callbacks,%fname)
+        __(check_cstack_alignment())
 	__(push $local_label(back_from_callback))
 	__(set_nargs(2))
-        __(check_cstack_alignment())
 	__(jump_fname())
 __(tra(local_label(back_from_callback)))
 	__(movl %esp,rcontext(tcr.save_vsp))
@@ -4261,11 +4269,22 @@ __(tra(local_label(back_from_callback)))
 	__(pop %ebx)
 	__(pop %esi)
 	__(pop %edi)
-	__(movl 8(%ebp),%eax)
-	/* doubleword result? */
-	/* fp result? */
-	__(leave)
+        __(cmpb $1,-16(%ebp))
+        __(movl -12(%ebp),%ecx) /* magic value for ObjC bridge */
+        __(jae 1f)
+	__(movl -8(%ebp),%eax)
+        __(movl -4(%ebp),%edx)
+        __(leave)
 	__(ret)
+1:      __(jne 2f)
+        /* single float return in x87 */
+        __(flds -8(%ebp))
+        __(leave)
+        __(ret)
+2: /* double-float return in x87 */
+        __(fldl -8(%ebp))
+        __(leave)
+        __(ret)         
 _endsubp(callback)
 
 /* temp0 = array, arg_y = i, arg_z = j. Typecheck everything.
