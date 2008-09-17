@@ -42,7 +42,8 @@
     ;; Hash-consing support (special primitives for allocating
     ;; and managing statically allocated CONS cells) will be
     ;; added in 1.1
-    :openmcl-hash-consing
+    ;; Was dropped in 1.2
+    ;; :openmcl-hash-consing
     #+eabi-target :eabi-target
     #+ppc-target :powerpc
     #+ppc-target :ppc-target
@@ -66,6 +67,8 @@
     #+linuxx86-target :linuxx86-target
     #+linuxx8664-target :linuxx8664-target
     #+linuxx8664-target :linuxx8664-host
+    #+linuxx8632-target :linuxx8632-target
+    #+linuxx8632-target :linuxx8632-host
     #+darwinppc-target :darwinppc-target
     #+darwinppc-target :darwinppc-host
     #+darwinppc-target :darwin-target
