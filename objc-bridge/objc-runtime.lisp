@@ -1129,7 +1129,6 @@ argument lisp string."
 ;;; The following conversions are currently done:
 ;;;   - T/NIL => #$YES/#$NO
 ;;;   - NIL => (%null-ptr)
-;;;   - Lisp string => NSString
 ;;;   - Lisp numbers  => SINGLE-FLOAT when possible
 
 (defun coerce-to-bool (x)
@@ -1149,7 +1148,6 @@ argument lisp string."
   (let ((x-temp (gensym)))
     `(let ((,x-temp ,x))
        (cond ((null ,x-temp) +null-ptr+)
-	     ((stringp ,x-temp) (%make-nsstring ,x-temp))
 	     (t ,x-temp)))))
 
 ;;; This is generally a bad idea; it forces us to
@@ -1161,7 +1159,6 @@ argument lisp string."
 (defun %coerce-to-address (x)
   (etypecase x
     (macptr x)
-    (string (%make-nsstring x))         ; does this ever get released ?
     (null (%null-ptr))))
 
 (defun coerce-to-foreign-type (x ftype)
