@@ -1242,7 +1242,7 @@ unsigned IP address."
 ;;; a single word that should be passed by value.  The FFI translator
 ;;; seems to lose the :struct, so just using #_ doesn't work (that
 ;;; sounds like a bug in the FFI translator.)
-#+(or darwin-target linuxx8664-target freebsd-target solaris-target)
+#+(or darwin-target linuxx86-target freebsd-target solaris-target)
 (defun _inet_ntoa (addr)
   (with-macptrs ((p))
     (%setf-macptr p (external-call #+darwin-target "_inet_ntoa"
