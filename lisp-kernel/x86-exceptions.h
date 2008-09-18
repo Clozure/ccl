@@ -32,23 +32,14 @@ typedef u8_t opcode, *pc;
 #define DARWIN_USE_PSEUDO_SIGRETURN 1
 #include <sys/syscall.h>
 #define DarwinSigReturn(context) syscall(0x2000000|SYS_sigreturn,context,0x1e)
-#ifdef X8664
-#define xpGPRvector(x) ((natural *)(&(UC_MCONTEXT(x)->__ss.__rax)))
+#define xpGPRvector(x) ((natural *)(&(UC_MCONTEXT(x)->__ss)))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
 #define xpPC(x) (xpGPR(x,Iip))
 #define eflags_register(xp) xpGPR(xp,Iflags)
 #define xpFPRvector(x) ((natural *)(&(UC_MCONTEXT(x)->__fs.__fpu_xmm0)))
-#define xpMMXreg(x,n) ((natural *)(&(x)->uc_mcontext->__fs.__fpu_stmm0))[n]
-#else /* X8632 */
-#define xpGPRvector(x) ((natural *)(&((x)->uc_mcontext->__ss.__eax)))
-#define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
-#define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
-#define xpPC(x) (xpGPR(x,Iip))
-#define eflags_register(xp) xpGPR(xp,Iflags)
-#define xpFPRvector(x) ((natural *)(&((x)->uc_mcontext->__fs.__fpu_xmm0)))
-#define xpMMXreg(x,n) ((natural *)(&(x)->uc_mcontext->__fs.__fpu_stmm0))[n]
-#endif
+#define xpMMXreg(x,n) ((natural *)(&(UC_MCONTEXT(x)->__fs.__fpu_stmm0)))[n]
+
 #include <mach/mach.h>
 #include <mach/mach_error.h>
 #include <mach/machine/thread_state.h>
