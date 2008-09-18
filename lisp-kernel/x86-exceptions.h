@@ -39,7 +39,7 @@ typedef u8_t opcode, *pc;
 #define xpPC(x) (xpGPR(x,Iip))
 #define eflags_register(xp) xpGPR(xp,Iflags)
 #define xpFPRvector(x) ((natural *)(&(UC_MCONTEXT(x)->__fs.__fpu_xmm0)))
-#define xpMMXreg(x,n)  (xpFPRvector(x)[n])
+#define xpMMXreg(x,n) ((natural *)(&(x)->uc_mcontext->__fs.__fpu_stmm0))[n]
 #else /* X8632 */
 #define xpGPRvector(x) ((natural *)(&((x)->uc_mcontext->__ss.__eax)))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
@@ -47,8 +47,7 @@ typedef u8_t opcode, *pc;
 #define xpPC(x) (xpGPR(x,Iip))
 #define eflags_register(xp) xpGPR(xp,Iflags)
 #define xpFPRvector(x) ((natural *)(&((x)->uc_mcontext->__fs.__fpu_xmm0)))
-/* are you ready for this? */
-#define xpMMXreg(x,n) *((natural *)&((&((x)->uc_mcontext->__fs.__fpu_stmm0))[n]))
+#define xpMMXreg(x,n) ((natural *)(&(x)->uc_mcontext->__fs.__fpu_stmm0))[n]
 #endif
 #include <mach/mach.h>
 #include <mach/mach_error.h>
