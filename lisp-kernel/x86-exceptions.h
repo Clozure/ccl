@@ -38,7 +38,9 @@ typedef u8_t opcode, *pc;
 #define xpPC(x) (xpGPR(x,Iip))
 #define eflags_register(xp) xpGPR(xp,Iflags)
 #define xpFPRvector(x) ((natural *)(&(UC_MCONTEXT(x)->__fs.__fpu_xmm0)))
-#define xpMMXreg(x,n) ((natural *)(&(UC_MCONTEXT(x)->__fs.__fpu_stmm0)))[n]
+#define xpMMXvector(x) (&(UC_MCONTEXT(x)->__fs.__fpu_stmm0))
+/* Note that this yields only the lower half of the MMX reg on x8632 */
+#define xpMMXreg(x,n) *(natural *)&(xpMMXvector(x)[n])
 
 #include <mach/mach.h>
 #include <mach/mach_error.h>
