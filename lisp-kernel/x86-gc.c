@@ -1108,7 +1108,7 @@ mark_memoized_area(area *a, natural num_memo_dnodes)
       index_of_last_word = (num_memo_dnodes >> bitmap_shift);
 
     if (bits_in_last_word != 0) {
-      natural mask = ~((1L<<(nbits_in_word-bits_in_last_word))-1L);
+      natural mask = ~((NATURAL1<<(nbits_in_word-bits_in_last_word))- NATURAL1);
       refbits[index_of_last_word] &= mask;
     }
   }
