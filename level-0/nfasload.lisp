@@ -250,6 +250,8 @@
 (setq *package-refs-lock* (make-lock))
 
 (defun register-package-ref (name)
+  (unless (typep name 'string)
+    (report-bad-arg name 'string))
   (let* ((ref
           (or (gethash name *package-refs*)
               (with-lock-grabbed (*package-refs-lock*)

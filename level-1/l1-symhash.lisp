@@ -188,16 +188,17 @@
   it is NIL."
   (setq internal-size (require-type internal-size 'fixnum)
         external-size (require-type external-size 'fixnum))
-  (let ((pkg (gvector :package 
-                      (%new-package-hashtable internal-size)
-                      (%new-package-hashtable external-size)
-                      nil
-                      nil
-                      (list (new-package-name name))
-                      nil
-                      (make-read-write-lock)
-                      nil)))
-    (let* ((ref (register-package-ref name)))
+  (let* ((pkg-name (new-package-name name))
+         (pkg (gvector :package 
+                       (%new-package-hashtable internal-size)
+                       (%new-package-hashtable external-size)
+                       nil
+                       nil
+                       (list pkg-name)
+                       nil
+                       (make-read-write-lock)
+                       nil)))
+    (let* ((ref (register-package-ref pkg-name)))
       (setf (package-ref.pkg ref) pkg))
     (use-package use pkg)
     (%add-nicknames nicknames pkg)
