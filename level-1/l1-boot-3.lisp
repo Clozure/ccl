@@ -28,9 +28,5 @@
 (setq cmain xcmain)
 (setq %err-disp %xerr-disp)
 
-;;; do heap sanity checking for now
-#+x8632-target
-(setq *gc-event-status-bits* (logior *gc-event-status-bits*
-				     $gc-integrity-check-bit))
 ;;;end of l1-boot-3.lisp
 
