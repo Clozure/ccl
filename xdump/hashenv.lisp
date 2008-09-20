@@ -37,7 +37,8 @@
   nhash.vector.finalization-alist       ; deleted out key/value pairs put here
   nhash.vector.weak-deletions-count     ; incremented when the GC deletes an element
   nhash.vector.hash                     ; back-pointer
-  nhash.vector.deleted-count            ; number of deleted entries [not maintained if lock-free]
+  nhash.vector.deleted-count            ; if lock-free, hint to GC to delete marked keys.
+                                        ; else number of deleted entries
   nhash.vector.count                    ; number of valid entries [not maintained if lock-free]
   nhash.vector.cache-idx                ; index of last cached key/value pair
   nhash.vector.cache-key                ; cached key

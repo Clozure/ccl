@@ -106,9 +106,9 @@
 ;; gives the byte offset of the bit for LAP code.  The two bytes in
 ;; question are at offsets $nhash.vector-weak-byte and
 ;; $nhash.vector-track-keys-byte offsets from the tagged vector.
-;; The 32 bits of the fixnum at nhash.vector.flags look like:
+;; The raw 32 bits of the fixnum at nhash.vector.flags look like:
 ;;
-;;     TTTTKEC0 00000000 000WVFZ0 00000000
+;;     TKEC0000 00000000 WVFZ0000 00000000
 ;;
 ;;
 ;; $nhash_track_keys_bit         "T" in the diagram above

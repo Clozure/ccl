@@ -281,6 +281,32 @@
                 (pathname (%%equalphash key))
                 (t (%%eqlhash key)))))))
 
+(defun update-hash-flags (hash vector addressp)
+  (when addressp
+    (flet ((new-flags (flags addressp)
+             (declare (fixnum flags))
+             (if (eq :key addressp)
+               ;; hash code depended on key's address
+               (if (logbitp $nhash_component_address_bit flags)
+                 flags
+                 (logior $nhash-track-keys-mask
+                         (if (logbitp $nhash_track_keys_bit flags)
+                           flags
+                           (bitclr $nhash_key_moved_bit flags))))
+               ;; hash code depended on component address
+               (bitset $nhash_component_address_bit
+                       (logand (lognot $nhash-track-keys-mask) flags)))))
+      (declare (inline new-flags))
+      (if (hash-lock-free-p hash)
+        (loop
+          (let* ((flags (nhash.vector.flags vector))
+                 (new-flags (new-flags flags addressp)))
+            (when (or (eq flags new-flags)
+                      (store-gvector-conditional nhash.vector.flags vector flags new-flags))
+              (return))))
+        (setf (nhash.vector.flags vector)
+              (new-flags (nhash.vector.flags vector) addressp))))))
+
 (defun compute-hash-code (hash key update-hash-flags &optional
                                (vector (nhash.vector hash))) ; vectorp))
   (let ((keytransF (nhash.keytransF hash))
@@ -301,30 +327,9 @@
 	(setq primary (%%eqlhash-internal key))
 	;; EQ hash table - or something eql doesn't do
 	(multiple-value-setq (primary addressp) (%%eqhash key))))
-    (when addressp
-      (when update-hash-flags
-        (flet ((new-flags (flags addressp)
-                 (declare (fixnum flags))
-                 (if (eq :key addressp)
-                   ;; hash code depended on key's address
-                   (if (logbitp $nhash_component_address_bit flags)
-                     flags
-                     (logior $nhash-track-keys-mask
-                             (if (logbitp $nhash_track_keys_bit flags)
-                               flags
-                               (bitclr $nhash_key_moved_bit flags))))
-                   ;; hash code depended on component address
-                   (bitset $nhash_component_address_bit
-                           (logand (lognot $nhash-track-keys-mask) flags)))))
-          (declare (inline new-flags))
-          (if (hash-lock-free-p hash)
-            (loop
-                (let* ((flags (nhash.vector.flags vector))
-                       (new-flags (new-flags flags addressp)))
-                  (when (or (eq flags new-flags)
-                            (store-gvector-conditional nhash.vector.flags vector flags new-flags))
-                    (return))))
-            (setf (nhash.vector.flags vector) (new-flags (nhash.vector.flags vector) addressp))))))
+    (when update-hash-flags
+      (when addressp
+        (update-hash-flags hash vector addressp)))
     (let* ((entries (nhash.vector-size vector)))
       (declare (fixnum entries))
       (values primary
@@ -577,9 +582,9 @@ before doing so.")
 ;; A modification of the lock-free hash table algorithm described by Cliff Click Jr.  in
 ;; http://blogs.azulsystems.com/cliff/2007/03/a_nonblocking_h.html.
 ;;
-;; The modifications have to do with the fact that the goal of the current implementation
-;; is to have thread-safe hash tables with minimal performance penalty on reads, so I don't
-;; bother with aspects of his algorithm that aren't relevant to that goal.
+;; The modifications have to do with the fact that our goal is just to minimize the
+;; performance impact of thread-safety, by eliminating the need for locking on every
+;; read.  I don't bother with aspects of his algorithm that aren't relevant to that goal.
 ;;
 ;; The main difference from Click's algorithm is that I don't try to do rehashing
 ;; concurrently.  Instead, rehashing grabs a lock, so that only one thread can be
@@ -591,21 +596,56 @@ before doing so.")
 ;; of a hash table entry (where "object" means any object other than the special markers):
 ;;
 ;; State      Key               Value
-;; DELETED    object            free-hash-marker
+;; DELETED1   object            free-hash-marker
+;; DELETED2   deleted-marker    free-hash-marker
 ;; IN-USE     object            object
 ;; FREE       free-hash-marker  free-hash-marker
 ;; REHASHING  object            rehashing-value-marker
 ;; REHASHING  free-hash-marker  rehashing-value-marker
+;; REHASHING  deleted-marker    rehashing-value-marker
 ;;
 ;; No other states are allowed - at no point in time can a hash table entry be in any
-;; other state.   In addition, the only transition allowed on the Key slot is
-;; free-hash-marker -> object.  Once a key slot is so claimed, it must never change
-;; again (even after the hash vector has been discarded after rehashing, because
-;; there can be some process still looking at it).
+;; other state.   In addition, the only transitions allowed on the key slot are
+;; free-hash-marker -> object/deleted-marker -> deleted-marker.  Once a key slot
+;; is claimed, it must never change to free or another key value (even after the hash
+;; vector has been discarded after rehashing, because there some process might still
+;; be looking at it).
 ;; In particular, rehashing in place is not an option.  All rehashing creates a new
 ;; vector and copies into it.  This means it's kinda risky to use lock-free hash
 ;; tables with address-based keys, because they will thrash in low-memory situations,
 ;; but we don't disallow it because a particular use might not have this problem.
+;;
+;; The following operations may take place:
+;;
+;; * gethash: find matching key - if no match, return not found.  Else fetch value,
+;;   if value is rehashing-value-marker then maybe-rehash and try again;
+;;   if value is free-hash-marker, return not found, else return found value.
+;;
+;; * puthash: find matching key or FREE slot.
+;;   ** If found key, fetch value.
+;;      if value is rehashing-value-marker then maybe-rehash and try again;
+;;      else store-conditional the value -> new value, if fails try again.
+;;   ** Else have FREE slot, store-key-conditional free-hash-marker -> key,
+;;      and if that succeeds, store-conditional free-hash-marker -> new value,
+;;      if either fails, maybe-rehash and try again.
+;;
+;; * remhash: find matching key - if no match, done.  Else fetch value,
+;;   if value is rehashing-value-marker then maybe-rehash and try again;
+;;   else store-conditional the value -> free-hash-marker, if fails try again.
+;;
+;; * rehash: grab a lock, estimate number of entries, make a new vector.  loop over
+;; old vector, at each entry fetch the old value with atomic swap of
+;; rehashing-value-marker.  This prevents any further state changes involving the
+;; value.  It doesn't prevent state changes involving the key, but the only ones that
+;; can happen is FREE -> DELETED, and DELETED1 <-> DELETED2, all of which are
+;; equivalent from the point of view of rehashing.  Anyway, if the old value was
+;; rehashing-value-marker then bug (because we have a lock).  If the old value is
+;; free-hash-marker then do nothing, else get the entry key and rehash into the new
+;; vector -- if no more room, start over.  When done, store the new vector in the
+;; hash table and release lock.
+;;
+;; * gc: for weak tables, gc may convert IN-USE states to DELETED2 states.
+;;   Even for non-weak tables, gc could convert DELETED1 states to DELETED2.
 
 
 (defun lock-free-rehash (hash)
@@ -713,6 +753,9 @@ before doing so.")
                      (when (eq old-value free-hash-marker)
                        (return-from lock-free-remhash nil))
                      (when (set-hash-value-conditional vector-index vector old-value free-hash-marker)
+                       ;; We just use this as a flag - tell gc to scan the vector for deleted keys.
+                       ;; It's just a hint, so don't worry about sync'ing
+                       (setf (nhash.vector.deleted-count vector) 1)
                        (return-from lock-free-remhash t)))))))
       ;; We're here because the table needs rehashing or it was getting rehashed while we
       ;; were searching.  Take care of it and try again.
@@ -726,7 +769,10 @@ before doing so.")
        (loop
          with vector = (nhash.vector hash)
          for i1 fixnum from (%i+ $nhash.vector_overhead 1) below (uvsize vector) by 2
-         do (setf (%svref vector i1) free-hash-marker))
+         do (setf (%svref vector i1) free-hash-marker)
+         ;; We just use this as a flag - tell gc to scan the vector for deleted keys.
+         ;; It's just a hint, so don't worry about sync'ing
+         finally (setf (nhash.vector.deleted-count vector) 1))
        (%unlock-recursive-lock-object lock))))
   hash)
 
@@ -1097,7 +1143,7 @@ before doing so.")
   (%hash-probe hash key nil))
 
 (defun general-hash-find-for-put (hash key)
-  (%hash-probe hash key t))
+  (%hash-probe hash key (if (hash-lock-free-p hash) :free :reuse)))
 
 ;;; returns a single value:
 ;;;   index - the index in the vector for key (where it was or where
@@ -1130,7 +1176,8 @@ before doing so.")
                                                   vector-index)
                                               -1)))
                                 ((eq table-key deleted-hash-key-marker)
-                                 (when (null first-deleted-index)
+                                 (when (and (eq for-put-p :reuse)
+                                            (null first-deleted-index))
                                    (setq first-deleted-index vector-index)))
                                 ((,@predicate key table-key)
                                  (return-it vector-index))))))
@@ -1148,7 +1195,7 @@ before doing so.")
                                 (when (eql index initial-index)
                                   (return-it (if for-put-p
                                                (or first-deleted-index
-                                                   (error "Bug: no deleted entries in table"))
+                                                   (error "Bug: no room in table"))
                                                -1)))
                                 (test-it ,predicate))))))
               (if (fixnump comparef)
@@ -1217,16 +1264,12 @@ before doing so.")
                   (%hash-symbol key)
                   (progn
                     (unless (immediate-p-macro key)
-                      (let* ((flags (nhash.vector.flags vector)))
-                        (declare (fixum flags))
-                        (unless (logbitp $nhash_track_keys_bit flags)
-                          (setq flags (bitclr $nhash_key_moved_bit flags)))
-                        (setf (nhash.vector.flags vector)
-                              (logior $nhash-track-keys-mask flags))))
+                      (update-hash-flags hash vector :key))
                     (mixup-hash-code (strip-tag-to-fixnum key))))))))
          (entries (nhash.vector-size vector))
          (vector-index (index->vector-index (hash-mod hash-code entries vector)))
-         (table-key (%svref vector vector-index)))
+         (table-key (%svref vector vector-index))
+         (reuse (not (hash-lock-free-p hash))))
     (declare (fixnum hash-code vector-index))
     (if (or (eq key table-key)
             (eq table-key free-hash-marker))
@@ -1234,8 +1277,9 @@ before doing so.")
       (let* ((secondary-hash (%svref secondary-keys-*-2
                                      (logand 7 hash-code)))
              (initial-index vector-index)             
-             (first-deleted-index (if (eq table-key deleted-hash-key-marker)
-                                    vector-index))
+             (first-deleted-index (and reuse
+                                       (eq table-key deleted-hash-key-marker)
+                                       vector-index))
              (count (+ entries entries))
              (length (+ count $nhash.vector_overhead)))
         (declare (fixnum secondary-hash initial-index count length))
@@ -1246,12 +1290,13 @@ before doing so.")
           (setq table-key (%svref vector vector-index))
           (when (= vector-index initial-index)
             (return (or first-deleted-index
-                        (error "Bug: no deleted entries in table"))))
+                        (error "Bug: no room in table"))))
           (if (eq table-key key)
             (return vector-index)
             (if (eq table-key free-hash-marker)
               (return (or first-deleted-index vector-index))
-              (if (and (null first-deleted-index)
+              (if (and reuse
+                       (null first-deleted-index)
                        (eq table-key deleted-hash-key-marker))
                 (setq first-deleted-index vector-index)))))))))
 
@@ -1294,7 +1339,8 @@ before doing so.")
            (hash-code (%%eqlhash-internal key))
            (entries (nhash.vector-size vector))
            (vector-index (index->vector-index (hash-mod hash-code entries vector)))
-           (table-key (%svref vector vector-index)))
+           (table-key (%svref vector vector-index))
+           (reuse (not (hash-lock-free-p hash))))
       (declare (fixnum hash-code entries vector-index))
       (if (or (eql key table-key)
               (eq table-key free-hash-marker))
@@ -1302,8 +1348,9 @@ before doing so.")
         (let* ((secondary-hash (%svref secondary-keys-*-2
                                        (logand 7 hash-code)))
                (initial-index vector-index)
-               (first-deleted-index (if (eq table-key deleted-hash-key-marker)
-                                      vector-index))
+               (first-deleted-index (and reuse
+                                         (eq table-key deleted-hash-key-marker)
+                                         vector-index))
                (count (+ entries entries))
                (length (+ count $nhash.vector_overhead)))
           (declare (fixnum secondary-hash initial-index count length))
@@ -1314,12 +1361,13 @@ before doing so.")
             (setq table-key (%svref vector vector-index))
             (when (= vector-index initial-index)
               (return (or first-deleted-index
-                          (error "Bug: no deleted entries in table"))))
+                          (error "Bug: no room in table"))))
             (if (eql table-key key)
               (return vector-index)
               (if (eq table-key free-hash-marker)
                 (return (or first-deleted-index vector-index))
-                (if (and (null first-deleted-index)
+                (if (and reuse
+                         (null first-deleted-index)
                          (eq table-key deleted-hash-key-marker))
                   (setq first-deleted-index vector-index))))))))
     (eq-hash-find-for-put hash key)))
@@ -1336,6 +1384,8 @@ before doing so.")
 ;;; Rehash.  Caller should have exclusive access to the hash table
 ;;; and have disabled interrupts.
 (defun %rehash (hash)
+  (when (hash-lock-free-p hash)
+    (error "How did we get here?"))
   (let* ((vector (nhash.vector hash))
          (flags (nhash.vector.flags vector))
          (vector-index (- $nhash.vector_overhead 2))
@@ -1832,6 +1882,8 @@ before doing so.")
             (return-from lock-free-enumerate-hash-keys-and-values
                          (lock-free-enumerate-hash-keys-and-values hash keys values)))
           (unless (eq val free-hash-marker)
+            (when (eql key deleted-hash-key-marker)
+              (error "Bug: deleted key but not value?"))
             (when keys (setf (%svref keys out-idx) key))
             (when values (setf (%svref values out-idx) val))
             (incf out-idx)))))))
