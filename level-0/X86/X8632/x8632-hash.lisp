@@ -5,18 +5,11 @@
 
 ;;; This should stay in LAP so that it's fast
 ;;; Equivalent to cl:mod when both args are positive fixnums
-
-;;; We have to use edx:eax for the dividend, so we can't avoid
-;;; having to do the mark-as-imm/mark-as-node dance here.  This
-;;; may have performance implications.
 (defx8632lapfunction fast-mod ((number arg_y) (divisor arg_z))
-  (mark-as-imm temp1)			;aka edx
-  (let ((imm1 temp1))
-    (xorl (% imm1) (% imm1))
-    (mov (% number) (% imm0))
-    (div (% divisor))
-    (mov (% imm1) (% arg_z)))
-  (mark-as-node temp1)
+  (xorl (% edx) (% edx))		;aka temp1
+  (mov (% number) (% imm0))
+  (div (% divisor))			;boxed remainder goes into edx/temp1
+  (mov (% edx) (% arg_z))
   (single-value-return))
 
 ;; Faster mod based on Bruce Hoult's Dylan version, modified to use a
