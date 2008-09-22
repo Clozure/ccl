@@ -1470,7 +1470,7 @@ result-type-specifer is :VOID or NIL"
   (print-unreadable-object (s stream :type t :identity t)
     (format stream "~a" (or (shlib.soname s) (shlib.pathname s)))))
 
-#-darwin-target
+#-(or darwin-target windows-target)
 (defun dlerror ()
   (with-macptrs ((p))
     (%setf-macptr p (#_dlerror))
