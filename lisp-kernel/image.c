@@ -345,29 +345,6 @@ prepare_to_write_dynamic_space()
   }
 }
 
-OSErr
-write_area_pages(int fd, area *a)
-{
-  natural total = a->active - a->low, count, done=0;
-  signed_natural n;
-  char buffer[32768];
-
-  while (total) {
-    if (total > 32768) {
-      count = 32768;
-    } else {
-      count = total;
-    }
-    memmove(buffer,a->low+done,count);
-    n = write(fd, buffer, count);
-    if (n < 0) {
-      return n;
-    }
-    total -= n;
-    done += n;
-  }
-  return 0;
-}
   
 
 int
@@ -478,19 +455,8 @@ save_application(unsigned fd)
     seek_to_next_page(fd);
     n = sections[i].memory_size;
     nstatic = sections[i].static_dnodes;
-    if (a->code == AREA_READONLY) {
-      /* 
-	 Darwin seems to have problems writing the readonly area for
-	 some reason.  It seems to work better to write a page at a
-	 time.
-      */
-      if (write_area_pages(fd, a) != 0) {
+    if (write(fd, a->low, n) != n) {
 	return errno;
-      }
-    } else {
-      if (write(fd, a->low, n) != n) {
-	return errno;
-      }
     }
   }
 
