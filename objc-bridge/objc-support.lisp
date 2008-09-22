@@ -312,14 +312,24 @@ instance variable."
 
 #+x8632-target
 (progn
+
+(defloadvar *x8632-objc-callback-error-return-trampoline*
+    (let* ((code-bytes '(#x83 #xec #x10      ; subl $16,%esp
+                         #x89 #x04 #x24      ; movl %eax,(%esp)
+                         #x52                ; pushl %edx
+                         #xff #xe1))         ; jmp *ecx
+           (nbytes (length code-bytes))
+           (ptr (%allocate-callback-pointer 16)))
+      (dotimes (i nbytes ptr)
+        (setf (%get-unsigned-byte ptr i) (pop code-bytes)))))
+
 (defun objc-callback-error-return (condition return-value-pointer return-address-pointer)
-  (declare (ignorable oondition return-value-pointer return-address-pointer))
-  #||
   (process-debug-condition *current-process* condition (%get-frame-ptr))
   (let* ((addr (%reference-external-entry-point (load-time-value (external "__NSRaiseError")))))
-    (setf (%get-unsigned-long ) )
-  (setf (%get-ptr return-value-pointer 0) (ns-exception condition))
-  ||#
+    (setf (%get-unsigned-long return-value-pointer -12 ) addr))
+  (setf (%get-ptr return-value-pointer -8) (ns-exception condition)
+        (%get-ptr return-value-pointer -4) (%get-ptr return-address-pointer)
+        (%get-ptr return-address-pointer) *x8632-objc-callback-error-return-trampoline*)
   nil)
 )
 
