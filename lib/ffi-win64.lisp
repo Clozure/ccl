@@ -109,7 +109,7 @@
             (arg-num 0)
             (gpr-arg-offset -8)
             (fpr-arg-offset -40)
-            (memory-arg-offset 16)
+            (memory-arg-offset 48)
             (fp nil nil))
            ((null argvars)
             (values (rlets) (lets) nil (inits) rtype nil 8))
