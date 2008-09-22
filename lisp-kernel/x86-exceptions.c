@@ -770,6 +770,9 @@ is_write_fault(ExceptionInformation *xp, siginfo_t *info)
 #ifdef FREEBSD
   return (xp->uc_mcontext.mc_err & 0x2) != 0;
 #endif
+#ifdef WINDOWS
+  return (info->ExceptionFlags == EXCEPTION_WRITE_FAULT);
+#endif
 }
 
 Boolean
