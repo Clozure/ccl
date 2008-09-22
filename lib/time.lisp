@@ -42,17 +42,7 @@
          (funk (%incf-ptr copy timeval-size))
          (funk (%incf-ptr copy timeval-size)))))))
 
-(defun get-universal-time ()
-  "Return a single integer for the current time of
-   day in universal time format."
-  #-windows-target
-  (rlet ((tv :timeval))
-    (#_gettimeofday tv (%null-ptr))
-    (+ (pref tv :timeval.tv_sec) unix-to-universal-time))
-  #+windows-target
-  (rlet ((ft #>FILETIME))
-    (#_GetSystemTimeAsFileTime ft)
-    (windows-filetime-to-universal-time ft)))
+
 
 
 ;;; This should stop using #_localtime_r: not all times can be represented
