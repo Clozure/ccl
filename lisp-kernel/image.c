@@ -369,7 +369,23 @@ write_file_and_section_headers(int fd,
   return 0;
 }
   
-  
+natural
+writebuf(int fd, char *bytes, natural n)
+{
+  natural remain = n;
+  int result;
+
+  while (remain) {
+    result = write(fd, bytes, remain);
+    if (result < 0) {
+      return errno;
+    }
+    bytes += result;
+    remain -= result;
+  }
+  return 0;
+}
+
 OSErr
 save_application(unsigned fd)
 {
@@ -450,12 +466,11 @@ save_application(unsigned fd)
   }
 
   for (i = 0; i < NUM_IMAGE_SECTIONS; i++) {
-    natural n, nstatic;
+    natural n;
     a = areas[i];
     seek_to_next_page(fd);
     n = sections[i].memory_size;
-    nstatic = sections[i].static_dnodes;
-    if (write(fd, a->low, n) != n) {
+    if (writebuf(fd, a->low, n)) {
 	return errno;
     }
   }
