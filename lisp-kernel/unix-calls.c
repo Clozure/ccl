@@ -30,6 +30,7 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <sys/syscall.h>
+#include <sys/time.h>
 
 ssize_t
 lisp_read(int fd, void *buf, size_t count)
