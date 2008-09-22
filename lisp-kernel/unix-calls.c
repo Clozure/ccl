@@ -120,3 +120,9 @@ lisp_pipe(int pipefd[2])
 {
   return pipe(pipefd);
 }
+
+int
+lisp_gettimeofday(struct timeval *tp, void *tzp)
+{
+  return gettimeofday(tp, tzp);
+}

@@ -425,6 +425,12 @@ lisp_pipe(int fd[2])
   return 0;
 }
 
+int
+lisp_gettimeofday(struct timeval *tp, void *tzp)
+{
+  return gettimeofday(tp, tzp);
+}
+
 
 HMODULE *modules = NULL;
 DWORD cbmodules = 0;
