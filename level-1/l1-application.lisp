@@ -294,10 +294,8 @@ Default version returns OpenMCL version info."
 (defun housekeeping-loop ()
   (with-standard-abort-handling nil 
     (loop
-      #+windows-target
-      (#_Sleep 333)
-      #-windows-target
-      (%nanosleep *periodic-task-seconds* *periodic-task-nanoseconds*)
+      #+windows-target (#_SleepEx 333 #$true)
+      #-windows-target (%nanosleep *periodic-task-seconds* *periodic-task-nanoseconds*)
       (housekeeping))))
   
 
