@@ -5302,7 +5302,7 @@
   (rlet ((now :timeval))
     (let* ((wait-end 
             (when timeout
-              (#_gettimeofday now (%null-ptr))
+              (gettimeofday now)
               (+ (timeval->milliseconds now) timeout))))
       (loop
         (multiple-value-bind (win error)
@@ -5318,7 +5318,7 @@
           (unless (eql error (- #$EINTR))
             (return (values nil nil error)))
           (when timeout
-            (#_gettimeofday now (%null-ptr))
+            (gettimeofday now)
             (setq timeout (- wait-end (timeval->milliseconds now)))
             (if (<= timeout 0)
               (return (values nil t nil)))))))))
@@ -5337,7 +5337,7 @@
   (rlet ((now :timeval))
     (let* ((wait-end 
             (when timeout
-              (#_gettimeofday now (%null-ptr))
+              (gettimeofday now)
               (+ (timeval->milliseconds now) timeout))))
       (loop
         (multiple-value-bind (win error)
@@ -5353,7 +5353,7 @@
           ;; otherwise, adjust the remaining timeout.
           ;; If there was no timeout, continue to wait forever.
           (when timeout
-            (#_gettimeofday now (%null-ptr))
+            (gettimeofday now)
             (setq timeout (- wait-end (timeval->milliseconds now)))
             (if (<= timeout 0)
               (return (values nil t nil)))))))))

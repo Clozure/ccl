@@ -72,11 +72,17 @@
   (+ (* *ticks-per-second* (pref tv :timeval.tv_sec))
      (round (pref tv :timeval.tv_usec) (floor 1000000 *ticks-per-second*))))
 
-#-windows-target
+
+(defun gettimeofday (ptimeval &optional (ptz +null-ptr+))
+  (int-errno-ffcall (%kernel-import target::kernel-import-lisp-gettimeofday)
+                    :address ptimeval
+                    :address ptz
+                    :int))
+
 (defloadvar *lisp-start-timeval*
     (progn
       (let* ((r (make-record :timeval)))
-        (#_gettimeofday r (%null-ptr))
+        (gettimeofday r +null-ptr+)
         r)))
 
 
@@ -86,9 +92,8 @@
 (defun get-internal-real-time ()
   "Return the real time in the internal time format. (See
   INTERNAL-TIME-UNITS-PER-SECOND.) This is useful for finding elapsed time."
-  #-windows-target
   (rlet ((tv :timeval))
-    (#_gettimeofday tv (%null-ptr))
+    (gettimeofday tv)
     (let* ((units (truncate (the fixnum (pref tv :timeval.tv_usec)) (/ 1000000 internal-time-units-per-second)))
            (initial *internal-real-time-session-seconds*))
       (if initial
@@ -102,14 +107,7 @@
         (progn
           (setq *internal-real-time-session-seconds*
                 (pref tv :timeval.tv_sec))
-          units))))
-  #+windows-target
-  (rlet ((ft #>FILETIME))
-    (#_GetSystemTimeAsFileTime ft)
-    (values
-     (floor (dpb (pref ft #>FILETIME.dwHighDateTime) (byte 32 32)
-                (pref ft #>FILETIME.dwLowDateTime))
-           (floor 10000000 internal-time-units-per-second)))))
+          units)))))
 
 (defun get-tick-count ()
   (values (floor (get-internal-real-time)

@@ -1812,6 +1812,13 @@ not, why not; and what its result code was if it completed."
 
 ;;(assert (= (logcount *host-page-size*) 1))
 
+(defun get-universal-time ()
+  "Return a single integer for the current time of
+   day in universal time format."
+  (rlet ((tv :timeval))
+    (gettimeofday tv)
+    (+ (pref tv :timeval.tv_sec) unix-to-universal-time)))
+
 #-windows-target
 (progn
 (defun map-file-to-ivector (pathname element-type)
