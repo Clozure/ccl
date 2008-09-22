@@ -49,6 +49,11 @@ extern pc restore_windows_context_start, restore_windows_context_end,
 
 extern void interrupt_handler(int, siginfo_t *, ExceptionInformation *);
 
+void CALLBACK 
+nullAPC(ULONG_PTR arg) 
+{
+}
+  
 BOOL (*pCancelIoEx)(HANDLE, OVERLAPPED*) = NULL;
 
 
@@ -76,7 +81,7 @@ raise_thread_interrupt(TCR *target)
   pcontext->ContextFlags = CONTEXT_ALL;
   rc = GetThreadContext(hthread, pcontext);
   if (rc == 0) {
-    wperror("GetThreadContext");
+    return ESRCH;
   }
 
   where = (pc)(xpPC(pcontext));
@@ -103,7 +108,10 @@ raise_thread_interrupt(TCR *target)
       } else {
         CancelIo(pending->h);
       }
+    } else {
+      QueueUserAPC(nullAPC, hthread, 0);
     }
+
     ResumeThread(hthread);
     return 0;
   } else {
@@ -455,11 +463,13 @@ wait_on_semaphore(void *s, int seconds, int millis)
   }
 #endif
 #ifdef USE_WINDOWS_SEMAPHORES
-  switch (WaitForSingleObject(s, seconds*1000L+(DWORD)millis)) {
+  switch (WaitForSingleObjectEx(s, seconds*1000L+(DWORD)millis,true)) {
   case WAIT_OBJECT_0:
     return 0;
   case WAIT_TIMEOUT:
-    return WAIT_TIMEOUT;
+    return /* ETIMEDOUT */ WAIT_TIMEOUT;
+  case WAIT_IO_COMPLETION:
+    return EINTR;
   default:
     break;
   }
@@ -1558,13 +1568,12 @@ suspend_tcr(TCR *tcr)
     rc = SuspendThread(hthread);
     if (rc == -1) {
       /* If the thread's simply dead, we should handle that here */
-      wperror("SuspendThread");
       return false;
     }
     pcontext->ContextFlags = CONTEXT_ALL;
     rc = GetThreadContext(hthread, pcontext);
     if (rc == 0) {
-      wperror("GetThreadContext");
+      return false;
     }
     where = (pc)(xpPC(pcontext));
 
