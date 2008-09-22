@@ -29,9 +29,10 @@ if [ -z "$OPENMCL_KERNEL" ]; then
               ppc*) OPENMCL_KERNEL=dppccl ;;
               i386) OPENMCL_KERNEL=dx86cl ;;
             esac ;;
-    Linux)
-    OPENMCL_KERNEL=ppccl
-    ;;
+    Linux) case `uname -m` in
+              ppc*) OPENMCL_KERNEL=ppccl ;;
+              *86*) OPENMCL_KERNEL=lx86cl ;;
+           esac ;;
     *)
     echo "Can't determine host OS.  Fix this."
     exit 1
