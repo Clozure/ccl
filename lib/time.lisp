@@ -210,9 +210,14 @@
       (nanoseconds seconds)
     (%nanosleep secs nanos))
   #+windows-target
-  (let* ((millis (round (* seconds 1000))))
-    (#_SleepEx millis 1)
-    nil))
+  (do* ((start (floor (get-internal-real-time)
+                       (floor internal-time-units-per-second 1000))
+               (floor (get-internal-real-time)
+                       (floor internal-time-units-per-second 1000)))
+         (millis (round (* seconds 1000)) (- stop start))
+         (stop (+ start millis)))
+       ((or (<= millis 0)
+            (not (eql (#_SleepEx millis #$true) #$WAIT_IO_COMPLETION))))))
 
 
 (defun %internal-run-time ()
