@@ -573,40 +573,51 @@ given is that of a group to which the current user belongs."
       (values realpath kind)
       (values nil nil))))
 
+;;; The mingw headers define timeval.tv_sec and timeval.tv_usec to be
+;;; signed 32-bit quantities.
+(macrolet ((timeval-ref (ptr accessor)
+             #+windows-target `(logand #xfffffffff (pref ,ptr ,accessor))
+             #-windows-target `(pref ,ptr ,accessor))
+           (set-timeval-ref (ptr accessor new)
+           `(setf (pref ,ptr ,accessor)
+             #+windows-target (u32->s32 ,new)
+             #-windows-target ,new)))
+  
 (defun timeval->milliseconds (tv)
-    (+ (* 1000 (pref tv :timeval.tv_sec)) (round (pref tv :timeval.tv_usec) 1000)))
+    (+ (* 1000 (timeval-ref tv :timeval.tv_sec)) (round (timeval-ref tv :timeval.tv_usec) 1000)))
 
 (defun timeval->microseconds (tv)
-    (+ (* 1000000 (pref tv :timeval.tv_sec)) (pref tv :timeval.tv_usec)))
+    (+ (* 1000000 (timeval-ref tv :timeval.tv_sec)) (timeval-ref tv :timeval.tv_usec)))
 
 (defun %add-timevals (result a b)
-  (let* ((seconds (+ (pref a :timeval.tv_sec) (pref b :timeval.tv_sec)))
-	 (micros (+ (pref a :timeval.tv_usec) (pref b :timeval.tv_usec))))
+  (let* ((seconds (+ (timeval-ref a :timeval.tv_sec) (timeval-ref b :timeval.tv_sec)))
+	 (micros (+ (timeval-ref a :timeval.tv_usec) (timeval-ref b :timeval.tv_usec))))
     (if (>= micros 1000000)
       (setq seconds (1+ seconds) micros (- micros 1000000)))
-    (setf (pref result :timeval.tv_sec) seconds
-	  (pref result :timeval.tv_usec) micros)
+    (set-timeval-ref result :timeval.tv_sec seconds)
+    (set-timeval-ref result :timeval.tv_usec micros)
     result))
 
 (defun %sub-timevals (result a b)
-  (let* ((seconds (- (pref a :timeval.tv_sec) (pref b :timeval.tv_sec)))
-	 (micros (- (pref a :timeval.tv_usec) (pref b :timeval.tv_usec))))
+  (let* ((seconds (- (timeval-ref a :timeval.tv_sec) (timeval-ref b :timeval.tv_sec)))
+	 (micros (- (timeval-ref a :timeval.tv_usec) (timeval-ref b :timeval.tv_usec))))
     (if (< micros 0)
       (setq seconds (1- seconds) micros (+ micros 1000000)))
-    (setf (pref result :timeval.tv_sec) seconds
-	  (pref result :timeval.tv_usec) micros)
+    (set-timeval-ref result :timeval.tv_sec  seconds)
+    (set-timeval-ref result :timeval.tv_usec micros)
     result))
 
 ;;; Return T iff the time denoted by the timeval a is not later than the
 ;;; time denoted by the timeval b.
 (defun %timeval<= (a b)
-  (let* ((asec (pref a :timeval.tv_sec))
-         (bsec (pref b :timeval.tv_sec)))
+  (let* ((asec (timeval-ref a :timeval.tv_sec))
+         (bsec (timeval-ref b :timeval.tv_sec)))
     (or (< asec bsec)
         (and (= asec bsec)
-             (< (pref a :timeval.tv_usec)
-                (pref b :timeval.tv_usec))))))
+             (< (timeval-ref a :timeval.tv_usec)
+                (timeval-ref b :timeval.tv_usec))))))
 
+); windows signed nonsense.
 
 #-windows-target
 (defun %%rusage (usage &optional (who #$RUSAGE_SELF))
@@ -698,10 +709,11 @@ environment variable. Returns NIL if there is no user with the ID uid."
   #+windows-target
   (declare (ignore userid))
   #+windows-target
-  (with-native-utf-16-cstrs ((key "USERPROFILE"))
-    (let* ((p (#__wgetenv key)))
-      (unless (%null-ptr-p p)
-        (get-foreign-namestring p))))
+  (dolist (k '(#||"HOME"||# "USERPROFILE")) 
+    (with-native-utf-16-cstrs ((key k))
+      (let* ((p (#__wgetenv key)))
+        (unless (%null-ptr-p p)
+          (return (get-foreign-namestring p))))))
   #-windows-target
   (rlet ((pwd :passwd)
          (result :address))
@@ -1595,7 +1607,11 @@ not, why not; and what its result code was if it completed."
         (rlet ((handles (:array #>HANDLE 2)))
           (setf (paref handles (:array #>HANDLE) 0) (external-process-pid p))
           (setf (paref handles (:array #>HANDLE) 1) (#__get_osfhandle in-fd))
-          (let ((rc (#_WaitForMultipleObjects 2 handles #$FALSE #$INFINITE)))
+          (let ((rc (ignoring-eintr
+                     (let* ((code (#_WaitForMultipleObjectsEx 2 handles #$FALSE #$INFINITE #$true)))
+                       (if (eql code #$WAIT_IO_COMPLETION)
+                         (- #$EINTR)
+                         code)))))
             (if (eq rc #$WAIT_OBJECT_0)
               (setf terminated t)
               (%stack-block ((buf 1024))
@@ -1608,7 +1624,11 @@ not, why not; and what its result code was if it completed."
                       (%str-from-ptr buf n string)
                       (write-sequence string out-stream :end n))))))))
         (progn
-          (#_WaitForSingleObject (external-process-pid p) #$INFINITE)
+          (ignoring-eintr
+           (let* ((code (#_WaitForSingleObjectEx (external-process-pid p) #$INFINITE #$true)))
+             (if (eql code #$WAIT_IO_COMPLETION)
+               (- #$EINTR)
+               code)))
           (setf terminated t))))))
   
 
