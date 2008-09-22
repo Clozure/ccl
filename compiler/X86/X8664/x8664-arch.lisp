@@ -841,6 +841,7 @@
   lisp-readdir
   lisp-closedir
   lisp-pipe
+  lisp-gettimeofday
 )
 
 (defmacro nrs-offset (name)
