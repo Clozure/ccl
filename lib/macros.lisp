@@ -2996,11 +2996,11 @@ to binary 0."
 		  (signal-program-error "Unknown size for foreign type ~S."
 					(unparse-foreign-type ftype))))
 	 (p (gensym))
-	 (bzero (read-from-string "#_bzero")))    
+	 (memset (read-from-string "#_memset")))    
     `(let* ((,p (,allocator ,bytes)))
       ,@(when (eq *host-backend* *target-backend*)
               `((%set-macptr-type ,p ,ordinal-form)))
-      (,bzero ,p ,bytes)
+      (,memset ,p 0 ,bytes)
       ,@(%foreign-record-field-forms p ftype record-name initforms)
       ,p)))
   
