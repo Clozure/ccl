@@ -4018,6 +4018,12 @@
 (deftype extended-char ()
   "Type of CHARACTERs that aren't BASE-CHARs."
   nil)
+
+(deftype natural ()
+  `(unsigned-byte ,target::nbits-in-word))
+
+(deftype signed-natural ()
+  `(signed-byte ,target::nbits-in-word))
 )
 
 
