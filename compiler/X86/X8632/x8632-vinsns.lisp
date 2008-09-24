@@ -979,7 +979,9 @@
   :bad
   (:anchored-uuo (uuo-error-reg-not-type (:%l src) (:$ub arch::error-object-not-unsigned-byte-32))))
 
-;;; xxx -- review this again later
+;;; an object is of type (SIGNED-BYTE 32) iff
+;;; a) it's a fixnum
+;;; b) it's a bignum with exactly one digit.
 (define-x8632-vinsn unbox-s32 (((dest :s32))
                                ((src :lisp)))
   :resume
@@ -988,12 +990,12 @@
   ;; Was it a fixnum ?
   (testl (:$l x8632::fixnummask) (:%l src))
   (je :done)
-  ;; May be a 2-digit bignum
+  ;; May be a 1-digit bignum
   (movl (:%l src) (:%l dest))
   (andl (:$b x8632::tagmask) (:%l dest))
   (cmpl (:$b x8632::tag-misc) (:%l dest))
   (jne :bad)
-  (cmpl (:$l x8632::two-digit-bignum-header) (:@ x8632::misc-header-offset (:%l src)))
+  (cmpl (:$l x8632::one-digit-bignum-header) (:@ x8632::misc-header-offset (:%l src)))
   (movl (:@ x8632::misc-data-offset (:%l src)) (:%l dest))
   (jne :bad)
   :done
