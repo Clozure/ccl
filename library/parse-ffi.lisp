@@ -377,7 +377,7 @@
      (list :primitive
            (ecase (car spec)
 	     (:char (if (getf (ftd-attributes *parse-ffi-target-ftd*)
-			       :signed-char)
+                              :signed-char)
 		      '(:signed 8)
 		      '(:unsigned 8)))
              (:signed-char  '(:signed 8))
@@ -387,14 +387,23 @@
              ((:vec128 :unsigned-long-long-long) '(:unsigned 128))
              (:signed-long-long-long '(:signed 128))
              (:int '(:signed 32))
-             (:long (ecase (getf (ftd-attributes *parse-ffi-target-ftd*)
-                                :bits-per-word)
+             (:long (ecase (or
+                            (getf
+                             (ftd-attributes *parse-ffi-target-ftd*)
+                             :bits-per-long)
+                            (getf
+                             (ftd-attributes *parse-ffi-target-ftd*)
+                             :bits-per-word))
                       (32 '(:signed 32))
                       (64 '(:signed 64))))
              (:unsigned  '(:unsigned 32))
-             (:unsigned-long (ecase (getf
-                                     (ftd-attributes *parse-ffi-target-ftd*)
-                                     :bits-per-word)
+             (:unsigned-long (ecase (or
+                                     (getf
+                                      (ftd-attributes *parse-ffi-target-ftd*)
+                                      :bits-per-long)
+                                     (getf
+                                      (ftd-attributes *parse-ffi-target-ftd*)
+                                      :bits-per-word))
                                (32 '(:unsigned 32))
                                (64 '(:unsigned 64))))
              (:long-long '(:signed 64))
@@ -406,6 +415,7 @@
              (:complex-float :complex-float)
              (:complex-double :complex-double)
              (:complex-long-double :complex-long-float)
+             (:long-long-long :long-long-long)
              #|(:void :void)|#)))))
              
              
