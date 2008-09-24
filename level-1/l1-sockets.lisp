@@ -226,13 +226,13 @@
     res))
 
 #-windows-target
-(defun %hstrerror (h_errno)
-  (with-macptrs ((p (#_hstrerror (abs h_errno))))
-    (if p
-      (%get-cstring p)
-      (format nil "Nameserver error ~d" (abs h_errno)))))
+(defun %gai-strerror (errno)
+  (let* ((err (abs errno))
+         (p (#_gai_strerror err)))
+    (if (%null-ptr-p p)
+      (format nil "Unknown nameserver error ~d" err)
+      (%get-cstring p))))
     
-
 
 
 (defun socket-error (stream where errno &optional nameserver-p)
@@ -255,7 +255,7 @@ conditions, based on the state of the arguments."
                                               (%windows-error-string errno)
                                               #-windows-target
 					      (if nameserver-p
-						(%hstrerror errno)
+						(%gai-strerror errno)
 						(%strerror errno))
 					      errno where)))
     (error (make-condition 'socket-creation-error
@@ -264,13 +264,13 @@ conditions, based on the state of the arguments."
 			   :situation where
 			   ;; TODO: this is a constant arg, there is a way to put this
 			   ;; in the class definition, just need to remember how...
-			   :format-control "~a (error #~d) during socket creation in ~a"
+			   :format-control "~a (error #~d) during socket creation or nameserver operation in ~a"
 			   :format-arguments (list
                                               #+windows-target
                                               (%windows-error-string errno)
                                               #-windows-target
 					      (if nameserver-p
-						(%hstrerror errno)
+						(%gai-strerror errno)
 						(%strerror errno))
 					      errno where)))))
     
@@ -438,6 +438,7 @@ operating system resources associated with the socket."))
 ;;; A FILE-LISTENER-SOCKET should try to delete the filesystem
 ;;; entity when closing.
 
+#-windows-target
 (defmethod close :before ((s file-listener-socket) &key abort)
   (declare (ignore abort))
   (let* ((path (local-socket-filename (socket-device s) s)))
@@ -541,6 +542,7 @@ safer to mess with directly as there is less magic going on."))
 (defmethod local-host ((socket socket))
   (local-socket-info (socket-device socket) :host socket))
 
+#-windows-target
 (defmethod local-filename ((socket socket))
   (local-socket-filename (socket-device socket) socket))
 
@@ -560,6 +562,7 @@ the socket is not connected."))
 (defmethod remote-port ((socket socket))
   (remote-socket-info socket :port))
 
+#-windows-target
 (defmethod remote-filename ((socket socket))
   (remote-socket-filename socket))
   
@@ -640,7 +643,8 @@ the socket is not connected."))
     (when (and (eq address-family :file)
 	       (eq connect :passive)
 	       local-filename)
-      (bind-unix-socket fd local-filename))))
+      #+windows-target (error "can't create file socket on Windows")
+      #-windows-target (bind-unix-socket fd local-filename))))
 
 ;; I hope the inline declaration makes the &rest/apply's go away...
 (declaim (inline make-ip-socket))
@@ -743,7 +747,11 @@ the socket is not connected."))
   (rletz ((sockaddr :sockaddr_un))
     (init-unix-sockaddr sockaddr remote-filename)
     (%socket-connect fd sockaddr (record-length :sockaddr_un))))
-         
+
+#+windows-target
+(defun file-socket-connect (fd remote-filename)
+  (declare (ignore fd))
+  (error "Can't create file socket to ~s on Windows" remote-filename))
   
 (defun make-tcp-stream-socket (fd &rest keys
                                   &key remote-host
@@ -1100,125 +1108,41 @@ unsigned IP address."
     (socket-call socket "setsockopt"
       (c_setsockopt socket level optname valptr (record-length :signed)))))
 
-#+(or darwin-target linux-target)
-(defloadvar *h-errno-variable-address* nil)
-#+linux-target
-(defloadvar *h-errno-function-address* nil)
 
-(defun h-errno-location ()
-  #+darwin-target
-  ;; As of Tiger, Darwin doesn't seem to have grasped the concept
-  ;; of thread-local storage for h_errno.
-  (or *h-errno-variable-address*
-      (setq *h-errno-variable-address* (foreign-symbol-address "_h_errno")))
-  ;; Supported versions of FreeBSD seem to have grasped that concept.
-  #+freebsd-target
-  (#_ __h_error)
-  #+linux-target
-  ;; Current versions of Linux support thread-specific h_errno,
-  ;; but older versions may not.
-  (if *h-errno-function-address*
-    (ff-call *h-errno-function-address* :address)
-    (or *h-errno-variable-address*
-        (let* ((entry (foreign-symbol-entry "__h_errno_location")))
-          (if entry
-            (ff-call (setq *h-errno-function-address* entry) :address)
-            (setq *h-errno-variable-address*
-                  (foreign-symbol-address  "h_errno")))))))
+
             
-
-#+(or darwin-target freebsd-target)
-(defun c_gethostbyaddr (addr)
-  (rlet ((addrp :unsigned))
-    (setf (pref addrp :unsigned) addr)
-    (without-interrupts
-     (let* ((hp (#_gethostbyaddr addrp (record-length :unsigned) #$AF_INET)))
-       (declare (dynamic-extent hp))
-       (if (not (%null-ptr-p hp))
-	 (%get-cstring (pref hp :hostent.h_name))
-	 (values nil (pref (h-errno-location) :signed)))))))
-
-#+linux-target
-(defun c_gethostbyaddr (addr)
-  (rlet ((hostent :hostent)
-	 (hp (* (struct :hostent)))
-	 (herr :signed)
-	 (addrp :unsigned))
-    (setf (pref addrp :unsigned) addr)
-    (do* ((buflen 1024 (+ buflen buflen))) ()
-      (declare (fixnum buflen))
-      (%stack-block ((buf buflen))
-	(let* ((res (#_gethostbyaddr_r addrp (record-length :unsigned) #$AF_INET
-				       hostent buf buflen hp herr)))
-	  (declare (fixnum res))
-	  (unless (eql res #$ERANGE)
-	    (return
-	     (if (and (eql res 0) (not (%null-ptr-p (%get-ptr hp))))
-		 (%get-cstring (pref (%get-ptr hp) :hostent.h_name))
-	       (values nil (- (pref herr :signed)))))))))))
-
-#+solaris-target
-(defun c_gethostbyaddr (addr)
-  (rlet ((hostent :hostent)
-	 (herr :signed)
-	 (addrp :unsigned))
-    (setf (pref addrp :unsigned) addr)
-    (do* ((buflen 1024 (+ buflen buflen))) ()
-      (declare (fixnum buflen))
-      (%stack-block ((buf buflen))
-	(let* ((res (#_gethostbyaddr_r addrp (record-length :unsigned) #$AF_INET
-				       hostent buf buflen herr)))
-          (if (%null-ptr-p res)
-            (unless (eql (%get-errno) (- #$ERANGE))
-              (return (values nil (- (pref herr :signed)))))
-            (return (%get-cstring (pref res :hostent.h_name)))))))))
-
-#+(or darwin-target freebsd-target windows-target)
+(defun c_gethostbyaddr (addr-in-net-byte-order)
+  (rletZ ((sin #>sockaddr_in))
+    (setf (pref sin :sockaddr_in.sin_family) #$AF_INET
+          (pref sin
+                #+(or windows-target solaris-target) #>sockaddr_in.sin_addr.S_un.S_addr
+                #-(or windows-target solaris-target) #>sockaddr_in.sin_addr.s_addr) addr-in-net-byte-order)
+    #+darwin-target (setf (pref sin :sockaddr_in.sin_len) (record-length :sockaddr_in))
+    (%stack-block ((namep #$NI_MAXHOST))
+      (let* ((err (#_getnameinfo sin (record-length #>sockaddr_in) namep #$NI_MAXHOST (%null-ptr) 0 #$NI_NAMEREQD)))
+        (if (eql 0 err)
+          (%get-cstring namep)
+          (values nil err))))))
+                
 (defun c_gethostbyname (name)
   (with-cstrs ((name (string name)))
-    (without-interrupts
-     (let* ((hp (#_gethostbyname  name)))
-       (declare (dynamic-extent hp))
-       (if (not (%null-ptr-p hp))
-	 (%get-unsigned-long
-	  (%get-ptr (pref hp :hostent.h_addr_list)))
-	 (values nil (pref (h-errno-location) :signed)))))))
+    (rletZ ((hints #>addrinfo)
+            (results :address))
+      (setf (pref hints #>addrinfo.ai_family) #$AF_INET)
+      (let* ((err (#_getaddrinfo name (%null-ptr) hints results)))
+        (if (eql 0 err)
+          (let* ((info (pref results :address))
+                 (sin (pref info #>addrinfo.ai_addr)))
+            (prog1
+                #+(or windows-target solaris-target)
+                (pref sin #>sockaddr_in.sin_addr.S_un.S_addr)
+                #-(or windows-target solaris-target)
+                (pref sin #>sockaddr_in.sin_addr.s_addr)
+                (#_freeaddrinfo info)))
+          (values nil err))))))
+      
+  
 
-#+linux-target
-(defun c_gethostbyname (name)
-  (with-cstrs ((name (string name)))
-    (rlet ((hostent :hostent)
-           (hp (* (struct :hostent)))
-           (herr :signed 0))
-       (do* ((buflen 1024 (+ buflen buflen))) ()
-         (declare (fixnum buflen))
-         (%stack-block ((buf buflen))
-           (let* ((res (#_gethostbyname_r name hostent buf buflen hp herr)))
-             (declare (fixnum res))
-             (unless (eql res #$ERANGE)
-	       (return
-                 (let* ((err (pref herr :signed)))
-		 (if (and (eql res 0) (eql err 0))
-		   (%get-unsigned-long
-		    (%get-ptr (pref (%get-ptr hp) :hostent.h_addr_list)))
-		   (values nil (- err))))))))))))
-
-#+solaris-target
-(defun c_gethostbyname (name)
-  (with-cstrs ((name (string name)))
-    (rlet ((hostent :hostent)
-           (herr :signed 0))
-       (do* ((buflen 1024 (+ buflen buflen))) ()
-         (declare (fixnum buflen))
-         (%stack-block ((buf buflen))
-           (setf (pref herr :signed) 0)
-           (let* ((res (#_gethostbyname_r name hostent buf buflen herr)))
-             (if (%null-ptr-p res)
-               (unless (eql (%get-errno) (- #$ERANGE))
-                 (return (values nil (- (pref herr :signed)))))
-               (return
-                 (%get-unsigned-long
-                  (%get-ptr (pref res :hostent.h_addr_list)))))))))))
   
 
 (defun _getservbyname (name proto)
@@ -1242,12 +1166,12 @@ unsigned IP address."
 ;;; a single word that should be passed by value.  The FFI translator
 ;;; seems to lose the :struct, so just using #_ doesn't work (that
 ;;; sounds like a bug in the FFI translator.)
-#+(or darwin-target linuxx86-target freebsd-target solaris-target)
+#-linuxppc-target
 (defun _inet_ntoa (addr)
   (with-macptrs ((p))
     (%setf-macptr p (external-call #+darwin-target "_inet_ntoa"
                                    #-darwin-target "inet_ntoa"
-				   :unsigned-fullword addr
+				   :unsigned-fullword (htonl addr)
 				   :address))
     (unless (%null-ptr-p p) (%get-cstring p))))				   
 
@@ -1446,8 +1370,9 @@ unsigned IP address."
                  (push (make-ip-interface
                         :name (%get-cstring (pref q :ifaddrs.ifa_name))
                         :addr (ntohl (pref addr :sockaddr_in.sin_addr.s_addr))
-                        :netmask (pref (pref q :ifaddrs.ifa_netmask)
-                                       :sockaddr_in.sin_addr.s_addr)
+                        :netmask (ntohl
+                                  (pref (pref q :ifaddrs.ifa_netmask)
+                                       :sockaddr_in.sin_addr.s_addr))
                         :flags (pref q :ifaddrs.ifa_flags)
                         :address-family #$AF_INET)
                        res))))
@@ -1512,7 +1437,7 @@ unsigned IP address."
                            (push (make-ip-interface
                                   :name name
                                   :addr (ntohl address)
-                                  :netmask netmask
+                                  :netmask (ntohl netmask)
                                   :flags if-flags
                                   :address-family address-family)
                                  res)))))))))
@@ -1520,7 +1445,49 @@ unsigned IP address."
     res))
 )
 
-             
+
+
+
+#+windows-target
+(defun %get-ip-interfaces ()
+  (let* ((handle (#_socket #$AF_INET #$SOCK_DGRAM #$IPPROTO_IP)))
+    (unwind-protect
+    (rlet ((realoutlen #>DWORD 0))
+      (do* ((reservedlen (* 4 (record-length #>INTERFACE_INFO))
+                         (* 2 reservedlen)))
+           ()
+        (%stack-block ((buf reservedlen))
+          (unless (eql 0 (#_WSAIoctl
+                          handle
+                          #$SIO_GET_INTERFACE_LIST
+                          (%null-ptr)
+                          0
+                          buf
+                          reservedlen
+                          realoutlen
+                          (%null-ptr)
+                          (%null-ptr)))
+            (return))
+          (let* ((noutbytes (pref realoutlen #>DWORD)))
+            (when (< noutbytes reservedlen)
+              (let* ((interfaces nil))
+                (do* ((offset 0 (+ offset (record-length #>INTERFACE_INFO)))
+                      (nameidx 0 (1+ nameidx)))
+                     ((>= offset noutbytes))
+                  (with-macptrs ((p (%inc-ptr buf offset)))
+                    (push (make-ip-interface 
+                           :name (format nil "ip~d" nameidx)
+                           :addr (ntohl
+                                  (pref (pref p #>INTERFACE_INFO.iiAddress)
+                                        #>sockaddr_gen.AddressIn.sin_addr.S_un.S_addr))
+                           :netmask (ntohl
+                                     (pref (pref p #>INTERFACE_INFO.iiNetmask)
+                                        #>sockaddr_gen.AddressIn.sin_addr.S_un.S_addr))
+                           :flags (pref p #>INTERFACE_INFO.iiFlags)
+                           :address-family #$AF_INET)
+                          interfaces)))
+                (return interfaces)))))))
+      (#_CloseHandle (%int-to-ptr handle)))))
 
       
 
