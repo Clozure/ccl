@@ -371,7 +371,7 @@
   "Be sure that you understand the implications of changing this
 before doing so.")
 
-(defparameter *lock-free-hash-table-default* #+(or gz ccl-0711) :shared #-(or gz ccl-0711) nil
+(defparameter *lock-free-hash-table-default* :shared
   "If NIL, hash tables default to using the standard algorithms, with locks for shared tables.
    If :SHARED, shared hash tables default to using the \"lock-free\" algorithm,
    which is faster for typical access but slower for rehashing or growing the table.
