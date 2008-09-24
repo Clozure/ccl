@@ -25,7 +25,7 @@
 
 
 ;;; Bootstrapping for futexes
-#+(and linuxx8664-target)
+#+(and linux-target x86-target)
 (eval-when (:compile-toplevel :execute)
   (pushnew :futex *features*))
 
