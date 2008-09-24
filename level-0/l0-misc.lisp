@@ -1130,3 +1130,10 @@
       (check-type dest macptr)))
   (without-interrupts                   ;reentrancy
    (%safe-get-ptr p dest)))
+
+
+;;; Useless for anything but using RLET in early level-1 code without
+;;; having to bootstrap canonical type ordinals.
+(%fhave 'parse-foreign-type (lambda (spec) (declare (ignore spec))))
+(%fhave 'foreign-type-ordinal (lambda (thing) (declare (ignore thing)) 0))
+(%fhave '%foreign-type-or-record (lambda (x) (declare (ignore x))))
