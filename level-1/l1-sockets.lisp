@@ -1201,9 +1201,9 @@ unsigned IP address."
                        (%get-winsock-error)
                        (let* ((fd (#__open_osfhandle handle 0)))
                          (if (< fd 0)
-                           (progn
-                             (#_CloseHandle handle)
-                             (%get-errno))
+                           (prog1
+                               (%get-errno)
+                             (#_CloseHandle handle))
                            fd)))))
 
 
