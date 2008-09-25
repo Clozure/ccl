@@ -102,17 +102,17 @@
   #+windows-target
   (defun fid-open-input (pathname)
     (with-filename-cstrs ((name (cdb-native-namestring pathname)))
-      (let* ((handle (%ptr-to-int (#_CreateFileW
+      (let* ((handle (#_CreateFileW
 				   name
 				   #$GENERIC_READ
 				   #$FILE_SHARE_READ
 				   (%null-ptr)
 				   #$OPEN_EXISTING
 				   #$FILE_ATTRIBUTE_NORMAL
-				   (%null-ptr)))))
-	(if (eq handle #xffffffffffffffff)
+				   (%null-ptr))))
+	(if (eql handle *windows-invalid-handle*)
 	  (error "Error opening CDB database ~S" pathname)
-	  (#__open_osfhandle handle #$O_RDONLY)))))
+	  (#__open_osfhandle (%ptr-to-int handle) #$O_RDONLY)))))
   
   
   ;;; Read N octets from FID into BUF.  Return #of octets read or error.
