@@ -516,7 +516,10 @@ predicate to return true."
           (when (apply function args)
             (return))
           ;; Sleep for a tick
-          (%nanosleep 0 *ns-per-tick*)))))
+          #-windows-target
+          (%nanosleep 0 *ns-per-tick*)
+          #+windows-target
+          (%windows-sleep 5)))))
 
 
 
