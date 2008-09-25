@@ -106,9 +106,11 @@ present and false otherwise. This variable shouldn't be set by user code.")
 
     (setq *stderr* (make-fd-stream 2 :basic t :direction :output :sharing :lock :encoding encoding-name))
     (if *batch-flag*
-      (let* ((tty-fd (let* ((fd (fd-open "/dev/tty" #$O_RDWR)))
-                       (if (>= fd 0) fd)))
-             (can-use-tty (and tty-fd (eql (tcgetpgrp tty-fd) (getpid)))))
+      (let* ((tty-fd
+               #-windows-target
+               (let* ((fd (fd-open "/dev/tty" #$O_RDWR)))
+                 (if (>= fd 0) fd)))
+             (can-use-tty #-windows-target (and tty-fd (eql (tcgetpgrp tty-fd) (getpid)))))
         (if can-use-tty
           (setq
            *terminal-input* (make-fd-stream tty-fd
