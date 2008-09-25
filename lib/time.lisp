@@ -200,6 +200,16 @@
 	(+ second (* (+ guess (- minwest minwest-guess)) 60))))))
 
 
+#+windows-target
+(defun %windows-sleep (millis)
+  (do* ((start (floor (get-internal-real-time)
+                      (floor internal-time-units-per-second 1000))
+               (floor (get-internal-real-time)
+                      (floor internal-time-units-per-second 1000)))
+        (millis millis (- stop start))
+        (stop (+ start millis)))
+       ((or (<= millis 0)
+            (not (eql (#_SleepEx millis #$true) #$WAIT_IO_COMPLETION))))))
 
 (defun sleep (seconds)
   "This function causes execution to be suspended for N seconds. N may
@@ -210,14 +220,7 @@
       (nanoseconds seconds)
     (%nanosleep secs nanos))
   #+windows-target
-  (do* ((start (floor (get-internal-real-time)
-                       (floor internal-time-units-per-second 1000))
-               (floor (get-internal-real-time)
-                       (floor internal-time-units-per-second 1000)))
-         (millis (round (* seconds 1000)) (- stop start))
-         (stop (+ start millis)))
-       ((or (<= millis 0)
-            (not (eql (#_SleepEx millis #$true) #$WAIT_IO_COMPLETION))))))
+  (%windows-sleep (round (* seconds 1000))))
 
 
 (defun %internal-run-time ()
