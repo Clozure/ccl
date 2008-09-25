@@ -376,16 +376,17 @@
 				(eq structname 'logical-pathname)))
                        (locally
                            (declare (optimize (speed 3) (safety 0)))
-                         (let* ((x-size (uvsize x)))
-                           (declare (fixnum x-size))
+                         (let* ((x-size (uvsize x))
+                                (skip (if (eq structname 'pathname)
+                                        %physical-pathname-version
+                                        -1)))
+                           (declare (fixnum x-size skip))
                            (when (= x-size (the fixnum (uvsize y)))
-                             ;; Ignore last (version) slot in physical pathnames.
-                             (when (eq structname 'pathname)
-                               (decf x-size))
                              (do* ((i 1 (1+ i)))
                                   ((= i x-size) t)
                                (declare (fixnum i))
-                               (unless (equal (%svref x i) (%svref y i))
+                               (unless (or (= i skip)
+                                           (equal (%svref x i) (%svref y i)))
                                  (return)))))))))))))
 
 #+ppc32-target
