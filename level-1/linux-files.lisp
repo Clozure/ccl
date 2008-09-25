@@ -450,6 +450,12 @@ given is that of a group to which the current user belongs."
         (errchk (#_chown cnamestr uid gid))))
     win))
 
+#+windows-target
+(defun copy-file-attributes (source-path dest-path)
+  "could at least copy the file times"
+  (declare (ignore source-path dest-path)))
+
+
 #+linux-target
 (defun %uname (idx)
   (%stack-block ((buf (* #$_UTSNAME_LENGTH 6)))  
@@ -525,6 +531,8 @@ given is that of a group to which the current user belongs."
       (if (or (= len 1)
               (eql (schar namestring 1) #\/))
         (concatenate 'string (get-user-home-dir (getuid)) (if (= len 1) "/" (subseq namestring 1)))
+        #+windows-target namestring
+        #-windows-target
         (let* ((slash-pos (position #\/ namestring))
                (user-name (subseq namestring 1 slash-pos))
                (uid (or (get-uid-from-name user-name)
@@ -640,6 +648,11 @@ given is that of a group to which the current user belongs."
           (without-interrupts
            (%get-cstring (pref pw :passwd.pw_name))))))))
 
+#+windows-target
+(defun %file-author (namestring)
+  (declare (ignore namestring))
+  nil)
+
 #-windows-target
 (defun %utimes (namestring)
   (with-filename-cstrs ((cnamestring namestring))
@@ -647,7 +660,33 @@ given is that of a group to which the current user belongs."
       (declare (fixnum err))
       (or (eql err 0)
           (%errno-disp err namestring)))))
-         
+
+#+windows-target
+(defun %utimes (namestring)
+  (with-filename-cstrs ((cnamestring namestring))
+    (let* ((handle (#_CreateFileW
+                    cnamestring
+                    #$FILE_WRITE_ATTRIBUTES
+                    (logior #$FILE_SHARE_READ #$FILE_SHARE_WRITE)
+                    (%null-ptr)
+                    #$OPEN_EXISTING
+                    #$FILE_ATTRIBUTE_NORMAL
+                    (%null-ptr))))
+      (if (eql handle *windows-invalid-handle*)
+        (%windows-error-disp (#_GetLastError))
+        (rlet ((st #>SYSTEMTIME)
+               (ft #>FILETIME))
+          (#_GetSystemTime st)
+          (#_SystemTimeToFileTime st ft)
+          (let* ((result (#_SetFileTime handle (%null-ptr) (%null-ptr) ft))
+                 (err (unless (eql 0 result) (#_GetLastError))))
+            (#_CloseHandle handle)
+            (if err
+              (%windows-error-disp err)
+              t)))))))
+
+
+             
 
 #-windows-target
 (defun get-uid-from-name (name)
@@ -1532,7 +1571,7 @@ not, why not; and what its result code was if it completed."
 
 (defun run-external-process (proc in-fd out-fd error-fd &optional env)
   (let* ((args (external-process-args proc))
-         (child-pid (exec-with-io-redirection in-fd out-fd error-fd args proc)))
+         (child-pid (exec-with-io-redirection in-fd out-fd error-fd args proc env)))
     (when child-pid
       (setf (external-process-pid proc) child-pid)
       (add-external-process proc)
@@ -1542,7 +1581,8 @@ not, why not; and what its result code was if it completed."
 (defun join-strings (strings)
   (reduce (lambda (left right) (concatenate 'string left " " right)) strings))
 
-(defun exec-with-io-redirection (new-in new-out new-err args proc)
+(defun exec-with-io-redirection (new-in new-out new-err args proc &optional env)
+  (declare (ignore env))                ; until we can do better.
   (with-filename-cstrs ((command (join-strings args)))
     (rletz ((proc-info #>PROCESS_INFORMATION)
             (si #>STARTUPINFO))
