@@ -545,7 +545,7 @@
       (unless (eq start-pos end-pos)
         (setq name (%std-name-component (%substr sstr start-pos end-pos))))
       (if (eq host :unspecific)
-	(%cons-pathname directory name type :newest device)
+	(%cons-pathname directory name type (if name :newest) device)
         (%cons-logical-pathname directory name type host version)))))
 
 (defun parse-namestring (thing &optional host (defaults *default-pathname-defaults*)
