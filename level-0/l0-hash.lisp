@@ -1742,10 +1742,16 @@ before doing so.")
   (if (> counter 0)
     (typecase expr
       ((or string bit-vector number character)  (+ key (%%equalhash expr)))
-      ((or pathname logical-pathname)
+      (logical-pathname
        (dotimes (i (uvsize expr) key)
          (declare (fixnum i))
          (setq key (+ key (sxhash-aux (%svref expr i) (1- counter) key)))))
+      (pathname
+       ;; Don't consider %PHYSICAL-PATHNAME-VERSION to be significant
+       (dotimes (i (uvsize expr) key)
+         (declare (fixnum i))
+         (unless (= i %physical-pathname-version)
+           (setq key (+ key (sxhash-aux (%svref expr i) (1- counter) key))))))
       (symbol (+ key (%%equalhash (symbol-name expr))))
       (cons (sxhash-aux
              (cdr expr)
