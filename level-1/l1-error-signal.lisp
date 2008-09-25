@@ -33,6 +33,10 @@
 (defun %errno-disp (errno &rest errargs)
   (%errno-disp-internal errno errargs (%get-frame-ptr)))
 
+#+windows-target
+(defun %windows-error-disp (errno &rest errargs)
+  (%err-disp-common errno 0 (%windows-error-string errno) errargs (%get-frame-ptr)))
+  
 (defun %errno-disp-internal (errno errargs frame-ptr)
   (declare (fixnum errno))
   (let* ((err-type (max (ash errno -16) 0))
