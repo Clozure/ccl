@@ -19,6 +19,10 @@
 
 (in-package "CCL")
 
+#+windows-target
+(progn
+  (defvar *windows-invalid-handle* nil)
+  (setq *windows-invalid-handle* (%int-to-ptr #+64-bit-target #xffffffffffffffff #+32-bit-target #xffffffff)))
 
 
 ;;; We have several different conventions for representing an
@@ -470,6 +474,7 @@ the operating system."
 
 
   (defun init-windows-ffi ()
+    (%revive-macptr *windows-invalid-handle*)
     (setq *current-process-handle* (ff-call (foreign-symbol-entry "GetCurrentProcess") :address)) 
     (setq *enum-process-modules-addr* (foreign-symbol-entry "EnumProcessModules"))   
     (setq *get-module-file-name-addr* (foreign-symbol-entry "GetModuleFileNameA"))
