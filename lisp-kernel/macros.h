@@ -96,3 +96,20 @@
 #else
 #define LSEEK(fd,offset,how) lseek(fd,offset,how)
 #endif
+
+/* We can't easily and unconditionally use format strings like "0x%lx"
+   to print lisp objects: the "l" might not match the word size, and
+   neither would (necessarily) something like "0x%llx".  We can at 
+   least exploit the fact that on all current platforms, "ll" ("long long")
+   is the size of a 64-bit lisp object and "l" ("long") is the size of
+   a 32-bit lisp object. */
+
+#if (WORD_SIZE == 64)
+#define LISP "%llx"
+#define ZLISP "%016llx"
+#define DECIMAL "%lld"
+#else
+#define LISP "%lx"
+#define ZLISP "%08x"
+#define DECIMAL "%ld"
+#endif
