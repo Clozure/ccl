@@ -24,6 +24,7 @@
 #include <windows.h>
 #include <psapi.h>
 #include <dirent.h>
+#undef __argv
 #include <stdio.h>
 
 
@@ -290,7 +291,8 @@ lisp_read(int fd, void *buf, unsigned int count)
   hfile = (HANDLE) _get_osfhandle(fd);
 
   if (hfile == ((HANDLE)-1)) {
-    return -EBADF;
+    errno = EBADF;
+    return -1;
   }
   
   memset(&overlapped,0,sizeof(overlapped));
@@ -342,9 +344,32 @@ lisp_read(int fd, void *buf, unsigned int count)
 }
 
 ssize_t
-lisp_write(int fd, void *buf, unsigned int count)
+lisp_write(int fd, void *buf, ssize_t count)
 {
-  return _write(fd, buf, count);
+  HANDLE hfile;
+  OVERLAPPED overlapped;
+  DWORD err, nwritten;
+
+  hfile = (HANDLE) _get_osfhandle(fd);
+
+  if (hfile == ((HANDLE)-1)) {
+    errno = EBADF;
+    return -1;
+  }
+
+  memset(&overlapped,0,sizeof(overlapped));
+
+  if (GetFileType(hfile) == FILE_TYPE_DISK) {
+    overlapped.Offset = SetFilePointer(hfile, 0, &(overlapped.OffsetHigh), FILE_CURRENT);
+  }
+
+  if (WriteFile(hfile, buf, count, &nwritten, &overlapped)) {
+    return nwritten;
+  }
+  
+  err = GetLastError();
+  _dosmaperr(err);
+  return -1;
 }
 
 int
@@ -434,6 +459,7 @@ lisp_gettimeofday(struct timeval *tp, void *tzp)
 
 HMODULE *modules = NULL;
 DWORD cbmodules = 0;
+HANDLE find_symbol_lock = 0;
 
 void *
 windows_find_symbol(void *handle, char *name)
@@ -446,10 +472,11 @@ windows_find_symbol(void *handle, char *name)
     return GetProcAddress(handle, name);
   } else {
     DWORD cbneeded,  have, i;
+    WaitForSingleObject(find_symbol_lock,INFINITE);
 
     if (cbmodules == 0) {
       cbmodules = 16 * sizeof(HANDLE);
-      modules = LocalAlloc(LPTR, cbmodules);
+      modules = malloc(cbmodules);
     }
     
     while (1) {
@@ -458,7 +485,7 @@ windows_find_symbol(void *handle, char *name)
         break;
       }
       cbmodules = cbneeded;
-      modules = LocalReAlloc(modules,cbmodules,0);
+      modules = realloc(modules,cbmodules);
     }
     have = cbneeded/sizeof(HANDLE);
 
@@ -466,9 +493,11 @@ windows_find_symbol(void *handle, char *name)
       void *addr = GetProcAddress(modules[i],name);
 
       if (addr) {
+        ReleaseMutex(find_symbol_lock);
         return addr;
       }
     }
+    ReleaseMutex(find_symbol_lock);
     return NULL;
   }
 }
@@ -490,45 +519,11 @@ windows_open_shared_library(char *path)
   return (void *)module;
 }
 
+
 void
 init_windows_io()
 {
-#if 0
-  int fd;
-  HANDLE hfile0, hfile1;
-
-  hfile0 = (HANDLE) _get_osfhandle(0);
-  hfile1 = ReOpenFile(hfile0,GENERIC_READ,FILE_SHARE_READ,FILE_FLAG_OVERLAPPED);
-  if (hfile1 != ((HANDLE)-1)) {
-    fd = _open_osfhandle(hfile1,O_RDONLY);
-    dup2(fd,0);
-    _close(fd);
-    SetStdHandle(STD_INPUT_HANDLE,hfile1);
-    CloseHandle(hfile0);
-  } else {
-    wperror("ReOpenFile");
-  }
-
-  hfile0 = (HANDLE) _get_osfhandle(1);
-  hfile1 = ReOpenFile(hfile0,GENERIC_WRITE,FILE_SHARE_WRITE,FILE_FLAG_OVERLAPPED);
-  if (hfile1 != ((HANDLE)-1)) {
-    fd = _open_osfhandle(hfile1,O_WRONLY);
-    dup2(fd,1);
-    _close(fd);
-    SetStdHandle(STD_OUTPUT_HANDLE,hfile1);
-    CloseHandle(hfile0);
-  }
-
-  hfile0 = (HANDLE) _get_osfhandle(2);
-  hfile1 = ReOpenFile(hfile0,GENERIC_WRITE,FILE_SHARE_WRITE,FILE_FLAG_OVERLAPPED);
-  if (hfile1 != ((HANDLE)-1)) {
-    fd = _open_osfhandle(hfile1,O_WRONLY);
-    dup2(fd,2);
-    _close(fd);
-    SetStdHandle(STD_ERROR_HANDLE,hfile1);
-    CloseHandle(hfile0);
-  }
-#endif  
+  find_symbol_lock = CreateMutex(NULL,false,NULL);
 }
 
 void
