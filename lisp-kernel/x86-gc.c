@@ -54,7 +54,7 @@ check_node(LispObj n)
 #ifdef X8664
   case fulltag_nil:
     if (n != lisp_nil) {
-      Bug(NULL,"Object tagged as nil, not nil : 0x%08x", n);
+      Bug(NULL,"Object tagged as nil, not nil : " LISP, n);
     }
     return;
 #endif
@@ -70,7 +70,7 @@ check_node(LispObj n)
   case fulltag_immheader_1: 
   case fulltag_immheader_2: 
 #endif
-    Bug(NULL, "Header not expected : 0x%lx", n);
+    Bug(NULL, "Header not expected : 0x" LISP, n);
     return;
 
 #ifdef X8632
@@ -85,7 +85,7 @@ check_node(LispObj n)
       a = active_dynamic_area;
       if ((n > (ptr_to_lispobj(a->active))) &&
           (n < (ptr_to_lispobj(a->high)))) {
-        Bug(NULL, "TRA points to heap free space: 0x%lx", n);
+        Bug(NULL, "TRA points to heap free space: 0x" LISP, n);
       }
       return;
     }
@@ -101,7 +101,7 @@ check_node(LispObj n)
       if (fun == 0 ||
 	 (header_subtag(header_of(fun)) != subtag_function) ||
 	 (heap_area_containing((BytePtr)ptr_from_lispobj(fun)) != a)) {
-	Bug(NULL, "TRA at 0x%x has bad function address 0x%x\n", n, fun);
+	Bug(NULL, "TRA at 0x" LISP " has bad function address 0x" LISP "\n", n, fun);
       }
       n = fun;
     }
@@ -119,7 +119,7 @@ check_node(LispObj n)
       if ((disp == 0) ||
           (fulltag_of(n) != fulltag_function) ||
           (heap_area_containing((BytePtr)ptr_from_lispobj(n)) != a)) {
-        Bug(NULL, "TRA at 0x%lx has bad displacement %d\n", n, disp);
+        Bug(NULL, "TRA at 0x" LISP " has bad displacement %d\n", n, disp);
       }
     }
 #endif
@@ -142,7 +142,7 @@ check_node(LispObj n)
       a = active_dynamic_area;
       if ((n > (ptr_to_lispobj(a->active))) &&
           (n < (ptr_to_lispobj(a->high)))) {
-        Bug(NULL, "Node points to heap free space: 0x%lx", n);
+        Bug(NULL, "Node points to heap free space: 0x" LISP, n);
       }
       return;
     }
@@ -154,14 +154,14 @@ check_node(LispObj n)
   if (tag == fulltag_cons) {
     if ((nodeheader_tag_p(header_tag)) ||
         (immheader_tag_p(header_tag))) {
-      Bug(NULL, "Cons cell at 0x%lx has bogus header : 0x%lx", n, header);
+      Bug(NULL, "Cons cell at 0x" LISP " has bogus header : 0x" LISP, n, header);
     }
     return;
   }
 
   if ((!nodeheader_tag_p(header_tag)) &&
       (!immheader_tag_p(header_tag))) {
-    Bug(NULL,"Vector at 0x%lx has bogus header : 0x%lx", n, header);
+    Bug(NULL,"Vector at 0x" LISP " has bogus header : 0x" LISP, n, header);
   }
   return;
 }
@@ -188,12 +188,12 @@ check_range(LispObj *start, LispObj *end, Boolean header_allowed)
     tag = fulltag_of(node);
     if (immheader_tag_p(tag)) {
       if (! header_allowed) {
-        Bug(NULL, "Header not expected at 0x%lx\n", prev);
+        Bug(NULL, "Header not expected at 0x" LISP "\n", prev);
       }
       current = (LispObj *)skip_over_ivector((natural)prev, node);
     } else if (nodeheader_tag_p(tag)) {
       if (! header_allowed) {
-        Bug(NULL, "Header not expected at 0x%lx\n", prev);
+        Bug(NULL, "Header not expected at 0x" LISP "\n", prev);
       }
       elements = header_element_count(node) | 1;
       if (header_subtag(node) == subtag_function) {
@@ -432,7 +432,7 @@ mark_root(LispObj n)
 	prefix_nodes = (natural) ((int) deref(base,1));
 #endif
         if (prefix_nodes > element_count) {
-          Bug(NULL, "Function 0x%lx trashed",n);
+          Bug(NULL, "Function 0x" LISP " trashed",n);
         }
       }
       base += (1+element_count);
@@ -634,7 +634,7 @@ rmark(LispObj n)
 	int code_words = (unsigned short)base[1];
 #endif
         if (code_words >= nmark) {
-          Bug(NULL,"Bad function at 0x%lx",n);
+          Bug(NULL,"Bad function at 0x" LISP,n);
         }
 	nmark -= code_words;
       }
@@ -1276,7 +1276,7 @@ mark_vstack_area(area *a)
     *end = (LispObj *) a->high;
 
 #if 0
-  fprintf(stderr, "mark VSP range: 0x%lx:0x%lx\n", start, end);
+  fprintf(stderr, "mark VSP range: 0x" LISP ":0x" LISP "\n", start, end);
 #endif
   mark_headerless_area_range(start, end);
 }
@@ -1824,7 +1824,7 @@ compact_dynamic_heap()
         current = src;
         if (GCDebug) {
           if (dest != ptr_from_lispobj(locative_forwarding_address(ptr_to_lispobj(src)))) {
-            Bug(NULL, "Out of synch in heap compaction.  Forwarding from 0x%lx to 0x%lx,\n expected to go to 0x%lx\n", 
+            Bug(NULL, "Out of synch in heap compaction.  Forwarding from 0x" LISP " to 0x" LISP ",\n expected to go to 0x" LISP "\n", 
                 src, dest, locative_forwarding_address(ptr_to_lispobj(src)));
           }
         }
