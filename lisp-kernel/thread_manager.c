@@ -1315,7 +1315,7 @@ init_threads(void * stack_base, TCR *tcr)
 
 
 #ifdef WINDOWS
-unsigned
+unsigned CALLBACK
 #else
 void *
 #endif
@@ -1436,7 +1436,7 @@ xThreadCurrentStackSpace(TCR *tcr, unsigned *resultP)
 LispObj
 create_system_thread(size_t stack_size,
 		     void* stackaddr,
-		     unsigned (*start_routine)(void *),
+		     unsigned CALLBACK (*start_routine)(void *),
 		     void* param)
 {
   HANDLE thread_handle;
@@ -1744,7 +1744,7 @@ resume_tcr(TCR *tcr)
     HANDLE hthread = (HANDLE)(tcr->osid);
 
     if (context == NULL) {
-      Bug(NULL, "no suspend_context for TCR = 0x%Ix", (natural)tcr);
+      Bug(NULL, "no suspend_context for TCR = 0x" LISP, (natural)tcr);
     }
     tcr->suspend_context = NULL;
     SetThreadContext(hthread,context);
