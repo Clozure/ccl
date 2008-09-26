@@ -43,6 +43,9 @@
 #include <winternl.h>
 #include <ntstatus.h>
 #endif
+#ifndef EXCEPTION_WRITE_FAULT
+#define EXCEPTION_WRITE_FAULT 1
+#endif
 #endif
 
 int
@@ -1143,7 +1146,7 @@ wait_for_exception_lock_in_handler(TCR *tcr,
 
   LOCK(lisp_global(EXCEPTION_LOCK), tcr);
 #if 0
-  fprintf(stderr, "0x%x has exception lock\n", tcr);
+  fprintf(stderr, "0x" LISP " has exception lock\n", tcr);
 #endif
   xf->curr = context;
 #ifdef X8632
@@ -1166,7 +1169,7 @@ unlock_exception_lock_in_handler(TCR *tcr)
   tcr->valence = TCR_STATE_EXCEPTION_RETURN;
   UNLOCK(lisp_global(EXCEPTION_LOCK),tcr);
 #if 0
-  fprintf(stderr, "0x%x released exception lock\n", tcr);
+  fprintf(stderr, "0x" LISP " released exception lock\n", tcr);
 #endif
 }
 
@@ -1231,7 +1234,7 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context, TCR 
     char msg[512];
     Boolean foreign = (old_valence != TCR_STATE_LISP);
 
-    snprintf(msg, sizeof(msg), "Unhandled exception %d at 0x%lx, context->regs at #x%lx", signum, xpPC(context), (natural)xpGPRvector(context));
+    snprintf(msg, sizeof(msg), "Unhandled exception %d at 0x" LISP ", context->regs at #x" LISP "", signum, xpPC(context), (natural)xpGPRvector(context));
     
     if (lisp_Debugger(context, info, signum,  foreign, msg)) {
       SET_TCR_FLAG(tcr,TCR_FLAG_BIT_PROPAGATE_EXCEPTION);
@@ -1798,7 +1801,7 @@ handle_windows_exception_on_foreign_stack(TCR *tcr,
   return windows_switch_to_foreign_stack(foreign_rsp,handler,new_ep);
 }
 
-LONG
+LONG CALLBACK
 windows_arbstack_exception_handler(EXCEPTION_POINTERS *exception_pointers)
 {
   DWORD code = exception_pointers->ExceptionRecord->ExceptionCode;
@@ -2251,7 +2254,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
     if ((state == ID_unrecognized_alloc_instruction) ||
         ((state == ID_set_allocptr_header_instruction) &&
          (allocptr_tag != fulltag_misc))) {
-      Bug(xp, "Can't determine state of thread 0x%lx, interrupted during memory allocation", tcr);
+      Bug(xp, "Can't determine state of thread 0x" LISP ", interrupted during memory allocation", tcr);
     }
     switch(state) {
     case ID_set_allocptr_header_instruction:
@@ -2567,7 +2570,7 @@ gc_from_tcr(TCR *tcr, signed_natural param)
   BytePtr oldend, newend;
 
 #if 0
-  fprintf(stderr, "Start GC  in 0x%lx\n", tcr);
+  fprintf(stderr, "Start GC  in 0x" LISP "\n", tcr);
 #endif
   a = active_dynamic_area;
   oldend = a->high;
@@ -2576,7 +2579,7 @@ gc_from_tcr(TCR *tcr, signed_natural param)
   newfree = a->active;
   newend = a->high;
 #if 0
-  fprintf(stderr, "End GC  in 0x%lx\n", tcr);
+  fprintf(stderr, "End GC  in 0x" LISP "\n", tcr);
 #endif
   return ((oldfree-newfree)+(newend-oldend));
 }
