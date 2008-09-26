@@ -612,12 +612,12 @@ debug_thread_info(ExceptionInformation *xp, siginfo_t *info, int arg)
   if (tcr) {
     area *vs_area = tcr->vs_area, *cs_area = tcr->cs_area;
 
-    fprintf(stderr, "Current Thread Context Record (tcr) = %p\n", (u64_t)(natural)tcr);
-    fprintf(stderr, "Control (C) stack area:  low = 0x%llx, high = 0x%llx\n",
-            (u64_t)(natural)(cs_area->low), (u64_t)(natural)(cs_area->high));
-    fprintf(stderr, "Value (lisp) stack area: low = 0x%llx, high = 0x%llx\n",
+    fprintf(stderr, "Current Thread Context Record (tcr) = 0x" LISP "\n", tcr);
+    fprintf(stderr, "Control (C) stack area:  low = 0x" LISP ", high = 0x" LISP "\n",
+            (cs_area->low), (cs_area->high));
+    fprintf(stderr, "Value (lisp) stack area: low = 0x" LISP ", high = 0x" LISP "\n",
             (u64_t)(natural)(vs_area->low), (u64_t)(natural)vs_area->high);
-    fprintf(stderr, "Exception stack pointer = 0x%llx\n",
+    fprintf(stderr, "Exception stack pointer = 0x" LISP "\n",
 #ifdef PPC
             (u64_t) (natural)(xpGPR(xp,1))
 #endif
@@ -680,29 +680,29 @@ debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
 #endif
 
 #ifdef X8664
-  fprintf(stderr,"%%rax = 0x%016llx      %%r8  = 0x%016llx\n", xpGPR(xp,REG_RAX),xpGPR(xp,REG_R8));
-  fprintf(stderr,"%%rcx = 0x%016llx      %%r9  = 0x%016llx\n", xpGPR(xp,REG_RCX),xpGPR(xp,REG_R9));
-  fprintf(stderr,"%%rdx = 0x%016llx      %%r10 = 0x%016llx\n", xpGPR(xp,REG_RDX),xpGPR(xp,REG_R10));
-  fprintf(stderr,"%%rbx = 0x%016llx      %%r11 = 0x%016llx\n", xpGPR(xp,REG_RBX),xpGPR(xp,REG_R11));
-  fprintf(stderr,"%%rsp = 0x%016llx      %%r12 = 0x%016llx\n", xpGPR(xp,REG_RSP),xpGPR(xp,REG_R12));
-  fprintf(stderr,"%%rbp = 0x%016llx      %%r13 = 0x%016llx\n", xpGPR(xp,REG_RBP),xpGPR(xp,REG_R13));
-  fprintf(stderr,"%%rsi = 0x%016llx      %%r14 = 0x%016llx\n", xpGPR(xp,REG_RSI),xpGPR(xp,REG_R14));
-  fprintf(stderr,"%%rdi = 0x%016llx      %%r15 = 0x%016llx\n", xpGPR(xp,REG_RDI),xpGPR(xp,REG_R15));
-  fprintf(stderr,"%%rip = 0x%016llx   %%rflags = 0x%016llx\n",
+  fprintf(stderr,"%%rax = 0x" ZLISP "      %%r8  = 0x" ZLISP "\n", xpGPR(xp,REG_RAX),xpGPR(xp,REG_R8));
+  fprintf(stderr,"%%rcx = 0x" ZLISP "      %%r9  = 0x" ZLISP "\n", xpGPR(xp,REG_RCX),xpGPR(xp,REG_R9));
+  fprintf(stderr,"%%rdx = 0x" ZLISP "      %%r10 = 0x" ZLISP "\n", xpGPR(xp,REG_RDX),xpGPR(xp,REG_R10));
+  fprintf(stderr,"%%rbx = 0x" ZLISP "      %%r11 = 0x" ZLISP "\n", xpGPR(xp,REG_RBX),xpGPR(xp,REG_R11));
+  fprintf(stderr,"%%rsp = 0x" ZLISP "      %%r12 = 0x" ZLISP "\n", xpGPR(xp,REG_RSP),xpGPR(xp,REG_R12));
+  fprintf(stderr,"%%rbp = 0x" ZLISP "      %%r13 = 0x" ZLISP "\n", xpGPR(xp,REG_RBP),xpGPR(xp,REG_R13));
+  fprintf(stderr,"%%rsi = 0x" ZLISP "      %%r14 = 0x" ZLISP "\n", xpGPR(xp,REG_RSI),xpGPR(xp,REG_R14));
+  fprintf(stderr,"%%rdi = 0x" ZLISP "      %%r15 = 0x" ZLISP "\n", xpGPR(xp,REG_RDI),xpGPR(xp,REG_R15));
+  fprintf(stderr,"%%rip = 0x" ZLISP "   %%rflags = 0x%08lx\n",
 	  xpGPR(xp, Iip), eflags_register(xp));
 #endif
 
 #ifdef X8632
-  fprintf(stderr, "%%eax = 0x%08X\n", xpGPR(xp, REG_EAX));
-  fprintf(stderr, "%%ecx = 0x%08X\n", xpGPR(xp, REG_ECX));
-  fprintf(stderr, "%%edx = 0x%08X\n", xpGPR(xp, REG_EDX));
-  fprintf(stderr, "%%ebx = 0x%08X\n", xpGPR(xp, REG_EBX));
-  fprintf(stderr, "%%esp = 0x%08X\n", xpGPR(xp, REG_ESP));
-  fprintf(stderr, "%%ebp = 0x%08X\n", xpGPR(xp, REG_EBP));
-  fprintf(stderr, "%%esi = 0x%08X\n", xpGPR(xp, REG_ESI));
-  fprintf(stderr, "%%edi = 0x%08X\n", xpGPR(xp, REG_EDI));
-  fprintf(stderr, "%%eip = 0x%08X\n", xpGPR(xp, REG_EIP));
-  fprintf(stderr, "%%eflags = 0x%08X\n", xpGPR(xp, REG_EFL));
+  fprintf(stderr, "%%eax = 0x" ZLISP "\n", xpGPR(xp, REG_EAX));
+  fprintf(stderr, "%%ecx = 0x" ZLISP "\n", xpGPR(xp, REG_ECX));
+  fprintf(stderr, "%%edx = 0x" ZLISP "\n", xpGPR(xp, REG_EDX));
+  fprintf(stderr, "%%ebx = 0x" ZLISP "\n", xpGPR(xp, REG_EBX));
+  fprintf(stderr, "%%esp = 0x" ZLISP "\n", xpGPR(xp, REG_ESP));
+  fprintf(stderr, "%%ebp = 0x" ZLISP "\n", xpGPR(xp, REG_EBP));
+  fprintf(stderr, "%%esi = 0x" ZLISP "\n", xpGPR(xp, REG_ESI));
+  fprintf(stderr, "%%edi = 0x" ZLISP "\n", xpGPR(xp, REG_EDI));
+  fprintf(stderr, "%%eip = 0x" ZLISP "\n", xpGPR(xp, REG_EIP));
+  fprintf(stderr, "%%eflags = 0x" ZLISP "\n", xpGPR(xp, REG_EFL));
 #endif
 
   return debug_continue;
@@ -986,7 +986,7 @@ debug_identify_function(ExceptionInformation *xp, siginfo_t *info)
       char *foreign_name;
       natural where = (natural)xpPC(xp);
 
-      fprintf(stderr, " In foreign code at address 0x%08lx\n", where);
+      fprintf(stderr, " In foreign code at address 0x" ZLISP "\n", where);
       foreign_name = foreign_name_and_offset(where, &disp);
       if (foreign_name) {
         fprintf(stderr, "  [%s + %d]\n", foreign_name, disp);
