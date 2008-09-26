@@ -295,9 +295,7 @@ plbt_sp(LispObj currentSP)
 {
   area *cs_area;
   
-  if (lisp_nil == (LispObj) NULL) {
-    fprintf(stderr, "can't find lisp NIL; lisp process not active process ?\n");
-  } else {
+{
     TCR *tcr = (TCR *)get_tcr(true);
     char *ilevel = interrupt_level_description(tcr);
     cs_area = tcr->cs_area;
@@ -309,7 +307,7 @@ plbt_sp(LispObj currentSP)
       walk_stack_frames((lisp_frame *) ptr_from_lispobj(currentSP), (lisp_frame *) (cs_area->high));
       walk_other_areas();
     }
-  }
+  } 
 }
 
   
