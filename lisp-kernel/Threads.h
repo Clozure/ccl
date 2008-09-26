@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #endif
+#undef __argv
 #include <stdio.h>
 #ifndef WINDOWS
 #include <pthread.h>
@@ -179,7 +180,7 @@ TCR *initial_thread_tcr;
 LispObj create_system_thread(size_t stack_size, 
 			     void* stackaddr,
 #ifdef WINDOWS
-                             unsigned (*start_routine)(void *)
+                             unsigned CALLBACK (*start_routine)(void *)
 #else
 			     void* (*start_routine)(void *)
 #endif
