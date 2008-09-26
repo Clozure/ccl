@@ -174,10 +174,17 @@
                                  #+(or freebsd-target solaris-target)
                                  (%inc-ptr (pref map :link_map.l_addr) disp)
                                  #-(or freebsd-target solaris-target)
-                                 (%int-to-ptr 
-                                  (if (< disp 0) 
-                                    (+ disp (pref map :link_map.l_addr))
-                                    disp))))))
+                                 (let* ((udisp #+32-bit-target (pref dynamic-entries
+                                                                     :<E>lf32_<D>yn.d_un.d_val)
+                                               #+64-bit-target (pref dynamic-entries
+                                                                     :<E>lf64_<D>yn.d_un.d_val)))
+                                   (if (and (> udisp (pref map :link_map.l_addr))
+                                            (< udisp (%ptr-to-int dynamic-entries)))
+                                     (%int-to-ptr udisp)
+                                     (%int-to-ptr 
+                                      (if (< disp 0) 
+                                        (+ disp (pref map :link_map.l_addr))
+                                        disp))))))))
 	  (%setf-macptr dynamic-entries
 			(%inc-ptr dynamic-entries
                                   #+32-bit-target
