@@ -126,6 +126,7 @@ typedef natural paging_info;
 #endif
 #endif
 
+#undef __argv
 #include <stdio.h>
 
 void sample_paging_info(paging_info *);
