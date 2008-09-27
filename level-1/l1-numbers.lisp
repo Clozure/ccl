@@ -468,13 +468,21 @@
     (%df-check-exception-2 'expt b e (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+32-bit-target
+#+(and 32-bit-target (not win32-target))
 (defun %single-float-expt! (b e result)
   (declare (single-float b e result))
   (target::with-stack-short-floats ((temp))
     (%setf-short-float temp (#_powf b e))
     (%sf-check-exception-2 'expt b e (%ffi-exception-status))
     (%setf-short-float result TEMP)))
+
+#+win32-target
+(defun %single-float-expt! (b e result)
+  (declare (single-float b e result))
+  (with-stack-double-floats ((temp) (db b) (de e))
+    (%setf-double-float temp (#_pow db de))
+    (%df-check-exception-2 'expt b e (%ffi-exception-status))
+    (%double-float->short-float temp result)))
 
 #+64-bit-target
 (defun %single-float-expt (b e)
@@ -578,7 +586,7 @@
     (%df-check-exception-1 'cosh n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+32-bit-target
+#+(and 32-bit-target (not win32-target))
 (defun %single-float-cosh! (n result)
   (declare (single-float n result))
   (target::with-stack-short-floats ((temp))
@@ -688,7 +696,7 @@
     (%df-check-exception-1 'exp n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+32-bit-target
+#+(and 32-bit-target (not windows target))
 (defun %single-float-exp! (n result)
   (declare (single-float n result))
   (target::with-stack-short-floats ((temp))
@@ -710,7 +718,7 @@
     (%df-check-exception-1 'sinh n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+32-bit-target
+#+(and 32-bit-target (not windows-target))
 (defun %single-float-sinh! (n result)
   (declare (single-float n result))
   (target::with-stack-short-floats ((temp))
@@ -732,7 +740,7 @@
     (%df-check-exception-1 'tanh n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+32-bit-target
+#+(and 32-bit-target (not windows-target))
 (defun %single-float-tanh! (n result)
   (declare (single-float n result))
   (target::with-stack-short-floats ((temp))
