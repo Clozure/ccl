@@ -322,6 +322,21 @@ given is that of a group to which the current user belongs."
        (pref stat :_stat64.st_gid))
       (values nil nil nil nil nil nil nil nil nil)))
 
+#+win32-target
+(defun %stat-values (result stat)
+  (if (eql 0 (the fixnum result)) 
+      (values
+       t
+       (pref stat :__stat64.st_mode)
+       (pref stat :__stat64.st_size)
+       (pref stat :__stat64.st_mtime)
+       (pref stat :__stat64.st_ino)
+       (pref stat :__stat64.st_uid)
+       #$BUFSIZ
+       (pref stat :__stat64.st_mtime)     ; ???
+       (pref stat :__stat64.st_gid))
+      (values nil nil nil nil nil nil nil nil nil)))
+
 #+windows-target
 (defun windows-strip-trailing-slash (namestring)
   (do* ((len (length namestring) (length namestring)))
@@ -382,11 +397,11 @@ given is that of a group to which the current user belongs."
 #+windows-target
 (defun %stat (name &optional link-p)
   (declare (ignore link-p))
-  (rlet ((stat  #+win64-target #>_stat64))
+  (rlet ((stat  #+win64-target #>_stat64 #+win32-target #>__stat64))
     (%%stat name stat)))
 
 (defun %fstat (fd)
-  (rlet ((stat #+win64-target #>_stat64 #-win64-target :stat))
+  (rlet ((stat #+win64-target #>_stat64 #+win32-target #>__stat64 #-windows-target :stat))
     (%%fstat fd stat)))
 
 
@@ -546,7 +561,7 @@ given is that of a group to which the current user belongs."
     (do* ((bufsize 256))
          ()
       (%stack-block ((buf bufsize))
-        (let* ((nchars (#_GetFullPathNameW path (ash bufsize -1) buf +null-ptr+)))
+        (let* ((nchars (#_GetFullPathNameW path (ash bufsize -1) buf (%null-ptr))))
           (if (eql 0 nchars)
             (return nil)
             (let* ((max (+ nchars nchars 2)))
@@ -802,18 +817,18 @@ of the shell itself."
 
 #+windows-target
 (defun %windows-error-string (error-number)  
-  (rlet ((pbuffer :address +null-ptr+))
+  (rlet ((pbuffer :address (%null-ptr)))
     (if (eql 0
              (#_FormatMessageW (logior #$FORMAT_MESSAGE_ALLOCATE_BUFFER
                                        #$FORMAT_MESSAGE_FROM_SYSTEM
                                        #$FORMAT_MESSAGE_IGNORE_INSERTS
                                        #$FORMAT_MESSAGE_MAX_WIDTH_MASK)
-                               +null-ptr+
+                               (%null-ptr)
                                (abs error-number)
                                0                 ; default langid, more-or-less
                                pbuffer
                                0
-                               +null-ptr+))
+                               (%null-ptr)))
       (format nil "Windows error ~d" (abs error-number))
       (let* ((p (%get-ptr pbuffer))
              (q (%get-native-utf-16-cstring p)))
@@ -1836,19 +1851,11 @@ not, why not; and what its result code was if it completed."
                   (pref ret :uint)
                   1))))
             #+windows-target
-              (rlet ((bufsize #>DWORD 64))
-                (loop
-                  (%stack-block ((info (pref bufsize #>DWORD)))
-                    (unless (eql #$FALSE (#_GetLogicalProcessorInformation
-                                          info bufsize))
-                      (let* ((count 0)
-                             (nbytes (pref bufsize #>DWORD)))
-                        (return
-                          (do* ((i 0 (+ i (record-length #>SYSTEM_LOGICAL_PROCESSOR_INFORMATION))))
-                               ((>= i nbytes) count)
-                            (when (eql (pref info #>SYSTEM_LOGICAL_PROCESSOR_INFORMATION.Relationship) #$RelationProcessorCore)
-                              (incf count))
-                            (%incf-ptr info (record-length #>SYSTEM_LOGICAL_PROCESSOR_INFORMATION))))))))))))
+            (rlet ((procmask #>DWORD_PTR)
+                   (sysmask #>DWORD_PTR))
+              (if (eql 0 (#_GetProcessAffinityMask (#_GetCurrentProcess) procmask sysmask))
+                1
+                (logcount (pref sysmask #>DWORD_PTR)))))))
 
 (def-load-pointers spin-count ()
   (if (eql 1 (cpu-count))
