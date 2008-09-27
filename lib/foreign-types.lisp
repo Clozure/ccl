@@ -98,7 +98,8 @@
                         (:freebsdx8664 "ccl:freebsd-headers64;")
                         (:solarisx8664 "ccl:solarisx64-headers;")
                         (:win64 "ccl:win64-headers;")
-                        (:linuxx8632 "ccl:x86-headers;"))
+                        (:linuxx8632 "ccl:x86-headers;")
+                        (:win32 "ccl:win32-headers"))
                     :interface-package-name
                     #.(ftd-interface-package-name *target-ftd*)
                     :attributes
@@ -122,6 +123,7 @@
                     :platform-ordinal-types
                     (case (backend-name *target-backend*)
                         (:win64 '((:struct :_stat64)))
+                        (:win32 '((:struct :__stat64)))
                         (t
                          (case (target-os-name *target-backend*)
                            (:darwin '((:struct :host_basic_info)))
