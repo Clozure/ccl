@@ -73,16 +73,16 @@
      (round (pref tv :timeval.tv_usec) (floor 1000000 *ticks-per-second*))))
 
 
-(defun gettimeofday (ptimeval &optional (ptz +null-ptr+))
+(defun gettimeofday (ptimeval &optional ptz)
   (int-errno-ffcall (%kernel-import target::kernel-import-lisp-gettimeofday)
                     :address ptimeval
-                    :address ptz
+                    :address (or ptz (%null-ptr))
                     :int))
 
 (defloadvar *lisp-start-timeval*
     (progn
       (let* ((r (make-record :timeval)))
-        (gettimeofday r +null-ptr+)
+        (gettimeofday r)
         r)))
 
 
