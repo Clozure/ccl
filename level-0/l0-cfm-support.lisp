@@ -563,7 +563,7 @@ the operating system."
 
   (defun shlib-containing-address (addr &optional name)
     (declare (ignore name))
-    (rlet ((phmodule :address +null-ptr+))
+    (rlet ((phmodule :address (%null-ptr)))
       (let* ((found (ff-call *get-module-handle-ex-addr*
                              #>DWORD (logior
                                       #$GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
