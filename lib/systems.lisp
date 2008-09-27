@@ -146,6 +146,7 @@
     (ffi-solarisx8664 "ccl:bin;ffi-solarisx8664" ("ccl:lib;ffi-solarisx8664.lisp"))
     (ffi-win64 "ccl:bin;ffi-win64" ("ccl:lib;ffi-win64.lisp"))
     (ffi-linuxx8632  "ccl:bin;ffi-linuxx8632" ("ccl:lib;ffi-linuxx8632.lisp"))
+    (ffi-win32 "ccl:bin;ffi-win32" ("ccl:lib;ffi-win32.lisp"))
     
     (db-io            "ccl:bin;db-io"            ("ccl:lib;db-io.lisp"))
     (hash             "ccl:bin;hash"             ("ccl:lib;hash.lisp"))
