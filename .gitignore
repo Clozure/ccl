@@ -67,6 +67,7 @@ level-0/X86/*fsl
 level-0/X86/*~.*
 level-0/X86/X8632/*.dx32fsl
 level-0/X86/X8632/*.lx32fsl
+level-0/X86/X8632/*.wx32fsl
 level-0/X86/X8664/*fsl
 level-0/X86/X8664/*~.*
 level-1/*~.*
