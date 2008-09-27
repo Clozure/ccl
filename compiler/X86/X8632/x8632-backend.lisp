@@ -77,6 +77,39 @@
 #+linuxx86-target
 (pushnew *linuxx8632-backend* *known-x8632-backends* :key #'backend-name)
 
+#+windows-target
+(defvar *win32-backend*
+  (make-backend :lookup-opcode 'lookup-x86-opcode
+                :lookup-macro #'false
+                :lap-opcodes x86::*x86-opcode-templates*
+                :define-vinsn 'define-x86-vinsn
+                :p2-dispatch *x862-specials*
+                :p2-vinsn-templates *x8632-vinsn-templates*
+                :p2-template-hash-name '*x8632-vinsn-templates*
+                :p2-compile 'x862-compile
+                :platform-syscall-mask (logior platform-os-windows platform-cpu-x86 platform-word-size-32) 
+                :target-specific-features
+                '(:x8632 :x86-target :windows-target :win32-target :x8632-target
+                  :windowsx8632-target
+                  :little-endian-target
+                  :32-bit-target)
+                :target-fasl-pathname (make-pathname :type "wx32fsl")
+                :target-platform (logior platform-cpu-x86
+                                         platform-os-windows
+                                         platform-word-size-32)
+                :target-os :win32
+                :name :win32
+                :target-arch-name :x8632
+                :target-foreign-type-data nil
+                :target-arch x8632::*x8632-target-arch*
+                :lisp-context-register x8632::fs
+		:num-arg-regs 2
+                ))
+
+#+windows-target
+(pushnew *win32-backend* *known-x8632-backends* :key #'backend-name)
+
+
 (defvar *x8632-backend* (car *known-x8632-backends*))
 
 (defun fixup-x8632-backend ()
@@ -130,7 +163,23 @@
                            :callback-bindings-function
                            (intern "GENERATE-CALLBACK-BINDINGS" "X86-LINUX32")
                            :callback-return-value-function
-                           (intern "GENERATE-CALLBACK-RETURN-VALUE" "X86-LINUX32")))                
+                           (intern "GENERATE-CALLBACK-RETURN-VALUE" "X86-LINUX32")))
+                (:win32
+                 (make-ftd :interface-db-directory "ccl:win32-headers;"
+			   :interface-package-name "WIN32"
+                           :attributes '(:bits-per-word  32
+                                         :signed-char nil
+                                         :struct-by-value t
+                                         :float-results-in-x87 t)
+                           :ff-call-expand-function
+                           (intern "EXPAND-FF-CALL" "WIN32")
+			   :ff-call-struct-return-by-implicit-arg-function
+                           (intern "RECORD-TYPE-RETURNS-STRUCTURE-AS-FIRST-ARG"
+                                   "WIN32")
+                           :callback-bindings-function
+                           (intern "GENERATE-CALLBACK-BINDINGS" "WIN32")
+                           :callback-return-value-function
+                           (intern "GENERATE-CALLBACK-RETURN-VALUE" "WIN32")))
                 )))
         (install-standard-foreign-types ftd)
         (use-interface-dir :libc ftd)
