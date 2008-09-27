@@ -225,6 +225,27 @@
       #$REG_EDI                         ;edi
       )))
 
+#+win32-target
+(progn
+  (defconstant gp-regs-offset 0)
+  (defmacro xp-gp-regs (xp)
+    `,xp)
+  (defun xp-mxcsr (xp)
+    (%get-unsigned-long (pref xp #>CONTEXT.ExtendedRegisters) 24))
+  (defconstant flags-register-offset 192)
+  (defconstant eip-register-offset 180)
+  (defparameter *encoded-gpr-to-indexed-gpr*
+    #(
+     176                                ;eax
+     172                                ;ecx
+     168                                ;edx
+     164                                ;ebx
+     196                                ;esp
+     180                                ;ebp
+     160                                ;esi
+     156                                ;edi
+      )))
+
 (defun indexed-gpr-lisp (xp igpr)
   (%get-object (xp-gp-regs xp) (+ gp-regs-offset (ash igpr target::word-shift))))
 (defun (setf indexed-gpr-lisp) (new xp igpr)
@@ -364,7 +385,7 @@
                (ff-call (%kernel-import target::kernel-import-restore-soft-stack-limit)
                         :unsigned-fullword code
                         :void))))
-          ((= signal #$SIGBUS)
+          ((= signal #+win32-target 10 #-win32-target #$SIGBUS)
            (%error (make-condition 'invalid-memory-access
                     :address addr
                     :write-p (not (zerop code)))
