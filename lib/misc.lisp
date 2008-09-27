@@ -33,7 +33,7 @@
   #+windows-target
   (rlet ((nsize #>DWORD 0))
     (if (eql 0 (#_GetComputerNameExW #$ComputerNameDnsFullyQualified
-                                     +null-ptr+
+                                     (%null-ptr)
                                      nsize))
       (%stack-block ((buf (* 2 (pref nsize #>DWORD))))
         (#_GetComputerNameExW #$ComputerNameDnsFullyQualified
