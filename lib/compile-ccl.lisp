@@ -139,7 +139,8 @@
              (:freebsdx8664 'ffi-freebsdx8664)
              (:solarisx8664 'ffi-solarisx8664)
              (:win64 'ffi-win64)
-             (:linuxx8632 'ffi-linuxx8632)))))
+             (:linuxx8632 'ffi-linuxx8632)
+             (:win32 'ffi-win32)))))
 
 
 (defun target-compiler-modules (&optional (target
@@ -220,7 +221,7 @@
 	     '(ppc-error-signal ppc-trap-support
 	       ppc-threads-utils ppc-callback-support))
             ((:linuxx8664 :freebsdx8664 :darwinx8664 :solarisx8664
-	      :darwinx8632 :win64  :linuxx8632)
+	      :darwinx8632 :win64  :linuxx8632 :win32)
              '(x86-error-signal x86-trap-support
                x86-threads-utils x86-callback-support)))))
 
