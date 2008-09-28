@@ -69,7 +69,7 @@
    :macro-apply-code-function 'x8632-fixup-macro-apply-code
    :closure-trampoline-code nil
    :udf-code *x8632-udf-code*
-   :default-image-name "ccl:ccl;w86-boot32.image"
+   :default-image-name "ccl:ccl;wx86-boot32.image"
    :default-startup-file-name "level-1.wx32fsl"
    :subdirs '("ccl:level-0;X86;X8632;" "ccl:level-0;X86;")
    :compiler-target-name :win32
