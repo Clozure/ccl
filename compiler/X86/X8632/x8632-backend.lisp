@@ -102,7 +102,7 @@
                 :target-arch-name :x8632
                 :target-foreign-type-data nil
                 :target-arch x8632::*x8632-target-arch*
-                :lisp-context-register x8632::fs
+                :lisp-context-register x8632::gs
 		:num-arg-regs 2
                 ))
 
