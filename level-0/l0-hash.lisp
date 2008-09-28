@@ -115,9 +115,8 @@
       (if (logbitp $nhash_component_address_bit flags)
         (not (eql (the fixnum (%get-gc-count)) (the fixnum (nhash.vector.gc-count vector))))))))
 
-(defun %set-does-not-need-rehashing (hash)
-  (let* ((vector (nhash.vector hash))
-         (flags (nhash.vector.flags vector)))
+(defun %set-does-not-need-rehashing (vector)
+  (let* ((flags (nhash.vector.flags vector)))
     (declare (fixnum flags))
     (setf (nhash.vector.gc-count vector) (%get-gc-count))
     (when (logbitp $nhash_track_keys_bit flags)
@@ -678,41 +677,106 @@ before doing so.")
 ;; GC may run, updating the needs-rehashing flags and deleting weak entries in both
 ;; old and new vectors.
 (defun %lock-free-rehash (hash)
-  ;; Prevent puthash from adding new entries.  Note this doesn't keep it from undeleting
-  ;; existing entries, so we might still lose, but this makes the odds much smaller.
-  (setf (nhash.grow-threshold hash) 0)
   (let* ((old-vector (nhash.vector hash))
          (inherited-flags (logand $nhash_weak_flags_mask (nhash.vector.flags old-vector)))
-         count new-vector grow-threshold vector-size)
-    (tagbody
-     RESTART
-     (setq count (lock-free-count-entries hash))
-     (multiple-value-setq (grow-threshold vector-size)
-       (compute-hash-size count (nhash.rehash-size hash) (nhash.rehash-ratio hash)))
-     (setq new-vector (%cons-nhash-vector vector-size inherited-flags))
-     REHASH
-     (loop for i from $nhash.vector_overhead below (uvsize old-vector) by 2
-       do (let ((value (atomic-swap-gvector (%i+ i 1) old-vector rehashing-value-marker)))
-            (when (eq value rehashing-value-marker) (error "Who else is doing this?"))
-            (unless (eq value free-hash-marker)
-              (let* ((key (%svref old-vector i))
-                     (new-index (%growhash-probe new-vector hash key))
-                     (new-vector-index (index->vector-index new-index)))
-                (setf (%svref new-vector new-vector-index) key)
-                (setf (%svref new-vector (%i+ new-vector-index 1)) value)
-                (when (%i<= (decf grow-threshold) 0)
-                  ;; Too many entries got undeleted while we were rehashing!
-                  (go RESTART))))))
-     (when (%needs-rehashing-p new-vector) ;; keys moved, but at least can use the same new-vector.
-       (%init-misc free-hash-marker new-vector)
-       (%init-nhash-vector new-vector inherited-flags)
-       (go REHASH)))
+         (grow-threshold (nhash.grow-threshold hash))
+         count new-vector vector-size)
+    ;; Prevent puthash from adding new entries.  Note this doesn't keep it from undeleting
+    ;; existing entries, so we might still lose, but this makes the odds much smaller.
+    (setf (nhash.grow-threshold hash) 0)
+    (setq count (lock-free-count-entries hash))
+    (multiple-value-setq (grow-threshold vector-size)
+      (if (%i<= grow-threshold 0) ; if ran out of room, grow, else get just enough.
+        (compute-hash-size count (nhash.rehash-size hash) (nhash.rehash-ratio hash))
+        (compute-hash-size count 1 (nhash.rehash-ratio hash))))
+    (setq new-vector (%cons-nhash-vector vector-size inherited-flags))
+    (loop with full-count = grow-threshold
+          for i from $nhash.vector_overhead below (uvsize old-vector) by 2
+          do (let* ((value (atomic-swap-gvector (%i+ i 1) old-vector rehashing-value-marker))
+                    (key (%svref old-vector i)))
+               (when (eq value rehashing-value-marker) (error "Who else is doing this?"))
+               (unless (or (eq value free-hash-marker) (eq key deleted-hash-key-marker))
+                 (let* ((new-index (%growhash-probe new-vector hash key))
+                        (new-vector-index (index->vector-index new-index)))
+                   (%set-hash-table-vector-key new-vector new-vector-index key)
+                   (setf (%svref new-vector (%i+ new-vector-index 1)) value)
+                   (decf grow-threshold)
+                   (when (%i<= grow-threshold 0)
+                     ;; Too many entries got undeleted while we were rehashing (that's the
+                     ;; only way we could end up with more than COUNT entries, as adding
+                     ;; new entries is blocked).  Grow the output vector.
+                     (multiple-value-bind (bigger-threshold bigger-vector-size)
+                         (compute-hash-size full-count (nhash.rehash-size hash) (nhash.rehash-ratio hash))
+                       (assert (> bigger-vector-size vector-size))
+                       (let ((bigger-vector (%cons-nhash-vector bigger-vector-size 0)))
+                         (%copy-gvector-to-gvector new-vector
+                                                   $nhash.vector_overhead
+                                                   bigger-vector
+                                                   $nhash.vector_overhead
+                                                   (%i- (uvsize new-vector) $nhash.vector_overhead))
+                         (setf (nhash.vector.flags bigger-vector) (nhash.vector.flags new-vector))
+                         (%lock-free-rehash-in-place hash bigger-vector)
+                         (setq grow-threshold (- bigger-threshold full-count))
+                         (setq full-count bigger-threshold)
+                         (setq new-vector bigger-vector)
+                         (setq vector-size bigger-vector-size))))))))
+    (when (%needs-rehashing-p new-vector) ;; keys moved, but at least can use the same new-vector.
+      (%lock-free-rehash-in-place hash new-vector))
     (setf (nhash.vector.hash new-vector) hash)
     (setf (nhash.grow-threshold hash) grow-threshold)
     ;; At this point, another thread might decrement the threshold while they're looking at the old
     ;; vector. That's ok, just means it will be too small and we'll rehash sooner than planned,
     ;; no big deal.
     (setf (nhash.vector hash) new-vector)))
+
+;; This is called on a new vector that hasn't been installed yet, so no other thread is
+;; accessing it.  However, gc might be deleting stuff from it, which is why it tests
+;; key for deleted-hash-key-marker in addition to free-hash-marker value
+(defun %lock-free-rehash-in-place (hash vector)
+  (let* ((vector-index (- $nhash.vector_overhead 2))
+         (size (nhash.vector-size vector))
+         (rehash-bits (%make-rehash-bits hash size))
+         (index -1))
+    (declare (fixnum size index vector-index))
+    (%set-does-not-need-rehashing vector)
+    (loop
+      (when (>= (incf index) size) (return))
+      (setq vector-index (+ vector-index 2))
+      (unless (%already-rehashed-p index rehash-bits)
+        (let* ((value (%svref vector (%i+ vector-index 1)))
+               (key (%svref vector vector-index)))
+          (if (or (eq value free-hash-marker)
+                  (eq key deleted-hash-key-marker))
+            (unless (eq key free-hash-marker)
+              (setf (%svref vector vector-index) free-hash-marker))
+            (let* ((last-index index)
+                   (first t))
+              (loop
+                (let ((found-index (%rehash-probe rehash-bits hash key vector)))
+                  (%set-already-rehashed-p found-index rehash-bits)
+                  (when (eq last-index found-index)
+                    (return))
+                  (let* ((found-vector-index (index->vector-index found-index))
+                         (newvalue (%svref vector (the fixnum (1+ found-vector-index))))
+                         (newkey (%svref vector found-vector-index)))
+                    (declare (fixnum found-vector-index))
+                    (when first         ; or (eq last-index index) ?
+                      (setq first nil)
+                      (setf (%svref vector (the fixnum (1+ vector-index))) free-hash-marker)
+                      (setf (%svref vector vector-index) free-hash-marker))
+                    (%set-hash-table-vector-key vector found-vector-index key)
+                    (setf (%svref vector (the fixnum (1+ found-vector-index))) value)
+                    (when (or (eq newkey deleted-hash-key-marker)
+                              (eq newvalue free-hash-marker))
+                      (return))
+                    (when (eq key newkey)
+                      (cerror "Delete one of the entries." "Duplicate key: ~s in ~s ~s ~s ~s ~s"
+                              key hash value newvalue index found-index)                       
+                      (return))
+                    (setq key newkey
+                          value newvalue
+                          last-index found-index))))))))))
+  t )
 
 
 (defun lock-free-gethash (key hash default)
@@ -811,7 +875,6 @@ before doing so.")
     ;; it's not worth checking for).  Take care of it and try again.
     (lock-free-rehash hash)))
 
-
 (defun lock-free-count-entries (hash)
   ;; Other threads could be adding/removing entries while we count, some of
   ;; which will be included in the count (i.e. will be treated as if they
@@ -821,14 +884,13 @@ before doing so.")
   (loop
     with vector = (nhash.vector hash)
     for i fixnum from $nhash.vector_overhead below (uvsize vector) by 2
-    count (and (neq (%svref vector i) free-hash-marker)
-               (let ((value (%svref vector (%i+ i 1))))
-                 (when (eq value rehashing-value-marker)
-                   ;; This table is being rehashed.  Wait for it to be
-                   ;; done and try again.
-                   (lock-free-rehash hash)
-                   (return-from lock-free-count-entries (lock-free-count-entries hash)))
-                 (neq value free-hash-marker)))))
+    count (let ((value (%svref vector (%i+ i 1))))
+            (when (eq value rehashing-value-marker)
+              ;; This table is being rehashed.  Wait for it to be
+              ;; done and try again.
+              (lock-free-rehash hash)
+              (return-from lock-free-count-entries (lock-free-count-entries hash)))
+            (neq value free-hash-marker))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1397,7 +1459,7 @@ before doing so.")
           (logand flags $nhash-clear-key-bits-mask))
     (setf (nhash.vector.cache-key vector) free-hash-marker
           (nhash.vector.cache-value vector) nil)
-    (%set-does-not-need-rehashing hash)
+    (%set-does-not-need-rehashing vector)
     (loop
       (when (>= (incf index) size) (return))
       (setq vector-index (+ vector-index 2))
@@ -1464,13 +1526,12 @@ before doing so.")
 
 ;;; Hash to an index that is not set in rehash-bits
   
-(defun %rehash-probe (rehash-bits hash key)
+(defun %rehash-probe (rehash-bits hash key &optional (vector (nhash.vector hash)))
   (declare (optimize (speed 3)(safety 0)))  
-  (multiple-value-bind (hash-code index entries)(compute-hash-code hash key t)
+  (multiple-value-bind (hash-code index entries)(compute-hash-code hash key t vector)
     (declare (fixnum hash-code index entries))
     (when (null hash-code)(cerror "nuts" "Nuts"))
-    (let* ((vector (nhash.vector hash))
-           (vector-index (index->vector-index  index)))
+    (let* ((vector-index (index->vector-index index)))
       (if (or (not (%already-rehashed-p index rehash-bits))
               (eq key (%svref vector vector-index)))
         (return-from %rehash-probe index)
