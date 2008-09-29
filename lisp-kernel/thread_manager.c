@@ -962,16 +962,115 @@ free_tcr_extra_segment(TCR *tcr)
 #endif
 
 #ifdef WINDOWS
+bitvector ldt_entries_in_use = NULL;
+HANDLE ldt_lock;
+
+typedef struct {
+  DWORD offset;
+  DWORD size;
+  LDT_ENTRY entry;
+} win32_ldt_info;
+
+
+int WINAPI (*NtQueryInformationProcess)(HANDLE,DWORD,VOID*,DWORD,DWORD*);
+int WINAPI (*NtSetInformationProcess)(HANDLE,DWORD,VOID*,DWORD);
+
+void
+init_win32_ldt()
+{
+  HANDLE hNtdll;
+  int status = 0xc0000002;
+  win32_ldt_info info;
+  DWORD nret;
+  
+
+  ldt_entries_in_use=malloc(8192/8);
+  zero_bits(ldt_entries_in_use,8192);
+  ldt_lock = CreateMutex(NULL,0,NULL);
+
+  hNtdll = LoadLibrary("ntdll.dll");
+  NtQueryInformationProcess = (void*)GetProcAddress(hNtdll, "NtQueryInformationProcess");
+  NtSetInformationProcess = (void*)GetProcAddress(hNtdll, "NtSetInformationProcess");
+  if (NtQueryInformationProcess != NULL) {
+    info.offset = 0;
+    info.size = sizeof(LDT_ENTRY);
+    status = NtQueryInformationProcess(GetCurrentProcess(),10,&info,sizeof(info),&nret);
+  }
+
+  if (status) {
+    fprintf(stderr, "This application can't run under this OS version\n");
+    _exit(1);
+  }
+}
+
 void
 setup_tcr_extra_segment(TCR *tcr)
 {
+  int i, status;
+  DWORD nret;
+  win32_ldt_info info;
+  LDT_ENTRY *entry = &(info.entry);
+  DWORD *words = (DWORD *)entry, tcraddr = (DWORD)tcr;
+
+
+  WaitForSingleObject(ldt_lock,INFINITE);
+
+  for (i = 0; i < 8192; i++) {
+    if (!ref_bit(ldt_entries_in_use,i)) {
+      info.offset = i << 3;
+      info.size = sizeof(LDT_ENTRY);
+      words[0] = 0;
+      words[1] = 0;
+      status = NtQueryInformationProcess(GetCurrentProcess(),10,&info,sizeof(info),&nret);
+      if (status == 0) {
+        if ((info.size == 0) ||
+            ((words[0] == 0) && (words[1] == 0))) {
+          break;
+        }
+      }
+    }
+  }
+  if (i == 8192) {
+    ReleaseMutex(ldt_lock);
+    fprintf(stderr, "All 8192 ldt entries in use ?\n");
+    _exit(1);
+  }
+  set_bit(ldt_entries_in_use,i);
+  words[0] = 0;
+  words[1] = 0;
+  entry->LimitLow = sizeof(TCR);
+  entry->BaseLow = tcraddr & 0xffff;
+  entry->HighWord.Bits.BaseMid = (tcraddr >> 16) & 0xff;
+  entry->HighWord.Bits.BaseHi = (tcraddr >> 24);
+  entry->HighWord.Bits.Pres = 1;
+  entry->HighWord.Bits.Default_Big = 1;
+  entry->HighWord.Bits.Type = 16 | 2; /* read-write data */
+  entry->HighWord.Bits.Dpl = 3; /* for use by the great unwashed */
+  info.size = sizeof(LDT_ENTRY);
+  status = NtSetInformationProcess(GetCurrentProcess(),10,&info,sizeof(info));
+  if (status != 0) {
+    ReleaseMutex(ldt_lock);
+    FBug(NULL, "can't set LDT entry %d, status = 0x%x", i, status);
+  }
+#if 1
+  /* Sanity check */
+  info.offset = i << 3;
+  info.size = sizeof(LDT_ENTRY);
+  words[0] = 0;
+  words[0] = 0;
+  NtQueryInformationProcess(GetCurrentProcess(),10,&info,sizeof(info),&nret);
+  if (((entry->BaseLow)|((entry->HighWord.Bits.BaseMid)<<16)|((entry->HighWord.Bits.BaseHi)<<24)) != tcraddr) {
+    Bug(NULL, "you blew it: bad address in ldt entry\n");
+  }
+#endif
+  tcr->ldt_selector = (i << 3) | 7;
+  ReleaseMutex(ldt_lock);
 }
 
 void 
 free_tcr_extra_segment(TCR *tcr)
 {
 }
-
 
 #endif
 #endif
@@ -998,9 +1097,6 @@ new_tcr(natural vstack_size, natural tstack_size)
   TCR *tcr = &current_tcr;
 #else /* no TLS */
   TCR *tcr = allocate_tcr();
-#ifdef X8632
-  setup_tcr_extra_segment(tcr);
-#endif
 #endif
 
 #ifdef X86
