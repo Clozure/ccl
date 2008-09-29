@@ -180,9 +180,33 @@ _endfn
         __ifdef([WIN_32])
 _exportfn(C(restore_windows_context))
 Xrestore_windows_context_start:
-        __(hlt)
+        __(movl 12(%esp),%edx)  /* old valence */
+        __(movl 8(%esp),%eax)   /* tcr */
+        __(movw tcr.ldt_selector(%eax), %rcontext_reg)
+        __(movl 4(%esp),%ecx)   /* context */
+        __(movl $0,rcontext(tcr.pending_exception_context))
+        __(frstor win32_context.FloatSave(%ecx))
+        /* Windows doesn't bother to align the context, so use
+          'movupd' here */
+        __(movupd win32_context.Xmm0(%ecx),%xmm0)
+        __(movupd win32_context.Xmm1(%ecx),%xmm1)
+        __(movupd win32_context.Xmm2(%ecx),%xmm2)
+        __(movupd win32_context.Xmm3(%ecx),%xmm3)
+        __(movupd win32_context.Xmm4(%ecx),%xmm4)
+        __(movupd win32_context.Xmm5(%ecx),%xmm5)
+        __(movupd win32_context.Xmm6(%ecx),%xmm6)
+        __(movupd win32_context.Xmm7(%ecx),%xmm7)
+        __(ldmxcsr win32_context.MXCSR(%ecx))
+        __(movl win32_context.Ebp(%ecx),%ebp)
+        __(movl win32_context.Edi(%ecx),%edi)
+        __(movl win32_context.Esi(%ecx),%esi)
+        __(movl win32_context.Edx(%ecx),%edx)
+        __(movl win32_context.Ebx(%ecx),%ebx)
+        __(movl win32_context.Eax(%ecx),%eax)
+        /* There's an iret frame in the context.  Point %esp at it */
+        __(lea win32_context.Eip(%ecx),%esp)
 Xrestore_windows_context_load_rcx:                
-        __(nop)
+        __(movl win32_context.Ecx(%ecx),%ecx)
 Xrestore_windows_context_iret:            
         __(iretl)
 Xrestore_windows_context_end:             
