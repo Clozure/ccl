@@ -23,6 +23,11 @@ Xsubprims_start:
 	__(movl rcontext(tcr.save_vsp),%esp)
 	__(push $0)
 	__(mov %esp,%ebp)
+	__(clr %imm0)
+	__(cmpl $0,C(GCDebug))
+	__(jne 1f)
+	__(uuo_error_gc_trap)
+1:
 	__(jmp local_label(test))
 local_label(loop):
 	__(ref_nrs_value(toplcatch,%arg_z))
@@ -67,6 +72,11 @@ _exportfn(C(start_lisp))
 	__(push %ebx)
 	__(mov 8(%ebp), %ebx)	/* get tcr */
 	__(movw tcr.ldt_selector(%ebx), %rcontext_reg)
+        __(movl 8(%ebp),%eax)
+        __(cmpl rcontext(tcr.linear),%eax)
+        __(je 0f)
+        __(hlt)
+0:              
         .if c_stack_16_byte_aligned
 	__(sub $12, %esp) 	/* stack now 16-byte aligned */
         .else
@@ -82,11 +92,6 @@ _exportfn(C(start_lisp))
 	__(andb $~mxcsr_all_exceptions,rcontext(tcr.foreign_mxcsr))
         __(ldmxcsr rcontext(tcr.lisp_mxcsr))
 	__(movl $TCR_STATE_LISP, rcontext(tcr.valence))
-	__(clr %imm0)
-	__(cmpl $0,C(GCDebug))
-	__(jne 1f)
-	__(uuo_error_gc_trap)
-1:
 	__(call toplevel_loop)
 	__(movl $TCR_STATE_FOREIGN, rcontext(tcr.valence))
 	__(emms)
