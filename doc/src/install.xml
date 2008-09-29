@@ -412,15 +412,17 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
 	<title>Personal Customization with the Init File</title>
     <para>By default &CCL; tries to load the file
       <literal>"home:ccl-init.lisp"</literal> or the compiled
-	  
-      <literal>"home:ccl-init.fasl"</literal> upon starting up. For
-      the sake of backward compatibility, it also tries to load the
-      file <literal>"home:openmcl-init.lisp"</literal>, or its compiled
-      equivalent. &CCL; does this by executing <literal>(load
+      <literal>"home:ccl-init.fasl"</literal> upon starting up.
+      &CCL; does this by executing <literal>(load
       "home:ccl-init")</literal>.  If it's unable to load the file
       (for example because the file doesn't exist), &CCL; doesn't
       signal an error or warning, it just completes its startup
       normally.</para>
+    <para>
+      On Unix systems, if <literal>"ccl-init.lisp"</literal> is not
+      present, &CCL; will look for <literal>".ccl-init.lisp"</literal>
+      (post 1.2 versions only).
+    </para>
     <para>The <literal>"home:"</literal> prefix to the filename is a
       Common Lisp logical host, which &CCL; initializes to refer to
       your home directory. &CCL; therefore looks for either of the
