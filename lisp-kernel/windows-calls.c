@@ -523,6 +523,10 @@ windows_open_shared_library(char *path)
 void
 init_windows_io()
 {
+#ifdef WIN_32
+  extern void init_win32_ldt(void);
+  init_win32_ldt();
+#endif
   find_symbol_lock = CreateMutex(NULL,false,NULL);
 }
 
