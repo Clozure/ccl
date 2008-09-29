@@ -45,6 +45,12 @@ define([fn],[edi])
 	define([Rfn],[7])
 
 define([rcontext_reg],[fs])
+	
+        ifdef([WINDOWS],[
+undefine([rcontext_reg])        
+define([rcontext_reg],[gs])
+        ])
+                
 define([rcontext],[%rcontext_reg:$1])
 
 define([fname],[temp0])
@@ -542,6 +548,56 @@ TCR_BIAS = 0
 	 _word(save_eflags)
         _ends
 
+        _struct(win32_context,0)
+	 _field(ContextFlags, 4)
+	 _field(Dr0, 4)
+	 _field(Dr1, 4)
+	 _field(Dr2, 4)
+	 _field(Dr3, 4)
+	 _field(Dr6, 4)
+	 _field(Dr7, 4)
+	 _struct_label(FloatSave)
+	 _field(ControlWord, 4);
+	 _field(StatusWord, 4)
+	 _field(TagWord, 4)
+	 _field(ErrorOffset, 4)
+	 _field(ErrorSelector, 4)
+	 _field(DataOffset, 4)
+	 _field(DataSelector, 4)
+         _field(RegisterArea, 80)
+	 _field(Cr0NpxState, 4)
+        
+	 _field(SegGs, 4)
+	 _field(SegFs, 4)
+	 _field(SegEs, 4)
+	 _field(SegDs, 4)
+	 _field(Edi, 4)
+	 _field(Esi, 4)
+	 _field(Ebx, 4)
+	 _field(Edx, 4)
+	 _field(Ecx, 4)
+	 _field(Eax, 4)
+	 _field(Ebp, 4)
+	 _field(Eip, 4)
+	 _field(SegCs, 4)
+	 _field(EFlags, 4)
+	 _field(Esp, 4)
+	 _field(SegSs, 4)
+         _struct_label(ExtendedRegisters)
+         _struct_pad(24)
+         _field(MXCSR,4)
+         _struct_pad(136) /* (- 160 28) */
+         _field(Xmm0,16)
+         _field(Xmm1,16)
+         _field(Xmm2,16)
+         _field(Xmm3,16)
+         _field(Xmm4,16)
+         _field(Xmm5,16)
+         _field(Xmm6,16)
+         _field(Xmm7,16)
+         _struct_pad(224)
+         _ends
+        
 TCR_FLAG_BIT_FOREIGN = fixnum_shift
 TCR_FLAG_BIT_AWAITING_PRESET = (fixnum_shift+1)	
 TCR_FLAG_BIT_ALT_SUSPEND = (fixnumshift+2)
