@@ -286,5 +286,9 @@ C(restore_windows_context_load_rcx):  .quad Xrestore_windows_context_load_rcx
 C(restore_windows_context_iret): .quad Xrestore_windows_context_iret
 
         __endif
-                
+
+/* Something that we shouldn't return to */
+_exportfn(C(windows_halt))
+        __(hlt)
+_endfn                                
 	_endfile
