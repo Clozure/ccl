@@ -235,6 +235,11 @@ C(restore_windows_context_end): .long Xrestore_windows_context_end
 C(restore_windows_context_load_rcx):  .long Xrestore_windows_context_load_rcx
 C(restore_windows_context_iret): .long Xrestore_windows_context_iret
 
+
+/* Something that we shouldn't return to */
+_exportfn(C(windows_halt))
+        __(hlt)
+_endfn                                
         __endif
-	_endfile
+        _endfile
 
