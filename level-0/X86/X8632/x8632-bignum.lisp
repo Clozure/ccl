@@ -216,20 +216,23 @@
     (single-value-return 7)))
 
 (defx8632lapfunction %subtract-one ((high arg_y) (low arg_z))
-  (mark-as-imm temp0)
+  (shll ($ (- 16 x8632::fixnumshift)) (% arg_y))
   (unbox-fixnum low imm0)
-  (movl (% high) (% temp0))
-  (shll ($ (- 16 x8632::fixnumshift)) (% temp0))
-  (orl (% imm0) (% temp0))
-  (subl ($ 1) (% temp0))
-  (movzwl (% temp0.w) (% imm0))
-  (box-fixnum imm0 low)
-  (sarl ($ 16) (% temp0))
-  (box-fixnum temp0 high)
-  (mark-as-node temp0)
+  ;; high half should always be clear...
+  ;;(movzwl (% imm0.w) (% imm0))
+  (orl (% arg_y) (% imm0))
+  (decl (% imm0))
   (movl (% esp) (% temp0))
-  (push (% high))
-  (push (% low))
+  ;; extract and push high half
+  (movl ($ (- #x10000)) (% arg_y))
+  (andl (% imm0) (% arg_y))
+  (shrl ($ (- 16 x8632::fixnumshift)) (% arg_y))
+  (push (% arg_y))
+  ;; low half
+  (andl ($ #xffff) (% imm0))
+  (shll ($ x8632::fixnumshift) (% imm0))
+  (push (% imm0))
+  (set-nargs 2)
   (jmp-subprim .SPvalues))
 
 ;;; %SUBTRACT-WITH-BORROW -- Internal.
@@ -260,6 +263,7 @@
   (subl ($ 1) (% imm0))			;sets carry appropriately
   (sbbl (% temp0) (% temp1))
   (setae (%b imm0))			;resulting borrow (1 for no, 0 for yes)
+  (movzbl (%b imm0) (% imm0))
   (box-fixnum imm0 arg_z)
   (movl (% temp1) (% imm0))
   (andl ($ (- #x10000)) (% imm0))
@@ -934,13 +938,13 @@
 ;;; Otherwise, compute floor x[i]x[i-1] / y[j].
 (defx8632lapfunction %floor-99 ((x-stk 8) (xidx 4) #|(ra 0)|#
 				(yptr arg_y) (yidx arg_z))
-  (pop (% temp0))
-  (pop (% imm0))
   (pop (% temp1))
+  (pop (% imm0))
+  (pop (% temp0))
   (discard-reserved-frame)
-  (push (% temp0))
-  (movl (% imm0) (% temp0))
-  (movl (@ x8632::misc-data-offset (% temp1) (% temp0)) (% imm0)) ;x[i]
+  (push (% temp1))
+  (movl (% imm0) (% temp1))
+  (movl (@ x8632::misc-data-offset (% temp0) (% temp1)) (% imm0)) ;x[i]
   (cmpl (% imm0) (@ x8632::misc-data-offset (% yptr) (% yidx)))	  ;y[j]
   (jne @more)
   (pushl ($ '#xffff))
@@ -950,8 +954,8 @@
   (jmp-subprim .SPvalues)
   @more
   (mark-as-imm edx)			;aka temp1 (contains a fixnum)
-  (movl (@ (- x8632::misc-data-offset 4) (% temp1) (% temp0)) (% eax)) ;low
-  (movl (@ x8632::misc-data-offset (% temp1) (% temp0)) (% edx))    ;high digit
+  (movl (@ (- x8632::misc-data-offset 4) (% temp0) (% temp1)) (% eax)) ;low
+  (movl (@ x8632::misc-data-offset (% temp0) (% temp1)) (% edx))    ;high digit
   (divl (@ x8632::misc-data-offset (% yptr) (% yidx)))
   (mark-as-node edx)
   ;; extract and push high half of quotient
