@@ -1746,9 +1746,8 @@ map_windows_exception_code_to_posix_signal(DWORD code)
 
 
 LONG
-windows_exception_handler(EXCEPTION_POINTERS *exception_pointers)
+windows_exception_handler(EXCEPTION_POINTERS *exception_pointers, TCR *tcr)
 {
-  TCR *tcr = get_tcr(false);
   DWORD code = exception_pointers->ExceptionRecord->ExceptionCode;
   int old_valence, signal_number;
   ExceptionInformation *context = exception_pointers->ContextRecord;
@@ -1774,13 +1773,37 @@ windows_exception_handler(EXCEPTION_POINTERS *exception_pointers)
   return restore_windows_context(context, tcr, old_valence);
 }
 
-LONG windows_switch_to_foreign_stack(LispObj, void*, void*);
+void
+setup_exception_handler_call(CONTEXT *context,
+                             LispObj new_sp,
+                             void *handler,
+                             EXCEPTION_POINTERS *new_ep,
+                             TCR *tcr)
+{
+  extern void windows_halt(void);
+  LispObj *p = (LispObj *)new_sp;
+#ifdef WIN_64
+  p-=4;                         /* win64 abi argsave nonsense */
+  *(--p) = (LispObj)windows_halt;
+  context->Rsp = (DWORD64)p;
+  context->Rip = (DWORD64)handler;
+  context->Rcx = (DWORD64)new_ep;
+  context->Rdx = (DWORD64)tcr;
+#else
+  p-=4;                          /* args on stack, stack aligned */
+  p[0] = (LispObj)new_ep;
+  p[1] = (LispObj)tcr;
+  *(--p) = (LispObj)windows_halt;
+  context->Esp = (DWORD)p;
+  context->Eip = (DWORD)handler;
+#endif
+}
 
-LONG
-handle_windows_exception_on_foreign_stack(TCR *tcr,
-                                          CONTEXT *context,
-                                          void *handler,
-                                          EXCEPTION_POINTERS *original_ep)
+void
+prepare_to_handle_windows_exception_on_foreign_stack(TCR *tcr,
+                                                     CONTEXT *context,
+                                                     void *handler,
+                                                     EXCEPTION_POINTERS *original_ep)
 {
   LispObj foreign_rsp = 
     (LispObj) find_foreign_rsp(xpGPR(context,Isp), tcr->cs_area, tcr);
@@ -1798,7 +1821,7 @@ handle_windows_exception_on_foreign_stack(TCR *tcr,
   foreign_rsp = (LispObj)new_ep & ~15;
   new_ep->ContextRecord = new_context;
   new_ep->ExceptionRecord = new_info;
-  return windows_switch_to_foreign_stack(foreign_rsp,handler,new_ep);
+  setup_exception_handler_call(context,foreign_rsp,handler,new_ep, tcr);
 }
 
 LONG CALLBACK
@@ -1810,19 +1833,20 @@ windows_arbstack_exception_handler(EXCEPTION_POINTERS *exception_pointers)
     return EXCEPTION_CONTINUE_SEARCH;
   } else {
     TCR *tcr = get_interrupt_tcr(false);
-    area *vs = tcr->vs_area;
+    area *cs = tcr->cs_area;
     BytePtr current_sp = (BytePtr) current_stack_pointer();
-    struct _TEB *teb = NtCurrentTeb();
+    CONTEXT *context = exception_pointers->ContextRecord;
     
-    if ((current_sp >= vs->low) &&
-        (current_sp < vs->high)) {
-      return
-        handle_windows_exception_on_foreign_stack(tcr,
-                                                  exception_pointers->ContextRecord,
-                                                  windows_exception_handler,
-                                                  exception_pointers);
+    if ((current_sp >= cs->low) &&
+        (current_sp < cs->high)) {
+      FBug(context, "Exception on foreign stack\n");
     }
-    return windows_exception_handler(exception_pointers);
+
+    prepare_to_handle_windows_exception_on_foreign_stack(tcr,
+                                                         context,
+                                                         windows_exception_handler,
+                                                         exception_pointers);
+    return EXCEPTION_CONTINUE_EXECUTION;
   }
 }
 
