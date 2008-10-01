@@ -4086,6 +4086,9 @@ LocalLabelPrefix[]ffcall:
 	__(push %arg_y)
 	__(push %arg_z)
 	__(push %fn)
+        __ifdef([WIN32_ES_HACK])
+         __(movl rcontext(tcr.linear),%ebx)
+        __endif
 	__(movl %esp,rcontext(tcr.save_vsp))
 	__(movl %ebp,rcontext(tcr.save_ebp))
 	__(movl $TCR_STATE_FOREIGN,rcontext(tcr.valence))
@@ -4093,7 +4096,7 @@ LocalLabelPrefix[]ffcall:
 	/* preserve state of direction flag */
 	__(pushfl)
 	__(popl rcontext(tcr.save_eflags))
-	__(cld)
+	__(cld)        
 	__(stmxcsr rcontext(tcr.lisp_mxcsr))
 	__(emms)
 	__(ldmxcsr rcontext(tcr.foreign_mxcsr))
@@ -4103,8 +4106,15 @@ LocalLabelPrefix[]ffcall_setup:
         __(andl $-16,%ecx)
         __(movl %ecx,%esp)
 /*	__(addl $node_size,%esp) */
+        __ifdef([WIN32_ES_HACK])
+         __(push %ds)
+         __(pop %es)
+        __endif
 LocalLabelPrefix[]ffcall_call:
 	__(call *%eax)
+	__ifdef([WIN32_ES_HACK])
+         __(movw tcr.ldt_selector(%ebx),%rcontext_reg)
+        __endif
 LocalLabelPrefix[]ffcall_call_end:
 	__(movl %ebp,%esp)
 	__(movl %esp,rcontext(tcr.foreign_sp))
@@ -4265,6 +4275,10 @@ __(tra(local_label(back_from_callback)))
 	__(pop rcontext(tcr.foreign_sp))
         __(addl $12,%esp)       /* discard alignment padding */
         __(ldmxcsr rcontext(tcr.foreign_mxcsr))
+        __ifdef([WIN32_ES_HACK])
+         __(push %ds)
+         __(pop %es)
+        __endif
 	__(pop %ebp)
 	__(pop %ebx)
 	__(pop %esi)
@@ -4281,7 +4295,7 @@ __(tra(local_label(back_from_callback)))
         __(flds -8(%ebp))
         __(leave)
         __(ret)
-2: /* double-float return in x87 */
+2:      /* double-float return in x87 */
         __(fldl -8(%ebp))
         __(leave)
         __(ret)         
