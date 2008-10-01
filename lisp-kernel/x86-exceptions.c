@@ -1796,7 +1796,11 @@ setup_exception_handler_call(CONTEXT *context,
   *(--p) = (LispObj)windows_halt;
   context->Esp = (DWORD)p;
   context->Eip = (DWORD)handler;
+#ifdef WIN32_ES_HACK
+  context->SegEs = context->SegDs;
 #endif
+#endif
+  context->EFlags &= ~0x400;  /* clear direction flag */
 }
 
 void
