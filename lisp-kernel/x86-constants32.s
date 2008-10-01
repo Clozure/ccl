@@ -48,7 +48,7 @@ define([rcontext_reg],[fs])
 	
         ifdef([WINDOWS],[
 undefine([rcontext_reg])        
-define([rcontext_reg],[gs])
+define([rcontext_reg],[es])
         ])
                 
 define([rcontext],[%rcontext_reg:$1])
@@ -546,6 +546,7 @@ TCR_BIAS = 0
 	 _word(unboxed1)
 	 _node(next_method_context)
 	 _word(save_eflags)
+         _word(allocated)
         _ends
 
         _struct(win32_context,0)
