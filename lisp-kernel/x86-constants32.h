@@ -396,64 +396,65 @@ typedef unsigned short sel_t;   /* for now */
 #define X8632_DEFAULT_NODE_REGS_MASK 0xce
 
 typedef struct tcr {
-    struct tcr *next;
-    struct tcr *prev;
-    natural node_regs_mask; /* bit set means correspnding reg contains node */
-    struct tcr *linear;
+  struct tcr *next;
+  struct tcr *prev;
+  natural node_regs_mask; /* bit set means correspnding reg contains node */
+  struct tcr *linear;
   /* this spill area must be 16-byte aligned */
-    LispObj save0;		/* spill area for node registers */
-    LispObj save1;
-    LispObj save2;
-    LispObj save3;
-    LispObj *save_ebp;		/* EBP when in foreign code */
-    u32_t lisp_mxcsr;
-    u32_t foreign_mxcsr;
-    special_binding *db_link;     /* special binding chain head */
-    LispObj catch_top;            /* top catch frame */
-    LispObj *save_vsp;		  /* VSP when in foreign code */
-    LispObj *save_tsp;		  /* TSP when in foreign code */
-    LispObj *foreign_sp;
-    struct area *cs_area;		/* cstack area pointer */
-    struct area *vs_area;		/* vstack area pointer */
-    struct area *ts_area;		/* tstack area pointer */
-    LispObj cs_limit;			/* stack overflow limit */
-    natural bytes_allocated;
-    natural bytes_consed_high;
-    natural log2_allocation_quantum;      /* for per-thread consing */
-    signed_natural interrupt_pending;     /* pending interrupt flag */
-    xframe_list *xframe;	  /* exception-frame linked list */
-    int *errno_loc;               /* per-thread (?) errno location */
-    LispObj ffi_exception;        /* fpscr bits from ff-call */
-    LispObj osid;                 /* OS thread id */
-    signed_natural valence;	  /* odd when in foreign code */
-    signed_natural foreign_exception_status; /* non-zero -> call lisp_exit_hook */
-    void *native_thread_info;		     /* platform-dependent */
-    void *native_thread_id;	/* mach_thread_t, pid_t, etc. */
-    void *last_allocptr;
-    void *save_allocptr;
-    void *save_allocbase;
-    void *reset_completion;
-    void *activate;
-    signed_natural suspend_count;
-    ExceptionInformation *suspend_context;
-    ExceptionInformation *pending_exception_context;
-    void *suspend;                /* suspension semaphore */
-    void *resume;                 /* resumption semaphore */
-    natural flags;
-    ExceptionInformation *gc_context;
-    void *termination_semaphore;
-    signed_natural unwinding;
-    natural tlb_limit;
-    LispObj *tlb_pointer;
-    natural shutdown_count;
-    LispObj *next_tsp;
-    void *safe_ref_address;
-    sel_t ldt_selector;
-    natural scratch_mxcsr;
-    natural unboxed0;
-    natural unboxed1;
-    LispObj next_method_context; /* used in lieu of register */
-    natural save_eflags;
+  LispObj save0;		/* spill area for node registers */
+  LispObj save1;
+  LispObj save2;
+  LispObj save3;
+  LispObj *save_ebp;		/* EBP when in foreign code */
+  u32_t lisp_mxcsr;
+  u32_t foreign_mxcsr;
+  special_binding *db_link;     /* special binding chain head */
+  LispObj catch_top;            /* top catch frame */
+  LispObj *save_vsp;		  /* VSP when in foreign code */
+  LispObj *save_tsp;		  /* TSP when in foreign code */
+  LispObj *foreign_sp;
+  struct area *cs_area;		/* cstack area pointer */
+  struct area *vs_area;		/* vstack area pointer */
+  struct area *ts_area;		/* tstack area pointer */
+  LispObj cs_limit;			/* stack overflow limit */
+  natural bytes_allocated;
+  natural bytes_consed_high;
+  natural log2_allocation_quantum;      /* for per-thread consing */
+  signed_natural interrupt_pending;     /* pending interrupt flag */
+  xframe_list *xframe;	  /* exception-frame linked list */
+  int *errno_loc;               /* per-thread (?) errno location */
+  LispObj ffi_exception;        /* fpscr bits from ff-call */
+  LispObj osid;                 /* OS thread id */
+  signed_natural valence;	  /* odd when in foreign code */
+  signed_natural foreign_exception_status; /* non-zero -> call lisp_exit_hook */
+  void *native_thread_info;		     /* platform-dependent */
+  void *native_thread_id;	/* mach_thread_t, pid_t, etc. */
+  void *last_allocptr;
+  void *save_allocptr;
+  void *save_allocbase;
+  void *reset_completion;
+  void *activate;
+  signed_natural suspend_count;
+  ExceptionInformation *suspend_context;
+  ExceptionInformation *pending_exception_context;
+  void *suspend;                /* suspension semaphore */
+  void *resume;                 /* resumption semaphore */
+  natural flags;
+  ExceptionInformation *gc_context;
+  void *termination_semaphore;
+  signed_natural unwinding;
+  natural tlb_limit;
+  LispObj *tlb_pointer;
+  natural shutdown_count;
+  LispObj *next_tsp;
+  void *safe_ref_address;
+  sel_t ldt_selector;
+  natural scratch_mxcsr;
+  natural unboxed0;
+  natural unboxed1;
+  LispObj next_method_context; /* used in lieu of register */
+  natural save_eflags;
+  void *allocated;
 } TCR;
 
 #define nil_value (0x13000 + (fulltag_cons))
