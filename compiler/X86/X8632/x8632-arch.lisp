@@ -624,6 +624,7 @@
   unboxed1
   next-method-context			;used in lieu of register
   save-eflags
+  allocated                             ;maybe unaligned TCR pointer
 )
 
 (defconstant interrupt-level-binding-index (ash 1 fixnumshift))
