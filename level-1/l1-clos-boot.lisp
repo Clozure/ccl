@@ -908,7 +908,7 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
                  (and (standard-method-p method)
                       (kernel-function-p (%method-function method)))))
     (cerror "Replace the definition of ~S."
-            "The method ~S is predefined in OpenMCL." method)))
+            "The method ~S is predefined in Clozure CL." method)))
 
 ;;; Called by the expansion of generic-labels.  Which doesn't exist.
 (defun %add-methods (gf &rest methods)

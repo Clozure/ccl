@@ -383,7 +383,7 @@
                  (let ((pkg (symbol-package (if (consp name) (cadr name) name))))
                    (or (eq *common-lisp-package* pkg) (eq *ccl-package* pkg)))))
     (cerror "Replace the definition of ~S."
-            "The function ~S is predefined in OpenMCL." name)
+            "The function ~S is predefined in Clozure CL." name)
     (unless (consp name)
       (proclaim-inline nil name))))
 
