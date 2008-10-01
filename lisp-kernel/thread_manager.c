@@ -758,6 +758,17 @@ enqueue_tcr(TCR *new)
   UNLOCK(lisp_global(TCR_AREA_LOCK),new);
 }
 
+#ifdef WIN_32
+TCR *
+allocate_tcr()
+{
+  void *p = calloc(1,sizeof(TCR)+15);
+  TCR *tcr = (TCR *)((((natural)p)+15)&~15);
+
+  tcr->allocated = p;
+  return tcr;
+}
+#else
 TCR *
 allocate_tcr()
 {
@@ -801,6 +812,7 @@ allocate_tcr()
     return tcr;
   }
 }
+#endif
 
 #ifdef X8664
 #ifdef LINUX
@@ -1931,7 +1943,11 @@ free_freed_tcrs ()
   for (current = freed_tcrs; current; current = next) {
     next = current->next;
 #ifndef HAVE_TLS
+#ifdef WIN32
+    free(current->allocated);
+#else
     free(current);
+#endif
 #endif
   }
   freed_tcrs = NULL;
