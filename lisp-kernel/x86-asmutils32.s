@@ -203,26 +203,26 @@ Xrestore_windows_context_start:
         __(movl win32_context.Edx(%ecx),%edx)
         __(movl win32_context.Ebx(%ecx),%ebx)
         __(movl win32_context.Eax(%ecx),%eax)
-        /* There's an iret frame in the context.  Point %esp at it */
-        __(lea win32_context.Eip(%ecx),%esp)
+        __(movl win32_context.Esp(%ecx),%esp)
+        __(pushl win32_context.Eip(%ecx))
 Xrestore_windows_context_load_rcx:                
         __(movl win32_context.Ecx(%ecx),%ecx)
 Xrestore_windows_context_iret:            
-        __(iretl)
+        __(ret)
 Xrestore_windows_context_end:             
         __(nop)
 _endfn
 	
 _exportfn(C(windows_switch_to_foreign_stack))
         __(pop %eax)
-        __(pop %ecx)            /* new %esp */
-        __(pop %edx)            /* handler */
+        __(pop %ebx)            /* new %esp */
+        __(pop %ecx)            /* handler */
         __(pop %edx)            /* arg */
-        __(movl %ecx,%esp)
+        __(movl %ebx,%esp)
         __(subl $0x10,%esp)
         __(movl %edx,(%esp))
         __(push %eax)
-        __(jmp *%edx)
+        __(jmp *%ecx)
 _endfn        
 
         .data
