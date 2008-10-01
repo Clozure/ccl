@@ -1458,7 +1458,7 @@ main(int argc, char *argv[]
   ensure_gs_available(real_executable_name);
 #endif
 #endif
-#if (defined(DARWIN) && defined(PPC64)) || defined(X8664) || (defined(X8632) && defined(LINUX))
+#if (defined(DARWIN) && defined(PPC64)) || defined(X8664) || (defined(X8632) && !defined(DARWIN))
   remap_spjump();
 #endif
 
