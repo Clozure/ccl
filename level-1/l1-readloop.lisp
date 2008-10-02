@@ -403,25 +403,122 @@
            (definition-environment env t))
     lambda-expression))
 
+
+(defun %cons-def-info (type &optional lfbits keyvect lambda specializers qualifiers)
+  (ecase type
+    (defun nil)
+    (defmacro (setq lambda '(macro) lfbits nil)) ;; some code assumes lfbits=nil
+    (defgeneric (setq lambda (list :methods)))
+    (defmethod (setq lambda (list :methods (cons qualifiers specializers)))))
+  (vector lfbits keyvect *loading-file-source-file* lambda))
+
+(defun def-info.lfbits (def-info)
+  (and def-info (svref def-info 0)))
+
+(defun def-info.keyvect (def-info)
+  (and def-info (svref def-info 1)))
+
+(defun def-info.file (def-info)
+  (and def-info (svref def-info 2)))
+
+(defun def-info.lambda (def-info)
+  (let ((data (and def-info (svref def-info 3))))
+    (and (eq (car data) 'lambda) data)))
+
+(defun def-info.methods (def-info)
+  (let ((data (and def-info (svref def-info 3))))
+    (and (eq (car data) :methods) (%cdr data))))
+
+(defun def-info-with-new-methods (def-info new-methods)
+  (unless (eq (def-info.type def-info) 'defgeneric) (error "Bug: not method info: ~s" def-info))
+  (if (eq new-methods (def-info.methods def-info))
+    def-info
+    (let ((new (copy-seq def-info)))
+      (setf (svref new 3) (cons :methods new-methods))
+      new)))
+
+(defun def-info.macro-p (def-info)
+  (let ((data (and def-info (svref def-info 2))))
+    (eq (car data) 'macro)))
+
+(defun def-info.type (def-info)
+  (if (null def-info) nil  ;; means FTYPE decl or lap function
+    (let ((data (svref def-info 3)))
+      (ecase (car data)
+        ((nil lambda) 'defun)
+        (:methods 'defgeneric)
+        (macro 'defmacro)))))
+
+(defparameter *one-arg-defun-def-info* (%cons-def-info 'defun (encode-lambda-list '(x))))
+
+(defvar *compiler-warn-on-duplicate-definitions* t)
+
+(defun combine-function-infos (name old-info new-info)
+  (let ((old-type (def-info.type old-info))
+        (new-type (def-info.type new-info)))
+    (cond ((and (eq old-type 'defgeneric) (eq new-type 'defgeneric))
+           ;; TODO: Check compatibility of lfbits...
+           ;; TODO: check that all methods implement defgeneric keys
+           (let ((old-methods (def-info.methods old-info))
+                 (new-methods (def-info.methods new-info)))
+             (loop for new-method in new-methods
+                   do (if (member new-method old-methods :test #'equal)
+                        (when *compiler-warn-on-duplicate-definitions*
+                          (nx1-whine :duplicate-definition
+                                     `(method ,@(car new-method) ,name ,(cdr new-method))
+                                     (def-info.file old-info)
+                                     (def-info.file new-info)))
+                        (push new-method old-methods)))
+             (def-info-with-new-methods old-info old-methods)))
+          ((or (eq (or old-type 'defun) (or new-type 'defun))
+               (eq (or old-type 'defgeneric) (or new-type 'defgeneric)))
+           (when (and old-type new-type *compiler-warn-on-duplicate-definitions*)
+             (nx1-whine :duplicate-definition name (def-info.file old-info) (def-info.file new-info)))
+           (or new-info old-info))
+          (t
+           (when *compiler-warn-on-duplicate-definitions*
+             (apply #'nx1-whine :duplicate-definition
+                    name
+                    (def-info.file old-info)
+                    (def-info.file new-info)
+                    (cond ((eq old-type 'defmacro) '("macro" "function"))
+                          ((eq new-type 'defmacro) '("function" "macro"))
+                          ((eq old-type 'defgeneric) '("generic function" "function"))
+                          (t '("function" "generic function")))))
+           new-info))))
+
+(defun record-function-info (name info env)
+  (let* ((definition-env (definition-environment env)))
+    (if definition-env
+      (let* ((defs (defenv.defined definition-env))
+             (already (if (listp defs) (assq name defs) (gethash name defs))))
+        (if already
+          (setf (%cdr already) (combine-function-infos name (%cdr already) info))
+          (let ((new (cons name info)))
+            (if (listp defs)
+              (setf (defenv.defined definition-env) (cons new defs))
+              (setf (gethash name defs) new))))
+        info))))
+
+
 ;;; This is different from AUGMENT-ENVIRONMENT.
-;;; If "info" is a lambda expression, then
-;;;  record a cons whose CAR is (encoded-lfun-bits . keyvect) and whose cdr
-;;;  is the lambda expression iff the function named by "name" is 
-;;;  declared/proclaimed INLINE in env
 (defun note-function-info (name lambda-expression env)
   (let* ((info nil)
          (name (maybe-setf-function-name name)))
     (when (lambda-expression-p lambda-expression)
       (multiple-value-bind (lfbits keyvect) (encode-lambda-list (cadr lambda-expression) t)
-        (setq info (cons (cons lfbits keyvect) 
-                         (retain-lambda-expression name lambda-expression env)))))
+        (setq info (%cons-def-info 'defun lfbits keyvect
+                                   (retain-lambda-expression name lambda-expression env)))))
     (record-function-info name info env))
   name)
 
 ; And this is different from FUNCTION-INFORMATION.
 (defun retrieve-environment-function-info (name env)
  (let ((defenv (definition-environment env)))
-   (if defenv (assq (maybe-setf-function-name name) (defenv.defined defenv)))))
+   (when defenv
+     (let ((defs (defenv.defined defenv))
+           (sym (maybe-setf-function-name name)))
+       (if (listp defs) (assq sym defs) (gethash sym defs))))))
 
 (defun maybe-setf-function-name (name)
   (if (and (consp name) (eq (car name) 'setf))

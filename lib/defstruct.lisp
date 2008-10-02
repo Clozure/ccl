@@ -20,9 +20,12 @@
 
 (eval-when (eval compile)
   (require 'defstruct-macros)
+
 )
 
-
+#-BOOTSTRAPPED
+(unless (boundp '*one-arg-defun-def-info*)
+  (setq *one-arg-defun-def-info* nil))
 
 (defvar %structure-refs% (make-hash-table :test #'eq))
 (defvar %defstructs% (make-hash-table :test #'eq))
@@ -129,7 +132,7 @@
                       (ssd-offset slot))))))))))))
 
 ;;; return stuff for defstruct to compile
-(defun %defstruct-compile (sd refnames)
+(defun %defstruct-compile (sd refnames env)
   (let ((stuff))    
     (dolist (slot (sd-slots sd))
       (unless (fixnump (ssd-name slot))
@@ -141,13 +144,13 @@
                 ; This should be a style-warning
                 (warn "Accessor ~s at different position than in included structure"
                       accessor)))
-            (let ((fn (slot-accessor-fn slot accessor)))
+            (let ((fn (slot-accessor-fn slot accessor env)))
               (push
                `(progn
-                  ,fn
+                  ,.fn
                   (puthash ',accessor %structure-refs% ',(ssd-type-and-refinfo slot)))
                stuff))))))
-    `(progn ,@(nreverse stuff))))
+    (nreverse stuff)))
 
 
 ; no #. for cross compile
@@ -182,27 +185,33 @@
 ;;; PPC.  So can use that space optimization iff host and target are
 ;;; the same.
 
-(defparameter *defstruct-share-accessor-functions* t)
 
-(defun slot-accessor-fn (slot name &aux (ref (ssd-reftype slot))
-                              (offset (ssd-offset slot)))
-    (cond ((eq ref $defstruct-nth)
-           (if (and  (%i< offset 10) *defstruct-share-accessor-functions*)
-             `(fset ',name
+(defparameter *defstruct-share-accessor-functions* t)   ;; TODO: isn't it time to get rid of this?
+
+(defun slot-accessor-fn (slot name env &aux (ref (ssd-reftype slot)) (offset (ssd-offset slot)))
+  (cond ((eq ref $defstruct-nth)
+         (if (and  (%i< offset 10) *defstruct-share-accessor-functions*)
+           `((eval-when (:compile-toplevel)
+               (record-function-info ',name ',*one-arg-defun-def-info* ,env))
+              (fset ',name
                     ,(symbol-function
                       (%svref '#(first second third fourth fifth
-                                       sixth seventh eighth ninth tenth) offset)))
-             `(defun ,name (x)  (nth ,offset x))))
-          ((eq ref $defstruct-struct)
-           (if (and (%i< offset 10) *defstruct-share-accessor-functions*)
-             `(fset ',name , (%svref *struct-ref-vector* offset))
-             `(defun ,name (x)  (struct-ref x ,offset))))
-          ((or (eq ref target::subtag-simple-vector)
-               (eq ref $defstruct-simple-vector))
-           (if (and (%i< offset 10) *defstruct-share-accessor-functions*)
-             `(fset ',name ,(%svref *svref-vector* offset))
-             `(defun ,name (x)  (svref x ,offset))))
-          (t `(defun ,name (x) (uvref x ,offset)))))
+                                 sixth seventh eighth ninth tenth) offset))))
+           `((defun ,name (x)  (nth ,offset x)))))
+        ((eq ref $defstruct-struct)
+         (if (and (%i< offset 10) *defstruct-share-accessor-functions*)
+           `((eval-when (:compile-toplevel)
+               (record-function-info ',name ',*one-arg-defun-def-info* ,env))                
+             (fset ',name , (%svref *struct-ref-vector* offset)))
+           `((defun ,name (x)  (struct-ref x ,offset)))))
+        ((or (eq ref target::subtag-simple-vector)
+             (eq ref $defstruct-simple-vector))
+         (if (and (%i< offset 10) *defstruct-share-accessor-functions*)
+           `((eval-when (:compile-toplevel)
+               (record-function-info ',name ',*one-arg-defun-def-info* ,env))
+             (fset ',name ,(%svref *svref-vector* offset)))
+           `((defun ,name (x)  (svref x ,offset)))))
+        (t `((defun ,name (x) (uvref x ,offset))))))
 
 (defun defstruct-reftype (type)
   (cond ((null type) $defstruct-struct)
@@ -210,6 +219,7 @@
         (t (element-type-subtype (cadr type)))))
 
 (defun defstruct-slot-defs (sd refnames env)
+  (declare (ignore env))
   (let ((ref (defstruct-reftype (sd-type sd))) name defs)
     (dolist (slot (sd-slots sd))
       (ssd-set-reftype slot ref)
@@ -218,11 +228,7 @@
         (unless (sd-refname-pos-in-included-struct sd name)
           (push name defs))))
     (setq defs (nreverse defs))
-    (let* ((info (list (cons (dpb 1 $lfbits-numreq 0) nil))))
-      `(progn
-        (eval-when (:compile-toplevel)
-          ,@(mapcar #'(lambda (name) `(record-function-info ',name ',info ,env)) defs))
-        (declaim (inline ,@defs))))))
+    `((declaim (inline ,@defs)))))
 
 ;;;Used by setf and whatever...
 (defun defstruct-ref-transform (predicate-or-type-and-refinfo args)

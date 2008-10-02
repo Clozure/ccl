@@ -306,7 +306,7 @@
 
 
 
-(defstruct (frag-list (:include ccl::dll-header)))
+(defstruct (frag-list (:include ccl::dll-header) (:constructor nil)))
 
 ;;; ccl::dll-header-last is unit-time
 (defun frag-list-current (frag-list)

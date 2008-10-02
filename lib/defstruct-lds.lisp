@@ -243,11 +243,11 @@
     (return
      `(progn
        (remove-structure-defs  ',struct-name) ; lose any previous defs
-        ,(defstruct-slot-defs sd refnames env)
+        ,.(defstruct-slot-defs sd refnames env)
         ,.(if constructor (list (defstruct-constructor sd constructor)))
         ,.(defstruct-boa-constructors sd boa-constructors)
-        ,.(if copier (list (defstruct-copier sd copier env)))
-        ,.(if predicate (defstruct-predicate sd named predicate))
+        ,.(if copier (defstruct-copier sd copier env))
+        ,.(if predicate (defstruct-predicate sd named predicate env))
         (eval-when (:compile-toplevel)
           (define-compile-time-structure 
             ',sd 
@@ -258,7 +258,7 @@
          ',sd
          ,(if (and predicate (null (sd-type sd))) `',predicate)
          ,.(if documentation (list documentation)))
-        ,(%defstruct-compile sd refnames)
+        ,.(%defstruct-compile sd refnames env)
        ;; Wait until slot accessors are defined, to avoid
        ;; undefined function warnings in the print function/method.
        (%defstruct-set-print-function
@@ -380,16 +380,16 @@
            (t `(uvector ,slot ,@values)))))
 
 (defun defstruct-copier (sd copier env)
-  `(progn
-     (eval-when (:compile-toplevel)
-       (record-function-info ',copier (list (list (encode-lambda-list '(x)))) ,env))
-     (fset ',copier
-           ,(if (eq (sd-type sd) 'list) '#'copy-list '#'copy-uvector))
-     (record-source-file ',copier 'function)))
-; (put 'COPY-SHIP 'nx-alias 'copy-list)
+  `((eval-when (:compile-toplevel)
+      (record-function-info ',copier ',*one-arg-defun-def-info* ,env))
+    (fset ',copier
+          ,(if (eq (sd-type sd) 'list) '#'copy-list '#'copy-uvector))
+    (record-source-file ',copier 'function)))
 
-(defun defstruct-predicate (sd named predicate &aux (arg (gensym)))
-  (let* ((sd-name (sd-name sd))
+(defun defstruct-predicate (sd named predicate env)
+  (declare (ignore env))
+  (let* ((arg (gensym))
+         (sd-name (sd-name sd))
          (body
           (case (sd-type sd)
             ((nil) `(structure-typep ,arg ',(find-class-cell sd-name t)))
@@ -397,7 +397,6 @@
             (t `(and (uvector-subtype-p ,arg ,(defstruct-reftype (sd-type sd)))
                (< ,named (uvsize ,arg))
                (eq (uvref ,arg ,named) ',sd-name))))))
-    `((setf (symbol-function ',predicate) #'(lambda (,arg) ,body))
-      (record-source-file ',predicate 'function))))
+    `((defun ,predicate (,arg) ,body))))
 
 ; End of defstruct-lds.lisp

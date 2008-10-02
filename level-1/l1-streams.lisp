@@ -4296,8 +4296,6 @@
     (incf (ioblock-charpos ioblock)))
   (%string-push-extend char (string-stream-ioblock-string ioblock)))
 
-(defmethod stream-force-output ((stream string-output-stream)) nil)
-
 (defun fill-pointer-string-output-stream-ioblock-write-simple-string (ioblock string start-char num-chars)
   (let* ((end (+ start-char num-chars))
          (nlpos (position #\Newline string :start start-char :end end :from-end t)))

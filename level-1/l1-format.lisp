@@ -47,10 +47,10 @@
 
 (defun pop-format-arg (&aux (args *format-arguments*))
   (if (null args)
-      (format-error "Missing argument"))
-    (progn
-     (setq *format-arguments* (cdr args))
-     (%car args)))
+    (format-error "Missing argument"))
+  (progn
+    (setq *format-arguments* (cdr args))
+    (%car args)))
  
 ;SUB-FORMAT parses (a range of) the control string, finding the directives
 ;and applying them to their parameters.
@@ -291,30 +291,33 @@ done
 ;;;Interim definitions
 
 ;;;This function is shadowed by CCL in order to use ~{ to print error messages.
-(defun format (stream control-string &rest format-arguments)
-  (declare (dynamic-extent format-arguments))
-  (when (null stream)
-   (return-from format 
-    (with-output-to-string (x)
-     (apply #'format x control-string format-arguments))))
-  (if (eq stream t)
-    (setq stream *standard-output*)
-    (unless (streamp stream) (report-bad-arg stream 'stream)))
-  (if (functionp control-string)
-    (apply control-string stream format-arguments)
-    (progn
-      (setq control-string (ensure-simple-string control-string))
-      (let* ((*format-original-arguments* format-arguments)
-             (*format-arguments* format-arguments)
-             (*format-control-string* control-string))
-        (catch 'format-escape
-         (sub-format stream 0 (length control-string)))
-        nil))))
+(fset 'format 
+      (nlambda bootstrapping-format (stream control-string &rest format-arguments)
+        (declare (dynamic-extent format-arguments))
+        (block format
+          (when (null stream)
+            (return-from format 
+              (with-output-to-string (x)
+                (apply #'format x control-string format-arguments))))
+          (if (eq stream t)
+            (setq stream *standard-output*)
+            (unless (streamp stream) (report-bad-arg stream 'stream)))
+          (if (functionp control-string)
+            (apply control-string stream format-arguments)
+            (progn
+              (setq control-string (ensure-simple-string control-string))
+              (let* ((*format-original-arguments* format-arguments)
+                     (*format-arguments* format-arguments)
+                     (*format-control-string* control-string))
+                (catch 'format-escape
+                  (sub-format stream 0 (length control-string)))
+                nil))))))
 
-(defun format-error (&rest args)
-   (format t "~&FORMAT error at position ~A in control string ~S "
-             *format-index* *format-control-string*)
-   (apply #'error args))
+(fset 'format-error
+      (nlambda bootstrapping-format-error (&rest args)
+        (format t "~&FORMAT error at position ~A in control string ~S "
+                *format-index* *format-control-string*)
+        (apply #'error args)))
 
 (defun format-no-flags (colon atsign)
   (when (or colon atsign) (format-error "Flags not allowed")))

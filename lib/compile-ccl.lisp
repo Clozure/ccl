@@ -309,6 +309,7 @@
 )
 
 (defun compile-ccl (&optional force-compile)
+ (with-compilation-unit ()
   (update-modules 'nxenv force-compile)
   (update-modules *compiler-modules* force-compile)
   (update-modules (target-compiler-modules) force-compile)
@@ -322,7 +323,7 @@
     (update-modules other-lib force-compile)
     (require-modules other-lib)
     (require-update-modules *code-modules* force-compile))
-  (compile-modules *aux-modules* force-compile))
+  (compile-modules *aux-modules* force-compile)))
 
 
 
@@ -352,6 +353,7 @@
 ;Compile but don't load
 
 (defun xcompile-ccl (&optional force)
+ (with-compilation-unit ()
   (compile-modules 'nxenv force)
   (compile-modules *compiler-modules* force)
   (compile-modules (target-compiler-modules) force)
@@ -361,7 +363,7 @@
   (compile-modules (target-level-1-modules) force)
   (compile-modules (target-other-lib-modules) force)
   (compile-modules *code-modules* force)
-  (compile-modules *aux-modules* force))
+  (compile-modules *aux-modules* force)))
 
 (defun require-update-modules (modules &optional force-compile)
   (if (not (listp modules)) (setq modules (list modules)))
@@ -370,13 +372,6 @@
     (require-modules module)
     (update-modules module force-compile))))
 
-(defun compile-level-1 (&optional force-compile)
-  (compile-modules (target-level-1-modules (backend-name *host-backend*))
-		   force-compile))
-
-
-
-  
 
 (defun target-xcompile-ccl (target &optional force)
   (let* ((backend (or (find-backend target) *target-backend*))

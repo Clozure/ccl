@@ -509,14 +509,27 @@
     (:special-fbinding . "Attempt to bind compiler special name: ~s. Result undefined.")
     (:lambda . "Suspicious lambda-list: ~s")
     (:result-ignored . "Function result ignored in call to ~s")
+    (:duplicate-definition . report-compile-time-duplicate-definition)
     (:program-error . "~a")))
 
+(defun report-compile-time-duplicate-definition (condition stream)
+  (destructuring-bind (name old-file new-file &optional from to) (compiler-warning-args condition)
+    (format stream
+            "Duplicate definitions of ~s~:[~*~;~:* (as a ~a and a ~a)~]~:[~;, in this file~:[~; and in ~s~]~]"
+            name from to
+            (and old-file new-file)
+            (neq old-file new-file)
+            old-file)))
 
 (defun report-compiler-warning (condition stream)
   (let* ((warning-type (compiler-warning-warning-type condition))
-         (format-string (cdr (assq warning-type *compiler-warning-formats*))))
+         (format-string (cdr (assq warning-type *compiler-warning-formats*)))
+         (name (reverse (compiler-warning-function-name condition))))
     (format stream "In ")
-    (print-nested-name (reverse (compiler-warning-function-name condition)) stream)
+    (print-nested-name name stream)
+    (when (every #'null name)
+      (let ((position (compiler-warning-stream-position condition)))
+        (when position (format stream " at position ~s" position))))
     (format stream ": ")
     (if (typep format-string 'string)
       (apply #'format stream format-string (compiler-warning-args condition))

@@ -1259,13 +1259,14 @@
 		 (return nil)))))))
 
 
-(defun pprint (object &optional (stream *standard-output*))
-  "Prettily output OBJECT preceded by a newline."
-  (setq stream (decode-stream-arg stream))
-  (terpri stream)
-  (let ((*print-escape* T) (*print-pretty* T))
-    (write-1 object stream))
-  (values))
+(without-duplicate-definition-warnings  ;; override l1-io version.
+ (defun pprint (object &optional (stream *standard-output*))
+   "Prettily output OBJECT preceded by a newline."
+   (setq stream (decode-stream-arg stream))
+   (terpri stream)
+   (let ((*print-escape* T) (*print-pretty* T))
+     (write-1 object stream))
+   (values)))
 
 
 ;Any format string that is converted to a function is always printed

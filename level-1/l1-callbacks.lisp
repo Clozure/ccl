@@ -21,22 +21,6 @@
 (defstatic *callback-lock* (make-lock))
 
 
-;;; MacOS toolbox routines were once written mostly in Pascal, so some
-;;; code still refers to callbacks from foreign code as "pascal-callable
-;;; functions".
-
-; %Pascal-Functions% Entry
-(def-accessor-macros %svref
-  pfe.routine-descriptor
-  pfe.proc-info
-  pfe.lisp-function
-  pfe.sym
-  pfe.without-interrupts
-  pfe.trace-p)
-
-(defun %cons-pfe (routine-descriptor proc-info lisp-function sym without-interrupts)
-  (vector routine-descriptor proc-info lisp-function sym without-interrupts nil))
-
 ;;; (defcallback ...) expands into a call to this function.
 (defun define-callback-function (lisp-function  &optional doc-string (without-interrupts t) monitor-exception-ports
                                                    &aux name trampoline)

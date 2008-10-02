@@ -271,9 +271,9 @@
 
 (def-accessors (logical-pathname) %svref
   ()                                    ; 'logical-pathname
-  %pathname-directory
-  %pathname-name
-  %pathname-type  
+  nil                                   ; %pathname-directory
+  nil                                   ; %pathname-name
+  nil                                   ; %pathname-type  
   %logical-pathname-host
   %logical-pathname-version)
 
@@ -1402,6 +1402,23 @@
   entry-fn                            ;pprint function
   entry-full-spec                     ;list of priority and type specifier
   )
+
+;;; MacOS toolbox routines were once written mostly in Pascal, so some
+;;; code still refers to callbacks from foreign code as "pascal-callable
+;;; functions".
+
+; %Pascal-Functions% Entry
+(def-accessor-macros %svref
+  pfe.routine-descriptor
+  pfe.proc-info
+  pfe.lisp-function
+  pfe.sym
+  pfe.without-interrupts
+  pfe.trace-p)
+
+(defmacro %cons-pfe (routine-descriptor proc-info lisp-function sym without-interrupts)
+  `(vector ,routine-descriptor ,proc-info ,lisp-function ,sym ,without-interrupts nil))
+
 
 (def-accessors %svref
     ()                                  ; 'xp-structure

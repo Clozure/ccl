@@ -994,40 +994,6 @@
     (nreverse temp)
     temp))
 
-;;; Modified to clear the elements between the old and new fill pointers
-;;; so they won't hold on to garbage.
-(defun vector-delete (item vector test test-not key start end inc count
-                           &aux (length (length vector)) pos fill val)
-  (setq key (adjust-key key))
-  (multiple-value-setq (test test-not) (adjust-test-args item test test-not))
-  (setq end (check-sequence-bounds vector start end))
-  (if (%i< inc 0) (psetq start (%i- end 1) end (%i- start 1)))
-  (setq fill (setq pos start))
-  (loop
-    (if (or (eq count 0) (eq pos end)) (return))
-    (if (matchp2 item (setq val (aref vector pos)) test test-not key)
-      (setq count (%i- count 1))
-      (progn
-        (if (neq fill pos) (setf (aref vector fill) val))
-        (setq fill (%i+ fill inc))))
-    (setq pos (%i+ pos inc)))
-  (if (%i> fill pos) (psetq fill (%i+ pos 1) pos (%i+ fill 1)))
-  (loop
-    (if (eq pos length) (return))
-    (setf (aref vector fill) (aref vector pos))
-    (setq fill (%i+ fill 1) pos (%i+ pos 1)))
-  (when (gvectorp (array-data-and-offset vector))
-    (let ((old-fill (fill-pointer vector))
-          (i fill))
-      (declare (fixnum i old-fill))
-      (loop
-        (when (>= i old-fill) (return))
-        (setf (aref vector i) nil)
-        (incf i))))
-  (setf (fill-pointer vector) fill)
-  vector)
-
-
 ; The vector will be freshly consed & nothing is displaced to it,
 ; so it's legit to destructively truncate it.
 ; Likewise, it's ok to access its components with UVREF.

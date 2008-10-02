@@ -1081,16 +1081,16 @@ function to the indicated name is true.")
         (if info (setq token afunc 
                        containing-env (afunc-environment afunc)
                        lambda-form (afunc-lambdaform afunc)))
-        (let* ((defenv (definition-environment env)))
-          (if (cdr (setq info (if defenv (cdr (assq sym (defenv.defined defenv))))))
-            (setq lambda-form (cdr info)
+        (setq info (cdr (retrieve-environment-function-info sym env)))
+        (if (def-info.lambda info)
+            (setq lambda-form (def-info.lambda info)
                   token sym
-                  containing-env (new-lexical-environment defenv))
+                  containing-env (new-lexical-environment (definition-environment env)))
             (unless info
               (if (cdr (setq info (assq sym *nx-globally-inline*)))
                 (setq lambda-form (%cdr info)
                       token sym
-                      containing-env (new-lexical-environment (new-definition-environment nil)))))))))
+                      containing-env (new-lexical-environment (new-definition-environment nil))))))))
     (values lambda-form (nx-closed-environment env containing-env) token)))
 
 (defun nx-closed-environment (current-env target)
@@ -1921,12 +1921,13 @@ Or something. Right? ~s ~s" var varbits))
     (multiple-value-bind (bits keyvect)
                          (case deftype
                            (:global-mismatch (innermost-lfun-bits-keyvect def))
-                           (:environment-mismatch (values (caadr def) (cdadr def)))
+                           (:environment-mismatch
+                              (values (def-info.lfbits (cdr def)) (def-info.keyvect (cdr def))))
                            (t (let* ((lambda-form (afunc-lambdaform def)))
                                 (if (lambda-expression-p lambda-form)
                                   (encode-lambda-list (cadr lambda-form))))))
       (when bits
-        (unless (typep bits 'fixnum) (bug "Bad bits!"))
+        (unless (typep bits 'fixnum) (error "Bug: Bad bits ~s!" bits))
         (let* ((nargs (length arglist))
                (minargs (if spread-p (1- nargs) nargs))
                (maxargs (if spread-p nil nargs))

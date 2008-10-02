@@ -525,22 +525,31 @@
 
 (defparameter *outstanding-deferred-warnings* nil)
 
+(defun call-with-compilation-unit (thunk &key override)
+  (let* ((*outstanding-deferred-warnings* (%defer-warnings override)))
+    (multiple-value-prog1 (funcall thunk)
+      (report-deferred-warnings))))
 
-(defun %defer-warnings (override &optional flags)
-  (%istruct 'deferred-warnings (unless override *outstanding-deferred-warnings*) nil nil flags))
+(defun %defer-warnings (override &optional flags &aux (parent *outstanding-deferred-warnings*))
+  (%istruct 'deferred-warnings
+            (unless override parent)
+            nil
+            (if (or override (not parent))
+              (make-hash-table :test #'eq)
+              (deferred-warnings.defs parent))
+            flags))
 
 (defun report-deferred-warnings ()
   (let* ((current *outstanding-deferred-warnings*)
          (parent (deferred-warnings.parent current))
-         (defs (deferred-warnings.defs current))
          (warnings (deferred-warnings.warnings current))
          (any nil)
          (harsh nil))
     (if parent
       (setf (deferred-warnings.warnings parent) (append warnings (deferred-warnings.warnings parent))
-            (deferred-warnings.defs parent) (append defs (deferred-warnings.defs parent))
             parent t)
       (let* ((file nil)
+             (defs (deferred-warnings.defs current))
              (init t))
         (flet ((signal-warning (w)
                  (multiple-value-setq (harsh any file) (signal-compiler-warning w init file harsh any))
@@ -550,7 +559,7 @@
                    (wfname (car args))
                    (def nil))
               (when (if (typep w 'undefined-function-reference)
-                      (not (setq def (or (assq wfname defs)
+                      (not (setq def (or (gethash wfname defs)
                                          (let* ((global (fboundp wfname)))
                                            (if (typep global 'function)
                                              global))))))
@@ -558,9 +567,7 @@
               ;; Check args in call to forward-referenced function.
               (if (or (typep def 'function)
                       (and (consp def)
-                           (consp (cdr def))
-                           (consp (cadr def))
-                           (caadr def)))
+                           (def-info.lfbits (cdr def))))
                 (when (cdr args)
                   (destructuring-bind (arglist spread-p)
                       (cdr args)
@@ -576,11 +583,7 @@
                           (setf (compiler-warning-stream-position w2)
                                 (compiler-warning-stream-position w))
                           (signal-warning w2))))))
-                (if (or (and (consp def)
-                             (consp (cdr def))
-                             (consp (cadr def))
-                             (eq (cdadr def) 'macro))
-                        (typep def 'simple-vector))
+                (if (def-info.macro-p (cdr def))
                   (let* ((w2 (make-condition
                               'macro-used-before-definition
                               :file-name (compiler-warning-file-name w)

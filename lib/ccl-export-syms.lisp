@@ -101,6 +101,7 @@
      *signal-printing-errors*
      unignore
      *warn-if-redefine-kernel*
+     without-duplicate-definition-warnings
      require-type
      dovector
      debugging-function-name

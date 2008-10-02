@@ -175,16 +175,17 @@
 	 initargs))
 
 ;; Bootstrapping version, replaced in l1-typesys
-(defun standardized-type-specifier (spec)
-  (when (and (consp spec)
-             (memq (%car spec) '(and or))
-             (consp (%cdr spec))
-             (null (%cddr spec)))
-    (setq spec (%cadr spec)))
-  (if (consp spec)
-    (cons (%car spec) (mapcar #'standardized-type-specifier (%cdr spec)))
-    (or (cdr (assoc spec '((string . base-string))))
-        spec)))
+(fset 'standardized-type-specifier
+      (nlambda bootstrapping-standardized-type-specifier (spec)
+        (when (and (consp spec)
+                   (memq (%car spec) '(and or))
+                   (consp (%cdr spec))
+                   (null (%cddr spec)))
+          (setq spec (%cadr spec)))
+        (if (consp spec)
+          (cons (%car spec) (mapcar #'standardized-type-specifier (%cdr spec)))
+          (or (cdr (assoc spec '((string . base-string))))
+              spec))))
 
 ;;; The type of an effective slot definition is the intersection of
 ;;; the types of the direct slot definitions it's initialized from.
@@ -1184,9 +1185,9 @@ governs whether DEFCLASS makes that distinction or not.")
 
 
 
-;;; Fake method-combination
+;;; Fake method-combination, redefined in lib;method-combination.
 (defclass method-combination (metaobject) 
-  ((name :accessor method-combination-name :initarg :name)))
+  ((name :initarg :name)))
 
 
 

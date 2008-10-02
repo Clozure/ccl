@@ -3436,7 +3436,6 @@
                              (member (istruct-type-name x)
                                      '(args-ctype values-ctype function-ctype))))
 
-(defun function-ctype-p (x) (istruct-typep x 'function-ctype))
 (defun valuec-ctype-p (x) (istruct-typep x 'values-ctype))
 
 (setf (type-predicate 'args-ctype) 'args-ctype-p

@@ -146,6 +146,8 @@ Will differ from *compiling-file* during an INCLUDE")
 			    :report (lambda (stream) (format stream "Skip compiling ~s" src))
 			    (return))))))
 
+(defvar *fasl-compile-time-env* nil)
+
 (defun %compile-file (src output-file verbose print load features
                           save-local-symbols save-doc-strings save-definitions
                           break-on-program-errors
@@ -199,15 +201,17 @@ Will differ from *compiling-file* during an INCLUDE")
 	     (*target-ftd* (backend-target-foreign-type-data target-backend))
              (defenv (new-definition-environment))
              (lexenv (new-lexical-environment defenv))
+             (*fasl-compile-time-env* (new-lexical-environment (new-definition-environment)))
 	     (*fcomp-external-format* external-format))
         (let ((forms nil))
           (let* ((*outstanding-deferred-warnings* (%defer-warnings nil)))
             (rplacd (defenv.type defenv) *outstanding-deferred-warnings*)
+            (setf (defenv.defined defenv) (deferred-warnings.defs *outstanding-deferred-warnings*))
+
             (setq forms (fcomp-file src orig-src lexenv))
+
             (setf (deferred-warnings.warnings *outstanding-deferred-warnings*) 
-                  (append *fasl-deferred-warnings* (deferred-warnings.warnings *outstanding-deferred-warnings*))
-                  (deferred-warnings.defs *outstanding-deferred-warnings*)
-                  (append (defenv.defined defenv) (deferred-warnings.defs *outstanding-deferred-warnings*)))
+                  (append *fasl-deferred-warnings* (deferred-warnings.warnings *outstanding-deferred-warnings*)))
             (when *compile-verbose* (fresh-line))
             (multiple-value-bind (any harsh) (report-deferred-warnings)
               (setq *fasl-warnings-signalled-p* (or *fasl-warnings-signalled-p* any)
@@ -256,6 +260,7 @@ Will differ from *compiling-file* during an INCLUDE")
   (new-compiler-policy :force-boundp-checks t))
 
 (defun %compile-time-eval (form env)
+  (declare (ignore env))
   (let* ((*target-backend* *host-backend*))
     ;; The HANDLER-BIND here is supposed to note WARNINGs that're
     ;; signaled during (eval-when (:compile-toplevel) processing; this
@@ -271,7 +276,8 @@ Will differ from *compiling-file* during an INCLUDE")
                               (signal c))))
       (funcall (compile-named-function
                 `(lambda () ,form)
-                :env env :policy *compile-time-evaluation-policy*)))))
+                :env *fasl-compile-time-env*
+                :policy *compile-time-evaluation-policy*)))))
 
 
 ;;; No methods by default, not even for structures.  This really sux.
@@ -427,7 +433,8 @@ Will differ from *compiling-file* during an INCLUDE")
       (fcomp-output-form $fasl-src env *loading-file-source-file*)
       (let* ((*fcomp-previous-position* nil))
         (loop
-          (let* ((*fcomp-stream-position* (file-position stream)))
+          (let* ((*fcomp-stream-position* (file-position stream))
+                 (*nx-warnings* nil))
             (unless (eq read-package *package*)
               (fcomp-compile-toplevel-forms env)
               (setq read-package *package*))
@@ -442,6 +449,7 @@ Will differ from *compiling-file* during an INCLUDE")
                   (setq form (read stream nil eofval)))))
             (when (eq eofval form) (return))
             (fcomp-form form env processing-mode)
+            (fcomp-signal-or-defer-warnings *nx-warnings* env)
             (setq *fcomp-previous-position* *fcomp-stream-position*))))
       (while (setq form *fasl-eof-forms*)
         (setq *fasl-eof-forms* nil)
@@ -624,14 +632,19 @@ Will differ from *compiling-file* during an INCLUDE")
 
 (defun define-compile-time-constant (symbol initform env)
   (note-variable-info symbol t env)
-  (let ((definition-env (definition-environment env)))
-    (when definition-env
+  (let ((compile-time-defenv (definition-environment *fasl-compile-time-env*))
+        (definition-env (definition-environment env)))
+    (when (or compile-time-defenv definition-env)
       (multiple-value-bind (value error) 
                            (ignore-errors (values (%compile-time-eval initform env) nil))
         (when error
           (warn "Compile-time evaluation of DEFCONSTANT initial value form for ~S while ~
                  compiling ~S signalled the error: ~&~A" symbol *fasl-source-file* error))
-        (push (cons symbol (if error (%unbound-marker-8) value)) (defenv.constants definition-env))))
+        (let ((cell (cons symbol (if error (%unbound-marker-8) value))))
+          (when definition-env
+            (push cell (defenv.constants definition-env)))
+          (when compile-time-defenv
+            (push cell (defenv.constants compile-time-defenv))))))
     symbol))
 
 (defun fcomp-load-%defconstant (form env)
@@ -677,19 +690,28 @@ Will differ from *compiling-file* during an INCLUDE")
 
 
 (defun define-compile-time-macro (name lambda-expression env)
-  (let ((definition-env (definition-environment env)))
-    (when definition-env
-      (push (list* name 
-                   'macro 
-                   (compile-named-function lambda-expression :name name :env env))
-            (defenv.functions definition-env))
-      (record-function-info name (list (cons nil 'macro)) env))
+  (let ((compile-time-defenv (definition-environment *fasl-compile-time-env*))
+        (definition-env (definition-environment env)))
+    (when (or definition-env compile-time-defenv)
+      (let ((cell (list* name 
+                         'macro 
+                         (compile-named-function lambda-expression :name name :env env))))
+        (when compile-time-defenv
+          (push cell (defenv.functions compile-time-defenv)))
+        (when definition-env
+          (push cell (defenv.functions definition-env))))
+      (record-function-info name (%cons-def-info 'defmacro) env))
     name))
 
 (defun define-compile-time-symbol-macro (name expansion env)
-  (let* ((definition-env (definition-environment env)))
-    (if definition-env
-      (push (cons name expansion) (defenv.symbol-macros definition-env)))
+  (let ((compile-time-defenv (definition-environment *fasl-compile-time-env*))
+        (definition-env (definition-environment env)))
+    (when (or definition-env compile-time-defenv)
+      (let ((cell (cons name expansion)))
+        (when compile-time-defenv
+          (push cell (defenv.functions compile-time-defenv)))
+        (when definition-env
+          (push cell (defenv.functions definition-env)))))
     name))
 
 
@@ -757,6 +779,8 @@ Will differ from *compiling-file* during an INCLUDE")
         (if (and (eq (car doc) 'quote) (consp (cadr doc)))
           (setf (car (cadr doc)) nil))
         (setq doc nil)))
+    (when (and (consp fn) (eq (%car fn) 'nfunction))
+      (note-function-info (cadr fn) (caddr fn) env))
     (if (and (constantp doc)
              (setq fn (fcomp-function-arg fn env)))
       (progn

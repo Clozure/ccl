@@ -91,14 +91,12 @@
 ;;; an actual method Remember to smash old methods with newer methods
 ;;; to avoid clutter - done
 
-(defun physical-pathname-p (file)(declare (ignore file)) nil) ; redefined later
+(fset 'physical-pathname-p (lambda (file)(declare (ignore file)) nil)) ; redefined later
 
 
 ;(%defvar *enqueued-window-title* nil)
 
-(defun booted-probe-file (file)
-  (declare (ignore file))
-  nil)
+(fset 'booted-probe-file (lambda (file) (declare (ignore file)) nil))
 
 (queue-fixup
  (defun booted-probe-file (file)

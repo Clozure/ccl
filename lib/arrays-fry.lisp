@@ -218,7 +218,6 @@
         (t (subseq vector 0 to-size))))
 
 
-
 ; this could be put into print-db as it was in ccl-pr-4.2
 ; Or it (and print-db) could just be flushed ... tough one.
 (defun multi-dimension-array-to-list (array)

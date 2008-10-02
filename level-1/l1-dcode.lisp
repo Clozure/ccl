@@ -610,14 +610,6 @@
 (defun %gf-method-combination (gf)
   (sgf.method-combination gf))
 
-(defun %combined-method-methods  (cm)
-  (combined-method.thing cm))
-
-(defun %combined-method-dcode (cm)
-  ;(require-type cm 'combined-method)
-  (combined-method.dcode cm))
-
-
 ; need setters too
 
 (defsetf %combined-method-methods %set-combined-method-methods)

@@ -173,9 +173,6 @@
       (values t val))))
 
 
-(defun %slot-definition-class (slotd)
-  (standard-slot-definition.class slotd))
-
 (defun %slot-definition-location (slotd)
   (standard-effective-slot-definition.location slotd))
 
@@ -275,27 +272,28 @@
 
 
 ;;; This becomes (apply #'make-instance <method-class> &rest args).
-(defun %make-method-instance (class &key
-				    qualifiers
-				    specializers
-				    function				    
-				    name
-				    lambda-list
-                                    &allow-other-keys)
-  (let* ((method
-	  (%instance-vector (%class-own-wrapper class)
-			    qualifiers
-			    specializers
-			    function
-			    nil
-			    name
-			    lambda-list)))
-    (when function
-      (let* ((inner (closure-function function)))
-        (unless (eq inner function)
-          (copy-method-function-bits inner function)))
-      (lfun-name function method))
-    method))
+(fset '%make-method-instance
+      (nlambda bootstrapping-%make-method-instance (class &key
+                                                          qualifiers
+                                                          specializers
+                                                          function
+                                                          name
+                                                          lambda-list
+                                                          &allow-other-keys)
+        (let* ((method
+                (%instance-vector (%class-own-wrapper class)
+                                  qualifiers
+                                  specializers
+                                  function
+                                  nil
+                                  name
+                                  lambda-list)))
+          (when function
+            (let* ((inner (closure-function function)))
+              (unless (eq inner function)
+                (copy-method-function-bits inner function)))
+            (lfun-name function method))
+          method)))
   
        
 		 
@@ -868,9 +866,10 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
   (%add-standard-method-to-standard-gf gf method))
 
 ;; Redefined in l1-clos.lisp
-(defun maybe-remove-make-instance-optimization (gfn method)
-  (declare (ignore gfn method))
-  nil)
+(fset 'maybe-remove-make-instance-optimization
+      (nlambda bootstrapping-maybe-remove-make-instance-optimization (gfn method)
+        (declare (ignore gfn method))
+        nil))
 
 (defun %add-standard-method-to-standard-gf (gfn method)
   (when (%method-gf method)
@@ -1324,25 +1323,26 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
     (setf (%class-proper-name new-class) name)))
 
 
-(defun set-find-class (name class)
-  (clear-type-cache)
-  (let* ((cell (find-class-cell name t))
-         (old-class (class-cell-class cell)))
-    (when class
-      (if (eq name (%class.name class))
-        (setf (info-type-kind name) :instance)))
-    (setf (class-cell-class cell) class)
-    (update-class-proper-names name old-class class)
-    class))
+(fset 'set-find-class (nfunction bootstrapping-set-find-class ; redefined below
+                                 (lambda (name class)
+                                   (clear-type-cache)
+                                   (let* ((cell (find-class-cell name t))
+                                          (old-class (class-cell-class cell)))
+                                     (when class
+                                       (if (eq name (%class.name class))
+                                         (setf (info-type-kind name) :instance)))
+                                     (setf (class-cell-class cell) class)
+                                     (update-class-proper-names name old-class class)
+                                     class))))
 
 
 ;;; bootstrapping definition. real one is in "sysutils.lisp"
-
-(defun built-in-type-p (name)
-  (or (type-predicate name)
-      (memq name '(signed-byte unsigned-byte mod 
-                   values satisfies member and or not))
-      (typep (find-class name nil) 'built-in-class)))
+(fset 'built-in-type-p (nfunction boostrapping-built-in-typep-p
+                                  (lambda (name)
+                                    (or (type-predicate name)
+                                        (memq name '(signed-byte unsigned-byte mod 
+                                                     values satisfies member and or not))
+                                        (typep (find-class name nil) 'built-in-class)))))
 
 
 
@@ -2515,11 +2515,11 @@ to replace that class with ~s" name old-class new-class)
 
 ;;; Bootstrapping version of union
 (unless (fboundp 'union)
-(defun union (l1 l2)
-  (dolist (e l1)
-    (unless (memq e l2)
-      (push e l2)))
-  l2)
+  (fset 'union (nlambda bootstrapping-union (l1 l2)
+                 (dolist (e l1)
+                   (unless (memq e l2)
+                     (push e l2)))
+                 l2))
 )
 
 ;; Stub to prevent errors when the user doesn't define types

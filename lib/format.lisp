@@ -390,15 +390,17 @@
 
 ; in l1-format
 (defvar *logical-block-xp* nil)
-(defun pop-format-arg (&aux (args *format-arguments*)(xp *logical-block-xp*))
-  (when xp
-    (if (pprint-pop-check+ args xp) ; gets us level and length stuff in logical block
-      (throw 'logical-block nil)))           
-  (if (and (null args)(null xp)) ; what if its 3?
-      (format-error "Missing argument")
-    (progn
-     (setq *format-arguments* (cdr args))
-     (%car args))))
+
+(without-duplicate-definition-warnings
+ (defun pop-format-arg (&aux (args *format-arguments*)(xp *logical-block-xp*))
+   (when xp
+     (if (pprint-pop-check+ args xp)    ; gets us level and length stuff in logical block
+       (throw 'logical-block nil)))           
+   (if (and (null args)(null xp))       ; what if its 3?
+     (format-error "Missing argument")
+     (progn
+       (setq *format-arguments* (cdr args))
+       (%car args)))))
 
 ; SUB-FORMAT is now defined in L1-format.lisp
 ; DEFFORMAT is also defined there.

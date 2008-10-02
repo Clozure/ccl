@@ -624,15 +624,6 @@
     (eval-when (:load-toplevel :execute)
       (%define-symbol-macro ',name ',expansion))))
 
-(defun record-function-info (name info env)
-  (let* ((definition-env (definition-environment env)))
-    (if definition-env
-      (let* ((already (assq name (defenv.defined definition-env))))
-        (if already
-          (if info (%rplacd already info))
-          (push (cons name info) (defenv.defined definition-env)))
-        info))))
-
 ;; ---- allow inlining setf functions
 (defmacro defun (spec args &body body &environment env &aux global-name inline-spec)
   "Define a function at top level."
@@ -661,8 +652,6 @@
                    (cons doc lambda-expression)
                    doc)))
       `(progn
-         (eval-when (:compile-toplevel)
-           (note-function-info ',spec ',lambda-expression ,env))
          (%defun (nfunction ,spec ,lambda-expression) ',info)
          ',spec))))
 
@@ -745,16 +734,6 @@ such changes should be made with care."
   (let* ((temp (gensym)))
     `(let* ((,temp (function-to-function-vector ,f)))
       (%svref ,temp (the fixnum (1- (the fixnum (uvsize ,temp))))))))
-
-; %Pascal-Functions% Entry
-; Used by "l1;ppc-callback-support" & "lib;dumplisp"
-(def-accessor-macros %svref
-  pfe.routine-descriptor
-  pfe.proc-info
-  pfe.lisp-function
-  pfe.sym
-  pfe.without-interrupts
-  pfe.trace-p)
 
 (defmacro cond (&rest args &aux clause)
   (when args
@@ -950,6 +929,9 @@ are no Forms, OR returns NIL."
     (warn "Invalid lambda expression: ~s" lambda-expression))
   `(function (lambda ,paramlist ,@body)))
 
+; This isn't
+(defmacro nlambda (name (&rest arglist) &body body)
+  `(nfunction ,name (lambda ,arglist ,@body)))
 
 (defmacro when (test &body body)
   "If the first argument is true, the rest of the forms are
@@ -1457,8 +1439,10 @@ to open."
         WITH-COMPILATION-UNIT form grabs the undefined warnings. Specifying
         OVERRIDE true causes that form to grab any enclosed warnings, even if
         it is enclosed by another WITH-COMPILATION-UNIT."
-  `(let* ((*outstanding-deferred-warnings* (%defer-warnings ,override)))
-     (multiple-value-prog1 (progn ,@body) (report-deferred-warnings))))
+  `(flet ((with-compilation-unit-body ()
+            ,@body))
+     (declare (dynamic-extent #'with-compilation-unit-body))
+     (call-with-compilation-unit #'with-compilation-unit-body :override ,override)))
 
 ; Yow! Another Done Fun.
 (defmacro with-standard-io-syntax (&body body &environment env)
@@ -1736,14 +1720,11 @@ to open."
     `(progn
        (eval-when (:compile-toplevel)
          (record-function-info ',(maybe-setf-function-name name)
-                              ',(list (list (encode-gf-lambda-list
-                                             lambda-list)))
-                              ,env))
-       (compiler-let ((*nx-method-warning-name* 
-                       (list ',name
-                             ,@(mapcar #'(lambda (x) `',x) qualifiers)
-                             ',specializers)))
-	 (ensure-method ',name ,specializers-form
+                               ',(%cons-def-info 'defmethod (encode-gf-lambda-list lambda-list) nil nil
+                                                 specializers qualifiers)
+                               ,env))
+       (compiler-let ((*nx-method-warning-name* '(,name ,@qualifiers ,specializers)))
+         (ensure-method ',name ,specializers-form
                         :function ,function-form
                         :qualifiers ',qualifiers
                         :lambda-list ',lambda-list
@@ -1911,8 +1892,8 @@ to open."
 		      (documentation-p nil)
                       (readers nil)
 		      (writers nil)
-                      (reader-info (list (cons (dpb 1 $lfbits-numreq 0) nil)))
-                      (writer-info (list (cons (dpb 2 $lfbits-numreq 0) nil))))
+                      (reader-info (%cons-def-info 'defmethod (dpb 1 $lfbits-numreq 0) nil nil (list class-name)))
+                      (writer-info (%cons-def-info 'defmethod (dpb 2 $lfbits-numreq 0) nil nil (list t class-name))))
                  (when (memq slot-name slot-names)
                    (SIGNAL-PROGRAM-error "Multiple slots named ~S in DEFCLASS ~S" slot-name class-name))
                  (push slot-name slot-names)
@@ -2020,7 +2001,7 @@ to open."
       `(progn
         (eval-when (:compile-toplevel)
           (record-function-info ',(maybe-setf-function-name function-name)
-                                 ',(list (list (encode-gf-lambda-list lambda-list)))
+                                 ',(%cons-def-info 'defgeneric (encode-gf-lambda-list lambda-list))
                                  ,env))
         (let ((,gf (%defgeneric
                     ',function-name ',lambda-list ',method-combination ',generic-function-class 
@@ -2845,6 +2826,11 @@ slot-entry. Both setf and setq can be used to set the value of the slot."
     `(let ((,thunk #'(lambda () ,@body)))
        (declare (dynamic-extent ,thunk))
        (funcall-with-error-reentry-detection ,thunk))))
+
+(defmacro without-duplicate-definition-warnings (&body body)
+  `(compiler-let ((*compiler-warn-on-duplicate-definitions* nil))
+     ,@body))
+
 
 #+ppc-target
 (defmacro scan-for-instr (mask opcode fn pc-index &optional (tries *trap-lookup-tries*))

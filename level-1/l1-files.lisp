@@ -127,14 +127,6 @@
                  :version nil))
 
 		   
-(defun %shrink-vector (vector to-size)
-  (cond ((eq (length vector) to-size)
-         vector)
-        ((array-has-fill-pointer-p vector)
-         (setf (fill-pointer vector) to-size)
-         vector)
-        (t (subseq vector 0 to-size))))
-
 (defun namestring-unquote (name)
   #+(and windows-target bogus)
   (when (and (> (length name) 1)
@@ -257,13 +249,15 @@
 
 
 
-(defun pathname-host (thing)  ; redefined later in this file
-  (declare (ignore thing))
-  :unspecific)
+(fset 'pathname-host (nfunction bootstrapping-pathname-host   ; redefined later in this file
+                                (lambda (thing)
+                                  (declare (ignore thing))
+                                  :unspecific)))
 
-(defun pathname-version (thing)  ; redefined later in this file
-  (declare (ignore thing))
-  nil)
+(fset 'pathname-version (nfunction bootstrapping-pathname-version   ; redefined later in this file
+                                   (lambda (thing)
+                                     (declare (ignore thing))
+                                     nil)))
 
 (defmethod print-object ((pathname pathname) stream)
   (let ((flags (if (logical-pathname-p pathname) 4

@@ -274,8 +274,6 @@
   (%get-ptr (xp-gp-regs xp) (+ gp-regs-offset (ash igpr target::word-shift))))
 (defun (setf indexed-gpr-macptr) (new xp igpr)
   (setf (%get-ptr (xp-gp-regs xp) (+ gp-regs-offset (ash igpr target::word-shift))) new))
-(defun indexed-gpr-macptr (xp igpr)
-  (%get-ptr (xp-gp-regs xp) (+ gp-regs-offset (ash igpr target::word-shift))))
 (defun encoded-gpr-macptr (xp gpr)
   (indexed-gpr-macptr xp (aref *encoded-gpr-to-indexed-gpr* gpr)))
 (defun (setf encoded-gpr-macptr) (new xp gpr)

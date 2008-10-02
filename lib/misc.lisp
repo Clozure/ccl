@@ -157,9 +157,6 @@ are running on, or NIL if we can't find any useful information."
 (defmethod documentation (thing doc-id)
   (%get-documentation thing doc-id))
 
-(defun set-documentation (thing doc-id new)
-  (setf (documentation thing doc-id) new))
-
 (defmethod (setf documentation) (new thing doc-id)
   (%put-documentation thing doc-id new))
 

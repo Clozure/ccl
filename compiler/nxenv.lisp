@@ -29,7 +29,13 @@
 #+x8632-target (require "X8632ENV")
 #+x8664-target (require "X8664ENV")
 
-;
+#-BOOTSTRAPPED (unless (fboundp '%cons-def-info)
+                 (fset '%cons-def-info (lambda (&rest args) args nil))
+                 (fset 'def-info.lfbits (lambda (def-info) def-info nil))
+                 (fset 'def-info.keyvect (lambda (def-info) def-info nil))
+                 (fset 'def-info.lambda (lambda (def-info) def-info nil)))
+#-BOOTSTRAPPED (unless (fboundp 'retrieve-environment-function-info)
+                 (fset 'retrieve-environment-function-info (lambda (name env) name env nil)))
 
 (defconstant $vbittemporary 16)    ; a compiler temporary
 (defconstant $vbitreg 17)          ; really wants to live in a register.
