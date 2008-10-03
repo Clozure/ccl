@@ -1142,7 +1142,7 @@ process_options(int argc, char *argv[])
 void
 terminate_lisp()
 {
-  ExitProcess(EXIT_FAILURE);
+  _exit(EXIT_FAILURE);
 }
 #else
 pid_t main_thread_pid = (pid_t)0;
@@ -1156,11 +1156,7 @@ terminate_lisp()
 #endif
 
 #ifdef DARWIN
-#ifdef PPC64
 #define min_os_version "8.0"    /* aka Tiger */
-#else
-#define min_os_version "7.0"    /* aka Panther */
-#endif
 #endif
 #ifdef LINUX
 #ifdef PPC
@@ -1198,14 +1194,15 @@ remap_spjump()
   void *target;
   int disp;
   
-  if (old != (pc)0x5000) {
-    new = mmap((pc) 0x5000,
+  if (old != (pc)SPJUMP_TARGET_ADDRESS) {
+    new = mmap((pc) SPJUMP_TARGET_ADDRESS,
                0x1000,
                PROT_READ | PROT_WRITE | PROT_EXEC,
                MAP_PRIVATE | MAP_ANON | MAP_FIXED,
                -1,
                0);
-    if (new != (pc) 0x5000) {
+    if (new != (pc) SPJUMP_TARGET_ADDRESS) {
+      perror("remap spjump");
       _exit(1);
     }
     
@@ -1236,21 +1233,23 @@ remap_spjump()
   extern opcode spjump_start;
   DWORD old_protect;
 
-  if (!VirtualProtect((pc) 0x15000,
-		      0x1000,
-		      PAGE_EXECUTE_READWRITE,
-		      &old_protect)) {
-    wperror("VirtualProtect spjump");
-    _exit(1);
+  if ((void *)(&spjump_start) != (void *) SPJUMP_TARGET_ADDRESS) {
+    if (!VirtualProtect((pc) SPJUMP_TARGET_ADDRESS,
+                        0x1000,
+                        PAGE_EXECUTE_READWRITE,
+                        &old_protect)) {
+      wperror("VirtualProtect spjump");
+      _exit(1);
+    }
+    memmove((pc) SPJUMP_TARGET_ADDRESS, &spjump_start, 0x1000);
   }
-  memmove((pc) 0x15000, &spjump_start, 0x1000);
 }
 #else
 void
 remap_spjump()
 {
   extern opcode spjump_start;
-  pc new = mmap((pc) 0x15000,
+  pc new = mmap((pc) SPJUMP_TARGET_ADDRESS,
                 0x1000,
                 PROT_READ | PROT_WRITE | PROT_EXEC,
                 MAP_PRIVATE | MAP_ANON | MAP_FIXED,
