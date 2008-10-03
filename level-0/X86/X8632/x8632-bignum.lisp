@@ -59,7 +59,7 @@
 
 (defx8632lapfunction %digit-0-or-plusp ((bignum arg_y) (idx arg_z))
   (movl (@ x8632::misc-data-offset (% bignum) (% idx)) (% imm0))
-  (movl ($ x8632::nil-value) (% temp0))
+  (movl ($ (target-nil-value)) (% temp0))
   (leal (@ x8632::t-offset (% temp0)) (% arg_z))
   (testl (% imm0) (% imm0))
   (cmovll (% temp0) (% arg_z))
@@ -68,7 +68,7 @@
 ;;; For oddp, evenp
 (defx8632lapfunction %bignum-oddp ((bignum arg_z))
   (movl (@ x8632::misc-data-offset (% bignum)) (% imm0))
-  (movl ($ x8632::nil-value) (% temp0))
+  (movl ($ (target-nil-value)) (% temp0))
   (leal (@ x8632::t-offset (% temp0)) (% arg_z))
   (testb ($ 1) (% imm0.b))
   (cmovzl (% temp0) (% arg_z))
@@ -77,7 +77,7 @@
 (defx8632lapfunction bignum-plusp ((bignum arg_z))
   (vector-length bignum imm0)
   (movl (@ (- x8632::misc-data-offset 4) (% bignum) (% imm0)) (% imm0))
-  (movl ($ x8632::nil-value) (% arg_z))
+  (movl ($ (target-nil-value)) (% arg_z))
   (lea (@ x8632::t-offset (% arg_z)) (% temp0))
   (testl (% imm0) (% imm0))
   (cmovnsl (% temp0) (% arg_z))
@@ -86,7 +86,7 @@
 (defx8632lapfunction bignum-minusp ((bignum arg_z))
   (vector-length bignum imm0)
   (movl (@ (- x8632::misc-data-offset 4) (% bignum) (% imm0)) (% imm0))
-  (movl ($ x8632::nil-value) (% arg_z))
+  (movl ($ (target-nil-value)) (% arg_z))
   (lea (@ x8632::t-offset (% arg_z)) (% temp0))
   (testl (% imm0) (% imm0))
   (cmovsl (% temp0) (% arg_z))
@@ -98,13 +98,13 @@
 (defx8632lapfunction %add-with-carry ((r 20) (k 16) (c 12) (a 8) (i 4) #|(ra 0)|# (b arg_y) (j arg_z))
   (mark-as-imm temp0)
   (unbox-fixnum b imm0)
-  (cmpl ($ x8632::nil-value) (% j))
+  (cmpl ($ (target-nil-value)) (% j))
   ;; if j not nil, get b[j]
   (cmovnel (@ x8632::misc-data-offset (% b) (% j)) (% imm0))
   (movl (@ a (% esp)) (% arg_y))
   (unbox-fixnum arg_y temp0)
   (movl (@ i (% esp)) (% arg_z))
-  (cmpl ($ x8632::nil-value) (% arg_z))
+  (cmpl ($ (target-nil-value)) (% arg_z))
   ;; if i not nil, get a[i]
   (cmovnel (@ x8632::misc-data-offset (% arg_y) (% arg_z)) (% temp0))
   (xorl (% arg_z) (% arg_z))
@@ -129,7 +129,7 @@
 	(bb mm3)
 	(cc mm4))
     (unbox-fixnum b imm0)		;assume j will be nil
-    (cmpl ($ x8632::nil-value) (% j))
+    (cmpl ($ (target-nil-value)) (% j))
     ;; if j not nil, get b[j]
     (cmovnel (@ x8632::misc-data-offset (% b) (% j)) (% imm0))
     (movd (% imm0) (% bb))
@@ -137,7 +137,7 @@
     (movl (@ i (% esp)) (% arg_z))
     (movl (@ c (% esp)) (% temp0))
     (unbox-fixnum arg_y imm0)		;assume i will be nil
-    (cmpl ($ x8632::nil-value) (% arg_z))
+    (cmpl ($ (target-nil-value)) (% arg_z))
     ;; if i not nil, get a[i]
     (cmovnel (@ x8632::misc-data-offset (% arg_y) (% arg_z)) (% imm0))
     (movd (% imm0) (% aa))
@@ -162,12 +162,12 @@
 (defx8632lapfunction %subtract-with-borrow ((r 20) (k 16) (borrow 12) (a 8) (i 4) #|(ra 0)|# (b arg_y) (j arg_z))
   (mark-as-imm temp0)
   (unbox-fixnum b imm0)
-  (cmpl ($ x8632::nil-value) (% j))
+  (cmpl ($ (target-nil-value)) (% j))
   (cmovnel (@ x8632::misc-data-offset (% b) (% j)) (% imm0))
   (movl (@ a (% esp)) (% arg_y))
   (unbox-fixnum arg_y temp0)
   (movl (@ i (% esp)) (% arg_z))
-  (cmpl ($ x8632::nil-value) (% arg_z))
+  (cmpl ($ (target-nil-value)) (% arg_z))
   (cmovnel (@ x8632::misc-data-offset (% arg_y) (% arg_z)) (% temp0))
   ;; unboxed a or a[i] in temp0, unboxed b or b[j] in imm0
   (cmpl ($ '1) (@ borrow (% esp)))	;CF = 1 if borrow is 0 else CF = 0
@@ -188,7 +188,7 @@
 	(bb mm3)
 	(ww mm4))
     (unbox-fixnum b imm0)
-    (cmpl ($ x8632::nil-value) (% j))
+    (cmpl ($ (target-nil-value)) (% j))
     ;; if j not nil, get b[j]
     (cmovnel (@ x8632::misc-data-offset (% b) (% j)) (% imm0))
     (movd (% imm0) (% bb))
@@ -196,7 +196,7 @@
     (movl (@ i (% esp)) (% arg_z))
     (movl (@ borrow (% esp)) (% temp0))
     (unbox-fixnum arg_y imm0)
-    (cmpl ($ x8632::nil-value) (% arg_z))
+    (cmpl ($ (target-nil-value)) (% arg_z))
     ;; if i not nil, get a[i]
     (cmovnel (@ x8632::misc-data-offset (% arg_y) (% arg_z)) (% imm0))
     (movd (% imm0) (% aa))
@@ -333,7 +333,7 @@
     (movl (% imm0) (@ x8632::misc-header-offset (% bignum)))
     @maybe-return-fixnum
     ;; could use SETcc here to avoid one branch
-    (cmpl ($ x8632::nil-value) (@ 0 (% esp))) ;return-fixnum-p
+    (cmpl ($ (target-nil-value)) (@ 0 (% esp))) ;return-fixnum-p
     (je @done)
     (cmpl ($ x8632::one-digit-bignum-header)
 	  (@ x8632::misc-header-offset (% bignum)))
@@ -570,7 +570,7 @@
   (not (% imm0))
   (andl (% temp0) (% imm0))
   (mark-as-node temp0)
-  (cmpl ($ x8632::nil-value) (% dest))
+  (cmpl ($ (target-nil-value)) (% dest))
   (jne @store)
   (box-fixnum imm0 arg_z)
   (single-value-return 3)
@@ -586,7 +586,7 @@
   (not (% temp0))
   (andl (% temp0) (% imm0))
   (mark-as-node temp0)
-  (cmpl ($ x8632::nil-value) (% dest))
+  (cmpl ($ (target-nil-value)) (% dest))
   (jne @store)
   (box-fixnum imm0 arg_z)
   (single-value-return 3)
@@ -601,7 +601,7 @@
   (movl (@ x8632::misc-data-offset (% big)) (% imm0))
   (andl (% temp0) (% imm0))
   (mark-as-node temp0)
-  (cmpl ($ x8632::nil-value) (% dest))
+  (cmpl ($ (target-nil-value)) (% dest))
   (jne @store)
   (box-fixnum imm0 arg_z)
   (single-value-return 3)
@@ -657,10 +657,10 @@
     (addl ($ '1) (% i))
     (cmpl (% i) (% c))
     (jg @loop)
-    (movl ($ x8632::nil-value) (% arg_z))
+    (movl ($ (target-nil-value)) (% arg_z))
     (single-value-return 3)
     @true
-    (movl ($ x8632::t-value) (% arg_z))
+    (movl ($ (target-t-value)) (% arg_z))
     (single-value-return 3)))
 
 ;;; shift bignum left by nbits bits (1 <= nbits < 32)

@@ -83,7 +83,7 @@
   (setb (%b imm1))
   (andb (% imm1.b) (% imm0.b))
   (andl ($ x8664::t-offset) (%l imm0))
-  (lea (@ x8664::nil-value (% imm0)) (% arg_z))
+  (lea (@ (target-nil-value) (% imm0)) (% arg_z))
   (single-value-return))
 
 
@@ -177,7 +177,7 @@
     (pop (% limit))
     (pop (% obj))
     (pop (% fun))
-    (movl ($ x8664::nil-value) (% arg_z.l))
+    (movl ($ (target-nil-value)) (% arg_z.l))
     (restore-simple-frame)
     (single-value-return)))
 
@@ -296,7 +296,7 @@
     (pop (% limit))
     (pop (% obj))
     (pop (% fun))
-    (movl ($ x8664::nil-value) (% arg_z.l))
+    (movl ($ (target-nil-value)) (% arg_z.l))
     (restore-simple-frame)
     (single-value-return)))
 
@@ -345,7 +345,7 @@
 (defx86lapfunction full-gccount ()
   (ref-global tenured-area arg_z)
   (testq (% arg_z) (% arg_z))
-  (cmoveq (@ (+ x8664::nil-value (x8664::%kernel-global 'gc-count))) (% arg_z))
+  (cmoveq (@ (+ (target-nil-value) (x8664::%kernel-global 'gc-count))) (% arg_z))
   (cmovneq (@ x8664::area.gc-count (% arg_z)) (% arg_z))
   (single-value-return))
 
@@ -429,7 +429,7 @@ be somewhat larger than what was specified)."
   (check-nargs 0) 
   (movq ($ arch::gc-trap-function-use-lisp-heap-threshold) (% imm0))
   (uuo-gc-trap)
-  (movl ($ x8664::nil-value) (%l arg_z))
+  (movl ($ (target-nil-value)) (%l arg_z))
   (single-value-return))
 
 (defx86lapfunction freeze ()
@@ -494,7 +494,7 @@ be somewhat larger than what was specified)."
   (subq ($ '3) (% nargs.q))
   (leaq (@ '2 (% rsp) (% nargs.q)) (% imm0))
   (cmovaq (% imm0) (% rsp))
-  (movl ($ x8664::t-value) (%l arg_z))
+  (movl ($ (target-t-value)) (%l arg_z))
   (push (% ra0))
   (single-value-return))
 
@@ -503,7 +503,7 @@ be somewhat larger than what was specified)."
   (subq ($ '3) (% nargs.q))
   (leaq (@ '2 (% rsp) (% nargs.q)) (% imm0))
   (cmovaq (% imm0) (% rsp))
-  (movl ($ x8664::nil) (%l arg_z))
+  (movl ($ (target-nil-value)) (%l arg_z))
   (push (% ra0))
   (single-value-return))
 

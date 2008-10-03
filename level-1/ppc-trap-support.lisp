@@ -503,7 +503,7 @@
              ;; tweqi RA nil-value - resolve-eep, or resolve-foreign-variable
 	      ((and (match-instr the-trap
 				 (ppc-instruction-mask  :opcode :to :d)
-				 (ppc-lap-word (tweqi ?? ppc32::nil-value)))
+				 (ppc-lap-word (tweqi ?? (target-nil-value))))
 		    (setq instr (scan-for-instr
 				 (ppc-instruction-mask :opcode :d)
 				 (ppc-lap-word (lwz ??
@@ -731,7 +731,7 @@
               ;; tdeqi RA nil-value - resolve-eep, or resolve-foreign-variable
 	      ((and (match-instr the-trap
 				 (ppc-instruction-mask  :opcode :to :d)
-				 (ppc-lap-word (tdeqi ?? ppc64::nil-value)))
+				 (ppc-lap-word (tdeqi ?? (target-nil-value))))
 		    (setq instr (scan-for-instr
 				 (ppc-instruction-mask :opcode :ds :ds-xo)
 				 (ppc-lap-word (ld ??

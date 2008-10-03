@@ -373,9 +373,9 @@
 ;;; CONS.  This way, CAR and CDR can just check the tag, and
 ;;; CONSP/RPLACA/RPLACD can check the tag and complain if the argument
 ;;; is NIL.
-(defconstant nil-value (+ #x13000 fulltag-cons))
-(defconstant t-value (+ #x13008 fulltag-misc))
-(defconstant t-offset (- t-value nil-value))
+(defconstant canonical-nil-value (+ #x13000 fulltag-cons))
+(defconstant canonical-t-value (+ #x13008 fulltag-misc))
+(defconstant t-offset (- canonical-t-value canonical-nil-value))
 
 (defconstant misc-bias fulltag-misc)
 (defconstant cons-bias fulltag-cons)
@@ -1037,7 +1037,7 @@
 (defparameter *x8632-target-arch*
   (arch::make-target-arch :name :x8632
                           :lisp-node-size node-size
-                          :nil-value nil-value
+                          :nil-value canonical-nil-value
                           :fixnum-shift fixnumshift
                           :most-positive-fixnum target-most-positive-fixnum
                           :most-negative-fixnum target-most-negative-fixnum
@@ -1166,7 +1166,7 @@
 
 ;;;
 (defx8632archmacro ccl::%get-kernel-global (name)
-  `(ccl::%fixnum-ref 0 (+ x8632::nil-value
+  `(ccl::%fixnum-ref 0 (+ ,(ccl::target-nil-value)
                         ,(%kernel-global
                           (if (ccl::quoted-form-p name)
                             (cadr name)
@@ -1175,7 +1175,7 @@
 (defx8632archmacro ccl::%get-kernel-global-ptr (name dest)
   `(ccl::%setf-macptr
     ,dest
-    (ccl::%fixnum-ref-macptr 0 (+ x8632::nil-value
+    (ccl::%fixnum-ref-macptr 0 (+ ,(ccl::target-nil-value)
 				  ,(%kernel-global
 				    (if (ccl::quoted-form-p name)
 				      (cadr name)

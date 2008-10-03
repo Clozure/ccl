@@ -45,14 +45,14 @@
 (defppclapfunction %get-kernel-global-from-offset ((offset arg_z))
   (check-nargs 1)
   (unbox-fixnum imm0 offset)
-  (addi imm0 imm0 target::nil-value)
+  (addi imm0 imm0 (target-nil-value))
   (ldr arg_z 0 imm0)
   (blr))
 
 (defppclapfunction %set-kernel-global-from-offset ((offset arg_y) (new-value arg_z))
   (check-nargs 2)
   (unbox-fixnum imm0 offset)
-  (addi imm0 imm0 target::nil-value)
+  (addi imm0 imm0 (target-nil-value))
   (str new-value 0 imm0)
   (blr))
 
@@ -62,7 +62,7 @@
 						       (ptr arg_z))
   (check-nargs 2)
   (unbox-fixnum imm0 offset)
-  (addi imm0 imm0 target::nil-value)
+  (addi imm0 imm0 (target-nil-value))
   (ldr imm0 0 imm0)
   (str imm0 target::macptr.address ptr)
   (blr))
@@ -468,7 +468,7 @@
     (stfs fp1 8 imm2)
     (stfd fp1 16 imm2)
     (restore-full-lisp-context)
-    (li arg_z ppc32::nil-value)
+    (li arg_z (target-nil-value))
     (blr))
   
   (defun %ff-call (entry &rest specs-and-vals)
@@ -936,7 +936,7 @@ result-type-keyword is :VOID or NIL"
       (stfs fp1 8 imm2)
       (stfd fp1 16 imm2)
       (restore-full-lisp-context)
-      (li arg_z ppc32::nil-value)
+      (li arg_z (target-nil-value))
       (blr))
     )
 

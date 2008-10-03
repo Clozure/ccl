@@ -121,9 +121,9 @@
 
 (defx8632lapfunction called-for-mv-p ()
   (movl (@ x8632::lisp-frame.return-address (% ebp)) (% imm0))
-  (cmpl (% imm0) (@ (+ x8632::nil-value (x8632::kernel-global ret1valaddr))))
-  (movl ($ x8632::t-value) (% imm0))
-  (movl ($ x8632::nil-value) (% arg_z))
+  (cmpl (% imm0) (@ (+ (target-nil-value) (x8632::kernel-global ret1valaddr))))
+  (movl ($ (target-t-value)) (% imm0))
+  (movl ($ (target-nil-value)) (% arg_z))
   (cmove (% imm0) (% arg_z))
   (single-value-return))
 

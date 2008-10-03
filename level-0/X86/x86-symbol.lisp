@@ -29,7 +29,7 @@
 (defx86lapfunction %function ((sym arg_z))
   (check-nargs 1)
   (let ((symaddr temp0))
-    (movq ($ (+ x8664::nil-value x8664::nilsym-offset)) (% symaddr))
+    (movq ($ (+ (target-nil-value) x8664::nilsym-offset)) (% symaddr))
     (cmp-reg-to-nil sym)
     (cmovneq (% sym) (% symaddr))
     (trap-unless-fulltag= symaddr x8664::fulltag-symbol)
@@ -46,7 +46,7 @@
 ;;; nilsym
 (defx86lapfunction %symbol->symptr ((sym arg_z))
   (let ((tag imm0))
-    (movq ($ (+ x8664::nil-value x8664::nilsym-offset)) (% tag))
+    (movq ($ (+ (target-nil-value) x8664::nilsym-offset)) (% tag))
     (cmp-reg-to-nil sym)
     (cmoveq (% tag) (% sym))
     (je :done)
@@ -61,7 +61,7 @@
   (jb.pt @ok)
   (uuo-error-reg-not-tag (% symptr) ($ x8664::fulltag-symbol))
   @ok
-  (cmpq ($ (+ x8664::nil-value x8664::nilsym-offset)) (% symptr))
+  (cmpq ($ (+ (target-nil-value) x8664::nilsym-offset)) (% symptr))
   (sete (% imm0.b))
   (negb (% imm0.b))
   (andl ($ x8664::nilsym-offset) (% imm0.l))

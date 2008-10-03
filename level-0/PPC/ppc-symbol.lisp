@@ -29,11 +29,11 @@
 #+ppc32-target
 (defppclapfunction %function ((sym arg_z))
   (check-nargs 1)
-  (cmpwi cr1 sym ppc32::nil-value)
+  (cmpwi cr1 sym (target-nil-value))
   (let ((symptr temp0)
         (symbol temp1)
         (def arg_z))
-    (li symptr (+ ppc32::nilsym-offset ppc32::nil-value))
+    (li symptr (+ ppc32::nilsym-offset (target-nil-value)))
     (mr symbol sym)
     (if (:cr1 :ne)
       (progn
@@ -67,10 +67,10 @@
 (defppclapfunction %symbol->symptr ((sym arg_z))
   #+ppc32-target
   (progn
-    (cmpwi cr0 arg_z ppc32::nil-value)
+    (cmpwi cr0 arg_z (target-nil-value))
     (if (:cr0 :eq)
       (progn
-        (li arg_z (+ ppc32::nilsym-offset ppc32::nil-value))
+        (li arg_z (+ ppc32::nilsym-offset (target-nil-value)))
         (blr))))
   (trap-unless-typecode= arg_z target::subtag-symbol)
   (blr))
@@ -80,7 +80,7 @@
 (defppclapfunction %symptr->symbol ((symptr arg_z))
   #+ppc32-target
   (progn
-    (li imm1 (+ ppc32::nilsym-offset ppc32::nil-value))
+    (li imm1 (+ ppc32::nilsym-offset (target-nil-value)))
     (cmpw cr0 imm1 symptr)
     (if (:cr0 :eq)
       (progn 

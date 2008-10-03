@@ -11,7 +11,7 @@
 (defx8632lapfunction %function ((sym arg_z))
   (check-nargs 1)
   (let ((symaddr temp0))
-    (movl ($ (+ x8632::nil-value x8632::nilsym-offset)) (% symaddr))
+    (movl ($ (+ (target-nil-value) x8632::nilsym-offset)) (% symaddr))
     (cmp-reg-to-nil sym)
     (cmovne (% sym) (% symaddr))
     (trap-unless-typecode= symaddr x8632::subtag-symbol)
@@ -28,7 +28,7 @@
 ;;; nilsym
 (defx8632lapfunction %symbol->symptr ((sym arg_z))
   (let ((tag imm0))
-    (movl ($ (+ x8632::nil-value x8632::nilsym-offset)) (% tag))
+    (movl ($ (+ (target-nil-value) x8632::nilsym-offset)) (% tag))
     (cmp-reg-to-nil sym)
     (cmove (% tag) (% sym))
     (je :done)
@@ -38,9 +38,9 @@
 
 ;;; If symptr is NILSYM, return NIL; else typecheck and return symptr
 (defx8632lapfunction %symptr->symbol ((symptr arg_z))
-  (cmpl ($ (+ x8632::nil-value x8632::nilsym-offset)) (% symptr))
+  (cmpl ($ (+ (target-nil-value) x8632::nilsym-offset)) (% symptr))
   (jne @typecheck)
-  (movl ($ x8632::nil-value) (% arg_z))
+  (movl ($ (target-nil-value)) (% arg_z))
   (single-value-return)
   @typecheck
   (trap-unless-typecode= symptr x8632::subtag-symbol)
@@ -77,7 +77,7 @@
 
 (defx8632lapfunction %tcr-binding-location ((tcr arg_y) (sym arg_z))
   (movl (@ x8632::symbol.binding-index (% sym)) (% temp0))
-  (movl ($ x8632::nil-value) (% arg_z))
+  (movl ($ (target-nil-value)) (% arg_z))
   (rcmp (% temp0) (@ x8632::tcr.tlb-limit (% tcr)))
   (movl (@ x8632::tcr.tlb-pointer (% tcr)) (% arg_y))
   (jae @done)

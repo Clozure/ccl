@@ -430,16 +430,16 @@
 (defx86lapfunction %double-float-sign ((n arg_z))
   (movl (@ x8664::double-float.val-high (% n)) (% imm0.l))
   (testl (% imm0.l) (% imm0.l))
-  (movl ($ x8664::t-value) (% imm0.l))
-  (movl ($ x8664::nil-value) (% arg_z.l))
+  (movl ($ (target-t-value)) (% imm0.l))
+  (movl ($ (target-nil-value)) (% arg_z.l))
   (cmovlq (% imm0) (% arg_z))
   (single-value-return))
 
 
 (defx86lapfunction %short-float-sign ((n arg_z))
   (testq (% n) (% n))
-  (movl ($ x8664::t-value) (% imm0.l))
-  (movl ($ x8664::nil-value) (% arg_z.l))
+  (movl ($ (target-t-value)) (% imm0.l))
+  (movl ($ (target-nil-value)) (% arg_z.l))
   (cmovlq (% imm0) (% arg_z))
   (single-value-return))
 

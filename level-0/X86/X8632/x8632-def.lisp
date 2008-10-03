@@ -126,21 +126,21 @@
 (defx8632lapfunction %get-kernel-global-from-offset ((offset arg_z))
   (check-nargs 1)
   (unbox-fixnum offset imm0)
-  (movl (@ x8632::nil-value (% imm0)) (% arg_z))
+  (movl (@ (target-nil-value) (% imm0)) (% arg_z))
   (single-value-return))
 
 (defx8632lapfunction %set-kernel-global-from-offset ((offset arg_y)
 						     (new-value arg_z))
   (check-nargs 2)
   (unbox-fixnum offset imm0)
-  (movl (% arg_z) (@ x8632::nil-value (% imm0)))
+  (movl (% arg_z) (@ (target-nil-value) (% imm0)))
   (single-value-return))
 
 (defx8632lapfunction %get-kernel-global-ptr-from-offset ((offset arg_y)
 							 (ptr arg_z))
   (check-nargs 2)
   (unbox-fixnum offset imm0)
-  (movl (@ x8632::nil-value (% imm0)) (% imm0))
+  (movl (@ (target-nil-value) (% imm0)) (% imm0))
   (movl (% imm0) (@ x8632::macptr.address (% ptr)))
   (single-value-return))
 
@@ -235,7 +235,7 @@
   (movl (@ x8632::recover-fn-address-offset (% r)) (% arg_z))
   (single-value-return)
   @fail
-  (movl ($ x8632::nil-value) (% arg_z))
+  (movl ($ (target-nil-value)) (% arg_z))
   (single-value-return))
 
 (defx8632lapfunction %return-address-offset ((r arg_z))
@@ -250,7 +250,7 @@
   (box-fixnum imm0 arg_z)
   (single-value-return)
   @fail
-  (movl ($ x8632::nil-value) (% arg_z))
+  (movl ($ (target-nil-value)) (% arg_z))
   (single-value-return))
 
 ;;; It's always been the case that the function associated with a
@@ -269,7 +269,7 @@
 
 (defx8632lapfunction %catch-top ((tcr arg_z))
   (check-nargs 1)
-  (movl ($ x8632::nil-value) (% arg_y))
+  (movl ($ (target-nil-value)) (% arg_y))
   (movl (:rcontext x8632::tcr.catch-top) (% arg_z))
   (testb (%b arg_z) (%b arg_z))
   (cmovel (% arg_y) (% arg_z))

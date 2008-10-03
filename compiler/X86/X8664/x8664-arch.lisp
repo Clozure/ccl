@@ -411,11 +411,11 @@
 (define-subtag instance fulltag-nodeheader-1 8)
 
 	
-(defconstant nil-value (+ #x13000 fulltag-nil))
-(defconstant t-value (+ #x13020 fulltag-symbol))
+(defconstant canonical-nil-value (+ #x13000 fulltag-nil))
+(defconstant canonical-t-value (+ #x13020 fulltag-symbol))
 (defconstant misc-bias fulltag-misc)
 (defconstant cons-bias fulltag-cons)
-(defconstant t-offset (- t-value nil-value))
+(defconstant t-offset (- canonical-t-value canonical-nil-value))
 
 
 (defconstant misc-header-offset (- fulltag-misc))
@@ -1138,7 +1138,7 @@
 (defparameter *x8664-target-arch*
   (arch::make-target-arch :name :x8664
                           :lisp-node-size 8
-                          :nil-value nil-value
+                          :nil-value canonical-nil-value
                           :fixnum-shift fixnumshift
                           :most-positive-fixnum (1- (ash 1 (1- (- 64 fixnumshift))))
                           :most-negative-fixnum (- (ash 1 (1- (- 64 fixnumshift))))
@@ -1271,7 +1271,7 @@
 
 ;;;
 (defx8664archmacro ccl::%get-kernel-global (name)
-  `(ccl::%fixnum-ref 0 (+ x8664::nil-value
+  `(ccl::%fixnum-ref 0 (+ ,(ccl::target-nil-value)
                         ,(%kernel-global
                          (if (ccl::quoted-form-p name)
                            (cadr name)
@@ -1280,7 +1280,7 @@
 (defx8664archmacro ccl::%get-kernel-global-ptr (name dest)
   `(ccl::%setf-macptr
     ,dest
-    (ccl::%int-to-ptr (ccl::%fixnum-ref-natural 0 (+ x8664::nil-value
+    (ccl::%int-to-ptr (ccl::%fixnum-ref-natural 0 (+ ,(ccl::target-nil-value)
                                  ,(%kernel-global
                                    (if (ccl::quoted-form-p name)
                                      (cadr name)

@@ -315,7 +315,7 @@
    (pushl (:%l x8632::arg_y)))
   ((:pred >= min 1)
    (movl (:%l x8632::arg_z) (:%l x8632::arg_y)))
-  (movl (:$l x8632::nil-value) (:%l x8632::arg_z))
+  (movl (:$l (target-nil-value)) (:%l x8632::arg_z))
   :done)
 
 (define-x8632-vinsn default-2-args (()
@@ -331,7 +331,7 @@
    (pushl (:%l x8632::arg_y)))
   ((:pred >= min 1)
    (pushl (:%l x8632::arg_z)))
-  (movl (:$l x8632::nil-value) (:%l x8632::arg_y))
+  (movl (:$l (target-nil-value)) (:%l x8632::arg_y))
   (jmp :last)
   :one
   ;; We got min+1 args: arg_y was supplied, arg_z defaults to nil.
@@ -339,7 +339,7 @@
    (pushl (:%l x8632::arg_y)))
   (movl (:%l x8632::arg_z) (:%l x8632::arg_y))
   :last
-  (movl (:$l x8632::nil-value) (:%l x8632::arg_z))
+  (movl (:$l (target-nil-value)) (:%l x8632::arg_z))
   :done)
 
 (define-x8632-vinsn default-optionals (()
@@ -354,7 +354,7 @@
   (jae :done)
   :loop
   (addl (:$b x8632::fixnumone) (:%l temp))
-  (pushl (:$l x8632::nil-value))
+  (pushl (:$l (target-nil-value)))
   ((:pred < n 32)
    (cmpl (:$b (:apply ash n x8632::fixnumshift)) (:%l temp)))
   ((:pred >= n 32)
@@ -422,11 +422,11 @@
 (define-x8632-vinsn compare-vframe-offset-to-nil (()
                                                   ((frame-offset :u16const)
                                                    (cur-vsp :u16const)))
-  (cmpl (:$l x8632::nil-value) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp))))
+  (cmpl (:$l (target-nil-value)) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp))))
 
 (define-x8632-vinsn compare-value-cell-to-nil (()
                                                ((vcell :lisp)))
-  (cmpl (:$l x8632::nil-value) (:@ x8632::value-cell.value (:%l vcell))))
+  (cmpl (:$l (target-nil-value)) (:@ x8632::value-cell.value (:%l vcell))))
 
 (define-x8632-vinsn lcell-load (((dest :lisp))
 				((cell :lcell)
@@ -464,11 +464,11 @@
 
 (define-x8632-vinsn compare-to-nil (()
                                     ((arg0 t)))
-  (cmpl (:$l x8632::nil-value) (:%l arg0)))
+  (cmpl (:$l (target-nil-value)) (:%l arg0)))
 
 (define-x8632-vinsn compare-to-t (()
 				  ((arg0 t)))
-  (cmpl (:$l x8632::t-value) (:%l arg0)))
+  (cmpl (:$l (target-t-value)) (:%l arg0)))
 
 (define-x8632-vinsn ref-constant (((dest :lisp))
                                   ((lab :label)))
@@ -550,7 +550,7 @@
 				      ((tag :u8)))
   ;; special check for NIL (which is a distinguished CONS on x8632)
   :resume
-  (cmpl (:$l x8632::nil-value) (:%l object))
+  (cmpl (:$l (target-nil-value)) (:%l object))
   (je :bad)
   (movl (:%l object) (:%l tag))
   (andl (:$b x8632::fulltagmask) (:%l tag))
@@ -568,7 +568,7 @@
   (andb (:$b x8632::fulltagmask) (:%accb tag))
   (cmpb (:$b x8632::fulltag-cons) (:%accb tag))
   (setne (:%b x8632::ah))
-  (cmpl (:$l x8632::nil-value) (:% object))
+  (cmpl (:$l (target-nil-value)) (:% object))
   (sete (:%b x8632::al))
   (orb (:%b x8632::ah) (:%b x8632::al)))
 
@@ -735,12 +735,12 @@
 
 (define-x8632-vinsn (load-nil :constant-ref) (((dest t))
 					      ())
-  (movl (:$l x8632::nil-value) (:%l dest)))
+  (movl (:$l (target-nil-value)) (:%l dest)))
 
 
 (define-x8632-vinsn (load-t :constant-ref) (((dest t))
 					    ())
-  (movl (:$l x8632::t-value) (:%l dest)))
+  (movl (:$l (target-t-value)) (:%l dest)))
 
 ;;; use something like this for the other extract-whatevers, too,
 ;;; once it's established that it works.
@@ -823,7 +823,7 @@
 (define-x8632-vinsn cr-bit->boolean (((dest :lisp))
                                      ((crbit :u8const))
                                      ((temp :u32)))
-  (movl (:$l x8632::t-value) (:%l temp))
+  (movl (:$l (target-t-value)) (:%l temp))
   (leal (:@ (- x8632::t-offset) (:%l temp)) (:%l dest))
   (cmovccl (:$ub crbit) (:%l temp) (:%l dest)))
 
@@ -1504,7 +1504,7 @@
   (subl (:%l imm) (:%l x8632::esp))
   (jmp :done)
   :push-loop
-  (pushl (:$l x8632::nil-value))
+  (pushl (:$l (target-nil-value)))
   (addl (:$b x8632::node-size) (:%l x8632::nargs))
   (subl (:$b x8632::node-size) (:%l imm))
   :push-more
@@ -1547,7 +1547,7 @@
 ;;; %ra0 is pointing into %fn, so no need to copy %fn here.
 (define-x8632-vinsn pass-multiple-values-symbol (()
                                                  ())
-  (pushl (:@ (+ x8632::nil-value (x8632::%kernel-global 'x86::ret1valaddr)))) 
+  (pushl (:@ (+ (target-nil-value) (x8632::%kernel-global 'x86::ret1valaddr)))) 
   (jmp (:@ x8632::symbol.fcell (:% x8632::fname))))
 
 
@@ -1568,7 +1568,7 @@
   (cmovel (:@ x8632::symbol.fcell (:%l x8632::fname)) (:%l x8632::fn))
   (jne :bad)
   :go
-  (pushl (:@ (+ x8632::nil-value (x8632::%kernel-global 'x86::ret1valaddr))))
+  (pushl (:@ (+ (target-nil-value) (x8632::%kernel-global 'x86::ret1valaddr))))
   (jmp (:%l x8632::fn))
   (:anchored-uuo-section :resume)
   :bad
@@ -2463,7 +2463,7 @@
                                     ((object :lisp))
                                     ((tag :u8)))
   :again
-  (cmpl (:$l x8632::nil-value) (:%l object))
+  (cmpl (:$l (target-nil-value)) (:%l object))
   (je :got-it)
   (movl (:%l object) (:%l tag))
   (andb (:$b x8632::tagmask) (:%b tag))
@@ -2774,7 +2774,7 @@
                                      ((src :lisp))
                                      ((tag :u8)))
   :resume
-  (cmpl (:$l x8632::nil-value) (:%l src))
+  (cmpl (:$l (target-nil-value)) (:%l src))
   (je :nilsym)
   (movl (:%l src) (:%l tag))
   (andb (:$b x8632::tagmask) (:%b tag))
@@ -2789,7 +2789,7 @@
    (movl (:% src) (:% dest)))
   (jmp :ok)
   :nilsym
-  (movl (:$l (+ x8632::nil-value x8632::nilsym-offset)) (:%l dest))
+  (movl (:$l (+ (target-nil-value) x8632::nilsym-offset)) (:%l dest))
   :ok
   
   (:anchored-uuo-section :resume)
@@ -3454,14 +3454,14 @@
                                        ()
                                        ((temp :imm)
 					(ra0 (:lisp #.x8632::ra0))))
-  (movl (:@ (+ x8632::nil-value (x8632::%kernel-global 'x86::ret1valaddr)))
+  (movl (:@ (+ (target-nil-value) (x8632::%kernel-global 'x86::ret1valaddr)))
         (:%l temp))
   (cmpl (:%l temp) (:%l ra0))
   (je :multiple)
-  (pushl (:@ (+ x8632::nil-value (x8632::%kernel-global 'x86::lexpr-return1v))))
+  (pushl (:@ (+ (target-nil-value) (x8632::%kernel-global 'x86::lexpr-return1v))))
   (jmp :finish)
   :multiple
-  (pushl (:@ (+ x8632::nil-value (x8632::%kernel-global 'x86::lexpr-return))))
+  (pushl (:@ (+ (target-nil-value) (x8632::%kernel-global 'x86::lexpr-return))))
   (pushl (:%l temp))
   :finish
   (pushl (:%l x8632::ebp))
@@ -3632,7 +3632,7 @@
   (sarl (:$ub (- 11 1)) (:%l temp))
   (cmpl (:$b (ash #xd800 -11))(:%l temp))
   :bad-if-eq
-  (movl (:$l x8632::nil-value) (:%l temp))
+  (movl (:$l (target-nil-value)) (:%l temp))
   (cmovel (:%l temp) (:%l dest))
   (je :done)
   ((:not (:pred =
@@ -3683,7 +3683,7 @@
 				(nargs (:lisp #.x8632::nargs))))
   (leal (:@ (:%l x8632::esp) (:%l x8632::nargs)) (:%l temp))
   (subl (:@ (:%l temp)) (:%l x8632::nargs))
-  (movl (:$l x8632::nil-value) (:%l result))
+  (movl (:$l (target-nil-value)) (:%l result))
   (jle :done)
   ;; I -think- that a CMOV would be safe here, assuming that N wasn't
   ;; extremely large.  Don't know if we can assume that.
@@ -3752,7 +3752,7 @@
   :resume
   (movl (:@ (+ (ash 1 x8632::word-shift) x8632::misc-data-offset) (:%l src))
         (:%l dest))
-  (cmpl (:$l x8632::nil-value) (:%l dest))
+  (cmpl (:$l (target-nil-value)) (:%l dest))
   (je :bad)
 
   (:anchored-uuo-section :resume)
@@ -3860,7 +3860,7 @@
                                     ((nargs (:u32 #.x8632::nargs))
                                      (imm :imm)))
   (xorl (:%l imm) (:%l imm))
-  (movl (:$l x8632::nil-value) (:%l x8632::arg_y))
+  (movl (:$l (target-nil-value)) (:%l x8632::arg_y))
   :loop
   (rcmpl (:%l imm) (:%l nargs))
   (movl (:%l x8632::arg_y) (:%l x8632::arg_z))
@@ -3877,7 +3877,7 @@
   (setne (:%b temp))
   (negb (:%b temp))
   (andl (:$b x8632::t-offset) (:%l temp))
-  (addl (:$l x8632::nil-value) (:%l temp))
+  (addl (:$l (target-nil-value)) (:%l temp))
   (pushl (:%l temp)))
 
 ;; needs some love
@@ -3888,16 +3888,16 @@
   (rcmpl (:%l x8632::nargs) (:$b (:apply ash 1 x8632::word-shift)))
   (je :one)
   ;; none
-  (pushl (:$l x8632::nil-value))
-  (pushl (:$l x8632::nil-value))
+  (pushl (:$l (target-nil-value)))
+  (pushl (:$l (target-nil-value)))
   (jmp :done)
   :one
-  (pushl (:$l x8632::t-value))
-  (pushl (:$l x8632::nil-value))
+  (pushl (:$l (target-t-value)))
+  (pushl (:$l (target-nil-value)))
   (jmp :done)
   :two
-  (pushl (:$l x8632::t-value))
-  (pushl (:$l x8632::t-value))
+  (pushl (:$l (target-t-value)))
+  (pushl (:$l (target-t-value)))
   :done)
 
 (define-x8632-vinsn set-c-flag-if-constant-logbitp (()

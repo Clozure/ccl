@@ -150,7 +150,7 @@
     @test
     (cmpl (@ limit (% ebp)) (% obj))
     (jb @loop)
-    (movl ($ x8632::nil-value) (% arg_z))
+    (movl ($ (target-nil-value)) (% arg_z))
     (restore-simple-frame)
     (single-value-return)))
 
@@ -255,7 +255,7 @@
     (cmpl (@ sentinel (% ebp)) (% obj))
     (jb @loop)
     @done
-    (movl ($ x8632::nil-value) (% arg_z))
+    (movl ($ (target-nil-value)) (% arg_z))
     (restore-simple-frame)
     (single-value-return)))
 
@@ -281,7 +281,7 @@
   (movl (@ x8632::symbol.vcell (% temp1)) (% temp1))
   (movzbl (% imm0.b) (% imm0))
   (movl (@ x8632::misc-data-offset (% temp1) (% imm0) 4) (% temp0))
-  (cmpl ($ x8632::nil-value) (% temp0))
+  (cmpl ($ (target-nil-value)) (% temp0))
   (je @bad)
   ;; functionp?
   (extract-typecode temp0 imm0)
@@ -308,7 +308,7 @@
 (defx8632lapfunction full-gccount ()
   (ref-global tenured-area arg_z)
   (test (% arg_z) (% arg_z))
-  (cmovel (@ (+ x8632::nil-value (x8632::%kernel-global 'gc-count))) (% arg_z))
+  (cmovel (@ (+ (target-nil-value) (x8632::%kernel-global 'gc-count))) (% arg_z))
   (cmovnel (@ x8632::area.gc-count (% arg_z)) (% arg_z))
   (single-value-return))
 
@@ -377,7 +377,7 @@ be somewhat larger than what was specified)."
   (check-nargs 0) 
   (movl ($ arch::gc-trap-function-use-lisp-heap-threshold) (% imm0))
   (uuo-gc-trap)
-  (movl ($ x8632::nil-value) (%l arg_z))
+  (movl ($ (target-nil-value)) (%l arg_z))
   (single-value-return))
 
 (defx8632lapfunction freeze ()
@@ -390,7 +390,7 @@ be somewhat larger than what was specified)."
 ;;; Returns that kernel import, a fixnum.
 (defx8632lapfunction %kernel-import ((offset arg_z))
   (unbox-fixnum arg_z imm0)
-  (addl (@ (+ x8632::nil-value (x8632::%kernel-global 'kernel-imports))) (% imm0))
+  (addl (@ (+ (target-nil-value) (x8632::%kernel-global 'kernel-imports))) (% imm0))
   (movl (@ (% imm0)) (% imm0))
   (box-fixnum imm0 arg_z)
   (single-value-return))
@@ -437,7 +437,7 @@ be somewhat larger than what was specified)."
   (subl ($ '2) (% nargs))
   (leal (@ '2 (% esp) (% nargs)) (% imm0))
   (cmoval (% imm0) (% esp))
-  (movl ($ x8632::t-value) (% arg_z))
+  (movl ($ (target-t-value)) (% arg_z))
   (push (% temp0))
   (single-value-return))
 
@@ -446,7 +446,7 @@ be somewhat larger than what was specified)."
   (subl ($ '2) (% nargs))
   (leal (@ '2 (% esp) (% nargs)) (% imm0))
   (cmoval (% imm0) (% esp))
-  (movl ($ x8632::nil-value) (% arg_z))
+  (movl ($ (target-nil-value)) (% arg_z))
   (push (% temp0))
   (single-value-return))
 

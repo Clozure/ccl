@@ -133,7 +133,7 @@
 
 
 
-(defconstant nil-value #x00003015)
+(defconstant canonical-nil-value #x00003015)
 ;;; T is almost adjacent to NIL: since NIL is a misaligned CONS, it spans
 ;;; two doublewords.  The arithmetic difference between T and NIL is
 ;;; such that the least-significant bit and exactly one other bit is
@@ -756,7 +756,7 @@
 (defparameter *ppc32-target-arch*
   (arch::make-target-arch :name :ppc32
                           :lisp-node-size 4
-                          :nil-value nil-value
+                          :nil-value canonical-nil-value
                           :fixnum-shift fixnumshift
                           :most-positive-fixnum (1- (ash 1 (1- (- 32 fixnumshift))))
                           :most-negative-fixnum (- (ash 1 (1- (- 32 fixnumshift))))
@@ -884,7 +884,7 @@
 
 ;;;
 (defppc32archmacro ccl::%get-kernel-global (name)
-  `(ccl::%fixnum-ref 0 (+ ppc32::nil-value
+  `(ccl::%fixnum-ref 0 (+ ,(ccl::target-nil-value)
                         ,(%kernel-global
                           (if (ccl::quoted-form-p name)
                             (cadr name)
@@ -893,11 +893,11 @@
 (defppc32archmacro ccl::%get-kernel-global-ptr (name dest)
   `(ccl::%setf-macptr
     ,dest
-    (ccl::%fixnum-ref-macptr 0 (+ ppc32::nil-value
-                                                ,(%kernel-global
-                                                  (if (ccl::quoted-form-p name)
-                                                    (cadr name)
-                                                    name))))))
+    (ccl::%fixnum-ref-macptr 0 (+ ,(ccl::target-nil-value)
+                                ,(%kernel-global
+                                  (if (ccl::quoted-form-p name)
+                                    (cadr name)
+                                    name))))))
 
 (defppc32archmacro ccl::%target-kernel-global (name)
   `(ppc32::%kernel-global ,name))

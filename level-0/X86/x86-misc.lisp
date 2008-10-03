@@ -338,7 +338,7 @@
   (movq (@ x8664::area.active (% temp0)) (% imm0))
   @room
   (cmpq (% imm1) (% imm0))
-  (movl ($ x8664::nil-value) (%l arg_z))
+  (movl ($ (target-nil-value)) (%l arg_z))
   (cmovneq (@ (- x8664::node-size) (% imm1)) (% arg_z))
   (single-value-return))
 
@@ -379,19 +379,19 @@
   (lock)
   (cmpxchgq (% new) (@ (% object) (% imm1)))
   (jne @again)
-  (movl ($ x8664::t-value) (%l arg_z))
+  (movl ($ (target-t-value)) (%l arg_z))
   (single-value-return 3)
   @lose
-  (movl ($ x8664::nil-value) (%l arg_z))
+  (movl ($ (target-nil-value)) (%l arg_z))
   (single-value-return 3))
 
 (defx86lapfunction set-%gcable-macptrs% ((ptr x8664::arg_z))
   @again
-  (movq (@ (+ x8664::nil-value (x8664::kernel-global gcable-pointers)))
+  (movq (@ (+ (target-nil-value) (x8664::kernel-global gcable-pointers)))
         (% rax))
   (movq (% rax) (@ x8664::xmacptr.link (% ptr)))
   (lock)
-  (cmpxchgq (% ptr) (@ (+ x8664::nil-value (x8664::kernel-global gcable-pointers))))
+  (cmpxchgq (% ptr) (@ (+ (target-nil-value) (x8664::kernel-global gcable-pointers))))
   (jne @again)
   (single-value-return))
 
@@ -399,13 +399,13 @@
 ;;; (It's decremented if it's currently negative, incremented otherwise.)
 (defx86lapfunction %lock-gc-lock ()
   @again
-  (movq (@ (+ x8664::nil-value (x8664::kernel-global gc-inhibit-count))) (% rax))
+  (movq (@ (+ (target-nil-value) (x8664::kernel-global gc-inhibit-count))) (% rax))
   (lea (@ '-1 (% rax)) (% temp0))
   (lea (@ '1 (% rax)) (% arg_z))
   (testq (% rax) (% rax))
   (cmovsq (% temp0) (% arg_z))
   (lock)
-  (cmpxchgq (% arg_z) (@ (+ x8664::nil-value (x8664::kernel-global gc-inhibit-count))))
+  (cmpxchgq (% arg_z) (@ (+ (target-nil-value) (x8664::kernel-global gc-inhibit-count))))
   (jnz @again)
   (single-value-return))
 
@@ -414,14 +414,14 @@
 ;;; If it's incremented from -1 to 0, try to GC (maybe just a little.)
 (defx86lapfunction %unlock-gc-lock ()
   @again
-  (movq (@ (+ x8664::nil-value (x8664::kernel-global gc-inhibit-count)))
+  (movq (@ (+ (target-nil-value) (x8664::kernel-global gc-inhibit-count)))
         (% rax))
   (lea (@ '1 (% rax)) (% arg_x))
   (cmpq ($ -1) (% rax))
   (lea (@ '-1 (% rax)) (% arg_z))
   (cmovleq (% arg_x) (% arg_z))
   (lock)
-  (cmpxchgq (% arg_z) (@ (+ x8664::nil-value (x8664::kernel-global gc-inhibit-count))))
+  (cmpxchgq (% arg_z) (@ (+ (target-nil-value) (x8664::kernel-global gc-inhibit-count))))
   (jne @again)
   (cmpq ($ '-1) (% rax))
   (jne @done)
@@ -628,7 +628,7 @@
   (testq (% imm1) (% imm1))
   (setne (%b imm0))
   (andl ($ x8664::t-offset) (%l imm0))
-  (lea (@ x8664::nil-value (% imm0)) (% arg_z))
+  (lea (@ (target-nil-value) (% imm0)) (% arg_z))
   (single-value-return))
 
 
@@ -658,11 +658,11 @@
 
 (defx86lapfunction %check-deferred-gc ()
   (btq ($ (+ arch::tcr-flag-bit-pending-suspend target::fixnumshift)) (:rcontext x8664::tcr.flags))
-  (movl ($ x8664::nil-value) (% arg_z.l))
+  (movl ($ (target-nil-value)) (% arg_z.l))
   (jae @done)
   (ud2a)
   (:byte 3)
-  (movl ($ x8664::t-value) (% arg_z.l))
+  (movl ($ (target-t-value)) (% arg_z.l))
   @done
   (single-value-return))
 
@@ -679,7 +679,7 @@
   (:byte 5)
   (movzbl (%b imm0) (%l imm0))
   (testl (%l imm0) (%l imm0))
-  (movl ($ target::nil-value) (%l arg_z))
+  (movl ($ (target-nil-value)) (%l arg_z))
   (cmovnel (@ (+ target::t-offset target::symbol.vcell) (% arg_z)) (%l arg_z))
   (single-value-return))
 
@@ -687,7 +687,7 @@
   (check-nargs 0)
   (ud2a)
   (:byte 6)
-  (movl ($ target::nil-value) (%l arg_z))
+  (movl ($ (target-nil-value)) (%l arg_z))
   (single-value-return))
 
 (defx86lapfunction %resume-tcr ((target arg_z))
@@ -696,7 +696,7 @@
   (:byte 7)
   (movzbl (%b imm0) (%l imm0))
   (testl (%l imm0) (%l imm0))
-  (movl ($ target::nil-value) (%l arg_z))
+  (movl ($ (target-nil-value)) (%l arg_z))
   (cmovnel (@ (+ target::t-offset target::symbol.vcell) (% arg_z)) (%l arg_z))
   (single-value-return))
 
@@ -704,7 +704,7 @@
   (check-nargs 0)
   (ud2a)
   (:byte 8)
-  (movl ($ target::nil-value) (%l arg_z))
+  (movl ($ (target-nil-value)) (%l arg_z))
   (single-value-return))
 
 (defx86lapfunction %get-spin-lock ((p arg_z))
@@ -868,12 +868,12 @@
 
 (defx86lapfunction %atomic-pop-static-cons ()
   @again
-  (movq (@ (+ x8664::nil-value (x8664::kernel-global static-conses))) (% rax))
-  (testq ($ x8664::nil-value) (% rax))
+  (movq (@ (+ (target-nil-value) (x8664::kernel-global static-conses))) (% rax))
+  (testq ($ (target-nil-value)) (% rax))
   (jz @lose)
   (%cdr rax temp0)
   (lock)
-  (cmpxchgq (% temp0) (@ (+ x8664::nil-value (x8664::kernel-global static-conses))))
+  (cmpxchgq (% temp0) (@ (+ (target-nil-value) (x8664::kernel-global static-conses))))
   (jnz @again)
   @lose
   (movq (% rax) (% arg_z))
@@ -887,7 +887,7 @@
   (shrq ($ target::dnode-shift) (% imm0))
   (cmpq (@ target::area.static-dnodes (% temp0)) (% imm0))
   (leaq (@ (% imm0) target::fixnumone) (% arg_z))
-  (movl ($ target::nil-value) (%l imm0))
+  (movl ($ (target-nil-value)) (%l imm0))
   (cmovaeq (% imm0) (% arg_z))
   (single-value-return))
 

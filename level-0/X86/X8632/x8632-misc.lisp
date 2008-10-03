@@ -332,7 +332,7 @@
   @myself
   (cmpl (% imm0) (% esp))
   @finish
-  (movl ($ x8632::nil-value) (% arg_z))
+  (movl ($ (target-nil-value)) (% arg_z))
   (cmovnel (@ (- x8632::node-size) (% imm0)) (% arg_z))
   (single-value-return))
   
@@ -388,20 +388,20 @@
     (lock)
     (cmpxchgl (% new) (@ (% robject) (% imm1)))
     (jne @again)
-    (movl ($ x8632::t-value) (% arg_z))
+    (movl ($ (target-t-value)) (% arg_z))
     (mark-as-node temp0)
     (single-value-return 4)
     @lose
-    (movl ($ x8632::nil-value) (% arg_z))
+    (movl ($ (target-nil-value)) (% arg_z))
     (mark-as-node temp0)
     (single-value-return 4)))
 
 (defx8632lapfunction set-%gcable-macptrs% ((ptr arg_z))
   @again
-  (movl (@ (+ x8632::nil-value (x8632::kernel-global gcable-pointers))) (% eax))
+  (movl (@ (+ (target-nil-value) (x8632::kernel-global gcable-pointers))) (% eax))
   (movl (% eax) (@ x8632::xmacptr.link (% ptr)))
   (lock)
-  (cmpxchgl (% ptr) (@ (+ x8632::nil-value (x8632::kernel-global gcable-pointers))))
+  (cmpxchgl (% ptr) (@ (+ (target-nil-value) (x8632::kernel-global gcable-pointers))))
   (jne @again)
   (single-value-return))
 
@@ -409,13 +409,13 @@
 ;;; (It's decremented if it's currently negative, incremented otherwise.)
 (defx8632lapfunction %lock-gc-lock ()
   @again
-  (movl (@ (+ x8632::nil-value (x8632::kernel-global gc-inhibit-count))) (% eax))
+  (movl (@ (+ (target-nil-value) (x8632::kernel-global gc-inhibit-count))) (% eax))
   (lea (@ '-1 (% eax)) (% temp0))
   (lea (@ '1 (% eax)) (% arg_z))
   (test (% eax) (% eax))
   (cmovsl (% temp0) (% arg_z))
   (lock)
-  (cmpxchgl (% arg_z) (@ (+ x8632::nil-value (x8632::kernel-global gc-inhibit-count))))
+  (cmpxchgl (% arg_z) (@ (+ (target-nil-value) (x8632::kernel-global gc-inhibit-count))))
   (jnz @again)
   (single-value-return))
 
@@ -424,14 +424,14 @@
 ;;; If it's incremented from -1 to 0, try to GC (maybe just a little.)
 (defx8632lapfunction %unlock-gc-lock ()
   @again
-  (movl (@ (+ x8632::nil-value (x8632::kernel-global gc-inhibit-count)))
+  (movl (@ (+ (target-nil-value) (x8632::kernel-global gc-inhibit-count)))
         (% eax))
   (lea (@ '1 (% eax)) (% temp0))
   (cmpl ($ -1) (% eax))
   (lea (@ '-1 (% eax)) (% arg_z))
   (cmovlel (% temp0) (% arg_z))
   (lock)
-  (cmpxchgl (% arg_z) (@ (+ x8632::nil-value (x8632::kernel-global gc-inhibit-count))))
+  (cmpxchgl (% arg_z) (@ (+ (target-nil-value) (x8632::kernel-global gc-inhibit-count))))
   (jne @again)
   (cmpl ($ '-1) (% eax))
   (jne @done)
@@ -663,7 +663,7 @@
   (testl (% imm0) (% imm0))
   (setne (%b imm0))
   (andl ($ x8632::t-offset) (%l imm0))
-  (lea (@ x8632::nil-value (% imm0)) (% arg_z))
+  (lea (@ (target-nil-value) (% imm0)) (% arg_z))
   (single-value-return))
 
 (defx8632lapfunction debug-trap-with-string ((arg arg_z))
@@ -699,7 +699,7 @@
   (:byte 5)
   (movzbl (%b imm0) (%l imm0))
   (testl (%l imm0) (%l imm0))
-  (movl ($ target::nil-value) (%l arg_z))
+  (movl ($ (target-nil-value)) (%l arg_z))
   (cmovnel (@ (+ target::t-offset target::symbol.vcell) (% arg_z)) (%l arg_z))
   (single-value-return))
 
@@ -707,7 +707,7 @@
   (check-nargs 0)
   (ud2a)
   (:byte 6)
-  (movl ($ target::nil-value) (%l arg_z))
+  (movl ($ (target-nil-value)) (%l arg_z))
   (single-value-return))
 
 (defx8632lapfunction %resume-tcr ((target arg_z))
@@ -716,7 +716,7 @@
   (:byte 7)
   (movzbl (%b imm0) (%l imm0))
   (testl (%l imm0) (%l imm0))
-  (movl ($ target::nil-value) (%l arg_z))
+  (movl ($ (target-nil-value)) (%l arg_z))
   (cmovnel (@ (+ target::t-offset target::symbol.vcell) (% arg_z)) (%l arg_z))
   (single-value-return))
 
@@ -724,7 +724,7 @@
   (check-nargs 0)
   (ud2a)
   (:byte 8)
-  (movl ($ target::nil-value) (%l arg_z))
+  (movl ($ (target-nil-value)) (%l arg_z))
   (single-value-return))
 
 (defx8632lapfunction %get-spin-lock ((p arg_z))
@@ -765,12 +765,12 @@
 
 (defx8632lapfunction %atomic-pop-static-cons ()
   @again
-  (movl (@ (+ x8632::nil-value (x8632::kernel-global static-conses))) (% eax))
-  (testl ($ x8632::nil-value) (% eax))
+  (movl (@ (+ (target-nil-value) (x8632::kernel-global static-conses))) (% eax))
+  (testl ($ (target-nil-value)) (% eax))
   (jz @lose)
   (%cdr eax temp0)
   (lock)
-  (cmpxchgl (% temp0) (@ (+ x8632::nil-value (x8632::kernel-global static-conses))))
+  (cmpxchgl (% temp0) (@ (+ (target-nil-value) (x8632::kernel-global static-conses))))
   (jnz @again)
   @lose
   (movl (% eax) (% arg_z))
@@ -784,7 +784,7 @@
   (shrl ($ target::dnode-shift) (% imm0))
   (cmpl (@ target::area.static-dnodes (% temp0)) (% imm0))
   (leal (@ (% imm0) target::fixnumone) (% arg_z))
-  (movl ($ target::nil-value) (%l imm0))
+  (movl ($ (target-nil-value)) (%l imm0))
   (cmovael (% imm0) (% arg_z))
   (single-value-return))
 

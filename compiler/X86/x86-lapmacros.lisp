@@ -192,9 +192,9 @@
 (defx86lapmacro cmp-reg-to-nil (reg)
   (target-arch-case
    (:x8632
-    `(cmpl ($ x8632::nil-value) (%l ,reg)))
+    `(cmpl ($ (target-nil-value)) (%l ,reg)))
    (:x8664
-    `(cmpb ($ (logand #xff x8664::nil-value)) (%b ,reg)))))
+    `(cmpb ($ (logand #xff (target-nil-value))) (%b ,reg)))))
 
 (defx86lapmacro unbox-fixnum (src dest)
   (target-arch-case
@@ -330,23 +330,23 @@
 (defx86lapmacro ref-global (global reg)
   (target-arch-case
    (:x8632
-    `(movl (@ (+ x8632::nil-value ,(x8632::%kernel-global global))) (% ,reg)))
+    `(movl (@ (+ (target-nil-value) ,(x8632::%kernel-global global))) (% ,reg)))
    (:x8664
-    `(movq (@ (+ x8664::nil-value ,(x8664::%kernel-global global))) (% ,reg)))))
+    `(movq (@ (+ (target-nil-value) ,(x8664::%kernel-global global))) (% ,reg)))))
 
 (defx86lapmacro ref-global.l (global reg)
   (target-arch-case
    (:x8632
-    `(movl (@ (+ x8632::nil-value ,(x8632::%kernel-global global))) (%l ,reg)))
+    `(movl (@ (+ (target-nil-value) ,(x8632::%kernel-global global))) (%l ,reg)))
    (:x8664
-    `(movl (@ (+ x8664::nil-value ,(x8664::%kernel-global global))) (%l ,reg)))))
+    `(movl (@ (+ (target-nil-value) ,(x8664::%kernel-global global))) (%l ,reg)))))
 
 (defx86lapmacro set-global (reg global)
   (target-arch-case
    (:x8632
-    `(movl (% ,reg) (@ (+ x8632::nil-value ,(x8632::%kernel-global global)))))
+    `(movl (% ,reg) (@ (+ (target-nil-value) ,(x8632::%kernel-global global)))))
    (:x8664
-    `(movq (% ,reg) (@ (+ x8664::nil-value ,(x8664::%kernel-global global)))))))
+    `(movq (% ,reg) (@ (+ (target-nil-value) ,(x8664::%kernel-global global)))))))
 
 (defx86lapmacro macptr-ptr (src dest)
   (target-arch-case

@@ -494,7 +494,7 @@
     (strcx. new object imm0)
     (bne @again)
     (isync)
-    (li arg_z (+ target::t-offset target::nil-value))
+    (li arg_z (+ target::t-offset (target-nil-value)))
     (blr)
     @lose
     (li imm0 target::reservation-discharge)
@@ -503,7 +503,7 @@
     (blr)))
 
 (defppclapfunction set-%gcable-macptrs% ((ptr target::arg_z))
-  (li imm0 (+ target::nil-value (target::kernel-global gcable-pointers)))
+  (li imm0 (+ (target-nil-value) (target::kernel-global gcable-pointers)))
   @again
   (lrarx arg_y rzero imm0)
   (str arg_y target::xmacptr.link ptr)
@@ -515,7 +515,7 @@
 ;;; Atomically increment or decrement the gc-inhibit-count kernel-global
 ;;; (It's decremented if it's currently negative, incremented otherwise.)
 (defppclapfunction %lock-gc-lock ()
-  (li imm0 (+ target::nil-value (target::kernel-global gc-inhibit-count)))
+  (li imm0 (+ (target-nil-value) (target::kernel-global gc-inhibit-count)))
   @again
   (lrarx arg_y rzero imm0)
   (cmpri cr1 arg_y 0)
@@ -533,7 +533,7 @@
 ;;; If it's incremented from -1 to 0, try to GC (maybe just a little.)
 (defppclapfunction %unlock-gc-lock ()
 ;;  (sync)
-  (li imm0 (+ target::nil-value (target::kernel-global gc-inhibit-count)))
+  (li imm0 (+ (target-nil-value) (target::kernel-global gc-inhibit-count)))
   @again
   (lrarx arg_y rzero imm0)
   (cmpri cr1 arg_y -1)
@@ -710,42 +710,42 @@
   (lwz srv 20 vsp)
 @get0
   (svref imm0 1 srv)
-  (cmpwi cr0 imm0 target::nil-value)
+  (cmpwi cr0 imm0 (target-nil-value))
   (beq @get1)
   (lwz save0 0 imm0)
 @get1
   (svref imm0 2 srv)
-  (cmpwi cr0 imm0 target::nil-value)
+  (cmpwi cr0 imm0 (target-nil-value))
   (beq @get2)
   (lwz save1 0 imm0)
 @get2
   (svref imm0 3 srv)
-  (cmpwi cr0 imm0 target::nil-value)
+  (cmpwi cr0 imm0 (target-nil-value))
   (beq @get3)
   (lwz save2 0 imm0)
 @get3
   (svref imm0 4 srv)
-  (cmpwi cr0 imm0 target::nil-value)
+  (cmpwi cr0 imm0 (target-nil-value))
   (beq @get4)
   (lwz save3 0 imm0)
 @get4
   (svref imm0 5 srv)
-  (cmpwi cr0 imm0 target::nil-value)
+  (cmpwi cr0 imm0 (target-nil-value))
   (beq @get5)
   (lwz save4 0 imm0)
 @get5
   (svref imm0 6 srv)
-  (cmpwi cr0 imm0 target::nil-value)
+  (cmpwi cr0 imm0 (target-nil-value))
   (beq @get6)
   (lwz save5 0 imm0)
 @get6
   (svref imm0 7 srv)
-  (cmpwi cr0 imm0 target::nil-value)
+  (cmpwi cr0 imm0 (target-nil-value))
   (beq @get7)
   (lwz save6 0 imm0)
 @get7
   (svref imm0 8 srv)
-  (cmpwi cr0 imm0 target::nil-value)
+  (cmpwi cr0 imm0 (target-nil-value))
   (beq @got)
   (lwz save7 0 imm0)
 @got
@@ -1011,10 +1011,10 @@
   (blr))
 
 (defppclapfunction %atomic-pop-static-cons ()
-  (li imm0 (+ target::nil-value (target::kernel-global static-conses)))
+  (li imm0 (+ (target-nil-value) (target::kernel-global static-conses)))
   @again
   (lrarx arg_z rzero imm0)
-  (cmpri arg_z target::nil-value)
+  (cmpri arg_z (target-nil-value))
   (beq @lose)
   (%cdr arg_y arg_z)
   (strcx. arg_y rzero imm0)

@@ -40,7 +40,7 @@ numbers with the same type and value."
   (cmpb ($ x8632::subtag-ratio) (% imm0.b))
   (je @ratio)
   @lose
-  (movl ($ x8632::nil-value) (% arg_z))
+  (movl ($ (target-nil-value)) (% arg_z))
   (single-value-return)
   @double-float
   ;; use UCOMISD here, maybe?
@@ -50,7 +50,7 @@ numbers with the same type and value."
   (movl (@ x8632::double-float.value (% x)) (% imm0))
   (cmpl (% imm0) (@ x8632::double-float.value (% y)))
   (jne @lose)
-  (movl ($ x8632::t-value) (% arg_z))
+  (movl ($ (target-t-value)) (% arg_z))
   (single-value-return)
   @macptr
   (cmpb ($ x8632::subtag-macptr) (@ x8632::misc-subtag-offset (% y)))
@@ -59,12 +59,12 @@ numbers with the same type and value."
   (movl (@ x8632::misc-data-offset (% x)) (% imm0))
   @test
   (cmpl (% imm0) (@ x8632::misc-data-offset (% y)))
-  (movl ($ x8632::t-value) (%l imm0))
+  (movl ($ (target-t-value)) (%l imm0))
   (lea (@ (- x8632::t-offset) (% imm0)) (% arg_z))
   (cmovel (%l imm0) (%l arg_z))
   (single-value-return)
   @win
-  (movl ($ x8632::t-value) (% arg_z))
+  (movl ($ (target-t-value)) (% arg_z))
   (single-value-return)
   @ratio
   @complex
@@ -85,7 +85,7 @@ numbers with the same type and value."
   (restore-simple-frame)
   (jnz @tail)
   ;; lose, again
-  (movl ($ x8632::nil-value) (% arg_z))
+  (movl ($ (target-nil-value)) (% arg_z))
   (single-value-return)
   @bignum
   ;; Way back when, we got x's header into imm0.  We know that y's
@@ -101,7 +101,7 @@ numbers with the same type and value."
   (addl ($ '1) (% temp1))
   (sub ($ '1) (% temp0))
   (jnz @bignum-next)
-  (movl ($ x8632::t-value) (% arg_z))
+  (movl ($ (target-t-value)) (% arg_z))
   (single-value-return))
 
 (defx8632lapfunction equal ((x arg_y) (y arg_z))
@@ -125,10 +125,10 @@ numbers with the same type and value."
   (cmpb ($ x8632::fulltag-misc) (% imm0.b))
   (je @misc)
   @lose
-  (movl ($ x8632::nil-value) (% arg_z))
+  (movl ($ (target-nil-value)) (% arg_z))
   (single-value-return)
   @win
-  (movl ($ x8632::t-value) (% arg_z))
+  (movl ($ (target-t-value)) (% arg_z))
   (single-value-return)
   @cons
   ;; Check to see if the CARs are EQ.  If so, we can avoid saving
@@ -154,7 +154,7 @@ numbers with the same type and value."
   (pop (% x))
   (restore-simple-frame)         
   (jnz @top)
-  (movl ($ x8632::nil-value) (% arg_z))
+  (movl ($ (target-nil-value)) (% arg_z))
   (single-value-return)
   @misc
   ;; Both objects are uvectors of some sort.  Try EQL; if that fails,
@@ -171,7 +171,7 @@ numbers with the same type and value."
   (jump-symbol hairy-equal 2)
   @won-with-eql
   (restore-simple-frame)                ; discards pushed args
-  (movl ($ x8632::t-value) (% arg_z))
+  (movl ($ (target-t-value)) (% arg_z))
   (single-value-return))
 
 (defx8632lapfunction %lisp-lowbyte-ref ((thing arg_z))

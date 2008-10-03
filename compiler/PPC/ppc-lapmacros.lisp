@@ -562,19 +562,19 @@
   (target-arch-case
    (:ppc32
     (let* ((offset (ppc32::%kernel-global sym)))
-      `(lwz ,reg (+ ,offset ppc32::nil-value) 0)))
+      `(lwz ,reg (+ ,offset (target-nil-value)) 0)))
    (:ppc64
     (let* ((offset (ppc64::%kernel-global sym)))
-      `(ld ,reg (+ ,offset ppc64::nil-value) 0)))))
+      `(ld ,reg (+ ,offset (target-nil-value)) 0)))))
 
 (defppclapmacro set-global (reg sym)
   (target-arch-case
    (:ppc32
     (let* ((offset (ppc32::%kernel-global sym)))
-      `(stw ,reg (+ ,offset ppc32::nil-value) 0)))
+      `(stw ,reg (+ ,offset (target-nil-value)) 0)))
    (:ppc64
     (let* ((offset (ppc64::%kernel-global sym)))
-      `(std ,reg (+ ,offset ppc64::nil-value) 0)))))
+      `(std ,reg (+ ,offset (target-nil-value)) 0)))))
 
 ;;; Set "dest" to those bits in "src" that are other than those that
 ;;; would be set if "src" is a fixnum and of type (unsigned-byte
@@ -601,11 +601,11 @@
    (:ppc32
     `(progn
       (rlwimi ,temp ,src 4 27 27)
-      (addi ,dest ,temp ppc32::nil-value)))
+      (addi ,dest ,temp (target-nil-value))))
    (:ppc64
     `(progn
       (mulli ,temp ,src ppc64::t-offset) ; temp = ppc64::t-offset, or 0
-      (addi ,dest ,temp ppc64::nil-value))))) ; dest = (src == 1), lisp-wise
+      (addi ,dest ,temp (target-nil-value)))))) ; dest = (src == 1), lisp-wise
 
 (defppclapmacro eq0->boolean (dest src temp)
   (target-arch-case

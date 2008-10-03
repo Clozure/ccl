@@ -139,7 +139,7 @@
 (progn
 (defun setup-objc-exception-globals ()
   (flet ((set-global (offset name)
-           (setf (%get-ptr (%int-to-ptr (+ target::nil-value (%kernel-global-offset offset))))
+           (setf (%get-ptr (%int-to-ptr (+ (target-nil-value) (%kernel-global-offset offset))))
                  (foreign-symbol-address name))))
     (set-global 'x86::objc-2-personality "___objc_personality_v0")
     (set-global 'x86::objc-2-begin-catch "_objc_begin_catch")

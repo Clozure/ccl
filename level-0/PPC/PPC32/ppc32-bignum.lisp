@@ -97,7 +97,7 @@
   (cntlzw imm0 imm0)
   (srwi imm0 imm0 5)
   (rlwimi imm0 imm0 4 27 27)
-  (addi arg_z imm0 ppc32::nil-value)
+  (addi arg_z imm0 (target-nil-value))
   (blr))
 
 ;;; store the sign of bignum (0 or -1) in the one-word bignum "digit".
@@ -168,7 +168,7 @@
   (lwzx imm0 bignum imm0)
   (srwi imm0 imm0 31)
   (rlwimi imm0 imm0 4 27 27)
-  (addi arg_z imm0 ppc32::nil-value)	; return T if sign bit was clear before inversion
+  (addi arg_z imm0 (target-nil-value))	; return T if sign bit was clear before inversion
   (blr))
 
 
@@ -177,8 +177,8 @@
 ;;; If I is NIL, A is a fixnum.  If J is NIL, B is a fixnum.
 
 (defppclapfunction %add-with-carry ((r 12) (k 8) (c 4) (a 0) (i arg_x) (b arg_y) (j arg_z))
-  (cmpwi cr1 j ppc32::nil-value)
-  (cmpwi cr0 i ppc32::nil-value)
+  (cmpwi cr1 j (target-nil-value))
+  (cmpwi cr0 i (target-nil-value))
   (lwz temp0 a vsp)
   (unbox-fixnum imm1 temp0)
   (unbox-fixnum imm2 b)
@@ -210,8 +210,8 @@
 ;;; Store the result of A[I] - B[J] - borrow into R[K], returning the borrow.
 ;;; If I is NIL, A is a fixnum; likewise for J and B.
 (defppclapfunction %subtract-with-borrow ((r 12) (k 8) (borrow 4) (a 0) (i arg_x) (b arg_y) (j arg_z))
-  (cmpwi cr0 i ppc32::nil-value)
-  (cmpwi cr1 j ppc32::nil-value)
+  (cmpwi cr0 i (target-nil-value))
+  (cmpwi cr1 j (target-nil-value))
   (lwz temp0 a vsp)
   (unbox-fixnum imm2 b)
   (unbox-fixnum imm1 temp0)
@@ -782,10 +782,10 @@ arg_y) (borrow-in arg_z))
   (bne @true)
   (subic. count count 4)
   (bgt  @loop)
-  (li arg_z ppc32::nil-value)
+  (li arg_z (target-nil-value))
   (blr)
   @true
-  (li arg_z (+ ppc32::nil-value  ppc32::t-offset))
+  (li arg_z (+ (target-nil-value)  ppc32::t-offset))
   (blr))
 
 ;;; dest[idx] <- (lognot src[idx])
@@ -841,7 +841,7 @@ arg_y) (borrow-in arg_z))
         (w2 imm1))
     (unbox-fixnum  w1 fix)
     (lwz w2 ppc32::misc-data-offset big)
-    (cmpwi dest ppc32::nil-value)
+    (cmpwi dest (target-nil-value))
     (not w2 w2)
     (and w1 w1 w2)
     (bne @store)
@@ -858,7 +858,7 @@ arg_y) (borrow-in arg_z))
         (w2 imm1))
     (unbox-fixnum  w1 fix)
     (lwz w2 ppc32::misc-data-offset big)
-    (cmpwi dest ppc32::nil-value)
+    (cmpwi dest (target-nil-value))
     (and w1 w1 w2)
     (bne @store)
     (box-fixnum arg_z w1)
@@ -874,7 +874,7 @@ arg_y) (borrow-in arg_z))
         (w2 imm1))
     (unbox-fixnum  w1 fix)
     (lwz w2 ppc32::misc-data-offset big)
-    (cmpwi dest ppc32::nil-value)
+    (cmpwi dest (target-nil-value))
     (not w1 w1)
     (and w1 w1 w2)
     (bne @store)
@@ -1106,7 +1106,7 @@ arg_y) (borrow-in arg_z))
     (addi len len '1) ; if not, need 1 more
     (b @big)
     @more
-    (cmpwi :cr1 fixp ppc32::nil-value)
+    (cmpwi :cr1 fixp (target-nil-value))
     (cmpwi len '1)
     (beq :cr1 @big)  ; dont return fixnum
     (bgt @big)
@@ -1543,7 +1543,7 @@ arg_y) (borrow-in arg_z))
     (stw carry 4 rp)
     (b @again)
     @done
-    (li arg_z ppc32::nil-value)
+    (li arg_z (target-nil-value))
     (blr)))
 
 ;;; left-shift src by 1 bit, storing result at res.  Return

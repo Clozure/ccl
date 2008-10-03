@@ -63,7 +63,7 @@
   (bne cr0 @lose)
   (bne cr1 @lose)
   @win
-  (li arg_z (+ ppc32::t-offset ppc32::nil-value))
+  (li arg_z (+ ppc32::t-offset (target-nil-value)))
   (blr)
   @macptr
   (extract-lowbyte imm0 imm0)
@@ -75,7 +75,7 @@
   (cmpw cr0 imm0 imm1)
   (beq cr0 @win)
   @lose
-  (li arg_z ppc32::nil-value)
+  (li arg_z (target-nil-value))
   (blr)
   @bignum
   ;; Way back when, we got x's header into imm0.  We know that y's
@@ -93,7 +93,7 @@
   (la imm1 4 imm1)
   (bne cr0 @lose)
   (bne cr1 @bignum-next)
-  (li arg_z (+ ppc32::t-offset ppc32::nil-value))
+  (li arg_z (+ ppc32::t-offset (target-nil-value)))
   (blr)
   @node
   ;; Have either a ratio or a complex.  In either case, corresponding
@@ -105,7 +105,7 @@
   (lwz x ppc32::misc-data-offset x)
   (lwz y ppc32::misc-data-offset y)
   (bl @tail)
-  (cmpwi cr0 arg_z ppc32::nil-value)
+  (cmpwi cr0 arg_z (target-nil-value))
   (restore-full-lisp-context)
   (vpop y)
   (vpop x)
@@ -154,7 +154,7 @@
   (cmpd imm0 imm1)
   (bne @lose)
   @win
-  (li arg_z (+ ppc64::nil-value ppc64::t-offset))
+  (li arg_z (+ (target-nil-value) ppc64::t-offset))
   (blr)
   ;; Macptr objects can have different lengths, but their subtags must
   ;; match
@@ -231,7 +231,7 @@
   (blt cr1 @lose)
   (bge cr0 @go)
   @lose
-  (li arg_z ppc32::nil-value)
+  (li arg_z (target-nil-value))
   (blr)
   @same
   (bne cr3 @lose)
@@ -260,7 +260,7 @@
   (mr x temp0)
   (mr y temp1)
   (bl @top)
-  (cmpwi :cr0 arg_z ppc32::nil-value)  
+  (cmpwi :cr0 arg_z (target-nil-value))  
   (mr nfn fn)
   (restore-full-lisp-context)           ; gets old fn to fn  
   (vpop y)
@@ -270,7 +270,7 @@
   (%cdr y y)
   (b @top)
   @win
-  (li arg_z (+ ppc32::t-offset ppc32::nil-value))
+  (li arg_z (+ ppc32::t-offset (target-nil-value)))
   (blr))
 
 #+ppc64-target
@@ -295,7 +295,7 @@
   (li arg_z nil)
   (blr)
   @win
-  (li arg_z (+ ppc64::nil-value ppc64::t-offset))
+  (li arg_z (+ (target-nil-value) ppc64::t-offset))
   (blr)
   @cons
   ;; Check to see if the CARs are EQ.  If so, we can avoid saving

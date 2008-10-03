@@ -703,7 +703,7 @@
   (let* ((pos (position name ppc::*ppc-nilreg-relative-symbols* :test #'eq)))
     (if pos (* (1- pos) symbol.size))))
 
-(defconstant nil-value (+ #x3000 symbol.size fulltag-misc))
+(defconstant canonical-nil-value (+ #x3000 symbol.size fulltag-misc))
 
 
 (defconstant reservation-discharge #x2008)
@@ -821,7 +821,7 @@
 (defparameter *ppc64-target-arch*
   (arch::make-target-arch :name :ppc64
                           :lisp-node-size 8
-                          :nil-value nil-value
+                          :nil-value canonical-nil-value
                           :fixnum-shift fixnumshift
                           :most-positive-fixnum (1- (ash 1 (1- (- 64 fixnumshift))))
                           :most-negative-fixnum (- (ash 1 (1- (- 64 fixnumshift))))
@@ -950,20 +950,20 @@
 
 ;;;
 (defppc64archmacro ccl::%get-kernel-global (name)
-  `(ccl::%fixnum-ref 0 (+ ppc64::nil-value
-                                 ,(%kernel-global
-                                   (if (ccl::quoted-form-p name)
-                                     (cadr name)
-                                     name)))))
+  `(ccl::%fixnum-ref 0 (+ ,(ccl::target-nil-value)
+                        ,(%kernel-global
+                          (if (ccl::quoted-form-p name)
+                            (cadr name)
+                            name)))))
 
 (defppc64archmacro ccl::%get-kernel-global-ptr (name dest)
   `(ccl::%setf-macptr
     ,dest
-    (ccl::%fixnum-ref-macptr 0 (+ ppc64::nil-value
-                                 ,(%kernel-global
-                                   (if (ccl::quoted-form-p name)
-                                     (cadr name)
-                                     name))))))
+    (ccl::%fixnum-ref-macptr 0 (+ ,(ccl::target-nil-value)
+                                ,(%kernel-global
+                                  (if (ccl::quoted-form-p name)
+                                    (cadr name)
+                                    name))))))
 
 (defppc64archmacro ccl::%target-kernel-global (name)
   `(ppc64::%kernel-global ,name))

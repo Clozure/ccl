@@ -496,7 +496,7 @@
   (check-nargs 0)
   (li imm0 arch::gc-trap-function-gc)
   (trlgei allocptr 0)
-  (li arg_z target::nil-value)
+  (li arg_z (target-nil-value))
   (blr))
 
 

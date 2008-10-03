@@ -151,13 +151,13 @@
 (defx86lapfunction %get-kernel-global-from-offset ((offset arg_z))
   (check-nargs 1)
   (unbox-fixnum offset imm0)
-  (movq (@ target::nil-value (% imm0)) (% arg_z))
+  (movq (@ (target-nil-value) (% imm0)) (% arg_z))
   (single-value-return))
 
 (defx86lapfunction %set-kernel-global-from-offset ((offset arg_y) (new-value arg_z))
   (check-nargs 2)
   (unbox-fixnum offset imm0)
-  (movq (% arg_z) (@ target::nil-value (% imm0)))
+  (movq (% arg_z) (@ (target-nil-value) (% imm0)))
   (single-value-return))
 
 
@@ -165,7 +165,7 @@
 						       (ptr arg_z))
   (check-nargs 2)
   (unbox-fixnum offset imm0)
-  (movq (@ target::nil-value (% imm0)) (% imm0))
+  (movq (@ (target-nil-value) (% imm0)) (% imm0))
   (movq (% imm0) (@ x8664::macptr.address (% ptr)))
   (single-value-return))
 
@@ -259,7 +259,7 @@
   (lea (@ x8664::recover-fn-from-rip-length (% imm0) (% r)) (% arg_z))
   (single-value-return)
   @fail
-  (movl ($ x8664::nil-value) (% arg_z.l))
+  (movl ($ (target-nil-value)) (% arg_z.l))
   (single-value-return))
 
 (defx86lapfunction %return-address-offset ((r arg_z))
@@ -275,7 +275,7 @@
   (leaq (@ (- (ash x8664::recover-fn-from-rip-length x8664::fixnumshift)) (% imm0) 8) (% arg_z))
   (single-value-return)
   @fail
-  (movl ($ x8664::nil-value) (% arg_z.l))
+  (movl ($ (target-nil-value)) (% arg_z.l))
   (single-value-return))
 
 ;;; It's always been the case that the function associated with a
@@ -296,7 +296,7 @@
 
 (defx86lapfunction %catch-top ((tcr arg_z))
   (check-nargs 1)
-  (movl ($ x8664::nil-value) (%l arg_y))
+  (movl ($ (target-nil-value)) (%l arg_y))
   (movq (:rcontext x8664::tcr.catch-top) (% arg_z))
   (testb (%b arg_z) (%b arg_z))
   (cmoveq (% arg_y) (% arg_z))

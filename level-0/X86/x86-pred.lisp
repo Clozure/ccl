@@ -61,7 +61,7 @@ numbers with the same type and value."
   (movq  (@ x8664::misc-data-offset (% y)) (% imm1))
   @test
   (cmpq (% imm0) (% imm1))
-  (movl ($ x8664::t-value) (%l imm0))
+  (movl ($ (target-t-value)) (%l imm0))
   (lea (@ (- x8664::t-offset) (% imm0)) (% arg_z))
   (cmovel (%l imm0) (%l arg_z))
   (single-value-return)

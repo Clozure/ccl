@@ -1349,9 +1349,7 @@
   (with-x86-local-vinsn-macros (seg vreg xfer)
     (if (eq vreg :push)
       (progn
-        (! vpush-fixnum (target-arch-case
-			 (:x8632 x8632::nil-value)
-			 (:x8664 x8664::nil-value)))
+        (! vpush-fixnum (target-nil-value))
         (^))
       (progn
         (if (x862-for-value-p vreg)
@@ -1363,9 +1361,7 @@
   (with-x86-local-vinsn-macros (seg vreg xfer)
     (if (eq vreg :push)
       (progn
-        (! vpush-fixnum (target-arch-case
-			 (:x8632 x8632::t-value)
-			 (:x8664 x8664::t-value)))
+        (! vpush-fixnum (target-t-value))
         (^))
       (progn
         (if (x862-for-value-p vreg)
@@ -2134,9 +2130,9 @@
          (is-node  (member type-keyword (arch::target-gvector-types arch))))
     (if is-node
       (cond ((eq form *nx-nil*)
-             (arch::target-nil-value arch))
+             (target-nil-value))
             ((eq form *nx-t*)
-             (+ (arch::target-nil-value arch) (arch::target-t-offset arch)))
+             (+ (target-nil-value) (arch::target-t-offset arch)))
             (t
              (let* ((fixval (acode-fixnum-form-p form)))
                (if fixval

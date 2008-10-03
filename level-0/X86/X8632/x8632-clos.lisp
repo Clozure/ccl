@@ -164,7 +164,7 @@
       (ref-global.l lexpr-return1v ra0)
       (jmp @call)
       @multiple
-      (pushl (@ (+ x8632::nil-value (x8632::%kernel-global 'lexpr-return))))
+      (pushl (@ (+ (target-nil-value) (x8632::%kernel-global 'lexpr-return))))
       (movl (% imm0) (% ra0))
       @call
       (push (% ra0))
@@ -212,7 +212,7 @@
   (movl (% fn) (% arg_y))
   (set-nargs 3)
   (call-subprim .SPksignalerr)
-  ;(movl ($ x8632::nil-value) (% arg_z))
+  ;(movl ($ (target-nil-value)) (% arg_z))
   (leave)
   (single-value-return))
 
@@ -235,7 +235,7 @@
       (ref-global lexpr-return1v ra0)
       (jmp @call)
       @multiple
-      (pushl (@ (+ x8632::nil-value (x8632::%kernel-global 'lexpr-return))))
+      (pushl (@ (+ (target-nil-value) (x8632::%kernel-global 'lexpr-return))))
       (movl (% imm0) (% ra0))
       @call
       (push (% ra0))

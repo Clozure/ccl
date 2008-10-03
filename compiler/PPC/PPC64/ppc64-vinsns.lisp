@@ -1018,7 +1018,7 @@
 				   (crfx :crf)
 				   (crfy :crf)))
   :again
-  (cmpdi crfx object ppc64::nil-value)
+  (cmpdi crfx object (target-nil-value))
   (clrldi tag object (- ppc64::nbits-in-word ppc64::ntagbits))
   (cmpdi crfy tag ppc64::fulltag-cons)
   (beq crfx :got-it)
@@ -1440,7 +1440,7 @@
 				      ((object :lisp))
 				      ((tag :u8)
 				       (crf :crf)))
-  (cmpldi crf object ppc64::nil-value)
+  (cmpldi crf object (target-nil-value))
   (clrldi tag object (- ppc64::nbits-in-word ppc64::ntagbits))
   (beq crf :ok)
   (tdi 3 tag ppc64::fulltag-cons)
@@ -1550,7 +1550,7 @@
                                    ((bits :u64))
                                    ())
   (mulli bits bits ppc64::t-offset)
-  (addi dest bits ppc64::nil-value))
+  (addi dest bits (target-nil-value)))
 
 (define-ppc64-vinsn invert-lowbit (((bits :u64))
                                    ((bits :u64))
@@ -1635,7 +1635,7 @@
 
 (define-ppc64-vinsn eqnil->bit31 (((bits :u64))
 				  ((x t)))
-  (subi bits x ppc64::nil-value)
+  (subi bits x (target-nil-value))
   (cntlzd bits bits)
   (srdi bits bits 6))
 
@@ -1649,7 +1649,7 @@
 
 (define-ppc64-vinsn nenil->bit31 (((bits :u64))
 				  ((x t)))
-  (subi bits x ppc64::nil-value)
+  (subi bits x (target-nil-value))
   (cntlzd bits bits)
   (srdi bits bits 6)
   (xori bits bits 1))
@@ -1742,7 +1742,7 @@
 
 (define-ppc64-vinsn compare-to-nil (((crf :crf))
 				    ((arg0 t)))
-  (cmpdi crf arg0 ppc64::nil-value))
+  (cmpdi crf arg0 (target-nil-value)))
 
 (define-ppc64-vinsn compare-logical (((crf :crf))
 				     ((arg0 t)
@@ -1994,7 +1994,7 @@
 
 (define-ppc64-vinsn %closure-code% (((dest :lisp))
 				    ())
-  (ld dest (+ ppc64::symbol.vcell (ppc64::nrs-offset %closure-code%) ppc64::nil-value) 0))
+  (ld dest (+ ppc64::symbol.vcell (ppc64::nrs-offset %closure-code%) (target-nil-value)) 0))
 
 (define-ppc64-vinsn single-float-bits (((dest :u32))
                                        ((src :lisp)))
@@ -2227,12 +2227,12 @@
 
 (define-ppc64-vinsn (load-nil :constant-ref) (((dest t))
 					      ())
-  (li dest ppc64::nil-value))
+  (li dest (target-nil-value)))
 
 
 (define-ppc64-vinsn (load-t :constant-ref) (((dest t))
 					    ())
-  (li dest (+ ppc64::t-offset ppc64::nil-value)))
+  (li dest (+ ppc64::t-offset (target-nil-value))))
 
 (define-ppc64-vinsn set-eq-bit (((dest :crf))
 				())
@@ -2558,7 +2558,7 @@
   (sldi dest src (- ppc64::charcode-shift ppc64::fixnumshift))
   (bne+ :ok)
   :bad
-  (li dest ppc64::nil-value)
+  (li dest (target-nil-value))
   (b :done)
   :ok
   (addi dest dest ppc64::subtag-character)
@@ -3421,7 +3421,7 @@
    (mr ppc::arg_x ppc::arg_y))
   ((:pred >= min 1)
    (mr ppc::arg_y ppc::arg_z))
-  (li ppc::arg_z ppc64::nil-value)
+  (li ppc::arg_z (target-nil-value))
   :done)
 
 (define-ppc64-vinsn default-2-args (()
@@ -3437,7 +3437,7 @@
    (stdu ppc::arg_y -8 ppc::vsp))
   ((:pred >= min 1)
    (mr ppc::arg_x ppc::arg_z))
-  (li ppc::arg_y ppc64::nil-value)
+  (li ppc::arg_y (target-nil-value))
   (b :last)
   :one
   ;; We got min+1 args: arg_y was supplied, arg_z defaults to nil.
@@ -3447,7 +3447,7 @@
    (mr ppc::arg_x ppc::arg_y))
   (mr ppc::arg_y ppc::arg_z)
   :last
-  (li ppc::arg_z ppc64::nil-value)
+  (li ppc::arg_z (target-nil-value))
   :done)
 
 (define-ppc64-vinsn default-3-args (()
@@ -3481,11 +3481,11 @@
    (stdu ppc::arg_y -8 ppc::vsp))
   ((:pred >= min 1)
    (stdu ppc::arg_z -8 ppc::vsp))
-  (li ppc::arg_x ppc64::nil-value)
+  (li ppc::arg_x (target-nil-value))
   :last-2
-  (li ppc::arg_y ppc64::nil-value)
+  (li ppc::arg_y (target-nil-value))
   :last-1
-  (li ppc::arg_z ppc64::nil-value)
+  (li ppc::arg_z (target-nil-value))
   :done)
 
 (define-ppc64-vinsn save-lr (()
@@ -3631,7 +3631,7 @@
 (define-ppc64-vinsn eep.address (((dest t))
 				 ((src (:lisp (:ne dest )))))
   (ld dest (+ (ash 1 ppc64::word-shift) ppc64::misc-data-offset) src)
-  (tdeqi dest ppc64::nil-value))
+  (tdeqi dest (target-nil-value)))
 
 (define-ppc64-vinsn %natural+ (((dest :u64))
                                ((x :u64) (y :u64)))
