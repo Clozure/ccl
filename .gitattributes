@@ -214,6 +214,7 @@ lisp-kernel/linuxx8632/.gdbinit -text
 lisp-kernel/linuxx8632/Makefile -text
 lisp-kernel/solarisx64/.gdbinit -text
 lisp-kernel/unix-calls.c -text
+lisp-kernel/win32/.gdbinit -text
 lisp-kernel/win32/Makefile -text
 lisp-kernel/win32/pei-ia32.x -text
 lisp-kernel/win64/.gdbinit -text
