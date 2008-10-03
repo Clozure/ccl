@@ -131,8 +131,20 @@ raise_thread_interrupt(TCR *target)
     xpGPR(pcontext,REG_RSP) = (LispObj)(((LispObj *)icontext)-1);
     *(((LispObj *)icontext)-1) = (LispObj)raise_thread_interrupt;
 #else
-#warning need interrupt setup for win32
+    {
+      LispObj *p = (LispObj *)icontext;
+      p -= 4;
+      p[0] = SIGNAL_FOR_PROCESS_INTERRUPT;
+      p[1] = 0;
+      p[2] = (DWORD)icontext;
+      *(--p) = (LispObj)raise_thread_interrupt;;
+      xpGPR(pcontext,Isp) = (DWORD)p;
+#ifdef WIN32_ES_HACK
+      pcontext->SegEs = pcontext->SegDs;
 #endif
+    }
+#endif
+    pcontext->EFlags &= ~0x400;  /* clear direction flag */
     xpPC(pcontext) = (LispObj)interrupt_handler;
     SetThreadContext(hthread,pcontext);
     ResumeThread(hthread);
@@ -658,7 +670,6 @@ new_recursive_lock()
 #ifndef USE_FUTEX
   void *signal = new_semaphore(0);
 #endif
-
   if (p) {
     m = (RECURSIVE_LOCK) ((((natural)p)+cache_block_size-1) & (~(cache_block_size-1)));
     m->malloced_ptr = p;
