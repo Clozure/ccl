@@ -1869,8 +1869,10 @@ check_for_embedded_image (char *path)
 LispObj
 load_image(char *path)
 {
-  int fd = open(path, O_RDONLY, 0666);
+  int fd = open(path, O_RDONLY, 0666), err;
   LispObj image_nil = 0;
+
+  errno = 0;
   if (fd > 0) {
     openmcl_image_file_header ih;
     image_nil = load_openmcl_image(fd, &ih);
@@ -1878,12 +1880,26 @@ load_image(char *path)
        seems to confuse Darwin (doesn't everything ?), so
        we'll instead keep the original file open.
     */
+    err = errno;
     if (!image_nil) {
       close(fd);
     }
+#ifdef WINDOWS
+    /* We currently don't actually map the image, and leaving the file
+       open seems to make it difficult to write to reliably. */
+    if (image_nil) {
+      close(fd);
+    }
+#endif
+  } else {
+    err = errno;
   }
   if (image_nil == 0) {
-    fprintf(stderr, "Couldn't load lisp heap image from %s:\n%s\n", path, strerror(errno));
+    if (err == 0) {
+      fprintf(stderr, "Couldn't load lisp heap image from %s\n", path);
+    } else {
+      fprintf(stderr, "Couldn't load lisp heap image from %s:\n%s\n", path, strerror(err));
+    }
     exit(-1);
   }
   return image_nil;
