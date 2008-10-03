@@ -58,7 +58,10 @@
   (platform-syscall-mask 0)
   (define-callback nil)
   (defcallback-body nil)
-  (lisp-context-register 0))
+  (lisp-context-register 0)
+  ;; difference between canonical static address for arch and this
+  ;; target's. Usually 0.
+  (lowmem-bias 0))
 
 (defmethod print-object ((b backend) s)
   (print-unreadable-object (b s :type t :identity t)
