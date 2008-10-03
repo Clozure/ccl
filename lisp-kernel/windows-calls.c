@@ -26,7 +26,7 @@
 #include <dirent.h>
 #undef __argv
 #include <stdio.h>
-
+#include <math.h>
 
 #ifndef WIN_32
 #define _dosmaperr mingw_dosmaperr
@@ -456,6 +456,61 @@ lisp_gettimeofday(struct timeval *tp, void *tzp)
   return gettimeofday(tp, tzp);
 }
 
+typedef struct {
+  char *name;
+  void *addr;
+} math_fn_entry;
+
+
+math_fn_entry math_fn_entries [] = {
+  {"acos",acos},
+  {"acosf",acosf},
+  {"acosh",acosh},
+  {"acoshf",acoshf},
+  {"asin",asin},
+  {"asinf",asinf},
+  {"asinh",asinh},
+  {"asinhf",asinhf},
+  {"atan",atan},
+  {"atan2",atan2},
+  {"atan2f",atan2f},
+  {"atanf",atanf},
+  {"atanh",atanh},
+  {"atanhf",atanhf},
+  {"cos",cos},
+  {"cosf",cosf},
+  {"cosh",cosh},
+  {"coshf",coshf},
+  {"exp",exp},
+  {"expf",expf},
+  {"log",log},
+  {"logf",logf},
+  {"pow",pow},
+  {"powf",powf},
+  {"sin",sin},
+  {"sinf",sinf},
+  {"sinh",sinh},
+  {"sinhf",sinhf},
+  {"tan",tan},
+  {"tanf",tanf},
+  {"tanh",tanh},
+  {"tanhf",tanhf},
+  {NULL, 0}};
+
+void *
+lookup_math_fn(char *name)
+{
+  math_fn_entry *p = math_fn_entries;
+  char *entry_name;
+  
+  while ((entry_name = p->name) != NULL) {
+    if (!strcmp(name, entry_name)) {
+      return p->addr;
+    }
+    p++;
+  }
+  return NULL;
+}
 
 HMODULE *modules = NULL;
 DWORD cbmodules = 0;
@@ -464,12 +519,14 @@ HANDLE find_symbol_lock = 0;
 void *
 windows_find_symbol(void *handle, char *name)
 {
+  void *addr;
+
   if ((handle == ((void *)-2L)) ||
       (handle == ((void *)-1L))) {
     handle = NULL;
   }
   if (handle != NULL) {
-    return GetProcAddress(handle, name);
+    addr = GetProcAddress(handle, name);
   } else {
     DWORD cbneeded,  have, i;
     WaitForSingleObject(find_symbol_lock,INFINITE);
@@ -490,15 +547,17 @@ windows_find_symbol(void *handle, char *name)
     have = cbneeded/sizeof(HANDLE);
 
     for (i = 0; i < have; i++) {
-      void *addr = GetProcAddress(modules[i],name);
+      addr = GetProcAddress(modules[i],name);
 
       if (addr) {
-        ReleaseMutex(find_symbol_lock);
-        return addr;
+        break;
       }
     }
     ReleaseMutex(find_symbol_lock);
-    return NULL;
+    if (addr) {
+      return addr;
+    }
+    return lookup_math_fn(name);
   }
 }
 
