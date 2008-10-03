@@ -456,6 +456,161 @@ lisp_gettimeofday(struct timeval *tp, void *tzp)
   return gettimeofday(tp, tzp);
 }
 
+#ifdef WIN_64
+
+/* Make sure that the lisp calls these functions, when they do something */
+/* This code is taken from the 32-bit mingw library and is in the
+   public domain */
+double
+acosh(double x)
+{
+  if (isnan (x)) 
+    return x;
+
+  if (x < 1.0)
+    {
+      errno = EDOM;
+      return nan("");
+    }
+
+  if (x > 0x1p32)
+    /*  Avoid overflow (and unnecessary calculation when
+        sqrt (x * x - 1) == x). GCC optimizes by replacing
+        the long double M_LN2 const with a fldln2 insn.  */ 
+    return log (x) + 6.9314718055994530941723E-1L;
+
+  /* Since  x >= 1, the arg to log will always be greater than
+     the fyl2xp1 limit (approx 0.29) so just use logl. */ 
+  return log (x + sqrt((x + 1.0) * (x - 1.0)));
+}
+
+float
+acoshf(float x)
+{
+  if (isnan (x)) 
+    return x;
+  if (x < 1.0f)
+    {
+      errno = EDOM;
+      return nan("");
+    }
+
+ if (x > 0x1p32f)
+    /*  Avoid overflow (and unnecessary calculation when
+        sqrt (x * x - 1) == x). GCC optimizes by replacing
+        the long double M_LN2 const with a fldln2 insn.  */ 
+    return log (x) + 6.9314718055994530941723E-1L;
+
+  /* Since  x >= 1, the arg to log will always be greater than
+     the fyl2xp1 limit (approx 0.29) so just use logl. */ 
+  return log (x + sqrt((x + 1.0) * (x - 1.0)));
+}
+
+double
+asinh(double x)
+{
+  double z;
+  if (!isfinite (x))
+    return x;
+  z = fabs (x);
+
+  /* Avoid setting FPU underflow exception flag in x * x. */
+#if 0
+  if ( z < 0x1p-32)
+    return x;
+#endif
+
+  /* Use log1p to avoid cancellation with small x. Put
+     x * x in denom, so overflow is harmless. 
+     asinh(x) = log1p (x + sqrt (x * x + 1.0) - 1.0)
+              = log1p (x + x * x / (sqrt (x * x + 1.0) + 1.0))  */
+
+  z = log1p (z + z * z / (sqrt (z * z + 1.0) + 1.0));
+
+  return ( x > 0.0 ? z : -z);
+}
+
+float
+asinhf(float x)
+{
+  float z;
+  if (!isfinite (x))
+    return x;
+  z = fabsf (x);
+
+  /* Avoid setting FPU underflow exception flag in x * x. */
+#if 0
+  if ( z < 0x1p-32)
+    return x;
+#endif
+
+
+  /* Use log1p to avoid cancellation with small x. Put
+     x * x in denom, so overflow is harmless. 
+     asinh(x) = log1p (x + sqrt (x * x + 1.0) - 1.0)
+              = log1p (x + x * x / (sqrt (x * x + 1.0) + 1.0))  */
+
+  z = log1p (z + z * z / (sqrt (z * z + 1.0) + 1.0));
+
+  return ( x > 0.0 ? z : -z);
+}
+
+double
+atanh(double x)
+{
+  double z;
+  if (isnan (x))
+    return x;
+  z = fabs (x);
+  if (z == 1.0)
+    {
+      errno  = ERANGE;
+      return (x > 0 ? INFINITY : -INFINITY);
+    }
+  if (z > 1.0)
+    {
+      errno = EDOM;
+      return nan("");
+    }
+  /* Rearrange formula to avoid precision loss for small x.
+
+  atanh(x) = 0.5 * log ((1.0 + x)/(1.0 - x))
+	   = 0.5 * log1p ((1.0 + x)/(1.0 - x) - 1.0)
+           = 0.5 * log1p ((1.0 + x - 1.0 + x) /(1.0 - x)) 
+           = 0.5 * log1p ((2.0 * x ) / (1.0 - x))  */
+  z = 0.5 * log1p ((z + z) / (1.0 - z));
+  return x >= 0 ? z : -z;
+}
+
+float
+atanhf(float x)
+{
+  float z;
+  if (isnan (x))
+    return x;
+  z = fabsf (x);
+  if (z == 1.0)
+    {
+      errno  = ERANGE;
+      return (x > 0 ? INFINITY : -INFINITY);
+    }
+  if ( z > 1.0)
+    {
+      errno = EDOM;
+      return nanf("");
+    }
+  /* Rearrange formula to avoid precision loss for small x.
+
+  atanh(x) = 0.5 * log ((1.0 + x)/(1.0 - x))
+	   = 0.5 * log1p ((1.0 + x)/(1.0 - x) - 1.0)
+           = 0.5 * log1p ((1.0 + x - 1.0 + x) /(1.0 - x)) 
+           = 0.5 * log1p ((2.0 * x ) / (1.0 - x))  */
+  z = 0.5 * log1p ((z + z) / (1.0 - z));
+  return x >= 0 ? z : -z;
+}
+
+#endif
+
 typedef struct {
   char *name;
   void *addr;
