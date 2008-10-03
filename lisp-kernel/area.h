@@ -194,6 +194,8 @@ typedef struct area_list {
 #define STATIC_BASE_ADDRESS 0x00012000
 #endif
 
+#define SPJUMP_TARGET_ADDRESS (STATIC_BASE_ADDRESS+0x3000)
+
 extern LispObj image_base;
 extern BytePtr pure_space_start, pure_space_active, pure_space_limit;
 extern BytePtr static_space_start, static_space_active, static_space_limit;
