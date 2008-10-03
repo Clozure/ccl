@@ -215,7 +215,8 @@ ReserveMemoryForHeap(LogicalAddress want, natural totalsize)
 }
 
 int
-CommitMemory (LogicalAddress start, natural len) {
+CommitMemory (LogicalAddress start, natural len) 
+{
   LogicalAddress rc;
 #if DEBUG_MEMORY
   fprintf(stderr, "Committing memory at 0x" LISP ", size 0x" LISP "\n", start, len);
@@ -223,7 +224,12 @@ CommitMemory (LogicalAddress start, natural len) {
 #ifdef WINDOWS
   if ((start < ((LogicalAddress)nil_value)) &&
       (((LogicalAddress)nil_value) < (start+len))) {
-    /* nil area is in the executable on Windows, do nothing */
+    /* nil area is in the executable on Windows; ensure range is
+       read-write */
+    DWORD as_if_i_care;
+    if (!VirtualProtect(start,len,PAGE_EXECUTE_READWRITE,&as_if_i_care)) {
+      return false;
+    }
     return true;
   }
   rc = VirtualAlloc(start, len, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
