@@ -25,6 +25,9 @@ _endfn
         __ifdef([DARWIN])
         .space 0x3000,0
         __endif
+        __ifdef([WIN_32])
+        .space 0x5000-0x1000,0
+        __endif
          .globl C(spjump_start)
 C(spjump_start):
 
@@ -184,7 +187,7 @@ C(spjump_start):
         _spjump(nmkunwind)
          .globl C(spjump_end)
 C(spjump_end):
-	.org 0x1000
+	.org C(spjump_start)+0x1000
 	
         _endfile
 		
