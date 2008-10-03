@@ -184,13 +184,14 @@ define([_startfn],[define([__func_name],$1)
 	ifelse(eval(SYSstabs),eval(ELFstabs),[
 	.type $1,@function
 ])
+
 $1:
 ifdef([WINDOWS],[
 	.def	$1;	.scl	2;	.type	32;	.endef
 ],[
         .stabd 68,0,__line__
-	.stabs "$1:F1",36,0,__line__,$1
 ])
+	.stabs "$1:F1",36,0,__line__,$1
 	.set func_start,$1
 # __line__ "__file__" 1 ])
 
