@@ -87,7 +87,7 @@ pthread_mutex_t *mach_exception_lock;
 #define xpPC(x) xpGPR(x,Iip)
 #define eflags_register(xp) xp->EFlags
 #define xpFPRvector(x) ((natural *)(&(x->ExtendedRegisters[10*16])))
-#define xpMMXreg(x,n)  (xpFPRvector(x)[n])
+#define xpMMXreg(x,n)  (*((u64_t *)(&(x->FloatSave.RegisterArea[10*(n)]))))
 #endif
 #endif
 
