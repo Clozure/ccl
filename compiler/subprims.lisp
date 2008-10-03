@@ -42,7 +42,8 @@
       (error "subprim named ~s not found." name))))
 
 (defun subprim-name->offset (name &optional (backend *target-backend*))
-  (%subprim-name->offset name  (arch::target-subprims-table
-                                (backend-target-arch backend))))
+  (+ (backend-lowmem-bias backend)
+     (%subprim-name->offset name  (arch::target-subprims-table
+                                   (backend-target-arch backend)))))
 
 (provide "SUBPRIMS")

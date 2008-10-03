@@ -473,3 +473,16 @@
   `(progn
     (setf (macro-function ',name) #'backend-arch-macroexpand)
     ',name))
+
+(defun target-nil-value (&optional (backend *target-backend*))
+  (+ (arch::target-nil-value (backend-target-arch backend))
+     (backend-lowmem-bias backend)))
+
+(defun target-t-value (&optional (backend *target-backend*))
+  (let* ((arch (backend-target-arch backend)))
+    (+ (arch::target-nil-value arch)
+       (arch::target-t-offset arch)
+       (backend-lowmem-bias backend))))
+
+
+     
