@@ -99,7 +99,7 @@
                         (:solarisx8664 "ccl:solarisx64-headers;")
                         (:win64 "ccl:win64-headers;")
                         (:linuxx8632 "ccl:x86-headers;")
-                        (:win32 "ccl:win32-headers"))
+                        (:win32 "ccl:win32-headers;"))
                     :interface-package-name
                     #.(ftd-interface-package-name *target-ftd*)
                     :attributes
@@ -1706,9 +1706,9 @@ result-type-specifer is :VOID or NIL"
     #>STARTUPINFO
     (:array #>HANDLE 2)
     #>DWORD
-    #>SYSTEM_LOGICAL_PROCESSOR_INFORMATION
     (:array #>wchar_t #.#$MAX_PATH)
-    #>fd_set))
+    #>fd_set
+    #>DWORD_PTR))
     
     
 (defun canonicalize-foreign-type-ordinals (ftd)
