@@ -75,7 +75,7 @@ fulltag_nil = 5	/* NIL and nothing but.  (Note that there]s still a hidden NILSY
 fulltag_misc = 6	/* Pointer "real" tag_misc object.  Shares TAG with fulltag_nodeheader. */
 fulltag_immheader = 7	/* Header of heap-allocated object that contains unboxed data. */
 
-nil_value = 0x00003015
+nil_value = 0x00003015+LOWMEM_BIAS
 misc_bias = fulltag_misc
 cons_bias = tag_list        
 
@@ -681,6 +681,6 @@ define([TCR_STATE_EXCEPTION_RETURN],4)
 
 define([RESERVATION_DISCHARGE],0x2004)
 
-lisp_globals_limit = 0x3010
+lisp_globals_limit = (0x3010+(LOWMEM_BIAS))
         
 INTERRUPT_LEVEL_BINDING_INDEX = fixnumone

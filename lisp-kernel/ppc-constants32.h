@@ -421,7 +421,7 @@ typedef struct doh_block {
 
 
 
-#define nil_value 0x00003015
+#define nil_value (0x00003015+(LOWMEM_BIAS))
 
 #define TCR_BIAS (0)
 

@@ -218,8 +218,8 @@
 
 
 
-#define nil_value (0x13000+fulltag_nil)
-#define t_value (0x13020+fulltag_symbol)	
+#define nil_value ((0x13000+fulltag_nil)+(LOWMEM_BIAS))
+#define t_value ((0x13020+fulltag_symbol)+(LOWMEM_BIAS))
 #define misc_bias fulltag_misc
 #define cons_bias fulltag_cons
 

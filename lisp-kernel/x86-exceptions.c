@@ -791,6 +791,7 @@ handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valenc
 #endif
 #endif
 
+
   if (addr && (addr == tcr->safe_ref_address)) {
     xpGPR(xp,Iimm0) = 0;
     xpPC(xp) = xpGPR(xp,Ira0);
@@ -816,6 +817,7 @@ handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valenc
       xcf;
     if ((fulltag_of(cmain) == fulltag_misc) &&
       (header_subtag(header_of(cmain)) == subtag_macptr)) {
+      Bug(xp,"fault");
       xcf = create_exception_callback_frame(xp, tcr);
       callback_to_lisp(tcr, cmain, xp, xcf, SIGBUS, is_write_fault(xp,info), (natural)addr, 0);
     }

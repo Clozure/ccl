@@ -132,8 +132,8 @@
 
 
 
-#define nil_value (0x3000+fulltag_misc+sizeof(struct lispsymbol))
-#define t_value (0x3000+fulltag_misc)	
+#define nil_value (0x3000+fulltag_misc+sizeof(struct lispsymbol)+(LOWMEM_BIAS))
+#define t_value (0x3000+fulltag_misc+(LOWMEM_BIAS))	
 #define misc_bias fulltag_misc
 #define cons_bias fulltag_cons
 

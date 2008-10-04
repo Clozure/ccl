@@ -13,6 +13,12 @@
 /*   http://opensource.franz.com/preamble.html */
 
 	include(m4macros.m4)
+        ifdef([LOWMEM_BIAS],[
+[LOWMEM_BIAS] = LOWMEM_BIAS
+],[
+[LOWMEM_BIAS] = 0
+])
+        undefine([LOWMEM_BIAS])                                
         ifdef([PPC],[
          include(ppc-constants.s)
          include(ppc-macros.s)

@@ -457,8 +457,8 @@ typedef struct tcr {
   void *allocated;
 } TCR;
 
-#define nil_value (0x13000 + (fulltag_cons))
-#define t_value (0x13008 + (fulltag_misc))
+#define nil_value ((0x13000 + (fulltag_cons))+(LOWMEM_BIAS))
+#define t_value ((0x13008 + (fulltag_misc))+(LOWMEM_BIAS))
 #define t_offset (t_value-nil_value)
 #define misc_header_offset -fulltag_misc
 #define misc_data_offset misc_header_offset + node_size

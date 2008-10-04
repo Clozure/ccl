@@ -20,6 +20,9 @@
 
 
 #include "lisptypes.h"
+#ifndef LOWMEM_BIAS
+#define LOWMEM_BIAS 0
+#endif
 
 #ifdef PPC
 #include "ppc-constants.h"

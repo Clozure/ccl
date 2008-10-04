@@ -201,8 +201,8 @@ misc_subtag_offset = misc_header_offset
 misc_data_offset = misc_header_offset+node_size
 misc_dfloat_offset = misc_header_offset+8
 
-nil_value = (0x13000 + fulltag_cons)
-t_value = (0x13008 + fulltag_misc)
+nil_value = ((0x13000 + fulltag_cons)+(LOWMEM_BIAS))
+t_value = ((0x13008 + fulltag_misc)+(LOWMEM_BIAS))
 t_offset = (t_value-nil_value)
 misc_bias = fulltag_misc
 cons_bias = fulltag_cons
@@ -308,7 +308,7 @@ cons_bias = fulltag_cons
 
 symbol_extra = symbol.size-fulltag_misc
 
-	_struct(nrs,0x13008)
+	_struct(nrs,(0x13008+(LOWMEM_BIAS)))
 	 _struct_pad(fulltag_misc)
 	 _struct_label(tsym)
 	 _struct_pad(symbol_extra)	/* t */
@@ -612,7 +612,7 @@ target_most_positive_fixnum = 536870911
 target_most_negative_fixnum = -536870912
 call_arguments_limit = 8192
 
-lisp_globals_limit = 0x13000
+lisp_globals_limit = (0x13000+(LOWMEM_BIAS))
         
 INTERRUPT_LEVEL_BINDING_INDEX = fixnumone
 

@@ -73,8 +73,8 @@ extern LispObj lisp_nil;
 
 #ifdef PPC
 #ifdef PPC64
-#define lisp_global(g) (((LispObj *) 0x3000)[(g)])
-#define nrs_symbol(s) (((lispsymbol *) 0x3000)[(s)])
+#define lisp_global(g) (((LispObj *) (0x3000+(LOWMEM_BIAS)))[(g)])
+#define nrs_symbol(s) (((lispsymbol *) (0x3000+(LOWMEM_BIAS)))[(s)])
 #else
 #define lisp_global(g) (((LispObj *) (nil_value-fulltag_nil))[(g)])
 #define nrs_symbol(s) (((lispsymbol *) (nil_value+(8-fulltag_nil)+8))[(s)])
@@ -82,13 +82,13 @@ extern LispObj lisp_nil;
 #endif
 
 #ifdef X8664
-#define lisp_global(g) (((LispObj *) 0x13000)[(g)])
-#define nrs_symbol(s) (((lispsymbol *) 0x13020)[(s)])
+#define lisp_global(g) (((LispObj *) (0x13000+(LOWMEM_BIAS)))[(g)])
+#define nrs_symbol(s) (((lispsymbol *) (0x13020+(LOWMEM_BIAS)))[(s)])
 #endif
 
 #ifdef X8632
-#define lisp_global(g) (((LispObj *) 0x13000)[(g)])
-#define nrs_symbol(s) (((lispsymbol *) 0x13008)[(s)])
+#define lisp_global(g) (((LispObj *) (0x13000+(LOWMEM_BIAS)))[(g)])
+#define nrs_symbol(s) (((lispsymbol *) (0x13008+(LOWMEM_BIAS)))[(s)])
 #endif
 
 #define nrs_T 				(nrs_symbol(0))		/* t */

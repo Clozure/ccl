@@ -333,7 +333,7 @@ max_1_bit_constant_index = ((0x7fff + misc_data_offset)<<5)
 symbol_extra = symbol.size-fulltag_misc
 
 	
-	_struct(nrs,0x3000)
+	_struct(nrs,(0x3000+(LOWMEM_BIAS)))
 	 _struct_pad(fulltag_misc)
 	 _struct_label(tsym)
 	 _struct_pad(symbol_extra)	/* t */
@@ -585,11 +585,11 @@ TCR_FLAG_BIT_FOREIGN_EXCEPTION = (fixnumshift+6)
 TCR_FLAG_BIT_PENDING_SUSPEND = (fixnumshift+7)        
 
 
-nil_value = 0x3000+symbol.size+fulltag_misc        
+nil_value = (0x3000+symbol.size+fulltag_misc+(LOWMEM_BIAS))
         	
-define([RESERVATION_DISCHARGE],0x2008)
+define([RESERVATION_DISCHARGE],(0x2008+(LOWMEM_BIAS))
 
-lisp_globals_limit = 0x3000
+lisp_globals_limit = (0x3000+(LOWMEM_BIAS))
         
 INTERRUPT_LEVEL_BINDING_INDEX = fixnumone
         
