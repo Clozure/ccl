@@ -56,7 +56,7 @@ set_n_bits(bitvector bits, natural first, natural n)
 void
 zero_bits(bitvector bits, natural nbits)
 {
-  memset(bits, 0, ((sizeof(natural)*((nbits+(nbits_in_word-1)))>>bitmap_shift)));
+  memset(bits, 0, ((sizeof(natural)*(((nbits+(nbits_in_word-1)))>>bitmap_shift))));
 }
 
 void
