@@ -388,7 +388,7 @@
    (movq (:%q x8664::arg_y) (:%q x8664::arg_x)))
   ((:pred >= min 1)
    (movq (:%q x8664::arg_z) (:%q x8664::arg_y)))
-  (movq (:$l (target-nil-value)) (:%q x8664::arg_z))
+  (movq (:$l (:apply target-nil-value)) (:%q x8664::arg_z))
   :done)
 
 
@@ -407,7 +407,7 @@
    (pushq (:%q x8664::arg_y)))
   ((:pred >= min 1)
    (movq (:%q x8664::arg_z) (:%q x8664::arg_x)))
-  (movl (:$l (target-nil-value)) (:%l x8664::arg_y))
+  (movl (:$l (:apply target-nil-value)) (:%l x8664::arg_y))
   (jmp :last)
   :one
   ;; We got min+1 args: arg_y was supplied, arg_z defaults to nil.
@@ -417,7 +417,7 @@
    (movq (:%q x8664::arg_y) (:%q x8664::arg_x)))
   (movq (:%q x8664::arg_z) (:%q x8664::arg_y))
   :last
-  (movq (:$l (target-nil-value)) (:%q x8664::arg_z))
+  (movq (:$l (:apply target-nil-value)) (:%q x8664::arg_z))
   :done)
 
 (define-x8664-vinsn default-3-args (()
@@ -455,11 +455,11 @@
    (pushq (:%q x8664::arg_y)))
   ((:pred >= min 1)
    (pushq (:%q x8664::arg_z)))
-  (movl (:$l (target-nil-value)) (:%l x8664::arg_x))
+  (movl (:$l (:apply target-nil-value)) (:%l x8664::arg_x))
   :last-2
-  (movl (:$l (target-nil-value)) (:%l x8664::arg_y))
+  (movl (:$l (:apply target-nil-value)) (:%l x8664::arg_y))
   :last-1
-  (movl (:$l (target-nil-value)) (:%l x8664::arg_z))
+  (movl (:$l (:apply target-nil-value)) (:%l x8664::arg_z))
   :done)
 
 
@@ -478,7 +478,7 @@
    (cmpl (:$b (:apply ash n x8664::word-shift)) (:%l temp)))
   ((:pred >= n 16)
    (cmpl (:$l (:apply ash n x8664::word-shift)) (:%l temp)))  
-  (pushq (:$l (target-nil-value)))
+  (pushq (:$l (:apply target-nil-value)))
   (jne :loop)
   :done)
   
@@ -592,7 +592,7 @@
 
 (define-x8664-vinsn compare-to-t (()
                                     ((arg0 t)))
-  (cmpq (:$l (target-t-value)) (:%q arg0)))
+  (cmpq (:$l (:apply target-t-value)) (:%q arg0)))
 
 (define-x8664-vinsn ref-constant (((dest :lisp))
                                   ((lab :label)))
@@ -845,12 +845,12 @@
 
 (define-x8664-vinsn (load-nil :constant-ref) (((dest t))
 					      ())
-  (movl (:$l (target-nil-value)) (:%l dest)))
+  (movl (:$l (:apply target-nil-value)) (:%l dest)))
 
 
 (define-x8664-vinsn (load-t :constant-ref) (((dest t))
 					    ())
-  (movl(:$l (target-t-value)) (:%l dest)))
+  (movl(:$l (:apply target-t-value)) (:%l dest)))
 
 
 (define-x8664-vinsn extract-tag (((tag :u8))
@@ -918,7 +918,7 @@
 
 (define-x8664-vinsn cr-bit->boolean (((dest :lisp))
                                      ((crbit :u8const)))
-  (movl (:$l (target-nil-value)) (:%l dest))
+  (movl (:$l (:apply target-nil-value)) (:%l dest))
   (cmovccl (:$ub crbit) (:@ (+ x8664::t-offset x8664::symbol.vcell) (:%l dest)) (:%l dest)))
 
 
@@ -1709,7 +1709,7 @@
   (subq (:%q imm) (:%q x8664::rsp))
   (jmp :done)
   :push-loop
-  (pushq (:$l (target-nil-value)))
+  (pushq (:$l (:apply target-nil-value)))
   (addl (:$b x8664::node-size) (:%l x8664::nargs))
   (subl (:$b x8664::node-size) (:%l imm))
   :push-more
@@ -1751,7 +1751,7 @@
 ;;; %ra0 is pointing into %fn, so no need to copy %fn here.
 (define-x8664-vinsn pass-multiple-values-symbol (()
                                                  ())
-  (pushq (:@ (+ (target-nil-value) (x8664::%kernel-global 'x86::ret1valaddr)))) 
+  (pushq (:@ (:apply + (:apply target-nil-value) (x8664::%kernel-global 'x86::ret1valaddr)))) 
   (jmp (:@ x8664::symbol.fcell (:% x8664::fname))))
 
 ;;; It'd be good to have a variant that deals with a known function
@@ -1766,7 +1766,7 @@
   (cmovgq (:%q x8664::temp0) (:%q x8664::fn))
   (jl :bad)
   (cmoveq (:@ x8664::symbol.fcell (:%q x8664::fname)) (:%q x8664::fn))
-  (pushq (:@ (+ (target-nil-value) (x8664::%kernel-global 'x86::ret1valaddr))))
+  (pushq (:@ (:apply + (:apply target-nil-value) (x8664::%kernel-global 'x86::ret1valaddr))))
   (jmp (:%q x8664::fn))
 
   (:anchored-uuo-section :resume)
@@ -3257,7 +3257,7 @@
                                     ((nargs (:u64 #.x8664::nargs))
                                      (imm :imm)))
   (xorl (:%l imm) (:%l imm))
-  (movl (:$l (target-nil-value)) (:%l x8664::arg_y))
+  (movl (:$l (:apply target-nil-value)) (:%l x8664::arg_y))
   :loop
   (rcmpl (:%l imm) (:%l nargs))
   (movl (:%l x8664::arg_y) (:%l x8664::arg_z))
@@ -3271,7 +3271,7 @@
                                         ()
                                         ((temp :u64)))
   (testl (:%l x8664::nargs) (:%l x8664::nargs))
-  (movl (:$l (target-nil-value)) (:%l temp))
+  (movl (:$l (:apply target-nil-value)) (:%l temp))
   (cmovnel (:@ (+ x8664::t-offset x8664::symbol.vcell) (:%l temp)) (:%l temp))
   (pushq (:%q temp)))
 
@@ -3280,7 +3280,7 @@
                                         ((temp0 :u64)
                                          (temp1 :u64)))
   (rcmpl (:%l x8664::nargs) (:$b x8664::node-size))
-  (movl (:$l (target-nil-value)) (:%l temp0))
+  (movl (:$l (:apply target-nil-value)) (:%l temp0))
   (movl (:%l temp0) (:%l temp1))
   (cmovael (:@ (+ x8664::t-offset x8664::symbol.vcell) (:%l temp0)) (:%l temp0))
   (cmoval (:@ (+ x8664::t-offset x8664::symbol.vcell) (:%l temp1)) (:%l temp1))
@@ -3407,15 +3407,15 @@
 (define-x8664-vinsn build-lexpr-frame (()
                                        ()
                                        ((temp :imm)))
-  (movq (:@ (+ (target-nil-value) (x8664::%kernel-global 'x86::ret1valaddr)))
+  (movq (:@ (:apply + (:apply target-nil-value) (x8664::%kernel-global 'x86::ret1valaddr)))
         (:%q temp))
   (cmpq (:%q temp)
         (:%q x8664::ra0))
   (je :multiple)
-  (pushq (:@ (+ (target-nil-value) (x8664::%kernel-global 'x86::lexpr-return1v))))
+  (pushq (:@ (:apply + (:apply target-nil-value) (x8664::%kernel-global 'x86::lexpr-return1v))))
   (jmp :finish)
   :multiple
-  (pushq (:@ (+ (target-nil-value) (x8664::%kernel-global 'x86::lexpr-return))))
+  (pushq (:@ (:apply + (:apply target-nil-value) (x8664::%kernel-global 'x86::lexpr-return))))
   (pushq (:%q temp))
   :finish
   (pushq (:%q x8664::rbp))
@@ -3532,7 +3532,7 @@
                                      ((src :lisp))
                                      ((tag :u8)))
   :begin
-  (movl (:$l (+ (target-nil-value) x8664::nilsym-offset)) (:%l tag))
+  (movl (:$l (:apply + (:apply target-nil-value) x8664::nilsym-offset)) (:%l tag))
   (cmpb (:$b x8664::fulltag-nil) (:%b src))
   (cmoveq (:%q tag) (:%q dest))
   (movl (:%l src) (:%l tag))
@@ -3638,7 +3638,7 @@
   (sarl (:$ub (- 11 1)) (:%l temp))
   (cmpl (:$b (ash #xd800 -11))(:%l temp))
   :bad-if-eq
-  (movl (:$l (target-nil-value)) (:%l temp))
+  (movl (:$l (:apply target-nil-value)) (:%l temp))
   (cmovel (:%l temp) (:%l dest))
   (je :done)
   ((:not (:pred =
@@ -3693,7 +3693,7 @@
                                ((imm0 :u64)))
   (leaq (:@ (:%q x8664::rsp) (:%q x8664::nargs)) (:%q imm0))
   (subq (:@ (:%q imm0)) (:%q x8664::nargs))
-  (movl (:$l (target-nil-value)) (:%l result))
+  (movl (:$l (:apply target-nil-value)) (:%l result))
   (jle :done)
   ;; I -think- that a CMOV would be safe here, assuming that N wasn't
   ;; extremely large.  Don't know if we can assume that.
