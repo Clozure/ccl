@@ -520,9 +520,6 @@
   (or (ppc-vr-name-p x)
       (ppc-lap-evaluated-expression x)))
 
-(defun ppc-vr (r)
-  (svref ppc::*vector-register-names* r))
-
 
 (defparameter *ppc-cr-field-names* #(:crf0 :crf1 :crf2 :crf3 :crf4 :crf5 :crf6 :crf7))
 (defparameter *ppc-cr-names* #(:cr0 :cr1 :cr2 :cr3 :cr4 :cr5 :cr6 :cr7))
