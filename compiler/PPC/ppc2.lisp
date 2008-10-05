@@ -2590,14 +2590,15 @@
 
 
   
-(defun ppc2-long-constant-p (form)
-  (setq form (acode-unwrapped-form form))
-  (or (acode-fixnum-form-p form)
-      (and (acode-p form)
-           (eq (acode-operator form) (%nx1-operator immediate))
-           (setq form (%cadr form))
-           (if (integerp form) 
-             form))))
+(defun ppc2-integer-constant-p (form mode)
+  (let* ((val 
+         (or (acode-fixnum-form-p (setq form (acode-unwrapped-form form)))
+             (and (acode-p form)
+                  (eq (acode-operator form) (%nx1-operator immediate))
+                  (setq form (%cadr form))
+                  (if (typep form 'integer)
+                    form)))))
+    (and val (%typep val (mode-specifier-type mode)) val)))
 
 
 (defun ppc-side-effect-free-form-p (form)
@@ -2633,9 +2634,6 @@
 
 
 
-;;; treat form as a 32-bit immediate value and load it into immreg.
-;;; This is the "lenient" version of 32-bit-ness; OSTYPEs and chars
-;;; count, and we don't care about the integer's sign.
 
 (defun ppc2-unboxed-integer-arg-to-reg (seg form immreg &optional ffi-arg-type)
   (let* ((mode (case ffi-arg-type
@@ -2645,10 +2643,12 @@
                  (:signed-halfword :s16)
                  (:unsigned-halfword :u16)
                  (:signed-fullword :s32)
-                 (:unsigned-fullword :u32)))
+                 (:unsigned-fullword :u32)
+                 (:unsigned-doubleword :u64)
+                 (:signed-doubleword :s64)))
          (modeval (gpr-mode-name-value mode)))
     (with-ppc-local-vinsn-macros (seg)
-      (let* ((value (ppc2-long-constant-p form)))
+      (let* ((value (ppc2-integer-constant-p form mode)))
         (if value
           (if (eql value 0)
             (make-wired-lreg ppc::rzero :mode modeval)
@@ -4084,9 +4084,9 @@
     (if (eql 0 (%ilogand #xf bits))
       (ppc2-%immediate-set-ptr seg vreg xfer  ptr offset val)
       (let* ((size (logand #xf bits))
-             (long-p (eq size 4))
+             (nbits (ash size 3))
              (signed (not (logbitp 5 bits)))
-             (intval (if long-p (ppc2-long-constant-p val) (acode-fixnum-form-p val)))
+             (intval (acode-integer-constant-p val nbits))
              (offval (acode-fixnum-form-p offset))
              (absptr (and offval (acode-absolute-ptr-p ptr)))
              (for-value (ppc2-for-value-p vreg)))
@@ -4638,22 +4638,7 @@
     (ppc2-make-compound-cd (ppc2-cd-false cd) (ppc2-cd-true cd) (logbitp $backend-mvpass-bit cd))
     cd))
 
-(defun ppc2-long-constant-p (form)
-  (setq form (acode-unwrapped-form form))
-  (or (acode-fixnum-form-p form)
-      (and (acode-p form)
-           (eq (acode-operator form) (%nx1-operator immediate))
-           (setq form (%cadr form))
-           (if (integerp form) 
-             form
-             (progn
-               (if (symbolp form) (setq form (symbol-name form)))
-               (if (and (stringp form) (eql (length form) 4))
-                 (logior (ash (%char-code (char form 0)) 24)
-                         (ash (%char-code (char form 1)) 16)
-                         (ash (%char-code (char form 2)) 8)
-                         (%char-code (char form 3)))
-                 (if (characterp form) (%char-code form))))))))
+
 
 ;;; execute body, cleanup afterwards (if need to)
 (defun ppc2-undo-body (seg vreg xfer body old-stack)
@@ -8351,7 +8336,6 @@
         (declare (list specs vals))
         (let* ((valform (car vals))
                (spec (car specs))
-               (longval (ppc2-long-constant-p valform))
                (absptr (acode-absolute-ptr-p valform)))
           (case spec
             (:registers
@@ -8413,9 +8397,7 @@
                (with-imm-target ()
                    (valreg :natural)
                  (let* ((reg valreg))
-                   (if longval
-                     (ppc2-lri seg valreg longval)
-                     (setq reg (ppc2-unboxed-integer-arg-to-reg seg valform valreg spec)))
+                   (setq reg (ppc2-unboxed-integer-arg-to-reg seg valform valreg spec))
                    (! set-c-arg reg nextarg))))))
           (unless (eq spec :registers)(incf nextarg))))
       (do* ((fpreg ppc::fp1 (1+ fpreg))
