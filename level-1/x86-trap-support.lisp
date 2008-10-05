@@ -236,14 +236,14 @@
   (defconstant eip-register-offset 180)
   (defparameter *encoded-gpr-to-indexed-gpr*
     #(
-     176                                ;eax
-     172                                ;ecx
-     168                                ;edx
-     164                                ;ebx
-     196                                ;esp
-     180                                ;ebp
-     160                                ;esi
-     156                                ;edi
+     44                                ;eax
+     43                                ;ecx
+     42                                ;edx
+     41                                ;ebx
+     49                                ;esp
+     45                                ;ebp
+     40                                ;esi
+     39                                ;edi
       )))
 
 (defun indexed-gpr-lisp (xp igpr)
