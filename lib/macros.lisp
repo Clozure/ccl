@@ -1904,18 +1904,23 @@ to open."
                    (case (car options)
                      (:reader
                       (setq name (cadr options))
-		      (push (cons name reader-info) signatures)
-                      (push name readers))
+                      (unless (memq name readers)
+                        (push (cons name reader-info) signatures)
+                        (push name readers)))
                      (:writer                      
                       (setq name (cadr options))
-                      (push (cons name writer-info) signatures)
-                      (push name writers))
+                      (unless (member name writers :test 'equal)
+                        (push (cons name writer-info) signatures)
+                        (push name writers)))
                      (:accessor
                       (setq name (cadr options))
-                      (push (cons name reader-info) signatures)
-                      (push name readers)
-                      (push (cons (setf-function-name name) writer-info) signatures)
-                      (push `(setf ,name) writers))
+                      (unless (memq name readers)
+                        (push (cons name reader-info) signatures)
+                        (push name readers))
+                      (let ((setf-name `(setf ,name)))
+                        (unless (member setf-name writers :test 'equal)
+                          (push (cons (setf-function-name name) writer-info) signatures)
+                          (push setf-name writers))))
                      (:initarg
                       (push (require-type (cadr options) 'symbol) initargs))
                      (:type
