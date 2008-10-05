@@ -5115,7 +5115,7 @@
                           (compiler-bug "unknown vinsn label ~s" valform)))
                      ((atom valform) valform)
                      ((and (atom (cdr valform))
-                           (typep (car valforms) 'fixnum))
+                           (typep (car valform) 'fixnum))
                       (svref vp (car valform)))
                      (t (let* ((op-vals (cdr valform))
                                (parsed-ops (make-list (length op-vals)))
