@@ -894,7 +894,7 @@
                                     ((tag :u8)
                                      (crf :crf)))
   :again
-  (cmpwi crf object (target-nil-value))
+  (cmpwi crf object (:apply target-nil-value))
   (clrlwi tag object (- ppc32::nbits-in-word ppc32::nlisptagbits))
   (beq crf :got-it)
   (cmpwi crf tag ppc32::tag-misc)
@@ -1510,7 +1510,7 @@
                                    ((bits :u32))
                                    ())
   (rlwimi bits bits (- ppc32::least-significant-bit 27) 27 27) ; bits = 0000...X000X
-  (addi dest bits (target-nil-value)))
+  (addi dest bits (:apply target-nil-value)))
 
 (define-ppc32-vinsn invert-lowbit (((bits :u32))
                                    ((bits :u32))
@@ -1594,7 +1594,7 @@
 
 (define-ppc32-vinsn eqnil->bit31 (((bits :u32))
                                   ((x t)))
-  (subi bits x (target-nil-value))
+  (subi bits x (:apply target-nil-value))
   (cntlzw bits bits)
   (srwi bits bits 5))
 
@@ -1608,7 +1608,7 @@
 
 (define-ppc32-vinsn nenil->bit31 (((bits :u32))
                                   ((x t)))
-  (subi bits x (target-nil-value))
+  (subi bits x (:apply target-nil-value))
   (cntlzw bits bits)
   (srwi bits bits 5)
   (xori bits bits 1))
@@ -1701,7 +1701,7 @@
 
 (define-ppc32-vinsn compare-to-nil (((crf :crf))
                                     ((arg0 t)))
-  (cmpwi crf arg0 (target-nil-value)))
+  (cmpwi crf arg0 (:apply target-nil-value)))
 
 (define-ppc32-vinsn compare-logical (((crf :crf))
                                      ((arg0 t)
@@ -1954,7 +1954,7 @@
 
 (define-ppc32-vinsn %closure-code% (((dest :lisp))
                                     ())
-  (lwz dest (+ ppc32::symbol.vcell (ppc32::nrs-offset %closure-code%) (target-nil-value)) 0))
+  (lwz dest (:apply + ppc32::symbol.vcell (ppc32::nrs-offset %closure-code%) (:apply target-nil-value)) 0))
 
 
 (define-ppc32-vinsn single-float-bits (((dest :u32))
@@ -2236,11 +2236,11 @@
 
 (define-ppc32-vinsn (load-nil :constant-ref) (((dest t))
                                               ())
-  (li dest (target-nil-value)))
+  (li dest (:apply target-nil-value)))
 
 (define-ppc32-vinsn (load-t :constant-ref) (((dest t))
                                             ())
-  (li dest (+ ppc32::t-offset (target-nil-value))))
+  (li dest (:apply + ppc32::t-offset (:apply target-nil-value))))
 
 (define-ppc32-vinsn set-eq-bit (((dest :crf))
                                 ())
@@ -2550,7 +2550,7 @@
   (slwi dest src (- ppc32::charcode-shift ppc32::fixnumshift))
   (bne+ :ok)
   :bad
-  (li dest (target-nil-value))
+  (li dest (:apply target-nil-value))
   (b :done)
   :ok
   (addi dest dest ppc32::subtag-character)
@@ -3434,7 +3434,7 @@
    (mr ppc::arg_x ppc::arg_y))
   ((:pred >= min 1)
    (mr ppc::arg_y ppc::arg_z))
-  (li ppc::arg_z (target-nil-value))
+  (li ppc::arg_z (:apply target-nil-value))
   :done)
 
 (define-ppc32-vinsn default-2-args (()
@@ -3450,7 +3450,7 @@
    (stwu ppc::arg_y -4 ppc::vsp))
   ((:pred >= min 1)
    (mr ppc::arg_x ppc::arg_z))
-  (li ppc::arg_y (target-nil-value))
+  (li ppc::arg_y (:apply target-nil-value))
   (b :last)
   :one
                                         ; We got min+1 args: arg_y was supplied, arg_z defaults to nil.
@@ -3460,7 +3460,7 @@
    (mr ppc::arg_x ppc::arg_y))
   (mr ppc::arg_y ppc::arg_z)
   :last
-  (li ppc::arg_z (target-nil-value))
+  (li ppc::arg_z (:apply target-nil-value))
   :done)
 
 (define-ppc32-vinsn default-3-args (()
@@ -3494,11 +3494,11 @@
    (stwu ppc::arg_y -4 ppc::vsp))
   ((:pred >= min 1)
    (stwu ppc::arg_z -4 ppc::vsp))
-  (li ppc::arg_x (target-nil-value))
+  (li ppc::arg_x (:apply target-nil-value))
   :last-2
-  (li ppc::arg_y (target-nil-value))
+  (li ppc::arg_y (:apply target-nil-value))
   :last-1
-  (li ppc::arg_z (target-nil-value))
+  (li ppc::arg_z (:apply target-nil-value))
   :done)
 
 (define-ppc32-vinsn save-lr (()
@@ -3638,7 +3638,7 @@
 (define-ppc32-vinsn eep.address (((dest t))
                                  ((src (:lisp (:ne dest )))))
   (lwz dest (+ (ash 1 2) ppc32::misc-data-offset) src)
-  (tweqi dest (target-nil-value)))
+  (tweqi dest (:apply target-nil-value)))
                  
 (define-ppc32-vinsn %natural+ (((dest :u32))
                                ((x :u32) (y :u32)))
@@ -3720,7 +3720,7 @@
                                       (crf0 :crf)
                                       (crf1 :crf)))
   (clrlwi tag src (- ppc32::nbits-in-word ppc32::nlisptagbits))
-  (cmpwi crf0 src (target-nil-value))
+  (cmpwi crf0 src (:apply target-nil-value))
   (cmpwi crf1 tag ppc32::tag-misc)
   (beq crf0 :nilsym)
   (bne crf1 :do-trap)
@@ -3733,7 +3733,7 @@
    (mr dest src))
   (b :done)
   :nilsym
-  (li dest (+ ppc32::nilsym-offset (target-nil-value)))
+  (li dest (:apply + ppc32::nilsym-offset (:apply target-nil-value)))
   :done)
 
 ;;; Subprim calls.  Done this way for the benefit of VINSN-OPTIMIZE.
