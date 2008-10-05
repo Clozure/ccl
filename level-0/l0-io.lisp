@@ -222,9 +222,9 @@
   (int-errno-ffcall
    (%kernel-import target::kernel-import-lisp-lseek)
    :int fd
-   :off_t offset
+   :signed-doubleword offset
    :int whence
-   :off_t))
+   :signed-doubleword))
 
 (defun fd-close (fd)
   (int-errno-ffcall (%kernel-import target::kernel-import-lisp-close)
