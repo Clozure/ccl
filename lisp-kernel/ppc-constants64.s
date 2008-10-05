@@ -587,7 +587,7 @@ TCR_FLAG_BIT_PENDING_SUSPEND = (fixnumshift+7)
 
 nil_value = (0x3000+symbol.size+fulltag_misc+(LOWMEM_BIAS))
         	
-define([RESERVATION_DISCHARGE],(0x2008+(LOWMEM_BIAS))
+define([RESERVATION_DISCHARGE],(0x2008+(LOWMEM_BIAS)))
 
 lisp_globals_limit = (0x3000+(LOWMEM_BIAS))
         
