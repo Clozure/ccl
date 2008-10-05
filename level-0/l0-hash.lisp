@@ -494,7 +494,11 @@ before doing so.")
 (defvar *continue-from-readonly-hashtable-lock-error* t)
 
 (defun signal-read-only-hash-table-error (hash)
-  (cond (*continue-from-readonly-hashtable-lock-error*
+  (cond ((hash-lock-free-p hash)
+         ;; We don't really do anything different if this is set, so no problem
+         (cerror "Modify it anyway"
+                 "Attempt to modify readonly hash table ~s" hash))
+        (*continue-from-readonly-hashtable-lock-error*
          (cerror "Make the hash-table writable. DANGEROUS! This could damage your lisp if another thread is acccessing this table. CONTINUE ONLY IF YOU KNOW WHAT YOU'RE DOING!"
                  "Hash-table ~s is readonly" hash)
          (assert-hash-table-writeable hash)
@@ -802,6 +806,8 @@ before doing so.")
 
 (defun lock-free-remhash (key hash)
   (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (when (nhash.read-only hash)
+    (signal-read-only-hash-table-error hash)) ;; continuable
   (loop
     (let* ((vector (nhash.vector hash))
            (vector-index (funcall (the function (nhash.find hash)) hash key)))
@@ -826,6 +832,8 @@ before doing so.")
       (lock-free-rehash hash))))
 
 (defun lock-free-clrhash (hash)
+  (when (nhash.read-only hash)
+    (signal-read-only-hash-table-error hash)) ;;continuable
   (with-lock-context
     (without-interrupts
      (let ((lock (nhash.exclusion-lock hash)))
@@ -845,6 +853,8 @@ before doing so.")
   (when (or (eq value rehashing-value-marker)
             (eq value free-hash-marker))
     (error "Illegal value ~s for storing in a hash table" value))
+  (when (nhash.read-only hash)
+    (signal-read-only-hash-table-error hash)) ;;continuable
   (loop
     (let* ((vector (nhash.vector  hash))
            (vector-index (funcall (nhash.find-new hash) hash key)))
@@ -1878,19 +1888,21 @@ before doing so.")
   (or (nhash.read-only hash)
       (when (nhash.owner hash)
         (error "Hash~table ~s is thread-private and can't be made read-only for that reason" hash))
-      (with-lock-context
-        (without-interrupts
-         (write-lock-hash-table hash)
-         (let* ((flags (nhash.vector.flags (nhash.vector hash))))
-           (declare (fixnum flags))
-           (when (or (logbitp $nhash_track_keys_bit flags)
-                     (logbitp $nhash_component_address_bit flags))
-             (format t "~&Hash-table ~s uses address-based hashing and can't yet be made read-only for that reason." hash)
+      (if (hash-lock-free-p hash)
+        (setf (nhash.read-only hash) t)
+        (with-lock-context
+          (without-interrupts
+           (write-lock-hash-table hash)
+           (let* ((flags (nhash.vector.flags (nhash.vector hash))))
+             (declare (fixnum flags))
+             (when (or (logbitp $nhash_track_keys_bit flags)
+                       (logbitp $nhash_component_address_bit flags))
+               (format t "~&Hash-table ~s uses address-based hashing and can't yet be made read-only for that reason." hash)
+               (unlock-hash-table hash nil)
+               (return-from assert-hash-table-readonly nil))
+             (setf (nhash.read-only hash) t)
              (unlock-hash-table hash nil)
-             (return-from assert-hash-table-readonly nil))
-           (setf (nhash.read-only hash) t)
-           (unlock-hash-table hash nil)
-           t)))))
+             t))))))
 
 ;; This is dangerous, if multiple threads are accessing a read-only
 ;; hash table. Use it responsibly.
