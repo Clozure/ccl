@@ -509,6 +509,11 @@
     (when full
       (setq clean t kernel t reload t))
     (when update (update-ccl :verbose (not (eq update :quiet))))
+    (when (or clean force)
+      ;; for better bug reports...
+      (format t "~&Rebuilding ~a using ~a"
+              (lisp-implementation-type)
+              (lisp-implementation-version)))
     (let* ((cd (current-directory)))
       (unwind-protect
            (progn
