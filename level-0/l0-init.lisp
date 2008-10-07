@@ -88,6 +88,8 @@
     #+windows-target :windows-target
     #+win64-target :win64-target
     #+win64-target :win64-host
+    #+win32-target :win32-target
+    #+win32-target :win32-host
     #+solaris-target :solaris-host
     #+solaris-target :solaris-target
     #+solarisx86-target :solarisx86-target
