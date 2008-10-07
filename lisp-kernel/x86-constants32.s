@@ -587,7 +587,7 @@ TCR_BIAS = 0
          _struct_label(ExtendedRegisters)
          _struct_pad(24)
          _field(MXCSR,4)
-         _struct_pad(136) /* (- 160 28) */
+         _struct_pad(132) /* (- 160 28) */
          _field(Xmm0,16)
          _field(Xmm1,16)
          _field(Xmm2,16)
