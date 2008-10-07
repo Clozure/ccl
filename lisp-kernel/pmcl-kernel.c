@@ -115,6 +115,7 @@ Boolean running_under_rosetta = false;
 #include "Threads.h"
 
 #include <fenv.h>
+#include <sys/stat.h>
 
 #ifndef MAP_NORESERVE
 #define MAP_NORESERVE (0)
@@ -791,7 +792,18 @@ area *
 set_nil(LispObj);
 
 
-#if defined(DARWIN) || defined(WINDOWS)
+/* Check for the existence of a file named by 'path'; return true
+   if it seems to exist, without checking size, permissions, or
+   anything else. */
+Boolean
+probe_file(char *path)
+{
+  struct stat st;
+
+  return (stat(path,&st) == 0);
+}
+
+
 #ifdef WINDOWS
 /* Chop the trailing ".exe" from the kernel image name */
 char *
@@ -809,19 +821,9 @@ chop_exe_suffix(char *path)
 }
 #endif
 
-/* 
-   The underlying file system may be case-insensitive (e.g., HFS),
-   so we can't just case-invert the kernel's name.
-   Tack ".image" onto the end of the kernel's name.  Much better ...
-*/
 char *
-default_image_name(char *orig)
+path_by_appending_image(char *path)
 {
-#ifdef WINDOWS
-  char *path = chop_exe_suffix(orig);
-#else
-  char *path = orig;
-#endif
   int len = strlen(path) + strlen(".image") + 1;
   char *copy = (char *) malloc(len);
 
@@ -832,11 +834,10 @@ default_image_name(char *orig)
   return copy;
 }
 
-#else
 char *
-default_image_name(char *orig)
+case_inverted_path(char *path)
 {
-  char *copy = strdup(orig), *base = copy, *work = copy, c;
+  char *copy = strdup(path), *base = copy, *work = copy, c;
   if (copy == NULL) {
     return NULL;
   }
@@ -855,7 +856,31 @@ default_image_name(char *orig)
   }
   return copy;
 }
+/* 
+   The underlying file system may be case-insensitive (e.g., HFS),
+   so we can't just case-invert the kernel's name.
+   Tack ".image" onto the end of the kernel's name.  Much better ...
+*/
+char *
+default_image_name(char *orig)
+{
+#ifdef WINDOWS
+  char *path = chop_exe_suffix(orig);
+#else
+  char *path = orig;
 #endif
+  char *image_name = path_by_appending_image(path);
+#if !defined(WINDOWS) && !defined(DARWIN)
+  if (!probe_file(image_name)) {
+    char *legacy = case_inverted_path(path);
+    if (probe_file(legacy)) {
+      image_name = legacy;
+    }
+  }
+#endif
+  return image_name;
+}
+
 
 
 char *program_name = NULL;
