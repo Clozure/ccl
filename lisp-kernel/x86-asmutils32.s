@@ -252,7 +252,7 @@ _exportfn(C(ensure_safe_for_string_operations))
         __endif
         __(cld)        
 	__(ret)
-        __ifdef ([WIN32_ES_HACK])
+        __ifdef([WIN32_ES_HACK])
 9:      __(hlt)
         __(jmp 0b)
         __endif
