@@ -72,7 +72,9 @@ ifdef([SOLARIS],[define([SYSstabs],[ELFstabs])
 
 ifdef([WINDOWS],[define([SYSstabs],[COFFstabs])
                define([CNamesNeedUnderscores],[])
-               define([LocalLabelPrefix],[L])])
+               define([LocalLabelPrefix],[L])
+	       define([StartTextLabel],[Ltext0])
+	       define([EndTextLabel],[Letext])])
 
 
 /*  Names exported to (or imported from) C may need leading underscores.  */
@@ -106,7 +108,7 @@ define([_emit_ELF_source_line_stab],[
 ])
 
 define([_emit_COFF_source_line_stab],[
-        .loc 1 $1 0
+        _emit_ELF_source_line_stab($1)
 ])
 
 
@@ -155,10 +157,7 @@ define([__pwd__],substr(pwd0,0,decr(len(pwd0)))[/])
 /*   starts .text section  */
 
 
-define([_beginfile],[ifdef([WINDOWS],[
-        .file 1 "__file__"
-        .text
-],[
+define([_beginfile],[
 	.stabs "__pwd__",N_SO,0,0,StartTextLabel()
 	.stabs "__file__",N_SO,0,0,StartTextLabel()
 ifdef([PPC64],[
@@ -168,15 +167,12 @@ ifdef([DARWIN],[
 	.text
 StartTextLabel():
 # __line__ "__file__"
-])])
+])
 
 define([_endfile],[
-ifdef([WINDOWS],[
-],[
 	.stabs "",N_SO,0,0,EndTextLabel()
 EndTextLabel():
 # __line__
-])
 ])
 
 define([_startfn],[define([__func_name],$1)
