@@ -1832,7 +1832,10 @@ prepare_to_handle_windows_exception_on_foreign_stack(TCR *tcr,
 LONG CALLBACK
 windows_arbstack_exception_handler(EXCEPTION_POINTERS *exception_pointers)
 {
+  extern void ensure_safe_for_string_operations(void);
   DWORD code = exception_pointers->ExceptionRecord->ExceptionCode;
+
+  ensure_safe_for_string_operations();
   
   if ((code & 0x80000000L) == 0) {
     return EXCEPTION_CONTINUE_SEARCH;
