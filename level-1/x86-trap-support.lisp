@@ -232,8 +232,8 @@
     `,xp)
   (defun xp-mxcsr (xp)
     (%get-unsigned-long (pref xp #>CONTEXT.ExtendedRegisters) 24))
-  (defconstant flags-register-offset 192)
-  (defconstant eip-register-offset 180)
+  (defconstant flags-register-offset 48)
+  (defconstant eip-register-offset 45)
   (defparameter *encoded-gpr-to-indexed-gpr*
     #(
      44                                ;eax
