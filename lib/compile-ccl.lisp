@@ -434,7 +434,8 @@
     (:darwinx8664 "x86-boot64.image")
     (:solarisx8664 "sx86-boot64")
     (:win64 "wx86-boot64.image")
-    (:linuxx8632 "x86-boot32")))
+    (:linuxx8632 "x86-boot32")
+    (:win32 "wx86-boot32.image")))
 
 (defun standard-kernel-name (&optional (target (backend-name *host-backend*)))
   (ecase target
@@ -448,7 +449,8 @@
     (:darwinx8664 "dx86cl64")
     (:solarisx8664 "sx86cl64")
     (:win64 "wx86cl64.exe")
-    (:linuxx8632 "lx86cl")))
+    (:linuxx8632 "lx86cl")
+    (:win32 "wx86cl.exe")))
 
 (defun standard-image-name (&optional (target (backend-name *host-backend*)))
   (ecase target
@@ -462,7 +464,8 @@
     (:darwinx8664 "dx86cl64.image")
     (:solarisx8664 "SX86CL64")
     (:win64 "wx86cl64.image")
-    (:linuxx8632 "LX86CL")))
+    (:linuxx8632 "LX86CL")
+    (:win32 "wx86cl.image")))
 
 (defun kernel-build-directory (&optional (target (backend-name *host-backend*)))
   (ecase target
@@ -476,7 +479,8 @@
     (:darwinx8664 "darwinx8664")
     (:solarisx8664 "solarisx64")
     (:win64 "win64")
-    (:linuxx8632 "linuxx8632")))
+    (:linuxx8632 "linuxx8632")
+    (:win32 "win32")))
 
 ;;; If we distribute (e.g.) 32- and 64-bit versions for the same
 ;;; machine and OS in the same svn directory, return the name of the
@@ -486,7 +490,8 @@
 (defun peer-platform (&optional (target (backend-name *host-backend*)))
   (let* ((pairs '((:darwinppc32 . :darwinppc64)
                   (:linuxppc32 . :linuxppc64)
-                  (:darwinx8632 . :darwinx8664))))
+                  (:darwinx8632 . :darwinx8664)
+                  (:linuxx8632 . :linuxx8664))))
     (or (cdr (assoc target pairs))
         (car (rassoc target pairs)))))
 
