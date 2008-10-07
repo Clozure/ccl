@@ -284,11 +284,15 @@ C(restore_windows_context_start):  .quad Xrestore_windows_context_start
 C(restore_windows_context_end): .quad Xrestore_windows_context_end
 C(restore_windows_context_load_rcx):  .quad Xrestore_windows_context_load_rcx
 C(restore_windows_context_iret): .quad Xrestore_windows_context_iret
-
+        .text
 
 /* Something that we shouldn't return to */
 _exportfn(C(windows_halt))
         __(hlt)
-_endfn                                
+_endfn         
+_exportfn(C(ensure_safe_for_string_operations))
+        __(cld)
+        __(ret)
+_endfn                                       
         __endif
 	_endfile

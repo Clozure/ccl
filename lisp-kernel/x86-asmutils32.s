@@ -234,7 +234,8 @@ C(restore_windows_context_start):  .long Xrestore_windows_context_start
 C(restore_windows_context_end): .long Xrestore_windows_context_end
 C(restore_windows_context_load_rcx):  .long Xrestore_windows_context_load_rcx
 C(restore_windows_context_iret): .long Xrestore_windows_context_iret
-
+        .text
+        
         __ifdef([WIN32_ES_HACK])
 /* Something that we shouldn't return to */
 _exportfn(C(windows_halt))

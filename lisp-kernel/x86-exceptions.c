@@ -1835,7 +1835,7 @@ windows_arbstack_exception_handler(EXCEPTION_POINTERS *exception_pointers)
   extern void ensure_safe_for_string_operations(void);
   DWORD code = exception_pointers->ExceptionRecord->ExceptionCode;
 
-  ensure_safe_for_string_operations();
+
   
   if ((code & 0x80000000L) == 0) {
     return EXCEPTION_CONTINUE_SEARCH;
@@ -1845,6 +1845,8 @@ windows_arbstack_exception_handler(EXCEPTION_POINTERS *exception_pointers)
     BytePtr current_sp = (BytePtr) current_stack_pointer();
     CONTEXT *context = exception_pointers->ContextRecord;
     
+    ensure_safe_for_string_operations();
+
     if ((current_sp >= cs->low) &&
         (current_sp < cs->high)) {
       FBug(context, "Exception on foreign stack\n");
