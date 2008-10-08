@@ -453,19 +453,7 @@
     (:win32 "wx86cl.exe")))
 
 (defun standard-image-name (&optional (target (backend-name *host-backend*)))
-  (ecase target
-    (:darwinppc32 "dppccl.image")
-    (:linuxppc32 "PPCCL")
-    (:darwinppc64 "dppccl64.image")
-    (:linuxppc64 "PPCCL64")
-    (:darwinx8632 "dx86cl.image")
-    (:linuxx8664 "LX86CL64")
-    (:freebsdx8664 "FX86CL64")
-    (:darwinx8664 "dx86cl64.image")
-    (:solarisx8664 "SX86CL64")
-    (:win64 "wx86cl64.image")
-    (:linuxx8632 "LX86CL")
-    (:win32 "wx86cl.image")))
+  (concatenate 'string (pathname-name (standard-kernel-name target)) ".image"))
 
 (defun kernel-build-directory (&optional (target (backend-name *host-backend*)))
   (ecase target
