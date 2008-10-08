@@ -586,11 +586,11 @@
     (%df-check-exception-1 'cosh n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+(and 32-bit-target (not win32-target))
+#+32-bit-target
 (defun %single-float-cosh! (n result)
   (declare (single-float n result))
   (target::with-stack-short-floats ((temp))
-    (%setf-short-float TEMP (#_coshf n))
+    (%setf-short-float TEMP (external-call "coshf" :single-float n :single-float))
     (%sf-check-exception-1 'cosh n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
 
@@ -718,11 +718,11 @@
     (%df-check-exception-1 'sinh n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+(and 32-bit-target (not windows-target))
+#+32-bit-target
 (defun %single-float-sinh! (n result)
   (declare (single-float n result))
   (target::with-stack-short-floats ((temp))
-    (%setf-short-float TEMP (#_sinhf n))
+    (%setf-short-float TEMP (external-call "sinhf" :single-float n :single-float))
     (%sf-check-exception-1 'sinh n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
 
@@ -740,11 +740,11 @@
     (%df-check-exception-1 'tanh n (%ffi-exception-status))
     (%setf-double-float result TEMP)))
 
-#+(and 32-bit-target (not windows-target))
+#+32-bit-target
 (defun %single-float-tanh! (n result)
   (declare (single-float n result))
   (target::with-stack-short-floats ((temp))
-    (%setf-short-float TEMP (#_tanhf n))
+    (%setf-short-float TEMP (external-call "tanhf" :single-float n :single-float))
     (%sf-check-exception-1 'tanh n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
 
