@@ -164,6 +164,12 @@ char *Iregnames[] = {"???", "???", "???", "???",
 char *Iregnames[] = {"edi", "esi", "ebx", "edx", "ecx", "eax",
                      "ebp", "eip", "???", "efl", "esp"};
 #endif
+#ifdef FREEBSD
+char *Iregnames[] = {"???", "???", "???", "???", "???"
+                     "edi", "esi", "ebp", "ebx", "edx", 
+		     "ecx", "eax", "???", "???", "eip",
+		     "???", "efl", "esp"};
+#endif
 #endif
 
 #ifdef X8632

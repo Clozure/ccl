@@ -26,6 +26,20 @@
 #define REG_ESP 10
 #endif
 
+#ifdef FREEBSD
+#define REG_EDI 5
+#define REG_ESI 6
+#define REG_EBP 7
+#define REG_ISP 8
+#define REG_EBX 9
+#define REG_EDX 10
+#define REG_ECX 11
+#define REG_EAX 12
+#define REG_EIP 15
+#define REG_EFL 17
+#define REG_ESP 19
+#endif
+
 /* Indicies of GPRs in the mcontext component of a ucontext */
 #define Iimm0  REG_EAX
 #define Iarg_z REG_EBX

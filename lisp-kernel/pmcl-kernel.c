@@ -409,6 +409,9 @@ unsigned unsigned_max(unsigned x, unsigned y)
 #ifdef WINDOWS
 #define MAXIMUM_MAPPABLE_MEMORY (1U<<30)
 #endif
+#ifdef FREEBSD
+#define MAXIMUM_MAPPABLE_MEMORY (1U<<30)
+#endif
 #endif
 
 natural

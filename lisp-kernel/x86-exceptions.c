@@ -782,7 +782,11 @@ Boolean
 handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valence)
 {
 #ifdef FREEBSD
+#ifdef X8664
   BytePtr addr = (BytePtr) xp->uc_mcontext.mc_addr;
+#else
+  BytePtr addr = (BytePtr) info->si_addr;
+#endif
 #else
 #ifdef WINDOWS
   BytePtr addr = (BytePtr) info->ExceptionInformation[1];
@@ -921,7 +925,11 @@ void
 freebsd_decode_vector_fp_exception(siginfo_t *info, ExceptionInformation *xp)
 {
   if (info->si_code == 0) {
+#ifdef X8664
     struct savefpu *fpu = (struct savefpu *) &(xp->uc_mcontext.mc_fpstate);
+#else
+    struct savexmm *fpu = (struct savexmm *) &(xp->uc_mcontext.mc_fpstate);
+#endif
     uint32_t mxcsr = fpu->sv_env.en_mxcsr;
 
     decode_vector_fp_exception(info, mxcsr);

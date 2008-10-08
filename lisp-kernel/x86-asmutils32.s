@@ -169,6 +169,11 @@ _exportfn(C(switch_to_foreign_stack))
         __(jmp *%esi)
 _endfn
 
+_exportfn(C(freebsd_sigreturn))
+	__(movl $417,%eax)	/* SYS_sigreturn */
+	__(int $80)				
+_endfn
+		
 _exportfn(C(get_vector_registers))
 	__(ret)
 _endfn

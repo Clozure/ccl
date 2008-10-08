@@ -856,6 +856,7 @@ setup_tcr_extra_segment(TCR *tcr)
 #endif
 
 #ifdef X8632
+
 #ifdef DARWIN
 #include <architecture/i386/table.h>
 #include <architecture/i386/sel.h>
@@ -973,7 +974,7 @@ free_tcr_extra_segment(TCR *tcr)
   short sel = tcr->ldt_selector;
 
   pthread_mutex_lock(&ldt_lock);
-  /* load %fs with null segement selector */
+  /* load %fs with null segment selector */
   __asm__ volatile ("mov %0,%%fs" : : "r"(0));
   tcr->ldt_selector = 0;
   u.entry_number = (sel>>3);
@@ -1095,6 +1096,49 @@ free_tcr_extra_segment(TCR *tcr)
 {
 }
 
+#endif
+#ifdef FREEBSD
+#include <machine/segments.h>
+#include <machine/sysarch.h>
+
+/* It'd be tempting to use i386_set_fsbase() here, but there doesn't
+   seem to be any way to free the GDT entry it creates. */
+void
+setup_tcr_extra_segment(TCR *tcr)
+{
+  struct segment_descriptor sd;
+  uintptr_t addr = (uintptr_t)tcr;
+  unsigned int size = sizeof(*tcr);
+  int i;
+
+  sd.sd_lolimit = (size - 1) & 0xffff;
+  sd.sd_hilimit = ((size - 1) >> 16) & 0xf;
+  sd.sd_lobase = addr & ((1<<24)-1);
+  sd.sd_type = 18;
+  sd.sd_dpl = SEL_UPL;
+  sd.sd_p = 1;
+  sd.sd_def32 = 1;
+  sd.sd_gran = 0;
+
+  i = i386_set_ldt(LDT_AUTO_ALLOC, (union descriptor *)&sd, 1);
+
+  if (i < 0) {
+    perror("i386_set_ldt");
+  } else {
+    tcr->ldt_selector = LSEL(i,SEL_UPL);
+  }
+}
+
+void 
+free_tcr_extra_segment(TCR *tcr)
+{
+  int idx = tcr->ldt_selector >> 3;
+  /* load %fs with null segment selector */
+  __asm__ volatile ("mov %0,%%fs" : : "r"(0));
+  if (i386_set_ldt(idx, NULL, 1) < 0)
+    perror("i386_set_ldt");
+  tcr->ldt_selector = 0;
+}
 #endif
 #endif
 
