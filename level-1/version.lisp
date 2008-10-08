@@ -17,16 +17,16 @@
 (in-package "CCL")
 
 (defparameter *openmcl-major-version* 1)
-(defparameter *openmcl-minor-version* 2)
-(defparameter *openmcl-revision* 0)
+(defparameter *openmcl-minor-version* 3)
+(defparameter *openmcl-revision* "dev")
 ;;; May be set by xload-level-0
 (defvar *openmcl-svn-revision* nil)
 (defparameter *openmcl-dev-level* nil)
 
-(defparameter *openmcl-version* (format nil "~d.~d~@[.~d~]~@[-r~a~] ~@[+~s~] (~@[~A: ~]~~A)"
+(defparameter *openmcl-version* (format nil "~d.~d~@[-~a~]~@[-r~a~] ~@[+~s~] (~@[~A: ~]~~A)"
 					*openmcl-major-version*
 					*openmcl-minor-version*
-					(unless (zerop *openmcl-revision*)
+					(unless (null *openmcl-revision*)
 					  *openmcl-revision*)
 					*openmcl-svn-revision*
                                         *optional-features*
