@@ -31,6 +31,7 @@
 #include <dirent.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
+#include <stdint.h>
 
 ssize_t
 lisp_read(int fd, void *buf, size_t count)
@@ -56,8 +57,8 @@ lisp_fchmod(int fd, mode_t mode)
   return fchmod(fd,mode);
 }
 
-off_t
-lisp_lseek(int fd, off_t offset, int whence)
+int64_t
+lisp_lseek(int fd, int64_t offset, int whence)
 {
   return lseek(fd,offset,whence);
 }
