@@ -25,6 +25,7 @@
    conventions (e.g., return -1 or NULL and set errno on error.)
 */
 
+#define _LARGEFILE64_SOURCE
 #include <errno.h>
 #include <unistd.h>
 #include <sys/stat.h>
