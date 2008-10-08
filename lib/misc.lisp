@@ -921,7 +921,7 @@ are running on, or NIL if we can't find any useful information."
 (defun allocate-static-conses ()
   "Allocates some memory, freezes it and lets it become garbage.
    This will add the memory to the list of free static conses."
-  (let ((l (make-array *static-cons-chunk*)))
+  (let ((l (make-array (1- (* 2 *static-cons-chunk*)))))
     (declare (ignore l))
     (freeze))
   (gc))
