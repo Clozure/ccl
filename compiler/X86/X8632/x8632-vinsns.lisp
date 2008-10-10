@@ -565,7 +565,7 @@
 					 ((object :lisp))
 					 ((tag (:u32 #.x8632::imm0))))
   (movl (:%l object) (:%accl tag))
-  (andb (:$b x8632::fulltagmask) (:%accb tag))
+  (andl (:$b x8632::fulltagmask) (:%accl tag))
   (cmpb (:$b x8632::fulltag-cons) (:%accb tag))
   (setne (:%b x8632::ah))
   (cmpl (:$l (:apply target-nil-value)) (:% object))
@@ -741,25 +741,10 @@
 					    ())
   (movl (:$l (:apply target-t-value)) (:%l dest)))
 
-;;; use something like this for the other extract-whatevers, too,
-;;; once it's established that it works.
 (define-x8632-vinsn extract-tag (((tag :u8))
                                  ((object :lisp)))
   (movl (:%l object) (:%l tag))
-  ((:pred = (:apply %hard-regspec-value tag) x8632::eax)
-   ;; tag is the accumulator (2 bytes)
-   (andb (:$b x8632::tagmask) (:%accb tag)))
-  ((:and (:pred > (:apply %hard-regspec-value tag) x8632::eax)
-	 (:pred <= (:apply %hard-regspec-value tag) x8632::ebx))
-   ;; tag is in a register whose low 8 bits can be accessed by byte
-   ;; insns (3 bytes)
-   (andb (:$b x8632::tagmask) (:%b tag)))
-  ((:pred > (:apply %hard-regspec-value tag) x8632::ebx)
-   ;; tag is somewhere else (6 bytes) (could use andw and get a length
-   ;; of 5 bytes, but Intel's optimization manual advises avoiding
-   ;; length-changing prefixes to change the size of immediates.
-   ;; (section 3.4.2.3)
-   (andl (:$l x8632::tagmask) (:%l tag))))
+  (andl (:$b x8632::tagmask) (:%l tag)))
 
 (define-x8632-vinsn extract-tag-fixnum (((tag :imm))
 					((object :lisp)))
@@ -1549,14 +1534,15 @@
                                           ()
                                           ((tag :u8)))
   :resume
-  (movb (:%b x8632::temp0) (:%b tag))
-  (andb (:$b x8632::tagmask) (:%b tag))
-  (cmpb (:$b x8632::tag-misc) (:%b tag))
+  (movl (:%l x8632::temp0) (:%l tag))
+  (andl (:$b x8632::tagmask) (:%l tag))
+  (cmpl (:$b x8632::tag-misc) (:%l tag))
   (jne :bad)
-  (cmpb (:$b x8632::subtag-function) (:@ x8632::misc-subtag-offset (:%l x8632::temp0)))
+  (movsbl (:@ x8632::misc-subtag-offset (:%l x8632::temp0)) (:%l tag))
+  (cmpl (:$b x8632::subtag-function) (:%l tag))
   (cmovel (:%l x8632::temp0) (:%l x8632::fn))
   (je :go)
-  (cmpb (:$b x8632::subtag-symbol) (:@ x8632::misc-subtag-offset (:%l x8632::temp0)))
+  (cmpl (:$b x8632::subtag-symbol) (:%l tag))
   (cmovel (:@ x8632::symbol.fcell (:%l x8632::fname)) (:%l x8632::fn))
   (jne :bad)
   :go
@@ -1902,12 +1888,12 @@
                                                   (valtype :lisp)))
   (xorl (:%l valtype) (:%l valtype))
   (movl (:%l val) (:%l tag))
-  (andb (:$b x8632::tagmask) (:%b tag))
-  (cmpb (:$b x8632::tag-misc) (:%b tag))
+  (andl (:$b x8632::tagmask) (:%l tag))
+  (cmpl (:$b x8632::tag-misc) (:%l tag))
   (jne :have-tag)
-  (movb (:@ x8632::misc-subtag-offset (:%l val)) (:%b tag))
+  (movsbl (:@ x8632::misc-subtag-offset (:%l val)) (:%l tag))
   :have-tag
-  (cmpb (:$b x8632::subtag-istruct) (:%b tag))
+  (cmpl (:$b x8632::subtag-istruct) (:%l tag))
   (jne :do-compare)
   (movl (:@ x8632::misc-data-offset (:%l val)) (:%l valtype))
   :do-compare
