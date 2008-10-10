@@ -570,7 +570,7 @@ the socket is not connected."))
   #+windows-target
   (let* ((handle (socket-handle fd)))
     (rlet ((argp :u_long (if block-flag 0 1)))
-      (#_ioctlsocket handle #$FIONBIO argp)))
+      (#_ioctlsocket handle #.(u32->s32 #$FIONBIO) argp)))
   #-windows-target
   (if block-flag
     (fd-clear-flag fd #$O_NONBLOCK)
@@ -875,7 +875,20 @@ the socket is not connected."))
 			  (eql res (- #$EOPNOTSUPP))
 			  (eql res (- #$ENETUNREACH))))
 	       (- #$EAGAIN)
-	       res))))
+               #+windows-target (if (< res 0)
+                                  res
+                                  (progn
+                                    ;; SLIME still crashes on startup
+                                    ;; on (at least) win32.
+                                    ;; This is intended to make it
+                                    ;; possible to attach GDB and
+                                    ;; try to see what's going on.
+                                    #+debug
+                                    (format t "~& pid = ~d" (getpid))
+                                    #+debug
+                                    (sleep 60)
+                                    (#__open_osfhandle res 0)))
+	       #-windows-target res))))
     (cond (wait
 	    (with-eagain fd :input
 	      (_accept fd *multiprocessing-socket-io*)))
