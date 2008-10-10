@@ -56,7 +56,7 @@
     #+x8632-target :x8632-host
     #+x8664-target :x86-64
     #+x8664-target :x86_64
-    #+x8632-target :x86)
+    #+x8632-target :x86
     #+x86-target :x86-target
     #+x86-target :x86-host
     #+x8664-target :x8664-target
