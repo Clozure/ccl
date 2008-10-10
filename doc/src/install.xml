@@ -155,7 +155,7 @@
          disk image, then drag Clozure CL to the Applications folder.
          After that you can double-click the Clozure CL application to
          run it.  The disk images are available at
-         <ulink url="ftp://clozure.com/pub/testing/"/> </para>
+         <ulink url="ftp://clozure.com/pub/release/1.2/"/> </para>
 
       <para>So that &CCL; can locate its source code, and for other
         reasons explained in
@@ -266,7 +266,7 @@ Type 'svn help' for usage]]>
     <!-- ***************************************************** -->
     <sect2><title>Tarballs</title>
       <para>Tarballs are available at <ulink
-      url="ftp://clozure.com/pub/testing/"/>.  Download and extract
+      url="ftp://clozure.com/pub/release/1.2/"/>.  Download and extract
       one on your local disk.  Then edit the &CCL; shell script to set
       the value of <varname>CCL_DEFAULT_DIRECTORY</varname> and start
       up the appropriate &CCL; kernel. See <xref
