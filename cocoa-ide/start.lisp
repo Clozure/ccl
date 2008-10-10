@@ -5,12 +5,14 @@
 (if (< #&NSAppKitVersionNumber 824)
     (error "This application requires features introduced in OSX 10.4."))
 
-(def-cocoa-default *ccl-directory* :string "" nil #'(lambda (old new)
-                                                      (when (equal new "") (setq new nil))
-                                                      (unless (and new (equal old new))
-                                                        (init-interfaces-root)
-                                                        (ccl::replace-base-translation "ccl:"
-                                                                                       (or new (find-ccl-directory))))))
+(def-cocoa-default  *ccl-directory* :string "" nil
+                    #+no #'(lambda (old new)
+                             (when (equal new "") (setq new nil))
+                             (unless (and new (equal old new))
+                               (init-interfaces-root)
+                               (ccl::replace-base-translation
+                                "ccl:"
+                                (or new (find-ccl-directory))))))
 
 ;; If there are interfaces inside the bundle, use those rather than the ones
 ;; in CCL:, since they're more likely to be valid.  CCL: could be some random
@@ -31,6 +33,7 @@
     (if (equalp (last dir 2) '("Contents" "MacOS"))
         (make-pathname :directory (butlast dir 3))
         path)))
+
 
 (defmethod ccl::ui-object-do-operation ((o ns:ns-application)
                                         operation
@@ -78,6 +81,7 @@
 ;;; bit better ... I'd tend to agree.)
 (defmethod ccl::parse-application-arguments ((a cocoa-application))
   (values nil nil nil nil))
+
 
 (defmethod toplevel-function ((a cocoa-application) init-file)
   (declare (ignore init-file))
