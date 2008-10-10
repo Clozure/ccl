@@ -627,9 +627,11 @@
    (andl (:$b x8632::tagmask) (:%l tag))
    (cmpl (:$b x8632::tag-misc) (:%l tag)))
   (jne :have-tag)
-  (movb (:@ x8632::misc-subtag-offset (:%l object)) (:%b tag))
+  ;; This needs to be a sign-extending mov, since the cmpl below
+  ;; will sign-extend the 8-bit constant operand.
+  (movsbl (:@ x8632::misc-subtag-offset (:%l object)) (:%l tag))
   :have-tag
-  (cmpb (:$b tagval) (:%b tag))
+  (cmpl (:$b tagval) (:%l tag))
   (jne :bad)
 
   (:anchored-uuo-section :resume)
@@ -644,9 +646,8 @@
   (andl (:$b x8632::tagmask) (:%l tag))
   (cmpl (:$b x8632::tag-misc) (:%l tag))
   (jne :bad)
-  ;; xxx tag might not be byte-accessible
-  (movb (:@ x8632::misc-subtag-offset (:%l object)) (:%b tag))
-  (cmpb (:$b x8632::subtag-single-float) (:%b tag))
+  (movsbl (:@ x8632::misc-subtag-offset (:%l object)) (:%l tag))
+  (cmpl (:$b x8632::subtag-single-float) (:%l tag))
   (jne :bad)
 
   (:anchored-uuo-section :resume)
@@ -661,9 +662,8 @@
   (andl (:$b x8632::tagmask) (:%l tag))
   (cmpl (:$b x8632::tag-misc) (:%l tag))
   (jne :bad)
-  ;; xxx tag might not be byte-accessible
-  (movb (:@ x8632::misc-subtag-offset (:%l object)) (:%b tag))
-  (cmpb (:$b x8632::subtag-double-float) (:%b tag))
+  (movsbl (:@ x8632::misc-subtag-offset (:%l object)) (:%l tag))
+  (cmpl (:$b x8632::subtag-double-float) (:%l tag))
   (jne :bad)
 
   (:anchored-uuo-section :resume)
@@ -678,8 +678,7 @@
   (andl (:$b x8632::tagmask) (:%l tag))
   (cmpl (:$b x8632::tag-misc) (:%l tag))
   (jne :have-tag)
-  ;; xxx tag might not be byte-accessible
-  (movb (:@ x8632::misc-subtag-offset (:%l object)) (:%b tag))
+  (movsbl (:@ x8632::misc-subtag-offset (:%l object)) (:%l tag))
   :have-tag
   (cmpl (:$b x8632::subtag-macptr) (:%l tag))
   (jne :bad)
@@ -784,20 +783,13 @@
    (imull (:$b x8632::fixnumone) (:%l object) (:%l tag)))
   (andl (:$b (ash x8632::fulltagmask x8632::fixnumshift)) (:%l tag)))
 
-(define-x8632-vinsn extract-typecode (((tag :imm))
+(define-x8632-vinsn extract-typecode (((tag :u32))
                                       ((object :lisp)))
   (movl (:%l object) (:%l tag))
-  ((:pred <= (:apply  %hard-regspec-value tag) x8632::ebx)
-   (andb (:$b x8632::tagmask) (:%b tag))
-   (cmpb (:$b x8632::tag-misc) (:%b tag)))
-  ((:pred > (:apply  %hard-regspec-value tag) x8632::ebx)
-   (andl (:$l x8632::tagmask) (:%l tag))
-   (cmpl (:$l x8632::tag-misc) (:%l tag)))
+  (andl (:$b x8632::tagmask) (:%l tag))
+  (cmpl (:$b x8632::tag-misc) (:%l tag))
   (jne :have-tag)
-  ((:pred <= (:apply  %hard-regspec-value tag) x8632::ebx)
-   (movb (:@ x8632::misc-subtag-offset (:%l object)) (:%b tag)))
-  ((:pred > (:apply %hard-regspec-value tag) x8632::ebx)
-   (movl (:@ x8632::misc-subtag-offset (:%l object)) (:%l tag)))
+  (movzbl (:@ x8632::misc-subtag-offset (:%l object)) (:%l tag))
   :have-tag)
 
 (define-x8632-vinsn extract-typecode-fixnum (((tag :imm))
@@ -807,7 +799,7 @@
   (andl (:$b x8632::tagmask) (:%l temp))
   (cmpl (:$b x8632::tag-misc) (:%l temp))
   (jne :have-tag)
-  (movb (:@ x8632::misc-subtag-offset (:%l object)) (:%b temp))
+  (movzbl (:@ x8632::misc-subtag-offset (:%l object)) (:%l temp))
   :have-tag
   (leal (:@ (:%l temp) 4) (:%l tag)))
 
@@ -2362,9 +2354,9 @@
                                            ((object :lisp))
                                            ((tag :u8)))
   :again
-  (movb (:%b object) (:%b tag))
-  (andb (:$b x8632::fixnummask) (:%b tag))
-  (cmpb (:$b x8632::tag-misc) (:%b tag))
+  (movl (:%l object) (:%l tag))
+  (andl (:$b x8632::fixnummask) (:%l tag))
+  (cmpl (:$b x8632::tag-misc) (:%l tag))
   (jne :bad)
   (cmpb (:$b x8632::subtag-simple-vector) (:@ x8632::misc-subtag-offset (:%l object)))
   (jne :bad)
@@ -2377,9 +2369,9 @@
                                            ((object :lisp))
                                            ((tag :u8)))
   :again
-  (movb (:%b object) (:%b tag))
-  (andb (:$b x8632::fixnummask) (:%b tag))
-  (cmpb (:$b x8632::tag-misc) (:%b tag))
+  (movl (:%l object) (:%l tag))
+  (andl (:$b x8632::fixnummask) (:%l tag))
+  (cmpl (:$b x8632::tag-misc) (:%l tag))
   (jne :bad)
   (cmpb (:$b x8632::subtag-simple-base-string) (:@ x8632::misc-subtag-offset (:%l object)))
   (jne :bad)
@@ -2397,11 +2389,11 @@
   :again
   (movl (:%l object) (:%l tag))
   (andl (:$b x8632::tagmask) (:%l tag))
-  (cmpb (:$b x8632::tag-misc) (:%b tag))
+  (cmpl (:$b x8632::tag-misc) (:%l tag))
   (jne :have-tag)
-  (movb (:@ x8632::misc-subtag-offset (:%l object)) (:%b tag))
+  (movzbl (:@ x8632::misc-subtag-offset (:%l object)) (:%l tag))
   :have-tag
-  (cmpb (:$b (1- (- x8632::nbits-in-word x8632::fixnumshift))) (:%b tag))
+  (cmpl (:$b (1- (- x8632::nbits-in-word x8632::fixnumshift))) (:%l tag))
   (movl (:$l (ash (logior (ash 1 x8632::tag-fixnum)
                           (ash 1 x8632::subtag-single-float)
                           (ash 1 x8632::subtag-double-float)
@@ -2425,11 +2417,11 @@
   :again
   (movl (:%l object) (:%l tag))
   (andl (:$b x8632::tagmask) (:%l tag))
-  (cmpb (:$b x8632::tag-misc) (:%b tag))
+  (cmpl (:$b x8632::tag-misc) (:%l tag))
   (jne :have-tag)
-  (movb (:@ x8632::misc-subtag-offset (:%l object)) (:%b tag))
+  (movzbl (:@ x8632::misc-subtag-offset (:%l object)) (:%l tag))
   :have-tag
-  (cmpb (:$b (1- (- x8632::nbits-in-word x8632::fixnumshift))) (:%b tag))
+  (cmpl (:$b (1- (- x8632::nbits-in-word x8632::fixnumshift))) (:%l tag))
   (movl (:$l (ash (logior (ash 1 x8632::tag-fixnum)
                           (ash 1 x8632::subtag-single-float)
                           (ash 1 x8632::subtag-double-float)
@@ -2451,8 +2443,8 @@
                                   ((tag :u8)))
   :again
   (movl (:%l object) (:%l tag))
-  (andb (:$b x8632::fulltagmask) (:%b tag))
-  (cmpb (:$b x8632::fulltag-cons) (:%b tag))
+  (andl (:$b x8632::fulltagmask) (:%l tag))
+  (cmpl (:$b x8632::fulltag-cons) (:%l tag))
   (jne :bad)
 
   (:anchored-uuo-section :again)
@@ -2466,8 +2458,8 @@
   (cmpl (:$l (:apply target-nil-value)) (:%l object))
   (je :got-it)
   (movl (:%l object) (:%l tag))
-  (andb (:$b x8632::tagmask) (:%b tag))
-  (cmpb (:$b x8632::tag-misc) (:%b tag))
+  (andl (:$b x8632::tagmask) (:%l tag))
+  (cmpl (:$b x8632::tag-misc) (:%l tag))
   (jne :bad)
   (cmpb (:$b x8632::subtag-symbol) (:@ x8632::misc-subtag-offset (:%l object)))
   (jne :bad)
@@ -2777,11 +2769,11 @@
   (cmpl (:$l (:apply target-nil-value)) (:%l src))
   (je :nilsym)
   (movl (:%l src) (:%l tag))
-  (andb (:$b x8632::tagmask) (:%b tag))
-  (cmpb (:$b x8632::tag-misc) (:%b tag))
+  (andl (:$b x8632::tagmask) (:%l tag))
+  (cmpl (:$b x8632::tag-misc) (:%l tag))
   (jne :bad)
-  (movb (:@ x8632::misc-subtag-offset (:%l src)) (:%b tag))
-  (cmpb (:$b x8632::subtag-symbol) (:%b tag))
+  (movsbl (:@ x8632::misc-subtag-offset (:%l src)) (:%l tag))
+  (cmpl (:$b x8632::subtag-symbol) (:%l tag))
   (jne :bad)
   ((:not (:pred =
                 (:apply %hard-regspec-value dest)
@@ -2816,15 +2808,8 @@
                                                ((src :lisp))
                                                ((temp :u32)))
   (movl (:@ x8632::misc-header-offset (:%l src)) (:%l temp))
-  ((:and (:pred >= (:apply %hard-regspec-value temp) x8632::eax)
-	 (:pred <= (:apply %hard-regspec-value temp) x8632::ebx))
-   (movb (:$b 0) (:%b temp)))
-  ((:pred > (:apply %hard-regspec-value temp) x8632::ebx)
-   (andl (:$l #xffffff00) (:%l temp)))
-  (movl (:%l temp) (:%l dest))
-  (shrl (:$ub (- x8632::num-subtag-bits x8632::fixnumshift)) (:%l dest)))
-
-
+  (shrl (:$ub x8632::num-subtag-bits) (:%l temp))
+  (leal (:@ (:%l temp) 4) (:%l dest)))
 
 (define-x8632-vinsn %logior2 (((dest :imm))
                               ((x :imm)
@@ -3284,10 +3269,10 @@
    (andl (:$b x8632::tagmask) (:%l tag))
    (cmpl (:$b x8632::tag-misc) (:%l tag)))
   (jne :bad)
-  (movb (:@ x8632::misc-subtag-offset (:%l x8632::temp0)) (:%b tag))
-  (cmpb (:$b x8632::subtag-function) (:%b tag))
+  (movsbl (:@ x8632::misc-subtag-offset (:%l x8632::temp0)) (:%l tag))
+  (cmpl (:$b x8632::subtag-function) (:%l tag))
   (je :go)
-  (cmpb (:$b x8632::subtag-symbol) (:%b tag))
+  (cmpl (:$b x8632::subtag-symbol) (:%l tag))
   (cmovel (:@ x8632::symbol.fcell (:%l x8632::temp0)) (:%l x8632::temp0))
   (jne :bad)
   :go
@@ -3536,11 +3521,11 @@
   :resume
   (movl (:@ x8632::symbol.fcell (:%l sym)) (:%l val))
   (movl (:%l val) (:%l tag))
-  (andb (:$b x8632::tagmask) (:%b tag))
-  (cmpb (:$b x8632::tag-misc) (:%b tag))
+  (andl (:$b x8632::tagmask) (:%l tag))
+  (cmpl (:$b x8632::tag-misc) (:%l tag))
   (jne :bad)
-  (movb (:@ x8632::misc-subtag-offset (:%l val)) (:%b tag))
-  (cmpb (:$b x8632::subtag-function) (:%b tag))
+  (movsbl (:@ x8632::misc-subtag-offset (:%l val)) (:%l tag))
+  (cmpl (:$b x8632::subtag-function) (:%l tag))
   (jne :bad)
 
   (:anchored-uuo-section :resume)
