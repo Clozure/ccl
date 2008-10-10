@@ -538,6 +538,7 @@
     (#/edited:range:changeInLength: self #$NSTextStorageEditedCharacters r 0)))
 
 
+
 ;;; This runs on the main thread; it synchronizes the "real" NSMutableAttributedString
 ;;; with the hemlock string and informs the textstorage of the insertion.
 (objc:defmethod (#/noteHemlockInsertionAtPosition:length: :void) ((self hemlock-text-storage)
@@ -851,6 +852,7 @@
     ((blink-location :foreign-type :unsigned :accessor text-view-blink-location)
      (blink-color-attribute :foreign-type :id :accessor text-view-blink-color)
      (blink-enabled :foreign-type :<BOOL> :accessor text-view-blink-enabled)
+     (blink-phase :foreign-type :<BOOL> :accessor text-view-blink-phase)
      (peer :foreign-type :id))
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-textstorage-text-view))
@@ -873,6 +875,8 @@
   (assume-cocoa-thread)
   #+debug (log-debug "deactivating ~s" self)
   (assume-not-editing self)
+  (setf (text-view-blink-phase self) #$NO)
+  (disable-blink self)
   (#/setSelectable: self nil))
 
 (defmethod eventqueue-abort-pending-p ((self hemlock-textstorage-text-view))
@@ -1000,9 +1004,10 @@
   (unless (or (not (eq ccl::*current-process* ccl::*initial-process*))
               (#/editingInProgress (#/textStorage self)))
     (unless (eql #$NO (text-view-blink-enabled self))
+      #+debug (#_NSLog #@"Flag = %@" :id (if flag #@"T" #@"NIL"))
+      (setf (text-view-blink-phase self) (if flag 1 0))
       (let* ((layout (#/layoutManager self))
-             (container (#/textContainer self))
-             (blink-color (text-view-blink-color self)))
+             (container (#/textContainer self)))
         ;; We toggle the blinked character "off" by setting its
         ;; foreground color to the textview's background color.
         ;; The blinked character should be "off" whenever the insertion
@@ -1020,10 +1025,7 @@
                           layout
                           glyph-range
                           container)))
-              (#/set blink-color)
-              (#_NSRectFill rect))
-          (unless flag
-            (#/drawGlyphsForGlyphRange:atPoint: layout glyph-range (#/textContainerOrigin self))))))))
+              (#/setNeedsDisplayInRect: self rect)))))))
   (call-next-method r color flag))
 
 
@@ -1066,7 +1068,27 @@
                      #+debug (#_NSLog #@"enable blink, backward")
                      (setf (text-view-blink-location self)
                            (hi:mark-absolute-position temp)
-                           (text-view-blink-enabled self) #$YES))))))))))
+                           (text-view-blink-enabled self) #$YES))))))
+        (when (eql (text-view-blink-enabled self) #$YES)
+          (ns:with-ns-range (char-range (text-view-blink-location self) 1)
+            (let* ((layout (#/layoutManager self))
+                   (container (#/textContainer self))
+                   (glyph-range (#/glyphRangeForCharacterRange:actualCharacterRange:
+                                 layout
+                                 char-range
+                                 +null-ptr+))
+                   (rect (#/boundingRectForGlyphRange:inTextContainer:
+                          layout
+                          glyph-range
+                          container)))
+              (setf (text-view-blink-phase self) #$YES)
+              (#/setNeedsDisplayInRect: self rect))))))))
+
+(objc:defmethod (#/updateInsertionPointStateAndRestartTimer: :void)
+    ((self hemlock-textstorage-text-view)
+     (restart #>BOOL))
+  (setf (text-view-blink-phase self) #$YES)
+  (call-next-method restart))
 
 ;;; Set and display the selection at pos, whose length is len and whose
 ;;; affinity is affinity.  This should never be called from any Cocoa
@@ -1074,10 +1096,10 @@
 ;;; underlying buffer's point and/or mark
 
 (objc:defmethod (#/updateSelection:length:affinity: :void)
-		((self hemlock-textstorage-text-view)
-		 (pos :int)
-		 (length :int)
-		 (affinity :<NSS>election<A>ffinity))
+    ((self hemlock-textstorage-text-view)
+     (pos :int)
+     (length :int)
+     (affinity :<NSS>election<A>ffinity))
   (assume-cocoa-thread)
   (when (eql length 0)
     (update-blink self))
@@ -1116,6 +1138,82 @@
      (line-height :foreign-type :<CGF>loat :accessor text-view-line-height))
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-text-view))
+
+
+
+;;; LAYOUT is an NSLayoutManager in which we'll set temporary character
+;;; attrubutes before redisplay.
+;;; POS is the absolute character position of the start of START-LINE.
+;;; END-LINE is either EQ to START-LNE (in the degenerate case) or
+;;; follows it in the buffer; it may be NIL and is the exclusive
+;;; end of a range of lines
+;;; HI::*CURRENT-BUFFER* is bound to the buffer containing START-LINE
+;;; and END-LINE
+(defun set-temporary-character-attributes (layout pos start-line end-line blink-location  blink-color)
+  (ns:with-ns-range (range)
+    (let* ((color-attribute #&NSForegroundColorAttributeName)
+           (string-color  (#/blueColor ns:ns-color) )
+           (comment-color (#/grayColor ns:ns-color)))
+      (hi::with-mark ((m (hi::buffer-start-mark hi::*current-buffer*)))
+        (hi::line-start m start-line)
+        (hi::pre-command-parse-check m t))
+      (do ((p pos (+ p (1+ (hi::line-length line))))
+           (line start-line (hi::line-next line)))
+          ((eq line end-line))
+        (let* ((parse-info (getf (hi::line-plist line) 'hemlock::lisp-info)))
+          (when parse-info
+            (dolist (r (hemlock::lisp-info-ranges-to-ignore parse-info))
+              (destructuring-bind (istart . iend) r
+                (let* ((is-string (if (= istart 0)
+                                    (hemlock::lisp-info-begins-quoted parse-info)
+                                    (eql (hi::line-character line (1- istart))
+                                         #\")))
+                       (color (if is-string
+                                string-color
+                                comment-color)))
+                  (if (and is-string (not (= istart 0)))
+                    (decf istart))
+                  (setf (ns:ns-range-location range) (+ p istart)
+                        (ns:ns-range-length range) (1+ (- iend istart)))
+                  (#/addTemporaryAttribute:value:forCharacterRange:
+                   layout color-attribute color range)))))))
+      (when blink-location
+        (#/addTemporaryAttribute:value:forCharacterRange:
+             layout color-attribute blink-color (ns:make-ns-range blink-location 1))))))
+
+(objc:defmethod (#/drawRect: :void) ((self hemlock-text-view) (rect :<NSR>ect))
+  (let* ((container (#/textContainer self))
+         (layout (#/layoutManager container))
+         (glyph-range (#/glyphRangeForBoundingRect:inTextContainer:
+                       layout rect container))
+         (char-range (#/characterRangeForGlyphRange:actualGlyphRange:
+                      layout glyph-range +null-ptr+))
+         (start (ns:ns-range-location char-range))
+         (length (ns:ns-range-length char-range)))
+    (when (> length 0)
+      ;; Remove all temporary attributes from the character range
+      (#/removeTemporaryAttribute:forCharacterRange:
+       layout #&NSForegroundColorAttributeName char-range)
+      (let* ((ts (#/textStorage self))
+             (cache (hemlock-buffer-string-cache (slot-value ts 'hemlock-string)))
+             (hi::*current-buffer* (buffer-cache-buffer cache)))
+        #+debug (#_NSLog #@"blink-phase = %d" :int (text-view-blink-phase self))
+        (multiple-value-bind (start-line start-offset)
+            (update-line-cache-for-index cache start)
+          (let* ((end-line (update-line-cache-for-index cache (+ start length))))
+            (set-temporary-character-attributes
+             layout
+             (- start start-offset)
+             start-line
+             (hi::line-next end-line)
+             (and (eql #$YES (text-view-blink-enabled self))
+                  (eql #$YES (text-view-blink-phase self))
+                  (#/shouldDrawInsertionPoint self)
+                  (text-view-blink-location self))
+             (text-view-blink-color self))))))
+    ;; Um, don't forget to actually draw the view..
+    (call-next-method  rect)))
+
 
 (defmethod hemlock-view ((self hemlock-text-view))
   (let ((pane (text-view-pane self)))
@@ -1797,9 +1895,10 @@
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-frame))
 
-(defmethod hemlock-view ((self hemlock-frame))
-  (let ((pane (slot-value self 'pane)))
-    (unless (%null-ptr-p pane)
+
+(defmethod hemlock-view ((frame hemlock-frame))
+  (let ((pane (slot-value frame 'pane)))
+    (when (and pane (not (%null-ptr-p pane)))
       (hemlock-view pane))))
 
 (objc:defmethod (#/runErrorSheet: :void) ((self hemlock-frame) message)
@@ -2005,13 +2104,7 @@
        +null-ptr+
        t))))
 
-(defun textstorage-note-insertion-at-position (textstorage pos n)
-  #+debug
-  (#_NSLog #@"insertion at position %d, len %d" :int pos :int n)
-  (#/edited:range:changeInLength:
-   textstorage #$NSTextStorageEditedAttributes (ns:make-ns-range pos 0) n)
-  (#/edited:range:changeInLength:
-   textstorage  #$NSTextStorageEditedCharacters (ns:make-ns-range pos n) 0))
+
 
 
 (defun hi::buffer-note-font-change (buffer region font)
@@ -2421,10 +2514,7 @@
 
              
 
-(defmethod hemlock-view ((frame hemlock-frame))
-  (let ((pane (slot-value frame 'pane)))
-    (when (and pane (not (%null-ptr-p pane)))
-      (hemlock-view pane))))
+
 
 (defun hemlock-ext:all-hemlock-views ()
   "List of all hemlock views, in z-order, frontmost first"
