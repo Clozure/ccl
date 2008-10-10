@@ -438,7 +438,7 @@
       new)))
 
 (defun def-info.macro-p (def-info)
-  (let ((data (and def-info (svref def-info 2))))
+  (let ((data (and def-info (svref def-info 3))))
     (eq (car data) 'macro)))
 
 (defun def-info.type (def-info)
