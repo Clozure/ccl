@@ -21,7 +21,17 @@
 	 (dict (#/mutableCopy initial-values)))
     (#/registerDefaults: domain dict)
     (#/release dict)
-    (update-cocoa-defaults)))
+    (update-cocoa-defaults)
+    (when *standalone-cocoa-ide*
+      (init-ccl-directory-for-ide))))
+
+(defun init-ccl-directory-for-ide ()
+  (let* ((bundle-path (#/bundlePath (#/mainBundle ns:ns-bundle)))
+         (parent (#/stringByDeletingLastPathComponent bundle-path))
+         (path (ccl::ensure-directory-pathname
+                (lisp-string-from-nsstring parent))))
+    (ccl::replace-base-translation "ccl" path)))
+         
 
 (objc:defmethod (#/applicationWillFinishLaunching: :void)
     ((self lisp-application-delegate) notification)
