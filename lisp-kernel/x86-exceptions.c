@@ -1819,7 +1819,7 @@ prepare_to_handle_windows_exception_on_foreign_stack(TCR *tcr,
                                                      EXCEPTION_POINTERS *original_ep)
 {
   LispObj foreign_rsp = 
-    (LispObj) find_foreign_rsp(xpGPR(context,Isp), tcr->cs_area, tcr);
+    (LispObj) (tcr->foreign_sp - 128) & ~15;
   CONTEXT *new_context;
   siginfo_t *new_info;
   EXCEPTION_POINTERS *new_ep;
@@ -1857,6 +1857,7 @@ windows_arbstack_exception_handler(EXCEPTION_POINTERS *exception_pointers)
 
     if ((current_sp >= cs->low) &&
         (current_sp < cs->high)) {
+      debug_show_registers(context, exception_pointers->ExceptionRecord, 0);
       FBug(context, "Exception on foreign stack\n");
     }
 
