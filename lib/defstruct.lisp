@@ -23,10 +23,6 @@
 
 )
 
-#-BOOTSTRAPPED
-(unless (boundp '*one-arg-defun-def-info*)
-  (setq *one-arg-defun-def-info* nil))
-
 (defvar %structure-refs% (make-hash-table :test #'eq))
 (defvar %defstructs% (make-hash-table :test #'eq))
 
