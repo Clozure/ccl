@@ -39,162 +39,27 @@
 
 (%fhave 'full-pathname (qlfun bootstrapping-full-pathname (name) name))
 
-(%fhave '%source-files (qlfun bootstrapping-%source-files (name)
-                         (get name 'bootstrapping-source-files)))
-(%fhave '%set-source-files (qlfun bootstrapping-%set-source-files (name value)
-                             (put name 'bootstrapping-source-files value)))
-
-
-
-
 
 ; real one is  in setf.lisp
 (%fhave '%setf-method (qlfun bootstripping-setf-fsname (spec)
                                    spec nil))
-
-; this new thing breaks for case of a function being defined in non-file place
-; use some euphemism for that such as t or "{No file}"
-; something is broken (probably) here calling assq with garbage
-
-
-(defun source-file-or-files (symbol type setf-p method)
-  (let ((source-files-info (%source-files symbol))    
-        assoc-pair files)
-    (cond ((null (consp source-files-info))
-           (values source-files-info
-                   nil
-                   (if (and source-files-info (eq type 'function)(not setf-p)) source-files-info)))
-          (t (setq assoc-pair (assq type (if setf-p
-                                           (cdr (assq 'setf source-files-info))
-                                           source-files-info)))
-             (if (neq type 'method)
-               (setq files assoc-pair)
-               (setq files
-                     (do* ((lst (cdr assoc-pair) (cdr lst))
-                           (clst (car lst)(car lst)))
-                          ((null lst) nil)
-                       (when (consp clst)
-                         (when (or (eq method (car clst))  ; method is a place holder for q's and s's 
-                                   (and (methods-congruent-p method (car clst))
-                                        ; below avoids clutter
-                                        (rplaca clst method)))
-                           (return clst))))))
-             (values source-files-info assoc-pair files)))))
-
-
-;;; warn if defining in no file iff previously defined in a file
-;;; (i.e. dont warn every time something gets redefined in the
-;;; listener) fix to not to bitch if file is anywhere in list name is
-;;; function-name or (method-name (class-names)) or ((setf
-;;; method-name) (class-names)) store('method (method file file)
-;;; (method file file) ...)  if type is 'method we expect name to be
-;;; an actual method Remember to smash old methods with newer methods
-;;; to avoid clutter - done
 
 (fset 'physical-pathname-p (lambda (file)(declare (ignore file)) nil)) ; redefined later
 
 
 ;(%defvar *enqueued-window-title* nil)
 
-(fset 'booted-probe-file (lambda (file) (declare (ignore file)) nil))
+(fset 'level-1-record-source-file
+      (qlfun level-1-record-source-file (name def-type &optional (file-name *loading-file-source-file*))
+        ;; Level-0 puts stuff on plist of name.  Once we're in level-1, names can
+        ;; be more complicated than just a symbol, so just collect all calls until
+        ;; the real record-source-file is loaded.
+        (when *record-source-file*
+          (unless (listp *record-source-file*)
+            (setq *record-source-file* nil))
+          (push (list name def-type file-name) *record-source-file*))))
 
-(queue-fixup
- (defun booted-probe-file (file)
-   (probe-file file)))
-
-(defun record-source-file (name def-type
-                                &optional (file-name *loading-file-source-file*))  
-  (let (symbol setf-p method old-file)
-    (flet ((same-file (x y)
-             (or (eq x y)
-		 ;; funny because equal not defined before us
-                 (and x
-		      y
-		      (or (equal x y)
-			  (equal
-			   (or (booted-probe-file x) (full-pathname x))
-			   (or (booted-probe-file y) (full-pathname y))))))))
-      (when (and *record-source-file* ) ;file-name)
-        (when (and file-name (physical-pathname-p file-name))
-	  (setq file-name (namestring (back-translate-pathname file-name)))
-	  (cond ((equalp file-name *last-back-translated-name*)
-		 (setq file-name *last-back-translated-name*))
-		(t (setq *last-back-translated-name* file-name))))
-        (when (eq t def-type) (report-bad-arg def-type '(not (eql t))))
-        (cond ((eq def-type 'method)
-               (setq method name symbol (%method-name name) name nil))
-              ((consp name)
-               (cond ((neq (car name) 'setf)
-                      (warn "record-source-file hates ~s" name))
-                     (t (setq symbol name))))
-              ((symbolp name) (setq symbol name)))
-        (cond ((and (consp symbol)(eq (car symbol) 'setf))
-               (let ((tem (%setf-method (cadr symbol))))
-                 (if tem 
-                   (setq symbol tem)
-                   (progn (setq symbol (cadr symbol))
-                          (setq setf-p t))))))
-        ;; assoc-pair is e.g. (function file1 ...)  or (class . file)
-        ;; or (method (method-object file1 ...) ...) or (method
-        ;; (method-object . file) ...)
-        (when (symbolp symbol)		; avoid boot problems - you thought 
-          (multiple-value-bind (source-files-info assoc-pair files)
-	      (source-file-or-files symbol def-type setf-p method) 
-            (setq old-file 
-                  (cond ((consp files)
-                         (if (consp (cdr files)) (cadr files) (cdr files)))
-                        (t files)))
-            (unless
-		(if (or (not (consp files))(not (consp (cdr files))))
-		  (same-file old-file file-name)
-		  (do ((lst (cdr files)(cdr lst)))
-		      ((null (consp lst)) nil) 
-		    (when (same-file file-name (car lst))
-		      (rplaca lst (cadr files))
-		      (rplaca (cdr files) file-name)
-		      (return t))))
-              (when (and *warn-if-redefine*
-                         (neq def-type 'method)	; This should be more specific
-                         (cond ((eq def-type 'function)
-                                (and (fboundp name) old-file))
-                               (t old-file)))
-                (warn " ~S ~S previously defined in: ~A
-         is now being redefined in: ~A~%"
-                      def-type
-                      name
-                      (or old-file "{Not Recorded}")
-                      (or file-name "{No file}")))
-              (if (consp files)
-                (%rplacd files (cons file-name 
-                                     (if (consp (cdr files))(cdr files)(list (cdr files)))))
-                
-                (if assoc-pair
-                  (%rplacd assoc-pair (cons (if (eq def-type 'method)
-                                              `(,method . , file-name)
-                                              file-name)
-                                            (if (consp (%cdr assoc-pair))
-                                              (%cdr assoc-pair)
-                                              (list (%cdr assoc-pair)))))
-		  (%set-source-files
-		   symbol
-		   (cond ((and (eq def-type 'function)
-			       (null setf-p)
-			       (not (consp  source-files-info)))
-			  (if (null old-file)
-			    file-name
-			    `((function ,file-name ,old-file))))
-			 (t
-			  (when (and source-files-info
-				     (not (consp source-files-info)))
-			    (setq source-files-info `((function . , source-files-info))))
-			  (let ((thing (if (neq def-type 'method) 
-					 `(,def-type . ,file-name)
-					 `(,def-type (,method . ,file-name)))))
-			    (cons (if setf-p `(setf ,thing) thing) source-files-info))))))))
-	    ))))))
-
-(record-source-file 'record-source-file 'function)
-
+(fset 'record-source-file #'level-1-record-source-file)
 
 (defun inherit-from-p (ob parent)
   (memq (if (symbolp parent) (find-class parent nil) parent)
