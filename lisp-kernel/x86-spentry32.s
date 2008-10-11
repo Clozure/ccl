@@ -3325,7 +3325,7 @@ _spentry(gets64)
 	__(jne 8f)
 	__(movq misc_data_offset(%arg_z),%mm0)
 8:      __(repret)
-9:      __(uuo_error_reg_not_type(Rarg_z,error_object_not_u64))
+9:      __(uuo_error_reg_not_type(Rarg_z,error_object_not_s64))
 _endsubp(gets64)
 
 /* arg_z should be of type (unsigned-byte 64) */
