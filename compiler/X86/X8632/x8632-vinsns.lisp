@@ -1732,7 +1732,7 @@
 (define-x8632-vinsn get-64-bit-ffcall-result (()
                                               ())
   (movl (:%l x8632::eax) (:@ (:%seg :rcontext) x8632::tcr.unboxed0))
-  (movd (:@ (:%seg :rcontext) x8632::tcr.unboxed0) (:%mmx x8632::mm0)))
+  (movq (:@ (:%seg :rcontext) x8632::tcr.unboxed0) (:%mmx x8632::mm0)))
 
 (define-x8632-subprim-call-vinsn (ff-call)  .SPffcall)
 
