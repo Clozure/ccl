@@ -1672,7 +1672,9 @@
                       (if (eql vreg-class hard-reg-class-fpr)
                         (<- fp-val)
                         (ensuring-node-target (target vreg)
-                          (! single->node target fp-val)))))
+			  (target-arch-case
+			   (:x8632 (x862-single->heap seg target fp-val))
+			   (:x8664 (! single->node target fp-val)))))))
                    (t
 		    (with-additional-imm-reg ()
 		      (with-imm-target () temp
@@ -1702,7 +1704,9 @@
 			(if (eq vreg-class hard-reg-class-fpr)
 			  (<- fp-val)
 			  (ensuring-node-target (target vreg)
-			    (! single->node target fp-val)))))
+			    (target-arch-case
+			     (:x8632 (x862-single->heap seg target fp-val))
+			     (:x8664 (! single->node target fp-val)))))))
 		     (t
 		      (with-imm-target () temp
 			(if is-signed
