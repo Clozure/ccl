@@ -607,6 +607,19 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
     (get-source-files-with-types name type)))
 
 
+;; For ilisp.
+(defun %source-files (name)
+  (let ((type-list ())
+        (meth-list ()))
+    (loop for ((dt . full-name) . files) in (find-definition-sources name t)
+          do (if (typep dt 'method-definition-type)
+               (dolist (file files)
+                 (push (cons full-name file) meth-list))
+               (push (cons (definition-type-name dt) files) type-list)))
+    (when meth-list
+      (push (cons 'method meth-list) type-list))
+    type-list))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; record-source-file
 
