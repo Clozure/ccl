@@ -61,7 +61,11 @@ lisp_fchmod(int fd, mode_t mode)
 int64_t
 lisp_lseek(int fd, int64_t offset, int whence)
 {
+#ifdef LINUX
+  return lseek64(fd,offset,whence);
+#else
   return lseek(fd,offset,whence);
+#endif
 }
 
 int
