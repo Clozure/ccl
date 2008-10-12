@@ -1084,12 +1084,13 @@ unsigned IP address."
 
 (defun ipaddr-to-dotted (addr &key values)
   "Convert a 32-bit unsigned IP address into octets."
-  (if values
-      (values (ldb (byte 8 24) addr)
-	      (ldb (byte 8 16) addr)
-	      (ldb (byte 8  8) addr)
-	      (ldb (byte 8  0) addr))
-    (_inet_ntoa (htonl addr))))
+  (let* ((a (ldb (byte 8 24) addr))
+	 (b (ldb (byte 8 16) addr))
+	 (c (ldb (byte 8  8) addr))
+	 (d (ldb (byte 8  0) addr)))
+    (if values
+      (values a b c d)
+      (format nil "~d.~d.~d.~d" a b c d))))
 
 (defun ipaddr-to-hostname (ipaddr &key ignore-cache)
   "Convert a 32-bit unsigned IP address into a host name string."
@@ -1166,28 +1167,6 @@ unsigned IP address."
       (%setf-macptr servent-ptr (#_getservbyname name proto))
       (unless (%null-ptr-p servent-ptr)
 	(pref servent-ptr :servent.s_port)))))
-
-#+linuxppc-target
-(defun _inet_ntoa (addr)
-  (rlet ((addrp :unsigned))
-    (setf (pref addrp :unsigned) addr)
-    (with-macptrs ((p))
-      (%setf-macptr p (#_inet_ntoa addrp))
-      (unless (%null-ptr-p p) (%get-cstring p)))))
-
-;;; On all of these platforms, the argument is a (:struct :in_addr),
-;;; a single word that should be passed by value.  The FFI translator
-;;; seems to lose the :struct, so just using #_ doesn't work (that
-;;; sounds like a bug in the FFI translator.)
-#-linuxppc-target
-(defun _inet_ntoa (addr)
-  (with-macptrs ((p))
-    (%setf-macptr p (external-call #+darwin-target "_inet_ntoa"
-                                   #-darwin-target "inet_ntoa"
-				   :unsigned-fullword (htonl addr)
-				   :address))
-    (unless (%null-ptr-p p) (%get-cstring p))))				   
-
 
 (defun _inet_aton (string)
   (with-cstrs ((name string))
