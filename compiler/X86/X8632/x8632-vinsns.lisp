@@ -2774,6 +2774,9 @@
   :bad
   (:anchored-uuo (uuo-error-reg-not-tag (:%l src) (:$ub x8632::subtag-symbol))))
 
+(define-x8632-vinsn single-float-bits (((dest :u32))
+				       ((src :lisp)))
+  (movl (:@ x8632::misc-data-offset (:%l src)) (:%l dest)))
 
 (define-x8632-vinsn zero-double-float-register (((dest :double-float))
                                                 ())
