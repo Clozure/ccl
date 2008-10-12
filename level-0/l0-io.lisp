@@ -237,11 +237,17 @@
 ;;; Kernels prior to 2.4 don't seem to have a "stat" variant
 ;;; that handles 64-bit file offsets.
 (defun fd-size (fd)
-  (without-interrupts
-   (let* ((curpos (fd-lseek fd 0 #$SEEK_CUR)))
-     (unwind-protect
-	  (fd-lseek fd 0 #$SEEK_END)
-       (fd-lseek fd curpos #$SEEK_SET)))))
+  (rlet ((stat #+win64-target #>_stat64 #+win32-target #>__stat64 #-windows-target :stat))
+    (if (eql 0 (ff-call (%kernel-import target::kernel-import-lisp-fstat)
+                        :int fd
+                        :address stat
+                        :int))
+      (pref stat
+            #-windows-target :stat.st_size
+            #+win64-target #>_stat64.st_size
+            #+win32-target #>__stat64.st_size)
+      -1)))
+
 
 (defun fd-ftruncate (fd new)
   (int-errno-ffcall (%kernel-import target::kernel-import-lisp-ftruncate)
