@@ -159,9 +159,9 @@
       ((#.x8664::fulltag-tra-0
         #.x8664::fulltag-tra-1)
        (let* ((disp (%return-address-offset thing)))
-         (or (eql 0 disp)
-             (let* ((f (%return-address-function thing)))
-               (and (typep f 'function) (valid-header-p f))))))
+         (and disp
+              (let* ((f (%return-address-function thing)))
+                (and (typep f 'function) (valid-header-p f))))))
       (#.x8664::fulltag-cons t)
       (#.x8664::fulltag-nil (null thing))
       (t nil))))
@@ -180,7 +180,7 @@
 			       (typep x 'gvector))
 			   (on-any-tsp-stack x))
 		      (and (eql fulltag x8632::fulltag-tra)
-			   (eql 0 (%return-address-offset x)))
+			   (%return-address-offset x))
 		      (and (typep x 'ivector)
 			   (on-any-csp-stack x))
 		      (%heap-ivector-p x))
