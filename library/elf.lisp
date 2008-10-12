@@ -70,25 +70,37 @@
         (elf-object-fd object) nil))
 
 (defun new-elf-file-header (object format type machine)
-  (let* ((ehdr (#_elf64_newehdr (elf-object-libelf-pointer object))))
+  (let* ((ehdr (#+64-bit-target #_elf64_newehdr #+32-bit-target #_elf32_newehdr (elf-object-libelf-pointer object))))
     (if (%null-ptr-p ehdr)
       (error "Can't create ELF file header for ~s: ~a"
              (elf-object-pathname object)
              (libelf-error-string))
       (progn
-        (setf (paref (pref ehdr :<E>lf64_<E>hdr.e_ident) (:* :unsigned-char) #$EI_DATA) format
-              (pref ehdr :<E>lf64_<E>hdr.e_machine) machine
-              (pref ehdr :<E>lf64_<E>hdr.e_type) type
-              (pref ehdr :<E>lf64_<E>hdr.e_version) *checked-libelf-version*)
-        (assert-pointer-type ehdr :<E>lf64_<E>hdr)))))
+        (setf (paref (pref ehdr
+                           #+64-bit-target :<E>lf64_<E>hdr.e_ident
+                           #+32-bit-target :<E>lf32_<E>hdr.e_ident) (:* :unsigned-char) #$EI_DATA) format
+              (pref ehdr
+                    #+64-bit-target :<E>lf64_<E>hdr.e_machine
+                    #+32-bit-target :<E>lf32_<E>hdr.e_machine) machine
+              (pref ehdr
+                    #+64-bit-target :<E>lf64_<E>hdr.e_type
+                    #+32-bit-target :<E>lf32_<E>hdr.e_type) type
+              (pref ehdr
+                    #+64-bit-target :<E>lf64_<E>hdr.e_version
+                    #+32-bit-target :<E>lf32_<E>hdr.e_version) *checked-libelf-version*)
+        (assert-pointer-type ehdr
+                             #+64-bit-target :<E>lf64_<E>hdr
+                             #+32-bit-target :<E>lf32_<E>hdr)))))
 
 (defun new-elf-program-header (object &optional (count 1))
-  (let* ((phdr (#_elf64_newphdr (elf-object-libelf-pointer object) count)))
+  (let* ((phdr (#+64-bit-target #_elf64_newphdr #+32-bit-target #_elf32_newphdr (elf-object-libelf-pointer object) count)))
     (if (%null-ptr-p phdr)
       (error "Can't create ELF program header for ~s: ~a"
              (elf-object-pathname object)
              (libelf-error-string))
-      (assert-pointer-type phdr :<E>lf64_<P>hdr))))
+      (assert-pointer-type phdr
+                           #+64-bit-target :<E>lf64_<P>hdr
+                           #+32-bit-target :<E>lf32_<P>hdr))))
 
 (defun new-elf-section (object)
   (let* ((scn (#_elf_newscn (elf-object-libelf-pointer object))))
@@ -99,12 +111,14 @@
       (assert-pointer-type scn :<E>lf_<S>cn))))
 
 (defun elf-section-header-for-section (object section)
-  (let* ((shdr (#_elf64_getshdr section)))
+  (let* ((shdr (#+64-bit-target #_elf64_getshdr #+32-bit-target #_elf32_getshdr  section)))
     (if (%null-ptr-p shdr)
       (error "Can' obtain ELF section header for ~s: ~a"
              (elf-object-pathname object)
              (libelf-error-string))
-      (assert-pointer-type shdr :<E>lf64_<S>hdr))))
+      (assert-pointer-type shdr
+                           #+64-bit-target :<E>lf64_<S>hdr
+                           #+32-bit-target :<E>lf32_<S>hdr))))
 
 (defun elf-data-pointer-for-section (object section)
   (let* ((data (#_elf_newdata section)))
@@ -135,11 +149,21 @@
   (let* ((name (format nil "~s" f)))
     (subseq (nsubstitute #\0 #\# (nsubstitute #\. #\Space name)) 1)))
 
+#+x8664-target
 (defx86lapfunction dynamic-dnode ((x arg_z))
   (movq (% x) (% imm0))
   (ref-global x86::heap-start arg_y)
   (subq (% arg_y) (% imm0))
   (shrq ($ x8664::dnode-shift) (% imm0))
+  (box-fixnum imm0 arg_z)
+  (single-value-return))
+
+#+x8632-target
+(defx8632lapfunction dynamic-dnode ((x arg_z))
+  (movl (% x) (% imm0))
+  (ref-global x86::heap-start arg_y)
+  (subl (% arg_y) (% imm0))
+  (shrl ($ x8632::dnode-shift) (% imm0))
   (box-fixnum imm0 arg_z)
   (single-value-return))
 
@@ -151,7 +175,9 @@
         (%map-areas (lambda (o)
                       (when (>= (dynamic-dnode o) frozen-dnodes)
                         (return-from walk nil))
-                      (when (typep o 'function-vector)
+                      (when (typep o
+                                   #+x8664-target 'function-vector
+                                   #-x8664-target 'function)
                         (functions (function-vector-to-function o))))
                     ccl::area-dynamic
                     ccl::area-dynamic
@@ -161,20 +187,39 @@
 (defun register-elf-functions (section-number)
   (let* ((functions (collect-elf-static-functions))
          (n (length functions))
-         (data (#_calloc (1+ n) (record-length :<E>lf64_<S>ym)))
+         (data (#_calloc (1+ n) (record-length #+64-bit-target :<E>lf64_<S>ym
+                                               #+32-bit-target :<E>lf32_<S>ym)))
          (string-table (make-elf-string-table)))
     (declare (fixnum n))
     (do* ((i 0 (1+ i))
-          (p (%inc-ptr data (record-length :<E>lf64_<S>ym)) (progn (%incf-ptr p (record-length :<E>lf64_<S>ym)) p))
+          (p (%inc-ptr data
+                       (record-length #+64-bit-target :<E>lf64_<S>ym
+                                      #+32-bit-target :<E>lf32_<S>ym))
+             (progn (%incf-ptr p
+                               (record-length #+64-bit-target :<E>lf64_<S>ym
+                                              #+32-bit-target :<E>lf32_<S>ym))
+                    p))
           (f (pop functions) (pop functions)))
          ((= i n)
           (make-elf-symbol-table :strings string-table :data data :nsyms n))
       (declare (fixnum n))
-      (setf (pref p :<E>lf64_<S>ym.st_name) (elf-register-string (elf-lisp-function-name f) string-table)
-            (pref p :<E>lf64_<S>ym.st_info) (logior (ash #$STB_GLOBAL 4) #$STT_FUNC)
-            (pref p :<E>lf64_<S>ym.st_shndx) section-number
-            (pref p :<E>lf64_<S>ym.st_value) (%address-of f)
-            (pref p :<E>lf64_<S>ym.st_size) (1+ (ash (1- (%function-code-words f)) target::word-shift))))))
+      (setf (pref p
+                  #+64-bit-target :<E>lf64_<S>ym.st_name
+                  #+32-bit-target :<E>lf32_<S>ym.st_name)
+            (elf-register-string (elf-lisp-function-name f) string-table)
+            (pref p
+                  #+64-bit-target :<E>lf64_<S>ym.st_info
+                  #+32-bit-target :<E>lf32_<S>ym.st_info)
+            (logior (ash #$STB_GLOBAL 4) #$STT_FUNC)
+            (pref p
+                  #+64-bit-target :<E>lf64_<S>ym.st_shndx
+                  #+32-bit-target :<E>lf32_<S>ym.st_shndx) section-number
+            (pref p
+                  #+64-bit-target :<E>lf64_<S>ym.st_value
+                  #+32-bit-target :<E>lf32_<S>ym.st_value) (%address-of f)
+            (pref p
+                  #+64-bit-target :<E>lf64_<S>ym.st_size
+                  #+32-bit-target :<E>lf32_<S>ym.st_size) (1+ (ash (1- (%function-code-words f)) target::word-shift))))))
 
 (defun elf-section-index (section)
   (#_elf_ndxscn section))
@@ -205,7 +250,8 @@
   (let* ((symbols-data (elf-data-pointer-for-section object section))
          (buf (elf-symbol-table-data symbols))
          (nsyms (elf-symbol-table-nsyms symbols) )
-         (n (* (1+ nsyms) (record-length :<E>lf64_<S>ym))))
+         (n (* (1+ nsyms) (record-length #+64-bit-target :<E>lf64_<S>ym
+                                         #+32-bit-target :<E>lf32_<S>ym))))
     (setf (pref symbols-data :<E>lf_<D>ata.d_align) 8
           (pref symbols-data :<E>lf_<D>ata.d_off) 0
           (pref symbols-data :<E>lf_<D>ata.d_type) #$ELF_T_SYM
@@ -239,22 +285,38 @@
 
 (defun fixup-lisp-section-offset (fd eof sectnum)
   (fd-lseek fd 0 #$SEEK_SET)
-  (rlet ((fhdr :<E>lf64_<E>hdr)
-         (shdr :<E>lf64_<S>hdr))
-    (fd-read fd fhdr (record-length :<E>lf64_<E>hdr))
-    (let* ((pos (+ (pref fhdr :<E>lf64_<E>hdr.e_shoff)
-                   (* sectnum (pref fhdr :<E>lf64_<E>hdr.e_shentsize)))))
+  (rlet ((fhdr #+64-bit-target :<E>lf64_<E>hdr
+               #+32-bit-target :<E>lf32_<E>hdr)
+         (shdr #+64-bit-target :<E>lf64_<S>hdr
+               #+32-bit-target :<E>lf32_<S>hdr))
+    (fd-read fd fhdr (record-length #+64-bit-target :<E>lf64_<E>hdr
+                                    #+32-bit-target :<E>lf32_<E>hdr))
+    (let* ((pos (+ (pref fhdr #+64-bit-target :<E>lf64_<E>hdr.e_shoff
+                         #+32-bit-target :<E>lf32_<E>hdr.e_shoff)
+                   (* sectnum (pref fhdr #+64-bit-target :<E>lf64_<E>hdr.e_shentsize
+                                    #+32-bit-target :<E>lf32_<E>hdr.e_shentsize)))))
       (fd-lseek fd pos #$SEEK_SET)
-      (fd-read fd shdr (record-length :<E>lf64_<S>hdr))
-      (setf (pref shdr :<E>lf64_<S>hdr.sh_offset)
+      (fd-read fd shdr (record-length #+64-bit-target :<E>lf64_<S>hdr
+                                      #+32-bit-target :<E>lf32_<S>hdr))
+      (setf (pref shdr #+64-bit-target :<E>lf64_<S>hdr.sh_offset
+                  #+32-bit-target :<E>lf32_<S>hdr.sh_offset)
             (+ #x2000 (logandc2 (+ eof 4095) 4095))) ; #x2000 for nilreg-area
       (fd-lseek fd pos #$SEEK_SET)
-      (fd-write fd shdr (record-length :<E>lf64_<S>hdr))
+      (fd-write fd shdr (record-length #+64-bit-target :<E>lf64_<S>hdr
+                                       #+32-bit-target :<E>lf32_<S>hdr))
       t)))
   
 (defun write-elf-symbols-to-file (pathname)
   (let* ((object (create-elf-object pathname))
-         (file-header (new-elf-file-header object #$ELFDATA2LSB #$ET_DYN #$EM_X86_64))
+         (file-header (new-elf-file-header object
+                                           #+little-endian-target #$ELFDATA2LSB
+                                           #+big-endian-target #$ELFDATA2MSB
+                                           #$ET_DYN
+                                           #+x8664-target #$EM_X86_64
+                                           #+x8632-target #$EM_386
+                                           #+ppc32-target #$EM_PPC
+                                           #+ppc64-target #$EM_PPC64
+                                           ))
          (program-header (new-elf-program-header object))
          (lisp-section (new-elf-section object))
          (symbols-section (new-elf-section object))
@@ -268,24 +330,43 @@
          (strings-section-header (elf-section-header-for-section object strings-section))
          (shstrtab-section-header (elf-section-header-for-section object shstrtab-section)))
     
-    (setf (pref file-header :<E>lf64_<E>hdr.e_shstrndx) (elf-section-index shstrtab-section))
-    (setf (pref lisp-section-header :<E>lf64_<S>hdr.sh_name) (elf-register-string ".lisp" section-names)
-          (pref lisp-section-header :<E>lf64_<S>hdr.sh_type) #$SHT_NOBITS
-          (pref lisp-section-header :<E>lf64_<S>hdr.sh_flags) (logior #$SHF_WRITE #$SHF_ALLOC #$SHF_EXECINSTR)
-          (pref lisp-section-header :<E>lf64_<S>hdr.sh_addr) (ash (%get-kernel-global heap-start) target::fixnumshift)
-          (pref lisp-section-header :<E>lf64_<S>hdr.sh_size) (ash (frozen-space-dnodes) target::dnode-shift)
-          (pref lisp-section-header :<E>lf64_<S>hdr.sh_offset) 0
-          (pref lisp-section-header :<E>lf64_<S>hdr.sh_addralign) 1)
-    (setf (pref symbols-section-header :<E>lf64_<S>hdr.sh_name) (elf-register-string ".symtab" section-names)
-          (pref symbols-section-header :<E>lf64_<S>hdr.sh_type) #$SHT_SYMTAB
-          (pref symbols-section-header :<E>lf64_<S>hdr.sh_entsize) (record-length :<E>lf64_<S>ym)
-          (pref symbols-section-header :<E>lf64_<S>hdr.sh_link) (elf-section-index strings-section))
-    (setf (pref strings-section-header :<E>lf64_<S>hdr.sh_name) (elf-register-string ".strtab" section-names)
-          (pref strings-section-header :<E>lf64_<S>hdr.sh_type) #$SHT_STRTAB
-          (pref strings-section-header :<E>lf64_<S>hdr.sh_flags) (logior #$SHF_STRINGS #$SHF_ALLOC))
-    (setf (pref shstrtab-section-header :<E>lf64_<S>hdr.sh_name) (elf-register-string ".shstrtab" section-names)
-          (pref shstrtab-section-header :<E>lf64_<S>hdr.sh_type) #$SHT_STRTAB
-          (pref shstrtab-section-header :<E>lf64_<S>hdr.sh_flags) (logior #$SHF_STRINGS #$SHF_ALLOC))
+    (setf (pref file-header #+64-bit-target :<E>lf64_<E>hdr.e_shstrndx
+                #+32-bit-target :<E>lf32_<E>hdr.e_shstrndx) (elf-section-index shstrtab-section))
+    (setf (pref lisp-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_name
+                #+32-bit-target :<E>lf32_<S>hdr.sh_name) (elf-register-string ".lisp" section-names)
+          (pref lisp-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_type
+                #+32-bit-target :<E>lf32_<S>hdr.sh_type) #$SHT_NOBITS
+          (pref lisp-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_flags
+                #+32-bit-target :<E>lf32_<S>hdr.sh_flags) (logior #$SHF_WRITE #$SHF_ALLOC #$SHF_EXECINSTR)
+          (pref lisp-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_addr
+                #+32-bit-target :<E>lf32_<S>hdr.sh_addr) (ash (%get-kernel-global heap-start) target::fixnumshift)
+          (pref lisp-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_size
+                #+32-bit-target :<E>lf32_<S>hdr.sh_size) (ash (frozen-space-dnodes) target::dnode-shift)
+          (pref lisp-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_offset
+                #+32-bit-target :<E>lf32_<S>hdr.sh_offset) 0
+          (pref lisp-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_addralign
+                #+32-bit-target :<E>lf32_<S>hdr.sh_addralign) 1)
+    (setf (pref symbols-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_name
+                #+32-bit-target :<E>lf32_<S>hdr.sh_name) (elf-register-string ".symtab" section-names)
+          (pref symbols-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_type
+                #+32-bit-target :<E>lf32_<S>hdr.sh_type) #$SHT_SYMTAB
+          (pref symbols-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_entsize
+                #+32-bit-target :<E>lf32_<S>hdr.sh_entsize) (record-length #+64-bit-target :<E>lf64_<S>ym
+                                                                           #+32-bit-target :<E>lf32_<S>ym)
+          (pref symbols-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_link
+                #+32-bit-target :<E>lf32_<S>hdr.sh_link) (elf-section-index strings-section))
+    (setf (pref strings-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_name
+                #+32-bit-target :<E>lf32_<S>hdr.sh_name) (elf-register-string ".strtab" section-names)
+          (pref strings-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_type
+                #+32-bit-target :<E>lf32_<S>hdr.sh_type) #$SHT_STRTAB
+          (pref strings-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_flags
+                #+32-bit-target :<E>lf32_<S>hdr.sh_flags) (logior #$SHF_STRINGS #$SHF_ALLOC))
+    (setf (pref shstrtab-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_name
+                #+32-bit-target :<E>lf32_<S>hdr.sh_name) (elf-register-string ".shstrtab" section-names)
+          (pref shstrtab-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_type
+                #+32-bit-target :<E>lf32_<S>hdr.sh_type) #$SHT_STRTAB
+          (pref shstrtab-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_flags
+                #+32-bit-target :<E>lf32_<S>hdr.sh_flags) (logior #$SHF_STRINGS #$SHF_ALLOC))
     (elf-make-empty-data-for-section object lisp-section (ash (frozen-space-dnodes) target::dnode-shift))
     (elf-init-section-data-from-string-table object strings-section (elf-symbol-table-strings symbols))
     (elf-init-section-data-from-string-table object shstrtab-section section-names)
@@ -293,9 +374,18 @@
     ;; Prepare in-memory data structures.
     (elf-update object #$ELF_C_NULL)
     ;; Fix up the program header.
-    (setf (pref program-header :<E>lf64_<P>hdr.p_type) #$PT_PHDR
-          (pref program-header :<E>lf64_<P>hdr.p_offset) (pref file-header :<E>lf64_<E>hdr.e_phoff)
-          (pref program-header :<E>lf64_<P>hdr.p_filesz) (#_elf64_fsize #$ELF_T_PHDR 1 #$EV_CURRENT))
+    (setf (pref program-header
+                #+64-bit-target :<E>lf64_<P>hdr.p_type
+                #+32-bit-target :<E>lf32_<P>hdr.p_type) #$PT_PHDR
+          (pref program-header #+64-bit-target :<E>lf64_<P>hdr.p_offset
+                #+32-bit-target :<E>lf32_<P>hdr.p_offset)
+          (pref file-header
+                #+64-bit-target :<E>lf64_<E>hdr.e_phoff
+                #+32-bit-target :<E>lf32_<E>hdr.e_phoff)
+          (pref program-header
+                #+64-bit-target :<E>lf64_<P>hdr.p_filesz
+                #+32-bit-target :<E>lf32_<P>hdr.p_filesz)
+          (#+64-bit-target #_elf64_fsize #+32-bit-target #_elf32_fsize #$ELF_T_PHDR 1 #$EV_CURRENT))
     ;; Mark the program header as being dirty.
     (elf-flag-phdr object #$ELF_C_SET #$ELF_F_DIRTY)
     (let* ((eof (elf-update object #$ELF_C_WRITE))
