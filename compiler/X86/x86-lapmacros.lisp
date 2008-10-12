@@ -144,13 +144,18 @@
 	 ,done)))))
 
 (defx86lapmacro trap-unless-typecode= (node tag &optional (immreg 'imm0))
-  (let* ((ok (gensym)))
+  (let* ((bad (gensym))
+         (anchor (gensym)))
+           
     `(progn
+      ,anchor
       (extract-typecode ,node ,immreg)
       (cmpb ($ ,tag) (%b ,immreg))
-      (je.pt ,ok)
-      (uuo-error-reg-not-tag (% ,node) ($ ,tag))
-      ,ok)))
+      (jne ,bad)
+      (:anchored-uuo-section ,anchor)
+      ,bad
+      (:anchored-uuo (uuo-error-reg-not-tag (% ,node) ($ ,tag)))
+      (:main-section nil))))
 
 (defx86lapmacro trap-unless-fulltag= (node tag &optional (immreg 'imm0))
   (let* ((ok (gensym)))
@@ -400,6 +405,20 @@
     `(progn
        (pushq (% rbp))
        (movq (% rsp) (% rbp))))))
+
+(defx86lapmacro save-stackargs-frame (nstackargs)
+  (target-arch-case
+   (:x8632
+    `(progn
+      (movl (% ebp) (@ ,(* (1+ nstackargs) x8632::node-size) (% esp)))
+      (leal (@ ,(* (1+ nstackargs) x8632::node-size) (% esp)) (% ebp))
+      (popl (@ x8632::node-size (% ebp)))))
+   (:x8664
+    `(progn
+      (movq (% rbp) (@ ,(* (1+ nstackargs) x8664::node-size) (% rsp)))
+      (leaq (@ ,(* (1+ nstackargs) x8664::node-size) (% rsp)) (% rbp))
+      (popq (@ x8632::node-size (% rbp)))))))
+    
   
 (defx86lapmacro save-frame-variable-arg-count ()
   (let* ((push (gensym))
