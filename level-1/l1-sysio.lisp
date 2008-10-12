@@ -17,8 +17,8 @@
 (in-package "CCL")
 
 (defstruct (file-ioblock (:include ioblock))
-  (octet-pos 0 :type fixnum)		; current io position in octets
-  (fileeof 0 :type fixnum)		; file length in elements
+  (octet-pos 0 )                       ; current io position in octets
+  (fileeof 0 )                          ; file length in elements
   )
 
 
@@ -588,32 +588,39 @@ is :UNIX.")
 
 (defmethod stream-length ((stream fundamental-file-input-stream) &optional newlen)
   (with-stream-ioblock-input (file-ioblock stream :speedy t)
-    (%ioblock-input-file-length file-ioblock newlen)))
+    (let* ((res (%ioblock-input-file-length file-ioblock newlen)))
+      (and res (>= res 0) res))))
+
 
 (defmethod stream-length ((stream basic-file-input-stream) &optional newlen)
   (let* ((file-ioblock (basic-stream-ioblock stream)))
     (with-ioblock-input-locked (file-ioblock)
-      (%ioblock-input-file-length file-ioblock newlen))))
+      (let* ((res (%ioblock-input-file-length file-ioblock newlen)))
+        (and res (>= res 0) res)))))
 
 
 (defmethod stream-length ((s fundamental-file-output-stream) &optional newlen)
   (with-stream-ioblock-output (file-ioblock s :speedy t)
-    (%ioblock-output-file-length file-ioblock newlen)))
+    (let* ((res (%ioblock-output-file-length file-ioblock newlen)))
+      (and res (>= res 0) res))))
 
 
 (defmethod stream-length ((stream basic-file-output-stream) &optional newlen)
   (let* ((file-ioblock (basic-stream-ioblock stream)))
     (with-ioblock-output-locked (file-ioblock)
-      (%ioblock-output-file-length file-ioblock newlen))))
+      (let* ((res (%ioblock-output-file-length file-ioblock newlen)))
+        (and res (>= res 0) res)))))
 
 (defmethod stream-length ((s fundamental-file-io-stream) &optional newlen)
   (with-stream-ioblock-input (file-ioblock s :speedy t)
-    (%ioblock-output-file-length file-ioblock newlen)))
+    (let* ((res (%ioblock-output-file-length file-ioblock newlen)))
+      (and res (>= res 0) res))))
 
 (defmethod stream-length ((stream basic-file-io-stream) &optional newlen)
   (let* ((file-ioblock (basic-stream-ioblock stream)))
     (with-ioblock-input-locked (file-ioblock)
-      (%ioblock-output-file-length file-ioblock newlen))))
+      (let* ((res (%ioblock-output-file-length file-ioblock newlen)))
+        (and res (>= res 0) res)))))
 
 (defun close-file-stream (s abort)
   (when (open-stream-p s)
