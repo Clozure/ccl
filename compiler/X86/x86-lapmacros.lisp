@@ -29,14 +29,8 @@
   `(xorq (% ,reg) (% ,reg)))
 
 (defx86lapmacro set-nargs (n)
-  (let* ((many (target-arch-case
-		(:x8632 32)
-		(:x8664 16))))
-    (cond ((>= n many) `(movl ($ ',n) (% nargs)))
-	  ((= n 0) `(xorl (% nargs) (% nargs)))
-	  (t `(progn
-		(xorl (% nargs) (% nargs))
-		(addl ($ ',n) (% nargs)))))))
+  (cond ((= n 0) `(xorl (% nargs) (% nargs)))
+        (t `(movl ($ ',n) (% nargs)))))
         
 
 (defx86lapmacro anchored-uuo (form)
