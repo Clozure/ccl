@@ -1658,7 +1658,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
             (slot-id.name  slot-id)
             (slot-id.index  slot-id))))
 
-#+x8664-target
+#+x86-target
 (defmethod print-object ((tra tagged-return-address) stream)
   (print-unreadable-object (tra stream :identity t :type t)
     (let* ((f (%return-address-function tra))
