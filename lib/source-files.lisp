@@ -208,11 +208,11 @@ definition type NAME"
 
 (define-definition-type macro (function-definition-type))
 
-(define-definition-type compiler-macro (function-definition-type))
+(define-definition-type compiler-macro (macro-definition-type))
 
-(define-definition-type symbol-macro (function-definition-type))
+(define-definition-type symbol-macro (macro-definition-type))
 
-(define-definition-type setf-expander (function-definition-type))
+(define-definition-type setf-expander (macro-definition-type))
 
 (define-definition-type generic-function (function-definition-type))
 
@@ -381,7 +381,7 @@ definition type NAME"
         (t
          (default-definition-type (%car entry)))))
 
-(defun def-source-entry.files (key entry)
+(defun def-source-entry.sources (key entry)
   (declare (ignore key))
   (cond ((consp entry)
          (if (consp (%cdr entry)) (%cdr entry) (list (%cdr entry))))
@@ -525,50 +525,6 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
            (equal (method-qualifiers x)
                   (method-qualifiers y)))))
 
-(defun source-files-like-em (classes qualifiers method)
-  (and (equal (canonicalize-specializers classes)
-              (%method-specializers method))
-       (or (eq qualifiers t)
-           (equal qualifiers (%method-qualifiers method)))))
-
-(defun parse-definition-spec (form)
-  (let ((type t)
-        name classes qualifiers)
-    (cond
-     ((consp form)
-      (cond ((eq (car form) 'setf)
-             (setq name form))
-            (t (setq name (car form))
-               (let ((last (car (last (cdr form)))))
-                 (cond ((and (listp last)(or (null last)(neq (car last) 'eql)))
-                        (setq classes last)
-                        (setq qualifiers (butlast (cdr form))))
-                       (t (setq classes (cdr form)))))                   
-               (cond ((null qualifiers)
-                      (setq qualifiers t))
-                     ((equal qualifiers '(:primary))
-                      (setq qualifiers nil))))))
-     (t (setq name form)))
-    (when (and (consp name)(eq (car name) 'setf))
-        (setq name (or (%setf-method (cadr name)) name))) ; e.g. rplacd
-    (when (not (or (symbolp name)
-                   (setf-function-name-p name)))
-      (return-from parse-definition-spec))
-    (when (consp qualifiers)
-      (mapc #'(lambda (q)
-                (when (listp q)
-                  (return-from parse-definition-spec)))
-          qualifiers))
-    (when classes
-      (mapc #'(lambda (c)
-                (when (not (and c (or (symbolp c)(and (consp c)(eq (car c) 'eql)))))
-                  (return-from parse-definition-spec)))
-            classes))            
-    (when (or (consp classes)(consp qualifiers))(setq type 'method))
-    (values type name classes qualifiers)))
-
-
-
 (defun edit-definition-p (name &optional (type t)) ;exported
   (let ((specs (get-source-files-with-types name type)))
     (when (and (null specs)
@@ -620,6 +576,24 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
       (push (cons 'method meth-list) type-list))
     type-list))
 
+;;; For swank.
+
+(defun find-definitions-for-name (name &optional (type-name t))
+  "Returns a list of (TYPE . DEFINITION-SOURCE) for all the known definitions of NAME."
+  (let ((definitions ()))
+    (loop for ((dt . full-name) last-source . nil)
+            in (find-definition-sources name type-name)
+          do (when last-source
+               (push (list dt full-name last-source) definitions)))
+    definitions))
+
+(defun find-simple-definitions-for-name (name)
+  (let* ((result (find-definitions-for-name name)))
+    (dolist (pair result result)
+      (let* ((dt (car pair)))
+        (when (typep dt 'definition-type)
+          (setf (car pair) (definition-type-name dt)))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; record-source-file
 
@@ -659,7 +633,7 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
     (loop for ptr on all as entry = (car ptr)
           do (when (and (eq dt (def-source-entry.type key entry))
                         (definition-same-p dt name (def-source-entry.name key entry)))
-               (setq e-files (def-source-entry.files key entry))
+               (setq e-files (def-source-entry.sources key entry))
                (let ((old (flet ((same-file (x y)
                                    (or (equal x y)
                                        (and x
@@ -680,7 +654,7 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
               (definition-type-name dt)
               name
               (car e-files)
-              (if (eq file-name :interactive) "{No file}" file-name)))
+              (or file-name "{No file}")))
       (setq e-files (cons file-name e-files)))
     (let ((entry (make-def-source-entry key dt name e-files)))
       (if e-loc

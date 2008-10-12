@@ -178,6 +178,7 @@
   (multiple-value-bind (lambda-form doc)
                        (parse-macro-1 access-fn lambda-list body)
     `(eval-when (load compile eval)
+       (record-source-file ',access-fn 'setf-expander)
        (store-setf-method ',access-fn
                           (nfunction ,access-fn ,lambda-form)
                           ,@(when doc (list doc))))))
@@ -236,6 +237,7 @@
                    (access-form (gensym))
                    (environment (gensym)))
               `(eval-when (:compile-toplevel :load-toplevel :execute)
+                 (record-source-file ',access-fn 'setf-expander)
                  (store-setf-method 
                   ',access-fn
                   #'(lambda (,access-form ,environment)

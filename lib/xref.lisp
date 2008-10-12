@@ -196,6 +196,42 @@ from FASLs.")
                             :method-qualifiers (unless (eql qualifiers t) qualifiers)
                             :method-specializers specializers)))))))
 
+(defun parse-definition-spec (form)
+  (let ((type t)
+        name classes qualifiers)
+    (cond
+     ((consp form)
+      (cond ((eq (car form) 'setf)
+             (setq name form))
+            (t (setq name (car form))
+               (let ((last (car (last (cdr form)))))
+                 (cond ((and (listp last)(or (null last)(neq (car last) 'eql)))
+                        (setq classes last)
+                        (setq qualifiers (butlast (cdr form))))
+                       (t (setq classes (cdr form)))))                   
+               (cond ((null qualifiers)
+                      (setq qualifiers t))
+                     ((equal qualifiers '(:primary))
+                      (setq qualifiers nil))))))
+     (t (setq name form)))
+    (when (and (consp name)(eq (car name) 'setf))
+        (setq name (or (%setf-method (cadr name)) name))) ; e.g. rplacd
+    (when (not (or (symbolp name)
+                   (setf-function-name-p name)))
+      (return-from parse-definition-spec))
+    (when (consp qualifiers)
+      (mapc #'(lambda (q)
+                (when (listp q)
+                  (return-from parse-definition-spec)))
+          qualifiers))
+    (when classes
+      (mapc #'(lambda (c)
+                (when (not (and c (or (symbolp c)(and (consp c)(eq (car c) 'eql)))))
+                  (return-from parse-definition-spec)))
+            classes))            
+    (when (or (consp classes)(consp qualifiers))(setq type 'method))
+    (values type name classes qualifiers)))
+
 ;; XREF-ENTRY-EQUAL -- external
 ;;
 ;; Simply compares all slots.
