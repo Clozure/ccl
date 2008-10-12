@@ -767,7 +767,7 @@
     (if (= typecode x8632::tag-fixnum)
       'fixnum
       (if (= typecode x8632::tag-list)	;a misnomer on x8632...
-	(if (= typecode x8632::fulltag-cons)
+	(if (= (fulltag thing) x8632::fulltag-cons)
 	  (if thing 'cons 'null)
 	  'tagged-return-address)
         (if (= typecode x8632::tag-imm)
