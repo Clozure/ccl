@@ -2466,34 +2466,51 @@
 ;;; People who think that there's so much overhead in all of
 ;;; this (multiple-value-list, etc.) should probably consider
 ;;; rewriting those parts of the CLOS and I/O code that make
-;;; using things like READ-CHAR impractical ...
+;;; using things like READ-CHAR impractical...
+
+;;; mb: the reason multiple-value-list is used here is that we need to distunguish between the
+;;; recursive parse call returning (values nil) and (values).
 (defun %parse-expression (stream firstchar dot-ok)
   (let* ((readtable *readtable*)
-         (attrtab (rdtab.ttab readtable)))
-    (let* ((attr (%character-attribute firstchar attrtab)))
-      (declare (fixnum attr))
-      (if (= attr $cht_ill)
-          (signal-reader-error stream "Illegal character ~S." firstchar))
-      (let* ((vals (multiple-value-list 
-                    (if (not (logbitp $cht_macbit attr))
-                      (%parse-token stream firstchar dot-ok)
-                      (let* ((def (cdr (assq firstchar (rdtab.alist readtable)))))
-                        (cond ((null def))
-                              ((atom def)
-                               (funcall def stream firstchar))
-                              #+no ; include if %initial-readtable% broken (see above)
-                              ((and (consp (car def))
-                                    (eq (caar def) 'function))
-                               (funcall (cadar def) stream firstchar))
-                              ((functionp (car def))
-                               (funcall (car def) stream firstchar))
-                              (t (error "Bogus default dispatch fn: ~S" (car def)) nil)))))))
-        (declare (dynamic-extent vals)
-                 (list vals))
-        (if (null vals)
-            (values nil nil)
-            (values (car vals) t))))))
-
+         (attrtab (rdtab.ttab readtable))
+         (attr (%character-attribute firstchar attrtab))
+         (start-pos (file-position stream)))
+    (declare (fixnum attr))
+    (when (eql attr $cht_ill)
+      (signal-reader-error stream "Illegal character ~S." firstchar))
+    (let* ((vals (multiple-value-list 
+                     (if (not (logbitp $cht_macbit attr))
+                       (%parse-token stream firstchar dot-ok)
+                       (let* ((def (cdr (assq firstchar (rdtab.alist readtable)))))
+                         (cond ((null def))
+                               ((atom def)
+                                (funcall def stream firstchar))
+                               #+no     ; include if %initial-readtable% broken (see above)
+                               ((and (consp (car def))
+                                     (eq (caar def) 'function))
+                                (funcall (cadar def) stream firstchar))
+                               ((functionp (car def))
+                                (funcall (car def) stream firstchar))
+                               (t (error "Bogus default dispatch fn: ~S" (car def)) nil))))))
+           (end-pos (and start-pos (file-position stream))))
+      (declare (dynamic-extent vals)
+               (list vals))
+      (if (null vals)
+        (values nil nil)
+        (destructuring-bind (form &optional nested-source-notes)
+                            vals
+          ;; Can't really trust random reader macros to return source notes...
+          (unless (and (consp nested-source-notes)
+                       (source-note-p (car nested-source-notes)))
+            (setq nested-source-notes nil))
+          (values form
+                  t
+                  (and start-pos
+                       (make-source-note :form form
+                                         :stream stream
+                                         :start-pos (1- start-pos)
+                                         :end-pos end-pos
+                                         :subform-notes nested-source-notes))))))))
 
 #|
 (defun %parse-expression-test (string)
@@ -2510,39 +2527,46 @@
   (loop
       (let* ((firstch (%next-non-whitespace-char-and-attr-no-eof stream)))
         (if (eq firstch termch)
-            (return (values nil nil))
-            (multiple-value-bind (val val-p) (%parse-expression stream firstch dot-ok)
+            (return (values nil nil nil))
+            (multiple-value-bind (val val-p source-info)
+                (%parse-expression stream firstch dot-ok)
               (if val-p
-                  (return (values val t))))))))
-
+                  (return (values val t source-info))))))))
 
 (defun read-list (stream &optional nodots (termch #\)))
   (let* ((dot-ok (cons nil nil))
          (head (cons nil nil))
-         (tail head))
+         (tail head)
+         (source-note-list nil))
     (declare (dynamic-extent dot-ok head)
              (list head tail))
     (if nodots (setq dot-ok nil))
-    (multiple-value-bind (firstform firstform-p)
+    (multiple-value-bind (firstform firstform-p firstform-source-note)
         (%read-list-expression stream dot-ok termch)
+      (when firstform-source-note
+        (push firstform-source-note source-note-list))
       (when firstform-p
         (if (and dot-ok (eq firstform dot-ok))       ; just read a dot
             (signal-reader-error stream "Dot context error."))
         (rplacd tail (setq tail (cons firstform nil)))
         (loop
-          (multiple-value-bind (nextform nextform-p)
+          (multiple-value-bind (nextform nextform-p nextform-source-note)
               (%read-list-expression stream dot-ok termch)
+            (when nextform-source-note
+              (push nextform-source-note source-note-list))
             (if (not nextform-p) (return))
             (if (and dot-ok (eq nextform dot-ok))    ; just read a dot
-                (if (multiple-value-bind (lastform lastform-p)
+                (if (multiple-value-bind (lastform lastform-p lastform-source-note)
                         (%read-list-expression stream nil termch)
+                      (when lastform-source-note
+                        (push lastform-source-note source-note-list))
                       (and lastform-p
-                           (progn (rplacd tail lastform) 
+                           (progn (rplacd tail lastform)
                                   (not (nth-value 1 (%read-list-expression stream nil termch))))))
                     (return)
                     (signal-reader-error stream "Dot context error."))
-                (rplacd tail (setq tail (cons nextform nil))))))))
-    (cdr head)))
+              (rplacd tail (setq tail (cons nextform nil))))))))
+    (values (cdr head) source-note-list)))
 
 #|
 (defun read-list-test (string &optional nodots)
@@ -2566,7 +2590,9 @@ c)" t)
  (nfunction |'-reader| 
             (lambda (stream ignore)
               (declare (ignore ignore))
-              `(quote ,(read stream t nil t)))))
+              (multiple-value-bind (form source-note)
+                  (read-internal stream t nil t)
+                (values `(quote ,form) (and source-note (list source-note)))))))
 
 (defparameter *alternate-line-terminator*
     #+darwin-target #\Return
@@ -2629,29 +2655,34 @@ initially NIL.")
   (lambda (stream subchar numarg)
     (declare (ignore subchar))
     (if (or (null numarg) *read-suppress*)
-      (let* ((lst (read-list stream t))
-             (len (length lst))
-             (vec (make-array len)))
-        (declare (list lst) (fixnum len) (simple-vector vec))
-        (dotimes (i len vec)
-          (setf (svref vec i) (pop lst))))
+      (multiple-value-bind (lst notes) (read-list stream t)
+        (let* ((len (length lst))
+               (vec (make-array len)))
+          (declare (list lst) (fixnum len) (simple-vector vec))
+          (dotimes (i len)
+            (setf (svref vec i) (pop lst)))
+          (values vec notes)))
       (locally
-        (declare (fixnum numarg))
+          (declare (fixnum numarg))
         (do* ((vec (make-array numarg))
+              (notes ())
               (lastform)
               (i 0 (1+ i)))
-             ((multiple-value-bind (form form-p) (%read-list-expression stream nil)
-                (if form-p
-                  (setq lastform form)
-                  (unless (= i numarg)
-                      (if (= i 0) 
-                        (%err-disp $XARROOB -1 vec)
-                        (do* ((j i (1+ j)))
-                             ((= j numarg))
-                          (declare (fixnum j))
-                          (setf (svref vec j) lastform)))))
-                (not form-p))
-              vec)
+            ((multiple-value-bind (form form-p source-info)
+                 (%read-list-expression stream nil)
+               (if form-p
+                 (progn
+                   (setq lastform form)
+                   (when source-info (push source-info notes)))
+                 (unless (= i numarg)
+                   (if (= i 0) 
+                     (%err-disp $XARROOB -1 vec)
+                     (do* ((j i (1+ j)))
+                         ((= j numarg))
+                       (declare (fixnum j))
+                       (setf (svref vec j) lastform)))))
+               (not form-p))
+               (values vec notes))
           (declare (fixnum i))
           (setf (svref vec i) lastform)))))))
 
@@ -2688,10 +2719,10 @@ initially NIL.")
 (set-dispatch-macro-character 
  #\# 
  #\C
- #'(lambda (stream char arg &aux form)
+ #'(lambda (stream char arg)
      (require-no-numarg char arg )
-     (setq form (read stream t nil t))
-     (unless *read-suppress* (apply #'complex form))))
+     (multiple-value-bind (form note) (read-internal stream t nil t)
+       (values (unless *read-suppress* (apply #'complex form)) (and note (list note))))))
 
 (set-dispatch-macro-character 
  #\#
@@ -2775,7 +2806,8 @@ initially NIL.")
  (nfunction |#'-reader| 
             (lambda (stream subchar numarg)
               (require-no-numarg subchar numarg)
-              `(function ,(read stream t nil t)))))
+              (multiple-value-bind (form note) (read-internal stream t nil t)
+                (values `(function ,form) (and note (list note)))))))
 
 (set-dispatch-macro-character
  #\#
@@ -2843,12 +2875,15 @@ initially NIL.")
 ;;;for efficiency, we couldn't reliably offer a protocol for stream-dependent
 ;;;recursive reading.  So recursive reads always get done via tyi's, and streams
 ;;;only get to intercept toplevel reads.
-
 (defun read (&optional stream (eof-error-p t) eof-value recursive-p)
   (declare (resident))
+  ;; just return the first value of read-internal
+  (values (read-internal stream eof-error-p eof-value recursive-p)))
+
+(defun read-internal (stream eof-error-p eof-value recursive-p)
   (setq stream (input-stream-arg stream))
   (if recursive-p
-    (%read-form stream 0 nil)
+    (%read-form stream (if eof-error-p 0) nil)
     (let ((%read-objects% nil) (%keep-whitespace% nil))
       (%read-form stream (if eof-error-p 0) eof-value))))
 
@@ -2856,26 +2891,30 @@ initially NIL.")
   "Read from STREAM and return the value read, preserving any whitespace
    that followed the object."
   (setq stream (input-stream-arg stream))
-  (if recursive-p
-    (%read-form stream 0 nil)
-    (let ((%read-objects% nil) (%keep-whitespace% t))
-      (%read-form stream (if eof-error-p 0) eof-value))))
+  (values
+    (if recursive-p
+      (%read-form stream 0 nil)
+      (let ((%read-objects% nil) (%keep-whitespace% t))
+        (%read-form stream (if eof-error-p 0) eof-value)))))
 
 
 (defun read-delimited-list (char &optional stream recursive-p)
   "Read Lisp values from INPUT-STREAM until the next character after a
-   value's representation is ENDCHAR, and return the objects as a list."
+   value's representation is CHAR, and return the objects as a list."
   (setq char (require-type char 'character))
   (setq stream (input-stream-arg stream))
-  (let ((%keep-whitespace% nil))
-    (if recursive-p
-      (%read-form stream char nil)
-      (let ((%read-objects% nil))
-        (%read-form stream char nil)))))
+  (values
+   (let ((%keep-whitespace% nil))
+     (if recursive-p
+       (%read-form stream char nil)
+       (let ((%read-objects% nil))
+         (%read-form stream char nil))))))
 
 (defun read-conditional (stream subchar int)
   (declare (ignore int))
-  (cond ((eq subchar (read-feature stream)) (read stream t nil t))
+  (cond ((eq subchar (read-feature stream))
+         (multiple-value-bind (form note) (read-internal stream t nil t)
+           (values form (and note (list note)))))
         (t (let* ((*read-suppress* t))
              (read stream t nil t)
              (values)))))
@@ -2900,34 +2939,29 @@ initially NIL.")
 (set-dispatch-macro-character #\# #\+ #'read-conditional)
 (set-dispatch-macro-character #\# #\- #'read-conditional)
 
-
-
-
-;;;arg=0 : read form, error if eof
-;;;arg=nil : read form, eof-val if eof.
-;;;arg=char : read delimited list
 (defun %read-form (stream arg eof-val)
+  "Read a lisp form from STREAM
+
+arg=0 : read form, error if eof
+arg=nil : read form, eof-val if eof.
+arg=char : read delimited list"
   (declare (resident))
   (check-type *readtable* readtable)
   (check-type *package* package)
   (if (and arg (not (eq arg 0)))
       (read-list stream nil arg)
       (loop
-          (let* ((ch (%next-non-whitespace-char-and-attr stream)))
+        (let* ((ch (%next-non-whitespace-char-and-attr stream)))
           (if (null ch)
             (if arg 
               (error 'end-of-file :stream stream)
               (return eof-val))
-            (multiple-value-bind (form form-p) (%parse-expression stream ch nil)
-              (if form-p
-                 (if *read-suppress*
-                     (return nil)
-                     (return form)))))))))
-
-
-
-
-
+            (multiple-value-bind (form form-p source-note)
+                (%parse-expression stream ch nil)
+              (when form-p
+                (return
+                 (values (if *read-suppress* nil form)
+                         source-note)))))))))
 
 ;;;Until load backquote...
 (set-macro-character #\`
@@ -2937,25 +2971,105 @@ initially NIL.")
 
 
 (set-dispatch-macro-character #\# #\P
- (qlfun |#P-reader| (stream char flags &aux path (invalid-string "Invalid flags (~S) for pathname ~S"))
+ (qlfun |#P-reader| (stream char flags &aux (invalid-string "Invalid flags (~S) for pathname ~S"))
    (declare (ignore char))
    (when (null flags) (setq flags 0))
    (unless (memq flags '(0 1 2 3 4))
      (unless *read-suppress* (report-bad-arg flags '(integer 0 4))))
-   (setq path (read stream t nil t))
-   (unless *read-suppress*
-     (unless (stringp path) (report-bad-arg path 'string))
-     (setq path (pathname path))
-     (when (%ilogbitp 0 flags)
-       (when (%pathname-type path) (error invalid-string flags path))
-       (setf (%pathname-type path) :unspecific))
-     (when (%ilogbitp 1 flags)
-       (when (%pathname-name path) (error invalid-string flags path))
-       (setf (%pathname-name path) ""))
-     path)))
+   (multiple-value-bind (path note) (read-internal stream t nil t)
+     (unless *read-suppress*
+       (unless (stringp path) (report-bad-arg path 'string))
+       (setq path (pathname path))
+       (when (%ilogbitp 0 flags)
+         (when (%pathname-type path) (error invalid-string flags path))
+         (setf (%pathname-type path) :unspecific))
+       (when (%ilogbitp 1 flags)
+         (when (%pathname-name path) (error invalid-string flags path))
+         (setf (%pathname-name path) ""))
+       (values path (and note (list note)))))))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defstruct (source-note (:constructor %make-source-note))
+  ;; For an inner source form, the source-note of the outer source form.
+  source
+  file-name
+  file-range)
 
+(defun encode-file-range (start-pos end-pos)
+  (let ((len (- end-pos start-pos)))
+    (if (< len (ash 1 12))
+      (+ (ash start-pos 12) len)
+      (cons start-pos end-pos))))
 
+(defun source-note-start-pos (source-note)
+  (let ((range (source-note-file-range source-note)))
+    (when range
+      (if (consp range) (car range) (ash range -12)))))
 
+(defun source-note-end-pos (source-note)
+  (let ((range (source-note-file-range source-note)))
+    (when range
+      (if (consp range) (cdr range) (+ (ash range -12) (logand range #xFFF))))))
+
+(defvar *recording-source-streams* ())
+
+(defun make-source-note (&key form stream start-pos end-pos subform-notes)
+  (let ((recording (assq stream *recording-source-streams*)))
+    (when (and recording (not *read-suppress*))
+      (destructuring-bind (map file-name stream-offset) (cdr recording)
+        (let* ((prev (gethash form map))
+               (note (%make-source-note :file-name file-name
+                                        :file-range (encode-file-range
+                                                     (+ stream-offset start-pos)
+                                                     (+ stream-offset end-pos)))))
+          (setf (gethash form map)
+                (cond ((null prev) note)
+                      ((consp prev) (cons note prev))
+                      (t (list note prev))))
+          (loop for sub in subform-notes as subnote = (require-type sub 'source-note)
+            do (when (source-note-source subnote) (error "Subnote ~s already owned?" subnote))
+            do (setf (source-note-source subnote) note))
+          note)))))
+
+(defmethod make-load-form ((note source-note) &optional env)
+  (make-load-form-saving-slots note :environment env))
+
+(defun read-recording-source (stream &key eofval file-name start-offset map)
+  "Read a top-level form, perhaps recording source locations.
+If MAP is NIL, just reads a form as if by READ.
+If MAP is non-NIL, returns a second value of a source-note object describing the form.
+In addition, if MAP is a hash table, it gets filled with source-note's for all
+non-atomic nested subforms."
+  (typecase map
+    (null (values (read-internal stream nil eofval nil) nil))
+    (hash-table
+     (let* ((recording (list stream map file-name (or start-offset 0)))
+            (*recording-source-streams* (cons recording *recording-source-streams*)))
+       (declare (dynamic-extent recording *recording-source-streams*))
+       (multiple-value-bind (form source-note) (read-internal stream nil eofval nil)
+         (when (and source-note (not (eq form eofval)))
+           (assert (null (source-note-source source-note)))
+           (loop for form being the hash-key using (hash-value note) of map
+                 do (cond ((eq note source-note) nil)
+                          ;; Remove entries with multiple source notes, which can happen
+                          ;; for atoms.  If we can't tell which instance we mean, then we
+                          ;; don't have useful source info.
+                          ((listp note) (remhash form map))
+                          ((loop for p = note then (source-note-source p) while (source-note-p p)
+                                 thereis (eq p source-note))
+                           ;; Flatten the backpointers so each subnote points directly
+                           ;; to the toplevel note.
+                           (setf (source-note-source note) source-note)))))
+	 (values form source-note))))
+    (T
+     (let* ((start (file-position stream))
+            (form (read-internal stream nil eofval nil)))
+       (values form (and (neq form eofval)
+                         (%make-source-note :file-name file-name
+                                            :file-range (encode-file-range
+                                                         (+ (or start-offset 0)
+                                                            start)
+                                                         (+ (or start-offset 0)
+                                                            (file-position stream))))))))))

@@ -46,10 +46,6 @@
                (cons form (read-file-to-list-aux stream))))))
 |#
 
-(defun read-internal (input-stream)
-  (read input-stream t nil t))
-
-
 (set-dispatch-macro-character #\# #\*
  (qlfun |#*-reader| (input-stream sub-char int 
    &aux list list-length array array-length last-bit)
@@ -95,9 +91,9 @@
          ((not dimensions)
           (signal-reader-error stream "reader macro #A used without a rank integer"))
          ((eql dimensions 0) ;0 dimensional array
-          (make-array nil :initial-contents (read-internal stream)))
+          (make-array nil :initial-contents (read-internal stream t nil t)))
          ((and (integerp dimensions) (> dimensions 0)) 
-          (let ((init-list (read-internal stream)))
+          (let ((init-list (read-internal stream t nil t)))
             (cond ((not (typep init-list 'sequence))
                    (signal-reader-error stream "The form following a #~SA reader macro should have been a sequence, but it was: ~S" dimensions init-list))
                   ((= (length init-list) 0)
@@ -129,7 +125,7 @@
 (set-dispatch-macro-character #\# #\S
   (qlfun |#S-reader| (input-stream sub-char int &aux list sd)
      (declare (ignore sub-char int))
-     (setq list (read-internal input-stream))
+     (setq list (read-internal input-stream t nil t))
      (unless *read-suppress*
        (unless (and (consp list)
                     (symbolp (%car list))
