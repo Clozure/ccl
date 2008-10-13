@@ -408,8 +408,6 @@ before doing so.")
   (unless (or (fixnump rehash-size) (and (realp rehash-size) (< 1.0 rehash-size)))
     (report-bad-arg rehash-size '(or fixnum (real 1 *))))
   (unless (fixnump size) (report-bad-arg size 'fixnum))
-  (when (and (eq lock-free :shared) (not shared))
-    (setq lock-free nil))
   (setq rehash-threshold (/ 1.0 (max 0.01 rehash-threshold)))
   (let* ((default-hash-function
              (cond ((or (eq test 'eq) (eq test #'eq)) 
