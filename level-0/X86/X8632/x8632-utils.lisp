@@ -101,8 +101,7 @@
     (add ($ (- x8632::cons.size x8632::fulltag-cons)) (% obj))
     (jmp @test)
     @misc
-    (lea (@ x8632::fulltag-misc (% obj)) (% obj))
-    (mov (% obj) (% arg_z))
+    (lea (@ x8632::fulltag-misc (% obj)) (% arg_z))
     (set-nargs 1)
     (push (% obj))
     (:talign 5)
