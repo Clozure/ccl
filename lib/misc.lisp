@@ -842,7 +842,7 @@ are running on, or NIL if we can't find any useful information."
              (dynamic-extent nvectors vector-sizes))
     (when gc-first (gc))
     (%map-areas (lambda (thing)
-                  (if (consp thing)
+                  (if (listp thing)
                     (incf nconses)
                     (let* ((typecode (typecode thing)))
                       (incf (aref nvectors typecode))
