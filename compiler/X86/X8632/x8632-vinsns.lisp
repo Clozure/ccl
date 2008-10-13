@@ -79,6 +79,13 @@
                                              ())
   (movl (:$l val) (:@ x8632::misc-data-offset (:%l v) (:%l unscaled-idx))))
 
+(define-x8632-vinsn misc-set-single-float (()
+					   ((val :single-float)
+					    (v :lisp)
+					    (scaled-idx :u32))
+					   ())
+  (movss (:%xmm val) (:@ x8632::misc-data-offset (:%l v) (:%l scaled-idx))))
+
 (define-x8632-vinsn misc-set-double-float (()
 				   ((val :double-float)
 				    (v :lisp)
