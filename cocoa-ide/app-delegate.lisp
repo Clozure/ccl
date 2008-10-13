@@ -30,7 +30,7 @@
          (parent (#/stringByDeletingLastPathComponent bundle-path))
          (path (ccl::ensure-directory-pathname
                 (lisp-string-from-nsstring parent))))
-    (ccl::replace-base-translation "ccl" path)))
+    (ccl::replace-base-translation "ccl:" path)))
          
 
 (objc:defmethod (#/applicationWillFinishLaunching: :void)
