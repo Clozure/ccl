@@ -177,7 +177,7 @@ _dosmaperr(unsigned long oserrno)
 
 #define MAX_FD 32
 
-int
+HANDLE
 lisp_open(wchar_t *path, int flag, int mode)
 {
   HANDLE hfile;
@@ -261,43 +261,32 @@ lisp_open(wchar_t *path, int flag, int mode)
                       NULL);
   if (hfile == ((HANDLE)-1)) {
     _dosmaperr(GetLastError());
-    return -1;
+    return (HANDLE)-1;
   }
-  return (int)hfile;
+  return hfile;
 }
 
 int
-lisp_close(int fd)
+lisp_close(HANDLE hfile)
 {
-  if (fd < MAX_FD) {
-    return close(fd);
-  }
-  if (CloseHandle((HANDLE)fd)) {
+  if (CloseHandle(hfile)) {
     return 0;
   }
   _dosmaperr(GetLastError());
   return -1;
 }
 
+extern TCR *get_tcr(int);
+
 ssize_t
-lisp_read(int fd, void *buf, unsigned int count)
+lisp_read(HANDLE hfile, void *buf, unsigned int count)
 {
-  HANDLE hfile;
+  HANDLE hevent;
   OVERLAPPED overlapped;
   DWORD err, nread;
   pending_io pending;
   TCR *tcr;
-  extern TCR *get_tcr(int);
 
-  if (fd < MAX_FD) {
-    hfile = (HANDLE) _get_osfhandle(fd);
-    if (hfile == ((HANDLE)-1)) {
-      errno = EBADF;
-      return -1;
-    }
-  } else {
-    hfile = (HANDLE) fd;
-  }
   
   memset(&overlapped,0,sizeof(overlapped));
 
@@ -308,23 +297,25 @@ lisp_read(int fd, void *buf, unsigned int count)
   tcr = (TCR *)get_tcr(1);
   pending.h = hfile;
   pending.o = &overlapped;
-  tcr->foreign_exception_status = (signed_natural)&pending;
-
+  tcr->pending_io_info = &pending;
+  hevent = (HANDLE)(tcr->io_datum);
+  overlapped.hEvent = hevent;
   do {
+    ResetEvent(hevent);
     if (ReadFile(hfile, buf, count, &nread, &overlapped)) {
-      tcr->foreign_exception_status = 0;
+      tcr->pending_io_info = NULL;
       return nread;
     }
     err = GetLastError();
 
     if (err == ERROR_HANDLE_EOF) {
-      tcr->foreign_exception_status = 0;
+      tcr->pending_io_info = NULL;
       return 0;
     }
 
     if (err != ERROR_IO_PENDING) {
       _dosmaperr(err);
-      tcr->foreign_exception_status = 0;
+      tcr->pending_io_info = NULL;
       return -1;
     }
   
@@ -332,14 +323,14 @@ lisp_read(int fd, void *buf, unsigned int count)
     /* We block here */
     if (GetOverlappedResult(hfile, &overlapped, &nread, TRUE)) {
       if (nread) {
-        tcr->foreign_exception_status = 0;
+        tcr->pending_io_info = NULL;
         return nread;
       }
     } else {
       err = GetLastError();
     }
   } while (!err);
-  tcr->foreign_exception_status = 0;
+  tcr->pending_io_info = NULL;
 
   switch (err) {
   case ERROR_HANDLE_EOF: 
@@ -354,22 +345,15 @@ lisp_read(int fd, void *buf, unsigned int count)
 }
 
 ssize_t
-lisp_write(int fd, void *buf, ssize_t count)
+lisp_write(HANDLE hfile, void *buf, ssize_t count)
 {
-  HANDLE hfile;
+  HANDLE hevent;
   OVERLAPPED overlapped;
   DWORD err, nwritten;
+  TCR *tcr = (TCR *)get_tcr(1);
 
-  if (fd < MAX_FD) {
-    hfile = (HANDLE) _get_osfhandle(fd);
+  hevent = (HANDLE)tcr->io_datum;
 
-    if (hfile == ((HANDLE)-1)) {
-      errno = EBADF;
-      return -1;
-    }
-  } else {
-    hfile = (HANDLE) fd;
-  }
 
   memset(&overlapped,0,sizeof(overlapped));
 
@@ -377,6 +361,8 @@ lisp_write(int fd, void *buf, ssize_t count)
     overlapped.Offset = SetFilePointer(hfile, 0, &(overlapped.OffsetHigh), FILE_CURRENT);
   }
 
+  overlapped.hEvent = hevent;
+  ResetEvent(hevent);
   if (WriteFile(hfile, buf, count, &nwritten, &overlapped)) {
     return nwritten;
   }
@@ -387,28 +373,17 @@ lisp_write(int fd, void *buf, ssize_t count)
 }
 
 int
-lisp_fchmod(int fd, int mode)
+lisp_fchmod(HANDLE hfile, int mode)
 {
   errno = ENOSYS;
   return -1;
 }
 
 __int64
-lisp_lseek(int fd, __int64 offset, int whence)
+lisp_lseek(HANDLE hfile, __int64 offset, int whence)
 {
-  HANDLE hfile;
   DWORD high, low;
 
-  if (fd < MAX_FD) {
-    hfile = (HANDLE) _get_osfhandle(fd);
-
-    if (hfile == ((HANDLE)-1)) {
-      errno = EBADF;
-      return -1;
-    }
-  } else {
-    hfile = (HANDLE) fd;
-  }
   high = ((__int64)offset)>>32;
   low = offset & 0xffffffff;
   low = SetFilePointer(hfile, low, &high, whence);
@@ -440,21 +415,10 @@ filetime_to_unix_time(FILETIME *ft)
 }
 
 int
-lisp_fstat(int fd, struct __stat64 *buf)
+lisp_fstat(HANDLE hfile, struct __stat64 *buf)
 {
-  HANDLE hfile;
   int filetype;
 
-  if (fd < MAX_FD) {
-    hfile = (HANDLE) _get_osfhandle(fd);
-
-    if (hfile == ((HANDLE)-1)) {
-      errno = EBADF;
-      return -1;
-    }
-  } else {
-    hfile = (HANDLE) fd;
-  }
   filetype = GetFileType(hfile) & ~FILE_TYPE_REMOTE;
 
   if (filetype == FILE_TYPE_UNKNOWN) {
@@ -513,23 +477,12 @@ lisp_futex(int *uaddr, int op, int val, void *timeout, int *uaddr2, int val3)
 
 
 __int64
-lisp_ftruncate(int fd, off_t new_size)
+lisp_ftruncate(HANDLE hfile, off_t new_size)
 {
-  HANDLE hfile;
   __int64 oldpos;
 
-  if (fd < MAX_FD) {
-    hfile = (HANDLE) _get_osfhandle(fd);
 
-    if (hfile == ((HANDLE)-1)) {
-      errno = EBADF;
-      return -1;
-    }
-  } else {
-    hfile = (HANDLE) fd;
-  }
-
-  oldpos = lisp_lseek((int)hfile, 0, SEEK_END);
+  oldpos = lisp_lseek(hfile, 0, SEEK_END);
   if (oldpos == -1) {
     return 0;
   }
@@ -553,7 +506,7 @@ lisp_ftruncate(int fd, off_t new_size)
     }
     return 0;
   }
-  lisp_lseek((int)hfile, new_size, SEEK_SET);
+  lisp_lseek(hfile, new_size, SEEK_SET);
   if (SetEndOfFile(hfile)) {
     return 0;
   }
@@ -595,8 +548,8 @@ lisp_pipe(int fd[2])
       wperror("CreatePipe");
       return -1;
     }
-  fd[0] = (int) input;
-  fd[1] = (int) output;
+  fd[0] = (int) ((intptr_t)input);
+  fd[1] = (int) ((intptr_t)output);
   return 0;
 }
 
