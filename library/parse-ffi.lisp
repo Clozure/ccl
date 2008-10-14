@@ -307,7 +307,15 @@
                   (c::- (- a b))
                   (c::\| (logior a b))
                   (c::\& (logand a b))
-                  (c::cast (if (foreign-typep b a) b))
+                  (c::cast (if (foreign-typep b a)
+                             b
+                             (if (and (typep a 'foreign-integer-type)
+                                      (not (foreign-integer-type-signed a))
+                                      (typep b 'integer)
+                                      (not (> (integer-length b)
+                                              (foreign-integer-type-bits a))))
+                               (logand b (1- (ash 1 (foreign-integer-type-bits a)))))))
+                                           
                   (t 
 		   ;(break "binary op = ~s ~s ~s" operator a b)
 		   nil))))
