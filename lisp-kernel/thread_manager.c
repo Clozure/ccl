@@ -102,7 +102,7 @@ raise_thread_interrupt(TCR *target)
     GetThreadIOPendingFlag(hthread,&io_pending);
     target->interrupt_pending = (1LL << (nbits_in_word - 1LL));
     if (io_pending) {
-      pending_io * pending = (pending_io *) (target->foreign_exception_status);
+      pending_io * pending = (pending_io *) (target->pending_io_info);
       if (pending) {
         if (pCancelIoEx) {
           pCancelIoEx(pending->h, pending->o);
@@ -1277,6 +1277,10 @@ shutdown_thread_tcr(void *arg)
 #ifdef X8632
     free_tcr_extra_segment(tcr);
 #endif
+#ifdef WIN32
+    CloseHandle((HANDLE)tcr->io_datum);
+    tcr->io_datum = NULL;
+#endif
     UNLOCK(lisp_global(TCR_AREA_LOCK),tcr);
     if (termination_semaphore) {
       SEM_RAISE(termination_semaphore);
@@ -1365,6 +1369,9 @@ thread_init_tcr(TCR *tcr, void *stack_base, natural stack_size)
 #endif
 #ifdef LINUX
   linux_exception_init(tcr);
+#endif
+#ifdef WINDOWS
+  tcr->io_datum = (VOID *)CreateEvent(NULL, true, false, NULL);
 #endif
   tcr->log2_allocation_quantum = unbox_fixnum(lisp_global(DEFAULT_ALLOCATION_QUANTUM));
 }
