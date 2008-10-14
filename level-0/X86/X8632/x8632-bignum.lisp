@@ -862,9 +862,7 @@
 (defx8632lapfunction truncate-guess-loop ((guess-h 16) (guess-l 12) (x 8)
 					  (xidx 4) #|(ra 0)|#
 					  (yptr arg_y) (yidx arg_z))
-  (movl (% ebp) (@ 20 (% esp)))
-  (leal (@ 20 (% esp)) (% ebp))
-  (popl (@ 4 (% ebp)))
+  (save-stackargs-frame 4)
   (push (% arg_y))
   (push (% arg_z))
 
@@ -873,6 +871,9 @@
   (compose-digit temp0 temp1 imm0)
   (movd (% imm0) (% mm0))		;save guess
 
+  @loop
+  (movl (@ (% esp)) (% yidx))
+  (movl (@ 4 (% esp)) (% yptr))
   (movd (@ (- x8632::misc-data-offset 0) (% yptr) (% yidx)) (% mm1)) ;y1 (high)
   ;; (%multiply guess y1)
   (pmuludq (% mm0) (% mm1))
@@ -896,7 +897,7 @@
   (movd (% mm3) (% eax))		;high part of y1*guess
   (sbbl (% eax) (% edx))
   (movd (% edx) (% mm7))		;save high digit
-  ;; guess is now either good, or one too large
+  ;; see if guess is suitable
   ;; if (and (= high-digit 0)
   (test (% edx) (% edx))
   (jne @return)
@@ -932,7 +933,7 @@
   (movd (% mm0) (% imm0))		;guess
   (subl ($ 1) (% imm0))
   (movd (% imm0) (% mm0))
-  (jmp @return))
+  (jmp @loop))
 
 ;;; If x[i] = y[j], return the all ones digit (as two halves).
 ;;; Otherwise, compute floor x[i]x[i-1] / y[j].
