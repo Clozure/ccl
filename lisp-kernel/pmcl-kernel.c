@@ -180,17 +180,13 @@ size_t
 ensure_stack_limit(size_t stack_size)
 {
 #ifdef WINDOWS
+  extern void os_get_current_thread_stack_bounds(void **, natural*);
+  natural totalsize;
+  void *ignored;
+  
+  os_get_current_thread_stack_bounds(&ignored, &totalsize);
 
-  /* On Windows, the stack is allocated on thread creation.  For the
-     initial thread, the loader does that, and we cannot change the
-     stack size after the fact.  For threads we create, we can set the
-     stack size.  A possible solution is putting the initial thread
-     asleep and using only runtime-created threads.
-
-     For now, just refuse any attempt to set another stack size, and
-     return the linker default. */
-
-  return 0x200000;
+  return (size_t)totalsize-(size_t)(CSTACK_HARDPROT+CSTACK_SOFTPROT);
 
 #else
   struct rlimit limits;
