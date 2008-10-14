@@ -103,13 +103,15 @@ raise_thread_interrupt(TCR *target)
     target->interrupt_pending = (1LL << (nbits_in_word - 1LL));
     if (io_pending) {
       pending_io * pending = (pending_io *) (target->foreign_exception_status);
-      if (pCancelIoEx) {
-        pCancelIoEx(pending->h, pending->o);
+      if (pending) {
+        if (pCancelIoEx) {
+          pCancelIoEx(pending->h, pending->o);
+        } else {
+          CancelIo(pending->h);
+        }
       } else {
-        CancelIo(pending->h);
+        QueueUserAPC(nullAPC, hthread, 0);
       }
-    } else {
-      QueueUserAPC(nullAPC, hthread, 0);
     }
 
     ResumeThread(hthread);
