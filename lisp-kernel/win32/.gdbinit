@@ -32,6 +32,7 @@ end
 
 
 break Bug
+break FBug
 
 display/i $pc
 
