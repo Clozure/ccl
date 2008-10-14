@@ -250,7 +250,10 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
         OSErr err;
         extern OSErr save_application(unsigned);
         area *vsarea = tcr->vs_area;
-	
+
+#ifdef WINDOWS	
+        arg = _open_osfhandle(arg,0);
+#endif
         nrs_TOPLFUNC.vcell = *((LispObj *)(vsarea->high)-1);
         err = save_application(arg);
         if (err == noErr) {
