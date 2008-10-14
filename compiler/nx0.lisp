@@ -304,8 +304,6 @@ function to the indicated name is true.")
 (defun nx-allow-transforms (env)
   (nx-apply-env-hook policy.allow-transforms env))
 
-
-
 (defun nx-force-boundp-checks (var env)
   (or (eq (safety-optimize-quantity env) 3)
       (nx-apply-env-hook policy.force-boundp-checks var env)))
@@ -1254,7 +1252,7 @@ function to the indicated name is true.")
                                      (%ilsl $vbitsetq 1) 
                                      (ash -1 $vbitspecial)
                                      (%ilsl $vbitclosed 1)) varbits))
-          (error "Bug-o-rama - \"punted\" var had bogus bits.
+          (error "Bug-o-rama - \"punted\" var had bogus bits. ~
 Or something. Right? ~s ~s" var varbits))
         (let* ((varcount     (%ilogand $vrefmask varbits)) 
                (boundtocount (%ilogand $vrefmask boundtobits)))
@@ -1374,15 +1372,11 @@ Or something. Right? ~s ~s" var varbits))
   (and (consp form)
        (consp (setq form (%cdr form)))       
        (eq (caar form) '&method)))
-         
-
-
-
 
 
 (defun nx1-lambda (ll body decls &aux (l ll) methvar)
-  (let ((old-env *nx-lexical-environment*)
-        (*nx-bound-vars* *nx-bound-vars*))
+  (let* ((old-env *nx-lexical-environment*)
+         (*nx-bound-vars* *nx-bound-vars*))
     (with-nx-declarations (pending)
       (let* ((*nx-parsing-lambda-decls* t))
         (nx-process-declarations pending decls))
@@ -1392,7 +1386,7 @@ Or something. Right? ~s ~s" var varbits))
             (unless (setq bits (encode-lambda-list (%cdr l)))
               (nx-error "invalid lambda-list  - ~s" l)))
           (return-from nx1-lambda
-                       (list
+                       (make-acode
                         (%nx1-operator lambda-list)
                         (list (cons '&lap bits))
                         nil

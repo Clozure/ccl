@@ -31,7 +31,6 @@
 (defx86lapmacro set-nargs (n)
   (cond ((= n 0) `(xorl (% nargs) (% nargs)))
         (t `(movl ($ ',n) (% nargs)))))
-        
 
 (defx86lapmacro anchored-uuo (form)
   `(progn
@@ -140,7 +139,6 @@
 (defx86lapmacro trap-unless-typecode= (node tag &optional (immreg 'imm0))
   (let* ((bad (gensym))
          (anchor (gensym)))
-           
     `(progn
       ,anchor
       (extract-typecode ,node ,immreg)
@@ -412,8 +410,7 @@
       (movq (% rbp) (@ ,(* (1+ nstackargs) x8664::node-size) (% rsp)))
       (leaq (@ ,(* (1+ nstackargs) x8664::node-size) (% rsp)) (% rbp))
       (popq (@ x8632::node-size (% rbp)))))))
-    
-  
+
 (defx86lapmacro save-frame-variable-arg-count ()
   (let* ((push (gensym))
          (done (gensym)))

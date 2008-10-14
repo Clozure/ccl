@@ -1084,9 +1084,9 @@
 ;;; in a null lexical environment.
 
 (defnx1 nx1-load-time-value (load-time-value) (&environment env form &optional read-only-p)
-  ; Validate the "read-only-p" argument
+  ;; Validate the "read-only-p" argument
   (if (and read-only-p (neq read-only-p t)) (require-type read-only-p '(member t nil)))
-  ; Then ignore it.
+  ;; Then ignore it.
   (if *nx-load-time-eval-token*
     (multiple-value-bind (function warnings)
                          (compile-named-function 
@@ -1370,7 +1370,7 @@
              (:linuxppc32 (%nx1-operator eabi-syscall))
              ((:darwinppc32 :darwinppc64 :linuxppc64)
               (%nx1-operator poweropen-syscall))
-	     (:darwinx8632 :linuxx632 :win32 (%nx1-operator i386-syscall))
+	     ((:darwinx8632 :linuxx632 :win32) (%nx1-operator i386-syscall))
              ((:linuxx8664 :freebsdx8664 :darwinx8664 :solarisx8664 :win64) (%nx1-operator syscall))))))
 
 (defun nx1-ff-call-internal (address-expression arg-specs-and-result-spec operator )
@@ -1894,7 +1894,7 @@
                       arglist (%cdr arglist))))
             (if arglist
               (when (and (not keys) (not rest))
-                (nx-error "Extra args ~s for (LAMBDA ~s ,,,)" args lambda-list))
+                (nx-error "Extra args ~s for (LAMBDA ~s ...)" args lambda-list))
               (when rest
                 (push rest vars*) (push *nx-nil* vals*)
                 (nx1-punt-bindings (cons rest nil) (cons *nx-nil* nil))

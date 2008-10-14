@@ -2722,8 +2722,6 @@
       usual)))
 
 
-    
-    
 (defun x86-print-disassembled-instruction (ds instruction seq)
   (let* ((addr (x86-di-address instruction))
          (entry (x86-ds-entry-point ds)))
@@ -2798,7 +2796,8 @@
           (setq seq (funcall collect-function ds instruction seq)))))))
 
 #+x8664-target
-(defun x8664-xdisassemble (function &optional (collect-function #'x86-print-disassembled-instruction ))
+(defun x8664-xdisassemble (function
+                           &optional (collect-function #'x86-print-disassembled-instruction))
   (let* ((fv (%function-to-function-vector function))
          (function-size-in-words (uvsize fv))
          (code-words (%function-code-words function))
@@ -2813,7 +2812,8 @@
     (do* ((k code-words (1+ k))
           (j 1 (1+ j)))
          ((= k function-size-in-words)
-          (x8664-disassemble-xfunction xfunction :collect-function collect-function))
+          (x8664-disassemble-xfunction xfunction
+                                       :collect-function collect-function))
       (declare (fixnum j k))
       (setf (uvref xfunction j) (uvref fv k)))))
 

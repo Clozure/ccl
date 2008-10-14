@@ -1716,7 +1716,7 @@ to open."
 
 (defmacro defmethod (name &rest args &environment env)
   (multiple-value-bind (function-form specializers-form qualifiers lambda-list documentation specializers)
-                       (parse-defmethod name args env)    
+      (parse-defmethod name args env)
     `(progn
        (eval-when (:compile-toplevel)
          (record-function-info ',(maybe-setf-function-name name)
@@ -1999,20 +1999,20 @@ to open."
         (t (%badarg (car rest) '(or (and null symbol) list)))))
 
 (defmacro defgeneric (function-name lambda-list &rest options-and-methods &environment env)
-  (fboundp function-name)               ; type-check
+  (fboundp function-name)             ; type-check
   (multiple-value-bind (method-combination generic-function-class options methods)
       (parse-defgeneric function-name t lambda-list options-and-methods)
     (let ((gf (gensym)))
       `(progn
-        (eval-when (:compile-toplevel)
-          (record-function-info ',(maybe-setf-function-name function-name)
+         (eval-when (:compile-toplevel)
+           (record-function-info ',(maybe-setf-function-name function-name)
                                  ',(%cons-def-info 'defgeneric (encode-gf-lambda-list lambda-list))
                                  ,env))
-        (let ((,gf (%defgeneric
-                    ',function-name ',lambda-list ',method-combination ',generic-function-class 
-                    ',(apply #'append options))))
-          (%set-defgeneric-methods ,gf ,@methods)
-          ,gf)))))
+         (let ((,gf (%defgeneric
+                     ',function-name ',lambda-list ',method-combination ',generic-function-class 
+                     ',(apply #'append options))))
+           (%set-defgeneric-methods ,gf ,@methods)
+           ,gf)))))
 
 
 
@@ -2027,7 +2027,8 @@ to open."
         (let ((keyword (car o))
               (defmethod (if global-p 'defmethod 'anonymous-method)))
           (if (eq keyword :method)
-            (push `(,defmethod ,function-name ,@(%cdr o)) methods)
+	    (let ((defn `(,defmethod ,function-name ,@(%cdr o))))
+	      (push defn methods))
             (cond ((and (not (eq keyword 'declare))
 			(memq keyword (prog1 option-keywords (push keyword option-keywords))))		   
                    (signal-program-error "Duplicate option: ~s to ~s" keyword 'defgeneric))
@@ -2136,10 +2137,6 @@ to open."
     `(progn
        (defclass ,name ,(or supers '(condition)) ,slots ,@classopts)
        ,@reporter
-       ;; defclass will record name as a class, we only want
-      #+new-record-source
-       (remove-definition-source 'class ',name)
-       (record-source-file ',name 'condition)
        ',name)))
 
 (defmacro with-condition-restarts (&environment env condition restarts &body body)
@@ -2660,7 +2657,7 @@ defcallback returns the callback pointer, e.g., the value of name."
   (let* ((val (gensym)))
     `(do* ((,val ,place ,place))
           ((typep ,val ',typespec))
-      (setf ,place (%check-type ,val ',typespec ',place ,string)))))
+       (setf ,place (%check-type ,val ',typespec ',place ,string)))))
 
 
 

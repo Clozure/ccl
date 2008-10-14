@@ -20,7 +20,7 @@
 
 (in-package :ccl)
 
-#| Note: when MCL-AppGen 4.0 is built, the following form will need to be included in it:
+#|| Note: when MCL-AppGen 4.0 is built, the following form will need to be included in it:
 ; for compiler-special-form-p, called by cheap-eval-in-environment
 (defparameter *nx1-compiler-special-forms*
   `(%DEFUN %FUNCTION %NEW-PTR %NEWGOTAG %PRIMITIVE %VREFLET BLOCK CATCH COMPILER-LET DEBIND
@@ -29,7 +29,7 @@
     MULTIPLE-VALUE-LIST MULTIPLE-VALUE-PROG1 NEW-LAP NEW-LAP-INLINE NFUNCTION OLD-LAP
     OLD-LAP-INLINE OR PROG1 PROGN PROGV QUOTE RETURN-FROM SETQ STRUCT-REF STRUCT-SET
     SYMBOL-MACROLET TAGBODY THE THROW UNWIND-PROTECT WITH-STACK-DOUBLE-FLOATS WITHOUT-INTERRUPTS))
-|#
+||#
 
 (eval-when (:compile-toplevel)
   (require 'nxenv))
@@ -405,14 +405,14 @@
     (error "Invalid lambda-expression ~S." lambda-expression))
   (%make-function nil lambda-expression env))
 
-#| Might be nicer to do %declaim
+#|| Might be nicer to do %declaim
 (defmacro declaim (&rest decl-specs &environment env)
   `(progn
      (eval-when (:load-toplevel :execute)
        (proclaim ',@decl-specs))
      (eval-when (:compile-toplevel)
        (%declaim ',@decl-specs ,env))))
-|#
+||#
 
 (defmacro declaim (&environment env &rest decl-specs)
   "DECLAIM Declaration*
@@ -446,8 +446,7 @@
     warnings))
 
 ;;; This is called by, e.g., note-function-info & so can't be -too- funky ...
-;;; don't call proclaimed-inline-p or proclaimed-notinline-p with
-;;; alphatized crap
+;;; don't call proclaimed-inline-p or proclaimed-notinline-p with alphatized crap
 
 (defun nx-declared-inline-p (sym env)
   (setq sym (maybe-setf-function-name sym))

@@ -53,7 +53,7 @@
     heap-start                          ; start of lisp heap
     heap-end                            ; end of lisp heap
     statically-linked                   ; true if the lisp kernel is statically linked
-    stack-size                          ; weak gc policy/algorithm.
+    stack-size                          ; value of --stack-size arg
     objc-2-begin-catch                  ; objc_begin_catch
     bad-funcall                         ; pseudo-target for funcall
     all-areas                           ; doubly-linked area list

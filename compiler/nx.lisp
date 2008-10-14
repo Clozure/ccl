@@ -185,16 +185,11 @@
            afunc
            (funcall (backend-p2-compile *target-backend*)
             afunc
-            ; will also bind *nx-lexical-environment*
+            ;; will also bind *nx-lexical-environment*
             (if keep-lambda (if (lambda-expression-p keep-lambda) keep-lambda def))
             keep-symbols)))))
   (values (afunc-lfun def) (afunc-warnings def)))
 )
-
-
-  
-
-
 
 
 (defparameter *compiler-whining-conditions*
