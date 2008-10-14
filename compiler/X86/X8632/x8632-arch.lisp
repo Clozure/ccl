@@ -625,6 +625,8 @@
   next-method-context			;used in lieu of register
   save-eflags
   allocated                             ;maybe unaligned TCR pointer
+  pending-io-info
+  io-datum                              ;for windows overlapped I/O
 )
 
 (defconstant interrupt-level-binding-index (ash 1 fixnumshift))

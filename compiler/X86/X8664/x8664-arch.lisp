@@ -721,6 +721,8 @@
   shutdown-count
   next-tsp
   safe-ref-address
+  pending-io-info
+  io-datum
 )
 
 (defconstant tcr.single-float-convert.value (+ 4 tcr.single-float-convert))
