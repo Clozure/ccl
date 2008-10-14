@@ -469,6 +469,8 @@ typedef struct tcr {
   LispObj next_method_context; /* used in lieu of register */
   natural save_eflags;
   void *allocated;
+  void *pending_io_info;
+  void *io_datum;
 } TCR;
 
 #define nil_value ((0x13000 + (fulltag_cons))+(LOWMEM_BIAS))

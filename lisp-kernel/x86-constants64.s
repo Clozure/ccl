@@ -952,6 +952,8 @@ TCR_BIAS = 0
 	 _node(shutdown_count)
          _node(next_tsp)
          _node(safe_ref_address)
+         _node(pending_io_info)
+         _node(io_datum)
 	_ends
 
         _struct(win64_context,0)

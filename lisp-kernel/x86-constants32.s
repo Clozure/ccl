@@ -547,6 +547,8 @@ TCR_BIAS = 0
 	 _node(next_method_context)
 	 _word(save_eflags)
          _word(allocated)
+         _word(pending_io_info)
+         _word(io_datum)
         _ends
 
         _struct(win32_context,0)
