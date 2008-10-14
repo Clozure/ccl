@@ -405,14 +405,28 @@ given is that of a group to which the current user belongs."
     (%%fstat fd stat)))
 
 
-(defun %file-kind (mode)
+(defun %file-kind (mode &optional fd)
+  (declare (ignorable fd))
   (when mode
     (let* ((kind (logand mode #$S_IFMT)))
       (cond ((eql kind #$S_IFDIR) :directory)
 	    ((eql kind #$S_IFREG) :file)
             #-windows-target
 	    ((eql kind #$S_IFLNK) :link)
-	    ((eql kind #$S_IFIFO) :pipe)
+	    ((eql kind #$S_IFIFO) 
+	     #-windows-target :pipe
+             ;; Windows doesn't seem to be able to distinguish between
+             ;; sockets and pipes.  Since this function is currently
+             ;; (mostly) used for printing streams and since we've
+             ;; already done something fairly expensive (stat, fstat)
+             ;; to get here.  try to distinguish between pipes and
+             ;; sockets by calling #_getsockopt.  If that succeeds,
+             ;; we've got a socket; otherwise, we're probably got a pipe.
+	     #+windows-target (rlet ((ptype :int)
+				     (plen :int 4))
+				(if (and fd (eql 0 (#_getsockopt fd #$SOL_SOCKET #$SO_TYPE  ptype plen)))
+				    :socket
+				    :pipe)))
             #-windows-target
 	    ((eql kind #$S_IFSOCK) :socket)
 	    ((eql kind #$S_IFCHR) :character-special)
@@ -424,7 +438,7 @@ given is that of a group to which the current user belongs."
 (defun %unix-fd-kind (fd)
   (if (isatty fd)
     :tty
-    (%file-kind (nth-value 1 (%fstat fd)))))
+    (%file-kind (nth-value 1 (%fstat fd)) fd)))
 
 #-windows-target
 (defun %uts-string (result idx buf)
@@ -497,22 +511,19 @@ given is that of a group to which the current user belongs."
 
 #+windows-target
 (defun fd-dup (fd &key direction inheritable)
+  (declare (ignore direction))
   (rlet ((handle #>HANDLE))
     (#_DuplicateHandle (#_GetCurrentProcess)
-		       (#__get_osfhandle fd)
+		       fd
 		       (#_GetCurrentProcess) 
 		       handle
 		       0
 		       (if inheritable #$TRUE #$FALSE)
-		       #$DUPLICATE_SAME_ACCESS)
-    (#__open_osfhandle (pref handle #>HANDLE) (case direction
-						(:input #$O_RDONLY)
-						(:output #$O_WRONLY)
-						(t #$O_RDWR)))))
+		       #$DUPLICATE_SAME_ACCESS)))
 		       
 
 (defun fd-fsync (fd)
-  #+windows-target (progn fd 0)
+  #+windows-target (#_FlushFileBuffers fd)
   #-windows-target
   (int-errno-call (#_fsync fd)))
 
@@ -1606,11 +1617,17 @@ not, why not; and what its result code was if it completed."
             (logior #$STARTF_USESTDHANDLES #$STARTF_USESHOWWINDOW))
       (setf (pref si #>STARTUPINFO.wShowWindow) #$SW_HIDE)
       (setf (pref si #>STARTUPINFO.hStdInput)
-            (%int-to-ptr (#__get_osfhandle (or new-in 0))))
+            (if new-in
+              (%int-to-ptr new-in)
+              (#_GetStdHandle #$STD_INPUT_HANDLE)))
       (setf (pref si #>STARTUPINFO.hStdOutput)
-            (%int-to-ptr (#__get_osfhandle (or new-out 1))))
+            (if new-out
+              (%int-to-ptr new-out)
+              (#_GetStdHandle #$STD_OUTPUT_HANDLE)))
       (setf (pref si #>STARTUPINFO.hStdError)
-            (%int-to-ptr (#__get_osfhandle (or new-err 2))))
+            (if new-err
+              (%int-to-ptr new-err)
+              (#_GetStdHandle #$STD_ERROR_HANDLE)))
       (if (zerop (#_CreateProcessW (%null-ptr)
                                    command
                                    (%null-ptr)

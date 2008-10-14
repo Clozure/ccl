@@ -112,7 +112,7 @@
 				   (%null-ptr))))
 	(if (eql handle *windows-invalid-handle*)
 	  (error "Error opening CDB database ~S" pathname)
-	  (#__open_osfhandle (%ptr-to-int handle) #$O_RDONLY)))))
+	  (%ptr-to-int handle)))))
   
   
   ;;; Read N octets from FID into BUF.  Return #of octets read or error.

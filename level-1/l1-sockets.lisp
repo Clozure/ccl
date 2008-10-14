@@ -60,10 +60,6 @@
     #-windows-target `(int-errno-call ,form))
   )
 
-(declaim (inline socket-handle))
-(defun socket-handle (fd)
-  #+windows-target (#__get_osfhandle fd)
-  #-windows-target fd)
 
 #+windows-target
 (defun %get-winsock-error ()
@@ -568,9 +564,8 @@ the socket is not connected."))
   
 (defun set-socket-fd-blocking (fd block-flag)
   #+windows-target
-  (let* ((handle (socket-handle fd)))
-    (rlet ((argp :u_long (if block-flag 0 1)))
-      (#_ioctlsocket handle #.(u32->s32 #$FIONBIO) argp)))
+  (rlet ((argp :u_long (if block-flag 0 1)))
+    (#_ioctlsocket fd #.(u32->s32 #$FIONBIO) argp))
   #-windows-target
   (if block-flag
     (fd-clear-flag fd #$O_NONBLOCK)
@@ -875,20 +870,7 @@ the socket is not connected."))
 			  (eql res (- #$EOPNOTSUPP))
 			  (eql res (- #$ENETUNREACH))))
 	       (- #$EAGAIN)
-               #+windows-target (if (< res 0)
-                                  res
-                                  (progn
-                                    ;; SLIME still crashes on startup
-                                    ;; on (at least) win32.
-                                    ;; This is intended to make it
-                                    ;; possible to attach GDB and
-                                    ;; try to see what's going on.
-                                    #+debug
-                                    (format t "~& pid = ~d" (getpid))
-                                    #+debug
-                                    (sleep 60)
-                                    (#__open_osfhandle res 0)))
-	       #-windows-target res))))
+               res))))
     (cond (wait
 	    (with-eagain fd :input
 	      (_accept fd *multiprocessing-socket-io*)))
@@ -1191,12 +1173,7 @@ unsigned IP address."
   #+windows-target (let* ((handle (#_socket domain type protocol)))
                      (if (< handle 0)
                        (%get-winsock-error)
-                       (let* ((fd (#__open_osfhandle handle 0)))
-                         (if (< fd 0)
-                           (prog1
-                               (%get-errno)
-                             (#_CloseHandle handle))
-                           fd)))))
+                       handle)))
 
 
 
@@ -1246,7 +1223,7 @@ unsigned IP address."
       
 
 (defun c_bind (sockfd sockaddr addrlen)
-  (check-socket-error (#_bind (socket-handle sockfd) sockaddr addrlen)))
+  (check-socket-error (#_bind sockfd sockaddr addrlen)))
 
 
 #+windows-target
@@ -1257,17 +1234,16 @@ unsigned IP address."
   (rlet ((writefds :fd_set)
          (exceptfds :fd_set)
          (tv :timeval :tv_sec 0 :tv_usec 0))
-    (let* ((handle (socket-handle sockfd)))
-      (fd-zero writefds)
-      (fd-zero exceptfds)
-      (fd-set handle writefds)
-      (fd-set handle exceptfds)
-      (when timeout-in-milliseconds
-        (multiple-value-bind (seconds milliseconds)
-            (floor timeout-in-milliseconds 1000)
-          (setf (pref tv :timeval.tv_sec) seconds
-                (pref tv :timeval.tv_usec) (* 1000 milliseconds))))
-      (> (#_select 1 (%null-ptr) writefds exceptfds (if timeout-in-milliseconds tv (%null-ptr))) 0))))
+    (fd-zero writefds)
+    (fd-zero exceptfds)
+    (fd-set sockfd writefds)
+    (fd-set sockfd exceptfds)
+    (when timeout-in-milliseconds
+      (multiple-value-bind (seconds milliseconds)
+          (floor timeout-in-milliseconds 1000)
+        (setf (pref tv :timeval.tv_sec) seconds
+              (pref tv :timeval.tv_usec) (* 1000 milliseconds))))
+    (> (#_select 1 (%null-ptr) writefds exceptfds (if timeout-in-milliseconds tv (%null-ptr))) 0)))
       
       
 ;;; If attempts to connnect are interrupted, we basically have to
@@ -1279,7 +1255,7 @@ unsigned IP address."
     (unwind-protect
          (progn
            (set-socket-fd-blocking sockfd nil)
-           (let* ((err (check-socket-error (#_connect (socket-handle sockfd) addr len))))
+           (let* ((err (check-socket-error (#_connect sockfd addr len))))
              (cond ((or (eql err (- #+windows-target #$WSAEINPROGRESS
                                     
                                     #-windows-target #$EINPROGRESS))
@@ -1294,17 +1270,17 @@ unsigned IP address."
       (set-socket-fd-blocking sockfd was-blocking))))
 
 (defun c_listen (sockfd backlog)
-  (check-socket-error (#_listen (socket-handle sockfd) backlog)))
+  (check-socket-error (#_listen sockfd backlog)))
 
 (defun c_accept (sockfd addrp addrlenp)
   (ignoring-eintr
-   (check-socket-error (#_accept (socket-handle sockfd) addrp addrlenp))))
+   (check-socket-error (#_accept sockfd addrp addrlenp))))
 
 (defun c_getsockname (sockfd addrp addrlenp)
-  (check-socket-error (#_getsockname (socket-handle sockfd) addrp addrlenp)))
+  (check-socket-error (#_getsockname sockfd addrp addrlenp)))
 
 (defun c_getpeername (sockfd addrp addrlenp)
-  (check-socket-error (#_getpeername (socket-handle sockfd) addrp addrlenp)))
+  (check-socket-error (#_getpeername sockfd addrp addrlenp)))
 
 #-windows-target
 (defun c_socketpair (domain type protocol socketsptr)
@@ -1312,27 +1288,27 @@ unsigned IP address."
 
 
 (defun c_sendto (sockfd msgptr len flags addrp addrlen)
-  (check-socket-error (#_sendto (socket-handle sockfd) msgptr len flags addrp addrlen)))
+  (check-socket-error (#_sendto sockfd msgptr len flags addrp addrlen)))
 
 (defun c_recvfrom (sockfd bufptr len flags addrp addrlenp)
-  (check-socket-error (#_recvfrom (socket-handle sockfd) bufptr len flags addrp addrlenp)))
+  (check-socket-error (#_recvfrom sockfd bufptr len flags addrp addrlenp)))
 
 (defun c_shutdown (sockfd how)
-  (check-socket-error (#_shutdown (socket-handle sockfd) how)))
+  (check-socket-error (#_shutdown sockfd how)))
 
 (defun c_setsockopt (sockfd level optname optvalp optlen)
-  (check-socket-error (#_setsockopt (socket-handle sockfd) level optname optvalp optlen)))
+  (check-socket-error (#_setsockopt sockfd level optname optvalp optlen)))
 
 (defun c_getsockopt (sockfd level optname optvalp optlenp)
-  (check-socket-error (#_getsockopt (socket-handle sockfd) level optname optvalp optlenp)))
+  (check-socket-error (#_getsockopt sockfd level optname optvalp optlenp)))
 
 #-windows-target
 (defun c_sendmsg (sockfd msghdrp flags)
-  (check-socket-error (#_sendmsg (socket-handle sockfd) msghdrp flags)))
+  (check-socket-error (#_sendmsg sockfd msghdrp flags)))
 
 #-windows-target
 (defun c_recvmsg (sockfd msghdrp flags)
-  (check-socket-error   (#_recvmsg (socket-handle sockfd) msghdrp flags)))
+  (check-socket-error   (#_recvmsg sockfd msghdrp flags)))
 
 ;;; Return a list of currently configured interfaces, a la ifconfig.
 (defstruct ip-interface

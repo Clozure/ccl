@@ -96,15 +96,23 @@ present and false otherwise. This variable shouldn't be set by user code.")
 (defun initialize-interactive-streams ()
   (let* ((encoding (lookup-character-encoding *terminal-character-encoding-name*))
          (encoding-name (if encoding (character-encoding-name encoding))))
-    (setq *stdin* (make-fd-stream 0
+    (setq *stdin* (make-fd-stream #-windows-target 0
+                                  #+windows-target (%ptr-to-int
+                                                    (#_GetStdHandle #$STD_INPUT_HANDLE))
                                   :basic t
                                   :sharing :lock
                                   :direction :input
                                   :interactive (not *batch-flag*)
                                   :encoding encoding-name))
-    (setq *stdout* (make-fd-stream 1 :basic t :direction :output :sharing :lock :encoding encoding-name))
+    (setq *stdout* (make-fd-stream #-windows-target 1
+                                   #+windows-target (%ptr-to-int
+                                                     (#_GetStdHandle #$STD_OUTPUT_HANDLE))
+                                   :basic t :direction :output :sharing :lock :encoding encoding-name))
 
-    (setq *stderr* (make-fd-stream 2 :basic t :direction :output :sharing :lock :encoding encoding-name))
+    (setq *stderr* (make-fd-stream #-windows-target 2
+                                   #+windows-target (%ptr-to-int
+                                                     (#_GetStdHandle #$STD_ERROR_HANDLE))
+                    :basic t :direction :output :sharing :lock :encoding encoding-name))
     (if *batch-flag*
       (let* ((tty-fd
                #-windows-target
