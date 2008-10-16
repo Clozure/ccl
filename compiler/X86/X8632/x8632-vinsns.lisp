@@ -3758,11 +3758,10 @@
 (define-x8632-vinsn  %slot-ref (((dest :lisp))
 				((instance (:lisp (:ne dest)))
 				 (index :lisp)))
-  :resume
   (movl (:@ x8632::misc-data-offset (:%l instance) (:%l index)) (:%l dest))
   (cmpl (:$l x8632::slot-unbound-marker) (:%l dest))
   (je :bad)
-
+  :resume
   (:anchored-uuo-section :resume)
   :bad
   (:anchored-uuo (uuo-error-slot-unbound (:%l dest) (:%l instance) (:%l index))))
