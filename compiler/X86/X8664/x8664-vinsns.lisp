@@ -693,9 +693,9 @@
 (define-x8664-vinsn set-z-flag-if-consp (()
                                          ((object :lisp))
                                          ((tag :u8)))
-  (movb (:%b object) (:%b tag))
-  (andb (:$b x8664::fulltagmask) (:%b tag))
-  (cmpb (:$b x8664::fulltag-cons) (:%b tag)))
+  (movl (:%l object) (:%l tag))
+  (andl (:$b x8664::fulltagmask) (:%l tag))
+  (cmpl (:$b x8664::fulltag-cons) (:%l tag)))
 
 (define-x8664-vinsn trap-unless-uvector (()
                                          ((object :lisp))
@@ -2719,7 +2719,7 @@
 			     ((temp :s64)))
   (movq (:%q src) (:%q temp))
   (sarq (:$ub count) (:%q temp))
-  (andb (:$b (lognot x8664::fixnummask)) (:%b temp))
+  (andq (:$b (lognot x8664::fixnummask)) (:%q temp))
   (movq (:%q temp) (:%q dest)))
 
 (define-x8664-vinsn %ilsr-c (((dest :imm))
