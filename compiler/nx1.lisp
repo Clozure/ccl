@@ -1174,7 +1174,7 @@
   (if (and (consp def)
            (eq (%car def) 'nfunction)
            (consp (%cdr def))
-           (symbolp (%cadr def)))
+           (or (symbolp (%cadr def)) (setf-function-name-p (%cadr def))))
     (note-function-info (%cadr def) nil env))
   (nx1-treat-as-call w))
 
