@@ -156,6 +156,11 @@
 	  (%add-with-carry res len-a carry (%bignum-sign a) nil sign-b nil))
 	(%normalize-bignum-macro res))))
 
+;;; Could do better than this, surely.
+(defun add-bignum-and-fixnum (bignum fixnum)
+  (with-small-bignum-buffers ((bigfix fixnum))
+    (add-bignums bignum bigfix)))
+
 
 
 ;;; B was shorter than A; keep adding B's sign digit to each remaining
