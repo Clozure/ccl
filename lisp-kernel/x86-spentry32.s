@@ -4135,13 +4135,12 @@ LocalLabelPrefix[]ffcall_call_end:
 	__(clr %temp0)
 	__(clr %fn)
 	__(pxor %fpzero,%fpzero)
-	__ifdef([DARWIN])
-	/* Darwin's math library seems to cause spurious FP exceptions. */
+	__(cmpb $0,C(bogus_fp_exceptions))
+	__(je 0f)
 	__(movl %arg_z,rcontext(tcr.ffi_exception))
-	__else
-	__(stmxcsr rcontext(tcr.ffi_exception))
-	__endif
-	__(pushl rcontext(tcr.save_eflags))
+	__(jmp 1f)
+0:	__(stmxcsr rcontext(tcr.ffi_exception))
+1:	__(pushl rcontext(tcr.save_eflags))
 	__(popfl)
 	__(movl rcontext(tcr.save_vsp),%esp)
 	__(movl rcontext(tcr.save_ebp),%ebp)
