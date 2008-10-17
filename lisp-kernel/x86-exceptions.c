@@ -1862,6 +1862,7 @@ windows_arbstack_exception_handler(EXCEPTION_POINTERS *exception_pointers)
         (current_sp < cs->high)) {
       debug_show_registers(context, exception_pointers->ExceptionRecord, 0);
       FBug(context, "Exception on foreign stack\n");
+      return EXCEPTION_CONTINUE_EXECUTION;
     }
 
     prepare_to_handle_windows_exception_on_foreign_stack(tcr,
