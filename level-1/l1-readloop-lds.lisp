@@ -379,16 +379,16 @@ expressions as commands")
     (progv vars vals
       (setq +++ ++ ++ + + - - form)
       (unwind-protect
-          (let* ((package *package*)
-                 (values (multiple-value-list (cheap-eval-in-environment form nil))))
-            (unless (eq package *package*)
-              ;; If changing a local value (e.g. buffer-local), not useful to notify app
-              ;; without more info.  Perhaps should have a *source-context* that can send along?
-              (unless (member '*package* vars)
-                (application-ui-operation *application* :note-current-package *package*)))
-            values)
+           (let* ((package *package*)
+                  (values (multiple-value-list (cheap-eval-in-environment form nil))))
+             (unless (eq package *package*)
+               ;; If changing a local value (e.g. buffer-local), not useful to notify app
+               ;; without more info.  Perhaps should have a *source-context* that can send along?
+               (unless (member '*package* vars)
+                 (application-ui-operation *application* :note-current-package *package*)))
+             values)
         (loop for var in vars as pval on vals
-          do (setf (car pval) (symbol-value var)))))))
+              do (setf (car pval) (symbol-value var)))))))
 
 
 (defun toplevel-print (values &optional (out *standard-output*))
@@ -632,10 +632,10 @@ expressions as commands")
                  (*print-level* *error-print-level*)
                  (*print-length* *error-print-length*)
 					;(*print-pretty* nil)
-                   (*print-array* nil))
-              (format t "~&> Type :GO to continue, :POP to abort, :R for a list of available restarts.")
-              (format t "~&> If continued: ~A~%" continue))
-            (format t "~&> Type :POP to abort, :R for a list of available restarts.~%"))
+                 (*print-array* nil))
+            (format t "~&> Type :GO to continue, :POP to abort, :R for a list of available restarts.")
+            (format t "~&> If continued: ~A~%" continue))
+          (format t "~&> Type :POP to abort, :R for a list of available restarts.~%"))
         (format t "~&> Type :? for other options.")
         (terpri)
         (force-output)
