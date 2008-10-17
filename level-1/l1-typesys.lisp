@@ -1747,7 +1747,6 @@
 
 (setf (type-predicate 'negation-ctype) 'negation-ctype-p)
 
-
 (define-type-method (negation :unparse) (x)
   `(not ,(type-specifier (negation-ctype-type x))))
 
@@ -3436,8 +3435,6 @@
                              (member (istruct-type-name x)
                                      '(args-ctype values-ctype function-ctype))))
 
-(defun valuec-ctype-p (x) (istruct-typep x 'values-ctype))
-
 (setf (type-predicate 'args-ctype) 'args-ctype-p
       (type-predicate 'function-ctype) 'function-ctype-p
       (type-predicate 'values-ctype) 'values-ctype-p)
@@ -3455,15 +3452,28 @@
   (let* ((class1 (if (class-ctype-p type1) (class-ctype-class type1)))
          (class2 (if (class-ctype-p type2) (class-ctype-class type2))))
     (if (and class1 class2)
-      (if (memq class2 (class-direct-superclasses class1))
-	(values t t)
-	(if (or (class-has-a-forward-referenced-superclass-p class1)
-                (typep class1 'compile-time-class))
-	  (values nil nil)
-	  (let ((supers (%inited-class-cpl class1)))
-	    (if (memq class2 supers)
-	      (values t t)
-	      (values nil t)))))
+      (let* ((ordinal2 (%class-ordinal class2))
+             (wrapper1 (%class.own-wrapper class1))
+             (bits1 (if wrapper1 (%wrapper-cpl-bits wrapper1))))
+        (if bits1
+          (locally (declare (simple-bit-vector bits1)
+                            (optimize (speed 3) (safety 0)))
+            (values (if (< ordinal2 (length bits1))
+                      (not (eql 0 (sbit bits1 ordinal2))))
+                    t))
+          (if (%standard-instance-p class1)
+            (if (memq class2 (%class.local-supers class1))
+              (values t t)
+              (if (eq (%class-of-instance class1)
+                      *forward-referenced-class-class*)
+                (values nil nil)
+                ;; %INITED-CLASS-CPL will return NIL if class1 can't
+                ;; be finalized; in that case, we don't know the answer.
+                (let ((supers (%inited-class-cpl class1)))
+                  (if (memq class2 supers)
+                    (values t t)
+                    (values nil (not (null supers)))))))
+            (values nil t))))
       (values nil t))))
 
 (defun find-class-intersection (c1 c2)
