@@ -581,5 +581,8 @@
     *nx-nil*))
 )
 
+(defmacro make-mask (&rest weights)
+  `(logior ,@(mapcar #'(lambda (w) `(ash 1 ,w)) weights)))
+
 (provide "NXENV")
 

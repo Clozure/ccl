@@ -35,10 +35,7 @@
           x8632-arg-registers-mask
           x8632-nonvolatile-registers-mask))
 
-;;; Defined in x8664env.lisp, too
-#+x8632-target
-(defmacro make-mask (&rest weights)
-  `(logior ,@(mapcar #'(lambda (w) `(ash 1 ,w)) weights)))
+
 
 (defconstant x8632-temp-node-regs 
   (make-mask x8632::temp0

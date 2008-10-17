@@ -47,8 +47,7 @@
           ppc-arg-registers-mask
           ppc-nonvolatile-registers-mask))
 
-(defmacro make-mask (&rest weights)
-  `(logior ,@(mapcar #'(lambda (w) `(ash 1 ,w)) weights)))
+
 
 (defconstant ppc-temp-node-regs 
   (make-mask ppc::temp0

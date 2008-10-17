@@ -42,8 +42,6 @@
           x8664-arg-registers-mask
           x8664-nonvolatile-registers-mask))
 
-(defmacro make-mask (&rest weights)
-  `(logior ,@(mapcar #'(lambda (w) `(ash 1 ,w)) weights)))
 
 (defconstant x8664-temp-node-regs 
   (make-mask x8664::temp0
