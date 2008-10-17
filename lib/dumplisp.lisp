@@ -140,6 +140,11 @@
                            (funcall f))
                          (kill-lisp-pointers)
                          (clear-ioblock-streams)
+                         (with-deferred-gc
+                             (let* ((pop *termination-population*))
+                               (with-lock-grabbed (*termination-population-lock*)
+                                 (setf (population.data pop) nil
+                                       (population.termination-list pop) nil))))
                          (%set-toplevel
                           #'(lambda ()
                               (%set-toplevel #'(lambda ()
