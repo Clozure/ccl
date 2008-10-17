@@ -283,10 +283,10 @@ lisp_read(HANDLE hfile, void *buf, unsigned int count)
 {
   HANDLE hevent;
   OVERLAPPED overlapped;
-  DWORD err, nread;
+  DWORD err, nread, wait_result;
   pending_io pending;
   TCR *tcr;
-
+  
   
   memset(&overlapped,0,sizeof(overlapped));
 
@@ -300,37 +300,48 @@ lisp_read(HANDLE hfile, void *buf, unsigned int count)
   tcr->pending_io_info = &pending;
   hevent = (HANDLE)(tcr->io_datum);
   overlapped.hEvent = hevent;
-  do {
-    ResetEvent(hevent);
-    if (ReadFile(hfile, buf, count, &nread, &overlapped)) {
-      tcr->pending_io_info = NULL;
-      return nread;
-    }
-    err = GetLastError();
+  ResetEvent(hevent);
+  if (ReadFile(hfile, buf, count, &nread, &overlapped)) {
+    tcr->pending_io_info = NULL;
+    return nread;
+  }
+  err = GetLastError();
+  
+  if (err == ERROR_HANDLE_EOF) {
+    tcr->pending_io_info = NULL;
+    return 0;
+  }
 
+  if (err != ERROR_IO_PENDING) {
+    _dosmaperr(err);
+    tcr->pending_io_info = NULL;
+    return -1;
+  }
+  
+  err = 0;
+  
+  /* We block here */    
+  wait_result = WaitForSingleObjectEx(hevent, INFINITE, true);
+  tcr->pending_io_info = NULL;
+  if (wait_result == WAIT_OBJECT_0) {
+    err = overlapped.Internal;
     if (err == ERROR_HANDLE_EOF) {
-      tcr->pending_io_info = NULL;
       return 0;
     }
-
-    if (err != ERROR_IO_PENDING) {
+    if (err) {
       _dosmaperr(err);
-      tcr->pending_io_info = NULL;
       return -1;
     }
+    return overlapped.InternalHigh;
+  }
+
+  if (wait_result == WAIT_IO_COMPLETION) {
+    CancelIo(hfile);
+    errno = EINTR;
+    return -1;
+  }
+  err = GetLastError();
   
-    err = 0;
-    /* We block here */
-    if (GetOverlappedResult(hfile, &overlapped, &nread, TRUE)) {
-      if (nread) {
-        tcr->pending_io_info = NULL;
-        return nread;
-      }
-    } else {
-      err = GetLastError();
-    }
-  } while (!err);
-  tcr->pending_io_info = NULL;
 
   switch (err) {
   case ERROR_HANDLE_EOF: 
