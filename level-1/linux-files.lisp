@@ -199,6 +199,7 @@ it has been changed, this is the directory OpenMCL was started in."
 	     (let* ((len (%os-getcwd buf bufsize)))
 	       (cond ((< len 0) (%errno-disp len))
 		     ((< len bufsize)
+		      (setf (%get-unsigned-byte buf len) 0)
 		      (values (get-foreign-namestring buf) len))
 		     (t (values nil len)))))))
     (do* ((string nil)
@@ -520,7 +521,7 @@ given is that of a group to which the current user belongs."
 		       0
 		       (if inheritable #$TRUE #$FALSE)
 		       #$DUPLICATE_SAME_ACCESS)))
-		       
+
 
 (defun fd-fsync (fd)
   #+windows-target (#_FlushFileBuffers fd)
@@ -781,7 +782,7 @@ environment variable. Returns NIL if there is no user with the ID uid."
           (return (get-foreign-namestring p))))))
   #-windows-target
   (rlet ((pwd :passwd)
-         (result :address))
+         (result :address pwd))
     (do* ((buflen 512 (* 2 buflen)))
          ()
       (%stack-block ((buf buflen))
@@ -797,7 +798,9 @@ environment variable. Returns NIL if there is no user with the ID uid."
                                 :address result
                                 :int)))
           (if (eql 0 err)
-            (return (get-foreign-namestring (pref pwd :passwd.pw_dir)))
+            (return (let* ((rp (%get-ptr result)))
+                      (unless (%null-ptr-p rp)
+                        (get-foreign-namestring (pref rp :passwd.pw_dir)))))
             (unless (eql err #$ERANGE)
               (return nil))))))))
 
@@ -1196,48 +1199,60 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                    (remove-external-process p)
                    (setq terminated t)))))))))
       
-(defun run-external-process (proc in-fd out-fd error-fd &optional env)
-  ;; type-check the env variable
-  (dolist (pair env)
-    (destructuring-bind (var . val) pair
-      (assert (typep var '(or string symbol character)))
-      (assert (typep val 'string)))) 
-  (call-with-string-vector
-   #'(lambda (argv)
-       (let* ((child-pid (#_fork)))
-	 (declare (fixnum child-pid))
-	 (cond ((zerop child-pid)
-		;; Running in the child; do an exec
-                (dolist (pair env)
-                  (setenv (string (car pair)) (cdr pair)))
-		(without-interrupts
-		 (exec-with-io-redirection
-		  in-fd out-fd error-fd argv)))
-	       ((> child-pid 0)
-		;; Running in the parent: success
-		(setf (external-process-pid proc) child-pid)
-		(add-external-process proc)
-		(signal-semaphore (external-process-signal proc))
-                (monitor-external-process proc))
-               (t
-                ;; Fork failed
-                (setf (external-process-%status proc) :error
-                      (external-process-%exit-code proc) (%get-errno))
-                (signal-semaphore (external-process-signal proc))))))
-   (external-process-args proc)))
+(defun run-external-process (proc in-fd out-fd error-fd argv &optional env)
+  (let* ((signaled nil))
+    (unwind-protect
+         (let* ((child-pid (#_fork)))
+           (declare (fixnum child-pid))
+           (cond ((zerop child-pid)
+                  ;; Running in the child; do an exec
+                  (setq signaled t)
+                  (dolist (pair env)
+                    (setenv (string (car pair)) (cdr pair)))
+                  (without-interrupts
+                    (exec-with-io-redirection
+                     in-fd out-fd error-fd argv)))
+                 ((> child-pid 0)
+                  ;; Running in the parent: success
+                  (setf (external-process-pid proc) child-pid)
+                  (add-external-process proc)
+                  (signal-semaphore (external-process-signal proc))
+                  (setq signaled t)
+                  (monitor-external-process proc))
+                 (t
+                  ;; Fork failed
+                  (setf (external-process-%status proc) :error
+                        (external-process-%exit-code proc) (%get-errno))
+                  (signal-semaphore (external-process-signal proc))
+                  (setq signaled t))))
+      (unless signaled
+        (setf (external-process-%status proc) :error
+              (external-process-%exit-code proc) -1)
+        (signal-semaphore (external-process-signal proc))))))
 
-		
+(defparameter *silently-ignore-catastrophic-failure-in-run-program*
+  #+ccl-0711 t #-ccl-0711 nil
+  "If NIL, signal an error if run-program is unable to start the program.
+If non-NIL, treat failure to start the same as failure from the program
+itself, by setting the status and exit-code fields.")
+
 (defun run-program (program args &key
 			    (wait t) pty
 			    input if-input-does-not-exist
 			    output (if-output-exists :error)
 			    (error :output) (if-error-exists :error)
 			    status-hook (element-type 'character)
-                            env)
+                            env
+                            (silently-ignore-catastrophic-failures
+                             *silently-ignore-catastrophic-failure-in-run-program*))
   "Invoke an external program as an OS subprocess of lisp."
   (declare (ignore pty))
   (unless (every #'(lambda (a) (typep a 'simple-string)) args)
     (error "Program args must all be simple strings : ~s" args))
+  (dolist (pair env)
+    (destructuring-bind (var . val) pair
+      (check-type var (or string symbol character))
+      (check-type val string)))
   (push (native-untranslated-namestring program) args)
   (let* ((token (list 0))
 	 (in-fd nil)
@@ -1266,7 +1281,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                                  :element-type element-type))
 	   (multiple-value-setq (out-fd out-stream close-in-parent close-on-error)
 	     (get-descriptor-for output proc close-in-parent close-on-error
-				 :direction :output
+                                 :direction :output
 				 :if-exists if-output-exists
                                  :element-type element-type))
 	   (multiple-value-setq (error-fd error-stream close-in-parent close-on-error)
@@ -1276,29 +1291,35 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
 				   :direction :output
 				   :if-exists if-error-exists
                                    :element-type element-type)))
-	   (setf (external-process-input proc) in-stream
+           (setf (external-process-input proc) in-stream
                  (external-process-output proc) out-stream
                  (external-process-error proc) error-stream)
-           (process-run-function
-            (list :name
-                  (format nil "Monitor thread for external process ~a" args)
-                  :stack-size (ash 128 10)
-                  :vstack-size (ash 128 10)
-                  :tstack-size (ash 128 10))
-            #'run-external-process proc in-fd out-fd error-fd env)
-           (wait-on-semaphore (external-process-signal proc))
-           )
+           (call-with-string-vector
+            #'(lambda (argv)
+                (process-run-function
+                 (list :name
+                       (format nil "Monitor thread for external process ~a" args)
+                       :stack-size (ash 128 10)
+                       :vstack-size (ash 128 10)
+                       :tstack-size (ash 128 10))
+                 #'run-external-process proc in-fd out-fd error-fd argv env)
+                (wait-on-semaphore (external-process-signal proc)))
+            args))
       (dolist (fd close-in-parent) (fd-close fd))
       (unless (external-process-pid proc)
         (dolist (fd close-on-error) (fd-close fd)))
       (when (and wait (external-process-pid proc))
         (with-interrupts-enabled
-            (wait-on-semaphore (external-process-completed proc)))))
-    (and (or (external-process-pid proc)
-             (if (eq (external-process-%status proc) :error)
-               (error "Fork failed in ~s: ~s" proc (%strerror (external-process-%exit-code proc)))))
-             (external-process-%status proc)) proc))
-
+          (wait-on-semaphore (external-process-completed proc)))))
+    (unless (external-process-pid proc)
+      ;; something is wrong
+      (if (eq (external-process-%status proc) :error)
+        ;; Fork failed
+        (unless silently-ignore-catastrophic-failures
+          (cerror "Pretend the program ran and failed" 'external-process-creation-failure :proc proc))
+        ;; Currently can't happen.
+        (error "Bug: fork failed but status field not set?")))
+    proc))
 
 
 
@@ -1367,11 +1388,14 @@ identifies it."
 (defun signal-external-process (proc signal)
   "Send the specified signal to the specified external process.  (Typically,
 it would only be useful to call this function if the EXTERNAL-PROCESS was
-created with :WAIT NIL.) Return T if successful; signal an error otherwise."
+created with :WAIT NIL.) Return T if successful; NIL if the process wasn't
+created successfully, and signal an error otherwise."
   (require-type proc 'external-process)
   (let* ((pid (external-process-pid proc)))
     (when pid
-      (int-errno-call (#_kill pid signal)))))
+      (let ((error (int-errno-call (#_kill pid signal))))
+        (or (eql error 0)
+            (%errno-disp error))))))
 
 ) ; #-windows-target (progn
 
@@ -1740,8 +1764,9 @@ not, why not; and what its result code was if it completed."
 	  (return-from %acquire-shared-resource nil))))
     (let* ((request (make-shared-resource-request *current-process*)))
       (when verbose
-	(format t "~%~%;;;~%;;; ~a requires access to ~a~%;;;~%~%"
-		*current-process* (shared-resource-name resource)))
+	(format t "~%~%;;;~%;;; ~a requires access to ~a~%;;; Type (:y ~D) to yield control to this thread.~%;;;~%"
+		*current-process* (shared-resource-name resource)
+                (process-serial-number *current-process*)))
       (with-lock-grabbed ((shared-resource-lock resource))
 	(append-dll-node request (shared-resource-requestors resource)))
       (wait-on-semaphore (shared-resource-request-signal request))
