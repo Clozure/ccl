@@ -35,7 +35,42 @@
   (std imm2 ppc64::misc-header-offset bignum)
   (blr))
   
-
+(defppclapfunction %multiply-and-add-loop
+    ((x 8) (y 0)  (r arg_x) (idx arg_y) (ylen arg_z))
+  (let ((cc nargs)
+	(xx imm2)
+	(yy imm3)
+	(rr imm4)
+	(i imm0)
+	(j imm1))
+    (srdi i idx 1)
+    (la i ppc64::misc-data-offset i)
+    (ld temp0 x vsp)
+    (lwzx xx temp0 i)			;x[i]
+    (ld temp0 y vsp)
+    (mr temp1 r)
+    (li cc 0)
+    (li j ppc64::misc-data-offset)
+    @loop
+    (lwzx yy temp0 j)
+    (mulld yy xx yy)
+    ;; 64-bit product now in %yy
+    (lwzx rr temp1 i)
+    ;; add in digit from r[i]
+    (add rr rr yy)
+    ;; add in carry
+    (add rr rr cc)
+    (stwx rr temp1 i)
+    (srdi cc rr 32) 		;get carry digit into low word
+    (cmpdi ylen '1)
+    (la i 4 i)
+    (la j 4 j)
+    (subi ylen ylen '1)
+    (bne  @loop)
+    (stwx cc temp1 i)
+    (set-nargs 0)
+    (la vsp 16 vsp)
+    (blr)))
 
 ;;; Multiply the (32-bit) digits X and Y, producing a 64-bit result.
 ;;; Add the 32-bit "prev" digit and the 32-bit carry-in digit to that 64-bit
