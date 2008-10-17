@@ -272,12 +272,13 @@
                                          `,handler))))
                            clauses))
         (cluster (gensym)))    
-    `(let* (,@fns
-            (,cluster (list ,@bindings))
-            (%handlers% (cons ,cluster %handlers%)))
-       (declare (dynamic-extent ,cluster %handlers%))
-       ,@decls
-       (progn
+    (if (null bindings)
+      `(progn ,@body)
+      `(let* (,@fns
+              (,cluster (list ,@bindings))
+              (%handlers% (cons ,cluster %handlers%)))
+         (declare (dynamic-extent ,cluster %handlers%))
+         ,@decls
          ,@body))))
 
 (defmacro restart-case (&environment env form &rest clauses)
@@ -316,10 +317,12 @@
                  (declare (ignore arglist))
                  `(block ,block
                     (let* ((,restart-name (%cons-restart ',name () ,report ,interactive ,test))
-                           (,cluster (list ,restart-name))
-                           (%restarts% (cons ,cluster %restarts%)))
-                      (declare (dynamic-extent ,restart-name ,cluster %restarts%))
-                      (catch ,cluster (return-from ,block ,form)))
+                           (,cluster (list ,restart-name)))
+                      (declare (dynamic-extent ,restart-name ,cluster))
+                      (catch ,cluster
+                        (let ((%restarts% (cons ,cluster %restarts%)))
+                          (declare (dynamic-extent %restarts%))
+                          (return-from ,block ,form))))
                     ,@body))))
             (t
              (let ((block (gensym)) (val (gensym))
@@ -336,10 +339,12 @@
                          cases)))
                `(block ,block
                   (let ((,val (let* (,@restarts
-                                     (,cluster (list ,@(reverse restart-names)))
-                                     (%restarts% (cons ,cluster %restarts%)))
-                                (declare (dynamic-extent ,@restart-names ,cluster %restarts%))
-                                (catch ,cluster (return-from ,block ,form)))))
+                                     (,cluster (list ,@(reverse restart-names))))
+                                (declare (dynamic-extent ,@restart-names ,cluster))
+                                (catch ,cluster
+                                  (let ((%restarts% (cons ,cluster %restarts%)))
+                                    (declare (dynamic-extent %restarts%))
+                                    (return-from ,block ,form))))))
                     (case (pop ,val)
                       ,@(nreverse cases))))))))))
 
@@ -410,16 +415,20 @@
                (if var
                  `(block ,block
                     ((lambda ,var ,@body)
-                      (let* ((,cluster (list ',type))
-                            (%handlers% (cons ,cluster %handlers%)))
-                       (declare (dynamic-extent ,cluster %handlers%))
-                       (catch ,cluster (return-from ,block ,form)))))
+                      (let* ((,cluster (list ',type)))
+                        (declare (dynamic-extent ,cluster))
+                        (catch ,cluster
+                          (let ((%handlers% (cons ,cluster %handlers%)))
+                            (declare (dynamic-extent %handlers%))
+                            (return-from ,block ,form))))))
                  `(block ,block
-                    (let* ((,cluster (list ',type))
-                           (%handlers% (cons ,cluster %handlers%)))
-                      (declare (dynamic-extent ,cluster %handlers%))
-                      (catch ,cluster (return-from ,block ,form)))
-                    (locally ,@body))))))
+                    (let* ((,cluster (list ',type)))
+                      (declare (dynamic-extent ,cluster))
+                      (catch ,cluster
+                        (let ((%handlers% (cons ,cluster %handlers%)))
+                          (declare (dynamic-extent %handlers%))
+                          (return-from ,block ,form)))
+                      (locally ,@body)))))))
           (t (let ((block (gensym)) (cluster (gensym)) (val (gensym))
                    (index -1) handlers cases)
                (while clauses
@@ -433,10 +442,12 @@
                            `(,index ((lambda ,var ,@body) ,val))
                            `(,index (locally ,@body))) cases)))
                `(block ,block
-                  (let ((,val (let* ((,cluster (list ,@(nreverse handlers)))
-                                     (%handlers% (cons ,cluster %handlers%)))
-                                (declare (dynamic-extent ,cluster %handlers%))
-                                (catch ,cluster (return-from ,block ,form)))))
+                  (let ((,val (let* ((,cluster (list ,@(nreverse handlers))))
+                                (declare (dynamic-extent ,cluster))
+                                (catch ,cluster
+                                  (let ((%handlers% (cons ,cluster %handlers%)))
+                                    (declare (dynamic-extent %handlers%))
+                                    (return-from ,block ,form))))))
                     (case (pop ,val)
                       ,@(nreverse cases)))))))))))
 
@@ -458,17 +469,21 @@
                                 ,format-string
                                 nil
                                 nil))
-          (,cluster (list ,temp))
-          (%restarts% (cons ,cluster %restarts%)))
-     (declare (dynamic-extent ,temp ,cluster %restarts%))
-     (catch ,cluster ,@body)))
+          (,cluster (list ,temp)))
+     (declare (dynamic-extent ,temp ,cluster))
+     (catch ,cluster
+       (let ((%restarts% (cons ,cluster %restarts%)))
+         (declare (dynamic-extent %restarts%))
+         ,@body))))
 
 ;Like with-simple-restart but takes a pre-consed restart.  Not CL.
 (defmacro with-restart (restart &body body &aux (cluster (gensym)))
-  `(let* ((,cluster (list ,restart))
-          (%restarts% (cons ,cluster %restarts%)))
-     (declare (dynamic-extent ,cluster %restarts%))
-     (catch ,cluster ,@body)))
+  `(let* ((,cluster (list ,restart)))
+     (declare (dynamic-extent ,cluster))
+     (catch ,cluster
+       (let ((%restarts% (cons ,cluster %restarts%)))
+         (declare (dynamic-extent %restarts%))
+         ,@body))))
 
 (defmacro ignore-errors (&rest forms)
   "Execute FORMS handling ERROR conditions, returning the result of the last
@@ -675,11 +690,13 @@
        `(%defvar ',var))
     ',var))
          
-(defmacro def-standard-initial-binding (name &optional (form name) &environment env)
+(defmacro def-standard-initial-binding (name &optional (form name) (doc nil doc-p) &environment env)
   `(progn
     (eval-when (:compile-toplevel)
       (note-variable-info ',name t ,env))    
     (define-standard-initial-binding ',name #'(lambda () ,form))
+    ,@(when doc-p
+           `((set-documentation ',name 'variable ,doc)))
     ',name))
 
 (defmacro defparameter (&environment env var value &optional doc)
@@ -851,7 +868,7 @@ are no Forms, OR returns NIL."
     (progn
       (if (assoc atom-or-list used-keys)
         (warn "Duplicate keyform ~s in ~s statement." atom-or-list statement-type)
-        (nconc used-keys (list (cons atom-or-list t))))
+        (setq used-keys (nconc used-keys (list (cons atom-or-list t)))))
       `((,(if (typep atom-or-list '(and number (not fixnum)))
               'eql
               'eq)
@@ -1482,7 +1499,7 @@ to open."
        *READ-SUPPRESS*                  NIL
        *READTABLE*                      the standard readtable"
   (multiple-value-bind (decls body) (parse-body body env)
-    `(let ((*package* (find-package "CL-USER"))
+    `(let ((*package* (pkg-arg "COMMON-LISP-USER"))
            (*print-array* t)
            (*print-base* 10.)
            (*print-case* :upcase)
@@ -1773,6 +1790,8 @@ to open."
     (values (nreverse outer) (nreverse inner))))
 		   
 
+(defvar *warn-about-unreferenced-required-args-in-methods* #+ccl-0711 nil #-ccl-0711 T)
+
 (defun parse-defmethod (name args env)
   (validate-function-name name)
   (let (qualifiers lambda-list parameters specializers specializers-form refs types temp)
@@ -1801,6 +1820,8 @@ to open."
                      (t (signal-program-error "Illegal arg ~S" p))))
               (t
                (push p parameters)
+               (unless *warn-about-unreferenced-required-args-in-methods*
+                 (push p refs))
                (push t specializers-form)
                (push t specializers)))))
     (setq lambda-list (nreconc parameters lambda-list))
@@ -2611,7 +2632,6 @@ defcallback returns the callback pointer, e.g., the value of name."
             (handler-bind ((,condition-name ,handler))
               (values ,body)))))
         body))))
-
 
 
 (defmacro define-toplevel-command (group-name name arglist &body body &environment env)
@@ -3468,8 +3488,6 @@ to be at least partially steppable."
 (declare-arch-specific-macro area-succ)
 
 
-
-
 (defmacro do-gc-areas ((area) &body body)
   (let ((initial-area (gensym)))
     `(let* ((,initial-area (%get-kernel-global 'all-areas))
@@ -3587,19 +3605,20 @@ to be at least partially steppable."
   (let* ((res (gensym))
          (eintr (symbol-value (read-from-string "#$EINTR"))))
     `(loop
-      (let* ((,res (progn ,@body)))
-        (unless (eql ,res (- ,eintr))
-          (return ,res))))))
+       (let* ((,res (progn ,@body)))
+         (unless (eql ,res (- ,eintr))
+           (return ,res))))))
 
 (defmacro ff-call-ignoring-eintr (&body body)
   (let* ((res (gensym))
          (eintr (symbol-value (read-from-string "#$EINTR"))))
     `(loop
-      (let* ((,res (progn ,@body)))
-        (when (< ,res 0)
-          (setq ,res (%get-errno)))
-        (unless (eql ,res (- ,eintr))
-          (return ,res))))))
+       (let* ((,res (progn ,@body)))
+         (declare (fixnum ,res))
+         (when (< ,res 0)
+           (setq ,res (%get-errno)))
+         (unless (eql ,res (- ,eintr))
+           (return ,res))))))
 
 (defmacro basic-stream-ioblock (s)
   `(or (basic-stream.state ,s)
