@@ -64,12 +64,11 @@
     ;;(%proclaim-special name)          ;
     ;; already done by defpascal expansion
     (when name (set name trampoline))
-    (record-source-file name 'defcallback)
+    (record-source-file name 'callback)
     (when (and doc-string *save-doc-strings*)
       (setf (documentation name 'variable) doc-string))
     (when *fasload-print* (format t "~&~S~%" name))
     (or name trampoline)))
-
 
 (defun %lookup-pascal-function (index)
   (declare (optimize (speed 3) (safety 0)))
