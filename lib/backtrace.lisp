@@ -27,7 +27,7 @@
 (defparameter *backtrace-print-level* 2)
 (defparameter *backtrace-print-length* 5)
 
-(defparameter *backtrace-format* :traditional
+(defparameter *backtrace-format* #+ccl-0711 :direct #-ccl-0711 :traditional
   "If :TRADITIONAL, shows calls to non-toplevel functions using FUNCALL, and shows frame address values.
    If :DIRECT, uses a more streamlined format.")
 
@@ -166,38 +166,43 @@ object."
              (list name)
              (case *backtrace-format*
                (:direct
-                  (list (format nil "~s" lfun)))
+                  (list (format nil "~s" (or name lfun))))
                (:list
-                  (if (lfun-closure-p lfun) ;; could be stack consed
-                    (list 'funcall (format nil "~s" lfun))
-                    (list lfun)))
+                  (list 'funcall (format nil "~s" (or name lfun))))
                (t (list 'funcall `(function ,(concatenate 'string "#<" (%lfun-name-string lfun) ">")))))))
-         (if (and pc (<= pc target::arg-check-trap-pc-limit))
-           (arg-check-call-arguments cfp lfun)
-           (collect ((call))
-             (multiple-value-bind (req opt restp keys)
-                 (function-args lfun)
-               (when (or (not (eql 0 req)) (not (eql 0 opt)) restp keys)
-                 (let* ((arglist (arglist-from-map lfun)))
-                   (if (or (null arglist) (null pc))
-                     (call "???")
-                     (progn
-                       (dotimes (i req)
-                         (let* ((val (argument-value context cfp lfun pc (pop arglist))))
-                           (if (eq val (%unbound-marker))
-                             (call "?")
-                             (call (let* ((*print-length* *backtrace-print-length*)
-                                          (*print-level* *backtrace-print-level*))
-                                     (format nil "~s" val))))))
-                       (case *backtrace-format*
-                         (:direct
-                            (when (not (eql opt 0)) (call "[&optional ...]"))
-                            (if keys
-                              (call "[&key ...]")
-                              (when restp (call "[&rest ...]"))))
-                         (t (if (or restp keys (not (eql opt 0)))
-                              (call "[...]"))))))))
-               (call))))))
+         (backtrace-supplied-args context cfp lfun pc)))
+
+(defun backtrace-supplied-args (context frame lfun pc)
+  (if (and pc (<= pc target::arg-check-trap-pc-limit))
+    (arg-check-call-arguments frame lfun)
+    (multiple-value-bind (params valid) (arglist-from-map lfun)
+      (if (not valid)
+        '("???")
+        (let ((args (arguments-and-locals context frame lfun pc)) ;overkill, but will do.
+              (state :required)
+              (strings ()))
+          (flet ((collect (arg)
+                   (let* ((*print-length* *backtrace-print-length*)
+                          (*print-level* *backtrace-print-level*))
+                     (push (format nil "~s" arg) strings))))
+            (dolist (param params)
+              (if (or (member param lambda-list-keywords) (eq param '&lexpr))
+                (setq state param)
+                (let* ((pair (pop args))
+                       (value (cdr pair)))
+                  (case state
+                    (&lexpr
+                       (with-list-from-lexpr (rest value)
+                         (dolist (r rest) (collect r)))
+                       (return))
+                    (&rest
+                       (dolist (r value) (collect r))
+                       (return))
+                    (&key (collect param)))
+                  (if (eq value (%unbound-marker))
+                    (push "?" strings)
+                    (collect value))))))
+          (nreverse strings))))))
 
 ;;; Return a list of "interesting" frame addresses in context, most
 ;;; recent first.
