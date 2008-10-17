@@ -160,8 +160,8 @@
 
 (defun arglist-from-map (lfun)
   (multiple-value-bind (nreq nopt restp nkeys allow-other-keys
-                             optinit lexprp
-                             ncells nclosed)
+                        optinit lexprp
+                        ncells nclosed)
       (function-args lfun)
     (declare (ignore optinit))
     (if lexprp
@@ -185,7 +185,7 @@
               (when restp
                 (push (if lexprp '&lexpr '&rest) res)
                 (push (if (> idx 0) (elt map (decf idx)) 'the-rest) res))
-	      (when nkeys
+              (when nkeys
                 (push '&key res)
                 (let ((keyvect (lfun-keyvect lfun)))
                   (dotimes (i (length keyvect))
@@ -212,7 +212,7 @@
                 (idx (- (length map) nclosed)))
             (unless (zerop total)
               (progn
-                (dotimes (x nreq)
+                (dotimes (x (the fixnum nreq))
                   (declare (fixnum x))
                   (req (if (> idx 0) (elt map (decf idx)) (make-arg "ARG" x))))
                 (when (neq nopt 0)
@@ -221,9 +221,11 @@
                 (when (or restp lexprp)
                   (setq rest (if (> idx 0) (elt map (decf idx)) 'the-rest)))
                 (when nkeys
-		  (dotimes (i (the fixnum nkeys))
+                  (dotimes (i (the fixnum nkeys))
                     (keys (if (> idx 0) (elt map (decf idx)) (make-arg "KEY" i)))))))))
-        (values (not (null map)) (req) (opt) rest (keys))))))
+        (values (or (not (null map))
+                    (and (eql 0 nreq) (eql 0 nopt) (not restp) (null nkeys)))
+                (req) (opt) rest (keys))))))
               
               
 
