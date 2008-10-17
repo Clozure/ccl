@@ -113,8 +113,7 @@
 	(if (eql handle *windows-invalid-handle*)
 	  (error "Error opening CDB database ~S" pathname)
 	  (%ptr-to-int handle)))))
-  
-  
+
   ;;; Read N octets from FID into BUF.  Return #of octets read or error.
   (defun fid-read (fid buf n)
     (let* ((count (fd-read fid buf n)))
@@ -875,18 +874,19 @@ satisfy the optional predicate PREDICATE."
  (qlfun |#&-reader| (stream char arg)
    (declare (ignore char arg))
    (let* ((package (find-package (ftd-interface-package-name *target-ftd*))))
-     (multiple-value-bind (sym query)
+     (multiple-value-bind (sym source query)
          (%read-symbol-preserving-case
           stream
           package)
        (unless *read-suppress*
          (let* ((fv (%load-var sym query)))
-           (if query
-             fv
-             (%foreign-access-form `(%reference-external-entry-point (load-time-value ,fv))
-                                   (fv.type fv)
-                                   0
-                                   nil))))))))
+           (values (if query
+                     fv
+                     (%foreign-access-form `(%reference-external-entry-point (load-time-value ,fv))
+                                           (fv.type fv)
+                                           0
+                                           nil))
+                   source)))))))
 
 
               
@@ -1019,7 +1019,8 @@ satisfy the optional predicate PREDICATE."
   (let* ((case (readtable-case *readtable*))
          (query nil)
 	 (error nil)
-	 (sym nil))
+	 (sym nil)
+         (source nil))
     (let* ((*package* package))
       (unwind-protect
 	   (progn
@@ -1027,20 +1028,20 @@ satisfy the optional predicate PREDICATE."
              (when (eq #\? (peek-char t stream nil nil))
                (setq query t)
                (read-char stream))
-	     (multiple-value-setq (sym error)
-	       (handler-case (read stream nil nil)
-		 (error (condition) (values nil condition)))))
+	     (multiple-value-setq (sym source error)
+	       (handler-case (read-internal stream nil nil nil)
+		 (error (condition) (values nil nil condition)))))
 	(setf (readtable-case *readtable*) case)))
     (when error
       (error error))
-    (values sym query)))
+    (values sym source query)))
 
 (set-dispatch-macro-character 
  #\# #\$
  (qlfun |#$-reader| (stream char arg)
    (declare (ignore char))
    (let* ((package (find-package (ftd-interface-package-name *target-ftd*))))
-     (multiple-value-bind (sym query)
+     (multiple-value-bind (sym source query)
          (%read-symbol-preserving-case
 	    stream
             package)
@@ -1048,7 +1049,7 @@ satisfy the optional predicate PREDICATE."
          (etypecase sym
            (symbol
             (if query
-              (load-os-constant sym query)
+              (values (load-os-constant sym query) source)
               (progn
                 (when (eq (symbol-package sym) package)
                   (unless arg (setq arg 0))
@@ -1059,11 +1060,11 @@ satisfy the optional predicate PREDICATE."
                                            (%unbound-marker-8))))
                        (load-os-constant sym)))
                     (1 (makunbound sym) (load-os-constant sym))))
-                sym)))
+                (values sym source))))
            (string
             (let* ((val 0)
                    (len (length sym)))
-              (dotimes (i 4 val)
+              (dotimes (i 4 (values val source))
                 (let* ((ch (if (< i len) (char sym i) #\space)))
                   (setq val (logior (ash val 8) (char-code ch)))))))))))))
 
@@ -1071,20 +1072,21 @@ satisfy the optional predicate PREDICATE."
   (qlfun |#_-reader| (stream char arg)
     (declare (ignore char))
     (unless arg (setq arg 0))
-    (multiple-value-bind (sym query)
+    (multiple-value-bind (sym source query)
         (%read-symbol-preserving-case
 		 stream
 		 (find-package (ftd-interface-package-name *target-ftd*)))
       (unless *read-suppress*
         (unless (and sym (symbolp sym)) (report-bad-arg sym 'symbol))
         (if query
-          (load-external-function sym t)
+          (values (load-external-function sym t) source)
           (let* ((def (if (eql arg 0)
                         (gethash sym (ftd-external-function-definitions
                                       *target-ftd*)))))
-            (if (and def (eq (macro-function sym) #'%external-call-expander))
-              sym
-              (load-external-function sym nil))))))))
+            (values (if (and def (eq (macro-function sym) #'%external-call-expander))
+                      sym
+                      (load-external-function sym nil))
+                    source)))))))
 
 (set-dispatch-macro-character
  #\# #\>
