@@ -165,7 +165,7 @@
     mc))
 
 
-; Need to special case (compute-effective-method #'compute-effective-method ...)
+;;; Need to special case (compute-effective-method #'compute-effective-method ...)
 (defmethod compute-effective-method ((generic-function standard-generic-function)
                                      (method-combination standard-method-combination)
                                      methods)
@@ -231,6 +231,7 @@
                            `(call-method ,(car primaries) nil)
                            `(,operator ,@(mapcar #'(lambda (m) `(call-method ,m nil)) primaries)))))
                (make-effective-method
+                generic-function
                 (if arounds
                   `(call-method ,(car arounds)
                                 (,@(cdr arounds) (make-method ,code)))
@@ -282,7 +283,7 @@
                                      (method-combination long-method-combination)
                                      methods)
   (or (get-combined-method methods generic-function)
-      (destructuring-bind (args-var . expander) 
+      (destructuring-bind ((args-var . gf-name) . expander) 
                           (method-combination-expander method-combination)
         (let* ((user-form (funcall expander
                                    generic-function
@@ -291,7 +292,7 @@
                (effective-method
                 (if (functionp user-form)
                   user-form 
-                  (make-effective-method user-form args-var))))
+                  (make-effective-method generic-function user-form args-var gf-name))))
           (put-combined-method methods effective-method generic-function)))))
 
 (defmacro with-call-method-context (args-var &body body)
@@ -346,7 +347,7 @@
                   (setq lfbits (lfun-bits function)))
          (logbitp $lfbits-nextmeth-bit lfbits))))
 
-(defun make-effective-method (form &optional (args-sym (make-symbol "ARGS")))
+(defun make-effective-method (gf form  &optional (args-sym (make-symbol "ARGS")) (gf-name (make-symbol "GF")))
   (setq args-sym (require-type args-sym 'symbol))
   (let (m mf)
     (if (and (listp form)
@@ -360,9 +361,11 @@
       (%make-function
        nil
        `(lambda (&rest ,args-sym)
-          (declare (dynamic-extent ,args-sym))
-          (with-call-method-context ,args-sym
-            ,form))
+         (declare (dynamic-extent ,args-sym))
+         (let* ((,gf-name ,gf))
+           (declare (ignorable ,gf-name))
+           (with-call-method-context ,args-sym
+             ,form)))
        nil))))
 
 ;;;;;;;
@@ -436,6 +439,123 @@
       (declare (dynamic-extent temp))
       (maphash temp *effective-method-gfs*))))
 
+;;; Support el-bizarro arglist partitioning for the long form of
+;;; DEFINE-METHOD-COMBINATION.
+(defun nth-required-gf-arg (gf argvals i)
+  (declare (fixnum i))
+  (let* ((bits (lfun-bits gf))
+         (numreq (ldb $lfbits-numreq bits)))
+    (declare (fixnum bits numreq))
+    (if (< i numreq)
+      (nth i argvals))))
+
+(defun nth-opt-gf-arg-present-p (gf argvals i)
+  (declare (fixnum i))
+  (let* ((bits (lfun-bits gf))
+         (numreq (ldb $lfbits-numreq bits))
+         (numopt (ldb $lfbits-numopt bits)))
+    (declare (fixnum bits numreq numopt))
+    (and (< i numopt)
+         (< (the fixum (+ i numreq)) (length argvals)))))
+
+;;; This assumes that we've checked for argument presence.
+(defun nth-opt-gf-arg (gf argvals i)
+  (declare (fixnum i))
+  (let* ((bits (lfun-bits gf))
+         (numreq (ldb $lfbits-numreq bits)))
+    (declare (fixnum bits numreq ))
+    (nth (the fixum (+ i numreq)) argvals)))
+
+(defun gf-arguments-tail (gf argvals)
+  (let* ((bits (lfun-bits gf))
+         (numreq (ldb $lfbits-numreq bits))
+         (numopt (ldb $lfbits-numopt bits)))
+    (declare (fixnum bits numreq numopt))
+    (nthcdr (the fixnum (+ numreq numopt)) argvals)))
+
+(defun gf-key-present-p (gf argvals key)
+  (let* ((tail (gf-arguments-tail gf argvals))
+         (missing (cons nil nil)))
+    (declare (dynamic-extent missing))
+    (not (eq missing (getf tail key missing)))))
+
+;; Again, this should only be called if GF-KEY-PRESENT-P returns true.
+(defun gf-key-value (gf argvals key)
+  (let* ((tail (gf-arguments-tail gf argvals)))
+    (getf tail key)))  
+  
+
+(defun lfmc-bindings (gf-form args-form lambda-list)
+  (let* ((req-idx 0)
+         (opt-idx 0)
+         (state :required))
+    (collect ((names)
+              (vals))
+      (dolist (arg lambda-list)
+        (case arg
+          ((&whole &optional &rest &key &allow-other-keys &aux)
+           (setq state arg))
+          (t
+           (case state
+             (:required
+              (names arg)
+              (vals (list 'quote `(nth-required-gf-arg ,gf-form ,args-form ,req-idx)))
+              (incf req-idx))
+             (&whole
+              (names arg)
+              (vals `,args-form)
+              (setq state :required))
+             (&optional
+              (let* ((var arg)
+                     (val nil)
+                     (spvar nil))
+                (when (listp arg)
+                  (setq var (pop arg)
+                        val (pop arg)
+                        spvar (car arg)))
+                (names var)
+                (vals (list 'quote
+                            `(if (nth-opt-gf-arg-present-p ,gf-form ,args-form ,opt-idx)
+                              (nth-opt-gf-arg ,gf-form ,args-form ,opt-idx)
+                              ,val)))
+                (when spvar
+                  (names spvar)
+                  (vals (list 'quote 
+                         `(nth-opt-gf-arg-present-p ,gf-form ,args-form ,opt-idx))))
+                (incf opt-idx)))
+             (&rest
+              (names arg)
+              (vals (list 'quote
+                          `(gf-arguments-tail ,gf-form ,args-form))))
+             (&key
+              (let* ((var arg)
+                     (keyword nil)
+                     (val nil)
+                     (spvar nil))
+                (if (atom arg)
+                  (setq keyword (make-symbol (symbol-name arg)))
+                  (progn
+                    (setq var (car arg))
+                    (if (atom var)
+                      (setq keyword (make-symbol (symbol-name var)))
+                      (setq keyword (car var) var (cadr var)))
+                    (setq val (cadr arg) spvar (caddr arg))))
+                (names var)
+                (vals (list 'quote `(if (gf-key-present-p ,gf-form ,args-form ',keyword)
+                                     (gf-key-value ,gf-form ,args-form ',keyword)
+                                     ,val)))
+                (when spvar
+                  (names spvar)
+                  (vals (list 'quote `(gf-key-present-p ,gf-form ,args-form ',keyword))))))
+             (&allow-other-keys)
+             (&aux
+              (cond ((atom arg)
+                     (names arg)
+                     (vals nil))
+                    (t
+                     (names (car arg))
+                     (vals (list 'quote (cadr arg))))))))))
+      (values (names) (vals)))))
 ;;
 ;; Long form
 ;;
@@ -467,14 +587,18 @@
         (let* ((methods-sym (make-symbol "METHODS"))
                (args-sym (make-symbol "ARGS"))
                (options-sym (make-symbol "OPTIONS"))
+               (arg-vars ())
+               (arg-vals ())
                (code `(lambda (,generic-fn-symbol ,methods-sym ,options-sym)
                         ,@(unless gf-symbol-specified?
                             `((declare (ignore-if-unused ,generic-fn-symbol))))
-                        (let* (,@(let* ((n -1)
-                                        (temp #'(lambda (sym) 
-                                                  `(,sym '(nth ,(incf n) ,args-sym)))))
-                                   (declare (dynamic-extent temp))
-                                   (mapcar temp arguments)))
+                        (let* (,@(progn
+                                  (multiple-value-setq (arg-vars arg-vals)
+                                    (lfmc-bindings generic-fn-symbol
+                                                   args-sym
+                                                   arguments))
+                                  (mapcar #'list arg-vars arg-vals)))
+                          (declare (ignorable ,@arg-vars))
                           ,@decls
                           (destructuring-bind ,lambda-list ,options-sym
                             (destructuring-bind
@@ -486,7 +610,7 @@
                                ',descriptions)
                               ,@body))))))
           `(%long-form-define-method-combination
-            ',name (cons ',args-sym #',code) ',doc))))))
+            ',name (cons (cons ',args-sym ',generic-fn-symbol) #',code) ',doc))))))
 
 (defun %long-form-define-method-combination (name args-var.expander documentation)
   (setq name (require-type name 'symbol))
