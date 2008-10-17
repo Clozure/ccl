@@ -642,9 +642,9 @@
 (defun add-accessor-methods (class dslotds)
   (dolist (dslotd dslotds)
     (dolist (reader (%slot-definition-readers dslotd))
-      (add-reader-method class			   
-			 (ensure-generic-function reader)
-			 dslotd))
+      (add-reader-method class
+                         (ensure-generic-function reader)
+                         dslotd))
     (dolist (writer (%slot-definition-writers dslotd))
       (add-writer-method class
 			 (ensure-generic-function writer)
@@ -908,7 +908,7 @@ governs whether DEFCLASS makes that distinction or not.")
   (let* ((initargs
 	  `(:qualifiers nil
 	    :specializers ,(list class)
-	    :lambda-list (instance)
+	    :lambda-list (,(or (%class-name class) 'instance))
 	    :name ,(function-name gf)
 	    :slot-definition ,dslotd))
 	 (reader-method-class
@@ -919,6 +919,7 @@ governs whether DEFCLASS makes that distinction or not.")
 			:function method-function
 			initargs)))
     (declare (dynamic-extent initargs))
+    (record-source-file method 'reader-method)
     (add-method gf method)))
 
 (defmethod remove-reader-method ((class std-class) gf)
@@ -942,7 +943,7 @@ governs whether DEFCLASS makes that distinction or not.")
   (let* ((initargs
 	  `(:qualifiers nil
 	    :specializers ,(list *t-class* class)
-	    :lambda-list (new-value instance)
+	    :lambda-list (new-value ,(or (%class-name class) 'instance))
 	    :name ,(function-name gf)
 	    :slot-definition ,dslotd))
 	 (method-class (apply #'writer-method-class class dslotd initargs))
@@ -955,6 +956,7 @@ governs whether DEFCLASS makes that distinction or not.")
 			    dslotd)
 		 initargs)))
     (declare (dynamic-extent initargs))
+    (record-source-file method 'writer-method)
     (add-method gf method)))
 
 (defmethod remove-writer-method ((class std-class) gf)
@@ -2202,14 +2204,12 @@ changing its name to ~s may have serious consequences." class new))
                      (initform (slot-definition-initform slot))
                      (location (slot-definition-location slot))
                      (location-var nil)
+                     (class-init-p nil)
                      (one-initarg-p (null (cdr initargs)))
                      (name (slot-definition-name slot))
                      (type (slot-definition-type slot)))
                 (when (consp location)
-                  (setq location-var (gensym "LOCATION"))
-                  (class-binds `(,location-var
-                                 (load-time-value
-                                  (slot-definition-location ',slot)))))
+                  (setq location-var (gensym "LOCATION")))
                 (when initfunction
                   (setq initform
                         (if (self-evaluating-p initform)
@@ -2220,11 +2220,12 @@ changing its name to ~s may have serious consequences." class new))
                               (if initfunction
                                   (generate-type-check initform type)
                                   `(%slot-unbound-marker))))
-                         (if (consp location)
+                         (if location-var
                              (when initfunction
-                                 (class-slot-inits
-                                  `(when (eq (%slot-unbound-marker) (cdr ,location-var))
-                                     (setf (cdr ,location-var) ,initial-value-form))))
+                               (setq class-init-p t)
+                               (class-slot-inits
+                                `(when (eq (%slot-unbound-marker) (cdr ,location-var))
+                                   (setf (cdr ,location-var) ,initial-value-form))))
                              (forms initial-value-form))))
                       (t (collect ((cond-clauses))
                            (let ((last-cond-clause nil))
@@ -2236,7 +2237,7 @@ changing its name to ~s may have serious consequences." class new))
                                       (initial-value-form
                                        (if (and initfunction
                                                 one-initarg-p
-                                                (atom location))
+                                                (null location-var))
                                            initform
                                            (progn
                                              (when initarg
@@ -2246,7 +2247,7 @@ changing its name to ~s may have serious consequences." class new))
                                                              (string initarg)
                                                              "-P"))))
                                              (and one-initarg-p
-                                                  (atom location)
+                                                  (null location-var)
                                                   (if initfunction
                                                       initform
                                                       `(%slot-unbound-marker))))))
@@ -2261,28 +2262,30 @@ changing its name to ~s may have serious consequences." class new))
                                                `(funcall ,function)))))
                                  (keys (list*
                                         (list initarg name)
-                                        (if (and default one-initarg-p (atom location))
+                                        (if (and default one-initarg-p (null location-var))
                                             default
                                             initial-value-form)
                                         (if spvar (list spvar))))
                                  (if one-initarg-p
-                                     (if (consp location)
-                                         (class-slot-inits
-                                          `(if ,spvar
-                                               (setf (cdr ,location-var)
+                                   (if location-var
+                                     (progn
+                                       (setq class-init-p t)
+                                       (class-slot-inits
+                                        `(if ,spvar
+                                           (setf (cdr ,location-var)
+                                                 ,(generate-type-check
+                                                   name type))
+                                           ,(if default
+                                              `(setf (cdr ,location-var)
                                                      ,(generate-type-check
-                                                       name type))
-                                               ,(if default
-                                                    `(setf (cdr ,location-var)
-                                                           ,(generate-type-check
-                                                             default type))
-                                                    (when initfunction
-                                                      `(when (eq (%slot-unbound-marker)
-                                                                 (cdr ,location-var))
-                                                         (setf (cdr ,location-var)
-                                                               ,(generate-type-check
-                                                                 initform type)))))))
-                                         (forms `,(generate-type-check name type spvar)))
+                                                       default type))
+                                              (when initfunction
+                                                `(when (eq (%slot-unbound-marker)
+                                                           (cdr ,location-var))
+                                                   (setf (cdr ,location-var)
+                                                         ,(generate-type-check
+                                                           initform type))))))))
+                                     (forms `,(generate-type-check name type spvar)))
                                      (progn (cond-clauses `(,spvar ,name))
                                             (when (and default (null last-cond-clause))
                                               (setq last-cond-clause
@@ -2290,7 +2293,7 @@ changing its name to ~s may have serious consequences." class new))
                              (when (cond-clauses)
                                (when last-cond-clause
                                  (cond-clauses last-cond-clause))
-                               (cond ((atom location)
+                               (cond ((null location-var)
                                       (unless last-cond-clause
                                         (cond-clauses `(t ,initform)))
                                       (forms (generate-type-check
@@ -2307,6 +2310,7 @@ changing its name to ~s may have serious consequences." class new))
                                                ,(if initfunction
                                                     initform
                                                     `(%slot-unbound-marker)))))
+                                        (setq class-init-p t)
                                         (class-slot-inits
                                          `(let* (,@(and initform-p-var
                                                         (list `(,initform-p-var nil)))
@@ -2321,7 +2325,11 @@ changing its name to ~s may have serious consequences." class new))
                                                                (not (eq ,value-var
                                                                         (%slot-unbound-marker)))))
                                                      t)
-                                                (setf (cdr ,location-var) ,value-var)))))))))))))))
+                                                (setf (cdr ,location-var) ,value-var))))))))))))
+                (when class-init-p
+                  (class-binds `(,location-var
+                                 (load-time-value
+                                  (slot-definition-location ',slot))))))))
           (let* ((cell (make-symbol "CLASS-CELL"))
                  (args (make-symbol "ARGS"))
                  (slots (make-symbol "SLOTS"))
