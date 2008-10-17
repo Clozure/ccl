@@ -74,11 +74,9 @@
 
 (defun %structure-class-of (thing)
   (let* ((cell (car (uvref thing 0))))
-    (if (istruct-typep cell 'class-cell)
-      (or (class-cell-class cell)
-          (setf (class-cell-class cell)
-                (find-class (class-cell-name cell))))
-      (find-class cell))))
+    (or (class-cell-class cell)
+        (setf (class-cell-class cell)
+              (find-class (class-cell-name cell))))))
 
 ;These might want to compiler-transform into non-typechecking versions...
 (defun struct-ref (struct offset)
@@ -144,7 +142,8 @@
               (push
                `(progn
                   ,.fn
-                  (puthash ',accessor %structure-refs% ',(ssd-type-and-refinfo slot)))
+                  (puthash ',accessor %structure-refs% ',(ssd-type-and-refinfo slot))
+                  (record-source-file ',accessor 'structure-accessor))
                stuff))))))
     (nreverse stuff)))
 
