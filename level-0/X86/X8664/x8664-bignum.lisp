@@ -35,6 +35,40 @@
   (movl (% imm0.l) (@ x8664::misc-data-offset (% bignum)))
   (single-value-return))
   
+;; multiply x[i] by y and add to result starting at digit idx
+(defx86lapfunction %multiply-and-add-loop
+    ((x 16) (y 8) #|(ra 0)|# (r arg_x) (idx arg_y) (ylen arg_z))
+  (let ((cc mm2)
+	(xx mm3)
+	(yy mm4)
+	(rr mm5)
+	(i imm0)
+	(j imm1))
+    (unbox-fixnum idx i)
+    (movq (@ x (% rsp)) (% temp0))
+    (movd (@ x8664::misc-data-offset (% temp0) (% i) 4) (% xx)) ;x[i]
+    (movq (@ y (% rsp)) (% temp0))
+    (movq (% r) (% temp1))
+    (pxor (% cc) (% cc))
+    (xorq (% j) (% j))
+    @loop
+    (movd (@ x8664::misc-data-offset (% temp0) (% j) 4) (% yy)) ;y[j]
+    (pmuludq (% xx) (% yy))
+    ;; 64-bit product now in %yy
+    (movd (@ x8664::misc-data-offset (% temp1) (% i) 4) (% rr))
+    ;; add in digit from r[i]
+    (paddq (% yy) (% rr))
+    ;; add in carry
+    (paddq (% cc) (% rr))
+    (movd (% rr) (@ x8664::misc-data-offset (% temp1) (% i) 4)) ;update r[i]
+    (movq (% rr) (% cc))
+    (psrlq ($ 32) (% cc))		;get carry digit into low word
+    (addq ($ 1) (% i))
+    (addq ($ 1) (% j))
+    (subq ($ '1) (% ylen))
+    (jg @loop)
+    (movd (% cc) (@ x8664::misc-data-offset (% temp1) (% i) 4))
+    (single-value-return 4)))
 
 
 ;;; Multiply the (32-bit) digits X and Y, producing a 64-bit result.
