@@ -109,11 +109,9 @@ raise_thread_interrupt(TCR *target)
         } else {
           CancelIo(pending->h);
         }
-      } else {
-        QueueUserAPC(nullAPC, hthread, 0);
       }
     }
-
+    QueueUserAPC(nullAPC, hthread, 0);
     ResumeThread(hthread);
     return 0;
   } else {
@@ -1761,6 +1759,8 @@ suspend_tcr(TCR *tcr)
              restore */
 #ifdef WIN_64
           *pcontext = * (CONTEXT *)(pcontext->Rcx);
+#else
+          fprintf(stderr, "missing win32 suspend code, case (1)\n");
 #endif
         } else {
           /* Most of the context has already been restored; fix %rcx
@@ -1777,6 +1777,7 @@ suspend_tcr(TCR *tcr)
           pcontext->SegSs = (WORD) iret_frame->Ss;
 #else
 #warning need context setup for win32
+          fprintf(stderr, "missing win32 suspend code, case (2)\n");
 #endif
         }
         tcr->suspend_context = NULL;
@@ -1786,7 +1787,7 @@ suspend_tcr(TCR *tcr)
            x86-subprims64.o, or in the subprims jump table at #x15000,
            or on the tstack ... we're just executing lisp code.  Otherwise,
            we got an exception while executing lisp code, but haven't
-           yet entered the handler yet (still in Windows exception glue
+           entered the handler yet (still in Windows exception glue
            or switching stacks or something.)  In the latter case, we
            basically want to get to he handler and have it notice
            the pending exception request, and suspend the thread at that
@@ -1915,17 +1916,16 @@ resume_tcr(TCR *tcr)
     CONTEXT *context = tcr->suspend_context;
     HANDLE hthread = (HANDLE)(tcr->osid);
 
-    if (context == NULL) {
-      Bug(NULL, "no suspend_context for TCR = 0x" LISP, (natural)tcr);
+    if (context) {
+      tcr->suspend_context = NULL;
+      SetThreadContext(hthread,context);
+      rc = ResumeThread(hthread);
+      if (rc == -1) {
+        wperror("ResumeThread");
+        return false;
+      }
+      return true;
     }
-    tcr->suspend_context = NULL;
-    SetThreadContext(hthread,context);
-    rc = ResumeThread(hthread);
-    if (rc == -1) {
-      wperror("ResumeThread");
-      return false;
-    }
-    return true;
   }
   return false;
 }   
