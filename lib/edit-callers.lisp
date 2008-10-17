@@ -60,47 +60,42 @@
   (declare (optimize (speed 3)(safety 0)))
 
   (let ((*function-parent-table* nil))
-    (if (and (symbolp function) (fboundp function))
-      (setq cfun (symbol-function function)))
-    (if (and (consp function)(eq (car function) 'setf))
+    (if (setf-function-name-p function)
       (let ((nm (cadr function)))
         (setq function  (or (%setf-method nm)
                             (and (symbolp nm)
                                  (setq nm (setf-function-name nm))
                                  (fboundp nm)
                                  nm)
-                            function))))  
+                            function))))
+    (if (and (symbolp function) (fboundp function))
+      (setq cfun (symbol-function function)))
     (when (copying-gc-p) (setq gccount (full-gccount)))
     (flet ((do-it (fun)
-                                        ;(declare (special fun))
              (when (and gccount (neq gccount (full-gccount)))
                (throw 'losing :lost))
-             (let ((bits (lfun-bits fun)))
-               (declare (fixnum bits))
-               (unless (or (and (logbitp $lfbits-cm-bit bits)(not (logbitp $lfbits-method-bit bits))) ; combined method
-                           (and (logbitp $lfbits-trampoline-bit bits)(lfun-closure-p fun)
-                                (not (global-function-p fun)))) ; closure (interp or compiled)
-                 (let* ((nm (ignore-errors (lfun-name fun)))
-                            (globalp (if nm (global-function-p fun nm))))
-                       (flet ((do-imm (im)
-                                (when (and (or (eq function im)
-                                               (and cfun (eq cfun im)))
-                                           (neq im nm))                             
-                                  (push fun callers)) 
-                                (when (functionp im) ; was (or (functionp im)(eq imtype $sym.fapply))
-                                  (if globalp
-                                    (setf (gethash im *function-parent-table*) fun)
-                                    (let ((ht (gethash im *function-parent-table*)))
-                                      (if (not ht)
-                                        (setf (gethash im *function-parent-table*) fun)
-                                        (unless (eq ht fun)
-                                          (if (consp ht)
-                                            (when (not (memq fun ht))(nconc ht (list fun)))
-                                            (if (not (global-function-p ht))
-                                              (setf (gethash im *function-parent-table*) 
-                                                    (list ht fun)))))))))))
-                         (declare (dynamic-extent #'do-imm))                                
-                         (%map-lfimms fun #'do-imm )))))))
+             (when (possible-caller-function-p fun)
+               (let* ((nm (ignore-errors (lfun-name fun)))
+                      (globalp (if nm (global-function-p fun nm))))
+                 (flet ((do-imm (im)
+                          (when (and (or (eq function im)
+                                         (and cfun (eq cfun im)))
+                                     (neq im nm))                             
+                            (push fun callers)) 
+                          (when (functionp im) ; was (or (functionp im)(eq imtype $sym.fapply))
+                            (if globalp
+                              (setf (gethash im *function-parent-table*) fun)
+                              (let ((ht (gethash im *function-parent-table*)))
+                                (if (not ht)
+                                  (setf (gethash im *function-parent-table*) fun)
+                                  (unless (eq ht fun)
+                                    (if (consp ht)
+                                      (when (not (memq fun ht))(nconc ht (list fun)))
+                                      (if (not (global-function-p ht))
+                                        (setf (gethash im *function-parent-table*) 
+                                              (list ht fun)))))))))))
+                   (declare (dynamic-extent #'do-imm))                                
+                   (%map-lfimms fun #'do-imm ))))))
       (declare (dynamic-extent #'do-it))
       (unwind-protect
            (progn
@@ -129,7 +124,6 @@
               *function-parent-table* nil)))))
 
 
-
 (defun top-level-caller (function &optional the-list)
   (or (global-function-p function)
       (pascal-function-p function)
@@ -156,6 +150,49 @@
             (return caller))))
       function))
 
+(defun possible-caller-function-p (fun)
+  (let ((bits (lfun-bits fun)))
+    (declare (fixnum bits))
+    (not (or (and (logbitp $lfbits-cm-bit bits)
+                  (not (logbitp $lfbits-method-bit bits))) ; combined method
+             (and (logbitp $lfbits-trampoline-bit bits)
+                  (lfun-closure-p fun)
+                  (not (global-function-p fun))))))) ; closure (interp or compiled)
+
+  
+(defun caller-functions (function &aux cfun callers gccount retry)
+  "Returns a list of all functions (actual function objects, not names) that reference FUNCTION"
+  (declare (optimize (speed 3)(safety 0)))
+  (when (setf-function-name-p function)
+    (let ((nm (cadr function)))
+      (setq function  (or (%setf-method nm)
+                          (and (setq nm (setf-function-name nm))
+                               (fboundp nm)
+                               nm)
+                          function))))
+  (when (and (symbolp function) (fboundp function))
+    (setq cfun (symbol-function function)))
+  (when (copying-gc-p) (setq gccount (full-gccount)))
+  (flet ((do-it (fun)
+           (when (and gccount (neq gccount (full-gccount)))
+             (throw 'losing :lost))
+           (when (and (neq fun cfun)
+                      (possible-caller-function-p fun))
+             (lfunloop for im in fun
+               when (or (eq function im)
+                        (and cfun (eq cfun im)))
+               do (return (pushnew (if (%method-function-p fun)
+                                     (%method-function-method fun)
+                                     fun)
+                                   callers))))))
+    (declare (dynamic-extent #'do-it))
+    (loop while (eq :lost (catch 'losing      
+                            (%map-lfuns #'do-it)))
+          do (when retry (cerror "Try again" "Callers is losing"))
+          do (setq callers nil)
+          do (setq retry t))
+    callers))
+
 ; in 3.x the function in pascal-functions calls the actual function
 (defun pascal-function-p (function)
   (if (find function %pascal-functions%
@@ -171,19 +208,6 @@
                            function))
                        (if elt (aref elt 2)))))
     (function-name function)))
-
-
-
-
-
-                  
-
-
-
-
-
-
-
 
 
 ;;; Calls function f with args (imm) on each immediate in lfv.
