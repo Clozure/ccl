@@ -22,6 +22,7 @@
    '(
      local
      set-local
+     @
      *elements-per-buffer*
      save-application
      def-load-pointers
@@ -55,6 +56,7 @@
      *backtrace-show-internal-frames*
      *backtrace-format*
      *quit-on-eof*
+     macroexpand-all
      compiler-macroexpand
      compiler-macroexpand-1
      uncompile-function
@@ -343,6 +345,7 @@
      with-encoded-cstrs
      with-string-vector
      with-pointer-to-ivector
+     get-encoded-string
      +null-ptr+
      free
      define-entry-point
@@ -638,7 +641,9 @@
      unmap-octet-vector
      ;; Miscellany
      heap-utilization
-                                      
+
+     external-process-creation-failure
+
      ) "CCL"
    )
   )
