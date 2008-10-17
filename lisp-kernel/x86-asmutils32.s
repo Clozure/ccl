@@ -189,6 +189,7 @@ Xrestore_windows_context_start:
         __(movl 8(%esp),%eax)   /* tcr */
         __(movw tcr.ldt_selector(%eax), %rcontext_reg)
         __(movl 4(%esp),%ecx)   /* context */
+        __(movl %edx,rcontext(tcr.valence))
         __(movl $0,rcontext(tcr.pending_exception_context))
         __(frstor win32_context.FloatSave(%ecx))
         /* Windows doesn't bother to align the context, so use
