@@ -735,6 +735,19 @@ such changes should be made with care."
     `(let* ((,temp (function-to-function-vector ,f)))
       (%svref ,temp (the fixnum (1- (the fixnum (uvsize ,temp))))))))
 
+(defmacro lfunloop (for var in function &body loop-body)
+  "Loop over immediates in function"
+  (assert (and (or (equal (symbol-name for) "FOR") (equal (symbol-name for) "AS"))
+               (equal (symbol-name in) "IN")))
+  (let ((fn (gensym))
+	(lfv (gensym))
+	(i (gensym)))
+    `(loop with ,fn = ,function
+           with ,lfv = (function-to-function-vector ,fn)
+           for ,i from #+ppc-target 1 #+x86-target (%function-code-words ,fn) below (%i- (uvsize  ,lfv) 1)
+           as ,var = (%svref ,lfv ,i)
+           ,@loop-body)))
+
 (defmacro cond (&rest args &aux clause)
   (when args
      (setq clause (car args))
@@ -2388,12 +2401,6 @@ has immediate effect."
 
 ;;; Bind per-thread specials which help with lock accounting.
 (defmacro with-lock-context (&body body)
-  #+lock-accounting
-  `(let* ((*locks-held* *locks-held*)
-          (*locks-pending* *locks-pending*)
-          (*lock-conses* *lock-conses*))
-    ,@body)
-  #-lock-accounting
   `(progn ,@body))
 
 (defmacro with-lock-grabbed ((lock &optional
