@@ -90,7 +90,7 @@
 (defmacro method-combination-info (method-combination-type)
   `(gethash ,method-combination-type *method-combination-info*))
 
-; Need to special case (find-method-combination #'find-method-combination ...)
+;;; Need to special case (find-method-combination #'find-method-combination ...)
 (without-duplicate-definition-warnings ;; override version in l1-clos-boot.lisp
  (defmethod find-method-combination ((generic-function standard-generic-function)
                                      method-combination-type

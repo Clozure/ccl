@@ -40,9 +40,9 @@
     (record-source-file symbol 'variable)
     symbol))
 
-(defstatic *kernel-tcr-area-lock* (%make-lock (%null-ptr) "Kernal tcr-area-lock"))
+(defstatic *kernel-tcr-area-lock* (%make-lock (%null-ptr) "Kernel tcr-area-lock"))
 
-(defstatic *kernel-exception-lock* (%make-lock (%null-ptr) "Kernal exception-lock"))
+(defstatic *kernel-exception-lock* (%make-lock (%null-ptr) "Kernel exception-lock"))
   
 (def-ccl-pointers kernel-locks ()
   (let* ((p (recursive-lock-ptr *kernel-tcr-area-lock*))
@@ -55,11 +55,6 @@
 (def-standard-initial-binding *package*)
 (def-standard-initial-binding *gensym-counter* 0)
 (def-standard-initial-binding *random-state* (initialize-random-state #xFBF1 9))
-#+lock-accounting
-(progn
-(def-standard-initial-binding *locks-held* ())
-(def-standard-initial-binding *locks-pending* ())
-(def-standard-initial-binding *lock-conses* (make-list 20)))
 (def-standard-initial-binding *whostate* "Reset")
 (setq *whostate* "Reset")
 (def-standard-initial-binding *error-print-length* 20)

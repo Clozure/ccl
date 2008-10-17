@@ -27,15 +27,7 @@
 (setq %lisp-system-fixups% nil)
 
 
-(setq *warn-if-redefine-kernel* nil)
-
-(setq *warn-if-redefine* nil)
-(setq *record-source-file* t)
-
 ;;; Kludge for record-source-file bootstrapping
-
-; Set T by l1-boot.lisp
-(setq *level-1-loaded* nil)
 
 (%fhave 'full-pathname (qlfun bootstrapping-full-pathname (name) name))
 
@@ -46,8 +38,7 @@
 
 (fset 'physical-pathname-p (lambda (file)(declare (ignore file)) nil)) ; redefined later
 
-
-;(%defvar *enqueued-window-title* nil)
+(setq *record-source-file* t)
 
 (fset 'level-1-record-source-file
       (qlfun level-1-record-source-file (name def-type &optional (file-name *loading-file-source-file*))

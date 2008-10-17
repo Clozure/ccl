@@ -473,7 +473,7 @@
                        (if *ppc2-record-symbols*
                          (setq function-debugging-info (nconc (list 'function-symbol-map *ppc2-recorded-symbols*)
                                                               function-debugging-info)))
-                       (setq bits (logior (ash 1 $lfbits-symmap-bit) bits))
+                       (setq bits (logior (ash 1 $lfbits-info-bit) bits))
                        (backend-new-immediate function-debugging-info)))
                    (if (or fname lambda-form *ppc2-recorded-symbols*)
                      (backend-new-immediate fname)

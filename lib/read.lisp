@@ -139,7 +139,7 @@
            (push (pop plist) args))
          (apply sd (nreverse args))))))
 
-;from slisp reader2.lisp.
+;;;from slisp reader2.lisp, and apparently not touched in 20 years.
 (defun parse-integer (string &key (start 0) end
                       (radix 10) junk-allowed)
   "Examine the substring of string delimited by start and end
@@ -148,7 +148,7 @@
   radix parameter must be between 2 and 36."
   (flet ((parse-integer-not-integer-string (s)
 	   (error 'parse-integer-not-integer-string :string s)))
-    (declare (inline not-integer-string-error))
+    (declare (inline parse-integer-not-integer-string))
     (unless (typep string 'string)
       (setq string (require-type string 'string)))
     (setq end (check-sequence-bounds string start end))

@@ -16,6 +16,7 @@
 ;;;   http://opensource.franz.com/preamble.html
 
 (in-package "CCL")
+
 ;;;
 
 (defclass stream ()

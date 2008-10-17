@@ -807,7 +807,7 @@ a host-structure or string."
                          (if (and (> end 1)
                                   (eql (schar sstr 1) #\:))
                            (setq pos2 2)))
-                      (pathname-directory-sstr sstr pos2 end host))))
+                       (pathname-directory-sstr sstr pos2 end host))))
 		  (t (report-bad-arg path pathname-arg-type)))))
     (if (and case (neq case :local))
       (progn
@@ -1234,7 +1234,8 @@ a host-structure or string."
     (let* ((*package* *package*)
            (*readtable* *readtable*)
            (*loading-files* (cons file-name (specialv *loading-files*)))
-           (*loading-file-source-file* (namestring source-file))) ;reset by fasload to logical name stored in the file?
+           ;;reset by fasload to logical name stored in the file
+           (*loading-file-source-file* (namestring source-file)))
       (declare (special *loading-files* *loading-file-source-file*))
       (when verbose
 	(format t "~&;Loading ~S..." *load-pathname*)

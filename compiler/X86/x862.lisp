@@ -695,7 +695,7 @@
                        (if *x862-record-symbols*
                          (setq function-debugging-info (nconc (list 'function-symbol-map *x862-recorded-symbols*)
                                                               function-debugging-info)))
-                       (setq bits (logior (ash 1 $lfbits-symmap-bit) bits))
+                       (setq bits (logior (ash 1 $lfbits-info-bit) bits))
                        (setq debug-info function-debugging-info)))
                    (unless (or fname lambda-form *x862-recorded-symbols*)
                      (setq bits (logior (ash 1 $lfbits-noname-bit) bits)))

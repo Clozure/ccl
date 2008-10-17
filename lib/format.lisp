@@ -84,7 +84,7 @@
 (eval-when (compile eval #-bccl load)
 
 ; does this need to exist?????
-#| ; put it out of its misery
+#|| ; put it out of its misery
 (defmacro format-with-control-string (control-string &rest forms)
   `(let ((string (if (simple-string-p ,control-string)
                      ,control-string
@@ -103,7 +103,7 @@
                                       *format-control-string*
                                       (1+ *format-index*))
                                 error))))))
-|#
+||#
 (defmacro format-indirect-error (error)
   `(throw 'format-error
          (cons (list "While processing indirect control string~%~S~%~V@T^"

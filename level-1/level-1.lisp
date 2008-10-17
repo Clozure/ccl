@@ -93,11 +93,14 @@
   (l1-load "l1-boot-1")
   (l1-load "l1-boot-2")
   (l1-load "l1-boot-3")
+
+  ;; Without this, forms from the -e command line parameter would run with
+  ;; *loading-file-source-file* set to "l1-boot-3".
+  (setq *loading-file-source-file* nil)
   )
 
 (require "PREPARE-MCL-ENVIRONMENT")
-(progn (%set-toplevel #'toplevel-loop) (set-user-environment t) (toplevel))
-
-
-
-
+(progn
+  (%set-toplevel #'toplevel-loop)
+  (set-user-environment t)
+  (toplevel))

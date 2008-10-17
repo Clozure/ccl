@@ -370,7 +370,7 @@
             (list 'backquote-expander |`,| |`,.| |`,@|
                   (let ((*backquote-stack* (list* |`,| |`,.| |`,@| *backquote-stack*)))
                     (read stream t nil t)))))
-    (if *backquote-expand* (macroexpand-1 form) form))))
+    (if *backquote-expand* (values (macroexpand-1 form)) form))))
 
 (set-macro-character 
  #\, 

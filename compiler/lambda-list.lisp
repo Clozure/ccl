@@ -28,7 +28,7 @@
   (and (compiled-function-p fn)
        (let ((bits (lfun-bits fn)))
          (declare (fixnum bits))
-         (and (logbitp $lfbits-symmap-bit bits)
+         (and (logbitp $lfbits-info-bit bits)
                (%i- (uvsize (function-to-function-vector fn))
                               (if (logbitp $lfbits-noname-bit bits) 2 3))))))
 (defun %lfun-info (fn)

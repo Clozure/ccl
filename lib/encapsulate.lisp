@@ -645,6 +645,16 @@ functions are called."
       (push x res))
     res))
 
+(defmacro with-traces (syms &body body)
+ `(unwind-protect
+       (progn
+         (let ((*trace-output* (make-broadcast-stream)))
+           ;; if you're tracing ccl internals you'll get trace output as it encapsulates the
+           ;; functions so hide all the trace output while eval'ing the trace form itself.
+           (trace ,@syms))
+         ,@body)
+    (untrace ,@syms)))
+
 ;; this week def is the name of an uninterned gensym whose fn-cell is original def
 
 (defun trace-global-def (sym def if before-if eval-before after-if eval-after &optional method-p)
@@ -731,7 +741,7 @@ functions are called."
 
 
 (defun compile-named-function-warn (fn name)
-  (multiple-value-bind (result warnings)(compile-named-function fn :name name)
+  (multiple-value-bind (result warnings) (compile-named-function fn :name name)
     (when warnings 
       (let ((first t))
         (dolist (w warnings)

@@ -390,8 +390,8 @@ a given process."
                             (car result) t)
 		      (setq exited t)
 		      nil)
-                    (abort-break () :report "Reset this process")
-		    (abort () :report "Kill this process" (setq exited t)))
+                    (abort-break () :report "Reset this thread")
+		    (abort () :report "Kill this thread" (setq exited t)))
 		 (process-reset (condition)
 		   (process-reset-kill condition)))))
     ;; We either exited from the initial form normally, were told to
@@ -726,10 +726,3 @@ had invoked abort."
           (t (error "Failed to join ~s" p)))))
 
 
-(defmethod process-locks-held ((p process))
-  #+lock-accounting
-  (copy-list (symbol-value-in-process '*locks-held* p)))
-
-(defmethod process-locks-pending ((p process))
-  #+lock-accounting
-  (copy-list (symbol-value-in-process '*locks-pending* p)))

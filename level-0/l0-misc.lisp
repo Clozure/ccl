@@ -17,13 +17,6 @@
 (in-package "CCL")
 
 
-(defparameter *locks-held* () "per-thread list of held locks")
-(defparameter *locks-pending* () "per-thread list of locks we're waiting for.")
-(defparameter *lock-conses* ())
-
-
-
-
 ;;; Bootstrapping for futexes
 #+(and linux-target x86-target)
 (eval-when (:compile-toplevel :execute)
@@ -662,8 +655,6 @@
       (without-interrupts
        (cond ((eql p owner)
               (incf (%get-natural ptr target::lockptr.count))
-              #+lock-accounting
-              (setq *locks-held* (%lock-cons lock *locks-held*))
               (if flag (setf (lock-acquisition.status flag) t))
               t)
              (t
@@ -672,8 +663,6 @@
                 (when (setq win (eql 1 (incf (%get-natural ptr target::lockptr.avail))))
                   (setf (%get-ptr ptr target::lockptr.owner) p
                         (%get-natural ptr target::lockptr.count) 1)
-                  #+lock-accounting
-                  (setq *locks-held* (%lock-cons lock *locks-held*))
                   (if flag (setf (lock-acquisition.status flag) t)))
                 (setf (%get-ptr spin) (%null-ptr))
                 win)))))))
@@ -692,16 +681,12 @@
     (without-interrupts
      (cond ((eql (%get-object ptr target::lockptr.owner) self)
             (incf (%get-natural ptr target::lockptr.count))
-            #+lock-accounting*
-            (setq *locks-held* (%lock-cons lock *locks-held*))
             (if flag (setf (lock-acquisition.status flag) t))
             t)
            (t
             (when (eql 0 (%ptr-store-conditional ptr futex-avail futex-locked))
               (%set-object ptr target::lockptr.owner self)
               (setf (%get-natural ptr target::lockptr.count) 1)
-              #+lock-accounting
-              (setq *locks-held* (%lock-cons lock *locks-held*))
               (if flag (setf (lock-acquisition.status flag) t))
               t))))))
 
@@ -910,7 +895,6 @@
        (if (eq (%get-object ptr target::rwlock.writer) tcr)
          (progn
            (setf (%get-natural ptr target::rwlock.spin) 0)
-           (setq *locks-pending* (cdr *locks-pending*))
            (error 'deadlock :lock lock))
          (do* ((state
                 (%get-signed-natural ptr target::rwlock.state)
@@ -944,7 +928,6 @@
        (if (eq (%get-object ptr target::rwlock.writer) tcr)
          (progn
            (%unlock-futex ptr)
-           (setq *locks-pending* (cdr *locks-pending*))
            (error 'deadlock :lock lock))
          (do* ((state
                 (%get-signed-natural ptr target::rwlock.state)

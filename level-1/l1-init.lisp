@@ -254,8 +254,8 @@ methods that are marked as being predefined signal continuable errors.")
 (defparameter *loading-files* nil)
 (defparameter *break-level* 0)
 (defparameter *last-break-level* 0)
-(defvar *record-source-file* nil)       ; set in l1-utils.
-(defvar *warn-if-redefine* nil)         ; set in l1-utils.
+(defparameter *warn-if-redefine* nil)
+(defvar *record-source-file*)           ; set in l1-utils.
 (defparameter *level-1-loaded* nil)     ; set t by l1-boot
 (defparameter *save-definitions* nil)
 (defparameter *save-local-symbols* t)
