@@ -1759,6 +1759,7 @@
 
 
 (defvar *inspector-ui* ())
+(defvar *previous-inspector-ui* nil)
 
 (defclass inspector-ui ()
     ((inspector :initarg :inspector :accessor inspector-ui-inspector)
@@ -1808,12 +1809,17 @@
 
 (ccl::define-toplevel-command
     :tty-inspect pop ()
-    "exit current inspector"
+    "exit current inspector level"
     (invoke-restart 'exit-inspector))
 
 (ccl::define-toplevel-command
+    :tty-inspect q ()
+    "exit inspector"
+  (invoke-restart 'end-inspect))
+
+(ccl::define-toplevel-command
     :tty-inspect show ()
-    "re-show currently inspected object"
+    "re-show currently inspected object (the value of CCL:@)"
     (ui-present *inspector-ui*))
 
 (defmethod inspector-ui-next-page ((ui inspector-tty-ui))
@@ -1860,14 +1866,17 @@
 (defmethod ui-interact ((ui inspector-tty-ui))
   (let* ((level (inspector-ui-level ui)))
     (restart-case
-     (ccl:with-terminal-input
-	 (ccl::with-toplevel-commands :tty-inspect
-	   (ccl::read-loop
-	    :prompt-function #'(lambda (stream)
-				 (if (eql level 0)
-				   (format stream "~&Inspect> ")
-				   (format stream "~&Inspect ~d> " level))))))
-     (exit-inspector () (terpri *debug-io*)))))
+        (ccl:with-terminal-input
+          (ccl::with-toplevel-commands :tty-inspect
+            (ccl::read-loop
+             :prompt-function #'(lambda (stream)
+                                  (if (eql level 0)
+                                    (format stream "~&Inspect> ")
+                                    (format stream "~&Inspect ~d> " level))))))
+      (exit-inspector ()
+        (if *previous-inspector-ui*
+          (ui-present *previous-inspector-ui*)
+          (terpri *debug-io*))))))
 
 (defmethod inspector-ui-inspect-nth ((ui inspector-tty-ui) n)
   (let* ((inspector (inspector-ui-inspector ui)))
@@ -1885,7 +1894,8 @@
 (defparameter *default-inspector-ui-class-name* 'inspector-tty-ui)
 
 (defmethod inspector-ui-inspect ((ui inspector-ui))
-  (let* ((*inspector-ui* ui))
+  (let* ((*previous-inspector-ui* *inspector-ui*)
+         (*inspector-ui* ui))
     (ui-initialize ui)
     (ui-present ui)
     (ui-interact ui)
@@ -1901,5 +1911,5 @@
 
 (defun inspect (thing)
   (let* ((ccl::@ thing))
-    (funcall *default-inspector-ui-creation-function* thing)))
-
+    (restart-case (funcall *default-inspector-ui-creation-function* thing)
+      (end-inspect () thing))))
