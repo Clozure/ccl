@@ -37,8 +37,8 @@
 (defvar *format-original-arguments* ()
   "Saved arglist from top-level FORMAT call for ~* and ~@*")
 
-(defvar *format-stream-stack* ()
-  "A stack of string streams for collecting FORMAT output")
+
+(def-standard-initial-binding *format-stream-stack* nil "A stack of string streams for collecting FORMAT output")
 
 (defvar *format-pprint* nil
   "Has a pprint format directive (~W ~I ~_ ~:T) or logical-block directive been seen?")
@@ -46,12 +46,9 @@
 (defvar *format-justification-semi* nil
   "Has a ~<...~:;...~> been seen?")
 
-; prevent circle checking rest args. Really EVIL when dynamic-extent
-(defvar *format-top-level* nil)
+;;; prevent circle checking rest args. Really EVIL when dynamic-extent
+(def-standard-initial-binding *format-top-level* nil)
 
-;;; Specials imported from ERRORFUNS
-
-(declaim (special *error-output*))
 
 ;;; ERRORS
 
@@ -389,7 +386,7 @@
 ;;; POP-FORMAT-ARG also defined in l1-format
 
 ; in l1-format
-(defvar *logical-block-xp* nil)
+(def-standard-initial-binding *logical-block-xp* nil)
 
 (without-duplicate-definition-warnings
  (defun pop-format-arg (&aux (args *format-arguments*)(xp *logical-block-xp*))
