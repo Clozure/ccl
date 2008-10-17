@@ -108,7 +108,6 @@ present and false otherwise. This variable shouldn't be set by user code.")
                                    #+windows-target (%ptr-to-int
                                                      (#_GetStdHandle #$STD_OUTPUT_HANDLE))
                                    :basic t :direction :output :sharing :lock :encoding encoding-name))
-
     (setq *stderr* (make-fd-stream #-windows-target 2
                                    #+windows-target (%ptr-to-int
                                                      (#_GetStdHandle #$STD_ERROR_HANDLE))
@@ -238,6 +237,7 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "READ" "read")
       (bin-load-provide "ARRAYS-FRY" "arrays-fry")
       (bin-load-provide "APROPOS" "apropos")
+      (bin-load-provide "SOURCE-FILES" "source-files")
       
       #+ppc-target
       (progn
@@ -294,7 +294,6 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "ARGLIST" "arglist")
       (bin-load-provide "EDIT-CALLERS" "edit-callers")
       (bin-load-provide "DESCRIBE" "describe")
-      (bin-load-provide "SOURCE-FILES" "source-files")
       (bin-load-provide "MCL-COMPAT" "mcl-compat")
       (require "LOOP")
       (bin-load-provide "CCL-EXPORT-SYMS" "ccl-export-syms")
