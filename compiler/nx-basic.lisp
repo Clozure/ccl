@@ -44,17 +44,21 @@
 
 (let ((policy (%istruct 'compiler-policy
                #'(lambda (env)
-                   (neq (debug-optimize-quantity env) 3))   ;  allow-tail-recursion-elimination
+                   #+ccl-0711 (< (debug-optimize-quantity env) 2)
+                   #-ccl-0711 (neq (debug-optimize-quantity env) 3))   ;  allow-tail-recursion-elimination
                #'(lambda (env)
-                   (eq (debug-optimize-quantity env) 3))   ; inhibit-register-allocation
+                   #+ccl-0711 nil
+                   #-ccl-0711 (eq (debug-optimize-quantity env) 3))   ; inhibit-register-allocation
                #'(lambda (env)
                    (let* ((safety (safety-optimize-quantity env)))
                      (and (< safety 3)
                           (>= (speed-optimize-quantity env)
                               safety)))) ; trust-declarations
                #'(lambda (env)
-                   (>= (speed-optimize-quantity env)
-                       (+ (space-optimize-quantity env) 2)))    ; open-code-inline
+                   #+ccl-0711 (> (speed-optimize-quantity env)
+                                 (space-optimize-quantity env))
+                   #-ccl-0711 (>= (speed-optimize-quantity env)
+                                  (+ (space-optimize-quantity env) 2))) ; open-code-inline
                #'(lambda (env)
                    (and (eq (speed-optimize-quantity env) 3) 
                         (eq (safety-optimize-quantity env) 0)))   ; inhibit-safety-checking
@@ -67,7 +71,8 @@
                #'(lambda (env)
                    (and (neq (compilation-speed-optimize-quantity env) 3)
                         (neq (safety-optimize-quantity env) 3)
-                        (neq (debug-optimize-quantity env) 3)))   ; allow-transforms
+                        #+ccl-0711 (neq (speed-optimize-quantity env) 0)
+                        (neq (debug-optimize-quantity env) 3))) ; allow-transforms
                #'(lambda (var env)       ; force-boundp-checks
                    (declare (ignore var))
                    (eq (safety-optimize-quantity env) 3))
