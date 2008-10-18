@@ -1864,7 +1864,9 @@
 
 
 (defmethod ui-interact ((ui inspector-tty-ui))
-  (let* ((level (inspector-ui-level ui)))
+  (let* ((level (inspector-ui-level ui))
+         (ccl::*default-integer-command* `(:i 0 ,(1- (compute-line-count (inspector-ui-inspector ui))))))
+    (declare (special ccl::*default-integer-command*))
     (restart-case
         (ccl:with-terminal-input
           (ccl::with-toplevel-commands :tty-inspect
