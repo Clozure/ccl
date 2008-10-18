@@ -141,15 +141,12 @@
 ;;; We can probably do better than UVREF here, but
 ;;; a) it's not -that- bad
 ;;; b) it does some bounds/sanity checking, which isn't a bad idea.
-(eval-when (:compile-toplevel :execute)
-  (declaim (inline bignum-ref bignum-set)))
 
-(defun bignum-ref (b i)
-  (%typed-miscref :bignum b i))
+(defmacro bignum-ref (b i)
+  `(%typed-miscref :bignum ,b ,i))
 
-(defun bignum-set (b i val)
-  (declare (fixnum val))
-  (%typed-miscset :bignum b i (logand val all-ones-digit)))
+(defmacro bignum-set (b i val)
+  `(%typed-miscset :bignum ,b ,i ,val))
 
 
 (defun bignum-plusp (b)
@@ -177,13 +174,14 @@
     -1
     0))
 
+         
 (defun %add-with-carry (a-digit b-digit carry-in)
   (declare (fixnum a-digit b-digit carry-in))
   (setq a-digit (logand all-ones-digit a-digit)
         b-digit (logand all-ones-digit b-digit))
   (let* ((sum (+ carry-in (the fixnum (+ a-digit b-digit)))))
     (declare (fixnum sum))
-    (values (logand all-ones-digit sum) (logand 1 (ash sum -32)))))
+    (values (logand all-ones-digit sum) (logand 1 (the fixnum (ash sum -32))))))
 
 (defun %subtract-with-borrow (a-digit b-digit borrow-in)
   (declare (fixnum a-digit b-digit borrow-in))
@@ -212,7 +210,8 @@
 (defun add-bignums (a b)
   (let* ((len-a (%bignum-length a))
 	 (len-b (%bignum-length b)))
-    (declare (bignum-index len-a len-b))
+    (declare (bignum-index len-a len-b)
+             (optimize (speed 3) (safety 0)))
     (when (> len-b len-a)
       (rotatef a b)
       (rotatef len-a len-b))
@@ -221,29 +220,79 @@
 	   (carry 0)
 	   (sign-b (%bignum-sign b)))
 	(dotimes (i len-b)
-          (multiple-value-bind (result-digit carry-out)
-              (%add-with-carry (bignum-ref a i) (bignum-ref b i) carry)
-            (setf (bignum-ref res i) result-digit
-                  carry carry-out)))
+          (let* ((sum (+
+                       (the fixnum (+ (the digit-type (bignum-ref a i))
+                                      (the digit-type (bignum-ref b i))))
+                       carry)))
+            (declare (fixnum sum))
+            (setf (bignum-ref res i) sum)
+            (setq carry (logand 1 (the fixnum (ash sum -32))))))
 	(if (/= len-a len-b)
 	  (finish-bignum-add  res carry a sign-b len-b len-a)
           (setf (bignum-ref res len-a)
-                (%add-with-carry (%bignum-sign a) sign-b carry)))
+                (+ (the fixnum carry)
+                   (the fixnum (+ (the digit-type (%bignum-sign a))
+                                  sign-b)))))
 	(%normalize-bignum-macro res))))
+
+(defun add-bignum-and-fixnum (bignum fixnum)
+  (declare (bignum-type bignum)
+           (fixnum fixnum)
+           (optimize (speed 3) (safety 0)))
+  (let* ((len-bignum (%bignum-length bignum))
+         (len-res (1+ len-bignum))
+         (res (%allocate-bignum len-res))
+         (low (logand all-ones-digit fixnum))
+         (high (logand all-ones-digit (the fixnum (ash fixnum -32)))))
+    (declare (bignum-index len-bignum)
+             (bignum-type res)
+             (digit-type low high))
+    (let* ((sum0 (+ (the digit-type (bignum-ref bignum 0)) low))
+           (sum1 (+ (the fixnum (+ (the digit-type (bignum-ref bignum 1))
+                                   high))
+                    (the fixnum (logand 1 (ash sum0 -32)))))
+           (carry (logand 1 (ash sum1 -32))))
+      (declare (fixnum sum0 sum1) (digit-type carry))
+      (setf (bignum-ref res 0) sum0
+            (bignum-ref res 1) sum1)
+      (if (> len-bignum 2)
+        (finish-bignum-add  res carry bignum (ash fixnum (- (- target::nbits-in-word target::fixnumshift))) 2 len-bignum)
+        (setf (bignum-ref res 2)
+              (+ (the fixnum carry)
+                 (the fixnum (+ (the digit-type (%bignum-sign bignum))
+                                (the fixnum (ash fixnum (- (- target::nbits-in-word target::fixnumshift)))))))))
+      (%normalize-bignum-macro res))))
+
+
+
 
 
 ;;; B was shorter than A; keep adding B's sign digit to each remaining
 ;;; digit of A, propagating the carry.
 (defun finish-bignum-add (result carry a sign-b start end)
-  (declare (type bignum-index start end))
-  (do* ((i start (1+ i)))
+  (declare (type bignum-index start end)
+           (digit-type sign-b carry)
+           (optimize (speed 3) (safety 0)))
+  (do* ((i start (1+ i))
+        (sign-b (logand all-ones-digit sign-b)))
        ((= i end)
         (setf (bignum-ref result end)
-              (%add-with-carry (%sign-digit a end) sign-b carry)))
-    (multiple-value-bind (result-digit carry-out)
-        (%add-with-carry (bignum-ref a i) sign-b carry)
-      (setf (bignum-ref result i) result-digit
-            carry carry-out))))
+              (the fixnum (+
+                           (the fixnum (+ (the fixnum
+                                            (logand all-ones-digit
+                                                    (the fixnum
+                                                      (%sign-digit a end))))
+                                          sign-b))
+                           carry))))
+    (declare (fixnum i) (digit-type sign-b))
+    (let* ((sum (the fixnum (+ (the fixnum (+ (bignum-ref a i)
+                                              sign-b))
+                               carry))))
+      (declare (fixnum sum))
+      (setf (bignum-ref result i) sum)
+      (setq carry (logand 1 (the fixnum (ash sum -32)))))))
+
+
 
 
 ;;;; Subtraction.
@@ -257,12 +306,14 @@
     (%normalize-bignum-macro res)))
 
 (defun bignum-subtract-loop (a len-a b len-b res)
-  (declare (bignum-index len-a len-b ))
+  (declare (bignum-index len-a len-b )
+           (optimize (speed 3) (safety 0)))
   (let* ((len-res (%bignum-length res)))
     (declare (bignum-index len-res))
     (let* ((borrow 1)
 	   (sign-a (%bignum-sign a))
 	   (sign-b (%bignum-sign b)))
+      (declare (digit-type borrow sign-a sign-b))
       (dotimes (i (the bignum-index len-res))
         (multiple-value-bind (result-digit borrow-out)
             (%subtract-with-borrow
@@ -937,7 +988,8 @@
 
 (defun bignum-ashift-right (bignum x)
   (declare (type bignum-type bignum)
-           (fixnum x))
+           (fixnum x)
+           (optimize (speed 3) (safety 0)))
   (let ((bignum-len (%bignum-length bignum)))
     (declare (type bignum-index bignum-len))
     (multiple-value-bind (digits n-bits) (truncate x digit-size)
@@ -1042,7 +1094,8 @@
   (let* ((remaining-bits (- digit-size n-bits))
 	 (res-len-1 (1- res-len))
 	 (res (or res (%allocate-bignum res-len))))
-    (declare (type bignum-index res-len res-len-1))
+    (declare (type bignum-index res-len res-len-1)
+             (optimize (speed 3) (safety 0)))
     (do ((i 0 i+1)
 	 (i+1 1 (1+ i+1))
 	 (j (1+ digits) (1+ j)))
