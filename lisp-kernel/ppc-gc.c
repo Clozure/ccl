@@ -154,7 +154,7 @@ check_range(LispObj *start, LispObj *end, Boolean header_allowed)
 }
 
 void
-check_all_areas()
+check_all_areas(TCR *tcr)
 {
   area *a = active_dynamic_area;
   area_code code = a->code;
