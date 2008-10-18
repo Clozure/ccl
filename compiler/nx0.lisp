@@ -54,7 +54,7 @@
 (defvar *nx1-vcells* nil)
 (defvar *nx1-fcells* nil)
 
-(defvar *nx1-operators* (make-hash-table :size 160 :test #'eq))
+(defvar *nx1-operators* (make-hash-table :size 300 :test #'eq))
 
                                          
 
@@ -83,6 +83,7 @@
 (defparameter *nx-never-tail-call*
   '(error cerror break warn type-error file-error
     signal-program-error signal-simple-program-error
+    print-call-history
     #-bccl %get-frame-pointer
     #-bccl break-loop)
   "List of functions which never return multiple values and
@@ -207,11 +208,11 @@
       (setq block-name (cadr block-name)))
     (let ((body (parse-macro-1 block-name arglist body env)))
       `(eval-when (:compile-toplevel :load-toplevel :execute)
-        (eval-when (:load-toplevel :execute)
-          (record-source-file ',name 'compiler-macro))
-        (setf (compiler-macro-function ',name)
-         (nfunction (compiler-macro-function ,name)  ,body))
-        ',name))))
+         (eval-when (:load-toplevel :execute)
+           (record-source-file ',name 'compiler-macro))
+         (setf (compiler-macro-function ',name)
+               (nfunction (compiler-macro-function ,name)  ,body))
+         ',name))))
 
 ;;; This is silly (as may be the whole idea of actually -using-
 ;;; compiler-macros).  Compiler-macroexpand-1 will return a second
@@ -702,15 +703,15 @@ function to the indicated name is true.")
                                      (and name (not (nx-declared-notinline-p name env))))))
       (unless (nx-allow-register-allocation env)
         (nx-inhibit-register-allocation))
-            (setq *nx-new-p2decls*
+      (setq *nx-new-p2decls*
             (if (eql (safety-optimize-quantity env) 3)
               (logior $decl_full_safety
                       (if (nx-tailcalls env) $decl_tailcalls 0))
-              (%ilogior 
-               (if (nx-tailcalls env) $decl_tailcalls 0)
-               (if (nx-open-code-in-line env) $decl_opencodeinline 0)
-               (if (nx-inhibit-safety-checking env) $decl_unsafe 0)
-               (if (nx-trust-declarations env) $decl_trustdecls 0)))))))
+              (%ilogior
+                (if (nx-tailcalls env) $decl_tailcalls 0)
+                (if (nx-open-code-in-line env) $decl_opencodeinline 0)
+                (if (nx-inhibit-safety-checking env) $decl_unsafe 0)
+                (if (nx-trust-declarations env) $decl_trustdecls 0)))))))
 
 #|     
 (defun nx-find-misc-decl (declname env)
@@ -938,7 +939,12 @@ function to the indicated name is true.")
   (dolist (v vars)
     (nx1-punt-var v (pop initforms))))
 
-
+;;; at the beginning of a binding construct, note which lexical
+;;; variables are bound to other variables and the number of setqs
+;;; done so far on the initform.  After executing the body, if neither
+;;; variable has been closed over, the new variable hasn't been
+;;; setq'ed, and the old guy wasn't setq'ed in the body, the binding
+;;; can be punted.
 (defun nx1-note-var-binding (var initform)
   (let* ((init (nx-untyped-form initform))
          (inittype (nx-acode-form-type initform *nx-lexical-environment*))
@@ -1434,7 +1440,7 @@ Or something. Right? ~s ~s" var varbits))
          auxen
          body
          *nx-new-p2decls*)))))
-  
+
 (defun nx-parse-simple-lambda-list (pending ll &aux
 					      req
 					      opt
@@ -1621,11 +1627,10 @@ Or something. Right? ~s ~s" var varbits))
     (list (%nx1-operator lambda-list) whole req opt rest keys auxen)))
 
 (defun nx1-form (form &optional (*nx-lexical-environment* *nx-lexical-environment*))
-  (let* ((*nx-form-type* t))
-    (when (and (consp form)(eq (car form) 'the))
-      (setq *nx-form-type* (nx-target-type (cadr form))))
-    (prog1
-      (nx1-typed-form form *nx-lexical-environment*))))
+  (let* ((*nx-form-type* (if (and (consp form) (eq (car form) 'the))
+                           (nx-target-type (cadr form))
+                           t)))
+    (nx1-typed-form form *nx-lexical-environment*)))
 
 (defun nx1-typed-form (original env)
   (with-program-error-handler
@@ -1633,7 +1638,7 @@ Or something. Right? ~s ~s" var varbits))
         (nx1-transformed-form (nx-transform (runtime-program-error-form c) env) env))
     (nx1-transformed-form (nx-transform original env) env)))
 
-(defun nx1-transformed-form (form &optional (env *nx-lexical-environment*))
+(defun nx1-transformed-form (form env)
   (if (consp form)
     (nx1-combination form env)
     (let* ((symbolp (non-nil-symbol-p form))
@@ -1673,7 +1678,7 @@ Or something. Right? ~s ~s" var varbits))
   (if form
     (or (nx-null form)
         (nx-t form)
-        (and (consp form)
+        (and (acode-p form)
              (or (eq (acode-operator form) (%nx1-operator immediate))
                  (eq (acode-operator form) (%nx1-operator fixnum))
                  (eq (acode-operator form) (%nx1-operator simple-function)))))))
@@ -1870,7 +1875,7 @@ Or something. Right? ~s ~s" var varbits))
         (nx1-whine :undefined-function sym))
       (setq whined t))
     (when (and args-p (setq somedef (or lexenv-def defenv-def global-def)))
-      (multiple-value-bind (deftype  reason)
+      (multiple-value-bind (deftype reason)
           (nx1-check-call-args somedef args spread-p)
         (when deftype
           (nx1-whine deftype sym reason args spread-p)
@@ -2117,7 +2122,7 @@ Or something. Right? ~s ~s" var varbits))
 	 (destructuring-bind (typespec thing) (cdr form)
            (if (constantp thing)
              (progn
-               (setq form thing form thing)
+               (setq form thing)
                (go LOOP))
              (multiple-value-bind (newform win) (nx-transform thing environment)
                (when win
@@ -2145,7 +2150,9 @@ Or something. Right? ~s ~s" var varbits))
        (when (and enabled
 		  (not (nx-declared-notinline-p sym environment)))
 	 (multiple-value-bind (value folded) (nx-constant-fold form environment)
-	   (when folded (setq form value changed t)  (unless (and (consp form) (eq (car form) sym)) (go START))))
+	   (when folded
+             (setq form value changed t)
+             (unless (and (consp form) (eq (car form) sym)) (go START))))
 	 (when compiler-macro
 	   (multiple-value-bind (newform win) (compiler-macroexpand-1 form environment)
 	     (when win
@@ -2187,7 +2194,8 @@ Or something. Right? ~s ~s" var varbits))
            (win nil))
       (declare (type cons ptr))
       (dolist (form (cdr callform) (if any-wins (values (copy-list transformed-call) t) (values callform nil)))
-        (rplacd ptr (setq ptr (cons (multiple-value-setq (form win) (nx-transform form env)) nil)))
+        (multiple-value-setq (form win) (nx-transform form env))
+        (rplacd ptr (setq ptr (cons form nil)))
         (if win (setq any-wins t)))))
 
 ;This is needed by (at least) SETF.
