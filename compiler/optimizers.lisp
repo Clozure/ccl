@@ -2389,6 +2389,17 @@
       w)))
 
 
+;;; In practice, things that're STREAMP are almost always
+;;; BASIC-STREAMs or FUNDAMENTAL-STREAMs, but STREAMP is a generic
+;;; function.
+(define-compiler-macro streamp (arg)
+  (let* ((s (gensym)))
+    `(let* ((,s ,arg))
+      (or (typep ,s 'basic-stream)
+       (typep ,s 'fundamental-stream)
+       ;; Don't recurse
+       (funcall 'streamp ,s)))))
+
 
 (define-compiler-macro %char-code-case-fold (&whole w code vector &environment env)
   (if (nx-open-code-in-line env)
