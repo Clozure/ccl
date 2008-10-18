@@ -1218,6 +1218,8 @@ new_tcr(natural vstack_size, natural tstack_size)
   TCR_INTERRUPT_LEVEL(tcr) = (LispObj) (-1<<fixnum_shift);
 #ifndef WINDOWS
   tcr->shutdown_count = PTHREAD_DESTRUCTOR_ITERATIONS;
+#else
+  tcr->shutdown_count = 1;
 #endif
   return tcr;
 }
@@ -1225,11 +1227,15 @@ new_tcr(natural vstack_size, natural tstack_size)
 void
 shutdown_thread_tcr(void *arg)
 {
-  TCR *tcr = TCR_FROM_TSD(arg);
+  TCR *tcr = TCR_FROM_TSD(arg),*current=get_tcr(0);
 
   area *vs, *ts, *cs;
   void *termination_semaphore;
   
+  if (current == NULL) {
+    current = tcr;
+  }
+
   if (--(tcr->shutdown_count) == 0) {
     if (tcr->flags & (1<<TCR_FLAG_BIT_FOREIGN)) {
       LispObj callback_macptr = nrs_FOREIGN_THREAD_CONTROL.vcell,
@@ -1242,7 +1248,7 @@ shutdown_thread_tcr(void *arg)
 #ifdef DARWIN
     darwin_exception_cleanup(tcr);
 #endif
-    LOCK(lisp_global(TCR_AREA_LOCK),tcr);
+    LOCK(lisp_global(TCR_AREA_LOCK),current);
     vs = tcr->vs_area;
     tcr->vs_area = NULL;
     ts = tcr->ts_area;
@@ -1279,7 +1285,7 @@ shutdown_thread_tcr(void *arg)
     CloseHandle((HANDLE)tcr->io_datum);
     tcr->io_datum = NULL;
 #endif
-    UNLOCK(lisp_global(TCR_AREA_LOCK),tcr);
+    UNLOCK(lisp_global(TCR_AREA_LOCK),current);
     if (termination_semaphore) {
       SEM_RAISE(termination_semaphore);
     }
@@ -1907,8 +1913,10 @@ kill_tcr(TCR *tcr)
          forcing the thread to run quit_handler().  For now,
          mark the TCR as dead and kill thw Windows thread. */
       tcr->osid = 0;
-      if (!TerminateThread(osid, 0)) {
+      if (!TerminateThread((HANDLE)osid, 0)) {
         result = false;
+      } else {
+        shutdown_thread_tcr(tcr);
       }
 #else
       if (pthread_kill((pthread_t)osid,SIGQUIT)) {
