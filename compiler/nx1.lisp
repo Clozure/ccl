@@ -999,7 +999,10 @@
     (if (null false)
       (return-from nx1-if (nx1-form `(progn ,test nil)))
       (psetq test `(not ,test) true false false true)))
-  (make-acode (%nx1-operator if)  (nx1-form test) (nx1-form true) (nx1-form false)))
+  (let ((test-form (nx1-form test))
+        ;; Once hit a conditional, no more duplicate warnings
+        (*compiler-warn-on-duplicate-definitions* nil))
+    (make-acode (%nx1-operator if) test-form (nx1-form true) (nx1-form false))))
 
 (defnx1 nx1-%debug-trap dbg (&optional arg)
   (make-acode (%nx1-operator %debug-trap) (nx1-form arg)))
@@ -1175,7 +1178,7 @@
            (eq (%car def) 'nfunction)
            (consp (%cdr def))
            (or (symbolp (%cadr def)) (setf-function-name-p (%cadr def))))
-    (note-function-info (%cadr def) nil env))
+    (note-function-info (%cadr def) (caddr def) env))
   (nx1-treat-as-call w))
 
 
@@ -1209,8 +1212,8 @@
   (setf (afunc-fn-refcount afunc) 1)
   (nx1-afunc-ref afunc))
 
-(defun nx1-compile-inner-function (name def 
-                                        &optional p (env *nx-lexical-environment*) 
+(defun nx1-compile-inner-function (name def p
+                                        &optional (env *nx-lexical-environment*)
                                         &aux (q *nx-current-function*))
   (unless p (setq p (make-afunc)))
   (setf (afunc-parent p) q)
