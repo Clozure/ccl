@@ -1293,6 +1293,10 @@
   (uuo_interr arch::error-object-not-unsigned-byte-32 src)
   :got-it)
 
+(define-ppc64-vinsn %unbox-u32 (((dest :u32))
+				((src :lisp)))
+  (rldicl dest src (- 64 ppc64::fixnumshift) 32))
+
 ;;; an object is of type (SIGNED-BYTE 32) iff
 ;;; a) it's of type (SIGNED-BYTE 32)
 ;;; b) see (a).
