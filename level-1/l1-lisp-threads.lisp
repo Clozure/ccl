@@ -422,14 +422,11 @@
 
 (defun kill-lisp-thread (thread)
   (unless (eq thread *initial-lisp-thread*)
-    (let* ((pthread (lisp-thread-os-thread thread)))
-      (when pthread
+    (let* ((tcr (lisp-thread.tcr thread)))
+      (when tcr
         (setf (lisp-thread.tcr thread) nil
               (lisp-thread.state thread) :exit)
-        #+windows-target
-        (#_TerminateThread pthread #$EXIT_FAILURE)
-        #-windows-target
-        (#_pthread_kill pthread #$SIGQUIT)))))
+	(%kill-tcr tcr)))))
 
 ;;; This returns the underlying pthread, whatever that is.
 (defun lisp-thread-os-thread (thread)
