@@ -1084,7 +1084,7 @@ handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TC
 	return true;
 	
       case XUUO_KILL:
-        kill_tcr(target);
+        xpGPR(context,Iimm0) = (LispObj)kill_tcr(target);
         xpPC(context)+=3;
         break;
       default:
