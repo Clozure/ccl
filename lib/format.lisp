@@ -335,9 +335,11 @@
 		       (require-type stream 'stream)))     
 	(if (functionp control-string)
 	  (apply control-string stream format-arguments)
-	  (let ((*format-control-string* (ensure-simple-string control-string))
-                (*format-pprint* nil)
-                (*format-justification-semi* nil))
+	  (let* ((control-string (ensure-simple-string control-string))
+                 (*format-control-string* control-string)
+                 (*format-pprint* nil)
+                 (*format-justification-semi* nil))
+            (declare (type simple-string control-string))
 	    (cond
 	      ;; Try to avoid pprint overhead in this case.
 	      ((not (position #\~ control-string))
@@ -495,12 +497,12 @@
     (let ((cpos (format-find-char #\: ipos epos))
           package)
       (cond (cpos 
-             (setq package (string-upcase (%substr string ipos cpos)))
+             (setq package (find-package (string-upcase (%substr string ipos cpos))))
              (when (eql #\: (schar string (%i+ 1 cpos)))
                (setq cpos (%i+ cpos 1)))
              (setq ipos (%i+ cpos 1)))
-            (t (setq package :cl-user)))
-      (let ((thing (intern (string-upcase (%substr string ipos epos)) (find-package package))))
+            (t (setq package (find-package "CL-USER"))))
+      (let ((thing (intern (string-upcase (%substr string ipos epos)) package)))
         (setq *format-index* epos) ; or 1+ epos?
         (apply thing stream (pop-format-arg) colon atsign parms)))))
 
