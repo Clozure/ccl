@@ -31,7 +31,8 @@
 #define error_suspend 12
 #define error_suspend_all 13
 #define error_resume 14
-#define error_resume_all 15					
+#define error_resume_all 15 
+#define error_kill 16
 #define error_cant_call 17
 
 #define error_type_error 128

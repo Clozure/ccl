@@ -1083,6 +1083,10 @@ handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TC
 	xpPC(context)+=3;
 	return true;
 	
+      case XUUO_KILL:
+        kill_tcr(target);
+        xpPC(context)+=3;
+        break;
       default:
 	return false;
       }

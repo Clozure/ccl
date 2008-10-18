@@ -1890,6 +1890,36 @@ tcr_suspend_ack(TCR *tcr)
 #endif
       
 
+Boolean
+kill_tcr(TCR *tcr)
+{
+  TCR *current = get_tcr(true);
+  Boolean result = false;
+
+  LOCK(lisp_global(TCR_AREA_LOCK),current);
+  {
+    LispObj osid = tcr->osid;
+    
+    if (osid) {
+      result = true;
+#ifdef WINDOWS
+      /* What we really want to de hear is (something like)
+         forcing the thread to run quit_handler().  For now,
+         mark the TCR as dead and kill thw Windows thread. */
+      tcr->osid = 0;
+      if (!TerminateThread(osid)) {
+        result = false;
+      }
+#else
+      if (pthread_kill(osid,SIGQUIT)) {
+        result = false;
+      }
+#endif
+    }
+  }
+  UNLOCK(lisp_global(TCR_AREA_LOCK), current);
+  return result;
+}
 
 Boolean
 lisp_suspend_tcr(TCR *tcr)
