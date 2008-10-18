@@ -152,30 +152,23 @@
 (defparameter *load-time-eval-token* nil)
 
 
-
-
 (eval-when (:compile-toplevel)
   (declaim (ftype (function (&rest ignore) t)  ppc-compile)))
 
 (defparameter *nx-discard-xref-info-hook* nil)
 
-(defun compile-named-function (def &rest args)
- ;; -- TEMP -- bootstrapping a version using keyword args.
- (ignore-errors
-   (destructuring-bind (&key name env keep-lambda keep-symbols policy load-time-eval-token target) args
-     (setq args (list name env keep-lambda keep-symbols policy load-time-eval-token target))))
- (destructuring-bind (&optional name env keep-lambda keep-symbols policy *load-time-eval-token* target) args
- ;; 
+(defun compile-named-function (def &key name env keep-lambda keep-symbols policy load-time-eval-token target)
   (when (and name *nx-discard-xref-info-hook*)
     (funcall *nx-discard-xref-info-hook* name))
   (setq 
    def
-   (let ((env (new-lexical-environment env)))
+   (let ((*load-time-eval-token* load-time-eval-token)
+         (env (new-lexical-environment env)))
      (setf (lexenv.variables env) 'barrier)
        (let* ((*target-backend* (or (if target (find-backend target)) *host-backend*))
               (afunc (nx1-compile-lambda 
                       name 
-                      def 
+                      def
                       (make-afunc) 
                       nil 
                       env 
@@ -184,13 +177,11 @@
          (if (afunc-lfun afunc)
            afunc
            (funcall (backend-p2-compile *target-backend*)
-            afunc
-            ;; will also bind *nx-lexical-environment*
-            (if keep-lambda (if (lambda-expression-p keep-lambda) keep-lambda def))
-            keep-symbols)))))
+                    afunc
+                    ;; will also bind *nx-lexical-environment*
+                    (if keep-lambda (if (lambda-expression-p keep-lambda) keep-lambda def))
+                    keep-symbols)))))
   (values (afunc-lfun def) (afunc-warnings def)))
-)
-
 
 (defparameter *compiler-whining-conditions*
   '((:undefined-function . undefined-function-reference)
