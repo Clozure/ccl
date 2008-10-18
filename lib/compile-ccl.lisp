@@ -490,7 +490,7 @@
     (:solarisx8664 "gmake")
     (t "make")))
 
-(defparameter *known-optional-features* '(:count-gf-calls :monitor-futex-wait))
+(defparameter *known-optional-features* '(:count-gf-calls :monitor-futex-wait :unique-dcode))
 (defvar *build-time-optional-features* nil)
 
 
