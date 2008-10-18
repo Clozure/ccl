@@ -729,6 +729,16 @@
   (movl ($ (target-nil-value)) (%l arg_z))
   (single-value-return))
 
+
+(defx8632lapfunction %kill-tcr ((target arg_z))
+  (check-nargs 1)
+  (ud2a)
+  (:byte 9)
+  (testb (%b imm0) (%b imm0))
+  (movl ($ (target-nil-value)) (%l arg_z))
+  (cmovnel (@ (+ target::t-offset target::symbol.vcell) (% arg_z)) (%l arg_z))
+  (single-value-return))
+
 (defx8632lapfunction %get-spin-lock ((p arg_z))
   (check-nargs 1)
   (save-simple-frame)

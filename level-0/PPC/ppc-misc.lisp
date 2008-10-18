@@ -1010,6 +1010,12 @@
   (li arg_z nil)
   (blr))
 
+(defppclapfunction %kill-tcr ((target arg_z))
+  (check-nargs 1)
+  (uuo_interr arch::error-kill rzero)
+  (ne0->boolean arg_z imm0 imm1)
+  (blr))
+
 (defppclapfunction %atomic-pop-static-cons ()
   (li imm0 (+ (target-nil-value) (target::kernel-global static-conses)))
   @again
