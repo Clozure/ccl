@@ -71,76 +71,7 @@
 
 
   
-  (defmacro two-arg-+/- (name op big-op)
-    `(defun ,name (x y)     
-      (number-case x
-	(fixnum (number-case y
-		  (fixnum (,op (the fixnum x) (the fixnum y)))
-		  (double-float (rat-dfloat ,op x y))
-		  (short-float (rat-sfloat ,op x y))
-		  (bignum (with-small-bignum-buffers ((bx x))
-			    (,big-op bx y)))
-		  (complex (complex (,op x (%realpart y))
-				    ,(if (eq op '-)`(- (%imagpart y)) `(%imagpart y))))
-		  (ratio (let* ((dy (%denominator y)) 
-				(n (,op (* x dy) (%numerator y))))
-			   (%make-ratio n dy)))))
-	(double-float (number-case y
-			(double-float (,op (the double-float x) (the double-float y)))
-			(short-float (with-stack-double-floats ((dy y))
-				       (,op (the double-float x) (the double-float dy))))
-			(rational (dfloat-rat ,op x y))
-			(complex (complex (,op x (%realpart y)) 
-					  ,(if (eq op '-)`(- (%imagpart y)) `(%imagpart y))))))
-	(short-float (number-case y                                
-		       (short-float (,op (the short-float x) (the short-float y)))
-		       (double-float (with-stack-double-floats ((dx x))
-				       (,op (the double-float dx) (the double-float y))))
-		       (rational (sfloat-rat ,op x y))
-		       (complex (complex (,op x (%realpart y))
-					 ,(if (eq op '-) `(- (%imagpart y)) `(%imagpart y))))))
-	(bignum (number-case y
-		  (bignum (,big-op x y))
-		  (fixnum (with-small-bignum-buffers ((by y))
-			    (,big-op x by)))
-		  (double-float (rat-dfloat ,op x y))
-		  (short-float (rat-sfloat ,op x y))
-		  (complex (complex (,op x (realpart y)) 
-				    ,(if (eq op '-)`(- (%imagpart y)) `(%imagpart y))))
-		  (ratio
-		   (let* ((dy (%denominator y))
-			  (n (,op (* x dy) (%numerator y))))
-		     (%make-ratio n dy)))))
-	(complex (number-case y
-		   (complex (canonical-complex (,op (%realpart x) (%realpart y))
-					       (,op (%imagpart x) (%imagpart y))))
-		   ((rational float) (complex (,op (%realpart x) y) (%imagpart x)))))
-	(ratio (number-case y
-		 (ratio
-		  (let* ((nx (%numerator x))
-			 (dx (%denominator x))
-			 (ny (%numerator y))
-			 (dy (%denominator y))
-			 (g1 (gcd dx dy)))
-		    (if (eql g1 1)
-		      (%make-ratio (,op (* nx dy) (* dx ny)) (* dx dy))
-		      (let* ((t1 (,op (* nx (truncate dy g1)) (* (truncate dx g1) ny)))
-			     (g2 (gcd t1 g1))
-			     (t2 (truncate dx g1)))
-			(cond ((eql t1 0) 0)
-			      ((eql g2 1) (%make-ratio t1 (* t2 dy)))
-			      (t
-			       (let* ((nn (truncate t1 g2))
-				      (t3 (truncate dy g2))
-				      (nd (if (eql t2 1) t3 (* t2 t3))))
-				 (if (eql nd 1) nn (%make-ratio nn nd)))))))))
-		 (integer
-		  (let* ((dx (%denominator x)) (n (,op (%numerator x) (* y dx))))
-		    (%make-ratio n dx)))
-		 (double-float (rat-dfloat ,op x y))
-		 (short-float (rat-sfloat ,op x y))
-		 (complex (complex (,op x (%realpart y)) 
-				   ,(if (eq op '-)`(- (%imagpart y)) `(%imagpart y)))))))))
+
 
   (declaim (inline  %make-complex %make-ratio))
   (declaim (inline canonical-complex))
@@ -576,8 +507,146 @@
 
 
 
-(two-arg-+/- +-2 + add-bignums)
-(two-arg-+/- --2 - subtract-bignum)
+(defun +-2 (x y)     
+  (number-case x
+    (fixnum (number-case y
+              (fixnum (+ (the fixnum x) (the fixnum y)))
+              (double-float (rat-dfloat + x y))
+              (short-float (rat-sfloat + x y))
+              (bignum (add-bignum-and-fixnum y x))
+              (complex (complex (+ x (%realpart y))
+                                (%imagpart y)))
+              (ratio (let* ((dy (%denominator y)) 
+                            (n (+ (* x dy) (%numerator y))))
+                       (%make-ratio n dy)))))
+    (double-float (number-case y
+                    (double-float (+ (the double-float x) (the double-float y)))
+                    (short-float (with-stack-double-floats ((dy y))
+                                   (+ (the double-float x) (the double-float dy))))
+                    (rational (dfloat-rat + x y))
+                    (complex (complex (+ x (%realpart y)) 
+                                      (%imagpart y)))))
+    (short-float (number-case y                                
+                   (short-float (+ (the short-float x) (the short-float y)))
+                   (double-float (with-stack-double-floats ((dx x))
+                                   (+ (the double-float dx) (the double-float y))))
+                   (rational (sfloat-rat + x y))
+                   (complex (complex (+ x (%realpart y))
+                                     (%imagpart y)))))
+    (bignum (number-case y
+              (bignum (add-bignums x y))
+              (fixnum (add-bignum-and-fixnum x y))
+              (double-float (rat-dfloat + x y))
+              (short-float (rat-sfloat + x y))
+              (complex (complex (+ x (realpart y)) 
+                                (%imagpart y)))
+              (ratio
+               (let* ((dy (%denominator y))
+                      (n (+ (* x dy) (%numerator y))))
+                 (%make-ratio n dy)))))
+    (complex (number-case y
+               (complex (canonical-complex (+ (%realpart x) (%realpart y))
+                                           (+ (%imagpart x) (%imagpart y))))
+               ((rational float) (complex (+ (%realpart x) y) (%imagpart x)))))
+    (ratio (number-case y
+             (ratio
+              (let* ((nx (%numerator x))
+                     (dx (%denominator x))
+                     (ny (%numerator y))
+                     (dy (%denominator y))
+                     (g1 (gcd dx dy)))
+                (if (eql g1 1)
+                  (%make-ratio (+ (* nx dy) (* dx ny)) (* dx dy))
+                  (let* ((t1 (+ (* nx (truncate dy g1)) (* (truncate dx g1) ny)))
+                         (g2 (gcd t1 g1))
+                         (t2 (truncate dx g1)))
+                    (cond ((eql t1 0) 0)
+                          ((eql g2 1) (%make-ratio t1 (* t2 dy)))
+                          (t
+                           (let* ((nn (truncate t1 g2))
+                                  (t3 (truncate dy g2))
+                                  (nd (if (eql t2 1) t3 (* t2 t3))))
+                             (if (eql nd 1) nn (%make-ratio nn nd)))))))))
+             (integer
+              (let* ((dx (%denominator x)) (n (+ (%numerator x) (* y dx))))
+                (%make-ratio n dx)))
+             (double-float (rat-dfloat + x y))
+             (short-float (rat-sfloat + x y))
+             (complex (complex (+ x (%realpart y)) 
+                               (%imagpart y)))))))
+
+(defun --2 (x y)     
+  (number-case x
+    (fixnum (number-case y
+              (fixnum (- (the fixnum x) (the fixnum y)))
+              (double-float (rat-dfloat - x y))
+              (short-float (rat-sfloat - x y))
+              (bignum 
+               (with-small-bignum-buffers ((bx x))
+                        (subtract-bignum bx y)))
+              (complex (complex (- x (%realpart y))
+                                (- (%imagpart y))))
+              (ratio (let* ((dy (%denominator y)) 
+                            (n (- (* x dy) (%numerator y))))
+                       (%make-ratio n dy)))))
+    (double-float (number-case y
+                    (double-float (- (the double-float x) (the double-float y)))
+                    (short-float (with-stack-double-floats ((dy y))
+                                   (- (the double-float x) (the double-float dy))))
+                    (rational (dfloat-rat - x y))
+                    (complex (complex (- x (%realpart y)) 
+                                      (- (%imagpart y))))))
+    (short-float (number-case y                                
+                   (short-float (- (the short-float x) (the short-float y)))
+                   (double-float (with-stack-double-floats ((dx x))
+                                   (- (the double-float dx) (the double-float y))))
+                   (rational (sfloat-rat - x y))
+                   (complex (complex (- x (%realpart y))
+                                     (- (%imagpart y))))))
+    (bignum (number-case y
+              (bignum (subtract-bignum x y))
+              (fixnum (if (eql y target::target-most-negative-fixnum)
+                        (with-small-bignum-buffers ((by y))
+                          (subtract-bignum x by))
+                        (add-bignum-and-fixnum x (- y))))
+              (double-float (rat-dfloat - x y))
+              (short-float (rat-sfloat - x y))
+              (complex (complex (- x (realpart y)) 
+                                (- (%imagpart y))))
+              (ratio
+               (let* ((dy (%denominator y))
+                      (n (- (* x dy) (%numerator y))))
+                 (%make-ratio n dy)))))
+    (complex (number-case y
+               (complex (canonical-complex (- (%realpart x) (%realpart y))
+                                           (- (%imagpart x) (%imagpart y))))
+               ((rational float) (complex (- (%realpart x) y) (%imagpart x)))))
+    (ratio (number-case y
+             (ratio
+              (let* ((nx (%numerator x))
+                     (dx (%denominator x))
+                     (ny (%numerator y))
+                     (dy (%denominator y))
+                     (g1 (gcd dx dy)))
+                (if (eql g1 1)
+                  (%make-ratio (- (* nx dy) (* dx ny)) (* dx dy))
+                  (let* ((t1 (- (* nx (truncate dy g1)) (* (truncate dx g1) ny)))
+                         (g2 (gcd t1 g1))
+                         (t2 (truncate dx g1)))
+                    (cond ((eql t1 0) 0)
+                          ((eql g2 1) (%make-ratio t1 (* t2 dy)))
+                          (t
+                           (let* ((nn (truncate t1 g2))
+                                  (t3 (truncate dy g2))
+                                  (nd (if (eql t2 1) t3 (* t2 t3))))
+                             (if (eql nd 1) nn (%make-ratio nn nd)))))))))
+             (integer
+              (let* ((dx (%denominator x)) (n (- (%numerator x) (* y dx))))
+                (%make-ratio n dx)))
+             (double-float (rat-dfloat - x y))
+             (short-float (rat-sfloat - x y))
+             (complex (complex (- x (%realpart y)) 
+                               (- (%imagpart y))))))))
 
 
 ;;; BUILD-RATIO  --  Internal
