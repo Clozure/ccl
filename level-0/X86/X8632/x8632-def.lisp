@@ -171,35 +171,39 @@
 (defx8632lapfunction %fixnum-set ((fixnum 4) #|(ra 0)|# (offset arg_y) #| &optional |# (new-value arg_z))
   (:arglist (fixnum offset &optional newval))
   (check-nargs 2 3)
-  (movl (@ fixnum (% esp)) (% temp0))
   (cmpl ($ '2) (% nargs))
   (jne @3-args)
-  (movl (% offset) (% temp0))
-  (xorl (%l offset) (%l offset))
+  (movl (% new-value) (% offset))
+  (single-value-return)
   @3-args
+  (movl (@ fixnum (% esp)) (% temp0))
   (unbox-fixnum offset imm0)
   (movl (% new-value) (@ (% temp0) (% imm0)))
-  (movl (% new-value) (% arg_z))
   (single-value-return 3))
 
 
 (defx8632lapfunction %fixnum-set-natural ((fixnum 4) #|(ra 0)|# (offset arg_y) #| &optional |# (new-value arg_z))
-  (:arglist (fixnum offset &optional newval))
+  (:arglist (fixnum offsnet &optional newval))
   (check-nargs 2 3)
-  (movl (@ fixnum (% esp)) (% temp0))
-  (save-simple-frame)
   (cmpl ($ '2) (% nargs))
   (jne @3-args)
+  (save-simple-frame)
   (movl (% offset) (% temp0))
-  (xorl (%l offset) (%l offset))
+  (xorl (% offset) (% offset))
+  (jmp @common)
   @3-args
+  (movl (% ebp) (@ 8 (% esp)))
+  (lea (@ 8 (% esp)) (% ebp))
+  (popl (@ 4 (% ebp)))
+  (popl (% temp0))
+  @common
   (call-subprim .SPgetu32)		;puts u32 in imm0
   (mark-as-imm temp1)
   (unbox-fixnum offset temp1)
   (movl (% imm0) (@ (% temp0) (% temp1)))
   (mark-as-node temp1)
   (restore-simple-frame)
-  (single-value-return 3))
+  (single-value-return))
 
 
 (defx8632lapfunction %current-frame-ptr ()
