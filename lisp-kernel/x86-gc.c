@@ -220,8 +220,92 @@ check_range(LispObj *start, LispObj *end, Boolean header_allowed)
   }
 }
 
+#ifdef X8632
 void
-check_all_areas()
+check_xp(ExceptionInformation *xp, natural node_regs_mask)
+{
+  natural *regs = (natural *) xpGPRvector(xp), dnode;
+
+  if (node_regs_mask & (1<<0)) check_node(regs[REG_EAX]);
+  if (node_regs_mask & (1<<1)) check_node(regs[REG_ECX]);
+  if (regs[REG_EFL] & EFL_DF) {
+    /* DF set means EDX should be treated as an imm reg */
+    ;
+  } else
+    if (node_regs_mask & (1<<2)) check_node(regs[REG_EDX]);
+
+  if (node_regs_mask & (1<<3)) check_node(regs[REG_EBX]);
+  if (node_regs_mask & (1<<4)) check_node(regs[REG_ESP]);
+  if (node_regs_mask & (1<<5)) check_node(regs[REG_EBP]);
+  if (node_regs_mask & (1<<6)) check_node(regs[REG_ESI]);
+  if (node_regs_mask & (1<<7)) check_node(regs[REG_EDI]);
+}
+#else
+void
+check_xp(ExceptionInformation *xp)
+{
+  natural *regs = (natural *) xpGPRvector(xp), dnode;
+
+  check_node(regs[Iarg_z]);
+  check_node(regs[Iarg_y]);
+  check_node(regs[Iarg_x]);
+  check_node(regs[Isave3]);
+  check_node(regs[Isave2]);
+  check_node(regs[Isave1]);
+  check_node(regs[Isave0]);
+  check_node(regs[Ifn]);
+  check_node(regs[Itemp0]);
+  check_node(regs[Itemp1]);
+  check_node(regs[Itemp2]);
+}
+#endif
+
+void
+check_tcrs(TCR *first)
+{
+  xframe_list *xframes;
+  ExceptionInformation *xp;
+  
+  TCR *tcr = first;
+  LispObj *tlb_start,*tlb_end;
+
+  do {
+    xp = tcr->gc_context;
+    if (xp) {
+#ifdef X8632
+      check_xp(xp,tcr->node_regs_mask);
+#else
+      check_xp(xp);
+#endif
+    }
+#ifdef X8632
+    check_node(tcr->save0);
+    check_node(tcr->save1);
+    check_node(tcr->save2);
+    check_node(tcr->save3);
+    check_node(tcr->next_method_context);
+#endif
+    for (xframes = (xframe_list *) tcr->xframe; 
+         xframes; 
+         xframes = xframes->prev) {
+#ifndef X8632
+      check_xp(xframes->curr);
+#else
+      check_xp(xframes->curr, xframes->node_regs_mask);
+#endif
+    }
+    tlb_start = tcr->tlb_pointer;
+    if (tlb_start) {
+      tlb_end = tlb_start + ((tcr->tlb_limit)>>fixnumshift);
+      check_range(tlb_start,tlb_end,false);
+    }
+    tcr = tcr->next;
+  } while (tcr != first);
+}
+
+  
+void
+check_all_areas(TCR *tcr)
 {
   area *a = active_dynamic_area;
   area_code code = a->code;
@@ -266,6 +350,8 @@ check_all_areas()
     a = a->succ;
     code = (a->code);
   }
+
+  check_tcrs(tcr);
 }
 
 
