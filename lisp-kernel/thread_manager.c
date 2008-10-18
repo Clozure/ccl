@@ -1907,7 +1907,7 @@ kill_tcr(TCR *tcr)
          forcing the thread to run quit_handler().  For now,
          mark the TCR as dead and kill thw Windows thread. */
       tcr->osid = 0;
-      if (!TerminateThread(osid)) {
+      if (!TerminateThread(osid, 0)) {
         result = false;
       }
 #else
