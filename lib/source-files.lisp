@@ -68,7 +68,7 @@ error messages etc.  The default method returns the name specified in
 define-definition-type."))
 
 (defclass definition-type ()
-  ((name :allocation :class :reader definition-type-name))
+  ((name :allocation :class :reader definition-type-name :initform t))
   (:documentation "Superclass of all definition types"))
 
 (defgeneric definition-base-name (def-type def)
@@ -191,14 +191,18 @@ definition type NAME"
 
 (defparameter *function-definition-type* (definition-type-instance 'function))
 
-;; TODO: what about (:internal .... (method-name quals specs)) ?
 (defmethod definition-base-name ((dt function-definition-type) name)
-  (while (consp name)
-    (if (setf-function-name-p name)
-      (return-from definition-base-name (canonical-maybe-setf-name name))
-      (let ((x (last name)))
-        (setq name (or (cdr x) (car x))))))
-  name)
+  (while (and (consp name) (not (setf-function-name-p name)))
+    (let ((x (last name)))
+      (or (setq name (cdr x))
+          ;; Try to detect the (:internal .... <hairy-method-name>) case
+          (when (and (setq name (car x))
+                     ;;check for plausible method name
+                     (setq x (method-def-parameters name))
+                     (neq x 'setf)
+                     (not (keywordp x)))
+            (setq name x)))))
+  (canonical-maybe-setf-name name))
 
 (defmethod definition-bound-p ((dt function-definition-type) name)
   (and (or (symbolp name) (setf-function-name-p name))
@@ -222,7 +226,7 @@ definition type NAME"
 
 (defmethod definition-base-name ((dt method-definition-type) (name cons))
   (if (setf-function-name-p name)
-    name
+    (canonical-maybe-setf-name name)
     (definition-base-name *function-definition-type* (car name))))
 
 ;; defmethod passes the actual method into record-source-file
@@ -419,7 +423,6 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
 
 
 ;;; backward compatibility
-
 
 ;;; modified version of %method-applicable-p - args are class names
 ;;; not instances
