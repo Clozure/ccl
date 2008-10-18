@@ -1352,6 +1352,9 @@ handle_uuo(ExceptionInformation *xp, opcode the_uuo, pc where)
       case error_resume_all:
 	lisp_resume_other_threads();
 	break;
+      case error_kill:
+	xpGPR(xp,imm0) = (LispObj)kill_tcr(target);
+	break;
       default:
 	status = handle_error(xp, errnum, rb, 0,  where);
 	break;
