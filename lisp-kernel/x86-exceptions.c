@@ -1981,26 +1981,14 @@ altstack_suspend_resume_handler(int signum, siginfo_t *info, ExceptionInformatio
 #endif
 #endif
 
-#ifdef WINDOWS
-void
-quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
-{
-}
-#else
-void
-quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
-{
-#ifdef DARWIN_GS_HACK
-  Boolean gs_was_tcr = ensure_gs_pthread();
-#endif
-  TCR *tcr = get_tcr(false);
-  area *a;
-  sigset_t mask;
-  
-  sigemptyset(&mask);
 
-
+/* This should only be called when the tcr_area_lock is held */
+void
+empty_tcr_stacks(TCR *tcr)
+{
   if (tcr) {
+    area *a;
+
     tcr->valence = TCR_STATE_FOREIGN;
     a = tcr->vs_area;
     if (a) {
@@ -2015,6 +2003,26 @@ quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
       a->active = a->high;
     }
   }
+}
+
+#ifdef WINDOWS
+void
+quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
+{
+}
+#else
+void
+quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
+{
+#ifdef DARWIN_GS_HACK
+  Boolean gs_was_tcr = ensure_gs_pthread();
+#endif
+  TCR *tcr = get_tcr(false);
+  sigset_t mask;
+  
+  sigemptyset(&mask);
+
+  empty_tcr_stacks(tcr);
   
   pthread_sigmask(SIG_SETMASK,&mask,NULL);
   pthread_exit(NULL);
