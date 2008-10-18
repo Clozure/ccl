@@ -1105,7 +1105,7 @@ gc(TCR *tcr, signed_natural param)
   } else {
     GCDebug = ((nrs_GC_EVENT_STATUS_BITS.vcell & gc_integrity_check_bit) != 0);
     if (GCDebug) {
-      check_all_areas();
+      check_all_areas(tcr);
     }
   }
 
@@ -1357,7 +1357,7 @@ gc(TCR *tcr, signed_natural param)
   }
 
   if (GCDebug) {
-    check_all_areas();
+    check_all_areas(tcr);
   }
 
   
