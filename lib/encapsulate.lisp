@@ -221,10 +221,11 @@
      ;; weed out macros and special-forms
      (if (or (null spec) (special-operator-p spec) (macro-function spec))
        (if error-p
-         (error "Cannot trace or advise ~a~S" spec
+         (error "Cannot trace or advise ~a~S"
                 (cond ((null spec) "")
                       ((special-operator-p spec) "special operator ")
-                      (t "macro ")))
+                      (t "macro "))
+                spec)
          nil)
        (if (or (fboundp spec)
                (and define-if-not
