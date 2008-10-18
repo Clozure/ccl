@@ -203,6 +203,7 @@
     (loop             "ccl:library;loop"         ("ccl:library;loop.lisp"))
     (linux-files      "ccl:l1f;linux-files"      ("ccl:level-1;linux-files.lisp"))
     (source-files     "ccl:bin;source-files"     ("ccl:lib;source-files.lisp"))
+    (leaks            "ccl:bin;leaks"            ("ccl:library;leaks.lisp"))
  
     (prepare-mcl-environment "ccl:bin;prepare-mcl-environment" ("ccl:lib;prepare-mcl-environment.lisp"))
     (defsystem        "ccl:tools;defsystem"      ("ccl:tools;defsystem.lisp"))

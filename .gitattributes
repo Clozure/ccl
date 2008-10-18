@@ -202,6 +202,7 @@ lib/late-clos.lisp -text
 lib/x8632env.lisp -text
 library/darwinx8632-syscalls.lisp -text
 library/elf.lisp -text
+library/leaks.lisp -text
 library/mach-o-symbols.lisp -text
 library/oprofile.txt -text
 library/sequence-utils.lisp -text
