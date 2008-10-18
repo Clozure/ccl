@@ -1911,7 +1911,7 @@ kill_tcr(TCR *tcr)
         result = false;
       }
 #else
-      if (pthread_kill(osid,SIGQUIT)) {
+      if (pthread_kill((pthread_t)osid,SIGQUIT)) {
         result = false;
       }
 #endif
