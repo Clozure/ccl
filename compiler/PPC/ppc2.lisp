@@ -1974,7 +1974,11 @@
                          (t
                           (if (typep constval '(unsigned-byte 32))
                             (ppc2-lri seg reg constval)
-                            (! unbox-u32 reg result-reg))))
+			    (if *ppc2-reckless*
+			      (target-arch-case
+			       (:ppc32 (! unbox-u32 reg result-reg))
+			       (:ppc64 (! %unbox-u32 reg result-reg)))
+			      (! unbox-u32 reg result-reg)))))
                    reg)))
               (is-16-bit
                (if is-signed
@@ -3516,7 +3520,9 @@
                     (#.hard-reg-class-gpr-mode-u32
                      (case src-mode
                        (#.hard-reg-class-gpr-mode-node
-                        (! unbox-u32 dest src))
+			(if *ppc2-reckless*
+			  (! %unbox-u32 dest src)
+			  (! unbox-u32 dest src)))
                        ((#.hard-reg-class-gpr-mode-u32
                          #.hard-reg-class-gpr-mode-s32)
                         (unless (eql  dest-gpr src-gpr)
