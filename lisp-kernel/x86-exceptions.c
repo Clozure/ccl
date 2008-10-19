@@ -2298,15 +2298,13 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
 
   if (allocptr_tag != 0) {
     alloc_instruction_id state = recognize_alloc_instruction(program_counter);
-#ifdef X8664
     signed_natural 
       disp = (allocptr_tag == fulltag_cons) ?
       sizeof(cons) - fulltag_cons :
+#ifdef X8664
       xpGPR(xp,Iimm1);
 #else
-      signed_natural disp = (allocptr_tag == fulltag_cons) ?
-      sizeof(cons) - fulltag_cons :
-      xpMMXreg(xp,Imm0);
+      xpGPR(xp,Iimm0);
 #endif
     LispObj new_vector;
 
