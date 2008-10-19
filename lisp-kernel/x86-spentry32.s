@@ -4088,11 +4088,6 @@ LocalLabelPrefix[]ffcall:
 	/* Save lisp registers. */
 	__(push %ebp)
 	__(mov %esp,%ebp)
-	__(push %temp0)
-	__(push %temp1)
-	__(push %arg_y)
-	__(push %arg_z)
-	__(push %fn)
         __ifdef([WIN32_ES_HACK])
          __(movl rcontext(tcr.linear),%ebx)
         __endif
@@ -4145,13 +4140,8 @@ LocalLabelPrefix[]ffcall_call_end:
 	__(movl rcontext(tcr.save_vsp),%esp)
 	__(movl rcontext(tcr.save_ebp),%ebp)
 	__(movl $TCR_STATE_LISP,rcontext(tcr.valence))
-	__(pop %fn)
-	__(pop %arg_z)
-	__(pop %arg_y)
-	__(pop %temp1)
 	__(ldmxcsr rcontext(tcr.lisp_mxcsr))
 	__(check_pending_interrupt(%temp0))
-	__(pop %temp0)
 	__(leave)
 	__(ret)
 	/* need to deal with NSExceptions and Objc-2.0 execptions */
