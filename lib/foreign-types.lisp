@@ -1487,7 +1487,7 @@ result-type-specifer is :VOID or NIL"
                                          )
   (entry-name "" :type string)
   (arg-specs () :type list)
-  (result-spec nil :type symbol)
+  (result-spec nil :type (or symbol list))
   (min-args 0 :type fixnum))
 
 
