@@ -155,11 +155,18 @@
             when (or (and (consp key) (gethash key cons-refs))
                      (and (consp key) (eq (car key) 'ccl::function-source-note))
                      (typep key 'ccl::hash-table-vector)
-                     (when (typep key 'ccl::symbol-vector)
-                       (push (ccl::%symvector->symptr key) additions)
+                     (when (and key
+				(typep key
+				  #+x8664-target 'ccl::symbol-vector
+				  #-x8664-target 'symbol
+				  ))
+                       (push (ccl::symvector->symptr key) additions)
                        t)
-                     (when (typep key 'ccl::function-vector)
-                       (push (ccl::%function-vector-to-function key) additions)
+                     (when (typep key
+				  #+x8664-target 'ccl::function-vector
+				  #-x8664-target 'function
+				  )
+                       (push (ccl::function-vector-to-function key) additions)
                        t))
               do
               (remhash key found))
