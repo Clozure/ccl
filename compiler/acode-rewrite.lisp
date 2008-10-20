@@ -64,7 +64,7 @@
             (t t)))))
 
 (defun acode-constant-p (form)
-  (let* ((form (acode-unwrapped-form form)))
+  (let* ((form (acode-unwrapped-form-value form)))
     (or (eq form *nx-nil*)
         (eq form *nx-t*)
         (let* ((operator (if (acode-p form) (acode-operator form))))
@@ -73,7 +73,7 @@
 
 (defun acode-post-form-typep (form type)
   (let* ((ctype (specifier-type type))
-         (form (acode-unwrapped-form form)))
+         (form (acode-unwrapped-form-value form)))
     (cond ((eq form *nx-nil*) (ctypep nil ctype))
           ((eq form *nx-t*) (ctypep t ctype))
           ((not (acode-p form)) (values nil nil))
@@ -255,7 +255,7 @@
   (rewrite-acode-forms w)
   (destructuring-bind (test true &optional (false *nx-nil*)) w
     (if (acode-constant-p test)
-      (if (eq *nx-nil* (acode-unwrapped-form test))
+      (if (eq *nx-nil* (acode-unwrapped-form-value test))
         false
         true))))
 
@@ -267,7 +267,7 @@
        ((null (cdr forms)))
     (let* ((form (car forms)))
       (when (and (acode-constant-p form)
-                 (not (eq *nx-nil* (acode-unwrapped-form form))))
+                 (not (eq *nx-nil* (acode-unwrapped-form-value form))))
         (progn
           (rplacd forms nil)
           (return))))))

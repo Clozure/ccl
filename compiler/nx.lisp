@@ -150,11 +150,6 @@
           (setq init nil))))))
 
 (defparameter *load-time-eval-token* nil)
-
-
-(eval-when (:compile-toplevel)
-  (declaim (ftype (function (&rest ignore) t)  ppc-compile)))
-
 (defparameter *nx-discard-xref-info-hook* nil)
 
 (defun compile-named-function (def &key name env keep-lambda keep-symbols policy load-time-eval-token target)
@@ -162,8 +157,8 @@
     (funcall *nx-discard-xref-info-hook* name))
   (setq 
    def
-   (let ((*load-time-eval-token* load-time-eval-token)
-         (env (new-lexical-environment env)))
+   (let* ((*load-time-eval-token* load-time-eval-token)
+          (env (new-lexical-environment env)))
      (setf (lexenv.variables env) 'barrier)
        (let* ((*target-backend* (or (if target (find-backend target)) *host-backend*))
               (afunc (nx1-compile-lambda 

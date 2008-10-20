@@ -47,6 +47,7 @@
                    #+ccl-0711 (< (debug-optimize-quantity env) 2)
                    #-ccl-0711 (neq (debug-optimize-quantity env) 3))   ;  allow-tail-recursion-elimination
                #'(lambda (env)
+                   (declare (ignorable env))
                    #+ccl-0711 nil
                    #-ccl-0711 (eq (debug-optimize-quantity env) 3))   ; inhibit-register-allocation
                #'(lambda (env)

@@ -350,7 +350,6 @@
 ;subst-if-not without a call to labels
 (defun subst-if-not (new test tree &key key)
   "Substitutes new for subtrees for which test is false."
-  "replace with above def when labels works."
   (unless key (setq key #'identity))
   (cond ((not (funcall test (funcall key tree))) new)
         ((atom tree) tree)

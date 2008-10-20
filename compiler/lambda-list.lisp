@@ -20,10 +20,6 @@
 
 ;;; Compiler functions needed elsewhere
 
-;;; used-by: backtrace, arglist
-(defun function-symbol-map (fn)
-  (getf (%lfun-info fn) 'function-symbol-map))
-
 (defun %lfun-info-index (fn)
   (and (compiled-function-p fn)
        (let ((bits (lfun-bits fn)))
@@ -38,6 +34,9 @@
 (defun uncompile-function (fn)
   (getf (%lfun-info fn) 'function-lambda-expression ))
 
+;;; used-by: backtrace, arglist
+(defun function-symbol-map (fn)
+  (getf (%lfun-info fn) 'function-symbol-map))
 
 ;;; Lambda-list utilities
 

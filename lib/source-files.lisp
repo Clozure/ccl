@@ -16,12 +16,6 @@
 
 (in-package "CCL")
 
-#-BOOTSTRAPPED (unless (fboundp 'level-1-record-source-file)
-                 ;; We're in a lisp image with old rsf.
-                 (fset 'level-1-record-source-file (lambda (&rest args) args))
-                 (when (boundp '%source-files%)
-                   (clrhash %source-files%)))
-
 ;; If we're reloading this file, don't want to be calling functions from here with
 ;; only some of them redefined.  So revert to the bootstrapping version until the end.
 (fset 'record-source-file #'level-1-record-source-file)

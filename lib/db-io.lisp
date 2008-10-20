@@ -1015,16 +1015,6 @@ satisfy the optional predicate PREDICATE."
         (setf (macro-function sym) #'%external-call-expander)
         sym))))
 
-#-BOOTSTRAPPED
-(when (eql (function-args #'read-internal) 1)
-  ;; loading this file into an old image, only happens during bootstrapping
-  (fset 'read-internal (lambda (stream eof-error-p eof-value recursive-p)
-                         (setq stream (input-stream-arg stream))
-                         (if recursive-p
-                           (%read-form stream (if eof-error-p 0) nil)
-                           (let ((%read-objects% nil) (%keep-whitespace% nil))
-                             (%read-form stream (if eof-error-p 0) eof-value))))))
-
 (defun %read-symbol-preserving-case (stream package)
   (let* ((case (readtable-case *readtable*))
          (query nil)

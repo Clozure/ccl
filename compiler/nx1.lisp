@@ -30,21 +30,14 @@
       (setq typespec (nx-target-type (type-specifier ctype)))))
   (let* ((*nx-form-type* typespec)
          (transformed (nx-transform form env)))
-    (if (and (consp transformed)
-             (eq (car transformed) 'the))
+    (when (and (consp transformed)
+               (eq (car transformed) 'the))
       (setq transformed form))
-    ;; Doing this in this bizarre way may be a little easier
-    ;; to bootstrap.
-    (if (nx-the-typechecks env)
-      (make-acode
-       (%nx1-operator typed-form)
-       typespec
-       (nx1-transformed-form transformed env)
-       t)
-      (make-acode
-       (%nx1-operator typed-form)
-       typespec
-       (nx1-transformed-form transformed env)))))
+    (make-acode
+     (%nx1-operator typed-form)
+     typespec
+     (nx1-transformed-form transformed env)
+     (nx-the-typechecks env))))
 
 (defnx1 nx1-struct-ref struct-ref (&whole whole structure offset)
   (if (not (fixnump (setq offset (nx-get-fixnum offset))))

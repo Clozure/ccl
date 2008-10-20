@@ -1051,7 +1051,7 @@ Will differ from *compiling-file* during an INCLUDE")
            (case type-code
              ((#.target::subtag-pool #.target::subtag-weak #.target::subtag-lock) (fasl-unknown exp))
              (#+ppc-target #.target::subtag-symbol
-	      #+x8632-target #.target::subtag-symbol
+              #+x8632-target #.target::subtag-symbol
               #+x8664-target #.target::tag-symbol (fasl-scan-symbol exp))
              ((#.target::subtag-instance #.target::subtag-struct)
               (fasl-scan-user-form exp))
@@ -1128,7 +1128,7 @@ Will differ from *compiling-file* during an INCLUDE")
                              (%cadr form)
                              form))))
         ((istruct-cell-p list)
-         (fasl-scan-form (%car list)))        
+         (fasl-scan-form (%car list)))
         (t (when list
              (fasl-scan-ref list)
              (fasl-scan-form (%car list))
@@ -1603,7 +1603,7 @@ Will differ from *compiling-file* during an INCLUDE")
                (fasl-dump-form form)))))
         ((istruct-cell-p list)
          (fasl-out-opcode $fasl-istruct-cell (car list))
-         (fasl-dump-symbol (car list)))       
+         (fasl-dump-symbol (car list)))
         (t (fasl-dump-cons list))))
 
 (defun fasl-dump-cons (cons &aux (end cons) (cdr-len 0))

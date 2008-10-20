@@ -139,7 +139,6 @@
 (defconstant $lfbits-aok-bit 16)
 (defconstant $lfbits-numinh (byte 6 17))
 (defconstant $lfbits-info-bit 23)
-(defconstant $lfbits-symmap-bit 23) ;; bootstrapping
 (defconstant $lfbits-trampoline-bit 24)
 (defconstant $lfbits-code-coverage-bit 25)
 (defconstant $lfbits-cm-bit 26)         ; combined-method
