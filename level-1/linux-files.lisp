@@ -1202,7 +1202,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
 (defun run-external-process (proc in-fd out-fd error-fd argv &optional env)
   (let* ((signaled nil))
     (unwind-protect
-         (let* ((child-pid (#_fork)))
+         (let* ((child-pid (#-solaris-target #_fork #+solaris-target #_forkall)))
            (declare (fixnum child-pid))
            (cond ((zerop child-pid)
                   ;; Running in the child; do an exec
