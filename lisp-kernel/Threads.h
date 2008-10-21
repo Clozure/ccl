@@ -35,6 +35,10 @@
 #include <sys/lwp.h>
 #endif
 
+#ifdef LINUX
+#include <sys/syscall.h>
+#endif
+
 #undef USE_MACH_SEMAPHORES
 #define USE_POSIX_SEMAPHORES
 #undef USE_WINDOWS_SEMAPHORES

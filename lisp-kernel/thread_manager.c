@@ -1323,7 +1323,11 @@ current_native_thread_id()
 {
   return ((void *) (natural)
 #ifdef LINUX
+#ifdef __NR_gettid
+          syscall(__NR_gettid)
+#else
           getpid()
+#endif
 #endif
 #ifdef DARWIN
 	  mach_thread_self()
