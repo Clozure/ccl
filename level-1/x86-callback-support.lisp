@@ -46,7 +46,7 @@
           (%get-unsigned-byte p 1) (ldb (byte 8 0) index)
           (%get-unsigned-byte p 2) (ldb (byte 8 8) index)
           (%get-unsigned-byte p 3) (ldb (byte 8 16) index)
-          (%get-unsigned-byte p 4) (ldb (byte 8 24) (ash discard-stack (- x8632::word-shift)))
+          (%get-unsigned-byte p 4) (ldb (byte 8 24) (ash (or discard-stack-bytes 0) (- x8632::word-shift)))
           (%get-unsigned-byte p 5) #xff  ; jmp *
           (%get-unsigned-byte p 6) #x24
           (%get-unsigned-byte p 7) #x25
