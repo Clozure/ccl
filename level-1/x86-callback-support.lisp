@@ -18,8 +18,8 @@
 
 
 #+x8664-target  
-(defun make-callback-trampoline (index &optional monitor-exception-ports)
-  (declare (ignorable monitor-exception-ports))
+(defun make-callback-trampoline (index &optional discard-stack-bytes)
+  (declare (ignore discard-stack-bytes))
   (let* ((p (%allocate-callback-pointer 16))
          (addr #.(subprim-name->offset '.SPcallback)))
     (setf (%get-unsigned-byte p 0) #x41 ; movl $n,%r11d
@@ -39,15 +39,14 @@
     p))
           
 #+x8632-target          
-(defun make-callback-trampoline (index &optional monitor-exception-ports)
-  (declare (ignorable monitor-exception-ports))
+(defun make-callback-trampoline (index &optional (discard-stack-bytes 0))
   (let* ((p (%allocate-callback-pointer 12))
          (addr #.(subprim-name->offset '.SPcallback)))
     (setf (%get-unsigned-byte p 0) #xb8 ; movl $n,%eax
           (%get-unsigned-byte p 1) (ldb (byte 8 0) index)
           (%get-unsigned-byte p 2) (ldb (byte 8 8) index)
           (%get-unsigned-byte p 3) (ldb (byte 8 16) index)
-          (%get-unsigned-byte p 4) (ldb (byte 8 24) index)
+          (%get-unsigned-byte p 4) (ldb (byte 8 24) (ash discard-stack (- x8632::word-shift)))
           (%get-unsigned-byte p 5) #xff  ; jmp *
           (%get-unsigned-byte p 6) #x24
           (%get-unsigned-byte p 7) #x25
