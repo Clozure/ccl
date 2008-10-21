@@ -2534,8 +2534,8 @@ defcallback returns the callback pointer, e.g., the value of name."
          (fp-args-ptr (gensym))
          (result-type-spec :void)
          (args args)
+         (discard-stack-args nil)
          (woi nil)
-	 (monitor nil)
          (need-struct-arg)
          (struct-return-arg-name)
          (error-return nil))
@@ -2550,9 +2550,8 @@ defcallback returns the callback pointer, e.g., the value of name."
         (when (null args) (return))
         (if (eq (car args) :without-interrupts)
           (setq woi (cadr args) args (cddr args))
-          (if (eq (car args) :monitor-exception-ports)
-            (setq monitor (cadr args) args (cddr args))
-            
+          (if (eq (car args) :discard-stack-args)
+            (setq discard-stack-args t args (cdr args))
             (if (eq (car args) :error-return)
               (setq error-return
                     (cadr args)                  
@@ -2562,9 +2561,10 @@ defcallback returns the callback pointer, e.g., the value of name."
                 (progn
                   (arg-specs (pop args))
                   (arg-names (pop args))))))))
-      (multiple-value-bind (rlets lets dynamic-extent-names inits foreign-return-type fp-args-form error-return-offset)
+      (multiple-value-bind (rlets lets dynamic-extent-names inits foreign-return-type fp-args-form error-return-offset num-arg-bytes)
           (funcall (ftd-callback-bindings-function *target-ftd*)
                    stack-ptr fp-args-ptr (arg-names) (arg-specs) result-type-spec struct-return-arg-name)
+        (unless num-arg-bytes (setq num-arg-bytes 0))
         (multiple-value-bind (body decls doc) (parse-body body env t)
           `(progn
             (declaim (special ,name))
@@ -2592,7 +2592,7 @@ defcallback returns the callback pointer, e.g., the value of name."
                                             ))))))
                 ,doc
               ,woi
-              ,monitor)))))))
+              ,(if discard-stack-args num-arg-bytes 0))))))))
 
 
 (defun defcallback-body (&rest args)
