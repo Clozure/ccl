@@ -4219,6 +4219,10 @@ _spentry(callback)
            current %ebp.  We may need quite a bit of it. */
         __(subl $24,%esp)
         __(movl $0,-16(%ebp)) /* No FP result */
+        __(movl %eax,%ecx)    /* extract args-discard count */
+        __(shrl $32,%ecx)
+        __(andl $0xff000000,%eax)
+        __(movl %ecx,-12(ebp))
         /* If the C stack is 16-byte aligned by convention,
            it should still be, and this'll be a NOP. */
         __(andl $~15,%esp)
@@ -4227,7 +4231,6 @@ _spentry(callback)
 	__(push %esi)
 	__(push %ebx)
 	__(push %ebp)
-	
 	__(box_fixnum(%eax,%esi))	/* put callback index in arg_y */
 	__(ref_global(get_tcr,%eax))
 	__(push $1)
@@ -4280,21 +4283,46 @@ __(tra(local_label(back_from_callback)))
 	__(pop %esi)
 	__(pop %edi)
         __(cmpb $1,-16(%ebp))
-        __(movl -12(%ebp),%ecx) /* magic value for ObjC bridge */
+        __(movl -12(%ebp),%ecx) /* magic value for ObjC bridge or winapi */
         __(jae 1f)
 	__(movl -8(%ebp),%eax)
         __(movl -4(%ebp),%edx)
         __(leave)
-	__(ret)
+        __ifdef([WIN_32])
+         __(testl %ecx,%ecx)
+         __(jne local_label(winapi_return)
+         __(repret)
+        __else
+	 __(ret)
+        __endif
 1:      __(jne 2f)
         /* single float return in x87 */
         __(flds -8(%ebp))
         __(leave)
-        __(ret)
+        __ifdef([WIN_32])
+         __(testl %ecx,%ecx)
+         __(jne local_label(winapi_return)
+         __(repret)
+        __else
+	 __(ret)
+        __endif
 2:      /* double-float return in x87 */
         __(fldl -8(%ebp))
         __(leave)
-        __(ret)         
+        __ifdef([WIN_32])
+         __(testl %ecx,%ecx)
+         __(jne local_label(winapi_return)
+         __(repret)
+        __else
+	 __(ret)
+        __endif
+        __ifdef([WIN_32])
+local_label(winapi_return):             
+         /* %ecx is non-zero and contains count of arg words to pop */
+          __(popl (%esp,%ecx,4))
+          __(leal -4(%esp,%ecx,4),%esp)
+          __(ret)
+        __endif
 _endsubp(callback)
 
 /* temp0 = array, arg_y = i, arg_z = j. Typecheck everything.
