@@ -91,7 +91,7 @@
 		   ,(win32::struct-from-regbuf-values result-temp struct-result-type regbuf)))
 	      call))))))
 
-;;; Return 7 values:
+;;; Return 8 values:
 ;;; A list of RLET bindings
 ;;; A list of LET* bindings
 ;;; A list of DYNAMIC-EXTENT declarations for the LET* bindings
@@ -100,7 +100,8 @@
 ;;; A form which can be used to initialize FP-ARGS-PTR, relative
 ;;;  to STACK-PTR.  (This is unused on linuxppc32.)
 ;;; The byte offset of the foreign return address, relative to STACK-PTR
-
+;;; The number of argument bytes pushed on the stack by the caller, or NIL
+;;; if this can't be determined.
 (defun win32::generate-callback-bindings (stack-ptr fp-args-ptr argvars argspecs result-spec struct-result-name)
   (declare (ignore fp-args-ptr))
   (collect ((lets)
@@ -118,7 +119,7 @@
 	    (argspecs argspecs (cdr argspecs))
 	    (offset 8 (incf offset 4)))
 	   ((null argvars)
-	    (values (rlets) (lets) (dynamic-extent-names) (inits) rtype nil 4))
+	    (values (rlets) (lets) (dynamic-extent-names) (inits) rtype nil 4 (- offset 8)))
 	(let* ((name (car argvars))
 	       (spec (car argspecs))
 	       (argtype (parse-foreign-type spec))
