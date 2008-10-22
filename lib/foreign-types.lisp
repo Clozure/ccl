@@ -1920,7 +1920,15 @@ result-type-specifer is :VOID or NIL"
     ftd)
   ))
 
-
+(defmethod make-load-form ((p macptr) &optional env)
+  (declare (ignore env))
+  (let* ((value (%ptr-to-int p)))
+    (unless (or (< value 65536)
+                (>= value (- (ash 1 target::nbits-in-word) 65536)))
+      (error "~&~s can't be referenced as a constant because its address contains more than 16 significant bits." p))
+    (if (zerop value)
+      '+null-ptr+
+      `(%int-to-ptr ,value))))
 
 
 
