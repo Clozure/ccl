@@ -364,6 +364,11 @@ lisp_write(HANDLE hfile, void *buf, ssize_t count)
   TCR *tcr = (TCR *)get_tcr(1);
 
   hevent = (HANDLE)tcr->io_datum;
+  if (hfile == (HANDLE)1) {
+    hfile = GetStdHandle(STD_OUTPUT_HANDLE);
+  } else if (hfile == (HANDLE) 2) {
+    hfile = GetStdHandle(STD_ERROR_HANDLE);
+  }
 
 
   memset(&overlapped,0,sizeof(overlapped));
