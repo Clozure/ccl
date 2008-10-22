@@ -9,6 +9,8 @@ if [ -z "$CCL_DEFAULT_DIRECTORY" ]; then
   CCL_DEFAULT_DIRECTORY=/usr/local/src/ccl
 fi
 
+export CCL_DEFAULT_DIRECTORY
+
 # This is shorter (& easier to type), making the invocation below
 # a little easier to read.
 
@@ -33,6 +35,10 @@ if [ -z "$OPENMCL_KERNEL" ]; then
               ppc*) OPENMCL_KERNEL=ppccl ;;
               *86*) OPENMCL_KERNEL=lx86cl ;;
            esac ;;
+    CYGWIN*)
+       OPENMCL_KERNEL=wx86cl.exe
+       CCL_DEFAULT_DIRECTORY="C:/cygwin$CCL_DEFAULT_DIRECTORY"
+    ;;
     *)
     echo "Can't determine host OS.  Fix this."
     exit 1
@@ -40,5 +46,5 @@ if [ -z "$OPENMCL_KERNEL" ]; then
   esac
 fi
 
-CCL_DEFAULT_DIRECTORY=${DD} exec ${DD}/${OPENMCL_KERNEL} "$@"
+exec ${DD}/${OPENMCL_KERNEL} "$@"
 
