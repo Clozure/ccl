@@ -194,23 +194,33 @@
              :int fd :address buf :ssize_t nbytes :ssize_t)))
 
 
+(let* ((pathname-encoding-name ()))
+  (defun pathname-encoding-name ()
+    pathname-encoding-name)
+  (defun set-pathname-encoding-name (new)
+    #+(or darwin-target windows-target) (declare (ignore new))
+    #-(or darwin-target windows-target)
+    (let* ((encoding (ensure-character-encoding new)))
+      (setq pathname-encoding-name
+            (unless (eq encoding (get-character-encoding nil))
+              (character-encoding-name encoding))))))
+
+
+    
 (defun fd-open (path flags &optional (create-mode #o666))
-  (#+darwin-target with-utf-8-cstrs
-   #+windows-target with-native-utf-16-cstrs
-   #-(or darwin-target windows-target) with-cstrs
-   ((p path))
+  (with-filename-cstrs ((p path))
     (let* ((fd (int-errno-ffcall
+              (%kernel-import target::kernel-import-lisp-open)
+              :address p :int flags :mode_t create-mode :int)))
+    (declare (fixnum fd))
+    (when (or (= fd (- #$EMFILE))
+              (= fd (- #$EMFILE)))
+      (gc)
+      (drain-termination-queue)
+      (setq fd (int-errno-ffcall
                 (%kernel-import target::kernel-import-lisp-open)
                 :address p :int flags :mode_t create-mode :int)))
-      (declare (fixnum fd))
-      (when (or (= fd (- #$EMFILE))
-                (= fd (- #$EMFILE)))
-        (gc)
-        (drain-termination-queue)
-        (setq fd (int-errno-ffcall
-                  (%kernel-import target::kernel-import-lisp-open)
-                           :address p :int flags :mode_t create-mode :int)))
-      fd)))
+    fd)))
 
 (defun fd-chmod (fd mode)
   (int-errno-ffcall (%kernel-import target::kernel-import-lisp-fchmod)
