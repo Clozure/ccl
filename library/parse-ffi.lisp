@@ -307,14 +307,20 @@
                   (c::- (- a b))
                   (c::\| (logior a b))
                   (c::\& (logand a b))
-                  (c::cast (if (foreign-typep b a)
+                  (c::cast (if (foreign-typep (setq b (eval-parsed-c-expression b constant-alist)) a)
                              b
                              (if (and (typep a 'foreign-integer-type)
                                       (not (foreign-integer-type-signed a))
                                       (typep b 'integer)
                                       (not (> (integer-length b)
                                               (foreign-integer-type-bits a))))
-                               (logand b (1- (ash 1 (foreign-integer-type-bits a)))))))
+                               (logand b (1- (ash 1 (foreign-integer-type-bits a))))
+                               (if (and (typep a 'foreign-pointer-type)
+                                        (typep b 'integer)
+                                        (<= (integer-length b) 16))
+                                 (progn                                   
+                                   (%int-to-ptr (logand b #xffffffff)))))))
+                               
                                            
                   (t 
 		   ;(break "binary op = ~s ~s ~s" operator a b)
@@ -330,10 +336,14 @@
       1
       (progn
         (unless (ffi-macro-tokens macro)
-          (multiple-value-bind (tokens error) (ignore-errors (string-to-tokens string))
-            (if error
-              (setf (ffi-macro-disposition macro) :bad-tokenize)
-              (setf (ffi-macro-tokens macro) tokens))))
+          (let* ((transitive (gethash (ffi-macro-expansion macro) macro-table)))
+            (if transitive
+              (setf (ffi-macro-tokens macro) transitive
+                    (gethash (ffi-macro-name macro) macro-table) transitive)
+              (multiple-value-bind (tokens error) (ignore-errors (string-to-tokens string))
+                (if error
+                  (setf (ffi-macro-disposition macro) :bad-tokenize)
+                  (setf (ffi-macro-tokens macro) tokens))))))
         (unless (ffi-macro-expression macro)
           (let* ((tokens (ffi-macro-tokens macro)))
             (when tokens
