@@ -330,8 +330,8 @@ prepare_to_write_dynamic_space()
     if (immheader_tag_p(tag)) {
       subtag = header_subtag(x1);
       if (subtag == subtag_macptr) {
-        if (start[1]) {
-          /* Leave NULL pointers alone */
+        if ((start[1] >= (natural)0x10000) && (start[1] < (natural)-0x10000)) {
+          /* Leave small pointers alone */
           *start = make_header(subtag_dead_macptr,header_element_count(x1));
         }
       }
