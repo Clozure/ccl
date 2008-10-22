@@ -576,7 +576,7 @@ satisfy the optional predicate PREDICATE."
   return-value)
     
 
-
+(eval-when (:compile-toplevel :load-toplevel :execute)
 (defconstant db-string-constant 0)
 (defconstant db-read-string-constant 1)
 (defconstant db-s32-constant 2)
@@ -584,6 +584,8 @@ satisfy the optional predicate PREDICATE."
 (defconstant db-float-constant 4)
 (defconstant db-double-constant 5)
 (defconstant db-char-constant 6)
+(defconstant db-pointer-constant 7)
+)
 
 (defparameter *arg-spec-encoding*
   '((#\Space . :void)
@@ -692,7 +694,13 @@ satisfy the optional predicate PREDICATE."
                   (#.db-u32-constant (pref dptr :dbm-constant.value.u32))
                   (#.db-float-constant (pref dptr :dbm-constant.value.single-float))
                   (#.db-double-constant (pref dptr :dbm-constant.value.double-float))
-                  (#.db-char-constant (code-char (pref dptr :dbm-constant.value.u32)))))
+                  (#.db-char-constant (code-char (pref dptr :dbm-constant.value.u32)))
+                  (#.db-pointer-constant
+                   (let* ((val (pref dptr :dbm-constant.value.u32)))
+                     #+64-bit-target
+                     (if (logbitp 31 val)
+                       (setq val (logior val (ash #xffffffff 32))))
+                     (%int-to-ptr val )))))
 	  (cdb-free (pref datum :cdb-datum.data)))))
     val))
 
@@ -735,7 +743,8 @@ satisfy the optional predicate PREDICATE."
          (signed-byte 32)
          short-float
          double-float
-         character)
+         character
+         macptr)
      (rletZ ((constant :dbm-constant)
 	     (content :cdb-datum)
 	     (key :cdb-datum))
@@ -754,7 +763,11 @@ satisfy the optional predicate PREDICATE."
           (setf (pref constant :dbm-constant.class) db-double-constant))
          (character
           (setf (pref constant :dbm-constant.value.u32) (char-code val))
-          (setf (pref constant :dbm-constant.class) db-char-constant)))
+          (setf (pref constant :dbm-constant.class) db-char-constant))
+         (macptr
+          (setf (pref constant :dbm-constant.value.u32) (logand #xffffffff (%ptr-to-int val)))
+          (setf (pref constant :dbm-constant.class) db-pointer-constant))
+         )
        (setf (pref content :cdb-datum.data) constant
              (pref content :cdb-datum.size) (record-length :dbm-constant))
        (with-cstrs ((keyname (string name)))
