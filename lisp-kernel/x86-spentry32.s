@@ -4220,8 +4220,8 @@ _spentry(callback)
         __(subl $24,%esp)
         __(movl $0,-16(%ebp)) /* No FP result */
         __(movl %eax,%ecx)    /* extract args-discard count */
-        __(shrl $32,%ecx)
-        __(andl $0xff000000,%eax)
+        __(shrl $24,%ecx)
+        __(andl $0x00ffffff,%eax)
         __(movl %ecx,-12(%ebp))
         /* If the C stack is 16-byte aligned by convention,
            it should still be, and this'll be a NOP. */
