@@ -565,7 +565,7 @@ the socket is not connected."))
 (defun set-socket-fd-blocking (fd block-flag)
   #+windows-target
   (rlet ((argp :u_long (if block-flag 0 1)))
-    (#_ioctlsocket fd #.(u32->s32 #$FIONBIO) argp))
+    (#_ioctlsocket fd #$FIONBIO argp))
   #-windows-target
   (if block-flag
     (fd-clear-flag fd #$O_NONBLOCK)
