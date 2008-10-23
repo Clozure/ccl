@@ -196,9 +196,13 @@
 
 (let* ((pathname-encoding-name ()))
   (defun pathname-encoding-name ()
-    pathname-encoding-name)
+    #+darwin-target :utf-8
+    #+windows-target :utf-16le
+    #-(or darwin-target windows-target) pathname-encoding-name)
   (defun set-pathname-encoding-name (new)
     #+(or darwin-target windows-target) (declare (ignore new))
+    #+darwin-target :utf-8
+    #+windows-target :utf-16le
     #-(or darwin-target windows-target)
     (let* ((encoding (ensure-character-encoding new)))
       (setq pathname-encoding-name
@@ -206,10 +210,8 @@
               (character-encoding-name encoding))))))
 
 
-    
-(defun fd-open (path flags &optional (create-mode #o666))
-  (with-filename-cstrs ((p path))
-    (let* ((fd (int-errno-ffcall
+(defun fd-open-path (p flags create-mode)
+  (let* ((fd (int-errno-ffcall
               (%kernel-import target::kernel-import-lisp-open)
               :address p :int flags :mode_t create-mode :int)))
     (declare (fixnum fd))
@@ -220,7 +222,20 @@
       (setq fd (int-errno-ffcall
                 (%kernel-import target::kernel-import-lisp-open)
                 :address p :int flags :mode_t create-mode :int)))
-    fd)))
+    fd))
+
+(defun fd-open (path flags &optional (create-mode #o666))
+  #+darwin-target (with-utf-8-cstrs ((p path))
+                    (fd-open-path p flags create-mode))
+  #+windows-target (with-native-utf-16-cstrs ((p path))
+                     (fd-open-path p flags create-mode))
+  #-(or darwin-target windows-target)
+  (let* ((encoding (pathname-encoding-name)))
+    (if encoding
+      (with-encoded-cstrs encoding ((p path))
+        (fd-open-path p flags create-mode))
+      (with-cstrs ((p path))
+        (fd-open-path p flags create-mode)))))
 
 (defun fd-chmod (fd mode)
   (int-errno-ffcall (%kernel-import target::kernel-import-lisp-fchmod)
