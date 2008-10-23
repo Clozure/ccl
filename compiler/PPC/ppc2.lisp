@@ -171,6 +171,7 @@
 (defparameter *ppc2-inhibit-register-allocation* nil)
 (defvar *ppc2-record-symbols* nil)
 (defvar *ppc2-recorded-symbols* nil)
+(defvar *ppc2-emitted-source-notes* nil)
 
 (defvar *ppc2-result-reg* ppc::arg_z)
 
@@ -410,6 +411,7 @@
            (*backend-fp-temps* ppc-temp-fp-regs)
            (*available-backend-fp-temps* ppc-temp-fp-regs)
            (bits 0)
+           (debug-info nil)
            (*logical-register-counter* -1)
            (*backend-all-lregs* ())
            (*ppc2-popj-labels* nil)
@@ -437,7 +439,8 @@
            (*ppc2-entry-vsp-saved-p* nil)
            (*ppc2-vcells* (ppc2-ensure-binding-indices-for-vcells (afunc-vcells afunc)))
            (*ppc2-fcells* (afunc-fcells afunc))
-           *ppc2-recorded-symbols*)
+           *ppc2-recorded-symbols*
+           (*ppc2-emitted-source-notes* '()))
       (set-fill-pointer
        *backend-labels*
        (set-fill-pointer
@@ -466,18 +469,19 @@
                    (ppc2-expand-vinsns vinsns) 
                    (if (logbitp $fbitnonnullenv (the fixnum (afunc-bits afunc)))
                      (setq bits (+ bits (ash 1 $lfbits-nonnullenv-bit))))
-                   (let* ((function-debugging-info (afunc-lfun-info afunc)))
-                     (when (or function-debugging-info lambda-form *ppc2-record-symbols*)
-                       (if lambda-form (setq function-debugging-info 
-                                             (list* 'function-lambda-expression lambda-form function-debugging-info)))
-                       (if *ppc2-record-symbols*
-                         (setq function-debugging-info (nconc (list 'function-symbol-map *ppc2-recorded-symbols*)
-                                                              function-debugging-info)))
-                       (setq bits (logior (ash 1 $lfbits-info-bit) bits))
-                       (backend-new-immediate function-debugging-info)))
+                   (setq debug-info (afunc-lfun-info afunc))
+                   (when lambda-form
+                     (setq debug-info (list* 'function-lambda-expression lambda-form debug-info)))
+                   (when *ppc2-recorded-symbols*
+                     (setq debug-info (list* 'function-symbol-map *ppc2-recorded-symbols* debug-info)))
+
+                   (when debug-info
+                     (setq bits (logior (ash 1 $lfbits-info-bit) bits))
+                     (backend-new-immediate debug-info))
                    (if (or fname lambda-form *ppc2-recorded-symbols*)
                      (backend-new-immediate fname)
-                     (setq bits (logior (ash -1 $lfbits-noname-bit) bits)))                                     
+                     (setq bits (logior (ash -1 $lfbits-noname-bit) bits)))
+
                    (unless (afunc-parent afunc)
                      (ppc2-fixup-fwd-refs afunc))
                    (setf (afunc-all-vars afunc) nil)
@@ -496,7 +500,10 @@
                             regsave-reg
                             regsave-addr
                             (if (and fname (symbolp fname)) (symbol-name fname)))))
-                   (ppc2-digest-symbols))))
+                   (when (getf debug-info 'pc-source-map)
+                     (setf (getf debug-info 'pc-source-map) (ppc2-generate-pc-source-map debug-info)))
+                   (when (getf debug-info 'function-symbol-map)
+                     (setf (getf debug-info 'function-symbol-map) (ppc2-digest-symbols))))))
           (backend-remove-labels))))
     afunc))
 
@@ -556,8 +563,66 @@
               (if (eq (%svref v i) ref)
                 (setf (%svref v i) ref-fun)))))))))
 
+(defun ppc2-generate-pc-source-map (debug-info)
+  (let* ((definition-source-note (getf debug-info 'function-source-note))
+         (emitted-source-notes (getf debug-info 'pc-source-map))
+         (def-start (source-note-start-pos definition-source-note))
+         (n (length emitted-source-notes))
+         (nvalid 0)
+         (max 0)
+         (pc-starts (make-array n))
+         (pc-ends (make-array n))
+         (text-starts (make-array n))
+         (text-ends (make-array n)))
+    (declare (fixnum n nvalid)
+             (dynamic-extent pc-starts pc-ends text-starts text-ends))
+    (dolist (start emitted-source-notes)
+      (let* ((pc-start (ppc2-vinsn-note-label-address start t))
+             (pc-end (ppc2-vinsn-note-label-address (vinsn-note-peer start) nil))
+             (source-note (aref (vinsn-note-info start) 0))
+             (text-start (- (source-note-start-pos source-note) def-start))
+             (text-end (- (source-note-end-pos source-note) def-start)))
+        (declare (fixnum pc-start pc-end text-start text-end))
+        (when (and (plusp pc-start)
+                   (plusp pc-end)
+                   (plusp text-start)
+                   (plusp text-end))
+          (if (> pc-start max) (setq max pc-start))
+          (if (> pc-end max) (setq max pc-end))
+          (if (> text-start max) (setq max text-start))
+          (if (> text-end max) (setq max text-end))
+          (setf (svref pc-starts nvalid) pc-start
+                (svref pc-ends nvalid) pc-end
+                (svref text-starts nvalid) text-start
+                (svref text-ends nvalid) text-end)
+          (incf nvalid))))
+    (let* ((nentries (* nvalid 4))
+           (vec (cond ((< max #x100) (make-array nentries :element-type '(unsigned-byte 8)))
+                      ((< max #x10000) (make-array nentries :element-type '(unsigned-byte 16)))
+                      (t (make-array nentries :element-type '(unsigned-byte 32))))))
+      (declare (fixnum nentries))
+      (do* ((i 0 (+ i 4))
+            (j 1 (+ j 4))
+            (k 2 (+ k 4))
+            (l 3 (+ l 4))
+            (idx 0 (1+ idx)))
+          ((= i nentries) vec)
+        (declare (fixnum i j k l idx))
+        (setf (aref vec i) (svref pc-starts idx)
+              (aref vec j) (svref pc-ends idx)
+              (aref vec k) (svref text-starts idx)
+              (aref vec l) (svref text-ends idx))))))
+
+(defun ppc2-vinsn-note-label-address (note &optional start-p sym)
+  (let* ((label (vinsn-note-label note))
+         (lap-label (if label (vinsn-label-info label))))
+    (if lap-label
+      (lap-label-address lap-label)
+      (compiler-bug "Missing or bad ~s label: ~s" 
+                    (if start-p 'start 'end) sym))))
+
 (defun ppc2-digest-symbols ()
-  (if *ppc2-recorded-symbols*
+  (when *ppc2-recorded-symbols*
     (let* ((symlist *ppc2-recorded-symbols*)
            (len (length symlist))
            (syms (make-array len))
@@ -567,22 +632,16 @@
       (declare (fixnum i j))
       (dolist (info symlist (progn (%rplaca symlist syms)
                                    (%rplacd symlist ptrs)))
-        (flet ((label-address (note start-p sym)
-                 (let* ((label (vinsn-note-label note))
-                        (lap-label (if label (vinsn-label-info label))))
-                   (if lap-label
-                     (lap-label-address lap-label)
-                     (compiler-bug "Missing or bad ~s label: ~s" 
-                       (if start-p 'start 'end) sym)))))
-          (destructuring-bind (var sym startlab endlab) info
-            (let* ((ea (var-ea var))
-                   (ea-val (ldb (byte 16 0) ea)))
-              (setf (aref ptrs (incf i)) (if (memory-spec-p ea)
-                                           (logior (ash ea-val 6) #o77)
-                                           ea-val)))
-            (setf (aref syms (incf j)) sym)
-            (setf (aref ptrs (incf i)) (label-address startlab t sym))
-            (setf (aref ptrs (incf i)) (label-address endlab nil sym))))))))
+        (destructuring-bind (var sym startlab endlab) info
+          (let* ((ea (var-ea var))
+                 (ea-val (ldb (byte 16 0) ea)))
+            (setf (aref ptrs (incf i)) (if (memory-spec-p ea)
+                                         (logior (ash ea-val 6) #o77)
+                                         ea-val)))
+          (setf (aref syms (incf j)) sym)
+          (setf (aref ptrs (incf i)) (ppc2-vinsn-note-label-address startlab t sym))
+          (setf (aref ptrs (incf i)) (ppc2-vinsn-note-label-address endlab nil sym))))
+      *ppc2-recorded-symbols*)))
 
 (defun ppc2-decls (decls)
   (if (fixnump decls)
@@ -996,22 +1055,32 @@
     n))
 
 
-(defun ppc2-form (seg vreg xfer form)
-  (if (nx-null form)
-    (ppc2-nil seg vreg xfer)
-    (if (nx-t form)
-      (ppc2-t seg vreg xfer)
-      (let* ((op nil)
-             (fn nil))
-        (if (and (consp form)
-                 (setq fn (svref *ppc2-specials* (%ilogand #.operator-id-mask (setq op (acode-operator form))))))
-          (if (and (null vreg)
-                   (%ilogbitp operator-acode-subforms-bit op)
-                   (%ilogbitp operator-assignment-free-bit op))
-            (dolist (f (%cdr form) (ppc2-branch seg xfer nil))
-              (ppc2-form seg nil nil f ))
-            (apply fn seg vreg xfer (%cdr form)))
-          (compiler-bug "ppc2-form ? ~s" form))))))
+(defun ppc2-form (seg vreg xfer form &aux (note (acode-source-note form)))
+  (flet ((main (seg vreg xfer form)
+           (if (nx-null form)
+             (ppc2-nil seg vreg xfer)
+             (if (nx-t form)
+               (ppc2-t seg vreg xfer)
+               (let* ((op nil)
+                      (fn nil))
+                 (if (and (consp form)
+                          (setq fn (svref *ppc2-specials* (%ilogand #.operator-id-mask (setq op (acode-operator form))))))
+                   (if (and (null vreg)
+                            (%ilogbitp operator-acode-subforms-bit op)
+                            (%ilogbitp operator-assignment-free-bit op))
+                     (dolist (f (%cdr form) (ppc2-branch seg xfer nil))
+                       (ppc2-form seg nil nil f ))
+                     (apply fn seg vreg xfer (%cdr form)))
+                   (compiler-bug "ppc2-form ? ~s" form)))))))
+    (if note
+      (let* ((start (ppc2-emit-note seg :source-location-begin note))
+             (bits (main seg vreg xfer form))
+             (end (ppc2-emit-note seg :source-location-end)))
+        (setf (vinsn-note-peer start) end
+              (vinsn-note-peer end) start)
+        (push start *ppc2-emitted-source-notes*)
+	bits)
+      (main seg vreg xfer form))))
 
 ;;; dest is a float reg - form is acode
 (defun ppc2-form-float (seg freg xfer form)
@@ -1249,7 +1318,7 @@
                    (cdar tagdata)))))))))
 
 (defun ppc2-single-valued-form-p (form)
-  (setq form (acode-unwrapped-form form))
+  (setq form (acode-unwrapped-form-value form))
   (or (nx-null form)
       (nx-t form)
       (if (acode-p form)
@@ -2209,7 +2278,7 @@
                            (eq (ppc2-lexical-reference-p (%car reg-args)) rest))
                 (return nil))
               (flet ((independent-of-all-values (form)        
-                       (setq form (acode-unwrapped-form form))
+                       (setq form (acode-unwrapped-form-value form))
                        (or (ppc-constant-form-p form)
                            (let* ((lexref (ppc2-lexical-reference-p form)))
                              (and lexref 
@@ -2245,7 +2314,7 @@
     (when spread-p
       (destructuring-bind (stack-args reg-args) arglist
         (when (and (null (cdr reg-args))
-                   (nx-null (acode-unwrapped-form (car reg-args))))
+                   (nx-null (acode-unwrapped-form-value (car reg-args))))
           (setq spread-p nil)
           (let* ((nargs (length stack-args)))
             (declare (fixnum nargs))
@@ -2333,7 +2402,7 @@
 ;;; Nargs = nil -> multiple-value case.
 (defun ppc2-invoke-fn (seg fn nargs spread-p xfer)
   (with-ppc-local-vinsn-macros (seg)
-    (let* ((f-op (acode-unwrapped-form fn))
+    (let* ((f-op (acode-unwrapped-form-value fn))
            (immp (and (consp f-op)
                       (eq (%car f-op) (%nx1-operator immediate))))
            (symp (and immp (symbolp (%cadr f-op))))
@@ -2577,7 +2646,7 @@
 
 
 (defun ppc2-immediate-function-p (f)
-  (setq f (acode-unwrapped-form f))
+  (setq f (acode-unwrapped-form-value f))
   (and (acode-p f)
        (or (eq (%car f) (%nx1-operator immediate))
            (eq (%car f) (%nx1-operator simple-function)))))
@@ -2606,7 +2675,7 @@
 
 
 (defun ppc-side-effect-free-form-p (form)
-  (when (consp (setq form (acode-unwrapped-form form)))
+  (when (consp (setq form (acode-unwrapped-form-value form)))
     (or (ppc-constant-form-p form)
         ;(eq (acode-operator form) (%nx1-operator bound-special-ref))
         (if (eq (acode-operator form) (%nx1-operator lexical-reference))
@@ -3291,7 +3360,7 @@
        (^)))))
 
 (defun ppc2-lexical-reference-ea (form &optional (no-closed-p t))
-  (when (acode-p (setq form (acode-unwrapped-form form)))
+  (when (acode-p (setq form (acode-unwrapped-form-value form)))
     (if (eq (acode-operator form) (%nx1-operator lexical-reference))
       (let* ((addr (var-ea (%cadr form))))
         (if (typep addr 'lreg)
@@ -3658,11 +3727,12 @@
                    (ppc2-open-undo $undostkblk)
                    (setq val node))))
               ((eq op (%nx1-operator %new-ptr))
-               (let ((clear-form (caddr val)))
-                 (if (nx-constant-form-p clear-form)
+               (let* ((clear-form (caddr val))
+                      (cval (nx-constant-form-p clear-form)))
+                 (if cval
                    (progn 
                      (ppc2-one-targeted-reg-form seg (%cadr val) ($ ppc::arg_z))
-                     (if (nx-null clear-form)
+                     (if (nx-null cval)
                        (! make-stack-block)
                        (! make-stack-block0)))
                    (with-crf-target () crf
@@ -3685,7 +3755,7 @@
                (ppc2-open-undo $undostkblk curstack)
                (! make-stack-list)
                (setq val ppc::arg_z))       
-              ((eq (%car val) (%nx1-operator vector))
+              ((eq op (%nx1-operator vector))
                (let* ((*ppc2-vstack* *ppc2-vstack*)
                       (*ppc2-top-vstack-lcell* *ppc2-top-vstack-lcell*))
                  (ppc2-set-nargs seg (ppc2-formlist seg (%cadr val) nil))
@@ -4320,7 +4390,7 @@
 
 (defun ppc2-lexical-reference-p (form)
   (when (acode-p form)
-    (let ((op (acode-operator (setq form (acode-unwrapped-form form)))))
+    (let ((op (acode-operator (setq form (acode-unwrapped-form-value form)))))
       (when (or (eq op (%nx1-operator lexical-reference))
                 (eq op (%nx1-operator inherited-arg)))
         (%cadr form)))))
@@ -4479,7 +4549,7 @@
 (defun ppc2-acode-needs-memoization (valform)
   (if (ppc2-form-typep valform 'fixnum)
     nil
-    (let* ((val (acode-unwrapped-form valform)))
+    (let* ((val (acode-unwrapped-form-value valform)))
       (if (or (eq val *nx-t*)
               (eq val *nx-nil*)
               (and (acode-p val)
@@ -4552,7 +4622,7 @@
 ;;; that register to RNIL.
 ;;; "XFER" is a compound destination.
 (defun ppc2-conditional-form (seg xfer form)
-  (let* ((uwf (acode-unwrapped-form form)))
+  (let* ((uwf (acode-unwrapped-form-value form)))
     (if (nx-null uwf)
       (ppc2-branch seg (ppc2-cd-false xfer) nil)
       (if (ppc-constant-form-p uwf)
@@ -5054,15 +5124,16 @@
 (defun ppc2-expand-note (note)
   (let* ((lab (vinsn-note-label note)))
     (case (vinsn-note-class note)
-      ((:regsave :begin-variable-scope :end-variable-scope)
+      ((:regsave :begin-variable-scope :end-variable-scope
+        :source-location-begin :source-location-end)
        (setf (vinsn-label-info lab) (emit-lap-label lab))))))
 
 (defun ppc2-expand-vinsns (header)
   (do-dll-nodes (v header)
     (if (%vinsn-label-p v)
       (let* ((id (vinsn-label-id v)))
-        (if (typep id 'fixnum)
-          (when (or t (vinsn-label-refs v))
+        (if (or (typep id 'fixnum) (null id))
+          (when (or t (vinsn-label-refs v) (null id))
             (setf (vinsn-label-info v) (emit-lap-label v)))
           (ppc2-expand-note id)))
       (ppc2-expand-vinsn v)))
@@ -6161,9 +6232,9 @@
         (^)))))
       
 
-(defppc2 ppc2-if if (seg vreg xfer testform true false)
-  (if (nx-constant-form-p (acode-unwrapped-form testform))
-    (ppc2-form seg vreg xfer (if (nx-null (acode-unwrapped-form testform)) false true))
+(defppc2 ppc2-if if (seg vreg xfer testform true false &aux test-val)
+  (if (setq test-val (nx-constant-form-p (acode-unwrapped-form-value testform)))
+    (ppc2-form seg vreg xfer (if (nx-null test-val) false true))
     (let* ((cstack *ppc2-cstack*)
            (vstack *ppc2-vstack*)
            (top-lcell *ppc2-top-vstack-lcell*)
@@ -9066,7 +9137,7 @@
 
 (defppc2 ppc2-%double-float %double-float (seg vreg xfer arg)
   (let* ((real (or (acode-fixnum-form-p arg)
-                   (let* ((form (acode-unwrapped-form arg)))
+                   (let* ((form (acode-unwrapped-form-value arg)))
                      (if (and (acode-p form)
                               (eq (acode-operator form)
                                   (%nx1-operator immediate))
@@ -9096,7 +9167,7 @@
 
 (defppc2 ppc2-%single-float %single-float (seg vreg xfer arg)
   (let* ((real (or (acode-fixnum-form-p arg)
-                   (let* ((form (acode-unwrapped-form arg)))
+                   (let* ((form (acode-unwrapped-form-value arg)))
                      (if (and (acode-p form)
                               (eq (acode-operator form)
                                   (%nx1-operator immediate))

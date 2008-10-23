@@ -199,6 +199,7 @@
 (defparameter *x862-inhibit-register-allocation* nil)
 (defvar *x862-record-symbols* nil)
 (defvar *x862-recorded-symbols* nil)
+(defvar *x862-emitted-source-notes* nil)
 
 (defvar *x862-result-reg* x8664::arg_z)
 
@@ -593,7 +594,8 @@
            (*x862-entry-vsp-saved-p* nil)
            (*x862-vcells* (x862-ensure-binding-indices-for-vcells (afunc-vcells afunc)))
            (*x862-fcells* (afunc-fcells afunc))
-           *x862-recorded-symbols*)
+           *x862-recorded-symbols*
+           (*x862-emitted-source-notes* '()))
       (set-fill-pointer
        *backend-labels*
        (set-fill-pointer
@@ -688,15 +690,18 @@
 
                    (if (logbitp $fbitnonnullenv (the fixnum (afunc-bits afunc)))
                      (setq bits (+ bits (ash 1 $lfbits-nonnullenv-bit))))
-                   (let* ((function-debugging-info (afunc-lfun-info afunc)))
-                     (when (or function-debugging-info lambda-form *x862-record-symbols*)
-                       (if lambda-form (setq function-debugging-info 
-                                             (list* 'function-lambda-expression lambda-form function-debugging-info)))
-                       (if *x862-record-symbols*
-                         (setq function-debugging-info (nconc (list 'function-symbol-map *x862-recorded-symbols*)
-                                                              function-debugging-info)))
-                       (setq bits (logior (ash 1 $lfbits-info-bit) bits))
-                       (setq debug-info function-debugging-info)))
+                   (setq debug-info (afunc-lfun-info afunc))
+                   (when lambda-form
+                     (setq debug-info
+                           (list* 'function-lambda-expression lambda-form debug-info)))
+                   (when *x862-record-symbols*
+                     (setq debug-info
+                           (list* 'function-symbol-map *x862-recorded-symbols* debug-info)))
+                   (when (and (getf debug-info 'function-source-note) *x862-emitted-source-notes*)
+                     (setq debug-info                     ;; Compressed below
+                           (list* 'pc-source-map *x862-emitted-source-notes* debug-info)))
+                   (when debug-info
+                     (setq bits (logior (ash 1 $lfbits-info-bit) bits)))
                    (unless (or fname lambda-form *x862-recorded-symbols*)
                      (setq bits (logior (ash 1 $lfbits-noname-bit) bits)))
                    (unless (afunc-parent afunc)
@@ -743,14 +748,19 @@
 		       ))
 
                      (x862-lap-process-regsave-info frag-list regsave-label regsave-mask regsave-addr)
+
+                     (when (getf debug-info 'pc-source-map)
+                       (setf (getf debug-info 'pc-source-map) (x862-generate-pc-source-map debug-info)))
+                     (when (getf debug-info 'function-symbol-map)
+                       (setf (getf debug-info 'function-symbol-map) (x862-digest-symbols)))
+
                      (setf (afunc-lfun afunc)
                            #+x86-target
                            (if (eq *host-backend* *target-backend*)
                              (create-x86-function fname frag-list *x862-constant-alist* bits debug-info)
                              (cross-create-x86-function fname frag-list *x862-constant-alist* bits debug-info))
                            #-x86-target
-                           (cross-create-x86-function fname frag-list *x862-constant-alist* bits debug-info)))
-                   (x862-digest-symbols)))))
+                           (cross-create-x86-function fname frag-list *x862-constant-alist* bits debug-info)))))))
           (backend-remove-labels))))
     afunc))
 
@@ -784,6 +794,56 @@
               (declare (fixnum i))
               (if (eq (%svref v i) ref)
                 (setf (%svref v i) ref-fun)))))))))
+
+(defun x862-generate-pc-source-map (debug-info)
+  (let* ((definition-source-note (getf debug-info 'function-source-note))
+         (emitted-source-notes (getf debug-info 'pc-source-map))
+         (def-start (source-note-start-pos definition-source-note))
+         (n (length emitted-source-notes))
+         (nvalid 0)
+         (max 0)
+         (pc-starts (make-array n))
+         (pc-ends (make-array n))
+         (text-starts (make-array n))
+         (text-ends (make-array n)))
+    (declare (fixnum n nvalid)
+             (dynamic-extent pc-starts pc-ends text-starts text-ends))
+    (dolist (start emitted-source-notes)
+      (let* ((pc-start (x862-vinsn-note-label-address start t))
+             (pc-end (x862-vinsn-note-label-address (vinsn-note-peer start) nil))
+             (source-note (aref (vinsn-note-info start) 0))
+             (text-start (- (source-note-start-pos source-note) def-start))
+             (text-end (- (source-note-end-pos source-note) def-start)))
+        (declare (fixnum pc-start pc-end text-start text-end))
+        (when (and (plusp pc-start)
+                   (plusp pc-end)
+                   (plusp text-start)
+                   (plusp text-end))
+          (if (> pc-start max) (setq max pc-start))
+          (if (> pc-end max) (setq max pc-end))
+          (if (> text-start max) (setq max text-start))
+          (if (> text-end max) (setq max text-end))
+          (setf (svref pc-starts nvalid) pc-start
+                (svref pc-ends nvalid) pc-end
+                (svref text-starts nvalid) text-start
+                (svref text-ends nvalid) text-end)
+          (incf nvalid))))
+    (let* ((nentries (* nvalid 4))
+           (vec (cond ((< max #x100) (make-array nentries :element-type '(unsigned-byte 8)))
+                      ((< max #x10000) (make-array nentries :element-type '(unsigned-byte 16)))
+                      (t (make-array nentries :element-type '(unsigned-byte 32))))))
+      (declare (fixnum nentries))
+      (do* ((i 0 (+ i 4))
+            (j 1 (+ j 4))
+            (k 2 (+ k 4))
+            (l 3 (+ l 4))
+            (idx 0 (1+ idx)))
+          ((= i nentries) vec)
+        (declare (fixnum i j k l idx))
+        (setf (aref vec i) (svref pc-starts idx)
+              (aref vec j) (svref pc-ends idx)
+              (aref vec k) (svref text-starts idx)
+              (aref vec l) (svref text-ends idx))))))
 
 (defun x862-vinsn-note-label-address (note &optional start-p sym)
   (-
@@ -1257,23 +1317,32 @@
     (make-vcell-memory-spec n)
     n))
 
-
-(defun x862-form (seg vreg xfer form)
-  (if (nx-null form)
-    (x862-nil seg vreg xfer)
-    (if (nx-t form)
-      (x862-t seg vreg xfer)
-      (let* ((op nil)
-             (fn nil))
-        (if (and (consp form)
-                 (setq fn (svref *x862-specials* (%ilogand #.operator-id-mask (setq op (acode-operator form))))))
-          (if (and (null vreg)
-                   (%ilogbitp operator-acode-subforms-bit op)
-                   (%ilogbitp operator-assignment-free-bit op))
-            (dolist (f (%cdr form) (x862-branch seg xfer))
-              (x862-form seg nil nil f ))
-	    (apply fn seg vreg xfer (%cdr form)))
-          (compiler-bug "x862-form ? ~s" form))))))
+(defun x862-form (seg vreg xfer form &aux (note (acode-source-note form)))
+  (flet ((main (seg vreg xfer form)
+           (if (nx-null form)
+             (x862-nil seg vreg xfer)
+             (if (nx-t form)
+               (x862-t seg vreg xfer)
+               (let* ((op nil)
+                      (fn nil))
+                 (if (and (consp form)
+                          (setq fn (svref *x862-specials* (%ilogand #.operator-id-mask (setq op (acode-operator form))))))
+                   (if (and (null vreg)
+                            (%ilogbitp operator-acode-subforms-bit op)
+                            (%ilogbitp operator-assignment-free-bit op))
+                     (dolist (f (%cdr form) (x862-branch seg xfer))
+                       (x862-form seg nil nil f ))
+                     (apply fn seg vreg xfer (%cdr form)))
+                   (compiler-bug "x862-form ? ~s" form)))))))
+    (if note
+      (let* ((start (x862-emit-note seg :source-location-begin note))
+             (bits (main seg vreg xfer form))
+             (end (x862-emit-note seg :source-location-end)))
+        (setf (vinsn-note-peer start) end
+              (vinsn-note-peer end) start)
+        (push start *x862-emitted-source-notes*)
+        bits)
+      (main seg vreg xfer form))))
 
 ;;; dest is a float reg - form is acode
 (defun x862-form-float (seg freg xfer form)
@@ -1551,7 +1620,7 @@
                    (cdar tagdata)))))))))
 
 (defun x862-single-valued-form-p (form)
-  (setq form (acode-unwrapped-form form))
+  (setq form (acode-unwrapped-form-value form))
   (or (nx-null form)
       (nx-t form)
       (if (acode-p form)
@@ -2581,7 +2650,7 @@
                            (eq (x862-lexical-reference-p (%car reg-args)) rest))
                 (return nil))
               (flet ((independent-of-all-values (form)        
-                       (setq form (acode-unwrapped-form form))
+                       (setq form (acode-unwrapped-form-value form))
                        (or (x86-constant-form-p form)
                            (let* ((lexref (x862-lexical-reference-p form)))
                              (and lexref 
@@ -2617,7 +2686,7 @@
     (when spread-p
       (destructuring-bind (stack-args reg-args) arglist
         (when (and (null (cdr reg-args))
-                   (nx-null (acode-unwrapped-form (car reg-args))))
+                   (nx-null (acode-unwrapped-form-value (car reg-args))))
           (setq spread-p nil)
           (let* ((nargs (length stack-args)))
             (declare (fixnum nargs))
@@ -2704,7 +2773,7 @@
 ;;; Nargs = nil -> multiple-value case.
 (defun x862-invoke-fn (seg fn nargs spread-p xfer &optional mvpass-label)
   (with-x86-local-vinsn-macros (seg)
-    (let* ((f-op (acode-unwrapped-form fn))
+    (let* ((f-op (acode-unwrapped-form-value fn))
            (immp (and (consp f-op)
                       (eq (%car f-op) (%nx1-operator immediate))))
            (symp (and immp (symbolp (%cadr f-op))))
@@ -2957,7 +3026,7 @@
 
 
 (defun x862-immediate-function-p (f)
-  (setq f (acode-unwrapped-form f))
+  (setq f (acode-unwrapped-form-value f))
   (and (acode-p f)
        (or (eq (%car f) (%nx1-operator immediate))
            (eq (%car f) (%nx1-operator simple-function)))))
@@ -2998,7 +3067,7 @@
 
 
 (defun x86-side-effect-free-form-p (form)
-  (when (consp (setq form (acode-unwrapped-form form)))
+  (when (consp (setq form (acode-unwrapped-form-value form)))
     (or (x86-constant-form-p form)
         ;(eq (acode-operator form) (%nx1-operator bound-special-ref))
         (if (eq (acode-operator form) (%nx1-operator lexical-reference))
@@ -3542,20 +3611,20 @@
   arglist)
 
 (defun x862-acode-operator-supports-u8 (form)
-  (setq form (acode-unwrapped-form form))
+  (setq form (acode-unwrapped-form-value form))
   (when (acode-p form)
     (let* ((operator (acode-operator form)))
       (if (member operator *x862-operator-supports-u8-target*)
         (values operator (acode-operand 1 form))))))
 
 (defun x862-acode-operator-supports-push (form)
-  (setq form (acode-unwrapped-form form))
-  (when (acode-p form)
-    (if (or (eq form *nx-t*)
-            (eq form *nx-nil*)
-            (let* ((operator (acode-operator form)))
-              (member operator *x862-operator-supports-push*)))
-        form)))
+  (let ((value (acode-unwrapped-form-value form)))
+    (when (acode-p value)
+      (if (or (eq value *nx-t*)
+              (eq value *nx-nil*)
+              (let* ((operator (acode-operator value)))
+                (member operator *x862-operator-supports-push*)))
+        value))))
 
 (defun x862-compare-u8 (seg vreg xfer form u8constant cr-bit true-p u8-operator)
   (with-x86-local-vinsn-macros (seg vreg xfer)
@@ -3826,7 +3895,7 @@
        (^)))))
 
 (defun x862-lexical-reference-ea (form &optional (no-closed-p t))
-  (when (acode-p (setq form (acode-unwrapped-form form)))
+  (when (acode-p (setq form (acode-unwrapped-form-value form)))
     (if (eq (acode-operator form) (%nx1-operator lexical-reference))
       (let* ((addr (var-ea (%cadr form))))
         (if (typep addr 'lreg)
@@ -4268,26 +4337,27 @@
                    (x862-open-undo $undo-x86-c-frame)
                    (setq val node))))
               ((eq op (%nx1-operator %new-ptr))
-               (let ((clear-form (caddr val)))
-                 (if (nx-constant-form-p clear-form)
+               (let* ((clear-form (caddr val))
+                      (cval (nx-constant-form-p clear-form)))
+                 (if cval
                    (progn 
                      (x862-one-targeted-reg-form seg (%cadr val) ($ *x862-arg-z*))
-                     (if (nx-null clear-form)
+                     (if (nx-null cval)
                        (! make-stack-block)
                        (! make-stack-block0)))
                    (with-crf-target () crf
-                                    (let ((stack-block-0-label (backend-get-next-label))
-                                          (done-label (backend-get-next-label))
-                                          (rval ($ *x862-arg-z*))
-                                          (rclear ($ *x862-arg-y*)))
-                                      (x862-two-targeted-reg-forms seg (%cadr val) rval clear-form rclear)
-                                      (! compare-to-nil crf rclear)
-                                      (! cbranch-false (aref *backend-labels* stack-block-0-label) crf x86::x86-e-bits)
-                                      (! make-stack-block)
-                                      (-> done-label)
-                                      (@ stack-block-0-label)
-                                      (! make-stack-block0)
-                                      (@ done-label)))))
+                     (let ((stack-block-0-label (backend-get-next-label))
+                           (done-label (backend-get-next-label))
+                           (rval ($ *x862-arg-z*))
+                           (rclear ($ *x862-arg-y*)))
+                       (x862-two-targeted-reg-forms seg (%cadr val) rval clear-form rclear)
+                       (! compare-to-nil crf rclear)
+                       (! cbranch-false (aref *backend-labels* stack-block-0-label) crf x86::x86-e-bits)
+                       (! make-stack-block)
+                       (-> done-label)
+                       (@ stack-block-0-label)
+                       (! make-stack-block0)
+                       (@ done-label)))))
                (x862-open-undo $undo-x86-c-frame)
                (setq val ($ *x862-arg-z*)))
               ((eq op (%nx1-operator make-list))
@@ -4295,7 +4365,7 @@
                (x862-open-undo $undostkblk curstack)
                (! make-stack-list)
                (setq val *x862-arg-z*))       
-              ((eq (%car val) (%nx1-operator vector))
+              ((eq op (%nx1-operator vector))
                (let* ((*x862-vstack* *x862-vstack*)
                       (*x862-top-vstack-lcell* *x862-top-vstack-lcell*))
                  (x862-set-nargs seg (x862-formlist seg (%cadr val) nil))
@@ -4841,7 +4911,7 @@
 
 (defun x862-lexical-reference-p (form)
   (when (acode-p form)
-    (let ((op (acode-operator (setq form (acode-unwrapped-form form)))))
+    (let ((op (acode-operator (setq form (acode-unwrapped-form-value form)))))
       (when (or (eq op (%nx1-operator lexical-reference))
                 (eq op (%nx1-operator inherited-arg)))
         (%cadr form)))))
@@ -4997,7 +5067,7 @@
 (defun x862-acode-needs-memoization (valform)
   (if (x862-form-typep valform 'fixnum)
     nil
-    (let* ((val (acode-unwrapped-form valform)))
+    (let* ((val (acode-unwrapped-form-value valform)))
       (if (or (eq val *nx-t*)
               (eq val *nx-nil*)
               (and (acode-p val)
@@ -5070,7 +5140,7 @@
 ;;; that register to RNIL.
 ;;; "XFER" is a compound destination.
 (defun x862-conditional-form (seg xfer form)
-  (let* ((uwf (acode-unwrapped-form form)))
+  (let* ((uwf (acode-unwrapped-form-value form)))
     (if (nx-null uwf)
       (x862-branch seg (x862-cd-false xfer))
       (if (x86-constant-form-p uwf)
@@ -5580,7 +5650,8 @@
 (defun x862-expand-note (frag-list note)
   (let* ((lab (vinsn-note-label note)))
     (case (vinsn-note-class note)
-      ((:regsave :begin-variable-scope :end-variable-scope)
+      ((:regsave :begin-variable-scope :end-variable-scope
+        :source-location-begin :source-location-end)
        (setf (vinsn-label-info lab) (emit-x86-lap-label frag-list lab))))))
 
 (defun x86-emit-instruction-from-vinsn (opcode-template
@@ -5744,8 +5815,8 @@
     (do-dll-nodes (v header)
       (if (%vinsn-label-p v)
         (let* ((id (vinsn-label-id v)))
-          (if (typep id 'fixnum)
-            (when (or t (vinsn-label-refs v))
+          (if (or (typep id 'fixnum) (null id))
+            (when (or t (vinsn-label-refs v) (null id))
               (setf (vinsn-label-info v) (emit-x86-lap-label frag-list v)))
             (x862-expand-note frag-list id)))
         (x862-expand-vinsn v frag-list instruction immediate-operand uuo-frag-list)))
@@ -6997,9 +7068,9 @@
         (^)))))
       
 
-(defx862 x862-if if (seg vreg xfer testform true false)
-  (if (nx-constant-form-p (acode-unwrapped-form testform))
-    (x862-form seg vreg xfer (if (nx-null (acode-unwrapped-form testform)) false true))
+(defx862 x862-if if (seg vreg xfer testform true false &aux test-val)
+  (if (setq test-val (nx-constant-form-p (acode-unwrapped-form-value testform)))
+    (x862-form seg vreg xfer (if (nx-null test-val) false true))
     (let* ((cstack *x862-cstack*)
            (vstack *x862-vstack*)
            (top-lcell *x862-top-vstack-lcell*)
@@ -9970,7 +10041,7 @@
 
 (defx862 x862-%double-float %double-float (seg vreg xfer arg)
   (let* ((real (or (acode-fixnum-form-p arg)
-                   (let* ((form (acode-unwrapped-form arg)))
+                   (let* ((form (acode-unwrapped-form-value arg)))
                      (if (and (acode-p form)
                               (eq (acode-operator form)
                                   (%nx1-operator immediate))
@@ -10001,7 +10072,7 @@
 
 (defx862 x862-%single-float %single-float (seg vreg xfer arg)
   (let* ((real (or (acode-fixnum-form-p arg)
-                   (let* ((form (acode-unwrapped-form arg)))
+                   (let* ((form (acode-unwrapped-form-value arg)))
                      (if (and (acode-p form)
                               (eq (acode-operator form)
                                   (%nx1-operator immediate))

@@ -1294,7 +1294,9 @@ Or something. Right? ~s ~s" var varbits))
                                  q
                                  parent-env
                                  (policy *default-compiler-policy*)
-                                 load-time-eval-token)
+                                 load-time-eval-token
+                                 function-note)
+
   (if q
      (setf (afunc-parent p) q))
 
@@ -1315,6 +1317,12 @@ Or something. Right? ~s ~s" var varbits))
                 `(:internal ,name ,parent-name)
                 `(:internal ,parent-name)))
             name)))
+
+  (when (or function-note
+            (setq function-note (nx-source-note lambda-form))
+            (setq function-note (and q (getf (afunc-lfun-info q) 'function-source-note))))
+    (setf (afunc-lfun-info p)
+          (list* 'function-source-note function-note (afunc-lfun-info p))))
 
   (unless (lambda-expression-p lambda-form)
     (nx-error "~S is not a valid lambda expression." lambda-form))
@@ -1642,21 +1650,28 @@ Or something. Right? ~s ~s" var varbits))
   (with-program-error-handler
       (lambda (c)
         (let ((replacement (runtime-program-error-form c)))
+          (nx-note-source-transformation original replacement)
           (nx1-transformed-form (nx-transform replacement env) env)))
     (nx1-transformed-form (nx-transform original env) env)))
 
 (defun nx1-transformed-form (form env)
-  (if (consp form)
-    (nx1-combination form env)
-    (let* ((symbolp (non-nil-symbol-p form))
-           (constant-value (unless symbolp form))
-           (constant-symbol-p nil))
-      (if symbolp 
-        (multiple-value-setq (constant-value constant-symbol-p) 
-          (nx-transform-defined-constant form env)))
-      (if (and symbolp (not constant-symbol-p))
-        (nx1-symbol form env)
-        (nx1-immediate (nx-unquote constant-value))))))
+  (flet ((main (form env)
+           (if (consp form)
+             (nx1-combination form env)
+             (let* ((symbolp (non-nil-symbol-p form))
+                    (constant-value (unless symbolp form))
+                    (constant-symbol-p nil))
+               (if symbolp 
+                 (multiple-value-setq (constant-value constant-symbol-p) 
+                   (nx-transform-defined-constant form env)))
+               (if (and symbolp (not constant-symbol-p))
+                 (nx1-symbol form env)
+                 (nx1-immediate (nx-unquote constant-value)))))))
+    (if *nx-source-note-map*
+      (let ((acode (main form env)))
+        (setf (acode-source acode) form)
+        acode)
+      (main form env))))
 
 (defun nx1-prefer-areg (form env)
   (nx1-form form env))
@@ -2104,11 +2119,14 @@ Or something. Right? ~s ~s" var varbits))
 
 )
 
-(defun nx-transform (form &optional (environment *nx-lexical-environment*))
+(defun nx-transform (form &optional (environment *nx-lexical-environment*) (source-note-map *nx-source-note-map*))
   (macrolet ((form-changed (form)
-               (declare (ignore form))
-               '(setq changed t)))
-    (prog (sym transforms lexdefs changed enabled macro-function compiler-macro)
+               `(progn
+                  (unless source (setq source (gethash ,form source-note-map)))
+                  (setq changed t))))
+    (prog (sym transforms lexdefs changed enabled macro-function compiler-macro (source t))
+       (when source-note-map
+         (setq source (gethash form source-note-map)))
        (go START)
      LOOP
        (form-changed form)
@@ -2131,7 +2149,7 @@ Or something. Right? ~s ~s" var varbits))
              (progn
                (setq form thing)
                (go LOOP))
-             (multiple-value-bind (newform win) (nx-transform thing environment)
+             (multiple-value-bind (newform win) (nx-transform thing environment source-note-map)
                (when win
                  (form-changed newform)
                  (if (and (self-evaluating-p newform)
@@ -2152,7 +2170,7 @@ Or something. Right? ~s ~s" var varbits))
        (unless macro-function
          (let* ((win nil))
            (when (and enabled (functionp (fboundp sym)))
-             (multiple-value-setq (form win) (nx-transform-arglist form environment))
+             (multiple-value-setq (form win) (nx-transform-arglist form environment source-note-map))
              (when win
                (form-changed form)))))
        (when (and enabled
@@ -2192,19 +2210,26 @@ Or something. Right? ~s ~s" var varbits))
          (form-changed form)
          (go START))
      DONE
+       (when (and source (neq source t) (not (gethash form source-note-map)))
+         (unless (and (consp form)
+                      (eq (%car form) 'the)
+                      (eq source (gethash (caddr form) source-note-map)))
+           (unless (or (eq form (%unbound-marker))
+                       (eq form (%slot-unbound-marker)))
+             (setf (gethash form source-note-map) source))))
        (return (values form changed)))))
 
 ; Transform all of the arguments to the function call form.
 ; If any of them won, return a new call form (with the same operator as the original), else return the original
 ; call form unchanged.
-(defun nx-transform-arglist (callform env)
+(defun nx-transform-arglist (callform env source-note-map)
   (let* ((any-wins nil)
          (transformed-call (cons (car callform) nil))
          (ptr transformed-call)
          (win nil))
     (declare (type cons ptr))
     (dolist (form (cdr callform) (if any-wins (values (copy-list transformed-call) t) (values callform nil)))
-      (multiple-value-setq (form win) (nx-transform form env))
+      (multiple-value-setq (form win) (nx-transform form env source-note-map))
       (rplacd ptr (setq ptr (cons form nil)))
       (if win (setq any-wins t)))))
 

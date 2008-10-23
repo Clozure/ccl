@@ -1466,7 +1466,9 @@
                 (or (not (macro-function name *nx-lexical-environment*))
                     (nx-error "Can't funcall macro function ~s ." name)))
               (and (consp name) 
-                   (or (eq (%car name) 'lambda)
+                   (or (when (eq (%car name) 'lambda)
+                         (nx-note-source-transformation func name)
+                         t)
                        (setq name (nx-need-function-name name))))))
       (nx1-form (cons name args))  ; This picks up call-next-method evil.
       (nx1-call (nx1-form func) args nil t))))
@@ -1543,12 +1545,14 @@
             (maybe-warn-about-nx1-alphatizer-binding funcname)
             (multiple-value-bind (body decls)
                                  (parse-body flet-function-body env)
-              (let ((func (make-afunc)))
+              (let ((func (make-afunc))
+                    (expansion `(lambda ,lambda-list
+                                  ,@decls
+                                  (block ,(if (consp funcname) (%cadr funcname) funcname)
+                                    ,@body))))
+                (nx-note-source-transformation def expansion)
                 (setf (afunc-environment func) env
-                      (afunc-lambdaform func) `(lambda ,lambda-list
-                                                     ,@decls
-                                                     (block ,(if (consp funcname) (%cadr funcname) funcname)
-                                                       ,@body)))
+                      (afunc-lambdaform func) expansion)
                 (push func funcs)
                 (when (and *nx-next-method-var*
                              (eq funcname 'call-next-method)
@@ -1639,6 +1643,7 @@
                                    ,@decls 
                                    (block ,blockname
                                      ,@body))))
+                (nx-note-source-transformation def expansion)
                 (setf (afunc-lambdaform func) expansion
                       (afunc-environment func) env)
                 (push (cons funcname expansion)

@@ -150,32 +150,68 @@
           (setq init nil))))))
 
 (defparameter *load-time-eval-token* nil)
+
+(defparameter *nx-source-note-map* nil)
+
+(defun nx-source-note (form &aux (source-notes *nx-source-note-map*))
+  (when source-notes (gethash form source-notes)))
+  
+(defun nx-note-source-transformation (original new &aux (source-notes *nx-source-note-map*) sn)
+  (when (and source-notes
+             (setq sn (gethash original source-notes))
+             (not (gethash new source-notes)))
+    (setf (gethash new source-notes) sn)))
+
 (defparameter *nx-discard-xref-info-hook* nil)
 
-(defun compile-named-function (def &key name env keep-lambda keep-symbols policy load-time-eval-token target)
+;; In lieu of a slot in acode.  Don't reference this variable elsewhere because I'm
+;; hoping to make it go away.
+(defparameter *nx-acode-source-map* nil)
+
+(defun acode-source-note (acode &aux (hash *nx-acode-source-map*))
+  (and hash (gethash acode hash)))
+
+(defun (setf acode-source) (form acode)
+  ;; Could save the form, but right now only really care about the source note,
+  ;; and this way don't have to keep looking it up in pass 2.
+  (let ((note (nx-source-note form)))
+    (when note
+      (assert *nx-acode-source-map*)
+      (setf (gethash acode *nx-acode-source-map*) note))))
+
+(defun compile-named-function (def &key name env policy load-time-eval-token target
+                                function-note keep-lambda keep-symbols source-notes)
+  ;; SOURCE-NOTES, if not nil, is a hash table mapping source forms to locations,
+  ;;   is used to produce and attach a pc/source map to the lfun, also to attach
+  ;;   source locations and pc/source maps to inner lfuns.
+  ;; FUNCTION-NOTE, if not nil, is a note to attach to the function as the lfun
+  ;;   source location in preference to whatever the source-notes table assigns to it.
   (when (and name *nx-discard-xref-info-hook*)
     (funcall *nx-discard-xref-info-hook* name))
   (setq 
    def
    (let* ((*load-time-eval-token* load-time-eval-token)
+	  (*nx-source-note-map* source-notes)
+	  (*nx-acode-source-map* (and source-notes (make-hash-table :test #'eq :shared nil)))
           (env (new-lexical-environment env)))
      (setf (lexenv.variables env) 'barrier)
-       (let* ((*target-backend* (or (if target (find-backend target)) *host-backend*))
-              (afunc (nx1-compile-lambda 
-                      name 
-                      def
-                      (make-afunc) 
-                      nil 
-                      env 
-                      (or policy *default-compiler-policy*)
-                      *load-time-eval-token*)))
-         (if (afunc-lfun afunc)
-           afunc
-           (funcall (backend-p2-compile *target-backend*)
-                    afunc
-                    ;; will also bind *nx-lexical-environment*
-                    (if keep-lambda (if (lambda-expression-p keep-lambda) keep-lambda def))
-                    keep-symbols)))))
+     (let* ((*target-backend* (or (if target (find-backend target)) *host-backend*))
+            (afunc (nx1-compile-lambda 
+                    name 
+                    def
+                    (make-afunc) 
+                    nil 
+                    env 
+                    (or policy *default-compiler-policy*)
+                    *load-time-eval-token*
+                    function-note)))
+       (if (afunc-lfun afunc)
+         afunc
+         (funcall (backend-p2-compile *target-backend*)
+                  afunc
+                  ;; will also bind *nx-lexical-environment*
+                  (if keep-lambda (if (lambda-expression-p keep-lambda) keep-lambda def))
+                  keep-symbols)))))
   (values (afunc-lfun def) (afunc-warnings def)))
 
 (defparameter *compiler-whining-conditions*
