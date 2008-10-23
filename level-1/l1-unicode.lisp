@@ -4834,7 +4834,24 @@ or prepended to output."
                  0
                  string)
         string))))
-        
+
+
+(defun get-encoded-cstring (encoding-name pointer)
+  (let* ((encoding (ensure-character-encoding encoding-name)))
+    (get-encoded-string
+     encoding
+     pointer
+     (ecase (character-encoding-code-unit-size encoding)
+       (8 (%cstrlen pointer))
+       (16 (do* ((i 0 (+ i 2)))
+                ((= 0 (%get-unsigned-word pointer i))
+                 (return i))
+             (declare (fixnum i))))
+       (32 (do* ((i 0 (+ i 4)))
+                ((= 0 (%get-unsigned-long pointer i))
+                 (return i))
+             (declare (fixnum i))))))))
+    
 
       
 
