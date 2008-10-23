@@ -474,7 +474,8 @@
                      (setq debug-info (list* 'function-lambda-expression lambda-form debug-info)))
                    (when *ppc2-recorded-symbols*
                      (setq debug-info (list* 'function-symbol-map *ppc2-recorded-symbols* debug-info)))
-
+                   (when *ppc2-emitted-source-notes*
+                     (setq debug-info (list* 'pc-source-map *ppc2-emitted-source-notes* debug-info)))
                    (when debug-info
                      (setq bits (logior (ash 1 $lfbits-info-bit) bits))
                      (backend-new-immediate debug-info))
