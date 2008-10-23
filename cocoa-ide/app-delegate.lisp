@@ -19,6 +19,7 @@
   (let* ((domain (#/standardUserDefaults ns:ns-user-defaults))
 	 (initial-values (cocoa-defaults-initial-values))
 	 (dict (#/mutableCopy initial-values)))
+    (declare (special *standalone-cocoa-ide*))
     (#/registerDefaults: domain dict)
     (#/release dict)
     (update-cocoa-defaults)
