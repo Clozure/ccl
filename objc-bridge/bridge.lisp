@@ -949,7 +949,8 @@
                           ys
                           (do* ((xs xs (cdr xs))
                                 (ys ys (cdr ys)))
-                               ((null xs) (null ys))
+                               ((or (null xs) (null ys))
+                                (and (null xs) (null ys)))
                             (unless (foreign-type-= (ensure-foreign-type (car xs))
                                                     (ensure-foreign-type (car ys)))
                               (return nil))))))
