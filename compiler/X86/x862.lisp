@@ -2982,7 +2982,18 @@
                   (setq form (%cadr form))
                   (if (typep form 'integer)
                     form)))))
-    (and val (%typep val (mode-specifier-type mode)) val)))
+    (when val
+      (let* ((type (mode-specifier-type mode))
+             (high (numeric-ctype-high type))
+             (low (numeric-ctype-low type)))
+        (if (and (>= val low)
+                 (<= val high))
+          val
+          (if (<= (integer-length val) (integer-length (- high low)))
+            (if (eql 0 low)             ; type is unsigned, value is negative
+              (logand high val)
+              (- val (1+ (- high low))))))))))
+
          
 
 
