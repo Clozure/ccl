@@ -51,9 +51,11 @@
   ;; be encoded according to the current locale's character
   ;; encoding (though FreeBSD seems to be moving towards
   ;; precomposed UTF-8.).
-  ;; In any case, the use of %GET-CSTRING here is wrong ...
   #-(or darwin-target windows-target)
-  (%get-cstring pointer))
+  (let* ((encoding-name (pathname-encoding-name)))
+    (if encoding-name
+      (get-encoded-cstring encoding-name pointer)
+      (%get-cstring pointer))))
 
 (defun nanoseconds (n)
   (unless (and (typep n 'fixnum)
