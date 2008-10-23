@@ -1134,5 +1134,7 @@ vector
 (defsetf %composite-pointer-ref %set-composite-pointer-ref)
 
 
+(defsetf pathname-encoding-name set-pathname-encoding-name)
+
 ;end of L1-utils.lisp
 
