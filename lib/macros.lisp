@@ -1703,10 +1703,10 @@ to open."
                                              bindings) body))
 
 (defmacro with-filename-cstrs (&rest rest)
-  `(,(case (target-os-name)
-      (:darwin 'with-utf-8-cstrs)
-      (:windows 'with-native-utf-16-cstrs)
-      (t 'with-cstrs)) ,@rest))
+  (case (target-os-name)
+    (:darwin `(with-utf-8-cstrs ,@rest))
+    (:windows `(with-native-utf-16-cstrs ,@rest))
+    (t `(with-encoded-cstrs (pathname-encoding-name) ,@rest))))
 
 
 (defun with-specs-aux (name spec-list original-body)
