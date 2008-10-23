@@ -704,6 +704,14 @@
     (%sf-check-exception-1 'exp n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
 
+#+(and 32-bit-target windows-target)
+(defun %single-float-exp! (n result)
+  (declare (single-float n result))
+  (target::with-stack-short-floats ((temp))
+    (%setf-short-float TEMP (external-call "expf" :single-float n :single-float))
+    (%sf-check-exception-1 'exp n (%ffi-exception-status))
+    (%setf-short-float result TEMP)))
+
 #+64-bit-target
 (defun %single-float-exp (n)
   (declare (single-float n))
