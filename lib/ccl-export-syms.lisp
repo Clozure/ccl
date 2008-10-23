@@ -271,6 +271,7 @@
      file-locked-p
      directoryp
 
+
      *module-search-path*
      *module-provider-functions*
      *.lisp-pathname*
@@ -278,6 +279,9 @@
      *pathname-translations-pathname*
      *default-external-format*
      *default-line-termination*
+     pathname-encoding-name
+     with-filename-cstrs
+     get-foreign-namestring
      fasl-concatenate
      event-ticks
      set-event-ticks
