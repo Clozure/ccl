@@ -182,6 +182,7 @@ examples/cocoa/nib-loading/nib-loading.lisp -text
 examples/cocoa/ui-elements/HOWTO.html -text
 examples/cocoa/ui-elements/HOWTO_files/images/bosco.jpg -text
 examples/cocoa/ui-elements/HOWTO_files/stylesheets/styles.css -text
+examples/mswin.lisp -text
 level-0/X86/X8632/x8632-array.lisp -text
 level-0/X86/X8632/x8632-bignum.lisp -text
 level-0/X86/X8632/x8632-clos.lisp -text
