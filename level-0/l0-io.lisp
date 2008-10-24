@@ -195,6 +195,7 @@
 
 
 (let* ((pathname-encoding-name ()))
+  (declare (ignorable pathname-encoding-name))
   (defun pathname-encoding-name ()
     #+darwin-target :utf-8
     #+windows-target :utf-16le
