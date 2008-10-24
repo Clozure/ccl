@@ -25,17 +25,15 @@
 ;;; This is machine-dependent (it conses up a piece of "trampoline" code
 ;;; which calls a subprim in the lisp kernel.)
 #-(and linuxppc-target poweropen-target)
-(defun make-callback-trampoline (index &optional monitor-exception-ports)
-  (declare (ignorable monitor-exception-ports))
+(defun make-callback-trampoline (index &optional info)
+  (declare (ignorable info))
   (macrolet ((ppc-lap-word (instruction-form)
                (uvref (uvref (compile nil `(lambda (&lap 0) (ppc-lap-function () ((?? 0)) ,instruction-form))) 0) #+ppc32-host 0 #+ppc64-host 1)))
     (let* ((subprim
 	    #+eabi-target
 	     #.(subprim-name->offset '.SPeabi-callback)
 	     #-eabi-target
-	     (if monitor-exception-ports
-	       #.(subprim-name->offset '.SPpoweropen-callbackX)
-	       #.(subprim-name->offset '.SPpoweropen-callback)))
+             #.(subprim-name->offset '.SPpoweropen-callback))
            (p (%allocate-callback-pointer 12)))
       (setf (%get-long p 0) (logior (ldb (byte 8 16) index)
                                     (ppc-lap-word (lis 11 ??)))   ; unboxed index
@@ -56,8 +54,8 @@
 ;;; TOC) the function references in the second word.  We can use the
 ;;; TOC word in the transfer vector to store the callback index.
 #+(and linuxppc-target poweropen-target)
-(defun make-callback-trampoline (index &optional monitor-exception-ports)
-  (declare (ignorable monitor-exception-ports))
+(defun make-callback-trampoline (index &optional info)
+  (declare (ignorable info))
   (let* ((p (%allocate-callback-pointer 16)))
     (setf (%%get-unsigned-longlong p 0) #.(subprim-name->offset '.SPpoweropen-callback)
           (%%get-unsigned-longlong p 8) index)
