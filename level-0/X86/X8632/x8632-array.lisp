@@ -217,7 +217,7 @@
   (addl ($ '1) (% esp))
   (jmp-subprim .SPaset2))
 
-(defx8632lapfunction %aset3 ((array 12) (i 8) (j 4) #|(ra 0)|# (j arg_y) (newval arg_z))
+(defx8632lapfunction %aset3 ((array 12) (i 8) (j 4) #|(ra 0)|# (k arg_y) (newval arg_z))
   (check-nargs 5)
   (popl (@ 16 (% esp)))
   (pop (% temp0))
