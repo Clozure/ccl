@@ -1176,1594 +1176,1598 @@ of 32KBytes in earlier versions.)"
 
 
 ;;; This alist is automatically (and not too cleverly ...) generated.
+;;;
+;;; NB: it was generated from Unicode 5.0 character tables, check to
+;;; see if anything's changed in 5.1 or later versions.
+;;;
 ;;; The (upper . lower) pairs have the property that UPPER is the
 ;;; value "simple uppercase equivalent" entry for LOWER in the
 ;;; UnicodeData.txt file and LOWER is the corresponding entry for
 ;;; UPPER,
 (let* ((mapping
         '((#\Latin_Capital_Letter_A_With_Grave . #\Latin_Small_Letter_A_With_Grave)
-                (#\Latin_Capital_Letter_A_With_Acute . #\Latin_Small_Letter_A_With_Acute)
-                (#\Latin_Capital_Letter_A_With_Circumflex
-                 . #\Latin_Small_Letter_A_With_Circumflex)
-                (#\Latin_Capital_Letter_A_With_Tilde . #\Latin_Small_Letter_A_With_Tilde)
-                (#\Latin_Capital_Letter_A_With_Diaeresis
-                 . #\Latin_Small_Letter_A_With_Diaeresis)
-                (#\Latin_Capital_Letter_A_With_Ring_Above
-                 . #\Latin_Small_Letter_A_With_Ring_Above)
+          (#\Latin_Capital_Letter_A_With_Acute . #\Latin_Small_Letter_A_With_Acute)
+          (#\Latin_Capital_Letter_A_With_Circumflex
+           . #\Latin_Small_Letter_A_With_Circumflex)
+          (#\Latin_Capital_Letter_A_With_Tilde . #\Latin_Small_Letter_A_With_Tilde)
+          (#\Latin_Capital_Letter_A_With_Diaeresis
+           . #\Latin_Small_Letter_A_With_Diaeresis)
+          (#\Latin_Capital_Letter_A_With_Ring_Above
+           . #\Latin_Small_Letter_A_With_Ring_Above)
           
-                (#\Latin_Capital_Letter_Ae . #\Latin_Small_Letter_Ae)
+          (#\Latin_Capital_Letter_Ae . #\Latin_Small_Letter_Ae)
           
-                (#\Latin_Capital_Letter_C_With_Cedilla . #\Latin_Small_Letter_C_With_Cedilla)
+          (#\Latin_Capital_Letter_C_With_Cedilla . #\Latin_Small_Letter_C_With_Cedilla)
           
-                (#\Latin_Capital_Letter_E_With_Grave . #\Latin_Small_Letter_E_With_Grave)
+          (#\Latin_Capital_Letter_E_With_Grave . #\Latin_Small_Letter_E_With_Grave)
           
-                (#\Latin_Capital_Letter_E_With_Acute . #\Latin_Small_Letter_E_With_Acute)
+          (#\Latin_Capital_Letter_E_With_Acute . #\Latin_Small_Letter_E_With_Acute)
           
-                (#\Latin_Capital_Letter_E_With_Circumflex
-                 . #\Latin_Small_Letter_E_With_Circumflex)
+          (#\Latin_Capital_Letter_E_With_Circumflex
+           . #\Latin_Small_Letter_E_With_Circumflex)
           
-                (#\Latin_Capital_Letter_E_With_Diaeresis
-                 . #\Latin_Small_Letter_E_With_Diaeresis)
+          (#\Latin_Capital_Letter_E_With_Diaeresis
+           . #\Latin_Small_Letter_E_With_Diaeresis)
           
-                (#\Latin_Capital_Letter_I_With_Grave . #\Latin_Small_Letter_I_With_Grave)
+          (#\Latin_Capital_Letter_I_With_Grave . #\Latin_Small_Letter_I_With_Grave)
           
-                (#\Latin_Capital_Letter_I_With_Acute . #\Latin_Small_Letter_I_With_Acute)
+          (#\Latin_Capital_Letter_I_With_Acute . #\Latin_Small_Letter_I_With_Acute)
           
-                (#\Latin_Capital_Letter_I_With_Circumflex
-                 . #\Latin_Small_Letter_I_With_Circumflex)
+          (#\Latin_Capital_Letter_I_With_Circumflex
+           . #\Latin_Small_Letter_I_With_Circumflex)
           
-                (#\Latin_Capital_Letter_I_With_Diaeresis
-                 . #\Latin_Small_Letter_I_With_Diaeresis)
+          (#\Latin_Capital_Letter_I_With_Diaeresis
+           . #\Latin_Small_Letter_I_With_Diaeresis)
           
-                (#\Latin_Capital_Letter_Eth . #\Latin_Small_Letter_Eth)
+          (#\Latin_Capital_Letter_Eth . #\Latin_Small_Letter_Eth)
           
-                (#\Latin_Capital_Letter_N_With_Tilde . #\Latin_Small_Letter_N_With_Tilde)
+          (#\Latin_Capital_Letter_N_With_Tilde . #\Latin_Small_Letter_N_With_Tilde)
           
-                (#\Latin_Capital_Letter_O_With_Grave . #\Latin_Small_Letter_O_With_Grave)
+          (#\Latin_Capital_Letter_O_With_Grave . #\Latin_Small_Letter_O_With_Grave)
           
-                (#\Latin_Capital_Letter_O_With_Acute . #\Latin_Small_Letter_O_With_Acute)
+          (#\Latin_Capital_Letter_O_With_Acute . #\Latin_Small_Letter_O_With_Acute)
           
-                (#\Latin_Capital_Letter_O_With_Circumflex
-                 . #\Latin_Small_Letter_O_With_Circumflex)
+          (#\Latin_Capital_Letter_O_With_Circumflex
+           . #\Latin_Small_Letter_O_With_Circumflex)
           
-                (#\Latin_Capital_Letter_O_With_Tilde . #\Latin_Small_Letter_O_With_Tilde)
+          (#\Latin_Capital_Letter_O_With_Tilde . #\Latin_Small_Letter_O_With_Tilde)
           
-                (#\Latin_Capital_Letter_O_With_Diaeresis
-                 . #\Latin_Small_Letter_O_With_Diaeresis)
+          (#\Latin_Capital_Letter_O_With_Diaeresis
+           . #\Latin_Small_Letter_O_With_Diaeresis)
           
-                (#\Latin_Capital_Letter_O_With_Stroke . #\Latin_Small_Letter_O_With_Stroke)
+          (#\Latin_Capital_Letter_O_With_Stroke . #\Latin_Small_Letter_O_With_Stroke)
           
-                (#\Latin_Capital_Letter_U_With_Grave . #\Latin_Small_Letter_U_With_Grave)
+          (#\Latin_Capital_Letter_U_With_Grave . #\Latin_Small_Letter_U_With_Grave)
           
-                (#\Latin_Capital_Letter_U_With_Acute . #\Latin_Small_Letter_U_With_Acute)
+          (#\Latin_Capital_Letter_U_With_Acute . #\Latin_Small_Letter_U_With_Acute)
           
-                (#\Latin_Capital_Letter_U_With_Circumflex
-                 . #\Latin_Small_Letter_U_With_Circumflex)
+          (#\Latin_Capital_Letter_U_With_Circumflex
+           . #\Latin_Small_Letter_U_With_Circumflex)
           
-                (#\Latin_Capital_Letter_U_With_Diaeresis
-                 . #\Latin_Small_Letter_U_With_Diaeresis)
+          (#\Latin_Capital_Letter_U_With_Diaeresis
+           . #\Latin_Small_Letter_U_With_Diaeresis)
           
-                (#\Latin_Capital_Letter_Y_With_Acute . #\Latin_Small_Letter_Y_With_Acute)
+          (#\Latin_Capital_Letter_Y_With_Acute . #\Latin_Small_Letter_Y_With_Acute)
           
-                (#\Latin_Capital_Letter_Thorn . #\Latin_Small_Letter_Thorn)
+          (#\Latin_Capital_Letter_Thorn . #\Latin_Small_Letter_Thorn)
           
-                (#\Latin_Capital_Letter_A_With_Macron . #\Latin_Small_Letter_A_With_Macron)
+          (#\Latin_Capital_Letter_A_With_Macron . #\Latin_Small_Letter_A_With_Macron)
           
-                (#\Latin_Capital_Letter_A_With_Breve . #\Latin_Small_Letter_A_With_Breve)
+          (#\Latin_Capital_Letter_A_With_Breve . #\Latin_Small_Letter_A_With_Breve)
           
-                (#\Latin_Capital_Letter_A_With_Ogonek . #\Latin_Small_Letter_A_With_Ogonek)
+          (#\Latin_Capital_Letter_A_With_Ogonek . #\Latin_Small_Letter_A_With_Ogonek)
           
-                (#\Latin_Capital_Letter_C_With_Acute . #\Latin_Small_Letter_C_With_Acute)
+          (#\Latin_Capital_Letter_C_With_Acute . #\Latin_Small_Letter_C_With_Acute)
           
-                (#\Latin_Capital_Letter_C_With_Circumflex
-                 . #\Latin_Small_Letter_C_With_Circumflex)
+          (#\Latin_Capital_Letter_C_With_Circumflex
+           . #\Latin_Small_Letter_C_With_Circumflex)
           
-                (#\Latin_Capital_Letter_C_With_Dot_Above
-                 . #\Latin_Small_Letter_C_With_Dot_Above)
+          (#\Latin_Capital_Letter_C_With_Dot_Above
+           . #\Latin_Small_Letter_C_With_Dot_Above)
           
-                (#\Latin_Capital_Letter_C_With_Caron . #\Latin_Small_Letter_C_With_Caron)
+          (#\Latin_Capital_Letter_C_With_Caron . #\Latin_Small_Letter_C_With_Caron)
           
-                (#\Latin_Capital_Letter_D_With_Caron . #\Latin_Small_Letter_D_With_Caron)
+          (#\Latin_Capital_Letter_D_With_Caron . #\Latin_Small_Letter_D_With_Caron)
           
-                (#\Latin_Capital_Letter_D_With_Stroke . #\Latin_Small_Letter_D_With_Stroke)
+          (#\Latin_Capital_Letter_D_With_Stroke . #\Latin_Small_Letter_D_With_Stroke)
           
-                (#\Latin_Capital_Letter_E_With_Macron . #\Latin_Small_Letter_E_With_Macron)
+          (#\Latin_Capital_Letter_E_With_Macron . #\Latin_Small_Letter_E_With_Macron)
           
-                (#\Latin_Capital_Letter_E_With_Breve . #\Latin_Small_Letter_E_With_Breve)
+          (#\Latin_Capital_Letter_E_With_Breve . #\Latin_Small_Letter_E_With_Breve)
           
-                (#\Latin_Capital_Letter_E_With_Dot_Above
-                 . #\Latin_Small_Letter_E_With_Dot_Above)
+          (#\Latin_Capital_Letter_E_With_Dot_Above
+           . #\Latin_Small_Letter_E_With_Dot_Above)
           
-                (#\Latin_Capital_Letter_E_With_Ogonek . #\Latin_Small_Letter_E_With_Ogonek)
+          (#\Latin_Capital_Letter_E_With_Ogonek . #\Latin_Small_Letter_E_With_Ogonek)
           
-                (#\Latin_Capital_Letter_E_With_Caron . #\Latin_Small_Letter_E_With_Caron)
+          (#\Latin_Capital_Letter_E_With_Caron . #\Latin_Small_Letter_E_With_Caron)
           
-                (#\Latin_Capital_Letter_G_With_Circumflex
-                 . #\Latin_Small_Letter_G_With_Circumflex)
+          (#\Latin_Capital_Letter_G_With_Circumflex
+           . #\Latin_Small_Letter_G_With_Circumflex)
           
-                (#\Latin_Capital_Letter_G_With_Breve . #\Latin_Small_Letter_G_With_Breve)
+          (#\Latin_Capital_Letter_G_With_Breve . #\Latin_Small_Letter_G_With_Breve)
           
-                (#\Latin_Capital_Letter_G_With_Dot_Above
-                 . #\Latin_Small_Letter_G_With_Dot_Above)
+          (#\Latin_Capital_Letter_G_With_Dot_Above
+           . #\Latin_Small_Letter_G_With_Dot_Above)
           
-                (#\Latin_Capital_Letter_G_With_Cedilla . #\Latin_Small_Letter_G_With_Cedilla)
+          (#\Latin_Capital_Letter_G_With_Cedilla . #\Latin_Small_Letter_G_With_Cedilla)
           
-                (#\Latin_Capital_Letter_H_With_Circumflex
-                 . #\Latin_Small_Letter_H_With_Circumflex)
+          (#\Latin_Capital_Letter_H_With_Circumflex
+           . #\Latin_Small_Letter_H_With_Circumflex)
           
-                (#\Latin_Capital_Letter_H_With_Stroke . #\Latin_Small_Letter_H_With_Stroke)
+          (#\Latin_Capital_Letter_H_With_Stroke . #\Latin_Small_Letter_H_With_Stroke)
           
-                (#\Latin_Capital_Letter_I_With_Tilde . #\Latin_Small_Letter_I_With_Tilde)
+          (#\Latin_Capital_Letter_I_With_Tilde . #\Latin_Small_Letter_I_With_Tilde)
           
-                (#\Latin_Capital_Letter_I_With_Macron . #\Latin_Small_Letter_I_With_Macron)
+          (#\Latin_Capital_Letter_I_With_Macron . #\Latin_Small_Letter_I_With_Macron)
           
-                (#\Latin_Capital_Letter_I_With_Breve . #\Latin_Small_Letter_I_With_Breve)
+          (#\Latin_Capital_Letter_I_With_Breve . #\Latin_Small_Letter_I_With_Breve)
           
-                (#\Latin_Capital_Letter_I_With_Ogonek . #\Latin_Small_Letter_I_With_Ogonek)
+          (#\Latin_Capital_Letter_I_With_Ogonek . #\Latin_Small_Letter_I_With_Ogonek)
           
-                (#\Latin_Capital_Ligature_Ij . #\Latin_Small_Ligature_Ij)
+          (#\Latin_Capital_Ligature_Ij . #\Latin_Small_Ligature_Ij)
           
-                (#\Latin_Capital_Letter_J_With_Circumflex
-                 . #\Latin_Small_Letter_J_With_Circumflex)
+          (#\Latin_Capital_Letter_J_With_Circumflex
+           . #\Latin_Small_Letter_J_With_Circumflex)
           
-                (#\Latin_Capital_Letter_K_With_Cedilla . #\Latin_Small_Letter_K_With_Cedilla)
+          (#\Latin_Capital_Letter_K_With_Cedilla . #\Latin_Small_Letter_K_With_Cedilla)
           
-                (#\Latin_Capital_Letter_L_With_Acute . #\Latin_Small_Letter_L_With_Acute)
+          (#\Latin_Capital_Letter_L_With_Acute . #\Latin_Small_Letter_L_With_Acute)
           
-                (#\Latin_Capital_Letter_L_With_Cedilla . #\Latin_Small_Letter_L_With_Cedilla)
+          (#\Latin_Capital_Letter_L_With_Cedilla . #\Latin_Small_Letter_L_With_Cedilla)
           
-                (#\Latin_Capital_Letter_L_With_Caron . #\Latin_Small_Letter_L_With_Caron)
+          (#\Latin_Capital_Letter_L_With_Caron . #\Latin_Small_Letter_L_With_Caron)
           
-                (#\Latin_Capital_Letter_L_With_Middle_Dot
-                 . #\Latin_Small_Letter_L_With_Middle_Dot)
+          (#\Latin_Capital_Letter_L_With_Middle_Dot
+           . #\Latin_Small_Letter_L_With_Middle_Dot)
           
-                (#\Latin_Capital_Letter_L_With_Stroke . #\Latin_Small_Letter_L_With_Stroke)
+          (#\Latin_Capital_Letter_L_With_Stroke . #\Latin_Small_Letter_L_With_Stroke)
           
-                (#\Latin_Capital_Letter_N_With_Acute . #\Latin_Small_Letter_N_With_Acute)
+          (#\Latin_Capital_Letter_N_With_Acute . #\Latin_Small_Letter_N_With_Acute)
           
-                (#\Latin_Capital_Letter_N_With_Cedilla . #\Latin_Small_Letter_N_With_Cedilla)
+          (#\Latin_Capital_Letter_N_With_Cedilla . #\Latin_Small_Letter_N_With_Cedilla)
           
-                (#\Latin_Capital_Letter_N_With_Caron . #\Latin_Small_Letter_N_With_Caron)
+          (#\Latin_Capital_Letter_N_With_Caron . #\Latin_Small_Letter_N_With_Caron)
           
-                (#\Latin_Capital_Letter_Eng . #\Latin_Small_Letter_Eng)
+          (#\Latin_Capital_Letter_Eng . #\Latin_Small_Letter_Eng)
           
-                (#\Latin_Capital_Letter_O_With_Macron . #\Latin_Small_Letter_O_With_Macron)
+          (#\Latin_Capital_Letter_O_With_Macron . #\Latin_Small_Letter_O_With_Macron)
           
-                (#\Latin_Capital_Letter_O_With_Breve . #\Latin_Small_Letter_O_With_Breve)
+          (#\Latin_Capital_Letter_O_With_Breve . #\Latin_Small_Letter_O_With_Breve)
           
-                (#\Latin_Capital_Letter_O_With_Double_Acute
-                 . #\Latin_Small_Letter_O_With_Double_Acute)
+          (#\Latin_Capital_Letter_O_With_Double_Acute
+           . #\Latin_Small_Letter_O_With_Double_Acute)
           
-                (#\Latin_Capital_Ligature_Oe . #\Latin_Small_Ligature_Oe)
+          (#\Latin_Capital_Ligature_Oe . #\Latin_Small_Ligature_Oe)
           
-                (#\Latin_Capital_Letter_R_With_Acute . #\Latin_Small_Letter_R_With_Acute)
+          (#\Latin_Capital_Letter_R_With_Acute . #\Latin_Small_Letter_R_With_Acute)
           
-                (#\Latin_Capital_Letter_R_With_Cedilla . #\Latin_Small_Letter_R_With_Cedilla)
+          (#\Latin_Capital_Letter_R_With_Cedilla . #\Latin_Small_Letter_R_With_Cedilla)
           
-                (#\Latin_Capital_Letter_R_With_Caron . #\Latin_Small_Letter_R_With_Caron)
+          (#\Latin_Capital_Letter_R_With_Caron . #\Latin_Small_Letter_R_With_Caron)
           
-                (#\Latin_Capital_Letter_S_With_Acute . #\Latin_Small_Letter_S_With_Acute)
+          (#\Latin_Capital_Letter_S_With_Acute . #\Latin_Small_Letter_S_With_Acute)
           
-                (#\Latin_Capital_Letter_S_With_Circumflex
-                 . #\Latin_Small_Letter_S_With_Circumflex)
+          (#\Latin_Capital_Letter_S_With_Circumflex
+           . #\Latin_Small_Letter_S_With_Circumflex)
           
-                (#\Latin_Capital_Letter_S_With_Cedilla . #\Latin_Small_Letter_S_With_Cedilla)
+          (#\Latin_Capital_Letter_S_With_Cedilla . #\Latin_Small_Letter_S_With_Cedilla)
           
-                (#\Latin_Capital_Letter_S_With_Caron . #\Latin_Small_Letter_S_With_Caron)
+          (#\Latin_Capital_Letter_S_With_Caron . #\Latin_Small_Letter_S_With_Caron)
           
-                (#\Latin_Capital_Letter_T_With_Cedilla . #\Latin_Small_Letter_T_With_Cedilla)
+          (#\Latin_Capital_Letter_T_With_Cedilla . #\Latin_Small_Letter_T_With_Cedilla)
           
-                (#\Latin_Capital_Letter_T_With_Caron . #\Latin_Small_Letter_T_With_Caron)
+          (#\Latin_Capital_Letter_T_With_Caron . #\Latin_Small_Letter_T_With_Caron)
           
-                (#\Latin_Capital_Letter_T_With_Stroke . #\Latin_Small_Letter_T_With_Stroke)
+          (#\Latin_Capital_Letter_T_With_Stroke . #\Latin_Small_Letter_T_With_Stroke)
           
-                (#\Latin_Capital_Letter_U_With_Tilde . #\Latin_Small_Letter_U_With_Tilde)
+          (#\Latin_Capital_Letter_U_With_Tilde . #\Latin_Small_Letter_U_With_Tilde)
           
-                (#\Latin_Capital_Letter_U_With_Macron . #\Latin_Small_Letter_U_With_Macron)
+          (#\Latin_Capital_Letter_U_With_Macron . #\Latin_Small_Letter_U_With_Macron)
           
-                (#\Latin_Capital_Letter_U_With_Breve . #\Latin_Small_Letter_U_With_Breve)
+          (#\Latin_Capital_Letter_U_With_Breve . #\Latin_Small_Letter_U_With_Breve)
           
-                (#\Latin_Capital_Letter_U_With_Ring_Above
-                 . #\Latin_Small_Letter_U_With_Ring_Above)
+          (#\Latin_Capital_Letter_U_With_Ring_Above
+           . #\Latin_Small_Letter_U_With_Ring_Above)
           
-                (#\Latin_Capital_Letter_U_With_Double_Acute
-                 . #\Latin_Small_Letter_U_With_Double_Acute)
+          (#\Latin_Capital_Letter_U_With_Double_Acute
+           . #\Latin_Small_Letter_U_With_Double_Acute)
           
-                (#\Latin_Capital_Letter_U_With_Ogonek . #\Latin_Small_Letter_U_With_Ogonek)
+          (#\Latin_Capital_Letter_U_With_Ogonek . #\Latin_Small_Letter_U_With_Ogonek)
           
-                (#\Latin_Capital_Letter_W_With_Circumflex
-                 . #\Latin_Small_Letter_W_With_Circumflex)
+          (#\Latin_Capital_Letter_W_With_Circumflex
+           . #\Latin_Small_Letter_W_With_Circumflex)
           
-                (#\Latin_Capital_Letter_Y_With_Circumflex
-                 . #\Latin_Small_Letter_Y_With_Circumflex)
+          (#\Latin_Capital_Letter_Y_With_Circumflex
+           . #\Latin_Small_Letter_Y_With_Circumflex)
           
-                (#\Latin_Capital_Letter_Y_With_Diaeresis
-                 . #\Latin_Small_Letter_Y_With_Diaeresis)
+          (#\Latin_Capital_Letter_Y_With_Diaeresis
+           . #\Latin_Small_Letter_Y_With_Diaeresis)
           
-                (#\Latin_Capital_Letter_Z_With_Acute . #\Latin_Small_Letter_Z_With_Acute)
+          (#\Latin_Capital_Letter_Z_With_Acute . #\Latin_Small_Letter_Z_With_Acute)
           
-                (#\Latin_Capital_Letter_Z_With_Dot_Above
-                 . #\Latin_Small_Letter_Z_With_Dot_Above)
+          (#\Latin_Capital_Letter_Z_With_Dot_Above
+           . #\Latin_Small_Letter_Z_With_Dot_Above)
           
-                (#\Latin_Capital_Letter_Z_With_Caron . #\Latin_Small_Letter_Z_With_Caron)
+          (#\Latin_Capital_Letter_Z_With_Caron . #\Latin_Small_Letter_Z_With_Caron)
           
-                (#\Latin_Capital_Letter_B_With_Hook . #\Latin_Small_Letter_B_With_Hook)
+          (#\Latin_Capital_Letter_B_With_Hook . #\Latin_Small_Letter_B_With_Hook)
           
-                (#\Latin_Capital_Letter_B_With_Topbar . #\Latin_Small_Letter_B_With_Topbar)
+          (#\Latin_Capital_Letter_B_With_Topbar . #\Latin_Small_Letter_B_With_Topbar)
           
-                (#\Latin_Capital_Letter_Tone_Six . #\Latin_Small_Letter_Tone_Six)
+          (#\Latin_Capital_Letter_Tone_Six . #\Latin_Small_Letter_Tone_Six)
           
-                (#\Latin_Capital_Letter_Open_O . #\Latin_Small_Letter_Open_O)
+          (#\Latin_Capital_Letter_Open_O . #\Latin_Small_Letter_Open_O)
           
-                (#\Latin_Capital_Letter_C_With_Hook . #\Latin_Small_Letter_C_With_Hook)
+          (#\Latin_Capital_Letter_C_With_Hook . #\Latin_Small_Letter_C_With_Hook)
           
-                (#\Latin_Capital_Letter_African_D . #\Latin_Small_Letter_D_With_Tail)
+          (#\Latin_Capital_Letter_African_D . #\Latin_Small_Letter_D_With_Tail)
           
-                (#\Latin_Capital_Letter_D_With_Hook . #\Latin_Small_Letter_D_With_Hook)
+          (#\Latin_Capital_Letter_D_With_Hook . #\Latin_Small_Letter_D_With_Hook)
           
-                (#\Latin_Capital_Letter_D_With_Topbar . #\Latin_Small_Letter_D_With_Topbar)
+          (#\Latin_Capital_Letter_D_With_Topbar . #\Latin_Small_Letter_D_With_Topbar)
           
-                (#\Latin_Capital_Letter_Reversed_E . #\Latin_Small_Letter_Turned_E)
+          (#\Latin_Capital_Letter_Reversed_E . #\Latin_Small_Letter_Turned_E)
           
-                (#\Latin_Capital_Letter_Schwa . #\Latin_Small_Letter_Schwa)
+          (#\Latin_Capital_Letter_Schwa . #\Latin_Small_Letter_Schwa)
           
-                (#\Latin_Capital_Letter_Open_E . #\Latin_Small_Letter_Open_E)
+          (#\Latin_Capital_Letter_Open_E . #\Latin_Small_Letter_Open_E)
           
-                (#\Latin_Capital_Letter_F_With_Hook . #\Latin_Small_Letter_F_With_Hook)
+          (#\Latin_Capital_Letter_F_With_Hook . #\Latin_Small_Letter_F_With_Hook)
           
-                (#\Latin_Capital_Letter_G_With_Hook . #\Latin_Small_Letter_G_With_Hook)
+          (#\Latin_Capital_Letter_G_With_Hook . #\Latin_Small_Letter_G_With_Hook)
           
-                (#\Latin_Capital_Letter_Gamma . #\Latin_Small_Letter_Gamma)
+          (#\Latin_Capital_Letter_Gamma . #\Latin_Small_Letter_Gamma)
           
-                (#\Latin_Capital_Letter_Iota . #\Latin_Small_Letter_Iota)
+          (#\Latin_Capital_Letter_Iota . #\Latin_Small_Letter_Iota)
           
-                (#\Latin_Capital_Letter_I_With_Stroke . #\Latin_Small_Letter_I_With_Stroke)
+          (#\Latin_Capital_Letter_I_With_Stroke . #\Latin_Small_Letter_I_With_Stroke)
           
-                (#\Latin_Capital_Letter_K_With_Hook . #\Latin_Small_Letter_K_With_Hook)
+          (#\Latin_Capital_Letter_K_With_Hook . #\Latin_Small_Letter_K_With_Hook)
           
-                (#\Latin_Capital_Letter_Turned_M . #\Latin_Small_Letter_Turned_M)
+          (#\Latin_Capital_Letter_Turned_M . #\Latin_Small_Letter_Turned_M)
           
-                (#\Latin_Capital_Letter_N_With_Left_Hook
-                 . #\Latin_Small_Letter_N_With_Left_Hook)
+          (#\Latin_Capital_Letter_N_With_Left_Hook
+           . #\Latin_Small_Letter_N_With_Left_Hook)
           
-                (#\Latin_Capital_Letter_O_With_Middle_Tilde . #\Latin_Small_Letter_Barred_O)
+          (#\Latin_Capital_Letter_O_With_Middle_Tilde . #\Latin_Small_Letter_Barred_O)
           
-                (#\Latin_Capital_Letter_O_With_Horn . #\Latin_Small_Letter_O_With_Horn)
+          (#\Latin_Capital_Letter_O_With_Horn . #\Latin_Small_Letter_O_With_Horn)
           
-                (#\Latin_Capital_Letter_Oi . #\Latin_Small_Letter_Oi)
+          (#\Latin_Capital_Letter_Oi . #\Latin_Small_Letter_Oi)
           
-                (#\Latin_Capital_Letter_P_With_Hook . #\Latin_Small_Letter_P_With_Hook)
+          (#\Latin_Capital_Letter_P_With_Hook . #\Latin_Small_Letter_P_With_Hook)
           
-                (#\Latin_Letter_Yr . #\Latin_Letter_Small_Capital_R)
+          (#\Latin_Letter_Yr . #\Latin_Letter_Small_Capital_R)
           
-                (#\Latin_Capital_Letter_Tone_Two . #\Latin_Small_Letter_Tone_Two)
+          (#\Latin_Capital_Letter_Tone_Two . #\Latin_Small_Letter_Tone_Two)
           
-                (#\Latin_Capital_Letter_Esh . #\Latin_Small_Letter_Esh)
+          (#\Latin_Capital_Letter_Esh . #\Latin_Small_Letter_Esh)
           
-                (#\Latin_Capital_Letter_T_With_Hook . #\Latin_Small_Letter_T_With_Hook)
+          (#\Latin_Capital_Letter_T_With_Hook . #\Latin_Small_Letter_T_With_Hook)
           
-                (#\Latin_Capital_Letter_T_With_Retroflex_Hook
-                 . #\Latin_Small_Letter_T_With_Retroflex_Hook)
+          (#\Latin_Capital_Letter_T_With_Retroflex_Hook
+           . #\Latin_Small_Letter_T_With_Retroflex_Hook)
           
-                (#\Latin_Capital_Letter_U_With_Horn . #\Latin_Small_Letter_U_With_Horn)
+          (#\Latin_Capital_Letter_U_With_Horn . #\Latin_Small_Letter_U_With_Horn)
           
-                (#\Latin_Capital_Letter_Upsilon . #\Latin_Small_Letter_Upsilon)
+          (#\Latin_Capital_Letter_Upsilon . #\Latin_Small_Letter_Upsilon)
           
-                (#\Latin_Capital_Letter_V_With_Hook . #\Latin_Small_Letter_V_With_Hook)
+          (#\Latin_Capital_Letter_V_With_Hook . #\Latin_Small_Letter_V_With_Hook)
           
-                (#\Latin_Capital_Letter_Y_With_Hook . #\Latin_Small_Letter_Y_With_Hook)
+          (#\Latin_Capital_Letter_Y_With_Hook . #\Latin_Small_Letter_Y_With_Hook)
           
-                (#\Latin_Capital_Letter_Z_With_Stroke . #\Latin_Small_Letter_Z_With_Stroke)
+          (#\Latin_Capital_Letter_Z_With_Stroke . #\Latin_Small_Letter_Z_With_Stroke)
           
-                (#\Latin_Capital_Letter_Ezh . #\Latin_Small_Letter_Ezh)
+          (#\Latin_Capital_Letter_Ezh . #\Latin_Small_Letter_Ezh)
           
-                (#\Latin_Capital_Letter_Ezh_Reversed . #\Latin_Small_Letter_Ezh_Reversed)
+          (#\Latin_Capital_Letter_Ezh_Reversed . #\Latin_Small_Letter_Ezh_Reversed)
           
-                (#\Latin_Capital_Letter_Tone_Five . #\Latin_Small_Letter_Tone_Five)
+          (#\Latin_Capital_Letter_Tone_Five . #\Latin_Small_Letter_Tone_Five)
           
-                (#\Latin_Capital_Letter_Dz_With_Caron . #\Latin_Small_Letter_Dz_With_Caron)
+          (#\Latin_Capital_Letter_Dz_With_Caron . #\Latin_Small_Letter_Dz_With_Caron)
           
-                (#\Latin_Capital_Letter_Lj . #\Latin_Small_Letter_Lj)
+          (#\Latin_Capital_Letter_Lj . #\Latin_Small_Letter_Lj)
           
-                (#\Latin_Capital_Letter_Nj . #\Latin_Small_Letter_Nj)
+          (#\Latin_Capital_Letter_Nj . #\Latin_Small_Letter_Nj)
           
-                (#\Latin_Capital_Letter_A_With_Caron . #\Latin_Small_Letter_A_With_Caron)
+          (#\Latin_Capital_Letter_A_With_Caron . #\Latin_Small_Letter_A_With_Caron)
           
-                (#\Latin_Capital_Letter_I_With_Caron . #\Latin_Small_Letter_I_With_Caron)
+          (#\Latin_Capital_Letter_I_With_Caron . #\Latin_Small_Letter_I_With_Caron)
           
-                (#\Latin_Capital_Letter_O_With_Caron . #\Latin_Small_Letter_O_With_Caron)
+          (#\Latin_Capital_Letter_O_With_Caron . #\Latin_Small_Letter_O_With_Caron)
           
-                (#\Latin_Capital_Letter_U_With_Caron . #\Latin_Small_Letter_U_With_Caron)
+          (#\Latin_Capital_Letter_U_With_Caron . #\Latin_Small_Letter_U_With_Caron)
           
-                (#\Latin_Capital_Letter_U_With_Diaeresis_And_Macron
-                 . #\Latin_Small_Letter_U_With_Diaeresis_And_Macron)
+          (#\Latin_Capital_Letter_U_With_Diaeresis_And_Macron
+           . #\Latin_Small_Letter_U_With_Diaeresis_And_Macron)
           
-                (#\Latin_Capital_Letter_U_With_Diaeresis_And_Acute
-                 . #\Latin_Small_Letter_U_With_Diaeresis_And_Acute)
+          (#\Latin_Capital_Letter_U_With_Diaeresis_And_Acute
+           . #\Latin_Small_Letter_U_With_Diaeresis_And_Acute)
           
-                (#\Latin_Capital_Letter_U_With_Diaeresis_And_Caron
-                 . #\Latin_Small_Letter_U_With_Diaeresis_And_Caron)
+          (#\Latin_Capital_Letter_U_With_Diaeresis_And_Caron
+           . #\Latin_Small_Letter_U_With_Diaeresis_And_Caron)
           
-                (#\Latin_Capital_Letter_U_With_Diaeresis_And_Grave
-                 . #\Latin_Small_Letter_U_With_Diaeresis_And_Grave)
+          (#\Latin_Capital_Letter_U_With_Diaeresis_And_Grave
+           . #\Latin_Small_Letter_U_With_Diaeresis_And_Grave)
           
-                (#\Latin_Capital_Letter_A_With_Diaeresis_And_Macron
-                 . #\Latin_Small_Letter_A_With_Diaeresis_And_Macron)
+          (#\Latin_Capital_Letter_A_With_Diaeresis_And_Macron
+           . #\Latin_Small_Letter_A_With_Diaeresis_And_Macron)
           
-                (#\Latin_Capital_Letter_A_With_Dot_Above_And_Macron
-                 . #\Latin_Small_Letter_A_With_Dot_Above_And_Macron)
+          (#\Latin_Capital_Letter_A_With_Dot_Above_And_Macron
+           . #\Latin_Small_Letter_A_With_Dot_Above_And_Macron)
           
-                (#\Latin_Capital_Letter_Ae_With_Macron . #\Latin_Small_Letter_Ae_With_Macron)
+          (#\Latin_Capital_Letter_Ae_With_Macron . #\Latin_Small_Letter_Ae_With_Macron)
           
-                (#\Latin_Capital_Letter_G_With_Stroke . #\Latin_Small_Letter_G_With_Stroke)
+          (#\Latin_Capital_Letter_G_With_Stroke . #\Latin_Small_Letter_G_With_Stroke)
           
-                (#\Latin_Capital_Letter_G_With_Caron . #\Latin_Small_Letter_G_With_Caron)
+          (#\Latin_Capital_Letter_G_With_Caron . #\Latin_Small_Letter_G_With_Caron)
           
-                (#\Latin_Capital_Letter_K_With_Caron . #\Latin_Small_Letter_K_With_Caron)
+          (#\Latin_Capital_Letter_K_With_Caron . #\Latin_Small_Letter_K_With_Caron)
           
-                (#\Latin_Capital_Letter_O_With_Ogonek . #\Latin_Small_Letter_O_With_Ogonek)
+          (#\Latin_Capital_Letter_O_With_Ogonek . #\Latin_Small_Letter_O_With_Ogonek)
           
-                (#\Latin_Capital_Letter_O_With_Ogonek_And_Macron
-                 . #\Latin_Small_Letter_O_With_Ogonek_And_Macron)
+          (#\Latin_Capital_Letter_O_With_Ogonek_And_Macron
+           . #\Latin_Small_Letter_O_With_Ogonek_And_Macron)
           
-                (#\Latin_Capital_Letter_Ezh_With_Caron . #\Latin_Small_Letter_Ezh_With_Caron)
+          (#\Latin_Capital_Letter_Ezh_With_Caron . #\Latin_Small_Letter_Ezh_With_Caron)
           
-                (#\Latin_Capital_Letter_Dz . #\Latin_Small_Letter_Dz)
+          (#\Latin_Capital_Letter_Dz . #\Latin_Small_Letter_Dz)
           
-                (#\Latin_Capital_Letter_G_With_Acute . #\Latin_Small_Letter_G_With_Acute)
+          (#\Latin_Capital_Letter_G_With_Acute . #\Latin_Small_Letter_G_With_Acute)
           
-                (#\Latin_Capital_Letter_Hwair . #\Latin_Small_Letter_Hv)
+          (#\Latin_Capital_Letter_Hwair . #\Latin_Small_Letter_Hv)
           
-                (#\Latin_Capital_Letter_Wynn . #\Latin_Letter_Wynn)
+          (#\Latin_Capital_Letter_Wynn . #\Latin_Letter_Wynn)
           
-                (#\Latin_Capital_Letter_N_With_Grave . #\Latin_Small_Letter_N_With_Grave)
+          (#\Latin_Capital_Letter_N_With_Grave . #\Latin_Small_Letter_N_With_Grave)
           
-                (#\Latin_Capital_Letter_A_With_Ring_Above_And_Acute
-                 . #\Latin_Small_Letter_A_With_Ring_Above_And_Acute)
+          (#\Latin_Capital_Letter_A_With_Ring_Above_And_Acute
+           . #\Latin_Small_Letter_A_With_Ring_Above_And_Acute)
           
-                (#\Latin_Capital_Letter_Ae_With_Acute . #\Latin_Small_Letter_Ae_With_Acute)
+          (#\Latin_Capital_Letter_Ae_With_Acute . #\Latin_Small_Letter_Ae_With_Acute)
           
-                (#\Latin_Capital_Letter_O_With_Stroke_And_Acute
-                 . #\Latin_Small_Letter_O_With_Stroke_And_Acute)
+          (#\Latin_Capital_Letter_O_With_Stroke_And_Acute
+           . #\Latin_Small_Letter_O_With_Stroke_And_Acute)
           
-                (#\Latin_Capital_Letter_A_With_Double_Grave
-                 . #\Latin_Small_Letter_A_With_Double_Grave)
+          (#\Latin_Capital_Letter_A_With_Double_Grave
+           . #\Latin_Small_Letter_A_With_Double_Grave)
           
-                (#\Latin_Capital_Letter_A_With_Inverted_Breve
-                 . #\Latin_Small_Letter_A_With_Inverted_Breve)
+          (#\Latin_Capital_Letter_A_With_Inverted_Breve
+           . #\Latin_Small_Letter_A_With_Inverted_Breve)
           
-                (#\Latin_Capital_Letter_E_With_Double_Grave
-                 . #\Latin_Small_Letter_E_With_Double_Grave)
+          (#\Latin_Capital_Letter_E_With_Double_Grave
+           . #\Latin_Small_Letter_E_With_Double_Grave)
           
-                (#\Latin_Capital_Letter_E_With_Inverted_Breve
-                 . #\Latin_Small_Letter_E_With_Inverted_Breve)
+          (#\Latin_Capital_Letter_E_With_Inverted_Breve
+           . #\Latin_Small_Letter_E_With_Inverted_Breve)
           
-                (#\Latin_Capital_Letter_I_With_Double_Grave
-                 . #\Latin_Small_Letter_I_With_Double_Grave)
+          (#\Latin_Capital_Letter_I_With_Double_Grave
+           . #\Latin_Small_Letter_I_With_Double_Grave)
           
-                (#\Latin_Capital_Letter_I_With_Inverted_Breve
-                 . #\Latin_Small_Letter_I_With_Inverted_Breve)
+          (#\Latin_Capital_Letter_I_With_Inverted_Breve
+           . #\Latin_Small_Letter_I_With_Inverted_Breve)
           
-                (#\Latin_Capital_Letter_O_With_Double_Grave
-                 . #\Latin_Small_Letter_O_With_Double_Grave)
+          (#\Latin_Capital_Letter_O_With_Double_Grave
+           . #\Latin_Small_Letter_O_With_Double_Grave)
           
-                (#\Latin_Capital_Letter_O_With_Inverted_Breve
-                 . #\Latin_Small_Letter_O_With_Inverted_Breve)
+          (#\Latin_Capital_Letter_O_With_Inverted_Breve
+           . #\Latin_Small_Letter_O_With_Inverted_Breve)
           
-                (#\Latin_Capital_Letter_R_With_Double_Grave
-                 . #\Latin_Small_Letter_R_With_Double_Grave)
+          (#\Latin_Capital_Letter_R_With_Double_Grave
+           . #\Latin_Small_Letter_R_With_Double_Grave)
           
-                (#\Latin_Capital_Letter_R_With_Inverted_Breve
-                 . #\Latin_Small_Letter_R_With_Inverted_Breve)
+          (#\Latin_Capital_Letter_R_With_Inverted_Breve
+           . #\Latin_Small_Letter_R_With_Inverted_Breve)
           
-                (#\Latin_Capital_Letter_U_With_Double_Grave
-                 . #\Latin_Small_Letter_U_With_Double_Grave)
+          (#\Latin_Capital_Letter_U_With_Double_Grave
+           . #\Latin_Small_Letter_U_With_Double_Grave)
           
-                (#\Latin_Capital_Letter_U_With_Inverted_Breve
-                 . #\Latin_Small_Letter_U_With_Inverted_Breve)
+          (#\Latin_Capital_Letter_U_With_Inverted_Breve
+           . #\Latin_Small_Letter_U_With_Inverted_Breve)
           
-                (#\Latin_Capital_Letter_S_With_Comma_Below
-                 . #\Latin_Small_Letter_S_With_Comma_Below)
+          (#\Latin_Capital_Letter_S_With_Comma_Below
+           . #\Latin_Small_Letter_S_With_Comma_Below)
           
-                (#\Latin_Capital_Letter_T_With_Comma_Below
-                 . #\Latin_Small_Letter_T_With_Comma_Below)
+          (#\Latin_Capital_Letter_T_With_Comma_Below
+           . #\Latin_Small_Letter_T_With_Comma_Below)
           
-                (#\Latin_Capital_Letter_Yogh . #\Latin_Small_Letter_Yogh)
+          (#\Latin_Capital_Letter_Yogh . #\Latin_Small_Letter_Yogh)
           
-                (#\Latin_Capital_Letter_H_With_Caron . #\Latin_Small_Letter_H_With_Caron)
+          (#\Latin_Capital_Letter_H_With_Caron . #\Latin_Small_Letter_H_With_Caron)
           
-                (#\Latin_Capital_Letter_N_With_Long_Right_Leg
-                 . #\Latin_Small_Letter_N_With_Long_Right_Leg)
+          (#\Latin_Capital_Letter_N_With_Long_Right_Leg
+           . #\Latin_Small_Letter_N_With_Long_Right_Leg)
           
-                (#\Latin_Capital_Letter_Ou . #\Latin_Small_Letter_Ou)
+          (#\Latin_Capital_Letter_Ou . #\Latin_Small_Letter_Ou)
           
-                (#\Latin_Capital_Letter_Z_With_Hook . #\Latin_Small_Letter_Z_With_Hook)
+          (#\Latin_Capital_Letter_Z_With_Hook . #\Latin_Small_Letter_Z_With_Hook)
           
-                (#\Latin_Capital_Letter_A_With_Dot_Above
-                 . #\Latin_Small_Letter_A_With_Dot_Above)
+          (#\Latin_Capital_Letter_A_With_Dot_Above
+           . #\Latin_Small_Letter_A_With_Dot_Above)
           
-                (#\Latin_Capital_Letter_E_With_Cedilla . #\Latin_Small_Letter_E_With_Cedilla)
+          (#\Latin_Capital_Letter_E_With_Cedilla . #\Latin_Small_Letter_E_With_Cedilla)
           
-                (#\Latin_Capital_Letter_O_With_Diaeresis_And_Macron
-                 . #\Latin_Small_Letter_O_With_Diaeresis_And_Macron)
+          (#\Latin_Capital_Letter_O_With_Diaeresis_And_Macron
+           . #\Latin_Small_Letter_O_With_Diaeresis_And_Macron)
           
-                (#\Latin_Capital_Letter_O_With_Tilde_And_Macron
-                 . #\Latin_Small_Letter_O_With_Tilde_And_Macron)
+          (#\Latin_Capital_Letter_O_With_Tilde_And_Macron
+           . #\Latin_Small_Letter_O_With_Tilde_And_Macron)
           
-                (#\Latin_Capital_Letter_O_With_Dot_Above
-                 . #\Latin_Small_Letter_O_With_Dot_Above)
+          (#\Latin_Capital_Letter_O_With_Dot_Above
+           . #\Latin_Small_Letter_O_With_Dot_Above)
           
-                (#\Latin_Capital_Letter_O_With_Dot_Above_And_Macron
-                 . #\Latin_Small_Letter_O_With_Dot_Above_And_Macron)
+          (#\Latin_Capital_Letter_O_With_Dot_Above_And_Macron
+           . #\Latin_Small_Letter_O_With_Dot_Above_And_Macron)
           
-                (#\Latin_Capital_Letter_Y_With_Macron . #\Latin_Small_Letter_Y_With_Macron)
+          (#\Latin_Capital_Letter_Y_With_Macron . #\Latin_Small_Letter_Y_With_Macron)
           
-                (#\Latin_Capital_Letter_A_With_Stroke . #\U+2C65)
+          (#\Latin_Capital_Letter_A_With_Stroke . #\U+2C65)
           
-                (#\Latin_Capital_Letter_C_With_Stroke . #\Latin_Small_Letter_C_With_Stroke)
+          (#\Latin_Capital_Letter_C_With_Stroke . #\Latin_Small_Letter_C_With_Stroke)
           
-                (#\Latin_Capital_Letter_L_With_Bar . #\Latin_Small_Letter_L_With_Bar)
+          (#\Latin_Capital_Letter_L_With_Bar . #\Latin_Small_Letter_L_With_Bar)
           
-                (#\Latin_Capital_Letter_T_With_Diagonal_Stroke . #\U+2C66)
+          (#\Latin_Capital_Letter_T_With_Diagonal_Stroke . #\U+2C66)
           
-                (#\Latin_Capital_Letter_Glottal_Stop . #\Latin_Small_Letter_Glottal_Stop)
+          (#\Latin_Capital_Letter_Glottal_Stop . #\Latin_Small_Letter_Glottal_Stop)
           
-                (#\Latin_Capital_Letter_B_With_Stroke . #\Latin_Small_Letter_B_With_Stroke)
+          (#\Latin_Capital_Letter_B_With_Stroke . #\Latin_Small_Letter_B_With_Stroke)
           
-                (#\Latin_Capital_Letter_U_Bar . #\Latin_Small_Letter_U_Bar)
+          (#\Latin_Capital_Letter_U_Bar . #\Latin_Small_Letter_U_Bar)
           
-                (#\Latin_Capital_Letter_Turned_V . #\Latin_Small_Letter_Turned_V)
+          (#\Latin_Capital_Letter_Turned_V . #\Latin_Small_Letter_Turned_V)
           
-                (#\Latin_Capital_Letter_E_With_Stroke . #\Latin_Small_Letter_E_With_Stroke)
+          (#\Latin_Capital_Letter_E_With_Stroke . #\Latin_Small_Letter_E_With_Stroke)
           
-                (#\Latin_Capital_Letter_J_With_Stroke . #\Latin_Small_Letter_J_With_Stroke)
+          (#\Latin_Capital_Letter_J_With_Stroke . #\Latin_Small_Letter_J_With_Stroke)
           
-                (#\Latin_Capital_Letter_Small_Q_With_Hook_Tail
-                 . #\Latin_Small_Letter_Q_With_Hook_Tail)
+          (#\Latin_Capital_Letter_Small_Q_With_Hook_Tail
+           . #\Latin_Small_Letter_Q_With_Hook_Tail)
           
-                (#\Latin_Capital_Letter_R_With_Stroke . #\Latin_Small_Letter_R_With_Stroke)
+          (#\Latin_Capital_Letter_R_With_Stroke . #\Latin_Small_Letter_R_With_Stroke)
           
-                (#\Latin_Capital_Letter_Y_With_Stroke . #\Latin_Small_Letter_Y_With_Stroke)
+          (#\Latin_Capital_Letter_Y_With_Stroke . #\Latin_Small_Letter_Y_With_Stroke)
           
-                (#\Greek_Capital_Letter_Alpha_With_Tonos
-                 . #\Greek_Small_Letter_Alpha_With_Tonos)
+          (#\Greek_Capital_Letter_Alpha_With_Tonos
+           . #\Greek_Small_Letter_Alpha_With_Tonos)
           
-                (#\Greek_Capital_Letter_Epsilon_With_Tonos
-                 . #\Greek_Small_Letter_Epsilon_With_Tonos)
+          (#\Greek_Capital_Letter_Epsilon_With_Tonos
+           . #\Greek_Small_Letter_Epsilon_With_Tonos)
           
-                (#\Greek_Capital_Letter_Eta_With_Tonos . #\Greek_Small_Letter_Eta_With_Tonos)
+          (#\Greek_Capital_Letter_Eta_With_Tonos . #\Greek_Small_Letter_Eta_With_Tonos)
           
-                (#\Greek_Capital_Letter_Iota_With_Tonos
-                 . #\Greek_Small_Letter_Iota_With_Tonos)
+          (#\Greek_Capital_Letter_Iota_With_Tonos
+           . #\Greek_Small_Letter_Iota_With_Tonos)
           
-                (#\Greek_Capital_Letter_Omicron_With_Tonos
-                 . #\Greek_Small_Letter_Omicron_With_Tonos)
+          (#\Greek_Capital_Letter_Omicron_With_Tonos
+           . #\Greek_Small_Letter_Omicron_With_Tonos)
           
-                (#\Greek_Capital_Letter_Upsilon_With_Tonos
-                 . #\Greek_Small_Letter_Upsilon_With_Tonos)
+          (#\Greek_Capital_Letter_Upsilon_With_Tonos
+           . #\Greek_Small_Letter_Upsilon_With_Tonos)
           
-                (#\Greek_Capital_Letter_Omega_With_Tonos
-                 . #\Greek_Small_Letter_Omega_With_Tonos)
+          (#\Greek_Capital_Letter_Omega_With_Tonos
+           . #\Greek_Small_Letter_Omega_With_Tonos)
           
-                (#\Greek_Capital_Letter_Alpha . #\Greek_Small_Letter_Alpha)
+          (#\Greek_Capital_Letter_Alpha . #\Greek_Small_Letter_Alpha)
           
-                (#\Greek_Capital_Letter_Beta . #\Greek_Small_Letter_Beta)
+          (#\Greek_Capital_Letter_Beta . #\Greek_Small_Letter_Beta)
           
-                (#\Greek_Capital_Letter_Gamma . #\Greek_Small_Letter_Gamma)
+          (#\Greek_Capital_Letter_Gamma . #\Greek_Small_Letter_Gamma)
           
-                (#\Greek_Capital_Letter_Delta . #\Greek_Small_Letter_Delta)
+          (#\Greek_Capital_Letter_Delta . #\Greek_Small_Letter_Delta)
           
-                (#\Greek_Capital_Letter_Epsilon . #\Greek_Small_Letter_Epsilon)
+          (#\Greek_Capital_Letter_Epsilon . #\Greek_Small_Letter_Epsilon)
           
-                (#\Greek_Capital_Letter_Zeta . #\Greek_Small_Letter_Zeta)
+          (#\Greek_Capital_Letter_Zeta . #\Greek_Small_Letter_Zeta)
           
-                (#\Greek_Capital_Letter_Eta . #\Greek_Small_Letter_Eta)
+          (#\Greek_Capital_Letter_Eta . #\Greek_Small_Letter_Eta)
           
-                (#\Greek_Capital_Letter_Theta . #\Greek_Small_Letter_Theta)
+          (#\Greek_Capital_Letter_Theta . #\Greek_Small_Letter_Theta)
           
-                (#\Greek_Capital_Letter_Iota . #\Greek_Small_Letter_Iota)
+          (#\Greek_Capital_Letter_Iota . #\Greek_Small_Letter_Iota)
           
-                (#\Greek_Capital_Letter_Kappa . #\Greek_Small_Letter_Kappa)
+          (#\Greek_Capital_Letter_Kappa . #\Greek_Small_Letter_Kappa)
           
-                (#\Greek_Capital_Letter_Lamda . #\Greek_Small_Letter_Lamda)
+          (#\Greek_Capital_Letter_Lamda . #\Greek_Small_Letter_Lamda)
           
-                (#\Greek_Capital_Letter_Mu . #\Greek_Small_Letter_Mu)
+          (#\Greek_Capital_Letter_Mu . #\Greek_Small_Letter_Mu)
           
-                (#\Greek_Capital_Letter_Nu . #\Greek_Small_Letter_Nu)
+          (#\Greek_Capital_Letter_Nu . #\Greek_Small_Letter_Nu)
           
-                (#\Greek_Capital_Letter_Xi . #\Greek_Small_Letter_Xi)
+          (#\Greek_Capital_Letter_Xi . #\Greek_Small_Letter_Xi)
           
-                (#\Greek_Capital_Letter_Omicron . #\Greek_Small_Letter_Omicron)
+          (#\Greek_Capital_Letter_Omicron . #\Greek_Small_Letter_Omicron)
           
-                (#\Greek_Capital_Letter_Pi . #\Greek_Small_Letter_Pi)
+          (#\Greek_Capital_Letter_Pi . #\Greek_Small_Letter_Pi)
           
-                (#\Greek_Capital_Letter_Rho . #\Greek_Small_Letter_Rho)
+          (#\Greek_Capital_Letter_Rho . #\Greek_Small_Letter_Rho)
           
-                (#\Greek_Capital_Letter_Sigma . #\Greek_Small_Letter_Sigma)
+          (#\Greek_Capital_Letter_Sigma . #\Greek_Small_Letter_Sigma)
           
-                (#\Greek_Capital_Letter_Tau . #\Greek_Small_Letter_Tau)
+          (#\Greek_Capital_Letter_Tau . #\Greek_Small_Letter_Tau)
           
-                (#\Greek_Capital_Letter_Upsilon . #\Greek_Small_Letter_Upsilon)
+          (#\Greek_Capital_Letter_Upsilon . #\Greek_Small_Letter_Upsilon)
           
-                (#\Greek_Capital_Letter_Phi . #\Greek_Small_Letter_Phi)
+          (#\Greek_Capital_Letter_Phi . #\Greek_Small_Letter_Phi)
           
-                (#\Greek_Capital_Letter_Chi . #\Greek_Small_Letter_Chi)
+          (#\Greek_Capital_Letter_Chi . #\Greek_Small_Letter_Chi)
           
-                (#\Greek_Capital_Letter_Psi . #\Greek_Small_Letter_Psi)
+          (#\Greek_Capital_Letter_Psi . #\Greek_Small_Letter_Psi)
           
-                (#\Greek_Capital_Letter_Omega . #\Greek_Small_Letter_Omega)
+          (#\Greek_Capital_Letter_Omega . #\Greek_Small_Letter_Omega)
           
-                (#\Greek_Capital_Letter_Iota_With_Dialytika
-                 . #\Greek_Small_Letter_Iota_With_Dialytika)
+          (#\Greek_Capital_Letter_Iota_With_Dialytika
+           . #\Greek_Small_Letter_Iota_With_Dialytika)
           
-                (#\Greek_Capital_Letter_Upsilon_With_Dialytika
-                 . #\Greek_Small_Letter_Upsilon_With_Dialytika)
+          (#\Greek_Capital_Letter_Upsilon_With_Dialytika
+           . #\Greek_Small_Letter_Upsilon_With_Dialytika)
           
-                (#\Greek_Letter_Archaic_Koppa . #\Greek_Small_Letter_Archaic_Koppa)
+          (#\Greek_Letter_Archaic_Koppa . #\Greek_Small_Letter_Archaic_Koppa)
           
-                (#\Greek_Letter_Stigma . #\Greek_Small_Letter_Stigma)
+          (#\Greek_Letter_Stigma . #\Greek_Small_Letter_Stigma)
           
-                (#\Greek_Letter_Digamma . #\Greek_Small_Letter_Digamma)
+          (#\Greek_Letter_Digamma . #\Greek_Small_Letter_Digamma)
           
-                (#\Greek_Letter_Koppa . #\Greek_Small_Letter_Koppa)
+          (#\Greek_Letter_Koppa . #\Greek_Small_Letter_Koppa)
           
-                (#\Greek_Letter_Sampi . #\Greek_Small_Letter_Sampi)
+          (#\Greek_Letter_Sampi . #\Greek_Small_Letter_Sampi)
           
-                (#\Coptic_Capital_Letter_Shei . #\Coptic_Small_Letter_Shei)
+          (#\Coptic_Capital_Letter_Shei . #\Coptic_Small_Letter_Shei)
           
-                (#\Coptic_Capital_Letter_Fei . #\Coptic_Small_Letter_Fei)
+          (#\Coptic_Capital_Letter_Fei . #\Coptic_Small_Letter_Fei)
           
-                (#\Coptic_Capital_Letter_Khei . #\Coptic_Small_Letter_Khei)
+          (#\Coptic_Capital_Letter_Khei . #\Coptic_Small_Letter_Khei)
           
-                (#\Coptic_Capital_Letter_Hori . #\Coptic_Small_Letter_Hori)
+          (#\Coptic_Capital_Letter_Hori . #\Coptic_Small_Letter_Hori)
           
-                (#\Coptic_Capital_Letter_Gangia . #\Coptic_Small_Letter_Gangia)
+          (#\Coptic_Capital_Letter_Gangia . #\Coptic_Small_Letter_Gangia)
           
-                (#\Coptic_Capital_Letter_Shima . #\Coptic_Small_Letter_Shima)
+          (#\Coptic_Capital_Letter_Shima . #\Coptic_Small_Letter_Shima)
           
-                (#\Coptic_Capital_Letter_Dei . #\Coptic_Small_Letter_Dei)
+          (#\Coptic_Capital_Letter_Dei . #\Coptic_Small_Letter_Dei)
           
-                (#\Greek_Capital_Letter_Sho . #\Greek_Small_Letter_Sho)
+          (#\Greek_Capital_Letter_Sho . #\Greek_Small_Letter_Sho)
           
-                (#\Greek_Capital_Lunate_Sigma_Symbol . #\Greek_Lunate_Sigma_Symbol)
+          (#\Greek_Capital_Lunate_Sigma_Symbol . #\Greek_Lunate_Sigma_Symbol)
           
-                (#\Greek_Capital_Letter_San . #\Greek_Small_Letter_San)
+          (#\Greek_Capital_Letter_San . #\Greek_Small_Letter_San)
           
-                (#\Greek_Capital_Reversed_Lunate_Sigma_Symbol
-                 . #\Greek_Small_Reversed_Lunate_Sigma_Symbol)
+          (#\Greek_Capital_Reversed_Lunate_Sigma_Symbol
+           . #\Greek_Small_Reversed_Lunate_Sigma_Symbol)
           
-                (#\Greek_Capital_Dotted_Lunate_Sigma_Symbol
-                 . #\Greek_Small_Dotted_Lunate_Sigma_Symbol)
+          (#\Greek_Capital_Dotted_Lunate_Sigma_Symbol
+           . #\Greek_Small_Dotted_Lunate_Sigma_Symbol)
           
-                (#\Greek_Capital_Reversed_Dotted_Lunate_Sigma_Symbol
-                 . #\Greek_Small_Reversed_Dotted_Lunate_Sigma_Symbol)
+          (#\Greek_Capital_Reversed_Dotted_Lunate_Sigma_Symbol
+           . #\Greek_Small_Reversed_Dotted_Lunate_Sigma_Symbol)
           
-                (#\Cyrillic_Capital_Letter_Ie_With_Grave
-                 . #\Cyrillic_Small_Letter_Ie_With_Grave)
+          (#\Cyrillic_Capital_Letter_Ie_With_Grave
+           . #\Cyrillic_Small_Letter_Ie_With_Grave)
           
-                (#\Cyrillic_Capital_Letter_Io . #\Cyrillic_Small_Letter_Io)
+          (#\Cyrillic_Capital_Letter_Io . #\Cyrillic_Small_Letter_Io)
           
-                (#\Cyrillic_Capital_Letter_Dje . #\Cyrillic_Small_Letter_Dje)
+          (#\Cyrillic_Capital_Letter_Dje . #\Cyrillic_Small_Letter_Dje)
           
-                (#\Cyrillic_Capital_Letter_Gje . #\Cyrillic_Small_Letter_Gje)
+          (#\Cyrillic_Capital_Letter_Gje . #\Cyrillic_Small_Letter_Gje)
           
-                (#\Cyrillic_Capital_Letter_Ukrainian_Ie
-                 . #\Cyrillic_Small_Letter_Ukrainian_Ie)
+          (#\Cyrillic_Capital_Letter_Ukrainian_Ie
+           . #\Cyrillic_Small_Letter_Ukrainian_Ie)
           
-                (#\Cyrillic_Capital_Letter_Dze . #\Cyrillic_Small_Letter_Dze)
+          (#\Cyrillic_Capital_Letter_Dze . #\Cyrillic_Small_Letter_Dze)
           
-                (#\Cyrillic_Capital_Letter_Byelorussian-Ukrainian_I
-                 . #\Cyrillic_Small_Letter_Byelorussian-Ukrainian_I)
+          (#\Cyrillic_Capital_Letter_Byelorussian-Ukrainian_I
+           . #\Cyrillic_Small_Letter_Byelorussian-Ukrainian_I)
           
-                (#\Cyrillic_Capital_Letter_Yi . #\Cyrillic_Small_Letter_Yi)
+          (#\Cyrillic_Capital_Letter_Yi . #\Cyrillic_Small_Letter_Yi)
           
-                (#\Cyrillic_Capital_Letter_Je . #\Cyrillic_Small_Letter_Je)
+          (#\Cyrillic_Capital_Letter_Je . #\Cyrillic_Small_Letter_Je)
           
-                (#\Cyrillic_Capital_Letter_Lje . #\Cyrillic_Small_Letter_Lje)
+          (#\Cyrillic_Capital_Letter_Lje . #\Cyrillic_Small_Letter_Lje)
           
-                (#\Cyrillic_Capital_Letter_Nje . #\Cyrillic_Small_Letter_Nje)
+          (#\Cyrillic_Capital_Letter_Nje . #\Cyrillic_Small_Letter_Nje)
           
-                (#\Cyrillic_Capital_Letter_Tshe . #\Cyrillic_Small_Letter_Tshe)
+          (#\Cyrillic_Capital_Letter_Tshe . #\Cyrillic_Small_Letter_Tshe)
           
-                (#\Cyrillic_Capital_Letter_Kje . #\Cyrillic_Small_Letter_Kje)
+          (#\Cyrillic_Capital_Letter_Kje . #\Cyrillic_Small_Letter_Kje)
           
-                (#\Cyrillic_Capital_Letter_I_With_Grave
-                 . #\Cyrillic_Small_Letter_I_With_Grave)
+          (#\Cyrillic_Capital_Letter_I_With_Grave
+           . #\Cyrillic_Small_Letter_I_With_Grave)
           
-                (#\Cyrillic_Capital_Letter_Short_U . #\Cyrillic_Small_Letter_Short_U)
+          (#\Cyrillic_Capital_Letter_Short_U . #\Cyrillic_Small_Letter_Short_U)
           
-                (#\Cyrillic_Capital_Letter_Dzhe . #\Cyrillic_Small_Letter_Dzhe)
+          (#\Cyrillic_Capital_Letter_Dzhe . #\Cyrillic_Small_Letter_Dzhe)
           
-                (#\Cyrillic_Capital_Letter_A . #\Cyrillic_Small_Letter_A)
+          (#\Cyrillic_Capital_Letter_A . #\Cyrillic_Small_Letter_A)
           
-                (#\Cyrillic_Capital_Letter_Be . #\Cyrillic_Small_Letter_Be)
+          (#\Cyrillic_Capital_Letter_Be . #\Cyrillic_Small_Letter_Be)
           
-                (#\Cyrillic_Capital_Letter_Ve . #\Cyrillic_Small_Letter_Ve)
+          (#\Cyrillic_Capital_Letter_Ve . #\Cyrillic_Small_Letter_Ve)
           
-                (#\Cyrillic_Capital_Letter_Ghe . #\Cyrillic_Small_Letter_Ghe)
+          (#\Cyrillic_Capital_Letter_Ghe . #\Cyrillic_Small_Letter_Ghe)
           
-                (#\Cyrillic_Capital_Letter_De . #\Cyrillic_Small_Letter_De)
+          (#\Cyrillic_Capital_Letter_De . #\Cyrillic_Small_Letter_De)
           
-                (#\Cyrillic_Capital_Letter_Ie . #\Cyrillic_Small_Letter_Ie)
+          (#\Cyrillic_Capital_Letter_Ie . #\Cyrillic_Small_Letter_Ie)
           
-                (#\Cyrillic_Capital_Letter_Zhe . #\Cyrillic_Small_Letter_Zhe)
+          (#\Cyrillic_Capital_Letter_Zhe . #\Cyrillic_Small_Letter_Zhe)
           
-                (#\Cyrillic_Capital_Letter_Ze . #\Cyrillic_Small_Letter_Ze)
+          (#\Cyrillic_Capital_Letter_Ze . #\Cyrillic_Small_Letter_Ze)
           
-                (#\Cyrillic_Capital_Letter_I . #\Cyrillic_Small_Letter_I)
+          (#\Cyrillic_Capital_Letter_I . #\Cyrillic_Small_Letter_I)
           
-                (#\Cyrillic_Capital_Letter_Short_I . #\Cyrillic_Small_Letter_Short_I)
+          (#\Cyrillic_Capital_Letter_Short_I . #\Cyrillic_Small_Letter_Short_I)
           
-                (#\Cyrillic_Capital_Letter_Ka . #\Cyrillic_Small_Letter_Ka)
+          (#\Cyrillic_Capital_Letter_Ka . #\Cyrillic_Small_Letter_Ka)
           
-                (#\Cyrillic_Capital_Letter_El . #\Cyrillic_Small_Letter_El)
+          (#\Cyrillic_Capital_Letter_El . #\Cyrillic_Small_Letter_El)
           
-                (#\Cyrillic_Capital_Letter_Em . #\Cyrillic_Small_Letter_Em)
+          (#\Cyrillic_Capital_Letter_Em . #\Cyrillic_Small_Letter_Em)
           
-                (#\Cyrillic_Capital_Letter_En . #\Cyrillic_Small_Letter_En)
+          (#\Cyrillic_Capital_Letter_En . #\Cyrillic_Small_Letter_En)
           
-                (#\Cyrillic_Capital_Letter_O . #\Cyrillic_Small_Letter_O)
+          (#\Cyrillic_Capital_Letter_O . #\Cyrillic_Small_Letter_O)
           
-                (#\Cyrillic_Capital_Letter_Pe . #\Cyrillic_Small_Letter_Pe)
+          (#\Cyrillic_Capital_Letter_Pe . #\Cyrillic_Small_Letter_Pe)
           
-                (#\Cyrillic_Capital_Letter_Er . #\Cyrillic_Small_Letter_Er)
+          (#\Cyrillic_Capital_Letter_Er . #\Cyrillic_Small_Letter_Er)
           
-                (#\Cyrillic_Capital_Letter_Es . #\Cyrillic_Small_Letter_Es)
+          (#\Cyrillic_Capital_Letter_Es . #\Cyrillic_Small_Letter_Es)
           
-                (#\Cyrillic_Capital_Letter_Te . #\Cyrillic_Small_Letter_Te)
+          (#\Cyrillic_Capital_Letter_Te . #\Cyrillic_Small_Letter_Te)
           
-                (#\Cyrillic_Capital_Letter_U . #\Cyrillic_Small_Letter_U)
+          (#\Cyrillic_Capital_Letter_U . #\Cyrillic_Small_Letter_U)
           
-                (#\Cyrillic_Capital_Letter_Ef . #\Cyrillic_Small_Letter_Ef)
+          (#\Cyrillic_Capital_Letter_Ef . #\Cyrillic_Small_Letter_Ef)
           
-                (#\Cyrillic_Capital_Letter_Ha . #\Cyrillic_Small_Letter_Ha)
+          (#\Cyrillic_Capital_Letter_Ha . #\Cyrillic_Small_Letter_Ha)
           
-                (#\Cyrillic_Capital_Letter_Tse . #\Cyrillic_Small_Letter_Tse)
+          (#\Cyrillic_Capital_Letter_Tse . #\Cyrillic_Small_Letter_Tse)
           
-                (#\Cyrillic_Capital_Letter_Che . #\Cyrillic_Small_Letter_Che)
+          (#\Cyrillic_Capital_Letter_Che . #\Cyrillic_Small_Letter_Che)
           
-                (#\Cyrillic_Capital_Letter_Sha . #\Cyrillic_Small_Letter_Sha)
+          (#\Cyrillic_Capital_Letter_Sha . #\Cyrillic_Small_Letter_Sha)
           
-                (#\Cyrillic_Capital_Letter_Shcha . #\Cyrillic_Small_Letter_Shcha)
+          (#\Cyrillic_Capital_Letter_Shcha . #\Cyrillic_Small_Letter_Shcha)
           
-                (#\Cyrillic_Capital_Letter_Hard_Sign . #\Cyrillic_Small_Letter_Hard_Sign)
+          (#\Cyrillic_Capital_Letter_Hard_Sign . #\Cyrillic_Small_Letter_Hard_Sign)
           
-                (#\Cyrillic_Capital_Letter_Yeru . #\Cyrillic_Small_Letter_Yeru)
+          (#\Cyrillic_Capital_Letter_Yeru . #\Cyrillic_Small_Letter_Yeru)
           
-                (#\Cyrillic_Capital_Letter_Soft_Sign . #\Cyrillic_Small_Letter_Soft_Sign)
+          (#\Cyrillic_Capital_Letter_Soft_Sign . #\Cyrillic_Small_Letter_Soft_Sign)
           
-                (#\Cyrillic_Capital_Letter_E . #\Cyrillic_Small_Letter_E)
+          (#\Cyrillic_Capital_Letter_E . #\Cyrillic_Small_Letter_E)
           
-                (#\Cyrillic_Capital_Letter_Yu . #\Cyrillic_Small_Letter_Yu)
+          (#\Cyrillic_Capital_Letter_Yu . #\Cyrillic_Small_Letter_Yu)
           
-                (#\Cyrillic_Capital_Letter_Ya . #\Cyrillic_Small_Letter_Ya)
+          (#\Cyrillic_Capital_Letter_Ya . #\Cyrillic_Small_Letter_Ya)
           
-                (#\Cyrillic_Capital_Letter_Omega . #\Cyrillic_Small_Letter_Omega)
+          (#\Cyrillic_Capital_Letter_Omega . #\Cyrillic_Small_Letter_Omega)
           
-                (#\Cyrillic_Capital_Letter_Yat . #\Cyrillic_Small_Letter_Yat)
+          (#\Cyrillic_Capital_Letter_Yat . #\Cyrillic_Small_Letter_Yat)
           
-                (#\Cyrillic_Capital_Letter_Iotified_E . #\Cyrillic_Small_Letter_Iotified_E)
+          (#\Cyrillic_Capital_Letter_Iotified_E . #\Cyrillic_Small_Letter_Iotified_E)
           
-                (#\Cyrillic_Capital_Letter_Little_Yus . #\Cyrillic_Small_Letter_Little_Yus)
+          (#\Cyrillic_Capital_Letter_Little_Yus . #\Cyrillic_Small_Letter_Little_Yus)
           
-                (#\Cyrillic_Capital_Letter_Iotified_Little_Yus
-                 . #\Cyrillic_Small_Letter_Iotified_Little_Yus)
+          (#\Cyrillic_Capital_Letter_Iotified_Little_Yus
+           . #\Cyrillic_Small_Letter_Iotified_Little_Yus)
           
-                (#\Cyrillic_Capital_Letter_Big_Yus . #\Cyrillic_Small_Letter_Big_Yus)
+          (#\Cyrillic_Capital_Letter_Big_Yus . #\Cyrillic_Small_Letter_Big_Yus)
           
-                (#\Cyrillic_Capital_Letter_Iotified_Big_Yus
-                 . #\Cyrillic_Small_Letter_Iotified_Big_Yus)
+          (#\Cyrillic_Capital_Letter_Iotified_Big_Yus
+           . #\Cyrillic_Small_Letter_Iotified_Big_Yus)
           
-                (#\Cyrillic_Capital_Letter_Ksi . #\Cyrillic_Small_Letter_Ksi)
+          (#\Cyrillic_Capital_Letter_Ksi . #\Cyrillic_Small_Letter_Ksi)
           
-                (#\Cyrillic_Capital_Letter_Psi . #\Cyrillic_Small_Letter_Psi)
+          (#\Cyrillic_Capital_Letter_Psi . #\Cyrillic_Small_Letter_Psi)
           
-                (#\Cyrillic_Capital_Letter_Fita . #\Cyrillic_Small_Letter_Fita)
+          (#\Cyrillic_Capital_Letter_Fita . #\Cyrillic_Small_Letter_Fita)
           
-                (#\Cyrillic_Capital_Letter_Izhitsa . #\Cyrillic_Small_Letter_Izhitsa)
+          (#\Cyrillic_Capital_Letter_Izhitsa . #\Cyrillic_Small_Letter_Izhitsa)
           
-                (#\Cyrillic_Capital_Letter_Izhitsa_With_Double_Grave_Accent
-                 . #\Cyrillic_Small_Letter_Izhitsa_With_Double_Grave_Accent)
+          (#\Cyrillic_Capital_Letter_Izhitsa_With_Double_Grave_Accent
+           . #\Cyrillic_Small_Letter_Izhitsa_With_Double_Grave_Accent)
           
-                (#\Cyrillic_Capital_Letter_Uk . #\Cyrillic_Small_Letter_Uk)
+          (#\Cyrillic_Capital_Letter_Uk . #\Cyrillic_Small_Letter_Uk)
           
-                (#\Cyrillic_Capital_Letter_Round_Omega . #\Cyrillic_Small_Letter_Round_Omega)
+          (#\Cyrillic_Capital_Letter_Round_Omega . #\Cyrillic_Small_Letter_Round_Omega)
           
-                (#\Cyrillic_Capital_Letter_Omega_With_Titlo
-                 . #\Cyrillic_Small_Letter_Omega_With_Titlo)
+          (#\Cyrillic_Capital_Letter_Omega_With_Titlo
+           . #\Cyrillic_Small_Letter_Omega_With_Titlo)
           
-                (#\Cyrillic_Capital_Letter_Ot . #\Cyrillic_Small_Letter_Ot)
+          (#\Cyrillic_Capital_Letter_Ot . #\Cyrillic_Small_Letter_Ot)
           
-                (#\Cyrillic_Capital_Letter_Koppa . #\Cyrillic_Small_Letter_Koppa)
+          (#\Cyrillic_Capital_Letter_Koppa . #\Cyrillic_Small_Letter_Koppa)
           
-                (#\Cyrillic_Capital_Letter_Short_I_With_Tail
-                 . #\Cyrillic_Small_Letter_Short_I_With_Tail)
+          (#\Cyrillic_Capital_Letter_Short_I_With_Tail
+           . #\Cyrillic_Small_Letter_Short_I_With_Tail)
           
-                (#\Cyrillic_Capital_Letter_Semisoft_Sign
-                 . #\Cyrillic_Small_Letter_Semisoft_Sign)
+          (#\Cyrillic_Capital_Letter_Semisoft_Sign
+           . #\Cyrillic_Small_Letter_Semisoft_Sign)
           
-                (#\Cyrillic_Capital_Letter_Er_With_Tick
-                 . #\Cyrillic_Small_Letter_Er_With_Tick)
+          (#\Cyrillic_Capital_Letter_Er_With_Tick
+           . #\Cyrillic_Small_Letter_Er_With_Tick)
           
-                (#\Cyrillic_Capital_Letter_Ghe_With_Upturn
-                 . #\Cyrillic_Small_Letter_Ghe_With_Upturn)
+          (#\Cyrillic_Capital_Letter_Ghe_With_Upturn
+           . #\Cyrillic_Small_Letter_Ghe_With_Upturn)
           
-                (#\Cyrillic_Capital_Letter_Ghe_With_Stroke
-                 . #\Cyrillic_Small_Letter_Ghe_With_Stroke)
+          (#\Cyrillic_Capital_Letter_Ghe_With_Stroke
+           . #\Cyrillic_Small_Letter_Ghe_With_Stroke)
           
-                (#\Cyrillic_Capital_Letter_Ghe_With_Middle_Hook
-                 . #\Cyrillic_Small_Letter_Ghe_With_Middle_Hook)
+          (#\Cyrillic_Capital_Letter_Ghe_With_Middle_Hook
+           . #\Cyrillic_Small_Letter_Ghe_With_Middle_Hook)
           
-                (#\Cyrillic_Capital_Letter_Zhe_With_Descender
-                 . #\Cyrillic_Small_Letter_Zhe_With_Descender)
+          (#\Cyrillic_Capital_Letter_Zhe_With_Descender
+           . #\Cyrillic_Small_Letter_Zhe_With_Descender)
           
-                (#\Cyrillic_Capital_Letter_Ze_With_Descender
-                 . #\Cyrillic_Small_Letter_Ze_With_Descender)
+          (#\Cyrillic_Capital_Letter_Ze_With_Descender
+           . #\Cyrillic_Small_Letter_Ze_With_Descender)
           
-                (#\Cyrillic_Capital_Letter_Ka_With_Descender
-                 . #\Cyrillic_Small_Letter_Ka_With_Descender)
+          (#\Cyrillic_Capital_Letter_Ka_With_Descender
+           . #\Cyrillic_Small_Letter_Ka_With_Descender)
           
-                (#\Cyrillic_Capital_Letter_Ka_With_Vertical_Stroke
-                 . #\Cyrillic_Small_Letter_Ka_With_Vertical_Stroke)
+          (#\Cyrillic_Capital_Letter_Ka_With_Vertical_Stroke
+           . #\Cyrillic_Small_Letter_Ka_With_Vertical_Stroke)
           
-                (#\Cyrillic_Capital_Letter_Ka_With_Stroke
-                 . #\Cyrillic_Small_Letter_Ka_With_Stroke)
+          (#\Cyrillic_Capital_Letter_Ka_With_Stroke
+           . #\Cyrillic_Small_Letter_Ka_With_Stroke)
           
-                (#\Cyrillic_Capital_Letter_Bashkir_Ka . #\Cyrillic_Small_Letter_Bashkir_Ka)
+          (#\Cyrillic_Capital_Letter_Bashkir_Ka . #\Cyrillic_Small_Letter_Bashkir_Ka)
           
-                (#\Cyrillic_Capital_Letter_En_With_Descender
-                 . #\Cyrillic_Small_Letter_En_With_Descender)
+          (#\Cyrillic_Capital_Letter_En_With_Descender
+           . #\Cyrillic_Small_Letter_En_With_Descender)
           
-                (#\Cyrillic_Capital_Ligature_En_Ghe . #\Cyrillic_Small_Ligature_En_Ghe)
+          (#\Cyrillic_Capital_Ligature_En_Ghe . #\Cyrillic_Small_Ligature_En_Ghe)
           
-                (#\Cyrillic_Capital_Letter_Pe_With_Middle_Hook
-                 . #\Cyrillic_Small_Letter_Pe_With_Middle_Hook)
+          (#\Cyrillic_Capital_Letter_Pe_With_Middle_Hook
+           . #\Cyrillic_Small_Letter_Pe_With_Middle_Hook)
           
-                (#\Cyrillic_Capital_Letter_Abkhasian_Ha
-                 . #\Cyrillic_Small_Letter_Abkhasian_Ha)
+          (#\Cyrillic_Capital_Letter_Abkhasian_Ha
+           . #\Cyrillic_Small_Letter_Abkhasian_Ha)
           
-                (#\Cyrillic_Capital_Letter_Es_With_Descender
-                 . #\Cyrillic_Small_Letter_Es_With_Descender)
+          (#\Cyrillic_Capital_Letter_Es_With_Descender
+           . #\Cyrillic_Small_Letter_Es_With_Descender)
           
-                (#\Cyrillic_Capital_Letter_Te_With_Descender
-                 . #\Cyrillic_Small_Letter_Te_With_Descender)
+          (#\Cyrillic_Capital_Letter_Te_With_Descender
+           . #\Cyrillic_Small_Letter_Te_With_Descender)
           
-                (#\Cyrillic_Capital_Letter_Straight_U . #\Cyrillic_Small_Letter_Straight_U)
+          (#\Cyrillic_Capital_Letter_Straight_U . #\Cyrillic_Small_Letter_Straight_U)
           
-                (#\Cyrillic_Capital_Letter_Straight_U_With_Stroke
-                 . #\Cyrillic_Small_Letter_Straight_U_With_Stroke)
+          (#\Cyrillic_Capital_Letter_Straight_U_With_Stroke
+           . #\Cyrillic_Small_Letter_Straight_U_With_Stroke)
           
-                (#\Cyrillic_Capital_Letter_Ha_With_Descender
-                 . #\Cyrillic_Small_Letter_Ha_With_Descender)
+          (#\Cyrillic_Capital_Letter_Ha_With_Descender
+           . #\Cyrillic_Small_Letter_Ha_With_Descender)
           
-                (#\Cyrillic_Capital_Ligature_Te_Tse . #\Cyrillic_Small_Ligature_Te_Tse)
+          (#\Cyrillic_Capital_Ligature_Te_Tse . #\Cyrillic_Small_Ligature_Te_Tse)
           
-                (#\Cyrillic_Capital_Letter_Che_With_Descender
-                 . #\Cyrillic_Small_Letter_Che_With_Descender)
+          (#\Cyrillic_Capital_Letter_Che_With_Descender
+           . #\Cyrillic_Small_Letter_Che_With_Descender)
           
-                (#\Cyrillic_Capital_Letter_Che_With_Vertical_Stroke
-                 . #\Cyrillic_Small_Letter_Che_With_Vertical_Stroke)
+          (#\Cyrillic_Capital_Letter_Che_With_Vertical_Stroke
+           . #\Cyrillic_Small_Letter_Che_With_Vertical_Stroke)
           
-                (#\Cyrillic_Capital_Letter_Shha . #\Cyrillic_Small_Letter_Shha)
+          (#\Cyrillic_Capital_Letter_Shha . #\Cyrillic_Small_Letter_Shha)
           
-                (#\Cyrillic_Capital_Letter_Abkhasian_Che
-                 . #\Cyrillic_Small_Letter_Abkhasian_Che)
+          (#\Cyrillic_Capital_Letter_Abkhasian_Che
+           . #\Cyrillic_Small_Letter_Abkhasian_Che)
           
-                (#\Cyrillic_Capital_Letter_Abkhasian_Che_With_Descender
-                 . #\Cyrillic_Small_Letter_Abkhasian_Che_With_Descender)
+          (#\Cyrillic_Capital_Letter_Abkhasian_Che_With_Descender
+           . #\Cyrillic_Small_Letter_Abkhasian_Che_With_Descender)
           
-                (#\Cyrillic_Letter_Palochka . #\Cyrillic_Small_Letter_Palochka)
+          (#\Cyrillic_Letter_Palochka . #\Cyrillic_Small_Letter_Palochka)
           
-                (#\Cyrillic_Capital_Letter_Zhe_With_Breve
-                 . #\Cyrillic_Small_Letter_Zhe_With_Breve)
+          (#\Cyrillic_Capital_Letter_Zhe_With_Breve
+           . #\Cyrillic_Small_Letter_Zhe_With_Breve)
           
-                (#\Cyrillic_Capital_Letter_Ka_With_Hook
-                 . #\Cyrillic_Small_Letter_Ka_With_Hook)
+          (#\Cyrillic_Capital_Letter_Ka_With_Hook
+           . #\Cyrillic_Small_Letter_Ka_With_Hook)
           
-                (#\Cyrillic_Capital_Letter_El_With_Tail
-                 . #\Cyrillic_Small_Letter_El_With_Tail)
+          (#\Cyrillic_Capital_Letter_El_With_Tail
+           . #\Cyrillic_Small_Letter_El_With_Tail)
           
-                (#\Cyrillic_Capital_Letter_En_With_Hook
-                 . #\Cyrillic_Small_Letter_En_With_Hook)
+          (#\Cyrillic_Capital_Letter_En_With_Hook
+           . #\Cyrillic_Small_Letter_En_With_Hook)
           
-                (#\Cyrillic_Capital_Letter_En_With_Tail
-                 . #\Cyrillic_Small_Letter_En_With_Tail)
+          (#\Cyrillic_Capital_Letter_En_With_Tail
+           . #\Cyrillic_Small_Letter_En_With_Tail)
           
-                (#\Cyrillic_Capital_Letter_Khakassian_Che
-                 . #\Cyrillic_Small_Letter_Khakassian_Che)
+          (#\Cyrillic_Capital_Letter_Khakassian_Che
+           . #\Cyrillic_Small_Letter_Khakassian_Che)
           
-                (#\Cyrillic_Capital_Letter_Em_With_Tail
-                 . #\Cyrillic_Small_Letter_Em_With_Tail)
+          (#\Cyrillic_Capital_Letter_Em_With_Tail
+           . #\Cyrillic_Small_Letter_Em_With_Tail)
           
-                (#\Cyrillic_Capital_Letter_A_With_Breve
-                 . #\Cyrillic_Small_Letter_A_With_Breve)
+          (#\Cyrillic_Capital_Letter_A_With_Breve
+           . #\Cyrillic_Small_Letter_A_With_Breve)
           
-                (#\Cyrillic_Capital_Letter_A_With_Diaeresis
-                 . #\Cyrillic_Small_Letter_A_With_Diaeresis)
+          (#\Cyrillic_Capital_Letter_A_With_Diaeresis
+           . #\Cyrillic_Small_Letter_A_With_Diaeresis)
           
-                (#\Cyrillic_Capital_Ligature_A_Ie . #\Cyrillic_Small_Ligature_A_Ie)
+          (#\Cyrillic_Capital_Ligature_A_Ie . #\Cyrillic_Small_Ligature_A_Ie)
           
-                (#\Cyrillic_Capital_Letter_Ie_With_Breve
-                 . #\Cyrillic_Small_Letter_Ie_With_Breve)
+          (#\Cyrillic_Capital_Letter_Ie_With_Breve
+           . #\Cyrillic_Small_Letter_Ie_With_Breve)
           
-                (#\Cyrillic_Capital_Letter_Schwa . #\Cyrillic_Small_Letter_Schwa)
+          (#\Cyrillic_Capital_Letter_Schwa . #\Cyrillic_Small_Letter_Schwa)
           
-                (#\Cyrillic_Capital_Letter_Schwa_With_Diaeresis
-                 . #\Cyrillic_Small_Letter_Schwa_With_Diaeresis)
+          (#\Cyrillic_Capital_Letter_Schwa_With_Diaeresis
+           . #\Cyrillic_Small_Letter_Schwa_With_Diaeresis)
           
-                (#\Cyrillic_Capital_Letter_Zhe_With_Diaeresis
-                 . #\Cyrillic_Small_Letter_Zhe_With_Diaeresis)
+          (#\Cyrillic_Capital_Letter_Zhe_With_Diaeresis
+           . #\Cyrillic_Small_Letter_Zhe_With_Diaeresis)
           
-                (#\Cyrillic_Capital_Letter_Ze_With_Diaeresis
-                 . #\Cyrillic_Small_Letter_Ze_With_Diaeresis)
+          (#\Cyrillic_Capital_Letter_Ze_With_Diaeresis
+           . #\Cyrillic_Small_Letter_Ze_With_Diaeresis)
           
-                (#\Cyrillic_Capital_Letter_Abkhasian_Dze
-                 . #\Cyrillic_Small_Letter_Abkhasian_Dze)
+          (#\Cyrillic_Capital_Letter_Abkhasian_Dze
+           . #\Cyrillic_Small_Letter_Abkhasian_Dze)
           
-                (#\Cyrillic_Capital_Letter_I_With_Macron
-                 . #\Cyrillic_Small_Letter_I_With_Macron)
+          (#\Cyrillic_Capital_Letter_I_With_Macron
+           . #\Cyrillic_Small_Letter_I_With_Macron)
           
-                (#\Cyrillic_Capital_Letter_I_With_Diaeresis
-                 . #\Cyrillic_Small_Letter_I_With_Diaeresis)
+          (#\Cyrillic_Capital_Letter_I_With_Diaeresis
+           . #\Cyrillic_Small_Letter_I_With_Diaeresis)
           
-                (#\Cyrillic_Capital_Letter_O_With_Diaeresis
-                 . #\Cyrillic_Small_Letter_O_With_Diaeresis)
+          (#\Cyrillic_Capital_Letter_O_With_Diaeresis
+           . #\Cyrillic_Small_Letter_O_With_Diaeresis)
           
-                (#\Cyrillic_Capital_Letter_Barred_O . #\Cyrillic_Small_Letter_Barred_O)
+          (#\Cyrillic_Capital_Letter_Barred_O . #\Cyrillic_Small_Letter_Barred_O)
           
-                (#\Cyrillic_Capital_Letter_Barred_O_With_Diaeresis
-                 . #\Cyrillic_Small_Letter_Barred_O_With_Diaeresis)
+          (#\Cyrillic_Capital_Letter_Barred_O_With_Diaeresis
+           . #\Cyrillic_Small_Letter_Barred_O_With_Diaeresis)
           
-                (#\Cyrillic_Capital_Letter_E_With_Diaeresis
-                 . #\Cyrillic_Small_Letter_E_With_Diaeresis)
+          (#\Cyrillic_Capital_Letter_E_With_Diaeresis
+           . #\Cyrillic_Small_Letter_E_With_Diaeresis)
           
-                (#\Cyrillic_Capital_Letter_U_With_Macron
-                 . #\Cyrillic_Small_Letter_U_With_Macron)
+          (#\Cyrillic_Capital_Letter_U_With_Macron
+           . #\Cyrillic_Small_Letter_U_With_Macron)
           
-                (#\Cyrillic_Capital_Letter_U_With_Diaeresis
-                 . #\Cyrillic_Small_Letter_U_With_Diaeresis)
+          (#\Cyrillic_Capital_Letter_U_With_Diaeresis
+           . #\Cyrillic_Small_Letter_U_With_Diaeresis)
           
-                (#\Cyrillic_Capital_Letter_U_With_Double_Acute
-                 . #\Cyrillic_Small_Letter_U_With_Double_Acute)
+          (#\Cyrillic_Capital_Letter_U_With_Double_Acute
+           . #\Cyrillic_Small_Letter_U_With_Double_Acute)
           
-                (#\Cyrillic_Capital_Letter_Che_With_Diaeresis
-                 . #\Cyrillic_Small_Letter_Che_With_Diaeresis)
+          (#\Cyrillic_Capital_Letter_Che_With_Diaeresis
+           . #\Cyrillic_Small_Letter_Che_With_Diaeresis)
           
-                (#\Cyrillic_Capital_Letter_Ghe_With_Descender
-                 . #\Cyrillic_Small_Letter_Ghe_With_Descender)
+          (#\Cyrillic_Capital_Letter_Ghe_With_Descender
+           . #\Cyrillic_Small_Letter_Ghe_With_Descender)
           
-                (#\Cyrillic_Capital_Letter_Yeru_With_Diaeresis
-                 . #\Cyrillic_Small_Letter_Yeru_With_Diaeresis)
+          (#\Cyrillic_Capital_Letter_Yeru_With_Diaeresis
+           . #\Cyrillic_Small_Letter_Yeru_With_Diaeresis)
           
-                (#\Cyrillic_Capital_Letter_Ghe_With_Stroke_And_Hook
-                 . #\Cyrillic_Small_Letter_Ghe_With_Stroke_And_Hook)
+          (#\Cyrillic_Capital_Letter_Ghe_With_Stroke_And_Hook
+           . #\Cyrillic_Small_Letter_Ghe_With_Stroke_And_Hook)
           
-                (#\Cyrillic_Capital_Letter_Ha_With_Hook
-                 . #\Cyrillic_Small_Letter_Ha_With_Hook)
+          (#\Cyrillic_Capital_Letter_Ha_With_Hook
+           . #\Cyrillic_Small_Letter_Ha_With_Hook)
           
-                (#\Cyrillic_Capital_Letter_Ha_With_Stroke
-                 . #\Cyrillic_Small_Letter_Ha_With_Stroke)
+          (#\Cyrillic_Capital_Letter_Ha_With_Stroke
+           . #\Cyrillic_Small_Letter_Ha_With_Stroke)
           
-                (#\Cyrillic_Capital_Letter_Komi_De . #\Cyrillic_Small_Letter_Komi_De)
+          (#\Cyrillic_Capital_Letter_Komi_De . #\Cyrillic_Small_Letter_Komi_De)
           
-                (#\Cyrillic_Capital_Letter_Komi_Dje . #\Cyrillic_Small_Letter_Komi_Dje)
+          (#\Cyrillic_Capital_Letter_Komi_Dje . #\Cyrillic_Small_Letter_Komi_Dje)
           
-                (#\Cyrillic_Capital_Letter_Komi_Zje . #\Cyrillic_Small_Letter_Komi_Zje)
+          (#\Cyrillic_Capital_Letter_Komi_Zje . #\Cyrillic_Small_Letter_Komi_Zje)
           
-                (#\Cyrillic_Capital_Letter_Komi_Dzje . #\Cyrillic_Small_Letter_Komi_Dzje)
+          (#\Cyrillic_Capital_Letter_Komi_Dzje . #\Cyrillic_Small_Letter_Komi_Dzje)
           
-                (#\Cyrillic_Capital_Letter_Komi_Lje . #\Cyrillic_Small_Letter_Komi_Lje)
+          (#\Cyrillic_Capital_Letter_Komi_Lje . #\Cyrillic_Small_Letter_Komi_Lje)
           
-                (#\Cyrillic_Capital_Letter_Komi_Nje . #\Cyrillic_Small_Letter_Komi_Nje)
+          (#\Cyrillic_Capital_Letter_Komi_Nje . #\Cyrillic_Small_Letter_Komi_Nje)
           
-                (#\Cyrillic_Capital_Letter_Komi_Sje . #\Cyrillic_Small_Letter_Komi_Sje)
+          (#\Cyrillic_Capital_Letter_Komi_Sje . #\Cyrillic_Small_Letter_Komi_Sje)
           
-                (#\Cyrillic_Capital_Letter_Komi_Tje . #\Cyrillic_Small_Letter_Komi_Tje)
+          (#\Cyrillic_Capital_Letter_Komi_Tje . #\Cyrillic_Small_Letter_Komi_Tje)
           
-                (#\Cyrillic_Capital_Letter_Reversed_Ze . #\Cyrillic_Small_Letter_Reversed_Ze)
+          (#\Cyrillic_Capital_Letter_Reversed_Ze . #\Cyrillic_Small_Letter_Reversed_Ze)
           
-                (#\Cyrillic_Capital_Letter_El_With_Hook
-                 . #\Cyrillic_Small_Letter_El_With_Hook)
+          (#\Cyrillic_Capital_Letter_El_With_Hook
+           . #\Cyrillic_Small_Letter_El_With_Hook)
           
-                (#\Armenian_Capital_Letter_Ayb . #\Armenian_Small_Letter_Ayb)
+          (#\Armenian_Capital_Letter_Ayb . #\Armenian_Small_Letter_Ayb)
           
-                (#\Armenian_Capital_Letter_Ben . #\Armenian_Small_Letter_Ben)
+          (#\Armenian_Capital_Letter_Ben . #\Armenian_Small_Letter_Ben)
           
-                (#\Armenian_Capital_Letter_Gim . #\Armenian_Small_Letter_Gim)
+          (#\Armenian_Capital_Letter_Gim . #\Armenian_Small_Letter_Gim)
           
-                (#\Armenian_Capital_Letter_Da . #\Armenian_Small_Letter_Da)
+          (#\Armenian_Capital_Letter_Da . #\Armenian_Small_Letter_Da)
           
-                (#\Armenian_Capital_Letter_Ech . #\Armenian_Small_Letter_Ech)
+          (#\Armenian_Capital_Letter_Ech . #\Armenian_Small_Letter_Ech)
           
-                (#\Armenian_Capital_Letter_Za . #\Armenian_Small_Letter_Za)
+          (#\Armenian_Capital_Letter_Za . #\Armenian_Small_Letter_Za)
           
-                (#\Armenian_Capital_Letter_Eh . #\Armenian_Small_Letter_Eh)
+          (#\Armenian_Capital_Letter_Eh . #\Armenian_Small_Letter_Eh)
           
-                (#\Armenian_Capital_Letter_Et . #\Armenian_Small_Letter_Et)
+          (#\Armenian_Capital_Letter_Et . #\Armenian_Small_Letter_Et)
           
-                (#\Armenian_Capital_Letter_To . #\Armenian_Small_Letter_To)
+          (#\Armenian_Capital_Letter_To . #\Armenian_Small_Letter_To)
           
-                (#\Armenian_Capital_Letter_Zhe . #\Armenian_Small_Letter_Zhe)
+          (#\Armenian_Capital_Letter_Zhe . #\Armenian_Small_Letter_Zhe)
           
-                (#\Armenian_Capital_Letter_Ini . #\Armenian_Small_Letter_Ini)
+          (#\Armenian_Capital_Letter_Ini . #\Armenian_Small_Letter_Ini)
           
-                (#\Armenian_Capital_Letter_Liwn . #\Armenian_Small_Letter_Liwn)
+          (#\Armenian_Capital_Letter_Liwn . #\Armenian_Small_Letter_Liwn)
           
-                (#\Armenian_Capital_Letter_Xeh . #\Armenian_Small_Letter_Xeh)
+          (#\Armenian_Capital_Letter_Xeh . #\Armenian_Small_Letter_Xeh)
           
-                (#\Armenian_Capital_Letter_Ca . #\Armenian_Small_Letter_Ca)
+          (#\Armenian_Capital_Letter_Ca . #\Armenian_Small_Letter_Ca)
           
-                (#\Armenian_Capital_Letter_Ken . #\Armenian_Small_Letter_Ken)
+          (#\Armenian_Capital_Letter_Ken . #\Armenian_Small_Letter_Ken)
           
-                (#\Armenian_Capital_Letter_Ho . #\Armenian_Small_Letter_Ho)
+          (#\Armenian_Capital_Letter_Ho . #\Armenian_Small_Letter_Ho)
           
-                (#\Armenian_Capital_Letter_Ja . #\Armenian_Small_Letter_Ja)
+          (#\Armenian_Capital_Letter_Ja . #\Armenian_Small_Letter_Ja)
           
-                (#\Armenian_Capital_Letter_Ghad . #\Armenian_Small_Letter_Ghad)
+          (#\Armenian_Capital_Letter_Ghad . #\Armenian_Small_Letter_Ghad)
           
-                (#\Armenian_Capital_Letter_Cheh . #\Armenian_Small_Letter_Cheh)
+          (#\Armenian_Capital_Letter_Cheh . #\Armenian_Small_Letter_Cheh)
           
-                (#\Armenian_Capital_Letter_Men . #\Armenian_Small_Letter_Men)
+          (#\Armenian_Capital_Letter_Men . #\Armenian_Small_Letter_Men)
           
-                (#\Armenian_Capital_Letter_Yi . #\Armenian_Small_Letter_Yi)
+          (#\Armenian_Capital_Letter_Yi . #\Armenian_Small_Letter_Yi)
           
-                (#\Armenian_Capital_Letter_Now . #\Armenian_Small_Letter_Now)
+          (#\Armenian_Capital_Letter_Now . #\Armenian_Small_Letter_Now)
           
-                (#\Armenian_Capital_Letter_Sha . #\Armenian_Small_Letter_Sha)
+          (#\Armenian_Capital_Letter_Sha . #\Armenian_Small_Letter_Sha)
           
-                (#\Armenian_Capital_Letter_Vo . #\Armenian_Small_Letter_Vo)
+          (#\Armenian_Capital_Letter_Vo . #\Armenian_Small_Letter_Vo)
           
-                (#\Armenian_Capital_Letter_Cha . #\Armenian_Small_Letter_Cha)
+          (#\Armenian_Capital_Letter_Cha . #\Armenian_Small_Letter_Cha)
           
-                (#\Armenian_Capital_Letter_Peh . #\Armenian_Small_Letter_Peh)
+          (#\Armenian_Capital_Letter_Peh . #\Armenian_Small_Letter_Peh)
           
-                (#\Armenian_Capital_Letter_Jheh . #\Armenian_Small_Letter_Jheh)
+          (#\Armenian_Capital_Letter_Jheh . #\Armenian_Small_Letter_Jheh)
           
-                (#\Armenian_Capital_Letter_Ra . #\Armenian_Small_Letter_Ra)
+          (#\Armenian_Capital_Letter_Ra . #\Armenian_Small_Letter_Ra)
           
-                (#\Armenian_Capital_Letter_Seh . #\Armenian_Small_Letter_Seh)
+          (#\Armenian_Capital_Letter_Seh . #\Armenian_Small_Letter_Seh)
           
-                (#\Armenian_Capital_Letter_Vew . #\Armenian_Small_Letter_Vew)
+          (#\Armenian_Capital_Letter_Vew . #\Armenian_Small_Letter_Vew)
           
-                (#\Armenian_Capital_Letter_Tiwn . #\Armenian_Small_Letter_Tiwn)
+          (#\Armenian_Capital_Letter_Tiwn . #\Armenian_Small_Letter_Tiwn)
           
-                (#\Armenian_Capital_Letter_Reh . #\Armenian_Small_Letter_Reh)
+          (#\Armenian_Capital_Letter_Reh . #\Armenian_Small_Letter_Reh)
           
-                (#\Armenian_Capital_Letter_Co . #\Armenian_Small_Letter_Co)
+          (#\Armenian_Capital_Letter_Co . #\Armenian_Small_Letter_Co)
           
-                (#\Armenian_Capital_Letter_Yiwn . #\Armenian_Small_Letter_Yiwn)
+          (#\Armenian_Capital_Letter_Yiwn . #\Armenian_Small_Letter_Yiwn)
           
-                (#\Armenian_Capital_Letter_Piwr . #\Armenian_Small_Letter_Piwr)
+          (#\Armenian_Capital_Letter_Piwr . #\Armenian_Small_Letter_Piwr)
           
-                (#\Armenian_Capital_Letter_Keh . #\Armenian_Small_Letter_Keh)
+          (#\Armenian_Capital_Letter_Keh . #\Armenian_Small_Letter_Keh)
           
-                (#\Armenian_Capital_Letter_Oh . #\Armenian_Small_Letter_Oh)
+          (#\Armenian_Capital_Letter_Oh . #\Armenian_Small_Letter_Oh)
           
-                (#\Armenian_Capital_Letter_Feh . #\Armenian_Small_Letter_Feh)
+          (#\Armenian_Capital_Letter_Feh . #\Armenian_Small_Letter_Feh)
           
-                (#\U+10A0 . #\U+2D00)
+          (#\U+10A0 . #\U+2D00)
           (#\U+10A1 . #\U+2D01)
           (#\U+10A2 . #\U+2D02)
           
-                (#\U+10A3 . #\U+2D03)
+          (#\U+10A3 . #\U+2D03)
           (#\U+10A4 . #\U+2D04)
           (#\U+10A5 . #\U+2D05)
           
-                (#\U+10A6 . #\U+2D06)
+          (#\U+10A6 . #\U+2D06)
           (#\U+10A7 . #\U+2D07)
           (#\U+10A8 . #\U+2D08)
           
-                (#\U+10A9 . #\U+2D09)
+          (#\U+10A9 . #\U+2D09)
           (#\U+10AA . #\U+2D0A)
           (#\U+10AB . #\U+2D0B)
           
-                (#\U+10AC . #\U+2D0C)
+          (#\U+10AC . #\U+2D0C)
           (#\U+10AD . #\U+2D0D)
           (#\U+10AE . #\U+2D0E)
           
-                (#\U+10AF . #\U+2D0F)
+          (#\U+10AF . #\U+2D0F)
           (#\U+10B0 . #\U+2D10)
           (#\U+10B1 . #\U+2D11)
           
-                (#\U+10B2 . #\U+2D12)
+          (#\U+10B2 . #\U+2D12)
           (#\U+10B3 . #\U+2D13)
           (#\U+10B4 . #\U+2D14)
           
-                (#\U+10B5 . #\U+2D15)
+          (#\U+10B5 . #\U+2D15)
           (#\U+10B6 . #\U+2D16)
           (#\U+10B7 . #\U+2D17)
           
-                (#\U+10B8 . #\U+2D18)
+          (#\U+10B8 . #\U+2D18)
           (#\U+10B9 . #\U+2D19)
           (#\U+10BA . #\U+2D1A)
           
-                (#\U+10BB . #\U+2D1B)
+          (#\U+10BB . #\U+2D1B)
           (#\U+10BC . #\U+2D1C)
           (#\U+10BD . #\U+2D1D)
           
-                (#\U+10BE . #\U+2D1E)
+          (#\U+10BE . #\U+2D1E)
           (#\U+10BF . #\U+2D1F)
           (#\U+10C0 . #\U+2D20)
           
-                (#\U+10C1 . #\U+2D21)
+          (#\U+10C1 . #\U+2D21)
           (#\U+10C2 . #\U+2D22)
           (#\U+10C3 . #\U+2D23)
           
-                (#\U+10C4 . #\U+2D24)
+          (#\U+10C4 . #\U+2D24)
           (#\U+10C5 . #\U+2D25)
           (#\U+1E00 . #\U+1E01)
           
-                (#\U+1E02 . #\U+1E03)
+          (#\U+1E02 . #\U+1E03)
           (#\U+1E04 . #\U+1E05)
           (#\U+1E06 . #\U+1E07)
           
-                (#\U+1E08 . #\U+1E09)
+          (#\U+1E08 . #\U+1E09)
           (#\U+1E0A . #\U+1E0B)
           (#\U+1E0C . #\U+1E0D)
           
-                (#\U+1E0E . #\U+1E0F)
+          (#\U+1E0E . #\U+1E0F)
           (#\U+1E10 . #\U+1E11)
           (#\U+1E12 . #\U+1E13)
           
-                (#\U+1E14 . #\U+1E15)
+          (#\U+1E14 . #\U+1E15)
           (#\U+1E16 . #\U+1E17)
           (#\U+1E18 . #\U+1E19)
           
-                (#\U+1E1A . #\U+1E1B)
+          (#\U+1E1A . #\U+1E1B)
           (#\U+1E1C . #\U+1E1D)
           (#\U+1E1E . #\U+1E1F)
           
-                (#\U+1E20 . #\U+1E21)
+          (#\U+1E20 . #\U+1E21)
           (#\U+1E22 . #\U+1E23)
           (#\U+1E24 . #\U+1E25)
           
-                (#\U+1E26 . #\U+1E27)
+          (#\U+1E26 . #\U+1E27)
           (#\U+1E28 . #\U+1E29)
           (#\U+1E2A . #\U+1E2B)
           
-                (#\U+1E2C . #\U+1E2D)
+          (#\U+1E2C . #\U+1E2D)
           (#\U+1E2E . #\U+1E2F)
           (#\U+1E30 . #\U+1E31)
           
-                (#\U+1E32 . #\U+1E33)
+          (#\U+1E32 . #\U+1E33)
           (#\U+1E34 . #\U+1E35)
           (#\U+1E36 . #\U+1E37)
           
-                (#\U+1E38 . #\U+1E39)
+          (#\U+1E38 . #\U+1E39)
           (#\U+1E3A . #\U+1E3B)
           (#\U+1E3C . #\U+1E3D)
           
-                (#\U+1E3E . #\U+1E3F)
+          (#\U+1E3E . #\U+1E3F)
           (#\U+1E40 . #\U+1E41)
           (#\U+1E42 . #\U+1E43)
           
-                (#\U+1E44 . #\U+1E45)
+          (#\U+1E44 . #\U+1E45)
           (#\U+1E46 . #\U+1E47)
           (#\U+1E48 . #\U+1E49)
           
-                (#\U+1E4A . #\U+1E4B)
+          (#\U+1E4A . #\U+1E4B)
           (#\U+1E4C . #\U+1E4D)
           (#\U+1E4E . #\U+1E4F)
           
-                (#\U+1E50 . #\U+1E51)
+          (#\U+1E50 . #\U+1E51)
           (#\U+1E52 . #\U+1E53)
           (#\U+1E54 . #\U+1E55)
           
-                (#\U+1E56 . #\U+1E57)
+          (#\U+1E56 . #\U+1E57)
           (#\U+1E58 . #\U+1E59)
           (#\U+1E5A . #\U+1E5B)
           
-                (#\U+1E5C . #\U+1E5D)
+          (#\U+1E5C . #\U+1E5D)
           (#\U+1E5E . #\U+1E5F)
           (#\U+1E60 . #\U+1E61)
           
-                (#\U+1E62 . #\U+1E63)
+          (#\U+1E62 . #\U+1E63)
           (#\U+1E64 . #\U+1E65)
           (#\U+1E66 . #\U+1E67)
           
-                (#\U+1E68 . #\U+1E69)
+          (#\U+1E68 . #\U+1E69)
           (#\U+1E6A . #\U+1E6B)
           (#\U+1E6C . #\U+1E6D)
           
-                (#\U+1E6E . #\U+1E6F)
+          (#\U+1E6E . #\U+1E6F)
           (#\U+1E70 . #\U+1E71)
           (#\U+1E72 . #\U+1E73)
           
-                (#\U+1E74 . #\U+1E75)
+          (#\U+1E74 . #\U+1E75)
           (#\U+1E76 . #\U+1E77)
           (#\U+1E78 . #\U+1E79)
           
-                (#\U+1E7A . #\U+1E7B)
+          (#\U+1E7A . #\U+1E7B)
           (#\U+1E7C . #\U+1E7D)
           (#\U+1E7E . #\U+1E7F)
           
-                (#\U+1E80 . #\U+1E81)
+          (#\U+1E80 . #\U+1E81)
           (#\U+1E82 . #\U+1E83)
           (#\U+1E84 . #\U+1E85)
           
-                (#\U+1E86 . #\U+1E87)
+          (#\U+1E86 . #\U+1E87)
           (#\U+1E88 . #\U+1E89)
           (#\U+1E8A . #\U+1E8B)
           
-                (#\U+1E8C . #\U+1E8D)
+          (#\U+1E8C . #\U+1E8D)
           (#\U+1E8E . #\U+1E8F)
           (#\U+1E90 . #\U+1E91)
           
-                (#\U+1E92 . #\U+1E93)
+          (#\U+1E92 . #\U+1E93)
           (#\U+1E94 . #\U+1E95)
           (#\U+1EA0 . #\U+1EA1)
           
-                (#\U+1EA2 . #\U+1EA3)
+          (#\U+1EA2 . #\U+1EA3)
           (#\U+1EA4 . #\U+1EA5)
           (#\U+1EA6 . #\U+1EA7)
           
-                (#\U+1EA8 . #\U+1EA9)
+          (#\U+1EA8 . #\U+1EA9)
           (#\U+1EAA . #\U+1EAB)
           (#\U+1EAC . #\U+1EAD)
           
-                (#\U+1EAE . #\U+1EAF)
+          (#\U+1EAE . #\U+1EAF)
           (#\U+1EB0 . #\U+1EB1)
           (#\U+1EB2 . #\U+1EB3)
           
-                (#\U+1EB4 . #\U+1EB5)
+          (#\U+1EB4 . #\U+1EB5)
           (#\U+1EB6 . #\U+1EB7)
           (#\U+1EB8 . #\U+1EB9)
           
-                (#\U+1EBA . #\U+1EBB)
+          (#\U+1EBA . #\U+1EBB)
           (#\U+1EBC . #\U+1EBD)
           (#\U+1EBE . #\U+1EBF)
           
-                (#\U+1EC0 . #\U+1EC1)
+          (#\U+1EC0 . #\U+1EC1)
           (#\U+1EC2 . #\U+1EC3)
           (#\U+1EC4 . #\U+1EC5)
           
-                (#\U+1EC6 . #\U+1EC7)
+          (#\U+1EC6 . #\U+1EC7)
           (#\U+1EC8 . #\U+1EC9)
           (#\U+1ECA . #\U+1ECB)
           
-                (#\U+1ECC . #\U+1ECD)
+          (#\U+1ECC . #\U+1ECD)
           (#\U+1ECE . #\U+1ECF)
           (#\U+1ED0 . #\U+1ED1)
           
-                (#\U+1ED2 . #\U+1ED3)
+          (#\U+1ED2 . #\U+1ED3)
           (#\U+1ED4 . #\U+1ED5)
           (#\U+1ED6 . #\U+1ED7)
           
-                (#\U+1ED8 . #\U+1ED9)
+          (#\U+1ED8 . #\U+1ED9)
           (#\U+1EDA . #\U+1EDB)
           (#\U+1EDC . #\U+1EDD)
           
-                (#\U+1EDE . #\U+1EDF)
+          (#\U+1EDE . #\U+1EDF)
           (#\U+1EE0 . #\U+1EE1)
           (#\U+1EE2 . #\U+1EE3)
           
-                (#\U+1EE4 . #\U+1EE5)
+          (#\U+1EE4 . #\U+1EE5)
           (#\U+1EE6 . #\U+1EE7)
           (#\U+1EE8 . #\U+1EE9)
           
-                (#\U+1EEA . #\U+1EEB)
+          (#\U+1EEA . #\U+1EEB)
           (#\U+1EEC . #\U+1EED)
           (#\U+1EEE . #\U+1EEF)
           
-                (#\U+1EF0 . #\U+1EF1)
+          (#\U+1EF0 . #\U+1EF1)
           (#\U+1EF2 . #\U+1EF3)
           (#\U+1EF4 . #\U+1EF5)
           
-                (#\U+1EF6 . #\U+1EF7)
+          (#\U+1EF6 . #\U+1EF7)
           (#\U+1EF8 . #\U+1EF9)
           (#\U+1F08 . #\U+1F00)
           
-                (#\U+1F09 . #\U+1F01)
+          (#\U+1F09 . #\U+1F01)
           (#\U+1F0A . #\U+1F02)
           (#\U+1F0B . #\U+1F03)
           
-                (#\U+1F0C . #\U+1F04)
+          (#\U+1F0C . #\U+1F04)
           (#\U+1F0D . #\U+1F05)
           (#\U+1F0E . #\U+1F06)
           
-                (#\U+1F0F . #\U+1F07)
+          (#\U+1F0F . #\U+1F07)
           (#\U+1F18 . #\U+1F10)
           (#\U+1F19 . #\U+1F11)
           
-                (#\U+1F1A . #\U+1F12)
+          (#\U+1F1A . #\U+1F12)
           (#\U+1F1B . #\U+1F13)
           (#\U+1F1C . #\U+1F14)
           
-                (#\U+1F1D . #\U+1F15)
+          (#\U+1F1D . #\U+1F15)
           (#\U+1F28 . #\U+1F20)
           (#\U+1F29 . #\U+1F21)
           
-                (#\U+1F2A . #\U+1F22)
+          (#\U+1F2A . #\U+1F22)
           (#\U+1F2B . #\U+1F23)
           (#\U+1F2C . #\U+1F24)
           
-                (#\U+1F2D . #\U+1F25)
+          (#\U+1F2D . #\U+1F25)
           (#\U+1F2E . #\U+1F26)
           (#\U+1F2F . #\U+1F27)
           
-                (#\U+1F38 . #\U+1F30)
+          (#\U+1F38 . #\U+1F30)
           (#\U+1F39 . #\U+1F31)
           (#\U+1F3A . #\U+1F32)
           
-                (#\U+1F3B . #\U+1F33)
+          (#\U+1F3B . #\U+1F33)
           (#\U+1F3C . #\U+1F34)
           (#\U+1F3D . #\U+1F35)
           
-                (#\U+1F3E . #\U+1F36)
+          (#\U+1F3E . #\U+1F36)
           (#\U+1F3F . #\U+1F37)
           (#\U+1F48 . #\U+1F40)
           
-                (#\U+1F49 . #\U+1F41)
+          (#\U+1F49 . #\U+1F41)
           (#\U+1F4A . #\U+1F42)
           (#\U+1F4B . #\U+1F43)
           
-                (#\U+1F4C . #\U+1F44)
+          (#\U+1F4C . #\U+1F44)
           (#\U+1F4D . #\U+1F45)
           (#\U+1F59 . #\U+1F51)
           
-                (#\U+1F5B . #\U+1F53)
+          (#\U+1F5B . #\U+1F53)
           (#\U+1F5D . #\U+1F55)
           (#\U+1F5F . #\U+1F57)
           
-                (#\U+1F68 . #\U+1F60)
+          (#\U+1F68 . #\U+1F60)
           (#\U+1F69 . #\U+1F61)
           (#\U+1F6A . #\U+1F62)
           
-                (#\U+1F6B . #\U+1F63)
+          (#\U+1F6B . #\U+1F63)
           (#\U+1F6C . #\U+1F64)
           (#\U+1F6D . #\U+1F65)
           
-                (#\U+1F6E . #\U+1F66)
+          (#\U+1F6E . #\U+1F66)
           (#\U+1F6F . #\U+1F67)
           (#\U+1F88 . #\U+1F80)
           
-                (#\U+1F89 . #\U+1F81)
+          (#\U+1F89 . #\U+1F81)
           (#\U+1F8A . #\U+1F82)
           (#\U+1F8B . #\U+1F83)
           
-                (#\U+1F8C . #\U+1F84)
+          (#\U+1F8C . #\U+1F84)
           (#\U+1F8D . #\U+1F85)
           (#\U+1F8E . #\U+1F86)
           
-                (#\U+1F8F . #\U+1F87)
+          (#\U+1F8F . #\U+1F87)
           (#\U+1F98 . #\U+1F90)
           (#\U+1F99 . #\U+1F91)
           
-                (#\U+1F9A . #\U+1F92)
+          (#\U+1F9A . #\U+1F92)
           (#\U+1F9B . #\U+1F93)
           (#\U+1F9C . #\U+1F94)
           
-                (#\U+1F9D . #\U+1F95)
+          (#\U+1F9D . #\U+1F95)
           (#\U+1F9E . #\U+1F96)
           (#\U+1F9F . #\U+1F97)
           
-                (#\U+1FA8 . #\U+1FA0)
+          (#\U+1FA8 . #\U+1FA0)
           (#\U+1FA9 . #\U+1FA1)
           (#\U+1FAA . #\U+1FA2)
           
-                (#\U+1FAB . #\U+1FA3)
+          (#\U+1FAB . #\U+1FA3)
           (#\U+1FAC . #\U+1FA4)
           (#\U+1FAD . #\U+1FA5)
           
-                (#\U+1FAE . #\U+1FA6)
+          (#\U+1FAE . #\U+1FA6)
           (#\U+1FAF . #\U+1FA7)
           (#\U+1FB8 . #\U+1FB0)
           
-                (#\U+1FB9 . #\U+1FB1)
+          (#\U+1FB9 . #\U+1FB1)
           (#\U+1FBA . #\U+1F70)
           (#\U+1FBB . #\U+1F71)
           
-                (#\U+1FBC . #\U+1FB3)
+          (#\U+1FBC . #\U+1FB3)
           (#\U+1FC8 . #\U+1F72)
           (#\U+1FC9 . #\U+1F73)
           
-                (#\U+1FCA . #\U+1F74)
+          (#\U+1FCA . #\U+1F74)
           (#\U+1FCB . #\U+1F75)
           (#\U+1FCC . #\U+1FC3)
           
-                (#\U+1FD8 . #\U+1FD0)
+          (#\U+1FD8 . #\U+1FD0)
           (#\U+1FD9 . #\U+1FD1)
           (#\U+1FDA . #\U+1F76)
           
-                (#\U+1FDB . #\U+1F77)
+          (#\U+1FDB . #\U+1F77)
           (#\U+1FE8 . #\U+1FE0)
           (#\U+1FE9 . #\U+1FE1)
           
-                (#\U+1FEA . #\U+1F7A)
+          (#\U+1FEA . #\U+1F7A)
           (#\U+1FEB . #\U+1F7B)
           (#\U+1FEC . #\U+1FE5)
           
-                (#\U+1FF8 . #\U+1F78)
+          (#\U+1FF8 . #\U+1F78)
           (#\U+1FF9 . #\U+1F79)
           (#\U+1FFA . #\U+1F7C)
           
-                (#\U+1FFB . #\U+1F7D)
+          (#\U+1FFB . #\U+1F7D)
           (#\U+1FFC . #\U+1FF3)
           (#\U+2132 . #\U+214E)
           
-                (#\U+2160 . #\U+2170)
+          (#\U+2160 . #\U+2170)
           (#\U+2161 . #\U+2171)
           (#\U+2162 . #\U+2172)
           
-                (#\U+2163 . #\U+2173)
+          (#\U+2163 . #\U+2173)
           (#\U+2164 . #\U+2174)
           (#\U+2165 . #\U+2175)
           
-                (#\U+2166 . #\U+2176)
+          (#\U+2166 . #\U+2176)
           (#\U+2167 . #\U+2177)
           (#\U+2168 . #\U+2178)
           
-                (#\U+2169 . #\U+2179)
+          (#\U+2169 . #\U+2179)
           (#\U+216A . #\U+217A)
           (#\U+216B . #\U+217B)
           
-                (#\U+216C . #\U+217C)
+          (#\U+216C . #\U+217C)
           (#\U+216D . #\U+217D)
           (#\U+216E . #\U+217E)
           
-                (#\U+216F . #\U+217F)
+          (#\U+216F . #\U+217F)
           (#\U+2183 . #\U+2184)
           (#\U+24B6 . #\U+24D0)
           
-                (#\U+24B7 . #\U+24D1)
+          (#\U+24B7 . #\U+24D1)
           (#\U+24B8 . #\U+24D2)
           (#\U+24B9 . #\U+24D3)
           
-                (#\U+24BA . #\U+24D4)
+          (#\U+24BA . #\U+24D4)
           (#\U+24BB . #\U+24D5)
           (#\U+24BC . #\U+24D6)
           
-                (#\U+24BD . #\U+24D7)
+          (#\U+24BD . #\U+24D7)
           (#\U+24BE . #\U+24D8)
           (#\U+24BF . #\U+24D9)
           
-                (#\U+24C0 . #\U+24DA)
+          (#\U+24C0 . #\U+24DA)
           (#\U+24C1 . #\U+24DB)
           (#\U+24C2 . #\U+24DC)
           
-                (#\U+24C3 . #\U+24DD)
+          (#\U+24C3 . #\U+24DD)
           (#\U+24C4 . #\U+24DE)
           (#\U+24C5 . #\U+24DF)
           
-                (#\U+24C6 . #\U+24E0)
+          (#\U+24C6 . #\U+24E0)
           (#\U+24C7 . #\U+24E1)
           (#\U+24C8 . #\U+24E2)
           
-                (#\U+24C9 . #\U+24E3)
+          (#\U+24C9 . #\U+24E3)
           (#\U+24CA . #\U+24E4)
           (#\U+24CB . #\U+24E5)
           
-                (#\U+24CC . #\U+24E6)
+          (#\U+24CC . #\U+24E6)
           (#\U+24CD . #\U+24E7)
           (#\U+24CE . #\U+24E8)
           
-                (#\U+24CF . #\U+24E9)
+          (#\U+24CF . #\U+24E9)
           (#\U+2C00 . #\U+2C30)
           (#\U+2C01 . #\U+2C31)
           
-                (#\U+2C02 . #\U+2C32)
+          (#\U+2C02 . #\U+2C32)
           (#\U+2C03 . #\U+2C33)
           (#\U+2C04 . #\U+2C34)
           
-                (#\U+2C05 . #\U+2C35)
+          (#\U+2C05 . #\U+2C35)
           (#\U+2C06 . #\U+2C36)
           (#\U+2C07 . #\U+2C37)
           
-                (#\U+2C08 . #\U+2C38)
+          (#\U+2C08 . #\U+2C38)
           (#\U+2C09 . #\U+2C39)
           (#\U+2C0A . #\U+2C3A)
           
-                (#\U+2C0B . #\U+2C3B)
+          (#\U+2C0B . #\U+2C3B)
           (#\U+2C0C . #\U+2C3C)
           (#\U+2C0D . #\U+2C3D)
           
-                (#\U+2C0E . #\U+2C3E)
+          (#\U+2C0E . #\U+2C3E)
           (#\U+2C0F . #\U+2C3F)
           (#\U+2C10 . #\U+2C40)
           
-                (#\U+2C11 . #\U+2C41)
+          (#\U+2C11 . #\U+2C41)
           (#\U+2C12 . #\U+2C42)
           (#\U+2C13 . #\U+2C43)
           
-                (#\U+2C14 . #\U+2C44)
+          (#\U+2C14 . #\U+2C44)
           (#\U+2C15 . #\U+2C45)
           (#\U+2C16 . #\U+2C46)
           
-                (#\U+2C17 . #\U+2C47)
+          (#\U+2C17 . #\U+2C47)
           (#\U+2C18 . #\U+2C48)
           (#\U+2C19 . #\U+2C49)
           
-                (#\U+2C1A . #\U+2C4A)
+          (#\U+2C1A . #\U+2C4A)
           (#\U+2C1B . #\U+2C4B)
           (#\U+2C1C . #\U+2C4C)
           
-                (#\U+2C1D . #\U+2C4D)
+          (#\U+2C1D . #\U+2C4D)
           (#\U+2C1E . #\U+2C4E)
           (#\U+2C1F . #\U+2C4F)
           
-                (#\U+2C20 . #\U+2C50)
+          (#\U+2C20 . #\U+2C50)
           (#\U+2C21 . #\U+2C51)
           (#\U+2C22 . #\U+2C52)
           
-                (#\U+2C23 . #\U+2C53)
+          (#\U+2C23 . #\U+2C53)
           (#\U+2C24 . #\U+2C54)
           (#\U+2C25 . #\U+2C55)
           
-                (#\U+2C26 . #\U+2C56)
+          (#\U+2C26 . #\U+2C56)
           (#\U+2C27 . #\U+2C57)
           (#\U+2C28 . #\U+2C58)
           
-                (#\U+2C29 . #\U+2C59)
+          (#\U+2C29 . #\U+2C59)
           (#\U+2C2A . #\U+2C5A)
           (#\U+2C2B . #\U+2C5B)
           
-                (#\U+2C2C . #\U+2C5C)
+          (#\U+2C2C . #\U+2C5C)
           (#\U+2C2D . #\U+2C5D)
           (#\U+2C2E . #\U+2C5E)
           
-                (#\U+2C60 . #\U+2C61)
+          (#\U+2C60 . #\U+2C61)
           (#\U+2C62 . #\Latin_Small_Letter_L_With_Middle_Tilde)
           
-                (#\U+2C63 . #\U+1D7D)
+          (#\U+2C63 . #\U+1D7D)
           (#\U+2C64 . #\Latin_Small_Letter_R_With_Tail)
           
-                (#\U+2C67 . #\U+2C68)
+          (#\U+2C67 . #\U+2C68)
           (#\U+2C69 . #\U+2C6A)
           (#\U+2C6B . #\U+2C6C)
           
-                (#\U+2C75 . #\U+2C76)
+          (#\U+2C75 . #\U+2C76)
           (#\U+2C80 . #\U+2C81)
           (#\U+2C82 . #\U+2C83)
           
-                (#\U+2C84 . #\U+2C85)
+          (#\U+2C84 . #\U+2C85)
           (#\U+2C86 . #\U+2C87)
           (#\U+2C88 . #\U+2C89)
           
-                (#\U+2C8A . #\U+2C8B)
+          (#\U+2C8A . #\U+2C8B)
           (#\U+2C8C . #\U+2C8D)
           (#\U+2C8E . #\U+2C8F)
           
-                (#\U+2C90 . #\U+2C91)
+          (#\U+2C90 . #\U+2C91)
           (#\U+2C92 . #\U+2C93)
           (#\U+2C94 . #\U+2C95)
           
-                (#\U+2C96 . #\U+2C97)
+          (#\U+2C96 . #\U+2C97)
           (#\U+2C98 . #\U+2C99)
           (#\U+2C9A . #\U+2C9B)
           
-                (#\U+2C9C . #\U+2C9D)
+          (#\U+2C9C . #\U+2C9D)
           (#\U+2C9E . #\U+2C9F)
           (#\U+2CA0 . #\U+2CA1)
           
-                (#\U+2CA2 . #\U+2CA3)
+          (#\U+2CA2 . #\U+2CA3)
           (#\U+2CA4 . #\U+2CA5)
           (#\U+2CA6 . #\U+2CA7)
           
-                (#\U+2CA8 . #\U+2CA9)
+          (#\U+2CA8 . #\U+2CA9)
           (#\U+2CAA . #\U+2CAB)
           (#\U+2CAC . #\U+2CAD)
           
-                (#\U+2CAE . #\U+2CAF)
+          (#\U+2CAE . #\U+2CAF)
           (#\U+2CB0 . #\U+2CB1)
           (#\U+2CB2 . #\U+2CB3)
           
-                (#\U+2CB4 . #\U+2CB5)
+          (#\U+2CB4 . #\U+2CB5)
           (#\U+2CB6 . #\U+2CB7)
           (#\U+2CB8 . #\U+2CB9)
           
-                (#\U+2CBA . #\U+2CBB)
+          (#\U+2CBA . #\U+2CBB)
           (#\U+2CBC . #\U+2CBD)
           (#\U+2CBE . #\U+2CBF)
           
-                (#\U+2CC0 . #\U+2CC1)
+          (#\U+2CC0 . #\U+2CC1)
           (#\U+2CC2 . #\U+2CC3)
           (#\U+2CC4 . #\U+2CC5)
           
-                (#\U+2CC6 . #\U+2CC7)
+          (#\U+2CC6 . #\U+2CC7)
           (#\U+2CC8 . #\U+2CC9)
           (#\U+2CCA . #\U+2CCB)
           
-                (#\U+2CCC . #\U+2CCD)
+          (#\U+2CCC . #\U+2CCD)
           (#\U+2CCE . #\U+2CCF)
           (#\U+2CD0 . #\U+2CD1)
           
-                (#\U+2CD2 . #\U+2CD3)
+          (#\U+2CD2 . #\U+2CD3)
           (#\U+2CD4 . #\U+2CD5)
           (#\U+2CD6 . #\U+2CD7)
           
-                (#\U+2CD8 . #\U+2CD9)
+          (#\U+2CD8 . #\U+2CD9)
           (#\U+2CDA . #\U+2CDB)
           (#\U+2CDC . #\U+2CDD)
           
-                (#\U+2CDE . #\U+2CDF)
+          (#\U+2CDE . #\U+2CDF)
           (#\U+2CE0 . #\U+2CE1)
           (#\U+2CE2 . #\U+2CE3)
           
-                (#\U+FF21 . #\U+FF41)
+          (#\U+FF21 . #\U+FF41)
           (#\U+FF22 . #\U+FF42)
           (#\U+FF23 . #\U+FF43)
           
-                (#\U+FF24 . #\U+FF44)
+          (#\U+FF24 . #\U+FF44)
           (#\U+FF25 . #\U+FF45)
           (#\U+FF26 . #\U+FF46)
           
-                (#\U+FF27 . #\U+FF47)
+          (#\U+FF27 . #\U+FF47)
           (#\U+FF28 . #\U+FF48)
           (#\U+FF29 . #\U+FF49)
           
-                (#\U+FF2A . #\U+FF4A)
+          (#\U+FF2A . #\U+FF4A)
           (#\U+FF2B . #\U+FF4B)
           (#\U+FF2C . #\U+FF4C)
           
-                (#\U+FF2D . #\U+FF4D)
+          (#\U+FF2D . #\U+FF4D)
           (#\U+FF2E . #\U+FF4E)
           (#\U+FF2F . #\U+FF4F)
           
-                (#\U+FF30 . #\U+FF50)
+          (#\U+FF30 . #\U+FF50)
           (#\U+FF31 . #\U+FF51)
           (#\U+FF32 . #\U+FF52)
           
-                (#\U+FF33 . #\U+FF53)
+          (#\U+FF33 . #\U+FF53)
           (#\U+FF34 . #\U+FF54)
           (#\U+FF35 . #\U+FF55)
           
-                (#\U+FF36 . #\U+FF56)
+          (#\U+FF36 . #\U+FF56)
           (#\U+FF37 . #\U+FF57)
           (#\U+FF38 . #\U+FF58)
           
-                (#\U+FF39 . #\U+FF59)
+          (#\U+FF39 . #\U+FF59)
           (#\U+FF3A . #\U+FF5A)
           (#\U+10400 . #\U+10428)
           
-                (#\U+10401 . #\U+10429)
+          (#\U+10401 . #\U+10429)
           (#\U+10402 . #\U+1042A)
           (#\U+10403 . #\U+1042B)
           
-                (#\U+10404 . #\U+1042C)
+          (#\U+10404 . #\U+1042C)
           (#\U+10405 . #\U+1042D)
           (#\U+10406 . #\U+1042E)
           
-                (#\U+10407 . #\U+1042F)
+          (#\U+10407 . #\U+1042F)
           (#\U+10408 . #\U+10430)
           (#\U+10409 . #\U+10431)
           
-                (#\U+1040A . #\U+10432)
+          (#\U+1040A . #\U+10432)
           (#\U+1040B . #\U+10433)
           (#\U+1040C . #\U+10434)
           
-                (#\U+1040D . #\U+10435)
+          (#\U+1040D . #\U+10435)
           (#\U+1040E . #\U+10436)
           (#\U+1040F . #\U+10437)
           
-                (#\U+10410 . #\U+10438)
+          (#\U+10410 . #\U+10438)
           (#\U+10411 . #\U+10439)
           (#\U+10412 . #\U+1043A)
           
-                (#\U+10413 . #\U+1043B)
+          (#\U+10413 . #\U+1043B)
           (#\U+10414 . #\U+1043C)
           (#\U+10415 . #\U+1043D)
           
-                (#\U+10416 . #\U+1043E)
+          (#\U+10416 . #\U+1043E)
           (#\U+10417 . #\U+1043F)
           (#\U+10418 . #\U+10440)
           
-                (#\U+10419 . #\U+10441)
+          (#\U+10419 . #\U+10441)
           (#\U+1041A . #\U+10442)
           (#\U+1041B . #\U+10443)
           
-                (#\U+1041C . #\U+10444)
+          (#\U+1041C . #\U+10444)
           (#\U+1041D . #\U+10445)
           (#\U+1041E . #\U+10446)
           
-                (#\U+1041F . #\U+10447)
+          (#\U+1041F . #\U+10447)
           (#\U+10420 . #\U+10448)
           (#\U+10421 . #\U+10449)
           
-                (#\U+10422 . #\U+1044A)
+          (#\U+10422 . #\U+1044A)
           (#\U+10423 . #\U+1044B)
           (#\U+10424 . #\U+1044C)
           
-                (#\U+10425 . #\U+1044D)
+          (#\U+10425 . #\U+1044D)
           (#\U+10426 . #\U+1044E)
           (#\U+10427 . #\U+1044F)
           ))
@@ -2777,23 +2781,23 @@ of 32KBytes in earlier versions.)"
         (setq max-lower lower))))
   (let* ((upper-to-lower (make-array (the fixnum (1+ (the fixnum (char-code max-upper)))) :element-type '(signed-byte 16)))
          (lower-to-upper (make-array (the fixnum (1+ (the fixnum (char-code max-lower)))) :element-type '(signed-byte 16))))
-  (dolist (pair mapping)
-    (destructuring-bind (upper . lower) pair
-      (let* ((upper-code (char-code upper))
-             (lower-code (char-code lower))
-             (diff (- lower-code upper-code)))
-        (declare (type (mod #x110000) upper-code lower-code)
-                 (type (signed-byte 16) diff))
-        (setf (aref upper-to-lower upper-code) diff
-              (aref lower-to-upper lower-code) (the fixnum (- diff))))))
-  (do* ((upper (char-code #\A) (1+ upper))
-        (lower (char-code #\a) (1+ lower)))
-       ((> upper (char-code #\Z)))
-    (setf (aref upper-to-lower upper) (- lower upper)
-          (aref lower-to-upper lower) (- upper lower)))
-  (setq *lower-to-upper* lower-to-upper
-        *upper-to-lower* upper-to-lower)
-  nil))
+    (dolist (pair mapping)
+      (destructuring-bind (upper . lower) pair
+        (let* ((upper-code (char-code upper))
+               (lower-code (char-code lower))
+               (diff (- lower-code upper-code)))
+          (declare (type (mod #x110000) upper-code lower-code)
+                   (type (signed-byte 16) diff))
+          (setf (aref upper-to-lower upper-code) diff
+                (aref lower-to-upper lower-code) (the fixnum (- diff))))))
+    (do* ((upper (char-code #\A) (1+ upper))
+          (lower (char-code #\a) (1+ lower)))
+         ((> upper (char-code #\Z)))
+      (setf (aref upper-to-lower upper) (- lower upper)
+            (aref lower-to-upper lower) (- upper lower)))
+    (setq *lower-to-upper* lower-to-upper
+          *upper-to-lower* upper-to-lower)
+    nil))
 
 (eval-when (:compile-toplevel)
   (declaim (inline %char-code-case-fold)))
@@ -2815,9 +2819,7 @@ of 32KBytes in earlier versions.)"
   (declare (optimize speed))            ; so that %char-code-case-fold inlines
   (code-char (the valid-char-code (%char-code-case-fold (char-code c) *lower-to-upper*))))
 
-(defun %non-standard-char-code-upcase (code)
-  (declare (type (mod #x110000) code))
-  (%char-code-upcase code))
+
 
 
 (defun %char-code-downcase (code)
@@ -2829,32 +2831,6 @@ of 32KBytes in earlier versions.)"
       (locally (declare (optimize (speed 3) (safety 0)))
         (the fixnum (+ code (the (signed-byte 16) (aref table code))))))))
 
-
-(defun %non-standard-upper-case-equivalent (char)
-  (let* ((code (char-code char))
-         (table *lower-to-upper*)
-         (disp 0))
-    (declare (type (mod #x110000) code)
-             (type (simple-array (signed-byte 16) (*)))
-             (type (signed-byte 16) disp))
-    (if (< code (length table))
-      (setq disp (aref table code)))
-    (unless (zerop disp)
-      (code-char (+ code disp)))))
-    
-
-
-(defun %non-standard-lower-case-equivalent (char)
-  (let* ((code (char-code char))
-         (table *upper-to-lower*)
-         (disp 0))
-    (declare (type (mod #x110000) code)
-             (type (simple-array (signed-byte 16) (*)))
-             (type (signed-byte 16) disp))
-    (if (< code (length table))
-      (setq disp (aref table code)))
-    (unless (zerop disp)
-      (code-char (+ code disp)))))
 
 ;;;True for a-z, and maybe other things.
 (defun lower-case-p (c)
@@ -2869,23 +2845,653 @@ of 32KBytes in earlier versions.)"
 
 
 
-;;;True for a-z A-Z, others.
+(defstatic *alpha-char-bits*
+  (let* ((bits (make-array #x2fa1e :element-type 'bit)))
+    (dolist (range '((#x0041 . #x005A)
+                     (#x0061 . #x007A)
+                     #x00AA
+                     #x00B5
+                     #x00BA
+                     (#x00C0 . #x00D6)
+                     (#x00D8 . #x00F6)
+                     (#x00F8 . #x01BA)
+                     #x01BB
+                     (#x01BC . #x01BF)
+                     (#x01C0 . #x01C3)
+                     (#x01C4 . #x0293)
+                     #x0294
+                     (#x0295 . #x02AF)
+                     (#x02B0 . #x02C1)
+                     (#x02C6 . #x02D1)
+                     (#x02E0 . #x02E4)
+                     #x02EC
+                     #x02EE
+                     #x0345
+                     (#x0370 . #x0373)
+                     #x0374
+                     (#x0376 . #x0377)
+                     #x037A
+                     (#x037B . #x037D)
+                     #x0386
+                     (#x0388 . #x038A)
+                     #x038C
+                     (#x038E . #x03A1)
+                     (#x03A3 . #x03F5)
+                     (#x03F7 . #x0481)
+                     (#x048A . #x0523)
+                     (#x0531 . #x0556)
+                     #x0559
+                     (#x0561 . #x0587)
+                     (#x05B0 . #x05BD)
+                     #x05BF
+                     (#x05C1 . #x05C2)
+                     (#x05C4 . #x05C5)
+                     #x05C7
+                     (#x05D0 . #x05EA)
+                     (#x05F0 . #x05F2)
+                     (#x0610 . #x061A)
+                     (#x0621 . #x063F)
+                     #x0640
+                     (#x0641 . #x064A)
+                     (#x064B . #x0657)
+                     (#x0659 . #x065E)
+                     (#x066E . #x066F)
+                     #x0670
+                     (#x0671 . #x06D3)
+                     #x06D5
+                     (#x06D6 . #x06DC)
+                     (#x06E1 . #x06E4)
+                     (#x06E5 . #x06E6)
+                     (#x06E7 . #x06E8)
+                     #x06ED
+                     (#x06EE . #x06EF)
+                     (#x06FA . #x06FC)
+                     #x06FF
+                     #x0710
+                     #x0711
+                     (#x0712 . #x072F)
+                     (#x0730 . #x073F)
+                     (#x074D . #x07A5)
+                     (#x07A6 . #x07B0)
+                     #x07B1
+                     (#x07CA . #x07EA)
+                     (#x07F4 . #x07F5)
+                     #x07FA
+                     (#x0901 . #x0902)
+                     #x0903
+                     (#x0904 . #x0939)
+                     #x093D
+                     (#x093E . #x0940)
+                     (#x0941 . #x0948)
+                     (#x0949 . #x094C)
+                     #x0950
+                     (#x0958 . #x0961)
+                     (#x0962 . #x0963)
+                     #x0971
+                     #x0972
+                     (#x097B . #x097F)
+                     #x0981
+                     (#x0982 . #x0983)
+                     (#x0985 . #x098C)
+                     (#x098F . #x0990)
+                     (#x0993 . #x09A8)
+                     (#x09AA . #x09B0)
+                     #x09B2
+                     (#x09B6 . #x09B9)
+                     #x09BD
+                     (#x09BE . #x09C0)
+                     (#x09C1 . #x09C4)
+                     (#x09C7 . #x09C8)
+                     (#x09CB . #x09CC)
+                     #x09CE
+                     #x09D7
+                     (#x09DC . #x09DD)
+                     (#x09DF . #x09E1)
+                     (#x09E2 . #x09E3)
+                     (#x09F0 . #x09F1)
+                     (#x0A01 . #x0A02)
+                     #x0A03
+                     (#x0A05 . #x0A0A)
+                     (#x0A0F . #x0A10)
+                     (#x0A13 . #x0A28)
+                     (#x0A2A . #x0A30)
+                     (#x0A32 . #x0A33)
+                     (#x0A35 . #x0A36)
+                     (#x0A38 . #x0A39)
+                     (#x0A3E . #x0A40)
+                     (#x0A41 . #x0A42)
+                     (#x0A47 . #x0A48)
+                     (#x0A4B . #x0A4C)
+                     #x0A51
+                     (#x0A59 . #x0A5C)
+                     #x0A5E
+                     (#x0A70 . #x0A71)
+                     (#x0A72 . #x0A74)
+                     #x0A75
+                     (#x0A81 . #x0A82)
+                     #x0A83
+                     (#x0A85 . #x0A8D)
+                     (#x0A8F . #x0A91)
+                     (#x0A93 . #x0AA8)
+                     (#x0AAA . #x0AB0)
+                     (#x0AB2 . #x0AB3)
+                     (#x0AB5 . #x0AB9)
+                     #x0ABD
+                     (#x0ABE . #x0AC0)
+                     (#x0AC1 . #x0AC5)
+                     (#x0AC7 . #x0AC8)
+                     #x0AC9
+                     (#x0ACB . #x0ACC)
+                     #x0AD0
+                     (#x0AE0 . #x0AE1)
+                     (#x0AE2 . #x0AE3)
+                     #x0B01
+                     (#x0B02 . #x0B03)
+                     (#x0B05 . #x0B0C)
+                     (#x0B0F . #x0B10)
+                     (#x0B13 . #x0B28)
+                     (#x0B2A . #x0B30)
+                     (#x0B32 . #x0B33)
+                     (#x0B35 . #x0B39)
+                     #x0B3D
+                     #x0B3E
+                     #x0B3F
+                     #x0B40
+                     (#x0B41 . #x0B44)
+                     (#x0B47 . #x0B48)
+                     (#x0B4B . #x0B4C)
+                     #x0B56
+                     #x0B57
+                     (#x0B5C . #x0B5D)
+                     (#x0B5F . #x0B61)
+                     (#x0B62 . #x0B63)
+                     #x0B71
+                     #x0B82
+                     #x0B83
+                     (#x0B85 . #x0B8A)
+                     (#x0B8E . #x0B90)
+                     (#x0B92 . #x0B95)
+                     (#x0B99 . #x0B9A)
+                     #x0B9C
+                     (#x0B9E . #x0B9F)
+                     (#x0BA3 . #x0BA4)
+                     (#x0BA8 . #x0BAA)
+                     (#x0BAE . #x0BB9)
+                     (#x0BBE . #x0BBF)
+                     #x0BC0
+                     (#x0BC1 . #x0BC2)
+                     (#x0BC6 . #x0BC8)
+                     (#x0BCA . #x0BCC)
+                     #x0BD0
+                     #x0BD7
+                     (#x0C01 . #x0C03)
+                     (#x0C05 . #x0C0C)
+                     (#x0C0E . #x0C10)
+                     (#x0C12 . #x0C28)
+                     (#x0C2A . #x0C33)
+                     (#x0C35 . #x0C39)
+                     #x0C3D
+                     (#x0C3E . #x0C40)
+                     (#x0C41 . #x0C44)
+                     (#x0C46 . #x0C48)
+                     (#x0C4A . #x0C4C)
+                     (#x0C55 . #x0C56)
+                     (#x0C58 . #x0C59)
+                     (#x0C60 . #x0C61)
+                     (#x0C62 . #x0C63)
+                     (#x0C82 . #x0C83)
+                     (#x0C85 . #x0C8C)
+                     (#x0C8E . #x0C90)
+                     (#x0C92 . #x0CA8)
+                     (#x0CAA . #x0CB3)
+                     (#x0CB5 . #x0CB9)
+                     #x0CBD
+                     #x0CBE
+                     #x0CBF
+                     (#x0CC0 . #x0CC4)
+                     #x0CC6
+                     (#x0CC7 . #x0CC8)
+                     (#x0CCA . #x0CCB)
+                     #x0CCC
+                     (#x0CD5 . #x0CD6)
+                     #x0CDE
+                     (#x0CE0 . #x0CE1)
+                     (#x0CE2 . #x0CE3)
+                     (#x0D02 . #x0D03)
+                     (#x0D05 . #x0D0C)
+                     (#x0D0E . #x0D10)
+                     (#x0D12 . #x0D28)
+                     (#x0D2A . #x0D39)
+                     #x0D3D
+                     (#x0D3E . #x0D40)
+                     (#x0D41 . #x0D44)
+                     (#x0D46 . #x0D48)
+                     (#x0D4A . #x0D4C)
+                     #x0D57
+                     (#x0D60 . #x0D61)
+                     (#x0D62 . #x0D63)
+                     (#x0D7A . #x0D7F)
+                     (#x0D82 . #x0D83)
+                     (#x0D85 . #x0D96)
+                     (#x0D9A . #x0DB1)
+                     (#x0DB3 . #x0DBB)
+                     #x0DBD
+                     (#x0DC0 . #x0DC6)
+                     (#x0DCF . #x0DD1)
+                     (#x0DD2 . #x0DD4)
+                     #x0DD6
+                     (#x0DD8 . #x0DDF)
+                     (#x0DF2 . #x0DF3)
+                     (#x0E01 . #x0E30)
+                     #x0E31
+                     (#x0E32 . #x0E33)
+                     (#x0E34 . #x0E3A)
+                     (#x0E40 . #x0E45)
+                     #x0E46
+                     #x0E4D
+                     (#x0E81 . #x0E82)
+                     #x0E84
+                     (#x0E87 . #x0E88)
+                     #x0E8A
+                     #x0E8D
+                     (#x0E94 . #x0E97)
+                     (#x0E99 . #x0E9F)
+                     (#x0EA1 . #x0EA3)
+                     #x0EA5
+                     #x0EA7
+                     (#x0EAA . #x0EAB)
+                     (#x0EAD . #x0EB0)
+                     #x0EB1
+                     (#x0EB2 . #x0EB3)
+                     (#x0EB4 . #x0EB9)
+                     (#x0EBB . #x0EBC)
+                     #x0EBD
+                     (#x0EC0 . #x0EC4)
+                     #x0EC6
+                     #x0ECD
+                     (#x0EDC . #x0EDD)
+                     #x0F00
+                     (#x0F40 . #x0F47)
+                     (#x0F49 . #x0F6C)
+                     (#x0F71 . #x0F7E)
+                     #x0F7F
+                     (#x0F80 . #x0F81)
+                     (#x0F88 . #x0F8B)
+                     (#x0F90 . #x0F97)
+                     (#x0F99 . #x0FBC)
+                     (#x1000 . #x102A)
+                     (#x102B . #x102C)
+                     (#x102D . #x1030)
+                     #x1031
+                     (#x1032 . #x1036)
+                     #x1038
+                     (#x103B . #x103C)
+                     (#x103D . #x103E)
+                     #x103F
+                     (#x1050 . #x1055)
+                     (#x1056 . #x1057)
+                     (#x1058 . #x1059)
+                     (#x105A . #x105D)
+                     (#x105E . #x1060)
+                     #x1061
+                     #x1062
+                     (#x1065 . #x1066)
+                     (#x1067 . #x1068)
+                     (#x106E . #x1070)
+                     (#x1071 . #x1074)
+                     (#x1075 . #x1081)
+                     #x1082
+                     (#x1083 . #x1084)
+                     (#x1085 . #x1086)
+                     #x108E
+                     (#x10A0 . #x10C5)
+                     (#x10D0 . #x10FA)
+                     #x10FC
+                     (#x1100 . #x1159)
+                     (#x115F . #x11A2)
+                     (#x11A8 . #x11F9)
+                     (#x1200 . #x1248)
+                     (#x124A . #x124D)
+                     (#x1250 . #x1256)
+                     #x1258
+                     (#x125A . #x125D)
+                     (#x1260 . #x1288)
+                     (#x128A . #x128D)
+                     (#x1290 . #x12B0)
+                     (#x12B2 . #x12B5)
+                     (#x12B8 . #x12BE)
+                     #x12C0
+                     (#x12C2 . #x12C5)
+                     (#x12C8 . #x12D6)
+                     (#x12D8 . #x1310)
+                     (#x1312 . #x1315)
+                     (#x1318 . #x135A)
+                     #x135F
+                     (#x1380 . #x138F)
+                     (#x13A0 . #x13F4)
+                     (#x1401 . #x166C)
+                     (#x166F . #x1676)
+                     (#x1681 . #x169A)
+                     (#x16A0 . #x16EA)
+                     (#x16EE . #x16F0)
+                     (#x1700 . #x170C)
+                     (#x170E . #x1711)
+                     (#x1712 . #x1713)
+                     (#x1720 . #x1731)
+                     (#x1732 . #x1733)
+                     (#x1740 . #x1751)
+                     (#x1752 . #x1753)
+                     (#x1760 . #x176C)
+                     (#x176E . #x1770)
+                     (#x1772 . #x1773)
+                     (#x1780 . #x17B3)
+                     #x17B6
+                     (#x17B7 . #x17BD)
+                     (#x17BE . #x17C5)
+                     #x17C6
+                     (#x17C7 . #x17C8)
+                     #x17D7
+                     #x17DC
+                     (#x1820 . #x1842)
+                     #x1843
+                     (#x1844 . #x1877)
+                     (#x1880 . #x18A8)
+                     #x18A9
+                     #x18AA
+                     (#x1900 . #x191C)
+                     (#x1920 . #x1922)
+                     (#x1923 . #x1926)
+                     (#x1927 . #x1928)
+                     (#x1929 . #x192B)
+                     (#x1930 . #x1931)
+                     #x1932
+                     (#x1933 . #x1938)
+                     (#x1950 . #x196D)
+                     (#x1970 . #x1974)
+                     (#x1980 . #x19A9)
+                     (#x19B0 . #x19C0)
+                     (#x19C1 . #x19C7)
+                     (#x19C8 . #x19C9)
+                     (#x1A00 . #x1A16)
+                     (#x1A17 . #x1A18)
+                     (#x1A19 . #x1A1B)
+                     (#x1B00 . #x1B03)
+                     #x1B04
+                     (#x1B05 . #x1B33)
+                     #x1B35
+                     (#x1B36 . #x1B3A)
+                     #x1B3B
+                     #x1B3C
+                     (#x1B3D . #x1B41)
+                     #x1B42
+                     #x1B43
+                     (#x1B45 . #x1B4B)
+                     (#x1B80 . #x1B81)
+                     #x1B82
+                     (#x1B83 . #x1BA0)
+                     #x1BA1
+                     (#x1BA2 . #x1BA5)
+                     (#x1BA6 . #x1BA7)
+                     (#x1BA8 . #x1BA9)
+                     (#x1BAE . #x1BAF)
+                     (#x1C00 . #x1C23)
+                     (#x1C24 . #x1C2B)
+                     (#x1C2C . #x1C33)
+                     (#x1C34 . #x1C35)
+                     (#x1C4D . #x1C4F)
+                     (#x1C5A . #x1C77)
+                     (#x1C78 . #x1C7D)
+                     (#x1D00 . #x1D2B)
+                     (#x1D2C . #x1D61)
+                     (#x1D62 . #x1D77)
+                     #x1D78
+                     (#x1D79 . #x1D9A)
+                     (#x1D9B . #x1DBF)
+                     (#x1E00 . #x1F15)
+                     (#x1F18 . #x1F1D)
+                     (#x1F20 . #x1F45)
+                     (#x1F48 . #x1F4D)
+                     (#x1F50 . #x1F57)
+                     #x1F59
+                     #x1F5B
+                     #x1F5D
+                     (#x1F5F . #x1F7D)
+                     (#x1F80 . #x1FB4)
+                     (#x1FB6 . #x1FBC)
+                     #x1FBE
+                     (#x1FC2 . #x1FC4)
+                     (#x1FC6 . #x1FCC)
+                     (#x1FD0 . #x1FD3)
+                     (#x1FD6 . #x1FDB)
+                     (#x1FE0 . #x1FEC)
+                     (#x1FF2 . #x1FF4)
+                     (#x1FF6 . #x1FFC)
+                     #x2071
+                     #x207F
+                     (#x2090 . #x2094)
+                     #x2102
+                     #x2107
+                     (#x210A . #x2113)
+                     #x2115
+                     (#x2119 . #x211D)
+                     #x2124
+                     #x2126
+                     #x2128
+                     (#x212A . #x212D)
+                     (#x212F . #x2134)
+                     (#x2135 . #x2138)
+                     #x2139
+                     (#x213C . #x213F)
+                     (#x2145 . #x2149)
+                     #x214E
+                     (#x2160 . #x2182)
+                     (#x2183 . #x2184)
+                     (#x2185 . #x2188)
+                     (#x24B6 . #x24E9)
+                     (#x2C00 . #x2C2E)
+                     (#x2C30 . #x2C5E)
+                     (#x2C60 . #x2C6F)
+                     (#x2C71 . #x2C7C)
+                     #x2C7D
+                     (#x2C80 . #x2CE4)
+                     (#x2D00 . #x2D25)
+                     (#x2D30 . #x2D65)
+                     #x2D6F
+                     (#x2D80 . #x2D96)
+                     (#x2DA0 . #x2DA6)
+                     (#x2DA8 . #x2DAE)
+                     (#x2DB0 . #x2DB6)
+                     (#x2DB8 . #x2DBE)
+                     (#x2DC0 . #x2DC6)
+                     (#x2DC8 . #x2DCE)
+                     (#x2DD0 . #x2DD6)
+                     (#x2DD8 . #x2DDE)
+                     (#x2DE0 . #x2DFF)
+                     #x2E2F
+                     #x3005
+                     #x3006
+                     #x3007
+                     (#x3021 . #x3029)
+                     (#x3031 . #x3035)
+                     (#x3038 . #x303A)
+                     #x303B
+                     #x303C
+                     (#x3041 . #x3096)
+                     (#x309D . #x309E)
+                     #x309F
+                     (#x30A1 . #x30FA)
+                     (#x30FC . #x30FE)
+                     #x30FF
+                     (#x3105 . #x312D)
+                     (#x3131 . #x318E)
+                     (#x31A0 . #x31B7)
+                     (#x31F0 . #x31FF)
+                     (#x3400 . #x4DB5)
+                     (#x4E00 . #x9FC3)
+                     (#xA000 . #xA014)
+                     #xA015
+                     (#xA016 . #xA48C)
+                     (#xA500 . #xA60B)
+                     #xA60C
+                     (#xA610 . #xA61F)
+                     (#xA62A . #xA62B)
+                     (#xA640 . #xA65F)
+                     (#xA662 . #xA66D)
+                     #xA66E
+                     #xA67F
+                     (#xA680 . #xA697)
+                     (#xA717 . #xA71F)
+                     (#xA722 . #xA76F)
+                     #xA770
+                     (#xA771 . #xA787)
+                     #xA788
+                     (#xA78B . #xA78C)
+                     (#xA7FB . #xA801)
+                     (#xA803 . #xA805)
+                     (#xA807 . #xA80A)
+                     (#xA80C . #xA822)
+                     (#xA823 . #xA824)
+                     (#xA825 . #xA826)
+                     #xA827
+                     (#xA840 . #xA873)
+                     (#xA880 . #xA881)
+                     (#xA882 . #xA8B3)
+                     (#xA8B4 . #xA8C3)
+                     (#xA90A . #xA925)
+                     (#xA926 . #xA92A)
+                     (#xA930 . #xA946)
+                     (#xA947 . #xA951)
+                     #xA952
+                     (#xAA00 . #xAA28)
+                     (#xAA29 . #xAA2E)
+                     (#xAA2F . #xAA30)
+                     (#xAA31 . #xAA32)
+                     (#xAA33 . #xAA34)
+                     (#xAA35 . #xAA36)
+                     (#xAA40 . #xAA42)
+                     #xAA43
+                     (#xAA44 . #xAA4B)
+                     #xAA4C
+                     #xAA4D
+                     (#xAC00 . #xD7A3)
+                     (#xF900 . #xFA2D)
+                     (#xFA30 . #xFA6A)
+                     (#xFA70 . #xFAD9)
+                     (#xFB00 . #xFB06)
+                     (#xFB13 . #xFB17)
+                     #xFB1D
+                     #xFB1E
+                     (#xFB1F . #xFB28)
+                     (#xFB2A . #xFB36)
+                     (#xFB38 . #xFB3C)
+                     #xFB3E
+                     (#xFB40 . #xFB41)
+                     (#xFB43 . #xFB44)
+                     (#xFB46 . #xFBB1)
+                     (#xFBD3 . #xFD3D)
+                     (#xFD50 . #xFD8F)
+                     (#xFD92 . #xFDC7)
+                     (#xFDF0 . #xFDFB)
+                     (#xFE70 . #xFE74)
+                     (#xFE76 . #xFEFC)
+                     (#xFF21 . #xFF3A)
+                     (#xFF41 . #xFF5A)
+                     (#xFF66 . #xFF6F)
+                     #xFF70
+                     (#xFF71 . #xFF9D)
+                     (#xFF9E . #xFF9F)
+                     (#xFFA0 . #xFFBE)
+                     (#xFFC2 . #xFFC7)
+                     (#xFFCA . #xFFCF)
+                     (#xFFD2 . #xFFD7)
+                     (#xFFDA . #xFFDC)
+                     (#x10000 . #x1000B)
+                     (#x1000D . #x10026)
+                     (#x10028 . #x1003A)
+                     (#x1003C . #x1003D)
+                     (#x1003F . #x1004D)
+                     (#x10050 . #x1005D)
+                     (#x10080 . #x100FA)
+                     (#x10140 . #x10174)
+                     (#x10280 . #x1029C)
+                     (#x102A0 . #x102D0)
+                     (#x10300 . #x1031E)
+                     (#x10330 . #x10340)
+                     #x10341
+                     (#x10342 . #x10349)
+                     #x1034A
+                     (#x10380 . #x1039D)
+                     (#x103A0 . #x103C3)
+                     (#x103C8 . #x103CF)
+                     (#x103D1 . #x103D5)
+                     (#x10400 . #x1044F)
+                     (#x10450 . #x1049D)
+                     (#x10800 . #x10805)
+                     #x10808
+                     (#x1080A . #x10835)
+                     (#x10837 . #x10838)
+                     #x1083C
+                     #x1083F
+                     (#x10900 . #x10915)
+                     (#x10920 . #x10939)
+                     #x10A00
+                     (#x10A01 . #x10A03)
+                     (#x10A05 . #x10A06)
+                     (#x10A0C . #x10A0F)
+                     (#x10A10 . #x10A13)
+                     (#x10A15 . #x10A17)
+                     (#x10A19 . #x10A33)
+                     (#x12000 . #x1236E)
+                     (#x12400 . #x12462)
+                     (#x1D400 . #x1D454)
+                     (#x1D456 . #x1D49C)
+                     (#x1D49E . #x1D49F)
+                     #x1D4A2
+                     (#x1D4A5 . #x1D4A6)
+                     (#x1D4A9 . #x1D4AC)
+                     (#x1D4AE . #x1D4B9)
+                     #x1D4BB
+                     (#x1D4BD . #x1D4C3)
+                     (#x1D4C5 . #x1D505)
+                     (#x1D507 . #x1D50A)
+                     (#x1D50D . #x1D514)
+                     (#x1D516 . #x1D51C)
+                     (#x1D51E . #x1D539)
+                     (#x1D53B . #x1D53E)
+                     (#x1D540 . #x1D544)
+                     #x1D546
+                     (#x1D54A . #x1D550)
+                     (#x1D552 . #x1D6A5)
+                     (#x1D6A8 . #x1D6C0)
+                     (#x1D6C2 . #x1D6DA)
+                     (#x1D6DC . #x1D6FA)
+                     (#x1D6FC . #x1D714)
+                     (#x1D716 . #x1D734)
+                     (#x1D736 . #x1D74E)
+                     (#x1D750 . #x1D76E)
+                     (#x1D770 . #x1D788)
+                     (#x1D78A . #x1D7A8)
+                     (#x1D7AA . #x1D7C2)
+                     (#x1D7C4 . #x1D7CB)
+                     (#x20000 . #x2A6D6)
+                     (#x2F800 . #x2FA1D))
+             bits)
+      (let* ((low (if (atom range) range (car range)))
+             (high (1+ (if (atom range) range (cdr range)))))
+        (do* ((i low (1+ i)))
+             ((= i high))
+          (setf (sbit bits i) 1))))))
 
 
 (defun alpha-char-p (c)
   "The argument must be a character object. ALPHA-CHAR-P returns T if the
    argument is an alphabetic character; otherwise NIL."
   (let* ((code (char-code c))
-         (upper *upper-to-lower*)
-         (lower *lower-to-upper*))
+         (bits *alpha-char-bits*))
     (declare (type (mod #x110000 code))
-             (type (simple-array (signed-byte 16) (*)) upper lower))
-    (or (and (< code (length upper))
-             (not (zerop (the (signed-byte 16) (aref upper code)))))
-        (and (< code (length lower))
-             (not (zerop (the (signed-byte 16) (aref lower code))))))))
-
-
+             (simple-bit-vector bits))
+    (and (< code (length bits))
+         (not (eql 0 (sbit bits code))))))
 
 
 ;;; def-accessors type-tracking stuff.  Used by inspector
