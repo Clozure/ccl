@@ -87,12 +87,12 @@
 (defun upper-case-p (c)
   "The argument must be a character object; UPPER-CASE-P returns T if the
    argument is an upper-case character, NIL otherwise."
-  (let* ((code (char-code c)))
-    (declare (type (mod #x110000) code))
-    (or (and (>= code (char-code #\A))
-             (<= code (char-code #\Z)))
-        (and (>= code #x80)
-             (not (null (%non-standard-lower-case-equivalent c)))))))
+  (let* ((code (char-code c))
+         (to-lower *upper-to-lower*))
+    (declare (type (mod #x110000) code)
+             (type (simple-array (signed-byte 16) *to-lower)))
+    (and (< code (length to-lower))
+         (not (zerop (aref to-lower code))))))
 
 
 
@@ -101,15 +101,15 @@
   "The argument must be a character object. BOTH-CASE-P returns T if the
   argument is an alphabetic character and if the character exists in
   both upper and lower case. For ASCII, this is the same as ALPHA-CHAR-P."
-  (let* ((code (char-code c)))
-    (declare (type (mod #x110000) code))
-    (or (and (>= code (char-code #\A))
-             (<= code (char-code #\Z)))
-        (and (>= code (char-code #\a))
-             (<= code (char-code #\z)))
-        (and (>= code #x80)
-             (or (not (null (%non-standard-upper-case-equivalent c)))
-                 (not (null (%non-standard-lower-case-equivalent c))))))))
+  (let* ((code (char-code c))
+         (to-upper *lower-to-upper*)
+         (to-lower *upper-to-lower*))
+    (declare (type (mod #x110000) code)
+             (type (simple-array (signed-byte 16) (*)) to-lower to-upper))
+    (or (and (< code (length to-upper))
+             (not (zerop (aref to-upper code))))
+        (and (< code (length to-lower))
+             (not (zerop (aref to-lower code)))))))
   
 (defun alphanumericp (c)
   "Given a character-object argument, ALPHANUMERICP returns T if the
@@ -119,13 +119,10 @@
     (or
      (and (>= code (char-code #\0))
           (<= code (char-code #\9)))
-     (and (>= code (char-code #\a))
-          (<= code (char-code #\z)))
-     (and (>= code (char-code #\A))
-          (<= code (char-code #\Z)))
-     (and (> code #x80)
-          (or (not (null (%non-standard-upper-case-equivalent c)))
-              (not (null (%non-standard-lower-case-equivalent c))))))))
+     (let* ((bits *alpha-char-bits*))
+       (declare (simple-bit-vector bits))
+       (and (< code (length bits))
+            (not (eql 0 (sbit bits code))))))))
 
 (defun char= (ch &rest others)
   "Return T if all of the arguments are the same character."
@@ -312,20 +309,20 @@
            (optimize (speed 3) (safety 0)))
   (unless (typep string 'simple-string)
     (check-type string simple-string))
-  (do* ((i start (1+ i)))
+  (do* ((i start (1+ i))
+        (to-lower *upper-to-lower*)
+        (n (length to-lower)))
        ((>= i end) string)
-    (declare (fixnum i))
+    (declare (fixnum i n) (type (simple-array (signed-byte 16) (*)) to-lower))
     (let* ((ch (schar string i))
            (code (char-code ch))
-           (lower (if (and (char<= ch #\Z)
-                           (char>= ch #\A))
-                    (%code-char (the (unsigned-byte 8)
-                                  (+ code (- (char-code #\a)(char-code #\A)))))
-                    (if (>= code #x80)
-                      (%non-standard-lower-case-equivalent ch)))))
-      (declare (character ch) (type (mod #x110000) code))
-      (when lower
-        (setf (schar string i) lower)))))
+           (delta (if (< code n) (aref to-lower code) 0)))
+      (declare (character ch)
+               (type (mod #x110000) code)
+               (type (signed-byte 16) delta))
+      (unless (zerop delta)
+        (setf (schar string i)
+              (code-char (the valid-char-code (+ code delta))))))))
 
 
 
@@ -353,20 +350,19 @@
            (optimize (speed 3) (safety 0)))
   (unless (typep string 'simple-string)
     (check-type string simple-string))
-  (do* ((i start (1+ i)))
+  (do* ((i start (1+ i))
+        (to-upper *lower-to-upper*)
+        (n (length to-upper)))
        ((>= i end) string)
-    (declare (fixnum i))
+    (declare (fixnum i n) (type (simple-array (signed-byte 16) (*)) to-upper))
     (let* ((ch (schar string i))
            (code (char-code ch))
-           (upper (if (and (char<= ch #\z)
-                           (char>= ch #\a))
-                    (%code-char (the (unsigned-byte 8)
-                                  (- code (- (char-code #\a)(char-code #\A)))))
-                    (if (>= code #x80)
-                      (%non-standard-upper-case-equivalent ch)))))
-      (declare (character ch) (type (mod #x110000) code))
-      (when upper
-        (setf (schar string i) upper)))))
+           (delta (if (< code n) (aref to-upper code) 0)))
+      (declare (character ch)
+               (type (mod #x110000) code)
+               (type (signed-byte 16) delta))
+      (unless (zerop delta)
+        (setf (schar string i) (code-char (the valid-char-code (+ code delta))))))))
 
 
 
