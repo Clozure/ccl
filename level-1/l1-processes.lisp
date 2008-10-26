@@ -140,10 +140,14 @@
              :reader process-result))
   (:primary-p t))
 
+(defparameter *print-process-whostate* t "make it optional")
+
 (defmethod print-object ((p process) s)
   (print-unreadable-object (p s :type t :identity t)
-    (format s "~a(~d) [~a]" (process-name p)
-	    (process-serial-number p)(process-whostate p))))
+    (format s "~a(~d)" (process-name p)
+	    (process-serial-number p))
+    (when *print-process-whostate*
+      (format s " [~a]" (process-whostate p)))))
 
 (defvar *process-class* (find-class 'process))
 
