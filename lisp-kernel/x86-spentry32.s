@@ -4331,7 +4331,7 @@ __(tra(local_label(back_from_callback)))
         __ifdef([WIN_32])
 local_label(winapi_return):             
          /* %ecx is non-zero and contains count of arg words to pop */
-          __(popl (%esp,%ecx,4))
+          __(popl -4(%esp,%ecx,4))
           __(leal -4(%esp,%ecx,4),%esp)
           __(ret)
         __endif
