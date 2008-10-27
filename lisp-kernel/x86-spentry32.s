@@ -4455,12 +4455,10 @@ _spentry(aset2)
 4:	__(uuo_error_array_bounds(Rarg_y,Rtemp1))
 _endsubp(aset2)
 
-/* temp1 = array, imm0 = i, temp0 = j, arg_y = k, arg_z = newval */
-/* ARRAY-DIMENSION-LIMIT is required to be a fixnum, so using imm0 is OK. */
+/* temp1 = array, (%esp) = i, temp0 = j, arg_y = k, arg_z = newval */
 _spentry(aset3)
-	__(testb $fixnummask,%imm0_b)
+	__(testb $fixnummask,(%esp))
 	__(jne 0f)
-	__(push %imm0)
 	__(testb $fixnummask,%temp0_b)
 	__(jne 1f)
 	__(testl $fixnummask,%arg_y)
@@ -4495,11 +4493,13 @@ _spentry(aset3)
 	__(cmpb $subtag_vectorH,%imm0_b)
 	__(ja C(misc_set_common))
 	__(jmp 8b)
-0:	__(uuo_error_reg_not_fixnum(Rimm0))
+0:	__(pop %temp0)	/* supplied i */
+	__(uuo_error_reg_not_fixnum(Rtemp0))
 1:	__(uuo_error_reg_not_fixnum(Rtemp0))
 2:	__(uuo_error_reg_not_fixnum(Rarg_y))
 3:	__(uuo_error_reg_not_type(Rtemp1,error_object_not_array_3d))
-4:	__(uuo_error_array_bounds(Rimm0,Rtemp1))
+4:	__(pop %imm0)	/* supplied i is on stack */
+	__(uuo_error_array_bounds(Rimm0,Rtemp1))
 5:	__(uuo_error_array_bounds(Rtemp0,Rtemp1))
 6:	__(uuo_error_array_bounds(Rarg_y,Rtemp1))
 _endsubp(aset3)
