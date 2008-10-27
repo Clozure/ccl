@@ -310,16 +310,6 @@
   (box-fixnum imm0 arg_z)
   (single-value-return))
 
-;;; Return the x87 status word in effect after the last ff-call.
-;;; It's kept in the high half of the ffi-exception slot in the
-;;; TCR.
-(defx8632lapfunction %get-post-ffi-x87-status ()
-  (xor (% arg_z) (% arg_z))
-  (movzwl (:rcontext (+ 2 x8632::tcr.ffi-exception)) (% imm0))
-  (movl (% arg_z) (:rcontext x8632::tcr.ffi-exception))
-  (box-fixnum imm0 arg_z)
-  (single-value-return))
-
 ;;; The next several defuns are copied verbatim from x8664-float.lisp.
 ;;; It will probably be desirable to factor this code out into a new
 ;;; x86-float.lisp, perhaps conditionalized via #+sse2 or something.
@@ -333,10 +323,6 @@
 (defun %ffi-exception-status ()
   (logior (%get-mxcsr-control)
           (logand x86::mxcsr-status-mask (the fixnum (%get-post-ffi-mxcsr)))))
-
-(defun %ffi-exception-status-x87 ()
-  (logior (%get-mxcsr-control)
-	  (logand x86::mxcsr-status-mask (the fixnum (%get-post-ffi-x87-status)))))
 
 ;;; See if the binary double-float operation OP set any enabled
 ;;; exception bits in the mxcsr
