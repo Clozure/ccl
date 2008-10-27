@@ -217,12 +217,12 @@
   (addl ($ '1) (% esp))
   (jmp-subprim .SPaset2))
 
+;;; We're out of registers.  Put i on the stack.
 (defx8632lapfunction %aset3 ((array 12) (i 8) (j 4) #|(ra 0)|# (k arg_y) (newval arg_z))
   (check-nargs 5)
   (popl (@ 16 (% esp)))
   (pop (% temp0))
-  (pop (% imm0))
+  (popl (@ 4 (% esp)))
   (pop (% temp1))
-  (addl ($ '1) (% esp))
   (jmp-subprim .SPaset3))
 
