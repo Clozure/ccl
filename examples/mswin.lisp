@@ -73,7 +73,7 @@
   ;; in this simple example, we don't - we can just pass all of our
   ;; arguments to the default window procedure and return whatever it
   ;; returns.
-  #+debug 0 (format t "~& hwnd = ~s, msg = ~s, wparam = ~s, lparam = ~s"
+  #+debug (format t "~& hwnd = ~s, msg = ~s, wparam = ~s, lparam = ~x"
                   hwnd msg wparam lparam)
   (cond ((eql msg #$WM_DESTROY)
          ;; If there were resources attached to the window - bitmaps,
@@ -82,8 +82,6 @@
          ;; in very short order.
          (#_PostQuitMessage 0)          ; exit status 0: all is well.
          0)                             ; and we'll return 0
-	((eql msg #$WM_CREATE)
-	 0)
         (t
          ;; In a more realistic example, we'd handle more cases here.
          ;; Like many functions that deal with characters and strings,
@@ -149,7 +147,7 @@
                                       (%null-ptr)))) ;info for MDI parents/children
         (when (%null-ptr-p hwnd)
           (error "CreateWindow failed: ~a" (ccl::%windows-error-string (#_GetLastError))))
-        (#_ShowWindow hwnd #$true)
+        (#_ShowWindow hwnd #$SW_SHOW)
         (#_UpdateWindow hwnd)
         ;; Loop, fetching messages, translating virtual key events
         ;; into character-oriented events and dispatching each
@@ -185,9 +183,15 @@
     (unless (eql 0 (#_GetUserObjectInformationA ws #$UOI_FLAGS flags (ccl::record-length #>USEROBJECTFLAGS) (%null-ptr)))
       (pref flags #>USEROBJECTFLAGS.dwFlags))))
 
+;;; This only works on Vista or later.
 (defun get-desktop-info (desktop)
   (rlet ((pbool #>BOOLEAN #$false))
     (if (eql 0 (#_GetUserObjectInformationA desktop 6 pbool (ccl::record-length #>BOOLEAN) (%null-ptr)))
-      (pref pbool #>BOOLEAN)
-      (ccl::%windows-error-string (#_GetLastError)))))
+      (ccl::%windows-error-string (#_GetLastError))
+      (pref pbool #>BOOLEAN))))
+
+(defun get-ui-object-name (handle)
+  (%stack-block ((name 1000))
+    (unless (eql 0 (#_GetUserObjectInformationA handle #$UOI_NAME name 1000 (%null-ptr)))
+      (%get-cstring name))))
 ||#
