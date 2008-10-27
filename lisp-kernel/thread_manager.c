@@ -1284,6 +1284,8 @@ shutdown_thread_tcr(void *arg)
 #ifdef WIN32
     CloseHandle((HANDLE)tcr->io_datum);
     tcr->io_datum = NULL;
+    free(tcr->native_thread_info);
+    tcr->native_thread_info = NULL;
 #endif
     UNLOCK(lisp_global(TCR_AREA_LOCK),current);
     if (termination_semaphore) {
@@ -1380,6 +1382,7 @@ thread_init_tcr(TCR *tcr, void *stack_base, natural stack_size)
 #endif
 #ifdef WINDOWS
   tcr->io_datum = (VOID *)CreateEvent(NULL, true, false, NULL);
+  tcr->native_thread_info = malloc(sizeof(CONTEXT));
 #endif
   tcr->log2_allocation_quantum = unbox_fixnum(lisp_global(DEFAULT_ALLOCATION_QUANTUM));
 }
@@ -1734,17 +1737,15 @@ suspend_tcr(TCR *tcr)
   int suspend_count = atomic_incf(&(tcr->suspend_count));
   DWORD rc;
   if (suspend_count == 1) {
-    /* Can't seem to get gcc to align a CONTEXT structure correctly */
-    char _contextbuf[sizeof(CONTEXT)+__alignof(CONTEXT)];
-
-    CONTEXT *suspend_context, *pcontext;
+    CONTEXT  *pcontext = (CONTEXT *)tcr->native_thread_info;
     HANDLE hthread = (HANDLE)(tcr->osid);
     pc where;
     area *cs = tcr->cs_area;
     LispObj foreign_rsp;
 
-    pcontext = (CONTEXT *)((((natural)&_contextbuf)+15)&~15);
-
+    if (hthread == NULL) {
+      return false;
+    }
     rc = SuspendThread(hthread);
     if (rc == -1) {
       /* If the thread's simply dead, we should handle that here */
@@ -1793,8 +1794,8 @@ suspend_tcr(TCR *tcr)
         tcr->suspend_context = NULL;
       } else {
         area *ts = tcr->ts_area;
-        /* If we're in the lisp heap, or in x86-spentry64.o, or in
-           x86-subprims64.o, or in the subprims jump table at #x15000,
+        /* If we're in the lisp heap, or in x86-spentry??.o, or in
+           x86-subprims??.o, or in the subprims jump table at #x15000,
            or on the tstack ... we're just executing lisp code.  Otherwise,
            we got an exception while executing lisp code, but haven't
            entered the handler yet (still in Windows exception glue
@@ -1830,26 +1831,15 @@ suspend_tcr(TCR *tcr)
       }
     } else {
       if (tcr->valence == TCR_STATE_EXCEPTION_RETURN) {
+        if (!tcr->pending_exception_context) {
+          FBug(pcontext, "we're confused here.");
+        }
         *pcontext = *tcr->pending_exception_context;
         tcr->pending_exception_context = NULL;
         tcr->valence = TCR_STATE_LISP;
       }
     }
-
-    /* If the context's stack pointer is pointing into the cs_area,
-       copy the context below the stack pointer. else copy it
-       below tcr->foreign_rsp. */
-    foreign_rsp = xpGPR(pcontext,Isp);
-
-    if ((foreign_rsp < (LispObj)(cs->low)) ||
-        (foreign_rsp >= (LispObj)(cs->high))) {
-      foreign_rsp = (LispObj)(tcr->foreign_sp);
-    }
-    foreign_rsp -= 0x200;
-    foreign_rsp &= ~15;
-    suspend_context = (CONTEXT *)(foreign_rsp)-1;
-    *suspend_context = *pcontext;
-    tcr->suspend_context = suspend_context;
+    tcr->suspend_context = pcontext;
     return true;
   }
   return false;
@@ -1959,6 +1949,7 @@ resume_tcr(TCR *tcr)
     HANDLE hthread = (HANDLE)(tcr->osid);
 
     if (context) {
+      context->ContextFlags = CONTEXT_ALL;
       tcr->suspend_context = NULL;
       SetThreadContext(hthread,context);
       rc = ResumeThread(hthread);
