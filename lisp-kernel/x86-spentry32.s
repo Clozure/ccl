@@ -4245,9 +4245,10 @@ _spentry(callback)
 	__(push %ebp)
 	__(box_fixnum(%eax,%esi))	/* put callback index in arg_y */
 	__(ref_global(get_tcr,%eax))
-	__(push $1)
+	__(subl $12,%esp)		/* alignment */
+	__(push $1)			/* stack now 16-byte aligned */
 	__(call *%eax)
-	__(addl $node_size,%esp)
+	__(addl $16,%esp)		/* discard arg, alignment words */
 	/* linear TCR addr now in %eax */
 	__(movw tcr.ldt_selector(%eax), %rcontext_reg)
 
