@@ -147,6 +147,16 @@
                                       (%null-ptr)))) ;info for MDI parents/children
         (when (%null-ptr-p hwnd)
           (error "CreateWindow failed: ~a" (ccl::%windows-error-string (#_GetLastError))))
+	;; Depending on how the lisp process was created, the first call
+	;; to #_ShowWindow in that process might ignore its argument
+	;; (and instead use an argument specified in the STARTUPINFO
+	;; structure passed to #_CreateProcess.)  SLIME under FSF Emacs
+	;; runs the lisp with this flag set, and it's possible to waste
+	;; a week or two trying to track this down.  (Trust me.)
+        (#_ShowWindow hwnd #$SW_SHOW)
+	;; In case the parent process said to ignore #_ShowWindow's argument
+	;; the first time it's called, call #_ShowWindow again.  This seems
+	;; to be harmless, if a little strange ...
         (#_ShowWindow hwnd #$SW_SHOW)
         (#_UpdateWindow hwnd)
         ;; Loop, fetching messages, translating virtual key events
