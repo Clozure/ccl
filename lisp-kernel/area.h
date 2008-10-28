@@ -166,7 +166,11 @@ typedef struct area_list {
 #endif
 #endif
 #ifdef SOLARIS
+#ifdef X8664
 #define IMAGE_BASE_ADDRESS 0x300000000000L
+#else
+#define IMAGE_BASE_ADDRESS 0x10000000
+#endif
 #endif
 #ifdef DARWIN
 #ifdef X8664

@@ -1140,6 +1140,87 @@ free_tcr_extra_segment(TCR *tcr)
   tcr->ldt_selector = 0;
 }
 #endif
+#ifdef SOLARIS
+#include <sys/sysi86.h>
+
+bitvector ldt_entries_in_use = NULL;
+pthread_mutex_t ldt_lock = PTHREAD_MUTEX_INITIALIZER;  /* simple, non-recursive mutex */
+
+void
+solaris_ldt_init()
+{
+  int fd;
+  struct ssd s;
+
+  ldt_entries_in_use=malloc(8192/8);
+  zero_bits(ldt_entries_in_use,8192);
+  
+  fd = open("/proc/self/ldt", O_RDONLY);
+
+  while(read(fd,&s,sizeof(s)) == sizeof(s)) {
+    set_bit(ldt_entries_in_use,s.sel>>3);
+  }
+  close(fd);
+}
+    
+
+void
+setup_tcr_extra_segment(TCR *tcr)
+{
+  struct ssd s;
+  int i;
+
+  pthread_mutex_lock(&ldt_lock);
+
+  for (i = 0; i < 8192; i++) {
+    if (!ref_bit(ldt_entries_in_use,i)) {
+      break;
+    }
+  }
+  if (i == 8192) {
+    pthread_mutex_unlock(&ldt_lock);
+    fprintf(stderr, "All 8192 LDT descriptors in use\n");
+    _exit(1);
+  }
+
+  s.sel = (i<<3)|7;
+  s.bo = (unsigned int)tcr;
+  s.ls = sizeof(TCR);
+  s.acc1 = 0xf2;
+  s.acc2 = 4;
+
+  if (sysi86(SI86DSCR, &s) < 0) {
+    pthread_mutex_unlock(&ldt_lock);
+    perror("ldt setup");
+    _exit(1);
+  }
+  set_bit(ldt_entries_in_use,i);
+  tcr->ldt_selector = (i<<3)|7;
+  pthread_mutex_unlock(&ldt_lock);
+  
+}
+
+void 
+free_tcr_extra_segment(TCR *tcr)
+{
+  struct ssd s;
+  int i;
+
+  pthread_mutex_lock(&ldt_lock);
+  __asm__ volatile ("mov %0,%%fs" : : "r"(0));
+  s.sel = tcr->ldt_selector;
+  i = s.sel>>3;
+  tcr->ldt_selector = 0;
+  s.bo = 0;
+  s.ls = 0;
+  s.acc1 = 0;
+  s.acc2 = 0;
+  sysi86(SI86DSCR, &s);
+  clr_bit(ldt_entries_in_use,i);
+  pthread_mutex_unlock(&ldt_lock);
+}
+
+#endif
 #endif
 
 /*

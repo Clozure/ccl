@@ -76,6 +76,7 @@
 #define REG_R15     15
 #define REG_RIP     16
 #endif
+
 /* Define indices of the GPRs in the mcontext component of a ucontext */
 #define Itemp0      REG_RBX
 #define Iarg_y      REG_RDI

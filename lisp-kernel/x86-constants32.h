@@ -40,6 +40,21 @@
 #define REG_ESP 19
 #endif
 
+#ifdef SOLARIS
+#include <sys/regset.h>
+#include <limits.h>
+#define REG_EAX EAX
+#define REG_EBX EBX
+#define REG_ECX ECX
+#define REG_EDX EDX
+#define REG_ESI ESI
+#define REG_EDI EDI
+#define REG_EBP EBP
+#define REG_ESP ESP
+#define REG_EFL EFL
+#define REG_EIP EIP
+#endif
+
 /* Indicies of GPRs in the mcontext component of a ucontext */
 #define Iimm0  REG_EAX
 #define Iarg_z REG_EBX

@@ -72,13 +72,14 @@ pthread_mutex_t *mach_exception_lock;
 #endif
 
 #ifdef SOLARIS
-#ifdef X8664
 #define xpGPRvector(x) ((x)->uc_mcontext.gregs)
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
 #define xpPC(x) xpGPR(x,Iip)
 #define eflags_register(xp) xpGPR(xp,Iflags)
 #define xpXMMregs(x)(&((x)->uc_mcontext.fpregs.fp_reg_set.fpchip_state.xmm[0]))
+#ifdef X8632
+#define xpMMXreg(x,n)(((x)->uc_mcontext.fpregs.fp_reg_set.fpchip_state.state[n]))
 #endif
 #endif
 

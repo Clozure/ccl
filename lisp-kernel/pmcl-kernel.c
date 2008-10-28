@@ -408,6 +408,9 @@ unsigned unsigned_max(unsigned x, unsigned y)
 #ifdef FREEBSD
 #define MAXIMUM_MAPPABLE_MEMORY (1U<<30)
 #endif
+#ifdef SOLARIS
+#define MAXIMUM_MAPPABLE_MEMORY (1U<<30)
+#endif
 #endif
 
 natural
@@ -1542,6 +1545,15 @@ main(int argc, char *argv[]
     fprintf(stderr, "CPU doesn't support required features\n");
     exit(1);
   }
+#endif
+
+#ifdef SOLARIS
+#ifdef X8632
+  {
+    extern void solaris_ldt_init(void);
+    solaris_ldt_init();
+  }
+#endif
 #endif
 
 #ifndef WINDOWS
