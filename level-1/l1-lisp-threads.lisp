@@ -1062,7 +1062,7 @@ no longer being used."
     ;; Um, this is a little more complicated now that we use
     ;; thread-local shallow binding
     (flet ((save-binding (new-value sym prev)
-             (let* ((idx (%svref sym target::symbol.binding-index-cell))
+             (let* ((idx (symbol-binding-index sym))
                     (byte-idx (ash idx target::fixnum-shift))
                     (binding-vector (%fixnum-ref (%current-tcr) target::tcr.tlb-pointer))
                     (old-value (%fixnum-ref  binding-vector byte-idx)))
