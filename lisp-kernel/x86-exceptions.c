@@ -1228,16 +1228,20 @@ exit_signal_handler(TCR *tcr, int old_valence)
 }
 
 void
-signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context, TCR *tcr, int old_valence)
+signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context
+#ifdef DARWIN
+               , TCR *tcr, int old_valence
+#endif
+)
 {
 #ifdef DARWIN_GS_HACK
   Boolean gs_was_tcr = ensure_gs_pthread();
 #endif
   xframe_list xframe_link;
 #ifndef DARWIN
-  tcr = get_tcr(false);
+  TCR *tcr = get_tcr(false);
 
-  old_valence = prepare_to_wait_for_exception_lock(tcr, context);
+  int old_valence = prepare_to_wait_for_exception_lock(tcr, context);
 #endif
   if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_SUSPEND)) {
     CLR_TCR_FLAG(tcr, TCR_FLAG_BIT_PENDING_SUSPEND);
