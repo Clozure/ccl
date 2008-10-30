@@ -1868,9 +1868,15 @@
 (define-compiler-macro aref (&whole call a &rest subscripts &environment env)
   (let* ((ctype (if (nx-form-typep a 'array env)
                   (specifier-type (nx-form-type a env) env)))
-         (type (if ctype (type-specifier (array-ctype-specialized-element-type ctype))))
-         (useful (unless (or (eq type *) (eq type t))
-                   type)))
+         (ectype (typecase ctype
+                   (array-ctype (array-ctype-specialized-element-type ctype))
+                   (union-ctype (when (every #'array-ctype-p (union-ctype-types ctype))
+                                  (%type-union
+                                   (mapcar (lambda (ct) (array-ctype-specialized-element-type ct))
+                                           (union-ctype-types ctype)))))))
+         (etype (and ectype (type-specifier ectype)))
+         (useful (unless (or (eq etype *) (eq etype t))
+                   etype)))
     (if (= 2 (length subscripts))
       (setq call `(%aref2 ,a ,@subscripts))
       (if (= 3 (length subscripts))
