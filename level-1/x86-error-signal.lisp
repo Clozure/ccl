@@ -269,7 +269,7 @@
             (cond ((< op1 #x90)
                    (setq skip (%check-anchored-uuo xcf 3))
                    (setq *error-reentry-count* 0)
-                   (setf (encoded-gpr-lisp xp (ldb (byte 4 0) op1))
+                   (setf (encoded-gpr-lisp xp (ldb (byte 3 0) op1))
                          (%slot-unbound-trap
                           (encoded-gpr-lisp xp (ldb (byte 4 4) op2))
                           (encoded-gpr-lisp xp (ldb (byte 4 0) op2))
@@ -281,14 +281,14 @@
                                              (list
                                               (encoded-gpr-lisp
                                                xp
-                                               (ldb (byte 4 0) op1)))
+                                               (ldb (byte 3 0) op1)))
                                              frame-ptr))
                   ((< op1 #xb0)
 		   (setq skip (%check-anchored-uuo xcf 2))
                    (%err-disp-internal $xfunbnd
                                        (list (encoded-gpr-lisp
                                               xp
-                                              (ldb (byte 4 0) op1)))
+                                              (ldb (byte 3 0) op1)))
                                        frame-ptr))
                   ((< op1 #xc0)
 		   (setq skip (%check-anchored-uuo xcf 3))
@@ -296,7 +296,7 @@
                     #.(car (rassoc 'type-error *kernel-simple-error-classes*))
                     (list (encoded-gpr-lisp
                            xp
-                           (ldb (byte 4 0) op1))
+                           (ldb (byte 3 0) op1))
                           (logandc2 op2 arch::error-type-error))
                     frame-ptr))
                   ((= op1 #xc0)
@@ -373,7 +373,7 @@
                      (%error (make-condition 'cant-throw-error
                                              :tag (encoded-gpr-lisp
                                                    xp
-                                                   (ldb (byte 4 0) op1)))
+                                                   (ldb (byte 3 0) op1)))
                              nil frame-ptr)
                      (let* ((typename
                              (cond ((= op2 x8632::tag-fixnum) 'fixnum)
@@ -390,7 +390,7 @@
                        (%error (make-condition 'type-error
                                                :datum (encoded-gpr-lisp
                                                        xp
-                                                       (ldb (byte 4 0) op1))
+                                                       (ldb (byte 3 0) op1))
                                                :expected-type typename)
                                nil
                                frame-ptr))))
@@ -399,7 +399,7 @@
                    (%error (make-condition 'type-error
                                            :datum (encoded-gpr-lisp
                                                    xp
-                                                   (ldb (byte 4 0) op1))
+                                                   (ldb (byte 3 0) op1))
                                            :expected-type 'list)
                            nil
                            frame-ptr))
@@ -408,7 +408,7 @@
                    (%error (make-condition 'type-error
                                            :datum (encoded-gpr-lisp
                                                    xp
-                                                   (ldb (byte 4 0) op1))
+                                                   (ldb (byte 3 0) op1))
                                            :expected-type 'fixnum)
                            nil
                            frame-ptr)))
