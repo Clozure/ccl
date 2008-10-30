@@ -151,25 +151,18 @@ _endfn
 
 /* switch_to_foreign_stack(new_sp, func, arg_0, arg_1, arg_2, arg_3)  */
 /*   Not fully general, but should get us off of the signal stack */
+        __ifndef([WINDOWS])
 _exportfn(C(switch_to_foreign_stack))
-	__ifdef([WINDOWS])
-	__(movq 8(%rsp), %ctemp0)
-	__(movq 16(%rsp), %ctemp1)
-	__endif
-	__(movq %carg0,%rsp)
-	__(movq %carg1,%rax)
-	__(movq %carg2,%carg0)
-	__(movq %carg3,%carg1)
-	__ifdef([WINDOWS])
-	__(movq %ctemp0, %carg2)
-	__(movq %ctemp1, %carg3)
-	__else
-	__(movq %carg4,%carg2)
-	__(movq %carg5,%carg3)
-	__endif
+	__(movq %rdi,%rsp)
+	__(movq %rsi,%rax)
+	__(movq %rdx,%rdi)
+	__(movq %rcx,%rsi)
+	__(movq %r8,%rdx)
+	__(movq %r9,%rcx)
 	__(jmp *%rax)
 _endfn
-
+        __endif
+        
 _exportfn(C(freebsd_sigreturn))
 	__(movl $417,%eax)	/* SYS_sigreturn */
 	__(syscall)				
