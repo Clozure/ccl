@@ -1174,29 +1174,26 @@ setup_tcr_extra_segment(TCR *tcr)
 
   for (i = 0; i < 8192; i++) {
     if (!ref_bit(ldt_entries_in_use,i)) {
-      break;
+      s.sel = (i<<3)|7;
+      s.bo = (unsigned int)tcr;
+      s.ls = sizeof(TCR);
+      s.acc1 = 0xf2;
+      s.acc2 = 4;
+
+      if (sysi86(SI86DSCR, &s) >= 0) {
+        set_bit(ldt_entries_in_use,i);
+        tcr->ldt_selector = (i<<3)|7;
+        pthread_mutex_unlock(&ldt_lock);
+        return;
+      }
+      set_bit(ldt_entries_in_use,i);
     }
   }
-  if (i == 8192) {
-    pthread_mutex_unlock(&ldt_lock);
-    fprintf(stderr, "All 8192 LDT descriptors in use\n");
-    _exit(1);
-  }
-
-  s.sel = (i<<3)|7;
-  s.bo = (unsigned int)tcr;
-  s.ls = sizeof(TCR);
-  s.acc1 = 0xf2;
-  s.acc2 = 4;
-
-  if (sysi86(SI86DSCR, &s) < 0) {
-    pthread_mutex_unlock(&ldt_lock);
-    perror("ldt setup");
-    _exit(1);
-  }
-  set_bit(ldt_entries_in_use,i);
-  tcr->ldt_selector = (i<<3)|7;
   pthread_mutex_unlock(&ldt_lock);
+  fprintf(stderr, "All 8192 LDT descriptors in use\n");
+  _exit(1);
+
+
   
 }
 
