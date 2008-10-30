@@ -109,6 +109,36 @@
 #+windows-target
 (pushnew *win32-backend* *known-x8632-backends* :key #'backend-name)
 
+#+solaris-target
+(defvar *solaris-x8632-backend*
+  (make-backend :lookup-opcode 'lookup-x86-opcode
+                :lookup-macro #'false
+                :lap-opcodes x86::*x86-opcode-templates*
+                :define-vinsn 'define-x86-vinsn
+                :p2-dispatch *x862-specials*
+                :p2-vinsn-templates *x8632-vinsn-templates*
+                :p2-template-hash-name '*x8632-vinsn-templates*
+                :p2-compile 'x862-compile
+                :platform-syscall-mask (logior platform-os-solaris platform-cpu-x86 platform-word-size-32) 
+                :target-specific-features
+                '(:x8632 :x86-target :solaris-target :x8632-target
+                  :solarisx8632-target
+                  :little-endian-target
+                  :32-bit-target)
+                :target-fasl-pathname (make-pathname :type "sx32fsl")
+                :target-platform (logior platform-cpu-x86
+                                         platform-os-solaris
+                                         platform-word-size-32)
+                :target-os :solarisx8632
+                :name :solarisx8632
+                :target-arch-name :x8632
+                :target-foreign-type-data nil
+                :target-arch x8632::*x8632-target-arch*
+                :lisp-context-register x8632::fs
+		:num-arg-regs 2
+                ))
+#+solaris-target
+(pushnew *solaris-x8632-backend* *known-x8632-backends* :key #'backend-name)
 
 (defvar *x8632-backend* (car *known-x8632-backends*))
 
@@ -180,6 +210,22 @@
                            (intern "GENERATE-CALLBACK-BINDINGS" "WIN32")
                            :callback-return-value-function
                            (intern "GENERATE-CALLBACK-RETURN-VALUE" "WIN32")))
+                (:solarisx8632
+                 (make-ftd :interface-db-directory "ccl:solarisx86-headers;"
+			   :interface-package-name "X86-SOLARIS32"
+                           :attributes '(:bits-per-word  32
+                                         :signed-char nil
+                                         :struct-by-value t
+                                         :float-results-in-x87 t)
+                           :ff-call-expand-function
+                           (intern "EXPAND-FF-CALL" "X86-SOLARIS32")
+			   :ff-call-struct-return-by-implicit-arg-function
+                           (intern "RECORD-TYPE-RETURNS-STRUCTURE-AS-FIRST-ARG"
+                                   "X86-SOLARIS32")
+                           :callback-bindings-function
+                           (intern "GENERATE-CALLBACK-BINDINGS" "X86-SOLARIS32")
+                           :callback-return-value-function
+                           (intern "GENERATE-CALLBACK-RETURN-VALUE" "X86-SOLARIS32")))
                 )))
         (install-standard-foreign-types ftd)
         (use-interface-dir :libc ftd)
