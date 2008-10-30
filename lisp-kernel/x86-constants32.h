@@ -50,7 +50,7 @@
 #define REG_ESI ESI
 #define REG_EDI EDI
 #define REG_EBP EBP
-#define REG_ESP ESP
+#define REG_ESP UESP    /* Maybe ... ESP is often 0, but who knows why ? */
 #define REG_EFL EFL
 #define REG_EIP EIP
 #endif
