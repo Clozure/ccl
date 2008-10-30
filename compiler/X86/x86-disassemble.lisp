@@ -2229,13 +2229,14 @@
 
 (defun x86-dis-do-uuo (ds instruction intop)
   (declare (type (unsigned-byte 8) intop))
-  (let* ((stop t))
+  (let* ((stop t)
+         (regmask (if (x86-ds-mode-64 ds) #xf #x7)))
     (cond ((and (>= intop #x70) (< intop #x80))
            (let* ((pseudo-modrm-byte (x86-ds-next-u8 ds)))
              (setf (x86-di-mnemonic instruction)
                    "uuo-error-slot-unbound"
                    (x86-di-op0 instruction)
-                   (x86-dis-make-reg-operand (lookup-x86-register (logand intop #xf) :%))                     
+                   (x86-dis-make-reg-operand (lookup-x86-register (logand intop regmask) :%))                     
                    (x86-di-op1 instruction)
                    (x86-dis-make-reg-operand (lookup-x86-register (ldb (byte 4 4)
                                                                        pseudo-modrm-byte) :%))
@@ -2250,18 +2251,18 @@
            (setf (x86-di-mnemonic instruction)
                  "uuo-error-unbound"
                  (x86-di-op0 instruction)
-                 (x86-dis-make-reg-operand (lookup-x86-register (logand intop #xf) :%))))
+                 (x86-dis-make-reg-operand (lookup-x86-register (logand intop rregmask) :%))))
           ((< intop #xb0)
            (setf (x86-di-mnemonic instruction)
                  "uuo-error-udf"
                  (x86-di-op0 instruction)
-                 (x86-dis-make-reg-operand (lookup-x86-register (logand intop #xf) :%))))
+                 (x86-dis-make-reg-operand (lookup-x86-register (logand intop regmask) :%))))
          
           ((< intop #xc0)
            (setf (x86-di-mnemonic instruction)
                  "uuo-error-reg-not-type"
                  (x86-di-op0 instruction)
-                 (x86-dis-make-reg-operand (lookup-x86-register (logand intop #xf) :%))
+                 (x86-dis-make-reg-operand (lookup-x86-register (logand intop #regmask) :%))
                  (x86-di-op1 instruction)
                  (x86::make-x86-immediate-operand :value (parse-x86-lap-expression (x86-ds-next-u8 ds)))))
           ((< intop #xc8)
@@ -2331,19 +2332,19 @@
            (setf (x86-di-mnemonic instruction)
                  "uuo-error-reg-not-tag"
                  (x86-di-op0 instruction)
-                 (x86-dis-make-reg-operand (lookup-x86-register (logand intop #xf) :%))
+                 (x86-dis-make-reg-operand (lookup-x86-register (logand intop regmask) :%))
                  (x86-di-op1 instruction)
                  (x86::make-x86-immediate-operand :value (parse-x86-lap-expression (x86-ds-next-u8 ds)))))
           ((< intop #xf0)
            (setf (x86-di-mnemonic instruction)
                  "uuo-error-reg-not-list"
                  (x86-di-op0 instruction)
-                 (x86-dis-make-reg-operand (lookup-x86-register (logand intop #xf) :%))))
+                 (x86-dis-make-reg-operand (lookup-x86-register (logand intop regmask) :%))))
           (t
            (setf (x86-di-mnemonic instruction)
                  "uuo-error-reg-not-fixnum"
                  (x86-di-op0 instruction)
-                 (x86-dis-make-reg-operand (lookup-x86-register (logand intop #xf) :%)))))
+                 (x86-dis-make-reg-operand (lookup-x86-register (logand intop regmask) :%)))))
     stop))
 
 
