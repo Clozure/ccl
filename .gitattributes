@@ -196,6 +196,7 @@ level-0/X86/X8632/x8632-symbol.lisp -text
 level-0/X86/X8632/x8632-utils.lisp -text
 lib/ffi-darwinx8632.lisp -text
 lib/ffi-linuxx8632.lisp -text
+lib/ffi-solarisx8632.lisp -text
 lib/ffi-solarisx8664.lisp -text
 lib/ffi-win32.lisp -text
 lib/ffi-win64.lisp -text
