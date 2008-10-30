@@ -99,7 +99,8 @@
                         (:solarisx8664 "ccl:solarisx64-headers;")
                         (:win64 "ccl:win64-headers;")
                         (:linuxx8632 "ccl:x86-headers;")
-                        (:win32 "ccl:win32-headers;"))
+                        (:win32 "ccl:win32-headers;")
+                        (:solarisx8632 "ccl:solarisx86-headers;"))
                     :interface-package-name
                     #.(ftd-interface-package-name *target-ftd*)
                     :attributes
