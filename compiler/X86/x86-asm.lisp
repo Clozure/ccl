@@ -4282,7 +4282,11 @@
 (defun insert-opcode-reg4-entry (instruction entry)
   (let* ((reg-num (reg-entry-reg-num entry))
          (xreg-num (logior reg-num
-                           (if (logtest +regrex+ (reg-entry-reg-flags entry))
+                           (if
+                             (ccl::target-arch-case
+                              (:x8664
+                               (logtest +regrex+ (reg-entry-reg-flags entry)))
+                              (:x8632 t))
                              #x08
                              #x00))))
     (setf (x86-instruction-base-opcode instruction)
