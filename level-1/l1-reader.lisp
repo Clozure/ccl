@@ -2441,7 +2441,13 @@
                         (multiple-value-bind (found symbol) (%get-htab-symbol string len (pkg.etab pkg))
                           (if found
                             symbol
-                            (%err-disp $XNOESYM (%string-from-token tb) pkg)))))))))))))))
+                            (let* ((token (%string-from-token tb))
+                                   (symbol (find-symbol token pkg)))
+                              (with-simple-restart (continue
+                                                    "~:[Create and use the internal symbol ~a::~a~;Use the internal symbol ~:*~s~]"
+                                                    symbol (package-name pkg) token)
+                                (%err-disp $XNOESYM token pkg))
+                              (or symbol (intern token pkg)))))))))))))))))
                     
 #|
 (defun %parse-token-test (string &key dot-ok (case (readtable-case *readtable*)))
