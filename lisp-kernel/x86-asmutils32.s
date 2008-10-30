@@ -134,19 +134,20 @@ _exportfn(C(cpuid))
 	__(ret)
 _endfn
 
-/* switch_to_foreign_stack(new_sp, func, arg_0, arg_1, arg_2, arg_3)  */
+/* switch_to_foreign_stack(new_sp, func, arg_0, arg_1, arg_2)  */
 /*   Not fully general, but should get us off of the signal stack */
 /* Beware: on Darwin, GDB can get very confused by this code, and
    doesn't really get unconfused until the target function - the
-   handler - has built its stack frame */
-/* The lone caller of this function actually doesn't pass arg_3.
+   handler - has built its stack frame
+   The lone caller of this function passes 3 arguments (besides
+   the new stack pointer and the handler address.)
    On platforms where the C stack must be 16-byte aligned, pushing
-   4 words (arg_0-arg_3) helps make it aligned before the return
+   a 4th word helps make the stack aligned before the return
    address is (re-)pushed.
    On Linux, there are severe constraints on what the top of stack
    can look like when rt_sigreturn (the code at the return address)
    runs, and there aren't any constraints on stack alignment, so
-   we don't push "arg_3" on the new stack.*/
+   we don't push the extra word on the new stack.*/
 _exportfn(C(switch_to_foreign_stack))
         __(addl $4,%esp)        /* discard return address, on wrong stack */
         __(pop %edi)            /* new esp */
@@ -154,19 +155,16 @@ _exportfn(C(switch_to_foreign_stack))
         __(pop %eax)            /* arg_0 */
         __(pop %ebx)            /* arg_1 */
         __(pop %ecx)            /* arg_2 */
-        __ifndef([LINUX])        
-        __(pop %edx)            /* arg_3 */
-        __endif
         __(mov %edi,%esp)
         __(pop %edi)            /* Return address pushed by caller */
         __ifndef([LINUX])
-        __(push %edx)
+        __(push $0)             /* For alignment. See comment above */
         __endif
-        __(push %ecx)
-        __(push %ebx)
-        __(push %eax)
-        __(push %edi)           /* On some platforms, we don't really return */
-        __(jmp *%esi)
+        __(push %ecx)           /* arg_2 */
+        __(push %ebx)           /* arg_1 */
+        __(push %eax)           /* arg_0 */
+        __(push %edi)           /* return address */
+        __(jmp *%esi)           /* On some platforms, we don't really return */
 _endfn
 
 _exportfn(C(freebsd_sigreturn))
