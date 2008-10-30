@@ -39,6 +39,8 @@ if [ -z "$OPENMCL_KERNEL" ]; then
        OPENMCL_KERNEL=wx86cl.exe
        CCL_DEFAULT_DIRECTORY="C:/cygwin$CCL_DEFAULT_DIRECTORY"
     ;;
+    SunOS) OPENMCL_KERNEL=sx86cl
+    ;;
     *)
     echo "Can't determine host OS.  Fix this."
     exit 1
