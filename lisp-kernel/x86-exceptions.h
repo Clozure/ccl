@@ -79,7 +79,7 @@ pthread_mutex_t *mach_exception_lock;
 #define eflags_register(xp) xpGPR(xp,Iflags)
 #define xpXMMregs(x)(&((x)->uc_mcontext.fpregs.fp_reg_set.fpchip_state.xmm[0]))
 #ifdef X8632
-#define xpMMXreg(x,n)(((x)->uc_mcontext.fpregs.fp_reg_set.fpchip_state.state[n]))
+#define xpMMXreg(x,n)*(natural *)(&(((struct fnsave_state *)(&(((x)->uc_mcontext.fpregs))))->f_st[n]))
 #endif
 #endif
 
@@ -182,7 +182,11 @@ extern void freebsd_sigreturn(ExceptionInformation *);
 
 #ifdef SOLARIS
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV
+#ifdef X8664
 #define IS_MAYBE_INT_TRAP(info,xp) ((xpGPR(xp,REG_TRAPNO)==0xd)&&((xpGPR(xp,REG_ERR)&7)==2))
+#else
+#define IS_MAYBE_INT_TRAP(info,xp) ((xpGPR(xp,TRAPNO)==0xd)&&((xpGPR(xp,ERR)&7)==2))
+#endif
 #define SIGRETURN(context) setcontext(context)
 #endif
 
