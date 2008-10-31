@@ -2987,7 +2987,7 @@ local_label(match_keys_loop):
 	__(xorl %temp1,%temp1)
 	__(jmp local_label(match_test))
 local_label(match_loop):
-	__(cmpl misc_data_offset(%arg_y,%temp1),%arg_z)
+	__(cmpl misc_data_offset(%arg_y,%temp1),%temp0)
 	__(je local_label(matched))
 	__(addl $node_size,%temp1)
 local_label(match_test):
