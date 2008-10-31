@@ -1894,6 +1894,8 @@
 ;;; This mostly knows how to reference the elements of an immediate miscobj.
 (defun x862-vref (seg vreg xfer type-keyword vector index safe)
   (with-x86-local-vinsn-macros (seg vreg xfer)
+    (when *x862-full-safety*
+      (unless vreg (setq vreg *x862-arg-z*)))
     (if (null vreg)
       (progn
         (x862-form seg nil nil vector)
@@ -6327,18 +6329,23 @@
              (node-p (unless (or float-p crf-p)
                        (= (get-regspec-mode vreg) hard-reg-class-gpr-mode-node)))
              (first (pop forms)))
-        (x862-push-register seg 
-                            (if (or node-p crf-p)
-                              (x862-one-untargeted-reg-form seg first *x862-arg-z*)
-                              (x862-one-targeted-reg-form seg first vreg)))
-        (dolist (form forms)
-          (x862-form seg nil nil form))
-        (if crf-p
+        (if (and node-p
+                 (nx-null (car forms))
+                 (null (cdr forms)))
+          (x862-form seg vreg xfer first)
           (progn
-            (x862-vpop-register seg *x862-arg-z*)
-            (<- *x862-arg-z*))
-          (x862-pop-register seg vreg))
-        (^)))))
+            (x862-push-register seg 
+                                (if (or node-p crf-p)
+                                  (x862-one-untargeted-reg-form seg first *x862-arg-z*)
+                                  (x862-one-targeted-reg-form seg first vreg)))
+            (dolist (form forms)
+              (x862-form seg nil nil form))
+            (if crf-p
+              (progn
+                (x862-vpop-register seg *x862-arg-z*)
+                (<- *x862-arg-z*))
+              (x862-pop-register seg vreg))
+            (^)))))))
 
 (defx862 x862-free-reference free-reference (seg vreg xfer sym)
   (x862-ref-symbol-value seg vreg xfer sym t))
