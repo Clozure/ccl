@@ -484,7 +484,9 @@
   (let* ((pairs '((:darwinppc32 . :darwinppc64)
                   (:linuxppc32 . :linuxppc64)
                   (:darwinx8632 . :darwinx8664)
-                  (:linuxx8632 . :linuxx8664))))
+                  (:linuxx8632 . :linuxx8664)
+                  (:win32 . :win64)
+                  (:solarisx8632 . :solarisx8664))))
     (or (cdr (assoc target pairs))
         (car (rassoc target pairs)))))
 
@@ -492,7 +494,7 @@
   ;; The Solaris "make" program is too clever to understand -C, so
   ;; use GNU make (installed as "gmake").
   (case target
-    (:solarisx8664 "gmake")
+    ((:solarisx8664 :solarisx8632) "gmake")
     (t "make")))
 
 (defparameter *known-optional-features* '(:count-gf-calls :monitor-futex-wait :unique-dcode))
