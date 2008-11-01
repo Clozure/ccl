@@ -722,11 +722,10 @@ had invoked abort."
                               (make-broadcast-stream out f)))))
       path)))
 
-(defmethod join-process ((p process) &key (default nil defaultp))
+(defmethod join-process ((p process) &key default)
   (wait-on-semaphore (process-termination-semaphore p) nil "join-process")
   (let ((result (process-result p)))
     (cond ((car result) (values-list (cdr result)))
-          (defaultp default)
-          (t (error "Failed to join ~s" p)))))
+          (t default))))
 
 
