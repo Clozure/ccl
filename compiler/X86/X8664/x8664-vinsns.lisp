@@ -191,7 +191,7 @@
                                               ((v :lisp)
                                                (idx :s32const)) ; sic
                                               ())
-  (movss (:@ (:apply + x8664::misc-data-offset (:apply ash idx x8664::word-shift)) (:%q v)) (:%xmm dest)))
+  (movss (:@ (:apply + x8664::misc-data-offset (:apply ash idx 2)) (:%q v)) (:%xmm dest)))
 
 (define-x8664-vinsn misc-ref-c-u8  (((dest :u64))
 				     ((v :lisp)
