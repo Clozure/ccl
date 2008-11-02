@@ -8570,8 +8570,9 @@
          (atype (if (array-ctype-p ctype) ctype))
          (keyword (and atype
                        (let* ((dims (array-ctype-dimensions atype)))
-                         (and (typep dims 'list)
-                              (= 2 (length dims))))
+                         (or (eq dims '*)
+                             (and (typep dims 'list)
+                                  (= 2 (length dims)))))
                        (not (array-ctype-complexp atype))
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
@@ -8625,8 +8626,9 @@
          (atype (if (array-ctype-p ctype) ctype))
          (keyword (and atype
                        (let* ((dims (array-ctype-dimensions atype)))
-                         (and (typep dims 'list)
-                           (= 3 (length dims))))
+                         (or (eq dims '*)
+                             (and (typep dims 'list)
+                                  (= 3 (length dims)))))
                        (not (array-ctype-complexp atype))
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
