@@ -3721,31 +3721,21 @@
                 (x862-compare-natural-registers seg vreg xfer ireg jreg cr-bit true-p))))))))
 
 
-(defun x862-cr-bit-for-logical-comparison (cr-bit true-p)
-  (declare (fixnum cr-bit))
-  (let* ((unsigned
-          (case cr-bit
-            (#.x86::x86-l-bits x86::x86-b-bits)
-            (#.x86::x86-le-bits x86::x86-be-bits )
-            (#.x86::x86-g-bits x86::x86-a-bits)
-            (#.x86::x86-ge-bits x86::x86-ae-bits)
-            (t cr-bit))))
-    (declare (fixnum unsigned))
-    (if true-p
-      unsigned
-      (logxor unsigned 1))))
+
                  
 (defun x862-compare-natural-registers (seg vreg xfer ireg jreg cr-bit true-p)
   (with-x86-local-vinsn-macros (seg vreg xfer)
     (if vreg
       (progn
-        (setq cr-bit (x862-cr-bit-for-logical-comparison cr-bit true-p))
+        (setq cr-bit (x862-cr-bit-for-unsigned-comparison cr-bit))
         (! compare ireg jreg)
         (regspec-crf-gpr-case 
          (vreg dest)
          (^ cr-bit true-p)
          (progn
            (ensuring-node-target (target dest)
+             (if (not true-p)
+               (setq cr-bit (logxor 1 cr-bit)))
              (! cr-bit->boolean target cr-bit))
            (^))))
       (^))))
@@ -7517,8 +7507,9 @@
          (atype (if (array-ctype-p ctype) ctype))
          (keyword (if (and atype
                            (let* ((dims (array-ctype-dimensions atype)))
-                             (and (not (atom dims))
-                                  (= (length dims) 1)))
+                             (or (eq dims '*)
+                                 (and (not (atom dims))
+                                      (= (length dims) 1))))
                            (not (array-ctype-complexp atype)))
                     (funcall
                         (arch::target-array-type-name-from-ctype-function
@@ -7534,8 +7525,9 @@
          (atype (if vtype (specifier-type vtype)))
          (keyword (if (and atype
                            (let* ((dims (array-ctype-dimensions atype)))
-                             (and (not (atom dims))
-                                 (= (length dims) 1)))
+                             (or (eq dims '*)
+                                 (and (not (atom dims))
+                                      (= (length dims) 1))))
                            (not (array-ctype-complexp atype)))
                     (funcall
                         (arch::target-array-type-name-from-ctype-function
@@ -8675,8 +8667,9 @@
          (atype (if (array-ctype-p ctype) ctype))
          (keyword (and atype
                        (let* ((dims (array-ctype-dimensions atype)))
-                         (and (typep dims 'list)
-                              (= 2 (length dims))))
+                         (or (eq dims '*)
+                             (and (typep dims 'list)
+                                  (= 2 (length dims)))))
                        (not (array-ctype-complexp atype))
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
@@ -8714,8 +8707,9 @@
          (atype (if (array-ctype-p ctype) ctype))
          (keyword (and atype
                        (let* ((dims (array-ctype-dimensions atype)))
-                         (unless (atom dims)
-                           (= 3 (length dims))))
+                         (or (eq dims '*)
+                             (unless (atom dims)
+                               (= 3 (length dims)))))
                        (not (array-ctype-complexp atype))
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
