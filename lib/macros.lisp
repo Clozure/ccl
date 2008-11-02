@@ -517,51 +517,57 @@
            (let* ((form (car args)) 
                   (value (cadr args)))
              ;This must match get-setf-method .
-             (if (atom form)
-               (progn
-                 (unless (symbolp form)(signal-program-error $XNotSym form))
-                 `(setq ,form ,value))
-               (multiple-value-bind (ftype local-p)
-                                    (function-information (setq accessor (car form)) ENV)
-                 (if local-p
-                   (if (eq ftype :function)
-                     ;Local function, so don't use global setf definitions.
-                     (default-setf form value env)
-                     `(setf ,(macroexpand-1 form env) ,value))
-                   (cond
-                    ((setq temp (%setf-method accessor))
-                     (if (symbolp temp)
-                       `(,temp ,@(cdar args) ,value)
-                       (multiple-value-bind (dummies vals storevars setter #|getter|#)
-                                            (funcall temp form env)
-                         (do* ((d dummies (cdr d))
-                               (v vals (cdr v))
-                               (let-list nil))
-                              ((null d)
-                               (setq let-list (nreverse let-list))
-                               `(let* ,let-list
-                                  (declare (ignorable ,@dummies))
-                                  (multiple-value-bind ,storevars ,value
-                                    #|,getter|#
-                                    ,setter)))
-                           (push (list (car d) (car v)) let-list)))))
-                    ((and (type-and-refinfo-p (setq temp (or (environment-structref-info accessor env)
-                                                             (and #-bccl (boundp '%structure-refs%)
-                                                                  (gethash accessor %structure-refs%)))))
-                          (not (refinfo-r/o (if (consp temp) (%cdr temp) temp))))
-                     (if (consp temp)
-                       ;; strip off type, but add in a require-type
-                       (let ((type (%car temp)))
-                         `(the ,type (setf ,(defstruct-ref-transform (%cdr temp) (%cdar args))
-                                           (require-type ,value ',type))))
-                       `(setf ,(defstruct-ref-transform temp (%cdar args))
-                              ,value)))
-                    (t
-                     (multiple-value-bind (res win)
-                                          (macroexpand-1 form env)
-                       (if win
-                         `(setf ,res ,value)
-                         (default-setf form value env))))))))))
+             (cond ((atom form)
+                    (progn
+                      (unless (symbolp form)(signal-program-error $XNotSym form))
+                      `(setq ,form ,value)))
+                   ((eq (car form) 'the)
+                    (unless (eql (length form) 3)
+                      (error "Bad THE place form in (SETF ~S ~S)" form value))
+                    (destructuring-bind (type place) (cdr form)
+                      `(setf ,place (the ,type ,value))))
+                   (t
+                    (multiple-value-bind (ftype local-p)
+                        (function-information (setq accessor (car form)) ENV)
+                      (if local-p
+                        (if (eq ftype :function)
+                                        ;Local function, so don't use global setf definitions.
+                          (default-setf form value env)
+                          `(setf ,(macroexpand-1 form env) ,value))
+                        (cond
+                          ((setq temp (%setf-method accessor))
+                           (if (symbolp temp)
+                             `(,temp ,@(cdar args) ,value)
+                             (multiple-value-bind (dummies vals storevars setter #|getter|#)
+                                 (funcall temp form env)
+                               (do* ((d dummies (cdr d))
+                                     (v vals (cdr v))
+                                     (let-list nil))
+                                    ((null d)
+                                     (setq let-list (nreverse let-list))
+                                     `(let* ,let-list
+                                       (declare (ignorable ,@dummies))
+                                       (multiple-value-bind ,storevars ,value
+                                         #|,getter|#
+                                         ,setter)))
+                                 (push (list (car d) (car v)) let-list)))))
+                          ((and (type-and-refinfo-p (setq temp (or (environment-structref-info accessor env)
+                                                                   (and #-bccl (boundp '%structure-refs%)
+                                                                        (gethash accessor %structure-refs%)))))
+                                (not (refinfo-r/o (if (consp temp) (%cdr temp) temp))))
+                           (if (consp temp)
+                             ;; strip off type, but add in a require-type
+                             (let ((type (%car temp)))
+                               `(the ,type (setf ,(defstruct-ref-transform (%cdr temp) (%cdar args))
+                                            (require-type ,value ',type))))
+                             `(setf ,(defstruct-ref-transform temp (%cdar args))
+                               ,value)))
+                          (t
+                           (multiple-value-bind (res win)
+                               (macroexpand-1 form env)
+                             (if win
+                               `(setf ,res ,value)
+                               (default-setf form value env)))))))))))
           ((oddp temp)
 	   (signal-program-error "Odd number of args to SETF : ~s." args))
           (t (do* ((a args (cddr a)) (l nil))
