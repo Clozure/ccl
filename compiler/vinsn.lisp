@@ -260,6 +260,7 @@
     :jump-unknown			; Jumps, but we don't know where ...
     :constant-ref
     :sets-cc                            ; vinsn sets condition codes based on result
+    :discard                            ; adjusts a stack pointer
     ))
 
 (defparameter *nvp-max* 10 "size of *vinsn-varparts* freelist elements")
