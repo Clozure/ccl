@@ -246,6 +246,27 @@
      39                                ;edi
       )))
 
+#+solarisx8632-target
+(progn
+  (defconstant gp-regs-offset 0)
+  (defmacro xp-gp-regs (xp)
+    `(pref (pref ,xp :ucontext.uc_mcontext) :mcontext_t.gregs))
+  (defun xp-mxcsr (xp)
+    (pref xp :ucontext.uc_mcontext.fpregs.fp_reg_set.fpchip_state.mxcsr))
+  (defconstant flags-register-offset #$EFL)
+  (defconstant eip-register-offset #$EIP)
+  (defparameter *encoded-gpr-to-indexed-gpr*
+    (vector
+     #$EAX
+     #$ECX
+     #$EDX
+     #$EBX
+     #$ESP
+     #$EBP
+     #$ESI
+     #$EDI)
+      ))
+
 (defun indexed-gpr-lisp (xp igpr)
   (%get-object (xp-gp-regs xp) (+ gp-regs-offset (ash igpr target::word-shift))))
 (defun (setf indexed-gpr-lisp) (new xp igpr)
