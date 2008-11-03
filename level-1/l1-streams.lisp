@@ -4325,7 +4325,7 @@
 (defun %make-string-output-stream (string)
   (unless (and (typep string 'string)
                (array-has-fill-pointer-p string))
-    (error "~S must be a string with a fill pointer."))
+    (error "~S must be a string with a fill pointer." string))
   (%%make-string-output-stream *fill-pointer-string-output-stream-class* string 'fill-pointer-string-output-stream-ioblock-write-char 'fill-pointer-string-output-stream-ioblock-write-simple-string))
 
 (defun string-output-stream-ioblock-write-char (ioblock char)
