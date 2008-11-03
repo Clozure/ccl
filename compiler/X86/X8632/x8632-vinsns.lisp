@@ -48,7 +48,7 @@
 (define-x8632-vinsn misc-ref-double-float  (((dest :double-float))
                                             ((v :lisp)
                                              (scaled-idx :imm)))
-  (movsd (:@ x8632::misc-dfloat-offset (:%l v) (:%l scaled-idx)) (:%xmm dest)))
+  (movsd (:@ x8632::misc-dfloat-offset (:%l v) (:%l scaled-idx) 2) (:%xmm dest)))
 
 (define-x8632-vinsn misc-ref-c-double-float  (((dest :double-float))
                                               ((v :lisp)
@@ -91,7 +91,7 @@
 				    (v :lisp)
 				    (unscaled-idx :imm))
 				   ())
-  (movsd (:%xmm val) (:@ x8632::misc-dfloat-offset (:%l v) (:%l unscaled-idx))))
+  (movsd (:%xmm val) (:@ x8632::misc-dfloat-offset (:%l v) (:%l unscaled-idx) 2)))
 
 (define-x8632-vinsn misc-ref-u8 (((dest :u8))
                                  ((v :lisp)
@@ -1649,24 +1649,24 @@
 
 ;; make-fixed-stack-gvector
 
-(define-x8632-vinsn discard-temp-frame (()
-					()
-                                        ((temp :imm)))
+(define-x8632-vinsn (discard-temp-frame :tsp :pop :discard) (()
+                                                             ()
+                                                             ((temp :imm)))
   (movl (:@ (:%seg :rcontext) x8632::tcr.save-tsp) (:%l temp))
   (movl (:@ (:%l temp)) (:%l temp))
   (movl (:%l temp) (:@ (:%seg :rcontext) x8632::tcr.save-tsp))
   (movl (:%l temp) (:@ (:%seg :rcontext) x8632::tcr.next-tsp))
   )
 
-(define-x8632-vinsn discard-c-frame (()
-                                     ()
-                                     ((temp :imm)))
+(define-x8632-vinsn (discard-c-frame :csp :pop :discard) (()
+                                                          ()
+                                                          ((temp :imm)))
   (movl (:@ (:%seg :rcontext) x8632::tcr.foreign-sp) (:%l temp))
   (movl (:@ (:%l temp)) (:%l temp))
   (movl (:%l temp) (:@ (:%seg :rcontext) x8632::tcr.foreign-sp)))
 
   
-(define-x8632-vinsn vstack-discard (()
+(define-x8632-vinsn (vstack-discard :vsp :pop :discard) (()
 				    ((nwords :u32const)))
   ((:not (:pred = nwords 0))
    ((:pred < nwords 16)
@@ -3948,6 +3948,16 @@
   (xorl (:%l reg) (:%l reg))
   (btsl (:$ub (:apply %hard-regspec-value reg)) (:@ (:%seg :rcontext) x8632::tcr.node-regs-mask)))
 
+;;; We can't safely push %eflags on the lisp stack, so we have to clobber
+;;; %ah.
+(define-x8632-vinsn mark-as-node-preserving-flags (()
+                                                   ((reg :imm))
+                                                   ((ah (:u8 #.x8632::imm0))))
+  (:byte #x9f)                          ;lahf
+  (xorl (:%l reg) (:%l reg))
+  (btsl (:$ub (:apply %hard-regspec-value reg)) (:@ (:%seg :rcontext) x8632::tcr.node-regs-mask))
+  (:byte #x9e))
+  
 (define-x8632-vinsn (temp-push-unboxed-word :push :word :csp)
     (()
      ((w :u32))
