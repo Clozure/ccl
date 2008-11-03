@@ -96,7 +96,7 @@
     #+solarisx86-target :solarisx86-target
     #+solarisx8664-target :solarisx8664-target
     #+solarisx8664-target :solarisx8664-host
-    #+solarisx8632-target :solarix8632-target
+    #+solarisx8632-target :solarisx8632-target
     #+solarisx8632-target :solarisx8632-host
     #+poweropen-target :poweropen-target
     #+64-bit-target :64-bit-target
