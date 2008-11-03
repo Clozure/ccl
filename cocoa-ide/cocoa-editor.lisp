@@ -849,10 +849,10 @@
 
 ;;; An abstract superclass of the main and echo-area text views.
 (defclass hemlock-textstorage-text-view (ns::ns-text-view)
-    ((blink-location :foreign-type :unsigned :accessor text-view-blink-location)
-     (blink-color-attribute :foreign-type :id :accessor text-view-blink-color)
-     (blink-enabled :foreign-type :<BOOL> :accessor text-view-blink-enabled)
-     (blink-phase :foreign-type :<BOOL> :accessor text-view-blink-phase)
+    ((paren-highlight-left-pos :foreign-type #>NSUInteger :accessor text-view-paren-highlight-left-pos)
+     (paren-highlight-right-pos :foreign-type #>NSUInteger :accessor text-view-paren-highlight-right-pos)
+     (paren-highlight-color-attribute :foreign-type :id :accessor text-view-paren-highlight-color)
+     (paren-highlight-enabled :foreign-type #>BOOL :accessor text-view-paren-highlight-enabled)
      (peer :foreign-type :id))
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-textstorage-text-view))
@@ -875,9 +875,8 @@
   (assume-cocoa-thread)
   #+debug (log-debug "deactivating ~s" self)
   (assume-not-editing self)
-  (setf (text-view-blink-phase self) #$NO)
-  (disable-blink self)
-  (#/setSelectable: self nil))
+  (#/setSelectable: self nil)
+  (disable-paren-highlight self))
 
 (defmethod eventqueue-abort-pending-p ((self hemlock-textstorage-text-view))
   ;; Return true if cmd-. is in the queue.  Not sure what to do about c-g:
@@ -981,114 +980,107 @@
   (unless *layout-text-in-background*
     (#/setDelegate: layout +null-ptr+)
     (#/setBackgroundLayoutEnabled: layout nil)))
-    
+
+(defloadvar *paren-highlight-background-color* ())
+
+(defun paren-highlight-background-color ()
+  (or *paren-highlight-background-color*
+      (setq *paren-highlight-background-color*
+            (#/retain (#/colorWithCalibratedRed:green:blue:alpha:
+                       ns:ns-color
+                       .3
+                       .875
+                       .8125
+                       1.0)))))
+                                                        
 ;;; Note changes to the textview's background color; record them
-;;; as the value of the "temporary" foreground color (for blinking).
+;;; as the value of the "temporary" foreground color (for paren-highlighting).
 (objc:defmethod (#/setBackgroundColor: :void)
     ((self hemlock-textstorage-text-view) color)
   #+debug (#_NSLog #@"Set background color: %@" :id color)
-  (let* ((old (text-view-blink-color self)))
+  (let* ((old (text-view-paren-highlight-color self)))
     (unless (%null-ptr-p old)
       (#/release old)))
-  (setf (text-view-blink-color self) (#/retain color))
+  (setf (text-view-paren-highlight-color self) (paren-highlight-background-color))
   (call-next-method color))
 
-;;; Maybe cause 1 character in the textview to blink (by drawing an empty
-;;; character rectangle) in synch with the insertion point.
-
-(objc:defmethod (#/drawInsertionPointInRect:color:turnedOn: :void)
-    ((self hemlock-textstorage-text-view)
-     (r :<NSR>ect)
-     color
-     (flag :<BOOL>))
-  (unless (or (not (eq ccl::*current-process* ccl::*initial-process*))
-              (#/editingInProgress (#/textStorage self)))
-    (unless (eql #$NO (text-view-blink-enabled self))
-      #+debug (#_NSLog #@"Flag = %@" :id (if flag #@"T" #@"NIL"))
-      (setf (text-view-blink-phase self) (if flag 1 0))
-      (let* ((layout (#/layoutManager self))
-             (container (#/textContainer self)))
-        ;; We toggle the blinked character "off" by setting its
-        ;; foreground color to the textview's background color.
-        ;; The blinked character should be "off" whenever the insertion
-        ;; point is drawn as "on".  (This means that when this method
-        ;; is invoked to tunr off the insertion point - as when a
-        ;; view loses keyboard focus - the matching paren character
-        ;; is drawn.
-        (ns:with-ns-range  (char-range (text-view-blink-location self) 1)
-          (let* ((glyph-range (#/glyphRangeForCharacterRange:actualCharacterRange:
-                               layout
-                               char-range
-                               +null-ptr+)))
-            #+debug (#_NSLog #@"Flag = %d, location = %d" :<BOOL> (if flag #$YES #$NO) :int (text-view-blink-location self))
-            (let* ((rect (#/boundingRectForGlyphRange:inTextContainer:
-                          layout
-                          glyph-range
-                          container)))
-              (#/setNeedsDisplayInRect: self rect)))))))
-  (call-next-method r color flag))
 
 
-(defmethod disable-blink ((self hemlock-textstorage-text-view))
-  (when (eql (text-view-blink-enabled self) #$YES)
-    (setf (text-view-blink-enabled self) #$NO)
-    (ns:with-ns-range  (char-range (text-view-blink-location self) 1)
-      (let* ((layout (#/layoutManager self))
-             (glyph-range (#/glyphRangeForCharacterRange:actualCharacterRange:
-                               layout
-                               char-range
-                               +null-ptr+)))
+(defmethod remove-paren-highlight ((self hemlock-textstorage-text-view))
+  (let* ((left (text-view-paren-highlight-left-pos self))
+         (right (text-view-paren-highlight-right-pos self)))
+    (ns:with-ns-range  (char-range left (1+ (- right left)))
+      (let* ((layout (#/layoutManager self)))
         (#/lockFocus self)
-        (#/drawGlyphsForGlyphRange:atPoint: layout glyph-range (#/textContainerOrigin self))
+        (#/removeTemporaryAttribute:forCharacterRange: layout #&NSBackgroundColorAttributeName char-range)
         (#/unlockFocus self)))))
 
+(defmethod disable-paren-highlight ((self hemlock-textstorage-text-view))
+  (when (eql (text-view-paren-highlight-enabled self) #$YES)
+    (setf (text-view-paren-highlight-enabled self) #$NO)
+    (remove-paren-highlight self)))
 
-(defmethod update-blink ((self hemlock-textstorage-text-view))
-  (disable-blink self)
+
+
+
+(defmethod force-paren-redisplay ((self hemlock-textstorage-text-view))
+  (when (eql (text-view-paren-highlight-enabled self) #$YES)
+    (ns:with-ns-range (left-char-range (text-view-paren-highlight-left-pos self) 1)
+      (ns:with-ns-range (right-char-range (text-view-paren-highlight-right-pos self) 1)
+        (let* ((layout (#/layoutManager self))
+               (container (#/textContainer self))
+               (left-glyph-range (#/glyphRangeForCharacterRange:actualCharacterRange:
+                                  layout
+                                  left-char-range
+                                  +null-ptr+))
+               (right-glyph-range (#/glyphRangeForCharacterRange:actualCharacterRange:
+                                   layout
+                                   right-char-range
+                                   +null-ptr+))
+               (left-rect (#/boundingRectForGlyphRange:inTextContainer:
+                           layout
+                           left-glyph-range
+                           container))
+               (right-rect (#/boundingRectForGlyphRange:inTextContainer:
+                            layout
+                            right-glyph-range
+                            container)))
+          (#/setNeedsDisplayInRect: self left-rect)
+          (#/setNeedsDisplayInRect: self right-rect))))))
+
+(defmethod update-paren-highlight ((self hemlock-textstorage-text-view))
+  (disable-paren-highlight self)
   (let* ((buffer (hemlock-buffer self)))
     (when (and buffer (string= (hi::buffer-major-mode buffer) "Lisp"))
       (let* ((hi::*current-buffer* buffer)
              (point (hi::buffer-point buffer)))
-        #+debug (#_NSLog #@"Syntax check for blinking")
+        #+debug (#_NSLog #@"Syntax check for paren-highlighting")
         (update-buffer-package (hi::buffer-document buffer) buffer)
         (cond ((eql (hi::next-character point) #\()
                (hemlock::pre-command-parse-check point)
                (when (hemlock::valid-spot point t)
                  (hi::with-mark ((temp point))
                    (when (hemlock::list-offset temp 1)
-                     #+debug (#_NSLog #@"enable blink, forward")
-                     (setf (text-view-blink-location self)
+                     #+debug (#_NSLog #@"enable paren-highlight, forward")
+                     (setf (text-view-paren-highlight-right-pos self)
                            (1- (hi:mark-absolute-position temp))
-                           (text-view-blink-enabled self) #$YES)))))
+                           (text-view-paren-highlight-left-pos self)
+                           (hi::mark-absolute-position point)
+                           (text-view-paren-highlight-enabled self) #$YES)))))
               ((eql (hi::previous-character point) #\))
                (hemlock::pre-command-parse-check point)
                (when (hemlock::valid-spot point nil)
                  (hi::with-mark ((temp point))
                    (when (hemlock::list-offset temp -1)
-                     #+debug (#_NSLog #@"enable blink, backward")
-                     (setf (text-view-blink-location self)
+                     #+debug (#_NSLog #@"enable paren-highlight, backward")
+                     (setf (text-view-paren-highlight-left-pos self)
                            (hi:mark-absolute-position temp)
-                           (text-view-blink-enabled self) #$YES))))))
-        (when (eql (text-view-blink-enabled self) #$YES)
-          (ns:with-ns-range (char-range (text-view-blink-location self) 1)
-            (let* ((layout (#/layoutManager self))
-                   (container (#/textContainer self))
-                   (glyph-range (#/glyphRangeForCharacterRange:actualCharacterRange:
-                                 layout
-                                 char-range
-                                 +null-ptr+))
-                   (rect (#/boundingRectForGlyphRange:inTextContainer:
-                          layout
-                          glyph-range
-                          container)))
-              (setf (text-view-blink-phase self) #$YES)
-              (#/setNeedsDisplayInRect: self rect))))))))
+                           (text-view-paren-highlight-right-pos self)
+                           (1- (hi:mark-absolute-position point))
+                           (text-view-paren-highlight-enabled self) #$YES))))))
+        (force-paren-redisplay self)))))
 
-(objc:defmethod (#/updateInsertionPointStateAndRestartTimer: :void)
-    ((self hemlock-textstorage-text-view)
-     (restart #>BOOL))
-  (setf (text-view-blink-phase self) #$YES)
-  (call-next-method restart))
+
 
 ;;; Set and display the selection at pos, whose length is len and whose
 ;;; affinity is affinity.  This should never be called from any Cocoa
@@ -1102,7 +1094,7 @@
      (affinity :<NSS>election<A>ffinity))
   (assume-cocoa-thread)
   (when (eql length 0)
-    (update-blink self))
+    (update-paren-highlight self))
   (rlet ((range :ns-range :location pos :length length))
     (ccl::%call-next-objc-method self
 				 hemlock-textstorage-text-view
@@ -1149,7 +1141,7 @@
 ;;; end of a range of lines
 ;;; HI::*CURRENT-BUFFER* is bound to the buffer containing START-LINE
 ;;; and END-LINE
-(defun set-temporary-character-attributes (layout pos start-line end-line blink-location  blink-color)
+(defun set-temporary-character-attributes (layout pos start-line end-line)
   (ns:with-ns-range (range)
     (let* ((color-attribute #&NSForegroundColorAttributeName)
            (string-color  (#/blueColor ns:ns-color) )
@@ -1176,10 +1168,7 @@
                   (setf (ns:ns-range-location range) (+ p istart)
                         (ns:ns-range-length range) (1+ (- iend istart)))
                   (#/addTemporaryAttribute:value:forCharacterRange:
-                   layout color-attribute color range)))))))
-      (when blink-location
-        (#/addTemporaryAttribute:value:forCharacterRange:
-             layout color-attribute blink-color (ns:make-ns-range blink-location 1))))))
+                   layout color-attribute color range))))))))))
 
 (objc:defmethod (#/drawRect: :void) ((self hemlock-text-view) (rect :<NSR>ect))
   (let* ((container (#/textContainer self))
@@ -1194,10 +1183,12 @@
       ;; Remove all temporary attributes from the character range
       (#/removeTemporaryAttribute:forCharacterRange:
        layout #&NSForegroundColorAttributeName char-range)
+      (#/removeTemporaryAttribute:forCharacterRange:
+       layout #&NSBackgroundColorAttributeName char-range)
       (let* ((ts (#/textStorage self))
              (cache (hemlock-buffer-string-cache (slot-value ts 'hemlock-string)))
              (hi::*current-buffer* (buffer-cache-buffer cache)))
-        #+debug (#_NSLog #@"blink-phase = %d" :int (text-view-blink-phase self))
+        #+debug (#_NSLog #@"paren-highlight-phase = %d" :int (text-view-paren-highlight-phase self))
         (multiple-value-bind (start-line start-offset)
             (update-line-cache-for-index cache start)
           (let* ((end-line (update-line-cache-for-index cache (+ start length))))
@@ -1205,12 +1196,18 @@
              layout
              (- start start-offset)
              start-line
-             (hi::line-next end-line)
-             (and (eql #$YES (text-view-blink-enabled self))
-                  (eql #$YES (text-view-blink-phase self))
-                  (#/shouldDrawInsertionPoint self)
-                  (text-view-blink-location self))
-             (text-view-blink-color self))))))
+             (hi::line-next end-line))))))
+    (when (and (eql #$YES (text-view-paren-highlight-enabled self))
+               (#/isKeyWindow (#/window self))
+               (#/isSelectable self))
+      (let* ((background #&NSBackgroundColorAttributeName)
+             (paren-highlight-left (text-view-paren-highlight-left-pos self))
+             (paren-highlight-right (text-view-paren-highlight-right-pos self))
+             (paren-highlight-color (text-view-paren-highlight-color self)))
+        (#/addTemporaryAttribute:value:forCharacterRange:
+         layout background paren-highlight-color (ns:make-ns-range paren-highlight-left 1))
+        (#/addTemporaryAttribute:value:forCharacterRange:
+         layout background paren-highlight-color (ns:make-ns-range paren-highlight-right 1))))
     ;; Um, don't forget to actually draw the view..
     (call-next-method  rect)))
 
@@ -1432,7 +1429,7 @@
              (#_NSLog #@"Moving point to absolute position %d" :int location)
              (setf (hi::buffer-region-active buffer) nil)
              (move-hemlock-mark-to-absolute-position point d location)
-             (update-blink self))
+             (update-paren-highlight self))
             (t
              ;; We don't get much information about which end of the
              ;; selection the mark's at and which end point is at, so
@@ -1656,6 +1653,28 @@
 
 (defmethod hemlock-view ((self text-pane))
   (text-pane-hemlock-view self))
+
+;;; This method gets invoked on the text pane, which is its containing
+;;; window's delegate object.
+(objc:defmethod (#/windowDidResignKey: :void)
+    ((self text-pane) notification)
+  (declare (ignorable notification))
+  ;; When the window loses focus, we should remove or change transient
+  ;; highlighting (like matching-paren highlighting).  Maybe make this
+  ;; more general ...
+  (let* ((tv (text-pane-text-view self)))
+    (remove-paren-highlight tv)
+    (remove-paren-highlight (slot-value tv 'peer))))
+
+;;; Likewise, reactivate transient highlighting when the window gets
+;;; focus.
+(objc:defmethod (#/windowDidBecomeKey: :void)
+    ((self text-pane) notification)
+  (declare (ignorable notification))
+  (let* ((tv (text-pane-text-view self)))
+    (force-paren-redisplay tv)
+    (force-paren-redisplay (slot-value tv 'peer))))
+  
 
 ;;; Mark the buffer's modeline as needing display.  This is called whenever
 ;;; "interesting" attributes of a buffer are changed.
@@ -1958,6 +1977,7 @@
     (ns:with-ns-rect (pane-rect  0 reserve-below (ns:ns-rect-width window-frame) (- (ns:ns-rect-height window-frame) (+ reserve-above reserve-below)))
        (let* ((pane (make-instance 'text-pane :with-frame pane-rect)))
 	 (#/addSubview: window-content-view pane)
+         (#/setDelegate: w pane)
 	 pane))))
 
 (defun textpane-for-textstorage (class ts ncols nrows container-tracks-text-view-width color style)
