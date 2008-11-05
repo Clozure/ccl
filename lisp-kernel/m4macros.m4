@@ -42,7 +42,8 @@ ifdef([DARWIN],[define([SYSstabs],[BSDstabs])
                 ifdef([PPC],[
 		define([POWEROPENABI],[])])
                 ifdef([X86],[
-                define([SYSCALL_SETS_CARRY_ON_ERROR],[])])
+                define([SYSCALL_SETS_CARRY_ON_ERROR],[])
+		define([SSE2_MATH_LIB],[])])
 ])
 
 ifdef([LINUX],[define([SYSstabs],[ELFstabs])

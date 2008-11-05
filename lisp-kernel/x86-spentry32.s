@@ -4141,7 +4141,12 @@ LocalLabelPrefix[]ffcall_call_end:
 	__(je 0f)
 	__(movl %arg_z,rcontext(tcr.ffi_exception))
 	__(jmp 1f)
-0:	__(stmxcsr rcontext(tcr.ffi_exception))
+0:
+	__ifdef([SSE2_MATH_LIB])
+	__(stmxcsr rcontext(tcr.ffi_exception))
+	__else
+	__(fnstsw rcontext(tcr.ffi_exception))
+	__endif
 1:	__(pushl rcontext(tcr.save_eflags))
 	__(popfl)
 	__(movl rcontext(tcr.save_vsp),%esp)
