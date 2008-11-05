@@ -1374,10 +1374,11 @@
 ;;; Returns true iff lexical variable VAR isn't setq'ed in FORM.
 ;;; Punts a lot ...
 (defun x862-var-not-set-by-form-p (var form)
-  (or (not (%ilogbitp $vbitsetq (nx-var-bits var)))
-      (x862-setqed-var-not-set-by-form-p var form)))
+  (let* ((bits (nx-var-bits var)))
+    (or (not (%ilogbitp $vbitsetq bits))
+        (x862-setqed-var-not-set-by-form-p var form (logbitp $vbitclosed bits)))))
 
-(defun x862-setqed-var-not-set-by-form-p (var form)
+(defun x862-setqed-var-not-set-by-form-p (var form &optional closed)
   (setq form (acode-unwrapped-form form))
   (or (atom form)
       (x86-constant-form-p form)
@@ -1387,10 +1388,11 @@
         (if (eq op (%nx1-operator setq-lexical))
           (and (neq var (cadr form))
                (x862-setqed-var-not-set-by-form-p var (caddr form)))
-          (and (%ilogbitp operator-side-effect-free-bit op)
+          (and (or (not closed)
+                   (logbitp operator-side-effect-free-bit op))
                (flet ((not-set-in-formlist (formlist)
                         (dolist (subform formlist t)
-                          (unless (x862-setqed-var-not-set-by-form-p var subform) (return)))))
+                          (unless (x862-setqed-var-not-set-by-form-p var subform closed) (return)))))
                  (if
                    (cond ((%ilogbitp operator-acode-subforms-bit op) (setq subforms (%cdr form)))
                          ((%ilogbitp operator-acode-list-bit op) (setq subforms (cadr form))))
@@ -1719,7 +1721,8 @@
              (is-signed (member type-keyword '(:signed-8-bit-vector :signed-16-bit-vector :signed-32-bit-vector :signed-64-bit-vector :fixnum-vector)))
              (vreg-class (and (not (eq vreg :push)) (hard-regspec-class vreg)))
              (vreg-mode
-              (if (eql vreg-class hard-reg-class-gpr)
+              (if (or (eql vreg-class hard-reg-class-gpr)
+                      (eql vreg-class hard-reg-class-fpr))
                 (get-regspec-mode vreg)
                 hard-reg-class-gpr-mode-invalid)))
         (cond
@@ -1731,7 +1734,11 @@
              (ensuring-node-target (target vreg)
                (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-64-bit-constant-index arch)))
                  (! misc-ref-c-node target src index-known-fixnum)
-                 (! misc-ref-node target src unscaled-idx)))))
+                 (if unscaled-idx
+                   (! misc-ref-node target src unscaled-idx)
+                   (with-node-target (src) unscaled-idx
+                     (x862-absolute-natural seg unscaled-idx  nil (ash index-known-fixnum *x862-target-fixnum-shift*))
+                     (! misc-ref-node target src unscaled-idx)))))))
           (is-32-bit
            (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-32-bit-constant-index arch)))
              (cond ((eq type-keyword :single-float-vector)
@@ -1764,7 +1771,7 @@
 			      (! box-fixnum target temp)))))))))
              (with-imm-target () idx-reg
                (if index-known-fixnum
-		 (x862-absolute-natural seg idx-reg nil (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum 2)))
+		 (x862-absolute-natural seg idx-reg nil (ash index-known-fixnum 2))
 		 (! scale-32bit-misc-index idx-reg unscaled-idx))
 	       (cond ((eq type-keyword :single-float-vector)
 		      (with-fp-target () (fp-val :single-float)
@@ -1831,6 +1838,8 @@
                (! box-fixnum target temp))))
           ;; Down to the dregs.
           (is-64-bit
+           (with-node-target (src) extra
+             (unless unscaled-idx (setq unscaled-idx extra)))
            (case type-keyword
              (:double-float-vector
               (with-fp-target () (fp-val :double-float)
@@ -2600,10 +2609,11 @@
 						  index unscaled-idx
 						  value result-reg)))
 		(:x8664
-		 (x862-three-targeted-reg-forms seg
-						vector src
-						index unscaled-idx
-						value result-reg)))))
+                 (multiple-value-setq (src unscaled-idx result-reg)
+                   (x862-three-untargeted-reg-forms seg
+                                                  vector src
+                                                  index unscaled-idx
+                                                  value result-reg))))))
         (when safe
 	  (let* ((*available-backend-imm-temps* *available-backend-imm-temps*)
 		 (value (if (eql (hard-regspec-class result-reg)
@@ -3196,26 +3206,26 @@
 	  (target-arch-case
 	   (:x8632
 	    (setq vinsn (! temp-push-single-float areg))
-	    (incf *x862-cstack* *x862-target-dnode-size*))
+            (x862-open-undo $undo-x86-c-frame))
 	   (:x8664
 	    (setq vinsn (! vpush-single-float areg))
 	    (x862-new-vstack-lcell :single-float *x862-target-lcell-size* 0 nil)
-	    (x862-adjust-vstack *x862-target-node-size*)))
+	    (x862-open-undo $undo-x86-c-frame)))
 	  (target-arch-case
 	   (:x8632
 	    (if a-float
 	      (progn
 		(setq vinsn (! temp-push-double-float areg))
-		(incf *x862-cstack* 16))
+                (x862-open-undo $undo-x86-c-frame))
 	      (progn
 		(setq vinsn (! temp-push-unboxed-word areg))
-		(incf *x862-cstack* *x862-target-dnode-size*))))
+		(x862-open-undo $undo-x86-c-frame))))
 	   (:x8664
             (setq vinsn
                   (if a-float
                     (! temp-push-double-float areg)
                     (! temp-push-unboxed-word areg)))
-            (setq *x862-cstack* (+ *x862-cstack* 16))))))
+            (x862-open-undo $undo-x86-c-frame)))))
       vinsn)))
 
 (defun x862-pop-register (seg areg)
@@ -3230,7 +3240,7 @@
           (target-arch-case
 	   (:x8632
 	    (setq vinsn (! temp-pop-single-float areg))
-	    (decf *x862-cstack* *x862-target-dnode-size*))
+            (x862-close-undo))
 	   (:x8664
             (setq vinsn (! vpop-single-float areg))
             (setq *x862-top-vstack-lcell* (lcell-parent *x862-top-vstack-lcell*))
@@ -3240,30 +3250,26 @@
 	    (if a-float
 	      (progn
 		(setq vinsn (! temp-pop-double-float areg))
-		(decf *x862-cstack* 16))
+		(x862-close-undo))
 	      (progn
 		(setq vinsn (! temp-pop-unboxed-word areg))
-		(decf *x862-cstack* *x862-target-dnode-size*))))
+		(x862-close-undo))))
 	   (:x8664
             (setq vinsn
                   (if a-float
                     (! temp-pop-double-float areg)
                     (! temp-pop-unboxed-word areg)))
-            (setq *x862-cstack* (- *x862-cstack* 16))))))
+            (x862-close-undo)))))
       vinsn)))
 
+;;; If reg is a GPR and of mode node, use arg_z, otherwise, just return
+;;; reg.
 (defun x862-acc-reg-for (reg)
   (with-x86-local-vinsn-macros (seg)
-    (let* ((class (hard-regspec-class reg))
-           (mode (get-regspec-mode reg)))
-      (declare (fixnum class mode))
-      (cond ((= class hard-reg-class-fpr)
-             (make-wired-lreg *x862-fp1* :class class :mode mode))
-            ((= class hard-reg-class-gpr)
-             (if (= mode hard-reg-class-gpr-mode-node)
-               ($ *x862-arg-z*)
-               (make-wired-lreg *x862-imm0* :mode mode)))
-            (t (compiler-bug "Unknown register class for reg ~s" reg))))))
+    (if (and (eql (hard-regspec-class reg) hard-reg-class-gpr)
+           (eql (get-regspec-mode reg) hard-reg-class-gpr-mode-node))
+      ($ *x862-arg-z*)
+      reg)))
 
 ;;; The compiler often generates superfluous pushes & pops.  Try to
 ;;; eliminate them.
@@ -3713,12 +3719,20 @@
             (unless (or ju31 (eq cr-bit x86::x86-e-bits)) 
                 (setq cr-bit (x862-reverse-cr-bit cr-bit)))
             (^ cr-bit true-p))
-        (with-imm-target () (ireg :natural)
-	  (with-additional-imm-reg ()
-            (with-imm-target
-                (ireg) (jreg :natural)
-                (x862-two-targeted-reg-forms seg i ireg j jreg)
-                (x862-compare-natural-registers seg vreg xfer ireg jreg cr-bit true-p))))))))
+        (target-arch-case
+         (:x8664
+          (with-imm-target () (ireg :natural)
+            (with-imm-target (ireg) (jreg :natural)
+              (x862-two-targeted-reg-forms seg i ireg j jreg)
+              (x862-compare-natural-registers seg vreg xfer ireg jreg cr-bit true-p))))
+         (:x8632
+          (with-imm-target () (jreg :natural) 
+            (x862-one-targeted-reg-form seg i jreg)
+            (x862-push-register seg jreg)
+            (x862-one-targeted-reg-form seg j jreg)
+            (! temp-pop-temp1-as-unboxed-word)
+            (x862-close-undo)
+            (x862-compare-natural-registers seg vreg xfer ($ x8632::temp1) jreg cr-bit true-p))))))))
 
 
 
@@ -3729,6 +3743,9 @@
       (progn
         (setq cr-bit (x862-cr-bit-for-unsigned-comparison cr-bit))
         (! compare ireg jreg)
+        (target-arch-case
+         (:x8664)
+         (:x8632 (! mark-temp1-as-node-preserving-flags)))
         (regspec-crf-gpr-case 
          (vreg dest)
          (^ cr-bit true-p)
