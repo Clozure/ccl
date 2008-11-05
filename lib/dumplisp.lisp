@@ -89,13 +89,23 @@
                                        (find-class application-class)
                                        application-class)))
     (setq *application* (make-instance application-class)))
-  (when (not toplevel-function)
+  (if (not toplevel-function)
     (setq toplevel-function 
           #'(lambda ()
               (toplevel-function *application*
 				 (if init-file-p
 				   init-file
-				   (application-init-file *application*))))))
+				   (application-init-file *application*)))))
+    (let* ((user-toplevel-function (coerce-to-function toplevel-function)))
+      (setq toplevel-function
+            (lambda ()
+              (restore-lisp-pointers)
+              (initialize-interactive-streams)
+              (process-run-function "toplevel" (lambda ()
+                                                 (funcall user-toplevel-function)
+                                                 (quit)))
+              (%set-toplevel #'housekeeping-loop)
+              (toplevel)))))
   (when error-handler
     (make-application-error-handler *application* error-handler))
   
