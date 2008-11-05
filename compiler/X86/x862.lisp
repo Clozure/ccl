@@ -3194,6 +3194,8 @@
         (x862-one-untargeted-lreg-form seg form suggested)))))
              
 
+
+
 (defun x862-push-register (seg areg)
   (let* ((a-float (= (hard-regspec-class areg) hard-reg-class-fpr))
          (a-single (if a-float (= (get-regspec-mode areg) hard-reg-class-fpr-mode-single)))
@@ -3210,7 +3212,7 @@
 	   (:x8664
 	    (setq vinsn (! vpush-single-float areg))
 	    (x862-new-vstack-lcell :single-float *x862-target-lcell-size* 0 nil)
-	    (x862-open-undo $undo-x86-c-frame)))
+	    (x862-adjust-vstack *x862-target-node-size*)))
 	  (target-arch-case
 	   (:x8632
 	    (if a-float
@@ -3227,6 +3229,8 @@
                     (! temp-push-unboxed-word areg)))
             (x862-open-undo $undo-x86-c-frame)))))
       vinsn)))
+
+
 
 (defun x862-pop-register (seg areg)
   (let* ((a-float (= (hard-regspec-class areg) hard-reg-class-fpr))
