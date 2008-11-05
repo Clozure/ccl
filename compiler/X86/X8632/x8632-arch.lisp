@@ -360,11 +360,11 @@
 (defconstant misc-data-offset (+ misc-header-offset node-size))
 (defconstant misc-dfloat-offset ( + misc-header-offset 8))
 
-(defconstant max-64-bit-constant-index (ash (+ #x7fff x8632::misc-dfloat-offset) -3))
-(defconstant max-32-bit-constant-index (ash (+ #x7fff x8632::misc-data-offset) -2))
-(defconstant max-16-bit-constant-index (ash (+ #x7fff x8632::misc-data-offset) -1))
-(defconstant max-8-bit-constant-index (+ #x7fff x8632::misc-data-offset))
-(defconstant max-1-bit-constant-index (ash (+ #x7fff x8632::misc-data-offset) 5))
+(defconstant max-64-bit-constant-index (ash 1 24))
+(defconstant max-32-bit-constant-index (ash 1 24))
+(defconstant max-16-bit-constant-index (ash 1 24))
+(defconstant max-8-bit-constant-index (ash 1 24))
+(defconstant max-1-bit-constant-index (ash 1 24))
 
 )  ;eval-when
 
