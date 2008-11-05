@@ -1848,7 +1848,7 @@
   (leaq (:@ (+ x8664::dnode-size x8664::fulltag-misc) (:%q tempa)) (:%q dest)))
 
 
-(define-x8664-vinsn discard-temp-frame (()
+(define-x8664-vinsn (discard-temp-frame :tsp :pop :discard) (()
 					()
                                         ((temp :imm)))
   (movq (:rcontext x8664::tcr.save-tsp) (:%q temp))
@@ -1857,7 +1857,7 @@
   (movq (:%q temp) (:rcontext x8664::tcr.next-tsp))
   )
 
-(define-x8664-vinsn discard-c-frame (()
+(define-x8664-vinsn (discard-c-frame :csp :pop :discard) (()
                                      ()
                                      ((temp :imm)))
   (movq (:rcontext x8664::tcr.foreign-sp) (:%q temp))
@@ -1865,7 +1865,7 @@
   (movq (:%q temp) (:rcontext x8664::tcr.foreign-sp)))
 
   
-(define-x8664-vinsn vstack-discard (()
+(define-x8664-vinsn (vstack-discard :vsp :pop :discard) (()
 				    ((nwords :u32const)))
   ((:not (:pred = nwords 0))
    ((:pred < nwords 16)
@@ -4534,8 +4534,7 @@
 
 (define-x8664-vinsn align-loop-head (()
                                      ()
-                                     ())
-  (:align 4))
+                                     ()))
 
 (queue-fixup
  (fixup-x86-vinsn-templates
