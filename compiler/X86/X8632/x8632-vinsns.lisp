@@ -3948,15 +3948,14 @@
   (xorl (:%l reg) (:%l reg))
   (btsl (:$ub (:apply %hard-regspec-value reg)) (:@ (:%seg :rcontext) x8632::tcr.node-regs-mask)))
 
-;;; We can't safely push %eflags on the lisp stack, so we have to clobber
-;;; %ah.
-(define-x8632-vinsn mark-as-node-preserving-flags (()
-                                                   ((reg :imm))
-                                                   ((ah (:u8 #.x8632::imm0))))
-  (:byte #x9f)                          ;lahf
-  (xorl (:%l reg) (:%l reg))
-  (btsl (:$ub (:apply %hard-regspec-value reg)) (:@ (:%seg :rcontext) x8632::tcr.node-regs-mask))
-  (:byte #x9e))
+(define-x8632-vinsn mark-temp1-as-node-preserving-flags (()
+                                                        ()
+                                                        ((reg (:u32 #.x8632::temp1))))
+  (movl (:$l 0) (:%l reg))              ;not xorl!
+  (cld))                                ;well, preserving most flags.
+
+  
+
   
 (define-x8632-vinsn (temp-push-unboxed-word :push :word :csp)
     (()
@@ -3973,6 +3972,15 @@
     (((w :u32))
      ())
   (movl (:@ (:%seg :rcontext) x8632::tcr.foreign-sp) (:%l w))
+  (movl (:@ 8 (:%l w)) (:%l w))
+  (addl (:$b 16) (:@ (:%seg :rcontext) x8632::tcr.foreign-sp)))
+
+(define-x8632-vinsn (temp-pop-temp1-as-unboxed-word :pop :word :csp)
+    (()
+     ()
+     ((w (:u32 #.x8632::temp1))))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.foreign-sp) (:%l w))
+  (std)
   (movl (:@ 8 (:%l w)) (:%l w))
   (addl (:$b 16) (:@ (:%seg :rcontext) x8632::tcr.foreign-sp)))
 
@@ -4054,7 +4062,7 @@
 
 (define-x8632-vinsn align-loop-head (()
 				     ())
-  (:align 4))
+)
 
 (queue-fixup
  (fixup-x86-vinsn-templates
