@@ -69,10 +69,12 @@
 (defclass cocoa-application (application)
   ())
 
-;; Is this defined on application (rather than cocoa-application) for a reason?
-(defmethod ccl::application-error ((a application) condition error-pointer)
+(defmethod ccl::application-error ((a cocoa-application) condition error-pointer)
   (ccl::break-loop-handle-error condition error-pointer))
 
+
+(defmethod ccl::application-init-file ((a cocoa-application))
+  '("home:ccl-init" "home:\\.ccl-init"))
 
 ;;; If we're launched via the Finder, the only argument we'll
 ;;; get is of the form -psnXXXXXX.  That's meaningless to us;
@@ -138,5 +140,8 @@
                       :application-class 'cocoa-application)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+#+x8632-target
+(break "ready to start Cocoa event loop.")
 
 (start-cocoa-application)

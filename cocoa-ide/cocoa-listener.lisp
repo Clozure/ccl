@@ -214,8 +214,10 @@
                          :accessor cocoa-listener-process-backtrace-contexts)
      (window :reader cocoa-listener-process-window)))
   
+(defloadvar *first-listener* t)
 
 (defun new-cocoa-listener-process (procname window)
+  (declare (special *standalone-cocoa-ide*))
   (let* ((input-stream (make-instance 'cocoa-listener-input-stream))
          (output-stream (make-instance 'cocoa-listener-output-stream
                           :hemlock-view (hemlock-view window)))
@@ -241,6 +243,10 @@
            :initial-function
            #'(lambda ()
                (setq ccl::*listener-autorelease-pool* (create-autorelease-pool))
+               (when (and *standalone-cocoa-ide*
+                        (prog1 *first-listener* (setq *first-listener* nil)))
+                 (ccl::startup-ccl (ccl::application-init-file ccl::*application*))
+                 (ui-object-note-package *nsapp* *package*))
                (ccl::listener-function))
            :echoing nil
            :class 'cocoa-listener-process)))
