@@ -59,7 +59,7 @@
                `(defgeneric ,name ,args
                   ,@options
                   (:method ,args
-                    (declare (ignore ,@args))))))
+                    (declare (ignore ,@(remove-if (lambda (sym) (member sym lambda-list-keywords)) args)))))))
   ;; TODO: mouse-move
   (defgeneric-and-empty-method mouse-down (view &key cocoa-event location button
                                                 click-count delta))
