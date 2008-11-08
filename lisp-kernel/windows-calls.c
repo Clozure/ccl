@@ -187,13 +187,7 @@ lisp_open(wchar_t *path, int flag, int mode)
   DWORD dwFlagsAndAttributes = 0;
   SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
 
-  if ((flag & S_IREAD) == S_IREAD) {
-    dwShareMode = FILE_SHARE_READ;
-  } else {
-    if ((flag & S_IWRITE) == S_IWRITE) {
-      dwShareMode = FILE_SHARE_READ | FILE_SHARE_WRITE;
-    }
-  }
+  dwShareMode = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
 
   if ((flag & _O_WRONLY) == _O_WRONLY) {
     dwDesiredAccess |= GENERIC_WRITE | FILE_WRITE_DATA |
@@ -206,12 +200,6 @@ lisp_open(wchar_t *path, int flag, int mode)
       FILE_WRITE_ATTRIBUTES;
   }
     
-  if ((flag & S_IREAD) == S_IREAD) {
-    dwShareMode |= FILE_SHARE_READ;
-  }
-  if ((flag & S_IWRITE) == S_IWRITE) {
-    dwShareMode |= FILE_SHARE_WRITE;
-  }
 
   if ((flag & (_O_CREAT | _O_EXCL)) == (_O_CREAT | _O_EXCL)) {
     dwCreationDistribution |= CREATE_NEW;
@@ -572,7 +560,15 @@ lisp_pipe(int fd[2])
 int
 lisp_gettimeofday(struct timeval *tp, void *tzp)
 {
-  return gettimeofday(tp, tzp);
+  __time64_t now;
+
+  gettimeofday(tp,tzp);       /* trust it to get time zone right, at least */
+  GetSystemTimeAsFileTime((FILETIME*)&now);
+  now -= UNIX_EPOCH_IN_WINDOWS_EPOCH;
+  now /= 10000;
+  tp->tv_sec = now/1000LL;
+  tp->tv_usec = now%1000LL;
+  return 0;
 }
 
 #ifdef WIN_64
@@ -646,7 +642,7 @@ asinh(double x)
 
   z = log1p (z + z * z / (sqrt (z * z + 1.0) + 1.0));
 
-  return ( x > 0.0 ? z : -z);
+  return ( x >= 0.0 ? z : -z);
 }
 
 float
@@ -671,7 +667,7 @@ asinhf(float x)
 
   z = log1p (z + z * z / (sqrt (z * z + 1.0) + 1.0));
 
-  return ( x > 0.0 ? z : -z);
+  return ( x >= 0.0 ? z : -z);
 }
 
 double
