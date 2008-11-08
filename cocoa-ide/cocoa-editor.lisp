@@ -1011,9 +1011,7 @@
          (right (text-view-paren-highlight-right-pos self)))
     (ns:with-ns-range  (char-range left (1+ (- right left)))
       (let* ((layout (#/layoutManager self)))
-        (#/lockFocus self)
-        (#/removeTemporaryAttribute:forCharacterRange: layout #&NSBackgroundColorAttributeName char-range)
-        (#/unlockFocus self)))))
+        (#/removeTemporaryAttribute:forCharacterRange: layout #&NSBackgroundColorAttributeName char-range)))))
 
 (defmethod disable-paren-highlight ((self hemlock-textstorage-text-view))
   (when (eql (text-view-paren-highlight-enabled self) #$YES)
