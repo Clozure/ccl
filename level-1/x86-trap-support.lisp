@@ -369,6 +369,7 @@
           ((< signal 0)
            (%err-disp-internal code () frame-ptr))
           ((= signal #$SIGFPE)
+           (setq code (logand #xffffffff code))
            (multiple-value-bind (operation operands)
                (decode-arithmetic-error xp xcf)
              (let* ((condition-name
