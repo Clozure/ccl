@@ -2123,13 +2123,13 @@ _spentry(gvector)
 _endsubp(gvector)
 
 _spentry(mvpass)
-	__(int $3)
+	__(hlt)
 _endsubp(mvpass)
 
 
 
 _spentry(nthvalue)
-	__(int $3)
+	__(hlt)
 _endsubp(nthvalue)
 
 _spentry(values)
@@ -2157,15 +2157,15 @@ _spentry(values)
 _endsubp(values)
 
 _spentry(default_optional_args)
-	__(int $3)
+	__(hlt)
 _endsubp(default_optional_args)
 
 _spentry(opt_supplied_p)
-	__(int $3)
+	__(hlt)
 _endsubp(opt_supplied_p)
 
 _spentry(lexpr_entry)
-	__(int $3)
+	__(hlt)
 _endsubp(lexpr_entry)
 	
 _spentry(heap_rest_arg)
@@ -3219,7 +3219,7 @@ local_label(pushloop_mvcall):
 _endsubp(recover_values_for_mvcall)
         				
 _spentry(reset)
-	__(int $3)
+	__(hlt)
 _endsubp(reset)
 
 
@@ -3396,19 +3396,19 @@ _spentry(restoreintlevel)
 _endsubp(restoreintlevel)
 
 _spentry(makes32)
-	__(int $3)
+	__(hlt)
 _endsubp(makes32)
 
 _spentry(makeu32)
-	__(int $3)
+	__(hlt)
 _endsubp(makeu32)
 
 _spentry(gets32)
-	__(int $3)
+	__(hlt)
 _endsubp(gets32)
 
 _spentry(getu32)
-	__(int $3)
+	__(hlt)
 _endsubp(getu32)
 
 
@@ -5020,55 +5020,55 @@ _endsubp(eabi_callback)
 
 /* Unused, and often not used on PPC either  */
 _spentry(callbuiltin)
-	__(int $3)
+	__(hlt)
 _endsubp(callbuiltin)
 
 _spentry(callbuiltin0)
-	__(int $3)
+	__(hlt)
 _endsubp(callbuiltin0)
 
 _spentry(callbuiltin1)
-	__(int $3)
+	__(hlt)
 _endsubp(callbuiltin1)
 
 _spentry(callbuiltin2)
-	__(int $3)
+	__(hlt)
 _endsubp(callbuiltin2)
 
 _spentry(callbuiltin3)
-	__(int $3)
+	__(hlt)
 _endsubp(callbuiltin3)
 	
 _spentry(restorefullcontext)
-	__(int $3)
+	__(hlt)
 _endsubp(restorefullcontext)
 
 _spentry(savecontextvsp)
-	__(int $3)
+	__(hlt)
 _endsubp(savecontextvsp)
 
 _spentry(savecontext0)
-	__(int $3)
+	__(hlt)
 _endsubp(savecontext0)
 
 _spentry(restorecontext)
-	__(int $3)
+	__(hlt)
 _endsubp(restorecontext)
 
 _spentry(stkconsyz)
-	__(int $3)
+	__(hlt)
 _endsubp(stkconsyz)
 
 _spentry(stkvcell0)
-	__(int $3)
+	__(hlt)
 _endsubp(stkvcell0)
 
 _spentry(stkvcellvsp)
-	__(int $3)
+	__(hlt)
 _endsubp(stkvcellvsp)
 
 _spentry(breakpoint)
-        __(int $3)
+        __(hlt)
 _endsubp(breakpoint)
 
 
@@ -5152,7 +5152,7 @@ LEFDEffcall_return_registers:
         __endif
         
 _spentry(unused_5)
-        __(int $3)
+        __(hlt)
 Xspentry_end:           
 _endsubp(unused_5)
         

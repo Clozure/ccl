@@ -1641,7 +1641,7 @@ _endsubp(stkconslist)
 /*	nargs set to #args vpushed.  */
 
 _spentry(stkconslist_star)
-	__(int $3)
+	__(hlt)
 	__(nop)
 _endsubp(stkconslist_star)
 
@@ -2054,11 +2054,11 @@ _spentry(gvector)
 _endsubp(gvector)
 
 _spentry(mvpass)
-	__(int $3)
+	__(hlt)
 _endsubp(mvpass)
 
 _spentry(nthvalue)
-	__(int $3)
+	__(hlt)
 _endsubp(nthvalue)
 
 _spentry(values)
@@ -2089,15 +2089,15 @@ _spentry(values)
 _endsubp(values)
 
 _spentry(default_optional_args)
-	__(int $3)
+	__(hlt)
 _endsubp(default_optional_args)
 
 _spentry(opt_supplied_p)
-	__(int $3)
+	__(hlt)
 _endsubp(opt_supplied_p)
 
 _spentry(lexpr_entry)
-	__(int $3)
+	__(hlt)
 _endsubp(lexpr_entry)
 
 _spentry(heap_rest_arg)
@@ -2440,7 +2440,7 @@ _spentry(stack_cons_rest_arg)
 _endsubp(stack_cons_rest_arg)
 
 _spentry(getxlong)
-	__(int $3)
+	__(hlt)
 _endsubp(getxlong)
 
 /* Have to be a little careful here: the caller may or may not have pushed  */
@@ -3081,7 +3081,7 @@ _spentry(destructuring_bind_inner)
 _endsubp(destructuring_bind_inner)
 
 _spentry(vpopargregs)
-	__(int $3)
+	__(hlt)
 _endsubp(vpopargregs)
 
 /* If arg_z is an integer, return in imm0 something whose sign  */
@@ -3267,7 +3267,7 @@ local_label(pushloop_mvcall):
 _endsubp(recover_values_for_mvcall)
 
 _spentry(reset)
-	__(int $3)
+	__(hlt)
 _endsubp(reset)
 
 /* temp0 = element-count, arg_y = subtag, arg_z = initval */
@@ -3287,8 +3287,21 @@ __(tra(local_label(misc_alloc_init_back)))
 	__(jump_fname())
 _endsubp(misc_alloc_init)
 
+/* %temp1 = element-count, %arg_y = subtag, %arg_z = initial-value */        
 _spentry(stack_misc_alloc_init)
-	__(int $3)
+	__(push %ebp)
+        __(movl %esp,%ebp)
+        __(push %arg_z)
+        __(movl %arg_y,%arg_z)
+        __(movl %temp1,%arg_y)
+        __(pushl $local_label(stack_misc_alloc_init_back))
+        __(jmp _SPstack_misc_alloc)
+__(tra(local_label(stack_misc_alloc_init_back)))
+        __(popl %arg_y)
+	__(leave)
+	__(movl $nrs.init_misc,%fname)
+	__(set_nargs(2))
+	__(jump_fname())
 _endsubp(stack_misc_alloc_init)
 
 	.globl C(popj)
@@ -3453,7 +3466,7 @@ _spentry(specrefcheck)
 _endsubp(specrefcheck)
 
 _spentry(restoreintlevel)
-	__(int $3)
+	__(hlt)
 _endsubp(restoreintlevel)
 
 /* Make a lisp integer from the unsigned value in imm0 */
@@ -3529,7 +3542,7 @@ _spentry(getu32)
 _endsubp(getu32)
 
 _spentry(mvpasssym)
-	__(int $3)
+	__(hlt)
 _endsubp(mvpasssym)
 
 /* don't smash arg_z */
@@ -4165,7 +4178,7 @@ LocalLabelPrefix[]ffcall_call_end:
 _endsubp(ffcall)
 
 _spentry(ffcall_return_registers)
-	__(int $3)
+	__(hlt)
 _endsubp(ffcall_return_registers)
 
 /* We need to reserve a frame here if (a) nothing else was already pushed
@@ -4636,77 +4649,77 @@ local_label(one_arg):
 _endsubp(call_closure)
 
 _spentry(poweropen_callbackX)
-	__(int $3)
+	__(hlt)
 _endsubp(poweropen_callbackX)
 
 _spentry(poweropen_ffcallX)
-	__(int $3)
+	__(hlt)
 _endsubp(poweropen_ffcallX)
 
 _spentry(eabi_ff_call)
-	__(int $3)
+	__(hlt)
 _endsubp(eabi_ff_call)
 
 _spentry(eabi_callback)
-	__(int $3)
+	__(hlt)
 _endsubp(eabi_callback)
 
 
 /* Unused, and often not used on PPC either  */
 _spentry(callbuiltin)
-	__(int $3)
+	__(hlt)
 _endsubp(callbuiltin)
 
 _spentry(callbuiltin0)
-	__(int $3)
+	__(hlt)
 _endsubp(callbuiltin0)
 
 _spentry(callbuiltin1)
-	__(int $3)
+	__(hlt)
 _endsubp(callbuiltin1)
 
 _spentry(callbuiltin2)
-	__(int $3)
+	__(hlt)
 _endsubp(callbuiltin2)
 
 _spentry(callbuiltin3)
-	__(int $3)
+	__(hlt)
 _endsubp(callbuiltin3)
 
 _spentry(restorefullcontext)
-	__(int $3)
+	__(hlt)
 _endsubp(restorefullcontext)
 
 _spentry(savecontextvsp)
-	__(int $3)
+	__(hlt)
 _endsubp(savecontextvsp)
 
 _spentry(savecontext0)
-	__(int $3)
+	__(hlt)
 _endsubp(savecontext0)
 
 _spentry(restorecontext)
-	__(int $3)
+	__(hlt)
 _endsubp(restorecontext)
 
 _spentry(stkconsyz)
-	__(int $3)
+	__(hlt)
 _endsubp(stkconsyz)
 
 _spentry(stkvcell0)
-	__(int $3)
+	__(hlt)
 _endsubp(stkvcell0)
 
 _spentry(stkvcellvsp)
-	__(int $3)
+	__(hlt)
 _endsubp(stkvcellvsp)
 
 _spentry(breakpoint)
-        __(int $3)
+        __(hlt)
 _endsubp(breakpoint)
 
 _spentry(unused_6)
-        __(int $3)
+        __(hlt)
 Xspentry_end:
 _endsubp(unused_6)
         .data
