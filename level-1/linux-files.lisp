@@ -526,7 +526,7 @@ given is that of a group to which the current user belongs."
 
 
 (defun fd-fsync (fd)
-  #+windows-target (#_FlushFileBuffers fd)
+  #+windows-target (#_FlushFileBuffers (%int-to-ptr fd))
   #-windows-target
   (int-errno-call (#_fsync fd)))
 
