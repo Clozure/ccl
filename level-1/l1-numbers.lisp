@@ -766,19 +766,26 @@
 #+windows-target
 (progn
 (defun %double-float-asinh! (n result)
-  (%setf-double-float
-   result
-   (log (+ n (sqrt (1+ (* n n)))))))
+  (declare (double-float n result))
+  (with-stack-double-floats ((temp))
+    (%setf-double-float TEMP (external-call "asinh" :double-float n :double-float))
+    (%df-check-exception-1 'asinh n (%ffi-exception-status))
+    (%setf-double-float result TEMP)))
 
 #+32-bit-target
 (defun %single-float-asinh! (n result)
-  (%setf-short-float
-   result
-   (log (+ n (sqrt (1+ (* n n)))))))
+  (declare (single-float n result))
+  (target::with-stack-short-floats ((temp))
+    (%setf-short-float TEMP (external-call "asinhf" :float n :float))
+    (%sf-check-exception-1 'asinh n (%ffi-exception-status))
+    (%setf-short-float result TEMP)))
 
 #+64-bit-target
 (defun %single-float-asinh (n)
-  (log (+ n (sqrt (1+ (* n n)))))))
+  (declare (single-float n))
+  (let* ((result (external-call "asinhf" :float n :float)))
+    (%sf-check-exception-1 'asinh n (%ffi-exception-status))
+    result)))
 
 #-windows-target
 (progn
@@ -809,19 +816,26 @@
 #+windows-target
 (progn
 (defun %double-float-acosh! (n result)
-  (%setf-double-float
-   result
-   (* 2 (log (+ (sqrt (/ (+ n 1) 2)) (sqrt (/ (- n 1) 2)))))))
+  (declare (double-float n result))
+  (with-stack-double-floats ((temp))
+    (%setf-double-float TEMP (external-call "acosh" :double  n :double))
+    (%df-check-exception-1 'acosh n (%ffi-exception-status))
+    (%setf-double-float result TEMP)))
 
 #+32-bit-target
 (defun %single-float-acosh! (n result)
-  (%setf-short-float
-   result
-   (* 2 (log (+ (sqrt (/ (+ n 1) 2)) (sqrt (/ (- n 1) 2)))))))
+  (declare (single-float n result))
+  (target::with-stack-short-floats ((temp))
+    (%setf-short-float TEMP (external-call "acoshf" :float n :float))
+    (%sf-check-exception-1 'acosh n (%ffi-exception-status))
+    (%setf-short-float result TEMP)))
 
 #+64-bit-target
 (defun %single-float-acosh (n)
-  (* 2 (log (+ (sqrt (/ (+ n 1) 2)) (sqrt (/ (- n 1) 2))))))
+  (declare (single-float n))
+  (let* ((result (external-call "acoshf" :float n :float)))
+    (%sf-check-exception-1 'acosh n (%ffi-exception-status))
+    result))
 
 )
 
@@ -853,25 +867,26 @@
 #+windows-target
 (progn
 (defun %double-float-atanh! (n result)
-  (%setf-double-float
-   result
-   (/ (- (log (1+ n))
-         (log (- 1 n)))
-      2)))
+  (declare (double-float n result))
+  (with-stack-double-floats ((temp))
+    (%setf-double-float TEMP (external-call "atanh" :double n :double))
+    (%df-check-exception-1 'atanh n (%ffi-exception-status))
+    (%setf-double-float result TEMP)))
 
 #+32-bit-target
 (defun %single-float-atanh! (n result)
-  (%setf-short-float
-   result
-   (/ (- (log (1+ n))
-         (log (- 1 n)))
-      2)))
+  (declare (single-float n result)) 
+  (target::with-stack-short-floats ((temp))
+    (%setf-short-float TEMP (external-call "atanhf" :float n :float))
+    (%sf-check-exception-1 'atanh n (%ffi-exception-status))
+    (%setf-short-float result TEMP)))
 
 #+64-bit-target
 (defun %single-float-atanh (n)
-  (/ (- (log (1+ n))
-        (log (- 1 n)))
-     2))
+  (declare (single-float n)) 
+  (let* ((result (external-call "atanhf" :float n :float)))
+    (%sf-check-exception-1 'atanh n (%ffi-exception-status))
+    result))
 
 )
 
