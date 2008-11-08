@@ -1615,11 +1615,12 @@ _endsubp(conslist_star)
 /* We always have to create a tsp frame (even if nargs is 0), so the compiler */
 /* doesn't get confused. */
 _spentry(stkconslist)
+	__(movl $nil_value,%arg_z)
+C(stkconslist_common):               
 	__(movl %ra0,rcontext(tcr.save0))
 	__(movd %nargs,%mm0)
 	__(movl %nargs,%temp0)
 	__(addl %temp0,%temp0)
-	__(movl $nil_value,%arg_z)
 	__(dnode_align(%temp0,tsp_frame.fixed_overhead,%temp0))
 	__(TSP_Alloc_Var(%temp0,%imm0))
 	__(addl $fulltag_cons,%imm0)
@@ -1641,8 +1642,7 @@ _endsubp(stkconslist)
 /*	nargs set to #args vpushed.  */
 
 _spentry(stkconslist_star)
-	__(hlt)
-	__(nop)
+        __(jmp C(stkconslist_common))
 _endsubp(stkconslist_star)
 
 
