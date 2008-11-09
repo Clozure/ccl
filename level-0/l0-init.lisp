@@ -78,6 +78,8 @@
     #+freebsdx86-target :freebsdx86-target
     #+freebsdx8664-target :freebsdx8664-target
     #+freebsdx8664-target :freebsdx8664-host
+    #+freebsdx8632-target :freebsdx8632-target
+    #+freebsdx8632-target :freebsdx8632-host
     #+darwin-target :darwin-host
     #+darwin-target :darwin-target
     #+darwinx86-target :darwinx86-target
