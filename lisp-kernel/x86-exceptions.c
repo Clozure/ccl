@@ -1221,6 +1221,9 @@ exit_signal_handler(TCR *tcr, int old_valence)
 {
   sigset_t mask;
   sigfillset(&mask);
+#ifdef FREEBSD
+  sigdelset(&mask,SIGTRAP);
+#endif
   
   pthread_sigmask(SIG_SETMASK,&mask, NULL);
   tcr->valence = old_valence;
@@ -1707,11 +1710,7 @@ install_signal_handler(int signo, void * handler)
   sigfillset(&sa.sa_mask);
 #ifdef FREEBSD
   /* Strange FreeBSD behavior wrt synchronous signals */
-  sigdelset(&sa.sa_mask,SIGNUM_FOR_INTN_TRAP);
   sigdelset(&sa.sa_mask,SIGTRAP);  /* let GDB work */
-  sigdelset(&sa.sa_mask,SIGILL);
-  sigdelset(&sa.sa_mask,SIGFPE);
-  sigdelset(&sa.sa_mask,SIGSEGV);
 #endif
   sa.sa_flags = 
     0 /* SA_RESTART */
