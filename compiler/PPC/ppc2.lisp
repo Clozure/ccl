@@ -1860,7 +1860,7 @@
 
 
 (defun ppc2-constant-value-ok-for-type-keyword (type-keyword form)
-  (if (and (acode-p form)
+  (if (and (acode-p (setq form (acode-unwrapped-form form)))
            (or (eq (acode-operator form) (%nx1-operator immediate))
                (eq (acode-operator form) (%nx1-operator fixnum))))
     (let* ((val (%cadr form))
