@@ -37,7 +37,7 @@
 #define REG_EAX 12
 #define REG_EIP 15
 #define REG_EFL 17
-#define REG_ESP 19
+#define REG_ESP 18
 #endif
 
 #ifdef SOLARIS
