@@ -1114,6 +1114,7 @@ setup_tcr_extra_segment(TCR *tcr)
   sd.sd_lolimit = (size - 1) & 0xffff;
   sd.sd_hilimit = ((size - 1) >> 16) & 0xf;
   sd.sd_lobase = addr & ((1<<24)-1);
+  sd.sd_hibase = (addr>>24)&0xff;
   sd.sd_type = 18;
   sd.sd_dpl = SEL_UPL;
   sd.sd_p = 1;
