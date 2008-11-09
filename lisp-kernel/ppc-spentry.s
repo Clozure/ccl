@@ -3525,11 +3525,12 @@ push_pair_test:
 	/*     corresponding entry on the vstack to the value and the  */
 	/*     associated supplied-p var to T.  */
 	/*  b) Regardless of whether or not the keyword is found,  */
-	/*     if the keyword is :ALLOW-OTHER-KEYS and the value is non-nil,  */
-	/*     set imm1 to a non-zero value to indicate that unknown keywords  */
-	/*     are acceptable.  */
+        /*     if :ALLOW-OTHER-KEYS is provided with a non-nil value, */
+	/*     set the low bit of imm1 to indicate that unknown keywords  */
+	/*     are acceptable. (This bit is pre-set above to the value */
+        /*     the encoded value of &allow_other_keys.) */
 	/*  c) If the keyword is not found (and isn't :ALLOW-OTHER-KEYS), increment  */
-	/*     the count of unknown keywords in imm0.  */
+	/*     the count of unknown keywords in the high bits of imm1*/
 	/* At the end of the list, signal an error if any unknown keywords were seen  */
 	/* but not allowed.  Otherwise, return.  */
 
@@ -3543,12 +3544,8 @@ match_keys_loop:
 	__(cmpr(cr3,arg_x,arg_y))	/* :ALLOW-OTHER-KEYS ?  */
 	__(ldr(arg_reg,cons.cdr(arg_reg)))
 	__(ldr(arg_y,cons.car(arg_reg)))
-	__(cmpri(cr0,arg_y,nil_value))
 	__(cmpr(cr4,imm0,nargs))
 	__(ldr(arg_reg,cons.cdr(arg_reg)))
-	__(bne cr3,match_test)
-	__(beq cr0,match_test)
-	__(ori imm1,imm1,1)
 	__(b match_test)
 match_loop:
 	__(ldrx(temp0,keyvect_reg,imm3))
@@ -3566,17 +3563,26 @@ match_loop:
 	__(bne cr0,match_keys_loop)	/* already saw this  */
 	__(str(arg_y,node_size*1(imm0)))
 	__(str(temp0,node_size*0(imm0)))
-	__(b match_keys_loop)
+        __(bne cr3,match_keys_loop)
+	__(b match_keys_check_aok)
 match_test:
 	__(bne cr4,match_loop)
-	__(oris imm1,imm1,0x8000)
+        __(beq cr3,match_keys_check_aok)
+        __(addi imm1,imm1,4)
+        __(b match_keys_loop)
+match_keys_check_aok:
+        __(andi. imm0,imm1,2)  /* check "seen-aok" bit in imm1 */
+        __(cmpri cr1,arg_y,nil_value) /* check value */
+        __(ori imm1,imm1,2)
+        __(bne cr0,match_keys_loop) /* duplicate aok */
+        __(beq cr1,match_keys_loop)
+        __(ori imm1,imm1,1)
 	__(b match_keys_loop)
 matched_keys:
-	__(cmpri(cr1,imm1,0))
-	__(add imm1,imm1,imm1)
-	__(cmpri(cr0,imm1,0))
-	__(bgelr cr1)
-	__(bnelr cr0)
+        __(clrrwi. imm0,imm1,2)
+        __(beqlr)
+        __(andi. imm1,imm1,1)
+        __(bnelr)
 	/* Some unrecognized keywords.  Complain generically about  */
 	/* invalid keywords.  */
 db_badkeys:
