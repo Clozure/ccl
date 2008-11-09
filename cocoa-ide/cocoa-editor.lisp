@@ -1165,8 +1165,10 @@
                     (decf istart))
                   (setf (ns:ns-range-location range) (+ p istart)
                         (ns:ns-range-length range) (1+ (- iend istart)))
-                  (#/addTemporaryAttribute:value:forCharacterRange:
-                   layout color-attribute color range))))))))))
+		  (let ((attrs (#/dictionaryWithObject:forKey:
+				ns:ns-dictionary color color-attribute)))
+		    (#/addTemporaryAttributes:forCharacterRange:
+		     layout attrs range)))))))))))
 
 (objc:defmethod (#/drawRect: :void) ((self hemlock-text-view) (rect :<NSR>ect))
   (let* ((container (#/textContainer self))
@@ -1201,11 +1203,14 @@
       (let* ((background #&NSBackgroundColorAttributeName)
              (paren-highlight-left (text-view-paren-highlight-left-pos self))
              (paren-highlight-right (text-view-paren-highlight-right-pos self))
-             (paren-highlight-color (text-view-paren-highlight-color self)))
-        (#/addTemporaryAttribute:value:forCharacterRange:
-         layout background paren-highlight-color (ns:make-ns-range paren-highlight-left 1))
-        (#/addTemporaryAttribute:value:forCharacterRange:
-         layout background paren-highlight-color (ns:make-ns-range paren-highlight-right 1))))
+             (paren-highlight-color (text-view-paren-highlight-color self))
+	     (attrs (#/dictionaryWithObject:forKey: ns:ns-dictionary
+						    paren-highlight-color
+						    background)))
+        (#/addTemporaryAttributes:forCharacterRange:
+         layout attrs (ns:make-ns-range paren-highlight-left 1))
+        (#/addTemporaryAttributes:forCharacterRange:
+         layout attrs (ns:make-ns-range paren-highlight-right 1))))
     ;; Um, don't forget to actually draw the view..
     (call-next-method  rect)))
 
