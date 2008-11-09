@@ -1838,7 +1838,7 @@
 							    ((src :u32)
 							     (bitval :u32) ; 0 or 1
 							     (bitnum :u8const)))
-  (rlwimi dest bitval (:apply - 31 bitnum) bitnum bitnum))
+  (rlwimi dest bitval (:apply - 32 bitnum) bitnum bitnum))
 
 (define-ppc64-vinsn set-constant-ppc-bit-to-1 (((dest :u32))
 					       ((src :u32)
