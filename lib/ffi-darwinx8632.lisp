@@ -13,46 +13,37 @@
 	   (nbits (ensure-foreign-type-bits ftype)))
       (not (member nbits '(8 16 32 64))))))
 
-(defun x86-darwin32::struct-from-regbuf-values (r rtype regbuf)
-  (ecase (ensure-foreign-type-bits rtype)
-    (8 `(setf (%get-unsigned-byte ,r 0) (%get-unsigned-byte ,regbuf 0)))
-    (16 `(setf (%get-unsigned-word ,r 0) (%get-unsigned-word ,regbuf 0)))
-    (32 `(setf (%get-unsigned-long ,r 0) (%get-unsigned-long ,regbuf 0)))
-    (64 `(setf (%%get-unsigned-longlong ,r 0)
-	       (%%get-unsigned-longlong ,regbuf 0)))))
-
 ;;; All arguments are passed on the stack.
 ;;;
 ;;; (We don't support the __m64, __m128, __m128d, and __m128i types.)
 
 (defun x86-darwin32::expand-ff-call (callform args &key (arg-coerce #'null-coerce-foreign-arg) (result-coerce #'null-coerce-foreign-result))
   (let* ((result-type-spec (or (car (last args)) :void))
-	 (regbuf nil)
+	 (result-in-registers-p nil)
 	 (result-temp nil)
-	 (result-form nil)
-	 (struct-result-type nil))
+	 (result-form nil))
     (multiple-value-bind (result-type error)
 	(ignore-errors (parse-foreign-type result-type-spec))
       (if error
 	(setq result-type-spec :void result-type *void-foreign-type*)
 	(setq args (butlast args)))
       (collect ((argforms))
-	(when (eq (car args) :monitor-exception-ports)
-	  (argforms (pop args)))
 	(when (typep result-type 'foreign-record-type)
-	  (setq result-form (pop args)
-		struct-result-type result-type
-		result-type *void-foreign-type*
-		result-type-spec :void)
-	  (if (x86-darwin32::record-type-returns-structure-as-first-arg result-type)
+	  (setq result-form (pop args))
+	  (if (x86-darwin32::record-type-returns-structure-as-first-arg
+	       result-type)
 	    (progn
+	      (setq result-type *void-foreign-type*
+		    result-type-spec :void)
 	      (argforms :address)
 	      (argforms result-form))
 	    (progn
-	      (setq regbuf (gensym)
-		    result-temp (gensym))
-	      (argforms :registers)
-	      (argforms regbuf))))
+	      ;; We're going to get either 32 bits in EAX, or
+	      ;; 64 bits in EDX:EAX.
+	      (setq result-type (parse-foreign-type :signed-doubleword)
+		    result-type-spec :signed-doubleword)
+	      (setq result-temp (gensym))
+	      (setq result-in-registers-p t))))
 	(unless (evenp (length args))
 	  (error "~s should be an even-length list of alternating foreign types and values" args))
 	(do* ((args args (cddr args)))
@@ -74,14 +65,13 @@
 		(argforms (funcall arg-coerce arg-type-spec arg-value-form))))))
 	  (argforms (foreign-type-to-representation-type result-type))
 	  (let* ((call (funcall result-coerce result-type-spec `(,@callform ,@(argforms)))))
-	    (if regbuf
+	    (if result-in-registers-p
 	      `(let* ((,result-temp (%null-ptr)))
 		 (declare (dynamic-extent ,result-temp)
 			  (type macptr ,result-temp))
 		 (%setf-macptr ,result-temp ,result-form)
-		 (%stack-block ((,regbuf 8))
-		   ,call
-		   ,(x86-darwin32::struct-from-regbuf-values result-temp struct-result-type regbuf)))
+		 (setf (%%get-signed-longlong ,result-temp 0)
+		       ,call))
 	      call))))))
 
 ;;; Return 7 values:
