@@ -1125,6 +1125,7 @@ setup_tcr_extra_segment(TCR *tcr)
 
   if (i < 0) {
     perror("i386_set_ldt");
+    exit(1);
   } else {
     tcr->ldt_selector = LSEL(i,SEL_UPL);
   }
