@@ -267,6 +267,29 @@
      #$EDI)
       ))
 
+#+freebsdx8632-target
+(progn
+  (defconstant gp-regs-offset 0)
+  (defmacro xp-gp-regs (xp)
+    `(pref ,xp :ucontext_t.uc_mcontext))
+  (defun xp-mxcsr (xp)
+    (pref (pref xp :ucontext_t.uc_mcontext.mc_fpstate) :savexmm.sv_env.en_mxcsr)
+)
+  (defconstant flags-register-offset 17)
+  (defconstant eip-register-offset 15)
+  (defparameter *encoded-gpr-to-indexed-gpr*
+    #(
+      12                                ;eax
+      11                                ;ecx
+      10                                ;edx
+      9                                 ;ebx
+      18                                ;esp
+      7                                 ;ebp
+      6                                 ;esi
+      5                                 ;edi
+      )
+      ))
+
 (defun indexed-gpr-lisp (xp igpr)
   (%get-object (xp-gp-regs xp) (+ gp-regs-offset (ash igpr target::word-shift))))
 (defun (setf indexed-gpr-lisp) (new xp igpr)
