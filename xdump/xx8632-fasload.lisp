@@ -118,6 +118,8 @@
    :static-space-address (+ (ash 1 16) (ash 2 12))
 ))
 
+(add-xload-backend *x8632-freebsd-xload-backend*)
+
 #+x8632-target
 (progn
   #+darwin-target
