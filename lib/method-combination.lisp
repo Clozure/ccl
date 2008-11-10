@@ -192,8 +192,8 @@
   (record-source-file operator 'method-combination-evaluator)
   (setf (get-method-combination-evaluator operator) function)
   (maphash #'(lambda (name mci)
-               (when (eq operator (or (getf (mci.options mci) :operator) name))
-                 (clear-method-combination-caches name mci)))
+               (when (eq operator (or (and (eq (mci.class mci) 'short-method-combination) (getf (mci.options mci) :operator)) name)))
+                 (clear-method-combination-caches name mci))
            *method-combination-info*)
   function)
 
