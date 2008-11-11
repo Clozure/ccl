@@ -203,7 +203,7 @@
 	        a process that's "exhausted" . (As used here, the
 	        term"exhausted" means that the process's initial function
 	        has run and returned and the underlying native thread has
-	        been deallocated.) One of the principle uses of PROCESS-RESET
+	        been deallocated.) One of the principal uses of PROCESS-RESET
 	        is to "recycle" threads; enabling an exhausted process
 	        involves creating a new native thread (and stacks and
 	        synchronization objects and ...),and this is the sort of
@@ -1530,7 +1530,7 @@ Type :? for other options.
 	      <varlistentry>
 	        <term>kill-option</term>
 	        <listitem>
-		      <para>a generalized boolean.  The default is T.</para>
+		      <para>an internal argument, must be nil.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
@@ -1546,13 +1546,14 @@ Type :? for other options.
 	    <title>Description</title>
 
 	    <para>Causes <varname>process</varname> to cleanly exit
-	      from any ongoing computation.  If <varname>kill-option</varname>
-	      is true, <varname>process</varname> then exits.  Otherwise, it
-	      enters a state where it can be
+	      from any ongoing computation and enter a state where it can be
 	      <xref linkend="f_process-preset"/>. This
 	      is implemented by signaling a condition of type PROCESS-RESET;
 	      user-defined condition handlers should generally refrain from
 	      attempting to handle conditions of this type.</para>
+
+            <para>The <varname>kill-option</varname> argument is for internal
+            use only and should not be specified by user code</para>
 
 	    <para>A process can meaningfully reset itself.</para>
 
