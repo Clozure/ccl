@@ -104,7 +104,7 @@
     (%copy-ivector-to-ivector protov 0 newv 0 (the fixnum (ash code-words target::word-shift)))
     (loop for k fixnum from code-words below total-words
       do (setf (%svref newv k) (%svref protov k)))
-    (function-vector-to-function newv)))
+    (%update-self-references (function-vector-to-function newv))))
 
 (defun replace-function-code (target proto)
   (let* ((target-words (%function-code-words target))
