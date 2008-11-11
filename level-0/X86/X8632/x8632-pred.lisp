@@ -131,6 +131,11 @@ numbers with the same type and value."
   (movl ($ (target-t-value)) (% arg_z))
   (single-value-return)
   @cons
+  ;; If either X or Y is NIL, lose.
+  (cmp-reg-to-nil x)
+  (je @lose)
+  (cmp-reg-to-nil y)
+  (je @lose)
   ;; Check to see if the CARs are EQ.  If so, we can avoid saving
   ;; context, and can just tail call ourselves on the CDRs.
   (%car x temp0)
