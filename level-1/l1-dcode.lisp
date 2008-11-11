@@ -1687,7 +1687,9 @@
   ; now thing is vector of gf orig methods, arg for key or initarg check, key or initarg fnction
   ; and our job is to do all the arg checking
   (let ()
-    (when magic
+    ;; THING is nil in next-method calls for non-standard method combination.  To enable
+    ;; checking in that case, would need to change %%call-method* to store a vector in (car magic).
+    (when (and magic thing)
       (flet ((do-it (thing args)
                (let* ((args-len (length args))
                       (gf (svref thing 0))  ; could get this from a method
