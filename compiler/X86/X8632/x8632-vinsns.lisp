@@ -988,25 +988,17 @@
   :bad
   (:anchored-uuo (uuo-error-reg-not-type (:%l src) (:$ub arch::error-object-not-signed-byte-32))))
 
-
-;;; xxx -- sigh...
 (define-x8632-vinsn sign-extend-s8 (((dest :s32))
                                     ((src :s8)))
-  ;; (movsbl (:%b temp) (:%l dest))
-  (movl (:%l src) (:%l dest))
-  (shll (:$ub 24) (:%l dest))
-  (sarl (:$ub 24) (:%l dest)))
+  (movsbl (:%b src) (:%l dest)))
 
 (define-x8632-vinsn sign-extend-s16 (((dest :s32))
                                      ((src :s16)))
   (movswl (:%w src) (:%l dest)))
 
-;;; xxx -- sigh...
 (define-x8632-vinsn zero-extend-u8 (((dest :s32))
                                     ((src :u8)))
-  ;;(movzbl (:%b src) (:%l dest))
-  (movl (:%l src) (:%l dest))
-  (andl (:$l #xff) (:%l dest)))
+  (movzbl (:%b src) (:%l dest)))
 
 (define-x8632-vinsn zero-extend-u16 (((dest :s32))
                                      ((src :u16)))
@@ -3639,8 +3631,8 @@
 (define-x8632-vinsn sign-extend-halfword (((dest :imm))
 					  ((src :imm)))
   (movl (:%l src ) (:%l dest))
-  (shll (:$ub (- 48 x8632::fixnumshift)) (:%l dest))
-  (sarl (:$ub (- 48 x8632::fixnumshift)) (:%l dest)))
+  (shll (:$ub (- 16 x8632::fixnumshift)) (:%l dest))
+  (sarl (:$ub (- 16 x8632::fixnumshift)) (:%l dest)))
 
 (define-x8632-subprim-jump-vinsn (tail-funcall-gen) .SPtfuncallgen)
 
