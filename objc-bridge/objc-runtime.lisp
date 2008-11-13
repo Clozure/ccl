@@ -1519,6 +1519,32 @@ argument lisp string."
                  arg-temp)
            (incf nstackargs)))))))
 
+#+(and apple-objc x8632-target)
+(defun %process-varargs-list (ptr index arglist)
+  (dolist (arg-temp arglist)
+    (typecase arg-temp
+      ((signed-byte 32)
+       (setf (paref ptr (:* (:signed 32)) index) arg-temp)
+       (incf index))
+      ((unsigned-byte 32)
+       (setf (paref ptr (:* (:unsigned 32)) index) arg-temp)
+       (incf index))
+      (macptr
+       (setf (paref ptr (:* :address) index) arg-temp)
+       (incf index))
+      (single-float
+       (setf (paref ptr (:* :single-float) index) arg-temp)
+       (incf index))
+      (double-float
+       (setf (paref ptr (:* :double-float) index) arg-temp)
+       (incf index 2))
+      ((or (signed-byte 64)
+	   (unsigned-byte 64))
+       (setf (paref ptr (:* :unsigned) index) (ldb (byte 32 32) arg-temp))
+       (incf index)
+       (setf (paref ptr (:* :unsigned) index) (ldb (byte 32 0) arg-temp))
+       (incf index)))))
+
 #+(and apple-objc ppc32-target)
 (defun %process-varargs-list (gpr-pointer fpr-pointer ngprs nfprs arglist)
   (dolist (arg-temp arglist)
@@ -1809,6 +1835,87 @@ argument lisp string."
                               :address ,marg-ptr
                               ,return-type-spec)))))))))
 
+#+(and apple-objc x8632-target)
+(defun %compile-varargs-send-function-for-signature (sig)
+  (let* ((return-type-spec (car sig))
+         (arg-type-specs (butlast (cdr sig)))
+         (args (objc-gen-message-arglist (length arg-type-specs)))
+         (receiver (gensym))
+         (selector (gensym))
+         (rest-arg (gensym))
+         (arg-temp (gensym))
+         (marg-ptr (gensym))
+	 (static-arg-words 2)		;receiver, selptr
+	 (marg-words (gensym))
+         (selptr (gensym)))
+    (collect ((static-arg-forms))
+      (static-arg-forms `(setf (paref ,marg-ptr (:* address) 0) ,receiver))
+      (static-arg-forms `(setf (paref ,marg-ptr (:* address) 1) ,selptr))
+      (do* ((args args (cdr args))
+            (arg-type-specs arg-type-specs (cdr arg-type-specs)))
+           ((null args))
+        (let* ((arg (car args))
+               (spec (car arg-type-specs))
+               (static-arg-type (parse-foreign-type spec)))
+          (etypecase static-arg-type
+            (foreign-integer-type
+             (let* ((bits (foreign-type-bits static-arg-type))
+                    (signed (foreign-integer-type-signed static-arg-type)))
+               (if (> bits 32)
+                 (progn
+                   (static-arg-forms
+                    `(setf (,(if signed '%%get-signed-longlong '%%get-unsigned-long-long)
+			     ,marg-ptr (* 4 ,static-arg-words))
+			   ,arg))
+                   (incf static-arg-words 2))
+                 (progn
+                   (if (eq spec :<BOOL>)
+                     (setq arg `(%coerce-to-bool ,arg)))
+                   (static-arg-forms
+                    `(setf (paref ,marg-ptr (:* 
+					     (,(if (foreign-integer-type-signed 
+						    static-arg-type)
+						   :signed
+						   :unsigned)
+					       32)) ,static-arg-words)
+			   ,arg))
+                   (incf static-arg-words)))))
+            (foreign-single-float-type
+             (static-arg-forms
+              `(setf (paref ,marg-ptr (:* :single-float) ,static-arg-words) ,arg))
+             (incf static-arg-words))
+            (foreign-double-float-type
+             (static-arg-forms
+              `(setf (%get-double-float ,marg-ptr (* 4 ,static-arg-words)) ,arg))
+             (incf static-arg-words 2))
+            (foreign-pointer-type
+             (static-arg-forms
+              `(setf (paref ,marg-ptr (:* address) ,static-arg-words) ,arg))
+	     (incf static-arg-words)))))
+      (compile
+       nil
+       `(lambda (,receiver ,selector ,@args &rest ,rest-arg)
+	  (declare (dynamic-extent ,rest-arg))
+	  (let* ((,selptr (%get-selector ,selector))
+		 (,marg-words ,static-arg-words))
+	    (dolist (,arg-temp ,rest-arg)
+	      (if (or (typep ,arg-temp 'double-float)
+		      (and (typep ,arg-temp 'integer)
+			   (if (< ,arg-temp 0)
+			     (>= (integer-length ,arg-temp) 32)
+			     (> (integer-length ,arg-temp) 32))))
+		(incf ,marg-words 2)
+		(incf ,marg-words 1)))
+	    (%stack-block ((,marg-ptr ,marg-words))
+	      (progn ,@(static-arg-forms))
+	      (%process-varargs-list ,marg-ptr ,static-arg-words ,rest-arg)
+	      (external-call "_objc_msgSendv"
+			     :address ,receiver
+			     :address ,selptr
+			     :size_t (* 4 ,marg-words)
+			     :address ,marg-ptr
+			     ,return-type-spec))))))))
+
 #+(and apple-objc ppc64-target)
 (defun %compile-varargs-send-function-for-signature (sig)
   (let* ((return-type-spec (car sig))
@@ -1897,9 +2004,6 @@ argument lisp string."
                                :address ,marg-ptr
                                ,return-type-spec)))))))))
 
-#-(and apple-objc (or x8664-target ppc-target))
-(defun %compile-varargs-send-function-for-signature (sig)
-  (warn "Varargs function for signature ~s NYI" sig))
 
 
 
