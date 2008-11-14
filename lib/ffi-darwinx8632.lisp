@@ -65,10 +65,9 @@
 		(argforms arg-value-form))
 	      (let* ((ftype (parse-foreign-type arg-type-spec))
                      (bits (ensure-foreign-type-bits ftype)))
-                (if (and (typep ftype 'foreign-record-type)
-                         (<= bits 32))
+                (if (typep ftype 'foreign-record-type)
                   (argforms (ceiling bits 32))
-                  (argforms (foreign-type-to-representation-type ftype)))
+		  (argforms (foreign-type-to-representation-type ftype)))
 		(argforms (funcall arg-coerce arg-type-spec arg-value-form))))))
 	  (argforms (foreign-type-to-representation-type result-type))
 	  (let* ((call (funcall result-coerce result-type-spec `(,@callform ,@(argforms)))))
@@ -85,7 +84,7 @@
 ;;; A list of RLET bindings
 ;;; A list of LET* bindings
 ;;; A list of DYNAMIC-EXTENT declarations for the LET* bindings
-;;; A list of initializaton forms for (some) structure args
+;;; A list of initializaton forms for (some) structure args (not used on x8632)
 ;;; A FOREIGN-TYPE representing the "actual" return type.
 ;;; A form which can be used to initialize FP-ARGS-PTR, relative
 ;;;  to STACK-PTR.  (This is unused on linuxppc32.)
@@ -95,7 +94,6 @@
   (declare (ignore fp-args-ptr))
   (collect ((lets)
 	    (rlets)
-	    (inits)
 	    (dynamic-extent-names))
     (let* ((rtype (parse-foreign-type result-spec)))
       (when (typep rtype 'foreign-record-type)
@@ -108,7 +106,7 @@
 	    (argspecs argspecs (cdr argspecs))
 	    (offset 8))
 	   ((null argvars)
-	    (values (rlets) (lets) (dynamic-extent-names) (inits) rtype nil 4))
+	    (values (rlets) (lets) (dynamic-extent-names) nil rtype nil 4))
 	(let* ((name (car argvars))
 	       (spec (car argspecs))
 	       (argtype (parse-foreign-type spec))
