@@ -60,7 +60,7 @@
 
 ; The compiler can (generally) use temporary vectors for VARs.
 (defun nx-cons-var (name &optional (bits 0))
-  (%istruct 'var name bits nil nil nil nil))
+  (%istruct 'var name bits nil nil nil nil 0 nil))
 
 
 
