@@ -301,6 +301,19 @@
 
 (defvar *update-slots-preserve-existing-wrapper* nil)
 
+(defvar *optimized-dependents* (make-hash-table :test 'eq :weak :key)
+  "Hash table mapping a class to a list of all objects that have been optimized to
+   depend in some way on the layout of the class")
+
+(defun note-class-dependent (class gf)
+  (pushnew gf (gethash class *optimized-dependents*)))
+
+;; Yeah, yeah, when/if this gets more general can use generic functions.
+(defun unoptimize-dependents (class)
+  (loop for obj in (gethash class *optimized-dependents*)
+        do (etypecase obj
+             (standard-generic-function (compute-dcode obj)))))
+
 (defun update-slots (class eslotds)
   (let* ((instance-slots (extract-slotds-with-allocation :instance eslotds))
          (new-ordering
@@ -320,6 +333,8 @@
                 (t
                  (make-instances-obsolete class)
                  (%cons-wrapper class)))))
+    (when old-wrapper
+      (unoptimize-dependents class))
     (setf (%class-slots class) eslotds)
     (setf (%wrapper-instance-slots new-wrapper) new-ordering
           (%wrapper-class-slots new-wrapper) (%class-get class :class-slots)
@@ -2002,9 +2017,8 @@ changing its name to ~s may have serious consequences." class new))
           (unique class))))))
 
 
-
 ;;; Try to replace gf dispatch with something faster in f.
-(defun %snap-reader-method (f)
+(defun %snap-reader-method (f &key (redefinable t))
   (when (slot-boundp f 'methods)
     (let* ((methods (generic-function-methods f)))
       (when (and methods
@@ -2030,6 +2044,9 @@ changing its name to ~s may have serious consequences." class new))
               ;; :allocation :instance (and all locations - the CDRs
               ;; of the alist pairs - are small, positive fixnums.
               (when (every (lambda (pair) (typep (cdr pair) 'fixnum)) alist)
+                (when redefinable
+                  (loop for (c . nil) in alist
+                        do (note-class-dependent c f)))
                 (clear-gf-dispatch-table dt)
                 (setf (%gf-dispatch-table-argnum dt) -1) ;mark as non-standard
                 (cond ((null (cdr alist))
