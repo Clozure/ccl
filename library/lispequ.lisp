@@ -202,6 +202,7 @@
   var-inittype
   var-binding-info
   var-refs
+  var-nvr
 )
 
 (def-accessors (package) %svref
