@@ -1596,12 +1596,12 @@
 
 
 (defun xload-record-source-file (symaddr indicator)
-  ;; need to do something with *xload-loading-toplevel-location*
   (when *xload-record-source-file-p*
     (when (or (eq indicator 'function)
               (eq indicator 'variable))
       (let* ((keyaddr (xload-copy-symbol 'bootstrapping-source-files))
-             (pathaddr (or *xload-loading-file-source-file*
+             (pathaddr (or *xload-loading-toplevel-location*
+                           *xload-loading-file-source-file*
                            (if *loading-file-source-file*
                              (setq *xload-loading-file-source-file* (xload-save-string *loading-file-source-file*))))))
         (when pathaddr

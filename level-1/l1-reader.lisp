@@ -2512,11 +2512,11 @@
           (values form
                   t
                   (and start-pos
-                       (make-source-note :form form
-                                         :stream stream
-                                         :start-pos (1- start-pos)
-                                         :end-pos end-pos
-                                         :subform-notes nested-source-notes))))))))
+                       (record-source-note :form form
+                                           :stream stream
+                                           :start-pos (1- start-pos)
+                                           :end-pos end-pos
+                                           :subform-notes nested-source-notes))))))))
 
 #|
 (defun %parse-expression-test (string)
@@ -2997,85 +2997,210 @@ arg=char : read delimited list"
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defstruct (source-note (:constructor %make-source-note))
+(defstruct (source-note (:conc-name "SOURCE-NOTE.") (:constructor %make-source-note))
   ;; For an inner source form, the source-note of the outer source form.
+  ;; For outer source note, octets
   source
-  file-name
+  filename
+  ;; start and end file positions (NOT characters positions)
   file-range)
 
-(defun encode-file-range (start-pos end-pos)
-  (let ((len (- end-pos start-pos)))
-    (if (< len (ash 1 12))
-      (+ (ash start-pos 12) len)
-      (cons start-pos end-pos))))
+(defun make-source-note (&key filename start-pos end-pos source)
+  (%make-source-note :filename filename
+                     :file-range (encode-file-range start-pos end-pos)
+                     :source source))
+
+(defmethod print-object ((sn source-note) stream)
+  (print-unreadable-object (sn stream :type t :identity nil)
+    (let ((*print-length* (min (or *print-length* 3) 3)))
+      (format stream "~s:~s-~s ~s" (source-note-filename sn)
+              (source-note-start-pos sn) (source-note-end-pos sn)
+              (source-note.source sn)))))
+
+(defun source-note-filename (source)
+  (if (source-note-p source)
+    (source-note.filename source)
+    ;;  else null or a pathname, as in record-source-file
+    source))
+
+(defun (setf source-note-filename) (filename source-note)
+  (setf (source-note.filename (require-type source-note 'source-note)) filename))
+
+;; Since source notes are optional, it simplifies a lot of code
+;; to have these accessors allow NIL.
+
+(defun source-note-source (source-note)
+  (when source-note
+    (source-note.source (require-type source-note 'source-note))))
+
+(defun source-note-file-range (source-note)
+  (when source-note
+    (source-note.file-range (require-type source-note 'source-note))))
 
 (defun source-note-start-pos (source-note)
   (let ((range (source-note-file-range source-note)))
     (when range
-      (if (consp range) (car range) (ash range -12)))))
+      (if (consp range) (car range) (ash range -14)))))
 
 (defun source-note-end-pos (source-note)
   (let ((range (source-note-file-range source-note)))
     (when range
-      (if (consp range) (cdr range) (+ (ash range -12) (logand range #xFFF))))))
+      (if (consp range) (cdr range) (+ (ash range -14) (logand range #x3FFF))))))
+
+(defun encode-file-range (start-pos end-pos)
+  (let ((len (- end-pos start-pos)))
+    (if (< len (ash 1 14))
+      (+ (ash start-pos 14) len)
+      (cons start-pos end-pos))))
+
+(defun source-note-text (source-note &optional start end)
+  (let* ((source (source-note-source source-note))
+         (start-pos (source-note-start-pos source-note))
+         (end-pos (source-note-end-pos source-note))
+         (start (or start start-pos))
+         (end (or end end-pos)))
+    (etypecase source
+      (source-note
+         (assert (<= (source-note-start-pos source) start end (source-note-end-pos source)))
+         (source-note-text source start end))
+      ((simple-array (unsigned-byte 8) (*))
+         (decf start start-pos)
+         (decf end start-pos)
+         (assert (and (<= 0 start end (length source))))
+         (decode-string-from-octets source :start start :end end :external-format :utf-8))
+      (null source))))
 
 (defvar *recording-source-streams* ())
 
-(defun make-source-note (&key form stream start-pos end-pos subform-notes)
+(defun record-source-note (&key form stream start-pos end-pos subform-notes)
   (let ((recording (assq stream *recording-source-streams*)))
     (when (and recording (not *read-suppress*))
       (destructuring-bind (map file-name stream-offset) (cdr recording)
         (let* ((prev (gethash form map))
-               (note (%make-source-note :file-name file-name
-                                        :file-range (encode-file-range
-                                                     (+ stream-offset start-pos)
-                                                     (+ stream-offset end-pos)))))
+               (note (make-source-note :filename file-name
+                                       :start-pos (+ stream-offset start-pos)
+                                       :end-pos (+ stream-offset end-pos))))
           (setf (gethash form map)
                 (cond ((null prev) note)
                       ((consp prev) (cons note prev))
                       (t (list note prev))))
           (loop for sub in subform-notes as subnote = (require-type sub 'source-note)
             do (when (source-note-source subnote) (error "Subnote ~s already owned?" subnote))
-            do (setf (source-note-source subnote) note))
+            do (setf (source-note.source subnote) note))
           note)))))
 
-(defmethod make-load-form ((note source-note) &optional env)
-  (make-load-form-saving-slots note :environment env))
-
-(defun read-recording-source (stream &key eofval file-name start-offset map)
+(defun read-recording-source (stream &key eofval file-name start-offset map save-source-text)
   "Read a top-level form, perhaps recording source locations.
 If MAP is NIL, just reads a form as if by READ.
 If MAP is non-NIL, returns a second value of a source-note object describing the form.
 In addition, if MAP is a hash table, it gets filled with source-note's for all
 non-atomic nested subforms."
+  (when (null start-offset) (setq start-offset 0))
   (typecase map
     (null (values (read-internal stream nil eofval nil) nil))
     (hash-table
-     (let* ((recording (list stream map file-name (or start-offset 0)))
-            (*recording-source-streams* (cons recording *recording-source-streams*)))
-       (declare (dynamic-extent recording *recording-source-streams*))
-       (multiple-value-bind (form source-note) (read-internal stream nil eofval nil)
-         (when (and source-note (not (eq form eofval)))
-           (assert (null (source-note-source source-note)))
-           (loop for form being the hash-key using (hash-value note) of map
-                 do (cond ((eq note source-note) nil)
-                          ;; Remove entries with multiple source notes, which can happen
-                          ;; for atoms.  If we can't tell which instance we mean, then we
-                          ;; don't have useful source info.
-                          ((listp note) (remhash form map))
-                          ((loop for p = note then (source-note-source p) while (source-note-p p)
-                                 thereis (eq p source-note))
-                           ;; Flatten the backpointers so each subnote points directly
-                           ;; to the toplevel note.
-                           (setf (source-note-source note) source-note)))))
-	 (values form source-note))))
+       (let* ((recording (list stream map file-name start-offset))
+              (*recording-source-streams* (cons recording *recording-source-streams*)))
+         (declare (dynamic-extent recording *recording-source-streams*))
+         (multiple-value-bind (form source-note) (read-internal stream nil eofval nil)
+           (when (and source-note (not (eq form eofval)))
+             (assert (null (source-note-source source-note)))
+             (loop for form being the hash-key using (hash-value note) of map
+                   do (cond ((eq note source-note) nil)
+                            ;; Remove entries with multiple source notes, which can happen
+                            ;; for atoms.  If we can't tell which instance we mean, then we
+                            ;; don't have useful source info.
+                            ((listp note) (remhash form map))
+                            ((loop for p = note then (source-note-source p) while (source-note-p p)
+                                   thereis (eq p source-note))
+                             ;; Flatten the backpointers so each subnote points directly
+                             ;; to the toplevel note.
+                             (setf (source-note.source note) source-note))))
+             (when save-source-text
+               (setf (source-note.source source-note)
+                     (fetch-octets-from-stream stream
+                                               (- (source-note-start-pos source-note)
+                                                  start-offset)
+                                               (- (source-note-end-pos source-note)
+                                                  start-offset)))))
+           (values form source-note))))
     (T
-     (let* ((start (file-position stream))
-            (form (read-internal stream nil eofval nil)))
-       (values form (and (neq form eofval)
-                         (%make-source-note :file-name file-name
-                                            :file-range (encode-file-range
-                                                         (+ (or start-offset 0)
-                                                            start)
-                                                         (+ (or start-offset 0)
-                                                            (file-position stream))))))))))
+       (let* ((start-pos (file-position stream))
+              (form (read-internal stream nil eofval nil))
+              (end-pos (and start-pos (neq form eofval) (file-position stream)))
+              (source-note (and end-pos
+                                (make-source-note :filename file-name
+                                                  :start-pos (+ start-offset start-pos)
+                                                  :end-pos (+ start-offset end-pos)))))
+         (when (and source-note save-source-text)
+           (setf (source-note.source source-note) (fetch-octets-from-stream stream start-pos end-pos)))
+         (values form source-note)))))
+
+(defun fetch-octets-from-stream (stream start-offset end-offset)
+  ;; We basically want to read the bytes between two positions, but there is no
+  ;; direct interface for that.  So we let the stream decode and then we re-encode.
+  ;; (Just as well, since otherwise we'd have to remember the file's encoding).
+  (declare (fixnum start-offset))
+  (when (< start-offset end-offset)
+    (let* ((cur-pos (file-position stream))
+           (noctets (- end-offset start-offset))
+           (vec (make-array noctets :element-type '(unsigned-byte 8)))
+           (index 0))
+      (declare (type fixnum end-offset noctets index)
+               (type (simple-array (unsigned-byte 8) (*)) vec))
+      (macrolet ((out (code)
+                   `(progn
+                      (setf (aref vec index) ,code)
+                      (when (eql (incf index) noctets) (return)))))
+        (file-position stream start-offset)
+        (loop
+          (let ((code (char-code (stream-read-char stream))))
+            (declare (fixnum code))
+            (cond ((< code #x80)
+                   (out code))
+                  ((< code #x800)
+                   (out (logior #xc0 (ldb (byte 5 6) code)))
+                   (out (logior #x80 (ldb (byte 6 0) code))))
+                  ((< code #x10000)
+                   (out (logior #xe0 (ldb (byte 4 12) code)))
+                   (out (logior #x80 (ldb (byte 6 6) code)))
+                   (out (logior #x80 (ldb (byte 6 0) code))))
+                  (t
+                   (out (logior #xf0 (ldb (byte 3 18) code)))
+                   (out (logior #xe0 (ldb (byte 6 12) code)))
+                   (out (logior #x80 (ldb (byte 6 6) code)))
+                   (out (logior #x80 (ldb (byte 6 0) code))))))))
+      (file-position stream cur-pos)
+      vec)))
+
+(defun ensure-source-note-text (source-note &key (if-does-not-exist nil))
+  "Fetch source text from file if don't have it"
+  (setq if-does-not-exist (require-type if-does-not-exist '(member :error nil)))
+  (let ((source (source-note-source source-note))
+        (filename (source-note-filename source-note)))
+    (etypecase source
+      (null
+         (with-open-file (stream filename :if-does-not-exist if-does-not-exist)
+           (when stream
+             (let ((start (source-note-start-pos source-note))
+                   (end (source-note-end-pos source-note))
+                   (len (file-length stream)))
+               (if (<= end len)
+                 (setf (source-note.source source-note)
+                       (fetch-octets-from-stream stream start end))
+                 (when if-does-not-exist
+                   (error 'simple-file-error :pathname filename
+                          :error-type "File ~s changed since source info recorded")))))))
+      (source-note
+         (ensure-source-note-text source))
+      ((simple-array (unsigned-byte 8) (*))
+         source))))
+
+
+;; This can be called explicitly by macros that do more complicated transforms
+(defun note-source-transformation (original new)
+  (nx-note-source-transformation original new))
+
+
+
+; end

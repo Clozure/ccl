@@ -97,6 +97,7 @@
   ;; Without this, forms from the -e command line parameter would run with
   ;; *loading-file-source-file* set to "l1-boot-3".
   (setq *loading-file-source-file* nil)
+  (setq *loading-toplevel-location* nil)
   )
 
 (require "PREPARE-MCL-ENVIRONMENT")

@@ -1592,7 +1592,7 @@ to open."
   `(let ((,fn #'(lambda () ,@body)))
      (if (eq %lisp-system-fixups% T)
        (funcall ,fn)
-       (push (cons ,fn *loading-file-source-file*) %lisp-system-fixups%))))
+       (push (cons ,fn (or *loading-toplevel-location* *loading-file-source-file*)) %lisp-system-fixups%))))
 
 (defmacro %incf-ptr (p &optional (by 1))
   (if (symbolp p)  ;once-only

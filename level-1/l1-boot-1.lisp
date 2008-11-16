@@ -114,6 +114,7 @@
 
 (catch :toplevel
   (setq *loading-file-source-file* nil)  ;Reset from last %fasload...
+  (setq *loading-toplevel-location* nil)
   (init-logical-directories)
   )
 

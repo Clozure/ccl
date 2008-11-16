@@ -39,6 +39,20 @@
      edit-definition
      edit-definition-p
      *loading-file-source-file*
+     find-definition-sources
+     define-definition-type
+     *save-source-locations*
+     function-source-note
+     source-note
+     source-note-p
+     source-note-filename
+     source-note-start-pos
+     source-note-end-pos
+     source-note-text
+     ensure-source-note-text
+     *record-pc-mapping*
+     find-source-note-at-pc
+
      show-documentation
      %set-toplevel
      toplevel-loop
@@ -873,7 +887,9 @@
 (unless (eq %lisp-system-fixups% T)
   (while %lisp-system-fixups%
     (let* ((fn.source (car %lisp-system-fixups%))
-           (*loading-file-source-file* (cdr fn.source)))
+           (*loading-toplevel-location* (and (source-note-p (cdr fn.source)) (cdr fn.source)))
+           (*loading-file-source-file* (source-note-filename (cdr fn.source)))
+           )
       (funcall (car fn.source)))
     (setq %lisp-system-fixups% (cdr %lisp-system-fixups%)))
   (setq %lisp-system-fixups% T))

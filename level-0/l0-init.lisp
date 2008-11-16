@@ -157,6 +157,7 @@
   (%symbol-bits x (%ilogior2 (%symbol-bits x) (ash 1 $sym_bit_special))))
 
 (defparameter *loading-file-source-file* nil)
+(defparameter *loading-toplevel-location* nil)
 
 (defvar *nx-speed* 1)
 (defvar *nx-space* 1)

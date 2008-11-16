@@ -153,7 +153,7 @@
              (setf (gethash (cdr cons) cons-refs) t)))
       (loop for key being the hash-keys of found
             when (or (and (consp key) (gethash key cons-refs))
-                     (and (consp key) (eq (car key) 'ccl::function-source-note))
+                     (and (consp key) (eq (car key) 'ccl::%function-source-note))
                      (typep key 'ccl::hash-table-vector)
                      (when (and key
 				(typep key

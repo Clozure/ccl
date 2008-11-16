@@ -287,7 +287,8 @@ expressions as commands")
                                             (print-listener-prompt stream t))))
   (let* ((*break-level* break-level)
          (*last-break-level* break-level)
-         *loading-file-source-file*
+         (*loading-file-source-file* nil)
+         (*loading-toplevel-location* nil)
          *in-read-loop*
          *** ** * +++ ++ + /// // / -
          (eof-value (cons nil nil))

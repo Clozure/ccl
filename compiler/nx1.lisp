@@ -1215,7 +1215,10 @@
   (setf (afunc-blocks q) *nx-blocks*)
   (setf (afunc-inner-functions q) (push p *nx-inner-functions*))
   (setf (lexenv.lambda env) q)
-  (nx1-compile-lambda name def p q env *nx-current-compiler-policy* *nx-load-time-eval-token*)) ;returns p.
+  (if *nx-current-code-note*
+    (let* ((*nx-current-code-note* (nx-ensure-code-note def *nx-current-code-note*)))
+      (nx1-compile-lambda name def p q env *nx-current-compiler-policy* *nx-load-time-eval-token*)) ;returns p.
+    (nx1-compile-lambda name def p q env *nx-current-compiler-policy* *nx-load-time-eval-token*)))
 
 (defun nx1-afunc-ref (afunc)
   (let ((op (if (afunc-inherited-vars afunc)
@@ -1647,7 +1650,7 @@
                 (setf (afunc-lambdaform func) expansion
                       (afunc-environment func) env)
                 (push (cons funcname expansion)
-                            bodies)))))
+                      bodies)))))
         (nx1-dynamic-extent-functions vars env)
         (dolist (def bodies)
           (nx1-compile-inner-function (car def) (cdr def) (setq func (pop funcs))))

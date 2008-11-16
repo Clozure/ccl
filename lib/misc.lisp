@@ -759,6 +759,22 @@ are running on, or NIL if we can't find any useful information."
 
 (%fhave 'df #'disassemble)
 
+(defun string-sans-most-whitespace (string &optional (max-length (length string)))
+  (with-output-to-string (sans-whitespace)
+    (loop
+      for count below max-length
+      for char across string
+      with just-saw-space = nil
+      if (member char '(#\Space #\Tab #\Newline #\Return #\Formfeed))
+        do (if just-saw-space
+               (decf count)
+               (write-char #\Space sans-whitespace))
+        and do (setf just-saw-space t)
+      else
+        do (setf just-saw-space nil)
+        and do (write-char char sans-whitespace))))
+
+
 (defloadvar *use-cygwin-svn*
     #+windows-target (not (null (getenv "CYGWIN")))
     #-windows-target nil)

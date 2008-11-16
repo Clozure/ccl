@@ -716,6 +716,10 @@
     ; (format t "~& source-file = ~s" source-file)
     (setq *loading-file-source-file* source-file)))
 
+(deffaslop $fasl-toplevel-location (s)
+  (%cant-epush s)
+  (setq *loading-toplevel-location* (%fasl-expr s)))
+
 (defvar *modules* nil)
 
 ;;; Bootstrapping version

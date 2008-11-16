@@ -26,8 +26,9 @@
 				  (string name)
                                   (namestring (backend-target-fasl-pathname
                                                *target-backend*)))))
-       `(let* ((*loading-file-source-file* *loading-file-source-file*))
-                 (%fasload ,namestring))))
+               `(let* ((*loading-file-source-file* *loading-file-source-file*)
+                       (*loading-toplevel-location* *loading-toplevel-location*))
+                  (%fasload ,namestring))))
 	   (bin-load (name)
 	     (let* ((namestring
 		     (concatenate 'simple-base-string
@@ -35,8 +36,9 @@
 				  (string name)
                                   (namestring (backend-target-fasl-pathname
                                                *target-backend*)))))
-               `(let* ((*loading-file-source-file* *loading-file-source-file*))
-                 (%fasload ,namestring)))))
+               `(let* ((*loading-file-source-file* *loading-file-source-file*)
+                       (*loading-toplevel-location* *loading-toplevel-location*))
+                  (%fasload ,namestring)))))
 
 
 (catch :toplevel

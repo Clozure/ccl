@@ -1235,7 +1235,8 @@ a host-structure or string."
            (*readtable* *readtable*)
            (*loading-files* (cons file-name (specialv *loading-files*)))
            ;;reset by fasload to logical name stored in the file
-           (*loading-file-source-file* (namestring source-file)))
+           (*loading-file-source-file* (namestring source-file))
+           (*loading-toplevel-location* nil))
       (declare (special *loading-files* *loading-file-source-file*))
       (when verbose
 	(format t "~&;Loading ~S..." *load-pathname*)

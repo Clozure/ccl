@@ -259,6 +259,16 @@ methods that are marked as being predefined signal continuable errors.")
 (defparameter *level-1-loaded* nil)     ; set t by l1-boot
 (defparameter *save-definitions* nil)
 (defparameter *save-local-symbols* t)
+(defparameter *save-source-locations* :no-text
+  "Controls whether complete source locations is stored, both for definitions (names) and
+in function objects.
+
+If NIL we don't store any source location (other than the filename if *record-source-file* is non-NIL).
+
+If T we store as much source location information as we have available.
+
+If :NO-TEXT we don't store a copy of the original source text.")
+(defparameter *record-pc-mapping* t)
 
 (defvar *modules* nil
   "This is a list of module names that have been loaded into Lisp so far.

@@ -364,14 +364,35 @@
     (dolist (op parsed-operands (format stream ")"))
       (format stream (if (and (consp op) (eq (car op) 'quote)) " ~s" " ~a") op))))
 
-(defun print-ppc-instructions (stream instructions &optional for-lap backend)
+(defun print-ppc-instructions (stream function instructions &optional for-lap backend)
   (declare (ignorable backend))
-  (let* ((tab (if for-lap 6 2)))
+  (let* ((tab (if for-lap 6 2))
+         (previous-source-note nil))
+
+    (let ((source-note (function-source-note function)))
+      (when source-note
+        (format t ";; Source: ~S:~D-~D"
+                (source-note-filename source-note)
+                (source-note-start-pos source-note)
+                (source-note-end-pos source-note))
+        ;; Fetch text from file if don't already have it
+        (ensure-source-note-text source-note)))
+
     (when for-lap 
       (let* ((lap-function-name (car for-lap)))
         (format stream "~&(~S ~S ~&  (~S (~s) ~&    (~s ~s ()" 
                 'nfunction lap-function-name 'lambda '&lap 'ppc-lap-function lap-function-name)))
+
     (do-dll-nodes (i instructions)
+      (let ((source-note (find-source-note-at-pc function (instruction-element-address i))))
+        (unless (eql (source-note-file-range source-note)
+                     (source-note-file-range previous-source-note))
+          (setf previous-source-note source-note)
+          (let* ((source-text (source-note-text source-note))
+                 (text (if source-text
+                         (string-sans-most-whitespace source-text 100)
+                         "#<no source text>")))
+            (format stream "~&~%;;; ~A" text))))
       (etypecase i
         (lap-label (format stream "~&~a " (lap-label-name i)))
         (lap-instruction 
@@ -383,7 +404,8 @@
   (let* ((backend (if target (find-backend target) *host-backend*))
          (prefix-length (length (arch::target-code-vector-prefix (backend-target-arch backend))))
          (*ppc-disassembly-backend* backend))
-    (print-ppc-instructions stream (function-to-dll-header fn-vector prefix-length)
+    (print-ppc-instructions stream fn-vector
+                            (function-to-dll-header fn-vector prefix-length)
                             (if for-lap (list (uvref fn-vector (- (uvsize fn-vector) 2)))))
     (values)))
 

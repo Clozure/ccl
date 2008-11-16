@@ -2722,16 +2722,28 @@
       `(* ,usual)
       usual)))
 
+(defvar *previous-source-note*)
 
-(defun x86-print-disassembled-instruction (ds instruction seq)
+(defun x86-print-disassembled-instruction (ds instruction seq function)
   (let* ((addr (x86-di-address instruction))
-         (entry (x86-ds-entry-point ds)))
+         (entry (x86-ds-entry-point ds))
+         (pc (- addr entry)))
+    (let ((source-note (find-source-note-at-pc function pc)))
+      (unless (eql (source-note-file-range source-note)
+                   (source-note-file-range *previous-source-note*))
+        (setf *previous-source-note* source-note)
+        (let* ((source-text (source-note-text source-note))
+               (text (if source-text
+                       (string-sans-most-whitespace source-text 100)
+                       "#<no source text>")))
+          (format t "~&~%;;; ~A" text))))
     (when (x86-di-labeled instruction)
-      (format t "~&L~d~&" (- addr entry))
+      (format t "~&L~d~%" pc)
       (setq seq 0))
+    (format t "~&  [~D]~8T" pc)
     (dolist (p (x86-di-prefixes instruction))
       (format t "~&  (~a)~%" p))
-    (format t "~&  (~a" (x86-di-mnemonic instruction))
+    (format t "  (~a" (x86-di-mnemonic instruction))
     (let* ((op0 (x86-di-op0 instruction))
            (op1 (x86-di-op1 instruction))
            (op2 (x86-di-op2 instruction)))
@@ -2742,14 +2754,24 @@
           (when op2
             (format t " ~a" (unparse-x86-lap-operand op2 ds))))))
     (format t ")")
-    (unless (zerop seq) ;(when (oddp seq)
-      (format t "~50t;[~d]" (- addr entry)))
     (format t "~%")
     (1+ seq)))
 
+(defun x86-print-disassembled-function-header (function xfunction)
+  (declare (ignore xfunction))
+  (let ((source-note (function-source-note function)))
+    (when source-note
+      (format t ";; Source: ~S:~D-~D"
+              (source-note-filename source-note)
+              (source-note-start-pos source-note)
+              (source-note-end-pos source-note))
+      ;; Fetch source from file if don't already have it.
+      (ensure-source-note-text source-note))))
 
-(defun x8664-disassemble-xfunction (xfunction &key (symbolic-names
-                                                         x8664::*x8664-symbolic-register-names*) (collect-function #'x86-print-disassembled-instruction))
+(defun x8664-disassemble-xfunction (function xfunction
+                                    &key (symbolic-names x8664::*x8664-symbolic-register-names*)
+                                         (collect-function #'x86-print-disassembled-instruction)
+                                         (header-function #'x86-print-disassembled-function-header))
   (check-type xfunction xfunction)
   (check-type (uvref xfunction 0) (simple-array (unsigned-byte 8) (*)))
   (let* ((ds (make-x86-disassembly-state
@@ -2767,13 +2789,23 @@
       (let* ((lab (pop (x86-ds-pending-labels ds))))
         (or (x86-dis-find-label lab blocks)
             (x86-disassemble-new-block ds lab))))
-    (let* ((seq 0))
+    (when (and blocks (let ((something-to-disassemble nil))
+                        (do-dll-nodes (block blocks)
+                          (do-dll-nodes (instruction (x86-dis-block-instructions block))
+                            (setf something-to-disassemble t)))
+                        something-to-disassemble))
+      (funcall header-function function xfunction))
+    (let* ((seq 0)
+           (*previous-source-note* nil))
+      (declare (special *previous-source-note*))
       (do-dll-nodes (block blocks)
         (do-dll-nodes (instruction (x86-dis-block-instructions block))
-          (setq seq (funcall collect-function ds instruction seq)))))))
+          (setq seq (funcall collect-function ds instruction seq function)))))))
 
-(defun x8632-disassemble-xfunction (xfunction &key (symbolic-names
-                                                         x8632::*x8632-symbolic-register-names*) (collect-function #'x86-print-disassembled-instruction))
+(defun x8632-disassemble-xfunction (function xfunction
+                                    &key (symbolic-names x8632::*x8632-symbolic-register-names*)
+                                         (collect-function #'x86-print-disassembled-instruction)
+                                         (header-function #'x86-print-disassembled-function-header))
   (check-type xfunction xfunction)
   (check-type (uvref xfunction 0) (simple-array (unsigned-byte 8) (*)))
   (let* ((ds (make-x86-disassembly-state
@@ -2791,14 +2823,23 @@
       (let* ((lab (pop (x86-ds-pending-labels ds))))
         (or (x86-dis-find-label lab blocks)
             (x86-disassemble-new-block ds lab))))
-    (let* ((seq 0))
+    (when (and blocks (let ((something-to-disassemble nil))
+                        (do-dll-nodes (block blocks)
+                          (do-dll-nodes (instruction (x86-dis-block-instructions block))
+                            (setf something-to-disassemble t)))
+                        something-to-disassemble))
+      (funcall header-function function xfunction))
+    (let* ((seq 0)
+           (*previous-source-note* nil))
+      (declare (special *previous-source-note*))
       (do-dll-nodes (block blocks)
         (do-dll-nodes (instruction (x86-dis-block-instructions block))
-          (setq seq (funcall collect-function ds instruction seq)))))))
+          (setq seq (funcall collect-function ds instruction seq function)))))))
 
 #+x8664-target
 (defun x8664-xdisassemble (function
-                           &optional (collect-function #'x86-print-disassembled-instruction))
+                           &optional (collect-function #'x86-print-disassembled-instruction)
+                                     (header-function #'x86-print-disassembled-function-header))
   (let* ((fv (%function-to-function-vector function))
          (function-size-in-words (uvsize fv))
          (code-words (%function-code-words function))
@@ -2813,13 +2854,16 @@
     (do* ((k code-words (1+ k))
           (j 1 (1+ j)))
          ((= k function-size-in-words)
-          (x8664-disassemble-xfunction xfunction
-                                       :collect-function collect-function))
+          (x8664-disassemble-xfunction function xfunction
+                                       :collect-function collect-function
+                                       :header-function header-function))
       (declare (fixnum j k))
       (setf (uvref xfunction j) (uvref fv k)))))
 
 #+x8632-target
-(defun x8632-xdisassemble (function &optional (collect-function #'x86-print-disassembled-instruction ))
+(defun x8632-xdisassemble (function
+                           &optional (collect-function #'x86-print-disassembled-instruction)
+                                     (header-function #'x86-print-disassembled-function-header))
   (let* ((fv (function-to-function-vector function))
          (function-size-in-words (uvsize fv))
          (code-words (%function-code-words function))
@@ -2834,7 +2878,9 @@
     (do* ((k code-words (1+ k))
           (j 1 (1+ j)))
          ((= k function-size-in-words)
-          (x8632-disassemble-xfunction xfunction :collect-function collect-function))
+          (x8632-disassemble-xfunction function xfunction
+                                       :collect-function collect-function
+                                       :header-function header-function))
       (declare (fixnum j k))
       (setf (uvref xfunction j) (uvref fv k)))))
 
@@ -2842,7 +2888,8 @@
   (collect ((instructions))
     (#+x8632-target x8632-xdisassemble #+x8664-target x8664-xdisassemble
      function
-     #'(lambda (ds instruction seq)
+     #'(lambda (ds instruction seq function)
+         (declare (ignore function))
          (collect ((insn))
            (let* ((addr (x86-di-address instruction))
                   (entry (x86-ds-entry-point ds))

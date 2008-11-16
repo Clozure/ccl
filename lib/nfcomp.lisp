@@ -44,16 +44,24 @@
 (require "X8664-ARCH")
 ) ;eval-when (:compile-toplevel :execute)
 
+; inited in l1-init, this is for when loading into a lisp that doesn't have it yet.
+#-BOOTSTRAPPED (eval-when (compile load eval)
+                 (unless (boundp '*LOADING-TOPLEVEL-LOCATION*)
+                   (declaim (special *loading-toplevel-location*))
+                   (defparameter *save-source-locations* nil)))
+
 ;File compiler options.  Not all of these need to be exported/documented, but
 ;they should be in the product just in case we need them for patches....
 (defvar *fasl-save-local-symbols* t)
+(defvar *fasl-save-doc-strings*  t)
+(defvar *fasl-save-definitions* nil)
+
 (defvar *fasl-deferred-warnings* nil)
 (defvar *fasl-non-style-warnings-signalled-p* nil)
 (defvar *fasl-warnings-signalled-p* nil)
+
 (defvar *compile-verbose* nil ; Might wind up getting called *compile-FILE-verbose*
   "The default for the :VERBOSE argument to COMPILE-FILE.")
-(defvar *fasl-save-doc-strings*  t)
-(defvar *fasl-save-definitions* nil)
 (defvar *compile-file-pathname* nil
   "The defaulted pathname of the file currently being compiled, or NIL if not
   compiling.") ; pathname of src arg to COMPILE-FILE
@@ -124,11 +132,17 @@ Will differ from *compiling-file* during an INCLUDE")
                          (save-local-symbols *fasl-save-local-symbols*)
                          (save-doc-strings *fasl-save-doc-strings*)
                          (save-definitions *fasl-save-definitions*)
-                         (break-on-program-errors *fasl-break-on-program-errors*)
+                         (save-source-locations *save-source-locations*)
                          (external-format :default)
-                         force)
-  "Compile INPUT-FILE, producing a corresponding fasl file and returning
-   its filename."
+                         force
+                         ;; src may be a temp file with a section of the real source,
+                         ;; then this is the real source file name.
+                         compile-file-original-truename
+                         (compile-file-original-buffer-offset 0)
+                         (break-on-program-errors (if compile-file-original-truename
+                                                    t  ;; really SLIME being interactive...
+                                                    *fasl-break-on-program-errors*)))
+  "Compile SRC, producing a corresponding fasl file and returning its filename."
   (let* ((backend *target-backend*))
     (when (and target-p (not (setq backend (find-backend target))))
       (warn "Unknown :TARGET : ~S.  Reverting to ~s ..." target *fasl-target*)
@@ -137,8 +151,9 @@ Will differ from *compiling-file* during an INCLUDE")
 	(restart-case
 	 (return (%compile-file src output-file verbose print load features
                                 save-local-symbols save-doc-strings save-definitions
-                                break-on-program-errors
-                                force backend external-format))
+                                save-source-locations break-on-program-errors
+                                force backend external-format
+                                compile-file-original-truename compile-file-original-buffer-offset))
 	 (retry-compile-file ()
 			     :report (lambda (stream) (format stream "Retry compiling ~s" src))
 			     nil)
@@ -150,12 +165,11 @@ Will differ from *compiling-file* during an INCLUDE")
 
 (defun %compile-file (src output-file verbose print load features
                           save-local-symbols save-doc-strings save-definitions
-                          break-on-program-errors
+                          save-source-locations break-on-program-errors
                           force target-backend external-format
-			  &aux orig-src)
-
-  (setq orig-src (merge-pathnames src))
-  (let* ((output-default-type (backend-target-fasl-pathname target-backend)))
+                          compile-file-original-truename compile-file-original-buffer-offset)
+  (let* ((orig-src (merge-pathnames src))
+         (output-default-type (backend-target-fasl-pathname target-backend)))
     (setq src (fcomp-find-file orig-src))
     (let* ((newtype (pathname-type src)))
       (when (and newtype (not (pathname-type orig-src)))
@@ -184,6 +198,7 @@ Will differ from *compiling-file* during an INCLUDE")
       (let* ((*features* (append (if (listp features) features (list features)) (setup-target-features target-backend *features*)))
              (*fasl-deferred-warnings* nil) ; !!! WITH-COMPILATION-UNIT ...
              (*fasl-save-local-symbols* save-local-symbols)
+             (*save-source-locations* save-source-locations)
              (*fasl-save-doc-strings* save-doc-strings)
              (*fasl-save-definitions* save-definitions)
              (*fasl-break-on-program-errors* break-on-program-errors)
@@ -208,7 +223,10 @@ Will differ from *compiling-file* during an INCLUDE")
             (rplacd (defenv.type defenv) *outstanding-deferred-warnings*)
             (setf (defenv.defined defenv) (deferred-warnings.defs *outstanding-deferred-warnings*))
 
-            (setq forms (fcomp-file src orig-src lexenv))
+            (setq forms (fcomp-file src
+                                    (or compile-file-original-truename orig-src)
+                                    compile-file-original-buffer-offset
+                                    lexenv))
 
             (setf (deferred-warnings.warnings *outstanding-deferred-warnings*) 
                   (append *fasl-deferred-warnings* (deferred-warnings.warnings *outstanding-deferred-warnings*)))
@@ -261,7 +279,11 @@ Will differ from *compiling-file* during an INCLUDE")
 
 (defun %compile-time-eval (form env)
   (declare (ignore env))
-  (let* ((*target-backend* *host-backend*))
+  (let* ((*target-backend* *host-backend*)
+         (*loading-toplevel-location* (or (fcomp-source-note form)
+                                          *loading-toplevel-location*))
+         (lambda `(lambda () ,form)))
+    (fcomp-note-source-transformation form lambda)
     ;; The HANDLER-BIND here is supposed to note WARNINGs that're
     ;; signaled during (eval-when (:compile-toplevel) processing; this
     ;; in turn is supposed to satisfy a pedantic interpretation of the
@@ -275,7 +297,8 @@ Will differ from *compiling-file* during an INCLUDE")
                                 (setq *fasl-non-style-warnings-signalled-p* t))
                               (signal c))))
       (funcall (compile-named-function
-                `(lambda () ,form)
+                lambda
+                :source-notes *fcomp-source-note-map*
                 :env *fasl-compile-time-env*
                 :policy *compile-time-evaluation-policy*)))))
 
@@ -345,6 +368,8 @@ Will differ from *compiling-file* during an INCLUDE")
 (defvar *fcomp-eval-always-functions* nil)   ; used by the LISP package
 (defvar *fcomp-output-list*)
 (defvar *fcomp-toplevel-forms*)
+(defvar *fcomp-source-note-map* nil)
+(defvar *fcomp-loading-toplevel-location*)
 (defvar *fcomp-warnings-header*)
 (defvar *fcomp-stream-position* nil)
 (defvar *fcomp-previous-position* nil)
@@ -378,7 +403,7 @@ Will differ from *compiling-file* during an INCLUDE")
       (getf *fcomp-print-handler-plist* 'include) '(nil . t))
 
 
-(defun fcomp-file (filename orig-file env)  ; orig-file is back-translated
+(defun fcomp-file (filename orig-file orig-offset env)  ; orig-file is back-translated
   (let* ((*package* *package*)
          (*compiling-file* filename)
          (*nx-compile-time-types* *nx-compile-time-types*)
@@ -395,7 +420,7 @@ Will differ from *compiling-file* during an INCLUDE")
          (*fcomp-indentation* 0)
          (*fcomp-last-compile-print* (cons nil (cons nil nil))))
     (push (list $fasl-platform (backend-target-platform *fasl-backend*)) *fcomp-output-list*)
-    (fcomp-read-loop filename orig-file env :not-compile-time)
+    (fcomp-read-loop filename orig-file orig-offset env :not-compile-time)
     (nreverse *fcomp-output-list*)))
 
 (defun fcomp-find-file (file &aux path)
@@ -407,34 +432,32 @@ Will differ from *compiling-file* during an INCLUDE")
 ;;; orig-file is back-translated when from fcomp-file
 ;;; when from fcomp-include it's included filename merged with *compiling-file*
 ;;; which is not back translated
-(defun fcomp-read-loop (filename orig-file env processing-mode)
+(defun fcomp-read-loop (filename orig-file orig-offset env processing-mode)
   (when *compile-verbose*
     (format t "~&;~A ~S..."
             (if (eq filename *compiling-file*) "Compiling" " Including")
             filename))
   (with-open-file (stream filename
-			  :element-type 'base-char
-			  :external-format *fcomp-external-format*)
-    (let* ((old-file (and (neq filename *compiling-file*) *fasl-source-file*))           
+                          :element-type 'base-char
+                          :external-format *fcomp-external-format*)
+    (let* ((old-file (and (neq filename *compiling-file*) *fasl-source-file*))
            (*fasl-source-file* filename)
            (*fcomp-toplevel-forms* nil)
            (*fasl-eof-forms* nil)
-           (*loading-file-source-file* (namestring orig-file)) ; why orig-file???
+           (*loading-file-source-file* (namestring orig-file))
+           (*fcomp-source-note-map* (and *save-source-locations*
+                                         (make-hash-table :test #'eq :shared nil)))
+           (*loading-toplevel-location* nil)
+           (*fcomp-loading-toplevel-location* nil)
            (eofval (cons nil nil))
            (read-package nil)
            form)
-      (declare (special *fasl-eof-forms* *fcomp-toplevel-forms* *fasl-source-file*))
-      ;;This should really be something like `(set-loading-source
-      ;;,filename) but then couldn't compile level-1 with this...  ->
-      ;;In any case, change this to be a fasl opcode, so don't make an
-      ;;lfun just to do this...  There are other reasons - more
-      ;;compelling ones than "fear of tiny lfuns" - for making this a
-      ;;fasl opcode.
+
       (fcomp-output-form $fasl-src env *loading-file-source-file*)
       (let* ((*fcomp-previous-position* nil))
         (loop
           (let* ((*fcomp-stream-position* (file-position stream))
-                 (*nx-warnings* nil))
+                 (*nx-warnings* nil)) ;; catch any warnings from :compile-toplevel forms
             (unless (eq read-package *package*)
               (fcomp-compile-toplevel-forms env)
               (setq read-package *package*))
@@ -446,8 +469,21 @@ Will differ from *compiling-file* during an INCLUDE")
                     ((error #'(lambda (c) ; we should distinguish read errors from others?
                                 (format *error-output* "~&Read error between positions ~a and ~a in ~a." pos (file-position stream) filename)
                                 (signal c))))
-                  (setq form (read stream nil eofval)))))
-            (when (eq eofval form) (return))
+                  (multiple-value-setq (form *loading-toplevel-location*)
+                    (if *fcomp-source-note-map* ;; #-BOOTSTRAPPED
+                      (read-recording-source stream
+                                             :eofval eofval
+                                             :file-name *loading-file-source-file*
+                                             :start-offset orig-offset
+                                             :map *fcomp-source-note-map*
+                                             :save-source-text (neq *save-source-locations* :no-text))
+                      (read-recording-source stream
+                                             :eofval eofval
+                                             :file-name *loading-file-source-file*
+                                             :start-offset orig-offset))))))
+            (when (eq eofval form)
+	      (require-type *loading-toplevel-location* 'null)
+	      (return))
             (fcomp-form form env processing-mode)
             (fcomp-signal-or-defer-warnings *nx-warnings* env)
             (setq *fcomp-previous-position* *fcomp-stream-position*))))
@@ -500,16 +536,16 @@ Will differ from *compiling-file* during an INCLUDE")
                              "  (Compiletime)"
                              "")))))))
     (fcomp-form-1 form env processing-mode)))
-           
+
 (defun fcomp-form-1 (form env processing-mode &aux sym body)
   (if (consp form) (setq sym (%car form) body (%cdr form)))
   (case sym
     (progn (fcomp-form-list body env processing-mode))
-    (eval-when (fcomp-eval-when body env processing-mode))
-    (compiler-let (fcomp-compiler-let body env processing-mode))
-    (locally (fcomp-locally body env processing-mode))
-    (macrolet (fcomp-macrolet body env processing-mode))
-    (symbol-macrolet (fcomp-symbol-macrolet body env processing-mode))
+    (eval-when (fcomp-eval-when form env processing-mode))
+    (compiler-let (fcomp-compiler-let form env processing-mode))
+    (locally (fcomp-locally form env processing-mode))
+    (macrolet (fcomp-macrolet form env processing-mode))
+    (symbol-macrolet (fcomp-symbol-macrolet form env processing-mode))
     ((%include include) (fcomp-include form env processing-mode))
     (t
      ;;Need to macroexpand to see if get more progn's/eval-when's and so should
@@ -518,17 +554,18 @@ Will differ from *compiling-file* during an INCLUDE")
      ;; Good advice, but the hard part is knowing which is which.
      (cond 
        ((and (non-nil-symbol-p sym)
-             (macro-function sym env)            
+             (macro-function sym env)
              (not (compiler-macro-function sym env))
              (not (eq sym '%defvar-init)) ;  a macro that we want to special-case
-             (multiple-value-bind (new win) (macroexpand-1 form env)
+             (multiple-value-bind (new win) (fcomp-macroexpand-1 form env)
                (if win (setq form new))
                win))
         (fcomp-form form env processing-mode))
        ((and (not *fcomp-inside-eval-always*)
              (memq sym *fcomp-eval-always-functions*))
-        (let* ((*fcomp-inside-eval-always* t))
-          (fcomp-form-1 `(eval-when (:execute :compile-toplevel :load-toplevel) ,form) env processing-mode)))
+        (let* ((*fcomp-inside-eval-always* t)
+               (new `(eval-when (:execute :compile-toplevel :load-toplevel) ,form)))
+          (fcomp-form-1 new env processing-mode)))
        (t
         (when (or (eq processing-mode :compile-time) (eq processing-mode :compile-time-too))
           (%compile-time-eval form env))
@@ -547,25 +584,29 @@ Will differ from *compiling-file* during an INCLUDE")
             (t (fcomp-random-toplevel-form form env)))))))))
 
 (defun fcomp-form-list (forms env processing-mode)
-  (dolist (form forms) (fcomp-form form env processing-mode)))
+  (let* ((outer *loading-toplevel-location*))
+    (dolist (form forms)
+      (setq *loading-toplevel-location* (or (fcomp-source-note form) outer))
+      (fcomp-form form env processing-mode))
+    (setq *loading-toplevel-location* outer)))
 
-(defun fcomp-compiler-let (form env processing-mode &aux vars varinits)
+(defun fcomp-compiler-let (form env processing-mode &aux vars varinits (body (%cdr form)))
   (fcomp-compile-toplevel-forms env)
-  (dolist (pair (pop form))
+  (dolist (pair (car body))
     (push (nx-pair-name pair) vars)
     (push (%compile-time-eval (nx-pair-initform pair) env) varinits))
   (progv (nreverse vars) (nreverse varinits)
-                 (fcomp-form-list form env processing-mode)
-                 (fcomp-compile-toplevel-forms env)))
+    (fcomp-form-list (cdr body) env processing-mode)
+    (fcomp-compile-toplevel-forms env)))
 
-(defun fcomp-locally (body env processing-mode)
+(defun fcomp-locally (form env processing-mode &aux (body (%cdr form)))
   (fcomp-compile-toplevel-forms env)
   (multiple-value-bind (body decls) (parse-body body env)
     (let* ((env (augment-environment env :declare (decl-specs-from-declarations decls))))
       (fcomp-form-list body env processing-mode)
       (fcomp-compile-toplevel-forms env))))
 
-(defun fcomp-macrolet (body env processing-mode)
+(defun fcomp-macrolet (form env processing-mode &aux (body (%cdr form)))
   (fcomp-compile-toplevel-forms env)
   (let ((outer-env (augment-environment env 
                                         :macro
@@ -581,7 +622,7 @@ Will differ from *compiling-file* during an INCLUDE")
         (fcomp-form-list body env processing-mode)
         (fcomp-compile-toplevel-forms env)))))
 
-(defun fcomp-symbol-macrolet (body env processing-mode)
+(defun fcomp-symbol-macrolet (form env processing-mode &aux (body (%cdr form)))
   (fcomp-compile-toplevel-forms env)
   (let* ((outer-env (augment-environment env :symbol-macro (car body))))
     (multiple-value-bind (body decls) (parse-body (cdr body) env)
@@ -589,8 +630,8 @@ Will differ from *compiling-file* during an INCLUDE")
                                        :declare (decl-specs-from-declarations decls))))
         (fcomp-form-list body env processing-mode)
         (fcomp-compile-toplevel-forms env)))))
-                                                               
-(defun fcomp-eval-when (form env processing-mode &aux (eval-times (pop form)))
+
+(defun fcomp-eval-when (form env processing-mode &aux (body (%cdr form)) (eval-times (pop body)))
   (let* ((compile-time-too  (eq processing-mode :compile-time-too))
          (compile-time-only (eq processing-mode :compile-time))
          (at-compile-time nil)
@@ -607,13 +648,13 @@ Will differ from *compiling-file* during an INCLUDE")
                   when eval-times *fasl-source-file*)))))
     (fcomp-compile-toplevel-forms env)        ; always flush the suckers
     (cond (compile-time-only
-           (if at-eval-time (fcomp-form-list form env :compile-time)))
+           (if at-eval-time (fcomp-form-list body env :compile-time)))
           (at-load-time
-           (fcomp-form-list form env (if (or at-compile-time (and at-eval-time compile-time-too))
+           (fcomp-form-list body env (if (or at-compile-time (and at-eval-time compile-time-too))
                                        :compile-time-too
                                        :not-compile-time)))
           ((or at-compile-time (and at-eval-time compile-time-too))
-           (fcomp-form-list form env :compile-time))))
+           (fcomp-form-list body env :compile-time))))
   (fcomp-compile-toplevel-forms env))
 
 (defun fcomp-include (form env processing-mode &aux file)
@@ -626,7 +667,7 @@ Will differ from *compiling-file* during an INCLUDE")
     (when *compile-print* (format t "~&~vTIncluding file ~A~%" *fcomp-indentation* actual))
     (let ((*fcomp-indentation* (+ 4 *fcomp-indentation*))
           (*package* *package*))
-      (fcomp-read-loop (fcomp-find-file actual) actual env processing-mode)
+      (fcomp-read-loop (fcomp-find-file actual) actual 0 env processing-mode)
       (fcomp-output-form $fasl-src env *loading-file-source-file*))
     (when *compile-print* (format t "~&~vTFinished included file ~A~%" *fcomp-indentation* actual))))
 
@@ -653,7 +694,7 @@ Will differ from *compiling-file* during an INCLUDE")
       (setq doc nil))
     (if (quoted-form-p sym)
       (setq sym (%cadr sym)))
-    (if (and (typep sym 'symbol) (or  (quoted-form-p valform) (self-evaluating-p valform)))
+    (if (and (typep sym 'symbol) (or (quoted-form-p valform) (self-evaluating-p valform)))
       (fcomp-output-form $fasl-defconstant env sym (eval-constant valform) (eval-constant doc))
       (fcomp-random-toplevel-form form env))))
 
@@ -663,8 +704,9 @@ Will differ from *compiling-file* during an INCLUDE")
       (setq doc nil))
     (if (quoted-form-p sym)
       (setq sym (%cadr sym)))
-    (let* ((fn (fcomp-function-arg valform env)))
-      (if (and (typep sym 'symbol) (or fn (constantp valform)))
+    (let* ((sym-p (typep sym 'symbol))
+           (fn (and sym-p (fcomp-function-arg valform env))))
+      (if (and sym-p (or fn (constantp valform)))
         (fcomp-output-form $fasl-defparameter env sym (or fn (eval-constant valform)) (eval-constant doc))
         (fcomp-random-toplevel-form form env)))))
 
@@ -685,10 +727,8 @@ Will differ from *compiling-file* during an INCLUDE")
         (let* ((fn (if sym-p (fcomp-function-arg valform env))))
           (if (and sym-p (or fn (constantp valform)))
             (fcomp-output-form $fasl-defvar-init env sym (or fn (eval-constant valform)) (eval-constant doc))
-            (fcomp-random-toplevel-form (macroexpand-1 form env) env)))))))
+            (fcomp-random-toplevel-form form env)))))))
       
-
-
 (defun define-compile-time-macro (name lambda-expression env)
   (let ((compile-time-defenv (definition-environment *fasl-compile-time-env*))
         (definition-env (definition-environment env)))
@@ -718,7 +758,7 @@ Will differ from *compiling-file* during an INCLUDE")
 (defun fcomp-proclaim-type (type syms)
   (dolist (sym syms)
     (if (symbolp sym)
-    (push (cons sym type) *nx-compile-time-types*)
+      (push (cons sym type) *nx-compile-time-types*)
       (warn "~S isn't a symbol in ~S type declaration while compiling ~S."
             sym type *fasl-source-file*))))
 
@@ -816,10 +856,25 @@ Will differ from *compiling-file* during an INCLUDE")
                               structrefs))))
         (setf (defenv.structrefs defenv) structrefs)))))
 
+(defun fcomp-source-note (form &aux (notes *fcomp-source-note-map*))
+  (and notes (gethash form notes)))
 
+(defun fcomp-note-source-transformation (original new)
+  (let* ((*nx-source-note-map* *fcomp-source-note-map*))
+    (nx-note-source-transformation original new)))
+
+(defun fcomp-macroexpand-1 (form env)
+  (let* ((*nx-source-note-map* *fcomp-source-note-map*))
+    (multiple-value-bind (new win)
+        (macroexpand-1 form env)
+      (when win
+	(nx-note-source-transformation form new))
+      (values new win))))
 
 (defun fcomp-transform (form env)
-  (nx-transform form env))
+  (let* ((*nx-source-note-map* *fcomp-source-note-map*))
+    (nx-transform form env)))
+
 
 (defun fcomp-random-toplevel-form (form env)
   (unless (constantp form)
@@ -830,27 +885,36 @@ Will differ from *compiling-file* during an INCLUDE")
       ;;top-level compiles.
       ;;This assumes the form has been macroexpanded, or at least none of the
       ;;non-evaluated macro arguments could look like functions.
-      (let (lfun (args (%cdr form)))
-        (while args
-          (multiple-value-bind (arg win) (fcomp-transform (%car args) env)
-            (when (or (setq lfun (fcomp-function-arg arg env))
-                      win)
-              (when lfun (setq arg `',lfun))
-              (labels ((subst-l (new ptr list)
-                         (if (eq ptr list) (cons new (cdr list))
-                           (cons (car list) (subst-l new ptr (%cdr list))))))
-                (setq form (subst-l arg args form))))
-            (setq args (%cdr args))))))
+      (let ((new-form (make-list (length form))))
+        (declare (dynamic-extent new-form))
+        (loop for arg in (%cdr form) for newptr on (%cdr new-form)
+              do (setf (%car newptr)
+                       (multiple-value-bind (new win) (fcomp-transform arg env)
+                         (let ((lfun (fcomp-function-arg new env)))
+                           (when lfun
+                             (setq new `',lfun win t)
+                             (fcomp-note-source-transformation arg new)))
+                         (if win new arg))))
+        (unless (every #'eq (%cdr form) (%cdr new-form))
+          (setf (%car new-form) (%car form))
+          (fcomp-note-source-transformation form (setq form (copy-list new-form))))))
+    (fcomp-ensure-source env)
     (push form *fcomp-toplevel-forms*)))
 
 (defun fcomp-function-arg (expr env)
   (when (consp expr)
-    (if (and (eq (%car expr) 'nfunction)
-             (lambda-expression-p (cadr (%cdr expr))))
-      (fcomp-named-function (%caddr expr) (%cadr expr) env)
-      (if (and (eq (%car expr) 'function)
-               (lambda-expression-p (car (%cdr expr))))
-        (fcomp-named-function (%cadr expr) nil env)))))
+    (multiple-value-bind (lambda-expr name win)
+	(cond ((and (eq (%car expr) 'nfunction)
+		    (lambda-expression-p (cadr (%cdr expr))))
+	       (values (%caddr expr) (%cadr expr) t))
+	      ((and (eq (%car expr) 'function)
+		    (lambda-expression-p (car (%cdr expr))))
+	       (values (%cadr expr) nil t)))
+      (when win
+        (fcomp-named-function lambda-expr name env
+                              (or (fcomp-source-note expr)
+                                  (fcomp-source-note lambda-expr)
+                                  *loading-toplevel-location*))))))
 
 (defun fcomp-compile-toplevel-forms (env)
   (when *fcomp-toplevel-forms*
@@ -882,23 +946,34 @@ Will differ from *compiling-file* during an INCLUDE")
               (setq *fcomp-toplevel-forms* (nreverse forms))
               (fcomp-compile-toplevel-forms env))))))))
 
+(defun fcomp-ensure-source (env)
+  ;; if source location saving is off, both values are NIL, so this will do nothing,
+  ;; don't need to check explicitly.
+  (unless (eq *fcomp-loading-toplevel-location* *loading-toplevel-location*)
+    (setq *fcomp-loading-toplevel-location* *loading-toplevel-location*)
+    (fcomp-output-form $fasl-toplevel-location env *loading-toplevel-location*)))
+
 (defun fcomp-output-form (opcode env &rest args)
+  (fcomp-ensure-source env)
   (when *fcomp-toplevel-forms* (fcomp-compile-toplevel-forms env))
   (push (cons opcode args) *fcomp-output-list*))
+
 
 ;;; Compile a lambda expression for the sole purpose of putting it in a fasl
 ;;; file.  The result will not be funcalled.  This really shouldn't bother
 ;;; making an lfun, but it's simpler this way...
-(defun fcomp-named-function (def name env)
+(defun fcomp-named-function (def name env &optional source-note)
   (let* ((env (new-lexical-environment env))
          (*nx-break-on-program-errors* (not (memq *fasl-break-on-program-errors* '(nil :defer)))))
     (multiple-value-bind (lfun warnings)
         (compile-named-function def
                                 :name name
                                 :env env
+                                :function-note source-note
                                 :keep-lambda *fasl-save-definitions*
                                 :keep-symbols *fasl-save-local-symbols*
                                 :policy *default-file-compilation-policy*
+                                :source-notes *fcomp-source-note-map*
                                 :load-time-eval-token cfasl-load-time-eval-sym
                                 :target *fasl-target*)
       (fcomp-signal-or-defer-warnings warnings env)
@@ -961,7 +1036,7 @@ Will differ from *compiling-file* during an INCLUDE")
                                           :rehash-threshold 0.9
                                           :test 'eq
 					  :shared nil))
-         (*make-load-form-hash* (make-hash-table :test 'eq))
+         (*make-load-form-hash* (make-hash-table :test 'eq :shared nil))
          (*fasdump-read-package* nil)
          (*fasdump-global-offsets* nil)
          (gsymbols nil))
@@ -1135,6 +1210,9 @@ Will differ from *compiling-file* during an INCLUDE")
              (fasl-scan-form (%cdr list))))))
 
 (defun fasl-scan-user-form (form)
+  (when (or (source-note-p form)
+            (code-note-p form))
+    (return-from fasl-scan-user-form (fasl-scan-gvector form)))
   (multiple-value-bind (load-form init-form) (make-load-form form *fcomp-load-forms-environment*)
     (labels ((simple-load-form (form)
                (or (atom form)

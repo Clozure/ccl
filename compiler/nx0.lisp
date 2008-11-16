@@ -33,6 +33,8 @@
   (setf (afunc-bits v) 0)
   v)
 
+(defvar *compile-code-coverage* nil "True to instrument for code coverage")
+
 (defvar *nx-blocks* nil)
 (defvar *nx-tags* nil)
 (defvar *nx-parent-function* nil)
@@ -41,6 +43,8 @@
 (defvar *nx-symbol-macros* nil)
 (defvar *nx-inner-functions* nil)
 (defvar *nx-cur-func-name* nil)
+(defvar *nx-current-note*)
+(defparameter *nx-source-note-map* nil) ;; there might be external refs, from macros.
 (defvar *nx-form-type* t)
 ;(defvar *nx-proclaimed-inline* nil)
 ;(defvar *nx-proclaimed-inline* (make-hash-table :size 400 :test #'eq))
@@ -56,7 +60,6 @@
 
 (defvar *nx1-operators* (make-hash-table :size 300 :test #'eq))
 
-                                         
 
 ; The compiler can (generally) use temporary vectors for VARs.
 (defun nx-cons-var (name &optional (bits 0))
@@ -80,6 +83,11 @@
 
 (defvar *nx1-compiler-special-forms* nil "Real special forms")
 
+(defmacro without-compiling-code-coverage (&body body)
+  "Disable code coverage in the lexical scope of the form"
+  `(compiler-let ((*nx-current-code-note* nil))
+     ,@body))
+
 (defparameter *nx-never-tail-call*
   '(error cerror break warn type-error file-error
     signal-program-error signal-simple-program-error
@@ -90,7 +98,6 @@
    should never be tail-called.")
 
 (defvar *cross-compiling* nil "bootstrapping")
-
 
 
 (defparameter *nx-operator-result-types*
@@ -525,7 +532,8 @@ function to the indicated name is true.")
 ;; Use acode-unwrapped-form-value to reason about the value of a form at
 ;; compile time.   To actually generate code, use acode-unwrapped-form.
 (defun acode-unwrapped-form-value (form)
-  ;; Currently no difference
+  ;; Currently no difference, but if had any operators like with-code-note,
+  ;; would unwrap them here.
   (acode-unwrapped-form form))
 
 ; Strip off any type info or "punted" lexical references.
@@ -1086,7 +1094,8 @@ function to the indicated name is true.")
          (containing-env nil)
          (token nil))
     (if (and (nx-declared-inline-p sym env)
-             (not (gethash sym *nx1-alphatizers*)))
+             (not (gethash sym *nx1-alphatizers*))
+             (not *nx-current-code-note*))
       (multiple-value-bind (info afunc) (unless global-only (nx-lexical-finfo sym env))
         (if info (setq token afunc 
                        containing-env (afunc-environment afunc)
@@ -1294,8 +1303,7 @@ Or something. Right? ~s ~s" var varbits))
                                  q
                                  parent-env
                                  (policy *default-compiler-policy*)
-                                 load-time-eval-token
-                                 function-note)
+                                 load-time-eval-token)
 
   (if q
      (setf (afunc-parent p) q))
@@ -1318,16 +1326,12 @@ Or something. Right? ~s ~s" var varbits))
                 `(:internal ,parent-name)))
             name)))
 
-  (when (or function-note
-            (setq function-note (nx-source-note lambda-form))
-            (setq function-note (and q (getf (afunc-lfun-info q) 'function-source-note))))
-    (setf (afunc-lfun-info p)
-          (list* 'function-source-note function-note (afunc-lfun-info p))))
-
   (unless (lambda-expression-p lambda-form)
     (nx-error "~S is not a valid lambda expression." lambda-form))
+
   (let* ((*nx-current-function* p)
          (*nx-parent-function* q)
+         (*nx-current-note* (or *nx-current-note* (nx-source-note lambda-form)))
          (*nx-lexical-environment* (new-lexical-environment parent-env))
          (*nx-load-time-eval-token* load-time-eval-token)
          (*nx-all-vars* nil)
@@ -1351,6 +1355,11 @@ Or something. Right? ~s ~s" var varbits))
       (setf (afunc-bits p) (logior (ash 1 $fbitnonnullenv) (the fixnum (afunc-bits p)))))
 
     (setf (afunc-lambdaform p) lambda-form)
+
+    (when *nx-current-note*
+      (setf (afunc-lfun-info p)
+            (list* '%function-source-note *nx-current-note* (afunc-lfun-info p))))
+
     (with-program-error-handler
 	(lambda (c)
 	  (setf (afunc-acode p) (nx1-lambda '(&rest args) `(args ,(runtime-program-error-form c)) nil)))
@@ -1370,7 +1379,7 @@ Or something. Right? ~s ~s" var varbits))
 	(multiple-value-bind (body decls)
 	    (with-program-error-handler (lambda (c) (runtime-program-error-form c))
 	      (parse-body (%cddr lambda-form) *nx-lexical-environment* t))
-	  (setf (afunc-acode p) (nx1-lambda (%cadr lambda-form) body decls)))))
+          (setf (afunc-acode p) (nx1-lambda (%cadr lambda-form) body decls)))))
 
     (nx1-transitively-punt-bindings *nx-punted-vars*)
     (setf (afunc-blocks p) *nx-blocks*)
@@ -1445,15 +1454,18 @@ Or something. Right? ~s ~s" var varbits))
                   (%ilogior 
                    (%ilsl $fbitnextmethp 1)
                    (afunc-bits *nx-current-function*)))))
-        (make-acode
-         (%nx1-operator lambda-list) 
-         req
-         opt 
-         (if lexpr (list rest) rest)
-         keys
-         auxen
-         body
-         *nx-new-p2decls*)))))
+        (let ((acode (make-acode
+                      (%nx1-operator lambda-list) 
+                      req
+                      opt 
+                      (if lexpr (list rest) rest)
+                      keys
+                      auxen
+                      body
+                      *nx-new-p2decls*)))
+          (when *nx-current-code-note*
+            (setf (acode-note acode) *nx-current-code-note*))
+          acode)))))
 
 (defun nx-parse-simple-lambda-list (pending ll &aux
 					      req
@@ -1655,23 +1667,26 @@ Or something. Right? ~s ~s" var varbits))
     (nx1-transformed-form (nx-transform original env) env)))
 
 (defun nx1-transformed-form (form env)
-  (flet ((main (form env)
-           (if (consp form)
-             (nx1-combination form env)
-             (let* ((symbolp (non-nil-symbol-p form))
-                    (constant-value (unless symbolp form))
-                    (constant-symbol-p nil))
-               (if symbolp 
-                 (multiple-value-setq (constant-value constant-symbol-p) 
-                   (nx-transform-defined-constant form env)))
-               (if (and symbolp (not constant-symbol-p))
-                 (nx1-symbol form env)
-                 (nx1-immediate (nx-unquote constant-value)))))))
-    (if *nx-source-note-map*
-      (let ((acode (main form env)))
-        (setf (acode-source acode) form)
-        acode)
-      (main form env))))
+  (let* ((*nx-current-note* (or (nx-source-note form) *nx-current-note*))
+         (*nx-current-code-note*  (and *nx-current-code-note*
+                                       (or (nx-ensure-code-note form *nx-current-code-note*)
+                                           (compiler-bug "No source note for ~s" form))))
+         (acode (if (consp form)
+                  (nx1-combination form env)
+                  (let* ((symbolp (non-nil-symbol-p form))
+                         (constant-value (unless symbolp form))
+                         (constant-symbol-p nil))
+                    (if symbolp 
+                      (multiple-value-setq (constant-value constant-symbol-p) 
+                        (nx-transform-defined-constant form env)))
+                    (if (and symbolp (not constant-symbol-p))
+                      (nx1-symbol form env)
+                      (nx1-immediate (nx-unquote constant-value)))))))
+    (cond (*nx-current-code-note*
+           (setf (acode-note acode) *nx-current-code-note*))
+          (*record-pc-mapping*
+           (setf (acode-note acode) (nx-source-note form))))
+    acode))
 
 (defun nx1-prefer-areg (form env)
   (nx1-form form env))

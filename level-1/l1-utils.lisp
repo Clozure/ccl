@@ -41,14 +41,15 @@
 (setq *record-source-file* t)
 
 (fset 'level-1-record-source-file
-      (qlfun level-1-record-source-file (name def-type &optional (file-name *loading-file-source-file*))
+      (qlfun level-1-record-source-file (name def-type &optional (source (or *loading-toplevel-location*
+                                                                             *loading-file-source-file*)))
         ;; Level-0 puts stuff on plist of name.  Once we're in level-1, names can
         ;; be more complicated than just a symbol, so just collect all calls until
         ;; the real record-source-file is loaded.
         (when *record-source-file*
           (unless (listp *record-source-file*)
             (setq *record-source-file* nil))
-          (push (list name def-type file-name) *record-source-file*))))
+          (push (list name def-type source) *record-source-file*))))
 
 (fset 'record-source-file #'level-1-record-source-file)
 
@@ -650,8 +651,6 @@ vector
       (if (self-evaluating-p form) form
 	(report-bad-arg form '(satisfies constantp))))))
 
-;;; avoid hanging onto beezillions of pathnames
-(defvar *last-back-translated-name* nil)
 (defvar *lfun-names*)
 
 

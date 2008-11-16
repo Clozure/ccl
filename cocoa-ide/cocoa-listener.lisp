@@ -88,7 +88,8 @@
                  (setq cur-string val cur-string-pos 0))
                 (t
                  (destructuring-bind (string package-name pathname) val
-                   (let ((env (cons '(*loading-file-source-file*) (list pathname))))
+                   (let ((env (cons '(*loading-file-source-file* *loading-toplevel-location*)
+                                    (list pathname nil))))
                      (when package-name
                        (push '*package* (car env))
                        (push (ccl::pkg-arg package-name) (cdr env)))

@@ -547,11 +547,31 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
                 unless (definition-same-p *method-definition-type* m name)
                   do (setq list (nconc (find-definition-sources m 'method) list))))))
     ;; Convert to old format, (type-or-name . file)
-    (loop for ((dt . full-name) . files) in list
+    (loop for ((dt . full-name) . sources) in list
           as spec = (if (eq full-name name) (definition-type-name dt) full-name)
-          nconc (mapcan (lambda (file) (when file (list (cons spec file)))) files))))
+          nconc (mapcan (lambda (s)
+                          (when s (list (cons spec (source-note-filename s)))))
+                        sources))))
 
 
+;; For ilisp.
+(defun %source-files (name)
+  (let ((type-list ())
+        (meth-list ()))
+    (loop for ((dt . full-name) . sources) in (find-definition-sources name t)
+          as files = (mapcan #'(lambda (s)
+                                 (and s (setq s (source-note-filename s)) (list s)))
+                             sources)
+          when files
+            do (if (typep dt 'method-definition-type)
+                 (dolist (file files)
+                   (push (cons full-name file) meth-list))
+                 (push (cons (definition-type-name dt) files) type-list)))
+    (when meth-list
+      (push (cons 'method meth-list) type-list))
+    type-list))
+
+;; For CVS slime as of 11/15/2008.
 (defun get-source-files-with-types&classes (sym &optional (type t) classes qualifiers the-method)
   (let* ((name (or the-method
                    (and (or (eq type 'method) classes qualifiers)
@@ -560,20 +580,9 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
     (get-source-files-with-types name type)))
 
 
-;; For ilisp.
-(defun %source-files (name)
-  (let ((type-list ())
-        (meth-list ()))
-    (loop for ((dt . full-name) . files) in (find-definition-sources name t)
-          do (if (typep dt 'method-definition-type)
-               (dolist (file files)
-                 (push (cons full-name file) meth-list))
-               (push (cons (definition-type-name dt) files) type-list)))
-    (when meth-list
-      (push (cons 'method meth-list) type-list))
-    type-list))
-
-;;; For swank.
+#|
+;; For working-0711 versions of slime, but this doesn't actually work since
+;; source-note representations are not compatible
 
 (defun find-definitions-for-name (name &optional (type-name t))
   "Returns a list of (TYPE . DEFINITION-SOURCE) for all the known definitions of NAME."
@@ -590,6 +599,7 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
       (let* ((dt (car pair)))
         (when (typep dt 'definition-type)
           (setf (car pair) (definition-type-name dt)))))))
+|#
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; record-source-file
@@ -622,7 +632,7 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
                             specs))
             (values name quals specs)))))))
 
-(defmethod record-definition-source ((dt definition-type) name file-name)
+(defmethod record-definition-source ((dt definition-type) name source)
   (let* ((key (definition-base-name dt name))
          (all (%source-file-entries key))
          (e-loc nil)
@@ -632,17 +642,19 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
                         (definition-same-p dt name (def-source-entry.name key entry)))
                (setq e-files (def-source-entry.sources key entry))
                (let ((old (flet ((same-file (x y)
+                                   (setq x (source-note-filename x))
+                                   (setq y (source-note-filename y))
                                    (or (equal x y)
                                        (and x
                                             y
                                             (equal
                                              (or (probe-file x) (full-pathname x))
                                              (or (probe-file y) (full-pathname y)))))))
-                            (member file-name e-files :test #'same-file))))
-                 (when (and old (neq file-name (car e-files))) ;; move to front
-                   (setq e-files (cons file-name (remove (car old) e-files :test #'eq)))))
+                            (member source e-files :test #'same-file))))
+                 (when (and old (neq source (car e-files))) ;; move to front
+                   (setq e-files (cons source (remove (car old) e-files :test #'eq)))))
                (return (setq e-loc ptr))))
-    (unless (and e-files (eq file-name (car e-files)))
+    (unless (and e-files (eq source (car e-files)))
       ;; Never previously defined in this file
       (when (and (car e-files)            ; don't warn if last defined interactively
                  *warn-if-redefine*
@@ -650,9 +662,9 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
         (warn "~A ~S previously defined in: ~A is now being redefined in: ~A~%"
               (definition-type-name dt)
               name
-              (car e-files)
-              (or file-name "{No file}")))
-      (setq e-files (cons file-name e-files)))
+              (source-note-filename (car e-files))
+              (or (source-note-filename source) "{No file}")))
+      (setq e-files (cons source e-files)))
     (let ((entry (make-def-source-entry key dt name e-files)))
       (if e-loc
         (setf (car e-loc) entry)
@@ -660,30 +672,44 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
       (%set-source-file-entries key all))
     name))
 
+;;; avoid hanging onto beezillions of pathnames
+(defparameter *last-back-translated-name* (cons nil nil))
+
 ;; Define the real record-source-file, which will be the last defn handled by the
 ;; bootstrapping record-source-file, so convert all queued up data right afterwards.
-(progn
+(when (BOUNDP '*LOADING-TOPLEVEL-LOCATION*) ;; #-BOOTSTRAPPED
 
-(defun record-source-file (name def-type &optional (file-name *loading-file-source-file*))
-  (when *record-source-file*
+(defun record-source-file (name def-type &optional (source (or *loading-toplevel-location*
+                                                               *loading-file-source-file*)))
+  (when (and source *record-source-file*)
     (with-lock-grabbed (*source-files-lock*)
-      (when (and file-name (physical-pathname-p file-name))
-        (setq file-name (namestring (back-translate-pathname file-name)))
-        (cond ((equalp file-name *last-back-translated-name*)
-               (setq file-name *last-back-translated-name*))
-              (t (setq *last-back-translated-name* file-name))))
+      (let ((file-name (source-note-filename source)))
+        (unless (equalp file-name (car *last-back-translated-name*))
+          (setf (car *last-back-translated-name*) file-name)
+          (setf (cdr *last-back-translated-name*)
+                (if (physical-pathname-p file-name)
+                  (namestring (back-translate-pathname file-name))
+                  file-name)))
+        (setq file-name (cdr *last-back-translated-name*))
+        (if (source-note-p source)
+          (setf (source-note-filename source) file-name)
+          (setq source file-name)))
       (when (eq def-type 't) (report-bad-arg def-type '(not (eql t))))
       (record-definition-source (definition-type-instance def-type
                                     :if-does-not-exist :create)
                                 name
-                                file-name))))
+                                source))))
 
 ;; Collect level-0 source file info
 (do-all-symbols (s)
   (let ((f (get s 'bootstrapping-source-files)))
     (when f
-      (setf (gethash s %source-files%) f)
+      (if (consp f)
+        (destructuring-bind ((type . source)) f
+          (when source (record-source-file s type source)))
+        (record-source-file s 'function f))
       (remprop s 'bootstrapping-source-files))))
+
 ;; Collect level-1 source file info
 (when (consp *record-source-file*)
   (let ((list (nreverse (shiftf *record-source-file* t))))
