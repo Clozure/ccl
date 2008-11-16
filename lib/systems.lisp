@@ -75,11 +75,9 @@
                                                   "ccl:compiler;nx-basic.lisp"
                                                   "ccl:compiler;nx1.lisp"))
     (nxenv            "ccl:bin;nxenv"            ("ccl:compiler;nxenv.lisp"))
-    (nx2              "ccl:bin;nx2"              ("ccl:compiler;nx2.lisp"
-                                                  "ccl:compiler;nx2a.lisp"))
+    (nx2              "ccl:bin;nx2"              ("ccl:compiler;nx2.lisp"))
     (nx-base-app      "ccl:l1f;nx-base-app"      ("ccl:compiler;nx-base-app.lisp"
                                                   "ccl:compiler;lambda-list.lisp"))
-                                        ; PPC compiler
     (dll-node         "ccl:bin;dll-node"         ("ccl:compiler;dll-node.lisp"))
     (ppc32-arch       "ccl:bin;ppc32-arch"       ("ccl:compiler;PPC;PPC32;ppc32-arch.lisp"))
     (ppc-arch         "ccl:bin;ppc-arch"         ("ccl:compiler;PPC;ppc-arch.lisp"))

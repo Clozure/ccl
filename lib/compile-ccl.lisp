@@ -18,8 +18,9 @@
 
 (require 'systems)
 
-; Interim PPC support
-; sequences is here since l1-typesys REQUIREs it
+(defparameter *sysdef-modules*
+  '(systems compile-ccl))
+
 (defparameter *level-1-modules*
   '(level-1
     l1-cl-package
@@ -34,12 +35,11 @@
     l1-typesys sysutils l1-error-system
     l1-error-signal version l1-callbacks
     l1-sockets linux-files
-
     ))
 
 (defparameter *compiler-modules*
-      '(nx optimizers dll-node arch vreg vinsn 
-	reg subprims  backend))
+  '(nx optimizers dll-node arch vreg vinsn 
+    reg subprims  backend nx2))
 
 
 (defparameter *ppc-compiler-modules*
@@ -185,31 +185,29 @@
 
 
 (defparameter *code-modules*
-      '(encapsulate
-        read misc  arrays-fry
-        sequences sort 
-        method-combination
-        case-error pprint 
-        format time 
+  '(encapsulate
+    read misc  arrays-fry
+    sequences sort 
+    method-combination
+    case-error pprint 
+    format time 
 ;        eval step
-        backtrace-lds  ccl-export-syms prepare-mcl-environment))
+    backtrace-lds  ccl-export-syms prepare-mcl-environment))
 
 
 
 (defparameter *aux-modules*
-      '(systems compile-ccl 
-        lisp-package
-        number-macros number-case-macro
-        loop
-	runtime
-	mcl-compat
-	arglist
-	edit-callers
-        describe
-        leaks
-	asdf
-	defsystem
-))
+  '(number-macros number-case-macro
+    loop
+    runtime
+    mcl-compat
+    arglist
+    edit-callers
+    describe
+    leaks
+    asdf
+    defsystem
+    ))
 
 
 
@@ -224,24 +222,13 @@
 	     '(ppc-error-signal ppc-trap-support
 	       ppc-threads-utils ppc-callback-support))
             ((:linuxx8664 :freebsdx8664 :darwinx8664 :solarisx8664
-	      :darwinx8632 :win64  :linuxx8632 :win32 :solarisx8632
-              :freebsdx8632)
+                          :darwinx8632 :win64  :linuxx8632 :win32 :solarisx8632
+                          :freebsdx8632)
              '(x86-error-signal x86-trap-support
                x86-threads-utils x86-callback-support)))))
 
-		  
 
-
-
-
-;
-
-
-
-
-
-; Needed to cross-dump an image
-
+;;; Needed to cross-dump an image
 
 
 (unless (fboundp 'xload-level-0)
@@ -275,10 +262,6 @@
 			:target target)))))))
 
 
-
-
-
-
 (defun needs-compile-p (fasl sources force-compile)
   (if fasl
     (if (eq force-compile t)
@@ -294,7 +277,7 @@
 
 
 
-;compile if needed, load if recompiled.
+;;;compile if needed, load if recompiled.
 
 (defun update-modules (modules &optional force-compile)
   (if (not (listp modules)) (setq modules (list modules)))
@@ -313,21 +296,22 @@
 )
 
 (defun compile-ccl (&optional force-compile)
- (with-compilation-unit ()
-  (update-modules 'nxenv force-compile)
-  (update-modules *compiler-modules* force-compile)
-  (update-modules (target-compiler-modules) force-compile)
-  (update-modules (target-xdev-modules) force-compile)
-  (update-modules (target-xload-modules)  force-compile)
-  (let* ((env-modules (target-env-modules))
-	 (other-lib (target-other-lib-modules)))
-    (require-modules env-modules)
-    (update-modules env-modules force-compile)
-    (compile-modules (target-level-1-modules)  force-compile)
-    (update-modules other-lib force-compile)
-    (require-modules other-lib)
-    (require-update-modules *code-modules* force-compile))
-  (compile-modules *aux-modules* force-compile)))
+  (with-compilation-unit ()
+    (update-modules *sysdef-modules* force-compile)
+    (update-modules 'nxenv force-compile)
+    (update-modules *compiler-modules* force-compile)
+    (update-modules (target-compiler-modules) force-compile)
+    (update-modules (target-xdev-modules) force-compile)
+    (update-modules (target-xload-modules)  force-compile)
+    (let* ((env-modules (target-env-modules))
+           (other-lib (target-other-lib-modules)))
+      (require-modules env-modules)
+      (update-modules env-modules force-compile)
+      (compile-modules (target-level-1-modules)  force-compile)
+      (update-modules other-lib force-compile)
+      (require-modules other-lib)
+      (require-update-modules *code-modules* force-compile))
+    (compile-modules *aux-modules* force-compile)))
 
 
 
@@ -357,17 +341,18 @@
 ;Compile but don't load
 
 (defun xcompile-ccl (&optional force)
- (with-compilation-unit ()
-  (compile-modules 'nxenv force)
-  (compile-modules *compiler-modules* force)
-  (compile-modules (target-compiler-modules) force)
-  (compile-modules (target-xdev-modules) force)
-  (compile-modules (target-xload-modules)  force)
-  (compile-modules (target-env-modules) force)
-  (compile-modules (target-level-1-modules) force)
-  (compile-modules (target-other-lib-modules) force)
-  (compile-modules *code-modules* force)
-  (compile-modules *aux-modules* force)))
+  (with-compilation-unit ()
+    (compile-modules *sysdef-modules* force)
+    (compile-modules 'nxenv force)
+    (compile-modules *compiler-modules* force)
+    (compile-modules (target-compiler-modules) force)
+    (compile-modules (target-xdev-modules) force)
+    (compile-modules (target-xload-modules)  force)
+    (compile-modules (target-env-modules) force)
+    (compile-modules (target-level-1-modules) force)
+    (compile-modules (target-other-lib-modules) force)
+    (compile-modules *code-modules* force)
+    (compile-modules *aux-modules* force)))
 
 (defun require-update-modules (modules &optional force-compile)
   (if (not (listp modules)) (setq modules (list modules)))
@@ -378,6 +363,7 @@
 
 
 (defun target-xcompile-ccl (target &optional force)
+  (require-update-modules *sysdef-modules* force) ;in the host
   (let* ((backend (or (find-backend target) *target-backend*))
 	 (arch (backend-target-arch-name backend))
 	 (*defstruct-share-accessor-functions* nil))
@@ -386,6 +372,7 @@
     (target-compile-modules (target-compiler-modules arch) target force)
     (target-compile-modules (target-level-1-modules target) target force)
     (target-compile-modules (target-lib-modules target) target force)
+    (target-compile-modules *sysdef-modules* target force)
     (target-compile-modules *aux-modules* target force)
     (target-compile-modules *code-modules* target force)
     (target-compile-modules (target-xdev-modules arch) target force)))
