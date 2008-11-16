@@ -1102,10 +1102,14 @@ free_tcr_extra_segment(TCR *tcr)
 #include <machine/sysarch.h>
 
 /* It'd be tempting to use i386_set_fsbase() here, but there doesn't
-   seem to be any way to free the GDT entry it creates. */
+   seem to be any way to free the GDT entry it creates.  Actually,
+   it's not clear that that really sets a GDT entry; let's see */
+
+#define FREEBSD_USE_SET_FSBASE 1
 void
 setup_tcr_extra_segment(TCR *tcr)
 {
+#if !FREEBSD_USE_SET_FSBASE
   struct segment_descriptor sd;
   uintptr_t addr = (uintptr_t)tcr;
   unsigned int size = sizeof(*tcr);
@@ -1115,6 +1119,9 @@ setup_tcr_extra_segment(TCR *tcr)
   sd.sd_hilimit = ((size - 1) >> 16) & 0xf;
   sd.sd_lobase = addr & ((1<<24)-1);
   sd.sd_hibase = (addr>>24)&0xff;
+
+
+
   sd.sd_type = 18;
   sd.sd_dpl = SEL_UPL;
   sd.sd_p = 1;
@@ -1129,19 +1136,34 @@ setup_tcr_extra_segment(TCR *tcr)
   } else {
     tcr->ldt_selector = LSEL(i,SEL_UPL);
   }
+#else
+  if (i386_set_fsbase((void*)tcr)) {
+    perror("i386_set_fsbase");
+    exit(1);
+  }
+  /* Once we've called i386_set_fsbase, we can't write to %fs. */
+  tcr->ldt_selector = GSEL(GUFS_SEL, SEL_UPL);
+#endif
 }
 
 void 
 free_tcr_extra_segment(TCR *tcr)
 {
+#if FREEBSD_USE_SET_FSBASE
+  /* On a 32-bit kernel, this allocates a GDT entry.  It's not clear
+     what it would mean to deallocate that entry. */
+  /* If we're running on a 64-bit kernel, we can't write to %fs */
+#else
   int idx = tcr->ldt_selector >> 3;
   /* load %fs with null segment selector */
   __asm__ volatile ("mov %0,%%fs" : : "r"(0));
   if (i386_set_ldt(idx, NULL, 1) < 0)
     perror("i386_set_ldt");
+#endif
   tcr->ldt_selector = 0;
 }
 #endif
+
 #ifdef SOLARIS
 #include <sys/sysi86.h>
 

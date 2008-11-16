@@ -4262,13 +4262,15 @@ _spentry(callback)
 	__(push %ebx)
 	__(push %ebp)
 	__(box_fixnum(%eax,%esi))	/* put callback index in arg_y */
-	__(ref_global(get_tcr,%eax))
-	__(subl $12,%esp)		/* alignment */
-	__(push $1)			/* stack now 16-byte aligned */
-	__(call *%eax)
-	__(addl $16,%esp)		/* discard arg, alignment words */
-	/* linear TCR addr now in %eax */
-	__(movw tcr.ldt_selector(%eax), %rcontext_reg)
+        __ifndef([FREEBSD])
+	 __(ref_global(get_tcr,%eax))
+	 __(subl $12,%esp)		/* alignment */
+	 __(push $1)			/* stack now 16-byte aligned */
+	 __(call *%eax)
+	 __(addl $16,%esp)		/* discard arg, alignment words */
+	 /* linear TCR addr now in %eax */
+	 __(movw tcr.ldt_selector(%eax), %rcontext_reg)
+        __endif
 
         /* ebp is 16-byte aligned, and we've pushed 4 words.  Make
           sure that when we push old foreign_sp, %esp will be 16-byte

@@ -74,7 +74,9 @@ _exportfn(C(start_lisp))
 	__(push %esi)
 	__(push %ebx)
 	__(mov 8(%ebp), %ebx)	/* get tcr */
-	__(movw tcr.ldt_selector(%ebx), %rcontext_reg)
+        __ifndef([FREEBSD])
+	 __(movw tcr.ldt_selector(%ebx), %rcontext_reg)
+        __endif
         __(movl 8(%ebp),%eax)
         __(cmpl rcontext(tcr.linear),%eax)
         __(je 0f)
