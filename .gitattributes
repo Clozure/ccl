@@ -55,6 +55,7 @@ compiler/X86/X8632/x8632-arch.lisp -text
 compiler/X86/X8632/x8632-backend.lisp -text
 compiler/X86/X8632/x8632-vinsns.lisp -text
 compiler/acode-rewrite.lisp -text
+compiler/nx2.lisp -text
 doc/ccl-documentation.html -text
 doc/doc-splitter.lisp -text
 doc/release-notes.txt -text
