@@ -43,12 +43,15 @@ CHEADERS = area.h bits.h x86-constants.h lisp-errors.h gc.h lisp.h \
 	lisp-exceptions.h lisp_globals.h macros.h memprotect.h image.h \
 	Threads.h x86-constants32.h x86-exceptions.h
 
+.if $(MACHINE) == "amd64"
+CROSS = -B/usr/lib32
+.endif
 
 KSPOBJ = $(SPOBJ)
 all:	../../fx86cl
 
 
-OSLIBS = -lm -lthr
+OSLIBS = -lm -lthr $(CROSS)
 
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
