@@ -206,6 +206,7 @@ present and false otherwise. This variable shouldn't be set by user code.")
       #+ppc-target
       (bin-load-provide "PPC-LAP" "ppc-lap")
       (bin-load-provide "BACKEND" "backend")
+      (bin-load-provide "NX2" "nx2")
      
       #+ppc-target
       (provide "PPC2")                  ; Lie, load the module manually
