@@ -216,6 +216,7 @@ lisp-kernel/darwinx8632/.gdbinit -text
 lisp-kernel/darwinx8632/Makefile -text
 lisp-kernel/freebsdx8632/.gdbinit -text
 lisp-kernel/freebsdx8632/Makefile -text
+lisp-kernel/freebsdx8632/fpu.h -text
 lisp-kernel/gc-common.c -text
 lisp-kernel/linuxx8632/.gdbinit -text
 lisp-kernel/linuxx8632/Makefile -text

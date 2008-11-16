@@ -55,7 +55,7 @@ pthread_mutex_t *mach_exception_lock;
 #ifdef X8664
 #include <machine/fpu.h>
 #else
-#include <machine/npx.h>
+#include "freebsdx8632/fpu.h"
 #endif
 #define xpGPRvector(x) ((natural *)(&((x)->uc_mcontext)))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
@@ -66,8 +66,8 @@ pthread_mutex_t *mach_exception_lock;
 #define xpMMXreg(x,n) *((natural *)(&(((struct savefpu *)(&(x)->uc_mcontext.mc_fpstate))->sv_fp[n])))
 #define xpXMMregs(x)(&(((struct savefpu *)(&(x)->uc_mcontext.mc_fpstate))->sv_xmm[0]))
 #else
-#define xpMMXreg(x,n) *((natural *)(&(((struct savexmm *)(&(x)->uc_mcontext.mc_fpstate))->sv_fp[n])))
-#define xpXMMregs(x)(&(((struct savexmm *)(&(x)->uc_mcontext.mc_fpstate))->sv_xmm[0]))
+#define xpMMXreg(x,n) *((natural *)(&(((struct ccl_savexmm *)(&(x)->uc_mcontext.mc_fpstate))->sv_fp[n])))
+#define xpXMMregs(x)(&(((struct ccl_savexmm *)(&(x)->uc_mcontext.mc_fpstate))->sv_xmm[0]))
 #endif
 #endif
 
