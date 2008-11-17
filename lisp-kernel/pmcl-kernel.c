@@ -1302,11 +1302,21 @@ check_os_version(char *progname)
   struct utsname uts;
   long got, want;
   char *got_end,*want_end;
+#ifdef X8632
+  extern Boolean rcontext_readonly;
+#endif
+
   want = strtoul(min_os_version,&want_end,10);
 
   uname(&uts);
   got = strtoul(uts.release,&got_end,10);
-
+#ifdef X8632
+#ifdef FREEBSD
+  if (!strcmp(uts.machine,"amd64")) {
+    rcontext_readonly = true;
+  }
+#endif
+#endif
   while (got == want) {
     if (*want_end == '.') {
       want = strtoul(want_end+1,&want_end,10);
