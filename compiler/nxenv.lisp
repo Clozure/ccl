@@ -563,14 +563,15 @@
          (new (%i+ (%ilsr 8 (%ilogand2 $vsetqmask bits)) scaled-by)))
     (if (%i> new 255) (setq new 255))
     (setq bits (nx-set-var-bits var (%ilogior (%ilogand (%ilognot $vsetqmask) bits) (%ilsl 8 new))))
-; If a variable is setq'ed from a catch nested within the construct that
-; bound it, it can't be allocated to a register. *
-; * unless it can be proved that the variable isn't referenced
-;   after that catch construct has been exited. **
-; ** or unless the saved value of the register in the catch frame 
-;    is also updated.
+    ;; If a variable is setq'ed from a catch nested within the construct that
+    ;; bound it, it can't be allocated to a register. *
+    ;; * unless it can be proved that the variable isn't referenced
+    ;;   after that catch construct has been exited. **
+    ;; ** or unless the saved value of the register in the catch frame 
+    ;;    is also updated.
     (when catchp
       (nx-set-var-bits var (%ilogior2 bits (%ilsl $vbitnoreg 1))))
+    (setf (var-refs var) (+ (the fixnum (var-refs var)) by))
     new))
 
 

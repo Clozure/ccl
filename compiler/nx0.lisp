@@ -1280,16 +1280,17 @@ Or something. Right? ~s ~s" var varbits))
           (nx-set-var-bits var (%ilogior
                                  (%ilsl $vbitpuntable 1)
                                  (%i- varbits varcount)))
-              (nx-set-var-bits
-               boundto
-                 (%i+ (%i- boundtobits boundtocount)
-                      (%ilogand $vrefmask
-                                (%i+ (%i- boundtocount 1) varcount)))))))))
+          (setf (var-refs var) (+ (var-refs var) (var-refs boundto)))
+          (nx-set-var-bits
+           boundto
+           (%i+ (%i- boundtobits boundtocount)
+                (%ilogand $vrefmask
+                          (%i+ (%i- boundtocount 1) varcount)))))))))
 
-;; Home-baked handler-case replacement.  About 10 times as fast as full handler-case.
-;;(LET ((S 0)) (DOTIMES (I 1000000) (INCF S))) took 45,678 microseconds
-;;(LET ((S 0)) (DOTIMES (I 1000000) (BLOCK X (ERROR (CATCH 'X (RETURN-FROM X (INCF S))))))) took 57,485
-;;(LET ((S 0)) (DOTIMES (I 1000000) (HANDLER-CASE (INCF S) (ERROR (C) C)))) took 168,947
+;;; Home-baked handler-case replacement.  About 10 times as fast as full handler-case.
+;;;(LET ((S 0)) (DOTIMES (I 1000000) (INCF S))) took 45,678 microseconds
+;;;(LET ((S 0)) (DOTIMES (I 1000000) (BLOCK X (ERROR (CATCH 'X (RETURN-FROM X (INCF S))))))) took 57,485
+;;;(LET ((S 0)) (DOTIMES (I 1000000) (HANDLER-CASE (INCF S) (ERROR (C) C)))) took 168,947
 (defmacro with-program-error-handler (handler &body body)
   (let ((tag (gensym)))
     `(block ,tag
@@ -2344,6 +2345,7 @@ Or something. Right? ~s ~s" var varbits))
          (temp-p (%ilogbitp $vbittemporary bits))
          (by (if temp-p 1 (expt  4 *nx-loop-nesting-level*)))
          (new (%imin (%i+ (%ilogand2 $vrefmask bits) by) 255)))
+    (setf (var-refs var) (+ (var-refs var) by))
     (nx-set-var-bits var (%ilogior (%ilogand (%ilognot $vrefmask) bits) new))
     new))
 
