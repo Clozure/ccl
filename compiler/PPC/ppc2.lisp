@@ -1110,16 +1110,7 @@
                    (%ilogbitp operator-assignment-free-bit op))
             (dolist (f (%cdr form) (ppc2-branch seg xfer nil))
               (ppc2-form seg nil nil f ))
-            (apply fn seg vreg xfer (%cdr form)))))))
-    (if note
-      (let* ((start (ppc2-emit-note seg :source-location-begin note))
-             (bits (main seg vreg xfer form))
-             (end (ppc2-emit-note seg :source-location-end)))
-        (setf (vinsn-note-peer start) end
-              (vinsn-note-peer end) start)
-        (push start *ppc2-emitted-source-notes*)
-	bits)
-      (main seg vreg xfer form))))
+            (apply fn seg vreg xfer (%cdr form))))))))
 
 ;;; dest is a float reg - form is acode
 (defun ppc2-form-float (seg freg xfer form)
@@ -2258,8 +2249,8 @@
 (defun ppc2-code-coverage-entry (seg note)
   (let* ((afunc *ppc2-cur-afunc*))
     (setf (afunc-bits afunc) (%ilogior (afunc-bits afunc) (ash 1 $fbitccoverage)))
-    (with-x86-local-vinsn-macros (seg)
-      (let* ((ccreg ($ ppc::atemp0)))
+    (with-ppc-local-vinsn-macros (seg)
+      (let* ((ccreg ($ ppc::temp0)))
         (ppc2-store-immediate seg note ccreg)
         (! misc-set-c-node ($ ppc::rzero) ccreg 1)))))
 
