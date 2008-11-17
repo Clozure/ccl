@@ -47,7 +47,7 @@ import_ptrs_start:
 	defimport(xFindSymbol)
 	defimport(allocate)
 	defimport(deallocate)
-	defimport(allocate_tstack_holding_area_lock)
+	defimport(jvm_init)
 	defimport(allocate_vstack_holding_area_lock)
 	defimport(register_cstack_holding_area_lock)
 	defimport(raise_thread_interrupt)
