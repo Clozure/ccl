@@ -2729,15 +2729,14 @@
          (entry (x86-ds-entry-point ds))
          (pc (- addr entry)))
     (let ((source-note (find-source-note-at-pc function pc)))
-      (when source-note
-        (unless (eql (source-note-file-range source-note)
-                     (source-note-file-range *previous-source-note*))
-          (setf *previous-source-note* source-note)
-          (let* ((source-text (source-note-text source-note))
-                 (text (if source-text
-                         (string-sans-most-whitespace source-text 100)
-                         "#<no source text>")))
-            (format t "~&~%;;; ~A" text)))))
+      (unless (eql (source-note-file-range source-note)
+                   (source-note-file-range *previous-source-note*))
+        (setf *previous-source-note* source-note)
+        (let* ((source-text (source-note-text source-note))
+               (text (if source-text
+                       (string-sans-most-whitespace source-text 100)
+                       "#<no source text>")))
+          (format t "~&~%;;; ~A" text))))
     (when (x86-di-labeled instruction)
       (format t "~&L~d~%" pc)
       (setq seq 0))

@@ -3054,21 +3054,22 @@ arg=char : read delimited list"
       (cons start-pos end-pos))))
 
 (defun source-note-text (source-note &optional start end)
-  (let* ((source (source-note-source source-note))
-         (start-pos (source-note-start-pos source-note))
-         (end-pos (source-note-end-pos source-note))
-         (start (or start start-pos))
-         (end (or end end-pos)))
-    (etypecase source
-      (source-note
+  (when source-note
+    (let* ((source (source-note-source source-note))
+	   (start-pos (source-note-start-pos source-note))
+	   (end-pos (source-note-end-pos source-note))
+	   (start (or start start-pos))
+	   (end (or end end-pos)))
+      (etypecase source
+	(source-note
          (assert (<= (source-note-start-pos source) start end (source-note-end-pos source)))
          (source-note-text source start end))
-      ((simple-array (unsigned-byte 8) (*))
+	((simple-array (unsigned-byte 8) (*))
          (decf start start-pos)
          (decf end start-pos)
          (assert (and (<= 0 start end (length source))))
          (decode-string-from-octets source :start start :end end :external-format :utf-8))
-      (null source))))
+	(null source)))))
 
 (defvar *recording-source-streams* ())
 
@@ -3176,25 +3177,28 @@ non-atomic nested subforms."
 (defun ensure-source-note-text (source-note &key (if-does-not-exist nil))
   "Fetch source text from file if don't have it"
   (setq if-does-not-exist (require-type if-does-not-exist '(member :error nil)))
-  (let ((source (source-note-source source-note))
-        (filename (source-note-filename source-note)))
-    (etypecase source
-      (null
-         (with-open-file (stream filename :if-does-not-exist if-does-not-exist)
-           (when stream
-             (let ((start (source-note-start-pos source-note))
-                   (end (source-note-end-pos source-note))
-                   (len (file-length stream)))
-               (if (<= end len)
-                 (setf (source-note.source source-note)
-                       (fetch-octets-from-stream stream start end))
-                 (when if-does-not-exist
-                   (error 'simple-file-error :pathname filename
-                          :error-type "File ~s changed since source info recorded")))))))
-      (source-note
-         (ensure-source-note-text source))
-      ((simple-array (unsigned-byte 8) (*))
-         source))))
+  (if source-note
+    (let ((source (source-note-source source-note))
+	  (filename (source-note-filename source-note)))
+      (etypecase source
+	(null
+	 (with-open-file (stream filename :if-does-not-exist if-does-not-exist)
+	   (when stream
+	     (let ((start (source-note-start-pos source-note))
+		   (end (source-note-end-pos source-note))
+		   (len (file-length stream)))
+	       (if (<= end len)
+		   (setf (source-note.source source-note)
+			 (fetch-octets-from-stream stream start end))
+		   (when if-does-not-exist
+		     (error 'simple-file-error :pathname filename
+			    :error-type "File ~s changed since source info recorded")))))))
+	(source-note
+	 (ensure-source-note-text source))
+	((simple-array (unsigned-byte 8) (*))
+	 source)))
+    (when if-does-not-exist
+      (error "Missing source note"))))
 
 
 ;; This can be called explicitly by macros that do more complicated transforms
