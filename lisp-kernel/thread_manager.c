@@ -28,6 +28,9 @@ typedef struct {
 __thread TCR __attribute__ ((aligned (16))) current_tcr;
 #endif
 
+/* This is set to true when running a 32-bit Lisp on 64-bit FreeBSD */
+Boolean rcontext_readonly = false;
+
 extern natural
 store_conditional(natural*, natural, natural);
 
@@ -55,6 +58,8 @@ nullAPC(ULONG_PTR arg)
 }
   
 BOOL (*pCancelIoEx)(HANDLE, OVERLAPPED*) = NULL;
+
+  ;
 
 
 extern void *windows_find_symbol(void*, char*);
@@ -1591,7 +1596,7 @@ init_threads(void * stack_base, TCR *tcr)
   pthread_key_create((pthread_key_t *)&(lisp_global(TCR_KEY)), shutdown_thread_tcr);
   thread_signal_setup();
 #endif
- 
+
 #ifndef USE_FUTEX
   count_cpus();
 #endif
