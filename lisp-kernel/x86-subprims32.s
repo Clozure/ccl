@@ -74,14 +74,15 @@ _exportfn(C(start_lisp))
 	__(push %esi)
 	__(push %ebx)
 	__(mov 8(%ebp), %ebx)	/* get tcr */
-        __ifndef([FREEBSD])
-	 __(movw tcr.ldt_selector(%ebx), %rcontext_reg)
-        __endif
+        __(cmpb $0,C(rcontext_readonly))
+        __(jne 0f)
+        __(movw tcr.ldt_selector(%ebx), %rcontext_reg)
+0:              
         __(movl 8(%ebp),%eax)
         __(cmpl rcontext(tcr.linear),%eax)
-        __(je 0f)
+        __(je 1f)
         __(hlt)
-0:              
+1:              
         .if c_stack_16_byte_aligned
 	__(sub $12, %esp) 	/* stack now 16-byte aligned */
         .else
