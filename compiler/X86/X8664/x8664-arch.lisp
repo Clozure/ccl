@@ -793,7 +793,7 @@
   FindSymbol
   malloc
   free
-  allocate_tstack
+  jvm-init
   allocate_vstack
   register_cstack
   raise-thread-interrupt
