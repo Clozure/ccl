@@ -1847,6 +1847,7 @@ argument lisp string."
          (marg-ptr (gensym))
 	 (static-arg-words 2)		;receiver, selptr
 	 (marg-words (gensym))
+	 (marg-size (gensym))
          (selptr (gensym)))
     (collect ((static-arg-forms))
       (static-arg-forms `(setf (paref ,marg-ptr (:* address) 0) ,receiver))
@@ -1897,7 +1898,8 @@ argument lisp string."
        `(lambda (,receiver ,selector ,@args &rest ,rest-arg)
 	  (declare (dynamic-extent ,rest-arg))
 	  (let* ((,selptr (%get-selector ,selector))
-		 (,marg-words ,static-arg-words))
+		 (,marg-words ,static-arg-words)
+		 (,marg-size nil))
 	    (dolist (,arg-temp ,rest-arg)
 	      (if (or (typep ,arg-temp 'double-float)
 		      (and (typep ,arg-temp 'integer)
@@ -1906,13 +1908,14 @@ argument lisp string."
 			     (> (integer-length ,arg-temp) 32))))
 		(incf ,marg-words 2)
 		(incf ,marg-words 1)))
-	    (%stack-block ((,marg-ptr ,marg-words))
+	    (setq ,marg-size (ash ,marg-words 2))
+	    (%stack-block ((,marg-ptr ,marg-size))
 	      (progn ,@(static-arg-forms))
 	      (%process-varargs-list ,marg-ptr ,static-arg-words ,rest-arg)
 	      (external-call "_objc_msgSendv"
-			     :address ,receiver
-			     :address ,selptr
-			     :size_t (* 4 ,marg-words)
+			     :id ,receiver
+			     :<SEL> ,selptr
+			     :size_t ,marg-size
 			     :address ,marg-ptr
 			     ,return-type-spec))))))))
 
