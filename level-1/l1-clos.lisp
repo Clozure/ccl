@@ -2162,16 +2162,17 @@ changing its name to ~s may have serious consequences." class new))
                             
 ;;; Return a list of :after methods for INITIALIZE-INSTANCE on the
 ;;; class's prototype, and a boolean that's true if no other qualified
-;;; methods are defined.
+;;; methods are defined and at most one primary one.
 (defun initialize-instance-after-methods (proto class)
   (let* ((method-list (compute-method-list (sort-methods
                             (compute-applicable-methods #'initialize-instance (list proto))
                             (list (class-precedence-list class))))))
     (if (atom method-list)
       (values nil t)
-      (if (null (car method-list))
+      (if (and (null (car method-list))
+	       (null (cdddr method-list)))
         (values (cadr method-list) t)
-        ;; :around or :before methods, give up
+        ;; :around or :before methods, or more than one primary method, give up
         (values nil nil)))))
 
 (defparameter *typecheck-slots-in-optimized-make-instance* t)
