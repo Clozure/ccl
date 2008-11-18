@@ -1778,8 +1778,8 @@ Or something. Right? ~s ~s" var varbits))
                     (nx1-form `(the ,(prog1 type (setq type t)) ,inherited-p))))
                 (progn
                   (when (not inherited-p)
-                    (nx-set-var-bits info (%ilogior2 (%ilsl $vbitreffed 1) (nx-var-bits info)))
-                    (nx-adjust-ref-count info))
+                    (nx-set-var-bits info (%ilogior2 (%ilsl $vbitreffed 1) (nx-var-bits info))))
+                  (nx-adjust-ref-count info)
                   (make-acode (%nx1-operator lexical-reference) info)))
               (make-acode
 	       (if (nx1-check-special-ref form info)
