@@ -56,7 +56,8 @@
         (let* ((pc-start (aref pc-source-map q))
                (pc-end (aref pc-source-map (%i+ q 1))))
           (declare (fixnum pc-start pc-end))
-          (when (and (<= pc-start pc pc-end)
+          (when (and (<= pc-start pc)
+		     (< pc pc-end)
                      (or (eql best-guess -1)
                          (< (%i- pc-end pc-start) best-length)))
             (setf best-guess q
