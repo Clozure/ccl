@@ -227,6 +227,9 @@ definition type NAME"
 (defmethod definition-base-name ((dt method-definition-type) (method method))
   (definition-base-name dt (method-name method)))
 
+(defmethod definition-base-name ((dt method-definition-type) (fn method-function))
+  (definition-base-name dt (function-name fn)))
+
 (defmethod definition-same-p ((dt method-definition-type) m1 m2)
   (multiple-value-bind (n1 q1 s1) (method-def-parameters m1)
     (multiple-value-bind (n2 q2 s2) (method-def-parameters m2)
@@ -606,6 +609,8 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
 
 ;; Returns nil if not a method/method name
 (defun method-def-parameters (m)
+  (when (typep m 'method-function)
+    (setq m (%method-function-method m)))
   (if (typep m 'method)
     (values (method-name m)
             (method-qualifiers m)
