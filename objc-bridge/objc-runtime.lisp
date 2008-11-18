@@ -1533,16 +1533,16 @@ argument lisp string."
        (setf (paref ptr (:* :address) index) arg-temp)
        (incf index))
       (single-float
-       (setf (paref ptr (:* :single-float) index) arg-temp)
+       (setf (%get-single-float ptr (* 4 index)) arg-temp)
        (incf index))
       (double-float
-       (setf (paref ptr (:* :double-float) index) arg-temp)
+       (setf (%get-double-float ptr (* 4 index)) arg-temp)
        (incf index 2))
       ((or (signed-byte 64)
 	   (unsigned-byte 64))
-       (setf (paref ptr (:* :unsigned) index) (ldb (byte 32 32) arg-temp))
-       (incf index)
        (setf (paref ptr (:* :unsigned) index) (ldb (byte 32 0) arg-temp))
+       (incf index)
+       (setf (paref ptr (:* :unsigned) index) (ldb (byte 32 32) arg-temp))
        (incf index)))))
 
 #+(and apple-objc ppc32-target)
