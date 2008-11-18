@@ -141,7 +141,5 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-#+x8632-target
-(break "ready to start Cocoa event loop.")
 
 (start-cocoa-application)
