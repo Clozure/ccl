@@ -189,6 +189,8 @@ from FASLs.")
      (case (car input)
        ((ppc-lap-macro compiler-macro-function)
         (%make-xref-entry :name (cadr input) :type (car input)))
+       ((:internal)
+        (make-xref-entry (car (last input)) relation))
        (t
         (multiple-value-bind (type name specializers qualifiers)
             (parse-definition-spec input)
