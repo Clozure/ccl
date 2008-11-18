@@ -177,6 +177,9 @@
 
 (defvar *ppc2-result-reg* ppc::arg_z)
 
+(defvar *ppc2-nvrs* `(,ppc::save0 ,ppc::save1 ,ppc::save2 ,ppc::save3
+                      ,ppc::save4 ,ppc::save5 ,ppc::save6 ,ppc::save7))
+
 
 
 
@@ -656,105 +659,9 @@
             *ppc2-trust-declarations* (neq 0 (%ilogand2 $decl_trustdecls decls))))))
 
 
-(defun %ppc2-bigger-cdr-than (x y)
-  (declare (cons x y))
-  (> (the fixnum (cdr x)) (the fixnum (cdr y))))
 
-;;; Return an unordered list of "varsets": each var in a varset can be
-;;; assigned a register and all vars in a varset can be assigned the
-;;; same register (e.g., no scope conflicts.)
 
-(defun ppc2-partition-vars (vars)
-  (labels ((var-weight (var)
-             (let* ((bits (nx-var-bits var)))
-               (declare (fixnum bits))
-               (if (eql 0 (logand bits (logior
-                                        (ash 1 $vbitpuntable)
-                                        (ash -1 $vbitspecial)
-                                        (ash 1 $vbitnoreg))))
-                 (if (eql (logior (ash 1 $vbitclosed) (ash 1 $vbitsetq))
-                          (logand bits (logior (ash 1 $vbitclosed) (ash 1 $vbitsetq))))
-                   0
-                   (%i+ (%ilogand $vrefmask bits) (%ilsr 8 (%ilogand $vsetqmask bits))))
-                 0)))
-           (sum-weights (varlist) 
-             (let ((sum 0))
-               (dolist (v varlist sum) (incf sum (var-weight v)))))
-           (vars-disjoint-p (v1 v2)
-             (if (eq v1 v2)
-               nil
-               (if (memq v1 (var-binding-info v2))
-                 nil
-                 (if (memq v2 (var-binding-info v1))
-                   nil
-                   t)))))
-    (setq vars (%sort-list-no-key
-                ;(delete-if #'(lambda (v) (eql (var-weight v) 0)) vars) 
-                (do* ((handle (cons nil vars))
-                      (splice handle))
-                     ((null (cdr splice)) (cdr handle))                  
-                  (declare (dynamic-extent handle) (type cons handle splice))
-                  (if (eql 0 (var-weight (%car (cdr splice))))
-                    (rplacd splice (%cdr (cdr splice)))
-                    (setq splice (cdr splice))))
-                #'(lambda (v1 v2) (%i> (var-weight v1) (var-weight v2)))))
-    ; This isn't optimal.  It partitions all register-allocatable variables into sets such that
-    ; 1) no variable is a member of more than one set and
-    ; 2) all variables in a given set are disjoint from each other
-    ; A set might have exactly one member.
-    ; If a register is allocated for any member of a set, it's allocated for all members of that
-    ; set.
-    (let* ((varsets nil))
-      (do* ((all vars (cdr all)))
-           ((null all))
-        (let* ((var (car all)))
-          (when (dolist (already varsets t)
-                  (when (memq var (car already)) (return)))
-            (let* ((varset (cons var nil)))
-              (dolist (v (cdr all))
-                (when (dolist (already varsets t)
-                        (when (memq v (car already)) (return)))
-                  (when (dolist (d varset t)
-                          (unless (vars-disjoint-p v d) (return)))
-                    (push v varset))))
-              (let* ((weight (sum-weights varset)))
-                (declare (fixnum weight))
-                (if (>= weight 3)
-                  (push (cons (nreverse varset) weight) varsets)))))))
-      varsets)))
 
-;;; Maybe globally allocate registers to symbols naming functions & variables,
-;;; and to simple lexical variables.
-(defun ppc2-allocate-global-registers (fcells vcells all-vars no-regs)
-  (if no-regs
-    (progn
-      (dolist (c fcells) (%rplacd c nil))
-      (dolist (c vcells) (%rplacd c nil))
-      (values 0 nil))
-    (let* ((maybe (ppc2-partition-vars all-vars)))
-      (dolist (c fcells) 
-        (if (>= (the fixnum (cdr c)) 3) (push c maybe)))
-      (dolist (c vcells) 
-        (if (>= (the fixnum (cdr c)) 3) (push c maybe)))
-      (do* ((things (%sort-list-no-key maybe #'%ppc2-bigger-cdr-than) (cdr things))
-            (n 0 (1+ n))
-            (regno ppc::save0 (1- regno))
-            (constant-alist ()))
-           ((or (null things) (= n $numppcsaveregs))
-            (dolist (cell fcells) (%rplacd cell nil))
-            (dolist (cell vcells) (%rplacd cell nil))
-            (values n constant-alist))
-        (declare (list things)
-                 (fixnum n regno))
-        (let* ((thing (car things)))
-          (if (or (memq thing fcells)
-                  (memq thing vcells))
-            (push (cons thing regno) constant-alist)
-            (dolist (var (car thing))
-              (nx-set-var-bits var 
-                               (%ilogior (%ilogand (%ilognot $vrefmask) (nx-var-bits var))
-                                 regno
-                                 (%ilsl $vbitreg 1))))))))))
           
     
 ;;; Vpush the last N non-volatile-registers.
@@ -804,15 +711,17 @@
     (if (memq arg passed-in-regs)
       (ppc2-set-var-ea seg arg (var-ea arg))
       (let* ((lcell (pop lcells)))
-        (if (setq reg (ppc2-assign-register-var arg))
-          (ppc2-init-regvar seg arg reg (ppc2-vloc-ea vloc))
+        (if (setq reg (nx2-assign-register-var arg))
+          (progn
+            (break "Inherited var in NVR: ~s/~s" arg (var-name arg))
+            (ppc2-init-regvar seg arg reg (ppc2-vloc-ea vloc)))
           (ppc2-bind-var seg arg vloc lcell))
         (setq vloc (%i+ vloc *ppc2-target-node-size*)))))
   (dolist (arg req)
     (if (memq arg passed-in-regs)
       (ppc2-set-var-ea seg arg (var-ea arg))
       (let* ((lcell (pop lcells)))
-        (if (setq reg (ppc2-assign-register-var arg))
+        (if (setq reg (nx2-assign-register-var arg))
           (ppc2-init-regvar seg arg reg (ppc2-vloc-ea vloc))
           (ppc2-bind-var seg arg vloc lcell))
         (setq vloc (%i+ vloc *ppc2-target-node-size*)))))
@@ -825,14 +734,14 @@
         (if (memq var passed-in-regs)
           (ppc2-set-var-ea seg var (var-ea var))
           (let* ((lcell (pop lcells)))
-            (if (setq reg (ppc2-assign-register-var var))
+            (if (setq reg (nx2-assign-register-var var))
               (ppc2-init-regvar seg var reg (ppc2-vloc-ea vloc))
               (ppc2-bind-var seg var vloc lcell))
             (setq vloc (+ vloc *ppc2-target-node-size*)))))))
   (when rest
     (if lexpr
       (progn
-        (if (setq reg (ppc2-assign-register-var rest))
+        (if (setq reg (nx2-assign-register-var rest))
           (progn
             (ppc2-load-lexpr-address seg reg)
             (ppc2-set-var-ea seg rest reg))
@@ -843,7 +752,7 @@
               (ppc2-note-top-cell rest)
               (ppc2-bind-var seg rest loc *ppc2-top-vstack-lcell*)))))
       (let* ((rvloc (+ vloc (* 2 *ppc2-target-node-size* nkeys))))
-        (if (setq reg (ppc2-assign-register-var rest))
+        (if (setq reg (nx2-assign-register-var rest))
           (ppc2-init-regvar seg rest reg (ppc2-vloc-ea rvloc))
           (ppc2-bind-var seg rest rvloc (pop lcells))))))
   (when keys
@@ -857,7 +766,7 @@
              (spvar (pop spvars))
              (lcell (pop lcells))
              (splcell (pop splcells))
-             (reg (ppc2-assign-register-var var))
+             (reg (nx2-assign-register-var var))
              (sp-reg ($ ppc::arg_z))
              (regloadedlabel (if reg (backend-get-next-label))))
         (unless (nx-null initform)
@@ -875,7 +784,7 @@
             (@ regloadedlabel))
           (ppc2-bind-var seg var vloc lcell))
         (when spvar
-          (if (setq reg (ppc2-assign-register-var spvar))
+          (if (setq reg (nx2-assign-register-var spvar))
             (ppc2-init-regvar seg spvar reg (ppc2-vloc-ea spvloc))
             (ppc2-bind-var seg spvar spvloc splcell))))
       (setq vloc (%i+ vloc *ppc2-target-node-size*))
@@ -887,7 +796,7 @@
     (dolist (var keyvars)
       (let* ((spvar (pop keysupp))
              (initform (pop keyinits))
-             (reg (ppc2-assign-register-var var))
+             (reg (nx2-assign-register-var var))
              (regloadedlabel (if reg (backend-get-next-label)))
              (var-lcell (pop lcells))
              (sp-lcell (pop lcells))
@@ -908,7 +817,7 @@
             (@ regloadedlabel))
           (ppc2-bind-var seg var vloc var-lcell))
         (when spvar
-          (if (setq reg (ppc2-assign-register-var spvar))
+          (if (setq reg (nx2-assign-register-var spvar))
             (ppc2-init-regvar seg spvar reg (ppc2-vloc-ea sploc))
             (ppc2-bind-var seg spvar sploc sp-lcell))))
       (setq vloc (%i+ vloc (* 2 *ppc2-target-node-size*))))))
@@ -917,13 +826,11 @@
 ;;; Return NIL if register was vpushed, else var.
 (defun ppc2-vpush-arg-register (seg reg var)
   (when var
-    (let* ((bits (nx-var-bits var)))
-      (declare (fixnum bits))
-      (if (logbitp $vbitreg bits)
-        var
-        (progn 
-          (ppc2-vpush-register seg reg :reserved)
-          nil)))))
+    (if (var-nvr var)
+      var
+      (progn 
+        (ppc2-vpush-register seg reg :reserved)
+        nil))))
 
 
 ;;; nargs has been validated, arguments defaulted and canonicalized.
@@ -1247,11 +1154,6 @@
     (compiler-bug "~s exceeded." call-arguments-limit)
     (with-ppc-local-vinsn-macros (seg)
       (! set-nargs n))))
-
-(defun ppc2-assign-register-var (v)
-  (let ((bits (nx-var-bits v)))
-    (when (%ilogbitp $vbitreg bits)
-      (%ilogand bits $vrefmask))))
 
 (defun ppc2-single-float-bits (the-sf)
   (single-float-bits the-sf))
@@ -2270,11 +2172,11 @@
                                               index unscaled-idx
                                               value result-reg))
               (t
-               (setq result-reg (ppc2-target-reg-for-aset vreg type-keyword))
-               (ppc2-three-targeted-reg-forms seg
+               (multiple-value-setq (src unscaled-idx result-reg)
+                 (ppc2-three-untargeted-reg-forms seg
                                               vector src
                                               index unscaled-idx
-                                              value result-reg)))
+                                              value (ppc2-target-reg-for-aset vreg type-keyword)))))
         (when safe
           (let* ((*available-backend-imm-temps* *available-backend-imm-temps*)
                  (value (if (eql (hard-regspec-class result-reg)
@@ -2855,16 +2757,10 @@
 
 (defun ppc2-acc-reg-for (reg)
   (with-ppc-local-vinsn-macros (seg)
-    (let* ((class (hard-regspec-class reg))
-           (mode (get-regspec-mode reg)))
-      (declare (fixnum class mode))
-      (cond ((= class hard-reg-class-fpr)
-             (make-wired-lreg ppc::fp1 :class class :mode mode))
-            ((= class hard-reg-class-gpr)
-             (if (= mode hard-reg-class-gpr-mode-node)
-               ($ ppc::arg_z)
-               (make-wired-lreg ppc::imm0 :mode mode)))
-            (t (compiler-bug "Unknown register class for reg ~s" reg))))))
+    (if (and (eql (hard-regspec-class reg) hard-reg-class-gpr)
+             (eql (get-regspec-mode reg) hard-reg-class-gpr-mode-node))
+      ($ ppc::arg_z)
+      reg)))
 
 ;;; The compiler often generates superfluous pushes & pops.  Try to
 ;;; eliminate them.
@@ -3858,7 +3754,7 @@
                 (ppc2-set-var-ea seg var puntval))
               (progn
                 (let* ((vloc *ppc2-vstack*)
-                       (reg (let* ((r (ppc2-assign-register-var var)))
+                       (reg (let* ((r (nx2-assign-register-var var)))
                               (if r ($ r)))))
                   (if (ppc2-load-ea-p val)
                     (if reg
@@ -4957,7 +4853,7 @@
 
 (defun ppc2-bind-structured-var (seg var vloc lcell &optional context)
   (if (not (ppc2-structured-var-p var))
-    (let* ((reg (ppc2-assign-register-var var)))
+    (let* ((reg (nx2-assign-register-var var)))
       (if reg
         (ppc2-init-regvar seg var reg (ppc2-vloc-ea vloc))
         (ppc2-bind-var seg var vloc lcell)))
@@ -5365,7 +5261,7 @@
         (setq *ppc2-inhibit-register-allocation*
               (setq no-regs (%ilogbitp $fbitnoregs fbits)))
         (multiple-value-setq (pregs reglocatives) 
-          (ppc2-allocate-global-registers *ppc2-fcells* *ppc2-vcells* (afunc-all-vars afunc) no-regs))
+          (nx2-allocate-global-registers *ppc2-fcells* *ppc2-vcells* (afunc-all-vars afunc) inherited-vars (unless no-regs *ppc2-nvrs*)))
         (@ (backend-get-next-label)) ; generic self-reference label, should be label #1
         (when keys ;; Ensure keyvect is the first immediate
           (backend-immediate-index (%cadr (%cdddr keys))))
@@ -5506,7 +5402,7 @@
               (declare (list vars) (fixnum arg-reg-num))
               (let* ((var (car vars)))
                 (when var
-                  (let* ((reg (ppc2-assign-register-var var)))
+                  (let* ((reg (nx2-assign-register-var var)))
                     (ppc2-copy-register seg reg arg-reg-num)
                     (setf (var-ea var) reg))))))
           (setq *ppc2-entry-vsp-saved-p* t)
@@ -6910,7 +6806,7 @@
              (lcells (progn (ppc2-reserve-vstack-lcells n) (ppc2-collect-lcells :reserved old-top))))
         (dolist (var vars)
           (let* ((lcell (pop lcells))
-                 (reg (ppc2-assign-register-var var)))
+                 (reg (nx2-assign-register-var var)))
             (if reg
               (ppc2-init-regvar seg var reg (ppc2-vloc-ea vloc))
               (ppc2-bind-var seg var vloc lcell))          
@@ -7451,7 +7347,7 @@
       (dolist (var vars)
         (setq val (%car valcopy))
         (cond ((or (%ilogbitp $vbitspecial (setq bits (nx-var-bits var)))
-                   (and (%ilogbitp $vbitreg bits)
+                   (and (var-nvr var)
                         (dolist (val (%cdr valcopy))
                           (unless (ppc2-trivial-p val) (return t)))))
                (let* ((pair (cons (ppc2-vloc-ea *ppc2-vstack*) nil)))
