@@ -41,6 +41,8 @@ if [ -z "$OPENMCL_KERNEL" ]; then
     ;;
     SunOS) OPENMCL_KERNEL=sx86cl
     ;;
+    FreeBSD) OPENMCL_KERNEL=fx86cl
+    ;;
     *)
     echo "Can't determine host OS.  Fix this."
     exit 1
