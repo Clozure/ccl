@@ -712,9 +712,7 @@
       (ppc2-set-var-ea seg arg (var-ea arg))
       (let* ((lcell (pop lcells)))
         (if (setq reg (nx2-assign-register-var arg))
-          (progn
-            (break "Inherited var in NVR: ~s/~s" arg (var-name arg))
-            (ppc2-init-regvar seg arg reg (ppc2-vloc-ea vloc)))
+          (ppc2-init-regvar seg arg reg (ppc2-vloc-ea vloc))
           (ppc2-bind-var seg arg vloc lcell))
         (setq vloc (%i+ vloc *ppc2-target-node-size*)))))
   (dolist (arg req)
