@@ -3685,7 +3685,8 @@
                                    ((nwords :u32const))
 				   ((temp :imm)))
   (movd (:@ (:%seg :rcontext) x8632::tcr.foreign-sp) (:%mmx x8632::stack-temp))
-  (subl (:$l (:apply ash nwords x8632::word-shift))
+  ;; make frame at least 24 bytes long
+  (subl (:$l (:apply ash (:apply max 6 nwords) x8632::word-shift))
 	(:@ (:%seg :rcontext) x8632::tcr.foreign-sp))
   ;; align stack to 16-byte boundary
   (andb (:$b -16) (:@ (:%seg :rcontext) x8632::tcr.foreign-sp))
@@ -3698,7 +3699,11 @@
                                             ((nwords :imm))
                                             ((temp :imm)))
   (movd (:@ (:%seg :rcontext) x8632::tcr.foreign-sp) (:%mmx x8632::stack-temp))
-  (subl (:%l nwords) (:@ (:%seg :rcontext) x8632::tcr.foreign-sp))
+  ;; make frame at least 24 bytes long (note that nwords is a fixnum)
+  (movl (:$l 24) (:%l temp))
+  (rcmpl (:%l nwords) (:%l temp))
+  (cmoval (:%l nwords) (:%l temp))
+  (subl (:%l temp) (:@ (:%seg :rcontext) x8632::tcr.foreign-sp))
   ;; align stack to 16-byte boundary
   (andb (:$b -16) (:@ (:%seg :rcontext) x8632::tcr.foreign-sp))
   (subl (:$b (* 2 x8632::node-size)) (:@ (:%seg :rcontext) x8632::tcr.foreign-sp))
