@@ -1314,7 +1314,12 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
                   "Class named ~S not found." name)
           (find-class name errorp environment)))))
 
+(fset 'pessimize-make-instance-for-class-name ;; redefined later
+      (qlfun bootstrapping-pessimize-make-instance-for-class-name (name) name))
+
 (defun update-class-proper-names (name old-class new-class)
+  (when name
+    (pessimize-make-instance-for-class-name name))
   (when (and old-class
              (not (eq old-class new-class))
              (eq (%class-proper-name old-class) name))

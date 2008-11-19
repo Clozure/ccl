@@ -308,11 +308,13 @@
 (defun note-class-dependent (class gf)
   (pushnew gf (gethash class *optimized-dependents*)))
 
-;; Yeah, yeah, when/if this gets more general can use generic functions.
 (defun unoptimize-dependents (class)
+  (pessimize-make-instance-for-class-name (%class-name class))
   (loop for obj in (gethash class *optimized-dependents*)
         do (etypecase obj
-             (standard-generic-function (compute-dcode obj)))))
+             (standard-generic-function
+	      (clear-gf-dispatch-table (%gf-dispatch-table obj))
+	      (compute-dcode obj)))))
 
 (defun update-slots (class eslotds)
   (let* ((instance-slots (extract-slotds-with-allocation :instance eslotds))
@@ -331,10 +333,9 @@
                 ((and old-wrapper *update-slots-preserve-existing-wrapper*)
                  old-wrapper)
                 (t
+		 (unoptimize-dependents class)
                  (make-instances-obsolete class)
                  (%cons-wrapper class)))))
-    (when old-wrapper
-      (unoptimize-dependents class))
     (setf (%class-slots class) eslotds)
     (setf (%wrapper-instance-slots new-wrapper) new-ordering
           (%wrapper-class-slots new-wrapper) (%class-get class :class-slots)
@@ -793,7 +794,12 @@
 (defun pessimize-make-instance-for-class-name (class-name)
   (let ((cell (find-class-cell class-name nil)))
     (when cell
-      (setf (class-cell-instantiate cell) '%make-instance))))
+      (init-class-cell-instantiator cell))))
+
+(defun init-class-cell-instantiator (cell)
+  (when cell
+    (setf (class-cell-instantiate cell) '%make-instance)
+    (setf (class-cell-extra cell) nil)))
 
 ;;; Redefine an existing (not forward-referenced) class.
 (defmethod ensure-class-using-class ((class class) name &rest keys &key)
@@ -801,16 +807,13 @@
       (ensure-class-metaclass-and-initargs class keys)
     (unless (eq (class-of class) metaclass)
       (error "Can't change metaclass of ~s to ~s." class metaclass))
-    (pessimize-make-instance-for-class-name name)
     (apply #'reinitialize-instance class initargs)
     (setf (find-class name) class)))
 
 
 (defun ensure-class (name &rest keys &key &allow-other-keys)
-  (declare (special *sealed-clos-world*))
-  (if *sealed-clos-world*
-    (error "Class (re)definition is not allowed in this environment")
-    (apply #'ensure-class-using-class (find-class name nil) name keys)))
+  (declare (dynamic-extent keys))
+  (apply #'ensure-class-using-class (find-class name nil) name keys))
 
 (defparameter *defclass-redefines-improperly-named-classes-pedantically* 
    t
@@ -820,22 +823,15 @@ redefines existing classes regardless of their CLASS-NAME.  This variable
 governs whether DEFCLASS makes that distinction or not.")
 
 (defun ensure-class-for-defclass (name &rest keys &key &allow-other-keys)
-  (declare (special *sealed-clos-world*))
-  (if *sealed-clos-world*
-    (error "Class (re)definition is not allowed in this environment")
-    (progn
-      (record-source-file name 'class)
-      ;; Maybe record source-file information for accessors as well
-      ;; We should probably record them as "accessors of the class", since
-      ;; there won't be any other explicit defining form associated with
-      ;; them.
-      (let* ((existing-class (find-class name nil)))
-        (when (and *defclass-redefines-improperly-named-classes-pedantically* 
-                   existing-class 
-                   (not (eq (class-name existing-class) name)))
-          ;; Class isn't properly named; act like it didn't exist
-          (setq existing-class nil))
-        (apply #'ensure-class-using-class existing-class name keys)))))
+  (declare (dynamic-extent keys))
+  (record-source-file name 'class)
+  (let* ((existing-class (find-class name nil)))
+    (when (and *defclass-redefines-improperly-named-classes-pedantically* 
+	       existing-class 
+	       (not (eq (class-name existing-class) name)))
+      ;; Class isn't properly named; act like it didn't exist
+      (setq existing-class nil))
+    (apply #'ensure-class-using-class existing-class name keys)))
 
 
 
@@ -2369,7 +2365,7 @@ changing its name to ~s may have serious consequences." class new))
                 ,@(after-method-forms)))))))))
 
 (defun optimize-make-instance-for-class-cell (cell)
-  (setf (class-cell-instantiate cell) '%make-instance)
+  (init-class-cell-instantiator cell)
   (let* ((lambda (make-instantiate-lambda-for-class-cell cell)))
     (when lambda
       (setf (class-cell-instantiate cell) (compile nil lambda)
@@ -2395,11 +2391,13 @@ changing its name to ~s may have serious consequences." class new))
   (when (or (eq gfn #'allocate-instance)
             (eq gfn #'initialize-instance)
             (eq gfn #'shared-initialize))
-    (let* ((specializer (car (method-specializers method)))
-           (cell (and (typep specializer 'class)
-                      (gethash (class-name specializer) %find-classes%))))
-      (when cell
-        (setf (class-cell-instantiate cell) '%make-instance)))))            
+    (let ((specializer (car (method-specializers method))))
+      (when (typep specializer 'class)
+	(labels ((clear (class)
+		   (pessimize-make-instance-for-class-name (class-name class))
+		   (dolist (sub (%class-direct-subclasses class))
+		     (clear sub))))
+	  (clear specializer))))))
 
 ;;; Iterate over all known GFs; try to optimize their dcode in cases
 ;;; involving reader methods.
@@ -2408,10 +2406,7 @@ changing its name to ~s may have serious consequences." class new))
                                  (check-conflicts t)
                                  (optimize-make-instance t))
   (declare (ignore check-conflicts)
-           (special *sealed-clos-world*))
-  (unless known-sealed-world
-    (cerror "Proceed, if it's known that no new classes or methods will be defined."
-            "Optimizing reader methods in this way is only safe if it's known that no new classes or methods will be defined."))
+	   (ignore known-sealed-world))
   (when optimize-make-instance
     (optimize-named-class-make-instance-methods))
   (let* ((ngf 0)
@@ -2420,7 +2415,6 @@ changing its name to ~s may have serious consequences." class new))
       (incf ngf)
       (when (%snap-reader-method f)
         (incf nwin)))
-    (setq *sealed-clos-world* t)
     (values ngf nwin 0)))
 
 (defun register-non-dt-dcode-function (f)
@@ -2435,20 +2429,16 @@ changing its name to ~s may have serious consequences." class new))
       f)))
 
 (defun pessimize-clos ()
-  (declare (special *sealed-clos-world*))
-  (when *sealed-clos-world*
-    ;; Undo MAKE-INSTANCE optimization
-    (maphash (lambda (class-name class-cell)
-               (declare (ignore class-name))
-               (setf (class-cell-instantiate class-cell) '%make-instance))
-             %find-classes%)
-    ;; Un-snap reader methods, undo other GF optimizations.
-    (dolist (f (population-data %all-gfs%))
-      (let* ((dt (%gf-dispatch-table f)))
-        (clear-gf-dispatch-table dt)
-        (compute-dcode f)))
-    (setq *sealed-clos-world* nil)
-    t))
+  ;; Undo MAKE-INSTANCE optimization
+  (maphash (lambda (class-name class-cell)
+	     (declare (ignore class-name))
+	     (init-class-cell-instantiator class-cell))
+	   %find-classes%)
+  ;; Un-snap reader methods, undo other GF optimizations.
+  (dolist (f (population-data %all-gfs%))
+    (let* ((dt (%gf-dispatch-table f)))
+      (clear-gf-dispatch-table dt)
+      (compute-dcode f))))
 
 ;;; If there's a single method (with standard method combination) on
 ;;; GF and all of that method's arguments are specialized to the T
