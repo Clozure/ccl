@@ -36,8 +36,6 @@
 
 (defvar *lisp-compiler-version* 666 "I lost count.")
 
-#-BOOTSTRAPPED (defvar *record-pc-mapping* nil) ;; defined in level-1
-
 (defvar *nx-compile-time-types* nil)
 (defvar *nx-proclaimed-types* nil)
 (defvar *nx-method-warning-name* nil)
@@ -101,15 +99,14 @@
                  ;; appears in multiple places, and shows partial coverage (from the
                  ;; other reference) in code that's never executed.
                  (loop for p = parent-note then (code-note-parent-note p)
-                       when (null p)
-                         return t
+                       when (null p) return t
                        when (code-note-source-note p)
-                         return (eq (loop for n = source-note then s
-                                          as s = (source-note-source n)
-                                          unless (source-note-p s) return n)
-                                    (loop for n = (code-note-source-note p) then s
-                                          as s = (source-note-source n)
-                                          unless (source-note-p s) return n))))
+                       return (eq (loop for n = source-note then s
+                                        as s = (source-note-source n)
+                                        unless (source-note-p s) return n)
+                                  (loop for n = (code-note-source-note p) then s
+                                        as s = (source-note-source n)
+                                        unless (source-note-p s) return n))))
       (setq source-note nil))
     (make-code-note :form form :source-note source-note :parent-note parent-note)))
 

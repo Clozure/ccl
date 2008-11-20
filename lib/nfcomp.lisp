@@ -44,11 +44,6 @@
 (require "X8664-ARCH")
 ) ;eval-when (:compile-toplevel :execute)
 
-; inited in l1-init, this is for when loading into a lisp that doesn't have it yet.
-#-BOOTSTRAPPED (eval-when (compile load eval)
-                 (unless (boundp '*LOADING-TOPLEVEL-LOCATION*)
-                   (declaim (special *loading-toplevel-location*))
-                   (defparameter *save-source-locations* nil)))
 
 ;File compiler options.  Not all of these need to be exported/documented, but
 ;they should be in the product just in case we need them for patches....
@@ -470,17 +465,12 @@ Will differ from *compiling-file* during an INCLUDE")
                                 (format *error-output* "~&Read error between positions ~a and ~a in ~a." pos (file-position stream) filename)
                                 (signal c))))
                   (multiple-value-setq (form *loading-toplevel-location*)
-                    (if *fcomp-source-note-map* ;; #-BOOTSTRAPPED
-                      (read-recording-source stream
-                                             :eofval eofval
-                                             :file-name *loading-file-source-file*
-                                             :start-offset orig-offset
-                                             :map *fcomp-source-note-map*
-                                             :save-source-text (neq *save-source-locations* :no-text))
-                      (read-recording-source stream
-                                             :eofval eofval
-                                             :file-name *loading-file-source-file*
-                                             :start-offset orig-offset))))))
+                    (read-recording-source stream
+                                           :eofval eofval
+                                           :file-name *loading-file-source-file*
+                                           :start-offset orig-offset
+                                           :map *fcomp-source-note-map*
+                                           :save-source-text (neq *save-source-locations* :no-text))))))
             (when (eq eofval form)
 	      (require-type *loading-toplevel-location* 'null)
 	      (return))

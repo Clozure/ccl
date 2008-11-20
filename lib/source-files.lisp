@@ -682,7 +682,7 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
 
 ;; Define the real record-source-file, which will be the last defn handled by the
 ;; bootstrapping record-source-file, so convert all queued up data right afterwards.
-(when (BOUNDP '*LOADING-TOPLEVEL-LOCATION*) ;; #-BOOTSTRAPPED
+(progn
 
 (defun record-source-file (name def-type &optional (source (or *loading-toplevel-location*
                                                                *loading-file-source-file*)))

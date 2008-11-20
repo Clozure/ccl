@@ -4382,84 +4382,84 @@
                    (x862-open-undo $undostkblk )
                    (! make-tsp-cons result y z)
                    (setq val result)))
-                 ((eq op (%nx1-operator %consmacptr%))
-                  (with-imm-target () (address :address)
-                    (x862-one-targeted-reg-form seg form address)
-                    (with-node-target () node
-                      (! macptr->stack node address)
-                      (x862-open-undo $undo-x86-c-frame)
-                      (setq val node))))
-                 ((eq op (%nx1-operator %new-ptr))
-                  (let* ((clear-form (caddr form))
-                         (cval (nx-constant-form-p clear-form)))
-                    (if cval
-                      (progn 
-                        (x862-one-targeted-reg-form seg (%cadr form) ($ *x862-arg-z*))
-                        (if (nx-null cval)
-                          (! make-stack-block)
-                          (! make-stack-block0)))
-                      (with-crf-target () crf
-                        (let ((stack-block-0-label (backend-get-next-label))
-                              (done-label (backend-get-next-label))
-                              (rval ($ *x862-arg-z*))
-                              (rclear ($ *x862-arg-y*)))
-                          (x862-two-targeted-reg-forms seg (%cadr form) rval clear-form rclear)
-                          (! compare-to-nil crf rclear)
-                          (! cbranch-false (aref *backend-labels* stack-block-0-label) crf x86::x86-e-bits)
-                          (! make-stack-block)
-                          (-> done-label)
-                          (@ stack-block-0-label)
-                          (! make-stack-block0)
-                          (@ done-label)))))
-                  (x862-open-undo $undo-x86-c-frame)
-                  (setq val ($ *x862-arg-z*)))
-                 ((eq op (%nx1-operator make-list))
-                  (x862-two-targeted-reg-forms seg (%cadr form) ($ *x862-arg-y*) (%caddr form) ($ *x862-arg-z*))
-                  (x862-open-undo $undostkblk curstack)
-                  (! make-stack-list)
-                  (setq val *x862-arg-z*))       
-                 ((eq op (%nx1-operator vector))
-                  (let* ((*x862-vstack* *x862-vstack*)
-                         (*x862-top-vstack-lcell* *x862-top-vstack-lcell*))
-                    (x862-set-nargs seg (x862-formlist seg (%cadr form) nil))
-                    (! make-stack-vector))
-                  (x862-open-undo $undostkblk)
-                  (setq val *x862-arg-z*))
-                 ((eq op (%nx1-operator %gvector))
-                  (let* ((*x862-vstack* *x862-vstack*)
-                         (*x862-top-vstack-lcell* *x862-top-vstack-lcell*)
-                         (arglist (%cadr form)))
-                    (x862-set-nargs seg (x862-formlist seg (append (car arglist) (reverse (cadr arglist))) nil))
-                    (! make-stack-gvector))
-                  (x862-open-undo $undostkblk)
-                  (setq val *x862-arg-z*)) 
-                 ((eq op (%nx1-operator closed-function)) 
-                  (setq val (x862-make-closure seg (cadr form) t))) ; can't error
-                 ((eq op (%nx1-operator %make-uvector))
-                  (destructuring-bind (element-count subtag &optional (init 0 init-p)) (%cdr form)
-                    (let* ((fix-subtag (acode-fixnum-form-p subtag))
-                           (is-node (x862-target-is-node-subtag fix-subtag))
-                           (is-imm  (x862-target-is-imm-subtag fix-subtag)))
-                      (when (or is-node is-imm)
-                        (if init-p
-                          (progn
-                            (x862-three-targeted-reg-forms seg element-count
-                                                           (target-arch-case
-                                                            (:x8632
-                                                             ($ x8632::temp1))
-                                                            (:x8664
-                                                             ($ x8664::arg_x)))
-                                                           subtag ($ *x862-arg-y*)
-                                                           init ($ *x862-arg-z*))
-                            (! stack-misc-alloc-init))
-                          (progn
-                            (x862-two-targeted-reg-forms seg element-count ($ *x862-arg-y*)  subtag ($ *x862-arg-z*))
-                            (! stack-misc-alloc)))
-                        (if is-node
-                          (x862-open-undo $undostkblk)
-                          (x862-open-undo $undo-x86-c-frame))
-                        (setq val ($ *x862-arg-z*))))))))))
-      val))
+                ((eq op (%nx1-operator %consmacptr%))
+                 (with-imm-target () (address :address)
+                   (x862-one-targeted-reg-form seg form address)
+                   (with-node-target () node
+                     (! macptr->stack node address)
+                     (x862-open-undo $undo-x86-c-frame)
+                     (setq val node))))
+                ((eq op (%nx1-operator %new-ptr))
+                 (let* ((clear-form (caddr form))
+                        (cval (nx-constant-form-p clear-form)))
+                   (if cval
+                     (progn 
+                       (x862-one-targeted-reg-form seg (%cadr form) ($ *x862-arg-z*))
+                       (if (nx-null cval)
+                         (! make-stack-block)
+                         (! make-stack-block0)))
+                     (with-crf-target () crf
+                       (let ((stack-block-0-label (backend-get-next-label))
+                             (done-label (backend-get-next-label))
+                             (rval ($ *x862-arg-z*))
+                             (rclear ($ *x862-arg-y*)))
+                         (x862-two-targeted-reg-forms seg (%cadr form) rval clear-form rclear)
+                         (! compare-to-nil crf rclear)
+                         (! cbranch-false (aref *backend-labels* stack-block-0-label) crf x86::x86-e-bits)
+                         (! make-stack-block)
+                         (-> done-label)
+                         (@ stack-block-0-label)
+                         (! make-stack-block0)
+                         (@ done-label)))))
+                 (x862-open-undo $undo-x86-c-frame)
+                 (setq val ($ *x862-arg-z*)))
+                ((eq op (%nx1-operator make-list))
+                 (x862-two-targeted-reg-forms seg (%cadr form) ($ *x862-arg-y*) (%caddr form) ($ *x862-arg-z*))
+                 (x862-open-undo $undostkblk curstack)
+                 (! make-stack-list)
+                 (setq val *x862-arg-z*))       
+                ((eq op (%nx1-operator vector))
+                 (let* ((*x862-vstack* *x862-vstack*)
+                        (*x862-top-vstack-lcell* *x862-top-vstack-lcell*))
+                   (x862-set-nargs seg (x862-formlist seg (%cadr form) nil))
+                   (! make-stack-vector))
+                 (x862-open-undo $undostkblk)
+                 (setq val *x862-arg-z*))
+                ((eq op (%nx1-operator %gvector))
+                 (let* ((*x862-vstack* *x862-vstack*)
+                        (*x862-top-vstack-lcell* *x862-top-vstack-lcell*)
+                        (arglist (%cadr form)))
+                   (x862-set-nargs seg (x862-formlist seg (append (car arglist) (reverse (cadr arglist))) nil))
+                   (! make-stack-gvector))
+                 (x862-open-undo $undostkblk)
+                 (setq val *x862-arg-z*)) 
+                ((eq op (%nx1-operator closed-function)) 
+                 (setq val (x862-make-closure seg (cadr form) t))) ; can't error
+                ((eq op (%nx1-operator %make-uvector))
+                 (destructuring-bind (element-count subtag &optional (init 0 init-p)) (%cdr form)
+                   (let* ((fix-subtag (acode-fixnum-form-p subtag))
+                          (is-node (x862-target-is-node-subtag fix-subtag))
+                          (is-imm  (x862-target-is-imm-subtag fix-subtag)))
+                     (when (or is-node is-imm)
+                       (if init-p
+                         (progn
+                           (x862-three-targeted-reg-forms seg element-count
+                                                          (target-arch-case
+                                                           (:x8632
+                                                            ($ x8632::temp1))
+                                                           (:x8664
+                                                            ($ x8664::arg_x)))
+                                                          subtag ($ *x862-arg-y*)
+                                                          init ($ *x862-arg-z*))
+                           (! stack-misc-alloc-init))
+                         (progn
+                           (x862-two-targeted-reg-forms seg element-count ($ *x862-arg-y*)  subtag ($ *x862-arg-z*))
+                           (! stack-misc-alloc)))
+                       (if is-node
+                         (x862-open-undo $undostkblk)
+                         (x862-open-undo $undo-x86-c-frame))
+                       (setq val ($ *x862-arg-z*))))))))))
+    val))
 
 (defun x862-addrspec-to-reg (seg addrspec reg)
   (if (memory-spec-p addrspec)
@@ -10239,7 +10239,5 @@
 		 xlfun
 		 (unless symbolic-names (list nil)))))
       xlfun)))
-
-
 
 
