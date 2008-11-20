@@ -887,7 +887,7 @@ satisfy the optional predicate PREDICATE."
  (qlfun |#&-reader| (stream char arg)
    (declare (ignore char arg))
    (let* ((package (find-package (ftd-interface-package-name *target-ftd*))))
-     (multiple-value-bind (sym source query)
+     (multiple-value-bind (sym query source)
          (%read-symbol-preserving-case
           stream
           package)
@@ -1047,14 +1047,14 @@ satisfy the optional predicate PREDICATE."
 	(setf (readtable-case *readtable*) case)))
     (when error
       (error error))
-    (values sym source query)))
+    (values sym query source)))
 
 (set-dispatch-macro-character 
  #\# #\$
  (qlfun |#$-reader| (stream char arg)
    (declare (ignore char))
    (let* ((package (find-package (ftd-interface-package-name *target-ftd*))))
-     (multiple-value-bind (sym source query)
+     (multiple-value-bind (sym query source)
          (%read-symbol-preserving-case
 	    stream
             package)
@@ -1085,7 +1085,7 @@ satisfy the optional predicate PREDICATE."
   (qlfun |#_-reader| (stream char arg)
     (declare (ignore char))
     (unless arg (setq arg 0))
-    (multiple-value-bind (sym source query)
+    (multiple-value-bind (sym query source)
         (%read-symbol-preserving-case
 		 stream
 		 (find-package (ftd-interface-package-name *target-ftd*)))
