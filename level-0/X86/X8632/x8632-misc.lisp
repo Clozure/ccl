@@ -773,7 +773,9 @@
   (restore-simple-frame)
   (single-value-return))
 
-;;; future %%apply-in-frame-proto would go here
+;; tbd
+(defx8632lapfunction %%apply-in-frame-proto ()
+  (hlt))
 
 (defx8632lapfunction %atomic-pop-static-cons ()
   @again

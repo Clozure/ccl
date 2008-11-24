@@ -418,39 +418,42 @@
               
          
 (defun %apply-in-frame (frame function arglist)
-  (let* ((target-catch (last-catch-since frame nil))
-         (start-fp (if target-catch
-                     (uvref target-catch target::catch-frame.rbp-cell)
-                     (%get-frame-ptr)))
-         (target-xcf (last-xcf-since frame start-fp nil))
-         (target-db-link (last-binding-before frame))
-         (target-tsp (last-tsp-before frame))
-         (target-foreign-sp (last-foreign-sp-before frame)))
-    (multiple-value-bind (save0-loc save1-loc save2-loc save3-loc)
-        (find-x8664-saved-nvrs frame start-fp nil)
-      (let* ((thunk (%clone-x86-function #'%%apply-in-frame-proto
-                                         frame
-                                         target-catch
-                                         target-db-link
-                                         target-xcf
-                                         target-tsp
-                                         target-foreign-sp
-                                         (if save0-loc
-                                           (- save0-loc frame)
-                                           0)
-                                         (if save1-loc
-                                           (- save1-loc frame)
-                                           0)
-                                         (if save2-loc
-                                           (- save2-loc frame)
-                                           0)
-                                         (if save3-loc
-                                           (- save3-loc frame)
-                                           0)
-                                         (coerce-to-function function)
-                                         arglist
-                                         0)))
-        (funcall thunk)))))
+  (target-arch-case
+   (:x8632 (error "%apply-in-frame doesn't work for x8632 yet"))
+   (:x8664
+    (let* ((target-catch (last-catch-since frame nil))
+	   (start-fp (if target-catch
+		       (uvref target-catch x8664::catch-frame.rbp-cell)
+		       (%get-frame-ptr)))
+	   (target-xcf (last-xcf-since frame start-fp nil))
+	   (target-db-link (last-binding-before frame))
+	   (target-tsp (last-tsp-before frame))
+	   (target-foreign-sp (last-foreign-sp-before frame)))
+      (multiple-value-bind (save0-loc save1-loc save2-loc save3-loc)
+	  (find-x8664-saved-nvrs frame start-fp nil)
+	(let* ((thunk (%clone-x86-function #'%%apply-in-frame-proto
+					   frame
+					   target-catch
+					   target-db-link
+					   target-xcf
+					   target-tsp
+					   target-foreign-sp
+					   (if save0-loc
+					     (- save0-loc frame)
+					     0)
+					   (if save1-loc
+					     (- save1-loc frame)
+					     0)
+					   (if save2-loc
+					     (- save2-loc frame)
+					     0)
+					   (if save3-loc
+					     (- save3-loc frame)
+					     0)
+					   (coerce-to-function function)
+					   arglist
+					   0)))
+	  (funcall thunk)))))))
 
             
     
