@@ -1143,7 +1143,7 @@
   (ns:with-ns-range (range)
     (let* ((color-attribute #&NSForegroundColorAttributeName)
            (string-color  (#/blueColor ns:ns-color) )
-           (comment-color (#/grayColor ns:ns-color)))
+           (comment-color (#/darkGrayColor ns:ns-color)))
       (hi::with-mark ((m (hi::buffer-start-mark hi::*current-buffer*)))
         (hi::line-start m start-line)
         (hi::pre-command-parse-check m t))
