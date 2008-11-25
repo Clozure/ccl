@@ -53,7 +53,6 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (require "OBJC-PACKAGE")
-  (require "SPLAY-TREE")
   (require "NAME-TRANSLATION")
   (require "OBJC-CLOS"))
 
@@ -153,27 +152,27 @@
      (the (unsigned-byte #+64-bit-target 64 #+32-bit-target 32)
        (%ptr-to-int Y))))
 
-(let* ((objc-class-map (make-splay-tree #'%ptr-eql #'%ptr<))
-       (objc-metaclass-map (make-splay-tree #'%ptr-eql #'%ptr<))
+(let* ((objc-class-map (make-hash-table :test #'eql :size 1024))
+       (objc-metaclass-map (make-hash-table :test #'eql :size 1024))
        ;;; These are NOT lisp classes; we mostly want to keep track
        ;;; of them so that we can pretend that instances of them
        ;;; are instances of some known (declared) superclass.
-       (private-objc-classes (make-splay-tree #'%ptr-eql #'%ptr<))
+       (private-objc-classes (make-hash-table :test #'eql :size 2048))
        (objc-class-lock (make-lock))
        (next-objc-class-id 0)
        (next-objc-metaclass-id 0)
        (class-table-size 1024)
        (c (make-array class-table-size))
        (m (make-array class-table-size))
-       (cw (make-array 1024 :initial-element nil))
-       (mw (make-array 1024 :initial-element nil))
-       (csv (make-array 1024))
-       (msv (make-array 1024))
-       (class-id->metaclass-id (make-array 1024 :initial-element nil))
-       (class-foreign-names (make-array 1024))
-       (metaclass-foreign-names (make-array 1024))
-       (class-id->ordinal (make-array 1024 :initial-element nil))
-       (metaclass-id->ordinal (make-array 1024 :initial-element nil))
+       (cw (make-array class-table-size :initial-element nil))
+       (mw (make-array class-table-size :initial-element nil))
+       (csv (make-array class-table-size))
+       (msv (make-array class-table-size))
+       (class-id->metaclass-id (make-array class-table-size :initial-element nil))
+       (class-foreign-names (make-array class-table-size))
+       (metaclass-foreign-names (make-array class-table-size))
+       (class-id->ordinal (make-array class-table-size :initial-element nil))
+       (metaclass-id->ordinal (make-array class-table-size :initial-element nil))
        )
 
   (flet ((grow-vectors ()
@@ -244,17 +243,14 @@
 	(setf (svref metaclass-foreign-names i) new))
       (defun %clear-objc-class-maps ()
 	(with-lock-grabbed (objc-class-lock)
-	  (setf (splay-tree-root objc-class-map) nil
-		(splay-tree-root objc-metaclass-map) nil
-                (splay-tree-root private-objc-classes) nil
-		(splay-tree-count objc-class-map) 0
-		(splay-tree-count objc-metaclass-map) 0
-                (splay-tree-count private-objc-classes) 0)))
+          (clrhash objc-class-map)
+          (clrhash objc-metaclass-map)
+          (clrhash private-objc-classes)))
       (flet ((install-objc-metaclass (meta)
-	       (or (splay-tree-get objc-metaclass-map meta)
+	       (or (gethash meta objc-metaclass-map)
 		   (let* ((id (assign-next-metaclass-id))
 			  (meta (%inc-ptr meta 0)))
-		     (splay-tree-put objc-metaclass-map meta id)
+		     (setf (gethash meta objc-metaclass-map) id)
 		     (setf (svref m id) meta
 			   (svref msv id)
 			   (make-objc-metaclass-slots-vector meta)
@@ -265,11 +261,11 @@
 	  "ensure that the class is mapped to a small integer and associate a slots-vector with it."
 	  (with-lock-grabbed (objc-class-lock)
 	    (ensure-objc-classptr-resolved class)
-	    (or (splay-tree-get objc-class-map class)
+	    (or (gethash class objc-class-map)
 		(let* ((id (assign-next-class-id))
 		       (class (%inc-ptr class 0))
 		       (meta (pref class #+apple-objc :objc_class.isa #+gnu-objc :objc_class.class_pointer)))
-		  (splay-tree-put objc-class-map class id)
+		  (setf (gethash class objc-class-map) id)
 		  (setf (svref c id) class
 			(svref csv id)
 			(make-objc-class-slots-vector class)
@@ -278,11 +274,9 @@
 			(svref class-id->ordinal id) (%next-class-ordinal))
 		  id)))))
       (defun objc-class-id (class)
-	(with-lock-grabbed (objc-class-lock)
-	  (splay-tree-get objc-class-map class)))
+        (gethash class objc-class-map))
       (defun objc-metaclass-id (meta)
-	(with-lock-grabbed (objc-class-lock)
-	  (splay-tree-get objc-metaclass-map meta)))
+        (gethash meta objc-metaclass-map))
       (defun objc-class-id->objc-metaclass-id (class-id)
 	(svref class-id->metaclass-id class-id))
       (defun objc-class-id->objc-metaclass (class-id)
@@ -300,14 +294,10 @@
       (defun objc-metaclass-map () objc-metaclass-map)
       (defun %objc-metaclass-count () next-objc-metaclass-id)
       (defun %register-private-objc-class (c name)
-        (splay-tree-put private-objc-classes c (make-private-objc-class-info :name name)))
+        (setf (gethash c private-objc-classes) 
+              (make-private-objc-class-info :name name)))
       (defun %get-private-objc-class (c)
-        (splay-tree-get private-objc-classes c))
-      (defun (setf %get-private-objc-class) (public c)
-        (let* ((node (binary-tree-get private-objc-classes c)))
-          (if node
-            (setf (tree-node-value node) public)
-            (error "Private class ~s not found" c))))
+        (gethash c private-objc-classes))
       (defun private-objc-classes ()
         private-objc-classes))))
 
@@ -315,8 +305,8 @@
          :key #'function-name)
 
 (defun do-all-objc-classes (f)
-  (map-splay-tree (objc-class-map) #'(lambda (id)
-				       (funcall f (id->objc-class id)))))
+  (maphash #'(lambda (ptr id) (declare (ignore ptr)) (funcall f (id->objc-class id)))
+           (objc-class-map)))
 
 (defun canonicalize-registered-class (c)
   (let* ((id (objc-class-id c)))
@@ -676,12 +666,12 @@
 ;;; When starting up an image that's had ObjC classes in it, all of
 ;;; those canonical classes (and metaclasses) will have had their type
 ;;; changed (by SAVE-APPLICATION) to, CCL::DEAD-MACPTR and the addresses
-;;; of those classes may be bogus.  The splay trees (objc-class/metaclass-map)
+;;; of those classes may be bogus.  The hash tables (objc-class/metaclass-map)
 ;;; should be empty.
 ;;; For each class that -had- had an assigned ID, determine its ObjC
 ;;; class name, and ask ObjC where (if anywhere) the class is now.
 ;;; If we get a non-null answer, revive the class pointer and set its
-;;; address appropriately, then add an entry to the splay tree; this
+;;; address appropriately, then add an entry to the hash-table; this
 ;;; means that classes that existed on both sides of SAVE-APPLICATION
 ;;; will retain the same ID.
 
@@ -711,16 +701,16 @@
         (unless (typep m 'macptr)
           (%revive-macptr m)
           (%setf-macptr m (%null-ptr)))
-	(unless (splay-tree-get class-map c)
+	(unless (gethash c class-map)
 	  (%set-pointer-to-objc-class-address (objc-class-id-foreign-name i) c)
 	  ;; If the class is valid and the metaclass is still
 	  ;; unmapped, set the metaclass pointer's address and map it.
 	  (unless (%null-ptr-p c)
-	    (splay-tree-put class-map c i)
-	    (unless (splay-tree-get metaclass-map m)
+            (setf (gethash c class-map) i)
+	    (unless (gethash m metaclass-map)
               (%setf-macptr m (pref c #+apple-objc :objc_class.isa
 				      #+gnu-objc :objc_class.class_pointer))
-	      (splay-tree-put metaclass-map m meta-id))
+              (setf (gethash m metaclass-map) meta-id))
             (note-class-protocols c)))))
     ;; Second pass: install class objects for user-defined classes,
     ;; assuming the superclasses are already "revived".  If the
@@ -738,10 +728,10 @@
             (let* ((class (make-objc-class-pair super (make-cstring (objc-class-id-foreign-name i))))
                    (meta (pref class #+apple-objc :objc_class.isa
                                #+gnu-objc :objc-class.class_pointer)))
-	    (unless (splay-tree-get metaclass-map m)
+	    (unless (gethash m metaclass-map)
 	      (%revive-macptr m)
 	      (%setf-macptr m meta)
-	      (splay-tree-put metaclass-map m meta-id))
+	      (setf (gethash m metaclass-map) meta-id))
 	    (%setf-macptr c class))
             #+apple-objc-2.0
             (%revive-foreign-slots c)
@@ -751,7 +741,7 @@
 	    (multiple-value-bind (ivars instance-size)
 		(%make-objc-ivars c)
 	      (%add-objc-class c ivars instance-size))
-	    (splay-tree-put class-map c i)))))
+            (setf (gethash c class-map) i)))))
     ;; Finally, iterate over all classes in the runtime world.
     ;; Register any class that's not found in the class map
     ;; as a "private" ObjC class.
