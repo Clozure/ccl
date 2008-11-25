@@ -103,7 +103,7 @@
 ;;; Open file descriptor to a temporary file.  The write-fd will be
 ;;; open for reading and writing and the file will have mode #o600
 ;;; (readable/ writable by owner, not accessible to others.)  Unlink
-;;; the file as soon as it's opened, to help exposing its contents
+;;; the file as soon as it's opened, to help avoid exposing its contents
 ;;; (and to ensure that the file gets deleted when the application
 ;;; quits.)
 (defun open-logging-fds ()
@@ -149,9 +149,17 @@
            (nth-value 4 (ccl::%stat path)))
          (fd-inode (fd)
            (nth-value 4 (ccl::%fstat fd))))
-    (cond ((and (eql (fd-inode 0) (path-inode "/dev/null"))
-                (eql (fd-inode 1) (fd-inode 2)))
+    (cond ((and nil
+                (eql (fd-inode 0) (path-inode "/dev/null"))
+                (eql (fd-inode 1) (fd-inode 2))
+                (rlet ((pflags :long))
+                  (#_fcntl 2 #$F_GETFL :address pflags)
+                  (let* ((accmode (logand #$O_ACCMODE (pref flags :long))))
+                    (or (eql #$O_RDONLY accmode)
+                        (eql #$O_RDWR accmode)))))
            (let* ((win (#/typeoutWindowWithTitle: (find-class 'console-window) #@"Console")))
+
+
              (#/redirectStandardOutput win)
              (let* ((tv (typeout-view-text-view (typeout-window-typeout-view win))))
                (#/setTypingAttributes: tv
