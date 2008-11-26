@@ -142,7 +142,7 @@
             (#.x8664::subtag-s16-vector
              (%init-ivector-u16 len
                                 (logand (the (signed-byte 16)
-                                          (require-type val '(unsigned-byte 16)))
+                                          (require-type val '(signed-byte 16)))
                                         #xffff)
                                 uvector))
             (#.x8664::subtag-u8-vector
