@@ -195,6 +195,7 @@ examples/jfli/examples/session.lisp -text
 examples/jfli/examples/swtdemo.lisp -text
 examples/jfli/jfli.jar -text
 examples/jfli/jfli.lisp -text
+examples/jfli/jni-lw.lisp -text
 examples/jfli/jni.lisp -text
 examples/mswin.lisp -text
 level-0/X86/X8632/x8632-array.lisp -text
