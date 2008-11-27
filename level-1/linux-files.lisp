@@ -972,117 +972,546 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
 
 #-windows-target
 (progn
-(defun %execvp (argv)
-  (#_execvp (%get-ptr argv) argv)
-  (#_exit #$EX_OSERR))
+  (defun %execvp (argv)
+    (#_execvp (%get-ptr argv) argv)
+    (#_exit #$EX_OSERR))
 
-(defun exec-with-io-redirection (new-in new-out new-err argv)
-  (#_setpgid 0 0)
-  (if new-in (#_dup2 new-in 0))
-  (if new-out (#_dup2 new-out 1))
-  (if new-err (#_dup2 new-err 2))
-  (do* ((fd 3 (1+ fd)))
-       ((= fd *max-os-open-files*) (%execvp argv))
-    (declare (fixnum fd))
-    (#_close fd)))
-
-
+  (defun exec-with-io-redirection (new-in new-out new-err argv)
+    (#_setpgid 0 0)
+    (if new-in (#_dup2 new-in 0))
+    (if new-out (#_dup2 new-out 1))
+    (if new-err (#_dup2 new-err 2))
+    (do* ((fd 3 (1+ fd)))
+         ((= fd *max-os-open-files*) (%execvp argv))
+      (declare (fixnum fd))
+      (#_close fd)))
 
 
 
-(defstruct external-process
-  pid
-  %status
-  %exit-code
-  pty
-  input
-  output
-  error
-  status-hook
-  plist
-  token
-  core
-  args
-  (signal (make-semaphore))
-  (completed (make-semaphore))
-  watched-fd
-  watched-stream
-  )
 
-(defmethod print-object ((p external-process) stream)
-  (print-unreadable-object (p stream :type t :identity t)
-    (let* ((status (external-process-%status p)))
-      (let* ((*print-length* 3))
-	(format stream "~a" (external-process-args p)))
-      (format stream "[~d] (~a" (external-process-pid p) status)
-      (unless (eq status :running)
-	(format stream " : ~d" (external-process-%exit-code p)))
-      (format stream ")"))))
 
-(defun get-descriptor-for (object proc close-in-parent close-on-error
-				  &rest keys &key direction (element-type 'character)
-				  &allow-other-keys)
-  (etypecase object
-    ((eql t)
-     (values nil nil close-in-parent close-on-error))
-    (null
-     (let* ((null-device #+windows-target "nul" #-windows-target "/dev/null")
-	    (fd (fd-open null-device (case direction
-				       (:input #$O_RDONLY)
-				       (:output #$O_WRONLY)
-				       (t #$O_RDWR)))))
-       (if (< fd 0)
-	 (signal-file-error fd null-device))
-       (values fd nil (cons fd close-in-parent) (cons fd close-on-error))))
-    ((eql :stream)
-     (multiple-value-bind (read-pipe write-pipe) (pipe)
-       (case direction
-	 (:input
-	  (values read-pipe
-		  (make-fd-stream write-pipe
-				  :direction :output
-                                  :element-type element-type
-				  :interactive nil
-                                  :basic t
-                                  :auto-close t)
-		  (cons read-pipe close-in-parent)
-		  (cons write-pipe close-on-error)))
-	 (:output
-	  (values write-pipe
-		  (make-fd-stream read-pipe
-				  :direction :input
-                                  :element-type element-type
-				  :interactive nil
-                                  :basic t
-                                  :auto-close t)
-		  (cons write-pipe close-in-parent)
-		  (cons read-pipe close-on-error)))
-	 (t
-	  (fd-close read-pipe)
-	  (fd-close write-pipe)
-	  (report-bad-arg direction '(member :input :output))))))
-    ((or pathname string)
-     (with-open-stream (file (apply #'open object keys))
-       (let* ((fd (fd-dup (ioblock-device (stream-ioblock file t)))))
+  (defstruct external-process
+    pid
+    %status
+    %exit-code
+    pty
+    input
+    output
+    error
+    status-hook
+    plist
+    token                               
+    core
+    args
+    (signal (make-semaphore))
+    (completed (make-semaphore))
+    watched-fds
+    watched-streams
+    )
+
+  (defmethod print-object ((p external-process) stream)
+    (print-unreadable-object (p stream :type t :identity t)
+      (let* ((status (external-process-%status p)))
+        (let* ((*print-length* 3))
+          (format stream "~a" (external-process-args p)))
+        (format stream "[~d] (~a" (external-process-pid p) status)
+        (unless (eq status :running)
+          (format stream " : ~d" (external-process-%exit-code p)))
+        (format stream ")"))))
+
+  (defun get-descriptor-for (object proc close-in-parent close-on-error
+                                    &rest keys
+                                    &key direction (element-type 'character)
+                                    (sharing :private)
+                                    &allow-other-keys)
+    (etypecase object
+      ((eql t)
+       (values nil nil close-in-parent close-on-error))
+      (null
+       (let* ((null-device #+windows-target "nul" #-windows-target "/dev/null")
+              (fd (fd-open null-device (case direction
+                                         (:input #$O_RDONLY)
+                                         (:output #$O_WRONLY)
+                                         (t #$O_RDWR)))))
+         (if (< fd 0)
+           (signal-file-error fd null-device))
+         (values fd nil (cons fd close-in-parent) (cons fd close-on-error))))
+      ((eql :stream)
+       (multiple-value-bind (read-pipe write-pipe) (pipe)
+         (case direction
+           (:input
+            (values read-pipe
+                    (make-fd-stream write-pipe
+                                    :direction :output
+                                    :element-type element-type
+                                    :interactive nil
+                                    :sharing sharing
+                                    :basic t
+                                    :auto-close t)
+                    (cons read-pipe close-in-parent)
+                    (cons write-pipe close-on-error)))
+           (:output
+            (values write-pipe
+                    (make-fd-stream read-pipe
+                                    :direction :input
+                                    :element-type element-type
+                                    :interactive nil
+                                    :basic t
+                                    :sharing sharing
+                                    :auto-close t)
+                    (cons write-pipe close-in-parent)
+                    (cons read-pipe close-on-error)))
+           (t
+            (fd-close read-pipe)
+            (fd-close write-pipe)
+            (report-bad-arg direction '(member :input :output))))))
+      ((or pathname string)
+       (with-open-stream (file (apply #'open object keys))
+         (let* ((fd (fd-dup (ioblock-device (stream-ioblock file t)))))
+           (values fd
+                   nil
+                   (cons fd close-in-parent)
+                   (cons fd close-on-error)))))
+      (fd-stream
+       (let ((fd (fd-dup (ioblock-device (stream-ioblock object t)))))
          (values fd
                  nil
                  (cons fd close-in-parent)
-                 (cons fd close-on-error)))))
-    (fd-stream
-     (let ((fd (fd-dup (ioblock-device (stream-ioblock object t)))))
-       (values fd
-	       nil
-	       (cons fd close-in-parent)
-	       (cons fd close-on-error))))
-    (stream
-     (ecase direction
-       (:input
-	(with-cstrs ((template "/tmp/lisp-tempXXXXXX"))
-	  (let* ((fd (#_mkstemp template)))
-	    (if (< fd 0)
-	      (%errno-disp fd))
-	    (#_unlink template)
-	    (loop
+                 (cons fd close-on-error))))
+      (stream
+       (ecase direction
+         (:input
+          (with-cstrs ((template "/tmp/lisp-tempXXXXXX"))
+            (let* ((fd (#_mkstemp template)))
+              (if (< fd 0)
+                (%errno-disp fd))
+              (#_unlink template)
+              (loop
+                (multiple-value-bind (line no-newline)
+                    (read-line object nil nil)
+                  (unless line
+                    (return))
+                  (let* ((len (length line)))
+                    (%stack-block ((buf (1+ len)))
+                      (%cstr-pointer line buf)
+                      (fd-write fd buf len)
+                      (if no-newline
+                        (return))
+                      (setf (%get-byte buf) (char-code #\newline))
+                      (fd-write fd buf 1)))))
+              (fd-lseek fd 0 #$SEEK_SET)
+              (values fd nil (cons fd close-in-parent) (cons fd close-on-error)))))
+         (:output
+          (multiple-value-bind (read-pipe write-pipe) (pipe)
+            (push read-pipe (external-process-watched-fds proc))
+            (push object (external-process-watched-streams proc))
+            (incf (car (external-process-token proc)))
+            (values write-pipe
+                    nil
+                    (cons write-pipe close-in-parent)
+                    (cons read-pipe close-on-error))))))))
+
+  (let* ((external-processes ())
+         (external-processes-lock (make-lock)))
+    (defun add-external-process (p)
+      (with-lock-grabbed (external-processes-lock)
+        (push p external-processes)))
+    (defun remove-external-process (p)
+      (with-lock-grabbed (external-processes-lock)
+        (setq external-processes (delete p external-processes))))
+    ;; Likewise
+    (defun external-processes ()
+      (with-lock-grabbed (external-processes-lock)
+        (copy-list external-processes)))
+    )
+
+
+  (defmacro wtermsig (status)
+    `(ldb (byte 7 0) ,status))
+
+  (defmacro wexitstatus (status)
+    `(ldb (byte 8 8) (the fixnum ,status)))
+
+  (defmacro wstopsig (status)
+    `(wexitstatus ,status))
+
+  (defmacro wifexited (status)
+    `(eql (wtermsig ,status) 0))
+
+  (defmacro wifstopped (status)
+    `(eql #x7f (ldb (byte 7 0) (the fixnum ,status))))
+
+  (defun monitor-external-process (p)
+    (let* ((in-fds (external-process-watched-fds p))
+           (out-streams (external-process-watched-streams p))
+           (token (external-process-token p))
+           (terminated)
+           (changed)
+           (maxfd 0)
+           (pairs (pairlis in-fds out-streams)))
+      (%stack-block ((in-fd-set *fd-set-size*))
+        (rlet ((tv #>timeval))
+          (loop
+            (when changed
+              (setq pairs (pairlis in-fds out-streams)
+                    changed nil))
+            (when (and terminated (null pairs))
+              (signal-semaphore (external-process-completed p))
+              (return))
+            (when pairs
+              (fd-zero in-fd-set)
+              (setq maxfd 0)
+              (dolist (p pairs)
+                (let* ((fd (car p)))
+                  (when (> fd maxfd)
+                    (setq maxfd fd))
+                  (fd-set fd in-fd-set)))
+              (setf (pref tv #>timeval.tv_sec) 1
+                    (pref tv #>timeval.tv_usec) 0)
+              (when (> (#_select (1+ maxfd) in-fd-set (%null-ptr) (%null-ptr) tv)
+                       0)
+                (dolist (p pairs)
+                  (let* ((in-fd (car p))
+                         (out-stream (cdr p)))
+                    (when (fd-is-set in-fd in-fd-set)
+                      (%stack-block ((buf 1024))
+                        (let* ((n (fd-read in-fd buf 1024)))
+                          (declare (fixnum n))
+                          (if (<= n 0)
+                            (progn
+                              (without-interrupts
+                               (decf (car token))
+                               (fd-close in-fd)
+                               (setq in-fds (delete in-fd in-fds)
+                                     out-streams (delete out-stream out-streams)
+                                     changed t)))
+                            (let* ((string (make-string 1024)))
+                              (declare (dynamic-extent string))
+                              (%str-from-ptr buf n string)
+                              (write-sequence string out-stream :end n))))))))))
+            (let* ((statusflags (check-pid (external-process-pid p)
+                                           (logior
+                                            (if in-fds #$WNOHANG 0)
+                                            #$WUNTRACED)))
+                   (oldstatus (external-process-%status p)))
+              (cond ((null statusflags)
+                     (remove-external-process p)
+                     (setq terminated t))
+                    ((eq statusflags t)) ; Running.
+                    (t
+                     (multiple-value-bind (status code core)
+                         (cond ((wifstopped statusflags)
+                                (values :stopped (wstopsig statusflags)))
+                               ((wifexited statusflags)
+                                (values :exited (wexitstatus statusflags)))
+                               (t
+                                (let* ((signal (wtermsig statusflags)))
+                                  (declare (fixnum signal))
+                                  (values
+                                   (if (or (= signal #$SIGSTOP)
+                                           (= signal #$SIGTSTP)
+                                           (= signal #$SIGTTIN)
+                                           (= signal #$SIGTTOU))
+                                     :stopped
+                                     :signaled)
+                                   signal
+                                   (logtest #-solaris-target #$WCOREFLAG
+                                            #+solaris-target #$WCOREFLG
+                                            statusflags)))))
+                       (setf (external-process-%status p) status
+                             (external-process-%exit-code p) code
+                             (external-process-core p) core)
+                       (let* ((status-hook (external-process-status-hook p)))
+                         (when (and status-hook (not (eq oldstatus status)))
+                           (funcall status-hook p)))
+                       (when (or (eq status :exited)
+                                 (eq status :signaled))
+                         (remove-external-process p)
+                         (setq terminated t)))))))))))
+      
+  (defun run-external-process (proc in-fd out-fd error-fd argv &optional env)
+    (let* ((signaled nil))
+      (unwind-protect
+           (let* ((child-pid (#-solaris-target #_fork #+solaris-target #_forkall)))
+             (declare (fixnum child-pid))
+             (cond ((zerop child-pid)
+                    ;; Running in the child; do an exec
+                    (setq signaled t)
+                    (dolist (pair env)
+                      (setenv (string (car pair)) (cdr pair)))
+                    (without-interrupts
+                     (exec-with-io-redirection
+                      in-fd out-fd error-fd argv)))
+                   ((> child-pid 0)
+                    ;; Running in the parent: success
+                    (setf (external-process-pid proc) child-pid)
+                    (add-external-process proc)
+                    (signal-semaphore (external-process-signal proc))
+                    (setq signaled t)
+                    (monitor-external-process proc))
+                   (t
+                    ;; Fork failed
+                    (setf (external-process-%status proc) :error
+                          (external-process-%exit-code proc) (%get-errno))
+                    (signal-semaphore (external-process-signal proc))
+                    (setq signaled t))))
+        (unless signaled
+          (setf (external-process-%status proc) :error
+                (external-process-%exit-code proc) -1)
+          (signal-semaphore (external-process-signal proc))))))
+
+  (defparameter *silently-ignore-catastrophic-failure-in-run-program*
+    #+ccl-0711 t #-ccl-0711 nil
+    "If NIL, signal an error if run-program is unable to start the program.
+If non-NIL, treat failure to start the same as failure from the program
+itself, by setting the status and exit-code fields.")
+
+  (defun run-program (program args &key
+                              (wait t) pty
+                              input if-input-does-not-exist
+                              output (if-output-exists :error)
+                              (error :output) (if-error-exists :error)
+                              status-hook (element-type 'character)
+                              env
+                              (sharing :private)
+                              (silently-ignore-catastrophic-failures
+                               *silently-ignore-catastrophic-failure-in-run-program*))
+    "Invoke an external program as an OS subprocess of lisp."
+    (declare (ignore pty))
+    (unless (every #'(lambda (a) (typep a 'simple-string)) args)
+      (error "Program args must all be simple strings : ~s" args))
+    (dolist (pair env)
+      (destructuring-bind (var . val) pair
+        (check-type var (or string symbol character))
+        (check-type val string)))
+    (push (native-untranslated-namestring program) args)
+    (let* ((token (list 0))
+           (in-fd nil)
+           (in-stream nil)
+           (out-fd nil)
+           (out-stream nil)
+           (error-fd nil)
+           (error-stream nil)
+           (close-in-parent nil)
+           (close-on-error nil)
+           (proc
+            (make-external-process
+             :pid nil
+             :args args
+             :%status :running
+             :input nil
+             :output nil
+             :error nil
+             :token token
+             :status-hook status-hook)))
+      (unwind-protect
+           (progn
+             (multiple-value-setq (in-fd in-stream close-in-parent close-on-error)
+               (get-descriptor-for input proc  nil nil :direction :input
+                                   :if-does-not-exist if-input-does-not-exist
+                                   :element-type element-type
+                                   :sharing sharing))
+             (multiple-value-setq (out-fd out-stream close-in-parent close-on-error)
+               (get-descriptor-for output proc close-in-parent close-on-error
+                                   :direction :output
+                                   :if-exists if-output-exists
+                                   :element-type element-type
+                                   :sharing sharing))
+             (multiple-value-setq (error-fd error-stream close-in-parent close-on-error)
+               (if (eq error :output)
+                 (values out-fd out-stream close-in-parent close-on-error)
+                 (get-descriptor-for error proc close-in-parent close-on-error
+                                     :direction :output
+                                     :if-exists if-error-exists
+                                     :sharing sharing
+                                     :element-type element-type)))
+             (setf (external-process-input proc) in-stream
+                   (external-process-output proc) out-stream
+                   (external-process-error proc) error-stream)
+             (call-with-string-vector
+              #'(lambda (argv)
+                  (process-run-function
+                   (list :name
+                         (format nil "Monitor thread for external process ~a" args)
+                         :stack-size (ash 128 10)
+                         :vstack-size (ash 128 10)
+                         :tstack-size (ash 128 10))
+                   #'run-external-process proc in-fd out-fd error-fd argv env)
+                  (wait-on-semaphore (external-process-signal proc)))
+              args))
+        (dolist (fd close-in-parent) (fd-close fd))
+        (unless (external-process-pid proc)
+          (dolist (fd close-on-error) (fd-close fd)))
+        (when (and wait (external-process-pid proc))
+          (with-interrupts-enabled
+              (wait-on-semaphore (external-process-completed proc)))))
+      (unless (external-process-pid proc)
+        ;; something is wrong
+        (if (eq (external-process-%status proc) :error)
+          ;; Fork failed
+          (unless silently-ignore-catastrophic-failures
+            (cerror "Pretend the program ran and failed" 'external-process-creation-failure :proc proc))
+          ;; Currently can't happen.
+          (error "Bug: fork failed but status field not set?")))
+      proc))
+
+
+
+  (defmacro wifsignaled (status)
+    (let* ((statname (gensym)))
+      `(let* ((,statname ,status))
+        (and (not (wifstopped ,statname)) (not (wifexited ,statname))))))
+
+
+  (defun check-pid (pid &optional (flags (logior  #$WNOHANG #$WUNTRACED)))
+    (declare (fixnum pid))
+    (rlet ((status :signed))
+      (let* ((retval (ff-call-ignoring-eintr (#_waitpid pid status flags))))
+        (declare (fixnum retval))
+        (if (= retval pid)
+          (pref status :signed)
+          (zerop retval)))))
+
+
+
+
+
+  (defun external-process-wait (proc &optional check-stopped)
+    (process-wait "external-process-wait"
+                  #'(lambda ()
+                      (case (external-process-%status proc)
+                        (:running)
+                        (:stopped
+                         (when check-stopped
+                           t))
+                        (t
+                         (when (zerop (car (external-process-token proc)))
+                           t))))))
+
+  (defun external-process-status (proc)
+    "Return information about whether an OS subprocess is running; or, if
+not, why not; and what its result code was if it completed."
+    (require-type proc 'external-process)
+    (values (external-process-%status proc)
+            (external-process-%exit-code proc)))
+
+  (defun external-process-input-stream (proc)
+    "Return the lisp stream which is used to write input to a given OS
+subprocess, if it has one."
+    (require-type proc 'external-process)
+    (external-process-input proc))
+
+  (defun external-process-output-stream (proc)
+    "Return the lisp stream which is used to read output from a given OS
+subprocess, if there is one."
+    (require-type proc 'external-process)
+    (external-process-output proc))
+
+  (defun external-process-error-stream (proc)
+    "Return the stream which is used to read error output from a given OS
+subprocess, if it has one."
+    (require-type proc 'external-process)
+    (external-process-error proc))
+
+  (defun external-process-id (proc)
+    "Return the process id of an OS subprocess, a positive integer which
+identifies it."
+    (require-type proc 'external-process)
+    (external-process-pid proc))
+  
+  (defun signal-external-process (proc signal)
+    "Send the specified signal to the specified external process.  (Typically,
+it would only be useful to call this function if the EXTERNAL-PROCESS was
+created with :WAIT NIL.) Return T if successful; NIL if the process wasn't
+created successfully, and signal an error otherwise."
+    (require-type proc 'external-process)
+    (let* ((pid (external-process-pid proc)))
+      (when pid
+        (let ((error (int-errno-call (#_kill pid signal))))
+          (or (eql error 0)
+              (%errno-disp error))))))
+
+  )                                     ; #-windows-target (progn
+
+#+windows-target
+(progn
+  (defun temp-file-name (prefix)
+    "Returns a unique name for a temporary file, residing in system temp
+space, and prefixed with PREFIX."
+    (rlet ((buffer (:array :wchar_t #.#$MAX_PATH)))
+      (#_GetTempPathW #$MAX_PATH buffer)
+      (with-filename-cstrs ((c-prefix prefix)) 
+        (#_GetTempFileNameW buffer c-prefix 0 buffer)
+        (%get-native-utf-16-cstring buffer))))
+  
+  (defun get-descriptor-for (object proc close-in-parent close-on-error
+                                    &rest keys
+                                    &key
+                                    direction (element-type 'character)
+                                    (sharing :private)
+                                    &allow-other-keys)
+    (etypecase object
+      ((eql t)
+       (values nil nil close-in-parent close-on-error))
+      (null
+       (let* ((null-device "nul")
+              (fd (fd-open null-device (case direction
+                                         (:input #$O_RDONLY)
+                                         (:output #$O_WRONLY)
+                                         (t #$O_RDWR)))))
+         (if (< fd 0)
+           (signal-file-error fd null-device))
+         (values fd nil (cons fd close-in-parent) (cons fd close-on-error))))
+      ((eql :stream)
+       (multiple-value-bind (read-pipe write-pipe) (pipe)
+         (case direction
+           (:input
+            (values read-pipe
+                    (make-fd-stream (fd-uninheritable write-pipe :direction :output)
+                                    :direction :output
+                                    :element-type element-type
+                                    :interactive nil
+                                    :basic t
+                                    :sharing sharing
+                                    :auto-close t)
+                    (cons read-pipe close-in-parent)
+                    (cons write-pipe close-on-error)))
+           (:output
+            (values write-pipe
+                    (make-fd-stream (fd-uninheritable read-pipe :direction :input)
+                                    :direction :input
+                                    :element-type element-type
+                                    :interactive nil
+                                    :basic t
+                                    :sharing sharing
+                                    :auto-close t)
+                    (cons write-pipe close-in-parent)
+                    (cons read-pipe close-on-error)))
+           (t
+            (fd-close read-pipe)
+            (fd-close write-pipe)
+            (report-bad-arg direction '(member :input :output))))))
+      ((or pathname string)
+       (with-open-stream (file (apply #'open object keys))
+         (let* ((fd (fd-dup (ioblock-device (stream-ioblock file t)) :direction direction :inheritable t)))
+           (values fd
+                   nil
+                   (cons fd close-in-parent)
+                   (cons fd close-on-error)))))
+      (fd-stream
+       (let ((fd (fd-dup (ioblock-device (stream-ioblock object t)))))
+         (values fd
+                 nil
+                 (cons fd close-in-parent)
+                 (cons fd close-on-error))))
+      (stream
+       (ecase direction
+         (:input
+          (let* ((tempname (temp-file-name "lisp-temp"))
+                 (fd (fd-open tempname #$O_RDWR)))
+            (if (< fd 0)
+              (%errno-disp fd))
+            (loop
               (multiple-value-bind (line no-newline)
                   (read-line object nil nil)
                 (unless line
@@ -1095,642 +1524,254 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                       (return))
                     (setf (%get-byte buf) (char-code #\newline))
                     (fd-write fd buf 1)))))
-	    (fd-lseek fd 0 #$SEEK_SET)
-	    (values fd nil (cons fd close-in-parent) (cons fd close-on-error)))))
-       (:output
-	(multiple-value-bind (read-pipe write-pipe) (pipe)
-          (setf (external-process-watched-fd proc) read-pipe
-                (external-process-watched-stream proc) object)
-          (incf (car (external-process-token proc)))
-	  (values write-pipe
-		  nil
-		  (cons write-pipe close-in-parent)
-		  (cons read-pipe close-on-error))))))))
+            (fd-lseek fd 0 #$SEEK_SET)
+            (values fd nil (cons fd close-in-parent) (cons fd close-on-error))))
+         (:output
+          (multiple-value-bind (read-pipe write-pipe) (pipe)
+            (push read-pipe (external-process-watched-fds proc))
+            (push object (external-process-watched-streams proc))
+            (incf (car (external-process-token proc)))
+            (values write-pipe
+                    nil
+                    (cons write-pipe close-in-parent)
+                    (cons read-pipe close-on-error))))))))
 
-(let* ((external-processes ())
-       (external-processes-lock (make-lock)))
-  (defun add-external-process (p)
-    (with-lock-grabbed (external-processes-lock)
-      (push p external-processes)))
-  (defun remove-external-process (p)
-    (with-lock-grabbed (external-processes-lock)
-      (setq external-processes (delete p external-processes))))
-  ;; Likewise
-  (defun external-processes ()
-    (with-lock-grabbed (external-processes-lock)
-      (copy-list external-processes)))
-  )
+  (defstruct external-process
+    pid
+    %status
+    %exit-code
+    pty
+    input
+    output
+    error
+    status-hook
+    plist
+    token
+    core
+    args
+    (signal (make-semaphore))
+    (completed (make-semaphore))
+    watched-fds
+    watched-streams
+    )
 
-
-(defmacro wtermsig (status)
-  `(ldb (byte 7 0) ,status))
-
-(defmacro wexitstatus (status)
-  `(ldb (byte 8 8) (the fixnum ,status)))
-
-(defmacro wstopsig (status)
-  `(wexitstatus ,status))
-
-(defmacro wifexited (status)
-  `(eql (wtermsig ,status) 0))
-
-(defmacro wifstopped (status)
-  `(eql #x7f (ldb (byte 7 0) (the fixnum ,status))))
-
-(defun monitor-external-process (p)
-  (let* ((in-fd (external-process-watched-fd p))
-         (out-stream (external-process-watched-stream p))
-         (token (external-process-token p))
-         (terminated))
-    (loop
-      (when (and terminated (null in-fd))
-        (signal-semaphore (external-process-completed p))
-        (return))
-      (when in-fd
-        (when (fd-input-available-p in-fd 1000)
-          (%stack-block ((buf 1024))
-            (let* ((n (fd-read in-fd buf 1024)))
-              (declare (fixnum n))
-              (if (<= n 0)
-                (progn
-                  (without-interrupts
-                   (decf (car token))
-                   (fd-close in-fd)
-                   (setq in-fd nil)))
-                (let* ((string (make-string 1024)))
-                  (declare (dynamic-extent string))
-                  (%str-from-ptr buf n string)
-                  (write-sequence string out-stream :end n)))))))
-      (let* ((statusflags (check-pid (external-process-pid p)
-                                     (logior
-                                      (if in-fd #$WNOHANG 0)
-                                      #$WUNTRACED)))
-             (oldstatus (external-process-%status p)))
-        (cond ((null statusflags)
-               (remove-external-process p)
-               (setq terminated t))
-              ((eq statusflags t))	; Running.
-              (t
-               (multiple-value-bind (status code core)
-                   (cond ((wifstopped statusflags)
-                          (values :stopped (wstopsig statusflags)))
-                         ((wifexited statusflags)
-                          (values :exited (wexitstatus statusflags)))
-                         (t
-                          (let* ((signal (wtermsig statusflags)))
-                            (declare (fixnum signal))
-                            (values
-                             (if (or (= signal #$SIGSTOP)
-                                     (= signal #$SIGTSTP)
-                                     (= signal #$SIGTTIN)
-                                     (= signal #$SIGTTOU))
-                               :stopped
-                               :signaled)
-                             signal
-                             (logtest #-solaris-target #$WCOREFLAG
-                                      #+solaris-target #$WCOREFLG
-                                      statusflags)))))
-                 (setf (external-process-%status p) status
-                       (external-process-%exit-code p) code
-                       (external-process-core p) core)
-                 (let* ((status-hook (external-process-status-hook p)))
-                   (when (and status-hook (not (eq oldstatus status)))
-                     (funcall status-hook p)))
-                 (when (or (eq status :exited)
-                           (eq status :signaled))
-                   (remove-external-process p)
-                   (setq terminated t)))))))))
-      
-(defun run-external-process (proc in-fd out-fd error-fd argv &optional env)
-  (let* ((signaled nil))
-    (unwind-protect
-         (let* ((child-pid (#-solaris-target #_fork #+solaris-target #_forkall)))
-           (declare (fixnum child-pid))
-           (cond ((zerop child-pid)
-                  ;; Running in the child; do an exec
-                  (setq signaled t)
-                  (dolist (pair env)
-                    (setenv (string (car pair)) (cdr pair)))
-                  (without-interrupts
-                    (exec-with-io-redirection
-                     in-fd out-fd error-fd argv)))
-                 ((> child-pid 0)
-                  ;; Running in the parent: success
-                  (setf (external-process-pid proc) child-pid)
-                  (add-external-process proc)
-                  (signal-semaphore (external-process-signal proc))
-                  (setq signaled t)
-                  (monitor-external-process proc))
-                 (t
-                  ;; Fork failed
-                  (setf (external-process-%status proc) :error
-                        (external-process-%exit-code proc) (%get-errno))
-                  (signal-semaphore (external-process-signal proc))
-                  (setq signaled t))))
-      (unless signaled
-        (setf (external-process-%status proc) :error
-              (external-process-%exit-code proc) -1)
-        (signal-semaphore (external-process-signal proc))))))
-
-(defparameter *silently-ignore-catastrophic-failure-in-run-program*
-  #+ccl-0711 t #-ccl-0711 nil
-  "If NIL, signal an error if run-program is unable to start the program.
-If non-NIL, treat failure to start the same as failure from the program
-itself, by setting the status and exit-code fields.")
-
-(defun run-program (program args &key
-			    (wait t) pty
-			    input if-input-does-not-exist
-			    output (if-output-exists :error)
-			    (error :output) (if-error-exists :error)
-			    status-hook (element-type 'character)
-                            env
-                            (silently-ignore-catastrophic-failures
-                             *silently-ignore-catastrophic-failure-in-run-program*))
-  "Invoke an external program as an OS subprocess of lisp."
-  (declare (ignore pty))
-  (unless (every #'(lambda (a) (typep a 'simple-string)) args)
-    (error "Program args must all be simple strings : ~s" args))
-  (dolist (pair env)
-    (destructuring-bind (var . val) pair
-      (check-type var (or string symbol character))
-      (check-type val string)))
-  (push (native-untranslated-namestring program) args)
-  (let* ((token (list 0))
-	 (in-fd nil)
-	 (in-stream nil)
-	 (out-fd nil)
-	 (out-stream nil)
-	 (error-fd nil)
-	 (error-stream nil)
-	 (close-in-parent nil)
-	 (close-on-error nil)
-	 (proc
-          (make-external-process
-           :pid nil
-           :args args
-           :%status :running
-           :input nil
-           :output nil
-           :error nil
-           :token token
-           :status-hook status-hook)))
-    (unwind-protect
-	 (progn
-	   (multiple-value-setq (in-fd in-stream close-in-parent close-on-error)
-	     (get-descriptor-for input proc  nil nil :direction :input
-				 :if-does-not-exist if-input-does-not-exist
-                                 :element-type element-type))
-	   (multiple-value-setq (out-fd out-stream close-in-parent close-on-error)
-	     (get-descriptor-for output proc close-in-parent close-on-error
-                                 :direction :output
-				 :if-exists if-output-exists
-                                 :element-type element-type))
-	   (multiple-value-setq (error-fd error-stream close-in-parent close-on-error)
-	     (if (eq error :output)
-	       (values out-fd out-stream close-in-parent close-on-error)
-	       (get-descriptor-for error proc close-in-parent close-on-error
-				   :direction :output
-				   :if-exists if-error-exists
-                                   :element-type element-type)))
-           (setf (external-process-input proc) in-stream
-                 (external-process-output proc) out-stream
-                 (external-process-error proc) error-stream)
-           (call-with-string-vector
-            #'(lambda (argv)
-                (process-run-function
-                 (list :name
-                       (format nil "Monitor thread for external process ~a" args)
-                       :stack-size (ash 128 10)
-                       :vstack-size (ash 128 10)
-                       :tstack-size (ash 128 10))
-                 #'run-external-process proc in-fd out-fd error-fd argv env)
-                (wait-on-semaphore (external-process-signal proc)))
-            args))
-      (dolist (fd close-in-parent) (fd-close fd))
-      (unless (external-process-pid proc)
-        (dolist (fd close-on-error) (fd-close fd)))
-      (when (and wait (external-process-pid proc))
-        (with-interrupts-enabled
-          (wait-on-semaphore (external-process-completed proc)))))
-    (unless (external-process-pid proc)
-      ;; something is wrong
-      (if (eq (external-process-%status proc) :error)
-        ;; Fork failed
-        (unless silently-ignore-catastrophic-failures
-          (cerror "Pretend the program ran and failed" 'external-process-creation-failure :proc proc))
-        ;; Currently can't happen.
-        (error "Bug: fork failed but status field not set?")))
-    proc))
-
-
-
-(defmacro wifsignaled (status)
-  (let* ((statname (gensym)))
-    `(let* ((,statname ,status))
-      (and (not (wifstopped ,statname)) (not (wifexited ,statname))))))
-
-
-(defun check-pid (pid &optional (flags (logior  #$WNOHANG #$WUNTRACED)))
-  (declare (fixnum pid))
-  (rlet ((status :signed))
-    (let* ((retval (ff-call-ignoring-eintr (#_waitpid pid status flags))))
-      (declare (fixnum retval))
-      (if (= retval pid)
-	(pref status :signed)
-	(zerop retval)))))
-
-
-
-
-
-(defun external-process-wait (proc &optional check-stopped)
-  (process-wait "external-process-wait"
-		#'(lambda ()
-		    (case (external-process-%status proc)
-		      (:running)
-		      (:stopped
-		       (when check-stopped
-			 t))
-		      (t
-		       (when (zerop (car (external-process-token proc)))
-			 t))))))
-
-(defun external-process-status (proc)
-  "Return information about whether an OS subprocess is running; or, if
+  (defun external-process-status (proc)
+    "Return information about whether an OS subprocess is running; or, if
 not, why not; and what its result code was if it completed."
-  (require-type proc 'external-process)
-  (values (external-process-%status proc)
-	  (external-process-%exit-code proc)))
-
-(defun external-process-input-stream (proc)
-  "Return the lisp stream which is used to write input to a given OS
-subprocess, if it has one."
-  (require-type proc 'external-process)
-  (external-process-input proc))
-
-(defun external-process-output-stream (proc)
-  "Return the lisp stream which is used to read output from a given OS
-subprocess, if there is one."
-  (require-type proc 'external-process)
-  (external-process-output proc))
-
-(defun external-process-error-stream (proc)
-  "Return the stream which is used to read error output from a given OS
-subprocess, if it has one."
-  (require-type proc 'external-process)
-  (external-process-error proc))
-
-(defun external-process-id (proc)
-  "Return the process id of an OS subprocess, a positive integer which
-identifies it."
-  (require-type proc 'external-process)
-  (external-process-pid proc))
-  
-(defun signal-external-process (proc signal)
-  "Send the specified signal to the specified external process.  (Typically,
-it would only be useful to call this function if the EXTERNAL-PROCESS was
-created with :WAIT NIL.) Return T if successful; NIL if the process wasn't
-created successfully, and signal an error otherwise."
-  (require-type proc 'external-process)
-  (let* ((pid (external-process-pid proc)))
-    (when pid
-      (let ((error (int-errno-call (#_kill pid signal))))
-        (or (eql error 0)
-            (%errno-disp error))))))
-
-) ; #-windows-target (progn
-
-#+windows-target
-(progn
-(defun temp-file-name (prefix)
-  "Returns a unique name for a temporary file, residing in system temp
-space, and prefixed with PREFIX."
-  (rlet ((buffer (:array :wchar_t #.#$MAX_PATH)))
-    (#_GetTempPathW #$MAX_PATH buffer)
-    (with-filename-cstrs ((c-prefix prefix)) 
-      (#_GetTempFileNameW buffer c-prefix 0 buffer)
-      (%get-native-utf-16-cstring buffer))))
-  
-(defun get-descriptor-for (object proc close-in-parent close-on-error
-                                  &rest keys &key direction (element-type 'character)
-                                  &allow-other-keys)
-  (etypecase object
-    ((eql t)
-     (values nil nil close-in-parent close-on-error))
-    (null
-     (let* ((null-device "nul")
-	    (fd (fd-open null-device (case direction
-				       (:input #$O_RDONLY)
-				       (:output #$O_WRONLY)
-				       (t #$O_RDWR)))))
-       (if (< fd 0)
-	 (signal-file-error fd null-device))
-       (values fd nil (cons fd close-in-parent) (cons fd close-on-error))))
-    ((eql :stream)
-     (multiple-value-bind (read-pipe write-pipe) (pipe)
-       (case direction
-	 (:input
-	  (values read-pipe
-		  (make-fd-stream (fd-uninheritable write-pipe :direction :output)
-				  :direction :output
-                                  :element-type element-type
-				  :interactive nil
-                                  :basic t
-                                  :auto-close t)
-		  (cons read-pipe close-in-parent)
-		  (cons write-pipe close-on-error)))
-	 (:output
-	  (values write-pipe
-		  (make-fd-stream (fd-uninheritable read-pipe :direction :input)
-				  :direction :input
-                                  :element-type element-type
-				  :interactive nil
-                                  :basic t
-                                  :auto-close t)
-		  (cons write-pipe close-in-parent)
-		  (cons read-pipe close-on-error)))
-	 (t
-	  (fd-close read-pipe)
-	  (fd-close write-pipe)
-	  (report-bad-arg direction '(member :input :output))))))
-    ((or pathname string)
-     (with-open-stream (file (apply #'open object keys))
-       (let* ((fd (fd-dup (ioblock-device (stream-ioblock file t)) :direction direction :inheritable t)))
-         (values fd
-                 nil
-                 (cons fd close-in-parent)
-                 (cons fd close-on-error)))))
-    (fd-stream
-     (let ((fd (fd-dup (ioblock-device (stream-ioblock object t)))))
-       (values fd
-	       nil
-	       (cons fd close-in-parent)
-	       (cons fd close-on-error))))
-    (stream
-     (ecase direction
-       (:input
-	(let* ((tempname (temp-file-name "lisp-temp"))
-	       (fd (fd-open tempname #$O_RDWR)))
-	  (if (< fd 0)
-	    (%errno-disp fd))
-	  (loop
-            (multiple-value-bind (line no-newline)
-                (read-line object nil nil)
-              (unless line
-                (return))
-              (let* ((len (length line)))
-                (%stack-block ((buf (1+ len)))
-                  (%cstr-pointer line buf)
-                  (fd-write fd buf len)
-                  (if no-newline
-                    (return))
-                  (setf (%get-byte buf) (char-code #\newline))
-                  (fd-write fd buf 1)))))
-	  (fd-lseek fd 0 #$SEEK_SET)
-	  (values fd nil (cons fd close-in-parent) (cons fd close-on-error))))
-       (:output
-	(multiple-value-bind (read-pipe write-pipe) (pipe)
-          (setf (external-process-watched-fd proc) read-pipe
-                (external-process-watched-stream proc) object)
-          (incf (car (external-process-token proc)))
-	  (values write-pipe
-		  nil
-		  (cons write-pipe close-in-parent)
-		  (cons read-pipe close-on-error))))))))
-
-(defstruct external-process
-  pid
-  %status
-  %exit-code
-  pty
-  input
-  output
-  error
-  status-hook
-  plist
-  token
-  core
-  args
-  (signal (make-semaphore))
-  (completed (make-semaphore))
-  watched-fd
-  watched-stream
-  )
-
-(defun external-process-status (proc)
-  "Return information about whether an OS subprocess is running; or, if
-not, why not; and what its result code was if it completed."
-  (require-type proc 'external-process)
-  (values (external-process-%status proc)
-	  (external-process-%exit-code proc)))
+    (require-type proc 'external-process)
+    (values (external-process-%status proc)
+            (external-process-%exit-code proc)))
 
 
-(defmethod print-object ((p external-process) stream)
-  (print-unreadable-object (p stream :type t :identity t)
-    (let* ((status (external-process-%status p)))
-      (let* ((*print-length* 3))
-        (format stream "~a" (external-process-args p)))
-      (format stream "[~d] (~a" (external-process-pid p) status)
-      (unless (eq status :running)
-        (format stream " : ~d" (external-process-%exit-code p)))
-      (format stream ")"))))
+  (defmethod print-object ((p external-process) stream)
+    (print-unreadable-object (p stream :type t :identity t)
+      (let* ((status (external-process-%status p)))
+        (let* ((*print-length* 3))
+          (format stream "~a" (external-process-args p)))
+        (format stream "[~d] (~a" (external-process-pid p) status)
+        (unless (eq status :running)
+          (format stream " : ~d" (external-process-%exit-code p)))
+        (format stream ")"))))
 
-(defun run-program (program args &key
-                            (wait t) pty
-                            input if-input-does-not-exist
-                            output (if-output-exists :error)
-                            (error :output) (if-error-exists :error)
-                            status-hook (element-type 'character)
-                            env)
-  "Invoke an external program as an OS subprocess of lisp."
-  (declare (ignore pty))
-  (unless (every #'(lambda (a) (typep a 'simple-string)) args)
-    (error "Program args must all be simple strings : ~s" args))
-  (push program args)
-  (let* ((token (list 0))
-         (in-fd nil)
-         (in-stream nil)
-         (out-fd nil)
-         (out-stream nil)
-         (error-fd nil)
-         (error-stream nil)
-         (close-in-parent nil)
-         (close-on-error nil)
-         (proc
-          (make-external-process
-           :pid nil
-           :args args
-           :%status :running
-           :input nil
-           :output nil
-           :error nil
-           :token token
-           :status-hook status-hook)))
-    (unwind-protect
-         (progn
-           (multiple-value-setq (in-fd in-stream close-in-parent close-on-error)
-             (get-descriptor-for input proc  nil nil :direction :input
-                                 :if-does-not-exist if-input-does-not-exist
-                                 :element-type element-type))
-           (multiple-value-setq (out-fd out-stream close-in-parent close-on-error)
-             (get-descriptor-for output proc close-in-parent close-on-error
-                                 :direction :output
-                                 :if-exists if-output-exists
-                                 :element-type element-type))
-           (multiple-value-setq (error-fd error-stream close-in-parent close-on-error)
-             (if (eq error :output)
-               (values out-fd out-stream close-in-parent close-on-error)
-               (get-descriptor-for error proc close-in-parent close-on-error
+  (defun run-program (program args &key
+                              (wait t) pty
+                              input if-input-does-not-exist
+                              output (if-output-exists :error)
+                              (error :output) (if-error-exists :error)
+                              status-hook (element-type 'character)
+                              (sharing :private)
+                              env)
+    "Invoke an external program as an OS subprocess of lisp."
+    (declare (ignore pty))
+    (unless (every #'(lambda (a) (typep a 'simple-string)) args)
+      (error "Program args must all be simple strings : ~s" args))
+    (push program args)
+    (let* ((token (list 0))
+           (in-fd nil)
+           (in-stream nil)
+           (out-fd nil)
+           (out-stream nil)
+           (error-fd nil)
+           (error-stream nil)
+           (close-in-parent nil)
+           (close-on-error nil)
+           (proc
+            (make-external-process
+             :pid nil
+             :args args
+             :%status :running
+             :input nil
+             :output nil
+             :error nil
+             :token token
+             :status-hook status-hook)))
+      (unwind-protect
+           (progn
+             (multiple-value-setq (in-fd in-stream close-in-parent close-on-error)
+               (get-descriptor-for input proc  nil nil :direction :input
+                                   :if-does-not-exist if-input-does-not-exist
+                                   :sharing sharing
+                                   :element-type element-type))
+             (multiple-value-setq (out-fd out-stream close-in-parent close-on-error)
+               (get-descriptor-for output proc close-in-parent close-on-error
                                    :direction :output
-                                   :if-exists if-error-exists
-                                   :element-type element-type)))
-           (setf (external-process-input proc) in-stream
-                 (external-process-output proc) out-stream
-                 (external-process-error proc) error-stream)
-           (process-run-function
-            (format nil "Monitor thread for external process ~a" args)
+                                   :if-exists if-output-exists
+                                   :sharing sharing
+                                   :element-type element-type))
+             (multiple-value-setq (error-fd error-stream close-in-parent close-on-error)
+               (if (eq error :output)
+                 (values out-fd out-stream close-in-parent close-on-error)
+                 (get-descriptor-for error proc close-in-parent close-on-error
+                                     :direction :output
+                                     :if-exists if-error-exists
+                                     :sharing sharing
+                                     :element-type element-type)))
+             (setf (external-process-input proc) in-stream
+                   (external-process-output proc) out-stream
+                   (external-process-error proc) error-stream)
+             (process-run-function
+              (format nil "Monitor thread for external process ~a" args)
                     
-            #'run-external-process proc in-fd out-fd error-fd env)
-           (wait-on-semaphore (external-process-signal proc))
-           )
-      (dolist (fd close-in-parent) (fd-close fd))
-      (if (external-process-pid proc)
-        (when (and wait (external-process-pid proc))
-          (with-interrupts-enabled
-              (wait-on-semaphore (external-process-completed proc))))
-        (progn
-          (dolist (fd close-on-error) (fd-close fd))
-          (error "Process execution failed"))))
-    proc))
+              #'run-external-process proc in-fd out-fd error-fd env)
+             (wait-on-semaphore (external-process-signal proc))
+             )
+        (dolist (fd close-in-parent) (fd-close fd))
+        (if (external-process-pid proc)
+          (when (and wait (external-process-pid proc))
+            (with-interrupts-enabled
+                (wait-on-semaphore (external-process-completed proc))))
+          (progn
+            (dolist (fd close-on-error) (fd-close fd))
+            (error "Process execution failed"))))
+      proc))
 
-(let* ((external-processes ())
-       (external-processes-lock (make-lock)))
-  (defun add-external-process (p)
-    (with-lock-grabbed (external-processes-lock)
-      (push p external-processes)))
-  (defun remove-external-process (p)
-    (with-lock-grabbed (external-processes-lock)
-      (setq external-processes (delete p external-processes))))
-  ;; Likewise
-  (defun external-processes ()
-    (with-lock-grabbed (external-processes-lock)
-      (copy-list external-processes)))
-  )
-
-
+  (let* ((external-processes ())
+         (external-processes-lock (make-lock)))
+    (defun add-external-process (p)
+      (with-lock-grabbed (external-processes-lock)
+        (push p external-processes)))
+    (defun remove-external-process (p)
+      (with-lock-grabbed (external-processes-lock)
+        (setq external-processes (delete p external-processes))))
+    ;; Likewise
+    (defun external-processes ()
+      (with-lock-grabbed (external-processes-lock)
+        (copy-list external-processes)))
+    )
 
 
-(defun run-external-process (proc in-fd out-fd error-fd &optional env)
-  (let* ((args (external-process-args proc))
-         (child-pid (exec-with-io-redirection in-fd out-fd error-fd args proc env)))
-    (when child-pid
-      (setf (external-process-pid proc) child-pid)
-      (add-external-process proc)
-      (signal-semaphore (external-process-signal proc))
-      (monitor-external-process proc))))
 
-(defun join-strings (strings)
-  (reduce (lambda (left right) (concatenate 'string left " " right)) strings))
 
-(defun exec-with-io-redirection (new-in new-out new-err args proc &optional env)
-  (declare (ignore env))                ; until we can do better.
-  (with-filename-cstrs ((command (join-strings args)))
-    (rletz ((proc-info #>PROCESS_INFORMATION)
-            (si #>STARTUPINFO))
-      (setf (pref si #>STARTUPINFO.cb) (record-length #>STARTUPINFO))
-      (setf (pref si #>STARTUPINFO.dwFlags)
-            (logior #$STARTF_USESTDHANDLES #$STARTF_USESHOWWINDOW))
-      (setf (pref si #>STARTUPINFO.wShowWindow) #$SW_HIDE)
-      (setf (pref si #>STARTUPINFO.hStdInput)
-            (if new-in
-              (%int-to-ptr new-in)
-              (#_GetStdHandle #$STD_INPUT_HANDLE)))
-      (setf (pref si #>STARTUPINFO.hStdOutput)
-            (if new-out
-              (%int-to-ptr new-out)
-              (#_GetStdHandle #$STD_OUTPUT_HANDLE)))
-      (setf (pref si #>STARTUPINFO.hStdError)
-            (if new-err
-              (%int-to-ptr new-err)
-              (#_GetStdHandle #$STD_ERROR_HANDLE)))
-      (if (zerop (#_CreateProcessW (%null-ptr)
-                                   command
-                                   (%null-ptr)
-                                   (%null-ptr)
-                                   1
-                                   #$CREATE_NEW_CONSOLE
-                                   (%null-ptr)
-                                   (%null-ptr)
-                                   si
-                                   proc-info))
-        (setf (external-process-%status proc) :error
-              (external-process-%exit-code proc) (#_GetLastError))
-        (#_CloseHandle (pref proc-info #>PROCESS_INFORMATION.hThread)))
-      (pref proc-info #>PROCESS_INFORMATION.hProcess))))
+  (defun run-external-process (proc in-fd out-fd error-fd &optional env)
+    (let* ((args (external-process-args proc))
+           (child-pid (exec-with-io-redirection in-fd out-fd error-fd args proc env)))
+      (when child-pid
+        (setf (external-process-pid proc) child-pid)
+        (add-external-process proc)
+        (signal-semaphore (external-process-signal proc))
+        (monitor-external-process proc))))
 
-(defun fd-uninheritable (fd &key direction)
-  (let ((new-fd (fd-dup fd :direction direction)))
-    (fd-close fd)
-    new-fd))
+  (defun join-strings (strings)
+    (reduce (lambda (left right) (concatenate 'string left " " right)) strings))
 
-(defun monitor-external-process (p)
-  (let* ((in-fd (external-process-watched-fd p))
-         (out-stream (external-process-watched-stream p))
-         (token (external-process-token p))
-         (terminated))
-    (loop
-      (when terminated
-        (without-interrupts
-         (decf (car token))
-         (if in-fd (fd-close in-fd))
-         (setq in-fd nil)
-         (rlet ((code #>DWORD))
-           (loop
-             (#_GetExitCodeProcess (external-process-pid p) code)
-             (unless (eql (pref code #>DWORD) #$STILL_ACTIVE)
-               (return)))
-           (#_SleepEx 10 #$TRUE)
-           (setf (external-process-%exit-code p) (pref code #>DWORD)))
-         (#_CloseHandle (external-process-pid p))
-         (setf (external-process-pid p) nil)
-         (setf (external-process-%status p) :exited)
-         (let ((status-hook (external-process-status-hook p)))
-           (when status-hook
-             (funcall status-hook p)))
-         (remove-external-process p)
-         (signal-semaphore (external-process-completed p))
-         (return)))	 
-      (if in-fd
-        (rlet ((handles (:array #>HANDLE 2)))
-          (setf (paref handles (:array #>HANDLE) 0) (external-process-pid p))
-          (setf (paref handles (:array #>HANDLE) 1) (#__get_osfhandle in-fd))
-          (let ((rc (ignoring-eintr
-                     (let* ((code (#_WaitForMultipleObjectsEx 2 handles #$FALSE #$INFINITE #$true)))
-                       (if (eql code #$WAIT_IO_COMPLETION)
-                         (- #$EINTR)
-                         code)))))
-            (if (eq rc #$WAIT_OBJECT_0)
-              (setf terminated t)
-              (%stack-block ((buf 1024))
-                (let* ((n (fd-read in-fd buf 1024)))
-                  (declare (fixnum n))
-                  (if (<= n 0)
-                    (setf terminated t)
-                    (let* ((string (make-string 1024)))
-                      (declare (dynamic-extent string))
-                      (%str-from-ptr buf n string)
-                      (write-sequence string out-stream :end n))))))))
-        (progn
-          (ignoring-eintr
-           (let* ((code (#_WaitForSingleObjectEx (external-process-pid p) #$INFINITE #$true)))
-             (if (eql code #$WAIT_IO_COMPLETION)
-               (- #$EINTR)
-               code)))
-          (setf terminated t))))))
+  (defun exec-with-io-redirection (new-in new-out new-err args proc &optional env)
+    (declare (ignore env))              ; until we can do better.
+    (with-filename-cstrs ((command (join-strings args)))
+      (rletz ((proc-info #>PROCESS_INFORMATION)
+              (si #>STARTUPINFO))
+        (setf (pref si #>STARTUPINFO.cb) (record-length #>STARTUPINFO))
+        (setf (pref si #>STARTUPINFO.dwFlags)
+              (logior #$STARTF_USESTDHANDLES #$STARTF_USESHOWWINDOW))
+        (setf (pref si #>STARTUPINFO.wShowWindow) #$SW_HIDE)
+        (setf (pref si #>STARTUPINFO.hStdInput)
+              (if new-in
+                (%int-to-ptr new-in)
+                (#_GetStdHandle #$STD_INPUT_HANDLE)))
+        (setf (pref si #>STARTUPINFO.hStdOutput)
+              (if new-out
+                (%int-to-ptr new-out)
+                (#_GetStdHandle #$STD_OUTPUT_HANDLE)))
+        (setf (pref si #>STARTUPINFO.hStdError)
+              (if new-err
+                (%int-to-ptr new-err)
+                (#_GetStdHandle #$STD_ERROR_HANDLE)))
+        (if (zerop (#_CreateProcessW (%null-ptr)
+                                     command
+                                     (%null-ptr)
+                                     (%null-ptr)
+                                     1
+                                     #$CREATE_NEW_CONSOLE
+                                     (%null-ptr)
+                                     (%null-ptr)
+                                     si
+                                     proc-info))
+          (setf (external-process-%status proc) :error
+                (external-process-%exit-code proc) (#_GetLastError))
+          (#_CloseHandle (pref proc-info #>PROCESS_INFORMATION.hThread)))
+        (pref proc-info #>PROCESS_INFORMATION.hProcess))))
+
+  (defun fd-uninheritable (fd &key direction)
+    (let ((new-fd (fd-dup fd :direction direction)))
+      (fd-close fd)
+      new-fd))
+
+  (defun monitor-external-process (p)
+    (let* ((in-fds (external-process-watched-fds p))
+           (out-streams (external-process-watched-streams p))
+           (token (external-process-token p))
+           (terminated))
+      (loop
+        (when terminated
+          (without-interrupts
+           (decf (car token))
+           (if in-fd (fd-close in-fd))
+           (setq in-fd nil)
+           (rlet ((code #>DWORD))
+             (loop
+               (#_GetExitCodeProcess (external-process-pid p) code)
+               (unless (eql (pref code #>DWORD) #$STILL_ACTIVE)
+                 (return)))
+             (#_SleepEx 10 #$TRUE)
+             (setf (external-process-%exit-code p) (pref code #>DWORD)))
+           (#_CloseHandle (external-process-pid p))
+           (setf (external-process-pid p) nil)
+           (setf (external-process-%status p) :exited)
+           (let ((status-hook (external-process-status-hook p)))
+             (when status-hook
+               (funcall status-hook p)))
+           (remove-external-process p)
+           (signal-semaphore (external-process-completed p))
+           (return)))	 
+        (if in-fd
+          (rlet ((handles (:array #>HANDLE 2)))
+            (setf (paref handles (:array #>HANDLE) 0) (external-process-pid p))
+            (setf (paref handles (:array #>HANDLE) 1) (#__get_osfhandle in-fd))
+            (let ((rc (ignoring-eintr
+                       (let* ((code (#_WaitForMultipleObjectsEx 2 handles #$FALSE #$INFINITE #$true)))
+                         (if (eql code #$WAIT_IO_COMPLETION)
+                           (- #$EINTR)
+                           code)))))
+              (if (eq rc #$WAIT_OBJECT_0)
+                (setf terminated t)
+                (%stack-block ((buf 1024))
+                  (let* ((n (fd-read in-fd buf 1024)))
+                    (declare (fixnum n))
+                    (if (<= n 0)
+                      (setf terminated t)
+                      (let* ((string (make-string 1024)))
+                        (declare (dynamic-extent string))
+                        (%str-from-ptr buf n string)
+                        (write-sequence string out-stream :end n))))))))
+          (progn
+            (ignoring-eintr
+             (let* ((code (#_WaitForSingleObjectEx (external-process-pid p) #$INFINITE #$true)))
+               (if (eql code #$WAIT_IO_COMPLETION)
+                 (- #$EINTR)
+                 code)))
+            (setf terminated t))))))
   
 
-)                                   ; #+windows-target (progn
+  )                                     ; #+windows-target (progn
 
 ;;; EOF on a TTY is transient, but I'm less sure of other cases.
 (defun eof-transient-p (fd)
