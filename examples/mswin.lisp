@@ -95,7 +95,7 @@
 ;;; Register a named window class. ("class" in this sense has nothing to
 ;;; do with CLOS or any other object system: windows of the same class
 ;;; share a common window procedure callback and other attributes, which
-;;; we define here.
+;;; we define here.)
 ;;; If the registration attempt is succesful, it'll return an "atom"
 ;;; (a small integer that identifies the registered class); otherwise,
 ;;;  it returns 0.
