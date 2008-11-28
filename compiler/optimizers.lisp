@@ -1924,7 +1924,7 @@
                                                   string &optional (stream nil) &rest keys)
   (if (nx-form-typep string 'simple-string env)
     (if keys
-      `((lambda (string stream &key start end) 
+      `((lambda (string stream &key (start 0) end)
           (write-simple-string string stream start end))
         ,string ,stream ,@keys)
       `(write-simple-string ,string ,stream 0 nil))
