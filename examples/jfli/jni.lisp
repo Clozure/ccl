@@ -55,784 +55,1046 @@ I have tried to limit LispWorks FLI code to this file.
 
 (in-package :jni)
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (ccl:use-interface-dir :jni))
+
+(ccl::%register-type-ordinal-class (ccl::parse-foreign-type :jobject) 'jobject)
+(ccl::%register-type-ordinal-class (ccl::parse-foreign-type #>JavaVM) 'java-vm)
+
+
 (defvar *jni-lib-path*
-#+:MACOSX "/System/Library/Frameworks/JavaVM.framework/JavaVM"
-#+:WIN32 "C:/j2sdk1.4.2_01/jre/bin/client/jvm.dll"
+#+:darwin-target "/System/Library/Frameworks/JavaVM.framework/JavaVM"
+#+:win32-target "C:/j2sdk1.4.2_01/jre/bin/client/jvm.dll"
 "Set this to point to your jvm dll prior to calling create-jvm")
 
-(defparameter *pvm* nil)
-(defparameter *penv* nil)
+(ccl::defloadvar *pvm* nil)
 
-(defparameter *process-envs* nil)
+;;; Map between lisp and Java booleans
+(eval-when (:compile-toplevel)
+  (declaim (inline jboolean-arg jboolean-result)))
 
-(defconstant JNI-VERSION-1-2 #X10002)
-(defconstant JNI-VERSION-1-4 #X10004)
-(defconstant JNI-OK 0)
+(defun jboolean-arg (val)
+  (if (and val (not (eql val #$JNI_FALSE)))
+    #$JNI_TRUE
+    #$JNI_FALSE))
+
+(defun jboolean-result (val)
+  (not (eql val #$JNI_FALSE)))
+
+
+
+(defconstant JNI-VERSION-1-2 #$JNI_VERSION_1_2)
+(defconstant JNI-VERSION-1-4 #$JNI_VERSION_1_4)
+(defconstant JNI-OK #$JNI_OK)
 
 (defun load-jni-lib (&optional (libpath *jni-lib-path*))
-  (fli:register-module :jni-lib
-                     :real-name libpath
-                     :connection-style :immediate))
-
-(fli:define-c-typedef pvoid (:ptr :void))
-(fli:define-c-typedef const-char-* (:reference-pass :ef-mb-string))
-(fli:define-c-typedef const-jchar-* (:reference-pass :ef-wc-string))
-(fli:define-foreign-pointer (java-ref (:allow-null t) (:predicate java-ref-p)) pvoid)
-
-(fli:define-c-typedef jvoid :void)
-(fli:define-c-typedef jboolean (:boolean (:unsigned :byte)))
-(fli:define-c-typedef jbyte :byte)
-(fli:define-c-typedef jchar :wchar-t)
-(fli:define-c-typedef jshort :short)
-(fli:define-c-typedef jint :int)
-(fli:define-c-typedef jlong :long-long)
-(fli:define-c-typedef jfloat :float)
-(fli:define-c-typedef jdouble :double)
-(fli:define-c-typedef jsize jint)
-(fli:define-c-typedef jobject java-ref)
-(fli:define-c-typedef jclass java-ref)
-(fli:define-c-typedef jthrowable java-ref)
-(fli:define-c-typedef jstring java-ref)
-(fli:define-c-typedef jarray java-ref)
-(fli:define-c-typedef jboolean-array java-ref)
-(fli:define-c-typedef jbyte-array java-ref)
-(fli:define-c-typedef jchar-array java-ref)
-(fli:define-c-typedef jshort-array java-ref)
-(fli:define-c-typedef jint-array java-ref)
-(fli:define-c-typedef jlong-array java-ref)
-(fli:define-c-typedef jfloat-array java-ref)
-(fli:define-c-typedef jdouble-array java-ref)
-(fli:define-c-typedef jobject-array java-ref)
-(fli:define-c-typedef jfield-id pvoid)
-(fli:define-c-typedef jmethod-id pvoid)
-(fli:define-c-typedef jweak java-ref)
-
-(fli:define-c-typedef pvm (:ptr (:ptr java-vm)))
-(fli:define-c-typedef penv (:ptr (:ptr jni-env)))
-(fli:define-foreign-type pfunc (&rest fargs)
-  `(:ptr (:function ,@fargs)))
-
-(fli:define-c-union jvalue
-  (:z jboolean)
-  (:b jbyte)
-  (:c jchar)
-  (:s jshort)
-  (:i jint)
-  (:j jlong)
-  (:f jfloat)
-  (:d jdouble)
-  (:l jobject))
-
-(fli:define-c-typedef arg-array (:c-array jvalue))
-
-(eval-when (:compile-toplevel)
-  (defun build-struct-entries (name members)
-    (mapcar #'(lambda (member)
-                (if (= 2 (length member)) ;padding or other non-function entry
-                    member
-                  (destructuring-bind (func args ret &key lambda-list) member
-                    (declare (ignore lambda-list))
-                    `(,func (pfunc ,(cons `(:ptr (:ptr ,name))
-                                          (mapcar #'second args))
-                                   ,ret)))))
-            members)))
-
-(eval-when (:compile-toplevel)
-  (defun build-access-functions (name global members)
-    (mapcar #'(lambda (member)
-                (if (= 2 (length member)) ;padding or other non-function entry
-                    ()
-                  (destructuring-bind (func args ret &key lambda-list) member
-                    (let ((thunk (intern (concatenate 'string (symbol-name func) "-thunk")))
-                          (genv (gensym))
-                        ;(func (intern (symbol-name f)))
-                          )
-                      `(locally
-                         (fli:define-foreign-funcallable
-                          ,thunk
-                          ,(cons `(this (:ptr (:ptr ,name))) args)
-                          :result-type ,ret)
-                         (defun ,func ,(if lambda-list
-                                           lambda-list
-                                         (mapcar #'first args))
-                           (let ((,genv ,global))
-                             (,thunk
-                              (fli:foreign-slot-value (fli:dereference ,genv) ',func)
-                              ,genv
-                              ,@(mapcar #'first args))))
-                         (export ',func))))))
-            members)))
-
-(defmacro defvtable (name global &rest members)
-  `(locally
-     (fli:define-c-struct ,name ,@(build-struct-entries name members))
-     ,@(build-access-functions name global members)))
-
-(fli:define-c-struct jni-native-method
-  (name (:ptr :char))
-  (signature (:ptr :char))
-  (fn-ptr pvoid)
-  )
+  (ccl:open-shared-library libpath))
 
 (defun current-env ()
-  "memoizes attach-current-thread per process"
-  (or
-   *penv*
-   (cdr (assoc mp:*current-process* *process-envs*))
-   (multiple-value-bind (ret env) (attach-current-thread)
-     (declare (ignore ret))
-     (push (cons mp:*current-process* env) *process-envs*)
-     env)))
+  "return a pointer to the current thread's JNIEnv, creating that environment
+if necessary."
+  (rlet ((pjnienv :address))
+    (let* ((jvm (get-pvm)))
+      (unless (eql jni-ok
+                   (ff-call (pref jvm #>JavaVM.GetEnv)
+                            :address jvm
+                            :address pjnienv
+                            :jint jni-version-1-4
+                            :jint))
+        ;; On Darwin, attaching the current thread to a JVM instance
+        ;; overwrites the thread's Mach exception ports, which CCL
+        ;; happens to be using.  We can work around this by calling
+        ;; a function in the CCL kernel and having that function
+        ;; call the vm's AttachCurrentThread function and then restore
+        ;; the thread's exception ports before returning.  Yes, that
+        ;; -is- total nonsense.
+        (unless (eql jni-ok
+                     (ff-call
+                      (ccl::%kernel-import target::kernel-import-jvm-init)
+                      :address (pref jvm #>JavaVM.AttachCurrentThread)
+                      :address jvm
+                      :address pjnienv
+                      :address (ccl::%null-ptr)
+                      :jint))
+          (error "Can't attach thread to JVM ~s" jvm)))
+      (let* ((result (pref pjnienv :address)))
+        (ccl::%set-macptr-type result (load-time-value (ccl::foreign-type-ordinal (ccl::foreign-pointer-type-to (ccl::parse-foreign-type #>JNIEnv)))))
+        result))))
 
-(defvtable jni-env (current-env)
-           (reserved-0 pvoid)                                              ;0
-           (reserved-1 pvoid)                                              ;1
-           (reserved-2 pvoid)                                              ;2
-           (reserved-3 pvoid)                                              ;3
-  ;some mac nonsense requires this non-portable padding, so much for a binary spec
-           #+:MACOSX  (cfm-padding (:foreign-array pvoid (225)))
-           (get-version () jint)                                           ;4
-           (define-class ((name const-char-*)                              ;5
-                          (loader jobject)
-                          (buf (:ptr jbyte))
-                          (len jsize)) jclass) 
-           (jni-find-class ((name const-char-*)) jclass)                       ;6
-           (from-reflected-method ((method jobject)) jmethod-id)           ;7
-           (from-reflected-field ((field jobject)) jfield-id)              ;8
-           (to-reflected-method ((cls jclass)                              ;9
-                                 (method-id jmethod-id)
-                                 (is-static jboolean)) jobject)
-           (get-superclass ((clazz jclass)) jclass)                        ;10
-           (is-assignable-from ((sub jclass)                               ;11
-                                (sup jclass)) jboolean)
-           (to-reflected-field ((cls jclass)                               ;12
-                                (field-id jfield-id)
-                                (is-static jboolean)) jobject)
-           (jni-throw ((obj jthrowable)) jint)                                 ;13
-           (throw-new ((clazz jclass)                                      ;14
-                       (msg const-char-*)) jint)
-           (exception-occurred () jthrowable)                              ;15
-           (exception-describe () :void)                                   ;16
-           (exception-clear () :void)                                      ;17
-           (fatal-error ((msg const-char-*)) :void)                        ;18
-           (push-local-frame ((capacity jint)) jint)                       ;19
-           (pop-local-frame ((result jobject)) jobject)                    ;20
-           (new-global-ref ((lobj jobject)) jobject)                       ;21
-           (delete-global-ref ((gref jobject)) :void)                      ;22
-           (delete-local-ref ((lref jobject)) :void)                       ;23
-           (is-same-object ((obj1 jobject)                                 ;24
-                            (obj2 jobject)) jboolean)
-           (new-local-ref ((ref jobject)) jobject)                         ;25
-           (ensure-local-capacity ((capacity jint)) jint)                  ;26
-           (alloc-object ((clazz jclass)) jobject)                         ;27
-           (new-object pvoid)                                              ;28
-           (new-object-v pvoid)                                            ;29
-           (new-object-a ((clazz jclass)                                   ;30
-                          (method-id jmethod-id)
-                          (args arg-array)) jobject)
-           (get-object-class ((obj jobject)) jclass)                       ;31
-           (is-instance-of ((obj jobject)                                  ;32
-                            (clazz jclass)) jboolean)
-           (get-method-id ((clazz jclass)                                  ;33
-                           (name const-char-*)
-                           (sig const-char-*)) jmethod-id)
 
-           (call-object-method pvoid)                                      ;34
-           (call-object-method-v pvoid)                                    ;35
-           (call-object-method-a ((obj jobject)                            ;36
-                                  (method-id jmethod-id)
-                                  (args arg-array)) jobject)
-           (call-boolean-method pvoid)                                     ;37
-           (call-boolean-method-v pvoid)                                   ;38
-           (call-boolean-method-a ((obj jobject)                           ;39
-                                   (method-id jmethod-id)                  
-                                   (args arg-array)) jboolean)
-           (call-byte-method pvoid)                                        ;40
-           (call-byte-method-v pvoid)                                      ;41
-           (call-byte-method-a ((obj jobject)                              ;42
-                                (method-id jmethod-id)
-                                (args arg-array)) jbyte)
-           (call-char-method pvoid)                                        ;43
-           (call-char-method-v pvoid)                                      ;44
-           (call-char-method-a ((obj jobject)                              ;45
-                                (method-id jmethod-id)
-                                (args arg-array)) jchar)
-           (call-short-method pvoid)                                       ;46
-           (call-short-method-v pvoid)                                     ;47
-           (call-short-method-a ((obj jobject)                             ;48
-                                 (method-id jmethod-id)
-                                 (args arg-array)) jshort)
-           (call-int-method pvoid)                                         ;49
-           (call-int-method-v pvoid)                                       ;50
-           (call-int-method-a ((obj jobject)                               ;51
-                               (method-id jmethod-id)
-                               (args arg-array)) jint)
-           (call-long-method pvoid)                                        ;52
-           (call-long-method-v pvoid)                                      ;53
-           (call-long-method-a ((obj jobject)                              ;54
-                                (method-id jmethod-id)
-                                (args arg-array)) jlong)
-           (call-float-method pvoid)                                       ;55
-           (call-float-method-v pvoid)                                     ;56
-           (call-float-method-a ((obj jobject)                             ;57
-                                 (method-id jmethod-id)
-                                 (args arg-array)) jfloat)
-           (call-double-method pvoid)                                      ;58
-           (call-double-method-v pvoid)                                    ;59
-           (call-double-method-a ((obj jobject)                            ;60
-                                  (method-id jmethod-id)
-                                  (args arg-array)) jdouble)
-           (call-void-method pvoid)                                        ;61
-           (call-void-method-v pvoid)                                      ;62
-           (call-void-method-a ((obj jobject)                              ;63
-                                (method-id jmethod-id)
-                                (args arg-array)) jvoid)
+;;; JNIEnv functions.
 
-           (call-nonvirtual-object-method pvoid)                           ;64
-           (call-nonvirtual-object-method-v pvoid)                         ;65
-           (call-nonvirtual-object-method-a ((obj jobject)                 ;66
-                                             (clazz jclass)
-                                             (method-id jmethod-id)
-                                             (args arg-array)) jobject)
-           (call-nonvirtual-boolean-method pvoid)                          ;67
-           (call-nonvirtual-boolean-method-v pvoid)                        ;68
-           (call-nonvirtual-boolean-method-a ((obj jobject)                ;69
-                                              (clazz jclass)
-                                              (method-id jmethod-id)
-                                              (args arg-array)) jboolean)
-           (call-nonvirtual-byte-method pvoid)                             ;70
-           (call-nonvirtual-byte-method-v pvoid)                           ;71
-           (call-nonvirtual-byte-method-a ((obj jobject)                   ;72
-                                           (clazz jclass)
-                                           (method-id jmethod-id)
-                                           (args arg-array)) jbyte)
-           (call-nonvirtual-char-method pvoid)                             ;73
-           (call-nonvirtual-char-method-v pvoid)                           ;74
-           (call-nonvirtual-char-method-a ((obj jobject)                   ;75
-                                           (clazz jclass)
-                                           (method-id jmethod-id)
-                                           (args arg-array)) jchar)
-           (call-nonvirtual-short-method pvoid)                            ;76
-           (call-nonvirtual-short-method-v pvoid)                          ;77
-           (call-nonvirtual-short-method-a ((obj jobject)                  ;78
-                                            (clazz jclass)
-                                            (method-id jmethod-id)
-                                            (args arg-array)) jshort)
-           (call-nonvirtual-int-method pvoid)                              ;79
-           (call-nonvirtual-int-method-v pvoid)                            ;80
-           (call-nonvirtual-int-method-a ((obj jobject)                    ;81
-                                          (clazz jclass)
-                                          (method-id jmethod-id)
-                                          (args arg-array)) jint)
-           (call-nonvirtual-long-method pvoid)                             ;82
-           (call-nonvirtual-long-method-v pvoid)                           ;83
-           (call-nonvirtual-long-method-a ((obj jobject)                   ;84
-                                           (clazz jclass)
-                                           (method-id jmethod-id)
-                                           (args arg-array)) jlong)
-           (call-nonvirtual-float-method pvoid)                            ;85
-           (call-nonvirtual-float-method-v pvoid)                          ;86
-           (call-nonvirtual-float-method-a ((obj jobject)                  ;87
-                                            (clazz jclass)
-                                            (method-id jmethod-id)
-                                            (args arg-array)) jfloat)
-           (call-nonvirtual-double-method pvoid)                           ;88
-           (call-nonvirtual-double-method-v pvoid)                         ;89
-           (call-nonvirtual-double-method-a ((obj jobject)                 ;90
-                                             (clazz jclass)
-                                             (method-id jmethod-id)
-                                             (args arg-array)) jdouble)
-           (call-nonvirtual-void-method pvoid)                             ;91
-           (call-nonvirtual-void-method-v pvoid)                           ;92
-           (call-nonvirtual-void-method-a ((obj jobject)                   ;93
-                                           (clazz jclass)
-                                           (method-id jmethod-id)
-                                           (args arg-array)) jvoid)
-           (get-field-id ((clazz jclass)                                   ;94
-                          (name const-char-*)
-                          (sig const-char-*)) jfield-id)
+(defmacro jnienv-call ((slot result-type) &rest specs)
+  ;; We might want to special-case some result-types for finalization.
+  (let* ((env (gensym))
+         (accessor (ccl::escape-foreign-name (concatenate 'string "JNIEnv." slot))))
+    `(let* ((,env (current-env)))
+      (ff-call (pref ,env ,accessor) :address ,env ,@specs ,result-type))))
 
-           (get-object-field ((obj jobject)                                ;95
-                              (field-id jfield-id)) jobject)
-           (get-boolean-field ((obj jobject)                               ;96
-                               (field-id jfield-id)) jboolean)  
-           (get-byte-field ((obj jobject)                                  ;97
-                            (field-id jfield-id)) jbyte)  
-           (get-char-field ((obj jobject)                                  ;98
-                            (field-id jfield-id)) jchar)  
-           (get-short-field ((obj jobject)                                 ;99
-                             (field-id jfield-id)) jshort)  
-           (get-int-field ((obj jobject)                                   ;100
-                           (field-id jfield-id)) jint)  
-           (get-long-field ((obj jobject)                                  ;101
-                            (field-id jfield-id)) jlong)  
-           (get-float-field ((obj jobject)                                 ;102
-                             (field-id jfield-id)) jfloat)  
-           (get-double-field ((obj jobject)                                ;103
-                              (field-id jfield-id)) jdouble)  
+(defun get-version ()
+  (jnienv-call ("GetVersion" :jint)))
 
-           (set-object-field ((obj jobject)                                ;104
-                              (field-id jfield-id)
-                              (val jobject)) jvoid)
-           (set-boolean-field ((obj jobject)                               ;105
-                               (field-id jfield-id)
-                               (val jboolean)) jvoid)
-           (set-byte-field ((obj jobject)                                  ;106
-                            (field-id jfield-id)
-                            (val jbyte)) jvoid)
-           (set-char-field ((obj jobject)                                  ;107
-                            (field-id jfield-id)
-                            (val jchar)) jvoid)
-           (set-short-field ((obj jobject)                                 ;108
-                             (field-id jfield-id)
-                             (val jshort)) jvoid)
-           (set-int-field ((obj jobject)                                   ;109
-                           (field-id jfield-id)
-                           (val jint)) jvoid)
-           (set-long-field ((obj jobject)                                  ;110
-                            (field-id jfield-id)
-                            (val jlong)) jvoid)
-           (set-float-field ((obj jobject)                                 ;111
-                             (field-id jfield-id)
-                             (val jfloat)) jvoid)
-           (set-double-field ((obj jobject)                                ;112
-                              (field-id jfield-id)
-                              (val jdouble)) jvoid)
+(defun define-class (name loader buf len)
+  (ccl::with-utf-8-cstrs ((cname name))
+    (jnienv-call ("DefineClass" :jclass) 
+                 :address cname
+                 :jobject loader
+                 (:* :jbyte) buf
+                 :jsize len)))
 
-           (get-static-method-id ((clazz jclass)                           ;113
-                                  (name const-char-*)
-                                  (sig const-char-*)) jmethod-id)
+(defun jni-find-class (name)
+  (ccl::with-utf-8-cstrs ((cname name))
+    (jnienv-call ("FindClass" :jclass) :address cname)))
 
-           (call-static-object-method pvoid)                               ;114
-           (call-static-object-method-v pvoid)                             ;115
-           (call-static-object-method-a ((clazz jclass)                    ;116
-                                         (method-id jmethod-id)
-                                         (args arg-array)) jobject)
-           (call-static-boolean-method pvoid)                              ;117
-           (call-static-boolean-method-v pvoid)                            ;118
-           (call-static-boolean-method-a ((clazz jclass)                   ;119
-                                          (method-id jmethod-id)
-                                          (args arg-array)) jboolean)
-           (call-static-byte-method pvoid)                                 ;120
-           (call-static-byte-method-v pvoid)                               ;121
-           (call-static-byte-method-a ((clazz jclass)                      ;122
-                                       (method-id jmethod-id)
-                                       (args arg-array)) jbyte)
-           (call-static-char-method pvoid)                                 ;123
-           (call-static-char-method-v pvoid)                               ;124
-           (call-static-char-method-a ((clazz jclass)                      ;125
-                                       (method-id jmethod-id)
-                                       (args arg-array)) jchar)
-           (call-static-short-method pvoid)                                ;126
-           (call-static-short-method-v pvoid)                              ;127
-           (call-static-short-method-a ((clazz jclass)                     ;128
-                                        (method-id jmethod-id)
-                                        (args arg-array)) jshort)
-           (call-static-int-method pvoid)                                  ;129
-           (call-static-int-method-v pvoid)                                ;130
-           (call-static-int-method-a ((clazz jclass)                       ;131
-                                      (method-id jmethod-id)
-                                      (args arg-array)) jint)
-           (call-static-long-method pvoid)                                 ;132
-           (call-static-long-method-v pvoid)                               ;133
-           (call-static-long-method-a ((clazz jclass)                      ;134
-                                       (method-id jmethod-id)
-                                       (args arg-array)) jlong)
-           (call-static-float-method pvoid)                                ;135
-           (call-static-float-method-v pvoid)                              ;136
-           (call-static-float-method-a ((clazz jclass)                     ;137
-                                        (method-id jmethod-id)
-                                        (args arg-array)) jfloat)
-           (call-static-double-method pvoid)                               ;138
-           (call-static-double-method-v pvoid)                             ;139
-           (call-static-double-method-a ((clazz jclass)                    ;140
-                                         (method-id jmethod-id)
-                                         (args arg-array)) jdouble)
-           (call-static-void-method pvoid)                                 ;141
-           (call-static-void-method-v pvoid)                               ;142
-           (call-static-void-method-a ((clazz jclass)                      ;143
-                                       (method-id jmethod-id)
-                                       (args arg-array)) jvoid)
+(defun from-reflected-method (method)
+  (jnienv-call ("FromReflectedMethod" #>jmethodID) :jobject method))
 
-           (get-static-field-id ((clazz jclass)                            ;144
-                                 (name const-char-*)
-                                 (sig const-char-*)) jfield-id)
+(defun from-reflected-field (field)
+  (jnienv-call ("FromReflectedField" #>jfieldID) :jobject field))
 
-           (get-static-object-field ((clazz jclass)                        ;145
-                                     (field-id jfield-id)) jobject)
-           (get-static-boolean-field ((clazz jclass)                       ;146
-                                      (field-id jfield-id)) jboolean)
-           (get-static-byte-field ((clazz jclass)                          ;147
-                                   (field-id jfield-id)) jbyte)
-           (get-static-char-field ((clazz jclass)                          ;148
-                                   (field-id jfield-id)) jchar)
-           (get-static-short-field ((clazz jclass)                         ;149
-                                    (field-id jfield-id)) jshort)
-           (get-static-int-field ((clazz jclass)                           ;150
-                                  (field-id jfield-id)) jint)
-           (get-static-long-field ((clazz jclass)                          ;151
-                                   (field-id jfield-id)) jlong)
-           (get-static-float-field ((clazz jclass)                         ;152
-                                    (field-id jfield-id)) jfloat)
-           (get-static-double-field ((clazz jclass)                        ;153
-                                     (field-id jfield-id)) jdouble)
+(defun to-reflected-method (cls method-id is-static)
+  (jnienv-call ("ToReflectedMethod" :jobject)
+               :jclass cls
+               #>jmethodID method-id
+               :jboolean (jboolean-arg is-static)))
 
-           (set-static-object-field ((clazz jclass)                        ;154
-                                     (field-id jfield-id)
-                                     (val jobject)) jvoid)
-           (set-static-boolean-field ((clazz jclass)                       ;155
-                                      (field-id jfield-id)
-                                      (val jboolean)) jvoid)
-           (set-static-byte-field ((clazz jclass)                          ;156
-                                   (field-id jfield-id)
-                                   (val jbyte)) jvoid)
-           (set-static-char-field ((clazz jclass)                          ;157
-                                   (field-id jfield-id)
-                                   (val jchar)) jvoid)
-           (set-static-short-field ((clazz jclass)                         ;158
-                                    (field-id jfield-id)
-                                    (val jshort)) jvoid)
-           (set-static-int-field ((clazz jclass)                           ;159
-                                  (field-id jfield-id)
-                                  (val jint)) jvoid)
-           (set-static-long-field ((clazz jclass)                          ;160
-                                   (field-id jfield-id)
-                                   (val jlong)) jvoid)
-           (set-static-float-field ((clazz jclass)                         ;161
-                                    (field-id jfield-id)
-                                    (val jfloat)) jvoid)
-           (set-static-double-field ((clazz jclass)                        ;162
-                                     (field-id jfield-id)
-                                     (val jdouble)) jvoid)
+(defun get-superclass (sub)
+  (jnienv-call ("GetSuperclass" :jclass) :jclass sub))
 
-           (new-string ((uchars (:reference-pass :ef-wc-string))               ;163
-                        (len jsize)) jstring)
-           (get-string-length ((str jstring)) jsize)                       ;164
-           (get-string-chars ((str jstring)                                ;165
-                              (is-copy (:reference-return jboolean)))
-                             ;(:c-array jchar 1000)
-                             (:ptr :wchar-t)
-                             ;(:ef-wc-string :external-format :unicode)
-                             :lambda-list (str &optional is-copy))
-           (release-string-chars ((str jstring)                            ;166
-                                  (chars (:ptr jchar))) jvoid)
+(defun is-assignable-from (sub sup)
+  (jboolean-result
+   (jnienv-call ("IsAssignableFrom" :jboolean) :jclass sub :jclass sup)))
 
-           (new-string-utf ((chars const-char-*)) jstring)                 ;167
-           (get-string-utf-length ((str jstring)) jsize)                   ;168
-           (get-string-utf-chars ((str jstring)                            ;169
-                                  (is-copy (:reference-return jboolean)))
-                                 ;(:c-array :char 1000)
-                                 (:ptr :char)
-                                 :lambda-list (str &optional is-copy))
-           (release-string-utf-chars ((str jstring)                        ;170
-                                      (chars (:ptr :char))) jvoid)
+(defun to-reflected-field (cls field-id is-static)
+  (jnienv-call ("ToReflectedField" :jobject)
+               :jclass cls
+               #>jfieldID field-id
+               :jboolean (jboolean-arg is-static)))
 
-           (get-array-length ((array jarray)) jsize)                       ;171
-           
-           (new-object-array ((len jsize)                                  ;172
-                              (element-type jclass)
-                              (initial-element jobject)) jarray)
-           (get-object-array-element ((array jobject-array)                ;173
-                                      (index jsize)) jobject)
-           (set-object-array-element ((array jobject-array)                ;174
-                                      (index jsize)
-                                      (val jobject)) jvoid)
+(defun jni-throw (obj)
+  (jnienv-call ("Throw" :jint) :jthrowable obj))
 
-           (new-boolean-array ((len jsize)) jboolean-array)                ;175
-           (new-byte-array ((len jsize)) jbyte-array)                      ;176
-           (new-char-array ((len jsize)) jchar-array)                      ;177
-           (new-short-array ((len jsize)) jshort-array)                    ;178
-           (new-int-array ((len jsize)) jint-array)                        ;179
-           (new-long-array ((len jsize)) jlong-array)                      ;180
-           (new-float-array ((len jsize)) jfloat-array)                    ;181
-           (new-double-array ((len jsize)) jdouble-array)                  ;182
+(defun throw-new (clazz msg)
+  (ccl::with-utf-8-cstrs ((cmsg msg))
+    (jnienv-call ("ThrowNew" :jint) :jclass clazz :address cmsg)))
 
-           (get-boolean-array-elements ((array jboolean-array)             ;183
-                                        (is-copy (:reference-return jboolean)))
-                                       (:ptr jboolean)
-                                       :lambda-list (array &optional is-copy))
-           (get-byte-array-elements ((array jbyte-array)                   ;184
-                                     (is-copy (:reference-return jboolean)))
-                                    (:ptr jbyte)
-                                    :lambda-list (array &optional is-copy))
-           (get-char-array-elements ((array jchar-array)                   ;185
-                                     (is-copy (:reference-return jboolean)))
-                                    (:ptr jchar)
-                                    :lambda-list (array &optional is-copy))
-           (get-short-array-elements ((array jshort-array)                 ;186
-                                      (is-copy (:reference-return jboolean)))
-                                     (:ptr jshort)
-                                     :lambda-list (array &optional is-copy))
-           (get-int-array-elements ((array jint-array)                     ;187
-                                    (is-copy (:reference-return jboolean)))
-                                   (:ptr jint)
-                                   :lambda-list (array &optional is-copy))
-           (get-long-array-elements ((array jlong-array)                   ;188
-                                     (is-copy (:reference-return jboolean)))
-                                    (:ptr jlong)
-                                    :lambda-list (array &optional is-copy))
-           (get-float-array-elements ((array jfloat-array)                 ;189
-                                      (is-copy (:reference-return jboolean)))
-                                     (:ptr jfloat)
-                                     :lambda-list (array &optional is-copy))
-           (get-double-array-elements ((array jdouble-array)               ;190
-                                       (is-copy (:reference-return jboolean)))
-                                      (:ptr jdouble)
-                                      :lambda-list (array &optional is-copy))
+(defun exception-occurred ()
+  (jnienv-call ("ExceptionOccurred" :jthrowable)))
 
-           (release-boolean-array-elements ((array jboolean-array)         ;191
-                                            (elems (:ptr jboolean))
-                                            (mode jint)) jvoid
-                                           :lambda-list (array elems &optional (mode 0)))
-           (release-byte-array-elements ((array jbyte-array)               ;192
-                                         (elems (:ptr jbyte))
-                                         (mode jint)) jvoid
-                                        :lambda-list (array elems &optional (mode 0)))
-           (release-char-array-elements ((array jchar-array)               ;193
-                                         (elems (:ptr jchar))
-                                         (mode jint)) jvoid
-                                        :lambda-list (array elems &optional (mode 0)))
-           (release-short-array-elements ((array jshort-array)             ;194
-                                          (elems (:ptr jshort))
-                                          (mode jint)) jvoid
-                                         :lambda-list (array elems &optional (mode 0)))
-           (release-int-array-elements ((array jint-array)                 ;195
-                                        (elems (:ptr jint))
-                                        (mode jint)) jvoid
-                                       :lambda-list (array elems &optional (mode 0)))
-           (release-long-array-elements ((array jlong-array)               ;196
-                                         (elems (:ptr jlong))
-                                         (mode jint)) jvoid
-                                        :lambda-list (array elems &optional (mode 0)))
-           (release-float-array-elements ((array jfloat-array)             ;197
-                                          (elems (:ptr jfloat))
-                                          (mode jint)) jvoid
-                                         :lambda-list (array elems &optional (mode 0)))
-           (release-double-array-elements ((array jdouble-array)           ;198
-                                           (elems (:ptr jdouble))
-                                           (mode jint)) jvoid
-                                          :lambda-list (array elems &optional (mode 0)))
+(defun exception-describe ()
+  (jnienv-call ("ExceptionDescribe" :void)))
 
-           (get-boolean-array-region ((array jboolean-array)               ;199
-                                      (start jsize)
-                                      (len jsize)
-                                      (buf (:ptr jboolean))) jvoid)
-           (get-byte-array-region ((array jbyte-array)                     ;200
-                                   (start jsize)
-                                   (len jsize)
-                                   (buf (:ptr jbyte))) jvoid)
-           (get-char-array-region ((array jchar-array)                     ;201
-                                   (start jsize)
-                                   (len jsize)
-                                   (buf (:ptr jchar))) jvoid)
-           (get-short-array-region ((array jshort-array)                   ;202
-                                    (start jsize)
-                                    (len jsize)
-                                    (buf (:ptr jshort))) jvoid)
-           (get-int-array-region ((array jint-array)                       ;203
-                                  (start jsize)
-                                  (len jsize)
-                                  (buf (:ptr jint))) jvoid)
-           (get-long-array-region ((array jlong-array)                     ;204
-                                   (start jsize)
-                                   (len jsize)
-                                   (buf (:ptr jlong))) jvoid)
-           (get-float-array-region ((array jfloat-array)                   ;205
-                                    (start jsize)
-                                    (len jsize)
-                                    (buf (:ptr jfloat))) jvoid)
-           (get-double-array-region ((array jdouble-array)                 ;206
-                                     (start jsize)
-                                     (len jsize)
-                                     (buf (:ptr jdouble))) jvoid)
+(defun exception-clear ()
+  (jnienv-call ("ExceptionClear" :void)))
 
-           (set-boolean-array-region ((array jboolean-array)               ;207
-                                      (start jsize)
-                                      (len jsize)
-                                      (buf (:ptr jboolean))) jvoid)
-           (set-byte-array-region ((array jbyte-array)                     ;208
-                                   (start jsize)
-                                   (len jsize)
-                                   (buf (:ptr jbyte))) jvoid)
-           (set-char-array-region ((array jchar-array)                     ;209
-                                   (start jsize)
-                                   (len jsize)
-                                   (buf (:ptr jchar))) jvoid)
-           (set-short-array-region ((array jshort-array)                   ;210
-                                    (start jsize)
-                                    (len jsize)
-                                    (buf (:ptr jshort))) jvoid)
-           (set-int-array-region ((array jint-array)                       ;211
-                                  (start jsize)
-                                  (len jsize)
-                                  (buf (:ptr jint))) jvoid)
-           (set-long-array-region ((array jlong-array)                     ;212
-                                   (start jsize)
-                                   (len jsize)
-                                   (buf (:ptr jlong))) jvoid)
-           (set-float-array-region ((array jfloat-array)                   ;213
-                                    (start jsize)
-                                    (len jsize)
-                                    (buf (:ptr jfloat))) jvoid)
-           (set-double-array-region ((array jdouble-array)                 ;214
-                                     (start jsize)
-                                     (len jsize)
-                                     (buf (:ptr jdouble))) jvoid)
+(defun fatal-error (msg)
+  (ccl::with-utf-8-cstrs ((cmsg msg))
+    (jnienv-call ("FatalError" :void) :address cmsg)))
+  
+(defun push-local-frame (capacity)
+  (jnienv-call ("PushLocalFrame" :jint) :jint capacity))
 
-           (register-natives ((clazz jclass)                               ;215
-                              (methods (:ptr jni-native-method))
-                              (n-methods jsize)) jint)
-           (unregister-natives ((clazz jclass)) jint)                      ;216
-           (monitor-enter ((obj jobject)) jint)                            ;217
-           (monitor-exit ((obj jobject)) jint)                             ;218
+(defun pop-local-frame (result)
+  (jnienv-call ("PopLocalFrame" :jobject) :jobject result))
 
-           (get-java-vm ((vm (:reference-return pvm))) jint                ;219
-                        :lambda-list (&optional (vm t)))
+(defun new-global-ref (lobj)
+  (jnienv-call ("NewGlobalRef" :jobject) :jobject lobj))
 
-           (get-string-region ((str jstring)                               ;220
-                               (start jsize)
-                               (len jsize)
-                               (buf (:ptr jchar))) jvoid)
-           (get-string-utf-region ((str jstring)                           ;221
-                               (start jsize)
-                               (len jsize)
-                               (buf (:ptr :char))) jvoid)
+(defun delete-global-ref (gref)
+  (jnienv-call ("DeleteGlobalRef" :void) :jobject gref))
+  
+(defun delete-local-ref (obj)
+  (jnienv-call ("DeleteLocalRef" :void) :jobject obj))
 
-           (get-primitive-array-critical ((array jarray)                   ;222
-                                          (is-copy (:reference-return jboolean))) pvoid
-                                         :lambda-list (array &optional is-copy))
-           (release-primitive-array-critical ((array jarray)               ;223
-                                            (carray pvoid)
-                                            (mode jint)) jvoid
-                                           :lambda-list (array carray &optional (mode 0)))
-           
-           (get-string-critical ((str jstring)                             ;224
-                                 (is-copy (:reference-return jboolean)))
-                                (:ptr jchar)
-                                :lambda-list (str &optional is-copy))
-           (release-string-critical ((str jstring)                         ;225
-                                     (cstring (:ptr jchar))) jvoid)
-           (new-weak-global-ref ((obj jobject)) jweak)                     ;226
-           (delete-weak-global-ref ((ref jweak)) jvoid)                    ;227
-           (exception-check () jboolean)                                   ;228
-           )
+(defun is-same-object (obj1 obj2)
+  (jboolean-result
+   (jnienv-call ("IsSameObject" :jboolean) :jobject obj1 :jobject obj2)))
+
+(defun new-local-ref (ref)
+  (jnienv-call ("NewLocalRef" :jobject) :jobject ref))
+
+(defun ensure-local-capacity (capacity)
+  (jnienv-call ("EnsureLocalCapacity" :jint) :jint capacity))
+
+(defun alloc-object (clazz)
+  (jnienv-call ("AllocObject" :jobject) :jclass clazz))
+
+;;; We probably can't get very far with NewObject or NewObjectV, which
+;;; depend on the underlying varargs mechanism.  NewObjectA is more
+;;; tractable.
+
+(defun new-object-a (clazz method-id args)
+  (jnienv-call ("NewObjectA" :jobject) :jclass clazz #>jmethodID method-id (:* :jvalue) args))
+
+(defun get-object-class (obj)
+  (jnienv-call ("GetObjectClass" :jclass) :jobject obj))
+
+;;; Likewise for Call*Method and Call*MethodV vs Call*MethodA.
+
+(defun call-object-method-a (obj method-id args)
+  (jnienv-call ("CallObjectMethodA" :jobject)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-boolean-method-a (obj method-id args)
+  (jboolean-result
+   (jnienv-call ("CallBooleanMethodA" :jboolean)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args)))
+
+(defun call-byte-method-a (obj method-id args)
+  (jnienv-call ("CallByteMethodA" :jbyte)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-byte-method-a (obj method-id args)
+  (jnienv-call ("CallCharMethodA" :jchar)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-short-method-a (obj method-id args)
+  (jnienv-call ("CallShortMethodA" :jshort)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-int-method-a (obj method-id args)
+  (jnienv-call ("CallIntMethodA" :jint)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-long-method-a (obj method-id args)
+  (jnienv-call ("CallLongMethodA" :jlong)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-float-method-a (obj method-id args)
+  (jnienv-call ("CallFloatMethodA" :jfloat)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-double-method-a (obj method-id args)
+  (jnienv-call ("CallDoubleMethodA" :jdouble)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-void-method-a (obj method-id args)
+  (jnienv-call ("CallVoidMethodA" :void)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+;;; Nonvirtual method calls.
+(defun call-nonvirtual-object-method-a (obj method-id args)
+  (jnienv-call ("CallNonvirtualObjectMethodA" :jobject)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-nonvirtual-boolean-method-a (obj method-id args)
+  (jboolean-result
+   (jnienv-call ("CallNonvirtualBooleanMethodA" :jboolean)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args)))
+
+(defun call-nonvirtual-byte-method-a (obj method-id args)
+  (jnienv-call ("CallNonvirtualByteMethodA" :jbyte)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-nonvirtual-char-method-a (obj method-id args)
+  (jnienv-call ("CallNonvirtualCharMethodA" :jchar)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-nonvirtual-short-method-a (obj method-id args)
+  (jnienv-call ("CallNonvirtualShortMethodA" :jshort)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+
+(defun call-nonvirtual-int-method-a (obj method-id args)
+  (jnienv-call ("CallNonvirtualIntMethodA" :jint)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-nonvirtual-long-method-a (obj method-id args)
+  (jnienv-call ("CallNonvirtualLongMethodA" :jlong)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-nonvirtual-float-method-a (obj method-id args)
+  (jnienv-call ("CallNonvirtualFloatMethodA" :jfloat)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-nonvirtual-double-method-a (obj method-id args)
+  (jnienv-call ("CallNonvirtualDoubleMethodA" :jdouble)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-nonvirtual-void-method-a (obj method-id args)
+  (jnienv-call ("CallNonvirtualVoidMethodA" :void)
+               :jobject obj
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun get-field-id (clazz name sig)
+  (ccl::with-utf-8-cstrs ((cname name)
+                          (csig sig))
+    (jnienv-call ("GetFieldID" #>jfieldID)
+                 :jclass clazz
+                 :address cname
+                 :address csig)))
+
+(defun get-object-field (obj field-id)
+  (jnienv-call ("GetObjectField" :jobject)
+               :jobject obj
+               #>jfieldID field-id))
+
+(defun get-boolean-field (obj field-id)
+  (jboolean-result
+   (jnienv-call ("GetBooleanField" :jboolean)
+               :jobject obj
+               #>jfieldID field-id)))
+
+(defun get-byte-field (obj field-id)
+  (jnienv-call ("GetByteField" :jbyte)
+               :jobject obj
+               #>jfieldID field-id))
+
+(defun get-char-field (obj field-id)
+  (jnienv-call ("GetCharField" :jchar)
+               :jobject obj
+               #>jfieldID field-id))
+
+(defun get-short-field (obj field-id)
+  (jnienv-call ("GetShortField" :jshort)
+               :jobject obj
+               #>jfieldID field-id))
+
+
+(defun get-int-field (obj field-id)
+  (jnienv-call ("GetIntField" :jint)
+               :jobject obj
+               #>jfieldID field-id))
+
+(defun get-long-field (obj field-id)
+  (jnienv-call ("GetLongField" :jlong)
+               :jobject obj
+               #>jfieldID field-id))
+
+(defun get-float-field (obj field-id)
+  (jnienv-call ("GetFloatField" :jfloat)
+               :jobject obj
+               #>jfieldID field-id))
+
+(defun get-double-field (obj field-id)
+  (jnienv-call ("GetDoubleField" :jdouble)
+               :jobject obj
+               #>jfieldID field-id))
+
+(defun set-object-field (obj field-id val)
+  (jnienv-call ("SetObjectField" :void)
+               :jobject obj
+               #>jfieldID field-id
+               :jobject val))
+
+(defun set-boolean-field (obj field-id val)
+  (jnienv-call ("SetBooleanField" :void)
+               :jobject obj
+               #>jfieldID field-id
+               :jboolean (jboolean-arg val)))
+
+(defun set-byte-field (obj field-id val)
+  (jnienv-call ("SetByteField" :void)
+               :jobject obj
+               #>jfieldID field-id
+               :jbyte val))
+
+(defun set-char-field (obj field-id val)
+  (jnienv-call ("SetCharField" :void)
+               :jobject obj
+               #>jfieldID field-id
+               :jchar val))
+
+(defun set-short-field (obj field-id val)
+  (jnienv-call ("SetShortField" :void)
+               :jobject obj
+               #>jfieldID field-id
+               :jshort val))
+
+(defun set-int-field (obj field-id val)
+  (jnienv-call ("SetIntField" :void)
+               :jobject obj
+               #>jfieldID field-id
+               :jint val))
+
+(defun set-long-field (obj field-id val)
+  (jnienv-call ("SetLongField" :void)
+               :jobject obj
+               #>jfieldID field-id
+               :jlong val))
+
+(defun set-float-field (obj field-id val)
+  (jnienv-call ("SetFloatField" :void)
+               :jobject obj
+               #>jfieldID field-id
+               :jfloat val))
+
+(defun set-double-field (obj field-id val)
+  (jnienv-call ("SetDoubleField" :void)
+               :jobject obj
+               #>jfieldID field-id
+               :jdouble val))
+
+(defun get-static-method-id (clazz name sig)
+  (ccl::with-utf-8-cstrs ((cname name)
+                          (csig sig))
+    (jnienv-call ("GetStaticMethodID" #>jmethodID)
+                 :jclass clazz
+                 :address cname
+                 :address csig)))
+
+(defun call-static-object-method-a (clazz method-id args)
+  (jnienv-call ("CallStaticObjectMethodA" :jobject)
+               :jclass clazz
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-static-boolean-method-a (clazz method-id args)
+  (jboolean-result
+   (jnienv-call ("CallStaticBooleanMethodA" :jboolean)
+                :jclass clazz
+                #>jmethodID method-id
+                (:* :jvalue) args)))
+
+(defun call-static-byte-method-a (clazz method-id args)
+  (jnienv-call ("CallStaticByteMethodA" :jbyte)
+               :jclass clazz
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-static-char-method-a (clazz method-id args)
+  (jnienv-call ("CallStaticCharMethodA" :jchar)
+               :jclass clazz
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-static-short-method-a (clazz method-id args)
+  (jnienv-call ("CallStaticShortMethodA" :jshort)
+               :jclass clazz
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-static-int-method-a (clazz method-id args)
+  (jnienv-call ("CallStaticIntMethodA" :jint)
+               :jclass clazz
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-static-long-method-a (clazz method-id args)
+  (jnienv-call ("CallStaticLongMethodA" :jlong)
+               :jclass clazz
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-static-float-method-a (clazz method-id args)
+  (jnienv-call ("CallStaticFloatMethodA" :jfloat)
+               :jclass clazz
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-static-double-method-a (clazz method-id args)
+  (jnienv-call ("CallStaticDoubleMethodA" :jdouble)
+               :jclass clazz
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun call-static-void-method-a (clazz method-id args)
+  (jnienv-call ("CallStaticVoidMethodA" :void)
+               :jclass clazz
+               #>jmethodID method-id
+               (:* :jvalue) args))
+
+(defun get-static-field-id (clazz name sig)
+  (ccl::with-utf-8-cstrs ((cname name)
+                          (csig sig))
+    (jnienv-call ("GetStaticFieldID" #>jfieldID)
+                 :jclass clazz
+                 :address cname
+                 :address csig)))
+
+(defun get-static-object-field (clazz field-id)
+  (jnienv-call ("GetStaticObjectField" :jobject)
+               :jclass clazz
+               #>jfieldID field-id))
+
+(defun get-static-boolean-field (clazz field-id)
+  (jboolean-result
+   (jnienv-call ("GetStaticBooleanField" :jboolean)
+               :jclass clazz
+               #>jfieldID field-id)))
+
+(defun get-static-byte-field (clazz field-id)
+  (jnienv-call ("GetStaticByteField" :jbyte)
+               :jclass clazz
+               #>jfieldID field-id))
+
+(defun get-static-char-field (clazz field-id)
+  (jnienv-call ("GetStaticCharField" :jchar)
+               :jclass clazz
+               #>jfieldID field-id))
+
+(defun get-static-short-field (clazz field-id)
+  (jnienv-call ("GetStaticShortField" :jshort)
+               :jclass clazz
+               #>jfieldID field-id))
+
+(defun get-static-int-field (clazz field-id)
+  (jnienv-call ("GetStaticIntField" :jint)
+               :jclass clazz
+               #>jfieldID field-id))
+
+(defun get-static-long-field (clazz field-id)
+  (jnienv-call ("GetStaticLongField" :jlong)
+               :jclass clazz
+               #>jfieldID field-id))
+
+(defun get-static-float-field (clazz field-id)
+  (jnienv-call ("GetStaticFloatField" :jfloat)
+               :jclass clazz
+               #>jfieldID field-id))
+
+(defun get-static-double-field (clazz field-id)
+  (jnienv-call ("GetStaticDoubleField" :jdouble)
+               :jclass clazz
+               #>jfieldID field-id))
+
+
+(defun set-static-object-field (clazz field-id value)
+  (jnienv-call ("SetStaticObjectField" :void)
+               :jclass clazz
+               #>jfieldID field-id
+               :jobject value))
+
+(defun set-static-boolean-field (clazz field-id value)
+  (jnienv-call ("SetStaticBooleanField" :void)
+               :jclass clazz
+               #>jfieldID field-id
+               :jboolean (jboolean-arg value)))
+
+(defun set-static-byte-field (clazz field-id value)
+  (jnienv-call ("SetStaticByteField" :void)
+               :jclass clazz
+               #>jfieldID field-id
+               :jbyte value))
+
+(defun set-static-char-field (clazz field-id value)
+  (jnienv-call ("SetStaticCharField" :void)
+               :jclass clazz
+               #>jfieldID field-id
+               :jchar value))
+
+(defun set-static-short-field (clazz field-id value)
+  (jnienv-call ("SetStaticShortField" :void)
+               :jclass clazz
+               #>jfieldID field-id
+               :jshort value))
+
+(defun set-static-int-field (clazz field-id value)
+  (jnienv-call ("SetStaticIntField" :void)
+               :jclass clazz
+               #>jfieldID field-id
+               :jint value))
+
+(defun set-static-long-field (clazz field-id value)
+  (jnienv-call ("SetStaticLongField" :void)
+               :jclass clazz
+               #>jfieldID field-id
+               :jlong value))
+
+(defun set-static-float-field (clazz field-id value)
+  (jnienv-call ("SetStaticFloatField" :void)
+               :jclass clazz
+               #>jfieldID field-id
+               :jfloat value))
+
+(defun set-static-double-field (clazz field-id value)
+  (jnienv-call ("SetStaticDoubleField" :void)
+               :jclass clazz
+               #>jfieldID field-id
+               :jdouble value))
+
+(defun new-string (unicode len)
+  (ccl::with-native-utf-16-cstrs ((cstring unicode))
+    (jnienv-call ("NewString" :jstring)
+                 (:* :jchar) cstring
+                 :jsize len)))
+
+(defun get-string-length (str)
+  (jnienv-call ("GetStringLength" :jsize)
+               :jstring str))
+
+(defun get-string-chars (str is-copy)
+  (jnienv-call ("GetStringChars" (:* :jchar))
+               :jstring str
+               (:* :jboolean) is-copy))
+
+(defun release-string-chars (str chars)
+  (jnienv-call ("ReleaseStringChars" :void)
+               :jstring str
+               (:* :jchar) chars))
+
+(defun new-string-utf (string)
+  (ccl::with-utf-8-cstrs ((cstring string))
+    (jnienv-call ("NewStringUTF" :jstring)
+                 :address cstring)))
+
+(defun get-string-utf-chars (str)
+  (rlet ((is-copy :jboolean))
+    (let* ((chars (jnienv-call ("GetStringUTFChars" (:* :char))
+                               :jstring str
+                               (:* :jboolean) is-copy)))
+      (values chars (jboolean-result (pref is-copy :jboolean))))))
+
+(defun release-string-utf-chars (str chars)
+  (jnienv-call ("ReleaseStringUTFChars" :void)
+               :jstring str
+               (:* :char) chars))
+
+(defun get-array-length (array)
+  (jnienv-call ("GetArrayLength" :jsize)
+               :jArray array))
+
+(defun new-object-array (len clazz init)
+  (jnienv-call ("NewObjectArray" #>jobjectArray)
+               :jsize len
+               :jclass clazz
+               :jobject init))
+
+(defun get-object-array-element (array index)
+  (jnienv-call ("GetObjectArrayElement" :jobject)
+               #>jobjectArray array
+               :jsize index))
+
+(defun set-object-array-element (array index val)
+  (jnienv-call ("SetObjectArrayElement" :void)
+               #>jobjectArray array
+               :jsize index
+               :jobject val))
+
+(defun new-boolean-array (len)
+  (jnienv-call ("NewBooleanArray" #>jbooleanArray)
+               :jsize len))
+
+(defun new-byte-array (len)
+  (jnienv-call ("NewByteArray" #>jbyteArray)
+               :jsize len))
+
+(defun new-char-array (len)
+  (jnienv-call ("NewCharArray" #>jcharArray)
+               :jsize len))
+
+(defun new-short-array (len)
+  (jnienv-call ("NewShortArray" #>jshortArray)
+               :jsize len))
+
+(defun new-int-array (len)
+  (jnienv-call ("NewIntArray" #>jintArray)
+               :jsize len))
+
+(defun new-long-array (len)
+  (jnienv-call ("NewLongArray" #>jlongArray)
+               :jsize len))
+
+(defun new-float-array (len)
+  (jnienv-call ("NewFloatArray" #>jfloatArray)
+               :jsize len))
+
+(defun new-double-array (len)
+  (jnienv-call ("NewDoubleArray" #>jdoubleArray)
+               :jsize len))
+
+
+(defun get-boolean-array-elements (array is-copy)
+  (jnienv-call ("GetBooleanArrayElements" (:* :jboolean))
+               #>jbooleanArray array
+               (:* :jboolean) is-copy))
+
+(defun get-byte-array-elements (array is-copy)
+  (jnienv-call ("GetByteArrayElements" (:* :jbyte))
+               #>jbyteArray array
+               (:* :jboolean) is-copy))
+
+(defun get-char-array-elements (array is-copy)
+  (jnienv-call ("GetCharArrayElements" (:* :jchar))
+               #>jcharArray array
+               (:* :jboolean) is-copy))
+
+(defun get-short-array-elements (array is-copy)
+  (jnienv-call ("GetShortArrayElements" (:* :jshort))
+               #>jshortArray array
+               (:* :jboolean) is-copy))
+
+(defun get-int-array-elements (array is-copy)
+  (jnienv-call ("GetIntArrayElements" (:* :jint))
+               #>jintArray array
+               (:* :jboolean) is-copy))
+
+(defun get-long-array-elements (array is-copy)
+  (jnienv-call ("GetLongArrayElements" (:* :jlong))
+               #>jlongArray array
+               (:* :jboolean) is-copy))
+
+(defun get-float-array-elements (array is-copy)
+  (jnienv-call ("GetFloatArrayElements" (:* :jfloat))
+               #>jfloatArray array
+               (:* :jboolean) is-copy))
+
+(defun get-double-array-elements (array is-copy)
+  (jnienv-call ("GetDoubleArrayElements" (:* :jdouble))
+               #>jdoubleArray array
+               (:* :jboolean) is-copy))
+
+(defun release-boolean-array-elements (array elems mode)
+  (jnienv-call ("ReleaseBooleanArrayElements" :void)
+               #>jbooleanArray array
+               (:* jboolean) elems
+               :jint mode))
+
+(defun release-byte-array-elements (array elems mode)
+  (jnienv-call ("ReleaseByteArrayElements" :void)
+               #>jbyteArray array
+               (:* jbyte) elems
+               :jint mode))
+
+(defun release-char-array-elements (array elems mode)
+  (jnienv-call ("ReleaseCharArrayElements" :void)
+               #>jcharArray array
+               (:* jchar) elems
+               :jint mode))
+
+(defun release-short-array-elements (array elems mode)
+  (jnienv-call ("ReleaseShortArrayElements" :void)
+               #>jshortArray array
+               (:* jshort) elems
+               :jint mode))
+
+(defun release-int-array-elements (array elems mode)
+  (jnienv-call ("ReleaseIntArrayElements" :void)
+               #>jintArray array
+               (:* jint) elems
+               :jint mode))
+
+(defun release-long-array-elements (array elems mode)
+  (jnienv-call ("ReleaseLongArrayElements" :void)
+               #>jlongArray array
+               (:* jlong) elems
+               :jint mode))
+
+(defun release-float-array-elements (array elems mode)
+  (jnienv-call ("ReleaseFloatArrayElements" :void)
+               #>jfloatArray array
+               (:* jfloat) elems
+               :jint mode))
+
+(defun release-double-array-elements (array elems mode)
+  (jnienv-call ("ReleaseDoubleArrayElements" :void)
+               #>jdoubleArray array
+               (:* jdouble) elems
+               :jint mode))
+
+
+(defun get-boolean-array-region (array start len buf)
+  (jnienv-call ("GetBooleanArrayRegion" :void)
+               #>jbooleanArray array
+               :jsize start
+               :jsize len
+               (:* :jboolean) buf))
+
+(defun get-byte-array-region (array start len buf)
+  (jnienv-call ("GetByteArrayRegion" :void)
+               #>jbyteArray array
+               :jsize start
+               :jsize len
+               (:* :jbyte) buf))
+
+(defun get-char-array-region (array start len buf)
+  (jnienv-call ("GetCharArrayRegion" :void)
+               #>jcharArray array
+               :jsize start
+               :jsize len
+               (:* :jchar) buf))
+
+(defun get-short-array-region (array start len buf)
+  (jnienv-call ("GetShortArrayRegion" :void)
+               #>jshortArray array
+               :jsize start
+               :jsize len
+               (:* :jshort) buf))
+
+(defun get-int-array-region (array start len buf)
+  (jnienv-call ("GetIntArrayRegion" :void)
+               #>jintArray array
+               :jsize start
+               :jsize len
+               (:* :jint) buf))
+
+(defun get-long-array-region (array start len buf)
+  (jnienv-call ("GetLongArrayRegion" :void)
+               #>jlongArray array
+               :jsize start
+               :jsize len
+               (:* :jlong) buf))
+
+(defun get-float-array-region (array start len buf)
+  (jnienv-call ("GetFloatArrayRegion" :void)
+               #>jfloatArray array
+               :jsize start
+               :jsize len
+               (:* :jfloat) buf))
+
+(defun get-double-array-region (array start len buf)
+  (jnienv-call ("GetDoubleArrayRegion" :void)
+               #>jdoubleArray array
+               :jsize start
+               :jsize len
+               (:* :jdouble) buf))
+
+(defun set-boolean-array-region (array start len buf)
+  (jnienv-call ("SetBooleanArrayRegion" :void)
+               #>jbooleanArray array
+               :jsize start
+               :jsize len
+               (:* :jboolean) buf))
+
+(defun set-byte-array-region (array start len buf)
+  (jnienv-call ("SetByteArrayRegion" :void)
+               #>jbyteArray array
+               :jsize start
+               :jsize len
+               (:* :jbyte) buf))
+
+(defun set-char-array-region (array start len buf)
+  (jnienv-call ("SetCharArrayRegion" :void)
+               #>jcharArray array
+               :jsize start
+               :jsize len
+               (:* :jchar) buf))
+
+(defun set-short-array-region (array start len buf)
+  (jnienv-call ("SetShortArrayRegion" :void)
+               #>jshortArray array
+               :jsize start
+               :jsize len
+               (:* :jshort) buf))
+
+(defun set-int-array-region (array start len buf)
+  (jnienv-call ("SetIntArrayRegion" :void)
+               #>jintArray array
+               :jsize start
+               :jsize len
+               (:* :jint) buf))
+
+(defun set-long-array-region (array start len buf)
+  (jnienv-call ("SetLongArrayRegion" :void)
+               #>jlongArray array
+               :jsize start
+               :jsize len
+               (:* :jlong) buf))
+
+(defun set-float-array-region (array start len buf)
+  (jnienv-call ("SetFloatArrayRegion" :void)
+               #>jfloatArray array
+               :jsize start
+               :jsize len
+               (:* :jfloat) buf))
+
+(defun set-double-array-region (array start len buf)
+  (jnienv-call ("SetDoubleArrayRegion" :void)
+               #>jdoubleArray array
+               :jsize start
+               :jsize len
+               (:* :jdouble) buf))
+
+
+(defun register-natives (clazz methods nmethods)
+  (jnienv-call ("RegisterNatives":jint)
+               :jclass clazz
+               (:* #>JNINativeMethod) methods
+               :jint nmethods))
+
+
+(defun unregister-natives (clazz)
+  (jnienv-call ("UnregisterNatives" :jint)
+               :jclass clazz))
+
+(defun monitor-enter (obj)
+  (jnienv-call ("MonitorEnter" :jint)
+               :jobject obj))
+
+(defun monitor-exit (obj)
+  (jnienv-call ("MonitorExit" :jint)
+               :jobject obj))
+
+(defun get-java-vm (vm)
+  (jnienv-call ("GetJavaVM" :jint)
+               (:* (:* #>JavaVM)) vm))
+
+(defun get-string-region (str start len buf)
+  (jnienv-call ("GetStringRegion" :void)
+               :jstring str
+               :jsize start
+               :jsize len
+               (:* :jchar) buf))
+
+(defun get-string-utf-region (str start len buf)
+  (jnienv-call ("GetStringUTFRegion" :void)
+               :jstring str
+               :jsize start
+               :jsize len
+               (:* :char) buf))
+
+(defun get-primitive-array-critical (array is-copy)
+  (jnienv-call ("GetPrimitiveArrayCritical" (:* :void))
+               :jarray array
+               (:* :jboolean) is-copy))
+
+(defun release-primitive-array-critical(jarray carray mode)
+  (jnienv-call ("ReleasePrimitiveArrayCritical" :void)
+               :jarray jarray
+               (:* :void) carray
+               :jint mode))
+
+(defun get-string-critical (string is-copy)
+  (jnienv-call ("GetStringCritical" (:* :jchar))
+               :jstring string
+               (:* :jboolean) is-copy))
+
+(defun release-string-critical (string cstring)
+  (jnienv-call ("ReleaseStringCritical" :void)
+               :jstring string
+               (:* :jchar) cstring))
+
+(defun new-weak-global-ref (obj)
+  (jnienv-call ("NewWeakGlobalRef" :jweak)
+               :jobject obj))
+
+(defun delete-weak-global-ref (ref)
+  (jnienv-call ("DeleteWeakGlobalRef" :void)
+               :jweak ref))
+
+(defun exception-check ()
+  (jboolean-result (jnienv-call ("ExceptionCheck" :jboolean))))
+               
+
+(defun new-direct-byte-buffer (address capacity)
+  (jnienv-call ("NewDirectByteBuffer" :jobject)
+               :address address
+               :jlong capacity))
+
+(defun get-direct-buffer-address (buf)
+  (jnienv-call ("GetDirectBufferAddress" :address)
+               :jobject buf))
+
+(defun get-direct-buffer-capacity (buf)
+  (jnienv-call ("GetDirectBufferCapacity" :jlong)
+               :jobject buf))
+
+;;; End of jnienv functions.  (Finally.)
 
 (defun get-pvm ()
   (or *pvm*
       (error "JVM not loaded")))
 
-(defvtable java-vm (get-pvm)
-  (reserved-0 pvoid)
-  (reserved-1 pvoid)
-  (reserved-2 pvoid)
-#+:MACOSX  (cfm-padding (:foreign-array pvoid (4)))
-  (destroy-java-vm () jint)
-  (attach-current-thread ((penv (:reference-return penv)) (args pvoid)) jint
-                         :lambda-list (&optional args (penv t)))
-  (detach-current-thread () jint)
-  (get-env ((penv (:reference-return penv)) (interface-id jint)) jint
-           :lambda-list (interface-id &optional (penv t))))
-  
-(fli:define-c-struct java-vm-option
-  (option-string (:ptr :char))
-  (extra-info pvoid))
-
-(fli:define-c-struct jdk-1-1-init-args
-  (version jint)
-  (properties (:ptr (:ptr char)))
-  (check-source jint)
-  (native-stack-size jint)
-  (java-stack-size jint)
-  (min-heap-size jint)
-  (max-heap-size jint)
-  (verify-mode jint)
-  (class-path (:ptr :char))
-  (vprintf pvoid)
-  (exit pvoid)
-  (abort pvoid)
-  (enable-class-gc jint)
-  (enable-verbose-gc jint)
-  (disable-async-gc jint)
-  (reserved-0 jint)
-  (reserved-1 jint)
-  (reserved-2 jint))
-  
-(fli:define-foreign-function (jni-get-default-java-vm-init-args "JNI_GetDefaultJavaVMInitArgs")
-    ((init-args (:ptr jdk-1-1-init-args)))
-  :result-type jint)
-
-(fli:define-c-struct java-vm-init-args
-  (version jint)
-  (n-options jint)
-  (options (:ptr java-vm-option))
-  (ignore-unrecognized jboolean))
-
-(fli:define-foreign-function (jni-create-java-vm "JNI_CreateJavaVM" :source)
-    ((pvm (:reference-return pvm))
-     (penv (:reference-return penv))
-     (vm-args (:ptr java-vm-init-args)))
-  :result-type jint
-  :lambda-list (vm-args &optional (pvm t) (penv t))
-;  :module :jni-lib ;refused on Mac OSX, even though register-module is supported
-  )
-
-(fli:define-foreign-function (jni-get-created-java-vms "JNI_GetCreatedJavaVMs" :source)
-    ((vm-buf (:c-array pvm))
-     (buf-len jsize)
-     (n-vms (:reference-return jsize)))
-  :result-type jint)
-
+#+later
 (defun cleanup-jni-gref (gref)
   "set as a special free action to free java classes when no longer used by Lisp"
   (when (java-ref-p gref)
     (delete-global-ref gref)))
 
-(defun create-jvm (&rest option-strings)
+(defun create-jvm (&rest args)
+  (declare (dynamic-extent args))
   "Creates the JVM, this can only be done once.
 The option strings can be used to control the JVM, esp. the classpath:
 \"-Djava.class.path=/Users/rich/Lisp/jfli.jar\""
   (when *pvm*
     (error "JVM already created, can only be started once"))
   (load-jni-lib)
-  (let ((nopts (length option-strings))
-         (option-array nil))
-    (fli:with-dynamic-foreign-objects ((ia java-vm-init-args))
-      (when option-strings
-        (setf option-array (fli:allocate-dynamic-foreign-object :type 'java-vm-option :nelems nopts))
-        (dotimes (n nopts)
-          (setf (fli:foreign-slot-value (fli:dereference option-array
-                                                         :index n
-                                                         :copy-foreign-object nil) 'option-string)
-                (fli:convert-to-dynamic-foreign-string (nth n option-strings)))))
-      (fli:with-foreign-slots (VERSION N-OPTIONS OPTIONS IGNORE-UNRECOGNIZED) ia
-        (setf version JNI-VERSION-1-4
-              n-options nopts
-              OPTIONS option-array
-              IGNORE-UNRECOGNIZED nil)
-        (multiple-value-bind (ret vm env)
-            (jni-create-java-vm ia)
-          (setf *pvm* vm)
-          (add-special-free-action #'cleanup-jni-gref)
-          (values ret vm env))))))
+  (ccl::call-with-string-vector
+   (lambda (argv)
+     (let* ((nargs (length args)))
+       (rlet ((initargs :<J>ava<VMI>nit<A>rgs)
+              (env (:* :<JNIE>nv))
+              (vm (:* :<J>ava<VM>)))
+         (%stack-block ((options (* nargs (ccl::record-length :<J>ava<VMO>ption))))
+           (do* ((i 0 (1+ i))
+                 (p options (%inc-ptr p (ccl::record-length :<J>ava<VMO>ption))))
+                ((= i nargs))
+             (setf (pref p :<J>ava<VMO>ption.option<S>tring)
+                   (paref argv (:* (:* :char)) i)))
+           (setf (pref initargs :<J>ava<VMI>nit<A>rgs.version) #$JNI_VERSION_1_4
+                 (pref initargs :<J>ava<VMI>nit<A>rgs.n<O>ptions) nargs
+                 (pref initargs :<J>ava<VMI>nit<A>rgs.options) options
+                 (pref initargs :<J>ava<VMI>nit<A>rgs.ignore<U>nrecognized) #$JNI_TRUE)
+           ;; In Darwin, JNI_CreateJavaVM will clobber the calling thread's
+           ;; Mach exception ports, despite the fact that CCL is using them.
+           ;; To work around this, call a function in the lisp kernel which
+           ;; restores the thread's exception ports after calling
+           ;; JNI_CreateJavaVM for us.
+           (let* ((result
+                   (ff-call (ccl::%kernel-import target::kernel-import-jvm-init)
+                            :address (foreign-symbol-address "JNI_CreateJavaVM")
+                            :address vm
+                            :address env
+                            :address initargs
+                            :int)))
+             (if (>= result 0)
+               (progn
+                 (setq *pvm* (%get-ptr vm))
+                 (values result (%get-ptr vm) (%get-ptr env)))
+               (error "Can't create Java VM: result = ~d" result)))))))
+   args))
 
-;this is the FLI side of proxy support
+
+;;;this is the FLI side of proxy support
 
 (defvar *invocation-handler* nil
   "this will be set by jfli:enable-java-proxies to a function of 3 args")
 
-;this will be set as the implementation of a native java function
+#+todo
+(progn
+
+
+;;;this will be set as the implementation of a native java function
 (fli:define-foreign-callable ("LispInvocationHandler_invoke" :result-type jobject)
     ((env penv) (obj jobject) (proxy jobject) (method jobject) (args jobject))
   (do-invoke env obj proxy method args))
 
 (defun do-invoke (env obj proxy method args)
-  ;(declare (ignore env))
+  (declare (ignore env))                ;it's not like we're on another thread
   (when *invocation-handler*
-    (let ((*penv* env))
-      (prog1
-          (funcall *invocation-handler* proxy method args)
-        ;(jfli::invocation-handler proxy method args)
-        (delete-local-ref obj)))))
+    (prog1
+        (funcall *invocation-handler* proxy method args)
+      ;;(jfli::invocation-handler proxy method args)
+      (delete-local-ref obj))))
 
 (defun register-invocation-handler (invocation-handler)
   "sets up the Lisp handler and binds the native function - jfli.jar must be in the classpath"
@@ -1237,3 +1499,4 @@ otherwise the next Java call you make will cause a crash
 
 )
 
+) ; #+todo
