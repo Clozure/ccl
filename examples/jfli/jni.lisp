@@ -51,16 +51,53 @@ I have tried to limit LispWorks FLI code to this file.
    :local-ref-to-global-ref :local-ref-to-string
    :def-jni-function :def-jni-functions :def-jni-constructor :def-jni-field
    :jaref :convert-to-java-string :convert-from-java-string :java-ref-p
-   :is-name-of-primitive :split-package-and-class))
+   :is-name-of-primitive :split-package-and-class
+   ;; Export JNIEnv function names, too
+   :get-array-length :is-same-object :jni-find-class :is-assignable-from
+   :delete-local-ref :new-object-array :new-int-array
+   ))
 
 (in-package :jni)
+
+(defclass java-object (ccl::foreign-standard-object)
+    ())
+
+(ccl::defloadvar *java-object-domain*
+    (ccl::register-foreign-object-domain :java
+                                         :recognize #'ccl::false
+                                         :class-of (lambda (x)
+                                                     (declare (ignore x))
+                                                     (find-class 'java-object))
+                                         :classp #'ccl::false
+                                         :instance-class-wrapper
+                                         (lambda (x)
+                                           (declare (ignore x))
+                                           (ccl::class-own-wrapper
+                                            (find-class 'java-object)))
+                                         :class-own-wrapper
+                                         #'ccl::false
+                                         :slots-vector #'ccl::false
+                                         :class-ordinal #'ccl::false
+                                         :set-class-ordinal
+                                         #'ccl::false))
+
+(deftype java-ref () 'java-object)
+
+(defun java-ref-p (x)
+  (and (eql (ccl::typecode x) target::subtag-macptr)
+       (eql (ccl::%macptr-domain x) *java-object-domain*)))
+
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (ccl:use-interface-dir :jni))
 
-(ccl::%register-type-ordinal-class (ccl::parse-foreign-type :jobject) 'jobject)
-(ccl::%register-type-ordinal-class (ccl::parse-foreign-type #>JavaVM) 'java-vm)
-
+(defun string-append (&rest args)
+  (declare (dynamic-extent args))
+  (do* ((a args (cdr a)))
+     ((null a) (apply #'concatenate 'string args))
+    (let* ((arg (car a)))
+      (unless (typep arg 'string)
+        (setf (car a) (string arg))))))
 
 (defvar *jni-lib-path*
 #+:darwin-target "/System/Library/Frameworks/JavaVM.framework/JavaVM"
@@ -71,7 +108,7 @@ I have tried to limit LispWorks FLI code to this file.
 
 ;;; Map between lisp and Java booleans
 (eval-when (:compile-toplevel)
-  (declaim (inline jboolean-arg jboolean-result)))
+  (declaim (inline jboolean-arg jboolean-result jobject-result)))
 
 (defun jboolean-arg (val)
   (if (and val (not (eql val #$JNI_FALSE)))
@@ -80,6 +117,12 @@ I have tried to limit LispWorks FLI code to this file.
 
 (defun jboolean-result (val)
   (not (eql val #$JNI_FALSE)))
+
+;;; Might also want to register p for termination (finalization).
+(defun jobject-result (val)
+  (unless (ccl::%null-ptr-p val)
+    (ccl::%set-macptr-domain val *java-object-domain*))
+  val)
 
 
 
@@ -127,9 +170,18 @@ if necessary."
 (defmacro jnienv-call ((slot result-type) &rest specs)
   ;; We might want to special-case some result-types for finalization.
   (let* ((env (gensym))
-         (accessor (ccl::escape-foreign-name (concatenate 'string "JNIEnv." slot))))
-    `(let* ((,env (current-env)))
-      (ff-call (pref ,env ,accessor) :address ,env ,@specs ,result-type))))
+         (accessor (ccl::escape-foreign-name (concatenate 'string "JNIEnv." slot)))
+         (form
+          `(let* ((,env (current-env)))
+            (ff-call (pref ,env ,accessor) :address ,env ,@specs ,result-type))))
+    (case result-type
+      (:jboolean `(jboolean-result ,form))
+      ((:jobject :jclass :jstring :jthrowable :jarray #>jbooleanArray
+                 #>jbyteArray #>jcharArray #>jshortArray #>jintArray
+                 #>jlongArray #>jfloatArray #>jdoubleArray #>jobjectArray)
+       `(jobject-result ,form))
+      (t form))))
+                 
 
 (defun get-version ()
   (jnienv-call ("GetVersion" :jint)))
@@ -146,6 +198,7 @@ if necessary."
   (ccl::with-utf-8-cstrs ((cname name))
     (jnienv-call ("FindClass" :jclass) :address cname)))
 
+
 (defun from-reflected-method (method)
   (jnienv-call ("FromReflectedMethod" #>jmethodID) :jobject method))
 
@@ -153,6 +206,7 @@ if necessary."
   (jnienv-call ("FromReflectedField" #>jfieldID) :jobject field))
 
 (defun to-reflected-method (cls method-id is-static)
+  
   (jnienv-call ("ToReflectedMethod" :jobject)
                :jclass cls
                #>jmethodID method-id
@@ -162,10 +216,11 @@ if necessary."
   (jnienv-call ("GetSuperclass" :jclass) :jclass sub))
 
 (defun is-assignable-from (sub sup)
-  (jboolean-result
-   (jnienv-call ("IsAssignableFrom" :jboolean) :jclass sub :jclass sup)))
+  
+  (jnienv-call ("IsAssignableFrom" :jboolean) :jclass sub :jclass sup))
 
 (defun to-reflected-field (cls field-id is-static)
+  
   (jnienv-call ("ToReflectedField" :jobject)
                :jclass cls
                #>jfieldID field-id
@@ -195,6 +250,7 @@ if necessary."
   (jnienv-call ("PushLocalFrame" :jint) :jint capacity))
 
 (defun pop-local-frame (result)
+  
   (jnienv-call ("PopLocalFrame" :jobject) :jobject result))
 
 (defun new-global-ref (lobj)
@@ -207,10 +263,11 @@ if necessary."
   (jnienv-call ("DeleteLocalRef" :void) :jobject obj))
 
 (defun is-same-object (obj1 obj2)
-  (jboolean-result
-   (jnienv-call ("IsSameObject" :jboolean) :jobject obj1 :jobject obj2)))
+  
+  (jnienv-call ("IsSameObject" :jboolean) :jobject obj1 :jobject obj2))
 
 (defun new-local-ref (ref)
+  
   (jnienv-call ("NewLocalRef" :jobject) :jobject ref))
 
 (defun ensure-local-capacity (capacity)
@@ -224,10 +281,21 @@ if necessary."
 ;;; tractable.
 
 (defun new-object-a (clazz method-id args)
+  
   (jnienv-call ("NewObjectA" :jobject) :jclass clazz #>jmethodID method-id (:* :jvalue) args))
 
 (defun get-object-class (obj)
   (jnienv-call ("GetObjectClass" :jclass) :jobject obj))
+
+(defun is-instance-of (obj clazz)
+  
+  (jnienv-call ("IsInstanceOf" :jboolean) :jobject obj :jclass clazz))
+
+(defun get-method-id (clazz name sig)
+  (ccl::with-utf-8-cstrs ((cname name)
+                          (csig sig))
+    (jnienv-call ("GetMethodID" #>jmethodID)
+                 :jclass clazz :address cname :address csig)))
 
 ;;; Likewise for Call*Method and Call*MethodV vs Call*MethodA.
 
@@ -238,11 +306,11 @@ if necessary."
                (:* :jvalue) args))
 
 (defun call-boolean-method-a (obj method-id args)
-  (jboolean-result
-   (jnienv-call ("CallBooleanMethodA" :jboolean)
+  
+  (jnienv-call ("CallBooleanMethodA" :jboolean)
                :jobject obj
                #>jmethodID method-id
-               (:* :jvalue) args)))
+               (:* :jvalue) args))
 
 (defun call-byte-method-a (obj method-id args)
   (jnienv-call ("CallByteMethodA" :jbyte)
@@ -300,11 +368,11 @@ if necessary."
                (:* :jvalue) args))
 
 (defun call-nonvirtual-boolean-method-a (obj method-id args)
-  (jboolean-result
-   (jnienv-call ("CallNonvirtualBooleanMethodA" :jboolean)
+  
+  (jnienv-call ("CallNonvirtualBooleanMethodA" :jboolean)
                :jobject obj
                #>jmethodID method-id
-               (:* :jvalue) args)))
+               (:* :jvalue) args))
 
 (defun call-nonvirtual-byte-method-a (obj method-id args)
   (jnienv-call ("CallNonvirtualByteMethodA" :jbyte)
@@ -364,15 +432,16 @@ if necessary."
                  :address csig)))
 
 (defun get-object-field (obj field-id)
+  
   (jnienv-call ("GetObjectField" :jobject)
                :jobject obj
                #>jfieldID field-id))
 
 (defun get-boolean-field (obj field-id)
-  (jboolean-result
-   (jnienv-call ("GetBooleanField" :jboolean)
+  
+  (jnienv-call ("GetBooleanField" :jboolean)
                :jobject obj
-               #>jfieldID field-id)))
+               #>jfieldID field-id))
 
 (defun get-byte-field (obj field-id)
   (jnienv-call ("GetByteField" :jbyte)
@@ -473,17 +542,18 @@ if necessary."
                  :address csig)))
 
 (defun call-static-object-method-a (clazz method-id args)
+  
   (jnienv-call ("CallStaticObjectMethodA" :jobject)
                :jclass clazz
                #>jmethodID method-id
                (:* :jvalue) args))
 
 (defun call-static-boolean-method-a (clazz method-id args)
-  (jboolean-result
-   (jnienv-call ("CallStaticBooleanMethodA" :jboolean)
-                :jclass clazz
-                #>jmethodID method-id
-                (:* :jvalue) args)))
+  
+  (jnienv-call ("CallStaticBooleanMethodA" :jboolean)
+               :jclass clazz
+               #>jmethodID method-id
+               (:* :jvalue) args))
 
 (defun call-static-byte-method-a (clazz method-id args)
   (jnienv-call ("CallStaticByteMethodA" :jbyte)
@@ -547,10 +617,10 @@ if necessary."
                #>jfieldID field-id))
 
 (defun get-static-boolean-field (clazz field-id)
-  (jboolean-result
-   (jnienv-call ("GetStaticBooleanField" :jboolean)
+  
+  (jnienv-call ("GetStaticBooleanField" :jboolean)
                :jclass clazz
-               #>jfieldID field-id)))
+               #>jfieldID field-id))
 
 (defun get-static-byte-field (clazz field-id)
   (jnienv-call ("GetStaticByteField" :jbyte)
@@ -672,7 +742,7 @@ if necessary."
     (let* ((chars (jnienv-call ("GetStringUTFChars" (:* :char))
                                :jstring str
                                (:* :jboolean) is-copy)))
-      (values chars (jboolean-result (pref is-copy :jboolean))))))
+      (values chars  (pref is-copy :jboolean)))))
 
 (defun release-string-utf-chars (str chars)
   (jnienv-call ("ReleaseStringUTFChars" :void)
@@ -1002,7 +1072,7 @@ if necessary."
                :jweak ref))
 
 (defun exception-check ()
-  (jboolean-result (jnienv-call ("ExceptionCheck" :jboolean))))
+  (jnienv-call ("ExceptionCheck" :jboolean)))
                
 
 (defun new-direct-byte-buffer (address capacity)
@@ -1079,14 +1149,14 @@ The option strings can be used to control the JVM, esp. the classpath:
 (defvar *invocation-handler* nil
   "this will be set by jfli:enable-java-proxies to a function of 3 args")
 
-#+todo
-(progn
 
 
 ;;;this will be set as the implementation of a native java function
-(fli:define-foreign-callable ("LispInvocationHandler_invoke" :result-type jobject)
-    ((env penv) (obj jobject) (proxy jobject) (method jobject) (args jobject))
+
+(defcallback |LispInvocationHandler_invoke|
+    (:address env :jobject obj :jobject proxy :jobject method :jobject args :jobject)
   (do-invoke env obj proxy method args))
+
 
 (defun do-invoke (env obj proxy method args)
   (declare (ignore env))                ;it's not like we're on another thread
@@ -1096,16 +1166,29 @@ The option strings can be used to control the JVM, esp. the classpath:
       ;;(jfli::invocation-handler proxy method args)
       (delete-local-ref obj))))
 
+(defun try (result)
+  (if (exception-check)
+      (handle-exception)
+    result))
+
+;JNI will sometimes indicate theere is an exception via a return value
+;so take advantage of that when possible vs. the call back to exception-check
+(defun try-null (result)
+  (if (ccl:%null-ptr-p result)
+      (handle-exception)
+    result))
+
 (defun register-invocation-handler (invocation-handler)
   "sets up the Lisp handler and binds the native function - jfli.jar must be in the classpath"
   (setf *invocation-handler* invocation-handler)
-  (fli:with-dynamic-foreign-objects ((method jni-native-method))
+  (rlet ((method #>JNINativeMethod))
     (let ((lih (try-null (jni-find-class "com/richhickey/jfli/LispInvocationHandler"))))
-      (fli:with-foreign-slots (name signature fn-ptr) method
-        (setf name (fli:convert-to-dynamic-foreign-string "invoke")
-              signature (fli:convert-to-dynamic-foreign-string "(Ljava/lang/Object;Ljava/lang/reflect/Method;[Ljava/lang/Object;)Ljava/lang/Object;")
-              fn-ptr (fli:make-pointer :symbol-name "LispInvocationHandler_invoke")))
-      (register-natives lih method 1))))
+      (with-cstrs ((name "invoke")
+                   (signature "(Ljava/lang/Object;Ljava/lang/reflect/Method;[Ljava/lang/Object;)Ljava/lang/Object;"))
+        (setf (pref method #>JNINativeMethod.name) name
+              (pref method #>JNINativeMethod.signature) signature
+              (pref method #>JNINativeMethod.fnPtr) |LispInvocationHandler_invoke|)
+      (register-natives lih method 1)))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1116,7 +1199,7 @@ The option strings can be used to control the JVM, esp. the classpath:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;found on c.l.l
-(eval-when (:compile-toplevel :load-toplevel)
+(eval-when (:compile-toplevel :load-toplevel :execute)
 (defun replace-substrings (string substring replacement)
   (declare (optimize (speed 3))
            (type simple-string string substring replacement))
@@ -1137,6 +1220,7 @@ The option strings can be used to control the JVM, esp. the classpath:
 (defun local-ref-to-global-ref (lref)
   (when lref
     (let ((gref (new-global-ref lref)))
+      #+laster
       (flag-special-free-action gref)
       (delete-local-ref lref)
       gref)))
@@ -1154,7 +1238,7 @@ The option strings can be used to control the JVM, esp. the classpath:
   (when s
     (let ((chars (try-null (get-string-utf-chars s))))
       (prog1
-          (fli:convert-from-foreign-string chars :external-format :utf-8)
+          (ccl::%get-utf-8-cstring chars)
         (release-string-utf-chars s chars)))))
 
 (defun jaref (array index)
@@ -1176,22 +1260,18 @@ The option strings can be used to control the JVM, esp. the classpath:
                  val))
 
 (defmacro set-arg (args i val type)
-  `(setf (fli:foreign-slot-value (fli:dereference (fli:foreign-array-pointer ,args ,i)
-                                                     :copy-foreign-object nil)
-                                    ',(slot-from-typename type))
-            ,(process-arg val type)))
+  `(setf (pref (paref ,args (:* :jvalue) ,i)
+          ,(jvalue-accessor-from-typename type))
+    ,(process-arg val type)))
 
 (defmacro with-arg-array (arg-array-name args &body body)
   (let ((i -1))
-  `(fli:with-dynamic-foreign-objects ()
-     (let ((,arg-array-name
-            (fli:allocate-dynamic-foreign-object :type
-                                                 '(:c-array jvalue ,(length args)))))
+  `(%stack-block ((,arg-array-name (*  ,(length args) (ccl::record-length :jvalue))))
        ,@(mapcar #'(lambda (arg)
                      (list 'set-arg arg-array-name (incf i) (first arg) (second arg))) 
                  args)
 
-       ,@body))))
+       ,@body)))
 
 (defun build-descriptor (params return-type)
   (string-append
@@ -1249,6 +1329,21 @@ The option strings can be used to control the JVM, esp. the classpath:
     (if prim
         (rest prim)
       :l)))
+
+(defun jvalue-accessor-from-typename (tn)
+  (let ((prim (assoc tn
+                     '(("boolean" . :jvalue.z)
+                       ("byte" . :jvalue.b)
+                       ("char" . :jvalue.c)
+                       ("short" . :jvalue.s)
+                       ("int" . :jvalue.i)
+                       ("long" . :jvalue.j)
+                       ("float" . :jvalue.f)
+                       ("double" . :jvalue.d))
+                     :test #'string-equal)))
+    (if prim
+        (rest prim)
+      :jvalue.l)))
 
 (defun name-component-from-typename (tn)
   (if (is-name-of-primitive tn)
@@ -1463,13 +1558,14 @@ The option strings can be used to control the JVM, esp. the classpath:
          (let ((,x (jaref ,garray ,gi)))
            ,@body)))))
 
-#|
+#||
 It is critical that if you call a JNI function that might throw an exception that you clear it,
 otherwise the next Java call you make will cause a crash
-|#
+||#
+
 (defun handle-exception ()
   (let ((e (exception-occurred)))
-    (when (not (fli:null-pointer-p e)) ;allow for safe calling in non-exceptional state
+    (when (not (ccl:%null-ptr-p e)) ;allow for safe calling in non-exceptional state
       (exception-clear)
       ;if the exception occurs in the reflection target, we really want that
       (when (is-instance-of e (jni-find-class "java/lang/reflect/InvocationTargetException"))
@@ -1479,17 +1575,9 @@ otherwise the next Java call you make will cause a crash
                     (do-jarray (x (throwable.getstacktrace e))
                       (format s "~A~%" (object.tostring x))))))))
 
-(defun try (result)
-  (if (exception-check)
-      (handle-exception)
-    result))
 
-;JNI will sometimes indicate theere is an exception via a return value
-;so take advantage of that when possible vs. the call back to exception-check
-(defun try-null (result)
-  (if (fli:null-pointer-p result)
-      (handle-exception)
-    result))
+
+
 
 (defun try-neg (result)
   (if (minusp result)
@@ -1499,4 +1587,4 @@ otherwise the next Java call you make will cause a crash
 
 )
 
-) ; #+todo
+
