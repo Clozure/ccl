@@ -193,6 +193,7 @@ examples/jfli/docs/jfli_bkgrnd.gif -text
 examples/jfli/docs/jfli_new.gif -text
 examples/jfli/examples/session.lisp -text
 examples/jfli/examples/swtdemo.lisp -text
+examples/jfli/jfli-lw.lisp -text
 examples/jfli/jfli.jar -text
 examples/jfli/jfli.lisp -text
 examples/jfli/jni-lw.lisp -text
