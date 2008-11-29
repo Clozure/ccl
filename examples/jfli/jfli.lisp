@@ -15,7 +15,7 @@ Callbacks from Java to Lisp also require jfli.jar (included)
 |#
 
 (defpackage :jfli
-  (:use :common-lisp :lispworks :jni)
+  (:use :common-lisp :ccl :jni)
   (:export
 
    ;jvm creation
@@ -233,7 +233,7 @@ a few (primitive, less safe and maybe faster) jni wrappers
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;; utilities ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(eval-when (:compile-toplevel :load-toplevel)
+(eval-when (:compile-toplevel :load-toplevel :execute)
   (defun ensure-package (name)
     "find the package or create it if it doesn't exist"
     (or (find-package name)
@@ -328,29 +328,29 @@ the full class name as a string, the class-symbol, or one of :boolean, :int etc
 (defun class-symbol (full-class-name)
   "(\"java.lang.Object\") -> '|java.lang|:object."
   (multiple-value-bind (package class) (split-package-and-class full-class-name)
-    (intern (string-upcase (string-append class ".")) (ensure-package package))))
+    (intern (string-upcase (jni::string-append class ".")) (ensure-package package))))
 
 (defun java-class-name (class-sym)
   "inverse of class-symbol, only valid on class-syms created by def-java-class"
   (let ((canonic-class-symbol (symbol-value class-sym)))
-    (string-append (package-name (symbol-package canonic-class-symbol))
-                                                "."
-                                                canonic-class-symbol)))
+    (jni::string-append (package-name (symbol-package canonic-class-symbol))
+                        "." 
+                        canonic-class-symbol)))
 
 (defun member-symbol (full-class-name member-name)
   "members are defined case-insensitively in case-sensitive packages,
 prefixed by 'classname.' -
-(member-symbol \"java.lang.Object\" \"toString\") -> '|java.lang|::OBJECT.TOSTRING"
+ (member-symbol \"java.lang.Object\" \"toString\") -> '|java.lang|::OBJECT.TOSTRING"
   (multiple-value-bind (package class) (split-package-and-class full-class-name)
-    (intern (string-upcase (string-append class "." member-name)) (ensure-package package))))
+    (intern (string-upcase (jni::string-append class "." member-name)) (ensure-package package))))
 
 (defun constructor-symbol (full-class-name)
   (member-symbol full-class-name "new"))
 
-(defun get-java-class-ref (canonic-class-symbol)
+¯(defun get-java-class-ref (canonic-class-symbol)
   "class-ref is cached on the plist of the canonic class symbol"
   (get-or-init (get canonic-class-symbol :class-ref)
-               (let ((class-name (string-append (package-name
+               (let ((class-name (jni::string-append (package-name
                                                  (symbol-package canonic-class-symbol))
                                                 "."
                                                 canonic-class-symbol)))
@@ -401,7 +401,7 @@ make-typed-ref can create fully-typed wrappers when desired
                             (lambda (x y)
                               (is-assignable-from x y)))))
       (mapcar #'class.getname result))))
-#|
+#||
 (defun get-superclass-names (full-class-name)
   (let* ((class (get-java-class-ref (canonic-class-symbol full-class-name)))
          (super (class.getsuperclass class))
@@ -415,11 +415,11 @@ make-typed-ref can create fully-typed wrappers when desired
         (push (class.getname super) supers)
       (push "java.lang.Object" supers))
     (nreverse supers)))
-|#
+||#
 
 (defun ensure-java-class (full-class-name)
   "walks the superclass hierarchy and makes sure all the classes are fully defined
-(they may be undefined or just forward-referenced-class)
+ (they may be undefined or just forward-referenced-class)
 caches this has been done on the class-symbol's plist"
   (let* ((class-sym (class-symbol full-class-name))
          (class (find-class class-sym nil)))
@@ -431,7 +431,7 @@ caches this has been done on the class-symbol's plist"
           (ensure-java-class super))
         (unless (and class (subtypep class 'standard-object))
           (setf class
-                (clos:ensure-class class-sym :direct-superclasses (mapcar #'class-symbol supers))))
+                (ccl:ensure-class class-sym :direct-superclasses (mapcar #'class-symbol supers))))
         (setf (get class-sym :ensured) t)
         class))))
 
@@ -668,19 +668,19 @@ to the init-args"
                            class-spec
                          (first class-spec)))
            (class-sym (if (symbolp class-atom)
-                          ;(find-symbol (string-append (symbol-name class-atom) "."))
+                          ;(find-symbol (jni::string-append (symbol-name class-atom) "."))
                           class-atom
                         (multiple-value-bind (package class) (jni::split-package-and-class class-atom)
-                          (find-symbol (string-append (string-upcase class) ".") package))))
+                          (find-symbol (jni::string-append (string-upcase class) ".") package))))
            (class-name (subseq (symbol-name class-sym) 0 (1- (length (symbol-name class-sym)))))
            (gthis (gensym)))
       (flet ((expand-init (x)
                (if (keywordp (first x)) ;setf field or property
-                   `(setf (,(find-symbol (string-append class-name "." (symbol-name (first x))))
+                   `(setf (,(find-symbol (jni::string-append class-name "." (symbol-name (first x))))
                            ,gthis ,@(butlast (rest x)))
                           ,@(last (rest x)))
                  ;.memfunc
-                 `(,(find-symbol (string-append class-name (symbol-name (first x))))
+                 `(,(find-symbol (jni::string-append class-name (symbol-name (first x))))
                    ,gthis
                    ,@(rest x)))))
         `(let* ((,gthis (make-new ,class-sym ,@real-args))
@@ -710,7 +710,7 @@ static fields also get a symbol-macro *classname.fieldname*"
              (field-sym (member-symbol full-class-name field-name))
              (is-static (modifier.isstatic (field.getmodifiers field))))
         (if is-static
-            (let ((macsym (intern (string-append "*" (symbol-name field-sym) "*")
+            (let ((macsym (intern (jni::string-append "*" (symbol-name field-sym) "*")
                                   (symbol-package field-sym))))
               (push `(defun ,field-sym ()
                        (install-static-field-and-get ,full-class-name ,field-name))
@@ -822,7 +822,7 @@ that calls the latter
                  ;build setters when finding beans property protocol
                  (flet ((add-setter-if (prefix)
                           (when (eql 0 (search prefix name))
-                            (let ((setname (string-append "set" (subseq name (length prefix)))))
+                            (let ((setname (jni::string-append "set" (subseq name (length prefix)))))
                               (when (gethash setname methods-by-name)
                                 (push `(defun (setf ,method-sym) (val &rest args)
                                          (progn
@@ -977,7 +977,7 @@ then call the requested method - subsequent calls via those symbols will be dire
     `(locally
        ,@(mapcan
           (lambda (type)
-            (let ((ref-sym (intern (string-upcase (string-append "jref-" (symbol-name type))))))
+            (let ((ref-sym (intern (string-upcase (jni::string-append "jref-" (symbol-name type))))))
               (list 
                `(defun ,ref-sym (array &rest subscripts)
                   ,(format nil "like aref, for Java arrays of ~A, settable" (symbol-name type))
@@ -986,7 +986,7 @@ then call the requested method - subsequent calls via those symbols will be dire
                        ((sub subscripts (rest sub))
                         (a (get-ref array) (get-ref (array.get a (first sub)))))
                        ((null (rest sub))
-                        (,(intern (string-upcase (string-append "array.get" (symbol-name type))))
+                        (,(intern (string-upcase (jni::string-append "array.get" (symbol-name type))))
                          a (first sub)))))
 
                `(defun (setf ,ref-sym) (val array &rest subscripts)
@@ -996,7 +996,7 @@ then call the requested method - subsequent calls via those symbols will be dire
                         (a (get-ref array) (get-ref (array.get a (first sub)))))
                        ((null (rest sub))
                         (array.set a (first sub)
-                                   (,(intern (string-upcase (string-append "box-"
+                                   (,(intern (string-upcase (jni::string-append "box-"
                                                                            (symbol-name type))))
                                     val))
                         val))))))
@@ -1270,7 +1270,7 @@ then call the requested method - subsequent calls via those symbols will be dire
   ;is this rem guaranteed to be a fixnum?
   (rem (object.hashcode (object.getclass proxy)) most-positive-fixnum))
 
-(defvar *proxy-table* (make-hash-table :test #'jeq :hash-function #'proxy-hashcode))
+(defvar *proxy-table* (make-hash-table :test 'jeq :hash-function 'proxy-hashcode))
 
 ;(defvar *proxy-list* nil)
 
