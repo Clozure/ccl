@@ -1715,23 +1715,46 @@ not, why not; and what its result code was if it completed."
       (fd-close fd)
       new-fd))
 
+  
+  (defun data-available-on-pipe-p (hpipe)
+    (rlet ((navail #>DWORD 0))
+      (unless (eql 0 (#_PeekNamedPipe (if (typep hpipe 'macptr)
+                                        hpipe
+                                        (%int-to-ptr hpipe))
+                                      (%null-ptr)
+                                      0
+                                      (%null-ptr)
+                                      navail
+                                      (%null-ptr)))
+        (not (eql 0 (pref navail #>DWORD))))))
+    
+
+  ;;; There doesn't seem to be any way to wait on input from an
+  ;;; anonymous pipe in Windows (that would, after all, make too
+  ;;; much sense.)  We -can- check for pending unread data on
+  ;;; pipes, and can expect to eventually get EOF on a pipe.
+  ;;; So, this tries to loop until the process handle is signaled and
+  ;;; all data has been read.
   (defun monitor-external-process (p)
     (let* ((in-fds (external-process-watched-fds p))
            (out-streams (external-process-watched-streams p))
            (token (external-process-token p))
-           (terminated))
+           (terminated)
+           (changed)
+           (pairs (pairlis in-fds out-streams))
+           )
       (loop
-        (when terminated
+        (when changed
+          (setq pairs (pairlis in-fds out-streams)
+                changed nil))
+        (when (and terminated (null pairs))
           (without-interrupts
-           (decf (car token))
-           (if in-fd (fd-close in-fd))
-           (setq in-fd nil)
            (rlet ((code #>DWORD))
              (loop
                (#_GetExitCodeProcess (external-process-pid p) code)
                (unless (eql (pref code #>DWORD) #$STILL_ACTIVE)
-                 (return)))
-             (#_SleepEx 10 #$TRUE)
+                 (return))
+               (#_SleepEx 10 #$TRUE))
              (setf (external-process-%exit-code p) (pref code #>DWORD)))
            (#_CloseHandle (external-process-pid p))
            (setf (external-process-pid p) nil)
@@ -1741,34 +1764,33 @@ not, why not; and what its result code was if it completed."
                (funcall status-hook p)))
            (remove-external-process p)
            (signal-semaphore (external-process-completed p))
-           (return)))	 
-        (if in-fd
-          (rlet ((handles (:array #>HANDLE 2)))
-            (setf (paref handles (:array #>HANDLE) 0) (external-process-pid p))
-            (setf (paref handles (:array #>HANDLE) 1) (#__get_osfhandle in-fd))
-            (let ((rc (ignoring-eintr
-                       (let* ((code (#_WaitForMultipleObjectsEx 2 handles #$FALSE #$INFINITE #$true)))
-                         (if (eql code #$WAIT_IO_COMPLETION)
-                           (- #$EINTR)
-                           code)))))
-              (if (eq rc #$WAIT_OBJECT_0)
-                (setf terminated t)
-                (%stack-block ((buf 1024))
-                  (let* ((n (fd-read in-fd buf 1024)))
+           (return)))
+        (dolist (p pairs)
+          (let* ((in-fd (car p))
+                 (out-stream (cdr p)))
+            (when (or terminated (data-available-on-pipe-p in-fd))
+              (%stack-block ((buf 1024))
+                (let* ((n (fd-read in-fd buf 1024)))
                     (declare (fixnum n))
                     (if (<= n 0)
-                      (setf terminated t)
+                      (progn
+                        (without-interrupts
+                         (decf (car token))
+                         (fd-close in-fd)
+                         (setq in-fds (delete in-fd in-fds)
+                               out-streams (delete out-stream out-streams)
+                               changed t)))
+
                       (let* ((string (make-string 1024)))
                         (declare (dynamic-extent string))
                         (%str-from-ptr buf n string)
                         (write-sequence string out-stream :end n))))))))
-          (progn
-            (ignoring-eintr
-             (let* ((code (#_WaitForSingleObjectEx (external-process-pid p) #$INFINITE #$true)))
-               (if (eql code #$WAIT_IO_COMPLETION)
-                 (- #$EINTR)
-                 code)))
-            (setf terminated t))))))
+        (unless terminated
+          (setq terminated (eql (#_WaitForSingleObjectEx
+                                 (external-process-pid p)
+                                 1000
+                                 #$true)
+                                #$WAIT_OBJECT_0))))))
   
 
   )                                     ; #+windows-target (progn
