@@ -413,9 +413,11 @@ local_label(misc_ref_bit_vector):
 	__(box_fixnum(%imm0,%arg_z))
 	__(ret)
 local_label(misc_ref_invalid):
+	__(pop %temp1)	/* return addr */
 	__(push $reserved_frame_marker)
 	__(push $reserved_frame_marker)
 	__(push $XBADVEC)
+	__(push %temp1)
 	__(set_nargs(3))
 	__(jmp _SPksignalerr)
 _endfn(C(misc_ref_common))
@@ -815,9 +817,11 @@ local_label(misc_set_s32):
 local_label(misc_set_bad):
 	__(movl %arg_z,%arg_y)
 	__(movl %temp0,%arg_z)
+	__(pop %temp1)	/* return addr */
 	__(push $reserved_frame_marker)
 	__(push $reserved_frame_marker)
 	__(push $XNOTELT)
+	__(push %temp1)
 	__(set_nargs(3))
 	__(jmp _SPksignalerr)
 local_label(misc_set_single_float_vector):
@@ -914,10 +918,12 @@ local_label(misc_set_clr_bit):
 	__(btrl %imm0,misc_data_offset(%temp0))
 	__(ret)
 local_label(misc_set_invalid):
+	__(pop %temp1)	/* return addr */
 	__(push $reserved_frame_marker)
 	__(push $reserved_frame_marker)
 	__(push $XSETBADVEC)
 	__(push %temp0)
+	__(push %temp1)
 	__(set_nargs(4))
 	__(jmp _SPksignalerr)
 _endfn(C(misc_set_common))
