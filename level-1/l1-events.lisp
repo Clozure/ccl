@@ -117,8 +117,12 @@
                              condition)
                             (clear-input *terminal-io*))))))
 
+(defglobal *quit-interrupt-hook* nil)
 
-
+(defun force-async-quit ()
+  (when *quit-interrupt-hook*
+    (funcall *quit-interrupt-hook*))
+  (quit 143))
 
 (defstatic *running-periodic-tasks* nil)
 
@@ -142,14 +146,24 @@
            (let ((f *post-gc-hook*))
              (when (functionp f) (funcall f)))))))
 
+(defconstant $user-interrupt-break 1)
+(defconstant $user-interrupt-quit 2)
+
 (defun housekeeping ()
   (progn
     (handle-gc-hooks)
     (unless *inhibit-abort*
-      (when (break-event-pending-p)
-	(let* ((proc (select-interactive-abort-process)))
-	  (if proc
-	    (force-break-in-listener proc)))))
+      (let ((id (pending-user-interrupt)))
+        (cond ((eql id $user-interrupt-quit)
+               ;; Doesn't matter where it happens, but try to use a process that
+               ;; has a shot at reporting any problems in user hook.
+               (let* ((proc (or (select-interactive-abort-process)
+                                *initial-process*)))
+                 (process-interrupt proc #'force-async-quit)))
+              ((eql id $user-interrupt-break)
+               (let* ((proc (select-interactive-abort-process)))
+                 (if proc
+                   (force-break-in-listener proc)))))))
     (flet ((maybe-run-periodic-task (task)
              (let ((now (get-tick-count))
                    (state (ptask.state task)))

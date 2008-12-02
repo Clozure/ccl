@@ -70,6 +70,7 @@
      *backtrace-show-internal-frames*
      *backtrace-format*
      *quit-on-eof*
+     *quit-interrupt-hook*
      macroexpand-all
      compiler-macroexpand
      compiler-macroexpand-1

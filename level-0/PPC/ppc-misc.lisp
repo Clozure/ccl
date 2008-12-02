@@ -941,13 +941,12 @@
   (blr))
 
 
-(defppclapfunction break-event-pending-p ()
+(defppclapfunction pending-user-interrupt ()
   (ref-global arg_z target::intflag)
+  ;; If another signal happens now, it will get ignored, same as if it happened
+  ;; before whatever signal is in arg_z.  But then these are async signals, so
+  ;; who can be sure it didn't actually happen just before...
   (set-global rzero target::intflag)
-  (cmpri arg_z 0)
-  (li arg_z nil)
-  (beqlr)
-  (la arg_z target::t-offset arg_z)
   (blr))
 
 

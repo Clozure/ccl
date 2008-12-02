@@ -658,14 +658,13 @@
   (movl ($ x8632::subtag-no-thread-local-binding) (% arg_z))
   (single-value-return))
 
-(defx8632lapfunction break-event-pending-p ()
+(defx8632lapfunction pending-user-interrupt ()
   (xorl (% temp0) (% temp0))
-  (ref-global x8632::intflag imm0)
+  (ref-global x8632::intflag arg_z)
+  ;; If another signal happens now, it will get ignored, same as if it happened
+  ;; before whatever signal is in arg_z.  But then these are async signals, so
+  ;; who can be sure it didn't actually happen just before...
   (set-global temp0 x8632::intflag)
-  (testl (% imm0) (% imm0))
-  (setne (%b imm0))
-  (andl ($ x8632::t-offset) (%l imm0))
-  (lea (@ (target-nil-value) (% imm0)) (% arg_z))
   (single-value-return))
 
 (defx8632lapfunction debug-trap-with-string ((arg arg_z))

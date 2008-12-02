@@ -728,10 +728,13 @@ shrink_dynamic_area(natural delta)
 
 
 void
-sigint_handler (int signum, siginfo_t *info, ExceptionInformation *context)
+user_signal_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 {
   if (signum == SIGINT) {
     lisp_global(INTFLAG) = (1 << fixnumshift);
+  }
+  else if (signum == SIGTERM) {
+    lisp_global(INTFLAG) = (2 << fixnumshift);
   }
 #ifdef DARWIN
   DarwinSigReturn(context);
@@ -740,7 +743,7 @@ sigint_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 
 
 void
-register_sigint_handler()
+register_user_signal_handler()
 {
 #ifdef WINDOWS
   extern BOOL CALLBACK ControlEventHandler(DWORD);
@@ -749,7 +752,8 @@ register_sigint_handler()
 
   SetConsoleCtrlHandler(ControlEventHandler,TRUE);
 #else
-  install_signal_handler(SIGINT, (void *)sigint_handler);
+  install_signal_handler(SIGINT, (void *)user_signal_handler);
+  install_signal_handler(SIGTERM, (void *)user_signal_handler);
 #endif
 }
 
@@ -1669,7 +1673,7 @@ main(int argc, char *argv[]
 
   lisp_global(EXCEPTION_LOCK) = ptr_to_lispobj(new_recursive_lock());
   enable_fp_exceptions();
-  register_sigint_handler();
+  register_user_signal_handler();
 
 #ifdef PPC
   lisp_global(ALTIVEC_PRESENT) = altivec_present << fixnumshift;

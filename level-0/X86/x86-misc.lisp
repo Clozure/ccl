@@ -621,14 +621,13 @@
   (single-value-return))
 
 
-(defx86lapfunction break-event-pending-p ()
+(defx86lapfunction pending-user-interrupt ()
   (xorq (% imm0) (% imm0))
-  (ref-global x8664::intflag imm1)
+  (ref-global x8664::intflag arg_z)
+  ;; If another signal happens now, it will get ignored, same as if it happened
+  ;; before whatever signal is in arg_z.  But then these are async signals, so
+  ;; who can be sure it didn't actually happen just before...
   (set-global imm0 x8664::intflag)
-  (testq (% imm1) (% imm1))
-  (setne (%b imm0))
-  (andl ($ x8664::t-offset) (%l imm0))
-  (lea (@ (target-nil-value) (% imm0)) (% arg_z))
   (single-value-return))
 
 
