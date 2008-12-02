@@ -6609,6 +6609,10 @@
   (let* ((vtype (acode-form-type v t))
          (atype (if vtype (specifier-type vtype)))
          (keyword (if (and atype
+                           (let* ((dims (array-ctype-dimensions atype)))
+                             (or (eq dims '*)
+                                 (and (not (atom dims))
+                                      (= (length dims) 1))))
                            (not (array-ctype-complexp atype)))
                     (funcall
                         (arch::target-array-type-name-from-ctype-function
@@ -6622,6 +6626,10 @@
   (let* ((vtype (acode-form-type v t))
          (atype (if vtype (specifier-type vtype)))
          (keyword (if (and atype
+                           (let* ((dims (array-ctype-dimensions atype)))
+                             (or (eq dims '*)
+                                 (and (not (atom dims))
+                                      (= (length dims) 1))))
                            (not (array-ctype-complexp atype)))
                     (funcall
                         (arch::target-array-type-name-from-ctype-function
@@ -7618,18 +7626,20 @@
   (let* ((atype0 (acode-form-type arr t))
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
-         (keyword (and atype
-                       (let* ((dims (array-ctype-dimensions atype)))
-                         (and (typep dims 'list)
-                              (= 2 (length dims))))
+	 (dims (and atype (array-ctype-dimensions atype)))
+	 (keyword (and atype
+		       (or (eq dims '*)
+			   (and (typep dims 'list)
+				(= 2 (length dims))))
                        (not (array-ctype-complexp atype))
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
                         atype))))
     (cond (keyword
-           (let* ((dims (array-ctype-dimensions atype))
-                  (dim0 (car dims))
+	   (when (eq dims '*)
+	     (setq dims nil))
+           (let* ((dim0 (car dims))
                   (dim1 (cadr dims)))
              (ppc2-aref2 seg
                          vreg
@@ -7669,18 +7679,20 @@
   (let* ((atype0 (acode-form-type arr t))
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
+	 (dims (and atype (array-ctype-dimensions atype)))
          (keyword (and atype
-                       (let* ((dims (array-ctype-dimensions atype)))
-                         (and (typep dims 'list)
-                           (= 3 (length dims))))
+		       (or (eq dims '*)
+			   (and (typep dims 'list)
+				(= 3 (length dims))))
                        (not (array-ctype-complexp atype))
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
                         atype))))
     (cond (keyword
-           (let* ((dims (array-ctype-dimensions atype))
-                  (dim0 (car dims))
+	   (when (eq dims '*)
+	     (setq dims nil))
+           (let* ((dim0 (car dims))
                   (dim1 (cadr dims))
                   (dim2 (caddr dims)))
              (ppc2-aref3 seg
@@ -7718,18 +7730,20 @@
   (let* ((atype0 (acode-form-type arr t))
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
+	 (dims (and atype (array-ctype-dimensions atype)))
          (keyword (and atype
-                       (let* ((dims (array-ctype-dimensions atype)))
-                         (and (typep dims 'list)
-                           (= 2 (length dims))))
+		       (or (eq dims '*)
+			   (and (typep dims 'list)
+				(= 2 (length dims))))
                        (not (array-ctype-complexp atype))
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
                         atype))))
     (cond (keyword
-           (let* ((dims (array-ctype-dimensions atype))
-                  (dim0 (car dims))
+	   (when (eq dims '*)
+	     (setq dims nil))
+           (let* ((dim0 (car dims))
                   (dim1 (cadr dims)))
              (ppc2-aset2 seg
                          vreg
@@ -7756,18 +7770,20 @@
   (let* ((atype0 (acode-form-type arr t))
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
+	 (dims (and atype (array-ctype-dimensions atype)))
          (keyword (and atype
-                       (let* ((dims (array-ctype-dimensions atype)))
-                         (unless (atom dims)
-                           (= 3 (length dims))))
+		       (or (eq dims '*)
+			   (unless (atom dims)
+			     (= 3 (length dims))))
                        (not (array-ctype-complexp atype))
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
                         atype))))
     (cond (keyword
-           (let* ((dims (array-ctype-dimensions atype))
-                  (dim0 (car dims))
+	   (when (eq dims '*)
+	     (setq dims nil))
+           (let* ((dim0 (car dims))
                   (dim1 (cadr dims))
                   (dim2 (caddr dims)))
              (ppc2-aset3 seg
