@@ -62,24 +62,27 @@ I have tried to limit LispWorks FLI code to this file.
 (defclass java-object (ccl::foreign-standard-object)
     ())
 
-(ccl::defloadvar *java-object-domain*
-    (ccl::register-foreign-object-domain :java
-                                         :recognize #'ccl::false
-                                         :class-of (lambda (x)
-                                                     (declare (ignore x))
-                                                     (find-class 'java-object))
-                                         :classp #'ccl::false
-                                         :instance-class-wrapper
-                                         (lambda (x)
-                                           (declare (ignore x))
-                                           (ccl::class-own-wrapper
-                                            (find-class 'java-object)))
-                                         :class-own-wrapper
-                                         #'ccl::false
-                                         :slots-vector #'ccl::false
-                                         :class-ordinal #'ccl::false
-                                         :set-class-ordinal
-                                         #'ccl::false))
+(ccl::defloadvar *java-object-domain* nil)
+
+(or *java-object-domain*
+    (setq *java-object-domain*
+          (ccl::register-foreign-object-domain :java
+                                               :recognize #'ccl::false
+                                               :class-of (lambda (x)
+                                                           (declare (ignore x))
+                                                           (find-class 'java-object))
+                                               :classp #'ccl::false
+                                               :instance-class-wrapper
+                                               (lambda (x)
+                                                 (declare (ignore x))
+                                                 (ccl::class-own-wrapper
+                                                  (find-class 'java-object)))
+                                               :class-own-wrapper
+                                               #'ccl::false
+                                               :slots-vector #'ccl::false
+                                               :class-ordinal #'ccl::false
+                                               :set-class-ordinal
+                                               #'ccl::false)))
 
 (deftype java-ref () 'java-object)
 
@@ -108,12 +111,16 @@ I have tried to limit LispWorks FLI code to this file.
 
 ;;; Map between lisp and Java booleans
 (eval-when (:compile-toplevel)
-  (declaim (inline jboolean-arg jboolean-result jobject-result)))
+  (declaim (inline jboolean-arg jboolean-result jobject-result jobject-arg)))
 
 (defun jboolean-arg (val)
   (if (and val (not (eql val #$JNI_FALSE)))
     #$JNI_TRUE
     #$JNI_FALSE))
+
+(defun jobject-arg (val)
+  (or val ccl::+null-ptr+))
+
 
 (defun jboolean-result (val)
   (not (eql val #$JNI_FALSE)))
@@ -121,8 +128,8 @@ I have tried to limit LispWorks FLI code to this file.
 ;;; Might also want to register p for termination (finalization).
 (defun jobject-result (val)
   (unless (ccl::%null-ptr-p val)
-    (ccl::%set-macptr-domain val *java-object-domain*))
-  val)
+    (ccl::%set-macptr-domain val *java-object-domain*)
+    val))
 
 
 
@@ -167,13 +174,28 @@ if necessary."
 
 ;;; JNIEnv functions.
 
+(defun process-jnienv-call-args (specs)
+  (ccl::collect ((args))
+    (do* ((specs specs (cddr specs)))
+         ((null specs) (args))
+      (let* ((type (car specs))
+             (valform (cadr specs)))
+        (args type)
+        (case type
+          (:jboolean (args `(jboolean-arg ,valform)))
+          ((:jobject :jclass :jstring :jthrowable :jarray #>jbooleanArray
+                     #>jbyteArray #>jcharArray #>jshortArray #>jintArray
+                     #>jlongArray #>jfloatArray #>jdoubleArray #>jobjectArray)
+           (args `(jobject-arg ,valform)))
+          (t (args valform)))))))
+  
 (defmacro jnienv-call ((slot result-type) &rest specs)
   ;; We might want to special-case some result-types for finalization.
   (let* ((env (gensym))
          (accessor (ccl::escape-foreign-name (concatenate 'string "JNIEnv." slot)))
          (form
           `(let* ((,env (current-env)))
-            (ff-call (pref ,env ,accessor) :address ,env ,@specs ,result-type))))
+            (ff-call (pref ,env ,accessor) :address ,env ,@(process-jnienv-call-args specs) ,result-type))))
     (case result-type
       (:jboolean `(jboolean-result ,form))
       ((:jobject :jclass :jstring :jthrowable :jarray #>jbooleanArray
@@ -210,7 +232,7 @@ if necessary."
   (jnienv-call ("ToReflectedMethod" :jobject)
                :jclass cls
                #>jmethodID method-id
-               :jboolean (jboolean-arg is-static)))
+               :jboolean is-static))
 
 (defun get-superclass (sub)
   (jnienv-call ("GetSuperclass" :jclass) :jclass sub))
@@ -224,7 +246,7 @@ if necessary."
   (jnienv-call ("ToReflectedField" :jobject)
                :jclass cls
                #>jfieldID field-id
-               :jboolean (jboolean-arg is-static)))
+               :jboolean is-static))
 
 (defun jni-throw (obj)
   (jnienv-call ("Throw" :jint) :jthrowable obj))
@@ -489,7 +511,7 @@ if necessary."
   (jnienv-call ("SetBooleanField" :void)
                :jobject obj
                #>jfieldID field-id
-               :jboolean (jboolean-arg val)))
+               :jboolean val))
 
 (defun set-byte-field (obj field-id val)
   (jnienv-call ("SetByteField" :void)
@@ -668,7 +690,7 @@ if necessary."
   (jnienv-call ("SetStaticBooleanField" :void)
                :jclass clazz
                #>jfieldID field-id
-               :jboolean (jboolean-arg value)))
+               :jboolean value))
 
 (defun set-static-byte-field (clazz field-id value)
   (jnienv-call ("SetStaticByteField" :void)
@@ -1155,7 +1177,12 @@ The option strings can be used to control the JVM, esp. the classpath:
 
 (defcallback |LispInvocationHandler_invoke|
     (:address env :jobject obj :jobject proxy :jobject method :jobject args :jobject)
-  (do-invoke env obj proxy method args))
+  (jobject-result obj)
+  (jobject-result proxy)
+  (jobject-result method)
+  (jobject-result args)
+  (jobject-arg 
+   (do-invoke env obj proxy method args)))
 
 
 (defun do-invoke (env obj proxy method args)
@@ -1174,7 +1201,7 @@ The option strings can be used to control the JVM, esp. the classpath:
 ;JNI will sometimes indicate theere is an exception via a return value
 ;so take advantage of that when possible vs. the call back to exception-check
 (defun try-null (result)
-  (if (ccl:%null-ptr-p result)
+  (if (or (null result) (ccl:%null-ptr-p result))
       (handle-exception)
     result))
 
@@ -1256,8 +1283,8 @@ The option strings can be used to control the JVM, esp. the classpath:
 
 (defun process-arg (val type)
   (if (string-equal "java.lang.String" type)
-                 `(convert-string-arg ,val)
-                 val))
+    `(convert-string-arg ,val)
+    `(or ,val ccl::+null-ptr+)))
 
 (defmacro set-arg (args i val type)
   `(setf (pref (paref ,args (:* :jvalue) ,i)
