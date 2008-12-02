@@ -15,7 +15,7 @@ Callbacks from Java to Lisp also require jfli.jar (included)
 |#
 
 (defpackage :jfli
-  (:use :common-lisp :ccl :jni)
+  (:use :common-lisp :jni)
   (:export
 
    ;jvm creation
@@ -347,7 +347,7 @@ prefixed by 'classname.' -
 (defun constructor-symbol (full-class-name)
   (member-symbol full-class-name "new"))
 
-¯(defun get-java-class-ref (canonic-class-symbol)
+(defun get-java-class-ref (canonic-class-symbol)
   "class-ref is cached on the plist of the canonic class symbol"
   (get-or-init (get canonic-class-symbol :class-ref)
                (let ((class-name (jni::string-append (package-name
