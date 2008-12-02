@@ -8634,19 +8634,20 @@
   (let* ((atype0 (acode-form-type arr t))
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
+	 (dims (and atype (array-ctype-dimensions atype)))
          (keyword (and atype
-                       (let* ((dims (array-ctype-dimensions atype)))
-                         (or (eq dims '*)
-                             (and (typep dims 'list)
-                                  (= 2 (length dims)))))
+		       (or (eq dims '*)
+			   (and (typep dims 'list)
+				(= 2 (length dims))))
                        (not (array-ctype-complexp atype))
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
                         atype))))
     (cond (keyword
-           (let* ((dims (array-ctype-dimensions atype))
-                  (dim0 (car dims))
+	   (when (eq dims '*)
+	     (setq dims nil))
+           (let* ((dim0 (car dims))
                   (dim1 (cadr dims)))
              (x862-aref2 seg
                          vreg
@@ -8690,19 +8691,20 @@
   (let* ((atype0 (acode-form-type arr t))
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
+	 (dims (and atype (array-ctype-dimensions atype)))
          (keyword (and atype
-                       (let* ((dims (array-ctype-dimensions atype)))
-                         (or (eq dims '*)
-                             (and (typep dims 'list)
-                                  (= 3 (length dims)))))
+		       (or (eq dims '*)
+			   (and (typep dims 'list)
+				(= 3 (length dims))))
                        (not (array-ctype-complexp atype))
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
                         atype))))
     (cond (keyword
-           (let* ((dims (array-ctype-dimensions atype))
-                  (dim0 (car dims))
+	   (when (eq dims '*)
+	     (setq dims nil))
+           (let* ((dim0 (car dims))
                   (dim1 (cadr dims))
                   (dim2 (caddr dims)))
              (x862-aref3 seg
@@ -8733,19 +8735,20 @@
   (let* ((atype0 (acode-form-type arr t))
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
+	 (dims (and atype (array-ctype-dimensions atype)))
          (keyword (and atype
-                       (let* ((dims (array-ctype-dimensions atype)))
-                         (or (eq dims '*)
-                             (and (typep dims 'list)
-                                  (= 2 (length dims)))))
+		       (or (eq dims '*)
+			   (and (typep dims 'list)
+				(= 2 (length dims))))
                        (not (array-ctype-complexp atype))
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
                         atype))))
     (cond (keyword
-           (let* ((dims (array-ctype-dimensions atype))
-                  (dim0 (car dims))
+	   (when (eq dims '*)
+	     (setq dims nil))
+           (let* ((dim0 (car dims))
                   (dim1 (cadr dims)))
              (x862-aset2 seg
                          vreg
@@ -8773,19 +8776,20 @@
   (let* ((atype0 (acode-form-type arr t))
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
+	 (dims (and atype (array-ctype-dimensions atype)))
          (keyword (and atype
-                       (let* ((dims (array-ctype-dimensions atype)))
-                         (or (eq dims '*)
-                             (unless (atom dims)
-                               (= 3 (length dims)))))
+		       (or (eq dims '*)
+			   (unless (atom dims)
+			     (= 3 (length dims))))
                        (not (array-ctype-complexp atype))
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
                         atype))))
     (cond (keyword
-           (let* ((dims (array-ctype-dimensions atype))
-                  (dim0 (car dims))
+	   (when (eq dims '*)
+	     (setq dims nil))
+           (let* ((dim0 (car dims))
                   (dim1 (cadr dims))
                   (dim2 (caddr dims)))
              (x862-aset3 seg
