@@ -9,7 +9,7 @@ Apple's CHUD metering tools are available (as of this writing) from:
 <ftp://ftp.apple.com/developer/Tool_Chest/Testing_-_Debugging/Performance_tools/>. 
 
 The CHUD tools are also generally bundled with Apple's XCode tools.
-CBUD 4.5.0 (which seems to be bundled with XCode 3.0) seems to work
+CHUD 4.5.0 (which seems to be bundled with XCode 3.0) seems to work
 well with this interface; later versions may have problems.
 Versions of CHUD as old as 4.1.1 may work with 32-bit PPC versions
 of CCL; later versions (not sure exactly -what- versions) added
