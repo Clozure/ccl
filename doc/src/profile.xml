@@ -187,7 +187,7 @@ samples  %        symbol name
 	<para><ulink url="ftp://ftp.apple.com/developer/Tool_Chest/Testing_-_Debugging/Performance_tools/">
 	  ftp://ftp.apple.com/developer/Tool_Chest/Testing_-_Debugging/Performance_tools/</ulink>.</para>
 
-	<para>The CHUD tools are also generally bundled with Apple's XCode tools.  CBUD
+	<para>The CHUD tools are also generally bundled with Apple's XCode tools.  CHUD
 	4.5.0 (which seems to be bundled with XCode 3.0) seems to work well with this
 	interface; later versions may have problems.  Versions of CHUD as old as 4.1.1 may
 	work with 32-bit PPC versions of CCL; later versions (not sure exactly -what-
