@@ -685,8 +685,7 @@
    (direct-default-initargs nil direct-default-initargs-p)
    (documentation nil doc-p)
    (primary-p nil primary-p-p))
-  (declare (ignore slot-names))
-  (if direct-superclasses-p
+  (if (or direct-superclasses-p (eq slot-names t))
     (progn
       (setq direct-superclasses
             (or direct-superclasses
