@@ -96,6 +96,14 @@
   `(with-lock-grabbed (*profiler-lock*)
      ,@body))
 
+#+darwin
+(defun mach-timespec->nanoseconds (ts)
+  "Convert the given typespec structure into nanoseconds."
+  (+ (* 1000000000 (pref ts :mach_timespec.tv_sec))
+     (pref ts :mach_timespec.tv_nsec)))
+#+darwin
+(declaim (inline mach-timespec->nanoseconds))
+
 (defun timespec->nanoseconds (ts)
   "Convert the given typespec structure into nanoseconds."
   (+ (* 1000000000 (pref ts :timespec.tv_sec))
@@ -110,9 +118,10 @@
 (let ((clock-port (make-record :clock_serv_t)))
   (#_host_get_clock_service (#_mach_host_self) #$REALTIME_CLOCK clock-port)
   (defun get-real-time ()
-    (ccl:rlet ((ts :mach_timespec_t))
-      (#_clock_get_time (%get-ptr clock-port) ts)
-      (timespec->nanoseconds ts))))
+    (ccl:rlet ((ts :mach_timespec))
+      (unless (zerop (#_clock_get_time (%get-ptr clock-port) ts))
+        (error "error reading clock ~A: ~A~%" id (ccl::%strerror (ccl::%get-errno))))
+      (mach-timespec->nanoseconds ts))))
 
 ;;; For non-Darwin platforms, we use clock_gettime() with the
 ;;; CLOCK_MONOTONIC clock.
