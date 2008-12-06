@@ -113,30 +113,6 @@
       (let* ((filename (#/objectAtIndex: (#/filenames panel) 0)))
         (#/setValue:forKey: values filename #@"hyperspecFileURLString")))))
 
-(objc:defmethod (#/selectCCLdirectory: :void)
-    ((self lisp-preferences-window-controller)
-     sender)
-  (declare (ignore sender))
-  (let* ((panel (make-instance 'ns:ns-open-panel))
-         (values (#/values (#/sharedUserDefaultsController ns:ns-user-defaults-controller))))
-    (#/setAllowsMultipleSelection: panel nil)
-    (#/setCanChooseDirectories: panel t)
-    (#/setCanChooseFiles: panel nil)
-    (when (eql
-           (#/runModalForDirectory:file:types:
-            panel
-            (#/valueForKey: values #@"cclDirectory")
-            +null-ptr+
-            +null-ptr+)
-           #$NSOKButton)
-      ;; #/stringByStandardizingPath seems to strip trailing slashes
-      (let* ((filename (#/stringByAppendingString:
-                        (#/stringByStandardizingPath (#/objectAtIndex: (#/filenames panel) 0))
-                         #@"/")))
-        (#/setValue:forKey: values filename #@"cclDirectory")))))
-
-
-
 (objc:defmethod #/sharedPanel ((self +lisp-preferences-panel))
   (cond (*lisp-preferences-panel*)
         (t

@@ -59,7 +59,6 @@
   ((tab-view :foreign-type :id :accessor tab-view)
    (editor-tab-view-item :foreign-type :id :accessor editor-tab-view-item)
    (listener-tab-view-item :foreign-type :id :accessor listener-tab-view-item)
-   (ccl-path-button :foreign-type :id :accessor ccl-path-button)
    (hyperspec-path-button :foreign-type :id :accessor hyperspec-path-button)
    (toolbar :foreign-type :id :accessor toolbar)
    (general-prefs :foreign-type :id :accessor general-prefs)
@@ -155,29 +154,6 @@
        (unless (%null-ptr-p font)
 	 (setq data (#/archivedDataWithRootObject: ns:ns-archiver font))
 	 (#/setObject:forKey: defaults data #@"editorFont"))))))
-
-(objc:defmethod (#/selectCCLDirectory: :void) ((self preferences-window-controller)
-					  sender)
-  (declare (ignore sender))
-  (let* ((panel (#/openPanel ns:ns-open-panel))
-	 (dc (#/sharedUserDefaultsController ns:ns-user-defaults-controller))
-         (values (#/values dc))
-	 (key #@"cclDirectory"))
-    (#/setAllowsMultipleSelection: panel nil)
-    (#/setCanChooseDirectories: panel t)
-    (#/setCanChooseFiles: panel nil)
-    (when (eql (#/runModalForDirectory:file:types: panel
-						   (#/valueForKey: values key)
-						   +null-ptr+
-						   +null-ptr+)
-	       #$NSOKButton)
-      ;; #/stringByStandardizingPath seems to strip trailing slashes
-      (let* ((filename (#/stringByAppendingString:
-                        (#/stringByStandardizingPath
-			 (#/objectAtIndex: (#/filenames panel) 0))
-			#@"/")))
-        (#/setValue:forKey: values filename key)))))
-
 
 ;;; toolbar delegate methods
 
