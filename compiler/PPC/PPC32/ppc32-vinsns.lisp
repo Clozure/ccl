@@ -2078,8 +2078,8 @@
      (ori dest dest (:apply logand intval #xffff))))))
 
 
-(define-ppc32-vinsn discard-temp-frame (()
-                                        ())
+(define-ppc32-vinsn (discard-temp-frame :tsp :pop :discard) (()
+                                                             ())
   (lwz ppc::tsp 0 ppc::tsp))
 
 
@@ -2181,8 +2181,8 @@
 ;;; We should rarely have to do this.  It's easier to just generate code
 ;;; to do the memory reference than it would be to keep track of the size
 ;;; of each frame.
-(define-ppc32-vinsn discard-c-frame (()
-                                     ())
+(define-ppc32-vinsn (discard-c-frame :csp :pop :discard) (()
+                                                          ())
   (lwz ppc::sp 0 ppc::sp))
 
 
@@ -2307,8 +2307,8 @@
   (mr dest ppc::allocptr)
   (clrrwi ppc::allocptr ppc::allocptr ppc32::ntagbits))
 
-(define-ppc32-vinsn vstack-discard (()
-                                    ((nwords :u32const)))
+(define-ppc32-vinsn (vstack-discard :vsp :pop :discard) (()
+                                                         ((nwords :u32const)))
   ((:not (:pred = nwords 0))
    (la ppc::vsp (:apply ash nwords ppc32::word-shift) ppc::vsp)))
 
