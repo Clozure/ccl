@@ -58,9 +58,15 @@ relocate_area_contents(area *a, LispObj bias)
     if (immheader_tag_p(fulltag)) {
       start = (LispObj *)skip_over_ivector((natural)start, w0);
     } else {
-#ifdef X8664
+#ifdef X86
       if (header_subtag(w0) == subtag_function) {
-        int skip = (int) start[1];
+#ifdef X8664
+        int skip = ((int) start[1])+1;
+#else
+        int skip = ((unsigned short)start[1])+1;
+        extern void update_self_references(LispObj *);
+        update_self_references(start);
+#endif
      
         start += skip;
         if (((LispObj) start) & node_size) {
