@@ -86,9 +86,7 @@ lisp-kernel/static-linuxppc/external-functions.h
 scripts/*~.*
 tools/*fsl
 tools/*~.*
-tools/asdf-install/*~.*
-tools/asdf-install/asdf-install
+tools/asdf-install/*fsl
 tools/asdf-install/doc/*~.*
-tools/asdf-install/test-passed
 xdump/*.*fsl
 xdump/*~.*
