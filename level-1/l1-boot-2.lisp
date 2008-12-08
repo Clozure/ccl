@@ -282,6 +282,8 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "FFI-WIN32" "ffi-win32")
       #+solarisx8632-target
       (bin-load-provide "FFI-SOLARISX8632" "ffi-solarisx8632")
+      #+freebsdx8632-target
+      (bin-load-provide "FFI-FREEBSDX8632" "ffi-freebsdx8632")
       
       (bin-load-provide "DB-IO" "db-io")
 
