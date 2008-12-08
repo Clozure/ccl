@@ -2264,19 +2264,21 @@ changing its name to ~s may have serious consequences." class new))
                                                   (if initfunction
                                                       initform
                                                       `(%slot-unbound-marker))))))
-                                      (default (assq initarg default-initargs)))
+                                      (default (assq initarg default-initargs))
+                                      (default-value-form nil))
                                  (when spvar (ignorable spvar))
                                  (when default
                                    (destructuring-bind (form function)
                                        (cdr default)
-                                     (setq default
-                                           (if (self-evaluating-p form)
+                                     (setq default-value-form
+                                           (if (or (quoted-form-p form)
+                                                   (self-evaluating-p form))
                                                form
                                                `(funcall ,function)))))
                                  (keys (list*
                                         (list initarg name)
                                         (if (and default one-initarg-p (null location-var))
-                                            default
+                                            default-value-form
                                             initial-value-form)
                                         (if spvar (list spvar))))
                                  (if one-initarg-p
