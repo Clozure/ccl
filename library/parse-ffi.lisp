@@ -780,7 +780,6 @@
          (*parse-ffi-target-ftd* ftd)
          (*target-ftd* ftd)
          (*target-backend* backend)
-         (*ffi-struct-return-explicit* t)
 	 (d (use-interface-dir dirname ftd))
 	 (interface-dir (merge-pathnames
 			 (interface-dir-subdir d)
