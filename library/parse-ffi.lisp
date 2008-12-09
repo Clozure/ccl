@@ -720,6 +720,12 @@
     (record-global-function ffi-function)))
 
 
+(defun read-ffi-toplevel-form (stream eof-value)
+  (loop
+    (let* ((ch (peek-char  nil stream nil eof-value)))
+      (cond ((eq ch eof-value) (return eof-value))
+            ((eql ch #\() (return (read stream nil eof-value)))
+            (t (read-line stream))))))
 
 (defun parse-ffi (inpath)
   (let* ((*ffi-typedefs* (make-hash-table :test 'string= :hash-function 'sxhash))
@@ -736,7 +742,8 @@
       (with-open-file (in inpath)
         (let* ((*ffi-ordinal* -1))
           (let* ((*package* (find-package "KEYWORD")))
-            (do* ((form (read in nil :eof) (read in nil :eof)))
+            (do* ((form (read-ffi-toplevel-form in :eof)
+                        (read-ffi-toplevel-form in :eof)))
                  ((eq form :eof))
               (case (car form)
                 (:struct (push (process-ffi-struct form) defined-types))
@@ -1292,7 +1299,7 @@
                                          ;; This is an explicit type conversion
                                          `(c::cast ,(evaluate-type-name (list left))
                                            ,@(parse-argument-list)))
-                                        (t `(c::call ,left ,@(parse-argument-list))))))
+                                        (t nil #|`(c::call ,left ,@(parse-argument-list))|#))))
                                ((memq right '(c::|.| c::|->|))
                                 (next)          ; swallow operator
                                 `(,right ,left ,(parse-primary (next))))  ; parse-name, really
