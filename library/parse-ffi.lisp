@@ -53,8 +53,10 @@
 (defvar *ffi-objc-classes* nil)
 (defvar *ffi-global-objc-classes* nil)
 (defvar *ffi-global-objc-messages* nil)
-(defvar *ffi-macros*)
-(defvar *ffi-vars*)
+;;; Some things are just too hard to parse, but are important.
+;;; Override those things with simpler versions.
+(defvar *ffi-macro-overrides*
+  '((:macro ("{override}" 0) "_IOC_TYPECHECK ( t )" "sizeof(t)")))
 
 (defvar *ffi-void-reference* '(:primitive :void))
 
@@ -716,7 +718,9 @@
     (dolist (arg args) (ensure-referenced-type-defined arg))
     (ensure-referenced-type-defined retval)
     (record-global-function ffi-function)))
-  
+
+
+
 (defun parse-ffi (inpath)
   (let* ((*ffi-typedefs* (make-hash-table :test 'string= :hash-function 'sxhash))
          (*ffi-unions* (make-hash-table :test 'string= :hash-function 'sxhash))
@@ -748,13 +752,19 @@
                                (args (ffi-macro-args m)))
                           (if args
                             (setf (gethash (string (ffi-macro-name m)) argument-macros) args)
-			    (push m defined-macros))))
+                            (push m defined-macros))))
                 (:type (push (process-ffi-typedef form) defined-types))
                 (:var (push (process-ffi-var form) defined-vars))
                 (:enum-ident (push (process-ffi-enum-ident form) defined-constants))
                 (:enum (process-ffi-enum form))
                 (:union (push (process-ffi-union form) defined-types))
                 (:transparent-union (push (process-ffi-transparent-union form) defined-types)))))
+          (dolist (override *ffi-macro-overrides*)
+            (let* ((m (process-ffi-macro override))
+                   (args (ffi-macro-args m)))
+              (if args
+                (setf (gethash (string (ffi-macro-name m)) argument-macros) args)
+                (push m defined-macros))))
           (multiple-value-bind (new-constants new-macros)
               (process-defined-macros defined-macros (reverse defined-constants) argument-macros)
 	    ;; If we're really lucky, we might be able to turn some C macros
@@ -1176,7 +1186,7 @@
              (let ((left (parse-logical-or)))
                (if (eq (peek) 'c::|?|)
                  (let ((then (progn (next) (parse-expression)))
-                       (else (if (eq (peek) '|:|)
+                       (else (if (eq (peek) 'c::|:|)
                                (progn (next) (parse-conditional))
                                (fail "~A where : was expected" (peek)))))
                    (list 'if left then else))
