@@ -94,6 +94,13 @@
 		  (make-condition condition-name
 				  :datum (car errargs)
 				  :format-control format-string))
+                 (array-element-type-error
+                  (let* ((array (cadr errargs)))
+                    (make-condition condition-name
+                                    :format-control format-string
+                                    :datum (car errargs)
+                                    :expected-type (array-element-type array)
+                                    :array array)))
                                   
                  (t (make-condition condition-name 
                                     :format-control format-string

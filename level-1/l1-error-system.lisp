@@ -176,6 +176,15 @@
 
 (define-condition simple-type-error (simple-condition type-error) ())
 
+(define-condition array-element-type-error (simple-type-error)
+  ((array :initarg :array :reader array-element-type-error-array))
+  (:report (lambda (c s)
+             (format s (simple-condition-format-control c)
+                     (type-error-datum c)
+                     (array-element-type-error-array c)))))
+                  
+
+
 
 
 (define-condition program-error (error) ())
@@ -1050,6 +1059,7 @@
         (cons $xaccessnth 'sequence-index-type-error)
 	(cons $ximproperlist 'improper-list)
 	(cons $xnospread 'cant-construct-arglist)
+        (cons $xnotelt 'array-element-type-error)
         ))
 
 
