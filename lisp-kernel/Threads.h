@@ -253,7 +253,7 @@ atomic_ior(natural*, natural);
 #endif
 
 #ifdef FREEBSD
-#define SIG_KILL_THREAD (SIG_THR+5)
+#define SIG_KILL_THREAD (SIGTHR+5)
 #endif
 
 
