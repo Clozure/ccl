@@ -2022,11 +2022,11 @@ quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
 #endif
   TCR *tcr = get_tcr(false);
   sigset_t mask;
-  
+
   sigemptyset(&mask);
 
   empty_tcr_stacks(tcr);
-  
+
   pthread_sigmask(SIG_SETMASK,&mask,NULL);
   pthread_exit(NULL);
 }
@@ -2109,9 +2109,10 @@ void
 thread_signal_setup()
 {
   thread_suspend_signal = SIG_SUSPEND_THREAD;
+  thread_quit_signal = SIG_KILL_THREAD;
 
   install_signal_handler(thread_suspend_signal, (void *)SUSPEND_RESUME_HANDLER);
-  install_signal_handler(SIGQUIT, (void *)QUIT_HANDLER);
+  install_signal_handler(thread_quit_signal, (void *)QUIT_HANDLER);
 }
 #endif
 

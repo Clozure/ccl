@@ -239,7 +239,10 @@ atomic_ior(natural*, natural);
 #define SIG_SUSPEND_THREAD SIGUSR2
 #endif
 
-extern int thread_suspend_signal, thread_resume_signal;
+
+#define SIG_KILL_THREAD  SIGQUIT   /* unless we can find something better */
+
+extern int thread_suspend_signal, thread_quit_signal;
 
 void *
 allocate_stack(natural);

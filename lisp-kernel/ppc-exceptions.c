@@ -2205,6 +2205,7 @@ void
 thread_signal_setup()
 {
   thread_suspend_signal = SIG_SUSPEND_THREAD;
+  thread_quit_signal = SIG_KILL_THREAD;
 
   install_signal_handler(thread_suspend_signal, (void *) suspend_resume_handler);
   install_signal_handler(SIGQUIT, (void *)quit_handler);
