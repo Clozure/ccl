@@ -73,7 +73,7 @@ extern LispObj lisp_nil;
 
 /* These are only non-zero when an image is being saved or loaded */
 
-#if (WOED_SIZE==64)
+#if (WORD_SIZE==64)
 #define LISP_HEAP_THRESHOLD (-511)
 #define EGC_ENABLED (-510)
 #define G0_THRESHOLD (-509)
