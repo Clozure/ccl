@@ -546,7 +546,7 @@ current_thread_osid()
 #endif
 
 
-int thread_suspend_signal = 0, thread_quit_signal = 0;
+int thread_suspend_signal = 0, thread_kill_signal = 0;
 
 
 
@@ -2020,7 +2020,7 @@ kill_tcr(TCR *tcr)
         shutdown_thread_tcr(tcr);
       }
 #else
-      if (pthread_kill((pthread_t)osid,thread_quit_signal)) {
+      if (pthread_kill((pthread_t)osid,thread_kill_signal)) {
         result = false;
       }
 #endif

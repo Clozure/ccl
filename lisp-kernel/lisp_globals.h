@@ -71,6 +71,22 @@ extern LispObj lisp_nil;
 
 #define MIN_KERNEL_GLOBAL INITIAL_TCR
 
+/* These are only non-zero when an image is being saved or loaded */
+
+#if (WOED_SIZE==64)
+#define LISP_HEAP_THRESHOLD (-511)
+#define EGC_ENABLED (-510)
+#define G0_THRESHOLD (-509)
+#define G1_THRESHOLD (-508)
+#define G2_THRESHOLD (-507)
+#else
+#define LISP_HEAP_THRESHOLD (-1023)
+#define EGC_ENABLED (-1022)
+#define G0_THRESHOLD (-1021)
+#define G1_THRESHOLD (-1020)
+#define G2_THRESHOLD (-1019)
+#endif
+
 #ifdef PPC
 #ifdef PPC64
 #define lisp_global(g) (((LispObj *) (0x3000+(LOWMEM_BIAS)))[(g)])

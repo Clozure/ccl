@@ -454,6 +454,16 @@ save_application(unsigned fd)
   
   prepare_to_write_dynamic_space(active_dynamic_area);
 
+  {
+    area *g0_area = g1_area->younger;
+
+    /* Save GC config */
+    lisp_global(LISP_HEAP_THRESHOLD) = lisp_heap_gc_threshold;
+    lisp_global(G0_THRESHOLD) = g0_area->threshold;
+    lisp_global(G1_THRESHOLD) = g1_area->threshold;
+    lisp_global(G1_THRESHOLD) = g2_area->threshold;
+    lisp_global(EGC_ENABLED) = (LispObj)(active_dynamic_area->older != NULL);
+  }
   /*
     lisp_global(GC_NUM) and lisp_global(FWDNUM) are persistent,
     as is DELETED_STATIC_PAIRS.
@@ -465,6 +475,11 @@ save_application(unsigned fd)
     case GC_NUM:
     case STATIC_CONSES:
     case WEAK_GC_METHOD:
+    case LISP_HEAP_THRESHOLD:
+    case EGC_ENABLED:
+    case G0_THRESHOLD:
+    case G1_THRESHOLD:
+    case G2_THRESHOLD:
       break;
     default:
       lisp_global(i) = 0;

@@ -240,9 +240,24 @@ atomic_ior(natural*, natural);
 #endif
 
 
-#define SIG_KILL_THREAD  SIGQUIT   /* unless we can find something better */
+#ifdef DARWIN
+#define SIG_KILL_THREAD SIGEMT
+#endif
 
-extern int thread_suspend_signal, thread_quit_signal;
+#if defined(LINUX) && defined(SIGRTMIN)
+#define SIG_KILL_THREAD (SIGRTMIN+7)
+#endif
+
+#ifdef SOLARIS
+#define SIG_KILL_THREAD SIGRTMIN
+#endif
+
+#ifdef FREEBSD
+#define SIG_KILL_THREAD (SIG_THR+5)
+#endif
+
+
+extern int thread_suspend_signal, thread_kill_signal;
 
 void *
 allocate_stack(natural);

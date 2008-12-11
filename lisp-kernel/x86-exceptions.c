@@ -2010,12 +2010,12 @@ empty_tcr_stacks(TCR *tcr)
 
 #ifdef WINDOWS
 void
-quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
+thread_kill_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
 {
 }
 #else
 void
-quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
+thread_kill_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
 {
 #ifdef DARWIN_GS_HACK
   Boolean gs_was_tcr = ensure_gs_pthread();
@@ -2035,7 +2035,7 @@ quit_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
 #ifndef WINDOWS
 #ifndef USE_SIGALTSTACK
 void
-arbstack_quit_handler(int signum, siginfo_t *info, ExceptionInformation *context)
+arbstack_thread_kill_handler(int signum, siginfo_t *info, ExceptionInformation *context)
 {
 #ifdef DARWIN_GS_HACK
   Boolean gs_was_tcr = ensure_gs_pthread();
@@ -2047,7 +2047,7 @@ arbstack_quit_handler(int signum, siginfo_t *info, ExceptionInformation *context
   if ((current_sp >= vs->low) &&
       (current_sp < vs->high)) {
     handle_signal_on_foreign_stack(tcr,
-                                   quit_handler,
+                                   thread_kill_handler,
                                    signum,
                                    info,
                                    context,
@@ -2064,21 +2064,21 @@ arbstack_quit_handler(int signum, siginfo_t *info, ExceptionInformation *context
       set_gs_address(tcr);
     }
 #endif
-    quit_handler(signum, info, context);
+    thread_kill_handler(signum, info, context);
   }
 }
 
 
 #else
 void
-altstack_quit_handler(int signum, siginfo_t *info, ExceptionInformation *context)
+altstack_thread_kill_handler(int signum, siginfo_t *info, ExceptionInformation *context)
 {
 #ifdef DARWIN_GS_HACK
   Boolean gs_was_tcr = ensure_gs_pthread();
 #endif
   TCR* tcr = get_tcr(true);
   handle_signal_on_foreign_stack(tcr,
-                                 quit_handler,
+                                 thread_kill_handler,
                                  signum,
                                  info,
                                  context,
@@ -2093,10 +2093,10 @@ altstack_quit_handler(int signum, siginfo_t *info, ExceptionInformation *context
 
 #ifdef USE_SIGALTSTACK
 #define SUSPEND_RESUME_HANDLER altstack_suspend_resume_handler
-#define QUIT_HANDLER altstack_quit_handler
+#define THREAD_KILL_HANDLER altstack_thread_kill_handler
 #else
 #define SUSPEND_RESUME_HANDLER arbstack_suspend_resume_handler
-#define QUIT_HANDLER arbstack_quit_handler
+#define THREAD_KILL_HANDLER arbstack_thread_kill_handler
 #endif
 
 #ifdef WINDOWS
@@ -2109,10 +2109,10 @@ void
 thread_signal_setup()
 {
   thread_suspend_signal = SIG_SUSPEND_THREAD;
-  thread_quit_signal = SIG_KILL_THREAD;
+  thread_kill_signal = SIG_KILL_THREAD;
 
   install_signal_handler(thread_suspend_signal, (void *)SUSPEND_RESUME_HANDLER);
-  install_signal_handler(thread_quit_signal, (void *)QUIT_HANDLER);
+  install_signal_handler(thread_kill_signal, (void *)THREAD_KILL_HANDLER);
 }
 #endif
 

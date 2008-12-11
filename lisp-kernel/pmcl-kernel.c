@@ -1466,6 +1466,18 @@ main(int argc, char *argv[]
 )
 {
   extern int page_size;
+  natural default_g0_threshold = G0_AREA_THRESHOLD,
+    default_g1_threshold = G1_AREA_THRESHOLD,
+    default_g2_threshold = G2_AREA_THRESHOLD,
+    lisp_heap_threshold_from_image = 0;
+  Boolean egc_enabled =
+#ifdef DISABLE_EGC
+    false
+#else
+    true
+#endif
+    ;
+  Boolean lisp_heap_threshold_set_from_command_line = false;
 
 #ifdef PPC
   extern int altivec_present;
@@ -1582,6 +1594,10 @@ main(int argc, char *argv[]
   } else {
     process_options(argc,argv);
   }
+  if (lisp_heap_gc_threshold != DEFAULT_LISP_HEAP_GC_THRESHOLD) {
+    lisp_heap_threshold_set_from_command_line = true;
+  }
+
   initial_stack_size = ensure_stack_limit(initial_stack_size);
   if (image_name == NULL) {
     if (check_for_embedded_image(real_executable_name)) {
@@ -1598,6 +1614,21 @@ main(int argc, char *argv[]
   gc_init();
 
   set_nil(load_image(image_name));
+  lisp_heap_threshold_from_image = lisp_global(LISP_HEAP_THRESHOLD);
+  if (lisp_heap_threshold_from_image) {
+    if ((!lisp_heap_threshold_set_from_command_line) &&
+        (lisp_heap_threshold_from_image != lisp_heap_gc_threshold)) {
+      lisp_heap_gc_threshold = lisp_heap_threshold_from_image;
+      resize_dynamic_heap(active_dynamic_area->active,lisp_heap_gc_threshold);
+    }
+    /* If lisp_heap_threshold_from_image was set, other image params are
+       valid. */
+    default_g0_threshold = lisp_global(G0_THRESHOLD);
+    default_g1_threshold = lisp_global(G1_THRESHOLD);
+    default_g2_threshold = lisp_global(G2_THRESHOLD);
+    egc_enabled = lisp_global(EGC_ENABLED);
+  }
+
   lisp_global(TCR_AREA_LOCK) = ptr_to_lispobj(tcr_area_lock);
 
 #ifdef X86
@@ -1661,9 +1692,9 @@ main(int argc, char *argv[]
     a->static_used = 0;
     lisp_global(TENURED_AREA) = ptr_to_lispobj(tenured_area);
     lisp_global(REFBITS) = ptr_to_lispobj(tenured_area->refbits);
-    g2_area->threshold = G2_AREA_THRESHOLD;
-    g1_area->threshold = G1_AREA_THRESHOLD;
-    a->threshold = G0_AREA_THRESHOLD;
+    g2_area->threshold = default_g2_threshold;
+    g1_area->threshold = default_g1_threshold;
+    a->threshold = default_g0_threshold;
   }
 
   tcr = new_tcr(initial_stack_size, MIN_TSTACK_SIZE);
@@ -1691,9 +1722,9 @@ main(int argc, char *argv[]
 #ifdef GC_INTEGRITY_CHECKING
   (nrs_GC_EVENT_STATUS_BITS.vcell |= gc_integrity_check_bit);
 #endif
-#ifndef DISABLE_EGC
-  egc_control(true, NULL);
-#endif
+  if (egc_enabled) {
+    egc_control(true, NULL);
+  }
   atexit(lazarus);
   start_lisp(TCR_TO_TSD(tcr), 0);
   _exit(0);

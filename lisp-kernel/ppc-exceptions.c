@@ -2173,7 +2173,7 @@ install_pmcl_exception_handlers()
 }
 
 void
-quit_handler(int signum, siginfo_t info, ExceptionInformation *xp)
+thread_kill_handler(int signum, siginfo_t info, ExceptionInformation *xp)
 {
   TCR *tcr = get_tcr(false);
   area *a;
@@ -2205,10 +2205,10 @@ void
 thread_signal_setup()
 {
   thread_suspend_signal = SIG_SUSPEND_THREAD;
-  thread_quit_signal = SIG_KILL_THREAD;
+  thread_kill_signal = SIG_KILL_THREAD;
 
   install_signal_handler(thread_suspend_signal, (void *) suspend_resume_handler);
-  install_signal_handler(SIGQUIT, (void *)quit_handler);
+  install_signal_handler(thread_kill_signal, (void *)thread_kill_handler);
 }
 
 

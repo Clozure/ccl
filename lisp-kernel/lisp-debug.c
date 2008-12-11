@@ -928,7 +928,7 @@ debug_command_entry debug_command_entries[] =
    'T'},
 #endif
   {debug_kill_process,
-   "Kill OpenMCL process",
+   "Kill Clozure CL process",
    0,
    NULL,
    'K'},
@@ -1056,9 +1056,9 @@ lisp_Debugger(ExceptionInformation *xp,
   fprintf(stderr, "? for help\n");
   while (state == debug_continue) {
 #ifdef WINDOWS
-    fprintf(stderr, "[%d] OpenMCL kernel debugger: ", (int)GetCurrentProcessId());
+    fprintf(stderr, "[%d] Clozure CL kernel debugger: ", (int)GetCurrentProcessId());
 #else
-    fprintf(stderr, "[%d] OpenMCL kernel debugger: ", main_thread_pid);
+    fprintf(stderr, "[%d] Clozure CL kernel debugger: ", main_thread_pid);
 #endif
     state = apply_debug_command(xp, readc(), info, why);
   }
@@ -1109,6 +1109,6 @@ FBug(ExceptionInformation *xp, const char *format, ...)
 void
 lisp_bug(char *string)
 {
-  Bug(NULL, "Bug in OpenMCL system code:\n%s", string);
+  Bug(NULL, "Bug in Clozure CL system code:\n%s", string);
 }
 

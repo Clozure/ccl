@@ -373,11 +373,17 @@ mark_root(LispObj n)
     return;
   }
 
+  dnode = gc_area_dnode(n);
+  if (dnode >= GCndnodes_in_area) {
+    return;
+  }
+
 #ifdef X8632
   if (tag_n == fulltag_tra) {
     if (*(unsigned char *)n == RECOVER_FN_OPCODE) {
       n = *(LispObj *)(n + 1);
       tag_n = fulltag_misc;
+      dnode = gc_area_dnode(n);
     } else
       return;
   }
@@ -389,6 +395,7 @@ mark_root(LispObj n)
       int sdisp = (*(int *) (n+3));
       n = RECOVER_FN_FROM_RIP_LENGTH+n+sdisp;
       tag_n = fulltag_function;
+      dnode = gc_area_dnode(n);
     }
     else {
       return;
@@ -396,11 +403,6 @@ mark_root(LispObj n)
   }
 #endif
 
-
-  dnode = gc_area_dnode(n);
-  if (dnode >= GCndnodes_in_area) {
-    return;
-  }
   set_bits_vars(GCmarkbits,dnode,bitsp,bits,mask);
   if (bits & mask) {
     return;
@@ -592,11 +594,17 @@ rmark(LispObj n)
     return;
   }
 
+  dnode = gc_area_dnode(n);
+  if (dnode >= GCndnodes_in_area) {
+    return;
+  }
+
 #ifdef X8632
   if (tag_n == fulltag_tra) {
     if (*(unsigned char *)n == RECOVER_FN_OPCODE) {
       n = *(LispObj *)(n + 1);
       tag_n = fulltag_misc;
+      dnode = gc_area_dnode(n);
     } else {
       return;
     }
@@ -609,16 +617,13 @@ rmark(LispObj n)
       int sdisp = (*(int *) (n+3));
       n = RECOVER_FN_FROM_RIP_LENGTH+n+sdisp;
       tag_n = fulltag_function;
+      dnode = gc_area_dnode(n);
     } else {
       return;
     }
   }
 #endif
 
-  dnode = gc_area_dnode(n);
-  if (dnode >= GCndnodes_in_area) {
-    return;
-  }
   set_bits_vars(markbits,dnode,bitsp,bits,mask);
   if (bits & mask) {
     return;
