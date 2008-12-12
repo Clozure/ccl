@@ -1178,13 +1178,17 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                         (let* ((n (fd-read in-fd buf 1024)))
                           (declare (fixnum n))
                           (if (<= n 0)
-                            (progn
-                              (without-interrupts
-                               (decf (car token))
-                               (fd-close in-fd)
-                               (setq in-fds (delete in-fd in-fds)
-                                     out-streams (delete out-stream out-streams)
-                                     changed t)))
+                            (without-interrupts
+                              (decf (car token))
+                              (fd-close in-fd)
+                              ;; Delete, watching out for the same out-stream being used
+                              ;; for different fds
+                              (loop for fds on in-fds as streams on out-streams
+                                    do (when (eq (car fds) in-fd)
+                                         (setf (car fds) :delete (car streams) :delete)))
+                              (setq in-fds (delete :delete in-fds)
+                                    out-streams (delete :delete out-streams)
+                                    changed t))
                             (let* ((string (make-string 1024)))
                               (declare (dynamic-extent string))
                               (%str-from-ptr buf n string)
