@@ -142,35 +142,44 @@ Will differ from *compiling-file* during an INCLUDE")
     (when (and target-p (not (setq backend (find-backend target))))
       (warn "Unknown :TARGET : ~S.  Reverting to ~s ..." target *fasl-target*)
       (setq target *fasl-target*  backend *target-backend*))
-    (loop
-	(restart-case
-	 (return (%compile-file src output-file verbose print load features
-                                save-local-symbols save-doc-strings save-definitions
-                                save-source-locations break-on-program-errors
-                                force backend external-format
-                                compile-file-original-truename compile-file-original-buffer-offset))
-	 (retry-compile-file ()
-			     :report (lambda (stream) (format stream "Retry compiling ~s" src))
-			     nil)
-	 (skip-compile-file ()
-			    :report (lambda (stream) (format stream "Skip compiling ~s" src))
-			    (return))))))
+    (multiple-value-bind (output-file truename warnings-p serious-p)
+        (loop
+          (restart-case
+              (return (%compile-file src output-file verbose print features
+                                     save-local-symbols save-doc-strings save-definitions
+                                     save-source-locations break-on-program-errors
+                                     force backend external-format
+                                     compile-file-original-truename compile-file-original-buffer-offset))
+            (retry-compile-file ()
+              :report (lambda (stream) (format stream "Retry compiling ~s" src))
+              nil)
+            (skip-compile-file ()
+              :report (lambda (stream)
+                        (if load
+                          (format stream "Skip compiling and loading ~s" src)
+                          (format stream "Skip compiling ~s" src)))
+              (return-from compile-file))))
+      (when load (load output-file :verbose (or verbose *load-verbose*)))
+      (values truename warnings-p serious-p))))
+
 
 (defvar *fasl-compile-time-env* nil)
 
-(defun %compile-file (src output-file verbose print load features
+(defun %compile-file (src output-file verbose print features
                           save-local-symbols save-doc-strings save-definitions
                           save-source-locations break-on-program-errors
                           force target-backend external-format
                           compile-file-original-truename compile-file-original-buffer-offset)
   (let* ((orig-src (merge-pathnames src))
-         (output-default-type (backend-target-fasl-pathname target-backend)))
+         (output-default-type (backend-target-fasl-pathname target-backend))
+         (*fasl-non-style-warnings-signalled-p* nil)
+         (*fasl-warnings-signalled-p* nil))
     (setq src (fcomp-find-file orig-src))
     (let* ((newtype (pathname-type src)))
       (when (and newtype (not (pathname-type orig-src)))
         (setq orig-src (merge-pathnames orig-src (make-pathname :type newtype :defaults nil)))))
     (setq output-file (merge-pathnames
-		       (if output-file ; full-pathname in case output-file is relative
+		       (if output-file  ; full-pathname in case output-file is relative
 			 (full-pathname (merge-pathnames output-file output-default-type) :no-error nil) 
 			 output-default-type)
 		       orig-src))
@@ -178,18 +187,14 @@ Will differ from *compiling-file* during an INCLUDE")
     (setq output-file (namestring output-file))
     (when (physical-pathname-p orig-src) ; only back-translate to things likely to exist at load time
       (setq orig-src (back-translate-pathname orig-src '("home" "ccl"))))
-    (let* ((*fasl-non-style-warnings-signalled-p* nil)
-           (*fasl-warnings-signalled-p* nil))
-      (when (and (not force)
-		 (probe-file output-file)
-		 (not (fasl-file-p output-file)))
-	(unless (y-or-n-p
-		 (format nil
-			 "Compile destination ~S is not ~A file!  Overwrite it?"
-			 output-file (pathname-type
-				      (backend-target-fasl-pathname
-				       *target-backend*))))
-	(return-from %compile-file nil)))
+    (when (and (not force)
+               (probe-file output-file)
+               (not (fasl-file-p output-file)))
+      (cerror "overwrite it anyway"
+              "Compile destination ~S is not a ~A file!"
+              output-file (pathname-type
+                           (backend-target-fasl-pathname
+                            *target-backend*))))
       (let* ((*features* (append (if (listp features) features (list features)) (setup-target-features target-backend *features*)))
              (*fasl-deferred-warnings* nil) ; !!! WITH-COMPILATION-UNIT ...
              (*fasl-save-local-symbols* save-local-symbols)
@@ -212,31 +217,31 @@ Will differ from *compiling-file* during an INCLUDE")
              (defenv (new-definition-environment))
              (lexenv (new-lexical-environment defenv))
              (*fasl-compile-time-env* (new-lexical-environment (new-definition-environment)))
-	     (*fcomp-external-format* external-format))
-        (let ((forms nil))
-          (let* ((*outstanding-deferred-warnings* (%defer-warnings nil)))
-            (rplacd (defenv.type defenv) *outstanding-deferred-warnings*)
-            (setf (defenv.defined defenv) (deferred-warnings.defs *outstanding-deferred-warnings*))
+	     (*fcomp-external-format* external-format)
+             (forms nil))
+      (let* ((*outstanding-deferred-warnings* (%defer-warnings nil)))
+        (rplacd (defenv.type defenv) *outstanding-deferred-warnings*)
+        (setf (defenv.defined defenv) (deferred-warnings.defs *outstanding-deferred-warnings*))
 
-            (setq forms (fcomp-file src
-                                    (or compile-file-original-truename orig-src)
-                                    compile-file-original-buffer-offset
-                                    lexenv))
+        (setq forms (fcomp-file src
+                                (or compile-file-original-truename orig-src)
+                                compile-file-original-buffer-offset
+                                lexenv))
 
-            (setf (deferred-warnings.warnings *outstanding-deferred-warnings*) 
-                  (append *fasl-deferred-warnings* (deferred-warnings.warnings *outstanding-deferred-warnings*)))
-            (when *compile-verbose* (fresh-line))
-            (multiple-value-bind (any harsh) (report-deferred-warnings)
-              (setq *fasl-warnings-signalled-p* (or *fasl-warnings-signalled-p* any)
-                    *fasl-non-style-warnings-signalled-p* (if (eq harsh :very) :very
-							      (or *fasl-non-style-warnings-signalled-p* harsh)))))
-          (when (and *fasl-break-on-program-errors* (eq *fasl-non-style-warnings-signalled-p* :very))
-            (cerror "create the output file despite the errors"
-                    "Serious errors encountered during compilation of ~s"
-                    src))
-          (fasl-scan-forms-and-dump-file forms output-file lexenv)))
-      (when load (load output-file :verbose (or verbose *load-verbose*)))
-      (values (truename (pathname output-file)) 
+        (setf (deferred-warnings.warnings *outstanding-deferred-warnings*) 
+              (append *fasl-deferred-warnings* (deferred-warnings.warnings *outstanding-deferred-warnings*)))
+        (when *compile-verbose* (fresh-line))
+        (multiple-value-bind (any harsh) (report-deferred-warnings)
+          (setq *fasl-warnings-signalled-p* (or *fasl-warnings-signalled-p* any)
+                *fasl-non-style-warnings-signalled-p* (if (eq harsh :very) :very
+                                                        (or *fasl-non-style-warnings-signalled-p* harsh)))))
+      (when (and *fasl-break-on-program-errors* (eq *fasl-non-style-warnings-signalled-p* :very))
+        (cerror "create the output file despite the errors"
+                "Serious errors encountered during compilation of ~s"
+                src))
+      (fasl-scan-forms-and-dump-file forms output-file lexenv)
+      (values output-file
+              (truename (pathname output-file)) 
               *fasl-warnings-signalled-p* 
               (and *fasl-non-style-warnings-signalled-p* t)))))
 

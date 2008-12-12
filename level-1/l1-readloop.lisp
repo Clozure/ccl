@@ -494,10 +494,16 @@
              (already (if (listp defs) (assq name defs) (gethash name defs))))
         (if already
           (setf (%cdr already) (combine-function-infos name (%cdr already) info))
-          (let ((new (cons name info)))
-            (if (listp defs)
-              (setf (defenv.defined definition-env) (cons new defs))
-              (setf (gethash name defs) new))))
+          (let ((outer (loop for defer = (cdr (defenv.type definition-env))
+                               then (deferred-warnings.parent defer)
+                             while (typep defer 'deferred-warnings)
+                             thereis (gethash name (deferred-warnings.defs defer)))))
+            (when outer
+              (setq info (combine-function-infos name (%cdr outer) info)))
+            (let ((new (cons name info)))
+              (if (listp defs)
+                (setf (defenv.defined definition-env) (cons new defs))
+                (setf (gethash name defs) new)))))
         info))))
 
 
