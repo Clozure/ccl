@@ -77,12 +77,14 @@
 ;;; an imported symbol's procedure linkage table entry if the symbol
 ;;; has a plt entry (e.g., if it happens to be referenced by the
 ;;; lisp kernel.)  *RTLD-NEXT* is therefore a slightly better
-;;; default; we've traditionaly used *RTLD-DEFAULT*.
+;;; default; we've traditionaly used *RTLD-DEFAULT*.  
 (defvar *rtld-next*)
 (defvar *rtld-default*)
+(defvar *rtld-use*)
 (setq *rtld-next* (%incf-ptr (%null-ptr) -1)
       *rtld-default* (%int-to-ptr #+(or linux-target darwin-target windows-target)  0
-				  #-(or linux-target darwin-target windows-target)  -2))
+				  #-(or linux-target darwin-target windows-target)  -2)
+      *rtld-use* #+solaris-target *rtld-next* #-solaris-target *rtld-default*)
 
 #+(or linux-target freebsd-target solaris-target)
 (progn
@@ -607,13 +609,13 @@ the operating system."
 
 (defun ensure-open-shlib (c force)
   (if (or (shlib.map c) (not force))
-    *rtld-next*
+    *rtld-use*
     (error "Shared library not open: ~s" (shlib.soname c))))
 
 (defun resolve-container (c force)
   (if c
     (ensure-open-shlib c force)
-    *rtld-next*
+    *rtld-use*
     ))
 
 
@@ -629,7 +631,7 @@ the operating system."
 ;;; function addresses on at least a 16-byte boundary, but some
 ;;; linkers don't quite get the concept ...)
 
-(defun foreign-symbol-entry (name &optional (handle *rtld-next*))
+(defun foreign-symbol-entry (name &optional (handle *rtld-use*))
   "Try to resolve the address of the foreign symbol name. If successful,
 return a fixnum representation of that address, else return NIL."
   (with-cstrs ((n name))
@@ -803,7 +805,7 @@ return a fixnum representation of that address, else return NIL."
 
 
 
-(defun foreign-symbol-address (name &optional (map *rtld-next*))
+(defun foreign-symbol-address (name &optional (map *rtld-use*))
   "Try to resolve the address of the foreign symbol name. If successful,
 return that address encapsulated in a MACPTR, else returns NIL."
   (with-cstrs ((n name))
