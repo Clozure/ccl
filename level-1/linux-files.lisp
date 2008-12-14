@@ -1153,7 +1153,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
         (rlet ((tv #>timeval))
           (loop
             (when changed
-              (setq pairs (pairlis in-fds out-streams)
+              (setq pairs (delete nil pairs :key #'car)
                     changed nil))
             (when (and terminated (null pairs))
               (signal-semaphore (external-process-completed p))
@@ -1181,14 +1181,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                             (without-interrupts
                               (decf (car token))
                               (fd-close in-fd)
-                              ;; Delete, watching out for the same out-stream being used
-                              ;; for different fds
-                              (loop for fds on in-fds as streams on out-streams
-                                    do (when (eq (car fds) in-fd)
-                                         (setf (car fds) :delete (car streams) :delete)))
-                              (setq in-fds (delete :delete in-fds)
-                                    out-streams (delete :delete out-streams)
-                                    changed t))
+                              (setf (car p) nil changed t))
                             (let* ((string (make-string 1024)))
                               (declare (dynamic-extent string))
                               (%str-from-ptr buf n string)
@@ -1739,7 +1732,7 @@ not, why not; and what its result code was if it completed."
   ;;; pipes, and can expect to eventually get EOF on a pipe.
   ;;; So, this tries to loop until the process handle is signaled and
   ;;; all data has been read.
-  (defun monitor-external-process (p)
+ (defun monitor-external-process (p)
     (let* ((in-fds (external-process-watched-fds p))
            (out-streams (external-process-watched-streams p))
            (token (external-process-token p))
@@ -1749,7 +1742,7 @@ not, why not; and what its result code was if it completed."
            )
       (loop
         (when changed
-          (setq pairs (pairlis in-fds out-streams)
+          (setq pairs (delete nil pairs :key #'car)
                 changed nil))
         (when (and terminated (null pairs))
           (without-interrupts
@@ -1781,9 +1774,7 @@ not, why not; and what its result code was if it completed."
                         (without-interrupts
                          (decf (car token))
                          (fd-close in-fd)
-                         (setq in-fds (delete in-fd in-fds)
-                               out-streams (delete out-stream out-streams)
-                               changed t)))
+                         (setf (car p) nil changed t)))
 
                       (let* ((string (make-string 1024)))
                         (declare (dynamic-extent string))
