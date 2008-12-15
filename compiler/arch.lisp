@@ -65,6 +65,8 @@
 (defconstant error-resume-all 15)
 (defconstant error-kill 16)
 (defconstant error-cant-call 17)        ; Attempt to funcall something that is not a symbol or function.
+(defconstant error-allocate-list 18)
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defconstant error-type-error 128)
 )

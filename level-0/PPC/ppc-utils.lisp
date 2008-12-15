@@ -584,6 +584,18 @@ be somewhat larger than what was specified)."
   (ba .SPmakeu64)
   #+32-bit-target
   (ba .SPmakeu32))
+
+;;; Make a list.  This can be faster than doing so by doing CONS
+;;; repeatedly, since the latter strategy might triger the GC several
+;;; times if N is large.
+(defppclapfunction %allocate-list ((initial-element arg_y) (nconses arg_z))
+  (check-nargs 2)
+  (save-lisp-context)
+  (uuo_interr arch::error-allocate-list rzero)
+  (vpush arg_z)
+  (vpush arg_y)
+  (set-nargs 2)
+  (ba .SPnvalret))
   
 
 

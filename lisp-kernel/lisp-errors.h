@@ -34,6 +34,7 @@
 #define error_resume_all 15 
 #define error_kill 16
 #define error_cant_call 17
+#define error_allocate_list 18
 
 #define error_type_error 128
 

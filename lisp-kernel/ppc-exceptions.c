@@ -295,6 +295,59 @@ update_bytes_allocated(TCR* tcr, void *cur_allocptr)
   tcr->last_allocptr = 0;
 }
 
+void
+lisp_allocation_failure(ExceptionInformation *xp, TCR *tcr, natural bytes_needed)
+{
+  /* Couldn't allocate the object.  If it's smaller than some arbitrary
+     size (say 128K bytes), signal a "chronically out-of-memory" condition;
+     else signal a "allocation request failed" condition.
+  */
+  xpGPR(xp,allocptr) = xpGPR(xp,allocbase) = VOID_ALLOCPTR;
+  handle_error(xp, bytes_needed < (128<<10) ? XNOMEM : error_alloc_failed, 0, 0,  xpPC(xp));
+}
+
+/*
+  Allocate a large list, where "large" means "large enough to
+  possibly trigger the EGC several times if this was done
+  by individually allocating each CONS."  The number of 
+  ocnses in question is in arg_z; on successful return,
+  the list will be in arg_z 
+*/
+
+Boolean
+allocate_list(ExceptionInformation *xp, TCR *tcr)
+{
+  natural 
+    nconses = (unbox_fixnum(xpGPR(xp,arg_z))),
+    bytes_needed = (nconses << dnode_shift);
+  LispObj
+    prev = lisp_nil,
+    current,
+    initial = xpGPR(xp,arg_y);
+
+  if (nconses == 0) {
+    /* Silly case */
+    xpGPR(xp,arg_z) = lisp_nil;
+    xpGPR(xp,allocptr) = lisp_nil;
+    return true;
+  }
+  update_bytes_allocated(tcr, (void *)(void *) tcr->save_allocptr);
+  if (allocate_object(xp,bytes_needed,(-bytes_needed)+fulltag_cons,tcr)) {
+    for (current = xpGPR(xp,allocptr);
+         nconses;
+         prev = current, current+= dnode_size, nconses--) {
+      deref(current,0) = prev;
+      deref(current,1) = initial;
+    }
+    xpGPR(xp,arg_z) = prev;
+    xpGPR(xp,arg_y) = xpGPR(xp,allocptr);
+    xpGPR(xp,allocptr)-=fulltag_cons;
+  } else {
+    lisp_allocation_failure(xp,tcr,bytes_needed);
+  }
+  return true;
+}
+
 OSStatus
 handle_alloc_trap(ExceptionInformation *xp, TCR *tcr)
 {
@@ -352,12 +405,7 @@ handle_alloc_trap(ExceptionInformation *xp, TCR *tcr)
       adjust_exception_pc(xp,4);
       return 0;
     }
-    /* Couldn't allocate the object.  If it's smaller than some arbitrary
-       size (say 128K bytes), signal a "chronically out-of-memory" condition;
-       else signal a "allocation request failed" condition.
-    */
-    xpGPR(xp,allocptr) = xpGPR(xp,allocbase) = VOID_ALLOCPTR;
-    handle_error(xp, bytes_needed < (128<<10) ? XNOMEM : error_alloc_failed, 0, 0,  xpPC(xp));
+    lisp_allocation_failure(xp,tcr,bytes_needed);
     return -1;
   }
   return -1;
@@ -1355,6 +1403,9 @@ handle_uuo(ExceptionInformation *xp, opcode the_uuo, pc where)
       case error_kill:
 	xpGPR(xp,imm0) = (LispObj)kill_tcr(target);
 	break;
+      case error_allocate_list:
+        allocate_list(xp,get_tcr(true));
+        break;
       default:
 	status = handle_error(xp, errnum, rb, 0,  where);
 	break;
