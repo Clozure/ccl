@@ -144,6 +144,7 @@ void switch_to_foreign_stack(void*, ...);
 #define XUUO_RESUME 7
 #define XUUO_RESUME_ALL 8
 #define XUUO_KILL 9
+#define XUUO_ALLOCATE_LIST 10
 
 void
 pc_luser_xp(ExceptionInformation*, TCR*, signed_natural*);

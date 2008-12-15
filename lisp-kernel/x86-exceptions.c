@@ -417,17 +417,18 @@ create_exception_callback_frame(ExceptionInformation *xp, TCR *tcr)
   abs_pc = (LispObj)xpPC(xp);
 
 #ifdef X8664
-  if (fulltag_of(f) == fulltag_function) {
+  if (fulltag_of(f) == fulltag_function) 
 #else
-  if (fulltag_of(f) == fulltag_misc &&
-      header_subtag(header_of(f)) == subtag_function) {
+    if (fulltag_of(f) == fulltag_misc &&
+        header_subtag(header_of(f)) == subtag_function) 
 #endif
-    nominal_function = f;
-  } else {
-    if (tra_f) {
-      nominal_function = tra_f;
+      {
+        nominal_function = f;
+      } else {
+      if (tra_f) {
+        nominal_function = tra_f;
+      }
     }
-  }
   
   f = xpGPR(xp,Ifn);
   if (object_contains_pc(f, abs_pc)) {
@@ -474,6 +475,61 @@ create_exception_callback_frame(ExceptionInformation *xp, TCR *tcr)
 #define XMEMFULL (76)
 #endif
 
+void
+lisp_allocation_failure(ExceptionInformation *xp, TCR *tcr, natural bytes_needed )
+{
+  LispObj xcf = create_exception_callback_frame(xp, tcr),
+    cmain = nrs_CMAIN.vcell;
+  int skip;
+    
+  tcr->save_allocptr = tcr->save_allocbase = (void *)VOID_ALLOCPTR;
+  xpGPR(xp,Iallocptr) = VOID_ALLOCPTR;
+
+  skip = callback_to_lisp(tcr, cmain, xp, xcf, -1, XMEMFULL, 0, 0);
+  xpPC(xp) += skip;
+}
+
+/*
+  Allocate a large list, where "large" means "large enough to
+  possibly trigger the EGC several times if this was done
+  by individually allocating each CONS."  The number of 
+  ocnses in question is in arg_z; on successful return,
+  the list will be in arg_z 
+*/
+
+Boolean
+allocate_list(ExceptionInformation *xp, TCR *tcr)
+{
+  natural 
+    nconses = (unbox_fixnum(xpGPR(xp,Iarg_z))),
+    bytes_needed = (nconses << dnode_shift);
+  LispObj
+    prev = lisp_nil,
+    current,
+    initial = xpGPR(xp,Iarg_y);
+
+  if (nconses == 0) {
+    /* Silly case */
+    xpGPR(xp,Iarg_z) = lisp_nil;
+    xpGPR(xp,Iallocptr) = lisp_nil;
+    return true;
+  }
+  update_bytes_allocated(tcr, (void *)(void *) tcr->save_allocptr);
+  if (allocate_object(xp,bytes_needed,bytes_needed-fulltag_cons,tcr)) {
+    tcr->save_allocptr -= fulltag_cons;
+    for (current = xpGPR(xp,Iallocptr);
+         nconses;
+         prev = current, current+= dnode_size, nconses--) {
+      deref(current,0) = prev;
+      deref(current,1) = initial;
+    }
+    xpGPR(xp,Iarg_z) = prev;
+  } else {
+    lisp_allocation_failure(xp,tcr,bytes_needed);
+  }
+  return true;
+}
+
 Boolean
 handle_alloc_trap(ExceptionInformation *xp, TCR *tcr)
 {
@@ -499,17 +555,7 @@ handle_alloc_trap(ExceptionInformation *xp, TCR *tcr)
     return true;
   }
   
-  {
-    LispObj xcf = create_exception_callback_frame(xp, tcr),
-      cmain = nrs_CMAIN.vcell;
-    int skip;
-    
-    tcr->save_allocptr = tcr->save_allocbase = (void *)VOID_ALLOCPTR;
-    xpGPR(xp,Iallocptr) = VOID_ALLOCPTR;
-
-    skip = callback_to_lisp(tcr, cmain, xp, xcf, -1, XMEMFULL, 0, 0);
-    xpPC(xp) += skip;
-  }
+  lisp_allocation_failure(xp,tcr,bytes_needed);
 
   return true;
 }
@@ -1085,6 +1131,11 @@ handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TC
 	
       case XUUO_KILL:
         xpGPR(context,Iimm0) = (LispObj)kill_tcr(target);
+        xpPC(context)+=3;
+        return true;
+
+      case XUUO_ALLOCATE_LIST:
+        allocate_list(context,tcr);
         xpPC(context)+=3;
         return true;
 

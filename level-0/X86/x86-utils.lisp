@@ -438,7 +438,16 @@ be somewhat larger than what was specified)."
   (uuo-gc-trap)
   (jmp-subprim .SPmakeu64))
 
-  
+(defx86lapfunction %allocate-list ((initial-element arg_y) (nconses arg_z))
+  (check-nargs 2)
+  (save-simple-frame)
+  (ud2a)
+  (:byte 10)
+  (push (% arg_z))
+  (push (% allocptr))
+  (set-nargs 2)
+  (jmp-subprim .SPnvalret))
+
   
 
 

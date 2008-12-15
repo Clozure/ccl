@@ -385,6 +385,16 @@ be somewhat larger than what was specified)."
   (uuo-gc-trap)
   (jmp-subprim .SPmakeu32))
 
+(defx8632lapfunction %allocate-list ((initial-element arg_y) (nconses arg_z))
+  (check-nargs 2)
+  (save-simple-frame)
+  (ud2a)
+  (:byte 10)
+  (push (% arg_z))
+  (push (% allocptr))
+  (set-nargs 2)
+  (jmp-subprim .SPnvalret))
+
 ;;; offset is a fixnum, one of the x8632::kernel-import-xxx constants.
 ;;; Returns that kernel import, a fixnum.
 (defx8632lapfunction %kernel-import ((offset arg_z))
