@@ -937,10 +937,10 @@ are running on, or NIL if we can't find any useful information."
 (defun allocate-static-conses ()
   "Allocates some memory, freezes it and lets it become garbage.
    This will add the memory to the list of free static conses."
-  (let* ((nfullgc (full-gc-count)))
+  (let* ((nfullgc (full-gccount)))
     (multiple-value-bind (head tail)
         (%allocate-list 0 *static-cons-chunk*)
-      (if (eql (full-gc-count) nfullgc)
+      (if (eql (full-gccount) nfullgc)
         (freeze)
         (flash-freeze))
       (%augment-static-conses head tail))))

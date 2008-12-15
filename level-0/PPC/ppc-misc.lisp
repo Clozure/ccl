@@ -1031,6 +1031,17 @@
   (strcx. rzero rzero imm0)
   (blr))
 
+(defppclapfunction %augment_static_conses ((head arg_y) (tail arg_z))
+  (li imm0 (+ (target-nil-value) (target::kernel-global static-conses)))
+  @again
+  (lrarx temp0 rzero imm0)
+  (str temp0 tail target::cons.cdr)     ; static, no write-barrier issues
+  (strcx. head rzero imm0)
+  (bne @again)
+  (isync)
+  (li arg_z nil)
+  (blr))
+
 (defppclapfunction %staticp ((x arg_z))
   (check-nargs 1)
   (ref-global temp0 tenured-area)
