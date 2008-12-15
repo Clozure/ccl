@@ -618,11 +618,11 @@
     (ensure-fields-defined (ffi-objc-class-own-ivars c))))
 
 (defun record-global-union (u)
-  (when *ffi-global-unions*
+  (when (and *ffi-global-unions* (ffi-union-fields u))
     (setf (gethash (ffi-union-reference u) *ffi-global-unions*) u)))
 
 (defun record-global-transparent-union (u)
-  (when *ffi-global-transparent-unions*
+  (when (and *ffi-global-transparent-unions* (ffi-transparent-union-fields u))
     (setf (gethash (ffi-transparent-union-reference u) *ffi-global-transparent-unions*) u)))
 
 (defun define-union-from-ffi-info (u)
@@ -654,7 +654,7 @@
       (ensure-fields-defined (ffi-transparent-union-fields u)))))
 
 (defun record-global-struct (s)
-  (when *ffi-global-structs*
+  (when (and *ffi-global-structs* (ffi-struct-fields s))
     (setf (gethash (ffi-struct-reference s) *ffi-global-structs*) s)))
 
 (defun define-struct-from-ffi-info (s)
