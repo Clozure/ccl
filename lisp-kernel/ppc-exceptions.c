@@ -413,6 +413,12 @@ handle_alloc_trap(ExceptionInformation *xp, TCR *tcr)
 
 natural gc_deferred = 0, full_gc_deferred = 0;
 
+signed_natural
+flash_freeze(TCR *tcr, signed_natural param)
+{
+  return 0;
+}
+
 OSStatus
 handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
 {
@@ -460,6 +466,17 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
       }
     }
     xpGPR(xp, imm0) = lisp_heap_gc_threshold;
+    break;
+
+  case GC_TRAP_FUNCTION_FLASH_FREEZE:
+    untenure_from_area(tenured_area);
+    gc_like_from_xp(xp,flash_freeze,0);
+    a->active = (BytePtr) align_to_power_of_2(a->active, log2_page_size);
+    tenured_area->static_dnodes = area_dnode(a->active, a->low);
+    if (egc_was_enabled) {
+      tenure_to_area(tenured_area);
+    }
+    xpGPR(xp, imm0) = tenured_area->static_dnodes << dnode_shift;
     break;
 
   default:
@@ -733,9 +750,9 @@ TCR *gc_tcr = NULL;
    in that context.  Resume the other tcrs, then return what the
    function returned */
 
-int
+signed_natural
 gc_like_from_xp(ExceptionInformation *xp, 
-                int(*fun)(TCR *, signed_natural), 
+                signed_natural(*fun)(TCR *, signed_natural), 
                 signed_natural param)
 {
   TCR *tcr = TCR_FROM_TSD(xpGPR(xp, rcontext)), *other_tcr;
@@ -795,9 +812,10 @@ gc_like_from_xp(ExceptionInformation *xp,
 }
 
 
+
 /* Returns #bytes freed by invoking GC */
 
-int
+signed_natural
 gc_from_tcr(TCR *tcr, signed_natural param)
 {
   area *a;
@@ -819,7 +837,7 @@ gc_from_tcr(TCR *tcr, signed_natural param)
   return ((oldfree-newfree)+(newend-oldend));
 }
 
-int
+signed_natural
 gc_from_xp(ExceptionInformation *xp, signed_natural param)
 {
   int status = gc_like_from_xp(xp, gc_from_tcr, param);
@@ -828,13 +846,13 @@ gc_from_xp(ExceptionInformation *xp, signed_natural param)
   return status;
 }
 
-int
+signed_natural
 purify_from_xp(ExceptionInformation *xp, signed_natural param)
 {
   return gc_like_from_xp(xp, purify, param);
 }
 
-int
+signed_natural
 impurify_from_xp(ExceptionInformation *xp, signed_natural param)
 {
   return gc_like_from_xp(xp, impurify, param);

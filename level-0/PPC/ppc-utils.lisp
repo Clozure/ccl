@@ -585,6 +585,16 @@ be somewhat larger than what was specified)."
   #+32-bit-target
   (ba .SPmakeu32))
 
+(defppclapfunction flash-freeze ()
+  "Like FREEZE, but don't GC first."
+  (check-nargs 0)
+  (li imm0 arch::gc-trap-function-flash-freeze)
+  (trlgei allocptr 0)
+  #+64-bit-target
+  (ba .SPmakeu64)
+  #+32-bit-target
+  (ba .SPmakeu32))
+
 ;;; Make a list.  This can be faster than doing so by doing CONS
 ;;; repeatedly, since the latter strategy might triger the GC several
 ;;; times if N is large.

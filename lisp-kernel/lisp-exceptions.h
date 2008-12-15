@@ -123,10 +123,10 @@ non_fatal_error( char * );
 
 void Bug(ExceptionInformation *, const char *format_string, ...);
 void FBug(ExceptionInformation *, const char *format_string, ...);
-int gc_from_xp(ExceptionInformation *, signed_natural);
-int purify_from_xp(ExceptionInformation *, signed_natural);
-int impurify_from_xp(ExceptionInformation *, signed_natural);
-int change_hons_area_size_from_xp(ExceptionInformation *, signed_natural);
+signed_natural gc_from_xp(ExceptionInformation *, signed_natural);
+signed_natural purify_from_xp(ExceptionInformation *, signed_natural);
+signed_natural impurify_from_xp(ExceptionInformation *, signed_natural);
+
 
 
 void

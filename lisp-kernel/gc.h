@@ -77,8 +77,6 @@ LispObj node_forwarding_address(LispObj);
 void forward_range(LispObj *, LispObj *);
 void note_memoized_references(ExceptionInformation *,LogicalAddress, LogicalAddress, BytePtr *, BytePtr *);
 void gc(TCR *, signed_natural);
-int  purify(TCR *, signed_natural);
-int impurify(TCR *, signed_natural);
 int change_hons_area_size(TCR *, signed_natural);
 void delete_protected_area(protected_area_ptr);
 Boolean egc_control(Boolean, BytePtr);
@@ -137,6 +135,7 @@ void report_paging_info_delta(FILE*, paging_info *, paging_info *);
 #define GC_TRAP_FUNCTION_GC 0
 #define GC_TRAP_FUNCTION_PURIFY 1
 #define GC_TRAP_FUNCTION_IMPURIFY 2
+#define GC_TRAP_FUNCTION_FLASH_FREEZE 4
 #define GC_TRAP_FUNCTION_SAVE_APPLICATION 8
 
 #define GC_TRAP_FUNCTION_GET_LISP_HEAP_THRESHOLD 16
@@ -221,7 +220,9 @@ void forward_tstack_area(area *);
 void forward_vstack_area(area *);
 void forward_cstack_area(area *);
 LispObj compact_dynamic_heap(void);
-int purify(TCR *, signed_natural);
-int impurify(TCR *, signed_natural);
+signed_natural purify(TCR *, signed_natural);
+signed_natural impurify(TCR *, signed_natural);
+signed_natural gc_like_from_xp(ExceptionInformation *, signed_natural(*fun)(TCR *, signed_natural), signed_natural);
+
 
 #endif                          /* __GC_H__ */
