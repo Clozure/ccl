@@ -154,7 +154,7 @@ between threads."
            (eq (%svref r target::lock.kind-cell) 'recursive-lock))
     (or (%svref r target::lock.whostate-cell)
         (setf (%svref r target::lock.whostate-cell)
-              (format nil "Lock ~s wait" r)))
+              (%lock-whostate-string "Lock wait" r)))
     (report-bad-arg r 'recursive-lock)))
 
 
@@ -174,7 +174,7 @@ synchronization between threads."
            (eq (%svref rw target::lock.kind-cell) 'read-write-lock))
     (or (%svref rw target::lock.whostate-cell)
         (setf (%svref rw target::lock.whostate-cell)
-              (format nil "Read lock ~s wait" rw)))
+              (%lock-whostate-string "Read lock wait" rw)))
     (report-bad-arg rw 'read-write-lock)))
 
 (defun rwlock-write-whostate (rw)
@@ -182,7 +182,7 @@ synchronization between threads."
            (eq (%svref rw target::lock.kind-cell) 'read-write-lock))
     (or (%svref rw target::lock.whostate-2-cell)
         (setf (%svref rw target::lock.whostate-2-cell)
-              (format nil "Read lock ~s wait" rw)))
+              (%lock-whostate-string "Write lock wait" rw)))
     (report-bad-arg rw 'read-write-lock)))
   
 

@@ -434,7 +434,13 @@ be somewhat larger than what was specified)."
 
 (defx86lapfunction freeze ()
   "Do a full GC, then consider all heap-allocated objects which survive to be non-relocatable."
-  (movq ($ arch::gc-trap-function-freeze) (% imm0))
+  (movl ($ arch::gc-trap-function-freeze) (% imm0.l))
+  (uuo-gc-trap)
+  (jmp-subprim .SPmakeu64))
+
+(defx86lapfunction flash-freeze ()
+  "Like FREEZE, without the GC."
+  (movl ($ arch::gc-trap-function-flash-freeze) (% imm0.l))
   (uuo-gc-trap)
   (jmp-subprim .SPmakeu64))
 

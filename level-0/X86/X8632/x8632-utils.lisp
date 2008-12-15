@@ -385,6 +385,12 @@ be somewhat larger than what was specified)."
   (uuo-gc-trap)
   (jmp-subprim .SPmakeu32))
 
+(defx8632lapfunction flash-freeze ()
+  "Like FREEZE, without the GC."
+  (movl ($ arch::gc-trap-function-flash-freeze) (% imm0))
+  (uuo-gc-trap)
+  (jmp-subprim .SPmakeu32))
+
 (defx8632lapfunction %allocate-list ((initial-element arg_y) (nconses arg_z))
   (check-nargs 2)
   (save-simple-frame)

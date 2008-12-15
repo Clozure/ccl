@@ -2414,7 +2414,7 @@ purify_areas(BytePtr low, BytePtr high, area *target)
 */
 
 
-int
+signed_natural
 purify(TCR *tcr, signed_natural param)
 {
   extern area *extend_readonly_area(unsigned);
@@ -2698,7 +2698,7 @@ impurify_areas(LispObj low, LispObj high, signed_natural delta)
   }
 }
 
-int
+signed_natural
 impurify(TCR *tcr, signed_natural param)
 {
   area *r = find_readonly_area();

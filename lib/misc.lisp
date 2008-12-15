@@ -975,3 +975,11 @@ are running on, or NIL if we can't find any useful information."
         (or (cdr (assoc name *weak-gc-method-names*))
             0))
   name)
+
+(defun %lock-whostate-string (string lock)
+  (with-standard-io-syntax
+      (format nil "~a for ~a ~@[~a ~]@ #x~x"
+              string
+              (%svref lock target::lock.kind-cell)
+              (lock-name lock)
+              (%ptr-to-int (%svref lock target::lock._value-cell)))))

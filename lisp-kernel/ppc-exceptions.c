@@ -840,7 +840,7 @@ gc_from_tcr(TCR *tcr, signed_natural param)
 signed_natural
 gc_from_xp(ExceptionInformation *xp, signed_natural param)
 {
-  int status = gc_like_from_xp(xp, gc_from_tcr, param);
+  signed_natural status = gc_like_from_xp(xp, gc_from_tcr, param);
 
   freeGCptrs();
   return status;
