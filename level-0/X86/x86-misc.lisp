@@ -887,6 +887,17 @@
   @lose
   (movq (% rax) (% arg_z))
   (single-value-return))
+
+(defx86lapfunction %augment-static-conses ((head arg_y) (tail arg_z))
+  @again
+  (movq (@ (+ (target-nil-value) (x8664::kernel-global static-conses))) (% rax))
+  (movq (% rax) (@ target::cons.cdr (% tail)))
+  (lock)
+  (cmpxchgq (% head) (@ (+ (target-nil-value) (x8664::kernel-global static-conses))))
+  (jnz @again)
+  @lose
+  (movl ($ (target-nil-value)) (% arg_z.l))
+  (single-value-return))
   
 (defx86lapfunction %staticp ((x arg_z))
   (check-nargs 1)

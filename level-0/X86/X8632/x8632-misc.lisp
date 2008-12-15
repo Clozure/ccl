@@ -779,7 +779,7 @@
 (defx8632lapfunction %atomic-pop-static-cons ()
   @again
   (movl (@ (+ (target-nil-value) (x8632::kernel-global static-conses))) (% eax))
-  (testl ($ (target-nil-value)) (% eax))
+  (cmpl ($ (target-nil-value)) (% eax))
   (jz @lose)
   (%cdr eax temp0)
   (lock)
@@ -787,6 +787,17 @@
   (jnz @again)
   @lose
   (movl (% eax) (% arg_z))
+  (single-value-return))
+
+(defx8632lapfunction %augment-static-conses ((head arg_y) (tail arg_z))
+  @again
+  (movl (@ (+ (target-nil-value) (x8632::kernel-global static-conses))) (% eax))
+  (movl (% eax) (@ target::cons.cdr (% tail)))
+  (lock)
+  (cmpxchgl (% head) (@ (+ (target-nil-value) (x8632::kernel-global static-conses))))
+  (jnz @again)
+  @lose
+  (movl ($ (target-nil-value)) (% arg_z))
   (single-value-return))
 
 (defx8632lapfunction %staticp ((x arg_z))

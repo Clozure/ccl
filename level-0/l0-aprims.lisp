@@ -213,8 +213,10 @@ between threads."
                (>= (the fixnum size) 0))
     (report-bad-arg size '(and fixnum unsigned-byte)))
   (locally (declare (fixnum size))
-    (do* ((result '() (cons initial-element result)))
-        ((zerop size) result)
-      (decf size))))
+    (if (>= size (ash 1 16))
+      (values (%allocate-list initial-element size))
+      (do* ((result '() (cons initial-element result)))
+           ((zerop size) result)
+        (decf size)))))
 
 ; end
