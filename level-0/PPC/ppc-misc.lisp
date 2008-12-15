@@ -1031,7 +1031,7 @@
   (strcx. rzero rzero imm0)
   (blr))
 
-(defppclapfunction %augment_static_conses ((head arg_y) (tail arg_z))
+(defppclapfunction %augment-static-conses ((head arg_y) (tail arg_z))
   (li imm0 (+ (target-nil-value) (target::kernel-global static-conses)))
   @again
   (lrarx temp0 rzero imm0)
