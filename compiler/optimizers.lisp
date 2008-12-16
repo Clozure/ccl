@@ -1963,9 +1963,34 @@
                        (if (or (null stream) (stringp stream))
                          (format-to-string stream ,string)
                          (progn (write-string ,string (and (neq stream t) stream)) nil))))))
+          ((let ((new (format-string-sans~newlines string)))
+             (and (neq new string) (setq string new)))
+           `(format ,stream ,string ,@args))
           ((optimize-format-call stream string args env))
           (t call))
     call))
+
+(defun format-string-sans~newlines (string)
+  (loop as pos = 0 then (position #\Newline string :start pos) while pos
+        as ch = (and (> pos 0) (schar string (1- pos)))
+        do (cond ((not (or (eq ch #\~)
+			   (and (or (eq ch #\:) (eq ch #\@))
+				(> pos 1) (eq (schar string (- pos 2)) #\~))))
+		  (incf pos))
+		 ((eq ch #\:)
+		  (decf pos 2)
+		  (setq string (%str-cat (subseq string 0 pos) (subseq string (+ pos 3)))))
+		 ((eq ch #\@)
+		  (setq string (%str-cat (subseq string 0 (- pos 2))
+					 "~%"
+					 (subseq string (position-if-not #'whitespacep string
+									 :start (1+ pos))))))
+		 ((eq ch #\~)
+		  (decf pos)
+		  (setq string (%str-cat (subseq string 0 pos)
+					 (subseq string (position-if-not #'whitespacep string
+									 :start (1+ pos))))))))
+  string)
 
 (defun count-known-format-args (string start end)
   (declare (fixnum start end))
