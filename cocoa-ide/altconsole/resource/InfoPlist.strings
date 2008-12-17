@@ -1,0 +1,5 @@
+/* Localized versions of Info.plist keys */
+
+CFBundleShortVersionString = "0.1";
+CFBundleGetInfoString = "altconsole version 0.1, Copyright 2003 Clozure Associates.";
+NSHumanReadableCopyright = "Copyright 2003 Clozure Associates.";

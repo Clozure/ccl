@@ -10,6 +10,9 @@
 bin/*fsl
 cocoa-ide/*fsl
 cocoa-ide/*~.*
+cocoa-ide/altconsole/.gdb_history
+cocoa-ide/altconsole/AltConsole
+cocoa-ide/altconsole/AltConsole.app
 cocoa-ide/fasls/*fsl
 cocoa-ide/hemlock/*~.*
 cocoa-ide/hemlock/bin/*~.*
