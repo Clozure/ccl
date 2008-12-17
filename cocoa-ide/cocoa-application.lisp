@@ -19,7 +19,8 @@
 
 
 (defvar *cocoa-application-path* "ccl:Clozure CL.app;")
-(defvar *cocoa-application-copy-headers-p* t)
+(defvar *cocoa-application-copy-headers-p* nil)
+(defvar *cocoa-application-install-altconsole* t)
 (load "ccl:cocoa-ide;defsystem.lisp")
 (load-ide)
 
