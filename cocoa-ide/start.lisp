@@ -91,25 +91,19 @@
     (#_NSLog #@"This application requires features introduced in OSX 10.4.")
     (#_ _exit -1))
   (setq *standalone-cocoa-ide* t)
+  ;; It's probably reasonable to do this here: it's not really IDE-specific
+  (try-connecting-to-altconsole)
   ;; TODO: to avoid confusion, should now reset *cocoa-application-path* to
   ;; actual bundle path where started up.
   (start-cocoa-application))
 
 
-;;; The saved image will be an instance of COCOA-APPLICATION (mostly
-;;; so that it'll ignore its argument list.)  When it starts up, it'll
-;;; run the Cocoa event loop in the cocoa event process.
-;;; If you use an init file ("home:ccl-init"), it'll be loaded
-;;; in an environment in which *STANDARD-INPUT* always generates EOF
-;;; and where output and error streams are directed to the OSX console
-;;; (see below).  If that causes problems, you may want to suppress
-;;; the loading of your init file (via an :INIT-FILE nil arg to
-;;; the call to SAVE-APPLICATION, below.)
+
 
 (defun build-ide (bundle-path)
   (setq bundle-path (ensure-directory-pathname bundle-path))
 
-  ;; The bundle is expected to exists, we'll just add the executable into it.
+  ;; The bundle is expected to exist, we'll just add the executable into it.
   (assert (probe-file bundle-path))
 
   ;; Wait until we're sure that the Cocoa event loop has started.
@@ -139,6 +133,78 @@
                       :prepend-kernel t
                       :application-class 'cocoa-application)))
 
+;;; If we're running as a standalone .app, try to see if a bundle named
+;;; AltConsole.app exists in our PlugIns directory.  If so, execute
+;;; that bundle'es executable file, with its standard input/output/error
+;;; descriptors connected to one end of a socketpair, and connect t
+;;; descriptors 0,1,and 2 to the socket on the other end.
+
+(defun try-connecting-to-altconsole ()
+  (with-autorelease-pool
+      (let* ((main-bundle (#/mainBundle ns:ns-bundle))
+             (resource-path (#/resourcePath main-bundle)))
+        (block exit
+          (when (%null-ptr-p resource-path)
+            (return-from exit nil))
+          (let* ((altconsole-bundle
+                  (make-instance ns:ns-bundle
+                                 :with-path
+                                 (#/stringByAppendingPathComponent:
+                                  resource-path
+                                  #@"AltConsole.app"))))
+            (when (%null-ptr-p altconsole-bundle)
+              (return-from exit nil))
+            (let* ((executable-path (#/executablePath altconsole-bundle)))
+              (when (%null-ptr-p executable-path)
+                (return-from exit nil))
+              (let* ((nbytes (1+ (#/lengthOfBytesUsingEncoding:
+                                  executable-path
+                                  #$NSUTF8StringEncoding))))
+                (%stack-block ((c-executable-path nbytes))
+                  (unless (#/getCString:maxLength:encoding:
+                           executable-path
+                           c-executable-path
+                           nbytes
+                           #$NSUTF8StringEncoding)
+                    (return-from exit nil))
+                  (rletz ((argv (:array :address 2))
+                          (envp (:array :address 1))
+                          (sockets (:array :int 2)))
+                    (setf (paref argv (:array :address) 0) c-executable-path)
+                    (unless (eql 0 (#_socketpair #$AF_UNIX #$SOCK_STREAM 0 sockets))
+                      (return-from exit nil))
+                    (let* ((parent-socket (paref sockets (:array :int) 0))
+                           (child-socket (paref sockets (:array :int) 1))
+                           (pid (#_fork)))
+                      (case pid
+                        (-1
+                         ;; Fork failed
+                         (#_close parent-socket)
+                         (#_close child-socket)
+                         (return-from exit nil))
+                        (0
+                         ;; This runs in the child.
+                         (#_close parent-socket)
+                         (#_dup2 child-socket 0)
+                         (#_dup2 child-socket 1)
+                         (#_dup2 child-socket 2)
+                         (#_execve c-executable-path
+                                   argv
+                                   envp)
+                         ;; If the #_exec fails, there isn't
+                         ;; much to do or say about it.
+                         (#__exit 1))
+                        (t
+                         ;; We're the parent.
+                         (#_close child-socket)
+                         (when (eq t (ccl::check-pid pid))
+                           (#_dup2 parent-socket 0)
+                           (#_dup2 parent-socket 1)
+                           (#_dup2 parent-socket 2)
+                           pid)))))))))))))
+                      
+                    
+             
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
