@@ -5821,10 +5821,11 @@
     (let* ((*in-read-loop* nil)
            (first-char (peek-char t stream nil eof-value))
            (form
-            (cond ((eq first-char #\:)
-                   (read-command-or-keyword stream eof-value))
-                  ((eq first-char eof-value) eof-value)
-                  (t (read stream nil eof-value)))))
+            (let ((*read-suppress* nil))
+              (cond ((eq first-char #\:)
+                     (read-command-or-keyword stream eof-value))
+                    ((eq first-char eof-value) eof-value)
+                    (t (read stream nil eof-value))))))
       (if (eq form eof-value)
         (return (values form nil t))
         (progn
