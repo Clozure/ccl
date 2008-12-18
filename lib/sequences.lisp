@@ -1218,29 +1218,50 @@
 
 ;;; Delete-Duplicates:
 
+(defparameter *delete-duplicates-hash-threshold*  200)
+
 (defun list-delete-duplicates* (list test test-not key from-end start end)
   ;;(%print "test:" test "test-not:" test-not "key:" key)
-  (let ((handle (cons nil list)))
-    (do ((current  (nthcdr start list) (cdr current))
-         (previous (nthcdr start handle))
-         (index start (1+ index)))
-        ((or (= index end) (null current)) 
-         (cdr handle))
-      ;;(%print "outer loop top current:" current "previous:" previous)
-      (if (do ((x (if from-end 
-                    (nthcdr (1+ start) handle)
-                    (cdr current))
-                  (cdr x))
-               (i (1+ index) (1+ i)))
-              ((or (null x) 
-                   (and (not from-end) (= i end)) 
-                   (eq x current)) 
-               nil)
-            ;;(%print "inner loop top x:" x "i:" i)
-            (if (list-delete-duplicates*-aux current x test test-not key)
-              (return t)))
-        (rplacd previous (cdr current))
-        (setq previous (cdr previous))))))
+  (let* ((len (- end start))
+	 (handle (cons nil list))
+	 (previous (nthcdr start handle)))
+    (declare (dynamic-extent handle))
+    (if (and (> len *delete-duplicates-hash-threshold*)
+	     (or (eq test 'eq) (eq test 'eql) (eq test 'equal) (eq test 'equalp)
+		 (eq test #'eq) (eq test #'eql) (eq test #'equal) (eq test #'equalp)))
+      (let ((hash (make-hash-table :size len :test test :shared nil)))
+        (loop for i from start below end as obj in (cdr previous)
+          do (incf (gethash (funcall key obj) hash 0)))
+        (loop for i from start below end while (cdr previous)
+          do (let* ((current (cdr previous))
+                    (obj (car current))
+                    (obj-key (funcall key obj)))
+               (if (if from-end
+                     ;; Keep first ref
+                     (prog1 (gethash obj-key hash) (setf (gethash obj-key hash) nil))
+                     ;; Keep last ref
+                     (eql (decf (gethash obj-key hash)) 0))
+                 (setq previous current)
+                 (rplacd previous (cdr current))))))
+      (do ((current (cdr previous) (cdr current))
+           (index start (1+ index)))
+          ((or (= index end) (null current)))
+        ;;(%print "outer loop top current:" current "previous:" previous)
+        (if (do ((x (if from-end 
+                      (nthcdr (1+ start) handle)
+                      (cdr current))
+                    (cdr x))
+                 (i (1+ index) (1+ i)))
+                ((or (null x) 
+                     (and (not from-end) (= i end)) 
+                     (eq x current)) 
+                 nil)
+              ;;(%print "inner loop top x:" x "i:" i)
+              (if (list-delete-duplicates*-aux current x test test-not key)
+                (return t)))
+          (rplacd previous (cdr current))
+          (setq previous (cdr previous)))))
+    (cdr handle)))
 
 (defun list-delete-duplicates*-aux (current x test test-not key)
   (if test-not
@@ -1255,19 +1276,36 @@
 (defun vector-delete-duplicates* (vector test test-not key from-end start end 
 					 &optional (length (length vector)))
   (declare (vector vector))
-  (do ((index start (1+ index))
-       (jndex start))
-      ((= index end)
-       (do ((index index (1+ index))		; copy the rest of the vector
-            (jndex jndex (1+ jndex)))
-           ((= index length)
-            (setq vector (shrink-vector vector jndex)))
-            (aset vector jndex (aref vector index))))
-      (aset vector jndex (aref vector index))
-      (unless (position (funcall key (aref vector index)) vector :key key
-                             :start (if from-end start (1+ index)) :test test
-		                           :end (if from-end jndex end) :test-not test-not)
-              (setq jndex (1+ jndex)))))
+  (let* ((len (- end start))
+	 (index start)
+	 (jndex start))
+    (if (and (not test-not)
+	     (> len *delete-duplicates-hash-threshold*)
+	     (or (eq test 'eq) (eq test 'eql) (eq test 'equal) (eq test 'equalp)
+		 (eq test #'eq) (eq test #'eql) (eq test #'equal) (eq test #'equalp)))
+	(let ((hash (make-hash-table :size len :test test :shared nil)))
+	  (loop for i from start below end as obj = (aref vector i)
+	     do (incf (gethash (funcall key obj) hash 0)))
+	  (loop while (< index end) as obj = (aref vector index) as obj-key = (funcall key obj)
+	     do (incf index)
+	     do (when (if from-end
+			  (prog1 (gethash obj-key hash) (setf (gethash obj-key hash) nil))
+			  (eql (decf (gethash obj-key hash)) 0))
+		  (aset vector jndex obj)
+		  (incf jndex))))
+	(loop while (< index end) as obj = (aref vector index)
+	   do (incf index)
+	   do (unless (position (funcall key obj) vector :key key
+				:start (if from-end start index) :test test
+				:end (if from-end jndex end) :test-not test-not)
+		(aset vector jndex obj)
+		(incf jndex))))
+    (do ((index index (1+ index))	; copy the rest of the vector
+	 (jndex jndex (1+ jndex)))
+	((= index length)
+	 (setq vector (shrink-vector vector jndex)))
+      (aset vector jndex (aref vector index)))))
+
 
 (defun delete-duplicates (sequence &key (test #'eql) test-not (start 0) from-end end key)
   "The elements of SEQUENCE are examined, and if any two match, one is
