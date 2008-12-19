@@ -1593,4 +1593,143 @@
     <para></para>
   </sect1>
 
+  <sect1 id="floating-point">
+    <title>Floating Point Numbers</title>
+
+    <para>
+      In &CCL;, the Common Lisp types short-float and single-float are
+      implemented as IEEE single precision values; double-float and
+      long-float are IEEE double precision values.  On 64-bit
+      platforms, single-floats are immediate values (like fixnums and
+      characters).
+    </para>
+
+  <para>
+    Floating-point exceptions are generally enabled and detected.  By
+    default, threads start up with overflow, division-by-zero, and
+    invalid enabled, and the rounding mode is set to nearest. The
+    functions <varname>SET-FPU-MODE</varname> and
+    <varname>GET-FPU-MODE</varname> provide user control over
+    floating-point behavior.
+  </para>
+
+  <refentry id="f_get-fpu-mode">
+    <indexterm zone="f_get-fpu-mode">
+      <primary>get-fpu-mode</primary>
+    </indexterm>
+
+    <refnamediv>
+      <refname>GET-FPU-MODE</refname>
+      <refpurpose>
+	Return the state of exception-enable and rounding-mode control
+	flags for the current thread.
+      </refpurpose>
+      <refclass>Function</refclass>
+    </refnamediv>
+    
+    <refsynopsisdiv>
+      <synopsis><function>get-fpu-mode</function> &optional; mode</synopsis>
+    </refsynopsisdiv>
+
+    <refsect1>
+      <title>Arguments and Values</title>
+      <variablelist>
+	<varlistentry>
+	  <term>mode</term>
+	  <listitem>
+	    <para>
+	      One of the keywords :rounding-mode, :overflow,
+	      :underflow, :division-by-zero, :invalid, :inexact.
+	    </para>
+	  </listitem>
+	</varlistentry>
+      </variablelist>
+    </refsect1>
+    
+    <refsect1>
+      <title>Description</title>
+      <para>
+	If <varname>mode</varname> is supplied, returns the value of
+	the corresponding control flag for the current thread.
+      </para>
+      <para>
+	Otherwise, returns a list of keyword/value pairs which
+	describe the floating-point exception-enable and rounding-mode
+	control flags for the current thread.
+      </para>
+      <variablelist>
+	<varlistentry>
+	  <term>rounding-mode</term>
+	  <listitem>
+	    <para>
+	      One of :nearest, :zero, :positive, :negative
+	    </para>
+	  </listitem>
+	</varlistentry>
+	<varlistentry>
+	  <term>overflow, underflow, division-by-zero, invalid, inexact
+	  </term>
+	  <listitem>
+	    <para>
+	      If true, the floating-point exception is signaled.
+	      If NIL, it is masked.
+	    </para>
+	  </listitem>
+	</varlistentry>
+      </variablelist>
+    </refsect1>
+  </refentry>
+
+  <refentry id="f_set-fpu-mode">
+    <indexterm zone="f_set-fpu-mode">
+      <primary>set-fpu-mode</primary>
+    </indexterm>
+
+    <refnamediv>
+      <refname>SET-FPU-MODE</refname>
+      <refpurpose>
+	Set the state of exception-enable and rounding-mode control
+	flags for the current thread.
+      </refpurpose>
+      <refclass>Function</refclass>
+    </refnamediv>
+    
+    <refsynopsisdiv>
+      <synopsis><function>set-fpu-mode</function> &key;
+      rounding-mode overflow underflow division-by-zero
+      invalid inexact</synopsis>
+    </refsynopsisdiv>
+
+    <refsect1>
+      <title>Arguments and Values</title>
+      <variablelist>
+	<varlistentry>
+	  <term>rounding-mode</term>
+	  <listitem>
+	    <para>
+	      If supplied, must be one of :nearest, :zero, :positive, or
+	      :negative.
+	    </para>
+	  </listitem>
+	</varlistentry>
+	<varlistentry>
+	  <term>overflow, underflow, division-by-zero, invalid, inexact</term>
+	  <listitem>
+	    <para>NIL to mask the exception, T to signal it.</para>
+	  </listitem>
+	</varlistentry>
+      </variablelist>
+    </refsect1>
+    
+    <refsect1>
+      <title>Description</title>
+      <para>
+	Sets the current thread's exception-enable and rounding-mode
+	control flags to the indicated values for arguments that are
+	supplied, and preserves the values assoicated with those
+	that aren't supplied.
+      </para>
+    </refsect1>
+  </refentry>
+  </sect1>
 </chapter>
