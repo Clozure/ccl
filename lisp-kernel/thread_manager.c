@@ -821,8 +821,8 @@ allocate_tcr()
       continue;
     }
 #endif
-    for (next = chain; next;) {
-      next = next->next;
+    for (;chain;chain = next) {
+      next = chain->next;
       free(chain);
     }
     return tcr;
