@@ -1,25 +1,9 @@
 (in-package "CCL")
 
-;;; Some small structures are returned in EAX and EDX.  Otherwise,
-;;; return values are placed at the address specified by the caller.
+;; Always use the "hidden first arg" convention on linuxx8632
 (defun x86-linux32::record-type-returns-structure-as-first-arg (rtype)
-  (when (and rtype
-	     (not (typep rtype 'unsigned-byte))
-	     (not (member rtype *foreign-representation-type-keywords*
-			  :test #'eq)))
-    (let* ((ftype (if (typep rtype 'foreign-type)
-		    rtype
-		    (parse-foreign-type rtype)))
-	   (nbits (ensure-foreign-type-bits ftype)))
-      (not (member nbits '(8 16 32 64))))))
-
-(defun x86-linux32::struct-from-regbuf-values (r rtype regbuf)
-  (ecase (ensure-foreign-type-bits rtype)
-    (8 `(setf (%get-unsigned-byte ,r 0) (%get-unsigned-byte ,regbuf 0)))
-    (16 `(setf (%get-unsigned-word ,r 0) (%get-unsigned-word ,regbuf 0)))
-    (32 `(setf (%get-unsigned-long ,r 0) (%get-unsigned-long ,regbuf 0)))
-    (64 `(setf (%%get-unsigned-longlong ,r 0)
-	       (%%get-unsigned-longlong ,regbuf 0)))))
+  (declare (ignore rtype))
+  t)
 
 ;;; All arguments are passed on the stack.
 ;;;
@@ -27,32 +11,19 @@
 
 (defun x86-linux32::expand-ff-call (callform args &key (arg-coerce #'null-coerce-foreign-arg) (result-coerce #'null-coerce-foreign-result))
   (let* ((result-type-spec (or (car (last args)) :void))
-	 (regbuf nil)
-	 (result-temp nil)
-	 (result-form nil)
-	 (struct-result-type nil))
+	 (result-form nil))
     (multiple-value-bind (result-type error)
 	(ignore-errors (parse-foreign-type result-type-spec))
       (if error
 	(setq result-type-spec :void result-type *void-foreign-type*)
 	(setq args (butlast args)))
       (collect ((argforms))
-	(when (eq (car args) :monitor-exception-ports)
-	  (argforms (pop args)))
 	(when (typep result-type 'foreign-record-type)
 	  (setq result-form (pop args)
-		struct-result-type result-type
 		result-type *void-foreign-type*
 		result-type-spec :void)
-	  (if (x86-linux32::record-type-returns-structure-as-first-arg result-type)
-	    (progn
-	      (argforms :address)
-	      (argforms result-form))
-	    (progn
-	      (setq regbuf (gensym)
-		    result-temp (gensym))
-	      (argforms :registers)
-	      (argforms regbuf))))
+	  (argforms :address)
+	  (argforms result-form))
 	(unless (evenp (length args))
 	  (error "~s should be an even-length list of alternating foreign types and values" args))
 	(do* ((args args (cddr args)))
@@ -74,28 +45,19 @@
                                    (car (foreign-record-type-fields ftype)))
                             arg-type-spec (foreign-type-to-representation-type ftype)
                             bits (ensure-foreign-type-bits ftype)))
-                    (if (and (typep ftype 'foreign-record-type)
-                             (<= bits 32))
+                    (if (typep ftype 'foreign-record-type)
                       (argforms (ceiling bits 32))
                       (argforms (foreign-type-to-representation-type ftype)))
 		(argforms (funcall arg-coerce arg-type-spec arg-value-form))))))
 	  (argforms (foreign-type-to-representation-type result-type))
 	  (let* ((call (funcall result-coerce result-type-spec `(,@callform ,@(argforms)))))
-	    (if regbuf
-	      `(let* ((,result-temp (%null-ptr)))
-		 (declare (dynamic-extent ,result-temp)
-			  (type macptr ,result-temp))
-		 (%setf-macptr ,result-temp ,result-form)
-		 (%stack-block ((,regbuf 8))
-		   ,call
-		   ,(x86-linux32::struct-from-regbuf-values result-temp struct-result-type regbuf)))
-	      call))))))
+	    call)))))
 
 ;;; Return 7 values:
 ;;; A list of RLET bindings
 ;;; A list of LET* bindings
 ;;; A list of DYNAMIC-EXTENT declarations for the LET* bindings
-;;; A list of initializaton forms for (some) structure args
+;;; A list of initializaton forms for (some) structure args (not used on x8632)
 ;;; A FOREIGN-TYPE representing the "actual" return type.
 ;;; A form which can be used to initialize FP-ARGS-PTR, relative
 ;;;  to STACK-PTR.  (This is unused on linuxppc32.)
@@ -105,7 +67,6 @@
   (declare (ignore fp-args-ptr))
   (collect ((lets)
 	    (rlets)
-	    (inits)
 	    (dynamic-extent-names))
     (let* ((rtype (parse-foreign-type result-spec)))
       (when (typep rtype 'foreign-record-type)
@@ -116,46 +77,47 @@
 	  (rlets (list struct-result-name (foreign-record-type-name rtype)))))
       (do* ((argvars argvars (cdr argvars))
 	    (argspecs argspecs (cdr argspecs))
-	    (offset 8 (incf offset 4)))
+	    (offset 8))
 	   ((null argvars)
-	    (values (rlets) (lets) (dynamic-extent-names) (inits) rtype nil 4))
+	    (values (rlets) (lets) (dynamic-extent-names) nil rtype nil 4))
 	(let* ((name (car argvars))
 	       (spec (car argspecs))
 	       (argtype (parse-foreign-type spec))
 	       (bits (require-foreign-type-bits argtype))
 	       (double nil))
 	  (if (typep argtype 'foreign-record-type)
+	    (lets (list name `(%inc-ptr ,stack-ptr ,(prog1 offset
+							   (incf offset (* 4 (ceiling bits 32)))))))
 	    (progn
-	      (format t "~& arg is some foreign type"))
-	    (lets (list name
-			`(,
-			  (ecase (foreign-type-to-representation-type argtype)
-			    (:single-float '%get-single-float)
-			    (:double-float (setq double t) '%get-double-float)
-			    (:signed-doubleword (setq double t)
-						'%%get-signed-longlong)
-			    (:signed-fullword '%get-signed-long)
-			    (:signed-halfword '%get-signed-word)
-			    (:signed-byte '%get-signed-byte)
-			    (:unsigned-doubleword (setq double t)
-						  '%%get-unsigned-longlong)
-			    (:unsigned-fullword '%get-unsigned-long)
-			    (:unsigned-halfword '%get-unsigned-word)
-			    (:unsigned-byte '%get-unsigned-byte)
-			    (:address '%get-ptr))
-			  ,stack-ptr
-			  ,offset))))
-	  (when double (incf offset 4)))))))
+	      (lets (list name
+			  `(,
+			    (ecase (foreign-type-to-representation-type argtype)
+			      (:single-float '%get-single-float)
+			      (:double-float (setq double t) '%get-double-float)
+			      (:signed-doubleword (setq double t)
+						  '%%get-signed-longlong)
+			      (:signed-fullword '%get-signed-long)
+			      (:signed-halfword '%get-signed-word)
+			      (:signed-byte '%get-signed-byte)
+			      (:unsigned-doubleword (setq double t)
+						    '%%get-unsigned-longlong)
+			      (:unsigned-fullword '%get-unsigned-long)
+			      (:unsigned-halfword '%get-unsigned-word)
+			      (:unsigned-byte '%get-unsigned-byte)
+			      (:address '%get-ptr))
+			    ,stack-ptr
+			    ,offset)))
+	      (incf offset 4)
+	      (when double (incf offset 4)))))))))
 
 (defun x86-linux32::generate-callback-return-value (stack-ptr fp-args-ptr result return-type struct-return-arg)
-  (declare (ignore fp-args-ptr))
-  (format t "~&in generate-callback-return-value")
+  (declare (ignore fp-args-ptr struct-return-arg))
   (unless (eq return-type *void-foreign-type*)
     (if (typep return-type 'foreign-record-type)
-      ;; Would have been mapped to :VOID unless record-type was <= 64 bits
-      (format t "~&need to return structure ~s by value" return-type)
+      ;; Should have been mapped to :VOID
+      (error "Shouldn't be trying to return a structure by value on linuxx8632")
       (let* ((return-type-keyword (foreign-type-to-representation-type return-type)))
-        (ccl::collect ((forms))
+        (collect ((forms))
           (forms 'progn)
           (case return-type-keyword
             (:single-float
