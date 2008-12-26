@@ -393,7 +393,7 @@ writebuf(int fd, char *bytes, natural n)
 }
 
 OSErr
-save_application(unsigned fd)
+save_application(unsigned fd, Boolean egc_was_enabled)
 {
   openmcl_image_file_header fh;
   openmcl_image_section_header sections[NUM_IMAGE_SECTIONS];
@@ -461,8 +461,8 @@ save_application(unsigned fd)
     lisp_global(LISP_HEAP_THRESHOLD) = lisp_heap_gc_threshold;
     lisp_global(G0_THRESHOLD) = g0_area->threshold;
     lisp_global(G1_THRESHOLD) = g1_area->threshold;
-    lisp_global(G1_THRESHOLD) = g2_area->threshold;
-    lisp_global(EGC_ENABLED) = (LispObj)(active_dynamic_area->older != NULL);
+    lisp_global(G2_THRESHOLD) = g2_area->threshold;
+    lisp_global(EGC_ENABLED) = (LispObj)egc_was_enabled;
   }
   /*
     lisp_global(GC_NUM) and lisp_global(FWDNUM) are persistent,

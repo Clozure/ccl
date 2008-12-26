@@ -266,14 +266,14 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
       }
       if (selector & GC_TRAP_FUNCTION_SAVE_APPLICATION) {
         OSErr err;
-        extern OSErr save_application(unsigned);
+        extern OSErr save_application(unsigned, Boolean);
         area *vsarea = tcr->vs_area;
 
 #ifdef WINDOWS	
         arg = _open_osfhandle(arg,0);
 #endif
         nrs_TOPLFUNC.vcell = *((LispObj *)(vsarea->high)-1);
-        err = save_application(arg);
+        err = save_application(arg, egc_was_enabled);
         if (err == noErr) {
           _exit(0);
         }
@@ -1349,18 +1349,6 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context
 }
 #endif
 
-#ifdef DARWIN
-void
-pseudo_signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context, TCR *tcr, int old_valence)
-{
-  sigset_t mask;
-
-  sigfillset(&mask);
-
-  pthread_sigmask(SIG_SETMASK,&mask,&(context->uc_sigmask));
-  signal_handler(signum, info, context, tcr, old_valence);
-}
-#endif
 
 
 
@@ -2393,7 +2381,13 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
          (in the allocptr register) to the header in %rax and skip over this
          instruction, then fall into the next case. */
       new_vector = xpGPR(xp,Iallocptr);
-      deref(new_vector,0) = xpGPR(xp,Iimm0);
+      deref(new_vector,0) = 
+#ifdef X8664
+        xpGPR(xp,Iimm0)
+#else
+        xpMMXreg(xp,Imm0)
+#endif
+        ;
 
       xpPC(xp) += sizeof(set_allocptr_header_instruction);
       /* Fall thru */
@@ -3130,11 +3124,8 @@ setup_signal_frame(mach_port_t thread,
 #define ts_pc(t) t.__eip
 #endif
 
-#ifdef DARWIN_USE_PSEUDO_SIGRETURN
+
 #define DARWIN_EXCEPTION_HANDLER signal_handler
-#else
-#define DARWIN_EXCEPTION_HANDLER pseudo_signal_handler
-#endif
 
 
 kern_return_t
