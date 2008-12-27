@@ -2276,7 +2276,7 @@ opcode compare_allocptr_reg_to_tcr_save_allocbase_instruction[] =
 
 ;
 opcode branch_around_alloc_trap_instruction[] =
-  {0x7f,0x02};
+  {0x77,0x02};
 opcode alloc_trap_instruction[] =
   {0xcd,0xc5};
 opcode clear_tcr_save_allocptr_tag_instruction[] =
@@ -2295,7 +2295,9 @@ recognize_alloc_instruction(pc program_counter)
 {
   switch(program_counter[0]) {
   case 0xcd: return ID_alloc_trap_instruction;
-  case 0x7f: return ID_branch_around_alloc_trap_instruction;
+  /* 0x7f is jg, which we used to use here instead of ja */
+  case 0x7f:
+  case 0x77: return ID_branch_around_alloc_trap_instruction;
   case 0x48: return ID_set_allocptr_header_instruction;
 #ifdef WINDOWS
   case 0x41: return ID_clear_tcr_save_allocptr_tag_instruction;
@@ -2326,7 +2328,7 @@ opcode load_allocptr_reg_from_tcr_save_allocptr_instruction[] =
 opcode compare_allocptr_reg_to_tcr_save_allocbase_instruction[] =
   {0x64,0x3b,0x0d,0x88,0x00,0x00,0x00};
 opcode branch_around_alloc_trap_instruction[] =
-  {0x7f,0x02};
+  {0x77,0x02};
 opcode alloc_trap_instruction[] =
   {0xcd,0xc5};
 opcode clear_tcr_save_allocptr_tag_instruction[] =
@@ -2339,7 +2341,9 @@ recognize_alloc_instruction(pc program_counter)
 {
   switch(program_counter[0]) {
   case 0xcd: return ID_alloc_trap_instruction;
-  case 0x7f: return ID_branch_around_alloc_trap_instruction;
+  /* 0x7f is jg, which we used to use here instead of ja */
+  case 0x7f:
+  case 0x77: return ID_branch_around_alloc_trap_instruction;
   case 0x0f: return ID_set_allocptr_header_instruction;
   case 0x64: 
     switch(program_counter[1]) {
@@ -2415,16 +2419,15 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
       }
       break;
     case ID_branch_around_alloc_trap_instruction:
-      /* If we'd take the branch - which is a "jg" - around the alloc trap,
+      /* If we'd take the branch - which is a "ja" - around the alloc trap,
          we might as well finish the allocation.  Otherwise, back out of the
          attempt. */
       {
         int flags = (int)eflags_register(xp);
         
         if ((!(flags & (1 << X86_ZERO_FLAG_BIT))) &&
-            ((flags & (1 << X86_SIGN_FLAG_BIT)) ==
-             (flags & (1 << X86_CARRY_FLAG_BIT)))) {
-          /* The branch (jg) would have been taken.  Emulate taking it. */
+	    (!(flags & (1 << X86_CARRY_FLAG_BIT)))) {
+          /* The branch (ja) would have been taken.  Emulate taking it. */
           xpPC(xp) += (sizeof(branch_around_alloc_trap_instruction)+
                        sizeof(alloc_trap_instruction));
           if (allocptr_tag == fulltag_misc) {

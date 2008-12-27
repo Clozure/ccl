@@ -846,7 +846,7 @@
   (subl (:$b (- x8632::cons.size x8632::fulltag-cons)) (:@ (:%seg :rcontext) x8632::tcr.save-allocptr))
   (movl (:@ (:%seg :rcontext) x8632::tcr.save-allocptr) (:%l x8632::allocptr))
   (rcmpl (:%l x8632::allocptr) (:@ (:%seg :rcontext) x8632::tcr.save-allocbase))
-  (jg :no-trap)
+  (ja :no-trap)
   (uuo-alloc)
   :no-trap
   (andb (:$b (lognot x8632::fulltagmask)) (:@ (:%seg :rcontext) x8632::tcr.save-allocptr))
@@ -1136,7 +1136,7 @@
   (subl (:%l size) (:@ (:%seg :rcontext) x8632::tcr.save-allocptr))
   (movl (:@ (:%seg :rcontext) x8632::tcr.save-allocptr) (:%l freeptr))
   (rcmpl (:%l freeptr) (:@ (:%seg :rcontext) x8632::tcr.save-allocbase))
-  (jg :no-trap)
+  (ja :no-trap)
   (uuo-alloc)
   :no-trap
   (movd (:%mmx x8632::mm0) (:@ x8632::misc-header-offset (:%l freeptr)))

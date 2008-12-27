@@ -210,7 +210,7 @@
           (:rcontext x8664::tcr.save-allocptr))
     (movq (:rcontext x8664::tcr.save-allocptr) (% allocptr))
     (cmpq (:rcontext x8664::tcr.save-allocbase) (% allocptr))
-    (jg @ok)
+    (ja @ok)
     (uuo-alloc)
     @ok
     (andb ($ (lognot x8664::fulltagmask))

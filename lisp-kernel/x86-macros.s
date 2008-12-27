@@ -273,7 +273,7 @@ define([Cons],[
         __(subl $cons.size-fulltag_cons,rcontext(tcr.save_allocptr))
         __(movl rcontext(tcr.save_allocptr),%allocptr)
         __(rcmpl(%allocptr,rcontext(tcr.save_allocbase)))
-        __(jg macro_label(no_trap))
+        __(ja macro_label(no_trap))
         uuo_alloc()
 macro_label(no_trap):
         __(andb $~fulltagmask,rcontext(tcr.save_allocptr))
@@ -293,7 +293,7 @@ define([Cons],[
 	__(subq $cons.size-fulltag_cons,rcontext(tcr.save_allocptr))
 	__(movq rcontext(tcr.save_allocptr),%allocptr)
 	__(rcmpq(%allocptr,rcontext(tcr.save_allocbase)))
-	__(jg macro_label(no_trap))
+	__(ja macro_label(no_trap))
 	uuo_alloc()
 macro_label(no_trap):	
 	__(andb $~fulltagmask,rcontext(tcr.save_allocptr))
@@ -326,7 +326,7 @@ define([Misc_Alloc_Internal],[
         __(subl %imm0,rcontext(tcr.save_allocptr))
         __(movl rcontext(tcr.save_allocptr),%allocptr)
         __(cmpl rcontext(tcr.save_allocbase),%allocptr)
-        __(jg macro_label(no_trap))
+        __(ja macro_label(no_trap))
         uuo_alloc()
 macro_label(no_trap):   
         __(movd %mm0,misc_header_offset(%allocptr))
@@ -341,7 +341,7 @@ define([Misc_Alloc_Internal],[
 	__(subq %imm1,rcontext(tcr.save_allocptr))
 	__(movq rcontext(tcr.save_allocptr),%allocptr)
 	__(rcmpq(%allocptr,rcontext(tcr.save_allocbase)))
-	__(jg macro_label(no_trap))
+	__(ja macro_label(no_trap))
 	uuo_alloc()
 macro_label(no_trap):	
 	__(movq %imm0,misc_header_offset(%allocptr))

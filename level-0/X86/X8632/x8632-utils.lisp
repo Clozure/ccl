@@ -175,7 +175,7 @@
 	  (:rcontext x8632::tcr.save-allocptr))
     (movl (:rcontext x8632::tcr.save-allocptr) (% allocptr)) ;aka temp0
     (cmpl (:rcontext x8632::tcr.save-allocbase) (% allocptr))
-    (jg @ok)
+    (ja @ok)
     (uuo-alloc)
     @ok
     (andb ($ (lognot x8632::fulltagmask))
