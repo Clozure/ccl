@@ -2323,16 +2323,23 @@ recognize_alloc_instruction(pc program_counter)
 }
 #endif
 #ifdef X8632
+#ifdef WIN32_ES_HACK
+/* Win32 keeps the TCR in %es */
+#define TCR_SEG_PREFIX 0x26     /* %es: */
+#else
+/* Other platfroms use %fs */
+#define TCR_SEG_PREFIX 0x64     /* %fs: */
+#endif
 opcode load_allocptr_reg_from_tcr_save_allocptr_instruction[] =
-  {0x64,0x8b,0x0d,0x84,0x00,0x00,0x00};
+  {TCR_SEG_PREFIX,0x8b,0x0d,0x84,0x00,0x00,0x00};
 opcode compare_allocptr_reg_to_tcr_save_allocbase_instruction[] =
-  {0x64,0x3b,0x0d,0x88,0x00,0x00,0x00};
+  {TCR_SEG_PREFIX,0x3b,0x0d,0x88,0x00,0x00,0x00};
 opcode branch_around_alloc_trap_instruction[] =
   {0x77,0x02};
 opcode alloc_trap_instruction[] =
   {0xcd,0xc5};
 opcode clear_tcr_save_allocptr_tag_instruction[] =
-  {0x64,0x80,0x25,0x84,0x00,0x00,0x00,0xf8};
+  {TCR_SEG_PREFIX,0x80,0x25,0x84,0x00,0x00,0x00,0xf8};
 opcode set_allocptr_header_instruction[] =
   {0x0f,0x7e,0x41,0xfa};
 
@@ -2345,7 +2352,7 @@ recognize_alloc_instruction(pc program_counter)
   case 0x7f:
   case 0x77: return ID_branch_around_alloc_trap_instruction;
   case 0x0f: return ID_set_allocptr_header_instruction;
-  case 0x64: 
+  case TCR_SEG_PREFIX: 
     switch(program_counter[1]) {
     case 0x80: return ID_clear_tcr_save_allocptr_tag_instruction;
     case 0x3b: return ID_compare_allocptr_reg_to_tcr_save_allocbase_instruction;
