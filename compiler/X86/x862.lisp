@@ -203,6 +203,15 @@
 
 (defvar *x862-result-reg* x8664::arg_z)
 
+(defvar *x8664-nvrs*
+  `(,x8664::save0 ,x8664::save1 ,x8664::save2 ,x8664::save3))
+
+(defvar *reduced-x8664-nvrs*
+  `(,x8664::save0 ,x8664::save1 ,x8664::save2))
+
+(defvar *x8632-nvrs* ())
+
+
 (defvar *x862-arg-z* nil)
 (defvar *x862-arg-y* nil)
 (defvar *x862-imm0* nil)
@@ -893,114 +902,6 @@
             *x862-trust-declarations* (neq 0 (%ilogand2 $decl_trustdecls decls))))))
 
 
-(defun %x862-bigger-cdr-than (x y)
-  (declare (cons x y))
-  (> (the fixnum (cdr x)) (the fixnum (cdr y))))
-
-;;; Return an unordered list of "varsets": each var in a varset can be
-;;; assigned a register and all vars in a varset can be assigned the
-;;; same register (e.g., no scope conflicts.)
-
-(defun x862-partition-vars (vars)
-  (labels ((var-weight (var)
-             (let* ((bits (nx-var-bits var)))
-               (declare (fixnum bits))
-               (if (eql 0 (logand bits (logior
-                                        (ash 1 $vbitpuntable)
-                                        (ash -1 $vbitspecial)
-                                        (ash 1 $vbitnoreg))))
-                 (if (eql (logior (ash 1 $vbitclosed) (ash 1 $vbitsetq))
-                          (logand bits (logior (ash 1 $vbitclosed) (ash 1 $vbitsetq))))
-                   0
-                   (%i+ (%ilogand $vrefmask bits) (%ilsr 8 (%ilogand $vsetqmask bits))))
-                 0)))
-           (sum-weights (varlist) 
-             (let ((sum 0))
-               (dolist (v varlist sum) (incf sum (var-weight v)))))
-           (vars-disjoint-p (v1 v2)
-             (if (eq v1 v2)
-               nil
-               (if (memq v1 (var-binding-info v2))
-                 nil
-                 (if (memq v2 (var-binding-info v1))
-                   nil
-                   t)))))
-    (setq vars (%sort-list-no-key
-                ;(delete-if #'(lambda (v) (eql (var-weight v) 0)) vars) 
-                (do* ((handle (cons nil vars))
-                      (splice handle))
-                     ((null (cdr splice)) (cdr handle))                  
-                  (declare (dynamic-extent handle) (type cons handle splice))
-                  (if (eql 0 (var-weight (%car (cdr splice))))
-                    (rplacd splice (%cdr (cdr splice)))
-                    (setq splice (cdr splice))))
-                #'(lambda (v1 v2) (%i> (var-weight v1) (var-weight v2)))))
-    ;; This isn't optimal.  It partitions all register-allocatable
-    ;; variables into sets such that
-    ;; 1) no variable is a member of more than one set and
-    ;; 2) all variables in a given set are disjoint from each other
-    ;; A set might have exactly one member.
-    ;; If a register is allocated for any member of a set, it's
-    ;; allocated for all members of that set.
-    (let* ((varsets nil))
-      (do* ((all vars (cdr all)))
-           ((null all))
-        (let* ((var (car all)))
-          (when (dolist (already varsets t)
-                  (when (memq var (car already)) (return)))
-            (let* ((varset (cons var nil)))
-              (dolist (v (cdr all))
-                (when (dolist (already varsets t)
-                        (when (memq v (car already)) (return)))
-                  (when (dolist (d varset t)
-                          (unless (vars-disjoint-p v d) (return)))
-                    (push v varset))))
-              (let* ((weight (sum-weights varset)))
-                (declare (fixnum weight))
-                (if (>= weight 3)
-                  (push (cons (nreverse varset) weight) varsets)))))))
-      varsets)))
-
-;;; Maybe globally allocate registers to symbols naming functions & variables,
-;;; and to simple lexical variables.
-(defun x862-allocate-global-registers (fcells vcells all-vars no-regs)
-  (if (or no-regs (target-arch-case (:x8632 t)))
-    (progn
-      (dolist (c fcells) (%rplacd c nil))
-      (dolist (c vcells) (%rplacd c nil))
-      (values 0 nil))
-    (let* ((maybe (x862-partition-vars all-vars)))
-      (dolist (c fcells) 
-        (if (>= (the fixnum (cdr c)) 3) (push c maybe)))
-      (dolist (c vcells) 
-        (if (>= (the fixnum (cdr c)) 3) (push c maybe)))
-      (do* ((things (%sort-list-no-key maybe #'%x862-bigger-cdr-than) (cdr things))
-            (n 0 (1+ n))
-            (registers (target-arch-case
-			(:x8632 (error "no nvrs on x8632"))
-			(:x8664
-                         (if (= (backend-lisp-context-register *target-backend*) x8664::save3)
-                           (list x8664::save0 x8664::save1 x8664::save2)
-                           (list x8664::save0 x8664::save1 x8664::save2 x8664::save3)))))
-            (regno (pop registers) (pop registers))
-            (constant-alist ()))
-           ((or (null things) (null regno))
-            (dolist (cell fcells) (%rplacd cell nil))
-            (dolist (cell vcells) (%rplacd cell nil))
-            (values n constant-alist))
-        (declare (list things)
-                 (fixnum n regno))
-        (let* ((thing (car things)))
-          (if (or (memq thing fcells)
-                  (memq thing vcells))
-            (push (cons thing regno) constant-alist)
-            (dolist (var (car thing))
-              (nx-set-var-bits var 
-                               (%ilogior (%ilogand (%ilognot $vrefmask) (nx-var-bits var))
-                                 regno
-                                 (%ilsl $vbitreg 1))))))))))
-
-
     
 ;;; Vpush the last N non-volatile-registers.
 (defun x862-save-nvrs (seg n)
@@ -1062,7 +963,7 @@
     (if (memq arg passed-in-regs)
       (x862-set-var-ea seg arg (var-ea arg))
       (let* ((lcell (pop lcells)))
-        (if (setq reg (x862-assign-register-var arg))
+        (if (setq reg (nx2-assign-register-var arg))
           (x862-init-regvar seg arg reg (x862-vloc-ea vloc))
           (x862-bind-var seg arg vloc lcell))
         (setq vloc (%i+ vloc *x862-target-node-size*)))))
@@ -1070,7 +971,7 @@
     (if (memq arg passed-in-regs)
       (x862-set-var-ea seg arg (var-ea arg))
       (let* ((lcell (pop lcells)))
-        (if (setq reg (x862-assign-register-var arg))
+        (if (setq reg (nx2-assign-register-var arg))
           (x862-init-regvar seg arg reg (x862-vloc-ea vloc))
           (x862-bind-var seg arg vloc lcell))
         (setq vloc (%i+ vloc *x862-target-node-size*)))))
@@ -1083,7 +984,7 @@
         (if (memq var passed-in-regs)
           (x862-set-var-ea seg var (var-ea var))
           (let* ((lcell (pop lcells)))
-            (if (setq reg (x862-assign-register-var var))
+            (if (setq reg (nx2-assign-register-var var))
               (x862-init-regvar seg var reg (x862-vloc-ea vloc))
               (x862-bind-var seg var vloc lcell))
             (setq vloc (+ vloc *x862-target-node-size*)))))))
@@ -1091,7 +992,7 @@
   (when rest
     (if lexpr
       (progn
-        (if (setq reg (x862-assign-register-var rest))
+        (if (setq reg (nx2-assign-register-var rest))
           (progn
             (x862-copy-register seg reg *x862-arg-z*)
             (x862-set-var-ea seg rest reg))
@@ -1100,7 +1001,7 @@
               (x862-note-top-cell rest)
               (x862-bind-var seg rest loc *x862-top-vstack-lcell*))))
       (let* ((rvloc (+ vloc (* 2 *x862-target-node-size* nkeys))))
-        (if (setq reg (x862-assign-register-var rest))
+        (if (setq reg (nx2-assign-register-var rest))
           (x862-init-regvar seg rest reg (x862-vloc-ea rvloc))
           (x862-bind-var seg rest rvloc (pop lcells))))))
     (when keys
@@ -1115,7 +1016,7 @@
              (spvar (pop spvars))
              (lcell (pop lcells))
              (splcell (pop splcells))
-             (reg (x862-assign-register-var var))
+             (reg (nx2-assign-register-var var))
              (regloadedlabel (if reg (backend-get-next-label))))
         (unless (nx-null initform)
           (let ((skipinitlabel (backend-get-next-label)))
@@ -1131,7 +1032,7 @@
             (@ regloadedlabel))
           (x862-bind-var seg var vloc lcell))
         (when spvar
-          (if (setq reg (x862-assign-register-var spvar))
+          (if (setq reg (nx2-assign-register-var spvar))
             (x862-init-regvar seg spvar reg (x862-vloc-ea spvloc))
             (x862-bind-var seg spvar spvloc splcell))))
       (setq vloc (%i+ vloc *x862-target-node-size*))
@@ -1143,7 +1044,7 @@
     (dolist (var keyvars)
       (let* ((spvar (pop keysupp))
              (initform (pop keyinits))
-             (reg (x862-assign-register-var var))
+             (reg (nx2-assign-register-var var))
              (regloadedlabel (if reg (backend-get-next-label)))
              (var-lcell (pop lcells))
              (sp-lcell (pop lcells))
@@ -1162,7 +1063,7 @@
             (@ regloadedlabel))
           (x862-bind-var seg var vloc var-lcell))
         (when spvar
-          (if (setq reg (x862-assign-register-var spvar))
+          (if (setq reg (nx2-assign-register-var spvar))
             (x862-init-regvar seg spvar reg (x862-vloc-ea sploc))
             (x862-bind-var seg spvar sploc sp-lcell))))
       (setq vloc (%i+ vloc (* 2 *x862-target-node-size*))))))
@@ -1171,13 +1072,11 @@
 ;;; Return NIL if register was vpushed, else var.
 (defun x862-vpush-arg-register (seg reg var)
   (when var
-    (let* ((bits (nx-var-bits var)))
-      (declare (fixnum bits))
-      (if (logbitp $vbitreg bits)
-        var
-        (progn 
-          (x862-vpush-register seg reg :reserved)
-          nil)))))
+    (if (var-nvr var)
+      var
+      (progn 
+        (x862-vpush-register seg reg :reserved)
+        nil))))
 
 
 ;;; nargs has been validated, arguments defaulted and canonicalized.
@@ -1400,38 +1299,6 @@
   (declare (dynamic-extent forms))
   (apply (svref *x862-specials* (%ilogand operator-id-mask op)) seg vreg xfer forms))
 
-;;; Returns true iff lexical variable VAR isn't setq'ed in FORM.
-;;; Punts a lot ...
-(defun x862-var-not-set-by-form-p (var form)
-  (let* ((bits (nx-var-bits var)))
-    (or (not (%ilogbitp $vbitsetq bits))
-        (x862-setqed-var-not-set-by-form-p var form (logbitp $vbitclosed bits)))))
-
-(defun x862-setqed-var-not-set-by-form-p (var form &optional closed)
-  (setq form (acode-unwrapped-form form))
-  (or (atom form)
-      (x86-constant-form-p form)
-      (x862-lexical-reference-p form)
-      (let ((op (acode-operator form))
-            (subforms nil))
-        (if (eq op (%nx1-operator setq-lexical))
-          (and (neq var (cadr form))
-               (x862-setqed-var-not-set-by-form-p var (caddr form)))
-          (and (or (not closed)
-                   (logbitp operator-side-effect-free-bit op))
-               (flet ((not-set-in-formlist (formlist)
-                        (dolist (subform formlist t)
-                          (unless (x862-setqed-var-not-set-by-form-p var subform closed) (return)))))
-                 (if
-                   (cond ((%ilogbitp operator-acode-subforms-bit op) (setq subforms (%cdr form)))
-                         ((%ilogbitp operator-acode-list-bit op) (setq subforms (cadr form))))
-                   (not-set-in-formlist subforms)
-                   (and (or (eq op (%nx1-operator call))
-                            (eq op (%nx1-operator lexical-function-call)))
-                        (x862-setqed-var-not-set-by-form-p var (cadr form))
-                        (setq subforms (caddr form))
-                        (not-set-in-formlist (car subforms))
-                        (not-set-in-formlist (cadr subforms))))))))))
 
 (defun x862-check-fixnum-overflow (seg target &optional labelno)
   (with-x86-local-vinsn-macros (seg)
@@ -1541,10 +1408,7 @@
     (with-x86-local-vinsn-macros (seg)
       (! set-nargs n))))
 
-(defun x862-assign-register-var (v)
-  (let ((bits (nx-var-bits v)))
-    (when (%ilogbitp $vbitreg bits)
-      (%ilogand bits $vrefmask))))
+
 
 (defun x862-single-float-bits (the-sf)
   (single-float-bits the-sf))
@@ -2698,16 +2562,16 @@
                   (eq op (%nx1-operator call)))
             (destructuring-bind (fn-form (stack-args reg-args) &optional spread-p) (%cdr body)
                (unless (and (eq spread-p t)
-                           (eq (x862-lexical-reference-p (%car reg-args)) rest))
+                           (eq (nx2-lexical-reference-p (%car reg-args)) rest))
                 (return nil))
               (flet ((independent-of-all-values (form)        
                        (setq form (acode-unwrapped-form-value form))
                        (or (x86-constant-form-p form)
-                           (let* ((lexref (x862-lexical-reference-p form)))
+                           (let* ((lexref (nx2-lexical-reference-p form)))
                              (and lexref 
                                   (neq lexref rest)
                                   (dolist (val rest-values t)
-                                    (unless (x862-var-not-set-by-form-p lexref val)
+                                    (unless (nx2-var-not-set-by-form-p lexref val)
                                       (return))))))))
                 (unless (or (eq op (%nx1-operator lexical-function-call))
                             (independent-of-all-values fn-form))
@@ -2728,7 +2592,7 @@
             (if (eq op (%nx1-operator local-block))
               (setq body (%cadr body))
               (if (and (eq op (%nx1-operator if))
-                       (eq (x862-lexical-reference-p (%cadr body)) rest))
+                       (eq (nx2-lexical-reference-p (%cadr body)) rest))
                 (setq body (%caddr body))
                 (return nil)))))))))
 
@@ -2744,7 +2608,7 @@
             (if (<= nargs *x862-target-num-arg-regs*)
               (setq arglist (list nil (reverse stack-args)))
               (setq arglist (list (butlast stack-args *x862-target-num-arg-regs*) (reverse (last stack-args *x862-target-num-arg-regs*)))))))))
-    (let* ((lexref (x862-lexical-reference-p fn))
+    (let* ((lexref (nx2-lexical-reference-p fn))
            (simple-case (or (fixnump fn)
                             (typep fn 'lreg)
                             (x862-immediate-function-p fn)
@@ -2753,7 +2617,7 @@
                              (not spread-p)
                              (flet ((all-simple (args)
                                       (dolist (arg args t)
-                                        (when (and arg (not (x862-var-not-set-by-form-p lexref arg)))
+                                        (when (and arg (not (nx2-var-not-set-by-form-p lexref arg)))
                                           (return)))))
                                (and (all-simple (car arglist))
                                     (all-simple (cadr arglist))
@@ -3354,10 +3218,10 @@
     (warn "~s is not an lreg (1/2)" areg))
   (unless (typep breg 'lreg)
     (warn "~s is not an lreg (2/2)" breg))
-  (let* ((avar (x862-lexical-reference-p aform))
+  (let* ((avar (nx2-lexical-reference-p aform))
          (atriv (x862-trivial-p bform))
          (aconst (and (not atriv) (or (x86-side-effect-free-form-p aform)
-                                      (if avar (x862-var-not-set-by-form-p avar bform)))))
+                                      (if avar (nx2-var-not-set-by-form-p avar bform)))))
          apushed)
     (progn
       (unless aconst
@@ -3374,12 +3238,12 @@
 
 (defun x862-two-untargeted-reg-forms (seg aform areg bform breg)
   (with-x86-local-vinsn-macros (seg)
-    (let* ((avar (x862-lexical-reference-p aform))
+    (let* ((avar (nx2-lexical-reference-p aform))
            (adest areg)
            (bdest breg)
            (atriv (x862-trivial-p bform))
            (aconst (and (not atriv) (or (x86-side-effect-free-form-p aform)
-                                        (if avar (x862-var-not-set-by-form-p avar bform)))))
+                                        (if avar (nx2-var-not-set-by-form-p avar bform)))))
            (apushed (not (or atriv aconst))))
       (progn
         (unless aconst
@@ -3408,15 +3272,15 @@
                     (x862-trivial-p cform)))
          (aconst (and (not atriv) 
                       (or (x86-side-effect-free-form-p aform)
-                          (let ((avar (x862-lexical-reference-p aform)))
+                          (let ((avar (nx2-lexical-reference-p aform)))
                             (and avar 
-                                 (x862-var-not-set-by-form-p avar bform)
-                                 (x862-var-not-set-by-form-p avar cform))))))
+                                 (nx2-var-not-set-by-form-p avar bform)
+                                 (nx2-var-not-set-by-form-p avar cform))))))
          (bconst (and (not btriv)
                       (or
                        (x86-side-effect-free-form-p bform)
-                       (let ((bvar (x862-lexical-reference-p bform)))
-                         (and bvar (x862-var-not-set-by-form-p bvar cform))))))
+                       (let ((bvar (nx2-lexical-reference-p bform)))
+                         (and bvar (nx2-var-not-set-by-form-p bvar cform))))))
          (apushed nil)
          (bpushed nil))
     (if (and aform (not aconst))
@@ -3458,23 +3322,23 @@
                     (x862-trivial-p dform)))
          (aconst (and (not atriv) 
                       (or (x86-side-effect-free-form-p aform)
-                          (let ((avar (x862-lexical-reference-p aform)))
+                          (let ((avar (nx2-lexical-reference-p aform)))
                             (and avar 
-                                 (x862-var-not-set-by-form-p avar bform)
-                                 (x862-var-not-set-by-form-p avar cform)
-                                 (x862-var-not-set-by-form-p avar dform))))))
+                                 (nx2-var-not-set-by-form-p avar bform)
+                                 (nx2-var-not-set-by-form-p avar cform)
+                                 (nx2-var-not-set-by-form-p avar dform))))))
          (bconst (and (not btriv)
                       (or
                        (x86-side-effect-free-form-p bform)
-                       (let ((bvar (x862-lexical-reference-p bform)))
+                       (let ((bvar (nx2-lexical-reference-p bform)))
                          (and bvar
-                              (x862-var-not-set-by-form-p bvar cform)
-                              (x862-var-not-set-by-form-p bvar dform))))))
+                              (nx2-var-not-set-by-form-p bvar cform)
+                              (nx2-var-not-set-by-form-p bvar dform))))))
          (cconst (and (not ctriv)
                       (or
                        (x86-side-effect-free-form-p cform)
-                       (let ((cvar (x862-lexical-reference-p cform)))
-                         (and cvar (x862-var-not-set-by-form-p cvar dform))))))
+                       (let ((cvar (nx2-lexical-reference-p cform)))
+                         (and cvar (nx2-var-not-set-by-form-p cvar dform))))))
          (apushed nil)
          (bpushed nil)
          (cpushed nil))
@@ -3514,15 +3378,15 @@
                       (x862-trivial-p cform)))
            (aconst (and (not atriv) 
                         (or (x86-side-effect-free-form-p aform)
-                            (let ((avar (x862-lexical-reference-p aform)))
+                            (let ((avar (nx2-lexical-reference-p aform)))
                               (and avar 
-                                   (x862-var-not-set-by-form-p avar bform)
-                                   (x862-var-not-set-by-form-p avar cform))))))
+                                   (nx2-var-not-set-by-form-p avar bform)
+                                   (nx2-var-not-set-by-form-p avar cform))))))
            (bconst (and (not btriv)
                         (or
                          (x86-side-effect-free-form-p bform)
-                         (let ((bvar (x862-lexical-reference-p bform)))
-                           (and bvar (x862-var-not-set-by-form-p bvar cform))))))
+                         (let ((bvar (nx2-lexical-reference-p bform)))
+                           (and bvar (nx2-var-not-set-by-form-p bvar cform))))))
            (adest areg)
            (bdest breg)
            (cdest creg)
@@ -3559,24 +3423,24 @@
                     (x862-trivial-p dform)))
          (aconst (and (not atriv) 
                       (or (x86-side-effect-free-form-p aform)
-                          (let ((avar (x862-lexical-reference-p aform)))
+                          (let ((avar (nx2-lexical-reference-p aform)))
                             (and avar 
-                                 (x862-var-not-set-by-form-p avar bform)
-                                 (x862-var-not-set-by-form-p avar cform)
-                                 (x862-var-not-set-by-form-p avar dform))))))
+                                 (nx2-var-not-set-by-form-p avar bform)
+                                 (nx2-var-not-set-by-form-p avar cform)
+                                 (nx2-var-not-set-by-form-p avar dform))))))
          (bconst (and (not btriv)
                       (or
                        (x86-side-effect-free-form-p bform)
-                       (let ((bvar (x862-lexical-reference-p bform)))
+                       (let ((bvar (nx2-lexical-reference-p bform)))
                          (and bvar
-                              (x862-var-not-set-by-form-p bvar cform)
-                              (x862-var-not-set-by-form-p bvar dform))))))
+                              (nx2-var-not-set-by-form-p bvar cform)
+                              (nx2-var-not-set-by-form-p bvar dform))))))
          (cconst (and (not ctriv)
                       (or
                        (x86-side-effect-free-form-p cform)
-                       (let ((cvar (x862-lexical-reference-p cform)))
+                       (let ((cvar (nx2-lexical-reference-p cform)))
                          (and cvar
-                              (x862-var-not-set-by-form-p cvar dform))))))
+                              (nx2-var-not-set-by-form-p cvar dform))))))
          (adest areg)
          (bdest breg)
          (cdest creg)
@@ -4497,7 +4361,7 @@
                 (x862-set-var-ea seg var puntval))
               (progn
                 (let* ((vloc *x862-vstack*)
-                       (reg (let* ((r (x862-assign-register-var var)))
+                       (reg (let* ((r (nx2-assign-register-var var)))
                               (if r ($ r)))))
                   (if (x862-load-ea-p val)
                     (if reg
@@ -4962,12 +4826,7 @@
              (neq (%ilogior (%ilsl $vbitclosed 1) (%ilsl $vbitsetq 1))
                   (%ilogand (%ilogior (%ilsl $vbitclosed 1) (%ilsl $vbitsetq 1)) bits)))))))
 
-(defun x862-lexical-reference-p (form)
-  (when (acode-p form)
-    (let ((op (acode-operator (setq form (acode-unwrapped-form-value form)))))
-      (when (or (eq op (%nx1-operator lexical-reference))
-                (eq op (%nx1-operator inherited-arg)))
-        (%cadr form)))))
+
 
 (defun x862-ref-symbol-value (seg vreg xfer sym check-boundp)
   (declare (ignorable check-boundp))
@@ -5484,7 +5343,7 @@
 
 (defun x862-bind-structured-var (seg var vloc lcell &optional context)
   (if (not (x862-structured-var-p var))
-    (let* ((reg (x862-assign-register-var var)))
+    (let* ((reg (nx2-assign-register-var var)))
       (if reg
         (x862-init-regvar seg var reg (x862-vloc-ea vloc))
         (x862-bind-var seg var vloc lcell)))
@@ -6150,7 +6009,19 @@
         (setq *x862-inhibit-register-allocation*
               (setq no-regs (%ilogbitp $fbitnoregs fbits)))
         (multiple-value-setq (pregs reglocatives) 
-          (x862-allocate-global-registers *x862-fcells* *x862-vcells* (afunc-all-vars afunc) no-regs))
+          (nx2-allocate-global-registers
+           *x862-fcells*
+           *x862-vcells*
+           (afunc-all-vars afunc)
+           inherited-vars
+           (unless no-regs
+             (target-arch-case
+              (:x8664
+               (if (= (backend-lisp-context-register *target-backend*) x8664::save3)
+                 *reduced-x8664-nvrs*
+                 *x8664-nvrs*))
+              (:x8632
+               *x8632-nvrs*)))))
         (@ (backend-get-next-label)) ; generic self-reference label, should be label #1
         (! establish-fn)
         (@ (backend-get-next-label))    ; self-call label
@@ -6317,7 +6188,7 @@
               (declare (list vars) (fixnum arg-reg-num))
               (let* ((var (car vars)))
                 (when var
-                  (let* ((reg (x862-assign-register-var var)))
+                  (let* ((reg (nx2-assign-register-var var)))
                     (x862-copy-register seg reg arg-reg-num)
                     (setf (var-ea var) reg))))))
           (setq *x862-entry-vsp-saved-p* t)
@@ -7789,7 +7660,7 @@
              (lcells (progn (x862-reserve-vstack-lcells n) (x862-collect-lcells :reserved old-top))))
         (dolist (var vars)
           (let* ((lcell (pop lcells))
-                 (reg (x862-assign-register-var var)))
+                 (reg (nx2-assign-register-var var)))
             (if reg
               (x862-init-regvar seg var reg (x862-vloc-ea vloc))
               (x862-bind-var seg var vloc lcell))          
@@ -8360,7 +8231,7 @@
       (dolist (var vars)
         (setq val (%car valcopy))
         (cond ((or (%ilogbitp $vbitspecial (setq bits (nx-var-bits var)))
-                   (and (%ilogbitp $vbitreg bits)
+                   (and (var-nvr var)
                         (dolist (val (%cdr valcopy))
                           (unless (x862-trivial-p val) (return t)))))
                (let* ((pair (cons (x862-vloc-ea *x862-vstack*) nil)))
