@@ -104,7 +104,7 @@ I have tried to limit LispWorks FLI code to this file.
 
 (defvar *jni-lib-path*
 #+:darwin-target "/System/Library/Frameworks/JavaVM.framework/JavaVM"
-#+:win32-target "C:/j2sdk1.4.2_01/jre/bin/client/jvm.dll"
+#+:win32-target "C:/Program Files/Java/jre6/bin/client/jvm.dll"
 "Set this to point to your jvm dll prior to calling create-jvm")
 
 (ccl::defloadvar *pvm* nil)
