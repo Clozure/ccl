@@ -83,11 +83,11 @@ Make preferences for fonts, key commands
 (objc:defmethod (#/awakeFromNib :void) ((self ninspector-window-controller))
   (with-slots (table-view back-button forward-button refresh-button item-menu) self
     (#/setTarget: back-button self)
-    (#/setAction: back-button (@selector #/goBack))
+    (#/setAction: back-button (@selector #/goBack:))
     (#/setTarget: forward-button self)
-    (#/setAction: forward-button (@selector #/goForward))
+    (#/setAction: forward-button (@selector #/goForward:))
     (#/setTarget: refresh-button self)
-    (#/setAction: refresh-button (@selector #/doRefresh))
+    (#/setAction: refresh-button (@selector #/doRefresh:))
     (#/setTarget: table-view self)
     (#/setDoubleAction: table-view (@selector #/inspectSelectionInPlace:))
     (set-enabled self)
@@ -114,7 +114,7 @@ Make preferences for fonts, key commands
         (let ((ii (get-child (inspector-item wc) row)))
           (if (and (< next-index (fill-pointer viewed-inspector-items))
                    (eq ii (aref viewed-inspector-items next-index)))
-            ;;If the ii is the same and the next history item, then just go forward in history
+            ;;If the ii is the same as the next history item, then just go forward in history
             (set-current-inspector-item wc next-index)
             ;;Otherwise forget the forward history
             (push-inspector-item wc ii)))))))
@@ -134,15 +134,15 @@ Make preferences for fonts, key commands
 (objc:defmethod (#/editSelectionSource: :void) ((wc ninspector-window-controller) sender)
   (declare (ignore sender)))
 
-(objc:defmethod (#/goBack :void) ((wc ninspector-window-controller) sender)
+(objc:defmethod (#/goBack: :void) ((wc ninspector-window-controller) sender)
   (declare (ignore sender))
   (set-current-inspector-item wc (- (next-index wc) 2)))
 
-(objc:defmethod (#/goForward :void) ((wc ninspector-window-controller) sender)
+(objc:defmethod (#/goForward: :void) ((wc ninspector-window-controller) sender)
   (declare (ignore sender))
   (set-current-inspector-item wc (next-index wc)))
 
-(objc:defmethod (#/doRefresh :void) ((wc ninspector-window-controller) sender)
+(objc:defmethod (#/doRefresh: :void) ((wc ninspector-window-controller) sender)
   (declare (ignore sender))
   (push-inspector-item wc (make-inspector-item (inspector-object (inspector-item wc)))))
 
