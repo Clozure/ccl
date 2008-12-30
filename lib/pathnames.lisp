@@ -395,8 +395,8 @@
 	(while (setq sub (%read-dir dirent))
 	  (when (and (or all (neq (%schar sub 0) #\.))
                      (or include-emacs-lockfiles
-                         (and (>= (length sub) 2)
-                              (not (string= sub ".#" :end1 2))))
+                         (< (length sub) 2)
+                         (not (string= sub ".#" :end1 2)))
 		     (not (string= sub "."))
 		     (not (string= sub ".."))
 		     (%file*= name type sub))
