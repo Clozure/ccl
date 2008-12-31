@@ -188,12 +188,27 @@
       <para>One subversion command creates a
       <literal>ccl</literal> directory with runnable binaries, and a
       complete set of buildable sources.  To get the bleeding edge
-      &CCL; for Darwin x8664, at the command line type:</para>
+      &CCL; for Darwin x86 (both 32- and 64-bit versions),
+      at the command line type:</para>
 
         <programlisting>
           <![CDATA[
-svn co http://svn.clozure.com/publicsvn/openmcl/trunk/darwinx8664/ccl]]>
+svn co http://svn.clozure.com/publicsvn/openmcl/trunk/darwinx86/ccl]]>
         </programlisting>
+
+	<para>
+	  To get a bleeding-edge &CCL; for a different operating
+	  system, replace "darwinx86" with one of the following names
+	  (all versions include both 32- and 64-bit binaries):
+	</para>
+	<itemizedlist>
+	  <listitem><para>linunxx86</para></listitem>
+	  <listitem><para>freebsdx86</para></listitem>
+	  <listitem><para>solarisx86</para></listitem>
+	  <listitem><para>windows</para></listitem>
+	  <listitem><para>linuxppc</para></listitem>
+	  <listitem><para>darwinppc</para></listitem>
+	</itemizedlist>
 
 	<para>To get the 1.2 version of &CCL; type:</para>
         <programlisting>
