@@ -31,7 +31,11 @@ typedef u8_t opcode, *pc;
 #ifdef DARWIN
 #define DARWIN_USE_PSEUDO_SIGRETURN 1
 #include <sys/syscall.h>
-#define DarwinSigReturn(context) syscall(0x2000000|SYS_sigreturn,context,0x1e)
+#define DarwinSigReturn(context) do {\
+    darwin_sigreturn(context);\
+    Bug(context,"sigreturn returned");\
+  } while (0)
+
 #define xpGPRvector(x) ((natural *)(&(UC_MCONTEXT(x)->__ss)))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
