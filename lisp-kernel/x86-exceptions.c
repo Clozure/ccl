@@ -2388,9 +2388,10 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
     }
     switch(state) {
     case ID_set_allocptr_header_instruction:
-      /* We were consing a vector and we won.  Set the header of the new vector
-         (in the allocptr register) to the header in %rax and skip over this
-         instruction, then fall into the next case. */
+      /* We were consing a vector and we won.  Set the header of the
+         new vector (in the allocptr register) to the header in %rax
+         (%mm0 on ia32) and skip over this instruction, then fall into
+         the next case. */
       new_vector = xpGPR(xp,Iallocptr);
       deref(new_vector,0) = 
 #ifdef X8664
@@ -3155,6 +3156,7 @@ catch_exception_raise(mach_port_t exception_port,
   x86_thread_state32_t ts;
 #endif
   mach_msg_type_number_t thread_state_count;
+
 
 
 
