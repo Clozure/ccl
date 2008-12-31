@@ -169,6 +169,16 @@ _exportfn(C(freebsd_sigreturn))
 _exportfn(C(get_vector_registers))
 _endfn
 
+_exportfn(C(darwin_sigreturn))
+        .globl C(sigreturn)
+/* Need to set the sigreturn 'infostyle' argument, which is mostly
+   undocumented.  On x8664 Darwin, sigtramp() sets it to 0x1e, and
+   since we're trying to do what sigtramp() would do if we'd returned
+   to it ... */
+        __(movl $0x1e,%esi)
+        __(jmp C(sigreturn))
+_endfn            
+
 _exportfn(C(put_vector_registers))
 _endfn				
 	
