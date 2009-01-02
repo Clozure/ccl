@@ -741,12 +741,16 @@ Will differ from *compiling-file* during an INCLUDE")
 (defun define-compile-time-symbol-macro (name expansion env)
   (let ((compile-time-defenv (definition-environment *fasl-compile-time-env*))
         (definition-env (definition-environment env)))
+    (let* ((info (variable-information name env)))
+      (when (or (eq info :special)
+                (eq info :constant))
+        (signal-program-error "Can't define ~s as a symbol-macro; already defined as a ~a." name (string-downcase info))))
     (when (or definition-env compile-time-defenv)
       (let ((cell (cons name expansion)))
         (when compile-time-defenv
-          (push cell (defenv.functions compile-time-defenv)))
+          (push cell (defenv.symbol-macros compile-time-defenv)))
         (when definition-env
-          (push cell (defenv.functions definition-env)))))
+          (push cell (defenv.symbol-macros definition-env)))))
     name))
 
 
