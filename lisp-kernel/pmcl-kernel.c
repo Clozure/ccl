@@ -1204,8 +1204,8 @@ terminate_lisp()
 #define min_os_version "5.10"
 #endif
 
-#ifdef DARWIN
-#ifdef PPC64
+#ifdef PPC
+#if defined(PPC64) || !defined(DARWIN)
 /* ld64 on Darwin doesn't offer anything close to reliable control
    over the layout of a program in memory.  About all that we can
    be assured of is that the canonical subprims jump table address
@@ -1510,7 +1510,7 @@ main(int argc, char *argv[]
   ensure_gs_available(real_executable_name);
 #endif
 #endif
-#if (defined(DARWIN) && defined(PPC64)) || defined(X8664) || (defined(X8632) && !defined(DARWIN))
+#if (defined(DARWIN) && defined(PPC64)) || (defined(LINUX) && defined(PPC))|| defined(X8664) || (defined(X8632) && !defined(DARWIN))
   remap_spjump();
 #endif
 
