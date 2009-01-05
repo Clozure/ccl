@@ -24,7 +24,10 @@ ASFLAGS = -mregnames -mppc64 -a64 -maltivec
 M4FLAGS = -DLINUX -DPPC -DPPC64
 CDEFINES = -DLINUX -D_REENTRANT -DPPC -DPPC64 -D_GNU_SOURCE
 CDEBUG = -g
-COPT = #-O2
+COPT = -O2
+# word size issues are a little more relevant on a 64-bit platform
+# than elsewhere, but most gcc format warnings are still nonsense.
+WFORMAT = -Wno-format
 
 # If the linker supports a "--hash-style=" option, use traditional
 # Sysv hash tables.  (If it doesn't support that option, assume
@@ -40,7 +43,7 @@ endif
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) -m64 -o $@
+	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m64 -o $@
 
 SPOBJ = pad.o ppc-spjump.o ppc-spentry.o ppc-subprims.o
 ASMOBJ = ppc-asmutils.o imports.o
