@@ -1,13 +1,10 @@
 ;Just load this from LispWorks menu
 ;note works on Windows, some issues on OS X due to windowing conflict w/IDE
-(load "~/jfli/jni")
-(load "~/jfli/jfli")
+(load "ccl:examples;jfli;jni")
+(load "ccl:examples;jfli;jfli")
 (use-package :jfli)
-(create-jvm 
-#+:macosx "-Djava.class.path=/Users/rich/swt/swt.jar:/Users/rich/swt/swt-pi.jar:User/rich/jfli/jfli.jar"
- #+:macosx "-Djava.library.path=/Users/rich/swt"
- #+:win32 "-Djava.class.path=/swt/swt.jar;/lisp/jfli.jar"
- #+:win32 "-Djava.library.path=/swt"
+(create-jvm
+ "-Djava.class.path=/cygwin/home/gb/swt/swt.jar;/;/cygwin/usr/local/src/ccl-dev/examples/jfli/jfli.jar"
  )
 (enable-java-proxies)
 
