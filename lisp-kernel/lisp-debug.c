@@ -556,15 +556,15 @@ char *
 debug_get_string_value(char *prompt)
 {
   static char buf[128];
-  char *p;
+  char *p, *res;
 
   do {
     fpurge(stdin);
     fprintf(stderr, "\n %s :",prompt);
     buf[0] = 0;
-    fgets(buf, sizeof(buf)-1, stdin);
+    res = fgets(buf, sizeof(buf), stdin);
   } while (0);
-  p = strchr(buf, '\n');
+  p = strchr(res, '\n');
   if (p) {
     *p = 0;
     return buf;
@@ -575,14 +575,15 @@ debug_get_string_value(char *prompt)
 natural
 debug_get_natural_value(char *prompt)
 {
-  char s[32];
+  char s[32], *res;
   int n;
   natural val;
 
   do {
     fpurge(stdin);
     fprintf(stderr, "\n  %s :", prompt);
-    fgets(s, 24, stdin);
+    s[0]=0;
+    res = fgets(s, 24, stdin);
     n = sscanf(s, "%lu", &val);
   } while (n != 1);
   return val;
@@ -591,15 +592,15 @@ debug_get_natural_value(char *prompt)
 unsigned
 debug_get_u5_value(char *prompt)
 {
-  char s[32];
+  char s[32], *res;
   int n;
   unsigned val;
 
   do {
     fpurge(stdin);
     fprintf(stderr, "\n  %s :", prompt);
-    fgets(s, 24, stdin);
-    n = sscanf(s, "%i", &val);
+    res = fgets(s, 24, stdin);
+    n = sscanf(res, "%i", &val);
   } while ((n != 1) || (val > 31));
   return val;
 }
