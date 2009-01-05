@@ -1099,6 +1099,24 @@ setup_tcr_extra_segment(TCR *tcr)
 void 
 free_tcr_extra_segment(TCR *tcr)
 {
+  win32_ldt_info info;
+  LDT_ENTRY *entry = &(info.entry);
+  DWORD *words = (DWORD *)entry;
+  int idx = tcr->ldt_selector >> 3;
+
+
+  info.offset = idx << 3;
+  info.size = sizeof(LDT_ENTRY);
+
+  words[0] = 0;
+  words[1] = 0;
+
+  WaitForSingleObject(ldt_lock,INFINITE);
+  NtSetInformationProcess(GetCurrentProcess(),10,&info,sizeof(info));
+  clr_bit(ldt_entries_in_use,idx);
+  ReleaseMutex(ldt_lock);
+
+  tcr->ldt_selector = 0;
 }
 
 #endif
