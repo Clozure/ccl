@@ -24,12 +24,8 @@ _endfn
 ])
          .org 0x5000-0x2000
         /*	.align 12 */
-        __ifdef([DARWIN])
-         __ifdef([PPC64])
          .globl C(spjump_start)
 C(spjump_start):
-         __endif
-       __endif
         _spjump(jmpsym)
         _spjump(jmpnfn)
         _spjump(funcall)
@@ -183,12 +179,12 @@ C(spjump_start):
         _spjump(bind_interrupt_level)
         _spjump(bind_interrupt_level_0)
         _spjump(progvrestore)
-        __ifdef([DARWIN])
-         __ifdef([PPC64])
           .globl C(spjump_end)
 C(spjump_end):
-         .org 0x5000-0x1000
-         __endif
-        __endif
+	__ifdef([DARWIN])
+	 __ifdef([PPC64])
+           .org 0x5000-0x1000
+	 __endif
+	__endif
         _endfile
         
