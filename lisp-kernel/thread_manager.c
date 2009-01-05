@@ -1218,6 +1218,7 @@ create_system_thread(size_t stack_size,
 {
   pthread_attr_t attr;
   pthread_t returned_thread = (pthread_t) 0;
+  TCR *current = get_tcr(false);
 
   pthread_attr_init(&attr);
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);  
@@ -1240,8 +1241,18 @@ create_system_thread(size_t stack_size,
 
   /* 
      I think that's just about enough ... create the thread.
+     Well ... not quite enough.  In Leopard (at least), many
+     pthread routines grab an internal spinlock when validating
+     their arguments.  If we suspend a thread that owns this
+     spinlock, we deadlock.  We can't in general keep that
+     from happening: if arbitrary C code is suspended while
+     it owns the spinlock, we still deadlock.  It seems that
+     the best that we can do is to keep -this- code from
+     getting suspended (by grabbing TCR_AREA_LOCK)
   */
+  LOCK(lisp_global(TCR_AREA_LOCK),current);
   pthread_create(&returned_thread, &attr, start_routine, param);
+  UNLOCK(lisp_global(TCR_AREA_LOCK),current);
   return (LispObj) ptr_to_lispobj(returned_thread);
 }
 #endif
