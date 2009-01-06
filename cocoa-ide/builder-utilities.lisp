@@ -241,7 +241,7 @@
                  (string-equal (pathname-type verified-path) "plist"))
             (info-path)
             "The input path for READ-INFO-PLIST must be the name of a valid 'plist' file.")
-    (let* ((info-path-str (namestring info-path)))
+    (let* ((info-path-str (%temp-nsstring (namestring info-path))))
       (#/dictionaryWithContentsOfFile: ns:ns-mutable-dictionary 
                                        info-path-str))))
 
