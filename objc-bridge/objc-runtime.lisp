@@ -1572,7 +1572,7 @@ argument lisp string."
 
 #+(and apple-objc ppc64-target)
 (defun %process-varargs-list (gpr-pointer fpr-pointer ngprs nfprs arglist)
-  (dolist (arg-temp arglist)
+  (dolist (arg-temp arglist (min nfprs 13))
     (typecase arg-temp
       ((signed-byte 64)
        (setf (paref gpr-pointer (:* (:signed 64)) ngprs) arg-temp)
@@ -1909,7 +1909,7 @@ argument lisp string."
 			     :address ,marg-ptr
 			     ,return-type-spec))))))))
 
-#+(and apple-objc ppc64-target)
+#+(and apple-objc-2.0 ppc64-target)
 (defun %compile-varargs-send-function-for-signature (sig)
   (let* ((return-type-spec (car sig))
          (arg-type-specs (butlast (cdr sig)))
@@ -1917,24 +1917,24 @@ argument lisp string."
          (receiver (gensym))
          (selector (gensym))
          (rest-arg (gensym))
-         (arg-temp (gensym))
-         (marg-ptr (gensym))
-         (regparams (gensym))
+         (fp-arg-ptr (gensym))
+         (c-frame (gensym))
+         (gen-arg-ptr (gensym))
          (selptr (gensym))
          (gpr-total (gensym))
          (n-static-gprs 2)              ;receiver, selptr
          (n-static-fprs 0))
     (collect ((static-arg-forms))
-      (static-arg-forms `(setf (paref ,regparams (:* address) 0) ,receiver))
-      (static-arg-forms `(setf (paref ,regparams (:* address) 1) ,selptr))
+      (static-arg-forms `(setf (paref ,gen-arg-ptr (:* address) 0) ,receiver))
+      (static-arg-forms `(setf (paref ,gen-arg-ptr (:* address) 1) ,selptr))
       (do* ((args args (cdr args))
             (arg-type-specs arg-type-specs (cdr arg-type-specs)))
            ((null args))
         (let* ((arg (car args))
                (spec (car arg-type-specs))
                (static-arg-type (parse-foreign-type spec))
-               (gpr-base regparams)
-               (fpr-base marg-ptr)
+               (gpr-base gen-arg-ptr)
+               (fpr-base fp-arg-ptr)
                (gpr-offset (* n-static-gprs 8)))
           (etypecase static-arg-type
             (foreign-integer-type
@@ -1950,7 +1950,7 @@ argument lisp string."
              (incf n-static-gprs))
             (foreign-single-float-type
              (static-arg-forms
-              `(setf (%get-single-float ,gpr-base ,(+ 4 (* 8 n-static-gprs))) ,arg))
+              `(setf (%get-single-float ,gpr-base ,(+ 4 gpr-offset)) ,arg))
              (when (< n-static-fprs 13)
                (static-arg-forms
                 `(setf (paref ,fpr-base (:* :double-float) ,n-static-fprs)
@@ -1971,31 +1971,23 @@ argument lisp string."
               `(setf (paref ,gpr-base (:* address) ,n-static-gprs) ,arg))
              (incf n-static-gprs)))))
       
-      (progn
+      (compile
         nil
         `(lambda (,receiver ,selector ,@args &rest ,rest-arg)
           (declare (dynamic-extent ,rest-arg))
           (let* ((,selptr (%get-selector ,selector))
-                 (,gpr-total ,n-static-gprs))
-            (dolist (,arg-temp ,rest-arg)
-              (declare (ignore ,arg-temp))
-              (incf ,gpr-total 1))
-            (if (> ,gpr-total 8)
-              (setq ,gpr-total (- ,gpr-total 8))
-              (setq ,gpr-total 0))           
-            (%stack-block ((,marg-ptr (+ ,(%foreign-type-or-record-size
-                                           :<MARG> :bytes)
-                                         (* 8 ,gpr-total))))
-             
-              (with-macptrs ((,regparams (pref ,marg-ptr :<MARG>.reg<P>arams)))
-                (progn ,@(static-arg-forms))
-                (%process-varargs-list ,regparams ,marg-ptr ,n-static-gprs ,n-static-fprs  ,rest-arg)
-                (external-call "_objc_msgSendv"
-                               :address ,receiver
-                               :address ,selptr
-                               :size_t (+ 64 (* 8 ,gpr-total))
-                               :address ,marg-ptr
-                               ,return-type-spec)))))))))
+                 (,gpr-total (+ ,n-static-gprs (length ,rest-arg))))
+            (%stack-block ((,fp-arg-ptr (* 8 13)))
+              (with-variable-c-frame ,gpr-total ,c-frame
+                (with-macptrs ((,gen-arg-ptr))
+                  (%setf-macptr-to-object ,gen-arg-ptr (+ ,c-frame (ash ppc64::c-frame.param0 (- ppc64::word-shift))))
+                  (progn ,@(static-arg-forms))
+                  (%load-fp-arg-regs (%process-varargs-list ,gen-arg-ptr ,fp-arg-ptr ,n-static-gprs ,n-static-fprs  ,rest-arg) ,fp-arg-ptr)
+                  
+                  (%do-ff-call nil (%reference-external-entry-point (load-time-value (external "_objc_msgSend"))))
+                  ;; Using VALUES here is a hack: the multiple-value
+                  ;; returning machinery clobbers imm0.
+                  (values (%%ff-result ,(foreign-type-to-representation-type return-type-spec))))))))))))
 
 
 
