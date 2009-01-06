@@ -650,12 +650,8 @@ result-type-keyword is :VOID or NIL"
     (defun %ff-call (entry &rest specs-and-vals)
       (declare (dynamic-extent specs-and-vals))
       (let* ((len (length specs-and-vals))
-             (total-words 0)
-             (monitor (eq (car specs-and-vals) :monitor-exception-ports)))
+             (total-words 0))
         (declare (fixnum len total-words))
-        (when monitor
-          (decf len)
-          (setq specs-and-vals (cdr specs-and-vals)))
         (unless (oddp len)
           (error "Length of ~s is even.  Missing result ?" specs-and-vals))
         (let* ((result-spec (or (car (last specs-and-vals)) :void))
@@ -728,7 +724,6 @@ result-type-keyword is :VOID or NIL"
                                           (1+ (- total-words 8)))))))
               
               (%%ff-call
-               monitor
                fpr-reload-sizes
                fpr-reload-offsets
                (- (logandc2 (+ frame-size 3) 3))
@@ -750,21 +745,18 @@ result-type-keyword is :VOID or NIL"
               (:unsigned-byte (%get-unsigned-byte buf 3)))))))
 
 
-    (defppclapfunction %%ff-call ((monitor-exception-ports 12)
-                                  (reload-sizes 8)
+    (defppclapfunction %%ff-call ((reload-sizes 8)
                                   (reload-offsets 4)
                                   (frame-size 0)			     
                                   (total-words arg_x)
                                   (buf arg_y)
                                   (entry arg_z))
-      (check-nargs 7)
-      (la imm0 16 vsp)
+      (check-nargs 6)
+      (la imm0 12 vsp)
       (save-lisp-context imm0)
       (lwz imm0 frame-size vsp)
       (stwux sp sp imm0)
       (stw sp ppc32::c-frame.savelr sp)
-      (lwz imm2 monitor-exception-ports vsp)
-      (cmpwi cr1 imm2 nil)
       (macptr-ptr imm2 buf)
       (mr imm1 imm2)
       (la imm3 ppc32::c-frame.param0 sp)
@@ -923,11 +915,7 @@ result-type-keyword is :VOID or NIL"
       (lfdx fp13 imm1 imm2)
       @loaded
       (vpush buf)
-      (bne cr1 @callX)
       (bla .SPpoweropen-ffcall)
-      (b @called)
-      @callX
-      (bla .SPpoweropen-ffcallX)
       @called
       (vpop buf)
       (macptr-ptr imm2 buf)
@@ -1005,23 +993,17 @@ result-type-keyword is :VOID or NIL"
       (ba .SPmakes64))
 
   ;;; This is just here so that we can jump to a subprim from lisp.
-    (defppclapfunction %do-ff-call ((monitor arg_x) (regbuf arg_y) (entry arg_z))
+    (defppclapfunction %do-ff-call ((regbuf arg_y) (entry arg_z))
       (cmpdi cr0 regbuf nil)
-      (cmpdi cr1 monitor nil)
       (bnea cr0 .SPpoweropen-ffcall-return-registers)
-      (beqa cr1 .SPpoweropen-ffcall)
-      (ba .SPpoweropen-ffcallx))
+      (ba .SPpoweropen-ffcall))
   
     (defun %ff-call (entry &rest specs-and-vals)
       (declare (dynamic-extent specs-and-vals))
       (let* ((len (length specs-and-vals))
              (total-words 0)
-             (monitor (eq (car specs-and-vals) :monitor-exception-ports))
              (registers nil))
         (declare (fixnum len total-words))
-        (when monitor
-          (decf len)
-          (setq specs-and-vals (cdr specs-and-vals)))
         (let* ((result-spec (or (car (last specs-and-vals)) :void))
                (nargs (ash (the fixnum (1- len)) -1)))
           (declare (fixnum nargs))
@@ -1123,7 +1105,7 @@ result-type-keyword is :VOID or NIL"
                                 (incf p 8)
                                 (incf offset 8))))))
                        (%load-fp-arg-regs n-fp-args fp-args)
-                       (%do-ff-call monitor registers entry)
+                       (%do-ff-call registers entry)
                        (values (%%ff-result result-spec)))))))))))
 
     )
