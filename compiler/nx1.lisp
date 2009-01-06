@@ -1376,11 +1376,8 @@
   (let* ((specs ())         
          (vals ())
          (register-spec-seen nil)
-	 (monitor (eq (car arg-specs-and-result-spec) :monitor-exception-ports))
          (arg-specs (butlast arg-specs-and-result-spec))
          (result-spec (car (last arg-specs-and-result-spec))))
-    (if monitor
-      (setq arg-specs (cdr arg-specs)))
     (unless (evenp (length arg-specs))
       (error "odd number of arg-specs"))
     (loop
@@ -1408,7 +1405,7 @@
 		(nreverse specs)
 		(mapcar #'nx1-form (nreverse vals))
 		result-spec
-		monitor)))
+		nil)))
   
 (defnx1 nx1-block block (blockname &body forms)
   (let* ((*nx-blocks* *nx-blocks*)
