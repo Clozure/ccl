@@ -144,10 +144,10 @@
   (flet ((set-global (offset name)
            (setf (%get-ptr (%int-to-ptr (+ (target-nil-value) (%kernel-global-offset offset))))
                  (foreign-symbol-address name))))
-    (set-global 'x86::objc-2-personality "___objc_personality_v0")
-    (set-global 'x86::objc-2-begin-catch "_objc_begin_catch")
-    (set-global 'x86::objc-2-end-catch "_objc_end_catch")
-    (set-global 'x86::unwind-resume "__Unwind_Resume")))
+    (set-global 'objc-2-personality "___objc_personality_v0")
+    (set-global 'objc-2-begin-catch "_objc_begin_catch")
+    (set-global 'objc-2-end-catch "_objc_end_catch")
+    (set-global 'unwind-resume "__Unwind_Resume")))
 
 
 (def-ccl-pointers setup-objc-exception-handling ()
