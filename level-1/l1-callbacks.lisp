@@ -22,7 +22,7 @@
 
 
 ;;; (defcallback ...) expands into a call to this function.
-(defun define-callback-function (lisp-function  &optional doc-string (without-interrupts t) (info 0) &aux name trampoline)
+(defun define-callback-function (lisp-function  &optional doc-string (without-interrupts t) info &aux name trampoline)
   (unless (functionp lisp-function)
     (setq lisp-function (require-type lisp-function 'function)))
   (unless (and (symbolp (setq name (function-name lisp-function)))
@@ -57,7 +57,7 @@
                                  len))
                        (unless (%svref %pascal-functions% i)
                          (return i)))))
-          (setq trampoline (make-callback-trampoline index (or info 0)))
+          (setq trampoline (make-callback-trampoline index info))
           (setf (%svref %pascal-functions% index)
                 (%cons-pfe trampoline info lisp-function name without-interrupts)))))
     ;;(%proclaim-special name)          ;

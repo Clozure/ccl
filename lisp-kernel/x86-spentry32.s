@@ -4251,13 +4251,21 @@ _spentry(callback)
 	/* C scalar args are already on the stack. */
 	/* arg word 0 at 8(%ebp), word 1 at 12(%ebp), etc. */
 
+	/* %eax is passed to us via the callback trampoline.
+	   bits 0-22: callback index
+	   bit 23: flag, set if we need to discard hidden arg on return
+		   (ignored when upper 8 bits are non-zero)
+	   bits 24-31: arg words to discard on return (_stdcall for win32) */
+	
         /* Reserve some space for results, relative to the
            current %ebp.  We may need quite a bit of it. */
-        __(subl $24,%esp)
+        __(subl $20,%esp)
         __(movl $0,-16(%ebp)) /* No FP result */
+	__(btl $23,%eax)      /* set CF if we need to discard hidden arg */
+	__(pushfl)	      /* and save for later */
         __(movl %eax,%ecx)    /* extract args-discard count */
         __(shrl $24,%ecx)
-        __(andl $0x00ffffff,%eax)
+        __(andl $0x007fffff,%eax) /* callback index */
         __(movl %ecx,-12(%ebp))
         /* If the C stack is 16-byte aligned by convention,
            it should still be, and this'll be a NOP. */
@@ -4327,42 +4335,42 @@ __(tra(local_label(back_from_callback)))
         __(jae 1f)
 	__(movl -8(%ebp),%eax)
         __(movl -4(%ebp),%edx)
-        __(leave)
         __ifdef([WIN_32])
          __(testl %ecx,%ecx)
          __(jne local_label(winapi_return))
-         __(repret)
-        __else
-	 __(ret)
-        __endif
+	__endif
+	__(popfl)	/* flags from bt way back when */
+	__(jc local_label(discard_first_arg))
+	__(leave)
+	__(ret)
 1:      __(jne 2f)
         /* single float return in x87 */
         __(flds -8(%ebp))
-        __(leave)
         __ifdef([WIN_32])
          __(testl %ecx,%ecx)
          __(jne local_label(winapi_return))
-         __(repret)
-        __else
-	 __(ret)
         __endif
+        __(leave)
+	__(ret)
 2:      /* double-float return in x87 */
         __(fldl -8(%ebp))
-        __(leave)
         __ifdef([WIN_32])
          __(testl %ecx,%ecx)
          __(jne local_label(winapi_return))
-         __(repret)
-        __else
-	 __(ret)
         __endif
+        __(leave)
+	__(ret)
         __ifdef([WIN_32])
-local_label(winapi_return):             
+local_label(winapi_return):
+	  __(leave)
          /* %ecx is non-zero and contains count of arg words to pop */
           __(popl -4(%esp,%ecx,4))
           __(leal -4(%esp,%ecx,4),%esp)
           __(ret)
         __endif
+local_label(discard_first_arg):
+	__(leave)
+	__(ret $4)
 _endsubp(callback)
 
 /* temp0 = array, arg_y = i, arg_z = j. Typecheck everything.

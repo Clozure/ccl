@@ -2540,7 +2540,9 @@ defcallback returns the callback pointer, e.g., the value of name."
          (fp-args-ptr (gensym))
          (result-type-spec :void)
          (args args)
-         (discard-stack-args nil)
+         (discard-stack-args nil)	;only meaningful on win32
+	 (discard-hidden-arg nil)	;only meaningful on x8632
+	 (info nil)
          (woi nil)
          (need-struct-arg)
          (struct-return-arg-name)
@@ -2550,6 +2552,10 @@ defcallback returns the callback pointer, e.g., the value of name."
       (let* ((spec (car (last args)))
              (rtype (ignore-errors (parse-foreign-type spec))))
         (setq need-struct-arg (typep rtype 'foreign-record-type))
+	(when need-struct-arg
+	  (setq discard-hidden-arg
+		(funcall (ftd-ff-call-struct-return-by-implicit-arg-function
+			  *target-ftd*) rtype)))
         (if rtype
           (setq result-type-spec spec args (butlast args))))
       (loop
@@ -2570,7 +2576,20 @@ defcallback returns the callback pointer, e.g., the value of name."
       (multiple-value-bind (rlets lets dynamic-extent-names inits foreign-return-type fp-args-form error-return-offset num-arg-bytes)
           (funcall (ftd-callback-bindings-function *target-ftd*)
                    stack-ptr fp-args-ptr (arg-names) (arg-specs) result-type-spec struct-return-arg-name)
-        (unless num-arg-bytes (setq num-arg-bytes 0))
+	;; x8632 hair
+	(when discard-hidden-arg
+	  (if discard-stack-args
+	    ;; We already have to discard some number of args, so just
+	    ;; discard the extra hidden arg while we're at it.
+	    (incf num-arg-bytes 4)
+	    ;; Otherwise, indicate that we'll need to discard the
+	    ;; hidden arg.
+	    (setq info (ash 1 23))))
+	(when discard-stack-args
+	  (setq info 0)
+	  ;; put number of words to discard in high-order byte
+	  (setf (ldb (byte 8 24) info)
+		(ash num-arg-bytes (- target::word-shift))))
         (multiple-value-bind (body decls doc) (parse-body body env t)
           `(progn
             (declaim (special ,name))
@@ -2598,7 +2617,7 @@ defcallback returns the callback pointer, e.g., the value of name."
                                             ))))))
                 ,doc
               ,woi
-              ,(if discard-stack-args num-arg-bytes 0))))))))
+              ,info)))))))
 
 
 (defun defcallback-body (&rest args)

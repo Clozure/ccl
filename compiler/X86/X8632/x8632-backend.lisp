@@ -284,10 +284,9 @@
 
 (pushnew *x8632-backend* *known-backends* :key #'backend-name)
 
-;;; FFI stuff.  Most operating systems use the same vanilla i386 ABI.
-;;; Darwin uses a variant that returns small (<= 64 bit) structures in
-;;; registers.  (There are some other Darwin exceptions too, but they
-;;; don't concern us here).
+;;; FFI stuff.  The vanilla i386 ABI always returns structures as a
+;;; hidden first argument.  Some systems (Darwin, FreeBSD) use a
+;;; variant that returns small (<= 64 bit) structures in registers.
 
 ;;; A returned structure is passed as a hidden first argument.
 (defun x8632::record-type-returns-structure-as-first-arg (rtype)
@@ -319,7 +318,6 @@
 	      (argforms :address)
 	      (argforms result-form))
 	    (progn
-	      ;; for Darwin
 	      (ecase (foreign-type-bits result-type)
 		(8 (setq result-type-spec :unsigned-byte
 			 result-op '%get-unsigned-byte))
@@ -442,9 +440,10 @@
   (declare (ignore fp-args-ptr))
   (unless (eq return-type *void-foreign-type*)
     (if (typep return-type 'foreign-record-type)
-      ;; On non-Darwin systems, the result type would have been mapped
-      ;; to :VOID.  On Darwin, small (<= 64 bits) structs are returned
-      ;; by value.
+      ;; If the struct result is returned via a hidden argument, the
+      ;; return type would have been mapped to :VOID.  On some
+      ;; systems, small (<= 64 bits) structs are returned by value,
+      ;; which we arrange to retrieve here.
       (ecase (ensure-foreign-type-bits return-type)
 	(8 `(setf (%get-unsigned-byte ,stack-ptr -8)
 		  (%get-unsigned-byte ,struct-return-arg 0)))
