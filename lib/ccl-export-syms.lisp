@@ -330,6 +330,8 @@
      %get-long
      %get-unsigned-long
      %get-signed-long
+     %%get-signed-longlong
+     %%get-unsigned-longlong
      %get-fixnum
      %get-point
      %get-ptr
