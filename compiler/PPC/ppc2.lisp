@@ -8702,6 +8702,7 @@
       (^)))
 
 (defppc2 ppc2-poweropen-ff-call poweropen-ff-call (seg vreg xfer address argspecs argvals resultspec &optional monitor-exception-ports)
+  (declare (ignore monitor-exception-ports))
   (let* ((*ppc2-vstack* *ppc2-vstack*)
          (*ppc2-top-vstack-lcell* *ppc2-top-vstack-lcell*)
          (*ppc2-cstack* *ppc2-cstack*)
@@ -8729,9 +8730,7 @@
     (ppc2-vpop-register seg ppc::arg_z)
     (if return-registers
       (! poweropen-ff-call-regs)
-      (if monitor-exception-ports
-        (! poweropen-ff-callX)
-        (! poweropen-ff-call)))
+      (! poweropen-ff-call))
     (ppc2-close-undo)
     (when vreg
       (cond ((eq resultspec :void) (<- nil))
