@@ -1474,15 +1474,6 @@ struct rt_sigframe *rtsf = 0;
 #endif
 #endif
 
-#ifdef DARWIN
-void
-bogus_signal_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
-{
-  if (signum == SIGSYS) {
-    return;                     /* Leopard lossage */
-  }
-}
-#endif
 
 #ifndef WINDOWS
 /* x8632 Linux requires that the stack-allocated siginfo is nearer
@@ -1961,15 +1952,6 @@ install_pmcl_exception_handlers()
   install_signal_handler(SIGBUS, handler);
   install_signal_handler(SIGSEGV,handler);
   install_signal_handler(SIGFPE, handler);
-#else
-  install_signal_handler(SIGTRAP,bogus_signal_handler);
-  install_signal_handler(SIGILL, bogus_signal_handler);
-  
-  install_signal_handler(SIGBUS, bogus_signal_handler);
-  install_signal_handler(SIGSEGV,bogus_signal_handler);
-  install_signal_handler(SIGFPE, bogus_signal_handler);
-  /*  9.0.0d8 generates spurious SIGSYS from mach_msg_trap */
-  install_signal_handler(SIGSYS, bogus_signal_handler);
 #endif
   
   install_signal_handler(SIGNAL_FOR_PROCESS_INTERRUPT,
