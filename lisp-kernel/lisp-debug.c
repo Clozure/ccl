@@ -68,6 +68,24 @@ debug_command_entry debug_command_entries[];
 
 Boolean lisp_debugger_in_foreign_code = false;
 
+#ifndef WINDOWS
+Boolean
+fd0_is_dev_null()
+{
+  struct stat fd0stat, devnullstat;
+
+  if (fstat(0,&fd0stat)) {
+    return true;
+  }
+  if (stat("/dev/null",&devnullstat)) {
+    return true;
+  }
+  return ((fd0stat.st_ino == devnullstat.st_ino) &&
+          (fd0stat.st_dev == devnullstat.st_dev));
+}
+
+#endif
+
 char *
 foreign_name_and_offset(natural addr, int *delta)
 {
@@ -1025,15 +1043,21 @@ lisp_Debugger(ExceptionInformation *xp,
   va_list args;
   debug_command_return state = debug_continue;
 
-  if (threads_initialized) {
-    suspend_other_threads(false);
-  }
-
   va_start(args,message);
   vfprintf(stderr, message, args);
   fprintf(stderr, "\n");
   va_end(args);
   
+
+#ifndef WINDOWS
+  if (fd0_is_dev_null()) {
+    return -1;
+  }
+#endif
+  if (threads_initialized) {
+    suspend_other_threads(false);
+  }
+
   lisp_debugger_in_foreign_code = in_foreign_code;
   if (in_foreign_code) {    
     char *foreign_name;
