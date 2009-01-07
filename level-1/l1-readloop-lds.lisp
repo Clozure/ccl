@@ -272,6 +272,8 @@ expressions as commands")
 
 (defparameter *quit-on-eof* nil)
 
+(defparameter *consecutive-eof-limit* 2 "max number of consecutive EOFs at a given break level, before we give up and abruptly exit.")
+
 (defmethod stream-eof-transient-p (stream)
   (let ((fd (stream-device stream :input)))
     (and fd (eof-transient-p fd))))
@@ -292,6 +294,7 @@ expressions as commands")
          *in-read-loop*
          *** ** * +++ ++ + /// // / -
          (eof-value (cons nil nil))
+         (eof-count 0)
          (*show-available-restarts* (and *show-restarts-on-break* *break-condition*)))
     (declare (dynamic-extent eof-value))
     (loop
@@ -308,16 +311,21 @@ expressions as commands")
                                  :prompt-function prompt-function
                                  :eof-value eof-value)
                 (if (eq form eof-value)
-                  (if (and (not *batch-flag*)
-                           (not *quit-on-eof*)
-                           (stream-eof-transient-p input-stream))
-                    (progn
-                      (stream-clear-input input-stream)
-                      (abort-break))
-                    (exit-interactive-process *current-process*))
+                  (progn
+                    (when (> (incf eof-count) *consecutive-eof-limit*)
+                      (#_ _exit 0))
+                    (if (and (not *batch-flag*)
+                             (not *quit-on-eof*)
+                             (stream-eof-transient-p input-stream))
+                      (progn
+                        (stream-clear-input input-stream)
+                        (abort-break))
+                      (exit-interactive-process *current-process*)))
+                  (progn
+                    (setq eof-count 0)
                     (or (check-toplevel-command form)
                         (let* ((values (toplevel-eval form env)))
-                          (if print-result (toplevel-print values))))))))
+                          (if print-result (toplevel-print values)))))))))
            (format *terminal-io* "~&Cancelled")))
        (abort () :report (lambda (stream)
                            (if (eq break-level 0)
