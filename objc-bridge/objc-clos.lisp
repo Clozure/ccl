@@ -719,7 +719,9 @@
 
 (defmethod make-instance ((class objc:objc-class-object) &rest initargs)
   (let ((instance (apply #'allocate-instance class initargs)))
-    (apply #'initialize-instance instance initargs)))
+    (if (%null-ptr-p instance)
+      instance
+      (apply #'initialize-instance instance initargs))))
 
 
 (defun remove-slot-initargs (class initargs)
@@ -752,9 +754,7 @@
 						       class
 						       initargs))
 	    (send-objc-init-message (allocate-objc-object class) ks vs))))
-    (if (%null-ptr-p instance)
-      (error "Got null pointer when trying to init instance of Objective-C class ~s with initargs ~s"
-	     class (remove-slot-initargs class initargs))
+    (unless (%null-ptr-p instance)
       (or (gethash instance *objc-object-slot-vectors*)
           (let* ((slot-vector (create-foreign-instance-slot-vector class)))
             (when slot-vector
