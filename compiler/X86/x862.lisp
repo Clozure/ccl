@@ -7502,7 +7502,6 @@
   (cond ((null vreg) 
          (x862-form seg nil nil form1) 
          (x862-form seg nil xfer form2))
-        
         (t                              
          (let* ((fix1 (acode-fixnum-form-p form1))
                 (fix2 (acode-fixnum-form-p form2))
@@ -7514,7 +7513,7 @@
                                   (typep (ash fix2 *x862-target-fixnum-shift*)
                                          '(signed-byte 32)))
                            form1))))
-           (if (and fix1 fix2)
+           (if (and fix1 fix2 (not overflow))
              (x862-lri seg vreg (ash (+ fix1 fix2) *x862-target-fixnum-shift*))
              (if other
                (let* ((constant (ash (or fix1 fix2) *x862-target-fixnum-shift*)))
