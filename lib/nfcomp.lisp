@@ -44,6 +44,11 @@
 (require "X8664-ARCH")
 ) ;eval-when (:compile-toplevel :execute)
 
+;; Temp, for loading into a lisp that doesn't have the report-deferred-warnings change
+;; in level-1 yet.
+#-BOOTSTRAPPED (when (eql 0 (ldb $lfbits-numopt (lfun-bits #'report-deferred-warnings)))
+                 (%fhave 'report-deferred-warnings (lambda (&optional x) x nil)))
+
 
 ;File compiler options.  Not all of these need to be exported/documented, but
 ;they should be in the product just in case we need them for patches....
@@ -219,6 +224,15 @@ Will differ from *compiling-file* during an INCLUDE")
              (*fasl-compile-time-env* (new-lexical-environment (new-definition-environment)))
 	     (*fcomp-external-format* external-format)
              (forms nil))
+      (let ((current *outstanding-deferred-warnings*) last)
+        (when (and current
+                   (setq last (deferred-warnings.last-file current))
+                   (equalp *compile-file-pathname* (cdr last)))
+          ;; Discard previous deferred warnings when recompiling exactly the same file again,
+          ;; since most likely this is due to an interactive "retry compilation" request and
+          ;; we want to avoid duplicate warnings.
+          (setf (deferred-warnings.last-file current) nil)))
+
       (let* ((*outstanding-deferred-warnings* (%defer-warnings nil)))
         (rplacd (defenv.type defenv) *outstanding-deferred-warnings*)
         (setf (defenv.defined defenv) (deferred-warnings.defs *outstanding-deferred-warnings*))
@@ -231,7 +245,7 @@ Will differ from *compiling-file* during an INCLUDE")
         (setf (deferred-warnings.warnings *outstanding-deferred-warnings*) 
               (append *fasl-deferred-warnings* (deferred-warnings.warnings *outstanding-deferred-warnings*)))
         (when *compile-verbose* (fresh-line))
-        (multiple-value-bind (any harsh) (report-deferred-warnings)
+        (multiple-value-bind (any harsh) (report-deferred-warnings *compile-file-pathname*)
           (setq *fasl-warnings-signalled-p* (or *fasl-warnings-signalled-p* any)
                 *fasl-non-style-warnings-signalled-p* (if (eq harsh :very) :very
                                                         (or *fasl-non-style-warnings-signalled-p* harsh)))))

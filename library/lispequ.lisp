@@ -1570,7 +1570,7 @@
   deferred-warnings.parent
   deferred-warnings.warnings
   deferred-warnings.defs
-  deferred-warnings.flags ; might use to distinguish interactive case/compile-file
+  deferred-warnings.last-file
 )
 
 ;;; loader framework istruct

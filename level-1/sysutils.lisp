@@ -530,26 +530,41 @@
     (multiple-value-prog1 (funcall thunk)
       (report-deferred-warnings))))
 
-(defun %defer-warnings (override &optional flags &aux (parent *outstanding-deferred-warnings*))
+(defun %defer-warnings (override &aux (parent *outstanding-deferred-warnings*))
+  (when parent
+    (ensure-merged-deferred-warnings parent))
   (%istruct 'deferred-warnings
             (unless override parent)
             nil
             (make-hash-table :test #'eq)
-            flags))
+            nil))
 
-(defun report-deferred-warnings ()
-  (let* ((current *outstanding-deferred-warnings*)
+(defun ensure-merged-deferred-warnings (parent &aux (last (deferred-warnings.last-file parent)))
+  (when last
+    (setf (deferred-warnings.last-file parent) nil)
+    (let* ((child (car last)) ;; last = (deferred-warnings . file)
+           (warnings (deferred-warnings.warnings child))
+           (defs (deferred-warnings.defs child))
+           (parent-defs (deferred-warnings.defs parent))
+           (parent-warnings (deferred-warnings.warnings parent)))
+      (maphash (lambda (key val) (setf (gethash key parent-defs) val)) defs)
+      (setf (deferred-warnings.warnings parent) (append warnings parent-warnings))))
+  parent)
+
+
+(defun report-deferred-warnings (&optional (file nil))
+  (let* ((current (ensure-merged-deferred-warnings *outstanding-deferred-warnings*))
          (parent (deferred-warnings.parent current))
          (warnings (deferred-warnings.warnings current))
          (defs (deferred-warnings.defs current))
          (any nil)
          (harsh nil))
     (if parent
-      (let ((parent-defs (deferred-warnings.defs parent))
-            (parent-warnings (deferred-warnings.warnings parent)))
-        (maphash (lambda (key val) (setf (gethash key parent-defs) val)) defs)
-        (setf (deferred-warnings.warnings parent) (append warnings parent-warnings)
-              parent t))
+      (progn
+        (setf (deferred-warnings.last-file parent) (cons current file))
+        (unless file ;; don't defer merge for non-file units.
+          (ensure-merged-deferred-warnings parent))
+        (setq parent t))
       (let* ((file nil)
              (init t))
         (flet ((signal-warning (w)
