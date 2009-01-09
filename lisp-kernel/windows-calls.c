@@ -167,6 +167,9 @@ _dosmaperr(unsigned long oserrno)
   case  ERROR_NOT_ENOUGH_QUOTA:
     errno = ENOMEM;
     break;
+  case ERROR_OPERATION_ABORTED:
+    errno = EINTR;
+    break;
   default:
     errno = EINVAL;
     break;
@@ -293,6 +296,7 @@ lisp_read(HANDLE hfile, void *buf, unsigned int count)
     tcr->pending_io_info = NULL;
     return nread;
   }
+
   err = GetLastError();
   
   if (err == ERROR_HANDLE_EOF) {
@@ -334,9 +338,6 @@ lisp_read(HANDLE hfile, void *buf, unsigned int count)
   switch (err) {
   case ERROR_HANDLE_EOF: 
     return 0;
-  case ERROR_OPERATION_ABORTED:
-    errno = EINTR;
-    return -1;
   default:
     _dosmaperr(err);
     return -1;
