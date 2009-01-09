@@ -724,6 +724,55 @@ debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
 #endif
 
 #ifdef X8632
+  unsigned short rcs,rds,res,rfs,rgs,rss;
+#ifdef DARWIN
+  rcs = xp->uc_mcontext->__ss.__cs;
+  rds = xp->uc_mcontext->__ss.__ds;
+  res = xp->uc_mcontext->__ss.__es;
+  rfs = xp->uc_mcontext->__ss.__fs;
+  rgs = xp->uc_mcontext->__ss.__gs;
+  rss = xp->uc_mcontext->__ss.__ss;
+#define DEBUG_SHOW_X86_SEGMENT_REGISTERS
+#endif
+#ifdef LINUX
+  rcs = xp->uc_mcontext.gregs[REG_CS];
+  rds = xp->uc_mcontext.gregs[REG_DS];
+  res = xp->uc_mcontext.gregs[REG_ES];
+  rfs = xp->uc_mcontext.gregs[REG_FS];
+  rgs = xp->uc_mcontext.gregs[REG_GS];
+  rss = xp->uc_mcontext.gregs[REG_SS];
+#define DEBUG_SHOW_X86_SEGMENT_REGISTERS
+#endif
+#ifdef FREEBSD
+  rcs = xp->uc_mcontext.mc_cs;
+  rds = xp->uc_mcontext.mc_ds;
+  res = xp->uc_mcontext.mc_es;
+  rfs = xp->uc_mcontext.mc_fs;
+  rgs = xp->uc_mcontext.mc_gs;
+  rss = xp->uc_mcontext.mc_ss;
+#define DEBUG_SHOW_X86_SEGMENT_REGISTERS
+#endif
+#ifdef SOLARIS
+  rcs = xp->uc_mcontext.gregs[CS];
+  rds = xp->uc_mcontext.gregs[DS];
+  res = xp->uc_mcontext.gregs[ES];
+  rfs = xp->uc_mcontext.gregs[FS];
+  rgs = xp->uc_mcontext.gregs[GS];
+  rss = xp->uc_mcontext.gregs[SS];
+#define DEBUG_SHOW_X86_SEGMENT_REGISTERS
+#endif
+#ifdef WINDOWS
+  rcs = xp->SegCs;
+  rds = xp->SegDs;
+  res = xp->SegEs;
+  rfs = xp->SegFs;
+  rgs = xp->SegGs;
+  rss = xp->SegSs;
+#define DEBUG_SHOW_X86_SEGMENT_REGISTERS
+#endif
+
+
+
   fprintf(stderr, "%%eax = 0x" ZLISP "\n", xpGPR(xp, REG_EAX));
   fprintf(stderr, "%%ecx = 0x" ZLISP "\n", xpGPR(xp, REG_ECX));
   fprintf(stderr, "%%edx = 0x" ZLISP "\n", xpGPR(xp, REG_EDX));
@@ -734,6 +783,17 @@ debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
   fprintf(stderr, "%%edi = 0x" ZLISP "\n", xpGPR(xp, REG_EDI));
   fprintf(stderr, "%%eip = 0x" ZLISP "\n", xpGPR(xp, REG_EIP));
   fprintf(stderr, "%%eflags = 0x" ZLISP "\n", xpGPR(xp, REG_EFL));
+#ifdef DEBUG_SHOW_X86_SEGMENT_REGISTERS
+  fprintf(stderr,"\n");
+  fprintf(stderr, "%%cs = 0x%04x\n", rcs);
+  fprintf(stderr, "%%ds = 0x%04x\n", rds);
+  fprintf(stderr, "%%ss = 0x%04x\n", rss);
+  fprintf(stderr, "%%es = 0x%04x\n", res);
+  fprintf(stderr, "%%fs = 0x%04x\n", rfs);
+  fprintf(stderr, "%%gs = 0x%04x\n", rgs);
+
+#endif
+
 #endif
 
   return debug_continue;
