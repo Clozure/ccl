@@ -276,5 +276,13 @@ _exportfn(C(ensure_safe_for_string_operations))
         __endif
 _endfn                                       
         __endif
+	
+/* Could easily do this as a little bit of inline asm.  If I remembered
+   how ... */
+_exportfn(C(get_fs_register))
+        __(movl %fs,%eax)
+        __(ret)
+_endfn        
+
         _endfile
 
