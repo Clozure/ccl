@@ -844,6 +844,25 @@ return that address encapsulated in a MACPTR, else returns NIL."
 
 #+(or linux-target freebsd-target solaris-target)
 (progn
+
+;;; Return the position of the last dot character in name, if that
+;;; character is followed by one or more decimal digits (e.g., the
+;;; start of a numeric suffix on a library name.)  Return NIL if
+;;; there's no such suffix.
+(defun last-dot-pos (name)
+  (do* ((i (1- (length name)) (1- i))
+       (trailing-digits nil))
+       ((<= i 0))
+    (declare (fixnum i))
+    (let* ((code (%scharcode name i)))
+      (declare (type (mod #x110000) code))
+      (if (and (>= code (char-code #\0))
+               (<= code (char-code #\9)))
+        (setq trailing-digits t)
+        (if (= code (char-code #\.))
+          (return (if trailing-digits i))
+          (return nil))))))
+  
 ;;; It's assumed that the set of libraries that the OS has open
 ;;; (accessible via the _dl_loaded global variable) is a subset of
 ;;; the libraries on *shared-libraries*.
@@ -853,7 +872,8 @@ return that address encapsulated in a MACPTR, else returns NIL."
     (setf (shlib.map lib) nil
 	  (shlib.pathname lib) nil
 	  (shlib.base lib) nil)
-    (let* ((soname (shlib.soname lib)))
+    (let* ((soname (shlib.soname lib))
+           (last-dot (if soname (1+ (last-dot-pos soname)))))
       (when soname
 	(with-cstrs ((soname soname))
 	  (let* ((map (block found
@@ -863,7 +883,9 @@ return that address encapsulated in a MACPTR, else returns NIL."
 			       (%setf-macptr libname
 					     (soname-ptr-from-link-map m))
 			       (unless (%null-ptr-p libname)
-				 (when (%cstrcmp soname libname)
+				 (when (or (%cstrcmp soname libname)
+                                           (and last-dot
+                                                (%cnstrcmp soname libname last-dot)))
 				   (return-from found  m)))))))))
 	    (when map
 	      ;;; Sigh.  We can't reliably lookup symbols in the library
@@ -878,6 +900,7 @@ return that address encapsulated in a MACPTR, else returns NIL."
 	      (setf (shlib.base lib) (%int-to-ptr (pref map :link_map.l_addr))
 		    (shlib.pathname lib) (%get-cstring
 					  (pref map :link_map.l_name))
+                    (shlib.soname lib) (%get-cstring (soname-ptr-from-link-map map))
 		    (shlib.map lib) map))))))))
 
 ;;; Repeatedly iterate over shared libraries, trying to open those
