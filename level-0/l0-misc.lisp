@@ -455,6 +455,16 @@
     (when (zerop bx)
       (return t))))
 
+(defun %cnstrcmp (x y n)
+  (declare (fixnum n))
+  (do* ((i 0 (1+ i))
+	(bx (%get-byte x i) (%get-byte x i))
+	(by (%get-byte y i) (%get-byte y i)))
+       ((= i n) t)
+    (declare (fixnum i bx by))
+    (unless (= bx by)
+      (return))))
+
 (defvar %documentation nil)
 
 (defvar %documentation-lock% nil)
