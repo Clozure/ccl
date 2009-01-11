@@ -25,7 +25,8 @@ typedef struct {
 } thread_activation;
 
 #ifdef HAVE_TLS
-__thread TCR __attribute__ ((aligned (16))) current_tcr;
+__thread char tcrbuf[sizeof(TCR)+16];
+__thread TCR *current_tcr;
 #endif
 
 /* This is set to true when running a 32-bit Lisp on 64-bit FreeBSD */
@@ -1160,10 +1161,17 @@ setup_tcr_extra_segment(TCR *tcr)
     tcr->ldt_selector = LSEL(i,SEL_UPL);
   }
 #else
-  if (i386_set_fsbase((void*)tcr)) {
+  extern unsigned short get_fs_register(void);
+
+  if ((i386_set_fsbase((void*)tcr))) {
     perror("i386_set_fsbase");
     exit(1);
   }
+  if (get_fs_register() != GSEL(GUFS_SEL, SEL_UPL)) {
+    fprintf(stderr,"i386_set_fsbase didn't set %%fs properly; this my be a problem with the 7.1 FreeBSD-amd64 kernel\n");
+    exit(1);
+  }
+
   /* Once we've called i386_set_fsbase, we can't write to %fs. */
   tcr->ldt_selector = GSEL(GUFS_SEL, SEL_UPL);
 #endif
@@ -1286,7 +1294,8 @@ new_tcr(natural vstack_size, natural tstack_size)
 #endif
 
 #ifdef HAVE_TLS
-  TCR *tcr = &current_tcr;
+  TCR *tcr = (TCR *) ((((natural)&tcrbuf)+((natural)15)) & ~((natural)15));
+  current_tcr = tcr;
 #else /* no TLS */
   TCR *tcr = allocate_tcr();
 #endif
@@ -1816,7 +1825,7 @@ TCR *
 get_tcr(Boolean create)
 {
 #ifdef HAVE_TLS
-  TCR *current = current_tcr.linear;
+  TCR *current = current_tcr;
 #else
   void *tsd = (void *)tsd_get(lisp_global(TCR_KEY));
   TCR *current = (tsd == NULL) ? NULL : TCR_FROM_TSD(tsd);
