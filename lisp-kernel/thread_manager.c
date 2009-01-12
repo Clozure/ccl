@@ -1163,14 +1163,11 @@ setup_tcr_extra_segment(TCR *tcr)
 #else
   extern unsigned short get_fs_register(void);
 
-  if ((i386_set_fsbase((void*)tcr))) {
+  if (i386_set_fsbase((void*)tcr)) {
     perror("i386_set_fsbase");
     exit(1);
   }
-  if (get_fs_register() != GSEL(GUFS_SEL, SEL_UPL)) {
-    fprintf(stderr,"i386_set_fsbase didn't set %%fs properly; this my be a problem with the 7.1 FreeBSD-amd64 kernel\n");
-    exit(1);
-  }
+
 
   /* Once we've called i386_set_fsbase, we can't write to %fs. */
   tcr->ldt_selector = GSEL(GUFS_SEL, SEL_UPL);
