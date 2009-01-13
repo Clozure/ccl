@@ -18,7 +18,11 @@
 (in-package "CCL")			; for now.
 
 
-(defvar *cocoa-application-path* "ccl:Clozure CL.app;")
+(defvar *cocoa-application-path*
+  (multiple-value-bind (os bits cpu) (host-platform)
+    (declare (ignore os))
+    (format nil "ccl:Clozure CL-~a~a.app;"
+            (string-downcase cpu) bits)))
 (defvar *cocoa-application-copy-headers-p* nil)
 (defvar *cocoa-application-install-altconsole* t)
 (load "ccl:cocoa-ide;defsystem.lisp")
