@@ -49,11 +49,15 @@
       ;; in its Info.plist file.  That executable file could be practically
       ;; anything, as long as its executable bits were set.
       (let* ((image-name (ccl::standard-kernel-name))
+             #+ignore
 	     (ccl-image (make-pathname :name image-name :host "ccl"))
 	     (dest-image (make-pathname :name image-name
 					:defaults (subdir contents-dir "MacOS"))))
 	(ensure-directories-exist dest-image)
-	(copy-file ccl-image dest-image :if-exists :supersede :preserve-attributes t))
+        #+no
+	(copy-file ccl-image dest-image :if-exists :supersede :preserve-attributes t)
+        (ccl::touch dest-image)
+        )
       (ccl::touch target-dir))))
 
 ;;; This runs "make install" to generate
