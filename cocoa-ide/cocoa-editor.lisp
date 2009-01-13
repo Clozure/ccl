@@ -1015,36 +1015,54 @@
 
 (defmethod disable-paren-highlight ((self hemlock-textstorage-text-view))
   (when (eql (text-view-paren-highlight-enabled self) #$YES)
-    (setf (text-view-paren-highlight-enabled self) #$NO)
-    (remove-paren-highlight self)))
+    (setf (text-view-paren-highlight-enabled self) #$NO)))
 
 
 
 
-(defmethod force-paren-redisplay ((self hemlock-textstorage-text-view))
-  (when (eql (text-view-paren-highlight-enabled self) #$YES)
-    (ns:with-ns-range (left-char-range (text-view-paren-highlight-left-pos self) 1)
-      (ns:with-ns-range (right-char-range (text-view-paren-highlight-right-pos self) 1)
-        (let* ((layout (#/layoutManager self))
-               (container (#/textContainer self))
-               (left-glyph-range (#/glyphRangeForCharacterRange:actualCharacterRange:
-                                  layout
-                                  left-char-range
-                                  +null-ptr+))
-               (right-glyph-range (#/glyphRangeForCharacterRange:actualCharacterRange:
-                                   layout
-                                   right-char-range
-                                   +null-ptr+))
-               (left-rect (#/boundingRectForGlyphRange:inTextContainer:
-                           layout
-                           left-glyph-range
-                           container))
-               (right-rect (#/boundingRectForGlyphRange:inTextContainer:
-                            layout
-                            right-glyph-range
-                            container)))
-          (#/setNeedsDisplayInRect: self left-rect)
-          (#/setNeedsDisplayInRect: self right-rect))))))
+(defmethod compute-temporary-attributes ((self hemlock-textstorage-text-view))
+  (let* ((container (#/textContainer self))
+         ;; If there's a containing scroll view, use its contentview         
+         ;; Otherwise, just use the current view.
+         (scrollview (#/enclosingScrollView self))
+         (contentview (if (%null-ptr-p scrollview) self (#/contentView scrollview)))
+         (rect (#/frame contentview))
+         (layout (#/layoutManager container))
+         (glyph-range (#/glyphRangeForBoundingRect:inTextContainer:
+                       layout rect container))
+         (char-range (#/characterRangeForGlyphRange:actualGlyphRange:
+                      layout glyph-range +null-ptr+))
+         (start (ns:ns-range-location char-range))
+         (length (ns:ns-range-length char-range)))
+    (when (> length 0)
+      ;; Remove all temporary attributes from the character range
+      (#/removeTemporaryAttribute:forCharacterRange:
+       layout #&NSForegroundColorAttributeName char-range)
+      (#/removeTemporaryAttribute:forCharacterRange:
+       layout #&NSBackgroundColorAttributeName char-range)
+      (let* ((ts (#/textStorage self))
+             (cache (hemlock-buffer-string-cache (slot-value ts 'hemlock-string)))
+             (hi::*current-buffer* (buffer-cache-buffer cache)))
+        (multiple-value-bind (start-line start-offset)
+                             (update-line-cache-for-index cache start)
+          (let* ((end-line (update-line-cache-for-index cache (+ start length))))
+            (set-temporary-character-attributes
+             layout
+             (- start start-offset)
+             start-line
+             (hi::line-next end-line))))))
+    (when (eql #$YES (text-view-paren-highlight-enabled self))
+      (let* ((background #&NSBackgroundColorAttributeName)
+             (paren-highlight-left (text-view-paren-highlight-left-pos self))
+             (paren-highlight-right (text-view-paren-highlight-right-pos self))
+             (paren-highlight-color (text-view-paren-highlight-color self))
+	     (attrs (#/dictionaryWithObject:forKey: ns:ns-dictionary
+						    paren-highlight-color
+						    background)))
+        (#/addTemporaryAttributes:forCharacterRange:
+         layout attrs (ns:make-ns-range paren-highlight-left 1))
+        (#/addTemporaryAttributes:forCharacterRange:
+         layout attrs (ns:make-ns-range paren-highlight-right 1))))))
 
 (defmethod update-paren-highlight ((self hemlock-textstorage-text-view))
   (disable-paren-highlight self)
@@ -1076,7 +1094,7 @@
                            (text-view-paren-highlight-right-pos self)
                            (1- (hi:mark-absolute-position point))
                            (text-view-paren-highlight-enabled self) #$YES))))))
-        (force-paren-redisplay self)))))
+        (compute-temporary-attributes self)))))
 
 
 
@@ -1170,49 +1188,10 @@
 		    (#/addTemporaryAttributes:forCharacterRange:
 		     layout attrs range)))))))))))
 
+#+no
 (objc:defmethod (#/drawRect: :void) ((self hemlock-text-view) (rect :<NSR>ect))
-  (let* ((container (#/textContainer self))
-         (layout (#/layoutManager container))
-         (glyph-range (#/glyphRangeForBoundingRect:inTextContainer:
-                       layout rect container))
-         (char-range (#/characterRangeForGlyphRange:actualGlyphRange:
-                      layout glyph-range +null-ptr+))
-         (start (ns:ns-range-location char-range))
-         (length (ns:ns-range-length char-range)))
-    (when (> length 0)
-      ;; Remove all temporary attributes from the character range
-      (#/removeTemporaryAttribute:forCharacterRange:
-       layout #&NSForegroundColorAttributeName char-range)
-      (#/removeTemporaryAttribute:forCharacterRange:
-       layout #&NSBackgroundColorAttributeName char-range)
-      (let* ((ts (#/textStorage self))
-             (cache (hemlock-buffer-string-cache (slot-value ts 'hemlock-string)))
-             (hi::*current-buffer* (buffer-cache-buffer cache)))
-        #+debug (#_NSLog #@"paren-highlight-phase = %d" :int (text-view-paren-highlight-phase self))
-        (multiple-value-bind (start-line start-offset)
-            (update-line-cache-for-index cache start)
-          (let* ((end-line (update-line-cache-for-index cache (+ start length))))
-            (set-temporary-character-attributes
-             layout
-             (- start start-offset)
-             start-line
-             (hi::line-next end-line))))))
-    (when (and (eql #$YES (text-view-paren-highlight-enabled self))
-               (#/isKeyWindow (#/window self))
-               (#/isSelectable self))
-      (let* ((background #&NSBackgroundColorAttributeName)
-             (paren-highlight-left (text-view-paren-highlight-left-pos self))
-             (paren-highlight-right (text-view-paren-highlight-right-pos self))
-             (paren-highlight-color (text-view-paren-highlight-color self))
-	     (attrs (#/dictionaryWithObject:forKey: ns:ns-dictionary
-						    paren-highlight-color
-						    background)))
-        (#/addTemporaryAttributes:forCharacterRange:
-         layout attrs (ns:make-ns-range paren-highlight-left 1))
-        (#/addTemporaryAttributes:forCharacterRange:
-         layout attrs (ns:make-ns-range paren-highlight-right 1))))
-    ;; Um, don't forget to actually draw the view..
-    (call-next-method  rect)))
+  ;; Um, don't forget to actually draw the view..
+  (call-next-method  rect))
 
 
 (defmethod hemlock-view ((self hemlock-text-view))
@@ -1665,6 +1644,9 @@
   ;; When the window loses focus, we should remove or change transient
   ;; highlighting (like matching-paren highlighting).  Maybe make this
   ;; more general ...
+  ;; Currently, this only removes temporary attributes from matching
+  ;; parens; other kinds of syntax highlighting stays visible when
+  ;; the containing window loses keyboard focus
   (let* ((tv (text-pane-text-view self)))
     (remove-paren-highlight tv)
     (remove-paren-highlight (slot-value tv 'peer))))
@@ -1675,8 +1657,8 @@
     ((self text-pane) notification)
   (declare (ignorable notification))
   (let* ((tv (text-pane-text-view self)))
-    (force-paren-redisplay tv)
-    (force-paren-redisplay (slot-value tv 'peer))))
+    (compute-temporary-attributes tv)
+    (compute-temporary-attributes (slot-value tv 'peer))))
   
 
 ;;; Mark the buffer's modeline as needing display.  This is called whenever
