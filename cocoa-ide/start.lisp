@@ -201,6 +201,14 @@
                            (#_dup2 parent-socket 0)
                            (#_dup2 parent-socket 1)
                            (#_dup2 parent-socket 2)
+                           ;; Ensure that output to the stream ccl::*stdout* -
+                           ;; which is connected to fd 1 - is flushed periodically
+                           ;; by the housekeeping task.  (ccl::*stdout* is
+                           ;; typically the output side of the two-way stream
+                           ;; which is the global/static value of *TERMINAL-IO*;
+                           ;; many standard streams are synonym streams to
+                           ;; *TERMINAL-IO*.
+                           (ccl::add-auto-flush-stream ccl::*stdout*)
                            pid)))))))))))))
                       
                     
