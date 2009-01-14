@@ -1026,7 +1026,7 @@
          ;; Otherwise, just use the current view.
          (scrollview (#/enclosingScrollView self))
          (contentview (if (%null-ptr-p scrollview) self (#/contentView scrollview)))
-         (rect (#/frame contentview))
+         (rect (#/bounds contentview))
          (layout (#/layoutManager container))
          (glyph-range (#/glyphRangeForBoundingRect:inTextContainer:
                        layout rect container))
