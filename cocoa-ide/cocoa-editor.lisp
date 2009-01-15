@@ -941,7 +941,9 @@
 				     (hi:key-event-modifier-mask (cdr map)))))))
             (let* ((char (code-char c)))
               (when (and char (standard-char-p char))
-                (setq bits (logandc2 bits +shift-event-mask+))))
+                (setq bits (logandc2 bits +shift-event-mask+)))
+              (when (logtest #$NSAlphaShiftKeyMask modifiers)
+                (setf c (char-code (char-upcase char)))))
 	    (hi:make-key-event c bits)))))))
 
 ;; For now, this is only used to abort i-search.  All actual mouse handling is done
@@ -1009,14 +1011,20 @@
 (defmethod remove-paren-highlight ((self hemlock-textstorage-text-view))
   (let* ((left (text-view-paren-highlight-left-pos self))
          (right (text-view-paren-highlight-right-pos self)))
-    (ns:with-ns-range  (char-range left (1+ (- right left)))
+    (ns:with-ns-range  (char-range left 1)
       (let* ((layout (#/layoutManager self)))
-        (#/removeTemporaryAttribute:forCharacterRange: layout #&NSBackgroundColorAttributeName char-range)))))
+        (#/removeTemporaryAttribute:forCharacterRange: 
+         layout #&NSBackgroundColorAttributeName 
+         char-range)
+        (setf (pref char-range #>NSRange.location) right)
+        (#/removeTemporaryAttribute:forCharacterRange: 
+         layout #&NSBackgroundColorAttributeName 
+         char-range)))))
 
 (defmethod disable-paren-highlight ((self hemlock-textstorage-text-view))
   (when (eql (text-view-paren-highlight-enabled self) #$YES)
-    (setf (text-view-paren-highlight-enabled self) #$NO)))
-
+    (setf (text-view-paren-highlight-enabled self) #$NO)
+    (remove-paren-highlight self)))
 
 
 
@@ -1340,12 +1348,16 @@
   (#_NSLog #@"Granularity = %d" :int g)
   (objc:returning-foreign-struct (r)
      (block HANDLED
-       (let* ((index (ns:ns-range-location proposed))             
-              (length (ns:ns-range-length proposed)))
+       (let* ((index (ns:ns-range-location proposed))  
+              (length (ns:ns-range-length proposed))
+              (textstorage (#/textStorage self)))
          (when (and (eql 0 length)      ; not extending existing selection
-                    (not (eql g #$NSSelectByCharacter)))
-           (let* ((textstorage (#/textStorage self))
-                  (cache (hemlock-buffer-string-cache (#/hemlockString textstorage)))
+                    (or (not (eql g #$NSSelectByCharacter))
+                        (and (eql index (#/length textstorage))
+                             (let* ((event (#/currentEvent (#/window self))))
+                               (and (eql (#/type event) #$NSLeftMouseDown)
+                                    (> (#/clickCount event) 1))))))
+           (let* ((cache (hemlock-buffer-string-cache (#/hemlockString textstorage)))
                   (buffer (if cache (buffer-cache-buffer cache))))
              (when (and buffer (string= (hi::buffer-major-mode buffer) "Lisp"))
                (let* ((hi::*current-buffer* buffer))
@@ -1618,9 +1630,16 @@
         (#/setFrame: modeline modeline-frame)))))
 
 
+;;; A clip view subclass, which exists mostlu so that we can track origin changes.
+(defclass text-pane-clip-view (ns:ns-clip-view)
+  ()
+  (:metaclass ns:+ns-object))
 
+(objc:defmethod (#/scrollToPoint: :void) ((self text-pane-clip-view)
+                                           (origin #>NSPoint))
+  (call-next-method origin)
+  (compute-temporary-attributes (#/documentView self)))
 
-
 ;;; Text-pane
 
 ;;; The text pane is just an NSBox that (a) provides a draggable border
@@ -1753,7 +1772,7 @@
 		    (#/setHeightTracksTextView: container nil)
 		    (#/setHorizontallyResizable: tv t)
 		    (#/setVerticallyResizable: tv t)))
-
+                (#/setContentView: scrollview (make-instance 'text-pane-clip-view))
                 (#/setDocumentView: scrollview tv)	      
                 (values tv scrollview)))))))))
 
