@@ -70,11 +70,11 @@ Boolean lisp_debugger_in_foreign_code = false;
 
 #ifndef WINDOWS
 Boolean
-fd0_is_dev_null()
+stdin_is_dev_null()
 {
   struct stat fd0stat, devnullstat;
 
-  if (fstat(0,&fd0stat)) {
+  if (fstat(fileno(stdin),&fd0stat)) {
     return true;
   }
   if (stat("/dev/null",&devnullstat)) {
@@ -1110,7 +1110,7 @@ lisp_Debugger(ExceptionInformation *xp,
   
 
 #ifndef WINDOWS
-  if (fd0_is_dev_null()) {
+  if (stdin_is_dev_null()) {
     return -1;
   }
 #endif
