@@ -134,10 +134,11 @@
                       :application-class 'cocoa-application)))
 
 ;;; If we're running as a standalone .app, try to see if a bundle named
-;;; AltConsole.app exists in our PlugIns directory.  If so, execute
+;;; AltConsole.app exists in our Resources directory.  If so, execute
 ;;; that bundle'es executable file, with its standard input/output/error
-;;; descriptors connected to one end of a socketpair, and connect t
-;;; descriptors 0,1,and 2 to the socket on the other end.
+;;; descriptors connected to one end of a socketpair, and connect
+;;; lisp's *TERMINAL-IO* and C's stdin/stdout/stderr to the other end
+;;; of the socket.
 
 (defun try-connecting-to-altconsole ()
   (with-autorelease-pool
@@ -198,9 +199,16 @@
                          ;; We're the parent.
                          (#_close child-socket)
                          (when (eq t (ccl::check-pid pid))
-                           (#_dup2 parent-socket 0)
-                           (#_dup2 parent-socket 1)
-                           (#_dup2 parent-socket 2)
+                           (flet ((set-stdio-file-fd (f fd)
+                                    (setf (pref f #>FILE._file) fd))
+                                  (set-lisp-stream-fd (stream fd)
+                                    (setf (ccl::ioblock-device (ccl::stream-ioblock stream t))
+                                          fd)))
+                             (set-stdio-file-fd (%get-ptr (foreign-symbol-address "___stdinp")) parent-socket)
+                             (set-stdio-file-fd (%get-ptr (foreign-symbol-address "___stdoutp")) parent-socket)
+                             (set-stdio-file-fd (%get-ptr (foreign-symbol-address "___stderrp")) parent-socket)
+                             (set-lisp-stream-fd ccl::*stdin* parent-socket)
+                             (set-lisp-stream-fd ccl::*stdout* parent-socket))
                            ;; Ensure that output to the stream ccl::*stdout* -
                            ;; which is connected to fd 1 - is flushed periodically
                            ;; by the housekeeping task.  (ccl::*stdout* is
