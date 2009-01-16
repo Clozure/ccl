@@ -5,8 +5,27 @@
 # Any definition of CCL_DEFAULT_DIRECTORY already present in the environment 
 # takes precedence over definitions made below.
 
+probe()
+{
+    if [ -e "$1"  -a  -e "$1/scripts/ccl" ]; then
+        CCL_DEFAULT_DIRECTORY="$1"
+    fi
+}
+
+if [ -z "$CCL_DEFAULT_DIRECTORY"  -a  -n "`which readlink`" ]; then
+    dir="`readlink $0`"
+    probe "${dir%/scripts/ccl}"
+fi
+
 if [ -z "$CCL_DEFAULT_DIRECTORY" ]; then
-  CCL_DEFAULT_DIRECTORY=/usr/local/src/ccl
+    probe "/usr/local/src/ccl"
+fi
+
+if [ -z "$CCL_DEFAULT_DIRECTORY" ]; then
+    echo "Can't find CCL directory.  Please edit $0 or"
+    echo "set the environment variable CCL_DEFAULT_DIRECTORY"
+    echo "and try again."
+    exit 1
 fi
 
 export CCL_DEFAULT_DIRECTORY
