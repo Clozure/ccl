@@ -3027,20 +3027,11 @@ argument lisp string."
 	   (progn ,@body)
 	(release-autorelease-pool ,pool-temp)))))
 
-
-(defun %make-nsstring (string)
-  (with-encoded-cstrs :utf-8 ((s string))
-    (%make-nsstring-from-utf8-c-string s)))
-
-
-
 #+apple-objc-2.0
 ;;; New!!! Improved!!! At best, half-right!!!
 (defmacro with-ns-exceptions-as-errors (&body body)
   `(progn ,@body))
-                 
-             
-    
+
 #-apple-objc-2.0
 (defmacro with-ns-exceptions-as-errors (&body body)
   #+apple-objc

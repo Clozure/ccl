@@ -182,9 +182,17 @@
 
 (pushnew 'recognize-objc-exception *foreign-error-condition-recognizers*)
 
-(defun %make-nsstring-from-utf8-c-string (s)
-  (#/initWithUTF8String: (#/alloc ns:ns-string) s))
+(defun %make-nsstring (string)
+  (with-encoded-cstrs :utf-8 ((s string))
+    (#/initWithUTF8String: (#/alloc ns:ns-string) s)))
 
+(defmacro with-autoreleased-nsstring ((nsstring lisp-string) &body body)
+  `(let* ((,nsstring (%make-nsstring ,lisp-string)))
+     (#/autorelease ,nsstring)
+     ,@body))
+
+(defmacro with-autoreleased-nsstrings (speclist &body body)
+  (with-specs-aux 'with-autoreleased-nsstring speclist body))
 
 (defun retain-objc-instance (instance)
   (#/retain instance))
@@ -229,7 +237,7 @@
 (objc:defmethod #/reason ((self ns-lisp-exception))
   (with-slots (condition) self
     (if condition
-      (%make-nsstring (format nil "~A" condition))
+      (#/autorelease (%make-nsstring (format nil "~A" condition)))
       (call-next-method))))
 
 (objc:defmethod #/description ((self ns-lisp-exception))
