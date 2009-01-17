@@ -734,6 +734,21 @@ such changes should be made with care."
        (note-variable-info ',var :global ,env))
      (%defglobal ',var ,value ,doc)))
 
+(defmacro defstaticvar (&environment env var value &optional doc)
+  "Syntax is like DEFVAR.  Proclaims the symbol to be special,
+but also asserts that it will never be given a per-thread dynamic
+binding.  The value of the variable can be changed (via SETQ, etc.),
+but since all threads access the same static binding of the variable,
+such changes should be made with care.  Like DEFVAR, the initial value
+form is not evaluated if the variable is already BOUNDP."
+  (if (and doc (not (stringp doc))) (signal-program-error "~S is not a string." doc))
+  (if (and (compile-file-environment-p env) (not *fasl-save-doc-strings*))
+    (setq doc nil))
+  `(progn
+     (eval-when (:compile-toplevel)
+       (note-variable-info ',var :global ,env))
+     (%defvar-init ,var ,value ,doc)))
+
 
 (defmacro defglobal (&rest args)
   "Synonym for DEFSTATIC."
@@ -742,7 +757,7 @@ such changes should be made with care."
 
 (defmacro defloadvar (&environment env var value &optional doc)
   `(progn
-     (defstatic ,var ,nil ,@(if doc `(,doc)))
+     (defstaticvar ,var ,nil ,@(if doc `(,doc)))
      (def-ccl-pointers ,var ()
        (setq ,var ,value))
      ',var))
