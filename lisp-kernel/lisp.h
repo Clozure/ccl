@@ -125,3 +125,7 @@ void init_threads(void *, TCR *);
 #ifdef WINDOWS
 void wperror(char *);
 #endif
+
+#include <stdio.h>
+
+extern FILE *dbgout;

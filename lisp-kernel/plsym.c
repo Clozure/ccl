@@ -120,7 +120,7 @@ plsym(ExceptionInformation *xp, char *pname)
       (header_subtag(header_of(address)) == subtag_symbol)){
     describe_symbol(address);
   } else {
-    fprintf(stderr, "Not a symbol.\n");
+    fprintf(dbgout, "Not a symbol.\n");
   }
   return;
 }

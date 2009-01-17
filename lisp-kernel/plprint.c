@@ -21,7 +21,7 @@ void
 plprint(ExceptionInformation *xp, LispObj obj)
 {
   if (lisp_nil == (LispObj) NULL) {
-    fprintf(stderr,"can't find lisp NIL; lisp process not active process ?\n");
+    fprintf(dbgout,"can't find lisp NIL; lisp process not active process ?\n");
   } else {
     Dprintf("\n%s", print_lisp_object(obj));
   }

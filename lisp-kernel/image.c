@@ -153,16 +153,16 @@ find_openmcl_image_file_header(int fd, openmcl_image_file_header *header)
   }
   version = (header->abi_version) & 0xffff;
   if (version < ABI_VERSION_MIN) {
-    fprintf(stderr, "Heap image is too old for this kernel.\n");
+    fprintf(dbgout, "Heap image is too old for this kernel.\n");
     return false;
   }
   if (version > ABI_VERSION_MAX) {
-    fprintf(stderr, "Heap image is too new for this kernel.\n");
+    fprintf(dbgout, "Heap image is too new for this kernel.\n");
     return false;
   }
   flags = header->flags;
   if (flags != PLATFORM) {
-    fprintf(stderr, "Heap image was saved for another platform.\n");
+    fprintf(dbgout, "Heap image was saved for another platform.\n");
     return false;
   }
   return true;

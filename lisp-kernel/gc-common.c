@@ -1087,13 +1087,13 @@ gc(TCR *tcr, signed_natural param)
     sample_paging_info(&paging_info_start);
     comma_output_decimal(buf,16,area_dnode(oldfree,a->low) << dnode_shift);
     if (GCephemeral_low) {
-      fprintf(stderr,
+      fprintf(dbgout,
               "\n\n;;; Starting Ephemeral GC of generation %d",
               (from == g2_area) ? 2 : (from == g1_area) ? 1 : 0); 
     } else {
-      fprintf(stderr,"\n\n;;; Starting full GC");
+      fprintf(dbgout,"\n\n;;; Starting full GC");
     }
-    fprintf(stderr, ", %s bytes allocated.\n", buf);
+    fprintf(dbgout, ", %s bytes allocated.\n", buf);
   }
 
   get_time(start);
@@ -1396,14 +1396,14 @@ gc(TCR *tcr, signed_natural param)
         }
         comma_output_decimal(buf,16,justfreed);
         if (note == tenured_area) {
-          fprintf(stderr,";;; Finished full GC. %s bytes freed in %d.%06d s\n\n", buf, elapsed.tv_sec, elapsed.tv_usec);
+          fprintf(dbgout,";;; Finished full GC. %s bytes freed in %d.%06d s\n\n", buf, elapsed.tv_sec, elapsed.tv_usec);
         } else {
-          fprintf(stderr,";;; Finished EGC of generation %d. %s bytes freed in %d.%06d s\n\n", 
+          fprintf(dbgout,";;; Finished EGC of generation %d. %s bytes freed in %d.%06d s\n\n", 
                   (from == g2_area) ? 2 : (from == g1_area) ? 1 : 0,
                   buf, 
                   elapsed.tv_sec, elapsed.tv_usec);
         }
-        report_paging_info_delta(stderr, &paging_info_start, &paging_info_stop);
+        report_paging_info_delta(dbgout, &paging_info_start, &paging_info_stop);
       }
     }
   }

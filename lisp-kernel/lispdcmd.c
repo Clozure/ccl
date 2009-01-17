@@ -26,7 +26,7 @@
 void
 display_buffer(char *buf)
 {
-  fprintf(stderr, "%s\n", buf);
+  fprintf(dbgout, "%s\n", buf);
 }
 
 int

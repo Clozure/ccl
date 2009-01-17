@@ -956,7 +956,7 @@ setup_tcr_extra_segment(TCR *tcr)
   }
   if (i == LDT_ENTRIES) {
     pthread_mutex_unlock(&ldt_lock);
-    fprintf(stderr, "All 8192 ldt entries in use ?\n");
+    fprintf(dbgout, "All 8192 ldt entries in use ?\n");
     _exit(1);
   }
   u.entry_number = i;
@@ -965,7 +965,7 @@ setup_tcr_extra_segment(TCR *tcr)
   u.limit_in_pages = 0;
   if (modify_ldt(1,&u,sizeof(struct user_desc)) != 0) {
     pthread_mutex_unlock(&ldt_lock);
-    fprintf(stderr,"Can't assign LDT entry\n");
+    fprintf(dbgout,"Can't assign LDT entry\n");
     _exit(1);
   }
   sel = (i << 3) | 7;
@@ -1028,7 +1028,7 @@ init_win32_ldt()
   }
 
   if (status) {
-    fprintf(stderr, "This application can't run under this OS version\n");
+    fprintf(dbgout, "This application can't run under this OS version\n");
     _exit(1);
   }
 }
@@ -1062,7 +1062,7 @@ setup_tcr_extra_segment(TCR *tcr)
   }
   if (i == 8192) {
     ReleaseMutex(ldt_lock);
-    fprintf(stderr, "All 8192 ldt entries in use ?\n");
+    fprintf(dbgout, "All 8192 ldt entries in use ?\n");
     _exit(1);
   }
   set_bit(ldt_entries_in_use,i);
@@ -1242,7 +1242,7 @@ setup_tcr_extra_segment(TCR *tcr)
     }
   }
   pthread_mutex_unlock(&ldt_lock);
-  fprintf(stderr, "All 8192 LDT descriptors in use\n");
+  fprintf(dbgout, "All 8192 LDT descriptors in use\n");
   _exit(1);
 
 
@@ -1840,7 +1840,7 @@ get_tcr(Boolean create)
     register_thread_tcr(current);
 #ifdef DEBUG_TCR_CREATION
 #ifndef WINDOWS
-    fprintf(stderr, "\ncreating TCR for pthread 0x%x", pthread_self());
+    fprintf(dbgout, "\ncreating TCR for pthread 0x%x", pthread_self());
 #endif
 #endif
     current->vs_area->active -= node_size;
@@ -1913,7 +1913,7 @@ suspend_tcr(TCR *tcr)
 #ifdef WIN_64
           *pcontext = * (CONTEXT *)(pcontext->Rcx);
 #else
-          fprintf(stderr, "missing win32 suspend code, case (1)\n");
+          fprintf(dbgout, "missing win32 suspend code, case (1)\n");
 #endif
         } else {
           /* Most of the context has already been restored; fix %rcx
@@ -1930,7 +1930,7 @@ suspend_tcr(TCR *tcr)
           pcontext->SegSs = (WORD) iret_frame->Ss;
 #else
 #warning need context setup for win32
-          fprintf(stderr, "missing win32 suspend code, case (2)\n");
+          fprintf(dbgout, "missing win32 suspend code, case (2)\n");
 #endif
         }
         tcr->suspend_context = NULL;

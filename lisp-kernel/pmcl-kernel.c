@@ -138,7 +138,7 @@ wperror(char* message)
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 		(LPTSTR)&buffer,
 		0, NULL);
-  fprintf(stderr, "%s: 0x%x %s\n", message, (unsigned) last_error, buffer);
+  fprintf(dbgout, "%s: 0x%x %s\n", message, (unsigned) last_error, buffer);
   LocalFree(buffer);
 }
 #endif
@@ -204,7 +204,7 @@ ensure_stack_limit(size_t stack_size)
     errno = 0;
     if (setrlimit(RLIMIT_STACK, &limits)) {
       int e = errno;
-      fprintf(stderr, "errno = %d\n", e);
+      fprintf(dbgout, "errno = %d\n", e);
       Fatal(": Stack resource limit too small", "");
     }
   }
@@ -788,7 +788,7 @@ Fatal(StringPtr param0, StringPtr param1)
     deallocate(fatal_spare_ptr);
     fatal_spare_ptr = NULL;
   }
-  fprintf(stderr, "Fatal error: %s\n%s\n", param0, param1);
+  fprintf(dbgout, "Fatal error: %s\n%s\n", param0, param1);
   _exit(-1);
 }
 
@@ -953,25 +953,25 @@ void
 usage_exit(char *herald, int exit_status, char* other_args)
 {
   if (herald && *herald) {
-    fprintf(stderr, "%s\n", herald);
+    fprintf(dbgout, "%s\n", herald);
   }
-  fprintf(stderr, "usage: %s <options>\n", program_name);
-  fprintf(stderr, "\t or %s <image-name>\n", program_name);
-  fprintf(stderr, "\t where <options> are one or more of:\n");
+  fprintf(dbgout, "usage: %s <options>\n", program_name);
+  fprintf(dbgout, "\t or %s <image-name>\n", program_name);
+  fprintf(dbgout, "\t where <options> are one or more of:\n");
   if (other_args && *other_args) {
-    fputs(other_args, stderr);
+    fputs(other_args, dbgout);
   }
-  fprintf(stderr, "\t-R, --heap-reserve <n>: reserve <n> (default: %lld)\n",
+  fprintf(dbgout, "\t-R, --heap-reserve <n>: reserve <n> (default: %lld)\n",
 	  (u64_t) reserved_area_size);
-  fprintf(stderr, "\t\t bytes for heap expansion\n");
-  fprintf(stderr, "\t-S, --stack-size <n>: set  size of initial thread's control stack to <n>\n");
-  fprintf(stderr, "\t-Z, --thread-stack-size <n>: set default size of first (listener)  thread's stacks based on <n>\n");
-  fprintf(stderr, "\t-b, --batch: exit when EOF on *STANDARD-INPUT*\n");
-  fprintf(stderr, "\t--no-sigtrap : obscure option for running under GDB\n");
-  fprintf(stderr, "\t-I, --image-name <image-name>\n");
-  fprintf(stderr, "\t and <image-name> defaults to %s\n", 
+  fprintf(dbgout, "\t\t bytes for heap expansion\n");
+  fprintf(dbgout, "\t-S, --stack-size <n>: set  size of initial thread's control stack to <n>\n");
+  fprintf(dbgout, "\t-Z, --thread-stack-size <n>: set default size of first (listener)  thread's stacks based on <n>\n");
+  fprintf(dbgout, "\t-b, --batch: exit when EOF on *STANDARD-INPUT*\n");
+  fprintf(dbgout, "\t--no-sigtrap : obscure option for running under GDB\n");
+  fprintf(dbgout, "\t-I, --image-name <image-name>\n");
+  fprintf(dbgout, "\t and <image-name> defaults to %s\n", 
 	  default_image_name(program_name));
-  fprintf(stderr, "\n");
+  fprintf(dbgout, "\n");
   _exit(exit_status);
 }
 
@@ -1007,7 +1007,7 @@ parse_numeric_option(char *arg, char *argname, natural default_val)
     break;
     
   default:
-    fprintf(stderr, "couldn't parse %s argument %s", argname, arg);
+    fprintf(dbgout, "couldn't parse %s argument %s", argname, arg);
     val = default_val;
     break;
   }
@@ -1336,7 +1336,7 @@ check_os_version(char *progname)
   }
 
   if (got < want) {
-    fprintf(stderr, "\n%s requires %s version %s or later; the current version is %s.\n", progname, uts.sysname, min_os_version, uts.release);
+    fprintf(dbgout, "\n%s requires %s version %s or later; the current version is %s.\n", progname, uts.sysname, min_os_version, uts.release);
     exit(1);
   }
 #ifdef PPC
@@ -1419,7 +1419,7 @@ ensure_gs_available(char *progname)
   arch_prctl(ARCH_GET_GS, &gs_addr);
   arch_prctl(ARCH_GET_FS, &fs_addr);
   if ((gs_addr == cur_thread) && (fs_addr != cur_thread)) {
-    fprintf(stderr, "The installed C library - version %s - seems to be using the %%gs register for thread storage.\n\"%s\" cannot run, since it expects to be\nable to use that register for its own purposes.\n", gnu_get_libc_version(),progname);
+    fprintf(dbgout, "The installed C library - version %s - seems to be using the %%gs register for thread storage.\n\"%s\" cannot run, since it expects to be\nable to use that register for its own purposes.\n", gnu_get_libc_version(),progname);
     _exit(1);
   }
 }
@@ -1495,7 +1495,7 @@ main(int argc, char *argv[]
   _fmode = O_BINARY;
   _setmode(1, O_BINARY);
   _setmode(2, O_BINARY);
-  setvbuf(stderr, NULL, _IONBF, 0);
+  setvbuf(dbgout, NULL, _IONBF, 0);
   init_winsock();
   init_windows_io();
 #endif
@@ -1568,7 +1568,7 @@ main(int argc, char *argv[]
 
 #ifdef X86
   if (!check_x86_cpu()) {
-    fprintf(stderr, "CPU doesn't support required features\n");
+    fprintf(dbgout, "CPU doesn't support required features\n");
     exit(1);
   }
 #endif
@@ -1977,9 +1977,9 @@ load_image(char *path)
   }
   if (image_nil == 0) {
     if (err == 0) {
-      fprintf(stderr, "Couldn't load lisp heap image from %s\n", path);
+      fprintf(dbgout, "Couldn't load lisp heap image from %s\n", path);
     } else {
-      fprintf(stderr, "Couldn't load lisp heap image from %s:\n%s\n", path, strerror(err));
+      fprintf(dbgout, "Couldn't load lisp heap image from %s:\n%s\n", path, strerror(err));
     }
     exit(-1);
   }

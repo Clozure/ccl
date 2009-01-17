@@ -1232,7 +1232,7 @@ wait_for_exception_lock_in_handler(TCR *tcr,
 
   LOCK(lisp_global(EXCEPTION_LOCK), tcr);
 #if 0
-  fprintf(stderr, "0x" LISP " has exception lock\n", tcr);
+  fprintf(dbgout, "0x" LISP " has exception lock\n", tcr);
 #endif
   xf->curr = context;
 #ifdef X8632
@@ -1255,7 +1255,7 @@ unlock_exception_lock_in_handler(TCR *tcr)
   tcr->valence = TCR_STATE_EXCEPTION_RETURN;
   UNLOCK(lisp_global(EXCEPTION_LOCK),tcr);
 #if 0
-  fprintf(stderr, "0x" LISP " released exception lock\n", tcr);
+  fprintf(dbgout, "0x" LISP " released exception lock\n", tcr);
 #endif
 }
 
@@ -2688,7 +2688,7 @@ gc_from_tcr(TCR *tcr, signed_natural param)
   BytePtr oldend, newend;
 
 #if 0
-  fprintf(stderr, "Start GC  in 0x" LISP "\n", tcr);
+  fprintf(dbgout, "Start GC  in 0x" LISP "\n", tcr);
 #endif
   a = active_dynamic_area;
   oldend = a->high;
@@ -2697,7 +2697,7 @@ gc_from_tcr(TCR *tcr, signed_natural param)
   newfree = a->active;
   newend = a->high;
 #if 0
-  fprintf(stderr, "End GC  in 0x" LISP "\n", tcr);
+  fprintf(dbgout, "End GC  in 0x" LISP "\n", tcr);
 #endif
   return ((oldfree-newfree)+(newend-oldend));
 }
@@ -2870,7 +2870,7 @@ do_pseudo_sigreturn(mach_port_t thread, TCR *tcr)
   ExceptionInformation *xp;
 
 #ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(stderr, "doing pseudo_sigreturn for 0x%x\n",tcr);
+  fprintf(dbgout, "doing pseudo_sigreturn for 0x%x\n",tcr);
 #endif
   xp = tcr->pending_exception_context;
   if (xp) {
@@ -2882,7 +2882,7 @@ do_pseudo_sigreturn(mach_port_t thread, TCR *tcr)
     Bug(NULL, "no xp here!\n");
   }
 #ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(stderr, "did pseudo_sigreturn for 0x%x\n",tcr);
+  fprintf(dbgout, "did pseudo_sigreturn for 0x%x\n",tcr);
 #endif
   return KERN_SUCCESS;
 }  
@@ -3001,7 +3001,7 @@ setup_signal_frame(mach_port_t thread,
   siginfo_t *info;
 
 #ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(stderr,"Setting up exception handling for 0x%x\n", tcr);
+  fprintf(dbgout,"Setting up exception handling for 0x%x\n", tcr);
 #endif
   pseudosigcontext = create_thread_context_frame(thread, &stackp, &info, tcr,  ts);
   bzero(info, sizeof(*info));
@@ -3076,7 +3076,7 @@ setup_signal_frame(mach_port_t thread,
 		   x86_THREAD_STATE32_COUNT);
 #endif
 #ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(stderr,"Set up exception context for 0x%x at 0x%x\n", tcr, tcr->pending_exception_context);
+  fprintf(dbgout,"Set up exception context for 0x%x at 0x%x\n", tcr, tcr->pending_exception_context);
 #endif
   return 0;
 }
@@ -3143,7 +3143,7 @@ catch_exception_raise(mach_port_t exception_port,
 
 
 #ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(stderr, "obtaining Mach exception lock in exception thread\n");
+  fprintf(dbgout, "obtaining Mach exception lock in exception thread\n");
 #endif
 
 
@@ -3172,7 +3172,7 @@ catch_exception_raise(mach_port_t exception_port,
         ((natural)(ts_pc(ts)) == (natural)pseudo_sigreturn)) {
       kret = do_pseudo_sigreturn(thread, tcr);
 #if 0
-      fprintf(stderr, "Exception return in 0x%x\n",tcr);
+      fprintf(dbgout, "Exception return in 0x%x\n",tcr);
 #endif
     } else if (tcr->flags & (1<<TCR_FLAG_BIT_PROPAGATE_EXCEPTION)) {
       CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PROPAGATE_EXCEPTION);
@@ -3214,7 +3214,7 @@ catch_exception_raise(mach_port_t exception_port,
                                   tcr, 
                                   &ts);
 #if 0
-        fprintf(stderr, "Setup pseudosignal handling in 0x%x\n",tcr);
+        fprintf(dbgout, "Setup pseudosignal handling in 0x%x\n",tcr);
 #endif
         
       } else {
@@ -3254,10 +3254,10 @@ mach_exception_thread_shutdown()
 {
   kern_return_t kret;
 
-  fprintf(stderr, "terminating Mach exception thread, 'cause exit can't\n");
+  fprintf(dbgout, "terminating Mach exception thread, 'cause exit can't\n");
   kret = thread_terminate(mach_exception_thread);
   if (kret != KERN_SUCCESS) {
-    fprintf(stderr, "Couldn't terminate exception thread, kret = %d\n",kret);
+    fprintf(dbgout, "Couldn't terminate exception thread, kret = %d\n",kret);
   }
 }
 
@@ -3415,7 +3415,7 @@ darwin_exception_init(TCR *tcr)
 
   if ((kret = setup_mach_exception_handling(tcr))
       != KERN_SUCCESS) {
-    fprintf(stderr, "Couldn't setup exception handler - error = %d\n", kret);
+    fprintf(dbgout, "Couldn't setup exception handler - error = %d\n", kret);
     terminate_lisp();
   }
   lisp_global(LISP_EXIT_HOOK) = (LispObj) restore_foreign_exception_ports;
@@ -3458,7 +3458,7 @@ suspend_mach_thread(mach_port_t mach_thread)
       if (status == KERN_SUCCESS) {
         aborted = true;
       } else {
-        fprintf(stderr, "abort failed on thread = 0x%x\n",mach_thread);
+        fprintf(dbgout, "abort failed on thread = 0x%x\n",mach_thread);
         thread_resume(mach_thread);
       }
     } else {
@@ -3516,13 +3516,13 @@ mach_resume_tcr(TCR *tcr)
   
   xp = tcr->suspend_context;
 #ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(stderr, "resuming TCR 0x%x, pending_exception_context = 0x%x\n",
+  fprintf(dbgout, "resuming TCR 0x%x, pending_exception_context = 0x%x\n",
           tcr, tcr->pending_exception_context);
 #endif
   tcr->suspend_context = NULL;
   restore_mach_thread_state(mach_thread, xp);
 #ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(stderr, "restored state in TCR 0x%x, pending_exception_context = 0x%x\n",
+  fprintf(dbgout, "restored state in TCR 0x%x, pending_exception_context = 0x%x\n",
           tcr, tcr->pending_exception_context);
 #endif
   thread_resume(mach_thread);

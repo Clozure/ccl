@@ -1367,7 +1367,7 @@ mark_vstack_area(area *a)
     *end = (LispObj *) a->high;
 
 #if 0
-  fprintf(stderr, "mark VSP range: 0x" LISP ":0x" LISP "\n", start, end);
+  fprintf(dbgout, "mark VSP range: 0x" LISP ":0x" LISP "\n", start, end);
 #endif
   mark_headerless_area_range(start, end);
 }

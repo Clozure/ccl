@@ -177,7 +177,7 @@ ReserveMemoryForHeap(LogicalAddress want, natural totalsize)
 		       MEM_RESERVE,
 		       PAGE_NOACCESS);
   if (!start) {
-    fprintf(stderr, "Can't get desired heap address at 0x" LISP "\n", want);
+    fprintf(dbgout, "Can't get desired heap address at 0x" LISP "\n", want);
     start = VirtualAlloc(0,
 			 totalsize + heap_segment_size,
 			 MEM_RESERVE,
@@ -209,7 +209,7 @@ ReserveMemoryForHeap(LogicalAddress want, natural totalsize)
   mprotect(start, totalsize, PROT_NONE);
 #endif
 #if DEBUG_MEMORY
-  fprintf(stderr, "Reserving heap at 0x" LISP ", size 0x" LISP "\n", start, totalsize);
+  fprintf(dbgout, "Reserving heap at 0x" LISP ", size 0x" LISP "\n", start, totalsize);
 #endif
   return start;
 }
@@ -219,7 +219,7 @@ CommitMemory (LogicalAddress start, natural len)
 {
   LogicalAddress rc;
 #if DEBUG_MEMORY
-  fprintf(stderr, "Committing memory at 0x" LISP ", size 0x" LISP "\n", start, len);
+  fprintf(dbgout, "Committing memory at 0x" LISP ", size 0x" LISP "\n", start, len);
 #endif
 #ifdef WINDOWS
   if ((start < ((LogicalAddress)nil_value)) &&
@@ -257,7 +257,7 @@ CommitMemory (LogicalAddress start, natural len)
 void
 UnCommitMemory (LogicalAddress start, natural len) {
 #if DEBUG_MEMORY
-  fprintf(stderr, "Uncommitting memory at 0x" LISP ", size 0x" LISP "\n", start, len);
+  fprintf(dbgout, "Uncommitting memory at 0x" LISP ", size 0x" LISP "\n", start, len);
 #endif
 #ifdef WINDOWS
   int rc = VirtualFree(start, len, MEM_DECOMMIT);
@@ -273,7 +273,7 @@ UnCommitMemory (LogicalAddress start, natural len) {
 	!= start) {
       int err = errno;
       Fatal("mmap error", "");
-      fprintf(stderr, "errno = %d", err);
+      fprintf(dbgout, "errno = %d", err);
     }
   }
 #endif
@@ -284,7 +284,7 @@ LogicalAddress
 MapMemory(LogicalAddress addr, natural nbytes, int protection)
 {
 #if DEBUG_MEMORY
-  fprintf(stderr, "Mapping memory at 0x" LISP ", size 0x" LISP "\n", addr, nbytes);
+  fprintf(dbgout, "Mapping memory at 0x" LISP ", size 0x" LISP "\n", addr, nbytes);
 #endif
 #ifdef WINDOWS
   return VirtualAlloc(addr, nbytes, MEM_RESERVE|MEM_COMMIT, MEMPROTECT_RWX);
@@ -297,7 +297,7 @@ LogicalAddress
 MapMemoryForStack(natural nbytes)
 {
 #if DEBUG_MEMORY
-  fprintf(stderr, "Mapping stack of size 0x" LISP "\n", nbytes);
+  fprintf(dbgout, "Mapping stack of size 0x" LISP "\n", nbytes);
 #endif
 #ifdef WINDOWS
   return VirtualAlloc(0, nbytes, MEM_RESERVE|MEM_COMMIT, MEMPROTECT_RWX);
@@ -310,7 +310,7 @@ int
 UnMapMemory(LogicalAddress addr, natural nbytes)
 {
 #if DEBUG_MEMORY
-  fprintf(stderr, "Unmapping memory at 0x" LISP ", size 0x" LISP "\n", addr, nbytes);
+  fprintf(dbgout, "Unmapping memory at 0x" LISP ", size 0x" LISP "\n", addr, nbytes);
 #endif
 #ifdef WINDOWS
   /* Can't MEM_RELEASE here because we only want to free a chunk */
@@ -324,7 +324,7 @@ int
 ProtectMemory(LogicalAddress addr, natural nbytes)
 {
 #if DEBUG_MEMORY
-  fprintf(stderr, "Protecting memory at 0x" LISP ", size 0x" LISP "\n", addr, nbytes);
+  fprintf(dbgout, "Protecting memory at 0x" LISP ", size 0x" LISP "\n", addr, nbytes);
 #endif
 #ifdef WINDOWS
   DWORD oldProtect;
@@ -350,7 +350,7 @@ int
 UnProtectMemory(LogicalAddress addr, natural nbytes)
 {
 #if DEBUG_MEMORY
-  fprintf(stderr, "Unprotecting memory at 0x" LISP ", size 0x" LISP "\n", addr, nbytes);
+  fprintf(dbgout, "Unprotecting memory at 0x" LISP ", size 0x" LISP "\n", addr, nbytes);
 #endif
 #ifdef WINDOWS
   DWORD oldProtect;
@@ -403,7 +403,7 @@ MapFile(LogicalAddress addr, natural pos, natural nbytes, int permissions, int f
   while (total < nbytes) {
     count = read(fd, addr + total, nbytes - total);
     total += count;
-    // fprintf(stderr, "read " DECIMAL " bytes, for a total of " DECIMAL " out of " DECIMAL " so far\n", count, total, nbytes);
+    // fprintf(dbgout, "read " DECIMAL " bytes, for a total of " DECIMAL " out of " DECIMAL " so far\n", count, total, nbytes);
     if (!(count > 0))
       return false;
   }

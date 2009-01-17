@@ -1071,7 +1071,7 @@ mark_vstack_area(area *a)
     *end = (LispObj *) a->high;
 
 #if 0
-  fprintf(stderr, "mark VSP range: 0x%lx:0x%lx\n", start, end);
+  fprintf(dbgout, "mark VSP range: 0x%lx:0x%lx\n", start, end);
 #endif
   if (((natural)start) & (sizeof(natural))) {
     /* Odd number of words.  Mark the first (can't be a header) */
@@ -1422,7 +1422,7 @@ forward_vstack_area(area *a)
     *q = (LispObj *) a->high;
 
 #ifdef DEBUG
-  fprintf(stderr,"Forward range 0x%x/0x%x (owner 0x%x)\n",p,q,a->owner);
+  fprintf(dbgout,"Forward range 0x%x/0x%x (owner 0x%x)\n",p,q,a->owner);
 #endif
   if (((natural)p) & sizeof(natural)) {
     update_noderef(p);

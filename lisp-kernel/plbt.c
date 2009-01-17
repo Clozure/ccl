@@ -104,7 +104,7 @@ darwin_dladdr(void *p, Dl_info *info)
       unsigned long diff = 0xffffffff;
       unsigned long strtable = (unsigned long)(((struct symtab_command *)lc)->stroff + table_off);
       for (i = 0; i < numsyms; i++) {
-	/* fprintf(stderr,"%s : 0x%08x, 0x%x\n",(char *)(strtable + symtable->n_un.n_strx) ,symtable->n_value, symtable->n_type); */
+	/* fprintf(dbgout,"%s : 0x%08x, 0x%x\n",(char *)(strtable + symtable->n_un.n_strx) ,symtable->n_value, symtable->n_type); */
 	/* Ignore the following kinds of Symbols */
 	if ((!symtable->n_value)	/* Undefined */
 	    || (symtable->n_type & N_STAB)	/* Debug symbol */
@@ -253,7 +253,7 @@ walk_stack_frames(lisp_frame *start, lisp_frame *end)
       next = end;
     }
     if (next < start) {
-      fprintf(stderr, "Bad frame! (%x < %x)\n", next, start);
+      fprintf(dbgout, "Bad frame! (%x < %x)\n", next, start);
       break;
     }
     start = next;
@@ -303,7 +303,7 @@ plbt_sp(LispObj currentSP)
         (((LispObj) ptr_to_lispobj(cs_area->high)) < currentSP)) {
       Dprintf("\nStack pointer [#x%lX] in unknown area.", currentSP);
     } else {
-      fprintf(stderr, "current thread: tcr = 0x%lx, native thread ID = 0x%lx, interrupts %s\n", tcr, tcr->native_thread_id, ilevel);
+      fprintf(dbgout, "current thread: tcr = 0x%lx, native thread ID = 0x%lx, interrupts %s\n", tcr, tcr->native_thread_id, ilevel);
       walk_stack_frames((lisp_frame *) ptr_from_lispobj(currentSP), (lisp_frame *) (cs_area->high));
       walk_other_areas();
     }

@@ -104,7 +104,7 @@ walk_stack_frames(lisp_frame *start, lisp_frame *end)
       print_lisp_frame(start);
     } else {
       if (start->backlink) {
-        fprintf(stderr, "Bogus  frame %lx\n", start);
+        fprintf(dbgout, "Bogus  frame %lx\n", start);
       }
       return;
     }
@@ -114,7 +114,7 @@ walk_stack_frames(lisp_frame *start, lisp_frame *end)
       next = end;
     }
     if (next < start) {
-      fprintf(stderr, "Bad frame! (%x < %x)\n", next, start);
+      fprintf(dbgout, "Bad frame! (%x < %x)\n", next, start);
       break;
     }
     start = next;
@@ -158,7 +158,7 @@ plbt_sp(LispObj currentRBP)
         (((LispObj) ptr_to_lispobj(vs_area->high)) < currentRBP)) {
       Dprintf("\nFramepointer [#x%lX] in unknown area.", currentRBP);
     } else {
-      fprintf(stderr, "current thread: tcr = 0x%lx, native thread ID = 0x%lx, interrupts %s\n", tcr, tcr->native_thread_id, ilevel);
+      fprintf(dbgout, "current thread: tcr = 0x%lx, native thread ID = 0x%lx, interrupts %s\n", tcr, tcr->native_thread_id, ilevel);
       walk_stack_frames((lisp_frame *) ptr_from_lispobj(currentRBP), (lisp_frame *) (vs_area->high));
       /*      walk_other_areas();*/
     }

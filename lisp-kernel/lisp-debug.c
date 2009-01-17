@@ -33,6 +33,7 @@
 #endif
 #include <sys/stat.h>
 
+FILE *dbgout = stderr;
 
 typedef enum {
   debug_continue,		/* stay in the repl */
@@ -41,6 +42,21 @@ typedef enum {
   debug_kill
 } debug_command_return;
 
+
+Boolean
+open_debug_output(int fd)
+{
+  FILE *f = fdopen(fd, "w");
+  
+  if (f) {
+    if (setvbuf(f, NULL, _IONBF, 0) == 0) {
+      dbgout = f;
+      return true;
+    }
+    fclose(f);
+  }
+  return false;
+}
 
 
 typedef debug_command_return (*debug_command) (ExceptionInformation *,
@@ -221,10 +237,10 @@ show_lisp_register(ExceptionInformation *xp, char *label, int r)
   LispObj val = xpGPR(xp, r);
 
 #ifdef PPC
-  fprintf(stderr, "r%02d (%s) = %s\n", r, label, print_lisp_object(val));
+  fprintf(dbgout, "r%02d (%s) = %s\n", r, label, print_lisp_object(val));
 #endif
 #ifdef X8664
-  fprintf(stderr, "%%%s (%s) = %s\n",Iregnames[r], label, print_lisp_object(val));
+  fprintf(dbgout, "%%%s (%s) = %s\n",Iregnames[r], label, print_lisp_object(val));
 #endif
 #ifdef X8632
   {
@@ -238,7 +254,7 @@ show_lisp_register(ExceptionInformation *xp, char *label, int r)
     else
       s = print_lisp_object(val);
 
-    fprintf(stderr, "%%%s (%s) = %s\n", Iregnames[r], label, s);
+    fprintf(dbgout, "%%%s (%s) = %s\n", Iregnames[r], label, s);
   }
 #endif
 
@@ -252,7 +268,7 @@ describe_memfault(ExceptionInformation *xp, siginfo_t *info)
   void *addr = (void *)xpDAR(xp);
   natural dsisr = xpDSISR(xp);
 
-  fprintf(stderr, "%s operation to %s address 0x%lx\n",
+  fprintf(dbgout, "%s operation to %s address 0x%lx\n",
 	  dsisr & (1<<25) ? "Write" : "Read",
 	  dsisr & (1<<27) ? "protected" : "unmapped",
 	  addr);
@@ -276,13 +292,13 @@ describe_ppc_illegal(ExceptionInformation *xp)
     case UUO_INTERR:
       switch (errnum) {
       case error_udf_call:
-        fprintf(stderr, "ERROR: undefined function call: %s\n",
+        fprintf(dbgout, "ERROR: undefined function call: %s\n",
                 print_lisp_object(xpGPR(xp,fname)));
         described = true;
         break;
         
       default:
-        fprintf(stderr, "ERROR: lisp error %d\n", errnum);
+        fprintf(dbgout, "ERROR: lisp error %d\n", errnum);
         described = true;
         break;
       }
@@ -293,7 +309,7 @@ describe_ppc_illegal(ExceptionInformation *xp)
     }
   }
   if (!described) {
-    fprintf(stderr, "Illegal instruction (0x%08x) at 0x%lx\n",
+    fprintf(dbgout, "Illegal instruction (0x%08x) at 0x%lx\n",
             the_uuo, where);
   }
 }
@@ -318,25 +334,25 @@ describe_ppc_trap(ExceptionInformation *xp)
       switch (TO_field(the_trap)) {
       case TO_NE:
 	if (xpGPR(xp, nargs) < D_field(the_trap)) {
-	  fprintf(stderr, "Too few arguments (no opt/rest)\n");
+	  fprintf(dbgout, "Too few arguments (no opt/rest)\n");
 	} else {
-	  fprintf(stderr, "Too many arguments (no opt/rest)\n");
+	  fprintf(dbgout, "Too many arguments (no opt/rest)\n");
 	}
 	identified = true;
 	break;
 	
       case TO_GT:
-	fprintf(stderr, "Event poll !\n");
+	fprintf(dbgout, "Event poll !\n");
 	identified = true;
 	break;
 	
       case TO_HI:
-	fprintf(stderr, "Too many arguments (with opt)\n");
+	fprintf(dbgout, "Too many arguments (with opt)\n");
 	identified = true;
 	break;
 	
       case TO_LT:
-	fprintf(stderr, "Too few arguments (with opt/rest/key)\n");
+	fprintf(dbgout, "Too few arguments (with opt/rest/key)\n");
 	identified = true;
 	break;
 	
@@ -371,7 +387,7 @@ describe_ppc_trap(ExceptionInformation *xp)
 	  if (instr) {
 	    ra = RA_field(instr);
 	    if (lisp_reg_p(ra)) {
-	      fprintf(stderr, "Unbound variable: %s\n",
+	      fprintf(dbgout, "Unbound variable: %s\n",
 		      print_lisp_object(xpGPR(xp,ra)));
 	      identified = true;	
 	    }
@@ -399,7 +415,7 @@ describe_ppc_trap(ExceptionInformation *xp)
 	  if (instr) {
 	    ra = RA_field(instr);
 	    if (lisp_reg_p(ra)) {
-	      fprintf(stderr, "value 0x%lX is not of the expected header type 0x%02X\n", xpGPR(xp, ra), err_arg2);
+	      fprintf(dbgout, "value 0x%lX is not of the expected header type 0x%02X\n", xpGPR(xp, ra), err_arg2);
 	      identified = true;
 	    }
 	  }
@@ -411,7 +427,7 @@ describe_ppc_trap(ExceptionInformation *xp)
 	  if (instr) {
 	    rs = RS_field(instr);
 	    if (lisp_reg_p(rs)) {
-	      fprintf(stderr, "value 0x%lX is not of the expected type 0x%02X\n",
+	      fprintf(dbgout, "value 0x%lX is not of the expected type 0x%02X\n",
 		      xpGPR(xp, rs), err_arg2);
 	      identified = true;
 	    }
@@ -430,7 +446,7 @@ describe_ppc_trap(ExceptionInformation *xp)
     switch (TO_field(the_trap)) {
     case TO_LO:
       if (RA_field(the_trap) == sp) {
-	fprintf(stderr, "Stack overflow! Run away! Run away!\n");
+	fprintf(dbgout, "Stack overflow! Run away! Run away!\n");
 	identified = true;
       }
       break;
@@ -442,7 +458,7 @@ describe_ppc_trap(ExceptionInformation *xp)
       if (instr) {
 	ra = RA_field(instr);
 	if (lisp_reg_p(ra)) {
-	  fprintf(stderr, "Bad index %d for vector %lX length %d\n",
+	  fprintf(dbgout, "Bad index %d for vector %lX length %d\n",
 		  unbox_fixnum(xpGPR(xp, RA_field(the_trap))),
 		  xpGPR(xp, ra),
 		  unbox_fixnum(xpGPR(xp, RB_field(the_trap))));
@@ -454,7 +470,7 @@ describe_ppc_trap(ExceptionInformation *xp)
   }
 
   if (!identified) {
-    fprintf(stderr, "Unknown trap: 0x%08x\n", the_trap);
+    fprintf(dbgout, "Unknown trap: 0x%08x\n", the_trap);
   }
 
 
@@ -468,11 +484,11 @@ debug_lisp_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
 #ifdef PPC
     TCR *xpcontext = (TCR *)ptr_from_lispobj(xpGPR(xp, rcontext));
 
-    fprintf(stderr, "rcontext = 0x%lX ", xpcontext);
+    fprintf(dbgout, "rcontext = 0x%lX ", xpcontext);
     if (!active_tcr_p(xpcontext)) {
-      fprintf(stderr, "(INVALID)\n");
+      fprintf(dbgout, "(INVALID)\n");
     } else {
-      fprintf(stderr, "\nnargs = %d\n", xpGPR(xp, nargs) >> fixnumshift);
+      fprintf(dbgout, "\nnargs = %d\n", xpGPR(xp, nargs) >> fixnumshift);
       show_lisp_register(xp, "fn", fn);
       show_lisp_register(xp, "arg_z", arg_z);
       show_lisp_register(xp, "arg_y", arg_y);
@@ -497,20 +513,20 @@ debug_lisp_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
     show_lisp_register(xp, "arg_z", Iarg_z);
     show_lisp_register(xp, "arg_y", Iarg_y);
     show_lisp_register(xp, "arg_x", Iarg_x);
-    fprintf(stderr,"------\n");
+    fprintf(dbgout,"------\n");
     show_lisp_register(xp, "fn", Ifn);
-    fprintf(stderr,"------\n");
+    fprintf(dbgout,"------\n");
     show_lisp_register(xp, "save0", Isave0);
     show_lisp_register(xp, "save1", Isave1);
     show_lisp_register(xp, "save2", Isave2);
     show_lisp_register(xp, "save3", Isave3);
-    fprintf(stderr,"------\n");
+    fprintf(dbgout,"------\n");
     show_lisp_register(xp, "temp0", Itemp0);
     show_lisp_register(xp, "temp1", Itemp1);
     show_lisp_register(xp, "temp2", Itemp2);
-    fprintf(stderr,"------\n");
+    fprintf(dbgout,"------\n");
     if (tag_of(xpGPR(xp,Inargs)) == tag_fixnum) {
-      fprintf(stderr,"%%rcx (nargs) = %ld (maybe)\n", unbox_fixnum(xpGPR(xp,Inargs)&0xffff));
+      fprintf(dbgout,"%%rcx (nargs) = %ld (maybe)\n", unbox_fixnum(xpGPR(xp,Inargs)&0xffff));
     }
 #endif
   }
@@ -518,14 +534,14 @@ debug_lisp_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
 #ifdef X8632
   show_lisp_register(xp, "arg_z", Iarg_z);
   show_lisp_register(xp, "arg_y", Iarg_y);
-  fprintf(stderr,"------\n");
+  fprintf(dbgout,"------\n");
   show_lisp_register(xp, "fn", Ifn);
-  fprintf(stderr,"------\n");
+  fprintf(dbgout,"------\n");
   show_lisp_register(xp, "temp0", Itemp0);
   show_lisp_register(xp, "temp1", Itemp1);
-  fprintf(stderr,"------\n");
+  fprintf(dbgout,"------\n");
   if (tag_of(xpGPR(xp,Inargs)) == tag_fixnum) {
-    fprintf(stderr,"%%edx (nargs) = %d (maybe)\n", unbox_fixnum(xpGPR(xp,Inargs)));
+    fprintf(dbgout,"%%edx (nargs) = %d (maybe)\n", unbox_fixnum(xpGPR(xp,Inargs)));
   }
 #endif
   
@@ -578,7 +594,7 @@ debug_get_string_value(char *prompt)
 
   do {
     fpurge(stdin);
-    fprintf(stderr, "\n %s :",prompt);
+    fprintf(dbgout, "\n %s :",prompt);
     buf[0] = 0;
     res = fgets(buf, sizeof(buf), stdin);
   } while (0);
@@ -599,7 +615,7 @@ debug_get_natural_value(char *prompt)
 
   do {
     fpurge(stdin);
-    fprintf(stderr, "\n  %s :", prompt);
+    fprintf(dbgout, "\n  %s :", prompt);
     s[0]=0;
     res = fgets(s, 24, stdin);
     n = sscanf(s, "%lu", &val);
@@ -616,7 +632,7 @@ debug_get_u5_value(char *prompt)
 
   do {
     fpurge(stdin);
-    fprintf(stderr, "\n  %s :", prompt);
+    fprintf(dbgout, "\n  %s :", prompt);
     res = fgets(s, 24, stdin);
     n = sscanf(res, "%i", &val);
   } while ((n != 1) || (val > 31));
@@ -643,12 +659,12 @@ debug_thread_info(ExceptionInformation *xp, siginfo_t *info, int arg)
   if (tcr) {
     area *vs_area = tcr->vs_area, *cs_area = tcr->cs_area;
 
-    fprintf(stderr, "Current Thread Context Record (tcr) = 0x" LISP "\n", tcr);
-    fprintf(stderr, "Control (C) stack area:  low = 0x" LISP ", high = 0x" LISP "\n",
+    fprintf(dbgout, "Current Thread Context Record (tcr) = 0x" LISP "\n", tcr);
+    fprintf(dbgout, "Control (C) stack area:  low = 0x" LISP ", high = 0x" LISP "\n",
             (cs_area->low), (cs_area->high));
-    fprintf(stderr, "Value (lisp) stack area: low = 0x" LISP ", high = 0x" LISP "\n",
+    fprintf(dbgout, "Value (lisp) stack area: low = 0x" LISP ", high = 0x" LISP "\n",
             (u64_t)(natural)(vs_area->low), (u64_t)(natural)vs_area->high);
-    fprintf(stderr, "Exception stack pointer = 0x" LISP "\n",
+    fprintf(dbgout, "Exception stack pointer = 0x" LISP "\n",
 #ifdef PPC
             (u64_t) (natural)(xpGPR(xp,1))
 #endif
@@ -681,45 +697,45 @@ debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
 #ifdef PPC64
   int a, b;
   for (a = 0, b = 16; a < 16; a++, b++) {
-    fprintf(stderr,"r%02d = 0x%016lX    r%02d = 0x%016lX\n",
+    fprintf(dbgout,"r%02d = 0x%016lX    r%02d = 0x%016lX\n",
 	    a, xpGPR(xp, a),
 	    b, xpGPR(xp, b));
   }
   
-  fprintf(stderr, "\n PC = 0x%016lX     LR = 0x%016lX\n",
+  fprintf(dbgout, "\n PC = 0x%016lX     LR = 0x%016lX\n",
           xpPC(xp), xpLR(xp));
-  fprintf(stderr, "CTR = 0x%016lX    CCR = 0x%08X\n",
+  fprintf(dbgout, "CTR = 0x%016lX    CCR = 0x%08X\n",
           xpCTR(xp), xpCCR(xp));
-  fprintf(stderr, "XER = 0x%08X            MSR = 0x%016lX\n",
+  fprintf(dbgout, "XER = 0x%08X            MSR = 0x%016lX\n",
           xpXER(xp), xpMSR(xp));
-  fprintf(stderr,"DAR = 0x%016lX  DSISR = 0x%08X\n",
+  fprintf(dbgout,"DAR = 0x%016lX  DSISR = 0x%08X\n",
 	  xpDAR(xp), xpDSISR(xp));
 #else
   int a, b, c, d;;
   for (a = 0, b = 8, c = 16, d = 24; a < 8; a++, b++, c++, d++) {
-    fprintf(stderr,"r%02d = 0x%08X  r%02d = 0x%08X  r%02d = 0x%08X  r%02d = 0x%08X\n",
+    fprintf(dbgout,"r%02d = 0x%08X  r%02d = 0x%08X  r%02d = 0x%08X  r%02d = 0x%08X\n",
 	    a, xpGPR(xp, a),
 	    b, xpGPR(xp, b),
 	    c, xpGPR(xp, c),
 	    d, xpGPR(xp, d));
   }
-  fprintf(stderr, "\n PC = 0x%08X   LR = 0x%08X  CTR = 0x%08X  CCR = 0x%08X\n",
+  fprintf(dbgout, "\n PC = 0x%08X   LR = 0x%08X  CTR = 0x%08X  CCR = 0x%08X\n",
 	  xpPC(xp), xpLR(xp), xpCTR(xp), xpCCR(xp));
-  fprintf(stderr, "XER = 0x%08X  MSR = 0x%08X  DAR = 0x%08X  DSISR = 0x%08X\n",
+  fprintf(dbgout, "XER = 0x%08X  MSR = 0x%08X  DAR = 0x%08X  DSISR = 0x%08X\n",
 	  xpXER(xp), xpMSR(xp), xpDAR(xp), xpDSISR(xp));
 #endif
 #endif
 
 #ifdef X8664
-  fprintf(stderr,"%%rax = 0x" ZLISP "      %%r8  = 0x" ZLISP "\n", xpGPR(xp,REG_RAX),xpGPR(xp,REG_R8));
-  fprintf(stderr,"%%rcx = 0x" ZLISP "      %%r9  = 0x" ZLISP "\n", xpGPR(xp,REG_RCX),xpGPR(xp,REG_R9));
-  fprintf(stderr,"%%rdx = 0x" ZLISP "      %%r10 = 0x" ZLISP "\n", xpGPR(xp,REG_RDX),xpGPR(xp,REG_R10));
-  fprintf(stderr,"%%rbx = 0x" ZLISP "      %%r11 = 0x" ZLISP "\n", xpGPR(xp,REG_RBX),xpGPR(xp,REG_R11));
-  fprintf(stderr,"%%rsp = 0x" ZLISP "      %%r12 = 0x" ZLISP "\n", xpGPR(xp,REG_RSP),xpGPR(xp,REG_R12));
-  fprintf(stderr,"%%rbp = 0x" ZLISP "      %%r13 = 0x" ZLISP "\n", xpGPR(xp,REG_RBP),xpGPR(xp,REG_R13));
-  fprintf(stderr,"%%rsi = 0x" ZLISP "      %%r14 = 0x" ZLISP "\n", xpGPR(xp,REG_RSI),xpGPR(xp,REG_R14));
-  fprintf(stderr,"%%rdi = 0x" ZLISP "      %%r15 = 0x" ZLISP "\n", xpGPR(xp,REG_RDI),xpGPR(xp,REG_R15));
-  fprintf(stderr,"%%rip = 0x" ZLISP "   %%rflags = 0x%08lx\n",
+  fprintf(dbgout,"%%rax = 0x" ZLISP "      %%r8  = 0x" ZLISP "\n", xpGPR(xp,REG_RAX),xpGPR(xp,REG_R8));
+  fprintf(dbgout,"%%rcx = 0x" ZLISP "      %%r9  = 0x" ZLISP "\n", xpGPR(xp,REG_RCX),xpGPR(xp,REG_R9));
+  fprintf(dbgout,"%%rdx = 0x" ZLISP "      %%r10 = 0x" ZLISP "\n", xpGPR(xp,REG_RDX),xpGPR(xp,REG_R10));
+  fprintf(dbgout,"%%rbx = 0x" ZLISP "      %%r11 = 0x" ZLISP "\n", xpGPR(xp,REG_RBX),xpGPR(xp,REG_R11));
+  fprintf(dbgout,"%%rsp = 0x" ZLISP "      %%r12 = 0x" ZLISP "\n", xpGPR(xp,REG_RSP),xpGPR(xp,REG_R12));
+  fprintf(dbgout,"%%rbp = 0x" ZLISP "      %%r13 = 0x" ZLISP "\n", xpGPR(xp,REG_RBP),xpGPR(xp,REG_R13));
+  fprintf(dbgout,"%%rsi = 0x" ZLISP "      %%r14 = 0x" ZLISP "\n", xpGPR(xp,REG_RSI),xpGPR(xp,REG_R14));
+  fprintf(dbgout,"%%rdi = 0x" ZLISP "      %%r15 = 0x" ZLISP "\n", xpGPR(xp,REG_RDI),xpGPR(xp,REG_R15));
+  fprintf(dbgout,"%%rip = 0x" ZLISP "   %%rflags = 0x%08lx\n",
 	  xpGPR(xp, Iip), eflags_register(xp));
 #endif
 
@@ -773,24 +789,24 @@ debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
 
 
 
-  fprintf(stderr, "%%eax = 0x" ZLISP "\n", xpGPR(xp, REG_EAX));
-  fprintf(stderr, "%%ecx = 0x" ZLISP "\n", xpGPR(xp, REG_ECX));
-  fprintf(stderr, "%%edx = 0x" ZLISP "\n", xpGPR(xp, REG_EDX));
-  fprintf(stderr, "%%ebx = 0x" ZLISP "\n", xpGPR(xp, REG_EBX));
-  fprintf(stderr, "%%esp = 0x" ZLISP "\n", xpGPR(xp, REG_ESP));
-  fprintf(stderr, "%%ebp = 0x" ZLISP "\n", xpGPR(xp, REG_EBP));
-  fprintf(stderr, "%%esi = 0x" ZLISP "\n", xpGPR(xp, REG_ESI));
-  fprintf(stderr, "%%edi = 0x" ZLISP "\n", xpGPR(xp, REG_EDI));
-  fprintf(stderr, "%%eip = 0x" ZLISP "\n", xpGPR(xp, REG_EIP));
-  fprintf(stderr, "%%eflags = 0x" ZLISP "\n", xpGPR(xp, REG_EFL));
+  fprintf(dbgout, "%%eax = 0x" ZLISP "\n", xpGPR(xp, REG_EAX));
+  fprintf(dbgout, "%%ecx = 0x" ZLISP "\n", xpGPR(xp, REG_ECX));
+  fprintf(dbgout, "%%edx = 0x" ZLISP "\n", xpGPR(xp, REG_EDX));
+  fprintf(dbgout, "%%ebx = 0x" ZLISP "\n", xpGPR(xp, REG_EBX));
+  fprintf(dbgout, "%%esp = 0x" ZLISP "\n", xpGPR(xp, REG_ESP));
+  fprintf(dbgout, "%%ebp = 0x" ZLISP "\n", xpGPR(xp, REG_EBP));
+  fprintf(dbgout, "%%esi = 0x" ZLISP "\n", xpGPR(xp, REG_ESI));
+  fprintf(dbgout, "%%edi = 0x" ZLISP "\n", xpGPR(xp, REG_EDI));
+  fprintf(dbgout, "%%eip = 0x" ZLISP "\n", xpGPR(xp, REG_EIP));
+  fprintf(dbgout, "%%eflags = 0x" ZLISP "\n", xpGPR(xp, REG_EFL));
 #ifdef DEBUG_SHOW_X86_SEGMENT_REGISTERS
-  fprintf(stderr,"\n");
-  fprintf(stderr, "%%cs = 0x%04x\n", rcs);
-  fprintf(stderr, "%%ds = 0x%04x\n", rds);
-  fprintf(stderr, "%%ss = 0x%04x\n", rss);
-  fprintf(stderr, "%%es = 0x%04x\n", res);
-  fprintf(stderr, "%%fs = 0x%04x\n", rfs);
-  fprintf(stderr, "%%gs = 0x%04x\n", rgs);
+  fprintf(dbgout,"\n");
+  fprintf(dbgout, "%%cs = 0x%04x\n", rcs);
+  fprintf(dbgout, "%%ds = 0x%04x\n", rds);
+  fprintf(dbgout, "%%ss = 0x%04x\n", rss);
+  fprintf(dbgout, "%%es = 0x%04x\n", res);
+  fprintf(dbgout, "%%fs = 0x%04x\n", rfs);
+  fprintf(dbgout, "%%gs = 0x%04x\n", rgs);
 
 #endif
 
@@ -809,9 +825,9 @@ debug_show_fpu(ExceptionInformation *xp, siginfo_t *info, int arg)
   np = (int *) dp;
   
   for (i = 0; i < 32; i++, np+=2) {
-    fprintf(stderr, "f%02d : 0x%08X%08X (%f)\n", i,  np[0], np[1], *dp++);
+    fprintf(dbgout, "f%02d : 0x%08X%08X (%f)\n", i,  np[0], np[1], *dp++);
   }
-  fprintf(stderr, "FPSCR = %08X\n", xpFPSCR(xp));
+  fprintf(dbgout, "FPSCR = %08X\n", xpFPSCR(xp));
 #endif
 #ifdef X8664
 #ifdef LINUX
@@ -842,9 +858,9 @@ debug_show_fpu(ExceptionInformation *xp, siginfo_t *info, int arg)
     sp = (float *) xmmp;
     dp = (double *) xmmp;
     np = (int *) xmmp;
-    fprintf(stderr, "f%02d: 0x%08x (%e), 0x%08x%08x (%e)\n", i, *np, (double)(*sp), np[1], np[0], *dp);
+    fprintf(dbgout, "f%02d: 0x%08x (%e), 0x%08x%08x (%e)\n", i, *np, (double)(*sp), np[1], np[0], *dp);
   }
-  fprintf(stderr, "mxcsr = 0x%08x\n",
+  fprintf(dbgout, "mxcsr = 0x%08x\n",
 #ifdef LINUX
           xp->uc_mcontext.fpregs->mxcsr
 #endif
@@ -873,10 +889,10 @@ debug_show_fpu(ExceptionInformation *xp, siginfo_t *info, int arg)
     float *sp = (float *)xmmp;
     dp = (double *)xmmp;
     np = (int *)xmmp;
-    fprintf(stderr, "f%1d: 0x%08x (%e), 0x%08x%08x (%e)\n", i, *np,
+    fprintf(dbgout, "f%1d: 0x%08x (%e), 0x%08x%08x (%e)\n", i, *np,
 	    (double)(*sp), np[1], np[0], *dp);
   }
-  fprintf(stderr, "mxcsr = 0x%08x\n", UC_MCONTEXT(xp)->__fs.__fpu_mxcsr);
+  fprintf(dbgout, "mxcsr = 0x%08x\n", UC_MCONTEXT(xp)->__fs.__fpu_mxcsr);
 #endif
 #endif
 
@@ -905,7 +921,7 @@ debug_help(ExceptionInformation *xp, siginfo_t *info, int arg) {
   for (entry = debug_command_entries; entry->f; entry++) {
     /* If we have an XP or don't need one, call the function */
     if (xp || !(entry->flags & DEBUG_COMMAND_FLAG_REQUIRE_XP)) {
-      fprintf(stderr, "(%c)  %s\n", entry->c, entry->help_text);
+      fprintf(dbgout, "(%c)  %s\n", entry->c, entry->help_text);
     }
   }
   return debug_continue;
@@ -1070,17 +1086,17 @@ debug_identify_function(ExceptionInformation *xp, siginfo_t *info)
         codev =  register_codevector_contains_pc(f, where);
       }
       if (codev) {
-        fprintf(stderr, " While executing: %s\n", print_lisp_object(f));
+        fprintf(dbgout, " While executing: %s\n", print_lisp_object(f));
       }
     } else {
       int disp;
       char *foreign_name;
       natural where = (natural)xpPC(xp);
 
-      fprintf(stderr, " In foreign code at address 0x" ZLISP "\n", where);
+      fprintf(dbgout, " In foreign code at address 0x" ZLISP "\n", where);
       foreign_name = foreign_name_and_offset(where, &disp);
       if (foreign_name) {
-        fprintf(stderr, "  [%s + %d]\n", foreign_name, disp);
+        fprintf(dbgout, "  [%s + %d]\n", foreign_name, disp);
       }
     }
   }
@@ -1104,8 +1120,8 @@ lisp_Debugger(ExceptionInformation *xp,
   debug_command_return state = debug_continue;
 
   va_start(args,message);
-  vfprintf(stderr, message, args);
-  fprintf(stderr, "\n");
+  vfprintf(dbgout, message, args);
+  fprintf(dbgout, "\n");
   va_end(args);
   
 
@@ -1122,10 +1138,10 @@ lisp_Debugger(ExceptionInformation *xp,
   if (in_foreign_code) {    
     char *foreign_name;
     int disp;
-    fprintf(stderr, "Exception occurred while executing foreign code\n");
+    fprintf(dbgout, "Exception occurred while executing foreign code\n");
     foreign_name = foreign_name_and_offset((natural)xpPC(xp), &disp);
     if (foreign_name) {
-      fprintf(stderr, " at %s + %d\n", foreign_name, disp);
+      fprintf(dbgout, " at %s + %d\n", foreign_name, disp);
     }
   }
 
@@ -1138,12 +1154,12 @@ lisp_Debugger(ExceptionInformation *xp,
     }
     debug_identify_function(xp, info);
   }
-  fprintf(stderr, "? for help\n");
+  fprintf(dbgout, "? for help\n");
   while (state == debug_continue) {
 #ifdef WINDOWS
-    fprintf(stderr, "[%d] Clozure CL kernel debugger: ", (int)GetCurrentProcessId());
+    fprintf(dbgout, "[%d] Clozure CL kernel debugger: ", (int)GetCurrentProcessId());
 #else
-    fprintf(stderr, "[%d] Clozure CL kernel debugger: ", main_thread_pid);
+    fprintf(dbgout, "[%d] Clozure CL kernel debugger: ", main_thread_pid);
 #endif
     state = apply_debug_command(xp, readc(), info, why);
   }

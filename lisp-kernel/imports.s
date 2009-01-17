@@ -50,7 +50,7 @@ import_ptrs_start:
 	defimport(jvm_init)
 	defimport(allocate_vstack_holding_area_lock)
 	defimport(register_cstack_holding_area_lock)
-	defimport(raise_thread_interrupt)
+	defimport(open_debug_output)
 	defimport(get_r_debug)
 	defimport(restore_soft_stack_limit)
 	defimport(lisp_egc_control)

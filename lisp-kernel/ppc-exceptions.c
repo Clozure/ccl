@@ -251,7 +251,7 @@ allocate_object(ExceptionInformation *xp,
   if (new_heap_segment(xp, bytes_needed, false, tcr)) {
     xpGPR(xp, allocptr) += disp_from_allocptr;
 #ifdef DEBUG
-    fprintf(stderr, "New heap segment for #x%x, no GC: #x%x/#x%x, vsp = #x%x\n",
+    fprintf(dbgout, "New heap segment for #x%x, no GC: #x%x/#x%x, vsp = #x%x\n",
             tcr,xpGPR(xp,allocbase),tcr->last_allocptr, xpGPR(xp,vsp));
 #endif
     return true;
@@ -270,7 +270,7 @@ allocate_object(ExceptionInformation *xp,
   if (new_heap_segment(xp, bytes_needed, true, tcr)) {
     xpGPR(xp, allocptr) += disp_from_allocptr;
 #ifdef DEBUG
-    fprintf(stderr, "New heap segment for #x%x after GC: #x%x/#x%x\n",
+    fprintf(dbgout, "New heap segment for #x%x after GC: #x%x/#x%x\n",
             tcr,xpGPR(xp,allocbase),tcr->last_allocptr);
 #endif
     return true;
@@ -399,7 +399,7 @@ handle_alloc_trap(ExceptionInformation *xp, TCR *tcr)
     update_bytes_allocated(tcr,((BytePtr)(cur_allocptr-disp)));
     if (allocate_object(xp, bytes_needed, disp, tcr)) {
 #if 0
-      fprintf(stderr, "alloc_trap in 0x%lx, new allocptr = 0x%lx\n",
+      fprintf(dbgout, "alloc_trap in 0x%lx, new allocptr = 0x%lx\n",
               tcr, xpGPR(xp, allocptr));
 #endif
       adjust_exception_pc(xp,4);
@@ -705,14 +705,14 @@ normalize_tcr(ExceptionInformation *xp, TCR *tcr, Boolean is_other_tcr)
     update_area_active((area **)&tcr->vs_area, (BytePtr) ptr_from_lispobj(xpGPR(xp, vsp)));
     update_area_active((area **)&tcr->ts_area, (BytePtr) ptr_from_lispobj(xpGPR(xp, tsp)));
 #ifdef DEBUG
-    fprintf(stderr, "TCR 0x%x in lisp code, vsp = 0x%lx, tsp = 0x%lx\n",
+    fprintf(dbgout, "TCR 0x%x in lisp code, vsp = 0x%lx, tsp = 0x%lx\n",
             tcr, xpGPR(xp, vsp), xpGPR(xp, tsp));
-    fprintf(stderr, "TCR 0x%x, allocbase/allocptr were 0x%x/0x%x at #x%x\n",
+    fprintf(dbgout, "TCR 0x%x, allocbase/allocptr were 0x%x/0x%x at #x%x\n",
             tcr,
             xpGPR(xp, allocbase),
             xpGPR(xp, allocptr),
             xpPC(xp));
-    fprintf(stderr, "TCR 0x%x, exception context = 0x%x\n",
+    fprintf(dbgout, "TCR 0x%x, exception context = 0x%x\n",
             tcr,
             tcr->pending_exception_context);
 #endif
@@ -720,9 +720,9 @@ normalize_tcr(ExceptionInformation *xp, TCR *tcr, Boolean is_other_tcr)
     /* In ff-call.  No need to update cs_area */
     cur_allocptr = (void *) (tcr->save_allocptr);
 #ifdef DEBUG
-    fprintf(stderr, "TCR 0x%x in foreign code, vsp = 0x%lx, tsp = 0x%lx\n",
+    fprintf(dbgout, "TCR 0x%x in foreign code, vsp = 0x%lx, tsp = 0x%lx\n",
             tcr, tcr->save_vsp, tcr->save_tsp);
-    fprintf(stderr, "TCR 0x%x, save_allocbase/save_allocptr were 0x%x/0x%x at #x%x\n",
+    fprintf(dbgout, "TCR 0x%x, save_allocbase/save_allocptr were 0x%x/0x%x at #x%x\n",
             tcr,
             tcr->save_allocbase,
             tcr->save_allocptr,
@@ -823,7 +823,7 @@ gc_from_tcr(TCR *tcr, signed_natural param)
   BytePtr oldend, newend;
 
 #ifdef DEBUG
-  fprintf(stderr, "Start GC  in 0x%lx\n", tcr);
+  fprintf(dbgout, "Start GC  in 0x%lx\n", tcr);
 #endif
   a = active_dynamic_area;
   oldend = a->high;
@@ -832,7 +832,7 @@ gc_from_tcr(TCR *tcr, signed_natural param)
   newfree = a->active;
   newend = a->high;
 #if 0
-  fprintf(stderr, "End GC  in 0x%lx\n", tcr);
+  fprintf(dbgout, "End GC  in 0x%lx\n", tcr);
 #endif
   return ((oldfree-newfree)+(newend-oldend));
 }
@@ -1527,13 +1527,13 @@ callback_to_lisp (LispObj callback_macptr, ExceptionInformation *xp,
   */
   callback_ptr = ((macptr *)ptr_from_lispobj(untag(callback_macptr)))->address;
 #ifdef DEBUG
-  fprintf(stderr, "0x%x releasing exception lock for callback\n", tcr);
+  fprintf(dbgout, "0x%x releasing exception lock for callback\n", tcr);
 #endif
   UNLOCK(lisp_global(EXCEPTION_LOCK), tcr);
   ((void (*)())callback_ptr) (xp, arg1, arg2, arg3, arg4, arg5);
   LOCK(lisp_global(EXCEPTION_LOCK), tcr);
 #ifdef DEBUG
-  fprintf(stderr, "0x%x acquired exception lock after callback\n", tcr);
+  fprintf(dbgout, "0x%x acquired exception lock after callback\n", tcr);
 #endif
 
 
@@ -1671,7 +1671,7 @@ handle_trap(ExceptionInformation *xp, opcode the_trap, pc where, siginfo_t *info
         tcr->interrupt_pending = 0;
       }
 #if 0
-      fprintf(stderr, "About to do trap callback in 0x%x\n",tcr);
+      fprintf(dbgout, "About to do trap callback in 0x%x\n",tcr);
 #endif
       callback_for_trap(cmain, xp,  where, (natural) the_trap,  0, 0);
       adjust_exception_pc(xp, 4);
@@ -1703,8 +1703,8 @@ scan_for_instr( unsigned target, unsigned mask, pc where )
 
 void non_fatal_error( char *msg )
 {
-  fprintf( stderr, "Non-fatal error: %s.\n", msg );
-  fflush( stderr );
+  fprintf( dbgout, "Non-fatal error: %s.\n", msg );
+  fflush( dbgout );
 }
 
 /* The main opcode.  */
@@ -1784,7 +1784,7 @@ wait_for_exception_lock_in_handler(TCR *tcr,
 
   LOCK(lisp_global(EXCEPTION_LOCK), tcr);
 #ifdef DEBUG
-  fprintf(stderr, "0x%x has exception lock\n", tcr);
+  fprintf(dbgout, "0x%x has exception lock\n", tcr);
 #endif
   xf->curr = context;
   xf->prev = tcr->xframe;
@@ -1800,7 +1800,7 @@ unlock_exception_lock_in_handler(TCR *tcr)
   tcr->xframe = tcr->xframe->prev;
   tcr->valence = TCR_STATE_EXCEPTION_RETURN;
 #ifdef DEBUG
-  fprintf(stderr, "0x%x releasing exception lock\n", tcr);
+  fprintf(dbgout, "0x%x releasing exception lock\n", tcr);
 #endif
   UNLOCK(lisp_global(EXCEPTION_LOCK),tcr);
 }
@@ -1836,7 +1836,7 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context, TCR 
 
 #ifdef DARWIN
   if (running_under_rosetta) {
-    fprintf(stderr, "signal handler: signal = %d, pc = 0x%08x\n", signum, xpPC(context));
+    fprintf(dbgout, "signal handler: signal = %d, pc = 0x%08x\n", signum, xpPC(context));
   }
 #endif
   if (!use_mach_exception_handling) {
@@ -2026,7 +2026,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
 
       if (disp < (4*node_size)) {
 #if 0
-        fprintf(stderr, "pc-luser: finish SP frame in 0x%x, disp = %d\n",tcr, disp);
+        fprintf(dbgout, "pc-luser: finish SP frame in 0x%x, disp = %d\n",tcr, disp);
 #endif
 	frame->savevsp = 0;
 	if (disp < (3*node_size)) {
@@ -2081,20 +2081,20 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
       }
     } else {
 #ifdef DEBUG
-      fprintf(stderr, "tcr 0x%x is past alloc trap, finishing alloc at 0x%x\n", tcr, xpGPR(xp,allocptr));
+      fprintf(dbgout, "tcr 0x%x is past alloc trap, finishing alloc at 0x%x\n", tcr, xpGPR(xp,allocptr));
 #endif
       /* If we're already past the alloc_trap, finish allocating
          the object. */
       if (allocptr_tag == fulltag_cons) {
         finish_allocating_cons(xp);
 #ifdef DEBUG
-          fprintf(stderr, "finish allocating cons in TCR = #x%x\n",
+          fprintf(dbgout, "finish allocating cons in TCR = #x%x\n",
                   tcr);
 #endif
       } else {
         if (allocptr_tag == fulltag_misc) {
 #ifdef DEBUG
-          fprintf(stderr, "finish allocating uvector in TCR = #x%x\n",
+          fprintf(dbgout, "finish allocating uvector in TCR = #x%x\n",
                   tcr);
 #endif
           finish_allocating_uvector(xp);
@@ -2113,7 +2113,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
     LispObj *frame = ptr_from_lispobj(untag(xpGPR(xp, nargs)));
     int idx = ((int)((short)(D_field(instr))+fulltag_misc))>>fixnumshift;
 #if 0
-        fprintf(stderr, "pc-luser: CATCH frame in 0x%x, idx = %d\n",tcr, idx);
+        fprintf(dbgout, "pc-luser: CATCH frame in 0x%x, idx = %d\n",tcr, idx);
 #endif
 
     for (;idx < sizeof(catch_frame)/sizeof(LispObj); idx++) {
@@ -2169,7 +2169,7 @@ interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 	  old_valence = prepare_to_wait_for_exception_lock(tcr, context);
 	  wait_for_exception_lock_in_handler(tcr, context, &xframe_link);
 #ifdef DEBUG
-          fprintf(stderr, "[0x%x acquired exception lock for interrupt]\n",tcr);
+          fprintf(dbgout, "[0x%x acquired exception lock for interrupt]\n",tcr);
 #endif
 	  PMCL_exception_handler(signum, context, tcr, info, old_valence);
           if (disp) {
@@ -2177,7 +2177,7 @@ interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
           }
 	  unlock_exception_lock_in_handler(tcr);
 #ifdef DEBUG
-          fprintf(stderr, "[0x%x released exception lock for interrupt]\n",tcr);
+          fprintf(dbgout, "[0x%x released exception lock for interrupt]\n",tcr);
 #endif
 	  exit_signal_handler(tcr, old_valence);
 	}
@@ -2495,7 +2495,7 @@ do_pseudo_sigreturn(mach_port_t thread, TCR *tcr)
   ExceptionInformation *xp;
 
 #ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(stderr, "doing pseudo_sigreturn for 0x%x\n",tcr);
+  fprintf(dbgout, "doing pseudo_sigreturn for 0x%x\n",tcr);
 #endif
   xp = tcr->pending_exception_context;
   if (xp) {
@@ -2507,7 +2507,7 @@ do_pseudo_sigreturn(mach_port_t thread, TCR *tcr)
     Bug(NULL, "no xp here!\n");
   }
 #ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(stderr, "did pseudo_sigreturn for 0x%x\n",tcr);
+  fprintf(dbgout, "did pseudo_sigreturn for 0x%x\n",tcr);
 #endif
   return KERN_SUCCESS;
 }  
@@ -2621,7 +2621,7 @@ setup_signal_frame(mach_port_t thread,
   natural stackp;
 
 #ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(stderr,"Setting up exception handling for 0x%x\n", tcr);
+  fprintf(dbgout,"Setting up exception handling for 0x%x\n", tcr);
 #endif
   pseudosigcontext = create_thread_context_frame(thread, &stackp);
   pseudosigcontext->uc_onstack = 0;
@@ -2659,7 +2659,7 @@ setup_signal_frame(mach_port_t thread,
 		   MACHINE_THREAD_STATE_COUNT);
 #endif
 #ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(stderr,"Set up exception context for 0x%x at 0x%x\n", tcr, tcr->pending_exception_context);
+  fprintf(dbgout,"Set up exception context for 0x%x at 0x%x\n", tcr, tcr->pending_exception_context);
 #endif
   return 0;
 }
@@ -2774,7 +2774,7 @@ catch_exception_raise(mach_port_t exception_port,
   kern_return_t kret;
 
 #ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(stderr, "obtaining Mach exception lock in exception thread\n");
+  fprintf(dbgout, "obtaining Mach exception lock in exception thread\n");
 #endif
 
   if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_EXCEPTION)) {
@@ -2788,7 +2788,7 @@ catch_exception_raise(mach_port_t exception_port,
     if (code1 == (int)pseudo_sigreturn) {
       kret = do_pseudo_sigreturn(thread, tcr);
 #if 0
-      fprintf(stderr, "Exception return in 0x%x\n",tcr);
+      fprintf(dbgout, "Exception return in 0x%x\n",tcr);
 #endif
         
     } else if (code1 == (int)enable_fp_exceptions) {
@@ -2827,7 +2827,7 @@ catch_exception_raise(mach_port_t exception_port,
                                 code,
                                 tcr);
 #if 0
-      fprintf(stderr, "Setup pseudosignal handling in 0x%x\n",tcr);
+      fprintf(dbgout, "Setup pseudosignal handling in 0x%x\n",tcr);
 #endif
 
     } else {
@@ -3057,7 +3057,7 @@ darwin_exception_init(TCR *tcr)
 
   if ((kret = setup_mach_exception_handling(tcr))
       != KERN_SUCCESS) {
-    fprintf(stderr, "Couldn't setup exception handler - error = %d\n", kret);
+    fprintf(dbgout, "Couldn't setup exception handler - error = %d\n", kret);
     terminate_lisp();
   }
   lisp_global(LISP_EXIT_HOOK) = (LispObj) restore_foreign_exception_ports;
@@ -3100,7 +3100,7 @@ suspend_mach_thread(mach_port_t mach_thread)
       if (status == KERN_SUCCESS) {
         aborted = true;
       } else {
-        fprintf(stderr, "abort failed on thread = 0x%x\n",mach_thread);
+        fprintf(dbgout, "abort failed on thread = 0x%x\n",mach_thread);
         thread_resume(mach_thread);
       }
     } else {
@@ -3141,13 +3141,13 @@ mach_resume_tcr(TCR *tcr)
   
   xp = tcr->suspend_context;
 #ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(stderr, "resuming TCR 0x%x, pending_exception_context = 0x%x\n",
+  fprintf(dbgout, "resuming TCR 0x%x, pending_exception_context = 0x%x\n",
           tcr, tcr->pending_exception_context);
 #endif
   tcr->suspend_context = NULL;
   restore_mach_thread_state(mach_thread, xp);
 #ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(stderr, "restored state in TCR 0x%x, pending_exception_context = 0x%x\n",
+  fprintf(dbgout, "restored state in TCR 0x%x, pending_exception_context = 0x%x\n",
           tcr, tcr->pending_exception_context);
 #endif
   thread_resume(mach_thread);
