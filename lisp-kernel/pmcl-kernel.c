@@ -1500,6 +1500,8 @@ main(int argc, char *argv[]
   init_windows_io();
 #endif
 
+  dbgout = stderr;
+
   check_os_version(argv[0]);
   real_executable_name = determine_executable_name(argv[0]);
   page_size = getpagesize(); /* Implement with GetSystemInfo on Windows w/o MinGW */

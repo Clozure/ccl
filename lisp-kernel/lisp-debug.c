@@ -33,7 +33,7 @@
 #endif
 #include <sys/stat.h>
 
-FILE *dbgout = stderr;
+FILE *dbgout = NULL;
 
 typedef enum {
   debug_continue,		/* stay in the repl */
