@@ -40,6 +40,10 @@
                thing))))
 
 
+(defun character-encoded-in-single-octet (c)
+  (declare (ignore c))
+  1)
+
 (defstruct character-encoding
   (name ())                             ;canonical name
   (code-unit-size 8)                    ;in bits: 8, 16, 32
@@ -109,6 +113,7 @@
   (nul-encoding #(0))
   ;; Char-codes less than  this value map to themselves on output.
   (encode-literal-char-code-limit 0)
+  (character-size-in-octets-function 'character-encoded-in-single-octet)
   )
 
 (defconstant byte-order-mark #\u+feff)
@@ -2914,6 +2919,7 @@ used in western languages."
   :encode-literal-char-code-limit #x80  
   )
 
+
 ;;; UTF-8.  Decoding checks for malformed sequences; it might be faster (and
 ;;; would certainly be simpler) if it didn't.
 (define-character-encoding :utf-8
@@ -3159,6 +3165,17 @@ bytes."
     :decode-literal-code-unit-limit #x80
     :encode-literal-char-code-limit #x80    
     :bom-encoding #(#xef #xbb #xbf)
+    :character-size-in-octets-function  (lambda (c)
+                                          (let* ((code (char-code c)))
+                                            (declare (type (mod #x110000) code))
+                                            (if (< code #x80)
+                                              1
+                                              (if (< code #x800)
+                                                2
+                                                (if (< code #x10000)
+                                                  3
+                                                  4)))))
+      
     )
 
 
@@ -3211,20 +3228,6 @@ bytes."
       #\Replacement_Character)))
 
 
-(defun utf-16-octets-in-string (string start end)
-  (if (>= end start)
-    (do* ((noctets 0)
-          (i start (1+ i)))
-         ((= i end) noctets)
-      (declare (fixnum noctets))
-      (let* ((code (char-code (schar string i))))
-        (declare (type (mod #x110000) code))
-        (incf noctets
-              (if (< code #x10000)
-                2
-                4))))
-    0))
-
 
 (declaim (inline %big-endian-u8-ref-u16 %little-endian-u8-ref-u16))
 (defun %big-endian-u8-ref-u16 (u8-vector idx)
@@ -3276,6 +3279,12 @@ bytes."
         (aref u8-vector (the fixnum (1+ idx))) (ldb (byte 8 8) val))
   val)
 
+(defun utf-16-character-size-in-octets (c)
+  (let* ((code (char-code c)))
+    (declare (type (mod #x110000) code))
+    (if (< code #x10000)
+      2
+      4)))
 
 ;;; utf-16, native byte order.
 (define-character-encoding #+big-endian-target :utf-16be #-big-endian-target :utf-16le
@@ -3439,6 +3448,7 @@ interpreted on input or prepended to output."
     :decode-literal-code-unit-limit #xd800  
     :encode-literal-char-code-limit #x10000
     :nul-encoding #(0 0)
+    :character-size-in-octets-function 'utf-16-character-size-in-octets
     )
 
 ;;; utf-16, reversed byte order
@@ -3603,6 +3613,7 @@ interpreted on input or prepended to output."
   :decode-literal-code-unit-limit #xd800
   :encode-literal-char-code-limit #x10000
   :nul-encoding #(0 0)
+  :character-size-in-octets-function 'utf-16-character-size-in-octets
   )
 
 ;;; UTF-16.  Memory and vector functions determine endianness of
@@ -3836,8 +3847,13 @@ in native byte-order with a leading byte-order mark."
   #+little-endian-target :utf-16be
   :bom-encoding #+big-endian-target #(#xfe #xff) #+little-endian-target #(#xff #xfe)
   :nul-encoding #(0 0)
+  :character-size-in-octets-function 'utf-16-character-size-in-octets  
   )
 
+
+(defun two-octets-per-character (c)
+  (declare (ignore c))
+  2)
 
 (defun ucs-2-stream-encode (char write-function stream)
   (let* ((code (char-code char)))
@@ -3957,6 +3973,7 @@ to output."
   :decode-literal-code-unit-limit #x10000
   :encode-literal-char-code-limit #x10000  
   :nul-encoding #(0 0)
+  :character-size-in-octets-function 'two-octets-per-character
   )
 
 ;;; UCS-2, reversed byte order
@@ -4045,6 +4062,7 @@ to output."
   :decode-literal-code-unit-limit #x10000
   :encode-literal-char-code-limit #x10000
   :nul-encoding #(0 0)
+  :character-size-in-octets-function 'two-octets-per-character
   )
 
 (define-character-encoding :ucs-2
@@ -4181,8 +4199,13 @@ big-endian order."
   #+big-endian-target :ucs-2le
   #+little-endian-target :ucs-2be
   :nul-encoding #(0 0)
+  :character-size-in-octets-function 'two-octets-per-character
   )
 
+
+(defun four-octets-per-character (c)
+  (declare (ignore c))
+  4)
 
 (defun ucs-4-stream-encode (char write-function stream)
   (let* ((code (char-code char)))
@@ -4364,6 +4387,7 @@ or prepended to output."
   :decode-literal-code-unit-limit #x110000
   :encode-literal-char-code-limit #x110000
   :nul-encoding #(0 0 0 0)
+  :character-size-in-octets-function 'four-octets-per-character
   )
 
 ;;; UTF-32/UCS-4, reversed byte order
@@ -4462,6 +4486,7 @@ or prepended to output."
   :decode-literal-code-unit-limit #x110000
   :encode-literal-char-code-limit #x110000
   :nul-encoding #(0 0 0 0)  
+  :character-size-in-octets-function 'four-octets-per-character
   )
 
 (define-character-encoding :utf-32
@@ -4595,6 +4620,7 @@ or prepended to output."
   #+little-endian-target :utf-32be
   :bom-encoding #+big-endian-target #(#x00 #x00 #xfe #xff) #+little-endian-target #(#xff #xfe #x00 #x00)
   :nul-encoding #(0 0 0 0)  
+  :character-size-in-octets-function 'four-octets-per-character
   )
 
 (defun describe-character-encoding (name)
