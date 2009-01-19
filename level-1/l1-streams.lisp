@@ -1937,8 +1937,8 @@
         (setq col 0)
         (incf col))
       (if (< code limit)
-               (%ioblock-write-u8-element ioblock code)
-               (funcall encode-function char #'%ioblock-write-u8-element ioblock)))))
+        (%ioblock-write-u8-element ioblock code)
+        (funcall encode-function char #'%ioblock-write-u8-element ioblock)))))
 
 
 (declaim (inline %ioblock-write-u16-encoded-char))
@@ -2674,7 +2674,7 @@
 (defun setup-ioblock-input (ioblock character-p element-type sharing encoding line-termination)
   (setf (ioblock-sharing ioblock) sharing)
   (when character-p
-    (setf (ioblock-unread-char-function ioblock) '%ioblock-untyi)
+    (setf (ioblock-unread-char-function ioblock) (select-stream-untyi-function (ioblock-stream ioblock) :input))
     (setf (ioblock-decode-literal-code-unit-limit ioblock)
           (if encoding
             (character-encoding-decode-literal-code-unit-limit encoding)
@@ -5972,5 +5972,16 @@ are printed.")
       new)))
 
 
+(defmethod select-stream-untyi-function ((s symbol) direction)
+  (select-stream-untyi-function (find-class s) direction))
+
+(defmethod select-stream-untyi-function ((c class) direction)
+  (select-stream-untyi-function (class-prototype c) direction))
+
+(defmethod select-stream-untyi-function ((s fd-stream) (direction t))
+  '%ioblock-untyi)
+
+(defmethod select-stream-untyi-function ((s basic-stream) (direction t))
+  '%ioblock-untyi)
 
 ; end of L1-streams.lisp
