@@ -18,11 +18,7 @@
 
 (in-package "CCL")
 
-(defun %new-ptr (size &optional clear-p)
-  (let* ((p (malloc size)))
-    (if (and clear-p (not (%null-ptr-p p)))
-      (#_memset p 0 size))
-    p))
+(setf (fdefinition '%new-ptr) (fdefinition '%new-gcable-ptr))
 
 
 ;;;; ======================================================================
