@@ -178,11 +178,8 @@ is :UNIX.")
 	 (inbuf (file-ioblock-inbuf file-ioblock))
 	 (curpos (+ element-base (io-buffer-idx inbuf))))
     (if (null newpos)
-      (if (file-ioblock-untyi-char file-ioblock)
-	(1- curpos)
-	curpos)
+      curpos
       (progn
-	(setf (file-ioblock-untyi-char file-ioblock) nil)
 	(if (and (>= newpos element-base)
 		 (< newpos (+ element-base (io-buffer-count inbuf))))
 	  (setf (io-buffer-idx inbuf) (- newpos element-base))
@@ -245,16 +242,10 @@ is :UNIX.")
 	 (curidx (io-buffer-idx outbuf))
 	 (curpos (+ element-base curidx)))
     (if (null newpos)
-      (if (file-ioblock-untyi-char file-ioblock)
-	(1- curpos)
-	curpos)
+      curpos
       (let* ((incount (io-buffer-count outbuf)))
         (unless (= newpos 0)
           (setf (ioblock-pending-byte-order-mark file-ioblock) nil))        
-	(when (file-ioblock-untyi-char file-ioblock)
-	  (setf (file-ioblock-untyi-char file-ioblock) nil)
-	  (if (> curidx 0)
-	    (decf curpos)))
 	(cond 
 	  ((and (>= newpos element-base)
 		(<= newpos curpos))
@@ -324,7 +315,6 @@ is :UNIX.")
 	       ;; Discard any buffered output.  Truncate the
 	       ;; file, then seek to the new EOF.
 	       (fd-ftruncate fd new-octet-eof)
-	       (setf (file-ioblock-untyi-char file-ioblock) nil)
 	       (file-ioblock-seek-and-reset file-ioblock new-octet-eof))
 	      (t
 	       (fd-ftruncate fd new-octet-eof)
@@ -529,14 +519,20 @@ is :UNIX.")
 
 		    
 (defun output-file-force-output (stream file-ioblock count finish-p)
-  (let* ((n (fd-stream-force-output stream file-ioblock count finish-p)))
+  (let* ((pos (%ioblock-output-file-position file-ioblock nil))
+         (n (fd-stream-force-output stream file-ioblock count finish-p)))
     (incf (file-ioblock-octet-pos file-ioblock) (or n 0))
+    (%ioblock-output-file-position file-ioblock pos)
     n))
 
 ;;; Can't be sure where the underlying fd is positioned, so seek first.
 (defun io-file-force-output (stream file-ioblock count finish-p)
-  (file-ioblock-seek file-ioblock (file-ioblock-octet-pos file-ioblock))
-  (output-file-force-output stream file-ioblock count finish-p))
+  (let* ((pos (%ioblock-io-file-position file-ioblock nil)))
+    (file-ioblock-seek file-ioblock (file-ioblock-octet-pos file-ioblock))
+    (let* ((n (fd-stream-force-output stream file-ioblock count finish-p)))
+      (incf (file-ioblock-octet-pos file-ioblock) (or n 0))
+      (%ioblock-io-file-position file-ioblock pos)
+      n)))
 
 
 ;;; Invalidate both buffers and seek to the new position.  The output
@@ -545,7 +541,6 @@ is :UNIX.")
 (defun file-ioblock-seek-and-reset (file-ioblock newoctetpos)
   (let* ((inbuf (file-ioblock-inbuf file-ioblock))
 	 (outbuf (file-ioblock-outbuf file-ioblock)))
-    (setf (file-ioblock-untyi-char file-ioblock) nil)
     (setf (file-ioblock-dirty file-ioblock) nil)
     (when inbuf
       (setf (io-buffer-count inbuf) 0
@@ -716,6 +711,30 @@ is :UNIX.")
     (:io 'io-file-force-output)
     (:output 'output-file-force-output)))
 
+(defmethod select-stream-untyi-function ((s file-stream) (direction t))
+  '%file-ioblock-untyi)
+
+;;; Conceptually, decrement the stream's position by the number of octets
+;;; needed to encode CHAR.
+;;; Since we don't use IOBLOCK-UNTYI-CHAR, it's hard to detect the error
+;;; of calling UNREAD-CHAR twice in a row.
+(defun %file-ioblock-untyi (ioblock char)
+  (let* ((inbuf (ioblock-inbuf ioblock))
+         (idx (io-buffer-idx inbuf))
+         (encoding (ioblock-encoding ioblock))
+         (noctets (if encoding
+                    (funcall (character-encoding-character-size-in-octets-function encoding) char)
+                    1)))
+    (declare (fixnum idx noctets))
+    (if (>= idx noctets)
+      (setf (io-buffer-idx inbuf) (the fixnum (- idx noctets)))
+      (let* ((stream (ioblock-stream ioblock))
+             (pos (stream-position stream))
+             (newpos (- pos noctets)))
+        (if (< newpos 0)
+          (error "Invalid attempt to unread ~s on ~s." char (ioblock-stream ioblock))
+          (stream-position stream newpos))))
+    char))
 
 
 
