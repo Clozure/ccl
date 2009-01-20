@@ -883,7 +883,7 @@ a host-structure or string."
        (multiple-value-bind (newstart host) (pathname-directory-end sstr start end)
 	 (if (eq host :unspecific)
 	   nil
-	   (pathname-version-sstr sstr newstart end)))))
+	   (values (pathname-version-sstr sstr newstart end))))))
     (t (report-bad-arg path pathname-arg-type))))
 
 (defun pathname-version-sstr (sstr start end)
