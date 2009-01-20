@@ -696,7 +696,7 @@
   jvm-init
   allocate_vstack
   register_cstack
-  raise-thread-interrupt
+  open-debug-output
   get-r-debug
   restore-soft-stack-limit
   egc-control
