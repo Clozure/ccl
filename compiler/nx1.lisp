@@ -23,11 +23,17 @@
            (progn (nx1-whine :type call) t))
     (setq typespec t))
   ;; Allow VALUES types here (or user-defined types that
-  ;; expand to VALUES types).
+  ;; expand to VALUES types).  We could do a better job
+  ;; of this, but treat them as wild types.
+  ;; Likewise, complex FUNCTION types can be legally used
+  ;; in type declarations, but aren't legal args to TYPEP;
+  ;; treat them as the simple FUNCTION type.
   (let* ((ctype (values-specifier-type typespec)))
-    (if (typep ctype 'values-ctype)
+    (if (typep ctype 'values-ctype)       
       (setq typespec '*)
-      (setq typespec (nx-target-type (type-specifier ctype)))))
+      (if (typep ctype 'function-ctype)
+        (setq typespec 'function)       ; better than nothing.
+        (setq typespec (nx-target-type (type-specifier ctype))))))
   (let* ((*nx-form-type* typespec)
          (transformed (nx-transform form env)))
     (when (and (consp transformed)
