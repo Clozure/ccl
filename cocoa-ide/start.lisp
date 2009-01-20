@@ -199,14 +199,13 @@
                          ;; We're the parent.
                          (#_close child-socket)
                          (when (eq t (ccl::check-pid pid))
-                           (flet ((set-stdio-file-fd (f fd)
-                                    (setf (pref f #>FILE._file) fd))
-                                  (set-lisp-stream-fd (stream fd)
+                           (flet ((set-lisp-stream-fd (stream fd)
                                     (setf (ccl::ioblock-device (ccl::stream-ioblock stream t))
                                           fd)))
-                             (set-stdio-file-fd (%get-ptr (foreign-symbol-address "___stdinp")) parent-socket)
-                             (set-stdio-file-fd (%get-ptr (foreign-symbol-address "___stdoutp")) parent-socket)
-                             (set-stdio-file-fd (%get-ptr (foreign-symbol-address "___stderrp")) parent-socket)
+                             (ff-call (%kernel-import 'target::open-debug-output)
+                                      :int parent-socket
+                                      :int)
+                             (#_dup2 parent-socket 0)
                              (set-lisp-stream-fd ccl::*stdin* parent-socket)
                              (set-lisp-stream-fd ccl::*stdout* parent-socket))
                            ;; Ensure that output to the stream ccl::*stdout* -
