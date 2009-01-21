@@ -400,7 +400,11 @@ unsigned unsigned_max(unsigned x, unsigned y)
 #define MAXIMUM_MAPPABLE_MEMORY ((1U<<31)-2*heap_segment_size)
 #endif
 #ifdef LINUX
+#ifdef X86
+#define MAXIMUM_MAPPABLE_MEMORY (3U<<30)
+#else
 #define MAXIMUM_MAPPABLE_MEMORY (1U<<30)
+#endif
 #endif
 #ifdef WINDOWS
 #define MAXIMUM_MAPPABLE_MEMORY (1U<<30)
