@@ -401,7 +401,7 @@ unsigned unsigned_max(unsigned x, unsigned y)
 #endif
 #ifdef LINUX
 #ifdef X86
-#define MAXIMUM_MAPPABLE_MEMORY (3U<<30)
+#define MAXIMUM_MAPPABLE_MEMORY (9U<<28)
 #else
 #define MAXIMUM_MAPPABLE_MEMORY (1U<<30)
 #endif
@@ -443,6 +443,8 @@ int cache_block_size=32;
 #define G1_AREA_THRESHOLD (2<<20)
 #define G0_AREA_THRESHOLD (1<<20)
 #endif
+
+#define MIN_DYNAMIC_SIZE (DEFAULT_LISP_HEAP_GC_THRESHOLD *2)
 
 #if (WORD_SIZE == 32)
 #define DEFAULT_INITIAL_STACK_SIZE (1<<20)
@@ -571,10 +573,24 @@ create_reserved_area(natural totalsize)
     start, 
     want = (BytePtr)IMAGE_BASE_ADDRESS;
   area *reserved;
+  Boolean fatal = false;
 
   totalsize = align_to_power_of_2((void *)totalsize, log2_heap_segment_size);
+    
+  if (totalsize < (PURESPACE_RESERVE + MIN_DYNAMIC_SIZE)) {
+    totalsize = PURESPACE_RESERVE + MIN_DYNAMIC_SIZE;
+    fatal = true;
+  }
 
   start = ReserveMemoryForHeap(want, totalsize);
+
+  if (start == NULL) {
+    if (fatal) {
+      perror("minimal initial mmap");
+      exit(1);
+    }
+    return NULL;
+  }
 
   h = (Ptr) start;
   base = (natural) start;
@@ -660,7 +676,8 @@ allocate_dynamic_area(natural initsize)
 
   start = allocate_from_reserved_area(totalsize);
   if (start == NULL) {
-    return NULL;
+    fprintf(dbgout, "reserved area too small to load heap image\n");
+    exit(1);
   }
   end = start + totalsize;
   a = new_area(start, end, AREA_DYNAMIC);
@@ -1613,10 +1630,13 @@ main(int argc, char *argv[]
     }
   }
 
-
-  if (!create_reserved_area(reserved_area_size)) {
-    exit(-1);
+  while (1) {
+    if (create_reserved_area(reserved_area_size)) {
+      break;
+    }
+    reserved_area_size = reserved_area_size *.9;
   }
+
   gc_init();
 
   set_nil(load_image(image_name));
