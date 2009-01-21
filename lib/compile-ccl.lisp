@@ -752,8 +752,10 @@
       (cwd "ccl:tests;ansi-tests;")
       (let ((do-tests (find-symbol "DO-TESTS" "REGRESSION-TEST"))
             (*print-catch-errors* nil))
-        (time (funcall do-tests :verbose verbose :compile t
-                       :catch-errors catch-errors
-                       :optimization-settings (or optimization-settings '((safety 2))))))
-      ;; Ok, here we would run any of our own tests.
-      )))
+        (prog1
+            (time (funcall do-tests :verbose verbose :compile t
+                           :catch-errors catch-errors
+                           :optimization-settings (or optimization-settings '((safety 2)))))
+          ;; Clean up a little
+          (map nil #'delete-file
+               (directory (merge-pathnames *.fasl-pathname* "ccl:tests;ansi-tests;temp*"))))))))
