@@ -183,8 +183,7 @@ ReserveMemoryForHeap(LogicalAddress want, natural totalsize)
 			 MEM_RESERVE,
 			 PAGE_NOACCESS);
     if (!start) {
-      wperror("VirtualAlloc");
-      exit(1);
+      return NULL;
     }
   }
 #else
@@ -195,8 +194,7 @@ ReserveMemoryForHeap(LogicalAddress want, natural totalsize)
 	       -1,
 	       0);
   if (start == MAP_FAILED) {
-    perror("Initial mmap");
-    exit(1);
+    return NULL;
   }
 
   if (start != want) {
