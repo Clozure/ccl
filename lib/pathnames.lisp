@@ -111,7 +111,7 @@
 		(namestring (native-to-pathname new-namestring))))
 	(values new-name original (truename new-name))))))
 
-(defun copy-file (source-path dest-path &key (if-exists :error)
+(defun copy-file (source-path dest-path &key (if-exists :error) (if-does-not-exist :create)
 			      (preserve-attributes nil))
   (let* ((original (truename source-path))
 	 (new-name (merge-pathnames dest-path original))
@@ -120,6 +120,7 @@
                         :element-type '(unsigned-byte 8))
       (with-open-file (out new-name :direction :output
                            :if-exists if-exists
+                           :if-does-not-exist if-does-not-exist
                            :element-type '(unsigned-byte 8))
         (loop
           as n = (stream-read-vector in buffer 0 4096) until (eql n 0)
