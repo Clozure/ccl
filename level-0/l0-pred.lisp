@@ -382,12 +382,19 @@
                                         -1)))
                            (declare (fixnum x-size skip))
                            (when (= x-size (the fixnum (uvsize y)))
-                             (do* ((i 1 (1+ i)))
-                                  ((= i x-size) t)
-                               (declare (fixnum i))
-                               (unless (or (= i skip)
-                                           (equal (%svref x i) (%svref y i)))
-                                 (return)))))))))))))
+                             (if *case-sensitive-filesystem*
+                               (do* ((i 1 (1+ i)))
+                                    ((= i x-size) t)
+                                 (declare (fixnum i))
+                                 (unless (or (= i skip)
+                                             (equal (%svref x i) (%svref y i)))
+                                   (return)))
+                                                              (do* ((i 1 (1+ i)))
+                                    ((= i x-size) t)
+                                 (declare (fixnum i))
+                                 (unless (or (= i skip)
+                                             (equalp (%svref x i) (%svref y i)))
+                                   (return))))))))))))))
 
 #+ppc32-target
 (progn

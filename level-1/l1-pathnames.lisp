@@ -579,6 +579,7 @@
               (when (not (eq p s))
                 (return)))))))))
 
+
 (defun path-str-match-p (pattern str p-start s-start p-end s-end)
   (declare (fixnum p-start s-start p-end s-end)
 	   (type simple-base-string pattern str))
@@ -591,12 +592,19 @@
       (when (eq s-start s-end)
 	(return nil))
       (let ((p (%scharcode pattern p-start)))
+        (unless *case-sensitive-filesystem*
+          (setq p (%char-code-upcase p)))
         (when (eq p esc)
 	  (when (eq (setq p-start (1+ p-start)) p-end)
 	    (return nil))
-          (setq p (%scharcode pattern p-start)))
-	(unless (eq p (%scharcode str s-start))
-	  (return nil))
+          (setq p (%scharcode pattern p-start))
+          (unless *case-sensitive-filesystem*
+            (setq p (%char-code-upcase p))))
+        (let* ((q (%scharcode str s-start)))
+          (unless *case-sensitive-filesystem*
+            (setq q (%char-code-upcase q)))
+          (unless (eq p q)
+            (return nil)))
 	(setq p-start (1+ p-start))
 	(setq s-start (1+ s-start))))))
       

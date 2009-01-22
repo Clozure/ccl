@@ -165,4 +165,6 @@
 (defvar *nx-cspeed* 1)
 (defvar *nx-debug* 1)
 
+(defparameter *case-sensitive-filesystem* t)
+
 ;;; end
