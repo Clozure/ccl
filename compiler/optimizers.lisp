@@ -1983,13 +1983,16 @@
 		 ((eq ch #\@)
 		  (setq string (%str-cat (subseq string 0 (- pos 2))
 					 "~%"
-					 (subseq string (position-if-not #'whitespacep string
-									 :start (1+ pos))))))
-		 ((eq ch #\~)
+					 (subseq string (or
+                                                         (position-if-not #'whitespacep string
+                                                                          :start (1+ pos))
+                                                         (1+ pos))))))
+                  ((eq ch #\~)
 		  (decf pos)
 		  (setq string (%str-cat (subseq string 0 pos)
-					 (subseq string (position-if-not #'whitespacep string
-									 :start (1+ pos))))))))
+					 (subseq string (or (position-if-not #'whitespacep string
+									 :start (1+ pos))
+                                                            (1+ pos))))))))
   string)
 
 (defun count-known-format-args (string start end)
