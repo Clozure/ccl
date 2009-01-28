@@ -114,7 +114,7 @@ and END to OUTPUT-STREAM."
                        ioblock string start  (%i- end start))))))
       (if (and (not start) (not end))
         (stream-write-string stream string)
-        (stream-write-string stream string start end)))
+        (stream-write-string stream string start (or end (length string)))))
     string))
 
 (defun write-line (string &optional output-stream
