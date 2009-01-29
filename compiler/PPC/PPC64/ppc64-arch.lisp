@@ -647,7 +647,7 @@
   malloc
   free
   jvm-init
-  allocate_vstack
+  tcr-frame-ptr
   register_cstack
   open-debug-output
   get-r-debug

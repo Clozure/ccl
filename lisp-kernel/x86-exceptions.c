@@ -1431,6 +1431,36 @@ copy_ucontext(ExceptionInformation *context, LispObj *current, copy_ucontext_las
 
 
 LispObj *
+tcr_frame_ptr(TCR *tcr)
+{
+  ExceptionInformation *xp;
+  LispObj *bp;
+
+  if (tcr->pending_exception_context)
+    xp = tcr->pending_exception_context;
+  else if (tcr->valence == TCR_STATE_LISP) {
+    xp = tcr->suspend_context;
+  } else {
+    xp = NULL;
+  }
+  if (xp) {
+#ifdef X8664
+    bp = (LispObj *) xpGPR(xp, Irbp);
+#else
+    bp = (LispObj *) xpGPR(xp, Iebp);
+#endif
+  } else {
+#ifdef X8664
+    bp = tcr->save_rbp;
+#else
+    bp = tcr->save_ebp;
+#endif
+  }
+  return bp;
+}
+
+
+LispObj *
 find_foreign_rsp(LispObj rsp, area *foreign_area, TCR *tcr)
 {
 

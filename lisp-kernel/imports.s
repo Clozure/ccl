@@ -48,7 +48,7 @@ import_ptrs_start:
 	defimport(allocate)
 	defimport(deallocate)
 	defimport(jvm_init)
-	defimport(allocate_vstack_holding_area_lock)
+	defimport(tcr_frame_ptr)
 	defimport(register_cstack_holding_area_lock)
 	defimport(open_debug_output)
 	defimport(get_r_debug)

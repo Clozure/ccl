@@ -333,6 +333,14 @@
 
 
 
+(defun %tcr-frame-ptr (tcr)
+  (with-macptrs (p)
+    (%setf-macptr-to-object p tcr)
+    (%fixnum-from-macptr
+     (ff-call (%kernel-import target::kernel-import-tcr-frame-ptr)
+              :address p
+              :address))))
+ 
 (defun thread-exhausted-p (thread)
   (or (null thread)
       (null (lisp-thread.tcr thread))))
@@ -593,8 +601,9 @@
 
 
 
-(defun last-frame-ptr (&optional context)
-  (let* ((current (if context (bt.current context) (%current-frame-ptr)))
+(defun last-frame-ptr (&optional context origin)
+  (let* ((current (or origin
+                      (if context (bt.current context) (%current-frame-ptr))))
          (last current))
     (loop
       (setq current (parent-frame current context))

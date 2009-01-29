@@ -31,9 +31,25 @@
   "If :TRADITIONAL, shows calls to non-toplevel functions using FUNCALL, and shows frame address values.
    If :DIRECT, uses a more streamlined format.")
 
+(defun context-for-suspended-tcr (tcr)
+  (let ((frame-ptr (%tcr-frame-ptr tcr)))
+    (new-backtrace-info nil
+                        frame-ptr ;; youngest - not used
+                        frame-ptr ;; oldest - not used
+                        tcr
+                        nil       ;; condition - not used
+                        frame-ptr ;; current
+                        #+ppc-target *fake-stack-frames*
+                        #+x86-target frame-ptr
+                        (%fixnum-ref tcr target::tcr.db-link)
+                        0         ;; break level - not used
+                        )))
+  
+
 (defun backtrace-as-list (&key
                           context
-                          (origin (%get-frame-ptr))
+                          process
+                          origin
                           (count target::target-most-positive-fixnum)
                           (start-frame-number 0)
                           (stream *debug-io*)
@@ -46,18 +62,24 @@ Each element in the list is a list that describes the call in one stack frame:
 The arguments are represented by strings, the function is a symbol or a function
 object."
   (when (null count) (setq count target::target-most-positive-fixnum))
-  (let* ((tcr (if context (bt.tcr context) (%current-tcr)))
+  (when (and context process (neq (bt.tcr context) (process-tcr process)))
+    (error "Context ~s doesn't correspond to the process ~s" context process))
+  (let* ((tcr (cond (context (bt.tcr context))
+                    (process (process-tcr process))
+                    (t (%current-tcr))))
          (*debug-io* stream)
          (*backtrace-print-level* print-level)
          (*backtrace-print-length* print-length)
          (*backtrace-show-internal-frames* show-internal-frames)
          (*backtrace-format* :list))
     (if (eq tcr (%current-tcr))
-      (%backtrace-as-list-internal context origin count start-frame-number)
+      (%backtrace-as-list-internal context (or origin (%get-frame-ptr)) count start-frame-number)
       (unwind-protect
            (progn
              (%suspend-tcr tcr)
-             (%backtrace-as-list-internal context origin count start-frame-number))
+             (unless context
+               (setq context (context-for-suspended-tcr tcr)))
+             (%backtrace-as-list-internal context (or origin (bt.current context)) count start-frame-number))
         (%resume-tcr tcr)))))
 
 
@@ -65,7 +87,8 @@ object."
 ;;; (because of stack consing) to actually return it.
                                
 (defun print-call-history (&key context
-                                (origin (%get-frame-ptr))
+                                process
+                                origin
                                 (detailed-p t)
                                 (count target::target-most-positive-fixnum)
                                 (start-frame-number 0)
@@ -75,18 +98,24 @@ object."
                                 (show-internal-frames *backtrace-show-internal-frames*)
                                 (format *backtrace-format*))
   (when (null count) (setq count target::target-most-positive-fixnum))
-  (let* ((tcr (if context (bt.tcr context) (%current-tcr)))
+  (when (and context process (neq (bt.tcr context) (process-tcr process)))
+    (error "Context ~s doesn't correspond to the process ~s" context process))
+  (let* ((tcr (cond (context (bt.tcr context))
+                    (process (process-tcr process))
+                    (t (%current-tcr))))
          (*debug-io* stream)
          (*backtrace-print-level* print-level)
          (*backtrace-print-length* print-length)
          (*backtrace-show-internal-frames* show-internal-frames)
          (*backtrace-format* format))
     (if (eq tcr (%current-tcr))
-      (%print-call-history-internal context origin detailed-p count start-frame-number)
+      (%print-call-history-internal context (or origin (%get-frame-ptr)) detailed-p count start-frame-number)
       (unwind-protect
            (progn
-             (%suspend-tcr tcr )
-             (%print-call-history-internal context origin detailed-p count start-frame-number))
+             (%suspend-tcr tcr)
+             (unless context
+               (setq context (context-for-suspended-tcr tcr)))
+             (%print-call-history-internal context (or origin (bt.current context)) detailed-p count start-frame-number))
         (%resume-tcr tcr)))
     (values)))
 
@@ -231,6 +260,8 @@ object."
 	(funcall fn p)))))
 
 (defun %backtrace-as-list-internal (context origin count skip-initial)
+  (unless (eq (last-frame-ptr context origin) (last-frame-ptr context))
+    (error "Origin ~s is not in the stack of ~s" origin context))
   (let ((*print-catch-errors* t)
         (p origin)
         (q (last-frame-ptr context)))
@@ -259,6 +290,8 @@ object."
   
 (defun %print-call-history-internal (context origin detailed-p
                                              &optional (count target::target-most-positive-fixnum) (skip-initial 0))
+  (unless (eq (last-frame-ptr context origin) (last-frame-ptr context))
+    (error "Origin ~s is not in the stack of ~s" origin context))
   (let ((*standard-output* *debug-io*)
         (*print-circle* nil)
         (*print-catch-errors* t)

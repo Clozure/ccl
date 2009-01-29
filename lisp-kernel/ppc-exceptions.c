@@ -687,6 +687,23 @@ update_area_active (area **aptr, BytePtr value)
   }
 }
 
+LispObj *
+tcr_frame_ptr(TCR *tcr)
+{
+  ExceptionInformation *xp;
+  LispObj *bp = NULL;
+
+  if (tcr->pending_exception_context)
+    xp = tcr->pending_exception_context;
+  else {
+    xp = tcr->suspend_context;
+  }
+  if (xp) {
+    bp = (LispObj *) xpGPR(xp, sp);
+  }
+  return bp;
+}
+
 void
 normalize_tcr(ExceptionInformation *xp, TCR *tcr, Boolean is_other_tcr)
 {
