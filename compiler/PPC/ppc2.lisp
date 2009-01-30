@@ -6645,53 +6645,58 @@
       (when (and (ppc2-form-typep form1 type)
                  (ppc2-form-typep form2 type))
         (setq overflow nil))))
-  (cond ((null vreg) 
-         (ppc2-form seg nil nil form1) 
-         (ppc2-form seg nil xfer form2))
-        (overflow
-         (multiple-value-bind (r1 r2) (ppc2-two-untargeted-reg-forms seg form1 ppc::arg_y form2 ppc::arg_z)
-           (ensuring-node-target (target vreg)
-             (if *ppc2-open-code-inline*
-               (! fixnum-add-overflow-inline target r1 r2)
-               (progn
-                 (! fixnum-add-overflow-ool r1 r2)
-                 (ppc2-copy-register seg target ($ ppc::arg_z)))))
-           (^)))
-        (t                              
-         ;; There isn't any "addi" that checks for overflow, which is
-         ;; why we didn't bother.
-         (let* ((fix1 (acode-fixnum-form-p form1))
-                (fix2 (acode-fixnum-form-p form2))
-                (other (if (and fix1
-                                (typep (ash fix1 *ppc2-target-fixnum-shift*)
-                                       '(signed-byte 32)))
-                         form2
-                         (if (and fix2
-                                  (typep (ash fix2 *ppc2-target-fixnum-shift*)
-                                              '(signed-byte 32)))
-                           form1))))
-           (if (and fix1 fix2)
-             (ppc2-lri seg vreg (ash (+ fix1 fix2) *ppc2-target-fixnum-shift*))
-             (if other
-               (let* ((constant (ash (or fix1 fix2) *ppc2-target-fixnum-shift*))
-                      (reg (ppc2-one-untargeted-reg-form seg other ppc::arg_z))
-                      (high (ldb (byte 16 16) constant))
-                      (low (ldb (byte 16 0) constant)))
-                 (declare (fixnum high low))
-                 (if (zerop constant)
-                   (<- reg)
-                   (progn
-                     (if (logbitp 15 low) (setq high (ldb (byte 16 0) (1+ high))))
-                     (if (and (eq vreg reg) (not (zerop high)))
-                       (with-node-temps (vreg) (temp)
-                         (! add-immediate temp reg high low)
-                         (<- temp))
-                       (ensuring-node-target (target vreg)
-                         (! add-immediate target reg high low))))))
-               (multiple-value-bind (r1 r2) (ppc2-two-untargeted-reg-forms seg form1 ppc::arg_y form2 ppc::arg_z)
-                 (ensuring-node-target (target vreg)
-                   (! fixnum-add target r1 r2)))))
-           (^)))))
+  (let* ((fix1 (acode-fixnum-form-p form1))
+         (fix2 (acode-fixnum-form-p form2))
+         (sum (and fix1 fix2 (if overflow (+ fix1 fix2) (%i+ fix1 fix2)))))
+    (cond ((null vreg) 
+           (ppc2-form seg nil nil form1) 
+           (ppc2-form seg nil xfer form2))
+          (sum
+           (if (nx1-target-fixnump sum)
+             (ppc2-use-operator (%nx1-operator fixnum) seg vreg xfer sum)
+             (ppc2-use-operator (%nx1-operator immediate) seg vreg xfer sum)))
+          (overflow
+           (multiple-value-bind (r1 r2) (ppc2-two-untargeted-reg-forms seg form1 ppc::arg_y form2 ppc::arg_z)
+             (ensuring-node-target (target vreg)
+               (if *ppc2-open-code-inline*
+                 (! fixnum-add-overflow-inline target r1 r2)
+                 (progn
+                   (! fixnum-add-overflow-ool r1 r2)
+                   (ppc2-copy-register seg target ($ ppc::arg_z)))))
+             (^)))
+          (t                              
+           ;; There isn't any "addi" that checks for overflow, which is
+           ;; why we didn't bother.
+           (let* ((other (if (and fix1
+                                  (typep (ash fix1 *ppc2-target-fixnum-shift*)
+                                         '(signed-byte 32)))
+                           form2
+                           (if (and fix2
+                                    (typep (ash fix2 *ppc2-target-fixnum-shift*)
+                                           '(signed-byte 32)))
+                             form1))))
+             (if (and fix1 fix2)
+               (ppc2-lri seg vreg (ash (+ fix1 fix2) *ppc2-target-fixnum-shift*))
+               (if other
+                 (let* ((constant (ash (or fix1 fix2) *ppc2-target-fixnum-shift*))
+                        (reg (ppc2-one-untargeted-reg-form seg other ppc::arg_z))
+                        (high (ldb (byte 16 16) constant))
+                        (low (ldb (byte 16 0) constant)))
+                   (declare (fixnum high low))
+                   (if (zerop constant)
+                     (<- reg)
+                     (progn
+                       (if (logbitp 15 low) (setq high (ldb (byte 16 0) (1+ high))))
+                       (if (and (eq vreg reg) (not (zerop high)))
+                         (with-node-temps (vreg) (temp)
+                           (! add-immediate temp reg high low)
+                           (<- temp))
+                         (ensuring-node-target (target vreg)
+                           (! add-immediate target reg high low))))))
+                 (multiple-value-bind (r1 r2) (ppc2-two-untargeted-reg-forms seg form1 ppc::arg_y form2 ppc::arg_z)
+                   (ensuring-node-target (target vreg)
+                     (! fixnum-add target r1 r2)))))
+             (^))))))
 
 (defppc2 ppc2-%i- %i- (seg vreg xfer num1 num2 &optional overflow)
   (when overflow
@@ -6700,9 +6705,12 @@
                  (ppc2-form-typep num2 type))
         (setq overflow nil))))
   (let* ((v1 (acode-fixnum-form-p num1))
-         (v2 (acode-fixnum-form-p num2)))
-    (if (and v1 v2)
-      (ppc2-use-operator (%nx1-operator fixnum) seg vreg xfer (%i- v1 v2))
+         (v2 (acode-fixnum-form-p num2))
+         (diff (and v1 v2 (if overflow (- v1 v2) (%i- v1 v2)))))
+    (if diff
+      (if (nx1-target-fixnump diff)
+        (ppc2-use-operator (%nx1-operator fixnum) seg vreg xfer diff)
+        (ppc2-use-operator (%nx1-operator immediate) seg vreg xfer diff))
       (if (and v2 (neq v2 most-negative-fixnum))
         (ppc2-use-operator (%nx1-operator %i+) seg vreg xfer num1 (make-acode (%nx1-operator fixnum) (- v2)) overflow) 
         (if (eq v2 0)
