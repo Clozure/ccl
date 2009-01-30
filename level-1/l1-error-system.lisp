@@ -191,6 +191,12 @@
 (define-condition simple-program-error (simple-condition program-error)
   ((context :initarg :context :reader simple-program-error-context :initform nil)))
 
+(define-condition invalid-type-specifier (program-error)
+  ((typespec :initarg :typespec :reader invalid-type-specifier-typespec))
+  (:report (lambda (c s)
+             (with-slots (typespec) c
+               (format s "Invalid type specifier: ~s ." typespec)))))
+
 (defun signal-program-error (string &rest args)
   (let* ((e #'error))
     (funcall e
