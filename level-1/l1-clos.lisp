@@ -194,8 +194,10 @@
         (unless (eq t (%slot-definition-type dslotd))
           (return)))
       (standardized-type-specifier
-       `(and ,@(mapcar #'(lambda (d) (or (%slot-definition-type d) t))
-                       direct-slots)))))
+       (if (cdr direct-slots)
+         `(and ,@(mapcar #'(lambda (d) (or (%slot-definition-type d) t))
+                         direct-slots))
+         (%slot-definition-type (car direct-slots))))))
 
 (defmethod compute-effective-slot-definition ((class slots-class)
                                               name
