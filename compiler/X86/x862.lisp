@@ -1789,6 +1789,8 @@
                  (! nref-bit-vector-fixnum target bitnum src))))))))
     (^)))
 
+
+
 ;;; safe = T means assume "vector" is miscobj, do bounds check.
 ;;; safe = fixnum means check that subtag of vector = "safe" and do
 ;;;        bounds check.
@@ -6857,6 +6859,8 @@
       (x862-do-lexical-setq seg vreg ea valreg))
     (^)))
 
+
+
 (pushnew (%nx1-operator fixnum) *x862-operator-supports-push*)
 (defx862 x862-fixnum fixnum (seg vreg xfer value)
   (if (null vreg)
@@ -6870,20 +6874,20 @@
             (! vpush-register target)))
         (^))
       (let* ((class (hard-regspec-class vreg))
-           (mode (get-regspec-mode vreg))
-           (unboxed (if (= class hard-reg-class-gpr)
-                      (not (or (= hard-reg-class-gpr-mode-node mode)
-                               (= hard-reg-class-gpr-mode-address mode))))))
-      (if unboxed
-        (x862-absolute-natural seg vreg xfer value)
-        (if (= class hard-reg-class-crf)
-          (progn
-            ;compiler-bug "Would have clobbered a GPR!")
-            (x862-branch seg (x862-cd-true xfer)))
-          (progn
-            (ensuring-node-target (target vreg)
-              (x862-absolute-natural seg target nil (ash value *x862-target-fixnum-shift*)))
-            (^))))))))
+             (mode (get-regspec-mode vreg))
+             (unboxed (if (= class hard-reg-class-gpr)
+                        (not (or (= hard-reg-class-gpr-mode-node mode)
+                                 (= hard-reg-class-gpr-mode-address mode))))))
+        (if unboxed
+          (x862-absolute-natural seg vreg xfer value)
+          (if (= class hard-reg-class-crf)
+            (progn
+                                        ;compiler-bug "Would have clobbered a GPR!")
+              (x862-branch seg (x862-cd-true xfer)))
+            (progn
+              (ensuring-node-target (target vreg)
+                (x862-absolute-natural seg target nil (ash value *x862-target-fixnum-shift*)))
+              (^))))))))
 
 (defx862 x862-%ilogbitp %ilogbitp (seg vreg xfer cc bitnum form)
   (if (null vreg)
@@ -7429,11 +7433,10 @@
             (^)))))))
 
 (defx862 x862-logand2 logand2 (seg vreg xfer form1 form2)
-
-  (if (or (x862-explicit-non-fixnum-type-p form1)
-          (x862-explicit-non-fixnum-type-p form2))
-    (x862-binary-builtin seg vreg xfer 'logand-2 form1 form2)
-    (x862-inline-logand2 seg vreg xfer form1 form2)))
+    (if (or (x862-explicit-non-fixnum-type-p form1)
+            (x862-explicit-non-fixnum-type-p form2))
+      (x862-binary-builtin seg vreg xfer 'logand-2 form1 form2)
+      (x862-inline-logand2 seg vreg xfer form1 form2)))
 
 (defx862 x862-%quo2 %quo2 (seg vreg xfer form1 form2)
   (x862-binary-builtin seg vreg xfer '/-2 form1 form2))
@@ -7493,6 +7496,18 @@
        (:x8664
 	(x862-ternary-builtin seg vreg xfer '%aset1 v i n))))))
 
+;;; Return VAL if its a fixnum whose boxed representation fits in 32
+;;; bits.  (On a 32-bit platform, that's true of all native fixnums.)
+(defun s32-fixnum-constant-p (val)
+  (when val
+    (target-arch-case
+     (:x8632
+      ;; On x8632, all fixnums fit in 32 bits.
+      val)
+     (:x8664
+      (if (typep val '(signed-byte #.(- 32 x8664::fixnumshift)))
+        val)))))
+
 (defx862 x862-%i+ %i+ (seg vreg xfer form1 form2 &optional overflow)
   (when overflow
     (let* ((type *x862-target-half-fixnum-type*))
@@ -7503,20 +7518,22 @@
          (x862-form seg nil nil form1) 
          (x862-form seg nil xfer form2))
         (t                              
-         (let* ((fix1 (acode-fixnum-form-p form1))
-                (fix2 (acode-fixnum-form-p form2))
-                (other (if (and fix1
-                                (typep (ash fix1 *x862-target-fixnum-shift*)
-                                       '(signed-byte 32)))
+         (let* ((c1 (acode-fixnum-form-p form1))
+                (c2 (acode-fixnum-form-p form2))
+                (fix1 (s32-fixnum-constant-p c1))
+                (fix2 (s32-fixnum-constant-p c2))
+                (other (if fix1                                
                          form2
-                         (if (and fix2
-                                  (typep (ash fix2 *x862-target-fixnum-shift*)
-                                         '(signed-byte 32)))
-                           form1))))
-           (if (and fix1 fix2 (not overflow))
-             (x862-lri seg vreg (ash (+ fix1 fix2) *x862-target-fixnum-shift*))
+                         (if fix2
+                           form1)))
+                (sum (and c1 c2 (if overflow (+ c1 c2) (%i+ c1 c2)))))
+
+           (if sum
+             (if (nx1-target-fixnump sum)
+               (x862-use-operator (%nx1-operator fixnum) seg vreg nil sum)
+               (x862-use-operator (%nx1-operator immediate) seg vreg nil sum))
              (if other
-               (let* ((constant (ash (or fix1 fix2) *x862-target-fixnum-shift*)))
+               (let* ((constant (ash (or fix1 fix2) *x862-target-fixnum-shift*))) 
                  (if (zerop constant)
                    (x862-form seg vreg nil other)
                    (if overflow
@@ -7556,26 +7573,22 @@
   (let* ((v1 (acode-fixnum-form-p num1))
          (v2 (acode-fixnum-form-p num2)))
     (if (and v1 v2)
-      (x862-use-operator (%nx1-operator fixnum) seg vreg xfer (%i- v1 v2))
-      (if (and v2 (neq v2 most-negative-fixnum))
+      (x862-use-operator (%nx1-operator immediate) seg vreg xfer (if overflow (- v1 v2)(%i- v1 v2)))
+      (if (and v2 (/= v2 (arch::target-most-negative-fixnum (backend-target-arch *target-backend*))))
         (x862-use-operator (%nx1-operator %i+) seg vreg xfer num1 (make-acode (%nx1-operator fixnum) (- v2)) overflow) 
           (cond
            ((null vreg)
             (x862-form seg nil nil num1)
             (x862-form seg nil xfer num2))
-           (t                              
-            (let* ((fix1 (acode-fixnum-form-p num1))
-                   (fix2 (acode-fixnum-form-p num2)))
-              (if (and fix1 fix2 (not overflow))
-                (x862-lri seg vreg (ash (- fix1 fix2) *x862-target-fixnum-shift*))
-                (multiple-value-bind (r1 r2) (x862-two-untargeted-reg-forms seg num1 *x862-arg-y* num2 *x862-arg-z*)
-                      ;; This isn't guaranteed to set the overflow flag,
-                      ;; but may do so.
-                      (ensuring-node-target (target vreg)
-                        (! fixnum-sub2 target r1 r2)
-                        (if overflow
-                          (x862-check-fixnum-overflow seg target))))))
-            (^)))))))
+           (t
+            (multiple-value-bind (r1 r2) (x862-two-untargeted-reg-forms seg num1 *x862-arg-y* num2 *x862-arg-z*)
+              ;; This isn't guaranteed to set the overflow flag,
+              ;; but may do so.
+              (ensuring-node-target (target vreg)
+                (! fixnum-sub2 target r1 r2)
+                (if overflow
+                  (x862-check-fixnum-overflow seg target)))
+              (^))))))))
 
 (defx862 x862-%i* %i* (seg vreg xfer num1 num2)
   (if (null vreg)
