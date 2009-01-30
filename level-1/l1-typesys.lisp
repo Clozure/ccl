@@ -1353,6 +1353,12 @@
       (declare (type ctype type))
     (funcall (type-class-unparse (ctype-class-info type)) type)))
 
+
+(defconstant compound-only-type-specifiers
+  ;; See CLHS Figure 4-4.
+  '(and mod satisfies eql not values member or))
+
+
 ;;; VALUES-SPECIFIER-TYPE  --  Interface
 ;;;
 ;;;    Return the type structure corresponding to a type specifier.  We pick
@@ -1383,10 +1389,15 @@
          ((let ((cell (find-builtin-cell spec nil)))
            (and cell (cdr cell))))
          (t
+          (when (member spec compound-only-type-specifiers)
+            (error 'invalid-type-specifier :typespec spec))
           (let* ((lspec (if (atom spec) (list spec) spec))
                  (fun (info-type-translator (car lspec))))
             (cond (fun (funcall fun lspec env))
-                  ((or (and (consp spec) (symbolp (car spec)))
+                  ((or (and (consp spec)
+                            (symbolp (car spec))
+                            (not (or (find-class (car spec) nil env)
+                                     (info-type-builtin (car spec)))))
                        (symbolp spec))
                    (when *type-system-initialized*
                      (signal 'parse-unknown-type :specifier spec))
@@ -1394,7 +1405,7 @@
                    ;; Inhibit caching...
                    nil)
                   (t
-                   (error "Bad thing to be a type specifier: ~S." spec)))))))))
+                   (error 'invalid-type-specifier :typespec spec)))))))))
 
 (eval-when (:compile-toplevel :execute)
   (defconstant type-cache-size (ash 1 12))
@@ -1525,6 +1536,7 @@
 (defun standardized-type-specifier (spec &optional env)
   (handler-case
       (type-specifier (specifier-type spec env))
+    (invalid-type-specifier () spec)
     (parse-unknown-type () spec)))
 
 (defun modified-numeric-type (base
@@ -1555,8 +1567,8 @@
         (let ((pred (make-numeric-ctype-predicate res)))
           (when pred (setf (numeric-ctype-predicate res) pred))))
       (unless (unknown-ctype-p res)
-	  (setf (info-type-builtin spec) res)
-	  (setf (info-type-kind spec) :primitive)))))
+        (setf (info-type-builtin spec) res)
+        (setf (info-type-kind spec) :primitive)))))
 
 ;;;; Builtin types.
 
@@ -3945,8 +3957,7 @@
 (deftype simple-signed-long-vector (&optional size)
   `(simple-array (signed-byte 32) (,size)))
 
-(deftype simple-double-float-vector (&optional size)
-  `(simple-array double-float (,size)))
+
 
 (deftype simple-short-float-vector (&optional size)
   `(simple-array short-float (,size)))
@@ -4005,8 +4016,14 @@
 (deftype simple-single-float-vector (&optional size)
   `(simple-array single-float (,size)))
 
+(deftype simple-long-float-vector (&optional size)
+  `(simple-array double-float (,size)))
+
 (deftype simple-fixnum-vector (&optional size)
   `(simple-array fixnum (,size)))
+
+(deftype fixnum-vector (&optional size)
+  `(array fixnum (,size)))
 
 #+64-bit-target
 (deftype simple-doubleword-vector (&optional size)
@@ -4023,10 +4040,12 @@
 (deftype long-float (&optional low high)
   `(double-float ,low ,high))
 
+#||
 ;;; As empty a type as you're likely to find ...
 (deftype extended-char ()
   "Type of CHARACTERs that aren't BASE-CHARs."
   nil)
+||#
 
 (deftype natural ()
   `(unsigned-byte ,target::nbits-in-word))
@@ -4310,6 +4329,16 @@
                   (let* ((ctype (specifier-type type)))
                     (unless (eq ctype *universal-type*)
                       (generate-predicate-for-ctype ctype)))
+                (invalid-type-specifier ()
+                  (warn "Invalid type soecifier ~s in slot definition for ~s in class ~s." type (slot-definition-name spec) (slot-definition-class spec))
+                  (lambda (v)
+                    (cerror "Allow the assignment or initialization."
+                            "Can't determine whether or not the value ~s should be used to initialize or assign to the slot ~&named ~s in an instance of ~s, because the slot is declared ~&to be of the invalid type ~s."
+                            v (slot-definition-name spec) (slot-definition-class spec) (slot-definition-type spec))
+                    ;; Suppress further checking, at least for things that use this effective slotd.
+                    ;; (It's hard to avoid this, and more trouble than it's worth to do better.)
+                    (setf (slot-value spec 'type-predicate) nil)
+                    t))
                 (parse-unknown-type (c)
                    (declare (ignore c))
                    #'(lambda (value)
