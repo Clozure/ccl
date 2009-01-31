@@ -507,7 +507,8 @@
     (:special-fbinding . "Attempt to bind compiler special name: ~s. Result undefined.")
     (:lambda . "Suspicious lambda-list: ~s")
     (:result-ignored . "Function result ignored in call to ~s")
-    (:program-error . "~a")))
+    (:program-error . "~a")
+    (:unsure . "Nonspecific warning.")))
 
 
 (defun report-compiler-warning (condition stream)
