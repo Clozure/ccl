@@ -70,7 +70,9 @@
    (nrefs :initform 1 :accessor compiler-warning-nrefs))
   (:report report-compiler-warning))
 
-(define-condition style-warning (compiler-warning) ())
+(define-condition style-warning (compiler-warning)
+  ((warning-type :initform :unsure)
+   (args :initform nil)))
 (define-condition undefined-function-reference (style-warning) ())
 (define-condition macro-used-before-definition (compiler-warning) ())
 (define-condition invalid-arguments (style-warning) ())

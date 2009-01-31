@@ -593,7 +593,8 @@
     (:lambda . "Suspicious lambda-list: ~s")
     (:result-ignored . "Function result ignored in call to ~s")
     (:duplicate-definition . report-compile-time-duplicate-definition)
-    (:program-error . "~a")))
+    (:program-error . "~a")
+    (:unsure . "Nonspecific warning")))
 
 (defun report-compile-time-duplicate-definition (condition stream)
   (destructuring-bind (name old-file new-file &optional from to) (compiler-warning-args condition)
