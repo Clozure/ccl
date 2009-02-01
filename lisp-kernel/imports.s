@@ -49,7 +49,7 @@ import_ptrs_start:
 	defimport(deallocate)
 	defimport(jvm_init)
 	defimport(tcr_frame_ptr)
-	defimport(register_cstack_holding_area_lock)
+	defimport(register_xmacptr_dispose_function)
 	defimport(open_debug_output)
 	defimport(get_r_debug)
 	defimport(restore_soft_stack_limit)

@@ -225,4 +225,19 @@ signed_natural impurify(TCR *, signed_natural);
 signed_natural gc_like_from_xp(ExceptionInformation *, signed_natural(*fun)(TCR *, signed_natural), signed_natural);
 
 
+typedef enum {
+  xmacptr_flag_none = 0,        /* Maybe already disposed by Lisp */
+  xmacptr_flag_recursive_lock,  /* recursive-lock */
+  xmacptr_flag_ptr,             /* malloc/free */
+  xmacptr_flag_rwlock,          /* read/write lock */
+  xmacptr_flag_semaphore,        /* semaphore */
+  xmacptr_flag_user_first = 8,  /* first user-defined dispose fn */
+  xmacptr_flag_user_last = 16   /* exclusive upper bound */
+} xmacptr_flag;
+
+
+typedef void (*xmacptr_dispose_fn)(void *);
+
+extern xmacptr_dispose_fn xmacptr_dispose_functions[];
+
 #endif                          /* __GC_H__ */

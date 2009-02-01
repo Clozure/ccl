@@ -638,6 +638,8 @@ mark_tcr_xframes(TCR *tcr)
       
 
 void *postGCptrs = NULL;
+struct xmacptr *user_postGC_macptrs = NULL;
+
 
 void
 postGCfree(void *p)
@@ -647,15 +649,63 @@ postGCfree(void *p)
 }
 
 void
+postGCfreexmacptr(struct xmacptr *p)
+{
+  p->class = (LispObj) user_postGC_macptrs;
+  user_postGC_macptrs = p;
+}
+
+
+xmacptr_dispose_fn xmacptr_dispose_functions[xmacptr_flag_user_last-xmacptr_flag_user_first];
+
+
+
+void
 freeGCptrs()
 {
-  void *p, *next;
+  void *p, *next, *addr;
+  struct xmacptr *x, *xnext;
+  int i, flags;
+  xmacptr_dispose_fn fn;
 
   for (p = postGCptrs; p; p = next) {
     next = *((void **)p);
     free(p);
   }
   postGCptrs = NULL;
+  
+  for (x = user_postGC_macptrs; x; x = xnext) {
+    xnext = (xmacptr *) (x->class);;
+    flags = x->flags - xmacptr_flag_user_first;
+    fn = xmacptr_dispose_functions[flags];
+    addr = (void *) x->address;
+    x->address = 0;
+    x->flags = 0;
+    x->link = 0;
+    x->class = 0;
+    if (fn && addr) {
+      fn(addr);
+    }
+  }
+
+  user_postGC_macptrs = NULL;
+}
+
+int
+register_xmacptr_dispose_function(void *fn)
+{
+  int i, k;
+  
+  for( i = 0, k = xmacptr_flag_user_first; k < xmacptr_flag_user_last; i++, k++) {
+    if (xmacptr_dispose_functions[i]==NULL) {
+      xmacptr_dispose_functions[i] = fn;
+      return k;
+    }
+    if (xmacptr_dispose_functions[i] == fn) {
+      return k;
+    }
+  }
+  return 0;
 }
 
 void
@@ -697,6 +747,12 @@ reap_gcable_ptrs()
           break;
 
         default:
+          if ((flag >= xmacptr_flag_user_first) &&
+              (flag < xmacptr_flag_user_last)) {
+            set_n_bits(GCmarkbits,dnode,3);
+            postGCfreexmacptr(x);
+            break;
+          }
           /* (warn "unknown xmacptr_flag: ~s" flag) */
           /* Unknowd, and perhaps unknowdable. */
           /* Fall in: */
@@ -837,6 +893,7 @@ void
 forward_gcable_ptrs()
 {
   LispObj *prev = &(lisp_global(GCABLE_POINTERS)), next, new;
+  struct xmacptr **xprev, *xnext, *xnew;
 
   while ((next = *prev) != (LispObj)NULL) {
     new = node_forwarding_address(next);
@@ -844,6 +901,14 @@ forward_gcable_ptrs()
       *prev = new;
     }
     prev = &(((xmacptr *)ptr_from_lispobj(untag(next)))->link);
+  }
+  xprev = &user_postGC_macptrs;
+  while (xnext = *xprev) {
+    xnew = (struct xmacptr *)locative_forwarding_address((LispObj)xnext);
+    if (xnew != xnext) {
+      *xprev = xnew;
+    }
+    xprev = (struct xmacptr **)(&(xnext->class));
   }
 }
 

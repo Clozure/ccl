@@ -443,13 +443,6 @@ typedef struct hash_table_vector_header {
   known values of an "extended" (gcable) macptr's flags word:
 */
 
-typedef enum {
-  xmacptr_flag_none = 0,        /* Maybe already disposed by Lisp */
-  xmacptr_flag_recursive_lock,  /* recursive-lock */
-  xmacptr_flag_ptr,             /* malloc/free */
-  xmacptr_flag_rwlock,          /* read/write lock */
-  xmacptr_flag_semaphore        /* semaphore */
-} xmacptr_flag;
 
 /* Creole */
 
