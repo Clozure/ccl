@@ -1173,6 +1173,14 @@ of 32KBytes in earlier versions.)"
 (defstatic *upper-to-lower* nil)
 (defstatic *lower-to-upper*  nil)
 
+;;; "address" should be the address (as returned by FOREIGN-SYMBOL-ADDRESS)
+;;; of a foreign function that accepts a pointer as an argument and does
+;;; whatever's needed to dispose of it.  That function can be called from
+;;; the GC, so it shouldn't call back into lisp.
+(defun register-xmacptr-dispose-function (address)
+  (ff-call (%kernel-import target::kernel-import-register-xmacptr-dispose-function)
+           :address address
+           :int))
 
 
 ;;; This alist is automatically (and not too cleverly ...) generated.

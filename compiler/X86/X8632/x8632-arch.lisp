@@ -695,7 +695,7 @@
   free
   jvm-init
   tcr-frame-ptr
-  register_cstack
+  register-xmacptr-dispose-function
   open-debug-output
   get-r-debug
   restore-soft-stack-limit
