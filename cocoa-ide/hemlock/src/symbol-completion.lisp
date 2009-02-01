@@ -300,7 +300,7 @@ of the individual words within the symbol (e.g. mvb => multiple-value-bind).
 	 (expansion (dabbrev-next-expansion context))
 	 (expansion-len (length expansion)))
     (when (null expansion)
-      (editor-error "No~:[ more~] expansions for ~s"
+      (editor-error "No~:[ more~;~] expansions for ~s"
 		    (null (dabbrev.expansion context))
 		    abbrev))
     (push expansion (dabbrev.seen context))

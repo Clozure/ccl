@@ -259,7 +259,7 @@
       (push-buffer-mark (qrs-start-mark qrs)))
     (delete-mark (qrs-stop-mark qrs))
     (when report
-      (message "~D Occurrence~:[s~] replaced." count (eql count 1)))))
+      (message "~D occurrence~:P replaced." count))))
 
 
 (defun abort-query/replace-mode ()
