@@ -702,7 +702,8 @@ functions are called."
                  (funcall *trace-print-hook* ',sym nil)))
              (values-list vals))
            do-it)))
-     `(traced ,sym))))
+     `(traced ,sym)
+     :keep-symbols t)))
 
 ; &method var tells compiler to bind var to contents of next-method-context
 (defun advise-global-def (def when stuff &optional method-p dynamic-extent-arglist)
@@ -741,8 +742,9 @@ functions are called."
                     (return  ,stuff))))))))))
 
 
-(defun compile-named-function-warn (fn name)
-  (multiple-value-bind (result warnings) (compile-named-function fn :name name)
+(defun compile-named-function-warn (fn name &rest keys)
+  (declare (dynamic-extent keys))
+  (multiple-value-bind (result warnings) (apply #'compile-named-function fn :name name keys)
     (when warnings 
       (let ((first t))
         (dolist (w warnings)
