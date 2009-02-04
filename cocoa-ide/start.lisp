@@ -202,7 +202,7 @@
                            (flet ((set-lisp-stream-fd (stream fd)
                                     (setf (ccl::ioblock-device (ccl::stream-ioblock stream t))
                                           fd)))
-                             (ff-call (%kernel-import 'target::open-debug-output)
+                             (ff-call (ccl::%kernel-import target::kernel-import-open-debug-output)
                                       :int parent-socket
                                       :int)
                              (#_dup2 parent-socket 0)
