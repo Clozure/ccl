@@ -1,0 +1,918 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd"[
+          <!ENTITY rest "<varname>&amp;rest</varname>">
+          <!ENTITY key "<varname>&amp;key</varname>">
+          <!ENTITY optional "<varname>&amp;optional</varname>">
+          <!ENTITY body "<varname>&amp;body</varname>">
+          <!ENTITY aux "<varname>&amp;aux</varname>">
+          <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+          <!ENTITY CCL "Clozure CL">
+          ]>
+<chapter id="The-Objective-C-Bridge">
+  <title>The Objective-C Bridge</title>
+
+  <para>Mac OS X APIs use a language called Objective-C, which is
+    approximately C with some object-oriented extensions modeled on
+    Smalltalk.  The Objective-C bridge makes it possible to work with
+    Objective-C objects and classes from Lisp, and to define classes
+    in Lisp which can be used by Objective-C.</para>
+  <para>The ultimate purpose of the Objective-C and Cocoa bridges is
+    to make Cocoa (the standard user-interface framework on Mac OS X)
+    as easy as possible to use from &CCL;, in order to support the
+    development of GUI applications and IDEs on Mac OS X (and on any
+    platform that supports Objective-C, such as GNUStep).  The
+    eventual goal, which is much closer than it used to be, is
+    complete integration of Cocoa into CLOS.</para>
+  <para>The current release provides Lisp-like syntax and naming
+    conventions for the basic Objective-C operations, with automatic type
+    processing and messages checked for validity at compile-time.  It
+    also provides some convenience facilities for working with
+    Cocoa.</para>
+
+  <!-- ============================================================ -->
+  <sect1 id="Objective-C-Changes-1.2">
+    <title>Changes in 1.2</title>
+
+    <para>Version 1.2 of &CCL; exports most of the useful symbols
+    described in this chapter; in previous releases, most of them were
+    private in the <literal>CCL</literal> package.</para>
+
+    <para>There are several new reader macros that make it much more
+    convenient than before to refer to several classes of symbols used
+    with the Objective-C bridge. For a full description of these
+    reader-macros, see
+    the <link linkend="anchor_Foreign-Function-Interface-Dictionary">Foreign-Function-Interface
+    Dictionary</link>, especially the entries at the beginning,
+    describing reader macros.</para>
+
+    <para>As in previous releases, 32-bit versions of &CCL; use 32-bit
+    floats and integers in data structures that describe geometry,
+    font sizes and metrics, and so on. 64-bit versions of &CCL; use
+    64-bit values where appropriate.</para>
+
+    <para>The Objective-C bridge defines the
+      type <literal>NS:CGFLOAT</literal> as the Lisp type of the preferred
+      floating-point type on the current platform, and defines the
+      constant <literal>NS:+CGFLOAT+</literal>.  On DarwinPPC32, the foreign
+      types <literal>:cgfloat</literal>, <literal>:&lt;NSUI&gt;nteger</literal>,
+      and
+      <literal>:&lt;NSI&gt;nteger</literal> are defined by the Objective-C
+      bridge (as 32-bit float, 32-bit unsigned integer, and 32-bit
+      signed integer, respectively); these types are defined as 64-bit
+      variants in the 64-bit interfaces.</para>
+
+    <para>Every Objective-C class is now properly named, either with a
+      name exported from the <literal>NS</literal> package (in the case of a
+      predefined class declared in the interface files) or with the
+      name provided in the <literal>DEFCLASS</literal> form (with <literal>:METACLASS</literal>
+      <literal>NS:+NS-OBJECT</literal>) which defines the class from Lisp.
+      The class's Lisp name is now proclaimed to be a "static"
+      variable (as if by <literal>DEFSTATIC</literal>, as described in the
+      <link linkend="Static_Variables">"Static Variables"
+      section</link>) and given the class object as its value.  In
+      other words:</para>
+
+    <programlisting>
+(send (find-class 'ns:ns-application) 'shared-application)
+    </programlisting>
+
+  <para>and</para>
+
+    <programlisting>
+(send ns:ns-application 'shared-application)
+    </programlisting>
+
+  <para>are equivalent.  (Since it's not legal to bind a "static"
+  variable, it may be necessary to rename some things so that
+  unrelated variables whose names coincidentally conflict with
+  Objective-C class names don't do so.)</para>
+
+  </sect1>
+
+  <!-- ============================================================ -->
+  <sect1 id="Using-Objective-C-Classes">
+    <title>Using Objective-C Classes</title>
+
+    <para>The class of most standard CLOS classes is named
+      STANDARD-CLASS. In the Objective-C object model, each class is
+      an instance of a (usually unique) metaclass, which is itself an
+      instance of a "base" metaclass (often the metaclass of the class
+      named "NSObject".) So, the Objective-C class named "NSWindow"
+      and the Objective-C class "NSArray" are (sole) instances of
+      their distinct metaclasses whose names are also "NSWindow" and
+      "NSArray", respectively. (In the Objective-C world, it's much
+      more common and useful to specialize class behavior such as
+      instance allocation.)</para>
+    <para>When &CCL; first loads foreign libraries containing
+      Objective-C classes, it identifies the classes they contain. The
+      foreign class name, such as "NSWindow", is mapped to an external
+      symbol in the "NS" package via the bridge's translation rules,
+      such as NS:NS-WINDOW.  A similar transformation happens to the
+      metaclass name, with a "+" prepended, yielding something like
+      NS:+NS-WINDOW.</para>
+    <para>These classes are integrated into CLOS such that the
+      metaclass is an instance of the class OBJC:OBJC-METACLASS and
+      the class
+      is an instance of the metaclass. SLOT-DESCRIPTION metaobjects are
+      created for each instance variable, and the class and metaclass go
+      through something very similar to the "standard" CLOS class
+      initialization protocol (with a difference being that these classes
+      have already been allocated.)</para>
+    <para>Performing all this initialization, which is done when you
+      (require "COCOA"), currently takes several
+      seconds; it could conceivably be sped up some, but it's never likely
+      to be fast.</para>
+    <para>When the process is complete, CLOS is aware of several hundred
+      new Objective-C classes and their metaclasses. &CCL;'s runtime system can
+      reliably recognize MACPTRs to Objective-C classes as being CLASS objects, and
+      can (fairly reliably but heuristically) recognize instances of those
+      classes (though there are complicating factors here; see below.)
+      SLOT-VALUE can be used to access (and, with care, set) instance
+      variables in Objective-C instances. To see this, do:</para>
+    <programlisting>
+      ? (require "COCOA")
+    </programlisting>
+    <para>and, after waiting a bit longer for a Cocoa listener window to
+      appear, activate that Cocoa listener and do:</para>
+    <programlisting>? (describe (ccl::send ccl::*NSApp* 'key-window))
+    </programlisting>
+    <para>This sends a message asking for the key window, which is the window
+      that has the input focus (often the frontmost), and then describes
+      it. As we can see, NS:NS-WINDOWs have lots of interesting slots.</para>
+  </sect1>
+
+  <!-- ============================================================ -->
+  <sect1 id="Instantiating-Objective-C-Objects">
+    <title>Instantiating Objective-C Objects</title>
+    <para>Making an instance of an Objective-C class (whether the class in
+      question is predefined or defined by the application) involves
+      calling MAKE-INSTANCE with the class and a set of initargs as
+      arguments.  As with STANDARD-CLASS, making an instance involves
+      initializing (with INITIALIZE-INSTANCE) an object allocated with
+      ALLOCATE-INSTANCE.</para>
+    <para>For example, you can create an ns:ns-number like this:</para>
+    <programlisting>
+      ? (make-instance 'ns:ns-number :init-with-int 42)
+      #&lt;NS-CF-NUMBER 42 (#x85962210)>
+    </programlisting>
+    <para>It's worth looking at how this would be done if you were
+      writing in Objective C:</para>
+    <programlisting>
+      [[NSNumber alloc] initWithInt: 42]
+    </programlisting>
+    <para>Allocating an instance of an Objective-C class involves sending the
+      class an "alloc" message, and then using those initargs that
+      <emphasis>don't</emphasis> correspond to slot initargs as the
+      "init" message to be sent to the newly-allocated instance.  So, the
+      example above could have been done more verbosely as:</para>
+    <programlisting>
+      ? (defvar *n* (ccl::send (find-class 'ns:ns-number) 'alloc))
+      *N*
+
+      ? (setq *n* (ccl::send *n* :init-with-int 42))
+      #&lt;NS-CF-NUMBER 42 (#x16D340)>
+    </programlisting>
+    <para>That setq is important; this is a case where init
+      decides to replace the object and return the new one, instead
+      of modifying the existing one.
+      In fact, if you leave out the setq and
+      then try to view the value of *N*, &CCL; will freeze.  There's
+      little reason to ever do it this way; this is just to show
+      what's going on.</para>
+    <para>You've seen that an Objective-C initialization method doesn't have to
+      return the same object it was passed.  In fact, it doesn't have
+      to return any object at all; in this case, the initialization fails
+      and make-instance returns nil.</para>
+    <para>In some special cases, such as loading an ns:ns-window-controller
+      from a .nib file, it may be necessary for you to pass the
+      instance itself as one of the parameters to the initialization
+      method.  It goes like this:</para>
+    <programlisting>
+      ? (defvar *controller*
+      (make-instance 'ns:ns-window-controller))
+      *CONTROLLER*
+
+      ? (setq *controller*
+      (ccl::send *controller*
+      :init-with-window-nib-name #@"DataWindow"
+      :owner *controller*))
+      #&lt;NS-WINDOW-CONTROLLER &lt;NSWindowController: 0x1fb520> (#x1FB520)>
+    </programlisting>
+    <para>This example calls (make-instance) with no initargs.  When you
+      do this, the object is only allocated, and not initialized.  It
+      then sends the "init" message to do the initialization by hand.</para>
+
+    <para>There is an alternative API for instantiating Objective-C
+      classes. You can
+      call <literal>OBJC:MAKE-OBJC-INSTANCE</literal>, passing it the
+      name of the Objective-C class as a string. In previous
+      releases, <literal>OBJC:MAKE-OBJC-INSTANCE</literal> could be
+      more efficient than <literal>OBJC:MAKE-INSTANCE</literal> in
+      cases where the class did not define any Lisp slots; this is no
+      longer the case. You can now
+      regard <literal>OBJC:MAKE-OBJC-INSTANCE</literal> as completely
+      equivalent to <literal>OBJC:MAKE-INSTANCE</literal>, except that
+      you can pass a string for the classname, which may be convenient
+      in the case that the classname is in some way unusual.</para>
+  </sect1>
+
+  <!-- ============================================================ -->
+  <sect1 id="Calling-Objective-C-Methods">
+    <title>Calling Objective-C Methods</title>
+    <para>In Objective-C, methods are called "messages", and there's
+      a special syntax to send a message to an object:</para>
+    <programlisting>
+      [w alphaValue]
+      [w setAlphaValue: 0.5]
+      [v mouse: p inRect: r]
+    </programlisting>
+    <para>The first line sends the method "alphaValue" to the object
+      <literal>w</literal>, with no parameters.  The second line sends
+      the method "setAlphaValue", with the parameter 0.5.  The third
+      line sends the method "mouse:inRect:" - yes, all one long word -
+      with the parameters <literal>p</literal> and
+      <literal>r</literal>.</para>
+    <para>In Lisp, these same three lines are:</para>
+    <programlisting>
+      (send w 'alpha-value)
+      (send w :set-alpha-value 0.5)
+      (send v :mouse p :in-rect r)
+    </programlisting>
+    <para>Notice that when a method has no parameters, its name is an ordinary
+      symbol (it doesn't matter what package the symbol is in, as
+      only its name is checked).  When a method has parameters,
+      each part of its name is a keyword, and the keywords alternate
+      with the values.</para>
+    <para>These two lines break those rules, and both  will
+      result in error messages:</para>
+    <programlisting>
+      (send w :alpha-value)
+      (send w 'set-alpha-value 0.5)
+    </programlisting>
+    <para>Instead of (send), you can also invoke (send-super), with the
+      same interface.  It has roughly the same purpose as CLOS's
+      (call-next-method); when you use (send-super), the message is
+      handled by the superclass.  This can be used to get at the
+      original implementation of a method when it is shadowed by a
+      method in your subclass.</para>
+
+    <sect2 id="Type-Coercion-for-ObjC-Method-Calls">
+	  <title>Type Coercion for Objective-C Method Calls</title>
+      <para>&CCL;'s FFI handles many common conversions between
+        Lisp and foreign data, such as unboxing floating-point args
+        and boxing floating-point results.  The bridge adds a few more
+        automatic conversions:</para>
+      <para>NIL is equivalent to (%NULL-PTR) for any message
+        argument that requires a pointer.</para>
+      <para>T/NIL are equivalent to #$YES/#$NO for any boolean argument.</para>
+      <para>A #$YES/#$NO returned by any method that returns BOOL
+        will be automatically converted to T/NIL.</para>
+    </sect2>
+
+    <sect2 id="Methods-which-Return-Structures">
+	  <title>Methods which Return Structures</title>
+      <para>Some Cocoa methods return small structures, such as
+        those used to represent points, rects, sizes and ranges. When
+        writing in Objective C, the compiler hides the implementation
+        details.  Unfortunately, in Lisp we must be slightly more
+        aware of them.</para>
+      <para>Methods which return structures are called in a special
+        way; the caller allocates space for the result, and passes a
+        pointer to it as an extra argument to the method.  This is
+        called a Structure Return, or STRET.  Don't look at me; I
+        don't name these things.</para>
+      <para>Here's a simple use of this in Objective C.  The first line
+	    sends the "bounds" message to v1, which returns a rectangle.
+	    The second line sends the "setBounds" message to v2, passing
+	    that same rectangle as a parameter.</para>
+      <programlisting>
+        NSRect r = [v1 bounds];
+        [v2 setBounds r];
+	  </programlisting>
+      <para>In Lisp, we must explicitly allocate the memory, which
+        is done most easily and safely with <xref linkend="m_rlet"/>.
+        We do it like this:</para>
+      <programlisting>
+(rlet ((r :&lt;NSR&gt;ect))
+          (send/stret r v1 'bounds)
+          (send v2 :set-bounds r))
+      </programlisting>
+      <para>The rlet allocates the storage (but doesn't initialize
+        it), and makes sure that it will be deallocated when we're
+        done.  It binds the variable r to refer to it.  The call to
+        <literal>send/stret</literal> is just like an ordinary call to
+        <literal>send</literal>, except that r is passed as an extra,
+        first parameter.  The third line, which calls
+        <literal>send</literal>, does not need to do anything special,
+        because there's nothing complicated about passing a structure
+        as a parameter.</para>
+	  <para>In order to make STRETs easier to use, the bridge
+	    provides two conveniences.</para>
+      <para>First, you can use the macros <literal>slet</literal>
+        and <literal>slet*</literal> to allocate and initialize local
+        variables to foreign structures in one step.  The example
+        above could have been written more tersely as:</para>
+      <programlisting>
+(slet ((r (send v1 'bounds)))
+      (send v2 :set-bounds r))
+	  </programlisting>
+      <para>Second, when one call to <literal>send</literal> is made
+        inside another, the inner one has an implicit
+        <literal>slet</literal> around it.  So, one could in fact
+        just write:</para>
+      <programlisting>
+(send v1 :set-bounds (send v2 'bounds))
+      </programlisting>
+      <para>There are also several pseudo-functions provided for convenience
+        by the Objective-C compiler, to make objects of specific types. The
+        following are currently supported by the bridge: NS-MAKE-POINT,
+        NS-MAKE-RANGE, NS-MAKE-RECT, and NS-MAKE-SIZE.</para>
+      <para>These pseudo-functions can be used within an SLET initform:</para>
+      <programlisting>
+(slet ((p (ns-make-point 100.0 200.0)))
+      (send w :set-frame-origin p))
+      </programlisting>
+      <para>Or within a call to <literal>send</literal>:</para>
+      <programlisting>
+(send w :set-origin (ns-make-point 100.0 200.0))
+      </programlisting>
+      <para>However, since these aren't real functions, a call like the
+        following won't work:</para>
+      <programlisting>
+(setq p (ns-make-point 100.0 200.0))
+      </programlisting>
+      <para>To extract fields from these objects, there are also some
+        convenience macros: NS-MAX-RANGE, NS-MIN-X,
+        NS-MIN-Y, NS-MAX-X, NS-MAX-Y, NS-MID-X, NS-MID-Y,
+        NS-HEIGHT, and NS-WIDTH.</para>
+      <para>Note that there is also a <literal>send-super/stret</literal>
+        for use within methods.  Like <literal>send-super</literal>,
+        it ignores any shadowing methods in a subclass, and calls the
+        version of a method which belongs to its superclass.</para>
+    </sect2>
+
+    <sect2 id="Variable-Arity-Messages">
+	  <title>Variable-Arity Messages</title>
+      <para>
+        There are a few messages in Cocoa which take variable numbers
+        of arguments. Perhaps the most common examples involve
+        formatted strings:</para>
+      <programlisting>
+[NSClass stringWithFormat: "%f %f" x y]
+      </programlisting>
+      <para>In Lisp, this would be written:</para>
+      <programlisting>
+(send (find-class 'ns:ns-string)
+      :string-with-format #@"%f %f"
+      (:double-float x :double-float y))
+      </programlisting>
+      <para>Note that it's necessary to specify the foreign types of the
+        variables (in this example, :double-float), because the
+        compiler has no general way of knowing these types.  (You
+        might think that it could parse the format string, but this
+        would only work for format strings which are not determined
+        at runtime.)</para>
+      <para>Because the Objective-C runtime system does not provide any information
+        on which messages are variable arity, they must be explicitly
+        declared. The standard variable arity messages in Cocoa are
+        predeclared by the bridge.  If you need to declare a new
+        variable arity message, use
+        (DEFINE-VARIABLE-ARITY-MESSAGE "myVariableArityMessage:").</para>
+    </sect2>
+
+    <sect2 id="Optimization">
+	  <title>Optimization</title>
+      <para>The bridge works fairly hard to optimize message sends,
+        when it has enough information to do so.  There are two cases
+        when it does.  In either, a message send should be nearly as
+        efficient as when writing in Objective C.</para>
+      <para>The first case is when both the message and the
+        receiver's class are known at compile-time. In general, the
+        only way the receiver's class is known is if you declare it,
+        which you can do with either a DECLARE or a THE form.  For
+        example:</para>
+      <programlisting>
+(send (the ns:ns-window w) 'center)
+	  </programlisting>
+      <para>Note that there is no way in Objective-C to name the class of a
+        class.  Thus the bridge provides a declaration, @METACLASS.
+        The type of an instance of "NSColor" is ns:ns-color.  The type
+        of the <emphasis>class</emphasis> "NSColor" is (@metaclass
+        ns:ns-color):</para>
+      <programlisting>
+(let ((c (find-class 'ns:ns-color)))
+  (declare ((ccl::@metaclass ns:ns-color) c))
+  (send c 'white-color))
+      </programlisting>
+      <para>The other case that allows optimization is when only
+        the message is known at compile-time, but its type signature
+        is unique. Of the more-than-6000 messages currently provided
+        by Cocoa, only about 50 of them have nonunique type
+        signatures.</para>
+      <para>An example of a message with a type signature that is
+        not unique is SET.  It returns VOID for NSColor, but ID for
+        NSSet.  In order to optimize sends of messages with nonunique
+        type signatures, the class of the receiver must be declared at
+        compile-time.</para>
+      <para>If the type signature is nonunique or the message is
+        unknown at compile-time, then a slower runtime call must be
+        used.</para>
+      <para>When the receiver's class is unknown, the bridge's
+        ability to optimize relies on a type-signature table which it
+        maintains.  When first loaded, the bridge initializes this
+        table by scanning every method of every Objective-C class.  When new
+        methods are defined later, the table must be updated.  This
+        happens automatically when you define methods in Lisp.  After
+        any other major change, such as loading an external framework,
+        you should rebuild the table:</para>
+      <programlisting>
+? (update-type-signatures)
+      </programlisting>
+      <para>Because <literal>send</literal> and its relatives
+        <literal>send-super</literal>, <literal>send/stret</literal>,
+        and <literal>send-super/stret</literal> are macros, they
+        cannot be <literal>funcall</literal>ed,
+        <literal>apply</literal>ed, or passed as arguments to
+        functions.</para>
+      <para>To work around this, there are function equivalents to
+        them: <literal>%send</literal>,
+        <literal>%send-super</literal>,
+        <literal>%send/stret</literal>, and
+        <literal>%send-super/stret</literal>.  However, these
+        functions should be used only when the macros will not do,
+        because they are unable to optimize.</para>
+    </sect2>
+  </sect1>
+
+  <!-- ============================================================ -->
+  <sect1 id="Defining-Objective-C-Classes">
+    <title>Defining Objective-C Classes</title>
+    <para>You can define your own foreign classes, which can then be
+      passed to foreign functions; the methods which you implement in
+      Lisp will be made available to the foreign code as
+      callbacks.</para>
+    <para>You can also define subclasses of existing classes,
+      implementing your subclass in Lisp even though the parent class
+      was in Objective C.  One such subclass is CCL::NS-LISP-STRING.
+      It is also particularly useful to make subclasses of
+      NS-WINDOW-CONTROLLER.</para>
+    <para>We can use the MOP to define new Objective-C classes, but
+      we have to do something a little funny: the :METACLASS that we'd
+      want to use in a DEFCLASS option generally doesn't exist until
+      we've created the class (recall that Objective-C classes have, for the
+      sake of argument, unique and private metaclasses.) We can sort
+      of sleaze our way around this by specifying a known Objective-C
+      metaclass object name as the value of the DEFCLASS :METACLASS
+      object; the metaclass of the root class NS:NS-OBJECT,
+      NS:+NS-OBJECT, makes a good choice. To make a subclass of
+      NS:NS-WINDOW (that, for simplicity's sake, doesn't define any
+      new slots), we could do:</para>
+    <programlisting>
+(defclass example-window (ns:ns-window)
+  ()
+  (:metaclass ns:+ns-object))
+    </programlisting>
+    <para>That'll create a new Objective-C class named EXAMPLE-WINDOW whose
+      metaclass is the class named +EXAMPLE-WINDOW. The class will be
+      an object of type OBJC:OBJC-CLASS, and the metaclass will be of
+      type OBJC:OBJC-METACLASS.  EXAMPLE-WINDOW will be a subclass of
+      NS-WINDOW.</para>
+
+    <sect2 id="Defining-classes-with-foreign-slots">
+	  <title>Defining classes with foreign slots</title>
+      <para>If a slot specification in an Objective-C class
+        definition contains the keyword :FOREIGN-TYPE, the slot will
+        be a "foreign slot" (i.e. an Objective-C instance variable). Be aware
+        that it is an error to redefine an Objective-C class so that its
+        foreign slots change in any way, and &CCL; doesn't do
+        anything consistent when you try to.</para>
+      <para>The value of the :FOREIGN-TYPE initarg should be a
+        foreign type specifier. For example, if we wanted (for some
+        reason) to define a subclass of NS:NS-WINDOW that kept track
+        of the number of key events it had received (and needed an
+        instance variable to keep that information in), we could
+        say:</para>
+      <programlisting>
+(defclass key-event-counting-window (ns:ns-window)
+  ((key-event-count :foreign-type :int
+                    :initform 0
+                    :accessor window-key-event-count))
+  (:metaclass ns:+ns-object))
+      </programlisting>
+      <para>Foreign slots are always SLOT-BOUNDP, and the initform
+        above is redundant: foreign slots are initialized to binary
+        0.</para>
+    </sect2>
+
+    <sect2 id="Defining-classes-with-Lisp-slots">
+	  <title>Defining classes with Lisp slots</title>
+      <para>A slot specification in an Objective-C class definition that
+        doesn't contain the :FOREIGN-TYPE initarg defines a
+        pretty-much normal lisp slot that'll happen to be associated
+        with "an instance of a foreign class". For instance:</para>
+      <programlisting>
+(defclass hemlock-buffer-string (ns:ns-string)
+  ((hemlock-buffer :type hi::hemlock-buffer
+                   :initform hi::%make-hemlock-buffer
+                   :accessor string-hemlock-buffer))
+  (:metaclass ns:+ns-object))
+	  </programlisting>
+      <para>As one might expect, this has memory-management
+        implications: we have to maintain an association between a
+        MACPTR and a set of lisp objects (its slots) as long as the
+        Objective-C instance exists, and we have to ensure that the Objective-C
+        instance exists (does not have its -dealloc method called)
+        while lisp is trying to think of it as a first-class object
+        that can't be "deallocated" while it's still possible to
+        reference it. Associating one or more lisp objects with a
+        foreign instance is something that's often very useful; if you
+        were to do this "by hand", you'd have to face many of the same
+        memory-management issues.</para>
+    </sect2>
+  </sect1>
+
+  <!-- ============================================================ -->
+  <sect1 id="Defining-Objective-C-Methods">
+    <anchor id="anchor_Defining-Objective-C-Methods"/>
+    <title>Defining Objective-C Methods</title>
+    <para>In Objective-C, unlike in CLOS, every method belongs to some
+      particular class.  This is probably not a strange concept to
+      you, because C++ and Java do the same thing.  When you use Lisp
+      to define Objective-C methods, it is only possible to define methods
+      belonging to Objective-C classes which have been defined in
+      Lisp.</para>
+
+    <para>You can use either of two different macros to define methods
+      on Objective-C classes. <literal>define-objc-method</literal>
+      accepts a two-element list containing a message selector name
+      and a class name, and a body. <literal>objc:defmethod</literal>
+      superficially resembles the normal
+      CLOS <literal>defmethod</literal>, but creates methods on
+      Objective-C classes with the same restrictions as those created
+      by <literal>define-objc-method</literal>.</para>
+
+    <sect2>
+      <title>Using <literal>define-objc-method</literal></title>
+      <para>As described in the
+        section <link linkend="Calling-Objective-C-Methods">Calling
+        Objective-C Methods</link>, the names of Objective-C methods
+        are broken into pieces, each piece followed by a parameter.
+        The types of all parameters must be explicitly
+        declared.</para>
+      <para>Consider a few examples, meant to illustrate the use
+        of <literal>define-objc-method</literal>. Let us define a
+        class to use in them:</para>
+
+      <programlisting>
+(defclass data-window-controller (ns:ns-window-controller)
+  ((window :foreign-type :id :accessor window)
+   (data :initform nil :accessor data))
+  (:metaclass ns:+ns-object))
+      </programlisting>
+
+      <para>There's nothing special about this class.  It inherits from
+        <literal>ns:ns-window-controller</literal>.  It has two slots:
+        <literal>window</literal> is a foreign slot, stored in the Objective-C
+        world; and <literal>data</literal> is an ordinary slot, stored
+        in the Lisp world.</para>
+
+      <para>Here is an example of how to define a method which takes no
+        arguments:</para>
+
+      <programlisting>
+(define-objc-method ((:id get-window)
+                     data-window-controller)
+    (window self))
+      </programlisting>
+
+      <para>The return type of this method is the foreign type :id,
+        which is used for all Objective-C objects.  The name of the
+        method is
+        <literal>get-window</literal>.  The body of the method is the
+        single line <literal>(window self)</literal>.  The
+        variable <literal>self</literal> is bound, within the body, to
+        the instance that is receiving the message.  The call
+        to <literal>window</literal> uses the CLOS accessor to get the
+        value of the window field.</para>
+
+      <para>Here's an example that takes a parameter.  Notice that the
+        name of the method without a parameter was an ordinary symbol,
+        but with a parameter, it's a keyword:</para>
+
+      <programlisting>
+(define-objc-method ((:id :init-with-multiplier (:int multiplier))
+                     data-window-controller)
+  (setf (data self) (make-array 100))
+  (dotimes (i 100)
+    (setf (aref (data self) i)
+          (* i multiplier)))
+  self)
+      </programlisting>
+
+      <para>To Objective-C code that uses the class, the name of this
+        method is <literal>initWithMultiplier:</literal>.  The name of
+        the parameter is
+        <literal>multiplier</literal>, and its type
+        is <literal>:int</literal>.  The body of the method does some
+        meaningless things.  Then it returns
+        <literal>self</literal>, because this is an initialization
+        method.</para>
+
+      <para>Here's an example with more than one parameter:</para>
+
+      <programlisting>
+(define-objc-method ((:id :init-with-multiplier (:int multiplier)
+                          :and-addend (:int addend))
+                     data-window-controller)
+  (setf (data self) (make-array size))
+  (dotimes (i 100)
+    (setf (aref (data self) i)
+          (+ (* i multiplier)
+             addend)))
+  self)
+      </programlisting>
+
+      <para>To Objective-C, the name of this method is
+        <literal>initWithMultiplier:andAddend:</literal>.  Both
+        parameters are of type <literal>:int</literal>; the first is
+        named <literal>multiplier</literal>, and the second
+        is <literal>addend</literal>.  Again, the method returns
+        <literal>self</literal>.</para>
+
+      <para>Here is a method that does not return any value, a so-called
+        "void method".  Where our other methods
+        said <literal>:id</literal>, this one
+        says <literal>:void</literal> for the return type:</para>
+
+      <programlisting>
+(define-objc-method ((:void :take-action (:id sender))
+                     data-window-controller)
+  (declare (ignore sender))
+  (dotimes (i 100)
+    (setf (aref (data self) i)
+          (- (aref (data self) i)))))
+      </programlisting>
+
+      <para>This method would be called <literal>takeAction:</literal>
+        in Objective-C.  The convention for methods that are going to be
+        used as Cocoa actions is that they take one parameter, which is
+        the object responsible for triggering the action.  However, this
+        method doesn't actually need to use that parameter, so it
+        explicitly ignores it to avoid a compiler warning.  As promised,
+        the method doesn't return any value.</para>
+
+      <para>There is also an alternate syntax, illustrated here.  The
+        following two method definitions are equivalent:</para>
+
+      <programlisting>
+(define-objc-method ("applicationShouldTerminate:"
+                     "LispApplicationDelegate")
+    (:id sender :&lt;BOOL>)
+    (declare (ignore sender))
+    nil)
+  
+(define-objc-method ((:&lt;BOOL>
+                        :application-should-terminate sender)
+                       lisp-application-delegate)
+    (declare (ignore sender))
+    nil)
+      </programlisting>
+      </sect2>
+
+    <sect2>
+      <anchor id="anchor_Using-objc-defmethod"/>
+
+	  <title>Using <literal>objc:defmethod</literal></title>
+
+      <para>The macro <literal>OBJC:DEFMETHOD</literal> can be used to
+        define Objective-C methods.  It looks superficially like
+        <literal>CL:DEFMETHOD</literal> in some respects.</para>
+
+      <para>Its syntax is</para>
+
+      <programlisting>
+(OBC:DEFMETHOD name-and-result-type 
+               ((receiver-arg-and-class) &rest; other-args) 
+      &body; body)
+      </programlisting>
+
+      <para><literal>name-and-result-type</literal> is either an
+        Objective-C message name, for methods that return a value of
+        type <literal>:ID</literal>, or a list containing an
+        Objective-C message name and a foreign type specifier for
+        methods with a different foreign result type.</para>
+
+      <para><literal>receiver-arg-and-class</literal> is a two-element
+        list whose first element is a variable name and whose second
+        element is the Lisp name of an Objective-C class or metaclass.
+        The receiver variable name can be any bindable lisp variable
+        name, but <literal>SELF</literal> might be a reasonable
+        choice.  The receiver variable is declared to be "unsettable";
+        i.e., it is an error to try to change the value of the
+        receiver in the body of the method definition.</para>
+
+      <para><literal>other-args</literal> are either variable names
+            (denoting parameters of type <literal>:ID</literal>) or
+            2-element lists whose first element is a variable name and
+            whose second element is a foreign type specifier.</para>
+
+      <para>Consider this example:</para>
+
+      <programlisting>
+(objc:defmethod (#/characterAtIndex: :unichar)
+    ((self hemlock-buffer-string) (index :&lt;NSUI&gt;nteger))
+  ...)
+      </programlisting>
+
+      <para>The method <literal>characterAtIndex:</literal>, when
+        invoked on an object of
+        class <literal>HEMLOCK-BUFFER-STRING</literal> with an
+        additional argument of
+        type <literal>:&lt;NSU&gt;integer</literal> returns a value of
+        type
+        <literal>:unichar</literal>.</para>
+
+      <para>Arguments that wind up as some pointer type other
+        than <literal>:ID</literal> (e.g. pointers, records passed by
+        value) are represented as typed foreign pointers, so that the
+        higher-level, type-checking accessors can be used on arguments
+        of
+        type <literal>:ns-rect</literal>, <literal>:ns-point</literal>,
+        and so on.</para>
+
+      <para>Within the body of methods defined
+        via <literal>OBJC:DEFMETHOD</literal>, the local function
+        <literal>CL:CALL-NEXT-METHOD</literal> is defined.  It isn't
+        quite as general as <literal>CL:CALL-NEXT-METHOD</literal> is
+        when used in a CLOS method, but it has some of the same
+        semantics.  It accepts as many arguments as are present in the
+        containing method's <literal>other-args</literal> list and
+        invokes version of the containing method that would have been
+        invoked on instances of the receiver's class's superclass with
+        the receiver and other provided arguments.  (The idiom of
+        passing the current method's arguments to the next method is
+        common enough that the <literal>CALL-NEXT-METHOD</literal> in
+        <literal>OBJC:DEFMETHODs</literal> should probably do this if
+        it receives no arguments.)</para>
+
+      <para>A method defined via <literal>OBJC:DEFMETHOD</literal>
+        that returns a structure "by value" can do so by returning a
+        record created via <literal>MAKE-GCABLE-RECORD</literal>, by
+        returning the value returned
+        via <literal>CALL-NEXT-METHOD</literal>, or by other similar
+        means. Behind the scenes, there may be a pre-allocated
+        instance of the record type (used to support native
+        structure-return conventions), and any value returned by the
+        method body will be copied to this internal record instance.
+        Within the body of a method defined
+        with <literal>OBJC:DEFMETHOD</literal> that's declared to
+        return a structure type, the local macro
+        <literal>OBJC:RETURNING-FOREIGN-STRUCT</literal> can be used
+        to access the internal structure. For example:</para>
+
+       <programlisting>
+(objc:defmethod (#/reallyTinyRectangleAtPoint: :ns-rect) 
+  ((self really-tiny-view) (where :ns-point))
+  (objc:returning-foreign-struct (r)
+    (ns:init-ns-rect r (ns:ns-point-x where) (ns:ns-point-y where)
+                        single-float-epsilon single-float-epsilon)
+    r))
+       </programlisting>
+     
+       <para>If the <literal>OBJC:DEFMETHOD</literal> creates a new
+       method, then it displays a message to that effect. These
+       messages may be helpful in catching errors in the names of
+       method definitions. In addition, if
+       a <literal>OBJC:DEFMETHOD</literal> form redefines a method in
+       a way that changes its type signature, &CCL; signals a
+       continuable error.</para>
+    </sect2>
+
+    <sect2 id="Method-Redefinition-Constraints">
+	  <title>Method Redefinition Constraints</title>
+      <para>Objective C was not designed, as Lisp was, with runtime
+        redefinition in mind.  So, there are a few constraints about
+        how and when you can replace the definition of an Objective C
+        method.  Currently, if you break these rules, nothing will
+        collapse, but the behavior will be confusing; so
+        don't.</para>
+      <para>Objective C methods can be redefined at runtime, but
+        their signatures shouldn't change.  That is, the types of the
+        arguments and the return type have to stay the same.  The
+        reason for this is that changing the signature changes the
+        selector which is used to call the method.</para>
+      <para>When a method has already been defined in one class, and
+        you define it in a subclass, shadowing the original method,
+        they must both have the same type signature.  There is no such
+        constraint, though, if the two classes aren't related and the
+        methods just happen to have the same name.</para>
+    </sect2>
+  </sect1>
+
+  <!-- ============================================================ -->
+  <sect1 id="Loading-Objc-Frameworks">
+    <title>Loading Frameworks</title>
+
+    <para>On Mac OS X, a framework is a structured directory
+      containing one or more shared libraries along with metadata such
+      as C and Objective-C header files. In some cases, frameworks may
+      also contain additional items such as executables.</para>
+
+    <para>Loading a framework means opening the shared libraries and
+      processing any declarations so that &CCL; can subsequently call
+      its entry points and use its data structures. &CCL; provides the
+      function <literal>OBJC:LOAD-FRAMEWORK</literal> for this
+      purpose.</para>
+
+    <programlisting>
+(OBJC:LOAD-FRAMEWORK framework-name interface-dir)
+    </programlisting>
+
+    <para><literal>framework-name</literal> is a string that names the
+    framework (for example, "Foundation", or "Cocoa"),
+    and <literal>interface-dir</literal> is a keyword that names the
+    set of interface databases associated with the named framework
+    (for example, <literal>:foundation</literal>,
+    or <literal>:cocoa</literal>).</para>
+
+    <para>Assuming that interface databases for the named frameworks
+    exist on the standard search
+    path, <literal>OBJC:LOAD-FRAMEWORK</literal> finds and initializes
+    the framework bundle by searching OS X's standard framework search
+    paths. Loading the named framework may create new Objective-C
+    classes and methods, add foreign type descriptions and entry
+    points, and adjust &CCL;'s dispatch functions.</para>
+
+    <para>If interface databases don't exist for a framework you want
+    to use, you will need to create them. For more information about
+    creating interface databases,
+    see <link linkend="Creating-new-interface-directories">Creating
+    new interface directories</link>.</para>
+  </sect1>
+
+  <!-- ============================================================ -->
+  <sect1 id="How-Objective-C-Names-are-Mapped-to-Lisp-Symbols">
+    <title>How Objective-C Names are Mapped to Lisp Symbols</title>
+    <para>There is a standard set of naming conventions for Cocoa
+      classes, messages, etc.  As long as they are followed, the
+      bridge is fairly good at automatically translating between Objective-C
+      and Lisp names.</para>
+    <para>For example, "NSOpenGLView" becomes ns:ns-opengl-view;
+      "NSURLHandleClient" becomes ns:ns-url-handle-client; and
+      "nextEventMatchingMask:untilDate:inMode:dequeue:" becomes
+      (:next-event-matching-mask :until-date :in-mode :dequeue).  What
+      a mouthful.</para>
+    <para>To see how a given Objective-C or Lisp name will be translated by
+      the bridge, you can use the following functions:</para>
+	<simplelist type="vert">
+	  <member>(ccl::objc-to-lisp-classname string)</member>
+	  <member>(ccl::lisp-to-objc-classname symbol)</member>
+	  <member>(ccl::objc-to-lisp-message string)</member>
+	  <member>(ccl::lisp-to-objc-message string)</member>
+	  <member>(ccl::objc-to-lisp-init string)</member>
+	  <member>(ccl::lisp-to-objc-init keyword-list)</member>
+	</simplelist>
+
+    <para>Of course, there will always be exceptions to any naming
+      convention.  Please tell us on the mailing lists if you come
+      across any name translation problems that seem to be bugs.
+      Otherwise, the bridge provides two ways of dealing with
+      exceptions:</para>
+    <para>First, you can pass a string as the class name of
+      MAKE-OBJC-INSTANCE and as the message to SEND.  These strings
+      will be directly interpreted as Objective-C names, with no
+      translation. This is useful for a one-time exception.  For
+      example:</para>
+    <programlisting>
+(ccl::make-objc-instance "WiErDclass")
+(ccl::send o "WiErDmEsSaGe:WithARG:" x y)
+    </programlisting>
+    <para>Alternatively, you can define a special translation rule
+      for your exception.  This is useful for an exceptional name that
+      you need to use throughout your code.  Some examples:</para>
+    <programlisting>
+(ccl::define-classname-translation "WiErDclass" wierd-class)
+(ccl::define-message-translation "WiErDmEsSaGe:WithARG:" (:weird-message :with-arg))
+(ccl::define-init-translation "WiErDiNiT:WITHOPTION:" (:weird-init :option))
+    </programlisting>
+    <para>The normal rule in Objective-C names is that each word begins with a
+      capital letter (except possibly the first).  Using this rule
+      literally, "NSWindow" would be translated as N-S-WINDOW, which
+      seems wrong.  "NS" is a special word in Objective-C that should not be
+      broken at each capital letter. Likewise "URL", "PDF", "OpenGL",
+      etc. Most common special words used in Cocoa are already defined
+      in the bridge, but you can define new ones as follows:</para>
+    <programlisting>
+(ccl::define-special-objc-word "QuickDraw")
+    </programlisting>
+    <para>Note that message keywords in a SEND such as (SEND V
+      :MOUSE P :IN-RECT R) may look like the keyword arguments in a
+      Lisp function call, but they really aren't. All keywords must be
+      present and the order is significant. Neither (:IN-RECT :MOUSE)
+      nor (:MOUSE) translate to "mouse:inRect:"</para>
+    <para>Also, as a special exception, an "init" prefix is optional
+      in the initializer keywords, so (MAKE-OBJC-INSTANCE 'NS-NUMBER
+      :INIT-WITH-FLOAT 2.7) can also be expressed as
+      (MAKE-OBJC-INSTANCE 'NS-NUMBER :WITH-FLOAT 2.7)</para>
+  </sect1>
+</chapter>

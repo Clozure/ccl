@@ -1,0 +1,481 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY rest "<varname>&amp;rest</varname>">
+<!ENTITY key "<varname>&amp;key</varname>">
+<!ENTITY optional "<varname>&amp;optional</varname>">
+<!ENTITY body "<varname>&amp;body</varname>">
+<!ENTITY aux "<varname>&amp;aux</varname>">
+<!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+<!ENTITY CCL "Clozure CL">
+]>
+
+  <chapter id="Running-Other-Programs-as-Subprocesses">
+    <title>Running Other Programs as Subprocesses</title>
+
+    <sect1 id="Subprocess-Overview">
+      <title>Overview</title>
+      <para>&CCL; provides primitives to run external Unix programs,
+      to select and connect Lisp streams to their input and output
+      sources, to (optionally) wait for their completion and to check
+      their execution and exit status.</para>
+      <para>All of the global symbols described below are exported
+      from the CCL package.</para>
+      <para>This implementation is modeled on - and uses some code
+      from - similar facilities in CMUCL.</para>
+    </sect1>
+
+    <sect1 id="Subprocess-Examples">
+      <title>Examples</title>
+      <programlisting>
+;;; Capture the output of the "uname" program in a lisp string-stream
+;;; and return the generated string (which will contain a trailing
+;;; newline.)
+? (with-output-to-string (stream)
+    (run-program "uname" '("-r") :output stream))
+;;; Write a string to *STANDARD-OUTPUT*, the hard way.
+? (run-program "cat" () :input (make-string-input-stream "hello") :output t)
+;;; Find out that "ls" doesn't expand wildcards.
+? (run-program "ls" '("*.lisp") :output t)
+;;; Let the shell expand wildcards.
+? (run-program "sh" '("-c" "ls *.lisp") :output t)
+</programlisting>
+      <para>These last examples will only produce output if &CCL;'s
+      current directory contains .lisp files, of course.</para>
+    </sect1>
+
+    <sect1 id="Limitations-and-known-bugs">
+      <title>Limitations and known bugs</title>
+      <itemizedlist>
+        <listitem><para>&CCL; and the external process may get
+        confused about who owns which streams when input, output, or
+        error are specified as T and wait is specified as
+        NIL.</para></listitem>
+        <listitem><para>External processes that need to talk to a
+        terminal device may not work properly; the environment (SLIME,
+        ILISP) under which &CCL; is run can affect
+        this.</para></listitem>
+      
+      </itemizedlist>
+    </sect1>
+
+    <sect1 id="External-Program-Dictionary">
+      <title>External-Program Dictionary</title>
+	<refentry id="f_run-program">
+	  <indexterm zone="f_run-program">
+	    <primary>run-program</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>RUN-PROGRAM</refname>
+	    <refpurpose>Invokes an external program as an OS subprocess
+	    of lisp.</refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis><function>run-program</function>
+	    program args &key; (wait t) pty input
+	    if-input-does-not-exist output (if-output-exists :error) (error
+	    :output) (if-error-exists :error) status-hook</synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Arguments and Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+		<term>program</term>
+
+		<listitem>
+		  <para>A string or pathname which denotes an executable file.
+		  The PATH environment variable is used to find programs whose
+		  name doesn't contain a directory component.</para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term>args</term>
+
+		<listitem>
+		  <para>A list of simple-strings</para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term>wait</term>
+
+		<listitem>
+		  <para>Indicates whether or not run-program should wait for
+		  the EXTERNAL-PROCESS to complete or should return
+		  immediately.</para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term>pty</term>
+
+		<listitem>
+		  <para>This option is accepted but currently ignored;
+		  it's intended to make it easier to run external programs
+		  that need to interact with a terminal device.</para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term>input</term>
+
+		<listitem>
+		  <para>Selects the input source used by the EXTERNAL-PROCESS.
+		  May be any of the following:</para>
+
+		  <itemizedlist>
+		    <listitem>
+		      <para>NIL Specifies that a null input stream (e.g.,
+		      /dev/null) should be used.</para>
+		    </listitem>
+
+		    <listitem>
+		      <para>T Specifies that the EXTERNAL-PROCESS should use
+		      the input source with which &CCL; was invoked.</para>
+		    </listitem>
+
+		    <listitem>
+		      <para>A string or pathname. Specifies that the
+		      EXTERNAL-PROCESS should receive its input from the named
+		      existing file.</para>
+		    </listitem>
+
+		    <listitem>
+		      <para>:STREAM Creates a Lisp stream opened for character
+		      output. Any data written to this stream (accessible as
+		      the EXTERNAL-PROCESS-INPUT-STREAM of the
+		      EXTERNAL-PROCESS object) appears as input to the
+		      external process.</para>
+		    </listitem>
+
+		    <listitem>
+		      <para>A stream. Specifies that the lisp stream should
+		      provide input to the EXTERNAL-PROCESS.</para>
+		    </listitem>
+		  </itemizedlist>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term>if-input-does-not-exist</term>
+
+		<listitem>
+		  <para>If the input argument specifies the name of an
+		  existing file, this argument is used as the
+		  if-does-not-exist argument to OPEN when that file is opened.</para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term>output</term>
+
+		<listitem>
+		  <para>Specifies where standard output from the external
+		  process should be sent. Analogous to input above.</para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term>if-output-exists</term>
+
+		<listitem>
+		  <para>If output is specified as a string or pathname, this
+		  argument is used as the if-exists argument to OPEN when that
+		  file is opened.</para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term>error</term>
+
+		<listitem>
+		  <para>Specifies where error output from the external process
+		  should be sent. In addition to the values allowed for
+		  output, the keyword :OUTPUT can be used to indicate that
+		  error output should be sent where standard output goes.</para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term>if-error-exists</term>
+
+		<listitem>
+		  <para>Analogous to if-output-exists.</para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term>status-hook</term>
+
+		<listitem>
+		  <para>A user-defined function of one argument (the
+		  EXTERNAL-PROCESS structure.) This function is called
+		  whenever &CCL; detects a change in the status of the
+		  EXTERNAL-PROCESS.</para>
+		</listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Runs the specified program in an external (Unix) process,
+	    returning an object of type EXTERNAL-PROCESS if successful.</para>
+	  </refsect1>
+	</refentry>
+
+	<refentry id="f_signal-external-process">
+	  <indexterm zone="f_signal-external-process">
+	    <primary>signal-external-process</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>SIGNAL-EXTERNAL-PROCESS</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis><function>signal-external-process</function>
+	    proc signal-number</synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Arguments and Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+		<term>proc</term>
+
+		<listitem>
+		  <para>An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term>signal</term>
+
+		<listitem>
+		  <para>A small integer.</para>
+		</listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Sends the specified "signal" to the specified
+	    external process. (Typically, it would only be useful to call
+	    this function if the EXTERNAL-PROCESS was created with :WAIT
+	    NIL. ) Returns T if successful; signals an error otherwise.</para>
+	  </refsect1>
+	</refentry>
+
+	<refentry id="f_external-process-id">
+	  <indexterm zone="f_external-process-id">
+	    <primary>external-process-id</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>EXTERNAL-PROCESS-ID</refname>
+	    <refpurpose>Returns the "process ID" of an OS subprocess,
+	    a positive integer which identifies it.</refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis><function>external-process-id</function>
+	    proc</synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Arguments and Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+		<term>proc</term>
+
+		<listitem>
+		  <para>An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</para>
+		</listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Returns the <emphasis>process id</emphasis> assigned to
+	    the external process by the operating system. This is typically
+	    a positive, 16-bit number.</para>
+	  </refsect1>
+	</refentry>
+
+	<refentry id="f_external-process-input-stream">
+	  <indexterm zone="f_external-process-input-stream">
+	    <primary>external-process-input-stream</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>EXTERNAL-PROCESS-INPUT-STREAM</refname>
+	    <refpurpose>Returns the lisp stream which is used to write
+	    input to a given OS subprocess, if it has one.</refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis><function>external-process-input-stream</function>
+	    proc</synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Arguments and Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+		<term>proc</term>
+
+		<listitem>
+		  <para>An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</para>
+		</listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Returns the stream created when the input argument to
+	    run-program is specified as :STREAM.</para>
+	  </refsect1>
+	</refentry>
+
+	<refentry id="f_external-process-output-stream">
+	  <indexterm zone="f_external-process-output-stream">
+	    <primary>external-process-output-stream</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>EXTERNAL-PROCESS-OUTPUT-STREAM</refname>
+	    <refpurpose>Returns the lisp stream which is used to read
+	    output from an OS subprocess, if there is one.</refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis><function>external-process-output-stream</function>
+	    proc</synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Arguments and Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+		<term>proc</term>
+
+		<listitem>
+		  <para>An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</para>
+		</listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Returns the stream created when the output argument to
+	    run-program is specified as :STREAM.</para>
+	  </refsect1>
+	</refentry>
+
+	<refentry id="f_external-process-error-stream">
+	  <indexterm zone="f_external-process-error-stream">
+	    <primary>external-process-error-stream</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>EXTERNAL-PROCESS-ERROR-STREAM</refname>
+	    <refpurpose>Returns the stream which is used to read
+	    "error" output from a given OS subprocess, if it has
+	    one.</refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis><function>external-process-error-stream</function>
+	    proc</synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Arguments and Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+		<term>proc</term>
+
+		<listitem>
+		  <para>An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</para>
+		</listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Returns the stream created when the error argument to
+	    run-program is specified as :STREAM.</para>
+	  </refsect1>
+	</refentry>
+
+	<refentry id="f_external-process-status">
+	  <indexterm zone="f_external-process-status">
+	    <primary>external-process-status</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>EXTERNAL-PROCESS-STATUS</refname>
+	    <refpurpose>Returns information about whether an OS
+	    subprocess is running; or, if not, why not; and what its
+	    result code was if it completed.</refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis><function>external-process-status</function>
+	    proc</synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Arguments and Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+		<term>proc</term>
+
+		<listitem>
+		  <para>An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</para>
+		</listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Returns, as multiple values, a keyword denoting the status
+	    of the external process (one of :running, :stopped, :signaled, or
+	    :exited), and the exit code or terminating signal if the first
+	    value is other than :running.</para>
+	  </refsect1>
+	</refentry>
+    </sect1>
+  </chapter>

@@ -1,0 +1,375 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN"
+          "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd"[
+          <!ENTITY rest "<varname>&amp;rest</varname>">
+          <!ENTITY key "<varname>&amp;key</varname>">
+          <!ENTITY optional "<varname>&amp;optional</varname>">
+          <!ENTITY body "<varname>&amp;body</varname>">
+          <!ENTITY aux "<varname>&amp;aux</varname>">
+          <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+          <!ENTITY CCL "Clozure CL">
+          ]>
+
+<glossary id="glossary">
+  <glossaryinfo>
+	<title>Glossary of Terms</title>
+  </glossaryinfo>
+
+  <glossdiv id="A">
+	<!-- ******************** A ********************  -->
+	<title>A</title>
+
+	<glossentry id="application_bundle">
+	  <glossterm>application bundle</glossterm>
+
+	  <glossdef>
+
+		<para>A specially-structured directory that Mac OS X
+		recognizes as a
+		launchable <glossterm linkend="Cocoa">Cocoa</glossterm>
+		application. Graphical applications on Mac OS X are
+		represented as application bundles.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
+  <glossdiv id="C">
+	<!-- ******************** C ********************  -->
+	<title>C</title>
+
+	<glossentry id="Cocoa">
+	  <glossterm>Cocoa</glossterm>
+
+	  <glossdef>
+
+		<para>The standard user-interface libraries and frameworks
+		provided by Apple for development of applications on Mac OS
+		X.</para>
+
+	  </glossdef>
+	</glossentry>
+    
+	<glossentry id="creator_code">
+	  <glossterm>creator code</glossterm>
+
+	  <glossdef>
+
+		<para>A four-character identifier used in Mac OS X to uniquely
+		identify an application.</para>
+
+	  </glossdef>
+	</glossentry>
+    
+  </glossdiv>
+
+  <glossdiv id="D">
+	<!-- ******************** D ********************  -->
+	<title>D</title>
+
+	<glossentry id="displaced-array">
+	  <glossterm>displaced array</glossterm>
+
+	  <glossdef>
+
+		<para>An array with no storage of its own for elements, which
+		points to the storage of another array, called its
+		target. Reading or writing the elements of the displaced array
+		returns or changes the contents of the target.</para>
+
+	  </glossdef>
+	</glossentry>
+
+  </glossdiv>
+
+  <glossdiv id="F">
+	<!-- ******************** F ********************  -->
+	<title>F</title>
+
+	<glossentry id="fasl-file">
+	  <glossterm>fasl file</glossterm>
+
+	  <glossdef>
+
+		<para>A file containing compiled lisp code that the Lisp is
+		able to quickly load and use. A "fast-load" file.</para>
+
+	  </glossdef>
+	</glossentry>
+
+  </glossdiv>
+
+  <glossdiv id="H">
+	<!-- ******************** H ********************  -->
+	<title>H</title>
+
+	<glossentry id="hemlock">
+	  <glossterm>Hemlock</glossterm>
+
+	  <glossdef>
+
+		<para>A text editor, written in Common Lisp, similar in
+		features to Emacs. Hemlock was originally developed as part of
+		CMU Common Lisp. A portable version of Hemlock is built into
+		the &CCL; <glossterm linkend="IDE">IDE</glossterm>.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
+  <glossdiv id="I">
+	<!-- ******************** I ********************  -->
+	<title>I</title>
+
+	<glossentry id="IDE">
+	  <glossterm>IDE</glossterm>
+
+	  <glossdef>
+
+		<para>"Integrated Development Environment". In the context of
+		&CCL;, "the IDE" refers to the experimental <glossterm linkend="Cocoa">Cocoa</glossterm>
+		windowing development environment provided in source form with
+		&CCL; distributions.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+	<glossentry id="lisp_image">
+	  <glossterm>image</glossterm>
+
+	  <glossdef>
+
+		<para>The in-memory state of a running Lisp system, containing
+		functions, data structures, variables, and so on. Also, a file
+		containing archived versions of these data in a format that
+		can be loaded and reconstituted by the
+		Lisp <glossterm linkend="lisp_kernel">kernel</glossterm>. A
+		working &CCL; system consists of the kernel and
+		an <glossterm linkend="lisp_image">image</glossterm>.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+	<glossentry id="InterfaceBuilder">
+	  <glossterm>InterfaceBuilder</glossterm>
+
+	  <glossdef>
+
+		<para>An application supplied by Apple with their developer
+		tools that can be used to interactively build user-interface
+		elements for <glossterm linkend="Cocoa">Cocoa</glossterm>
+		applications.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
+  <glossdiv id="K">
+	<!-- ******************** K ********************  -->
+	<title>K</title>
+
+	<glossentry id="lisp_kernel">
+	  <glossterm>kernel</glossterm>
+
+	  <glossdef>
+
+		<para>The binary executable program that implements the lowest
+		levels of the Lisp system. A working &CCL; system consists of
+		the kernel and
+		an <glossterm linkend="lisp_image">image</glossterm>.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
+  <glossdiv id="L">
+	<!-- ******************** L ********************  -->
+	<title>L</title>
+
+	<glossentry id="listener_window">
+	  <glossterm>listener window</glossterm>
+
+	  <glossdef>
+
+		<para>In the <glossterm linkend="IDE">IDE</glossterm>,
+		a <glossterm linkend="Cocoa">Cocoa</glossterm>
+		window that contains a pseudo-terminal session that
+		communicates with a Lisp <glossterm linkend="REPL">REPL</glossterm>.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
+  <glossdiv id="M">
+	<!-- ******************** M ********************  -->
+	<title>M</title>
+
+	<glossentry id="memory_mapped_file">
+	  <glossterm>memory-mapped file</glossterm>
+
+	  <glossdef>
+
+		<para>A file whose contents are accessible as a range of
+		memory addresses. Some operating systems support this feature,
+		in which the virtual memory subsystem arranges for a range of
+		virtual memory addresses to point to the contents of an open
+		file. Programs can then gain access to the file's contents by
+		operating on memory addresses in that range. Access to the
+		file's contents is valid only as long as the file remains
+		open.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
+  <glossdiv id="N">
+	<!-- ******************** N ********************  -->
+	<title>N</title>
+
+	<glossentry id="nibfile">
+	  <glossterm>nibfile</glossterm>
+
+	  <glossdef>
+
+		<para>A data file created by
+		Apple's <glossterm linkend="InterfaceBuilder">InterfaceBuilder</glossterm>
+		application, which contains archived Objective-C objects that
+		define user-interface elements for
+		a <glossterm linkend="Cocoa">Cocoa</glossterm>
+		application. Under Mac OS
+		X, <glossterm linkend="Cocoa">Cocoa</glossterm> applications
+		typically create their user interface elements by reading
+		nibfiles and unarchiving the objects in them.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
+  <glossdiv id="R">
+
+	<!-- ******************** R ********************  -->
+	<title>R</title>
+
+	<glossentry id="REPL">
+	  <glossterm>REPL</glossterm>
+
+	  <glossdef>
+
+		<para>"Read-eval-print loop". The interactive shell provided
+		by &CCL; for interaction with Lisp.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
+  <glossdiv id="S">
+
+	<!-- ******************** S ********************  -->
+	<title>S</title>
+
+	<glossentry id="s-expression">
+	  <glossterm>s-expression</glossterm>
+
+	  <glossdef>
+
+		<para>The simplest, most general element of Lisp syntax. An
+		s-expression may be an atom (such as a symbol, integer, or
+		string), or it may be a list of s-expressions.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+	<glossentry id="special_variable">
+	  <glossterm>special variable</glossterm>
+
+	  <glossdef>
+
+		<para>A variable whose binding is in the dynamic
+		environment. Special variables are essentially equivalent to
+		global variables in languages other than Lisp. A special
+		variable binding is visible in any lexical environment, so
+		long as a lexical binding has not shadowed it.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+	<glossentry id="static_variable">
+	  <glossterm>static variable</glossterm>
+
+	  <glossdef>
+
+		<para>In &CCL;, a variable whose value is shared across all
+		threads, and which may not be dynamically rebound. Changing a
+		static variable's value in one thread causes all threads to
+		see the new value. Attempting to dynamically rebind the
+		variable (for instance, by using <code>LET</code>, or using
+		the variable name as a parameter in a <code>LAMBDA</code>
+		form) signals an error.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
+  <glossdiv id="T">
+
+	<!-- ******************** T ********************  -->
+	<title>T</title>
+
+	<glossentry id="toplevel_function">
+	  <glossterm>toplevel function</glossterm>
+
+	  <glossdef>
+
+		<para>The function executed by Lisp automatically once its
+		startup is complete. &CCL;'s default toplevel is the
+		interactive <glossterm linkend="REPL">read-eval-print
+		loop</glossterm> that you normally use to interact with
+		Lisp. You can, however, replace the toplevel with a function
+		of your own design, changing &CCL; from a Lisp development
+		system into some tool of your making.</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+	<glossentry id="type-specifier">
+	  <glossterm>type-specifier</glossterm>
+
+	  <glossdef>
+
+		<para>An expression that denotes a type. Type specifiers may
+		be symbols (such as <code>CONS</code>
+		and <code>STRING</code>), or they may be more complex
+		<glossterm linkend="s-expression">S-expressions</glossterm>
+		(such as (UNSIGNED-BYTE 8)).</para>
+
+	  </glossdef>
+
+	</glossentry>
+    
+  </glossdiv>
+
+</glossary>
+

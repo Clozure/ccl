@@ -1,0 +1,18 @@
+#! /bin/sh
+
+now=`date --iso`
+tempdir=/tmp/hemlock-publish/
+rm -rf $tempdir
+mkdir $tempdir
+cd $tempdir ;
+cvs -d :pserver:gilbert@localhost:/hemlock export -D "`date`" -d hemlock-$now hemlock ;
+tar zcvf hemlock-$now.tar.gz hemlock-$now
+
+sed -e "s/%%DATE%%/$now/g" < hemlock-$now/website/index.html.in > index.html
+
+scp hemlock-$now.tar.gz unk6@rzstud1.rz.uni-karlsruhe.de:.public_html/export/
+scp index.html unk6@rzstud1.rz.uni-karlsruhe.de:.public_html/hemlock/
+
+ssh -l unk6 rzstud1.rz.uni-karlsruhe.de chmod a+r .public_html/export/hemlock-$now.tar.gz .public_html/hemlock/index.html
+
+# $Id$

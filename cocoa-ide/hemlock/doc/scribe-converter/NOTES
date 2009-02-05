@@ -1,0 +1,13 @@
+Scribe Syntax
+
+The Syntax of Scribe is actually very nice. A command is always
+introduced by #\@ followed by the command name and arguments delimited
+by delimiters (sic).
+
+The following delimiter pairs are supported:
+
+    { }   [ ]   < >   ( )   " "   ' '
+
+
+
+$Id$

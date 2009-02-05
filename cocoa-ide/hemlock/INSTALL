@@ -1,0 +1,16 @@
+                          INSTALLATION NOTES
+
+Phemlock comes with a mk:defsystem style .system file. So when you are
+lucky you just can fire up your Lisp and say
+
+    (oos :hemlock :load)
+
+    (hemlock)
+
+This was tested with:
+
+ - CMUCL
+ - ACL
+ - CLISP using MIT CLX
+
+

@@ -1,0 +1,184 @@
+
+LinuxPPC-specific examples:
+
+Prerequisites.
+  All of these example programs require OpenMCL 0.9 or later.
+  Most additionally require that X11 runtime libraries are installed,
+   and that OpenMCL is running under an X server.
+  Additional libraries may also be required.  One way to check for
+   the presence of a shared library named "LIBNAME.so" is to do:
+
+% /sbin/ldconfig -p | fgrep LIBNAME.so
+
+   If that returns a line of the form:
+
+     LIBNAME.so (<other info>) => /path/to/some/lib/on/your/system
+
+   you're in luck; if it doesn't, you may have to hunt around to
+   find a package (.deb, .rpm, ...) which contains the library in
+   a form that's appropriate for your Linux distribution.  Different
+   distributions package things differently, and packages often
+   depend on other packages; it's hard to be specific about what a
+   given distribution needs, but I'll try to provide some hints.
+
+ Beginning with release 0.9, OpenMCL uses "interface directories",
+  to try to modularize its interface database somewhat.  If any of
+  these examples need interface directories that aren't distributed
+  with OpenMCL, the example's description will note that.  ("interface
+  directories" are subdirectories of "ccl:headers;" that contain -
+  among other things - a set of files whose extension is "db".)
+
+----------------------------------------------------------------------
+file: "opengl-ffi.lisp"
+description: 2d Gasket example  taken from
+  "Interactive Computer Graphics:
+   A Top-Down Approach with OpenGL" by Ed Angel
+contributor: Hamilton Link
+interface-dir: gl	; distributed with OpenMCL
+libraries:  libGL.so	; may be part of a "mesa" or "opengl" package
+            libGLU.so	; may be part of a "mesa" or "opengl" package
+            libglut.so	; may be part of a "glutg3" or "glutg3-dev" package
+invocation:
+? (require "opengl-ffi")
+? (2dgasket::main)
+notes:
+OpenGL doesn't seem to provide a way to do event handling incrementally
+or concurrently with OpenMCL; when its event handling function finishes
+(when the OpenGL window closes), the OpenMCL process will exit and when
+the OpenGL event-loop is active, OpenMCL isn't responsive.)
+It's possible that the "gtkglarea" package would provide a way of doing
+OpenGL graphics in a way that's a little less intrusive.
+----------------------------------------------------------------------
+file: "gtk-clock.lisp"
+description: A double-buffered analog clock, derived from the
+  double-buffered clock example in "Developing Linux Applications
+  with GDK and GTK+", Eric Harlow, (c) 1999 New Riders Publishing.
+contributor: Clozure
+interface-dir: gtk	; distributed with OpenMCL
+libraries:  libgtk.so	; may be part of a "libgtk-1.2" package
+invocation:
+? (require "gtk-clock")
+? (ccl::gtk-clock)
+notes:
+The clock is reentrant: it should be possible to call (ccl::gtk-clock)
+multiple times, and clutter your desktop with way too many 
+clocks.
+----------------------------------------------------------------------
+file: "gtk-minesweepr.lisp"
+description: An implementation of the Minesweeper game, derived from the
+  Minesweeper example in "Developing Linux Applications
+  with GDK and GTK+", Eric Harlow, (c) 1999 New Riders Publishing.
+contributor: Clozure
+interface-dir: gtk	; distributed with OpenMCL
+libraries:  libgtk.so	; may be part of a "libgtk-1.2" package
+invocation:
+? (require "gtk-minesweeper")
+? (minesweeper:minesweeper)
+notes:
+Minesweeper -isn't- reentrant (too much state is kept in global variables);
+if you try to invoke (minesweeper:minesweeper) while a minesweeper window
+is already active, it'll let you close the old window or abort the attempt
+to open a new one.
+
+I found that there were display issues with the way that GtkToggleButtons
+were used in the original program and made a subclass - GtkQuietToggelButton -
+that handles "enter" and "leave" events differently.  The quiet buttons are
+probably better (you can do
+
+? (setq  MINESWEEPER::*MINESWEEPER-USE-QUIET-TOGGLE-BUTTONS* nil)
+
+to use the original implementation), but some display artifacts remain.
+There may be a better approach to the problem than the one I took, and
+I'd have to assume that GTK is flexible enough to offer a solution.
+
+Maybe not the world's best Minesweeper game, but the only one I know of
+that allows you to develop CL programs while you're playing ...
+
+----------------------------------------------------------------------
+file: "gtk-step.lisp"
+description: An alternate user interface to OpenMCL's STEP command.
+contributor: Clozure
+interface-dir: gtk	; distributed with OpenMCL
+libraries:  libgtk.so	; may be part of a "libgtk-1.2" package
+invocation:
+? (require "gtk-step")
+? (step <some form>)
+Notes:
+Since OpenMCL is essentially a "compile-only" implementation, one has
+to take special ... steps to ensure that STEP will step through evaluated
+code.  (This is true regardless of what user interface STEP uses.)
+
+Most of the STEP output is displayed in a GtkText widget; it often feels
+like it's dragging a reluctant vertical scrollbar with it, fighting tooth
+and nail to convince that scrollbar to scroll to where the most recent
+output is.  I sincerely hope that I'm doing something wrong here ...
+
+-------------
+MacOSX-specific examples:
+(These currently depend on the Cocoa application framework, which is part
+of MacOSX.  In the future, they may also work under Linux and/or Darwin
+with the GNUstep application framework (an opensource implementation of
+the OpenSTEP framework on which Cocoa is based.)
+
+----------------------------------------------------------------------
+file: "cocoa.lisp"
+description: A preliminary Cocoa-based lisp development system
+contributor: Clozure
+interface-dir: cocoa	; distributed with OpenMCL
+libraries:  /System/Library/Frameworks/Cocoa.framework/Cocoa
+invocation:
+? (require "COCOA")
+After a few seconds, an "OpenMCL" dock entry should appear, identifying
+a new window layer in which a Cocoa-based listener and OpenMCL menubar
+should be present.  There's a text editor that supports basic Emacs-style
+key bindings for cursor movement, etc.; it isn't (yet) very lisp-aware.
+
+----------------------------------------------------------------------
+file: "cocoa-inspector.lisp"
+description: A browser-style inspector for the preliminary Cocoa IDE.
+contributor: Clozure
+interface-dir: cocoa	; distributed with OpenMCL
+libraries:  /System/Library/Frameworks/Cocoa.framework/Cocoa
+invocation:
+? (require "COCOA-INSPECTOR")
+This loads the Cocoa IDE and adds support for graphically inspecting
+Lisp objects:
+? (ccl::cinspect <form>)
+
+Hopefully, we'll be able to tie this in (to the Cocoa editor/listener,
+to the menubar, to the CL:INSPECT function ...) in the near future.
+
+----------------------------------------------------------------------
+file: "cocoa-application.lisp"
+description: Save the "preliminary Cocoa IDE" as a double-clickable
+             MacOSX application bundle
+contributor: Clozure
+interface-dir: cocoa	; distributed with OpenMCL
+libraries:  /System/Library/Frameworks/Cocoa.framework/Cocoa
+invocation:
+? (require "COCOA-APPLICATION") ; after first carefully reading the
+                                ; comments in that file.
+
+It may be a little premature to worry about this (since the Cocoa IDE
+is still pretty feature-starved.)  It -does- demonstrate that it's
+possible to make .nib-based, double-clickable applications in OpenMCL,
+and I think that it's reasonable to assume that the process will get
+smoother in the future.
+
+Platform-neutral examples:
+
+
+file: "finger.lisp"
+description: An RFC 1288 "finger" protocol client and server
+contributor: Barry Perryman
+interface-dir: libc	; distributed with OpenMCL
+libraries:  
+invocation: (require "FINGER")
+
+This is a clear, self-contained example of TCP programming in OpenMCL.
+Note that it may not be possible to run a FINGER server on the standard
+port (79), since doing so may require root privileges (and since there
+may already be a finger service running on that port, via inetd/xinetd.)
+
+I suppose that I should also say that one should always exercise caution 
+when running any type of server on a machine connected to the Internet.

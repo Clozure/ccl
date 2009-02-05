@@ -1,0 +1,11 @@
+{
+    IBClasses = (
+        {
+            CLASS = DisplayDocument; 
+            LANGUAGE = ObjC; 
+            OUTLETS = {textView = NSTextView; }; 
+            SUPERCLASS = NSDocument; 
+        }
+    ); 
+    IBVersion = 1; 
+}

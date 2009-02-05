@@ -1,0 +1,47 @@
+The original ASDF-INSTALL code (the files Makefile, README,
+asdf-install.asd, defpackage.lisp, and installer.lisp) was written by
+Daniel Barlow <dan@telent.net> and is distributed with SBCL and
+therefore in the public domain.  The SBCL Common Lisp implementation
+can be obtained from Sourceforge: <http://sbcl.sf.net/>.
+
+The initial port of ASDF-INSTALL to other Lisps was done by Dr. Edmund
+Weitz <edi@agharta.de> and included the file port.lisp and some
+changes to the files mentioned above.  More code was provided by Marco
+Baringer <mb@bese.it> (OpenMCL port), James Anderson
+<james.anderson@setf.de> (MCL port, including the file digitool.lisp),
+Kiyoshi Mizumaru <maru@krc.sony.co.jp>, Robert P. Goldman
+<rpgoldman@sift.info>, and Raymond Toy <toy@rtp.ericsson.se>
+(bugfixes).  Marco Antoniotti <marcoxa@cs.nyu.edu> added support for
+MK:DEFSYSTEM which includes the files load-asdf-install.lisp,
+loader.lisp, and finally split-sequence.lisp which has its own
+copyright notice. ASDF-Install is currently maintained by Gary King
+<gwking@metabang.com> and is hosted on Common-Lisp.net.
+
+The complete code distributed with this archive (asdf-install.tar.gz)
+is copyrighted by the above-mentioned authors and governed by the
+following license.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+  * Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+  * Redistributions in binary form must reproduce the above
+    copyright notice, this list of conditions and the following
+    disclaimer in the documentation and/or other materials
+    provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHORS 'AS IS' AND ANY EXPRESSED OR
+IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED.  IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY DIRECT,
+INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+

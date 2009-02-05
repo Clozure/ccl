@@ -1,0 +1,21 @@
+Wire was using its own buffer management -- how useful. We did away
+with that an read/write directly from an binary stream for now.
+
+TODO
+
+- actually switch to binary streams
+- invent something for strings (say define it as unicode or something)
+
+- can we do a reasonable attempt to make symbol lookup work across
+  lisp implementations?
+
+- can we make this at least somewhat work with CLISP?
+
+- conditions.
+
+- Do away with superfluous large macros
+
+- Can we again do with a serve event kind of interface for poor Lisp
+  which do not feature multiprocessing (like say CLISP)?
+
+

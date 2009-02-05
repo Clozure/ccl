@@ -1,0 +1,621 @@
+-*- Mode: Text; Package: Hemlock; Editor: t -*-
+
+
+
+;;;; X problems.
+
+Compute mininum width of a window group by taking the maximum of all the
+windows' font-widths, each multiplied by minimum-window-columns.  Right now it
+just uses the default font or current window.
+
+Compute minimum window split correctly: look at current window's font-height
+and new window's font-height, extra height pixels, whether each has a modeline,
+and minimum-window-lines to determine if we can split the current window.
+
+Server not implementing DRAW-IMAGE-GLYPHS correctly, so we don't have to do our
+pixmap hack.
+
+
+
+;;;; Bill and/or Rob.
+
+Make editor-error messages; that is just make many of the (editor-error)
+forms have some string to be printed.
+   Importance: often beeps and don't know why.
+   Difficulty: pervasive search for EDITOR-ERROR.
+
+Probably the ERROR for trying to modify a read-only buffer could/should be an
+EDITOR-ERROR.  Maybe the error message should be a Hemlock variable that can be
+set for certain buffers or modes.
+
+Make definition editing different.  Maybe only one command that offers some
+appropriate default, requiring confirmation.  Maybe some way to rightly know to
+edit the function named under a #'name instead of the function name in a
+function position.  Think about whizzy, general definition location logging and
+finding mechanism that is user extensible.
+
+Think about regular expression searching.
+   Importance: it would be used weekly by some and daily by others.
+
+Make illegal setting window width and height, (or support this).
+
+Think about example init file for randoms.  It should show most of the simple
+through intermediate customizations one would want to do starting to use
+Hemlock.
+  setting variables
+  file type hooks
+  hooks
+  transposing two keys
+  changing modifiers
+  
+DEFMODE should take a keyword argument for the modeline name, so "Fill"
+could be named "Auto Fill" but show "Fill" in the modeline (similarly with
+"Spell" and "Save").
+   Importance: low.
+   Difficulty: low.
+
+Optional doc strings for commands?
+   Importance: suggested by a couple people.
+   Difficulty: ???
+
+Get a real italic comment mode.
+   Importance: some people want it, like Scott.
+   Difficulty: hard to do right.
+
+Line-wrap-character a user feature?  Per device?  Per device set from Hvar?
+   Importance: a few people set this already for bitmap devices.
+   Difficulty: low.
+   Bill should just throw this in.
+
+When MESSAGE'ing the line of a matching open paren, can something be done to
+make the exact open paren more pronounced -- SUBSEQ'ing the line string?
+   Importance: low
+   Difficulty: one line frob to major echo area changes.
+
+Do something about active region highlighting and blank lines.  Consider
+changing redisplay to be able to hack some glyph onto the line, a virtual
+newline or something.
+   Importance: blank lines at the ends of the active region can be confusing.
+   Difficulty: unknown difficult changes to redisplay.
+
+Change redisplay on bitmaps to draw top down?  Currently line writes are queued
+going down the window image but the queue is written backwards.
+   Importance: low, two people commented on how it looks funny.
+   Difficulty: unknown, but probably little.
+
+Disallow tty I/O when the tty is in a bad state.  Since editor is sharing
+Unix standard input with *terminal-io*, doing reads on this is bad among
+other problems.
+   Importance: necessary or non-experienced users.
+   Difficulty: slight.  Error system wants to use *terminal-io* if you go
+               into a break loop from the editor.
+   Bill.
+
+Make Lisp indentation respect user indentation even when in a form with known
+special arguments?
+   Importance: noticeable correctness.
+   Difficulty: Lucid wrote this already with LOOP macro.
+   Rob.
+Make Lisp motion that exceeds the parsed region lose more gracefully by
+informing the user, possibly offering to enlarge the parsing parameters.
+   Importance: very deceptive as it is currently.
+   Difficulty: ???
+   Rob.
+Lisp motion fails to handle correctly vertical bar syntax; for example,
+      package:|foo|
+   Importance: correctness, not too necessary
+   Difficulty: ???
+"Editor Evaluate Defun" does not handle multiple value returns correctly
+... if we admit that this is often used to evaluate non-DEFUN top-level
+forms.
+   Importance: user convenience.
+   Difficulty: low.
+
+Super-confirm select buffer.  Super confirm means "make this be a legal
+input".  Has no interaction with prompting function interface.  More
+generally, make a *super-confirm-parse-function* that can be bound around
+prompters.  One suggestion when prompting for a buffer is to make it, but
+another suggestion is to find file some appropriate file.
+   Importance: multiple people requested.
+   Difficulty: low.
+   Bill.
+A super-confirm for a more facist "Find File" that disallowed creating buffers
+when the file didn't exist could tell the command to really create the buffer.
+
+Displayed-p shouldn't directly call update-window-image, or perhaps uwi should
+be changed to check if the ticks and whatnot indicate recomputation is needed.
+   Importance: minor efficiency hack and maybe a little cleaner.
+   Difficulty: low.
+   Bill.
+
+Fix line-length for hemlock output streams.  The following example causes lines
+to brek incorrectly in "Eval" mode but not in "Typescript" mode:
+   (defun dup (x n &aux r) (dolist (i n r) (push x r)))
+   (dup 'a 100)     ;lines wrap due to faulty line breaking
+   (dup 'aa 100)    ;lines wrap due to faulty line breaking
+   (dup 'aaa 100)   ;now lines break correctly
+   Importance: correctness.  It's not screwing anyone.
+   Difficulty: depends on what the right thing is.
+
+Termcap bug:
+   setenv TERMCAP "foobar:li#65:tc=vt102:"
+   set term = foobar
+This causes an EOF unexpectedly on the string stream.  This is because the
+the termcap parsing stuff wasn't written to go all the way back to the top
+entry point to determine what file to use when the TERMCAP variable had an
+indirection.  The code currently just goes to the beginning of the stream
+and looks for the new tty name.
+
+Make prompt text not part of input buffer.  Do some magical thing to solve
+the problem of having special echo area commands that simply get around the
+prompt text in the echo are buffer.
+   Importance: low sense problem is currently somewhat taken care of.
+	       Possibly resolve problem when new Hemlock environment stuff
+	       goes in.
+   Difficulty: Magical in origin.
+   Rob.
+
+Commonify everything.  Make everything portable that could be made so (file
+system extensions, character att. finding, string ops, etc.) and document
+our expectations of the non-portable stuff we lean on.  Provide portable
+code for stuff done in assembler.
+   Some known problems:
+      %sp- functions aren't documented and don't have portable code for
+         them.
+      semantics of initial values versus declared type.
+      :error-file to COMPILE-FILE calls.
+
+   Importance: cleanliness and portability ease for those who want our
+	       code.
+   Difficulty: identify the problems and alter some code.
+   Bill and Rob.
+
+Fix things that keep text from getting gc'ed.  Buffer local things keep
+pointer to buffer.
+   Importance: could be important, maybe nothing is wrong.
+   Difficulty: identifying problems.
+   Bill or Rob.
+
+Two reproducible window image builder bugs:
+THIS IS NUMBER ONE:
+I wrote this command:
+   (defcommand "Fetch Input" (p)
+     "Does \"Point to Here\" followed by \"Reenter Interactive Input\"."
+     "Does \"Point to Here\" followed by \"Reenter Interactive Input\"."
+     (declare (ignore p))
+     (point-to-here-command nil)
+     (reenter-interactive-input-command nil))
+I made the following bindings:
+   (bind-key "Fetch Input" #\hyper-leftdown :mode "Eval")
+   (bind-key "Fetch Input" #\hyper-leftdown :mode "Typescript")
+   (bind-key "Do Nothing" #\hyper-leftup :mode "Eval")
+   (bind-key "Do Nothing" #\hyper-leftup :mode "Typescript")
+In an interactive buffer I typed hyper-leftdown twice on the same line and
+got the following error:
+   Error in function HEMLOCK-INTERNALS::CACHED-REAL-LINE-LENGTH.
+   Vector index, 14700, out of bounds.
+This index is always the one you get no matter what line of input you try to
+enter twice.
+;;;
+THIS IS NUMBER TWO:
+Put point at the beginning of a small defun that has at least some interior
+lines in addition to the "(defun ..." line and the last line of the routine.
+Mark the defun and save the region.  Now, yank the defun, and note that the
+beginning of the second instance starts at the end of the line the yanked copy
+ends on.  Now type c-w.  You'll delete the yanked copy, and the lines that
+should not have been touched at all end up with font marks.  Interestingly the
+first line of the defun and the last don't get any font marks.
+   Importance: well, they are reproducible, and they're pretty ugly.  No one
+   	       has noticed these yet though.
+   Difficulty: Rob and I didn't conjure up the bugs after a casual inspection.
+   Bill AND Rob
+
+Consider a GNU-style undo where action is undo-able.
+   Importance: low, but people point it out as an inadequacy of Hemlock.
+   Difficulty: possibly very hard.  Have to figure out what's necessary first.
+   Bill and Rob
+
+
+;;;; Mailer stuff.
+
+Find all message-info-msgs sets and refs, changing them from possible list
+values to always be a simple-string value.  Maybe must leave a list (or make
+another slot) if I need to indicate that I can't use the value as a msg-id.
+The only problem is coming through SHOW-PROMPTED-MESSAGE.  This could pick or
+something to really know if there were more than one message or not.
+
+Write "Refile Message and Show Next".
+
+Do something about message headers when reading mail.  Suggestions include a
+list of headers components that get deleted from the buffer and simply
+scrolling the window past the "Received:" lines.
+
+Add more folder support and possibly something specific for Bovik groveling.
+For example, rehashing the cached folder names and/or adding new ones from a
+folder spec or root directory (allows adding the bovik folders).
+
+Consistency problems:
+   Expunging message should not JUST delete headers buffers and their
+   associated message buffers.  There could be independent message buffers with
+   invalid message id's.  Since these are independent, though, we might not
+   want to gratuitously delete them.
+
+   "Headers Delete Message" should check for message buffers when virtual
+   message deletion is not used, deleting them I suppose.  Instead of just
+   making headers buffers consistent.
+
+
+
+;;;; Spelling stuff.
+
+This stuff is probably for Rob or Bill, but think about undergrad
+dispatching before actually implementing it.
+
+Two apostrophes precede a punctuation character, as in:
+	``This is a very common occurrence in TeX.''
+"Correct Buffer Spelling" complains that '' is an unknown word.  The problem
+doesn't show up if the character preceding the apostrophes is alphabetic.
+
+"Correct Last Misspelled Word" should try to transpose the space on the
+ends of a word if there are more than one misspelling (adjacent?).  This
+would have to be done at the command level trying to correct different
+words formed from the buffer.
+
+Fahlman would like to see a list of words that are treated as errors, even
+though they may be in the dictionary.  These are considered common typos made
+that actually are rarely-used words.  These would be flagged as errors for the
+user to do a conscious double check on.
+
+When the spelling correction stuff cannot find any possible corrections, it
+could try inserting a space between letters that still form legal words,
+checking the two new words are in the dictionary.
+   Importance: possibly pretty useful, especially with "Spell" mode.
+   Difficulty: low to medium.
+   Bill, possibly undergrad after I looked at it.
+
+Fix "Undo Last Spelling" correction interaction with auto-fill.  When this
+command is invoked on a word that made auto-fill break the line, shit
+happens.
+   Importance: Rob noticed it.
+   Difficulty: unknown.
+   Bill or Rob.
+
+
+
+;;;; User and Implementors Manuals
+
+User Manual wall chart appendix based on systems (e.g., dired, mailer, Lisp
+editing, spelling, etc.), then modes (e.g., "Headers", "Message", and "Draft"),
+then whatever seems appropriate.
+
+Point out that "Make Buffer Hook" runs after mode setup.
+
+
+
+;;;; Things for undergrads.
+
+Create "Remote Load File" and make "Load File" use it the way "Compile File"
+uses "Remote Compile File".
+
+Make "Insert Scribe Directive" undo-able, and make the "command" insertion
+stuff use the active region.  Also, clean up terminology with respect to using
+command and environment.
+   Importance: it would be nice.
+   Difficulty: little
+
+Add a feature that notes modified or new lines, probably down in
+HI::MODIFYING-BUFFER.  Then add interfaces for moving over these lines, moving
+over text structures with these lines such as DEFUN's, paragraphs, etc.  Write
+commands that display these in some way, compile them, etc.
+
+Look at open paren highlighting and the Scribe bracket table stuff to make a
+general bracket highlighter.  Possibly have to call function based on mode or
+something since Lisp parens are found differently than Scribe brackets (Lisp
+parse groveling versus counting open and close brackets).
+
+Make hooks that are lists of function have list in the name, so users can know
+easily whether to set this to a list or function.
+   Importance: low.
+   Difficulty: low, but pervasive.  must be careful.
+
+Make FILTER-REGION not move all marks in the buffer to the end.  It should
+affect each line, letting marks stay on a line, instead of deleting the whole
+region and inserting a new one.
+   Importance: low, but described behaviour is better than current behaviour.
+   Difficulty: low.
+
+Make some "Auto Save Access" variable, so users don't have to write fully
+protected auto save files.  Possibly there could be some variable to that
+represents Hemlock's default file writing protection.
+   Importance: one person requested.
+   Difficulty: easy.
+
+Make "Save" mode on a first write or on startup check for a .CKP file.  If it
+is there and has a later write date than the file, warn the user before a save
+could overwrite this file that potentially has good stuff in it from a previous
+Lisp crash.
+   Importance: good idea, though people should know to check.
+   Difficulty: easier if done on start up.
+
+We need Lisp-like movement in Text mode -- skipping parenthetic and quoted
+expressions while ignoring some Lisp syntax stuff.  Either can write a few
+commands that do what we expect, or we can get really clever with the
+pre-command parse checking and bounds rules for Text mode.  May even be able to
+get the right thing to happen with code fragments in documents.
+   Importance: would be pretty convenient to have it work right all the time.
+   Difficulty: will take some thinking and playing around.  Rob or Bill guidance.
+
+Make "Extended Command" offer a default of the last command entered.
+
+Make "Select Group" command take an optional argument for the group
+pathname and group name.
+   Importance: convenience for init files.
+   Difficulty: low.
+
+Put in buffer percentage.
+   Importance: Lots of people want it.
+   Difficulty: Rob thinks he knows how to do it.
+   Rob will tell some undergrad how to do it.
+
+Make "Unexpand Abbrev" work when no expansion had been done -- test for
+error condition was backwards.
+
+Add modeline display of current eval server and current compile server, when
+appropriate. 
+   Importance: suggested by a couple people.  Low.
+   Difficulty: none.
+   	       Basically, just have to change string and function.
+
+Make "Corrected xxx to yyy" messages use actual case of yyy that was
+inserted into the buffer.
+   Importance: more user friendly.
+   Difficult: low.
+   Anyone could do this, but it wouldn't be very educational for an
+      undergrad. 
+
+"Find all Symbols" does a FIND-ALL-SYMBOLS on previous or current form if
+it is a symbol.  See code for "Where is Symbol" in Scott's
+Hemlock-Init.Lisp file.
+   Importance: probably quite useful.
+   Difficulty: none.
+   Anyone could grab Scott's code.
+
+Make buffer read-only when visiting unwritable file?  Bill and Scott
+vehemently disagreed with this, but thought a variable would make everyone
+happy.
+   Importance: one person suggested.
+   Difficulty: low.
+   Anyone could do this, but it wouldn't be very educational for an
+      undergrad. 
+
+Modify MAKE-BUFFER to error when buffer exists?
+   Importance: more user friendly.
+   Difficulty: none.
+   Anybody could do this, but it wouldn't be very educational for an
+      undergrad. 
+
+Warn when unable to rename a buffer according to its file.  This occurs
+when writing files.
+   Importance: more user friendly.
+   Difficulty: none.
+   Anyone could do this.
+Uniquify buffer names by tacking a roman numeral on the end?
+   Importance: I don't know why this is here.
+   Difficulty: low.
+   Anyone could do this.
+
+Automatically save word abbrevs?
+   Importance: low.
+   Difficulty: low.
+   Some undergrad could do this.
+
+Automatically save named keyboard macros?  Maybe on request?
+   Importance: other editors can do it.
+   Difficulty: this is non-trivial since our kbmacs are based on their own
+	       little interpreter.
+   Medium undergrad task.
+
+Make nested prompts work.
+   Importance: some day this might be useful.
+   Difficulty: medium.
+   Upper level undergrad could do this.
+
+Make character searches deal with newlines.
+   Importance: correctness.
+   Difficulty: medium.
+   Upper level undergrad.
+
+Put argument type checks in the Hemlock primitives.
+   Importance: low, the compiler should do this from type declaration
+	       (cool?!).
+   Difficulty: work in a lot of places.
+   Undergrad could do the things Rob or Bill say.
+
+Add a "Preferred File Types" to work in coordination with "Ignore File Types".
+   Importance: low, suggested by one user.
+   Difficulty: minimal.
+
+Write separate search and i-search commands that do case-sensitive searches, so
+user's don't have to set the Hvar for one search.
+   Importance: low.
+   Difficulty: low.
+
+Add a write-region function which writes to a stream.
+   Importance: low.
+   Difficulty: medium.
+   Undergrad.
+
+
+
+;;;; The great rewrite and cleanup.
+
+Compilation order.  Cleanup up defvars, defhvars, proclaims, etc. for clean
+compilation of Hemlock in a Lisp without one.  Rename ED and HI packages
+and start cleaning up compilation.  Defvars should go near pertinent code,
+and proclaims should do the rest.  Do something about macros, rompsite, and
+main.
+   Importance: necessary for those taking our code and sets better example.
+   Difficulty: few days of work.
+   Bill.
+
+Hemlock package cleanup -- exporting Hemlock stuff, so users don't live in
+ED package.
+ Find primitives to export and describe in Command Implementor's Manual.
+ Export existing command names in a separate file.
+ DEFCOMMAND always interns in current package.
+ Variables
+  One global table.
+  DEFHVAR only at top level.  Interns into current package.  WHAT ABOUT SITE-INIT?
+  BIND-VARIABLE, a new form, will be used at top level or in setup
+   functions to establish default values.
+ Find all uses of FIND-PACKAGE, *hemlock-package*, etc. since these are
+  suspect in the new package regime.
+ Put DEFVAR's (esp. from Main.Lisp) in appropriate files, putting PROCLAIM's
+   in a single file or in files with compiler warnings.
+      Importance: really needs to be done along with environment stuff.
+      Difficulty: pervasive changes to get right.
+      Bill!
+
+Generalized environments:
+  Generalize notion of environment to first-class objects.
+  can inherit stuff from other environments.  Shadowing for conflict
+  resolution.  Transparent key bindings another sort of interaction.
+  If we retain modes as a primitive concept, then how do they interact?
+  If not, how do we get the effect?  Each buffer has an environment.
+  This is normally the composition of the default environment and
+  various mode environments.
+
+  Turning modes on and off is simply adding and removing the mode's environment
+  from the buffer's environment's inherit list.  The only sticky issue is the
+  order of the inheritence.  We could assign each environment a precedence.
+
+  I guess we could punt modes as a primitive concept.  The only thing this
+  wouldn't provide that modes do is a namespace and the major/minor
+  distinction.  Setting the major mode is just frobbing the lowest precedence
+  environment in a buffer.  A major mode is distinct from a minor mode in that
+  it inherits the global environment.  An interesting question is at which
+  level precedences should be implemented.  We could have it be a property only
+  of minor modes, which determines only the order in which a buffer inherits
+  its minor modes, or we could make it a property of environments, and have it
+  determine the total order of inheritance.  Probably the former is better: it
+  simpler, and adequate.  Also, at the environment level, it is more powerful
+  to be able to specify inheritance order on a per-case basis.
+
+  Make mode-hooks be a mode-object slot rather than hemlock variables.  [a
+  random cleanup]
+
+  We change the (... &optional kind where) arguments to
+  (... &optional where).  Where can be an environment such as
+  *global-environment* (the default) or a buffer, or it can be a string, in
+  which case it is interpreted as a mode name.
+
+  Instead of having key binding transparentness be a property of modes or of
+  commands, we make it a property of binding.  Each environment has separate
+  key-tables for transparent and opaque bindings, and there is a
+  Transparent-Bind-Key function that is used to make transparent key bindings.
+  [... or something.  This would imply a delete-transparent-key-binding and
+  prehaps other functions, so we might consider passing a transparent flag to
+  the primitives.]
+
+  *current-environment* is the current environment, which is normally eq to the
+  current buffer.  Attributes and variables are implemented using deep-binding
+  and caching.  Whenever there is any change to the inheritance structure or to
+  variable or attribute bindings, then we just totally flush all the caches.
+  The most frequent operation that would cause this to happen would be changing
+  a mode in a buffer, which is rare enough so that there should be no problem.
+
+  For variables, we just have a symbol-name X environment => binding cache.
+
+  For attributes we have two caches: attribute X environment => value vector
+  and attribute X environment X test-function => search vector.  The first
+  translates an attribute and environment to a simple-vector that contains the
+  current value for each character in that environment.  This is used for
+  Character-Attribute and when the Find-Attribute cache misses.  When this
+  cache misses, we fill the vector with a magic "unspecified" object, and then
+  scan up the inheritance, filling in any bindings that are unspecified.  We
+  could optimize this by noting in the character-attribute object when an
+  attribute has no shadowings.  character-attribute hooks have to go away,
+  since they depends on shallow-binding.
+
+  Make Hemlock variables be typed.  Have a :type defhvar argument,
+  variable-type function.  In implementation, create a test function for each
+  variable so that we can efficiently check the type of each assigned value.
+  This implies defhvar should be a macro.  We could make specifying the test
+  function be an explicit feature, but the same effect could always be obtained
+  with a Satisfies type specfier.
+
+  Split binding of hvars from definition.  
+      Bind-Variable Symbol-Name Value &Optional Where
+  Creates a binding.  If :Value is specified to defhvar, then it creates a
+  global binding of that value.  If no :Value is specified, then there is no
+  global binding.  We could flush the :Mode and :Buffer options, and require an
+  explicit Bind-Variable to be done in this case, or we could still allow them.
+  It would probably be better to flush them, since it would break code that is
+  doing run-time defhvars to make buffer-local variables.  Perhaps we would
+  flush only :Buffer, since it is clearly useless, while being able to give an
+  initial mode binding may be useless.
+
+  All variable attributes except for value are global.  Hooks are global.  The
+  concept of a hook is somewhat dubious in the presence of non-global bindings.
+  It might be semi-useful to invoke the hook on each new binding in addition to
+  on each set.
+
+     Importance: Next big step for Hemlock.
+     Difficulty: Two months.
+     Bill will do this.
+
+Multiple font support:
+ Figure what kind of multi-font stuff we want to do.
+ Bogus to use integer constants for facecodes.  It is reasonable within the
+ font mark, but the user interface should be keywords for facecodes.
+   Importance: no documented font support currently.  Really need it.
+   Difficulty: includes massively reworking redisplay data structures.
+   Bill and Rob.
+
+
+
+;;;; Things to think about.
+
+;;; These are things that have been thought of, but we don't know much more
+;;; about them.
+
+Some general facility for users to associate definition locations with kinds of
+things and/or forms.
+
+What's the right way to be in a comment in some Lisp file and have filling,
+spelling, and whatever work out just right.  Possibly regions with environment
+information.  Maybe with a whole new hierarchical text representation, this
+would fall out.
+
+Synchronization/exclusion issues:
+    Currently there are non-modification primitives that are looking into a
+    buffer assuming it will not change out from under the primitive.  We
+    need to identify these places and exactly what the nature of this
+    problem is (including whether it exists).  Probably we need to make
+    non-trivial text examination primitives use without-interrupts so that
+    they see a consistent state.
+
+    Find other places where exclusion is needed:
+        Redisplay?
+        Typescript code?
+
+Online documentation stuff: What to do and how to do it.  Rob has some
+notes on this from a year or two ago.
+   Importance: something to do.
+   Difficulty: high.
+   maybe no one.
+
+Think about general "Save My Editor State".  Can generalize notion of
+stateful things? -- Word abbrevs, keyboard macros, defindent, spelling
+stuff, etc.  This could be the last thing we ever do to Hemlock.
+   Importance: low.
+   Difficulty: very.
+   ???
+
+
+
+;;;; New Eval Servers
+
+Do something about slaves dieing in init files.  Lisps start up and first load
+init.lisp.  When a slave does this, it goes into the debugger before connecting
+to the editor.

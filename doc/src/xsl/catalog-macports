@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!DOCTYPE catalog
+   PUBLIC "-//OASIS/DTD Entity Resolution XML Catalog V1.0//EN"
+   "http://www.oasis-open.org/committees/entity/release/1.0/catalog.dtd">
+
+<catalog xmlns="urn:oasis:names:tc:entity:xmlns:xml:catalog">
+  <rewriteSystem systemIdStartString="http://www.oasis-open.org/docbook/xml/4.2" rewritePrefix="file:///opt/local/share/xml/docbook/4.2"/>
+
+  <rewriteURI uriStartString="http://www.oasis-open.org/docbook/xml/4.2" rewritePrefix="file:///opt/local/share/xml/docbook/4.2"/>
+
+  <nextCatalog catalog="/opt/local/etc/xml/catalog"/>
+</catalog>
+

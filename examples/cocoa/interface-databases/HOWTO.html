@@ -1,0 +1,371 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <title>Interface Databases HOWTO</title>
+    <link rel="stylesheet" type="text/css" href="HOWTO_files/stylesheets/styles.css" />
+  </head>
+
+  <body>
+
+    <div class="title">
+      <h1>Interface Databases HOWTO</h1>
+    </div>
+
+
+    <div class="section-head">
+      <h2>About Interface Databases</h2>
+    </div>
+
+    <div class="body-text">
+      <p>This HOWTO guide explains how to build interface databases
+        for Clozure CL (formerly OpenMCL).</p> 
+
+      <p>Clozure CL's <strong>interface databases</strong> are
+        descriptions of foreign data structures and functions. Clozure
+        CL uses the interface databases to call C and Objective-C
+        functions, and to use C and Objective-C data
+        structures. Clozure CL provides the interface databases you
+        are most likely to need when writing Cocoa applications, but
+        it doesn't provide databases for every foreign library and
+        framework. For some applications, you may need to generate
+        interface databases yourself. This HOWTO shows how to do
+        that.</p>
+    </div>
+
+    <div class="section-head">
+      <h4>Online Documentation</h4>
+    </div>
+
+    <div class="body-text">
+      <p>The concepts explained here are also discussed in depth in
+        the OpenMCL online
+        documentation. See <a href="http://www.openmcl.org/Doc/index.html#The-Interface-Translator">this
+          page</a> for an explanation of how to generate interface
+        databases.</p>
+    </div>
+    
+    <div class="section-head">
+      <h4>Interface Databases and the Foreign Function Interface</h4>
+    </div>
+    
+    <div class="body-text">
+      <p>Clozure CL provides an integrated foreign function interface
+        that can call external C and Objective-C functions and methods,
+        define and instantiate Objective-C classes, and read and write
+        fields of C data structures. Using these features, a Lisp
+        program can interoperate freely with external libraries and
+        frameworks. Of special interest to Mac OS X programmers, Lisp
+        programs can link Mac OS X frameworks and use the features they
+        provide, including standard OS X features such as the AppKit,
+        CoreAudio, OpenGL, CoreAnimation, and so on.</p>
+    </div>
+
+    <div class="section-head">
+      <h4>Interface Databases and Frameworks</h4>
+    </div>
+
+    <div class="body-text">
+      <p>In order to use externally-defined functions and data
+        structures, Clozure CL needs descriptions of the entry points
+        and data fields, including their names and types. It reads
+        this information from the interface databases. A separate tool
+        called ffigen parses the header files that describe foreign
+        libraries and frameworks, such as the ones provided with
+        Apple's SDKs, to produce descriptions readable by Clozure CL's
+        parse-ffi subsystem. The parse-ffi subsystem then reads these
+        descriptions and writes the results of its processing to
+        files. These files, written by parse-ffi, are what we refer to
+        as interface databases.</p>
+    </div>
+
+    <div class="section-head">
+      <h1>Adding New Interface Databases</h1>
+    </div>
+
+    <div class="body-text">
+      <p>In order to generate a new set of interface databases, you
+      must follow these steps, explained in the following
+      sections:</p>
+
+      <ol>
+        <li><p>Obtain and install the ffigen tool</p></li>
+        <li><p>Create an appropriately-named and -structured
+        subdirectory of the interfaces directory for your
+        platform</p></li>
+        <li><p>Write a script ("populate.sh") and then run it to populate the new interface
+        subdirectory</p></li>
+        <li><p>Using the parse-ffi subsystem, convert the ".ffi" files
+        created in the previous step to interface databases</p></li>
+      </ol>
+    </div>
+
+    <div class="section-head">
+      <h2>1. Obtain and install ffigen</h2>
+    </div>
+
+    <div class="body-text">
+      <p>ffigen is a command-line tool, available from Clozure, that
+        parses C and Objective-C header files for use by the Clozure
+        CL parse-ffi subsystem. A "populate.sh" script drives the
+        ffigen tool to parse library or framework headers, and then
+        the Clozure CL parse-ffi subsystem converts the ffigen output
+        to interface databases. In order to generate interface
+        databases you must first obtain the latest version of ffigen
+        for the platform you are using.</p>
+
+      <p>ffigen is available from the Clozure ftp server
+      at <a href="ftp://clozure.com/pub/testing/">clozure.com/pub/testing/</a>. A
+      separate version of ffigen is available for each supported
+      platform. Make sure to get the latest version available for the
+      platform you are using. For example,</p>
+
+      <pre>
+      ffigen-apple-gcc-5465-x86-64-2007-11-06-00-00-59 
+      </pre>
+
+      <p>supports Apple's C compiler ("gcc") on the 64-bit Intel
+      platform ("x86-64").</p>
+
+      <p>Once you have the appropriate version of ffigen, unpack and
+      install it in a location where it will be convenient to
+      use. You might, for example, install it in /usr/local/ffigen,
+      or in ~/ffigen.</p>
+
+      <p>The ffigen distribution unpacks into a directory with the
+        following structure:</p>
+      
+      <p>bin/</p>
+      <p style="margin-left: 2em; line-height: 0em">h-to-ffi.sh</p>
+      <p style="; line-height: 0em">ffigen/</p>
+      <p style="margin-left: 2em; line-height: 0em">bin/</p>
+      <p style="margin-left: 4em; line-height: 0em">ffigen</p>
+      <p style="margin-left: 2em; line-height: 0em">include/</p>
+      
+      <p>To install ffigen, unpack the distribution, then move the
+      unpacked directory to its install location. For example, to
+      install it in /usr/local/ffigen:</p>
+
+      <pre>
+      tar zxf ffigen-apple-gcc-5465-x86-64-2007-11-06-00-00-59.tar.gz
+
+      mv ffigen-apple-gcc-5465-x86-64-2007-11-06-00-00-59\
+         /usr/local/ffigen
+      </pre>
+
+      <p>You can now add a line to your shell's init script to add the
+        h-to-ffi.sh script to your PATH, and the script will find the
+        ffigen tool automatically.</p>
+      
+      <p>For example, if your shell is bash, you can add this line to
+        your .bashrc or .bash_profile:</p>
+      
+      <p><code>PATH="/usr/local/ffigen/bin:${PATH}"</code></p>
+
+    </div>
+
+    <div class="section-head">
+      <h2>2. Create An Interfaces Subdirectory</h2>
+    </div>
+
+    <div class="body-text">
+      <p>Clozure CL finds interface databases by consulting a
+        search-list. It initializes the search list when starting up,
+        and the exact contents of the search list depend on the
+        platform Clozure CL is running on. For example, a Mac OS X
+        version of Clozure CL running on the 64-bit Intel platform
+        searches "ccl/darwin-x86-headers64/", but a Mac OS X version
+        running on the 32-bit PowerPC platform searches
+        "ccl/darwin-headers/". We'll call this search directory
+        the <strong>interfaces directory</strong>. For the rest of this
+        discussion we'll assume we are running Clozure CL on Mac OS X
+        on the 64-bit Intel platform.</p>
+
+      <p>Each supported foreign library or framework has a
+      corresponding subdirectory of the interfaces directory. For
+      example, we can find a "cocoa" subdrectory of
+      "ccl/darwin-x86-headers64/"; it contains the interface databases
+      for the Cocoa framework. Similarly, the "gl" subdirectory
+      contains the interface databases for OpenGL.</p>
+
+      <p>In order to add support for a new framework, we must first
+      add a subdirectory for the framework to the interfaces
+      directory. For example, suppose we want to add support for the
+      TWAIN framework. This framework is one of the standard frameworks
+      provided in Mac OS X 10.5, but not one of those supported
+      out-of-the-box by Clozure CL.</p>
+
+      <p>To add TWAIN interfaces for use by Clozure CL, follow these
+      steps:</p>
+
+      <ol>
+        <li><p>Create a subdirectory called "twain" in the interfaces directory</p></li>
+        <li>
+          <p>Create a subdirectory of "twain" called "C".</p>
+          <p>If you look inside any of the existing interfaces
+          subdirectories, you see that each one contains a similar
+          "C" subdirectory. The ffigen tool populates these "C"
+          subdirectories with ".ffi" files when it parses the
+          framework or library headers.</p>
+        </li>
+        <li>
+          <p>Inside the "C" subdirectory, create a file called
+          "populate.sh"</p>
+          <p>Again, you can see that the existing interfaces
+          subdirectories contain "populate.sh" files in their "C"
+          subdirectories. This file is the script that drives the
+          ffigen tool for the particular interface databases we are
+          creating. The next section explains what to put in the
+          "populate.sh" file.</p>
+        </li>
+      </ol>
+
+    </div>
+
+    <div class="section-head">
+      <h2>3. Write and Run a "populate.sh" Script</h2>
+    </div>
+
+      <div class="body-text">
+        <p>If you look in the directory</p>
+      
+      <p>ccl/darwin-x86-headers64/cocoa/C/</p>
+      
+      <p>for example, you'll find a script named populate.sh. The
+        script sets up flags for the C compiler, and then calls
+        h-to-ffi.sh on each of several header files that define the
+        Objective-C data structures and entry points used by the Cocoa
+        framework. The first step in generating or regenerating the
+        interface databases is to run one of these populate.sh
+        scripts.</p>
+
+      <p>You can create a populate.sh script by copying an existing
+        one from another set of interfaces, then replacing the
+        references to the libraries or frameworks that the
+        populate.sh script processes. A good place to start is with
+        an existing populate.sh script that processes a library or
+        framework that is similar to, or related to, the one you want
+        to add.</p>
+
+      <p>For example, for our TWAIN interfaces, we can copy the
+        populate.sh script from the existing qtkit subdirectory. The
+        contents of the qtkit script are:</p>
+
+
+      <pre>
+#!/bin/sh
+# For now, things earlier than the 10.5 sdk are pointless
+rm -rf System Developer usr
+SDK=/Developer/SDKs/MacOSX10.5.sdk
+CFLAGS="-m64 -fobjc-abi-version=2 -isysroot ${SDK} -mmacosx-version-min=10.5"; export CFLAGS
+h-to-ffi.sh ${SDK}/System/Library/Frameworks/QTKit.framework/Headers/QTKit.h
+      </pre>
+
+
+      <p>Now we just need to change the reference to the QTKit header
+      file so that it refers instead to the TWAIN header file:</p>
+
+      <pre>
+#!/bin/sh
+# For now, things earlier than the 10.5 sdk are pointless
+rm -rf System Developer usr
+SDK=/Developer/SDKs/MacOSX10.5.sdk
+CFLAGS="-m64 -fobjc-abi-version=2 -isysroot ${SDK} -mmacosx-version-min=10.5"; export CFLAGS
+h-to-ffi.sh ${SDK}/System/Library/Frameworks/TWAIN.framework/Headers/TWAIN.h
+      </pre>
+
+      <p>Next you must run the script to generate the ".ffi" files
+      that will be used in the next step. Assuming you installed
+      ffigen as described in step 1, and made sure that it's on your
+      PATH, all you have to do is cd to the directory that contains
+      your new populate.sh script and execute it:</p>
+
+      <pre>
+$ ./populate.sh
++++ /Developer/SDKs/MacOSX10.5.sdk/System/Library/Frameworks/TWAIN.framework/Headers/TWAIN.h
+      </pre>
+
+      <p>Now, if you look inside the C subdirectory of your twain
+      directory, you should find that it has been populated with
+      ".ff" files:</p>
+
+      <pre>
+oshirion:C mikel$ ls
+./           ../          Developer/   populate.sh*
+
+oshirion:C mikel$ ls Developer/SDKs/MacOSX10.5.sdk/System/Library/Frameworks/TWAIN.framework/Headers/
+./         ../        TWAIN.ffi
+        
+      </pre>
+    </div>
+
+    <div class="section-head">
+      <h2>4. Use parse-ffi to Generate Interface Databases</h2>
+    </div>
+
+    <div class="body-text">
+      <p>The ".ffi" files, created in the prevoius step, contain a
+        series of s-expressions readable by the Clozure CL parse-ffi
+        subsystem. Each s-expression describes a datastructure or
+        entry point in the foreign library.</p>
+
+      <p>Once you have created a set of these ".ffi" files by running
+        a populate.sh script, you must next use Clozure CL to convert
+        the ".ffi" files into interface database files.</p>
+
+      <ol>
+        <li><p>First, launch Clozure CL</p></li>
+        <li>
+          <p>Next, evaluate this form to load the parse-ffi subsystem:</p>
+          <p><code>(require "PARSE-FFI")</code></p>
+        </li>
+        <li>
+          <p>Next, supposing you want to parse the TWAIN files
+            created in the previous section, evaluate the following form:</p>
+          <p><code>(ccl::parse-standard-ffi-files :twain)</code></p>
+          <p>The parse-ffi subsystem looks for a subdirectory named
+            "twain" in the interface databases directory for the
+            current platform.</p>
+
+          <p>The first time you run this expression, you'll see
+          warnings like this one:</p>
+          <pre>
+; Warning: Interface file #P"ccl:darwin-x86-headers64;twain;types.cdb.newest" does not exist.
+          </pre>
+          <p>These warnings are normal.</p>
+        </li>
+        <li>
+          <p>Finally, evaluate the following form once more:</p>
+          <p><code>(ccl::parse-standard-ffi-files :twain)</code></p>
+          <p>In order to correctly describe some foreign definitions,
+            the parse-ffi subsystem needs information provided by the
+            first parse. Thus, to produce a complete and corrrect set of
+            interface databases, you should always evaluate
+            the <code>parse-standard-ffi-files</code> form twice.</p>
+        </li>
+      </ol>
+
+    </div>
+
+
+    <div class="section-head">
+      <h2>Conclusion</h2>
+    </div>
+
+    <div class="body-text">
+      <p>Assuming all went well, you should now find a new set of
+        interface database files in the twain subdirectory of the
+        interface databases directory for your current
+        platform. Congratulations! You have added a new set of
+        interface databases to your Clozure CL installation.</p>
+
+      <p>For more information about ffigen and the interface
+        translation process, refer to the online documentation for the
+        <a href="http://www.openmcl.org/Doc/index.html#The-Interface-Translator">Interface
+          Translator</a>.</p>
+    </div>
+
+
+  </body>
+</html>
+

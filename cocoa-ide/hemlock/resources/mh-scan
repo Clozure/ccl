@@ -1,0 +1,5 @@
+%4(putnumf(msg))%<(cur)+%| %>%<{replied}A%| %> \
+%02(putnumf(mday{date}))-%(putstr(month{date}))%<{date} %|*%>\
+%5(size) \
+%<(mymbox{from})To:%14(putstrf(friendly{to}))%|%17(putstrf(friendly{from}))%> \
+%{subject}%<{body}   <<%{body}%>

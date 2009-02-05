@@ -1,0 +1,366 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <title>UI Elements HOWTO</title>
+    <link rel="stylesheet" type="text/css" href="HOWTO_files/stylesheets/styles.css" />
+  </head>
+
+  <body>
+
+    <div class="title">
+      <h1>UI Elements HOWTO</h1>
+    </div>
+
+    <div class="body-text">
+      <p>This HOWTO shows how you can create Cocoa user-interface
+      elements by making lisp calls to instantiate and initialize
+      Objective-C objects.</p>
+
+      <p>Cocoa programmers usually create UI elements using Apple's
+      InterfaceBuilder application, and then load those elements from
+      a <strong>nibfile</strong>, but Cocoa supports creating all the
+      same UI elements by making Objective-C method calls. In fact,
+      that's how it loads nibfiles: by making method calls to
+      instantiate the objects described in them.</p>
+
+      <p>For Lisp programmers, accustomed to working incrementally and
+      interactively, it may sometimes make more sense to create
+      user-interface elements by making method calls interactively,
+      rather than by constructing a complete user interface in
+      InterfaceBuilder. This HOWTO shows how you can use Objective-C
+      method calls to create and display windows and other UI
+      elements.</p>
+
+      <p>For more information about how to load nibfiles from Lisp,
+      see the "nib-loading" example. For a complete discussion of how
+      to construct a Cocoa application using nibfiles created with
+      InterfaceBuilder, see the "currency-converter" example.</p>
+
+    <div class="title">
+      <h2>Creating a Window</h2>
+    </div>
+
+    <p>Every user-interface element under Mac OS X appears either in
+    a window or in a menu. We'll begin by exploring how to create and
+    display windows.</p>
+
+    <p>First, switch to the <code>CCL</code> package, for
+    convenience. Most of Clozure CL's Objective-C utilities are in
+    the <code>CCL</code> package:</p>
+
+    <pre>
+? (in-package :ccl)
+#&lt;Package "CCL"&gt;
+    </pre>
+
+    <p>Creating a Cocoa window follows the common Objective-C pattern
+    of allocating an object and then initializing it with some
+    starting data. To allocate a window, just call
+    the <code>alloc</code> method of the <code>NSWindow</code>
+    class:</p>
+
+    <pre>
+? (setf my-window (#/alloc (@class ns-window)))
+#&lt;NS-WINDOW &lt;NSWindow: 0x13b68580&gt; (#x13B68580)&gt;
+    </pre>
+
+    <p>The above expression creates a new window, but doesn't display
+    it. Before it shows up on the screen we must initialize it with
+    some appropriate values. For that, we'll use the
+    method <code>initWithContentRect:styleMask:backing:defer:</code>.</p>
+
+    <p>As always in Objective-C, the name of the method reveals
+    something about the arguments it expects. The <code>NSRect</code>
+    that we pass for the <code>initWithContentRect:</code> segment of
+    the method name describes the shape of the window. The mask
+    for <code>styleMask:</code> is a sequence of bits that specify
+    which window features are turned on. The <code>backing:</code>
+    argument is a constant of type <code>NSBackingStoreType</code>
+    that specifies how Cocoa will draw the contents of the
+    window. Finally, the <code>defer:</code> argument is a Boolean
+    that determines whether to display the window as soon as it's
+    created.</p>
+
+    <p>Next, we'll create data values to pass in these parameters, so
+    that we can display our new window on the screen. We'll build the
+    proper initialization form up piece-by-piece.</p>
+
+    <p>The first argument, of course, is the window object to be
+    initialized. We pass the window that we created before:</p>
+
+    <pre>
+(#/initWithContentRect:styleMask:backing:defer: my-window ...)
+    </pre>
+
+    <p>The next argument, the <code>NSRect</code>, is a structure
+    that we need only temporarily. Because <code>NSRect</code> values
+    appear so often in Cocoa code, Clozure CL provides a handy way to
+    allocate them temporarily, disposing of them
+    automatically. The <code>with-ns-rect</code> macro (in
+    the <code>NS</code> package) creates an <code>NSRect</code> value,
+    and then disposes of it when control leaves the scope of the
+    macro; for example:</p>
+
+    <pre>
+(ns:with-ns-rect (r 100 100 400 300)
+   ...)
+    </pre>
+
+    <p>We can use this rectangle to initialize the shape of our new
+    window:</p>
+
+    <pre>
+(ns:with-ns-rect (r 100 100 400 300)
+   (#/initWithContentRect:styleMask:backing:defer: 
+    my-window 
+    r 
+    ...))
+    </pre>
+
+    <p>To specify the window features we want, we must combine
+    several flags to form the proper style mask. Cocoa provides named
+    constants for each of the various window features. To create the
+    syle mask that describes a new window, use inclusive-or to
+    combine the named flags into a style mask:</p>
+
+    <pre>
+(logior  #$NSTitledWindowMask 
+         #$NSClosableWindowMask  
+         #$NSMiniaturizableWindowMask 
+         #$NSResizableWindowMask)
+    </pre>
+
+    <p>You can find definitions for all the window masks in the Apple
+    Developer documentation
+    for <a href="http://developer.apple.com/documentation/Cocoa/Reference/ApplicationKit/Classes/NSWindow_Class/Reference/Reference.html#//apple_ref/doc/uid/20000013-89097">NSWindow
+    Constants</a>.</p>
+
+    <p>Passing the window mask as the next argument gives us this
+    expression:</p>
+
+    <pre>
+(ns:with-ns-rect (r 100 100 400 300)
+  (#/initWithContentRect:styleMask:backing:defer: 
+   my-window 
+   r 
+   (logior  #$NSTitledWindowMask 
+            #$NSClosableWindowMask  
+            #$NSMiniaturizableWindowMask 
+            #$NSResizableWindowMask)
+   ...))
+    </pre>
+
+    <p>Like the style masks, the <code>NSBackingStoreType</code> value
+    is a named constant that describes which drawing strategy Cocoa
+    should use for the contents of the window. The value can
+    be <code>NSBackingStoreRetained</code>, <code>NSBackingStoreNonretained</code>,
+    or <code>NSBackingStoreBuffered</code>. For this example, we'll
+    use <code>NSBackingStoreBuffered</code>:</p>
+
+    <pre>
+(ns:with-ns-rect (r 100 100 400 300)
+  (#/initWithContentRect:styleMask:backing:defer: 
+   my-window 
+   r 
+   (logior  #$NSTitledWindowMask 
+            #$NSClosableWindowMask  
+            #$NSMiniaturizableWindowMask 
+            #$NSResizableWindowMask)
+   #$NSBackingStoreBuffered
+   ...))
+    </pre>
+
+    <p>Finally, the <code>defer</code> argument is just a Boolean. If
+    we pass a true value, Cocoa will defer displaying the window until
+    we explicitly tell it to. If we pass a False value, it will
+    instead display the window right away. We can pass the Lisp
+    values <code>T</code> or <code>NIL</code>, and the Objective-C
+    bridge automatically converts them for us, but in the spirit of
+    using Objective-C values for Objective-C operations, let's use the
+    Objective-C constants <code>#$YES</code>
+    and <code>#$NO</code>:</p>
+
+    <pre>
+(ns:with-ns-rect (r 100 100 400 300)
+  (#/initWithContentRect:styleMask:backing:defer: 
+   my-window 
+   r 
+   (logior  #$NSTitledWindowMask 
+            #$NSClosableWindowMask  
+            #$NSMiniaturizableWindowMask 
+            #$NSResizableWindowMask)
+   #$NSBackingStoreBuffered
+   #$NO))
+    </pre>
+
+    <p>There; the expression to initialize our window object is
+    finally complete. We can evaluate it in the Listener to
+    initialize the window:</p>
+
+    <pre>
+(ns:with-ns-rect (r 100 100 400 300)
+  (#/initWithContentRect:styleMask:backing:defer: 
+   my-window 
+   r 
+   (logior  #$NSTitledWindowMask 
+            #$NSClosableWindowMask  
+            #$NSMiniaturizableWindowMask 
+            #$NSResizableWindowMask)
+   #$NSBackingStoreBuffered
+   #$NO))
+    </pre>
+
+    <p>Then we can call <code>makeKeyAndOrderFront:</code> to display the window:</p>
+
+    <pre>
+(#/makeKeyAndOrderFront: my-window nil)
+    </pre>
+
+    <p>The window, empty, but with the shape and features we
+    specified, appears on the left lower corner of the screen.</p>
+
+    <div class="title">
+      <h2>Adding a Button</h2>
+    </div>
+
+    <p>Once we have a window on the screen, we might like to put
+    something in it. Let's start by adding a button.</p>
+
+    <p>Creating a button object is as simple as creating a window
+    object; we simply allocate one:</p>
+
+    <pre>
+(setf my-button (#/alloc ns:ns-button))
+#&lt;NS-BUTTON &lt;NSButton: 0x13b7bec0&gt; (#x13B7BEC0)&gt;
+    </pre>
+
+    <p>As with the window, most of the interesting work is in
+    configuring the allocated button after it's allocated.</p>
+
+    <p>Instances of NSButton include pushbuttons with either text or
+    image labels (or both), checkboxes, and radio buttons. In order to
+    make a text pushbutton, we need to tell our button to use a
+    button-type of <code>NSMomentaryPushInButton</code>, an image
+    position of <code>NSNoImage</code>, and a border style
+    of <code>NSRoundedBezelStyle</code>. These style options are
+    represented by Cocoa constants.</p>
+    
+    <p>We also need to give the button a frame rectangle that defines
+    its size and position. We can once again
+    use <code>ns:with-ns-rect</code> to specify a temporary rectangle
+    for the purpose of initializing our button:</p>
+
+    <pre>
+(ns:with-ns-rect (frame 10 10 72 32)
+  (#/initWithFrame: my-button frame)
+  (#/setButtonType: my-button #$NSMomentaryPushInButton)
+  (#/setImagePosition: my-button #$NSNoImage)
+  (#/setBezelStyle: my-button #$NSRoundedBezelStyle))
+;Compiler warnings :
+;   Undeclared free variable MY-BUTTON (4 references), in an anonymous lambda form
+NIL
+    </pre>
+
+    <p>Now we just need to add the button to the window. This we do by
+    asking the window for its content view, and asking that view to
+    add the button as a subview:</p>
+
+    <pre>
+(#/addSubview: (#/contentView my-window) my-button)
+    </pre>
+
+    <p>The button appears in the window with the rather uninspired
+    title "Button". Clicking it highlights the button but, since we
+    didn't give it any action to perform, does nothing else.</p>
+
+    <p>We can give the button a more interesting title and, perhaps
+    more importantly, an action to perform, by passing a string and an
+    action to it. First, let's set the button title:</p>
+
+    <pre>
+(let ((label (%make-nsstring "Hello!")))
+  (#/setTitle: my-button label)
+  (#/release label))
+;Compiler warnings :
+;   Undeclared free variable MY-BUTTON, in an anonymous lambda form
+NIL
+    </pre>
+
+    <p>The button changes to display the text "Hello!". Notice that we
+    are careful to save a reference to the button text and release it
+    after changing the button title. The normal memory-management
+    policy in Cocoa is that if we allocate an object (like the
+    NSString "Hello!") we are responsible for releasing it. Unlike
+    Lisp, Cocoa does not automatically garbage-collect all allocated
+    objects by default.</p>
+
+    <p>Giving the button an action is slightly more
+    complicated. Clicking a button causes the button object to send a
+    message to a target object. We haven't given our button a message
+    to send, nor a target object to send it to, so it doesn't do
+    anything. In order to get it do perform some kind of action, we
+    need to give it a target object and a message to send. Then, when
+    we click the button, it will send the message we specify to the
+    target we provide. Naturally, the target object had better be able
+    to respond to the message, or else we'll just see a runtime
+    error.</p>
+
+    <p>Let's define a class that knows how to respond to a greeting
+    message, and then make an object of that class to serve as our
+    button's target.</p>
+
+    <p>We can define a subclass of <code>NSObject</code> to handle
+    our button's message:</p>
+
+    <pre>
+(defclass greeter (ns:ns-object)
+  ()
+  (:metaclass ns:+ns-object))
+#&lt;OBJC:OBJC-CLASS GREETER (#x13BAF810)&gt;
+    </pre>
+
+    <p>We'll need to define a method to execute in response to the
+    button's message. Action methods accept one argument (in addition
+    to the receiver): a sender. Normally Cocoa passes the button
+    object itself as the sender argument; the method can do anything
+    it likes (or nothing at all) with the sender.</p>
+
+    <p>Here's a method that displays an alert dialog:</p>
+
+    <pre>
+(objc:defmethod #/greet: ((self greeter) (sender :id))
+  (declare (ignore sender))
+  (let ((title (%make-nsstring "Hello!"))
+        (msg (%make-nsstring "Hello, World!"))
+        (default-button (%make-nsstring "Hi!"))
+        (alt-button (%make-nsstring "Hello!"))
+        (other-button (%make-nsstring "Go Away")))
+    (#_NSRunAlertPanel title msg default-button alt-button other-button)
+    (#/release title)
+    (#/release msg)
+    (#/release default-button)
+    (#/release other-button)))
+    </pre>
+
+    <p>Now we can create an instance of the Greeter class and use it
+    as the button's target:</p>
+
+    <pre>
+(setf my-greeter (#/init (#/alloc greeter)))
+#&lt;GREETER &lt;Greeter: 0x136c58e0&gt; (#x136C58E0)&gt;
+
+(#/setTarget: my-button my-greeter)
+NIL
+
+(#/setAction: my-button (@SELECTOR "greet:"))
+NIL
+    </pre>
+
+    <p>Now, if you click the button, an Alert panel appears.</p>
+
+    </div>
+
+  </body>
+</html>
+

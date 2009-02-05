@@ -1,0 +1,8 @@
+#!/bin/sh
+HTTP_URL=http://svn.clozure.com
+SSH_URL=svn+ssh://svn.clozure.com/usr/local
+
+(cd $1;
+    echo Relocating `pwd` ; 
+    svn switch --relocate $HTTP_URL $SSH_URL)
+

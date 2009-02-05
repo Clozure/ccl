@@ -1,0 +1,9 @@
+The Objective-C bridge has evolved quite a bit, and the CocoaBridgeDoc.txt
+file is now probably mostly misleading.
+
+The most current documentation for the bridge is in release-notes.txt in
+the top-level ccl directory.  At some point soon, updated documentation
+will be made available at:
+
+http://doc.clozure.com/doku.php/doc/openmcl/objc
+

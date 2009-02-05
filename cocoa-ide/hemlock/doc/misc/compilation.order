@@ -1,0 +1,250 @@
+; Definitions of structures intended for use within the HEMLOCK-INTERNALS
+; package.
+Struct
+; Definitions of structures intended for use within the HEMLOCK package.
+Struct-ed
+; Code specific to CMU Common Lisp on the IBM RT/PC under Mach.
+rompsite
+; Implementation dependant character hacking macros.
+Charmacs
+; This is implementation dependent code for canonical input event
+; representation.  It also provides a interface for converting X11 codes
+; and bits to an input event.
+Key-event
+Keysym-defs
+; Implementation independent code to support input to Hemlock, based on
+; keytran.lisp and keytrandefs.lisp.
+Input
+; Random macros needed in the compiler.
+Macros
+; Implementation dependant line structure definition.
+Line
+
+; Ring-Buffer data-type primitives.
+Ring
+; String-Table primitives.
+Table
+ 
+; Text manipulation primitives.
+Htext1
+Htext2
+Htext3
+Htext4
+
+; Searching and replacing primitives.
+Search1 ;String searches.
+Search2 ;Character searches, uses %sp-[reverse-]find-character-with-attribute.
+
+; Stuff that depends on the current line-image building scheme, and
+; thus %SP-Find-Character-With-Attribute.
+; Build line images.
+Linimage
+; Cursor-positioning and recentering stuff.
+Cursor
+
+; Uses %SP-Find-Character-With-Attribute, but is independent of line-image
+; stuff.
+; Syntax table primitives.
+Syntax
+
+; Window image building stuff.
+Winimage
+
+; Implementation dependent redisplay code for running under X.
+Hunk-Draw
+
+; Implementation independent interface to Unix style termcap files.
+Termcap
+
+; Implementation independent redisplay entry points.
+Display
+
+; Implementation dependent redisplay.
+Bit-display ;for bitmap displays under X.
+
+; Implementation dependent redisplay code for running with a terminal.
+Tty-disp-rt
+
+; Implementation independent redisplay code for running with a terminal.
+Tty-display
+
+; Implementation dependent code for random typeout/pop-up displays on the
+; bitmap and tty.
+pop-up-stream
+
+; Implementation independent screen management.
+Screen
+
+; Implementation dependent screen management.
+Bit-screen ;for bitmap display under X.
+
+; Implementation independent screen management code for running with a terminal.
+Tty-screen
+
+; Implementation independent code for Hemlock window primitives and
+; some other redisplay stuff.
+Window
+
+; Implementation independent interface to fonts.
+Font
+
+; The command interpreter.
+Interp
+
+; Hemlock variable access functions.
+Vars
+
+; Buffer and mode manipulation functions
+Buffer
+
+; Implementation dependent file primitives.
+Files
+
+; Implemention dependent stream primitives.
+Streams
+
+; echo-area prompting functions.
+Echo
+
+; Random top-level user functions and implementation independant initilization
+; stuff.
+Main
+
+; Echo-Area commands.
+EchoComs
+
+; Some character attribute definitions.
+Defsyn
+
+; Basic commands
+Command
+MoreComs
+
+; Stuff for undoing stuff.
+Undo
+
+; Killing and un-killing commands.  Mark ring primitives and commands.
+KillComs
+
+; Searching and replacing commands.
+SearchComs
+
+; File and buffer manipulating commands.
+Filecoms
+
+; Indentation commands
+Indent
+
+; Commands for lisp mode.
+Lispmode
+
+; Comment-hacking commands.
+Comments
+
+; Auto Fill Mode and filling commands.
+Fill
+
+; Text primitives and commands (paragraphs, sentences, etc.)
+Text
+
+; Documentation commands.
+Doccoms
+
+; Commands for buffer comparison and stuff.
+Srccom
+
+; Commands for manipulating groups of files.
+Group
+
+; Implementation dependent spell code.
+Spell-RT
+; Spelling correction interface implementation.
+Spell-Corr
+; Spell interface to incrementally add to the dictionary.
+Spell-Aug
+; Nearly implementation independent code to build binary dictionary.
+Spell-Build
+; User interface commands.
+Spellcoms
+
+; Word abbreviation commands.
+Abbrev
+
+; Overwrite mode, for making text pictures and stuff.
+Overwrite
+
+; Gosling Emacs bindings and twiddle chars command.  Lots of other
+;differences.
+gosmacs
+
+; a typescript server in Hemlock.  Client Lisp's *terminal-io* streams are
+; set to typescript streams which send message requests to typescript servers
+; for input and output, so this is how client Lisps can do full I/O inside
+; a Hemlock buffer.
+Ts-buf
+Ts-stream
+
+; commands for interacting with client Lisp environments and REP loops.
+eval-server
+Lispeval
+
+; commands for evaling and running a REP loop in a buffer.
+Lispbuf
+
+; Keyboard macros and stuff.
+Kbdmac
+
+; Hackish thing to italicize comments.
+Icom
+
+; Stuff to check buffer integrity.
+Integrity
+
+; Scribe Mode
+Scribe
+
+; Definition editing/function definition finding
+Edit-Defs
+
+; auto-save mode.
+auto-save
+
+; register code.  stuff for stashing marks and regions in "registers".
+register
+
+; commands pertinent only to the X windowing system.
+xcoms
+
+; implements Unix specific commands for Hemlock.
+unixcoms
+
+; mail interface to MH.
+mh
+
+; highlighting parens and active regions.
+highlight
+
+; directory editing; implementation dependent.
+dired
+diredcoms
+
+; buffer hacking mode.
+bufed
+
+; lisp library browser mode; implementation dependent.
+lisp-lib
+
+; completion mode to save key strokes for long Lisp identifiers.
+completion
+
+; "Process" mode, primarily implements Unix shells in Hemlock buffers.
+shell
+
+; stuff for talking to slave Lisps to do debugging.
+debug
+
+; site dependent NNTP interface for reading Netnews.
+netnews
+
+; File that sets up all the default key bindings; implementation dependant.
+Bindings

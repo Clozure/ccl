@@ -1,0 +1,158 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+  <head>
+    <title>Portable Hemlock</title>
+    <link rel='stylesheet' href='../style.css'>
+    <link rel='shortcut icon' href='../lambda.png'>
+  </head>
+
+  <body>
+    <div class=face2></div>
+    
+    <h1 align=center>Portable Hemlock</h1>
+<p>
+Hemlock is an Emacs-like editor which for a long time was a part of <a
+href='http://www.cons.org/cmucl/'>CMUCL</a>. It was believed that it
+is tied to this particular implementation of Common Lisp. But this is
+no longer true.
+
+<p>
+So, here is Portable Hemlock! An attempt to free Hemlock from its CMUCL
+prison.
+
+<p>
+The stuff that works is opening files, editing them and saving your
+work -- what you expect from an editor. Lisp mode works too. Missing
+is: tty mode operation, typescript buffers (inferior shell and
+inferior lisp), spell checking, netnews and mail.
+<p>
+Portable Hemlock was tested in:
+<ul>
+<li> <a href='http://www.cons.org/cmucl/'>CMUCL</a>
+<li> <a href='http://clisp.cons.org/'>CLISP</a>
+<li> <a href='http://openmcl.clozure.com/'>OpenMCL</a> (patches not yet received)
+<li> <a href='http://sbcl.sourceforge.net/'>SBCL</a>, patches by Daniel Barlow.
+<li> <a href='http://www.scieneer.com/scl/'>Scieneer Common Lisp</a>, patches by Douglas Crosher.
+</ul>
+
+<h2>Download</h2>
+
+<a href='http://www.stud.uni-karlsruhe.de/~unk6/export/hemlock-%%DATE%%.tar.gz'>hemlock-%%DATE%%.tar.gz</a>, have fun.
+
+<h2>CVS access</h2>
+
+    <p>
+      Anonymouns [read-only] CVS access is available. Just follow the instructions below:
+
+    <p style='margin: 1em; padding: 1em; border: 1px solid; background: rgb(100%,100%,80%);'>
+<tt>$ export CVSROOT=<b>:pserver:anonymous@bauhh.dyndns.org:/hemlock</b></tt><br>
+<tt>$ cvs login</tt><br>
+<tt>Logging in to :pserver:anonymous@bauhh.dyndns.org:2401/hemlock</tt><br>
+<tt>CVS password: <b>anonymous</b></tt><br>
+<tt>$ cvs -z9 co -P <b>hemlock</b></tt><br>
+</p>
+
+<b>non</b>-anonymous CVS write access is also awailable, just drop
+<a href="mailto:unk6@stud.uni-karlsruhe.de">me</a> a note if you want
+access.
+
+<h2>News/History</h2>
+
+<dl>
+<dt>2003-08-05
+<dd>I was a bit lazy updating the web page. Here is what happend:
+<ul>
+
+<li>Ingvar Mattsson is hacking an elisp compatibility package.
+
+<li>I am currently working on providing the "Slave Lisp"
+functionality, so that Portable Hemlock will be useful for actually
+hacking Lisp code.
+
+</ul>
+
+<dt>2003-03-06
+<dd>Bug fix: <tt>auto-save.lisp</tt> was not compiling.
+<dt>2003-03-05
+<dd>This web page was created.<p>
+    New release having the SBCL patches in.
+<dt>2003-02-07
+<dd>Portable Hemlock was announced to <a href='http://www.cliki.net/IRC'>#lisp</a>.
+<dt>2002-11-??
+<dd>I made initial attempt to port Hemlock from CMUCL. Then put it aside to work on other stuff.
+</dl>
+
+<h2>Random Notes</h2>
+
+<p>
+The source code of Hemlock showed unportability (or better its age) in
+the following areas:
+<ul>
+<li><P>
+   Buffers sometimes also serve as streams. As Hemlock was written
+   there was no universal de-facto standard interface for user defined
+   streams and thus the authors defined CMUCL streams. These days we
+   have Gray streams.
+
+<li><p>
+   File I/O was tied to both CMUCL and Unix to accommodate probably
+   slow machines. The file I/O functions called
+   <tt>unix-read</tt> and <tt>unix-write</tt> beaming data directly to
+   and fro system areas. I changed that using standard CL functions
+   doing I/O on a line-by-line basis now.
+
+<li><p>
+   The TTY interface is inherently unportable. Currently it is
+   disabled altogether. I think we could reclaim some useful code from
+   Hemlock's TTY interface and morph it into a CLIM TTY port. And
+   since my graphics card cannot even display a text console interface
+   on my monitor, this has very low priority on my list, though other
+   people might want to have it.
+
+<li><p>
+   The X11 interface uses the <tt>SERVE-EVENT</tt> facility of CMUCL,
+   which naturally is only available there. I provided a thin
+   portability layer to provide the same API using just the standard
+   CLX interface.
+</ul>
+<p>
+This already summaries pretty well the current state of Portable
+Hemlock. You can edit files using the X11 interface on an ANSI CL
+which provides for CLX.
+
+<h2>Future</h2>
+
+<p>
+The next steps I have in mind are:
+
+<ul>
+<li> <p>Port the missing files except the TTY interface.
+
+<li> <p>Hemlock has the idea that characters are 8-bit wide. We need to
+   teach it otherwise as we have Unicode strings now. This involves
+   syntax tables and probably searching.
+
+<li> <P>I want a CLIM Hemlock.
+<p>
+   How exactly to do this is still not decided. I see two
+   possibilities:
+<ul>
+<li> Hemlock already provides for a kind of device interface. We can
+     implement a new device which is just a CLIM device.
+
+<li> Or we rip this device abstraction layer and state that CLIM
+     itself is the device layer. (Making the bet that we'll have a TTY
+     CLIM in the future).
+</ul>
+</ul>
+<p>After that is done, we can talk about extending Portable Hemlock in various
+ways like syntax highlighting, color, new modes, ... you name it.
+
+
+<br>
+<br>
+    <address><a href="mailto:unk6@stud.uni-karlsruhe.de">Gilbert Baumann</a></address>
+<br>
+$Id$
+  </body>
+</html>

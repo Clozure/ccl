@@ -1,0 +1,564 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+          <!ENTITY rest "<varname>&amp;rest</varname>">
+          <!ENTITY key "<varname>&amp;key</varname>">
+          <!ENTITY optional "<varname>&amp;optional</varname>">
+          <!ENTITY body "<varname>&amp;body</varname>">
+          <!ENTITY aux "<varname>&amp;aux</varname>">
+          <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+          <!ENTITY CCL "Clozure CL">
+          ]>
+
+<chapter id="Modifying-CCL">
+  <title>Modifying &CCL;</title>
+
+  <sect1 id="Contributing-Code-Back-to-the-CCL-Project">
+    <title>Contributing Code Back to the &CCL; Project</title>
+    <para>This section is a placeholder, added as of August 2004.  The
+      full text is being written, and will be added as soon as it is
+      available.</para>
+  </sect1>
+
+  <sect1 id="Using-CCL-in--development--and-in--user--mode">
+    <title>Using &CCL; in "development" and in  "user" mode</title>
+
+    <para>As it's distributed, &CCL; starts up with *PACKAGE* set to
+      the CL-USER package and with most predefined functions and
+      methods protected against accidental redefinition.  The package
+      setting is of course a requirement of ANSI CL, and the
+      protection of predefined functions and methods is intended to
+      catch certain types of programming errors (accidentally
+      redefining a CL or CCL function) before those errors have a
+      chance to do much damage.</para>
+    <para>These settings may make using &CCL; to develop &CCL; a bit
+      awkward, because much of that process assumes you are working in
+      the CCL package is current, and a primary purpose of &CCL;
+      development is to redefine some predefined, builtin functions.
+      The standard, "routine" ways of building &CCL; from sources (see
+      ) - COMPILE-CCL, XCOMPILE-CCL, and XLOAD-LEVEL-0 - bind
+      *PACKAGE* to the "CCL" package and enable the redefinition of
+      predefined functions; the symbols COMPILE-CCL, XCOMPILE-CCL, and
+      XLOAD-LEVEL-0 are additionally now exported from the "CCL"
+      package.</para>
+    <para>Some other (more ad-hoc) ways of doing development on
+      &CCL;&mdash;compiling and/or loading individual files,
+      incrementally redefining individual functions&mdash;may be
+      awkward unless one reverts to the mode of operation which was
+      traditionally offered in &CCL;. Some &CCL; source files -
+      especially those that comprise the bootstrapping image sources
+      and the first few files in the "cold load" sequence - are
+      compiled and loaded in the "CCL" package but don't contain
+      (IN-PACKAGE "CCL") forms, since IN-PACKAGE doesn't work until
+      later in the cold load sequence.</para>
+    <para>The somewhat bizarre behavior of both SET-USER-ENVIRONMENT
+      and SET-DEVELOPMENT-ENVIRONMENT with respect to the special
+      variables they affect is intended to allow those constructs to
+      take effect when the read-eval-print loop next returns to a
+      top-level '? ' prompt; the constructs can meaningfully be used
+      inside LOAD, for instance (recall that LOAD binds *PACKAGE*),
+      though using both constructs within the same LOAD call would
+      likely be pretty confusing.</para>
+    <para>"user" and "development" are otherwise very generic terms;
+      here they're intended to enforce the distinction between "using"
+      &CCL; and "developing" it.</para>
+    <para>The initial environment from which &CCL; images are
+      saved is one where (SET-USER-ENVIRONMENT T) has just been
+      called; in previous versions, it was effectively as if
+      (SET-DEVELOPMENT-ENVIRONMENT T) had just been called.</para>
+    <para>Hopefully, most users of &CCL; can safely ignore these
+      issues most of the time. Note that doing (SET-USER-ENVIRONMENT
+      T) after loading one's own code (or 3rd-party code) into &CCL;
+      would protect that code (as well as &CCL;'s) from accidental
+      redefinition; that may be useful in some cases.</para>
+  </sect1>
+
+  <sect1 id="kernel-debugger">
+    <title>The Kernel Debugger</title>
+    <para> In a perfect world, something like this couldn't
+      happen:</para>
+    <programlisting>
+Welcome to &CCL; Version x.y!
+? (defun foo (x)
+    (declare (cons x))
+    (cdr x))
+FOO
+
+? (foo -1) ;Oops. Too late ...
+Unhandled exception 11 at 0x300e90c8, context->regs at #x7ffff6b8
+Continue/Debugger/eXit &lt;enter&gt;?
+    </programlisting>
+
+    <para>As you may have noticed, it's not a perfect world; it's rare
+      that the cause (attempting to reference the CDR of -1, and therefore
+      accessing unmapped memory near location 0) of this effect (an
+      "Unhandled exception ..." message) is so obvious.</para>
+    <para>The addresses printed in the message above aren't very useful
+      unless you're debugging the kernel with GDB (and they're often
+      very useful if you are.)</para>
+    <para>Aside from causing an exception that the lisp kernel doesn't
+      know how to handle, one can also enter the kernel debugger (more)
+      deliberately:</para>
+
+    <programlisting>
+? (defun classify (n)
+    (cond ((&gt; n 0) "Greater")
+          ((&lt; n 0) "Less")
+          (t
+           ;; Sheesh ! What else could it be ?
+           (ccl::bug "I give up. How could this happen ?"))))
+CLASSIFY
+
+? (classify 0)
+Bug in &CCL; system code:
+I give up. How could this happen ?
+? for help
+[12345] &CCL; kernel debugger:
+    </programlisting>
+
+    <para>CCL::BUG isn't quite the right tool for this example (a
+      call to BREAK or PRINT might do a better job of clearing up the
+      mystery), but it's sometimes helpful when those other tools
+      can't be used.  The lisp error system notices, for instance, if
+      attempts to signal errors themselves cause errors to be
+      signaled; this sort of thing can happen if CLOS or the I/O
+      system are broken or missing. After some small number of
+      recursive errors, the error system gives up and calls
+      CCL::BUG.</para>
+    <para>If one enters a '?' at the kernel debugger prompt, one
+      will see output like:</para>
+
+    <programlisting>
+(S)  Find and describe symbol matching specified name
+(B)  Show backtrace
+(X)  Exit from this debugger, asserting that any exception was handled
+(K)  Kill &CCL; process
+(?)  Show this help
+    </programlisting>
+
+    <para>CCL::BUG just does an FF-CALL into the lisp kernel.  If
+      the kernel debugger was invoked because of an unhandled
+      exception (such as an illegal memory reference) the OS kernel
+      saves the machine state ("context") in a data structure for us,
+      and in that case some additional options can be used to display
+      the contents of the registers at the point of the
+      exception. Another function&mdash;CCL::DBG&mdash;causes a special
+      exception to be generated and enters the lisp kernel debugger
+      with a non-null "context":</para>
+
+    <programlisting>
+? (defun classify2 (n)
+    (cond ((&gt; n 0) "Greater")
+          ((&lt; n 0) "Less")
+          (t (dbg n))))
+CLASSIFY2
+
+? (classify2 0)
+Lisp Breakpoint
+While executing: #&lt;Function CLASSIFY2 #x08476cfe>
+? for help
+[12345] &CCL; kernel debugger: ?
+(G)  Set specified GPR to new value
+(A)  Advance the program counter by one instruction (use with caution!)
+(D)  Describe the current exception in greater detail
+(R)  Show raw GPR/SPR register values
+(L)  Show Lisp values of tagged registers
+(F)  Show FPU registers
+(S)  Find and describe symbol matching specified name
+(B)  Show backtrace
+(X)  Exit from this debugger, asserting that any exception was handled
+(P)  Propagate the exception to another handler (debugger or OS)
+(K)  Kill &CCL; process
+(?)  Show this help
+    </programlisting>
+
+    <para>CCL::DBG takes an argument, whose value is copied into the register
+      that &CCL; uses to return a function's primary value (arg_z, which
+      is r23 on the PowerPC). If we were to choose the (L) option at this point,
+      we'd see a dislay like:</para>
+
+    <programlisting>
+rnil = 0x01836015
+nargs = 0
+r16 (fn) = #&lt;Function CLASSIFY2 #x30379386>
+r23 (arg_z) = 0
+r22 (arg_y) = 0
+r21 (arg_x) = 0
+r20 (temp0) = #&lt;26-element vector subtag = 2F @#x303793ee>
+r19 (temp1/next_method_context) = 6393788
+r18 (temp2/nfn) = #&lt;Function CLASSIFY2 #x30379386>
+r17 (temp3/fname) = CLASSIFY2
+r31 (save0) = 0
+r30 (save1) = *TERMINAL-IO*
+r29 (save2) = 0
+r28 (save3) = (#&lt;RESTART @#x01867f2e> #&lt;RESTART @#x01867f56>)
+r27 (save4) = ()
+r26 (save5) = ()
+r25 (save6) = ()
+r24 (save7) = ()
+    </programlisting>
+
+    <para>From this we can conclude that the problematic argument to CLASSIFY2
+      was 0 (see r23/arg_z), and that I need to work on a better example.</para>
+    <para>The R option shows the values of the ALU (and PPC branch unit)
+      registers in hex; the F option shows the values of the FPU registers.</para>
+    <para>The (B) option shows a raw stack backtrace; it'll try to
+      identify foreign functions as well as lisp functions. (Foreign function
+      names are guesses based on the nearest preceding exported symbol.)</para>
+    <para>If you ever unexpectedly find yourself in the "lisp kernel
+      debugger", the output of the (L) and (B) options are often the most
+      helpful things to include in a bug report.</para>
+  </sect1>
+
+  <sect1 id="Using-AltiVec-in-CCL-LAP-functions">
+    <title>Using AltiVec in &CCL; LAP functions</title>
+
+    <sect2 id="Overview--16-">
+	  <title>Overview</title>
+      <para>It's now possible to use AltiVec instructions in PPC LAP
+        (assembler) functions.</para>
+      <para>The lisp kernel detects the presence or absence of
+        AltiVec and preserves AltiVec state on lisp thread switch and
+        in response to exceptions, but the implementation doesn't
+        otherwise use vector operations.</para>
+      <para>This document doesn't document PPC LAP programming in
+        general.  Ideally, there would be some document that
+        did.</para>
+      <para>This document does explain AltiVec register-usage
+        conventions in &CCL; and explains the use of some lap macros
+        that help to enforce those conventions.</para>
+      <para>All of the global symbols described below are exported
+        from the CCL package. Note that lap macro names, ppc
+        instruction names, and (in most cases) register names are
+        treated as strings, so this only applies to functions and
+        global variable names.</para>
+      <para>Much of the &CCL; support for AltiVec LAP programming
+        is based on work contributed to MCL by Shannon Spires.</para>
+    </sect2>
+
+    <sect2 id="Register-usage-conventions">
+	  <title>Register usage conventions</title>
+      <para>&CCL; LAP functions that use AltiVec instructions must
+        interoperate with each other and with C functions; that fact
+        suggests that they follow C AltiVec register usage
+        conventions. (vr0-vr1 scratch, vr2-vr13 parameters/return
+        value, vr14-vr19 temporaries, vr20-vr31 callee-save
+        non-volatile registers.)</para>
+      <para>The EABI (Embedded Application Binary Interface) used in
+        LinuxPPC doesn't ascribe particular significance to the vrsave
+        special-purpose register; on other platforms (notably MacOS),
+        it's used as a bitmap which indicates to system-level code
+        which vector registers contain meaningful values.</para>
+      <para>The WITH-ALTIVEC-REGISTERS lap macro generates code that
+        saves, updates, and restores VRSAVE on platforms where this is
+        required (as indicated by the value of the special variable
+        that controls this behavior) and ignores VRSAVE on platforms
+        that don't require it to be maintained.</para>
+      <para>On all PPC platforms, it's necessary to save any non-volatile
+        vector registers (vr20 .. vr31) before assigning to them and to restore
+        such registers before returning to the caller.</para>
+      <para>On platforms that require that VRSAVE be maintained, it's
+        not necessary to mention the "use" of vector registers that
+        are used as incoming parameters. It's not incorrect to mention
+        their use in a WITH-ALTIVEC-REGISTERS form, but it may be
+        unnecessary in many interesting cases. One can likewise assume
+        that the caller of any function that returns a vector value in
+        vr2 has already set the appropriate bit in VRSAVE to indicate
+        that this register is live. One could therefore write a leaf
+        function that added the bytes in vr3 and vr2 and returned the
+        result in vr2 as:</para>
+
+      <programlisting>
+(defppclapfunction vaddubs ((y vr3) (z vr2))
+  (vaddubs z y z)
+  (blr))
+      </programlisting>
+
+      <para>When vector registers that aren't incoming parameters are used
+        in a LAP function, WITH-ALTIVEC-REGISTERS takes care of maintaining VRSAVE
+        and of saving/restoring any non-volatile vector registers:</para>
+
+      <programlisting>
+(defppclapfunction load-array ((n arg_z))
+  (check-nargs 1)
+  (with-altivec-registers (vr1 vr2 vr3 vr27) ; Clobbers imm0
+    (li imm0 arch::misc-data-offset)
+    (lvx vr1 arg_z imm0)                ; load MSQ
+    (lvsl vr27 arg_z imm0)              ; set the permute vector
+    (addi imm0 imm0 16)                 ; address of LSQ
+    (lvx vr2 arg_z imm0)                ; load LSQ
+    (vperm vr3 vr1 vr2 vr27)           ; aligned result appears in VR3
+    (dbg t))                         ; Look at result in some debugger
+  (blr))
+      </programlisting>
+
+      <para>AltiVec registers are not preserved by CATCH and UNWIND-PROTECT.
+        Since AltiVec is only accessible from LAP in &CCL; and since LAP
+        functions rarely use high-level control structures, this should rarely be
+        a problem in practice.</para>
+      <para>LAP functions that use non-volatile vector registers and
+        that call (Lisp ?) code which may use CATCH or UNWIND-PROTECT
+        should save those vector registers before such a call and
+        restore them on return. This is one of the intended uses of
+        the WITH-VECTOR-BUFFER lap macro.</para>
+    </sect2>
+  </sect1>
+
+  <sect1 id="Development-Mode-Dictionary">
+    <title>Development-Mode Dictionary</title>
+
+    <refentry id="v_warn-if-redefine-kernel">
+	  <indexterm zone="v_warn-if-redefine-kernel">
+	    <primary>*warn-if-redefine-kernel</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>*WARN-IF-REDEFINE-KERNEL*</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Variable</refclass>
+	  </refnamediv>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>When true, attempts to redefine (via DEFUN or DEFMETHOD)
+	      functions and methods that are marked as being
+	      &#34;predefined&#34; signal continuable errors.</para>
+
+	    <para>Note that these are CERRORs, not warnings, and that
+	      no lisp functions or methods have been defined in the kernel
+	      in MCL or &CCL; since 1987 or so.</para>
+	  </refsect1>
+    </refentry>
+
+    <refentry id="f_set-development-environment">
+	  <indexterm zone="f_set-development-environment">
+	    <primary>set-development-environment</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>SET-DEVELOPMENT-ENVIRONMENT</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis><function>set-development-environment</function>
+	      &optional;
+	      unmark-builtin-functions</synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Arranges that the outermost special bindings of *PACKAGE*
+	      and *WARN-IF-REDEFINE-KERNEL* restore values of the &#34;CCL&#34;
+	      package and NIL to these variables, respectively. If the optional
+	      argument is true, marks all globally defined functions and methods
+	      as being &#34;not predefined&#34; (this is a fairly expensive
+	      operation.)</para>
+	  </refsect1>
+    </refentry>
+
+    <refentry id="f_set-user-environment">
+	  <indexterm zone="f_set-user-environment">
+	    <primary>set-user-environment</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>SET-USER-ENVIRONMENT</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis><function>set-user-environment</function>
+	      &optional; mark-builtin-functions</synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Arranges that the outermost special bindings of *PACKAGE*
+	      and *WARN-IF-REDEFINE-KERNEL* restore values of the
+	      &#34;CL-USER&#34; package and T to these variables, respectively.
+	      If the optional argument is true, marks all globally defined
+	      functions and methods as being &#34;predefined&#34; (this is a
+	      fairly expensive operation.)</para>
+	  </refsect1>
+    </refentry>
+    <refentry id="v_altivec-available">
+	  <indexterm zone="v_altivec-available">
+	    <primary>*altivec-available*</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>*ALTIVEC-AVAILABLE*</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Variable</refclass>
+	  </refnamediv>
+
+	  <refsect1>
+	    <title>Description</title>
+	    <para>This variable is initialized each time an &CCL; session
+	      starts based on information provided by the lisp kernel. Its value
+	      is true if AltiVec is present and false otherwise. This variable
+	      shouldn't be set by user code.</para>
+	  </refsect1>
+    </refentry>
+
+    <refentry id="f_altivec-available-p">
+	  <indexterm zone="f_altivec-available-p">
+	    <primary>altivec-available-p</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>ALTIVEC-AVAILABLE-P</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+	  
+	  <refsynopsisdiv>
+	    <synopsis><function>altivec-available-p</function></synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Returns non-NIL if AltiVec is available.</para>
+	  </refsect1>
+    </refentry>
+
+    <refentry id="v_altivec-lapmacros-maintain-vrsave-p">
+	  <indexterm zone="v_altivec-lapmacros-maintain-vrsave-p">
+	    <primary>*altivec-lapmacros-maintain-vrsave-p*</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>*ALTIVEC-LAPMACROS-MAINTAIN-VRSAVE-P*</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>Variable</refclass>
+	  </refnamediv>
+	  
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Intended to control the expansion of certain lap macros.
+	      Initialized to NIL on LinuxPPC; initialized to T on platforms
+	      (such as MacOS X/Darwin) that require that the VRSAVE SPR contain
+	      a bitmask of active vector registers at all times.</para>
+	  </refsect1>
+    </refentry>
+
+    <refentry id="lapm_with-altivec-registers">
+	  <indexterm zone="lapm_with-altivec-registers">
+	    <primary>with-altivec-registers</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>WITH-ALTIVEC-REGISTERS</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>LAP Macro</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis><function>with-altivec-registers</function>
+	      reglist &body; body</synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Arguments and Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>reglist</term>
+
+	        <listitem>
+		      <para>A list of vector register names (vr0 .. vr31).</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>body</term>
+
+	        <listitem>
+		      <para>A sequence of PPC LAP instructions.</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Specifies the set of AltiVec registers used in body. If
+	      *altivec-lapmacros-maintain-vrsave-p* is true when the macro is
+	      expanded, generates code to save the VRSAVE SPR and updates VRSAVE
+	      to include a bitmask generated from the specified register list.
+	      Generates code which saves any non-volatile vector registers which
+	      appear in the register list, executes body, and restores the saved
+	      non-volatile vector registers (and, if
+	      *altivec-lapmacros-maintain-vrsave-p* is true, restores VRSAVE as
+	      well. Uses the IMM0 register (r3) as a temporary.</para>
+	  </refsect1>
+    </refentry>
+
+    <refentry id="lapm_with-vector-buffer">
+	  <indexterm zone="lapm_with-vector-buffer">
+	    <primary>with-vector-buffer</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>WITH-VECTOR-BUFFER</refname>
+	    <refpurpose></refpurpose>
+	    <refclass>LAP Macro</refclass>
+	  </refnamediv>
+	  
+	  <refsynopsisdiv>
+	    <synopsis>with-vector-buffer base n &body; body</synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Arguments and Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>base</term>
+
+	        <listitem>
+		      <para>Any available general-purpose register.</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>n</term>
+
+	        <listitem>
+		      <para>An integer between 1 and 254, inclusive. (Should
+		        typically be much, much closer to 1.) Specifies the size of
+		        the buffer, in 16-byte units.</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+	        <term>body</term>
+
+	        <listitem>
+		      <para>A sequence of PPC LAP instructions.</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+	    <para>Generates code which allocates a 16-byte aligned buffer
+	      large enough to contain N vector registers; the GPR base points to
+	      the lowest address of this buffer. After processing body, the
+	      buffer will be deallocated. The body should preserve the value of
+	      base as long as it needs to reference the buffer. It's
+	      intended that base be used as a base register in stvx and lvx
+	      instructions within the body.</para>
+	  </refsect1>
+    </refentry>
+  </sect1>
+</chapter>

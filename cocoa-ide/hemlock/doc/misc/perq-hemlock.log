@@ -1,0 +1,146 @@
+/Lisp2/Slisp/Hemlock/perqsite.slisp#1, 23-Mar-85 11:05:16, Edit by Ram
+  Made wait-for-more use logical-char=.
+
+/lisp2/slisp/hemlock/echocoms.slisp#1, 22-Mar-85 13:41:10, Edit by Ram
+  Made "Complete Keyword" and "Help on Parse" pass the parse default into
+  Complete-File and Ambiguous-Files, respectively.
+
+/Lisp2/Slisp/Hemlock/echocoms.slisp#1, 22-Mar-85 10:51:09, Edit by Ram
+  Updated to correspond to new prompting conventions.
+
+/Lisp2/Slisp/Hemlock/echo.slisp#1, 22-Mar-85 10:21:19, Edit by Ram
+  Changes to make defaulting work better.  *parse-default* is now a string
+  which we pretend we read when we confirm an empty parse.
+  *parse-default-string* is now only used in displaying the default, as it
+  should be.  The prompt and help can now be a list of format string and format
+  arguments.  The feature of help being a function is gone.
+
+/Lisp2/Slisp/Hemlock/echo.slisp#1, 22-Mar-85 08:00:01, Edit by Ram
+  Made Parse-For-Something specify NIL to Recursive-Edit so that C-G's will
+  blow away prompts.
+
+/Lisp2/Slisp/Hemlock/buffer.slisp#1, 22-Mar-85 07:57:49, Edit by Ram
+  Added the optional Handle-Abort argument to recursive-edit so that we can
+  have recursive-edits that aren't blown away by C-G's.
+
+/Lisp2/Slisp/Hemlock/spellcoms.slisp#1, 22-Mar-85 07:35:01, Edit by Ram
+  Made Sub-Correct-Last-Misspelled-Word delete the marks pointing to misspelled
+  words when it pops them off the ring.
+
+/lisp2/slisp/hemlock/syntax.slisp#1, 18-Mar-85 07:20:53, Edit by Ram
+  Fixed problem with the old value not being saved if a shadow-attribute was
+  dowe for a mode that is currently active.
+
+/lisp2/slisp/hemlock/defsyn.slisp#1, 14-Mar-85 09:42:53, Edit by Ram
+  Made #\. be a word delimiter by default.  For old time's sake, it is not
+  a delimiter in "Fundamental" mode.
+
+/Lisp2/Slisp/Hemlock/filecoms.slisp#1, 13-Mar-85 00:25:19, Edit by Ram
+  Changed write-da-file not to compare write dates if the file desn't exist.
+
+/Lisp2/Slisp/Hemlock/perqsite.slisp#1, 13-Mar-85 00:15:31, Edit by Ram
+  Changed emergency message stuff to divide the message size by 8.
+
+/Lisp2/Slisp/Hemlock/htext2.slisp#1, 13-Mar-85 00:07:13, Edit by Ram
+  Changed %set-next-character to use the body of Modifying-Buffer.  Made
+  string-to-region give the region a disembodied buffer count.
+
+/Lisp2/Slisp/Hemlock/htext3.slisp#1, 12-Mar-85 23:53:57, Edit by Ram
+  Changed everyone to use the body of modifying-buffer.
+
+/Lisp2/Slisp/Hemlock/htext1.slisp#1, 12-Mar-85 23:45:51, Edit by Ram
+  Made Modifying-Buffer have a body and wrap a without-interrupts around the
+  body.  Changed %set-line-string to run within the body of modifying-buffer.
+
+/Lisp2/Slisp/Hemlock/echocoms.slisp#1, 12-Mar-85 23:28:40, Edit by Ram
+  Made "Confirm Parse" push the input before calling the confirm function so
+  that if it gets an error, you don't have to type it again.  Also changed it
+  to directly return the default if there is empty input, rather than calling
+  the confirm function on the default string.  It used to be this way, and I
+  changed it, but don't remember why.
+
+/Lisp2/Slisp/Hemlock/group.slisp#1, 12-Mar-85 23:10:43, Edit by Ram
+  Made group-read-file go to the beginning of the buffer, which is useful in
+  the case where the file was already read.
+
+/Lisp2/Slisp/Hemlock/lispbuf.slisp#1, 12-Mar-85 22:58:03, Edit by Ram
+  Made "Compile File" use buffer-default-pathname to get defaults for the
+  prompt.  Added "Compile Group" command.
+
+/lisp2/slisp/hemlock/kbdmac.slisp#1, 09-Mar-85 20:53:33, Edit by Ram
+  Made default-kbdmac-transform bind *invoke-hook* so that recursive edits
+  don't try do clever stuff.
+
+/lisp2/slisp/hemlock/perqsite.slisp#1, 09-Mar-85 14:16:41, Edit by Ram
+  Changed editor-input stream to use new stream representation.  Moved
+  Input-Waiting here from Streams, changed definition to return T or NIL
+  instead of number of chars.  Made Wait-For-More not unread the character if
+  it is rubout.  Made level-1-abort handler clear input.
+
+/lisp2/slisp/hemlock/streams.slisp#1, 09-Mar-85 14:59:02, Edit by Ram
+  Changed to use new stream representation.
+
+/lisp2/slisp/hemlock/pane-stream.slisp#1, 09-Mar-85 14:51:25, Edit by Ram
+  Changed to use new stream representation.
+
+/lisp2/slisp/hemlock/lispmode.slisp#1, 05-Mar-85 11:59:15, Edit by Ram
+  Changed the "Defindent" command to go to the beginning of the line before
+  doing the backward-up-list.  This means that we always find the form
+  controlling indentation for the current line, rather than the enclosing form.
+  Do a "Indent For Lisp" after we redefine the indentation, since it presumably
+  changed.
+
+/lisp2/slisp/hemlock/spell-corr.slisp#1, 05-Mar-85 11:39:19, Edit by Ram
+  Fixed everyone to use gr-call.  Made Correct-Spelling call
+  maybe-read-spell-dictionary, rather than trying to look at
+  *spell-opeining-return*.
+
+/lisp2/slisp/hemlock/spell-augment.slisp#1, 05-Mar-85 11:53:04, Edit by Ram
+  Fixed everyone to use gr-call and friends.
+
+/Lisp2/Slisp/Hemlock/command.slisp#1, 21-Feb-85 00:56:52, Edit by Ram
+  Edited back in change to "Scroll Next Window ..." commands to make them
+  complain if there is only one window.
+
+/Lisp2/Slisp/Hemlock/filecoms.slisp#1, 21-Feb-85 00:48:00, Edit by Ram
+  Edited back in changes:
+    Make "Backup File" message the file written.
+    Make Previous-Buffer return any buffer other than the current buffer
+      and the echo area buffer it there is nothing good in the history.
+
+/Lisp2/Slisp/Hemlock/bindings.slisp#1, 21-Feb-85 00:30:48, Edit by Ram
+  Removed spurious binding of #\' to "Check Word Spelling".
+
+/Lisp2/Boot/Hemlock/spellcoms.slisp#1, 05-Feb-85 13:58:54, Edit by Ram
+  Added call to Region-To-String in "Add Word to Spelling Dictionary" so that
+  it worked.
+
+/Lisp2/Boot/Hemlock/fill.slisp#1, 31-Jan-85 12:09:01, Edit by Ram
+  Made "Set Fill Prefix" and "Set Fill Column" define a buffer local variable
+  so that the values are buffer local.
+
+/Lisp2/Boot/Hemlock/fill.slisp#1, 26-Jan-85 17:19:57, Edit by Ram
+  Made / be a paragraph delimiter.
+
+/Lisp2/Boot/Hemlock/search2.slisp#1, 26-Jan-85 17:07:37, Edit by Ram
+  Fixed the reclaim-function for set search patterns to reclaim the set instead
+  of the search-pattern structure.
+
+/Lisp2/Boot/Hemlock/group.slisp#1, 25-Jan-85 22:07:15, Edit by Ram 
+  Changed the way Group-Read-File works.  We always use "Find File" to read in
+  the file, but if "Group Find File" is false, and we created a new buffer, we
+  rename the buffer to "Group Search", nuking any old buffer of that name.  If
+  we are in the "Group Search" buffer when we finish, we nuke it and go to the
+  previous buffer.
+
+/Lisp2/Boot/Hemlock/macros.slisp#1, 25-Jan-85 22:35:26, Edit by Ram
+  Fixed Hlet so that it worked.  Evidently nobody had used it before.  
+
+/Lisp2/Boot/Hemlock/filecoms.slisp#1, 25-Jan-85 23:26:35, Edit by Ram
+  Made "Log Change" merge the buffer pathname defaults into the log file name.
+  Added the feature that the location for the point in the change log entry
+  template can be specified by placing a "@" in the template.
+
+/Lisp2/Boot/Hemlock/search2.slisp#1, 25-Jan-85 23:23:35, Edit by Ram
+  Fixed various one-off errors in the end args being passed to position and
+  %sp-find-character-with-attribute.

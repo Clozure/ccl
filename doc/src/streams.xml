@@ -1,0 +1,1087 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+          <!ENTITY rest "<varname>&amp;rest</varname>">
+          <!ENTITY key "<varname>&amp;key</varname>">
+          <!ENTITY optional "<varname>&amp;optional</varname>">
+          <!ENTITY body "<varname>&amp;body</varname>">
+          <!ENTITY aux "<varname>&amp;aux</varname>">
+          <!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+          <!ENTITY CCL "Clozure CL">
+          ]>
+
+<chapter id="Streams">
+  <title>Streams</title>
+
+  <sect1 id="CCL-Stream-Extensions">
+    <title>Stream Extensions</title>
+
+    <sect2><title>Stream External Encoding</title>
+    <para>&CCL; streams have an external-encoding attribute that
+    may be read using
+    <function>STREAM-EXTERNAL-ENCODING</function> and set using <function>(SETF
+    STREAM-EXTERNAL-ENCODING)</function>.
+    </para>
+    </sect2>
+
+    <sect2 id="Additional-Open-Keywords">
+      <title>Additional keywords for OPEN and MAKE-SOCKET</title>
+      <para><function>OPEN</function> and
+      <function>MAKE-SOCKET</function> have each been extended to take
+      the additional keyword arguments: <literal>:CLASS</literal>,
+      <literal>:SHARING</literal>, and
+      <literal>:BASIC</literal>.</para>
+
+    <variablelist>
+      <varlistentry>
+	<term><literal>:CLASS</literal></term>
+	<listitem>
+	  <para>A symbol that names the desired class of the stream.
+	  The specified class must inherit from
+	  <literal>FILE-STREAM</literal> for
+	  <function>OPEN</function>.</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term><literal>:SHARING</literal></term>
+	<listitem>
+	  <para>Specifies how a stream can be used by multiple
+	  threads.  The possible values are:
+	  <literal>:PRIVATE</literal>, <literal>:LOCK</literal> and
+	  <literal>:EXTERNAL</literal>. <literal>:PRIVATE</literal> is
+	  the default.  <literal>NIL</literal> is also accepted as a
+	  synonym for <literal>:EXTERNAL</literal>.</para>
+	  <variablelist>
+	    <varlistentry>
+	      <term><literal>:PRIVATE</literal></term>
+	      <listitem>
+		<para>Specifies that the stream can only be accessed
+		by the thread that created it.  This is the default.
+		(There was some discussion on openmcl-devel about the
+		idea of "transferring ownership" of a stream; this has
+		not yet been implemented.)  Attempts to do I/O on a
+		stream with :PRIVATE sharing from a thread other than
+		the stream's owner yield an error.</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><literal>:LOCK</literal></term>
+	      <listitem>
+		<para>Specifies that all access to the stream require
+		the calling thread to obtain a lock. There are
+		separate "read" and "write" locks for IO streams.
+		This makes it possible for instance, for one thread to
+		read from such a stream while another thread writes to
+		it.  (see also <xref linkend="f_make-read-write-lock"/>
+		<xref linkend="m_with-read-lock"/> <xref
+		linkend="m_with-write-lock"/>)</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><literal>:EXTERNAL</literal></term>
+	      <listitem>
+		<para>Specifies that I/O primitives enforce no access
+		protocol.  This may be appropriate for some types of
+		application which can control stream access via
+		application-level protocols.  Note that since even the
+		act of reading from a stream changes its internal
+		state (and simultaneous access from multiple threads
+		can therefore lead to corruption of that state), some
+		care must be taken in the design of such protocols.</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term><literal>:BASIC</literal></term>
+	<listitem>
+	  <para>A boolean that indicates whether or not the stream is
+	  a Gray stream, i.e. whether or not the stream is an instance
+	  of <literal>FUNDAMENTAL-STREAM</literal> or
+	  <literal>CCL::BASIC-STREAM</literal>(see <xref
+	  linkend="Basic-Versus-Fundamental-Streams"/>).  Defaults to
+	  <literal>T</literal>.</para>
+	</listitem>
+      </varlistentry>
+    </variablelist>
+
+    </sect2>
+
+    <sect2 id="Basic-Versus-Fundamental-Streams">
+      <title>Basic Versus Fundamental Streams</title>
+      <para>Gray streams (see <xref
+      linkend="Creating-Your-Own-Stream-Classes-with-Gray-Streams"/>)
+      all inherit from <literal>FUNDAMENTAL-STREAM</literal> whereas
+      basic streams inherit from <literal>CCL::BASIC-STREAM</literal>.
+      The tradeoff between FUNDAMENTAL and BASIC streams is entirely
+      between flexibility and performance, potential or actual.  I/O
+      primitives can recognize BASIC-STREAMs and exploit knowledge of
+      implementation details. FUNDAMENTAL stream classes can be
+      subclassed and extended in a standard way (the Gray streams
+      protocol).</para>
+
+      <para>For existing stream classes (FILE-STREAMs, SOCKETs, and
+      the internal CCL::FD-STREAM classes used to implement file
+      streams and sockets), a lot of code can be shared between the
+      FUNDAMENTAL and BASIC implementations.  The biggest difference
+      should be that that code can be reached from I/O primitives like
+      READ-CHAR without going through some steps that're there to
+      support generality and extensibility, and skipping those steps
+      when that support isn't needed can improve I/O performance.
+      </para>
+
+      <para>The Gray stream method
+      <function>STREAM-READ-CHAR</function> should work on appropriate
+      <literal>BASIC-STREAM</literal>s.  (There may still be cases
+      where such methods are undefined; such cases should be
+      considered bugs.)  It is not guaranteed that Gray stream methods
+      would ever be called by I/O primitives to read a character from
+      a <literal>BASIC-STREAM</literal>, though there are still cases
+      where this happens.</para>
+
+      <para>A simple loop reading 2M characters from a text file runs
+      about 10X faster when the file is opened the new defaults
+      <literal>(:SHARING :PRIVATE :BASIC T)</literal> than it had
+      before these changes were made.  That sounds good, until one
+      realizes that the "equivalent" C loop can be about 10X faster
+      still ...</para>
+    </sect2>
+
+
+    <sect2 id="Stream-Timeouts-And-Deadlines">
+      <title>Stream Timeouts and Deadlines</title>
+      <indexterm>
+        <primary>stream-input-timeout</primary>
+      </indexterm>
+      <indexterm>
+        <primary>stream-output-timeout</primary>
+      </indexterm>
+      <indexterm>
+        <primary>stream-deadline</primary>
+      </indexterm>
+      <indexterm>
+        <primary>input-timeout</primary>
+      </indexterm>
+      <indexterm>
+        <primary>output-timeout</primary>
+      </indexterm>
+      <indexterm>
+        <primary>communication-deadline-expired</primary>
+      </indexterm>
+      <para>A stream that is associated with a file descriptor has
+        attributes and accessors:
+        <function>STREAM-INPUT-TIMEOUT</function>,
+        <function>STREAM-OUTPUT-TIMEOUT</function>, and
+        <function>STREAM-DEADLINE</function>.  All three accessors have
+        corresponding <function>SETF</function> methods.
+        <function>STREAM-INPUT-TIMEOUT</function> and
+        <function>STREAM-OUTPUT-TIMEOUT</function> are specified in
+        seconds and can be any positive real number less than one million.
+        When a timeout is set and the corresponding I/O operation takes
+        longer than the specified interval, an error is signalled.  The
+        error is <literal>INPUT-TIMEOUT</literal> for input and
+        <literal>OUTPUT-TIMEOUT</literal> for output.
+        <literal>STREAM-DEADLINE</literal> specifies an absolute time in
+        internal-time-units.  If an I/O operation on the stream does not
+        complete before the deadline then a
+        <literal>COMMUNICATION-DEADLINE-EXPIRED</literal> error is
+        signalled.  A deadline takes precedence over any
+        input/output timeouts that may be set.</para>
+    </sect2>
+
+    <sect2 id="Open-File-Streams">
+      <title>Open File Streams</title>
+      <para>Historically, &CCL; and MCL maintained a list of open
+        file streams in the value of
+        <literal>CCL:*OPEN-FILE-STREAMS*</literal>.  This functionality
+        has been replaced with the thread-safe function:
+        <literal>CCL:OPEN-FILE-STREAMS</literal> and its two helper
+        functions: <literal>CCL:NOTE-OPEN-FILE-STREAM</literal> and
+        <literal>CCL:REMOVE-OPEN-FILE-STREAM</literal>.  Maintaining
+        this list helps to ensure that streams get closed in an orderly
+        manner when the lisp exits.</para>
+
+      <refentry id="f_open-file-streams">
+	    <indexterm zone="f_open-file-streams">
+	      <primary>open-file-streams</primary>
+	    </indexterm>
+
+	    <refnamediv>
+	      <refname>OPEN-FILE-STREAMS</refname>
+	      <refpurpose>Returns the list of file streams that are currently open.</refpurpose>
+	      <refclass>Function</refclass>
+	    </refnamediv>
+
+	    <refsynopsisdiv>
+	      <synopsis>
+	        <function>open-file-streams</function>
+	        => stream-list
+	      </synopsis>
+	    </refsynopsisdiv>
+
+	    <refsect1>
+	      <title>Values</title>
+	      
+	      <variablelist>
+	        <varlistentry>
+	          <term>stream-list</term>
+	          <listitem>
+		        <para>A list of open file streams.  This is a copy of
+		          an internal list so it may be destructively
+		          modified without ill effect.</para>
+	          </listitem>
+	        </varlistentry>
+	      </variablelist>
+	    </refsect1>
+
+	    <refsect1>
+	      <title>Description</title>
+	      <para>Returns a list of open file streams.</para>
+	    </refsect1>
+
+	    <refsect1>
+	      <title>See Also</title>	 
+	      <simplelist type="inline">
+	        <member><xref linkend="f_note-open-file-stream"/></member>
+	        <member><xref linkend="f_remove-open-file-stream"/></member>
+	      </simplelist>
+	    </refsect1>
+      </refentry>
+
+      <refentry id="f_note-open-file-stream">
+	    <indexterm zone="f_note-open-file-stream">
+	      <primary>note-open-file-stream</primary>
+	    </indexterm>
+
+	    <refnamediv>
+	      <refname>NOTE-OPEN-FILE-STREAM</refname>
+	      <refpurpose>Adds a file stream to the internal list of open
+	        file streams that is returned by
+	        <function>note-open-file-stream</function>.</refpurpose>
+	      <refclass>Function</refclass>
+	    </refnamediv>
+
+	    <refsynopsisdiv>
+	      <synopsis>
+	        <function>note-open-file-stream</function>
+	        file-stream
+	      </synopsis>
+	    </refsynopsisdiv>
+
+	    <refsect1>
+	      <title>Arguments</title>
+	      
+	      <variablelist>
+	        <varlistentry>
+	          <term>file-stream</term>
+	          <listitem>
+		        <para>A file stream.</para>
+	          </listitem>
+	        </varlistentry>
+	      </variablelist>
+	    </refsect1>
+
+	    <refsect1>
+	      <title>Description</title>
+	      <para>Adds a file stream to the internal list of open
+	        file streams that is returned by
+	        <function>open-file-streams</function>.  This function is
+	        thread-safe.  It will usually only be called from custom
+	        stream code when a file-stream is created.</para>
+	    </refsect1>
+
+	    <refsect1>
+	      <title>See Also</title>	 
+	      <simplelist type="inline">
+	        <member><xref linkend="f_open-file-streams"/></member>
+	        <member><xref linkend="f_remove-open-file-stream"/></member>
+	      </simplelist>
+	    </refsect1>
+
+      </refentry>
+
+      <refentry id="f_remove-open-file-stream">
+	    <indexterm zone="f_remove-open-file-stream">
+	      <primary>remove-open-file-stream</primary>
+	    </indexterm>
+
+	    <refnamediv>
+	      <refname>REMOVE-OPEN-FILE-STREAM</refname>
+	      <refpurpose>Removes file stream from the internal list of open
+	        file streams that is returned by
+	        <function>open-file-streams</function>.</refpurpose>
+	      <refclass>Function</refclass>
+	    </refnamediv>
+
+	    <refsynopsisdiv>
+	      <synopsis>
+	        <function>remove-open-file-stream</function>
+	        file-stream
+	      </synopsis>
+	    </refsynopsisdiv>
+
+	    <refsect1>
+	      <title>Arguments</title>
+	      
+	      <variablelist>
+	        <varlistentry>
+	          <term>file-stream</term>
+	          <listitem>
+		        <para>A file stream.</para>
+	          </listitem>
+	        </varlistentry>
+	      </variablelist>
+	    </refsect1>
+
+	    <refsect1>
+	      <title>Description</title>
+	      <para>Remove file stream from the internal list of open file
+	        streams that is returned by
+	        <function>open-file-streams</function>.  This function is
+	        thread-safe.  It will usually only be called from custom
+	        stream code when a file-stream is closed.</para>
+	    </refsect1>
+
+	    <refsect1>
+	      <title>See Also</title>	 
+	      <simplelist type="inline">
+	        <member><xref linkend="f_open-file-streams"/></member>
+	        <member><xref linkend="f_note-open-file-stream"/></member>
+	      </simplelist>
+	    </refsect1>
+
+      </refentry>
+
+    </sect2>
+  </sect1>
+
+  <sect1 id="Creating-Your-Own-Stream-Classes-with-Gray-Streams">
+    <title>Creating Your Own Stream Classes with Gray Streams</title>
+
+    <sect2 id="Streams-Overview">
+      <title>Overview</title>
+      <para>This sect1 is still being written and revised, because
+        it is woefully incomplete.  The dictionary section currently
+        only lists a couple functions.  Caveat lector.</para>
+      <para>Gray streams are an extension to Common Lisp.  They were
+        proposed for standardization by David Gray (the astute reader
+        now understands their name) quite some years ago, but not
+        accepted, because they had not been tried sufficiently to find
+        conceptual problems with them.</para>
+      <para>They have since been implemented by quite a few modern
+        Lisp implementations.  However, they do indeed have some
+        inadequacies, and each implementation has addressed these in
+        different ways.  The situation today is that it's difficult to
+        even find out how to get started using Gray streams.  This is
+        why standards are important.</para>
+      <para>Here's a list of some classes which you might wish for
+        your new stream class to inherit from:</para>
+      
+      <simplelist>
+	    <member>fundamental-stream</member>
+	    <member>fundamental-input-stream</member>
+	    <member>fundamental-output-stream</member>
+	    <member>fundamental-character-stream</member>
+	    <member>fundamental-binary-stream</member>
+	    <member>fundamental-character-input-stream</member>
+	    <member>fundamental-character-output-stream</member>
+	    <member>fundamental-binary-input-stream</member>
+	    <member>fundamental-binary-output-stream</member>
+	    <member>ccl::buffered-stream-mixin</member>
+	    <member>ccl::buffered-input-stream-mixin</member>
+	    <member>ccl::buffered-output-stream-mixin</member>
+	    <member>ccl::buffered-io-stream-mixin</member>
+	    <member>ccl::buffered-character-input-stream-mixin</member>
+	    <member>ccl::buffered-character-output-stream-mixin</member>
+	    <member>ccl::buffered-character-io-stream-mixin</member>
+	    <member>ccl::buffered-binary-input-stream-mixin</member>
+	    <member>ccl::buffered-binary-output-stream-mixin</member>
+	    <member>ccl::buffered-binary-io-stream-mixin</member>
+	    <member>file-stream</member>
+	    <member>file-input-stream</member>
+	    <member>file-output-stream</member>
+	    <member>file-io-stream</member>
+	    <member>file-character-input-stream</member>
+	    <member>file-character-output-stream</member>
+	    <member>file-character-io-stream</member>
+	    <member>file-binary-input-stream</member>
+	    <member>file-binary-output-stream</member>
+	    <member>file-binary-io-stream</member>
+	    <member>ccl::fd-stream</member>
+	    <member>ccl::fd-input-stream</member>
+	    <member>ccl::fd-output-stream</member>
+	    <member>ccl::fd-io-stream</member>
+	    <member>ccl::fd-character-input-stream</member>
+	    <member>ccl::fd-character-output-stream</member>
+	    <member>ccl::fd-character-io-stream</member>
+	    <member>ccl::fd-binary-input-stream</member>
+	    <member>ccl::fd-binary-output-stream</member>
+	    <member>ccl::fd-binary-io-stream</member>
+      </simplelist>
+
+      <para>All of these are defined in ccl/level-1/l1-streams.lisp,
+        except for the ccl:file-* ones, which are in
+        ccl/level-1/l1-sysio.lisp.</para>
+      <para>According to the original Gray streams proposal, you
+        should inherit from the most specific of the fundamental-*
+        classes which applies.  Using &CCL;, though, if you want
+        buffering for better performance, which, unless you know of some
+        reason you wouldn't, you do, you should instead inherit from the
+        appropriate ccl::buffered-* class The buffering you get this way
+        is exactly the same as the buffering which is used on ordinary,
+        non-Gray streams, and force-output will work properly on
+        it.</para>
+      <para>Notice that -mixin suffix in the names of all the
+        ccl::buffered-* classes?  The suffix means that this class is
+        not "complete" by itself; you still need to inherit from a
+        fundamental-* stream, even if you also inherit from a *-mixin
+        stream.  You might consider making your own class like this.
+        ....  Except that they do inherit from the fundamental-*
+        streams, that's weird.</para>
+      <para>If you want to be able to create an instance of your class
+        with the :class argument to (open) and (with-open-file), you
+        should make it inherit from one of the file-* classes.  If you
+        do this, it's not necessary to inherit from any of the other
+        classes (though it won't hurt anything), since the file-*
+        classes already do.</para>
+      <para>When you inherit from the file-* classes, you can use
+        (call-next-method) in any of your methods to get the standard
+        behavior.  This is especially useful if you want to create a
+        class which performs some simple filtering operation, such as
+        changing everything to uppercase or to a different character
+        encoding.  If you do this, you will definitely need to
+        specialize ccl::select-stream-class.  Your method on
+        ccl::stream-select-class should accept an instance of the class,
+        but pay no attention to its contents, and return a symbol naming
+        the class to actually be instantiated.</para>
+      <para>If you need to make your functionality generic across all
+        the different types of stream, probably the best way to
+        implement it is to make it a mixin, define classes with all the
+        variants of input, output, io, character, and binary, which
+        inherit both from your mixin and from the appropriate other
+        class, then define a method on ccl::select-stream-class which
+        chooses from among those classes.</para>
+      <para>Note that some of these classes are internal to the CLL
+        package.  If you try to inherit from those ones without the
+        ccl:: prefix, you'll get an error which may confuse you, calling
+        them "forward-referenced classes".  That just means you used the
+        wrong symbol, so add the prefix.</para>
+      <para>Here's a list of some generic functions which you might
+        wish to specialize for your new stream class, and which ought to
+        be documented at some point.</para>
+      <simplelist>
+	    <member>stream-direction stream =></member>
+	    <member>stream-device stream direction =></member>
+	    <member>stream-length stream &optional; new =></member>
+	    <member>stream-position stream &optional; new =></member>
+	    <member>streamp stream => boolean</member>
+	    <member>stream-write-char output-stream char =></member>
+	    <member>stream-write-entire-string output-stream string =></member>
+	    <member>stream-read-char input-stream =></member>
+	    <member>stream-unread-char input-stream char =></member>
+	    <member>stream-force-output output-stream => nil</member>
+	    <member>stream-maybe-force-output output-stream => nil</member>
+	    <member>stream-finish-output output-stream => nil</member>
+	    <member>stream-clear-output output-stream => nil</member>
+	    <member>close stream &key; abort => boolean</member>
+	    <member>stream-fresh-line stream => t</member>
+	    <member>stream-line-length stream => length</member>
+	    <member>interactive-stream-p stream => boolean</member>
+	    <member>stream-clear-input input-stream => nil</member>
+	    <member>stream-listen input-stream => boolean</member>
+	    <member>stream-filename stream => string</member>
+	    <member>ccl::select-stream-class instance in-p out-p char-p =>
+	      class</member>
+      </simplelist>
+      <para>The following functions are standard parts of Common Lisp, but
+        behave in special ways with regard to Gray streams.</para>
+      <simplelist>
+	    <member>open-stream-p stream => generalized-boolean</member>
+	    <member>input-stream-p stream => generalized-boolean</member>
+	    <member>output-stream-p stream => generalized-boolean</member>
+	    <member>stream-element-type stream =></member>
+	    <member>stream-error-stream =></member>
+	    <member>open</member>
+	    <member>close</member>
+	    <member>with-open-file</member>
+      </simplelist>
+
+      <para>Specifically, (open) and (with-open-file) accept a new
+        keyword argument, :class, which may be a symbol naming a class;
+        the class itself; or an instance of it.  The class so given must
+        be a subtype of 'stream, and an instance of it with no
+        particular contents will be passed to ccl::select-stream-class
+        to determine what class to actually instantiate.</para>
+      <para>The following are standard, and do not behave specially
+        with regard to Gray streams, but probably should.</para>
+      <simplelist>
+	    <member>stream-external-format</member>
+      </simplelist>
+    </sect2>
+
+    <sect2 id="Extending-READ-SEQUENCE-and-WRITE-SEQUENCE">
+      <title>Extending READ-SEQUENCE and WRITE-SEQUENCE</title>
+
+      <sect3 id="extending-read-write-overview">
+	    <title>Overview</title>
+	    <para>The "Gray Streams" API is based on an informal proposal that was
+	      made before ANSI CL adopted the READ-SEQUENCE and WRITE-SEQUENCE
+	      functions; as such, there is no "standard" way for the author of a Gray
+	      stream class to improve the performance of these functions by exploiting
+	      knowledge of the stream's internals (e.g., the buffering mechanism it
+	      uses.)</para>
+	    <para>In the absence of any such knowledge, READ-SEQUENCE and
+	      WRITE-SEQUENCE are effectively just convenient shorthand for a
+	      loop which calls READ-CHAR/READ-BYTE/WRITE-CHAR/WRITE-BYTE as
+	      appropriate. The mechanism described below allows subclasses
+	      of FUNDAMENTAL-STREAM to define more specialized (and
+	      presumably more efficient) behavior.</para>
+      </sect3>
+
+      <sect3 id="Notes">
+	    <title>Notes</title>
+	    <para>READ-SEQUENCE and WRITE-SEQUENCE do a certain amount of
+	      sanity-checking and normalization of their arguments before
+	      dispatching to one of the methods above. If an individual
+	      method can't do anything particularly clever, CALL-NEXT-METHOD
+	      can be used to handle the general case.</para>
+      </sect3>
+
+      <sect3 id="Example">
+	    <title>Example</title>
+	    <programlisting>
+(defclass my-string-input-stream (fundamental-character-input-stream)
+  ((string :initarg :string :accessor my-string-input-stream-string)
+   (index :initform 0 :accessor my-string-input-stream-index)
+   (length)))
+
+(defmethod stream-read-vector ((stream my-string-input-stream) vector start end)
+  (if (not (typep vector 'simple-base-string))
+      (call-next-method)
+      (with-slots (string index length)
+	      (do* ((outpos start (1+ outpos)))
+               ((or (= outpos end)
+                    (= index length))
+                outpos))
+        (setf (schar vector outpos)
+              (schar string index))
+        (incf index)))))
+	    </programlisting>
+      </sect3>
+    </sect2>
+
+    <sect2 id="Multibyte-I-O">
+      <title>Multibyte I/O</title>
+      <para>All heap-allocated objects in &CCL; that cannot contain
+        pointers to lisp objects are represented as
+        <emphasis>ivectors</emphasis>. &CCL; provides low-level
+        functions, and , to efficiently transfer data between buffered
+        streams and ivectors. There's some overlap in functionality
+        between the functions described here and the ANSI CL
+        READ-SEQUENCE and WRITE-SEQUENCE functions.</para>
+      <para>As used here, the term "octet" means roughly the same
+        thing as the term "8-bit byte". The functions described below
+        transfer a specified sequence of octets between a buffered
+        stream and an ivector, and don't really concern themselves with
+        higher-level issues (like whether that octet sequence is within
+        bounds or how it relates to the logical contents of the
+        ivector.) For these reasons, these functions are generally less
+        safe and more flexible than their ANSI counterparts.</para>
+    </sect2>
+
+    <sect2 id="Gray-Streams-Dictionary">
+      <title>Gray Streams Dictionary</title>
+      <refentry id="f_stream-read-list">
+	    <indexterm zone="f_stream-read-list">
+	      <primary>stream-read-list</primary>
+	    </indexterm>
+
+	    <refnamediv>
+	      <refname>CCL:STREAM-READ-LIST</refname>
+	      <refpurpose></refpurpose>
+	      <refclass>Generic Function</refclass>
+	    </refnamediv>
+
+	    <refsynopsisdiv>
+	      <synopsis><function>stream-read-list</function>
+	        stream list count</synopsis>
+	    </refsynopsisdiv>
+
+	    <refsect1>
+	      <title>Arguments and Values</title>
+
+	      <variablelist>
+	        <varlistentry>
+	          <term>stream</term>
+
+	          <listitem>
+		        <para>a stream, presumably a fundamental-input-stream.</para>
+	          </listitem>
+	        </varlistentry>
+
+	        <varlistentry>
+	          <term>list</term>
+
+	          <listitem>
+		        <para>a list. When a STREAM-READ-LIST method is called by
+		          READ-SEQUENCE, this argument is guaranteed to be a proper
+		          list.</para>
+	          </listitem>
+	        </varlistentry>
+
+	        <varlistentry>
+	          <term>count</term>
+
+	          <listitem>
+		        <para>a non-negative integer. When a STREAM-READ-LIST method
+		          is called by READ-SEQUENCE, this argument is guaranteed not
+		          to be greater than the length of the list.</para>
+	          </listitem>
+	        </varlistentry>
+	      </variablelist>
+	    </refsect1>
+
+	    <refsect1>
+	      <title>Description</title>
+
+	      <para>Should try to read up to count elements from stream into the
+	        list list, returning the number of elements actually read (which
+	        may be less than count in case of a premature end-of-file.)</para>
+	    </refsect1>
+      </refentry>
+
+      <refentry id="f_stream-write-list">
+	    <indexterm zone="f_stream-write-list">
+	      <primary>stream-write-list</primary>
+	    </indexterm>
+
+	    <refnamediv>
+	      <refname>CCL:STREAM-WRITE-LIST</refname>
+	      <refpurpose></refpurpose>
+	      <refclass>Generic Function</refclass>
+	    </refnamediv>
+
+	    <refsynopsisdiv>
+	      <synopsis><function>stream-write-list</function>
+	        stream list count</synopsis>
+	    </refsynopsisdiv>
+
+	    <refsect1>
+	      <title>Arguments and Values</title>
+
+	      <variablelist>
+	        <varlistentry>
+	          <term>stream</term>
+
+	          <listitem>
+		        <para>a stream, presumably a fundamental-output-stream.</para>
+	          </listitem>
+	        </varlistentry>
+
+	        <varlistentry>
+	          <term>list</term>
+
+	          <listitem>
+		        <para>a list. When a STREAM-WRITE-LIST method is called by
+		          WRITE-SEQUENCE, this argument is guaranteed to be a proper
+		          list.</para>
+	          </listitem>
+	        </varlistentry>
+
+	        <varlistentry>
+	          <term>count</term>
+
+	          <listitem>
+		        <para>a non-negative integer. When a STREAM-WRITE-LIST
+		          method is called by WRITE-SEQUENCE, this argument is
+		          guaranteed not to be greater than the length of the list.</para>
+	          </listitem>
+	        </varlistentry>
+	      </variablelist>
+	    </refsect1>
+
+	    <refsect1>
+	      <title>Description</title>
+
+	      <para>should try to write the first count elements of list to
+	        stream. The return value of this method is ignored.</para>
+	    </refsect1>
+      </refentry>
+
+      <refentry id="f_stream-read-vector">
+	    <indexterm zone="f_stream-read-vector">
+	      <primary>stream-read-vector</primary>
+	    </indexterm>
+
+	    <refnamediv>
+	      <refname>CCL:STREAM-READ-VECTOR</refname>
+	      <refpurpose></refpurpose>
+	      <refclass>Generic Function</refclass>
+	    </refnamediv>
+
+	    <refsynopsisdiv>
+	      <synopsis><function>stream-read-vector</function>
+	        stream vector start end</synopsis>
+	    </refsynopsisdiv>
+
+	    <refsect1>
+	      <title>Arguments and Values</title>
+
+	      <variablelist>
+	        <varlistentry>
+	          <term>stream</term>
+
+	          <listitem>
+		        <para>a stream, presumably a fundamental-input-stream</para>
+	          </listitem>
+	        </varlistentry>
+
+	        <varlistentry>
+	          <term>vector</term>
+
+	          <listitem>
+		        <para>a vector. When a STREAM-READ-VECTOR method is called
+		          by READ-SEQUENCE, this argument is guaranteed to be a simple
+		          one-dimensional array.</para>
+	          </listitem>
+	        </varlistentry>
+
+	        <varlistentry>
+	          <term>start</term>
+
+	          <listitem>
+		        <para>a non-negative integer. When a STREAM-READ-VECTOR
+		          method is called by READ-SEQUENCE, this argument is
+		          guaranteed to be no greater than end and not greater than
+		          the length of vector.</para>
+	          </listitem>
+	        </varlistentry>
+
+	        <varlistentry>
+	          <term>end</term>
+
+	          <listitem>
+		        <para>a non-negative integer. When a STREAM-READ-VECTOR
+		          method is called by READ-SEQUENCE, this argument is
+		          guaranteed to be no less than end and not greater than the
+		          length of vector.</para>
+	          </listitem>
+	        </varlistentry>
+	      </variablelist>
+	    </refsect1>
+
+	    <refsect1>
+	      <title>Description</title>
+
+	      <para>should try to read successive elements from stream into
+	        vector, starting at element start (inclusive) and continuing
+	        through element end (exclusive.) Should return the index of the
+	        vector element beyond the last one stored into, which may be less
+	        than end in case of premature end-of-file.</para>
+	    </refsect1>
+      </refentry>
+
+      <refentry id="f_stream-write-vector">
+	    <indexterm zone="f_stream-write-vector">
+	      <primary>stream-write-vector</primary>
+	    </indexterm>
+
+	    <refnamediv>
+	      <refname>CCL:STREAM-WRITE-VECTOR</refname>
+	      <refpurpose></refpurpose>
+	      <refclass>Generic Function</refclass>
+	    </refnamediv>
+
+	    <refsynopsisdiv>
+	      <synopsis><function>stream-write-vector</function>
+	        stream vector start end</synopsis>
+	    </refsynopsisdiv>
+
+	    <refsect1>
+	      <title>Arguments and Values</title>
+
+	      <variablelist>
+	        <varlistentry>
+	          <term>stream</term>
+
+	          <listitem>
+		        <para>a stream, presumably a fundamental-output-stream</para>
+	          </listitem>
+	        </varlistentry>
+
+	        <varlistentry>
+	          <term>vector</term>
+
+	          <listitem>
+		        <para>a vector. When a STREAM-WRITE-VECTOR method is called
+		          by WRITE-SEQUENCE, this argument is guaranteed to be a
+		          simple one-dimensional array.</para>
+	          </listitem>
+	        </varlistentry>
+
+	        <varlistentry>
+	          <term>start</term>
+
+	          <listitem>
+		        <para>a non-negative integer. When a STREAM-WRITE-VECTOR
+		          method is called by WRITE-SEQUENCE, this argument is
+		          guaranteed to be no greater than end and not greater than
+		          the length of vector.</para>
+	          </listitem>
+	        </varlistentry>
+
+	        <varlistentry>
+	          <term>end</term>
+
+	          <listitem>
+		        <para>a non-negative integer. When a STREAM-WRITE-VECTOR
+		          method is called by WRITE-SEQUENCE, this argument is
+		          guaranteed to be no less than end and not greater than the
+		          length of vector.</para>
+	          </listitem>
+	        </varlistentry>
+	      </variablelist>
+	    </refsect1>
+
+	    <refsect1>
+	      <title>Description</title>
+
+	      <para>should try to write successive elements of vector to stream,
+	        starting at element start (inclusive) and continuing through
+	        element end (exclusive.)</para>
+	    </refsect1>
+      </refentry>
+
+      <refentry id="f_stream-device">
+	    <indexterm zone="f_stream-device">
+	      <primary>stream-device</primary>
+	    </indexterm>
+
+	    <refnamediv>
+	      <refname>CCL::STREAM-DEVICE</refname>
+	      <refpurpose>Returns the OS file descriptor associated with a
+	        given lisp stream.</refpurpose>
+	      <refclass>Generic Function</refclass>
+	    </refnamediv>
+
+	    <refsynopsisdiv>
+	      <synopsis><function>ccl::stream-device</function>
+	        s direction</synopsis>
+	    </refsynopsisdiv>
+
+	    <refsect1>
+	      <title>Method Signatures</title>
+
+	      <synopsis><function>ccl::stream-device</function>
+	        (s stream) direction => fd</synopsis>
+	    </refsect1>
+
+	    <refsect1>
+	      <title>Arguments and Values</title>
+	      
+	      <variablelist>
+	        <varlistentry>
+	          <term>s</term>
+	          <listitem>
+		        <para>a stream.</para>
+	          </listitem>
+	        </varlistentry>
+	        <varlistentry>
+	          <term>direction</term>
+	          <listitem>
+		        <para>either :INPUT or :OUTPUT.</para>
+	          </listitem>
+	        </varlistentry>
+	        <varlistentry>
+	          <term>fd</term>
+	          <listitem>
+		        <para>a file descriptor, which is a non-negative integer
+		          used by the OS to refer to an open file, socket, or similar
+		          I/O connection.  NIL if there is no file descriptor associated
+		          with <varname>s</varname> in the direction given by
+		          <varname>direction</varname>.</para>
+	          </listitem>
+	        </varlistentry>
+	      </variablelist>
+	    </refsect1>
+
+	    <refsect1>
+	      <title>Description</title>
+
+	      <para>Returns the file descriptor associated with
+	        <varname>s</varname> in the direction given by
+	        <varname>direction</varname>.  It is necessary to specify
+	        <varname>direction</varname> because the input and output
+	        file descriptors may be different; the most common case is when
+	        one of them has been redirected by the Unix shell.</para>
+	    </refsect1>
+      </refentry>
+
+      <refentry id="f_stream-read-ivector">
+	    <indexterm zone="f_stream-read-ivector">
+	      <primary>stream-read-ivector</primary>
+	    </indexterm>
+
+	    <refnamediv>
+	      <refname>STREAM-READ-IVECTOR</refname>
+	      <refpurpose></refpurpose>
+	      <refclass>Generic Function</refclass>
+	    </refnamediv>
+
+	    <refsynopsisdiv>
+	      <synopsis><function>stream-read-ivector</function>
+	        stream ivector start-octet max-octets</synopsis>
+	    </refsynopsisdiv>
+
+	    <refsect1>
+	      <title>Description</title>
+
+	      <para>Reads up to max-octets octets from stream into ivector,
+	        storing them at start-octet. Returns the number of octets actually
+	        read.</para>
+	    </refsect1>
+
+	    <refsect1>
+	      <title>Arguments</title>
+
+	      <variablelist>
+	        <varlistentry>
+	          <term>stream</term>
+
+	          <listitem>
+		        <para>An input stream. The method defined on
+		          BUFFERED-INPUT-STREAMs requires that the size in octets of
+		          an instance of the stream's element type is 1.</para>
+	          </listitem>
+	        </varlistentry>
+
+	        <varlistentry>
+	          <term>ivector</term>
+
+	          <listitem>
+		        <para>Any ivector.</para>
+	          </listitem>
+	        </varlistentry>
+
+	        <varlistentry>
+	          <term>start-octet</term>
+
+	          <listitem>
+		        <para>A non-negative integer.</para>
+	          </listitem>
+	        </varlistentry>
+
+	        <varlistentry>
+	          <term>max-octets</term>
+
+	          <listitem>
+		        <para>A non-negative integer. The return value may be less
+		          than the value of this parameter if EOF was encountered.</para>
+	          </listitem>
+	        </varlistentry>
+	      </variablelist>
+	    </refsect1>
+      </refentry>
+
+      <refentry id="f_stream-write-ivector">
+	    <indexterm zone="f_stream-write-ivector">
+	      <primary>stream-write-ivector</primary>
+	    </indexterm>
+
+	    <refnamediv>
+	      <refname>STREAM-WRITE-IVECTOR</refname>
+	      <refpurpose></refpurpose>
+	      <refclass>Generic Function</refclass>
+	    </refnamediv>
+
+	    <refsynopsisdiv>
+	      <synopsis><function>stream-write-ivector stream</function>
+	        ivector start-octet max-octets</synopsis>
+	    </refsynopsisdiv>
+
+	    <refsect1>
+	      <title>Description</title>
+
+	      <para>Writes max-octets octets to stream from ivector, starting at
+	        start-octet. Returns max-octets.</para>
+	    </refsect1>
+
+	    <refsect1>
+	      <title>Arguments</title>
+
+	      <variablelist>
+	        <varlistentry>
+	          <term>stream</term>
+
+	          <listitem>
+		        <para>An input stream. The method defined on
+		          BUFFERED-OUTPUT-STREAMs requires that the size in octets of
+		          an instance of the stream's element type is 1.</para>
+	          </listitem>
+	        </varlistentry>
+
+	        <varlistentry>
+	          <term>ivector</term>
+
+	          <listitem>
+		        <para>Any ivector</para>
+	          </listitem>
+	        </varlistentry>
+
+	        <varlistentry>
+	          <term>start-octet</term>
+
+	          <listitem>
+		        <para>A non-negative integer.</para>
+	          </listitem>
+	        </varlistentry>
+
+	        <varlistentry>
+	          <term>max-octet</term>
+
+	          <listitem>
+		        <para>A non-negative integer.</para>
+	          </listitem>
+	        </varlistentry>
+	      </variablelist>
+	    </refsect1>
+
+	    <refsect1>
+	      <title>Examples</title>
+
+	      <programlisting format="linespecific">
+;;; Write the contents of a (SIMPLE-ARRAY(UNSIGNED-BYTE 16) 3) 
+;;; to a character file stream. Read back the characters.
+(let* ((a (make-array 3 
+                      :element-type '(unsigned-byte 16)
+                      :initial-contents '(26725 27756 28449))))
+  (with-open-file (s "junk"
+                     :element-type 'character
+                     :direction :io
+                     :if-does-not-exist :create
+                     :if-exists :supersede)
+    ;; Write six octets (three elements).
+    (stream-write-ivector s a 0 6)
+    ;; Rewind, then read a line
+    (file-position s 0)
+    (read-line s)))
+
+;;; Write a vector of DOUBLE-FLOATs. Note that (to maintain
+;;; alignment) there are 4 octets of padding before the 0th 
+;;; element of a (VECTOR DOUBLE-FLOAT).
+;;; (Note that (= (- arch::misc-dfloat-offset 
+;;;                  arch::misc-data-offset) 4))
+(defun write-double-float-vector
+    (stream vector &#38;key (start 0) (end (length vector)))
+     (check-type vector (vector double-float))
+     (let* ((start-octet (+ (* start 8) 
+                            (- arch::misc-dfloat-offset
+                               arch::misc-data-offset)))
+	        (num-octets (* 8 (- end start))))
+       (stream-write-ivector stream vector start-octet num-octets)))
+          </programlisting>
+	    </refsect1>
+      </refentry>
+    </sect2>
+  </sect1>
+</chapter>

@@ -1,0 +1,21 @@
+TODO
+
+Feel free to stick your own notes into it, be sure to append a
+signature.
+
+- we need to get rid of hemlock11.cursor and hemlock11.mask
+  --GB 2003-03-26
+
+- Provide the classes fundamental-character-{input|output}-stream for SCL
+
+- Write a style guide.
+  . signed comments
+  . no 80-characters-per-line limitations
+  . no #+/#- in the main code body
+  . no :: in the main code body
+  . no changes to bindings in bindings.lisp
+    unless one updates the manual too.
+
+- Import the scribe parser and work on the html converter
+
+$Id$

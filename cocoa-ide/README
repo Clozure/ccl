@@ -1,0 +1,80 @@
+November 20, 2007
+
+This directory contains sources and other resources needed to build
+a Cocoa-based IDE for Clozure CL on OSX.
+
+The IDE uses the ObjC bridge (in ccl/objc-bridge/) to communicate
+with the ObjC runtime.
+
+The "./ide-contents" directory contains nib files, icons and other
+resources used by the IDE.  These are copied to the application bundle
+by the build process.
+
+The "./hemlock" directory contains a hacked up version of Portable
+Hemlock (forked from the main Portable Hemlock tree some years ago.)
+Hemlock is public domain Emacs-like editor that comes with CMUCL;
+Portable Hemlock is an attempt to "free Hemlock from its CMUCL prison"
+(e.g., remove dependencies on CMUCL).  Hemlock (and Portable Hemlock)
+were designed to use CLX for display and event processing; the version
+distributed here uses the Cocoa text system for that functionality.
+Much of the initial work on Portable Hemlock was done by Gilbert Baumann.
+
+To run the IDE from within a ccl command-line session (a shell, Emacs shell
+buffer, under SLIME or ILisp or ...), do:
+
+? (require "COCOA")
+
+The first time this is run, it'll compile the sources, generating lots
+of compiler warnings.  You'll also see messages noting that various
+new ObjC-callable methods are being defined.  When the loading process
+completes, it creates a temporary application bundle in "ccl:temp
+bundle.app" and activates it.  You should see a new menubar, a
+listener window, and a Clozure CL icon in the Dock. The non-GUI
+listener process from which the REQUIRE was issued will remain active;
+you may see warning/diagnostic/error messages from the IDE directed to
+the standard output/error streams associated with that listener.
+(Under SLIME, these messages might appear in the *inferior lisp*
+buffer.)
+
+It's also possible to save the loaded IDE in a populated bundle,
+effectively making it a double-clickable application.  To do this, you
+can do:
+
+? (require "COCOA-APPLICATION")
+
+which will create an application bundle in "ccl:Clozure CL.app"
+and save an executable lisp image inside it. Double-clicking on
+that bundle in the Finder will launch the IDE; any diagnostic
+messages/warnings/etc. will be written to the system log, which
+can be examined with the Console application.
+
+The IDE depends on functionality introduced in OSX 10.4 (Tiger).
+
+
+
+*Note: CCL directory and IDE Preferences
+
+Normally, the IDE assumes it is located at the top level of the "CCL"
+directory.  It uses the CCL directory to enable Meta-. to find the
+system source files and require'd modules, among other things.  If you
+want to move the IDE somewhere else, e.g. to put it in the
+Applications folder, but still want to be able to Meta-. and require
+stuff from the CCL directory, you can set the "CCL Directory" entry in
+the "Paths" pane of the Preferences dialog to the absolute path of the
+directory containing the system sources.
+
+The values of changed application preferences are stored in
+"~/Library/Preferences/com.clozure.Clozure CL.plist"; if you have
+an old version of this file, it might be desirable to delete it
+before invoking the IDE for the first time.
+
+
+*Note: Interface files
+
+The standalone IDE bundle contains a copy of the FFI/ObjC interface
+definition databases (i.e. the .cdb files) for its target platform in
+Clozure CL.app/Contents/Resources/xxx-headers.  If you create
+additional databases that you want the IDE to access, you can just
+copy them into the bundle.  Conversely, if you'd rather use the
+interface definitions in the CCL directory, just delete the ones in
+the bundle.

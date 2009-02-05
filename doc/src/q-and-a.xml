@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd"[
+<!ENTITY rest "<varname>&amp;rest</varname>">
+<!ENTITY key "<varname>&amp;key</varname>">
+<!ENTITY optional "<varname>&amp;optional</varname>">
+<!ENTITY body "<varname>&amp;body</varname>">
+<!ENTITY aux "<varname>&amp;aux</varname>">
+<!ENTITY allow-other-keys "<varname>&amp;allow-other-keys</varname>">
+<!ENTITY CCL "Clozure CL">
+]>
+  <chapter id="Questions-and-Answers">
+
+    <title>Questions and Answers</title>
+
+    <sect1 id="How-can-I-do-nonblocking--aka--unbuffered--and--raw---IO-">
+      <title>How can I do nonblocking (aka "unbuffered" and "raw") IO?</title>
+      <para>There's some code for manipulating TTY modes in
+      "ccl:library;pty.lisp".</para>
+      <programlisting>
+? (require "PTY")
+
+? (ccl::disable-tty-local-modes 0 #$ICANON)
+T
+      </programlisting>
+      <para>will turn off "input canonicalization" on file descriptor
+      0, which is at least part of what you need to do here.  This
+      disables the #$ICANON mode, which tells the OS not to do any
+      line-buffering or line-editing.  Of course, this only has any
+      effect in situations where the OS ever does that, which means
+      when stdin is a TTY or PTY.</para>
+      <para>If the #$ICANON mode is disabled, you can do things like:</para>
+      <programlisting>
+? (progn (read-char) (read-char))
+a
+#\a
+      </programlisting>
+      <para>(where the first READ-CHAR consumes the newline, which
+      isn't really necessary to make the reader happy anymore.)  So,
+      you can do:</para>
+      <programlisting>
+? (read-char)
+#\Space
+</programlisting>
+      <para>(where there's a space after the close-paren) without
+      having to type a newline.</para>
+    </sect1>
+
+    <sect1 id="I-m-using-the-graphics-demos--Why-doesn-t-the-menubar-change-">
+      <title>I'm using the graphics demos. Why doesn't the menubar
+      change?</title>
+      <para>When you interact with text-only &CCL;, you're either
+      in Terminal or in Emacs, running &CCL; as a subprocess.  When
+      you load Cocoa or the graphical environment, the subprocess does
+      some tricky things that turn it into a full-fledged Application,
+      as far as the OS is concerned.</para>
+      <para>So, it gets its own icon in the dock, and its own menubar,
+      and so on.  It can be confusing, because standard input and
+      output will still be connected to Terminal or Emacs, so you can
+      still type commands to &CCL; from there.  To see the menubar
+      you loaded, or the windows you opened, just click on the &CCL;
+      icon in the dock.</para>
+    </sect1>
+
+    <sect1 id="I-m-using-Slime-and-Cocoa--Why-doesn-t--standard-output--seem-to-work-">
+      <title>I'm using Slime and Cocoa. Why doesn't *standard-output*
+      seem to work? </title>
+      <para>This comes up if you're using the Slime interface
+      to run &CCL; under Emacs, and you are doing Cocoa programming
+      which involves printing to *standard-output*.  It seems as
+      though the output goes nowhere; no error is reported, but it
+      doesn't appear in the *slime-repl* buffer.</para>
+
+      <para>For the most part, this is only relevant when you are
+      trying to insert debug code into your event handlers.  The SLIME
+      listener runs in a thread where the standard stream variables
+      (like <literal>*STANDARD-OUTPUT* and</literal> and
+      <literal>*TERMINAL-IO*</literal> are bound to the stream used to
+      communicate with Emacs; the Cocoa event thread has its own
+      bindings of these standard stream variables, and output to these
+      streams goes to the *inferior-lisp* buffer instead.  Look for it
+      there.</para>
+    </sect1>
+  </chapter>

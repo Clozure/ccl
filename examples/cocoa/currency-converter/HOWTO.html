@@ -1,0 +1,130 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <title>CurrencyConverter HOWTO</title>
+    <link rel="stylesheet" type="text/css" href="HOWTO_files/stylesheets/styles.css" />
+  </head>
+
+  <body>
+
+    <div class="title">
+      <h1>CurrencyConverter HOWTO</h1>
+    </div>
+
+    <div class="subtitle">
+      <h2>Creating Apple's <a
+      href="http://developer.apple.com/documentation/Cocoa/Conceptual/ObjCTutorial/index.html">
+            Currency Converter</a> example<br/>
+          with Clozure CL
+      </h2></div>
+
+
+    <div class="body-text">
+      <p>This HOWTO guide explains how to use Clozure CL (formerly
+      OpenMCL) to create a Cocoa application that is functionally
+      identical to Apple's
+      <a
+      href="http://developer.apple.com/documentation/Cocoa/Conceptual/ObjCTutorial/index.html">
+        Currency Converter</a> example. The most important
+        difference between Apple's example and this one is that this
+        one is implemented in Common Lisp instead of Objective-C. It
+        uses Clozure CL's Objective-C bridge to provide communication
+        between the Lisp code that you write and Apple's Cocoa
+        frameworks. The resulting application looks and acts just
+        like any other Cocoa application.</p>
+
+      <p>This HOWTO doesn't discuss all the background information
+      that Apple's tutorial covers. Instead, we assume that you have
+      Apple's document handy for reference, and we just describe the
+      specific steps needed to build the example using
+      Apple's InterfaceBuilder application and Clozure CL.</p>
+
+      <p>An observant programmer will look at the code in this example
+      and say, "well, that's trivial! Why create all those classes and
+      connections and so forth just to perform a multiplcation?" That
+      observation is correct: the actual work done by the Currency
+      Converter application is trivial&mdash;both in the Lisp and the
+      Objective-C versions. The point of this example (and Apple's) is
+      not to show you how to perform a multiplication. The point is to
+      show you how Apple's frameworks implement and support the
+      Model-View-Controller paradigm, and how you can use that support
+      to build Cocoa applications. In fact, the work done by the
+      application is <em>intentionally trivial</em>, to emphasize the
+      frameworks rather than the particulars of the application.</p> 
+
+      <p>This HOWTO has the additional purpose of showing you how
+      Clozure CL makes it possible to do exactly the same thing in
+      Lisp that you can do with Objective-C, so that you will
+      understand how to use Lisp with Apple's frameworks.</p>
+
+      <p>The current version of the Clozure CL Objective-C bridge
+      includes code that was formerly distributed separately as the
+      "Bosco" application framework. Because that framework has been
+      integrated with Clozure CL proper, it no longer exists as a
+      separate project.</p>
+    </div>
+
+    <div class="section-head">
+      <h2>Apple's Currency Converter Example</h2>
+    </div>
+
+    <div class="body-text">
+      <p>It will be helpful in understanding this example if you can
+      easily refer to
+      Apple's <a href="http://developer.apple.com/documentation/Cocoa/Conceptual/ObjCTutorial/index.html">
+      Currency Converter</a> tutorial while working through this
+      HOWTO. You might consider opening a separate window or tab, and
+      keeping the Apple example handy while you work.</p>
+
+      <p>In some ways, the Lisp version of the example is simpler
+      than the Objective-C example, but the basic concepts are the
+      same. In particular, the Lisp example follows the same
+      <a
+      href="http://developer.apple.com/documentation/Cocoa/Conceptual/ObjCTutorial/02Essence/chapter_2_section_4.html#//apple_ref/doc/uid/TP40000863-CH3-DontLinkElementID_6">
+        Model-View-Controller</a> paradigm that the Apple tutorial
+        uses. If you are new to Cocoa programming, or if you are not
+        familiar with how it uses the Model-View-Controller paradigm,
+        it's probably a good idea to read through the Apple example in
+        full, paying special attention to the Model-View-Controller
+        section. Once you've done that, keep the Apple pages handy in
+        a window for easy reference.</p>
+
+      <p>This Common Lisp version of the Currency Converter example
+      uses Apple's InterfaceBuilder application to build a window and
+      main menu, and then uses Common Lisp code to load and operate
+      that user interface. The Common Lisp code relies on Clozure CL's
+      Objective-C bridge to provide communication between the running
+      Lisp code and Apple's Cocoa frameworks. Once the code is
+      complete, we use the BUILD-APPLICATION function to save a
+      working Cocoa application bundle. That bundle looks and acts
+      just like any other Cocoa application.</p>
+
+    </div>
+
+    <div class="section-head">
+      <h2>Requirements Before You Start</h2>
+    </div>
+
+    <div class="body-text">
+      <p>In order to build this example you will need:</p>
+
+      <ul>
+        <li><p>Mac OS X Leopard (version 10.5.x) or Mac OS X Tiger
+        (version 10.4.x)</p></li>
+        <li><p>Apple's XCode development tools</p></li>
+        <li><p>Apple's InterfaceBuilder application (included with XCode)</p></li>
+        <li><p>A recent version of Clozure CL</p></li>
+        <li><p>The Apple <a
+      href="http://developer.apple.com/documentation/Cocoa/Conceptual/ObjCTutorial/index.html">
+        Currency Converter</a> example, for reference</p></li>
+      </ul>
+    </div>
+
+    <div class="nav">
+      <p><a href="HOWTO_files/pages/making_project.html">next</a></p>
+    </div>
+
+  </body>
+</html>
+

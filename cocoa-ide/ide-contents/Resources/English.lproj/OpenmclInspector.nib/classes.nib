@@ -1,0 +1,32 @@
+{
+    IBClasses = (
+        {CLASS = FirstResponder; LANGUAGE = ObjC; SUPERCLASS = NSObject; }, 
+        {
+            ACTIONS = {browserAction = id; browserDoubleAction = id; }; 
+            CLASS = InspectorBrowserDelegate; 
+            LANGUAGE = ObjC; 
+            OUTLETS = {inspectorTableView = NSTableView; inspectorWindow = NSWindow; }; 
+            SUPERCLASS = NSObject; 
+        }, 
+        {CLASS = InspectorNSBrowser; LANGUAGE = ObjC; SUPERCLASS = NSBrowser; }, 
+        {
+            CLASS = InspectorTableViewDataSource; 
+            LANGUAGE = ObjC; 
+            OUTLETS = {inspectorBrowser = NSBrowser; inspectorWindow = NSWindow; }; 
+            SUPERCLASS = NSObject; 
+        }, 
+        {
+            CLASS = InspectorTableViewDelegate; 
+            LANGUAGE = ObjC; 
+            OUTLETS = {inspectorWindow = NSWindow; }; 
+            SUPERCLASS = NSObject; 
+        }, 
+        {
+            CLASS = InspectorWindowController; 
+            LANGUAGE = ObjC; 
+            OUTLETS = {inspectorBrowser = NSBrowser; }; 
+            SUPERCLASS = NSWindowController; 
+        }
+    ); 
+    IBVersion = 1; 
+}

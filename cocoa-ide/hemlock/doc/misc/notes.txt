@@ -1,0 +1,27 @@
+(defcommand "Find File From Sources" (p)
+  "" ""
+  (declare (ignore p))
+  (let ((point (current-point)))
+    (with-mark ((start point)
+		(end point))
+      (find-file-command
+       nil
+       (merge-pathnames "src:"
+			(region-to-string (region (line-start start)
+						  (line-end end))))))))
+
+* abbrev.lisp
+* doccoms.lisp
+* echo.lisp
+* echocoms.lisp
+* filecoms.lisp
+* lisp-lib.lisp  ;Blew away help command, should do describe mode.
+* lispbuf.lisp
+* lispeval.lisp  ;Maybe write MESSAGE-EVAL_FORM-RESULTS.
+* macros.lisp    <<< Already changed in WORK:
+* mh.lisp        <<< Ask Bill about INC in "Incorporate New Mail".
+* morecoms.lisp
+* register.lisp
+* scribe.lisp
+* searchcoms.lisp
+* spellcoms.lisp

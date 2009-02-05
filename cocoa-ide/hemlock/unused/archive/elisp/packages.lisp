@@ -1,0 +1,66 @@
+(defpackage "ELISP"
+  (:shadow "=" "DEFUN" "LET" "IF" "SETQ" "ASSOC" "COMMANDP" "AREF")
+  (:use "COMMON-LISP" "HEMLOCK-INTERNALS")
+  (:export
+   "%"
+   "="
+   "ABORT-RECURSIVE-EDIT"
+   "AREF"
+   "ASET"
+   "ASSQ"
+   "ASSOC"
+   "AUTOLOAD"
+   "BOBP"
+   "BODY"
+   "BOLP"
+   "BOOL-VECTOR-P"
+   "BUFFER-LOCAL-P"
+   "CAR-LESS-THAN-CAR"
+   "CAR-SAFE"
+   "CDR-SAFE"
+   "COMMANDP"
+   "DEFMACRO"
+   "DEFUN"
+   "DEFVAR"
+   "FEATURES"
+   "FILENAME"
+   "GET-BUFFER"
+   "GET-BUFFER-CREATE"
+   "GET-DEFAULT"
+   "GLOBAL-SET-KEY"
+   "IF"
+   "INTERACTIVE"
+   "KEY"
+   "KEYMAP"
+   "LET"
+   "LEXICAL-LET"
+   "LOAD-FILE"
+   "LOAD-LIBRARY"
+   "LOAD-PATH"
+   "LOCAL-SET-KEY"
+   "MAKE-BOOL-VECTOR"
+   "MAKE-KEYMAP"
+   "MAKE-VARIABLE-BUFFER-LOCAL"
+   "MAKE-SPARSE-KEYMAP"
+   "NOERROR"
+   "SET-DEFAULT"
+   "SETQ"
+   "USE-LOCAL-MAP"
+   "WHILE"
+ )
+)
+(defpackage "ELISP-INTERNALS"
+  (:shadow "READ-STRING")
+  (:use "COMMON-LISP")
+  (:export
+   "FIND-LAMBDA-LIST-VARIABLES"
+   "GENERATE-CL-PACKAGE"
+   "REQUIRE-LOAD"
+   "GET-USER-HOMEDIR"
+   "INTERACTIVE-GLUE"
+   "*ELISP-READTABLE*"
+   )
+  )
+(defpackage "ELISP-USER"
+  (:use "ELISP" "ELISP-INTERNALS")
+  )
