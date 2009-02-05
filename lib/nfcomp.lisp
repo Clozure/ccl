@@ -877,12 +877,25 @@ Will differ from *compiling-file* during an INCLUDE")
     (nx-note-source-transformation original new)))
 
 (defun fcomp-macroexpand-1 (form env)
-  (let* ((*nx-source-note-map* *fcomp-source-note-map*))
-    (multiple-value-bind (new win)
-        (macroexpand-1 form env)
-      (when win
-	(nx-note-source-transformation form new))
-      (values new win))))
+  (handler-bind ((warning (lambda (c)
+                            (nx1-whine :program-error c)
+                            (muffle-warning c)))
+                 (program-error (lambda (c)
+                                  (if *fasl-break-on-program-errors*
+                                    (cerror "continue compilation ignoring this form" c)
+                                    (progn
+                                      (when (typep c 'compile-time-program-error)
+                                        (setq c (make-condition 'simple-program-error
+                                                  :format-control (simple-condition-format-control c)
+                                                  :format-arguments (simple-condition-format-arguments c))))
+                                      (nx1-whine :program-error c)))
+                                  (return-from fcomp-macroexpand-1 (values nil t)))))
+    (let* ((*nx-source-note-map* *fcomp-source-note-map*))
+      (multiple-value-bind (new win)
+          (macroexpand-1 form env)
+        (when win
+          (nx-note-source-transformation form new))
+        (values new win)))))
 
 (defun fcomp-transform (form env)
   (let* ((*nx-source-note-map* *fcomp-source-note-map*))

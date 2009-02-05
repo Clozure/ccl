@@ -641,18 +641,14 @@
 
 (defun specifier-type-if-known (typespec &optional env)
   (handler-case (specifier-type typespec env)
-    (parse-unknown-type (c) (values nil (parse-unknown-type-specifier c)))
-    (error () nil)))
+    (parse-unknown-type (c) (values nil (parse-unknown-type-specifier c)))))
 
 #+debugging-version
 (defun specifier-type-if-known (typespec &optional env)
   (handler-bind ((parse-unknown-type (lambda (c)
                                        (break "caught unknown-type ~s" c)
                                        (return-from specifier-type-if-known
-                                         (values nil (parse-unknown-type-specifier c)))))
-                 (error (lambda (c)
-                          (break "caught error ~s" c)
-                          (return-from specifier-type-if-known nil))))
+                                         (values nil (parse-unknown-type-specifier c))))))
     (specifier-type typespec env)))
 
 
@@ -1591,19 +1587,21 @@
                         (t nil))))))))))
 
 (define-compiler-macro typep  (&whole call &environment env thing type &optional e)
-  (if (quoted-form-p type)
-    (if (and (constantp thing) (specifier-type-if-known type env))
-      (typep (if (quoted-form-p thing) (%cadr thing) thing) (%cadr type) env)
-      (or (and (null e) (optimize-typep thing (%cadr type) env))
-          call))
-    (if (eq type t)
-      `(progn ,thing t)
-      call)))
+  (if (or (quoted-form-p type) (self-evaluating-p type))
+    (let ((type-val (nx-unquote type)))
+      (if (eq type-val t)
+        `(progn ,thing t)
+        (if (and (or (quoted-form-p thing) (self-evaluating-p thing))
+                 (specifier-type-if-known type-val env))
+          (typep (nx-unquote thing) type-val env)
+          (or (and (null e) (optimize-typep thing type-val env))
+              call))))
+    call))
 
 (define-compiler-macro structure-typep (&whole w thing type)
   (if (not (quoted-form-p type))
     (progn
-      (warn "Non-qouted structure-type in ~s" w)
+      (warn "Non-quoted structure-type in ~s" w)
       w)
     (let* ((type (nx-unquote type)))
       (if (symbolp type)

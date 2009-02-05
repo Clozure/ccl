@@ -1950,7 +1950,7 @@ to open."
                       (reader-info (%cons-def-info 'defmethod (dpb 1 $lfbits-numreq 0) nil nil (list class-name)))
                       (writer-info (%cons-def-info 'defmethod (dpb 2 $lfbits-numreq 0) nil nil (list t class-name))))
                  (when (memq slot-name slot-names)
-                   (SIGNAL-PROGRAM-error "Multiple slots named ~S in DEFCLASS ~S" slot-name class-name))
+                   (signal-program-error "Multiple slots named ~S in DEFCLASS ~S" slot-name class-name))
                  (push slot-name slot-names)
                  (do ((options (cdr slot) (cddr options))
                       name)
@@ -1982,8 +1982,11 @@ to open."
                       (if type-p
 			(duplicate-options slot)
 			(setq type-p t))
-                      ;(when (null (cadr options)) (signal-program-error "Illegal options ~S" options))
-                      (setq type (cadr options)))
+                      (setq type (cadr options))
+                      ;; complain about illegal typespecs
+                      (handler-case (specifier-type type env)
+                        (invalid-type-specifier ()
+                          (warn "Invalid type ~s in ~s slot definition ~s" type class-name slot))))
                      (:initform
                       (if initform-p
 			(duplicate-options slot)
