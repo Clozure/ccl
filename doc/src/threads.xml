@@ -872,9 +872,9 @@ Type :? for other options.
 	      <varname>process</varname>.
 	    </para>
 
-	    <para>A process can suspend itself; it it&#39;s successful in doing
-	      so, then it can obviously only be resumed by some other
-	      process.</para>
+	    <para>A process can't suspend itself, though this once
+	    worked and this documentation claimed has claimed that it
+	    did.</para>
 	  </refsect1>
 
 	  <refsect1>
