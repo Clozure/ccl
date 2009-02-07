@@ -169,6 +169,7 @@ _exportfn(C(freebsd_sigreturn))
 _exportfn(C(get_vector_registers))
 _endfn
 
+	__ifdef([DARWIN])
 _exportfn(C(darwin_sigreturn))
         .globl C(sigreturn)
 /* Need to set the sigreturn 'infostyle' argument, which is mostly
@@ -177,7 +178,8 @@ _exportfn(C(darwin_sigreturn))
    to it ... */
         __(movl $0x1e,%esi)
         __(jmp C(sigreturn))
-_endfn            
+_endfn
+	__endif
 
 _exportfn(C(put_vector_registers))
 _endfn				
