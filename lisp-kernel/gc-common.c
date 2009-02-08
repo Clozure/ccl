@@ -666,7 +666,7 @@ freeGCptrs()
   void *p, *next, *addr;
   struct xmacptr *x, *xnext;
   int i, flags;
-  xmacptr_dispose_fn fn;
+  xmacptr_dispose_fn dfn;
 
   for (p = postGCptrs; p; p = next) {
     next = *((void **)p);
@@ -677,14 +677,14 @@ freeGCptrs()
   for (x = user_postGC_macptrs; x; x = xnext) {
     xnext = (xmacptr *) (x->class);;
     flags = x->flags - xmacptr_flag_user_first;
-    fn = xmacptr_dispose_functions[flags];
+    dfn = xmacptr_dispose_functions[flags];
     addr = (void *) x->address;
     x->address = 0;
     x->flags = 0;
     x->link = 0;
     x->class = 0;
-    if (fn && addr) {
-      fn(addr);
+    if (dfn && addr) {
+      dfn(addr);
     }
   }
 
@@ -692,16 +692,16 @@ freeGCptrs()
 }
 
 int
-register_xmacptr_dispose_function(void *fn)
+register_xmacptr_dispose_function(void *dfn)
 {
   int i, k;
   
   for( i = 0, k = xmacptr_flag_user_first; k < xmacptr_flag_user_last; i++, k++) {
     if (xmacptr_dispose_functions[i]==NULL) {
-      xmacptr_dispose_functions[i] = fn;
+      xmacptr_dispose_functions[i] = dfn;
       return k;
     }
-    if (xmacptr_dispose_functions[i] == fn) {
+    if (xmacptr_dispose_functions[i] == dfn) {
       return k;
     }
   }
