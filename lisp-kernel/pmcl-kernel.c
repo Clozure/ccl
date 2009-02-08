@@ -1508,20 +1508,21 @@ main(int argc, char *argv[]
   BytePtr stack_base, current_sp = (BytePtr) current_stack_pointer();
   TCR *tcr;
 
+  dbgout = stderr;
 
 #ifdef WINDOWS
-  extern void init_winsock(void);
-  extern void init_windows_io(void);
+  {
+    extern void init_winsock(void);
+    extern void init_windows_io(void);
 
-  _fmode = O_BINARY;
-  _setmode(1, O_BINARY);
-  _setmode(2, O_BINARY);
-  setvbuf(dbgout, NULL, _IONBF, 0);
-  init_winsock();
-  init_windows_io();
+    _fmode = O_BINARY;
+    _setmode(1, O_BINARY);
+    _setmode(2, O_BINARY);
+    setvbuf(dbgout, NULL, _IONBF, 0);
+    init_winsock();
+    init_windows_io();
+  }
 #endif
-
-  dbgout = stderr;
 
   check_os_version(argv[0]);
   real_executable_name = determine_executable_name(argv[0]);
