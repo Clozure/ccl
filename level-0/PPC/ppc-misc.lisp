@@ -1035,7 +1035,7 @@
   (li imm0 (+ (target-nil-value) (target::kernel-global static-conses)))
   @again
   (lrarx temp0 rzero imm0)
-  (str temp0 tail target::cons.cdr)     ; static, no write-barrier issues
+  (str temp0 target::cons.cdr tail)     ; static, no write-barrier issues
   (strcx. head rzero imm0)
   (bne @again)
   (isync)
