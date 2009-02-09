@@ -18,7 +18,7 @@
 
 (defparameter *openmcl-major-version* 1)
 (defparameter *openmcl-minor-version* 3)
-(defparameter *openmcl-revision* "dev")
+(defparameter *openmcl-revision* "RC1")
 ;;; May be set by xload-level-0
 (defvar *openmcl-svn-revision* nil)
 (defparameter *openmcl-dev-level* nil)
