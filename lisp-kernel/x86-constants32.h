@@ -483,6 +483,12 @@ typedef struct tcr {
 #define misc_header_offset -fulltag_misc
 #define misc_data_offset misc_header_offset + node_size
 
+typedef struct {
+  natural Eip;
+  natural Cs;                   /* in low 16 bits */
+  natural EFlags;
+} ia32_iret_frame;
+
 #define heap_segment_size 0x00010000
 #define log2_heap_segment_size 16
 
