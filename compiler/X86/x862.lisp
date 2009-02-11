@@ -3190,27 +3190,28 @@
                          (hard-regspec-value popped-reg)))
            (csp-p (vinsn-attribute-p push-vinsn :csp)))
       (when csp-p                       ; vsp case is harder.
-        (let* ((pushed-reg-is-set (vinsn-sequence-sets-reg-p
-                                   push-vinsn pop-vinsn pushed-reg))
-               (popped-reg-is-set (if same-reg
-                                    pushed-reg-is-set
-                                    (vinsn-sequence-sets-reg-p
-                                     push-vinsn pop-vinsn popped-reg))))
-          (unless (and pushed-reg-is-set popped-reg-is-set)
-            (unless same-reg
-              (let* ((copy (if (eq (hard-regspec-class pushed-reg)
-                                   hard-reg-class-fpr)
-                             (if (= (get-regspec-mode pushed-reg)
-                                    hard-reg-class-fpr-mode-double)
-                               (! copy-double-float popped-reg pushed-reg)
-                               (! copy-single-float popped-reg pushed-reg))
-                             (! copy-gpr popped-reg pushed-reg))))
-                (remove-dll-node copy)
-                (if pushed-reg-is-set
-                  (insert-dll-node-after copy push-vinsn)
-                  (insert-dll-node-before copy push-vinsn))))
-            (elide-vinsn push-vinsn)
-            (elide-vinsn pop-vinsn)))))))
+        (unless (vinsn-sequence-has-attribute-p push-vinsn pop-vinsn :csp :discard)
+          (let* ((pushed-reg-is-set (vinsn-sequence-sets-reg-p
+                                     push-vinsn pop-vinsn pushed-reg))
+                 (popped-reg-is-set (if same-reg
+                                      pushed-reg-is-set
+                                      (vinsn-sequence-sets-reg-p
+                                       push-vinsn pop-vinsn popped-reg))))
+            (unless (and pushed-reg-is-set popped-reg-is-set)
+              (unless same-reg
+                (let* ((copy (if (eq (hard-regspec-class pushed-reg)
+                                     hard-reg-class-fpr)
+                               (if (= (get-regspec-mode pushed-reg)
+                                      hard-reg-class-fpr-mode-double)
+                                 (! copy-double-float popped-reg pushed-reg)
+                                 (! copy-single-float popped-reg pushed-reg))
+                               (! copy-gpr popped-reg pushed-reg))))
+                  (remove-dll-node copy)
+                  (if pushed-reg-is-set
+                    (insert-dll-node-after copy push-vinsn)
+                    (insert-dll-node-before copy push-vinsn))))
+              (elide-vinsn push-vinsn)
+              (elide-vinsn pop-vinsn))))))))
                 
         
 ;;; we never leave the first form pushed (the 68K compiler had some subprims that
