@@ -74,7 +74,7 @@ compiler/acode-rewrite.lisp -text
 compiler/nx2.lisp -text
 doc/ccl-documentation.html -text
 doc/doc-splitter.lisp -text
-doc/release-notes.txt -text
+doc/release-notes-1.2.txt -text
 doc/src/Makefile.fedora -text
 doc/src/Makefile.macports -text
 doc/src/about.xml -text
