@@ -264,7 +264,10 @@ Xrestore_windows_context_start:
         __(movq win64_context.R13(%rcx),%r13)
         __(movq win64_context.R14(%rcx),%r14)
         __(movq win64_context.R15(%rcx),%r15)
-Xrestore_windows_context_load_rcx:                
+        /* This must be the last thing before the iret, e.g., if we're
+        interrupted before the iret, the context we're returning to here
+        is still in %rcx.  If we're interrupted -at- the iret, then
+        everything but that which the iret will restore has been restored. */
         __(movq win64_context.Rcx(%rcx),%rcx)
 Xrestore_windows_context_iret:            
         __(iretq)
@@ -283,11 +286,9 @@ _endfn
         .data
         .globl C(restore_windows_context_start)
         .globl C(restore_windows_context_end)
-        .globl C(restore_windows_context_load_rcx)
         .globl C(restore_windows_context_iret)
 C(restore_windows_context_start):  .quad Xrestore_windows_context_start
 C(restore_windows_context_end): .quad Xrestore_windows_context_end
-C(restore_windows_context_load_rcx):  .quad Xrestore_windows_context_load_rcx
 C(restore_windows_context_iret): .quad Xrestore_windows_context_iret
         .text
 

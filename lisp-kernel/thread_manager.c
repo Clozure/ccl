@@ -49,7 +49,8 @@ atomic_swap(signed_natural*, signed_natural);
 #ifdef WINDOWS
 extern pc spentry_start, spentry_end,subprims_start,subprims_end;
 extern pc restore_windows_context_start, restore_windows_context_end,
-  restore_windows_context_load_rcx, restore_windows_context_iret;
+  restore_windows_context_iret;
+
 
 extern void interrupt_handler(int, siginfo_t *, ExceptionInformation *);
 
@@ -59,8 +60,8 @@ nullAPC(ULONG_PTR arg)
 }
   
 BOOL (*pCancelIoEx)(HANDLE, OVERLAPPED*) = NULL;
+BOOL (*pCancelSynchronousIo)(HANDLE) = NULL;
 
-  ;
 
 
 extern void *windows_find_symbol(void*, char*);
@@ -116,6 +117,9 @@ raise_thread_interrupt(TCR *target)
           CancelIo(pending->h);
         }
       }
+    }
+    if (pCancelSynchronousIo) {
+      pCancelSynchronousIo(hthread);
     }
     QueueUserAPC(nullAPC, hthread, 0);
     ResumeThread(hthread);
@@ -1616,6 +1620,7 @@ init_threads(void * stack_base, TCR *tcr)
 #ifdef WINDOWS
   lisp_global(TCR_KEY) = TlsAlloc();
   pCancelIoEx = windows_find_symbol(NULL, "CancelIoEx");
+  pCancelSynchronousIo = windows_find_symbol(NULL, "CancelSynchronousIo");
 #else
   pthread_key_create((pthread_key_t *)&(lisp_global(TCR_KEY)), shutdown_thread_tcr);
   thread_signal_setup();
@@ -1872,6 +1877,43 @@ get_tcr(Boolean create)
 }
 
 #ifdef WINDOWS
+void *
+pc_luser_restore_windows_context(CONTEXT *pcontext, TCR *tcr, pc where)
+{
+  /* Thread has started to return from an exception. */
+  if (where < restore_windows_context_iret) {
+    /* In the process of restoring registers; context still in
+       %rcx.  Just make our suspend_context be the context
+       we're trying to restore, so that we'll resume from
+       the suspend in the same context that we're trying to
+       restore */
+#ifdef WIN_64
+    *pcontext = * (CONTEXT *)(pcontext->Rcx);
+#else
+    *pcontext = * (CONTEXT *)(pcontext->Ecx);
+#endif
+  } else {
+    /* Most of the context has already been restored; fix %rcx
+       if need be, then restore ss:rsp, cs:rip, and flags. */
+#ifdef WIN_64
+    x64_iret_frame *iret_frame = (x64_iret_frame *) (pcontext->Rsp);
+
+    pcontext->Rip = iret_frame->Rip;
+    pcontext->SegCs = (WORD) iret_frame->Cs;
+    pcontext->EFlags = (DWORD) iret_frame->Rflags;
+    pcontext->Rsp = iret_frame->Rsp;
+    pcontext->SegSs = (WORD) iret_frame->Ss;
+#else
+    ia32_iret_frame *iret_frame = (ia32_iret_frame *) (pcontext->Esp);
+
+    pcontext->Eip = iret_frame->Eip;
+    pcontext->SegCs = (WORD) iret_frame->Cs;
+    pcontext->EFlags = (DWORD) iret_frame->EFlags;
+    pcontext->Esp += sizeof(ia32_iret_frame);
+#endif
+  }
+  tcr->pending_exception_context = NULL;
+}
 
 Boolean
 suspend_tcr(TCR *tcr)
@@ -1903,37 +1945,7 @@ suspend_tcr(TCR *tcr)
     if (tcr->valence == TCR_STATE_LISP) {
       if ((where >= restore_windows_context_start) &&
           (where < restore_windows_context_end)) {
-        /* Thread has started to return from an exception. */
-        if (where < restore_windows_context_load_rcx) {
-          /* In the process of restoring registers; context still in
-             %rcx.  Just make our suspend_context be the context
-             we're trying to restore, so that we'll resume from
-             the suspend in the same context that we're trying to
-             restore */
-#ifdef WIN_64
-          *pcontext = * (CONTEXT *)(pcontext->Rcx);
-#else
-          fprintf(dbgout, "missing win32 suspend code, case (1)\n");
-#endif
-        } else {
-          /* Most of the context has already been restored; fix %rcx
-             if need be, then restore ss:rsp, cs:rip, and flags. */
-#ifdef WIN64
-          x64_iret_frame *iret_frame = (x64_iret_frame *) (pcontext->Rsp);
-          if (where == restore_windows_context_load_rcx) {
-            pcontext->Rcx = ((CONTEXT*)(pcontext->Rcx))->Rcx;
-          }
-          pcontext->Rip = iret_frame->Rip;
-          pcontext->SegCs = (WORD) iret_frame->Cs;
-          pcontext->EFlags = (DWORD) iret_frame->Rflags;
-          pcontext->Rsp = iret_frame->Rsp;
-          pcontext->SegSs = (WORD) iret_frame->Ss;
-#else
-#warning need context setup for win32
-          fprintf(dbgout, "missing win32 suspend code, case (2)\n");
-#endif
-        }
-        tcr->suspend_context = NULL;
+        pc_luser_restore_windows_context(pcontext, tcr, where);
       } else {
         area *ts = tcr->ts_area;
         /* If we're in the lisp heap, or in x86-spentry??.o, or in

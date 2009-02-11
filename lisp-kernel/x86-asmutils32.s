@@ -197,10 +197,10 @@ _endfn
         __ifdef([WIN_32])
 _exportfn(C(restore_windows_context))
 Xrestore_windows_context_start:
+        __(movl 4(%esp),%ecx)   /* context */
         __(movl 12(%esp),%edx)  /* old valence */
         __(movl 8(%esp),%eax)   /* tcr */
         __(movw tcr.ldt_selector(%eax), %rcontext_reg)
-        __(movl 4(%esp),%ecx)   /* context */
         __(movl %edx,rcontext(tcr.valence))
         __(movl $0,rcontext(tcr.pending_exception_context))
         __(frstor win32_context.FloatSave(%ecx))
@@ -222,11 +222,16 @@ Xrestore_windows_context_start:
         __(movl win32_context.Ebx(%ecx),%ebx)
         __(movl win32_context.Eax(%ecx),%eax)
         __(movl win32_context.Esp(%ecx),%esp)
-        __(pushl win32_context.Eip(%ecx))
-Xrestore_windows_context_load_rcx:                
+        __(pushl win32_context.EFlags(%ecx))
+        __(pushl %cs)
+        __(pushl win32_context.Eip(%ecx))        
+        /* This must be the last thing before the iret, e.g., if we're
+        interrupted before the iret, the context we're returning to here
+        is still in %ecx.  If we're interrupted -at- the iret, then
+        everything but that which the iret will restore has been restored. */
         __(movl win32_context.Ecx(%ecx),%ecx)
 Xrestore_windows_context_iret:            
-        __(ret)
+        __(iret)
 Xrestore_windows_context_end:             
         __(nop)
 _endfn
@@ -246,11 +251,9 @@ _endfn
         .data
         .globl C(restore_windows_context_start)
         .globl C(restore_windows_context_end)
-        .globl C(restore_windows_context_load_rcx)
         .globl C(restore_windows_context_iret)
 C(restore_windows_context_start):  .long Xrestore_windows_context_start
 C(restore_windows_context_end): .long Xrestore_windows_context_end
-C(restore_windows_context_load_rcx):  .long Xrestore_windows_context_load_rcx
 C(restore_windows_context_iret): .long Xrestore_windows_context_iret
         .text
         
