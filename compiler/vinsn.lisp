@@ -490,6 +490,19 @@
       (return t))))
 	
 
+;;; Return T if any vinsn between START and END (exclusive) has all
+;;; attributes set in MASK set.
+(defun %vinsn-sequence-has-attribute-p (start end attr)
+  (do* ((element (vinsn-succ start) (vinsn-succ element)))
+       ((eq element end))
+    (when (typep element 'vinsn)
+      (when (eql attr (logand (vinsn-template-attributes (vinsn-template element))))
+        (return t)))))
+
+(defmacro vinsn-sequence-has-attribute-p (start end &rest attrs)
+  `(%vinsn-sequence-has-attribute-p ,start ,end ,(encode-vinsn-attributes attrs)))
+
+                               
 ;;; Flow-graph nodes (FGNs)
 
 (defstruct (fgn (:include dll-header))
