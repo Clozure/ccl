@@ -56,7 +56,7 @@
 	   (let ((args (list arg-y arg-z)))
 	     (if (eql nargs 2)
 	       args
-	       (let ((sp (%inc-ptr (encoded-gpr-macptr xp x8632::esp)
+	       (let ((sp (%inc-ptr (encoded-gpr-macptr xp x8632::ebp)
 				   (+ x8632::node-size x8632::xcf.size))))
 		 (dotimes (i (- nargs 2))
 		   (push (%get-object sp (* i x8632::node-size)) args))
