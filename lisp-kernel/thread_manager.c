@@ -60,8 +60,8 @@ nullAPC(ULONG_PTR arg)
 }
   
 BOOL (*pCancelIoEx)(HANDLE, OVERLAPPED*) = NULL;
+BOOL (*pCancelSynchronousIo)(HANDLE) = NULL;
 
-  ;
 
 
 extern void *windows_find_symbol(void*, char*);
@@ -117,6 +117,9 @@ raise_thread_interrupt(TCR *target)
           CancelIo(pending->h);
         }
       }
+    }
+    if (pCancelSynchronousIo) {
+      pCancelSynchronousIo(hthread);
     }
     QueueUserAPC(nullAPC, hthread, 0);
     ResumeThread(hthread);
@@ -1617,6 +1620,7 @@ init_threads(void * stack_base, TCR *tcr)
 #ifdef WINDOWS
   lisp_global(TCR_KEY) = TlsAlloc();
   pCancelIoEx = windows_find_symbol(NULL, "CancelIoEx");
+  pCancelSynchronousIo = windows_find_symbol(NULL, "CancelSynchronousIo");
 #else
   pthread_key_create((pthread_key_t *)&(lisp_global(TCR_KEY)), shutdown_thread_tcr);
   thread_signal_setup();
