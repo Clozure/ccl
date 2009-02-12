@@ -1960,7 +1960,7 @@
                          (arglist-string
                           (string-to-arglist fun-name (current-buffer) t)))
                     (when arglist-string
-                      (message "a" arglist-string))))
+                      (message "~a" arglist-string))))
               (if (ccl::whitespacep (next-character mark3))
                 (mark-after mark3)
                 (return nil)))))))))
