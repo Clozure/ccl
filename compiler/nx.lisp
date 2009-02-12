@@ -171,9 +171,9 @@
           (*nx-current-note* function-note)
           (*record-pc-mapping* (and source-notes record-pc-mapping))
           (*compile-code-coverage* (and source-notes compile-code-coverage))
-	  (*nx-acode-note-map* (and (or record-pc-mapping compile-code-coverage)
+	  (*nx-acode-note-map* (and (or *record-pc-mapping* *compile-code-coverage*)
                                     (make-hash-table :test #'eq :shared nil)))
-          (*nx-current-code-note* (and compile-code-coverage
+          (*nx-current-code-note* (and *compile-code-coverage*
                                        (make-code-note :form def :source-note function-note)))
           (env (new-lexical-environment env)))
      (setf (lexenv.variables env) 'barrier)
