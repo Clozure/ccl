@@ -1940,7 +1940,7 @@
           (let* ((fun-name (region-to-string (region mark1 mark2)))
                  (arglist-string (string-to-arglist fun-name (current-buffer))))
             (when arglist-string
-              (message arglist-string))))))))
+              (message "~a" arglist-string))))))))
 
 (defcommand "Arglist On Space" (p)
   "Insert a space, then show the current function's arglist."
@@ -1960,7 +1960,7 @@
                          (arglist-string
                           (string-to-arglist fun-name (current-buffer) t)))
                     (when arglist-string
-                      (message arglist-string))))
+                      (message "a" arglist-string))))
               (if (ccl::whitespacep (next-character mark3))
                 (mark-after mark3)
                 (return nil)))))))))
