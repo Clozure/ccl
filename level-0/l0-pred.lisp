@@ -1012,8 +1012,6 @@
 ;;; that can be.)
 (defun structure-typep (thing type)
   (if (= (the fixnum (typecode thing)) target::subtag-struct)
-
-
     (let* ((types (%svref thing 0)))
       (if (typep type 'symbol)
         (dolist (x types)
