@@ -294,9 +294,8 @@
             (%set-sym-global-value sym value)))))))
 
 
-(defun process-enable (p &optional (wait (* 60 60 24) wait-p))
+(defmethod process-enable ((p process) &optional (wait (* 60 60 24) wait-p))
   "Begin executing the initial function of a specified process."
-  (setq p (require-type p 'process))
   (not-in-current-process p 'process-enable)
   (when wait-p
     (check-type wait (unsigned-byte 32)))
@@ -305,11 +304,16 @@
   (let* ((thread (process-thread p)))
     (do* ((total-wait wait (+ total-wait wait)))
 	 ((thread-enable thread (process-termination-semaphore p) (1- (integer-length (process-allocation-quantum p)))  wait)
+          (process-tcr-enable p (lisp-thread.tcr thread))
 	  p)
       (cerror "Keep trying."
 	      "Unable to enable process ~s; have been trying for ~s seconds."
 	      p total-wait))))
 
+(defmethod process-tcr-enable ((process process) tcr)
+  (when (and tcr (not (eql 0 tcr)))
+    (%signal-semaphore-ptr (%fixnum-ref-macptr tcr target::tcr.activate))
+    ))
 
 (defmethod (setf process-termination-semaphore) :after (new (p process))
   (with-macptrs (tcrp)
@@ -350,19 +354,18 @@ a given process."
        (not (process-exhausted-p p))))
   
 ;;; Used by process-run-function
-(defun process-preset (process function &rest args)
+(defmethod process-preset ((p process) function &rest args)
   "Set the initial function and arguments of a specified process."
-  (let* ((p (require-type process 'process))
-         (f (require-type function 'function))
+  (let* ((f (require-type function 'function))
          (initial-form (process-initial-form p)))
     (declare (type cons initial-form))
     (not-in-current-process p 'process-preset)
     ; Not quite right ...
     (rplaca initial-form f)
     (rplacd initial-form args)
-    (%process-preset-internal process)))
+    (%process-preset-internal p)))
 
-(defun %process-preset-internal (process)
+(defmethod %process-preset-internal ((process process))
    (let* ((initial-form (process-initial-form process))
          (thread (process-thread process)))
      (declare (type cons initial-form))
@@ -566,7 +569,7 @@ some point in the near future, and then return to what it was doing."
 ;;; This one is in the Symbolics documentation
 (defun process-allow-schedule ()
   "Used for cooperative multitasking; probably never necessary."
-  (yield))
+  (process-yield *current-process*))
 
 
 ;;; something unique that users won't get their hands on
@@ -619,6 +622,10 @@ some point in the near future, and then return to what it was doing."
       (maybe-finish-process-kill process kill)
       (progn
 	(process-interrupt process '%process-reset kill)))))
+
+(defmethod process-yield ((p process))
+  #+windows-target (#_Sleep 0)
+  #-windows-target (#_sched_yield))
 
 
 (defun %process-reset (kill)

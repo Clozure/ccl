@@ -1966,10 +1966,7 @@ not, why not; and what its result code was if it completed."
   (%defglobal '*spin-lock-timeouts* 0))
 
 (defun yield ()
-  #+windows-target
-  (#_Sleep 0)
-  #-windows-target  
-  (#_sched_yield))
+  (process-allow-schedule))
 
 (defloadvar *host-page-size*
     #-windows-target (#_getpagesize)

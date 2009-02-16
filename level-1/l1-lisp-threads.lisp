@@ -162,8 +162,7 @@
             (make-lock)
 	    nil
 	    :reset
-	    (make-lock)
-	    nil))
+	    (make-lock)))
 
 (defvar *current-lisp-thread*
   (%cons-lisp-thread "Initial" (%current-tcr)))
@@ -403,7 +402,7 @@
 
 
 	
-(defun thread-preset (thread function &rest args)
+(defun  thread-preset (thread function &rest args)
   (setf (lisp-thread.initial-function.args thread)
 	(cons function args)))
 
@@ -436,19 +435,16 @@
               (lisp-thread.state thread) :exit)
 	(%kill-tcr tcr)))))
 
-;;; This returns the underlying pthread, whatever that is.
+;;; This returns the underlying pthread, whatever that is, as an
+;;; unsigned integer.
 (defun lisp-thread-os-thread (thread)
   (with-macptrs (tcrp)
     (%setf-macptr-to-object tcrp (lisp-thread.tcr thread))
     (unless (%null-ptr-p tcrp)
-      #+linux-target
-      (let* ((pthread (#+32-bit-target %get-unsigned-long
-                       #+64-bit-target %%get-unsigned-longlong
-                       tcrp target::tcr.osid)))
-	(unless (zerop pthread) pthread))
-      #+darwin-target
-      (let* ((pthread (%get-ptr tcrp target::tcr.osid)))
-	(unless (%null-ptr-p pthread) pthread)))))
+      (let* ((natural (%get-natural tcrp target::tcr.osid)))
+        (unless (zerop natural) natural)))))
+
+
                          
 ;;; This returns something lower-level than the pthread, if that
 ;;; concept makes sense.  On current versions of Linux, it returns
@@ -486,22 +482,18 @@
     (setf (%fixnum-ref tcr target::tcr.flags)
 	  (bitset arch::tcr-flag-bit-awaiting-preset flags))))  
 
+;;; This doesn't quite activate the thread; see PROCESS-TCR-ENABLE.
 (defun %activate-tcr (tcr termination-semaphore allocation-quantum)
   (if (and tcr (not (eql 0 tcr)))
-    (with-macptrs (tcrp s)
+    (with-macptrs (tcrp)
       (%setf-macptr-to-object tcrp tcr)
-      (%setf-macptr s (%get-ptr tcrp target::tcr.activate))
-      (unless (%null-ptr-p s)
-        (setf (#+64-bit-target %%get-unsigned-longlong
-               #+32-bit-target %get-unsigned-long
-                               tcrp target::tcr.log2-allocation-quantum)
-              (or allocation-quantum (default-allocation-quantum)))
-        (setf (%get-ptr tcrp target::tcr.termination-semaphore)
-              (if termination-semaphore
-                (semaphore-value termination-semaphore)
-                (%null-ptr)))
-	(%signal-semaphore-ptr s)
-	t))))
+      (setf (%get-natural tcrp target::tcr.log2-allocation-quantum)
+            (or allocation-quantum (default-allocation-quantum)))
+      (setf (%get-ptr tcrp target::tcr.termination-semaphore)
+            (if termination-semaphore
+              (semaphore-value termination-semaphore)
+              (%null-ptr)))
+      t)))
                          
 (defvar *canonical-error-value*
   '(*canonical-error-value*))
