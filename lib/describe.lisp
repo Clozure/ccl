@@ -1493,7 +1493,8 @@
 )
 
 (defmethod line-n ((thread thread-inspector) n)
-  (declare (ignore n))
+  (declare (ignorable n))
+  (call-next-method)
 )
 
 #|
