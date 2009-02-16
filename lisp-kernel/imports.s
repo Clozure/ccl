@@ -56,7 +56,7 @@ import_ptrs_start:
 	defimport(lisp_egc_control)
 	defimport(lisp_bug)
 	defimport(xNewThread)
-	defimport(xYieldToThread)
+	defimport(cooperative_thread_startup)
 	defimport(xDisposeThread)
 	defimport(xThreadCurrentStackSpace)
 	defimport(usage_exit)
