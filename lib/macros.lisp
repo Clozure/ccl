@@ -747,6 +747,7 @@ form is not evaluated if the variable is already BOUNDP."
   `(progn
      (eval-when (:compile-toplevel)
        (note-variable-info ',var :global ,env))
+      (%symbol-bits ',var (logior (ash 1 $sym_vbit_global) (the fixnum (%symbol-bits ',var))))
      (%defvar-init ,var ,value ,doc)))
 
 
