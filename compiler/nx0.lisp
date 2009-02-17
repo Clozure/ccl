@@ -43,7 +43,7 @@
 (defvar *nx-symbol-macros* nil)
 (defvar *nx-inner-functions* nil)
 (defvar *nx-cur-func-name* nil)
-(defvar *nx-current-note*)
+(defvar *nx-current-note* nil)
 (defparameter *nx-source-note-map* nil) ;; there might be external refs, from macros.
 (defvar *nx-form-type* t)
 ;(defvar *nx-proclaimed-inline* nil)
@@ -1811,11 +1811,19 @@ Or something. Right? ~s ~s" var varbits))
 
 
 (defun nx1-whine (about &rest forms)
+  (if #-BOOTSTRAPPED (fboundp 'compiler-warning-source-note) #+BOOTSTRAPPED T
+    (push (make-condition (or (cdr (assq about *compiler-whining-conditions*)) 'compiler-warning)
+                          :function-name (list *nx-cur-func-name*)
+                          :source-note *nx-current-note*
+                          :warning-type about
+                          :args (or forms (list nil)))
+          *nx-warnings*)
+    ;; remove this case once bootstrapped.
     (push (make-condition (or (cdr (assq about *compiler-whining-conditions*)) 'compiler-warning)
                           :function-name (list *nx-cur-func-name*)
                           :warning-type about
                           :args (or forms (list nil)))
-          *nx-warnings*)
+          *nx-warnings*))
   nil)
 
 (defun p2-whine (afunc about &rest forms)

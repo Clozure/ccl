@@ -2931,7 +2931,7 @@
 ;;; terminate lines with #\Return when writing to the clipboard;
 ;;; we may need to continue to override this method in order to
 ;;; fix that.)
-(objc:defmethod (#/paste: :void) ((self hemlock-text-view) sender)
+(objc:defmethod (#/paste: :void) ((self hemlock-textstorage-text-view) sender)
   (declare (ignorable sender))
   #+debug (#_NSLog #@"Paste: sender = %@" :id sender)
   (let* ((pb (general-pasteboard))
@@ -2946,7 +2946,15 @@
         (unless (#/shouldChangeTextInRange:replacementString: self (#/selectedRange self) string)
           (#/setSelectedRange: self (ns:make-ns-range (#/length textstorage) 0)))
 	(let* ((selectedrange (#/selectedRange self)))
-	  (#/replaceCharactersInRange:withString: textstorage selectedrange string))))))
+          ;; We really should bracket the call to
+          ;; #/repaceCharactersInRange:withString: here with calls
+          ;; to #/beginEditing and #/endEditing, but our implementation
+          ;; of #/replaceCharactersInRange:withString: calls code that
+          ;; asserts that editing isn't in progress.  Once that's
+          ;; fixed, this should be fixed as well.
+          #+not-broken (#/beginEditing textstorage)
+	  (#/replaceCharactersInRange:withString: textstorage selectedrange string)
+          #+not-broken (#/endEditing self))))))
 
 
 (objc:defmethod (#/hyperSpecLookUp: :void)

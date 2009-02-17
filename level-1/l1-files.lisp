@@ -490,7 +490,7 @@
     (string (string-to-pathname path))))
 
 (defun %path-from-stream (stream)
-  (or (stream-filename stream) (error "Can't determine pathname of ~S ." stream)))      ; ???
+  (or (pathname (stream-filename stream)) (error "Can't determine pathname of ~S ." stream)))      ; ???
 
 ;Like (pathname stream) except returns NIL rather than error when there's no
 ;filename associated with the stream.
@@ -1148,8 +1148,6 @@ a host-structure or string."
   (let ((full-name (full-pathname file-name :no-error nil))
         (kind nil))
     (when full-name
-      (when (eq (pathname-host file-name) :unspecific) ;; if physical pathname to begin with, force absolute
-	(setq file-name full-name))
       (let ((file-type (pathname-type full-name)))
         (if (and file-type (neq file-type :unspecific))
           (values (probe-file full-name) file-name file-name)
