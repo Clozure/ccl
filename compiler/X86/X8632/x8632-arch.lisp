@@ -702,7 +702,7 @@
   egc-control
   lisp-bug
   NewThread
-  YieldToThread
+  cooperative-thread-startup
   DisposeThread
   ThreadCurrentStackSpace
   usage-exit
