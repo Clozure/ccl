@@ -1655,6 +1655,7 @@ lisp_thread_entry(void *param)
   TCR *tcr = new_tcr(activation->vsize, activation->tsize);
 #ifndef WINDOWS
   sigset_t mask, old_mask;
+  LispObj *start_vsp;
 
   sigemptyset(&mask);
   pthread_sigmask(SIG_SETMASK, &mask, &old_mask);
@@ -1667,6 +1668,7 @@ lisp_thread_entry(void *param)
 #endif
   tcr->vs_area->active -= node_size;
   *(--tcr->save_vsp) = lisp_nil;
+  start_vsp = tcr->save_vsp;
   enable_fp_exceptions();
   SET_TCR_FLAG(tcr,TCR_FLAG_BIT_AWAITING_PRESET);
   activation->tcr = tcr;
@@ -1676,6 +1678,7 @@ lisp_thread_entry(void *param)
     SEM_WAIT_FOREVER(tcr->activate);
     /* Now go run some lisp code */
     start_lisp(TCR_TO_TSD(tcr),0);
+    tcr->save_vsp = start_vsp;
   } while (tcr->flags & (1<<TCR_FLAG_BIT_AWAITING_PRESET));
 #ifndef WINDOWS
   pthread_cleanup_pop(true);
@@ -1697,6 +1700,7 @@ void
 suspend_current_cooperative_thread()
 {
   static suspendf cooperative_suspend = NULL;
+  void *xFindSymbol(void*,char*);
 
   if (cooperative_suspend == NULL) {
     cooperative_suspend = (suspendf)xFindSymbol(NULL, "SetThreadState");
@@ -1713,6 +1717,8 @@ cooperative_thread_startup(void *arg)
 {
 
   TCR *tcr = get_tcr(0);
+  LispObj *start_vsp;
+
   if (!tcr) {
     return NULL;
   }
@@ -1720,11 +1726,13 @@ cooperative_thread_startup(void *arg)
   pthread_cleanup_push(tcr_cleanup,(void *)tcr);
 #endif
   SET_TCR_FLAG(tcr,TCR_FLAG_BIT_AWAITING_PRESET);
+  start_vsp = tcr->save_vsp;
   do {
     SEM_RAISE(tcr->reset_completion);
     suspend_current_cooperative_thread();
       
     start_lisp(tcr, 0);
+    tcr->save_vsp = start_vsp;
   } while (tcr->flags & (1<<TCR_FLAG_BIT_AWAITING_PRESET));
 #ifndef WINDOWS
   pthread_cleanup_pop(true);
