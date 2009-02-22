@@ -114,7 +114,7 @@
 
 (defclass process ()
     ((name :initform nil :initarg :name :accessor process-name)
-     (thread :initarg :thread :accessor process-thread)
+     (thread :initarg :thread :initform nil :accessor process-thread)
      (initial-form :initform (cons nil nil) :reader process-initial-form)
      (priority :initform 0 :initarg :priority :accessor process-priority)
      (persistent :initform nil :initarg :persistent :reader process-persistent)
@@ -172,8 +172,6 @@
   (let* ((p (make-instance
 	     class
 	     :name name
-	     :thread (or thread
-			 (new-thread name stack-size  vstack-size  tstack-size))
 	     :priority priority
 	     :persistent persistent
 	     :initial-bindings (append (if use-standard-initial-bindings
@@ -183,6 +181,11 @@
              :termination-semaphore (or termination-semaphore
                                         (make-semaphore))
              :allocation-quantum allocation-quantum)))
+    (with-slots ((lisp-thread thread)) p
+      (unless lisp-thread
+        (setq lisp-thread
+              (or thread
+                  (new-thread name stack-size  vstack-size  tstack-size)))))
     (add-to-all-processes p)
     (setf (car (process-splice p)) p)
     p))
