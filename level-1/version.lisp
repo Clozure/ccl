@@ -28,7 +28,9 @@
 					*openmcl-minor-version*
 					(unless (null *openmcl-revision*)
 					  *openmcl-revision*)
-					*openmcl-svn-revision*
+					(if (and (typep *openmcl-svn-revision* 'string)
+                                                 (> (length *openmcl-svn-revision*) 0))
+                                          *openmcl-svn-revision*)
                                         *optional-features*
                                         *openmcl-dev-level*))
 
