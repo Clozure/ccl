@@ -175,7 +175,7 @@
      (let* ((old-bos *break-on-signals*))
        (when (unknown-ctype-p (let* ((*break-on-signals* nil)) (specifier-type old-bos)))
 	 (setq *break-on-signals* nil)
-	 (warn "~S : Ignoring invalid type specifier ~s." '*break-on-signals old-bos)))
+	 (warn "~S : Ignoring invalid type specifier ~s." '*break-on-signals* old-bos)))
 	 
    (when (typep condition *break-on-signals*)
      (let ((*break-on-signals* nil))
