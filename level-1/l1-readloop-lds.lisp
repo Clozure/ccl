@@ -471,8 +471,7 @@ expressions as commands")
             (format s "~s" oldval))
           (format s ", was reset to ~s ." (symbol-value bogusness)))))
     (if (and *break-on-errors* (not *batch-flag*))
-      (with-terminal-input
-          (break-loop condition error-pointer))
+      (break-loop condition error-pointer)
       (if *batch-flag*
         (abnormal-application-exit)
         (abort)))))
@@ -513,8 +512,7 @@ expressions as commands")
             (*debugger-hook* nil))
         (funcall hook c hook)))
     (%break-message "Debug" c fp)
-    (with-terminal-input
-	(break-loop c fp))))
+    (break-loop c fp)))
 
 (defun %break-message (msg condition error-pointer &optional (prefixchar #\>))
   (let ((*print-circle* *error-print-circle*)
@@ -547,11 +545,10 @@ expressions as commands")
 (defun cbreak-loop (msg cont-string condition error-pointer)
   (let* ((*print-readably* nil))
     (%break-message msg condition error-pointer)
-    (with-terminal-input
-      (restart-case (break-loop condition error-pointer)
-		    (continue () :report (lambda (stream) (write-string cont-string stream))))
-      (fresh-line *error-output*)
-      nil)))
+    (restart-case (break-loop condition error-pointer)
+      (continue () :report (lambda (stream) (write-string cont-string stream))))
+    (fresh-line *error-output*)
+    nil))
 
 (defun warn (condition-or-format-string &rest args)
   "Warn about a situation by signalling a condition formed by DATUM and
@@ -618,23 +615,24 @@ expressions as commands")
          (*standard-output* *debug-io*)
          (*signal-printing-errors* nil)
          (*read-suppress* nil)
-         (*print-readably* nil))
-    (let* ((context (new-backtrace-info nil
-                                        frame-pointer
-                                        (if *backtrace-contexts*
-                                          (or (child-frame
-                                               (bt.youngest (car *backtrace-contexts*))
-                                               nil)
-                                              (last-frame-ptr))
-                                          (last-frame-ptr))
-                                        (%current-tcr)
-                                        condition
-                                        (%current-frame-ptr)
-                                        #+ppc-target *fake-stack-frames*
-                                        #+x86-target (%current-frame-ptr)
-                                        (db-link)
-                                        (1+ *break-level*)))
-           (*backtrace-contexts* (cons context *backtrace-contexts*)))
+         (*print-readably* nil)
+         (context (new-backtrace-info nil
+                                      frame-pointer
+                                      (if *backtrace-contexts*
+                                        (or (child-frame
+                                             (bt.youngest (car *backtrace-contexts*))
+                                             nil)
+                                            (last-frame-ptr))
+                                        (last-frame-ptr))
+                                      (%current-tcr)
+                                      condition
+                                      (%current-frame-ptr)
+                                      #+ppc-target *fake-stack-frames*
+                                      #+x86-target (%current-frame-ptr)
+                                      (db-link)
+                                      (1+ *break-level*)))
+         (*backtrace-contexts* (cons context *backtrace-contexts*)))
+    (with-terminal-input
       (with-toplevel-commands :break
         (if *continuablep*
           (let* ((*print-circle* *error-print-circle*)
