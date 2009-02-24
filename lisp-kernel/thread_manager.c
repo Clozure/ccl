@@ -1668,6 +1668,7 @@ lisp_thread_entry(void *param)
 #endif
   tcr->vs_area->active -= node_size;
   *(--tcr->save_vsp) = lisp_nil;
+  start_vsp = tcr->save_vsp;
   enable_fp_exceptions();
   SET_TCR_FLAG(tcr,TCR_FLAG_BIT_AWAITING_PRESET);
   activation->tcr = tcr;
@@ -1677,6 +1678,7 @@ lisp_thread_entry(void *param)
     SEM_WAIT_FOREVER(tcr->activate);
     /* Now go run some lisp code */
     start_lisp(TCR_TO_TSD(tcr),0);
+    tcr->save_vsp = start_vsp;
   } while (tcr->flags & (1<<TCR_FLAG_BIT_AWAITING_PRESET));
 #ifndef WINDOWS
   pthread_cleanup_pop(true);
