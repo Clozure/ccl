@@ -283,7 +283,5 @@ _exportfn(C(ensure_safe_for_string_operations))
         __endif
 _endfn                                       
         __endif
-	
-	
         _endfile
 
