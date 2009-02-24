@@ -2004,31 +2004,34 @@ arbstack_suspend_resume_handler(int signum, siginfo_t *info, ExceptionInformatio
   Boolean gs_was_tcr = ensure_gs_pthread();
 #endif
   TCR *tcr = get_interrupt_tcr(false);
-  area *vs = tcr->vs_area;
-  BytePtr current_sp = (BytePtr) current_stack_pointer();
-
-  if ((current_sp >= vs->low) &&
-      (current_sp < vs->high)) {
-    handle_signal_on_foreign_stack(tcr,
-                                   suspend_resume_handler,
-                                   signum,
-                                   info,
-                                   context,
-                                   (LispObj)__builtin_return_address(0)
+  if (tcr != NULL) {
+    area *vs = tcr->vs_area;
+    BytePtr current_sp = (BytePtr) current_stack_pointer();
+    
+    if ((current_sp >= vs->low) &&
+        (current_sp < vs->high)) {
+      return
+        handle_signal_on_foreign_stack(tcr,
+                                       suspend_resume_handler,
+                                       signum,
+                                       info,
+                                       context,
+                                       (LispObj)__builtin_return_address(0)
 #ifdef DARWIN_GS_HACK
-                                   ,gs_was_tcr
+                                       ,gs_was_tcr
 #endif
-                                   );
-  } else {
-    /* If we're not on the value stack, we pretty much have to be on
-       the C stack.  Just run the handler. */
+                                       );
+    } else {
+      /* If we're not on the value stack, we pretty much have to be on
+         the C stack.  Just run the handler. */
 #ifdef DARWIN_GS_HACK
-    if (gs_was_tcr) {
-      set_gs_address(tcr);
+      if (gs_was_tcr) {
+        set_gs_address(tcr);
+      }
+#endif
     }
-#endif
-    suspend_resume_handler(signum, info, context);
   }
+  suspend_resume_handler(signum, info, context);
 }
 
 
