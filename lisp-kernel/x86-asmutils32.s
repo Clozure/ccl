@@ -175,14 +175,18 @@ _endfn
         __endif
 
         __ifdef([DARWIN])
-        .globl C(sigreturn)
 _exportfn(C(darwin_sigreturn))
 /* Need to set the sigreturn 'infostyle' argument, which is mostly
    undocumented.  On x8632 Darwin, sigtramp() sets it to 0x1e, and
    since we're trying to do what sigtramp() would do if we'd returned
    to it ... */
-        __(movl $0x1e,%esi)
-        __(jmp C(sigreturn))
+        .globl C(sigreturn)
+        __(movl $0x1e,8(%esp))
+        __(jmp *jsigreturn)
+        .data
+jsigreturn:     .long C(sigreturn)
+        .text
+
 _endfn
         __endif        
 		
