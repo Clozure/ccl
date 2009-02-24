@@ -590,8 +590,8 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
 (defun find-definitions-for-name (name &optional (type-name t))
   "Returns a list of (TYPE . DEFINITION-SOURCE) for all the known definitions of NAME."
   (let ((definitions ()))
-    (loop for ((dt . full-name) last-source . nil)
-            in (find-definition-sources name type-name)
+    (loop for ((dt . full-name) . sources) in (find-definition-sources name type-name)
+          as last-source = (find-if-not #'null sources)
           do (when last-source
                (push (list dt full-name last-source) definitions)))
     definitions))
@@ -652,6 +652,8 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
                                    (or (equal x y)
                                        (and x
                                             y
+                                            (or (stringp x) (pathnamep x))
+                                            (or (stringp y) (pathnamep y))
                                             (equal
                                              (or (probe-file x) (full-pathname x))
                                              (or (probe-file y) (full-pathname y)))))))
