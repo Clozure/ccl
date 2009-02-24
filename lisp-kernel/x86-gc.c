@@ -1857,10 +1857,12 @@ update_self_references(LispObj *node)
   natural i, offset;
 
   i = ((unsigned short *)node)[2];
-  offset = node[--i];
-  while (offset) {
-    *(LispObj *)(p + offset) = fn;
+  if (i) {
     offset = node[--i];
+    while (offset) {
+      *(LispObj *)(p + offset) = fn;
+      offset = node[--i];
+    }
   }    
 }
 #endif
@@ -1933,13 +1935,15 @@ compact_dynamic_heap()
 	    int skip = *((int *)src);
 #endif
 	    *dest++ = node;
-	    elements -= skip;
-	    while(skip--) {
-	      *dest++ = *src++;
-	    }
+            if (skip) {
+              elements -= skip;
+              while(skip--) {
+                *dest++ = *src++;
+              }
 #ifdef X8632
-	    update_self_references(f);
+              update_self_references(f);
 #endif
+            }
 	    while(elements--) {
 	      *dest++ = node_forwarding_address(*src++);
 	    }

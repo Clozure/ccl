@@ -1745,10 +1745,10 @@ C(egc_gvset):
 	__(shrl $dnode_shift,%imm0)
 	__(cmpl lisp_global(oldspace_dnode_count),%imm0)
 	__(jae 0b)
-	__(ref_global(refbits,%temp0))
+	__(ref_global(refbits,%temp1))
 	__(xorb $31,%imm0_b)
 	__(lock)
-	__(btsl %imm0,(%temp0))
+	__(btsl %imm0,(%temp1))
 	__(ret)
 _endsubp(gvset)
 
