@@ -1653,6 +1653,7 @@ lisp_thread_entry(void *param)
 {
   thread_activation *activation = (thread_activation *)param;
   TCR *tcr = new_tcr(activation->vsize, activation->tsize);
+  LispObj *start_vsp;
 #ifndef WINDOWS
   sigset_t mask, old_mask;
 

@@ -1702,8 +1702,10 @@ not, why not; and what its result code was if it completed."
                                      (%null-ptr)
                                      si
                                      proc-info))
-          (setf (external-process-%status proc) :error
-                (external-process-%exit-code proc) (#_GetLastError))
+          (progn
+            (setf (external-process-%status proc) :error
+                  (external-process-%exit-code proc) (#_GetLastError))
+            (signal-semaphore (external-process-completed proc)))
           (#_CloseHandle (pref proc-info #>PROCESS_INFORMATION.hThread)))
         (pref proc-info #>PROCESS_INFORMATION.hProcess))))
 
@@ -1732,7 +1734,7 @@ not, why not; and what its result code was if it completed."
   ;;; pipes, and can expect to eventually get EOF on a pipe.
   ;;; So, this tries to loop until the process handle is signaled and
   ;;; all data has been read.
- (defun monitor-external-process (p)
+  (defun monitor-external-process (p)
     (let* ((in-fds (external-process-watched-fds p))
            (out-streams (external-process-watched-streams p))
            (token (external-process-token p))
@@ -1768,18 +1770,18 @@ not, why not; and what its result code was if it completed."
             (when (or terminated (data-available-on-pipe-p in-fd))
               (%stack-block ((buf 1024))
                 (let* ((n (fd-read in-fd buf 1024)))
-                    (declare (fixnum n))
-                    (if (<= n 0)
-                      (progn
-                        (without-interrupts
-                         (decf (car token))
-                         (fd-close in-fd)
-                         (setf (car p) nil changed t)))
+                  (declare (fixnum n))
+                  (if (<= n 0)
+                    (progn
+                      (without-interrupts
+                       (decf (car token))
+                       (fd-close in-fd)
+                       (setf (car p) nil changed t)))
 
-                      (let* ((string (make-string 1024)))
-                        (declare (dynamic-extent string))
-                        (%str-from-ptr buf n string)
-                        (write-sequence string out-stream :end n))))))))
+                    (let* ((string (make-string 1024)))
+                      (declare (dynamic-extent string))
+                      (%str-from-ptr buf n string)
+                      (write-sequence string out-stream :end n))))))))
         (unless terminated
           (setq terminated (eql (#_WaitForSingleObjectEx
                                  (external-process-pid p)

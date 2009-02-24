@@ -1288,10 +1288,10 @@ unsigned IP address."
 
 
 (defun c_sendto (sockfd msgptr len flags addrp addrlen)
-  (check-socket-error (#_sendto sockfd msgptr len flags addrp addrlen)))
+  (ignoring-eintr (check-socket-error (#_sendto sockfd msgptr len flags addrp addrlen))))
 
 (defun c_recvfrom (sockfd bufptr len flags addrp addrlenp)
-  (check-socket-error (#_recvfrom sockfd bufptr len flags addrp addrlenp)))
+  (ignoring-eintr (check-socket-error (#_recvfrom sockfd bufptr len flags addrp addrlenp))))
 
 (defun c_shutdown (sockfd how)
   (check-socket-error (#_shutdown sockfd how)))

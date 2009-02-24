@@ -600,10 +600,16 @@
   (destructuring-bind (name old-file new-file &optional from to) (compiler-warning-args condition)
     (format stream
             "Duplicate definitions of ~s~:[~*~;~:* (as a ~a and a ~a)~]~:[~;, in this file~:[~; and in ~s~]~]"
-            name from to
+            (maybe-setf-name name) from to
             (and old-file new-file)
             (neq old-file new-file)
             old-file)))
+
+(defun adjust-compiler-warning-args (warning-type args)
+  (case warning-type
+    ((:undefined-function :result-ignored) (mapcar #'maybe-setf-name args))
+    (t args)))
+
 
 (defun report-compiler-warning (condition stream)
   (let* ((warning-type (compiler-warning-warning-type condition))
@@ -616,7 +622,7 @@
         (when position (format stream " at position ~s" position))))
     (format stream ": ")
     (if (typep format-string 'string)
-      (apply #'format stream format-string (compiler-warning-args condition))
+      (apply #'format stream format-string (adjust-compiler-warning-args warning-type (compiler-warning-args condition)))
       (funcall format-string condition stream))
     ;(format stream ".")
     (let ((nrefs (compiler-warning-nrefs condition)))
