@@ -105,7 +105,7 @@
 (defun hyperspec-map-hash (document)
   (or *hyperspec-map-sym-hash*
       (rlet ((perror :id  +null-ptr+))
-        (let* ((map-url (make-instance 'ns:ns-url :with-string "Data/Map_Sym.txt" :relative-to-url (hyperspec-root-url)))
+        (let* ((map-url (make-instance 'ns:ns-url :with-string #@"Data/Map_Sym.txt" :relative-to-url (hyperspec-root-url)))
                (data (make-instance 'ns:ns-data
                                     :with-contents-of-url map-url
                                     :options 0
