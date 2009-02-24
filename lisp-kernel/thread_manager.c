@@ -574,7 +574,18 @@ suspend_resume_handler(int signo, siginfo_t *info, ExceptionInformation *context
   Boolean gs_was_tcr = ensure_gs_pthread();
 #endif
   TCR *tcr = get_interrupt_tcr(false);
-
+  
+  if (tcr == NULL) {
+    /* Got a suspend signal sent to the pthread. */
+    extern natural initial_stack_size;
+    void register_thread_tcr(TCR *);
+    
+    tcr = new_tcr(initial_stack_size, MIN_TSTACK_SIZE);
+    tcr->suspend_count = 1;
+    tcr->vs_area->active -= node_size;
+    *(--tcr->save_vsp) = lisp_nil;
+    register_thread_tcr(tcr);
+  }
   if (TCR_INTERRUPT_LEVEL(tcr) <= (-2<<fixnumshift)) {
     SET_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_SUSPEND);
   } else {
@@ -1837,7 +1848,7 @@ get_tcr(Boolean create)
     LispObj callback_macptr = nrs_FOREIGN_THREAD_CONTROL.vcell,
       callback_ptr = ((macptr *)ptr_from_lispobj(untag(callback_macptr)))->address;
     int i, nbindwords = 0;
-    extern unsigned initial_stack_size;
+    extern natural initial_stack_size;
     
     /* Make one. */
     current = new_tcr(initial_stack_size, MIN_TSTACK_SIZE);
