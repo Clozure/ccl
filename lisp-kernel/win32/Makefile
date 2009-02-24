@@ -36,6 +36,8 @@ else
 HASH_STYLE="-Wl,--hash-style=sysv"
 endif
 
+CRT2 = $(shell $(CC) -mno-cygwin -print-file-name=crt2.o)
+
 # There may be some confusion about whether or not C symbols have
 # leading underscores or not.  The assembler sources seem to
 # expect them to and mingw import libs seem to use them, but
@@ -76,16 +78,19 @@ all:	../../wx86cl.exe
 # Order matters: libs that provide definitions must follow libs that
 # reference them.  (It's legal to use -lfoo multiple times to try to
 # work around this.)
-OSLIBS = /usr/i686-pc-mingw32/lib/crt2.o -L/usr/lib/w32api \
-	-L/usr/i686-pc-mingw32/lib  -lm -lpsapi -lws2_32  \
-	-lmingw32 -lmoldname -lmingwex -lmsvcrt -lkernel32
-LIBGCC = $(shell gcc -mno-cygwin -print-libgcc-file-name)
+LIBGCC = $(shell $(CC) -mno-cygwin -print-libgcc-file-name)
+OSLIBS =  -L/usr/lib/w32api -L/mingw/lib -L/usr/lib/mingw\
+	-lm -lpsapi -lws2_32 -lmingw32 $(LIBGCC) -lmoldname -lmingwex \
+	-lmsvcrt -luser32 -lkernel32 -ladvapi32 -lshell32  $(GCCLIB) \
+	-lmoldname -lmingwex -lmsvcrt
+
+
+
 IMAGE_BASE =--image-base=0x10000
 
 ../../wx86cl.exe: $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile
-	ld -o ../../wx86cl.exe  $(IMAGE_BASE) \
-	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS) $(LIBGCC)
-
+	ld -o ../../wx86cl.exe  $(IMAGE_BASE) --enable-auto-import \
+	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(CRT2) $(OSLIBS) $(LIBGCC) $(LATELIBS)
 
 
 $(SPOBJ): $(SPINC)
