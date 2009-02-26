@@ -1889,6 +1889,8 @@ _endsubp(store_node_conditional)
 	_spentry(set_hash_key_conditional)
         .globl C(egc_set_hash_key_conditional)
 C(egc_set_hash_key_conditional):
+        .globl C(egc_set_hash_key_conditional_retry)
+C(egc_set_hash_key_conditional_retry):          
 	__(unbox_fixnum(%temp0,%imm1))
 0:	__(movq (%arg_x,%imm1),%temp1)
 	__(cmpq %arg_y,%temp1)

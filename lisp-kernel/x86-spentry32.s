@@ -1825,6 +1825,8 @@ _spentry(set_hash_key_conditional)
 C(egc_set_hash_key_conditional):
 	__(subl $misc_data_offset*fixnumone,%temp0) /* undo pre-added offset */
 	__(sarl $fixnumshift,%temp0)	/* will be fixnum-tagged */
+        .globl C(egc_set_hash_key_conditional_retry)
+C(egc_set_hash_key_conditional_retry):          
 0:	__(cmpl %arg_y,misc_data_offset(%temp1,%temp0))
 	__(movl misc_data_offset(%temp1,%temp0),%imm0)
 	__(jne 3f)
