@@ -2261,7 +2261,7 @@ setup_sigaltstack(area *a)
 extern opcode egc_write_barrier_start, egc_write_barrier_end,
   egc_set_hash_key_conditional, egc_set_hash_key_conditional_success_test,
   egc_set_hash_key_conditional_retry,
-  egc_store_node_conditional_success_end,
+  egc_store_node_conditional_success_end, egc_store_node_conditional_retry,
   egc_store_node_conditional_success_test,egc_store_node_conditional,
   egc_set_hash_key, egc_gvset, egc_rplacd;
 
@@ -2569,11 +2569,14 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
       need_store = false;
       xpGPR(xp,Iarg_z) = t_value;
     } else if (program_counter >= &egc_store_node_conditional) {
+      if (program_counter <= &egc_store_node_conditional_retry) {
+        return;
+      }
       if ((program_counter < &egc_store_node_conditional_success_test) ||
           ((program_counter == &egc_store_node_conditional_success_test) &&
            !(eflags_register(xp) & (1 << X86_ZERO_FLAG_BIT)))) {
         /* Back up the PC, try again */
-        xpPC(xp) = (LispObj) &egc_store_node_conditional;
+        xpPC(xp) = (LispObj) &egc_store_node_conditional_retry;
         return;
       }
       if (program_counter >= &egc_store_node_conditional_success_end) {
