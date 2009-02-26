@@ -1155,7 +1155,7 @@ check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits)
       if (intergen_ref == false) {        
         x1 = start[1];
         tag = fulltag_of(x1);
-      if (is_node_fulltag(tag)) {        
+        if (is_node_fulltag(tag)) {        
           node_dnode = gc_area_dnode(x1);
           if (node_dnode < GCndnodes_in_area) {
             intergen_ref = true;
