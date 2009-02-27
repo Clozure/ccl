@@ -1857,6 +1857,21 @@
   (leal (:@ (:^ cleanup-lab)  (:%l x8632::fn)) (:%l x8632::xfn))
   (jmp (:@ .SPnmkunwind)))
 
+(define-x8632-vinsn u16->u32 (((dest :u32))
+			      ((src :u16)))
+  (movzwl (:%w src) (:%l dest)))
+
+(define-x8632-vinsn u8->u32 (((dest :u32))
+			     ((src :u8)))
+  (movzbl (:%b src) (:%l dest)))
+
+(define-x8632-vinsn s16->s32 (((dest :s32))
+			      ((src :s16)))
+  (movswl (:%w src) (:%l dest)))
+
+(define-x8632-vinsn s8->s32 (((dest :s32))
+			     ((src :s8)))
+  (movsbl (:%b src) (:%l dest)))
 
 (define-x8632-subprim-jump-vinsn (tail-call-fn-gen) .SPtcallnfngen)
 
