@@ -21,7 +21,10 @@
            #:draw-view-rectangle
            #:entry-text #:cell-count #:nth-cell #:selection #:redisplay
            #:string-value-of #:integer-value-of #:float-value-of
-           #:double-value-of))
+           #:double-value-of
+           #:y-or-n-dialog
+           #:choose-file-dialog #:choose-new-file-dialog
+           #:user-pick-color))
 
 (cl:defpackage :easygui-demo
   (:use :cl :easygui)

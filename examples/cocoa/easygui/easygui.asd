@@ -27,6 +27,7 @@
                (:file "events" :depends-on ("new-cocoa-bindings"))
                (:file "views" :depends-on ("events"))
                (:file "action-targets" :depends-on ("views"))
+               (:file "dialogs" :depends-on ("new-cocoa-bindings"))
                (:module "example"
                         :depends-on ("action-targets")
                         :components

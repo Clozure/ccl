@@ -1,5 +1,11 @@
 (in-package :easygui)
 
+;;; Changed by AWSC Feb 2009:
+;;; Modified define-chaining-responder-method to allow subclasses of easygui
+;;; views to inherit mouse handling behaviour.
+;;; Original work by an unknown author.
+;;; Permission to use the change is granted.
+
 ;;; Event handling basics
 
 (defmacro define-chaining-responder-method (class-name
@@ -8,9 +14,10 @@
                                             &body arg-compute-forms)
   `(objc:defmethod (,objc-name :void) ((,self-arg ,class-name)
                                        ,event-arg)
-     (let ((ev-class (class-name
-                      (class-of (easygui-view-of ,self-arg)))))
-       (if (find-method #',lisp-name nil `(,ev-class) nil) ; TODO: doesn't consider subclasses.
+     (let ((superclasses (ccl:class-precedence-list (class-of (easygui-view-of ,self-arg)))))
+       (if (some #'(lambda (super)
+                     (find-method #',lisp-name nil (list (class-name super)) nil))
+                 superclasses)
            (,lisp-name (easygui-view-of ,self-arg)
                      ,@arg-compute-forms)
            (,objc-name (#/nextResponder ,self-arg) ,event-arg)))))
