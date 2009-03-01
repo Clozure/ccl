@@ -2399,48 +2399,34 @@ d_d_test(double data)
   <sect1 id="Tutorial--Allocating-Foreign-Data-on-the-Lisp-Heap">
     <title>Tutorial: Allocating Foreign Data on the Lisp Heap </title>
     <para>Not every foreign function is so marvelously easy to use
-      as the ones we saw in the last section.  Some of them require
-      you to allocate a C struct, fill it in with your own
-      information, and pass it a pointer to the struct.  Some of them
-      require you to allocate an empty struct so they can fill it in,
-      and then you can read the information out of it.</para>
-    <para>Also, some of them have their own structs and return a
-      pointer to that same struct every time you call them, but those
-      are easier to deal with, so they won't be covered in this
-      section.</para>
-    <para>You might know that Lisp (and, indeed, most programming
-      languages) has two separate regions of memory.  There's the
-      stack, which is where variable bindings are kept.  Memory on the
-      stack is allocated every time any function is called, and
-      deallocated when it returns, so it's useful for anything that
-      doesn't need to last longer than one function call, when there's
-      only one thread.  If that's all you need, you can do it with
-      .</para>
-    <para>Then, there's the heap, which holds everything else, and
-      is our subject here.  There are two advantages and one big
-      disadvantage to putting things on the heap rather than the
-      stack.  First, data allocated on the heap can be passed outside
-      of the scope in which it was created.  This is useful for data
-      which may need to be passed between multiple C calls or multiple
-      threads. Also, some data may be too large to copy multiple times
-      or may be too large to allocate on the stack.</para>
-    <para>The second advantage is security.  If incoming data is
-      being placed directly onto the stack, the input data can cause
-      stack overflows and underflows.  This is not something which
-      Lisp users generally worry about since garbage collection
-      generally handles memory management.  However, "stack smashing"
-      is one of the classic exploits in C which malicious hackers can
-      use to gain control of a machine.  Not checking external data is
-      always a bad idea; however, allocating it into the heap at least
-      offers more protection than direct stack allocation.</para>
+      as the ones we saw in the last section.  Some functions require
+      you to allocate a C struct, fill it with your own
+      information, and pass in a pointer to that struct.  Some of them
+      require you to allocate an empty struct that they will fill in
+      so that you can read the information out of it.</para>
+    <para>There are generally two ways to allocate foreign data.  The
+    first way is to allocate it on the stack; the RLET macro is one way to do this.
+    This is analogous to using automatic variables in C.  In the
+    jargon of Common Lisp, data allocated this way is said to have
+    dynamic extent.</para>
+    <para>The other way to heap-allocate the foreign data.  This is
+    analogous to calling malloc in C.  Again in the jargon of Common
+    Lisp, heap-allocated data is said to have indefinite extent. If a
+    function heap-allocates some data, that data remains valid even
+    after the function itself exits.  This is useful for data which
+    may need to be passed between multiple C calls or multiple
+    threads. Also, some data may be too large to copy multiple times
+    or may be too large to allocate on the stack.</para>
     <para>The big disadvantage to allocating data on the heap is
       that it must be explicitly deallocated&mdash;you need to "free" it
-      when you're done with it.  Ordinarily, in Lisp, you wouldn't
-      allocate memory yourself, and the garbage collector would know
-      about it, so you wouldn't have to think about it again.  When
-      you're doing it manually, it's very different.  Memory
-      management becomes a manual process, just like in C and
-      C++.</para>
+      when you're done with it.  Normal Lisp objects, even those with indefinite
+      extent, are deallocated by the garbage collector when it can prove
+      that they're no longer referenced.  Foreign data, though, is outside the
+      GC's ken:  it has no way to know whether a blob of foreign data is still
+      referenced by foreign code or not. It is thus up to the programmer
+      to manage it manually, just as one
+      does in C with malloc and free.
+    </para>
     <para>What that means is that, if you allocate something and
       then lose track of the pointer to it, there's no way to ever
       free that memory.  That's what's called a memory leak, and if
@@ -2522,32 +2508,6 @@ reverse_int_ptr_ptrtest(int **ptrs)
     <programlisting>
       gcc -dynamiclib -Wall -o libptrtest.dylib ptrtest.c -install_name ./libptrtest.dylib
     </programlisting>
-    <para>If that command doesn't make sense to you, feel free to go back
-      and read about it at .</para>
-    <para>Now, start &CCL; and enter:</para>
-    <programlisting>
-      ? ;; make-heap-ivector courtesy of Gary Byers
-      (defun make-heap-ivector (element-count element-type)
-       (let* ((subtag (ccl::element-type-subtype element-type)))
-        (unless (= (logand subtag target::fulltagmask)
-                 target::fulltag-immheader)
-         (error "~s is not an ivector subtype." element-type))
-        (let* ((size-in-bytes (ccl::subtag-bytes subtag element-count)))
-         (ccl::%make-heap-ivector subtag size-in-bytes element-count))))      
-      MAKE-HEAP-IVECTOR
-
-      ? ;; dispose-heap-ivector created for symmetry
-      (defmacro dispose-heap-ivector (a mp)
-       `(progn
-         (ccl::%dispose-heap-ivector ,a)
-         ;; Demolish the arguments for safety
-         (setf ,a nil)
-         (setf ,mp nil)))
-      DISPOSE-HEAP-IVECTOR
-    </programlisting>
-    <para>If you don't understand how those functions do what they do.
-      That's okay; it gets into very fine detail which really doesn't
-      matter, because you don't need to change them.</para>
     <para>The function <literal>make-heap-ivector</literal> is the
       primary tool for allocating objects in heap memory.  It
       allocates a fixed-size &CCL; object in heap memory.  It
@@ -2658,33 +2618,14 @@ reverse_int_ptr_ptrtest(int **ptrs)
     <para>There is one final bit of housekeeping to deal with.
       Before moving on, the memory needs to be deallocated:</para>
     <programlisting>
-      ? ;; dispose-heap-ivector created for symmetry
-      ;; Macro repeated here for pedagogy
-      (defmacro dispose-heap-ivector (a mp)
-      `(progn
-      (ccl::%dispose-heap-ivector ,a)
-      ;; Demolish the arguments for safety
-      (setf ,a nil)
-      (setf ,mp nil)))
-      DISPOSE-HEAP-IVECTOR
-
       ? (dispose-heap-ivector a ap)
-      NIL
-
-      ? a
-      NIL
-
-      ? ap
       NIL
     </programlisting>
     <para>The <literal>dispose-heap-ivector</literal> macro actually
       deallocates the ivector, releasing its memory into the heap for
-      something else to use.  In addition, it makes sure that the
-      variables which it was called with are set to nil, because
-      otherwise they would still be referencing the memory of the
-      ivector - which is no longer allocated, so that would be a bug.
-      Making sure there are no other variables set to it is up to
-      you.</para>
+      something else to use.  Both <literal>a</literal> and <literal>ap</literal>
+      now have undefined values.
+      </para>
     <para>When do you call <literal>dispose-heap-ivector</literal>?
       Anytime after you know the ivector will never be used again, but
       no sooner.  If you have a lot of ivectors, say, in a hash table,
