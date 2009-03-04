@@ -588,6 +588,8 @@ callback_to_lisp (TCR * tcr, LispObj callback_macptr, ExceptionInformation *xp,
   unsigned old_mxcsr = get_mxcsr();
 #ifdef X8632
   natural saved_node_regs_mask = tcr->node_regs_mask;
+  natural saved_unboxed0 = tcr->unboxed0;
+  natural saved_unboxed1 = tcr->unboxed1;
   LispObj *vsp = (LispObj *)xpGPR(xp, Isp);
 #endif
 
@@ -628,6 +630,8 @@ callback_to_lisp (TCR * tcr, LispObj callback_macptr, ExceptionInformation *xp,
   xpGPR(xp, Isp) = (LispObj)vsp;
 
   tcr->node_regs_mask = saved_node_regs_mask;
+  tcr->unboxed0 = saved_unboxed0;
+  tcr->unboxed1 = saved_unboxed1;
 #endif
   set_mxcsr(old_mxcsr);
   return delta;
