@@ -1910,6 +1910,8 @@ Or something. Right? ~s ~s" var varbits))
 				 (nx-error . 0)
 				 (compiler-bug . 0)))
 
+#-BOOTSTRAPPED (unless (fboundp 'nx1-check-format-call) (fset 'nx1-check-format-call (lambda (&rest x) (declare (ignore x)))))
+
 ;;; Wimpy.
 (defun nx1-call-result-type (sym &optional (args nil args-p) spread-p)
   (let* ((env *nx-lexical-environment*)
