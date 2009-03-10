@@ -1415,6 +1415,8 @@
   (declare (ignore stream))
   (apply #'error format args))
 
+(pushnew '(c-parse-error . 1) ccl::*format-arg-functions* :test #'equal)
+
 (defun macro-definition-of-token (x)
   (declare (ignore x)))
 

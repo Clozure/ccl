@@ -280,6 +280,8 @@
   (let ((string (apply #'format nil format-string args)))
     (#_NSLog (ccl::%make-nsstring (double-%-in string)))))
 
+(pushnew '(log-debug . 0) ccl::*format-arg-functions* :test #'equal)
+
 (defun nslog-condition (c)
   (let* ((rep (format nil "~a" c)))
     (with-cstrs ((str rep))

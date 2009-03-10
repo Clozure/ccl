@@ -860,6 +860,9 @@ a LET-like macro, and a SETQ-like macro, which perform LOOP-style destructuring.
 (defun loop-warn (format-string &rest format-args)
   (warn "~?~%Current LOOP context:~{ ~S~}." format-string format-args (loop-context)))
 
+(pushnew '(loop-error . 0) ccl::*format-arg-functions* :test #'equal)
+(pushnew '(loop-warn . 0) ccl::*format-arg-functions* :test #'equal)
+
 
 (defun loop-check-data-type (specified-type required-type
 			     &optional (default-type required-type))

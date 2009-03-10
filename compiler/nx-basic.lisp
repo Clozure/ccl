@@ -593,6 +593,7 @@
     (:lambda . "Suspicious lambda-list: ~s")
     (:result-ignored . "Function result ignored in call to ~s")
     (:duplicate-definition . report-compile-time-duplicate-definition)
+    (:format-error . "~:{~@?~%~}")
     (:program-error . "~a")
     (:unsure . "Nonspecific warning")))
 

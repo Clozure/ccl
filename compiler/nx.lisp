@@ -203,6 +203,7 @@
     (:ignore . style-warning)
     (:result-ignored . style-warning)
     (:lambda . style-warning)
+    (:format-error . style-warning)
     (:unused . style-warning)))
 
 
