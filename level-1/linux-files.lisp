@@ -516,13 +516,15 @@ given is that of a group to which the current user belongs."
 (defun fd-dup (fd &key direction inheritable)
   (declare (ignore direction))
   (rlet ((handle #>HANDLE))
-    (#_DuplicateHandle (#_GetCurrentProcess)
-		       fd
-		       (#_GetCurrentProcess) 
-		       handle
-		       0
-		       (if inheritable #$TRUE #$FALSE)
-		       #$DUPLICATE_SAME_ACCESS)))
+    (if (eql 0 (#_DuplicateHandle (#_GetCurrentProcess)
+                                  (%int-to-ptr fd)
+                                  (#_GetCurrentProcess) 
+                                  handle
+                                  0
+                                  (if inheritable #$TRUE #$FALSE)
+                                  #$DUPLICATE_SAME_ACCESS))
+      (%windows-error-disp (#_GetLastError))
+      (pref handle #>DWORD))))
 
 
 (defun fd-fsync (fd)
@@ -1385,24 +1387,9 @@ itself, by setting the status and exit-code fields.")
                          (when (zerop (car (external-process-token proc)))
                            t))))))
 
-  (defun external-process-status (proc)
-    "Return information about whether an OS subprocess is running; or, if
-not, why not; and what its result code was if it completed."
-    (require-type proc 'external-process)
-    (values (external-process-%status proc)
-            (external-process-%exit-code proc)))
 
-  (defun external-process-input-stream (proc)
-    "Return the lisp stream which is used to write input to a given OS
-subprocess, if it has one."
-    (require-type proc 'external-process)
-    (external-process-input proc))
 
-  (defun external-process-output-stream (proc)
-    "Return the lisp stream which is used to read output from a given OS
-subprocess, if there is one."
-    (require-type proc 'external-process)
-    (external-process-output proc))
+
 
   (defun external-process-error-stream (proc)
     "Return the stream which is used to read error output from a given OS
@@ -1410,11 +1397,7 @@ subprocess, if it has one."
     (require-type proc 'external-process)
     (external-process-error proc))
 
-  (defun external-process-id (proc)
-    "Return the process id of an OS subprocess, a positive integer which
-identifies it."
-    (require-type proc 'external-process)
-    (external-process-pid proc))
+
   
   (defun signal-external-process (proc signal)
     "Send the specified signal to the specified external process.  (Typically,
@@ -1552,12 +1535,6 @@ space, and prefixed with PREFIX."
     watched-streams
     )
 
-  (defun external-process-status (proc)
-    "Return information about whether an OS subprocess is running; or, if
-not, why not; and what its result code was if it completed."
-    (require-type proc 'external-process)
-    (values (external-process-%status proc)
-            (external-process-%exit-code proc)))
 
 
   (defmethod print-object ((p external-process) stream)
@@ -1638,8 +1615,7 @@ not, why not; and what its result code was if it completed."
             (with-interrupts-enabled
                 (wait-on-semaphore (external-process-completed proc))))
           (progn
-            (dolist (fd close-on-error) (fd-close fd))
-            (error "Process execution failed"))))
+            (dolist (fd close-on-error) (fd-close fd)))))
       proc))
 
   (let* ((external-processes ())
@@ -1705,9 +1681,12 @@ not, why not; and what its result code was if it completed."
           (progn
             (setf (external-process-%status proc) :error
                   (external-process-%exit-code proc) (#_GetLastError))
-            (signal-semaphore (external-process-completed proc)))
-          (#_CloseHandle (pref proc-info #>PROCESS_INFORMATION.hThread)))
-        (pref proc-info #>PROCESS_INFORMATION.hProcess))))
+            (signal-semaphore (external-process-signal proc))
+            (signal-semaphore (external-process-completed proc))
+            nil)
+          (progn
+            (#_CloseHandle (pref proc-info #>PROCESS_INFORMATION.hThread))
+            (pref proc-info #>PROCESS_INFORMATION.hProcess))))))
 
   (defun fd-uninheritable (fd &key direction)
     (let ((new-fd (fd-dup fd :direction direction)))
@@ -1778,10 +1757,20 @@ not, why not; and what its result code was if it completed."
                        (fd-close in-fd)
                        (setf (car p) nil changed t)))
 
-                    (let* ((string (make-string 1024)))
-                      (declare (dynamic-extent string))
-                      (%str-from-ptr buf n string)
-                      (write-sequence string out-stream :end n))))))))
+                    (let* ((string (make-string n))
+			   (m 0))
+                      (declare (dynamic-extent string)
+			       (fixmum m))
+		      ;; Not quite right: we really want to map
+		      ;; CRLF to #\Newline, but stripping #\Return
+		      ;; is usually the same thing and easier.
+		      (dotimes (i n)
+			(let* ((code (%get-unsigned-byte buf i)))
+			  (unless (eql code (char-code #\Return))
+			    (setf (schar string m) (code-char code))
+			    (incf m))))
+                      (write-sequence string out-stream :end m)
+		      (force-output out-stream))))))))
         (unless terminated
           (setq terminated (eql (#_WaitForSingleObjectEx
                                  (external-process-pid p)
@@ -1790,7 +1779,42 @@ not, why not; and what its result code was if it completed."
                                 #$WAIT_OBJECT_0))))))
   
 
-  )                                     ; #+windows-target (progn
+  (defun signal-external-process (proc signal)
+    "Does nothing on Windows"
+    (declare (ignore signal))
+    (require-type proc 'external-process)
+    nil)  
+
+
+)
+                                        ;#+windows-target (progn
+
+
+(defun external-process-input-stream (proc)
+  "Return the lisp stream which is used to write input to a given OS
+subprocess, if it has one."
+  (require-type proc 'external-process)
+  (external-process-input proc))
+
+(defun external-process-output-stream (proc)
+  "Return the lisp stream which is used to read output from a given OS
+subprocess, if there is one."
+  (require-type proc 'external-process)
+  (external-process-output proc))
+
+
+(defun external-process-id (proc)
+  "Return the process id of an OS subprocess, a positive integer which
+identifies it."
+  (require-type proc 'external-process)
+  (external-process-pid proc))
+
+(defun external-process-status (proc)
+  "Return information about whether an OS subprocess is running; or, if
+not, why not; and what its result code was if it completed."
+  (require-type proc 'external-process)
+  (values (external-process-%status proc)
+          (external-process-%exit-code proc)))
 
 ;;; EOF on a TTY is transient, but I'm less sure of other cases.
 (defun eof-transient-p (fd)
