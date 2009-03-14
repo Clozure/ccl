@@ -105,15 +105,16 @@ present and false otherwise. This variable shouldn't be set by user code.")
                                   :sharing :lock
                                   :direction :input
                                   :interactive (not *batch-flag*)
-                                  :encoding encoding-name))
+                                  :encoding encoding-name
+                                  #+windows-target :line-termination #+windows-target :cp/m))
     (setq *stdout* (make-fd-stream #-windows-target 1
                                    #+windows-target (%ptr-to-int
                                                      (#_GetStdHandle #$STD_OUTPUT_HANDLE))
-                                   :basic t :direction :output :sharing :lock :encoding encoding-name))
+                                   :basic t :direction :output :sharing :lock :encoding encoding-name #+windows-target :line-termination #+windows-target :msdos))
     (setq *stderr* (make-fd-stream #-windows-target 2
                                    #+windows-target (%ptr-to-int
                                                      (#_GetStdHandle #$STD_ERROR_HANDLE))
-                    :basic t :direction :output :sharing :lock :encoding encoding-name))
+                    :basic t :direction :output :sharing :lock :encoding encoding-name #+windows-target :line-termination #+windows-target :crlf))
     (if *batch-flag*
       (let* ((tty-fd
                #-windows-target
