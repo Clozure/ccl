@@ -564,7 +564,7 @@ print a list of variables bound by NAME instead."
     (format stream "~%~T")
     (if bindings
         (progn
-          (format stream "~A ~:[is bound by;~binds~]:" name inverse)
+          (format stream "~A ~:[is bound by~;binds~]:" name inverse)
           (%print-xref-entries bindings stream verbose))
       (format stream "No ~:[bindings of~;symbols bound by~] ~A were found in the database~%"
               inverse name)))
