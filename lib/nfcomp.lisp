@@ -238,7 +238,7 @@ Will differ from *compiling-file* during an INCLUDE")
         (setf (defenv.defined defenv) (deferred-warnings.defs *outstanding-deferred-warnings*))
 
         (setq forms (fcomp-file src
-                                (or compile-file-original-truename orig-src)
+                                (or compile-file-original-truename (namestring orig-src))
                                 compile-file-original-buffer-offset
                                 lexenv))
 
@@ -458,7 +458,7 @@ Will differ from *compiling-file* during an INCLUDE")
            (*fasl-source-file* filename)
            (*fcomp-toplevel-forms* nil)
            (*fasl-eof-forms* nil)
-           (*loading-file-source-file* (namestring orig-file))
+           (*loading-file-source-file* orig-file)
            (*fcomp-source-note-map* (and *save-source-locations*
                                          (make-hash-table :test #'eq :shared nil)))
            (*loading-toplevel-location* nil)

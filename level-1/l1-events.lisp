@@ -129,12 +129,18 @@
 (defun cmain ()
   (thread-handle-interrupts))
 
-(defun select-interactive-abort-process ()
-  (or *interactive-abort-process*
+(defun select-interactive-abort-process (&aux proc)
+  (or (and (setq proc *interactive-abort-process*)
+           (process-active-p proc)
+           proc)
       (let* ((sr (input-stream-shared-resource *terminal-input*)))
-	(if sr
-	  (or (shared-resource-current-owner sr)
-	      (shared-resource-primary-owner sr))))))
+        (when sr
+          (or (and (setq proc (shared-resource-current-owner sr))
+                   (process-active-p proc)
+                   proc)
+              (and (setq proc (shared-resource-primary-owner sr))
+                   (process-active-p proc)
+                   proc))))))
 
 (defun handle-gc-hooks ()
   (let ((bits *gc-event-status-bits*))

@@ -1731,7 +1731,7 @@ C(egc_rplacd):
 	__(ret)
 _endsubp(rplacd)
 
-/* Storing into a gvector can be handles the same way as storing into a CONS. */
+/* Storing into a gvector can be handled the same way as storing into a CONS. */
 /* args (src, unscaled-idx, val) in temp0, arg_y, arg_z */
 _spentry(gvset)
         .globl C(egc_gvset)
@@ -1785,7 +1785,8 @@ _endsubp(set_hash_key)
 /* This is a little trickier: if this is interrupted, we need to know  */
 /* whether or not the STORE-CONDITIONAL (cmpxchgq) has won or not.    */
 /* If we're interrupted   before the PC has reached the "success_test" label, */
-/* repeat (luser the PC back to .SPstore_node_conditional.)  If we're at that */
+/* repeat (luser the PC back to store_node_conditional_retry.)  If
+	we're at that */
 /* label with the Z flag set, we won and (may) need to memoize.  */
 
 /* %temp0 = offset, %temp1 = object, %arg_y = old, %arg_z = new */
@@ -1794,6 +1795,8 @@ _spentry(store_node_conditional)
 C(egc_store_node_conditional):
 	__(subl $misc_data_offset*fixnumone,%temp0) /* undo pre-added offset */
 	__(sarl $fixnumshift,%temp0)	/* will be fixnum-tagged */
+        .globl C(egc_store_node_conditional_retry)
+C(egc_store_node_conditional_retry):      
 0:	__(cmpl %arg_y,misc_data_offset(%temp1,%temp0))
 	__(movl misc_data_offset(%temp1,%temp0),%imm0)
 	__(jne 3f)
@@ -1825,6 +1828,8 @@ _spentry(set_hash_key_conditional)
 C(egc_set_hash_key_conditional):
 	__(subl $misc_data_offset*fixnumone,%temp0) /* undo pre-added offset */
 	__(sarl $fixnumshift,%temp0)	/* will be fixnum-tagged */
+        .globl C(egc_set_hash_key_conditional_retry)
+C(egc_set_hash_key_conditional_retry):          
 0:	__(cmpl %arg_y,misc_data_offset(%temp1,%temp0))
 	__(movl misc_data_offset(%temp1,%temp0),%imm0)
 	__(jne 3f)

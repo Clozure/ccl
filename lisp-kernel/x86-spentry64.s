@@ -1853,13 +1853,15 @@ _endsubp(set_hash_key)
 /* This is a little trickier: if this is interrupted, we need to know  */
 /* whether or not the STORE-CONDITIONAL (cmpxchgq) has won or not.    */
 /* If we're interrupted   before the PC has reached the "success_test" label,   */
-/* repeat (luser the PC back to .SPstore_node_conditional.)  If we're at that  */
+/* repeat (luser the PC back to store_node_conditional_retry.)  If we're at that  */
 /* label with the Z flag set, we won and (may) need to memoize.  */
 
 _spentry(store_node_conditional)
         .globl C(egc_store_node_conditional)
 C(egc_store_node_conditional):
 	__(unbox_fixnum(%temp0,%imm1))
+        .globl C(egc_store_node_conditional_retry)
+C(egc_store_node_conditional_retry):      
 0:	__(movq (%arg_x,%imm1),%temp1)
 	__(cmpq %arg_y,%temp1)
 	__(movq %temp1,%imm0)
@@ -1889,6 +1891,8 @@ _endsubp(store_node_conditional)
 	_spentry(set_hash_key_conditional)
         .globl C(egc_set_hash_key_conditional)
 C(egc_set_hash_key_conditional):
+        .globl C(egc_set_hash_key_conditional_retry)
+C(egc_set_hash_key_conditional_retry):          
 	__(unbox_fixnum(%temp0,%imm1))
 0:	__(movq (%arg_x,%imm1),%temp1)
 	__(cmpq %arg_y,%temp1)
