@@ -5367,8 +5367,29 @@
 	      (pref tv :timeval.tv_usec) us)))))
 
 (defun fd-input-available-p (fd &optional milliseconds)
-  #+windows-target (declare (ignore fd milliseconds))
-  #+windows-target nil
+  #+windows-target
+  (case (%unix-fd-kind fd)
+    (:socket
+     (rlet ((infds #>fd_set)
+            (tv :timeval :tv_sec 0 :tv_usec 0))
+       (fd-zero infds)
+       (fd-set fd infds)
+       (when milliseconds
+         (multiple-value-bind (seconds millis)
+             (floor milliseconds 1000)
+        (setf (pref tv :timeval.tv_sec) seconds
+              (pref tv :timeval.tv_usec) (* 1000 millis))))
+       (let* ((result (#_select 1 infds (%null-ptr) (%null-ptr) (if milliseconds tv (%null-ptr)))))
+         (cond ((> result 0) (values t 0))
+               ((= result 0) (values nil 0))
+               (t (values nil (- (#_GetLastError))))))))
+    (:pipe (if (data-available-on-pipe-p fd)
+             (values t 0)
+             (if (and milliseconds (> milliseconds 0))
+               (values (process-wait-with-timeout "input-wait" milliseconds #'data-available-on-pipe-p fd) 0)
+               (values nil 0))))
+    ;(:character-special (windows-tty-input-available-p fd milliseconds))
+    (t (values nil 0)))
   #-windows-target
   (rlet ((pollfds (:array (:struct :pollfd) 1)))
     (setf (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.fd) fd
@@ -5379,8 +5400,23 @@
 
 
 (defun fd-ready-for-output-p (fd &optional milliseconds)
-  #+windows-target (declare (ignore fd milliseconds))
-  #+windows-target t
+  #+windows-target
+  (case (%unix-fd-kind fd)
+    (:socket
+     (rlet ((tv :timeval :tv_sec 0 :tv_usec 0)
+            (outfds :fd_set))
+       (fd-zero outfds)
+       (fd-set fd outfds)
+       (when milliseconds
+         (multiple-value-bind (seconds millis)
+             (floor milliseconds 1000)
+           (setf (pref tv #>timeval.tv_sec) seconds
+                 (pref tv #>timeval.tv_usec) (* millis 1000))))
+       (let* ((res (#_select 1 (%null-ptr) outfds (%null-ptr) (if milliseconds tv (%null-ptr)))))
+         (cond ((> res 0) (values t 0))
+               ((= res 0) (values nil 0))
+               (t (values 0 (- (#_GetLastError))))))))
+    (t (values t 0)))
   #-windows-target
   (rlet ((pollfds (:array (:struct :pollfd) 1)))
     (setf (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.fd) fd
