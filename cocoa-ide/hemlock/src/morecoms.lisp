@@ -53,13 +53,17 @@ i-search, and prompted input (e.g. m-x)"
   "Uppercase a word at point.
    With prefix argument uppercase that many words."
   "Uppercase p words at the point."
-  (filter-words p (current-point) #'string-upcase))
+  (if (region-active-p)
+    (hemlock::uppercase-region-command p)
+    (filter-words p (current-point) #'string-upcase)))
 
 (defcommand "Lowercase Word" (p)
   "Uppercase a word at point.
    With prefix argument uppercase that many words."
   "Uppercase p words at the point."
-  (filter-words p (current-point) #'string-downcase))
+  (if (region-active-p)
+    (hemlock::lowercase-region-command p)
+    (filter-words p (current-point) #'string-downcase)))
 
 ;;; FILTER-WORDS implements "Uppercase Word" and "Lowercase Word".
 ;;;
@@ -79,29 +83,41 @@ i-search, and prompted input (e.g. m-x)"
   argument, capitalize that many words.  A negative argument capitalizes
   words before the point, but leaves the point where it was."
   "Capitalize p words at the point."
-  (let ((point (current-point))
-	(arg (or p 1)))
-    (with-mark ((start point :left-inserting)
-		(end point))
-      (when (minusp arg)
-	(unless (word-offset start arg) (editor-error "No previous word.")))
-      (do ((region (region start end))
-	   (cnt (abs arg) (1- cnt)))
-	  ((zerop cnt) (move-mark point end))
-	(unless (find-attribute start :word-delimiter #'zerop)
-	  (editor-error "No next word."))
-	(move-mark end start)
-	(find-attribute end :word-delimiter)
-	(loop
-	  (when (mark= start end)
-	    (move-mark point end)
-	    (editor-error "No alphabetic characters in word."))
-	  (when (alpha-char-p (next-character start)) (return))
-	  (character-offset start 1))
-	(setf (next-character start) (char-upcase (next-character start)))
-        (hi::buffer-note-modification (current-buffer) start 1)
-	(mark-after start)
-	(filter-region #'string-downcase region)))))
+  (if (region-active-p)
+    (hemlock::capitalize-region-command p)
+    (let ((point (current-point))
+          (arg (or p 1)))
+      (with-mark ((start point)
+                  (end point))
+        (when (minusp arg)
+          (unless (word-offset start arg) (editor-error "No previous word.")))
+        (do ((region (region start end))
+             (cnt (abs arg) (1- cnt)))
+            ((zerop cnt) (move-mark point end))
+          (unless (find-not-attribute start :word-delimiter)
+            (editor-error "No next word."))
+          (move-mark end start)
+          (unless (find-attribute end :word-delimiter)
+            (buffer-end end))
+          (capitalize-one-word region))))))
+
+(defun capitalize-one-word (region)
+  "Capitalize first word in region, moving region-start to region-end"
+  (let* ((start (region-start region))
+         (end (region-end region)))
+    ;; (assert (mark<= start end))
+    (loop
+      (when (mark= start end)
+        (return nil))
+      (let ((ch (next-character start)))
+        (when (alpha-char-p ch)
+          (setf (next-character start) (char-upcase ch))
+          (hi::buffer-note-modification (current-buffer) start 1)
+          (mark-after start)
+          (filter-region #'string-downcase region)
+          (move-mark start end)
+          (return t)))
+      (mark-after start))))
 
 (defcommand "Uppercase Region" (p)
   "Uppercase words from point to mark."
@@ -124,10 +140,40 @@ i-search, and prompted input (e.g. m-x)"
     (let* ((region (region start end))
 	   (undo-region (copy-region region)))
       (filter-region function region)
+      (move-mark (current-point) end)
       (make-region-undo :twiddle name region undo-region))))
 
+(defcommand "Capitalize Region" (p)
+  "Capitalize words from point to mark."
+  (declare (ignore p))
+  (let* ((current-region (current-region))
+         (start (copy-mark (region-start current-region) :left-inserting))
+         (end (copy-mark (region-end current-region) :left-inserting))
+         (region (region start end))
+         (undo-region (copy-region region)))
+    (capitalize-words-in-region region)
+    (move-mark (current-point) end)
+    (make-region-undo :twiddle "Capitalize Region" region undo-region)))
 
-
+(defun capitalize-words-in-region (region)
+  (let ((limit (region-end region)))
+    (with-mark ((start (region-start region)))
+      (with-mark ((end start))
+        (let ((region (region start end)))
+          (loop
+            (unless (and (find-not-attribute start :word-delimiter)
+                         (mark< start limit))
+              (return))
+            ;; start is at a word constituent, there is at least one start <  limit
+            (move-mark end start)
+            (unless (find-attribute end :word-delimiter)
+              (buffer-end end))
+            (when (mark< limit end)
+              (move-mark end limit))
+            (capitalize-one-word region)
+            (move-mark start end)))))))
+
+
 ;;;; More stuff.
 
 (defcommand "Delete Previous Character Expanding Tabs" (p)
