@@ -27,6 +27,7 @@
     :openmcl
     :ccl
     :ccl-1.2
+    :ccl-1.3
     :clozure
     :clozure-common-lisp
     :ansi-cl
