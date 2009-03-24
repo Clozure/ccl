@@ -1394,7 +1394,7 @@ Boolean
 check_x86_cpu()
 {
   natural eax, ebx, ecx, edx;
-  
+
   eax = cpuid(0, &ebx, &ecx, &edx);
 
   if (eax >= 1) {
@@ -1403,6 +1403,19 @@ check_x86_cpu()
     if ((X86_REQUIRED_FEATURES & edx) == X86_REQUIRED_FEATURES) {
       return true;
     }
+    /* It's very unlikely that SSE2 would be present and other things
+       that we want wouldn't.  If they don't have MMX or CMOV either,
+       might as well tell them. */
+    if ((edx & X86_FEATURE_SSE2) == 0) {
+      fprintf(dbgout, "This CPU doesn't support the SSE2 instruction set\n");
+    }
+    if ((edx & X86_FEATURE_MMX) == 0) {
+      fprintf(dbgout, "This CPU doesn't support the MMX instruction set\n");
+    }
+    if ((edx & X86_FEATURE_CMOV) == 0) {
+      fprintf(dbgout, "This CPU doesn't support the CMOV instruction\n");
+    }
+    
   }
   return false;
 }
