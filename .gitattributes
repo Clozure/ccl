@@ -187,6 +187,7 @@ examples/cocoa/easygui/example/tiny.lisp -text
 examples/cocoa/easygui/example/view-hierarchy.lisp -text
 examples/cocoa/easygui/new-cocoa-bindings.lisp -text
 examples/cocoa/easygui/package.lisp -text
+examples/cocoa/easygui/rgb.lisp -text
 examples/cocoa/easygui/views.lisp -text
 examples/cocoa/interface-databases/HOWTO.html -text
 examples/cocoa/interface-databases/HOWTO_files/images/bosco.jpg -text
