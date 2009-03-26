@@ -25,12 +25,14 @@
   :components ((:file "package")
                (:file "new-cocoa-bindings" :depends-on ("package"))
                (:file "events" :depends-on ("new-cocoa-bindings"))
+               (:file "rgb" :depends-on ("package"))
                (:file "views" :depends-on ("events"))
                (:file "action-targets" :depends-on ("views"))
                (:file "dialogs" :depends-on ("new-cocoa-bindings"))
                (:module "example"
-                        :depends-on ("action-targets")
+                        :depends-on ("action-targets" "dialogs" "rgb")
                         :components
                         ((:file "tiny")
                          (:file "currency-converter")
-                         (:file "view-hierarchy")))))
+                         (:file "view-hierarchy")
+                         (:file "extended-demo")))))
