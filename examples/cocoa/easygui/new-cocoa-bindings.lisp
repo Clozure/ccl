@@ -119,13 +119,21 @@ has left BODY."
 
 ;;; debug macro for #/ funcalls:
 
-(defvar *debug-cocoa-calls* t)
+(defvar *debug-cocoa-calls* nil)
+;; Default changed to NIL by arthur, March 2009
+
+(defparameter *cocoa-pause* nil
+"When *debug-cocoa-calls* is not NIL, then a numeric value of *cocoa-pause* causes
+some sleep after every message produced by the DCC macro. Useful if something is
+causing a crash. During development it happened to me :-(")
 
 (defmacro dcc (form)
+;; Trace output identifies process, and may pause: arthur, March 2009
   `(progn
      (when *debug-cocoa-calls*
-       (format *trace-output* "Calling ~A on ~S~%"
-               ',(first form) (list ,@(rest form))))
+       (format *trace-output* "[~a]Calling ~A on ~S~%"
+               (ccl::process-serial-number ccl::*current-process*) ',(first form) (list ,@(rest form)))
+       (when (and *cocoa-pause* (numberp *cocoa-pause*)) (sleep *cocoa-pause*)))
      ,form))
 
 ;;; Running things on the main thread:
