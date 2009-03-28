@@ -104,7 +104,7 @@ local_label(misc_ref_jmp):
         /* 20-2f  */
         .long local_label(misc_ref_invalid) /* 20 even_fixnum  */
         .long local_label(misc_ref_invalid) /* 21 cons  */
-        .long local_label(misc_ref_invalid) /* 22 catch_frame  */
+        .long local_label(misc_ref_node) /* 22 catch_frame  */
         .long local_label(misc_ref_invalid) /* 23 imm  */
         .long local_label(misc_ref_invalid) /* 24 odd_fixnum  */
         .long local_label(misc_ref_invalid) /* 25 tra  */
@@ -121,7 +121,7 @@ local_label(misc_ref_jmp):
         /* 30-3f  */
         .long local_label(misc_ref_invalid) /* 30 even_fixnum  */
         .long local_label(misc_ref_invalid) /* 31 cons  */
-        .long local_label(misc_ref_invalid) /* 32 nodeheader  */
+        .long local_label(misc_ref_node) /* 32 basic_stream  */
         .long local_label(misc_ref_invalid) /* 33 imm  */
         .long local_label(misc_ref_invalid) /* 34 odd_fixnum  */
         .long local_label(misc_ref_invalid) /* 35 tra  */
@@ -528,7 +528,7 @@ local_label(misc_set_jmp):
         /* 20-2f  */
         .long local_label(misc_set_invalid) /* 20 even_fixnum  */
         .long local_label(misc_set_invalid) /* 21 cons  */
-        .long local_label(misc_set_invalid) /* 22 catch_frame  */
+        .long _SPgvset /* 22 catch_frame  */
         .long local_label(misc_set_invalid) /* 23 imm  */
         .long local_label(misc_set_invalid) /* 24 odd_fixnum  */
         .long local_label(misc_set_invalid) /* 25 tra  */
@@ -545,7 +545,7 @@ local_label(misc_set_jmp):
         /* 30-3f  */
         .long local_label(misc_set_invalid) /* 30 even_fixnum  */
         .long local_label(misc_set_invalid) /* 31 cons  */
-        .long local_label(misc_set_invalid) /* 32 nodeheader  */
+        .long _SPgvset /* 32 basic_stream  */
         .long local_label(misc_set_invalid) /* 33 imm  */
         .long local_label(misc_set_invalid) /* 34 odd_fixnum  */
         .long local_label(misc_set_invalid) /* 35 tra  */
