@@ -262,7 +262,7 @@
                                         (setq index base base nil)))
                                     (if (not (or disp base index))
                                       (setq disp (simplify-simple-operand head))
-                                      (error "~s not expected in ~s"  op)))))
+                                      (error "~s not expected in ~s" head op)))))
                                (if (and (null (cdr form))
                                         (or disp base index))
                                  (progn
@@ -271,7 +271,7 @@
                                      (setq index base base nil)))
                                  (if (not (or disp base index))
                                    (setq disp (simplify-simple-operand head))
-                                   (error "~s not expected in ~s"  op))))))))
+                                   (error "~s not expected in ~s" head op))))))))
                      (simplify-operand (op)
                        (cond ((atom op)
                               (simplify-simple-operand op))

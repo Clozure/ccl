@@ -2777,7 +2777,7 @@ defcallback returns the callback pointer, e.g., the value of name."
     (setq stream-symbol '*standard-output*))
   (when (and prefixp per-line-prefix-p)
     (warn "prefix ~S and per-line-prefix ~S cannot both be specified ~
-           in PPRINT-LOGICAL-BLOCK")
+           in PPRINT-LOGICAL-BLOCK" prefix per-line-prefix)
     (setq per-line-prefix nil))
   `(let ((*logical-block-p* t))
      (maybe-initiate-xp-printing

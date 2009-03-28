@@ -987,7 +987,8 @@
                    :report (lambda (s)
                              (if (= 1 (length other-functions))
                                (format s "Apply ~s to ~S this time." (first other-functions) args)
-                               (format s "Apply one of ~{~S or ~} to ~S this time.")))
+                               (format s "Apply one of ~{~S or ~} to ~S this time."
+                                       other-functions args)))
                    :interactive (lambda ()
                                   (if (= 1 (length other-functions))
                                     other-functions

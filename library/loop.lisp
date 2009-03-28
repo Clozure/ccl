@@ -1910,7 +1910,7 @@ collected result will be returned as the value of the LOOP."
   (check-type which (member hash-key hash-value))
   (cond ((or (cdr prep-phrases) (not (member (caar prep-phrases) '(:in :of))))
 	 (loop-error "Too many prepositions!"))
-	((null prep-phrases) (loop-error "Missing OF or IN in ~S iteration path.")))
+	((null prep-phrases) (loop-error "Missing OF or IN in iteration path." )))
   (let ((ht-var (loop-gentemp 'loop-hashtab-))
 	(next-fn (loop-gentemp 'loop-hashtab-next-))
 	(dummy-predicate-var nil)

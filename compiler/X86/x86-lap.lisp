@@ -669,7 +669,7 @@
             ;; A segment register - if present - must be first
             (if (eq f form)
               (setq seg (svref x86::*x86-seg-entries* (x86::reg-entry-reg-num r))) 
-              (error "Segment register ~s not valid in ~s" form))
+              (error "Segment register ~s not valid in ~s" head form))
             ;; Some other register.  Assume base if this is the
             ;; first gpr.  If we find only one gpr and a significant
             ;; scale factor, make that single gpr be the index.
