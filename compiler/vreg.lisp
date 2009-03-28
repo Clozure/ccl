@@ -281,7 +281,7 @@
 	       (use-node-temp vreg-value)
 	       (when result-p (note-vinsn-sets-gpr vinsn vreg-value)))))
           (unless (or (eq class 't) (vreg-ok-for-storage-class vreg class))
-            (warn "~s was expected to have storage class matching specifier ~s" class))
+            (warn "~s was expected to have storage class matching specifier ~s" vreg class))
           (when value
             (if (atom value)
               (match-vreg-value vreg-value value)

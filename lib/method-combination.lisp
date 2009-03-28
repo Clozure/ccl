@@ -683,7 +683,7 @@
       (case (car o-tail)
         (:most-specific-last)
         (:most-specific-first (setf (car res-tail) (nreverse (car res-tail))))
-        (t (error "~s is neither ~s nor ~s" :most-specific-first :most-specific-last)))
+        (t (error "~s is neither ~s nor ~s" (car o-tail) :most-specific-first :most-specific-last)))
       (when (car r-tail)
         (unless (car res-tail)
           ; should use DESCRIPTIONS here

@@ -679,7 +679,7 @@
       (error "~s is not a subtype of ~s." method-class *method-class*)))
   (when declarations
     (unless (list-length declarations)
-      (error "~s is not a proper list")))
+      (error "~s is not a proper list" declarations)))
   ;; Fix APO, lambda-list
   (if apo-p
     (if (not ll-p)
