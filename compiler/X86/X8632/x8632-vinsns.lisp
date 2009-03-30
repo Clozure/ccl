@@ -53,7 +53,7 @@
 (define-x8632-vinsn misc-ref-c-double-float  (((dest :double-float))
                                               ((v :lisp)
 					       (idx :s32const)))
-  (movsd (:@ (:apply + x8632::misc-dfloat-offset (:apply ash idx x8632::word-shift)) (:%l v)) (:%xmm dest)))
+  (movsd (:@ (:apply + x8632::misc-dfloat-offset (:apply ash idx 3)) (:%l v)) (:%xmm dest)))
 
 (define-x8632-vinsn misc-ref-node  (((dest :lisp))
                                     ((v :lisp)
