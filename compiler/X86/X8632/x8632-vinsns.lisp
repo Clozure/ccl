@@ -1436,8 +1436,27 @@
 ;;; Extract a double-float value, typechecking in the process.
 ;;; IWBNI we could simply call the "trap-unless-typecode=" vinsn here,
 ;;; instead of replicating it ..
-;;; get-double?
+(define-x8632-vinsn get-double? (((target :double-float))
+				 ((source :lisp))
+				 ((tag :u8)))
+  :resume
+  (movl (:%l source) (:%l tag))
+  ((:pred = (:apply %hard-regspec-value tag) x8632::eax)
+   (andl (:$b x8632::tagmask) (:%accl tag))
+   (cmpl (:$b x8632::tag-misc) (:%accl tag)))
+  ((:pred > (:apply %hard-regspec-value tag) x8632::eax)
+   (andl (:$b x8632::tagmask) (:%l tag))
+   (cmpl (:$b x8632::tag-misc) (:%l tag)))
+  (jne :have-tag)
+  (movsbl (:@ x8632::misc-subtag-offset (:%l source)) (:%l tag))
+  :have-tag
+  (cmpl (:$b x8632::subtag-double-float) (:%l tag))
+  (jne :bad)
+  (movsd (:@  x8632::double-float.value (:%l source)) (:%xmm target))
 
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-tag (:%q source) (:$ub x8632::subtag-double-float))))
 
 (define-x8632-vinsn copy-double-float (((dest :double-float))
                                        ((src :double-float)))
