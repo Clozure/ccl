@@ -1193,7 +1193,21 @@
     (simple-array single-float (* * *))
     (simple-array double-float (* * *))
     (simple-array char (* * *))
-    
+
+    (vector t)
+    bit-vector
+    (vector (signed-byte 8))
+    (vector (unsigned-byte 8))
+    (vector (signed-byte 16))
+    (vector (unsigned-byte 16))
+    (vector (signed-byte 32))
+    (vector (unsigned-byte 32))
+    (vector (signed-byte 64))
+    (vector (unsigned-byte 64))
+    (vector fixnum)
+    (vector single-float)
+    (vector double-float)
+
     ))
 
 
