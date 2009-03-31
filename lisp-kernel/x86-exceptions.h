@@ -93,6 +93,7 @@ pthread_mutex_t *mach_exception_lock;
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define xpPC(x) xpGPR(x,Iip)
 #define eflags_register(xp) xp->EFlags
+#define xpMXCSRptr(x) (DWORD *)(&(x->MxCsr))
 #else
 #define xpGPRvector(x) ((DWORD *)(&(x)->Edi))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
