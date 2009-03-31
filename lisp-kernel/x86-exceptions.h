@@ -100,6 +100,7 @@ pthread_mutex_t *mach_exception_lock;
 #define eflags_register(xp) xp->EFlags
 #define xpFPRvector(x) ((natural *)(&(x->ExtendedRegisters[10*16])))
 #define xpMMXreg(x,n)  (*((u64_t *)(&(x->FloatSave.RegisterArea[10*(n)]))))
+#define xpMXCSRptr(x) (DWORD *)(&(x->ExtendedRegisters[24]))
 #endif
 #endif
 

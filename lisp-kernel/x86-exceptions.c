@@ -1820,10 +1820,46 @@ CALLBACK ControlEventHandler(DWORD event)
   }
 }
 
+static
+DWORD mxcsr_bit_to_fpe_code[] = {
+  EXCEPTION_FLT_INVALID_OPERATION, /* ie */
+  0,                            /* de */
+  EXCEPTION_FLT_DIVIDE_BY_ZERO, /* ze */
+  EXCEPTION_FLT_OVERFLOW,       /* oe */
+  EXCEPTION_FLT_UNDERFLOW,      /* ue */
+  EXCEPTION_FLT_INEXACT_RESULT  /* pe */
+};
+
+#ifndef STATUS_FLOAT_MULTIPLE_FAULTS
+#define STATUS_FLOAT_MULTIPLE_FAULTS 0xc00002b4
+#endif
+
+#ifndef STATUS_FLOAT_MULTIPLE_TRAPS
+#define  STATUS_FLOAT_MULTIPLE_TRAPS 0xc00002b5
+#endif
+
 int
-map_windows_exception_code_to_posix_signal(DWORD code)
+map_windows_exception_code_to_posix_signal(DWORD code, siginfo_t *info, ExceptionInformation *context)
 {
   switch (code) {
+#ifdef WIN_32
+  case STATUS_FLOAT_MULTIPLE_FAULTS:
+  case STATUS_FLOAT_MULTIPLE_TRAPS:
+    {
+      int xbit, maskbit;
+      DWORD mxcsr = *(xpMXCSRptr(context));
+
+      for (xbit = 0, maskbit = MXCSR_IM_BIT; xbit < 6; xbit++, maskbit++) {
+        if ((mxcsr & (1 << xbit)) &&
+            !(mxcsr & (1 << maskbit))) {
+          info->ExceptionCode = mxcsr_bit_to_fpe_code[xbit];
+          break;
+        }
+      }
+    }
+    return SIGFPE;
+#endif
+      
   case EXCEPTION_ACCESS_VIOLATION:
     return SIGSEGV;
   case EXCEPTION_FLT_DENORMAL_OPERAND:
@@ -1859,7 +1895,7 @@ windows_exception_handler(EXCEPTION_POINTERS *exception_pointers, TCR *tcr)
   old_valence = prepare_to_wait_for_exception_lock(tcr, context);
   wait_for_exception_lock_in_handler(tcr, context, &xframes);
 
-  signal_number = map_windows_exception_code_to_posix_signal(code);
+  signal_number = map_windows_exception_code_to_posix_signal(code, info, context);
   
   if (!handle_exception(signal_number, info, context, tcr, old_valence)) {
     char msg[512];

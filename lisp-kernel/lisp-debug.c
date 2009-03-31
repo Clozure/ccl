@@ -874,7 +874,7 @@ debug_show_fpu(ExceptionInformation *xp, siginfo_t *info, int arg)
 	  xp->uc_mcontext.fpregs.fp_reg_set.fpchip_state.xstatus
 #endif
 #ifdef WINDOWS
-	  0 /* XXX: get from somewhere */
+          *(xpMXCSRptr(xp))
 #endif
           );
 #endif  
