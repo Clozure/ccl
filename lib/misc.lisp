@@ -694,16 +694,24 @@ are running on, or NIL if we can't find any useful information."
 			    (< value (length list)))
 		       (return-from get-answer (list (nth value list))))))))))))
 
+(defvar *choose-file-dialog-hook* nil "for GUIs")
+
 ;;; There should ideally be some way to override the UI (such as
 ;;; it is ...) here.
 ;;; More generally, this either
 ;;;   a) shouldn't exist, or
 ;;;   b) should do more sanity-checking
 (defun choose-file-dialog (&key file-types (prompt "File name:"))
-  (%choose-file-dialog t prompt file-types))
+  (let* ((hook *choose-file-dialog-hook*))
+    (if hook
+      (funcall hook t prompt file-types)
+      (%choose-file-dialog t prompt file-types))))
 
 (defun choose-new-file-dialog (&key prompt)
-  (%choose-file-dialog nil prompt nil))
+  (let* ((hook *choose-file-dialog-hook*))
+    (if hook
+      (funcall hook nil prompt nil)
+      (%choose-file-dialog nil prompt nil))))
 
 (defun %choose-file-dialog (must-exist prompt file-types)
   (loop
