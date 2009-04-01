@@ -844,6 +844,43 @@
            res))
         (t (error "~S can't be coerced to type ~S." object output-type-spec))))))
 
+(defun %coerce-to-string (seq)
+   (let* ((len (length seq))
+          (string (make-string len)))
+     (declare (fixnum len) (simple-base-string string))
+     (if (typep seq 'list)
+       (do* ((l seq (cdr l))
+             (i 0 (1+ i)))
+            ((null l) string)
+         (declare (list l) ; we know that it's a proper list because LENGTH won
+                  (fixnum i))
+         (setf (schar string i) (car l)))
+       (dotimes (i len string)
+         (setf (schar string i) (aref seq i))))))
+
+(defun %coerce-to-vector (seq subtype)
+   (let* ((len (length seq))
+          (vector (%alloc-misc len subtype)))
+     (declare (fixnum len) (type (simple-array * (*)) vector))
+     (if (typep seq 'list)
+       (do* ((l seq (cdr l))
+             (i 0 (1+ i)))
+            ((null l) vector)
+         (declare (list l) ; we know that it's a proper list because LENGTH won
+                  (fixnum i))
+         (setf (uvref vector i) (car l)))
+       (dotimes (i len vector)
+         (setf (uvref vector i) (aref seq i))))))
+
+(defun %coerce-to-list (seq)
+  (if (typep seq 'list)
+    seq
+    (collect ((result))
+      (dotimes (i (length seq) (result))
+        (result (aref seq i))))))
+
+
+
 
 (defun coerce-to-complex (object  output-type-spec)
   (if (consp output-type-spec)
