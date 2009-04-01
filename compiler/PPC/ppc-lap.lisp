@@ -253,7 +253,7 @@
           (let* ((opvals (lap-instruction-parsed-operands insn))
                  (pos (position label opvals)))
             (unless pos
-              (error "Bug: label ~s should be referenced by instruction ~s, but isn't."))
+              (error "Bug: label ~s should be referenced by instruction ~s, but isn't." label insn))
             (setf (svref opvals pos) diff)))))))
 
 (defun ppc-lap-generate-instruction (code-vector index insn)
