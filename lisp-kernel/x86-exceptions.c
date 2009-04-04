@@ -865,25 +865,27 @@ handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valenc
   BytePtr addr = (BytePtr) info->si_addr;
 #endif
 #endif
+  Boolean valid = IS_PAGE_FAULT(info,xp);
 
-
-  if (addr && (addr == tcr->safe_ref_address)) {
-    xpGPR(xp,Iimm0) = 0;
-    xpPC(xp) = xpGPR(xp,Ira0);
-    return true;
-  } else {
-    protected_area *a = find_protected_area(addr);
-    protection_handler *handler;
-
-    if (a) {
-      handler = protection_handlers[a->why];
-      return handler(xp, a, addr);
+  if (valid) {
+    if (addr && (addr == tcr->safe_ref_address)) {
+      xpGPR(xp,Iimm0) = 0;
+      xpPC(xp) = xpGPR(xp,Ira0);
+      return true;
     } else {
-      if ((addr >= readonly_area->low) &&
-          (addr < readonly_area->active)) {
-        UnProtectMemory((LogicalAddress)(truncate_to_power_of_2(addr,log2_page_size)),
-                        page_size);
-        return true;
+      protected_area *a = find_protected_area(addr);
+      protection_handler *handler;
+      
+      if (a) {
+        handler = protection_handlers[a->why];
+        return handler(xp, a, addr);
+      } else {
+        if ((addr >= readonly_area->low) &&
+            (addr < readonly_area->active)) {
+          UnProtectMemory((LogicalAddress)(truncate_to_power_of_2(addr,log2_page_size)),
+                          page_size);
+          return true;
+        }
       }
     }
   }
@@ -893,7 +895,7 @@ handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valenc
     if ((fulltag_of(cmain) == fulltag_misc) &&
       (header_subtag(header_of(cmain)) == subtag_macptr)) {
       xcf = create_exception_callback_frame(xp, tcr);
-      callback_to_lisp(tcr, cmain, xp, xcf, SIGBUS, is_write_fault(xp,info), (natural)addr, 0);
+      callback_to_lisp(tcr, cmain, xp, xcf, SIGBUS, valid ? is_write_fault(xp,info) : (natural)-1, valid ? (natural)addr : 0, 0);
     }
   }
   return false;
@@ -1092,16 +1094,7 @@ handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TC
       }
 
     } else {
-      if (old_valence == TCR_STATE_LISP) {
-        LispObj cmain = nrs_CMAIN.vcell,
-          xcf;
-        if ((fulltag_of(cmain) == fulltag_misc) &&
-            (header_subtag(header_of(cmain)) == subtag_macptr)) {
-          xcf = create_exception_callback_frame(context, tcr);
-          callback_to_lisp(tcr, cmain, context, xcf, SIGBUS, (natural)-1,0, 0);
-        }
-      }
-      return false;
+      return handle_fault(tcr, context, info, old_valence);
     }
     break;
 
