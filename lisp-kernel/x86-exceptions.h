@@ -169,6 +169,7 @@ typedef enum {
 #ifdef LINUX
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV
 #define IS_MAYBE_INT_TRAP(info,xp) ((xpGPR(xp,REG_TRAPNO)==0xd)&&((xpGPR(xp,REG_ERR)&7)==2))
+#define IS_PAGE_FAULT(info,xp) (xpGPR(xp,REG_TRAPNO)==0xe)
 #define SIGRETURN(context)
 #endif
 
@@ -176,12 +177,14 @@ typedef enum {
 extern void freebsd_sigreturn(ExceptionInformation *);
 #define SIGNUM_FOR_INTN_TRAP SIGBUS
 #define IS_MAYBE_INT_TRAP(info,xp) ((xp->uc_mcontext.mc_trapno == T_PROTFLT) && ((xp->uc_mcontext.mc_err & 7) == 2))
+#define IS_PAGE_FAULT(info,xp) (xp->uc_mcontext.mc_trapno == T_PAGEFLT)
 #define SIGRETURN(context) freebsd_sigreturn(context)
 #endif
 
 #ifdef DARWIN
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV /* Not really, but our Mach handler fakes that */
-#define IS_MAYBE_INT_TRAP(info,xp) ((UC_MCONTEXT(xp)->es.trapno == 0xd) && (((UC_MCONTEXT(xp)->es.err)&7)==2))
+#define IS_MAYBE_INT_TRAP(info,xp) ((UC_MCONTEXT(xp)->__es.trapno == 0xd) && (((UC_MCONTEXT(xp)->__es.err)&7)==2))
+#define IS_PAGE_FAULT(info,xp) (UC_MCONTEXT(xp)->__es.trapno == 0xe)
 /* The x86 version of sigreturn just needs the context argument; the
    hidden, magic "flavor" argument that sigtramp uses is ignored. */
 #define SIGRETURN(context) DarwinSigReturn(context)
@@ -191,8 +194,10 @@ extern void freebsd_sigreturn(ExceptionInformation *);
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV
 #ifdef X8664
 #define IS_MAYBE_INT_TRAP(info,xp) ((xpGPR(xp,REG_TRAPNO)==0xd)&&((xpGPR(xp,REG_ERR)&7)==2))
+#define IS_MAYBE_INT_TRAP(info,xp) (xpGPR(xp,REG_TRAPNO)==0xe)
 #else
 #define IS_MAYBE_INT_TRAP(info,xp) ((xpGPR(xp,TRAPNO)==0xd)&&((xpGPR(xp,ERR)&7)==2))
+#define IS_PAGE_FAULT(info,xp) (xpGPR(xp,TRAPNO)==0xe)
 #endif
 #define SIGRETURN(context) setcontext(context)
 #endif
@@ -203,6 +208,7 @@ extern void freebsd_sigreturn(ExceptionInformation *);
   ((info->ExceptionCode == EXCEPTION_ACCESS_VIOLATION) &&       \
    (info->ExceptionInformation[0]==0) &&                       \
    (info->ExceptionInformation[1]==(ULONG_PTR)(-1L)))
+#define IS_PAGE_FAULT(info,xp) (1)
 #define SIGRETURN(context)      /* for now */
 #endif
 
