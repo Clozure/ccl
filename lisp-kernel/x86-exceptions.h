@@ -194,7 +194,7 @@ extern void freebsd_sigreturn(ExceptionInformation *);
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV
 #ifdef X8664
 #define IS_MAYBE_INT_TRAP(info,xp) ((xpGPR(xp,REG_TRAPNO)==0xd)&&((xpGPR(xp,REG_ERR)&7)==2))
-#define IS_MAYBE_INT_TRAP(info,xp) (xpGPR(xp,REG_TRAPNO)==0xe)
+#define IS_PAGE_FAULT(info,xp) (xpGPR(xp,REG_TRAPNO)==0xe)
 #else
 #define IS_MAYBE_INT_TRAP(info,xp) ((xpGPR(xp,TRAPNO)==0xd)&&((xpGPR(xp,ERR)&7)==2))
 #define IS_PAGE_FAULT(info,xp) (xpGPR(xp,TRAPNO)==0xe)
