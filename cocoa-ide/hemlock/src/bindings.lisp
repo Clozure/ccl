@@ -324,8 +324,8 @@
 
 ;;;; Listener and Editor Modes.
 (bind-key "Confirm Listener Input" #k"return" :mode "Listener")
+(bind-key "Confirm Listener Input" #k"shift-return" :mode "Listener")
 (bind-key "Previous Interactive Input" #k"meta-p" :mode "Listener")
-
 (bind-key "Search Previous Interactive Input" #k"meta-P" :mode "Listener")
 (bind-key "Next Interactive Input" #k"meta-n" :mode "Listener")
 (bind-key "Kill Interactive Input" #k"meta-i" :mode "Listener")
@@ -432,6 +432,7 @@
 
 (bind-key "Open Line" #k"Control-o")
 (bind-key "New Line" #k"return")
+(bind-key "New Line" #k"shift-return")
 
 (bind-key "Transpose Words" #k"meta-t")
 (bind-key "Transpose Lines" #k"control-x control-t")
