@@ -168,20 +168,20 @@ typedef enum {
 
 #ifdef LINUX
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV
-#define IS_MAYBE_INT_TRAP(info,xp) (((info->si_code) &0x7f) == 0)
+#define IS_MAYBE_INT_TRAP(info,xp) ((xpGPR(xp,REG_TRAPNO)==0xd)&&((xpGPR(xp,REG_ERR)&7)==2))
 #define SIGRETURN(context)
 #endif
 
 #ifdef FREEBSD
 extern void freebsd_sigreturn(ExceptionInformation *);
 #define SIGNUM_FOR_INTN_TRAP SIGBUS
-#define IS_MAYBE_INT_TRAP(info,xp) (xp->uc_mcontext.mc_trapno == T_PROTFLT)
+#define IS_MAYBE_INT_TRAP(info,xp) ((xp->uc_mcontext.mc_trapno == T_PROTFLT) && ((xp->uc_mcontext.mc_err & 7) == 2))
 #define SIGRETURN(context) freebsd_sigreturn(context)
 #endif
 
 #ifdef DARWIN
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV /* Not really, but our Mach handler fakes that */
-#define IS_MAYBE_INT_TRAP(info,xp) (info->si_code == EXC_I386_GPFLT)
+#define IS_MAYBE_INT_TRAP(info,xp) ((UC_MCONTEXT(xp)->es.trapno == 0xd) && (((UC_MCONTEXT(xp)->es.err)&7)==2))
 /* The x86 version of sigreturn just needs the context argument; the
    hidden, magic "flavor" argument that sigtramp uses is ignored. */
 #define SIGRETURN(context) DarwinSigReturn(context)
