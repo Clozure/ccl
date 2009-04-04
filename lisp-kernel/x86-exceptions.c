@@ -1092,7 +1092,16 @@ handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TC
       }
 
     } else {
-      return handle_fault(tcr, context, info, old_valence);
+      if (old_valence == TCR_STATE_LISP) {
+        LispObj cmain = nrs_CMAIN.vcell,
+          xcf;
+        if ((fulltag_of(cmain) == fulltag_misc) &&
+            (header_subtag(header_of(cmain)) == subtag_macptr)) {
+          xcf = create_exception_callback_frame(context, tcr);
+          callback_to_lisp(tcr, cmain, context, xcf, SIGBUS, (natural)-1,0, 0);
+        }
+      }
+      return false;
     }
     break;
 
