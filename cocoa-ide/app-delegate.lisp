@@ -151,3 +151,31 @@
   (when (zerop *cocoa-listener-count*)
     (#/newListener: self app)
     t))
+
+(objc:defmethod (#/loadFile: :void) ((self lisp-application-delegate) sender)
+  (declare (ignore sender))
+  (let ((filename (cocoa-choose-file-dialog
+		   :button-string "Load"
+		   :file-types (list (pathname-type *.lisp-pathname*)
+				     (pathname-type *.fasl-pathname*)))))
+    (when filename
+      (#/ensureListener: self nil)
+      (let* ((doc (#/topListener hemlock-listener-document))
+	     (process (hemlock-document-process doc)))
+	(process-interrupt process #'(lambda ()
+				       (load filename)
+				       (fresh-line)))))))
+
+(objc:defmethod (#/compileFile: :void) ((self lisp-application-delegate) sender)
+  (declare (ignore sender))
+  (let ((filename (cocoa-choose-file-dialog
+		   :button-string "Compile"
+		   :file-types (list (pathname-type *.lisp-pathname*)))))
+    (when filename
+      (#/ensureListener: self nil)
+      (let* ((doc (#/topListener hemlock-listener-document))
+	     (process (hemlock-document-process doc)))
+	(process-interrupt process #'(lambda ()
+				       (compile-file filename)
+				       (fresh-line)))))))
+

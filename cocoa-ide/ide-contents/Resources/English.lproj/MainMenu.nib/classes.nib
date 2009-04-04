@@ -28,6 +28,8 @@
 				<string>id</string>
 				<key>compileBuffer</key>
 				<string>id</string>
+				<key>compileFile</key>
+				<string>id</string>
 				<key>continue</key>
 				<string>id</string>
 				<key>evalSelection</key>
@@ -41,6 +43,8 @@
 				<key>interrupt</key>
 				<string>id</string>
 				<key>loadBuffer</key>
+				<string>id</string>
+				<key>loadFile</key>
 				<string>id</string>
 				<key>newListener</key>
 				<string>id</string>
