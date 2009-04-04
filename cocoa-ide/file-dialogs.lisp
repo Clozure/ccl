@@ -2,7 +2,7 @@
 
 ;;;; MCL-ish file dialogs
 
-(defun %cocoa-choose-file-dialog (directory file-types file)
+(defun %cocoa-choose-file-dialog (directory file-types file button-string)
   (assume-cocoa-thread)
   (let* ((open-panel (#/openPanel ns:ns-open-panel))
          (types-array +null-ptr+))
@@ -19,6 +19,8 @@
           (#/addObject: types-array s)
           (#/release s)))
       (#/autorelease types-array))
+    (when button-string
+      (#/setPrompt: open-panel (#/autorelease (%make-nsstring button-string))))
     (let ((result (#/runModalForDirectory:file:types: open-panel directory
 						      file types-array)))
       (cond ((= result #$NSOKButton)
@@ -28,7 +30,7 @@
 	    (t
 	     (error "couldn't run the open panel: error code ~d" result))))))
         
-(defun cocoa-choose-file-dialog (&key directory file-types file)
+(defun cocoa-choose-file-dialog (&key directory file-types file button-string)
   (when (and directory (not (directoryp directory)))
     (error "~s doesn't designate a directory." directory))
   (when file-types
@@ -37,7 +39,7 @@
       (error "~s is not a list of strings." file-types)))
   (when (and file (not (probe-file file)))
     (error "~s doesn't designate a file." file))
-  (execute-in-gui #'(lambda () (%cocoa-choose-file-dialog directory file-types file))))
+  (execute-in-gui #'(lambda () (%cocoa-choose-file-dialog directory file-types file button-string))))
 
 (defun %cocoa-choose-new-file-dialog (directory file-types file)
   (assume-cocoa-thread)
