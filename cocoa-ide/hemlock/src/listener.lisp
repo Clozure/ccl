@@ -474,13 +474,18 @@ between the region's start and end, and if there are no ill-formed expressions i
       (when (valid-spot point nil)      ; not in the middle of a comment
         (cond ((eql (next-character point) #\()
                (with-mark ((m point))
-                 (if (list-offset m 1)
+                 (if (form-offset m 1)
                    (eval-region (region point m)))))
               ((eql (previous-character point) #\))
                (with-mark ((m point))
-                 (if (list-offset m -1)
-                   (eval-region (region m point))))))))))
-           
+                 (if (form-offset m -1)
+                   (eval-region (region m point)))))
+	      (t
+	       (with-mark ((start point)
+			   (end point))
+		 (when (mark-symbol start end)
+		   (eval-region (region start end))))))))))
+
 (defcommand "Editor Re-evaluate Defvar" (p)
   "Evaluate the current or next top-level form if it is a DEFVAR.  Treat the
    form as if the variable is not bound.  This occurs in the editor Lisp."
