@@ -90,7 +90,14 @@
   (:report (lambda (c s)
              (with-slots (address write-p) c
                (format s "Fault during ~a memory address #x~x" (if write-p "write to" "read of") address)))))
-  
+
+(define-condition invalid-memory-operation (storage-condition)
+  ()
+  (:report (lambda (c s)
+             (declare (ignore c))
+             (format s "Invalid memory operation."))))
+
+
 (define-condition type-error (error)
   ((datum :initarg :datum)
    (expected-type :initarg :expected-type :reader type-error-expected-type)
