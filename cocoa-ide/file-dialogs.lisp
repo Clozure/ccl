@@ -9,9 +9,9 @@
     ;; Maybe support multiple file selection later.
     (#/setAllowsMultipleSelection: open-panel #$NO)
     (when directory
-      (setq directory (#/autorelease (%make-nsstring (namestring directory)))))
+      (setq directory (#/autorelease (%make-nsstring directory))))
     (when file
-      (setq file (#/autorelease (%make-nsstring (namestring file)))))
+      (setq file (#/autorelease (%make-nsstring file))))
     (when file-types
       (setq types-array (make-instance 'ns:ns-mutable-array))
       (dolist (type file-types)
@@ -31,14 +31,15 @@
 	     (error "couldn't run the open panel: error code ~d" result))))))
         
 (defun cocoa-choose-file-dialog (&key directory file-types file button-string)
-  (when (and directory (not (directoryp directory)))
-    (error "~s doesn't designate a directory." directory))
+  (when directory
+    (setq directory (directory-namestring directory)))
   (when file-types
     (unless (and (listp file-types)
 		 (every #'stringp file-types))
       (error "~s is not a list of strings." file-types)))
-  (when (and file (not (probe-file file)))
-    (error "~s doesn't designate a file." file))
+  (when file
+    (setq file (file-namestring file)))
+  (check-type button-string (or null string))
   (execute-in-gui #'(lambda () (%cocoa-choose-file-dialog directory file-types file button-string))))
 
 (defun %cocoa-choose-new-file-dialog (directory file-types file)
@@ -47,9 +48,9 @@
          (types-array +null-ptr+))
     (#/setCanSelectHiddenExtension: save-panel t)
     (when directory
-      (setq directory (#/autorelease (%make-nsstring (namestring directory)))))
+      (setq directory (#/autorelease (%make-nsstring directory))))
     (when file
-      (setq file (#/autorelease (%make-nsstring (namestring file)))))
+      (setq file (#/autorelease (%make-nsstring file))))
     (when file-types
       (setq types-array (make-instance 'ns:ns-mutable-array))
       (dolist (type file-types)
@@ -67,14 +68,14 @@
 	     (error "couldn't run the save panel: error code ~d" result))))))
 
 (defun cocoa-choose-new-file-dialog (&key directory file-types file)
-  (when (and directory (not (directoryp directory)))
-    (error "~s doesn't designate a directory." directory))
+  (when directory
+    (setq directory (directory-namestring directory)))
+  (when file
+    (setq file (file-namestring file)))
   (when file-types
     (unless (and (listp file-types)
 		 (every #'stringp file-types))
       (error "~s is not a list of strings." file-types)))
-  (when (and file (not (probe-file file)))
-    (error "~s doesn't designate a file." file))
   (execute-in-gui #'(lambda () (%cocoa-choose-new-file-dialog directory file-types file))))
 
 (defun cocoa-choose-file-dialog-hook-function (must-exist prompt file-types)
@@ -94,7 +95,7 @@
     (#/setTitle: open-panel #@"Choose Directory")
     (#/setPrompt: open-panel #@"Choose")
     (when directory
-      (setq directory (#/autorelease (%make-nsstring (namestring directory)))))
+      (setq directory (#/autorelease (%make-nsstring directory))))
     (let  ((result (#/runModalForDirectory:file:types: open-panel directory
 						       nil nil)))
       (cond ((= result #$NSOKButton)
@@ -106,6 +107,6 @@
 	     (error "couldn't run the open panel: error code ~d" result))))))
 
 (defun cocoa-choose-directory-dialog (&key directory)
-  (when (and directory (not (directoryp directory)))
-    (error "~s doesn't designate a directory." directory))
+  (when directory
+    (setq directory (directory-namestring directory)))
   (execute-in-gui #'(lambda () (%cocoa-choose-directory-dialog directory))))
