@@ -2163,6 +2163,12 @@ Or something. Right? ~s ~s" var varbits))
 
 )
 
+(defun nx-source-note (form &aux (source-notes *nx-source-note-map*))
+  (when source-notes
+    (when (or (consp form) (vectorp form) (pathnamep form))
+      (let ((note (gethash form source-notes)))
+        (unless (listp note) note)))))
+
 (defun nx-transform (form &optional (environment *nx-lexical-environment*) (source-note-map *nx-source-note-map*))
   (macrolet ((form-changed (form)
                `(progn

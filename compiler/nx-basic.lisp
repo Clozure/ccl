@@ -55,12 +55,6 @@
     (setf (gethash acode *nx-acode-note-map*) note)))
 
 
-(defun nx-source-note (form &aux (source-notes *nx-source-note-map*))
-  (when source-notes
-    (when (or (consp form) (vectorp form) (pathnamep form))
-      (let ((note (gethash form source-notes)))
-        (unless (listp note) note)))))
-
 (defstruct (code-note (:constructor %make-code-note))
   ;; Code coverage state.  This MUST be the first slot - see nx2-code-coverage.
   code-coverage
@@ -115,7 +109,6 @@
              (setq sn (gethash original source-notes))
              (not (gethash new source-notes)))
     (setf (gethash new source-notes) sn)))
-
 
 
 (defvar *nx1-alphatizers* (make-hash-table :size 180 :test #'eq))

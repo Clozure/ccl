@@ -553,19 +553,47 @@
       (dolist (decl-spec (cdr declaration))
         (setq decl-specs (nconc decl-specs (list decl-spec)))))))
 
+(defun cheap-eval-macroexpand-1 (form env)
+  (multiple-value-bind (new win) (macroexpand-1 form env)
+    (when win
+      (note-source-transformation form new))
+    (values new win)))
+
+(defun cheap-eval-transform (original new)
+  (note-source-transformation original new)
+  new)
+
+(defun cheap-eval-function (name lambda env)
+  (multiple-value-bind (lfun warnings)
+                       (compile-named-function lambda
+                                               :name name
+                                               :env env
+                                               :function-note *loading-toplevel-location*
+                                               :keep-lambda *save-definitions*
+                                               :keep-symbols *save-local-symbols*
+                                               :source-notes *nx-source-note-map*)
+    (signal-or-defer-warnings warnings env)
+    lfun))
+
+(fset 'nx-source-note (nlambda bootstrapping-source-note (form) (declare (ignore form)) nil))
+
 (defun cheap-eval-in-environment (form env &aux sym)
   (declare (resident))
+  ;; records source locations if *nx-source-note-map* is bound by caller
+  (setq *loading-toplevel-location* (or (nx-source-note form) *loading-toplevel-location*))
   (flet ((progn-in-env (body&decls parse-env base-env)
            (multiple-value-bind (body decls) (parse-body body&decls parse-env)
              (setq base-env (augment-environment base-env :declare (decl-specs-from-declarations decls)))
-             (while (cdr body)
-               (cheap-eval-in-environment (pop body) base-env))
+             (loop with default-location = *loading-toplevel-location*
+               while (cdr body) as form = (pop body)
+               do (cheap-eval-in-environment form base-env)
+               do (setq *loading-toplevel-location* default-location))
              (cheap-eval-in-environment (car body) base-env))))
     (if form
       (cond ((symbolp form) 
-             (multiple-value-bind (expansion win) (macroexpand-1 form env)
+             (multiple-value-bind (expansion win) (cheap-eval-macroexpand-1 form env)
                (if win 
-                 (cheap-eval-in-environment expansion env) 
+                 (cheap-eval-in-environment expansion env)
                  (let* ((defenv (definition-environment env))
                         (constant (if defenv (assq form (defenv.constants defenv))))
                         (constval (%cdr constant)))
@@ -594,22 +622,25 @@
                       (if (and local-p (eq kind :macro))
                         (error "~s can't be used to reference lexically defined macro ~S" 'function sym)))
                     (%function (setf-function-name (%cadr sym))))
-                   (t (%make-function nil sym env))))
+                   (t (cheap-eval-function nil sym env))))
             ((eq sym 'nfunction)
              (verify-arg-count form 2 2)
-             (%make-function (%cadr form) (%caddr form) env))
+             (cheap-eval-function (%cadr form) (%caddr form) env))
             ((eq sym 'progn) (progn-in-env (%cdr form) env env))
             ((eq sym 'setq)
              (if (not (%ilogbitp 0 (list-length form)))
                (verify-arg-count form 0 0)) ;Invoke a "Too many args" error.
              (let* ((sym nil)
-                    (val nil))
+                    (val nil)
+                    (original form))
                (while (setq form (%cdr form))
                  (setq sym (require-type (pop form) 'symbol))
                  (multiple-value-bind (expansion expanded)
-                                      (macroexpand-1 sym env)
+                                      (cheap-eval-macroexpand-1 sym env)
                    (if expanded
-                     (setq val (cheap-eval-in-environment `(setf ,expansion ,(%car form)) env))
+                     (setq val (cheap-eval-in-environment
+                                (cheap-eval-transform original `(setf ,expansion ,(%car form)))
+                                env))
                      (set sym (setq val (cheap-eval-in-environment (%car form) env))))))
                val))
             ((eq sym 'eval-when)
@@ -617,7 +648,9 @@
                (when (or (memq 'eval when) (memq :execute when)) (progn-in-env body env env))))
             ((eq sym 'if)
              (destructuring-bind (test true &optional false) (%cdr form)
-               (cheap-eval-in-environment (if (cheap-eval-in-environment test env) true false) env)))
+               (setq test (let ((*loading-toplevel-location* *loading-toplevel-location*))
+                            (cheap-eval-in-environment test env)))
+               (cheap-eval-in-environment (if test true false) env)))
             ((eq sym 'locally) (progn-in-env (%cdr form) env env))
             ((eq sym 'symbol-macrolet)
 	     (multiple-value-bind (body decls) (parse-body (cddr form) env)
@@ -637,19 +670,19 @@
              (if (eq sym 'unwind-protect)
                (destructuring-bind (protected-form . cleanup-forms) (cdr form)
                  (unwind-protect
-                   (cheap-eval-in-environment protected-form env)
+                     (let ((*loading-toplevel-location* *loading-toplevel-location*))
+                       (cheap-eval-in-environment protected-form env))
                    (progn-in-env cleanup-forms env env)))
-               (funcall (%make-function nil `(lambda () (progn ,form)) env))))
+               (funcall (cheap-eval-function nil (cheap-eval-transform form `(lambda () (progn ,form))) env))))
             ((and (symbolp sym) (macro-function sym env))
-             (if (eq sym 'step)
-               (let ((*compile-definitions* nil))
-                     (cheap-eval-in-environment (macroexpand-1 form env) env))
-               (cheap-eval-in-environment (macroexpand-1 form env) env)))
+             (cheap-eval-in-environment (cheap-eval-macroexpand-1 form env) env))
             ((or (symbolp sym)
                  (and (consp sym) (eq (%car sym) 'lambda)))
-             (let ((args nil))
-               (dolist (elt (%cdr form)) (push (cheap-eval-in-environment elt env) args))
-               (apply #'call-check-regs (if (symbolp sym) sym (%make-function nil sym env))
+             (let ((args nil) (form-location *loading-toplevel-location*))
+               (dolist (elt (%cdr form))
+                 (push (cheap-eval-in-environment elt env) args)
+                 (setq *loading-toplevel-location* form-location))
+               (apply #'call-check-regs (if (symbolp sym) sym (cheap-eval-function nil sym env))
                       (nreverse args))))
             (t (signal-simple-condition 'simple-program-error "Car of ~S is not a function name or lambda-expression." form))))))
 
