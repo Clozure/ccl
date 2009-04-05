@@ -185,10 +185,12 @@ examples/cocoa/easygui/dialogs.lisp -text
 examples/cocoa/easygui/easygui.asd -text
 examples/cocoa/easygui/events.lisp -text
 examples/cocoa/easygui/example/currency-converter.lisp -text
+examples/cocoa/easygui/example/extended-demo.lisp -text
 examples/cocoa/easygui/example/tiny.lisp -text
 examples/cocoa/easygui/example/view-hierarchy.lisp -text
 examples/cocoa/easygui/new-cocoa-bindings.lisp -text
 examples/cocoa/easygui/package.lisp -text
+examples/cocoa/easygui/rgb.lisp -text
 examples/cocoa/easygui/views.lisp -text
 examples/cocoa/interface-databases/HOWTO.html -text
 examples/cocoa/interface-databases/HOWTO_files/images/bosco.jpg -text
