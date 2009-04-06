@@ -2038,7 +2038,7 @@
     <para>Create the file typetest.c, and put the following code
       into it:</para>
     <programlisting>
-#include &lt;stdio.&gt;
+#include &lt;stdio.h&gt;
 
 void
 void_void_test(void)
