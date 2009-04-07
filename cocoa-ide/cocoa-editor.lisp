@@ -781,9 +781,13 @@
 	 (lisp-string (if (> (#/length string) 0) (lisp-string-from-nsstring string)))
 	 (view (front-view-for-buffer buffer)))
     (when view
-      (hi::handle-hemlock-event view #'(lambda ()
-					 (hi:paste-characters position length
-							      lisp-string))))))
+      (let* ((edit-count (slot-value self 'edit-count)))
+        (dotimes (i edit-count) (#/endEditing self))
+        (hi::handle-hemlock-event view #'(lambda ()
+                                           (hi:paste-characters position length
+                                                                lisp-string)))
+        (dotimes (i edit-count)
+          (#/beginEditing self))))))
 
 (objc:defmethod (#/setAttributes:range: :void) ((self hemlock-text-storage)
                                                 attributes
@@ -2952,9 +2956,9 @@
           ;; of #/replaceCharactersInRange:withString: calls code that
           ;; asserts that editing isn't in progress.  Once that's
           ;; fixed, this should be fixed as well.
-          #+not-broken (#/beginEditing textstorage)
+          (#/beginEditing textstorage)
 	  (#/replaceCharactersInRange:withString: textstorage selectedrange string)
-          #+not-broken (#/endEditing self))))))
+          (#/endEditing self))))))
 
 
 (objc:defmethod (#/hyperSpecLookUp: :void)
