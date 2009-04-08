@@ -111,6 +111,9 @@
 (defun lookup-objc-protocol (name)
   (values (gethash name *objc-protocols*)))
 
+(defmacro @protocol (name)
+  `(objc-protocol-address (lookup-objc-protocol ,name)))
+
 (defun ensure-objc-classptr-resolved (classptr)
   #+apple-objc (declare (ignore classptr))
   #+gnu-objc
