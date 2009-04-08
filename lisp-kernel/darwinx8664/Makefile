@@ -21,8 +21,8 @@ MDYNAMIC_NO_PIC = $(shell ($(CC) --help -v 2>&1 | grep -q -e "-mdynamic-no-pic")
 
 VPATH = ..
 RM = /bin/rm
-LD = ld64
-
+LD = ld
+CC=gcc-4.0
 
 ### Current ld64 bugs include the claim that 0x1000 isn't a power of 2.
 ### Gosh.  I always thought that it was.  Go know, right ?
