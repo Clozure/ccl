@@ -2958,7 +2958,7 @@
           ;; fixed, this should be fixed as well.
           (#/beginEditing textstorage)
 	  (#/replaceCharactersInRange:withString: textstorage selectedrange string)
-          (#/endEditing self))))))
+          (#/endEditing textstorage))))))
 
 
 (objc:defmethod (#/hyperSpecLookUp: :void)
