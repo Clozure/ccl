@@ -5098,9 +5098,9 @@ LSCIE1:
 	.byte	0x1	/* uleb128 0x1; CIE Code Alignment Factor */
 	.byte	0x78	/* sleb128 -8; CIE Data Alignment Factor */
 	.byte	0x10	/* CIE RA Column */
-	.byte	0xb	/* uleb128 0xb; Augmentation size */
-	.byte	0x8c	/* Personality (indirect  sdata8) */
-	.quad	lisp_global(objc_2_personality)
+	.byte	0x7
+	.byte	0x9b
+	.long	___objc_personality_v0+4@GOTPCREL
 	.byte	0x10	/* LSDA Encoding (pcrel) */
 	.byte	0x10	/* FDE Encoding (pcrel) */
 	.byte	0xc	/* DW_CFA_def_cfa */
