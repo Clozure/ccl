@@ -881,7 +881,7 @@ return that address encapsulated in a MACPTR, else returns NIL."
 	  (shlib.pathname lib) nil
 	  (shlib.base lib) nil)
     (let* ((soname (shlib.soname lib))
-           (last-dot (if soname (1+ (last-dot-pos soname)))))
+           (last-dot (if soname (last-dot-pos soname))))
       (when soname
 	(with-cstrs ((soname soname))
 	  (let* ((map (block found
@@ -893,7 +893,7 @@ return that address encapsulated in a MACPTR, else returns NIL."
 			       (unless (%null-ptr-p libname)
 				 (when (or (%cstrcmp soname libname)
                                            (and last-dot
-                                                (%cnstrcmp soname libname last-dot)))
+                                                (%cnstrcmp soname libname (1+ last-dot))))
 				   (return-from found  m)))))))))
 	    (when map
 	      ;;; Sigh.  We can't reliably lookup symbols in the library
