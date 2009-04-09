@@ -437,8 +437,9 @@
 (bind-key "Transpose Lines" #k"control-x control-t")
 (bind-key "Transpose Regions" #k"control-x t")
 
-(bind-key "Uppercase Region" #k"control-x control-u")
-(bind-key "Lowercase Region" #k"control-x control-l")
+;(bind-key "Uppercase Region" #k"control-x control-u")
+;(bind-key "Lowercase Region" #k"control-x control-l")
+;(bind-key "Capitalize Region" #k"control-x control-c")
 
 (bind-key "Delete Indentation" #k"meta-^")
 (bind-key "Delete Indentation" #k"control-meta-^")
