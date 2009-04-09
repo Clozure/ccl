@@ -5087,6 +5087,9 @@ _endsubp(breakpoint)
 
         __ifdef([DARWIN])
         .if 1
+C(lisp_objc_personality):
+	jmp *lisp_global(objc_2_personality)
+	
 	.section __TEXT,__eh_frame,coalesced,no_toc+strip_static_syms+live_support
 EH_frame1:
 	.set L$set$12,LECIE1-LSCIE1
@@ -5098,9 +5101,9 @@ LSCIE1:
 	.byte	0x1	/* uleb128 0x1; CIE Code Alignment Factor */
 	.byte	0x78	/* sleb128 -8; CIE Data Alignment Factor */
 	.byte	0x10	/* CIE RA Column */
-	.byte	0xb
-	.byte	0x8c
-	.quad	_lisp_objc_personality
+	.byte	0x7
+	.byte	0x9b
+	.long	_lisp_objc_personality+4@GOTPCREL
 	.byte	0x10	/* LSDA Encoding (pcrel) */
 	.byte	0x10	/* FDE Encoding (pcrel) */
 	.byte	0xc	/* DW_CFA_def_cfa */
