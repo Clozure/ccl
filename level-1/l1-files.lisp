@@ -1321,9 +1321,21 @@ a host-structure or string."
 
 (defun load-from-stream (stream print &aux (eof-val (list ())) val)
   (with-compilation-unit (:override nil) ; try this for included files
-    (let ((env (new-lexical-environment (new-definition-environment 'eval))))
+    (let ((env (new-lexical-environment (new-definition-environment 'eval)))
+          ;; source note map to use with any compilations.
+          (*nx-source-note-map*  (and *save-source-locations*
+                                      (make-hash-table :test #'eq :shared nil)))
+          (*loading-toplevel-location* nil))
       (%rplacd (defenv.type (lexenv.parent-env env)) *outstanding-deferred-warnings*)
-      (while (neq eof-val (setq val (read stream nil eof-val)))
+      (loop
+        (multiple-value-setq (val *loading-toplevel-location*)
+          (read-recording-source stream
+                                 :eofval eof-val
+                                 :file-name *loading-file-source-file*
+                                 :map *nx-source-note-map*
+                                 :save-source-text (neq *save-source-locations* :no-text)))
+        (when (eq eof-val val)
+          (return))
         (when (eq print :source) (format t "~&Source: ~S~%" val))
         (setq val (cheap-eval-in-environment val env))
         (when print

@@ -166,6 +166,7 @@ _endfn
 _exportfn(C(freebsd_sigreturn))
 	__(movl $417,%eax)	/* SYS_sigreturn */
 	__(syscall)				
+	
 _exportfn(C(get_vector_registers))
 _endfn
 
@@ -177,7 +178,9 @@ _exportfn(C(darwin_sigreturn))
    since we're trying to do what sigtramp() would do if we'd returned
    to it ... */
         __(movl $0x1e,%esi)
-        __(jmp C(sigreturn))
+	__(movl $0x20000b8,%eax)
+	__(syscall)
+	__(ret)
 _endfn
 	__endif
 

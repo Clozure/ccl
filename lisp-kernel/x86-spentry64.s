@@ -4268,10 +4268,10 @@ LocalLabelPrefix[]ffcall_return_registers_call_end:
          /* %rax/%rdx contains the return value (maybe), %save0 still
             contains the linear tcr address.  Preserve %rax/%rdx here. */
          __(set_gs_base(%csave1))
-         __(movq (%csave3),%rax)
-         __(movq 8(%csave3),%rdx)
-         __(movsd 16(%csave3),%xmm0)
-         __(movsd 24(%csave3),%xmm1)
+         __(movq (%csave0),%rax)
+         __(movq 8(%csave0),%rdx)
+         __(movsd 16(%csave0),%xmm0)
+         __(movsd 24(%csave0),%xmm1)
         __endif
 	__ifdef([WINDOWS])
 	__(movq %csave1, %rcontext_reg)
@@ -5087,6 +5087,10 @@ _endsubp(breakpoint)
 
         __ifdef([DARWIN])
         .if 1
+	.globl  C(lisp_objc_personality)
+C(lisp_objc_personality):
+	jmp *lisp_global(objc_2_personality)
+	
 	.section __TEXT,__eh_frame,coalesced,no_toc+strip_static_syms+live_support
 EH_frame1:
 	.set L$set$12,LECIE1-LSCIE1
@@ -5098,9 +5102,9 @@ LSCIE1:
 	.byte	0x1	/* uleb128 0x1; CIE Code Alignment Factor */
 	.byte	0x78	/* sleb128 -8; CIE Data Alignment Factor */
 	.byte	0x10	/* CIE RA Column */
-	.byte	0xb	/* uleb128 0xb; Augmentation size */
-	.byte	0x8c	/* Personality (indirect  sdata8) */
-	.quad	lisp_global(objc_2_personality)
+	.byte	0x7
+	.byte	0x9b
+	.long	_lisp_objc_personality+4@GOTPCREL
 	.byte	0x10	/* LSDA Encoding (pcrel) */
 	.byte	0x10	/* FDE Encoding (pcrel) */
 	.byte	0xc	/* DW_CFA_def_cfa */

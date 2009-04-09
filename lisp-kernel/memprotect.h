@@ -25,7 +25,11 @@
 #endif
 #include <signal.h>
 #ifndef WINDOWS
+#ifdef DARWIN
+#include <sys/ucontext.h>
+#else
 #include <ucontext.h>
+#endif
 #endif
 
 #ifdef WINDOWS

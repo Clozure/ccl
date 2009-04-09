@@ -180,12 +180,10 @@ _exportfn(C(darwin_sigreturn))
    undocumented.  On x8632 Darwin, sigtramp() sets it to 0x1e, and
    since we're trying to do what sigtramp() would do if we'd returned
    to it ... */
-        .globl C(sigreturn)
         __(movl $0x1e,8(%esp))
-        __(jmp *jsigreturn)
-        .data
-jsigreturn:     .long C(sigreturn)
-        .text
+	__(movl $0xb8,%eax)	/* SYS_sigreturn */
+	__(int $0x80)
+	__(ret)			/* shouldn't return */
 
 _endfn
         __endif        

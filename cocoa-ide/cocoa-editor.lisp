@@ -26,6 +26,7 @@
 
 (def-cocoa-default *use-screen-fonts* :bool t "Use bitmap screen fonts when available")
 
+(def-cocoa-default *option-is-meta* :bool t "Use option key as meta?")
 
 (defgeneric hemlock-view (ns-object))
 
@@ -781,9 +782,13 @@
 	 (lisp-string (if (> (#/length string) 0) (lisp-string-from-nsstring string)))
 	 (view (front-view-for-buffer buffer)))
     (when view
-      (hi::handle-hemlock-event view #'(lambda ()
-					 (hi:paste-characters position length
-							      lisp-string))))))
+      (let* ((edit-count (slot-value self 'edit-count)))
+        (dotimes (i edit-count) (#/endEditing self))
+        (hi::handle-hemlock-event view #'(lambda ()
+                                           (hi:paste-characters position length
+                                                                lisp-string)))
+        (dotimes (i edit-count)
+          (#/beginEditing self))))))
 
 (objc:defmethod (#/setAttributes:range: :void) ((self hemlock-text-storage)
                                                 attributes
@@ -898,16 +903,20 @@
   #+debug (#_NSLog #@"Key down event = %@" :address event)
   (let* ((view (hemlock-view self))
 	 ;; quote-p means handle characters natively
-	 (quote-p (and view (hi::hemlock-view-quote-next-p view))))
+	 (quote-p (and view (hi::hemlock-view-quote-next-p view)))
+	 (flags (#/modifierFlags event)))
     #+debug (log-debug "~&quote-p ~s event ~s" quote-p event)
-    (if (or (null view)
-	    (#/hasMarkedText self)
-	    (and quote-p (zerop (#/length (#/characters event))))) ;; dead key, e.g. option-E
-      (call-next-method event)
-      (unless (eventqueue-abort-pending-p self)
-	(let ((hemlock-key (nsevent-to-key-event event quote-p)))
-	  (when hemlock-key
-	    (hi::handle-hemlock-event view hemlock-key)))))))
+    (cond ((and (not *option-is-meta*)
+		(logtest #$NSAlternateKeyMask flags))
+	   (call-next-method event))
+	  ((or (null view)
+	       (#/hasMarkedText self)
+	       (and quote-p (zerop (#/length (#/characters event)))))
+	   (call-next-method event))
+	  ((not (eventqueue-abort-pending-p self))
+	   (let ((hemlock-key (nsevent-to-key-event event quote-p)))
+	     (when hemlock-key
+	       (hi::handle-hemlock-event view hemlock-key)))))))
 
 (defmethod hi::handle-hemlock-event :around ((view hi:hemlock-view) event)
   (declare (ignore event))
@@ -2952,9 +2961,9 @@
           ;; of #/replaceCharactersInRange:withString: calls code that
           ;; asserts that editing isn't in progress.  Once that's
           ;; fixed, this should be fixed as well.
-          #+not-broken (#/beginEditing textstorage)
+          (#/beginEditing textstorage)
 	  (#/replaceCharactersInRange:withString: textstorage selectedrange string)
-          #+not-broken (#/endEditing self))))))
+          (#/endEditing textstorage))))))
 
 
 (objc:defmethod (#/hyperSpecLookUp: :void)
