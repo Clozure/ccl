@@ -1899,6 +1899,19 @@ Or something. Right? ~s ~s" var varbits))
 	form
 	(list (%nx1-operator typed-form) type form)))))
 
+(defvar *format-arg-functions* '((format . 1) (format-to-string . 1) (error . 0) (warn . 0)
+				 (y-or-n-p . 0) (yes-or-no-p . 0)
+				 (signal-simple-program-error . 0)
+				 (signal-simple-condition . 1)
+				 (signal-reader-error . 1)
+				 (%method-combination-error . 0)
+				 (%invalid-method-error . 1)
+				 (nx-compile-time-error . 0)
+				 (nx-error . 0)
+				 (compiler-bug . 0)))
+
+#-BOOTSTRAPPED (unless (fboundp 'nx1-check-format-call) (fset 'nx1-check-format-call (lambda (&rest x) (declare (ignore x)))))
+
 ;;; Wimpy.
 (defun nx1-call-result-type (sym &optional (args nil args-p) spread-p)
   (let* ((env *nx-lexical-environment*)
@@ -1918,6 +1931,13 @@ Or something. Right? ~s ~s" var varbits))
         (nx1-whine :undefined-function sym args spread-p)
         (nx1-whine :undefined-function sym))
       (setq whined t))
+    (when (and args-p
+	       (not spread-p)
+	       (setq somedef (cdr (assq sym *format-arg-functions*)))
+	       (setq somedef (nthcdr somedef args))
+	       (stringp (car somedef)))
+      (when (nx1-check-format-call (car somedef) (cdr somedef) env)
+	(setq whined t)))
     (when (and args-p (setq somedef (or lexenv-def defenv-def global-def)))
       (multiple-value-bind (deftype reason)
           (nx1-check-call-args somedef args spread-p)

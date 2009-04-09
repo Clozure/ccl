@@ -320,7 +320,12 @@ done
         (apply #'error args)))
 
 (defun format-no-flags (colon atsign)
-  (when (or colon atsign) (format-error "Flags not allowed")))
+  (cond ((and colon atsign)
+         (format-error "Flags not allowed"))
+        (colon
+         (format-error ": flag not allowed"))
+        (atsign
+         (format-error "@ flag not allowed"))))
 
 ;Redefined later
 (defformat #\A format-a (stream colon atsign)
@@ -339,24 +344,32 @@ done
 
 ;Final version
 (defformat #\% format-% (stream colon atsign &optional repeat-count)
+  (format-no-flags colon atsign)
   (cond ((or (not repeat-count)
-            (and repeat-count (fixnump repeat-count)
-                 (> repeat-count -1)))
-         (format-no-flags colon atsign)
+             (and (fixnump repeat-count)
+                  (> repeat-count -1)))
          (dotimes (i (or repeat-count 1)) (declare (fixnum i)) (terpri stream)))
         (t (format-error "Bad repeat-count."))))
 
 ;Final version
 (defformat #\& format-& (stream colon atsign &optional repeat-count)
   (format-no-flags colon atsign)
-  (unless (eq repeat-count 0)
-    (fresh-line stream)
-    (dotimes (i (1- (or repeat-count 1))) (declare (fixnum i)) (terpri stream))))
+  (cond ((or (not repeat-count)
+             (and (fixnump repeat-count)
+                  (> repeat-count -1)))
+         (unless (eq repeat-count 0)
+           (fresh-line stream)
+           (dotimes (i (1- (or repeat-count 1))) (declare (fixnum i)) (terpri stream))))
+        (t (format-error "Bad repeat-count."))))
 
 ;Final version
 (defformat #\~ format-~ (stream colon atsign &optional repeat-count)
   (format-no-flags colon atsign)
-  (dotimes (i (or repeat-count 1)) (declare (fixnum i)) (write-char #\~ stream)))
+  (cond ((or (not repeat-count)
+             (and (fixnump repeat-count)
+                  (> repeat-count -1)))
+         (dotimes (i (or repeat-count 1)) (declare (fixnum i)) (write-char #\~ stream)))
+        (t (format-error "Bad repeat-count."))))
 
 ;Final version
 (defformat #\P format-p (stream colon atsign)
@@ -381,7 +394,9 @@ done
          (where (- (list-length orig)   ; will error if args circular
                    (list-length *format-arguments*)))
          (to (if atsign 
-               (or count 0) ; absolute
+               (progn
+                 (format-no-flags colon nil)
+                 (or count 0)) ; absolute
                (progn
                  (when (null count)(setq count 1))
                  (when colon (setq count (- count)))
@@ -407,11 +422,10 @@ done
        ((or (= i n)
             (not (whitespacep (schar s i))))
         (setq *format-index* (1- i)))))
-        
+
 (defun nthcdr-no-overflow (count list)
-  "If cdr beyond end of list return :error"  
   (if (or (> count (list-length list)) (< count 0))
-    nil ;:error
+    (format-error "non-existent target for ~*")
     (nthcdr count list)))
 
 ;Redefined later

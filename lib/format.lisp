@@ -37,6 +37,11 @@
 (defvar *format-original-arguments* ()
   "Saved arglist from top-level FORMAT call for ~* and ~@*")
 
+(defvar *format-arguments-variance* nil
+  "Non-NIL only during compile-time scanning of a format string, in which case it is the
+number of additional elements at the front of *format-arguments* that may be already used
+up at runtime.  I.e. the actual *format-arguments* may be anything between *format-arguments*
+and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 (def-standard-initial-binding *format-stream-stack* nil "A stack of string streams for collecting FORMAT output")
 
@@ -45,6 +50,9 @@
 
 (defvar *format-justification-semi* nil
   "Has a ~<...~:;...~> been seen?")
+
+(defvar *format-colon-rest* nil
+  )
 
 ;;; prevent circle checking rest args. Really EVIL when dynamic-extent
 (def-standard-initial-binding *format-top-level* nil)
@@ -197,21 +205,26 @@
 ;;; not a part of the recognized parameter.
 
 (defun format-get-parameter (ch)
-  "Might someday want to add proper format error checking for negative 
-      parameters"
-  (let (neg-parm)
-    (when (eq ch #\-)(setq neg-parm ch)
-          (setq ch (format-nextchar)))
-    (case ch
-      (#\# (format-nextchar) (length *format-arguments*))
-      ((#\V #\v)
-       (prog1 (pop-format-arg) (format-nextchar)))
-      (#\' (prog1 (format-nextchar) (format-nextchar)))
-      (t (cond ((setq ch (digit-char-p ch))
-                (do ((number ch (%i+ ch (%i* number 10))))
+  (case ch
+    (#\# (format-nextchar)
+     (let ((n (or *format-arguments-variance* 0))
+           (len (length *format-arguments*)))
+       (declare (fixnum n len))
+       (if (eql n 0)
+         len
+         `(the (integer ,(- len n) ,len) (length *format-arguments*)))))
+    ((#\V #\v)
+     (prog1 (pop-format-arg) (format-nextchar)))
+    (#\' (prog1 (format-nextchar) (format-nextchar)))
+    (t (cond ((or (eq ch #\-) (eq ch #\+) (digit-char-p ch))
+              (let ((neg-parm (eq ch #\-)))
+                (unless (setq ch (digit-char-p ch))
+                  (unless (setq ch (digit-char-p (format-nextchar)))
+                    (format-error "Illegal parameter")))
+                (do ((number ch (+ ch (* number 10))))
                     ((not (setq ch (digit-char-p (format-nextchar))))
-                     (if neg-parm (- number) number))))
-               (t nil))))))
+                     (if neg-parm (- number) number)))))
+             (t nil)))))
 
 (defun format-skip-parameter (ch) ; only caller is parse-format-operation
   "Might someday want to add proper format error checking for negative 
@@ -222,10 +235,13 @@
        (format-nextchar))
       (#\' (format-nextchar) (format-nextchar))
       (#\,)
-      (t (cond (T ;(or (eq ch #\-)(digit-char-p ch)) ; t
-                (while (digit-char-p (format-nextchar))))
-               (t nil))))))
+      (t (when (or (eq ch #\-) (eq ch #\+)) (format-nextchar))
+         (while (digit-char-p (format-nextchar)))))))
 
+(defun format-no-semi (char &optional colon atsign)
+  (when *format-justification-semi*
+    (format-error "~~~:[~;:~]~:[~;@~]~c illegal in this context" colon atsign char))
+  (setq *format-pprint* t))
 
 ;;; Parses a format directive, including flags and parameters.  On entry,
 ;;; *format-index* should point to the "~" preceding the command.  On
@@ -250,16 +266,14 @@
                (until (neq (setq ch (format-peek)) #\,)
                  (setq ch (format-nextchar))
                  (format-skip-parameter ch)))))
-    ; allow either order - (also allows :: or @@)
+    ; allow either order
     (case ch
-      (#\: (setq colon t))
-      (#\@ (setq atsign t)))
-    (when (or colon atsign)
-      (case (setq ch (format-nextchar))
-        (#\: (setq colon t)
-         (setq ch (format-nextchar)))
-        (#\@ (setq atsign t)
-         (setq ch (format-nextchar)))))
+      (#\: (setq colon t ch (format-nextchar))
+           (when (eq ch #\@)
+             (setq atsign t ch (format-nextchar))))
+      (#\@ (setq atsign t ch (format-nextchar))
+           (when (eq ch #\:)
+             (setq colon t ch (format-nextchar)))))
     (values (if (consp parms) (nreverse parms) parms)
             colon
             atsign
@@ -318,6 +332,13 @@
           ((#\} #\> #\) #\])
            (format-error "No matching bracket")))))))
 
+(defun format-find-command-no-params (command-list &key (colon t) (atsign t))
+  (multiple-value-bind (prev tilde parms colon-flag atsign-flag command)
+                       (format-find-command command-list)
+    (with-format-parameters parms ()
+      (format-no-flags (and (not colon) colon-flag) (and (not atsign) atsign-flag)))
+    (values prev tilde command colon-flag atsign-flag)))
+
 ;;; This is the FORMAT top-level function.
 
 (defun format (stream control-string &rest format-arguments)
@@ -354,8 +375,6 @@
 	       (let ((*format-original-arguments* format-arguments)
 		     (*format-arguments* format-arguments)
 		     (*format-colon-rest* 'error)) ; what should this be??
-		 (declare (special *format-original-arguments* *format-arguments*
-				   *format-control-string* *format-colon-rest*))
 		 (do-sub-format stream))))))
 	nil))))
 
@@ -377,6 +396,8 @@
     (when errorp
       (error "~%~:{~@?~%~}" (nreverse errorp)))))
 
+
+
 ;;; This function does the real work of format.  The segment of the control
 ;;; string between indiced START (inclusive) and END (exclusive) is processed
 ;;; as follows: Text not part of a directive is output without further
@@ -391,15 +412,25 @@
 (def-standard-initial-binding *logical-block-xp* nil)
 
 (without-duplicate-definition-warnings
- (defun pop-format-arg (&aux (args *format-arguments*)(xp *logical-block-xp*))
+ (defun pop-format-arg (&aux (args *format-arguments*) (xp *logical-block-xp*) (av *format-arguments-variance*))
+   (when (and (null args) (null xp))
+     (format-error "Missing argument"))
    (when xp
-     (if (pprint-pop-check+ args xp)    ; gets us level and length stuff in logical block
-       (throw 'logical-block nil)))           
-   (if (and (null args)(null xp))       ; what if its 3?
-     (format-error "Missing argument")
+     (if (null av)
+       (when (pprint-pop-check+ args xp)    ; gets us level and length stuff in logical block
+         (throw 'logical-block nil))
+       ;; Could record that might exit here, but nobody cares.
+       #+no (note-format-scan-option *logical-block-options*)))
+   (if (or (null av) (eql av 0))
      (progn
        (setq *format-arguments* (cdr args))
-       (%car args)))))
+       (%car args))
+     (let ((types (loop for x in args as i from 0 below av
+                    collect (nx-form-type x))))
+       (when (eql av (length args))
+         (setq *format-arguments-variance* (1- av)))
+       (setq *format-arguments* (cdr args))
+       `(the (or ,@types) (car *format-arguments*))))))
 
 ; SUB-FORMAT is now defined in L1-format.lisp
 ; DEFFORMAT is also defined there.
@@ -409,9 +440,7 @@
 ;;; 
 
 (defformat #\W format-write (stream colon atsign)
-  (if *format-justification-semi*
-      (format-error "~~W illegal in this context"))
-  (setq *format-pprint* t)
+  (format-no-semi #\W)
   (let ((arg (pop-format-arg)))
     (cond (atsign
        (let ((*print-level* nil)
@@ -428,16 +457,12 @@
 (defformat #\I format-indent (stream colon atsign &rest parms)
   (declare (dynamic-extent parms))
   (declare (ignore atsign))
-  (if *format-justification-semi*
-      (format-error "~~I illegal in this context"))
-  (setq *format-pprint* t)
+  (format-no-semi #\I)
   (with-format-parameters parms ((n 0))
     (pprint-indent (if colon :current :block) n stream)))
 
 (defformat #\_ format-conditional-newline (stream colon atsign)
-  (if *format-justification-semi*
-      (format-error "~~_ illegal in this context"))
-  (setq *format-pprint* t)
+  (format-no-semi #\_)
   (let ((option
          (cond (atsign
                 (cond (colon  :mandatory)
@@ -451,9 +476,7 @@
 (defformat #\T format-tab (stream colon atsign &rest parms)
   (declare (dynamic-extent parms))
   (when colon
-      (if *format-justification-semi*
-          (format-error "~~:T illegal in this context"))
-      (setq *format-pprint* t))
+    (format-no-semi #\T t))
   (with-format-parameters parms ((colnum 1) (colinc 1))
     (cond ((or (typep stream 'xp-stream) (xp-structure-p stream))
            (let ((kind (if colon
@@ -497,25 +520,22 @@
     (let ((cpos (format-find-char #\: ipos epos))
           package)
       (cond (cpos 
-             (setq package (find-package (string-upcase (%substr string ipos cpos))))
+             (setq package (or (find-package (string-upcase (%substr string ipos cpos)))
+                               (format-error "Unknown package")))
              (when (eql #\: (schar string (%i+ 1 cpos)))
                (setq cpos (%i+ cpos 1)))
              (setq ipos (%i+ cpos 1)))
             (t (setq package (find-package "CL-USER"))))
       (let ((thing (intern (string-upcase (%substr string ipos epos)) package)))
         (setq *format-index* epos) ; or 1+ epos?
-        (apply thing stream (pop-format-arg) colon atsign parms)))))
+	(apply thing stream (pop-format-arg) colon atsign parms)))))
 
 ;;; Conditional case conversion  ~( ... ~)
 
 #| coral's old version
 (defformat #\( format-capitalization (stream colon atsign)
   (format-nextchar)
-  (multiple-value-bind
-   (prev tilde end-parms end-colon end-atsign)
-   (format-find-command '(#\)))
-   (when (or end-parms end-colon end-atsign)
-         (format-error "Flags or parameters not allowed"))
+  (multiple-value-bind (prev tilde) (format-find-command-no-params '(#\)))
    (let* (finished
           (string (with-format-string-output stream
                     (setq finished (catch 'format-escape (sub-format stream prev tilde) t)))))
@@ -541,11 +561,7 @@
 
 (defformat #\( format-capitalization (stream colon atsign)
   (format-nextchar)
-  (multiple-value-bind
-    (prev tilde end-parms end-colon end-atsign)
-    (format-find-command '(#\)))
-    (when (or end-parms end-colon end-atsign)
-      (format-error "Flags or parameters not allowed"))
+  (multiple-value-bind (prev tilde) (format-find-command-no-params '(#\)))
     (let (catchp)
       (cond ((typep stream 'xp-stream)
              (let ((xp (slot-value stream 'xp-structure)))
@@ -585,31 +601,18 @@
 
 ;;; Up and Out (Escape)  ~^
 
-(defformat #\^ format-escape (stream colon atsign &rest parms)
-  (declare (special *format-colon-rest*)) ; worry about this later??
+(defformat #\^ format-escape (stream colon atsign &optional p1 p2 p3)
   (declare (ignore stream))
-  (declare (dynamic-extent parms))
   (when atsign
     (format-error "FORMAT command ~~~:[~;:~]@^ is undefined" colon))
-  (setq parms (remove-if #'null parms))
-  (when
-    (cond ((null parms)
-           (null (if colon *format-colon-rest* *format-arguments*)))
-          ((null (cdr parms))
-           (let ((p (car parms)))
-             (typecase p
-               (number     (zerop p))
-               (character  (null p))
-               (t          nil))))
-          ((null (cddr parms))
-           (equal (car parms)(cadr parms)))
-          (t (let ((first (car parms))(second (cadr parms))(third (caddr parms)))
-               (typecase second
-                 (integer
-                  (<= first second third))
-                 (character
-                  (char< first second third))
-                 (t nil)))))  ; shouldnt this be an error??
+  (when (cond (p3 (etypecase p2
+                    (real
+                     (<= p1 p2 p3))
+                    (character
+                     (char< p1 p2 p3))))
+              (p2 (equal p1 p2))
+              (p1 (eql p1 0))
+              (t (null (if colon *format-colon-rest* *format-arguments*))))
     (throw 'format-escape (if colon 'format-colon-escape t))))
 
 ;;; Conditional expression  ~[ ... ]
@@ -624,38 +627,31 @@
       (format-error "Argument to ~~[ must be integer - ~S" test))
     (do ((count 0 (1+ count)))
         ((= count test)
-         (multiple-value-bind (prev tilde parms colon atsign cmd)
-                              (format-find-command '(#\; #\]))
-           (declare (ignore colon))
-           (when (or atsign parms)
-             (format-error "Atsign flag or parameters not allowed"))
+         (multiple-value-bind (prev tilde cmd colon atsign)
+                              (format-find-command-no-params '(#\; #\]) :atsign nil)
+           (declare (ignore colon atsign))
            (sub-format stream prev tilde)
            (unless (eq cmd #\])
              (format-find-command '(#\])))))
-      (multiple-value-bind (prev tilde parms colon atsign cmd)
-                           (format-find-command '(#\; #\]))
-        (declare (ignore prev tilde))
-        (when (or atsign parms)
-          (format-error "Atsign flag or parameters not allowed"))
+      (multiple-value-bind (prev tilde cmd colon atsign)
+                           (format-find-command-no-params '(#\; #\]) :atsign nil)
+        (declare (ignore prev tilde atsign))
         (when (eq cmd #\]) (return))
+        (format-nextchar)
         (when colon
-          (format-nextchar)
-          (multiple-value-bind (prev tilde parms colon atsign cmd)
-                               (format-find-command '(#\; #\]))
-            (declare (ignore parms colon atsign))
+          (multiple-value-bind (prev tilde cmd colon atsign)
+                               (format-find-command-no-params '(#\; #\]))
+            (declare (ignore colon atsign))
             (sub-format stream prev tilde)
             (unless (eq cmd #\])
-              (format-find-command '(#\]))))
-          (return))
-        (format-nextchar)))))
+              (format-find-command-no-params '(#\]))))
+          (return))))))
 
 
 ;;; ~@[
 
 (defun format-funny-condition (stream)
-  (multiple-value-bind (prev tilde parms colon atsign) (format-find-command '(#\]))
-    (when (or colon atsign parms)
-      (format-error "Flags or arguments not allowed"))
+  (multiple-value-bind (prev tilde) (format-find-command-no-params '(#\]))
     (if *format-arguments*
       (if (car *format-arguments*)
         (sub-format stream prev tilde)
@@ -666,32 +662,21 @@
 ;;; ~:[ 
 
 (defun format-boolean-condition (stream)
-  (multiple-value-bind
-    (prev tilde parms colon atsign command)
-    (format-find-command '(#\; #\]))
-    (when (or parms colon atsign)
-      (format-error "Flags or parameters not allowed"))
+  (multiple-value-bind (prev tilde command) (format-find-command-no-params '(#\; #\]))
     (when (eq command #\])
       (format-error "Two clauses separated by ~~; are required for ~~:["))
     (format-nextchar)
     (if (pop-format-arg)
-      (multiple-value-bind (prev tilde parms colon atsign)
-          (format-find-command '(#\]))
-        (when (or colon atsign parms)
-          (format-error "Flags or parameters not allowed"))
+      (multiple-value-bind (prev tilde)
+          (format-find-command-no-params '(#\]) :colon nil :atsign nil)
         (sub-format stream prev tilde))
       (progn
         (sub-format stream prev tilde)
-        (format-find-command '(#\]))))))
+        (format-find-command-no-params '(#\]))))))
 
 
-(defformat #\[ format-condition (stream colon atsign &rest parms)
-  (declare (dynamic-extent parms))
-  (when parms
-    (let ((p (pop parms)))
-      (if p (push p *format-arguments*)))
-    (unless (null parms)
-      (format-error "Too many parameters to ~~[")))
+(defformat #\[ format-condition (stream colon atsign &optional p)
+  (when p (push p *format-arguments*))
   (format-nextchar)
   (cond (colon
          (when atsign
@@ -708,10 +693,9 @@
   (declare (dynamic-extent parms))
   (with-format-parameters parms ((max-iter -1))
     (format-nextchar)
-    (multiple-value-bind (prev tilde end-parms end-colon end-atsign)
-                         (format-find-command '(#\}))
-      (when (or end-atsign end-parms)
-        (format-error "Illegal terminator for ~~{"))
+    (multiple-value-bind (prev tilde end-cmd end-colon end-atsign)
+                         (format-find-command-no-params '(#\}) :atsign nil)
+      (declare (ignore end-cmd end-atsign))
       (if (= prev tilde)
         ;; Use an argument as the control string if ~{~} is empty
         (let ((string (pop-format-arg)))
@@ -762,7 +746,6 @@
                                 (*format-colon-rest* *format-arguments*)
                                 (*format-arguments* args)
                                 (*format-original-arguments* args))
-                           (declare (special *format-colon-rest*))
                            (unless (listp *format-arguments*)
                              (report-bad-arg *format-arguments* 'list))
                            (if (functionp start)
@@ -797,12 +780,12 @@
 
 (defun format-get-trailing-segments ()
   (format-nextchar)
-  (multiple-value-bind (prev tilde colon atsign parms cmd)
+  (multiple-value-bind (prev tilde parms colon atsign cmd)
                        (format-find-command '(#\; #\>) nil T)
-    (when colon
-      (format-error "~~:; allowed only after first segment in ~~<"))
-    (when (or atsign parms)
-      (format-error "Flags and parameters not allowed"))
+    (with-format-parameters parms ()
+      (when colon
+        (format-error "~~:; allowed only after first segment in ~~<"))
+      (format-no-flags nil atsign))
     (let ((str (catch 'format-escape
                  (with-format-string-output stream
                    (sub-format stream prev tilde)))))      
@@ -908,9 +891,9 @@
 
 (defformat #\< format-justification (stream colon atsign &rest parms)
   (declare (dynamic-extent parms))
-  (multiple-value-bind (start tilde eparms ecolon eatsign)
-                       (format-find-command '(#\>)) ; bumps format-index
-    (declare (ignore tilde eparms))
+  (multiple-value-bind (start tilde ecmd ecolon eatsign)
+                       (format-find-command-no-params '(#\>)) ; bumps format-index
+    (declare (ignore tilde ecmd))
     (cond
      (ecolon
       (format-logical-block stream colon atsign eatsign start *format-index* parms))
@@ -944,7 +927,7 @@
                                          (if atsign () '(0))))))
                 (when special-arg
                   (if *format-pprint*
-                      (format-error "Justification illegal in this context."))
+                      (format-error "Justification illegal in this context"))
                   (setq *format-justification-semi* t)
                   (with-format-parameters special-parms ((spare 0)
                                                          (linel (stream-line-length stream)))
@@ -972,9 +955,7 @@
                  (cond ((eq *format-index* start)
                         (return t))
                        (t (return nil))))))))
-    (if *format-justification-semi*
-      (format-error "~<...~:> illegal in this context."))
-    (setq *format-pprint* t)
+    (format-no-semi #\<)
     (let ((format-string *format-control-string*)
           (prefix (if colon "(" ""))
           (suffix (if colon ")" ""))
@@ -1376,27 +1357,26 @@
             (not (whitespacep (schar s i))))
         (setq *format-index* (1- i)))))
 
-(defun format-newline (stream colon atsign &rest parms)
-  (declare (dynamic-extent parms))
-  (when parms
-    (format-error "Parameters not allowed"))
-  (cond (colon
-         (when atsign (format-error "~:@<newline> is undefined")))
-        (atsign (terpri stream) (format-eat-whitespace))
-        (t (format-eat-whitespace))))
+(defun format-newline (stream colon atsign parms)
+  (with-format-parameters parms ()
+    (cond (colon
+           (when atsign
+             (format-error "~:@<newline> is undefined")))
+          (atsign (terpri stream) (format-eat-whitespace))
+          (t (format-eat-whitespace)))))
   
 (defformat  #\newline format-newline (stream colon atsign &rest parms)
-  (apply #'format-newline stream colon atsign parms))
+  (declare (dynamic-extent parms))
+  (format-newline stream colon atsign parms))
 
 (defformat #\return format-newline (stream colon atsign &rest parms)
-  (apply #'format-newline stream colon atsign parms))
+  (declare (dynamic-extent parms))
+  (format-newline stream colon atsign parms))
 
 ;;; Indirection  ~?
 
-(defformat #\? format-indirection (stream colon atsign &rest parms)
-  (declare (dynamic-extent parms))
-  (when (or colon parms)
-    (format-error "Flags or parameters not allowed"))
+(defformat #\? format-indirection (stream colon atsign)
+  (format-no-flags colon nil)
   (let ((string (pop-format-arg)))
     (unless (or (stringp string)(functionp string))
       (format-error "Indirected control string is not a string or function"))
@@ -2185,4 +2165,458 @@
 	  (if (string-equal response "yes") (return t))
 	  (if (string-equal response "no") (return nil))
           (format *query-io* "Please answer yes or no.")))))
+
+
+;; Compile-time format-scanning support.
+;;
+;; All this assumes it's called from the compiler, but it has to be kept in sync with code
+;; here more than with the code in the compiler, so keep it in here.
+
+(defun note-format-scan-option (cell)
+  (when cell
+    (if (null (cdr cell))
+      (setf (car cell) *format-arguments* (cdr cell) *format-arguments-variance*)
+      (let* ((new-args *format-arguments*)
+             (new-var *format-arguments-variance*)
+             (new-max (length new-args))
+             (old-args (car cell))
+             (old-var (cdr cell))
+             (old-max (length old-args))
+             (min (min (- new-max new-var) (- old-max old-var))))
+        (if (>= new-max old-max)
+          (setf (car cell) new-args (cdr cell) (- new-max min))
+          (setf (cdr cell) (- old-max min))))))
+  cell)
+
+(defmacro with-format-scan-options ((var) &body body)
+  (let ((cell (gensym)))
+    ;; CELL is used to record range of arg variations that should be deferred til the end
+    ;; of BODY because they represent possible non-local exits.
+    `(let* ((,cell (cons nil nil))
+            (,var ,cell))
+       (declare (dynamic-extent ,cell))
+       (prog1
+           (progn
+             ,@body)
+         (setq *format-arguments* (car ,cell)
+               *format-arguments-variance* (cdr ,cell))))))
+
+(defvar *format-escape-options* nil)
+
+(defun nx1-check-format-call (control-string format-arguments &optional (env *nx-lexical-environment*))
+  "Format-arguments are expressions that will evaluate to the actual arguments.
+  Pre-scan process the format string, nx1-whine if find errors"
+  (let* ((*nx-lexical-environment* env)
+         (*format-top-level* t)
+         (*logical-block-xp* nil)
+         (*format-pprint* nil)
+         (*format-justification-semi* nil))
+    (let ((error (catch 'format-error
+		   (format-scan control-string format-arguments 0)
+                   nil)))
+      (when error
+	(setf (cadar error) (concatenate 'string (cadar error) " in format string:"))
+	(nx1-whine :format-error (nreverse error))
+	t))))
+
+(defun format-scan (string args var)
+  (let ((*format-original-arguments* args)
+	(*format-arguments* args)
+	(*format-arguments-variance* var)
+	(*format-colon-rest* 'error)
+	(*format-control-string* (ensure-simple-string string)))
+    (with-format-scan-options (*format-escape-options*)
+      (catch 'format-escape
+	(sub-format-scan 0 (length *format-control-string*))
+	(note-format-scan-option *format-escape-options*)))
+    #+no
+    (when (> (length *format-arguments*) *format-arguments-variance*)
+      (format-error "Too many format arguments"))))
+
+(defun sub-format-scan (i end)
+  (let ((*format-index* i)
+        (*format-length* end)
+        (string *format-control-string*))
+    (loop while (setq *format-index* (position #\~ string :start *format-index* :end end)) do
+      (multiple-value-bind (params colon atsign char) (parse-format-operation t)
+	(setq char (char-upcase char))
+	(let ((code (%char-code char)))
+	  (unless (and (< -1 code (length *format-char-table*))
+		       (svref *format-char-table* code))
+	    (format-error "Unknown directive ~c" char)))
+        (format-scan-directive char colon atsign params)
+        (incf *format-index*)))))
+
+(defun nx-could-be-type (form type &optional transformed &aux (env *nx-lexical-environment*))
+  (unless transformed (setq form (nx-transform form env)))
+  (if (constantp form)
+    (typep (eval-constant form) type env)
+    (multiple-value-bind (win-p sure-p) (subtypep (nx-form-type form env) `(not ,type) env)
+      (not (and win-p sure-p)))))
+
+(defun format-require-type (form type &optional description)
+  (unless (nx-could-be-type form type)
+    (format-error "~a must be of type ~s" (or description form) type)))
+
+
+(defun format-scan-directive (char colon atsign parms)
+  (ecase char
+    ((#\% #\& #\~ #\|)
+     (with-format-parameters parms ((repeat-count 1))
+       (format-no-flags colon atsign)
+       (format-require-type repeat-count '(integer 0))))
+    ((#\newline #\return)
+     (with-format-parameters parms ()
+       (when (and atsign colon) (format-error "~:@<newline> is undefined"))
+       (unless colon
+	 (format-eat-whitespace))))
+    ((#\P)
+     (with-format-parameters parms ()
+       (when colon
+	 (loop with end = *format-arguments*
+	    for list on *format-original-arguments*
+	    when (eq (cdr list) end) return (setq *format-arguments* list)
+	    finally (if (> (or *format-arguments-variance* 0) 0)
+			(decf *format-arguments-variance*)
+			(format-error "No previous argument"))))
+       (pop-format-arg)))
+    ((#\A #\S)
+     (with-format-parameters parms ((mincol 0) (colinc 1) (minpad 0) (padchar #\space))
+       (format-require-type mincol 'integer "mincol (first parameter)")
+       (format-require-type colinc '(integer 1) "colinc (second parameter)")
+       (format-require-type minpad 'integer "minpad (third parameter)")
+       (format-require-type padchar '(or (integer 0 #.char-code-limit) character) "padchar (fourth parameter)"))
+     (pop-format-arg))
+    ((#\I)
+     (with-format-parameters parms ((n 0))
+       (format-no-flags nil atsign)
+       (format-no-semi char)
+       (format-require-type n 'real)))
+    ((#\_)
+     (with-format-parameters parms ()
+       (format-no-semi char)))
+    ((#\T)
+     (with-format-parameters parms ((colnum 1) (colinc 1))
+       (when colon
+	 (format-no-semi char t))
+       (format-require-type colnum 'integer "colnum (first parameter)")
+       (format-require-type colinc 'integer "colinc (second parameter)")))
+    ((#\W)
+     (with-format-parameters parms ()
+       (format-no-semi #\W))
+     (pop-format-arg))
+    ((#\C)
+     (with-format-parameters parms ())
+     (format-require-type (pop-format-arg) '(or character fixnum (string 1))))
+    ((#\D #\B #\O #\X #\R)
+     (when (eql char #\R)
+       (let ((radix (pop parms)))
+	 (when radix
+	   (format-require-type radix '(integer 2 36)))))
+     (with-format-parameters parms ((mincol 0) (padchar #\space) (commachar #\,) (commainterval 3))
+       (format-require-type mincol 'integer "mincol (first parameter)")
+       (format-require-type padchar 'character "padchar (second parameter)")
+       (format-require-type commachar 'character "comma char (third parameter)")
+       (format-require-type commainterval 'integer "comma interval (fourth parameter)"))
+     (pop-format-arg))
+    ((#\F)
+     (format-no-flags colon nil)
+     (with-format-parameters parms ((w nil) (d nil) (k nil) (ovf nil) (pad #\space))
+       (format-require-type w '(or null (integer 0)) "w (first parameter)")
+       (format-require-type d '(or null (integer 0)) "d (second parameter)")
+       (format-require-type k '(or null integer) "k (third parameter)")
+       (format-require-type ovf '(or null character) "overflowchar (fourth parameter)")
+       (format-require-type pad '(or null character) "padchar (fifth parameter)"))
+     (pop-format-arg))
+    ((#\E #\G)
+     (format-no-flags colon nil)
+     (with-format-parameters parms ((w nil) (d nil) (e nil) (k 1) (ovf nil) (pad #\space) (marker nil))
+       (format-require-type w '(or null (integer 0)) "w (first parameter)")
+       (format-require-type d '(or null (integer 0)) "d (second parameter)")
+       (format-require-type e '(or null (integer 0)) "e (third parameter)")
+       (format-require-type k '(or null integer) "k (fourth parameter)")
+       (format-require-type ovf '(or null character) "overflowchar (fifth parameter)")
+       (format-require-type pad '(or null character) "padchar (sixth parameter)")
+       (format-require-type marker '(or null character) "exponentchar (seventh parameter)"))
+     (pop-format-arg))
+    ((#\$)
+     (with-format-parameters parms ((d 2) (n 1) (w 0) (pad #\space))
+       (format-require-type d '(or null (integer 0)) "d (first parameter)")
+       (format-require-type n '(or null (integer 0)) "n (second parameter)")
+       (format-require-type w '(or null (integer 0)) "w (third parameter)")
+       (format-require-type pad '(or null character) "pad (fourth parameter)"))
+     (format-require-type (pop-format-arg) 'real))
+    ((#\*)
+     (with-format-parameters parms ((count nil))
+       (when count
+	 (format-require-type count 'integer "count parameter"))
+       (if (typep (setq count (nx-transform count)) '(or null integer))
+	 (format-scan-goto colon atsign count)
+	 ;; Else can't tell how much going back or forth, could be anywhere.
+	 (setq *format-arguments* *format-original-arguments*
+	       *format-arguments-variance* (length *format-arguments*)))))
+    ((#\?)
+     (with-format-parameters parms ()
+       (format-no-flags colon nil))
+     (let ((string (pop-format-arg)))
+       (format-require-type string '(or string function))
+       (if atsign
+	 (setq *format-arguments-variance* (length *format-arguments*))
+	 (let ((arg (pop-format-arg)))
+	   (format-require-type arg 'list)))))
+    ((#\/)
+     (let* ((string *format-control-string*)
+	    (ipos (1+ *format-index*))
+	    (epos (format-find-char #\/ ipos *format-length*)))
+       (when (not epos) (format-error "Unmatched ~~/"))
+       (let* ((cpos (format-find-char #\: ipos epos))
+	      (name (if cpos
+		      (prog1
+			  (string-upcase (%substr string ipos cpos))
+			(when (eql #\: (schar string (%i+ 1 cpos)))
+			  (setq cpos (%i+ cpos 1)))
+			(setq ipos (%i+ cpos 1)))
+		      "CL-USER"))
+	      (package (find-package name))
+	      (sym (and package (find-symbol (string-upcase (%substr string ipos epos)) package)))
+	      (arg (pop-format-arg)))
+	 (setq *format-index* epos) ; or 1+ epos?
+	 ;; TODO: should we complain if the symbol doesn't exit?  Perhaps it will be defined
+	 ;; later, and to detect that would need to intern it.  What if the package doesn't exist?
+	 ;; Would need to extend :undefined-function warnings to handle previously-undefined package.
+	 (when sym
+	   (when (nth-value 1 (nx1-call-result-type sym (list* '*standard-output* arg colon atsign parms)))
+	     ;; Whined, just get out now.
+	     (throw 'format-error nil))))))
+    ((#\[)
+     (when (and colon atsign) (format-error  "~~:@[ undefined"))
+     (format-nextchar)
+     (cond (colon
+	    (format-scan-boolean-condition parms))
+	   (atsign
+	    (format-scan-funny-condition parms))
+	   (t (format-scan-untagged-condition parms))))
+    ((#\()
+     (with-format-parameters parms ()
+       (format-nextchar)
+       (multiple-value-bind (prev tilde parms colon atsign) (format-find-command '(#\)))
+	 (with-format-parameters parms () (format-no-flags colon atsign))
+	 (sub-format-scan prev tilde))))
+    ((#\^)
+     (format-no-flags nil atsign)
+     (with-format-parameters parms ((p1 nil) (p2 nil) (p3 nil))
+       (let ((val (nx-transform (cond (p3
+				       (if (every (lambda (p) (nx-could-be-type p 'real)) parms)
+					 ;; If the params could also be chars, don't know enough to constant fold
+					 ;; anyway, so this test will do.
+					 `(< ,p1 ,p2 ,p3)
+					 (if (every (lambda (p) (nx-could-be-type p 'character)) parms)
+					   `(char< ,p1 ,p2 ,p3)
+					   ;; At least one can't be real, at least one can't be char.
+					   (format-error "Wrong type of parameters for three-way comparison"))))
+				      (p2 `(equal ,p1 ,p2))
+				      (p1 `(eq ,p1 0))
+				      (t (null (if colon *format-colon-rest* *format-arguments*)))))))
+	 (when val
+	   (note-format-scan-option *format-escape-options*)
+	   (unless (nx-could-be-type val 'null t)
+	     (throw 'format-escape t))))))
+    ((#\{)
+     (with-format-parameters parms ((max-iter -1))
+       (format-require-type max-iter 'integer "max-iter parameter")
+       (format-nextchar)
+       (multiple-value-bind (prev tilde end-parms end-colon end-atsign) (format-find-command '(#\}))
+	 (declare (ignore end-colon))
+	 (with-format-parameters end-parms () (format-no-flags nil end-atsign))
+	 (when (= prev tilde)
+	   ;; Use an argument as the control string if ~{~} is empty
+	   (let ((string (pop-format-arg)))
+	     (unless (nx-could-be-type string '(or string function))
+	       (format-error "Control string is not a string or function"))))
+	 ;; Could try to actually scan the iteration if string is a compile-time string,
+	 ;; by that seems unlikely.
+	 (if atsign
+	   (setq *format-arguments-variance* (length *format-arguments*))
+	   (format-require-type (pop-format-arg) 'list)))))
+    ((#\<)
+     (multiple-value-bind (start tilde eparms ecolon eatsign) (format-find-command '(#\>))
+       (declare (ignore tilde eparms eatsign))
+       (setq *format-index* start)
+       (if ecolon
+	 (format-logical-block-scan colon atsign parms)
+	 (format-justification-scan colon atsign parms))))
+    ))
+
+(defun format-justification-scan (colon atsign parms)
+  (declare (ignore colon atsign))
+  (with-format-parameters parms ((mincol 0) (colinc 1) (minpad 0) (padchar #\space))
+    (format-require-type mincol 'integer "mincol (first parameter)")
+    (format-require-type colinc '(integer 1) "colinc (second parameter)")
+    (format-require-type minpad 'integer "minpad (third parameter)")
+    (format-require-type padchar `(or character (integer 0 #.char-code-limit)) "padchar (fourth parameter)"))
+  (let ((first-parms nil) (first-colon nil) (count 0))
+    (with-format-scan-options (*format-escape-options*)
+      (loop
+	 (format-nextchar)
+	 (multiple-value-bind (prev tilde parms colon atsign cmd)
+	     (format-find-command '(#\; #\>) nil T)
+	   (if (and (eql count 0) (eql cmd #\;) colon)
+	     (progn
+	       (format-no-flags nil atsign)
+	       (setq first-colon t)
+	       (setq *format-index* tilde)
+	       (setq first-parms (nth-value 2 (format-find-command '(#\; #\>) t T))))
+	     (with-format-parameters parms ()
+	       (format-no-flags colon atsign)))
+	   (when (catch 'format-escape
+		   (sub-format-scan prev tilde)
+		   nil)
+	     (unless (eq cmd #\>) (format-find-command '(#\>) nil t))
+	     (return))
+	   (incf count)
+	   (when (eq cmd #\>)
+	     (return))))
+      (note-format-scan-option *format-escape-options*))
+    (when first-colon
+      (when *format-pprint*
+	(format-error "Justification illegal in this context"))
+      (setq *format-justification-semi* t)
+      (with-format-parameters first-parms ((spare 0) (linel 0))
+	(format-require-type spare 'integer "spare (first parameter)")
+	(format-require-type linel 'integer "line length (second parameter)")))))
+      
+
+
+(defun format-logical-block-scan (colon atsign params)
+  (declare (ignore colon))
+  (with-format-parameters params ()
+    (format-no-semi #\<))
+    ;; First section can be termined by ~@;
+  (let ((format-string *format-control-string*)
+	(prefix "")
+	(suffix "")
+	(body-string nil))
+    (multiple-value-bind (start1 tilde parms1 colon1 atsign1 cmd) (format-find-command  '(#\; #\>))
+      (setq body-string (%substr format-string (1+ start1) tilde))
+      (with-format-parameters parms1 ())
+      (when (eq cmd #\;)
+	(format-no-flags colon1 nil)
+	(setq prefix body-string)
+	(multiple-value-setq (start1 tilde parms1 colon1 atsign1 cmd) (format-find-command '(#\; #\>)))
+	(with-format-parameters parms1 ())
+	(setq body-string (%substr format-string (1+ start1) tilde))
+	(when (eq cmd #\;)
+	  (format-no-flags colon1 atsign1)
+	  (multiple-value-setq (start1 tilde parms1 colon1 atsign1 cmd) (format-find-command  '(#\; #\>)))
+	  (with-format-parameters parms1 ())
+	  (setq suffix (%substr format-string (1+ start1) tilde))
+	  (when (eq cmd #\;)
+	    (format-error "Too many sections")))))
+    (flet ((format-check-simple (str where)
+	     (when (and str (or (%str-member #\~ str) (%str-member #\newline str)))
+	       (format-error "~A must be simple" where))))
+      (format-check-simple prefix "Prefix")
+      (format-check-simple suffix "Suffix"))
+    (if atsign
+      (let ((*logical-block-p* t))
+	(format-scan body-string *format-arguments* *format-arguments-variance*)
+	(setq *format-arguments* nil *format-arguments-variance* 0))
+      ;; If no atsign, we just use up an arg.  Don't bother trying to scan it, unlikely to be a constant.
+      (when *format-arguments*
+	(pop-format-arg)))))
+
+
+(defun format-scan-untagged-condition (parms)
+  (with-format-parameters parms ((index nil))
+    (unless index (setq index (pop-format-arg)))
+    (format-require-type index 'integer)
+    (with-format-scan-options (cond-options)
+      (loop with default = nil do
+	   (multiple-value-bind (prev tilde parms colon atsign cmd)
+	       (format-find-command '(#\; #\]))
+	     (when (and default (eq cmd #\;))
+	       (format-error "~:; must be the last clause"))
+	     (with-format-parameters parms ()
+	       (format-no-flags (if (eq cmd #\]) colon) atsign)
+	       (when colon (setq default t)))
+	     (format-scan-optional-clause prev tilde cond-options)
+	     (when (eq cmd #\])
+	       (unless default 	  ;; Could just skip the whole thing
+		 (note-format-scan-option cond-options))
+	       (return))
+	     (format-nextchar))))))
+
+(defun format-scan-funny-condition (parms)
+  (with-format-parameters parms ())
+  (multiple-value-bind (prev tilde parms colon atsign) (format-find-command '(#\]))
+    (with-format-parameters parms ()
+      (format-no-flags colon atsign))
+    (when (null *format-arguments*) (pop-format-arg)) ;; invoke std error
+    (with-format-scan-options (cond-options)
+      (let ((arg (nx-transform (car *format-arguments*))))
+	(when (nx-could-be-type arg 'null t)
+	  (let ((*format-arguments* *format-arguments*)
+		(*format-arguments-variance* *format-arguments-variance*))
+	    (when (eql *format-arguments-variance* (length *format-arguments*))
+	      (decf *format-arguments-variance*))
+	    (pop *format-arguments*)
+	    (note-format-scan-option cond-options)))
+	(when arg
+	  (format-scan-optional-clause prev tilde cond-options))))))
+
+
+(defun format-scan-boolean-condition (parms)
+  (with-format-parameters parms ())
+  (multiple-value-bind (prev tilde parms colon atsign cmd) (format-find-command '(#\; #\]))
+    (when (eq cmd #\])
+      (format-error "Two clauses separated by ~~; are required for ~~:["))
+    (with-format-parameters parms () (format-no-flags colon atsign))
+    (format-nextchar)
+    (with-format-scan-options (cond-options)
+      (let ((arg (nx-transform (pop-format-arg))))
+	(when (nx-could-be-type arg 'null t)
+	  (format-scan-optional-clause prev tilde cond-options))
+	(multiple-value-bind (prev tilde parms colon atsign) (format-find-command '(#\]))
+	  (with-format-parameters parms () (format-no-flags colon atsign))
+	  (when arg
+	    (format-scan-optional-clause prev tilde cond-options)))))))
+
+
+(defun format-scan-optional-clause (start end cond-option)
+  (let ((*format-arguments* *format-arguments*)
+	(*format-arguments-variance* *format-arguments-variance*))
+    ;; Let the branch points collect in outer *format-escape-options*, but don't
+    ;; throw there because need to consider the other clauses.
+    (catch 'format-escape
+      (sub-format-scan start end)
+      (note-format-scan-option cond-option)
+      nil)))
+
+(defun format-scan-goto (colon atsign count)
+  (if atsign 
+    (progn
+      (format-no-flags colon nil)
+      (setq *format-arguments*
+	    (nthcdr-no-overflow (or count 0) *format-original-arguments*))
+      (setq *format-arguments-variance* 0))
+    (progn
+      (when (null count)(setq count 1))
+      (when colon (setq count (- count)))
+      (cond ((> count 0)
+	     (when (> count (length *format-arguments*))
+	       (format-error "Target position for ~~* out of bounds"))
+	     (setq *format-arguments* (nthcdr count *format-arguments*))
+	     (when *format-arguments-variance*
+	       (setq *format-arguments-variance*
+		     (min *format-arguments-variance* (length *format-arguments*)))))
+	    ((< count 0)
+	     (let* ((orig *format-original-arguments*)
+		    (pos (+ (- (length orig) (length *format-arguments*)) count))
+		    (max-pos (+ pos (or *format-arguments-variance* 0))))
+	       (when (< max-pos 0)
+		 (format-error "Target position for ~~* out of bounds"))
+	       (if (< pos 0)
+		 (setq *format-arguments* orig
+		       *format-arguments-variance* max-pos)
+		 (setq *format-arguments* (nthcdr pos orig)))))))))
 

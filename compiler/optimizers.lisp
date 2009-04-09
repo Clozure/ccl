@@ -1930,7 +1930,7 @@
 
 (define-compiler-macro format (&environment env &whole call stream string &rest args)
   (if (stringp string)
-    (cond ((string-equal string "~a")
+    (cond ((and (string-equal string "~a") args (null (cdr args)))
            (destructuring-bind (object) args
              (cond ((null stream)
                     `(princ-to-string ,object))
@@ -1941,7 +1941,7 @@
                          (if (or (null stream) (stringp stream))
                            (format-to-string stream ,string object)
                            (progn (princ object (and (neq stream t) stream)) nil)))))))
-          ((string-equal string "~s")
+          ((and (string-equal string "~s") args (null (cdr args)))
            (destructuring-bind (object) args
              (cond ((null stream)
                     `(prin1-to-string ,object))
