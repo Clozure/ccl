@@ -710,19 +710,21 @@
 ;; Some simple restarts for simple error conditions.  Callable from the kernel.
 
 (defun find-unique-homonyms (name &optional (test (constantly t)))
-  (loop
-    with symbol = (if (consp name) (second name) name)
-    with pname = (symbol-name symbol)
-    for package in (list-all-packages)
-    for other-package-symbol = (find-symbol pname package)
-    for canditate = (and other-package-symbol
-			 (neq other-package-symbol symbol)
-			 (if (consp name)
-			   (list (first name) other-package-symbol)
-			   other-package-symbol))
-    when (and canditate
-              (funcall test canditate))
-    collect canditate))
+  (delete-duplicates
+   (loop
+     with symbol = (if (consp name) (second name) name)
+     with pname = (symbol-name symbol)
+     for package in (list-all-packages)
+     for other-package-symbol = (find-symbol pname package)
+     for canditate = (and other-package-symbol
+                          (neq other-package-symbol symbol)
+                          (if (consp name)
+                            (list (first name) other-package-symbol)
+                            other-package-symbol))
+     when (and canditate
+               (funcall test canditate))
+       collect canditate)
+   :test #'equal))
 
 (def-kernel-restart $xvunbnd %default-unbound-variable-restarts (frame-ptr cell-name)
   (unless *level-1-loaded*
