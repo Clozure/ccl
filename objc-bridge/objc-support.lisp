@@ -140,23 +140,26 @@
 
 #+apple-objc-2.0
 (progn
+(defloadvar *objc-exception-globals-setup* nil)  
 (defun setup-objc-exception-globals ()
   (flet ((set-global (offset name)
-	   (with-macptrs (p (%int-to-ptr (+ (target-nil-value) (%kernel-global-offset offset))))
-            (unless (%null-ptr-p (%get-ptr p))
-              (%setf-macptr p (%get-ptr p)))
-	    (setf (%get-ptr p)
-                  (foreign-symbol-address name)))))
-    (set-global 'objc-2-personality "___objc_personality_v0")
-    (set-global 'objc-2-begin-catch "_objc_begin_catch")
-    (set-global 'objc-2-end-catch "_objc_end_catch")
-    (set-global 'unwind-resume "__Unwind_Resume")))
+	   (let* ((p (%int-to-ptr (+ (target-nil-value) (%kernel-global-offset offset))))
+                  (q (%get-ptr p)))
+             (unless (%null-ptr-p q)
+               (setq p q))
+             (setf (%get-ptr p)
+                   (foreign-symbol-address name)))))
+    (unless *objc-exception-globals-setup*
+      (setq *objc-exception-globals-setup* t)
+      (set-global 'objc-2-personality "___objc_personality_v0")
+      (set-global 'objc-2-begin-catch "_objc_begin_catch")
+      (set-global 'objc-2-end-catch "_objc_end_catch")
+      (set-global 'unwind-resume "__Unwind_Resume"))))
 
 
 (def-ccl-pointers setup-objc-exception-handling ()
   (setup-objc-exception-globals))
 
-(setup-objc-exception-globals)
 )
 
 

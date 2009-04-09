@@ -4268,10 +4268,10 @@ LocalLabelPrefix[]ffcall_return_registers_call_end:
          /* %rax/%rdx contains the return value (maybe), %save0 still
             contains the linear tcr address.  Preserve %rax/%rdx here. */
          __(set_gs_base(%csave1))
-         __(movq (%csave3),%rax)
-         __(movq 8(%csave3),%rdx)
-         __(movsd 16(%csave3),%xmm0)
-         __(movsd 24(%csave3),%xmm1)
+         __(movq (%csave0),%rax)
+         __(movq 8(%csave0),%rdx)
+         __(movsd 16(%csave0),%xmm0)
+         __(movsd 24(%csave0),%xmm1)
         __endif
 	__ifdef([WINDOWS])
 	__(movq %csave1, %rcontext_reg)
@@ -5098,9 +5098,9 @@ LSCIE1:
 	.byte	0x1	/* uleb128 0x1; CIE Code Alignment Factor */
 	.byte	0x78	/* sleb128 -8; CIE Data Alignment Factor */
 	.byte	0x10	/* CIE RA Column */
-	.byte	0x7
-	.byte	0x9b
-	.long	___objc_personality_v0+4@GOTPCREL
+	.byte	0xb
+	.byte	0x8c
+	.quad	_lisp_objc_personality
 	.byte	0x10	/* LSDA Encoding (pcrel) */
 	.byte	0x10	/* FDE Encoding (pcrel) */
 	.byte	0xc	/* DW_CFA_def_cfa */

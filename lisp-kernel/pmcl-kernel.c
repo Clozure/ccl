@@ -1493,7 +1493,7 @@ check_bogus_fp_exceptions()
 
 #ifdef DARWIN
 #if WORD_SIZE==64
-void *__objc_personality_v0 = NULL;
+void *lisp_objc_personality = NULL;
 #endif
 #endif
 
@@ -1763,7 +1763,7 @@ main(int argc, char *argv[]
 #endif
 #ifdef DARWIN
 #if WORD_SIZE==64
-  lisp_global(OBJC_2_PERSONALITY) = (LispObj) &__objc_personality_v0;
+  lisp_global(OBJC_2_PERSONALITY) = (LispObj) &lisp_objc_personality;
 #endif
 #endif
 
