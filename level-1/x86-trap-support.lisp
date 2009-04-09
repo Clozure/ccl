@@ -429,10 +429,14 @@
                         :unsigned-fullword code
                         :void))))
           ((= signal #+win32-target 10 #-win32-target #$SIGBUS)
-           (%error (make-condition 'invalid-memory-access
-                    :address addr
-                    :write-p (not (zerop code)))
-                   ()
-                   frame-ptr))))
+           (if (= code -1)
+             (%error (make-condition 'invalid-memory-operation)
+                     ()
+                     frame-ptr)
+             (%error (make-condition 'invalid-memory-access
+                                     :address addr
+                                     :write-p (not (zerop code)))
+                     ()
+                     frame-ptr)))))
   0)
 

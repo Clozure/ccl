@@ -74,6 +74,7 @@
     "preferences"
     "processes-window"
     "apropos-window"
+    "file-dialogs"
     "app-delegate"
     "ide-self-update"
     "search-files"

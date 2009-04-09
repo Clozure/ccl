@@ -71,6 +71,7 @@
   (defconstant error-type-error 128)
 )
 
+
 (defconstant error-fpu-exception-double 1024)   ; FPU exception, binary double-float op
 (defconstant error-fpu-exception-single 1025)
 
@@ -191,6 +192,21 @@
   simple-array-double-float-3d
   simple-array-char-3d
 
+  ;;
+  vector-t
+  bit-vector
+  vector-s8
+  vector-u8
+  vector-s16
+  vector-u16
+  vector-s32
+  vector-u32
+  vector-s64
+  vector-u64
+  vector-fixnum
+  vector-single-float
+  vector-double-float
+  
   ;; Sentinel
   unused-max-type-error
   )

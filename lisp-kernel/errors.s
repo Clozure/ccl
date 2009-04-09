@@ -150,6 +150,20 @@ error_object_not_$1 = __type_error_counter__
         def_type_error(simple_array_single_float_3d)
         def_type_error(simple_array_double_float_3d)
         def_type_error(simple_array_char_3d)
+        def_type_error(vector_t)
+        def_type_error(bit_vector)
+        def_type_error(vector_s8)
+        def_type_error(vector_u8)
+        def_type_error(vector_s16)
+        def_type_error(vector_u16)
+        def_type_error(vector_s32)
+        def_type_error(vector_u32)
+        def_type_error(vector_s64)
+        def_type_error(vector_u64)
+        def_type_error(vector_fixnum)
+        def_type_error(vector_single_float)
+        def_type_error(vector_double_float)
+        
         
 	
 /* These are the "old" error constants that %ERR-DISP understands */

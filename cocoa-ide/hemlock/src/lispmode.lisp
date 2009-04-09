@@ -502,9 +502,12 @@
   "Return true if the character pointed to by Mark is not in a quoted context,
   false otherwise.  If Forwardp is true, we use the next character, otherwise
   we use the previous."
-  (multiple-value-bind (region line)
-		       (find-ignore-region mark forwardp)
-    (and line (not region))))
+  (if (and (not forwardp)
+	   (null (previous-character mark)))
+    t			      ;beginning of buffer always a valid spot
+    (multiple-value-bind (region line)
+	(find-ignore-region mark forwardp)
+      (and line (not region)))))
 
 
 ;;; Scan-Direction-Valid  --  Internal
@@ -843,6 +846,7 @@
 (defindent "do-headers-buffers" 1)
 (defindent "do-headers-lines" 1)
 (defindent "frob" 1) ;cover silly FLET and MACROLET names for Rob and Bill.
+(defindent "modifying-buffer" 1)
 
 ;;; Common Lisp forms.
 ;;; 
