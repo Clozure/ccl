@@ -189,6 +189,15 @@
                           (get-command-binding-for-key view key)
        #+debug (log-debug "~&  binding ~s ~s" main-binding transparent-bindings)
        (ring-push key *key-event-history*)
+       ;; If the key represents an "alphabetic" character (of which there
+       ;; are about 94000), and the event has no modifiers or only a shift
+       ;; modifier, treat it if it were bound to "Self Insert".
+       (when (eq main-binding (get-default-command))
+	 (let ((modifiers (key-event-bits-modifiers (key-event-bits key))))
+	   (when (and (alpha-char-p (key-event-char key))
+		      (or (null modifiers)
+			  (equal '("Shift") modifiers)))
+	     (setq main-binding (get-self-insert-command)))))
        (when main-binding
          (let* ((*last-last-command-type* (shiftf (hemlock-last-command-type view) nil))
                 (*last-prefix-argument* (hemlock::prefix-argument-resetting-state)))
