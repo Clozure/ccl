@@ -1491,11 +1491,6 @@ check_bogus_fp_exceptions()
 #endif
 }
 
-#ifdef DARWIN
-#if WORD_SIZE==64
-void *lisp_objc_personality = NULL;
-#endif
-#endif
 
 int
 main(int argc, char *argv[]
@@ -1761,12 +1756,6 @@ main(int argc, char *argv[]
 #ifndef WINDOWS
   lisp_global(INTERRUPT_SIGNAL) = (LispObj) box_fixnum(SIGNAL_FOR_PROCESS_INTERRUPT);
 #endif
-#ifdef DARWIN
-#if WORD_SIZE==64
-  lisp_global(OBJC_2_PERSONALITY) = (LispObj) &lisp_objc_personality;
-#endif
-#endif
-
   tcr->vs_area->active -= node_size;
   *(--tcr->save_vsp) = nrs_TOPLFUNC.vcell;
   nrs_TOPLFUNC.vcell = lisp_nil;
