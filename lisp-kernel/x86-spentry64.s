@@ -5087,6 +5087,7 @@ _endsubp(breakpoint)
 
         __ifdef([DARWIN])
         .if 1
+	.globl  C(lisp_objc_personality)
 C(lisp_objc_personality):
 	jmp *lisp_global(objc_2_personality)
 	
