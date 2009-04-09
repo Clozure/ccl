@@ -185,6 +185,11 @@
       (when encoding
          (set-terminal-encoding (character-encoding-name encoding))))))
 
+(defmethod repl-function-name ((a application))
+  "Return the name of a function that should be run in a TTY-like
+listener thread (if that concept makes sense); return NIL otherwise."
+  nil)
+
 (defmethod application-version-string ((a application))
   "Return a string which (arbitrarily) represents the application version.
 Default version returns OpenMCL version info."
@@ -267,8 +272,12 @@ Default version returns OpenMCL version info."
                     options)))))
 	
 
+(defmethod repl-function-name ((a lisp-development-system))
+  'listener-function)
+
 (defmethod toplevel-function ((a lisp-development-system) init-file)
-  (let* ((sr (input-stream-shared-resource *terminal-input*)))
+  (let* ((sr (input-stream-shared-resource *terminal-input*))
+         (f (or (repl-function-name a) 'listener-function)))
     (with-slots (initial-listener-process) a
       (setq initial-listener-process
             (make-mcl-listener-process
@@ -280,7 +289,7 @@ Default version returns OpenMCL version info."
              :initial-function
              #'(lambda ()
                  (startup-ccl (and *load-lisp-init-file* init-file))
-                 (listener-function)
+                 (funcall f)
                  nil)
              :close-streams nil
              :control-stack-size *initial-listener-default-control-stack-size*
