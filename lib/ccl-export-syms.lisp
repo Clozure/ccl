@@ -57,6 +57,7 @@
      %set-toplevel
      toplevel-loop
      toplevel-function
+     repl-function
      toplevel
      *listener-prompt-format*
      cancel
