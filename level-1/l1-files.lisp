@@ -498,11 +498,36 @@
 (defun stream-pathname (stream &aux (path (stream-filename stream)))
   (when path (pathname path)))
 
+(defun get-pathname-sstring (string &optional (start 0) (end (length string)))
+  #-windows-target
+  (get-sstring string start end)
+  #+windows-target
+  (multiple-value-bind (sstr start end)
+      (get-sstring string start end)
+    (declare (fixnum start end)
+             (simple-string sstr))
+    (if (do* ((i start (1+ i)))
+             ((= i end))
+          (declare (fixnum i))
+          (when (eql (schar sstr i) #\\)
+            (return t)))
+      (let* ((len (- end start))
+             (new (make-string len)))
+        (declare (fixnum len) (simple-string new))
+        (dotimes (i len)
+          (let* ((ch (schar sstr start)))
+            (if (eql ch #\\)
+              (setf (schar new i) #\/)
+              (setf (schar new i) ch)))
+          (incf start))
+        (values new 0 len))
+      (values sstr start end))))
+              
 (defun string-to-pathname (string &optional (start 0) (end (length string))
                                             (reference-host nil)
                                             (defaults *default-pathname-defaults*))
   (require-type reference-host '(or null string))
-  (multiple-value-bind (sstr start end) (get-sstring string start end)
+  (multiple-value-bind (sstr start end) (get-pathname-sstring string start end)
     #-windows-target
     (if (and (> end start)
              (eql (schar sstr start) #\~))
@@ -744,7 +769,7 @@ a host-structure or string."
          (typecase thing    
            (logical-pathname (%logical-pathname-host thing))
            (pathname :unspecific)
-           (string (multiple-value-bind (sstr start end) (get-sstring thing) 
+           (string (multiple-value-bind (sstr start end) (get-pathname-sstring thing) 
                      (pathname-host-sstr sstr start end)))
            (t (report-bad-arg thing pathname-arg-type)))))
     (if (and case (neq case :local))
@@ -794,13 +819,7 @@ a host-structure or string."
 		  (logical-pathname (setq logical-p t) (%pathname-directory path))
 		  (pathname (%pathname-directory path))
 		  (string
-		   (multiple-value-bind (sstr start end) (get-sstring path)
-                     #+no
-                     (if (and (> end start)
-                              (eql (schar sstr start) #\~))
-                       (setq sstr (tilde-expand (subseq sstr start end))
-                             start 0
-                             end (length sstr)))
+		   (multiple-value-bind (sstr start end) (get-pathname-sstring path)
 		     (multiple-value-bind (host pos2) (pathname-host-sstr sstr start end)
 		       (unless (eq host :unspecific) (setq logical-p t))
                        #+windows-target
@@ -880,7 +899,7 @@ a host-structure or string."
     (logical-pathname (%logical-pathname-version path))
     (pathname (%physical-pathname-version path))
     (string
-     (multiple-value-bind (sstr start end) (get-sstring path)
+     (multiple-value-bind (sstr start end) (get-pathname-sstring path)
        (multiple-value-bind (newstart host) (pathname-directory-end sstr start end)
 	 (if (eq host :unspecific)
 	   nil
@@ -915,7 +934,7 @@ a host-structure or string."
 		 (logical-pathname (setq logical-p t) (%pathname-name path))
 		 (pathname (%pathname-name path))
 		 (string
-		  (multiple-value-bind (sstr start end) (get-sstring path)
+		  (multiple-value-bind (sstr start end) (get-pathname-sstring path)
 		    (multiple-value-bind (newstart host) (pathname-directory-end sstr start end)
 		      (setq start newstart)
 		      (unless (eq host :unspecific)
@@ -951,7 +970,7 @@ a host-structure or string."
 		 (logical-pathname (setq logical-p t) (%pathname-type path))
 		 (pathname (%pathname-type path))
 		 (string
-		  (multiple-value-bind (sstr start end) (get-sstring path)
+		  (multiple-value-bind (sstr start end) (get-pathname-sstring path)
 		    (multiple-value-bind (newstart host) (pathname-directory-end sstr start end)
 		      (setq start newstart)
 		      (unless (eq host :unspecific)

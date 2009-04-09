@@ -359,7 +359,7 @@
 (defvar %empty-logical-pathname% (%cons-logical-pathname nil nil nil nil nil))
 
 (defun logical-pathname-namestring-p (string)
-  (multiple-value-bind (sstr start end) (get-sstring string)
+  (multiple-value-bind (sstr start end) (get-pathname-sstring string)
     (let ((host (pathname-host-sstr sstr start end t)))
       (and host (not (eq host :unspecific))))))
 
