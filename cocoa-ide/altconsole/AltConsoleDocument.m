@@ -61,6 +61,7 @@
     [watchdog invalidate];
     watchdog = nil;
   }
+   [[NSApplication sharedApplication] terminate:nil];
 }
 
 - (void) gotData:(NSNotification *)notification {
