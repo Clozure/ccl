@@ -217,7 +217,7 @@
               :address p :int flags :mode_t create-mode :int)))
     (declare (fixnum fd))
     (when (or (= fd (- #$EMFILE))
-              (= fd (- #$EMFILE)))
+              (= fd (- #$ENFILE)))
       (gc)
       (drain-termination-queue)
       (setq fd (int-errno-ffcall
