@@ -15,14 +15,10 @@
   <!-- ============================================================ -->
   <sect1><title>Releases and System Requirements</title>
     
-    <para>Version 1.2 is the latest release of &CCL; as of April
-    2008. It is intended to be a more stable release and follow a more
-    regular release schedule than previous versions.  It is easier for
-    users who wish to track the "bleeding edge" of development to do
-    so.</para>
+    <para>Version 1.3 is the latest stable release of &CCL; as of April
+    2009.</para>
 
-   <para>Versions 1.2 is available for five platform
-   configurations:</para>
+   <para>Version 1.3 is available for seven platform configurations:</para>
     <itemizedlist>
       <listitem>
         <para>Linux on PowerPC (32-bit and 64-bit implementations)</para>
@@ -31,19 +27,24 @@
         <para>Mac OS X on PowerPC (32-bit and 64-bit implementations)</para>
       </listitem>
       <listitem>
-        <para>Linux on X86-64 (64-bit implementation)</para>
+        <para>Linux on x86 (32-bit and 64-bit implementations)</para>
       </listitem>
       <listitem>
-        <para>Mac OS X on X86-64 (64-bit implementation)</para>
+        <para>Mac OS X on x86 (32-bit and 64-bit implementations)</para>
       </listitem>
-      <listitem><para>FreeBSD on X86-64 (64-bit implementation)</para></listitem>
+      <listitem>
+	<para>FreeBSD on x86 (32-bit and 64-bit implementations)</para>
+      </listitem>
+      <listitem>
+	<para>Solaris on x86 (32-bit and 64-bit implementations)</para>
+      </listitem>
+      <listitem>
+	<para>MS Windows on x86 (32-bit and 64-bit implementations)</para>
+      </listitem>
     </itemizedlist>
 
     <para>A 64-bit version of &CCL; requires a 64-bit processor
       running a 64-bit OS variant.</para>
-      
-    <para>There are ongoing efforts to port &CCL; to the Windows
-      operating system and to 32-bit x86 processors.</para>
     
     <para>Additional platform-specific information is given in the
       following subsections.</para>
@@ -54,7 +55,8 @@
     1.1 release was never made.  It was distributed as a series of
     development "snapshots" and CVS updates.  1.1 snapshots introduced
     support for x86-64 platforms, internal use of Unicode, and many
-    other features, but were moving targets. </para>
+    other features, but were moving targets.  Version 1.2 was a stable
+    version released in April 2008.</para>
 
     <!-- ***************************************************** -->
     <sect2><title>LinuxPPC</title> 
@@ -65,67 +67,44 @@
     </sect2>
 
     <!-- ***************************************************** -->
-    <sect2><title>Linux X8664</title> 
-
-      <para>&CCL; runs on relatively recent Linux distributions for
-      the x86-64 architecture.  It requires a Linux with Thread Local
-      Storage support in the toolchain and standard libraries, and the
-      New Posix Thread Library (NPTL).  Fortunately, these features
-      seem to be present in all current Linux distributions for
-      x86-64, though there may be some problems with early Linux
-      distributions for x86-64. Some GCC versions older than 4.0 on
-      Linux have been known to have problems compiling some of the C
-      code in the kernel; some very old Linux distributions don't
-      follow the current ABI standards with regard to segment register
-      usage; some early Linux kernels for x86-64 had problems mapping
-      large regions of the address space; and so on. It's difficult to
-      enumerate exactly what versions of which Linux distributions have
-      what problems.  A rule of thumb is that&mdash;because much of
-      the development of &CCL; for x86-64 took place in that time
-      frame&mdash;Linux distributions released earlier than early 2006
-      may have problems running &CCL;. </para>
+    <sect2><title>Linux x86</title> 
+    
+      <para>
+	Because of the nature of Linux distributions, it's difficult
+	to give precise version number requirements.  In general, a
+	"fairly modern" (no more than 2 or three years old) kernel and
+	C library are more likely to work well than older
+	versions.</para>
     </sect2>
 
     <!-- ***************************************************** -->
-    <sect2><title>FreeBSD-amd64</title> <para>&CCL; runs on FreeBSD on
-    x86-64 (FreeBSD releases generally call the platform "amd64").
-    &CCL; should run under FreeBSD 6.0 or later; as of this writing,
-    FreeBSD 7.0 is about to be released and it may be necessary for
-    FreeBSD 7 users to install the "compat6x" package in order to use
-    a version of &CCL; built on FreeBSD 6.x.</para>
+    <sect2><title>FreeBSD x86</title>
+    <para>&CCL; should run on
+    FreeBSD 6.x and 7.x.
+    FreeBSD 7 users will need to install the "compat6x" package in order to use
+    the distributed &CCL; kernel, which is built on a FreeBSD 6.x system.</para>
     </sect2>
 
     <!-- ***************************************************** -->
-    <sect2><title>DarwinPPC-MacOS-X</title>
+    <sect2><title>Mac OS X (ppc and x86)</title>
 
-      <para> &CCL; runs under OS X versions 10.4 and 10.5 and requires
-      at least version 10.3.9</para>
+      <para> &CCL; runs under Mac OS X versions 10.4 and 10.5.
+      </para>
 
-      <para>The 64-bit DarwinPPC version of &CCL; requires
-        functionality introduced in OSX 10.4 (namely, the ability to
-        run 64-bit binaries). The 64-bit DarwinPPC version also,
-        obviously, requires a G5 processor.</para>
+      <para>64-bit versions of &CCL; require 64-bit processors
+      (e.g., a G5 or Core 2 processor).  Some early Intel-based Macintoshes
+      used processors that don't support
+      64-bit operation, so the 64-bit &CCL; will not run on them, although
+      the 32-bit &CCL; will.
+      </para>
 
       <para>&CCL; hasn't been tested under Darwin proper, but
         &CCL; doesn't intentionally use any Mac OS X features beyond
         the Darwin subset and therefore it seems likely that &CCL;
-        would run on PPC Darwin versions that correspond to recent OSX
+        would run on Darwin versions that correspond to recent Mac OS X
         versions.</para>
     </sect2>
 
-    <!-- ***************************************************** -->
-    <sect2><title>Darwinx8664-MacOS-X</title> <para>&CCL; runs on
-    64-bit DarwinX86 (Mac OS X on Intel).</para>
-
-      <para>&CCL; Darwinx8664/MacOS X requires a 64-bit processor.
-        All Macintoshes currently sold by Apple (as of early 2008) and
-        all Macintoshes introduced by Apple since August 2006 have
-        such processors.  However, the original MacBooks, MacBook Pros
-        and Intel iMacs (models introduced in early 2006) used 32-bit
-        Core Duo processors, and so &CCL; will not (yet) run on
-        them.</para>
-
-    </sect2>
   </sect1>
 
 
@@ -137,10 +116,7 @@
     way to obtain &CCL;.  Mac OS X users can also use Subversion
     if they prefer. Tarballs are available for those who prefer them,
     but if you have Subversion installed, it is simpler and more
-    flexible to use Subversion than tarballs.  It is easier to keep up
-    with the bleeding edge if you are using Subversion, since disk
-    images and tarballs are generated much less frequently than
-    changes to Subversion.
+    flexible to use Subversion than tarballs.
     </para>
 
     <para> There are three popular ways to use &CCL;: as a
@@ -152,22 +128,22 @@
     <sect2><title>The Mac Way</title>
       <para>If you are using Mac OS X then you can install and use
          &CCL; in the usual Macintosh way.  Download and mount a
-         disk image, then drag Clozure CL to the Applications folder.
-         After that you can double-click the Clozure CL application to
-         run it.  The disk images are available at
-         <ulink url="ftp://clozure.com/pub/release/1.2/"/> </para>
+         disk image, then drag the ccl folder to the Applications folder
+	 or wherever you wish.
+         After that you can double-click the Clozure CL application found
+	 inside the ccl directory.  The disk images are available at
+         <ulink url="ftp://clozure.com/pub/release/1.3/"/> </para>
 
       <para>So that &CCL; can locate its source code, and for other
         reasons explained in
-        <xref linkend="Predefined-Logical-Hosts"/>, you should either put the
-        <literal>ccl</literal> directory in the same directory as the
-        Clozure CL application, or else put the Clozure CL application
+        <xref linkend="Predefined-Logical-Hosts"/>, you keep the
+        Clozure CL application
         in the <literal>ccl</literal> directory.  If you use a shell,
         you can set the value of the
         <varname>CCL_DEFAULT_DIRECTORY</varname> environment variable
         to explicitly indicate the location of
         the <literal>ccl</literal> directory. If you choose to do
-        that, then the <literal>ccl</literal> and the Clozure CL
+        that, then the <literal>ccl</literal> directory and the Clozure CL
         application can each be in any location you find
         convenient.</para>
     </sect2>
@@ -179,17 +155,18 @@
       using Subversion. This is the preferred way to get either the
       latest, or a specific version of &CCL;, unless you prefer
       the Mac Way.  Subversion is a source code control system that is
-      in wide usage.  Most modern OSes come with subversion
+      in wide usage.  Most modern OSes come with Subversion
       pre-installed. A complete, buildable and runnable set of &CCL;
-      sources and binaries can be retrieved by doing one subversion
-      checkout.</para>
+      sources and binaries can be retrieved with a single Subversion command.
+      </para>
 
-
-      <para>One subversion command creates a
-      <literal>ccl</literal> directory with runnable binaries, and a
-      complete set of buildable sources.  To get the bleeding edge
-      &CCL; for Darwin x86 (both 32- and 64-bit versions),
-      at the command line type:</para>
+      <para>Day-to-day development of &CCL; takes place in an area
+      of the Subversion repository known as the trunk.  At most times,
+      the trunk is perfectly usable, but occasionally it can be unstable
+      or totally broken.  If you wish to live on the 
+      bleeding edge, the following command will fetch a copy of the trunk
+      for Darwin x86 (both 32- and 64-bit versions):
+      </para>
 
         <programlisting>
           <![CDATA[
@@ -197,11 +174,12 @@ svn co http://svn.clozure.com/publicsvn/openmcl/trunk/darwinx86/ccl]]>
         </programlisting>
 
 	<para>
-	  To get a bleeding-edge &CCL; for a different operating
-	  system, replace "darwinx86" with one of the following names
-	  (all versions include both 32- and 64-bit binaries):
+	  To get a trunk &CCL; for another platform, replace
+	  "darwinx86" with one of the following names (all versions
+	  include both 32- and 64-bit binaries):
 	</para>
 	<itemizedlist>
+	  <listitem><para>darwinx86</para></listitem>
 	  <listitem><para>linunxx86</para></listitem>
 	  <listitem><para>freebsdx86</para></listitem>
 	  <listitem><para>solarisx86</para></listitem>
@@ -210,24 +188,29 @@ svn co http://svn.clozure.com/publicsvn/openmcl/trunk/darwinx86/ccl]]>
 	  <listitem><para>darwinppc</para></listitem>
 	</itemizedlist>
 
-	<para>To get the 1.2 version of &CCL; type:</para>
+	<para>Release versions of &CCL; are intended to be stable.  While
+	bugs will be fixed in the release branches, enhancements
+	and new features will go into the trunk.  To get the 1.3 release
+	of &CCL; type:</para>
         <programlisting>
           <![CDATA[
-svn co http://svn.clozure.com/publicsvn/openmcl/release/1.2/darwinx8664/ccl]]>
+svn co http://svn.clozure.com/publicsvn/openmcl/release/1.3/darwinx86/ccl]]>
         </programlisting>
 
         
-        <para>These examples fetch the complete sources and binaries
-        for the Darwin X8664 build of &CCL;. You can fetch a different
-        version by substituting its name in place of
-        "darwinx8664". Current available versions are:</para>
+        <para>The above command will fetch the complete sources and binaries
+        for the Darwin x86 build of &CCL;. To get a &CCL; for another platform,
+	replace "darwinx86" with one of the following names (all versions
+	include both 32- and 64-bit binaries):</para>
 
         <itemizedlist>
-          <listitem><para>darwinppc</para></listitem>
-          <listitem><para>darwinx8664</para></listitem>
-          <listitem><para>freebsdx8664</para></listitem>
-          <listitem><para>linuxppc</para></listitem>
-          <listitem><para>linuxx8664</para></listitem>
+	  <listitem><para>darwinx86</para></listitem>
+	  <listitem><para>linunxx86</para></listitem>
+	  <listitem><para>freebsdx86</para></listitem>
+	  <listitem><para>solarisx86</para></listitem>
+	  <listitem><para>windows</para></listitem>
+	  <listitem><para>linuxppc</para></listitem>
+	  <listitem><para>darwinppc</para></listitem>
         </itemizedlist>
 
         <para>These distributions contain complete sources and
@@ -281,7 +264,7 @@ Type 'svn help' for usage]]>
     <!-- ***************************************************** -->
     <sect2><title>Tarballs</title>
       <para>Tarballs are available at <ulink
-      url="ftp://clozure.com/pub/release/1.2/"/>.  Download and extract
+      url="ftp://clozure.com/pub/release/1.3/"/>.  Download and extract
       one on your local disk.  Then edit the &CCL; shell script to set
       the value of <varname>CCL_DEFAULT_DIRECTORY</varname> and start
       up the appropriate &CCL; kernel. See <xref
