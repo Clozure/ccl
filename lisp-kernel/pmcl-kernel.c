@@ -648,20 +648,23 @@ ensure_gc_structures_writable()
   natural 
     ndnodes = area_dnode(lisp_global(HEAP_END),lisp_global(HEAP_START)),
     markbits_size = (3*sizeof(LispObj))+((ndnodes+7)>>3),
-    reloctab_size = (sizeof(LispObj)*(((ndnodes+((1<<bitmap_shift)-1))>>bitmap_shift)+1));
+    reloctab_size = (sizeof(LispObj)*(((ndnodes+((1<<bitmap_shift)-1))>>bitmap_shift)+1)),
+    n;
   BytePtr 
-    new_reloctab_limit = ((BytePtr)global_reloctab)+reloctab_size,
-    new_markbits_limit = ((BytePtr)global_mark_ref_bits)+markbits_size;
+    new_reloctab_limit = (BytePtr)align_to_power_of_2(((natural)global_reloctab)+reloctab_size,log2_page_size),
+    new_markbits_limit = (BytePtr)align_to_power_of_2(((natural)global_mark_ref_bits)+markbits_size,log2_page_size);
 
   if (new_reloctab_limit > reloctab_limit) {
-    CommitMemory(global_reloctab, reloctab_size);
-    UnProtectMemory(global_reloctab, reloctab_size);
+    n = new_reloctab_limit - reloctab_limit;
+    CommitMemory(reloctab_limit, n);
+    UnProtectMemory(reloctab_limit, n);
     reloctab_limit = new_reloctab_limit;
   }
   
   if (new_markbits_limit > markbits_limit) {
-    CommitMemory(global_mark_ref_bits, markbits_size);
-    UnProtectMemory(global_mark_ref_bits, markbits_size);
+    n = new_markbits_limit-markbits_limit;
+    CommitMemory(markbits_limit, n);
+    UnProtectMemory(markbits_limit, n);
     markbits_limit = new_markbits_limit;
   }
 }
@@ -691,6 +694,8 @@ allocate_dynamic_area(natural initsize)
   a->hardprot = NULL;
   lisp_global(HEAP_START) = ptr_to_lispobj(a->low);
   lisp_global(HEAP_END) = ptr_to_lispobj(a->high);
+  markbits_limit = (BytePtr)global_mark_ref_bits;
+  reloctab_limit = (BytePtr)global_reloctab;
   ensure_gc_structures_writable();
   return a;
  }
