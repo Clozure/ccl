@@ -802,9 +802,11 @@ environment variable. Returns NIL if there is no user with the ID uid."
                                 :address result
                                 :int)))
           (if (eql 0 err)
-            (return (let* ((rp (%get-ptr result)))
-                      (unless (%null-ptr-p rp)
-                        (get-foreign-namestring (pref rp :passwd.pw_dir)))))
+	    (let* ((rp (%get-ptr result))
+		   (dir (and (not (%null-ptr-p rp))
+			     (get-foreign-namestring (pref rp :passwd.pw_dir)))))
+	      (return (if (and dir (eq (%unix-file-kind dir) :directory))
+			dir)))
             (unless (eql err #$ERANGE)
               (return nil))))))))
 
