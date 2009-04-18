@@ -349,7 +349,8 @@ lisp_write(HANDLE hfile, void *buf, ssize_t count)
 {
   HANDLE hevent;
   OVERLAPPED overlapped;
-  DWORD err, nwritten;
+  DWORD err, nwritten, wait_result;
+  pending_io pending;
   TCR *tcr = (TCR *)get_tcr(1);
 
   hevent = (HANDLE)tcr->io_datum;
@@ -366,12 +367,39 @@ lisp_write(HANDLE hfile, void *buf, ssize_t count)
     overlapped.Offset = SetFilePointer(hfile, 0, &(overlapped.OffsetHigh), FILE_CURRENT);
   }
 
+
+  pending.h = hfile;
+  pending.o = &overlapped;
+  tcr->pending_io_info = &pending;
   overlapped.hEvent = hevent;
   ResetEvent(hevent);
   if (WriteFile(hfile, buf, count, &nwritten, &overlapped)) {
+    tcr->pending_io_info = NULL;
     return nwritten;
   }
   
+  err = GetLastError();
+  if (err != ERROR_IO_PENDING) {
+    _dosmaperr(err);
+    tcr->pending_io_info = NULL;
+    return -1;
+  }
+  err = 0;
+  wait_result = WaitForSingleObjectEx(hevent, INFINITE, true);
+  tcr->pending_io_info = NULL;
+  if (wait_result == WAIT_OBJECT_0) {
+    err = overlapped.Internal;
+    if (err) {
+      _dosmaperr(err);
+      return -1;
+    }
+    return overlapped.InternalHigh;
+  }
+  if (wait_result == WAIT_IO_COMPLETION) {
+    CancelIo(hfile);
+    errno = EINTR;
+    return -1;
+  }
   err = GetLastError();
   _dosmaperr(err);
   return -1;
