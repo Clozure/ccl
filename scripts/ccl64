@@ -18,6 +18,10 @@ if [ -z "$CCL_DEFAULT_DIRECTORY"  -a  -n "`which readlink`" ]; then
 fi
 
 if [ -z "$CCL_DEFAULT_DIRECTORY" ]; then
+    probe "`pwd`"
+fi
+
+if [ -z "$CCL_DEFAULT_DIRECTORY" ]; then
     probe "/usr/local/src/ccl"
 fi
 
