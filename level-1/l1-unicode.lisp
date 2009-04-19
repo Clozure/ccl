@@ -3828,7 +3828,7 @@ in native byte-order with a leading byte-order mark."
              (end (+ origin noctets))
              (nchars 0 (1+ nchars)))
             ((> j end) (values nchars (- i origin)))
-         (declare (fixnum (i j end nchars)))
+         (declare (fixnum i j end nchars))
          (let* ((code (%get-unsigned-word pointer i)))
            (declare (type (unsigned-byte 16) code))
            (if swap (setq code (%swap-u16 code)))

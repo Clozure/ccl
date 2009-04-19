@@ -5810,7 +5810,7 @@
                       (head (make-list (length operands)))
                       (tail head))
                  (declare (dynamic-extent head)
-                          (cons (head tail)))
+                          (cons head tail))
                  (dolist (op operands)
                    (rplaca tail (parse-operand-form op))
                    (setq tail (cdr tail)))

@@ -178,7 +178,7 @@
       (or (car cell)
           (let* ((pname (%svref vector target::symbol.pname-cell))
                  (hash (mixup-hash-code (%pname-hash pname (uvsize pname)))))
-            (declare (type (simple-string pname)))
+            (declare (type simple-string pname))
             (if cell
               (setf (car cell) hash)
               (progn

@@ -90,7 +90,7 @@
   (let* ((code (char-code c))
          (to-lower *upper-to-lower*))
     (declare (type (mod #x110000) code)
-             (type (simple-array (signed-byte 16) *to-lower)))
+             (type (simple-array (signed-byte 16) (*)) to-lower))
     (and (< code (length to-lower))
          (not (zerop (aref to-lower code))))))
 
@@ -564,7 +564,7 @@
         (character (setq string1 (make-string 1 :initial-element string1)
                          len1 1))))
     (if (typep string2 'simple-string)
-      (setq len2 (length (the sumple-string string2)))
+      (setq len2 (length (the simple-string string2)))
       (etypecase string2
         (string (setq len2 (length string2))
                 (multiple-value-setq (string2 disp2)

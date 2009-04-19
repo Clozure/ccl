@@ -1921,7 +1921,7 @@
 
 (defun %ioblock-write-u8-encoded-simple-string (ioblock string start-char num-chars)
   (declare (fixnum start-char num-chars)
-           (simple-base-strng string)
+           (simple-base-string string)
            (optimize (speed 3) (safety 0)))
   (do* ((i 0 (1+ i))
         (col (ioblock-charpos ioblock))
@@ -1972,7 +1972,7 @@
 
 (defun %ioblock-write-u16-encoded-simple-string (ioblock string start-char num-chars)
   (declare (fixnum start-char num-chars)
-           (simple-base-strng string)
+           (simple-base-string string)
            (optimize (speed 3) (safety 0)))
   (when (ioblock-pending-byte-order-mark ioblock)
     (setf (ioblock-pending-byte-order-mark ioblock) nil)
@@ -2021,7 +2021,7 @@
 
 (defun %ioblock-write-swapped-u16-encoded-simple-string (ioblock string start-char num-chars)
   (declare (fixnum start-char num-chars)
-           (simple-base-strng string)
+           (simple-base-string string)
            (optimize (speed 3) (safety 0)))
   (do* ((i 0 (1+ i))
         (col (ioblock-charpos ioblock))
@@ -2054,7 +2054,7 @@
     (setf (ioblock-charpos ioblock) 0)
     (incf (ioblock-charpos ioblock)))
   (let* ((code (char-code char)))
-    (declare (type (mod #x110000 code)))
+    (declare (type (mod #x110000) code))
     (if (< code (the fixnum (ioblock-encode-literal-char-code-limit ioblock)))
       (%ioblock-write-u32-code-unit ioblock code)
       (funcall (ioblock-encode-output-function ioblock)
@@ -2074,7 +2074,7 @@
 
 (defun %ioblock-write-u32-encoded-simple-string (ioblock string start-char num-chars)
   (declare (fixnum start-char num-chars)
-           (simple-base-strng string)
+           (simple-base-string string)
            (optimize (speed 3) (safety 0)))
   (when (ioblock-pending-byte-order-mark ioblock)
     (setf (ioblock-pending-byte-order-mark ioblock) nil)
@@ -2104,7 +2104,7 @@
     (setf (ioblock-charpos ioblock) 0)
     (incf (ioblock-charpos ioblock)))
   (let* ((code (char-code char)))
-    (declare (type (mod #x110000 code)))
+    (declare (type (mod #x110000) code))
     (if (< code (the fixnum (ioblock-encode-literal-char-code-limit ioblock)))
       (%ioblock-write-swapped-u32-code-unit ioblock code)
       (funcall (ioblock-encode-output-function ioblock)
@@ -2124,7 +2124,7 @@
 
 (defun %ioblock-write-swapped-u32-encoded-simple-string (ioblock string start-char num-chars)
   (declare (fixnum start-char num-chars)
-           (simple-base-strng string)
+           (simple-base-string string)
            (optimize (speed 3) (safety 0)))
   (do* ((i 0 (1+ i))
         (col (ioblock-charpos ioblock))

@@ -3496,7 +3496,7 @@ of 32KBytes in earlier versions.)"
    argument is an alphabetic character; otherwise NIL."
   (let* ((code (char-code c))
          (bits *alpha-char-bits*))
-    (declare (type (mod #x110000 code))
+    (declare (type (mod #x110000) code)
              (simple-bit-vector bits))
     (and (< code (length bits))
          (not (eql 0 (sbit bits code))))))

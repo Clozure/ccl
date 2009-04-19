@@ -456,7 +456,7 @@
          (numopt (ldb $lfbits-numopt bits)))
     (declare (fixnum bits numreq numopt))
     (and (< i numopt)
-         (< (the fixum (+ i numreq)) (length argvals)))))
+         (< (the fixnum (+ i numreq)) (length argvals)))))
 
 ;;; This assumes that we've checked for argument presence.
 (defun nth-opt-gf-arg (gf argvals i)
@@ -464,7 +464,7 @@
   (let* ((bits (lfun-bits gf))
          (numreq (ldb $lfbits-numreq bits)))
     (declare (fixnum bits numreq ))
-    (nth (the fixum (+ i numreq)) argvals)))
+    (nth (the fixnum (+ i numreq)) argvals)))
 
 (defun gf-arguments-tail (gf argvals)
   (let* ((bits (lfun-bits gf))

@@ -347,7 +347,7 @@
 (defun regspec-class-and-value (regspec expected)
   (declare (fixnum expected))
   (let* ((class (hard-regspec-class regspec)))
-    (declare (type (unsigned-byte 8 class)))
+    (declare (type (unsigned-byte 8) class))
     (if (logbitp class expected)
       (values class (if (typep regspec 'lreg)
 		      regspec

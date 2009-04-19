@@ -299,7 +299,7 @@
                 #+64-bit-target :unsigned-doubleword
                 #+32-bit-target :unsigned-fullword ts-size
                 :address))))
-    (declare (fixum tcr))
+    (declare (fixnum tcr))
     (if (zerop tcr)
       (error "Can't create thread")
       tcr)))
