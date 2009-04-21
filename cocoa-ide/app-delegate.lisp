@@ -87,8 +87,7 @@
     (if (or (current-event-command-key-p)
             (null (setf w (first-window-with-controller-type 'search-files-window-controller))))
       (let* ((wc (make-instance 'search-files-window-controller)))
-        (setf w (#/window wc))
-        (#/setWindowController: w wc))
+        (setf w (#/window wc)))
       (#/makeKeyAndOrderFront: w self))))
 
 (objc:defmethod (#/newListener: :void) ((self lisp-application-delegate)

@@ -19,140 +19,152 @@
             (search-result-line-number srl)
             (search-result-line-nsstr srl))))
 
+(defconstant $find-combo-box-tag 0)
+(defconstant $folder-combo-box-tag 1)
+(defconstant $file-name-combo-box-tag 2)
+
+(defparameter *search-files-history-limit* 5 "combo box history length")
+
 (defclass search-files-window-controller (ns:ns-window-controller)
-  ((find-combo-box :foreign-type :id :accessor find-combo-box) ;IBOutlet
-   (folder-combo-box :foreign-type :id :accessor folder-combo-box) ;IBOutlet
-   (file-name-combo-box :foreign-type :id :accessor file-name-combo-box) ;IBOutlet
-   (search-button :foreign-type :id :accessor search-button) ;IBOutlet
-   (browse-button :foreign-type :id :accessor browse-button) ;IBOutlet
-   (outline-view :foreign-type :id :accessor outline-view) ;IBOutlet
-   (recursive-menu-item :foreign-type :id :accessor recursive-menu-item) ;IBOutlet
-   (case-sensitive-menu-item :foreign-type :id :accessor case-sensitive-menu-item) ;IBOutlet
-   (expand-results-menu-item :foreign-type :id :accessor expand-results-menu-item) ;IBOutlet
-   ;;the following three vectors contain NSStrings, they're treated as stacks, so the last entry appears first
-   ;;They behave as a history so the top of the stack is the most recent
-   ;;TODO:  figure out how to save these as a user preference
-   (find-strings :initform (make-array 10 :fill-pointer 0 :adjustable t)  :accessor find-strings) ;contains NSStrings
-   (folder-strings :initform (make-array 10 :fill-pointer 0 :adjustable t)  :accessor folder-strings) ;contains NSStrings
-   (file-name-strings :initform (make-array 10 :fill-pointer 0 :adjustable t)  :accessor file-name-strings) ;contains NSStrings
-   (results :initform (make-array 10 :fill-pointer 0 :adjustable t) :accessor search-results) ;contains a vector of search-result-files
+  ((find-combo-box :foreign-type :id :accessor find-combo-box)
+   (folder-combo-box :foreign-type :id :accessor folder-combo-box)
+   (file-name-combo-box :foreign-type :id :accessor file-name-combo-box)
+   (search-button :foreign-type :id :accessor search-button)
+   (browse-button :foreign-type :id :accessor browse-button)
+   (outline-view :foreign-type :id :accessor outline-view)
+   (recursive-checkbox :foreign-type :id :accessor recursive-checkbox)
+   (case-sensitive-checkbox :foreign-type :id :accessor case-sensitive-checkbox)
+   (expand-results-checkbox :foreign-type :id :accessor expand-results-checkbox)
+   (progress-indicator :foreign-type :id :accessor progress-indicator)
+   (status-field :foreign-type :id :accessor status-field)
+   (find-string-value :foreign-type :id :reader find-string-value)
+   (folder-string-value :foreign-type :id :reader folder-string-value)
+   (file-name-string-value :foreign-type :id :reader file-name-string-value)
+   (results :initform (make-array 10 :fill-pointer 0 :adjustable t)
+	    :accessor search-results) ;contains a vector of search-result-files
+   (new-results :accessor new-results)
    (search-dir :initform "" :accessor search-dir) ;the expanded search directory
-   (search-str :initform "")) ;a lisp string
+   (search-str :initform "" :accessor search-str) ;a lisp string
+   (recursive-p :initform t :reader recursive-p)
+   (case-sensitive-p :initform nil :reader case-sensitive-p)
+   (expand-results-p :initform nil :reader expand-results-p))
   (:metaclass ns:+ns-object))
 
-(defun recursive-p (wc)
-  (not (zerop (#/state (recursive-menu-item wc)))))
+(defmacro def-copying-setter (slot-name class-name)
+  (let* ((new (gensym))
+	 (obj (gensym)))
+    `(defmethod (setf ,slot-name) (,new (,obj ,class-name))
+       (with-slots (,slot-name) ,obj
+	 (unless (eql ,slot-name ,new)
+	   (#/release ,slot-name)
+	   (setq ,slot-name (#/copy ,new)))))))
 
-(defun case-sensitive-p (wc)
-  (not (zerop (#/state (case-sensitive-menu-item wc)))))
+(def-copying-setter find-string-value search-files-window-controller)
+(def-copying-setter folder-string-value search-files-window-controller)
+(def-copying-setter file-name-string-value search-files-window-controller)
 
-(defun expand-results-p (wc)
-  (not (zerop (#/state (expand-results-menu-item wc)))))
+
 
-(objc:defmethod (#/toggleMenuItem :void) ((wc search-files-window-controller) menu-item)
-  (#/setState: menu-item (if (zerop (#/state menu-item)) 1 0)))
+;;; Enable and disable the Search button according to the state of the
+;;; search files dialog.
 
-(objc:defmethod (#/expandResults :void) ((wc search-files-window-controller) menu-item)
-  (#/toggleMenuItem wc menu-item)
-  (if (expand-results-p wc)
-    (expand-all-results wc)
-    (collapse-all-results wc)))
+(defun can-search-p (wc)
+  (and (plusp (#/length (find-string-value wc)))
+       (folder-valid-p wc)
+       (plusp (#/length (file-name-string-value wc)))))
+
+(defmethod folder-valid-p ((wc search-files-window-controller))
+  (let* ((fm (#/defaultManager ns:ns-file-manager))
+	 (path (folder-string-value wc)))
+    (rlet ((dir-p #>BOOL))
+      (and
+       (#/fileExistsAtPath:isDirectory: fm path dir-p)
+       (plusp (%get-byte dir-p))))))
+
+(objc:defmethod (#/controlTextDidChange: :void) ((wc search-files-window-controller) notification)
+  (let* ((object (#/object notification))
+	 (info (#/userInfo notification))
+	 (field-editor (#/valueForKey: info #@"NSFieldEditor"))
+	 (string-ok (plusp (#/length (find-string-value wc))))
+	 (folder-ok (folder-valid-p wc))
+	 (file-ok (plusp (#/length (file-name-string-value wc)))))
+    (cond ((eql object (find-combo-box wc))
+	   (setf string-ok (plusp (#/length (#/string field-editor)))))
+	  ((eql object (folder-combo-box wc))
+	   (setf (folder-string-value wc) (#/string field-editor))
+	   (setf folder-ok (folder-valid-p wc)))
+	  ((eql object (file-name-combo-box wc))
+	   (setf file-ok (#/length (#/string field-editor)))))
+    (#/setEnabled: (search-button wc) (and string-ok folder-ok file-ok))))
+
+(objc:defmethod (#/comboBoxSelectionDidChange: :void) ((wc search-files-window-controller) notification)
+  (declare (ignore notification))
+  (#/setEnabled: (search-button wc) (can-search-p wc)))
+
+(objc:defmethod (#/toggleCheckbox: :void) ((wc search-files-window-controller) checkbox)
+  (with-slots (recursive-checkbox case-sensitive-checkbox expand-results-checkbox
+	       recursive-p case-sensitive-p expand-results-p) wc
+    (cond ((eql checkbox recursive-checkbox)
+	   (setf recursive-p (not recursive-p)))
+	  ((eql checkbox case-sensitive-checkbox)
+	   (setf case-sensitive-p (not case-sensitive-p)))
+	  ((eql checkbox expand-results-checkbox)
+	   (setf expand-results-p (not expand-results-p))
+	   (if expand-results-p
+	     (expand-all-results wc)
+	     (collapse-all-results wc))
+	   (#/reloadData (outline-view wc)))
+	  (t
+	   (error "Unknown checkbox ~s" checkbox)))))
+
+;;; For simple strings, it's easier to use the combo box's built-in
+;;; list than it is to mess around with a data source.
+
+(defun update-combo-box (combo-box string)
+  (check-type string ns:ns-string)
+  (unless (#/isEqualToString: string #@"")
+    (#/removeItemWithObjectValue: combo-box string)
+    (#/insertItemWithObjectValue:atIndex: combo-box string 0)
+    (when (> (#/numberOfItems combo-box) *search-files-history-limit*)
+      (#/removeItemAtIndex: combo-box *search-files-history-limit*))))
+
+(objc:defmethod (#/updateFindString: :void) ((wc search-files-window-controller)
+					     sender)
+  (setf (find-string-value wc) (#/stringValue sender))
+  (update-combo-box sender (find-string-value wc)))
+
+(objc:defmethod (#/updateFolderString: :void) ((wc search-files-window-controller) sender)
+  (setf (folder-string-value wc) (#/stringValue sender))
+  (update-combo-box sender (folder-string-value wc)))
+
+(objc:defmethod (#/updateFileNameString: :void) ((wc search-files-window-controller) sender)
+  (setf (file-name-string-value wc) (#/stringValue sender))
+  (update-combo-box sender (file-name-string-value wc)))
+
+
 
 (objc:defmethod #/init ((self search-files-window-controller))
   (#/initWithWindowNibName: self #@"SearchFiles"))
 
-;;Lifted from apropos-window.lisp, not sure if it's really needed...
-#+later (objc:defmethod (#/automaticallyNotifiesObserversForKey: :<BOOL>) ((self +search-files-window-controller)
-                                                                  key)
-  (declare (ignore key))
-  nil)
-
 (objc:defmethod (#/awakeFromNib :void) ((wc search-files-window-controller))
-  (with-slots (search-button browse-button find-combo-box folder-combo-box file-name-combo-box 
-			     file-name-strings outline-view recursive-menu-item 
-                             case-sensitive-menu-item expand-results-menu-item) wc
-    (#/setTarget: search-button wc)
-    (#/setKeyEquivalent: search-button (%make-nsstring (string #\return))) ;makes it the default button
-    (#/setAction: search-button (@selector #/doSearch))
-    (#/setTarget: browse-button wc)
-    (#/setAction: browse-button (@selector #/doBrowse))
-    (vector-push-extend #@"*.lisp" file-name-strings)
-    (#/setUsesDataSource: find-combo-box t)
-    (#/setDataSource: find-combo-box wc)
-    (#/setUsesDataSource: find-combo-box t)
-    (#/setUsesDataSource: folder-combo-box t)
-    (#/setDataSource: folder-combo-box wc)
-    (#/setUsesDataSource: folder-combo-box t)
-    (#/setUsesDataSource: file-name-combo-box t)
-    (#/setDataSource: file-name-combo-box wc)
-    (#/setUsesDataSource: file-name-combo-box t)
-    (#/setDataSource: outline-view wc)
+  (#/setStringValue: (status-field wc) #@"")
+  (with-slots (outline-view) wc
     (#/setTarget: outline-view wc)
-    (#/setEditable: (#/objectAtIndex: (#/tableColumns outline-view) 0) nil)
-    (#/setDoubleAction: outline-view (@selector #/editLine))
-    (#/selectItemAtIndex: file-name-combo-box 0)
-    (#/setTarget: recursive-menu-item wc)
-    (#/setAction: recursive-menu-item (@selector #/toggleMenuItem))
-    (#/setTarget: case-sensitive-menu-item wc)
-    (#/setAction: case-sensitive-menu-item (@selector #/toggleMenuItem))
-    (#/setTarget: expand-results-menu-item wc)
-    (#/setAction: expand-results-menu-item (@selector #/expandResults))
-    ))
-
-(defmethod combo-box-to-vector ((wc search-files-window-controller) combo-box)
-  (with-slots (find-combo-box folder-combo-box file-name-combo-box 
-			      find-strings folder-strings file-name-strings) wc
-    (cond ((eql combo-box find-combo-box) find-strings)
-          ((eql combo-box file-name-combo-box) file-name-strings)
-          ((eql combo-box folder-combo-box) folder-strings)
-          (t (error "Unknown combo box: ~s" combo-box)))))
-
-;;; Data source methods for combo box
-
-(objc:defmethod (#/numberOfItemsInComboBox: :<NSI>nteger) ((wc search-files-window-controller)
-						   combo-box)
-  (length (combo-box-to-vector wc combo-box)))
-
-(objc:defmethod #/comboBox:objectValueForItemAtIndex: ((wc search-files-window-controller)
-						       combo-box
-						       (index :<NSI>nteger))
-  (let ((vec (combo-box-to-vector wc combo-box)))
-    (aref vec (- (length vec) index 1))))
-
-(defun ns-string-begins-with (partial-nstr nstr)
-  (eql 0 (ns:ns-range-location (#/rangeOfString:options: nstr partial-nstr #$NSAnchoredSearch))))
+    (#/setDoubleAction: outline-view (@selector #/editLine:)))
+  (setf (find-string-value wc) #@"")
+  (with-slots (file-name-combo-box) wc
+    (#/setStringValue: file-name-combo-box #@"*.lisp")
+    (#/updateFileNameString: wc file-name-combo-box))
+  (with-slots (folder-combo-box) wc
+    (let ((dir (ccl::native-translated-namestring (ccl:current-directory))))
+    (#/setStringValue: folder-combo-box
+		       (#/autorelease (%make-nsstring dir)))
+    (#/updateFolderString: wc folder-combo-box))))
 
 (defun ns-string-equal (ns1 ns2)
   (and (typep ns1 'ns:ns-string)
        (typep ns2 'ns:ns-string)
        (#/isEqualToString: ns1 ns2)))
-
-(objc:defmethod #/comboBox:completedString: ((wc search-files-window-controller)
-					     combo-box
-					     partial-nstr)
-  (or (find partial-nstr (combo-box-to-vector wc combo-box) :from-end t
-            :test #'ns-string-begins-with)
-      #@""))
-
-(objc:defmethod (#/comboBox:indexOfItemWithStringValue: :<NSUI>nteger)
-    ((wc search-files-window-controller)
-     combo-box
-     string)
-  (let* ((vec (combo-box-to-vector wc combo-box))
-         (pos (position string vec :from-end t :test #'ns-string-equal)))
-    (if pos
-      (1- (length vec))
-      #$NSNotFound)))
-
-(defun get-combo-box-nstr (wc combo-box)
-  (let* ((vec (combo-box-to-vector wc combo-box))
-	 (nstr (#/stringValue combo-box))
-         (pos (position nstr vec :test #'eql)))
-    (unless pos (#/retain nstr))
-    (unless (and pos (= (1+ pos) (length vec))) ;already at top of stack
-      (setf vec (delete nstr vec :test #'ns-string-equal)) ;delete string if it's already there
-      (vector-push-extend nstr vec))
-    nstr))
 
 (defmethod get-full-dir-string ((str string))
   ;make sure it has a trailing slash
@@ -164,49 +176,102 @@
 (defmethod get-full-dir-string ((nsstring ns:ns-string))
   (get-full-dir-string (lisp-string-from-nsstring nsstring)))
 
-(objc:defmethod (#/doSearch :void) ((wc search-files-window-controller) sender)
+(objc:defmethod (#/doSearch: :void) ((wc search-files-window-controller) sender)
   (declare (ignore sender))
   (queue-for-gui #'(lambda ()
                      (with-slots (outline-view results) wc
                        (setf (fill-pointer results) 0)
                        (set-results-string wc #@"Searching...")
+		       (#/startAnimation: (progress-indicator wc) nil)
                        (#/reloadData outline-view))))
-  (queue-for-gui 
-   #'(lambda ()
-       (with-slots (find-combo-box folder-combo-box file-name-combo-box
-                                   results outline-view search-dir search-str) wc
-         (let* ((find-nstr (get-combo-box-nstr wc find-combo-box))
-                (folder-nstr (get-combo-box-nstr wc folder-combo-box))
-                (file-name-nstr (get-combo-box-nstr wc file-name-combo-box)))
-           (setf search-dir (get-full-dir-string folder-nstr)
-                 search-str (lisp-string-from-nsstring find-nstr))
-           (let* ((grep-output (call-grep (nconc (and (recursive-p wc) (list "-r"))
-                                                 (unless (case-sensitive-p wc) (list "-i"))
-                                                 (list "-c" "-e" (lisp-string-from-nsstring find-nstr)
-                                                  "--include" (lisp-string-from-nsstring file-name-nstr)
-                                                  search-dir))))
-             (dir-len (length search-dir))
-             (occurrences 0)
-             (file-count 0))
-             (map-lines grep-output
-                        #'(lambda (start end)
-                            (let* ((colon-pos (position #\: grep-output :from-end t :start start :end end))
-                                   (count (parse-integer grep-output :start (1+ colon-pos) :end end)))
-                              (incf file-count)
-                              (when (> count 0)
-                                (vector-push-extend (make-search-result-file 
-                                                     :name (subseq grep-output (+ start dir-len) colon-pos)
-                                                     :lines (make-array count :initial-element nil))
-                                                    results)
-                                (incf occurrences count)))))
-             (set-results-string wc (%make-nsstring (format nil "Found ~a occurrences in ~a files out of ~a files searched."
-                                                            occurrences (length results) file-count)))
-             (#/setTitle: (#/window wc) (%make-nsstring (format nil "Search Files: ~a" search-str)))
-             (#/reloadData outline-view)
-             (when (and (> occurrences 0) (or (<  occurrences 20) (expand-results-p wc)))
-               (expand-all-results wc))
-             (#/reloadData outline-view)))))))
 
+  (let* ((find-str (lisp-string-from-nsstring (find-string-value wc)))
+	 (folder-str (lisp-string-from-nsstring (folder-string-value wc)))
+	 (file-str (lisp-string-from-nsstring (file-name-string-value wc)))
+	 (grep-args (list (when (recursive-p wc) "-r")
+			  (unless (case-sensitive-p wc) "-i")
+			  "-I" "-s" "-c" "-e" find-str "--include" file-str
+			  (get-full-dir-string folder-str))))
+    (setf (search-dir wc) folder-str
+	  (search-str wc) find-str)
+    (#/setEnabled: (search-button wc) nil)
+    (process-run-function "grep" 'run-grep grep-args wc)
+    (#/setTitle: (#/window wc) (#/autorelease
+				(%make-nsstring (format nil "Search Files: ~a"
+							find-str))))))
+
+(defun auto-expandable-p (results)
+  (let ((n 0))
+    (dotimes (f (length results) t)
+      (dotimes (l (length (search-result-file-lines (aref results f))))
+	(incf n)
+	(when (> n 20)
+	  (return-from auto-expandable-p nil))))))
+
+(objc:defmethod (#/updateResults: :void) ((wc search-files-window-controller)
+					  msg)
+  (let* ((old-results (search-results wc)))
+    (setf (search-results wc) (new-results wc))
+    ;; release NSString instances.  sigh.
+    (dotimes (f (length old-results))
+      (dotimes (l (length (search-result-file-lines f)))
+	(and (search-result-line-nsstr l)
+	     (#/release (search-result-line-nsstr l))))
+      (and (search-result-file-nsstr f)
+	   (#/release (search-result-file-nsstr f))))
+    (set-results-string wc msg)
+    (when (or (auto-expandable-p (search-results wc))
+	      (expand-results-p wc))
+      (expand-all-results wc))
+    (#/reloadData (outline-view wc))
+    (#/setEnabled: (search-button wc) t)))
+    
+;;; This is run in a secondary thread.
+(defun run-grep (grep-arglist wc)
+  (with-autorelease-pool 
+      (#/performSelectorOnMainThread:withObject:waitUntilDone:
+       (progress-indicator wc) (@selector #/startAnimation:) nil nil)
+    (unwind-protect
+	 (let* ((grep-output (call-grep grep-arglist)))
+	   (multiple-value-bind (results message)
+	       (results-and-message grep-output wc)
+	     ;; This assumes that only one grep can be running at
+	     ;; a time.
+	     (setf (new-results wc) results)
+	     (#/performSelectorOnMainThread:withObject:waitUntilDone:
+	      wc
+	      (@selector #/updateResults:)
+	      (#/autorelease (%make-nsstring message))
+	      nil)))
+      (#/performSelectorOnMainThread:withObject:waitUntilDone:
+       (progress-indicator wc) (@selector #/stopAnimation:) nil nil))))
+
+(defun results-and-message (grep-output wc)
+  (let* ((results (make-array 10 :fill-pointer 0 :adjustable t))
+	 (occurrences 0)
+	 (file-count 0)
+	 (dir-len (length (search-dir wc))))
+    (map-lines
+     grep-output
+     #'(lambda (start end)
+	 (let* ((colon-pos (position #\: grep-output :from-end t :start start
+				     :end end))
+		(count (parse-integer grep-output :start (1+ colon-pos)
+				      :end end)))
+	   (incf file-count)
+	   (when (> count 0)
+	     (vector-push-extend (make-search-result-file
+				  :name (subseq grep-output
+						(+ start dir-len)
+						colon-pos)
+				  :lines (make-array count :initial-element nil))
+				 results)
+	     (incf occurrences count)))))
+    (values results
+	    (format nil "Found ~a occurrence~:p in ~a file~:p out of ~a ~
+                         file~:p searched." occurrences (length results)
+			 file-count))))
+		   
 (defmethod expand-all-results ((wc search-files-window-controller))
   (with-slots (outline-view) wc
     (#/expandItem:expandChildren: outline-view +null-ptr+ t)
@@ -218,17 +283,17 @@
     (#/reloadData outline-view)))
 
 (defun set-results-string (wc str)
-  (#/setStringValue: (#/headerCell (#/objectAtIndex: (#/tableColumns (outline-view wc)) 0)) str))
+  (#/setStringValue: (status-field wc) str))
 	    
-(objc:defmethod (#/doBrowse :void) ((wc search-files-window-controller) sender)
+(objc:defmethod (#/doBrowse: :void) ((wc search-files-window-controller) sender)
   (declare (ignore sender))
   (let ((dir (choose-directory-dialog)))
     (when dir
       (with-slots (folder-combo-box) wc
-        (#/setStringValue: folder-combo-box dir)
-        (get-combo-box-nstr wc folder-combo-box)))))
+	(#/setStringValue: folder-combo-box dir)
+	(#/updateFolderString: wc folder-combo-box)))))
 
-(objc:defmethod (#/editLine :void) ((wc search-files-window-controller) outline-view)
+(objc:defmethod (#/editLine: :void) ((wc search-files-window-controller) outline-view)
   (let* ((item (get-selected-item outline-view))
          (line-result (and item (nsstring-to-line-result wc item))))
     (unless line-result
@@ -329,9 +394,9 @@
     (let* ((proc (run-program "grep" args :input nil :output stream)))
       (multiple-value-bind (status exit-code) (external-process-status proc)
 	(let ((output (get-output-stream-string stream)))
-           (if (and (eq :exited status) (or (= exit-code 0) (= exit-code 1)))
-            (return-from call-grep output)
-            (error "Error running ~a, xit code: ~s" *grep-program* exit-code)))))))
+	  (if (eq :exited status)
+	    (return-from call-grep output)
+            (error "~a returned exit status ~s" *grep-program* exit-code)))))))
 
 (defun map-lines (string fn)
   "For each line in string, fn is called with the start and end of the line"
@@ -347,3 +412,4 @@
   (#/windowController 
    (first-window-with-controller-type 'search-files-window-controller)))
 |#
+
