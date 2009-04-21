@@ -909,6 +909,11 @@
     (cond ((and (not *option-is-meta*)
 		(logtest #$NSAlternateKeyMask flags))
 	   (call-next-method event))
+	  ;; If a standalone dead key (e.g., ^ on a French keyboard)
+	  ;; was pressed, pass it through to the Cocoa text input system.
+	  ((and (zerop (#/length (#/characters event)))
+		(not (logtest #$NSAlternateKeyMask flags)))
+	   (call-next-method event))
 	  ((or (null view)
 	       (#/hasMarkedText self)
 	       (and quote-p (zerop (#/length (#/characters event)))))
