@@ -64,6 +64,7 @@
      catch-cancel
      throw-cancel
      *backtrace-on-break*
+     *show-restarts-on-break*
      print-call-history
      dbg-form
      *backtrace-print-level*
