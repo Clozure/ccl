@@ -616,6 +616,7 @@ expressions as commands")
          (*signal-printing-errors* nil)
          (*read-suppress* nil)
          (*print-readably* nil)
+	 (*default-integer-command* `(:c 0 ,(1- (length (compute-restarts condition)))))
          (context (new-backtrace-info nil
                                       frame-pointer
                                       (if *backtrace-contexts*
