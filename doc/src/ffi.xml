@@ -1783,7 +1783,7 @@
       <para>A component shell script called h-to-ffi.sh reads a
         specified .h file (and optional preprocessor arguments) and writes
          a (hopefully) equivalent .ffi file to standard output, calling 
-        the the ffigen program with appropriate  arguments.</para>
+        the ffigen program with appropriate  arguments.</para>
       <para>For each interface directory (see FIXTHIS)
         <emphasis>subdir</emphasis> distributed with &CCL;, a shell
         script (distributed with &CCL; as
