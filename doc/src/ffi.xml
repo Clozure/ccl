@@ -1760,7 +1760,7 @@
 	  <title>Overview</title>
 	  <para>&CCL; uses an interface translation system based on the FFIGEN
 	    system, which is described at
-	    http://www.ccs.neu.edu/home/lth/ffigen/.
+	    <ulink url="http://www.ccs.neu.edu/home/lth/ffigen/">this page</ulink>
 	    The interface translator makes
 	    the constant, type, structure, and function definitions in a set of
 	    C-language header files available to lisp code.</para>
@@ -1773,45 +1773,28 @@
         semantics of header file inclusion or the arcana of C
         parsing.</para>
       <para>The original FFIGEN system used a modified version of
-        the LCC C compiler to produce .ffi files. Since many LinuxPPC
+        the LCC C compiler to produce .ffi files. Since many OS
         header files contain GCC-specific constructs, &CCL;'s
         translation system uses a modified version of GCC (called,
         somewhat confusingly, ffigen.)</para>
-      <para>A version of ffigen based on GCC-4.0 was developed
-        during the spring and summer of 2005.  Sources (diffs relative
-        to the GCC-4.0 release) are available here, and binaries are
-        available for DarwinPPC and for LinuxPPC.  These versions
-        should be insensitive to to the version of GCC (and its
-        preprocessor) installed on the system.</para>
-      <para>An older version was developed in 2001-2002; it depended
-        on the installed version of GCC being 2.95.  It may still be
-        of interest for people unable to run the GCC-4.0-based version
-        for whatever reason.</para>
-      <para>A LinuxPPC binary of this older version is available at
-        ftp://clozure.com/pub/ffigen-0.1.tar.gz, and LinuxPPC source
-        differences are at
-        ftp://clozure.com/pub/ffigen-src.tar.gz.</para>
-      <para>For Darwin, the binary of the older FFIGEN is available
-        at ftp://clozure.com/pub/ffigen-darwin.tar.gz, and the source
-        differences are at
-        ftp://clozure.com/pub/ffigen-darwin-src.tar.gz.</para>
-      <para>A shell script (distributed with the source and binary
-        packages) called h-to-ffi.sh reads a specified .h file (and
-        optional preprocessor arguments) and writes a (hopefully)
-        equivalent .ffi file to standard output, calling the installed
-        C preprocessor and the ffigen program with appropriate
-        arguments.</para>
+       <para>See <ulink url="http://trac.clozure.com/openmcl/wiki/BuildFFIGEN">
+	here</ulink> for information on building and installing ffigen.
+	</para>
+      <para>A component shell script called h-to-ffi.sh reads a
+        specified .h file (and optional preprocessor arguments) and writes
+         a (hopefully) equivalent .ffi file to standard output, calling 
+        the the ffigen program with appropriate  arguments.</para>
       <para>For each interface directory (see FIXTHIS)
         <emphasis>subdir</emphasis> distributed with &CCL;, a shell
         script (distributed with &CCL; as
         "ccl:headers;<emphasis>subdir</emphasis>;C;populate.sh"
-        ("ccl:darwin-headers;<emphasis>subdir</emphasis>;C;populate.sh"
-        for Darwin)) calls h-to-ffi.sh on a large number of the header
+        (or some other platform-specific headers directory)
+        calls h-to-ffi.sh on a large number of the header
         files in /usr/include (or some other <emphasis>system header
           path</emphasis>) and creates a parallel directory tree in
         "ccl:headers;<emphasis>subdir</emphasis>;C;<emphasis>system</emphasis>;<emphasis>header</emphasis>;<emphasis>path</emphasis>;"
         (or
-        "ccl:darwin-headers;<emphasis>subdir</emphasis>;C;<emphasis>system</emphasis>;<emphasis>header</emphasis>;<emphasis>path</emphasis>;"),
+        "ccl:darwin-headers;<emphasis>subdir</emphasis>;C;<emphasis>system</emphasis>;<emphasis>header</emphasis>;<emphasis>path</emphasis>;", etc.),
         populating that directory with .ffi files.</para>
       <para>A lisp function defined in "ccl:library;parse-ffi.lisp"
         reads the .ffi files in a specified interface directory
@@ -1827,12 +1810,10 @@
 	  <orderedlist>
 	    <listitem>
 	      <para>Ensure that the FFIGEN program is installed. See
-	        the"README" file in the source or binary archive for
+	        the"README" file generated during the FFIGEN build process for
 	        specific installation instructions.This example assumes
-	        LinuxPPC; for 32-bit DarwinPPC,
-	        substitute"ccl:darwin-headers;" for "ccl:headers;".  For
-	        64-bit DarwinPPC,substitute
-	        "ccl:darwin-headers64;".</para>
+	        LinuxPPC; for other platforms, substitute the appropriate
+		headers directory. </para>
 	    </listitem>
         <listitem>
 	      <para>Edit the
@@ -1853,7 +1834,6 @@
               ? (parse-standard-ffi-files :SUBDIR)
               ;;; lots of output ... after a while, shiny new .cdb files should
               ;;; appear in "ccl:headers;subdir;"
-              ;;; (or "ccl:darwin-headers;subdir;" under Darwin)
           </programlisting></para>
 	    </listitem>
 	  </orderedlist>
