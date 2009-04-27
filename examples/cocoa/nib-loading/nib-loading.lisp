@@ -12,17 +12,15 @@
 (in-package :ccl)
 
 (defun load-nibfile (nib-path)
-  (let* ((app-class-name (%make-nsstring "NSApplication"))
-         (app-class (#_NSClassFromString app-class-name))
-         (app (#/sharedApplication app-class))
-         (app-zone (#/zone app))
+  (let* ((app-zone (#/zone *NSApp*))
          (nib-name (%make-nsstring (namestring nib-path)))
-         (objects-array (#/arrayWithCapacity: (@class ns-mutable-array) 16))
-         (dict (#/dictionaryWithObjectsAndKeys: (@class ns-mutable-dictionary)
-                    app #@"NSNibOwner"
-                    objects-array #&NSNibTopLevelObjects))
+         (objects-array (#/arrayWithCapacity: ns:ns-mutable-array 16))
+         (dict (#/dictionaryWithObjectsAndKeys: ns:ns-mutable-dictionary
+                    *NSApp* #@"NSNibOwner"
+                    objects-array #&NSNibTopLevelObjects
+		    +null-ptr+))
          (toplevel-objects (list))
-         (result (#/loadNibFile:externalNameTable:withZone: (@class ns-bundle)
+         (result (#/loadNibFile:externalNameTable:withZone: ns:ns-bundle
                                                             nib-name
                                                             dict
                                                             app-zone)))
@@ -30,10 +28,7 @@
       (setf toplevel-objects 
             (cons (#/objectAtIndex: objects-array i)
                   toplevel-objects)))
-    (#/release app-class-name)
     (#/release nib-name)
-    (#/release dict)
-    (#/release objects-array)
     (values toplevel-objects result)))
 
 #|

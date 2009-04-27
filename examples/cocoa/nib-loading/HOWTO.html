@@ -133,8 +133,9 @@
         application for the one it's using.</p>
 
       <p>Before we can ask the application anything, we need a
-        reference to it. We'll ask the class NSApplication to give us a
-        reference to the running application.</p>
+        reference to it.  When the Clozure CL application starts up,
+        it stores a reference to the Cocoa application object into
+        the special variable *NSApp*.</p>
 
       <p>Start by changing to the CCL package; most of the utility
         functions we'll use are defined in that package:</p>
@@ -144,45 +145,12 @@
         #&lt;Package "CCL"&gt;
       </pre>
 
-      <p>Next, get a reference to the NSApplication class:</p>
+      <p>We have a reference to the running Clozure CL application
+        object in the special variable *NSApp*.  We can ask it for its
+        zone, where it allocates objects in memory:</p>
 
       <pre>
-        ? (setf  *my-app*
-        (let* ((class-name (%make-nsstring "NSApplication"))
-        (appclass (#_NSClassFromString class-name)))
-        (#/release class-name)
-        (#/sharedApplication appclass)))
-        #&lt;LISP-APPLICATION &lt;LispApplication: 0x1b8de0&gt; (#x1B8DE0)&gt;
-      </pre>
-
-      <p>Let's review this form step-by-step.</p>
-
-      <p>First of all, it's going to store the returned application
-        object in the variable <code>*my-app*</code>, so that we have it
-        convenient for later use.</p>
-
-      <p>We need an <code>NSString</code> object that contains the
-        name of the application class, so the code allocates one by
-        calling <code>%make-nsstring</code>. The <code>NSString</code>
-        object is a dynamically-allocated foreign object, not managed by
-        Lisp's garbage-collector, so we'll have to be sure to release it
-        later.</p>
-
-      <p>The code next uses the class-name to get the
-        actual <code>NSApplication</code> class object, by
-        calling <code>#_NSClassFromString</code>.</p>
-
-      <p>Finally, after first releasing the <code>NSString</code>
-        object, it calls <code>#/sharedApplication</code> to get the
-        running application object, which turns out to be an instance
-        of <code>LispApplication</code>.</p>
-
-      <p>Voilà! We have a reference to the running Clozure CL
-        application object! Now we can ask it for its zone, where it
-        allocates objects in memory:</p>
-
-      <pre>
-        ? (setf *my-zone* (#/zone *my-app*))
+        ? (setf *my-zone* (#/zone *NSApp*))
         #&lt;A Foreign Pointer #x8B000&gt;
       </pre>
 
@@ -219,7 +187,7 @@
 
       <pre>
         ? (setf *my-dict* 
-        (#/dictionaryWithObject:forKey: (@class ns-mutable-dictionary) 
+        (#/dictionaryWithObject:forKey: ns:ns-mutable-dictionary
         *my-app* 
         #@"NSNibOwner"))
         #&lt;NS-MUTABLE-DICTIONARY {
@@ -248,7 +216,7 @@
 
       <pre>
         ? (#/loadNibFile:externalNameTable:withZone: 
-        (@class ns-bundle)
+        ns:ns-bundle
         *nib-path*
         *my-dict*
         *my-zone*)
@@ -263,14 +231,16 @@
         returned <code>NIL</code>.</p>
 
       <p>At this point we no longer need the pathname and
-        dictionary objects, and we can release them:</p>
+        dictionary objects.  The *nib-path* we must release:</p>
 
       <pre>
         ? (setf *nib-path* (#/release *nib-path*))
         NIL
-        ? (setf *my-dict* (#/release *my-dict*))
-        NIL
       </pre>
+
+      <p>The *my-dict* instance was not created with #/alloc (or with
+      MAKE-INSTANCE), so it is already autoreleased, and we don't need
+      to release it again.
 
       <div class="section-head">
         <h2>Making a Nib-loading Function</h2> 
@@ -288,47 +258,39 @@
 
       <pre>
 (defun load-nibfile (nib-path)
-  (let* ((app-class-name (%make-nsstring "NSApplication"))
-         (app-class (#_NSClassFromString class-name))
-         (app (#/sharedApplication appclass))
-         (app-zone (#/zone app))
+  (let* ((app-zone (#/zone *NSApp*))
          (nib-name (%make-nsstring (namestring nib-path)))
          (dict (#/dictionaryWithObject:forKey: 
-                (@class ns-mutable-dictionary) app #@"NSNibOwner")))
-    (#/loadNibFile:externalNameTable:withZone: (@class ns-bundle)
+                 ns-mutable-dictionary app #@"NSNibOwner")))
+    (#/loadNibFile:externalNameTable:withZone: ns:ns-bundle
                                                nib-name
                                                dict
-                                               app-zone)))
+                                               app-zone
+                                             )))
       </pre>
 
-      <p>The trouble with this function is that it leaks two strings
-      and a dictionary every time we call it. We need to release the
-      variables <code>app-class-name</code>, <code>nib-name</code>,
-      and <code>dict</code> before returning. So how about this
+      <p>The trouble with this function is that it leaks a string
+      every time we call it. We need to release the
+      <code>nib-name</code> before returning. So how about this
       version instead?</p>
 
       <pre>
 (defun load-nibfile (nib-path)
-  (let* ((app-class-name (%make-nsstring "NSApplication"))
-         (app-class (#_NSClassFromString class-name))
-         (app (#/sharedApplication appclass))
-         (app-zone (#/zone app))
+  (let* ((app-zone (#/zone *NSApp*))
          (nib-name (%make-nsstring (namestring nib-path)))
          (dict (#/dictionaryWithObject:forKey: 
-                (@class ns-mutable-dictionary) app #@"NSNibOwner"))
-         (result (#/loadNibFile:externalNameTable:withZone: (@class ns-bundle)
+                ns-mutable-dictionary app #@"NSNibOwner"))
+         (result (#/loadNibFile:externalNameTable:withZone: ns:ns-bundle
                                                             nib-name
                                                             dict
                                                             app-zone)))
-    (#/release app-class-name)
     (#/release nib-name)
-    (#/release dict)
     result))
       </pre>
 
       <p>This version solves the leaking problem by binding the result
       of the load call to <code>result</code>, then releasing the
-      variables in question before returning the result of the
+      <code>nib-name</code> before returning the result of the
       load.</p>
 
       <p>There's just one more problem: what if we want to use the
@@ -343,7 +305,7 @@
 
       <pre>
 (let* (...
-       (objects-array (#/arrayWithCapacity: (@class ns-mutable-array) 16))
+       (objects-array (#/arrayWithCapacity: ns:ns-mutable-array 16))
        ...)
   ...)
       </pre>
@@ -355,18 +317,22 @@
 
       <pre>
   (let* (...
-         (dict (#/dictionaryWithObjectsAndKeys: (@class ns-mutable-dictionary)
+         (dict (#/dictionaryWithObjectsAndKeys: ns:ns-mutable-dictionary
                     app #@"NSNibOwner"
-                    objects-array #&amp;NSToplevelObjects))
+                    objects-array #&amp;NSToplevelObjects
+                    +null-ptr+))
          ...)
     ...)
   
       </pre>
 
-      <p>We'll want to release the <code>NSMutableArray</code>
-      object before returning, but first we need to collect the
-      objects in it. We'll do that by making a local variable to
-      store them, then iterating over the array object to get them all.</p>
+      <p>We now want to collect the objects in it. We'll do that by
+      making a local variable to store them, then iterating over the
+      array object to get them all.  (Normally, when we want to keep
+      an object from an array, we have to retain it.  Top-level nib
+      objects are a special case: they are created by the nib loading
+      process with a retain count of 1, and we are responsible for releasing
+      them when we're through with them.)</p>
 
       <pre>
   (let* (...
@@ -390,17 +356,15 @@
 
       <pre>
 (defun load-nibfile (nib-path)
-  (let* ((app-class-name (%make-nsstring "NSApplication"))
-         (app-class (#_NSClassFromString app-class-name))
-         (app (#/sharedApplication app-class))
-         (app-zone (#/zone app))
+  (let* ((app-zone (#/zone *NSApp*))
          (nib-name (%make-nsstring (namestring nib-path)))
-         (objects-array (#/arrayWithCapacity: (@class ns-mutable-array) 16))
-         (dict (#/dictionaryWithObjectsAndKeys: (@class ns-mutable-dictionary)
-                    app #@"NSNibOwner"
-                    objects-array #&amp;NSNibToplevelObjects))
+         (objects-array (#/arrayWithCapacity: ns:ns-mutable-array 16))
+         (dict (#/dictionaryWithObjectsAndKeys: ns:ns-mutable-dictionary
+                    *NSApp* #@"NSNibOwner"
+                    objects-array #&NSNibTopLevelObjects
+		    +null-ptr+))
          (toplevel-objects (list))
-         (result (#/loadNibFile:externalNameTable:withZone: (@class ns-bundle)
+         (result (#/loadNibFile:externalNameTable:withZone: ns:ns-bundle
                                                             nib-name
                                                             dict
                                                             app-zone)))
@@ -408,10 +372,7 @@
       (setf toplevel-objects 
             (cons (#/objectAtIndex: objects-array i)
                   toplevel-objects)))
-    (#/release app-class-name)
     (#/release nib-name)
-    (#/release dict)
-    (#/release objects-array)
     (values toplevel-objects result)))
       </pre>
 
