@@ -78,7 +78,8 @@
                      length aref svref char schar bit sbit getf identity list-length
                      car cdr cadr cddr nth nthcdr last load-byte deposit-byte byte-mask
                      member search count position assoc rassoc integer-length
-		         float not null char-int expt abs))
+		         float not null char-int expt abs
+                     = /= < <= > >=))
 
 (defun %binop-cassoc (call)
   (unless (and (cddr call) (null (cdr (%cddr call))))
