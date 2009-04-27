@@ -2764,7 +2764,8 @@
 
 (defmethod hemlock-ext:scroll-view ((view hi:hemlock-view) how &optional where)
   (assume-cocoa-thread)
-  (let* ((tv (text-pane-text-view (hi::hemlock-view-pane view))))
+  (let* ((tv (text-pane-text-view (hi::hemlock-view-pane view)))
+         (may-change-selection t))
     (when (eq how :line)
       (setq where (require-type where '(integer 0)))
       (let* ((line-y (nth-value 1 (charpos-xy tv where)))
@@ -2774,11 +2775,15 @@
     (ecase how
       (:center-selection
        (#/centerSelectionInVisibleArea: tv +null-ptr+))
-      (:page-up
+      ((:page-up :view-page-up)
+       (when (eq how :view-page-up)
+         (setq may-change-selection nil))
        (require-type where 'null)
        ;; TODO: next-screen-context-lines
        (scroll-by-lines tv (- *next-screen-context-lines* (view-screen-lines view))))
-      (:page-down
+      ((:page-down :view-page-down)
+       (when (eq how :view-page-down)
+         (setq may-change-selection nil))
        (require-type where 'null)
        (scroll-by-lines tv (- (view-screen-lines view) *next-screen-context-lines*)))
       (:lines-up
@@ -2786,14 +2791,15 @@
       (:lines-down
        (scroll-by-lines tv (require-type where 'integer))))
     ;; If point is not on screen, move it.
-    (let* ((point (hi::current-point))
-           (point-pos (hi::mark-absolute-position point)))
-      (multiple-value-bind (win-pos win-len) (visible-charpos-range tv)
-        (unless (and (<= win-pos point-pos) (< point-pos (+ win-pos win-len)))
-          (let* ((point (hi::current-point-collapsing-selection))
-                 (cache (hemlock-buffer-string-cache (#/hemlockString (#/textStorage tv)))))
-            (move-hemlock-mark-to-absolute-position point cache win-pos)
-            (update-hemlock-selection (#/textStorage tv))))))))
+    (when may-change-selection
+      (let* ((point (hi::current-point))
+             (point-pos (hi::mark-absolute-position point)))
+        (multiple-value-bind (win-pos win-len) (visible-charpos-range tv)
+          (unless (and (<= win-pos point-pos) (< point-pos (+ win-pos win-len)))
+            (let* ((point (hi::current-point-collapsing-selection))
+                   (cache (hemlock-buffer-string-cache (#/hemlockString (#/textStorage tv)))))
+              (move-hemlock-mark-to-absolute-position point cache win-pos)
+              (update-hemlock-selection (#/textStorage tv)))))))))
 
 (defun iana-charset-name-of-nsstringencoding (ns)
   (#_CFStringConvertEncodingToIANACharSetName

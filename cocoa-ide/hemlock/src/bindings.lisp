@@ -69,9 +69,9 @@
 (bind-key "Transpose Characters" #k"control-t")
 (bind-key "Universal Argument" #k"control-u")
 (bind-key "Scroll Window Down" #k"control-v")
-(bind-key "Scroll Window Down" #k"pagedown")
+(bind-key "Page Down" #k"pagedown")
 (bind-key "Scroll Window Up" #k"meta-v")
-(bind-key "Scroll Window Up" #k"pageup")
+(bind-key "Page Up" #k"pageup")
 ;(bind-key "Scroll Next Window Down" #k"control-meta-v")
 ;(bind-key "Scroll Next Window Up" #k"control-meta-V")
 

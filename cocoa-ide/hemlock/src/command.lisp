@@ -386,6 +386,12 @@
     (set-scroll-position :lines-down p)
     (set-scroll-position :page-down)))
 
+(defcommand "Page Down" (p)
+  "Move down one screenfull, without changing the selection."
+  "Ignores prefix argument"
+  (declare (ignore p))
+  (set-scroll-position :view-page-down))
+
 (defcommand "Scroll Window Up" (p)
   "Move up one screenfull.
   With prefix argument scroll up that many lines."
@@ -395,6 +401,12 @@
   (if p
     (set-scroll-position :lines-up p)
     (set-scroll-position :page-up)))
+
+(defcommand "Page Up" (p)
+  "Move up one screenfull, without changing the selection."
+  "Ignores prefix argument."
+  (declare (ignore p))
+  (set-scroll-position :view-page-up))
 
 ;;;; Kind of miscellaneous commands:
 
