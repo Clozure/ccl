@@ -178,20 +178,19 @@
 
 (objc:defmethod (#/doSearch: :void) ((wc search-files-window-controller) sender)
   (declare (ignore sender))
-  (queue-for-gui #'(lambda ()
-                     (with-slots (outline-view results) wc
-                       (setf (fill-pointer results) 0)
-                       (set-results-string wc #@"Searching...")
-		       (#/startAnimation: (progress-indicator wc) nil)
-                       (#/reloadData outline-view))))
-
+  (set-results-string wc #@"Searching...")
+  (setf (find-string-value wc) (#/stringValue (find-combo-box wc))
+	(folder-string-value wc) (#/stringValue (folder-combo-box wc))
+	(file-name-string-value wc) (#/stringValue (file-name-combo-box wc)))
   (let* ((find-str (lisp-string-from-nsstring (find-string-value wc)))
 	 (folder-str (lisp-string-from-nsstring (folder-string-value wc)))
 	 (file-str (lisp-string-from-nsstring (file-name-string-value wc)))
-	 (grep-args (list (when (recursive-p wc) "-r")
-			  (unless (case-sensitive-p wc) "-i")
-			  "-I" "-s" "-c" "-e" find-str "--include" file-str
+	 (grep-args (list "-I" "-s" "-c" "-e" find-str "--include" file-str
 			  (get-full-dir-string folder-str))))
+    (when (recursive-p wc)
+      (push "-r" grep-args))
+    (unless (case-sensitive-p wc)
+      (push "-i" grep-args))
     (setf (search-dir wc) folder-str
 	  (search-str wc) find-str)
     (#/setEnabled: (search-button wc) nil)
@@ -230,7 +229,7 @@
 (defun run-grep (grep-arglist wc)
   (with-autorelease-pool 
       (#/performSelectorOnMainThread:withObject:waitUntilDone:
-       (progress-indicator wc) (@selector #/startAnimation:) nil nil)
+       (progress-indicator wc) (@selector #/startAnimation:) nil t)
     (unwind-protect
 	 (let* ((grep-output (call-grep grep-arglist)))
 	   (multiple-value-bind (results message)
@@ -242,9 +241,9 @@
 	      wc
 	      (@selector #/updateResults:)
 	      (#/autorelease (%make-nsstring message))
-	      nil)))
+	      t)))
       (#/performSelectorOnMainThread:withObject:waitUntilDone:
-       (progress-indicator wc) (@selector #/stopAnimation:) nil nil))))
+       (progress-indicator wc) (@selector #/stopAnimation:) nil t))))
 
 (defun results-and-message (grep-output wc)
   (let* ((results (make-array 10 :fill-pointer 0 :adjustable t))
@@ -256,17 +255,19 @@
      #'(lambda (start end)
 	 (let* ((colon-pos (position #\: grep-output :from-end t :start start
 				     :end end))
-		(count (parse-integer grep-output :start (1+ colon-pos)
-				      :end end)))
-	   (incf file-count)
-	   (when (> count 0)
-	     (vector-push-extend (make-search-result-file
-				  :name (subseq grep-output
-						(+ start dir-len)
-						colon-pos)
-				  :lines (make-array count :initial-element nil))
-				 results)
-	     (incf occurrences count)))))
+		(count (and colon-pos
+			    (parse-integer grep-output :start (1+ colon-pos)
+					   :end end))))
+	   (when count
+	     (incf file-count)
+	     (when (> count 0)
+	       (vector-push-extend (make-search-result-file
+				    :name (subseq grep-output
+						  (+ start dir-len)
+						  colon-pos)
+				    :lines (make-array count :initial-element nil))
+				   results)
+	       (incf occurrences count))))))
     (values results
 	    (format nil "Found ~a occurrence~:p in ~a file~:p out of ~a ~
                          file~:p searched." occurrences (length results)
@@ -287,11 +288,13 @@
 	    
 (objc:defmethod (#/doBrowse: :void) ((wc search-files-window-controller) sender)
   (declare (ignore sender))
-  (let ((dir (choose-directory-dialog)))
-    (when dir
-      (with-slots (folder-combo-box) wc
-	(#/setStringValue: folder-combo-box dir)
-	(#/updateFolderString: wc folder-combo-box)))))
+  (let ((pathname (cocoa-choose-directory-dialog)))
+    (when pathname
+      (ccl::with-autoreleased-nsstring
+	  (dir (native-translated-namestring pathname))
+	(with-slots (folder-combo-box) wc
+	  (#/setStringValue: folder-combo-box dir)
+	  (#/updateFolderString: wc folder-combo-box))))))
 
 (objc:defmethod (#/editLine: :void) ((wc search-files-window-controller) outline-view)
   (let* ((item (get-selected-item outline-view))
