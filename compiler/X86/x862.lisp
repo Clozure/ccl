@@ -3627,7 +3627,8 @@
             (x862-one-targeted-reg-form seg (if ju31 i j) reg)
             (! compare-u31-constant reg (if ju31 jconstant iconstant))
             (unless (or ju31 (eq cr-bit x86::x86-e-bits)) 
-                (setq cr-bit (x862-reverse-cr-bit cr-bit)))
+              (setq cr-bit (x862-reverse-cr-bit cr-bit)))
+            (setq cr-bit (x862-cr-bit-for-unsigned-comparison cr-bit))
             (^ cr-bit true-p))
         (target-arch-case
          (:x8664
