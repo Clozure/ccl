@@ -6,19 +6,9 @@
 
 (in-package ccl)
 
-;;; We need to be able to point the CoreFoundation and Cocoa libraries
-;;; at some bundle very early in the process.  If you want to use some
-;;; other bundle path, you may need to change the call to FAKE-CFBUNDLE-PATH
-;;; below.
-
-#+darwin-target
-(progn
-  (require "FAKE-CFBUNDLE-PATH")
-  (fake-cfbundle-path "ccl:OpenMCL.app;Contents;MacOS;dppccl"))
-
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (require "OBJC-SUPPORT"))
+  (require "COCOA"))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (objc:load-framework "AddressBook" :addressbook))
