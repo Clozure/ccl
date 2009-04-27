@@ -25,7 +25,8 @@
     (#/retain (#/URLWithString: ns:ns-url (%make-nsstring (string s))))))
 		  
 
-(defun browser-window (urlspec)
+(defun %browser-window (urlspec)
+  (gui::assume-cocoa-thread)
   ;; Content rect for window, bounds rect for view.
   (ns:with-ns-rect (r 100.0 100.0 800.0 600.0)
     (with-autorelease-pool 
@@ -62,12 +63,24 @@
             ;; initiated the request seems to cause
             ;; view-locking errors.  Maybe that's just
             ;; an artifact of some other problem.
-            (#/performSelectorOnMainThread:withObject:waitUntilDone:
-             webframe (@selector #/loadRequest:) request t)
+            (#/loadRequest: webframe request)
             ;; Make the window visible & activate it
             ;; The view knows how to draw itself and respond
             ;; to events.
             (#/makeKeyAndOrderFront: w +null-ptr+))
           v)))))
+
+(defun browser-window (urlspec)
+  (let* ((ip ccl::*initial-process*))
+    (if (eq ccl::*current-process* ip)
+      (%browser-window urlspec)
+      (let* ((s (make-semaphore))
+             (v nil))
+        (process-interrupt ip (lambda ()
+                                (setq v (%browser-window urlspec))
+                                (signal-semaphore s)))
+        (wait-on-semaphore s)
+        v))))
+
 	
 ;;; (browser-window "http://openmcl.clozure.com")
