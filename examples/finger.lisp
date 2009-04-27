@@ -69,8 +69,9 @@
     (%finger host host-query port)))
 
 ;; For testing try:
-;;   (finger "idsoftware.com")
-;;   (finger "johnc@idsoftware.com") 
+;; (where "some-host.com" is a host running a finger server):
+;;   (finger "some-host.com")
+;;   (finger "user@some-host.com") 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Server code
