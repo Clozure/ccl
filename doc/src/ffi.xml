@@ -1831,10 +1831,12 @@
               ? (require "PARSE-FFI")
               PARSE-FFI
 
-              ? (parse-standard-ffi-files :SUBDIR)
+              ? (ccl::parse-standard-ffi-files :SUBDIR)
               ;;; lots of output ... after a while, shiny new .cdb files should
               ;;; appear in "ccl:headers;subdir;"
           </programlisting></para>
+            <para>It may be necessary to call CCL::PARSE-STANDARD-FFI-FILES
+                  twice, to ensure that forward-references are resolved </para>
 	    </listitem>
 	  </orderedlist>
     </sect2>
