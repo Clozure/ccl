@@ -189,7 +189,7 @@
 
 
 
-(defloadvar *heap-ivectors* ())
+(defstatic *heap-ivectors* ())
 (defvar *heap-ivector-lock* (make-lock))
 
 
@@ -2614,7 +2614,7 @@
   (%ioblock-write-char-translating-newline-to-cr ioblock char))
 
 (defun %locked-ioblock-write-char-translating-newline-to-cr (ioblock char)
-  (with-ioblock-input-lock-grabbed (ioblock)
+  (with-ioblock-output-lock-grabbed (ioblock)
     (%ioblock-write-char-translating-newline-to-cr ioblock char)))
 
 (declaim (inline %ioblock-write-char-translating-newline-to-crlf))
@@ -2634,7 +2634,7 @@
   (%ioblock-write-char-translating-newline-to-crlf ioblock char))
 
 (defun %locked-ioblock-write-char-translating-newline-to-crlf (ioblock char)
-  (with-ioblock-input-lock-grabbed (ioblock)
+  (with-ioblock-output-lock-grabbed (ioblock)
     (%ioblock-write-char-translating-newline-to-crlf ioblock char)))
 
 (declaim (inline %ioblock-write-char-translating-newline-to-line-separator))
@@ -2649,7 +2649,7 @@
   (%ioblock-write-char-translating-newline-to-line-separator ioblock char))
 
 (defun %locked-ioblock-write-char-translating-newline-to-line-separator (ioblock char)
-  (with-ioblock-input-lock-grabbed (ioblock)
+  (with-ioblock-output-lock-grabbed (ioblock)
     (%ioblock-write-char-translating-newline-to-line-separator ioblock char)))
 
 ;;; If we do newline translation, we probably can't be too clever about reading/writing

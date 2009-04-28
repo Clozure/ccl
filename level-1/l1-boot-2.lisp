@@ -170,6 +170,8 @@ present and false otherwise. This variable shouldn't be set by user code.")
 
 (defun set-terminal-encoding (encoding-name)
   (let* ((exformat (normalize-external-format t encoding-name)))
+    #+windows-target (setf (external-format-line-termination external-format)
+                           :crlf)
     (setf (stream-external-format *stdin*) exformat
           (stream-external-format *stdout*) exformat
           (stream-external-format *stderr*) exformat
