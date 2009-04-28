@@ -2860,7 +2860,8 @@
                            '%private-ioblock-read-char-translating-line-separator-to-newline)
                           (:lock
                            '%locked-ioblock-read-char-translating-line-separator-to-newline)
-                          (t '%ioblock-read-char-translating-line-separator-to-newline))))))))
+                          (t '%ioblock-read-char-translating-line-separator-to-newline)))))
+      (setf (ioblock-line-termination ioblock) line-termination))))
   
 (defun setup-ioblock-output (ioblock character-p element-type sharing encoding line-termination)
   (or (ioblock-sharing ioblock)
@@ -3043,7 +3044,8 @@
                            '%private-ioblock-write-char-translating-newline-to-line-separator)
                           (:lock
                            '%locked-ioblock-write-char-translating-newline-to-line-separator)
-                          (t '%ioblock-write-char-translating-newline-to-line-separator))))))))
+                          (t '%ioblock-write-char-translating-newline-to-line-separator)))))
+      (setf (ioblock-line-termination ioblock) line-termination))))
 
 
 (defun ensure-reasonable-element-type (element-type)
