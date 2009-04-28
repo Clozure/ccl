@@ -169,6 +169,9 @@ present and false otherwise. This variable shouldn't be set by user code.")
 
 
 (defun set-terminal-encoding (encoding-name)
+  #+windows-target (when (atom encoding-name)
+                     (setq encoding-name `(:character-encoding ,encoding-name
+                                           :line-termination :crlf)))
   (let* ((exformat (normalize-external-format t encoding-name)))
     (setf (stream-external-format *stdin*) exformat
           (stream-external-format *stdout*) exformat

@@ -189,7 +189,7 @@
 
 
 
-(defloadvar *heap-ivectors* ())
+(defstatic *heap-ivectors* ())
 (defvar *heap-ivector-lock* (make-lock))
 
 
@@ -1921,7 +1921,7 @@
 
 (defun %ioblock-write-u8-encoded-simple-string (ioblock string start-char num-chars)
   (declare (fixnum start-char num-chars)
-           (simple-base-strng string)
+           (simple-base-string string)
            (optimize (speed 3) (safety 0)))
   (do* ((i 0 (1+ i))
         (col (ioblock-charpos ioblock))
@@ -1972,7 +1972,7 @@
 
 (defun %ioblock-write-u16-encoded-simple-string (ioblock string start-char num-chars)
   (declare (fixnum start-char num-chars)
-           (simple-base-strng string)
+           (simple-base-string string)
            (optimize (speed 3) (safety 0)))
   (when (ioblock-pending-byte-order-mark ioblock)
     (setf (ioblock-pending-byte-order-mark ioblock) nil)
@@ -2021,7 +2021,7 @@
 
 (defun %ioblock-write-swapped-u16-encoded-simple-string (ioblock string start-char num-chars)
   (declare (fixnum start-char num-chars)
-           (simple-base-strng string)
+           (simple-base-string string)
            (optimize (speed 3) (safety 0)))
   (do* ((i 0 (1+ i))
         (col (ioblock-charpos ioblock))
@@ -2054,7 +2054,7 @@
     (setf (ioblock-charpos ioblock) 0)
     (incf (ioblock-charpos ioblock)))
   (let* ((code (char-code char)))
-    (declare (type (mod #x110000 code)))
+    (declare (type (mod #x110000) code))
     (if (< code (the fixnum (ioblock-encode-literal-char-code-limit ioblock)))
       (%ioblock-write-u32-code-unit ioblock code)
       (funcall (ioblock-encode-output-function ioblock)
@@ -2074,7 +2074,7 @@
 
 (defun %ioblock-write-u32-encoded-simple-string (ioblock string start-char num-chars)
   (declare (fixnum start-char num-chars)
-           (simple-base-strng string)
+           (simple-base-string string)
            (optimize (speed 3) (safety 0)))
   (when (ioblock-pending-byte-order-mark ioblock)
     (setf (ioblock-pending-byte-order-mark ioblock) nil)
@@ -2104,7 +2104,7 @@
     (setf (ioblock-charpos ioblock) 0)
     (incf (ioblock-charpos ioblock)))
   (let* ((code (char-code char)))
-    (declare (type (mod #x110000 code)))
+    (declare (type (mod #x110000) code))
     (if (< code (the fixnum (ioblock-encode-literal-char-code-limit ioblock)))
       (%ioblock-write-swapped-u32-code-unit ioblock code)
       (funcall (ioblock-encode-output-function ioblock)
@@ -2124,7 +2124,7 @@
 
 (defun %ioblock-write-swapped-u32-encoded-simple-string (ioblock string start-char num-chars)
   (declare (fixnum start-char num-chars)
-           (simple-base-strng string)
+           (simple-base-string string)
            (optimize (speed 3) (safety 0)))
   (do* ((i 0 (1+ i))
         (col (ioblock-charpos ioblock))
@@ -2614,7 +2614,7 @@
   (%ioblock-write-char-translating-newline-to-cr ioblock char))
 
 (defun %locked-ioblock-write-char-translating-newline-to-cr (ioblock char)
-  (with-ioblock-input-lock-grabbed (ioblock)
+  (with-ioblock-output-lock-grabbed (ioblock)
     (%ioblock-write-char-translating-newline-to-cr ioblock char)))
 
 (declaim (inline %ioblock-write-char-translating-newline-to-crlf))
@@ -2634,7 +2634,7 @@
   (%ioblock-write-char-translating-newline-to-crlf ioblock char))
 
 (defun %locked-ioblock-write-char-translating-newline-to-crlf (ioblock char)
-  (with-ioblock-input-lock-grabbed (ioblock)
+  (with-ioblock-output-lock-grabbed (ioblock)
     (%ioblock-write-char-translating-newline-to-crlf ioblock char)))
 
 (declaim (inline %ioblock-write-char-translating-newline-to-line-separator))
@@ -2649,7 +2649,7 @@
   (%ioblock-write-char-translating-newline-to-line-separator ioblock char))
 
 (defun %locked-ioblock-write-char-translating-newline-to-line-separator (ioblock char)
-  (with-ioblock-input-lock-grabbed (ioblock)
+  (with-ioblock-output-lock-grabbed (ioblock)
     (%ioblock-write-char-translating-newline-to-line-separator ioblock char)))
 
 ;;; If we do newline translation, we probably can't be too clever about reading/writing
@@ -2860,7 +2860,8 @@
                            '%private-ioblock-read-char-translating-line-separator-to-newline)
                           (:lock
                            '%locked-ioblock-read-char-translating-line-separator-to-newline)
-                          (t '%ioblock-read-char-translating-line-separator-to-newline))))))))
+                          (t '%ioblock-read-char-translating-line-separator-to-newline)))))
+      (setf (ioblock-line-termination ioblock) line-termination))))
   
 (defun setup-ioblock-output (ioblock character-p element-type sharing encoding line-termination)
   (or (ioblock-sharing ioblock)
@@ -3043,7 +3044,8 @@
                            '%private-ioblock-write-char-translating-newline-to-line-separator)
                           (:lock
                            '%locked-ioblock-write-char-translating-newline-to-line-separator)
-                          (t '%ioblock-write-char-translating-newline-to-line-separator))))))))
+                          (t '%ioblock-write-char-translating-newline-to-line-separator)))))
+      (setf (ioblock-line-termination ioblock) line-termination))))
 
 
 (defun ensure-reasonable-element-type (element-type)

@@ -239,6 +239,7 @@
 
 (defun restore-lisp-pointers ()
   (setq *interactive-streams-initialized* nil)
+  (setq *heap-ivectors* nil)
   (%revive-system-locks)
   (refresh-external-entrypoints)
   (restore-pascal-functions)
