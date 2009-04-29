@@ -177,7 +177,9 @@ ReserveMemoryForHeap(LogicalAddress want, natural totalsize)
 		       MEM_RESERVE,
 		       PAGE_NOACCESS);
   if (!start) {
+#if DEBUG_MEMORY    
     fprintf(dbgout, "Can't get desired heap address at 0x" LISP "\n", want);
+#endif
     start = VirtualAlloc(0,
 			 totalsize + heap_segment_size,
 			 MEM_RESERVE,
