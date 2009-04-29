@@ -98,7 +98,7 @@
 	(process-kill cp)))))
 
 (defun %save-application-internal (filename &key
-                                            toplevel-function  ;???? 
+                                            toplevel-function ;???? 
                                             error-handler ; meaningless unless application-class or *application* not lisp-development..
                                             application-class
 					    (mode #o644)
@@ -119,12 +119,9 @@
 				 (if init-file-p
 				   init-file
 				   (application-init-file *application*)))))
-        (let* ((user-toplevel-function (coerce-to-function toplevel-function)))
+    (let* ((user-toplevel-function (coerce-to-function toplevel-function)))
       (setq toplevel-function
             (lambda ()
-              (restore-lisp-pointers)
-              ;; Shouldn't be necessary post 1.2
-              ;;(initialize-interactive-streams)
               (process-run-function "toplevel" (lambda ()
                                                  (funcall user-toplevel-function)
                                                  (quit)))
