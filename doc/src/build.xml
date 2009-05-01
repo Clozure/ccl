@@ -267,7 +267,10 @@ $ cvs update -d -P      # create dirs as needed, prune empty ones
       <listitem>
 	    <para>Runs an external process that does a
 	      <literal>make</literal> in the current platform's kernel
-	      build directory to create a new kernel</para>
+	      build directory to create a new kernel.  
+             This step can only work if the C compiler and related
+             tools are installed; see <xref linkend="Kernel-build-prerequisites"/>. 
+           </para>
 	  </listitem>
       <listitem>
 	    <para>Does <literal>(compile-ccl t)</literal> in the running
