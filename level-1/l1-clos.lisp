@@ -1279,7 +1279,7 @@ governs whether DEFCLASS makes that distinction or not.")
 	  (let* ((name (ssd-name ssd))
 		 (initform (cadr ssd))
 		 (initfunction (constantly initform)))
-	    (push `(:name ,name :type ,type :initform ,initform :initfunction ,initfunction) dslots)))))
+	    (push `(:name ,name :type ,type :initform ,initform :initfunction ,initfunction :initargs ,(list (make-keyword name))) dslots)))))
     (ensure-class (sd-name sd)
 		  :metaclass 'structure-class
 		  :direct-superclasses (list (or (cadr (sd-superclasses sd)) 'structure-object))
@@ -1826,6 +1826,58 @@ changing its name to ~s may have serious consequences." class new))
                        (setf (slot-value-using-class class instance slotd)
                              newval))))))))))
   instance)
+
+(defmethod shared-initialize ((struct structure-object) slot-names &rest initargs)
+  (unless (eq slot-names t)
+    (error "Structure instance ~s can't be reinitialized." struct))
+  (dolist (slotd (class-slots (class-cell-class (car (%svref struct 0)))))
+    (let* ((predicate (slot-definition-predicate slotd))
+           (location (slot-definition-location slotd)))
+      (declare (fixnum location))
+      (multiple-value-bind (ignore new-value foundp)
+          (get-properties initargs (slot-definition-initargs slotd))
+        (declare (ignore ignore))
+        (cond (foundp
+               ;; an initarg for the slot was passed to this function
+               ;; Typecheck the new-value, then call
+               ;; (SETF SLOT-VALUE-USING-CLASS)
+               (unless (or (null predicate)
+                           (funcall predicate new-value))
+                 (error 'bad-slot-type-from-initarg
+                        :slot-definition slotd
+                        :instance struct
+                        :datum new-value
+                        :expected-type  (slot-definition-type slotd)
+                          :initarg-name (car foundp)))
+                 (setf (struct-ref struct location) new-value))
+                (t
+                 ;; If the slot name is among the specified slot names, or
+                 ;; we're reinitializing all slots, and the slot is currently
+                 ;; unbound in the instance, set the slot's value based
+                 ;; on the initfunction (which captures the :INITFORM).
+                 (let* ((initfunction (slot-definition-initfunction slotd)))
+                   (if initfunction
+                     (let* ((newval (funcall initfunction)))
+                       (unless (or (null predicate)
+                                   (funcall predicate newval))
+                         (error 'bad-slot-type-from-initform
+                                :slot-definition slotd
+                                :expected-type (slot-definition-type slotd)
+                                :datum newval
+                                :instance struct))
+                       (setf (struct-ref struct location) newval)))))))))
+  struct)
+
+(defmethod initialize-instance ((struct structure-object) &rest initargs &key &allow-other-keys)
+  (declare (dynamic-extent initargs))
+  (apply #'shared-initialize struct t initargs))
+
+(defmethod make-instance ((class structure-class)  &rest initargs &key &allow-other-keys)
+  (declare (dynamic-extent initargs))
+  (let* ((struct (apply #'allocate-instance class initargs)))
+    (apply #'initialize-instance struct initargs)))
+
+    
 
 ;;; Sometimes you can do a lot better at generic function dispatch than the
 ;;; default. This supports that for the one-arg-dcode case.
