@@ -59,6 +59,8 @@ cocoa-ide/ide-contents/Resources/English.lproj/processes.nib/info.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/processes.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/updateCCL.nib/designable.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/updateCCL.nib/keyedobjects.nib -text
+cocoa-ide/ide-contents/Resources/English.lproj/xapropos.nib/designable.nib -text
+cocoa-ide/ide-contents/Resources/English.lproj/xapropos.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/General.tiff -text
 cocoa-ide/ide-contents/Resources/openmcl-icon.icns -text svneol=unset#unset
 cocoa-ide/ide-self-update.lisp -text
@@ -67,6 +69,7 @@ cocoa-ide/preferences.lisp -text
 cocoa-ide/processes-window.lisp -text
 cocoa-ide/search-files.lisp -text
 cocoa-ide/start.lisp -text
+cocoa-ide/xapropos.lisp -text
 compiler/X86/X8632/x8632-arch.lisp -text
 compiler/X86/X8632/x8632-backend.lisp -text
 compiler/X86/X8632/x8632-vinsns.lisp -text

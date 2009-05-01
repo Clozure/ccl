@@ -60,6 +60,8 @@
 				<string>id</string>
 				<key>showSearchFiles</key>
 				<string>id</string>
+				<key>showXaproposWindow</key>
+				<string>id</string>
 				<key>updateCCL</key>
 				<string>id</string>
 			</dict>

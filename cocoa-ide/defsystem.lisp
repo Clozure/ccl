@@ -81,11 +81,20 @@
     "start"
     ))
 
+(defparameter *experimental-ide-files*
+  '("xapropos"))
+
 (defun load-ide (&optional force-compile)
   (declare (special *hemlock-files*)) ;; kludge
   (let ((src-dir "ccl:cocoa-ide;")
 	(bin-dir "ccl:cocoa-ide;fasls;"))
     (ensure-directories-exist bin-dir)
+    ;; kludge to limit experimental files to Leopard
+    (rlet ((p :int))
+      (#_Gestalt #$gestaltSystemVersion p)
+      (when (>= (%get-long p) #x1050)
+        (format t "~&;Running on Leopard.  Will load experimental files.")
+        (setq *ide-files* (append *ide-files* *experimental-ide-files*))))
     (with-compilation-unit ()
       (dolist (name *ide-files*)
 	(let* ((source (make-pathname :name name :type (pathname-type *.lisp-pathname*)

@@ -78,6 +78,16 @@
 	  (make-instance 'apropos-window-controller)))
   (#/showWindow: *apropos-window-controller* self))
 
+(defvar *xapropos-window-controller* nil)
+
+(objc:defmethod (#/showXaproposWindow: :void) ((self lisp-application-delegate)
+						sender)
+  (declare (ignore sender))
+  (when (null *xapropos-window-controller*)
+    (setf *apropos-window-controller*
+	  (make-instance 'xapropos-window-controller)))
+  (#/showWindow: *apropos-window-controller* self))
+
 (objc:defmethod (#/showSearchFiles: :void) ((self lisp-application-delegate)
                                             sender)
   ;;If command key is pressed, always make a new window
