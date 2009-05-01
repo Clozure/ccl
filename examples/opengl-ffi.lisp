@@ -22,7 +22,12 @@
   (dolist (lib '("libGL.so" "libGLU.so" "libglut.so"))
     (open-shared-library lib))
   #+darwin-target
-  (open-shared-library "GLUT.framework/GLUT")
+  (let* ((s (make-semaphore)))
+    (process-interrupt ccl::*initial-process*
+		       (lambda ()
+			 (open-shared-library "GLUT.framework/GLUT")
+			 (signal-semaphore s)))
+    (wait-on-semaphore s))
   )
 
 (in-package :opengl)
@@ -30,7 +35,7 @@
 ;; glut complains if it's initialized redundantly
 (let ((glut-initialized-p nil))
   (defun initialize-glut ()
-    (let ((command-line-strings (list "openmcl")))
+    (let ((command-line-strings (list "ccl")))
       (when (not glut-initialized-p)
         (ccl::with-string-vector (argv command-line-strings)
           (rlet ((argvp (* t))    ; glutinit takes (* (:signed 32)) and (* (* (:unsigned 8)))
@@ -97,48 +102,59 @@
     (#_glutCreateWindow title))
   (#_glutDisplayFunc display-cb)
   (myinit)
-; It appears that glut provides no mechanism for doing the event loop
-; yourself -- if you want to do that, you should use some other set of
-; libraries and make your own GUI toolkit.
+
+  ;; It appears that glut provides no mechanism for doing the event loop
+  ;; yourself -- if you want to do that, you should use some other set of
+  ;; libraries and make your own GUI toolkit.
   
-  (#_glutMainLoop) ; this never returns and interferes w/scheduling
+  (#_glutMainLoop) ; this never returns
   )
 
 
 ;;; With native threads, #_glutMainLoop doesn't necessarily interfere
-;;; with scheduling: we can just run all of the OpenGL code in a separate
-;;; thread (which'll probably spend most of its time blocked in GLUT's
-;;; event loop.)  On OSX, we need to use an undocumented API or two
-;;; to ensure that the thread we're creating is seen as the "main"
-;;; event handling thread (that's what the code that sets the current
-;;; thread's CFRunLoop to the main CFRunLoop does.)
-#+OpenMCL-native-threads
-(ccl:process-run-function
- "OpenGL main thread"
- #'(lambda ()
-     #+darwin-target
-     (progn
-       ;;; In OSX, a "run loop" is a data structure that
-       ;;; describes how event-handling code should block
-       ;;; for events, timers, and other event sources.
-       ;;; Ensure that this thread has a "current run loop".
-       ;;; (Under some circumstances, there may not yet be
-       ;;; a "main" run loop; setting the "current" run loop
-       ;;; ensures that a main run loop exists.)
-       (ccl::external-call "_CFRunLoopGetCurrent" :address)
-       ;;; Make the current thread's run loop be the "main" one;
-       ;;; only the main run loop can interact with the window
-       ;;; server.
-       (ccl::external-call
-        "__CFRunLoopSetCurrent"
-        :address (ccl::external-call "_CFRunLoopGetMain" :address))
+;;; with scheduling: we can just run all of the OpenGL code in a
+;;; separate thread (which'll probably spend most of its time blocked
+;;; in GLUT's event loop.)  On OSX (especially) it may work best to
+;;; force the GLUT event loop to run on the main thread, which
+;;; ordinarily does period "housekeeping" tasks.  Start another thread
+;;; to do those tasks, and force the initial/main thread to run the
+;;; GLUT event loop.
+;;;
+
+;;; Try to detect cases where we're already running some sort of event
+;;; loop on OSX.  There are other ways to lose, of course.
+
+#+darwin-target
+(progn
+  (eval-when (:compile-toplevel :execute)
+    (use-interface-dir :cocoa))
+  ;; If the current (window system) process is visible (has a UI),
+  ;; we can't possibly win.
+  (rlet ((psn #>ProcessSerialNumber))
+    (and (eql 0 (#_GetCurrentProcess psn))
+         (not (eql #$false (#_IsProcessVisible psn)))
+         (error "This is a GLUT example; it can't possibly work ~
+                 in a GUI environment."))))
+(progn
+  (ccl:process-run-function
+   "housekeeping"
+   #'ccl::housekeeping-loop)
+  (ccl:process-interrupt
+   ccl::*initial-process*
+   (lambda ()
+     ;; CCL::%SET-TOPLEVEL is sort of like PROCESS-PRESET for the
+     ;; initial process; CCL::TOPLEVEL is sort of like PROCESS-RESET
+     ;; for that process.
+     (ccl::%set-toplevel
+      (lambda ()
        ;;; Set the OSX Window Server's notion of the name of the
        ;;; current process.
        (rlet ((psn #>ProcessSerialNumber))
          (#_GetCurrentProcess psn)
          (with-cstrs ((name "simple OpenGL example"))
-           (ccl::external-call "_CPSSetProcessName" :address psn :address name :void))))
-     (main)))
+           (ccl::external-call "_CPSSetProcessName" :address psn :address name :void)))
+       (ccl::%set-toplevel nil)
+       (main)))
+     (ccl::toplevel))))
 
-; (main)
 
