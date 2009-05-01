@@ -78,15 +78,15 @@
 	  (make-instance 'apropos-window-controller)))
   (#/showWindow: *apropos-window-controller* self))
 
-(defvar *xapropos-window-controller* nil)
+(defloadvar *xapropos-window-controller* nil)
 
 (objc:defmethod (#/showXaproposWindow: :void) ((self lisp-application-delegate)
 						sender)
   (declare (ignore sender))
   (when (null *xapropos-window-controller*)
-    (setf *apropos-window-controller*
+    (setf *xapropos-window-controller*
 	  (make-instance 'xapropos-window-controller)))
-  (#/showWindow: *apropos-window-controller* self))
+  (#/showWindow: *xapropos-window-controller* self))
 
 (objc:defmethod (#/showSearchFiles: :void) ((self lisp-application-delegate)
                                             sender)
