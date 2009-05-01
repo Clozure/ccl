@@ -1168,29 +1168,28 @@ a host-structure or string."
   (let ((full-name (full-pathname file-name :no-error nil))
         (kind nil))
     (when full-name
-      (let ((file-type (pathname-type full-name)))
+      (let ((file-type (pathname-type full-name))
+            (merged (pathname (merge-pathnames file-name))))
         (if (and file-type (neq file-type :unspecific))
-          (values (probe-file full-name) file-name (if (eq (pathname-host file-name) :unspecific) full-name file-name))
+          (values (probe-file full-name) merged (if (eq (pathname-host file-name) :unspecific) full-name file-name))
           (let* ((source (merge-pathnames file-name *.lisp-pathname*))
                  (fasl   (merge-pathnames file-name *.fasl-pathname*))
                  (true-source (probe-file source))
                  (true-fasl   (probe-file fasl)))
             (cond (true-source
-                   (when (eq (pathname-host file-name) :unspecific) ;; if physical pathname to begin with, force absolute
-                     (setq source full-name))
                    (if (and true-fasl
                             (> (file-write-date true-fasl)
                                (file-write-date true-source)))
-                     (values true-fasl fasl source)
-                     (values true-source source source)))
+                     (values true-fasl merged source)
+                     (values true-source merged source)))
                   (true-fasl
-                   (values true-fasl fasl fasl))
+                   (values true-fasl merged fasl))
                   ((and (multiple-value-setq (full-name kind)
                           (let* ((realpath (%realpath (native-translated-namestring full-name))))
                             (if realpath
                               (%probe-file-x realpath ))))
                         (eq kind :file))
-                   (values full-name file-name file-name)))))))))
+                   (values full-name merged file-name)))))))))
 
 
 
