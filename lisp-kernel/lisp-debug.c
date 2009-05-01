@@ -1145,15 +1145,28 @@ lisp_Debugger(ExceptionInformation *xp,
     }
   }
 
-  if (lisp_global(BATCH_FLAG)) {
-    abort();
-  }
   if (xp) {
     if (why > debug_entry_exception) {
       debug_identify_exception(xp, info, why);
     }
     debug_identify_function(xp, info);
   }
+  if (lisp_global(BATCH_FLAG)) {
+#ifdef WINDOWS
+    fprintf(dbgout, "Current Process Id %d\n", (int)GetCurrentProcessId());
+#else
+    fprintf(dbgout, "Main thread pid %d\n", main_thread_pid);
+#endif
+    debug_thread_info(xp, info, 0);
+    if (xp) {
+      debug_show_registers(xp, info, 0);
+      debug_lisp_registers(xp, info, 0);
+      debug_show_fpu(xp, info, 0);
+    }
+    debug_backtrace(xp, info, 0);
+    abort();
+  }
+
   fprintf(dbgout, "? for help\n");
   while (state == debug_continue) {
 #ifdef WINDOWS
