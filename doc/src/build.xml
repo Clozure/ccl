@@ -118,19 +118,19 @@
 	      <tbody>
 	        <row>
 	          <entry>DarwinPPC32</entry>
-              <entry>dppccl</entry>
-              <entry>dppccl.image</entry>
-              <entry>ppc-boot.image</entry>
-              <entry>.dfsl</entry>
-              <entry>darwinppc</entry>
+                  <entry>dppccl</entry>
+                  <entry>dppccl.image</entry>
+                  <entry>ppc-boot.image</entry>
+                  <entry>.dfsl</entry>
+                 <entry>darwinppc</entry>
 	        </row>
 	        <row>
 	          <entry>LinuxPPC32</entry>
-              <entry>ppccl</entry>
-		      <entry>PPCCL</entry>
-              <entry>ppc-boot</entry>
-              <entry>.pfsl</entry>
-              <entry>linuxppc</entry>
+                  <entry>ppccl</entry>
+	          <entry>ppccl.image</entry>
+                  <entry>ppc-boot</entry>
+                  <entry>.pfsl</entry>
+                  <entry>linuxppc</entry>
 	        </row>
 	        <row>
 	          <entry>DarwinPPC64</entry>
@@ -139,39 +139,95 @@
 	          <entry>ppc-boot64.image</entry>
 	          <entry>.d64fsl</entry>
 	          <entry>darwinppc64</entry>
-            </row>
-            <row>
-		      <entry>LinuxPPC64</entry>
-              <entry>ppccl64</entry>
-              <entry>PPCCL64</entry>
-              <entry>ppc-boot64</entry>
-              <entry>.p64fsl</entry>
-              <entry>linuxppc64</entry>
-            </row>
+                </row>
+                <row>
+	          <entry>LinuxPPC64</entry>
+                  <entry>ppccl64</entry>
+                  <entry>ppccl64.image</entry>
+                  <entry>ppc-boot64</entry>
+                  <entry>.p64fsl</entry>
+                  <entry>linuxppc64</entry>
+                </row>
 	        <row>
-		      <entry>LinuxX8664</entry>
-              <entry>lx86cl64</entry>
-              <entry>LX86CL64</entry>
-              <entry>x86-boot64</entry>
-              <entry>.lx64fsl</entry>
-              <entry>linuxx8664</entry>
-            </row>
+	          <entry>LinuxX8664</entry>
+                  <entry>lx86cl64</entry>
+                  <entry>lx86cl64.image</entry>
+                  <entry>x86-boot64</entry>
+                  <entry>.lx64fsl</entry>
+                  <entry>linuxx8664</entry>
+                </row>
 	        <row>
-		      <entry>DarwinX8664</entry>
-		      <entry>dx86cl64</entry>
-              <entry>dx86cl64.image</entry>
-              <entry>x86-boot64.image</entry>
-              <entry>.dx64fsl</entry>
-              <entry>darwinx8664</entry>
-            </row>
-	        <row>
-		      <entry>FreeBSDX8664</entry>
-              <entry>fx86cl64</entry>
-              <entry>FX86CL64</entry>
-              <entry>fx86-boot64</entry>
-              <entry>.fx64fsl</entry>
-              <entry>freebsdx8664</entry>
-            </row>
+	          <entry>LinuxX8632</entry>
+                  <entry>lx86cl</entry>
+                  <entry>lx86cl.image</entry>
+                  <entry>x86-boot32</entry>
+                  <entry>.lx32fsl</entry>
+                  <entry>linuxx8632</entry>
+               </row>
+	       <row>
+	          <entry>DarwinX8664</entry>
+    	          <entry>dx86cl64</entry>
+                  <entry>dx86cl64.image</entry>
+                  <entry>x86-boot64.image</entry>
+                  <entry>.dx64fsl</entry>
+                  <entry>darwinx8664</entry>
+               </row>
+	       <row>
+	          <entry>DarwinX8632</entry>
+	          <entry>dx86cl</entry>
+                  <entry>dx86cl.image</entry>
+                  <entry>x86-boot32.image</entry>
+                  <entry>.dx32fsl</entry>
+                  <entry>darwinx8632</entry>
+               </row>
+	       <row>
+	          <entry>FreeBSDX8664</entry>
+                  <entry>fx86cl64</entry>
+                  <entry>fx86cl64.image</entry>
+                  <entry>fx86-boot64</entry>
+                  <entry>.fx64fsl</entry>
+                  <entry>freebsdx8664</entry>
+               </row>
+	       <row>
+                  <entry>FreeBSDX8632</entry>
+                  <entry>fx86cl</entry>
+                  <entry>fx86cl.image</entry>
+                  <entry>fx86-boot32</entry>
+                  <entry>.fx32fsl</entry>
+                  <entry>freebsdx8632</entry>
+               </row>
+               <row>
+	          <entry>SolarisX64</entry>
+                  <entry>sx86cl64</entry>
+                  <entry>sx86cl64.image</entry>
+                  <entry>sx86-boot64</entry>
+                  <entry>.sx64fsl</entry>
+                  <entry>solarisx64</entry>
+               </row>
+	       <row>
+		  <entry>SolarisX86</entry>
+                  <entry>sx86cl</entry>
+                  <entry>sx86cl.image</entry>
+                  <entry>sx86-boot32</entry>
+                  <entry>.sx32fsl</entry>
+                  <entry>solarisx86</entry>
+               </row>
+               <row>
+	          <entry>Win64</entry>
+                  <entry>wx86cl64.exe</entry>
+                  <entry>sx86cl64.image</entry>
+                  <entry>wx86-boot64.image</entry>
+                  <entry>.wx64fsl</entry>
+                  <entry>win64</entry>
+               </row>
+	       <row>
+		  <entry>Win32</entry>
+                  <entry>wx86cl.exe</entry>
+                  <entry>wx86cl.image</entry>
+                  <entry>wx86-boot32.image</entry>
+                  <entry>.wx32fsl</entry>
+                  <entry>win32</entry>
+               </row>
 	      </tbody>
 	    </tgroup>
       </table>
