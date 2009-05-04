@@ -490,6 +490,27 @@
     ((:solarisx8664 :solarisx8632) "gmake")
     (t "make")))
 
+
+(defun describe-external-process-failure (proc reminder)
+  "If it appears that the external-process PROC failed in some way,
+try to return a string that describes that failure.  If it seems
+to have succeeded or if we can't tell why it failed, return NIL.
+This is mostly intended to describe process-creation/fork/exec failures,
+not runtime errors reported by a successfully created process."
+  (multiple-value-bind (status exit-code)
+      (external-process-status proc)
+    (let* ((procname (car (external-process-args proc)))
+           (string
+            (case status
+              (:error
+               (%strerror exit-code))
+              #-windows-target
+              (:exited
+               (when(= exit-code #$EX_OSERR)
+                 "generic OS error in fork/exec")))))
+      (when string
+        (format nil "Error executing ~a: ~a~&~a" procname string reminder)))))
+
 (defparameter *known-optional-features* '(:count-gf-calls :monitor-futex-wait :unique-dcode))
 (defvar *build-time-optional-features* nil)
 
@@ -529,55 +550,58 @@
                                     "clean")))
                (format t "~&;Building lisp-kernel ...")
                (with-output-to-string (s)
-                                      (multiple-value-bind
-                                          (status exit-code)
-                                          (external-process-status 
-                                           (run-program (make-program)
-                                                        (list "-k" "-C" 
-                                                              (format nil "lisp-kernel/~a"
-                                                                      (kernel-build-directory))
-                                                              "-j"
+                 (let* ((proc (run-program (make-program)
+                                           (list "-k" "-C" 
+                                                 (format nil "lisp-kernel/~a"
+                                                         (kernel-build-directory))
+                                                 "-j"
                                                             
-                                                              (format nil "~d" (1+ (cpu-count))))
-                                                        :output s
-                                                        :error :output))
-                                        (if (and (eq :exited status) (zerop exit-code))
-                                          (progn
-                                            (format t "~&;Kernel built successfully.")
-                                            (when verbose
-                                              (format t "~&;kernel build output:~%~a"
-                                                      (get-output-stream-string s)))
-                                            (sleep 1))
-                                          (error "Error(s) during kernel compilation.~%~a"
-                                                 (get-output-stream-string s))))))
+                                                 (format nil "~d" (1+ (cpu-count))))
+                                           :output s
+                                           :error :output)))
+                   (multiple-value-bind (status exit-code)
+                       (external-process-status proc)
+                     (if (and (eq :exited status) (zerop exit-code))
+                       (progn
+                         (format t "~&;Kernel built successfully.")
+                         (when verbose
+                           (format t "~&;kernel build output:~%~a"
+                                   (get-output-stream-string s)))
+                         (sleep 1))
+                       (error "Error(s) during kernel compilation.~%~a"
+                              (or
+                               (describe-external-process-failure
+                                proc
+                                "Developer tools may not be installed correctly.")
+                               (get-output-stream-string s))))))))
              (compile-ccl (not (null force)))
              (if force (xload-level-0 :force) (xload-level-0))
              (when reload
                (with-input-from-string (cmd (format nil
-                                                    "(save-application ~s)"
-                                                    (standard-image-name)))
+                                              "(save-application ~s)"
+                                              (standard-image-name)))
                  (with-output-to-string (output)
-                                        (multiple-value-bind (status exit-code)
-                                            (external-process-status
-                                             (run-program
-                                              (format nil "./~a" (standard-kernel-name))
-                                              (list* "--image-name" (standard-boot-image-name)
-                                                     reload-arguments)
-                                              :input cmd
-                                              :output output
-                                              :error output))
-                                          (if (and (eq status :exited)
-                                                   (eql exit-code 0))
-                                            (progn
-                                              (format t "~&;Wrote heap image: ~s"
-                                                      (truename (format nil "ccl:~a"
-                                                                        (standard-image-name))))
-                                              (when verbose
-                                                (format t "~&;Reload heap image output:~%~a"
-                                                        (get-output-stream-string output))))
-                                            (error "Errors (~s ~s) reloading boot image:~&~a"
-                                                   status exit-code
-                                                   (get-output-stream-string output)))))))
+                   (multiple-value-bind (status exit-code)
+                       (external-process-status
+                        (run-program
+                         (format nil "./~a" (standard-kernel-name))
+                         (list* "--image-name" (standard-boot-image-name)
+                                reload-arguments)
+                         :input cmd
+                         :output output
+                         :error output))
+                     (if (and (eq status :exited)
+                              (eql exit-code 0))
+                       (progn
+                         (format t "~&;Wrote heap image: ~s"
+                                 (truename (format nil "ccl:~a"
+                                                   (standard-image-name))))
+                         (when verbose
+                           (format t "~&;Reload heap image output:~%~a"
+                                   (get-output-stream-string output))))
+                       (error "Errors (~s ~s) reloading boot image:~&~a"
+                              status exit-code
+                              (get-output-stream-string output)))))))
              (when exit
                (quit)))
         (setf (current-directory) cd)))))
