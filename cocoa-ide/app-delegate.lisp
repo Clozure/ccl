@@ -32,15 +32,22 @@
          (path (ccl::ensure-directory-pathname
                 (lisp-string-from-nsstring parent))))
     (ccl::replace-base-translation "ccl:" path)))
-         
+
+
+(defvar *ccl-ide-init-file* "home:ccl-ide-init")
+
+;;; Errors that occur while this file is loading will enter a break
+;;; loop, with *DEBUG-IO* connected to the terminal/Emacs, to AltConsole,
+;;; or to /dev/null and syslog.
+(defun load-ide-init-file ()
+  (with-simple-restart (continue "Skip loading IDE init file.")
+    (load *ccl-ide-init-file* :if-does-not-exist nil :verbose nil)))
 
 (objc:defmethod (#/applicationWillFinishLaunching: :void)
     ((self lisp-application-delegate) notification)
   (declare (ignore notification))
   (initialize-user-interface)
-  (let* ((c (#/init (#/alloc console-window))))
-    (unless (%null-ptr-p c)
-      (setf (console *nsapp*) c))))
+  (load-ide-init-file))
 
 (objc:defmethod (#/applicationWillTerminate: :void)
 		((self lisp-application-delegate) notification)
