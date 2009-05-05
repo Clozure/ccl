@@ -2497,8 +2497,9 @@ changing its name to ~s may have serious consequences." class new))
 
 ;;; If there's a single method (with standard method combination) on
 ;;; GF and all of that method's arguments are specialized to the T
-;;; class - and if the method doesn't accept &key - we can just have
-;;; the generic function call the method-function
+;;; class - and if the method doesn't accept &key or do any
+;;; next-method things - we can just have the generic function call
+;;; the method-function
 (defun dcode-for-universally-applicable-singleton (gf)
   (when (eq (generic-function-method-combination gf)
             *standard-method-combination*)
@@ -2507,7 +2508,9 @@ changing its name to ~s may have serious consequences." class new))
       (when (and method
                  (null (cdr methods))
                  (null (method-qualifiers method))
-                 (not (logbitp $lfbits-keys-bit (lfun-bits (method-function method))))
+                 (not (logtest (logior (ash 1 $lfbits-keys-bit)
+                                       (ash 1 $lfbits-nextmeth-bit))
+                                 (lfun-bits (method-function method))))
                  (dolist (spec (method-specializers method) t)
                    (unless (eq spec *t-class*)
                      (return nil))))
