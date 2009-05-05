@@ -74,7 +74,7 @@
 
 	  <refsynopsisdiv>
 	    <synopsis><function>run-program</function>
-	    program args &key; (wait t) pty input
+	    program args &key; (wait t) pty sharing input
 	    if-input-does-not-exist output (if-output-exists :error) (error
 	    :output) (if-error-exists :error) status-hook</synopsis>
 	  </refsynopsisdiv>
@@ -118,6 +118,17 @@
 		  <para>This option is accepted but currently ignored;
 		  it's intended to make it easier to run external programs
 		  that need to interact with a terminal device.</para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term>sharing</term>
+
+		<listitem>
+                  <para>Sets a specific sharing mode
+                  (see <xref linkend="Stream-SHARING"/>) for any streams created
+                  within RUN-PROGRAM when INPUT, OUTPUT or ERROR are requested
+                  to be a :STREAM.</para>
 		</listitem>
 	      </varlistentry>
 

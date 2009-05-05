@@ -41,7 +41,7 @@
 	  <function>OPEN</function>.</para>
 	</listitem>
       </varlistentry>
-      <varlistentry>
+      <varlistentry id="Stream-SHARING">
 	<term><literal>:SHARING</literal></term>
 	<listitem>
 	  <para>Specifies how a stream can be used by multiple
