@@ -4179,6 +4179,7 @@ LocalLabelPrefix[]ffcall_call_end:
 	__(stmxcsr rcontext(tcr.ffi_exception))
 	__else
 	__(fnstsw rcontext(tcr.ffi_exception))
+	__(fnclex)
 	__endif
 1:	__(pushl rcontext(tcr.save_eflags))
 	__(popfl)
