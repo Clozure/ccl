@@ -101,15 +101,27 @@
                           (encoded-gpr-lisp xp (ldb (byte 4 4) op2))
                           (encoded-gpr-lisp xp (ldb (byte 4 0) op2))
                           frame-ptr)))
+                  ((= op1 #x90)
+                   (setq skip (%check-anchored-uuo xcf 3))
+                   (setf (encoded-gpr-lisp xp (ldb (byte 4 4) op2))
+                         (%kernel-restart-internal $xvunbnd
+                                                   (list
+                                                    (encoded-gpr-lisp
+                                                     xp
+                                                     (ldb (byte 4 0) op2)))
+                                                   frame-ptr)))
                   ((< op1 #xa0)
                    (setq skip (%check-anchored-uuo xcf 2))
-                   ;; #x9x - register X is a symbol.  It's unbound.
-                   (%kernel-restart-internal $xvunbnd
-                                             (list
-                                              (encoded-gpr-lisp
+                   ;; #x9x, x>0 - register X is a symbol.  It's unbound,
+                   ;; but we don't have enough info to offer USE-VALUE,
+                   ;; STORE-VALUE, or CONTINUE restarts.
+                   (%error (make-condition 'unbound-variable
+                                           :name
+                                           (encoded-gpr-lisp
                                                xp
                                                (ldb (byte 4 0) op1)))
-                                             frame-ptr))
+                           ()
+                           frame-ptr))
                   ((< op1 #xb0)
                    (setq skip (%check-anchored-uuo xcf 2))
                    (%err-disp-internal $xfunbnd
@@ -274,15 +286,29 @@
                           (encoded-gpr-lisp xp (ldb (byte 4 4) op2))
                           (encoded-gpr-lisp xp (ldb (byte 4 0) op2))
                           frame-ptr)))
+                  ((= op1 #x90)
+		   (setq skip (%check-anchored-uuo xcf 3))
+                   (setf (encoded-gpr-lisp
+                          xp
+                          (ldb (byte 3 0) op2))
+                         (%kernel-restart-internal $xvunbnd
+                                                   (list
+                                                    (encoded-gpr-lisp
+                                                     xp
+                                                     (ldb (byte 3 0) op2)))
+                                                   frame-ptr)))
                   ((< op1 #xa0)
 		   (setq skip (%check-anchored-uuo xcf 2))
-                   ;; #x9x - register X is a symbol.  It's unbound.
-                   (%kernel-restart-internal $xvunbnd
-                                             (list
-                                              (encoded-gpr-lisp
+                   ;; #x9x, x>- - register X is a symbol.  It's unbound,
+                   ;; but we don't have enough info to offer USE-VALUE,
+                   ;; STORE-VALUE, or CONTINUE restart
+                   (%error (make-condition 'unbound-variable
+                                           :name
+                                           (encoded-gpr-lisp
                                                xp
                                                (ldb (byte 3 0) op1)))
-                                             frame-ptr))
+                           ()
+                           frame-ptr))
                   ((< op1 #xb0)
 		   (setq skip (%check-anchored-uuo xcf 2))
                    (%err-disp-internal $xfunbnd
