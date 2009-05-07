@@ -295,8 +295,8 @@
                                                    (list
                                                     (encoded-gpr-lisp
                                                      xp
-                                                     (ldb (byte 3 0) op2))
-                                                    frame-ptr))))
+                                                     (ldb (byte 3 0) op2)))
+                                                   frame-ptr)))
                   ((< op1 #xa0)
 		   (setq skip (%check-anchored-uuo xcf 2))
                    ;; #x9x, x>- - register X is a symbol.  It's unbound,
