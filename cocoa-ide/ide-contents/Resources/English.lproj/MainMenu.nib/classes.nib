@@ -54,6 +54,8 @@
 				<string>id</string>
 				<key>showListener</key>
 				<string>id</string>
+				<key>showNewInspector</key>
+				<string>id</string>
 				<key>showPreferences</key>
 				<string>id</string>
 				<key>showProcessesWindow</key>
