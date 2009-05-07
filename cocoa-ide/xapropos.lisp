@@ -30,7 +30,7 @@
 (objc:defmethod #/init ((wc xapropos-window-controller))
   (let ((self (#/initWithWindowNibName: wc #@"xapropos")))
     (unless (%null-ptr-p self)
-      (setf (slot-value self 'row-objects) (make-instance'ns:ns-mutable-array)))
+      (setf (slot-value self 'row-objects) (make-instance 'ns:ns-mutable-array)))
     self))
 
 (objc:defmethod (#/windowDidLoad :void) ((wc xapropos-window-controller))
@@ -61,8 +61,8 @@
           (vector-push-extend sym v))))
     (setf v (sort v #'string-lessp))
     (#/removeAllObjects array)
-    (dotimes (i (length v))
-      (let ((n (#/null ns:ns-null)))
+    (let ((n (#/null ns:ns-null)))
+      (dotimes (i (length v))
         (#/addObject: array n))))
   (#/reloadData (table-view wc)))
 
@@ -126,6 +126,6 @@
                    (syms matched-symbols)) wc
     (when (eql (#/objectAtIndex: array row) (#/null ns:ns-null))
       (let ((name (%make-nsstring (prin1-to-string (aref syms row)))))
-        (#/replaceObjectAtIndex:withObject: array row name)
+            (#/replaceObjectAtIndex:withObject: array row name)
         (#/release name)))
     (#/objectAtIndex: array row)))
