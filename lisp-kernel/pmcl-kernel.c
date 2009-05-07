@@ -1998,9 +1998,10 @@ load_image(char *path)
   int fd = open(path, O_RDONLY, 0666), err;
   LispObj image_nil = 0;
 
-  errno = 0;
   if (fd > 0) {
     openmcl_image_file_header ih;
+
+    errno = 0;
     image_nil = load_openmcl_image(fd, &ih);
     /* We -were- using a duplicate fd to map the file; that
        seems to confuse Darwin (doesn't everything ?), so
