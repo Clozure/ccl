@@ -2266,8 +2266,20 @@
 				    
   
 (defclass hemlock-editor-window-controller (ns:ns-window-controller)
-    ()
+  ()
   (:metaclass ns:+ns-object))
+
+;;; This is borrowed from emacs.  The first click on the zoom button will
+;;; zoom vertically.  The second will zoom completely.  The third will
+;;; return to the original size.
+(objc:defmethod (#/windowWillUseStandardFrame:defaultFrame: #>NSRect)
+                ((wc hemlock-editor-window-controller) sender (default-frame #>NSRect))
+  (let* ((r (#/frame sender)))
+    (if (= (ns:ns-rect-height r) (ns:ns-rect-height default-frame))
+      (setf r default-frame)
+      (setf (ns:ns-rect-height r) (ns:ns-rect-height default-frame)
+            (ns:ns-rect-y r) (ns:ns-rect-y default-frame)))
+    r))
 
 (defmethod hemlock-view ((self hemlock-editor-window-controller))
   (let ((frame (#/window self)))
@@ -2672,6 +2684,8 @@
            (controller (make-instance
                            'hemlock-editor-window-controller
                          :with-window window)))
+      ;;(#/setDelegate: window self)
+      (#/setDelegate: window controller)
       (#/setDelegate: (text-pane-text-view (slot-value window 'pane)) self)
       (#/addWindowController: self controller)
       (#/release controller)
