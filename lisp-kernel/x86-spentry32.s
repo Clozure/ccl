@@ -4354,6 +4354,12 @@ __(tra(local_label(back_from_callback)))
          __(testl %ecx,%ecx)
          __(jne local_label(winapi_return))
 	__endif
+        /* since we aligned the stack after pushing flags, we're not
+           really sure where %esp is relative to where flags were saved.
+           We do know where the saved flags are relative to %ebp, so use
+           that to establish %esp before the popfl.
+        */
+        __(lea -24(%ebp),%esp)
 	__(popfl)	/* flags from bt way back when */
 	__(jc local_label(discard_first_arg))
 	__(leave)
