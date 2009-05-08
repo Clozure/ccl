@@ -601,6 +601,14 @@ result-type-keyword is :VOID or NIL"
                           (setf (%get-unsigned-long-long buf other-byte-offset) val))
                         (incf other-byte-offset 8)))
                  (incf ngpr 2))
+		((:unsigned-byte :unsigned-halfword :unsigned-fullword)
+                 (cond ((< ngpr 8)
+                        (setf (%get-unsigned-long buf gpr-byte-offset) val
+                              gpr-byte-offset (+ gpr-byte-offset 4)))
+                       (t
+                        (setf (%get-unsigned-long buf other-byte-offset) val
+                              other-byte-offset (+ other-byte-offset 4))))
+		 (incf ngpr))
                 (t
                  (cond ((< ngpr 8)
                         (setf (%get-long buf gpr-byte-offset) val
@@ -705,6 +713,8 @@ result-type-keyword is :VOID or NIL"
                  (incf offset 4))
                 (:address
                  (setf (%get-ptr buf offset) val))
+		((:unsigned-byte :unsigned-halfword :unsigned-fullword)
+		 (setf (%get-unsigned-long buf offset) val))
                 (t
                  (if (typep spec 'unsigned-byte)
                    (dotimes (i spec (decf offset 4))
