@@ -699,9 +699,9 @@
   (setq s (%inc-ptr s 0))
   (let* ((newself (#/init self))
          (styles (make-editor-style-map))
-         (mirror (#/retain (make-instance ns:ns-mutable-attributed-string
+         (mirror (make-instance ns:ns-mutable-attributed-string
                                    :with-string s
-                                   :attributes (#/objectAtIndex: styles 0)))))
+                                   :attributes (#/objectAtIndex: styles 0))))
     (declare (type hemlock-text-storage newself))
     (setf (slot-value newself 'styles) styles)
     (setf (slot-value newself 'hemlock-string) s)
@@ -2645,7 +2645,9 @@
 
 (def-cocoa-default *initial-editor-x-pos* :float 20.0f0 "X position of upper-left corner of initial editor")
 
-(def-cocoa-default *initial-editor-y-pos* :float -20.0f0 "Y position of upper-left corner of initial editor")
+(def-cocoa-default *initial-editor-y-pos* :float 10.0f0 "Y position of upper-left corner of initial editor")
+
+(defloadvar *editor-cascade-point* nil)
 
 (defloadvar *next-editor-x-pos* nil) ; set after defaults initialized
 (defloadvar *next-editor-y-pos* nil)
@@ -2689,14 +2691,25 @@
       (#/setDelegate: (text-pane-text-view (slot-value window 'pane)) self)
       (#/addWindowController: self controller)
       (#/release controller)
-      (ns:with-ns-point  (current-point
-                          (or *next-editor-x-pos*
-                              (x-pos-for-window window *initial-editor-x-pos*))
-                          (or *next-editor-y-pos*
-                              (y-pos-for-window window *initial-editor-y-pos*)))
-        (let* ((new-point (#/cascadeTopLeftFromPoint: window current-point)))
-          (setq *next-editor-x-pos* (ns:ns-point-x new-point)
-                *next-editor-y-pos* (ns:ns-point-y new-point))))
+      ;; Cascade windows from the top left corner of the topmost editor window.
+      ;; If there's no editor window, use the default position.
+      (flet ((editor-window-p (w)
+               (and (not (eql w window))
+                    (eql (#/class (#/windowController w))
+                         (find-class 'hemlock-editor-window-controller)))))
+        (let* ((editors (remove-if-not #'editor-window-p (windows)))
+               (top-editor (car editors)))
+          (if top-editor
+            (ns:with-ns-point (zp 0 0)
+              (setq *editor-cascade-point* (#/cascadeTopLeftFromPoint: top-editor zp)))
+	    (let* ((screen-frame (#/visibleFrame (#/screen window)))
+                   (pt (ns:make-ns-point
+					    *initial-editor-x-pos*
+					    (- (ns:ns-rect-height
+						screen-frame)
+					       *initial-editor-y-pos*))))
+	      (setq *editor-cascade-point* pt)))))
+      (#/cascadeTopLeftFromPoint: window *editor-cascade-point*)
       (let ((view (hemlock-view window)))
         (hi::handle-hemlock-event view #'(lambda ()
                                            (hi::process-file-options)))))))
