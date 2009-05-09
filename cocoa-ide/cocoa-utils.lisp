@@ -378,3 +378,9 @@
        (#/release nstitle)
        (#/release nsmessage))))
 
+(defun post-tiger-p ()
+  (rlet ((p :int))
+    (#_Gestalt #$gestaltSystemVersion p)
+    (>= (%get-long p) #x1050)))
+
+

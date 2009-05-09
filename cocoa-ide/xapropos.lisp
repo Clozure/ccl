@@ -7,6 +7,7 @@
                     :accessor matched-symbols)
    ;; outlets
    (action-menu :foreign-type :id :accessor action-menu)
+   (action-popup-button :foreign-type :id :accessor action-popup-button)
    (search-field :foreign-type :id :accessor search-field)
    (search-field-toolbar-item :foreign-type :id :accessor search-field-toolbar-item)
    (table-view :foreign-type :id :accessor table-view)
@@ -33,8 +34,56 @@
       (setf (slot-value self 'row-objects) (make-instance 'ns:ns-mutable-array)))
     self))
 
+(defun make-action-popup (menu)
+  (ns:with-ns-rect (r 0 0 44 23)
+    (let* ((button (make-instance 'ns:ns-pop-up-button :with-frame r :pulls-down t))
+           (item (#/itemAtIndex: menu 0))
+           (image-name (if (post-tiger-p) #@"NSActionTemplate" #@"gear")))
+      (#/setBezelStyle: button #$NSTexturedRoundedBezelStyle)
+      ;; This looks bad on Tiger: the arrow is in the bottom corner of the button.
+      (#/setArrowPosition: (#/cell button) #$NSPopUpArrowAtBottom)
+      (#/setImage: item (#/imageNamed: ns:ns-image image-name))
+      (#/setMenu: button menu)
+      (#/synchronizeTitleAndSelectedItem button)
+      button)))
+
 (objc:defmethod (#/windowDidLoad :void) ((wc xapropos-window-controller))
-  (#/setDoubleAction: (table-view wc) (@selector #/inspect:)))
+  (#/setDoubleAction: (table-view wc) (@selector #/inspect:))
+  (setf (action-popup-button wc) (make-action-popup (action-menu wc)))
+  (let* ((toolbar (make-instance 'ns:ns-toolbar :with-identifier #@"apropos toolbar")))
+    (#/setDisplayMode: toolbar #$NSToolbarDisplayModeIconOnly)
+    (#/setDelegate: toolbar wc)
+    (#/setToolbar: (#/window wc) toolbar)
+    (#/release toolbar)
+    (#/makeFirstResponder: (#/window wc) (search-field wc))))
+
+(objc:defmethod #/toolbarAllowedItemIdentifiers: ((wc xapropos-window-controller) toolbar)
+  (declare (ignore toolbar))
+  (#/arrayWithObjects: ns:ns-array #@"action-popup-button"
+                       #&NSToolbarFlexibleSpaceItemIdentifier #@"search-field" +null-ptr+))
+
+(objc:defmethod #/toolbarDefaultItemIdentifiers: ((wc xapropos-window-controller) toolbar)
+  (declare (ignore toolbar))
+  (#/arrayWithObjects: ns:ns-array #@"action-popup-button"
+                       #&NSToolbarFlexibleSpaceItemIdentifier #@"search-field" +null-ptr+))
+
+(objc:defmethod #/toolbar:itemForItemIdentifier:willBeInsertedIntoToolbar:
+                ((wc xapropos-window-controller) toolbar identifier (flag #>BOOL))
+  (declare (ignore toolbar))
+  (let* ((toolbar-item (make-instance 'ns:ns-toolbar-item :with-item-identifier identifier)))
+    (#/autorelease toolbar-item)
+    (with-slots (action-popup-button search-field) wc
+      (cond ((#/isEqualToString: identifier #@"action-popup-button")
+             (#/setMinSize: toolbar-item (pref (#/frame action-popup-button) #>NSRect.size))
+             (#/setMaxSize: toolbar-item (pref (#/frame action-popup-button) #>NSRect.size))
+             (#/setView: toolbar-item action-popup-button))
+            ((#/isEqualToString: identifier #@"search-field")
+             (#/setMinSize: toolbar-item (pref (#/frame search-field) #>NSRect.size))
+             (#/setMaxSize: toolbar-item (pref (#/frame search-field) #>NSRect.size))
+             (#/setView: toolbar-item search-field))
+          (t
+           (setq toolbar-item +null-ptr+))))
+    toolbar-item))
 
 (objc:defmethod (#/dealloc :void) ((wc xapropos-window-controller))
   (#/release (slot-value wc 'row-objects))
@@ -126,6 +175,6 @@
                    (syms matched-symbols)) wc
     (when (eql (#/objectAtIndex: array row) (#/null ns:ns-null))
       (let ((name (%make-nsstring (prin1-to-string (aref syms row)))))
-            (#/replaceObjectAtIndex:withObject: array row name)
+        (#/replaceObjectAtIndex:withObject: array row name)
         (#/release name)))
     (#/objectAtIndex: array row)))
