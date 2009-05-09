@@ -28,6 +28,8 @@
     (unless (%null-ptr-p self)
       (with-slots (row-objects) wc
         (setf row-objects (make-instance 'ns:ns-mutable-array))))
+    ;; We implement custom cascading.
+    (#/setShouldCascadeWindows: wc nil)
     self))
 
 (defmethod initialize-instance :after ((wc xinspector-window-controller) &key inspector 
@@ -40,8 +42,19 @@
 
 (objc:defmethod (#/windowDidLoad :void) ((wc xinspector-window-controller))
   (#/setDoubleAction: (table-view wc) (ccl::@selector #/inspect:))
-  (setq *inspector-cascade-point*
-        (#/cascadeTopLeftFromPoint: (#/window wc) *inspector-cascade-point*)))
+  ;; Cascade window from the top left point of the topmost inspector window.
+  (flet ((good-window-p (w)
+           (and (not (eql w (#/window wc)))
+                (eql (#/class (#/windowController w))
+                     (find-class 'xinspector-window-controller)))))
+    (let* ((inspectors (remove-if-not #'good-window-p (gui::windows)))
+           (top-inspector (car inspectors)))
+      (if top-inspector
+        (ns:with-ns-point (zp 0 0)
+          (setq *inspector-cascade-point*
+                (#/cascadeTopLeftFromPoint: top-inspector zp))))))
+  (#/cascadeTopLeftFromPoint: (#/window wc) *inspector-cascade-point*))
+
 
 (objc:defmethod (#/windowWillClose: :void) ((wc xinspector-window-controller) notification)
   (declare (ignore notification))
