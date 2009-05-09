@@ -2701,13 +2701,12 @@
                (top-editor (car editors)))
           (if top-editor
             (ns:with-ns-point (zp 0 0)
-              (setq *editor-cascade-point* (#/cascadeTopLeftFromPoint: top-editor zp)))
+              (setq *editor-cascade-point* (#/cascadeTopLeftFromPoint:
+					    top-editor zp)))
 	    (let* ((screen-frame (#/visibleFrame (#/screen window)))
-                   (pt (ns:make-ns-point
-					    *initial-editor-x-pos*
-					    (- (ns:ns-rect-height
-						screen-frame)
-					       *initial-editor-y-pos*))))
+                   (pt (ns:make-ns-point *initial-editor-x-pos*
+					 (- (ns:ns-rect-height screen-frame)
+					    *initial-editor-y-pos*))))
 	      (setq *editor-cascade-point* pt)))))
       (#/cascadeTopLeftFromPoint: window *editor-cascade-point*)
       (let ((view (hemlock-view window)))

@@ -95,6 +95,12 @@
 	  (make-instance 'xapropos-window-controller)))
   (#/showWindow: *xapropos-window-controller* self))
 
+(objc:defmethod (#/showNewInspector: :void) ((self lisp-application-delegate)
+                                             sender)
+  (declare (ignore sender))
+  (#/showWindow: (make-instance 'inspector::xinspector-window-controller
+                   :inspector (inspector::make-inspector *package*)) self))
+
 (objc:defmethod (#/showSearchFiles: :void) ((self lisp-application-delegate)
                                             sender)
   ;;If command key is pressed, always make a new window
