@@ -74,6 +74,7 @@
     "preferences"
     "processes-window"
     "apropos-window"
+    "xapropos"
     "file-dialogs"
     "app-delegate"
     "ide-self-update"
@@ -81,8 +82,9 @@
     "start"
     ))
 
-(defparameter *experimental-ide-files*
-  '("xapropos"))
+(defparameter *leopard-only-ide-files*
+  '("xinspector"
+    ))
 
 (defun load-ide (&optional force-compile)
   (declare (special *hemlock-files*)) ;; kludge
@@ -93,8 +95,7 @@
     (rlet ((p :int))
       (#_Gestalt #$gestaltSystemVersion p)
       (when (>= (%get-long p) #x1050)
-        (format t "~&;Running on Leopard.  Will load experimental files.")
-        (setq *ide-files* (append *ide-files* *experimental-ide-files*))))
+        (setq *ide-files* (append *ide-files* *leopard-only-ide-files*))))
     (with-compilation-unit ()
       (dolist (name *ide-files*)
 	(let* ((source (make-pathname :name name :type (pathname-type *.lisp-pathname*)
