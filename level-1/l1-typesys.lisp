@@ -110,7 +110,9 @@
   (cond ((null fn)
          (remhash name %deftype-expanders%))
         ((and *type-system-initialized*
-              (or (built-in-type-p name) (find-class name nil)))
+              (or (built-in-type-p name)
+                  (let ((c (find-class name nil)))
+                    (and c (eq (class-name c) name)))))
          (error "Cannot redefine type ~S" name))
         (t (setf (gethash name %deftype-expanders%) fn)
            (record-source-file name 'type)))
