@@ -1932,6 +1932,14 @@
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-frame))
 
+(objc:defmethod (#/miniaturize: :void) ((w hemlock-frame) sender)
+  (let* ((event (#/currentEvent w))
+         (flags (#/modifierFlags event)))
+    (if (logtest #$NSControlKeyMask flags)
+      (progn
+        (#/orderOut: w nil)
+        (#/changeWindowsItem:title:filename: *nsapp* w (#/title w) nil))
+      (call-next-method sender))))
 
 (defmethod hemlock-view ((frame hemlock-frame))
   (let ((pane (slot-value frame 'pane)))
