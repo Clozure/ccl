@@ -44,11 +44,6 @@
 (require "X8664-ARCH")
 ) ;eval-when (:compile-toplevel :execute)
 
-;; Temp, for loading into a lisp that doesn't have the report-deferred-warnings change
-;; in level-1 yet.
-#-BOOTSTRAPPED (when (eql 0 (ldb $lfbits-numopt (lfun-bits #'report-deferred-warnings)))
-                 (%fhave 'report-deferred-warnings (lambda (&optional x) x nil)))
-
 
 ;File compiler options.  Not all of these need to be exported/documented, but
 ;they should be in the product just in case we need them for patches....

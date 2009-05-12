@@ -1812,20 +1812,12 @@ Or something. Right? ~s ~s" var varbits))
 
 
 (defun nx1-whine (about &rest forms)
-  (if #-BOOTSTRAPPED (fboundp 'compiler-warning-source-note) #+BOOTSTRAPPED T
-    (push (make-condition (or (cdr (assq about *compiler-whining-conditions*)) 'compiler-warning)
-                          :function-name (list *nx-cur-func-name*)
-                          :source-note *nx-current-note*
-                          :warning-type about
-                          :args (or forms (list nil)))
-          *nx-warnings*)
-    ;; remove this case once bootstrapped.
-    (push (make-condition (or (cdr (assq about *compiler-whining-conditions*)) 'compiler-warning)
-                          :function-name (list *nx-cur-func-name*)
-                          :warning-type about
-                          :args (or forms (list nil)))
-          *nx-warnings*))
-  nil)
+  (push (make-condition (or (cdr (assq about *compiler-whining-conditions*)) 'compiler-warning)
+			:function-name (list *nx-cur-func-name*)
+			:source-note *nx-current-note*
+			:warning-type about
+			:args (or forms (list nil)))
+	*nx-warnings*))
 
 (defun p2-whine (afunc about &rest forms)
   (let* ((warning (make-condition (or (cdr (assq about *compiler-whining-conditions*)) 'compiler-warning)
@@ -1910,8 +1902,6 @@ Or something. Right? ~s ~s" var varbits))
 				 (nx-compile-time-error . 0)
 				 (nx-error . 0)
 				 (compiler-bug . 0)))
-
-#-BOOTSTRAPPED (unless (fboundp 'nx1-check-format-call) (fset 'nx1-check-format-call (lambda (&rest x) (declare (ignore x)))))
 
 ;;; Wimpy.
 (defun nx1-call-result-type (sym &optional (args nil args-p) spread-p global-only)

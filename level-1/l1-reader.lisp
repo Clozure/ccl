@@ -3085,7 +3085,7 @@ arg=char : read delimited list"
                 (cond ((null prev) note)
                       ((consp prev) (cons note prev))
                       (t (list note prev))))
-          (loop for sub in subform-notes as subnote = (require-type sub 'source-note)
+          (loop for subnote in subform-notes
             do (when (source-note-source subnote) (error "Subnote ~s already owned?" subnote))
             do (setf (source-note.source subnote) note))
           note)))))
