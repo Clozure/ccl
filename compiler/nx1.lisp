@@ -1137,10 +1137,14 @@
   (if (null (%car (last (push arg args))))
     (setq spread-p nil args (butlast args)))
   (let ((name (nx1-func-name fn))
-        (global nil))
+        (global nil)
+        (result-type t))
+    (when name
+      (setq global (eq (%car fn) 'quote)
+            result-type (nx1-call-result-type name args spread-p global)
+            name (nx1-form fn)))
     (if name
-      (if (eq (%car fn) 'quote)
-        (setq global t name (nx1-form fn))
+      (unless global
         (let*  ((afunc (nth-value 1 (nx-lexical-finfo name))))
           (when (and afunc (eq afunc *nx-call-next-method-function*))
             (setq name (if (or arg orig) 
@@ -1149,7 +1153,10 @@
                          global t
                          args (cons (var-name *nx-next-method-var*) args)))))
       (setq name (nx1-form fn)))
-    (nx1-call name args spread-p global)))
+    (let* ((form (nx1-call name args spread-p global)))
+      (if (eq result-type t)
+        form
+        (make-acode (%nx1-operator typed-form) result-type form)))))
 
 (defnx1 nx1-%apply-lexpr ((%apply-lexpr)) (&whole call fn arg &rest args &aux (orig args))
   (push arg args)
@@ -1477,7 +1484,15 @@
                          t)
                        (setq name (nx-need-function-name name))))))
       (nx1-form (cons name args))  ; This picks up call-next-method evil.
-      (nx1-call (nx1-form func) args nil t))))
+      (let* ((result-type t))
+        (when (and (quoted-form-p func)
+                   (or (typep (setq name (nx-unquote func)) 'symbol)
+                       (setq name (valid-function-name-p name))))
+          (setq result-type (nx1-call-result-type name args nil t)))
+        (let* ((form (nx1-call (nx1-form func) args nil t)))
+          (if (eq result-type t)
+            form
+            (make-acode (%nx1-operator typed-form) result-type form)))))))
 
 (defnx1 nx1-multiple-value-call multiple-value-call (value-form &rest args)
   (make-acode (%nx1-default-operator)
