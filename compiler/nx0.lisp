@@ -272,8 +272,9 @@ function to the indicated name is true.")
 
 ;; Cross-referencing
 (defun nx-record-xref-info (relation name)
-  (when (fboundp '%add-xref-entry)
-    (funcall '%add-xref-entry relation *nx-cur-func-name* name)))
+  (let* ((axe (fboundp '%add-xref-entry)))
+    (when axe
+      (funcall axe relation *nx-cur-func-name* name))))
 
 
 
@@ -1913,7 +1914,7 @@ Or something. Right? ~s ~s" var varbits))
 #-BOOTSTRAPPED (unless (fboundp 'nx1-check-format-call) (fset 'nx1-check-format-call (lambda (&rest x) (declare (ignore x)))))
 
 ;;; Wimpy.
-(defun nx1-call-result-type (sym &optional (args nil args-p) spread-p)
+(defun nx1-call-result-type (sym &optional (args nil args-p) spread-p global-only)
   (let* ((env *nx-lexical-environment*)
          (global-def nil)
          (lexenv-def nil)
@@ -1923,7 +1924,8 @@ Or something. Right? ~s ~s" var varbits))
     (when (and sym 
                (symbolp sym)
                (not (find-ftype-decl sym env))
-               (not (setq lexenv-def (nth-value 1 (nx-lexical-finfo sym))))
+               (or global-only
+                   (not (setq lexenv-def (nth-value 1 (nx-lexical-finfo sym)))))
                (null (setq defenv-def (retrieve-environment-function-info sym env)))
                (neq sym *nx-global-function-name*)
                (not (functionp (setq global-def (fboundp sym)))))
@@ -1933,7 +1935,7 @@ Or something. Right? ~s ~s" var varbits))
       (setq whined t))
     (when (and args-p
 	       (not spread-p)
-	       (setq somedef (cdr (assq sym *format-arg-functions*)))
+	       (setq somedef (unless lexenv-def (cdr (assq sym *format-arg-functions*))))
 	       (setq somedef (nthcdr somedef args))
 	       (stringp (car somedef)))
       (when (nx1-check-format-call (car somedef) (cdr somedef) env)
