@@ -1141,8 +1141,8 @@
         (result-type t))
     (when name
       (setq global (eq (%car fn) 'quote)
-            result-type (nx1-call-result-type name args spread-p global)
-            name (nx1-form fn)))
+            result-type (nx1-call-result-type name args spread-p global))
+      (if global (setq name (nx1-form fn))))
     (if name
       (unless global
         (let*  ((afunc (nth-value 1 (nx-lexical-finfo name))))
