@@ -722,6 +722,11 @@ the socket is not connected."))
     (unless (< fd 0)
       (fd-close fd))))
 
+(defun make-datagram-file-socket (&rest keys)
+  (declare (ignore keys))
+  (error "Datagram file sockets aren't implemented."))
+
+
 (defun %socket-connect (fd addr addrlen &optional timeout-in-milliseconds)
   (let* ((err (c_connect fd addr addrlen timeout-in-milliseconds)))
     (declare (fixnum err))
