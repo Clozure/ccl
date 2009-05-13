@@ -583,6 +583,8 @@
           (error "Can't find active process for ~s" tcr))))))
 
 
+(defun return-from-frame (frame &rest values)
+  (apply-in-frame frame #'values values nil))
 
 
 ;;; (srv.unresolved srv) is the last catch frame, left there by
