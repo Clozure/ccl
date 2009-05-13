@@ -365,15 +365,13 @@ function to the indicated name is true.")
   (dolist (decl decls pending)
     (dolist (spec (%cdr decl))
       (if (memq (setq s (car spec)) *nx-known-declarations*)
+	;;  Hmm, NOTSPECIAL and FUNCTION are in *nx-known-declarations* but have no standard handler. 
         (if (setq f (getf *nx-standard-declaration-handlers* s))
           (funcall f pending spec env))
         ; Any type name is now (ANSI CL) a valid declaration.
-        ; We should probably do something to distinguish "type names" from "typo names",
-        ; so that (declare (inliMe foo)) warns unless the compiler has some reason to
-        ; believe that 'inliMe' (inlemon) has been DEFTYPEd.
-        (dolist (var (%cdr spec))
-          (if (symbolp var)
-            (nx-new-vdecl pending var 'type s)))))))
+	(if (symbolp s)
+	  (nx-process-type-decl pending spec s (%cdr spec) env)
+	  (nx-bad-decls spec))))))
 
 ; Put all variable decls for the symbol VAR into effect in environment ENV.  Now.
 ; Returns list of all new vdecls pertaining to VAR.
@@ -684,6 +682,34 @@ function to the indicated name is true.")
                       (integerp (%cadr acode-expression))))
            (%cadr acode-expression)))))
 
+(defun specifier-type-if-known (typespec &optional env &key whine)
+  (handler-case (specifier-type typespec env)
+    (parse-unknown-type (c) 
+      (when (and whine *compiler-warn-on-undefined-type-references*)
+	(nx1-whine :undefined-type (parse-unknown-type-specifier c)))
+      (values nil (parse-unknown-type-specifier c)))
+    ;; catch any errors due to destructuring in type-expand
+    (program-error (c)
+      (when whine
+	(nx1-whine :invalid-type typespec c))
+      (values nil typespec))))
+
+#+debugging-version
+(defun specifier-type-if-known (typespec &optional env &key whine)
+  (handler-bind ((parse-unknown-type (lambda (c)
+                                       (break "caught unknown-type ~s" c)
+				       (when (and whine *compiler-warn-on-undefined-type-references*)
+					 (nx1-whine :undefined-type (parse-unknown-type-specifier c)))
+                                       (return-from specifier-type-if-known
+                                         (values nil (parse-unknown-type-specifier c)))))
+		 (program-error (lambda (c)
+				  (break "caught program-error ~s" c)
+				  (when whine
+				    (nx1-whine :invalid-type typespec c))
+				  (return-from specifier-type-if-known
+				    (values nil typespec)))))
+    (specifier-type typespec env)))
+
 (defun nx-check-vdecl-var-ref (decl)
   (unless (eq (cadr decl) 'special)
     (let* ((sym (car decl))
@@ -754,6 +780,14 @@ function to the indicated name is true.")
       (nx-new-vdecl pending s 'special)
       (nx-bad-decls decl))))
 
+(defnxdecl notspecial (pending decl env)
+  (declare (ignore env))
+  (dolist (s (%cdr decl))
+    (if (symbolp s)
+      (nx-new-vdecl pending s 'notspecial)
+      (nx-bad-decls decl))))
+
+
 (defnxdecl dynamic-extent (pending decl env)
   (declare (ignore env))
   (dolist (s (%cdr decl))
@@ -781,10 +815,13 @@ function to the indicated name is true.")
         (nx-bad-decls decl)))))
 
 (defnxdecl ftype (pending decl env)
-  (declare (ignore env))
   (destructuring-bind (type &rest fnames) (%cdr decl)
-    (dolist (s fnames)
-      (nx-new-fdecl pending s 'ftype type))))
+    (if (not (every (lambda (f) (or (symbolp f) (setf-function-name-p f))) fnames))
+      (nx-bad-decls decl)
+      (let ((ctype (specifier-type-if-known type env :whine t)))
+	(when ctype
+	  (dolist (s fnames)
+	    (nx-new-fdecl pending s 'ftype type)))))))
 
 (defnxdecl settable (pending decl env)
   (nx-settable-decls pending decl env t))
@@ -799,44 +836,19 @@ function to the indicated name is true.")
       (nx-new-vdecl pending s 'settable val)
       (nx-bad-decls decl))))
 
+(defnxdecl function (pending decl env)
+  (nx-process-type-decl pending decl (car decl) (cdr decl) env))
+
 (defnxdecl type (pending decl env)
-  (declare (ignore env))
-  (labels ((kludge (type) ; 0 => known, 1 => unknown, 2=> illegal
-             (cond ((type-specifier-p type)
-                    0)
-                   ((and (consp type)
-                         (member (car type) '(and or))
-                         (not (null (list-length type))))
-                    (do ((result 0 (max result (kludge (car tail))))
-                         (tail (cdr type) (cdr tail)))
-                        ((null tail)
-                         result)))
-                   ((not (symbolp type))
-                    ;;>>>> nx-bad-decls shouldn't signal a fatal error!!!!
-                    ;;>>>> Most callers of nx-bad-decls should just ignore the
-                    ;;>>>> losing decl element and proceed with the rest
-                    ;;>>>>  (ie (declare (ignore foo (bar) baz)) should
-                    ;;>>>>   have the effect of ignoring foo and baz as well
-                    ;;>>>>   as WARNING about the mal-formed declaration.)
-                    (nx-bad-decls decl)
-                    2)
-                   (t 1))))
-    (let* ((spec (%cdr decl))
-           (type (car spec)))
-      (case (kludge type)
-        ((0)
-         (dolist (sym (cdr spec))
-           (if (symbolp sym)
-             (nx-new-vdecl pending sym 'type type)
-             (nx-bad-decls decl))))
-        ((1)
-         (dolist (sym (cdr spec))
-           (unless (symbolp sym)
-             (nx-bad-decls decl))))
-        ((2)
-         (nx-bad-decls decl))))))
+  (nx-process-type-decl pending decl (cadr decl) (cddr decl) env))
 
-
+(defun nx-process-type-decl (pending decl type vars env)
+  (if (not (every #'symbolp vars))
+    (nx-bad-decls decl)
+    (let ((ctype (specifier-type-if-known type env :whine t)))
+      (when ctype
+	(dolist (sym vars)
+	  (nx-new-vdecl pending sym 'type ctype))))))
 
 (defnxdecl global-function-name (pending decl env)
   (declare (ignore pending))

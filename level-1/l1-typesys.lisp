@@ -113,7 +113,9 @@
               (or (built-in-type-p name)
                   (let ((c (find-class name nil)))
                     (and c (eq (class-name c) name)))))
-         (error "Cannot redefine type ~S" name))
+	 (error "Cannot redefine type ~S because ~:[it is the name of a class~;it is a built-in type~]" name (built-in-type-p name)))
+	((memq name *nx-known-declarations*)
+	 (check-declaration-redefinition name 'deftype))
         (t (setf (gethash name %deftype-expanders%) fn)
            (record-source-file name 'type)))
   (set-documentation name 'type doc)   ; nil clears it.
@@ -145,10 +147,13 @@
   (setq name (require-type name 'symbol))
   (multiple-value-bind (lambda doc)
       (parse-macro-internal name arglist body env '*)
-      `(eval-when (:compile-toplevel :load-toplevel :execute)
-         (,definer ',name
-                   (nfunction ,name ,lambda)
-                   ,doc))))
+    `(progn
+       (eval-when (:compile-toplevel)
+	 (note-type-info ',name 'macro ,env))
+       (eval-when (:compile-toplevel :load-toplevel :execute)
+	 (,definer ',name
+	     (nfunction ,name ,lambda)
+	   ,doc)))))
 
 (defmacro deftype (name arglist &body body &environment env)
   "Define a new type, with syntax like DEFMACRO."
@@ -902,7 +907,7 @@
 ;;;    keywords or rest, *empty-type*.
 ;;;
 (defun values-type-types (type &optional (default-type *empty-type*))
-  (declare (type values-type type))
+  (declare (type values-ctype type))
   (values (append (args-ctype-required type)
 		  (args-ctype-optional type))
 	    (cond ((args-ctype-keyp type) *universal-type*)
@@ -1538,7 +1543,7 @@
 (defun standardized-type-specifier (spec &optional env)
   (handler-case
       (type-specifier (specifier-type spec env))
-    (invalid-type-specifier () spec)
+    (program-error () spec)
     (parse-unknown-type () spec)))
 
 (defun modified-numeric-type (base
@@ -2465,6 +2470,7 @@
 (defun coerced-float-bound (bound type)
   (coerce-bound bound type #'coerce))
 
+#|
 (def-type-translator real (&optional (low '*) (high '*))
   (specifier-type `(or (float ,(coerced-real-bound  low 'float)
 			      ,(coerced-real-bound high 'float))
@@ -2477,6 +2483,7 @@
 		      ,(coerced-float-bound high 'single-float))
 	(double-float ,(coerced-float-bound  low 'double-float)
 		      ,(coerced-float-bound high 'double-float)))))
+|#
 
 (def-bounded-type float float nil)
 (def-bounded-type real nil nil)
@@ -2582,7 +2589,7 @@
 ;;; due to mixed-type comparisons (but I think the result is the same).
 ;;;
 (define-type-method (number :simple-intersection) (type1 type2)
-  (declare (type numeric-type type1 type2))
+  (declare (type numeric-ctype type1 type2))
   (if (numeric-types-intersect type1 type2)
     (let* ((class1 (numeric-ctype-class type1))
 	   (class2 (numeric-ctype-class type2))
@@ -3354,7 +3361,7 @@
              (frob-car car-type2 car-type1 cdr-type2 cdr-type1 car-not2))))))
 	    
 (define-type-method (cons :simple-intersection) (type1 type2)
-  (declare (type cons-type type1 type2))
+  (declare (type cons-ctype type1 type2))
   (let ((car-int2 (type-intersection2 (cons-ctype-car-ctype type1)
 				      (cons-ctype-car-ctype type2)))
 	(cdr-int2 (type-intersection2 (cons-ctype-cdr-ctype type1)
@@ -4331,8 +4338,8 @@
                   (let* ((ctype (specifier-type type)))
                     (unless (eq ctype *universal-type*)
                       (generate-predicate-for-ctype ctype)))
-                (invalid-type-specifier ()
-                  (warn "Invalid type soecifier ~s in slot definition for ~s in class ~s." type (slot-definition-name spec) (slot-definition-class spec))
+                (program-error ()
+                  (warn "Invalid type specifier ~s in slot definition for ~s in class ~s." type (slot-definition-name spec) (slot-definition-class spec))
                   (lambda (v)
                     (cerror "Allow the assignment or initialization."
                             "Can't determine whether or not the value ~s should be used to initialize or assign to the slot ~&named ~s in an instance of ~s, because the slot is declared ~&to be of the invalid type ~s."

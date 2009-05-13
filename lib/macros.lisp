@@ -1990,9 +1990,9 @@ to open."
 			(duplicate-options slot)
 			(setq type-p t))
                       (setq type (cadr options))
-                      ;; complain about illegal typespecs
+                      ;; complain about illegal typespecs and continue
                       (handler-case (specifier-type type env)
-                        (invalid-type-specifier ()
+                        (program-error ()
                           (warn "Invalid type ~s in ~s slot definition ~s" type class-name slot))))
                      (:initform
                       (if initform-p
@@ -2044,6 +2044,8 @@ to open."
 		(signal-program-error "Class option~p~{ ~s~} is not one of ~s"
 				      (length illegal) illegal keyvect))))
 	  `(progn
+	     (when (memq ',class-name *nx-known-declarations*)
+	       (check-declaration-redefinition ',class-name 'defclass))
 	    (eval-when (:compile-toplevel)
 	      (%compile-time-defclass ',class-name ,env)
 	      (progn

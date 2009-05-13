@@ -409,11 +409,14 @@
     (defun nil)
     (defmacro (setq lambda '(macro) lfbits nil)) ;; some code assumes lfbits=nil
     (defgeneric (setq lambda (list :methods)))
-    (defmethod (setq lambda (list :methods (cons qualifiers specializers)))))
+    (defmethod (setq lambda (list :methods (cons qualifiers specializers))))
+    (deftype (setq lambda '(type) lfbits (cons nil *loading-file-source-file*))))
   (vector lfbits keyvect *loading-file-source-file* lambda))
 
 (defun def-info.lfbits (def-info)
-  (and def-info (svref def-info 0)))
+  (and def-info
+       (let ((lfbits (svref def-info 0)))
+	 (if (consp lfbits) (%car lfbits) lfbits))))
 
 (defun def-info.keyvect (def-info)
   (and def-info (svref def-info 1)))
@@ -422,15 +425,16 @@
   (and def-info (svref def-info 2)))
 
 (defun def-info.lambda (def-info)
-  (let ((data (and def-info (svref def-info 3))))
-    (and (eq (car data) 'lambda) data)))
+  (and def-info
+       (let ((data (svref def-info 3)))
+	 (and (eq (car data) 'lambda) data))))
 
 (defun def-info.methods (def-info)
-  (let ((data (and def-info (svref def-info 3))))
-    (and (eq (car data) :methods) (%cdr data))))
+  (and def-info
+       (let ((data (svref def-info 3)))
+	 (and (eq (car data) :methods) (%cdr data)))))
 
 (defun def-info-with-new-methods (def-info new-methods)
-  (unless (eq (def-info.type def-info) 'defgeneric) (error "Bug: not method info: ~s" def-info))
   (if (eq new-methods (def-info.methods def-info))
     def-info
     (let ((new (copy-seq def-info)))
@@ -441,21 +445,69 @@
   (let ((data (and def-info (svref def-info 3))))
     (eq (car data) 'macro)))
 
-(defun def-info.type (def-info)
-  (if (null def-info) nil  ;; means FTYPE decl or lap function
+(defun def-info.function-p (def-info)
+  (not (and def-info (eq (car (svref def-info 3)) 'type))))
+
+(defun def-info.function-type (def-info)
+  (if (null def-info)
+    nil ;; ftype only, for the purposes here, is same as nothing.
     (let ((data (svref def-info 3)))
       (ecase (car data)
-        ((nil lambda) 'defun)
-        (:methods 'defgeneric)
-        (macro 'defmacro)))))
+	((nil lambda) 'defun)
+	(:methods 'defgeneric)
+	(macro 'defmacro)
+	(ftype nil)
+	(type nil)))))
+
+(defun def-info.deftype (def-info)
+  (and def-info
+       (let ((bits (svref def-info 0)))
+	 ;; bits or (bits . type-source-file)
+	 (and (consp bits) bits))))
+
+(defun def-info.deftype-type (def-info)
+  ;; 'class (for defclass/defstruct) or 'macro (for deftype et. al.)
+  (and def-info
+       (consp (svref def-info 0))
+       (svref def-info 1)))
 
 (defparameter *one-arg-defun-def-info* (%cons-def-info 'defun (encode-lambda-list '(x))))
 
 (defvar *compiler-warn-on-duplicate-definitions* t)
 
-(defun combine-function-infos (name old-info new-info)
-  (let ((old-type (def-info.type old-info))
-        (new-type (def-info.type new-info)))
+(defun combine-deftype-infos (name def-info old-deftype new-deftype)
+  (when (or new-deftype old-deftype)
+    (when (and old-deftype new-deftype *compiler-warn-on-duplicate-definitions*)
+      (nx1-whine :duplicate-definition
+		 `(type ,name)
+		 (cdr old-deftype)
+		 (cdr new-deftype)))
+    (let ((target (if new-deftype
+		      (or (cdr new-deftype) (cdr old-deftype))
+		      (cdr old-deftype)))
+	  (target-deftype (def-info.deftype def-info)))
+      (unless (and target-deftype (eq (cdr target-deftype) target))
+	(setq def-info (copy-seq (or def-info '#(nil nil nil (ftype)))))
+	(setf (svref def-info 0) (cons (def-info.lfbits def-info) target)))))
+  def-info)
+
+#+debug
+(defun describe-def-info (def-info)
+  (list :lfbits (def-info.lfbits def-info)
+	:keyvect (def-info.keyvect def-info)
+	:macro-p (def-info.macro-p def-info)
+	:function-p (def-info.function-p def-info)
+	:lambda (and (def-info.function-p def-info) (def-info.lambda def-info))
+	:methods (and (def-info.function-p def-info) (def-info.methods def-info))
+	:function-type (def-info.function-type def-info)
+	:deftype (def-info.deftype def-info)
+	:deftype-type (def-info.deftype-type def-info)))
+
+(defun combine-definition-infos (name old-info new-info)
+  (let ((old-type (def-info.function-type old-info))  ;; defmacro
+	(old-deftype (def-info.deftype old-info))      ;; nil
+        (new-type (def-info.function-type new-info))  ;; nil
+	(new-deftype (def-info.deftype new-info)))   ;; (nil . file)
     (cond ((and (eq old-type 'defgeneric) (eq new-type 'defgeneric))
            ;; TODO: Check compatibility of lfbits...
            ;; TODO: check that all methods implement defgeneric keys
@@ -469,14 +521,15 @@
                                      (def-info.file old-info)
                                      (def-info.file new-info)))
                         (push new-method old-methods)))
-             (def-info-with-new-methods old-info old-methods)))
-          ((or (eq (or old-type 'defun) (or new-type 'defun))
-               (eq (or old-type 'defgeneric) (or new-type 'defgeneric)))
+             (setq new-info (def-info-with-new-methods old-info old-methods))))
+	  ((or (eq (or old-type 'defun) (or new-type 'defun))
+	       (eq (or old-type 'defgeneric) (or new-type 'defgeneric)))
            (when (and old-type new-type *compiler-warn-on-duplicate-definitions*)
              (nx1-whine :duplicate-definition name (def-info.file old-info) (def-info.file new-info)))
-           (or new-info old-info))
+	   (unless new-info (setq new-info old-info)))
           (t
-           (when *compiler-warn-on-duplicate-definitions*
+	   (when (and (def-info.function-p old-info) (def-info.function-p new-info)
+		      *compiler-warn-on-duplicate-definitions*)
              (apply #'nx1-whine :duplicate-definition
                     name
                     (def-info.file old-info)
@@ -485,27 +538,30 @@
                           ((eq new-type 'defmacro) '("function" "macro"))
                           ((eq old-type 'defgeneric) '("generic function" "function"))
                           (t '("function" "generic function")))))
-           new-info))))
+	   (unless new-type (setq new-info old-info))))
+    (combine-deftype-infos name new-info old-deftype new-deftype)))
 
-(defun record-function-info (name info env)
+(defun record-definition-info (name info env)
   (let* ((definition-env (definition-environment env)))
     (if definition-env
       (let* ((defs (defenv.defined definition-env))
              (already (if (listp defs) (assq name defs) (gethash name defs))))
         (if already
-          (setf (%cdr already) (combine-function-infos name (%cdr already) info))
+          (setf (%cdr already) (combine-definition-infos name (%cdr already) info))
           (let ((outer (loop for defer = (cdr (defenv.type definition-env))
                                then (deferred-warnings.parent defer)
                              while (typep defer 'deferred-warnings)
                              thereis (gethash name (deferred-warnings.defs defer)))))
             (when outer
-              (setq info (combine-function-infos name (%cdr outer) info)))
+              (setq info (combine-definition-infos name (%cdr outer) info)))
             (let ((new (cons name info)))
               (if (listp defs)
                 (setf (defenv.defined definition-env) (cons new defs))
                 (setf (gethash name defs) new)))))
         info))))
 
+(defun record-function-info (name info env)
+  (record-definition-info name info env))
 
 ;;; This is different from AUGMENT-ENVIRONMENT.
 (defun note-function-info (name lambda-expression env)
@@ -518,13 +574,18 @@
     (record-function-info name info env))
   name)
 
+(defun note-type-info (name kind env)
+  (record-definition-info name (%cons-def-info 'deftype nil kind) env))
+
+
 ; And this is different from FUNCTION-INFORMATION.
 (defun retrieve-environment-function-info (name env)
  (let ((defenv (definition-environment env)))
    (when defenv
-     (let ((defs (defenv.defined defenv))
-           (sym (maybe-setf-function-name name)))
-       (if (listp defs) (assq sym defs) (gethash sym defs))))))
+     (let* ((defs (defenv.defined defenv))
+	    (sym (maybe-setf-function-name name))
+	    (info (if (listp defs) (assq sym defs) (gethash sym defs))))
+       (and info (def-info.function-p (cdr info)) info)))))
 
 (defun maybe-setf-function-name (name)
   (if (and (consp name) (eq (car name) 'setf))

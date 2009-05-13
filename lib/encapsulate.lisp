@@ -680,6 +680,7 @@ functions are called."
      `(lambda (,@(and eval-before method-p `(&method ,saved-method-var))
                &rest args) ; if methodp put &method on front of args - vs get-saved-method-var?
        (declare (dynamic-extent args))
+       (declare (ftype function ,def))
        (let ((*trace-level* (1+ *trace-level*))
              (,enable ,if))
          (declare (special *trace-enable* *trace-level*))

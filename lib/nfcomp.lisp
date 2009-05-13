@@ -763,12 +763,13 @@ Will differ from *compiling-file* during an INCLUDE")
     name))
 
 
-(defun fcomp-proclaim-type (type syms)
+(defun fcomp-proclaim-type (type syms env)
   (dolist (sym syms)
     (if (symbolp sym)
-      (push (cons sym type) *nx-compile-time-types*)
-      (warn "~S isn't a symbol in ~S type declaration while compiling ~S."
-            sym type *fasl-source-file*))))
+      (progn
+	(specifier-type-if-known type env :whine t)
+	(push (cons sym type) *nx-compile-time-types*))
+      (nx-bad-decls `(type ,type ,sym)))))
 
 (defun compile-time-proclamation (specs env &aux  sym (defenv (definition-environment env)))
   (when defenv
@@ -776,7 +777,7 @@ Will differ from *compiling-file* during an INCLUDE")
       (setq sym (pop spec))
       (case sym
         (type
-         (fcomp-proclaim-type (car spec) (cdr spec)))
+         (fcomp-proclaim-type (car spec) (cdr spec) env))
         (special
          (dolist (sym spec)
            (push (cons (require-type sym 'symbol) nil) (defenv.specials defenv))))
@@ -815,10 +816,11 @@ Will differ from *compiling-file* during an INCLUDE")
            (dolist (fname fnames)
              (push (list* (maybe-setf-function-name fname) sym ftype) (lexenv.fdecls defenv)))))
         (otherwise
-         (if (memq (if (consp sym) (%car sym) sym) *cl-types*)
-           (fcomp-proclaim-type sym spec)       ; A post-cltl2 cleanup issue changes this
-           nil)                         ; ---- probably ought to complain
-         )))))
+	 (unless (memq sym *nx-known-declarations*)
+	   ;; Any type name is now (ANSI CL) a valid declaration.
+	   (if (symbolp sym)
+	     (fcomp-proclaim-type sym spec env)
+	     (nx-bad-decls `(,sym ,spec)))))))))
 
 (defun fcomp-load-%defun (form env)
   (destructuring-bind (fn &optional doc) (cdr form)
@@ -845,10 +847,15 @@ Will differ from *compiling-file* during an INCLUDE")
       (fcomp-output-form $fasl-macro env fn doc))
     (fcomp-random-toplevel-form form env)))
 
+#-BOOTSTRAPPED (unless (fboundp 'note-type-info)
+		 (fset 'note-type-info (nlambda bootstrapping-note-type-info (name kind env) (declare (ignore name kind env)))))
+
+
 (defun define-compile-time-structure (sd refnames predicate env)
   (let ((defenv (definition-environment env)))
     (when defenv
       (when (non-nil-symbolp (sd-name sd))
+	(note-type-info (sd-name sd) 'class env)
         (push (make-instance 'compile-time-class :name (sd-name sd))
               (defenv.classes defenv)))
       (setf (defenv.structures defenv) (alist-adjoin (sd-name sd) sd (defenv.structures defenv)))
@@ -1000,7 +1007,7 @@ Will differ from *compiling-file* during an INCLUDE")
       (fcomp-signal-or-defer-warnings warnings env)
       lfun)))
 
-; For now, defer only UNDEFINED-FUNCTION-REFERENCEs, signal all others via WARN.
+; For now, defer only UNDEFINED-REFERENCEs, signal all others via WARN.
 ; Well, maybe not WARN, exactly.
 (defun fcomp-signal-or-defer-warnings (warnings env)
   (let ((init (null *fcomp-warnings-header*))
@@ -1009,7 +1016,7 @@ Will differ from *compiling-file* during an INCLUDE")
     (dolist (w warnings)
       (setf (compiler-warning-file-name w) *fasl-source-file*)
       (setf (compiler-warning-stream-position w) *fcomp-stream-position*)
-      (if (and (typep w 'undefined-function-reference) 
+      (if (and (typep w 'undefined-reference) 
                (eq w (setq w (macro-too-late-p w env))))
         (push w *fasl-deferred-warnings*)
         (progn
@@ -1025,16 +1032,18 @@ Will differ from *compiling-file* during an INCLUDE")
 (defun macro-too-late-p (w env)
   (let* ((args (compiler-warning-args w))
          (name (car args)))
-    (if (or (macro-function name)
-            (let* ((defenv (definition-environment env))
-                   (info (if defenv (assq name (defenv.functions defenv)))))
-              (and (consp (cdr info))
-                   (eq 'macro (cadr info)))))
-      (make-instance 'macro-used-before-definition
-        :file-name (compiler-warning-file-name w)
-        :function-name (compiler-warning-function-name w)
-        :warning-type ':macro-used-before-definition
-        :args args)
+    (if (typep w 'undefined-function-reference)
+      (if (or (macro-function name)
+	      (let* ((defenv (definition-environment env))
+		     (info (if defenv (assq name (defenv.functions defenv)))))
+		(and (consp (cdr info))
+		     (eq 'macro (cadr info)))))
+	  (make-instance 'macro-used-before-definition
+	    :file-name (compiler-warning-file-name w)
+	    :function-name (compiler-warning-function-name w)
+	    :warning-type ':macro-used-before-definition
+	    :args args)
+	  w)
       w)))
 
 

@@ -552,8 +552,6 @@
 
 
 
-(defstatic *type-system-initialized* nil)
-
 (eval-when (eval compile)
   (require 'defstruct-macros))
 
@@ -1352,6 +1350,7 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 
 
 (defun %compile-time-defclass (name environment)
+  (note-type-info name 'class environment)
   (unless (find-class name nil environment)
     (let ((defenv (definition-environment environment)))
       (when defenv

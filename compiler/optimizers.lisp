@@ -640,28 +640,12 @@
       call
       `(progn ,@body))))
 
-(defun specifier-type-if-known (typespec &optional env)
-  (handler-case (specifier-type typespec env)
-    (parse-unknown-type (c) (values nil (parse-unknown-type-specifier c)))))
-
-#+debugging-version
-(defun specifier-type-if-known (typespec &optional env)
-  (handler-bind ((parse-unknown-type (lambda (c)
-                                       (break "caught unknown-type ~s" c)
-                                       (return-from specifier-type-if-known
-                                         (values nil (parse-unknown-type-specifier c))))))
-    (specifier-type typespec env)))
-
-
 (defun target-element-type-type-keyword (typespec &optional env)
-  (let* ((ctype (specifier-type-if-known `(array ,typespec) env)))
-    (if (null ctype)
-      (progn
-        (nx1-whine :unknown-type-declaration typespec)
-        nil)
+  (let ((ctype (specifier-type-if-known `(array ,typespec) env)))
+    (when ctype
       (funcall (arch::target-array-type-name-from-ctype-function
-                (backend-target-arch *target-backend*))
-               ctype))))
+		(backend-target-arch *target-backend*))
+	       ctype))))
 
 (defun infer-array-type (dims element-type element-type-p displaced-to-p fill-pointer-p adjustable-p env)
   (let* ((ctype (make-array-ctype :complexp (or displaced-to-p fill-pointer-p adjustable-p))))
@@ -698,11 +682,8 @@
                          (nx-unquote element-type)
                          '*)
                        t))
-           (element-type (or (specifier-type-if-known typespec env)
-                             (make-unknown-ctype :specifier typespec))))
-      (setf (array-ctype-element-type ctype) element-type)
-      (if (typep element-type 'unknown-ctype)
-        (setf (array-ctype-element-type ctype) *wild-type*))
+           (element-type (specifier-type-if-known typespec env :whine t)))
+      (setf (array-ctype-element-type ctype) (or element-type *wild-type*))
       (specialize-array-type ctype))
     (type-specifier ctype)))
 
@@ -728,7 +709,7 @@
       (let* ((element-type-keyword nil)
              (expansion
               (cond ((and initial-element-p initial-contents-p)
-                     (nx1-whine 'illegal-arguments call)
+		     (signal-program-error  "Incompatible arguments :INITIAL-ELEMENT and :INITIAL-CONTENTS in ~s" call)
                      call)
                     (displaced-to-p
                      (if (or initial-element-p initial-contents-p element-type-p)
@@ -957,7 +938,7 @@
   (cond ((and (or (eq type t)
                   (and (quoted-form-p type)
                        (setq type (%cadr type))))
-              (setq ctype (specifier-type-if-known type env)))
+              (setq ctype (specifier-type-if-known type env :whine t)))
          (cond ((nx-form-typep arg type env) arg)
                ((eq type 'simple-vector)
                 `(the simple-vector (require-simple-vector ,arg)))
@@ -1517,10 +1498,9 @@
         `(values (array-%%typep ,thing ,ctype)))))))
 
 
-
 (defun optimize-typep (thing type env)
   ;; returns a new form, or nil if it can't optimize
-  (let* ((ctype (specifier-type-if-known type env)))
+  (let ((ctype (specifier-type-if-known type env :whine t)))
     (when ctype
       (let* ((type (type-specifier ctype))
              (predicate (if (typep type 'symbol) (type-predicate type))))
@@ -2278,34 +2258,35 @@
         (t call)))
 
 (define-compiler-macro coerce (&whole call &environment env thing type)
-  (cond ((constantp type)
-         (if (quoted-form-p type)
-           (setq type (cadr type)))
-         (if (ignore-errors (subtypep type 'single-float))
-           `(float ,thing 0.0f0)
-           (if (ignore-errors (subtypep type 'double-float))
-             `(float ,thing 0.0d0)
-             (let* ((ctype (specifier-type-if-known type env))
-                    (simple nil)
-                    (extra nil))
-               (if (and (typep ctype 'array-ctype)
-                        (equal (array-ctype-dimensions ctype) '(*)))
-                 (if (eq (array-ctype-specialized-element-type ctype)
-                         (specifier-type 'character))
-                   (setq simple '%coerce-to-string)
-                   (if (and (eq *host-backend* *target-backend*)
-                            (array-ctype-typecode ctype))
-                     (setq simple '%coerce-to-vector
-                           extra (list (array-ctype-typecode ctype)))))
-                 (if (eq ctype (specifier-type 'list))
-                   (setq simple '%coerce-to-list)))
-               (if simple
-                 (let* ((temp (gensym)))
-                   `(let* ((,temp ,thing))
-                     (if (typep ,temp ',(type-specifier ctype))
-                       ,temp
-                       (,simple ,temp ,@extra))))
-               call)))))
+  (cond ((quoted-form-p type)
+	 (setq type (cadr type))
+	 (let ((ctype (specifier-type-if-known type env :whine t)))
+	   (if ctype
+	     (if (csubtypep ctype (specifier-type 'single-float))
+		 `(float ,thing 0.0f0)
+		 (if (csubtypep ctype (specifier-type 'double-float))
+		     `(float ,thing 0.0d0)
+		     (let ((simple nil)
+			   (extra nil))
+		       (if (and (typep ctype 'array-ctype)
+				(equal (array-ctype-dimensions ctype) '(*)))
+			   (if (eq (array-ctype-specialized-element-type ctype)
+				   (specifier-type 'character))
+			       (setq simple '%coerce-to-string)
+			       (if (and (eq *host-backend* *target-backend*)
+					(array-ctype-typecode ctype))
+				   (setq simple '%coerce-to-vector
+					 extra (list (array-ctype-typecode ctype)))))
+			   (if (eq ctype (specifier-type 'list))
+			       (setq simple '%coerce-to-list)))
+		       (if simple
+			   (let* ((temp (gensym)))
+			     `(let* ((,temp ,thing))
+				(if (typep ,temp ',(type-specifier ctype))
+				    ,temp
+				    (,simple ,temp ,@extra))))
+			   call))))
+	     call)))
         (t call)))
 
 (define-compiler-macro equal (&whole call x y &environment env)

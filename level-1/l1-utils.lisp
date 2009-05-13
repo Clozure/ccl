@@ -534,9 +534,8 @@ vector
     (ftype (apply #'proclaim-ftype (%cdr spec)))
     ;(function (proclaim-ftype (cons 'function (cddr spec)) (cadr spec)))
     (t (unless (memq (%car spec) *nx-known-declarations*) ;not really right...
-         ;; Any type name is now (ANSI CL) a valid declaration.
-         (if (and (symbolp (%car spec))
-                  (type-specifier-p (%car spec)))
+         ;; Any type name is now (ANSI CL) a valid declaration.  Any symbol could become a type.
+         (if (symbolp (%car spec))
            (apply #'proclaim-type spec)
            (warn "Unknown declaration specifier(s) in ~S" spec))))))
 
@@ -545,6 +544,11 @@ vector
   (dolist (var vars)
     (if (symbolp var)
       (let ((spec (assq var *nx-proclaimed-types*)))
+	;; Check the type.  This will signal program-error's in case of invalid types, let it.
+	(when *type-system-initialized*
+	  (handler-case (specifier-type type)
+	    (parse-unknown-type (c) 
+	      (warn "Undefined type ~s declaration for ~S" (parse-unknown-type-specifier c) var))))
         (if spec
           (rplacd spec type)
           (push (cons var type) *nx-proclaimed-types*)))
@@ -591,8 +595,16 @@ vector
 (defun proclaim-declaration (&rest syms)
   (declare (dynamic-extent syms))
   (dolist (sym syms)
+    (when (type-specifier-p sym)
+      (error "Cannot define declaration ~s because it is the name of a type" sym))
     (setq *nx-known-declarations* 
           (adjoin sym *nx-known-declarations* :test 'eq))))
+
+(defun check-declaration-redefinition (name why)
+  (when (memq name *nx-known-declarations*)
+    (cerror "Undeclare the declaration ~*~s"
+	    "Cannot ~a ~s because ~:*~s has been declared as a declaration name" why name)
+    (setq *nx-known-declarations* (remove name *nx-known-declarations*))))
 
 (defun proclaim-ignore (t-or-nil &rest syms)
   (declare (dynamic-extent syms))

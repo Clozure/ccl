@@ -242,6 +242,9 @@
     (setq sd (vector type slot-list superclasses offset constructor () refnames))
     (return
      `(progn
+	,@(when (null (sd-type sd))
+		`((when (memq ',struct-name *nx-known-declarations*)
+		    (check-declaration-redefinition ',struct-name 'defstruct))))
        (remove-structure-defs  ',struct-name) ; lose any previous defs
         ,.(defstruct-slot-defs sd refnames env)
         ,.(if constructor (list (defstruct-constructor sd constructor)))

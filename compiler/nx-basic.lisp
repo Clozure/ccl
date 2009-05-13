@@ -42,6 +42,14 @@
 
 (defvar *nx-current-code-note*)
 
+;; The problem with undefind type warnings is that there is no in-language way to shut
+;; them up even when the reference is intentional.  (In case of undefined functions,
+;; you can declare FTYPE and that will turn off any warnings without interfering with
+;; the function being defined later).  For now just provide this as an out.
+(defvar *compiler-warn-on-undefined-type-references* #+ccl-0711 t #-ccl-0711 t)
+
+
+
 ;; In lieu of a slot in acode.  Don't reference this variable elsewhere because I'm
 ;; hoping to make it go away.
 (defparameter *nx-acode-note-map* nil)
@@ -572,8 +580,9 @@
     (:unused . "Unused lexical variable ~S")
     (:ignore . "Variable ~S not ignored.")
     (:undefined-function . "Undefined function ~S")
+    (:undefined-type . "Undefined type ~S")
     (:unknown-declaration . "Unknown declaration ~S")
-    (:unknown-type-declaration . "Unknown type ~S")
+    (:invalid-type . report-invalid-type-compiler-warning)
     (:unknown-declaration-variable . "~s declaration for unknown variable ~s")
     (:macro-used-before-definition . "Macro function ~S was used before it was defined.")
     (:unsettable . "Shouldn't assign to variable ~S")
@@ -589,6 +598,12 @@
     (:format-error . "~:{~@?~%~}")
     (:program-error . "~a")
     (:unsure . "Nonspecific warning")))
+
+(defun report-invalid-type-compiler-warning (condition stream)
+  (destructuring-bind (type &optional why) (compiler-warning-args condition)
+    (when (typep why 'invalid-type-specifier)
+      (setq type (invalid-type-specifier-typespec why) why nil))
+    (format stream "Invalid type specifier ~S~@[: ~A~]" type why)))
 
 (defun report-compile-time-duplicate-definition (condition stream)
   (destructuring-bind (name old-file new-file &optional from to) (compiler-warning-args condition)
@@ -617,7 +632,9 @@
     (format stream ": ")
     (if (typep format-string 'string)
       (apply #'format stream format-string (adjust-compiler-warning-args warning-type (compiler-warning-args condition)))
-      (funcall format-string condition stream))
+      (if (null format-string)
+	(format stream "~A: ~S" warning-type (compiler-warning-args condition))
+	(funcall format-string condition stream)))
     ;(format stream ".")
     (let ((nrefs (compiler-warning-nrefs condition)))
       (when (and nrefs (neq nrefs 1))

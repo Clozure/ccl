@@ -138,12 +138,16 @@
     (signal-or-defer-warnings warnings env)
     lfun))
 
+#-BOOTSTRAPPED (unless (find-class 'undefined-reference nil)
+		 (deftype undefined-reference () 'undefined-function-reference)
+		 (defclass undefined-type-reference (undefined-function-reference) ()))
+
 (defun signal-or-defer-warnings (warnings env)
   (let* ((defenv (definition-environment env))
          (init t)
          (defer (and defenv (cdr (defenv.type defenv)) *outstanding-deferred-warnings*)))
     (dolist (w warnings)
-      (if (and defer (typep w 'undefined-function-reference))
+      (if (and defer (typep w 'undefined-reference))
         (push w (deferred-warnings.warnings defer))
         (progn
           (signal-compiler-warning w init nil nil nil)
@@ -197,6 +201,8 @@
 
 (defparameter *compiler-whining-conditions*
   '((:undefined-function . undefined-function-reference)
+    (:undefined-type . undefined-type-reference)
+    (:invalid-type . invalid-type-warning)
     (:global-mismatch . invalid-arguments-global)
     (:lexical-mismatch . invalid-arguments)
     (:environment-mismatch . invalid-arguments)

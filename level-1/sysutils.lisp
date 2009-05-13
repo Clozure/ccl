@@ -552,11 +552,91 @@
   parent)
 
 
+;; Should be a generic function but compiler-warning class not defined yet.
+(defun verify-deferred-warning (w)
+  (etypecase w
+    (undefined-type-reference (verify-deferred-type-warning w))
+    (undefined-function-reference (verify-deferred-function-warning w))
+    (compiler-warning nil)))
+
+(defun verify-deferred-type-warning (w)
+  (let* ((args (compiler-warning-args w))
+	 (typespec (car args))
+	 (defs (deferred-warnings.defs *outstanding-deferred-warnings*)))
+    (handler-bind ((parse-unknown-type
+		    (lambda (c)
+		      (let* ((type (parse-unknown-type-specifier c))
+			     (spec (if (consp type) (car type) type))
+			     (cell (and (symbolp spec) (gethash spec defs))))
+			(unless (and cell (def-info.deftype (cdr cell)))
+			  (when (and args (neq type typespec))
+			    (setf (car args) type))
+			  (return-from verify-deferred-type-warning w))
+			;; Else got defined.  TODO: Should check syntax, but don't have enuff info.
+			;; TODO: should note if got defined as a deftype (rather than class or struct) and
+			;; warn about forward reference, akin to the macro warning?  Might be missing out on
+			;; some intended optimizations.
+			)))
+		   (program-error ;; got defined, but turns out it's being used wrong
+		    (lambda (c)
+		      (let ((w2 (make-condition 'invalid-type-warning
+				  :file-name (compiler-warning-file-name w)
+				  :function-name (compiler-warning-function-name w)
+				  :source-note (compiler-warning-source-note w)
+				  :warning-type :invalid-type
+				  :args (list typespec c))))
+			(setf (compiler-warning-stream-position w2)
+			      (compiler-warning-stream-position w))
+			(return-from verify-deferred-type-warning w2)))))
+      (values-specifier-type typespec)
+      nil)))
+
+
+(defun verify-deferred-function-warning (w)
+  (let* ((args (compiler-warning-args w))
+	 (wfname (car args))
+	 (defs (deferred-warnings.defs *outstanding-deferred-warnings*))
+	 (def (or (let ((cell (gethash wfname defs)))
+		   (and cell (def-info.function-p (cdr cell)) cell))
+		 (let* ((global (fboundp wfname)))
+		   (and (typep global 'function) global)))))
+    (cond ((null def) w)
+	  ((or (typep def 'function)
+	       (and (consp def)
+		    (def-info.lfbits (cdr def))))
+	   ;; Check args in call to forward-referenced function.
+	   (when (cdr args)
+	     (destructuring-bind (arglist spread-p) (cdr args)
+	       (multiple-value-bind (deftype reason)
+		   (nx1-check-call-args def arglist spread-p)
+		 (when deftype
+		   (let* ((w2 (make-condition
+			       'invalid-arguments
+			       :file-name (compiler-warning-file-name w)
+			       :function-name (compiler-warning-function-name w)
+			       :source-note (compiler-warning-source-note w)
+			       :warning-type deftype
+			       :args (list (car args) reason arglist spread-p))))
+		     (setf (compiler-warning-stream-position w2)
+			   (compiler-warning-stream-position w))
+		     w2))))))
+	  ((def-info.macro-p (cdr def))
+	   (let* ((w2 (make-condition
+		       'macro-used-before-definition
+		       :file-name (compiler-warning-file-name w)
+		       :function-name (compiler-warning-function-name w)
+		       :source-note (compiler-warning-source-note w)
+		       :warning-type :macro-used-before-definition
+		       :args (list (car args)))))
+	     (setf (compiler-warning-stream-position w2)
+		   (compiler-warning-stream-position w))
+	     w2)))))
+
+
 (defun report-deferred-warnings (&optional (file nil))
   (let* ((current (ensure-merged-deferred-warnings *outstanding-deferred-warnings*))
          (parent (deferred-warnings.parent current))
          (warnings (deferred-warnings.warnings current))
-         (defs (deferred-warnings.defs current))
          (any nil)
          (harsh nil))
     (if parent
@@ -567,48 +647,10 @@
         (setq parent t))
       (let* ((file nil)
              (init t))
-        (flet ((signal-warning (w)
-                 (multiple-value-setq (harsh any file) (signal-compiler-warning w init file harsh any))
-                 (setq init nil)))
-          (dolist (w warnings)
-            (let* ((args (compiler-warning-args w))
-                   (wfname (car args))
-                   (def nil))
-              (when (if (typep w 'undefined-function-reference)
-                      (not (setq def (or (gethash wfname defs)
-                                         (let* ((global (fboundp wfname)))
-                                           (if (typep global 'function)
-                                             global))))))
-                (signal-warning w))
-              ;; Check args in call to forward-referenced function.
-              (if (or (typep def 'function)
-                      (and (consp def)
-                           (def-info.lfbits (cdr def))))
-                (when (cdr args)
-                  (destructuring-bind (arglist spread-p)
-                      (cdr args)
-                    (multiple-value-bind (deftype reason)
-                        (nx1-check-call-args def arglist spread-p)
-                      (when deftype
-                        (let* ((w2 (make-condition
-                                    'invalid-arguments
-                                    :file-name (compiler-warning-file-name w)
-                                    :function-name (compiler-warning-function-name w)
-                                    :warning-type deftype
-                                    :args (list (car args) reason arglist spread-p))))
-                          (setf (compiler-warning-stream-position w2)
-                                (compiler-warning-stream-position w))
-                          (signal-warning w2))))))
-                (if (def-info.macro-p (cdr def))
-                  (let* ((w2 (make-condition
-                              'macro-used-before-definition
-                              :file-name (compiler-warning-file-name w)
-                              :function-name (compiler-warning-function-name w)
-                              :warning-type :macro-used-before-definition
-                              :args (list (car args)))))
-                    (setf (compiler-warning-stream-position w2)
-                          (compiler-warning-stream-position w))
-                    (signal-warning w2)))))))))
+	(dolist (w warnings)
+	  (when (setq w (verify-deferred-warning w))
+	    (multiple-value-setq (harsh any file) (signal-compiler-warning w init file harsh any))
+	    (setq init nil)))))
     (values any harsh parent)))
 
 (defun print-nested-name (name-list stream)

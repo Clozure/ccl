@@ -164,6 +164,7 @@
   '(&OPTIONAL &REST &AUX &KEY &ALLOW-OTHER-KEYS &BODY &ENVIRONMENT &WHOLE)
   "symbols which are magical in a lambda list")
 
+(defstatic *type-system-initialized* nil)
 
 (defparameter %toplevel-catch% ':toplevel)
 
@@ -238,7 +239,7 @@ methods that are marked as being predefined signal continuable errors.")
 
 (defvar ccl::*kernel-restarts* nil)
 (defvar *condition-restarts* nil "explicit mapping between c & r")
-(declaim (type list %handlers% %restarts% ccl::*kernel-restarts* *condition-restarts*))
+(declaim (list %handlers% %restarts% ccl::*kernel-restarts* *condition-restarts*))
 
 
 

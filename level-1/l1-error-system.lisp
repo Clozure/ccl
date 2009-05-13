@@ -74,8 +74,11 @@
 (define-condition style-warning (compiler-warning)
   ((warning-type :initform :unsure)
    (args :initform nil)))
-(define-condition undefined-function-reference (style-warning) ())
+(define-condition undefined-reference (style-warning) ())
+(define-condition undefined-type-reference (undefined-reference) ())
+(define-condition undefined-function-reference (undefined-reference) ())
 (define-condition macro-used-before-definition (compiler-warning) ())
+(define-condition invalid-type-warning (style-warning) ())
 (define-condition invalid-arguments (style-warning) ())
 (define-condition invalid-arguments-global (style-warning) ())
 

@@ -1200,8 +1200,9 @@ governs whether DEFCLASS makes that distinction or not.")
 
 
 ;;; Fake method-combination, redefined in lib;method-combination.
-(defclass method-combination (metaobject) 
-  ((name :initarg :name)))
+(unless *type-system-initialized*
+ (defclass method-combination (metaobject) 
+   ((name :initarg :name))))
 
 
 
