@@ -173,3 +173,8 @@
                         (setq subforms (caddr form))
                         (not-set-in-formlist (car subforms))
                         (not-set-in-formlist (cadr subforms))))))))))
+
+(defun nx2-node-gpr-p (reg)
+  (and reg
+       (eql (hard-regspec-class reg) hard-reg-class-gpr)
+       (eql (get-regspec-mode reg) hard-reg-class-gpr-mode-node)))
