@@ -1627,17 +1627,17 @@
              (modeline-width (* (pref modeline-frame
                                       :<NSR>ect.size.width)
                                 0.75f0)))
-        (declare (type cgfloat modeline-width))
+        (declare (type ns:cgfloat modeline-width))
         (setf (pref modeline-frame :<NSR>ect.size.width)
               modeline-width
-              (the cgfloat
+              (the ns:cgfloat
                 (pref scrollbar-frame :<NSR>ect.size.width))
-              (- (the cgfloat
+              (- (the ns:cgfloat
                    (pref scrollbar-frame :<NSR>ect.size.width))
                  modeline-width)
-              (the cg-float
+              (the ns:cgfloat
                 (pref scrollbar-frame :<NSR>ect.origin.x))
-              (+ (the cgfloat
+              (+ (the ns:cgfloat
                    (pref scrollbar-frame :<NSR>ect.origin.x))
                  modeline-width))
         (#/setFrame: hscroll scrollbar-frame)
