@@ -372,7 +372,7 @@
   (#/stopModalWithCode: (#/sharedApplication (@class ns-application)) 0)
   (#/orderOut: (update-window *update-ccl-window-controller*) +null-ptr+))
 
-(objc:defmethod (#/updateCCL: :void) ((self lisp-application-delegate)
+(objc:defmethod (#/updateCCL: :void) ((self gui::lisp-application-delegate)
                                       sender)
   (declare (ignore sender))
   (if (gui::with-modal-progress-dialog "Checking for Updates..."
