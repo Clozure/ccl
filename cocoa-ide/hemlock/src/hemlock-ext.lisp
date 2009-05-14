@@ -43,7 +43,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun %sp-byte-blt (src start dest dstart end)
-  (declare (type (simple-base-string src dest)))
+  (declare (type simple-base-string src dest))
   (loop for s from start
         for d from dstart below end
         do
