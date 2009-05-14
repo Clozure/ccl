@@ -22,7 +22,7 @@
 
 (defpackage "NS"
   (:use)
-  (:export "+CGFLOAT-ZERO+" "CGFLOAT"))
+  (:export "+CGFLOAT-ZERO+" "CGFLOAT" "CG-FLOAT"))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (package-force-export "NS"))
@@ -49,7 +49,7 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (import '(objc:@class objc:@selector objc:make-objc-instance
             objc:send objc:send/stret objc:send-super objc:send-super/stret
-            ns:+cgfloat-zero+ ns:cgfloat
+            ns:+cgfloat-zero+ ns:cgfloat ns:cg-float
             objc:define-objc-method objc:define-objc-class-method
             objc:objc-message-send objc:objc-message-send-stret
             objc:objc-message-send-super objc:objc-message-send-super-stret
