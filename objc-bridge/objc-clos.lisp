@@ -249,6 +249,10 @@
 
 (setq *objc-class-class* (find-class 'objc:objc-class))
 
+(deftype @metaclass (&optional string)
+  (declare (ignore string))
+  'objc:objc-class)
+
 (defmethod objc-metaclass-p ((c class))
   nil)
 
