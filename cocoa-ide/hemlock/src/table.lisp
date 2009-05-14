@@ -226,10 +226,6 @@
 ;;; Do-Words macro can be called anywhere within the dynamic extent of a
 ;;; With-Folded-String to ``do'' over the words.
 
-(defvar *string-buffer-size* 128)
-(defvar *string-buffer* (make-string *string-buffer-size*))
-(declaim (simple-string *string-buffer*))
-
 (defvar *separator-positions* nil)
 
 (defmacro do-words ((start-var end-var) &body body)
@@ -242,24 +238,22 @@
 
 (defmacro with-folded-string ((str-var len-var orig-str separator)
 			      &body body)
-  `(let ((,str-var *string-buffer*))
-    (declare (simple-string ,str-var))
-    ;; make the string simple if it isn't already
-    (unless (simple-string-p ,orig-str)
-      (setq ,orig-str (coerce ,orig-str 'simple-string)))
-    ;; munge it into *string-buffer* and do the body
-    (let ((,len-var (with-folded-munge-string ,orig-str ,separator)))
-      ,@body)))
+  `(let* ((,str-var (make-string (length ,orig-str)))
+          (*separator-positions* nil))
+     (declare (simple-string ,str-var)
+              (dynamic-extent ,str-var))
+     ;; make the string simple if it isn't already
+     (unless (simple-string-p ,orig-str)
+       (setq ,orig-str (coerce ,orig-str 'simple-string)))
+     ;; munge it into stack-allocated ,str-var and do the body
+     (let ((,len-var (with-folded-munge-string ,str-var ,orig-str ,separator)))
+       ,@body)))
 
-(defun with-folded-munge-string (str separator)
+(defun with-folded-munge-string (buf str separator)
   (declare (simple-string str) (base-char separator))
   (let ((str-len (length str))
 	(sep-pos nil)
 	(buf-pos 0))
-    ;; Make sure we have enough room to blt the string into place.
-    (when (> str-len *string-buffer-size*)
-      (setq *string-buffer-size* (* str-len 2))
-      (setq *string-buffer* (make-string *string-buffer-size*)))
     ;; Bash the spaces out of the string remembering where the words are.
     (let ((start-pos (position separator str :test-not #'char=)))
       (when start-pos
@@ -271,16 +265,16 @@
 							:test-not #'char=)))
 		 (word-len (- (or end-pos str-len) start-pos))
 		 (new-buf-pos (+ buf-pos word-len)))
-	    (replace *string-buffer* str
+	    (replace buf str
 		     :start1 buf-pos :start2 start-pos :end2 end-pos)
 	    (push (cons buf-pos new-buf-pos) sep-pos)
 	    (setf buf-pos new-buf-pos)
 	    (when (or (null end-pos) (null next-start-pos))
 	      (return))
 	    (setf start-pos next-start-pos)
-	    (setf (schar *string-buffer* buf-pos) separator)
+	    (setf (schar buf buf-pos) separator)
 	    (incf buf-pos)))))
-    (nstring-downcase *string-buffer* :end buf-pos)
+    (nstring-downcase buf :end buf-pos)
     (setf *separator-positions* (nreverse sep-pos))
     buf-pos))
 
