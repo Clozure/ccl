@@ -5131,7 +5131,7 @@
                       (head (make-list (length operands)))
                       (tail head))
                  (declare (dynamic-extent head)
-                          (cons (head tail)))
+                          (cons head tail))
                  (dolist (op operands)
                    (rplaca tail (parse-operand-form op))
                    (setq tail (cdr tail)))
@@ -8499,7 +8499,7 @@
          (*ppc2-cstack* *ppc2-cstack*))
     (! alloc-c-frame (the fixnum
                        (+ (the fixnum (length argvals))
-                          (the fixnnum
+                          (the fixnum
                             (let* ((n 0))
                               (declare (fixnum n))
                               (dolist (spec argspecs n)
@@ -8726,7 +8726,7 @@
          (return-registers nil))
     (! alloc-c-frame (the fixnum
                        (+ (the fixnum (length argvals)) 
-                          (the fixnnum
+                          (the fixnum
                             (let* ((n 0))
                               (declare (fixnum n))
                               (dolist (spec argspecs n)
