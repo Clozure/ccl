@@ -629,7 +629,8 @@
 
 (defun ppc2-digest-symbols ()
   (when *ppc2-recorded-symbols*
-    (let* ((symlist *ppc2-recorded-symbols*)
+    (setq *ppc2-recorded-symbols* (nx2-recorded-symbols-in-arglist-order *ppc2-recorded-symbols* *ppc2-cur-afunc*))
+ (let* ((symlist *ppc2-recorded-symbols*)
            (len (length symlist))
            (syms (make-array len))
            (ptrs (make-array (%i+  (%i+ len len) len)))

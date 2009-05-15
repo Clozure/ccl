@@ -872,6 +872,7 @@
 
 (defun x862-digest-symbols ()
   (when *x862-recorded-symbols*
+    (setq *x862-recorded-symbols* (nx2-recorded-symbols-in-arglist-order *x862-recorded-symbols* *x862-cur-afunc*))
     (let* ((symlist *x862-recorded-symbols*)
            (len (length symlist))
            (syms (make-array len))
