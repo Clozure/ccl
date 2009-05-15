@@ -587,11 +587,6 @@
 	    (info (if (listp defs) (assq sym defs) (gethash sym defs))))
        (and info (def-info.function-p (cdr info)) info)))))
 
-(defun maybe-setf-function-name (name)
-  (if (and (consp name) (eq (car name) 'setf))
-    (setf-function-name (cadr name))
-    name))
-
 ;;; Must differ from -something-, but not sure what ... 
 (defun note-variable-info (name info env)
   (let ((definition-env (definition-environment env)))

@@ -296,6 +296,12 @@ terminate the list"
     (if valid-p nm (error "Invalid function name ~s." name))))
 
 
+(defun maybe-setf-function-name (name)
+  (if (and (consp name) (eq (car name) 'setf))
+    (setf-function-name (cadr name))
+    name))
+
+
 ;;; Returns index if char appears in string, else nil.
 
 (defun %str-member (char string &optional start end)
