@@ -29,9 +29,10 @@
 (defun registers-used-by (function &optional at-pc)
   (multiple-value-bind (mask stack-location rpc)
       (%function-register-usage function)
-    (if (null mask)
+    (if (or (null mask)
+            (and at-pc rpc (<= at-pc rpc)))
       (values nil nil)
-      (values (canonicalize-register-mask mask) (if (and at-pc rpc (> at-pc rpc)) stack-location)))))
+      (values (canonicalize-register-mask mask) (if (and at-pc rpc) stack-location)))))
 
 (defun canonicalize-register-mask (mask)
   (dpb (ldb (byte 2 14) mask) (byte 2 2) (ldb (byte 2 11) mask)))
@@ -175,11 +176,11 @@
                 (multiple-value-bind (mask where)
                     (registers-used-by lfun pc)
                   (when (if mask (logbitp index mask))
-                    (incf where (logcount (logandc2 mask (1- (ash 1 (1+ index))))))
-
-
                     (return-from %find-register-argument-value
-                      (raw-frame-ref frame context where bad)))))))
+                      (if where
+                        (let ((offset (logcount (logandc2 mask (1- (ash 1 (1+ index)))))))
+                          (raw-frame-ref frame context (+ where offset) bad))
+                        bad)))))))
           (setq first nil))))
     (get-register-value nil last-catch index)))
 
