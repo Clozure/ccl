@@ -28,11 +28,10 @@
   ;; Likewise, complex FUNCTION types can be legally used
   ;; in type declarations, but aren't legal args to TYPEP;
   ;; treat them as the simple FUNCTION type.
-  (let* ((ctype (handler-case (values-specifier-type typespec)
+  (let* ((ctype (handler-case (values-specifier-type typespec env)
 		  (parse-unknown-type (c)
-		    (when *compiler-warn-on-undefined-type-references*
-		      (nx1-whine :undefined-type (parse-unknown-type-specifier c))
-		      nil))
+		    (nx1-whine :unknown-type-in-declaration (parse-unknown-type-specifier c))
+		    nil)
 		  (program-error (c)
 		    (nx1-whine :invalid-type typespec c)
 		    nil))))

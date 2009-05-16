@@ -544,7 +544,7 @@
       (case (car decl)
         (special (setq bits (%ilogior bits (ash -1 $vbitspecial) (%ilsl $vbitparameter 1))))
         (ignore (setq bits (%ilogior bits (%ilsl $vbitignore 1))))
-        (ignore-if-unused (setq bits (%ilogior bits (%ilsl $vbitignoreunused 1))))
+        ((ignorable ignore-if-unused) (setq bits (%ilogior bits (%ilsl $vbitignoreunused 1))))
         (dynamic-extent (setq bits (%ilogior bits (%ilsl $vbitdynamicextent 1))))))
     node))
 
