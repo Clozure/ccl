@@ -2644,6 +2644,12 @@
 (objc:defmethod (#/setFileURL: :void) ((self hemlock-editor-document)
                                         url)
   (call-next-method url)
+  (let* ((path nil)
+         (controllers (#/windowControllers self)))
+    (dotimes (i (#/count controllers))
+      (let* ((controller (#/objectAtIndex: controllers i))
+             (window (#/window controller)))
+        (#/setFrameAutosaveName: window (or path (setq path (#/path url)))))))
   (let* ((buffer (hemlock-buffer self)))
     (when buffer
       (let* ((new-pathname (lisp-string-from-nsstring (#/path url))))
@@ -2693,30 +2699,38 @@
                     (user-input-style self)))
            (controller (make-instance
                            'hemlock-editor-window-controller
-                         :with-window window)))
+                         :with-window window))
+           (url (#/fileURL self))
+           (path (unless (%null-ptr-p url) (#/path url))))
       ;;(#/setDelegate: window self)
       (#/setDelegate: window controller)
       (#/setDelegate: (text-pane-text-view (slot-value window 'pane)) self)
       (#/addWindowController: self controller)
       (#/release controller)
-      ;; Cascade windows from the top left corner of the topmost editor window.
-      ;; If there's no editor window, use the default position.
-      (flet ((editor-window-p (w)
-               (and (not (eql w window))
-                    (eql (#/class (#/windowController w))
-                         (find-class 'hemlock-editor-window-controller)))))
-        (let* ((editors (remove-if-not #'editor-window-p (windows)))
-               (top-editor (car editors)))
-          (if top-editor
-            (ns:with-ns-point (zp 0 0)
-              (setq *editor-cascade-point* (#/cascadeTopLeftFromPoint:
-					    top-editor zp)))
-	    (let* ((screen-frame (#/visibleFrame (#/screen window)))
-                   (pt (ns:make-ns-point *initial-editor-x-pos*
-					 (- (ns:ns-rect-height screen-frame)
-					    *initial-editor-y-pos*))))
-	      (setq *editor-cascade-point* pt)))))
-      (#/cascadeTopLeftFromPoint: window *editor-cascade-point*)
+      (#/setShouldCascadeWindows: controller nil)
+      (when path
+        (unless (#/setFrameAutosaveName: window path)
+          (setq path nil)))
+      (unless (and path
+                   (#/setFrameUsingName: window path))
+        ;; Cascade windows from the top left corner of the topmost editor window.
+        ;; If there's no editor window, use the default position.
+        (flet ((editor-window-p (w)
+                 (and (not (eql w window))
+                      (eql (#/class (#/windowController w))
+                           (find-class 'hemlock-editor-window-controller)))))
+          (let* ((editors (remove-if-not #'editor-window-p (windows)))
+                 (top-editor (car editors)))
+            (if top-editor
+              (ns:with-ns-point (zp 0 0)
+                (setq *editor-cascade-point* (#/cascadeTopLeftFromPoint:
+                                              top-editor zp)))
+              (let* ((screen-frame (#/visibleFrame (#/screen window)))
+                     (pt (ns:make-ns-point *initial-editor-x-pos*
+                                           (- (ns:ns-rect-height screen-frame)
+                                              *initial-editor-y-pos*))))
+                (setq *editor-cascade-point* pt)))))
+        (#/cascadeTopLeftFromPoint: window *editor-cascade-point*))
       (let ((view (hemlock-view window)))
         (hi::handle-hemlock-event view #'(lambda ()
                                            (hi::process-file-options)))))))
