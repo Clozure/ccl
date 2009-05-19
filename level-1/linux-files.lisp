@@ -1762,7 +1762,7 @@ space, and prefixed with PREFIX."
                     (let* ((string (make-string n))
 			   (m 0))
                       (declare (dynamic-extent string)
-			       (fixmum m))
+			       (fixnum m))
 		      ;; Not quite right: we really want to map
 		      ;; CRLF to #\Newline, but stripping #\Return
 		      ;; is usually the same thing and easier.
