@@ -1371,7 +1371,7 @@
              (when (and buffer (string= (hi::buffer-major-mode buffer) "Lisp"))
                (let* ((hi::*current-buffer* buffer))
                  (hi::with-mark ((m1 (hi::buffer-point buffer)))
-                   (move-hemlock-mark-to-absolute-position m1 cache index)
+                   (setq index (hi:mark-absolute-position m1))
                    (hemlock::pre-command-parse-check m1)
                    (when (hemlock::valid-spot m1 nil)
                      (cond ((eql (hi::next-character m1) #\()
