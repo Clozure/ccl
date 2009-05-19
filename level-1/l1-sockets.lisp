@@ -665,7 +665,8 @@ the socket is not connected."))
 		    local-port local-host backlog class out-of-band-inline
 		    local-filename remote-filename sharing basic
                     external-format (auto-close t)
-                    connect-timeout input-timeout output-timeout deadline)
+                    connect-timeout input-timeout output-timeout deadline
+                    fd)
   "Create and return a new socket."
   (declare (dynamic-extent keys))
   (declare (ignore type connect remote-host remote-port eol format
@@ -679,11 +680,12 @@ the socket is not connected."))
 
 
 
-(defun make-udp-socket (&rest keys &aux (fd -1))
+(defun make-udp-socket (&rest keys &key (fd -1) &allow-other-keys)
   (unwind-protect
     (let (socket)
-      (setq fd (socket-call nil "socket"
-			    (c_socket #$AF_INET #$SOCK_DGRAM #$IPPROTO_UDP)))
+      (when (< fd 0)
+        (setq fd (socket-call nil "socket"
+                              (c_socket #$AF_INET #$SOCK_DGRAM #$IPPROTO_UDP))))
       (apply #'set-socket-options fd keys)
       (setq socket (make-instance 'udp-socket
 				  :device fd
@@ -693,32 +695,34 @@ the socket is not connected."))
     (unless (< fd 0)
       (fd-close fd))))
 
-(defun make-tcp-socket (&rest keys &key connect &allow-other-keys &aux (fd -1))
+(defun make-tcp-socket (&rest keys &key connect (fd -1) &allow-other-keys)
   (unwind-protect
-    (let (socket)
-      (setq fd (socket-call nil "socket"
-			    (c_socket #$AF_INET #$SOCK_STREAM #$IPPROTO_TCP)))
-      (apply #'set-socket-options fd keys)
-      (setq socket
-	    (ecase connect
-	      ((nil :active) (apply #'make-tcp-stream-socket fd keys))
-	      ((:passive) (apply #'make-tcp-listener-socket fd keys))))
-      (setq fd -1)
-      socket)
+       (let (socket)
+         (when (< fd 0)
+           (setq fd (socket-call nil "socket"
+                                 (c_socket #$AF_INET #$SOCK_STREAM #$IPPROTO_TCP))))
+         (apply #'set-socket-options fd keys)
+         (setq socket
+               (ecase connect
+                 ((nil :active) (apply #'make-tcp-stream-socket fd keys))
+                 ((:passive) (apply #'make-tcp-listener-socket fd keys))))
+         (setq fd -1)
+         socket)
     (unless (< fd 0)
       (fd-close fd))))
 
-(defun make-stream-file-socket (&rest keys &key connect &allow-other-keys &aux (fd -1))
+(defun make-stream-file-socket (&rest keys &key connect (fd -1) &allow-other-keys)
   (unwind-protect
-    (let (socket)
-      (setq fd (socket-call nil "socket" (c_socket #$PF_UNIX #$SOCK_STREAM 0)))
-      (apply #'set-socket-options fd keys)
-      (setq socket
-	    (ecase connect
-	      ((nil :active) (apply #'make-file-stream-socket fd keys))
-	      ((:passive) (apply #'make-file-listener-socket fd keys))))
-      (setq fd -1)
-      socket)
+       (let (socket)
+         (when (< fd 0)
+           (setq fd (socket-call nil "socket" (c_socket #$PF_UNIX #$SOCK_STREAM 0))))
+         (apply #'set-socket-options fd keys)
+         (setq socket
+               (ecase connect
+                 ((nil :active) (apply #'make-file-stream-socket fd keys))
+                 ((:passive) (apply #'make-file-listener-socket fd keys))))
+         (setq fd -1)
+         socket)
     (unless (< fd 0)
       (fd-close fd))))
 
