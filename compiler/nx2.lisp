@@ -173,3 +173,56 @@
                         (setq subforms (caddr form))
                         (not-set-in-formlist (car subforms))
                         (not-set-in-formlist (cadr subforms))))))))))
+
+(defun nx2-node-gpr-p (reg)
+  (and reg
+       (eql (hard-regspec-class reg) hard-reg-class-gpr)
+       (eql (get-regspec-mode reg) hard-reg-class-gpr-mode-node)))
+
+;;; ENTRIES is a list of recorded-symbol entries, built by pushing
+;;; info for each variable referenced by the function AFUNC as it
+;;; comes into scope.  (Inherited variables "come into scope" before
+;;; anything else, then required arguments, etc.)  Supplied-p variables
+;;; may come into scope before "real" arglist entries do, which confuses
+;;; functions that try to construct a function's arglist from the symbol
+;;; map.  I -think- that confusion only exists when supplied-p variables
+;;; are involved, so this returns its first argument unless they are;
+;;; otherwise, it ensures that all toplevel arglist symbols are followed
+;;; only by any inherited variables, and that the arglist symbols are
+;;; in the correct (reversed) order
+(defun nx2-recorded-symbols-in-arglist-order (entries afunc)
+  (let* ((alambda (afunc-acode afunc)))
+    (when (and (acode-p alambda)
+               (eq (acode-operator alambda) (%nx1-operator lambda-list)))
+      (destructuring-bind (req opt rest keys &rest ignore) (cdr alambda)
+        (declare (ignore ignore))
+        (when (or (dolist (sp (caddr opt))
+                    (when sp (return t)))
+                  (dolist (sp (caddr keys))
+                    (when sp (return t))))
+          (let* ((new ()))
+            (flet ((info-for-var (var)
+                     (assoc var entries :test #'eq)))
+              (flet ((add-new-info (var)
+                       (let* ((info (info-for-var var)))
+                         (when info
+                           (push info new)))))
+                (setq entries (nreverse entries))
+                (dolist (var (afunc-inherited-vars afunc))
+                  (add-new-info var))
+                (dolist (r req)
+                  (add-new-info r))
+                (dolist (o (car opt))
+                  (add-new-info o))
+                (when (consp rest)
+                  (setq rest (car rest)))
+                (when rest
+                  (add-new-info rest))
+                (dolist (k (cadr keys))
+                  (add-new-info k))
+                (dolist (e entries)
+                  (unless (member e new :test #'eq)
+                    (push e new)))
+                (setq entries new)))))))
+    entries))
+                
