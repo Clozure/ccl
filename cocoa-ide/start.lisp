@@ -84,6 +84,11 @@
 (defmethod ccl::parse-application-arguments ((a cocoa-application))
   (values nil nil nil nil))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+    (require :swank))
+
+(defun try-starting-swank ()
+  (swank:create-server :port *ccl-gui-swank-port* :dont-close t))
 
 (defmethod toplevel-function ((a cocoa-application) init-file)
   (declare (ignore init-file))
@@ -92,6 +97,7 @@
     (#_ _exit -1))
   (setq *standalone-cocoa-ide* t)
   ;; It's probably reasonable to do this here: it's not really IDE-specific
+  (try-starting-swank)
   (try-connecting-to-altconsole)
   ;; TODO: to avoid confusion, should now reset *cocoa-application-path* to
   ;; actual bundle path where started up.
