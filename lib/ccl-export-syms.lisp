@@ -427,6 +427,11 @@
      *static-cons-chunk*
      static-cons
 
+     population
+     make-population
+     population-type
+     population-contents
+
      compiler-let
 
 

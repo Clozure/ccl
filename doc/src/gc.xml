@@ -224,42 +224,119 @@ that provided by earlier &CCL; versions.</para>
       instance) that might overwrite an existing image file.</para>
     </sect1>
 
-    <sect1 id="Weak-Hash-Tables">
-      <title>Weak Hash Tables</title>
+    <sect1 id="Weak-References">
+      <title>Weak References</title>
       <para>In general, a "weak reference" is a reference to an object
-      which will not prevent the object from being garbage-collected.
+      which does not prevent the object from being garbage-collected.
       For example, suppose that you want to keep a list of all the
       objects of a certain type.  If you don't take special steps, the
       fact that you have a list of them will mean that the objects are
       always "live", because you can always reference them through the
       list.  Therefore, they will never be garbage-collected, and
       their memory will never be reclaimed, even if they are
-      referenced nowhere else in the program.  You may want this
-      behavior.  If you don't, you need weak references.</para>
-      <para>&CCL; supports weak references with "weak hash tables".
-      Hash tables may be weak with respect to either their keys or
-      their values.  To make a hash table with weak keys, invoke
+      referenced nowhere else in the program.  If you don't want this
+      behavior, you need weak references.</para>
+
+      <para>&CCL; supports weak references with two kinds of objects:
+      weak hash tables and populations.</para>
+
+      <para>Weak hash tables are created with the standard Common Lisp
+      function <literal>make-hash-table</literal>, which is extended
+      to accept the keyword argument <literal>:weak</literal>.  Hash
+      tables may be weak with respect to either their keys or their
+      values.  To make a hash table with weak keys, invoke
       <literal>make-hash-table</literal> with the option :weak t, or,
       equivalently, :weak :key.  To make one with weak values, use
       :weak :value.  When the key is weak, the equality test must be
       #'eq (because it wouldn't make sense otherwise).</para>
+
       <para>When garbage-collection occurs, key-value pairs are
-      removed from the hash table if there are no other references to
+      removed from the hash table if there are no non-weak references to
       the weak element of the pair (key or value).</para>
+
       <para>In general, weak-key hash tables are useful when you want
       to use the hash to store some extra information about the
       objects you look up in it, while weak-value hash tables are
       useful when you want to use the hash as an index for looking up
       objects.</para>
-      <para>If you are experimenting with weak hash tables
+
+      <para>A population encapsulates an object, causing certain
+      reference from the object to be considered weak.  &CCL; supports
+      two kinds of populations: lists, in which case the encapsulated
+      object is a list of elements, which are spliced out of the list
+      when there are no non-weak references to the element; and alists,
+      in which case the encapsulated object is a list of conses which
+      are spliced out of the list if there are no non-weak references
+      to the car of the cons.</para>
+
+    <para>If you are experimenting with weak references
       interactively, remember that an object is not dead if it was
       returned by one of the last three interactively-evaluated
       expressions, because of the variables <literal>*</literal>,
       <literal>**</literal>, and <literal>***</literal>.  The easy
       workaround is to evaluate some meaningless expression before
       invoking <literal>gc</literal>, to get the object out of the
-      repl variables.</para>
+      REPL variables.</para>
+
+
+      <para>
+        <indexterm zone="f_make-population"/>
+        <command><varname id="f_make-population">MAKE-POPULATION</varname>
+           &key; <parameter>type</parameter> <parameter>initial-contents</parameter>
+        [Function]</command>
+      </para>
+
+    <variablelist>
+      <varlistentry>
+        <term><varname>type</varname></term>
+        <listitem>
+          <para>The type of population, one of <literal>:LIST</literal> (the default) or <literal>:ALIST</literal></para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><varname>initial-contents</varname></term>
+        <listitem>
+          <para> A sequence of elements (or conses, for <literal>:alist</literal>) to be used to initialize the
+            population. The sequence itself (and the conses in case of an alist) is not stored, a new list
+            or alist is created to be stored in the population.</para>
+        </listitem>
+      </varlistentry>
+    </variablelist>
+
+    <para>Creates a new population of the specified type.</para>
+
+
+    <para>
+      <indexterm zone="f_population-type"/>
+      <command><varname id="f_population-type">POPULATION-TYPE</varname>  <parameter>population</parameter>
+        [Function]</command>
+    </para>
+
+    <para>returns the type of <literal>population</literal>, one of <literal>:LIST</literal> or <literal>:ALIST</literal></para>
+
+    <para>
+      <indexterm zone="f_population-contents"/>
+      <command><varname id="f_population-contents">POPULATION-CONTENTS</varname>  <parameter>population</parameter>
+        [Function]</command>
+    </para>
+
+    <para>returns the list encapsulated in <literal>population</literal>.  Note
+    that as long as there is a direct (non-weak) reference to this list, it will
+    not be modified by the garbage collector.  Therefore it is safe to traverse
+    the list, and even modify it, no different from any other list. If you want the
+    elements to become garbage-collectable again, you must stop refering to the
+    list directly.</para>
+
+    <para>
+      <indexterm zone="f_setf_population-contents"/>
+      <command>(SETF (<varname id="f_setf_population-contents">POPULATION-CONTENTS</varname> <parameter>population</parameter>) <parameter>contents</parameter>)
+              [Function]</command>
+    </para>
+
+    <para>Sets the list encapsulated in <literal>population</literal> to <literal>contents</literal>.  <literal>Contents</literal> is not copied, it is used directly.</para>
+
     </sect1>
+
 
     <sect1 id="Garbage-Collection-Dictionary">
       <title>Garbage-Collection Dictionary</title>

@@ -657,6 +657,35 @@ are running on, or NIL if we can't find any useful information."
 
 
 
+
+(defun make-population (&key (type :list) initial-contents)
+  (let* ((ntype (ecase type
+                  (:list $population_weak-list)
+                  (:alist $population_weak-alist)))
+         (list (if (eq type :alist)
+                 (map 'list (lambda (c) (cons (car c) (%cdr c))) initial-contents)
+                 (if (listp initial-contents)
+                   (copy-list initial-contents)
+                   (coerce initial-contents 'list)))))
+    (%cons-population list ntype)))
+
+(defun population-type (population)
+  (let ((ntype (population.type (require-type population 'population))))
+    (cond ((eq ntype $population_weak-alist) :alist)
+          ((eq ntype $population_weak-list) :list)
+          (t nil))))
+
+(declaim (inline population-contents (setf population-contents)))
+
+(defun population-contents (population)
+  (population.data (require-type population 'population)))
+
+(defun (setf population-contents) (list population)
+  (setf (population.data (require-type population 'population)) (require-type list 'list)))
+
+
+
+
 (defun get-string-from-user (prompt)
   (with-terminal-input
       (format *query-io* "~&~a " prompt)
