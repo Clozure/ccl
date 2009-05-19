@@ -542,12 +542,21 @@ expressions as commands")
   (force-output *error-output*)))
 					; returns NIL
 
+(defvar *break-hook* nil)
+
 (defun cbreak-loop (msg cont-string condition error-pointer)
-  (let* ((*print-readably* nil))
-    (%break-message msg condition error-pointer)
-    (restart-case (break-loop condition error-pointer)
+  (let* ((*print-readably* nil)
+         (hook *break-hook*))
+    (restart-case (progn
+                    (when hook
+                      (let ((*break-hook* nil))
+                        (funcall hook condition hook))
+                      (setq hook nil))
+                    (%break-message msg condition error-pointer)
+                    (break-loop condition error-pointer))
       (continue () :report (lambda (stream) (write-string cont-string stream))))
-    (fresh-line *error-output*)
+    (unless hook
+      (fresh-line *error-output*))
     nil))
 
 (defun warn (condition-or-format-string &rest args)

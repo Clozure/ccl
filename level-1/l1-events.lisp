@@ -98,10 +98,13 @@
 
 (defparameter *invoke-debugger-hook-on-interrupt* nil)
 
+(define-condition interrupt-signal-condition (condition) ()
+  (:report "interrupt signal"))
+
 (defun force-break-in-listener (p)
   (process-interrupt p
 		     #'(lambda ()
-                         (let* ((condition (condition-arg "interrupt signal" nil 'simple-condition)))
+                         (let* ((condition (make-condition 'interrupt-signal-condition)))
                            (ignoring-without-interrupts
                             (when *invoke-debugger-hook-on-interrupt*
                               (let* ((hook *debugger-hook*)

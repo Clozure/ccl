@@ -73,6 +73,8 @@
      *backtrace-format*
      *quit-on-eof*
      *quit-interrupt-hook*
+     *break-hook*
+     interrupt-signal-condition
      macroexpand-all
      compiler-macroexpand
      compiler-macroexpand-1
