@@ -356,9 +356,9 @@
   (let* ((doc (call-next-method)))
     (unless (%null-ptr-p doc)
       (let* ((listener-name (if (eql 1 (incf *cocoa-listener-count*))
-			    "Listener"
-			    (format nil
-				    "Listener-~d" *cocoa-listener-count*)))
+                              "Listener"
+                              (format nil
+                                      "Listener-~d" *cocoa-listener-count*)))
 	     (buffer (hemlock-buffer doc)))
 	(setf (hi::buffer-pathname buffer) nil
 	      (hi::buffer-minor-mode buffer "Listener") t
@@ -401,7 +401,9 @@
 	 (controller (make-instance
 		      'hemlock-listener-window-controller
 		      :with-window window))
-	 (listener-name (hi::buffer-name (hemlock-buffer self))))
+	 (listener-name (hi::buffer-name (hemlock-buffer self)))
+         (path (when (eql 1 *cocoa-listener-count*) #@"/")))
+
     (with-slots (styles) textstorage
       ;; We probably should be more disciplined about
       ;; Cocoa memory management.  Having retain/release in
@@ -415,17 +417,23 @@
       (dotimes (i (#/count layout-managers))
         (let* ((layout (#/objectAtIndex: layout-managers i)))
           (#/setBackgroundLayoutEnabled: layout nil))))
-    (#/setDelegate: (text-pane-text-view (slot-value window 'pane)) self)    
+    (#/setDelegate: (text-pane-text-view (slot-value window 'pane)) self)
+    (#/setShouldCascadeWindows: controller nil)
     (#/addWindowController: self controller)
     (#/release controller)
-    (ns:with-ns-point (current-point
-                       (or *next-listener-x-pos*
-                           (x-pos-for-window window *initial-listener-x-pos*))
-                       (or *next-listener-y-pos*
-                           (y-pos-for-window window *initial-listener-y-pos*)))
-      (let* ((new-point (#/cascadeTopLeftFromPoint: window current-point)))
-        (setf *next-listener-x-pos* (ns:ns-point-x new-point)
-              *next-listener-y-pos* (ns:ns-point-y new-point))))
+    (when path
+      (unless (#/setFrameAutosaveName: window path)
+        (setq path nil)))
+    (unless (and path
+                 (#/setFrameUsingName: window path))
+      (ns:with-ns-point (current-point
+                         (or *next-listener-x-pos*
+                             (x-pos-for-window window *initial-listener-x-pos*))
+                         (or *next-listener-y-pos*
+                             (y-pos-for-window window *initial-listener-y-pos*)))
+        (let* ((new-point (#/cascadeTopLeftFromPoint: window current-point)))
+          (setf *next-listener-x-pos* (ns:ns-point-x new-point)
+                *next-listener-y-pos* (ns:ns-point-y new-point)))))
     (setf (hemlock-document-process self)
           (new-cocoa-listener-process listener-name window))
     controller))
