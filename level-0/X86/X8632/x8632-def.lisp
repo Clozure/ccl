@@ -522,17 +522,21 @@
 
 
 ;;; This needs to:
-;;; (b) call the .SPffcall subprimitive, which will discard the foreign stack frame
-;;;     allocated by WITH-VARIABLE-C-FRAME in %FF-CALL
-;;; (c) re-establish the same foreign stack frame and store the result regs
-;;;     (%eax/%xmm0) there (not really xmm0, but .SPffcall will pop the x87
-;;;     stack and put the value in there for us.
+;;; (a) call the .SPffcall subprimitive, which will discard the foreign
+;;;     stack frame allocated by WITH-VARIABLE-C-FRAME in %FF-CALL
+;;; (b) re-establish the same foreign stack frame and store the results
+;;;     there.
+;;;
+;;; The flags argument tells us what/where the result is:
+;;;
+;;;; flags   meaning
+;;;    0     32-bit value in EAX
+;;;    1     single-float value on x87 stack
+;;;    2     double-float value on x87 stack
+;;;    3     64-bit value with low half in EAX, high half in tcr.unboxed1
 
-;;; flags = 0, return value in eax; 1 single-float; 2 double-float
 (defx8632lapfunction %do-ff-call ((flags 4) #|(ra 0)|# (frame arg_y) (entry arg_z))
-  (movl (% ebp) (@ 8 (% esp)))
-  (leal (@ 8 (% esp)) (% ebp))
-  (popl (@ 4 (% ebp)))
+  (save-stackargs-frame 1)
   (push (% arg_y))
   (push (% arg_z))
   (call-subprim .SPffcall)
@@ -541,21 +545,29 @@
   (movd (:rcontext x8632::tcr.foreign-sp) (% xmm0))
   (movd (% xmm0) (@ (% frame)))
   (movl (% frame) (:rcontext x8632::tcr.foreign-sp))
-  (cmpl ($ '1) (@ -4 (% ebp)))
-  (je @single)
-  (jg @double)
+  (cmpl ($ 0) (@ -4 (% ebp)))
+  (jne @fp-or-doubleword)
   (movl (% eax) (@ 4 (% frame)))
+  @done
+  (movl ($ nil) (% arg_z))
+  (restore-simple-frame)
+  (single-value-return)
+  @fp-or-doubleword
+  (cmpl ($ '2) (@ -4 (% ebp)))
+  (jl @single)
+  (je @double)
+  ;; high 32 bits in tcr.unboxed1 (see .SPffcall)
+  (movl (% eax) (@ 4 (% frame)))
+  (movl (:rcontext x8632::tcr.unboxed1) (% eax))
+  (movl (% eax) (@ 8 (% frame)))
   (jmp @done)
   @single
   (fstps (@ 4 (% frame)))
   (jmp @done)
   @double
   (fstpl (@ 4 (% frame)))
-  @done
-  (movl ($ nil) (% arg_z))
-  (restore-simple-frame)
-  (single-value-return))
-  
+  (jmp @done))
+
 (defun %ff-call (entry &rest specs-and-vals)
   (declare (dynamic-extent specs-and-vals))
   (let* ((len (length specs-and-vals))
@@ -634,6 +646,7 @@
 		 (let ((flags (case result-spec
 				(:single-float 1)
 				(:double-float 2)
+				((:signed-doubleword :unsigned-doubleword) 3)
 				(t 0))))
 		   (%do-ff-call flags frame entry))
 		 (ecase result-spec
