@@ -277,63 +277,128 @@ that provided by earlier &CCL; versions.</para>
       workaround is to evaluate some meaningless expression before
       invoking <literal>gc</literal>, to get the object out of the
       REPL variables.</para>
+    </sect1>
+
+    <sect1 id="Weak-References-Dictionary">
+      <title>Weak References Dictionary</title>
+
+    <refentry id="f_make-population">
+      <indexterm zone="f_make-population">
+        <primary>make-population</primary>
+      </indexterm>
+
+      <refnamediv>
+        <refname>MAKE-POPULATION</refname>
+        <refpurpose></refpurpose>
+        <refclass>Function</refclass>
+      </refnamediv>
+        
+      <refsynopsisdiv>
+        <synopsis><function>make-population</function> &key; type initial-contents</synopsis>
+      </refsynopsisdiv>
+
+      <refsect1>
+        <title>Arguments and Values</title>
+
+        <variablelist>
+          <varlistentry>
+            <term>type</term>
+            <listitem>
+              <para>The type of population, one of <literal>:LIST</literal> (the default) or <literal>:ALIST</literal></para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term>initial-contents</term>
+            <listitem>
+              <para> A sequence of elements (or conses, for <literal>:alist</literal>) to be used to initialize the
+              population. The sequence itself (and the conses in case of an
+              alist) is not stored in the population, a new list or alist is created to hold the elements.</para>
+            </listitem>
+          </varlistentry>
+        </variablelist>
+      </refsect1>
+      <refsect1>
+        <title>Description</title>
+
+        <para>Creates a new population of the specified type.</para>
+      </refsect1>
+    </refentry>
+
+    <refentry id="f_population-type">
+      <indexterm zone="f_population-type">
+        <primary>population-type</primary>
+      </indexterm>
+
+      <refnamediv>
+        <refname>POPULATION-TYPE</refname>
+        <refpurpose></refpurpose>
+        <refclass>Function</refclass>
+      </refnamediv>
+      
+      <refsynopsisdiv>
+        <synopsis><function>population-type</function> population</synopsis>
+      </refsynopsisdiv>
+
+      <refsect1>
+        <title>Description</title>
+
+        <para>returns the type of <literal>population</literal>, one of <literal>:LIST</literal> or <literal>:ALIST</literal></para>
+
+      </refsect1>
+    </refentry>
+
+    <refentry id="f_population-contents">
+      <indexterm zone="f_population-contents">
+        <primary>population-contents</primary>
+      </indexterm>
+
+      <refnamediv>
+        <refname>POPULATION-CONTENTS</refname>
+        <refpurpose></refpurpose>
+        <refclass>Function</refclass>
+      </refnamediv>
+      
+      <refsynopsisdiv>
+        <synopsis><function>population-contents</function> population</synopsis>
+      </refsynopsisdiv>
+
+      <refsect1>
+        <title>Description</title>
+
+        <para>returns the list encapsulated in <literal>population</literal>.
+        Note that as long as there is a direct (non-weak) reference to this
+        list, it will not be modified by the garbage collector.  Therefore it is
+        safe to traverse the list, and even modify it, no different from any
+        other list. If you want the elements to become garbage-collectable
+        again, you must stop refering to the list directly.</para>
+      </refsect1>
+    </refentry>
 
 
-      <para>
-        <indexterm zone="f_make-population"/>
-        <command><varname id="f_make-population">MAKE-POPULATION</varname>
-           &key; <parameter>type</parameter> <parameter>initial-contents</parameter>
-        [Function]</command>
-      </para>
+    <refentry id="f_setf_population-contents">
+      <indexterm zone="f_setf_population-contents">
+        <primary>(setf population-contents)</primary>
+      </indexterm>
 
-    <variablelist>
-      <varlistentry>
-        <term><varname>type</varname></term>
-        <listitem>
-          <para>The type of population, one of <literal>:LIST</literal> (the default) or <literal>:ALIST</literal></para>
-        </listitem>
-      </varlistentry>
-      <varlistentry>
-        <term><varname>initial-contents</varname></term>
-        <listitem>
-          <para> A sequence of elements (or conses, for <literal>:alist</literal>) to be used to initialize the
-            population. The sequence itself (and the conses in case of an alist) is not stored, a new list
-            or alist is created to be stored in the population.</para>
-        </listitem>
-      </varlistentry>
-    </variablelist>
+      <refnamediv>
+        <refname>(SETF POPULATION-CONTENTS)</refname>
+        <refpurpose></refpurpose>
+        <refclass>Function</refclass>
+      </refnamediv>
+      
+      <refsynopsisdiv>
+        <synopsis>(setf (<function>population-contents</function> population) contents)</synopsis>
+      </refsynopsisdiv>
 
-    <para>Creates a new population of the specified type.</para>
+      <refsect1>
+        <title>Description</title>
 
-
-    <para>
-      <indexterm zone="f_population-type"/>
-      <command><varname id="f_population-type">POPULATION-TYPE</varname>  <parameter>population</parameter>
-        [Function]</command>
-    </para>
-
-    <para>returns the type of <literal>population</literal>, one of <literal>:LIST</literal> or <literal>:ALIST</literal></para>
-
-    <para>
-      <indexterm zone="f_population-contents"/>
-      <command><varname id="f_population-contents">POPULATION-CONTENTS</varname>  <parameter>population</parameter>
-        [Function]</command>
-    </para>
-
-    <para>returns the list encapsulated in <literal>population</literal>.  Note
-    that as long as there is a direct (non-weak) reference to this list, it will
-    not be modified by the garbage collector.  Therefore it is safe to traverse
-    the list, and even modify it, no different from any other list. If you want the
-    elements to become garbage-collectable again, you must stop refering to the
-    list directly.</para>
-
-    <para>
-      <indexterm zone="f_setf_population-contents"/>
-      <command>(SETF (<varname id="f_setf_population-contents">POPULATION-CONTENTS</varname> <parameter>population</parameter>) <parameter>contents</parameter>)
-              [Function]</command>
-    </para>
-
-    <para>Sets the list encapsulated in <literal>population</literal> to <literal>contents</literal>.  <literal>Contents</literal> is not copied, it is used directly.</para>
+        <para>Sets the list encapsulated in <literal>population</literal> to
+        <literal>contents</literal>.  <literal>Contents</literal> is not copied,
+        it is used directly.</para>
+      </refsect1>
+    </refentry>
 
     </sect1>
 
