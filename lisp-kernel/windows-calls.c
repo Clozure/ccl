@@ -258,6 +258,17 @@ lisp_open(wchar_t *path, int flag, int mode)
 }
 
 int
+wopen(wchar_t *path, int flag, int mode)
+{
+  HANDLE h = lisp_open(path, flag, mode);
+
+  if (h == (HANDLE)-1) {
+    return -1;                  /* errno already set */
+  }
+  return _open_osfhandle((DWORD)h,0);
+}
+
+int
 lisp_close(HANDLE hfile)
 {
   if (CloseHandle(hfile)) {

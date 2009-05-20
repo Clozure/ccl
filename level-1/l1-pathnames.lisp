@@ -24,13 +24,12 @@
 (in-package "CCL")
 
 (defun heap-image-name ()
-  (let* ((p (%null-ptr)))
+  (let* ((p (%null-ptr))
+         (string (%get-utf-8-cstring (%get-kernel-global-ptr 'image-name p))))
     (declare (dynamic-extent p))
-    #-windows-target
-    (%get-cstring (%get-kernel-global-ptr 'image-name p))
-    #+windows-target
-     (nbackslash-to-forward-slash
-      (%get-cstring (%get-kernel-global-ptr 'image-name p)))))
+    #+windows-target (nbackslash-to-forward-slash string)
+    #+darwin-target (precompose-simple-string string)
+    #-(or windows-target darwin-target) string))
 
 (defloadvar *heap-image-name* (heap-image-name))
 
@@ -43,7 +42,7 @@
 	  (arg (%get-ptr argv i) (%get-ptr argv i)))
 	 ((%null-ptr-p arg) (nreverse res))
       (declare (fixnum i))
-      (push (%get-cstring arg) res))))
+      (push (%get-utf-8-cstring arg) res))))
 
 ;These are used by make-pathname
 (defun %verify-logical-component (name type)

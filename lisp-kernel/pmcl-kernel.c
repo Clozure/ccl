@@ -838,14 +838,14 @@ probe_file(char *path)
 
 #ifdef WINDOWS
 /* Chop the trailing ".exe" from the kernel image name */
-char *
-chop_exe_suffix(char *path)
+wchar_t *
+chop_exe_suffix(wchar_t *path)
 {
-  int len = strlen(path);
-  char *copy = malloc(len+1), *tail;
+  int len = wcslen(path);
+  wchar_t *copy = malloc((len+1)*sizeof(wchar_t)), *tail;
 
-  strcpy(copy,path);
-  tail = strrchr(copy, '.');
+  wcscpy(copy,path);
+  tail = wcsrchr(copy, '.');
   if (tail) {
     *tail = 0;
   }
@@ -853,6 +853,20 @@ chop_exe_suffix(char *path)
 }
 #endif
 
+#ifdef WINDOWS
+wchar_t *
+path_by_appending_image(wchar_t *path)
+{
+  int len = wcslen(path) + wcslen(L".image") + 1;
+  wchar_t *copy = (wchar_t *) malloc(len*sizeof(wchar_t));
+
+  if (copy) {
+    wcscpy(copy, path);
+    wcscat(copy, L".image");
+  }
+  return copy;
+}
+#else
 char *
 path_by_appending_image(char *path)
 {
@@ -865,6 +879,7 @@ path_by_appending_image(char *path)
   }
   return copy;
 }
+#endif
 
 char *
 case_inverted_path(char *path)
@@ -893,6 +908,15 @@ case_inverted_path(char *path)
    so we can't just case-invert the kernel's name.
    Tack ".image" onto the end of the kernel's name.  Much better ...
 */
+#ifdef WINDOWS
+wchar_t *
+default_image_name(wchar_t *orig)
+{
+  wchar_t *path = chop_exe_suffix(orig);
+  wchar_t *image_name = path_by_appending_image(path);
+  return image_name;
+}
+#else
 char *
 default_image_name(char *orig)
 {
@@ -912,12 +936,18 @@ default_image_name(char *orig)
 #endif
   return image_name;
 }
+#endif
 
 
 
 char *program_name = NULL;
+#ifdef WINDOWS
+wchar_t *real_executable_name = NULL;
+#else
 char *real_executable_name = NULL;
+#endif
 
+#ifndef WINDOWS
 char *
 determine_executable_name(char *argv0)
 {
@@ -962,18 +992,9 @@ determine_executable_name(char *argv0)
   }
   return argv0;
 #endif
-#ifdef WINDOWS
-  char path[PATH_MAX], *p;
-  int len = GetModuleFileName(NULL, path, PATH_MAX);
-  if (len > 0) {
-    p = malloc(len + 1);
-    memmove(p, path, len);
-    p[len] = 0;
-    return p;
-  }
   return argv0;
-#endif
 }
+#endif
 
 void
 usage_exit(char *herald, int exit_status, char* other_args)
@@ -995,14 +1016,20 @@ usage_exit(char *herald, int exit_status, char* other_args)
   fprintf(dbgout, "\t-b, --batch: exit when EOF on *STANDARD-INPUT*\n");
   fprintf(dbgout, "\t--no-sigtrap : obscure option for running under GDB\n");
   fprintf(dbgout, "\t-I, --image-name <image-name>\n");
+#ifndef WINDOWS
   fprintf(dbgout, "\t and <image-name> defaults to %s\n", 
 	  default_image_name(program_name));
+#endif
   fprintf(dbgout, "\n");
   _exit(exit_status);
 }
 
 int no_sigtrap = 0;
+#ifdef WINDOWS
+wchar_t *image_name = NULL;
+#else
 char *image_name = NULL;
+#endif
 int batch_flag = 0;
 
 
@@ -1050,16 +1077,20 @@ parse_numeric_option(char *arg, char *argname, natural default_val)
 */
 
 void
-process_options(int argc, char *argv[])
+process_options(int argc, char *argv[], wchar_t *shadow[])
 {
   int i, j, k, num_elide, flag, arg_error;
   char *arg, *val;
+  wchar_t *warg, *wval;
 #ifdef DARWIN
   extern int NXArgc;
 #endif
 
   for (i = 1; i < argc;) {
     arg = argv[i];
+    if (shadow) {
+      warg = shadow[i];
+    }
     arg_error = 0;
     if (*arg != '-') {
       i++;
@@ -1069,18 +1100,28 @@ process_options(int argc, char *argv[])
       if ((flag = (strncmp(arg, "-I", 2) == 0)) ||
 	  (strcmp (arg, "--image-name") == 0)) {
 	if (flag && arg[2]) {
-	  val = arg+2;
+	  val = arg+2;          
+          if (shadow) {
+            wval = warg+2;
+          }
 	  num_elide = 1;
 	} else {
 	  if ((i+1) < argc) {
 	    val = argv[i+1];
+            if (shadow) {
+              wval = shadow[i+1];
+            }
 	    num_elide = 2;
 	  } else {
 	    arg_error = 1;
 	  }
 	}
 	if (val) {
+#ifdef WINDOWS
+          image_name = wval;
+#else
 	  image_name = val;
+#endif
 	}
       } else if ((flag = (strncmp(arg, "-R", 2) == 0)) ||
 		 (strcmp(arg, "--heap-reserve") == 0)) {
@@ -1184,6 +1225,9 @@ process_options(int argc, char *argv[])
       if (num_elide) {
 	for (j = i+num_elide, k=i; j < argc; j++, k++) {
 	  argv[k] = argv[j];
+          if (shadow) {
+            shadow[k] = shadow[j];
+          }
 	}
 	argc -= num_elide;
 #ifdef DARWIN
@@ -1496,6 +1540,49 @@ check_bogus_fp_exceptions()
 #endif
 }
 
+#ifdef WINDOWS
+char *
+utf_16_to_utf_8(wchar_t *utf_16)
+{
+  int utf8len = WideCharToMultiByte(CP_UTF8,
+                                    0,
+                                    utf_16,
+                                    -1,
+                                    NULL,
+                                    0,
+                                    NULL,
+                                    NULL);
+
+  char *utf_8 = malloc(utf8len);
+
+  WideCharToMultiByte(CP_UTF8,
+                      0,
+                      utf_16,
+                      -1,
+                      utf_8,
+                      utf8len,
+                      NULL,
+                      NULL);
+
+  return utf_8;
+}
+
+char **
+wide_argv_to_utf_8(wchar_t *wide_argv[], int argc)
+{
+  char** argv = calloc(argc+1,sizeof(char *));
+  int i;
+
+  for (i = 0; i < argc; i++) {
+    argv[i] = utf_16_to_utf_8(wide_argv[i]);
+  }
+  return argv;
+}
+#endif
+
+
+  
+
 
 int
 main(int argc, char *argv[]
@@ -1517,11 +1604,16 @@ main(int argc, char *argv[]
 #endif
     ;
   Boolean lisp_heap_threshold_set_from_command_line = false;
+  wchar_t **utf_16_argv = NULL;
 
 #ifdef PPC
   extern int altivec_present;
 #endif
+#ifdef WINDOWS
+  extern LispObj load_image(wchar_t *);
+#else
   extern LispObj load_image(char *);
+#endif
   area *a;
   BytePtr stack_base, current_sp = (BytePtr) current_stack_pointer();
   TCR *tcr;
@@ -1530,6 +1622,7 @@ main(int argc, char *argv[]
 
 #ifdef WINDOWS
   {
+    int wide_argc;
     extern void init_winsock(void);
     extern void init_windows_io(void);
 
@@ -1539,11 +1632,16 @@ main(int argc, char *argv[]
     setvbuf(dbgout, NULL, _IONBF, 0);
     init_winsock();
     init_windows_io();
+    utf_16_argv = CommandLineToArgvW(GetCommandLineW(),&wide_argc);
   }
 #endif
 
   check_os_version(argv[0]);
+#ifdef WINDOWS
+  real_executable_name = utf_16_argv[0];
+#else
   real_executable_name = determine_executable_name(argv[0]);
+#endif
   page_size = getpagesize(); /* Implement with GetSystemInfo on Windows w/o MinGW */
 
   check_bogus_fp_exceptions();
@@ -1631,10 +1729,17 @@ main(int argc, char *argv[]
 
   program_name = argv[0];
   if ((argc == 2) && (*argv[1] != '-')) {
+#ifdef WINDOWS
+    image_name = utf_16_argv[1];
+#else
     image_name = argv[1];
+#endif
     argv[1] = NULL;
+#ifdef WINDOWS
+    utf_16_argv[1] = NULL;
+#endif
   } else {
-    process_options(argc,argv);
+    process_options(argc,argv,utf_16_argv);
   }
   if (lisp_heap_gc_threshold != DEFAULT_LISP_HEAP_GC_THRESHOLD) {
     lisp_heap_threshold_set_from_command_line = true;
@@ -1696,8 +1801,13 @@ main(int argc, char *argv[]
 
   
 
+#ifdef WINDOWS
+  lisp_global(IMAGE_NAME) = ptr_to_lispobj(utf_16_to_utf_8(image_name));
+  lisp_global(ARGV) = ptr_to_lispobj(wide_argv_to_utf_8(utf_16_argv, argc));
+#else
   lisp_global(IMAGE_NAME) = ptr_to_lispobj(image_name);
   lisp_global(ARGV) = ptr_to_lispobj(argv);
+#endif
   lisp_global(KERNEL_IMPORTS) = (LispObj)import_ptrs_base;
 
   lisp_global(GET_TCR) = (LispObj) get_tcr;
@@ -1976,9 +2086,20 @@ do_fd_zero(fd_set *fdsetp)
 
 
 Boolean
-check_for_embedded_image (char *path)
+check_for_embedded_image (
+#ifdef WINDOWS
+                          wchar_t *path
+#else
+                          char *path
+#endif
+                          )
 {
+#ifdef WINDOWS
+  int fd = wopen(path, O_RDONLY);
+#else  
   int fd = open(path, O_RDONLY);
+#endif
+
   Boolean image_is_embedded = false;
 
   if (fd >= 0) {
@@ -1993,9 +2114,19 @@ check_for_embedded_image (char *path)
 }
 
 LispObj
-load_image(char *path)
+load_image(
+#ifdef WINDOWS
+           wchar_t * path
+#else
+           char *path
+#endif
+)
 {
+#ifdef WINDOWS
+  int fd = wopen(path, O_RDONLY, 0666), err;
+#else
   int fd = open(path, O_RDONLY, 0666), err;
+#endif
   LispObj image_nil = 0;
 
   if (fd > 0) {

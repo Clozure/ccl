@@ -118,7 +118,11 @@ print_lisp_object(LispObj);
 
 #define PLATFORM (PLATFORM_OS|PLATFORM_CPU|PLATFORM_WORD_SIZE)
 
+#ifdef WINDOWS
+Boolean check_for_embedded_image (wchar_t *);
+#else
 Boolean check_for_embedded_image (char *);
+#endif
 natural xStackSpace();
 void init_threads(void *, TCR *);
 
