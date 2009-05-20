@@ -920,8 +920,9 @@
 	   (call-next-method event))
 	  ((not (eventqueue-abort-pending-p self))
 	   (let ((hemlock-key (nsevent-to-key-event event quote-p)))
-	     (when hemlock-key
-	       (hi::handle-hemlock-event view hemlock-key)))))))
+	     (if hemlock-key
+	       (hi::handle-hemlock-event view hemlock-key)
+               (call-next-method)))))))
 
 (defmethod hi::handle-hemlock-event :around ((view hi:hemlock-view) event)
   (declare (ignore event))
