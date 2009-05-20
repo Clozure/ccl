@@ -228,45 +228,12 @@
 
 ;;;; Parse block finders.
 
-(defhvar "Minimum Lines Parsed"
-  "The minimum number of lines before and after the point parsed by Lisp mode."
-  :value 50)
-(defhvar "Maximum Lines Parsed"
-  "The maximum number of lines before and after the point parsed by Lisp mode."
-  :value 500)
-(defhvar "Defun Parse Goal"
-  "Lisp mode parses the region obtained by skipping this many defuns forward
-   and backward from the point unless this falls outside of the range specified
-   by \"Minimum Lines Parsed\" and \"Maximum Lines Parsed\"."
-  :value 2)
 
+(defun start-of-parse-block (mark)
+  (buffer-start mark))
 
-(macrolet ((frob (step end)
-	     `(let ((min (value minimum-lines-parsed))
-		    (max (value maximum-lines-parsed))
-		    (goal (value defun-parse-goal))
-		    (last-defun nil))
-		(declare (fixnum min max goal))
-		(do ((line (mark-line mark) (,step line))
-		     (count 0 (1+ count)))
-		    ((null line)
-		     (,end mark))
-		  (declare (fixnum count))
-		  (when (char= (line-character line 0) #\()
-		    (setq last-defun line)
-		    (decf goal)
-		    (when (and (<= goal 0) (>= count min))
-		      (line-start mark line)
-		      (return)))
-		  (when (> count max)
-		    (line-start mark (or last-defun line))
-		    (return))))))
-
-  (defun start-of-parse-block (mark)
-    (frob line-previous buffer-start))
-
-  (defun end-of-parse-block (mark)
-    (frob line-next buffer-end)))
+(defun end-of-parse-block (mark)
+  (buffer-end mark))
 
 ;;; 
 ;;; START-OF-SEARCH-LINE
