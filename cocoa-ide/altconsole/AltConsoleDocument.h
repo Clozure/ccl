@@ -30,7 +30,7 @@
   NSTextView *textView;
   unsigned outpos;
   NSDictionary *local_typing_attributes, *system_output_attributes;
-  NSBox *indicator;
+  NSTextField *indicator;
   NSTimer *watchdog;
   Boolean peerDied;
 }

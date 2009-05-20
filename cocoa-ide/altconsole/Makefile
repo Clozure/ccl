@@ -8,7 +8,7 @@
 
 APPBASE=.
 OBJECTS=main.o AltConsoleDocument.o AltConsoleDocumentController.o
-RESOURCES=resource/MainMenu.nib resource/AltConsole.nib resource/Credits.rtf resource/InfoPlist.strings
+RESOURCES=resource/MainMenu.nib resource/AltConsole.nib resource/Credits.rtf resource/InfoPlist.strings resource/Clear.tiff
 
 CFLAGS=-g -O
 

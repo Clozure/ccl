@@ -40,7 +40,7 @@
       [dict setObject: [NSFont fontWithName: @"Courier" size:12.0] forKey: @"NSFont"];
       [dict setObject: [NSColor redColor] forKey: @"NSColor"];
       [dict setObject: [NSParagraphStyle defaultParagraphStyle] forKey: @"NSParagraphStyle"];
-      system_output_attributes = [dict retain];
+      system_output_attributes = dict;
       dict = [NSMutableDictionary dictionaryWithDictionary: dict];
       [dict setObject: [NSColor blackColor] forKey: @"NSColor"];
       local_typing_attributes = [dict retain];
@@ -55,7 +55,7 @@
 
 - (void) peerDied:(NSNotification *)notification {
   peerDied = YES;
-  [indicator setTitle: @"Disconnected"];
+  [indicator setStringValue:@"Disconnected"];
   [textView setEditable: NO];
   if (watchdog) {
     [watchdog invalidate];
@@ -97,6 +97,14 @@
 
 - (void)windowControllerDidLoadNib:(NSWindowController *) aController {
     [super windowControllerDidLoadNib:aController];
+
+    NSWindow *w = [aController window];
+    NSToolbar *toolbar = [[NSToolbar alloc] initWithIdentifier:@"altconsole"];
+
+    [toolbar setDelegate:self];
+    [w setToolbar:toolbar];
+    [toolbar release];
+
     [[NSNotificationCenter defaultCenter]
      addObserver: self
      selector: @selector(gotData:)
@@ -108,10 +116,6 @@
      name: @"peerDied"
      object: nil];
     [in readInBackgroundAndNotify];
-    [textView setUsesFontPanel: NO];
-    [textView setRichText: NO];
-    [textView setSmartInsertDeleteEnabled: NO];
-    [textView setUsesRuler: NO];
     [textView setDelegate: self];
     [textView setContinuousSpellCheckingEnabled: NO];
     [self setFileName: [[AltConsoleDocumentController sharedDocumentController] herald]];
@@ -198,5 +202,38 @@
 }
   
 
+- (NSArray *)toolbarAllowedItemIdentifiers:(NSToolbar *)toolbar
+{
+  [NSArray arrayWithObject:@"clear display"];
+}
+
+- (NSArray *)toolbarDefaultItemIdentifiers:(NSToolbar *)toolbar
+{
+  [NSArray arrayWithObject:@"clear display"];
+}
+
+- (NSToolbarItem *)toolbar:(NSToolbar *)toolbar itemForItemIdentifier:(NSString *)itemIdentifier willBeInsertedIntoToolbar:(BOOL)flag
+{
+  NSToolbarItem *item = [[[NSToolbarItem alloc]
+			   initWithItemIdentifier:itemIdentifier] autorelease];
+
+  if ([itemIdentifier isEqualToString:@"clear display"]) {
+    [item setLabel:@"Clear Display"];
+    [item setImage:[NSImage imageNamed:@"Clear"]];
+    [item setTarget:self];
+    [item setAction:@selector(clearDisplay:)];
+  } else {
+    item = nil;
+  }
+  return item;
+}
+
+- (void)clearDisplay:(id)sender
+{
+  NSTextStorage *storage = [textView textStorage];
+
+  [storage deleteCharactersInRange:NSMakeRange(0, [storage length])];
+  outpos = 0;
+}
 
 @end

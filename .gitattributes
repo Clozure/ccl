@@ -11,6 +11,7 @@ cocoa-ide/altconsole/main.m -text
 cocoa-ide/altconsole/resource/AltConsole.nib/classes.nib -text
 cocoa-ide/altconsole/resource/AltConsole.nib/info.nib -text
 cocoa-ide/altconsole/resource/AltConsole.nib/keyedobjects.nib -text
+cocoa-ide/altconsole/resource/Clear.tiff -text
 cocoa-ide/altconsole/resource/Credits.rtf -text
 cocoa-ide/altconsole/resource/InfoPlist.strings -text
 cocoa-ide/altconsole/resource/MainMenu.nib/classes.nib -text
