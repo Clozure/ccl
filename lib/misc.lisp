@@ -864,18 +864,18 @@ are running on, or NIL if we can't find any useful information."
                          
 (defun local-svn-revision ()
   (let* ((s (make-string-output-stream))
-          (root (native-translated-namestring "ccl:")))
-     (when *use-cygwin-svn*
-       (setq root (cygpath root)))
-     (multiple-value-bind (status exit-code)
-           (external-process-status
-            (run-program "svnversion"  (list  (native-translated-namestring "ccl:") (or (svn-url) "")) :output s :error :output))
-         (when (and (eq :exited status) (zerop exit-code))
-           (with-input-from-string (output (get-output-stream-string s))
-             (let* ((line (read-line output nil nil)))
-               (when (and line (parse-integer line :junk-allowed t) )
-                 (return-from local-svn-revision line))))))
-     nil))
+         (root (native-translated-namestring "ccl:")))
+    (when *use-cygwin-svn*
+      (setq root (cygpath root)))
+    (multiple-value-bind (status exit-code)
+        (external-process-status
+         (run-program "svnversion"  (list  (native-translated-namestring "ccl:") (or (svn-url) "")) :output s :error :output))
+      (when (and (eq :exited status) (zerop exit-code))
+        (with-input-from-string (output (get-output-stream-string s))
+          (let* ((line (read-line output nil nil)))
+            (when (and line (parse-integer line :junk-allowed t) )
+              (return-from local-svn-revision line))))))
+    nil))
 
 
 ;;; Scan the heap, collecting infomation on the primitive object types

@@ -87,8 +87,19 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
     (require :swank))
 
+(defun gui-swank-port ()
+  ;; TODO: get the port from a user preference and use
+  ;;       the global as a fallback
+  *default-gui-swank-port*)
+
 (defun try-starting-swank ()
-  (swank:create-server :port *ccl-gui-swank-port* :dont-close t))
+  (unless *ccl-swank-active-p*
+   (handler-case (swank:create-server :port (gui-swank-port) :dont-close t)
+     (serious-condition (c)
+       (setf *ccl-swank-active-p* nil)
+       (format t "~%Error starting swank server: ~A~%" c)
+       (force-output))
+     (:no-error (result) (setf *ccl-swank-active-p* t)))))
 
 (defmethod toplevel-function ((a cocoa-application) init-file)
   (declare (ignore init-file))
