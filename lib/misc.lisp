@@ -818,18 +818,19 @@ are running on, or NIL if we can't find any useful information."
 
 (defun svn-info-component (component)
   (let* ((component-length (length component)))
-  (with-output-to-string (s)
-    (multiple-value-bind (status exit-code)
-        (external-process-status
-         (run-program "svn"  (list "info" (native-translated-namestring "ccl:")):output s))
-      (when (and (eq :exited status) (zerop exit-code))
-        (with-input-from-string (output (get-output-stream-string s))
+    (let* ((s (make-string-output-stream)))
+      (multiple-value-bind (status exit-code)
+          (external-process-status
+           (run-program "svn"  (list "info" (native-translated-namestring "ccl:")) :output s :error :output))
+        (when (and (eq :exited status) (zerop exit-code))
+          (with-input-from-string (output (get-output-stream-string s))
             (do* ((line (read-line output nil nil) (read-line output nil nil)))
                  ((null line))
               (when (and (>= (length line) component-length)
                          (string= component line :end2 component-length))
                 (return-from svn-info-component
-                  (string-trim " " (subseq line component-length)))))))))))
+                  (string-trim " " (subseq line component-length)))))))))
+    nil))
 
 (defun svn-url () (svn-info-component "URL:"))
 (defun svn-repository () (svn-info-component "Repository Root:"))
@@ -862,23 +863,19 @@ are running on, or NIL if we can't find any useful information."
         
                          
 (defun local-svn-revision ()
-  (or
-   ;; svn2cvs uses a .svnrev file to sync CVS and SVN; if present,
-   ;; it contains the svn revision in decimal.
-   (with-open-file (f "ccl:\\.svnrev" :direction :input :if-does-not-exist nil)
-     (when f (read f)))
-   (with-output-to-string (s)
-     (let* ((root (native-translated-namestring "ccl:")))
-       (when *use-cygwin-svn*
-         (setq root (cygpath root)))
-       (multiple-value-bind (status exit-code)
+  (let* ((s (make-string-output-stream))
+          (root (native-translated-namestring "ccl:")))
+     (when *use-cygwin-svn*
+       (setq root (cygpath root)))
+     (multiple-value-bind (status exit-code)
            (external-process-status
-            (run-program "svnversion"  (list  (native-translated-namestring "ccl:") (or (svn-url) "")):output s))
+            (run-program "svnversion"  (list  (native-translated-namestring "ccl:") (or (svn-url) "")) :output s :error :output))
          (when (and (eq :exited status) (zerop exit-code))
            (with-input-from-string (output (get-output-stream-string s))
              (let* ((line (read-line output nil nil)))
                (when (and line (parse-integer line :junk-allowed t) )
-                 (return-from local-svn-revision line))))))))))
+                 (return-from local-svn-revision line))))))
+     nil))
 
 
 ;;; Scan the heap, collecting infomation on the primitive object types
