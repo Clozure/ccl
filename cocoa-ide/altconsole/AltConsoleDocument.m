@@ -38,12 +38,13 @@
       err =[[[NSFileHandle alloc] initWithFileDescriptor: 2] retain];
       dict = [[NSMutableDictionary alloc] initWithCapacity: 3];
       [dict setObject: [NSFont fontWithName: @"Courier" size:12.0] forKey: @"NSFont"];
-      [dict setObject: [NSColor redColor] forKey: @"NSColor"];
       [dict setObject: [NSParagraphStyle defaultParagraphStyle] forKey: @"NSParagraphStyle"];
       system_output_attributes = dict;
-      dict = [NSMutableDictionary dictionaryWithDictionary: dict];
+      dict = [dict mutableCopy];
+      [dict setObject: [NSFont fontWithName: @"Courier-Bold" size:12.0]
+	    forKey: @"NSFont"];
       [dict setObject: [NSColor blackColor] forKey: @"NSColor"];
-      local_typing_attributes = [dict retain];
+      local_typing_attributes = dict;
       outpos = 0;
     }
     return self;
