@@ -179,7 +179,7 @@
 (defmethod svn-info ((p string))
   (let* ((result-status nil)
          (info (with-output-to-string (out)
-                 (run-program "svn" `("info" ,p) 
+                 (run-program *svn-program* `("info" ,p) 
                               :output out
                               :status-hook (lambda (ep) 
                                              (multiple-value-bind (status status-code) 
@@ -193,7 +193,7 @@
 
 (defmethod svn-update ((p string))
   (let ((result-status nil))
-    (run-program "svn" `("update" ,p) 
+    (run-program *svn-program* `("update" ,p) 
                :status-hook (lambda (ep) 
                               (multiple-value-bind (status status-code) 
                                   (external-process-status ep)
@@ -223,6 +223,13 @@
 
 (defun svn-revision ()
   (svn-info-component "Revision:"))
+
+(defun check-svn ()
+  (multiple-value-bind (status exit-code)
+      (external-process-status
+       (run-program *svn-program* '("--version" "--quiet")))
+    (and (eq status :exited)
+         (eql exit-code 0))))
 
 ;;; -----------------------------------------------------------------
 ;;; authentication utils, for use with source control
@@ -375,7 +382,8 @@
 (objc:defmethod (#/updateCCL: :void) ((self gui::lisp-application-delegate)
                                       sender)
   (declare (ignore sender))
-  (if (gui::with-modal-progress-dialog "Checking for Updates..."
+  (if (check-svn)
+    (if (gui::with-modal-progress-dialog "Checking for Updates..."
         "Checking for new CCL changes..."
        (svn-update-available-p))
       ;; newer version in the repo; display the update window
@@ -390,5 +398,8 @@
                               (update-window *update-ccl-window-controller*)))
       ;; no newer version available; display an informative alert window
       (gui::alert-window :title "No Update Available"
-                         :message "No update is available. Your copy of CCL is up-to-date.")))
+                         :message "No update is available. Your copy of CCL is up-to-date."))
+    ;; Can't execute svn.
+    (gui::alert-window :title "Can't run svn."
+                       :message "The \"svn\" program doesn't appear to be instaled correctly.  Setting CCL::*SVN-PROGRAM* to the full pathname of your \"svn\" program may fix this.")))
 
