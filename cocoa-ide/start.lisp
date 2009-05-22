@@ -87,19 +87,77 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
     (require :swank))
 
-(defun gui-swank-port ()
-  ;; TODO: get the port from a user preference and use
-  ;;       the global as a fallback
-  *default-gui-swank-port*)
-
 (defun try-starting-swank ()
   (unless *ccl-swank-active-p*
-   (handler-case (swank:create-server :port (gui-swank-port) :dont-close t)
-     (serious-condition (c)
-       (setf *ccl-swank-active-p* nil)
-       (format t "~%Error starting swank server: ~A~%" c)
-       (force-output))
-     (:no-error (result) (setf *ccl-swank-active-p* t)))))
+    ;; try to determine the user preferences concerning the swank port number
+    ;; and whether the swank server should be started. If the user says start
+    ;; it, and we can determine a valid port for it, start it up
+    (let* ((defaults (handler-case (#/values (#/sharedUserDefaultsController ns:ns-user-defaults-controller))
+                       (serious-condition (c) 
+                         (progn (format t "~%ERROR: Unable to get preferences from the Shared User Defaults Controller")
+                                nil))))
+           (start-swank-pref (and defaults (#/valueForKey: defaults #@"startSwankServer")))
+           (start-swank? (cond
+                           ;; the user default is not initialized
+                           ((or (null start-swank-pref)
+                                (%null-ptr-p start-swank-pref)) nil)
+                           ;; examine the user default
+                           ((typep start-swank-pref 'ns:ns-number) 
+                            (case (#/intValue start-swank-pref)
+                              ;; don't start swank
+                              (0 nil)
+                              ;; start swank
+                              (1 t)
+                              ;; the user default value is incomprehensible
+                              (otherwise (progn
+                                           (format t "~%ERROR: Unrecognized value in user preference 'startSwankServer': ~S"
+                                                   start-swank-pref)
+                                           nil))))
+                           ;; the user default value is incomprehensible
+                           (t (progn
+                                (format t "~%ERROR: Unrecognized value type in user preference 'startSwankServer': ~S"
+                                        start-swank-pref)
+                                nil))))
+           (swank-port-pref (and defaults (#/valueForKey: defaults #@"swankPort")))
+           (swank-port (cond
+                         ;; the user default is not initialized
+                         ((or (null swank-port-pref)
+                              (%null-ptr-p swank-port-pref)) nil)
+                         ;; examine the user default
+                         ((typep swank-port-pref 'ns:ns-string) 
+                          (handler-case (let* ((port-str (lisp-string-from-nsstring swank-port-pref))
+                                               (port (parse-integer port-str :junk-allowed nil)))
+                                          (or port *default-gui-swank-port*))
+                            ;; parsing the port number failed
+                            (ccl::parse-integer-not-integer-string (c)
+                              (setf *ccl-swank-active-p* nil)
+                              (format t "~%Error starting swank server; the swank-port user preference is not a valid port number: ~S~%"
+                                      port-str)
+                              nil)))
+                         ;; the user default value is incomprehensible
+                         (t (progn
+                              (format t "~%ERROR: Unrecognized value type in user preference 'swankPort': ~S"
+                                      swank-port-pref)
+                              nil)))))
+      (if (and start-swank? swank-port)
+          ;; try to start the swank server
+          (handler-case (progn
+                          (swank:create-server :port swank-port :dont-close t)
+                          (setf *ccl-swank-active-p* t)
+                          (setf *active-gui-swank-port* swank-port)
+                          swank-port)
+            ;; swank server creation failed
+            (serious-condition (c)
+              (setf *ccl-swank-active-p* nil)
+              (setf *active-gui-swank-port* nil)
+              (format t "~%Error starting swank server: ~A~%" c)
+              nil))
+          ;; don't try to start the swank server
+          (progn
+            (setf *ccl-swank-active-p* nil)
+            (setf *active-gui-swank-port* nil)
+            nil)))
+    (force-output)))
 
 (defmethod toplevel-function ((a cocoa-application) init-file)
   (declare (ignore init-file))
