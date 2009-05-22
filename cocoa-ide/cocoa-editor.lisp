@@ -756,7 +756,10 @@
 	 (#/prepareWithInvocationTarget: undo-mgr self)
 	 pos (#/length string) replaced-string)))
     (ns:with-ns-range (r pos len)
-      (#/replaceCharactersInRange:withString: self r string))))
+      (#/beginEditing self)
+      (unwind-protect
+           (#/replaceCharactersInRange:withString: self r string)
+      (#/endEditing self)))))
 
 ;; In theory (though not yet in practice) we allow for a buffer to be shown in multiple
 ;; windows, and any change to a buffer through one window has to be reflected in all of
@@ -774,21 +777,24 @@
      for i from 0 below (#/count win-arr) as w = (#/objectAtIndex: win-arr i)
      thereis (and (eq (hemlock-buffer w) buffer) (hemlock-view w))))
 
+
+;;; Modify the hemlock buffer; don't change attributes.
 (objc:defmethod (#/replaceCharactersInRange:withString: :void)
     ((self hemlock-text-storage) (r :<NSR>ange) string)
   (let* ((buffer (hemlock-buffer self))
+         (hi::*current-buffer* buffer)
          (position (pref r :<NSR>ange.location))
 	 (length (pref r :<NSR>ange.length))
 	 (lisp-string (if (> (#/length string) 0) (lisp-string-from-nsstring string)))
-	 (view (front-view-for-buffer buffer)))
+         (view (front-view-for-buffer buffer)))
+    (hi::with-mark ((m (hi::buffer-point buffer)))
+      (hi::move-to-absolute-position m position)
+      (when (> length 0)
+        (hi::delete-characters m length))
+      (when lisp-string
+        (hi::insert-string m lisp-string)))
     (when view
-      (let* ((edit-count (slot-value self 'edit-count)))
-        (dotimes (i edit-count) (#/endEditing self))
-        (hi::handle-hemlock-event view #'(lambda ()
-                                           (hi:paste-characters position length
-                                                                lisp-string)))
-        (dotimes (i edit-count)
-          (#/beginEditing self))))))
+      (setf (hi::hemlock-view-quote-next-p view) nil))))
 
 (objc:defmethod (#/setAttributes:range: :void) ((self hemlock-text-storage)
                                                 attributes
@@ -883,6 +889,10 @@
   (#/setSelectable: self nil)
   (disable-paren-highlight self))
 
+
+
+      
+
 (defmethod eventqueue-abort-pending-p ((self hemlock-textstorage-text-view))
   ;; Return true if cmd-. is in the queue.  Not sure what to do about c-g:
   ;; would have to distinguish c-g from c-q c-g or c-q c-q c-g etc.... Maybe
@@ -904,8 +914,12 @@
   (let* ((view (hemlock-view self))
 	 ;; quote-p means handle characters natively
 	 (quote-p (and view (hi::hemlock-view-quote-next-p view)))
+         (has-marked-text (#/hasMarkedText self))
 	 (flags (#/modifierFlags event)))
     #+debug (log-debug "~&quote-p ~s event ~s" quote-p event)
+    (when (and has-marked-text quote-p)
+      (setf (hi::hemlock-view-quote-next-p view) nil)
+      (setq quote-p nil))
     (cond ((and (not *option-is-meta*)
 		(logtest #$NSAlternateKeyMask flags))
 	   (call-next-method event))
