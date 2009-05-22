@@ -41,6 +41,8 @@
    (cur-env :initform nil)
    (cur-sstream :initform nil)))
 
+
+
 (defmethod dequeue-listener-char ((stream cocoa-listener-input-stream) wait-p)
   (with-slots (queue queue-lock read-lock queue-semaphore text-semaphore cur-string cur-string-pos) stream
     (with-lock-grabbed (read-lock)
@@ -470,7 +472,7 @@
 (objc:defmethod (#/exitBreak: :void) ((self hemlock-listener-document) sender)
   (declare (ignore sender))
   (let* ((process (hemlock-document-process self)))
-    (log-debug  "~&exitBreak process ~s" process)
+    #+debug (log-debug  "~&exitBreak process ~s" process)
     (when process
       (process-interrupt process #'abort-break))))
 
