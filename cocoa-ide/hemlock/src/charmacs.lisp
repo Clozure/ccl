@@ -38,15 +38,20 @@
 ;;; as if they were #\u+00ff.  Not quite right, but better than
 ;;; flying off the end.
 (defmacro syntax-char-code (char)
-  `(min (char-code ,char) 255))
+  (let* ((code (gensym)))
+    `(let* ((,code (char-code ,char)))
+      (declare (type (mod #x110000) ,code))
+      (if (< ,code 256)
+        ,code
+        (char-code #\A)))))
 
 
 ;;;; Stuff used by the searching primitives (search)
 ;;;
-(defconstant search-char-code-limit 128
+(defconstant search-char-code-limit char-code-limit
   "The exclusive upper bound on significant char-codes for searching.")
 (defmacro search-char-code (ch)
-  `(logand (char-code ,ch) #x+7F))
+  `(char-code ,ch))
 ;;;
 ;;;    search-hash-code must be a function with the following properties:
 ;;; given any character it returns a number between 0 and 
@@ -55,7 +60,7 @@
 ;;;    In ASCII this is can be done by ANDing out the 5'th bit.
 ;;;
 (defmacro search-hash-code (ch)
-  `(logand (char-code ,ch) #x+5F))
+  `(char-code (char-upcase ,ch)))
 
 ;;; Doesn't do anything special, but it should fast and not waste any time
 ;;; checking type and whatnot.
@@ -70,14 +75,14 @@
 ;;; to the alphabetic characters and executing body.  Note that the manual
 ;;; guarantees lower and upper case char codes to be separately in order,
 ;;; but other characters may be interspersed within that ordering.
-(defmacro alpha-chars-loop (var start-char end-char result body)
+(defmacro alpha-chars-loop (var test result body)
   (let ((n (gensym))
 	(end-char-code (gensym)))
-    `(do ((,n (char-code ,start-char) (1+ ,n))
-	  (,end-char-code (char-code ,end-char)))
+    `(do ((,n (char-code #\A) (1+ ,n))
+	  (,end-char-code 255))
 	 ((> ,n ,end-char-code) ,result)
        (let ((,var (code-char ,n)))
-	 (when (alpha-char-p ,var)
+	 (when (,test ,var)
 	   ,@body)))))
 
 (defmacro do-alpha-chars ((var kind &optional result) &rest forms)
@@ -87,11 +92,11 @@
    :both is specified, lowercase letters are processed first."
   (case kind
     (:both
-     `(progn (alpha-chars-loop ,var #\a #\z nil ,forms)
-	     (alpha-chars-loop ,var #\A #\Z ,result ,forms)))
+     `(progn (alpha-chars-loop ,var lower-case-p nil ,forms)
+	     (alpha-chars-loop ,var upper-case-p ,result ,forms)))
     (:lower
-     `(alpha-chars-loop ,var #\a #\z ,result ,forms))
+     `(alpha-chars-loop ,var lower-case-p ,result ,forms))
     (:upper
-     `(alpha-chars-loop ,var #\A #\Z ,result ,forms))
+     `(alpha-chars-loop ,var upper-case-p ,result ,forms))
     (t (error "Kind argument not one of :lower, :upper, or :both -- ~S."
 	      kind))))
