@@ -3836,7 +3836,8 @@
            (synonym-method stream-surrounding-characters)
            (synonym-method stream-input-timeout)
            (synonym-method stream-output-timeout)
-           (synonym-method stream-deadline))
+           (synonym-method stream-deadline)
+           (synonym-method stream-eof-transient-p))
 
 (defmethod (setf input-stream-timeout) (new (s synonym-stream))
   (setf (input-stream-timeout (symbol-value (synonym-stream-symbol s))) new))
@@ -3874,6 +3875,9 @@
 (defclass two-way-stream (composite-stream-mixin fundamental-input-stream fundamental-output-stream)
     ((input-stream :initarg :input-stream :accessor two-way-stream-input-stream)
      (output-stream :initarg :output-stream :accessor two-way-stream-output-stream)))
+
+(defmethod stream-eof-transient-p ((stream two-way-stream))
+  (stream-eof-transient-p (two-way-stream-input-stream stream)))
 
 (defmethod print-object ((s two-way-stream) out)
   (print-unreadable-object (s out :type t :identity t)
