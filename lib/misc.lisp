@@ -812,6 +812,8 @@ are running on, or NIL if we can't find any useful information."
         and do (write-char char sans-whitespace))))
 
 
+(defparameter *svn-program* "svn")
+
 (defloadvar *use-cygwin-svn*
     #+windows-target (not (null (getenv "CYGWIN")))
     #-windows-target nil)
@@ -821,7 +823,7 @@ are running on, or NIL if we can't find any useful information."
     (let* ((s (make-string-output-stream)))
       (multiple-value-bind (status exit-code)
           (external-process-status
-           (run-program "svn"  (list "info" (native-translated-namestring "ccl:")) :output s :error :output))
+           (run-program *svn-program*  (list "info" (native-translated-namestring "ccl:")) :output s :error :output))
         (when (and (eq :exited status) (zerop exit-code))
           (with-input-from-string (output (get-output-stream-string s))
             (do* ((line (read-line output nil nil) (read-line output nil nil)))
@@ -859,7 +861,13 @@ are running on, or NIL if we can't find any useful information."
                      (car dir))))))))))))
 
 
-
+(defun svnversion-program ()
+  (or (ignore-errors
+        (native-translated-namestring
+         (merge-pathnames "svnversion" *svn-program*)))
+      "svnversion"))
+        
+                      
         
                          
 (defun local-svn-revision ()
@@ -869,7 +877,7 @@ are running on, or NIL if we can't find any useful information."
       (setq root (cygpath root)))
     (multiple-value-bind (status exit-code)
         (external-process-status
-         (run-program "svnversion"  (list  (native-translated-namestring "ccl:") (or (svn-url) "")) :output s :error :output))
+         (run-program (svnversion-program)  (list  (native-translated-namestring "ccl:") (or (svn-url) "")) :output s :error :output))
       (when (and (eq :exited status) (zerop exit-code))
         (with-input-from-string (output (get-output-stream-string s))
           (let* ((line (read-line output nil nil)))
