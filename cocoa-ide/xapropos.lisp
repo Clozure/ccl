@@ -5,14 +5,36 @@
    (search-category :initform :all :accessor search-category)
    (matched-symbols :initform (make-array 100 :fill-pointer 0 :adjustable t)
                     :accessor matched-symbols)
+   (external-only-p :initform nil :accessor external-only-p)
    ;; outlets
    (action-menu :foreign-type :id :accessor action-menu)
    (action-popup-button :foreign-type :id :accessor action-popup-button)
    (search-field :foreign-type :id :accessor search-field)
    (search-field-toolbar-item :foreign-type :id :accessor search-field-toolbar-item)
+   (all-symbols-button :foreign-type :id :accessor all-symbols-button)
+   (external-symbols-button :foreign-type :id :accessor external-symbols-button)
    (table-view :foreign-type :id :accessor table-view)
    (contextual-menu :foreign-type :id :accessor contextual-menu))
   (:metaclass ns:+ns-object))
+
+(defclass scope-bar-view (ns:ns-view)
+  ()
+  (:metaclass ns:+ns-object))
+
+(defconstant $scope-bar-border-width 1)
+
+;;; This should use a gradient, but we don't have NSGradient on Tiger.
+
+(objc:defmethod (#/drawRect: :void) ((self scope-bar-view) (rect #>NSRect))
+  (let* (;;(start-color (#/colorWithCalibratedWhite:alpha: ns:ns-color 0.75 1.0))
+         (end-color (#/colorWithCalibratedWhite:alpha: ns:ns-color 0.90 1.0))
+         (border-color (#/colorWithCalibratedWhite:alpha: ns:ns-color 0.69 1.0))
+         (bounds (#/bounds self)))
+    (#/set end-color)
+    (#_NSRectFill bounds)
+    (ns:with-ns-rect (r 0 0 (ns:ns-rect-width bounds) $scope-bar-border-width)
+      (#/set border-color)
+      (#_NSRectFill r))))
 
 (defconstant $all-symbols-item-tag 0)
 
@@ -55,6 +77,7 @@
     (#/setDelegate: toolbar wc)
     (#/setToolbar: (#/window wc) toolbar)
     (#/release toolbar)
+    (#/search: wc (search-field wc))
     (#/makeFirstResponder: (#/window wc) (search-field wc))))
 
 (objc:defmethod #/toolbarAllowedItemIdentifiers: ((wc xapropos-window-controller) toolbar)
@@ -99,15 +122,21 @@
                    (category search-category)
                    (array row-objects)) wc
     (setf (fill-pointer v) 0)
-    (do-all-symbols (sym)
-      (when (case category
-              (:function (fboundp sym))
-              (:variable (boundp sym))
-              (:macro (macro-function sym))
-              (:class (find-class sym nil))
-              (t t))
-        (when (ccl::%apropos-substring-p substring (symbol-name sym))
-          (vector-push-extend sym v))))
+    (flet ((maybe-include-symbol (sym)
+             (when (case category
+                     (:function (fboundp sym))
+                     (:variable (boundp sym))
+                     (:macro (macro-function sym))
+                     (:class (find-class sym nil))
+                     (t t))
+               (when (ccl::%apropos-substring-p substring (symbol-name sym))
+                 (vector-push-extend sym v)))))
+      (if (external-only-p wc)
+        (dolist (p (list-all-packages))
+          (do-external-symbols (sym p)
+            (maybe-include-symbol sym)))
+        (do-all-symbols (sym)
+          (maybe-include-symbol sym))))
     (setf v (sort v #'string-lessp))
     (#/removeAllObjects array)
     (let ((n (#/null ns:ns-null)))
@@ -130,6 +159,15 @@
       (setf (search-category wc) (cdr pair))
       (#/search: wc (search-field wc)))))
 
+(objc:defmethod (#/toggleExternalOnly: :void) ((wc xapropos-window-controller) sender)
+  (cond ((eql sender (all-symbols-button wc))
+         (#/setState: (external-symbols-button wc) #$NSOffState)
+         (setf (external-only-p wc) nil))
+        ((eql sender (external-symbols-button wc))
+         (#/setState: (all-symbols-button wc) #$NSOffState)
+         (setf (external-only-p wc) t)))
+  (#/search: wc (search-field wc)))
+  
 (objc:defmethod (#/inspect: :void) ((wc xapropos-window-controller) sender)
   (declare (ignore sender))
   (let* ((row (#/selectedRow (table-view wc)))

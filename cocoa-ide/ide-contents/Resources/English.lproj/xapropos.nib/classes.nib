@@ -15,6 +15,8 @@
 				<string>id</string>
 				<key>source</key>
 				<string>id</string>
+				<key>toggleExternalOnly</key>
+				<string>id</string>
 			</dict>
 			<key>CLASS</key>
 			<string>XaproposWindowController</string>
@@ -26,7 +28,11 @@
 				<string>id</string>
 				<key>actionPopupButton</key>
 				<string>id</string>
+				<key>allSymbolsButton</key>
+				<string>id</string>
 				<key>contextualMenu</key>
+				<string>id</string>
+				<key>externalSymbolsButton</key>
 				<string>id</string>
 				<key>searchField</key>
 				<string>id</string>
