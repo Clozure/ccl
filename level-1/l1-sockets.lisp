@@ -673,7 +673,7 @@ the socket is not connected."))
 		   keepalive reuse-address nodelay broadcast linger
 		   local-port local-host backlog class out-of-band-inline
 		   local-filename remote-filename sharing basic external-format
-                   auto-close connect-timeout input-timeout output-timeout deadline))
+                   auto-close connect-timeout input-timeout output-timeout deadline fd))
   (ecase address-family
     ((:file) (apply #'make-file-socket keys))
     ((nil :internet) (apply #'make-ip-socket keys))))
