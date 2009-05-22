@@ -22,6 +22,7 @@
 (setf (character-attribute :whitespace #\linefeed) 1)
 (setf (character-attribute :whitespace #\tab) 1)
 (setf (character-attribute :whitespace #\newline) 1)
+(setf (character-attribute :whitespace #\return) 1)
 
 (defattribute "Word Delimiter"
   "A value of 1 for this attribute indicates that the corresponding character
@@ -66,7 +67,7 @@
                            #+CMU #\formfeed
                            #+(or EXCL sbcl CLISP Clozure) #\page) 1)
 (setf (character-attribute :word-delimiter #\tab) 1)
-(setf (character-attribute :word-delimiter #\newline) 1)
+(setf (character-attribute :word-delimiter #\return) 1)
 
 (shadow-attribute :word-delimiter #\. 0 "Fundamental")
 (shadow-attribute :word-delimiter #\' 0 "Text")
