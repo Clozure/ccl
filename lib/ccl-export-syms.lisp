@@ -52,7 +52,8 @@
      ensure-source-note-text
      *record-pc-mapping*
      find-source-note-at-pc
-
+     *svn-program*
+     
      show-documentation
      %set-toplevel
      toplevel-loop
