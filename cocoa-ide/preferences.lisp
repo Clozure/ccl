@@ -101,9 +101,10 @@
       ;; for some reason, setting this in IB doesn't work on Tiger/PPC32
       (#/setShowsToolbarButton: window nil)
       (#/release toolbar))
-    (ccl::with-autoreleased-nsstring (label-str (format nil "Swank protocol version: ~a" swank-protocol-version))
+    (ccl::with-autoreleased-nsstring (label-str (format nil "Swank protocol version: ~A" (or swank-protocol-version
+                                                                                             "unknown")))
       (#/setStringValue: protocol-label label-str))
-    (ccl::with-autoreleased-nsstring (port-string (format nil "~A" swank-port))
+    (ccl::with-autoreleased-nsstring (port-string (format nil "~A" (or swank-port "")))
       (#/setStringValue: port-field port-string))
     (#/showAppearancePrefs: self +null-ptr+)))
   
