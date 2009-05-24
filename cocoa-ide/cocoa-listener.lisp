@@ -275,7 +275,8 @@
 (objc:defmethod (#/setDocumentEdited: :void)
     ((self hemlock-listener-window-controller) (edited :<BOOL>))
   (declare (ignorable edited)))
- 
+
+
 
 (objc:defmethod #/windowTitleForDocumentDisplayName: ((self hemlock-listener-window-controller) name)
   (let* ((doc (#/document self)))
@@ -384,6 +385,8 @@
       (process-kill p)))
   (call-next-method))
 
+
+
 (objc:defmethod (#/makeWindowControllers :void) ((self hemlock-listener-document))
   (let* ((textstorage (slot-value self 'textstorage))
          (window (%hemlock-frame-for-textstorage
@@ -404,8 +407,7 @@
 		      'hemlock-listener-window-controller
 		      :with-window window))
 	 (listener-name (hi::buffer-name (hemlock-buffer self)))
-         (path (when (eql 1 *cocoa-listener-count*) #@"/")))
-
+         (path (#/windowTitleForDocumentDisplayName: controller (#/displayName self ))))
     (with-slots (styles) textstorage
       ;; We probably should be more disciplined about
       ;; Cocoa memory management.  Having retain/release in
@@ -427,7 +429,20 @@
       (unless (#/setFrameAutosaveName: window path)
         (setq path nil)))
     (unless (and path
-                 (#/setFrameUsingName: window path))
+                 (when (#/setFrameUsingName: window path)
+                   (let* ((frame (#/frame window)))
+                     (ns:with-ns-point (current-point
+                                        (ns:ns-rect-x frame)
+                                        (+ (ns:ns-rect-y frame)
+                                           (ns:ns-rect-height frame)))
+                        (let* ((next-point (#/cascadeTopLeftFromPoint:
+                                            window
+                                            current-point)))
+                     (setq *next-listener-x-pos*
+                           (ns:ns-point-x next-point)
+                           *next-listener-y-pos*
+                           (ns:ns-point-y next-point)))))
+                   t))
       (ns:with-ns-point (current-point
                          (or *next-listener-x-pos*
                              (x-pos-for-window window *initial-listener-x-pos*))
