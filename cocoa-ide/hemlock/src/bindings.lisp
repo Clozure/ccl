@@ -244,6 +244,7 @@
 ;;;; Self Insert and Quoted Insert.
 
 (bind-key "Quoted Insert" #k"control-q")
+(bind-key "Native Quoted Insert" #k"meta-!")
 
 (bind-key "Self Insert" #k"space")
 (bind-key "Self Insert" #k"!")

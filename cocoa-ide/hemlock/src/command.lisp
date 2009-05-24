@@ -54,6 +54,12 @@
   (declare (ignore p))
   (setf (hi::hemlock-view-quote-next-p hi::*current-view*) t))
 
+(defcommand "Native Quoted Insert" (p)
+  "Causes the next character typed to be processed by the native text-handling
+   facility."
+  (declare (ignore p))
+  (setf (hi::hemlock-view-quote-next-p hi::*current-view*) :native))
+
 (defcommand "Forward Character" (p)
   "Move the point forward one character, collapsing the selection.
    With prefix argument move that many characters, with negative argument
