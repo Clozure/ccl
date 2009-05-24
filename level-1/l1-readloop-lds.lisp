@@ -609,6 +609,7 @@ expressions as commands")
 
 
 
+
 (defvar %last-continue% nil)
 (defun break-loop (condition frame-pointer)
   "Never returns"
@@ -643,32 +644,34 @@ expressions as commands")
                                       (1+ *break-level*)))
          (*backtrace-contexts* (cons context *backtrace-contexts*)))
     (with-terminal-input
-      (with-toplevel-commands :break
-        (if *continuablep*
-          (let* ((*print-circle* *error-print-circle*)
-                 (*print-level* *error-print-level*)
-                 (*print-length* *error-print-length*)
+        (with-toplevel-commands :break
+          (if *continuablep*
+            (let* ((*print-circle* *error-print-circle*)
+                   (*print-level* *error-print-level*)
+                   (*print-length* *error-print-length*)
 					;(*print-pretty* nil)
-                 (*print-array* nil))
-            (format t "~&> Type :GO to continue, :POP to abort, :R for a list of available restarts.")
-            (format t "~&> If continued: ~A~%" continue))
-          (format t "~&> Type :POP to abort, :R for a list of available restarts.~%"))
-        (format t "~&> Type :? for other options.")
-        (terpri)
-        (force-output)
+                   (*print-array* nil))
+              (format t (or (application-ui-operation *application* :break-options-string t)
+                            "~&> Type :GO to continue, :POP to abort, :R for a list of available restarts."))
+              (format t "~&> If continued: ~A~%" continue))
+            (format t (or (application-ui-operation *application* :break-options-string nil)
+                          "~&> Type :POP to abort, :R for a list of available restarts.~%")))
+          (format t "~&> Type :? for other options.")
+          (terpri)
+          (force-output)
 
-        (clear-input *debug-io*)
-        (setq *error-reentry-count* 0)  ; succesfully reported error
-        (ignoring-without-interrupts
-         (unwind-protect
-              (progn
-                (application-ui-operation *application*
-                                          :enter-backtrace-context context)
-                (read-loop :break-level (1+ *break-level*)
-                           :input-stream *debug-io*
-                           :output-stream *debug-io*))
-           (application-ui-operation *application* :exit-backtrace-context
-                                     context)))))))
+          (clear-input *debug-io*)
+          (setq *error-reentry-count* 0) ; succesfully reported error
+          (ignoring-without-interrupts
+           (unwind-protect
+                (progn
+                  (application-ui-operation *application*
+                                            :enter-backtrace-context context)
+                  (read-loop :break-level (1+ *break-level*)
+                             :input-stream *debug-io*
+                             :output-stream *debug-io*))
+             (application-ui-operation *application* :exit-backtrace-context
+                                       context)))))))
 
 
 
