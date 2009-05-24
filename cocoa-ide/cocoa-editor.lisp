@@ -759,7 +759,7 @@
       (#/beginEditing self)
       (unwind-protect
            (#/replaceCharactersInRange:withString: self r string)
-      (#/endEditing self)))))
+        (#/endEditing self)))))
 
 ;; In theory (though not yet in practice) we allow for a buffer to be shown in multiple
 ;; windows, and any change to a buffer through one window has to be reflected in all of
@@ -910,18 +910,19 @@
 (defvar *buffer-being-edited* nil)
 
 (objc:defmethod (#/keyDown: :void) ((self hemlock-textstorage-text-view) event)
-  #+debug (#_NSLog #@"Key down event = %@" :address event)
+  #+debug (#_NSLog #@"Key down event in %@  = %@" :id self :address event)
   (let* ((view (hemlock-view self))
 	 ;; quote-p means handle characters natively
 	 (quote-p (and view (hi::hemlock-view-quote-next-p view)))
          (has-marked-text (#/hasMarkedText self))
 	 (flags (#/modifierFlags event)))
     #+debug (log-debug "~&quote-p ~s event ~s" quote-p event)
-    (when (and has-marked-text quote-p)
+    (when (and has-marked-text quote-p (not (eq quote-p :native)))
       (setf (hi::hemlock-view-quote-next-p view) nil)
       (setq quote-p nil))
-    (cond ((and (not *option-is-meta*)
-		(logtest #$NSAlternateKeyMask flags))
+    (cond ((or (eq quote-p :native)
+               (and (not *option-is-meta*)
+                    (logtest #$NSAlternateKeyMask flags)))
 	   (call-next-method event))
 	  ;; If a standalone dead key (e.g., ^ on a French keyboard)
 	  ;; was pressed, pass it through to the Cocoa text input system.
@@ -1659,15 +1660,18 @@
         (#/setFrame: modeline modeline-frame)))))
 
 
-;;; A clip view subclass, which exists mostlu so that we can track origin changes.
+  
+
+;;; A clip view subclass, which exists mostly so that we can track origin changes.
 (defclass text-pane-clip-view (ns:ns-clip-view)
   ()
   (:metaclass ns:+ns-object))
 
 (objc:defmethod (#/scrollToPoint: :void) ((self text-pane-clip-view)
                                            (origin #>NSPoint))
-  (call-next-method origin)
-  (compute-temporary-attributes (#/documentView self)))
+  (unless (#/inLiveResize self)
+    (call-next-method origin)
+    (compute-temporary-attributes (#/documentView self))))
 
 ;;; Text-pane
 
@@ -2003,6 +2007,7 @@
       (setf (hemlock-frame-echo-area-buffer self) nil)
       (#/close echo-doc)))
   (release-canonical-nsobject self)
+  (#/setFrameAutosaveName: self #@"")
   (call-next-method))
   
 (defun new-hemlock-document-window (class)
@@ -2311,18 +2316,20 @@
 
 ;;; Map *default-file-character-encoding* to an :<NSS>tring<E>ncoding
 (defun get-default-encoding ()
-  (let* ((string (string (or *default-file-character-encoding*
-                                 "ISO-8859-1")))
-         (len (length string)))
-    (with-cstrs ((cstr string))
-      (with-nsstr (nsstr cstr len)
-        (let* ((cf (#_CFStringConvertIANACharSetNameToEncoding nsstr)))
-          (if (= cf #$kCFStringEncodingInvalidId)
-            (setq cf (#_CFStringGetSystemEncoding)))
-          (let* ((ns (#_CFStringConvertEncodingToNSStringEncoding cf)))
-            (if (= ns #$kCFStringEncodingInvalidId)
-              (#/defaultCStringEncoding ns:ns-string)
-              ns)))))))
+  (let* ((file-encoding *default-file-character-encoding*))
+    (when (and (typep file-encoding 'keyword)
+               (lookup-character-encoding file-encoding))
+      (let* ((string (string file-encoding))
+             (len (length string)))
+        (with-cstrs ((cstr string))
+          (with-nsstr (nsstr cstr len)
+            (let* ((cf (#_CFStringConvertIANACharSetNameToEncoding nsstr)))
+              (if (= cf #$kCFStringEncodingInvalidId)
+                (setq cf (#_CFStringGetSystemEncoding)))
+              (let* ((ns (#_CFStringConvertEncodingToNSStringEncoding cf)))
+                (if (= ns #$kCFStringEncodingInvalidId)
+                  (#/defaultCStringEncoding ns:ns-string)
+                  ns)))))))))
 
 (defclass hemlock-document-controller (ns:ns-document-controller)
     ((last-encoding :foreign-type :<NSS>tring<E>ncoding))
@@ -2340,7 +2347,7 @@
 
 (defclass hemlock-editor-document (ns:ns-document)
     ((textstorage :foreign-type :id)
-     (encoding :foreign-type :<NSS>tring<E>ncoding :initform (get-default-encoding)))
+     (encoding :foreign-type :<NSS>tring<E>ncoding))
   (:metaclass ns:+ns-object))
 
 (defmethod hemlock-buffer ((self hemlock-editor-document))
@@ -2360,7 +2367,8 @@
 	   (#/setNeedsDisplay: (text-pane-mode-line pane) t))))))
 
 (defmethod update-buffer-package ((doc hemlock-editor-document) buffer)
-  (let* ((name (hemlock::package-at-mark (hi::buffer-point buffer))))
+  (let* ((name (or (hemlock::package-at-mark (hi::buffer-point buffer))
+                   (hi::variable-value 'hemlock::default-package :buffer buffer))))
     (when name
       (let* ((pkg (find-package name)))
         (if pkg
@@ -2485,6 +2493,8 @@
                                (lisp-string-from-nsstring
                                 (#/displayName doc))
                                :modes '("Lisp" "Editor")))))
+    (with-slots (encoding) doc
+      (setq encoding (or (get-default-encoding) #$NSISOLatin1StringEncoding)))
     (setq *last-document-created* doc)
     doc))
 
@@ -2522,7 +2532,7 @@
         (if (%null-ptr-p string)
           (progn
             (if (zerop selected-encoding)
-              (setq selected-encoding (get-default-encoding)))
+              (setq selected-encoding (or (get-default-encoding) #$NSISOLatin1StringEncoding)))
             (setq string (#/stringWithContentsOfURL:encoding:error:
                           ns:ns-string
                           url
@@ -2875,7 +2885,26 @@
       (#/stringWithFormat: ns:ns-string #@"{%@}"
                            (#/localizedNameOfStringEncoding: ns:ns-string ns))
       iana)))
-      
+
+;;; Return T if the specified #>NSStringEncoding names something that
+;;; CCL supports.  (Could also have a set of other encoding names that
+;;; the user is interested in, maintained by preferences.
+
+(defun supported-string-encoding-p (ns-string-encoding)
+  (let* ((cfname (#_CFStringConvertEncodingToIANACharSetName
+                  (#_CFStringConvertNSStringEncodingToEncoding ns-string-encoding)))
+         (name (unless (%null-ptr-p cfname)
+                 (nstring-upcase (ccl::lisp-string-from-nsstring cfname))))
+         (keyword (when (and name (find-symbol name "KEYWORD"))
+                    (intern name "KEYWORD"))))
+    (or (and keyword (not (null (lookup-character-encoding keyword))))
+        ;; look in other table maintained by preferences
+        )))
+    
+         
+
+
+  
 ;;; Return a list of :<NSS>tring<E>ncodings, sorted by the
 ;;; (localized) name of each encoding.
 (defun supported-nsstring-encodings ()
@@ -2892,7 +2921,8 @@
                                    (#/localizedCompare:
                                     (nsstring-for-nsstring-encoding x)
                                     (nsstring-for-nsstring-encoding y))))))
-              (ids id))))))))
+              (when (supported-string-encoding-p id)              
+                (ids id)))))))))
 
 
 
