@@ -1856,8 +1856,13 @@
     (defhvar "Current Package"
       "The package used for evaluation of Lisp in this buffer."
       :buffer buffer
-      :value "CL-USER"
-      :hooks (list 'package-name-change-hook))))
+      :value nil
+      :hooks (list 'package-name-change-hook)))
+  (unless (hemlock-bound-p 'default-package :buffer buffer)
+    (defhvar "Default Package"
+      "The package to use if the current package doesn't exist or isn't set."
+      :buffer buffer
+      :value (package-name *package*))))
 
 
 
