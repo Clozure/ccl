@@ -34,6 +34,10 @@
 				<string>id</string>
 				<key>listenerTabViewItem</key>
 				<string>id</string>
+				<key>swankPortField</key>
+				<string>id</string>
+				<key>swankProtocolLabel</key>
+				<string>id</string>
 				<key>tabView</key>
 				<string>id</string>
 				<key>window</key>

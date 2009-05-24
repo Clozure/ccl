@@ -56,15 +56,17 @@
     (#/stringWithFormat: ns:ns-string #@"%@ %.0f" :id name :double-float size)))
 
 (defclass preferences-window-controller (ns:ns-window-controller)
-  ((tab-view :foreign-type :id :accessor tab-view)
-   (editor-tab-view-item :foreign-type :id :accessor editor-tab-view-item)
-   (listener-tab-view-item :foreign-type :id :accessor listener-tab-view-item)
-   (hyperspec-path-button :foreign-type :id :accessor hyperspec-path-button)
-   (toolbar :foreign-type :id :accessor toolbar)
-   (general-prefs :foreign-type :id :accessor general-prefs)
-   (appearance-prefs :foreign-type :id :accessor appearance-prefs)
+  ((appearance-prefs :foreign-type :id :accessor appearance-prefs)
    (documentation-prefs :foreign-type :id :accessor documentation-prefs)
-   (encodings-prefs :foreign-type :id :accessor encodings-prefs))
+   (editor-tab-view-item :foreign-type :id :accessor editor-tab-view-item)
+   (encodings-prefs :foreign-type :id :accessor encodings-prefs)
+   (general-prefs :foreign-type :id :accessor general-prefs)
+   (hyperspec-path-button :foreign-type :id :accessor hyperspec-path-button)
+   (listener-tab-view-item :foreign-type :id :accessor listener-tab-view-item)
+   (swank-port-field :foreign-type :id :accessor swank-port-field)
+   (swank-protocol-label :foreign-type :id :accessor swank-protocol-label)
+   (tab-view :foreign-type :id :accessor tab-view)
+   (toolbar :foreign-type :id :accessor toolbar))
   (:metaclass ns:+ns-object))
 
 (objc:defmethod #/init ((self preferences-window-controller))
@@ -81,8 +83,15 @@
 
   self)
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+    (require :swank))
+
 (objc:defmethod (#/windowDidLoad :void) ((self preferences-window-controller))
-  (let* ((window (#/window self)))
+  (let* ((window (#/window self))
+         (swank-protocol-version swank::*swank-wire-protocol-version*)
+         (protocol-label (swank-protocol-label self))
+         (port-field (swank-port-field self))
+         (swank-port (or (preference-swank-port) *default-gui-swank-port*)))
     (with-slots (toolbar) self
       (setf toolbar (make-instance 'ns:ns-toolbar
 				   :with-identifier #@"preferences-window-toolbar"))
@@ -92,6 +101,10 @@
       ;; for some reason, setting this in IB doesn't work on Tiger/PPC32
       (#/setShowsToolbarButton: window nil)
       (#/release toolbar))
+    (ccl::with-autoreleased-nsstring (label-str (format nil "Swank protocol version: ~a" swank-protocol-version))
+      (#/setStringValue: protocol-label label-str))
+    (ccl::with-autoreleased-nsstring (port-string (format nil "~A" swank-port))
+      (#/setStringValue: port-field port-string))
     (#/showAppearancePrefs: self +null-ptr+)))
   
 (objc:defmethod (#/showWindow: :void) ((self preferences-window-controller)
