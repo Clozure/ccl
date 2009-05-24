@@ -400,6 +400,6 @@
       (gui::alert-window :title "No Update Available"
                          :message "No update is available. Your copy of CCL is up-to-date."))
     ;; Can't execute svn.
-    (gui::alert-window :title "Can't run svn."
-                       :message "The \"svn\" program doesn't appear to be instaled correctly.  Setting CCL::*SVN-PROGRAM* to the full pathname of your \"svn\" program may fix this.")))
+    (gui::alert-window :title "Can't run svn!"
+                       :message "The \"svn\" program can't be executed. If this is because it's installed in some directory not on this program's executable search path, setting CCL:*SVN-PROGRAM* to the full pathname of your \"svn\" program may fix this.")))
 
