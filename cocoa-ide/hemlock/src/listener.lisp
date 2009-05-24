@@ -30,22 +30,31 @@
     (hi::note-modeline-change where)))
 
 (define-file-option "Package" (buffer value)
-  (defhvar "Current Package"
-    "The package used for evaluation of Lisp in this buffer."
-    :buffer buffer
-    :value
-    (let ((thing (handler-case (read-from-string value t)
-                   (error () (editor-error "Bad package file option value")))))
-      (cond
-       ((or (stringp thing) (symbolp thing))
-	(string thing))
-       ((and (consp thing) ;; e.g. Package: (foo :use bar)
-             (or (stringp (car thing)) (symbolp (car thing))))
-        (string (car thing)))
-       (t
-	(message "Ignoring \"package:\" file option ~a" thing)
-        nil)))
-    :hooks (list 'package-name-change-hook)))
+  (let* ((thing (handler-case (read-from-string value t)
+                  (error () (editor-error "Bad package file option value"))))
+         (name
+          (cond
+           ((or (stringp thing) (symbolp thing))
+            (string thing))
+           ((and (consp thing) ;; e.g. Package: (foo :use bar)
+                 (or (stringp (car thing)) (symbolp (car thing))))
+            (string (car thing)))
+           (t
+            (message "Ignoring \"package:\" file option ~a" thing)
+            nil))))
+    (when name
+      (ignore-errors (let* ((*package* *package*))
+                       (apply 'ccl::old-in-package (if (atom thing) (list thing) thing)))))
+    (defhvar "Current Package"
+      "The package used for evaluation of Lisp in this buffer."
+      :buffer buffer
+      :value (or name (package-name *package*))
+      :hooks (list 'package-name-change-hook))
+    (defhvar "Default Package"
+      "The buffer's default package."
+      :buffer buffer
+      :value (or name (package-name *package*)))))
+      
 
 
 ;;;; Listener Mode Interaction.
