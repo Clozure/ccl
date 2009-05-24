@@ -131,6 +131,12 @@
     (#/setSelectedFont:isMultiple: font-manager font nil)
     (#/orderFrontFontPanel: font-manager self)))
 
+(objc:defmethod (#/startSwankServer: :void) ((self preferences-window-controller)
+					 sender)
+  (unless (or *ccl-swank-active-p* 
+              (try-starting-swank :force t))
+    (alert-window :message "Unable to start the Swank server.")))
+
 ;;; This message is sent to the first responder, which is why
 ;;; we do the *listener-or-editor* thing.
 (objc:defmethod (#/changeFont: :void) ((self preferences-window-controller)
