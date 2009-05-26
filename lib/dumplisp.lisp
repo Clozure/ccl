@@ -74,8 +74,7 @@
 			 prepend-kernel
 			 )
   (declare (ignore toplevel-function error-handler application-class
-                   clear-clos-caches init-file impurify
-		   mode prepend-kernel))
+                   clear-clos-caches init-file impurify))
   (unless (probe-file (make-pathname :defaults nil
                                      :directory (pathname-directory (translate-logical-pathname filename))))
     (error "Directory containing ~s does not exist." filename))
@@ -85,28 +84,32 @@
   (let* ((ip *initial-process*)
 	 (cp *current-process*))
     (when (process-verify-quit ip)
-      (process-interrupt ip
-			 #'(lambda ()
-			     (process-exit-application
-			      *current-process*
-			      #'(lambda ()
-				  (apply #'%save-application-internal
-					 filename
-					 :purify purify
-					 rest)))))
+      (let* ((fd (open-dumplisp-file filename
+                                     :mode mode
+                                     :prepend-kernel prepend-kernel)))
+        (process-interrupt ip
+                           #'(lambda ()
+                               (process-exit-application
+                                *current-process*
+                                #'(lambda ()
+                                    (apply #'%save-application-internal
+                                           fd
+                                           :purify purify
+                                           rest))))))
       (unless (eq cp ip)
 	(process-kill cp)))))
 
-(defun %save-application-internal (filename &key
-                                            toplevel-function ;???? 
-                                            error-handler ; meaningless unless application-class or *application* not lisp-development..
-                                            application-class
-					    (mode #o644)
-                                            (purify t)
-                                            (impurify nil)
-					    (init-file nil init-file-p)
-                                            (clear-clos-caches t)
-					    (prepend-kernel nil))
+(defun %save-application-internal (fd &key
+                                      toplevel-function ;???? 
+                                      error-handler ; meaningless unless application-class or *application* not lisp-development..
+                                      application-class
+                                      mode
+                                      (purify t)
+                                      (impurify nil)
+                                      (init-file nil init-file-p)
+                                      (clear-clos-caches t)
+                                      prepend-kernel)
+  (declare (ignore mode prepend-kernel))
   (when (and application-class (neq  (class-of *application*)
                                      (if (symbolp application-class)
                                        (find-class application-class)
@@ -131,12 +134,9 @@
     (make-application-error-handler *application* error-handler))
   
   (if clear-clos-caches (clear-clos-caches))
-  (save-image (let ((fd (open-dumplisp-file filename
-					    :mode mode
-					    :prepend-kernel prepend-kernel)))
-                #'(lambda () (%save-application fd
-                                                (logior (if impurify 2 0)
-                                                        (if purify 1 0)))))
+  (save-image #'(lambda () (%save-application fd
+                                              (logior (if impurify 2 0)
+                                                      (if purify 1 0))))
               toplevel-function))
 
 (defun save-image (save-function toplevel-function)
@@ -205,16 +205,30 @@
 	      (unless (= nwritten nread)
 		(error "I/O error writing to fd ~d" out-fd)))
 	    (decf len nread))))))
-    
+
+
+
+(defun kernel-path ()
+  (let* ((p (%null-ptr)))
+    (declare (dynamic-extent p))
+    (%get-kernel-global-ptr 'kernel-path p)
+    (if (%null-ptr-p p)
+      (%realpath (car *command-line-argument-list*))
+      (let* ((string (%get-utf-8-cstring p)))
+        #+windows-target (nbackslash-to-forward-slash string)
+        #+darwin-target (precompose-simple-string string)
+        #-(or windows-target darwin-target) string))))
+
+
 (defun open-dumplisp-file (path &key (mode #o666) prepend-kernel)
-  (let* ((prepend-fd (if prepend-kernel (fd-open
-					 (if (eq prepend-kernel t)
-					   (car *command-line-argument-list*)
-					   (native-translated-namestring
-					    (pathname prepend-kernel)))
-                                         #$O_RDONLY)))
+  (let* ((prepend-path (if (eq prepend-kernel t)
+                         (kernel-path)
+                         (native-translated-namestring
+                          (pathname prepend-kernel))))
+         (prepend-fd (if prepend-kernel (fd-open prepend-path #$O_RDONLY)))
 	 (prepend-len (if (and prepend-fd (>= prepend-fd 0))
-			(skip-embedded-image prepend-fd)))
+			(skip-embedded-image prepend-fd)
+                        (signal-file-error prepend-fd prepend-path)))
 	 (filename (native-translated-namestring path)))
     (when (probe-file filename)
       (%delete-file filename))
