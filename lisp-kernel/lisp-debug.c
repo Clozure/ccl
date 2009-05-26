@@ -529,7 +529,6 @@ debug_lisp_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
       fprintf(dbgout,"%%rcx (nargs) = %ld (maybe)\n", unbox_fixnum(xpGPR(xp,Inargs)&0xffff));
     }
 #endif
-  }
 
 #ifdef X8632
   show_lisp_register(xp, "arg_z", Iarg_z);
@@ -544,6 +543,7 @@ debug_lisp_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
     fprintf(dbgout,"%%edx (nargs) = %d (maybe)\n", unbox_fixnum(xpGPR(xp,Inargs)));
   }
 #endif
+  }
   
   return debug_continue;
 }
