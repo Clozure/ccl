@@ -55,7 +55,7 @@
     statically-linked                   ; true if the lisp kernel is statically linked
     stack-size                          ; value of --stack-size arg
     objc-2-begin-catch                  ; objc_begin_catch
-    bad-funcall                         ; pseudo-target for funcall
+    kernel-path
     all-areas                           ; doubly-linked area list
     lexpr-return                        ; multiple-value lexpr return address
     lexpr-return1v                      ; single-value lexpr return address

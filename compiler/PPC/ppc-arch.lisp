@@ -252,7 +252,7 @@
     statically-linked                   ; true if the lisp kernel is statically linked
     stack-size                          ; weak gc policy/algorithm
     objc-2-begin-catch                  ; objc_begin_catch
-    bad-cs-overflow-limit               ; limit for control-stack overflow check
+    kernel-path
     all-areas                           ; doubly-linked area list
     lexpr-return                        ; multiple-value lexpr return address
     lexpr-return1v                      ; single-value lexpr return address
