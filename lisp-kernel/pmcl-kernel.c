@@ -152,9 +152,6 @@ bitvector global_mark_ref_bits = NULL;
 extern LispObj ret1valn;
 extern LispObj nvalret;
 extern LispObj popj;
-#ifdef X86
-extern LispObj bad_funcall;
-#endif
 
 LispObj text_start = 0;
 
@@ -948,6 +945,24 @@ char *real_executable_name = NULL;
 #endif
 
 #ifndef WINDOWS
+
+char *
+ensure_real_path(char *path)
+{
+  char buf[PATH_MAX*2], *p, *q;
+  int n;
+
+  p = realpath(path, buf);
+  
+  if (p == NULL) {
+    return path;
+  }
+  n = strlen(p);
+  q = malloc(n+1);
+  strcpy(q,p);
+  return q;
+}
+
 char *
 determine_executable_name(char *argv0)
 {
@@ -959,9 +974,9 @@ determine_executable_name(char *argv0)
     p = malloc(len+1);
     memmove(p, exepath, len);
     p[len]=0;
-    return p;
+    return ensure_real_path(p);
   } 
-  return argv0;
+  return ensure_real_path(argv0);
 #endif
 #ifdef LINUX
   char exepath[PATH_MAX], *p;
@@ -976,7 +991,7 @@ determine_executable_name(char *argv0)
   return argv0;
 #endif
 #ifdef FREEBSD
-  return argv0;
+  return ensure_real_path(argv0);
 #endif
 #ifdef SOLARIS
   char exepath[PATH_MAX], proc_path[PATH_MAX], *p;
@@ -990,9 +1005,37 @@ determine_executable_name(char *argv0)
     p[n]=0;
     return p;
   }
-  return argv0;
+  return ensure_real_path(argv0);
 #endif
-  return argv0;
+  return ensure_real_path(argv0);
+}
+#endif
+
+#ifdef WINDOWS
+wchar_t *
+ensure_real_path(wchar_t *path)
+{
+  int bufsize = 256, n;
+
+  do {
+    wchar_t buf[bufsize];
+
+    n = GetFullPathnameW(path,bufsize,buf,NULL);
+    if (n == 0) {
+      return path;
+    }
+
+    if (n < bufsize) {
+      int i;
+      wchar *q = calloc(n+1,sizeof(wchar_t));
+
+      for (i = 0; i < n; i++) {
+        q[i] = buf[i];
+      }
+      return q;
+    }
+    bufsize = n+1;
+  }
 }
 #endif
 
@@ -1790,9 +1833,6 @@ main(int argc, char *argv[]
   lisp_global(LEXPR_RETURN) = (LispObj)&nvalret;
   lisp_global(LEXPR_RETURN1V) = (LispObj)&popj;
   lisp_global(ALL_AREAS) = ptr_to_lispobj(all_areas);
-#ifdef X86
-  lisp_global(BAD_FUNCALL) = ptr_to_lispobj(&bad_funcall);
-#endif
   lisp_global(DEFAULT_ALLOCATION_QUANTUM) = log2_heap_segment_size << fixnumshift;
   lisp_global(STACK_SIZE) = thread_stack_size<<fixnumshift;
 
@@ -1802,10 +1842,12 @@ main(int argc, char *argv[]
   
 
 #ifdef WINDOWS
-  lisp_global(IMAGE_NAME) = ptr_to_lispobj(utf_16_to_utf_8(image_name));
+  lisp_global(IMAGE_NAME) = ptr_to_lispobj(utf_16_to_utf_8(ensure_real_path(image_name)));
+  lisp_global(KERNEL_PATH) = ptr_to_lispobj(utf_16_to_utf_8(real_executable_name));
   lisp_global(ARGV) = ptr_to_lispobj(wide_argv_to_utf_8(utf_16_argv, argc));
 #else
-  lisp_global(IMAGE_NAME) = ptr_to_lispobj(image_name);
+  lisp_global(IMAGE_NAME) = ptr_to_lispobj(ensure_real_path(image_name));
+  lisp_global(KERNEL_PATH) = ptr_to_lispobj(real_executable_name);
   lisp_global(ARGV) = ptr_to_lispobj(argv);
 #endif
   lisp_global(KERNEL_IMPORTS) = (LispObj)import_ptrs_base;
