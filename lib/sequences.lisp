@@ -446,6 +446,44 @@
        ;(setq lengths (nconc lengths (list length))) ; if itsa list, we dont care about its length, if itsan array, length twice is cheap
        (setq total-length (+ total-length length)))))
 
+(defun concat-to-string (&rest sequences)
+  (declare (dynamic-extent sequences))
+  (let* ((size 0))
+    (declare (fixnum size))
+    (dolist (seq sequences)
+      (setq size (+ size (the fixnum (length seq)))))
+    (let* ((result (make-string size))
+           (out 0))
+      (declare (simple-string result) (fixnum out))
+      (dolist (seq sequences result)
+        (etypecase seq
+          (simple-string
+           (let* ((n (length seq)))
+             (declare (fixnum n))
+             (%copy-ivector-to-ivector seq
+                                       0
+                                       result
+                                       (the fixnum (ash out 2))
+                                       (the fixnum (ash n 2)))
+             (incf out n)))
+          (string
+           (let* ((n (length seq)))
+             (declare (fixnum n))
+             (multiple-value-bind (data offset) (array-data-and-offset seq)
+               (declare (fixnum offset))
+               (%copy-ivector-to-ivector data
+                                         (the fixnum (ash offset 2))
+                                         result
+                                         (the fixnum (ash out 2))
+                                         (the fixnum (ash n 2)))
+               (incf out n))))
+          (vector
+           (dotimes (i (length seq))
+             (setf (schar result out) (aref seq i))
+             (incf out)))
+          (list
+           (dolist (elt seq)
+             (setf (schar result out) elt))))))))
 
 ;This one doesn't choke on circular lists, doesn't cons as much, and is
 ;about 1/8K smaller to boot.
