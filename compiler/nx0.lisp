@@ -369,9 +369,7 @@ function to the indicated name is true.")
         (if (setq f (getf *nx-standard-declaration-handlers* s))
           (funcall f pending spec env))
         ; Any type name is now (ANSI CL) a valid declaration.
-	(if (symbolp s)
-	  (nx-process-type-decl pending spec s (%cdr spec) env)
-	  (nx-bad-decls spec))))))
+	(nx-process-type-decl pending spec s (%cdr spec) env)))))
 
 ; Put all variable decls for the symbol VAR into effect in environment ENV.  Now.
 ; Returns list of all new vdecls pertaining to VAR.

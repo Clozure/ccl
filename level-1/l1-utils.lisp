@@ -516,9 +516,12 @@ vector
 ))
 
 ;; Redefined in sysutils.
-(%fhave 'type-specifier-p
-        (qlfun bootstrapping-type-specifier-p (name)
+(%fhave 'specifier-type-if-known
+        (qlfun bootstrapping-type-specifier-p (name &optional env &key &allow-other-keys)
+          (declare (ignore env))
           (memq name *cl-types*)))
+
+
 
 (defun proclaim (spec)
   (case (car spec)
@@ -535,7 +538,7 @@ vector
     (function (apply #'proclaim-type spec))
     (t (unless (memq (%car spec) *nx-known-declarations*)
          ;; Any type name is now (ANSI CL) a valid declaration.  Any symbol could become a type.
-         (if (symbolp (%car spec))
+         (if (specifier-type-if-known (%car spec))
            (apply #'proclaim-type spec)
            (warn "Unknown declaration specifier(s) in ~S" spec))))))
 
