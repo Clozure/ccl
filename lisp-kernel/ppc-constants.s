@@ -207,7 +207,7 @@ num_lisp_globals = 48		 /* MUST UPDATE THIS !!! */
 	 _node(lexpr_return) 		/* magic &lexpr return code. */
 	 _node(all_areas) 		/* doubly-linked list of all memory areas */
 	 _node(BAD_cs_overflow_limit) 	/* limit for control-stack overflow check */
-	 _node(BAD_current_ts) 		/* current temp-stack area */
+	 _node(kernel_name) 		/* real executable name */
 	 _node(BAD_current_vs) 		/* current value-stack area */
 	 _node(statically_linked)	/* non-zero if -static */
 	 _node(heap_end)                /* end of lisp heap */

@@ -88,7 +88,7 @@ num_lisp_globals = 48		 /* MUST UPDATE THIS !!!   */
 	 _node(lexpr_return1v) 		/* simpler when &lexpr called for single value.   */
 	 _node(lexpr_return) 		/* magic &lexpr return code.   */
 	 _node(all_areas) 		/* doubly-linked list of all memory areas   */
-	 _node(bad_funcall)	 	/* pseudo-funcall target for cmove   */
+	 _node(kernel_path)	 	/* real executable name */
 	 _node(objc2_begin_catch)	/* objc_begin_catch   */
 	 _node(BAD_current_vs) 		/* current value-stack area   */
 	 _node(statically_linked)	/* non-zero if -static   */

@@ -47,7 +47,7 @@ extern LispObj lisp_nil;
 #define STATICALLY_LINKED (-25)        /* non-zero if -static */
 #define STACK_SIZE (-26)        /* from the command line */
 #define OBJC_2_BEGIN_CATCH (-27)  /* address of ObjC 2.0 objc_begin_catch() */
-#define BAD_FUNCALL (-28)       /* funcall pseudo-target on x86 */
+#define KERNEL_PATH (-28)       /* real executable name */
 #define ALL_AREAS (-29)         /* doubly-linked list of stack & heap areas */
 #define LEXPR_RETURN (-30)      /* magic &lexpr cleanup code */
 #define LEXPR_RETURN1V (-31)    /* single-value &lexpr cleanup code */
