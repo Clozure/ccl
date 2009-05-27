@@ -454,6 +454,7 @@
 (bind-key "Indent Rigidly" #k"control-x control-i")
 
 (bind-key "Indent New Line" #k"linefeed")
+(bind-key "Indent New Line" #k"control-return")
 (bind-key "Indent" #k"tab")
 (bind-key "Indent" #k"control-i")
 (bind-key "Indent Region" #k"control-meta-\\")
