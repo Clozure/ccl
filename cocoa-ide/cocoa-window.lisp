@@ -49,7 +49,8 @@
 		 :unsigned-byte (if flag #$YES #$NO)
 		 :void))
 
-(defclass appkit-process (process) ())
+(defclass appkit-process (process)
+    ((have-interactive-terminal-io :initform t)))
 
 ;;; Interrupt the AppKit event process, by enqueing an event (if the
 ;;; application event loop seems to be running.)  It's possible that
@@ -62,6 +63,14 @@
     (apply function args)
     (if (and *NSApp* (#/isRunning *NSApp*))
       (queue-for-gui #'(lambda () (apply function args)) :at-start t)
+      #+not-yet
+      (let* ((invoked nil)
+             (f (lambda ()
+                  (unless invoked
+                    (setq invoked t)
+                    (apply function args)))))
+        (queue-for-gui f :at-start t)
+        (call-next-method process f))
       (call-next-method))))
 
 (defparameter *debug-in-event-process* t)
@@ -76,29 +85,31 @@
                 condition)))
       (unless (or (not (typep c 'error)) (member c *event-process-reported-conditions*))
         (push c *event-process-reported-conditions*)
-        (catch 'need-a-catch-frame-for-backtrace
-          (let* ((*debug-in-event-process* nil)
-                 (context (ccl::new-backtrace-info nil
-						   frame-pointer
-						   (if ccl::*backtrace-contexts*
+        (if (slot-value process 'have-interactive-terminal-io)
+          (ccl::application-error ccl::*application* c frame-pointer)
+          (catch 'need-a-catch-frame-for-backtrace
+            (let* ((*debug-in-event-process* nil)
+                   (context (ccl::new-backtrace-info nil
+                                                     frame-pointer
+                                                     (if ccl::*backtrace-contexts*
 						       (or (ccl::child-frame
 							    (ccl::bt.youngest (car ccl::*backtrace-contexts*))
 							    nil)
 							   (ccl::last-frame-ptr))
 						       (ccl::last-frame-ptr))
-						   (ccl::%current-tcr)
-						   condition
-						   (ccl::%current-frame-ptr)
-						   #+ppc-target ccl::*fake-stack-frames*
-						   #+x86-target (ccl::%current-frame-ptr)
-						   (ccl::db-link)
-						   (1+ ccl::*break-level*)))
-                 (ccl::*backtrace-contexts* (cons context ccl::*backtrace-contexts*)))  
-            (format t "~%~%*** Error in event process: ~a~%~%" condition)
-            (print-call-history :context context :detailed-p t :count 20 :origin frame-pointer)
-            (format t "~%~%~%")
-            (force-output t)
-            ))))))
+                                                     (ccl::%current-tcr)
+                                                     condition
+                                                     (ccl::%current-frame-ptr)
+                                                     #+ppc-target ccl::*fake-stack-frames*
+                                                     #+x86-target (ccl::%current-frame-ptr)
+                                                     (ccl::db-link)
+                                                     (1+ ccl::*break-level*)))
+                   (ccl::*backtrace-contexts* (cons context ccl::*backtrace-contexts*)))  
+              (format t "~%~%*** Error in event process: ~a~%~%" condition)
+              (print-call-history :context context :detailed-p t :count 20 :origin frame-pointer)
+              (format t "~%~%~%")
+              (force-output t)
+              )))))))
 
 
 (defloadvar *default-ns-application-proxy-class-name*
@@ -152,16 +163,20 @@
 
 (defun event-loop (&optional end-test)
   (let* ((app *NSApp*)
-         (ccl::*break-on-errors* nil))
+         (thread ccl::*current-process*))
     (loop
-      (handler-case (let* ((*event-process-reported-conditions* nil))
-		      (if end-test
-			(#/run app)
-			#|(#/runMode:beforeDate: (#/currentRunLoop ns:ns-run-loop)
-					       #&NSDefaultRunLoopMode
-					       (#/distantFuture ns:ns-date))|#
-			(#/run app)))
-	(error (c) (nslog-condition c)))
+      (if (not (slot-value thread 'have-interactive-terminal-io))
+        (let* ((ccl::*break-on-errors* nil))
+          (handler-case (let* ((*event-process-reported-conditions* nil))
+                          (if end-test
+                            (#/run app)
+                          #|(#/runMode:beforeDate: (#/currentRunLoop ns:ns-run-loop)
+                          #&NSDefaultRunLoopMode
+                          (#/distantFuture ns:ns-date))|#
+                          (#/run app))))
+          (error (c) (nslog-condition c)))
+        (with-simple-restart (abort "Process the next event")
+          (#/run app)))
       #+debug (log-debug "~&runMode exited, end-test: ~s isRunning ~s quitting: ~s" end-test (#/isRunning app) ccl::*quitting*)
       (when (or (and end-test (funcall end-test))
 		(and ccl::*quitting* (not (#/isRunning app))))
