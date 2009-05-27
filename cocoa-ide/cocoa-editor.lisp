@@ -786,13 +786,20 @@
          (position (pref r :<NSR>ange.location))
 	 (length (pref r :<NSR>ange.length))
 	 (lisp-string (if (> (#/length string) 0) (lisp-string-from-nsstring string)))
-         (view (front-view-for-buffer buffer)))
-    (hi::with-mark ((m (hi::buffer-point buffer)))
-      (hi::move-to-absolute-position m position)
-      (when (> length 0)
-        (hi::delete-characters m length))
-      (when lisp-string
-        (hi::insert-string m lisp-string)))
+         (view (front-view-for-buffer buffer))
+         (edit-count (slot-value self 'edit-count)))
+    ;; #!#@#@* find panel neglects to call #/beginEditing / #/endEditing.
+    (when (eql 0 edit-count)
+      (#/beginEditing self))
+    (unwind-protect
+         (hi::with-mark ((m (hi::buffer-point buffer)))
+           (hi::move-to-absolute-position m position)
+           (when (> length 0)
+             (hi::delete-characters m length))
+           (when lisp-string
+             (hi::insert-string m lisp-string)))
+      (when (eql 0 edit-count)
+        (#/endEditing self)))
     (when view
       (setf (hi::hemlock-view-quote-next-p view) nil))))
 
@@ -983,6 +990,7 @@
 (objc:defmethod (#/mouseDown: :void) ((self hemlock-textstorage-text-view) event)
   ;; If no modifier keys are pressed, send hemlock a no-op.
   ;; (Or almost a no-op - this does an update-hemlock-selection as a side-effect)
+
   (unless (logtest #$NSDeviceIndependentModifierFlagsMask (#/modifierFlags event))
     (let* ((view (hemlock-view self)))
       (when view
@@ -3067,7 +3075,8 @@
           ;; fixed, this should be fixed as well.
           (#/beginEditing textstorage)
 	  (#/replaceCharactersInRange:withString: textstorage selectedrange string)
-          (#/endEditing textstorage))))))
+          (#/endEditing textstorage)
+          (update-hemlock-selection textstorage) )))))
 
 
 (objc:defmethod (#/hyperSpecLookUp: :void)
