@@ -1020,14 +1020,14 @@ ensure_real_path(wchar_t *path)
   do {
     wchar_t buf[bufsize];
 
-    n = GetFullPathnameW(path,bufsize,buf,NULL);
+    n = GetFullPathNameW(path,bufsize,buf,NULL);
     if (n == 0) {
       return path;
     }
 
     if (n < bufsize) {
       int i;
-      wchar *q = calloc(n+1,sizeof(wchar_t));
+      wchar_t *q = calloc(n+1,sizeof(wchar_t));
 
       for (i = 0; i < n; i++) {
         q[i] = buf[i];
@@ -1035,7 +1035,7 @@ ensure_real_path(wchar_t *path)
       return q;
     }
     bufsize = n+1;
-  }
+  } while (1);
 }
 #endif
 
