@@ -586,6 +586,7 @@ not runtime errors reported by a successfully created process."
                         (run-program
                          (format nil "./~a" (standard-kernel-name))
                          (list* "--image-name" (standard-boot-image-name)
+                                "--batch"
                                 reload-arguments)
                          :input cmd
                          :output output
