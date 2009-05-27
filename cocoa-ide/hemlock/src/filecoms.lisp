@@ -125,6 +125,10 @@
 	  (return seen-major-mode-p))
 	(setf lastpos (1+ pos))))))
 
+(define-file-option "log" (buffer string)
+  (declare (ignore buffer string)))
+
+
 
 (defmacro define-file-type-hook (type-list (buffer type) &body body)
   "Define-File-Type-Hook ({Type}*) (Buffer Type) {Form}*
