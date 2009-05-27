@@ -197,7 +197,7 @@ between the region's start and end, and if there are no ill-formed expressions i
                       (copy-mark (region-end input-region) :right-inserting)))))
 
     (when input-region
-      (insert-character (current-point) #\NewLine)
+      (insert-character (current-point-for-insertion) #\NewLine)
       (when (balanced-expressions-in-region input-region)
         (let* ((string (region-to-string input-region))               )
           (push (cons r nil) (value input-regions))
