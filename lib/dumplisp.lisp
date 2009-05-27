@@ -221,14 +221,16 @@
 
 
 (defun open-dumplisp-file (path &key (mode #o666) prepend-kernel)
-  (let* ((prepend-path (if (eq prepend-kernel t)
-                         (kernel-path)
-                         (native-translated-namestring
-                          (pathname prepend-kernel))))
-         (prepend-fd (if prepend-kernel (fd-open prepend-path #$O_RDONLY)))
-	 (prepend-len (if (and prepend-fd (>= prepend-fd 0))
-			(skip-embedded-image prepend-fd)
-                        (signal-file-error prepend-fd prepend-path)))
+  (let* ((prepend-path (if prepend-kernel
+                         (if (eq prepend-kernel t)
+                           (kernel-path)
+                           (native-translated-namestring
+                          (pathname prepend-kernel)))))
+         (prepend-fd (if prepend-path (fd-open prepend-path #$O_RDONLY)))
+	 (prepend-len (if prepend-kernel
+                        (if (and prepend-fd (>= prepend-fd 0))
+                          (skip-embedded-image prepend-fd)
+                          (signal-file-error prepend-fd prepend-path))))
 	 (filename (native-translated-namestring path)))
     (when (probe-file filename)
       (%delete-file filename))
