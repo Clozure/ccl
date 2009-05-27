@@ -360,7 +360,7 @@
   (let ((jumps (new-search-vector))
 	(len (length vec)))
     (declare (simple-vector jumps))
-    (when (zerop len) (error "Zero length search string not allowed."))
+    (when (zerop len) (editor-error "Zero length search string not allowed."))
     ;; The default jump is the length of the search string.
     (dotimes (i search-char-code-limit)
       (setf (aref jumps i) len))
