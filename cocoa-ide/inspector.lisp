@@ -197,6 +197,7 @@ Make preferences for fonts, key commands
   (let* ((wc (make-instance 'ninspector-window-controller))
          (ii (make-inspector-item ob)))
     (push-inspector-item wc ii)
+    (#/showWindow: wc nil)
     wc))
 
 (defmethod push-inspector-item ((wc ninspector-window-controller) (ii inspector-item))
