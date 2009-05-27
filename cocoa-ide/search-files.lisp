@@ -144,7 +144,25 @@
 
 
 (objc:defmethod #/init ((self search-files-window-controller))
-  (#/initWithWindowNibName: self #@"SearchFiles"))
+  (prog1
+      (#/initWithWindowNibName: self #@"SearchFiles")
+    (#/setShouldCascadeWindows: self nil)))
+
+(defloadvar *search-files-cascade-point* (ns:make-ns-point 0 0))
+
+(objc:defmethod (#/windowDidLoad :void) ((wc search-files-window-controller))
+  ;; Cascade window from the top left point of the topmost search files window.
+  (flet ((good-window-p (w)
+           (and (not (eql w (#/window wc)))
+                (eql (#/class (#/windowController w))
+                     (find-class 'search-files-window-controller)))))
+    (let* ((dialogs (remove-if-not #'good-window-p (gui::windows)))
+           (top-dialog (car dialogs)))
+      (if top-dialog
+        (ns:with-ns-point (zp 0 0)
+          (setq *search-files-cascade-point*
+                (#/cascadeTopLeftFromPoint: top-dialog zp))))))
+  (#/cascadeTopLeftFromPoint: (#/window wc) *search-files-cascade-point*))
 
 (objc:defmethod (#/awakeFromNib :void) ((wc search-files-window-controller))
   (#/setStringValue: (status-field wc) #@"")
