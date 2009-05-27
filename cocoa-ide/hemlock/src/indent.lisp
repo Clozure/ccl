@@ -181,7 +181,7 @@
   "Inserts a newline into the buffer without moving the point."
   "Inserts a newline into the buffer without moving the point.
   With argument, inserts p newlines."
-  (let ((point (current-point))
+  (let ((point (current-point-collapsing-selection))
 	(count (if p p 1)))
     (if (not (minusp count))
 	(dotimes (i count)
@@ -195,11 +195,13 @@
   A newline is inserted.
   With an argument, repeats p times."
   "Moves the point to a new blank line."
-  (let ((point (current-point))
+  (let ((point (current-point-for-insertion))
 	(count (if p p 1)))
     (if (not (minusp count))
       (dotimes (i count) (insert-character point #\newline))
       (editor-error))))
+
+
 
 
 (defattribute "Space"
