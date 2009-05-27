@@ -42,6 +42,8 @@ cocoa-ide/ide-contents/Resources/English.lproj/MainMenu.nib/keyedobjects.nib -te
 cocoa-ide/ide-contents/Resources/English.lproj/OpenmclInspector.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/ProgressWindow.nib/designable.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/ProgressWindow.nib/keyedobjects.nib -text
+cocoa-ide/ide-contents/Resources/English.lproj/SearchFiles.nib/classes.nib -text
+cocoa-ide/ide-contents/Resources/English.lproj/SearchFiles.nib/info.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/SearchFiles.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/apropos.nib/classes.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/apropos.nib/info.nib -text
