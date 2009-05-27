@@ -282,11 +282,13 @@
 
 (pushnew '(log-debug . 0) ccl::*format-arg-functions* :test #'equal)
 
-(defun nslog-condition (c)
+(defun nslog-condition (c &optional (msg "Error in event loop: "))
   (let* ((rep (format nil "~a" c)))
-    (with-cstrs ((str rep))
+    (with-cstrs ((str rep)
+                 (msg-str msg))
       (with-nsstr (nsstr str (length rep))
-	(#_NSLog #@"Error in event loop: %@" :address nsstr)))))
+        (with-nsstr (nsmsg msg-str (length msg))
+         (#_NSLog #@"%@: %@" :address nsmsg :address nsstr))))))
 
 (defun nsstring-for-lisp-condition (cond)
   (%make-nsstring (double-%-in (or (ignore-errors (princ-to-string cond))

@@ -179,6 +179,7 @@ cocoa-ide/slime/test-all.sh -text
 cocoa-ide/slime/test.sh -text
 cocoa-ide/slime/xref.lisp -text
 cocoa-ide/start.lisp -text
+cocoa-ide/swank-ccl-ide.el -text
 cocoa-ide/swank.lisp -text
 cocoa-ide/xapropos.lisp -text
 cocoa-ide/xinspector.lisp -text
