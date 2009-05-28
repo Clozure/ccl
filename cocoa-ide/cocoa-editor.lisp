@@ -1511,42 +1511,6 @@
 
 ;;; Modeline-view
 
-;;; The modeline view is embedded in the horizontal scroll bar of the
-;;; scrollview which surrounds the textview in a pane.  (A view embedded
-;;; in a scrollbar like this is sometimes called a "placard").  Whenever
-;;; the view's invalidated, its drawRect: method draws a string containing
-;;; the current values of the buffer's modeline fields.
-
-(defparameter *modeline-grays* #(255 255 253 247 242 236 231
-				 224 229 234 239 245 252 255))
-
-(defparameter *modeline-height* 14)
-(defloadvar *modeline-pattern-image* nil)
-
-(defun create-modeline-pattern-image ()
-  (let* ((n (length *modeline-grays*)))
-    (multiple-value-bind (samples-array samples-macptr)
-	(make-heap-ivector n '(unsigned-byte 8))
-      (dotimes (i n)
-	(setf (aref samples-array i) (aref *modeline-grays* i)))
-      (rlet ((p :address samples-macptr))
-	(let* ((rep (make-instance 'ns:ns-bitmap-image-rep
-				   :with-bitmap-data-planes p
-				   :pixels-wide 1
-				   :pixels-high n
-				   :bits-per-sample 8
-				   :samples-per-pixel 1
-				   :has-alpha #$NO
-				   :is-planar #$NO
-				   :color-space-name #&NSDeviceWhiteColorSpace
-				   :bytes-per-row 1
-				   :bits-per-pixel 8))
-	       (image (make-instance 'ns:ns-image
-				     :with-size (ns:make-ns-size 1 n))))
-	  (#/addRepresentation: image rep)
-	  (#/release rep)
-	  (setf *modeline-pattern-image* image))))))
-
 (defclass modeline-view (ns:ns-view)
     ((pane :foreign-type :id :accessor modeline-view-pane)
      (text-attributes :foreign-type :id :accessor modeline-text-attributes))
@@ -1554,8 +1518,6 @@
 
 (objc:defmethod #/initWithFrame: ((self modeline-view) (frame :<NSR>ect))
   (call-next-method frame)
-  (unless *modeline-pattern-image*
-    (create-modeline-pattern-image))
   (let* ((size (#/smallSystemFontSize ns:ns-font))
 	 (font (#/systemFontOfSize: ns:ns-font size))
 	 (dict (#/dictionaryWithObject:forKey: ns:ns-dictionary font #&NSFontAttributeName)))
@@ -1595,10 +1557,7 @@
   (let* ((bounds (#/bounds self))
 	 (context (#/currentContext ns:ns-graphics-context)))
     (#/saveGraphicsState context)
-    (ns:with-ns-point (p0 0 (ns:ns-rect-height bounds))
-      (let ((p1 (#/convertPoint:toView: self p0 +null-ptr+)))
-	(#/setPatternPhase: context p1)))
-    (#/set (#/colorWithPatternImage: ns:ns-color *modeline-pattern-image*))
+    (#/set (#/colorWithCalibratedWhite:alpha: ns:ns-color 0.9 1.0))
     (#_NSRectFill bounds)
     (#/set (#/colorWithCalibratedWhite:alpha: ns:ns-color 0.3333 1.0))
     (ns:with-ns-rect (r 0 0.5 (ns:ns-rect-width bounds) 0.5)
@@ -1606,7 +1565,6 @@
     (ns:with-ns-rect (r 0 (- (ns:ns-rect-height bounds) 0.5)
 			(ns:ns-rect-width bounds) (- (ns:ns-rect-height bounds) 0.5))
       (#_NSRectFill r))
-    (#/set (#/blackColor ns:ns-color))
     (draw-modeline-string self)
     (#/restoreGraphicsState context)))
 
@@ -1845,6 +1803,7 @@
                                                        15))))
         (#/setAutoresizingMask: modeline #$NSViewWidthSizable)
         (#/addSubview: pane modeline)
+        (#/release modeline)
         (setf (slot-value pane 'mode-line) modeline
               (slot-value modeline 'pane) pane))
       tv)))
