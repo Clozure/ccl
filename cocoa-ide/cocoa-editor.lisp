@@ -1757,7 +1757,7 @@
 (defun make-scrolling-text-view-for-textstorage (textstorage x y width height tracks-width color style)
   (let* ((scrollview (#/autorelease
                       (make-instance
-                       'modeline-scroll-view
+                       'ns:ns-scroll-view
                        :with-frame (ns:make-ns-rect x y width height)))))
     (#/setBorderType: scrollview #$NSNoBorder)
     (#/setHasVerticalScroller: scrollview t)
@@ -1829,12 +1829,22 @@
 	 track-width
          color
          style)
-      (#/setContentView: pane scrollview)
+      (#/addSubview: pane scrollview)
+      (let* ((r (#/frame scrollview)))
+        (decf (ns:ns-rect-height r) 15)
+        (incf (ns:ns-rect-y r) 15)
+        (#/setFrame: scrollview r))
+      (#/setAutohidesScrollers: scrollview t)
       (setf (slot-value pane 'scroll-view) scrollview
             (slot-value pane 'text-view) tv
             (slot-value tv 'pane) pane
-            (slot-value scrollview 'pane) pane)
-      (let* ((modeline  (scroll-view-modeline scrollview)))
+            #|(slot-value scrollview 'pane) pane|#)
+      ;;(let* ((modeline  (scroll-view-modeline scrollview)))
+      (let* ((modeline  (make-instance 'modeline-view
+                          :with-frame (ns:make-ns-rect 0 0 (ns:ns-rect-width contentrect)
+                                                       15))))
+        (#/setAutoresizingMask: modeline #$NSViewWidthSizable)
+        (#/addSubview: pane modeline)
         (setf (slot-value pane 'mode-line) modeline
               (slot-value modeline 'pane) pane))
       tv)))
