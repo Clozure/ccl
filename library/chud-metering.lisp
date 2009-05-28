@@ -119,6 +119,15 @@ in the finder"
   (box-fixnum imm0 arg_z)
   (single-value-return))
 
+#+x8632-target
+(ccl::defx8632lapfunction dynamic-dnode ((x arg_z))
+  (movl (% x) (% imm0))
+  (ref-global x86::heap-start arg_y)
+  (subl (% arg_y) (% imm0))
+  (shrl ($ x8632::dnode-shift) (% imm0))
+  (box-fixnum imm0 arg_z)
+  (single-value-return))
+
 #+x8664-target
 (defun identify-functions-with-pure-code ()
   (ccl::freeze)
@@ -130,6 +139,22 @@ in the finder"
                              (return-from walk nil))
                            (when (typep o 'ccl::function-vector)
                              (functions (ccl::function-vector-to-function o))))
+                         ccl::area-dynamic
+                         ccl::area-dynamic
+                         )))
+    (functions)))
+
+#+x8632-target
+(defun identify-functions-with-pure-code ()
+  (ccl::freeze)
+  (ccl::collect ((functions))
+    (block walk
+      (let* ((frozen-dnodes (ccl::frozen-space-dnodes)))
+        (ccl::%map-areas (lambda (o)
+                           (when (>= (dynamic-dnode o) frozen-dnodes)
+                             (return-from walk nil))
+                           (when (typep o 'function)
+                             (functions o)))
                          ccl::area-dynamic
                          ccl::area-dynamic
                          )))
