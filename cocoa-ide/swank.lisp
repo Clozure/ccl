@@ -44,47 +44,12 @@
 (load #P"ccl:cocoa-ide;slime;swank-loader.lisp")
 (swank-loader::load-swank)
 
-;;; preference-start-swank?  
-;;; returns the current value of the "Start swank server?" user
-;;; preference
-(defun preference-start-swank? ()
-  (let* ((defaults (handler-case (#/values (#/sharedUserDefaultsController ns:ns-user-defaults-controller))
-                     (serious-condition (c) 
-                       (progn (format t "~%ERROR: Unable to get preferences from the Shared User Defaults Controller")
-                              (force-output)
-                              nil))))
-         (start-swank-pref (and defaults (#/valueForKey: defaults #@"startSwankServer"))))
-    (cond
-      ;; the user default is not initialized
-      ((or (null start-swank-pref)
-           (%null-ptr-p start-swank-pref)) nil)
-      ;; examine the user default
-      ((typep start-swank-pref 'ns:ns-number) 
-       (case (#/intValue start-swank-pref)
-         ;; don't start swank
-         (0 nil)
-         ;; start swank
-         (1 t)
-         ;; the user default value is incomprehensible
-         (otherwise (progn
-                      (format t "~%ERROR: Unrecognized value in user preference 'startSwankServer': ~S"
-                              start-swank-pref)
-                      (force-output)
-                      nil))))
-      ;; the user default value is incomprehensible
-      (t (progn
-           (format t "~%ERROR: Unrecognized value type in user preference 'startSwankServer': ~S"
-                   start-swank-pref)
-           (force-output)
-           nil)))))
-
 ;;; preference-swank-port
 ;;; returns the current value of the "Swank Port" user preference
 (defun preference-swank-port ()
   (let* ((defaults (handler-case (#/values (#/sharedUserDefaultsController ns:ns-user-defaults-controller))
                      (serious-condition (c) 
-                       (progn (format t "~%ERROR: Unable to get preferences from the Shared User Defaults Controller")
-                              (force-output)
+                       (progn (log-debug "~%ERROR: Unable to get preferences from the Shared User Defaults Controller")
                               nil))))
          (swank-port-pref (and defaults (#/valueForKey: defaults #@"swankPort"))))
     (cond
@@ -99,15 +64,13 @@
          ;; parsing the port number failed
          (ccl::parse-integer-not-integer-string (c)
            (setf *ccl-swank-active-p* nil)
-           (format t "~%Error starting swank server; the swank-port user preference is not a valid port number: ~S~%"
-                   port-str)
-           (force-output)
+           (NSLog #@"\nError starting swank server; the swank-port user preference is not a valid port number: %@\n"
+                  swank-port-pref)
            nil)))
       ;; the user default value is incomprehensible
       (t (progn
-           (format t "~%ERROR: Unrecognized value type in user preference 'swankPort': ~S"
-                   swank-port-pref)
-           (force-output)
+           (NSLog #@"\nERROR: Unrecognized value type in user preference 'swankPort': %@"
+                  swank-port-pref)
            nil)))))
 
 ;;; try-starting-swank (&key (force nil))
@@ -120,7 +83,7 @@
     ;; try to determine the user preferences concerning the swank port number
     ;; and whether the swank server should be started. If the user says start
     ;; it, and we can determine a valid port for it, start it up
-    (let* ((start-swank? (or (preference-start-swank?) force))
+    (let* ((start-swank? (or force (preference-start-swank?)))
            (swank-port (or (preference-swank-port) *default-gui-swank-port*)))
       (if (and start-swank? swank-port)
           ;; try to start the swank server
@@ -133,8 +96,7 @@
             (serious-condition (c)
               (setf *ccl-swank-active-p* nil)
               (setf *active-gui-swank-port* nil)
-              (format t "~%Error starting swank server: ~A~%" c)
-              (force-output)
+              (log-debug "~%Error starting swank server: ~A~%" c)
               nil))
           ;; don't try to start the swank server
           (progn
@@ -149,14 +111,30 @@
 
 ;;; aux utils
 
+(defvar $emacs-ccl-swank-request-marker "[emacs-ccl-swank-request]")
+
 (defun not-ready-yet (nm)
   (error "Not yet implemented: ~A" nm))
 
 (defun read-swank-ping (tcp-stream) 
-  (not-ready-yet 'read-swank-ping))
+  (read-line tcp-stream nil nil nil))
 
-(defun parse-swank-ping (string) 
-  (not-ready-yet 'parse-swank-ping))
+(defun parse-swank-ping (p) 
+  (let ((sentinel-end (length $emacs-ccl-swank-request-marker)))
+    (if (typep p 'string)
+        (if (string= p $emacs-ccl-swank-request-marker :start1 0 :end1 sentinel-end)
+            (let* ((request (subseq p sentinel-end))
+                   (split-pos (position #\: request))
+                   (port-str (if split-pos
+                                 (subseq request 0 split-pos)
+                                 nil))
+                   (port (when port-str (parse-integer port-str :junk-allowed nil)))
+                   (path-str (if split-pos
+                                 (subseq request (1+ split-pos))
+                                 request)))
+              (values (string-trim '(#\space #\tab #\return #\newline) path-str) port))
+            nil)
+        nil)))
 
 (defun make-swank-loader-pathname (string) 
   (not-ready-yet 'make-swank-loader-pathname))
@@ -170,28 +148,28 @@
 (defun send-swank-load-failed (tcp-stream swank-status)
   (not-ready-yet 'send-swank-load-failed))
 
+
+(defun handle-swank-client (c)
+  (let* ((msg (read-swank-ping c))
+         (swank-path (parse-swank-ping msg))
+         (swank-loader (make-swank-loader-pathname swank-path))
+         (swank-status (load-swank swank-loader)))
+    (if (swank-ready? swank-status)
+        (send-swank-ready c swank-status)
+        (send-swank-load-failed c swank-status))))
+
 ;;; the real deal
 ;;; if it succeeds, it returns a PROCESS object
 ;;; if it fails, it returns a CONDITION object
 (defun start-swank-listener (&optional (port *default-swank-listener-port*))
-  (flet ((handle-swank-client (c)
-           (let* ((msg (read-swank-ping c))
-                  (swank-path (parse-swank-ping msg))
-                  (swank-loader (make-swank-loader-pathname swank-path))
-                  (swank-status (load-swank swank-loader)))
-             (if (swank-ready? swank-status)
-                 (send-swank-ready c swank-status)
-                 (send-swank-load-failed c swank-status)))))
-    (handler-case (with-open-socket (sock :type :stream :connect :passive :local-port port :reuse-address t)
-                    (loop
-                       (let ((client-sock (accept-connection sock)))
-                         (process-run-function "CCL Swank Listener"
-                                               #'%handle-swank-client client-sock))))
-      (ccl::socket-creation-error (c) (nslog-condition c "Unable to create a socket for the swank-listener: ") c)
-      (ccl::socket-error (c) (nslog-condition c "Swank-listener failed trying to accept a client conection: ") c)
-      (serious-condition (c) (nslog-condition c "Unable to start up the swank listener") c))))
-
-
+  (handler-case (with-open-socket (sock :type :stream :connect :passive :local-port port :reuse-address t)
+                  (loop
+                     (let ((client-sock (accept-connection sock)))
+                       (process-run-function "CCL Swank Listener"
+                                             #'%handle-swank-client client-sock))))
+    (ccl::socket-creation-error (c) (nslog-condition c "Unable to create a socket for the swank-listener: ") c)
+    (ccl::socket-error (c) (nslog-condition c "Swank-listener failed trying to accept a client conection: ") c)
+    (serious-condition (c) (nslog-condition c "Unable to start up the swank listener") c)))
 
 ;;; maybe-start-swank-listener
 ;;; -----------------------------------------------------------------
@@ -206,17 +184,21 @@
            (swank-listener-port (or (preference-swank-port) *default-gui-swank-port*)))
       (if (and start-swank-listener? swank-port)
           ;; try to start the swank listener
-          (handler-case (progn
-                          (start-swank-listener swank-listener-port)
-                          (setf *active-gui-swank-listener-port* swank-listener-port)
-                          (setf *ccl-swank-listener-active-p* t)
-                          swank-listener-port)
+          (handler-case (let ((swank-listener (start-swank-listener swank-listener-port)))
+                          (if (typep swank-listener 'process)
+                              (progn
+                                (setf *active-gui-swank-listener-port* swank-listener-port)
+                                (setf *ccl-swank-listener-active-p* t)
+                                swank-listener-port)
+                              (progn
+                                (setf *active-gui-swank-listener-port* nil)
+                                (setf *ccl-swank-listener-active-p* nil)
+                                nil)))
             ;; swank listener creation failed
             (serious-condition (c)
               (setf *active-gui-swank-listener-port* nil)
               (setf *ccl-swank-listener-active-p* nil)
-              (format t "~%Error starting swank server: ~A~%" c)
-              (force-output)
+              (log-debug "~%Error starting swank server: ~A~%" c)
               nil))
           ;; don't try to start the swank listener
           (progn

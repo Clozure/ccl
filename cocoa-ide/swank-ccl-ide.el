@@ -32,13 +32,17 @@
 (defun slime-ccl-swank-filter (process string)
   (message (concat "CCL swank listener: " string)))
 
+(defvar $emacs-ccl-swank-request-marker "[emacs-ccl-swank-request]")
+
 (defun request-ccl-load-swank (&optional 
                                (host *ccl-swank-listener-host*)
-                               (port *ccl-swank-listener-port*))
-  (let ((ping "[emacs-ccl-swank-request]" (swank-loader-path) "\n")
-        (ccl-proc (open-network-stream "SLIME CCL Swank" nil host port)))
+                               (listener-port *ccl-swank-listener-port*)
+                               (connection-port slime-port))
+  (let ((ping (concat $emacs-ccl-swank-request-marker (format "%d" connection-port) ":" (swank-loader-path) "\n"))
+        (ccl-proc (open-network-stream "SLIME CCL Swank" nil host listener-port)))
     (setq *ccl-swank-listener-proc* ccl-proc)
     (set-process-filter ccl-proc 'slime-ccl-swank-filter)
     ;; send ping
     (process-send-string ccl-proc ping)
     ccl-proc))
+

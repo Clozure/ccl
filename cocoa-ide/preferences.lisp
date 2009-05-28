@@ -147,6 +147,7 @@
 
 (objc:defmethod (#/startSwankServer: :void) ((self preferences-window-controller)
 					 sender)
+  (declare (ignore sender))
   (unless (or *ccl-swank-active-p* 
               (try-starting-swank :force t))
     (alert-window :message "Unable to start the Swank server.")))
