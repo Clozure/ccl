@@ -94,7 +94,8 @@
 ;;; returns the current value of the "Start swank server?" user
 ;;; preference
 (defun preference-start-swank? ()
-  (let* ((defaults (handler-case (#/values (#/sharedUserDefaultsController ns:ns-user-defaults-controller))
+  (with-autorelease-pool
+   (let* ((defaults (handler-case (#/values (#/sharedUserDefaultsController ns:ns-user-defaults-controller))
                      (serious-condition (c) 
                        (progn (log-debug "~%ERROR: Unable to get preferences from the Shared User Defaults Controller")
                               nil))))
@@ -126,7 +127,7 @@
       (t (progn
            (log-debug "~%ERROR: Unrecognized value type in user preference 'startSwankServer': ~S"
                       start-swank-pref)
-           nil)))))
+           nil))))))
 
 (defmethod toplevel-function ((a cocoa-application) init-file)
   (declare (ignore init-file))
@@ -154,7 +155,7 @@
 
 
 
-  (Defun build-ide (bundle-path)
+  (defun build-ide (bundle-path)
     (setq bundle-path (ensure-directory-pathname bundle-path))
 
     ;; The bundle is expected to exist, we'll just add the executable into it.

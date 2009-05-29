@@ -47,31 +47,32 @@
 ;;; preference-swank-port
 ;;; returns the current value of the "Swank Port" user preference
 (defun preference-swank-port ()
-  (let* ((defaults (handler-case (#/values (#/sharedUserDefaultsController ns:ns-user-defaults-controller))
-                     (serious-condition (c) 
-                       (progn (log-debug "~%ERROR: Unable to get preferences from the Shared User Defaults Controller")
-                              nil))))
-         (swank-port-pref (and defaults (#/valueForKey: defaults #@"swankPort"))))
-    (cond
-      ;; the user default is not initialized
-      ((or (null swank-port-pref)
-           (%null-ptr-p swank-port-pref)) nil)
-      ;; examine the user default
-      ((typep swank-port-pref 'ns:ns-string) 
-       (handler-case (let* ((port-str (lisp-string-from-nsstring swank-port-pref))
-                            (port (parse-integer port-str :junk-allowed nil)))
-                       (or port *default-gui-swank-port*))
-         ;; parsing the port number failed
-         (ccl::parse-integer-not-integer-string (c)
-           (setf *ccl-swank-active-p* nil)
-           (NSLog #@"\nError starting swank server; the swank-port user preference is not a valid port number: %@\n"
-                  swank-port-pref)
-           nil)))
-      ;; the user default value is incomprehensible
-      (t (progn
-           (NSLog #@"\nERROR: Unrecognized value type in user preference 'swankPort': %@"
-                  swank-port-pref)
-           nil)))))
+  (with-autorelease-pool
+    (let* ((defaults (handler-case (#/values (#/sharedUserDefaultsController ns:ns-user-defaults-controller))
+                       (serious-condition (c) 
+                         (progn (log-debug "~%ERROR: Unable to get preferences from the Shared User Defaults Controller")
+                                nil))))
+           (swank-port-pref (and defaults (#/valueForKey: defaults #@"swankPort"))))
+      (cond
+        ;; the user default is not initialized
+        ((or (null swank-port-pref)
+             (%null-ptr-p swank-port-pref)) nil)
+        ;; examine the user default
+        ((typep swank-port-pref 'ns:ns-string) 
+         (handler-case (let* ((port-str (lisp-string-from-nsstring swank-port-pref))
+                              (port (parse-integer port-str :junk-allowed nil)))
+                         (or port *default-gui-swank-port*))
+           ;; parsing the port number failed
+           (ccl::parse-integer-not-integer-string (c)
+             (setf *ccl-swank-active-p* nil)
+             (NSLog #@"\nError starting swank server; the swank-port user preference is not a valid port number: %@\n"
+                    swank-port-pref)
+             nil)))
+        ;; the user default value is incomprehensible
+        (t (progn
+             (NSLog #@"\nERROR: Unrecognized value type in user preference 'swankPort': %@"
+                    swank-port-pref)
+             nil))))))
 
 ;;; try-starting-swank (&key (force nil))
 ;;; attempts to start the swank server. If :force t is supplied,
