@@ -556,11 +556,11 @@
       (:toomany
        (destructuring-bind (provided max)
            (cdr reason)
-         (format stream "~d argument~p were provided, but at most ~d ~a accepted~&  by " provided provided max (if (eql max 1) "is" "are"))))
+         (format stream "~d argument~:p ~:*~[were~;was~:;were~] provided, but at most ~d ~:*~[are~;is~:;are~] accepted~&  by " provided max)))
       (:toofew
        (destructuring-bind (provided min)
            (cdr reason)
-         (format stream "~d argument~p were provided, but at least ~d ~a required~&  by " provided provided min (if (eql min 1) "is" "are") )))
+	 (format stream "~d argument~:p ~:*~[were~;was~:;were~] provided, but at least ~d ~:*~[are~;is~:;are~] required~&  by " provided min)))
       (:odd-keywords
        (let* ((tail (cadr reason)))
          (format stream "the variable portion of the argument list ~s contains an odd number~&  of arguments and so can't be used to initialize keyword parameters~&  for " tail)))
