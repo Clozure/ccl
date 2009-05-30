@@ -159,43 +159,34 @@
 (defun swank-ready? (status)
   (swank-active? status))
 
-(defun send-swank-ready (tcp-stream swank-status)
-  (let ((response (format nil "(:active t :loader ~S :port ~D)"
-                          (swank-requested-loader swank-status)
-                          (swank-requested-port swank-status))))
+(defun send-swank-response (tcp-stream status)
+  (let ((response (format nil "(:active ~S :loader ~S :port ~D)"
+                          (swank-active? status)
+                          (swank-requested-loader status)
+                          (swank-requested-port status))))
     (format tcp-stream response)
-    (force-output)))
-
-(defun send-swank-load-failed (tcp-stream swank-status)
-  (let ((response (format nil "(:active nil :loader ~S :port ~D)"
-                          (swank-requested-loader swank-status)
-                          (swank-requested-port swank-status))))
-    (format tcp-stream response)
-    (force-output)))
+    (finish-output tcp-stream)))
 
 (defun handle-swank-client (c)
   (let* ((msg (read-swank-ping c)))
     (multiple-value-bind (swank-path requested-port)
         (parse-swank-ping msg)
-      (let* ((swank-status (load-and-start-swank swank-path requested-port)))
-        (if (swank-ready? swank-status)
-            (send-swank-ready c swank-status)
-            (send-swank-load-failed c swank-status))))))
+      (load-and-start-swank swank-path requested-port))))
 
 ;;; the real deal
 ;;; if it succeeds, it returns a PROCESS object
 ;;; if it fails, it returns a CONDITION object
 (defun start-swank-listener (&optional (port *default-swank-listener-port*))
-  (handler-case (with-open-socket (sock :type :stream :connect :passive :local-port port :reuse-address t)
+  (handler-case (with-open-socket (sock :type :stream :connect :passive :local-port port :reuse-address t :auto-close t)
                   (loop
                      (format t "~%swank listener loop...")
                      (force-output)
-                     (let ((client-sock (accept-connection sock)))
-                       (process-run-function "CCL Swank Listener"
-                                             #'handle-swank-client client-sock))))
+                     (let* ((client-sock (accept-connection sock))
+                            (status (handle-swank-client client-sock)))
+                       (send-swank-response client-sock status))))
     (ccl::socket-creation-error (c) (nslog-condition c "Unable to create a socket for the swank-listener: ") c)
     (ccl::socket-error (c) (nslog-condition c "Swank-listener failed trying to accept a client conection: ") c)
-    (serious-condition (c) (nslog-condition c "Unable to start up the swank listener") c)))
+    (serious-condition (c) (nslog-condition c "Error in the swank-listener:") c)))
 
 ;;; maybe-start-swank-listener
 ;;; -----------------------------------------------------------------

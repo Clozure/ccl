@@ -24,21 +24,26 @@
 (defvar *ccl-swank-listener-port* 4884)
 (defvar *ccl-swank-listener-proc* nil)
 
-
+(defvar *ccl-swank-output* nil)
 ;;; TODO: make this filter function start up a connection to
 ;;;       the CCL swank server if it reads a success message,
 ;;;       or display an informative error if it reads a
 ;;;       failure message
 (defun slime-ccl-swank-filter (process string)
-  (message (concat "CCL swank listener: " string)))
+  (let* ((status (read string))
+         (active? (plist-get status :active)))
+    (if active?
+        (let ((port (plist-get status :port)))
+          (slime-connect *ccl-swank-listener-host* port)))))
 
 (defvar $emacs-ccl-swank-request-marker "[emacs-ccl-swank-request]")
 
-(defun request-ccl-load-swank (&optional host listener-port connection-port )
+(defun request-ccl-load-swank (&optional host listener-port connection-port loader-path)
   (let* ((host (or host *ccl-swank-listener-host*))
          (listener-port (or listener-port *ccl-swank-listener-port*))
          (connection-port (or connection-port slime-port))
-         (ping (concat $emacs-ccl-swank-request-marker (format "%d" connection-port) ":" (swank-loader-path) "\n"))
+         (loader-path (or loader-path (swank-loader-path)))
+         (ping (concat $emacs-ccl-swank-request-marker (format "%d" connection-port) ":" loader-path "\n"))
          (ccl-proc (open-network-stream "SLIME CCL Swank" nil host listener-port)))
     (setq *ccl-swank-listener-proc* ccl-proc)
     (set-process-filter ccl-proc 'slime-ccl-swank-filter)
