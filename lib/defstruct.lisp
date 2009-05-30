@@ -225,8 +225,8 @@
     (setq defs (nreverse defs))
     `((declaim (inline ,@defs)))))
 
-;;;Used by setf and whatever...
-(defun defstruct-ref-transform (predicate-or-type-and-refinfo args)
+;;;Used by nx-transform, setf, and whatever...
+(defun defstruct-ref-transform (predicate-or-type-and-refinfo args &optional env)
   (if (type-and-refinfo-p predicate-or-type-and-refinfo)
     (multiple-value-bind (type refinfo)
                          (if (consp predicate-or-type-and-refinfo)
@@ -248,7 +248,14 @@
                     (t `(uvref ,@args ,offset)))))
         (if (eq type 't)
           accessor
-          `(the ,type ,accessor))))
+          (if (specifier-type-if-known type env)
+            `(the ,type ,accessor)
+            (if (nx-the-typechecks env)
+              `(require-type ,accessor ',type)
+              ;; Otherwise just ignore the type, it's most likely a forward reference,
+              ;; and while it means we might be missing out on a possible optimization,
+              ;; most of the time it's not worth warning about.
+              accessor)))))
     `(structure-typep ,@args ',predicate-or-type-and-refinfo)))
 
 ;;; Should probably remove the constructor, copier, and predicate as

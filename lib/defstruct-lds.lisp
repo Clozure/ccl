@@ -225,9 +225,9 @@
                    (setq read-only (%cadr args)))
                   (t (go bad-slot)))
             (setq args (%cddr args)))
+         (specifier-type slot-type env) ;; Check for validity (signals program error)
          (push (make-ssd name initform offset read-only slot-type) slot-list)
          (setq slots (%cdr slots) offset (%i+ offset 1))))
-
     (setq slot-list (nreverse slot-list))
     (when (and (null type) include)
       (ssd-set-initform (car slot-list) `',superclasses))

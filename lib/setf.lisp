@@ -109,14 +109,14 @@
               (let ((type (%car temp)))
                 (multiple-value-bind
                   (temps values storevars storeform accessform)
-                  (get-setf-method (defstruct-ref-transform (%cdr temp) (%cdr form)) environment)
+                  (get-setf-method (defstruct-ref-transform (%cdr temp) (%cdr form) environment) environment)
                   (values temps values storevars
                           (let ((storevar (first storevars)))
                             `(the ,type
                                   (let ((,storevar (require-type ,storevar ',type)))
                                     ,storeform)))
                           `(the ,type ,accessform))))
-              (get-setf-method (defstruct-ref-transform temp (%cdr form)) environment)))
+              (get-setf-method (defstruct-ref-transform temp (%cdr form) environment) environment)))
 	   (t
 	    (multiple-value-bind (res win)
 				 (macroexpand-1 form environment)

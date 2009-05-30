@@ -836,7 +836,7 @@ Will differ from *compiling-file* during an INCLUDE")
         (otherwise
 	 (unless (memq sym *nx-known-declarations*)
 	   ;; Any type name is now (ANSI CL) a valid declaration.
-	   (if (specifier-type-if-known sym env :whine t)
+	   (if (specifier-type-if-known sym env)
 	     (fcomp-proclaim-type sym spec env)
 	     (nx-bad-decls `(,sym ,@spec)))))))))
 

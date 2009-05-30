@@ -537,10 +537,10 @@ vector
     (ftype (apply #'proclaim-ftype (%cdr spec)))
     (function (apply #'proclaim-type spec))
     (t (unless (memq (%car spec) *nx-known-declarations*)
-         ;; Any type name is now (ANSI CL) a valid declaration.  Any symbol could become a type.
+         ;; Any type name is now (ANSI CL) a valid declaration.
          (if (specifier-type-if-known (%car spec))
            (apply #'proclaim-type spec)
-           (warn "Unknown declaration specifier(s) in ~S" spec))))))
+           (signal-program-error "Unknown declaration specifier ~s in ~S" (%car spec) spec))))))
 
 (defun bad-proclaim-spec (spec)
   (signal-program-error "Invalid declaration specifier ~s" spec))
@@ -551,10 +551,9 @@ vector
   (unless (loop for v in vars always (symbolp v)) (bad-proclaim-spec `(,type ,@vars)))
   (when *type-system-initialized*
     ;; Check the type.  This will signal program-error's in case of invalid types, let it.
-    (handler-case (specifier-type type)
-      (parse-unknown-type (c)
-        (warn "Undefined type ~s in declaration specifier ~s"
-              (parse-unknown-type-specifier c) `(,type ,@vars)))))
+    ;; Do not signal anything about unknown types though -- it should be ok to have forward
+    ;; references here, before anybody needs the info.
+    (specifier-type type))
   (dolist (var vars)
     (let ((spec (assq var *nx-proclaimed-types*)))
       (if spec
@@ -568,11 +567,9 @@ vector
   (unless *nx-proclaimed-ftypes*
     (setq *nx-proclaimed-ftypes* (make-hash-table :test #'eq)))
   ;; Check the type.  This will signal program-error's in case of invalid types, let it.
-  ;; TODO: should also check it for being a function type.
-  (handler-case (specifier-type ftype)
-    (parse-unknown-type (c)
-      (warn "Undefined type ~s in declaration specifier ~s"
-            (parse-unknown-type-specifier c) `(ftype ,ftype ,@names))))
+  ;; Do not signal anything about unknown types though -- it should be ok to have forward
+  ;; references here, before anybody needs the info.
+  (specifier-type ftype)
   (dolist (name names)
     (setf (gethash (maybe-setf-function-name name) *nx-proclaimed-ftypes*) ftype)))
 

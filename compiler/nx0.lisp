@@ -365,11 +365,12 @@ function to the indicated name is true.")
   (dolist (decl decls pending)
     (dolist (spec (%cdr decl))
       (if (memq (setq s (car spec)) *nx-known-declarations*)
-	;;  Hmm, NOTSPECIAL and FUNCTION are in *nx-known-declarations* but have no standard handler. 
         (if (setq f (getf *nx-standard-declaration-handlers* s))
           (funcall f pending spec env))
         ; Any type name is now (ANSI CL) a valid declaration.
-	(nx-process-type-decl pending spec s (%cdr spec) env)))))
+        (if (specifier-type-if-known s env)
+          (nx-process-type-decl pending spec s (%cdr spec) env)
+          (nx-bad-decls spec))))))
 
 ; Put all variable decls for the symbol VAR into effect in environment ENV.  Now.
 ; Returns list of all new vdecls pertaining to VAR.
@@ -684,7 +685,7 @@ function to the indicated name is true.")
   (handler-case (specifier-type typespec env)
     (parse-unknown-type (c) 
       (when (and whine *compiler-warn-on-undefined-type-references*)
-	(nx1-whine :undefined-type (parse-unknown-type-specifier c)))
+	(nx1-whine :undefined-type typespec))
       (values nil (parse-unknown-type-specifier c)))
     ;; catch any errors due to destructuring in type-expand
     (program-error (c)
@@ -697,7 +698,7 @@ function to the indicated name is true.")
   (handler-bind ((parse-unknown-type (lambda (c)
                                        (break "caught unknown-type ~s" c)
 				       (when (and whine *compiler-warn-on-undefined-type-references*)
-					 (nx1-whine :undefined-type (parse-unknown-type-specifier c)))
+					 (nx1-whine :undefined-type typespec))
                                        (return-from specifier-type-if-known
                                          (values nil (parse-unknown-type-specifier c)))))
 		 (program-error (lambda (c)
@@ -2167,6 +2168,14 @@ Or something. Right? ~s ~s" var varbits))
       (let ((note (gethash form source-notes)))
         (unless (listp note) note)))))
 
+#-BOOTSTRAPPED
+(when (= 2 (let ((bits (lfun-bits #'defstruct-ref-transform)))
+             (+ (ldb $lfbits-numreq bits) (ldb $lfbits-numopt bits))))
+  (let ((old #'defstruct-ref-transform))
+    (fset 'defstruct-ref-transform (lambda (a b &optional env)
+                                     (declare (ignore env))
+                                     (funcall old a b)))))
+
 (defun nx-transform (form &optional (environment *nx-lexical-environment*) (source-note-map *nx-source-note-map*))
   (macrolet ((form-changed (form)
                `(progn
@@ -2244,7 +2253,7 @@ Or something. Right? ~s ~s" var varbits))
            (when (setq transforms (or (environment-structref-info sym environment)
                                       (and (boundp '%structure-refs%)
                                            (gethash sym %structure-refs%))))
-             (setq form (defstruct-ref-transform transforms (%cdr form)))
+             (setq form (defstruct-ref-transform transforms (%cdr form) environment))
              (form-changed form)
              (go START))
            (when (setq transforms (assq sym *nx-synonyms*))

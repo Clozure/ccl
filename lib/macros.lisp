@@ -558,9 +558,9 @@
                            (if (consp temp)
                              ;; strip off type, but add in a require-type
                              (let ((type (%car temp)))
-                               `(the ,type (setf ,(defstruct-ref-transform (%cdr temp) (%cdar args))
+                               `(the ,type (setf ,(defstruct-ref-transform (%cdr temp) (%cdar args) env)
                                             (require-type ,value ',type))))
-                             `(setf ,(defstruct-ref-transform temp (%cdar args))
+                             `(setf ,(defstruct-ref-transform temp (%cdar args) env)
                                ,value)))
                           (t
                            (multiple-value-bind (res win)
@@ -3226,7 +3226,7 @@ element-type is numeric."
 	   (struct-transform (or (environment-structref-info sym env)
                                  (gethash sym %structure-refs%))))
       (if struct-transform
-        (setq place (defstruct-ref-transform struct-transform (cdr place))
+        (setq place (defstruct-ref-transform struct-transform (cdr place) env)
               sym (car place)))
       (ecase sym
 	(the `(the ,(cadr place) (atomic-incf-decf ,(caddr place) ,delta)))
@@ -3470,7 +3470,7 @@ element-type is numeric."
            (struct-transform (or (ccl::environment-structref-info sym env)
                                  (gethash sym ccl::%structure-refs%))))
       (if struct-transform
-        (setq place (ccl::defstruct-ref-transform struct-transform (cdr place))
+        (setq place (defstruct-ref-transform struct-transform (cdr place) env)
               sym (car place)))
       (if (member  sym '(svref ccl::%svref ccl::struct-ref))
         (let* ((v (gensym)))
