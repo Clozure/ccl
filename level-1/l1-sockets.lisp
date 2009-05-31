@@ -607,12 +607,14 @@ the socket is not connected."))
       (int-setsockopt fd #$SOL_SOCKET #$SO_BROADCAST 1))
     (when out-of-band-inline
       (int-setsockopt fd #$SOL_SOCKET #$SO_OOBINLINE 1))
-    (rlet ((plinger :linger))
+    (when (eq address-family :internet)
+      (when (eq type :stream)
+	(rlet ((plinger :linger))
 	  (setf (pref plinger :linger.l_onoff) (if linger 1 0)
 		(pref plinger :linger.l_linger) (or linger 0))
 	  (socket-call socket "setsockopt"
-		       (c_setsockopt fd #$SOL_SOCKET #$SO_LINGER plinger (record-length :linger))))
-    (when (eq address-family :internet)
+		       (c_setsockopt fd #$SOL_SOCKET #$SO_LINGER
+				     plinger (record-length :linger)))))
       (when nodelay
 	(int-setsockopt fd
 			#+linux-target #$SOL_TCP
