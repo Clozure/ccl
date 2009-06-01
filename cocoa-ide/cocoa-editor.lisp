@@ -2927,7 +2927,12 @@
           (let* ((item (#/itemAtIndex: appmenu i))
                  (title (#/title item)))
             (when (#/hasSuffix: title targetname)
-              (#/setTitle: item (#/stringByReplacingOccurrencesOfString:withString: title targetname cfbundlename)))))))))
+	      (let ((new-title (#/mutableCopy title)))
+		(ns:with-ns-range (r 0 (#/length new-title))
+		  (#/replaceOccurrencesOfString:withString:options:range:
+		   new-title targetname cfbundlename #$NSLiteralSearch r))
+		(#/setTitle: item new-title)
+		(#/release new-title)))))))))
               
 (defun initialize-user-interface ()
   ;; The first created instance of an NSDocumentController (or
