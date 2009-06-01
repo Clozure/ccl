@@ -91,4 +91,4 @@
 (progn
   (require "FAKE-CFBUNDLE-PATH")
   (create-ide-bundle *cocoa-application-path*)
-  (ccl::fake-cfbundle-path *cocoa-application-path* "ccl:cocoa-ide;Info.plist-proto" "com.clozure"))
+  (ccl::fake-cfbundle-path *cocoa-application-path* "ccl:cocoa-ide;Info.plist-proto" "com.clozure" *cocoa-application-bundle-suffix*))
