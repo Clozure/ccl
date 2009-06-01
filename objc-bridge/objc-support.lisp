@@ -380,11 +380,36 @@ instance variable."
                    :for-keys keys)))
 
 
+
+
+(defparameter *objc-description-max-length* 1024 "Limit on the length of NSObject description strings if non-NIL.")
+
+
+(defun initialized-nsobject-p (nsobject)
+  (or (objc-class-p nsobject)
+      (objc-metaclass-p nsobject)
+      (let* ((class (#/class nsobject))
+             (isize (%objc-class-instance-size class)))
+        (declare (fixnum isize))
+        (do* ((i (record-length :id) (1+ i)))
+             ((= i isize))
+          (declare (fixnum i))
+          (unless (zerop (the (unsigned-byte 8) (%get-unsigned-byte nsobject i)))
+            (return t))))))
+  
 (defun nsobject-description (nsobject)
   "Returns a lisp string that describes nsobject.  Note that some
 NSObjects describe themselves in more detail than others."
-  (with-autorelease-pool
-      (lisp-string-from-nsstring  (#/description nsobject))))
+  (if (initialized-nsobject-p nsobject)
+    (with-autorelease-pool
+        (let* ((desc (#/description nsobject)))
+          (if (or (null *objc-description-max-length*)
+                  (< (#/length desc) *objc-description-max-length*))
+            (lisp-string-from-nsstring desc)
+            (ns:with-ns-range (r 0 *objc-description-max-length*)
+              (format nil "~a[...]"(lisp-string-from-nsstring (#/substringWithRange: desc r)))))))
+    ""))
+
 
 
 
