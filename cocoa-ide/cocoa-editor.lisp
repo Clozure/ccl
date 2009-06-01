@@ -923,7 +923,7 @@
 	 (quote-p (and view (hi::hemlock-view-quote-next-p view))))
     #+debug (log-debug "~&quote-p ~s event ~s" quote-p event)
     (cond ((or (null view) (#/hasMarkedText self) (eq quote-p :native))
-	   (when (and quote-p (not (eq quote-p :native)))	;; Huh?
+	   (when (and quote-p (not (eq quote-p :native)))	;; see ticket:461
 	     (setf (hi::hemlock-view-quote-next-p view) nil))
 	   (call-next-method event))
 	  ((not (eventqueue-abort-pending-p self))
