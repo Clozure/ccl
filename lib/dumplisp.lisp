@@ -253,6 +253,7 @@
 (defun restore-lisp-pointers ()
   (setq *interactive-streams-initialized* nil)
   (setq *heap-ivectors* nil)
+  (setq *batch-flag* (not (eql (%get-kernel-global 'batch-flag) 0)))
   (%revive-system-locks)
   (refresh-external-entrypoints)
   (restore-pascal-functions)
