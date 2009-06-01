@@ -67,7 +67,7 @@ present and false otherwise. This variable shouldn't be set by user code.")
 (defstatic *auto-flush-streams-lock* (make-lock))
 
 
-(defloadvar *batch-flag* (not (eql (%get-kernel-global 'batch-flag) 0)))
+(defvar *batch-flag* (not (eql (%get-kernel-global 'batch-flag) 0)))
 (defloadvar *quiet-flag* nil)
 (defvar *terminal-input* ())
 (defvar *terminal-output* ())
