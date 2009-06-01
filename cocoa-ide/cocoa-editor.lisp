@@ -980,7 +980,7 @@
 		    (setq bits (logior bits
 				       (hi:key-event-modifier-mask (cdr map)))))))
 	      (let* ((char (code-char c)))
-		(when (and char (standard-char-p char))
+		(when (and char (graphic-char-p char))
 		  (setq bits (logandc2 bits +shift-event-mask+)))
 		(when (logtest #$NSAlphaShiftKeyMask modifiers)
 		  (setf c (char-code (char-upcase char)))))
@@ -2911,11 +2911,30 @@
   (#/performSelectorOnMainThread:withObject:waitUntilDone:
    self (@selector #/saveDocumentTo:) +null-ptr+ t))
 
+
+(defun maybe-fixup-application-menu ()
+  ;; If the CFBundleName isn't #@"Clozure CL", then set the
+  ;; title of any menu item on the application menu that ends
+  ;; in #@"Clozure CL" to the CFBundleName.
+  (let* ((bundle (#/mainBundle ns:ns-bundle))
+         (dict (#/infoDictionary bundle))
+         (cfbundlename (#/objectForKey: dict #@"CFBundleName"))
+         (targetname #@"Clozure CL"))
+    (unless (#/isEqualToString: cfbundlename targetname)
+      (let* ((appmenu (#/submenu (#/itemAtIndex: (#/mainMenu *nsapp*)  0)))
+             (numitems (#/numberOfItems appmenu)))
+        (dotimes (i numitems)
+          (let* ((item (#/itemAtIndex: appmenu i))
+                 (title (#/title item)))
+            (when (#/hasSuffix: title targetname)
+              (#/setTitle: item (#/stringByReplacingOccurrencesOfString:withString: title targetname cfbundlename)))))))))
+              
 (defun initialize-user-interface ()
   ;; The first created instance of an NSDocumentController (or
   ;; subclass thereof) becomes the shared document controller.  So it
   ;; may look like we're dropping this instance on the floor, but
   ;; we're really not.
+  (maybe-fixup-application-menu)
   (make-instance 'hemlock-document-controller)
   ;(#/sharedPanel lisp-preferences-panel)
   (make-editor-style-map))
