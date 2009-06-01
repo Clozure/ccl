@@ -43,7 +43,8 @@
            "DEFINE-OBJC-METHOD" "DEFINE-OBJC-CLASS-METHOD"
            "OBJC-MESSAGE-SEND" "OBJC-MESSAGE-SEND-STRET"
            "OBJC-MESSAGE-SEND-SUPER" "OBJC-MESSAGE-SEND-SUPER-STRET"
-           "LOAD-FRAMEWORK"))
+           "LOAD-FRAMEWORK" "*OBJC-DESCRIPTION-MAX-LENGTH*"
+           ))
 
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -53,7 +54,7 @@
             objc:define-objc-method objc:define-objc-class-method
             objc:objc-message-send objc:objc-message-send-stret
             objc:objc-message-send-super objc:objc-message-send-super-stret
-            )
+            objc:*objc-description-max-length*)
           "CCL"))
 
 (provide "OBJC-PACKAGE")
