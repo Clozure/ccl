@@ -10,7 +10,7 @@
 ;;; already "inside a bundle".  If it is necessary, it has to happen
 ;;; before the CoreFoundation library's initialized.
 
-(defun fake-cfbundle-path (bundle-root info-plist-proto-path bundle-prefix)
+(defun fake-cfbundle-path (bundle-root info-plist-proto-path bundle-prefix &optional bundle-suffix)
   (let* ((kernel-name (standard-kernel-name))
          (translated-root (translate-logical-pathname bundle-root))
 	 (bundle-name (let* ((name (if (directory-pathname-p translated-root)
@@ -19,10 +19,13 @@
 			     (len (length name)))
 			(if (and (> len 4)
 				 (string-equal name ".app" :start1 (- len 4)))
-			    (subseq name 0 (- len 4))
-			    name)))
-         (bundle-id (concatenate 'string bundle-prefix "." bundle-name))
-         (bundle-version (format nil "~d" *openmcl-svn-revision*))
+                                  (subseq name 0 (- len 4))
+                                  name)))
+         (bundle-id (concatenate 'string bundle-prefix "." (or bundle-suffix bundle-name)))
+         (bundle-version (multiple-value-bind (os bits cpu)
+                             (ccl::host-platform)
+                           (declare (ignore os))
+                           (format nil "~d (~a~d)" *openmcl-svn-revision* cpu bits)))
          (needles `(("OPENMCL-KERNEL" . ,kernel-name)
 		    ("OPENMCL-NAME" . ,bundle-name)
                     ("OPENMCL-IDENTIFIER" . ,bundle-id)
