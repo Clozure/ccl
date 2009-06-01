@@ -920,31 +920,17 @@
   #+debug (#_NSLog #@"Key down event in %@  = %@" :id self :address event)
   (let* ((view (hemlock-view self))
 	 ;; quote-p means handle characters natively
-	 (quote-p (and view (hi::hemlock-view-quote-next-p view)))
-         (has-marked-text (#/hasMarkedText self))
-	 (flags (#/modifierFlags event)))
+	 (quote-p (and view (hi::hemlock-view-quote-next-p view))))
     #+debug (log-debug "~&quote-p ~s event ~s" quote-p event)
-    (when (and has-marked-text quote-p (not (eq quote-p :native)))
-      (setf (hi::hemlock-view-quote-next-p view) nil)
-      (setq quote-p nil))
-    (cond ((or (eq quote-p :native)
-               (and (not *option-is-meta*)
-                    (logtest #$NSAlternateKeyMask flags)))
-	   (call-next-method event))
-	  ;; If a standalone dead key (e.g., ^ on a French keyboard)
-	  ;; was pressed, pass it through to the Cocoa text input system.
-	  ((and (zerop (#/length (#/characters event)))
-		(not (logtest #$NSAlternateKeyMask flags)))
-	   (call-next-method event))
-	  ((or (null view)
-	       (#/hasMarkedText self)
-	       (and quote-p (zerop (#/length (#/characters event)))))
+    (cond ((or (null view) (#/hasMarkedText self) (eq quote-p :native))
+	   (when (and quote-p (not (eq quote-p :native)))	;; Huh?
+	     (setf (hi::hemlock-view-quote-next-p view) nil))
 	   (call-next-method event))
 	  ((not (eventqueue-abort-pending-p self))
 	   (let ((hemlock-key (nsevent-to-key-event event quote-p)))
 	     (if hemlock-key
 	       (hi::handle-hemlock-event view hemlock-key)
-               (call-next-method event)))))))
+	       (call-next-method event)))))))
 
 (defmethod hi::handle-hemlock-event :around ((view hi:hemlock-view) event)
   (declare (ignore event))
@@ -957,31 +943,48 @@
 (defun nsevent-to-key-event (event quote-p)
   (let* ((modifiers (#/modifierFlags event)))
     (unless (logtest #$NSCommandKeyMask modifiers)
-      (let* ((chars (if quote-p
-                      (#/characters event)
-                      (#/charactersIgnoringModifiers event)))
-             (n (if (%null-ptr-p chars)
-                  0
-                  (#/length chars)))
-             (c (and (eql n 1)
-		     (#/characterAtIndex: chars 0))))
-        (when c
-          (let* ((bits 0)
-                 (useful-modifiers (logandc2 modifiers
-                                             (logior
-					      ;#$NSShiftKeyMask
-					      #$NSAlphaShiftKeyMask))))
-            (unless quote-p
-              (dolist (map hi:*modifier-translations*)
-                (when (logtest useful-modifiers (car map))
-                  (setq bits (logior bits
-				     (hi:key-event-modifier-mask (cdr map)))))))
-            (let* ((char (code-char c)))
-              (when (and char (standard-char-p char))
-                (setq bits (logandc2 bits +shift-event-mask+)))
-              (when (logtest #$NSAlphaShiftKeyMask modifiers)
-                (setf c (char-code (char-upcase char)))))
-	    (hi:make-key-event c bits)))))))
+      (let* ((native-chars (#/characters event))
+	     (native-len (if (%null-ptr-p native-chars)
+			   0
+			   (#/length native-chars)))
+	     (native-c (and (eql 1 native-len)
+			    (#/characterAtIndex: native-chars 0)))
+	     (option-p (logtest #$NSAlternateKeyMask modifiers)))
+	;; If a standalone dead key (e.g. ^'` on a French keyboard,) was pressed,
+	;; reverse the meaning of quote-p, i.e. use the system meaning if NOT quoted.
+	;; (I have no idea what makes standalone dead keys somehow different from
+	;; non-standalone dead keys).
+	(when (and (not option-p) (eql 0 native-len))
+	  (setq quote-p (not quote-p)))
+	(let ((c (if (or quote-p
+			 (and option-p
+			      (or (not *option-is-meta*)
+				  (and native-c
+				       (ccl::valid-char-code-p native-c)
+				       (standard-char-p (code-char (the ccl::valid-char-code native-c)))))
+			      (setq quote-p t)))
+		   native-c
+		   (let ((chars (#/charactersIgnoringModifiers event)))
+		     (and (not (%null-ptr-p chars))
+			  (eql 1 (#/length chars))
+			  (#/characterAtIndex: chars 0))))))
+	  (when c
+	    (let ((bits 0)
+		  (useful-modifiers (logandc2 modifiers
+					      (logior
+					       ;;#$NSShiftKeyMask
+					       #$NSAlphaShiftKeyMask))))
+	      (unless quote-p
+		(dolist (map hi:*modifier-translations*)
+		  (when (logtest useful-modifiers (car map))
+		    (setq bits (logior bits
+				       (hi:key-event-modifier-mask (cdr map)))))))
+	      (let* ((char (code-char c)))
+		(when (and char (standard-char-p char))
+		  (setq bits (logandc2 bits +shift-event-mask+)))
+		(when (logtest #$NSAlphaShiftKeyMask modifiers)
+		  (setf c (char-code (char-upcase char)))))
+	      (hi:make-key-event c bits))))))))
 
 ;; For now, this is only used to abort i-search.  All actual mouse handling is done
 ;; by Cocoa.   In the future might want to allow users to extend via hemlock, e.g.
