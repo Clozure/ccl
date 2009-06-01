@@ -32,6 +32,8 @@
 				<string>id</string>
 				<key>continue</key>
 				<string>id</string>
+				<key>evalAll</key>
+				<string>id</string>
 				<key>evalSelection</key>
 				<string>id</string>
 				<key>exitBreak</key>

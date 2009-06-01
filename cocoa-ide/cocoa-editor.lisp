@@ -1257,6 +1257,14 @@
         (setq s (lisp-string-from-nsstring s))
         (ui-object-eval-selection *NSApp* (list package-name pathname s))))))
 
+(objc:defmethod (#/evalAll: :void) ((self hemlock-text-view) sender)
+  (declare (ignore sender))
+  (let* ((buffer (hemlock-buffer self))
+         (package-name (hi::variable-value 'hemlock::current-package :buffer buffer))
+         (pathname (hi::buffer-pathname buffer))
+         (s (lisp-string-from-nsstring (#/string self))))
+    (ui-object-eval-selection *NSApp* (list package-name pathname s))))
+
 (objc:defmethod (#/loadBuffer: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
   (let* ((buffer (hemlock-buffer self))
@@ -1546,12 +1554,10 @@
                         #'(lambda (field)
                             (funcall (hi::modeline-field-function field) buffer))
                         (hi::buffer-modeline-fields buffer)))))
-	  (#/drawAtPoint:withAttributes: (%make-nsstring string)
+	  (#/drawAtPoint:withAttributes: (#/autorelease (%make-nsstring string))
                                          (ns:make-ns-point 5 1)
                                          text-attributes))))))
 
-;;; Draw the underlying buffer's modeline string on a white background
-;;; with a bezeled border around it.
 (objc:defmethod (#/drawRect: :void) ((self modeline-view) (rect :<NSR>ect))
   (declare (ignorable rect))
   (let* ((bounds (#/bounds self))
@@ -1560,6 +1566,7 @@
     (#/set (#/colorWithCalibratedWhite:alpha: ns:ns-color 0.9 1.0))
     (#_NSRectFill bounds)
     (#/set (#/colorWithCalibratedWhite:alpha: ns:ns-color 0.3333 1.0))
+    ;; Draw borders on top and bottom.
     (ns:with-ns-rect (r 0 0.5 (ns:ns-rect-width bounds) 0.5)
       (#_NSRectFill r))
     (ns:with-ns-rect (r 0 (- (ns:ns-rect-height bounds) 0.5)
@@ -1573,61 +1580,6 @@
 (hi::%init-mode-redisplay)
 
 
-;;; Modeline-scroll-view
-
-;;; This is just an NSScrollView that draws a "placard" view (the modeline)
-;;; in the horizontal scrollbar.  The modeline's arbitrarily given the
-;;; leftmost 75% of the available real estate.
-(defclass modeline-scroll-view (ns:ns-scroll-view)
-    ((modeline :foreign-type :id :accessor scroll-view-modeline)
-     (pane :foreign-type :id :accessor scroll-view-pane))
-  (:metaclass ns:+ns-object))
-
-;;; Making an instance of a modeline scroll view instantiates the
-;;; modeline view, as well.
-
-(objc:defmethod #/initWithFrame: ((self modeline-scroll-view) (frame :<NSR>ect))
-    (let* ((v (call-next-method frame)))
-      (when v
-        (let* ((modeline (make-instance 'modeline-view)))
-          (#/addSubview: v modeline)
-          (setf (scroll-view-modeline v) modeline)))
-      v))
-
-;;; Scroll views use the "tile" method to lay out their subviews.
-;;; After the next-method has done so, steal some room in the horizontal
-;;; scroll bar and place the modeline view there.
-
-(objc:defmethod (#/tile :void) ((self modeline-scroll-view))
-  (call-next-method)
-  (let* ((modeline (scroll-view-modeline self)))
-    (when (and (#/hasHorizontalScroller self)
-               (not (%null-ptr-p modeline)))
-      (let* ((hscroll (#/horizontalScroller self))
-             (scrollbar-frame (#/frame hscroll))
-             (modeline-frame (#/frame hscroll)) ; sic
-             (modeline-width (* (pref modeline-frame
-                                      :<NSR>ect.size.width)
-                                0.75f0)))
-        (declare (type ns:cgfloat modeline-width))
-        (setf (pref modeline-frame :<NSR>ect.size.width)
-              modeline-width
-              (the ns:cgfloat
-                (pref scrollbar-frame :<NSR>ect.size.width))
-              (- (the ns:cgfloat
-                   (pref scrollbar-frame :<NSR>ect.size.width))
-                 modeline-width)
-              (the ns:cgfloat
-                (pref scrollbar-frame :<NSR>ect.origin.x))
-              (+ (the ns:cgfloat
-                   (pref scrollbar-frame :<NSR>ect.origin.x))
-                 modeline-width))
-        (#/setFrame: hscroll scrollbar-frame)
-        (#/setFrame: modeline modeline-frame)))))
-
-
-  
-
 ;;; A clip view subclass, which exists mostly so that we can track origin changes.
 (defclass text-pane-clip-view (ns:ns-clip-view)
   ()
@@ -2378,6 +2330,10 @@
                   (#/shouldChangeTextInRange:replacementString: self selection #@""))))
           ((eql action (@selector #/evalSelection:))
            (not (eql 0 (ns:ns-range-length (#/selectedRange self)))))
+          ((eql action (@selector #/evalAll:))
+           (let* ((doc (#/document (#/windowController (#/window self)))))
+             (and (not (%null-ptr-p doc))
+                  (eq (type-of doc) 'hemlock-editor-document))))
           ;; if this hemlock-text-view is in an editor windowm and its buffer has
           ;; an associated pathname, then activate the Load Buffer item
           ((or (eql action (@selector #/loadBuffer:))
