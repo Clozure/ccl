@@ -93,18 +93,19 @@
       (error "~S is not a defined search pattern kind." kind))
     (funcall expert direction pattern result-search-pattern)))
 
-;;;; stuff to allocate and de-allocate simple-vectors search-char-code-limit
-;;;; in length.
+(defun new-search-vector (vec access-fn)
+  (let* ((max 0))
+    (declare (fixnum max))
+    (dotimes (i (length vec))
+      (let* ((code (funcall access-fn vec i)))
+        (when (> code max)
+          (setq max code))))
+    (make-array (the fixnum (1+ max)))))
 
-(defvar *spare-search-vectors* ())
 (eval-when (:compile-toplevel :execute)
-(defmacro new-search-vector ()
-  `(if *spare-search-vectors*
-       (pop *spare-search-vectors*)
-       (make-array search-char-code-limit)))
 
 (defmacro dispose-search-vector (vec)
-  `(push ,vec *spare-search-vectors*))
+  vec)
 ); eval-when (:compile-toplevel :execute)
 
 ;;;; macros used by various search kinds:
@@ -181,7 +182,10 @@
 (eval-when (:compile-toplevel :execute)
 (defmacro sensitive-string-search-macro (string start length pattern patlen
 						last jumps +/- -/+)
+  (let* ((jumpslen (gensym))
+         (charcode (gensym)))
   `(do ((scan (,+/- ,start ,last))
+        (,jumpslen (length ,jumps))
 	(patp ,last))
        (,(if length `(>= scan ,length) '(minusp scan)))
      (declare (fixnum scan patp))
@@ -193,12 +197,15 @@
 	     (setq scan (,-/+ scan 1)  patp (1- patp))))
 	(t
 	 ;; If mismatch consult jump table to find amount to skip.
-	 (let ((jump (svref ,jumps (search-char-code char))))
+	 (let* ((,charcode (search-char-code char))
+                (jump (if (< ,charcode ,jumpslen)
+                        (svref ,jumps ,charcode)
+                        ,patlen)))
 	   (declare (fixnum jump))
 	   (if (> jump (- ,patlen patp))
 	       (setq scan (,+/- scan jump))
 	       (setq scan (,+/- scan (- ,patlen patp)))))
-	 (setq patp ,last))))))
+	 (setq patp ,last)))))))
 
 ;;; insensitive-string-search-macro  --  Internal
 ;;;
@@ -210,15 +217,17 @@
 (defmacro insensitive-string-search-macro (string start length pattern
 						  folded-string patlen last
 						  jumps  +/- -/+)
-  `(do ((scan (,+/- ,start ,last))
-	(patp ,last))
-       (,(if length `(>= scan ,length) '(minusp scan)))
-     (declare (fixnum scan patp))
-     (let ((hash (search-hash-code (schar ,string scan))))
-       (declare (fixnum hash))
-       (cond
-	((= hash (the fixnum (svref ,pattern patp)))
-	 (if (zerop patp)
+  (let* ((jumpslen (gensym)))
+    `(do ((scan (,+/- ,start ,last))
+          (,jumpslen (length ,jumps))
+          (patp ,last))
+      (,(if length `(>= scan ,length) '(minusp scan)))
+      (declare (fixnum scan patp))
+      (let ((hash (search-hash-code (schar ,string scan))))
+        (declare (fixnum hash))
+        (cond
+          ((= hash (the fixnum (svref ,pattern patp)))
+           (if (zerop patp)
 	     (if (do ((i ,last (1- i)))
 		     (())
 		   (when (char/=
@@ -226,17 +235,19 @@
 			  (schar ,folded-string i))
 		     (return nil))
 		   (when (zerop i) (return t)))
-		 (return scan)
-		 (setq scan (,+/- scan ,patlen)  patp ,last))
+               (return scan)
+               (setq scan (,+/- scan ,patlen)  patp ,last))
 	     (setq scan (,-/+ scan 1)  patp (1- patp))))
-	(t
-	 ;; If mismatch consult jump table to find amount to skip.
-	 (let ((jump (svref ,jumps hash)))
-	   (declare (fixnum jump))
-	   (if (> jump (- ,patlen patp))
+          (t
+           ;; If mismatch consult jump table to find amount to skip.
+           (let ((jump (if (< hash ,jumpslen)
+                         (svref ,jumps hash)
+                         ,patlen)))
+             (declare (fixnum jump))
+             (if (> jump (- ,patlen patp))
 	       (setq scan (,+/- scan jump))
 	       (setq scan (,+/- scan (- ,patlen patp)))))
-	 (setq patp ,last))))))
+           (setq patp ,last)))))))
 
 ;;;; Searching for strings with newlines in them:
 ;;;
@@ -357,12 +368,12 @@
 ;;;
 (defun compute-boyer-moore-jumps (vec access-fun)
   (declare (simple-vector vec))
-  (let ((jumps (new-search-vector))
+  (let ((jumps (new-search-vector vec access-fun))
 	(len (length vec)))
     (declare (simple-vector jumps))
     (when (zerop len) (editor-error "Zero length search string not allowed."))
     ;; The default jump is the length of the search string.
-    (dotimes (i search-char-code-limit)
+    (dotimes (i len)
       (setf (aref jumps i) len))
     ;; For chars in the string the jump is the distance from the end.
     (dotimes (i len)
