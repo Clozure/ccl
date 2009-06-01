@@ -173,8 +173,8 @@
                           #|(#/runMode:beforeDate: (#/currentRunLoop ns:ns-run-loop)
                           #&NSDefaultRunLoopMode
                           (#/distantFuture ns:ns-date))|#
-                          (#/run app))))
-          (error (c) (nslog-condition c)))
+                          (#/run app)))
+            (error (c) (nslog-condition c))))
         (with-simple-restart (abort "Process the next event")
           (#/run app)))
       #+debug (log-debug "~&runMode exited, end-test: ~s isRunning ~s quitting: ~s" end-test (#/isRunning app) ccl::*quitting*)
