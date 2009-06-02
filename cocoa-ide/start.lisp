@@ -90,44 +90,8 @@
 (defmethod ccl::parse-application-arguments ((a cocoa-application))
   (values nil nil nil nil))
 
-;;; preference-start-swank?  
-;;; returns the current value of the "Start swank server?" user
-;;; preference
-(defun preference-start-swank? ()
-  (with-autorelease-pool
-   (let* ((defaults (handler-case (#/values (#/sharedUserDefaultsController ns:ns-user-defaults-controller))
-                     (serious-condition (c) 
-                       (progn (log-debug "~%ERROR: Unable to get preferences from the Shared User Defaults Controller")
-                              nil))))
-         (start-swank-pref (if (and defaults (not (%null-ptr-p defaults))) 
-                               (#/valueForKey: defaults #@"startSwankServer")         
-                               nil)))
-    (cond
-      ;; the user default is not initialized
-      ((or (null start-swank-pref)
-           (%null-ptr-p start-swank-pref)) nil)
-      ;; examine the user default
-      ;; intValue works on NSNumber or NSString
-      ;; BUG? if a string value is not a valid representation of an integer,
-      ;;      intValue returns 0, which means any non-numeric string will have the
-      ;;      same effect as "0"
-      ((or (typep start-swank-pref 'ns:ns-number)
-           (typep start-swank-pref 'ns:ns-string))
-       (case (#/intValue start-swank-pref)
-         ;; don't start swank
-         (0 nil)
-         ;; start swank
-         (1 t)
-         ;; the user default value is incomprehensible
-         (otherwise (progn
-                      (log-debug "~%ERROR: Unrecognized value in user preference 'startSwankServer': ~S"
-                                 start-swank-pref)
-                      nil))))
-      ;; the user default value is incomprehensible
-      (t (progn
-           (log-debug "~%ERROR: Unrecognized value type in user preference 'startSwankServer': ~S"
-                      start-swank-pref)
-           nil))))))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+    (require :swank-listener))
 
 (defmethod toplevel-function ((a cocoa-application) init-file)
   (declare (ignore init-file))
@@ -135,9 +99,7 @@
     (#_NSLog #@"This application requires features introduced in OSX 10.4.")
     (#_ _exit -1))
   (setq *standalone-cocoa-ide* t)
-  (when (preference-start-swank?)
-        (require :swank)
-        (try-starting-swank))
+  (maybe-start-swank-listener)
   (with-slots  (have-interactive-terminal-io) ccl::*current-process*
     (when (and (eql (nth-value 4 (ccl::%stat "/dev/null"))
                     (nth-value 4 (ccl::%fstat 0)))

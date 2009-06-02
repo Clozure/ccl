@@ -9,7 +9,7 @@
 			<dict>
 				<key>showFontPanel</key>
 				<string>id</string>
-				<key>startSwankServer</key>
+				<key>startSwankListener</key>
 				<string>id</string>
 			</dict>
 			<key>CLASS</key>

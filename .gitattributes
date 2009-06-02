@@ -180,7 +180,7 @@ cocoa-ide/slime/test.sh -text
 cocoa-ide/slime/xref.lisp -text
 cocoa-ide/start.lisp -text
 cocoa-ide/swank-ccl-ide.el -text
-cocoa-ide/swank.lisp -text
+cocoa-ide/swank-listener.lisp -text
 cocoa-ide/xapropos.lisp -text
 cocoa-ide/xinspector.lisp -text
 compiler/X86/X8632/x8632-arch.lisp -text

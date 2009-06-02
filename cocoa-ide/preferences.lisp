@@ -63,8 +63,7 @@
    (general-prefs :foreign-type :id :accessor general-prefs)
    (hyperspec-path-button :foreign-type :id :accessor hyperspec-path-button)
    (listener-tab-view-item :foreign-type :id :accessor listener-tab-view-item)
-   (swank-port-field :foreign-type :id :accessor swank-port-field)
-   (swank-protocol-label :foreign-type :id :accessor swank-protocol-label)
+   (swank-listener-port :foreign-type :id :accessor swank-listener-port)
    (tab-view :foreign-type :id :accessor tab-view)
    (toolbar :foreign-type :id :accessor toolbar))
   (:metaclass ns:+ns-object))
@@ -84,14 +83,12 @@
   self)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-    (require :swank))
+    (require :swank-listener))
 
 (objc:defmethod (#/windowDidLoad :void) ((self preferences-window-controller))
   (let* ((window (#/window self))
-         (swank-protocol-version swank::*swank-wire-protocol-version*)
-         (protocol-label (swank-protocol-label self))
-         (port-field (swank-port-field self))
-         (swank-port (or (preference-swank-port) *default-gui-swank-port*)))
+         (port-field (swank-listener-port self))
+         (listener-port (or (preference-swank-listener-port) *default-swank-listener-port*)))
     (with-slots (toolbar) self
       (setf toolbar (make-instance 'ns:ns-toolbar
 				   :with-identifier #@"preferences-window-toolbar"))
@@ -101,10 +98,7 @@
       ;; for some reason, setting this in IB doesn't work on Tiger/PPC32
       (#/setShowsToolbarButton: window nil)
       (#/release toolbar))
-    (ccl::with-autoreleased-nsstring (label-str (format nil "Swank protocol version: ~A" (or swank-protocol-version
-                                                                                             "unknown")))
-      (#/setStringValue: protocol-label label-str))
-    (ccl::with-autoreleased-nsstring (port-string (format nil "~A" (or swank-port "")))
+    (ccl::with-autoreleased-nsstring (port-string (format nil "~A" (or listener-port "")))
       (#/setStringValue: port-field port-string))
     (#/showAppearancePrefs: self +null-ptr+)))
   
@@ -145,7 +139,7 @@
     (#/setSelectedFont:isMultiple: font-manager font nil)
     (#/orderFrontFontPanel: font-manager self)))
 
-(objc:defmethod (#/startSwankServer: :void) ((self preferences-window-controller)
+(objc:defmethod (#/startSwankListener: :void) ((self preferences-window-controller)
 					 sender)
   (declare (ignore sender))
   (unless (or *ccl-swank-active-p* 
