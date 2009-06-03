@@ -143,7 +143,7 @@
 					 sender)
   (declare (ignore sender))
   (unless (or *ccl-swank-active-p* 
-              (try-starting-swank :force t))
+              (maybe-start-swank-listener :override-user-preference t))
     (alert-window :message "Unable to start the Swank server.")))
 
 ;;; This message is sent to the first responder, which is why
