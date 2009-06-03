@@ -1,0 +1,7 @@
+This directory contains source code contributed by users.  It
+is on the module search path, so files here can be loaded using
+REQUIRE.
+
+If you are interested in contributing source code here and don't
+have write access to the CCL repository, send a note to
+ccl-devel@clozure.com.

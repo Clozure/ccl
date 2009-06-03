@@ -698,6 +698,7 @@
                                     (cons-pathname '(:absolute "lib") nil nil "ccl")
 				    (cons-pathname '(:absolute "library") nil nil "ccl")
 				    (cons-pathname '(:absolute "examples" :wild-inferiors) nil nil "ccl")
+                                    (cons-pathname '(:absolute "contrib" :wild-inferiors) nil nil "ccl")
 				    (cons-pathname '(:absolute "tools") nil nil "ccl")
                                     (cons-pathname '(:absolute "objc-bridge") nil nil "ccl")
                                     (cons-pathname '(:absolute "cocoa-ide") nil nil "ccl"))
