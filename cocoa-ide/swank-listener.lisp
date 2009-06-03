@@ -126,14 +126,12 @@
             nil)
         nil)))
 
-;;; forward declaration to make swank startup possible
-(defpackage :swank
-  (:export "CREATE-SERVER"))
 
 (defun load-and-start-swank (path requested-port) 
   (handler-case (progn
                   (load path)
-                  (swank:create-server :port requested-port :dont-close t)
+                  ;; TODO: find a workaround that doesn't require swank to be loaded
+                  ;;(swank:create-server :port requested-port :dont-close t)
                   (make-swank-status :active? t :requested-loader path :requested-port requested-port))
     (ccl::socket-creation-error (e) (log-debug "Unable to start a swank server on port: ~A; ~A"
                                                requested-port e)
