@@ -52,7 +52,6 @@
                           origin
                           (count target::target-most-positive-fixnum)
                           (start-frame-number 0)
-                          (stream *debug-io*)
                           (print-level *backtrace-print-level*)
                           (print-length *backtrace-print-length*)
                           (show-internal-frames *backtrace-show-internal-frames*))
@@ -67,7 +66,6 @@ object."
   (let* ((tcr (cond (context (bt.tcr context))
                     (process (process-tcr process))
                     (t (%current-tcr))))
-         (*debug-io* stream)
          (*backtrace-print-level* print-level)
          (*backtrace-print-length* print-length)
          (*backtrace-show-internal-frames* show-internal-frames)
@@ -103,19 +101,18 @@ object."
   (let* ((tcr (cond (context (bt.tcr context))
                     (process (process-tcr process))
                     (t (%current-tcr))))
-         (*debug-io* stream)
          (*backtrace-print-level* print-level)
          (*backtrace-print-length* print-length)
          (*backtrace-show-internal-frames* show-internal-frames)
          (*backtrace-format* format))
     (if (eq tcr (%current-tcr))
-      (%print-call-history-internal context (or origin (%get-frame-ptr)) detailed-p count start-frame-number)
+      (%print-call-history-internal context (or origin (%get-frame-ptr)) detailed-p count start-frame-number stream)
       (unwind-protect
            (progn
              (%suspend-tcr tcr)
              (unless context
                (setq context (context-for-suspended-tcr tcr)))
-             (%print-call-history-internal context (or origin (bt.current context)) detailed-p count start-frame-number))
+             (%print-call-history-internal context (or origin (bt.current context)) detailed-p count start-frame-number stream))
         (%resume-tcr tcr)))
     (values)))
 
@@ -289,10 +286,12 @@ object."
 
   
 (defun %print-call-history-internal (context origin detailed-p
-                                             &optional (count target::target-most-positive-fixnum) (skip-initial 0))
+                                             &optional (count target::target-most-positive-fixnum)
+                                                       (skip-initial 0)
+                                                       (stream *debug-io*))
   (unless (eq (last-frame-ptr context origin) (last-frame-ptr context))
     (error "Origin ~s is not in the stack of ~s" origin context))
-  (let ((*standard-output* *debug-io*)
+  (let ((*standard-output* stream)
         (*print-circle* nil)
         (*print-catch-errors* t)
         (p origin)
