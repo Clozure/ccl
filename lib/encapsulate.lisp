@@ -713,6 +713,7 @@ functions are called."
                   `(&method ,saved-method-var))
               &rest arglist)
        ,@(and dynamic-extent-arglist '((declare (dynamic-extent arglist))))
+       (declare (ftype function ,def))
        (let ()
          ,(ecase
             when
