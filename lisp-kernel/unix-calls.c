@@ -33,6 +33,7 @@
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <stdint.h>
+#include <signal.h>
 
 ssize_t
 lisp_read(int fd, void *buf, size_t count)
@@ -132,4 +133,11 @@ int
 lisp_gettimeofday(struct timeval *tp, void *tzp)
 {
   return gettimeofday(tp, tzp);
+}
+
+int
+lisp_sigexit(int signum)
+{
+  signal(signum, SIG_DFL);
+  return kill(getpid(), signum);
 }

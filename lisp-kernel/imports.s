@@ -98,7 +98,7 @@ import_ptrs_start:
         defimport(lisp_closedir)
         defimport(lisp_pipe)
         defimport(lisp_gettimeofday)
-        
+        defimport(lisp_sigexit)
    
         .globl C(import_ptrs_base)
 C(import_ptrs_base):

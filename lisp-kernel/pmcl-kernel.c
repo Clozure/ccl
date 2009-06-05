@@ -754,10 +754,13 @@ void
 user_signal_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 {
   if (signum == SIGINT) {
-    lisp_global(INTFLAG) = (1 << fixnumshift);
+    lisp_global(INTFLAG) = (((signum<<8) + 1) << fixnumshift);
   }
   else if (signum == SIGTERM) {
-    lisp_global(INTFLAG) = (2 << fixnumshift);
+    lisp_global(INTFLAG) = (((signum<<8) + 2) << fixnumshift);
+  }
+  else if (signum == SIGQUIT) {
+    lisp_global(INTFLAG) = (((signum<<8) + 2) << fixnumshift);
   }
 #ifdef DARWIN
   DarwinSigReturn(context);

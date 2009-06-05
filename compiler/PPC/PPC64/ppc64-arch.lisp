@@ -697,6 +697,7 @@
   lisp-closedir
   lisp-pipe
   lisp-gettimeofday
+  lisp-sigexit
 )
 
 (defmacro nrs-offset (name)

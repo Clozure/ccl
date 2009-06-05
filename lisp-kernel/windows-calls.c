@@ -24,6 +24,7 @@
 #include <windows.h>
 #include <psapi.h>
 #include <dirent.h>
+#include <signal.h>
 #undef __argv
 #include <stdio.h>
 #include <math.h>
@@ -611,6 +612,13 @@ lisp_gettimeofday(struct timeval *tp, void *tzp)
   return 0;
 }
 
+int
+lisp_sigexit(int signum)
+{
+  signal(signum, SIG_DFL);
+  return raise(signum);
+}
+
 #ifdef WIN_64
 
 /* Make sure that the lisp calls these functions, when they do something */
@@ -906,3 +914,4 @@ init_winsock()
 
   WSAStartup((2<<8)|2,&data);
 }
+

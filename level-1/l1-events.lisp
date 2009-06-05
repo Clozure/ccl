@@ -122,10 +122,14 @@
 
 (defglobal *quit-interrupt-hook* nil)
 
-(defun force-async-quit ()
+(defun force-async-quit (signum)
   (when *quit-interrupt-hook*
-    (funcall *quit-interrupt-hook*))
-  (quit 143))
+    (funcall *quit-interrupt-hook* signum))
+  ;; Exit by resignalling, as per http://www.cons.org/cracauer/sigint.html
+  (quit #'(lambda ()
+            (ff-call (%kernel-import target::kernel-import-lisp-sigexit) :signed signum)
+            ;; Shouldn't get here
+            (#__exit 143))))
 
 (defstatic *running-periodic-tasks* nil)
 
@@ -162,14 +166,16 @@
   (progn
     (handle-gc-hooks)
     (unless *inhibit-abort*
-      (let ((id (pending-user-interrupt)))
-        (cond ((eql id $user-interrupt-quit)
-               ;; Doesn't matter where it happens, but try to use a process that
-               ;; has a shot at reporting any problems in user hook.
+      (let* ((id (pending-user-interrupt))
+             (kind (logand #xFF id)))
+        (cond ((eql kind $user-interrupt-quit)
+               ;; Try to use a process that has a shot at reporting any problems
+               ;; in case of bugs in user hook.
                (let* ((proc (or (select-interactive-abort-process)
-                                *initial-process*)))
-                 (process-interrupt proc #'force-async-quit)))
-              ((eql id $user-interrupt-break)
+                                *initial-process*))
+                      (signum (ash id -8)))
+                 (process-interrupt proc #'force-async-quit signum)))
+              ((eql kind $user-interrupt-break)
                (let* ((proc (select-interactive-abort-process)))
                  (if proc
                    (force-break-in-listener proc)))))))
