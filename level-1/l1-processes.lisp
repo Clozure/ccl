@@ -642,10 +642,11 @@ some point in the near future, and then return to what it was doing."
 
 (defmethod process-exit-application ((process process) thunk)
   (when (eq process *initial-process*)
-    (prepare-to-quit)
+    (with-standard-abort-handling "Exit Lisp"
+      (prepare-to-quit)
+      (fresh-line *stdout*)
+      (finish-output *stdout*))
     (%set-toplevel thunk)
-    (fresh-line *stdout*)
-    (finish-output *stdout*)
     (toplevel)))
 
 

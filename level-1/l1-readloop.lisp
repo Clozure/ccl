@@ -107,18 +107,28 @@
   (invoke-restart-no-return 'abort-break))
 
 
-(defun quit (&optional (exit-status 0))
-  (unless (typep exit-status '(signed-byte 32))
-    (report-bad-arg exit-status '(signed-byte 32)))
+(defun quit (&optional (exit 0) &key error-handler)
+  "exit must be either a (signed-byte 32) exit status or a function to call to exit lisp
+   error-handler can be a function of one argument, the condition, that will be called if an
+   error occurs while preparing to quit.  The error handler should exit"
+  (if (or (null exit) (typep exit '(signed-byte 32)))
+    (setq exit (let ((exit-status (or exit 0)))
+                 #'(lambda () (#__exit exit-status))))
+    (unless (typep exit 'function)
+      (report-bad-arg exit '(or (signed-byte 32) function))))
   (let* ((ip *initial-process*)
 	 (cp *current-process*))
     (when (process-verify-quit ip)
       (process-interrupt ip
 			 #'(lambda ()
-			     (process-exit-application *current-process*
-                                                       #'(lambda ()
-                                                           (%set-toplevel nil)
-                                                           (#__exit exit-status)))))
+                             (handler-bind ((error (lambda (c)
+                                                     (when error-handler
+                                                       (funcall error-handler c)))))
+                               (process-exit-application *current-process*
+                                                         #'(lambda ()
+                                                             (%set-toplevel nil)
+                                                             (funcall exit) ;; must exit
+                                                             (bug "Exit function didn't exit"))))))
       (unless (eq cp ip)
 	(process-kill cp)))))
 
