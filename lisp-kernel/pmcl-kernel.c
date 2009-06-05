@@ -749,7 +749,7 @@ shrink_dynamic_area(natural delta)
 }
 
 
-
+#ifndef WINDOWS
 void
 user_signal_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 {
@@ -767,6 +767,7 @@ user_signal_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 #endif
 }
 
+#endif
 
 void
 register_user_signal_handler()
