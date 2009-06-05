@@ -266,7 +266,7 @@ wopen(wchar_t *path, int flag, int mode)
   if (h == (HANDLE)-1) {
     return -1;                  /* errno already set */
   }
-  return _open_osfhandle((DWORD)h,0);
+  return  _open_osfhandle((intptr_t)h,0);
 }
 
 int
