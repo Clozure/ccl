@@ -384,18 +384,22 @@ instance variable."
 
 (defparameter *objc-description-max-length* 1024 "Limit on the length of NSObject description strings if non-NIL.")
 
+(defun %cf-instance-p (instance)
+  (> (objc-message-send instance "_cfTypeID" #>CFTypeID) 1))
 
 (defun initialized-nsobject-p (nsobject)
   (or (objc-class-p nsobject)
       (objc-metaclass-p nsobject)
-      (let* ((class (#/class nsobject))
-             (isize (%objc-class-instance-size class)))
-        (declare (fixnum isize))
-        (do* ((i (record-length :id) (1+ i)))
-             ((= i isize))
-          (declare (fixnum i))
-          (unless (zerop (the (unsigned-byte 8) (%get-unsigned-byte nsobject i)))
-            (return t))))))
+      (let* ((cf-p (%cf-instance-p nsobject)) 
+             (isize (if cf-p (#_malloc_size nsobject) (%objc-class-instance-size (#/class nsobject))))
+             (skip (if cf-p (+ (record-length :id) 4 #+64-bit-target 4) (record-length :id))))
+        (declare (fixnum isize skip))
+        (or (> skip isize)
+            (do* ((i skip (1+ i)))
+                 ((>= i isize))
+              (declare (fixnum i))
+              (unless (zerop (the (unsigned-byte 8) (%get-unsigned-byte nsobject i)))
+                (return t)))))))
   
 (defun nsobject-description (nsobject)
   "Returns a lisp string that describes nsobject.  Note that some
