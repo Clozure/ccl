@@ -243,8 +243,10 @@ binding of that symbol is used - or an integer index into the frame's set of loc
 
 (%use-toplevel-commands :global)
 
-(defparameter *toplevel-commands-dwim* t "If true, tries to interpret otherwise-erroneous toplevel
-expressions as commands")
+(defparameter *toplevel-commands-dwim* t
+ "If true, tries to interpret otherwise-erroneous toplevel expressions as commands.
+In addition, will suppress standard error handling for expressions that look like
+commands but aren't")
 
 (defvar *default-integer-command* nil
   "If non-nil, should be (keyword  min max)), causing integers between min and max to be
@@ -264,11 +266,26 @@ expressions as commands")
                    ;; Use find-symbol so don't make unneeded keywords.
                    (setq cmd (find-symbol (symbol-name cmd) :keyword))))
       (when (eq cmd :help) (setq cmd :?))
-      (dolist (g *active-toplevel-commands*)
-        (let* ((pair (assoc cmd (cdr g))))
-          (when pair 
-            (apply (cadr pair) args)
-            (return t)))))))
+      (flet ((run (cmd form)
+               (or (dolist (g *active-toplevel-commands*)
+                     (let* ((pair (assoc cmd (cdr g))))
+                       (when pair 
+                         (apply (cadr pair) args)
+                         (return t))))
+                   ;; Try to detect user mistyping a command
+                   (when (and *toplevel-commands-dwim*
+                              (if (consp form)
+                                (and (keywordp (%car form)) (not (fboundp (%car form))))
+                                (keywordp form)))
+                     (error "Unknown command ~s" cmd)))))
+        (declare (dynamic-extent #'run))
+        (if *toplevel-commands-dwim*
+          (block nil
+            (handler-bind ((error (lambda (c)
+                                    (format t "~&~a" c)
+                                    (return t))))
+              (run cmd form)))
+          (run cmd form))))))
 
 (defparameter *quit-on-eof* nil)
 
@@ -480,7 +497,7 @@ expressions as commands")
   "Print a message and invoke the debugger without allowing any possibility
    of condition handling occurring."
   (if *batch-flag*
-    (apply #'error string args)
+    (apply #'error (or string "BREAK invoked in batch mode") args)
     (apply #'%break-in-frame (%get-frame-ptr) string args)))
 
 (defun %break-in-frame (fp &optional string &rest args)
@@ -609,7 +626,6 @@ expressions as commands")
 
 
 
-
 (defvar %last-continue% nil)
 (defun break-loop (condition frame-pointer)
   "Never returns"
@@ -644,34 +660,34 @@ expressions as commands")
                                       (1+ *break-level*)))
          (*backtrace-contexts* (cons context *backtrace-contexts*)))
     (with-terminal-input
-        (with-toplevel-commands :break
-          (if *continuablep*
-            (let* ((*print-circle* *error-print-circle*)
-                   (*print-level* *error-print-level*)
-                   (*print-length* *error-print-length*)
+      (with-toplevel-commands :break
+        (if *continuablep*
+          (let* ((*print-circle* *error-print-circle*)
+                 (*print-level* *error-print-level*)
+                 (*print-length* *error-print-length*)
 					;(*print-pretty* nil)
-                   (*print-array* nil))
-              (format t (or (application-ui-operation *application* :break-options-string t)
-                            "~&> Type :GO to continue, :POP to abort, :R for a list of available restarts."))
-              (format t "~&> If continued: ~A~%" continue))
-            (format t (or (application-ui-operation *application* :break-options-string nil)
-                          "~&> Type :POP to abort, :R for a list of available restarts.~%")))
-          (format t "~&> Type :? for other options.")
-          (terpri)
-          (force-output)
+                 (*print-array* nil))
+            (format t (or (application-ui-operation *application* :break-options-string t)
+                          "~&> Type :GO to continue, :POP to abort, :R for a list of available restarts."))
+            (format t "~&> If continued: ~A~%" continue))
+          (format t (or (application-ui-operation *application* :break-options-string nil)
+                        "~&> Type :POP to abort, :R for a list of available restarts.~%")))
+        (format t "~&> Type :? for other options.")
+        (terpri)
+        (force-output)
 
-          (clear-input *debug-io*)
-          (setq *error-reentry-count* 0) ; succesfully reported error
-          (ignoring-without-interrupts
-           (unwind-protect
-                (progn
-                  (application-ui-operation *application*
-                                            :enter-backtrace-context context)
-                  (read-loop :break-level (1+ *break-level*)
-                             :input-stream *debug-io*
-                             :output-stream *debug-io*))
-             (application-ui-operation *application* :exit-backtrace-context
-                                       context)))))))
+        (clear-input *debug-io*)
+        (setq *error-reentry-count* 0)  ; succesfully reported error
+        (ignoring-without-interrupts
+          (unwind-protect
+               (progn
+                 (application-ui-operation *application*
+                                           :enter-backtrace-context context)
+                 (read-loop :break-level (1+ *break-level*)
+                            :input-stream *debug-io*
+                            :output-stream *debug-io*))
+            (application-ui-operation *application* :exit-backtrace-context
+                                      context)))))))
 
 
 
