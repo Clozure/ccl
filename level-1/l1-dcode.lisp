@@ -624,6 +624,7 @@
                            1)           ; next power of 2
                     *min-gf-dispatch-table-size*))
   (let ((res (%cons-gf-dispatch-table size)))
+    (declare (optimize (speed 3) (safety 0)))
     (setf (%gf-dispatch-table-mask res) (%i- (%ilsr 1 size) 1)
           (%gf-dispatch-table-argnum res) 0
           (%gf-dispatch-table-ref res size) (%unbound-marker))

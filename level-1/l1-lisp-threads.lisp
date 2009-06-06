@@ -842,7 +842,7 @@
 
 ;;; True if the object is in one of the heap areas
 (defun %in-consing-area-p (x area)
-  (declare (fixnum x))                  ; lie
+  (declare (optimize (speed 3) (safety 0)) (fixnum x))       ; lie
   (let* ((low (%fixnum-ref area target::area.low))
          (high (%fixnum-ref area target::area.high))
 )

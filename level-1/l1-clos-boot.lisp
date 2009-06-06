@@ -952,7 +952,7 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
   (with-hash-table-iterator (m %find-classes%)
     (loop
       (multiple-value-bind (found name cell) (m)
-        (declare (type class-cell cell))
+        (declare (optimize speed) (type class-cell cell))
         (unless found (return))
         (when cell
           (funcall function name (class-cell-class cell)))))))
@@ -1300,7 +1300,7 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 
 (defun find-class (name &optional (errorp t) environment)
   (let* ((cell (find-class-cell name nil)))
-    (declare (type class-cell cell))
+    (declare (optimize speed) (type class-cell cell))
     (or (and cell (class-cell-class cell))
         (let ((defenv (and environment (definition-environment environment))))
           (when defenv
@@ -1505,6 +1505,7 @@ to replace that class with ~s" name old-class new-class)
       cpl)))
 
 (defun make-cpl-bits (cpl)
+  (declare (optimize speed))
   (when cpl
     (let* ((max 0))
       (declare (fixnum max))
@@ -1774,6 +1775,8 @@ to replace that class with ~s" name old-class new-class)
 (let ((*dont-find-class-optimize* t)
       (ordinal-type-class-alist ())
       (ordinal-type-class-alist-lock (make-lock)))
+
+  (declare (optimize speed)) ;; make sure everything gets inlined that needs to be.
 
 ;; The built-in classes.
   (defstatic *array-class* (make-built-in-class 'array))
@@ -2626,6 +2629,7 @@ to replace that class with ~s" name old-class new-class)
 
 (defun %make-instance (class-cell &rest initargs)
   (declare (dynamic-extent initargs))
+  (declare (optimize speed)) ;; make sure everything gets inlined that needs to be.
   (apply #'make-instance
          (or (class-cell-class class-cell) (class-cell-name  (the class-cell class-cell)))
          initargs))

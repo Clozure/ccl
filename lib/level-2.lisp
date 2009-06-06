@@ -302,6 +302,7 @@
              (when (null body) (setq body `((,name ,@vars))))
              `(setf (symbol-function ',name)
                     (qlfun ,name ,vars ,@body))))
+  (declare (optimize (speed 1) (safety 1)))
   (%eval-redef %ilsl (n x))
   (%eval-redef %ilsr (n x))
   (%eval-redef neq (x y))

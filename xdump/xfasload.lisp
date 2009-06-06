@@ -1802,7 +1802,9 @@
 (defun target-Xcompile-directory (target dir &optional force)
   (let* ((backend (find-backend target))
 	 (any (not (null force)))
-         (outpath (merge-pathnames dir (backend-target-fasl-pathname backend))))
+         (outpath (merge-pathnames dir (backend-target-fasl-pathname backend)))
+         (*nx-speed* (max 1 *nx-speed*))
+         (*nx-safety* (min 1 *nx-safety*)))
     (in-development-mode
      (dolist (src (sort (directory (merge-pathnames dir "*.lisp"))
 			#'string< :key #'namestring)

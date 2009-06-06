@@ -2141,6 +2141,7 @@
 (defun make-string (size &key (initial-element () initial-element-p) (element-type 'character element-type-p))
   "Given a character count and an optional fill character, makes and returns
    a new string COUNT long filled with the fill character."
+  (declare (optimize (speed 1) (safety 1)))
   (when (and initial-element-p (not (typep initial-element 'character)))
     (report-bad-arg initial-element 'character))
   (when (and element-type-p

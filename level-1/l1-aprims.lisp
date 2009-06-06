@@ -176,7 +176,7 @@ terminate the list"
 	    (returned-list list)
 	    (index 0 (1+ index)))
 	   ((atom checked-list) returned-list)
-	(declare (type index index))
+	(declare (type fixnum index))
 	(if (>= index n)
 	  (pop returned-list))))
     (if (and (typep n 'bignum)
@@ -2787,6 +2787,7 @@ of 32KBytes in earlier versions.)"
           ))
        (max-upper #\u+0000)
        (max-lower #\u+0000))
+  (declare (optimize speed)) ;; make sure everything gets inlined that needs to be.
   (dolist (pair mapping)
     (destructuring-bind (upper . lower) pair
       (when (char> upper max-upper)
@@ -2861,6 +2862,7 @@ of 32KBytes in earlier versions.)"
 
 (defstatic *alpha-char-bits*
   (let* ((bits (make-array #x2fa1e :element-type 'bit)))
+    (declare (optimize speed)) ;; make sure everything gets inlined that needs to be.
     (dolist (range '((#x0041 . #x005A)
                      (#x0061 . #x007A)
                      #x00AA
