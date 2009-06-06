@@ -25,16 +25,16 @@
 (defvar *ccl-swank-listener-proc* nil)
 
 (defvar *ccl-swank-output* nil)
-;;; TODO: make this filter function start up a connection to
-;;;       the CCL swank server if it reads a success message,
-;;;       or display an informative error if it reads a
-;;;       failure message
+
 (defun slime-ccl-swank-filter (process string)
   (let* ((status (read string))
          (active? (plist-get status :active)))
+    (setq *ccl-swank-output* status)
     (if active?
         (let ((port (plist-get status :port)))
-          (slime-connect *ccl-swank-listener-host* port)))))
+          (slime-connect *ccl-swank-listener-host* port))
+        (error "CCL failed to start the swank server. The reason it gave was: '%s'"
+               (plist-get status :message)))))
 
 (defvar $emacs-ccl-swank-request-marker "[emacs-ccl-swank-request]")
 

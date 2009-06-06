@@ -18,6 +18,14 @@
 (defparameter *default-swank-listener-port* 4884)
 (defparameter *active-gui-swank-listener-port* nil)
 (defparameter *ccl-swank-listener-active-p* nil)
+(defvar *swank-listener-process* nil)
+
+(defun swank-listener-active? ()
+  (and *swank-listener-process*
+       (typep *swank-listener-process* 'process)
+       (not (member (process-whostate *swank-listener-process*)
+                    '("Reset" "Exhausted")
+                    :test 'string-equal))))
 
 ;;; preference-swank-listener-port
 ;;; returns the current value of the "Swank Port" user preference
@@ -98,14 +106,19 @@
 
 (defvar $emacs-ccl-swank-request-marker "[emacs-ccl-swank-request]")
 
+(defvar $last-swank-message-sent nil)
+
+(defun swank-server-running? ()
+  (and (find-package :swank)
+       (let ((active-listeners (symbol-value (intern "*LISTENER-SOCKETS*" :swank))))
+         (and (not (null active-listeners))
+              (first active-listeners)))))
+
 (defstruct (swank-status (:conc-name swank-))
   (active? nil :read-only t)
   (message nil :read-only t)
   (requested-loader nil :read-only t)
   (requested-port nil :read-only t))
-
-(defun not-ready-yet (nm)
-  (error "Not yet implemented: ~A" nm))
 
 (defun read-swank-ping (tcp-stream) 
   (read-line tcp-stream nil nil nil))
@@ -129,17 +142,23 @@
 
 
 (defun load-and-start-swank (path requested-port) 
-  (handler-case (progn
-                  (load path)
-                  (let ((swank-loader-package (find-package :swank-loader)))
-                    (if swank-loader-package
-                        ;; swank loaded. start the server
-                        (progn
-                          (funcall (intern "LOAD-SWANK" swank-loader-package))
-                          (funcall (intern "CREATE-SERVER" (find-package :swank)) :port requested-port :dont-close t)
-                          (make-swank-status :active? t :requested-loader path :requested-port requested-port))
-                        ;; swank failed to load. return failure status
-                        (make-swank-status :active? nil :message "swank load failed" :requested-loader path :requested-port requested-port))))
+  (handler-case (let* ((active-swank-port (swank-server-running?))
+                       (msg (format nil "A swank server is already running on port ~A" active-swank-port)))
+                  (if active-swank-port
+                      (progn
+                        (log-debug msg)
+                        (make-swank-status :active? t :message msg :requested-loader path :requested-port requested-port))
+                      (progn
+                        (load path)
+                        (let ((swank-loader-package (find-package :swank-loader)))
+                          (if swank-loader-package
+                              ;; swank loaded. start the server
+                              (progn
+                                (funcall (intern "LOAD-SWANK" swank-loader-package))
+                                (funcall (intern "CREATE-SERVER" (find-package :swank)) :port requested-port :dont-close t)
+                                (make-swank-status :active? t :requested-loader path :requested-port requested-port))
+                              ;; swank failed to load. return failure status
+                              (make-swank-status :active? nil :message "swank load failed" :requested-loader path :requested-port requested-port))))))
     (ccl::socket-creation-error (e) (log-debug "Unable to start a swank server on port: ~A; ~A"
                                                requested-port e)
                                 (make-swank-status :active? nil :message "socket-creation error"
@@ -153,10 +172,13 @@
   (swank-active? status))
 
 (defun send-swank-response (tcp-stream status)
-  (let ((response (format nil "(:active ~S :loader ~S :port ~D)"
-                          (swank-active? status)
-                          (swank-requested-loader status)
-                          (swank-requested-port status))))
+  (let ((response 
+         (let ((*print-case* :downcase))
+           (format nil "(:active ~S :loader ~S :message ~S :port ~D)"
+                   (swank-active? status)
+                   (swank-requested-loader status)
+                   (swank-message status)
+                   (swank-requested-port status)))))
     (format tcp-stream response)
     (finish-output tcp-stream)))
 
@@ -166,17 +188,26 @@
         (parse-swank-ping msg)
       (load-and-start-swank swank-path requested-port))))
 
+(defun stop-swank-listener ()
+  (process-kill *swank-listener-process*)
+  (setq *swank-listener-process* nil))
+
 ;;; the real deal
 ;;; if it succeeds, it returns a PROCESS object
 ;;; if it fails, it returns a CONDITION object
 (defun start-swank-listener (&optional (port *default-swank-listener-port*))
   (handler-case 
-      (process-run-function "Swank Listener"
-                            #'(lambda ()
-                                (with-open-socket (sock :type :stream :connect :passive :local-port port :reuse-address t :auto-close t)
-                                  (let* ((client-sock (accept-connection sock))
-                                         (status (handle-swank-client client-sock)))
-                                    (send-swank-response client-sock status)))))
+      (if (swank-listener-active?)
+          (log-debug "in start-swank-listener: the swank listener process is already running")
+          (setq *swank-listener-process*
+                (process-run-function "Swank Listener"
+                                      #'(lambda ()
+                                          (with-open-socket (sock :type :stream :connect :passive 
+                                                                  :local-port port :reuse-address t :auto-close t)
+                                            (loop
+                                               (let* ((client-sock (accept-connection sock))
+                                                      (status (handle-swank-client client-sock)))
+                                                 (send-swank-response client-sock status))))))))
     (ccl::socket-creation-error (c) (nslog-condition c "Unable to create a socket for the swank-listener: ") c)
     (ccl::socket-error (c) (nslog-condition c "Swank-listener failed trying to accept a client connection: ") c)
     (serious-condition (c) (nslog-condition c "Error starting in the swank-listener:") c)))
