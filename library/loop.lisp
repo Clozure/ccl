@@ -1879,7 +1879,7 @@ collected result will be returned as the value of the LOOP."
 
 (defun loop-for-arithmetic (var val data-type kwd)
   (loop-sequencer
-    var (loop-check-data-type data-type *loop-real-data-type*) t
+    var (loop-check-data-type data-type 'number) t
     nil nil nil nil nil nil
     (loop-collect-prepositional-phrases
       '((:from :upfrom :downfrom) (:to :upto :downto :above :below) (:by))
@@ -1938,11 +1938,11 @@ collected result will be returned as the value of the LOOP."
 	    (setq key-var variable val-var (and other-p other-var))
 	    (setq key-var (and other-p other-var) val-var variable))
 	(push `(with-hash-table-iterator (,next-fn ,ht-var)) *loop-wrappers*)
-	(when (consp key-var)
+	(when (or (consp key-var) data-type)
 	  (setq post-steps `(,key-var ,(setq key-var (loop-gentemp 'loop-hash-key-temp-))
 			     ,@post-steps))
 	  (push `(,key-var nil) bindings))
-	(when (consp val-var)
+	(when (or (consp val-var) data-type)
 	  (setq post-steps `(,val-var ,(setq val-var (loop-gentemp 'loop-hash-val-temp-))
 			     ,@post-steps))
 	  (push `(,val-var nil) bindings))

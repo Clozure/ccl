@@ -183,18 +183,22 @@
          (tstlab (gensym))
          (lstsym (gensym)))
     (multiple-value-bind (forms decls) (parse-body body env nil)
-     `(block nil
-       (let* ((,lstsym ,list) ,varsym)
-        ,@decls
-          (tagbody
-            (go ,tstlab)
-            ,toplab
-            (setq ,lstsym (cdr (the list ,lstsym)))
-            ,@forms
-            ,tstlab
-            (setq ,varsym (car ,lstsym))
-            (if ,lstsym (go ,toplab)))
-          ,@(if ret `((progn  ,ret))))))))
+      `(block nil
+         (let* ((,lstsym ,list))
+           (tagbody
+              (go ,tstlab)
+              ,toplab
+              (let ((,varsym (car ,lstsym)))
+                ,@decls
+                (tagbody
+                   ,@forms)
+                (setq ,lstsym (cdr (the list ,lstsym))))
+              ,tstlab
+              (if ,lstsym (go ,toplab))))
+         ,@(if ret `((let ((,varsym nil))
+                       (declare (ignore-if-unused ,varsym))
+                       ,@decls
+                       ,ret)))))))
 
 
 (defmacro dovector ((varsym vector &optional ret) &body body &environment env)
@@ -977,9 +981,10 @@ are no Forms, OR returns NIL."
 
 ; This is supposedly ANSI CL.
 (defmacro lambda (&whole lambda-expression (&rest paramlist) &body body)
+  (declare (ignore paramlist body))
   (unless (lambda-expression-p lambda-expression)
     (warn "Invalid lambda expression: ~s" lambda-expression))
-  `(function (lambda ,paramlist ,@body)))
+  `(function ,lambda-expression))
 
 ; This isn't
 (defmacro nlambda (name (&rest arglist) &body body)
@@ -1346,7 +1351,7 @@ are no Forms, OR returns NIL."
 (defmacro %ilogior2 (x y) 
   `(logior (the fixnum ,x) (the fixnum ,y)))
 
-(defmacro %ilogior (body &body args)
+(defmacro %ilogior (body &rest args)
    (while args
      (setq body (list '%ilogior2 body (pop args))))
    body)
@@ -1467,14 +1472,14 @@ All output to that string stream is saved in a string."
 		     (slot-value ,var 'truncated)))
 	(close ,var)))))
 
-(defmacro with-open-file ((var . args) &body body &aux (stream (gensym))(done (gensym)))
-  "Use open to create a file stream to file named by filespec. Filespec is
+(defmacro with-open-file ((var filename . args) &body body &aux (stream (gensym))(done (gensym)))
+  "Use open to create a file stream to file named by filename. Filename is
 the name of the file to be opened. Options are used as keyword arguments
 to open."
   `(let (,stream ,done)
      (unwind-protect
        (multiple-value-prog1
-         (let ((,var (setq ,stream (open ,@args))))
+         (let ((,var (setq ,stream (open ,filename ,@args))))
            ,@body)
          (setq ,done t))
        (when ,stream (close ,stream :abort (null ,done))))))

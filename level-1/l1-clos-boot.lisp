@@ -1299,8 +1299,9 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 
 
 (defun find-class (name &optional (errorp t) environment)
+  (declare (optimize speed))
   (let* ((cell (find-class-cell name nil)))
-    (declare (optimize speed) (type class-cell cell))
+    (declare (type class-cell cell))
     (or (and cell (class-cell-class cell))
         (let ((defenv (and environment (definition-environment environment))))
           (when defenv

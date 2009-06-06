@@ -1309,7 +1309,7 @@
        (make-no-applicable-method-function real-gf))))
 
 (defun nth-or-gf-error (n l gf)
-  (declare (fixnum l))
+  (declare (fixnum n))
   (do* ((i 0 (1+ i))
         (l l (cdr l)))
        ((null l) (dcode-too-few-args i gf))

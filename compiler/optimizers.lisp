@@ -1975,7 +1975,7 @@
   string)
 
 (defun count-known-format-args (string start end)
-  (declare (fixnum start end))
+  (declare (fixnum end))
   (loop with count = 0
         do (setq start (position #\~ string :start start :end end))
         when (null start)

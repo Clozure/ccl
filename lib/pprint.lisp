@@ -435,7 +435,7 @@
 ;many Common Lisps.
 
 (defmacro xp-check-size (FORM ptr min-size entry-size
-                           &optional (type 'simple-vector))
+                           &optional (type '(simple-array * (*))))
   `(let ((.old. ,form)
          (.ptr. ,ptr))
      (declare (type ,type .old.) (type fixnum .ptr.))
