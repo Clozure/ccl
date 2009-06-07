@@ -4562,12 +4562,12 @@
         (declare (fixnum limit))
         (if (and (typep newpos 'fixnum)
                  (>= (the fixnum newpos) 0)
-                 (< (the fixnum newpos) limit))
+                 (<= (the fixnum newpos) limit))
           (progn
             (setf (string-input-stream-ioblock-index ioblock)
                   (the fixnum (+ start (the fixnum newpos))))
             newpos)
-          (report-bad-arg newpos `(integer 0 (,limit)))))
+          (report-bad-arg newpos `(integer 0 ,limit))))
       (the fixnum (- idx start)))))
     
   
