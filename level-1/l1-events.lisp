@@ -127,7 +127,10 @@
 
 (defun force-async-quit (signum)
   (when *quit-interrupt-hook*
-    (funcall *quit-interrupt-hook* signum))
+    (multiple-value-bind (req opt restp) (function-args *quit-interrupt-hook*)
+      (if (and (= req 0) (= opt 0) (not restp))
+        (funcall *quit-interrupt-hook*)
+        (funcall *quit-interrupt-hook* signum))))
   ;; Exit by resignalling, as per http://www.cons.org/cracauer/sigint.html
   (quit #'(lambda ()
             (ff-call (%kernel-import target::kernel-import-lisp-sigexit) :signed signum)
