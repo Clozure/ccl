@@ -228,7 +228,7 @@
 
 (declaim (fixnum *x862-vstack* *x862-cstack*))
 
- 
+
 
 
 
@@ -1350,7 +1350,7 @@
   (x862-set-vstack (%i+ *x862-vstack* delta)))
 
 (defun x862-set-vstack (new)
-  (setq *x862-vstack* new))
+  (setq *x862-vstack* (or new 0)))
 
 
 ;;; Emit a note at the end of the segment.
@@ -3809,7 +3809,7 @@
   (x862-test-reg-%izerop seg vreg xfer (x862-one-untargeted-reg-form seg form *x862-arg-z*) cr-bit true-p 0))
 
 (defun x862-test-reg-%izerop (seg vreg xfer reg cr-bit true-p  zero)
-  (declare (fixnum reg zero))
+  (declare (fixnum zero))
   (with-x86-local-vinsn-macros (seg vreg xfer)
     (if (zerop zero)
       (! compare-reg-to-zero reg)
@@ -5837,7 +5837,7 @@
                                (parsed-ops (make-list (length op-vals)))
                                (tail parsed-ops))
                           (declare (dynamic-extent parsed-ops)
-                                   (cons parsed-ops tail))
+                                   (list parsed-ops tail))
                           (dolist (op op-vals (apply (cadr f) parsed-ops))
                             (setq tail (cdr (rplaca tail (parse-operand-form op t)))))))
                  (:not (not (eval-predicate (cadr f))))
@@ -6163,10 +6163,10 @@
             ;; Save NVRs; load constants into any that get constants.
             (x862-save-nvrs seg pregs)
             (dolist (pair reglocatives)
-              (declare (cons pair))
-              (let* ((constant (car pair))
+              (let* ((pair pair)
+                     (constant (car pair))
                      (reg (cdr pair)))
-                (declare (cons constant))
+                (declare (cons pair constant))
                 (rplacd constant reg)
                 (! ref-constant reg (x86-immediate-label (car constant))))))
           (when (and (not (or opt rest keys))
@@ -6199,7 +6199,7 @@
                                     (:x8664 (list *x862-arg-z* *x862-arg-y* x8664::arg_x))))
                   (arg-reg-num (pop arg-reg-numbers) (pop arg-reg-numbers)))
                  ((null vars))
-              (declare (list vars) (fixnum arg-reg-num))
+              (declare (list vars))
               (let* ((var (car vars)))
                 (when var
                   (let* ((reg (nx2-assign-register-var var)))
@@ -8945,34 +8945,43 @@
                 (eq typespec '*))
           (x862-form seg vreg xfer form)
           (with-note (form seg vreg xfer)
-            (let* ((ok (backend-get-next-label)))
-              (x862-one-targeted-reg-form seg form ($ *x862-arg-y*))
-              (x862-store-immediate seg typespec ($ *x862-arg-z*))
-              (x862-store-immediate seg 'typep ($ *x862-fname*))
-              (x862-set-nargs seg 2)
-              (x862-vpush-register seg ($ *x862-arg-y*))
-              (! call-known-symbol ($ *x862-arg-z*))
-              (! compare-to-nil ($ *x862-arg-z*))
-              (x862-vpop-register seg ($ *x862-arg-y*))
-              (! cbranch-false (aref *backend-labels* ok) x86::x86-e-bits)
-              (target-arch-case
-               (:x8632
-                (let* ((*x862-vstack* *x862-vstack*)
-                       (*x862-top-vstack-lcell* *x862-top-vstack-lcell*))
-                  (! reserve-outgoing-frame)
-                  (incf *x862-vstack* (* 2 *x862-target-node-size*))
-                  (! vpush-fixnum (ash $XWRONGTYPE *x862-target-fixnum-shift*))
-                  (x862-store-immediate seg typespec ($ *x862-arg-z*))
-                  (x862-set-nargs seg 3)
-                  (! ksignalerr)))
-               (:x8664
-                (x862-lri seg ($ x8664::arg_x) (ash $XWRONGTYPE *x862-target-fixnum-shift*))
+          (let* ((ok (backend-get-next-label)))
+            (if (and (symbolp typespec) (non-nil-symbolp (type-predicate typespec)))
+              ;; Do this so can compile the lisp with typechecking even though typep
+              ;; doesn't get defined til fairly late.
+              (progn
+                (x862-one-targeted-reg-form seg form ($ *x862-arg-z*))
+                (x862-store-immediate seg (type-predicate typespec) ($ *x862-fname*))
+                (x862-set-nargs seg 1)
+                (x862-vpush-register seg ($ *x862-arg-z*)))
+              (progn
+                (x862-one-targeted-reg-form seg form ($ *x862-arg-y*))
                 (x862-store-immediate seg typespec ($ *x862-arg-z*))
-                (x862-set-nargs seg 3)
-                (! ksignalerr)))
-              (@ ok)
-              (<- ($ *x862-arg-y*))
-              (^))))))))
+                (x862-store-immediate seg 'typep ($ *x862-fname*))
+                (x862-set-nargs seg 2)
+                (x862-vpush-register seg ($ *x862-arg-y*))))
+            (! call-known-symbol ($ *x862-arg-z*))
+            (! compare-to-nil ($ *x862-arg-z*))
+            (x862-vpop-register seg ($ *x862-arg-y*))
+            (! cbranch-false (aref *backend-labels* ok) x86::x86-e-bits)
+	    (target-arch-case
+	     (:x8632
+	      (let* ((*x862-vstack* *x862-vstack*)
+		     (*x862-top-vstack-lcell* *x862-top-vstack-lcell*))
+		(! reserve-outgoing-frame)
+		(incf *x862-vstack* (* 2 *x862-target-node-size*))
+		(! vpush-fixnum (ash $XWRONGTYPE *x862-target-fixnum-shift*))
+		(x862-store-immediate seg typespec ($ *x862-arg-z*))
+		(x862-set-nargs seg 3)
+		(! ksignalerr)))
+	     (:x8664
+	      (x862-lri seg ($ x8664::arg_x) (ash $XWRONGTYPE *x862-target-fixnum-shift*))
+	      (x862-store-immediate seg typespec ($ *x862-arg-z*))
+	      (x862-set-nargs seg 3)
+	      (! ksignalerr)))
+            (@ ok)
+            (<- ($ *x862-arg-y*))
+            (^))))))))
           
           
                   

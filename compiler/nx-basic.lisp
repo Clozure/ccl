@@ -145,7 +145,7 @@
                #'(lambda (env)
                    (let* ((safety (safety-optimize-quantity env)))
                      (or (eq safety 3)
-                         (> safety (speed-optimize-quantity env)))))          ;the-typechecks 
+                         (> safety (speed-optimize-quantity env)))))          ;declarations-typecheck
                #'(lambda (env)
                    (neq (debug-optimize-quantity env) 3))   ; inline-self-calls
                #'(lambda (env)
@@ -170,7 +170,7 @@
                                    (allow-transforms nil at-p)
                                    (force-boundp-checks nil fb-p)
                                    (allow-constant-substitution nil acs-p)
-                                   (the-typechecks nil tt-p))
+                                   (declarations-typecheck nil dt-p))
     (let ((p (copy-uvector policy)))
       (if atr-p (setf (policy.allow-tail-recursion-elimination p) allow-tail-recursion-elimination))
       (if ira-p (setf (policy.inhibit-register-allocation p) inhibit-register-allocation))
@@ -181,7 +181,7 @@
       (if at-p (setf (policy.allow-transforms p) allow-transforms))
       (if fb-p (setf (policy.force-boundp-checks p) force-boundp-checks))
       (if acs-p (setf (policy.allow-constant-substitution p) allow-constant-substitution))
-      (if tt-p (setf (policy.the-typechecks p) the-typechecks))
+      (if dt-p (setf (policy.declarations-typecheck p) declarations-typecheck))
       p))
   (defun %default-compiler-policy () policy))
 

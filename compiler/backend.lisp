@@ -378,7 +378,7 @@
   (let* ((class (gensym)))
     `(if ,regspec
        (multiple-value-bind (,class ,regval) (regspec-class-and-value ,regspec hard-reg-class-gpr-crf-mask)
-         (declare (fixnum ,class ,regval))
+         (declare (fixnum ,class))
          (if (= ,class hard-reg-class-crf)
            ,crf-form
            ,gpr-form)))))

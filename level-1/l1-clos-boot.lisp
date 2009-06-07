@@ -1236,7 +1236,6 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 
 
 (defun std-instance-class-cell-typep (form class-cell)
-  (declare (type class-cell  class-cell))
   (let* ((typecode (typecode form))
          (wrapper (cond ((= typecode target::subtag-instance)
                          (instance.class-wrapper form))

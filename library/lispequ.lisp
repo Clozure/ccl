@@ -198,7 +198,7 @@
   var-name                              ; symbol
   (var-bits var-parent)                 ; fixnum or ptr to parent
   (var-ea  var-expansion)               ; p2 address (or symbol-macro expansion)
-  var-decls                             ; list of applicable decls
+  var-decls                             ; list of applicable decls [not used]
   var-inittype
   var-binding-info
   var-refs
@@ -1557,7 +1557,7 @@
   policy.trust-declarations
   policy.open-code-inline
   policy.inhibit-safety-checking
-  policy.the-typechecks
+  policy.declarations-typecheck
   policy.inline-self-calls
   policy.allow-transforms
   policy.force-boundp-checks

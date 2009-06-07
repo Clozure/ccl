@@ -49,7 +49,7 @@
      (%nx1-operator typed-form)
      typespec
      (nx1-transformed-form transformed env)
-     (nx-the-typechecks env))))
+     (nx-declarations-typecheck env))))
 
 (defnx1 nx1-struct-ref struct-ref (&whole whole structure offset)
   (if (not (fixnump (setq offset (nx-get-fixnum offset))))
@@ -1016,12 +1016,18 @@
   (when (%ilogbitp 0 (length args))
     (nx-error "Odd number of forms in ~s ." whole))
   (while args
-    (let ((sym (nx-need-var (%car args) nil))
-	  (val (%cadr args)))
+    (let* ((sym (nx-need-var (%car args) nil))
+           (val (%cadr args))
+           (declared-type (nx-declared-type sym env)))
+      (when (nx-declarations-typecheck env)
+        (unless (or (eq declared-type t)
+                    (and (consp val) (eq (%car val) 'the) (equal (cadr val) declared-type)))
+          (setq val `(the ,declared-type ,val))
+          (nx-note-source-transformation (caddr val) val)))
       (multiple-value-bind (expansion win) (macroexpand-1 sym env)
 	(if win
-	    (push (nx1-form `(setf ,expansion ,val)) res)
-	    (multiple-value-bind (info inherited catchp)
+            (push (nx1-form `(setf ,expansion ,val)) res)
+            (multiple-value-bind (info inherited catchp)
 		(nx-lex-info sym)
 	      (push
 	       (if (eq info :symbol-macro)
@@ -1032,8 +1038,7 @@
 				       (%ilsl $vbitreffed 1)
 				       (nx-var-bits catchp)))
 		     (nx1-form `(setf ,inherited ,val)))
-		   (let* ((valtype (nx-form-type val env))
-			  (declared-type (nx-declared-type sym)))
+		   (let ((valtype (nx-form-type val env)))
 		     (let ((*nx-form-type* declared-type))
 		       (setq val (nx1-typed-form val env)))
 		     (if (and info (neq info :special))
@@ -2022,14 +2027,37 @@
 
 
 
-(defun nx1-env-body (body old-env)
+(defun nx1-env-body (body old-env &optional (typecheck (nx-declarations-typecheck *nx-lexical-environment*)))
   (do* ((form (nx1-progn-body body))
+        (typechecks nil)
         (env *nx-lexical-environment* (lexenv.parent-env env)))
-       ((or (eq env old-env) (null env)) form)
+       ((or (eq env old-env) (null env))
+        (if typechecks
+          (make-acode
+           (%nx1-operator progn)
+           (nconc (nreverse typechecks) (list form)))
+          form))
     (let ((vars (lexenv.variables env)))
-      (if (consp vars)
+      (when (consp vars)
         (dolist (var vars)
-          (nx-check-var-usage var))))))
+          (nx-check-var-usage var)
+          (when (and typecheck
+                     (let ((expansion (var-expansion var)))
+                       (or (atom expansion) (neq (%car expansion) :symbol-macro))))
+            (let* ((sym (var-name var))
+                   (type (nx-declared-type sym)))
+              (unless (eq type t)
+                (let ((old-bits (nx-var-bits var)))
+                  (push (nx1-form `(the ,type ,sym)) typechecks)
+                  (when (%izerop (%ilogand2 old-bits
+                                            (%ilogior (%ilsl $vbitspecial 1)
+                                                      (%ilsl $vbitreffed 1)
+                                                      (%ilsl $vbitclosed 1)
+                                                      $vrefmask
+                                                      $vsetqmask)))
+                    (nx-set-var-bits var (%ilogand2 (nx-var-bits var)
+                                                    (%ilognot (%ilsl $vbitignore 1))))))))))))))
+
 
 (defnx1 nx1-let* (let*) (varspecs &body forms)
   (let* ((vars nil)
@@ -2077,7 +2105,7 @@
           (dolist (sym varspecs)
             (push (nx-new-var pending sym t) vars))
           (nx-effect-other-decls pending *nx-lexical-environment*)
-          (make-acode 
+          (make-acode
            (%nx1-operator multiple-value-bind)
            (nreverse vars)
            mvform

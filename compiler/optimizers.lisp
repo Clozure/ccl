@@ -513,7 +513,7 @@
           `(let* ((,limit ,n) (,i 0))
              ,@decls
              (declare (fixnum ,limit)
-                      (type (integer 0 ,(if (<= upper 0) 0 `(,upper))) ,i)
+                      (type (integer 0 ,(if (<= upper 0) 0 upper)) ,i)
                       (unsettable ,i))
              (block nil
                (tagbody
@@ -738,7 +738,9 @@
                        `(allocate-typed-vector ,element-type-keyword ,dims ,initial-element)))
                     (t                        ;Should do more here
                      (comp-make-uarray dims keys (type-keyword-code element-type-keyword)))))
-             (type (infer-array-type dims element-type element-type-p displaced-to-p fill-pointer-p adjustable-p env)))
+             (type (if (nx-trust-declarations env)
+                     (infer-array-type dims element-type element-type-p displaced-to-p fill-pointer-p adjustable-p env)
+                     t)))
         `(the ,type ,expansion)))
 
         call))
@@ -940,60 +942,67 @@
                        (setq type (%cadr type))))
               (setq ctype (specifier-type-if-known type env :whine t)))
          (cond ((nx-form-typep arg type env) arg)
-               ((eq type 'simple-vector)
-                `(the simple-vector (require-simple-vector ,arg)))
-               ((eq type 'simple-string)
-                `(the simple-string (require-simple-string ,arg)))
-               ((eq type 'integer)
-                `(the integer (require-integer ,arg)))
-               ((eq type 'fixnum)
-                `(the fixnum (require-fixnum ,arg)))
-               ((eq type 'real)
-                `(the real (require-real ,arg)))
-               ((eq type 'list)
-                `(the list (require-list ,arg)))
-               ((eq type 'character)
-                `(the character (require-character ,arg)))
-               ((eq type 'number)
-                `(the number (require-number ,arg)))
-               ((eq type 'symbol)
-                `(the symbol (require-symbol ,arg)))
-               ((type= ctype
-                       (specifier-type '(signed-byte 8)))
-                `(the (signed-byte 8) (require-s8 ,arg)))
-               ((type= ctype
-                       (specifier-type '(unsigned-byte 8)))
-                `(the (unsigned-byte 8) (require-u8 ,arg)))
-               ((type= ctype
-                       (specifier-type '(signed-byte 16)))
-                `(the (signed-byte 16) (require-s16 ,arg)))
-               ((type= ctype
-                       (specifier-type '(unsigned-byte 16)))
-                `(the (unsigned-byte 16) (require-u16 ,arg)))
-               ((type= ctype
-                       (specifier-type '(signed-byte 32)))
-                `(the (signed-byte 32) (require-s32 ,arg)))
-               ((type= ctype
-                       (specifier-type '(unsigned-byte 32)))
-                `(the (unsigned-byte 32) (require-u32 ,arg)))
-               ((type= ctype
-                       (specifier-type '(signed-byte 64)))
-                `(the (signed-byte 64) (require-s64 ,arg)))
-               ((type= ctype
-                       (specifier-type '(unsigned-byte 64)))
-                `(the (unsigned-byte 64) (require-u64 ,arg)))
-               #+nil
-               ((and (symbolp type)
-                     (let ((simpler (type-predicate type)))
-                       (if simpler `(the ,type (%require-type ,arg ',simpler))))))
-               #+nil
-               ((and (symbolp type)(find-class type nil env))
-                  `(%require-type-class-cell ,arg (load-time-value (find-class-cell ',type t))))
+               ((and (nx-trust-declarations env) ;; if don't trust declarations, don't bother.
+                     (cond ((eq type 'simple-vector)
+                            `(the simple-vector (require-simple-vector ,arg)))
+                           ((eq type 'simple-string)
+                            `(the simple-string (require-simple-string ,arg)))
+                           ((eq type 'integer)
+                            `(the integer (require-integer ,arg)))
+                           ((eq type 'fixnum)
+                            `(the fixnum (require-fixnum ,arg)))
+                           ((eq type 'real)
+                            `(the real (require-real ,arg)))
+                           ((eq type 'list)
+                            `(the list (require-list ,arg)))
+                           ((eq type 'character)
+                            `(the character (require-character ,arg)))
+                           ((eq type 'number)
+                            `(the number (require-number ,arg)))
+                           ((eq type 'symbol)
+                            `(the symbol (require-symbol ,arg)))
+                           ((type= ctype
+                                   (specifier-type '(signed-byte 8)))
+                            `(the (signed-byte 8) (require-s8 ,arg)))
+                           ((type= ctype
+                                   (specifier-type '(unsigned-byte 8)))
+                            `(the (unsigned-byte 8) (require-u8 ,arg)))
+                           ((type= ctype
+                                   (specifier-type '(signed-byte 16)))
+                            `(the (signed-byte 16) (require-s16 ,arg)))
+                           ((type= ctype
+                                   (specifier-type '(unsigned-byte 16)))
+                            `(the (unsigned-byte 16) (require-u16 ,arg)))
+                           ((type= ctype
+                                   (specifier-type '(signed-byte 32)))
+                            `(the (signed-byte 32) (require-s32 ,arg)))
+                           ((type= ctype
+                                   (specifier-type '(unsigned-byte 32)))
+                            `(the (unsigned-byte 32) (require-u32 ,arg)))
+                           ((type= ctype
+                                   (specifier-type '(signed-byte 64)))
+                            `(the (signed-byte 64) (require-s64 ,arg)))
+                           ((type= ctype
+                                   (specifier-type '(unsigned-byte 64)))
+                            `(the (unsigned-byte 64) (require-u64 ,arg)))
+                           #+nil
+                           ((and (symbolp type)
+                                 (let ((simpler (type-predicate type)))
+                                   (if simpler `(the ,type (%require-type ,arg ',simpler))))))
+                           #+nil
+                           ((and (symbolp type)(find-class type nil env))
+                            `(%require-type-class-cell ,arg (load-time-value (find-class-cell ',type t))))
+                           (t (let* ((val (gensym)))
+                                `(the ,type
+                                   (let* ((,val ,arg))
+                                     (if (typep ,val ',type)
+                                       ,val
+                                       (%kernel-restart $xwrongtype ,val ',type)))))))))
                (t (let* ((val (gensym)))
                     `(let* ((,val ,arg))
-                      (if (typep ,val ',type)
-                        ,val
-                        (%kernel-restart $xwrongtype ,val ',type)))))))
+                       (if (typep ,val ',type)
+                         ,val
+                         (%kernel-restart $xwrongtype ,val ',type)))))))
         (t call)))
 
 (define-compiler-macro proclaim (&whole call decl)

@@ -1077,6 +1077,7 @@
         (cons $xflovfl 'floating-point-overflow)
         (cons $xfunbnd 'undefined-function)
 	(cons $xbadkeys 'simple-program-error)
+        (cons $xcallnomatch 'simple-program-error)
         (cons $xnotfun 'call-special-operator-or-macro)
         (cons $xaccessnth 'sequence-index-type-error)
 	(cons $ximproperlist 'improper-list)

@@ -656,7 +656,7 @@
 ;;;
 
 (defun %ptr-in-area-p (ptr area)
-  (declare (fixnum ptr area))           ; lie, maybe
+  (declare (optimize (speed 3) (safety 0)) (fixnum ptr area))           ; lie, maybe
   (and (<= (the fixnum (%fixnum-ref area target::area.low)) ptr)
        (> (the fixnum (%fixnum-ref area target::area.high)) ptr)))
 

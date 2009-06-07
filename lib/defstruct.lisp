@@ -250,7 +250,7 @@
           accessor
           (if (specifier-type-if-known type env)
             `(the ,type ,accessor)
-            (if (nx-the-typechecks env)
+            (if (nx-declarations-typecheck env)
               `(require-type ,accessor ',type)
               ;; Otherwise just ignore the type, it's most likely a forward reference,
               ;; and while it means we might be missing out on a possible optimization,

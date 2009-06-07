@@ -1047,10 +1047,15 @@ collected result will be returned as the value of the LOOP."
 
 
 (defun loop-typed-init (data-type)
-  (when (and data-type (subtypep data-type 'number))
-    (if (or (subtypep data-type 'float) (subtypep data-type '(complex float)))
-	(coerce 0 data-type)
-	0)))
+  (when data-type
+    (let ((val (if (subtypep data-type 'number)
+                 (if (or (subtypep data-type 'float) (subtypep data-type '(complex float)))
+                   (coerce 0 data-type)
+                   0)
+                 (if (subtypep data-type 'character)
+                   #\Null
+                   nil))))
+      (and val (typep val data-type) val))))
 
 
 (defun loop-optional-type (&optional variable)
@@ -1141,11 +1146,18 @@ collected result will be returned as the value of the LOOP."
 		(loop-error "Duplicated variable ~S in LOOP parallel binding." name)))
 	 (unless (symbolp name)
 	   (loop-error "Bad variable ~S somewhere in LOOP." name))
+         (unless initialization (setq initialization (loop-typed-init dtype)))
+         (when (and dtype
+                    (null initialization)
+                    (not (typep nil dtype)))
+           (if (eq dtype 'complex)
+             (setq initialization 0 dtype 'number)
+             (when iteration-variable-p
+               (setq dtype `(or null ,dtype)))))
 	 (loop-declare-variable name dtype)
 	 ;; We use ASSOC on this list to check for duplications (above),
 	 ;; so don't optimize out this list:
-	 (push (list name (or initialization (loop-typed-init dtype)))
-	       *loop-variables*))
+	 (push (list name initialization) *loop-variables*))
 	(initialization
 	 (cond (*loop-destructuring-hooks*
 		(loop-declare-variable name dtype)
@@ -1598,9 +1610,9 @@ collected result will be returned as the value of the LOOP."
   (multiple-value-bind (list constantp list-value) (loop-constant-fold-if-possible val)
     (let ((listvar var))
       (cond ((and var (symbolp var)) (loop-make-iteration-variable var list data-type))
-	    (t (loop-make-variable (setq listvar (loop-gentemp)) list 'list)
+	    (t (loop-make-variable (setq listvar (loop-gentemp)) list nil)
 	       (loop-make-iteration-variable var nil data-type)))
-      (multiple-value-bind (list-step step-function) (loop-list-step listvar)
+      (multiple-value-bind (list-step step-function) (loop-list-step `(the cons ,listvar))
 	(declare (ignore step-function))
 	;;@@@@ The CLOE problem above has to do with bug in macroexpansion of multiple-value-bind.
 	(let* ((first-endtest
@@ -1617,7 +1629,7 @@ collected result will be returned as the value of the LOOP."
 		 ;;Contour of the loop is different because we use the user's variable...
 		 `(() (,listvar ,(hide-variable-reference t listvar list-step)) ,other-endtest
 		   () () () ,first-endtest ()))
-		(t (let ((step `(,var ,listvar)) (pseudo `(,listvar ,list-step)))
+		(t (let ((step `(,var (the cons ,listvar))) (pseudo `(,listvar ,list-step)))
 		     `(,other-endtest ,step () ,pseudo
 		       ,@(and (not (eq first-endtest other-endtest))
 			      `(,first-endtest ,step () ,pseudo)))))))))))
