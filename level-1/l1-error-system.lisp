@@ -68,7 +68,7 @@
    (source-note :initarg :source-note :initform nil :accessor compiler-warning-source-note)
    (warning-type :initarg :warning-type :reader compiler-warning-warning-type)
    (args :initarg :args :reader compiler-warning-args)
-   (nrefs :initform 1 :accessor compiler-warning-nrefs))
+   (nrefs :initform () :accessor compiler-warning-nrefs))
   (:report report-compiler-warning))
 
 (define-condition style-warning (compiler-warning)

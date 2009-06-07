@@ -525,7 +525,12 @@
                              (null (cdr w1-args))
                              (eq (%car w-args)
                                  (%car w1-args)))
-                    (incf (compiler-warning-nrefs w1))
+                    (let ((nrefs (compiler-warning-nrefs w1)))
+                      #-BOOTSTRAPPED (when (eql nrefs 1) (setq nrefs nil))
+                      (setf (compiler-warning-nrefs w1)
+                            (cons (compiler-warning-source-note w)
+                                  (or nrefs
+                                      (list (compiler-warning-source-note w1))))))
                     (return)))))
           (push w warnings))))
     warnings))
@@ -638,8 +643,9 @@
 	(funcall format-string condition stream)))
     ;(format stream ".")
     (let ((nrefs (compiler-warning-nrefs condition)))
-      (when (and nrefs (neq nrefs 1))
-        (format stream " (~D references)" nrefs)))))
+      #-BOOTSTRAPPED (when (eql nrefs 1) (setq nrefs nil))
+      (when nrefs
+        (format stream " (~D references)" (length nrefs))))))
 
 (defun environment-structref-info (name env)
   (let ((defenv (definition-environment env)))
