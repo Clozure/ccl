@@ -993,7 +993,6 @@
 (objc:defmethod (#/mouseDown: :void) ((self hemlock-textstorage-text-view) event)
   ;; If no modifier keys are pressed, send hemlock a no-op.
   ;; (Or almost a no-op - this does an update-hemlock-selection as a side-effect)
-
   (unless (logtest #$NSDeviceIndependentModifierFlagsMask (#/modifierFlags event))
     (let* ((view (hemlock-view self)))
       (when view
@@ -1247,6 +1246,8 @@
   (let ((pane (text-view-pane self)))
     (when pane (hemlock-view pane))))
 
+
+
 (objc:defmethod (#/evalSelection: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
   (let* ((buffer (hemlock-buffer self))
@@ -1263,7 +1264,7 @@
 (objc:defmethod (#/evalAll: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
   (let* ((buffer (hemlock-buffer self))
-         (package-name (hi::variable-value 'hemlock::current-package :buffer buffer))
+         (package-name (hi::variable-value 'hemlock::default-package :buffer buffer))
          (pathname (hi::buffer-pathname buffer))
          (s (lisp-string-from-nsstring (#/string self))))
     (ui-object-eval-selection *NSApp* (list package-name pathname s))))
@@ -1271,21 +1272,21 @@
 (objc:defmethod (#/loadBuffer: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
   (let* ((buffer (hemlock-buffer self))
-         (package-name (hi::variable-value 'hemlock::current-package :buffer buffer))
+         (package-name (hi::variable-value 'hemlock::default-package :buffer buffer))
          (pathname (hi::buffer-pathname buffer)))
     (ui-object-load-buffer *NSApp* (list package-name pathname))))
 
 (objc:defmethod (#/compileBuffer: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
   (let* ((buffer (hemlock-buffer self))
-         (package-name (hi::variable-value 'hemlock::current-package :buffer buffer))
+         (package-name (hi::variable-value 'hemlock::default-package :buffer buffer))
          (pathname (hi::buffer-pathname buffer)))
     (ui-object-compile-buffer *NSApp* (list package-name pathname))))
 
 (objc:defmethod (#/compileAndLoadBuffer: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
   (let* ((buffer (hemlock-buffer self))
-         (package-name (hi::variable-value 'hemlock::current-package :buffer buffer))
+         (package-name (hi::variable-value 'hemlock::default-package :buffer buffer))
          (pathname (hi::buffer-pathname buffer)))
     (ui-object-compile-and-load-buffer *NSApp* (list package-name pathname))))
 
@@ -1496,6 +1497,7 @@
              ;; If neither d1 nor d2 apply, arbitrarily assume forward
              ;; selection: mark at n1, point at n1+m.
              ;; In all cases, activate Hemlock selection.
+             (disable-paren-highlight self)
              (unless still-selecting
                 (let* ((pointpos (hi:mark-absolute-position point))
                        (selection-end (+ location len))
@@ -1776,6 +1778,12 @@
     ()
   (:metaclass ns:+ns-object))
 (declaim (special echo-area-view))
+
+(defmethod compute-temporary-attributes ((self echo-area-view))
+)
+
+(defmethod update-paren-highlight ((self echo-area-view))
+)
 
 (defmethod hemlock-view ((self echo-area-view))
   (let ((text-view (slot-value self 'peer)))
@@ -2065,6 +2073,7 @@
 	(buffer-document-end-editing buffer)
 	(buffer-document-begin-editing old)))))
 
+
 (defun buffer-document-end-editing (buffer)
   (when buffer
     (let* ((document (hi::buffer-document (require-type buffer 'hi::buffer))))
@@ -2084,6 +2093,24 @@
 (defun document-edit-level (document)
   (assume-cocoa-thread) ;; see comment in #/editingInProgress
   (slot-value (slot-value document 'textstorage) 'edit-count))
+
+(defun hi::buffer-edit-level (buffer)
+  (if buffer
+    (let* ((document (hi::buffer-document buffer)))
+      (if document
+        (document-edit-level document)
+        0))
+    0))
+
+(defun hemlock-ext::invoke-allowing-buffer-display (buffer thunk)
+  ;; Call THUNK with the buffer's edit-level at 0, then restore the buffer's edit level.
+  (let* ((level (hi::buffer-edit-level buffer)))
+    (dotimes (i level) (buffer-document-end-editing buffer))
+    (unwind-protect
+        (funcall thunk)
+      (dotimes (i level) (buffer-document-begin-editing buffer)))))
+
+
 
 (defun perform-edit-change-notification (textstorage selector pos n &optional (extra 0))
   (with-lock-grabbed (*buffer-change-invocation-lock*)
@@ -2703,6 +2730,7 @@
   (let* ((textstorage (slot-value self 'textstorage)))
     (unless (%null-ptr-p textstorage)
       (setf (slot-value self 'textstorage) (%null-ptr))
+      #+huh?
       (for-each-textview-using-storage
        textstorage
        #'(lambda (tv)
@@ -2710,6 +2738,15 @@
              (#/setBackgroundLayoutEnabled: layout nil))))
       (close-hemlock-textstorage textstorage)))
   (call-next-method))
+
+(objc:defmethod (#/dealloc :void) ((self hemlock-editor-document))
+  (let* ((textstorage (slot-value self 'textstorage)))
+    (unless (%null-ptr-p textstorage)
+      (setf (slot-value self 'textstorage) (%null-ptr))
+      (close-hemlock-textstorage textstorage)))
+  (call-next-method))
+
+
 
 (defmethod view-screen-lines ((view hi:hemlock-view))
     (let* ((pane (hi::hemlock-view-pane view)))
