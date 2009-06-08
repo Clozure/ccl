@@ -85,6 +85,11 @@
     `(let ((*current-buffer* ,buffer))
        (hemlock-ext:invoke-modifying-buffer-storage *current-buffer* #'(lambda () ,@body)))))
 
+;; If we've done a (cocoa-specific) "beginEditing" on a buffer, finish that (to allow
+;; layout, etc.)  Call thunk, and maybe restore the editing state after.
+(defmacro allowing-buffer-display ((buffer) &body body)
+  `(hemlock-ext::invoke-allowing-buffer-display ,buffer (lambda () ,@body)))
+
 
 ;;;; A couple funs to hack strings to symbols.
 
@@ -468,15 +473,12 @@
 (defvar *saved-standard-output* nil)
 
 (defmacro with-output-to-listener (&body body)
-  `(let* ((*saved-standard-output* (or *saved-standard-output*
-				       (cons *standard-output* *error-output*)))
-	  (*standard-output* (hemlock-ext:top-listener-output-stream))
-	  (*error-output* *standard-output*))
+  `(let* ((*saved-standard-output* (or *saved-standard-output* *standard-output*))
+	  (*standard-output* (hemlock-ext:top-listener-output-stream)))	  
      ,@body))
 
 (defmacro with-standard-standard-output (&body body)
-  `(let* ((*standard-output* (or (car *saved-standard-output*) *standard-output*))
-	  (*error-output* (or (cdr *saved-standard-output*) *error-output*)))
+  `(let* ((*standard-output* (or *saved-standard-output* *standard-output*)))
      ,@body))
 
 
