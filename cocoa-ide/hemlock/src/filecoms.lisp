@@ -363,7 +363,8 @@
    otherwise make a new buffer with the same name as the file and
    read the file into it."
   (declare (ignore p))
-  (hi::open-document))
+  (hi::allowing-buffer-display ((current-buffer))
+    (hi::open-document)))
   
 
 #|
