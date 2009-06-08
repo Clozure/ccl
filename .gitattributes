@@ -16,6 +16,7 @@ cocoa-ide/altconsole/resource/Credits.rtf -text
 cocoa-ide/altconsole/resource/InfoPlist.strings -text
 cocoa-ide/altconsole/resource/MainMenu.nib/classes.nib -text
 cocoa-ide/altconsole/resource/MainMenu.nib/info.nib -text
+cocoa-ide/altconsole/resource/MainMenu.nib/keyedobjects.nib -text
 cocoa-ide/altconsole/resource/MainMenu.nib/objects.nib -text
 cocoa-ide/altconsole/version.plist -text
 cocoa-ide/app-delegate.lisp -text
