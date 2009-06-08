@@ -90,7 +90,9 @@
         (ignore-errors (values (read-from-string string))))
     (if error
       (editor-error "unreadable name: ~s" string)
-      (edit-definition fun-name))))
+      (handler-case (edit-definition fun-name)
+        (error (c) (editor-error (format nil "~a" c)))))))
+      
 
 #|
 ;;; "Edit Command Definition" is a hack due to creeping evolution in
@@ -266,7 +268,7 @@
                                  (eql (cadr arg) obj))))
                          (class
                           (let* ((name (class-name spec)))
-                            (or (if (eq name t) (eq arg t))
+                            (or (and (eq name t) (symbolp arg))
                                 (and (consp arg)
                                      (symbolp (car arg))
                                      (consp (cdr arg))
