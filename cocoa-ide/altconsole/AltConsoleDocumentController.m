@@ -43,7 +43,7 @@
         peer_name = [[NSString stringWithString: (NSString *)name] retain];
       }
     }
-    peer_herald = [[NSString stringWithFormat: @"%@-%d",peer_name, peer_pid] retain];
+    peer_herald = [[[NSString stringWithFormat: @"~/%@-%d",peer_name, peer_pid]stringByExpandingTildeInPath] retain];
   }
   return self;
 }
