@@ -201,3 +201,34 @@
 				       (compile-file filename)
 				       (fresh-line)))))))
 
+(objc:defmethod (#/exitBreak: :void) ((self lisp-application-delegate) sender)
+  (let* ((top-listener (#/topListener hemlock-listener-document)))
+    (unless (%null-ptr-p top-listener)
+      (#/exitBreak: top-listener sender))))
+
+(objc:defmethod (#/continue: :void) ((self lisp-application-delegate) sender)
+  (let* ((top-listener (#/topListener hemlock-listener-document)))
+    (unless (%null-ptr-p top-listener)
+      (#/continue: top-listener sender))))
+
+(objc:defmethod (#/restarts: :void) ((self lisp-application-delegate) sender)
+  (let* ((top-listener (#/topListener hemlock-listener-document)))
+    (unless (%null-ptr-p top-listener)
+      (#/restarts: top-listener sender))))
+
+(objc:defmethod (#/backtrace: :void) ((self lisp-application-delegate) sender)
+  (let* ((top-listener (#/topListener hemlock-listener-document)))
+    (unless (%null-ptr-p top-listener)
+      (#/backtrace: top-listener sender))))
+
+(objc:defmethod (#/validateMenuItem: #>BOOL) ((self lisp-application-delegate) item)
+  (let* ((action (#/action item))
+         (top-listener (#/topListener hemlock-listener-document)))
+    (unless (%null-ptr-p top-listener)      
+      (cond ((or (eql action (@selector "exitBreak:"))
+                 (eql action (@selector "continue:"))
+                 (eql action (@selector "restarts:"))
+                 (eql action (@selector "backtrace:")))
+             (#/validateMenuItem: top-listener item))))))
+
+
