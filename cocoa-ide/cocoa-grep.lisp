@@ -64,7 +64,7 @@
 
 (defvar *grep-ignore-case* t)
 (defvar *grep-include-pattern* "*.lisp")
-(defvar *grep-exclude-pattern* "*~.lisp")
+(defvar *grep-exclude-pattern* "*.lisp~")
 
 (defun grep (pattern directory &key (ignore-case *grep-ignore-case*)
 		                    (include *grep-include-pattern*)
@@ -93,7 +93,10 @@
 			       :result-callback #'request-edit-grep-line
 			       :display #'princ
 			       :title (format nil "~a in ~a" pattern directory)))
-	      (hi:editor-error "Error in grep status ~s code ~s: ~a" status exit-code output)))))))
+            (if (and (eql status :exited)
+                     (eql exit-code 1))
+              (hi:editor-error "Pattern ~s not found" pattern)
+	      (hi:editor-error "Error in grep status ~s code ~s: ~a" status exit-code output))))))))
 
 
 (hi:defhvar "Grep Directory"
