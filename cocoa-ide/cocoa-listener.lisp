@@ -609,9 +609,8 @@
                          :package-name package :pathname path))
 
 (defun hemlock-ext:send-string-to-listener (listener-buffer string)
-  (let* ((package-name (hi::variable-value 'hemlock::current-package :buffer listener-buffer))
-         (pathname (hi::buffer-pathname listener-buffer)))
-    (ui-object-eval-selection *NSApp* (list package-name pathname string))))
+  (let* ((pathname (hi::buffer-pathname listener-buffer)))
+    (ui-object-eval-selection *NSApp* (list nil pathname string))))
 
 
 (defun hemlock::evaluate-input-selection (selection)

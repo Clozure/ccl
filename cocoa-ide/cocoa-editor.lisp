@@ -980,7 +980,7 @@
 		    (setq bits (logior bits
 				       (hi:key-event-modifier-mask (cdr map)))))))
 	      (let* ((char (code-char c)))
-		(when (and char (graphic-char-p char))
+		(when (and char (alpha-char-p char))
 		  (setq bits (logandc2 bits +shift-event-mask+)))
 		(when (logtest #$NSAlphaShiftKeyMask modifiers)
 		  (setf c (char-code (char-upcase char)))))

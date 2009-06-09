@@ -222,13 +222,14 @@
       (#/backtrace: top-listener sender))))
 
 (objc:defmethod (#/validateMenuItem: #>BOOL) ((self lisp-application-delegate) item)
-  (let* ((action (#/action item))
-         (top-listener (#/topListener hemlock-listener-document)))
-    (unless (%null-ptr-p top-listener)      
-      (cond ((or (eql action (@selector "exitBreak:"))
-                 (eql action (@selector "continue:"))
-                 (eql action (@selector "restarts:"))
-                 (eql action (@selector "backtrace:")))
-             (#/validateMenuItem: top-listener item))))))
+  (let* ((action (#/action item)))
+    (cond ((or (eql action (@selector "exitBreak:"))
+               (eql action (@selector "continue:"))
+               (eql action (@selector "restarts:"))
+               (eql action (@selector "backtrace:")))
+           (let* ((top-listener (#/topListener hemlock-listener-document)))
+             (unless (%null-ptr-p top-listener)      
+               (#/validateMenuItem: top-listener item))))
+          (t t))))
 
 
