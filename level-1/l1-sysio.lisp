@@ -75,7 +75,9 @@
           (when line-termination
             (install-ioblock-input-line-termination file-ioblock line-termination)
             (when (file-ioblock-outbuf file-ioblock)
-              (install-ioblock-output-line-termination file-ioblock line-termination))))))))
+              (install-ioblock-output-line-termination file-ioblock line-termination))))))
+    (when (eq (ioblock-owner file-ioblock) *current-process*)
+      (setf (ioblock-owner file-ioblock) 0))))
 
 
 

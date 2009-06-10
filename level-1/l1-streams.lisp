@@ -480,6 +480,7 @@
   (let* ((owner (ioblock-owner ioblock)))
     (if owner
       (or (eq owner *current-process*)
+          (conditional-store (ioblock-owner ioblock) 0 *current-process*)
           (error "Stream ~s is private to ~s" (ioblock-stream ioblock) owner)))))
 
 
@@ -3102,7 +3103,7 @@
                           ioblock))
                       (stream-create-ioblock stream))))
     (when (eq sharing :private)
-      (setf (ioblock-owner ioblock) *current-process*))
+      (setf (ioblock-owner ioblock) 0))
     (setf (ioblock-encoding ioblock) encoding)
     (when insize
       (unless (ioblock-inbuf ioblock)
@@ -4760,11 +4761,13 @@
 
 (defmethod stream-owner ((stream buffered-stream-mixin))
   (let* ((ioblock (stream-ioblock stream nil)))
-    (and ioblock (ioblock-owner ioblock))))
+    (and ioblock (let* ((owner (ioblock-owner ioblock)))
+                   (unless (eql owner 0) owner)))))
 
 (defmethod stream-owner ((stream basic-stream))
   (let* ((ioblock (basic-stream.state stream)))
-    (and ioblock (ioblock-owner ioblock))))
+    (and ioblock (let* ((owner (ioblock-owner ioblock)))
+                   (unless (eql owner 0) owner)))))
 
 
 (defclass buffered-input-stream-mixin
