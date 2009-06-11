@@ -79,6 +79,7 @@
      macroexpand-all
      compiler-macroexpand
      compiler-macroexpand-1
+     compile-user-function
      uncompile-function
      abort-break
      *trace-print-level*
