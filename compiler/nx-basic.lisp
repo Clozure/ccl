@@ -150,9 +150,9 @@
                    (neq (debug-optimize-quantity env) 3))   ; inline-self-calls
                #'(lambda (env)
                    (and (neq (compilation-speed-optimize-quantity env) 3)
-                        (neq (safety-optimize-quantity env) 3)
-                        #+ccl-0711 (neq (speed-optimize-quantity env) 0)
-                        (neq (debug-optimize-quantity env) 3))) ; allow-transforms
+                        (or (neq (speed-optimize-quantity env) 0)
+                            (and (neq (safety-optimize-quantity env) 3)
+                                 (neq (debug-optimize-quantity env) 3))))) ; allow-transforms
                #'(lambda (var env)       ; force-boundp-checks
                    (declare (ignore var))
                    (eq (safety-optimize-quantity env) 3))
