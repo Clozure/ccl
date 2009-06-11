@@ -86,10 +86,20 @@
   ;;
   ;; The (logical) origin within a buffer or disembodied region, or NIL
   ;; if we aren't sure.
-  origin)
+  origin
+  ;; A vector of charprops-change objects or NIL if the whole line has
+  ;; the buffer's default character properties.
+  charprops-changes)
 
+(defstruct (charprops-change
+            (:copier nil)
+            (:constructor make-charprops-change (index plist)))
+  index
+  plist)
 
-
+(defun copy-charprops-change (c)
+  (make-charprops-change (charprops-change-index c)
+                         (copy-list (charprops-change-plist c))))
 
 ;;; If buffered lines are supported, then we create the string
 ;;; representation for the characters when someone uses Line-Chars.  People
@@ -118,6 +128,10 @@
   this probably won't happen often."
   (line-%chars line))
 
+(defun copy-charprops-changes (changes)
+  (when changes
+    (let* ((new (make-array (length changes) :adjustable t :fill-pointer 0)))
+      (map-into new #'copy-charprops-change changes))))
 
 ;;; Return a copy of Line in buffer Buffer with the same chars.  We use
 ;;; this macro where we want to copy a line because it takes care of
@@ -125,6 +139,8 @@
 ;;;
 (defmacro %copy-line (line &key previous number %buffer)
   `(make-line :chars (line-%chars ,line)
+              :charprops-changes (copy-charprops-changes
+                                  (line-charprops-changes ,line))
 	      :previous ,previous
 	      :number ,number
 	      :%buffer ,%buffer ))
