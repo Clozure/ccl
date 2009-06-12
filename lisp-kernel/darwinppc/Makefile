@@ -58,7 +58,7 @@ COPT = -O2
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c -arch ppc $< $(CDEFINES) $(CDEBUG) $(COPT) -Wno-deprecated-declarations -mmacosx-version-min=10.3.9 $(MDYNAMIC_NO_PIC) -o $@
+	$(CC) -c -arch ppc $< $(CDEFINES) $(CDEBUG) $(COPT) -Wno-deprecated-declarations -mmacosx-version-min=10.4 -isysroot /Developer/SDKs/MacOSX10.4u.sdk  $(MDYNAMIC_NO_PIC) -o $@
 
 SPOBJ = ppc-spjump.o ppc-spentry.o  ppc-subprims.o 
 ASMOBJ = ppc-asmutils.o imports.o

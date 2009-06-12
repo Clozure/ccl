@@ -92,12 +92,7 @@ Boolean use_mach_exception_handling =
 
 Boolean running_under_rosetta = false;
 
-#if WORD_SIZE == 64 || defined(X8632)
-/* Assume that if the OS is new enough to support PPC64/X8664, it has
-   a reasonable dlfcn.h
-*/
 #include <dlfcn.h>
-#endif
 #endif
 
 #if defined(FREEBSD) || defined(SOLARIS)
@@ -1991,7 +1986,7 @@ xGetSharedLibrary(char *path, int mode)
 void *
 xGetSharedLibrary(char *path, int *resultType)
 {
-#if defined(PPC) && (WORD_SIZE == 32)
+#if 0
   NSObjectFileImageReturnCode code;
   NSObjectFileImage	         moduleImage;
   NSModule		         module;
@@ -2249,7 +2244,7 @@ xFindSymbol(void* handle, char *name)
   return dlsym(handle, name);
 #endif
 #ifdef DARWIN
-#if defined(PPC64) || defined(X86)
+#if 1
   if ((handle == NULL) || (handle == ((void *) -1))) {
     handle = RTLD_DEFAULT;
   }    

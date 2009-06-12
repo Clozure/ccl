@@ -21,7 +21,7 @@
 #endif
 
 #ifdef DARWIN
-#ifndef PPC64
+#if 0
 #undef undefined
 #include <stdint.h>
 #include <mach-o/dyld.h>
@@ -153,11 +153,9 @@ print_lisp_frame(lisp_frame *frame)
     if (dladdr((void *)ptr_from_lispobj(pc), &info)) {
       spname = (char *)(info.dli_sname);
 #ifdef DARWIN
-#ifdef PPC64
       if (spname[-1] != '_') {
         --spname;
       }
-#endif
 #endif
     }
 #endif
