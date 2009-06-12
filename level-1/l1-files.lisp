@@ -1380,7 +1380,7 @@ a host-structure or string."
   module)
 
 (defparameter *loading-modules* () "Internal. Prevents circularity")
-(defparameter *module-provider-functions* '(module-provide-search-path)
+(defparameter *module-provider-functions* '(module-provide-search-path module-provide-asdf)
   "A list of functions called by REQUIRE to satisfy an unmet dependency.
 Each function receives a module name as a single argument; if the function knows how to load that module, it should do so, add the module's name as a string to *MODULES* (perhaps by calling PROVIDE) and return non-NIL."
   )
@@ -1440,6 +1440,20 @@ Each function receives a module name as a single argument; if the function knows
 				(car matches)))))
 		(when (setq path (find-load-file (merge-pathnames mod-path path-cand)))
 		  (return path)))))))
+
+(defun module-provide-asdf (module)
+  (let* ((asdf-package (find-package "ASDF")))
+    (when asdf-package
+      (let* ((verbose-out (find-symbol "*VERBOSE-OUT*" asdf-package))
+             (find-system (find-symbol "FIND-SYSTEM" asdf-package))
+             (operate (find-symbol "OPERATE" asdf-package))
+             (load-op (find-symbol "LOAD-OP" asdf-package)))
+        (when (and verbose-out find-system operate load-op)
+          (progv (list verbose-out) (list (make-broadcast-stream))
+            (let* ((system (funcall find-system module nil)))
+              (when system
+                (funcall operate load-op module)
+                t))))))))
 
 (defun wild-pathname-p (pathname &optional field-key)
   "Predicate for determining whether pathname contains any wildcards."
