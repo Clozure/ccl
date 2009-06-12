@@ -55,16 +55,44 @@
           (code-char (the fixnum (+ weight (- (char-code #\A) 10)))))))))
 
 
+(declaim (inline %control-char-p))
 
-;True for ascii codes 32-126 inclusive.
-; and for guys >= 128. Its really a function of the font of the moment.
+(defun %control-char-p (char)
+  (let* ((code (char-code char)))
+    (declare (type (mod #x110000) code))
+    ;; If we believe that "most" characters will have relatively
+    ;; small codes, then doing a linear search on this short
+    ;; list is probably faster than binary search on a vector
+    ;; or other approaches.
+    (dolist (pair '((0 . #x1f)                          ;c0
+                    (#x7f . #x9f)                       ;#\rubout, c1
+                    (#x34f . #x34f)                     ;combining grapheme joiner.
+                    (#x200c . #x200f)
+                    (#x202a . #x202e)
+                    (#x2060 . #x2063)
+                    (#x206a . #x206f)
+                    #+darwin-target
+                    (#xf700 . #xf7ff)
+                    (#xfe00 . #xfe0f)
+                    (#xfeff . #xfeff)                   ;byte-order mark (0-width space).
+                    (#xfff0 . #xfffd)
+                    
+                    (#xe0000 . #xefffd)))
+      (let* ((low (car pair))
+             (high (cdr pair)))
+        (declare (type (mod #x110000) low high))
+        (if (> low code)
+          (return nil)
+          (if (<= code high)
+            (return t)))))))
+
+
+
+;;; Characters that aren't control/formatting characters are graphic.
 (defun graphic-char-p (c)
-  "The argument must be a character object. GRAPHIC-CHAR-P returns T if the
-  argument is a printing character (space through ~ in ASCII), otherwise
-  returns NIL."
-  (let* ((code (char-code c)))
-    (unless (eq c #\rubout)
-      (>= code (char-code #\space)))))
+  "The argument must be a character object. GRAPHIC-CHAR-P returns NIL if the
+  argument is a Unicode control character, otherwise returns T."
+  (not (%control-char-p c)))
 
 
 ;True for ascii codes 10 and 32-126 inclusive.
