@@ -139,7 +139,7 @@
               (let* ((n (length s)))
                 (dotimes (i (length string) (progn (vector-push-extend 0 s) n))
                   (let* ((code (char-code (char string i))))
-                    (declare (type (mod #x110000 code)))
+                    (declare (type (mod #x110000) code))
                     (if (> code 255)
                       (vector-push-extend (char-code #\sub) s)
                       (vector-push-extend code s)))))))))
