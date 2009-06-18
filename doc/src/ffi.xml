@@ -3684,6 +3684,94 @@ reverse_int_ptr_ptrtest(int **ptrs)
     </refentry>
 
     <!-- ====================================  -->
+    <refentry id="f_make-heap-ivector">
+      <indexterm zone="f_make-heap-ivector">
+        <primary>make-heap-ivector</primary>
+      </indexterm>
+      
+      <refnamediv>
+        <refname>MAKE-HEAP-IVECTOR</refname>
+        <refpurpose></refpurpose>
+        <refclass>Function</refclass>
+      </refnamediv>
+      
+	  <refsynopsisdiv>
+	    <synopsis>
+	      <function>make-heap-ivector</function> element-count element-type
+	      => vector macptr size
+	    </synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>element-count</term>
+
+	        <listitem>
+		      <para>A positive integer.</para>
+	        </listitem>
+	      </varlistentry>
+	      <varlistentry>
+	        <term>element-type</term>
+
+	        <listitem>
+		      <para>A type specifier.
+		      
+		      </para>
+	        </listitem>
+	      </varlistentry>
+	      <varlistentry>
+	        <term>vector</term>
+
+	        <listitem>
+		      <para>A lisp vector.  The initial contents are
+		      undefined.</para>
+	        </listitem>
+	      </varlistentry>
+	      <varlistentry>
+	        <term>mactpr</term>
+
+	        <listitem>
+		      <para>A pointer to the first byte of data stored
+		      in the vector.
+		      </para>
+	        </listitem>
+	      </varlistentry>
+	      <varlistentry>
+	        <term>size</term>
+
+	        <listitem>
+		      <para>The size of the returned vector in octets.
+		      </para>
+	        </listitem>
+	      </varlistentry>
+	      
+	    </variablelist>
+	  </refsect1>
+      <refsect1>
+        <title>Description</title>
+        
+        <para>
+	An "ivector" is a one-dimensional array that's specialized to
+	a numeric or characater element type.
+	</para>
+	<para>
+	  <code>MAKE-HEAP-IVECTOR</code> allocates an ivector in
+	  foreign memory.  The GC will never move this vector, and
+	  will in fact not pay any attention to it at all.  The
+	  returned pointer to it can therefore be passed safely to
+	  foreign code.
+	</para>
+	<para>
+	  The vector must be explicitly deallocated with
+	  <code>DISPOSE-HEAP-IVECTOR</code>.
+	</para>
+      </refsect1>
+    </refentry>
+
+    <!-- ====================================  -->
     <refentry id="m_makegcable--record">
       <indexterm zone="m_make-record">
 	    <primary>make-gcable-record</primary>
