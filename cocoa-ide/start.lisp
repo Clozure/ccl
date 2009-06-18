@@ -66,7 +66,7 @@
   (unless (typep ccl::*current-process* 'appkit-process)
     (destructuring-bind (continuablep) args
       (if continuablep
-        "~&> Type cmd-/ to continue, cmd-/ to abort, cmd-\\ for a list of available restarts."
+        "~&> Type cmd-/ to continue, cmd-. to abort, cmd-\\ for a list of available restarts."
         "~&> Type cmd-. to abort, cmd-\\ for a list of available restarts.~%"))))
 
 ;;; Support for saving a stand-alone IDE
