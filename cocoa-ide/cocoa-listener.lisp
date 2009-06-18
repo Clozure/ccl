@@ -608,9 +608,14 @@
   (enqueue-toplevel-form (cocoa-listener-process-input-stream process) string
                          :package-name package :pathname path))
 
+;;; This is basically used to provide INPUT to the listener process, by
+;;; writing to an fd which is connected to that process's standard
+;;; input.
 (defun hemlock-ext:send-string-to-listener (listener-buffer string)
-  (let* ((pathname (hi::buffer-pathname listener-buffer)))
-    (ui-object-eval-selection *NSApp* (list nil pathname string))))
+  (let* ((process (buffer-process listener-buffer)))
+    (unless process
+      (error "No listener process found for ~s" listener-buffer))
+    (enqueue-listener-input (cocoa-listener-process-input-stream process) string)))
 
 
 (defun hemlock::evaluate-input-selection (selection)
