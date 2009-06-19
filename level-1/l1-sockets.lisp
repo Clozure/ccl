@@ -1429,7 +1429,7 @@ unsigned IP address."
 
 #+windows-target
 (defun %get-ip-interfaces ()
-  (let* ((handle (#_socket #$AF_INET #$SOCK_DGRAM #$IPPROTO_IP)))
+  (let* ((socket (#_socket #$AF_INET #$SOCK_DGRAM #$IPPROTO_IP)))
     (unwind-protect
     (rlet ((realoutlen #>DWORD 0))
       (do* ((reservedlen (* 4 (record-length #>INTERFACE_INFO))
@@ -1437,7 +1437,7 @@ unsigned IP address."
            ()
         (%stack-block ((buf reservedlen))
           (unless (eql 0 (#_WSAIoctl
-                          handle
+                          socket
                           #$SIO_GET_INTERFACE_LIST
                           (%null-ptr)
                           0
@@ -1466,7 +1466,7 @@ unsigned IP address."
                            :address-family #$AF_INET)
                           interfaces)))
                 (return interfaces)))))))
-      (#_CloseHandle (%int-to-ptr handle)))))
+      (#_closesocket socket))))
 
       
 
