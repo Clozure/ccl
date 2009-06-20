@@ -29,6 +29,7 @@ cocoa-ide/cocoa-utils.lisp -text
 cocoa-ide/console-window.lisp -text
 cocoa-ide/defsystem.lisp -text
 cocoa-ide/file-dialogs.lisp -text
+cocoa-ide/hemlock/src/charprops.lisp -text
 cocoa-ide/hemlock/src/isearchcoms.lisp -text
 cocoa-ide/hemlock/src/symbol-completion.lisp -text
 cocoa-ide/hemlock/src/views.lisp -text
