@@ -641,6 +641,7 @@
     (:ns-tool-tip . #&NSToolTipAttributeName)
     (:ns-character-shap . #&NSCharacterShapeAttributeName)
     (:ns-glyph-info . #&NSGlyphInfoAttributeName)
-    (:ns-marked-clause-segment . #&NSMarkedClauseSegmentAttributeName)
-    (:ns-spelling-state . #&NSSpellingStateAttributeName)))
+    ;;(:ns-marked-clause-segment . #&NSMarkedClauseSegmentAttributeName)
+    ;;(:ns-spelling-state . #&NSSpellingStateAttributeName)
+    ))
 
