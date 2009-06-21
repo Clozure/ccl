@@ -57,7 +57,7 @@
 	    (setq index (1+ index)))))
     (values string dst-length)))
 
-(defun string-to-region (string)
+(defun string-to-region (string &key charprops)
   "Returns a region containing the characters in the given String."
   (let* ((string (if (simple-string-p string)
 		     string (coerce string 'simple-string)))
@@ -69,6 +69,7 @@
 	  (line (make-line :%buffer buffer))
 	  (first-line line))
 	 (())
+      (set-line-charprops line charprops)
       (let ((right-index (%sp-find-character string index end #\newline)))
 	(cond (right-index
 	       (let* ((length (- right-index index))
@@ -140,6 +141,7 @@
 ;;;
 (defun %set-next-character (mark character)
   (let* ((line (mark-line mark))
+         (charpos (mark-charpos mark))
 	 (next (line-next line))
 	 (buffer (line-%buffer line)))
     (check-buffer-modification buffer mark)
@@ -162,6 +164,10 @@
 			       (current-line-cache-length))
 		 (setf (schar (current-open-chars) (current-left-open-pos)) character)
 		 (incf (current-left-open-pos)))
+
+               ;; merge charprops
+               (join-line-charprops line (line-next line))
+                   
 	       (move-some-marks (charpos next line) 
 				(+ charpos (current-left-open-pos)))
 	       (setq next (line-next next))
@@ -175,6 +181,13 @@
 		    (new (make-line :chars chars  :previous line 
 				    :next next  :%buffer buffer)))
 	       (%sp-byte-blt (current-open-chars) (current-right-open-pos) chars 0 len)
+
+               ;; split charprops
+               (multiple-value-bind (left right)
+                                    (split-line-charprops line charpos)
+                 (setf (line-charprops-changes line) left
+                       (line-charprops-changes new) right))
+
 	       (maybe-move-some-marks* (charpos line new) (current-left-open-pos)
 				       (- charpos (current-left-open-pos) 1))
 	       (setf (line-next line) new)
@@ -373,7 +386,7 @@
   (delete #\linefeed (the simple-string string)))
 
 (defun %print-whole-line (structure stream)
-  (let* ((hi::*current-buffer* (line-buffer structure)))
+  (let* ((hi::*current-buffer* (or (line-buffer structure) hi::*current-buffer*)))
     (cond ((current-open-line-p structure)
 	   (write-string (current-open-chars) stream :end (current-left-open-pos))
 	   (write-string (current-open-chars) stream :start (current-right-open-pos)
@@ -382,7 +395,7 @@
 	   (write-string (line-chars structure) stream)))))
 
 (defun %print-before-mark (mark stream)
-  (let* ((hi::*current-buffer* (mark-buffer mark)))
+  (let* ((hi::*current-buffer* (or (mark-buffer mark) hi::*current-buffer*)))
     (if (mark-line mark)
 	(let* ((line (mark-line mark))
 	       (chars (line-chars line))
@@ -405,7 +418,7 @@
 
 
 (defun %print-after-mark (mark stream)
-  (let* ((hi::*current-buffer* (mark-buffer mark)))
+  (let* ((hi::*current-buffer* (or (mark-buffer mark) hi::*current-buffer*)))
     (if (mark-line mark)
 	(let* ((line (mark-line mark))
 	       (chars (line-chars line))
@@ -436,7 +449,7 @@
 
 (defun %print-hmark (structure stream d)
   (declare (ignore d))
-  (let ((hi::*current-buffer* (mark-buffer structure)))
+  (let ((hi::*current-buffer* (or (mark-buffer structure) hi::*current-buffer*)))
     (write-string "#<Hemlock Mark \"" stream)
     (%print-before-mark structure stream)
     (write-string "^" stream)
@@ -451,7 +464,7 @@
   (write-string "#<Hemlock Region \"" stream)
   (let* ((start (region-start region))
 	 (end (region-end region))
-	 (hi::*current-buffer* (mark-buffer start))
+	 (hi::*current-buffer* (or (mark-buffer start) hi::*current-buffer*))
 	 (first-line (mark-line start))
 	 (last-line (mark-line end)))
     (cond
