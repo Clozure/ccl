@@ -1276,6 +1276,9 @@ process_options(int argc, char *argv[], wchar_t *shadow[])
 	NXArgc -= num_elide;
 #endif
 	argv[argc] = NULL;
+        if (shadow) {
+          shadow[argc] = NULL;
+        }
       }
     }
   }
@@ -1616,7 +1619,11 @@ wide_argv_to_utf_8(wchar_t *wide_argv[], int argc)
   int i;
 
   for (i = 0; i < argc; i++) {
-    argv[i] = utf_16_to_utf_8(wide_argv[i]);
+    if (wide_argv[i]) {
+      argv[i] = utf_16_to_utf_8(wide_argv[i]);
+    } else {
+      argv[i] = NULL;
+    }
   }
   return argv;
 }
