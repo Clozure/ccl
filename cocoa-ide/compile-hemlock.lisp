@@ -52,6 +52,7 @@
     "syntax"
     "htext1"
     "buffer"  
+    "charprops"
     "htext2"
     "htext3"
     "htext4"
