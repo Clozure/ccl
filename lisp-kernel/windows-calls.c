@@ -272,6 +272,17 @@ wopen(wchar_t *path, int flag, int mode)
 int
 lisp_close(HANDLE hfile)
 {
+  int err;
+
+  if (closesocket((SOCKET)hfile) == 0) {
+    return 0;
+  }
+
+  err = WSAGetLastError();
+  if (err != WSAENOTSOCK) {
+    _dosmaperr(err);
+    return -1;
+  }
   if (CloseHandle(hfile)) {
     return 0;
   }
