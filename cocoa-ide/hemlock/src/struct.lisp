@@ -115,6 +115,7 @@
   (font-regions (ccl::init-dll-header (ccl::make-dll-header)))
                                         ; a doubly-linked list of font regions.
   active-font-region                    ; currently active font region
+  charprops		      ; the buffer's default charprops
   )
 
 (defstruct (echo-buffer (:include buffer)
