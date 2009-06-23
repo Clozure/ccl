@@ -60,6 +60,7 @@
   (declare (ignore p))
   (setf (hi::hemlock-view-quote-next-p hi::*current-view*) :native))
 
+#| the old way
 (defcommand "Forward Character" (p)
   "Move the point forward one character, collapsing the selection.
    With prefix argument move that many characters, with negative argument
@@ -77,30 +78,75 @@
 	       (buffer-end point)
 	       (buffer-start point))
 	   (editor-error "Not enough characters.")))))
+|#
 
-(defcommand "Select Forward Character" (p)
-  "Move the point forward one character, extending the selection.
+;;; experimental: if there is an active region, we want to collapse the selection to the end,
+;;; rather than collapse it AND move forward one character
+(defcommand "Forward Character" (p)
+    "Move the point forward one character, collapsing the selection.
    With prefix argument move that many characters, with negative argument
    go backwards."
-  "Move the point of the current buffer forward p characters, extending the selection."
-  (let* ((p (or p 1))
-         (point (current-point-extending-selection)))
+    "Move the point of the current buffer forward p characters, collapsing the selection."
+  (let* ((p (cond
+              (p p)
+              ((hi::%buffer-current-region-p hi::*current-buffer*) 0)
+              (t 1)))
+         (point (current-point-collapsing-selection)))
     (cond ((character-offset point p))
-	  ((= p 1)
-	   (editor-error "No next character."))
-	  ((= p -1)
-	   (editor-error "No previous character."))
-	  (t
-	   (if (plusp p)
-	       (buffer-end point)
-	       (buffer-start point))
-	   (editor-error "Not enough characters.")))))
+          ((= p 1)
+           (editor-error "No next character."))
+          ((= p -1)
+           (editor-error "No previous character."))
+          (t
+           (if (plusp p)
+               (buffer-end point)
+               (buffer-start point))
+           (editor-error "Not enough characters.")))))
 
+(defcommand "Select Forward Character" (p)
+    "Move the point forward one character, extending the selection.
+   With prefix argument move that many characters, with negative argument
+   go backwards."
+    "Move the point of the current buffer forward p characters, extending the selection."
+  (if (hi::%buffer-current-region-p hi::*current-buffer*)
+      (multiple-value-bind (start end)(region-bounds (current-region nil nil))
+        (setf (buffer-point hi::*current-buffer*) end)
+        (setf (hi::buffer-region-active hi::*current-buffer*) nil))
+      (let* ((p (cond
+                  (p p)
+                  ((hi::%buffer-current-region-p hi::*current-buffer*) 0)
+                  (t 1)))
+             (point (current-point-collapsing-selection)))
+        (cond ((character-offset point p))
+              ((= p 1)
+               (editor-error "No next character."))
+              ((= p -1)
+               (editor-error "No previous character."))
+              (t
+               (if (plusp p)
+                   (buffer-end point)
+                   (buffer-start point))
+               (editor-error "Not enough characters."))))))
+
+#| the old way
 (defcommand "Backward Character" (p)
   "Move the point backward one character, collapsing the selection.
   With prefix argument move that many characters backward."
   "Move the point p characters backward, collapsing the selection."
   (forward-character-command (if p (- p) -1)))
+|#
+
+;;; experimental: if there is an active region, we want to collapse the selection to the start,
+;;; rather than collapse it AND move backward one character
+(defcommand "Backward Character" (p)
+    "Move the point backward one character, collapsing the selection.
+  With prefix argument move that many characters backward."
+    "Move the point p characters backward, collapsing the selection."
+  (if (hi::%buffer-current-region-p hi::*current-buffer*)
+      (multiple-value-bind (start end)(region-bounds (current-region nil nil))
+        (setf (buffer-point hi::*current-buffer*) start)
+        (setf (hi::buffer-region-active hi::*current-buffer*) nil))
+      (forward-character-command (if p (- p) -1))))
 
 (defcommand "Select Backward Character" (p)
   "Move the point backward one character, extending the selection.
