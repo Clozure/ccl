@@ -27,8 +27,9 @@
   (multiple-value-bind (os bits cpu) (host-platform)
     (declare (ignore os))
     (format nil "Clozure CL-~a~a" (string-downcase cpu) bits)))
+(defvar *cocoa-ide-force-compile* nil)
 (load "ccl:cocoa-ide;defsystem.lisp")
-(load-ide)
+(load-ide *cocoa-ide-force-compile*)
 
 ;;; If things go wrong, you might see some debugging information via
 ;;; the OSX console (/Applications/Utilities/Console.app.)  Standard

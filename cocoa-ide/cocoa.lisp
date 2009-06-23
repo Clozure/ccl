@@ -10,6 +10,7 @@
   (multiple-value-bind (os bits cpu) (host-platform)
     (declare (ignore os))
     (format nil "temp bundle-~a~a" (string-downcase cpu) bits)))
+(defvar *cocoa-ide-force-compile* nil)
 
 (load "ccl:cocoa-ide;defsystem.lisp")
-(load-ide)
+(load-ide *cocoa-ide-force-compile*)
