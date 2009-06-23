@@ -1871,13 +1871,14 @@
 		    
 (defun make-echo-area-for-window (w main-buffer color)
   (let* ((content-view (#/contentView w))
-	 (bounds (#/bounds content-view)))
+	 (bounds (#/bounds content-view))
+         (height (+ 1 (size-of-char-in-font *editor-font*))))
     (multiple-value-bind (echo-area box)
 			 (make-echo-area w
 					 0.0f0
 					 0.0f0
 					 (- (ns:ns-rect-width bounds) 16.0f0)
-					 20.0f0
+                                         height
 					 main-buffer
 					 color)
       (#/addSubview: content-view box)
@@ -1952,8 +1953,9 @@
   
 (defun new-hemlock-document-window (class)
   (let* ((w (new-cocoa-window :class class
-                              :activate nil)))
-      (values w (add-pane-to-window w :reserve-below 20.0))))
+                              :activate nil))
+         (modeline-height (+ 1 (size-of-char-in-font *editor-font*))))
+      (values w (add-pane-to-window w :reserve-below modeline-height))))
 
 
 
