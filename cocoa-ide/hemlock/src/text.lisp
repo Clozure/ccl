@@ -32,20 +32,22 @@
 ;;;; -- Paragraph Commands --
 
 (defcommand "Forward Paragraph" (p)
-  "moves point to the end of the current (next) paragraph."
-  "moves point to the end of the current (next) paragraph."
-  (let ((point (current-point)))
-    (unless (paragraph-offset point (or p 1))
-      (buffer-end point)
-      (editor-error))))
+    "moves point to the end of the current (next) paragraph."
+    "moves point to the end of the current (next) paragraph."
+  (or (collapse-if-selection :direction :forward)
+      (let ((point (current-point)))
+        (unless (paragraph-offset point (or p 1))
+          (buffer-end point)
+          (editor-error)))))
 
 (defcommand "Backward Paragraph" (p)
-  "moves point to the start of the current (previous) paragraph."
-  "moves point to the start of the current (previous) paragraph."
-  (let ((point (current-point)))
-    (unless (paragraph-offset point (- (or p 1)))
-      (buffer-start point)
-      (editor-error))))
+    "moves point to the start of the current (previous) paragraph."
+    "moves point to the start of the current (previous) paragraph."
+  (or (collapse-if-selection :direction :backward)
+      (let ((point (current-point)))
+        (unless (paragraph-offset point (- (or p 1)))
+          (buffer-start point)
+          (editor-error)))))
 
 (defcommand "Mark Paragraph" (p)
   "Put mark and point around current or next paragraph.
@@ -239,24 +241,26 @@
 ;;;; -- Sentence Commands --
 
 (defcommand "Forward Sentence" (p)
-  "Moves forward one sentence or the specified number.
+    "Moves forward one sentence or the specified number.
    A sentence terminates with a .,?, or ! followed by any number of closing
    delimiters (such as \",',),],>,|) which are followed by either two
    spaces or a newline."
-  "Moves forward one sentence or the specified number."
-  (unless (sentence-offset (current-point) (or p 1))
-    (editor-error)))
+    "Moves forward one sentence or the specified number."
+  (or (collapse-if-selection :direction :forward)
+      (unless (sentence-offset (current-point) (or p 1))
+        (editor-error))))
 
 
 
 (defcommand "Backward Sentence" (p)
-  "Moves backward one sentence or the specified number.
+    "Moves backward one sentence or the specified number.
    A sentence terminates with a .,?, or ! followed by any number of closing
    delimiters (such as \",',),],>,|) which are followed by either two
    spaces or a newline."
-  "Moves backward one sentence or the specified number."
-   (unless (sentence-offset (current-point) (- (or p 1)))
-    (editor-error)))
+    "Moves backward one sentence or the specified number."
+  (or (collapse-if-selection :direction :forward)
+      (unless (sentence-offset (current-point) (- (or p 1)))
+        (editor-error))))
 
 
 

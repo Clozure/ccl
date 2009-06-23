@@ -1291,10 +1291,11 @@
   "Skip over the next Lisp list, collapsing the selection.
   With argument, skips the next p lists."
   "Skip over the next Lisp list, collapsing the selection."
-  (let ((point (current-point-collapsing-selection))
-	(count (or p 1)))
-    (pre-command-parse-check point)
-    (unless (list-offset point count) (editor-error))))
+  (or (collapse-if-selection :direction :forward)
+      (let ((point (current-point-collapsing-selection))
+            (count (or p 1)))
+        (pre-command-parse-check point)
+        (unless (list-offset point count) (editor-error)))))
 
 (defcommand "Select Forward List" (p)
   "Skip over the next Lisp list, extending the selection.
@@ -1309,10 +1310,11 @@
   "Skip over the previous Lisp list, collapsing the selection.
   With argument, skips the previous p lists."
   "Skip over the previous Lisp list, collapsing the selection."
-  (let ((point (current-point-collapsing-selection))
+  (or (collapse-if-selection :direction :backward)
+   (let ((point (current-point-collapsing-selection))
 	(count (- (or p 1))))
     (pre-command-parse-check point)
-    (unless (list-offset point count) (editor-error))))
+    (unless (list-offset point count) (editor-error)))))
 
 (defcommand "Select Backward List" (p)
   "Skip over the previous Lisp list, extending the selection.
@@ -1324,13 +1326,14 @@
     (unless (list-offset point count) (editor-error))))
 
 (defcommand "Forward Form" (p)
-  "Skip over the next Form, collapsing the selection.
+    "Skip over the next Form, collapsing the selection.
   With argument, skips the next p Forms."
-  "Skip over the next Form, collapsing the selection."
-  (let ((point (current-point-collapsing-selection))
-	(count (or p 1)))
-    (pre-command-parse-check point)
-    (unless (form-offset point count) (editor-error))))
+    "Skip over the next Form, collapsing the selection."
+  (or (collapse-if-selection :direction :forward)
+      (let ((point (current-point-collapsing-selection))
+            (count (or p 1)))
+        (pre-command-parse-check point)
+        (unless (form-offset point count) (editor-error)))))
 
 (defcommand "Select Forward Form" (p)
   "Skip over the next Form, extending the selection.
@@ -1342,13 +1345,14 @@
     (unless (form-offset point count) (editor-error))))
 
 (defcommand "Backward Form" (p)
-  "Skip over the previous Form, collapsing the selection.
+    "Skip over the previous Form, collapsing the selection.
   With argument, skips the previous p Forms."
-  "Skip over the previous Form, collaspsing the selection."
-  (let ((point (current-point-collapsing-selection))
-	(count (- (or p 1))))
-    (pre-command-parse-check point)
-    (unless (form-offset point count) (editor-error))))
+    "Skip over the previous Form, collaspsing the selection."
+  (or (collapse-if-selection :direction :backward)
+      (let ((point (current-point-collapsing-selection))
+            (count (- (or p 1))))
+        (pre-command-parse-check point)
+        (unless (form-offset point count) (editor-error)))))
 
 (defcommand "Select Backward Form" (p)
   "Skip over the previous Form, extending the selection.
@@ -1565,29 +1569,30 @@
 
 
 (defcommand "Forward Up List" (p)
-  "Move forward past a one containing )."
-  "Move forward past a one containing )."
-  (let ((point (current-point-collapsing-selection))
-	(count (or p 1)))
-    (pre-command-parse-check point)
-    (if (minusp count)
-	(backward-up-list-command (- count))
-	(with-mark ((m point))
-	  (dotimes (i count (move-mark point m))
-	    (unless (forward-up-list m) (editor-error)))))))
-
+    "Move forward past a one containing )."
+    "Move forward past a one containing )."
+  (or (collapse-if-selection :direction :forward)
+      (let ((point (current-point-collapsing-selection))
+            (count (or p 1)))
+        (pre-command-parse-check point)
+        (if (minusp count)
+            (backward-up-list-command (- count))
+            (with-mark ((m point))
+              (dotimes (i count (move-mark point m))
+                (unless (forward-up-list m) (editor-error))))))))
 
 (defcommand "Backward Up List" (p)
-  "Move backward past a one containing (."
-  "Move backward past a one containing (."
-  (let ((point (current-point-collapsing-selection))
-	(count (or p 1)))
-    (pre-command-parse-check point)
-    (if (minusp count)
-	(forward-up-list-command (- count))
-	(with-mark ((m point))
-	  (dotimes (i count (move-mark point m))
-	    (unless (backward-up-list m) (editor-error)))))))
+    "Move backward past a one containing (."
+    "Move backward past a one containing (."
+  (or (collapse-if-selection :direction :backward)
+      (let ((point (current-point-collapsing-selection))
+            (count (or p 1)))
+        (pre-command-parse-check point)
+        (if (minusp count)
+            (forward-up-list-command (- count))
+            (with-mark ((m point))
+              (dotimes (i count (move-mark point m))
+                (unless (backward-up-list m) (editor-error))))))))
 
 
 (defcommand "Down List" (p)
