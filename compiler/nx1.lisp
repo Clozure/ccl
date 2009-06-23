@@ -28,28 +28,33 @@
   ;; Likewise, complex FUNCTION types can be legally used
   ;; in type declarations, but aren't legal args to TYPEP;
   ;; treat them as the simple FUNCTION type.
-  (let* ((ctype (handler-case (values-specifier-type typespec env)
-		  (parse-unknown-type (c)
-		    (nx1-whine :unknown-type-in-declaration (parse-unknown-type-specifier c))
-		    nil)
-		  (program-error (c)
-		    (nx1-whine :invalid-type typespec c)
-		    nil))))
-    (if (or (null ctype) (typep ctype 'values-ctype))
-      (setq typespec '*)
-      (if (typep ctype 'function-ctype)
-        (setq typespec 'function)       ; better than nothing.
-        (setq typespec (nx-target-type (type-specifier ctype))))))
-  (let* ((*nx-form-type* typespec)
-         (transformed (nx-transform form env)))
-    (when (and (consp transformed)
-               (eq (car transformed) 'the))
-      (setq transformed form))
-    (make-acode
-     (%nx1-operator typed-form)
-     typespec
-     (nx1-transformed-form transformed env)
-     (nx-declarations-typecheck env))))
+  (flet ((typespec-for-the (typespec)
+           (let* ((ctype (handler-case (values-specifier-type (nx-target-type typespec) env)
+                           (parse-unknown-type (c)
+                                               (nx1-whine :unknown-type-in-declaration (parse-unknown-type-specifier c))
+                                               nil)
+                           (program-error (c)
+                                          (nx1-whine :invalid-type typespec c)
+                                          nil))))
+             (if (or (null ctype) (typep ctype 'values-ctype))
+               '*
+               (if (typep ctype 'function-ctype)
+                 'function
+                 (nx-target-type (type-specifier ctype)))))))
+    (let* ((typespec (typespec-for-the typespec))
+           (*nx-form-type* typespec)
+           (transformed (nx-transform form env)))
+      (do* ()
+           ((or (atom transformed)
+                (not (eq (car transformed) 'the))))
+        (destructuring-bind (ftype form) (cdr transformed)
+          (setq typespec (nx-target-type (nx1-type-intersect call typespec (typespec-for-the ftype)))
+                transformed form)))
+      (make-acode
+       (%nx1-operator typed-form)
+       typespec
+       (nx1-transformed-form transformed env)
+       (nx-declarations-typecheck env)))))
 
 (defnx1 nx1-struct-ref struct-ref (&whole whole structure offset)
   (if (not (fixnump (setq offset (nx-get-fixnum offset))))
