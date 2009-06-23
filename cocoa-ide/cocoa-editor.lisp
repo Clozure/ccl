@@ -1954,8 +1954,8 @@
 (defun new-hemlock-document-window (class)
   (let* ((w (new-cocoa-window :class class
                               :activate nil))
-         (modeline-height (+ 1 (size-of-char-in-font *editor-font*))))
-      (values w (add-pane-to-window w :reserve-below modeline-height))))
+         (echo-area-height (+ 1 (size-of-char-in-font *editor-font*))))
+      (values w (add-pane-to-window w :reserve-below echo-area-height))))
 
 
 
