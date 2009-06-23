@@ -14,6 +14,18 @@
 
 (in-package :hemlock)
 
+;;; utility for collapsing selections from movement commands
+;;; returns a true value if a selection was collapsed, false otherwise
+(defun collapse-if-selection (&key (direction :end))
+  (assert (memq direction '(:start :end))()
+          "collapse-if-selection requires a :direction argument equal to either :start or :end")
+  (if (hi::%buffer-current-region-p hi::*current-buffer*)
+      (multiple-value-bind (start end)(region-bounds (current-region nil nil))
+        (let ((d (ecase direction ((:end) end)((:start) start))))
+          (setf (buffer-point hi::*current-buffer*) d)
+          (setf (hi::buffer-region-active hi::*current-buffer*) nil)
+          t))
+      nil))
 
 ;;; Make a mark for buffers as they're consed:
 
@@ -66,10 +78,7 @@
    With prefix argument move that many characters, with negative argument
    go backwards."
     "Move the point of the current buffer forward p characters, collapsing the selection."
-  (if (hi::%buffer-current-region-p hi::*current-buffer*)
-      (multiple-value-bind (start end)(region-bounds (current-region nil nil))
-        (setf (buffer-point hi::*current-buffer*) end)
-        (setf (hi::buffer-region-active hi::*current-buffer*) nil))
+  (or (collapse-if-selection :direction :end)
       (let* ((p (cond
                   (p p)
                   ((hi::%buffer-current-region-p hi::*current-buffer*) 0)
@@ -86,36 +95,29 @@
                    (buffer-start point))
                (editor-error "Not enough characters."))))))
 
-
 (defcommand "Select Forward Character" (p)
     "Move the point forward one character, extending the selection.
    With prefix argument move that many characters, with negative argument
    go backwards."
     "Move the point of the current buffer forward p characters, extending the selection."
-  (let* ((p (cond
-                  (p p)
-                  ((hi::%buffer-current-region-p hi::*current-buffer*) 0)
-                  (t 1)))
-             (point (current-point-collapsing-selection)))
-        (cond ((character-offset point p))
-              ((= p 1)
-               (editor-error "No next character."))
-              ((= p -1)
-               (editor-error "No previous character."))
-              (t
-               (if (plusp p)
-                   (buffer-end point)
-                   (buffer-start point))
-               (editor-error "Not enough characters.")))))
+  (let* ((p (or p 1))
+         (point (current-point-collapsing-selection)))
+    (cond ((character-offset point p))
+          ((= p 1)
+           (editor-error "No next character."))
+          ((= p -1)
+           (editor-error "No previous character."))
+          (t
+           (if (plusp p)
+               (buffer-end point)
+               (buffer-start point))
+           (editor-error "Not enough characters.")))))
 
 (defcommand "Backward Character" (p)
     "Move the point backward one character, collapsing the selection.
   With prefix argument move that many characters backward."
     "Move the point p characters backward, collapsing the selection."
-  (if (hi::%buffer-current-region-p hi::*current-buffer*)
-      (multiple-value-bind (start end)(region-bounds (current-region nil nil))
-        (setf (buffer-point hi::*current-buffer*) start)
-        (setf (hi::buffer-region-active hi::*current-buffer*) nil))
+  (or (collapse-if-selection :direction :start)
       (forward-character-command (if p (- p) -1))))
 
 (defcommand "Select Backward Character" (p)
@@ -210,17 +212,18 @@
 	  (return nil))))))
 
 (defcommand "Forward Word" (p)
-  "Moves forward one word, collapsing the selection.
+    "Moves forward one word, collapsing the selection.
   With prefix argument, moves the point forward over that many words."
-  "Moves the point forward p words, collapsing the selection."
-  (let* ((point (current-point-collapsing-selection)))
-    (cond ((word-offset point (or p 1)))
-          ((and p (minusp p))
-           (buffer-start point)
-           (editor-error "No previous word."))
-          (t
-           (buffer-end point)
-           (editor-error "No next word.")))))
+    "Moves the point forward p words, collapsing the selection."
+  (or (collapse-if-selection :direction :end)
+      (let* ((point (current-point-collapsing-selection)))
+        (cond ((word-offset point (or p 1)))
+              ((and p (minusp p))
+               (buffer-start point)
+               (editor-error "No previous word."))
+              (t
+               (buffer-end point)
+               (editor-error "No next word."))))))
 
 (defcommand "Select Forward Word" (p)
   "Moves forward one word, extending the selection.
@@ -239,7 +242,8 @@
   "Moves forward backward word.
   With prefix argument, moves the point back over that many words."
   "Moves the point backward p words."
-  (forward-word-command (- (or p 1))))
+  (or (collapse-if-selection :direction :start)
+   (forward-word-command (- (or p 1)))))
 
 (defcommand "Select Backward Word" (p)
   "Moves forward backward word, extending the selection.
