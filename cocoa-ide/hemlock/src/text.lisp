@@ -258,7 +258,7 @@
    delimiters (such as \",',),],>,|) which are followed by either two
    spaces or a newline."
     "Moves backward one sentence or the specified number."
-  (or (collapse-if-selection :direction :forward)
+  (or (collapse-if-selection :direction :backward)
       (unless (sentence-offset (current-point) (- (or p 1)))
         (editor-error))))
 

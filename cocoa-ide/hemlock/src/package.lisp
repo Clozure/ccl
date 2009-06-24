@@ -137,6 +137,7 @@
    #:find-pattern
    #:replace-pattern
    #:*last-search-string*
+   #:collapse-if-selection
 
    ;; Hemlock Variables
    #:*global-variable-names*
