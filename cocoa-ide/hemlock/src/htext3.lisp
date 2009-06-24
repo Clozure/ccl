@@ -42,82 +42,134 @@
 
              
 
-(defun insert-character (mark character)
+(defun insert-character (mark character &key (charprops :neighbor))
   "Inserts the Character at the specified Mark."
   (declare (type base-char character))
   (let* ((line (mark-line mark))
+         (charpos (mark-charpos mark))
 	 (buffer (line-%buffer line)))
     (modifying-buffer buffer
-		      (modifying-line line mark)
-		      (cond ((char= character #\newline)
-			     (let* ((next (line-next line))
-				    (new-chars (subseq (the simple-string (current-open-chars))
-						       0 (current-left-open-pos)))
-				    (new-line (make-line :%buffer buffer
-							 :chars (next-cache-modification-tick)
-							 :previous line
-							 :next next)))
-			       (maybe-move-some-marks (charpos line new-line) (current-left-open-pos)
-						      (- charpos (current-left-open-pos)))
-			       (setf (line-%chars line) new-chars)
-			       (setf (line-next line) new-line)
-			       (if next (setf (line-previous next) new-line))
-			       (number-line new-line)
-			       (setf (current-open-line) new-line
-				     (current-left-open-pos) 0)))
-			    (t
-			     (if (= (current-right-open-pos) (current-left-open-pos))
-			       (grow-open-chars))
+      (modifying-line line mark)
+      (cond ((char= character #\newline)
+             (let* ((next (line-next line))
+                    (new-chars (subseq (the simple-string (current-open-chars))
+                                       0 (current-left-open-pos)))
+                    (new-line (make-line :%buffer buffer
+                                         :chars (next-cache-modification-tick)
+                                         :previous line
+                                         :next next)))
+
+               ;; Do newlines get properties?  What if a charprops arg is
+               ;; specified here?
+               (multiple-value-bind (left right)
+                                    (split-line-charprops line charpos)
+                 (setf (line-charprops-changes line) left
+                       (line-charprops-changes new-line) right))
+
+               (maybe-move-some-marks (charpos line new-line) (current-left-open-pos)
+                                      (- charpos (current-left-open-pos)))
+                 
+               (setf (line-%chars line) new-chars)
+               (setf (line-next line) new-line)
+               (if next (setf (line-previous next) new-line))
+               (number-line new-line)
+               (setf (current-open-line) new-line
+                     (current-left-open-pos) 0)))
+            (t
+             (if (= (current-right-open-pos) (current-left-open-pos))
+               (grow-open-chars))
+
+             ;; Rule: when charprops is :neighbor, an inserted character
+             ;; takes on on the properties of the preceding character,
+             ;; unless the character is being inserted at the beginning of
+             ;; a line, in which case it takes on the the properties of the
+             ;; following character.
+
+             (if (eq charprops :neighbor)
+               (if (start-line-p mark)
+                 (adjust-charprops-changes (line-charprops-changes line) 0 1)
+                 (adjust-charprops-changes (line-charprops-changes line) (1- charpos) 1))
+               (let* ((next-props (next-charprops mark))
+                      (prev-props (previous-charprops mark)))
+                 (cond ((charprops-equal charprops prev-props)
+                        (format t "~& prev props (~s) equal" prev-props)
+                        (adjust-charprops-changes (line-charprops-changes line) (1- charpos) 1))
+                       ((charprops-equal charprops next-props)
+                        (format t "~& next props (~s) equal" next-props)
+                        (adjust-charprops-changes (line-charprops-changes line) charpos 1))
+                       (t
+                        (format t "~& surrounding props (~s, ~s) not equal" prev-props next-props)
+                        (adjust-charprops-changes (line-charprops-changes line) charpos 1)
+                        (set-line-charprops line charprops :start charpos
+                                        :end (1+ charpos))))))
+
+             (maybe-move-some-marks (charpos line) (current-left-open-pos)
+                                    (1+ charpos))
 	     
-			     (maybe-move-some-marks (charpos line) (current-left-open-pos)
-						    (1+ charpos))
-	     
-			     (cond
-			       ((eq (mark-%kind mark) :right-inserting)
-				(decf (current-right-open-pos))
-				(setf (char (the simple-string (current-open-chars)) (current-right-open-pos))
-				      character))
-			       (t
-				(setf (char (the simple-string (current-open-chars)) (current-left-open-pos))
-				      character)
-				(incf (current-left-open-pos))))))
-                      (adjust-line-origins-forward line)
-		      (buffer-note-insertion buffer mark 1))))
+             (cond
+              ((eq (mark-%kind mark) :right-inserting)
+               (decf (current-right-open-pos))
+               (setf (char (the simple-string (current-open-chars)) (current-right-open-pos))
+                     character))
+              (t
+               (setf (char (the simple-string (current-open-chars)) (current-left-open-pos))
+                     character)
+               (incf (current-left-open-pos))))))
+      (adjust-line-origins-forward line)
+      (buffer-note-insertion buffer mark 1))))
 
 
-(defun insert-string (mark string #| &optional (start 0) (end (length string))|#)
-  "Inserts the String at the Mark.  Do not use Start and End unless you
-  know what you're doing!"
+(defun insert-string (mark string &key (charprops :neighbor))
+  "Inserts the String at the Mark."
   (let* ((line (mark-line mark))
+         (charpos (mark-charpos mark))
          (len (length string))
 	 (buffer (line-%buffer line))
 	 (string (coerce string 'simple-string)))
     (declare (simple-string string))
     (unless (zerop len)
       (if (%sp-find-character string 0 len #\newline)
-        (ninsert-region mark (string-to-region string))
-        (modifying-buffer
-         buffer
-         (progn
-           (modifying-line line mark)
-           (if (<= (current-right-open-pos) (+ (current-left-open-pos) len))
-             (grow-open-chars (* (+ (current-line-cache-length) len) 2)))
-           (maybe-move-some-marks (charpos line) (current-left-open-pos)
-                                  (+ charpos len))
-           (cond
-             ((eq (mark-%kind mark) :right-inserting)
-              (let ((new (- (current-right-open-pos) len)))
-                (%sp-byte-blt string 0 (current-open-chars) new (current-right-open-pos))
-                (setf (current-right-open-pos) new)))
-             (t
-              (let ((new (+ (current-left-open-pos) len)))
-                (%sp-byte-blt string 0 (current-open-chars) (current-left-open-pos) new)
-                (setf (current-left-open-pos) new)))))
-         (adjust-line-origins-forward line)
-         (buffer-note-insertion buffer mark (length string)))))))
-                        
-  
+        (progn
+          (when (eq charprops :neighbor)
+            (if (start-line-p mark)
+              (setq charprops (next-charprops mark))
+              (setq charprops (previous-charprops mark))))
+          (ninsert-region mark (string-to-region string :charprops charprops)))
+        (modifying-buffer buffer
+          (modifying-line line mark)
+          (if (<= (current-right-open-pos) (+ (current-left-open-pos) len))
+            (grow-open-chars (* (+ (current-line-cache-length) len) 2)))
 
+          (if (eq charprops :neighbor)
+            (if (start-line-p mark)
+              (adjust-charprops-changes (line-charprops-changes line) 0 len)
+              (adjust-charprops-changes (line-charprops-changes line) (1- charpos) len))
+            (let* ((next-props (next-charprops mark))
+                   (prev-props (previous-charprops mark)))
+              (cond ((charprops-equal charprops prev-props)
+                     (format t "~& prev props (~s) equal" prev-props)
+                     (adjust-charprops-changes (line-charprops-changes line) (1- charpos) len))
+                    ((charprops-equal charprops next-props)
+                     (format t "~& next props (~s) equal" next-props)
+                     (adjust-charprops-changes (line-charprops-changes line) charpos len))
+                    (t
+                     (format t "~& surrounding props (~s, ~s) not equal" prev-props next-props)
+                     (set-line-charprops line charprops :start charpos
+                                     :end (+ charpos len))))))
+
+          (maybe-move-some-marks (charpos line) (current-left-open-pos)
+                                 (+ charpos len))
+          (cond
+           ((eq (mark-%kind mark) :right-inserting)
+            (let ((new (- (current-right-open-pos) len)))
+              (%sp-byte-blt string 0 (current-open-chars) new (current-right-open-pos))
+              (setf (current-right-open-pos) new)))
+           (t
+            (let ((new (+ (current-left-open-pos) len)))
+              (%sp-byte-blt string 0 (current-open-chars) (current-left-open-pos) new)
+              (setf (current-left-open-pos) new))))
+	  (adjust-line-origins-forward line)
+	  (buffer-note-insertion buffer mark (length string)))))))
 
 (defconstant line-number-interval-guess 8
   "Our first guess at how we should number an inserted region's lines.")
