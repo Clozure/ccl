@@ -373,7 +373,7 @@
 (bind-key "Select Forward Form" #k"control-meta-F")
 (bind-key "Select Forward Form" #k"control-shift-rightarrow")
 (bind-key "Backward Form" #k"control-meta-b")
-(bind-key "Backward Form" #k"control-leftarrow")¯
+(bind-key "Backward Form" #k"control-leftarrow")
 (bind-key "Select Backward Form" #k"control-meta-B")
 (bind-key "Select Backward Form" #k"control-shift-leftarrow")
 (bind-key "Forward List" #k"control-meta-n")
