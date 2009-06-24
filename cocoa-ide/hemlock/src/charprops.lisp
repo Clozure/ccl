@@ -157,6 +157,23 @@
               (setq prior-change change))
             (setq pivot i)))))))
 
+(defun append-line-charprops (line changes)
+  (let* ((left (line-charprops-changes line))
+         (len (line-length line))
+         (right changes))
+    (cond ((and left right)
+           (loop for c across changes
+             for new-change = (copy-charprops-change c)
+             do (incf (charprops-change-index new-change) len)
+                (push-charprops-change new-change left)))
+          ((and (null left) right)
+           (setq left (copy-charprops-changes changes))
+           (adjust-charprops-change-indexes left len)
+           (setf (line-charprops-changes line) left))
+          ((and left (null right))
+           (push-charprops-change (make-charprops-change len nil) left)))
+    left))
+
 ;;; Append the charprops-changes from line2 onto line1, modifying their
 ;;; indexes appropriately.
 (defun join-line-charprops (line1 line2)
@@ -207,115 +224,113 @@
    characters in the interval [start, end) on the specified line.  If the
    charprops in between start and end are the default charprops, return
    NIL."
-  (unless end
-    (setq end (line-length line)))
-  (let* ((changes (line-charprops-changes line))
-         (new-changes (make-empty-charprops-changes)))
+  (let ((changes (line-charprops-changes line)))
+    ;; some early-out special cases
     (cond ((null changes)
-           (setq new-changes nil))
-          ((and (= start 0)
-                (= end (line-length line)))
-           (setq new-changes (copy-charprops-changes changes)))
-          (t
-           (let* ((start-idx (charprops-change-index-for-position changes start))
-                  (end-idx (charprops-change-index-for-position changes (1- end))))
-             (if (eql start-idx end-idx)
-               (if (null start-idx)
-                 (setq new-changes nil)
-                 (let* ((change (aref changes start-idx))
-                        (plist (charprops-change-plist change)))
-                   (if (null plist)
-                     (setq new-changes nil)
-                     (push-charprops-change (make-charprops-change start plist)
-                                         new-changes))))
-               (do* ((i (or start-idx 0) (1+ i))
-                     (change nil)
-                     (index nil)
-                     (plist nil))
-                    ((> i end-idx))
-                 (setq change (aref changes i))
-                 (setq index (charprops-change-index change))
-                 (setq plist (charprops-change-plist change))
-                 (push-charprops-change (make-charprops-change
-                                         (max 0 (- index start)) plist)
-                                        new-changes))))))
-    new-changes))
+           (return-from copy-line-charprops))
+          ((and (= start 0) (null end))
+           (return-from copy-line-charprops (copy-charprops-changes changes))))
+    (unless end
+      (setq end (line-length line)))
+    (let* ((new-changes (make-empty-charprops-changes))
+           (start-idx (charprops-change-index-for-position changes start))
+           (end-idx (charprops-change-index-for-position changes (1- end))))
+      (if (eql start-idx end-idx)
+        (if (null start-idx)
+          (setq new-changes nil)
+          (let* ((change (aref changes start-idx))
+                 (plist (charprops-change-plist change)))
+            (if (null plist)
+              (setq new-changes nil)
+              (push-charprops-change (make-charprops-change start plist)
+                                     new-changes))))
+        (do ((i (or start-idx 0) (1+ i)))
+            ((> i end-idx))
+          (let* ((change (aref changes i))
+                 (index (charprops-change-index change))
+                 (plist (charprops-change-plist change)))
+          (push-charprops-change (make-charprops-change
+                                  (max 0 (- index start)) plist)
+                                 new-changes))))
+      new-changes)))
 
 (defun delete-line-charprops (line &key (start 0) end)
-  (unless end
-    (setq end (line-length line)))
-  (let* ((changes (line-charprops-changes line))
-         (start-idx (charprops-change-index-for-position changes start))
-         (end-idx (charprops-change-index-for-position changes (1- end))))
-
+  (let ((changes (line-charprops-changes line)))
+    ;; some early-out special cases
     (cond ((null changes)
            (return-from delete-line-charprops))
-          ((and (= start 0) (= end (line-length line)))
+          ((and (= start 0) (null end))
            (setf (line-charprops-changes line) nil)
-           (return-from delete-line-charprops))
-          ((null start-idx)
-           (if (null end-idx)
-             (adjust-charprops-change-indexes changes (- start end) :start 0)
-             (progn
-               ;; delete changes before end-idx
-               (replace changes changes :start1 0 :start2 end-idx)
-               (decf (fill-pointer changes) end-idx)
-               (setf (charprops-change-index (aref changes 0)) start)
-               ;; move back start of subsequent changes, if there are any
-               (when (> (length changes) 1)
-                 (adjust-charprops-change-indexes changes (- start end) :start 1)
-                 ;; if first change is now zero-length, remove it
-                 (when (= (charprops-change-index (aref changes 0))
-                          (charprops-change-index (aref changes 1)))
-                   (delete-charprops-change changes 0)))
-               ;; if first change's plist is nil, delete it, since a line
-               ;; always starts with implicit nil charprops.
-               (when (null (charprops-change-plist (aref changes 0)))
-                 (if (= (length changes) 1)
-                   (setf (line-charprops-changes line) nil)
-                   (delete-charprops-change changes 0))))))
-          ((eql start-idx end-idx)
-           ;; The deletion takes place within the scope of a single
-           ;; charprops run.  Note that start-idx will not be null.
-           ;; move back indexes of subsequent changes, if there are any
-           (when (> (length changes) (1+ start-idx))
-             (adjust-charprops-change-indexes changes (- start end)
-                                              :start (1+ start-idx))
-             ;; if the change is now zero-length, remove it
-             (when (= (charprops-change-index (aref changes start-idx))
-                      (charprops-change-index (aref changes (1+ start-idx))))
-               (delete-charprops-change changes start-idx)
-               (decf start-idx))
-             ;; if the first change and the second change have the same
-             ;; charprops, merge them.
-             (when (and (>= start-idx 0)
-                        (> (length changes) (1+ start-idx))
-                        (charprops-equal
-                         (charprops-change-plist (aref changes start-idx))
-                         (charprops-change-plist (aref changes (1+ start-idx)))))
-               (delete-charprops-change changes (1+ start-idx)))))
-          (t
-           ;; Remove changes between start-idx and and end-idx.
-           (replace changes changes :start1 (1+ start-idx)
-                    :start2 end-idx)
-           (decf (fill-pointer changes) (- end-idx (1+ start-idx)))
-           ;;(setf (charprops-change-index (aref changes (1+ start-idx))) start)
-           (when (> (length changes) (1+ start-idx))
-             (adjust-charprops-change-indexes changes (- start end)
-                                              :start (1+ start-idx))
-             (when (>= (charprops-change-index (aref changes start-idx))
-                       (charprops-change-index (aref changes (1+ start-idx))))
-               (delete-charprops-change changes start-idx)
-               (decf start-idx))
-             (when (and (>= start-idx 0)
-                        (> (length changes) (1+ start-idx))
-                        (charprops-equal
-                         (charprops-change-plist (aref changes start-idx))
-                         (charprops-change-plist (aref changes (1+ start-idx)))))
-               (delete-charprops-change changes (1+ start-idx))))))
-    changes))
-             
+           (return-from delete-line-charprops)))
+    (unless end
+      (setq end (line-length line)))
+    (assert (<= start end) (start end))
+    (let* ((start-idx (charprops-change-index-for-position changes start))
+           (end-idx (charprops-change-index-for-position changes (1- end))))
+      (cond ((null start-idx)
+             (if (null end-idx)
+               (adjust-charprops-change-indexes changes (- start end) :start 0)
+               (progn
+                 ;; delete changes before end-idx
+                 (replace changes changes :start1 0 :start2 end-idx)
+                 (decf (fill-pointer changes) end-idx)
+                 (setf (charprops-change-index (aref changes 0)) start)
+                 ;; move back start of subsequent changes, if there are any
+                 (when (> (length changes) 1)
+                   (adjust-charprops-change-indexes changes (- start end)
+                                                    :start 1)
+                   ;; if the change is now zero-length, remove it
+                   (when (= (charprops-change-index (aref changes 0))
+                            (charprops-change-index (aref changes 1)))
+                     (delete-charprops-change changes 0))))))
+            ((eql start-idx end-idx)
+             ;; The deletion takes place within the scope of a single
+             ;; charprops run.
+             ;; Move back start of subsequent changes, if there are any
+             (when (> (length changes) (1+ start-idx))
+               (adjust-charprops-change-indexes changes (- start end)
+                                                :start (1+ start-idx))
+               ;; if the change is now zero-length, remove it
+               (when (= (charprops-change-index (aref changes start-idx))
+                        (charprops-change-index (aref changes (1+ start-idx))))
+                 (delete-charprops-change changes start-idx))))
+            (t
+             ;; Remove changes between start-idx and and end-idx.
+             (replace changes changes :start1 (1+ start-idx)
+                      :start2 end-idx)
+             (decf (fill-pointer changes) (- end-idx (1+ start-idx)))
+             (setf (charprops-change-index (aref changes (1+ start-idx))) start)
+             (when (> (length changes) (1+ start-idx))
+               (adjust-charprops-change-indexes changes (- start end)
+                                                :start (+ 2 start-idx))
+               ;; if first change is now zero-length, remove it
+               (when (= (charprops-change-index (aref changes start-idx))
+                        (charprops-change-index (aref changes (1+ start-idx))))
+                 (delete-charprops-change changes start-idx))))))
+    (coalesce-line-charprops line)))
 
+;;; Coalesce adjacent changes with CHARPROP-EQUAL plists.
+;;; Maybe make this remove zero-length changes, too?
+(defun coalesce-line-charprops (line)
+  (let ((changes (line-charprops-changes line)))
+    (do* ((i 0 (1+ i))
+          (change nil))
+         ((>= i (length changes)))
+      (setq change (aref changes i))
+      (loop with j = (1+ i)
+        while (and (< j (length changes))
+                   (charprops-equal (charprops-change-plist change)
+                                    (charprops-change-plist (aref changes j))))
+        do (delete-charprops-change changes j)))
+    ;; Elide any changes with NIL plists at the start of the line.
+    (loop
+      while (and (> (length changes) 0)
+                 (null (charprops-change-plist (aref changes 0))))
+      do (delete-charprops-change changes 0))
+    (when (zerop (length changes))
+      (setf (line-charprops-changes line) nil)))
+  (line-charprops-changes line))
+      
 (defun adjust-charprops-change-indexes (changes delta &key (start 0))
   (do* ((i start (1+ i))
         (change nil))
@@ -328,49 +343,9 @@
 ;;; containing charpos.
 (defun adjust-charprops-changes (changes charpos delta)
   (let ((start-idx (charprops-change-index-for-position changes charpos)))
-    (cond
-     ((plusp delta)
-      ;; We're inserting something.  Adjust the charprops-change-indexes of
-      ;; all changes after the one we belong to.
-      (adjust-charprops-change-indexes changes delta :start (if start-idx
-                                                          (1+ start-idx)
-                                                          0)))
-     ((minusp delta)
-      ;; We're deleting something.
-      (let* ((end (+ charpos (abs delta)))
-             (end-idx (charprops-change-index-for-position changes end)))
-        (if (eql start-idx end-idx)
-          ;; The deletion takes place entirely within the scope of a
-          ;; single charprops change.  We have only to adjust the
-          ;; charprops-change-index of all changes after the one we
-          ;; belong to.
-          (adjust-charprops-change-indexes changes delta :start (if start-idx
-                                                              (1+ start-idx)
-                                                              0))
-          ;; The deletion spans multiple charprops changes.
-          (let* ((start-change (and start-idx (aref changes start-idx)))
-                 (end-change (aref changes end-idx)))
-            ;; Adjust the change at the end of the deletion.  (Note that
-            ;; end-idx is sure be valid: the only way it could be nil is if
-            ;; start-idx were also nil, but that case would have been
-            ;; caught by the consequent of the IF.)
-            (setf (charprops-change-index end-change)
-                  (- end (charprops-change-index end-change)))
-            (cond
-             ((null start-idx)
-              ;; There's a stretch of default properties at the start of
-              ;; the line.
-              (replace changes changes :start1 0 :start2 end-idx)
-              (decf (fill-pointer changes) end-idx))
-             ((= (charprops-change-index start-change)
-                 (charprops-change-index end-change))
-              ;; The start-change is being completely wiped out.
-              (replace changes changes :start1 start-idx :start2 end-idx)
-              (decf (fill-pointer changes) (- end-idx start-idx)))
-             ((> (- end-idx start-idx) 1)
-              ;; Delete the charprops changes between start-idx and end-idx.
-              (replace changes changes :start1 (1+ start-idx) :start2 end-idx)
-              (decf (fill-pointer changes) (- end-idx (1+ start-idx))))))))))))
+    (adjust-charprops-change-indexes changes delta :start (if start-idx
+                                                            (1+ start-idx)
+                                                            0))))
 
 #|
 ;;; Both target-changes and source-changes are vectors of charprops-change
