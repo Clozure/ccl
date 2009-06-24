@@ -16,16 +16,6 @@
 
 ;;; utility for collapsing selections from movement commands
 ;;; returns a true value if a selection was collapsed, false otherwise
-(defun collapse-if-selection (&key (direction :forward))
-  (assert (memq direction '(:backward :forward))()
-          "collapse-if-selection requires a :direction argument equal to either :backward or :forward")
-  (if (hi::%buffer-current-region-p hi::*current-buffer*)
-      (multiple-value-bind (start end)(region-bounds (current-region nil nil))
-        (let ((d (ecase direction ((:forward) end)((:backward) start))))
-          (setf (buffer-point hi::*current-buffer*) d)
-          (setf (hi::buffer-region-active hi::*current-buffer*) nil)
-          t))
-      nil))
 
 (defun collapse-if-selection (&key (direction :forward))
   (assert (memq direction '(:backward :forward))()
@@ -41,7 +31,6 @@
           (setf (hi::buffer-region-active b) nil)
           point)
         nil)))
-
 
 ;;; Make a mark for buffers as they're consed:
 
