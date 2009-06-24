@@ -157,8 +157,10 @@
 
 (bind-key "Forward Word" #k"meta-f")
 (bind-key "Select Forward Word" #k"meta-F")
+(bind-key "Select Forward Word" #k"meta-shift-rightarrow")
 (bind-key "Backward Word" #k"meta-b")
 (bind-key "Select Backward Word" #k"meta-B")
+(bind-key "Select Backward Word" #k"meta-shift-leftarrow")
 
 (bind-key "Forward Paragraph" #k"meta-]")
 (bind-key "Forward Sentence" #k"meta-e")
@@ -367,9 +369,13 @@
 (bind-key "End of Defun" #k"control-meta-e")
 (bind-key "Select to End of Defun" #k"control-meta-E")
 (bind-key "Forward Form" #k"control-meta-f")
+(bind-key "Forward Form" #k"control-rightarrow")
 (bind-key "Select Forward Form" #k"control-meta-F")
+(bind-key "Select Forward Form" #k"control-shift-rightarrow")
 (bind-key "Backward Form" #k"control-meta-b")
+(bind-key "Backward Form" #k"control-leftarrow")¯
 (bind-key "Select Backward Form" #k"control-meta-B")
+(bind-key "Select Backward Form" #k"control-shift-leftarrow")
 (bind-key "Forward List" #k"control-meta-n")
 (bind-key "Select Forward List" #k"control-meta-N")
 (bind-key "Backward List" #k"control-meta-p")

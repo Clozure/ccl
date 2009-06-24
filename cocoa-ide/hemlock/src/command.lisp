@@ -106,7 +106,7 @@
    go backwards."
     "Move the point of the current buffer forward p characters, extending the selection."
   (let* ((p (or p 1))
-         (point (current-point-collapsing-selection)))
+         (point (current-point-extending-selection)))
     (cond ((character-offset point p))
           ((= p 1)
            (editor-error "No next character."))
@@ -368,10 +368,10 @@
     (line-start point)))
 
 (defcommand "Select to Beginning of Line" (p)
-  "Moves the point to the beginning of the current line, extending the selection.
+    "Moves the point to the beginning of the current line, extending the selection.
   With prefix argument, moves the point to the beginning of the prefix'th
   next line."
-  "Moves the point down p lines and then to the beginning of the line, extending the selection."
+    "Moves the point down p lines and then to the beginning of the line, extending the selection."
   (let ((point (current-point-extending-selection)))
     (unless (line-offset point (if p p 0)) (editor-error "No such line."))
     (line-start point)))
