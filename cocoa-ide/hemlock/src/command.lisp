@@ -27,6 +27,22 @@
           t))
       nil))
 
+(defun collapse-if-selection (&key (direction :forward))
+  (assert (memq direction '(:backward :forward))()
+          "collapse-if-selection requires a :direction argument equal to either :backward or :forward")
+  (let ((b (current-buffer)))
+    (if (hi::%buffer-current-region-p b)
+        (let* ((point (buffer-point b))
+               (region (current-region)))
+          ;; Deactivate the region
+          (ecase direction
+            ((:backward) (move-mark point (region-start region)))
+            ((:forward) (move-mark point (region-end region))))
+          (setf (hi::buffer-region-active b) nil)
+          point)
+        nil)))
+
+
 ;;; Make a mark for buffers as they're consed:
 
 (defun hcmd-new-buffer-hook-fun (buff)

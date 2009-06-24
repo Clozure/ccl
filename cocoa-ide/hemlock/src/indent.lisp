@@ -191,15 +191,15 @@
 
 
 (defcommand "New Line" (p)
-  "Moves the point to a new blank line.
+    "Moves the point to a new blank line.
   A newline is inserted.
   With an argument, repeats p times."
-  "Moves the point to a new blank line."
+    "Moves the point to a new blank line."
   (let ((point (current-point-for-insertion))
-	(count (if p p 1)))
+        (count (if p p 1)))
     (if (not (minusp count))
-      (dotimes (i count) (insert-character point #\newline))
-      (editor-error))))
+        (dotimes (i count) (insert-character point #\newline))
+        (editor-error))))
 
 
 
