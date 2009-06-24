@@ -22,11 +22,6 @@
 
 ;;;; DELETE-CHARACTERS.
 
-(defvar *internal-temp-region* (make-empty-region))
-(defvar *internal-temp-mark* (internal-make-mark nil nil :temporary))
-
-
-
 (defun delete-characters (mark &optional (n 1))
   "Deletes N characters after the mark (or -N before if N is negative)."
   (let* ((line (mark-line mark))
@@ -34,47 +29,47 @@
 	 (length (line-length* line)))
     (check-buffer-modification (line-%buffer line) mark)
     (cond
-      ((zerop n) t)
-      ;; Deleting chars on one line, just bump the pointers.
-      ((<= 0 (+ charpos n) length)
-       (let* ((buffer (line-%buffer line)))
-       (modifying-buffer buffer
-                         (modifying-line line mark)
-                         (cond
-                           ((minusp n)
-                            (setf (current-left-open-pos) (+ (current-left-open-pos) n))
-                            (move-some-marks (pos line)
-                                             (if (> pos (current-left-open-pos))
-                                               (if (<= pos charpos) (current-left-open-pos) (+ pos n))
-                                               pos)))
-	 
-                           (t
-                            (setf (current-right-open-pos) (+ (current-right-open-pos) n))
-                            (let ((bound (+ charpos n)))
-                              (move-some-marks (pos line)
-                                               (if (> pos charpos)
-                                                 (if (<= pos bound) (current-left-open-pos) (- pos n))
-                                                 pos)))))
-                         (adjust-line-origins-forward line)
-                         (buffer-note-deletion buffer mark n)
-                         t)))
-
-      ;; Deleting some newlines, punt out to delete-region.
-      (t
-       (setf (mark-line *internal-temp-mark*) line
-             (mark-charpos *internal-temp-mark*) charpos)
-       (let ((other-mark (character-offset *internal-temp-mark* n)))
-         (cond
-           (other-mark
-            (if (< n 0)
-	      (setf (region-start *internal-temp-region*) other-mark
-		    (region-end *internal-temp-region*) mark)
-	      (setf (region-start *internal-temp-region*) mark
-		    (region-end *internal-temp-region*) other-mark))
-            (delete-region *internal-temp-region*) t)
-           (t nil)))))))
-
-
+     ((zerop n) t)
+     ;; Deleting chars on one line, just bump the pointers.
+     ((<= 0 (+ charpos n) length)
+      (let* ((buffer (line-%buffer line)))
+        (modifying-buffer buffer
+          (modifying-line line mark)
+          (cond
+           ((minusp n)
+            (delete-line-charprops line :start (+ charpos n) :end charpos)
+            (setf (current-left-open-pos) (+ (current-left-open-pos) n))
+            (move-some-marks (pos line)
+                             (if (> pos (current-left-open-pos))
+                               (if (<= pos charpos) (current-left-open-pos) (+ pos n))
+                               pos)))
+           
+           (t
+            (delete-line-charprops line :start charpos :end (+ charpos n))
+            (setf (current-right-open-pos) (+ (current-right-open-pos) n))
+            (let ((bound (+ charpos n)))
+              (move-some-marks (pos line)
+                               (if (> pos charpos)
+                                 (if (<= pos bound) (current-left-open-pos) (- pos n))
+                                 pos)))))
+          (adjust-line-origins-forward line)
+          (buffer-note-deletion buffer mark n)
+          t)))
+     
+     ;; Deleting some newlines, punt out to delete-region.
+     (t
+      (let* ((temp-mark (mark line charpos))
+             (other-mark (character-offset temp-mark n))
+             (temp-region (make-empty-region)))
+        (cond
+         (other-mark
+          (if (< n 0)
+            (setf (region-start temp-region) other-mark
+                  (region-end temp-region) mark)
+            (setf (region-start temp-region) mark
+                  (region-end temp-region) other-mark))
+          (delete-region temp-region) t)
+         (t nil)))))))
 
 ;;;; DELETE-REGION.
 
@@ -96,7 +91,9 @@
 	       (modifying-line first-line start)
 	       (let ((num (- last-charpos first-charpos)))
 		 (setf (current-right-open-pos) (+ (current-right-open-pos) num))
-		 ;; and fix up any marks in there:
+		 ;; and fix up any charprops or marks in there:
+                 (delete-line-charprops first-line :start first-charpos
+                                        :end last-charpos)
 		 (move-some-marks (charpos first-line)
 		   (if (> charpos first-charpos)
 		       (if (<= charpos last-charpos) 
@@ -117,6 +114,8 @@
 		   (%sp-byte-blt last-chars last-charpos new-chars first-charpos
 				 length)
 		   (setf (line-chars first-line) new-chars))
+                 (copy-line-charprops last-line :start last-charpos
+                                      :end last-length)
 		 ;; fix up the first line's marks:
 		 (move-some-marks (charpos first-line)
 		   (if (> charpos first-charpos)
@@ -278,6 +277,8 @@
 	     (chars (make-string length))
 	     (line (make-line :chars chars  :%buffer count  :number 0)))
 	(%sp-byte-blt (line-chars first-line) first-charpos chars 0 length)
+        (setf (line-charprops-changes line)
+              (copy-line-charprops line :start first-charpos :end last-charpos))
 	(internal-make-region (mark line 0 :right-inserting)
 			      (mark line length :left-inserting))))
      (t
@@ -289,6 +290,9 @@
 					   :number 0)))
 	(declare (simple-string first-chars))
 	(%sp-byte-blt first-chars first-charpos chars 0 length)
+        (setf (line-charprops-changes first-copied-line)
+              (copy-line-charprops first-line :start first-charpos
+                                   :end last-charpos))
 	(do ((line (line-next first-line) (line-next line))
 	     (previous first-copied-line)
 	     (number line-increment (+ number line-increment)))
@@ -299,6 +303,8 @@
 						 :%buffer count
 						 :previous previous)))
 	       (%sp-byte-blt (line-chars last-line) 0 chars 0 last-charpos)
+               (setf (line-charprops-changes last-copied-line)
+                     (copy-line-charprops last-line :end last-charpos))
 	       (setf (line-next previous) last-copied-line)
 	       (internal-make-region
 		(mark first-copied-line 0 :right-inserting)
@@ -306,6 +312,7 @@
 	  (let* ((new-line (%copy-line line :%buffer count
 				       :number number
 				       :previous previous)))
+            ;; note that %copy-line also copies charprops changes
 	    (setf (line-next previous) new-line)
 	    (setq previous new-line))))))))
 
