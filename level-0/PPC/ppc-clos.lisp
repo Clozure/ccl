@@ -175,6 +175,7 @@
   (bge @missing)
   (lwzx imm1 temp1 imm0)
   (cmpwi imm1 0)
+  (slri imm1 imm1 target::word-shift)
   (la imm1 target::misc-data-offset imm1)
   (beq @missing)
   @have-scaled-table-index
