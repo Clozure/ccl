@@ -4269,7 +4269,7 @@
                      (setq val node))))
                 ((eq op (%nx1-operator %new-ptr))
                  (let* ((clear-form (caddr form))
-                        (cval (nx-constant-form-p clear-form)))
+                        (cval (nx2-constant-form-value clear-form)))
                    (if cval
                      (progn 
                        (x862-one-targeted-reg-form seg (%cadr form) ($ *x862-arg-z*))
@@ -7019,7 +7019,7 @@
       
 
 (defx862 x862-if if (seg vreg xfer testform true false &aux test-val)
-  (if (setq test-val (nx-constant-form-p (acode-unwrapped-form-value testform)))
+  (if (setq test-val (nx2-constant-form-value (acode-unwrapped-form-value testform)))
     (x862-form seg vreg xfer (if (nx-null test-val) false true))
     (let* ((cstack *x862-cstack*)
            (vstack *x862-vstack*)

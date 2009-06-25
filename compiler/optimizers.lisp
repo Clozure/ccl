@@ -175,28 +175,26 @@
 
 
 (defun eql-iff-eq-p (thing env)
-  (if (quoted-form-p thing)
-    (setq thing (%cadr thing))
-    (if (not (self-evaluating-p thing))
-        (return-from eql-iff-eq-p
-          (or (nx-form-typep thing  'symbol env)
-              (nx-form-typep thing 'character env)
-              (nx-form-typep thing
-                             '(or fixnum
-                               #+64-bit-target single-float
-                               symbol character
-                               (and (not number) (not macptr))) env)))))
+  (if (nx-form-constant-p thing env)
+    (setq thing (nx-form-constant-value thing env))
+    (return-from eql-iff-eq-p
+      (or (nx-form-typep thing  'symbol env)
+	  (nx-form-typep thing 'character env)
+	  (nx-form-typep thing
+			 '(or fixnum
+			   #+64-bit-target single-float
+			   symbol character
+			   (and (not number) (not macptr))) env))))
   (or (fixnump thing) #+64-bit-target (typep thing 'single-float)
       (symbolp thing) (characterp thing)
       (and (not (numberp thing)) (not (macptrp thing)))))
 
 (defun equal-iff-eql-p (thing env)
-  (if (quoted-form-p thing)
-    (setq thing (%cadr thing))
-    (if (not (self-evaluating-p thing))
-      (return-from equal-iff-eql-p
-        (nx-form-typep thing
-                       '(and (not cons) (not string) (not bit-vector) (not pathname)) env))))
+  (if (nx-form-constant-p thing env)
+    (setq thing (nx-form-constant-value thing env))
+    (return-from equal-iff-eql-p
+      (nx-form-typep thing
+		     '(and (not cons) (not string) (not bit-vector) (not pathname)) env)))
   (not (typep thing '(or cons string bit-vector pathname))))
 
 
@@ -507,7 +505,7 @@
   (multiple-value-bind (body decls) (parse-body body env)
     (if (nx-form-typep (setq n (nx-transform n env)) 'fixnum env)
         (let* ((limit (gensym))
-               (upper (if (constantp n) n most-positive-fixnum))
+               (upper (if (nx-form-constant-p n env) (nx-form-constant-value n env) most-positive-fixnum))
                (top (gensym))
                (test (gensym)))
           `(let* ((,limit ,n) (,i 0))
@@ -555,8 +553,8 @@
   (multiple-value-bind (test test-win) (nx-transform test env)
     (multiple-value-bind (true true-win) (nx-transform true env)
       (multiple-value-bind (false false-win) (nx-transform false env)
-        (if (or (quoted-form-p test) (self-evaluating-p test))
-          (if (eval test)
+        (if (nx-form-constant-p test env)
+          (if (nx-form-constant-value test env)
             true
             false)
           (if (or test-win true-win false-win)
@@ -649,8 +647,8 @@
 
 (defun infer-array-type (dims element-type element-type-p displaced-to-p fill-pointer-p adjustable-p env)
   (let* ((ctype (make-array-ctype :complexp (or displaced-to-p fill-pointer-p adjustable-p))))
-    (if (quoted-form-p dims)
-      (let* ((dims (nx-unquote dims)))
+    (if (nx-form-constant-p dims env)
+      (let* ((dims (nx-form-constant-value dims env)))
         (if (listp dims)
           (progn
             (unless (every #'fixnump dims)
@@ -678,8 +676,8 @@
           (setf (array-ctype-dimensions ctype)
                 '*))))
     (let* ((typespec (if element-type-p
-                       (if (constantp element-type)
-                         (nx-unquote element-type)
+                       (if (nx-form-constant-p element-type env)
+                         (nx-form-constant-value element-type env)
                          '*)
                        t))
            (element-type (specifier-type-if-known typespec env :whine t)))
@@ -716,10 +714,10 @@
                        (comp-make-array-1 dims keys)
                        (comp-make-displaced-array dims keys)))
                     ((or displaced-index-offset-p
-                         (not (constantp element-type))
+                         (not (nx-form-constant-p element-type env))
                          (null (setq element-type-keyword
                                      (target-element-type-type-keyword
-                                      (eval element-type) env))))
+                                      (nx-form-constant-value element-type env) env))))
                      (comp-make-array-1 dims keys))
                     ((and (typep element-type-keyword 'keyword)
                           (nx-form-typep dims 'fixnum env)
@@ -938,8 +936,8 @@
 ;;; (<typecheck> foo)).
 (define-compiler-macro require-type (&whole call &environment env arg type &aux ctype)
   (cond ((and (or (eq type t)
-                  (and (quoted-form-p type)
-                       (setq type (%cadr type))))
+                  (and (nx-form-constant-p type env)
+                       (setq type (nx-form-constant-value type env))))
               (setq ctype (specifier-type-if-known type env :whine t)))
          (cond ((nx-form-typep arg type env) arg)
                ((and (nx-trust-declarations env) ;; if don't trust declarations, don't bother.
@@ -1056,7 +1054,7 @@
               (loop-test (if test-not 'unless 'when))
               (loop-function (nx-form-sequence-iterator sequence env)))
           (if loop-function
-            (let ((item-var (unless (or (constantp item)
+            (let ((item-var (unless (or (nx-form-constant-p item env)
                                         (and (equal find-test '#'funcall)
                                              (function-form-p item)))
                               (gensym)))
@@ -1105,12 +1103,9 @@
                (null from-end)
                (not (and test test-not)))
         (let ((position-test (or test test-not '#'eql))
-              (loop-test (if test-not 'unless 'when))
-              (sequence-value (if (constantp sequence)
-                                (eval-constant sequence)
-                                sequence)))
-          (cond ((nx-form-typep sequence-value 'list env)
-                 (let ((item-var (unless (or (constantp item)
+              (loop-test (if test-not 'unless 'when)))
+          (cond ((nx-form-typep sequence 'list env)
+                 (let ((item-var (unless (or (nx-form-constant-p item env)
                                              (and (equal position-test '#'funcall)
                                                   (function-form-p item)))
                                    (gensym)))
@@ -1123,8 +1118,8 @@
                                              (funcall ,(or key '#'identity) ,elt-var))
                                     (return ,position-var))
                         (incf ,position-var)))))
-                ((nx-form-typep sequence-value 'vector env)
-                 (let ((item-var (unless (or (constantp item)
+                ((nx-form-typep sequence 'vector env)
+                 (let ((item-var (unless (or (nx-form-constant-p item env)
                                              (and (equal position-test '#'funcall)
                                                   (function-form-p item)))
                                    (gensym)))
@@ -1577,13 +1572,13 @@
                         (t nil))))))))))
 
 (define-compiler-macro typep  (&whole call &environment env thing type &optional e)
-  (if (or (quoted-form-p type) (self-evaluating-p type))
-    (let ((type-val (nx-unquote type)))
+  (if (nx-form-constant-p type env)
+    (let ((type-val (nx-form-constant-value type env)))
       (if (eq type-val t)
         `(progn ,thing t)
-        (if (and (or (quoted-form-p thing) (self-evaluating-p thing))
+        (if (and (nx-form-constant-p thing env)
                  (specifier-type-if-known type-val env))
-          (typep (nx-unquote thing) type-val env)
+          (typep (nx-form-constant-value thing env) type-val env)
           (or (and (null e) (optimize-typep thing type-val env))
               call))))
     call))
@@ -1886,14 +1881,14 @@
   (declare (ignore typespec len keys initial-element))
   call)
 
-(define-compiler-macro make-string (&whole call size &rest keys)
+(define-compiler-macro make-string (&whole call &environment env size &rest keys)
   (if (constant-keywords-p keys)
     (destructuring-bind (&key (element-type () element-type-p)
                               (initial-element () initial-element-p))
                         keys
       (if (and element-type-p
-               (quoted-form-p element-type))
-        (let* ((element-type (cadr element-type)))
+               (nx-form-constant-p element-type env))
+        (let* ((element-type (nx-form-constant-value element-type env)))
           (if (subtypep element-type 'base-char)
             `(allocate-typed-vector :simple-string ,size ,@(if initial-element-p `(,initial-element)))
             call))
@@ -2267,8 +2262,8 @@
         (t call)))
 
 (define-compiler-macro coerce (&whole call &environment env thing type)
-  (cond ((quoted-form-p type)
-	 (setq type (cadr type))
+  (cond ((nx-form-constant-p type env)
+	 (setq type (nx-form-constant-value type env))
 	 (let ((ctype (specifier-type-if-known type env :whine t)))
 	   (if ctype
 	     (if (csubtypep ctype (specifier-type 'single-float))
@@ -2304,9 +2299,9 @@
     `(eql ,x ,y)
     call))
 
-(define-compiler-macro instance-slots (&whole w instance)
-  (if (and (constantp instance)
-           (eql (typecode instance) (nx-lookup-target-uvector-subtag :instance)))
+(define-compiler-macro instance-slots (&whole w instance &environment env)
+  (if (and (nx-form-constant-p instance env)
+           (eql (typecode (nx-form-constant-value instance env)) (nx-lookup-target-uvector-subtag :instance)))
     `(instance.slots ,instance)
     (let* ((itemp (gensym))
            (typecode (gensym)))
@@ -2389,43 +2384,44 @@
 ;;; Try to use "package-references" to speed up package lookup when
 ;;; a package name is used as a constant argument to some functions.
 
-(defun package-ref-form (arg)
-  (when (and arg (constantp arg) (typep (setq arg (nx-unquote arg))
-                                        '(or symbol string)))
+(defun package-ref-form (arg env)
+  (when (and arg (nx-form-constant-p arg env)
+	     (typep (setq arg (nx-form-constant-value arg env))
+		    '(or symbol string)))
     `(load-time-value (register-package-ref ,(string arg)))))
 
 
 
-(define-compiler-macro intern (&whole w string &optional package)
-  (let* ((ref (package-ref-form package)))
+(define-compiler-macro intern (&whole w string &optional package &environment env)
+  (let* ((ref (package-ref-form package env)))
     (if (or ref
             (setq ref (and (consp package)
                            (eq (car package) 'find-package)
                            (consp (cdr package))
                            (null (cddr package))
-                           (package-ref-form (cadr package)))))
+                           (package-ref-form (cadr package) env))))
       `(%pkg-ref-intern ,string ,ref)
       w)))
 
-(define-compiler-macro find-symbol (&whole w string &optional package)
-  (let* ((ref (package-ref-form package)))
+(define-compiler-macro find-symbol (&whole w string &optional package &environment env)
+  (let* ((ref (package-ref-form package env)))
     (if (or ref
             (setq ref (and (consp package)
                            (eq (car package) 'find-package)
                            (consp (cdr package))
                            (null (cddr package))
-                           (package-ref-form (cadr package)))))
+                           (package-ref-form (cadr package) env))))
       `(%pkg-ref-find-symbol ,string ,ref)
       w)))
 
-(define-compiler-macro find-package (&whole w package)
-  (let* ((ref (package-ref-form package)))
+(define-compiler-macro find-package (&whole w package &environment env)
+  (let* ((ref (package-ref-form package env)))
     (if ref
       `(package-ref.pkg ,ref)
       w)))
 
-(define-compiler-macro pkg-arg (&whole w package &optional allow-deleted)
-  (let* ((ref (unless allow-deleted (package-ref-form package))))
+(define-compiler-macro pkg-arg (&whole w package &optional allow-deleted &environment env)
+  (let* ((ref (unless allow-deleted (package-ref-form package env))))
     (if ref
       (let* ((r (gensym)))
         `(let* ((,r ,ref))
@@ -2478,11 +2474,11 @@
   `(code-char (the valid-char-code (%char-code-downcase (char-code ,char)))))
 
 
-(define-compiler-macro register-istruct-cell (&whole w arg)
-  (if (and (quoted-form-p arg)
-           (cadr arg)
-           (typep (cadr arg) 'symbol))
-    `',(register-istruct-cell (cadr arg))
+(define-compiler-macro register-istruct-cell (&whole w arg &environment env)
+  (if (and (nx-form-constant-p arg env)
+	   (setq arg (nx-form-constant-value arg env))
+	   (symbolp arg))
+    `',(register-istruct-cell arg)
     w))
 
 (define-compiler-macro get-character-encoding (&whole w name)

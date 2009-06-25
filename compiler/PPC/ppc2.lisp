@@ -3669,7 +3669,7 @@
 		     (setq val node))))
 		((eq op (%nx1-operator %new-ptr))
 		 (let* ((clear-form (caddr form))
-			(cval (nx-constant-form-p clear-form)))
+			(cval (nx2-constant-form-value clear-form)))
 		   (if cval
 		       (progn 
 			 (ppc2-one-targeted-reg-form seg (%cadr form) ($ ppc::arg_z))
@@ -6178,7 +6178,7 @@
       
 
 (defppc2 ppc2-if if (seg vreg xfer testform true false &aux test-val)
-  (if (setq test-val (nx-constant-form-p (acode-unwrapped-form-value testform)))
+  (if (setq test-val (nx2-constant-form-value (acode-unwrapped-form-value testform)))
     (ppc2-form seg vreg xfer (if (nx-null test-val) false true))
     (let* ((cstack *ppc2-cstack*)
            (vstack *ppc2-vstack*)

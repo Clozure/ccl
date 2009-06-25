@@ -358,6 +358,7 @@ function to the indicated name is true.")
         (proclaimed-special-p sym))))
 
 (defun nx-proclaimed-parameter-p (sym)
+  (setq sym (nx-need-sym sym))
   (or (constantp sym)
       (multiple-value-bind (special-p info) (nx-lex-info sym t)
         (or 
@@ -1723,7 +1724,7 @@ Or something. Right? ~s ~s" var varbits))
         (%nx1-operator immediate))   ; Screw: chars
      form)))
 
-(defun nx-constant-form-p (form)
+(defun nx2-constant-form-value (form)
   (setq form (nx-untyped-form form))
   (and (or (nx-null form)
            (nx-t form)
@@ -2156,6 +2157,16 @@ Or something. Right? ~s ~s" var varbits))
             (not (%cdr form)))
        (nx-error "Illegally quoted form ~S." f))))
 
+(defun nx-form-constant-p (form env)
+  (declare (ignore env))
+  (or (quoted-form-p form)
+      (self-evaluating-p form)))
+
+(defun nx-form-constant-value (form env)
+  (declare (ignore env))
+  (declare (type (satisfies nx-form-constant-p) form))
+  (if (consp form) (%cadr form) form))
+
 ; Returns two values: expansion & win
 ; win is true if expansion is not EQ to form.
 ; This is a bootstrapping version.
@@ -2398,49 +2409,47 @@ Or something. Right? ~s ~s" var varbits))
 
 ;;; Treat (VALUES x . y) as X if it appears in a THE form
 (defun nx-form-type (form &optional (env *nx-lexical-environment*))
-  (if (quoted-form-p form)
-    (type-of (nx-unquote form))
-    (if (self-evaluating-p form)
-      (type-of form)
-      (if (and (consp form)             ; Kinda bogus now, but require-type
-               (eq (%car form) 'require-type) ; should be special some day
-               (quoted-form-p (caddr form)))
-        (%cadr (%caddr form))
-        (if (nx-trust-declarations env)
-          (if (symbolp form)
-            (nx-target-type (nx-declared-type form env))
-            (if (consp form)
-              (if (eq (%car form) 'the)
-                (destructuring-bind (typespec val) (%cdr form)
-                  (declare (ignore val))
-                  (let* ((ctype (values-specifier-type typespec)))
-                    (if (typep ctype 'values-ctype)
-                      (let* ((req (values-ctype-required ctype)))
-                        (if req
-                          (nx-target-type (type-specifier (car req)))
-                          '*))
-                      (nx-target-type (type-specifier ctype)))))
-                (if (eq (%car form) 'setq)
-                  (nx-declared-type (cadr form) env)
-                  (let* ((op (gethash (%car form) *nx1-operators*)))
-                    (or (and op (cdr (assq op *nx-operator-result-types*)))
-                        (and (not op)(cdr (assq (car form) *nx-operator-result-types-by-name*)))
-                        (and (memq (car form) *numeric-ops*)
-                             (grovel-numeric-form form env))
-                        (and (memq (car form) *logical-ops*)
-                             (grovel-logical-form form env))
-                        ;; Sort of the right idea, but this should be done
-                        ;; in a more general way.
-                        (when (or (eq (car form) 'aref)
-                                  (eq (car form) 'uvref))
-                          (let* ((atype (nx-form-type (cadr form) env))
-                                 (a-ctype (specifier-type atype)))
-                            (when (array-ctype-p a-ctype)
-                              (type-specifier (array-ctype-specialized-element-type
-                                               a-ctype)))))
-                        t))))
-              t))
-          t)))))
+  (if (nx-form-constant-p form env)
+    (type-of (nx-form-constant-value form env))
+    (if (and (consp form)	   ; Kinda bogus now, but require-type
+	     (eq (%car form) 'require-type) ; should be special some day
+	     (nx-form-constant-p (caddr form) env))
+      (nx-form-constant-value (%caddr form) env)
+      (if (nx-trust-declarations env)
+	(if (symbolp form)
+	  (nx-target-type (nx-declared-type form env))
+	  (if (consp form)
+	    (if (eq (%car form) 'the)
+	      (destructuring-bind (typespec val) (%cdr form)
+		(declare (ignore val))
+		(let* ((ctype (values-specifier-type typespec)))
+		  (if (typep ctype 'values-ctype)
+		    (let* ((req (values-ctype-required ctype)))
+		      (if req
+			(nx-target-type (type-specifier (car req)))
+			'*))
+		    (nx-target-type (type-specifier ctype)))))
+	      (if (eq (%car form) 'setq)
+		(nx-declared-type (cadr form) env)
+		(let* ((op (gethash (%car form) *nx1-operators*)))
+		  (or (and op (cdr (assq op *nx-operator-result-types*)))
+		      (and (not op)(cdr (assq (car form) *nx-operator-result-types-by-name*)))
+		      (and (memq (car form) *numeric-ops*)
+			   (grovel-numeric-form form env))
+		      (and (memq (car form) *logical-ops*)
+			   (grovel-logical-form form env))
+		      ;; Sort of the right idea, but this should be done
+		      ;; in a more general way.
+		      (when (or (eq (car form) 'aref)
+				(eq (car form) 'uvref))
+			(let* ((atype (nx-form-type (cadr form) env))
+			       (a-ctype (specifier-type atype)))
+			  (when (array-ctype-p a-ctype)
+			    (type-specifier (array-ctype-specialized-element-type
+					     a-ctype)))))
+		      t))))
+	    t))
+	t))))
 
 (defparameter *numeric-ops* '(+ -  / * +-2 --2 *-2 /-2))
 
@@ -2481,8 +2490,8 @@ Or something. Right? ~s ~s" var varbits))
 
 (defun nx-form-typep (arg type &optional (env *nx-lexical-environment*))
   (setq type (nx-target-type (type-expand type)))
-  (if (constantp arg)
-    (typep (nx-unquote arg) type env)
+  (if (nx-form-constant-p arg env)
+    (typep (nx-form-constant-value arg env) type env)
     (subtypep (nx-form-type arg env) type env)))
 
 

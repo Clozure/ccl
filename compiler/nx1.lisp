@@ -18,10 +18,6 @@
 
 ;;; Wimp out, but don't choke on (the (values ...) form)
 (defnx1 nx1-the the (&whole call typespec form &environment env)
-  (if (and (self-evaluating-p form)
-           (not (typep form typespec))
-           (progn (nx1-whine :type call) t))
-    (setq typespec t))
   ;; Allow VALUES types here (or user-defined types that
   ;; expand to VALUES types).  We could do a better job
   ;; of this, but treat them as wild types.
@@ -44,6 +40,10 @@
     (let* ((typespec (typespec-for-the typespec))
            (*nx-form-type* typespec)
            (transformed (nx-transform form env)))
+      (when (and (nx-form-constant-p transformed env)
+		 (not (typep (nx-form-constant-value transformed env) typespec)))
+	(nx1-whine :type call)
+	(setq typespec t))
       (do* ()
            ((or (atom transformed)
                 (not (eq (car transformed) 'the))))
@@ -73,7 +73,7 @@
      (nx1-form newval))))
 
 (defnx1 nx1-istruct-typep ((istruct-typep)) (&whole whole thing type &environment env)
-  (if (and (quoted-form-p type) (symbolp (cadr type)))
+  (if (and (nx-form-constant-p type env) (non-nil-symbol-p (nx-form-constant-value type env)))
     (make-acode (%nx1-operator istruct-typep)
                 (nx1-immediate :eq)
                 (nx1-form thing)
@@ -1120,10 +1120,11 @@
 (defnx1 nx1-catch (catch) (operation &body body)
   (make-acode (%nx1-operator catch) (nx1-form operation) (nx1-catch-body body)))
 
-(defnx1 nx1-%badarg ((%badarg)) (badthing right-type)
+(defnx1 nx1-%badarg ((%badarg)) (badthing right-type &environment env)
   (make-acode (%nx1-operator %badarg2) 
               (nx1-form badthing) 
-              (nx1-form (or (if (quoted-form-p right-type) (%typespec-id (cadr right-type))) right-type))))
+              (nx1-form (or (if (nx-form-constant-p right-type env) (%typespec-id (nx-form-constant-value right-type env)))
+			    right-type))))
 
 (defnx1 nx1-unwind-protect (unwind-protect) (protected-form &body cleanup-form)
   (if cleanup-form
@@ -1484,7 +1485,7 @@
        info)
      (nx1-form value))))
 
-(defnx1 nx1-funcall ((funcall)) (func &rest args)
+(defnx1 nx1-funcall ((funcall)) (func &rest args &environment env)
   (let ((name func))
     (if (and (consp name)
              (eq (%car name) 'function)
@@ -1501,8 +1502,8 @@
                        (setq name (nx-need-function-name name))))))
       (nx1-form (cons name args))  ; This picks up call-next-method evil.
       (let* ((result-type t))
-        (when (and (quoted-form-p func)
-                   (or (typep (setq name (nx-unquote func)) 'symbol)
+        (when (and (nx-form-constant-p func env)
+                   (or (typep (setq name (nx-form-constant-value func env)) 'symbol)
                        (setq name (valid-function-name-p name))))
           (setq result-type (nx1-call-result-type name args nil t)))
         (let* ((form (nx1-call (nx1-form func) args nil t)))
