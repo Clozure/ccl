@@ -454,7 +454,7 @@ Will differ from *compiling-file* during an INCLUDE")
            (*fcomp-toplevel-forms* nil)
            (*fasl-eof-forms* nil)
            (*loading-file-source-file* orig-file)
-           (*fcomp-source-note-map* (and *save-source-locations*
+           (*fcomp-source-note-map* (and (or *save-source-locations* *compile-code-coverage*)
                                          (make-hash-table :test #'eq :shared nil)))
            (*loading-toplevel-location* nil)
            (*fcomp-loading-toplevel-location* nil)
@@ -491,6 +491,12 @@ Will differ from *compiling-file* during an INCLUDE")
             (fcomp-form form env processing-mode)
             (fcomp-signal-or-defer-warnings *nx-warnings* env)
             (setq *fcomp-previous-position* *fcomp-stream-position*))))
+      (when *compile-code-coverage*
+	(fcomp-compile-toplevel-forms env)
+        (let* ((fns (fcomp-code-covered-functions))
+	       (v (nreverse (coerce fns 'vector))))
+	  (map nil #'fcomp-digest-code-notes v)
+          (fcomp-random-toplevel-form `(register-code-covered-functions ',v) env)))
       (while (setq form *fasl-eof-forms*)
         (setq *fasl-eof-forms* nil)
         (fcomp-form-list form env processing-mode))
@@ -498,6 +504,15 @@ Will differ from *compiling-file* during an INCLUDE")
         (fcomp-output-form $fasl-src env (namestring *compile-file-pathname*)))
       (fcomp-compile-toplevel-forms env))))
 
+(defun fcomp-code-covered-functions ()
+  (loop for op in *fcomp-output-list*
+        when (consp op)
+          nconc (if (eq (car op) $fasl-lfuncall)
+                  ;; Don't collect the toplevel lfun itself, it leads to spurious markings.
+                  ;; Instead, descend one level and collect any referenced fns.
+                  (destructuring-bind (fn) (cdr op)
+                    (lfunloop for imm in fn when (functionp imm) collect imm))
+                  (loop for arg in (cdr op) when (functionp arg) collect arg))))
 
 
 (defun fcomp-form (form env processing-mode
@@ -1024,6 +1039,28 @@ Will differ from *compiling-file* during an INCLUDE")
                                 :target *fasl-target*)
       (fcomp-signal-or-defer-warnings warnings env)
       lfun)))
+
+
+;; Convert parent-notes to immediate indices.  The reason this is necessary is to avoid hitting
+;; the fasdumper's 64K limit on multiply-referenced objects.  This removes the reference
+;; from parent slots, making notes less likely to be multiply-referenced.
+(defun fcomp-digest-code-notes (lfun &optional refs)
+  (unless (memq lfun refs)
+    (let* ((lfv (function-to-function-vector lfun))
+	   (start #+ppc-target 0 #+x86-target (%function-code-words lfun))
+	   (refs (cons lfun refs)))
+      (declare (dynamic-extent refs))
+      (loop for i from start below (uvsize lfv) as imm = (uvref lfv i)
+	    do (typecase imm
+		 (code-note
+		  (let* ((parent (code-note-parent-note imm))
+			 (pos (when (code-note-p parent)
+				(loop for j from start below i
+				      do (when (eq parent (uvref lfv j)) (return j))))))
+		    (when pos
+		      (setf (code-note-parent-note imm) pos))))
+		 (function
+		  (fcomp-digest-code-notes imm refs)))))))
 
 ; For now, defer only UNDEFINED-REFERENCEs, signal all others via WARN.
 ; Well, maybe not WARN, exactly.

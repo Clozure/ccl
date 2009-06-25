@@ -259,6 +259,7 @@ lib/ffi-win32.lisp -text
 lib/ffi-win64.lisp -text
 lib/late-clos.lisp -text
 lib/x8632env.lisp -text
+library/cover.lisp -text
 library/darwinx8632-syscalls.lisp -text
 library/elf.lisp -text
 library/leaks.lisp -text

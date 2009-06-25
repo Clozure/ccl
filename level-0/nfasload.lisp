@@ -734,6 +734,40 @@
 
 
 
+;;; files compiled with code coverage do this
+;; list of lfuns and (source-fn-name . vector-of-lfuns), the latter put there by fasloading.
+(defvar *code-covered-functions* nil)
+
+(defun register-code-covered-functions (functions)
+  ;; unpack the parent-note references - see comment at fcomp-digest-code-notes
+  (labels ((reg (lfun refs)
+	     (unless (memq lfun refs)
+	       (let* ((lfv (function-to-function-vector lfun))
+		      (start #+ppc-target 0 #+x86-target (%function-code-words lfun))
+		      (refs (cons lfun refs)))
+		 (declare (dynamic-extent refs))
+		 (loop for i from start below (uvsize lfv) as imm = (uvref lfv i)
+		       do (typecase imm
+			    (code-note
+			     (let ((parent (code-note-parent-note imm)))
+			       (when (integerp parent)
+				 (setf (code-note-parent-note imm) (uvref lfv parent)))))
+			    (function (reg imm refs))))))))
+    (loop for fn across functions do (reg fn nil)))
+  (let ((a (assoc (pathname *loading-file-source-file*)
+                  *code-covered-functions*
+                  :test #'(lambda (p q)
+			    (and (equalp (pathname-name p) (pathname-name q))
+				 ;; same name, so worth trying harder to match 'em up.
+				 (or (equal p q)
+				     (let ((p (full-pathname p)) (q (full-pathname q)))
+				       (and p q (equalp p q)))
+				     (let ((p (probe-file p)) (q (probe-file q)))
+				       (and p q (equalp p q)))))))))
+    (when (null a)
+      (push (setq a (list nil nil)) *code-covered-functions*))
+    (setf (car a) *loading-file-source-file* (cdr a) functions))
+  nil)
 
 ;;; The loader itself
 

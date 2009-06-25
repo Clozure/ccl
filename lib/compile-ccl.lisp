@@ -204,6 +204,7 @@
     arglist
     edit-callers
     describe
+    cover
     leaks
     asdf
     defsystem

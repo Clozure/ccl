@@ -994,6 +994,13 @@ terminate the list"
 	 (nth-immediate lfun 1))))
 
 
+(defun function-entry-code-note (fn)
+  (let ((bits (lfun-bits (setq fn (require-type fn 'function)))))
+    (declare (fixnum bits))
+    (and (logbitp $lfbits-code-coverage-bit bits)
+	 (loop for i upfrom 1 as imm = (nth-immediate fn i)
+	       when (code-note-p imm) do (return imm)))))
+
 
 (defun function-lambda-expression (fn)
   "Return (VALUES DEFINING-LAMBDA-EXPRESSION CLOSURE-P NAME), where

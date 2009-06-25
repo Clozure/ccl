@@ -550,16 +550,12 @@
 (define-compiler-macro identity (form) form)
 
 (define-compiler-macro if (&whole call test true &optional false &environment env)
-  (multiple-value-bind (test test-win) (nx-transform test env)
-    (multiple-value-bind (true true-win) (nx-transform true env)
-      (multiple-value-bind (false false-win) (nx-transform false env)
-        (if (nx-form-constant-p test env)
-          (if (nx-form-constant-value test env)
-            true
-            false)
-          (if (or test-win true-win false-win)
-            `(if ,test ,true ,false)
-            call))))))
+  (let ((test-val (nx-transform test env)))
+    (if (nx-form-constant-p test-val env)
+      (if (nx-form-constant-value test-val env)
+	true
+	false)
+      call)))
 
 (define-compiler-macro %ilsr (&whole call &environment env shift value)
   (if (eql shift 0)

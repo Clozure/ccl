@@ -3012,10 +3012,21 @@ arg=char : read delimited list"
 
 (defmethod print-object ((sn source-note) stream)
   (print-unreadable-object (sn stream :type t :identity nil)
-    (let ((*print-length* (min (or *print-length* 3) 3)))
-      (format stream "~s:~s-~s ~s" (source-note-filename sn)
-              (source-note-start-pos sn) (source-note-end-pos sn)
-              (source-note.source sn)))))
+    (print-source-note sn stream)))
+
+(defun print-source-note (sn stream)
+  (let* ((file (source-note-filename sn))
+         (text (ignore-errors (source-note-text sn))))
+    ;; Should fix this when record the name.
+    (when (eq (pathname-version file) :newest)
+      (setq file (namestring (make-pathname :version nil :defaults file))))
+    (when text
+      (setq text (string-sans-most-whitespace text 121))
+      (when (> (length text) 120)
+        (setq text (concatenate 'string (subseq text 0 120) "..."))))
+    (format stream "~s:~s-~s ~s" file
+            (source-note-start-pos sn) (source-note-end-pos sn)
+            text)))
 
 (defun source-note-filename (source)
   (if (source-note-p source)

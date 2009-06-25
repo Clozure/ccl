@@ -1226,35 +1226,32 @@
            (svref *x862-specials* (%ilogand #.operator-id-mask (acode-operator form))))
       (compiler-bug "x862-form ? ~s" form)))
 
-(defmacro with-note ((form-var seg-var &rest other-vars) &body body)
+(defmacro with-note ((form-var seg-var) &body body)
   (let* ((note (gensym "NOTE"))
          (code-note (gensym "CODE-NOTE"))
          (source-note (gensym "SOURCE-NOTE"))
          (start (gensym "START"))
-         (end (gensym "END"))
-         (with-note-body (gensym "WITH-NOTE-BODY")))
-    `(flet ((,with-note-body (,form-var ,seg-var ,@other-vars)
-              ,@body))
-       (let ((,note (acode-note ,form-var)))
-         (if ,note
-           (let* ((,code-note (and (code-note-p ,note) ,note))
-                  (,source-note (if ,code-note
-                                  (code-note-source-note ,note)
-                                  ,note))
-                  (,start (and ,source-note
-                               (x862-emit-note ,seg-var :source-location-begin ,source-note))))
-             (prog2
-                 (when ,code-note
-                   (with-x86-local-vinsn-macros (,seg-var)
-                     (x862-store-immediate ,seg-var ,code-note *x862-temp0*)
-                     (! misc-set-immediate-c-node 0 *x862-temp0* 1)))
-                 (,with-note-body ,form-var ,seg-var ,@other-vars)
-               (when ,source-note
-                 (let ((,end (x862-emit-note ,seg-var :source-location-end)))
-                   (setf (vinsn-note-peer ,start) ,end
-                         (vinsn-note-peer ,end) ,start)
-                   (push ,start *x862-emitted-source-notes*)))))
-           (,with-note-body ,form-var ,seg-var ,@other-vars))))))
+         (end (gensym "END")))
+    `(let* ((,note (acode-note ,form-var))
+            (,code-note (and (code-note-p ,note) ,note))
+            (,source-note (if ,code-note
+                            (code-note-source-note ,note)
+                            ,note))
+            (,start (and ,source-note
+                         (x862-emit-note ,seg-var :source-location-begin ,source-note))))
+      #+debug-code-notes (require-type ,note '(or null code-note source-note))
+      (when ,code-note
+        (with-x86-local-vinsn-macros (,seg-var)
+          (x862-store-immediate ,seg-var ,code-note *x862-temp0*)
+          (! misc-set-immediate-c-node 0 *x862-temp0* 1)))
+      (prog1
+          (progn
+            ,@body)
+        (when ,source-note
+          (let ((,end (x862-emit-note ,seg-var :source-location-end)))
+            (setf (vinsn-note-peer ,start) ,end
+                  (vinsn-note-peer ,end) ,start)
+            (push ,start *x862-emitted-source-notes*)))))))
 
 (defun x862-toplevel-form (seg vreg xfer form)
   (let* ((code-note (acode-note form))
@@ -1262,7 +1259,7 @@
     (apply (x862-acode-operator-function form) seg vreg xfer args)))
 
 (defun x862-form (seg vreg xfer form)
-  (with-note (form seg vreg xfer)
+  (with-note (form seg)
     (if (nx-null form)
       (x862-nil seg vreg xfer)
       (if (nx-t form)
@@ -1279,7 +1276,7 @@
 ;;; dest is a float reg - form is acode
 (defun x862-form-float (seg freg xfer form)
   (declare (ignore xfer))
-  (with-note (form seg freg)
+  (with-note (form seg)
     (when (or (nx-null form)(nx-t form))(compiler-bug "x862-form to freg ~s" form))
     (when (and (= (get-regspec-mode freg) hard-reg-class-fpr-mode-double)
                (x862-form-typep form 'double-float))
@@ -4226,8 +4223,10 @@
             (= masked x8664::fulltag-nodeheader-1)))))))
 
 (defun x862-dynamic-extent-form (seg curstack val &aux (form val))
-  (when (acode-p form)
-    (with-note (form seg curstack) ;; note this binds form/seg/curstack so can't be setq'd.
+  (when (acode-p val)
+    ;; this will do source note processing even if don't emit anything here,
+    ;; which is a bit wasteful but not incorrect.
+    (with-note (form seg)
       (with-x86-local-vinsn-macros (seg)
         (let* ((op (acode-operator form)))
           (cond ((eq op (%nx1-operator list))
@@ -5066,17 +5065,18 @@
 ;;; that register to RNIL.
 ;;; "XFER" is a compound destination.
 (defun x862-conditional-form (seg xfer form)
-  (with-note (form seg xfer)
-    (let* ((uwf (acode-unwrapped-form-value form)))
-      (if (nx-null uwf)
-        (x862-branch seg (x862-cd-false xfer))
-        (if (x86-constant-form-p uwf)
-          (x862-branch seg (x862-cd-true xfer))
-          (with-crf-target () crf
-            (let* ((ea (x862-lexical-reference-ea form nil)))
-              (if (and ea (memory-spec-p ea))
-                (x862-compare-ea-to-nil seg crf xfer ea x86::x86-e-bits nil)
-                (x862-form seg crf xfer form)))))))))
+  (let* ((uwf (acode-unwrapped-form-value form)))
+    (if (x86-constant-form-p uwf)
+      (with-note (form seg)
+        (if (nx-null uwf)
+          (x862-branch seg (x862-cd-false xfer))
+          (x862-branch seg (x862-cd-true xfer))))
+      (with-crf-target () crf
+        (let* ((ea (x862-lexical-reference-ea form nil)))
+          (if (and ea (memory-spec-p ea))
+            (with-note (form seg)
+              (x862-compare-ea-to-nil seg crf xfer ea x86::x86-e-bits nil))
+            (x862-form seg crf xfer form)))))))
 
       
 (defun x862-branch (seg xfer &optional cr-bit true-p)
@@ -8944,7 +8944,7 @@
         (if (or (eq typespec t)
                 (eq typespec '*))
           (x862-form seg vreg xfer form)
-          (with-note (form seg vreg xfer)
+          (with-note (form seg)
           (let* ((ok (backend-get-next-label)))
             (if (and (symbolp typespec) (non-nil-symbolp (type-predicate typespec)))
               ;; Do this so can compile the lisp with typechecking even though typep

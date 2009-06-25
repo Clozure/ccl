@@ -1680,7 +1680,11 @@ Or something. Right? ~s ~s" var varbits))
         (let ((replacement (runtime-program-error-form c)))
           (nx-note-source-transformation original replacement)
           (nx1-transformed-form (nx-transform replacement env) env)))
-    (nx1-transformed-form (nx-transform original env) env)))
+    (multiple-value-bind (form changed source) (nx-transform original env)
+      (declare (ignore changed))
+      ;; Bind this for cases where the transformed form is an atom, so it doesn't remember the source it came from.
+      (let ((*nx-current-note* (or source *nx-current-note*)))
+	(nx1-transformed-form form env)))))
 
 (defun nx1-transformed-form (form env)
   (let* ((*nx-current-note* (or (nx-source-note form) *nx-current-note*))
@@ -1698,10 +1702,11 @@ Or something. Right? ~s ~s" var varbits))
                     (if (and symbolp (not constant-symbol-p))
                       (nx1-symbol form env)
                       (nx1-immediate (nx-unquote constant-value)))))))
-    (cond (*nx-current-code-note*
-           (setf (acode-note acode) *nx-current-code-note*))
-          (*record-pc-mapping*
-           (setf (acode-note acode) (nx-source-note form))))
+    (unless (acode-note acode) ;; leave it with most specific note
+      (cond (*nx-current-code-note*
+             (setf (acode-note acode) *nx-current-code-note*))
+            (*record-pc-mapping*
+             (setf (acode-note acode) (nx-source-note form)))))
     acode))
 
 (defun nx1-prefer-areg (form env)
@@ -2284,14 +2289,22 @@ Or something. Right? ~s ~s" var varbits))
          (form-changed form)
          (go START))
      DONE
-       (when (and source (neq source t) (not (gethash form source-note-map)))
-         (unless (and (consp form)
-                      (eq (%car form) 'the)
-                      (eq source (gethash (caddr form) source-note-map)))
-           (unless (or (eq form (%unbound-marker))
-                       (eq form (%slot-unbound-marker)))
-             (setf (gethash form source-note-map) source))))
-       (return (values form changed)))))
+       (if (eq source t)
+	 (setq source nil)
+	 (let ((this (nx-source-note form)))
+	   (if this
+	     (setq source this)
+	     (when source
+	       (unless (and (consp form)
+			    (eq (%car form) 'the)
+			    (eq source (gethash (caddr form) source-note-map)))
+		 (unless (or (consp form) (vectorp form) (pathnamep form))
+		   (unless (or (eq form (%unbound-marker))
+			       (eq form (%slot-unbound-marker)))
+		     (setf (gethash form source-note-map) source))))))))
+       ;; Return source for symbols, even though don't record it in hash table.
+       (return (values form changed source)))))
+
 
 ; Transform all of the arguments to the function call form.
 ; If any of them won, return a new call form (with the same operator as the original), else return the original
