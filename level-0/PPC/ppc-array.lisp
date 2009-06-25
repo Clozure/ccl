@@ -331,7 +331,7 @@
   (b @set-16)
   @s16
   (sldi imm0 val (- 64 (+ 16 ppc64::fixnumshift)))
-  (srawi imm0 imm0 (- 64 (+ 16 ppc64::fixnumshift)))
+  (sradi imm0 imm0 (- 64 (+ 16 ppc64::fixnumshift)))
   (cmpw cr0 imm0 val)
   (unbox-fixnum imm0 val)
   (bne- cr7 @bad)
