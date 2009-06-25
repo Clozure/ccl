@@ -1476,7 +1476,9 @@ execute them very quickly.")
       (dolist (c constants)
         (setf (uvref function-vector (decf last)) (car c)))
       #+x8632-target
-      (%update-self-references function-vector)
+      (if (> last #xffff)
+	(compiler-function-overflow)
+	(%update-self-references function-vector))
       (function-vector-to-function function-vector))))
 
 (defun %define-x86-lap-function (name forms &optional (bits 0))
