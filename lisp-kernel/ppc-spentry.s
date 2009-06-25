@@ -3355,7 +3355,7 @@ push_pair_loop:
 	__(vpush(imm5))
 push_pair_test:
 	__(bne cr0,push_pair_loop)
-	__(slwi imm2,imm2,3)		/* pairs -> bytes  */
+	__(slwi imm2,imm2,dnode_shift)  /* pairs -> bytes  */
 	__(add imm2,vsp,imm2)		/* imm2 points below pairs  */
 	__(li imm0,0)			/* count unknown keywords so far  */
 	__(extrwi imm1,nargs,1,mask_aok) /* unknown keywords allowed  */
@@ -3392,10 +3392,10 @@ match_loop:
 	__(cmpr(cr0,arg_x,temp0))
 	__(addi imm0,imm0,1)
 	__(cmpr(cr4,imm0,nargs))
-	__(addi imm3,imm3,4)
+	__(addi imm3,imm3,node_size)
 	__(bne cr0,match_test)
 	/* Got a hit.  Unless this keyword's been seen already, set it.  */
-	__(slwi imm0,imm0,3)
+	__(slwi imm0,imm0,dnode_shift)
 	__(subf imm0,imm0,imm2)
 	__(ldr(temp0,0(imm0)))
 	__(cmpri(cr0,temp0,nil_value))
@@ -3408,7 +3408,7 @@ match_loop:
 match_test:
 	__(bne cr4,match_loop)
         __(beq cr3,match_keys_check_aok)
-        __(addi imm1,imm1,4)
+        __(addi imm1,imm1,node_size)
         __(b match_keys_loop)
 match_keys_check_aok:
         __(andi. imm0,imm1,2)  /* check "seen-aok" bit in imm1 */
@@ -3932,8 +3932,10 @@ local_label(misc_set_u8):
          __(blr)
 local_label(misc_set_u64):
          __(extract_lisptag(imm0,arg_z))
+         __(extract_fulltag(imm2,arg_z))
          __(cmpdi cr0,arg_z,0)
          __(cmpdi cr7,imm0,0)
+         __(cmpdi cr6,imm2,fulltag_misc)
          __(la imm4,misc_data_offset(arg_y))
          __(bne cr7,local_label(setu64_maybe_bignum))
          __(unbox_fixnum(imm0,arg_z))
