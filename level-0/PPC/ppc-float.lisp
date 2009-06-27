@@ -335,13 +335,15 @@
 #+ppc32-target
 (defppclapfunction %int-to-sfloat! ((int arg_y) (sfloat arg_z))
   (int-to-freg int fp0 imm0)
-  (stfs fp0 ppc32::single-float.value sfloat)
+  (frsp fp1 fp0)
+  (stfs fp1 ppc32::single-float.value sfloat)
   (blr))
 
 #+ppc64-target
 (defppclapfunction %int-to-sfloat ((int arg_z))
   (int-to-freg int fp0 imm0)
-  (stfs fp0 ppc64::tcr.single-float-convert ppc64::rcontext)
+  (frsp fp1 fp0)
+  (stfs fp1 ppc64::tcr.single-float-convert ppc64::rcontext)
   (ld arg_z ppc64::tcr.single-float-convert ppc64::rcontext)
   (blr))
   
