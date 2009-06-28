@@ -146,6 +146,12 @@
       (#.objc-flag-class (id->objc-class-wrapper index))
       (#.objc-flag-metaclass (id->objc-metaclass-wrapper index)))))
 
+(defun has-lisp-slot-vector (p)
+  (gethash p *objc-object-slot-vectors*))
+
+(defun %remove-lisp-slot-vector (p)
+  (remhash p *objc-object-slot-vectors*))
+
 (defun %objc-domain-slots-vector (p)
        (let* ((type (%macptr-type p))
              (flags (ldb objc-type-flags type))
