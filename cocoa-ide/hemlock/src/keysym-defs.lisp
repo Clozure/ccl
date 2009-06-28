@@ -143,7 +143,7 @@
 (define-keysym :rightarrow "Rightarrow")
 
 
-(define-mouse-keysym 1 #xe000 "Leftdown" "Super" :button-press)
+(define-mouse-keysym 1 #xffff "Leftdown" "Super" :button-press)
 
 
 ;;;; SETFs of KEY-EVENT-CHAR and CHAR-KEY-EVENT.
