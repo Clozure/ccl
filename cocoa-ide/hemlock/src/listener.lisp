@@ -198,8 +198,10 @@ between the region's start and end, and if there are no ill-formed expressions i
 
     (when input-region
       (insert-character (current-point-for-insertion) #\NewLine)
-      (when (balanced-expressions-in-region input-region)
-        (let* ((string (region-to-string input-region))               )
+      (when (or (input-stream-reading-line
+                 (top-listener-input-stream))
+                (balanced-expressions-in-region input-region))
+        (let* ((string (region-to-string input-region)))
           (push (cons r nil) (value input-regions))
           (move-mark (value buffer-input-mark) (current-point))
           (append-font-regions (current-buffer))
