@@ -386,10 +386,12 @@ instance variable."
 
 (defun %cf-instance-p (instance)
   (> (objc-message-send instance "_cfTypeID" #>CFTypeID) 1))
+  
 
 (defun initialized-nsobject-p (nsobject)
   (or (objc-class-p nsobject)
       (objc-metaclass-p nsobject)
+      (has-lisp-slot-vector nsobject)
       (let* ((cf-p (%cf-instance-p nsobject)) 
              (isize (if cf-p (#_malloc_size nsobject) (%objc-class-instance-size (#/class nsobject))))
              (skip (if cf-p (+ (record-length :id) 4 #+64-bit-target 4) (record-length :id))))
@@ -412,7 +414,7 @@ NSObjects describe themselves in more detail than others."
             (lisp-string-from-nsstring desc)
             (ns:with-ns-range (r 0 *objc-description-max-length*)
               (format nil "~a[...]"(lisp-string-from-nsstring (#/substringWithRange: desc r)))))))
-    ""))
+    "[uninitialized]"))
 
 
 
