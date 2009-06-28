@@ -194,8 +194,10 @@
        ;; modifier, treat it if it were bound to "Self Insert".
        
        (when (eq main-binding (get-default-command))
-	 (let ((modifiers (key-event-bits-modifiers (key-event-bits key))))
-	   (when (and (graphic-char-p (key-event-char key))
+	 (let* ((modifiers (key-event-bits-modifiers (key-event-bits key)))
+                (char (key-event-char key)))
+	   (when (and char
+                      (graphic-char-p char)
 		      (or (null modifiers)
 			  (equal '("Shift") modifiers)))
 	     (setq main-binding (get-self-insert-command)))))
