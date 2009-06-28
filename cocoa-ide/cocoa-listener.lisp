@@ -39,7 +39,11 @@
    (cur-string :initform nil)
    (cur-string-pos :initform 0)
    (cur-env :initform nil)
-   (cur-sstream :initform nil)))
+   (cur-sstream :initform nil)
+   (reading-line :initform nil :accessor hi:input-stream-reading-line)))
+
+
+
 
 
 
@@ -136,7 +140,16 @@
 (defmethod stream-clear-input ((stream cocoa-listener-input-stream))
   (with-slots (queue-lock cur-string cur-string-pos cur-sstream cur-env) stream
     (with-lock-grabbed (queue-lock)
+      (setf (hi::input-stream-reading-line stream) nil)
       (setf cur-string nil cur-string-pos 0 cur-sstream nil cur-env nil))))
+
+(defmethod stream-read-line ((stream cocoa-listener-input-stream))
+  (let* ((old-reading-line (hi:input-stream-reading-line stream)))
+    (unwind-protect
+         (progn
+           (setf (hi::input-stream-reading-line stream) t)
+           (call-next-method))
+      (setf (hi:input-stream-reading-line stream) old-reading-line))))
 
 (defparameter $listener-flush-limit 100)
 
@@ -263,6 +276,10 @@
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-listener-frame))
 
+(objc:defmethod (#/setDocumentEdited: :void) ((w hemlock-listener-frame)
+                                              (edited #>BOOL))
+  (declare (ignorable edited)))
+
 
 (defclass hemlock-listener-window-controller (hemlock-editor-window-controller)
     ()
@@ -347,6 +364,12 @@
     (when process
       (setq process (require-type process 'cocoa-listener-process))
       (cocoa-listener-process-output-stream process))))
+
+(defun hemlock-ext:top-listener-input-stream ()
+  (let* ((process (hemlock-document-process (#/topListener hemlock-listener-document))))
+    (when process
+      (setq process (require-type process 'cocoa-listener-process))
+      (cocoa-listener-process-input-stream process))))
 
 
 
