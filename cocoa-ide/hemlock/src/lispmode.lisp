@@ -56,7 +56,7 @@
 (defstruct (lisp-info (:constructor make-lisp-info ()))
   (begins-quoted nil)		; (or t nil)
   (ending-quoted nil)		; (or t nil)
-  (ranges-to-ignore nil)	; (or t nil)
+  (ranges-to-ignore nil)
   (net-open-parens 0 :type fixnum)
   (net-close-parens 0 :type fixnum)
   (signature-slot))
