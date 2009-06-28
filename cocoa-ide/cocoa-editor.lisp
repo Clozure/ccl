@@ -1497,7 +1497,6 @@
              ;; If neither d1 nor d2 apply, arbitrarily assume forward
              ;; selection: mark at n1, point at n1+m.
              ;; In all cases, activate Hemlock selection.
-             (disable-paren-highlight self)
              (unless still-selecting
                 (let* ((pointpos (hi:mark-absolute-position point))
                        (selection-end (+ location len))
@@ -1892,6 +1891,15 @@
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-frame))
 
+;;; If a window's document's edited status changes, update the modeline.
+(objc:defmethod (#/setDocumentEdited: :void) ((w hemlock-frame)
+                                              (edited #>BOOL))
+  (let* ((was-edited (#/isDocumentEdited w)))
+    (unless (eq was-edited edited)
+      (#/setNeedsDisplay: (text-pane-mode-line (slot-value w 'pane)) t)))
+  (call-next-method edited))
+
+
 (objc:defmethod (#/miniaturize: :void) ((w hemlock-frame) sender)
   (let* ((event (#/currentEvent w))
          (flags (#/modifierFlags event)))
@@ -2113,6 +2121,10 @@
       (dotimes (i level) (buffer-document-begin-editing buffer)))))
 
 
+(defun hi::buffer-document-modified (buffer)
+  (let* ((doc (hi::buffer-document buffer)))
+    (if doc
+      (#/isDocumentEdited doc))))
 
 (defun perform-edit-change-notification (textstorage selector pos n &optional (extra 0))
   (with-lock-grabbed (*buffer-change-invocation-lock*)
