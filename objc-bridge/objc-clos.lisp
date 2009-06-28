@@ -289,7 +289,8 @@
   (if (objc-object-p o)
     (print-unreadable-object (o stream :type t)
       (format stream
-              (if (typep o 'ns::ns-string)
+              (if (and (typep o 'ns::ns-string)
+                       (initialized-nsobject-p o))
                 "~s (#x~x)"
                 "~a (#x~x)")
               (nsobject-description o) (%ptr-to-int o)))
