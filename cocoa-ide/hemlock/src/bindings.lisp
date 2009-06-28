@@ -156,9 +156,11 @@
 (bind-key "Rotate Kill Ring" #k"meta-y")
 
 (bind-key "Forward Word" #k"meta-f")
+(bind-key "Forward Word" #k"meta-rightarrow")
 (bind-key "Select Forward Word" #k"meta-F")
 (bind-key "Select Forward Word" #k"meta-shift-rightarrow")
 (bind-key "Backward Word" #k"meta-b")
+(bind-key "Backward Word" #k"meta-leftarrow")
 (bind-key "Select Backward Word" #k"meta-B")
 (bind-key "Select Backward Word" #k"meta-shift-leftarrow")
 

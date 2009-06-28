@@ -59,6 +59,8 @@
    #:current-point-unless-selection
    #:current-point-collapsing-selection
    #:current-point-extending-selection
+   #:current-point-for-selection-start
+   #:current-point-for-selection-end
    #:current-point
    #:current-mark
    #:pop-buffer-mark

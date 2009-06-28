@@ -234,8 +234,8 @@
     point))
 
 (defun current-point-extending-selection ()
-  "Return the Buffer-Point of the current buffer, deactivating the
-   region."
+  "Return the Buffer-Point of the current buffer, ensuring that
+   the region's active."
   (let* ((b *current-buffer*)
          (point (buffer-point b)))
     ;; If the region is active, keep it active.  Otherwise,
@@ -243,6 +243,46 @@
     (unless (%buffer-current-region-p b)
       (push-new-buffer-mark point t))
     point))
+
+(defun current-point-for-selection-start ()
+  "Return the Buffer-Point of the current buffer, ensuring that
+   the region's active.  If the region was active but the
+   buffer's SELECTION-SET-BY-COMMAND flag is false, ensure that
+   point precedes mark by exchanging their positions if necessary."
+  (let* ((b *current-buffer*)
+         (point (buffer-point b)))
+    ;; If the region is active, keep it active.  Otherwise,
+    ;; establish a new (empty) region at point.
+    (if (%buffer-current-region-p b)
+      (unless (buffer-selection-set-by-command b)
+        (let* ((mark (current-mark)))
+          (if (mark< mark point)
+            (with-mark ((temp point))
+              (move-mark point mark)
+              (move-mark mark temp)))))
+      (push-new-buffer-mark point t))
+    point))
+
+(defun current-point-for-selection-end ()
+  "Return the Buffer-Point of the current buffer, ensuring that
+   the region's active.  If the region was active but the
+   buffer's SELECTION-SET-BY-COMMAND flag is false, ensure that
+   point follows mark by exchanging their positions if necessary."
+  (let* ((b *current-buffer*)
+         (point (buffer-point b)))
+    ;; If the region is active, keep it active.  Otherwise,
+    ;; establish a new (empty) region at point.
+    (if (%buffer-current-region-p b)
+      (unless (buffer-selection-set-by-command b)
+        (let* ((mark (current-mark)))
+          (if (mark> mark point)
+            (with-mark ((temp point))
+              (move-mark point mark)
+              (move-mark mark temp)))))
+      (push-new-buffer-mark point t))
+    point))
+  
+
 
 (defun current-point-for-insertion ()
   "Check to see if the current buffer can be modified at its

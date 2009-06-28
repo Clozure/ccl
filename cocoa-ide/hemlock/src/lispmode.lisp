@@ -1225,7 +1225,7 @@
   "Move the point to the beginning of a top-level form, extending the selection.
   with an argument, skips the previous p top-level forms."
   "Move the point to the beginning of a top-level form, extending the selection."
-  (let ((point (current-point-extending-selection))
+  (let ((point (current-point-for-selection-start))
 	(count (or p 1)))
     (pre-command-parse-check point)
     (if (minusp count)
@@ -1268,7 +1268,7 @@
   "Move the point to the end of a top-level form, extending the selection.
    With an argument, skips the next p top-level forms."
   "Move the point to the end of a top-level form, extending the selection."
-  (let ((point (current-point-extending-selection))
+  (let ((point (current-point-for-selection-end))
 	(count (or p 1)))
     (pre-command-parse-check point)
     (if (minusp count)
@@ -1301,7 +1301,7 @@
   "Skip over the next Lisp list, extending the selection.
   With argument, skips the next p lists."
   "Skip over the next Lisp list, extending the selection."
-  (let ((point (current-point-extending-selection))
+  (let ((point (current-point-for-selection-end))
 	(count (or p 1)))
     (pre-command-parse-check point)
     (unless (list-offset point count) (editor-error))))
@@ -1320,7 +1320,7 @@
   "Skip over the previous Lisp list, extending the selection.
   With argument, skips the previous p lists."
   "Skip over the previous Lisp list, extending the selection."
-  (let ((point (current-point-extending-selection))
+  (let ((point (current-point-for-selection-start))
 	(count (- (or p 1))))
     (pre-command-parse-check point)
     (unless (list-offset point count) (editor-error))))
@@ -1339,7 +1339,7 @@
   "Skip over the next Form, extending the selection.
   With argument, skips the next p Forms."
   "Skip over the next Form, extending the selection."
-  (let ((point (current-point-extending-selection))
+  (let ((point (current-point-for-selection-end))
 	(count (or p 1)))
     (pre-command-parse-check point)
     (unless (form-offset point count) (editor-error))))
@@ -1358,7 +1358,7 @@
   "Skip over the previous Form, extending the selection.
   With argument, skips the previous p Forms."
   "Skip over the previous Form, extending the selection."
-  (let ((point (current-point-extending-selection))
+  (let ((point (current-point-for-selection-start))
 	(count (- (or p 1))))
     (pre-command-parse-check point)
     (unless (form-offset point count) (editor-error))))

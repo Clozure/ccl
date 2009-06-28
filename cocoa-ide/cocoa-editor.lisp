@@ -1159,6 +1159,8 @@
   (assume-cocoa-thread)
   (when (eql length 0)
     (update-paren-highlight self))
+  (let* ((buffer (hemlock-buffer self)))
+    (setf (hi::buffer-selection-set-by-command buffer) (> length 0)))
   (rlet ((range :ns-range :location pos :length length))
     (ccl::%call-next-objc-method self
 				 hemlock-textstorage-text-view
@@ -1468,6 +1470,7 @@
            (point (hi::buffer-point buffer))
            (location (pref r :<NSR>ange.location))
            (len (pref r :<NSR>ange.length)))
+      (setf (hi::buffer-selection-set-by-command buffer) nil)
       (cond ((eql len 0)
              #+debug
              (#_NSLog #@"Moving point to absolute position %d" :int location)

@@ -116,6 +116,7 @@
                                         ; a doubly-linked list of font regions.
   active-font-region                    ; currently active font region
   charprops		      ; the buffer's default charprops
+  (selection-set-by-command nil) ; boolean: true if selection set by (shifted) motion command.
   )
 
 (defstruct (echo-buffer (:include buffer)

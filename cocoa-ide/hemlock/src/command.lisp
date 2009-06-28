@@ -101,22 +101,20 @@
                (editor-error "Not enough characters."))))))
 
 (defcommand "Select Forward Character" (p)
-    "Move the point forward one character, extending the selection.
+  "Move the point forward one character, extending the selection.
    With prefix argument move that many characters, with negative argument
    go backwards."
-    "Move the point of the current buffer forward p characters, extending the selection."
-  (let* ((p (or p 1))
-         (point (current-point-extending-selection)))
-    (cond ((character-offset point p))
-          ((= p 1)
-           (editor-error "No next character."))
-          ((= p -1)
-           (editor-error "No previous character."))
-          (t
-           (if (plusp p)
+  "Move the point of the current buffer forward p characters, extending the selection."
+  (let* ((p (or p 1)))
+    (if (< p 0)
+      (select-backward-character-command (- p))
+      (let* ((point (current-point-for-selection-end)))
+        (cond ((character-offset point p))
+              ((= p 1)
+               (editor-error "No next character."))
+              (t
                (buffer-end point)
-               (buffer-start point))
-           (editor-error "Not enough characters.")))))
+               (editor-error "Not enough characters.")))))))
 
 (defcommand "Backward Character" (p)
     "Move the point backward one character, collapsing the selection.
@@ -129,7 +127,16 @@
   "Move the point backward one character, extending the selection.
   With prefix argument move that many characters backward."
   "Move the point p characters backward, extending the selection."
-  (select-forward-character-command (if p (- p) -1)))
+  (let* ((p (or p 1)))
+    (if (< p 0)
+      (select-forward-character-command (- p))
+      (let* ((point (current-point-for-selection-start)))
+        (cond ((character-offset point (- p)))
+              ((= p 1)
+               (editor-error "No previous character."))
+              (t
+               (buffer-start point)
+               (editor-error "Not enough characters.")))))))
 
 #|
 (defcommand "Delete Next Character" (p)
@@ -234,14 +241,14 @@
   "Moves forward one word, extending the selection.
   With prefix argument, moves the point forward over that many words."
   "Moves the point forward p words, extending the selection."
-  (let* ((point (current-point-extending-selection)))
-    (cond ((word-offset point (or p 1)))
-          ((and p (minusp p))
-           (buffer-start point)
-           (editor-error "No previous word."))
-          (t
-           (buffer-end point)
-           (editor-error "No next word.")))))
+  (let* ((p (or p 1)))
+    (if (< p 0)
+      (select-backward-word-command (- p))
+      (let* ((point (current-point-for-selection-end)))
+        (cond ((word-offset point p))
+              (t
+               (buffer-end point)
+               (editor-error "No next word.")))))))
 
 (defcommand "Backward Word" (p)
   "Moves forward backward word.
@@ -254,7 +261,14 @@
   "Moves forward backward word, extending the selection.
   With prefix argument, moves the point back over that many words."
   "Moves the point backward p words, extending the selection."
-  (select-forward-word-command (- (or p 1))))
+  (let* ((p (or p 1)))
+    (if (< p 0)
+      (select-forward-word-command (- p))
+      (let* ((point (current-point-for-selection-start)))
+        (cond ((word-offset point (- p)))
+              (t
+               (buffer-start point)
+               (editor-error "No previous word.")))))))
 
 
 
@@ -297,23 +311,23 @@
   "Moves the point to the next line, extending the selection.
    With prefix argument, moves the point that many lines down (or up if
    the prefix is negative)."
-  "Moves the down p lines, extendin the selection."
-  (let* ((point (current-point-extending-selection))
-	 (target (set-target-column point)))
-    (unless (line-offset point (or p 1))
-      (when (value next-line-inserts-newlines)
-        (cond ((not p)
-               (when (same-line-p point (buffer-end-mark (current-buffer)))
-                 (line-end point))
-               (insert-character point #\newline))
-              ((minusp p)
-               (buffer-start point)
-               (editor-error "No previous line."))
-              (t
-               (buffer-end point)
-               (when p (editor-error "No next line."))))))
-    (unless (move-to-position point target) (line-end point))
-    (setf (last-command-type) :line-motion)))
+  "Moves the down p lines, extending the selection."
+  (let* ((p (or p 1)))
+    (if (< p 0)
+      (select-previous-line-command (- p))
+      (let* ((point (current-point-for-selection-end))
+             (target (set-target-column point)))
+        (unless (line-offset point (or p 1))
+          (when (value next-line-inserts-newlines)
+            (cond ((not p)
+                   (when (same-line-p point (buffer-end-mark (current-buffer)))
+                     (line-end point))
+                   (insert-character point #\newline))
+                  (t
+                   (buffer-end point)
+                   (when p (editor-error "No next line."))))))
+        (unless (move-to-position point target) (line-end point))
+        (setf (last-command-type) :line-motion)))))
 
 
 (defcommand "Previous Line" (p)
@@ -328,7 +342,14 @@
   With prefix argument, moves the point that many lines up (or down if
   the prefix is negative)."
   "Moves the point up p lines, collapsing the selection."
-  (select-next-line-command (- (or p 1))))
+  (let* ((p (or p 1)))
+    (if (< p 0)
+      (select-next-line-command (- p))
+      (let* ((point (current-point-for-selection-start))
+             (target (set-target-column point)))
+        (line-offset point (- p))
+        (unless (move-to-position point target) (line-end point))
+        (setf (last-command-type) :line-motion)))))
 
 (defcommand "Mark to End of Buffer" (p)
   "Sets the current region from point to the end of the buffer."
@@ -372,7 +393,7 @@
   With prefix argument, moves the point to the beginning of the prefix'th
   next line."
     "Moves the point down p lines and then to the beginning of the line, extending the selection."
-  (let ((point (current-point-extending-selection)))
+  (let ((point (current-point-for-selection-start)))
     (unless (line-offset point (if p p 0)) (editor-error "No such line."))
     (line-start point)))
 
@@ -388,7 +409,7 @@
   "Moves the point to the end of the current line, extending the selection.
   With prefix argument, moves the point to the end of the prefix'th next line."
   "Moves the point down p lines and then to the end of the line, extending the selection."
-  (let ((point (current-point-extending-selection)))
+  (let ((point (current-point-for-selection-end)))
     (unless (line-offset point (if p p 0)) (editor-error "No such line."))
     (line-end point)))
 
