@@ -342,6 +342,7 @@
    #:ensure-selection-visible
    #:report-hemlock-error
    #:top-listener-output-stream
+   #:top-listener-input-stream
    #:invalidate-modeline
    #:note-buffer-saved
    #:note-buffer-unsaved
@@ -562,6 +563,8 @@
    ;; vars.lisp
    #:variable-value #:variable-hooks #:variable-documentation #:variable-name
    #:hemlock-bound-p #:defhvar #:delete-variable
+
+   #:input-stream-reading-line
 
    ))
 
