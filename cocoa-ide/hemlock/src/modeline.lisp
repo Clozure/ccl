@@ -121,7 +121,7 @@ other than :DEFAULT"
  :name :modifiedp
  :function #'(lambda (buffer)
 	       "Returns \"* \" if buffer is modified, or \"  \"."
-	       (let ((modifiedp (buffer-modified buffer)))
+	       (let ((modifiedp (buffer-document-modified buffer)))
 		 (if modifiedp
 		     "* "
 		     "  "))))
