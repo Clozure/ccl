@@ -14,6 +14,11 @@
 (objc:defmethod (#/characterAtIndex: :unichar) ((self ns-lisp-string) (index :<NSUI>nteger))
   (char-code (schar (ns-lisp-string-string self) index)))
 
+(objc:defmethod (#/dealloc :void) ((self ns-lisp-string))
+  (ccl::%remove-lisp-slot-vector self)
+  (call-next-method))
+
+
 (defclass frame-label (ns-lisp-string)
     ((frame-number  :foreign-type :int :accessor frame-label-number)
      (controller :foreign-type :id :reader frame-label-controller)
