@@ -119,7 +119,7 @@
     [in readInBackgroundAndNotify];
     [textView setDelegate: self];
     [textView setContinuousSpellCheckingEnabled: NO];
-    [self setFileName: [[AltConsoleDocumentController sharedDocumentController] herald]];
+    [self setFileURL: [NSURL fileURLWithPath: [[AltConsoleDocumentController sharedDocumentController] herald]]];
     [[AltConsoleDocumentController sharedDocumentController]
       add_console_document];
     watchdog = [NSTimer scheduledTimerWithTimeInterval: 1.0
