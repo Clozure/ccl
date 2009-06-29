@@ -47,6 +47,12 @@
                                         :size 13000
                                         :rehash-threshold .95))
 
+
+(defvar *direct-methods-only* nil
+  "If true, method name source location lookup will find direct methods only.  If false,
+   include all applicable methods")
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Definition types

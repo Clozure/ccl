@@ -8945,43 +8945,43 @@
                 (eq typespec '*))
           (x862-form seg vreg xfer form)
           (with-note (form seg)
-          (let* ((ok (backend-get-next-label)))
-            (if (and (symbolp typespec) (non-nil-symbolp (type-predicate typespec)))
-              ;; Do this so can compile the lisp with typechecking even though typep
-              ;; doesn't get defined til fairly late.
-              (progn
-                (x862-one-targeted-reg-form seg form ($ *x862-arg-z*))
-                (x862-store-immediate seg (type-predicate typespec) ($ *x862-fname*))
-                (x862-set-nargs seg 1)
-                (x862-vpush-register seg ($ *x862-arg-z*)))
-              (progn
-                (x862-one-targeted-reg-form seg form ($ *x862-arg-y*))
+            (let* ((ok (backend-get-next-label)))
+              (if (and (symbolp typespec) (non-nil-symbolp (type-predicate typespec)))
+                ;; Do this so can compile the lisp with typechecking even though typep
+                ;; doesn't get defined til fairly late.
+                (progn
+                  (x862-one-targeted-reg-form seg form ($ *x862-arg-z*))
+                  (x862-store-immediate seg (type-predicate typespec) ($ *x862-fname*))
+                  (x862-set-nargs seg 1)
+                  (x862-vpush-register seg ($ *x862-arg-z*)))
+                (progn
+                  (x862-one-targeted-reg-form seg form ($ *x862-arg-y*))
+                  (x862-store-immediate seg typespec ($ *x862-arg-z*))
+                  (x862-store-immediate seg 'typep ($ *x862-fname*))
+                  (x862-set-nargs seg 2)
+                  (x862-vpush-register seg ($ *x862-arg-y*))))
+              (! call-known-symbol ($ *x862-arg-z*))
+              (! compare-to-nil ($ *x862-arg-z*))
+              (x862-vpop-register seg ($ *x862-arg-y*))
+              (! cbranch-false (aref *backend-labels* ok) x86::x86-e-bits)
+              (target-arch-case
+               (:x8632
+                (let* ((*x862-vstack* *x862-vstack*)
+                       (*x862-top-vstack-lcell* *x862-top-vstack-lcell*))
+                  (! reserve-outgoing-frame)
+                  (incf *x862-vstack* (* 2 *x862-target-node-size*))
+                  (! vpush-fixnum (ash $XWRONGTYPE *x862-target-fixnum-shift*))
+                  (x862-store-immediate seg typespec ($ *x862-arg-z*))
+                  (x862-set-nargs seg 3)
+                  (! ksignalerr)))
+               (:x8664
+                (x862-lri seg ($ x8664::arg_x) (ash $XWRONGTYPE *x862-target-fixnum-shift*))
                 (x862-store-immediate seg typespec ($ *x862-arg-z*))
-                (x862-store-immediate seg 'typep ($ *x862-fname*))
-                (x862-set-nargs seg 2)
-                (x862-vpush-register seg ($ *x862-arg-y*))))
-            (! call-known-symbol ($ *x862-arg-z*))
-            (! compare-to-nil ($ *x862-arg-z*))
-            (x862-vpop-register seg ($ *x862-arg-y*))
-            (! cbranch-false (aref *backend-labels* ok) x86::x86-e-bits)
-	    (target-arch-case
-	     (:x8632
-	      (let* ((*x862-vstack* *x862-vstack*)
-		     (*x862-top-vstack-lcell* *x862-top-vstack-lcell*))
-		(! reserve-outgoing-frame)
-		(incf *x862-vstack* (* 2 *x862-target-node-size*))
-		(! vpush-fixnum (ash $XWRONGTYPE *x862-target-fixnum-shift*))
-		(x862-store-immediate seg typespec ($ *x862-arg-z*))
-		(x862-set-nargs seg 3)
-		(! ksignalerr)))
-	     (:x8664
-	      (x862-lri seg ($ x8664::arg_x) (ash $XWRONGTYPE *x862-target-fixnum-shift*))
-	      (x862-store-immediate seg typespec ($ *x862-arg-z*))
-	      (x862-set-nargs seg 3)
-	      (! ksignalerr)))
-            (@ ok)
-            (<- ($ *x862-arg-y*))
-            (^))))))))
+                (x862-set-nargs seg 3)
+                (! ksignalerr)))
+              (@ ok)
+              (<- ($ *x862-arg-y*))
+              (^))))))))
           
           
                   

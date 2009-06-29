@@ -258,9 +258,6 @@ from FASLs.")
         ,(xref-entry-method-specializers entry))
     (xref-entry-name entry)))
 
-;; edit-definition-p needs this - what is it for?
-(defvar *direct-methods-only* nil)
-
 ;; %SOURCE-FILE-FOR-XREF-ENTRY -- internal
 ;;
 (defun %source-file-for-xref-entry (entry)

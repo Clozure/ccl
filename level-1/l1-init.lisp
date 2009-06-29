@@ -269,7 +269,9 @@ If NIL we don't store any source location (other than the filename if *record-so
 If T we store as much source location information as we have available.
 
 If :NO-TEXT we don't store a copy of the original source text.")
-(defparameter *record-pc-mapping* t)
+
+(defparameter *record-pc-mapping* t "True to record pc -> source mapping (but only if
+*save-source-locations* is also true)")
 
 (defvar *modules* nil
   "This is a list of module names that have been loaded into Lisp so far.
