@@ -35,6 +35,7 @@
 
 (defgeneric name-of (thing)
   (:method ((thing t)) thing)
+  (:method ((thing method-function)) (name-of (%method-function-method thing)))
   (:method ((thing function)) (name-of (function-name thing)))
   (:method ((thing method)) (method-name thing))
   (:method ((thing class)) (class-name thing))
@@ -48,7 +49,7 @@
                                         :rehash-threshold .95))
 
 
-(defvar *direct-methods-only* nil
+(defvar *direct-methods-only* t
   "If true, method name source location lookup will find direct methods only.  If false,
    include all applicable methods")
 
@@ -400,30 +401,83 @@ definition type NAME"
 ;;; 
 
 
+;; Some objects (specifically functions) have source location information associated with the
+;; object itself, in addition to any source locations associated with its definition.  This
+;; allows us to find source for, e.g., anonymous functions.
+(defgeneric get-object-sources (thing)
+  ;; returns a list of entries ((a-type . a-name) source . previous-sources)
+  (:method ((thing t)) nil)
+  (:method ((fn function))
+    (let ((source (function-source-note fn)))
+      (when source
+        (list (list* (cons *function-definition-type* (or (name-of fn) fn)) source nil)))))
+  (:method ((fn method-function))
+    (let ((source (function-source-note fn)))
+      (when source
+        (list (list* (cons *method-definition-type* (%method-function-method fn)) source nil)))))
+  (:method ((m method))
+    (get-object-sources (method-function m))))
+
 (defun find-definition-sources (name &optional (type t))
   "Returns a list of entries ((a-type . a-name) source . previous-sources), where
 a-type is a subtype of TYPE, and a-name is either NAME or it's a special case of
 NAME (e.g. if NAME is the name of generic function, a-name could be a method of NAME).
-The list is guaranteed freshly consed (ie suitable for nconc'ing)."
-  (let* ((dt (definition-type-instance type))
-         (dt-class (class-of dt))
-         (seen-dts nil)
-         (matches nil))
-    (with-lock-grabbed (*source-files-lock*)
-      (loop for (nil . dt) in *definition-types*
-            when (and (typep dt dt-class) (not (memq dt seen-dts)))
-              do (let* ((key (definition-base-name dt name))
-                        (all (%source-file-entries key)))
-                   (push dt seen-dts)
-                   (loop for entry in all
-                         when (and (eq dt (def-source-entry.type key entry))
-                                   (or (eq name key) ;; e.g. all methods on a gf
-                                       (definition-same-p dt name (def-source-entry.name key entry))))
-                           do (multiple-value-bind (type name files)
-                                  (decode-def-source-entry key entry)
-                                (push (cons (cons type name) files) matches))))))
-    matches))
 
+If NAME is not a cons or symbol, it's assumed to be an object (e.g. class or
+function) whose source location we try to heuristically locate, usually by looking up
+the sources of its name.
+
+If NAME is a method name and *DIRECT-METHODS-ONLY* is false, will also locate all
+applicable methods.
+
+The returned list is guaranteed freshly consed (ie suitable for nconc'ing)."
+
+  (let* ((dt-class (class-of (definition-type-instance type)))
+         (matches (get-object-sources name)))
+    (if matches
+      (setq matches (delete-if-not (lambda (info) (typep (caar info) dt-class)) matches))
+      ;; No intrinsic source info for the thing itself, look it up by name.
+      (let (seen-dts implicit-type implicit-dt-class implicit-name)
+        (typecase name
+          (method
+             (setq implicit-type 'method implicit-name name))
+          (method-function
+             (setq implicit-type 'method implicit-name (%method-function-method name)))
+          (function
+             (setq implicit-type 'function implicit-name (name-of name)))
+          (method-combination
+             (setq implicit-type 'method-combination implicit-name (name-of name)))
+          (package
+             (setq implicit-type 'package implicit-name (name-of name)))
+          (class
+             (setq implicit-type 'class implicit-name (name-of name)))
+          (t 
+             (setq implicit-type t implicit-name name)))
+        (setq implicit-dt-class (class-of (definition-type-instance implicit-type)))
+        (with-lock-grabbed (*source-files-lock*)
+          (loop for (nil . dt) in *definition-types*
+                when (and (typep dt dt-class) (typep dt implicit-dt-class) (not (memq dt seen-dts)))
+                  do (let* ((key (definition-base-name dt implicit-name))
+                            (all (%source-file-entries key)))
+                       (push dt seen-dts)
+                       (loop for entry in all
+                             when (and (eq dt (def-source-entry.type key entry))
+                                       (or (eq implicit-name key) ;; e.g. all methods on a gf
+                                           (definition-same-p dt implicit-name (def-source-entry.name key entry))))
+                               do (multiple-value-bind (type name files)
+                                      (decode-def-source-entry key entry)
+                                    (push (cons (cons type name) files) matches))))))))
+
+    ;; include indirect applicable methods.  Who uses this case?
+    (when (and (eq type 'method)
+               (not (typep name 'method))
+               (not *direct-methods-only*))
+      (multiple-value-bind (sym qualifiers specializers) (method-def-parameters name)
+        (when sym
+          (loop for m in (find-applicable-methods sym specializers qualifiers)
+                unless (definition-same-p *method-definition-type* m name)
+                  do (setq matches (nconc (find-definition-sources m 'method) matches))))))
+    matches))
 
 ;;; backward compatibility
 
@@ -545,16 +599,6 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
 
 (defun get-source-files-with-types (name &optional (type t))
   (let ((list (find-definition-sources name type)))
-    (declare (special *direct-methods-only*))
-    ;; include indirect applicable methods.  Who uses this case?
-    (when (and (eq type 'method)
-               (not (typep name 'method))
-               (not *direct-methods-only*))
-      (multiple-value-bind (sym qualifiers specializers) (method-def-parameters name)
-        (when sym
-          (loop for m in (find-applicable-methods sym specializers qualifiers)
-                unless (definition-same-p *method-definition-type* m name)
-                  do (setq list (nconc (find-definition-sources m 'method) list))))))
     ;; Convert to old format, (type-or-name . file)
     (loop for ((dt . full-name) . sources) in list
           as spec = (if (eq full-name name) (definition-type-name dt) full-name)
@@ -588,27 +632,6 @@ The list is guaranteed freshly consed (ie suitable for nconc'ing)."
                    sym)))
     (get-source-files-with-types name type)))
 
-
-#|
-;; For working-0711 versions of slime, but this doesn't actually work since
-;; source-note representations are not compatible
-
-(defun find-definitions-for-name (name &optional (type-name t))
-  "Returns a list of (TYPE . DEFINITION-SOURCE) for all the known definitions of NAME."
-  (let ((definitions ()))
-    (loop for ((dt . full-name) . sources) in (find-definition-sources name type-name)
-          as last-source = (find-if-not #'null sources)
-          do (when last-source
-               (push (list dt full-name last-source) definitions)))
-    definitions))
-
-(defun find-simple-definitions-for-name (name)
-  (let* ((result (find-definitions-for-name name)))
-    (dolist (pair result result)
-      (let* ((dt (car pair)))
-        (when (typep dt 'definition-type)
-          (setf (car pair) (definition-type-name dt)))))))
-|#
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; record-source-file
