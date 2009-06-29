@@ -9,10 +9,10 @@
           <!ENTITY CCL "Clozure CL">
           ]>
 
-<chapter><title>About &CCL;</title>
+<chapter id="about-ccl"><title>About &CCL;</title>
   
   <!-- ============================================================ -->
-  <sect1><title>Introduction to &CCL;</title>
+  <sect1 id="introduction-to-ccl"><title>Introduction to &CCL;</title>
     
     <para>&CCL; is a fast, mature, open source Common Lisp
       implementation that runs on Linux, Mac OS X and BSD on either

@@ -9,10 +9,10 @@
           <!ENTITY CCL "Clozure CL">
           ]>
 
-<chapter><title>Using &CCL;</title>
+<chapter id="using-ccl"><title>Using &CCL;</title>
   
   <!-- ============================================================ -->
-  <sect1><title>Introduction</title>
+  <sect1 id="using-ccl-introduction"><title>Introduction</title>
     
     <para>The Common Lisp standard allows considerable latitude in the
       details of an implementation, and each particular Common Lisp
@@ -496,7 +496,7 @@
 
 
 
-  <sect2><title>Characters</title>
+  <sect2 id="unicode-characters"><title>Characters</title>
     <para>There is one <literal>CHARACTER</literal> type in &CCL;.
     All <literal>CHARACTER</literal>s are
     <literal>BASE-CHAR</literal>s.  <varname>CHAR-CODE-LIMIT</varname>
@@ -1105,7 +1105,7 @@
 
   <sect1 id="Pathanmes"><title>Pathnames</title>
 
-    <sect2>
+    <sect2 id="pathname-tilde-expansion">
       <title>Pathname Expansion</title>
       <para>Leading tilde (~) characters in physical pathname namestrings
         are expanded in the way that most shells do:</para>
@@ -1135,18 +1135,18 @@
     </sect2>
     
     
-    <sect2>
+    <sect2 id="pathnames-on-darwin">
       <title>OS X (Darwin)</title>
       
       <para>&CCL; assumes that pathname strings are decomposed UTF-8.</para>
     </sect2>
-    <sect2>
+    <sect2 id="pathnames-on-linux">
       <title>Linux</title>
       
       <para>Pathname strings are treated as null-terminated strings
         encoded according to the current locale.</para>
     </sect2>
-    <sect2>
+    <sect2 id="pathnames-on-freebsd">
       <title>FreeBSD</title>
       
       <para>Pathname strings are treated as null-terminated strings

@@ -10,10 +10,10 @@
           <!ENTITY CCL "Clozure CL">
           ]>
 
-<chapter><title>Obtaining, Installing, and Running &CCL;</title>
+<chapter id="installing"><title>Obtaining, Installing, and Running &CCL;</title>
   
   <!-- ============================================================ -->
-  <sect1><title>Releases and System Requirements</title>
+  <sect1 id="releases"><title>Releases and System Requirements</title>
     
     <para>Version 1.3 is the latest stable release of &CCL; as of April
     2009.</para>
@@ -59,7 +59,7 @@
     version released in April 2008.</para>
 
     <!-- ***************************************************** -->
-    <sect2><title>LinuxPPC</title> 
+    <sect2 id="linuxppc"><title>LinuxPPC</title> 
       
       <para>&CCL; requires version 2.2.13 (or later) of the Linux
       kernel and version 2.1.3 (or later) of the GNU C library (glibc)
@@ -67,7 +67,7 @@
     </sect2>
 
     <!-- ***************************************************** -->
-    <sect2><title>Linux x86</title> 
+    <sect2 id="linuxx86"><title>Linux x86</title> 
     
       <para>
 	Because of the nature of Linux distributions, it's difficult
@@ -78,7 +78,7 @@
     </sect2>
 
     <!-- ***************************************************** -->
-    <sect2><title>FreeBSD x86</title>
+    <sect2 id="freebsdx86"><title>FreeBSD x86</title>
     <para>&CCL; should run on
     FreeBSD 6.x and 7.x.
     FreeBSD 7 users will need to install the "compat6x" package in order to use
@@ -86,7 +86,7 @@
     </sect2>
 
     <!-- ***************************************************** -->
-    <sect2><title>Mac OS X (ppc and x86)</title>
+    <sect2 id="macosx"><title>Mac OS X (ppc and x86)</title>
 
       <para> &CCL; runs under Mac OS X versions 10.4 and 10.5.
       </para>
@@ -109,7 +109,7 @@
 
 
   <!-- ============================================================ -->
-  <sect1><title>Obtaining &CCL;</title>
+  <sect1 id="obtaining-ccl"><title>Obtaining &CCL;</title>
     <para>There two main ways to obtain &CCL;.  For Mac OS X,
     there are disk images that can be used to install &CCL; in
     the usual Macintosh way. For other OSes, Subversion is the best
@@ -125,7 +125,7 @@
       sections describe these options.</para>
 
     <!-- ***************************************************** -->
-    <sect2><title>The Mac Way</title>
+    <sect2 id="obtaining-the-mac-way"><title>The Mac Way</title>
       <para>If you are using Mac OS X then you can install and use
          &CCL; in the usual Macintosh way.  Download and mount a
          disk image, then drag the ccl folder to the Applications folder
@@ -150,7 +150,7 @@
     
 
     <!-- ***************************************************** -->
-    <sect2><title>Getting &CCL; with Subversion</title>
+    <sect2 id="obtaining-via-svn"><title>Getting &CCL; with Subversion</title>
       <para>It is very easy to download, install, and build &CCL;
       using Subversion. This is the preferred way to get either the
       latest, or a specific version of &CCL;, unless you prefer
@@ -262,7 +262,7 @@ Type 'svn help' for usage]]>
     </sect2>
 
     <!-- ***************************************************** -->
-    <sect2><title>Tarballs</title>
+    <sect2 id="obtaining-via-tarballs"><title>Tarballs</title>
       <para>Tarballs are available at <ulink
       url="ftp://clozure.com/pub/release/1.3/"/>.  Download and extract
       one on your local disk.  Then edit the &CCL; shell script to set
@@ -274,7 +274,7 @@ Type 'svn help' for usage]]>
   </sect1>
 
   <!-- ============================================================ -->
-  <sect1><title>Command Line Set Up</title>
+  <sect1 id="command-line-setup"><title>Command Line Set Up</title>
     <para>Sometimes it's convenient to use &CCL; from a Unix
       shell command line.  This is especially true when using &CCL;
       as a way to run Common Lisp utilities.</para>
@@ -675,7 +675,7 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
     </sect2>
 
     <!-- ***************************************************** -->
-    <sect2><title>Installing SLIME</title> 
+    <sect2 id="installing-slime"><title>Installing SLIME</title> 
 
       <para>Once you have the "slime" folder described in the previous
         section, installation is a simple matter of copying the folder

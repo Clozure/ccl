@@ -10,10 +10,10 @@
           <!ENTITY CCL "Clozure CL">
           ]>
 
-<chapter><title>The &CCL; IDE</title>
+<chapter id="ccl-ide"><title>The &CCL; IDE</title>
   
   <!-- ================================================================ -->
-  <sect1><title>Introduction</title>
+  <sect1 id="ccl-ide-introduction"><title>Introduction</title>
     
     <para>&CCL; ships with the complete source code for an integrated
     development environment written using Cocoa on Mac OS X. This
@@ -33,7 +33,7 @@
   </sect1>
 
   <!-- ================================================================ -->
-  <sect1><title>Building the IDE</title>
+  <sect1 id="building-ccl-ide"><title>Building the IDE</title>
     
     <para>Building the &CCL; IDE is now a very simple
       process.</para>
@@ -79,7 +79,7 @@ oshirion:ccl mikel$
   </sect1>
 
   <!-- ================================================================ -->
-  <sect1><title>Running the IDE</title>
+  <sect1 id="running-ccl-ide"><title>Running the IDE</title>
     
     <para>After it has been built, you can run the "Clozure CL.app"
       application normally, by double-clicking its icon. When
@@ -95,10 +95,10 @@ oshirion:ccl mikel$
   </sect1>
 
   <!-- ================================================================ -->
-  <sect1>
+  <sect1 id="ccl-ide-features">
     <title>IDE Features</title>
 
-    <sect2>
+    <sect2 id="ide-editor-windows">
       <title>Editor Windows</title>
       <para>You can open an editor window either by choosing Open from
         the File menu and then selecting a text file, or by choosing
@@ -114,7 +114,7 @@ oshirion:ccl mikel$
         windows).</para>
     </sect2>
     
-    <sect2>
+    <sect2 id="ide-lisp-menu">
       <title>The Lisp Menu</title>
       <para>The Lisp menu provides several commands for interacting
         with the running Lisp session, in addition to the ways you can
@@ -167,7 +167,7 @@ oshirion:ccl mikel$
       </sect3>
     </sect2>
 
-    <sect2>
+    <sect2 id="ide-tools-menu">
       <title>The Tools Menu</title>
       <para>The tools menu provides access to the Apropos and
         Processes windows. The Apropos window searches the running Lisp
@@ -179,7 +179,7 @@ oshirion:ccl mikel$
           window</link> on that process.</para>
     </sect2>
 
-    <sect2>
+    <sect2 id="ide-inspector-window">
       <title>The Inspector Window</title>
       <anchor id="section_inspector_window"/>
       <para>The Inspector window displays information about a Lisp
@@ -210,7 +210,7 @@ oshirion:ccl mikel$
   </sect1>
   
   <!-- ================================================================ -->
-  <sect1><title>IDE Sources</title>
+  <sect1 id="ide-source-code"><title>IDE Sources</title>
     
     <para>&CCL; builds the IDE from sources in the "objc-bridge" and
       "cocoa-ide" directories in the &CCL; distribution. The IDE as a
@@ -233,7 +233,7 @@ oshirion:ccl mikel$
   </sect1>
 
   <!-- ================================================================ -->
-  <sect1><title>The Application Builder</title>
+  <sect1 id="application-builder"><title>The Application Builder</title>
     <anchor id="application_builder"/>
     <para>One important feature of the IDE currently has no Cocoa user
       interface: the application builder. The application builder
@@ -464,7 +464,7 @@ oshirion:ccl mikel$
     example in "ccl/examples/cocoa/currency-converter/".</para>
 
     <!-- ***************************************************** -->
-    <sect2>
+    <sect2 id="running-the-application-builder-from-command-line">
       <title>Running the Application Builder From the Command
       Line</title>
 

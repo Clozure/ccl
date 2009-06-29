@@ -3755,7 +3755,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
         
         <para>
 	An "ivector" is a one-dimensional array that's specialized to
-	a numeric or characater element type.
+	a numeric or character element type.
 	</para>
 	<para>
 	  <code>MAKE-HEAP-IVECTOR</code> allocates an ivector in

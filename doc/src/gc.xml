@@ -62,49 +62,24 @@ that provided by earlier &CCL; versions.</para>
       <orderedlist continuation="restarts" inheritnum="ignore">
 	<listitem>
 	  <para>Most heap-allocated objects have very short lifetimes ("are
-	  ephemeral"): they become inaccessible soon after they&#39;re created.</para>
+	  ephemeral"): they become inaccessible soon after they're created.</para>
 	</listitem>
 
 	<listitem>
-	  <para>Most non-ephemeral objects have very long lifetimes: it&#39;s
+	  <para>Most non-ephemeral objects have very long lifetimes: it's
 	  rarely productive for the GC to consider reclaiming them, since
-	  it&#39;s rarely able to do so. (An object that&#39;s survived a large
-	  number of GCs is likely to survive the next one. That&#39;s not always
-	  true of course, but it&#39;s a reasonable heuristic.)</para>
+	  it's rarely able to do so. (An object that has survived a large
+	  number of GCs is likely to survive the next one. That's not always
+	  true of course, but it's a reasonable heuristic.)</para>
 	</listitem>
 
 	<listitem>
-	  <para>It&#39;s relatively rare for an old object to be destructively
+	  <para>It's relatively rare for an old object to be destructively
 	  modified (via SETF) so that it points to a new one, therefore most
 	  references to newly-created objects can be found in the stacks and
-	  registers of active threads. It&#39;s not generally necessary to scan
+	  registers of active threads. It's not generally necessary to scan
 	  the entire heap to find references to new objects (or to prove that
-	  such references don&#39;t exists), though it is necessary to keep
-	  track of the (hopefully exceptional) cases where old objects are
-	  modified to point at new ones.</para>
-	</listitem>
-      </orderedlist>
-      <orderedlist continuation="restarts" inheritnum="ignore">
-	<listitem>
-	  <para>Most heap-allocated objects have very short lifetimes ("are
-	  ephemeral"): they become inaccessible soon after they&#39;re created.</para>
-	</listitem>
-
-	<listitem>
-	  <para>Most non-ephemeral objects have very long lifetimes: it&#39;s
-	  rarely productive for the GC to consider reclaiming them, since
-	  it&#39;s rarely able to do so. (An object that&#39;s survived a large
-	  number of GCs is likely to survive the next one. That&#39;s not always
-	  true of course, but it&#39;s a reasonable heuristic.)</para>
-	</listitem>
-
-	<listitem>
-	  <para>It&#39;s relatively rare for an old object to be destructively
-	  modified (via SETF) so that it points to a new one, therefore most
-	  references to newly-created objects can be found in the stacks and
-	  registers of active threads. It&#39;s not generally necessary to scan
-	  the entire heap to find references to new objects (or to prove that
-	  such references don&#39;t exists), though it is necessary to keep
+	  such references don't exists), though it is necessary to keep
 	  track of the (hopefully exceptional) cases where old objects are
 	  modified to point at new ones.</para>
 	</listitem>
@@ -442,7 +417,7 @@ that provided by earlier &CCL; versions.</para>
 
 	<refsynopsisdiv>
 	  <synopsis>
-	    <function>lisp-heap-gc-threshold new-threshold</function>
+	    <function>set-lisp-heap-gc-threshold</function> new-threshold
 	  </synopsis>
 	</refsynopsisdiv>
 
@@ -451,7 +426,7 @@ that provided by earlier &CCL; versions.</para>
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>new-value</term>
+	      <term>new-threshold</term>
 
 	      <listitem>
 		<para>The requested new lisp-heap-gc-threshold.</para>
