@@ -9,11 +9,12 @@
 APPBASE=.
 OBJECTS=main.o AltConsoleDocument.o AltConsoleDocumentController.o
 RESOURCES=resource/MainMenu.nib resource/AltConsole.nib resource/Credits.rtf resource/InfoPlist.strings resource/Clear.tiff
+CC=gcc-4.0
 
-CFLAGS=-g -O
+CFLAGS=-g -O -mmacosx-version-min=10.4 -m32 -Wno-protocol
 
 AltConsole: $(OBJECTS)
-	$(CC) -o $@ $(OBJECTS) -framework cocoa
+	$(CC) $(CFLAGS) -o $@ $(OBJECTS) -framework cocoa
 
 $(APPBASE)/AltConsole.app: AltConsole $(RESOURCES) Info.plist
 	mkdir -p $(APPBASE)
