@@ -2101,6 +2101,7 @@ to open."
               (defmethod (if global-p 'defmethod 'anonymous-method)))
           (if (eq keyword :method)
 	    (let ((defn `(,defmethod ,function-name ,@(%cdr o))))
+	      (note-source-transformation o defn)
 	      (push defn methods))
             (cond ((and (not (eq keyword 'declare))
 			(memq keyword (prog1 option-keywords (push keyword option-keywords))))		   
