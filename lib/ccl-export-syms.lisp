@@ -41,6 +41,7 @@
      *loading-file-source-file*
      find-definition-sources
      define-definition-type
+     definition-type-name
      *save-source-locations*
      function-source-note
      source-note
