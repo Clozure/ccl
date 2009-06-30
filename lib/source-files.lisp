@@ -708,6 +708,11 @@ The returned list is guaranteed freshly consed (ie suitable for nconc'ing)."
       (%set-source-file-entries key all))
     name))
 
+(defmethod record-definition-source ((dt method-definition-type) (m method) source)
+  ;; In cases of non-toplevel method definitions, as in the expansion of defgeneric,
+  ;; the method function note has more specific info than *loading-toplevel-location*.
+  (call-next-method dt m (or (function-source-note (method-function m)) source)))
+
 ;;; avoid hanging onto beezillions of pathnames
 (defparameter *last-back-translated-name* (cons nil nil))
 
