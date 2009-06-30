@@ -543,9 +543,15 @@ The returned list is guaranteed freshly consed (ie suitable for nconc'ing)."
                   ((null cpls-tail))
                 (declare (type list args-tail cpls-tail))
                 (let ((arg (car args-tail)) thing)
-                  (if (consp arg)
-                    (setq thing (class-of (cadr arg)))
-                    (setq thing (find-class (or arg t) nil)))
+                  (typecase arg
+                    (cons
+                       (setq thing (class-of (cadr arg))))
+                    (symbol
+                       (setq thing (find-class (or arg t) nil)))
+                    (eql-specializer
+                       (setq thing (class-of (eql-specializer-object arg))))
+                    (t 
+                       (setq thing arg)))
                   (when thing
                     (setf (car cpls-tail)                
                           (%class-precedence-list thing)))))
