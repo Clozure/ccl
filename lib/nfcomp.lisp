@@ -959,6 +959,9 @@ Will differ from *compiling-file* during an INCLUDE")
         (unless (every #'eq (%cdr form) (%cdr new-form))
           (setf (%car new-form) (%car form))
           (fcomp-note-source-transformation form (setq form (copy-list new-form))))))
+    ;; At some point we will dump the toplevel forms, make sure that when that happens,
+    ;;; the loading location for this form is stored in *fcomp-loading-toplevel-location*,
+    ;; because *loading-toplevel-location* will be long gone by then.
     (fcomp-ensure-source env)
     (push form *fcomp-toplevel-forms*)))
 
@@ -981,6 +984,7 @@ Will differ from *compiling-file* during an INCLUDE")
   (when *fcomp-toplevel-forms*
     (let* ((forms (nreverse *fcomp-toplevel-forms*))
            (*fcomp-stream-position* *fcomp-previous-position*)
+	   (*loading-toplevel-location* *fcomp-loading-toplevel-location*)
            (lambda (if T ;; (null (cdr forms))
                      `(lambda () ,@forms)
                      `(lambda ()
@@ -993,7 +997,7 @@ Will differ from *compiling-file* during an INCLUDE")
       (handler-case (fcomp-output-form
                      $fasl-lfuncall
                      env
-                     (fcomp-named-function lambda nil env))
+                     (fcomp-named-function lambda nil env *loading-toplevel-location*))
         (compiler-function-overflow ()
           (if (null (cdr forms))
             (error "Form ~s cannot be compiled - size exceeds compiler limitation"
