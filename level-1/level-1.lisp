@@ -98,8 +98,9 @@
 
 (require "PREPARE-MCL-ENVIRONMENT")
 (progn
-  (%set-toplevel #'toplevel-loop)
+  (%set-toplevel #'(lambda ()
+                     (setq *loading-file-source-file* nil
+                           *loading-toplevel-location* nil)
+                     (toplevel-loop)))
   (set-user-environment t)
-  (setq *loading-file-source-file* nil
-        *loading-toplevel-location* nil)
   (toplevel))
