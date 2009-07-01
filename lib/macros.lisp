@@ -2717,7 +2717,8 @@ defcallback returns the callback pointer, e.g., the value of name."
   String and Args are the format string and args to the error call."
   (let* ((TOP (gensym))
          (setf-places-p (not (null places))))
-    `(tagbody
+    `(without-compiling-code-coverage
+      (tagbody
        ,TOP
        (unless ,test-form
          (%assertion-failure ,setf-places-p ',test-form ,string ,@args)
@@ -2731,7 +2732,7 @@ defcallback returns the callback pointer, e.g., the value of name."
                                 (assertion-value-prompt ',place)
                                 (when ,set-p (setf ,place (values-list ,new-val)))))
                          places)))
-         (go ,TOP)))))
+         (go ,TOP))))))
 
 
 (defmacro check-type (place typespec &optional string)
@@ -2741,9 +2742,10 @@ defcallback returns the callback pointer, e.g., the value of name."
   used to return, this can only return if the STORE-VALUE restart is
   invoked. In that case it will store into PLACE and start over."
   (let* ((val (gensym)))
-    `(do* ((,val ,place ,place))
+    `(without-compiling-code-coverage
+      (do* ((,val ,place ,place))
           ((typep ,val ',typespec))
-       (setf ,place (%check-type ,val ',typespec ',place ,string)))))
+       (setf ,place (%check-type ,val ',typespec ',place ,string))))))
 
 
 
