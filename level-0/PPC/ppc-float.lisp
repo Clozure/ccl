@@ -390,8 +390,9 @@
   (mtfsf #xff fp0)                      ; set all fields [0-7]
   (blr))
 
+
 (defppclapfunction %ffi-exception-status ()
-  (lwz imm0  ppc32::tcr.ffi-exception target::rcontext)
+  (ldr imm0  target::tcr.ffi-exception target::rcontext)
   (mtcrf #xfc imm0)
   (mcrfs :cr6 :cr6)
   (mcrfs :cr7 :cr7)
