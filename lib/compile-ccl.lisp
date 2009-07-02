@@ -777,6 +777,7 @@ not runtime errors reported by a successfully created process."
       (ensure-tests-loaded :force force :update update :ansi ansi :ccl ccl)
       (cwd "ccl:tests;ansi-tests;")
       (let ((do-tests (find-symbol "DO-TESTS" "REGRESSION-TEST"))
+            (failed (find-symbol "*FAILED-TESTS*" "REGRESSION-TEST"))
             (*print-catch-errors* nil))
         (prog1
             (time (funcall do-tests :verbose verbose :compile t
@@ -784,4 +785,5 @@ not runtime errors reported by a successfully created process."
                            :optimization-settings (or optimization-settings '((safety 2)))))
           ;; Clean up a little
           (map nil #'delete-file
-               (directory (merge-pathnames *.fasl-pathname* "ccl:tests;ansi-tests;temp*"))))))))
+               (directory (merge-pathnames *.fasl-pathname* "ccl:tests;ansi-tests;temp*"))))
+        (symbol-value failed)))))
