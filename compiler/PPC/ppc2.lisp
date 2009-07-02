@@ -9100,7 +9100,7 @@
                   *ppc2-reckless*)
         (! trap-unless-fixnum r))
       (! fixnum->fpr dreg r)
-      (<- (set-regspec-mode dreg hard-reg-class-fpr-mode-single))
+      (! double-to-single vreg dreg) 
       (^))))
 
 (defppc2 ppc2-%double-float %double-float (seg vreg xfer arg)
@@ -9110,9 +9110,10 @@
                               (eq (acode-operator form)
                                   (%nx1-operator immediate))
                               (typep (cadr form) 'real))
-                       (cadr form))))))
-    (if real
-      (ppc2-immediate seg vreg xfer (float real 0.0d0))
+                       (cadr form)))))
+         (dconst (and real (ignore-errors (float real 0.0d0)))))
+    (if dconst
+      (ppc2-immediate seg vreg xfer dconst)
       (if (ppc2-form-typep arg 'single-float)
         (ppc2-use-operator (%nx1-operator %single-to-double)
                            seg
@@ -9140,9 +9141,10 @@
                               (eq (acode-operator form)
                                   (%nx1-operator immediate))
                               (typep (cadr form) 'real))
-                       (cadr form))))))
-    (if real
-      (ppc2-immediate seg vreg xfer (float real 0.0f0))
+                       (cadr form)))))
+         (sconst (and real (ignore-errors (float real 0.0f0)))))
+    (if sconst
+      (ppc2-immediate seg vreg xfer sconst)
       (if (ppc2-form-typep arg 'double-float)
         (ppc2-use-operator (%nx1-operator %double-to-single)
                            seg
