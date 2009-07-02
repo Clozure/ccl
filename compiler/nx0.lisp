@@ -2222,6 +2222,7 @@ Or something. Right? ~s ~s" var varbits))
        (when (atom form) (go DONE))
        (unless (symbolp (setq sym (%car form)))
          (go DONE))
+       #+no
        (when (eq sym 'the)
          (destructuring-bind (typespec thing) (cdr form)
            (if (constantp thing)
