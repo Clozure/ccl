@@ -60,7 +60,11 @@
 (defun (setf acode-note) (note acode)
   (when note
     (assert *nx-acode-note-map*)
-    (setf (gethash acode *nx-acode-note-map*) note)))
+    ;; Only record if have a unique key
+    (unless (or (atom acode)
+                (nx-null acode)
+                (nx-t acode))
+      (setf (gethash acode *nx-acode-note-map*) note))))
 
 
 (defstruct (code-note (:constructor %make-code-note))

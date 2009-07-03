@@ -220,6 +220,7 @@
 (defvar *x862-fn* nil)
 (defvar *x862-fname* nil)
 (defvar *x862-ra0* nil)
+(defvar *x862-codecoverage-reg* nil)
 
 (defvar *x862-allocptr* nil)
 
@@ -515,6 +516,7 @@
 					   (:x8664 x8664::arg_y)))
 	   (*x862-temp0* (target-arch-case (:x8632 x8632::temp0)
 					   (:x8664 x8664::temp0)))
+           (*x862-codecoverage-reg* *x862-temp0*)
 	   (*x862-temp1* (target-arch-case (:x8632 x8632::temp1)
 					   (:x8664 x8664::temp1)))
 	   (*x862-fn* (target-arch-case (:x8632 x8632::fn)
@@ -1242,8 +1244,8 @@
       #+debug-code-notes (require-type ,note '(or null code-note source-note))
       (when ,code-note
         (with-x86-local-vinsn-macros (,seg-var)
-          (x862-store-immediate ,seg-var ,code-note *x862-temp0*)
-          (! misc-set-immediate-c-node 0 *x862-temp0* 1)))
+          (x862-store-immediate ,seg-var ,code-note *x862-codecoverage-reg*)
+          (! misc-set-immediate-c-node 0 *x862-codecoverage-reg* 1)))
       (prog1
           (progn
             ,@body)
@@ -3216,7 +3218,7 @@
 ;;; would vpop the first argument out of line.)
 (defun x862-two-targeted-reg-forms (seg aform areg bform breg)
   (let* ((avar (nx2-lexical-reference-p aform))
-         (atriv (and (x862-trivial-p bform) (nx2-node-gpr-p breg)))
+         (atriv (and (x862-trivial-p bform areg) (nx2-node-gpr-p breg)))
          (aconst (and (not atriv) (or (x86-side-effect-free-form-p aform)
                                       (if avar (nx2-var-not-set-by-form-p avar bform)))))
          apushed)
@@ -3259,12 +3261,12 @@
   (let* ((bnode (nx2-node-gpr-p breg))
          (cnode (nx2-node-gpr-p creg))
          (atriv (or (null aform) 
-                    (and (x862-trivial-p bform)
-                         (x862-trivial-p cform)
+                    (and (x862-trivial-p bform areg)
+                         (x862-trivial-p cform areg)
                          bnode
                          cnode)))
          (btriv (or (null bform)
-                    (and (x862-trivial-p cform)
+                    (and (x862-trivial-p cform breg)
                          cnode)))
          (aconst (and (not atriv) 
                       (or (x86-side-effect-free-form-p aform)
@@ -3303,19 +3305,19 @@
          (cnode (nx2-node-gpr-p creg))
          (dnode (nx2-node-gpr-p dreg))
          (atriv (or (null aform) 
-                    (and (x862-trivial-p bform)
-                         (x862-trivial-p cform)
-                         (x862-trivial-p dform)
+                    (and (x862-trivial-p bform areg)
+                         (x862-trivial-p cform areg)
+                         (x862-trivial-p dform areg)
                          bnode
                          cnode
                          dnode)))
          (btriv (or (null bform)
-                    (and (x862-trivial-p cform)
-                         (x862-trivial-p dform)
+                    (and (x862-trivial-p cform breg)
+                         (x862-trivial-p dform breg)
                          cnode
                          dnode)))
          (ctriv (or (null cform)
-                    (and (x862-trivial-p dform)
+                    (and (x862-trivial-p dform creg)
                          dnode)))
          (aconst (and (not atriv) 
                       (or (x86-side-effect-free-form-p aform)
@@ -4820,7 +4822,7 @@
 
 ;;; "Trivial" means can be evaluated without allocating or modifying registers.
 ;;; Interim definition, which will probably stay here forever.
-(defun x862-trivial-p (form &aux op bits)
+(defun x862-trivial-p (form &optional reg &aux op bits)
   (setq form (nx-untyped-form form))
   (and
    (consp form)
@@ -4837,7 +4839,9 @@
              (eq op (%nx1-operator lexical-reference)))
          (or (%ilogbitp $vbitpunted (setq bits (nx-var-bits (cadr form))))
              (neq (%ilogior (%ilsl $vbitclosed 1) (%ilsl $vbitsetq 1))
-                  (%ilogand (%ilogior (%ilsl $vbitclosed 1) (%ilsl $vbitsetq 1)) bits)))))))
+                  (%ilogand (%ilogior (%ilsl $vbitclosed 1) (%ilsl $vbitsetq 1)) bits)))))
+   (or (and reg (neq (hard-regspec-value reg) *x862-codecoverage-reg*))
+       (not (code-note-p (acode-note form))))))
 
 
 
