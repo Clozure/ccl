@@ -2965,6 +2965,8 @@ local_label(count_keys_loop):
  	__(cmpb $fulltag_cons,%arg_z_bh)
 	__(jne local_label(badlist))
 	__(_cdr(%arg_reg,%arg_reg))
+        __(compare_reg_to_nil(%arg_reg))
+        __(je local_label(badlist))
 	__(movb $fulltagmask,%arg_z_bh)
 	__(andb %arg_reg_b,%arg_z_bh)
 	__(cmpb $fulltag_cons,%arg_z_bh)
