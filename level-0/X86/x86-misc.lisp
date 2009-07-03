@@ -878,7 +878,7 @@
 (defx86lapfunction %atomic-pop-static-cons ()
   @again
   (movq (@ (+ (target-nil-value) (x8664::kernel-global static-conses))) (% rax))
-  (testq ($ (target-nil-value)) (% rax))
+  (cmpq ($ (target-nil-value)) (% rax))
   (jz @lose)
   (%cdr rax temp0)
   (lock)
