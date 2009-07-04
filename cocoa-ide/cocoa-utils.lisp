@@ -2,6 +2,13 @@
 
 (in-package "GUI")
 
+(defmethod list-from-ns-array (thing) (error "~S is not an instance of NS:NS-ARRAY" thing))
+(defmethod list-from-ns-array ((nsa ns:ns-array))
+  (let ((result (list))
+        (c (#/count nsa)))
+    (dotimes (i c) (setf result (push (#/objectAtIndex: nsa i) result)))
+    (reverse result)))
+
 (defclass sequence-window-controller (ns:ns-window-controller)
     ((table-view :foreign-type :id :reader sequence-window-controller-table-view)
      (sequence :initform nil :initarg :sequence :type sequence :reader sequence-window-controller-sequence)

@@ -875,6 +875,47 @@
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-textstorage-text-view))
 
+(objc:defmethod (#/performDragOperation: :boolean)
+    ((self hemlock-textstorage-text-view)
+     (sender :id))
+  (let* ((pboard (#/draggingPasteboard sender))
+         (pbTypes (#/arrayWithObjects: ns:ns-array #&NSFilenamesPboardType
+                                       +null-ptr+))
+         (available-type (#/availableTypeFromArray: pboard pbTypes)))
+    (if (%null-ptr-p available-type)
+        (progn (log-debug "No data available of type NSFilenamesPboardType")
+               (call-next-method sender))
+        (let* ((plist (#/propertyListForType: pboard #&NSFilenamesPboardType)))
+          (cond
+            ;; we found NSFilenamesPboardType and it's an array of pathnames
+            ((#/isKindOfClass: plist ns:ns-array)
+             (with-autorelease-pool
+               (let* ((strings-for-dropped-objects 
+                       (mapcar (lambda (d) 
+                                 (if (#/isKindOfClass: d ns:ns-string)
+                                     (ccl::lisp-string-from-nsstring d)
+                                     (#/description d)))
+                               (list-from-ns-array plist)))
+                      (canonical-dropped-strings 
+                       (mapcar (lambda (s) 
+                                 (if (and (probe-file s)
+                                          (directoryp s))
+                                     (ccl::ensure-directory-namestring s)
+                                     s))
+                               strings-for-dropped-objects))
+                      (dropstr (with-output-to-string (out)
+                                 (dolist (s canonical-dropped-strings)
+                                   (format out "~A~%" s)))))
+                 ;; TODO: insert them in the window
+                 (let* ((hview (hemlock-view self))
+                        (buf (hi:hemlock-view-buffer hview))
+                        (point (hi::buffer-point buf)))
+                   (hi::insert-string point dropstr)))))
+            ;; we found NSFilenamesPboardType, but didn't get an array of pathnames; huh???
+            (t (log-debug "hemlock-textstorage-text-view received an unrecognized data type in a drag operation: '~S'"
+                          (#/description plist))
+               (call-next-method sender)))))))
+
 (defmethod hemlock-view ((self hemlock-textstorage-text-view))
   (let ((frame (#/window self)))
     (unless (%null-ptr-p frame)
