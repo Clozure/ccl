@@ -971,7 +971,9 @@
 	  ((not (eventqueue-abort-pending-p self))
 	   (let ((hemlock-key (nsevent-to-key-event event quote-p)))
 	     (if hemlock-key
-	       (hi::handle-hemlock-event view hemlock-key)
+               (progn
+                 (#/setHiddenUntilMouseMoves: ns:ns-cursor t)
+                 (hi::handle-hemlock-event view hemlock-key))
 	       (call-next-method event)))))))
 
 (defmethod hi::handle-hemlock-event :around ((view hi:hemlock-view) event)
