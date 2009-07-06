@@ -875,7 +875,7 @@
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-textstorage-text-view))
 
-(objc:defmethod (#/performDragOperation: :boolean)
+(objc:defmethod (#/performDragOperation: #>BOOL)
     ((self hemlock-textstorage-text-view)
      (sender :id))
   (let* ((pboard (#/draggingPasteboard sender))
@@ -910,7 +910,8 @@
                  (let* ((hview (hemlock-view self))
                         (buf (hi:hemlock-view-buffer hview))
                         (point (hi::buffer-point buf)))
-                   (hi::insert-string point dropstr)))))
+                   (hi::insert-string point dropstr)
+                   #$YES))))
             ;; we found NSFilenamesPboardType, but didn't get an array of pathnames; huh???
             (t (log-debug "hemlock-textstorage-text-view received an unrecognized data type in a drag operation: '~S'"
                           (#/description plist))
