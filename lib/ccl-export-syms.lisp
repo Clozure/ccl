@@ -664,6 +664,10 @@
      describe-character-encodings
      get-character-encoding
      lookup-character-encoding
+     string-size-in-octets
+     encode-string-to-octets
+     count-characters-in-octet-vector
+     decode-string-from-octets
      *terminal-character-encoding-name*
      *default-file-character-encoding*
      *default-socket-character-encoding*

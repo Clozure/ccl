@@ -1097,8 +1097,181 @@
        output.</para>
        <para>Alias: <literal>:UCS-4LE</literal></para></listitem>
      </varlistentry>
-  </variablelist>
-    </sect3>
+   </variablelist>
+ </sect3>
+
+ <sect3><title>Encoding and Decoding Strings</title>
+ <para>&CCL; provides functions to encode and decode strings
+to and from vectors of type (simple-array (unsigned-byte 8)).</para>
+
+<refentry id="count-characters-in-octet-vector">
+  <indexterm zone="count-characters-in-octet-vector">
+    <primary>count-characters-in-octet-vector</primary>
+  </indexterm>
+
+  <refnamediv>
+    <refname>count-characters-in-octet-vector</refname>
+    <refpurpose></refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis>
+	<function>count-characters-in-octet-vector</function>
+	<parameter>vector</parameter>
+	<parameter>&key;</parameter>
+	<parameter>start</parameter>
+	<parameter>end</parameter>
+	<parameter>external-format</parameter>
+    </synopsis>
+  </refsynopsisdiv>
+
+  <refsect1><title>Description</title>
+  <para>
+    Returns the number of characters that would be produced by
+    decoding <varname>vector</varname> (or the subsequence thereof
+    delimited by <varname>start</varname> and <varname>end</varname>)
+    according to <varname>external-format</varname>.
+  </para>
+  </refsect1>
+</refentry>
+
+<refentry id="decode-string-from-octets">
+  <indexterm zone="decode-string-from-octets">
+    <primary>"decode-string-from-octets</primary>
+  </indexterm>
+
+  <refnamediv>
+    <refname>decode-string-from-octets</refname>
+    <refpurpose></refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis>
+	<function>decode-string-from-octets</function>
+	<parameter>vector</parameter>
+	<parameter>&key;</parameter>
+	<parameter>start</parameter>
+	<parameter>end</parameter>
+	<parameter>external-format</parameter>
+	<parameter>string</parameter>
+    </synopsis>
+  </refsynopsisdiv>
+
+
+  <refsect1><title>Description</title>
+  <para>
+    Decodes the octets in <varname>vector</varname> (or the subsequence
+    of it delimited by <varname>start</varname> and
+    <varname>end</varname>) into a string according
+    to <varname>external-format</varname>.
+  </para>
+  <para>
+    If <varname>string</varname> is supplied, output will be written into it.
+    It must be large enough to hold the decoded characters.  If <varname>
+    string</varname> is not supplied, a new string will be allocated to
+    hold the decoded characters.
+  </para>
+  <para>
+    Returns, as multiple values, the decoded string and the position in
+    <varname>vector</varname> where the decoding ended.
+  </para>
+  </refsect1>
+</refentry>
+
+<refentry id="encode-string-to-octets">
+  <indexterm zone="encode-string-to-octets">
+    <primary>encode-string-to-octets</primary>
+  </indexterm>
+
+  <refnamediv>
+    <refname>encode-string-to-octets</refname>
+    <refpurpose></refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis>
+	<function>encode-string-to-octets</function>
+	<parameter>string</parameter>
+	<parameter>&key;</parameter>
+	<parameter>start</parameter>
+	<parameter>end</parameter>
+	<parameter>external-format</parameter>
+	<parameter>use-byte-order-mark</parameter>
+	<parameter>vector</parameter>
+	<parameter>vector-offset</parameter>
+    </synopsis>
+  </refsynopsisdiv>
+
+
+  <refsect1><title>Description</title>
+  <para>
+    Encodes <varname>string</varname> (or the substring delimited by
+    <varname>start</varname> and <varname>end</varname>)
+    into <varname>external-format</varname> and returns, as multiple
+    values, a vector of octets containing the encoded data and an integer
+    that specifies the offset into the vector where the encoded data ends.
+  </para>
+  <para>
+    When <varname>use-byte-order-mark</varname> is true, a byte-order mark
+    will be included in the encoded data.
+  </para>
+  <para>
+    If <varname>vector</varname> is supplied, output will be written
+    to it.  It must be of type (simple-array (unsigned-byte 8)) and be
+    large enough to hold the encoded data.  If it is not supplied, the function
+    will allocate a new vector.
+  </para>
+  <para>
+    If <varname>vector-offset</varname> is supplied, data will be written
+    into the output vector starting at that offset.
+  </para>
+  </refsect1>
+</refentry>
+
+<refentry id="string-size-in-octets">
+  <indexterm zone="string-size-in-octets">
+    <primary>string-size-in-octets</primary>
+  </indexterm>
+
+  <refnamediv>
+    <refname>string-size-in-octets</refname>
+    <refpurpose></refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis>
+	<function>string-size-in-octets</function>
+	<parameter>string</parameter>
+	<parameter>&key;</parameter>
+	<parameter>start</parameter>
+	<parameter>end</parameter>
+	<parameter>external-format</parameter>
+	<parameter>use-byte-order-mark</parameter>
+    </synopsis>
+  </refsynopsisdiv>
+
+
+  <refsect1><title>Description</title>
+  <para>
+    Returns the number of octets required to encode
+    <varname>string</varname> (or the substring delimited by
+    <varname>start</varname> and <varname>end</varname>) into
+    <varname>external-format</varname>.
+  </para>
+  <para>
+    When <varname>use-byte-order-mark</varname> is true, the returned
+    size will include space for a byte-order marker.
+  </para>
+  </refsect1>
+</refentry>
+
+ </sect3>
+
+
   </sect2>
 
   </sect1>
