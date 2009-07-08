@@ -913,7 +913,8 @@
                  (if dropstr
                      (let* ((hview (hemlock-view self))
                             (buf (hi:hemlock-view-buffer hview))
-                            (point (hi::buffer-point buf)))
+                            (point (hi::buffer-point buf))
+                            (hi::*current-buffer* buf))
                        (hi::insert-string point dropstr)
                        #$YES)
                      #$NO))))
