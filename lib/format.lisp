@@ -1380,10 +1380,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
   (let ((string (pop-format-arg)))
     (unless (or (stringp string)(functionp string))
       (format-error "Indirected control string is not a string or function"))
-    ; fix so 3.1 doesn't make an extended-string here! for which %str-member was busted
-    ; it didn't fail in 3.0 cause the setq was erroneously missing
-    ; should really fix the compiler macro to not do that! - done 
-    (when (AND (stringp string)(NOT (SIMPLE-STRING-P STRING)))
+    (when (and (stringp string) (not (simple-string-p string)))
       (setq string (coerce string 'simple-string)))
     (catch 'format-escape
       (let ((error 
