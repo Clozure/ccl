@@ -875,6 +875,8 @@
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-textstorage-text-view))
 
+#| causes more problems than it solves.
+   removed until a better implementation manifests itself --me
 (objc:defmethod (#/performDragOperation: #>BOOL)
     ((self hemlock-textstorage-text-view)
      (sender :id))
@@ -896,26 +898,30 @@
                                      (ccl::lisp-string-from-nsstring d)
                                      (#/description d)))
                                (list-from-ns-array plist)))
-                      (canonical-dropped-strings 
+                      (canonical-dropped-paths 
                        (mapcar (lambda (s) 
                                  (if (and (probe-file s)
                                           (directoryp s))
-                                     (ccl::ensure-directory-namestring s)
+                                     (ccl::ensure-directory-pathname s)
                                      s))
                                strings-for-dropped-objects))
-                      (dropstr (with-output-to-string (out)
-                                 (dolist (s canonical-dropped-strings)
-                                   (format out "~A~%" s)))))
+                      (dropstr (if (= (length canonical-dropped-paths) 1)
+                                   (with-output-to-string (out)
+                                     (format out "~S~%" (first canonical-dropped-paths)))
+                                   nil)))
                  ;; TODO: insert them in the window
-                 (let* ((hview (hemlock-view self))
-                        (buf (hi:hemlock-view-buffer hview))
-                        (point (hi::buffer-point buf)))
-                   (hi::insert-string point dropstr)
-                   #$YES))))
+                 (if dropstr
+                     (let* ((hview (hemlock-view self))
+                            (buf (hi:hemlock-view-buffer hview))
+                            (point (hi::buffer-point buf)))
+                       (hi::insert-string point dropstr)
+                       #$YES)
+                     #$NO))))
             ;; we found NSFilenamesPboardType, but didn't get an array of pathnames; huh???
             (t (log-debug "hemlock-textstorage-text-view received an unrecognized data type in a drag operation: '~S'"
                           (#/description plist))
                (call-next-method sender)))))))
+|#
 
 (defmethod hemlock-view ((self hemlock-textstorage-text-view))
   (let ((frame (#/window self)))
