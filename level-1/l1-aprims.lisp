@@ -452,15 +452,6 @@ terminate the list"
           (setf (%get-unsigned-byte s i) (%scharcode data (+ offset i))))
 	s))))
 
-
-(defun extended-string-p (thing)
-  (declare (ignore thing)))
-
-(defun simple-extended-string-p (thing)
-  (declare (ignore thing)))
-
-
-
 (defun move-string-bytes (source dest off1 off2 n)
   (declare (fixnum off1 off2 n)
            (simple-base-string source dest)

@@ -500,7 +500,6 @@ simple-array
 simple-bit-vector
 simple-string 
 simple-base-string
-simple-extended-string 
 simple-vector 
 single-float
 standard-char

@@ -3932,14 +3932,6 @@
 (deftype simple-string (&optional size)
   `(simple-array character (,size)))
 
-(deftype extended-string (&optional size)
-  (declare (ignore size))
-  'nil)
-
-(deftype simple-extended-string (&optional size)
-  (declare (ignore size))
-  'nil)
-
 (deftype bit-vector (&optional size)
   `(array bit (,size)))
 
