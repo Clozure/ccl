@@ -3032,12 +3032,23 @@ argument lisp string."
 (defmacro with-ns-exceptions-as-errors (&body body)
   `(progn ,@body))
 
+;;; The NSHandler2 type was visible in Tiger headers, but it's not
+;;; in the Leopard headers.
+#-apple-objc-2.0
+(def-foreign-type #>NSHandler2_private
+  (:struct #>NSHandler2_private
+    (:_state :jmp_buf)
+    (:_exception :address)
+    (:_others :address)
+    (:_thread :address)
+    (:_reserved1 :address)))
+
 #-apple-objc-2.0
 (defmacro with-ns-exceptions-as-errors (&body body)
   #+apple-objc
   (let* ((nshandler (gensym))
          (cframe (gensym)))
-    `(rletZ ((,nshandler :<NSH>andler2))
+    `(rletZ ((,nshandler #>NSHandler2_private))
       (unwind-protect
            (progn
              (external-call "__NSAddHandler2" :address ,nshandler :void)
