@@ -171,7 +171,6 @@ Boolean mark_weak_hash_vector(hash_table_vector_header *hashp, natural elements)
 Boolean mark_weak_alist(LispObj weak_alist, int weak_type);
 void mark_tcr_tlb(TCR *);
 void mark_tcr_xframes(TCR *);
-void postGCfree(void *);
 void freeGCptrs(void);
 void reap_gcable_ptrs(void);
 unsigned short logcount16(unsigned short);
