@@ -21,6 +21,12 @@
 ;;; address.
 (defx8632lapfunction %update-self-references ((fun arg_z))
   (movzwl (@ x8632::misc-data-offset (% fun)) (% imm0)) ;imm word count
+  (btr ($ 15) (% imm0))
+  (jnc @proceed)
+  (imm-word-count fun imm0 temp0)
+  (subl ($ '2) (% temp0))
+  (jmp @load-offset)
+  @proceed
   (subl ($ 2) (% imm0))
   (box-fixnum imm0 temp0)		;byte offset of first self-ref offset
   (jmp @load-offset)
@@ -36,12 +42,23 @@
 (defx8632lapfunction %function-code-words ((fun arg_z))
   (trap-unless-typecode= fun x8632::subtag-function)
   (movzwl (@ x8632::misc-data-offset (% fun)) (% imm0))
+  (btr ($ 15) (% imm0))
+  (jnc @proceed)
+  (imm-word-count fun imm0 temp0)
+  (movl (% temp0) (% arg_z))
+  (single-value-return)
+  @proceed
   (box-fixnum imm0 arg_z)
   (single-value-return))
 
 (defx8632lapfunction %nth-immediate ((fun arg_y) (n arg_z))
   (trap-unless-typecode= fun x8632::subtag-function)
   (movzwl (@ x8632::misc-data-offset (% fun)) (% imm0))
+  (btr ($ 15) (% imm0))
+  (jnc @proceed)
+  (imm-word-count fun imm0 temp0)
+  (unbox-fixnum temp0 imm0)
+  @proceed
   (lea (@ (% n) (% imm0) 4) (% imm0))
   (movl (@ x8632::misc-data-offset (% fun) (% imm0)) (% arg_z))
   (single-value-return))
@@ -82,6 +99,10 @@
          (newv (allocate-typed-vector :function (the fixnum (+ code-words numimms)))))
     (declare (fixnum code-words numimms))
     (%copy-ivector-to-ivector protov 0 newv 0 (the fixnum (ash code-words target::word-shift)))
+    #||
+    ;; XXX bootstrapping
+    (setf (ldb (byte 16 0) (uvref newv 0)) (logior #x8000 numimms))
+    ||#
     (%update-self-references newv)
     (do* ((k code-words (1+ k))
           (imms immediates (cdr imms)))
@@ -104,6 +125,10 @@
     (%copy-ivector-to-ivector protov 0 newv 0 (the fixnum (ash code-words target::word-shift)))
     (loop for k fixnum from code-words below total-words
       do (setf (%svref newv k) (%svref protov k)))
+    #||
+    (setf (ldb (byte 16 0) (uvref newv 0))
+	  (logior #x8000 (- total-words code-words)))
+    ||#
     (%update-self-references (function-vector-to-function newv))))
 
 (defun replace-function-code (target proto)

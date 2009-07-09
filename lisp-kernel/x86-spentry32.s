@@ -345,6 +345,17 @@ local_label(misc_ref_jmp):
 
 local_label(misc_ref_function):
 	__(movzwl misc_data_offset(%arg_y), %imm0)
+	/* XXX bootstrapping */
+	__(btr $15,%imm0)
+	__(jnc 0f)
+	__(movl $0xffffff00,%temp0)
+	__(andl misc_header_offset(%arg_y),%temp0)
+	__(shr $num_subtag_bits-fixnumshift,%temp0)
+	__(shl $fixnumshift,%imm0)
+	__(subl %imm0,%temp0)
+	__(movl %temp0,%imm0)
+	__(shr $fixnumshift,%imm0)
+0:	
 	__(shl $fixnumshift,%imm0)
 	__(rcmpl(%arg_z,%imm0))
 	__(jb local_label(misc_ref_u32))
@@ -768,6 +779,17 @@ local_label(misc_set_function):
 	/* Functions are funny: the first N words are treated as */
 	/* (UNSIGNED-BYTE 32), where N is the low 16 bits of the first word. */
 	__(movzwl misc_data_offset(%temp0),%imm0)
+	/* XXX bootstrapping */
+	__(btr $15,%imm0)
+	__(jnc 0f)
+	__(movl $0xffffff00,%temp1)
+	__(andl misc_header_offset(%temp0),%temp1)
+	__(shr $num_subtag_bits-fixnumshift,%temp1)
+	__(shl $fixnumshift,%imm0)
+	__(subl %imm0,%temp1)
+	__(movl %temp1,%imm0)
+	__(shr $fixnumshift,%imm0)
+0:
 	__(shl $fixnumshift,%imm0)
 	__(rcmpl(%arg_y,%imm0))
 	__(jae _SPgvset)
@@ -2239,6 +2261,15 @@ local_label(even):
 	/* Push %imm0 pairs of NILs (representing value, supplied-p) */
 	/* for each declared keyword. */
 	__(movzwl misc_data_offset(%fn),%imm0)
+	/* XXX bootstrapping */
+	__(btr $15,%imm0)
+	__(jnc 0f)
+	__(vector_length(%fn,%arg_y))
+	__(box_fixnum(%imm0,%imm0))
+	__(subl %imm0,%arg_y)
+	__(movl %arg_y,%imm0)
+	__(shrl $fixnumshift,%imm0)
+0:
 	__(movl misc_data_offset(%fn,%imm0,node_size),%arg_y)
 	__(vector_length(%arg_y,%imm0))
 	__(jmp 4f)
@@ -2379,6 +2410,15 @@ local_label(next_keyvect_entry):
 
 local_label(no_keyword_values):
 	__(movzwl misc_data_offset(%fn),%imm0)
+	/* XXX bootstrapping */
+	__(btr $15,%imm0)
+	__(jnc 9f)
+	__(vector_length(%fn,%arg_y))
+	__(box_fixnum(%imm0,%imm0))
+	__(subl %imm0,%arg_y)
+	__(movl %arg_y,%imm0)
+	__(shrl $fixnumshift,%imm0)
+9:
 	__(movl misc_data_offset(%fn,%imm0,node_size),%arg_y)
 	__(vector_length(%arg_y,%arg_z))
 	__(movl $nil_value,%imm0)

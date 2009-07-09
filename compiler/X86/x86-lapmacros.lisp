@@ -628,3 +628,11 @@
        (orl (% ,high) (% ,dest))))
    (:x8664
     (error "compose-digit on x8664?"))))
+
+(defx86lapmacro imm-word-count (fn imm dest)
+  `(progn
+     (movzwl (@ x8632::misc-data-offset (% ,fn)) (% ,imm))
+     (btr ($ 15) (% ,imm))
+     (vector-length ,fn ,dest)
+     (box-fixnum ,imm ,imm)
+     (subl (% ,imm) (% ,dest))))

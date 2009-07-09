@@ -199,6 +199,10 @@ check_range(LispObj *start, LispObj *end, Boolean header_allowed)
       if (header_subtag(node) == subtag_function) {
 #ifdef X8632
 	int skip = *(unsigned short *)current;
+
+	/* XXX bootstrapping */
+	if (skip & 0x8000)
+	  skip = elements - (skip & 0x7fff);
 #else
         int skip = *(int *)current;
 #endif
@@ -516,6 +520,10 @@ mark_root(LispObj n)
       if (subtag == subtag_function) {
 #ifdef X8632
 	prefix_nodes = (natural) ((unsigned short) deref(base,1));
+
+	/* XXX bootstrapping */
+	if (prefix_nodes & 0x8000)
+	  prefix_nodes = element_count - (prefix_nodes & 0x7fff);
 #else
 	prefix_nodes = (natural) ((int) deref(base,1));
 #endif
@@ -723,6 +731,10 @@ rmark(LispObj n)
 	int code_words = (int)base[1];
 #else
 	int code_words = (unsigned short)base[1];
+
+	/* XXX bootstrapping */
+	if (code_words & 0x8000)
+	  code_words = element_count - (code_words & 0x7fff);
 #endif
         if (code_words >= nmark) {
           Bug(NULL,"Bad function at 0x" LISP,n);
@@ -946,6 +958,16 @@ rmark(LispObj n)
       header = *(natural *)base;
       subtag = header_subtag(header);
       boundary = base + (unsigned short)base[1];
+
+      /* XXX bootstrapping */
+      {
+	natural word_count = (unsigned short)base[1];
+	natural element_count = header_element_count(header);
+
+	if (word_count & 0x8000)
+	  boundary = base + element_count - (word_count & 0x7fff);
+      }
+
       /*
        * On x8632, the upper 24 bits of the boundary word are zero.
        * Functions on x8632 can be no more than 2^16 words (or 2^24
@@ -968,6 +990,15 @@ rmark(LispObj n)
       subtag = header_subtag(header);
       if (subtag == subtag_function) {
         boundary = base + (unsigned short)base[1];
+	/* XXX bootstrapping */
+	{
+	  natural word_count = (unsigned short)base[1];
+	  natural element_count = header_element_count(header);
+
+	  if (word_count & 0x8000)
+	    boundary = base + element_count - (word_count & 0x7fff);
+	}
+
 	*((int *)boundary) &= 0xff;
         *((int *)boundary) |= ((this-((LispObj)boundary)) << 8);
       }
@@ -1138,6 +1169,9 @@ check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits)
       if (header_subtag(x1) == subtag_function) {
 #ifdef X8632
 	int skip = (unsigned short)deref(start,1);
+	/* XXX bootstrapping */
+	if (skip & 0x8000)
+	  skip = header_element_count(x1) - (skip & 0x7fff);
 #else
         int skip = (int) deref(start,1);
 #endif
@@ -1316,7 +1350,14 @@ mark_simple_area_range(LispObj *start, LispObj *end)
       base = start + element_count + 1;
       if (subtag == subtag_function) {
 #ifdef X8632
-	element_count -= (unsigned short)start[1];
+	natural skip = (unsigned short)start[1];
+
+	/* XXX bootstrapping */
+	if (skip & 0x8000)
+	  skip = element_count - (skip & 0x7fff);
+
+	element_count -= skip;
+
 #else
 	element_count -= (int)start[1];
 #endif
@@ -1707,6 +1748,11 @@ forward_range(LispObj *range_start, LispObj *range_end)
 	if (header_subtag(node) == subtag_function) {
 #ifdef X8632
 	  int skip = (unsigned short)(p[1]);
+
+	  /* XXX bootstrapping */
+	  if (skip & 0x8000)
+	    skip = header_element_count(node) - (skip & 0x7fff);
+
 #else
 	  int skip = (int)(p[1]);
 #endif
@@ -1855,10 +1901,16 @@ update_self_references(LispObj *node)
   LispObj fn = fulltag_misc + (LispObj)node;
   unsigned char *p = (unsigned char *)node;
   natural i, offset;
+  LispObj header = *node;
 
   i = ((unsigned short *)node)[2];
   if (i) {
+    /* XXX bootstrapping for new scheme */
+    if (i & 0x8000) {
+      i = header_element_count(header) - (i & 0x7fff);
+    }
     offset = node[--i];
+
     while (offset) {
       *(LispObj *)(p + offset) = fn;
       offset = node[--i];
@@ -1931,6 +1983,10 @@ compact_dynamic_heap()
 #ifdef X8632
 	    int skip = *((unsigned short *)src);
 	    LispObj *f = dest;
+
+	    /* XXX bootstrapping for new scheme */
+	    if (skip & 0x8000)
+	      skip = elements - (skip & 0x7fff);
 #else
 	    int skip = *((int *)src);
 #endif
@@ -2274,6 +2330,10 @@ purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to)
           if (header_subtag(header) == subtag_function) {
 #ifdef X8632
             int skip = (unsigned short)(start[1]);
+
+	    /* XXX bootstrapping */
+	    if (skip & 0x8000)
+	      skip = header_element_count(header) - (skip & 0x7fff);
 #else
             int skip = (int)(start[1]);
 #endif
@@ -2592,7 +2652,11 @@ impurify_range(LispObj *start, LispObj *end, LispObj low, LispObj high, signed_n
           *start++ = 0;
         } else {
           if (header_subtag(header) == subtag_function) {
+#ifdef X8632
+	    int skip = (unsigned short)start[1];
+#else
             int skip = (int)(start[1]);
+#endif
             start += skip;
             nwords -= skip;
           }
