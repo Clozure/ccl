@@ -209,6 +209,5 @@
     (prepare-mcl-environment "ccl:bin;prepare-mcl-environment" ("ccl:lib;prepare-mcl-environment.lisp"))
     (defsystem        "ccl:tools;defsystem"      ("ccl:tools;defsystem.lisp"))
     (asdf             "ccl:tools;asdf"	    ("ccl:tools;asdf.lisp"))
-    (jp-encode-table  "ccl:bin;jp-encode-table"  ("ccl:library;jp-encode-table.lisp"))
     (jp-encode        "ccl:bin;jp-encode"        ("ccl:library;jp-encode.lisp"))))
 

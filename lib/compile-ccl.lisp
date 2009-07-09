@@ -208,7 +208,6 @@
     leaks
     asdf
     defsystem
-    jp-encode-table
     jp-encode
     ))
 
