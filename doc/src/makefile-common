@@ -1,7 +1,11 @@
 # -*- coding: unix -*-
 
-# Try to determine the svn revishion
-SVNREV = $(shell /usr/bin/svnversion)
+ifdef COMMIT
+SVN=/usr/bin/svn
+else
+SVN=/bin/true
+endif
+
 
 # The local stylesheet imports the generic stylesheets and
 # sets some custom parameters.
@@ -27,6 +31,7 @@ export TZ = UTC
 XMLFILES = $(wildcard *.xml)
 XSLFILES = $(shell find xsl -name "*.xsl")
 HTMLFILES = ccl-documentation.html
+PARENT = ../ccl-documentation.html
 
 # Save the xsltproc version string for use in debugging.
 
@@ -40,6 +45,7 @@ SVNREV = $(shell /usr/bin/svnversion)
 
 
 $(HTMLFILES): $(XMLFILES)  $(XSLFILES)
+	rm -rf build-* *~
 	$(XSLTPROC) \
 		--xinclude \
 		--stringparam root.filename $(basename $(@F)) \
@@ -54,14 +60,17 @@ $(HTMLFILES): $(XMLFILES)  $(XSLFILES)
 	rm -f $(if $(findstring Doc, $(@D)), $(@D)/*.html, $@)
 	mv $(TEMP)/*.html $(@D)/
 
+${PARENT}: ${HTMLFILES}
+	cp ${HTMLFILES} ${PARENT}
+	$(CCL) -b -n -l ../doc-splitter -e '(doc-splitter:split-doc-file "ccl-documentation.html" "../manual/")' </dev/null
+	(cd .. ; $(SVN) commit -m "updated" ccl-documentation.html)
 
 all: ${TEMP} ${HTMLFILES} distclean
 	echo ${HTMLFILES}
 
 
-install: $(HTMLFILES) distclean
-	cp $(HTMLFILES) ../
-	$(CCL) -b -n -l ../doc-splitter -e '(doc-splitter:split-doc-file "ccl-documentation.html" "../manual/")' </dev/null
+install: $(PARENT)
+
 
 $(TEMP):
 	mkdir $(TEMP)
