@@ -1089,7 +1089,7 @@
        encoded in a single octet; characters with larger code values
        can be encoded in 2 to 4 bytes.</para></listitem>
      </varlistentry>
-    <varlistentry><term><literal>:UTF32LE</literal></term>
+    <varlistentry><term><literal>:UTF-32LE</literal></term>
        <listitem><para>A 32-bit, fixed-length encoding in which all
        Unicode characters can encoded in a single 32-bit word. The
        encoded data is implicitly little-endian; byte-order-mark
