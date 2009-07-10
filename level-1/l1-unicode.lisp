@@ -4293,7 +4293,7 @@ big-endian order."
 
 
 ;;; UTF-32/UCS-4, native byte order
-(define-character-encoding #+big-endian-target :utf-32be #-big-endian-target :utf32le
+(define-character-encoding #+big-endian-target :utf-32be #-big-endian-target :utf-32le
   #+big-endian-target
   "A 32-bit, fixed-length encoding in which all Unicode characters
 encoded in a single 32-bit word. The encoded data is implicitly big-endian;
@@ -4490,7 +4490,13 @@ or prepended to output."
   )
 
 (define-character-encoding :utf-32
-    "A 32-bit, fixed-length encoding in which all Unicode characters can be encoded in a single 32-bit word.  The endianness of the encoded data is indicated by the endianness of a byte-order-mark character (#\u+feff) prepended to the data; in the absence of such a character on input, input data is assumed to be in big-endian order.  Output is written in native byte order with a leading byte-order mark."
+    "A 32-bit, fixed-length encoding in which all Unicode characters
+can be encoded in a single 32-bit word.  The endianness of the encoded
+data is indicated by the endianness of a byte-order-mark
+character (#\u+feff) prepended to the data; in the absence of such a
+character on input, input data is assumed to be in big-endian order.
+Output is written in native byte order with a leading byte-order
+mark."
     
   :aliases '(:ucs-4)
   :max-units-per-char 1
