@@ -157,6 +157,14 @@
 
 (defvar lispbuf-eof '(nil))
 
+(defun skip-line-comment (mark)
+  ;; return t if we skipped a comment, nil otherwise
+  (let ((cstart (to-line-comment mark ";")))
+    (if cstart
+        (progn (to-comment-end mark (string #\newline))
+               t)
+        nil)))
+
 (defun balanced-expressions-in-region (region)
   "Return true if there's at least one syntactically well-formed S-expression
 between the region's start and end, and if there are no ill-formed expressions in that region."
@@ -181,7 +189,8 @@ between the region's start and end, and if there are no ill-formed expressions i
                   (setq skip-whitespace nil))
                 (progn
                   (pre-command-parse-check m)
-                  (unless (form-offset m 1)
+                  (unless (or (form-offset m 1)
+                              (skip-line-comment m))
                     (return nil))
                   (setq skip-whitespace t))))))))))
                
@@ -215,11 +224,12 @@ between the region's start and end, and if there are no ill-formed expressions i
          (mark>= end-mark (current-point)))))
 
 (defun send-input-region-to-lisp ()
-  (let* ((input-region (get-interactive-input))
+  (let* ((input-mark (value buffer-input-mark))
+         (end-mark (region-end (buffer-region (current-buffer))))
+         (input-region (region input-mark end-mark))
          (r (if input-region
                 (region (copy-mark (region-start input-region))
                         (copy-mark (region-end input-region) :right-inserting)))))
-
     (when input-region
       (insert-character (current-point-for-insertion) #\NewLine)
       (when (or (input-stream-reading-line
@@ -230,7 +240,6 @@ between the region's start and end, and if there are no ill-formed expressions i
           (move-mark (value buffer-input-mark) (current-point))
           (append-font-regions (current-buffer))
           (hemlock-ext:send-string-to-listener (current-buffer) string))))))
-
 
 (defun send-region-to-lisp (region)
   (let* ((region-string (when region (region-to-string region))))
