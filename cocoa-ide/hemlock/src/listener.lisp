@@ -185,8 +185,7 @@ between the region's start and end, and if there are no ill-formed expressions i
                     (return nil))
                   (setq skip-whitespace t))))))))))
                
-            
-  
+#| old version
 (defcommand "Confirm Listener Input" (p)
   "Evaluate Listener Mode input between point and last prompt."
   "Evaluate Listener Mode input between point and last prompt."
@@ -206,6 +205,59 @@ between the region's start and end, and if there are no ill-formed expressions i
           (move-mark (value buffer-input-mark) (current-point))
           (append-font-regions (current-buffer))
           (hemlock-ext:send-string-to-listener (current-buffer) string))))))
+|#
+
+(defun point-at-prompt-p ()
+  (with-mark ((input-mark (value buffer-input-mark))
+              (end-mark (value buffer-input-mark)))
+    (buffer-end end-mark)
+    (and (mark>= (current-point) input-mark)
+         (mark>= end-mark (current-point)))))
+
+(defun send-input-region-to-lisp ()
+  (let* ((input-region (get-interactive-input))
+         (r (if input-region
+                (region (copy-mark (region-start input-region))
+                        (copy-mark (region-end input-region) :right-inserting)))))
+
+    (when input-region
+      (insert-character (current-point-for-insertion) #\NewLine)
+      (when (or (input-stream-reading-line
+                 (top-listener-input-stream))
+                (balanced-expressions-in-region input-region))
+        (let* ((string (region-to-string input-region)))
+          (push (cons r nil) (value input-regions))
+          (move-mark (value buffer-input-mark) (current-point))
+          (append-font-regions (current-buffer))
+          (hemlock-ext:send-string-to-listener (current-buffer) string))))))
+
+
+(defun send-region-to-lisp (region)
+  (let* ((region-string (when region (region-to-string region))))
+    (with-mark ((input-mark (value buffer-input-mark)))
+      (move-mark (current-point) input-mark)
+      (insert-string (current-point) region-string)
+      (send-input-region-to-lisp))))
+
+(defun send-expression-at-point-to-lisp ()
+  ;; if it's not a well-formed expression, try to fix it up and send it
+  ;; if we fail, don't send it
+  )
+
+(defcommand "Confirm Listener Input" (p)
+    "Evaluate Listener Mode input between point and last prompt."
+    "Evaluate Listener Mode input between point and last prompt."
+  (declare (ignore p))
+  (if (point-at-prompt-p)
+      (send-input-region-to-lisp)
+      (if (region-active-p)
+          (let ((selected-region (current-region nil nil)))
+            (send-region-to-lisp selected-region))
+          (let ((prior-region (input-region-containing-mark (current-point) (value input-regions))))
+            (if prior-region
+                (send-region-to-lisp prior-region)
+                (send-expression-at-point-to-lisp))))))
+
 
 (defparameter *pop-string* ":POP
 " "what you have to type to exit a break loop")
@@ -246,27 +298,27 @@ between the region's start and end, and if there are no ill-formed expressions i
    signalled.  When a region is returned, the start is the current buffer's
    input mark, and the end is the current point moved to the end of the buffer."
   (let ((point (current-point))
-	(mark (value buffer-input-mark)))
+        (mark (value buffer-input-mark)))
     (cond
-     ((mark>= point mark)
-      (buffer-end point)
-      (let* ((input-region (region mark point))
-	     (string (region-to-string input-region))
-	     (ring (value interactive-history)))
-	(when (and (or (zerop (ring-length ring))
-		       (string/= string (region-to-string (ring-ref ring 0))))
-		   (> (length string) (value minimum-interactive-input-length)))
-	  (ring-push (copy-region input-region) ring))
-	input-region))
-     (t
-      (let* ((region (input-region-containing-mark point (value input-regions ))))
-        (buffer-end point)
-        (if region
-          (progn
-            (delete-region (region mark point))
-            (insert-region point region))
-          (beep))
-        nil)))))
+      ((mark>= point mark)
+       (buffer-end point)
+       (let* ((input-region (region mark point))
+              (string (region-to-string input-region))
+              (ring (value interactive-history)))
+         (when (and (or (zerop (ring-length ring))
+                        (string/= string (region-to-string (ring-ref ring 0))))
+                    (> (length string) (value minimum-interactive-input-length)))
+           (ring-push (copy-region input-region) ring))
+         input-region))
+      (t
+       (let* ((region (input-region-containing-mark point (value input-regions ))))
+         (buffer-end point)
+         (if region
+             (progn
+               (delete-region (region mark point))
+               (insert-region point region))
+             (beep))
+         nil)))))
 
 
 (defhvar "Minimum Interactive Input Length"
