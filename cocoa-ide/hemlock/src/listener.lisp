@@ -235,7 +235,12 @@ between the region's start and end, and if there are no ill-formed expressions i
       (when (or (input-stream-reading-line
                  (top-listener-input-stream))
                 (balanced-expressions-in-region input-region))
-        (let* ((string (region-to-string input-region)))
+        (let* ((string (region-to-string input-region))
+               (ring (value interactive-history)))
+          (when (and (or (zerop (ring-length ring))
+                         (string/= string (region-to-string (ring-ref ring 0))))
+                     (> (length string) (value minimum-interactive-input-length)))
+            (ring-push (copy-region input-region) ring))
           (push (cons r nil) (value input-regions))
           (move-mark (value buffer-input-mark) (current-point))
           (append-font-regions (current-buffer))
@@ -248,10 +253,56 @@ between the region's start and end, and if there are no ill-formed expressions i
       (insert-string (current-point) region-string)
       (send-input-region-to-lisp))))
 
+(defun find-backward-form (mark)
+  (let ((start (copy-mark mark))
+        (end (copy-mark mark)))
+    (block finding
+      (or (form-offset start -1) (return-from finding nil))
+      (or (form-offset end -1) (return-from finding nil))
+      (or (form-offset end 1) (return-from finding nil))
+      (region start end))))
+
+(defun find-forward-form (mark)
+  (let ((start (copy-mark mark))
+        (end (copy-mark mark)))
+    (block finding
+      (or (form-offset start 1) (return-from finding nil))
+      (or (form-offset end 1) (return-from finding nil))
+      (or (form-offset start -1) (return-from finding nil))
+      (region start end))))
+
+(defun region= (r1 r2)
+  (multiple-value-bind (r1-start r1-end)(region-bounds r1)
+    (multiple-value-bind (r2-start r2-end)(region-bounds r2)
+      (and (mark= r1-start r2-start)
+           (mark= r1-end r2-end)))))
+
+;;; find the start or end of the nearest lisp form. return a region if
+;;; one is found, nil otherwise. try for a commonsense result.
+(defun mark-nearest-form (mark)
+  (let* ((backward-region (find-backward-form mark))
+         (forward-region (find-forward-form mark)))
+    (if backward-region
+        (if forward-region
+            ;; if we're in the middle of a token, then the backward
+            ;; and forward regions will be the same
+            (if (region= backward-region forward-region)
+                backward-region
+                ;; not equal, so figure out which is closer
+                (let* ((mark-pos (mark-absolute-position mark))
+                       (backward-dist (abs (- mark-pos (mark-absolute-position (region-end backward-region)))))
+                       (forward-dist (abs (- (mark-absolute-position (region-start forward-region)) mark-pos))))
+                  (if (< forward-dist backward-dist)
+                      forward-region
+                      backward-region)))
+            backward-region)
+        forward-region)))
+
 (defun send-expression-at-point-to-lisp ()
-  ;; if it's not a well-formed expression, try to fix it up and send it
-  ;; if we fail, don't send it
-  )
+  (let* ((nearest-form-region (mark-nearest-form (current-point))))
+    (if nearest-form-region
+        (send-region-to-lisp nearest-form-region)
+        (beep))))
 
 (defcommand "Confirm Listener Input" (p)
     "Evaluate Listener Mode input between point and last prompt."
