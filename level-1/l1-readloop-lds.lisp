@@ -262,7 +262,10 @@ commands but aren't")
     (when (or (keywordp cmd)
               (and *toplevel-commands-dwim*
                    (non-nil-symbol-p cmd)
-                   (not (if (consp form) (fboundp cmd) (boundp cmd)))
+                   (not (if (consp form)
+                          (fboundp cmd)
+                          (or (boundp cmd)
+                              (nth-value 1 (gethash cmd *symbol-macros*)))))
                    ;; Use find-symbol so don't make unneeded keywords.
                    (setq cmd (find-symbol (symbol-name cmd) :keyword))))
       (when (eq cmd :help) (setq cmd :?))
