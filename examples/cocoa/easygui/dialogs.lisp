@@ -32,7 +32,7 @@
                            +null-ptr+ ; no preselected file
                            ;; If not NIL below then an ObjC array containing NSStrings could be used
                            ;; to restrict the file types we're interested in
-                           #$NIL)))
+                           nil)))
           ;; Because we told the panel to disallow multiple selection,
           ;; there should be exactly one object in this array, an
           ;; NSString describing the selected file.

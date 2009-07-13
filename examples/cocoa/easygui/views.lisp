@@ -599,7 +599,7 @@ rectangle if the view has any non-NIL mouse-enter, mouse-exit or mouse-move."
                                      #$NSTrackingActiveInKeyWindow
                                      #$NSTrackingInVisibleRect)
                     :owner cocoaview
-                    :userInfo #$NIL)))
+                    :userInfo nil)))
         (dcc (#/addTrackingArea: cocoaview area))))
     |#
 
@@ -1530,6 +1530,6 @@ Example:
   (let* ((w (cocoa-ref (easygui-window-of view)))
          (mouselocation (dcc (#/mouseLocationOutsideOfEventStream w)))
          (cview (if (typep view 'window) (content-view view) view))
-         (nspt (dcc (#/convertPoint:fromView: (cocoa-ref cview) mouselocation #$NIL))))
+         (nspt (dcc (#/convertPoint:fromView: (cocoa-ref cview) mouselocation nil))))
     ;; todo: check point is inside bounds, lest negative coords
     (point (ns:ns-point-x nspt) (ns:ns-point-y nspt))))
