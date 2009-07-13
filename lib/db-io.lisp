@@ -1052,34 +1052,44 @@ satisfy the optional predicate PREDICATE."
 (set-dispatch-macro-character 
  #\# #\$
  (qlfun |#$-reader| (stream char arg)
-   (declare (ignore char))
-   (let* ((package (find-package (ftd-interface-package-name *target-ftd*))))
-     (multiple-value-bind (sym query source)
-         (%read-symbol-preserving-case
-	    stream
-            package)
-       (unless *read-suppress*
-         (etypecase sym
-           (symbol
-            (if query
-              (values (load-os-constant sym query) source)
-              (progn
-                (when (eq (symbol-package sym) package)
-                  (unless arg (setq arg 0))
-                  (ecase arg
-                    (0
-                     (unless (and (constant-symbol-p sym)
-                                  (not (eq (%sym-global-value sym)
-                                           (%unbound-marker-8))))
-                       (load-os-constant sym)))
-                    (1 (makunbound sym) (load-os-constant sym))))
-                (values sym source))))
-           (string
-            (let* ((val 0)
-                   (len (length sym)))
-              (dotimes (i 4 (values val source))
-                (let* ((ch (if (< i len) (char sym i) #\space)))
-                  (setq val (logior (ash val 8) (char-code ch)))))))))))))
+        (declare (ignore char))
+        (let* ((package (find-package (ftd-interface-package-name *target-ftd*))))
+          (multiple-value-bind (sym query source)
+              (%read-symbol-preserving-case
+               stream
+               package)
+            (unless *read-suppress*
+              (etypecase sym
+                (symbol
+                 (let* ((const (load-os-constant sym t)))
+                   (if query
+                     (values const source)
+                     (progn
+                       (if const
+                         (progn
+                           (when (eq (symbol-package sym) package)
+                             (unless arg (setq arg 0))
+                             (ecase arg
+                               (0
+                                (unless (and (constant-symbol-p sym)
+                                             (not (eq (%sym-global-value sym)
+                                                      (%unbound-marker-8))))
+                                  (load-os-constant sym)))
+                               (1 (makunbound sym) (load-os-constant sym))))
+                           (values sym source))
+                         (let* ((fv (%load-var sym nil)))
+                           (values
+                            (%foreign-access-form `(%reference-external-entry-point (load-time-value ,fv))
+                                                  (fv.type fv)
+                                                  0
+                                                  nil)
+                            source)))))))
+                (string
+                 (let* ((val 0)
+                        (len (length sym)))
+                   (dotimes (i 4 (values val source))
+                     (let* ((ch (if (< i len) (char sym i) #\space)))
+                       (setq val (logior (ash val 8) (char-code ch)))))))))))))
 
 (set-dispatch-macro-character #\# #\_
   (qlfun |#_-reader| (stream char arg)

@@ -1463,7 +1463,7 @@ result-type-specifer is :VOID or NIL"
         #+32-bit-target
 	(format out " (#x~8,'0x) " (logand #xffffffff (%ptr-to-int addr)))
         #+64-bit-target
-        	(format out " (#x~168,'0x) " (logand #xfffffffffffffffff (%ptr-to-int addr)))
+        	(format out " (#x~16,'0x) " (logand #xfffffffffffffffff (%ptr-to-int addr)))
 	(format out " {unresolved} "))
       (when (and container (or (not (typep container 'macptr))
 				    (not (%null-ptr-p container))))
