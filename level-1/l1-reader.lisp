@@ -2480,7 +2480,7 @@
   (let* ((readtable *readtable*)
          (attrtab (rdtab.ttab readtable))
          (attr (%character-attribute firstchar attrtab))
-         (start-pos (file-position stream)))
+         (start-pos (stream-position stream)))
     (declare (fixnum attr))
     (when (eql attr $cht_ill)
       (signal-reader-error stream "Illegal character ~S." firstchar))
@@ -2498,7 +2498,7 @@
                                ((functionp (car def))
                                 (funcall (car def) stream firstchar))
                                (t (error "Bogus default dispatch fn: ~S" (car def)) nil))))))
-           (end-pos (and start-pos (file-position stream))))
+           (end-pos (and start-pos (stream-position stream))))
       (declare (dynamic-extent vals)
                (list vals))
       (if (null vals)
@@ -3137,9 +3137,9 @@ non-atomic nested subforms."
                                                   start-offset)))))
            (values form source-note))))
     (T
-       (let* ((start-pos (file-position stream))
+       (let* ((start-pos (stream-position stream))
               (form (read-internal stream nil eofval nil))
-              (end-pos (and start-pos (neq form eofval) (file-position stream)))
+              (end-pos (and start-pos (neq form eofval) (stream-position stream)))
               (source-note (and end-pos
                                 (make-source-note :filename file-name
                                                   :start-pos (+ start-offset start-pos)
@@ -3154,21 +3154,27 @@ non-atomic nested subforms."
   ;; (Just as well, since otherwise we'd have to remember the file's encoding).
   (declare (fixnum start-offset))
   (when (< start-offset end-offset)
-    (let* ((cur-pos (file-position stream))
+    (let* ((cur-pos (stream-position stream))
            (noctets (- end-offset start-offset))
            (vec (make-array noctets :element-type '(unsigned-byte 8)))
-           (index 0))
+           (index 0)
+           (crlfp (eq :crlf
+                      (cdr (assoc (external-format-line-termination
+                                   (stream-external-format stream))
+                                  *canonical-line-termination-conventions*)))))
       (declare (type fixnum end-offset noctets index)
                (type (simple-array (unsigned-byte 8) (*)) vec))
       (macrolet ((out (code)
                    `(progn
                       (setf (aref vec index) ,code)
                       (when (eql (incf index) noctets) (return)))))
-        (file-position stream start-offset)
+        (stream-position stream start-offset)
         (loop
-          (let ((code (char-code (stream-read-char stream))))
+          (let ((code (char-code (read-char stream))))
             (declare (fixnum code))
             (cond ((< code #x80)
+                   (when (and crlfp (= code (char-code #\NewLine)))
+                     (out (char-code #\Return)))
                    (out code))
                   ((< code #x800)
                    (out (logior #xc0 (ldb (byte 5 6) code)))
@@ -3182,7 +3188,7 @@ non-atomic nested subforms."
                    (out (logior #xe0 (ldb (byte 6 12) code)))
                    (out (logior #x80 (ldb (byte 6 6) code)))
                    (out (logior #x80 (ldb (byte 6 0) code))))))))
-      (file-position stream cur-pos)
+      (stream-position stream cur-pos)
       vec)))
 
 (defun ensure-source-note-text (source-note &key (if-does-not-exist nil))
