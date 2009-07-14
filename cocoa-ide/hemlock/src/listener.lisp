@@ -246,12 +246,12 @@ between the region's start and end, and if there are no ill-formed expressions i
           (append-font-regions (current-buffer))
           (hemlock-ext:send-string-to-listener (current-buffer) string))))))
 
-(defun send-region-to-lisp (region)
+(defun copy-region-to-input (region)
   (let* ((region-string (when region (region-to-string region))))
     (with-mark ((input-mark (value buffer-input-mark)))
       (move-mark (current-point) input-mark)
       (insert-string (current-point) region-string)
-      (send-input-region-to-lisp))))
+      (buffer-end (current-point)))))
 
 (defun find-backward-form (mark)
   (let ((start (copy-mark mark))
@@ -298,10 +298,10 @@ between the region's start and end, and if there are no ill-formed expressions i
             backward-region)
         forward-region)))
 
-(defun send-expression-at-point-to-lisp ()
+(defun copy-expression-at-point-to-input ()
   (let* ((nearest-form-region (mark-nearest-form (current-point))))
     (if nearest-form-region
-        (send-region-to-lisp nearest-form-region)
+        (copy-region-to-input nearest-form-region)
         (beep))))
 
 (defcommand "Confirm Listener Input" (p)
@@ -312,11 +312,11 @@ between the region's start and end, and if there are no ill-formed expressions i
       (send-input-region-to-lisp)
       (if (region-active-p)
           (let ((selected-region (current-region nil nil)))
-            (send-region-to-lisp selected-region))
+            (copy-region-to-input selected-region))
           (let ((prior-region (input-region-containing-mark (current-point) (value input-regions))))
             (if prior-region
-                (send-region-to-lisp prior-region)
-                (send-expression-at-point-to-lisp))))))
+                (copy-region-to-input prior-region)
+                (copy-expression-at-point-to-input))))))
 
 
 (defparameter *pop-string* ":POP
