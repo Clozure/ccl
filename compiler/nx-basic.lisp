@@ -543,7 +543,6 @@
                              (eq (%car w-args)
                                  (%car w1-args)))
                     (let ((nrefs (compiler-warning-nrefs w1)))
-                      #-BOOTSTRAPPED (when (eql nrefs 1) (setq nrefs nil))
                       (setf (compiler-warning-nrefs w1)
                             (cons (compiler-warning-source-note w)
                                   (or nrefs
@@ -660,7 +659,6 @@
 	(funcall format-string condition stream)))
     ;(format stream ".")
     (let ((nrefs (compiler-warning-nrefs condition)))
-      #-BOOTSTRAPPED (when (eql nrefs 1) (setq nrefs nil))
       (when nrefs
         (format stream " (~D references)" (length nrefs))))))
 

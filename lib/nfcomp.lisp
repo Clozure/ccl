@@ -880,10 +880,6 @@ Will differ from *compiling-file* during an INCLUDE")
       (fcomp-output-form $fasl-macro env fn doc))
     (fcomp-random-toplevel-form form env)))
 
-#-BOOTSTRAPPED (unless (fboundp 'note-type-info)
-		 (fset 'note-type-info (nlambda bootstrapping-note-type-info (name kind env) (declare (ignore name kind env)))))
-
-
 (defun define-compile-time-structure (sd refnames predicate env)
   (let ((defenv (definition-environment env)))
     (when defenv

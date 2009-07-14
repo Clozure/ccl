@@ -320,11 +320,6 @@ function to the indicated name is true.")
 (defun nx-substititute-constant-value (symbol value env)
   (nx-apply-env-hook policy.allow-constant-substitution symbol value env))
 
-#-BOOTSTRAPPED
-(eval-when (compile)
-  (unless (boundp 'policy.declarations-typecheck)
-    (load "ccl:library;lispequ.lisp")))
-
 (defun nx-declarations-typecheck (env)
   (nx-apply-env-hook policy.declarations-typecheck env))
 
@@ -2190,13 +2185,6 @@ Or something. Right? ~s ~s" var varbits))
       (let ((note (gethash form source-notes)))
         (unless (listp note) note)))))
 
-#-BOOTSTRAPPED
-(when (= 2 (let ((bits (lfun-bits #'defstruct-ref-transform)))
-             (+ (ldb $lfbits-numreq bits) (ldb $lfbits-numopt bits))))
-  (let ((old #'defstruct-ref-transform))
-    (fset 'defstruct-ref-transform (lambda (a b &optional env)
-                                     (declare (ignore env))
-                                     (funcall old a b)))))
 
 (defun nx-transform (form &optional (environment *nx-lexical-environment*) (source-note-map *nx-source-note-map*))
   (macrolet ((form-changed (form)

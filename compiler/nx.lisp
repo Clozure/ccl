@@ -138,10 +138,6 @@
     (signal-or-defer-warnings warnings env)
     lfun))
 
-#-BOOTSTRAPPED (unless (find-class 'undefined-reference nil)
-		 (deftype undefined-reference () 'undefined-function-reference)
-		 (defclass undefined-type-reference (undefined-function-reference) ()))
-
 (defun signal-or-defer-warnings (warnings env)
   (let* ((defenv (definition-environment env))
          (init t)
