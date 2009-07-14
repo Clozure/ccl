@@ -231,25 +231,33 @@ between the region's start and end, and if there are no ill-formed expressions i
                 (region (copy-mark (region-start input-region))
                         (copy-mark (region-end input-region) :right-inserting)))))
     (when input-region
-      (insert-character (current-point-for-insertion) #\NewLine)
-      (when (or (input-stream-reading-line
-                 (top-listener-input-stream))
-                (balanced-expressions-in-region input-region))
-        (let* ((string (region-to-string input-region))
-               (ring (value interactive-history)))
-          (when (and (or (zerop (ring-length ring))
-                         (string/= string (region-to-string (ring-ref ring 0))))
-                     (> (length string) (value minimum-interactive-input-length)))
-            (ring-push (copy-region input-region) ring))
-          (push (cons r nil) (value input-regions))
-          (move-mark (value buffer-input-mark) (current-point))
-          (append-font-regions (current-buffer))
-          (hemlock-ext:send-string-to-listener (current-buffer) string))))))
+      (if (or (input-stream-reading-line
+               (top-listener-input-stream))
+              (balanced-expressions-in-region input-region))
+          ;; complete expression: send it to lisp
+          (let* ((string (region-to-string input-region))
+                 (ring (value interactive-history)))
+            (when (and (or (zerop (ring-length ring))
+                           (string/= string (region-to-string (ring-ref ring 0))))
+                       (> (length string) (value minimum-interactive-input-length)))
+              (ring-push (copy-region input-region) ring))
+            (push (cons r nil) (value input-regions))
+            (move-mark (value buffer-input-mark) (current-point))
+            (append-font-regions (current-buffer))
+            (hemlock-ext:send-string-to-listener (current-buffer) (concatenate 'string string '(#\Newline)))
+            (buffer-end (current-point)))
+          ;; incomplete expression: enter a newline
+          (progn
+            (insert-character (current-point-for-insertion) #\NewLine))))))
 
 (defun copy-region-to-input (region)
-  (let* ((region-string (when region (region-to-string region))))
+  (let* ((region-string (when region (region-to-string region)))
+         (input-mark (value buffer-input-mark))
+         (end-mark (region-end (buffer-region (current-buffer))))
+         (input-region (region input-mark end-mark)))
     (with-mark ((input-mark (value buffer-input-mark)))
       (move-mark (current-point) input-mark)
+      (delete-region input-region)
       (insert-string (current-point) region-string)
       (buffer-end (current-point)))))
 
