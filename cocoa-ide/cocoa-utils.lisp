@@ -9,6 +9,17 @@
     (dotimes (i c) (setf result (push (#/objectAtIndex: nsa i) result)))
     (reverse result)))
 
+(defclass key-select-table-view (ns:ns-table-view)
+  ()
+  (:metaclass ns:+ns-object))
+
+(objc:defmethod (#/keyDown: :void) ((self key-select-table-view) event)
+  (let* ((code (#/keyCode event)))
+    (if (and (>= (#/selectedRow self) 0)
+             (= code 36)) ; return key
+      (#/sendAction:to:from: *NSApp* (#/doubleAction self) (#/target self) self)
+      (call-next-method event))))
+
 (defclass sequence-window-controller (ns:ns-window-controller)
     ((table-view :foreign-type :id :reader sequence-window-controller-table-view)
      (sequence :initform nil :initarg :sequence :type sequence :reader sequence-window-controller-sequence)
@@ -35,7 +46,7 @@
                                         #$NSViewWidthSizable
                                         #$NSViewHeightSizable))
     (#/setAutoresizesSubviews: (#/contentView scrollview) t)
-    (let* ((table-view (make-instance 'ns:ns-table-view)))
+    (let* ((table-view (make-instance 'key-select-table-view)))
       (#/setDocumentView: scrollview table-view)
       (#/release table-view)
       (#/setColumnAutoresizingStyle: table-view #$NSTableViewUniformColumnAutoresizingStyle)
@@ -69,7 +80,7 @@
 
 (objc:defmethod (#/sequenceDoubleClick: :void)
     ((self sequence-window-controller) sender)
-  (let* ((n (#/clickedRow sender)))
+  (let* ((n (#/selectedRow sender)))
     (when (>= n 0)
       (with-slots (sequence result-callback) self
         (funcall result-callback (elt sequence n))))))
