@@ -17712,13 +17712,14 @@
   (values (gethash code *ucs-to-cp932-hash*)))
 
 
-(defmacro define-jp-encoding (name document max-units-per-char
+(defmacro define-jp-encoding (name docstring aliases max-units-per-char
                               from-ucs
                               to-ucs
                               length-by-code
                               length-by-1st-unit)
   `(define-character-encoding ,name
-       ,document
+       ,docstring
+     :aliases ,aliases
      :native-endianness nil
      :max-units-per-char ,max-units-per-char
      :stream-encode-function
@@ -17908,11 +17909,12 @@
              1)))))
 
 
-(define-jp-encoding :eucjp
+(define-jp-encoding :euc-jp
     "An 8-bit, variable-length character encoding in which
 character code points in the range #x00-#x7f can be encoded in a
 single octet; characters with larger code values can be encoded
 in 2 to 3 bytes."
+  '(:eucjp)
   3
   ucs-to-eucjp
   eucjp-to-ucs
@@ -17926,11 +17928,12 @@ in 2 to 3 bytes."
          2)
         (t 1)))
 
-(define-jp-encoding :cp932
+(define-jp-encoding :windows-31j
     "An 8-bit, variable-length character encoding in which
 character code points in the range #x00-#x7f can be encoded in a
 single octet; characters with larger code values can be encoded
 in 2 bytes."
+  '(:cp932 :csWindows31J)
   2
   ucs-to-cp932
   cp932-to-ucs
