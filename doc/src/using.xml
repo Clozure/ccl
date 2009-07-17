@@ -1097,17 +1097,19 @@
        output.</para>
        <para>Alias: <literal>:UCS-4LE</literal></para></listitem>
      </varlistentry>
-     <varlistentry><term><literal>:CP932</literal></term>
+     <varlistentry><term><literal>:Windows-31j</literal></term>
      <listitem><para>An 8-bit, variable-length character encoding in
      which character code points in the range #x00-#x7f can be encoded
      in a single octet; characters with larger code values can be
-     encoded in 2 bytes.</para></listitem>
+     encoded in 2 bytes.</para>
+     <para>Aliases: <literal>:CP932, :CSWINDOWS31J</literal></para></listitem>
      </varlistentry>
-     <varlistentry><term><literal>:EUCJP</literal></term>
+     <varlistentry><term><literal>:EUC-JP</literal></term>
      <listitem><para>An 8-bit, variable-length character encoding in
      which character code points in the range #x00-#x7f can be encoded
      in a single octet; characters with larger code values can be
-     encoded in 2 bytes.</para></listitem>
+     encoded in 2 bytes.</para>
+     <para>Alias: <literal>:EUCJP</literal></para></listitem>
      </varlistentry>
    </variablelist>
  </sect3>
