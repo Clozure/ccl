@@ -1012,6 +1012,24 @@ determine_executable_name(char *argv0)
 
 #ifdef WINDOWS
 wchar_t *
+determine_executable_name()
+{
+  DWORD nsize = 512, result;
+  wchar_t *buf = malloc(nsize*sizeof(wchar_t));
+
+  do {
+    result = GetModuleFileNameW(NULL, buf, nsize);
+    if (result == nsize) {
+      nsize *= 2;
+      buf = realloc(buf,nsize*sizeof(wchar_t));
+    } else {
+      return buf;
+    }
+  } while (1);
+}
+
+
+wchar_t *
 ensure_real_path(wchar_t *path)
 {
   int bufsize = 256, n;
@@ -1687,7 +1705,7 @@ main(int argc, char *argv[]
 
   check_os_version(argv[0]);
 #ifdef WINDOWS
-  real_executable_name = utf_16_argv[0];
+  real_executable_name = determine_executable_name();
 #else
   real_executable_name = determine_executable_name(argv[0]);
 #endif
