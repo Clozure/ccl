@@ -1097,6 +1097,18 @@
        output.</para>
        <para>Alias: <literal>:UCS-4LE</literal></para></listitem>
      </varlistentry>
+     <varlistentry><term><literal>:CP932</literal></term>
+     <listitem><para>An 8-bit, variable-length character encoding in
+     which character code points in the range #x00-#x7f can be encoded
+     in a single octet; characters with larger code values can be
+     encoded in 2 bytes.</para></listitem>
+     </varlistentry>
+     <varlistentry><term><literal>:EUCJP</literal></term>
+     <listitem><para>An 8-bit, variable-length character encoding in
+     which character code points in the range #x00-#x7f can be encoded
+     in a single octet; characters with larger code values can be
+     encoded in 2 bytes.</para></listitem>
+     </varlistentry>
    </variablelist>
  </sect3>
 
