@@ -208,6 +208,12 @@
              (invoke-command binding *last-prefix-argument*))
            (invoke-command main-binding *last-prefix-argument*)))))))
 
+(defmethod bound-to-system-default-behavior-p ((view hemlock-view)
+                                               key)
+  (eq (get-command-binding-for-key view key)
+      (hi::get-system-default-behavior-command)))
+
+
 (defmethod update-echo-area-after-command ((view hemlock-view))
   (let* ((eps (hemlock-prompted-input-state view)))
     ;;if we're in the process of returning from a recursive parse,

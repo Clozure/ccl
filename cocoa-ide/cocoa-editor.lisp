@@ -977,7 +977,8 @@
 	   (call-next-method event))
 	  ((not (eventqueue-abort-pending-p self))
 	   (let ((hemlock-key (nsevent-to-key-event event quote-p)))
-	     (if hemlock-key
+	     (if (and hemlock-key
+                      (not (hi::bound-to-system-default-behavior-p view hemlock-key)))
                (progn
                  (#/setHiddenUntilMouseMoves: ns:ns-cursor t)
                  (hi::handle-hemlock-event view hemlock-key))

@@ -151,6 +151,11 @@
     "The name of the command to invoke to handle keys that have no binding
      defined.  By default, this is \"Illegal\"."
     :value "Illegal")
+  (defhvar "System Default Behavior Command Name"
+    "The name of the command to handle keys which should by handled by the
+     native window system (not by Hemlock.)
+     By default, this is \"System Default Behavior\"."
+    :value "System Default Behavior")
   )
 
 

@@ -407,3 +407,7 @@
 (defun get-default-command ()
   ;; Get the command used when no binding is present in current buffer.
   (getstring (value hemlock::default-command-name) *command-names*))
+
+(defun get-system-default-behavior-command ()
+  ;; Get the command used to invoke "System Default Behavior"
+  (getstring (value hemlock::system-default-behavior-command-name) *command-names*))

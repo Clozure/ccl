@@ -46,7 +46,13 @@
 (dolist (buff *buffer-list*) (hcmd-new-buffer-hook-fun buff))
 
 
-
+(defcommand "System Default Behavior" (p)
+  "Pass the native key event to which this command is bound to the native
+window system."
+  "Pass the native key event to which this command is bound to the native
+window system."
+  (declare (ignore p))
+  (editor-error "This command shouldn't be called."))
 
 
 
