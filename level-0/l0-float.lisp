@@ -224,48 +224,50 @@
      (let* ((old-exp (%double-float-exp n))
             (sign (if (%double-float-sign n) -1.0d0 1.0d0)))    
        (if (eq 0 old-exp)
-         (if  (%double-float-zerop n)
+         (if (%double-float-zerop n)
            (values 0.0d0 0 sign)
            (let* ((val (%make-dfloat))
                   (zeros (dfloat-significand-zeros n)))
-             (%copy-double-float n val)
-             (%%scale-dfloat! n (+ 2 IEEE-double-float-bias zeros) val) ; get it normalized
+	     (%%double-float-abs! n val)
+             (%%scale-dfloat! val (+ 2 IEEE-double-float-bias zeros) val) ; get it normalized
              (set-%double-float-exp val IEEE-double-float-bias)      ; then bash exponent
-             (values val (- old-exp zeros IEEE-double-float-bias) sign )))
-         (if (> old-exp 2046)
+             (values val (- old-exp zeros IEEE-double-float-bias) sign)))
+         (if (> old-exp IEEE-double-float-normal-exponent-max)
            (error "Can't decode NAN or infinity ~s" n)
            (let ((val (%make-dfloat)))
-             (%copy-double-float n val)
+             (%%double-float-abs! n val)
              (set-%double-float-exp val IEEE-double-float-bias)
              (values val (- old-exp IEEE-double-float-bias) sign))))))
     (short-float
      (let* ((old-exp (%short-float-exp n))
             (sign (if (%short-float-sign n) -1.0s0 1.0s0)))
        (if (eq 0 old-exp)
-         (if  (%short-float-zerop n)
+         (if (%short-float-zerop n)
            (values 0.0s0 0 sign)
            #+32-bit-target
            (let* ((val (%make-sfloat))
                   (zeros (sfloat-significand-zeros n)))
-             (%copy-short-float n val)
-             (%%scale-sfloat! n (+ 2 IEEE-single-float-bias zeros) val) ; get it normalized
+	     (%%short-float-abs! n val)
+             (%%scale-sfloat! val (+ 2 IEEE-single-float-bias zeros) val) ; get it normalized
              (set-%short-float-exp val IEEE-single-float-bias)      ; then bash exponent
-             (values val (- old-exp zeros IEEE-single-float-bias) sign ))
+             (values val (- old-exp zeros IEEE-single-float-bias) sign))
            #+64-bit-target
            (let* ((zeros (sfloat-significand-zeros n))
-                  (val (%%scale-sfloat n (+ 2 IEEE-single-float-bias zeros))))
+                  (val (%%scale-sfloat (%short-float-abs n)
+				       (+ 2 IEEE-single-float-bias zeros))))
              (values (set-%short-float-exp val IEEE-single-float-bias)
-                     (- old-exp zeros IEEE-single-float-bias) sign )))
+                     (- old-exp zeros IEEE-single-float-bias) sign)))
          (if (> old-exp IEEE-single-float-normal-exponent-max)
            (error "Can't decode NAN or infinity ~s" n)
            #+32-bit-target
            (let ((val (%make-sfloat)))
-             (%copy-short-float n val)
+             (%%short-float-abs! n val)
              (set-%short-float-exp val IEEE-single-float-bias)
              (values val (- old-exp IEEE-single-float-bias) sign))
            #+64-bit-target
-           (values (set-%short-float-exp n IEEE-single-float-bias)
-                   (- old-exp IEEE-single-float-bias) sign)))))))
+	   (values (set-%short-float-exp (%short-float-abs n)
+					 IEEE-single-float-bias)
+		   (- old-exp IEEE-single-float-bias) sign)))))))
 
 ; (* float (expt 2 int))
 (defun scale-float (float int)
