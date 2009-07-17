@@ -151,23 +151,24 @@
            (call-next-method))
       (setf (hi:input-stream-reading-line stream) old-reading-line))))
 
-(defparameter $listener-flush-limit 100)
+(defparameter $listener-flush-limit 4095)
 
 (defclass cocoa-listener-output-stream (fundamental-character-output-stream)
   ((lock :initform (make-lock))
    (hemlock-view :initarg :hemlock-view)
    (data :initform (make-array (1+ $listener-flush-limit)
                                :adjustable t :fill-pointer 0
-                               :element-type 'character))))
+                               :element-type 'character))
+   (limit :initform $listener-flush-limit)))
 
 (defmethod stream-element-type ((stream cocoa-listener-output-stream))
   (with-slots (data) stream
     (array-element-type data)))
 
 (defmethod ccl:stream-write-char ((stream cocoa-listener-output-stream) char)
-  (with-slots (data lock) stream
+  (with-slots (data lock limit) stream
     (when (with-lock-grabbed (lock)
-	    (>= (vector-push-extend char data) $listener-flush-limit))
+	    (>= (vector-push-extend char data) limit))
       (stream-force-output stream))))
 
 ;; This isn't really thread safe, but it's not too bad...  I'll take a chance - trying
@@ -188,13 +189,13 @@
           (- n pos 1))))))
 
 (defmethod ccl:stream-fresh-line  ((stream cocoa-listener-output-stream))
-  (with-slots (hemlock-view data lock) stream
+  (with-slots (hemlock-view data lock limit) stream
     (when (with-lock-grabbed (lock)
             (let ((n (length data)))
               (unless (if (= n 0)
                         (= (hemlock-listener-output-mark-column hemlock-view) 0)
                         (eq (aref data (1- n)) #\Newline))
-                (>= (vector-push-extend #\Newline data) $listener-flush-limit))))
+                (>= (vector-push-extend #\Newline data) limit))))
       (stream-force-output stream))))
 
 (defmethod ccl::stream-finish-output ((stream cocoa-listener-output-stream))
