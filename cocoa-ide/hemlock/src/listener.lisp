@@ -241,6 +241,7 @@ between the region's start and end, and if there are no ill-formed expressions i
                            (string/= string (region-to-string (ring-ref ring 0))))
                        (> (length string) (value minimum-interactive-input-length)))
               (ring-push (copy-region input-region) ring))
+            (insert-character (region-end input-region) #\NewLine)
             (push (cons r nil) (value input-regions))
             (move-mark (value buffer-input-mark) (current-point))
             (append-font-regions (current-buffer))
