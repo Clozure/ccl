@@ -1546,7 +1546,13 @@ to open."
            (*read-default-float-format* 'single-float)
            (*read-eval* t) ; Also MIA as of 5/15/90
            (*read-suppress* nil)
-           (*readtable* %initial-readtable%))
+           (*readtable* %initial-readtable%)
+	   ; ccl extensions (see l1-io.lisp)
+	   (*print-abbreviate-quote* t)
+	   (*print-structure* t)
+	   (*print-simple-vector* nil)
+	   (*print-simple-bit-vector* nil)
+	   (*print-string-length* nil))
        ,@decls
        ,@body)))
 
