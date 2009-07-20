@@ -486,7 +486,7 @@
 	      (setq result (nconc (%all-directories subdir rest path so-far keys) result)))
 	    (when (and do-files (%file*= name type sub))
 	      (multiple-value-bind (name type) (%std-name-and-type sub)
-		(setq ans (%cons-pathname (or dir-list (setq dir-list (reverse so-far))) name type))
+		(setq ans (%cons-pathname (or dir-list (setq dir-list (reverse so-far))) name type nil device))
 		(when (or (null test) (funcall test ans))
 		  (push (if follow-links (truename ans) ans) result))))))))
     result))
