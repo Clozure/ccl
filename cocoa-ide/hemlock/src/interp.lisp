@@ -411,3 +411,18 @@
 (defun get-system-default-behavior-command ()
   ;; Get the command used to invoke "System Default Behavior"
   (getstring (value hemlock::system-default-behavior-command-name) *command-names*))
+
+(defvar *native-key-events* (make-hash-table :test #'eq))
+
+
+
+(defun native-key-event-p (key)
+  (check-type key key-event)
+  (gethash key *native-key-events*))
+
+
+(defun (setf native-key-event-p) (flag key)
+  (check-type key key-event)
+  (if flag
+    (setf (gethash key *native-key-events*) flag)
+    (remhash key *native-key-events*)))

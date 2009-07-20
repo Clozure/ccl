@@ -440,6 +440,7 @@
    #:invoke-command
    #:abort-to-toplevel #:abort-current-command
    #:set-scroll-position
+   #:native-key-event-p
 
    ;; from line.lisp
    #:line #:linep #:line-previous #:line-next #:line-plist #:line-signature
