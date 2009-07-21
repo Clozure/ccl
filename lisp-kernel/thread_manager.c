@@ -721,7 +721,11 @@ destroy_semaphore(void **s)
   if (*s) {
 #ifdef USE_POSIX_SEMAPHORES
     sem_destroy((sem_t *)*s);
-    free(*s);
+    if (lisp_global(IN_GC)) {
+      postGCfree(*s);
+    } else {
+      free(*s);
+    }
 #endif
 #ifdef USE_MACH_SEMAPHORES
     semaphore_destroy(mach_task_self(),((semaphore_t)(natural) *s));
