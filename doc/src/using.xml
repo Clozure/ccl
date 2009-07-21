@@ -1331,7 +1331,9 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       <title>Linux</title>
       
       <para>Pathname strings are treated as null-terminated strings
-        encoded according to the current locale.</para>
+        coded in the encoding named by the value returned by the function
+      <varname>CCL:PATHNAME-ENCODING-NAME</varname>.  This value may be changed
+      with <varname>SETF</varname>.</para>
     </sect2>
     <sect2 id="pathnames-on-freebsd">
       <title>FreeBSD</title>
