@@ -22,6 +22,7 @@
 ;;; the next character typed.
 ;;;
 (setf (key-translation #k"escape") '(:bits :meta))
+(setf (key-translation #k"control-[") '(:bits :meta))
 (setf (key-translation #k"control-z") '(:bits :control :meta))
 (setf (key-translation #k"control-Z") '(:bits :control :meta))
 (setf (key-translation #k"control-^") '(:bits :control))
