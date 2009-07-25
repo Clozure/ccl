@@ -31,7 +31,7 @@
 (in-package "CCL")
 
 (eval-when (:compile-toplevel :execute)
-  #+apple-objc
+  #+(or apple-objc cocotron-objc)
   (use-interface-dir :cocoa)
   #+gnu-objc
   (use-interface-dir :gnustep))
@@ -392,7 +392,7 @@
       (setq bit-offset (+ bit-offset (foreign-type-bits ftype))))))
 
 (defmethod (setf class-direct-slots) :before (dslotds (class objc::objc-class))
-  #-apple-objc-2.0
+  #-(or apple-objc-2.0 cocotron-objc)
   (let* ((foreign-dslotds
 	  (loop for d in dslotds
 		when (typep d 'foreign-direct-slot-definition)
@@ -407,7 +407,7 @@
           (if (not (foreign-direct-slot-definition-bit-offset d))
             (return nil)))
       (set-objc-foreign-direct-slot-offsets foreign-dslotds bit-offset)))
-  #+apple-objc-2.0
+  #+(or apple-objc-2.0 cocotron-objc)
   ;; Add ivars for each foreign direct slot, then ask the runtime for
   ;; the ivar's byte offset.  (Note that the ObjC 2.0 ivar initialization
   ;; protocol doesn't seem to offer support for bitfield-valued ivars.)
@@ -430,7 +430,7 @@
                         (ash offset 3))))))))))
 
 
-#+apple-objc-2.0
+#+(or apple-objc-2.0 cocotron-objc)
 (defun %revive-foreign-slots (class)
   (dolist (dslotd (class-direct-slots class))
     (when (typep dslotd 'foreign-direct-slot-definition)
@@ -493,12 +493,12 @@
   ;; If C is a non-null ObjC class that contains an instance variable
   ;; named NAME, return that instance variable's offset,  else return
   ;; NIL.
-  #+apple-objc-2.0
+  #+(or apple-objc-2.0 cocotron-objc)
   (with-cstrs ((name name))
     (with-macptrs ((ivar (#_class_getInstanceVariable c name)))
       (unless (%null-ptr-p ivar)
         (#_ivar_getOffset ivar))))
-  #-apple-objc-2.0
+  #-(or apple-objc-2.0 cocotron-objc)
   (when (objc-class-p c)
     (with-macptrs ((ivars (pref c :objc_class.ivars)))
       (unless (%null-ptr-p ivars)
@@ -513,9 +513,9 @@
   (labels ((locate-objc-slot (name class)
 	     (unless (%null-ptr-p class)
 		 (or (%objc-ivar-offset-in-class name class)
-		     (with-macptrs ((super #+apple-objc-2.0
+		     (with-macptrs ((super #+(or apple-objc-2.0 cocotron-objc)
                                            (#_class_getSuperclass class)
-                                           #-apple-objc-2.0
+                                           #-(or apple-objc-2.0 cocotron-objc)
                                            (pref class :objc_class.super_class)))
 		       (unless (or (%null-ptr-p super) (eql super class))
 			 (locate-objc-slot name super)))))))
@@ -787,11 +787,11 @@
 (defmethod initialize-instance :after ((class objc:objc-class) &rest initargs)
   (declare (ignore initargs))
   (unless (slot-value class 'foreign)
-    #-apple-objc-2.0
+    #-(or apple-objc-2.0 cocotron-objc)
     (multiple-value-bind (ivars instance-size)
 	(%make-objc-ivars class)
       (%add-objc-class class ivars instance-size))
-    #+apple-objc-2.0
+    #+(or apple-objc-2.0 cocotron-objc)
     (%add-objc-class class)))
 
 (defmethod shared-initialize ((instance objc:objc-object) slot-names 
@@ -851,16 +851,16 @@
 		   (class-of existing-metaclass))
 	       ;; A root metaclass has the corresponding class as
 	       ;; its superclass, and that class has no superclass.
-	       (with-macptrs ((super #+apple-objc-2.0
+	       (with-macptrs ((super #+(or apple-objc-2.0 cocotron-objc)
                                      (#_class_getSuperclass metaclass)
-                                     #-apple-objc-2.0
+                                     #-(or apple-objc-2.0 cocotron-objc)
                                      (pref metaclass :objc_class.super_class)))
 		 (and (not (%null-ptr-p super))
 		      (not (%objc-metaclass-p super))
 		      (%null-ptr-p
-                       #+apple-objc-2.0
+                       #+(or apple-objc-2.0 cocotron-objc)
                        (#_class_getSuperclass super)
-                       #-apple-objc-2.0
+                       #-(or apple-objc-2.0 cocotron-objc)
                        (pref super :objc_class.super_class)))))
 	;; Whew! it's ok to reinitialize the class.
 	(progn

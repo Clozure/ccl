@@ -173,7 +173,8 @@
     `(float ,x +cgfloat-zero+)))
 
 
-
+#+darwin-target
+(progn
 ;;; AEDesc (Apple Event Descriptor)
 
 (define-typed-foreign-struct-class ns::aedesc (:<AED>esc ns::aedesc-p ns::init-aedesc ns::make-aedesc ns::with-aedesc)
@@ -188,6 +189,7 @@
               (ns::aedesc-descriptor-type a)
               (ns::aedesc-data-handle a)))
     (describe-macptr-allocation-and-address a stream)))
+)
 
 ;;; It's not clear how useful this would be; I think that it's
 ;;; part of the ObjC 2.0 extensible iteration stuff ("foreach").
@@ -232,7 +234,8 @@
   (defun wrap-boolean (form)
     `(if ,form 1 0)))
 
-
+#-cocotron-objc                         ;nyi
+(progn
 ;;; NSDecimal
 (define-typed-foreign-struct-class ns::ns-decimal (:<NSD>ecimal ns::ns-decimal-p nil nil nil)
   (nil ns::ns-decimal-exponent :<NSD>ecimal._exponent)
@@ -283,7 +286,7 @@
       (format stream "exponent = ~d, length = ~s, is-negative = ~s, is-compact = ~s, mantissa = ~s" (ns::ns-decimal-exponent d) (ns::ns-decimal-length d) (ns::ns-decimal-is-negative d) (ns::ns-decimal-is-compact d) (ns::ns-decimal-mantissa d)))
     (describe-macptr-allocation-and-address d stream)))
 
-
+)
 
     
 ;;; NSRect
@@ -417,9 +420,9 @@
 ;;; Return the typestring for an ObjC METHOD 
 
 (defun method-typestring (method)
-  (%get-cstring #+apple-objc-2.0
+  (%get-cstring #+(or apple-objc-2.0 cocotron-objc)
                 (#_method_getTypeEncoding method)
-                #-apple-objc-2.0
+                #-(or apple-objc-2.0 cocotron-objc)
                 (pref method :objc_method.method_types)))
 
 
@@ -890,10 +893,10 @@
 
 (defun %call-next-objc-method (self class selector sig &rest args)
   (declare (dynamic-extent args))
-  (rlet ((s :objc_super #+apple-objc :receiver #+gnu-objc :self self
-            #+apple-objc-2.0 :super_class #-apple-objc-2.0 :class
-            #+apple-objc-2.0 (#_class_getSuperclass class)
-            #-apple-objc-2.0 (pref class :objc_class.super_class)))
+  (rlet ((s :objc_super #+(or apple-objc cocotron-objc) :receiver #+gnu-objc :self self
+            #+(or apple-objc-2.0 cocotron-objc)  :super_class #-(or apple-objc-2.0 cocotron-objc) :class
+            #+(or apple-objc-2.0 cocotron-objc) (#_class_getSuperclass class)
+            #-(or apple-objc-2.0 cocotron-objc) (pref class :objc_class.super_class)))
     (let* ((siginfo (objc-method-signature-info sig))
            (function (or (objc-method-signature-info-super-function siginfo)
                          (setf (objc-method-signature-info-super-function siginfo)
@@ -903,10 +906,10 @@
 
 
 (defun %call-next-objc-class-method (self class selector sig &rest args)
-  (rlet ((s :objc_super #+apple-objc :receiver #+gnu-objc :self self
-            #+apple-objc-2.0 :super_class #-apple-objc-2.0 :class
-            #+apple-objc-2.0 (#_class_getSuperclass (pref class :objc_class.isa))
-            #-apple-objc-2.0 (pref (pref class #+apple-objc :objc_class.isa #+gnu-objc :objc_class.class_pointer) :objc_class.super_class)))
+  (rlet ((s :objc_super #+(or apple-objc cocotron-objc) :receiver #+gnu-objc :self self
+            #+(or apple-objc-2.0 cocotron-objc) :super_class #-(or apple-objc-2.0 cocotron-objc) :class
+            #+(or apple-objc-2.0 cocotron-objc) (#_class_getSuperclass (pref class :objc_class.isa))
+            #-(or apple-objc-2.0 cocotron-objc) (pref (pref class #+apple-objc :objc_class.isa #+gnu-objc :objc_class.class_pointer) :objc_class.super_class)))
     (let* ((siginfo (objc-method-signature-info sig))
            (function (or (objc-method-signature-info-super-function siginfo)
                          (setf (objc-method-signature-info-super-function siginfo)

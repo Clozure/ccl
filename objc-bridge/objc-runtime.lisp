@@ -24,7 +24,8 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   #+darwin-target (pushnew :apple-objc *features*)
   #+(and darwin-target 64-bit-target) (pushnew :apple-objc-2.0 *features*)
-  #-darwin-target (pushnew :gnu-objc *features*))
+  #+win32-target (pushnew :cocotron-objc *features*)
+  #-(or darwin-target win32-target) (pushnew :gnu-objc *features*))
 
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -46,6 +47,8 @@
     (use-interface-dir :cocoa)
     #+nomore
     (use-interface-dir :carbon))        ; need :carbon for things in this file
+  #+cocotron-objc
+  (use-interface-dir :cocoa)
   #+gnu-objc
   (use-interface-dir :gnustep))
 
@@ -59,30 +62,30 @@
 ;;; NSInteger and NSUInteger probably belong here.
 ;;; CGFloat not so much.
 
-#-apple-objc-2.0
+#-(or apple-objc-2.0 cocotron-objc)
 (progn
-  (def-foreign-type :<CGF>loat :float)
-  (def-foreign-type :<NSUI>nteger :unsigned)
-  (def-foreign-type :<NSI>nteger :signed)
+  (def-foreign-type #>CGFloat :float)
+  (def-foreign-type #>NSUInteger :unsigned)
+  (def-foreign-type #>NSInteger :signed)
   )
 
 (defconstant +cgfloat-zero+
-  #+(and apple-objc-2.0 64-bit-target) 0.0d0
-  #-(and apple-objc-2.0 64-bit-target) 0.0f0)
+  #+(and (or apple-objc-2.0 cocotron-objc) 64-bit-target) 0.0d0
+  #-(and (or apple-objc-2.0 cocotron-objc) 64-bit-target) 0.0f0)
 
 (deftype cgfloat ()
-  #+(and apple-objc-2.0 64-bit-target) 'double-float
-  #-(and apple-objc-2.0 64-bit-target) 'single-float)
+  #+(and (or apple-objc-2.0 cocotron-objc) 64-bit-target) 'double-float
+  #-(and (or apple-objc-2.0 cocotron-objc) 64-bit-target) 'single-float)
 
 (deftype cg-float () 'cgfloat)
 
 (deftype nsuinteger ()
-  #+(and apple-objc-2.0 64-bit-target) '(unsigned-byte 64)
-  #-(and apple-objc-2.0 64-bit-target) '(unsigned-byte 32))
+  #+(and (or apple-objc-2.0 cocotron-objc) 64-bit-target) '(unsigned-byte 64)
+  #-(and (or apple-objc-2.0 cocotron-objc) 64-bit-target) '(unsigned-byte 32))
 
 (deftype nsinteger ()
-  #+(and apple-objc-2.0 64-bit-target) '(signed-byte 64)
-  #-(and apple-objc-2.0 64-bit-target) '(signed-byte 32))
+  #+(and (or apple-objc-2.0 cocotron-objc) 64-bit-target) '(signed-byte 64)
+  #-(and (or apple-objc-2.0 cocotron-objc) 64-bit-target) '(signed-byte 32))
 
 
 (defloadvar *NSApp* nil )
@@ -112,7 +115,7 @@
   (values (gethash name *objc-protocols*)))
 
 (defun ensure-objc-classptr-resolved (classptr)
-  #+apple-objc (declare (ignore classptr))
+  #-gnu-objc (declare (ignore classptr))
   #+gnu-objc
   (unless (logtest #$_CLS_RESOLV (pref classptr :objc_class.info))
     (external-call "__objc_resolve_class_links" :void)))
@@ -264,7 +267,7 @@
 	    (or (gethash class objc-class-map)
 		(let* ((id (assign-next-class-id))
 		       (class (%inc-ptr class 0))
-		       (meta (pref class #+apple-objc :objc_class.isa #+gnu-objc :objc_class.class_pointer)))
+		       (meta (pref class #+(or apple-objc cocotron-objc) :objc_class.isa #+gnu-objc :objc_class.class_pointer)))
 		  (setf (gethash class objc-class-map) id)
 		  (setf (svref c id) class
 			(svref csv id)
@@ -327,7 +330,7 @@
 
 
 ;;; Open shared libs.
-#+darwin-target
+#+(or darwin-target cocotron-objc)
 (progn
 (defloadvar *cocoa-event-process* *initial-process*)
 
@@ -348,7 +351,7 @@
   (with-cstrs ((thread-class-name "NSThread")
                (pool-class-name "NSAutoreleasePool")
                (thread-message-selector-name "detachNewThreadSelector:toTarget:withObject:")
-               (exit-selector-name "exit")
+               (exit-selector-name "class")
                (alloc-selector-name "alloc")
                (init-selector-name "init")
                (release-selector-name "release"))
@@ -390,7 +393,11 @@
        ;; We need to load and "initialize" the CoreFoundation library
        ;; in the thread that's going to process events.  Looking up a
        ;; symbol in the library should cause it to be initialized
+       #+apple-objc
        (open-shared-library "/System/Library/Frameworks/Cocoa.framework/Cocoa")
+       #+cocotron-objc
+       (open-shared-library (native-translated-namestring
+                             (truename "ccl:Cocoa'.1'.0'.dll")))
        ;(#_GetCurrentEventQueue)
        (current-ns-thread)
        (create-void-nsthread))))
@@ -451,11 +458,13 @@
 (defun get-appkit-version ()
   #+apple-objc
   #&NSAppKitVersionNumber
+  #+cocotron-objc 1.0                   ; fix this
   #+gnu-objc
   (get-foundation-version))
 
 (defun get-foundation-version ()
-  #&NSFoundationVersionNumber
+  #+apple-objc #&NSFoundationVersionNumber
+  #+cocotron-objc 1.0                   ; fix this
   #+gnu-objc (%get-cstring (foreign-symbol-address "gnustep_base_version")))
 
 (defparameter *appkit-library-version-number* (get-appkit-version))
@@ -477,11 +486,28 @@
 
 (defloadvar *NSConstantString-class*
   (with-cstrs ((name "NSConstantString"))
-    #+apple-objc (#_objc_lookUpClass name)
+    #+(or apple-objc cocotron-objc) (#_objc_lookUpClass name)
     #+gnu-objc (#_objc_lookup_class name)))
 
 
+;;; Catch frames are allocated on a stack, so it's OK to pass their
+;;; addresses around to foreign code.
+(defcallback throw-to-catch-frame (:signed-fullword value
+                                   :address frame
+                                   :void)
+  (throw (%get-object frame target::catch-frame.catch-tag) value))
 
+
+#+(and x8632-target (or apple-objc cocotron-objc))
+(defloadvar *setjmp-catch-rip-code*
+    (let* ((code-bytes '(#x83 #xec #x10 ; subl $16,%esp
+                         #x89 #x04 #x24 ; movl %eax,(%esp)
+                         #x89 #x7c #x24 #x04   ; movl %edi,4(%esp)
+                         #xff #xd3))    ; call *%ebx
+           (nbytes (length code-bytes))
+           (p (malloc nbytes)))
+      (dotimes (i nbytes p)
+        (setf (%get-unsigned-byte p i) (pop code-bytes)))))
 
 #+apple-objc
 (progn
@@ -594,23 +620,9 @@
       (dotimes (i nbytes p)
         (setf (%get-unsigned-byte p i) (pop code-bytes)))))
 
-#+x8632-target
-(defloadvar *setjmp-catch-rip-code*
-    (let* ((code-bytes '(#x83 #xec #x10 ; subl $16,%esp
-                         #x89 #x04 #x24 ; movl %eax,(%esp)
-                         #x89 #x7c #x24 #x04   ; movl %edi,4(%esp)
-                         #xff #xd3))    ; call *%ebx
-           (nbytes (length code-bytes))
-           (p (malloc nbytes)))
-      (dotimes (i nbytes p)
-        (setf (%get-unsigned-byte p i) (pop code-bytes)))))
 
-;;; Catch frames are allocated on a stack, so it's OK to pass their
-;;; addresses around to foreign code.
-(defcallback throw-to-catch-frame (:signed-fullword value
-                                   :address frame
-                                   :void)
-  (throw (%get-object frame target::catch-frame.catch-tag) value))
+
+
 
 ;;; Initialize a jmp_buf so that when it's #_longjmp-ed to, it'll
 ;;; wind up calling THROW-TO-CATCH-FRAME with the specified catch
@@ -663,6 +675,42 @@
 
 )
 
+#+win32-target
+(progn
+  (eval-when (:compile-toplevel :execute)
+    (progn
+      (defconstant jb-ebp 0)
+      (defconstant jb-ebx 4)
+      (defconstant jb-edi 8)
+      (defconstant jb-esi 12)
+      (defconstant jb-esp 16)
+      (defconstant jb-eip 20)
+      (defconstant jb-seh 24)
+      (defconstant jb-seh-info 28)))
+
+  (defx8632lapfunction set-jb-seh ((jb arg_z))
+    (macptr-ptr arg_z temp0)             ;fixnum-aligned
+    (movl (@ (% fs) 0) (% imm0))
+    (movl (% imm0) (@ jb-seh (% temp0)))
+    (cmpl ($ -1) (% imm0))
+    (je @store)
+    (movl (@ 12 (% imm0)) (% imm0))
+    @store
+    (movl (% imm0) (@ jb-seh-info (% temp0)))
+    (single-value-return))
+
+(defun %associate-jmp-buf-with-catch-frame (jmp-buf catch-frame c-frame)
+  (%set-object jmp-buf JB-ESP (1+ c-frame))
+  (%set-object jmp-buf JB-EBP (1+ c-frame))
+  (setf (%get-ptr jmp-buf JB-EBX) throw-to-catch-frame
+        (%get-ptr jmp-buf JB-EIP) *setjmp-catch-rip-code*)
+  (%set-object jmp-buf JB-EDI catch-frame)
+  (set-jb-seh jmp-buf)
+  t)  
+
+  
+  )
+
 ;;; When starting up an image that's had ObjC classes in it, all of
 ;;; those canonical classes (and metaclasses) will have had their type
 ;;; changed (by SAVE-APPLICATION) to, CCL::DEAD-MACPTR and the addresses
@@ -708,7 +756,7 @@
 	  (unless (%null-ptr-p c)
             (setf (gethash c class-map) i)
 	    (unless (gethash m metaclass-map)
-              (%setf-macptr m (pref c #+apple-objc :objc_class.isa
+              (%setf-macptr m (pref c #+(or apple-objc cocotron-objc) :objc_class.isa
 				      #+gnu-objc :objc_class.class_pointer))
               (setf (gethash m metaclass-map) meta-id))
             (note-class-protocols c)))))
@@ -726,18 +774,18 @@
 		 (meta-id (objc-class-id->objc-metaclass-id i))
 		 (m (id->objc-metaclass meta-id)))
             (let* ((class (make-objc-class-pair super (make-cstring (objc-class-id-foreign-name i))))
-                   (meta (pref class #+apple-objc :objc_class.isa
+                   (meta (pref class #+(or apple-objc cocotron-objc) :objc_class.isa
                                #+gnu-objc :objc-class.class_pointer)))
 	    (unless (gethash m metaclass-map)
 	      (%revive-macptr m)
 	      (%setf-macptr m meta)
 	      (setf (gethash m metaclass-map) meta-id))
 	    (%setf-macptr c class))
-            #+apple-objc-2.0
+            #+(or apple-objc-2.0 cocotron-objc)
             (%revive-foreign-slots c)
-            #+apple-objc-2.0
+            #+(or apple-objc-2.0 cocotron-objc)
             (%add-objc-class c)
-            #-apple-objc-2.0
+            #-(or apple-objc-2.0 cocotron-objc)
 	    (multiple-value-bind (ivars instance-size)
 		(%make-objc-ivars c)
 	      (%add-objc-class c ivars instance-size))
@@ -767,29 +815,29 @@
     
 
 (defun %objc-class-instance-size (c)
-  #+apple-objc-2.0
+  #+(or apple-objc-2.0 cocotron-objc)
   (#_class_getInstanceSize c)
-  #-apple-objc-2.0
+  #-(or apple-objc-2.0 cocotron-objc)
   (pref c :objc_class.instance_size))
 
 (defun find-named-objc-superclass (class string)
   (unless (or (null string) (%null-ptr-p class))
-    (with-macptrs ((name #+apple-objc-2.0 (#_class_getName class)
-                         #-apple-objc-2.0 (pref class :objc_class.name)))
+    (with-macptrs ((name #+(or apple-objc-2.0 cocotron-objc) (#_class_getName class)
+                         #-(or apple-objc-2.0 cocotron-objc) (pref class :objc_class.name)))
       (or
        (dotimes (i (length string) class)
          (let* ((b (%get-unsigned-byte name i)))
            (unless (eq b (char-code (schar string i)))
              (return))))
-       (find-named-objc-superclass #+apple-objc-2.0 (#_class_getSuperclass class)
-                                   #-apple-objc-2.0 (pref class :objc_class.super_class)
+       (find-named-objc-superclass #+(or apple-objc-2.0 cocotron-objc) (#_class_getSuperclass class)
+                                   #-(or apple-objc-2.0 cocotron-objc) (pref class :objc_class.super_class)
                                    string)))))
 
 (defun install-foreign-objc-class (class &optional (use-db t))
   (let* ((id (objc-class-id class)))
     (unless id
-      (let* ((name (%get-cstring #+apple-objc-2.0 (#_class_getName class)
-                                 #-apple-objc-2.0 (pref class :objc_class.name)))
+      (let* ((name (%get-cstring #+(or apple-objc-2.0 cocotron-objc) (#_class_getName class)
+                                 #-(or apple-objc-2.0 cocotron-objc) (pref class :objc_class.name)))
              (decl (get-objc-class-decl name use-db)))
         (if (null decl)
           (or (%get-private-objc-class class)
@@ -799,9 +847,9 @@
                   class (id->objc-class id))
             ;; If not mapped, map the superclass (if there is one.)
             (let* ((super (find-named-objc-superclass
-                           #+apple-objc-2.0
+                           #+(or apple-objc-2.0 cocotron-objc)
                            (#_class_getSuperclass class)
-                           #-apple-objc-2.0
+                           #-(or apple-objc-2.0 cocotron-objc)
                            (pref class :objc_class.super_class)
                            (db-objc-class-info-superclass-name decl))))
               (unless (null super)
@@ -818,9 +866,9 @@
                 (unless (id->objc-metaclass-wrapper meta-id)
                   (let* ((meta-foreign-name
                           (%get-cstring
-                           #+apple-objc-2.0
+                           #+(or apple-objc-2.0 cocotron-objc)
                            (#_class_getName meta)
-                           #-apple-objc-2.0
+                           #-(or apple-objc-2.0 cocotron-objc)
                            (pref meta :objc_class.name)))
                          (meta-name
                           (intern
@@ -832,7 +880,7 @@
                                           "NS")))
                            "NS"))
                          (meta-super
-                          (if super (pref super #+apple-objc :objc_class.isa
+                          (if super (pref super #+(or apple-objc cocotron-objc) :objc_class.isa
                                           #+gnu-objc :objc_class.class_pointer))))
                     ;; It's important (here and when initializing the
                     ;; class below) to use the "canonical"
@@ -887,6 +935,12 @@
 	   :bytes ,cstring
 	   :num<B>ytes ,len))
       ,@body)
+  #+cocotron-objc
+    `(rlet ((,nsstr :<NSC>onstant<S>tring
+	   :isa *NSConstantString-class*
+	   :_bytes ,cstring
+	   :_length ,len))
+      ,@body)
   #+gnu-objc
   `(rlet ((,nsstr :<NXC>onstant<S>tring
 	   :isa *NSConstantString-class*
@@ -904,6 +958,11 @@ argument lisp string."
 	       :isa *NSConstantString-Class*
 	       :bytes (make-cstring string)
 	       :num<B>ytes (length string))
+  #+cocotron-objc
+    (make-record :<NSC>onstant<S>tring
+	       :isa *NSConstantString-Class*
+	       :_bytes (make-cstring string)
+	       :_length (length string))
   #+gnu-objc
   (make-record :<NXC>onstant<S>tring
 	       :isa *NSConstantString-Class*
@@ -991,7 +1050,7 @@ argument lisp string."
 ;;; lookup once per session (in general.)
 (defun lookup-objc-class (name &optional error-p)
   (with-cstrs ((cstr (objc-class-name-string name)))
-    (let* ((p (#+apple-objc #_objc_lookUpClass
+    (let* ((p (#+(or apple-objc cocotron-objc) #_objc_lookUpClass
                #+gnu-objc #_objc_lookup_class
 	       cstr)))
       (if (%null-ptr-p p)
@@ -1002,7 +1061,7 @@ argument lisp string."
 (defun %set-pointer-to-objc-class-address (class-name-string ptr)
   (with-cstrs ((cstr class-name-string))
     (%setf-macptr ptr
-		  (#+apple-objc #_objc_lookUpClass
+		  (#+(or apple-objc cocotron-objc) #_objc_lookUpClass
 		   #+gnu-objc #_objc_lookup_class
 		   cstr)))
   nil)
@@ -1050,7 +1109,7 @@ argument lisp string."
 ;;; returns a simple C string.  and can be applied to a class or any
 ;;; instance (returning the class name.)
 (defun objc-class-name (object)
-  #+apple-objc
+  #+(or apple-objc cocotron-objc)
   (with-macptrs (p)
     (%setf-macptr p (#_object_getClassName object))
     (unless (%null-ptr-p p)
@@ -1070,7 +1129,7 @@ argument lisp string."
 ;;; represented by the same SEL.
 (defun get-selector-for (method-name &optional error)
   (with-cstrs ((cmethod-name method-name))
-    (let* ((p (#+apple-objc #_sel_getUid
+    (let* ((p (#+(or apple-objc cocotron-objc) #_sel_getUid
 	       #+gnu-objc #_sel_get_uid
 	       cmethod-name)))
       (if (%null-ptr-p p)
@@ -1200,6 +1259,7 @@ argument lisp string."
 (defun lisp-string-from-sel (sel)
   (%get-cstring
    #+apple-objc sel
+   #+cocotron-objc (#_sel_getName sel)
    #+gnu-objc (#_sel_get_name sel)))
 
 ;;; #_objc_msgSend takes two required arguments (the receiving object
@@ -1213,9 +1273,9 @@ argument lisp string."
 (defmacro objc-message-send (receiver selector-name &rest argspecs)
   (when (evenp (length argspecs))
     (setq argspecs (append argspecs '(:id))))
-  #+apple-objc
+  #+(or apple-objc cocotron-objc)
   (funcall (ftd-ff-call-expand-function *target-ftd*)
-           `(%ff-call (%reference-external-entry-point (load-time-value (external "_objc_msgSend"))))
+           `(%ff-call (%reference-external-entry-point (load-time-value (external "objc_msgSend"))))
            `(:address ,receiver :<SEL> (@selector ,selector-name) ,@argspecs)
            :arg-coerce 'objc-arg-coerce
            :result-coerce 'objc-result-coerce)  
@@ -1238,9 +1298,9 @@ argument lisp string."
 (defmacro objc-message-send-with-selector (receiver selector &rest argspecs)
   (when (evenp (length argspecs))
     (setq argspecs (append argspecs '(:id))))
-  #+apple-objc
+  #+(or apple-objc cocotron-objc)
   (funcall (ftd-ff-call-expand-function *target-ftd*)
-           `(%ff-call (%reference-external-entry-point (load-time-value (external "_objc_msgSend"))))
+           `(%ff-call (%reference-external-entry-point (load-time-value (external "objc_msgSend"))))
            `(:address ,receiver :<SEL> (%get-selector ,selector) ,@argspecs)
            :arg-coerce 'objc-arg-coerce
            :result-coerce 'objc-result-coerce)  
@@ -1285,11 +1345,11 @@ argument lisp string."
 ;;; actually implemented.
 
 (defmacro objc-message-send-stret (structptr receiver selector-name &rest argspecs)
-    #+apple-objc
+    #+(or apple-objc cocotron-objc)
     (let* ((return-typespec (car (last argspecs)))
            (entry-name (if (funcall (ftd-ff-call-struct-return-by-implicit-arg-function *target-ftd*) return-typespec)
-                         "_objc_msgSend_stret"
-                         "_objc_msgSend")))
+                         "objc_msgSend_stret"
+                         "objc_msgSend")))
       (funcall (ftd-ff-call-expand-function *target-ftd*)
                `(%ff-call (%reference-external-entry-point (load-time-value (external ,entry-name))))
         `(,structptr :address ,receiver :<SEL> (@selector ,selector-name) ,@argspecs)
@@ -1312,11 +1372,11 @@ argument lisp string."
                :result-coerce 'objc-result-coerce))))
 
 (defmacro objc-message-send-stret-with-selector (structptr receiver selector &rest argspecs)
-    #+apple-objc
+    #+(or apple-objc cocotron-objc)
     (let* ((return-typespec (car (last argspecs)))
            (entry-name (if (funcall (ftd-ff-call-struct-return-by-implicit-arg-function *target-ftd*) return-typespec)
-                         "_objc_msgSend_stret"
-                         "_objc_msgSend")))
+                         "objc_msgSend_stret"
+                         "objc_msgSend")))
       (funcall (ftd-ff-call-expand-function *target-ftd*)
                `(%ff-call (%reference-external-entry-point (load-time-value (external ,entry-name))))
         `(,structptr :address ,receiver :<SEL> (%get-selector ,selector) ,@argspecs)
@@ -1345,9 +1405,9 @@ argument lisp string."
 (defmacro objc-message-send-super (super selector-name &rest argspecs)
   (when (evenp (length argspecs))
     (setq argspecs (append argspecs '(:id))))
-  #+apple-objc
+  #+(or apple-objc cocotron-objc)
   (funcall (ftd-ff-call-expand-function *target-ftd*)
-           `(%ff-call (%reference-external-entry-point (load-time-value (external "_objc_msgSendSuper"))))
+           `(%ff-call (%reference-external-entry-point (load-time-value (external "objc_msgSendSuper"))))
            `(:address ,super :<SEL> (@selector ,selector-name) ,@argspecs)
            :arg-coerce 'objc-arg-coerce
            :result-coerce 'objc-result-coerce)
@@ -1370,9 +1430,9 @@ argument lisp string."
 (defmacro objc-message-send-super-with-selector (super selector &rest argspecs)
   (when (evenp (length argspecs))
     (setq argspecs (append argspecs '(:id))))
-  #+apple-objc
+  #+(or apple-objc cocotron-objc)
   (funcall (ftd-ff-call-expand-function *target-ftd*)
-           `(%ff-call (%reference-external-entry-point (load-time-value (external "_objc_msgSendSuper"))))
+           `(%ff-call (%reference-external-entry-point (load-time-value (external "objc_msgSendSuper"))))
            `(:address ,super :<SEL> ,selector ,@argspecs)
            :arg-coerce 'objc-arg-coerce
            :result-coerce 'objc-result-coerce)
@@ -1395,11 +1455,11 @@ argument lisp string."
 ;;; Send to superclass method, returning a structure. See above.
 (defmacro objc-message-send-super-stret
     (structptr super selector-name &rest argspecs)
-  #+apple-objc
+  #+(or apple-objc cocotron-objc)
     (let* ((return-typespec (car (last argspecs)))
            (entry-name (if (funcall (ftd-ff-call-struct-return-by-implicit-arg-function *target-ftd*) return-typespec)
-                         "_objc_msgSendSuper_stret"
-                         "_objc_msgSendSuper")))
+                         "objc_msgSendSuper_stret"
+                         "objc_msgSendSuper")))
       (funcall (ftd-ff-call-expand-function *target-ftd*)
                `(%ff-call (%reference-external-entry-point (load-time-value (external ,entry-name))))
                `(,structptr :address ,super :<SEL> (@selector ,selector-name) ,@argspecs)
@@ -1424,11 +1484,11 @@ argument lisp string."
 
 (defmacro objc-message-send-super-stret-with-selector
     (structptr super selector &rest argspecs)
-  #+apple-objc
+  #+(or apple-objc cocotron-objc)
     (let* ((return-typespec (car (last argspecs)))
            (entry-name (if (funcall (ftd-ff-call-struct-return-by-implicit-arg-function *target-ftd*) return-typespec)
-                         "_objc_msgSendSuper_stret"
-                         "_objc_msgSendSuper")))
+                         "objc_msgSendSuper_stret"
+                         "objc_msgSendSuper")))
       (funcall (ftd-ff-call-expand-function *target-ftd*)
                `(%ff-call (%reference-external-entry-point (load-time-value (external ,entry-name))))
                `(,structptr :address ,super :<SEL> ,selector ,@argspecs)
@@ -1509,7 +1569,7 @@ argument lisp string."
                  arg-temp)
            (incf nstackargs)))))))
 
-#+(and apple-objc x8632-target)
+#+x8632-target
 (defun %process-varargs-list (ptr index arglist)
   (dolist (arg-temp arglist)
     (typecase arg-temp
@@ -1717,7 +1777,7 @@ argument lisp string."
                    (%setf-macptr-to-object ,stackparams (+ ,cframe 8))
                    (progn ,@(static-arg-forms))
                    (%process-varargs-list ,regparams ,fpparams ,stackparams ,n-static-gprs ,n-static-fprs ,n-static-stack-args ,rest-arg)
-                   (%do-ff-call ,fpr-total ,cframe ,fpparams (%reference-external-entry-point (load-time-value (external "_objc_msgSend"))))
+                   (%do-ff-call ,fpr-total ,cframe ,fpparams (%reference-external-entry-point (load-time-value (external "objc_msgSend"))))
                    ,@(if op
                          `((,op ,regparams ,result-offset))
                          `(())))))))))))
@@ -1818,14 +1878,14 @@ argument lisp string."
              (with-macptrs ((,regparams (pref ,marg-ptr :<MARG>.reg<P>arams)))
                (progn ,@(static-arg-forms))
                (%process-varargs-list ,regparams ,marg-ptr ,n-static-gprs ,n-static-fprs  ,rest-arg)
-               (external-call "_objc_msgSendv"
+               (external-call "objc_msgSendv"
                               :address ,receiver
                               :address ,selptr
                               :size_t (+ 32 (* 4 ,gpr-total))
                               :address ,marg-ptr
                               ,return-type-spec)))))))))
 
-#+(and apple-objc x8632-target)
+#+(and (or apple-objc cocotron-objc) x8632-target)
 (defun %compile-varargs-send-function-for-signature (sig)
   (let* ((return-type-spec (car sig))
          (arg-type-specs (butlast (cdr sig)))
@@ -1902,7 +1962,7 @@ argument lisp string."
 	    (%stack-block ((,marg-ptr ,marg-size))
 	      (progn ,@(static-arg-forms))
 	      (%process-varargs-list ,marg-ptr ,static-arg-words ,rest-arg)
-	      (external-call "_objc_msgSendv"
+	      (external-call "objc_msgSendv"
 			     :id ,receiver
 			     :<SEL> ,selptr
 			     :size_t ,marg-size
@@ -1984,7 +2044,7 @@ argument lisp string."
                   (progn ,@(static-arg-forms))
                   (%load-fp-arg-regs (%process-varargs-list ,gen-arg-ptr ,fp-arg-ptr ,n-static-gprs ,n-static-fprs  ,rest-arg) ,fp-arg-ptr)
                   
-                  (%do-ff-call nil (%reference-external-entry-point (load-time-value (external "_objc_msgSend"))))
+                  (%do-ff-call nil (%reference-external-entry-point (load-time-value (external "objc_msgSend"))))
                   ;; Using VALUES here is a hack: the multiple-value
                   ;; returning machinery clobbers imm0.
                   (values (%%ff-result ,(foreign-type-to-representation-type return-type-spec))))))))))))
@@ -2230,7 +2290,7 @@ argument lisp string."
 
 ;;; Make a meta-class object (with no instance variables or class
 ;;; methods.)
-#-apple-objc-2.0
+#-(or apple-objc-2.0 cocotron-objc)
 (defun %make-basic-meta-class (nameptr superptr rootptr)
   #+apple-objc
   (let* ((method-vector (%make-method-vector)))
@@ -2261,7 +2321,7 @@ argument lisp string."
                :protocols (%null-ptr)
                :gc_object_type (%null-ptr)))
 
-#-apple-objc-2.0
+#-(or apple-objc-2.0 cocotron-objc)
 (defun %make-class-object (metaptr superptr nameptr ivars instance-size)
   #+apple-objc
   (let* ((method-vector (%make-method-vector)))
@@ -2290,9 +2350,9 @@ argument lisp string."
 		 :protocols (%null-ptr)))
 
 (defun make-objc-class-pair (superptr nameptr)
-  #+apple-objc-2.0
+  #+(or apple-objc-2.0 cocotron-objc)
   (#_objc_allocateClassPair superptr nameptr 0)
-  #-apple-objc-2.0
+  #-(or apple-objc-2.0 cocotron-objc)
   (%make-class-object
    (%make-basic-meta-class nameptr superptr (@class "NSObject"))
    superptr
@@ -2301,8 +2361,8 @@ argument lisp string."
    0))
 
 (defun superclass-instance-size (class)
-  (with-macptrs ((super #+apple-objc-2.0 (#_class_getSuperclass class)
-                        #-apple-objc-2.0 (pref class :objc_class.super_class)))
+  (with-macptrs ((super #+(or apple-objc-2.0 cocotron-objc) (#_class_getSuperclass class)
+                        #-(or apple-objc-2.0 cocotron-objc) (pref class :objc_class.super_class)))
     (if (%null-ptr-p super)
       0
       (%objc-class-instance-size super))))
@@ -2325,14 +2385,14 @@ argument lisp string."
 )
 
 (defun %objc-metaclass-p (class)
-  #+apple-objc-2.0 (not (eql #$NO (#_class_isMetaClass class)))
-  #-apple-objc-2.0
+  #+(or apple-objc-2.0 cocotron-objc) (not (eql #$NO (#_class_isMetaClass class)))
+  #-(or apple-objc-2.0 cocotron-objc)
   (logtest (pref class :objc_class.info)
 	   #+apple-objc #$CLS_META
 	   #+gnu-objc #$_CLS_META))
 
 ;; No way to tell in Objc-2.0.  Does anything care ?
-#-apple-objc-2.0
+#-(or apple-objc-2.0 cocotron-objc)
 (defun %objc-class-posing-p (class)
   (logtest (pref class :objc_class.info)
 	   #+apple-objc #$CLS_POSING
@@ -2362,9 +2422,9 @@ argument lisp string."
 	   (meta-name (intern (format nil "+~a" name)
 			      (symbol-package name)))
 	   (meta-super (canonicalize-registered-metaclass
-                        #+apple-objc-2.0
+                        #+(or apple-objc-2.0 cocotron-objc)
                         (#_class_getSuperclass meta)
-                        #-apple-objc-2.0
+                        #-(or apple-objc-2.0 cocotron-objc)
 			(pref meta :objc_class.super_class))))
       (initialize-instance meta
 			 :name meta-name
@@ -2378,7 +2438,7 @@ argument lisp string."
 
 ;;; Set up the class's ivar_list and instance_size fields, then
 ;;; add the class to the ObjC runtime.
-#-apple-objc-2.0
+#-(or apple-objc-2.0 cocotron-objc)
 (defun %add-objc-class (class ivars instance-size)
   (setf
    (pref class :objc_class.ivars) ivars
@@ -2409,7 +2469,7 @@ argument lisp string."
 	  (pref class :objc_class.info) (logior #$_CLS_RESOLV (pref class :objc_class.info)))
     (#___objc_exec_class m)))
 
-#+apple-objc-2.0
+#+(or apple-objc-2.0 cocotron-objc)
 (defun %add-objc-class (class)
   (#_objc_registerClassPair class))
 
@@ -2492,8 +2552,8 @@ argument lisp string."
   (let* ((info (%get-private-objc-class classptr)))
     (when info
       (or (private-objc-class-info-declared-ancestor info)
-          (with-macptrs ((super #+apple-objc-2.0 (#_class_getSuperclass classptr)
-                                #-apple-objc-2.0 (pref classptr :objc_class.super_class)))
+          (with-macptrs ((super #+(or apple-objc-2.0 cocotron-objc) (#_class_getSuperclass classptr)
+                                #-(or apple-objc-2.0 cocotron-objc) (pref classptr :objc_class.super_class)))
             (loop
               (when (%null-ptr-p super)
                 (return))
@@ -2501,8 +2561,8 @@ argument lisp string."
                 (if id
                   (return (setf (private-objc-class-info-declared-ancestor info)
                                 id))
-                  (%setf-macptr super #+apple-objc-2.0 (#_class_getSuperclass super)
-                                #-apple-objc-2.0 (pref super :objc_class.super_class))))))))))
+                  (%setf-macptr super #+(or apple-objc-2.0 cocotron-objc) (#_class_getSuperclass super)
+                                #-(or apple-objc-2.0 cocotron-objc) (pref super :objc_class.super_class))))))))))
 
 (defun objc-class-or-private-class-id (classptr)
   (or (objc-class-id classptr)
@@ -2514,7 +2574,7 @@ argument lisp string."
     (if (with-macptrs (q)
           (safe-get-ptr p q)
           (not (%null-ptr-p q)))
-      (with-macptrs ((parent #+apple-objc (pref p :objc_object.isa)
+      (with-macptrs ((parent #+(or apple-objc cocotron-objc) (pref p :objc_object.isa)
                              #+gnu-objc (pref p :objc_object.class_pointer)))
         (or
          (objc-class-id parent)
@@ -2550,7 +2610,7 @@ argument lisp string."
 ;;; that the objc runtime will invalidate any cached references
 ;;; to the old IMP, at least as far as objc method dispatch is
 ;;; concerned.
-#-apple-objc-2.0
+#-(or apple-objc-2.0 cocotron-objc)
 (defun %mlist-containing (classptr selector typestring imp)
   #-apple-objc (declare (ignore classptr selector typestring imp))
   #+apple-objc
@@ -2580,7 +2640,7 @@ argument lisp string."
 	      
 
 (defun %add-objc-method (classptr selector typestring imp)
-  #+apple-objc-2.0
+  #+(or apple-objc-2.0 cocotron-objc)
   (with-cstrs ((typestring typestring))
     (or (not (eql #$NO (#_class_addMethod classptr selector imp typestring)))
         (let* ((m (if (objc-metaclass-p classptr)
@@ -2589,7 +2649,7 @@ argument lisp string."
           (if (not (%null-ptr-p m))
             (#_method_setImplementation m imp)
             (error "Can't add ~s method to class ~s" selector typestring)))))
-  #-apple-objc-2.0
+  #-(or apple-objc-2.0 cocotron-objc)
   (progn
     #+apple-objc
     (#_class_addMethods classptr
@@ -2636,7 +2696,7 @@ argument lisp string."
 	 (imp (lisp-objc-method-imp m)))
     (%add-objc-method
      (if (lisp-objc-method-class-p m)
-       (pref class #+apple-objc :objc_class.isa #+gnu-objc :objc_class.class_pointer)
+       (pref class #+(or apple-objc cocotron-objc) :objc_class.isa #+gnu-objc :objc_class.class_pointer)
        class)
      sel
      typestring
@@ -2806,27 +2866,27 @@ argument lisp string."
 	  `(progn
 	    (defcallback ,impname
                 (:without-interrupts nil
-                 #+(and openmcl-native-threads apple-objc) :error-return
-                 #+(and openmcl-native-threads apple-objc)  (condition objc-callback-error-return) ,@params ,resulttype)
+                 #+(and openmcl-native-threads (or apple-objc cocotron-objc)) :error-return
+                 #+(and openmcl-native-threads (or apple-objc cocotron-objc))  (condition objc-callback-error-return) ,@params ,resulttype)
               (declare (ignorable ,_cmd))
               ,@decls
               (rlet ((,super :objc_super
-                       #+apple-objc :receiver #+gnu-objc :self ,self
-                       #+apple-objc-2.0 :super_class #-apple-objc-2.0 :class
+                       #+(or apple-objc coctron-objc) :receiver #+gnu-objc :self ,self
+                       #+(or apple-objc-2.0 cocotron-objc) :super_class #-(or apple-objc-2.0 cocotron-objc) :class
                        ,@(if class-p
-                             #+apple-objc-2.0
-                             `((external-call "_class_getSuperclass"
+                             #+(or apple-objc-2.0 cocotron-objc)
+                             `((external-call "class_getSuperclass"
                                 :address (pref (@class ,class-name) :objc_class.isa) :address))
-                             #-apple-objc-2.0
+                             #-(or apple-objc-2.0 cocotron-objc)
                              `((pref
                                 (pref (@class ,class-name)
                                  #+apple-objc :objc_class.isa
                                  #+gnu-objc :objc_class.class_pointer)
                                 :objc_class.super_class))
-                             #+apple-objc-2.0
-                             `((external-call "_class_getSuperclass"
+                             #+(or apple-objc-2.0 cocotron-objc)
+                             `((external-call "class_getSuperclass"
                                 :address (@class ,class-name) :address))
-                             #-apple-objc-2.0
+                             #-(or apple-objc-2.0 cocotron-objc)
                              `((pref (@class ,class-name) :objc_class.super_class)))))
                 (macrolet ((send-super (msg &rest args &environment env) 
                              (make-optimized-send nil msg args env nil ',super ,class-name))
@@ -2854,7 +2914,7 @@ argument lisp string."
 
 (defun %objc-struct-return (return-temp size value)
   (unless (eq return-temp value)
-    (#_bcopy value return-temp size)))
+    (#_memmove return-temp value size)))
 
 (defmacro objc:defmethod (name (self-arg &rest other-args) &body body &environment env)
   (collect ((arglist)
@@ -2974,15 +3034,15 @@ argument lisp string."
   
 
 (defun class-get-instance-method (class sel)
-  #+apple-objc (#_class_getInstanceMethod class sel)
+  #+(or apple-objc cocotron-objc) (#_class_getInstanceMethod class sel)
   #+gnu-objc (#_class_get_instance_method class sel))
 
 (defun class-get-class-method (class sel)
-  #+apple-objc (#_class_getClassMethod class sel)
+  #+(or apple-objc cocotron-objc) (#_class_getClassMethod class sel)
   #+gnu-objc   (#_class_get_class_method class sel))
 
 (defun method-get-number-of-arguments (m)
-  #+apple-objc (#_method_getNumberOfArguments m)
+  #+(or apple-objc cocotron-objc) (#_method_getNumberOfArguments m)
   #+gnu-objc (#_method_get_number_of_arguments m))
 
 #+(and apple-objc (not apple-objc-2.0) ppc-target)
@@ -3034,7 +3094,7 @@ argument lisp string."
 
 ;;; The NSHandler2 type was visible in Tiger headers, but it's not
 ;;; in the Leopard headers.
-#-apple-objc-2.0
+#+(and apple-objc (not apple-objc-2.0))
 (def-foreign-type #>NSHandler2_private
   (:struct #>NSHandler2_private
     (:_state :jmp_buf)
@@ -3061,6 +3121,22 @@ argument lisp string."
                  (progn
                    ,@body))))
         (check-ns-exception ,nshandler))))
+  #+cocotron-objc
+  (let* ((xframe (gensym))
+         (cframe (gensym)))
+    `(rletZ ((,xframe #>NSExceptionFrame))
+      (unwind-protect
+           (progn
+             (external-call "__NSPushExceptionFrame" :address ,xframe :void)
+             (catch ,xframe
+               (with-c-frame ,cframe
+                 (%associate-jmp-buf-with-catch-frame
+                  ,xframe
+                  (%fixnum-ref (%current-tcr) target::tcr.catch-top)
+                  ,cframe)
+                 (progn
+                   ,@body))))
+        (check-ns-exception ,xframe))))
   #+gnu-objc
   `(progn ,@body)
   )
@@ -3076,6 +3152,13 @@ argument lisp string."
                                            :address)))
     (if (%null-ptr-p exception)
       (external-call "__NSRemoveHandler2" :address nshandler :void)
+      (error (ns-exception->lisp-condition (%inc-ptr exception 0))))))
+
+#+cocotron-objc
+(defun check-ns-exception (xframe)
+  (with-macptrs ((exception (pref xframe #>NSExceptionFrame.exception)))
+    (if (%null-ptr-p exception)
+      (external-call "__NSPopExceptionFrame" :address xframe :void)
       (error (ns-exception->lisp-condition (%inc-ptr exception 0))))))
 
 

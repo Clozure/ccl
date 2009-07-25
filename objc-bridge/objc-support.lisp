@@ -14,7 +14,7 @@
 
 
 
-#+apple-objc
+#+(or apple-objc cocotron-objc)
 (defun iterate-over-objc-classes (fn)
   (let* ((n (#_objc_getClassList (%null-ptr) 0)))
     (declare (fixnum n))
@@ -25,7 +25,7 @@
         (declare (fixnum i))
         (funcall fn (paref buffer (:* :id) i))))))
 
-#+apple-objc
+#+(or apple-objc cocotron-objc)
 (defun count-objc-classes ()
   (#_objc_getClassList (%null-ptr) 0))  
 
@@ -63,7 +63,7 @@
         proto))))
 
 (defun note-class-protocols (class)
-  #-apple-objc-2.0
+  #-(or apple-objc-2.0 cocotron-objc)
   (do* ((protocols (pref class :objc_class.protocols)
                    (pref protocols :objc_protocol_list.next)))
        ((%null-ptr-p protocols))
@@ -72,8 +72,8 @@
         (dotimes (i count)
           (with-macptrs ((p (paref list (:* (:* (:struct :<P>rotocol))) i)))
             (%note-protocol p))))))
-  #+apple-objc-2.0
-  (rlet ((p-out-count :int))
+  #+(or apple-objc-2.0 cocotron-objc)
+  (rlet ((p-out-count :int 0))
     (with-macptrs ((protocols (#_class_copyProtocolList class p-out-count)))
       (let* ((n (pref p-out-count :int)))
         (dotimes (i n)
@@ -209,6 +209,8 @@
 
 
 #-ascii-only
+(progn
+#-windows-target
 (defun lisp-string-from-nsstring (nsstring)
   ;; The NSData object created here is autoreleased.
   (let* ((data (#/dataUsingEncoding:allowLossyConversion:
@@ -222,8 +224,16 @@
         ;; BLT the 4-byte code-points from the NSData object
         ;; to the string, return the string.
         (%copy-ptr-to-ivector (#/bytes data) 0 string 0 nbytes)))))
-        
 
+#+windows-target
+(defun lisp-string-from-nsstring (nsstring)
+  (let* ((n (#/length nsstring)))
+    (%stack-block ((buf (* (1+ n) (record-length :unichar))))
+      (#/getCharacters: nsstring buf)
+      (setf (%get-unsigned-word buf (+ n n)) 0)
+      (%get-native-utf-16-cstring buf))))
+        
+)
 
 #+ascii-only
 (defun lisp-string-from-nsstring (nsstring)
@@ -264,7 +274,7 @@ instance variable."
 
 
 
-#+apple-objc
+#+(or apple-objc cocotron-objc)         ; not really
 (progn
 
 
@@ -385,6 +395,8 @@ instance variable."
 (defparameter *objc-description-max-length* 1024 "Limit on the length of NSObject description strings if non-NIL.")
 
 (defun %cf-instance-p (instance)
+  #-apple-objc (declare (ignore instance))
+  #+apple-objc
   (> (objc-message-send instance "_cfTypeID" #>CFTypeID) 1))
   
 
@@ -393,7 +405,7 @@ instance variable."
       (objc-metaclass-p nsobject)
       (has-lisp-slot-vector nsobject)
       (let* ((cf-p (%cf-instance-p nsobject)) 
-             (isize (if cf-p (#_malloc_size nsobject) (%objc-class-instance-size (#/class nsobject))))
+             (isize (if cf-p (external-call "malloc_size" :address nsobject :size_t) (%objc-class-instance-size (#/class nsobject))))
              (skip (if cf-p (+ (record-length :id) 4 #+64-bit-target 4) (record-length :id))))
         (declare (fixnum isize skip))
         (or (> skip isize)
@@ -453,6 +465,10 @@ NSObjects describe themselves in more detail than others."
 	    i
 	    (nsobject-description current)
 	    (pref current :<NSA>utorelease<P>ool._released_count))))
+
+#+cocotron-objc
+(defun show-autorelease-pools ()
+  (%string-to-stderr  "No info about current thread's autorelease pools is available"))
 
 (define-toplevel-command :global sap () "Log information about current thread's autorelease-pool(s) to C's standard error stream"
   (show-autorelease-pools))
