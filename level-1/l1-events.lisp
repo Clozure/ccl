@@ -107,20 +107,15 @@
                          (multiple-value-bind (vars inits old-vals) (%check-error-globals)
                            (progv vars old-vals
                              (mapcar (lambda (v f) (set v (funcall f))) vars inits)
-                             (let ((condition (make-condition 'interrupt-signal-condition)))
+                             (let ((condition (make-condition 'interrupt-signal-condition))
+                                   (*top-error-frame* (%current-exception-frame)))
                                (ignoring-without-interrupts
                                  (when *invoke-debugger-hook-on-interrupt*
                                    (let* ((hook *debugger-hook*)
                                           (*debugger-hook* nil))
                                      (when hook
                                        (funcall hook condition hook))))
-                                 (%break-in-frame
-                                  #+ppc-target *fake-stack-frames*
-                                  #+x86-target (or (let* ((xcf (%current-xcf)))
-                                                     (if xcf
-                                                       (%%frame-backlink xcf)))
-                                                   (%get-frame-ptr))
-                                  condition)
+                                 (%break-in-frame *top-error-frame* condition)
                                  (clear-input *terminal-io*))))))))
 
 (defglobal *quit-interrupt-hook* nil)
@@ -142,18 +137,18 @@
 (defun cmain ()
   (thread-handle-interrupts))
 
-(defun select-interactive-abort-process (&aux proc)
-  (or (and (setq proc *interactive-abort-process*)
-           (process-active-p proc)
-           proc)
-      (let* ((sr (input-stream-shared-resource *terminal-input*)))
-        (when sr
-          (or (and (setq proc (shared-resource-current-owner sr))
-                   (process-active-p proc)
-                   proc)
-              (and (setq proc (shared-resource-primary-owner sr))
-                   (process-active-p proc)
-                   proc))))))
+
+(defvar *select-interactive-process-hook* nil)
+
+(defun select-interactive-abort-process ()
+  (flet ((maybe-proc (proc) (and proc (process-active-p proc) proc)))
+    (or (maybe-proc (and *select-interactive-process-hook*
+                         (funcall *select-interactive-process-hook*)))
+        (maybe-proc *interactive-abort-process*)
+        (let* ((sr (input-stream-shared-resource *terminal-input*)))
+          (when sr
+            (or (maybe-proc (shared-resource-current-owner sr))
+                (maybe-proc (shared-resource-primary-owner sr))))))))
 
 (defun handle-gc-hooks ()
   (let ((bits *gc-event-status-bits*))

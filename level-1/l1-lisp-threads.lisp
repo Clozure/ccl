@@ -555,8 +555,12 @@
 (defun %get-frame-ptr ()
   (%current-frame-ptr))
 
-
-
+(defun %current-exception-frame ()
+  #+ppc-target *fake-stack-frames*
+  #+x86-target (or (let* ((xcf (%current-xcf)))
+                     (if xcf
+                       (%%frame-backlink xcf)))
+                   (%current-frame-ptr)))
 
 
 

@@ -578,13 +578,10 @@
 		   (program-error ;; got defined, but turns out it's being used wrong
 		    (lambda (c)
 		      (let ((w2 (make-condition 'invalid-type-warning
-				  :file-name (compiler-warning-file-name w)
 				  :function-name (compiler-warning-function-name w)
 				  :source-note (compiler-warning-source-note w)
 				  :warning-type :invalid-type
 				  :args (list typespec c))))
-			(setf (compiler-warning-stream-position w2)
-			      (compiler-warning-stream-position w))
 			(return-from verify-deferred-type-warning w2)))))
       (values-specifier-type typespec)
       nil)))
@@ -610,24 +607,18 @@
 		 (when deftype
 		   (let* ((w2 (make-condition
 			       'invalid-arguments
-			       :file-name (compiler-warning-file-name w)
 			       :function-name (compiler-warning-function-name w)
 			       :source-note (compiler-warning-source-note w)
 			       :warning-type deftype
 			       :args (list (car args) reason arglist spread-p))))
-		     (setf (compiler-warning-stream-position w2)
-			   (compiler-warning-stream-position w))
 		     w2))))))
 	  ((def-info.macro-p (cdr def))
 	   (let* ((w2 (make-condition
 		       'macro-used-before-definition
-		       :file-name (compiler-warning-file-name w)
 		       :function-name (compiler-warning-function-name w)
 		       :source-note (compiler-warning-source-note w)
 		       :warning-type :macro-used-before-definition
 		       :args (list (car args)))))
-	     (setf (compiler-warning-stream-position w2)
-		   (compiler-warning-stream-position w))
 	     w2)))))
 
 

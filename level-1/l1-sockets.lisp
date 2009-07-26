@@ -895,35 +895,36 @@ the socket is not connected."))
 		    (_accept fd t))
 		(set-socket-fd-blocking fd was-blocking)))))))
 
-(defun accept-socket-connection (socket wait stream-create-function)
+(defun accept-socket-connection (socket wait stream-create-function &optional stream-args)
   (let ((listen-fd (socket-device socket))
 	(fd -1))
     (unwind-protect
-      (progn
+      (let ((keys (append stream-args (socket-keys socket))))
 	(setq fd (socket-accept listen-fd wait))
 	(cond ((>= fd 0)
-	       (prog1 (apply stream-create-function fd (socket-keys socket))
+	       (prog1 (apply stream-create-function fd keys)
 		 (setq fd -1)))
 	      ((eql fd (- #$EAGAIN)) nil)
 	      (t (socket-error socket "accept" fd))))
       (when (>= fd 0)
 	(fd-close fd)))))
 
-(defgeneric accept-connection (socket &key wait)
+(defgeneric accept-connection (socket &key wait stream-args)
   (:documentation
   "Extract the first connection on the queue of pending connections,
 accept it (i.e. complete the connection startup protocol) and return a new
 tcp-stream or file-socket-stream representing the newly established
 connection.  The tcp stream inherits any properties of the listener socket
-that are relevant (e.g. :keepalive, :nodelay, etc.) The original listener
+that are relevant (e.g. :keepalive, :nodelay, etc.) Additional arguments
+may be specified using STREAM-ARGS. The original listener
 socket continues to be open listening for more connections, so you can call
 accept-connection on it again."))
 
-(defmethod accept-connection ((socket listener-socket) &key (wait t))
-  (accept-socket-connection socket wait #'make-tcp-stream))
+(defmethod accept-connection ((socket listener-socket) &key (wait t) stream-args)
+  (accept-socket-connection socket wait #'make-tcp-stream stream-args))
 
-(defmethod accept-connection ((socket file-listener-socket) &key (wait t))
-  (accept-socket-connection socket wait #'make-file-socket-stream))
+(defmethod accept-connection ((socket file-listener-socket) &key (wait t) stream-args)
+  (accept-socket-connection socket wait #'make-file-socket-stream stream-args))
 
 (defun verify-socket-buffer (buf offset size)
   (unless offset (setq offset 0))

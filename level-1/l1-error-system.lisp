@@ -62,14 +62,16 @@
 (define-condition simple-warning (simple-condition warning) ())
 
 (define-condition compiler-warning (warning)
-  ((file-name :initarg :file-name :initform nil :accessor compiler-warning-file-name)
-   (stream-position :initform nil :accessor compiler-warning-stream-position)
-   (function-name :initarg :function-name :initform nil :accessor compiler-warning-function-name)
+  ((function-name :initarg :function-name :initform nil :accessor compiler-warning-function-name)
    (source-note :initarg :source-note :initform nil :accessor compiler-warning-source-note)
    (warning-type :initarg :warning-type :reader compiler-warning-warning-type)
    (args :initarg :args :reader compiler-warning-args)
    (nrefs :initform () :accessor compiler-warning-nrefs))
   (:report report-compiler-warning))
+
+;; Backward compatibility
+(defmethod compiler-warning-file-name ((w compiler-warning))
+  (source-note-filename (compiler-warning-source-note w)))
 
 (define-condition style-warning (compiler-warning)
   ((warning-type :initform :unsure)

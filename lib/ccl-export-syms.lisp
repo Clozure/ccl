@@ -41,6 +41,7 @@
      *loading-file-source-file*
      find-definition-sources
      define-definition-type
+     definition-type
      definition-type-name
      *save-source-locations*
      function-source-note
@@ -53,6 +54,7 @@
      ensure-source-note-text
      *record-pc-mapping*
      find-source-note-at-pc
+     caller-functions
      *svn-program*
      
      show-documentation
@@ -73,15 +75,28 @@
      *backtrace-print-length*
      *backtrace-show-internal-frames*
      *backtrace-format*
+     map-call-frames
+     frame-function
+     frame-supplied-arguments
+     frame-named-variables
+     apply-in-frame
      *quit-on-eof*
      *quit-interrupt-hook*
      *break-hook*
+     *top-error-frame*
+     *select-interactive-process-hook*
      interrupt-signal-condition
      macroexpand-all
      compiler-macroexpand
      compiler-macroexpand-1
      compile-user-function
      uncompile-function
+     report-compiler-warning
+     compiler-warning
+     style-warning
+     compiler-warning-source-note
+     compiler-warning-function-name
+     *merge-compiler-warnings*
      abort-break
      *trace-print-level*
      *trace-print-length*
@@ -93,6 +108,9 @@
      advisedp
      nfunction
      function-name
+     setf-function-p
+     setf-function-spec-name
+     name-of
 
      assq
      bignump
@@ -193,6 +211,7 @@
      method-name
      method-specializers
      method-qualifiers
+     slot-definition-documentation
      slot-definition-allocation
      slot-definition-initargs
      slot-definition-initform
@@ -261,11 +280,14 @@
      *compile-definitions*
      *record-source-file*
      *save-doc-strings*
+     *fasl-save-doc-strings* 
      *warn-if-redefine*
      *break-on-errors* 
      *save-definitions*
+     *fasl-save-definitions* 
      *save-local-symbols*
      *fasl-save-local-symbols*
+     *save-arglist-info*
      *always-eval-user-defvars*
 
 					;These 3 need to be set by the user in order for the correspondingly named
@@ -282,6 +304,7 @@
      current-directory
      directory-pathname-p
      full-pathname
+     temp-pathname
      create-file
      create-directory
      file-create-date
@@ -304,6 +327,8 @@
      pathname-encoding-name
      with-filename-cstrs
      get-foreign-namestring
+     native-translated-namestring
+     native-to-pathname
      fasl-concatenate
      event-ticks
      set-event-ticks
@@ -425,8 +450,6 @@
      weak-gc-method
      *trace-max-indent* 
      *trace-level* 
-     *fasl-save-doc-strings* 
-     *fasl-save-definitions* 
      *static-cons-chunk*
      static-cons
 
@@ -434,6 +457,8 @@
      make-population
      population-type
      population-contents
+
+     hash-table-weak-p
 
      compiler-let
 
@@ -462,6 +487,7 @@
      process-run-function
      make-process
      process-suspend-count
+     process-serial-number
      process-initial-form
      process-whostate
      process-priority
@@ -470,6 +496,7 @@
      clear-process-run-time
      process-resume
      process-suspend
+     process-exhausted-p
      let-globally
      process-wait
      process-wait-with-timeout
@@ -740,6 +767,7 @@
    "METHOD-NAME"
    "METHOD-SPECIALIZERS"
    "METHOD-QUALIFIERS"
+   "SLOT-DEFINITION-DOCUMENTATION"
    "SLOT-DEFINITION-ALLOCATION"
    "SLOT-DEFINITION-INITARGS"
    "SLOT-DEFINITION-INITFORM"
@@ -824,6 +852,7 @@
    "ENSURE-CLASS"
    "ENSURE-CLASS-USING-CLASS"
    "ENSURE-GENERIC-FUNCTION-USING-CLASS"
+   "EQL-SPECIALIZER"
    "EQL-SPECIALIZER-OBJECT"
    "EXTRACT-LAMBDA-LIST"
    "EXTRACT-SPECIALIZER-NAMES"
@@ -846,6 +875,7 @@
    "METHOD-NAME"
    "METHOD-SPECIALIZERS"
    "METHOD-QUALIFIERS"
+   "SLOT-DEFINITION-DOCUMENTATION"
    "SLOT-DEFINITION-ALLOCATION"
    "SLOT-DEFINITION-INITARGS"
    "SLOT-DEFINITION-INITFORM"

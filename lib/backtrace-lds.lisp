@@ -30,6 +30,34 @@
   #+x8664-target #(save3 save2 save1 save0)
   #+ppc-target #(save7 save6 save5 save4 save3 save2 save1 save0))
 
+(defun frame-function (frame context)
+  "Returns the function using the frame, and pc offset within the function, if known"
+  (declare (ignore context))
+  (cfp-lfun (require-type frame 'integer)))
+
+(defun frame-supplied-arguments (frame context &key (unknown-marker (%unbound-marker)))
+  "Return a list of supplied arguments to the call which opened this frame, as best we can reconstruct it"
+  (multiple-value-bind (lfun pc) (cfp-lfun frame)
+    (multiple-value-bind (args valid) (supplied-argument-list context frame lfun pc)
+      (if (not valid)
+        unknown-marker
+        (if (eq unknown-marker (%unbound-marker))
+          args
+          (substitute unknown-marker (%unbound-marker) args))))))
+
+(defun frame-named-variables (frame context &key (unknown-marker (%unbound-marker)))
+  "Returns an alist of (NAME . VALUE) of all named variables in this frame."
+  (multiple-value-bind (lfun pc) (cfp-lfun frame)
+    (multiple-value-bind (args locals) (arguments-and-locals context frame lfun pc unknown-marker)
+      (if (eq unknown-marker (%unbound-marker))
+        (append args locals)
+        (substitute unknown-marker (%unbound-marker) (append args locals))))))
+
+
+(defun frame-arguments-and-locals (frame context &key unknown-marker)
+  "Return two values, the arguments and the locals, known for this frame, as alists of (name . value)"
+  (multiple-value-bind (lfun pc) (cfp-lfun frame)
+    (arguments-and-locals context frame lfun pc unknown-marker)))
 
 ;;; Returns three values: (ARG-VALUES TYPES NAMES), solely for the benefit
 ;;; of the FRAME-ARGUMENTS function in SLIME's swank-openmcl.lisp.
@@ -38,42 +66,45 @@
 ;;;   whether they're "required", "optional", etc.  SLIME only really
 ;;;   cares about whether this is equal to "keyword" or not.
 ;;; NAMES is a list of symbols which name the args.
+;; 7/13/2009: This is now deprecated.  Use frame-supplied-arguments.
 (defun frame-supplied-args (frame lfun pc child context)
   (declare (ignore child))
   (if (null pc)
     (values nil nil nil)
     (if (<= pc target::arg-check-trap-pc-limit)
       (values (arg-check-call-arguments frame lfun) nil nil)
-      (let* ((arglist (arglist-from-map lfun))
-             (args (arguments-and-locals context frame lfun pc))
-             (state :required))
-        (collect ((arg-values)
-                  (types)
-                  (names))
-          (dolist (arg arglist)
-            (if (or (member arg lambda-list-keywords)
-                    (eq arg '&lexpr))
-              (setq state arg)
-              (let* ((pair (pop args)))
-                (case state
-                  (&lexpr
-                   (with-list-from-lexpr (rest (cdr pair))
-                     (dolist (r rest) (arg-values r) (names nil) (types nil)))
-                   (return))
-                  (&rest
-                   (dolist (r (cdr pair)) (arg-values r) (names nil) (types nil))
-                   (return))
-                  (&key
-                   (arg-values arg)
-                   (names nil)
-                   (types nil)))
-                (let* ((value (cdr pair)))
-                  (if (eq value (%unbound-marker))
-                    (return))
-                  (names (car pair))
-                  (arg-values value)
-                  (types nil)))))
-          (values (arg-values) (types) (names)))))))
+      (multiple-value-bind (arglist valid) (arglist-from-map lfun)
+        (if (not valid)
+          (values nil nil nil)
+          (let* ((args (arguments-and-locals context frame lfun pc))
+                 (state :required))
+            (collect ((arg-values)
+                      (types)
+                      (names))
+              (dolist (arg arglist)
+                (if (or (member arg lambda-list-keywords)
+                        (eq arg '&lexpr))
+                  (setq state arg)
+                  (let* ((pair (pop args)))
+                    (case state
+                      (&lexpr
+                         (with-list-from-lexpr (rest (cdr pair))
+                           (dolist (r rest) (arg-values r) (names nil) (types nil)))
+                         (return))
+                      (&rest
+                         (dolist (r (cdr pair)) (arg-values r) (names nil) (types nil))
+                         (return))
+                      (&key
+                         (arg-values arg)
+                         (names nil)
+                         (types nil)))
+                    (let* ((value (cdr pair)))
+                      (if (eq value (%unbound-marker))
+                        (return))
+                      (names (car pair))
+                      (arg-values value)
+                      (types nil)))))
+              (values (arg-values) (types) (names)))))))))
 
 
 #|

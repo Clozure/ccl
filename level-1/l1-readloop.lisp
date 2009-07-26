@@ -682,7 +682,7 @@
                       (if (and local-p (eq kind :macro))
                         (error "~s can't be used to reference lexically defined macro ~S" 'function sym)))
                     (%function sym))
-                   ((and (consp sym) (eq (%car sym) 'setf) (consp (%cdr sym)) (null (%cddr sym)))
+                   ((setf-function-name-p sym)
                     (multiple-value-bind (kind local-p)
                         (function-information sym env)
                       (if (and local-p (eq kind :macro))

@@ -660,7 +660,7 @@
            (setq global-name spec)
            (setq inline-spec spec)
            (setq body `(block ,spec ,@forms)))
-          ((and (consp spec) (eq 'setf (%car spec)))
+          ((setf-function-name-p spec)
            (setq inline-spec spec)
            (setq body `(block ,(cadr spec) ,@forms)))
           (t (setq body `(progn ,@forms))))

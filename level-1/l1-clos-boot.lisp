@@ -3587,11 +3587,17 @@ to replace that class with ~s" name old-class new-class)
 (defmethod compute-applicable-methods ((gf standard-generic-function) args)
   (%compute-applicable-methods* gf args))
 
+(defmethod compute-applicable-methods-using-classes ((gf standard-generic-function) args)
+  (let ((res (%compute-applicable-methods* gf args t)))
+    (if (eq res :undecidable)
+      (values nil nil)
+      (values res t))))
+
 (defun %compute-applicable-methods+ (gf &rest args)
   (declare (dynamic-extent args))
   (%compute-applicable-methods* gf args))
 
-(defun %compute-applicable-methods* (gf args)
+(defun %compute-applicable-methods* (gf args &optional using-classes-p)
   (let* ((methods (%gf-methods gf))
          (args-length (length args))
          (bits (inner-lfun-bits gf))
@@ -3612,22 +3618,41 @@ to replace that class with ~s" name old-class new-class)
               (cpls-tail cpls (cdr cpls-tail)))
             ((null cpls-tail))
           (setf (car cpls-tail)
-                (%class-precedence-list (class-of (car args-tail)))))
+                (%class-precedence-list (if using-classes-p
+                                          ;; extension for use in source location support
+                                          (if (typep (car args-tail) 'eql-specializer)
+                                            (class-of (eql-specializer-object (car args-tail)))
+                                            (car args-tail))
+                                          (class-of (car args-tail))))))
         (dolist (m methods)
-          (if (%method-applicable-p m args cpls)
-            (push m res)))
+          (let ((appp (%method-applicable-p m args cpls using-classes-p)))
+            (when appp
+              (when (eq appp :undecidable) ;; can only happen if using-classes-p
+                (return-from %compute-applicable-methods* appp))
+              (push m res))))
         (sort-methods res cpls (%gf-precedence-list gf))))))
 
 
-(defun %method-applicable-p (method args cpls)
+(defun %method-applicable-p (method args cpls &optional using-classes-p)
   (do* ((specs (%method-specializers method) (%cdr specs))
         (args args (%cdr args))
         (cpls cpls (%cdr cpls)))
       ((null specs) t)
-    (let ((spec (%car specs)))
+    (let ((spec (%car specs))
+          (arg (%car args)))
       (if (typep spec 'eql-specializer)
-        (unless (eql (%car args) (eql-specializer-object spec))
-          (return nil))
+        (if using-classes-p
+          (if (typep arg 'eql-specializer) ;; extension for use in source location support
+            (unless (eql (eql-specializer-object arg) (eql-specializer-object spec))
+              (return nil))
+            (if (typep (eql-specializer-object spec) arg)
+              ;; Can't tell if going to be applicable or not based on class alone
+              ;; Except for the special case of NULL which is a singleton
+              (unless (eq arg *null-class*)
+                (return :undecidable))
+              (return nil)))
+          (unless (eql arg (eql-specializer-object spec))
+            (return nil)))
         (unless (memq spec (%car cpls))
           (return nil))))))
 

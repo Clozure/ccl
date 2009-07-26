@@ -60,30 +60,24 @@ Each element in the list is a list that describes the call in one stack frame:
    (function arg1 arg2 ...)
 The arguments are represented by strings, the function is a symbol or a function
 object."
-  (when (null count) (setq count target::target-most-positive-fixnum))
-  (when (and context process (neq (bt.tcr context) (process-tcr process)))
-    (error "Context ~s doesn't correspond to the process ~s" context process))
-  (let* ((tcr (cond (context (bt.tcr context))
-                    (process (process-tcr process))
-                    (t (%current-tcr))))
-         (*backtrace-print-level* print-level)
+  (let* ((*backtrace-print-level* print-level)
          (*backtrace-print-length* print-length)
-         (*backtrace-show-internal-frames* show-internal-frames)
-         (*backtrace-format* :list))
-    (if (eq tcr (%current-tcr))
-      (%backtrace-as-list-internal context (or origin (%get-frame-ptr)) count start-frame-number)
-      (unwind-protect
-           (progn
-             (%suspend-tcr tcr)
-             (unless context
-               (setq context (context-for-suspended-tcr tcr)))
-             (%backtrace-as-list-internal context (or origin (bt.current context)) count start-frame-number))
-        (%resume-tcr tcr)))))
+         (*backtrace-format* :list)
+         (result nil))
+    (map-call-frames (lambda (p context)
+                       (multiple-value-bind (lfun pc) (cfp-lfun p)
+                         (push (if lfun
+                                 (backtrace-call-arguments context p lfun pc)
+                                 "?????")
+                               result)))
+                     :context context
+                     :process process
+                     :origin origin
+                     :count count
+                     :start-frame-number start-frame-number
+                     :test (and (not show-internal-frames) 'function-frame-p))
+    (nreverse result)))
 
-
-;;; This PRINTS the call history on *DEBUG-IO*.  It's more dangerous
-;;; (because of stack consing) to actually return it.
-                               
 (defun print-call-history (&key context
                                 process
                                 origin
@@ -95,41 +89,58 @@ object."
                                 (print-length *backtrace-print-length*)
                                 (show-internal-frames *backtrace-show-internal-frames*)
                                 (format *backtrace-format*))
-  (when (null count) (setq count target::target-most-positive-fixnum))
-  (when (and context process (neq (bt.tcr context) (process-tcr process)))
-    (error "Context ~s doesn't correspond to the process ~s" context process))
-  (let* ((tcr (cond (context (bt.tcr context))
-                    (process (process-tcr process))
-                    (t (%current-tcr))))
-         (*backtrace-print-level* print-level)
-         (*backtrace-print-length* print-length)
-         (*backtrace-show-internal-frames* show-internal-frames)
-         (*backtrace-format* format))
-    (if (eq tcr (%current-tcr))
-      (%print-call-history-internal context (or origin (%get-frame-ptr)) detailed-p count start-frame-number stream)
-      (unwind-protect
-           (progn
-             (%suspend-tcr tcr)
-             (unless context
-               (setq context (context-for-suspended-tcr tcr)))
-             (%print-call-history-internal context (or origin (bt.current context)) detailed-p count start-frame-number stream))
-        (%resume-tcr tcr)))
+  (let ((*backtrace-print-level* print-level)
+        (*backtrace-print-length* print-length)
+        (*backtrace-format* format)
+        (*standard-output* stream)
+        (*print-circle* nil)
+        (frame-number (or start-frame-number 0)))
+    (map-call-frames (lambda (p context)
+                       (multiple-value-bind (lfun pc) (cfp-lfun p)
+                         (unless (and (typep detailed-p 'fixnum)
+                                      (not (= (the fixnum detailed-p) frame-number)))
+                           (%show-stack-frame-label frame-number p context lfun pc detailed-p)
+                           (when detailed-p
+                             (if (eq detailed-p :raw)
+                               (%show-stack-frame p context lfun pc)
+                               (%show-args-and-locals p context lfun pc)))
+                           (incf frame-number))))
+                     :context context
+                     :process process
+                     :origin origin
+                     :count count
+                     :start-frame-number start-frame-number
+                     :test (and (not show-internal-frames) 'function-frame-p))
     (values)))
 
+(defun function-frame-p (p context)
+  (and (not (catch-csp-p p context)) (cfp-lfun p)))
+
 (defun map-call-frames (fn &key context
-			   (origin (%get-frame-ptr))
+                           process
+			   origin
+                           (count target::target-most-positive-fixnum)
 			   (start-frame-number 0)
-			   (include-internal nil))
-  (let* ((tcr (if context (bt.tcr context) (%current-tcr))))
+                           test)
+  (when (and context process (neq (bt.tcr context) (process-tcr process)))
+    (error "Context ~s doesn't correspond to the process ~s" context process))
+  (let ((tcr (cond (context (bt.tcr context))
+                   (process (process-tcr process))
+                   (t (%current-tcr))))
+        (*print-catch-errors* t)
+        (*signal-printing-errors* nil))
     (if (eq tcr (%current-tcr))
-      (%map-call-frames-internal fn context origin include-internal start-frame-number)
+      (%map-call-frames-internal fn context (or origin (%get-frame-ptr)) count start-frame-number test)
       (unwind-protect
 	   (progn
 	     (%suspend-tcr tcr)
-	     (%map-call-frames-internal fn context origin include-internal start-frame-number))
+             (when (null context)
+               (setq context (context-for-suspended-tcr tcr)))
+             (%map-call-frames-internal fn context (or origin (bt.current context))  count start-frame-number test))
 	(%resume-tcr tcr))))
   nil)
 
+; RAW case
 (defun %show-stack-frame (p context lfun pc)
   (handler-case
       (multiple-value-bind (count vsp parent-vsp) (count-values-in-frame p context)
@@ -199,36 +210,15 @@ object."
          (backtrace-supplied-args context cfp lfun pc)))
 
 (defun backtrace-supplied-args (context frame lfun pc)
-  (if (and pc (<= pc target::arg-check-trap-pc-limit))
-    (arg-check-call-arguments frame lfun)
-    (multiple-value-bind (params valid) (arglist-from-map lfun)
-      (if (not valid)
-        '("???")
-        (let ((args (arguments-and-locals context frame lfun pc)) ;overkill, but will do.
-              (state :required)
-              (strings ()))
-          (flet ((collect (arg)
-                   (let* ((*print-length* *backtrace-print-length*)
-                          (*print-level* *backtrace-print-level*))
-                     (push (format nil "~s" arg) strings))))
-            (dolist (param params)
-              (if (or (member param lambda-list-keywords) (eq param '&lexpr))
-                (setq state param)
-                (let* ((pair (pop args))
-                       (value (cdr pair)))
-                  (case state
-                    (&lexpr
-                       (with-list-from-lexpr (rest value)
-                         (dolist (r rest) (collect r)))
-                       (return))
-                    (&rest
-                       (dolist (r value) (collect r))
-                       (return))
-                    (&key (collect param)))
-                  (if (eq value (%unbound-marker))
-                    (push "?" strings)
-                    (collect value))))))
-          (nreverse strings))))))
+  (multiple-value-bind (args valid) (supplied-argument-list context frame lfun pc)
+    (if (not valid)
+      '("???")    
+      (loop for arg in args
+            collect (if (eq arg (%unbound-marker))
+                      "?"
+                      (let* ((*print-length* *backtrace-print-length*)
+                             (*print-level* *backtrace-print-level*))
+                        (format nil "~s" arg)))))))
 
 ;;; Return a list of "interesting" frame addresses in context, most
 ;;; recent first.
@@ -240,84 +230,21 @@ object."
       (when (or (not (catch-csp-p p context)) include-internal)
         (when (or (cfp-lfun p) include-internal)
           (frames p))))))
-    
-(defun %map-call-frames-internal (fn context origin include-internal skip-initial)
-  (let ((*standard-output* *debug-io*)
-        (*print-circle* nil)
-        (p origin)
-        (q (last-frame-ptr context)))
-    (dotimes (i skip-initial)
-      (setq p (parent-frame p context))
-      (when (or (null p) (eq p q) (%stack< q p context))
-        (return (setq p nil))))
-    (do* ((p p (parent-frame p context)))
-         ((or (null p) (eq p q) (%stack< q p context)) nil)
-      (when (or include-internal
-		(and (not (catch-csp-p p context)) (cfp-lfun p)))
-	(funcall fn p)))))
 
-(defun %backtrace-as-list-internal (context origin count skip-initial)
+(defun %map-call-frames-internal (fn context origin count skip-initial test)
+  (when (null skip-initial) (setq skip-initial 0))
+  (when (null count) (setq count target::target-most-positive-fixnum))
   (unless (eq (last-frame-ptr context origin) (last-frame-ptr context))
     (error "Origin ~s is not in the stack of ~s" origin context))
-  (let ((*print-catch-errors* t)
-        (p origin)
-        (q (last-frame-ptr context)))
-    (dotimes (i skip-initial)
-      (setq p (parent-frame p context))
-      (when (or (null p) (eq p q) (%stack< q p context))
-        (return (setq p nil))))
-    (do* ((frame-number (or skip-initial 0) (1+ frame-number))
-          (i 0 (1+ i))
-          (p p (parent-frame p context))
-          (r '()))
-        ((or (null p) (eq p q) (%stack< q p context)
-             (>= i count))
-         (nreverse r))
-      (declare (fixnum frame-number i))
-      (when (or (not (catch-csp-p p context))
-                *backtrace-show-internal-frames*)
-        (multiple-value-bind (lfun pc) (cfp-lfun p)
-          (when (or lfun *backtrace-show-internal-frames*)
-            (push
-             (if lfun
-               (backtrace-call-arguments context p lfun pc)
-               "?????")
-             r)))))))
-
-  
-(defun %print-call-history-internal (context origin detailed-p
-                                             &optional (count target::target-most-positive-fixnum)
-                                                       (skip-initial 0)
-                                                       (stream *debug-io*))
-  (unless (eq (last-frame-ptr context origin) (last-frame-ptr context))
-    (error "Origin ~s is not in the stack of ~s" origin context))
-  (let ((*standard-output* stream)
-        (*print-circle* nil)
-        (*print-catch-errors* t)
-        (p origin)
-        (q (last-frame-ptr context)))
-    (dotimes (i skip-initial)
-      (setq p (parent-frame p context))
-      (when (or (null p) (eq p q) (%stack< q p context))
-        (return (setq p nil))))
-    (do* ((frame-number (or skip-initial 0) (1+ frame-number))
-          (i 0 (1+ i))
-          (p p (parent-frame p context)))
-         ((or (null p) (eq p q) (%stack< q p context)
-              (>= i count))
-          (values))
-      (declare (fixnum frame-number i))
-      (when (or (not (catch-csp-p p context))
-                *backtrace-show-internal-frames*)
-        (multiple-value-bind (lfun pc) (cfp-lfun p)
-          (when (or lfun *backtrace-show-internal-frames*)
-            (unless (and (typep detailed-p 'fixnum)
-                         (not (= (the fixnum detailed-p) frame-number)))
-              (%show-stack-frame-label frame-number p context lfun pc detailed-p)
-              (when detailed-p
-                (if (eq detailed-p :raw)
-                  (%show-stack-frame p context lfun pc)
-                  (%show-args-and-locals p context lfun pc))))))))))
+  (let ((q (last-frame-ptr context))
+        (frame-number 0))
+    (do ((p origin (parent-frame p context)))
+        ((or (null p) (eq p q) (%stack< q p context) (<= count 0)) nil)
+      (when (or (null test) (funcall test p context))
+        (when (<= skip-initial frame-number)
+          (funcall fn p context)
+          (decf count))
+        (incf frame-number)))))
 
 (defun %show-stack-frame-label (frame-number p context lfun pc detailed-p)
   (case *backtrace-format*
@@ -685,9 +612,37 @@ object."
                 (get-arg-value name))
               (dolist (name local-vars)
                 (get-local-value name)))))
-        (values (args) (locals))))))
-                   
-            
+           (values (args) (locals))))))
+
+;; Return list of supplied arguments, as best we can reconstruct it.
+(defun supplied-argument-list (context frame lfun pc)
+  (if (null pc)
+    (values nil nil)
+    (if (<= pc target::arg-check-trap-pc-limit)
+      (values (arg-check-call-arguments frame lfun) t)
+      (multiple-value-bind (params valid) (arglist-from-map lfun)
+        (if (not valid)
+          (values nil nil)
+          (let* ((args (arguments-and-locals context frame lfun pc)) ;overkill, but will do.
+                 (state :required)
+                 (result ()))
+            (dolist (param params)
+              (if (or (member param lambda-list-keywords) (eq param '&lexpr))
+                (setq state param)
+                (let* ((pair (pop args))
+                       (value (cdr pair)))
+                  (case state
+                    (&lexpr
+                     (with-list-from-lexpr (rest value)
+                       (dolist (r rest) (push r result)))
+                     (return))
+                    (&rest
+                     (dolist (r value) (push r result))
+                     (return))
+                    (&key (push param result)))
+                  (push value result))))
+            (values (nreverse result) t)))))))
+
 
 (defun safe-cell-value (val)
   val)

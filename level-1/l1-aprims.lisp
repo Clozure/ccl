@@ -243,6 +243,7 @@ terminate the list"
 (defvar %setf-function-name-inverses% (make-hash-table :weak t :test 'eq))
 
 (defun setf-function-name (sym)
+  "Returns the symbol in the SETF package that holds the binding of (SETF sym)"
    (or (gethash sym %setf-function-names%)
        (progn
          (let* ((setf-package-sym (construct-setf-function-name sym)))
@@ -297,7 +298,7 @@ terminate the list"
 
 
 (defun maybe-setf-function-name (name)
-  (if (and (consp name) (eq (car name) 'setf))
+  (if (setf-function-name-p name)
     (setf-function-name (cadr name))
     name))
 

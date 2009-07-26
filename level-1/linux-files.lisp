@@ -191,8 +191,20 @@ atomically decremented, or until a timeout expires."
       (dotimes (i noctets (+ noctets noctets))
 	(when (eql 0 (%get-byte buf i))
 	  (return i))))))
-    
-    
+
+(defun temp-pathname ()
+  "Return a suitable pathname for a temporary file.  A different name is returned
+each time this is called in a session.  No file by that name existed when last
+checked, though no guarantee is given that one hasn't been created since."
+  (native-to-pathname
+     #-windows-target (get-foreign-namestring (#_tmpnam (%null-ptr)))
+     #+windows-target (rlet ((buffer (:array :wchar_t #.#$MAX_PATH)))
+                        (#_GetTempPathW #$MAX_PATH buffer)
+                        (with-filename-cstrs ((c-prefix "ccl")) 
+                            (#_GetTempFileNameW buffer c-prefix 0 buffer)
+                              (#_DeleteFileW buffer)
+                                (%get-native-utf-16-cstring buffer)))))
+
 (defun current-directory-name ()
   "Look up the current working directory of the OpenMCL process; unless
 it has been changed, this is the directory OpenMCL was started in."

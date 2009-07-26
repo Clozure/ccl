@@ -63,9 +63,11 @@
   (fboundp (encapsulation-symbol cap)))
 
 (defun setf-function-spec-name (spec)
-  (if (and (consp spec) (eq (car spec) 'setf))
-    (or (%setf-method (cadr spec)) ; this can be an anonymous function
-        (setf-function-name (cadr spec)))
+  (if (setf-function-name-p spec)
+    (let ((name (%setf-method (cadr spec))))
+      (if (non-nil-symbol-p name)  ; this can be an anonymous function
+        name
+        (setf-function-name (cadr spec))))
     spec))
 
 (defun trace-tab (direction &aux (n (min *trace-level* *trace-max-indent*)))

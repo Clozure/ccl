@@ -473,7 +473,9 @@ commands but aren't")
     (quit -1))
   (#__exit -1))
 
-(defun break-loop-handle-error (condition error-pointer)
+(defvar *top-error-frame* nil)
+
+(defun break-loop-handle-error (condition *top-error-frame*)
   (multiple-value-bind (bogus-globals newvals oldvals) (%check-error-globals)
     (dolist (x bogus-globals)
       (set x (funcall (pop newvals))))
@@ -481,7 +483,7 @@ commands but aren't")
       (let ((hook *debugger-hook*)
             (*debugger-hook* nil))
         (funcall hook condition hook)))
-    (%break-message "Error" condition error-pointer)
+    (%break-message "Error" condition)
     (let* ((s *error-output*))
       (dolist (bogusness bogus-globals)
         (let ((oldval (pop oldvals)))
@@ -491,7 +493,7 @@ commands but aren't")
             (format s "~s" oldval))
           (format s ", was reset to ~s ." (symbol-value bogusness)))))
     (if (and *break-on-errors* (not *batch-flag*))
-      (break-loop condition error-pointer)
+      (break-loop condition)
       (if *batch-flag*
         (abnormal-application-exit)
         (abort)))))
@@ -524,17 +526,17 @@ commands but aren't")
           (t (format *error-output* "Break while interrupt-level less than zero; ignored.")))))
 
 
-(defun invoke-debugger (condition &aux (fp (%get-frame-ptr)))
+(defun invoke-debugger (condition &aux (*top-error-frame* (%get-frame-ptr)))
   "Enter the debugger."
   (let ((c (require-type condition 'condition)))
     (when *debugger-hook*
       (let ((hook *debugger-hook*)
             (*debugger-hook* nil))
         (funcall hook c hook)))
-    (%break-message "Debug" c fp)
-    (break-loop c fp)))
+    (%break-message "Debug" c)
+    (break-loop c)))
 
-(defun %break-message (msg condition error-pointer &optional (prefixchar #\>))
+(defun %break-message (msg condition &optional (error-pointer *top-error-frame*) (prefixchar #\>))
   (let ((*print-circle* *error-print-circle*)
         ;(*print-prett*y nil)
         (*print-array* nil)
@@ -564,7 +566,7 @@ commands but aren't")
 
 (defvar *break-hook* nil)
 
-(defun cbreak-loop (msg cont-string condition error-pointer)
+(defun cbreak-loop (msg cont-string condition *top-error-frame*)
   (let* ((*print-readably* nil)
          (hook *break-hook*))
     (restart-case (progn
@@ -572,8 +574,13 @@ commands but aren't")
                       (let ((*break-hook* nil))
                         (funcall hook condition hook))
                       (setq hook nil))
-                    (%break-message msg condition error-pointer)
-                    (break-loop condition error-pointer))
+                    (%break-message msg condition)
+                    (when (and (eq (type-of condition) 'simple-condition)
+                               (equal (simple-condition-format-control condition) ""))
+                      (setq condition (make-condition 'simple-condition
+                                        :format-control "~a"
+                                        :format-arguments (list msg))))
+                    (break-loop condition))
       (continue () :report (lambda (stream) (write-string cont-string stream))))
     (unless hook
       (fresh-line *error-output*))
@@ -630,7 +637,7 @@ commands but aren't")
 
 
 (defvar %last-continue% nil)
-(defun break-loop (condition frame-pointer)
+(defun break-loop (condition &optional (frame-pointer *top-error-frame*))
   "Never returns"
   (let* ((%handlers% (last %handlers%)) ; firewall
          (*break-frame* frame-pointer)

@@ -450,7 +450,7 @@ Will differ from *compiling-file* during an INCLUDE")
                           :element-type 'base-char
                           :external-format *fcomp-external-format*)
     (let* ((old-file (and (neq filename *compiling-file*) *fasl-source-file*))
-           (*fasl-source-file* filename)
+           (*fasl-source-file* (or orig-file filename))
            (*fcomp-toplevel-forms* nil)
            (*fasl-eof-forms* nil)
            (*loading-file-source-file* orig-file)
@@ -467,6 +467,8 @@ Will differ from *compiling-file* during an INCLUDE")
         (loop
           (let* ((*fcomp-stream-position* (file-position stream))
                  (*nx-warnings* nil)) ;; catch any warnings from :compile-toplevel forms
+            (when (and *fcomp-stream-position* orig-offset)
+              (incf *fcomp-stream-position* orig-offset))
             (unless (eq read-package *package*)
               (fcomp-compile-toplevel-forms env)
               (setq read-package *package*))
@@ -1069,8 +1071,12 @@ Will differ from *compiling-file* during an INCLUDE")
         (some *fasl-warnings-signalled-p*)
         (harsh *fasl-non-style-warnings-signalled-p*))
     (dolist (w warnings)
-      (setf (compiler-warning-file-name w) *fasl-source-file*)
-      (setf (compiler-warning-stream-position w) *fcomp-stream-position*)
+      (unless (compiler-warning-source-note w)
+        (setf (compiler-warning-source-note w)
+              (make-source-note :source nil
+                                :filename *fasl-source-file*
+                                :start-pos *fcomp-stream-position*
+                                :end-pos *fcomp-stream-position*)))
       (if (and (typep w 'undefined-reference) 
                (eq w (setq w (macro-too-late-p w env))))
         (push w *fasl-deferred-warnings*)
@@ -1094,7 +1100,7 @@ Will differ from *compiling-file* during an INCLUDE")
 		(and (consp (cdr info))
 		     (eq 'macro (cadr info)))))
 	  (make-instance 'macro-used-before-definition
-	    :file-name (compiler-warning-file-name w)
+	    :source-note (compiler-warning-source-note w)
 	    :function-name (compiler-warning-function-name w)
 	    :warning-type ':macro-used-before-definition
 	    :args args)

@@ -22,6 +22,7 @@
             XREF-ENTRY
             XREF-ENTRY-NAME
             XREF-ENTRY-TYPE
+            XREF-ENTRY-FULL-NAME
             XREF-ENTRY-METHOD-QUALIFIERS
             XREF-ENTRY-METHOD-SPECIALIZERS
             XREF-ENTRY-P
@@ -50,6 +51,7 @@
                 "XREF-ENTRY"
                 "XREF-ENTRY-NAME"
                 "XREF-ENTRY-TYPE"
+                "XREF-ENTRY-FULL-NAME"
                 "XREF-ENTRY-METHOD-QUALIFIERS"
                 "XREF-ENTRY-METHOD-SPECIALIZERS"
                 "XREF-ENTRY-P"
@@ -73,6 +75,7 @@
            "XREF-ENTRY"
            "XREF-ENTRY-NAME"
            "XREF-ENTRY-TYPE"
+           "XREF-ENTRY-FULL-NAME"
            "XREF-ENTRY-METHOD-QUALIFIERS"
            "XREF-ENTRY-METHOD-SPECIALIZERS"
            "XREF-ENTRY-P"
@@ -205,8 +208,10 @@ from FASLs.")
      ((consp form)
       (cond ((eq (car form) 'setf)
              (setq name form))
-            (t (setq name (car form))
-               (let ((last (car (last (cdr form)))))
+            (t
+             (when (eq (car form) :method) (pop form))
+             (setq name (car form))
+             (let* ((last (car (last (cdr form)))))
                  (cond ((and (listp last)(or (null last)(neq (car last) 'eql)))
                         (setq classes last)
                         (setq qualifiers (butlast (cdr form))))
@@ -216,8 +221,8 @@ from FASLs.")
                      ((equal qualifiers '(:primary))
                       (setq qualifiers nil))))))
      (t (setq name form)))
-    (when (and (consp name)(eq (car name) 'setf))
-        (setq name (or (%setf-method (cadr name)) name))) ; e.g. rplacd
+    (when (setf-function-name-p name)
+      (setq name (canonical-maybe-setf-name name)))
     (when (not (or (symbolp name)
                    (setf-function-name-p name)))
       (return-from parse-definition-spec))
@@ -244,6 +249,16 @@ from FASLs.")
               (xref-entry-method-qualifiers entry2))
        (equal (xref-entry-method-specializers entry1)
               (xref-entry-method-specializers entry2))))
+
+;; XREF-ENTRY-FULL-NAME -- external
+;;
+(defun xref-entry-full-name (entry)
+  (if (eql (xref-entry-type entry) 'method)
+    `(:method ,(xref-entry-name entry)
+              ,@(xref-entry-method-qualifiers entry)
+              ,(xref-entry-method-specializers entry))
+    (xref-entry-name entry)))
+
 
 ;; %DB-KEY-FROM-XREF-ENTRY -- internal
 ;;

@@ -422,7 +422,7 @@
                (let ((fname nil))
                  (if (non-nil-symbol-p spec)
                    (setq fname spec)
-                   (if (and (consp spec) (eq (%car spec) 'setf))
+                   (if (setf-function-name-p spec)
                      (setq fname (setf-function-name (cadr spec)))))
                  (if fname
                    (push (list* fname decltype t) fdecls)))))
@@ -442,7 +442,7 @@
                    (let ((fname (cadr spec)))
                      (if (not (non-nil-symbol-p fname))
                        (setq fname 
-                             (if (and (consp fname) (eq (%car fname) 'setf))
+                             (if (setf-function-name-p fname)
                                (setf-function-name (cadr fname)))))
                      (if fname (push (list* fname decltype t) fdecls)))))))
               (type (add-type-decl (cdr decl)))
@@ -451,7 +451,7 @@
                          (let ((fname name))
                            (if (not (non-nil-symbol-p fname))
                              (setq fname 
-                                   (if (and (consp fname) (eq (%car fname) 'setf))
+                                   (if (setf-function-name-p fname)
                                      (setf-function-name (cadr fname)))))
                            (if fname (push (list* fname decltype typespec) fdecls))))))
               (special)
@@ -526,6 +526,10 @@
      (eval-when (:load-toplevel :execute)
        ,@body))))
 
+
+;; Should be true if compiler warnings UI doesn't use source locations, false if it does.
+(defvar *merge-compiler-warnings* t "If false, don't merge compiler warnings with different source locations")
+
 ;;; If warnings have more than a single entry on their
 ;;; args slot, don't merge them.
 (defun merge-compiler-warnings (old-warnings)
@@ -534,6 +538,7 @@
       (let* ((w-args (compiler-warning-args w)))
         (if
           (or (cdr w-args)
+              ;; See if W can be merged into an existing warning
               (dolist (w1 warnings t) 
                 (let ((w1-args (compiler-warning-args w1)))
                   (when (and (eq (compiler-warning-warning-type w)
@@ -541,13 +546,16 @@
                              w1-args
                              (null (cdr w1-args))
                              (eq (%car w-args)
-                                 (%car w1-args)))
+                                 (%car w1-args))
+                             (or *merge-compiler-warnings*
+                                 (eq (compiler-warning-source-note w)
+                                     (compiler-warning-source-note w1))))
                     (let ((nrefs (compiler-warning-nrefs w1)))
                       (setf (compiler-warning-nrefs w1)
                             (cons (compiler-warning-source-note w)
                                   (or nrefs
-                                      (list (compiler-warning-source-note w1))))))
-                    (return)))))
+                                      (list (compiler-warning-source-note w1)))))
+                      (return nil))))))
           (push w warnings))))
     warnings))
 
@@ -642,20 +650,22 @@
     (t args)))
 
 
-(defun report-compiler-warning (condition stream)
+(defun report-compiler-warning (condition stream &key short)
   (let* ((warning-type (compiler-warning-warning-type condition))
          (format-string (cdr (assq warning-type *compiler-warning-formats*)))
-         (name (reverse (compiler-warning-function-name condition))))
-    (format stream "In ")
-    (print-nested-name name stream)
-    (when (every #'null name)
-      (let ((position (compiler-warning-stream-position condition)))
-        (when position (format stream " at position ~s" position))))
-    (format stream ": ")
+         (warning-args (compiler-warning-args condition)))
+    (unless short
+      (let ((name (reverse (compiler-warning-function-name condition))))
+        (format stream "In ")
+        (print-nested-name name stream)
+        (when (every #'null name)
+          (let ((position (source-note-start-pos (compiler-warning-source-note condition))))
+            (when position (format stream " at position ~s" position))))
+        (format stream ": ")))
     (if (typep format-string 'string)
-      (apply #'format stream format-string (adjust-compiler-warning-args warning-type (compiler-warning-args condition)))
+      (apply #'format stream format-string (adjust-compiler-warning-args warning-type warning-args))
       (if (null format-string)
-	(format stream "~A: ~S" warning-type (compiler-warning-args condition))
+	(format stream "~A: ~S" warning-type warning-args)
 	(funcall format-string condition stream)))
     ;(format stream ".")
     (let ((nrefs (compiler-warning-nrefs condition)))

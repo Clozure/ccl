@@ -830,7 +830,7 @@ a LET-like macro, and a SETQ-like macro, which perform LOOP-style destructuring.
 		      ;;This skirts the issue of implementationally-defined lambda macros
 		      ;; by recognizing CL function names and nothing else.
 		      (if (or (symbolp (cadr x))
-			      (and (consp (cadr x)) (eq (caadr x) 'setf)))
+                              (ccl::setf-function-name-p  (cadr x)))
 			  1
 			  (throw 'duplicatable-code-p nil)))
 		     ((eq fn 'multiple-value-setq) (f (length (second x)) (cddr x)))

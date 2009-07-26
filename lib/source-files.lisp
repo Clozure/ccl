@@ -37,10 +37,11 @@
   (:method ((thing t)) thing)
   (:method ((thing method-function)) (name-of (%method-function-method thing)))
   (:method ((thing function)) (name-of (function-name thing)))
-  (:method ((thing method)) (method-name thing))
+  (:method ((thing method)) `(:method ,(method-name thing) ,@(method-qualifiers thing) ,(method-specializers thing)))
   (:method ((thing class)) (class-name thing))
   (:method ((thing method-combination)) (method-combination-name thing))
-  (:method ((thing package)) (package-name thing)))
+  (:method ((thing package)) (package-name thing))
+  (:method ((thing eql-specializer)) `(eql ,(eql-specializer-object thing))))
 
 ;; This used to be weak, but the keys are symbols-with-definitions, so why bother.
 ;; Set a high rehash threshold because space matters more than speed here.
@@ -451,8 +452,13 @@ The returned list is guaranteed freshly consed (ie suitable for nconc'ing)."
              (setq implicit-type 'package implicit-name (name-of name)))
           (class
              (setq implicit-type 'class implicit-name (name-of name)))
-          (t 
-             (setq implicit-type t implicit-name name)))
+          (t
+           (locally
+               (declare (ftype function xref-entry-p xref-entry-full-name xref-entry-type))
+             (if (and (find-class 'xref-entry nil)
+                      (xref-entry-p name))
+               (setq implicit-type (xref-entry-type name) implicit-name (xref-entry-full-name name))
+               (setq implicit-type t implicit-name name)))))
         (setq implicit-dt-class (class-of (definition-type-instance implicit-type)))
         (with-lock-grabbed (*source-files-lock*)
           (loop for (nil . dt) in *definition-types*
@@ -484,16 +490,21 @@ The returned list is guaranteed freshly consed (ie suitable for nconc'ing)."
 ;;; modified version of %method-applicable-p - args are class names
 ;;; not instances
 (defun %my-method-applicable-p (method args cpls)
-  (do ((specs (%method-specializers method) (cdr specs))
-       (args args (cdr args))
-       (cpls cpls (cdr cpls)))
-      ((null specs) t)
-    (declare (type list specs args cpls))
-    (let ((spec (car specs)))
-      (if (listp spec)
-        (unless (equal (car args) spec)
-          (return nil))
-        (unless (memq spec (car cpls))
+  (do* ((specs (%method-specializers method) (%cdr specs))
+        (args args (%cdr args))
+        (cpls cpls (%cdr cpls)))
+      ((null args) t)
+    (let ((spec (%car specs))
+          (arg (%car args)))
+      (if (typep spec 'eql-specializer)
+        (if (consp arg)
+          (unless (eql (cadr arg) (eql-specializer-object spec))
+            (return nil))
+          (if (typep (eql-specializer-object spec) arg)
+            ;(unless (eq arg *null-class*) (return :undecidable))
+            t  ;; include if it's at all possible it might be applicable.
+            (return nil)))
+        (unless (memq spec (%car cpls))
           (return nil))))))
 
 ;;; modified version of %compute-applicable-methods*
@@ -502,81 +513,67 @@ The returned list is guaranteed freshly consed (ie suitable for nconc'ing)."
 (defun find-applicable-methods (name args qualifiers)
   (let ((gf (fboundp name)))
     (when (and gf (typep gf 'standard-generic-function))
-      (let* ((methods (%gf-methods gf))
+      (let* ((methods (or (%gf-methods gf)
+                          (return-from find-applicable-methods nil)))
+             (arg-count (length (%method-specializers (car methods))))
              (args-length (length args))
-             (bits (lfun-bits (closure-function gf)))  ; <<
-             arg-count res)
-        (when methods
-          (setq arg-count (length (%method-specializers (car methods))))
-          (unless (or (logbitp $lfbits-rest-bit bits)
-                      (logbitp $lfbits-keys-bit bits)
-                      (<= args-length 
-                          (+ (ldb $lfbits-numreq bits) (ldb $lfbits-numopt bits))))
-            (return-from find-applicable-methods))
-          (cond 
-           ((null args)
-            (dolist (m methods res)
-              (when (or (eq qualifiers t)
-                        (equal qualifiers (%method-qualifiers m))) 
-                (push m res))))
-           ((%i< args-length arg-count)
-            (let (spectails)
-              (dolist (m methods)
-                (let ((mtail (nthcdr args-length (%method-specializers m))))
-                  (pushnew mtail spectails :test #'equal)))
-              (dolist (tail spectails)
-                (setq res 
-                      (nconc res (find-applicable-methods 
-                                  name 
-                                  (append args (mapcar 
-                                                #'(lambda (x) (if (consp x) x (class-name x)))
-                                                tail))
-                                  qualifiers))))
-              (if (%cdr spectails)
-                (delete-duplicates res :from-end t :test #'eq)
-                res)))
-           (t 
-            (let ((cpls (make-list arg-count)))
-              (declare (dynamic-extent cpls))
-              (do ((args-tail args (cdr args-tail))
-                   (cpls-tail cpls (cdr cpls-tail)))
-                  ((null cpls-tail))
-                (declare (type list args-tail cpls-tail))
-                (let ((arg (car args-tail)) thing)
-                  (typecase arg
-                    (cons
-                       (setq thing (class-of (cadr arg))))
-                    (symbol
-                       (setq thing (find-class (or arg t) nil)))
-                    (eql-specializer
-                       (setq thing (class-of (eql-specializer-object arg))))
-                    (t 
-                       (setq thing arg)))
-                  (when thing
-                    (setf (car cpls-tail)                
-                          (%class-precedence-list thing)))))
-              (dolist (m methods)
-                (when (%my-method-applicable-p m args cpls)
-                  (push m res)))
-              (let ((methods (sort-methods res cpls (%gf-precedence-list gf))))
-                (when (eq (generic-function-method-combination gf)
-                          *standard-method-combination*)
-                  ; around* (befores) (afters) primaries*
-                  (setq methods (compute-method-list methods))
-                  (when methods
-                    (setq methods
-                          (if (not (consp methods))
-                            (list methods)
-                            (let ((afters (cadr (member-if #'listp methods))))
-                              (when afters (nremove afters methods))
-                              (nconc
-                               (mapcan #'(lambda (x)(if (listp x) x (cons x nil)))
-                                       methods)
-                               afters))))))
-                (if (and qualifiers (neq qualifiers t))
-                  (delete-if #'(lambda (m)(not (equal qualifiers (%method-qualifiers m))))
-                             methods)
-                  methods))))))))))
+             (bits (inner-lfun-bits gf))
+             res)
+        (unless (or (logbitp $lfbits-rest-bit bits)
+                    (logbitp $lfbits-restv-bit bits)
+                    (logbitp $lfbits-keys-bit bits)
+                    (<= args-length 
+                        (+ (ldb $lfbits-numreq bits) (ldb $lfbits-numopt bits))))
+                                        ;(error "Too many args for ~s" gf)
+          (return-from find-applicable-methods))
+        (when (< arg-count args-length)
+          (setq args (subseq args 0 (setq args-length arg-count))))
+        (setq args (mapcar (lambda (arg)
+                             (typecase arg
+                               (eql-specializer `(eql ,(eql-specializer-object arg)))
+                               (class arg)
+                               (symbol (or (find-class (or arg t) nil)
+                                           ;;(error "Invalid class name ~s" arg)
+                                           (return-from find-applicable-methods)))
+                               (t
+                                  (unless (and (consp arg) (eql (car arg) 'eql) (null (cddr arg)))
+                                    ;;(error "Invalid specializer ~s" arg)
+                                    (return-from find-applicable-methods))
+                                  arg)))
+                           args))
+        (let ((cpls (make-list args-length)))
+          (declare (dynamic-extent cpls))
+          (do ((args-tail args (cdr args-tail))
+               (cpls-tail cpls (cdr cpls-tail)))
+              ((null cpls-tail))
+            (declare (type list args-tail cpls-tail))
+            (let ((arg (car args-tail)))
+              (setf (car cpls-tail)
+                    (%class-precedence-list (if (consp arg)
+                                              (class-of (cadr arg))
+                                              arg)))))
+          (dolist (m methods)
+            (when (%my-method-applicable-p m args cpls)
+              (push m res)))
+          (let ((methods (sort-methods res cpls (%gf-precedence-list gf))))
+            (when (eq (generic-function-method-combination gf)
+                      *standard-method-combination*)
+                                        ; around* (befores) (afters) primaries*
+              (setq methods (compute-method-list methods))
+              (when methods
+                (setq methods
+                      (if (not (consp methods))
+                        (list methods)
+                        (let ((afters (cadr (member-if #'listp methods))))
+                          (when afters (nremove afters methods))
+                          (nconc
+                           (mapcan #'(lambda (x)(if (listp x) x (cons x nil)))
+                                   methods)
+                           afters))))))
+            (if (and qualifiers (neq qualifiers t))
+              (delete-if #'(lambda (m)(not (equal qualifiers (%method-qualifiers m))))
+                         methods)
+              methods)))))))
 
 ;;; Do this just in case record source file doesn't remember the right
 ;;; definition
@@ -652,6 +649,7 @@ The returned list is guaranteed freshly consed (ie suitable for nconc'ing)."
             (method-specializers m))
     (let (name quals specs data last)
       (when (consp m)
+        (when (eq (car m) :method) (setq m (cdr m)))
         ;; (name spec1 .. specn) or (name qual1 .. qualn (spec1 ... specn))
         (setq data (cdr m) last (last data))
         (when (null (cdr last))

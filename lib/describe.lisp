@@ -15,7 +15,14 @@
 ;;;   http://opensource.franz.com/preamble.html
 
 (defpackage "INSPECTOR"
-  (:use "CL" "CCL"))
+  (:use "CL" "CCL")
+  (:export "MAKE-INSPECTOR"
+           "COMPUTE-LINE-COUNT"
+           "LINE-N"
+
+           "*INSPECTOR-DISASSEMBLY*"))
+
+
 
 (in-package "INSPECTOR")
 

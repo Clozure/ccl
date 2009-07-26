@@ -22,7 +22,7 @@
   (let* ((thing random)
          (name (or name (ignore-errors (function-name thing)))))
     (and name
-         (or (not (or (symbolp name)(and (consp name)(eq (car name) 'setf)))) ; maybe its (setf baz)
+         (or (not (or (symbolp name) (setf-function-name-p name))) ; maybe its (setf baz)
              (let ((fn  (fboundp name)))
                (and fn
                     (progn
