@@ -49,10 +49,12 @@
     (let* ((table-view (make-instance 'key-select-table-view)))
       (#/setDocumentView: scrollview table-view)
       (#/release table-view)
+      #-cocotron-objc
       (#/setColumnAutoresizingStyle: table-view #$NSTableViewUniformColumnAutoresizingStyle)
       (setf (slot-value self 'table-view) table-view)
       (let* ((column (make-instance 'ns:ns-table-column :with-identifier #@"")))
         (#/setEditable: column nil)
+        #-cocotron-objc
 	(#/setResizingMask: column #$NSTableColumnAutoresizingMask)
         (#/addTableColumn: table-view column)
 	(#/release column))
@@ -228,7 +230,7 @@
          (modifiers (#/modifierFlags event)))
     (logtest modifier-mask modifiers)))
 
-(defmethod current-event-command-key-p ()
+(defun current-event-command-key-p ()
   (current-event-modifier-p #$NSCommandKeyMask))
 
 ;;; I'm not sure if there's another way to recognize events whose
@@ -399,6 +401,8 @@
        (#/release nsmessage))))
 
 (defun post-tiger-p ()
+  #+cocotron-objc t
+  #-cocotron-objc 
   (rlet ((p :int))
     (#_Gestalt #$gestaltSystemVersion p)
     (>= (%get-long p) #x1050)))
