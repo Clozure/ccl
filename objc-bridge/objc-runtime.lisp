@@ -396,8 +396,17 @@
        #+apple-objc
        (open-shared-library "/System/Library/Frameworks/Cocoa.framework/Cocoa")
        #+cocotron-objc
-       (open-shared-library (native-translated-namestring
-                             (truename "ccl:Cocoa'.1'.0'.dll")))
+       (let* ((path (getenv "PATH")))
+         (unwind-protect
+              (progn
+                (setenv "PATH"
+                        (format nil "~a;~a"
+                                (native-translated-namestring
+                                 (truename "ccl:cocotron;"))
+                                path))
+                (open-shared-library "Foundation.1.0.dll")
+                (open-shared-library "AppKit.1.0.dll"))
+           (setenv "PATH" path)))
        ;(#_GetCurrentEventQueue)
        (current-ns-thread)
        (create-void-nsthread))))
