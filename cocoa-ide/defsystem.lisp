@@ -92,6 +92,7 @@
 	(bin-dir "ccl:cocoa-ide;fasls;"))
     (ensure-directories-exist bin-dir)
     ;; kludge to limit experimental files to Leopard
+    #+darwin-target
     (rlet ((p :int))
       (#_Gestalt #$gestaltSystemVersion p)
       (when (>= (%get-long p) #x1050)
