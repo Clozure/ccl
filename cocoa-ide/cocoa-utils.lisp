@@ -49,12 +49,12 @@
     (let* ((table-view (make-instance 'key-select-table-view)))
       (#/setDocumentView: scrollview table-view)
       (#/release table-view)
-      #-cocotron-objc
+      #-cocotron
       (#/setColumnAutoresizingStyle: table-view #$NSTableViewUniformColumnAutoresizingStyle)
       (setf (slot-value self 'table-view) table-view)
       (let* ((column (make-instance 'ns:ns-table-column :with-identifier #@"")))
         (#/setEditable: column nil)
-        #-cocotron-objc
+        #-cocotron
 	(#/setResizingMask: column #$NSTableColumnAutoresizingMask)
         (#/addTableColumn: table-view column)
 	(#/release column))
@@ -401,8 +401,8 @@
        (#/release nsmessage))))
 
 (defun post-tiger-p ()
-  #+cocotron-objc t
-  #-cocotron-objc 
+  #+cocotron t
+  #-cocotron 
   (rlet ((p :int))
     (#_Gestalt #$gestaltSystemVersion p)
     (>= (%get-long p) #x1050)))
