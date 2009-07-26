@@ -710,7 +710,7 @@ given is that of a group to which the current user belongs."
           (#_GetSystemTime st)
           (#_SystemTimeToFileTime st ft)
           (let* ((result (#_SetFileTime handle (%null-ptr) (%null-ptr) ft))
-                 (err (unless (eql 0 result) (#_GetLastError))))
+                 (err (when (eql 0 result) (#_GetLastError))))
             (#_CloseHandle handle)
             (if err
               (%windows-error-disp err)
