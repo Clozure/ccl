@@ -1710,7 +1710,8 @@ result-type-specifer is :VOID or NIL"
     #>DWORD
     (:array #>wchar_t #.#$MAX_PATH)
     #>fd_set
-    #>DWORD_PTR))
+    #>DWORD_PTR
+    #>SYSTEMTIME))
     
     
 (defun canonicalize-foreign-type-ordinals (ftd)
