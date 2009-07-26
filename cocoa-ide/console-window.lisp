@@ -28,6 +28,8 @@
     (#/insertString: (typeout-view-text-view tv) string)))
 
 (defmethod mark-console-output-available ((self console-window) available-p)
+  #+cocotron (declare (ignore available-p))
+  #-cocotron
   (let* ((menu (#/windowsMenu *nsapp*))
          (menu-ref (ccl::external-call "__NSGetCarbonMenu" :address menu :address))
          (index (#/indexOfItemWithTag: menu $system-console-menu-item-tag)))
