@@ -422,12 +422,13 @@
              (align (round (log (ceiling (foreign-type-alignment type) 8) 2))))
         (with-cstrs ((name string)
                      (encoding encoding))
-          (#_class_addIvar class name size align encoding)
+          (when (eql #$NO (#_class_addIvar class name size align encoding))
+            (error "class_addIvar failed"))
           (with-macptrs ((ivar (#_class_getInstanceVariable class name)))
-              (unless (%null-ptr-p ivar)
-                (let* ((offset (#_ivar_getOffset ivar)))
-                  (setf (foreign-direct-slot-definition-bit-offset dslotd)
-                        (ash offset 3))))))))))
+            (unless (%null-ptr-p ivar)
+              (let* ((offset (#_ivar_getOffset ivar)))
+                (setf (foreign-direct-slot-definition-bit-offset dslotd)
+                      (ash offset 3))))))))))
 
 
 #+(or apple-objc-2.0 cocotron-objc)
@@ -457,7 +458,7 @@
 ;;; This is only going to be called on a class created by the user;
 ;;; each foreign direct slotd's offset field should already have been
 ;;; set to the slot's bit offset.
-#-apple-objc-2.0
+#-(or apple-objc-2.0 cocotron-objc)
 (defun %make-objc-ivars (class)
   (let* ((start-offset (superclass-instance-size class))
 	 (foreign-dslotds (loop for s in (class-direct-slots class)
@@ -543,7 +544,7 @@
 	      (align (foreign-integer-type-alignment ftype))
 	      (signed (foreign-integer-type-signed ftype)))
          (if (= bits align)
-	   (ecase bits
+	   (case bits
 	     (1 (values #'%get-bit #'%set-bit))
 	     (8 (values (if signed #'%get-signed-byte #'%get-unsigned-byte)
 			#'%set-byte))
@@ -553,7 +554,11 @@
 			 #'%set-long))
 	     (64 (if signed
 		   (values #'%%get-signed-longlong #'%%set-signed-longlong)
-		   (values #'%%get-unsigned-longlong #'%%set-unsigned-longlong))))
+		   (values #'%%get-unsigned-longlong #'%%set-unsigned-longlong)))
+             (t (values #'(lambda (ptr offset)
+                       (%get-bitfield ptr offset bits))
+                   #'(lambda (ptr offset new)
+                       (setf (%get-bitfield ptr offset bits) new)))))
            (values #'(lambda (ptr offset)
                        (%get-bitfield ptr offset bits))
                    #'(lambda (ptr offset new)
