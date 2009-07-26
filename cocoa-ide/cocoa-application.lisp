@@ -17,6 +17,10 @@
 
 (in-package "CCL")			; for now.
 
+#+windows-target
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (pushnew :cocotron *features*))
+
 
 (defvar *cocoa-application-path*
   (let* ((bits (nth-value 1 (host-platform))))
@@ -27,6 +31,9 @@
   (multiple-value-bind (os bits cpu) (host-platform)
     (declare (ignore os))
     (format nil "Clozure CL-~a~a" (string-downcase cpu) bits)))
+(defvar *cocoa-application-frameworks* #+cocotron '("ccl:cocotron;Foundation.framework;" "ccl:cocotron;AppKit.framework;") #-cocotron nil)
+(defvar *cocoa-application-libraries* #+cocotron '("ccl:cocotron;Foundation'.1'.0'.dll" "ccl:cocotron;AppKit'.1'.0'.dll" #-cocotron nil)
+        
 (defvar *cocoa-ide-force-compile* nil)
 (load "ccl:cocoa-ide;defsystem.lisp")
 (load-ide *cocoa-ide-force-compile*)

@@ -10,7 +10,7 @@
 ;;; already "inside a bundle".  If it is necessary, it has to happen
 ;;; before the CoreFoundation library's initialized.
 
-(defun fake-cfbundle-path (bundle-root info-plist-proto-path bundle-prefix &optional bundle-suffix)
+(defun fake-cfbundle-path (bundle-root info-plist-proto-path bundle-prefix  bundle-suffix install-frameworks install-libraries)
   (let* ((kernel-name (standard-kernel-name))
          (translated-root (translate-logical-pathname bundle-root))
 	 (bundle-name (let* ((name (if (directory-pathname-p translated-root)
@@ -30,10 +30,15 @@
 		    ("OPENMCL-NAME" . ,bundle-name)
                     ("OPENMCL-IDENTIFIER" . ,bundle-id)
 		    ("OPENMCL-VERSION" . ,bundle-version)))
-         (executable-path (merge-pathnames
-                           (make-pathname :directory "Contents/MacOS/"
-                                          :name kernel-name)
-                           translated-root)))
+         (executable-dir (merge-pathnames
+                           (make-pathname :directory (format nil "Contents/~a/"
+                                                             #+windows-target
+                                                             "Windows"
+                                                             #+darwin-target
+                                                             "MacOS"
+                                                             #-(or windows-target darwin-target) "Unknown"))
+                           translated-root))
+         (executable-path (merge-pathnames executable-dir (make-pathname :name kernel-name :defaults nil))))
     (unless (probe-file info-plist-proto-path)
       (error "Can't find Info.plist prototype in ~s" info-plist-proto-path))
     (with-open-file (in info-plist-proto-path 
@@ -59,5 +64,13 @@
 				   (cdr needle)
 				   (subseq line (+ pos (length (car needle)))))))))
           (write-line line out))))
+    
     (touch executable-path)
+    (dolist (lib install-libraries)
+      (copy-file lib executable-dir :preserve-attributes t))
+    (when install-frameworks
+      (flet ((subdir (framework target)
+               (ensure-directory-pathname (make-pathname :name (car (last (pathname-directory framework))) :defaults target))))
+        (dolist (framework install-frameworks)
+          (recursive-copy-directory framework (subdir framework executable-dir) :if-exists :overwrite))))
     (setenv "CFProcessPath" (native-translated-namestring executable-path))))

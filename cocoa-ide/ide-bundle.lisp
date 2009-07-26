@@ -52,12 +52,13 @@
              #+ignore
 	     (ccl-image (make-pathname :name image-name :host "ccl"))
 	     (dest-image (make-pathname :name image-name
-					:defaults (subdir contents-dir "MacOS"))))
+					:defaults (subdir contents-dir #+darwin-target "MacOS" #+windows-target "Windows"))))
 	(ensure-directories-exist dest-image)
         #+no
 	(copy-file ccl-image dest-image :if-exists :supersede :preserve-attributes t)
         (ccl::touch dest-image)
         )
+      #-windows-target
       (ccl::touch target-dir))))
 
 ;;; This runs "make install" to generate
@@ -91,4 +92,4 @@
 (progn
   (require "FAKE-CFBUNDLE-PATH")
   (create-ide-bundle *cocoa-application-path*)
-  (ccl::fake-cfbundle-path *cocoa-application-path* "ccl:cocoa-ide;Info.plist-proto" "com.clozure" *cocoa-application-bundle-suffix*))
+  (ccl::fake-cfbundle-path *cocoa-application-path* "ccl:cocoa-ide;Info.plist-proto" "com.clozure" *cocoa-application-bundle-suffix* *cocoa-application-frameworks* *cocoa-application-libraries*))
