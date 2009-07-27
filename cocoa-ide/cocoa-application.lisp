@@ -32,7 +32,7 @@
     (declare (ignore os))
     (format nil "Clozure CL-~a~a" (string-downcase cpu) bits)))
 (defvar *cocoa-application-frameworks* #+cocotron '("ccl:cocotron;Foundation.framework;" "ccl:cocotron;AppKit.framework;") #-cocotron nil)
-(defvar *cocoa-application-libraries* #+cocotron '("ccl:cocotron;Foundation'.1'.0'.dll" "ccl:cocotron;AppKit'.1'.0'.dll" #-cocotron nil)
+(defvar *cocoa-application-libraries* #+cocotron '("ccl:cocotron;Foundation'.1'.0'.dll" "ccl:cocotron;AppKit'.1'.0'.dll") #-cocotron nil)
         
 (defvar *cocoa-ide-force-compile* nil)
 (load "ccl:cocoa-ide;defsystem.lisp")
