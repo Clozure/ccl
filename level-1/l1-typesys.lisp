@@ -722,6 +722,15 @@
     (specifier-type 'function)))
 
 
+(define-type-method (function :complex-intersection) (type1 type2)
+  (declare (type function-ctype type2))
+  (let ((function (specifier-type 'function)))
+    (if (eq type1 function)
+      type2
+      (type-intersection2 type1 function))))
+
+
+
 ;;; ### Not very real, but good enough for redefining transforms according to
 ;;; type:
 ;;;
@@ -1219,6 +1228,7 @@
 ;;; worst, we arbitrarily return one of the arguments as the first
 ;;; value (trying not to return a hairy type).
 (defun type-approx-intersection2 (type1 type2)
+  (declare (type ctype type1 type2))
   (cond ((type-intersection2 type1 type2))
 	((hairy-ctype-p type1) type2)
 	(t type1)))
@@ -1263,16 +1273,19 @@
 
 (defun simplify-intersections (types)
   (when types
-    (multiple-value-bind (first rest)
-	(if (intersection-ctype-p (car types))
-	    (values (car (intersection-ctype-types (car types)))
-		    (append (cdr (intersection-ctype-types (car types)))
+    (let ((first (if (typep (car types) 'ctype)
+		   (%car types)
+		   (specifier-type (%car types)))))
+      (multiple-value-bind (first rest)
+	  (if (intersection-ctype-p first)
+	    (values (car (intersection-ctype-types first))
+		    (append (cdr (intersection-ctype-types first))
 			    (cdr types)))
-	    (values (car types) (cdr types)))
-      (let ((rest (simplify-intersections rest)) u)
-	(dolist (r rest (cons first rest))
-	  (when (setq u (type-intersection2 first r))
-	    (return (simplify-intersections (nsubstitute u r rest)))))))))
+	    (values first (cdr types)))
+	(let ((rest (simplify-intersections rest)) u)
+	  (dolist (r rest (cons first rest))
+	    (when (setq u (type-intersection2 first r))
+	      (return (simplify-intersections (nsubstitute u r rest))))))))))
 
 (defun type-intersection2 (type1 type2)
   (declare (type ctype type1 type2))
@@ -1292,11 +1305,13 @@
 	;; not (AND (FUNCTION (T) T) (FUNCTION (T) T)).
 	((let ((function (specifier-type 'function)))
 	   (or (and (function-ctype-p type1)
-		    (not (or (function-ctype-p type2) (eq function type2)))
+		    (not (function-ctype-p type2))
+		    (neq function type2)
 		    (csubtypep type2 function)
 		    (not (csubtypep function type2)))
 	       (and (function-ctype-p type2)
-		    (not (or (function-ctype-p type1) (eq function type1)))
+		    (not (function-ctype-p type1))
+		    (neq function type1)
 		    (csubtypep type1 function)
 		    (not (csubtypep function type1)))))
 	 nil)
@@ -3534,7 +3549,9 @@
   (if (and (intersection-ctype-p type1)
 	   (> (count-if #'class-ctype-p (intersection-ctype-types type1)) 1))
       (values nil nil)
-      (invoke-complex-subtypep-arg1-method type1 class2 nil t)))
+      (if (function-ctype-p type1)
+	(csubtypep (specifier-type 'function) class2)
+	(invoke-complex-subtypep-arg1-method type1 class2 nil t))))
 
 (define-type-method (class :complex-subtypep-arg1) (type1 type2)
   (if (and (function-ctype-p type2)
