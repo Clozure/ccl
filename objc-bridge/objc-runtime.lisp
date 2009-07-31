@@ -1971,7 +1971,8 @@ argument lisp string."
 	    (%stack-block ((,marg-ptr ,marg-size))
 	      (progn ,@(static-arg-forms))
 	      (%process-varargs-list ,marg-ptr ,static-arg-words ,rest-arg)
-	      (external-call "objc_msgSendv"
+	      (external-call #+apple-objc  "objc_msgSendv"
+                             #+cocotron-objc "objc_msg_sendv"
 			     :id ,receiver
 			     :<SEL> ,selptr
 			     :size_t ,marg-size
