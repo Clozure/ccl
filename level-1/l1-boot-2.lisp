@@ -255,7 +255,7 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (progn
 	(bin-load-provide "X86-DISASSEMBLE" "x86-disassemble")
 	(bin-load-provide "X86-LAPMACROS" "x86-lapmacros"))
-      
+
 
       (bin-load-provide "FOREIGN-TYPES" "foreign-types")
       (install-standard-foreign-types *host-ftd*)
@@ -288,7 +288,12 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "FFI-SOLARISX8632" "ffi-solarisx8632")
       #+freebsdx8632-target
       (bin-load-provide "FFI-FREEBSDX8632" "ffi-freebsdx8632")
-      
+
+
+      ;; Knock wood: all standard reader macros and no non-standard
+      ;; reader macros are defined at this point.
+      (setq *readtable* (copy-readtable *readtable*))
+
       (bin-load-provide "DB-IO" "db-io")
 
       (canonicalize-foreign-type-ordinals *host-ftd*)

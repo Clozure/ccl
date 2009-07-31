@@ -1964,7 +1964,7 @@
               (signal-reader-error stream "Undefined character ~S in a ~S dispatch macro." subchar char)))))))
 
 ;;; This -really- gets initialized later in the file
-(defvar %initial-readtable%
+(defvar %standard-readtable%
   (let* ((ttab (make-array 256 :element-type '(unsigned-byte 8)))
          (macs `((#\# . (,#'read-dispatch))))
          (case :upcase))
@@ -1979,12 +1979,13 @@
     (uvset ttab (char-code #\Rubout) $cht_ill)
     (%istruct 'readtable ttab macs case)))
 
-(setq *readtable* %initial-readtable%)
+(defvar %initial-readtable%)
+(setq *readtable* %standard-readtable%)
 (def-standard-initial-binding *readtable* )
 (queue-fixup (setq %initial-readtable% (copy-readtable *readtable*)))
 
 (defun copy-readtable (&optional (from *readtable*) to)
-  (setq from (if from (readtable-arg from)  %initial-readtable%))
+  (setq from (if from (readtable-arg from)  %standard-readtable%))
   (setq to (if to 
              (readtable-arg to)
              (%istruct 'readtable
