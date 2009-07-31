@@ -54,7 +54,9 @@
                                         :document-attributes dictp)))
                (textstorage (#/textStorage textview))
                (dict (pref dictp :id))
-               (title (unless (%null-ptr-p dict)
+               (title
+                #-cocotron
+                 (unless (%null-ptr-p dict)
                         (#/valueForKey: dict #&NSTitleDocumentAttribute))))
           (when title 
             (#/setTitle: (#/window textview) title))
@@ -149,7 +151,9 @@
                                             :base-url url
                                             :document-attributes pdocattrs))
                      (docattrs (pref pdocattrs :id))
-                     (title (if (%null-ptr-p docattrs)
+                     (title #+cocotron +null-ptr+
+                            #-cocotron
+                            (if (%null-ptr-p docattrs)
                               +null-ptr+
                               (#/objectForKey: docattrs #&NSTitleDocumentAttribute))))
                 (if (%null-ptr-p title)
