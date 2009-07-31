@@ -122,11 +122,11 @@
   (float number ccl::+cgfloat-zero+))
 
 (defun color-values-to-nscolor (red green blue &optional alpha)
-  (#/colorWithCalibratedRed:green:blue:alpha: ns:ns-color
-                                              (cgfloat red)
-                                              (cgfloat green)
-                                              (cgfloat blue)
-                                              (cgfloat (or alpha 1.0))))
+  (#/retain (#/colorWithCalibratedRed:green:blue:alpha: ns:ns-color
+                                                       (cgfloat red)
+                                                       (cgfloat green)
+                                                       (cgfloat blue)
+                                                       (cgfloat (or alpha 1.0)))))
 
 (defun map-windows (fn)
   (let ((win-arr (#/orderedWindows *NSApp*)))
