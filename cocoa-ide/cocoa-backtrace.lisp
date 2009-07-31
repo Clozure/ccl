@@ -62,7 +62,8 @@
   (and (typep thing 'frame-label)
        (eql self (frame-label-controller thing))))
 
-(def-cocoa-default *backtrace-font-name* :string "Monaco" "Name of font used in backtrace views")
+(def-cocoa-default *backtrace-font-name* :string #+darwin-target "Monaco"
+                   #-darwin-target "Lucida Typewriter" "Name of font used in backtrace views")
 (def-cocoa-default *backtrace-font-size* :float 9.0f0 "Size of font used in backtrace views")
 
 
