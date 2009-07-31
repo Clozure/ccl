@@ -1817,7 +1817,7 @@
                 (values tv scrollview)))))))))
 
 (defun make-scrolling-textview-for-pane (pane textstorage track-width color style)
-  (let* ((contentrect (#/frame pane)))
+  (let* ((contentrect (#/frame (#/contentView pane)) ))
     (multiple-value-bind (tv scrollview)
 	(make-scrolling-text-view-for-textstorage
 	 textstorage
