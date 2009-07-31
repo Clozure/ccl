@@ -701,6 +701,23 @@
                (hi::buffer-document buffer)))))))
    +null-ptr+))
 
+
+#-cocotron
+(objc:defmethod #/initWithString: ((self hemlock-text-storage) s)
+  (setq s (%inc-ptr s 0))
+  (let* ((newself (#/init self))
+         (styles (make-editor-style-map))
+         (mirror (make-instance ns:ns-mutable-attributed-string
+                                   :with-string s
+                                   :attributes (#/objectAtIndex: styles 0))))
+    (declare (type hemlock-text-storage newself))
+    (setf (slot-value newself 'styles) styles)
+    (setf (slot-value newself 'hemlock-string) s)
+    (setf (slot-value newself 'mirror) mirror)
+    (setf (slot-value newself 'string) (#/retain (#/string mirror)))
+    newself))
+
+#+cocotron
 (objc:defmethod #/initWithString: ((self hemlock-text-storage) s)
   (setq s (%inc-ptr s 0))
   (let* ((styles (make-editor-style-map))
