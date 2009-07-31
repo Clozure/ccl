@@ -108,6 +108,7 @@
 ;;; the file as soon as it's opened, to help avoid exposing its contents
 ;;; (and to ensure that the file gets deleted when the application
 ;;; quits.)
+#-windows-target
 (defun open-logging-fds ()
   (with-cstrs ((template "/tmp/logfileXXXXXX"))
     (let* ((write-fd (#_mkstemp template)))
@@ -147,6 +148,8 @@
 
 (objc:defmethod #/init ((self console-window))
   (#/release self)
+  #+windows-target +null-ptr+
+  #-windows-target
   (flet ((path-inode (path)
            (nth-value 4 (ccl::%stat path)))
          (fd-inode (fd)
@@ -166,7 +169,10 @@
              (let* ((tv (typeout-view-text-view (typeout-window-typeout-view win))))
                (#/setTypingAttributes: tv
                                        (create-text-attributes
-                                        :font (default-font :name "Monaco" :size 10)
+                                        :font (default-font
+                                                  :name #+darwin-target "Monaco"
+                                                  #-darwin-targe "Lucida Typewriter"
+                                                :size 10)
                                         :color (#/redColor ns:ns-color))))
              (#/setFrameOrigin: win (ns:make-ns-point 20 20))
              win))
