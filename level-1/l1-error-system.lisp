@@ -1207,7 +1207,7 @@
     (simple-array fixnum (* * *))
     (simple-array single-float (* * *))
     (simple-array double-float (* * *))
-    (simple-array char (* * *))
+    (simple-array character (* * *))
 
     (vector t)
     bit-vector
