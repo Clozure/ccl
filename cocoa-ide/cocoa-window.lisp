@@ -116,8 +116,8 @@
     "LispApplicationDelegate")
 
 
-#+apple-objc
 (defun enable-foreground ()
+  #+apple-objc
   (rlet ((psn :<P>rocess<S>erial<N>umber))
     (#_GetCurrentProcess psn)
     (#_TransformProcessType psn #$kProcessTransformToForegroundApplication)
@@ -146,7 +146,7 @@
                  (#/setTitle: item #@"Hide System Console")
                  (#/setTitle: item #@"Show System Console"))
                t)))
-          (t (call-next-method item)))))
+          (t #+cocotron t #-cocotron (call-next-method item)))))
 
 (defmethod ccl::process-exit-application ((process appkit-process) thunk)
   (when (eq process ccl::*initial-process*)
@@ -192,6 +192,7 @@
            (with-autorelease-pool
              (enable-foreground)
              (or *NSApp* (setq *NSApp* (init-cocoa-application)))
+             #-cocotron
              (let* ((icon (#/imageNamed: ns:ns-image #@"NSApplicationIcon")))
                (unless (%null-ptr-p icon)
                  (#/setApplicationIconImage: *NSApp* icon)))
@@ -220,9 +221,14 @@
 ;;; advancement for the #\i glyph matches that of the advancement
 ;;; of the #\m glyph.
 
+#-cocotron
 (defun is-fixed-pitch-font (font)
   (= (ns:ns-size-width (#/advancementForGlyph: font (#/glyphWithName: font #@"i")))
      (ns:ns-size-width (#/advancementForGlyph: font (#/glyphWithName: font #@"m")))))
+
+#+cocotron
+(defun is-fixed-pitch-font (font)
+  (#/isFixedPitch font))
 
 ;;; Try to find the specified font.  If it doesn't exist (or isn't
 ;;; fixed-pitch), try to find a fixed-pitch font of the indicated size.
