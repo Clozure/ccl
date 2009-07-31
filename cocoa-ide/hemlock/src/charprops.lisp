@@ -614,7 +614,9 @@
     (:ns-expansion . #&NSExpansionAttributeName)
     (:ns-cursor . #&NSCursorAttributeName)
     (:ns-tool-tip . #&NSToolTipAttributeName)
+    #-cocotron
     (:ns-character-shap . #&NSCharacterShapeAttributeName)
+    #-cocotron
     (:ns-glyph-info . #&NSGlyphInfoAttributeName)
     ;;(:ns-marked-clause-segment . #&NSMarkedClauseSegmentAttributeName)
     ;;(:ns-spelling-state . #&NSSpellingStateAttributeName)
