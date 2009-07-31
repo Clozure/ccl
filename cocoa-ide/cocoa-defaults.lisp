@@ -103,6 +103,13 @@
              (unless (%null-ptr-p nsstring)
                (set name (lisp-string-from-nsstring nsstring)))))
           ((:color :font)
+           #+cocotron
+           (let* ((value (cocoa-default-value d)))
+             (set name
+                  (ecase type
+                    (:color (apply #'color-values-to-nscolor value))
+                    (:font (funcall value)))))
+           #-cocotron
            (let* ((data (#/dataForKey: domain key)))
              (unless (%null-ptr-p data)
                (set name (#/retain (#/unarchiveObjectWithData: ns:ns-unarchiver data)))))))
@@ -118,13 +125,20 @@
     (dolist (d defaults dict)
       (let* ((value (cocoa-default-value d)))
         (#/setObject:forKey: dict
-                             (case (cocoa-default-type d)
-                               (:color (#/archivedDataWithRootObject:
+                             (case (cocoa-default-type d)                               
+                               (:color #-cocotron
+                                       (#/archivedDataWithRootObject:
                                         ns:ns-archiver
-                                        (apply #'color-values-to-nscolor value)))
-			       (:font (#/archivedDataWithRootObject:
-				       ns:ns-archiver
-				       (funcall value)))
+                                        (apply #'color-values-to-nscolor value))
+                                       #+cocotron
+                                       (apply #'color-values-to-nscolor value)
+                                       )
+			       (:font #-cocotron
+                                      (#/archivedDataWithRootObject:
+                                       ns:ns-archiver
+                                       (funcall value))
+                                      #+cocotron
+                                      (funcall value))
                                (:bool (if value #@"YES" #@"NO"))
                                (t
                                 (%make-nsstring (format nil "~a" (cocoa-default-value d)))))
