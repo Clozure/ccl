@@ -63,6 +63,7 @@
            (image-name (if (post-tiger-p) #@"NSActionTemplate" #@"gear")))
       (#/setBezelStyle: button #$NSTexturedRoundedBezelStyle)
       ;; This looks bad on Tiger: the arrow is in the bottom corner of the button.
+      #-cocotron                        ; no setArrowPosition
       (#/setArrowPosition: (#/cell button) #$NSPopUpArrowAtBottom)
       (#/setImage: item (#/imageNamed: ns:ns-image image-name))
       (#/setMenu: button menu)
