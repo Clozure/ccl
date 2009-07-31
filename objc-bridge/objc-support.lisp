@@ -346,7 +346,7 @@ instance variable."
 
 (defun objc-callback-error-return (condition return-value-pointer return-address-pointer)
   (process-debug-condition *current-process* condition (%get-frame-ptr))
-  (let* ((addr (%reference-external-entry-point (load-time-value (external "__NSRaiseError")))))
+  (let* ((addr (%reference-external-entry-point (load-time-value (external #+cocotron-objc "_NSRaiseException" #-cocotron-objc "__NSRaiseError")))))
     (setf (%get-unsigned-long return-value-pointer -12 ) addr))
   (setf (%get-ptr return-value-pointer -8) (ns-exception condition)
         (%get-ptr return-value-pointer -4) (%get-ptr return-address-pointer)
