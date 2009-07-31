@@ -14,7 +14,11 @@
 (def-cocoa-default *editor-font* :font #'(lambda ()
 					   (#/fontWithName:size:
 					    ns:ns-font
-					    #@"Monaco" 10.0))
+                                            #+darwin-target
+					    #@"Monaco"
+                                            #-darwin-target
+                                            #@"Lucida Typewriter"
+                                            10.0))
 		   "Default font for editor windows")
 
 (def-cocoa-default *editor-rows* :int 24 "Initial height of editor windows, in characters")
@@ -442,6 +446,7 @@
                        len (if line (hi::line-length line) 0)
                        idx 0))))))))
 
+
 (objc:defmethod (#/getLineStart:end:contentsEnd:forRange: :void)
     ((self hemlock-buffer-string)
      (startptr (:* :<NSUI>nteger))
@@ -630,6 +635,7 @@
     (#/setAttributes:range: (#/mirror self) (#/objectAtIndex: (#/styles self) fontnum) range)
     (#/edited:range:changeInLength: self #$NSTextStorageEditedAttributes range 0)))
 
+
 (defloadvar *buffer-change-invocation*
     (with-autorelease-pool
         (#/retain
@@ -697,16 +703,17 @@
 
 (objc:defmethod #/initWithString: ((self hemlock-text-storage) s)
   (setq s (%inc-ptr s 0))
-  (let* ((newself (#/init self))
-         (styles (make-editor-style-map))
+  (let* ((styles (make-editor-style-map))
          (mirror (make-instance ns:ns-mutable-attributed-string
                                    :with-string s
-                                   :attributes (#/objectAtIndex: styles 0))))
+                                   :attributes (#/objectAtIndex: styles 0)))
+         (string (#/retain (#/string mirror)))
+         (newself (call-next-method string)))
     (declare (type hemlock-text-storage newself))
     (setf (slot-value newself 'styles) styles)
     (setf (slot-value newself 'hemlock-string) s)
     (setf (slot-value newself 'mirror) mirror)
-    (setf (slot-value newself 'string) (#/retain (#/string mirror)))
+    (setf (slot-value newself 'string) string)
     newself))
 
 ;;; Should generally only be called after open/revert.
@@ -851,6 +858,8 @@
 
 ;;; Mostly experimental, so that we can see what happens when a 
 ;;; real typesetter is used.
+#-cocotron
+(progn
 (defclass hemlock-ats-typesetter (ns:ns-ats-typesetter)
     ()
   (:metaclass ns:+ns-object))
@@ -863,7 +872,7 @@
      (next-index (:* :<NSUI>nteger)))
   (#_NSLog #@"layoutGlyphs: start = %d, maxlines = %d" :int start-index :int max-lines)
   (call-next-method layout-manager start-index max-lines next-index))
-
+)
 
 ;;; An abstract superclass of the main and echo-area text views.
 (defclass hemlock-textstorage-text-view (ns::ns-text-view)
@@ -1444,6 +1453,7 @@
 (defmethod text-view-string-cache ((self hemlock-textstorage-text-view))
   (hemlock-buffer-string-cache (#/hemlockString (#/textStorage self))))
 
+#-cocotron                              ; for now, small struct return FFI issue
 (objc:defmethod (#/selectionRangeForProposedRange:granularity: :ns-range)
     ((self hemlock-textstorage-text-view)
      (proposed :ns-range)
@@ -1761,9 +1771,12 @@
                 (#/setAutoresizingMask: tv #$NSViewWidthSizable)
                 (#/setBackgroundColor: tv color)
                 (#/setTypingAttributes: tv (#/objectAtIndex: (#/styles textstorage) style))
+                #-cocotron
                 (#/setSmartInsertDeleteEnabled: tv nil)
                 (#/setAllowsUndo: tv nil) ; don't want NSTextView undo
+                #-cocotron
                 (#/setUsesFindPanel: tv t)
+                #-cocotron
                 (#/setUsesFontPanel: tv nil)
                 (#/setMenu: tv (text-view-context-menu))
 
@@ -1787,7 +1800,7 @@
                 (values tv scrollview)))))))))
 
 (defun make-scrolling-textview-for-pane (pane textstorage track-width color style)
-  (let* ((contentrect (#/frame (#/contentView pane))))
+  (let* ((contentrect (#/frame pane)))
     (multiple-value-bind (tv scrollview)
 	(make-scrolling-text-view-for-textstorage
 	 textstorage
@@ -1803,6 +1816,7 @@
         (decf (ns:ns-rect-height r) 15)
         (incf (ns:ns-rect-y r) 15)
         (#/setFrame: scrollview r))
+      #-cocotron
       (#/setAutohidesScrollers: scrollview t)
       (setf (slot-value pane 'scroll-view) scrollview
             (slot-value pane 'text-view) tv
@@ -1907,6 +1921,7 @@
           (#/setMinSize: echo (pref box-frame :<NSR>ect.size))
           (#/setMaxSize: echo (ns:make-ns-size large-number-for-text large-number-for-text))
           (#/setRichText: echo nil)
+          #-cocotron
           (#/setUsesFontPanel: echo nil)
           (#/setHorizontallyResizable: echo t)
           (#/setVerticallyResizable: echo nil)
@@ -2285,7 +2300,7 @@
     (let* ((layout (#/autorelease (#/init (#/alloc ns:ns-layout-manager)))))
       (#/setUsesScreenFonts: layout screen-p)
       (values (fround (#/defaultLineHeightForFont: layout sf))
-              (fround (ns:ns-size-width (#/advancementForGlyph: sf (#/glyphWithName: sf #@" "))))))))
+              (fround (ns:ns-size-width (#/advancementForGlyph: sf (char-code #\space))))))))
          
 
 
@@ -2344,6 +2359,7 @@
 
 ;;; Map *default-file-character-encoding* to an :<NSS>tring<E>ncoding
 (defun get-default-encoding ()
+  #-cocotron                            ;need IANA conversion stuff
   (let* ((file-encoding *default-file-character-encoding*))
     (when (and (typep file-encoding 'keyword)
                (lookup-character-encoding file-encoding))
@@ -2744,7 +2760,6 @@
 (objc:defmethod (#/makeWindowControllers :void) ((self hemlock-editor-document))
   #+debug
   (#_NSLog #@"Make window controllers")
-  (with-callback-context "makeWindowControllers"
     (let* ((textstorage  (slot-value self 'textstorage))
            (window (%hemlock-frame-for-textstorage
                     hemlock-frame
@@ -2790,7 +2805,7 @@
         (#/cascadeTopLeftFromPoint: window *editor-cascade-point*))
       (let ((view (hemlock-view window)))
         (hi::handle-hemlock-event view #'(lambda ()
-                                           (hi::process-file-options)))))))
+                                           (hi::process-file-options))))))
 
 
 (objc:defmethod (#/close :void) ((self hemlock-editor-document))
@@ -2917,10 +2932,12 @@
               (update-hemlock-selection (#/textStorage tv)))))))))
 
 (defun iana-charset-name-of-nsstringencoding (ns)
+  #+cocotron (declare (ignore ns))
+  #+cocotron +null-ptr+
+  #-cocotron
   (#_CFStringConvertEncodingToIANACharSetName
    (#_CFStringConvertNSStringEncodingToEncoding ns)))
     
-
 (defun nsstring-for-nsstring-encoding (ns)
   (let* ((iana (iana-charset-name-of-nsstringencoding ns)))
     (if (%null-ptr-p iana)
@@ -2933,6 +2950,7 @@
 ;;; the user is interested in, maintained by preferences.
 
 (defun supported-string-encoding-p (ns-string-encoding)
+  #-cocotron
   (let* ((cfname (#_CFStringConvertEncodingToIANACharSetName
                   (#_CFStringConvertNSStringEncodingToEncoding ns-string-encoding)))
          (name (unless (%null-ptr-p cfname)
@@ -3032,13 +3050,14 @@
         (dotimes (i numitems)
           (let* ((item (#/itemAtIndex: appmenu i))
                  (title (#/title item)))
-            (when (#/hasSuffix: title targetname)
-	      (let ((new-title (#/mutableCopy title)))
-		(ns:with-ns-range (r 0 (#/length new-title))
-		  (#/replaceOccurrencesOfString:withString:options:range:
-		   new-title targetname cfbundlename #$NSLiteralSearch r))
-		(#/setTitle: item new-title)
-		(#/release new-title)))))))))
+            (unless (%null-ptr-p title)
+              (when (#/hasSuffix: title targetname)
+                (let ((new-title (#/mutableCopy title)))
+                  (ns:with-ns-range (r 0 (#/length new-title))
+                    (#/replaceOccurrencesOfString:withString:options:range:
+                     new-title targetname cfbundlename #$NSLiteralSearch r))
+                  (#/setTitle: item new-title)
+                  (#/release new-title))))))))))
               
 (defun initialize-user-interface ()
   ;; The first created instance of an NSDocumentController (or

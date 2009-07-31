@@ -7,12 +7,20 @@
 (def-cocoa-default *listener-input-font* :font #'(lambda ()
 						   (#/fontWithName:size:
 						    ns:ns-font
-						    #@"Monaco" 10.0))
+                                                    #+darwin-target
+						    #@"Monaco"
+                                                    #-darwin-target
+                                                    #@"Lucida Typewriter"
+                                                    10.0))
 		   "Default font for listener input")
 (def-cocoa-default *listener-output-font* :font #'(lambda ()
 						    (#/fontWithName:size:
 						     ns:ns-font
-						     #@"Monaco" 10.0))
+                                                     #+darwin-target
+						     #@"Monaco"
+                                                     #-darwin-target
+                                                     #@"Lucida Typewriter"
+                                                     10.0))
 		   "Default font for listener output")
 
 (def-cocoa-default *listener-rows* :int 16 "Initial height of listener windows, in characters")
