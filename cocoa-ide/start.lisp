@@ -2,6 +2,7 @@
 
 (defparameter *standalone-cocoa-ide* nil)
 
+#-cocotron
 (if (< #&NSAppKitVersionNumber 824)
     (error "This application requires features introduced in OSX 10.4."))
 
@@ -95,6 +96,7 @@
 
 (defmethod toplevel-function ((a cocoa-application) init-file)
   (declare (ignore init-file))
+  #-cocotron
   (when (< #&NSAppKitVersionNumber 824)
     (#_NSLog #@"This application requires features introduced in OSX 10.4.")
     (#_ _exit -1))
@@ -158,6 +160,7 @@
 ;;; of the socket.
 
 (defun try-connecting-to-altconsole ()
+  #-cocotron
   (with-autorelease-pool
       (let* ((main-bundle (#/mainBundle ns:ns-bundle))
              (resource-path (#/resourcePath main-bundle)))
