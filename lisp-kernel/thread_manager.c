@@ -1980,7 +1980,6 @@ pc_luser_restore_windows_context(CONTEXT *pcontext, TCR *tcr, pc where)
 #endif
   }
   tcr->pending_exception_context = NULL;
-  tcr->interrupt_context = NULL;
 }
 
 Boolean
