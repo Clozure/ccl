@@ -202,6 +202,7 @@
     (:global-mismatch . invalid-arguments-global)
     (:lexical-mismatch . invalid-arguments)
     (:environment-mismatch . invalid-arguments)
+    (:ftype-mismatch . invalid-arguments)
     (:ignore . style-warning)
     (:result-ignored . style-warning)
     (:lambda . style-warning)

@@ -204,7 +204,8 @@
 
 (%include "ccl:compiler;lambda-list.lisp")
 
-
+#-BOOTSTRAPPED (unless (fboundp 'types-disjoint-p)
+		 (fset 'types-disjoint-p (lambda (t1 t2 &optional env) t1 t2 env nil)))
 
 ;Syntactic Environment Access.
 
@@ -350,6 +351,16 @@
   (let ((decl (or (assq sym *nx-compile-time-types*)
                      (assq sym *nx-proclaimed-types*))))
     (if decl (%cdr decl) t)))
+
+(defun nx-declared-result-type (sym &optional (env *nx-lexical-environment*))
+  (when (symbolp (setq sym (maybe-setf-function-name sym)))
+    (let* ((ftype (find-ftype-decl sym env))
+	   (ctype (if (typep ftype 'ctype) ftype (specifier-type-if-known ftype env))))
+      (unless (or (null ctype)
+		  (not (function-ctype-p ctype))
+		  (eq *wild-type* (function-ctype-returns ctype)))
+	(let ((result-type (type-specifier (function-ctype-returns ctype))))
+	  (and (neq result-type 't) result-type))))))
 
 (defmacro define-declaration (decl-name lambda-list &body body &environment env)
   (multiple-value-bind (body decls)
@@ -596,9 +607,11 @@
       (:unknown-keyword
        (destructuring-bind (badguy goodguys)
            (cdr reason)
-         (format stream "the keyword argument ~s is not one of ~s, which are recognized~&  by " badguy goodguys))))
+         (format stream "the keyword argument~:[ ~s is~;s~{ ~s~^~#[~; and~:;,~]~} are~] not one of ~s, which are recognized~&  by "
+		 (consp badguy) badguy goodguys))))
     (format stream
             (ecase (compiler-warning-warning-type condition)       
+	      (:ftype-mismatch "the FTYPE declaration of ~s")
               (:global-mismatch "the current global definition of ~s")
               (:environment-mismatch "the definition of ~s visible in the current compilation unit.")
               (:lexical-mismatch "the lexically visible definition of ~s"))
@@ -619,6 +632,7 @@
     (:global-mismatch . report-compile-time-argument-mismatch)
     (:environment-mismatch . report-compile-time-argument-mismatch)
     (:lexical-mismatch . report-compile-time-argument-mismatch)    
+    (:ftype-mismatch . report-compile-time-argument-mismatch)
     (:type . "Type declarations violated in ~S")
     (:type-conflict . "Conflicting type declarations for ~S")
     (:special-fbinding . "Attempt to bind compiler special name: ~s. Result undefined.")

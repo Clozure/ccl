@@ -27,23 +27,19 @@
   (flet ((typespec-for-the (typespec)
            (let* ((ctype (handler-case (values-specifier-type (nx-target-type typespec) env)
                            (parse-unknown-type (c)
-                                               (nx1-whine :unknown-type-in-declaration (parse-unknown-type-specifier c))
-                                               nil)
+                             (nx1-whine :unknown-type-in-declaration (parse-unknown-type-specifier c))
+			     nil)
                            (program-error (c)
-                                          (nx1-whine :invalid-type typespec c)
-                                          nil))))
-             (if (or (null ctype) (typep ctype 'values-ctype))
+                              (nx1-whine :invalid-type typespec c)
+			      nil))))
+             (if (null ctype)
                '*
                (if (typep ctype 'function-ctype)
                  'function
-                 (nx-target-type (type-specifier ctype)))))))
+                 (nx-target-type (type-specifier (single-value-type ctype))))))))
     (let* ((typespec (typespec-for-the typespec))
            (*nx-form-type* typespec)
            (transformed (nx-transform form env)))
-      (when (and (nx-form-constant-p transformed env)
-		 (not (typep (nx-form-constant-value transformed env) typespec)))
-	(nx1-whine :type call)
-	(setq typespec t))
       (flet ((fold-the ()
                (do* ()
                     ((or (atom transformed)
@@ -62,6 +58,15 @@
           (fold-the)
           (when (eq transformed last)
             (return)))
+	(when (and (nx-form-constant-p transformed env)
+		   (not (typep (nx-form-constant-value transformed env) typespec)))
+	  (nx1-whine :type call)
+	  (setq typespec t))
+	(setq typespec (nx-target-type
+			(or (nx1-type-intersect call
+						typespec
+						(typespec-for-the (nx-form-type transformed env)))
+			    t)))
         (make-acode
          (%nx1-operator typed-form)
          typespec
@@ -1159,52 +1164,30 @@
       (nx1-progn-body body))))
 
 
+(defnx1 nx1-apply ((apply)) (&whole call fn arg &rest args &environment env)
+  (let ((last (%car (last (push arg args)))))
+    (if (and (nx-form-constant-p last env)
+	     (null (nx-form-constant-value last env)))
+      (nx1-form (let ((new `(funcall ,fn ,@(butlast args))))
+		  (nx-note-source-transformation call new)
+		  new))
+      (nx1-apply-fn fn args t))))
 
+(defnx1 nx1-%apply-lexpr ((%apply-lexpr)) (fn arg &rest args)
+  (nx1-apply-fn fn (cons arg args) 0))
 
-			  
-
-(defnx1 nx1-apply ((apply)) (&whole call fn arg &rest args &aux (orig args) (spread-p t))
-  (if (null (%car (last (push arg args))))
-    (setq spread-p nil args (butlast args)))
-  (let ((name (nx1-func-name fn))
-        (global nil)
-        (result-type t))
-    (when name
-      (setq global (eq (%car fn) 'quote)
-            result-type (nx1-call-result-type name args spread-p global))
-      (if global (setq name (nx1-form fn))))
-    (if name
-      (unless global
-        (let*  ((afunc (nth-value 1 (nx-lexical-finfo name))))
-          (when (and afunc (eq afunc *nx-call-next-method-function*))
-            (setq name (if (or arg orig) 
-                         '%call-next-method-with-args
-                         '%call-next-method)
-                         global t
-                         args (cons (var-name *nx-next-method-var*) args)))))
-      (setq name (nx1-form fn)))
-    (let* ((form (nx1-call name args spread-p global)))
-      (if (eq result-type t)
-        form
-        (make-acode (%nx1-operator typed-form) result-type form)))))
-
-(defnx1 nx1-%apply-lexpr ((%apply-lexpr)) (&whole call fn arg &rest args &aux (orig args))
-  (push arg args)
-  (let ((name (nx1-func-name fn))
-        (global nil))
-    (if name
-      (if (eq (%car fn) 'quote)
-        (setq global t name (nx1-form fn))
-        (let*  ((afunc (nth-value 1 (nx-lexical-finfo name))))
-          (when (and afunc (eq afunc *nx-call-next-method-function*))
-            (setq name (if (or arg orig) 
-                         '%call-next-method-with-args
-                         '%call-next-method)
-                  global t
-                  args (cons (var-name *nx-next-method-var*) args)))))
-      (setq name (nx1-form fn)))
-    (nx1-call name args 0 global)))
-
+(defun nx1-apply-fn (fn args spread)
+  (let* ((sym (nx1-func-name fn))
+	 (afunc (and (non-nil-symbol-p sym) (nth-value 1 (nx-lexical-finfo sym)))))
+    (when (and afunc (eq afunc *nx-call-next-method-function*))
+      (setq fn (let ((new (list 'quote (if (or (car args) (cdr args))
+					 '%call-next-method-with-args
+					 '%call-next-method))))
+		 (nx-note-source-transformation fn new)
+		 new)
+	    sym nil
+	    args (cons (var-name *nx-next-method-var*) args)))
+    (nx1-typed-call (if (non-nil-symbol-p sym) sym (nx1-form fn)) args spread)))
 
 
 (defnx1 nx1-%defun %defun (&whole w def &optional (doc nil doc-p) &environment env)
@@ -1280,8 +1263,11 @@
     (if (and (eq (car sym) (%nx1-operator immediate))
              (setq symbol (cadr sym))
              (symbolp symbol))
-      (progn
-        (nx1-call-result-type symbol)   ; misnamed.  Checks for (un-)definedness.
+      (let ((env *nx-lexical-environment*))
+	(unless (or (nx1-find-call-def symbol env)
+		    (find-ftype-decl symbol env)
+		    (eq symbol *nx-global-function-name*))
+	  (nx1-whine :undefined-function symbol))
         (make-acode (%nx1-default-operator) symbol))
       (make-acode (%nx1-operator call) (nx1-immediate '%function) (list nil (list sym))))))
 
@@ -1498,43 +1484,23 @@
        info)
      (nx1-form value))))
 
-(defnx1 nx1-funcall ((funcall)) (func &rest args &environment env)
-  (let ((name func))
-    (if (and (consp name)
-             (eq (%car name) 'function)
-             (consp (%cdr name))
-             (null (%cddr name))
-             (or
-              (if (symbolp (setq name (%cadr name)))
-                (or (not (macro-function name *nx-lexical-environment*))
-                    (nx-error "Can't funcall macro function ~s ." name)))
-              (and (consp name) 
-                   (or (when (eq (%car name) 'lambda)
-                         (nx-note-source-transformation func name)
-                         t)
-                       (setq name (nx-need-function-name name))))))
-      (nx1-form (cons name args))  ; This picks up call-next-method evil.
-      (let* ((result-type t))
-        (when (and (nx-form-constant-p func env)
-                   (or (typep (setq name (nx-form-constant-value func env)) 'symbol)
-                       (setq name (valid-function-name-p name))))
-          (setq result-type (nx1-call-result-type name args nil t)))
-        (let* ((form (nx1-call (nx1-form func) args nil t)))
-          (if (eq result-type t)
-            form
-            (make-acode (%nx1-operator typed-form) result-type form)))))))
+(defnx1 nx1-funcall ((funcall)) (&whole call func &rest args &environment env)
+  (let ((name (nx1-func-name func)))
+    (if (or (null name)
+	    (and (symbolp name) (macro-function name env)))
+      (nx1-typed-call (nx1-form func) args nil)
+      (progn
+	(when (consp name) ;; lambda expression
+	  (nx-note-source-transformation func name))
+	;; This picks up call-next-method evil.
+	(nx1-form (let ((new-form (cons name args)))
+		    (nx-note-source-transformation call new-form)
+		    new-form))))))
 
 (defnx1 nx1-multiple-value-call multiple-value-call (value-form &rest args)
   (make-acode (%nx1-default-operator)
               (nx1-form value-form)
               (nx1-formlist args)))
-
-#|
-(defun nx1-call-name (fn &aux (name (nx1-func-name fn)))
-  (if (and name (or (eq (%car fn) 'quote) (null (nx-lexical-finfo name))))
-    (make-acode (%nx1-operator immediate) name)
-    (or name (nx1-form fn))))
-|#
 
 (defnx1 nx1-compiler-let compiler-let (bindings &body forms)
   (let* ((vars nil)
@@ -2038,7 +2004,7 @@
                                   (dpb (length bindings) $lfbits-numreq 0))))
 
 (defnx1 nx1-x86-lap-function (x86-lap-function) (name bindings &body body)
-  (declare (ftype (function (t t t t)) %define-x86-lap-function))
+  (declare (ftype (function (t t t)) %define-x86-lap-function))
   (require "X86-LAP")
   (setf (afunc-lfun *nx-current-function*) 
         (%define-x86-lap-function name `((let ,bindings ,@body))

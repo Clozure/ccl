@@ -568,7 +568,10 @@ vector
   ;; Check the type.  This will signal program-error's in case of invalid types, let it.
   ;; Do not signal anything about unknown types though -- it should be ok to have forward
   ;; references here, before anybody needs the info.
-  (specifier-type ftype)
+  (let* ((ctype (specifier-type ftype)))
+    ;; If know enough to complain now, do so.
+    (when (types-disjoint-p ctype (specifier-type 'function))
+      (bad-proclaim-spec `(ftype ,ftype ,@names))))
   (dolist (name names)
     (setf (gethash (maybe-setf-function-name name) *nx-proclaimed-ftypes*) ftype)))
 

@@ -2244,10 +2244,9 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 (defun nx-could-be-type (form type &optional transformed &aux (env *nx-lexical-environment*))
   (unless transformed (setq form (nx-transform form env)))
-  (if (constantp form)
-    (typep (eval-constant form) type env)
-    (multiple-value-bind (win-p sure-p) (subtypep (nx-form-type form env) `(not ,type) env)
-      (not (and win-p sure-p)))))
+  (if (nx-form-constant-p form env)
+    (typep (nx-form-constant-value form env) type env)
+    (not (types-disjoint-p (nx-form-type form env) type env))))
 
 (defun format-require-type (form type &optional description)
   (unless (nx-could-be-type form type)
@@ -2380,7 +2379,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 	 ;; later, and to detect that would need to intern it.  What if the package doesn't exist?
 	 ;; Would need to extend :undefined-function warnings to handle previously-undefined package.
 	 (when sym
-	   (when (nth-value 1 (nx1-call-result-type sym (list* '*standard-output* arg colon atsign parms)))
+	   (when (nx1-check-typed-call sym (list* '*standard-output* arg colon atsign parms))
 	     ;; Whined, just get out now.
 	     (throw 'format-error nil))))))
     ((#\[)

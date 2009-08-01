@@ -343,6 +343,11 @@
   If values are NIL and NIL, it couldn't be determined."
   (csubtypep (specifier-type type1 env) (specifier-type type2 env)))
 
+(defun types-disjoint-p (type1 type2 &optional env)
+  ;; Return true if types are guaranteed to be disjoint, nil if not disjoint or unknown.
+  (let ((ctype1 (if (typep type1 'ctype) type1 (specifier-type type1 env)))
+	(ctype2 (if (typep type2 'ctype) type2 (specifier-type type2 env))))
+    (eq *empty-type* (type-intersection ctype1 ctype2))))
 
 
 
