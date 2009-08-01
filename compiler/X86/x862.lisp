@@ -4822,14 +4822,14 @@
 
 ;;; "Trivial" means can be evaluated without allocating or modifying registers.
 ;;; Interim definition, which will probably stay here forever.
-(defun x862-trivial-p (form &optional reg &aux op bits)
-  (setq form (nx-untyped-form form))
+(defun x862-trivial-p (form &optional reg &aux untyped-form op bits)
+  (setq untyped-form (nx-untyped-form form))
   (and
-   (consp form)
-   (not (eq (setq op (%car form)) (%nx1-operator call)))
+   (consp untyped-form)
+   (not (eq (setq op (%car untyped-form)) (%nx1-operator call)))
    (or
-    (nx-null form)
-    (nx-t form)
+    (nx-null untyped-form)
+    (nx-t untyped-form)
     (eq op (%nx1-operator simple-function))
     (eq op (%nx1-operator fixnum))
     (eq op (%nx1-operator immediate))
@@ -4837,7 +4837,7 @@
     (eq op (%nx1-operator bound-special-ref))
     (and (or (eq op (%nx1-operator inherited-arg)) 
              (eq op (%nx1-operator lexical-reference)))
-         (or (%ilogbitp $vbitpunted (setq bits (nx-var-bits (cadr form))))
+         (or (%ilogbitp $vbitpunted (setq bits (nx-var-bits (cadr untyped-form))))
              (neq (%ilogior (%ilsl $vbitclosed 1) (%ilsl $vbitsetq 1))
                   (%ilogand (%ilogior (%ilsl $vbitclosed 1) (%ilsl $vbitsetq 1)) bits)))))
    (or (and reg (neq (hard-regspec-value reg) *x862-codecoverage-reg*))
