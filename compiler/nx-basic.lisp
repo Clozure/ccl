@@ -359,7 +359,7 @@
       (unless (or (null ctype)
 		  (not (function-ctype-p ctype))
 		  (eq *wild-type* (function-ctype-returns ctype)))
-	(let ((result-type (type-specifier (function-ctype-returns ctype))))
+	(let ((result-type (type-specifier (single-value-type (function-ctype-returns ctype)))))
 	  (and (neq result-type 't) result-type))))))
 
 (defmacro define-declaration (decl-name lambda-list &body body &environment env)
