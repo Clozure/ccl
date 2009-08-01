@@ -73,6 +73,29 @@
 (shadow-attribute :word-delimiter #\' 0 "Text")
 (shadow-attribute :word-delimiter #\backspace 0 "Text")
 (shadow-attribute :word-delimiter #\_ 0 "Text")
+
+;; These aren't generally used to separate words in a Lisp symbol
+(shadow-attribute :word-delimiter #\* 0 "Lisp")
+(shadow-attribute :word-delimiter #\! 0 "Lisp")
+(shadow-attribute :word-delimiter #\$ 0 "Lisp")
+(shadow-attribute :word-delimiter #\+ 0 "Lisp")
+(shadow-attribute :word-delimiter #\% 0 "Lisp")
+(shadow-attribute :word-delimiter #\^ 0 "Lisp")
+(shadow-attribute :word-delimiter #\& 0 "Lisp")
+(shadow-attribute :word-delimiter #\? 0 "Lisp")
+(shadow-attribute :word-delimiter #\_ 0 "Lisp")
+(shadow-attribute :word-delimiter #\= 0 "Lisp")
+(shadow-attribute :word-delimiter #\[ 0 "Lisp")
+(shadow-attribute :word-delimiter #\] 0 "Lisp")
+(shadow-attribute :word-delimiter #\\ 0 "Lisp")
+(shadow-attribute :word-delimiter #\| 0 "Lisp")
+(shadow-attribute :word-delimiter #\{ 0 "Lisp")
+(shadow-attribute :word-delimiter #\} 0 "Lisp")
+(shadow-attribute :word-delimiter #\< 0 "Lisp")
+(shadow-attribute :word-delimiter #\> 0 "Lisp")
+(shadow-attribute :word-delimiter #\/ 0 "Lisp")
+(shadow-attribute :word-delimiter #\~ 0 "Lisp")
+
 
 (defattribute "Page Delimiter"
   "This attribute is 1 for characters that separate pages, 0 otherwise.")
