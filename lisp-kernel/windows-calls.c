@@ -293,7 +293,7 @@ lisp_close(HANDLE hfile)
 extern TCR *get_tcr(int);
 
 ssize_t
-lisp_read(HANDLE hfile, void *buf, unsigned int count)
+lisp_standard_read(HANDLE hfile, void *buf, unsigned int count)
 {
   HANDLE hevent;
   OVERLAPPED overlapped;
@@ -337,6 +337,9 @@ lisp_read(HANDLE hfile, void *buf, unsigned int count)
   
   /* We block here */    
   wait_result = WaitForSingleObjectEx(hevent, INFINITE, true);
+
+
+
   tcr->pending_io_info = NULL;
   if (wait_result == WAIT_OBJECT_0) {
     err = overlapped.Internal;
@@ -366,6 +369,85 @@ lisp_read(HANDLE hfile, void *buf, unsigned int count)
     return -1;
   }
 }
+
+ssize_t
+pipe_read(HANDLE hfile, void *buf, unsigned int count)
+{
+  DWORD navail;
+
+  do {
+    navail = 0;
+    PeekNamedPipe(hfile, NULL, 0, NULL, &navail, NULL);
+    if (navail != 0) {
+      return lisp_standard_read(hfile, buf, count);
+    }
+    if (SleepEx(50, TRUE) == WAIT_IO_COMPLETION) {
+      errno = EINTR;
+      return -1;
+    }
+  } while (1);
+}
+
+ssize_t
+console_read(HANDLE hfile, void *buf, unsigned int count)
+{
+  DWORD err, eventcount, i, n;
+  INPUT_RECORD ir;
+
+  do {
+    err = WaitForSingleObjectEx(hfile, INFINITE, TRUE);
+    switch (err) {
+    case WAIT_OBJECT_0:
+      eventcount = 0;
+      GetNumberOfConsoleInputEvents(hfile, &eventcount);
+      for (i = 0; i < eventcount; i++) {
+        PeekConsoleInput(hfile, &ir, 1, &n);
+        if (ir.EventType == KEY_EVENT) {
+          return lisp_standard_read(hfile, buf, count);
+        } else {
+          ReadConsoleInput(hfile, &ir, 1, &n);
+        }
+      }
+      break;
+    case WAIT_IO_COMPLETION:
+      errno = EINTR;
+      return -1;
+      break;
+    case WAIT_FAILED:
+      _dosmaperr(GetLastError());
+      return -1;
+      break;
+    }
+  } while (1);
+}
+
+ssize_t
+lisp_read(HANDLE hfile, void *buf, unsigned int count) {
+  switch(GetFileType(hfile)) {
+  case FILE_TYPE_CHAR:
+    return console_read(hfile, buf, count);
+    break;
+
+  case FILE_TYPE_PIPE:          /* pipe or one of these newfangled socket things */
+    {
+      int socktype, optlen = sizeof(int);
+      if ((getsockopt((SOCKET)hfile, SOL_SOCKET, SO_TYPE, (char *)&socktype, &optlen) != 0) && (GetLastError() == WSAENOTSOCK)) {
+        return pipe_read(hfile, buf, count);
+      }
+    }
+    /* It's a socket, fall through */
+    
+  case FILE_TYPE_DISK:
+    return lisp_standard_read(hfile, buf, count);
+    break;
+
+  default:
+    errno = EBADF;
+    return -1;
+  }
+}
+
+
 
 ssize_t
 lisp_write(HANDLE hfile, void *buf, ssize_t count)
