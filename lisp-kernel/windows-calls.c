@@ -373,11 +373,19 @@ lisp_standard_read(HANDLE hfile, void *buf, unsigned int count)
 ssize_t
 pipe_read(HANDLE hfile, void *buf, unsigned int count)
 {
-  DWORD navail;
+  DWORD navail, err;;
 
   do {
     navail = 0;
-    PeekNamedPipe(hfile, NULL, 0, NULL, &navail, NULL);
+    if (PeekNamedPipe(hfile, NULL, 0, NULL, &navail, NULL) == 0) {
+      err = GetLastError();
+      if (err = ERROR_HANDLE_EOF) {
+        return 0;
+      } else {
+        _dosmaperr(err);
+        return -1;
+      }
+    }
     if (navail != 0) {
       return lisp_standard_read(hfile, buf, count);
     }
