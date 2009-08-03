@@ -2603,7 +2603,7 @@ defcallback returns the callback pointer, e.g., the value of name."
         (if (eq (car args) :without-interrupts)
           (setq woi (cadr args) args (cddr args))
           (if (eq (car args) :discard-stack-args)
-            (setq discard-stack-args t args (cdr args))
+            (setq discard-stack-args (eq (backend-target-os *target-backend*) :win32) args (cdr args))
             (if (eq (car args) :error-return)
               (setq error-return
                     (cadr args)                  
