@@ -345,7 +345,7 @@
 (defmethod interactive-stream-p ((stream stream)) nil)
 
 (defmethod stream-clear-input ((x t))
-  (report-bad-arg x 'stream))
+  (report-bad-arg x 'input-stream))
 
 (defmethod stream-clear-input ((stream input-stream)) nil)
 
