@@ -206,16 +206,17 @@
     (handle-invoking-lisp-function thunk nil context)
     (if (or (not *nsapp*) (not (#/isRunning *nsapp*)))
       (error "cocoa thread not available")
-      (let* ((return-values nil)
-             (result-handler #'(lambda (&rest values) (setq return-values values)))
-             (arg (make-instance 'ns:ns-number
-                    :with-long (register-cocoa-thread-function thunk result-handler context))))
-	(#/performSelectorOnMainThread:withObject:waitUntilDone:
-	 *nsapp*
-	 (@selector #/invokeLispFunction:)
-	 arg
-	 t)
-        (apply #'values return-values)))))
+      (with-autorelease-pool 
+          (let* ((return-values nil)
+                 (result-handler #'(lambda (&rest values) (setq return-values values)))
+                 (arg (make-instance 'ns:ns-number
+                                     :with-long (register-cocoa-thread-function thunk result-handler context))))
+            (#/performSelectorOnMainThread:withObject:waitUntilDone:
+             *nsapp*
+             (@selector #/invokeLispFunction:)
+             arg
+             t)
+            (apply #'values return-values))))))
 
 
 (defconstant $lisp-function-event-subtype 17)

@@ -168,6 +168,10 @@
   (declare (ignore notification))
   (signal-semaphore *cocoa-application-finished-launching*))
 
+(objc:defmethod (#/applicationShouldOpenUntitledFile: #>BOOL)
+    ((self lisp-application-delegate) app)
+  t)
+
 (objc:defmethod (#/applicationOpenUntitledFile: :<BOOL>)
     ((self lisp-application-delegate) app)
   (when (zerop *cocoa-listener-count*)

@@ -10,7 +10,7 @@
                                                     #+darwin-target
 						    #@"Monaco"
                                                     #-darwin-target
-                                                    #@"Lucida Typewriter"
+                                                    #@"Lucida Console"
                                                     10.0))
 		   "Default font for listener input")
 (def-cocoa-default *listener-output-font* :font #'(lambda ()
@@ -19,7 +19,7 @@
                                                      #+darwin-target
 						     #@"Monaco"
                                                      #-darwin-target
-                                                     #@"Lucida Typewriter"
+                                                     #@"Lucida Console"
                                                      10.0))
 		   "Default font for listener output")
 
@@ -449,6 +449,7 @@
       (setf styles (#/retain listener-styles)))
     ;; Disabling background layout on listeners is an attempt to work
     ;; around a bug.  The bug's probably gone ...
+    #-cocotron                          ;no concept of background layout
     (let* ((layout-managers (#/layoutManagers textstorage)))
       (dotimes (i (#/count layout-managers))
         (let* ((layout (#/objectAtIndex: layout-managers i)))
@@ -457,6 +458,8 @@
     (#/setShouldCascadeWindows: controller nil)
     (#/addWindowController: self controller)
     (#/release controller)
+    (setf (hemlock-document-process self)
+          (new-cocoa-listener-process listener-name window))
     (when path
       (unless (#/setFrameAutosaveName: window path)
         (setq path nil)))
@@ -483,8 +486,7 @@
         (let* ((new-point (#/cascadeTopLeftFromPoint: window current-point)))
           (setf *next-listener-x-pos* (ns:ns-point-x new-point)
                 *next-listener-y-pos* (ns:ns-point-y new-point)))))
-    (setf (hemlock-document-process self)
-          (new-cocoa-listener-process listener-name window))
+    
     controller))
 
 (objc:defmethod (#/textView:shouldChangeTextInRange:replacementString: :<BOOL>)

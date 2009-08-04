@@ -171,7 +171,7 @@
                                        (create-text-attributes
                                         :font (default-font
                                                   :name #+darwin-target "Monaco"
-                                                  #-darwin-targe "Lucida Typewriter"
+                                                  #-darwin-target "Lucida Console"
                                                 :size 10)
                                         :color (#/redColor ns:ns-color))))
              (#/setFrameOrigin: win (ns:make-ns-point 20 20))

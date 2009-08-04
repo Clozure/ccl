@@ -991,6 +991,10 @@
 
 (defvar *buffer-being-edited* nil)
 
+#-darwin-target
+(objc:defmethod (#/hasMarkedText #>BOOL) ((self hemlock-textstorage-text-view))
+  nil)
+
 (objc:defmethod (#/keyDown: :void) ((self hemlock-textstorage-text-view) event)
   #+debug (#_NSLog #@"Key down event in %@  = %@" :id self :address event)
   (let* ((view (hemlock-view self))
@@ -1127,6 +1131,7 @@
 
 
 (defmethod remove-paren-highlight ((self hemlock-textstorage-text-view))
+  #-cocotron
   (let* ((left (text-view-paren-highlight-left-pos self))
          (right (text-view-paren-highlight-right-pos self)))
     (ns:with-ns-range  (char-range left 1)
@@ -1147,6 +1152,7 @@
 
 
 (defmethod compute-temporary-attributes ((self hemlock-textstorage-text-view))
+  #-cocotron
   (let* ((container (#/textContainer self))
          ;; If there's a containing scroll view, use its contentview         
          ;; Otherwise, just use the current view.
@@ -1638,7 +1644,9 @@
                 (apply #'concatenate 'string
                        (mapcar
                         #'(lambda (field)
-                            (funcall (hi::modeline-field-function field) buffer))
+                            (or (ignore-errors 
+                                  (funcall (hi::modeline-field-function field) buffer))
+                                ""))
                         (hi::buffer-modeline-fields buffer)))))
 	  (#/drawAtPoint:withAttributes: (#/autorelease (%make-nsstring string))
                                          (ns:make-ns-point 5 1)
@@ -2045,7 +2053,11 @@
   (release-canonical-nsobject self)
   (#/setFrameAutosaveName: self #@"")
   (call-next-method))
-  
+
+(defun window-menubar-height ()
+  #+cocotron (objc:objc-message-send (ccl::@class "NSMainMenuView") "menuHeight" #>CGFloat)
+  #-cocotron 0.0f0)
+
 (defun new-hemlock-document-window (class)
   (let* ((w (new-cocoa-window :class class
                               :activate nil))
