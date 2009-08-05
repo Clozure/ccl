@@ -262,7 +262,7 @@
         (form1 form2)
   (nx1-cc-binaryop (%nx1-default-operator) :ne form1 form2))
 
-(defnx1 nx1-logbitp ((logbitp)) (&whole w bitnum int &environment env)
+(defnx1 nx1-logbitp ((logbitp)) (bitnum int &environment env)
   (if (and (nx-form-typep bitnum
                           (target-word-size-case (32 '(integer 0 29))
                                                  (64 '(integer 0 60))) env)
@@ -293,7 +293,7 @@
            (make-acode (%nx1-operator %decls-body) body *nx-new-p2decls*)
            body)))))
 
-(defnx1 nx1-%new-ptr (%new-ptr) (&whole whole size &optional clear-p)
+(defnx1 nx1-%new-ptr (%new-ptr) (size &optional clear-p)
   (make-acode (%nx1-operator %new-ptr) (nx1-form size) (nx1-form clear-p)))
 
 ;;; This might also want to look at, e.g., the last form in a progn:
@@ -369,7 +369,7 @@
 
 ;;; This has to be ultra-bizarre because %schar is a macro.
 ;;; %schar shouldn't be a macro.
-(defnx1 nx1-%schar ((%schar)) (&whole w arg idx &environment env)
+(defnx1 nx1-%schar ((%schar)) (arg idx &environment env)
   (let* ((arg (nx-transform arg env))
          (idx (nx-transform idx env))
          (argvar (make-symbol "STRING"))
@@ -380,7 +380,7 @@
                  (declare (simple-base-string ,argvar))
                  (schar ,argvar ,idxvar)) env)))
         
-(defnx1 nx1-%scharcode ((%scharcode)) (arg idx &environment env)
+(defnx1 nx1-%scharcode ((%scharcode)) (arg idx)
   (make-acode (%nx1-operator %scharcode) (nx1-form arg)(nx1-form idx)))
 
 
@@ -535,7 +535,7 @@
                 (%nx1-default-operator))
               (nx1-prefer-areg vector env) (nx1-form index) (nx1-form value)))
 
-(defnx1 nx1-+ ((+-2)) (&whole whole &environment env num1 num2)
+(defnx1 nx1-+ ((+-2)) (&environment env num1 num2)
   (let* ((f1 (nx1-form num1))
          (f2 (nx1-form num2)))
     (if (nx-binary-fixnum-op-p num1 num2 env t)
@@ -575,7 +575,7 @@
               (make-acode (%nx1-default-operator) (nx1-form f0) (nx1-form f1))))
 
 
-(defnx1 nx1-*-2 ((*-2)) (&whole whole &environment env num1 num2)
+(defnx1 nx1-*-2 ((*-2)) (&environment env num1 num2)
   (if (nx-binary-fixnum-op-p num1 num2 env)
     (make-acode (%nx1-operator %i*) (nx1-form num1 env) (nx1-form num2 env))
     (if (and (nx-form-typep num1 'double-float env)
@@ -586,7 +586,7 @@
         (nx1-form `(%short-float*-2 ,num1 ,num2))
         (make-acode (%nx1-operator mul2) (nx1-form num1 env) (nx1-form num2 env))))))
 
-(defnx1 nx1-%negate ((%negate)) (&whole whole num &environment env)
+(defnx1 nx1-%negate ((%negate)) (num &environment env)
   (if (nx-form-typep num 'fixnum env)
     (if (subtypep *nx-form-type* 'fixnum)
       (make-acode (%nx1-operator %%ineg)(nx1-form num))
@@ -594,7 +594,7 @@
     (make-acode (%nx1-operator minus1) (nx1-form num))))
 
         
-(defnx1 nx1--2 ((--2)) (&whole whole &environment env num0 num1)        
+(defnx1 nx1--2 ((--2)) (&environment env num0 num1)        
   (if (nx-binary-fixnum-op-p num0 num1 env t)
     (let* ((f0 (nx1-form num0))
 	   (f1 (nx1-form num1))
@@ -632,7 +632,7 @@
 
 
 
-(defnx1 nx1-numcmp ((<-2) (>-2) (<=-2) (>=-2)) (&whole whole &environment env num1 num2)
+(defnx1 nx1-numcmp ((<-2) (>-2) (<=-2) (>=-2)) (&environment env num1 num2)
   (let* ((op *nx-sfname*)
          (both-fixnums (nx-binary-fixnum-op-p num1 num2 env t))
          (both-natural (nx-binary-natural-op-p num1 num2 env ))
@@ -682,7 +682,7 @@
                   (nx1-form num1)
                   (nx1-form num2)))))
 
-(defnx1 nx1-num= ((=-2) (/=-2)) (&whole whole &environment env num1 num2 )
+(defnx1 nx1-num= ((=-2) (/=-2)) (&environment env num1 num2 )
   (let* ((op *nx-sfname*)
 	 (2-fixnums (nx-binary-fixnum-op-p num1 num2 env t))
 	 (2-naturals (nx-binary-natural-op-p num1 num2 env))
@@ -734,13 +734,13 @@
                       (nx1-form num2)))))))
              
 
-(defnx1 nx1-uvset ((uvset) (%misc-set)) (vector index value &environment env)
+(defnx1 nx1-uvset ((uvset) (%misc-set)) (vector index value)
   (make-acode (%nx1-operator uvset)
               (nx1-form vector)
               (nx1-form index)
               (nx1-form value)))
 
-(defnx1 nx1-set-schar ((set-schar)) (&whole w s i v &environment env)
+(defnx1 nx1-set-schar ((set-schar)) (s i v)
   (make-acode (%nx1-operator %set-sbchar) (nx1-form s) (nx1-form i) (nx1-form v)))
 
 
@@ -760,7 +760,7 @@
                  (setf (schar ,argvar ,idxvar) ,charvar))
               env)))
 
-(defnx1 nx1-%set-scharcode ((%set-scharcode)) (&whole w s i v)
+(defnx1 nx1-%set-scharcode ((%set-scharcode)) (s i v)
     (make-acode (%nx1-operator %set-scharcode)
                 (nx1-form s)
                 (nx1-form i)
@@ -1811,7 +1811,7 @@
     (nx1-form offset))))
 
 (defnx1 nx1-%set-float ((%set-single-float)
-			(%set-double-float)) (&whole whole ptrform offset &optional (newval nil newval-p))
+			(%set-double-float)) (ptrform offset &optional (newval nil newval-p))
   (unless newval-p
     (setq newval offset
 	  offset 0))

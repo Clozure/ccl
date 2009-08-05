@@ -760,7 +760,7 @@ form is not evaluated if the variable is already BOUNDP."
   `(defstatic ,@args))
 
 
-(defmacro defloadvar (&environment env var value &optional doc)
+(defmacro defloadvar (var value &optional doc)
   `(progn
      (defstaticvar ,var ,nil ,@(if doc `(,doc)))
      (def-ccl-pointers ,var ()
@@ -1262,7 +1262,7 @@ are no Forms, OR returns NIL."
          (locally (declare (optimize (speed 3) (safety 0)))
            (svref ,vtemp ,itemp)))))
 
-(defmacro %svset (v i new &environment env)
+(defmacro %svset (v i new)
   (let* ((vtemp (make-symbol "VECTOR"))
          (itemp (make-symbol "INDEX"))
          (ntemp (make-symbol "NEW")))
@@ -2756,7 +2756,7 @@ defcallback returns the callback pointer, e.g., the value of name."
 
 
 
-(defmacro with-hash-table-iterator ((mname hash-table) &body body &environment env)
+(defmacro with-hash-table-iterator ((mname hash-table) &body body)
   "WITH-HASH-TABLE-ITERATOR ((function hash-table) &body body)
    provides a method of manually looping over the elements of a hash-table.
    FUNCTION is bound to a generator-macro that, within the scope of the

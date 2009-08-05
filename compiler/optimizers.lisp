@@ -325,7 +325,7 @@
       `(append-2 ,arg0 ,junk)
       call)))
 
-(define-compiler-macro apply  (&whole call &environment env fn arg0 &rest args)
+(define-compiler-macro apply  (&whole call fn arg0 &rest args)
   ;; Special-case (apply #'make-instance 'name ...)
   ;; Might be good to make this a little more general, e.g., there
   ;; may be other things that can be strength-reduced even if we can't
@@ -480,7 +480,7 @@
 
 
 
-(define-compiler-macro cons (&whole call &environment env x y &aux dcall ddcall)
+(define-compiler-macro cons (&whole call x y &aux dcall ddcall)
    (if (consp (setq dcall y))
      (cond
       ((or (eq (%car dcall) 'list) (eq (%car dcall) 'list*))
@@ -526,7 +526,7 @@
                ,result)))
         call)))
 
-(define-compiler-macro dpb (&whole call &environment env value byte integer)
+(define-compiler-macro dpb (&whole call value byte integer)
   (cond ((and (integerp byte) (> byte 0))
          (if (integerp value)
            `(logior ,(dpb value byte 0) (logand ,(lognot byte) ,integer))
@@ -557,7 +557,7 @@
 	false)
       call)))
 
-(define-compiler-macro %ilsr (&whole call &environment env shift value)
+(define-compiler-macro %ilsr (&whole call shift value)
   (if (eql shift 0)
     value
     (if (eql value 0)
@@ -607,7 +607,7 @@
     call
     `(locally ,@body)))
 
-(define-compiler-macro list* (&whole call &environment env &rest rest  &aux (n (list-length rest)) last)
+(define-compiler-macro list* (&whole call &rest rest  &aux (n (list-length rest)) last)
   (cond ((%izerop n) nil)
         ((null (setq last (%car (last call))))
          (cons 'list (nreverse (cdr (reverse (cdr call))))))
@@ -869,7 +869,7 @@
     `(memq ,item ,list)
     call))
 
-(define-compiler-macro memq (&whole call &environment env item list)
+(define-compiler-macro memq (item list)
   ;;(memq x '(y)) => (if (eq x 'y) '(y))
   ;;Would it be worth making a two elt list into an OR?  Maybe if
   ;;optimizing for speed...
@@ -895,14 +895,14 @@
   (declare (ignore ignore))
   (some-xx-transform call env))
 
-(define-compiler-macro nth  (&whole call &environment env count list)
+(define-compiler-macro nth  (count list)
    (if (and (fixnump count)
             (%i>= count 0)
             (%i< count 3))
      `(,(svref '#(car cadr caddr) count) ,list)
      `(car (nthcdr ,count ,list))))
 
-(define-compiler-macro nthcdr (&whole call &environment env count list)
+(define-compiler-macro nthcdr (count list)
   (if (and (fixnump count)
            (%i>= count 0)
            (%i< count 4))
@@ -1024,14 +1024,12 @@
 
 ;;; expand find-if and find-if-not
 
-(define-compiler-macro find-if (&whole call &environment env
-                                       test sequence &rest keys)
+(define-compiler-macro find-if (test sequence &rest keys)
   `(find ,test ,sequence
         :test #'funcall
         ,@keys))
 
-(define-compiler-macro find-if-not (&whole call &environment env
-                                           test sequence &rest keys)
+(define-compiler-macro find-if-not (test sequence &rest keys)
   `(find ,test ,sequence
         :test-not #'funcall
         ,@keys))
@@ -1076,14 +1074,12 @@
 
 ;;; expand position-if and position-if-not
 
-(define-compiler-macro position-if (&whole call &environment env
-                                           test sequence &rest keys)
+(define-compiler-macro position-if (test sequence &rest keys)
   `(position ,test ,sequence
              :test #'funcall
              ,@keys))
 
-(define-compiler-macro position-if-not (&whole call &environment env
-                                               test sequence &rest keys)
+(define-compiler-macro position-if-not (test sequence &rest keys)
   `(position ,test ,sequence
              :test-not #'funcall
              ,@keys))
@@ -1213,7 +1209,7 @@
       w
       `(/=-2 ,n0 ,n1))))
 
-(define-compiler-macro + (&whole w  &environment env &optional (n0 nil n0p) (n1 nil n1p) &rest more)
+(define-compiler-macro + (&optional (n0 nil n0p) (n1 nil n1p) &rest more)
   (if more
     `(+ (+-2 ,n0 ,n1) ,@more)
     (if n1p
@@ -1222,7 +1218,7 @@
         `(require-type ,n0 'number)
         0))))
 
-(define-compiler-macro - (&whole w &environment env n0 &optional (n1 nil n1p) &rest more)
+(define-compiler-macro - (n0 &optional (n1 nil n1p) &rest more)
   (if more
     `(- (--2 ,n0 ,n1) ,@more)
     (if n1p
@@ -1873,7 +1869,7 @@
       call)))
 
 
-(define-compiler-macro make-sequence (&whole call &environment env typespec len &rest keys &key initial-element)
+(define-compiler-macro make-sequence (&whole call typespec len &rest keys &key initial-element)
   (declare (ignore typespec len keys initial-element))
   call)
 
@@ -2032,12 +2028,12 @@
                       ,@body)))))))))
 
 
-(define-compiler-macro sbit (&environment env &whole call v &optional sub0 &rest others)
+(define-compiler-macro sbit (&whole call v &optional sub0 &rest others)
   (if (and sub0 (null others))
     `(aref (the simple-bit-vector ,v) ,sub0)
     call))
 
-(define-compiler-macro %sbitset (&environment env &whole call v sub0 &optional (newval nil newval-p) &rest newval-was-really-sub1)
+(define-compiler-macro %sbitset (&whole call v sub0 &optional (newval nil newval-p) &rest newval-was-really-sub1)
   (if (and newval-p (not newval-was-really-sub1) )
     `(setf (aref (the simple-bit-vector ,v) ,sub0) ,newval)
     call))
@@ -2295,7 +2291,7 @@
     `(eql ,x ,y)
     call))
 
-(define-compiler-macro instance-slots (&whole w instance &environment env)
+(define-compiler-macro instance-slots (instance &environment env)
   (if (and (nx-form-constant-p instance env)
            (eql (typecode (nx-form-constant-value instance env)) (nx-lookup-target-uvector-subtag :instance)))
     `(instance.slots ,instance)
@@ -2355,7 +2351,7 @@
       `(let* ((,val ,x))
         (and (integerp ,val) (not (< ,val 0)))))))
 
-(define-compiler-macro subtypep (&whole w t1 t2 &optional rtenv  &environment env)
+(define-compiler-macro subtypep (&whole w t1 t2 &optional rtenv)
   (if (and (consp t1)
            (consp (cdr t1))
            (null (cddr t1))
@@ -2367,7 +2363,7 @@
       w)))
 
 
-(define-compiler-macro string-equal (&whole w s1 s2 &rest keys)
+(define-compiler-macro string-equal (s1 s2 &rest keys)
   (if (null keys)
     `(%fixed-string-equal ,s1 ,s2)
     (let* ((s1-arg (gensym))
@@ -2453,12 +2449,12 @@
           ,c)))
     w))
         
-(define-compiler-macro %char-code-upcase (&whole w code &environment env)
+(define-compiler-macro %char-code-upcase (code)
   (if (typep code '(mod #x110000))
     (%char-code-upcase code)
     `(%char-code-case-fold ,code *lower-to-upper*)))
 
-(define-compiler-macro %char-code-downcase (&whole w code &environment env)
+(define-compiler-macro %char-code-downcase (code)
   (if (typep code '(mod #x110000))
     (%char-code-downcase code)
     `(%char-code-case-fold ,code *upper-to-lower*)))
