@@ -627,6 +627,7 @@
     (:bad-declaration . "Unknown or invalid declaration ~S")
     (:invalid-type . report-invalid-type-compiler-warning)
     (:unknown-declaration-variable . "~s declaration for unknown variable ~s")
+    (:unknown-declaration-function . "~s declaration for unknown function ~s")
     (:macro-used-before-definition . "Macro function ~S was used before it was defined.")
     (:unsettable . "Shouldn't assign to variable ~S")
     (:global-mismatch . report-compile-time-argument-mismatch)

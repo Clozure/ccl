@@ -719,6 +719,20 @@ function to the indicated name is true.")
                 (and (null info) (not (nx-proclaimed-special-p sym))))
         (nx1-whine :unknown-declaration-variable (cadr decl) sym)))))
 
+(defun nx-check-fdecl-var-ref (decl env &aux (sym (car decl)))
+  (unless (eq (cadr decl) 'ftype)
+    ;; Complain about forward references, since need a def to use the declaration.
+    ;; Perhaps should complain if regular macro, but don't for now.  Compiler macros
+    ;; specifically allowed by spec for inline decls
+    (unless (or (nx-lexical-finfo sym env)
+                (fboundp sym)
+                (retrieve-environment-function-info sym env)
+                (gethash sym *nx1-alphatizers*)
+                (assq sym *nx-compile-time-compiler-macros*)
+                (gethash sym *compiler-macros*)
+                (eq sym *nx-global-function-name*))
+      (nx1-whine :unknown-declaration-function (cadr decl) sym))))
+
 
 (defun nx-effect-other-decls (pending env)
   (flet ((merge-decls (new old)
@@ -738,7 +752,12 @@ function to the indicated name is true.")
                   (unless (eq merged-type newtype)
                     (rplacd (cdr decl) merged-type))))
               (push decl env-vdecls)))))
-      (when fdecls (setf (lexenv.fdecls env) (merge-decls fdecls (lexenv.fdecls env))))
+      (when fdecls
+        (let ((env-fdecls (lexenv.fdecls env)))
+          (dolist (decl fdecls (setf (lexenv.fdecls env) env-fdecls))
+            (unless (memq decl env-fdecls)
+              (nx-check-fdecl-var-ref decl env)
+              (push decl env-fdecls)))))
       (when mdecls (setf (lexenv.mdecls env) (merge-decls mdecls (lexenv.mdecls env))))
       (setq *nx-inlined-self* (and (nx-self-calls-inlineable env) 
                                    (let ((name *nx-global-function-name*)) 
