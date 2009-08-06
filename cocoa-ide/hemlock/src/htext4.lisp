@@ -176,11 +176,17 @@
                           (new-chars (make-string num))
                           (new-line (make-line
                                      :chars new-chars  :number 0
+                                     :charprops-changes
+                                     (copy-line-charprops first-line
+                                                          :start first-charpos
+                                                          :end last-charpos)
                                      :%buffer (next-disembodied-buffer-counter))))
                      (declare (simple-string new-chars))
                      (%sp-byte-blt (current-open-chars) (current-right-open-pos) new-chars 0 num) 
                      (setf (current-right-open-pos) new-right)
-                     ;; and fix up any marks in there:
+                     ;; and fix up any charprops or marks in there:
+                     (delete-line-charprops first-line :start first-charpos
+					    :end last-charpos)
                      (move-some-marks (charpos first-line)
                                       (if (> charpos first-charpos)
                                         (if (<= charpos last-charpos)
