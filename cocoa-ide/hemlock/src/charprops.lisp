@@ -46,7 +46,7 @@
          (end-pos 0))
     (dotimes (i (length changes) (values (and change
                                               (charprops-change-plist change))
-                                         start-pos (line-length line)))
+                                         start-pos (1+ (line-length line))))
       (setq prior-change change)
       (setq change (aref changes i))
       (setq end-pos (charprops-change-index change))
@@ -115,6 +115,74 @@
               (squeeze-out-superseded-changes changes i)))
           (return))))))
 
+(defun add-line-charprop-value (line name value &key (start 0) end)
+  (let* ((changes (line-charprops-changes line))
+         (start-idx (charprops-change-index-for-position changes start))
+         (end-idx (charprops-change-index-for-position changes
+                                                       (or end
+                                                           (setq end (line-length line))))))
+    (cond ((or (null changes)
+               (and (null start-idx) (null end-idx)))
+           ;; Either the line has no existing charprops, or we're within the
+           ;; implicit run of default properties at the start of the line.
+           ;; Just set the charprops over the relevant range and return.
+           (set-line-charprops line (list name value) :start start :end end)
+           (return-from add-line-charprop-value changes))
+          ((null start-idx)
+           ;; The starting position is in the implicit run of default
+           ;; properties at the start of the line.
+           (let ((new-change (make-charprops-change start (list name value))))
+             (insert-charprops-change changes 0 new-change)
+             (setq start-idx 0)
+             (incf end-idx))
+           (let ((end-change (aref changes end-idx)))
+             (unless (= (charprops-change-index end-change) end)
+               (let ((new-change (copy-charprops-change end-change)))
+                 (setf (charprops-change-index new-change) end)
+                 (insert-charprops-change changes (1+ end-idx) new-change)
+                 (incf end-idx)))))
+          ((and start-idx end-idx)
+           (let ((start-change (aref changes start-idx)))
+             (unless (= (charprops-change-index start-change) start)
+               (let ((new-change (copy-charprops-change start-change)))
+                 (setf (charprops-change-index new-change) start)
+                 (insert-charprops-change  changes (1+ start-idx) new-change)
+                 (incf start-idx)
+                 (incf end-idx))))
+           (let ((end-change (aref changes end-idx))
+                 (next-end-idx (charprops-change-index-for-position changes (1+ end))))
+             ;; If end-idx and next-end-idx differ, then the end
+             ;; position comes at the very end of a run, and we don't
+             ;; need to split.  We also don't need to split if end is
+             ;; at the very end of the line.
+             (when (and (= end-idx next-end-idx)
+                        (not (= end (line-length line))))
+               (let ((new-change (copy-charprops-change end-change)))
+                 (setf (charprops-change-index new-change) end)
+                 (insert-charprops-change changes (1+ end-idx) new-change)))))
+          (t (error "how did we get here?")))
+    (loop for i from start-idx to end-idx
+      as change = (aref changes i)
+      do (if (null value)
+           (remf (charprops-change-plist change) name)
+           (setf (getf (charprops-change-plist change) name) value)))))
+
+(defun set-region-charprops (region charprops)
+  (let* ((start (region-start region))
+         (end (region-end region))
+         (first-line (mark-line start))
+         (last-line (mark-line end)))
+    (cond ((eq first-line last-line)
+           (set-line-charprops first-line charprops :start (mark-charpos start)
+                               :end (mark-charpos end))
+	   (coalesce-line-charprops first-line))
+          (t
+           (set-line-charprops first-line charprops :start (mark-charpos start))
+           (do* ((line (line-next first-line) (line-next line)))
+                ((eq line last-line)
+                 (set-line-charprops line charprops :end (mark-charpos end)))
+             (set-line-charprops line charprops))))))
+
 ;;; Returns two values: fresh charprops change vectors for the line's characters
 ;;; before and after charpos.
 (defun split-line-charprops (line charpos)
@@ -162,12 +230,12 @@
          (len (line-length line))
          (right changes))
     (cond ((and left right)
-           (loop for c across changes
-             for new-change = (copy-charprops-change c)
-             do (incf (charprops-change-index new-change) len)
-                (push-charprops-change new-change left)))
+           (loop for c across right
+                 for new-change = (copy-charprops-change c)
+                 do (incf (charprops-change-index new-change) len)
+                    (push-charprops-change new-change left)))
           ((and (null left) right)
-           (setq left (copy-charprops-changes changes))
+           (setq left (copy-charprops-changes right))
            (adjust-charprops-change-indexes left len)
            (setf (line-charprops-changes line) left))
           ((and left (null right))
@@ -228,7 +296,7 @@
     ;; some early-out special cases
     (cond ((null changes)
            (return-from copy-line-charprops))
-          ((and (= start 0) (null end))
+          ((and (= start 0) (or (= 0 end) (null end)))
            (return-from copy-line-charprops (copy-charprops-changes changes))))
     (unless end
       (setq end (line-length line)))
@@ -340,43 +408,40 @@
     (incf (charprops-change-index change) delta)))
 
 ;;; Add delta to the starting index of all charprops changes after the one
-;;; containing charpos.
-(defun adjust-charprops-changes (changes charpos delta)
-  (let ((start-idx (charprops-change-index-for-position changes charpos)))
+;;; containing start.
+(defun adjust-line-charprops (line delta &key (start 0))
+  (let* ((changes (line-charprops-changes line))
+         (start-idx (charprops-change-index-for-position changes start)))
     (adjust-charprops-change-indexes changes delta :start (if start-idx
                                                             (1+ start-idx)
                                                             0))))
 
-#|
-;;; Both target-changes and source-changes are vectors of charprops-change
-;;; objects.  Insert charprops-changes from source-changes from start2 to end2
-;;; into target-changes at start1.
-(defun insert-charprops-changes (target-changes source-changes &key startpos1
-                                            startpos2 endpos2)
-  (let* ((target-idx (charprops-change-index-for-position startpos1))
-         (source-idx (charprops-change-index-for-position startpos2)))
-    (adjust-charprops-changes target-changes startpos1 (- endpos2 startpos2))
-    (do* ((i source-idx (1+ i))
-          (change nil))
-         ((= i 
-
-
-
-         (start2 (charprops-change-index-for-position startpos2))
-         (end2 (charprops-change-index-for-position endpos1))
-         (n (- end2 start2))) ; number of changes to add to target-changes
-|#
+(defun apply-line-charprops (line changes start-pos end-pos)
+  (cond ((null changes)
+         (set-line-charprops line nil :start start-pos :end end-pos))
+        (t
+         (setq changes (copy-charprops-changes changes))
+         (do* ((i 0 (1+ i))
+               (change nil))
+              ((= i (length changes)))
+           (setq change (aref changes i))
+           (set-line-charprops line (charprops-change-plist change)
+                               :start (+ (charprops-change-index change) start-pos)
+                               :end end-pos))
+         (coalesce-line-charprops line)))
+  (line-charprops-changes line))
 
 (defvar *display-properties*
   '(:font-name
     :font-size
     :font-weight
+    :font-width
     :font-slant
     :font-underline
     :font-color
     :background-color))
 
-;;; Accessing charprops
+;;; Setting and accessing charprops
 
 (defun next-charprop-value (mark name &key view)
   (let ((props (next-charprops mark :view view)))
@@ -387,15 +452,79 @@
     (getf props name)))
 
 (defun set-charprop-value (mark name value &key (count 1 count-supplied-p) end view)
-  (declare (ignore view count value name mark))
+  (declare (ignore view))
   (when (and count-supplied-p end)
-    (error "Cannot specify both :COUNT and :END")))
+    (error "Cannot specify both :COUNT and :END"))
+  (with-mark ((start-mark mark)
+              (end-mark mark))
+    (if end
+      (move-mark end-mark end)
+      (character-offset end-mark count))
+    (let* ((start-line (mark-line start-mark))
+           (start-charpos (mark-charpos start-mark))
+           (end-line (mark-line end-mark))
+           (end-charpos (mark-charpos end-mark)))
+      (cond ((eq start-line end-line)
+	     (add-line-charprop-value start-line name value
+				      :start start-charpos
+				      :end end-charpos))
+	    (t
+	     (do* ((line start-line (line-next line))
+		   (start start-charpos 0))
+		  ((eq line end-line)
+		   (add-line-charprop-value end-line name value
+					    :start 0
+					    :end end-charpos))
+	       (add-line-charprop-value line name value :start start))))
+      (let ((n (count-characters (region start-mark end-mark)))
+	    (buffer (line-%buffer start-line)))
+	(buffer-note-modification buffer mark n)))))
+
+(defun find-line-charprop-value (line name value &key (start 0) end)
+  (unless end
+    (setq end (line-length line)))
+  (let* ((changes (line-charprops-changes line))
+	 (start-idx (or (charprops-change-index-for-position changes start) 0))
+	 (end-idx (or (charprops-change-index-for-position changes end) 0)))
+    (when changes
+      (loop for i from start-idx to end-idx
+	 as change = (aref changes i)
+	 as plist = (charprops-change-plist change)
+	 as found-value = (getf plist name)
+	 do (when (and found-value
+		       (charprop-equal found-value value))
+	      (return (max start (charprops-change-index change))))))))
 
 (defun find-charprop-value (mark name value &key (count nil count-supplied-p)
-                                 end view from-end)
-  (declare (ignore from-end view count value name mark))
-  (when (and count-supplied-p end)
-    (error "Cannot specify both :COUNT and :END")))
+			    end view from-end)
+  (declare (ignore from-end view))
+  (with-mark ((start-mark mark)
+	      (end-mark mark))
+    (when (and count-supplied-p end)
+      (error "Cannot specify both :COUNT and :END"))
+    (let* ((buffer (line-buffer (mark-line mark))))
+      (unless (bufferp buffer)
+	(error "text must be in a buffer"))
+      (if count-supplied-p
+	(character-offset end-mark count)
+	(move-mark end-mark (buffer-end-mark buffer)))
+      (let* ((start-line (mark-line start-mark))
+	     (start-charpos (mark-charpos start-mark))
+	     (end-line (mark-line end-mark))
+	     (end-charpos (mark-charpos end-mark)))
+	(do* ((line start-line (line-next line))
+	      (charpos start-charpos 0))
+             ((eq line end-line)
+              (let ((pos (find-line-charprop-value end-line name value
+                                                   :start charpos
+                                                   :end end-charpos)))
+                (when pos
+                  (move-to-position mark pos end-line)
+                  mark)))
+	  (let ((pos (find-line-charprop-value line name value :start charpos)))
+	    (when pos
+	      (move-to-position mark pos line)
+	      (return mark))))))))
 
 (defun filter-match (filter name)
   (cond ((functionp filter)
@@ -431,16 +560,28 @@
     (when (mark-before m)
       (next-charprops m :view view :filter filter))))
 
+#|
 (defun set-charprops (mark charprops &key (count 1 count-supplied-p)
-                           (end nil end-supplied-p) filter)
+                           (end nil end-supplied-p) (filter charprops-names charprops))
   (declare (ignore filter end count charprops mark))
   (when (and count-supplied-p end-supplied-p)
     (error "Only one of count or end can be supplied."))
-  
-)
+  (setq charprops (charprops-as-plist charprops :filter filter))
+  (with-mark ((start-mark mark)
+              (end-mark mark))
+    (if end
+      (move-mark end-mark end)
+      (character-offset end-mark count))
+    (let* ((start-line (mark-line start-mark))
+           (start-charpos (mark-charpos start-mark))
+           (end-line (mark-line end-mark))
+           (end-charpos (mark-charpos end-mark)))
+      (cond ((eq start-line end-line)
+
+|#
 
 ;;; Return a list of charprops-change vectors that correspond to the lines
-;;; in the region defined by the paramaters.
+;;; of text in the region defined by the paramaters.
 (defun charprops-in-region (region-or-mark &key (count 1 count-supplied-p)
                                            end filter)
   (declare (ignore filter))
@@ -453,25 +594,60 @@
 		(setq count (- end (mark-absolute-position m))))
 	      (character-offset m count)
 	      (setq region (region region-or-mark m))))
-      (region (setq region region-or-mark)))
+      (region (when (or count-supplied-p end)
+                (error "Can't specify count or end when passing in a region."))
+              (setq region region-or-mark)))
     (let* ((start (region-start region))
            (first-line (mark-line start))
+           (first-charpos (mark-charpos start))
            (end (region-end region))
-           (last-line (mark-line end)))
-      (do* ((line first-line (line-next line))
-            (m (copy-mark start) (line-start m line)))
-           ((eq line last-line)
-            ;; last line
-            (let* ((changes (line-charprops-changes line))
-                   (idx (charprops-change-index-for-position changes (mark-charpos end))))
-              (push (subseq (line-charprops-changes line) 0 idx) result)
-              (nreverse result)))
-        (let* ((changes (line-charprops-changes line))
-               (idx (or (charprops-change-index-for-position changes (mark-charpos m)) 0)))
-          (push (subseq changes idx) result))))))
+           (last-line (mark-line end))
+           (last-charpos (mark-charpos end)))
+      (cond
+       ((eq first-line last-line)
+        (list (copy-line-charprops first-line :start first-charpos)))
+       (t
+        (push (copy-line-charprops first-line :start first-charpos) result)
+        (do* ((line (line-next first-line) (line-next line))
+              (m (copy-mark start) (line-start m line)))
+             ((eq line last-line)
+              (push (copy-line-charprops last-line :end last-charpos) result)
+              (nreverse result))
+          (push (copy-line-charprops line) result)))))))
 
 (defun apply-charprops (mark charprops-range &key filter from-end)
   (declare (ignore from-end filter charprops-range mark)))
+
+#|
+  (let* ((start-line (mark-line mark))
+         (start-charpos (mark-charpos))
+         (nlines (length charprops-range))
+         (first-changes (pop charprops-range)))
+
+    ;; do possibly-partial first line
+    (let ((left (split-line-charprops start-line start-charpos)))
+      (setf (line-charprops start-line) left)
+      (append-line-charprops start-line first-changes))
+    ;; do some number of whole lines
+    (do* ((line (line-next start-line) (line-next line))
+          (previous-line start-line (line-next previous-line))
+          (cc-list charprops-range (cdr charprops-range))
+          (changes (car cc-list) (car cc-list)))
+         ((or (null line) (endp cc-list)))
+      (setf (line-charprops-changes line) (copy-charprops-changes changes)))
+    ;; I don't know what to do about a partial last line.  There's no
+    ;; way that I can see to know whether the last charprops change vector
+    ;; in the charprops-range list is to apply to an entire line or to end
+    ;; at a particular charpos on that line.  Maybe that information needs
+    ;; to be stored as part of the charprops-range list.  For example, if the
+    ;; element of the charprops-range list is a non-null list, the list could
+    ;; be (charprops-change-vector start-charpos end-charpos).
+
+    (multiple-value-bind (left right)
+                         (split-line-charprops last-line last-charpos)
+      (setf (line-charprops last-line) last-changes)
+      (append-line-charprops last-line right)))
+|#
 
 (defun find-charprops (mark charprops &key count end view filter from-end)
   (declare (ignore from-end filter view end count charprops mark)))
@@ -542,7 +718,7 @@
   (and (subsetp s1 s2 :test test)
        (subsetp s2 s1 :test test)))
 
-;; This may need tuning later.
+;; I wonder if this will be a hot spot...
 (defun charprops-equal (charprops1 charprops2 &key (filter t))
   (setq charprops1 (charprops-as-plist charprops1 :filter filter)
         charprops2 (charprops-as-plist charprops2 :filter filter))
@@ -593,31 +769,31 @@
 
 ;;; From <AppKit/NSAttributedString.h>
 (defparameter *cocoa-attributes*
-  '((:ns-font . #&NSFontAttributeName)
-    (:ns-paragraph-style . #&NSParagraphStyleAttributeName)
-    (:ns-foreground-color . #&NSForegroundColorAttributeName)
-    (:ns-underline-style . #&NSUnderlineStyleAttributeName)
-    (:ns-superscript . #&NSSuperscriptAttributeName)
-    (:ns-background-color . #&NSBackgroundColorAttributeName)
-    (:ns-attachment . #&NSAttachmentAttributeName)
-    (:ns-ligature . #&NSLigatureAttributeName)
-    (:ns-baseline-offset . #&NSBaselineOffsetAttributeName)
-    (:ns-kern . #&NSKernAttributeName)
-    (:ns-link . #&NSLinkAttributeName)
-    (:ns-stroke-width . #&NSStrokeWidthAttributeName)
-    (:ns-stroke-color . #&NSStrokeColorAttributeName)
-    (:ns-underline-color . #&NSUnderlineColorAttributeName)
-    (:ns-strikethrough-style . #&NSStrikethroughStyleAttributeName)
-    (:ns-strikethrough-color . #&NSStrikethroughColorAttributeName)
-    (:ns-shadow . #&NSShadowAttributeName)
-    (:ns-obliqueness . #&NSObliquenessAttributeName)
-    (:ns-expansion . #&NSExpansionAttributeName)
-    (:ns-cursor . #&NSCursorAttributeName)
-    (:ns-tool-tip . #&NSToolTipAttributeName)
+  `((:ns-font . ,#&NSFontAttributeName)
+    (:ns-paragraph-style . ,#&NSParagraphStyleAttributeName)
+    (:ns-foreground-color . ,#&NSForegroundColorAttributeName)
+    (:ns-underline-style . ,#&NSUnderlineStyleAttributeName)
+    (:ns-superscript . ,#&NSSuperscriptAttributeName)
+    (:ns-background-color . ,#&NSBackgroundColorAttributeName)
+    (:ns-attachment . ,#&NSAttachmentAttributeName)
+    (:ns-ligature . ,#&NSLigatureAttributeName)
+    (:ns-baseline-offset . ,#&NSBaselineOffsetAttributeName)
+    (:ns-kern . ,#&NSKernAttributeName)
+    (:ns-link . ,#&NSLinkAttributeName)
+    (:ns-stroke-width . ,#&NSStrokeWidthAttributeName)
+    (:ns-stroke-color . ,#&NSStrokeColorAttributeName)
+    (:ns-underline-color . ,#&NSUnderlineColorAttributeName)
+    (:ns-strikethrough-style . ,#&NSStrikethroughStyleAttributeName)
+    (:ns-strikethrough-color . ,#&NSStrikethroughColorAttributeName)
+    (:ns-shadow . ,#&NSShadowAttributeName)
+    (:ns-obliqueness . ,#&NSObliquenessAttributeName)
+    (:ns-expansion . ,#&NSExpansionAttributeName)
+    (:ns-cursor . ,#&NSCursorAttributeName)
+    (:ns-tool-tip . ,#&NSToolTipAttributeName)
     #-cocotron
-    (:ns-character-shap . #&NSCharacterShapeAttributeName)
+    (:ns-character-shape . ,#&NSCharacterShapeAttributeName)
     #-cocotron
-    (:ns-glyph-info . #&NSGlyphInfoAttributeName)
+    (:ns-glyph-info . ,#&NSGlyphInfoAttributeName)
     ;;(:ns-marked-clause-segment . #&NSMarkedClauseSegmentAttributeName)
     ;;(:ns-spelling-state . #&NSSpellingStateAttributeName)
     ))
