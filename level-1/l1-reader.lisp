@@ -2736,19 +2736,6 @@ initially NIL.")
  #\.
  #'read-eval)
 
-;;; This has been deprecated.  Why not nuke it ?
-#-ansi-cl
-(set-dispatch-macro-character
- #\#
- #\,
- #'(lambda (stream subchar numarg)
-     (let* ((sharp-comma-token *reading-for-cfasl*))
-       (if (or *read-suppress* (not *compiling-file*) (not sharp-comma-token))
-         (read-eval stream subchar numarg)
-         (progn
-           (require-no-numarg subchar numarg)
-           (list sharp-comma-token (read stream t nil t)))))))
-
 ;;; Read a valid, non-numeric token string from stream; *READ-SUPPRESS*
 ;;; is known to be false.
 (defun read-symbol-token (stream)
