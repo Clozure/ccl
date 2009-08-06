@@ -391,6 +391,8 @@
 (defun move-hemlock-mark-to-absolute-position (mark cache abspos)
   ;; TODO: figure out if updating the cache matters, and if not, use hi:move-to-absolute-position.
   (let* ((hi::*current-buffer* (buffer-cache-buffer cache)))
+    (hi::move-to-absolute-position mark abspos)
+    #+rme-deletion
     (multiple-value-bind (line idx) (update-line-cache-for-index cache abspos)
       #+debug
       (#_NSLog #@"Moving point from current pos %d to absolute position %d"
@@ -481,10 +483,6 @@
       (setf (pref contents-endptr :<NSUI>nteger)
             (1+ (+ (buffer-cache-workline-offset cache)
                    (buffer-cache-workline-length cache)))))))
-
-                     
-
-
 
 ;;; For debugging, mostly: make the printed representation of the string
 ;;; referenence the named Hemlock buffer.
@@ -855,9 +853,10 @@
 
 (defun close-hemlock-textstorage (ts)
   (declare (type hemlock-text-storage ts))
-  (with-slots (styles) ts
-    (#/release styles)
-    (setq styles +null-ptr+))
+  (when (slot-exists-p ts 'styles)
+    (with-slots (styles) ts
+      (#/release styles)
+      (setq styles +null-ptr+)))
   (let* ((hemlock-string (slot-value ts 'hemlock-string)))
     (setf (slot-value ts 'hemlock-string) +null-ptr+)
     
@@ -1150,8 +1149,11 @@
     (remove-paren-highlight self)))
 
 
-
 (defmethod compute-temporary-attributes ((self hemlock-textstorage-text-view))
+  (unless (#/isKindOfClass: (#/textStorage self)
+			    (ccl::@class hemlock-text-storage))
+    ;; XXX buffer string cache isssues
+    (return-from compute-temporary-attributes +null-ptr+))
   #-cocotron
   (let* ((container (#/textContainer self))
          ;; If there's a containing scroll view, use its contentview         
@@ -1476,7 +1478,7 @@
 (defmethod text-view-string-cache ((self hemlock-textstorage-text-view))
   (hemlock-buffer-string-cache (#/hemlockString (#/textStorage self))))
 
-#-cocotron                              ; for now, small struct return FFI issue
+#-cocotron                             ; for now, small struct return FFI issue
 (objc:defmethod (#/selectionRangeForProposedRange:granularity: :ns-range)
     ((self hemlock-textstorage-text-view)
      (proposed :ns-range)
@@ -1795,7 +1797,9 @@
                 (#/setRichText: tv nil)
                 (#/setAutoresizingMask: tv #$NSViewWidthSizable)
                 (#/setBackgroundColor: tv color)
-                (#/setTypingAttributes: tv (#/objectAtIndex: (#/styles textstorage) style))
+		(when (slot-exists-p textstorage 'styles)
+		  (#/setTypingAttributes: tv (#/objectAtIndex:
+					      (#/styles textstorage) style)))
                 #-cocotron
                 (#/setSmartInsertDeleteEnabled: tv nil)
                 (#/setAllowsUndo: tv nil) ; don't want NSTextView undo
@@ -2513,8 +2517,7 @@
 (objc:defmethod (#/setTextStorage: :void) ((self hemlock-editor-document) ts)
   (let* ((doc (%inc-ptr self 0))        ; workaround for stack-consed self
          (string (#/hemlockString ts))
-         (cache (hemlock-buffer-string-cache string))
-         (buffer (buffer-cache-buffer cache)))
+         (buffer (hemlock-buffer string)))
     (unless (%null-ptr-p doc)
       (setf (slot-value doc 'textstorage) ts
             (hi::buffer-document buffer) doc))))
