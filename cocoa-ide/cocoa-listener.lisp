@@ -440,13 +440,14 @@
 		      :with-window window))
 	 (listener-name (hi::buffer-name (hemlock-buffer self)))
          (path (#/windowTitleForDocumentDisplayName: controller (#/displayName self ))))
-    (with-slots (styles) textstorage
-      ;; We probably should be more disciplined about
-      ;; Cocoa memory management.  Having retain/release in
-      ;; random places all over the code is going to get
-      ;; unwieldy.
-      (#/release styles)
-      (setf styles (#/retain listener-styles)))
+    (when (slot-exists-p textstorage 'styles)
+      (with-slots (styles) textstorage
+	;; We probably should be more disciplined about
+	;; Cocoa memory management.  Having retain/release in
+	;; random places all over the code is going to get
+	;; unwieldy.
+	(#/release styles)
+	(setf styles (#/retain listener-styles))))
     ;; Disabling background layout on listeners is an attempt to work
     ;; around a bug.  The bug's probably gone ...
     #-cocotron                          ;no concept of background layout
