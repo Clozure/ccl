@@ -52,6 +52,28 @@
    #:count-lines
    #:count-characters
 
+   ;; charprops
+   #:next-charprop-value
+   #:previous-charprop-value
+   #:set-charprop-value
+   #:find-charprop-value
+   #:next-charprops
+   #:previous-charprops
+   #:set-charprops
+   #:charprops-in-region
+   #:apply-charprops
+   #:find-charprops
+   #:find-charprops-change
+   #:charprop-equal
+   #:charprops-get
+   #:charprops-set
+   #:charprops-equal
+   #:charprops-as-plist
+   #:charprops-as-hash
+   #:charprops-names
+   #:set-buffer-charprops
+   #:buffer-charprops
+
    ;; Buffers
    #:current-buffer
    #:current-point-for-insertion
@@ -465,6 +487,15 @@
 
    ;; charmacs.lisp
    #:syntax-char-code-limit #:search-char-code-limit #:do-alpha-chars
+
+   ;; charprops.lisp
+   #:next-charprop-value #:previous-charprop-value
+   #:set-charprop-value #:find-charprop-value #:next-charprops
+   #:previous-charprops #:set-charprops #:charprops-in-region
+   #:apply-charprops #:find-charprops #:find-charprops-change
+   #:charprop-equal #:charprops-get #:charprops-set #:charprops-equal
+   #:charprops-as-plist #:charprops-as-hash #:charprops-names
+   #:set-buffer-charprops #:buffer-charprops
 
    ;; key-event.lisp
    #:define-keysym-code #:define-mouse-keysym #:define-modifier-bit
