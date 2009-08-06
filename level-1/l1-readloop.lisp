@@ -332,12 +332,18 @@
                    ,@(mexpand body env))))
               ((flet labels)
                (destructuring-bind-body (bindings &body) (rest form)
-                `(,(first form)
-                   ,(mapcar (lambda (binding)
-                              (list* (first binding) (cdr (macroexpand-all `(lambda ,@(rest binding)) env))))
-                            bindings)
-                   ,@decls
-                   ,@(mexpand body env))))
+                 (let ((augmented-env
+                        (augment-environment env :function (mapcar #'car bindings))))
+                  `(,(first form)
+                     ,(mapcar (lambda (binding)
+                                (list* (first binding)
+                                       (cdr (macroexpand-all `(lambda ,@(rest binding))
+                                                             (if (eq (first form) 'labels)
+                                                                 augmented-env
+                                                                 env)))))
+                              bindings)
+                     ,@decls
+                     ,@(mexpand body augmented-env)))))
               (nfunction (list* 'nfunction (second form) (macroexpand-all (third form) env)))
               (function
                  (if (and (consp (second form))
