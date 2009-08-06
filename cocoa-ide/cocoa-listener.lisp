@@ -487,7 +487,7 @@
         (let* ((new-point (#/cascadeTopLeftFromPoint: window current-point)))
           (setf *next-listener-x-pos* (ns:ns-point-x new-point)
                 *next-listener-y-pos* (ns:ns-point-y new-point)))))
-    
+    (#/synchronizeWindowTitleWithDocumentName controller)
     controller))
 
 (objc:defmethod (#/textView:shouldChangeTextInRange:replacementString: :<BOOL>)

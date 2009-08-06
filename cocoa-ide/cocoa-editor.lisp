@@ -2837,7 +2837,8 @@
         (#/cascadeTopLeftFromPoint: window *editor-cascade-point*))
       (let ((view (hemlock-view window)))
         (hi::handle-hemlock-event view #'(lambda ()
-                                           (hi::process-file-options))))))
+                                           (hi::process-file-options))))
+      (#/synchronizeWindowTitleWithDocumentName controller)))
 
 
 (objc:defmethod (#/close :void) ((self hemlock-editor-document))
