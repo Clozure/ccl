@@ -628,6 +628,7 @@
 ;;; Note that SLET* does not allow declarations 
 
 (defmacro slet* (varforms &body body &environment env)
+  (declare (ignorable env))
   (if (= (length varforms) 1)
       `(slet ,varforms ,@body)
     `(slet ,(list (first varforms))
