@@ -87,19 +87,19 @@
 
              (if (eq charprops :neighbor)
                (if (start-line-p mark)
-                 (adjust-charprops-changes (line-charprops-changes line) 0 1)
-                 (adjust-charprops-changes (line-charprops-changes line) (1- charpos) 1))
+                 (adjust-line-charprops line 1)
+                 (adjust-line-charprops line 1 :start (1- charpos)))
                (let* ((next-props (next-charprops mark))
                       (prev-props (previous-charprops mark)))
                  (cond ((charprops-equal charprops prev-props)
-                        (format t "~& prev props (~s) equal" prev-props)
-                        (adjust-charprops-changes (line-charprops-changes line) (1- charpos) 1))
+                        ;;(format t "~& prev props (~s) equal" prev-props)
+                        (adjust-line-charprops line 1 :start (1- charpos)))
                        ((charprops-equal charprops next-props)
-                        (format t "~& next props (~s) equal" next-props)
-                        (adjust-charprops-changes (line-charprops-changes line) charpos 1))
+                        ;;(format t "~& next props (~s) equal" next-props)
+                        (adjust-line-charprops (line-charprops-changes line) 1 :start charpos))
                        (t
-                        (format t "~& surrounding props (~s, ~s) not equal" prev-props next-props)
-                        (adjust-charprops-changes (line-charprops-changes line) charpos 1)
+                        ;;(format t "~& surrounding props (~s, ~s) not equal" prev-props next-props)
+                        (adjust-line-charprops line 1 :start charpos)
                         (set-line-charprops line charprops :start charpos
                                         :end (1+ charpos))))))
 
@@ -142,18 +142,18 @@
 
           (if (eq charprops :neighbor)
             (if (start-line-p mark)
-              (adjust-charprops-changes (line-charprops-changes line) 0 len)
-              (adjust-charprops-changes (line-charprops-changes line) (1- charpos) len))
+              (adjust-line-charprops line len)
+              (adjust-line-charprops line len :start (1- charpos)))
             (let* ((next-props (next-charprops mark))
                    (prev-props (previous-charprops mark)))
               (cond ((charprops-equal charprops prev-props)
-                     (format t "~& prev props (~s) equal" prev-props)
-                     (adjust-charprops-changes (line-charprops-changes line) (1- charpos) len))
+                     ;;(format t "~& prev props (~s) equal" prev-props)
+                     (adjust-line-charprops line len :start (1- charpos)))
                     ((charprops-equal charprops next-props)
-                     (format t "~& next props (~s) equal" next-props)
-                     (adjust-charprops-changes (line-charprops-changes line) charpos len))
+                     ;;(format t "~& next props (~s) equal" next-props)
+                     (adjust-line-charprops line len :start charpos))
                     (t
-                     (format t "~& surrounding props (~s, ~s) not equal" prev-props next-props)
+                     ;;(format t "~& surrounding props (~s, ~s) not equal" prev-props next-props)
                      (set-line-charprops line charprops :start charpos
                                      :end (+ charpos len))))))
 
@@ -182,7 +182,9 @@
 	 (last-line (mark-line end))
 	 (first-charpos (mark-charpos start))
 	 (last-charpos (mark-charpos end))
-         (nins (count-characters region)))
+         (nins (count-characters region))
+         (dest-line (mark-line mark))
+         (dest-charpos (mark-charpos mark)))
     (cond
      ((eq first-line last-line)
       ;; simple case -- just BLT the characters in with insert-string
@@ -191,7 +193,9 @@
         (unless (and (eql first-charpos 0)
                      (eql last-charpos (length string)))
           (setq string (subseq string first-charpos last-charpos)))
-        (insert-string mark string)))
+        (insert-string mark string)
+        (apply-line-charprops dest-line (line-charprops-changes first-line)
+                              dest-charpos (+ dest-charpos (length string)))))
      (t
       (close-line)
       (let* ((line (mark-line mark))
@@ -209,8 +213,10 @@
 	    (declare (simple-string first-chars new-chars))
 	    (%sp-byte-blt old-chars 0 new-chars 0 charpos)
 	    (%sp-byte-blt first-chars first-charpos new-chars charpos new-length)
-	    (setf (line-chars line) new-chars))
-	  
+	    (setf (line-chars line) new-chars)
+            (apply-line-charprops line (line-charprops-changes first-line)
+                                  charpos (+ charpos first-length)))
+
 	  ;; Copy intervening lines.  We don't link the lines in until we are
 	  ;; done in case the mark is within the region we are inserting.
 	  (do* ((this-line (line-next first-line) (line-next this-line))
@@ -232,6 +238,8 @@
 				new-length)
 		  (setf (line-next line) first)
 		  (setf (line-chars new-line) new-chars)
+                  (apply-line-charprops new-line (line-charprops-changes last-line)
+                                        0 last-charpos)
 		  (setf (line-next previous) new-line)
 		  (setf (line-next new-line) next)
 		  (when next
@@ -254,7 +262,9 @@
 	 (last-line (mark-line end))
 	 (first-charpos (mark-charpos start))
 	 (last-charpos (mark-charpos end))
-         (nins (count-characters region)))
+         (nins (count-characters region))
+         (dest-line (mark-line mark))
+         (dest-charpos (mark-charpos mark)))
     (cond
      ((eq first-line last-line)
       ;; Simple case -- just BLT the characters in with insert-string.
@@ -263,7 +273,9 @@
         (unless (and (eq first-charpos 0)
                      (eql last-charpos (length string)))
           (setq string (subseq string first-charpos last-charpos)))
-        (insert-string mark string)))
+        (insert-string mark string)
+        (apply-line-charprops dest-line (line-charprops-changes first-line)
+                              dest-charpos (+ dest-charpos (length string)))))
      (t
       (when (bufferp (line-%buffer first-line))
 	(error "Region is linked into Buffer ~S." (line-%buffer first-line)))
@@ -285,15 +297,18 @@
 	    (%sp-byte-blt old-chars 0 new-chars 0 charpos)
 	    (%sp-byte-blt first-chars first-charpos new-chars charpos
 			  new-length)
-	    (setf (line-chars line) new-chars))
+	    (setf (line-chars line) new-chars)
+            (apply-line-charprops line (line-charprops-changes first-line)
+                                  charpos (+ charpos first-length)))
 	  (let* ((last-chars (line-chars last-line))
 		 (old-length (length old-chars))
 		 (new-length (+ last-charpos (- old-length charpos)))
 		 (new-chars (make-string new-length)))
 	    (%sp-byte-blt last-chars 0 new-chars 0 last-charpos)
 	    (%sp-byte-blt old-chars charpos new-chars last-charpos new-length)
-	    (setf (line-chars last-line) new-chars))
-	  
+	    (setf (line-chars last-line) new-chars)
+	    (apply-line-charprops last-line (line-charprops-changes last-line)
+				  0 last-charpos))
 	  ;;; Link stuff together.
 	  (setf (line-next last-line) next)
 	  (setf (line-next line) second-line)
