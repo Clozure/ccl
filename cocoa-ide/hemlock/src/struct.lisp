@@ -119,6 +119,9 @@
   (selection-set-by-command nil) ; boolean: true if selection set by (shifted) motion command.
   )
 
+(defun set-buffer-charprops (buffer charprops)
+  (setf (buffer-charprops buffer) charprops))
+
 (defstruct (echo-buffer (:include buffer)
                         (:constructor internal-make-echo-buffer))
   )
