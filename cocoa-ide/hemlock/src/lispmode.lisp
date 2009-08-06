@@ -857,6 +857,8 @@
 (defindent "multiple-value-call" 1)
 (defindent "multiple-value-prog1" 1)
 (defindent "multiple-value-setq" 1)
+(defindent "prog" 1)
+(defindent "prog*" 1)
 (defindent "prog1" 1)
 (defindent "progv" 2)
 (defindent "progn" 0)
