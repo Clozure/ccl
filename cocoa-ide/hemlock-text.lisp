@@ -340,11 +340,11 @@
                  (#/dictionaryWithObjectsAndKeys: ns:ns-dictionary
 						  *default-paragraph-style*
 						  #&NSParagraphStyleAttributeName
-						  (#/fontWithName:size: ns:ns-font #@"Inconsolata" 14.0)
+						  *editor-font*
 						  #&NSFontAttributeName
 						  +null-ptr+)))
   (let* ((dict (#/dictionaryWithCapacity: ns:ns-mutable-dictionary 8))
-         (default-font (#/fontWithName:size: ns:ns-font #@"Monaco" 10))
+         (default-font *editor-font*)	;what about listeners?
          (fm (#/sharedFontManager ns:ns-font-manager))
          (traits 0)
          (font +null-ptr+)
