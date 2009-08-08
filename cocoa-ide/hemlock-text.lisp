@@ -32,7 +32,9 @@
       (when (eq buffer hi::*current-buffer*)
 	(setf hi::*current-buffer* nil))
       (setf (hi::buffer-document buffer) nil)
-      (hi::delete-buffer buffer)
+      ;; It makes sense to me to delete the buffer here, but
+      ;; the existing code does it in response to closing a document.
+      ;;(hi::delete-buffer buffer)
       (setf (slot-value self 'cache) nil)
       (call-next-method))))
 
@@ -41,12 +43,13 @@
 (objc:defmethod (#/replaceCharactersInRange:withString: :void)
                 ((self xhemlock-buffer-string) (range #>NSRange) string)
   (let* ((buffer (hemlock-buffer self))
+	 (cache (hemlock-buffer-string-cache self))
          (hi::*current-buffer* buffer)
          (position (pref range #>NSRange.location))
 	 (length (pref range #>NSRange.length))
 	 (lisp-string (if (> (#/length string) 0) (lisp-string-from-nsstring string))))
     (hi:with-mark ((m (hi:buffer-point buffer)))
-      (hi:move-to-absolute-position m position)
+      (move-hemlock-mark-to-absolute-position m cache position)
       (when (> length 0)
         (hi:delete-characters m length))
       (when lisp-string
@@ -153,14 +156,18 @@
 (objc:defmethod (#/setAttributes:range: :void) ((self xhemlock-text-storage)
                                                 (attributes :id)
                                                 (range #>NSRange))
-  (let* ((buffer (hemlock-buffer (hemlock-string self)))
+  (let* ((string (hemlock-string self))
+	 (cache (hemlock-buffer-string-cache self))
+	 (buffer (hemlock-buffer string))
          (hi::*current-buffer* buffer)
 	 (*suppress-edit-notifications* t))
     (hi:with-mark ((start (hi:buffer-point buffer))
                    (end (hi:buffer-point buffer)))
-      (hi:move-to-absolute-position start (ns:ns-range-location range))
-      (hi:move-to-absolute-position end (+ (ns:ns-range-location range)
-                                           (ns:ns-range-length range)))
+      (move-hemlock-mark-to-absolute-position start cache
+					      (ns:ns-range-location range))
+      (move-hemlock-mark-to-absolute-position end cache
+					      (+ (ns:ns-range-location range)
+						 (ns:ns-range-length range)))
       (hi::set-region-charprops (hi:region start end) (dict-to-charprops attributes))))
   (#/edited:range:changeInLength: self #$NSTextStorageEditedAttributes
                                   range 0))
@@ -172,7 +179,10 @@
   (let* ((buffer (hemlock-buffer (hemlock-string self)))
          (hi::*current-buffer* buffer))
     (hi:with-mark ((m (hi:buffer-point buffer)))
-      (hi:move-to-absolute-position m location)
+      (move-hemlock-mark-to-absolute-position m
+					      (hemlock-buffer-string-cache
+					       (hemlock-string self))
+					      location)
       (multiple-value-bind (plist start end)
                            (hi::line-charprops-for-position (hi:mark-line m) (hi:mark-charpos m))
         (unless (%null-ptr-p rangeptr)
