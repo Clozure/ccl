@@ -93,6 +93,32 @@
 	  (if (< code #x10000)
 	    code
 	    #\Replacement_Character))))))
+
+(objc:defmethod (#/getCharacters:range: :void) ((self xhemlock-buffer-string)
+						(buffer (:* :unichar))
+						(r :<NSR>ange))
+  (let* ((cache (hemlock-buffer-string-cache self))
+         (index (ns:ns-range-location r))
+         (length (ns:ns-range-length r))
+         (hi::*current-buffer* (buffer-cache-buffer cache)))
+    #+debug
+    (#_NSLog #@"get characters: %d/%d"
+             :<NSUI>nteger index
+             :<NSUI>nteger length)
+    (multiple-value-bind (line idx) (update-line-cache-for-index cache index)
+      (let* ((len (hemlock::line-length line)))
+        (do* ((i 0 (1+ i)))
+             ((= i length))
+          (cond ((< idx len)
+                 (setf (paref buffer (:* :unichar) i)
+                       (char-code (hemlock::line-character line idx)))
+                 (incf idx))
+                (t
+                 (setf (paref buffer (:* :unichar) i)
+                       (char-code #\Newline)
+                       line (hi::line-next line)
+                       len (if line (hi::line-length line) 0)
+                       idx 0))))))))
 
 
 ;;; This is bound to T when we edit text using the methods of
@@ -360,8 +386,6 @@
             (:ns-tool-tip (format t "~s" keyword))
             (:ns-character-shap (format t "~s" keyword))
             (:ns-glyph-info (format t "~s" keyword))))))))
-
-      
 
 (defun charprops-to-dict (plist)
   (when (null plist)
