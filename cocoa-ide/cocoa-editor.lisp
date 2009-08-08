@@ -391,8 +391,8 @@
 (defun move-hemlock-mark-to-absolute-position (mark cache abspos)
   ;; TODO: figure out if updating the cache matters, and if not, use hi:move-to-absolute-position.
   (let* ((hi::*current-buffer* (buffer-cache-buffer cache)))
-    (hi::move-to-absolute-position mark abspos)
-    #+rme-deletion
+    ;;(hi::move-to-absolute-position mark abspos)
+    ;;#+rme-deletion
     (multiple-value-bind (line idx) (update-line-cache-for-index cache abspos)
       #+debug
       (#_NSLog #@"Moving point from current pos %d to absolute position %d"
@@ -537,9 +537,9 @@
 
 (defun textstorage-note-insertion-at-position (self pos n)
   (ns:with-ns-range (r pos 0)
-    (#/edited:range:changeInLength: self #$NSTextStorageEditedAttributes r n)
+    (#/edited:range:changeInLength: self #$NSTextStorageEditedCharacters r n)
     (setf (ns:ns-range-length r) n)
-    (#/edited:range:changeInLength: self #$NSTextStorageEditedCharacters r 0)))
+    (#/edited:range:changeInLength: self #$NSTextStorageEditedAttributes r 0)))
 
 
 
