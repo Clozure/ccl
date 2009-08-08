@@ -55,10 +55,23 @@
 ;;; NSString primitive methods
 
 (objc:defmethod (#/length #>NSUInteger) ((self xhemlock-buffer-string))
+  (let* ((cache (hemlock-buffer-string-cache self)))
+    (or (buffer-cache-buflen cache)
+        (setf (buffer-cache-buflen cache)
+              (let* ((buffer (buffer-cache-buffer cache)))
+		(hemlock-buffer-length buffer))))))
+
+#+slow
+(objc:defmethod (#/length #>NSUInteger) ((self xhemlock-buffer-string))
   (let* ((buffer (hemlock-buffer self))
 	 (hi::*current-buffer* buffer))
     (hi:count-characters (hi:buffer-region buffer))))
 
+(objc:defmethod (#/characterAtIndex: :unichar) ((self xhemlock-buffer-string)
+						(index #>NSUInteger))
+  (char-code (hemlock-char-at-index (hemlock-buffer-string-cache self) index)))
+
+#+slow
 (objc:defmethod (#/characterAtIndex: :unichar) ((self xhemlock-buffer-string) (index #>NSUInteger))
   (let* ((buffer (hemlock-buffer self))
          (hi::*current-buffer* buffer)
@@ -191,6 +204,9 @@
       (#/replaceCharactersInRange:withString:
        (#/prepareWithInvocationTarget: undo-mgr self)
        (ns:make-ns-range pos n) #@"")))
+  (let ((cache (hemlock-buffer-string-cache (hemlock-string self))))
+    (adjust-buffer-cache-for-insertion cache pos n)
+    (update-line-cache-for-index cache pos))
   (unless *suppress-edit-notifications*
     (textstorage-note-insertion-at-position self pos n)))
 
@@ -198,6 +214,9 @@
     ((self xhemlock-text-storage) (pos :<NSI>nteger) (n :<NSI>nteger)
      (extra :<NSI>nteger))
   (declare (ignorable extra))
+  (let ((cache (hemlock-buffer-string-cache (hemlock-string self))))
+    (reset-buffer-cache cache)
+    (update-line-cache-for-index cache pos))
   (unless *suppress-edit-notifications*
     (ns:with-ns-range (range pos n)
       (#/edited:range:changeInLength: self
