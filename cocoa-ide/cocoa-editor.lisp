@@ -1150,10 +1150,6 @@
 
 
 (defmethod compute-temporary-attributes ((self hemlock-textstorage-text-view))
-  (unless (#/isKindOfClass: (#/textStorage self)
-			    (ccl::@class hemlock-text-storage))
-    ;; XXX buffer string cache isssues
-    (return-from compute-temporary-attributes +null-ptr+))
   #-cocotron
   (let* ((container (#/textContainer self))
          ;; If there's a containing scroll view, use its contentview         
