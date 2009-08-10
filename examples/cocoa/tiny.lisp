@@ -78,7 +78,7 @@
 				       #$NSMiniaturizableWindowMask)
 		   :backing #$NSBackingStoreBuffered
 		   :defer t)))
-      (#/setTitle: w "Tiny Window Application")
+      (#/setTitle: w #@"Tiny Window Application")
       (let ((my-view (make-instance 'demo-view :with-frame r)))
         (#/setContentView: w my-view)
         (#/setDelegate: w my-view))
