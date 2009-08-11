@@ -391,8 +391,8 @@
 (defun move-hemlock-mark-to-absolute-position (mark cache abspos)
   ;; TODO: figure out if updating the cache matters, and if not, use hi:move-to-absolute-position.
   (let* ((hi::*current-buffer* (buffer-cache-buffer cache)))
-    ;;(hi::move-to-absolute-position mark abspos)
-    ;;#+rme-deletion
+    (hi::move-to-absolute-position mark abspos)
+    #+old
     (multiple-value-bind (line idx) (update-line-cache-for-index cache abspos)
       #+debug
       (#_NSLog #@"Moving point from current pos %d to absolute position %d"
@@ -1079,11 +1079,6 @@
       (when view
 	(unless (eventqueue-abort-pending-p self)
 	  (hi::handle-hemlock-event view #k"leftdown")))))
-  (call-next-method event))
-
-#+GZ
-(objc:defmethod  (#/mouseUp: :void) ((self hemlock-textstorage-text-view) event)
-  (log-debug "~&MOUSE UP!!")
   (call-next-method event))
 
 (defmethod assume-not-editing ((tv hemlock-textstorage-text-view))
