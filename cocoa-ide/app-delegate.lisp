@@ -170,6 +170,7 @@
 
 (objc:defmethod (#/applicationShouldOpenUntitledFile: #>BOOL)
     ((self lisp-application-delegate) app)
+  (declare (ignore app))
   t)
 
 (objc:defmethod (#/applicationOpenUntitledFile: :<BOOL>)
