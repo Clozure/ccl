@@ -2564,7 +2564,9 @@
                                (lisp-string-from-nsstring
                                 (#/displayName doc))
                                :modes '("Lisp" "Editor"))))
-      ;; Cocotron's UndoManager causes CPU usage to peg at 90+%
+      ;; Cocotron's NSUndoManager implementation causes CPU usage to peg at 90+%
+      ;; Remove this when Cocotron issue #273 is fixed
+      ;;  (http://code.google.com/p/cocotron/issues/detail?id=273)
       #+cocotron (#/setHasUndoManager: doc nil))
     (with-slots (encoding) doc
       (setq encoding (or (get-default-encoding) #$NSISOLatin1StringEncoding)))
