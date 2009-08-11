@@ -2563,7 +2563,9 @@
                               (make-hemlock-buffer
                                (lisp-string-from-nsstring
                                 (#/displayName doc))
-                               :modes '("Lisp" "Editor")))))
+                               :modes '("Lisp" "Editor"))))
+      ;; Cocotron's UndoManager causes CPU usage to peg at 90+%
+      #+cocotron (#/setHasUndoManager: doc nil))
     (with-slots (encoding) doc
       (setq encoding (or (get-default-encoding) #$NSISOLatin1StringEncoding)))
     (setq *last-document-created* doc)
