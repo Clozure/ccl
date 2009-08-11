@@ -88,6 +88,9 @@ compiler/X86/X8632/x8632-backend.lisp -text
 compiler/X86/X8632/x8632-vinsns.lisp -text
 compiler/acode-rewrite.lisp -text
 compiler/nx2.lisp -text
+contrib/Glen[!!-~]Foy/ReadMe.rtf -text
+contrib/Glen[!!-~]Foy/list-definitions.lisp -text
+contrib/Neil[!!-~]Baylis/ca-demo.lisp -text
 contrib/README -text
 doc/ccl-documentation.html -text
 doc/doc-splitter.lisp -text
