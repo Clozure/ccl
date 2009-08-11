@@ -47,10 +47,10 @@
     (if package
       (do-symbols (sym package)
         (when (%apropos-substring-p theString (symbol-name sym))
-          (push sym theList)))
+          (pushnew sym theList)))
       (do-all-symbols (sym)
         (when (%apropos-substring-p theString (symbol-name sym))
-          (push sym theList))))
+          (pushnew sym theList))))
     (let* ((last 0)                      ; not a symbol
            (junk #'(lambda (item)
                      (declare (debugging-function-name nil))
