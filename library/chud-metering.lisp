@@ -162,7 +162,7 @@ in the finder"
 
 #+ppc-target
 (defun identify-functions-with-pure-code ()
-  (ccl:purify)
+  (ccl::purify)
   (multiple-value-bind (pure-low pure-high)
                                  
       (ccl::do-gc-areas (a)
