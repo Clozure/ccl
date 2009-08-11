@@ -329,7 +329,7 @@
 (defun line-length (line)
   "Returns the number of characters on the line."
   (if (linep line)
-    (line-length* line)
+    (buffer-line-length line)
     (error "~S is not a line!" line)))
 
 (defun line-buffer (line)
@@ -437,9 +437,13 @@
      (mark-charpos mark)))
 
 (defun move-to-absolute-position (mark position)
-  (with-mark ((m (buffer-start-mark (mark-buffer mark))))
-    (when (character-offset m position)
-      (move-mark mark m))))
+  (let* ((buffer (mark-buffer mark))
+         (line (buffer-line-at-absolute-position buffer position))
+         (offset (- position (get-line-origin line))))
+    (when (<= 0 offset (line-length line))
+      (change-line mark line)
+      (setf (mark-charpos mark) offset)
+      mark)))
 
 (defun buffer-selection-range (buffer)
   "Absolute start and end positions of the current selection"

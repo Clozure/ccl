@@ -117,6 +117,7 @@
   active-font-region                    ; currently active font region
   charprops		      ; the buffer's default charprops
   (selection-set-by-command nil) ; boolean: true if selection set by (shifted) motion command.
+  (%lines (make-array 10 :adjustable t :fill-pointer 0)) ;; all lines in the buffer
   )
 
 (defun set-buffer-charprops (buffer charprops)
@@ -363,6 +364,24 @@
 
 (defun buffer-lock (buffer)
   (buffer-gap-context-lock (ensure-buffer-gap-context buffer)))
+
+(defun buffer-open-line (buffer)
+  (buffer-gap-context-open-line (ensure-buffer-gap-context buffer)))
+
+(defun buffer-open-line-length (buffer)
+  (let ((context (ensure-buffer-gap-context buffer)))
+    (+ (buffer-gap-context-left-open-pos context)
+       (-   (buffer-gap-context-line-cache-length context)
+            (buffer-gap-context-right-open-pos context)))))
+
+(defun buffer-left-open-pos (buffer)
+  (buffer-gap-context-left-open-pos (ensure-buffer-gap-context buffer)))
+
+(defun buffer-right-open-pos (buffer)
+  (buffer-gap-context-right-open-pos (ensure-buffer-gap-context buffer)))
+
+(defun buffer-open-chars (buffer)
+  (buffer-gap-context-open-chars (ensure-buffer-gap-context buffer)))
 
 (defun current-gap-context ()
   (unless (boundp '*current-buffer*)

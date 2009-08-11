@@ -497,8 +497,40 @@
   (delete-string (buffer-name buffer) *buffer-names*)
   nil)
 
+(defun buffer-lines (buffer)
+  (let ((lines (buffer-%lines buffer)))
+    (when (eql (fill-pointer lines) 0)
+      (loop for origin = 0 then (+ origin (buffer-line-length l) 1)
+            for l = (mark-line (region-start (buffer-%region buffer))) then (line-next l) while l
+            do (setf (line-origin l) origin)
+            do (vector-push-extend l lines)))
+    lines))
 
-
+;; This will return the last line if posn is out of range (or first line if it's negative)
+(defun buffer-line-at-absolute-position (buffer posn)
+  (declare (optimize (speed 3) (safety 0)))
+  (let* ((lines (buffer-lines (ccl:require-type buffer 'buffer)))
+         (posn (ccl:require-type posn 'fixnum))
+         (vec (ccl::array-data-and-offset lines))
+         (start 0)
+         (end (fill-pointer lines)))
+    (declare (fixnum start end posn))
+    (loop
+      (let* ((middle (ash (the fixnum (+ start end)) -1))
+             (line (svref vec middle)))
+        (declare (fixnum middle))
+        (when (= middle start)
+          (return line))
+        (if (< posn (the fixnum (line-origin line)))
+          (setq end middle)
+          (setq start middle))))))
+
+;; Called whenever change a line's next or previous pointer.  Don't update immediately
+;; so don't thrash when inserting multiple lines.
+(declaim (inline invalidate-buffer-lines))
+(defun invalidate-buffer-lines (buffer)
+  (setf (fill-pointer (buffer-%lines buffer)) 0))
+
 ;;;; Buffer start and end marks.
 
 (defun buffer-start-mark (buffer)

@@ -65,8 +65,8 @@
   ;;
   ;; Pointers to the next and previous lines in the doubly linked list of
   ;; line structures.
-  previous
-  next
+  %previous
+  %next
   ;;
   ;; A list of all the permanent marks pointing into this line.
   (marks ())
@@ -90,6 +90,23 @@
   ;; A vector of charprops-change objects or NIL if the whole line has
   ;; the buffer's default character properties.
   charprops-changes)
+
+(declaim (inline line-next line-previous set-line-next set-line-previous))
+(defun line-next (line) (line-%next line))
+(defun line-previous (line) (line-%previous line))
+
+(defsetf line-next set-line-next)
+(defsetf line-previous set-line-previous)
+
+(defun set-line-next (line next)
+  (let ((buffer (line-buffer line)))
+    (when buffer (invalidate-buffer-lines buffer)))
+  (setf (line-%next line) next))
+
+(defun set-line-previous (line previous)
+  (let ((buffer (line-buffer line)))
+    (when buffer (invalidate-buffer-lines buffer)))
+  (setf (line-%previous line) previous))
 
 (defstruct (charprops-change
             (:copier nil)
@@ -148,7 +165,9 @@
 ;;; Hide the fact that the slot isn't really called CHARS.
 ;;;
 (defmacro make-line (&rest keys)
-  `(%make-line ,@(substitute :%chars :chars keys)))
+  (loop for (old . new) in '((:chars . :%chars) (:next . :%next) (:previous . :%previous))
+        do (setq keys (substitute new old keys)))
+  `(%make-line ,@keys))
 
 (defmacro line-length* (line)
   "Returns the number of characters on the line, but it's a macro!"
@@ -157,7 +176,13 @@
 	 (t
 	  (length (the simple-string (line-%chars ,line))))))
 
-
+(defun buffer-line-length (line)
+  (let ((buffer (line-buffer line)))
+    (cond ((null buffer)
+	   (line-length* line))
+	  ((eq line (buffer-open-line buffer))
+	   (buffer-open-line-length buffer))
+	  (t (length (line-chars line))))))
 
 (defun get-line-origin (line)
   (or (line-origin line)
