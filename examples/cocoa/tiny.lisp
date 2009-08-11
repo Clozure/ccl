@@ -82,7 +82,8 @@
       (let ((my-view (make-instance 'demo-view :with-frame r)))
         (#/setContentView: w my-view)
         (#/setDelegate: w my-view))
-      (#/makeKeyAndOrderFront: w nil)
+      (#/performSelectorOnMainThread:withObject:waitUntilDone:
+       w (objc:@selector "makeKeyAndOrderFront:") nil nil)
       w)))
 
 
