@@ -338,8 +338,9 @@
 	    (setq rr (cgfloat (/ rr 255.0))
 		  gg (cgfloat (/ gg 255.0))
 		  bb (cgfloat (/ bb 255.0)))
-	    (#/colorWithCalibratedRed:green:blue:alpha: ns:ns-color
-							rr gg bb aa))))))
+	    (setf (gethash color-string *charprop-colors*)
+		  (#/retain (#/colorWithCalibratedRed:green:blue:alpha: ns:ns-color
+									rr gg bb aa))))))))
 (defun dict-to-charprops (dict)
   (let ((enumerator (#/keyEnumerator dict))
         (plist nil))
