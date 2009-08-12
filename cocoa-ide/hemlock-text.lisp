@@ -324,6 +324,22 @@
                (bb (scale (pref b #>CGFloat))))
           (format nil "#~2,'0x~2,'0x~2,'0x" rr gg bb))))))
 
+(defvar *charprop-colors* (make-hash-table :test #'equalp))
+
+(defun ns-color-from-charprop (color-string)
+  (or (gethash color-string *charprop-colors*)
+      (when (and (= (length color-string) 7)
+		 (char= (char color-string 0) #\#))
+	(let* ((rr (ignore-errors (parse-integer color-string :start 1 :end 3 :radix 16)))
+	       (gg (ignore-errors (parse-integer color-string :start 3 :end 5 :radix 16)))
+	       (bb (ignore-errors (parse-integer color-string :start 5 :end 7 :radix 16)))
+	       (aa (cgfloat 1)))
+	  (when (and rr gg bb)
+	    (setq rr (cgfloat (/ rr 255.0))
+		  gg (cgfloat (/ gg 255.0))
+		  bb (cgfloat (/ bb 255.0)))
+	    (#/colorWithCalibratedRed:green:blue:alpha: ns:ns-color
+							rr gg bb aa))))))
 (defun dict-to-charprops (dict)
   (let ((enumerator (#/keyEnumerator dict))
         (plist nil))
@@ -399,7 +415,6 @@
   (let* ((dict (#/dictionaryWithCapacity: ns:ns-mutable-dictionary 8))
          (default-font *editor-font*)	;what about listeners?
          (fm (#/sharedFontManager ns:ns-font-manager))
-         (traits 0)
          (font +null-ptr+)
          (font-name nil))
     (#/setObject:forKey: dict *default-paragraph-style*
@@ -417,33 +432,45 @@
       (setq font default-font))
     (loop for (k v) on plist by #'cddr
       do (case k
-           (:font-size (setq v (float v ns:+cgfloat-zero+))
-                       (setq font (#/convertFont:toSize: fm font v)))
-           (:font-weight (cond ((eq v :bold)
-                                (setq traits (logior traits #$NSBoldFontMask)))
-                               ((eq v :plain)
-                                (setq traits (logior traits #$NSUnboldFontMask)))))
-           (:font-width (cond ((eq v :condensed)
-                               (setq traits (logior traits #$NSCondensedFontMask)))
-                              ((eq v :expanded)
-                               (setq traits (logior traits #$NSExpandedFontMask)))))
-           (:font-slant (cond ((eq v :italic)
-                               (setq traits (logior traits #$NSItalicFontMask)))
-                              ((eq v :roman)
-                               (setq traits (logior traits #$NSUnitalicFontMask)))))
-           (:font-underline (let (n)
-                              (case v
-                                (:single
-                                 (setq n (#/numberWithInt: ns:ns-number #$NSUnderlineStyleSingle)))
-                                (:double
-                                 (setq n (#/numberWithInt: ns:ns-number #$NSUnderlineStyleDouble)))
-                                (:thick
-                                 (setq n (#/numberWithInt: ns:ns-number #$NSUnderlineStyleThick))))
-                              (when n
-                                (#/setObject:forKey: dict n #&NSUnderlineStyleAttributeName))))
-           (:font-color)
-           (:background-color)))
-    (setq font (#/convertFont:toHaveTrait: fm font traits))
+           (:font-size
+	    (setq v (float v ns:+cgfloat-zero+))
+	    (setq font (#/convertFont:toSize: fm font v)))
+           (:font-weight
+	    (cond
+	      ((eq v :bold)
+	       (setq font (#/convertFont:toHaveTrait: fm font #$NSBoldFontMask)))
+	      ((eq v :plain)
+	       (setq font (#/convertFont:toHaveTrait: fm font #$NSUnboldFontMask)))))
+           (:font-width
+	    (cond
+	      ((eq v :condensed)
+	       (setq font (#/convertFont:toHaveTrait: fm font #$NSCondensedFontMask)))
+	      ((eq v :expanded)
+	       (setq font (#/convertFont:toHaveTrait: fm font #$NSExpandedFontMask)))))
+           (:font-slant
+	    (cond ((eq v :italic)
+		   (setq font (#/convertFont:toHaveTrait: fm font #$NSItalicFontMask)))
+		  ((eq v :roman)
+		   (setq font (#/convertFont:toHaveTrait: fm font #$NSUnitalicFontMask)))))
+           (:font-underline
+	    (let (n)
+	      (case v
+		(:single
+		 (setq n (#/numberWithInt: ns:ns-number #$NSUnderlineStyleSingle)))
+		(:double
+		 (setq n (#/numberWithInt: ns:ns-number #$NSUnderlineStyleDouble)))
+		(:thick
+		 (setq n (#/numberWithInt: ns:ns-number #$NSUnderlineStyleThick))))
+	      (when n
+		(#/setObject:forKey: dict n #&NSUnderlineStyleAttributeName))))
+           (:font-color
+	    (let ((color (ns-color-from-charprop v)))
+	      (when color
+		(#/setObject:forKey: dict color #&NSForegroundColorAttributeName))))
+           (:background-color
+	    (let ((color (ns-color-from-charprop v)))
+	      (when color
+		(#/setObject:forKey: dict color #&NSBackgroundColorAttributeName))))))
     (unless (%null-ptr-p font)
       (#/setObject:forKey: dict font #&NSFontAttributeName))
     dict))
