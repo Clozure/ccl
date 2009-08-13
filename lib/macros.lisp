@@ -196,8 +196,8 @@
               ,tstlab
               (if ,lstsym (go ,toplab))))
          ,@(if ret `((let ((,varsym nil))
-                       (declare (ignore-if-unused ,varsym))
-                       ,@decls
+                       (declare (ignorable ,varsym))
+                       ;;,@decls
                        ,ret)))))))
 
 
