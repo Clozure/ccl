@@ -29,7 +29,9 @@
 ; - Shift, Command, Control and Option keys may be interrogated
 ; ----------------------------------------------------------------------
 
-(declaim (optimize (speed 0) (space 0) (compilation-speed 0) (safety 3) (debug 3)))
+(eval-when (:compile-toplevel)
+  (declaim (optimize (speed 0) (space 0) (compilation-speed 0) (safety 3) (debug 3))))
+
 
 (defmacro running-on-this-thread ((&key (waitp t)) &rest body)
 ;; The purpose of this trivial macro is to mark places where it is thought possible that
