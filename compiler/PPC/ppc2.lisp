@@ -9100,7 +9100,11 @@
                   *ppc2-reckless*)
         (! trap-unless-fixnum r))
       (! fixnum->fpr dreg r)
-      (! double-to-single vreg dreg) 
+      (if (single-float-reg-p vreg)
+	(! double-to-single vreg dreg)
+	(with-fp-target (dreg) (sreg :single-float)
+	  (! double-to-single sreg dreg)
+	  (<- sreg)))
       (^))))
 
 (defppc2 ppc2-%double-float %double-float (seg vreg xfer arg)
