@@ -1507,7 +1507,13 @@
           (progn
             (setq locked t)
             (if (or (symbolp spec)
-                    (and (consp spec) (symbolp (car spec))))
+                    (and (consp spec)
+                         (symbolp (car spec))
+                         ;; hashing scheme uses equal, so only use when equivalent to eql
+                         (not (and (eq (car spec) 'member)
+                                   (some (lambda (x)
+                                           (typep x '(or cons string bit-vector pathname)))
+                                         (cdr spec))))))
               (let* ((idx (hash-type-specifier spec)))
                 (incf probes)
                 (if (equal (svref type-cache-specs idx) spec)
