@@ -221,6 +221,10 @@
     (when (logbitp bit mask)
       (return (make-hard-crf-reg (the fixnum (ash bit 2)))))))
 
+(defun single-float-reg-p (reg)
+  (and (= (hard-regspec-class reg) hard-reg-class-fpr)
+       (= (get-regspec-mode reg) hard-reg-class-fpr-mode-single)))
+
 (defun use-fp-temp (n)
     (setq *available-backend-fp-temps* (logand *available-backend-fp-temps* (lognot (ash 1 n))))
     n)
