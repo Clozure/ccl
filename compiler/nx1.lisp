@@ -16,7 +16,6 @@
 
 (in-package "CCL")
 
-;;; Wimp out, but don't choke on (the (values ...) form)
 (defnx1 nx1-the the (&whole call typespec form &environment env)
   ;; Allow VALUES types here (or user-defined types that
   ;; expand to VALUES types).  We could do a better job
@@ -28,15 +27,13 @@
            (let* ((ctype (handler-case (values-specifier-type (nx-target-type typespec) env)
                            (parse-unknown-type (c)
                              (nx1-whine :unknown-type-in-declaration (parse-unknown-type-specifier c))
-			     nil)
+                             *wild-type*)
                            (program-error (c)
                               (nx1-whine :invalid-type typespec c)
-			      nil))))
-             (if (null ctype)
-               '*
-               (if (typep ctype 'function-ctype)
-                 'function
-                 (nx-target-type (type-specifier (single-value-type ctype))))))))
+                             *wild-type*))))
+             (if (typep ctype 'function-ctype)
+               'function
+               (nx-target-type (type-specifier ctype))))))
     (let* ((typespec (typespec-for-the typespec))
            (*nx-form-type* typespec)
            (transformed (nx-transform form env)))
@@ -58,15 +55,21 @@
           (fold-the)
           (when (eq transformed last)
             (return)))
-	(when (and (nx-form-constant-p transformed env)
-		   (not (typep (nx-form-constant-value transformed env) typespec)))
-	  (nx1-whine :type call)
-	  (setq typespec t))
-	(setq typespec (nx-target-type
-			(or (nx1-type-intersect call
-						typespec
-						(typespec-for-the (nx-form-type transformed env)))
-			    t)))
+	(if (and (nx-form-constant-p transformed env)
+                 (or (equal typespec '(values))
+                     (not (typep (nx-form-constant-value transformed env)
+                                 (single-value-type (values-specifier-type typespec))))))
+	  (progn
+            (nx1-whine :type call)
+            (setq typespec '*))
+          (setq typespec (nx-target-type
+                          (or (nx1-type-intersect call
+                                                  typespec
+                                                  (typespec-for-the (nx-form-type transformed env)))
+                              '*))))
+        ;; Wimp out, but don't choke on (the (values ...) form)
+        (when (and (consp typespec) (eq (car typespec) 'values))
+          (setq typespec '*))
         (make-acode
          (%nx1-operator typed-form)
          typespec
