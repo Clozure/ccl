@@ -237,6 +237,7 @@
 ;;; I'm not sure if there's another way to recognize events whose
 ;;; type is #$NSApplicationDefined.
 (objc:defmethod (#/sendEvent: :void) ((self lisp-application) e)
+  (declare (dynamic-extent self e))
   (if (and (eql (#/type e) #$NSApplicationDefined)
 	   (eql (#/subtype e) $lisp-function-event-subtype))
     (invoke-lisp-function self (#/data1 e))
