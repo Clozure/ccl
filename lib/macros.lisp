@@ -2664,38 +2664,46 @@ defcallback returns the callback pointer, e.g., the value of name."
   (declare (dynamic-extent args))
   (destructuring-bind (stack-ptr fp-args-ptr lets rlets inits dynamic-extent-decls other-decls body return-type struct-return-arg error-return error-delta) args
     (declare (ignorable dynamic-extent-decls))
-    (let* ((result (gensym))
-           (condition-name (if (atom error-return) 'error (car error-return)))
+    (let* ((condition-name (if (atom error-return) 'error (car error-return)))
            (error-return-function (if (atom error-return) error-return (cadr error-return)))
+           (result (if struct-return-arg (gensym)))
            (body
             `(rlet ,rlets
               (let ,lets
                 ,dynamic-extent-decls
                 ,@other-decls
                 ,@inits
-                (let ((,result (progn ,@body)))
-                  (declare (ignorable ,result)
-                           (dynamic-extent ,result))
-
-                  ,(funcall (ftd-callback-return-value-function *target-ftd*)
-                            stack-ptr
-                            fp-args-ptr
-                            result
-                            return-type
-                            struct-return-arg)
-                  nil)))))
+                ,(if result
+                     `(let* ((,result ,@body))
+                       (declare (dynamic-extent ,result)
+                                (ignorable ,result))
+                       ,(funcall (ftd-callback-return-value-function *target-ftd*)
+                              stack-ptr
+                              fp-args-ptr
+                              result
+                              return-type
+                              struct-return-arg))
+                     (if (eq return-type *void-foreign-type*)
+                       `(progn ,@body)
+                       (funcall (ftd-callback-return-value-function *target-ftd*)
+                                stack-ptr
+                                fp-args-ptr
+                                `(progn ,@body)
+                                return-type
+                                struct-return-arg)))
+                nil))))
       (if error-return
         (let* ((cond (gensym))
                (block (gensym))
                (handler (gensym)))
           `(block ,block
             (let* ((,handler (lambda (,cond)
-                                           (,error-return-function ,cond ,stack-ptr (%inc-ptr ,stack-ptr ,error-delta))
-                                           (return-from ,block
-                                             nil))))
+                               (,error-return-function ,cond ,stack-ptr (%inc-ptr ,stack-ptr ,error-delta))
+                               (return-from ,block
+                                 nil))))
               (declare (dynamic-extent ,handler))
-            (handler-bind ((,condition-name ,handler))
-              (values ,body)))))
+              (handler-bind ((,condition-name ,handler))
+                (values ,body)))))
         body))))
 
 
