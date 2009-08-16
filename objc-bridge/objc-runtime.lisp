@@ -2936,7 +2936,6 @@ argument lisp string."
            (struct-return-var nil)
            (struct-return-size nil)
            (selector nil)
-           (cmd (intern "_CMD"))
            (class-p nil)
            (objc-class-name nil))
       (if (atom name)
@@ -2956,7 +2955,7 @@ argument lisp string."
             (setq struct-return-size (ceiling (foreign-type-bits rtype) 8))
             (arglist struct-return-var)))
         (arg-types :<SEL>)
-        (arg-names cmd)
+        (arg-names nil)                 ;newfangled
         (dolist (arg other-args)
           (if (atom arg)
             (progn
@@ -3026,7 +3025,7 @@ argument lisp string."
                  ',result-type
                  ',(cddr arg-types))
                 (defcallback ,impname ( :error-return (condition objc-callback-error-return) ,@(arglist))
-                  (declare (ignorable ,self-name ,cmd)
+                  (declare (ignorable ,self-name)
                            (unsettable ,self-name)
                            ,@(unless class-p `((type ,lisp-class-name ,self-name))))
                   ,@decls
