@@ -937,7 +937,8 @@
    (let* ((type nil))
      (if (and (symbolp instance)
               (subtypep (setq type (cdr (assq 'type (nth-value 2 (variable-information instance env)))))
-                        'objc:objc-object)
+                        'objc:objc-object
+                        env)
               (consp slot-name)
               (eq (car slot-name) 'load-time-value)
               (consp (cdr slot-name))
@@ -948,7 +949,7 @@
               (setq slot-name (cadadr slot-name))
               (quoted-form-p slot-name)
               (setq slot-name (cadr slot-name)))
-       (let* ((class (find-class type nil))
+       (let* ((class (find-class type nil env))
               (eslotd (when class (find slot-name (class-slots class)
                                         :key #'slot-definition-name))))
          (when (typep eslotd 'foreign-effective-slot-definition)
