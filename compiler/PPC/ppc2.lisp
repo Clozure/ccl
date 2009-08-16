@@ -7407,7 +7407,12 @@
   (^))
 
 (defppc2 ppc2-flet flet (seg vreg xfer vars afuncs body p2decls)
-  (ppc2-seq-fbind seg vreg xfer vars afuncs body p2decls))
+  (if (dolist (afunc afuncs)
+        (unless (eql 0 (afunc-fn-refcount afunc))
+          (return t)))
+    (ppc2-seq-fbind seg vreg xfer vars afuncs body p2decls)
+    (with-ppc-p2-declarations p2-decls
+      (ppc2-form seg vreg xfer body))))
 
 (defppc2 ppc2-labels labels (seg vreg xfer vars afuncs body p2decls)
   (let* ((fwd-refs nil)

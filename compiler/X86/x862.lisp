@@ -8296,7 +8296,12 @@
   (^))
 
 (defx862 x862-flet flet (seg vreg xfer vars afuncs body p2decls)
-  (x862-seq-fbind seg vreg xfer vars afuncs body p2decls))
+  (if (dolist (afunc afuncs)
+        (unless (eql 0 (afunc-fn-refcount afunc))
+          (return t)))
+    (x862-seq-fbind seg vreg xfer vars afuncs body p2decls)
+    (with-x86-p2-declarations p2decls
+      (x862-form seg vreg xfer body))))
 
 (defx862 x862-labels labels (seg vreg xfer vars afuncs body p2decls)
   (let* ((fwd-refs nil)
