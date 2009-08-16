@@ -1470,6 +1470,7 @@
   (hemlock-buffer-string-cache (#/hemlockString (#/textStorage self))))
 
 #-cocotron                             ; for now, small struct return FFI issue
+
 (objc:defmethod (#/selectionRangeForProposedRange:granularity: :ns-range)
     ((self hemlock-textstorage-text-view)
      (proposed :ns-range)
@@ -1504,7 +1505,7 @@
                             (hi::with-mark ((m2 m1))
                               (when (hemlock::list-offset m2 -1)
                                 (ns:init-ns-range r (hi:mark-absolute-position m2) (- index (hi:mark-absolute-position m2)))
-                                (return-from HANDLED r))))))))))))
+                                (return-from HANDLED r))))))))))))       
        (call-next-method proposed g)
        #+debug
        (#_NSLog #@"range = %@, proposed = %@, granularity = %d"
