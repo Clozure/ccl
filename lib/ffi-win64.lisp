@@ -136,8 +136,8 @@
                  (argtype (parse-foreign-type spec)))
             (if (typep argtype 'foreign-record-type)
               (setq argtype :address))
-            (lets (list name
-                        `(,
+            (let* ((access-form
+                    `(,
                           (ecase (foreign-type-to-representation-type argtype)
                             (:single-float (setq fp t) '%get-single-float)
                             (:double-float (setq fp t) '%get-double-float)
@@ -154,7 +154,8 @@
                              (dynamic-extent-names name)
                              '%get-ptr))
                           ,stack-ptr
-                          ,(if fp (next-fpr) (next-gpr)))))))))))
+                          ,(if fp (next-fpr) (next-gpr)))))
+              (when name (lets (list name access-form))))))))))
 
 (defun win64::generate-callback-return-value (stack-ptr fp-args-ptr result return-type struct-return-arg)
   (declare (ignore fp-args-ptr))

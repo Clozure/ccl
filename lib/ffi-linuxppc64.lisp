@@ -110,10 +110,10 @@
             (if (and (typep argtype 'foreign-record-type)
                      (< bits 64))
               (progn
-                (rlets (list name (foreign-record-type-name argtype)))
-                (inits `(setf (%%get-unsigned-longlong ,name 0)
-                         (ash (%%get-unsigned-longlong ,stack-ptr ,offset)
-                          ,(- 64 bits)))))
+                (when name (rlets (list name (foreign-record-type-name argtype))))
+                (when name (inits `(setf (%%get-unsigned-longlong ,name 0)
+                                    (ash (%%get-unsigned-longlong ,stack-ptr ,offset)
+                                     ,(- 64 bits))))))
               (let* ((access-form
                       `(,(cond
                           ((typep argtype 'foreign-single-float-type)
@@ -168,7 +168,8 @@
                         ,(if use-fp-args fp-args-ptr stack-ptr)
                         ,(if use-fp-args (* 8 (1- fp-arg-num))
                              `(+ ,offset ,bias)))))
-                (lets (list name access-form))
+                (when name (lets (list name access-form)))
+                #+nil
                 (when (eq spec :address)
                   (dynamic-extent-names name))
                 (when use-fp-args (set-fp-regs-form))))))))))

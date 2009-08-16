@@ -210,12 +210,16 @@
               (let* ((type0 (darwin32::record-type-has-single-scalar-field argtype)))
                 (if type0
                   (progn
-                    (rlets (list name (foreign-record-type-name argtype)))
-                    (inits `(setf ,(%foreign-access-form name type0 0 nil)
+                    (when name (rlets (list name (foreign-record-type-name argtype))))
+                    (let* ((init `(setf ,(%foreign-access-form name type0 0 nil)
                              ,(next-scalar-arg type0))))
-                  (progn (setq delta (* (ceiling (foreign-record-type-bits argtype) 32) 4))
-                    (lets (list name `(%inc-ptr ,stack-ptr ,offset ))))))
-              (lets (list name (next-scalar-arg argtype))))
+                      (when name (inits init))))
+                  (progn
+                    (setq delta (* (ceiling (foreign-record-type-bits argtype) 32) 4))
+                    (when name ; no side-efects hers     
+                    (lets (list name `(%inc-ptr ,stack-ptr ,offset)))))))
+              (let* ((pair (list name (next-scalar-arg argtype))))
+                (when name (lets pair))))
             #+nil
             (when (or (typep argtype 'foreign-pointer-type)
                       (typep argtype 'foreign-array-type))

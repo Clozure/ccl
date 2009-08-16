@@ -589,36 +589,39 @@
                     (:integer (if (< (decf gprs) 0) (setq first8 :memory)))
                     (:float (if (< (decf fprs) 0) (setq first8 :memory)))))
                 (if (eq first8 :memory)
-                  (progn
-                    (lets (list name `(%inc-ptr ,stack-ptr ,(prog1 memory-arg-offset
+                  (let* ((form `(%inc-ptr ,stack-ptr ,(prog1 memory-arg-offset
                                                                    (incf memory-arg-offset (* 8 (ceiling bits 64)))))))
-                         (dynamic-extent-names name))
+                    (when name
+                      (lets (list name form))
+                      (dynamic-extent-names name)))
                   (progn
-                    (rlets (list name (foreign-record-type-name argtype)))
-                    (inits `(setf (%%get-unsigned-longlong ,name 0)
-                             (%%get-unsigned-longlong ,stack-ptr ,(if (eq first8 :integer) (next-gpr) (next-fpr)))))
+                    (when name (rlets (list name (foreign-record-type-name argtype))))
+                    (let* ((init1 `(setf (%%get-unsigned-longlong ,name 0)
+                             (%%get-unsigned-longlong ,stack-ptr ,(if (eq first8 :integer) (next-gpr) (next-fpr))))))
+                      (when name (inits init1)))
                     (if second8
-                      (inits `(setf (%%get-unsigned-longlong ,name 8)
-                             (%%get-unsigned-longlong ,stack-ptr ,(if (eq second8 :integer) (next-gpr) (next-fpr)))))))))
-                (lets (list name
-                            `(,
-                             (ecase (foreign-type-to-representation-type argtype)
-                               (:single-float (setq fp t) '%get-single-float)
-                               (:double-float (setq fp t) '%get-double-float)
-                               (:signed-doubleword  '%%get-signed-longlong)
-                               (:signed-fullword '%get-signed-long)
-                               (:signed-halfword '%get-signed-word)
-                               (:signed-byte '%get-signed-byte)
-                               (:unsigned-doubleword '%%get-unsigned-longlong)
-                               (:unsigned-fullword '%get-unsigned-long)
-                               (:unsigned-halfword '%get-unsigned-word)
-                               (:unsigned-byte '%get-unsigned-byte)
-                               (:address
-                                #+nil
-                                (dynamic-extent-names name)
-                                '%get-ptr))
-                             ,stack-ptr
-                             ,(if fp (next-fpr) (next-gpr))))))))))))
+                      (let* ((init2 `(setf (%%get-unsigned-longlong ,name 8)
+                               (%%get-unsigned-longlong ,stack-ptr ,(if (eq second8 :integer) (next-gpr) (next-fpr))))))
+                        (when name (inits init2 )))))))
+              (let* ((form`(,
+                            (ecase (foreign-type-to-representation-type argtype)
+                              (:single-float (setq fp t) '%get-single-float)
+                              (:double-float (setq fp t) '%get-double-float)
+                              (:signed-doubleword  '%%get-signed-longlong)
+                              (:signed-fullword '%get-signed-long)
+                              (:signed-halfword '%get-signed-word)
+                              (:signed-byte '%get-signed-byte)
+                              (:unsigned-doubleword '%%get-unsigned-longlong)
+                              (:unsigned-fullword '%get-unsigned-long)
+                              (:unsigned-halfword '%get-unsigned-word)
+                              (:unsigned-byte '%get-unsigned-byte)
+                              (:address
+                               #+nil
+                               (when name (dynamic-extent-names name))
+                               '%get-ptr))
+                            ,stack-ptr
+                            ,(if fp (next-fpr) (next-gpr)))))                
+                (if name (lets (list name form )))))))))))
 
 (defun x8664::generate-callback-return-value (stack-ptr fp-args-ptr result return-type struct-return-arg)
   (declare (ignore fp-args-ptr))

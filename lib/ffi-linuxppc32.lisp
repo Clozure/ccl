@@ -186,7 +186,7 @@
                                     (error "Don't know how to access foreign argument of type ~s" (unparse-foreign-type argtype))))))
                           ,stack-ptr
                           ,(+ target bias))))
-                  (lets (list name access-form))
+                  (when name (lets (list name access-form)))
                   #+nil
                   (when (eq spec :address)
                     (dynamic-extent-names name))

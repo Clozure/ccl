@@ -456,7 +456,7 @@
                 (if (or (darwin64::record-type-contains-union argtype)
                         (= bits 128))
                   (progn (setq delta (* (ceiling bits 64) 8))
-                         (lets (list name `(%inc-ptr ,stack-ptr ,offset )))
+                         (when name (lets (list name `(%inc-ptr ,stack-ptr ,offset ))))
                          (incf offset delta))
 
                   (let* ((flattened-fields (darwin64::flatten-fields argtype)))
@@ -476,33 +476,40 @@
                                           (typep (foreign-record-field-type field)
                                                  'foreign-single-float-type))
                                    (return t))))))
-                      (rlets (list name (or (foreign-record-type-name argtype)
-                                            spec)))
+                      (when name (rlets (list name (or (foreign-record-type-name argtype)
+                                            spec))))
                       (do* ((bit-offset 0 (+ bit-offset 64))
                             (byte-offset 0 (+ byte-offset 8)))
                            ((>= bit-offset bits))
                         (if (double-float-at-offset bit-offset)
-                          (inits `(setf (%get-double-float ,name ,byte-offset)
-                                   ,(next-scalar-arg (parse-foreign-type :double-float))))
+                          (let* ((init `(setf (%get-double-float ,name ,byte-offset)
+                                   ,(next-scalar-arg (parse-foreign-type :double-float)))))
+                            (when name
+                              (inits init)))
                           (let* ((high-single (single-float-at-offset bit-offset))
-                                 (low-single (single-float-at-offset (+ bit-offset 32))))
-                            (inits `(setf (%%get-unsigned-longlong ,name ,byte-offset)
-                                     ,(next-scalar-arg (parse-foreign-type '(:unsigned 64)))))
+                                 (low-single (single-float-at-offset (+ bit-offset 32)))
+                                 (init `(setf (%%get-unsigned-longlong ,name ,byte-offset)
+                                     ,(next-scalar-arg (parse-foreign-type '(:unsigned 64))))))
+                            (when name (inits init))
                             (when high-single
                               (when (< (incf fp-arg-num) 14)
                                 (set-fp-regs-form)
-                                (inits `(setf (%get-single-float ,name ,byte-offset)
+                                (when name
+                                  (inits `(setf (%get-single-float ,name ,byte-offset)
                                          (%get-single-float-from-double-ptr
                                           ,fp-args-ptr
-                                          ,(* 8 (1- fp-arg-num)))))))
+                                          ,(* 8 (1- fp-arg-num))))))))
                             (when low-single
                               (when (< (incf fp-arg-num) 14)
                                 (set-fp-regs-form)
-                                (inits `(setf (%get-single-float ,name ,(+ 4 byte-offset))
+                                (when name
+                                  (inits `(setf (%get-single-float ,name ,(+ 4 byte-offset))
                                          (%get-single-float-from-double-ptr
                                           ,fp-args-ptr
-                                          ,(* 8 (1- fp-arg-num)))))))))))))
-                (lets (list name (next-scalar-arg argtype))))
+                                          ,(* 8 (1- fp-arg-num))))))))))))))
+                (let* ((pair (list name (next-scalar-arg argtype))))
+                  (when name 
+                    (lets name))))
               #+nil
               (when (or (typep argtype 'foreign-pointer-type)
                         (typep argtype 'foreign-array-type))

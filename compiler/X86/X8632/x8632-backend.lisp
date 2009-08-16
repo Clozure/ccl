@@ -382,8 +382,8 @@
 ;;;  if this can't be determined. (Only meaningful on Windows.)
 
 (defun x8632::generate-callback-bindings (stack-ptr fp-args-ptr argvars
-					  argspecs result-spec
-					  struct-result-name)
+                                                    argspecs result-spec
+                                                    struct-result-name)
   (declare (ignore fp-args-ptr))
   (collect ((lets)
 	    (rlets)
@@ -408,30 +408,29 @@
 	       (bits (require-foreign-type-bits argtype))
 	       (double nil))
 	  (if (typep argtype 'foreign-record-type)
-	    (lets (list name
-			`(%inc-ptr ,stack-ptr
-				   ,(prog1 offset
-					   (incf offset
-						 (* 4 (ceiling bits 32)))))))
-	    (progn
-	      (lets (list name
-			  `(,
-			    (ecase (foreign-type-to-representation-type argtype)
-			      (:single-float '%get-single-float)
-			      (:double-float (setq double t) '%get-double-float)
-			      (:signed-doubleword (setq double t)
-						  '%%get-signed-longlong)
-			      (:signed-fullword '%get-signed-long)
-			      (:signed-halfword '%get-signed-word)
-			      (:signed-byte '%get-signed-byte)
-			      (:unsigned-doubleword (setq double t)
-						    '%%get-unsigned-longlong)
-			      (:unsigned-fullword '%get-unsigned-long)
-			      (:unsigned-halfword '%get-unsigned-word)
-			      (:unsigned-byte '%get-unsigned-byte)
-			      (:address '%get-ptr))
-			    ,stack-ptr
-			    ,offset)))
+            (let* ((form `(%inc-ptr ,stack-ptr
+                           ,(prog1 offset
+                                   (incf offset
+                                         (* 4 (ceiling bits 32)))))))
+              (when name (lets (list name form))))
+	    (let* ((form `(,
+                           (ecase (foreign-type-to-representation-type argtype)
+                             (:single-float '%get-single-float)
+                             (:double-float (setq double t) '%get-double-float)
+                             (:signed-doubleword (setq double t)
+                                                 '%%get-signed-longlong)
+                             (:signed-fullword '%get-signed-long)
+                             (:signed-halfword '%get-signed-word)
+                             (:signed-byte '%get-signed-byte)
+                             (:unsigned-doubleword (setq double t)
+                                                   '%%get-unsigned-longlong)
+                             (:unsigned-fullword '%get-unsigned-long)
+                             (:unsigned-halfword '%get-unsigned-word)
+                             (:unsigned-byte '%get-unsigned-byte)
+                             (:address '%get-ptr))
+                           ,stack-ptr
+                           ,offset)))
+	      (when name (lets (list name form)))
 	      (incf offset 4)
 	      (when double (incf offset 4)))))))))
 
