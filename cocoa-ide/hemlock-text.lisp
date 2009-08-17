@@ -229,6 +229,27 @@
   (assume-cocoa-thread)
   (> (slot-value self 'edit-count) 0))
 
+(objc:defmethod (#/beginEditing :void) ((self xhemlock-text-storage))
+  (assume-cocoa-thread)
+  (with-slots (edit-count) self
+    #+debug
+    (#_NSLog #@"begin-editing")
+    (incf edit-count)
+    #+debug
+    (#_NSLog #@"after beginEditing on %@ edit-count now = %d" :id self :int edit-count)
+    (call-next-method)))
+
+(objc:defmethod (#/endEditing :void) ((self xhemlock-text-storage))
+  (assume-cocoa-thread)
+  (with-slots (edit-count) self
+    #+debug
+    (#_NSLog #@"end-editing")
+    (call-next-method)
+    (assert (> edit-count 0))
+    (decf edit-count)
+    #+debug
+    (#_NSLog #@"after endEditing on %@, edit-count now = %d" :id self :int edit-count)))
+
 (objc:defmethod (#/noteHemlockInsertionAtPosition:length: :void)
     ((self xhemlock-text-storage) (pos :<NSI>nteger) (n :<NSI>nteger)
      (extra :<NSI>nteger))
