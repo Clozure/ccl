@@ -92,6 +92,7 @@ contrib/README -text
 contrib/baylis/ca-demo.lisp -text
 contrib/foy/ReadMe.rtf -text
 contrib/foy/list-definitions.lisp -text
+contrib/paine/workpersistence.lisp -text
 doc/ccl-documentation.html -text
 doc/doc-splitter.lisp -text
 doc/release-notes-1.2.txt -text
