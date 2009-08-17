@@ -45,9 +45,10 @@ M4 = gm4
 ### correctly on the libc side and not implemented at all on the
 ### Mach kernel side.)
 ###
-M4FLAGS = -DDARWIN -DX86 -DX8664 -DDARWIN_GS_HACK
+### Apple never
+M4FLAGS = -DDARWIN -DX86 -DX8664 -DTCR_IN_GPR
 ASFLAGS = -arch x86_64 -g
-CDEFINES = -DDARWIN -DX86 -DX8664 -DDARWIN_GS_HACK
+CDEFINES = -DDARWIN -DX86 -DX8664 -DTCR_IN_GPR
 CDEBUG = -g
 COPT = -O2
 

@@ -330,6 +330,8 @@ equate_if_defined([HAVE_TLS])
 /* DARWIN_GS_HACK is hopefully short-lived */
 equate_if_defined([DARWIN_GS_HACK])
 
+equate_if_defined([TCR_IN_GPR])
+
 /* Well, so much for that. Maybe this will go away soon ? */
 equate_if_defined([WIN32_ES_HACK])
 equate_if_defined([SYSCALL_SETS_CARRY_ON_ERROR])

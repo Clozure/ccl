@@ -170,6 +170,9 @@ _exportfn(C(freebsd_sigreturn))
 _exportfn(C(get_vector_registers))
 _endfn
 
+_exportfn(C(put_vector_registers))
+_endfn				
+        
 	__ifdef([DARWIN])
 _exportfn(C(darwin_sigreturn))
         .globl C(sigreturn)
@@ -184,8 +187,6 @@ _exportfn(C(darwin_sigreturn))
 _endfn
 	__endif
 
-_exportfn(C(put_vector_registers))
-_endfn				
 	
         
         __ifdef([DARWIN_GS_HACK])

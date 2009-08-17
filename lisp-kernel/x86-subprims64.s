@@ -96,6 +96,8 @@ _exportfn(C(start_lisp))
 	__ifdef([WINDOWS])
 	__(push %csave5)
 	__(push %csave6)
+        __endif
+        __ifdef([TCR_IN_GPR])
 	__(movq %carg0,%rcontext_reg)
 	__endif
         __ifdef([DARWIN_GS_HACK])
@@ -114,7 +116,7 @@ _exportfn(C(start_lisp))
 	__(clr %save0)
 	__(clr %save1)
 	__(clr %save2)
-	__ifndef([WINDOWS]) /* no %save3, r11 is %rcontext_reg */
+	__ifndef([TCR_IN_GPR]) /* no %save3, r11 is %rcontext_reg */
 	__(clr %save3)
 	__endif
 	__(pxor %fpzero,%fpzero)	/* fpzero = 0.0[d0] */

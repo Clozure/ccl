@@ -1233,7 +1233,7 @@ __(tra(local_label(_threw_one_value_dont_unbind)))
 	__(movq catch_frame._save0(%temp0),%save0)
 	__(movq catch_frame._save1(%temp0),%save1)
 	__(movq catch_frame._save2(%temp0),%save2)
-	__ifndef([WINDOWS])
+	__ifndef([TCR_IN_GPR])
 	__(movq catch_frame._save3(%temp0),%save3)
 	__endif
 	__(movq %imm1,rcontext(tcr.catch_top))
@@ -1279,7 +1279,7 @@ local_label(_threw_multiple_push_test):
 	__(movq catch_frame._save0(%temp0),%save0)
 	__(movq catch_frame._save1(%temp0),%save1)
 	__(movq catch_frame._save2(%temp0),%save2)
-	__ifndef([WINDOWS])
+	__ifndef([TCR_IN_GPR])
 	__(movq catch_frame._save3(%temp0),%save3)
 	__endif
 	__(movq %imm1,rcontext(tcr.catch_top))
@@ -1336,7 +1336,7 @@ local_label(_nthrowv_push_test):
 	__(movq %save0,rcontext(tcr.xframe))
 	__(movq %save2,%rsp)
 	__(movq catch_frame.rbp(%temp0),%rbp)
-	__ifndef([WINDOWS])
+	__ifndef([TCR_IN_GPR])
 	__(movq catch_frame._save3(%temp0),%save3)
 	__endif
 	__(movq catch_frame._save2(%temp0),%save2)
@@ -1358,7 +1358,7 @@ local_label(_nthrowv_do_unwind):
 	__(push catch_frame._save0(%temp0))
 	__(push catch_frame._save1(%temp0))
 	__(push catch_frame._save2(%temp0))
-	__ifndef([WINDOWS])
+	__ifndef([TCR_IN_GPR])
 	__(push catch_frame._save3(%temp0))
 	__endif
 	__(push catch_frame.pc(%temp0))
@@ -1390,7 +1390,7 @@ local_label(_nthrowv_tpushtest):
 	__(subl $node_size,%nargs)
 	__(jns local_label(_nthrowv_tpushloop))
 	__(pop %xfn)
-	__ifndef([WINDOWS])
+	__ifndef([TCR_IN_GPR])
 	__(pop %save3)
 	__endif
 	__(pop %save2)
@@ -1468,7 +1468,7 @@ local_label(_nthrow1v_dont_unbind):
 	__(movq %save0,rcontext(tcr.xframe))
 	__(movq catch_frame.rsp(%temp0),%rsp)
 	__(movq catch_frame.rbp(%temp0),%rbp)
-	__ifndef([WINDOWS])
+	__ifndef([TCR_IN_GPR])
 	__(movq catch_frame._save3(%temp0),%save3)
 	__endif
 	__(movq catch_frame._save2(%temp0),%save2)
@@ -1492,7 +1492,7 @@ local_label(_nthrow1v_do_unwind):
 	__(movq catch_frame._save0(%temp0),%save0)
 	__(movq catch_frame._save1(%temp0),%save1)
 	__(movq catch_frame._save2(%temp0),%save2)
-	__ifndef([WINDOWS])
+	__ifndef([TCR_IN_GPR])
 	__(movq catch_frame._save3(%temp0),%save3)
 	__endif
 	__(movq catch_frame.pc(%temp0),%xfn)
@@ -4015,7 +4015,7 @@ LocalLabelPrefix[]ffcall:
          __(movq %csave1,%imm1)
          __(movq %csave2,%imm0)
         __endif
-	__ifdef([WINDOWS])
+	__ifdef([TCR_IN_GPR])
 	/* Preserve TCR pointer */
 	__(movq %rcontext_reg, %csave0)
 	__endif
@@ -4053,11 +4053,11 @@ LocalLabelPrefix[]ffcall_call_end:
          __(movq %csave1,%rax)
          __(movq %csave2,%rdx)
         __endif
-	__ifdef([WINDOWS])
+	__ifdef([TCR_IN_GPR])
 	__(movq %csave0, %rcontext_reg)
 	__endif
 	__(movq %rsp,rcontext(tcr.foreign_sp))
-	__ifndef([WINDOWS])
+	__ifndef([TCR_IN_GPR])
 	__(clr %save3)
 	__endif
 	__(clr %save2)
@@ -4235,7 +4235,7 @@ LocalLabelPrefix[]ffcall_return_registers:
          __(movq %csave2,%imm0)
          __(movq %csave3,%imm1)
         __endif
-	__ifdef([WINDOWS])
+	__ifdef([TCR_IN_GPR])
 	/* Preserve TCR pointer */
 	__(movq %rcontext_reg, %csave1)
 	__endif
@@ -4273,11 +4273,11 @@ LocalLabelPrefix[]ffcall_return_registers_call_end:
          __(movsd 16(%csave0),%xmm0)
          __(movsd 24(%csave0),%xmm1)
         __endif
-	__ifdef([WINDOWS])
+	__ifdef([TCR_IN_GPR])
 	__(movq %csave1, %rcontext_reg)
 	__endif
 	__(movq %rsp,rcontext(tcr.foreign_sp))        
-	__ifndef([WINDOWS])
+	__ifndef([TCR_IN_GPR])
 	__(clr %save3)
 	__endif
 	__(clr %save2)
@@ -4426,8 +4426,10 @@ _spentry(syscall)
 	__(emms)
 	__(movq (%rsp),%rbp)
 	__(addq $2*node_size,%rsp)
-        __ifdef([WINDOWS])
+        __ifdef([TCR_IN_GPR])
          __(movq %rcontext_reg,%csave0)
+        __endif
+        __ifdef([WINDOWS])
          __(pop %carg0)
          __(pop %carg1)
          __(pop %carg2)
@@ -4450,12 +4452,12 @@ _spentry(syscall)
 0:      
          __endif
         __endif
-        __ifdef([WINDOWS])
+        __ifdef([TCR_IN_GPR])
          __(movq %csave0,%rcontext_reg)
         __endif
 	__(movq %rbp,%rsp)
 	__(movq %rsp,rcontext(tcr.foreign_sp))
-        __ifndef([WINDOWS])
+        __ifndef([TCR_IN_GPR])
 	 __(clr %save3)
         __endif
 	__(clr %save2)
@@ -4609,7 +4611,7 @@ _spentry(callback)
 	__(movq %r11,%csave0)
         __ifdef([HAVE_TLS])
 	 /* TCR initialized for lisp ?   */
-	 __ifndef([WINDOWS]) /* FIXME */
+	 __ifndef([TCR_IN_GPR]) /* FIXME */
 	 __(movq %fs:current_tcr@TPOFF+tcr.linear,%rax)
 	 __(testq %rax,%rax)
 	 __(jne 1f)
@@ -4623,6 +4625,8 @@ _spentry(callback)
 	__(call *%rax)
 	__ifdef([WINDOWS])
 	__(add $0x20, %rsp)
+        __endif
+        __ifdef([TCR_IN_GPR])
 	__(movq %rax, %rcontext_reg)
 	__endif	
         __ifdef([DARWIN_GS_HACK])
@@ -4636,7 +4640,7 @@ _spentry(callback)
 	/* init lisp registers   */
 	__(movq %csave0,%rax)
 	__(movq %rsp,rcontext(tcr.foreign_sp))
-	__ifndef([WINDOWS])
+	__ifndef([TCR_IN_GPR])
 	__(clr %save3)
 	__endif
 	__(clr %save2)
@@ -4658,7 +4662,7 @@ _spentry(callback)
         __(movq (%rsp),%save0)
         __(movq 8(%rsp),%save1)
         __(movq 16(%rsp),%save2)
-        __ifndef([WINDOWS])
+        __ifndef([TCR_IN_GPR])
          __(movq 24(%rsp),%save3)
         __endif
         __(stmxcsr rcontext(tcr.foreign_mxcsr))

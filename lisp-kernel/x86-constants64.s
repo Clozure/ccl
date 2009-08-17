@@ -221,7 +221,7 @@ define([save0],[r15])
 	define([Rsave0],[15])	
 
 
-ifdef([WINDOWS],[
+ifdef([TCR_IN_GPR],[
 /* We keep the TCR pointer in r11 */
 	define([rcontext_reg], r11)
 	define([rcontext],[$1(%rcontext_reg)])
