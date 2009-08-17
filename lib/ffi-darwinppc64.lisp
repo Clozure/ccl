@@ -507,9 +507,9 @@
                                          (%get-single-float-from-double-ptr
                                           ,fp-args-ptr
                                           ,(* 8 (1- fp-arg-num))))))))))))))
-                (let* ((pair (list name (next-scalar-arg argtype))))
+                (let* ((form (next-scalar-arg argtype)))
                   (when name 
-                    (lets name))))
+                    (lets (list name form)))))
               #+nil
               (when (or (typep argtype 'foreign-pointer-type)
                         (typep argtype 'foreign-array-type))
