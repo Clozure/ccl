@@ -204,9 +204,6 @@
 
 (%include "ccl:compiler;lambda-list.lisp")
 
-#-BOOTSTRAPPED (unless (fboundp 'types-disjoint-p)
-		 (fset 'types-disjoint-p (lambda (t1 t2 &optional env) t1 t2 env nil)))
-
 ;Syntactic Environment Access.
 
 (defun declaration-information (decl-name &optional env)
