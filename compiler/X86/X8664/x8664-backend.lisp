@@ -87,7 +87,8 @@
 		:target-foreign-type-data nil
                 :target-arch x8664::*x8664-target-arch*
                 ;; Overload %gs until Apple straightens things out.
-                :lisp-context-register x8664::gs
+                ;; Whoops; they never did.
+                :lisp-context-register x8664::r11
                 ))
 
 #+freebsdx86-target
