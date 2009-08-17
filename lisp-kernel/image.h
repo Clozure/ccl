@@ -90,7 +90,7 @@ load_openmcl_image(int, openmcl_image_file_header*);
 
 
 #define ABI_VERSION_MIN 1029
-#define ABI_VERSION_CURRENT 1029
-#define ABI_VERSION_MAX 1029
+#define ABI_VERSION_CURRENT 1032
+#define ABI_VERSION_MAX 1032
 
 #define NUM_IMAGE_SECTIONS 4    /* used to be 3 */
