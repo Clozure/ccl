@@ -92,6 +92,11 @@ contrib/README -text
 contrib/baylis/ca-demo.lisp -text
 contrib/foy/ReadMe.rtf -text
 contrib/foy/list-definitions.lisp -text
+contrib/montuori/trivial-ldap/LICENSE.txt -text
+contrib/montuori/trivial-ldap/example.lisp -text
+contrib/montuori/trivial-ldap/trivial-ldap.asd -text
+contrib/montuori/trivial-ldap/trivial-ldap.html -text
+contrib/montuori/trivial-ldap/trivial-ldap.lisp -text
 contrib/paine/workpersistence.lisp -text
 doc/ccl-documentation.html -text
 doc/doc-splitter.lisp -text
