@@ -321,8 +321,12 @@
 	  
 	  (:char-quote
 	   (mark-after mark)
-	   (push-range (cons (mark-charpos mark) (1+ (mark-charpos mark)))
-		       line-info)
+           (let* ((charpos (mark-charpos mark))
+                  (nextpos (1+ charpos))
+                  (linelen (line-length (mark-line mark))))
+             (when (> linelen nextpos)
+               (push-range (cons charpos nextpos)
+                           line-info)))
 	   (mark-after mark))
 	  
 	  (:string-quote

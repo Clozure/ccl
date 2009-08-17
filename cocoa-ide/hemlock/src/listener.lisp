@@ -320,7 +320,12 @@ between the region's start and end, and if there are no ill-formed expressions i
     "Evaluate Listener Mode input between point and last prompt."
   (declare (ignore p))
   (if (point-at-prompt-p)
-      (send-input-region-to-lisp)
+    (progn
+      (if (eq (character-attribute :lisp-syntax (previous-character (buffer-end-mark (current-buffer)))) :char-quote)
+        (let* ((point (current-point))) 
+          (buffer-end point)
+          (insert-character point #\newline))
+        (send-input-region-to-lisp)))
       (if (region-active-p)
           (let ((selected-region (current-region nil nil)))
             (copy-region-to-input selected-region))
