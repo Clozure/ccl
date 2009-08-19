@@ -10,7 +10,7 @@
                                                     #+darwin-target
 						    #@"Monaco"
                                                     #-darwin-target
-                                                    #@"Lucida Console"
+                                                    #@"Courier"
                                                     10.0))
 		   "Default font for listener input")
 (def-cocoa-default *listener-output-font* :font #'(lambda ()
@@ -19,7 +19,7 @@
                                                      #+darwin-target
 						     #@"Monaco"
                                                      #-darwin-target
-                                                     #@"Lucida Console"
+                                                     #@"Courier"
                                                      10.0))
 		   "Default font for listener output")
 
