@@ -405,7 +405,15 @@
                                  (truename "ccl:cocotron;"))
                                 path))
                 (open-shared-library "Foundation.1.0.dll")
-                (open-shared-library "AppKit.1.0.dll"))
+                (open-shared-library "AppKit.1.0.dll")
+                ;; We may need to call #_NSInitializeProcess
+                ;; under Cocotron.  If so, we'd need to do
+                ;; so on standalone startup, too, and would
+                ;; have to heap-allocated the string vector
+                ;; and its strings.
+                #+notyet
+                (with-string-vector (argv (kernel-path))
+                  (#_NSInitializeProcess 1 argv)))
            (setenv "PATH" path)))
        ;(#_GetCurrentEventQueue)
        (current-ns-thread)
