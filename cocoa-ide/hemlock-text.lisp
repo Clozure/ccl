@@ -183,7 +183,7 @@
                                                 (attributes :id)
                                                 (range #>NSRange))
   (let* ((string (hemlock-string self))
-	 (cache (hemlock-buffer-string-cache self))
+	 (cache (hemlock-buffer-string-cache (hemlock-string self)))
 	 (buffer (hemlock-buffer string))
          (hi::*current-buffer* buffer)
 	 (*suppress-edit-notifications* t))
