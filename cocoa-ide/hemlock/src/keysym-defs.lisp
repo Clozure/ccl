@@ -21,7 +21,7 @@
 ;;;
 (define-keysym 9 "Tab")
 (define-keysym 27 "Escape" "Altmode" "Alt")		;escape
-(define-keysym 127 "Delete" "Backspace")  ;backspace
+(define-keysym #+cocotron 8 #-cocotron 127 "Delete" "Backspace")  ;backspace
 (define-keysym 13 "Return" "Newline")
 (define-keysym 10 "LineFeed")
 (define-keysym 3 "Enter")
