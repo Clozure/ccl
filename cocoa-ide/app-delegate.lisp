@@ -20,6 +20,17 @@
 	 (initial-values (cocoa-defaults-initial-values))
 	 (dict (#/mutableCopy initial-values)))
     (declare (special *standalone-cocoa-ide*))
+    #+cocotron
+    (#/setObject:forKey:
+     dict
+     (#/dictionaryWithObjectsAndKeys:
+      ns:ns-dictionary
+      #@"Control" #@"LeftControl"
+      #@"Alt" #@"LeftAlt"
+      #@"Command" #@"RightControl"
+      #@"Alt" #@"RightAlt"
+      +null-ptr+)
+     #@"NSModifierFlagMapping")
     (#/registerDefaults: domain dict)
     (#/release dict)
     (update-cocoa-defaults)
