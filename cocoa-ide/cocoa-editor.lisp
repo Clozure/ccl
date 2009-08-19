@@ -17,7 +17,7 @@
                                             #+darwin-target
 					    #@"Monaco"
                                             #-darwin-target
-                                            #@"Lucida Typewriter"
+                                            #@"Courier"
                                             10.0))
 		   "Default font for editor windows")
 
