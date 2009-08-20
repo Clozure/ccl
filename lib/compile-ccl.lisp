@@ -515,11 +515,12 @@ not runtime errors reported by a successfully created process."
 
 (defparameter *known-optional-features* '(:count-gf-calls :monitor-futex-wait :unique-dcode))
 (defvar *build-time-optional-features* nil)
+(defvar *ccl-save-source-locations* :no-text)
 
-
-(defun rebuild-ccl (&key update full clean kernel force (reload t) exit reload-arguments verbose optional-features)
+(defun rebuild-ccl (&key update full clean kernel force (reload t) exit reload-arguments verbose optional-features (save-source-locations *ccl-save-source-locations*))
   (let* ((*build-time-optional-features* (intersection *known-optional-features* optional-features))
-         (*features* (append *build-time-optional-features* *features*)))
+         (*features* (append *build-time-optional-features* *features*))
+	 (*save-source-locations* save-source-locations))
     (when *build-time-optional-features*
       (setq full t))
     (when full
