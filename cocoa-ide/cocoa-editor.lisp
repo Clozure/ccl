@@ -1040,6 +1040,7 @@
 	(let ((c (if (or quote-p
 			 (and option-p
 			      (or (not *option-is-meta*)
+                                  #-cocotron
 				  (and native-c
 				       (ccl::valid-char-code-p native-c)
 				       (standard-char-p (code-char (the ccl::valid-char-code native-c)))))
