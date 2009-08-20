@@ -3070,6 +3070,13 @@ arg=char : read delimited list"
          (decode-string-from-octets source :start start :end end :external-format :utf-8))
 	(null source)))))
 
+(defun source-note-toplevel-note (source-note)
+  (when source-note
+    (loop for source = (source-note-source source-note)
+          while (source-note-p source)
+          do (setq source-note source))
+    source-note))
+
 (defvar *recording-source-streams* ())
 
 (defun record-source-note (&key form stream start-pos end-pos subform-notes)
