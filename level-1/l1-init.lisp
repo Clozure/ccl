@@ -261,14 +261,15 @@ methods that are marked as being predefined signal continuable errors.")
 (defparameter *save-definitions* nil)
 (defparameter *save-local-symbols* t)
 (defparameter *save-source-locations* :no-text
-  "Controls whether complete source locations is stored, both for definitions (names) and
+  "Controls whether source location information is saved, both for definitions (names) and
 in function objects.
 
-If NIL we don't store any source location (other than the filename if *record-source-file* is non-NIL).
+If NIL we don't store any source locations (other than the filename if *record-source-file* is non-NIL).
 
 If T we store as much source location information as we have available.
 
-If :NO-TEXT we don't store a copy of the original source text.")
+If :NO-TEXT we don't store a copy of the original source text.  This is a space optimization useful
+for compiling files that are not expected to change.")
 
 (defparameter *record-pc-mapping* t "True to record pc -> source mapping (but only if
 *save-source-locations* is also true)")
