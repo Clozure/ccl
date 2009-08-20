@@ -1966,39 +1966,6 @@
 	 :sequence (ccl::callers symbol)
 	 :action #'edit-definition)))))
 
-;; Note this isn't necessarily called from hemlock, e.g. it might be called by cl:ed,
-;; from any thread, or it might be called from a sequence dialog, etc.
-(defun edit-definition (name)
-  (flet ((get-source-alist (name)
-           (mapcar #'(lambda (item) (cons name item))
-                   (ccl::get-source-files-with-types&classes name))))
-    (let* ((info (get-source-alist name)))
-      (when (null info)
-        (let* ((seen (list name))
-               (found ())
-               (pname (symbol-name name)))
-          (dolist (pkg (list-all-packages))
-            (let ((sym (find-symbol pname pkg)))
-              (when (and sym (not (member sym seen)))
-                (let ((new (get-source-alist sym)))
-                  (when new
-                    (setq info (nconc new info))
-                    (push sym found)))
-                (push sym seen))))
-          (when found
-            ;; Unfortunately, this puts the message in the wrong buffer (would be better in the destination buffer).
-            (loud-message "No definitions for ~s, using ~s instead"
-                          name (if (cdr found) found (car found))))))
-      (if info
-        (if (cdr info)
-          (hemlock-ext:open-sequence-dialog
-           :title (format nil "Definitions of ~s" name)
-           :sequence info
-           :action #'(lambda (item) (hemlock-ext:edit-single-definition (car item) (cdr item)))
-           :printer #'(lambda (item stream) (prin1 (cadr item) stream)))
-          (hemlock-ext:edit-single-definition (caar info) (cdar info)))
-        (editor-error "No known definitions for ~s" name)))))
-
 #||
 (defcommand "Set Package Name" (p)
   (variable-value 'current-package :buffer buffer)

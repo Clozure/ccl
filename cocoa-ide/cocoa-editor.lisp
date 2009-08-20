@@ -3223,16 +3223,12 @@
                    (lisp-string-from-nsstring (#/localizedDescription error))))))
       (front-view-for-buffer (hemlock-buffer doc)))))
 
-(defun cocoa-edit-single-definition (name info)
-  (assume-cocoa-thread)
-  (destructuring-bind (indicator . pathname) info
-    (let ((view (find-or-make-hemlock-view pathname)))
-      (hi::handle-hemlock-event view
-                                #'(lambda ()
-                                    (hemlock::find-definition-in-buffer name indicator))))))
+(defun hemlock-ext:execute-in-file-view (pathname thunk)
+  (execute-in-gui #'(lambda ()
+                      (assume-cocoa-thread)
+                      (let ((view (find-or-make-hemlock-view pathname)))
+                        (hi::handle-hemlock-event view thunk)))))
 
-(defun hemlock-ext:edit-single-definition (name info)
-  (execute-in-gui #'(lambda () (cocoa-edit-single-definition name info))))
 
 (defun hemlock-ext:open-sequence-dialog (&key title sequence action (printer #'prin1))
   (make-instance 'sequence-window-controller

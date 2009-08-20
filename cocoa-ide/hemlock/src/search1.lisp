@@ -61,13 +61,10 @@
 ;;; keyword.
 ;;;
 (defmacro define-search-kind (kind lambda-list documentation &body forms)
-  (let ((dummy #-CLISP (gensym) #+CLISP (gentemp (format nil ".search-kind.~A" kind))))
-    `(progn
-      (push ,documentation *search-pattern-documentation*)
-      (defun ,dummy ()
-	(setf (gethash ,kind *search-pattern-experts*)
-	      #'(lambda ,lambda-list ,@forms)))
-      (,dummy))))
+  `(progn
+     (push ,documentation *search-pattern-documentation*)
+     (setf (gethash ,kind *search-pattern-experts*)
+           #'(lambda ,lambda-list ,@forms))))
 
 ;;; new-search-pattern  --  Public
 ;;;
@@ -630,7 +627,8 @@
   If there is no match for the pattern then Mark is not modified and NIL
   is returned.
   If stop-mark is specified, NIL is returned and mark is not moved if
-  the point before the match is after stop-mark"
+  the point before the match is after stop-mark for forward search or
+  before stop-mark for backward search"
   (close-line)
   (multiple-value-bind (line start matched)
 		       (funcall (search-pattern-search-function search-pattern)
@@ -638,9 +636,13 @@
 				(mark-charpos mark))
     (when (and matched
 	       (or (null stop-mark)
-		   (< (line-number line) (line-number (mark-line stop-mark)))
-		   (and (= (line-number line) (line-number (mark-line stop-mark)))
-			(<= start (mark-charpos stop-mark)))))
+                   (if (eq (search-pattern-direction search-pattern) :forward)
+                     (or (< (line-number line) (line-number (mark-line stop-mark)))
+                         (and (eq line (mark-line stop-mark))
+                              (<= start (mark-charpos stop-mark))))
+                     (or (< (line-number (mark-line stop-mark)) (line-number line))
+                         (and (eq (mark-line stop-mark) line)
+                              (<= (mark-charpos stop-mark) start))))))
       (move-to-position mark start line)
       matched)))
 

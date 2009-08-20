@@ -62,7 +62,6 @@
 
 (defcommand "Goto Definition" (p)
   "Go to the current function/macro's definition.  With a numarg, prompts for name to go to."
-  "Go to the current function/macro's definition."
   (if p
       (edit-definition-command nil)
       (let* ((point (current-point))
@@ -186,30 +185,27 @@
 	    (move-mark point m))))))))
 |#
 
-(defparameter *source-file-indicator-defining-operators* ())
+(defparameter *type-defining-operators* ())
 
-(defun define-source-file-indicator-defining-operators (name &rest operators)
-  (setf (getf *source-file-indicator-defining-operators* name) operators))
+(defun define-type-defining-operators (name &rest operators)
+  (assert (subtypep name 'ccl::definition-type))
+  (let ((a (assoc name *type-defining-operators*)))
+    (when (null a)
+      (push (setq a (cons name nil)) *type-defining-operators*))
+    (loop for op in operators do (pushnew op (cdr a)))
+    name))
 
-(defun get-source-file-indicator-defining-operators (thing)
-  (if (typep thing 'method)
-    '(defmethod)
-    (getf *source-file-indicator-defining-operators* thing)))
+(defun type-defining-operator-p (def-type operator)
+  (loop for (type . ops) in *type-defining-operators*
+    thereis (and (typep def-type type) (memq operator ops))))
 
-(define-source-file-indicator-defining-operators 'class 'defclass)
-(define-source-file-indicator-defining-operators 'type 'deftype)
-(define-source-file-indicator-defining-operators 'function 'defun 'defmacro 'defgeneric #+x8664-target 'ccl::defx86lapfunction #+ppc-target 'ccl::defppclapfunction)
-(define-source-file-indicator-defining-operators 'ccl::constant 'defconstant)
-(define-source-file-indicator-defining-operators 'variable 'defvar 'defparameter 'ccl::defstatic 'ccl::defglobal)
-(define-source-file-indicator-defining-operators 'method-combination 'define-method-combination)
-(define-source-file-indicator-defining-operators 'ccl::method-combination-evaluator 'ccl::define-method-combination-evaluator)
-(define-source-file-indicator-defining-operators 'compiler-macro 'define-compiler-macro)
-#+ppc32-target
-(define-source-file-indicator-defining-operators 'ccl::ppc32-vinsn 'ccl::define-ppc32-vinsn)
-#+ppc64-target
-(define-source-file-indicator-defining-operators 'ccl::ppc64-vinsn 'ccl::define-ppc64-vinsn)
-#+x8664-target
-(define-source-file-indicator-defining-operators 'ccl::x8664-vinsn 'ccl::define-x8664-vinsn)
+(define-type-defining-operators 'ccl::class-definition-type 'defclass)
+(define-type-defining-operators 'ccl::type-definition-type 'deftype)
+(define-type-defining-operators 'ccl::function-definition-type 'defun 'defmacro 'defgeneric #+x8664-target 'ccl::defx86lapfunction #+ppc-target 'ccl::defppclapfunction)
+(define-type-defining-operators 'ccl::constant-definition-type 'defconstant)
+(define-type-defining-operators 'ccl::variable-definition-type 'defvar 'defparameter 'ccl::defstatic 'ccl::defglobal)
+(define-type-defining-operators 'ccl::method-combination-definition-type 'define-method-combination)
+(define-type-defining-operators 'ccl::compiler-macro-definition-type 'define-compiler-macro)
 
 
 (defun match-definition-context-for-method (end-mark package indicator)
@@ -278,31 +274,25 @@
               (unless (match-specializer spec)
                 (return nil)))))))))
                                  
-                        
-        
-;;; START and END delimit a function name that matches what we're looking
-;;; for, PACKAGE is the buffer's package (or *PACKAGE*), and INDICATOR
-;;; is either a symbol (FUNCTION, MACRO, etc) or a METHOD object.
-(defun match-context-for-indicator (start end package indicator)
-  (declare (ignorable end))
+;;; START and END delimit a function name that matches what we're looking for
+(defun match-context-for-indicator (start end def-type full-name)
   (with-mark ((op-start start)
               (op-end start))
     (and (form-offset op-start -1)
          (progn
            (move-mark op-end op-start)
            (form-offset op-end 1))
-         (let* ((defining-operator
+         (let* ((package (or (find-package (variable-value 'current-package :buffer (current-buffer)))
+                             *package*))
+                (defining-operator
                     (ignore-errors
                       (let* ((*package* package))
                         (values (read-from-string (region-to-string (region op-start op-end))))))))
-           (memq
-            defining-operator
-            (get-source-file-indicator-defining-operators indicator)))
-         (or (not (typep indicator 'method))
-             (match-definition-context-for-method end package indicator)))))
+           (and (type-defining-operator-p def-type defining-operator)
+                (or (not (typep full-name 'method))
+                    (match-definition-context-for-method end package full-name)))))))
 
-
-(defun match-definition-context (mark name indicator package)
+(defun match-definition-context (mark def-type full-name)
   (pre-command-parse-check mark)
   (when (valid-spot mark t)
     (with-mark ((start mark)
@@ -311,32 +301,121 @@
            (progn
              (move-mark start end)
              (form-offset start -1))
-           (eq name (ignore-errors
-                      (let* ((*package* package))
-                        (values (read-from-string (region-to-string (region start end)))))))
-           (match-context-for-indicator start end package indicator)))))
+           (let ((package (or (find-package (variable-value 'current-package :buffer (current-buffer)))
+                              *package*)))
+             (eq (ccl::definition-base-name def-type full-name)
+                 (ignore-errors
+                  (let* ((*package* package))
+                    (values (read-from-string (region-to-string (region start end))))))))
+           (match-context-for-indicator start end def-type full-name)))))
 
-(defun find-definition-in-buffer (name indicator)
-  (let ((buffer (current-buffer)))
-    (setf (hi::buffer-region-active buffer) nil)
-    (when (symbolp name)
-      (let* ((string (string name))
-             (len (length string))
-             (pattern (get-search-pattern string :forward))
-             (mark (copy-mark (buffer-start-mark buffer)))
-             (package (or
-                       (find-package
-                        (variable-value 'current-package :buffer buffer))
-                       *package*)))
-        (or
-         (loop
-           (let* ((won (find-pattern mark pattern)))
-             (unless won
-               (return))
-             (when (match-definition-context mark name indicator package)
-               (backward-up-list mark)
-               (move-mark (buffer-point buffer) mark)
-               (return t))
-             (unless (character-offset mark len)
-               (return))))
-         (editor-error "Couldn't find definition for ~s" name))))))
+(defun find-definition-by-context (def-type full-name)
+  (let* ((base-name (ccl::definition-base-name def-type full-name))
+	 (string (string base-name))
+         (pattern (new-search-pattern :string-insensitive :forward string)))
+    (with-mark ((mark (current-point)))
+      (when (loop
+	       while (find-pattern mark pattern)
+	       thereis (and (match-definition-context mark def-type full-name)
+			    (backward-up-list mark))
+	       do (character-offset mark 1))
+        (move-point-leaving-mark mark)))))
+
+(defun move-point-leaving-mark (target)
+  (let ((point (current-point)))
+    (push-new-buffer-mark point)
+    (move-mark point target)
+    point))
+
+(defun move-to-source-note (source)
+  (let ((start-pos (ccl:source-note-start-pos source)))
+    (when start-pos
+      (let ((full-text (ccl:source-note-text source))
+            (pattern nil)
+            (offset 0))
+        (flet ((search (mark string direction)
+                 (find-pattern mark
+                               (setq pattern (new-search-pattern :string-insensitive
+                                                                 direction
+                                                                 string
+                                                                 pattern)))))
+          (declare (inline search))
+          (with-mark ((temp-mark (current-point)))
+            (unless (move-to-absolute-position temp-mark start-pos)
+              (buffer-end temp-mark))
+            (unless full-text
+              ;; Someday, might only store a snippet for toplevel, so inner notes
+              ;; might not have text, but can still find them through the toplevel.
+              (let* ((toplevel (ccl::source-note-toplevel-note source))
+                     (toplevel-start-pos (and (not (eq toplevel source))
+                                              (ccl:source-note-start-pos toplevel))))
+                (when toplevel-start-pos
+                  (setq offset (- start-pos toplevel-start-pos))
+                  (setq start-pos toplevel-start-pos)
+                  (setq full-text (ccl:source-note-text toplevel)))))
+            (when (or (null full-text)
+                      (or (search temp-mark full-text :forward)
+                          (search temp-mark full-text :backward))
+                      ;; Maybe body changed, try at least to match the start of it
+                      (let ((snippet (and (> (length full-text) 60) (subseq full-text 0 60))))
+                        (and snippet
+                             (or (search temp-mark snippet :forward)
+                                 (search temp-mark snippet :backward)))))
+              (let ((point (move-point-leaving-mark temp-mark)))
+                (or (character-offset point offset)
+                    (buffer-end point))))))))))
+
+(defun find-definition-in-buffer (def-type full-name source)
+  (current-point-collapsing-selection)
+  (or (and (ccl:source-note-p source)
+           (move-to-source-note source))
+      (find-definition-by-context def-type full-name)
+      (editor-error "Couldn't find definition for ~s" full-name)))
+
+;; Note this isn't necessarily called from hemlock, e.g. it might be called by cl:ed,
+;; from any thread, or it might be called from a sequence dialog, etc.
+(defun edit-definition (name)
+  (flet ((get-source-alist (name)
+           (let ((list (ccl:find-definition-sources name t)))
+             ;; filter interactive-only defs
+             (loop for (id . sources) in list as source = (find-if-not #'null sources)
+               when source collect (cons id source))))
+         (defn-name (defn stream)
+           (destructuring-bind (dt . full-name) (car defn)
+             (format stream "~s ~s" (ccl:definition-type-name dt) (ccl:name-of full-name))))
+         (defn-action (defn &optional msg)
+           (destructuring-bind ((def-type . full-name) . source) defn
+             (hemlock-ext:execute-in-file-view
+              (ccl:source-note-filename source)
+              (lambda ()
+                (when msg (loud-message msg))
+                (find-definition-in-buffer def-type full-name source))))))
+    (let* ((info (get-source-alist name))
+           (msg nil))
+      (when (null info)
+        (let* ((seen (list name))
+               (found ())
+               (pname (symbol-name name)))
+          (dolist (pkg (list-all-packages))
+            (let ((sym (find-symbol pname pkg)))
+              (when (and sym (not (member sym seen :test 'eq)))
+                (let ((new (get-source-alist sym)))
+                  (when new
+                    (setq info (nconc new info))
+                    (push sym found)))
+                (push sym seen))))
+          (when found
+            (setq msg (format nil "No definitions for ~s, found ~s instead"
+                              name (if (cdr found) found (car found)))))))
+      (if info
+        (if (cdr info)
+          (progn
+            (when msg (loud-message msg))
+            (hemlock-ext:open-sequence-dialog
+             :title (format nil "Definitions of ~s" name)
+             :sequence info
+             :action #'defn-action
+             :printer #'defn-name))
+          (defn-action (car info) msg))
+        (editor-error "No known definitions for ~s" name)))))
+

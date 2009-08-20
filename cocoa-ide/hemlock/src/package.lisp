@@ -373,7 +373,7 @@
    #:read-only-listener-p
    #:all-hemlock-views
    #:open-sequence-dialog
-   #:edit-single-definition
+   #:execute-in-file-view
    #:change-active-pane
    #:send-string-to-listener
    #:buffer-process-description
