@@ -189,7 +189,7 @@ num_lisp_globals = 48		 /* MUST UPDATE THIS !!! */
 	 _node(initial_tcr)	        /* initial thread tcr */
 	 _node(image_name)	        /* --image-name argument */
 	 _node(BADfpscr_save_high)	        /* high word of FP reg used to save FPSCR */
-	 _node(BADfpscr_save)              /* saved FPSCR */
+	 _node(unwind_resume)           /* _Unwind_Resume */
 	 _node(batch_flag)	        /* -b */
 	 _node(host_platform)	        /* for runtime platform-specific stuff */
 	 _node(argv)			/* address of argv[0] */
@@ -200,7 +200,7 @@ num_lisp_globals = 48		 /* MUST UPDATE THIS !!! */
 	 _node(lisp_return_hook)	/* install lisp exception_handling */
 	 _node(double_float_one) 	/* high half of 1.0d0 */
 	 _node(short_float_zero) 	/* low half of 1.0d0 */
-	 _node(doh_head) 		/* creole objects header */
+	 _node(objc2_end_catch)         /* objc_end_catch() */
 	 _node(metering_info) 		/* address of lisp_metering global */
 	 _node(in_gc) 			/* non-zero when GC active */
 	 _node(lexpr_return1v) 		/* simpler when &lexpr called for single value. */
@@ -208,7 +208,7 @@ num_lisp_globals = 48		 /* MUST UPDATE THIS !!! */
 	 _node(all_areas) 		/* doubly-linked list of all memory areas */
 	 _node(BAD_cs_overflow_limit) 	/* limit for control-stack overflow check */
 	 _node(kernel_name) 		/* real executable name */
-	 _node(BAD_current_vs) 		/* current value-stack area */
+	 _node(objc2_begin_catch) 	/* objc_begin_catch */
 	 _node(statically_linked)	/* non-zero if -static */
 	 _node(heap_end)                /* end of lisp heap */
 	 _node(heap_start)              /* start of lisp heap */

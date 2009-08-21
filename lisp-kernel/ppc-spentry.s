@@ -1576,8 +1576,62 @@ LocalLabelPrefix[]ffcall_call_end:
 	__(check_pending_interrupt([cr1]))
         __(mtxer rzero)
         __(mtctr rzero)
+        __ifdef([PPC64])
+         __ifdef([DARWIN])
+          __(li imm3,1<<TCR_FLAG_BIT_FOREIGN_EXCEPTION)
+          __(ld imm4,tcr.flags(rcontext))
+          __(and. imm3,imm3,imm4)
+          __(bne cr0,0f)
+         __endif
+        __endif
 	__(blr)
-
+        __ifdef([PPC64])
+         __ifdef([DARWIN])
+0:        /* Got here because TCR_FLAG_BIT_FOREIGN_EXCEPTION */
+          /* was set in tcr.flags.  Clear that bit. */
+          __(andc imm4,imm4,imm3)
+          __(std imm4,tcr.flags(rcontext))
+ 	  /* Unboxed foreign exception (likely an NSException) in %imm0. */
+	  /* Box it, then signal a lisp error. */
+          __(Misc_Alloc_Fixed(arg_z,imm1,macptr.size))
+          __(std imm0,macptr.address(arg_z))
+          __(li arg_y,XFOREIGNEXCEPTION)
+          __(set_nargs(2))
+          __(b _SPksignalerr)
+        /* Handle exceptions, for ObjC 2.0 */
+LocalLabelPrefix[]ffcallLandingPad:      
+          __(mr save1,r3)
+          __(cmpdi r4,1)
+          __(beq 1f)
+LocalLabelPrefix[]ffcallUnwindResume:
+          __(ref_global(r12,unwind_resume))
+          __(mtctr r12)
+          __(bctrl)
+LocalLabelPrefix[]ffcallUnwindResume_end:         
+1:        __(mr r3,save1)
+LocalLabelPrefix[]ffcallBeginCatch:
+          __(ref_global(r12,objc2_begin_catch))
+          __(mtctr r12)
+          __(bctrl)
+LocalLabelPrefix[]ffcallBeginCatch_end:          
+          __(ld save1,0(r3)) /* indirection is necessary because we don't provide type info in lsda */
+LocalLabelPrefix[]ffcallEndCatch:  
+          __(ref_global(r12,objc2_end_catch))
+          __(mtctr r12)
+          __(bctrl)              
+LocalLabelPrefix[]ffcallEndCatch_end:     
+          __(ref_global(r12,get_tcr))
+          __(mtctr r12)
+          __(li imm0,1)       
+	  __(bctrl)
+          __(ld imm2,tcr.flags(imm0))
+          __(ori imm2,imm2,1<<TCR_FLAG_BIT_FOREIGN_EXCEPTION)
+          __(std imm2,tcr.flags(imm0))
+          __(mr imm0,save1)
+	  __(b LocalLabelPrefix[]ffcall_call_end)
+LocalLabelPrefix[]ffcall_end:   
+         __endif
+        __endif
 
 /* Just like poweropen_ffcall, only we save all argument(result)
    registers in a buffer passed in arg_y on entry before returning
