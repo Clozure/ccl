@@ -92,6 +92,10 @@ contrib/README -text
 contrib/baylis/ca-demo.lisp -text
 contrib/foy/ReadMe.rtf -text
 contrib/foy/list-definitions.lisp -text
+contrib/foy/list-definitions/ReadMe.rtf -text
+contrib/foy/list-definitions/history-lists.lisp -text
+contrib/foy/list-definitions/list-definitions.lisp -text
+contrib/foy/list-definitions/load-list-definitions.lisp -text
 contrib/montuori/trivial-ldap/LICENSE.txt -text
 contrib/montuori/trivial-ldap/example.lisp -text
 contrib/montuori/trivial-ldap/trivial-ldap.asd -text
