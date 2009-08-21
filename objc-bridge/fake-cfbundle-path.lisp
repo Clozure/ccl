@@ -67,7 +67,7 @@
     
     (touch executable-path)
     (dolist (lib install-libraries)
-      (copy-file lib executable-dir :preserve-attributes t))
+      (copy-file lib executable-dir :preserve-attributes t :if-exists :supersede))
     (when install-frameworks
       (flet ((subdir (framework target)
                (ensure-directory-pathname (make-pathname :name (car (last (pathname-directory framework))) :defaults target))))
