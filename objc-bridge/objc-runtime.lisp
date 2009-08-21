@@ -387,7 +387,7 @@
     (car success)))
 
 
-(def-ccl-pointers cocoa-framework ()
+(defun load-cocoa-framework ()
   (run-in-cocoa-process-and-wait
    #'(lambda ()
        ;; We need to load and "initialize" the CoreFoundation library
@@ -396,28 +396,38 @@
        #+apple-objc
        (open-shared-library "/System/Library/Frameworks/Cocoa.framework/Cocoa")
        #+cocotron-objc
-       (let* ((path (getenv "PATH")))
-         (unwind-protect
+       (progn
+         (open-shared-library "Foundation.1.0.dll")
+         (open-shared-library "AppKit.1.0.dll")
+         ;; We may need to call #_NSInitializeProcess
+         ;; under Cocotron.  If so, we'd need to do
+         ;; so on standalone startup, too, and would
+         ;; have to heap-allocated the string vector
+         ;; and its strings.
+         #+notyet
+         (with-string-vector (argv (kernel-path))
+           (#_NSInitializeProcess 1 argv)))
+         
+       ;(#_GetCurrentEventQueue)
+       (current-ns-thread)
+       (create-void-nsthread))))
+
+(pushnew #'load-cocoa-framework *lisp-system-pointer-functions* :key #'function-name)
+
+#-cocotron
+(load-cocoa-framework)
+
+#+cocotron
+(let* ((path (getenv "PATH")))
+           (unwind-protect
               (progn
                 (setenv "PATH"
                         (format nil "~a;~a"
                                 (native-translated-namestring
                                  (truename "ccl:cocotron;"))
                                 path))
-                (open-shared-library "Foundation.1.0.dll")
-                (open-shared-library "AppKit.1.0.dll")
-                ;; We may need to call #_NSInitializeProcess
-                ;; under Cocotron.  If so, we'd need to do
-                ;; so on standalone startup, too, and would
-                ;; have to heap-allocated the string vector
-                ;; and its strings.
-                #+notyet
-                (with-string-vector (argv (kernel-path))
-                  (#_NSInitializeProcess 1 argv)))
+                (load-cocoa-framework))
            (setenv "PATH" path)))
-       ;(#_GetCurrentEventQueue)
-       (current-ns-thread)
-       (create-void-nsthread))))
 
 
 (defun find-cfstring-sections ()
