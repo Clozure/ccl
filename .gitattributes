@@ -90,8 +90,6 @@ compiler/acode-rewrite.lisp -text
 compiler/nx2.lisp -text
 contrib/README -text
 contrib/baylis/ca-demo.lisp -text
-contrib/foy/ReadMe.rtf -text
-contrib/foy/list-definitions.lisp -text
 contrib/foy/list-definitions/ReadMe.rtf -text
 contrib/foy/list-definitions/history-lists.lisp -text
 contrib/foy/list-definitions/list-definitions.lisp -text
