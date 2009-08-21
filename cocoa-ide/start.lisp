@@ -128,6 +128,7 @@
     ;; Wait until we're sure that the Cocoa event loop has started.
     (wait-on-semaphore *cocoa-application-finished-launching*)
 
+    #-cocotron                          ;needs conditionalization
     (require :easygui)
 
     (ccl::maybe-map-objc-classes t)
@@ -141,10 +142,11 @@
       (when missing
         (break "ObjC classes ~{~&~a~} are declared but not defined." missing)))
 
+    #-cocotron
     (ccl::touch bundle-path)
 
     (let ((image-file (make-pathname :name (ccl::standard-kernel-name) :type nil :version nil
-                                     :defaults (merge-pathnames ";Contents;MacOS;" bundle-path))))
+                                     :defaults (merge-pathnames (format nil";Contents;~a;" #+darwin-target "MacOS" #+cocotron "Windows")  bundle-path))))
       (format *error-output* "~2%Saving application to ~a~2%" (truename bundle-path))
       (force-output *error-output*)
       (ensure-directories-exist image-file)
