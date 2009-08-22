@@ -108,6 +108,7 @@
 #define Ira0 Itemp2
 #define Inargs Iimm2
 #define Ixfn Itemp1
+#define Ifp Irbp
 
 
 #define nbits_in_word 64L
@@ -483,7 +484,7 @@ typedef struct tcr {
     float f;
   } single_float_convert;
   struct tcr* linear;
-  LispObj *save_rbp;            /* RBP when in foreign code */
+  LispObj *save_fp;            /* RBP when in foreign code */
   u32_t lisp_mxcsr;
   u32_t foreign_mxcsr;
   special_binding* db_link;	/* special binding chain head */

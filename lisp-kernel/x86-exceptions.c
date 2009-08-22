@@ -479,13 +479,8 @@ create_exception_callback_frame(ExceptionInformation *xp, TCR *tcr)
   push_on_lisp_stack(xp,relative_pc);
   push_on_lisp_stack(xp,nominal_function);
   push_on_lisp_stack(xp,0);
-#ifdef X8664
-  push_on_lisp_stack(xp,xpGPR(xp,Irbp));
-  xpGPR(xp,Irbp) = xpGPR(xp,Isp);
-#else
-  push_on_lisp_stack(xp,xpGPR(xp,Iebp));
-  xpGPR(xp,Iebp) = xpGPR(xp,Isp);
-#endif
+  push_on_lisp_stack(xp,xpGPR(xp,Ifp));
+  xpGPR(xp,Ifp) = xpGPR(xp,Isp);
   return xpGPR(xp,Isp);
 }
 
@@ -596,10 +591,7 @@ callback_to_lisp (TCR * tcr, LispObj callback_macptr, ExceptionInformation *xp,
   set_mxcsr(0x1f80);
 
   /* Put the active stack pointers where .SPcallback expects them */
-#ifdef X8664
-  tcr->save_vsp = (LispObj *) xpGPR(xp, Isp);
-  tcr->save_rbp = (LispObj *) xpGPR(xp, Irbp);
-#else
+#ifdef X8632
   tcr->node_regs_mask = X8632_DEFAULT_NODE_REGS_MASK;
 
   *--vsp = tcr->save0;
@@ -608,10 +600,9 @@ callback_to_lisp (TCR * tcr, LispObj callback_macptr, ExceptionInformation *xp,
   *--vsp = tcr->save3;
   *--vsp = tcr->next_method_context;
   xpGPR(xp, Isp) = (LispObj)vsp;
-
-  tcr->save_vsp = (LispObj *)xpGPR(xp, Isp);
-  tcr->save_ebp = (LispObj *)xpGPR(xp, Iebp);
 #endif
+  tcr->save_vsp = (LispObj *)xpGPR(xp, Isp);
+  tcr->save_fp = (LispObj *)xpGPR(xp, Ifp);
 
   /* Call back.  The caller of this function may have modified stack/frame
      pointers (and at least should have called prepare_for_callback()).
@@ -642,20 +633,12 @@ callback_for_interrupt(TCR *tcr, ExceptionInformation *xp)
 {
   LispObj *save_vsp = (LispObj *)xpGPR(xp,Isp),
     word_beyond_vsp = save_vsp[-1],
-#ifdef X8664
-    save_rbp = xpGPR(xp,Irbp),
-#else
-    save_ebp = xpGPR(xp,Iebp),
-#endif
+    save_fp = xpGPR(xp,Ifp),
     xcf = create_exception_callback_frame(xp, tcr);
   int save_errno = errno;
 
   callback_to_lisp(tcr, nrs_CMAIN.vcell,xp, xcf, 0, 0, 0, 0);
-#ifdef X8664
-  xpGPR(xp,Irbp) = save_rbp;
-#else
-  xpGPR(xp,Iebp) = save_ebp;
-#endif
+  xpGPR(xp,Ifp) = save_fp;
   xpGPR(xp,Isp) = (LispObj)save_vsp;
   save_vsp[-1] = word_beyond_vsp;
   errno = save_errno;
@@ -667,12 +650,8 @@ handle_error(TCR *tcr, ExceptionInformation *xp)
   pc program_counter = (pc)xpPC(xp);
   unsigned char op0 = program_counter[0], op1 = program_counter[1];
   LispObj rpc, errdisp = nrs_ERRDISP.vcell,
-    save_vsp = xpGPR(xp,Isp), xcf0;
-#ifdef X8664
-  LispObj save_rbp = xpGPR(xp,Irbp);
-#else
-  LispObj save_ebp = xpGPR(xp,Iebp);
-#endif
+    save_vsp = xpGPR(xp,Isp), xcf0,
+    save_fp = xpGPR(xp,Ifp);
   int skip;
 
   if ((fulltag_of(errdisp) == fulltag_misc) &&
@@ -702,11 +681,7 @@ handle_error(TCR *tcr, ExceptionInformation *xp)
         
       skip = 0;
     }
-#ifdef X8664
-    xpGPR(xp,Irbp) = save_rbp;
-#else
-    xpGPR(xp,Iebp) = save_ebp;
-#endif
+    xpGPR(xp,Ifp) = save_fp;
     xpGPR(xp,Isp) = save_vsp;
     if ((op0 == 0xcd) && (op1 == 0xc7)) {
       /* Continue after an undefined function call. The function
@@ -720,11 +695,7 @@ handle_error(TCR *tcr, ExceptionInformation *xp)
          called when we resume.
       */
       LispObj *vsp =(LispObj *)save_vsp, ra = *vsp;
-#ifdef X8664
-      int nargs = (xpGPR(xp, Inargs) & 0xffff)>>fixnumshift;
-#else
       int nargs = xpGPR(xp, Inargs)>>fixnumshift;
-#endif
 
 #ifdef X8664
       if (nargs > 3) {
@@ -792,11 +763,7 @@ do_soft_stack_overflow(ExceptionInformation *xp, protected_area_ptr prot_area, B
       */
   lisp_protection_kind which = prot_area->why;
   Boolean on_TSP = (which == kTSPsoftguard);
-#ifdef X8664
-  LispObj save_rbp = xpGPR(xp,Irbp);
-#else
-  LispObj save_ebp = xpGPR(xp,Iebp);
-#endif
+  LispObj save_fp = xpGPR(xp,Ifp);
   LispObj save_vsp = xpGPR(xp,Isp), 
     xcf,
     cmain = nrs_CMAIN.vcell;
@@ -815,12 +782,8 @@ do_soft_stack_overflow(ExceptionInformation *xp, protected_area_ptr prot_area, B
     soft = a->softprot;
     unprotect_area(soft);
     xcf = create_exception_callback_frame(xp, tcr);
-    skip = callback_to_lisp(tcr, nrs_CMAIN.vcell, xp, xcf, SIGSEGV, on_TSP, 0, 0);
-#ifdef X8664
-    xpGPR(xp,Irbp) = save_rbp;
-#else
-    xpGPR(xp,Iebp) = save_ebp;
-#endif
+    skip = callback_to_lisp(tcr, cmain, xp, xcf, SIGSEGV, on_TSP, 0, 0);
+    xpGPR(xp,Ifp) = save_fp;
     xpGPR(xp,Isp) = save_vsp;
     xpPC(xp) += skip;
     return true;
@@ -832,11 +795,7 @@ Boolean
 is_write_fault(ExceptionInformation *xp, siginfo_t *info)
 {
 #ifdef DARWIN
-#ifdef X8664
   return (UC_MCONTEXT(xp)->__es.__err & 0x2) != 0;
-#else
-  return (xp->uc_mcontext->__es.__err & 0x2) != 0;
-#endif
 #endif
 #if defined(LINUX) || defined(SOLARIS)
   return (xpGPR(xp,REG_ERR) & 0x2) != 0;
@@ -906,12 +865,8 @@ handle_floating_point_exception(TCR *tcr, ExceptionInformation *xp, siginfo_t *i
 {
   int code,skip;
   LispObj  xcf, cmain = nrs_CMAIN.vcell,
-    save_vsp = xpGPR(xp,Isp);
-#ifdef X8664
-  LispObj save_rbp = xpGPR(xp,Irbp);
-#else
-  LispObj save_ebp = xpGPR(xp,Iebp);
-#endif
+    save_vsp = xpGPR(xp,Isp),
+    save_fp = xpGPR(xp,Ifp);
 #ifdef WINDOWS
   code = info->ExceptionCode;
 #else
@@ -923,11 +878,7 @@ handle_floating_point_exception(TCR *tcr, ExceptionInformation *xp, siginfo_t *i
     xcf = create_exception_callback_frame(xp, tcr);
     skip = callback_to_lisp(tcr, cmain, xp, xcf, SIGFPE, code, 0, 0);
     xpPC(xp) += skip;
-#ifdef X8664
-    xpGPR(xp,Irbp) = save_rbp;
-#else
-    xpGPR(xp,Iebp) = save_ebp;
-#endif
+    xpGPR(xp,Ifp) = save_fp;
     xpGPR(xp,Isp) = save_vsp;
     return true;
   } else {
@@ -1440,7 +1391,7 @@ LispObj *
 tcr_frame_ptr(TCR *tcr)
 {
   ExceptionInformation *xp;
-  LispObj *bp;
+  LispObj *fp;
 
   if (tcr->pending_exception_context)
     xp = tcr->pending_exception_context;
@@ -1450,19 +1401,11 @@ tcr_frame_ptr(TCR *tcr)
     xp = NULL;
   }
   if (xp) {
-#ifdef X8664
-    bp = (LispObj *) xpGPR(xp, Irbp);
-#else
-    bp = (LispObj *) xpGPR(xp, Iebp);
-#endif
+    fp = (LispObj *)xpGPR(xp, Ifp);
   } else {
-#ifdef X8664
-    bp = tcr->save_rbp;
-#else
-    bp = tcr->save_ebp;
-#endif
+    fp = tcr->save_fp;
   }
-  return bp;
+  return fp;
 }
 
 
@@ -1661,11 +1604,7 @@ interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
         (tcr->valence != TCR_STATE_LISP) ||
         (tcr->unwinding != 0) ||
         ! stack_pointer_on_vstack_p(xpGPR(context,Isp), tcr) ||
-#ifdef X8664
-        ! stack_pointer_on_vstack_p(xpGPR(context,Irbp), tcr)) {
-#else
-        ! stack_pointer_on_vstack_p(xpGPR(context,Iebp), tcr)) {
-#endif
+        ! stack_pointer_on_vstack_p(xpGPR(context,Ifp), tcr)) {
       tcr->interrupt_pending = (((natural) 1)<< (nbits_in_word - ((natural)1)));
     } else {
       LispObj cmain = nrs_CMAIN.vcell;

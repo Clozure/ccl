@@ -73,6 +73,7 @@
 #define Ira0 Itemp0
 #define Inargs Itemp1
 #define Ixfn Itemp1
+#define Ifp Iebp
 
 /* MMX register offsets from where mm0 is found in uc_mcontext.fs */
 #define Imm0 0
@@ -423,7 +424,7 @@ typedef struct tcr {
   LispObj save1;
   LispObj save2;
   LispObj save3;
-  LispObj *save_ebp;		/* EBP when in foreign code */
+  LispObj *save_fp;		/* EBP when in foreign code */
   u32_t lisp_mxcsr;
   u32_t foreign_mxcsr;
   special_binding *db_link;     /* special binding chain head */

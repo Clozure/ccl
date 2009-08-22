@@ -137,32 +137,26 @@ interrupt_level_description(TCR *tcr)
 }
 
 void
-plbt_sp(LispObj currentRBP)
+plbt_sp(LispObj current_fp)
 {
   area *vs_area, *cs_area;
-  
-{
-    TCR *tcr = (TCR *)get_tcr(true);
-    char *ilevel = interrupt_level_description(tcr);
-    vs_area = tcr->vs_area;
-    cs_area = tcr->cs_area;
-    if ((((LispObj) ptr_to_lispobj(vs_area->low)) > currentRBP) ||
-        (((LispObj) ptr_to_lispobj(vs_area->high)) < currentRBP)) {
-#ifdef X8664
-      currentRBP = (LispObj) (tcr->save_rbp);
-#else
-      currentRBP = (LispObj) (tcr->save_ebp);
-#endif
-    }
-    if ((((LispObj) ptr_to_lispobj(vs_area->low)) > currentRBP) ||
-        (((LispObj) ptr_to_lispobj(vs_area->high)) < currentRBP)) {
-      Dprintf("\nFramepointer [#x%lX] in unknown area.", currentRBP);
-    } else {
-      fprintf(dbgout, "current thread: tcr = 0x%lx, native thread ID = 0x%lx, interrupts %s\n", tcr, tcr->native_thread_id, ilevel);
-      walk_stack_frames((lisp_frame *) ptr_from_lispobj(currentRBP), (lisp_frame *) (vs_area->high));
-      /*      walk_other_areas();*/
-    }
-  } 
+  TCR *tcr = (TCR *)get_tcr(true);
+  char *ilevel = interrupt_level_description(tcr);
+
+  vs_area = tcr->vs_area;
+  cs_area = tcr->cs_area;
+  if ((((LispObj) ptr_to_lispobj(vs_area->low)) > current_fp) ||
+      (((LispObj) ptr_to_lispobj(vs_area->high)) < current_fp)) {
+    current_fp = (LispObj) (tcr->save_fp);
+  }
+  if ((((LispObj) ptr_to_lispobj(vs_area->low)) > current_fp) ||
+      (((LispObj) ptr_to_lispobj(vs_area->high)) < current_fp)) {
+    Dprintf("\nFrame pointer [#x" LISP "] in unknown area.", current_fp);
+  } else {
+    fprintf(dbgout, "current thread: tcr = 0x" LISP ", native thread ID = 0x" LISP ", interrupts %s\n", tcr, tcr->native_thread_id, ilevel);
+    walk_stack_frames((lisp_frame *) ptr_from_lispobj(current_fp), (lisp_frame *) (vs_area->high));
+    /*      walk_other_areas();*/
+  }
 }
 
 
