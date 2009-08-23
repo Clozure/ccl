@@ -1,4 +1,4 @@
-/* Copyright (C) 1994-2001 Digitool, Inc */
+ /* Copyright (C) 1994-2001 Digitool, Inc */
 /* This file is part of OpenMCL.   */
 
 /* OpenMCL is licensed under the terms of the Lisp Lesser GNU Public */
@@ -1630,6 +1630,47 @@ LocalLabelPrefix[]ffcallEndCatch_end:
           __(mr imm0,save1)
 	  __(b LocalLabelPrefix[]ffcall_call_end)
 LocalLabelPrefix[]ffcall_end:   
+
+        	.section __DATA,__gcc_except_tab
+GCC_except_table0:
+	  .align 3
+LLSDA1:
+	  .byte	0xff	/* @LPStart format (omit) */
+	  .byte	0x0	/* @TType format (absolute) */
+	  .byte	0x4d	/* uleb128 0x4d; @TType base offset */
+	  .byte	0x3	/* call-site format (udata4) */
+	  .byte	0x41	/* uleb128 0x41; Call-site table length */
+	
+	  .long Lffcall_setup-Lffcall	/* region 0 start */
+	  .long Lffcall_setup_end-Lffcall_setup	/* length */
+	  .long	0x0	/* landing pad */
+	  .byte	0x0	/* uleb128 0x0; action */
+        
+	  .long Lffcall_call-Lffcall	/* region 1 start */
+	  .long Lffcall_call_end-Lffcall_call	/* length */
+	  .long LffcallLandingPad-Lffcall	/* landing pad */
+	  .byte	0x1	/* uleb128 0x1; action */
+        
+	  .long LffcallUnwindResume-Lffcall	/* region 2 start */
+	  .long LffcallUnwindResume_end-LffcallUnwindResume	/* length */
+	  .long	0x0	/* landing pad */
+	  .byte	0x0	/* uleb128 0x0; action */
+	
+	  .long LffcallBeginCatch-Lffcall	/* region 3 start */
+	  .long LffcallBeginCatch_end-LffcallBeginCatch	/* length */
+	  .long 0	/* landing pad */
+	  .byte	0x0	/* uleb128 0x0; action */
+        
+	  .long LffcallEndCatch-Lffcall
+	  .long LffcallEndCatch_end-LffcallEndCatch	/* length */
+	  .long	0x0	/* landing pad */
+	  .byte	0x0	/* uleb128 0x0; action */
+        
+	  .byte	0x1	/* Action record table */
+	  .byte	0x0
+	  .align 3
+	  .quad	0       /* _OBJC_EHTYPE_$_NSException */
+          .text
          __endif
         __endif
 
@@ -1638,6 +1679,7 @@ LocalLabelPrefix[]ffcall_end:
    to lisp.  (We have to do this in the ffcall glue here, because
    r9 and r10 - at least - are overloaded as dedicated lisp registers */
 _spentry(poweropen_ffcall_return_registers)
+LocalLabelPrefix[]ffcall_return_registers:                
 	__(mflr loc_pc)
 	__(vpush_saveregs())		/* Now we can use save0-save7 to point to stacks  */
         __(ldr(save7,macptr.address(arg_y)))
@@ -1674,6 +1716,7 @@ _spentry(poweropen_ffcall_return_registers)
         __else
 	 __(li rcontext,0)
         __endif
+LocalLabelPrefix[]ffcall_return_registers_setup: 
 	__(mtctr nargs)
 	__(ldr(r3,c_frame.param0(sp)))
 	__(ldr(r4,c_frame.param1(sp)))
@@ -1686,7 +1729,10 @@ _spentry(poweropen_ffcall_return_registers)
 	/* Darwin is allegedly very picky about what register points */
 	/* to the function on entry.  */
 	__(mr r12,nargs)
+LocalLabelPrefix[]ffcall_return_registers_setup_end: 
+LocalLabelPrefix[]ffcall_return_registers_call:
 	__(bctrl)
+LocalLabelPrefix[]ffcall_return_registers_call_end:
         __(str(r3,0*node_size(save7)))        
         __(str(r4,1*node_size(save7)))        
         __(str(r5,2*node_size(save7)))        
@@ -1753,8 +1799,103 @@ _spentry(poweropen_ffcall_return_registers)
 	__(check_pending_interrupt([cr1]))
         __(mtxer rzero)
         __(mtctr rzero)
+        __ifdef([DARWIN])
+         __ifdef([PPC64])
+          __(li imm3,1<<TCR_FLAG_BIT_FOREIGN_EXCEPTION)
+          __(ld imm4,tcr.flags(rcontext))
+          __(and. imm3,imm3,imm4)
+          __(bne 0f)
+         __endif
+        __endif
 	__(blr)
 
+        __ifdef([DARWIN])
+         __ifdef([PPC64])
+0:        /* Got here because TCR_FLAG_BIT_FOREIGN_EXCEPTION */
+          /* was set in tcr.flags.  Clear that bit. */
+          __(andc imm4,imm4,imm3)
+          __(std imm4,tcr.flags(rcontext))
+ 	  /* Unboxed foreign exception (likely an NSException) in %imm0. */
+	  /* Box it, then signal a lisp error. */
+          __(Misc_Alloc_Fixed(arg_z,imm1,macptr.size))
+          __(std imm0,macptr.address(arg_z))
+          __(li arg_y,XFOREIGNEXCEPTION)
+          __(set_nargs(2))
+          __(b _SPksignalerr)
+        /* Handle exceptions, for ObjC 2.0 */
+LocalLabelPrefix[]ffcall_return_registersLandingPad:      
+          __(mr save1,r3)
+          __(cmpdi r4,1)
+          __(beq 1f)
+LocalLabelPrefix[]ffcall_return_registersUnwindResume:
+          __(ref_global(r12,unwind_resume))
+          __(mtctr r12)
+          __(bctrl)
+LocalLabelPrefix[]ffcall_return_registersUnwindResume_end:         
+1:        __(mr r3,save1)
+LocalLabelPrefix[]ffcall_return_registersBeginCatch:
+          __(ref_global(r12,objc2_begin_catch))
+          __(mtctr r12)
+          __(bctrl)
+LocalLabelPrefix[]ffcall_return_registersBeginCatch_end:          
+          __(ld save1,0(r3)) /* indirection is necessary because we don't provide type info in lsda */
+LocalLabelPrefix[]ffcall_return_registersEndCatch:  
+          __(ref_global(r12,objc2_end_catch))
+          __(mtctr r12)
+          __(bctrl)              
+LocalLabelPrefix[]ffcall_return_registersEndCatch_end:     
+          __(ref_global(r12,get_tcr))
+          __(mtctr r12)
+          __(li imm0,1)       
+	  __(bctrl)
+          __(ld imm2,tcr.flags(imm0))
+          __(ori imm2,imm2,1<<TCR_FLAG_BIT_FOREIGN_EXCEPTION)
+          __(std imm2,tcr.flags(imm0))
+          __(mr imm0,save1)
+	  __(b LocalLabelPrefix[]ffcall_return_registers_call_end)
+LocalLabelPrefix[]ffcall_return_registers_end:   
+	  .section __DATA,__gcc_except_tab
+GCC_except_table1:
+	  .align 3
+LLSDA2:
+	  .byte	0xff	/* @LPStart format (omit) */
+  	  .byte	0x0	/* @TType format (absolute) */
+	  .byte	0x4d	/* uleb128 0x4d; @TType base offset */
+	  .byte	0x3	/* call-site format (udata4) */
+	  .byte	0x41	/* uleb128 0x41; Call-site table length */
+	
+	  .long Lffcall_return_registers_setup-Lffcall_return_registers	/* region 0 start */
+	  .long Lffcall_return_registers_setup_end-Lffcall_return_registers_setup	/* length */
+	  .long	0x0	/* landing pad */
+	  .byte	0x0	/* uleb128 0x0; action */
+        
+	  .long Lffcall_return_registers_call-Lffcall_return_registers	/* region 1 start */
+	  .long Lffcall_return_registers_call_end-Lffcall_return_registers_call	/* length */
+	  .long Lffcall_return_registersLandingPad-Lffcall_return_registers	/* landing pad */
+	  .byte	0x1	/* uleb128 0x1; action */
+        
+	  .long Lffcall_return_registersUnwindResume-Lffcall_return_registers	/* region 2 start */
+	  .long Lffcall_return_registersUnwindResume_end-Lffcall_return_registersUnwindResume	/* length */
+	  .long	0x0	/* landing pad */
+	  .byte	0x0	/* uleb128 0x0; action */
+	
+	  .long Lffcall_return_registersBeginCatch-Lffcall_return_registers	/* region 3 start */
+	  .long Lffcall_return_registersBeginCatch_end-Lffcall_return_registersBeginCatch	/* length */
+	  .long 0	/* landing pad */
+	  .byte	0x0	/* uleb128 0x0; action */
+        
+	  .long Lffcall_return_registersEndCatch-Lffcall_return_registers
+	  .long Lffcall_return_registersEndCatch_end-Lffcall_return_registersEndCatch	/* length */
+	  .long	0x0	/* landing pad */
+	  .byte	0x0	/* uleb128 0x0; action */
+	  .byte	0x1	/* Action record table */
+	  .byte	0x0
+	  .align 3
+	  .quad	0       /* _OBJC_EHTYPE_$_NSException */
+          .text
+         __endif
+        __endif
+                      
 
         	
 /* Signal an error synchronously, via %ERR-DISP.  */
@@ -6831,6 +6972,89 @@ _spentry(nmkunwind)
         __(b _SPbind_interrupt_level)
 
 	
+        __ifdef([DARWIN])
+         __ifdef([PPC64])
+	
+	.section __TEXT,__eh_frame,coalesced,no_toc+strip_static_syms+live_support
+EH_frame1:
+	.set L$set$12,LECIE1-LSCIE1
+	.long L$set$12	/* Length of Common Information Entry */
+LSCIE1:
+	.long	0x0	/* CIE Identifier Tag */
+	.byte	0x1	/* CIE Version */
+	.ascii "zPLR\0"	/* CIE Augmentation */
+	.byte	0x1	/* uleb128 0x1; CIE Code Alignment Factor */
+	.byte	0x78	/* sleb128 -8; CIE Data Alignment Factor */
+	.byte	0x10	/* CIE RA Column */
+	.byte	0x7
+	.byte	0x8c
+	.quad   lisp_globals.objc_2_personality
+	.byte	0x10	/* LSDA Encoding (pcrel) */
+	.byte	0x10	/* FDE Encoding (pcrel) */
+	.byte	0xc
+	.byte	0x1
+	.byte	0x0
+	.byte	0xc	/* DW_CFA_def_cfa */
+	.byte	0x7	/* uleb128 0x7 */
+	.byte	0x8	/* uleb128 0x8 */
+	.byte	0x90	/* DW_CFA_offset, column 0x10 */
+	.byte	0x1	/* uleb128 0x1 */
+	.align 3
+LECIE1:
+        .globl _SPffcall.eh
+_SPffcall.eh:
+        .long LEFDEffcall-LSFDEffcall
+LSFDEffcall:      
+        .long LSFDEffcall-EH_frame1 /* FDE CIE offset */
+        .quad Lffcall-. /* FDE Initial Location */
+        .quad Lffcall_end-Lffcall /* FDE address range */
+        .byte 8 /* uleb128 0x8; Augmentation size */
+        .quad LLSDA1-.           /* Language Specific Data Area */
+	.byte	0x4	/* DW_CFA_advance_loc4 */
+	.long Lffcall_setup-Lffcall
+	.byte	0xe	/* DW_CFA_def_cfa_offset */
+	.byte	0x10	/* uleb128 0x10 */
+	.byte	0x86	/* DW_CFA_offset, column 0x6 */
+	.byte	0x2	/* uleb128 0x2 */
+	.byte	0x4	/* DW_CFA_advance_loc4 */
+	.long Lffcall_setup_end-Lffcall_setup
+	.byte	0xd	/* DW_CFA_def_cfa_register */
+	.byte	0x6	/* uleb128 0x6 */
+	.byte	0x4	/* DW_CFA_advance_loc4 */
+	.long Lffcall_call_end-Lffcall_call
+	.byte	0x83	/* DW_CFA_offset, column 0x3 */
+	.byte	0x3	/* uleb128 0x3 */
+	.align 3
+LEFDEffcall:
+        .globl _SPffcall_return_registers.eh
+_SPffcall_return_registers.eh:
+        .set Lfmh,LEFDEffcall_return_registers-LSFDEffcall_return_registers
+        .long Lfmh
+LSFDEffcall_return_registers:      
+        .long LSFDEffcall_return_registers-EH_frame1 /* FDE CIE offset */
+        .quad Lffcall_return_registers-. /* FDE Initial Location */
+        .quad Lffcall_return_registers_end-Lffcall_return_registers /* FDE address range */
+        .byte 8 /* uleb128 0x8; Augmentation size */
+        .quad LLSDA2-.           /* Language Specific Data Area */
+	.byte	0x4	/* DW_CFA_advance_loc4 */
+	.long Lffcall_return_registers_setup-Lffcall_return_registers
+	.byte	0xe	/* DW_CFA_def_cfa_offset */
+	.byte	0x10	/* uleb128 0x10 */
+	.byte	0x86	/* DW_CFA_offset, column 0x6 */
+	.byte	0x2	/* uleb128 0x2 */
+	.byte	0x4	/* DW_CFA_advance_loc4 */
+	.long Lffcall_return_registers_setup_end-Lffcall_return_registers_setup
+	.byte	0xd	/* DW_CFA_def_cfa_register */
+	.byte	0x6	/* uleb128 0x6 */
+	.byte	0x4	/* DW_CFA_advance_loc4 */
+	.long Lffcall_return_registers_call_end-Lffcall_return_registers_call
+	.byte	0x83	/* DW_CFA_offset, column 0x3 */
+	.byte	0x3	/* uleb128 0x3 */
+	.align 3
+LEFDEffcall_return_registers:
+        .text
+         __endif
+        __endif
 
 
                                 
