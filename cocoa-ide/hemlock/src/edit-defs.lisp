@@ -312,17 +312,22 @@
 (defun find-definition-by-context (def-type full-name)
   (let* ((base-name (ccl::definition-base-name def-type full-name))
 	 (string (string base-name))
-         (pattern (new-search-pattern :string-insensitive :forward string)))
-    (with-mark ((mark (current-point)))
-      (when (loop
-	       while (find-pattern mark pattern)
-	       thereis (and (match-definition-context mark def-type full-name)
-			    (backward-up-list mark))
-	       do (character-offset mark 1))
+         (pattern (new-search-pattern :string-insensitive :forward string))
+         (found 0))
+    (with-mark ((mark (buffer-start-mark (current-buffer))))
+      (when (or (loop
+                  while (and (find-pattern mark pattern) (incf found))
+                  thereis (and (match-definition-context mark def-type full-name)
+                               (backward-up-list mark))
+                  do (character-offset mark 1))
+                ;; if there is only one instance, just go there
+                (and (eql found 1) (find-pattern (buffer-start mark) pattern))
+                ;; Else should try again, being less strict...
+                )
         (move-point-leaving-mark mark)))))
 
 (defun move-point-leaving-mark (target)
-  (let ((point (current-point)))
+  (let ((point (current-point-collapsing-selection)))
     (push-new-buffer-mark point)
     (move-mark point target)
     point))
@@ -341,18 +346,21 @@
                                                                  pattern)))))
           (declare (inline search))
           (with-mark ((temp-mark (current-point)))
-            (unless (move-to-absolute-position temp-mark start-pos)
-              (buffer-end temp-mark))
             (unless full-text
               ;; Someday, might only store a snippet for toplevel, so inner notes
               ;; might not have text, but can still find them through the toplevel.
               (let* ((toplevel (ccl::source-note-toplevel-note source))
                      (toplevel-start-pos (and (not (eq toplevel source))
-                                              (ccl:source-note-start-pos toplevel))))
-                (when toplevel-start-pos
+                                              (ccl:source-note-start-pos toplevel)))
+                     (text (and toplevel-start-pos (ccl:source-note-text toplevel))))
+                (when text
                   (setq offset (- start-pos toplevel-start-pos))
                   (setq start-pos toplevel-start-pos)
-                  (setq full-text (ccl:source-note-text toplevel)))))
+                  (setq full-text text)
+                  (character-offset temp-mark (- offset)))))
+            (unless (move-to-absolute-position temp-mark start-pos)
+              (buffer-end temp-mark))
+
             (when (or (null full-text)
                       (or (search temp-mark full-text :forward)
                           (search temp-mark full-text :backward))
@@ -366,7 +374,6 @@
                     (buffer-end point))))))))))
 
 (defun find-definition-in-buffer (def-type full-name source)
-  (current-point-collapsing-selection)
   (or (and (ccl:source-note-p source)
            (move-to-source-note source))
       (find-definition-by-context def-type full-name)
