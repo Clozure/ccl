@@ -544,7 +544,7 @@
                    (tsp-range (inspector::make-tsp-stack-range tcr context))
                    (vsp-range (inspector::make-vsp-stack-range tcr context))
                    (csp-range (inspector::make-csp-stack-range tcr context))
-                   (process (context-process context)))
+                   (process (ccl::tcr->process tcr)))
               (make-instance 'sequence-window-controller
                              :sequence (cdr (ccl::bt.restarts context))
                              :result-callback #'(lambda (r)
