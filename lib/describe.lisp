@@ -19,6 +19,8 @@
   (:export "MAKE-INSPECTOR"
            "COMPUTE-LINE-COUNT"
            "LINE-N"
+           "INSPECTOR-OBJECT"
+           "INSPECTOR-LINE-COUNT"
 
            "*INSPECTOR-DISASSEMBLY*"))
 
