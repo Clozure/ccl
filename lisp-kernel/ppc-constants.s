@@ -229,7 +229,7 @@ num_lisp_globals = 48		 /* MUST UPDATE THIS !!! */
 	 _node(subprims_base) 		/* address of dynamic subprims jump table */
 	 _node(saveR13)			/* probably don]t really need this */
 	 _node(saveTOC)                 /* where the 68K emulator stores the  emulated regs */
-	 _node(tcr_lock)		/* this thread]s exception frame chain */
+	 _node(objc_2_personality)      /* exception "personality routine" address for ObjC 2.0 */ 
 	 _node(kernel_imports) 		/* some things we need imported for us */
 	 _node(interrupt_signal)	/* signal used by PROCESS-INTERRUPT */
 	 _node(tcr_count) 		/* tcr_id for next tcr */
