@@ -1593,6 +1593,7 @@ LocalLabelPrefix[]ffcall_call_end:
           __(std imm4,tcr.flags(rcontext))
  	  /* Unboxed foreign exception (likely an NSException) in %imm0. */
 	  /* Box it, then signal a lisp error. */
+          __(li imm1,macptr_header)
           __(Misc_Alloc_Fixed(arg_z,imm1,macptr.size))
           __(std imm0,macptr.address(arg_z))
           __(li arg_y,XFOREIGNEXCEPTION)
@@ -1817,6 +1818,7 @@ LocalLabelPrefix[]ffcall_return_registers_call_end:
           __(std imm4,tcr.flags(rcontext))
  	  /* Unboxed foreign exception (likely an NSException) in %imm0. */
 	  /* Box it, then signal a lisp error. */
+          __(li imm1,macptr_header)
           __(Misc_Alloc_Fixed(arg_z,imm1,macptr.size))
           __(std imm0,macptr.address(arg_z))
           __(li arg_y,XFOREIGNEXCEPTION)
@@ -1853,7 +1855,7 @@ LocalLabelPrefix[]ffcall_return_registersEndCatch_end:
           __(std imm2,tcr.flags(imm0))
           __(mr imm0,save1)
 	  __(b LocalLabelPrefix[]ffcall_return_registers_call_end)
-LocalLabelPrefix[]ffcall_return_registers_end:   
+LocalLabelPrefix[]ffcall_return_registers_end:
 	  .section __DATA,__gcc_except_tab
 GCC_except_table1:
 	  .align 3
@@ -6974,6 +6976,14 @@ _spentry(nmkunwind)
 	
         __ifdef([DARWIN])
          __ifdef([PPC64])
+L_lisp_objc2_personality:       
+        __(ref_global(r12,objc_2_personality))
+        __(mtctr r12)
+        __(bctr)
+        .data
+        .globl _lisp_objc2_personality
+_lisp_objc2_personality: 
+        .quad L_lisp_objc2_personality
 	
 	.section __TEXT,__eh_frame,coalesced,no_toc+strip_static_syms+live_support
 EH_frame1:
@@ -6985,25 +6995,21 @@ LSCIE1:
 	.ascii "zPLR\0"	/* CIE Augmentation */
 	.byte	0x1	/* uleb128 0x1; CIE Code Alignment Factor */
 	.byte	0x78	/* sleb128 -8; CIE Data Alignment Factor */
-	.byte	0x10	/* CIE RA Column */
+	.byte	0x41	/* CIE RA Column */
 	.byte	0x7
-	.byte	0x8c
-	.quad   lisp_globals.objc_2_personality
+	.byte	0x9b
+	.long   _lisp_objc2_personality-.
 	.byte	0x10	/* LSDA Encoding (pcrel) */
 	.byte	0x10	/* FDE Encoding (pcrel) */
 	.byte	0xc
 	.byte	0x1
 	.byte	0x0
-	.byte	0xc	/* DW_CFA_def_cfa */
-	.byte	0x7	/* uleb128 0x7 */
-	.byte	0x8	/* uleb128 0x8 */
-	.byte	0x90	/* DW_CFA_offset, column 0x10 */
-	.byte	0x1	/* uleb128 0x1 */
 	.align 3
 LECIE1:
         .globl _SPffcall.eh
 _SPffcall.eh:
-        .long LEFDEffcall-LSFDEffcall
+        .set assembler_nonsense,LEFDEffcall-LSFDEffcall
+        .long assembler_nonsense
 LSFDEffcall:      
         .long LSFDEffcall-EH_frame1 /* FDE CIE offset */
         .quad Lffcall-. /* FDE Initial Location */
@@ -7024,8 +7030,8 @@ LSFDEffcall:
 	.long Lffcall_call_end-Lffcall_call
 	.byte	0x83	/* DW_CFA_offset, column 0x3 */
 	.byte	0x3	/* uleb128 0x3 */
-	.align 3
 LEFDEffcall:
+	.align 3
         .globl _SPffcall_return_registers.eh
 _SPffcall_return_registers.eh:
         .set Lfmh,LEFDEffcall_return_registers-LSFDEffcall_return_registers
