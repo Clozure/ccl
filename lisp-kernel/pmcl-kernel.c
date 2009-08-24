@@ -89,9 +89,6 @@ Boolean use_mach_exception_handling =
 #include <mach/vm_region.h>
 #include <mach/port.h>
 #include <sys/sysctl.h>
-
-Boolean running_under_rosetta = false;
-
 #include <dlfcn.h>
 #endif
 
@@ -1472,18 +1469,6 @@ check_os_version(char *progname)
     fprintf(dbgout, "\n%s requires %s version %s or later; the current version is %s.\n", progname, uts.sysname, min_os_version, uts.release);
     exit(1);
   }
-#ifdef PPC
-#ifdef DARWIN
-  {
-    char *hosttype = getenv("HOSTTYPE");
-    if (hosttype && !strncmp("intel", hosttype, 5)) {
-      running_under_rosetta = true;
-      use_mach_exception_handling = false;
-      reserved_area_size = 1U << 30;
-    }
-  }
-#endif
-#endif
 #endif
 }
 
@@ -1966,21 +1951,12 @@ set_nil(LispObj r)
 void
 xMakeDataExecutable(void *start, unsigned long nbytes)
 {
+#ifndef X86
   extern void flush_cache_lines();
   natural ustart = (natural) start, base, end;
   
   base = (ustart) & ~(cache_block_size-1);
   end = (ustart + nbytes + cache_block_size - 1) & ~(cache_block_size-1);
-#ifdef DARWIN
-  if (running_under_rosetta) {
-    /* We probably need to flush something's cache even if running
-       under Rosetta, but (a) this is agonizingly slow and (b) we're
-       dying before we get to the point where this would matter.
-    */
-    return;
-  }
-#endif
-#ifndef X86
   flush_cache_lines(base, (end-base)/cache_block_size, cache_block_size);
 #endif
 }
