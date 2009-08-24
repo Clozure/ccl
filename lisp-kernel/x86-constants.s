@@ -68,11 +68,11 @@ define([seen_aok_bit],[28])
 num_lisp_globals = 48		 /* MUST UPDATE THIS !!!   */
 	
 	_struct(lisp_globals,lisp_globals_limit-(num_lisp_globals*node_size))
-	 _node(initial_tcr)	        /* initial thread tcr   */
-	 _node(image_name)	        /* --image-name argument   */
-	 _node(BADfpscr_save_high)      /* high word of FP reg used to save FPSCR   */
+	 _node(initial_tcr)	        /* initial thread tcr */
+	 _node(image_name)	        /* --image-name argument */
+	 _node(BADfpscr_save_high)      /* high word of FP reg used to save FPSCR */
 	 _node(unwind_resume)           /* _Unwind_Resume */
-	 _node(batch_flag)	        /* -b   */
+	 _node(batch_flag)	        /* -b */
 	 _node(host_platform)	        /* for runtime platform-specific stuff   */
 	 _node(argv)			/* address of argv[0]   */
 	 _node(errno)		        /* ADDRESS of errno   */
