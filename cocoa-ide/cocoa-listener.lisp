@@ -48,6 +48,8 @@
    (cur-string-pos :initform 0)
    (cur-env :initform nil)
    (cur-sstream :initform nil)
+   (cur-offset :initform nil)
+   (source-map :initform nil)
    (reading-line :initform nil :accessor hi:input-stream-reading-line)))
 
 
@@ -75,15 +77,21 @@
                   (setf cur-string s cur-string-pos 1)
                   (return (aref s 0))))))))))
 
-(defmethod ccl::read-toplevel-form ((stream cocoa-listener-input-stream) eof-value)
-  (with-slots (queue queue-lock read-lock queue-semaphore text-semaphore cur-string cur-string-pos cur-sstream cur-env) stream
+(defmethod ccl::read-toplevel-form ((stream cocoa-listener-input-stream) &key eof-value)
+  (with-slots (queue queue-lock read-lock queue-semaphore text-semaphore cur-string cur-string-pos cur-sstream
+               cur-env source-map cur-offset)
+    stream
     (with-lock-grabbed (read-lock)
       (loop
         (when cur-sstream
           #+debug (log-debug "About to recursively read from sstring in env: ~s" cur-env)
           (let* ((env cur-env)
                  (form (progv (car env) (cdr env)
-                         (ccl::read-toplevel-form cur-sstream eof-value)))
+                         (ccl::read-toplevel-form cur-sstream
+                                                  :eof-value eof-value
+                                                  :file-name *loading-file-source-file*
+                                                  :start-offset cur-offset
+                                                  :map source-map)))
                  (last-form-in-selection (not (listen cur-sstream))))
             #+debug (log-debug " --> ~s" form)
             (when last-form-in-selection
@@ -101,18 +109,22 @@
                  (assert (timed-wait-on-semaphore text-semaphore 0) () "text/queue mismatch!")
                  (setq cur-string val cur-string-pos 0))
                 (t
-                 (destructuring-bind (string package-name pathname) val
-                   (let ((env (cons '(*loading-file-source-file* *loading-toplevel-location*)
-                                    (list pathname nil))))
+                 (destructuring-bind (string package-name pathname offset) val
+                   ;; This env is used both for read and eval.  *nx-source-note-map* is for the latter.
+                   (let ((env (cons '(*loading-file-source-file* *loading-toplevel-location* ccl::*nx-source-note-map*)
+                                    (list pathname nil source-map))))
                      (when package-name
                        (push '*package* (car env))
                        (push (ccl::pkg-arg package-name) (cdr env)))
-                     (setf cur-sstream (make-string-input-stream string) cur-env env))))))))))
+                     (if source-map
+                       (clrhash source-map)
+                       (setf source-map (make-hash-table :test 'eq :shared nil)))
+                     (setf cur-sstream (make-string-input-stream string) cur-env env cur-offset offset))))))))))
 
-(defmethod enqueue-toplevel-form ((stream cocoa-listener-input-stream) string &key package-name pathname)
+(defmethod enqueue-toplevel-form ((stream cocoa-listener-input-stream) string &key package-name pathname offset)
   (with-slots (queue-lock queue queue-semaphore) stream
     (with-lock-grabbed (queue-lock)
-      (setq queue (nconc queue (list (list string package-name pathname))))
+      (setq queue (nconc queue (list (list string package-name pathname offset))))
       (signal-semaphore queue-semaphore))))
 
 (defmethod enqueue-listener-input ((stream cocoa-listener-input-stream) string)
@@ -639,9 +651,9 @@
 
 
 (defmethod eval-in-listener-process ((process cocoa-listener-process)
-                                     string &key path package)
+                                     string &key path package offset)
   (enqueue-toplevel-form (cocoa-listener-process-input-stream process) string
-                         :package-name package :pathname path))
+                         :package-name package :pathname path :offset offset))
 
 ;;; This is basically used to provide INPUT to the listener process, by
 ;;; writing to an fd which is connected to that process's standard
@@ -671,22 +683,22 @@
   (let* ((target-listener (ui-object-choose-listener-for-selection
 			   app selection)))
     (when target-listener
-      (destructuring-bind (package path string) selection
-        (eval-in-listener-process target-listener string :package package :path path)))))
+      (destructuring-bind (package path string &optional offset) selection
+        (eval-in-listener-process target-listener string :package package :path path :offset offset)))))
 
 (defmethod ui-object-load-buffer ((app ns:ns-application) selection)
   (let* ((target-listener (ui-object-choose-listener-for-selection app nil)))
     (when target-listener
       (destructuring-bind (package path) selection
         (let ((string (format nil "(load ~S)" path)))
-          (eval-in-listener-process target-listener string :package package :path path))))))
+          (eval-in-listener-process target-listener string :package package))))))
 
 (defmethod ui-object-compile-buffer ((app ns:ns-application) selection)
   (let* ((target-listener (ui-object-choose-listener-for-selection app nil)))
     (when target-listener
       (destructuring-bind (package path) selection
         (let ((string (format nil "(compile-file ~S)" path)))
-          (eval-in-listener-process target-listener string :package package :path path))))))
+          (eval-in-listener-process target-listener string :package package))))))
 
 (defmethod ui-object-compile-and-load-buffer ((app ns:ns-application) selection)
   (let* ((target-listener (ui-object-choose-listener-for-selection app nil)))
@@ -697,7 +709,7 @@
                               (make-pathname :directory (pathname-directory path)
                                              :name (pathname-name path)
                                              :type (pathname-type path)))))
-          (eval-in-listener-process target-listener string :package package :path path))))))
+          (eval-in-listener-process target-listener string :package package))))))
 
        
  

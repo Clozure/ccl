@@ -5848,20 +5848,18 @@
 ;;; that contain multiple forms are handled; see *VERBOSE-EVAL-SELECTION*
 ;;; and the SELECTION-INPUT-STREAM method below.)
 
-(defmethod read-toplevel-form ((stream synonym-stream) eof-value)
-  (read-toplevel-form (symbol-value (synonym-stream-symbol stream)) eof-value))
+(defmethod read-toplevel-form ((stream synonym-stream) &rest keys)
+  (apply #'read-toplevel-form (symbol-value (synonym-stream-symbol stream)) keys))
 
-(defmethod read-toplevel-form ((stream two-way-stream) eof-value)
+(defmethod read-toplevel-form ((stream two-way-stream) &rest keys)
   (if (typep stream 'echo-stream)
     (call-next-method)
-    (read-toplevel-form (two-way-stream-input-stream stream) eof-value)))
+    (apply #'read-toplevel-form (two-way-stream-input-stream stream) keys)))
 
-(defmethod read-toplevel-form :after ((stream echoing-two-way-stream) eof-value)
-  (declare (ignore eof-value))
+(defmethod read-toplevel-form :after ((stream echoing-two-way-stream) &key &allow-other-keys)
   (stream-set-column (two-way-stream-output-stream stream) 0))
 
-(defmethod read-toplevel-form ((stream input-stream)
-                               eof-value)
+(defmethod read-toplevel-form ((stream input-stream) &key eof-value file-name start-offset map)
   (loop
     (let* ((*in-read-loop* nil)
            (first-char (peek-char t stream nil eof-value))
@@ -5870,7 +5868,11 @@
               (cond ((eq first-char #\:)
                      (read-command-or-keyword stream eof-value))
                     ((eq first-char eof-value) eof-value)
-                    (t (read stream nil eof-value))))))
+                    (t (read-recording-source stream :eofval eof-value
+                                              :file-name file-name
+                                              :start-offset start-offset
+                                              :map map
+                                              :save-source-text t))))))
       (if (eq form eof-value)
         (return (values form nil t))
         (progn
@@ -5891,7 +5893,7 @@ are printed.  When false, only the results of evaluating the last form
 are printed.")
 
 (defmethod read-toplevel-form ((stream selection-input-stream)
-                               eof-value)
+                               &key eof-value &allow-other-keys)
   (if (eq (stream-peek-char stream) :eof)
     (values eof-value nil t)
     (let* ((*package* *package*)

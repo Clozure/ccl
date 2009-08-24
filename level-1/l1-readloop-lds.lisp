@@ -393,7 +393,7 @@ commands but aren't")
                            (eof-value *eof-value*))
   (force-output output-stream)
   (funcall prompt-function output-stream)
-  (read-toplevel-form input-stream eof-value))
+  (read-toplevel-form input-stream :eof-value eof-value))
 
 (defvar *always-eval-user-defvars* nil)
 

@@ -1337,9 +1337,10 @@
          (text (#/string self)))
     (dotimes (i (#/count ranges))
       (let* ((r (#/rangeValue (#/objectAtIndex: ranges i)))
-             (s (#/substringWithRange: text r)))
+             (s (#/substringWithRange: text r))
+             (o (ns:ns-range-location r)))
         (setq s (lisp-string-from-nsstring s))
-        (ui-object-eval-selection *NSApp* (list package-name pathname s))))))
+        (ui-object-eval-selection *NSApp* (list package-name pathname s o))))))
 
 (objc:defmethod (#/evalAll: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
