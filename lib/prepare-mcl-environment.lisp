@@ -52,28 +52,31 @@
 (defun set-user-environment (&optional (freeze-definitions nil))
   "Arrange that the outermost special bindings of *PACKAGE* and
 *WARN-IF-REDEFINE-KERNEL* restore values of the CL-USER package and T
-respectively. If the optional argument is true, marks all globally
-defined functions and methods as being predefined (this is a fairly
+respectively, and set *CCL-SAVE-SOURCE-LOCATIONS* to :NO-TEXT.
+If the optional argument is true, marks all globally defined
+functions and methods as being predefined (this is a fairly
 expensive operation.)"
   (when freeze-definitions
     (freeze-current-definitions))
   ;; enable redefine-kernel-function's error checking
   (%reset-outermost-binding '*warn-if-redefine-kernel* t)
   ;; Set the top-level *package* to the CL-USER package
-  (%reset-outermost-binding '*package* (find-package "CL-USER")))
+  (%reset-outermost-binding '*package* (find-package "CL-USER"))
+  (setq *ccl-save-source-locations* :NO-TEXT))
 
 (defun set-development-environment (&optional (thaw-definitions nil))
   "Arrange that the outermost special bindings of *PACKAGE* and
 *WARN-IF-REDEFINE-KERNEL* restore values of the CCL package and NIL
-respectively. If the optional argument is true, mark all globally
-defined functions and methods as being not predefined (this is a
-fairly expensive operation.)"
+respectively, and set *ccl-save-source-locations* to T. If the
+optional argument is true, mark all globally defined functions and
+methods as being not predefined (this is a fairly expensive operation.)"
   (when thaw-definitions
     (thaw-current-definitions))
   ;; enable redefine-kernel-function's error checking
   (%reset-outermost-binding '*warn-if-redefine-kernel* nil)
   ;; Set the top-level *package* to the CCL package
-  (%reset-outermost-binding '*package* (find-package "CCL")))
+  (%reset-outermost-binding '*package* (find-package "CCL"))
+  (setq *ccl-save-source-locations* T))
   
 
 

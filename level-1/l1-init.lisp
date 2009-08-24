@@ -260,7 +260,7 @@ methods that are marked as being predefined signal continuable errors.")
 (defparameter *level-1-loaded* nil)     ; set t by l1-boot
 (defparameter *save-definitions* nil)
 (defparameter *save-local-symbols* t)
-(defparameter *save-source-locations* :no-text
+(defparameter *save-source-locations* T
   "Controls whether source location information is saved, both for definitions (names) and
 in function objects.
 
