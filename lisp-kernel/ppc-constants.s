@@ -188,7 +188,7 @@ num_lisp_globals = 48		 /* MUST UPDATE THIS !!! */
 	_struct(lisp_globals,lisp_globals_limit-(num_lisp_globals*node_size))
 	 _node(initial_tcr)	        /* initial thread tcr */
 	 _node(image_name)	        /* --image-name argument */
-	 _node(BADfpscr_save_high)	        /* high word of FP reg used to save FPSCR */
+	 _node(BADfpscr_save_high)      /* high word of FP reg used to save FPSCR */
 	 _node(unwind_resume)           /* _Unwind_Resume */
 	 _node(batch_flag)	        /* -b */
 	 _node(host_platform)	        /* for runtime platform-specific stuff */
@@ -206,9 +206,9 @@ num_lisp_globals = 48		 /* MUST UPDATE THIS !!! */
 	 _node(lexpr_return1v) 		/* simpler when &lexpr called for single value. */
 	 _node(lexpr_return) 		/* magic &lexpr return code. */
 	 _node(all_areas) 		/* doubly-linked list of all memory areas */
-	 _node(BAD_cs_overflow_limit) 	/* limit for control-stack overflow check */
-	 _node(kernel_name) 		/* real executable name */
+	 _node(kernel_path) 		/* real executable name */
 	 _node(objc2_begin_catch) 	/* objc_begin_catch */
+	 _node(BAD_current_vs) 		/* current value-stack area   */
 	 _node(statically_linked)	/* non-zero if -static */
 	 _node(heap_end)                /* end of lisp heap */
 	 _node(heap_start)              /* start of lisp heap */
