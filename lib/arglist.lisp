@@ -196,36 +196,37 @@
         (values nil (zerop ncells))))))
 
 (defun arg-names-from-map (lfun pc)
-  (multiple-value-bind (nreq nopt restp nkeys allow-other-keys
-                             optinit lexprp
-                             ncells nclosed)
-      (function-args lfun)
-    (declare (ignore optinit ncells allow-other-keys))
-    (collect ((req)
-              (opt)
-              (keys))
-      (let* ((rest nil)
-             (map (if (and pc (> pc target::arg-check-trap-pc-limit))
-                    (car (function-symbol-map lfun)))))
-        (if (and map pc)
-          (let ((total (+ nreq nopt (if (or restp lexprp) 1 0) (or nkeys 0)))
-                (idx (- (length map) nclosed)))
-            (unless (zerop total)
-              (progn
-                (dotimes (x (the fixnum nreq))
-                  (declare (fixnum x))
-                  (req (if (> idx 0) (elt map (decf idx)) (make-arg "ARG" x))))
-                (when (neq nopt 0)
-                  (dotimes (x (the fixnum nopt))
-                    (opt (if (> idx 0) (elt map (decf idx)) (make-arg "OPT" x)))))
-                (when (or restp lexprp)
-                  (setq rest (if (> idx 0) (elt map (decf idx)) 'the-rest)))
-                (when nkeys
-                  (dotimes (i (the fixnum nkeys))
-                    (keys (if (> idx 0) (elt map (decf idx)) (make-arg "KEY" i)))))))))
-        (values (or (not (null map))
-                    (and (eql 0 nreq) (eql 0 nopt) (not restp) (null nkeys)))
-                (req) (opt) rest (keys))))))
+  (when lfun
+    (multiple-value-bind (nreq nopt restp nkeys allow-other-keys
+			       optinit lexprp
+			       ncells nclosed)
+	(function-args lfun)
+      (declare (ignore optinit ncells allow-other-keys))
+      (collect ((req)
+		(opt)
+		(keys))
+	(let* ((rest nil)
+	       (map (if (and pc (> pc target::arg-check-trap-pc-limit))
+			(car (function-symbol-map lfun)))))
+	  (if (and map pc)
+	      (let ((total (+ nreq nopt (if (or restp lexprp) 1 0) (or nkeys 0)))
+		    (idx (- (length map) nclosed)))
+		(unless (zerop total)
+		  (progn
+		    (dotimes (x (the fixnum nreq))
+		      (declare (fixnum x))
+		      (req (if (> idx 0) (elt map (decf idx)) (make-arg "ARG" x))))
+		    (when (neq nopt 0)
+		      (dotimes (x (the fixnum nopt))
+			(opt (if (> idx 0) (elt map (decf idx)) (make-arg "OPT" x)))))
+		    (when (or restp lexprp)
+		      (setq rest (if (> idx 0) (elt map (decf idx)) 'the-rest)))
+		    (when nkeys
+		      (dotimes (i (the fixnum nkeys))
+			(keys (if (> idx 0) (elt map (decf idx)) (make-arg "KEY" i)))))))))
+	  (values (or (not (null map))
+		      (and (eql 0 nreq) (eql 0 nopt) (not restp) (null nkeys)))
+		  (req) (opt) rest (keys)))))))
               
               
 
