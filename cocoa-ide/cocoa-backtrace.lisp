@@ -91,22 +91,27 @@
          (lfun (ccl:frame-function fp context)))
     (make-instance 'frame-descriptor
       :data (cons fp context)
-      :label (with-output-to-string (stream)
-               (format stream "(~S" (or (ccl:function-name lfun) lfun))
-               (if (eq args (ccl::%unbound-marker))
-                 (format stream " #<Unknown Arguments>")
-                 (loop for arg in args
-                   do (if (eq arg (ccl::%unbound-marker))
-                        (format stream " #<Unavailable>")
-                        (format stream " ~:['~;~]~s" (ccl::self-evaluating-p arg) arg))))
-               (format stream ")"))
-      :values (map 'vector
-                   (lambda (var.val)
-                     (destructuring-bind (var . val) var.val
-                       (let ((label (format nil "~:[~s~;~a~]: ~s"
-                                            (stringp var) var val)))
-                         (cons label var.val))))
-                   (cons `("Function" . ,lfun) vars)))))
+      :label (if lfun
+               (with-output-to-string (stream)
+                 (format stream "(~S" (or (ccl:function-name lfun) lfun))
+                 (if (eq args (ccl::%unbound-marker))
+                   (format stream " #<Unknown Arguments>")
+                   (loop for arg in args
+                     do (if (eq arg (ccl::%unbound-marker))
+                          (format stream " #<Unavailable>")
+                          (format stream " ~:['~;~]~s" (ccl::self-evaluating-p arg) arg))))
+                 (format stream ")"))
+               ":kernel")
+      :values (if lfun
+                (map 'vector
+                     (lambda (var.val)
+                       (destructuring-bind (var . val) var.val
+                         (let ((label (format nil "~:[~s~;~a~]: ~s"
+                                              (stringp var) var val)))
+                           (cons label var.val))))
+                     (cons `("Function" . ,lfun)
+                           (and (not (eq vars (ccl::%unbound-marker))) vars)))
+                ))))
 
 (defmethod stack-descriptor-frame ((sd stack-descriptor) index)
   (let ((cache (stack-descriptor-frame-cache sd)))
@@ -307,9 +312,10 @@
 
 (objc:defmethod (#/outlineView:isItemExpandable: :<BOOL>)
     ((self backtrace-window-controller) view item)
-    (declare (ignore view))
-    (or (%null-ptr-p item)
-        (our-frame-label-p self item)))
+  (declare (ignore view))
+  (or (%null-ptr-p item)
+      (and (our-frame-label-p self item)
+           (> (frame-descriptor-value-count (frame-label-descriptor item)) 0))))
 
 (objc:defmethod (#/outlineView:numberOfChildrenOfItem: :<NSI>nteger)
     ((self backtrace-window-controller) view item)
