@@ -50,7 +50,8 @@
          (ide-bundle-path (get-ide-bundle-path))
          ;; create the bundle directory
          (app-bundle (make-application-bundle :name name :project-path directory))
-         (image-path (namestring (path app-bundle "Contents" "MacOS" name))))
+         (image-path (namestring (path (bundle-executable-path app-bundle)
+                                       (bundle-executable-name name)))))
     ;; maybe copy IDE resources to the bundle
     (when copy-ide-resources
       (recursive-copy-directory (path ide-bundle-path "Contents" "Resources/")
@@ -74,7 +75,9 @@
     (save-application image-path
                       :application-class application-class
                       :toplevel-function toplevel-function
-                      :prepend-kernel t)))
+                      :prepend-kernel t
+                      #+windows-target #+windows-target
+                      :application-type :gui)))
 
 
 

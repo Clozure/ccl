@@ -152,7 +152,9 @@
       (ensure-directories-exist image-file)
       (save-application image-file
                         :prepend-kernel t
-                        :application-class 'cocoa-application)))
+                        :application-class 'cocoa-application
+                        #+windows-target #+windows-target
+                        :application-type :gui)))
 
 ;;; If we're running as a standalone .app, try to see if a bundle named
 ;;; AltConsole.app exists in our Resources directory.  If so, execute

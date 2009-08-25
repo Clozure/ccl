@@ -72,9 +72,10 @@
                          impurify
 			 (mode #o644)
 			 prepend-kernel
-			 )
+			 #+windows-target (application-type :console))
   (declare (ignore toplevel-function error-handler application-class
                    clear-clos-caches init-file impurify))
+  #+windows-target (check-type application-type (member :console :gui))
   (unless (probe-file (make-pathname :defaults nil
                                      :directory (pathname-directory (translate-logical-pathname filename))))
     (error "Directory containing ~s does not exist." filename))
@@ -86,7 +87,9 @@
     (when (process-verify-quit ip)
       (let* ((fd (open-dumplisp-file filename
                                      :mode mode
-                                     :prepend-kernel prepend-kernel)))
+                                     :prepend-kernel prepend-kernel
+                                     #+windows-target  #+windows-target 
+                                     :application-type application-type)))
         (process-interrupt ip
                            #'(lambda ()
                                (process-exit-application
@@ -108,8 +111,9 @@
                                       (impurify nil)
                                       (init-file nil init-file-p)
                                       (clear-clos-caches t)
-                                      prepend-kernel)
-  (declare (ignore mode prepend-kernel))
+                                      prepend-kernel
+                                      #+windows-target application-type)
+  (declare (ignore mode prepend-kernel #+windows-target application-type))
   (when (and application-class (neq  (class-of *application*)
                                      (if (symbolp application-class)
                                        (find-class application-class)
@@ -189,10 +193,11 @@
 		    header-pos))))))))))
 		  
   
-(defun %prepend-file (out-fd in-fd len)
+(defun %prepend-file (out-fd in-fd len #+windows-target application-type)
   (declare (fixnum out-fd in-fd len))
   (fd-lseek in-fd 0 #$SEEK_SET)
-  (let* ((bufsize (ash 1 15)))
+  (let* ((bufsize (ash 1 15))
+         #+windows-target (first-buf t))
     (%stack-block ((buf bufsize))
       (loop
 	  (when (zerop len) (return))
@@ -200,7 +205,26 @@
 	    (declare (fixnum nread))
 	    (if (< nread 0)
 	      (%errno-disp nread))
-	    (let* ((nwritten (fd-write out-fd buf nread)))
+            #+windows-target
+            (when (shiftf first-buf nil)
+              (let* ((application-byte (ecase application-type
+                                         (:console #$IMAGE_SUBSYSTEM_WINDOWS_CUI)
+                                         (:gui #$IMAGE_SUBSYSTEM_WINDOWS_GUI)))
+                     (offset (%get-long buf #x3c)))
+                (assert (< offset bufsize) () "PEF header not within first ~D bytes" bufsize)
+                (assert (= (%get-byte buf (+ offset 0)) (char-code #\P)) ()
+                        "File does not appear to be a PEF file")
+                (assert (= (%get-byte buf (+ offset 1)) (char-code #\E)) ()
+                        "File does not appear to be a PEF file")
+                (assert (= (%get-byte buf (+ offset 2)) 0) ()
+                        "File does not appear to be a PEF file")
+                (assert (= (%get-byte buf (+ offset 3)) 0) ()
+                        "File does not appear to be a PEF file")
+                ;; File is a PEF file -- Windows subsystem byte goes at offset 68 in the
+                ;;  "optional header" which appears right after the standard header (20 bytes)
+                ;;  and the PEF cookie (4 bytes)
+                (setf (%get-byte buf (+ offset 4 20 68)) application-byte)))
+            (let* ((nwritten (fd-write out-fd buf nread)))
 	      (declare (fixnum nwritten))
 	      (unless (= nwritten nread)
 		(error "I/O error writing to fd ~d" out-fd)))
@@ -220,7 +244,8 @@
         #-(or windows-target darwin-target) string))))
 
 
-(defun open-dumplisp-file (path &key (mode #o666) prepend-kernel)
+(defun open-dumplisp-file (path &key (mode #o666) prepend-kernel
+                           #+windows-target application-type)
   (let* ((prepend-path (if prepend-kernel
                          (if (eq prepend-kernel t)
                            (kernel-path)
@@ -238,9 +263,9 @@
       (setq mode (logior #o111 mode)))
     (let* ((image-fd (fd-open filename (logior #$O_WRONLY #$O_CREAT) mode)))
       (unless (>= image-fd 0) (signal-file-error image-fd filename))
-      (fd-chmod image-fd mode)
       (when prepend-fd
-	(%prepend-file image-fd prepend-fd prepend-len))
+	(%prepend-file image-fd prepend-fd prepend-len #+windows-target application-type))
+      (fd-chmod image-fd mode)
       image-fd)))
 
 

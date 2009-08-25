@@ -262,7 +262,7 @@
     (let* ((bundle-name-str (%make-nsstring name))
            (type-str (%make-nsstring package-type))
            (sig-str (%make-nsstring bundle-signature))
-           (app-name-str (%make-nsstring name))
+           (app-name-str (%make-nsstring (bundle-executable-name name)))
            (app-plist-path-str (%make-nsstring (namestring out-path))))
       (#/setValue:forKey: info-dict bundle-name-str $cfbundle-bundle-name-key)
       (#/setValue:forKey: info-dict app-name-str $cfbundle-executable-key)
@@ -299,6 +299,22 @@
                                                "Contents" "Info.plist"))))
     (read-info-plist ide-plist-path-str)))
 
+;;; BUNNDLE-EXECUTABLE-PATH app-path
+;;; ------------------------------------------------------------------------
+;;; Returns the pathname of the executable directory given the pathname of
+;;; an application bundle
+(defun bundle-executable-path (app-path)
+  (path app-path "Contents" 
+        #-windows-target (ensure-directory-pathname "MacOS")
+        #+windows-target (ensure-directory-pathname "Windows")))
+
+;;; BUNNDLE-EXECUTABLE-NAME name
+;;; ------------------------------------------------------------------------
+;;; Returns the name of the executable file for an application bundle
+(defun bundle-executable-name (name)
+  #-windows-target name
+  #+windows-target (concatenate 'string name ".exe"))
+
 ;;; MAKE-APPLICATION-BUNDLE name package-type bundle-signature project-path
 ;;; ------------------------------------------------------------------------
 ;;; Build the directory structure of a Cocoa application bundle and
@@ -309,9 +325,9 @@
   (let* ((app-bundle (path project-path 
                            (ensure-directory-pathname (concatenate 'string name ".app"))))
          (contents-dir (path app-bundle (ensure-directory-pathname "Contents")))
-         (macos-dir (path contents-dir (ensure-directory-pathname "MacOS")))
+         (executable-dir (bundle-executable-path app-bundle))
          (rsrc-dir (path contents-dir  "Resources" 
                          (ensure-directory-pathname "English.lproj"))))
-    (ensure-directories-exist macos-dir)
+    (ensure-directories-exist executable-dir)
     (ensure-directories-exist rsrc-dir)
     app-bundle))
