@@ -90,8 +90,7 @@
 (defmethod prin1-line-n ((i inspector) stream n)
   (multiple-value-call #'prin1-line i stream (line-n i n)))
 
-(defmethod prin1-line ((i inspector) stream value &optional
-                       label type function)
+(defmethod prin1-line ((i inspector) stream value &optional label type function)
   (unless function
     (setq function (inspector-print-function i type)))
   (funcall function i stream value label type))
@@ -268,9 +267,7 @@
   (let* ((type-sym (parse-type i type)))
     (if (eq type-sym :colon) (setq colon-p t))
     (when label
-      (if (stringp label)
-          (write-string label stream)
-          (princ label stream))
+      (prin1-label i stream value label type)
       (if colon-p (princ ": " stream)))
     (end-of-label stream)              ; used by cacheing code
     (format stream format-string value)))
@@ -1143,10 +1140,13 @@
 ;; Functions
 ;;
 (defclass function-inspector (inspector)
-  ((disasm-p :accessor disasm-p :initform *inspector-disassembly*)
+  ((header-lines :initform nil :reader header-lines)
+   (disasm-p :accessor disasm-p :initform *inspector-disassembly*)
    (disasm-info :accessor disasm-info)
    (pc-width :accessor pc-width)
    (pc :initarg :pc :initform nil :accessor pc)))
+
+(defmethod header-count ((i function-inspector)) (length (header-lines i)))
 
 (defclass closure-inspector (function-inspector)
   ((n-closed :accessor closure-n-closed)))
@@ -1157,26 +1157,27 @@
 (defmethod inspector-class ((f compiled-lexical-closure)) 'closure-inspector)
 
 (defmethod compute-line-count ((f function-inspector))
-  (+ 1                                  ; the function
-     1                                  ; name
-     1                                  ; arglist
-     (let* ((doc (documentation (inspector-object f) t)))
-       (if doc 1 0))
-     (compute-disassembly-lines f))) 
+  (let* ((o (inspector-object f))
+         (doc (documentation o t))
+         (sn (ccl::function-source-note o))
+         (lines (nconc (list (list o ""))
+                       (list (list (function-name o) "Name" :colon))
+                       (list (multiple-value-bind (arglist type) (arglist o)
+                               (let ((label (if type
+                                              (format nil "Arglist (~(~a~))" type)
+                                              "Arglist unknown")))
+                                 (list arglist label (if type :colon '(:comment (:plain)))))))
+                       (when doc (list (substitute #\space #\newline doc) "Documentation" :colon))
+                       (when sn (list (list sn "Source Location" :colon))))))
+    (setf (slot-value f 'header-lines) lines)
+    (+ (length lines) (compute-disassembly-lines f))))
 
 (defmethod line-n ((f function-inspector) n)
-  (let* ((o (inspector-object f))
-         (doc (documentation o t)))
-    (case n
-      (0 (values o ""))
-      (1 (values (function-name o) "Name" :colon))
-      (2 (multiple-value-bind (arglist type) (arglist o)
-           (let ((label (if type (format nil "Arglist (~(~a~))" type) "Arglist unknown")))
-             (values arglist label (if type :colon '(:comment (:plain)))))))
-      (3 (if doc
-           (values (substitute #\space #\newline doc) "Documentation" :colon)
-           (disassembly-line-n f (- n 3))))
-      (t (disassembly-line-n f (- n (if doc 4 3)))))))
+  (let* ((lines (header-lines f))
+         (nlines (length lines)))
+    (if (< n nlines)
+      (apply #'values (nth n lines))
+      (disassembly-line-n f (- n nlines)))))
 
 (defmethod compute-line-count ((f closure-inspector))
   (let* ((o (inspector-object f))
@@ -1191,13 +1192,13 @@
 (defmethod line-n ((f closure-inspector) n)
   (let ((o (inspector-object f))
         (nclosed (closure-n-closed f)))
-    (if (<= (decf n 2) 0)
+    (if (< (decf n (header-count f)) 0)
       (call-next-method)
-      (cond ((eql (decf n) 0)
+      (cond ((< (decf n) 0)
              (values (ccl::closure-function o) "Inner lfun: " :static))
-            ((eql (decf n) 0)
+            ((< (decf n) 0)
              (values nclosed "Closed over values" :comment #'prin1-comment))
-            ((< (decf n) nclosed)
+            ((< n nclosed)
              (let* ((value (ccl::nth-immediate o (1+ (- nclosed n))))
                     (map (car (ccl::function-symbol-map (ccl::closure-function o))))
                     (label (or (and map (svref map (+ n (- (length map) nclosed))))
@@ -1218,19 +1219,20 @@
       (1 (ccl::lfun-name o new-value) (resample-it))
       (2 (setf (arglist o) new-value))
       (t
-       (if (>= n 3) 
-         (set-disassembly-line-n f (- n 3) new-value)
-         (setf-line-n-out-of-range f n)))))
+       (let ((line (- n (header-count f))))
+         (if (>= line 0)
+           (set-disassembly-line-n f line new-value)
+           (setf-line-n-out-of-range f n))))))
   new-value)
 
 (defmethod (setf line-n) (new-value (f closure-inspector) en &aux (n en))
   (let ((o (inspector-object f))
         (nclosed (closure-n-closed f)))
-    (if (<= (decf n 2) 0)               ; function itself, name, or arglist
+    (if (< (decf n (header-count f)) 0)
       (call-next-method)
-      (cond ((<= (decf n 2) 0)          ; inner-lfun or "Closed over values"
+      (cond ((< (decf n 2) 0)          ; inner-lfun or "Closed over values"
              (setf-line-n-out-of-range f en))
-            ((< (decf n) nclosed)       ; closed-over variable
+            ((< n nclosed)       ; closed-over variable
              (let* ((value (ccl::nth-immediate o (1+ (- nclosed n))))
                     (cellp (ccl::closed-over-value-p value)))
                (unless cellp (setf-line-n-out-of-range f en))
@@ -1241,7 +1243,7 @@
 
 (defun compute-disassembly-lines (f &optional (function (inspector-object f)))
   (if (functionp function)
-    (let* ((info (and (disasm-p f)  (list-to-vector (ccl::disassemble-list function))))
+    (let* ((info (and (disasm-p f)  (coerce (ccl::disassemble-list function) 'vector)))
            (length (length info))
            (last-pc (if info (car (svref info (1- length))) 0)))
       (if (listp last-pc) (setq last-pc (cadr last-pc)))
@@ -1249,14 +1251,6 @@
       (setf (disasm-info f) info)
       length)
     0))
-
-(defun list-to-vector (list)
-  (let* ((length (length list))
-         (vec (make-array length)))
-    (dotimes (i length)
-      (declare (fixnum i))
-      (setf (svref vec i) (pop list)))
-    vec))
 
 (defun disassembly-line-n (f n)
   (let* ((line (svref (disasm-info f) n))
@@ -1344,31 +1338,33 @@
 
 (defmethod line-n ((f gf-inspector) n)
   (let* ((count (method-count f))
+         (header-count (header-count f))
          (slot-count (slot-count f))
          (lines (1+ count)))
-    (if (<= 3 n (+ lines slot-count 3))
+    (if (<= header-count n (+ lines slot-count header-count))
       (let ((methods (generic-function-methods (inspector-object f))))
-        (cond ((eql (decf n 3) 0) (values methods "Methods: " :static))
+        (cond ((eql (decf n header-count) 0) (values methods "Methods: " :static))
               ((<= n count)
                (values (nth (- n 1) methods) nil :static))
               ((< (decf n (1+ count)) slot-count)
                (standard-object-line-n f n))
               (t
                (values 0 "Disassembly" :comment #'prin1-comment))))
-      (call-next-method f (if (< n 3) n (- n lines slot-count 1))))))
+      (call-next-method f (if (< n header-count) n (- n lines slot-count 1))))))
 
 (defmethod (setf line-n) (new-value (f gf-inspector) n)
   (let* ((count (method-count f))
+         (header-count (header-count f))
          (slot-count (slot-count f))
          (lines (1+ count)))
-    (if (<= 3 n (+ lines slot-count 3))
+    (if (<= header-count n (+ lines slot-count header-count))
       (let ((en n))
-        (cond ((<= (decf en 3) count)
+        (cond ((<= (decf en header-count) count)
                (setf-line-n-out-of-range f n))
               ((< (decf en (1+ count)) slot-count)
                (standard-object-setf-line-n new-value f en))
               (t (setf-line-n-out-of-range f n))))
-      (call-next-method new-value f (if (< n 3) n (- n lines slot-count 1))))))
+      (call-next-method new-value f (if (< n header-count) n (- n lines slot-count 1))))))
 
 #|
 (defmethod inspector-commands ((f gf-inspector))
@@ -1564,7 +1560,7 @@
   (initialize-addresses f))
 
 (defmethod initialize-addresses ((f error-frame))
-  (let* ((addresses (list-to-vector (ccl::%stack-frames-in-context (context f)))))
+  (let* ((addresses (coerce (ccl::%stack-frames-in-context (context f)) 'vector)))
       (setf (frame-count f) (length addresses)
             (addresses f) addresses)))
 
