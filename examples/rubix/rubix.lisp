@@ -19,7 +19,6 @@
 
 (objc:defmethod (#/prepareOpenGL :void) ((self rubix-opengl-view))
   (declare (special *the-origin* *y-axis*))
-  (declare (ignore a-rect))
   (opengl:with-matrix-mode (#$GL_PROJECTION) ;; default is GL_MODELVIEW
     (#_glLoadIdentity)
     (#_glFrustum -0.6d0 0.6d0 -0.6d0 0.6d0 10.0d0 20.0d0))

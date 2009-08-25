@@ -12,4 +12,4 @@
     (load-relative "rubix.lisp")))
 
 
-; (run-rubix-demo)
+; (gui::execute-in-gui #'run-rubix-demo)
