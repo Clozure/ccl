@@ -46,14 +46,15 @@
          while item
          do (destructuring-bind (posx posy width height path) item
               (when (probe-file path)
-                (gui::execute-in-gui #'(lambda () (gui::find-or-make-hemlock-view path)))
-                (let ((window (find-file-buffer path))) ; round about way*
-                  ;;* how to get from hemlock-view
-                  (when window
-                    ;; should check whether coords are still in screen bounds
-                    ;; (could have changed screen realestate since)
-                    (let ((rect (ns:make-ns-rect posx posy width height)))
-                      (#/setFrame:display: window rect t))))))))))
+                (gui::execute-in-gui #'(lambda ()
+					 (gui::find-or-make-hemlock-view path)
+					 (let ((window (find-file-buffer path))) ; round about way*
+					   ;;* how to get from hemlock-view
+					   (when window
+					     ;; should check whether coords are still in screen bounds
+					     ;; (could have changed screen realestate since)
+					     (let ((rect (ns:make-ns-rect posx posy width height)))
+					       (#/setFrame:display: window rect t))))))))))))
 
 (pushnew 'remember-hemlock-files *lisp-cleanup-functions*)
 (pushnew 'open-remembered-hemlock-files *lisp-startup-functions*)
