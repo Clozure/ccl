@@ -2246,13 +2246,16 @@ xFindSymbol(void* handle, char *name)
 #endif
 #ifdef DARWIN
 #if 1
+  void *result;
+
   if ((handle == NULL) || (handle == ((void *) -1))) {
     handle = RTLD_DEFAULT;
   }    
-  if (*name == '_') {
-    name++;
+  result = dlsym(handle, name);
+  if ((result == NULL) && (*name == '_')) {
+    result = dlsym(handle, name+1);
   }
-  return dlsym(handle, name);
+  return result;
 #else
   natural address = 0;
 
