@@ -1282,6 +1282,7 @@
   vstack                                ; a value stack
   tstack                                ; (dynamic-extent) temp stack
   readonly                              ; readonly section
+  watched				; static area containing a single object
   managed-static                        ; growable static area
   static                                ; static data in application
   dynamic                               ; dynmaic (heap) data in application

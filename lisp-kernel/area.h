@@ -29,10 +29,11 @@ typedef enum {
   AREA_VSTACK = 2<<fixnumshift, /* A value stack.  The GC sees it as being doubleword-aligned */
   AREA_TSTACK = 3<<fixnumshift, /* A temp stack.  It -is- doubleword-aligned */
   AREA_READONLY = 4<<fixnumshift, /* A (cfm) read-only section. */
-  AREA_MANAGED_STATIC = 5<<fixnumshift, /* A resizable static area */
-  AREA_STATIC = 6<<fixnumshift, /* A  static section: contains
+  AREA_WATCHED = 5<<fixnumshift, /* A static area containing a single object. */
+  AREA_MANAGED_STATIC = 6<<fixnumshift, /* A resizable static area */
+  AREA_STATIC = 7<<fixnumshift, /* A  static section: contains
                                  roots, but not GCed */
-  AREA_DYNAMIC = 7<<fixnumshift /* A heap. Only one such area is "the heap."*/
+  AREA_DYNAMIC = 8<<fixnumshift /* A heap. Only one such area is "the heap."*/
 } area_code;
 
 typedef struct area {
