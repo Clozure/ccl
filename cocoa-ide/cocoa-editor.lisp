@@ -2071,6 +2071,11 @@
        (let* ((pane (make-instance 'text-pane :with-frame pane-rect)))
 	 (#/addSubview: window-content-view pane)
          (#/setDelegate: w pane)
+         ;; Cocotron doesn't set the new window's initialFirstResponder which means
+         ;; that the user must click in the window before they can edit.  So, do it here.
+         ;; Remove this when Cocotron issue #374 is fixed
+         ;;  (http://code.google.com/p/cocotron/issues/detail?id=374)
+         #+cocotron (#/setInitialFirstResponder: w pane)
 	 pane))))
 
 (defun textpane-for-textstorage (class ts ncols nrows container-tracks-text-view-width color style)
