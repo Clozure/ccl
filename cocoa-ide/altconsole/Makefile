@@ -14,7 +14,7 @@ CC=gcc-4.0
 CFLAGS=-g -O -mmacosx-version-min=10.4 -m32 -Wno-protocol
 
 AltConsole: $(OBJECTS)
-	$(CC) $(CFLAGS) -o $@ $(OBJECTS) -framework cocoa
+	$(CC) $(CFLAGS) -o $@ $(OBJECTS) -framework Cocoa
 
 $(APPBASE)/AltConsole.app: AltConsole $(RESOURCES) Info.plist
 	mkdir -p $(APPBASE)
