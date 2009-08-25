@@ -1633,7 +1633,6 @@ LocalLabelPrefix[]ffcallEndCatch_end:
 LocalLabelPrefix[]ffcall_end:   
 
         	.section __DATA,__gcc_except_tab
-GCC_except_table0:
 	  .align 3
 LLSDA1:
 	  .byte	0xff	/* @LPStart format (omit) */
@@ -1857,7 +1856,6 @@ LocalLabelPrefix[]ffcall_return_registersEndCatch_end:
 	  __(b LocalLabelPrefix[]ffcall_return_registers_call_end)
 LocalLabelPrefix[]ffcall_return_registers_end:
 	  .section __DATA,__gcc_except_tab
-GCC_except_table1:
 	  .align 3
 LLSDA2:
 	  .byte	0xff	/* @LPStart format (omit) */
@@ -6973,7 +6971,7 @@ _spentry(nmkunwind)
         __(mr arg_z,arg_y)
         __(b _SPbind_interrupt_level)
 
-	
+        .if 1
         __ifdef([DARWIN])
          __ifdef([PPC64])
 L_lisp_objc2_personality:       
@@ -7016,22 +7014,20 @@ LSFDEffcall:
         .quad Lffcall_end-Lffcall /* FDE address range */
         .byte 8 /* uleb128 0x8; Augmentation size */
         .quad LLSDA1-.           /* Language Specific Data Area */
-	.byte	0x4	/* DW_CFA_advance_loc4 */
+	.byte DW_CFA_def_cfa_offset 
+	.byte 0xc0,0x1 /* uleb128 0xc0.  A lie:  the frame is variable-length */
+	.byte DW_CFA_offset_extended_sf
+	.byte	0x41	
+	.byte	0x7e	/* sleb128 -2 */
+	.byte DW_CFA_advance_loc4
 	.long Lffcall_setup-Lffcall
-	.byte	0xe	/* DW_CFA_def_cfa_offset */
-	.byte	0x10	/* uleb128 0x10 */
-	.byte	0x86	/* DW_CFA_offset, column 0x6 */
-	.byte	0x2	/* uleb128 0x2 */
-	.byte	0x4	/* DW_CFA_advance_loc4 */
+	.byte DW_CFA_advance_loc4
 	.long Lffcall_setup_end-Lffcall_setup
-	.byte	0xd	/* DW_CFA_def_cfa_register */
-	.byte	0x6	/* uleb128 0x6 */
-	.byte	0x4	/* DW_CFA_advance_loc4 */
+	.byte DW_CFA_advance_loc4
 	.long Lffcall_call_end-Lffcall_call
-	.byte	0x83	/* DW_CFA_offset, column 0x3 */
-	.byte	0x3	/* uleb128 0x3 */
-LEFDEffcall:
 	.align 3
+LEFDEffcall:
+	
         .globl _SPffcall_return_registers.eh
 _SPffcall_return_registers.eh:
         .set Lfmh,LEFDEffcall_return_registers-LSFDEffcall_return_registers
@@ -7042,26 +7038,23 @@ LSFDEffcall_return_registers:
         .quad Lffcall_return_registers_end-Lffcall_return_registers /* FDE address range */
         .byte 8 /* uleb128 0x8; Augmentation size */
         .quad LLSDA2-.           /* Language Specific Data Area */
-	.byte	0x4	/* DW_CFA_advance_loc4 */
+	.byte DW_CFA_def_cfa_offset 
+	.byte 0xc0,0x1 /* uleb128 0xc0.  A lie:  the frame is variable-length */
+	.byte DW_CFA_offset_extended_sf
+	.byte 0x41	
+	.byte 0x7e	/* sleb128 -2 */
+	.byte DW_CFA_advance_loc4
 	.long Lffcall_return_registers_setup-Lffcall_return_registers
-	.byte	0xe	/* DW_CFA_def_cfa_offset */
-	.byte	0x10	/* uleb128 0x10 */
-	.byte	0x86	/* DW_CFA_offset, column 0x6 */
-	.byte	0x2	/* uleb128 0x2 */
-	.byte	0x4	/* DW_CFA_advance_loc4 */
+	.byte DW_CFA_advance_loc4
 	.long Lffcall_return_registers_setup_end-Lffcall_return_registers_setup
-	.byte	0xd	/* DW_CFA_def_cfa_register */
-	.byte	0x6	/* uleb128 0x6 */
-	.byte	0x4	/* DW_CFA_advance_loc4 */
+	.byte DW_CFA_advance_loc4
 	.long Lffcall_return_registers_call_end-Lffcall_return_registers_call
-	.byte	0x83	/* DW_CFA_offset, column 0x3 */
-	.byte	0x3	/* uleb128 0x3 */
 	.align 3
 LEFDEffcall_return_registers:
         .text
          __endif
         __endif
-
+        .endif
 
                                 
 /*  EOF, basically  */
