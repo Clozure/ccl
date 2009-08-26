@@ -2705,6 +2705,7 @@
     (setq encoding (nsinteger-to-nsstring-encoding (#/selectedTag popup)))
     (hi::note-modeline-change (hemlock-buffer self))))
 
+#-cocotron
 (objc:defmethod (#/prepareSavePanel: :<BOOL>) ((self hemlock-editor-document)
                                                panel)
   (with-slots (encoding) self
@@ -3045,12 +3046,14 @@
 
 (objc:defmethod (#/runModalOpenPanel:forTypes: :<NSI>nteger)
     ((self hemlock-document-controller) panel types)
-  (let* ((popup (build-encodings-popup self #|preferred|#)))
-    (#/setAccessoryView: panel popup)
+  (let* (#-cocotron (popup (build-encodings-popup self #|preferred|#)))
+    #-cocotron (#/setAccessoryView: panel popup)
     (let* ((result (call-next-method panel types)))
       (when (= result #$NSOKButton)
+        #-cocotron
         (with-slots (last-encoding) self
-          (setq last-encoding (nsinteger-to-nsstring-encoding (#/tag (#/selectedItem popup))))))
+          (setq last-encoding
+                (nsinteger-to-nsstring-encoding (#/tag (#/selectedItem popup))))))
       result)))
   
 (defun hi::open-document ()
