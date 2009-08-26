@@ -705,6 +705,7 @@
      unmap-octet-vector
      ;; Miscellany
      heap-utilization
+     with-readtable-iterator
 
      external-process-creation-failure
 

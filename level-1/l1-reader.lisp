@@ -2150,6 +2150,65 @@
         (push (cons sub-ch fn) (cdr def))))
     t))
 
+(defun %make-readtable-iterator (readtable macs? dmacs?)
+  (setq readtable (readtable-arg (or readtable %initial-readtable%)))
+  (let ((char-macro-alist (rdtab.alist readtable)))
+    (labels ((generate ()
+               (if char-macro-alist
+                   (destructuring-bind (char . defn) (pop char-macro-alist)
+                     (if (consp defn)
+                         (if dmacs?
+                             (values t char (car defn) t (cdr defn))
+                             (generate))
+                         (if macs?
+                             (values t char defn nil nil)
+                             (generate))))
+                   (values nil nil nil nil nil))))
+      #'generate)))
+
+(defmacro with-readtable-iterator ((name readtable &rest macro-char-types) &body body)
+  "While executing BODY, bind NAME to a macro that iterates over
+   READTABLE's macros.  Each invocation of NAME yields five values:
+
+   VALUE? CHAR FUNCTION DISPATCH? DISPATCH-ALIST
+
+   VALUE? is true until the iterator runs out of items.  CHAR is the
+   macro character.  FUNCTION is the primary value of
+   `get-macro-character' for CHAR.  DISPATCH? is true if and only if
+   CHAR is a dispatching macro character.  DISPATCH-ALIST is an alist
+   mapping sub-characters to their respective values of
+   `get-dispatch-macro-character', and is NIL unless DISPATCH?.
+
+   MACRO-CHAR-TYPES, which defaults
+   to (:macro-char :dispatch-macro-char) thereby yielding all items,
+   selects subsets of the iterated items.  When `:macro-char' is
+   present, yield those values where DISPATCH? is false; when
+   `:dispatch-macro-char' is present, yield those values where
+   DISPATCH? is true.
+
+   The consequences of modifying READTABLE after entering BODY and
+   before the final invocation of NAME or final use of a
+   DISPATCH-ALIST are undefined."
+  (unless (symbolp name)
+    (signal-program-error
+     "~S is not a variable name" name))
+  (let ((it (gensym)) macs? dmacs?)
+    (if macro-char-types
+        (dolist (mct macro-char-types)
+          (case mct
+            ((:macro-char) (setq macs? t))
+            ((:dispatch-macro-char) (setq dmacs? t))
+            (otherwise
+               (signal-program-error    ;can't be type-error
+                "~S is not one of ~S or ~S"
+                mct :macro-char :dispatch-macro-char))))
+        (setq macs? t dmacs? t))
+    `(let ((,it (%make-readtable-iterator ,readtable ,macs? ,dmacs?)))
+       (macrolet ((,name () `(funcall ,',it)))
+         ,@body))))
+
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;				Reader					;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
