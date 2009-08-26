@@ -297,8 +297,7 @@
 	(declare (simple-string first-chars))
 	(%sp-byte-blt first-chars first-charpos chars 0 length)
         (setf (line-charprops-changes first-copied-line)
-              (copy-line-charprops first-line :start first-charpos
-                                   :end last-charpos))
+              (copy-line-charprops first-line :start first-charpos))
 	(do ((line (line-next first-line) (line-next line))
 	     (previous first-copied-line)
 	     (number line-increment (+ number line-increment)))
