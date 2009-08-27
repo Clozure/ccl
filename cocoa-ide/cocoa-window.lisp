@@ -52,6 +52,10 @@
 (defclass appkit-process (process)
     ((have-interactive-terminal-io :initform t)))
 
+(defmethod event-loop-can-have-interactive-terminal-io ((process appkit-process))
+  #+windows-target t
+  #-windows-target (slot-value process 'have-interactive-terminal-io))
+
 ;;; Interrupt the AppKit event process, by enqueing an event (if the
 ;;; application event loop seems to be running.)  It's possible that
 ;;; the event loop will stop after the calling thread checks; in that
@@ -85,31 +89,57 @@
                 condition)))
       (unless (or (not (typep c 'error)) (member c *event-process-reported-conditions*))
         (push c *event-process-reported-conditions*)
-        (if (slot-value process 'have-interactive-terminal-io)
-          (ccl::application-error ccl::*application* c frame-pointer)
-          (catch 'need-a-catch-frame-for-backtrace
-            (let* ((*debug-in-event-process* nil)
-                   (context (ccl::new-backtrace-info nil
-                                                     frame-pointer
-                                                     (if ccl::*backtrace-contexts*
-						       (or (ccl::child-frame
-							    (ccl::bt.youngest (car ccl::*backtrace-contexts*))
-							    nil)
-							   (ccl::last-frame-ptr))
-						       (ccl::last-frame-ptr))
-                                                     (ccl::%current-tcr)
-                                                     condition
-                                                     (ccl::%current-frame-ptr)
-                                                     #+ppc-target ccl::*fake-stack-frames*
-                                                     #+x86-target (ccl::%current-frame-ptr)
-                                                     (ccl::db-link)
-                                                     (1+ ccl::*break-level*)))
-                   (ccl::*backtrace-contexts* (cons context ccl::*backtrace-contexts*)))  
-              (format t "~%~%*** Error in event process: ~a~%~%" condition)
-              (print-call-history :context context :detailed-p t :count 20 :origin frame-pointer)
-              (format t "~%~%~%")
-              (force-output t)
-              )))))))
+        (cond ((slot-value process 'have-interactive-terminal-io)
+               (ccl::application-error ccl::*application* c frame-pointer))
+              #+windows-target
+              ((connect-to-console-window process)
+               (ccl::application-error ccl::*application* c frame-pointer))
+              (t
+               (catch 'need-a-catch-frame-for-backtrace
+                 (let* ((*debug-in-event-process* nil)
+                        (context
+                         (ccl::new-backtrace-info nil
+                                                  frame-pointer
+                                                  (if ccl::*backtrace-contexts*
+                                                      (or (ccl::child-frame
+                                                           (ccl::bt.youngest
+                                                            (car ccl::*backtrace-contexts*))
+                                                           nil)
+                                                          (ccl::last-frame-ptr))
+                                                      (ccl::last-frame-ptr))
+                                                  (ccl::%current-tcr)
+                                                  condition
+                                                  (ccl::%current-frame-ptr)
+                                                  #+ppc-target ccl::*fake-stack-frames*
+                                                  #+x86-target (ccl::%current-frame-ptr)
+                                                  (ccl::db-link)
+                                                  (1+ ccl::*break-level*)))
+                        (ccl::*backtrace-contexts* (cons context ccl::*backtrace-contexts*)))  
+                   (format t "~%~%*** Error in event process: ~a~%~%" condition)
+                   (print-call-history :context context :detailed-p t :count 20
+                                       :origin frame-pointer)
+                   (format t "~%~%~%")
+                   (force-output t)
+                   ))))))))
+
+#+windows-target
+(defun connect-to-console-window (process)
+  (when (#_AllocConsole)
+    (flet ((set-lisp-stream-fd (stream fd)
+             (setf (ccl::ioblock-device (ccl::stream-ioblock stream t)) fd)))
+      (let ((input-handle (#_GetStdHandle #$STD_INPUT_HANDLE))
+            (output-handle (#_GetStdHandle #$STD_OUTPUT_HANDLE)))
+        (set-lisp-stream-fd ccl::*stdin* (%ptr-to-int input-handle))
+        (set-lisp-stream-fd ccl::*stdout* (%ptr-to-int output-handle)))
+    ;; Ensure that output to the stream ccl::*stdout* -
+    ;; which is connected to fd 1 - is flushed periodically
+    ;; by the housekeeping task.  (ccl::*stdout* is
+    ;; typically the output side of the two-way stream
+    ;; which is the global/static value of *TERMINAL-IO*;
+    ;; many standard streams are synonym streams to
+    ;; *TERMINAL-IO*.
+    (ccl::add-auto-flush-stream ccl::*stdout*)
+    (setf (slot-value process 'have-interactive-terminal-io) t))))
 
 
 (defloadvar *default-ns-application-proxy-class-name*
@@ -165,18 +195,18 @@
   (let* ((app *NSApp*)
          (thread ccl::*current-process*))
     (loop
-      (if (not (slot-value thread 'have-interactive-terminal-io))
+      (if (event-loop-can-have-interactive-terminal-io thread)
+        (with-simple-restart (abort "Process the next event")
+          (#/run app))
         (let* ((ccl::*break-on-errors* nil))
           (handler-case (let* ((*event-process-reported-conditions* nil))
                           (if end-test
                             (#/run app)
-                          #|(#/runMode:beforeDate: (#/currentRunLoop ns:ns-run-loop)
-                          #&NSDefaultRunLoopMode
-                          (#/distantFuture ns:ns-date))|#
-                          (#/run app)))
-            (error (c) (nslog-condition c))))
-        (with-simple-restart (abort "Process the next event")
-          (#/run app)))
+                            #|(#/runMode:beforeDate: (#/currentRunLoop ns:ns-run-loop)
+                                                     #&NSDefaultRunLoopMode
+                                                     (#/distantFuture ns:ns-date))|#
+                            (#/run app)))
+            (error (c) (nslog-condition c)))))
       #+debug (log-debug "~&runMode exited, end-test: ~s isRunning ~s quitting: ~s" end-test (#/isRunning app) ccl::*quitting*)
       (when (or (and end-test (funcall end-test))
 		(and ccl::*quitting* (not (#/isRunning app))))
