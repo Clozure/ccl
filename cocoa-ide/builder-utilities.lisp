@@ -331,3 +331,52 @@
     (ensure-directories-exist executable-dir)
     (ensure-directories-exist rsrc-dir)
     app-bundle))
+
+;;; BUNDLE-FRAMEWORKS-PATH app-path
+;;; ------------------------------------------------------------------------
+;;; Returns the pathname of the frameworks directory given the pathname of
+;;; an application bundle
+(defun bundle-frameworks-path (app-path)
+  (path app-path "Contents"
+        #-windows-target (ensure-directory-pathname "Frameworks")
+        #+windows-target (ensure-directory-pathname "Windows")))
+
+;;; FIND-FRAMEWORK-EXECUTABLE framework-path
+;;; ------------------------------------------------------------------------
+;;; Returns the pathname of the framework's executable file given the
+;;; pathname of a framework
+(defun find-framework-executable (framework-path)
+  (let* ((raw-framework-name (car (last (pathname-directory framework-path))))
+         (framework-name (subseq raw-framework-name 0 (- (length raw-framework-name)
+                                                         #.(length ".framework"))))
+         (executable-wildcard (path framework-path
+                                    (concatenate 'string framework-name "*.dll")))
+         (executables (directory executable-wildcard)))
+    (when executables
+      (truename (first executables)))))
+
+;;; COPY-PRIVATE-FRAMEWORKS private-frameworks app-path
+;;; ------------------------------------------------------------------------
+;;; Copy any private frameworks into the bundle taking into account the
+;;; different directory structures used by Cocoa and Cocotron (Windows).
+(defun copy-private-frameworks (private-frameworks app-path)
+  (let ((private-frameworks #+windows-target (append *cocoa-application-frameworks*
+                                                     private-frameworks)
+                            #-windows-target private-frameworks)
+        (frameworks-dir (bundle-frameworks-path app-path)))
+    #+windows-target
+    (dolist (lib *cocoa-application-libraries*)
+      (copy-file lib frameworks-dir :preserve-attributes t :if-exists :supersede))
+    (when private-frameworks
+      (flet ((subdir (framework target)
+               (ensure-directory-pathname
+                (make-pathname :name (car (last (pathname-directory framework)))
+                               :defaults target))))
+        (dolist (framework private-frameworks)
+          (recursive-copy-directory framework (subdir framework frameworks-dir)
+                                    :if-exists :overwrite)
+          #+windows-target
+          (let ((executable (find-framework-executable framework)))
+            (when executable
+              (copy-file executable frameworks-dir 
+                         :preserve-attributes t :if-exists :supersede))))))))

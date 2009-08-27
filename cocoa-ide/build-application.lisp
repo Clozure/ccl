@@ -9,7 +9,7 @@
 ;;;;
 ;;;; ***********************************************************************
 
-(require "builder-utilities")
+(require "BUILDER-UTILITIES")
 
 (in-package :ccl)
 
@@ -39,6 +39,7 @@
                                         ; as the app's main. this name gets written
                                         ; into the Info.plist on the "NSMainNibFile" key
                           (application-class 'gui::cocoa-application)
+                          (private-frameworks nil)
                           (toplevel-function nil))
 
   (let* ((info-plist (or info-plist ; if the user supplied one then we use it
@@ -50,8 +51,8 @@
          (ide-bundle-path (get-ide-bundle-path))
          ;; create the bundle directory
          (app-bundle (make-application-bundle :name name :project-path directory))
-         (image-path (namestring (path (bundle-executable-path app-bundle)
-                                       (bundle-executable-name name)))))
+         (executable-dir (bundle-executable-path app-bundle))
+         (image-path (namestring (path executable-dir (bundle-executable-name name)))))
     ;; maybe copy IDE resources to the bundle
     (when copy-ide-resources
       (recursive-copy-directory (path ide-bundle-path "Contents" "Resources/")
@@ -71,6 +72,8 @@
         (dolist (n nib-paths)
           (let ((dest (path app-bundle  "Contents" "Resources" "English.lproj/")))
             (copy-nibfile n dest :if-exists :overwrite)))))
+    ;; copy any private frameworks into the bundle
+    (copy-private-frameworks private-frameworks app-bundle)
     ;; save the application image into the bundle
     (save-application image-path
                       :application-class application-class
