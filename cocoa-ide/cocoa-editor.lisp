@@ -2750,7 +2750,7 @@
 (objc:defmethod (#/writeToFile:ofType: :<BOOL>)
     ((self hemlock-editor-document) path type)
   (rlet ((perror :id +null-ptr+))
-    (#/writeToURL:ofType:error: (#/fileURLWithPath: ns:ns-url path) self type perror)))
+    (#/writeToURL:ofType:error: self (#/fileURLWithPath: ns:ns-url path) type perror)))
 
 
 ;;; Shadow the setFileURL: method, so that we can keep the buffer
