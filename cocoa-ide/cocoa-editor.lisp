@@ -2745,7 +2745,12 @@
           (setf (hi::buffer-modified buffer) nil))
         t))))
 
-
+;;; Cocotron's NSDocument uses the deprecated as of 10.4 methods to implement the NSSavePanel
+#+cocotron
+(objc:defmethod (#/writeToFile:ofType: :<BOOL>)
+    ((self hemlock-editor-document) path type)
+  (rlet ((perror :id +null-ptr+))
+    (#/writeToURL:ofType:error: (#/fileURLWithPath: ns:ns-url path) self type perror)))
 
 
 ;;; Shadow the setFileURL: method, so that we can keep the buffer
