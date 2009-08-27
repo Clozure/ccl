@@ -124,7 +124,8 @@
 
 #+windows-target
 (defun connect-to-console-window (process)
-  (when (#_AllocConsole)
+  (#_AllocConsole)
+  (when (not (%null-ptr-p (#_GetStdHandle #$STD_OUTPUT_HANDLE)))
     (flet ((set-lisp-stream-fd (stream fd)
              (setf (ccl::ioblock-device (ccl::stream-ioblock stream t)) fd)))
       (let ((input-handle (#_GetStdHandle #$STD_INPUT_HANDLE))
