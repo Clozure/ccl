@@ -20,7 +20,7 @@
           (#/release s)))
       (#/autorelease types-array))
     (when button-string
-      (#/setPrompt: open-panel (#/autorelease (%make-nsstring button-string))))
+      #-cocotron (#/setPrompt: open-panel (#/autorelease (%make-nsstring button-string))))
     (let ((result (#/runModalForDirectory:file:types: open-panel directory
 						      file types-array)))
       (cond ((= result #$NSOKButton)
@@ -46,7 +46,7 @@
   (assume-cocoa-thread)
   (let* ((save-panel (#/savePanel ns:ns-save-panel))
          (types-array +null-ptr+))
-    (#/setCanSelectHiddenExtension: save-panel t)
+    #-cocotron (#/setCanSelectHiddenExtension: save-panel t)
     (when directory
       (setq directory (#/autorelease (%make-nsstring directory))))
     (when file
@@ -58,7 +58,7 @@
           (#/addObject: types-array s)
           (#/release s)))
       (#/autorelease types-array))
-    (#/setAllowedFileTypes: save-panel types-array)
+    #-cocotron (#/setAllowedFileTypes: save-panel types-array)
     (let ((result (#/runModalForDirectory:file: save-panel directory file)))
       (cond ((= result #$NSOKButton)
 	     (lisp-string-from-nsstring (#/filename save-panel)))
@@ -93,7 +93,7 @@
     (#/setCanChooseDirectories: open-panel #$YES)
     (#/setAllowsMultipleSelection: open-panel #$NO)
     (#/setTitle: open-panel #@"Choose Directory")
-    (#/setPrompt: open-panel #@"Choose")
+    #-cocotron (#/setPrompt: open-panel #@"Choose")
     (when directory
       (setq directory (#/autorelease (%make-nsstring directory))))
     (let  ((result (#/runModalForDirectory:file:types: open-panel directory
