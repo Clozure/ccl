@@ -69,6 +69,7 @@
 ;;; be a pathname that contains a space. Quoting such a pathname -
 ;;; and figuring out how to get make to do so - is left as an exercise.
 (defun install-altconsole (bundle-path)
+  #+cocotron (declare (ignore bundle-path))
   #-cocotron
   (let* ((altconsole-path (merge-pathnames ";Contents;Resources;AltConsole.app;" bundle-path))
          (build-directory "ccl:cocoa-ide;altconsole;")
