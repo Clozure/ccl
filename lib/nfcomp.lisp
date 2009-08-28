@@ -1,4 +1,4 @@
-;;;-*-Mode: LISP; Package: CCL -*-
+;;-*-Mode: LISP; Package: CCL -*-
 ;;;
 ;;;   Copyright (C) 1994-2001 Digitool, Inc
 ;;;   This file is part of OpenMCL.  
@@ -623,32 +623,50 @@ Will differ from *compiling-file* during an INCLUDE")
 (defun fcomp-locally (form env processing-mode &aux (body (%cdr form)))
   (fcomp-compile-toplevel-forms env)
   (multiple-value-bind (body decls) (parse-body body env)
-    (let* ((env (augment-environment env :declare (decl-specs-from-declarations decls))))
+    (let* ((decl-specs (decl-specs-from-declarations decls))
+           (env (augment-environment env :declare decl-specs))
+           (*fasl-compile-time-env* (augment-environment *fasl-compile-time-env*
+                                                         :declare decl-specs)))
       (fcomp-form-list body env processing-mode)
       (fcomp-compile-toplevel-forms env))))
 
 (defun fcomp-macrolet (form env processing-mode &aux (body (%cdr form)))
   (fcomp-compile-toplevel-forms env)
-  (let ((outer-env (augment-environment env 
-                                        :macro
-                                        (mapcar #'(lambda (m)
-                                                    (destructuring-bind (name arglist &body body) m
-                                                      (list name (enclose (parse-macro name arglist body env)
-                                                                          env))))
-                                                (car body)))))
-    (multiple-value-bind (body decls) (parse-body (cdr body) outer-env)
-      (let* ((env (augment-environment 
-                   outer-env
-                   :declare (decl-specs-from-declarations decls))))
-        (fcomp-form-list body env processing-mode)
-        (fcomp-compile-toplevel-forms env)))))
+  (flet ((augment-with-macros (e defs)
+           (augment-environment e
+                                :macro
+                                (mapcar #'(lambda (m)
+                                            (destructuring-bind (name arglist &body body) m
+                                              (list name (enclose (parse-macro name arglist body env)
+                                                                  e))))
+                                        defs))))
+           
+    (let* ((macros (car body))
+           (outer-env (augment-with-macros env macros)))
+      (multiple-value-bind (body decls) (parse-body (cdr body) outer-env)
+        (let* ((decl-specs (decl-specs-from-declarations decls))
+               (env (augment-environment 
+                     outer-env
+                     :declare decl-specs))
+               (*fasl-compile-time-env* (augment-environment
+                                         (augment-with-macros
+                                          *fasl-compile-time-env*
+                                          macros)
+                                         :declare decl-specs)))
+          (fcomp-form-list body env processing-mode)
+          (fcomp-compile-toplevel-forms env))))))
 
 (defun fcomp-symbol-macrolet (form env processing-mode &aux (body (%cdr form)))
   (fcomp-compile-toplevel-forms env)
-  (let* ((outer-env (augment-environment env :symbol-macro (car body))))
+  (let* ((defs (car body))
+         (outer-env (augment-environment env :symbol-macro defs)))
     (multiple-value-bind (body decls) (parse-body (cdr body) env)
-      (let* ((env (augment-environment outer-env 
-                                       :declare (decl-specs-from-declarations decls))))
+      (let* ((decl-specs (decl-specs-from-declarations decls))
+             (env (augment-environment outer-env 
+                                       :declare decl-specs))
+             (*fasl-compile-time-env* (augment-environment *fasl-compile-time-env*
+                                                           :symbol-macro defs
+                                                           :declare decl-specs)))
         (fcomp-form-list body env processing-mode)
         (fcomp-compile-toplevel-forms env)))))
 
