@@ -43,9 +43,9 @@
   (collect ((instance-slots)
 	    (shared-slots))
     (dolist (s slotds (values (instance-slots) (shared-slots)))
-      (if (eq (%slot-definition-allocation s) :class)
-        (shared-slots s)
-        (instance-slots s)))))
+      (case (%slot-definition-allocation s)
+        (:instance (instance-slots s))
+        (:class (shared-slots s))))))
 
 
 
