@@ -894,19 +894,27 @@ are running on, or NIL if we can't find any useful information."
   (let* ((nconses 0)
          (nvectors (make-array 256))
          (vector-sizes (make-array 256))
+         (vector-physical-sizes (make-array 256))
          (array-size-function (arch::target-array-data-size-function
                                (backend-target-arch *host-backend*))))
     (declare (type (simple-vector 256) nvectors vector-sizes)
-             (dynamic-extent nvectors vector-sizes))
+             (dynamic-extent nvectors vector-sizes vector-physical-sizes))
     (when gc-first (gc))
     (%map-areas (lambda (thing)
                   (if (listp thing)
                     (incf nconses)
-                    (let* ((typecode (typecode thing)))
+                    (let* ((typecode (typecode thing))
+                           (logsize (funcall array-size-function typecode (uvsize thing))))
                       (incf (aref nvectors typecode))
-                      (incf (aref vector-sizes typecode)
-                            (funcall array-size-function typecode (uvsize thing)))))))
-    (report-heap-utilization stream nconses nvectors vector-sizes)
+                      (incf (aref vector-sizes typecode) logsize)
+                      (incf (aref vector-physical-sizes typecode)
+                            (logandc2 (+ logsize
+                                         #+64-bit-target (+ 8 15)
+                                         #+32-bit-target (+ 4 7))
+                                      #+64-bit-target 15
+                                      #+32-bit-target 7))))))
+                                         
+    (report-heap-utilization stream nconses nvectors vector-sizes vector-physical-sizes)
     (values)))
 
 (defvar *heap-utilization-vector-type-names*
@@ -953,14 +961,21 @@ are running on, or NIL if we can't find any useful information."
 
   
     
-(defun report-heap-utilization (out nconses nvectors vector-sizes)
-  (format out "~&Object type~42tCount~50tTotal Size in Bytes")
-  (format out "~&CONS~36t~12d~48t~16d" nconses (* nconses target::cons.size))
-  (dotimes (i (length nvectors))
-    (let* ((count (aref nvectors i))
-           (sizes (aref vector-sizes i)))
-      (unless (zerop count)
-        (format out "~&~a~36t~12d~48t~16d" (aref *heap-utilization-vector-type-names* i)  count sizes)))))
+(defun report-heap-utilization (out nconses nvectors vector-sizes vector-physical-sizes)
+  (let* ((total-cons-size  (* nconses target::cons.size))
+         (total-vector-size 0)
+         (total-physical-vector-size 0))
+    (format out "~&Object type~42tCount~50tTotal Size in Bytes~72tTotal Size")
+    (format out "~&CONS~36t~12d~48t~16d~16d" nconses total-cons-size total-cons-size)
+    (dotimes (i (length nvectors))
+      (let* ((count (aref nvectors i))
+             (sizes (aref vector-sizes i))
+             (psizes (aref vector-physical-sizes i)))
+        (unless (zerop count)
+          (incf total-vector-size sizes)
+          (incf total-physical-vector-size psizes)
+          (format out "~&~a~36t~12d~48t~16d~16d" (aref *heap-utilization-vector-type-names* i)  count sizes psizes))))
+    (format out "~&   Total sizes: ~49t~16d~16d" (+ total-cons-size total-vector-size) (+ total-cons-size total-physical-vector-size))))
                             
 ;; The number of words to allocate for static conses when the user requests
 ;; one and we don't have any left over
