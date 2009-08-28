@@ -27,7 +27,9 @@
 #include <errno.h>
 #include <stdio.h>
 
-#ifndef WINDOWS
+#ifdef WINDOWS
+#include <fcntl.h>
+#else
 #include <sys/socket.h>
 #include <dlfcn.h>
 #endif
@@ -99,8 +101,18 @@ stdin_is_dev_null()
   return ((fd0stat.st_ino == devnullstat.st_ino) &&
           (fd0stat.st_dev == devnullstat.st_dev));
 }
-
 #endif
+
+#ifdef WINDOWS
+Boolean
+stdin_is_dev_null()
+{
+  HANDLE stdIn;
+  stdIn = GetStdHandle(STD_INPUT_HANDLE);
+  return (stdIn == NULL);
+}
+#endif
+
 
 char *
 foreign_name_and_offset(natural addr, int *delta)
@@ -144,6 +156,8 @@ readc()
     c = getchar();
     switch(c) {
     case '\n':
+      continue;
+    case '\r':
       continue;
     case EOF:
       if (ferror(stdin)) {
@@ -1107,6 +1121,10 @@ debug_identify_function(ExceptionInformation *xp, siginfo_t *info)
 extern pid_t main_thread_pid;
 #endif
 
+#ifdef WINDOWS
+Boolean first_debugger_call = TRUE;
+#endif
+
 
 OSStatus
 lisp_Debugger(ExceptionInformation *xp, 
@@ -1119,17 +1137,49 @@ lisp_Debugger(ExceptionInformation *xp,
   va_list args;
   debug_command_return state = debug_continue;
 
+#ifdef WINDOWS
+  HANDLE h;
+  int fd;
+  FILE *f;
+
+  if (first_debugger_call) {
+    first_debugger_call = FALSE;
+    if (stdin_is_dev_null())
+      AllocConsole();
+    // Reassociate C's stdin with Windows' stdin
+    h = GetStdHandle(STD_INPUT_HANDLE);
+    fd = _open_osfhandle((intptr_t)h, _O_TEXT);
+    if (fd >= 0) {
+      f = _fdopen(fd, "r");
+      *stdin = *f;
+    }
+    // Reassociate C's stdout with Windows' stdout
+    h = GetStdHandle(STD_OUTPUT_HANDLE);
+    fd = _open_osfhandle((intptr_t)h, _O_TEXT);
+    if (fd >= 0) {
+      f = _fdopen(fd, "w");
+      *stdout = *f;
+    }
+    // Reassociate C's stderr with Windows' stderr
+    h = GetStdHandle(STD_ERROR_HANDLE);
+    fd = _open_osfhandle((intptr_t)h, _O_TEXT);
+    if (fd >= 0) {
+      f = _fdopen(fd, "w");
+      *stderr = *f;
+    }
+    dbgout = stderr;
+  }
+#endif
+
+  if (stdin_is_dev_null()) {
+    return -1;
+  }
+
   va_start(args,message);
   vfprintf(dbgout, message, args);
   fprintf(dbgout, "\n");
   va_end(args);
-  
 
-#ifndef WINDOWS
-  if (stdin_is_dev_null()) {
-    return -1;
-  }
-#endif
   if (threads_initialized) {
     suspend_other_threads(false);
   }
