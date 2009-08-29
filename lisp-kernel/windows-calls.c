@@ -707,9 +707,9 @@ lisp_gettimeofday(struct timeval *tp, void *tzp)
   gettimeofday(tp,tzp);       /* trust it to get time zone right, at least */
   GetSystemTimeAsFileTime((FILETIME*)&now);
   now -= UNIX_EPOCH_IN_WINDOWS_EPOCH;
-  now /= 10000;
+  now /= 10000;               /* convert time to milliseconds */
   tp->tv_sec = now/1000LL;
-  tp->tv_usec = now%1000LL;
+  tp->tv_usec = 1000 * (now%1000LL); /* convert milliseconds to microseconds */
   return 0;
 }
 
