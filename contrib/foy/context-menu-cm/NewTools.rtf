@@ -1,0 +1,148 @@
+{\rtf1\ansi\ansicpg1252\cocoartf949\cocoasubrtf460
+{\fonttbl\f0\fswiss\fcharset0 Helvetica;\f1\fnil\fcharset0 Monaco;}
+{\colortbl;\red255\green255\blue255;\red0\green79\blue175;\red11\green12\blue197;}
+\margl1440\margr1440\vieww12620\viewh17880\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\f0\b\fs28 \cf2 \ul \ulc3 New-Tools
+\fs26 \cf3 \
+\
+
+\b0 \cf0 \ulnone Integrating new tools is simple.  Your tool's interface will be a contextual popup menu.  Right-Clicking in a Hemlock window will produce this popup menu when your tool is the 
+\b Default Tool
+\b0 .\
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\b\fs32 \cf0 (1)  
+\b0\fs26 Preliminaries:\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\fs20 \cf0 \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\f1 \cf2 (defpackage "YOUR-TOOLNAME" (:use :cl :ccl))\
+(in-package "YOUR-TOOLNAME")\
+(require :context-menu)\
+\
+By conventions toolnames have an appended "-CM", indicating that they are a part of a suite of tools.
+\f0\fs26 \cf0 \
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\b\fs32 \cf0 (2)
+\b0\fs30   
+\fs26 Derive a class from ns:ns-menu
+\fs30 :
+\fs26 \
+It it will probably have several slots, but it must have a 
+\f1\fs20 \cf2 tool-menu
+\f0\fs26 \cf0  slot and probably a 
+\f1\fs20 \cf2 doc-path
+\f0\fs26 \cf0  slot.  See the class, list-definitions-menu, in list-definitions-1.lisp.\
+\
+
+\b\fs32 (3)
+\b0\fs30   
+\fs26 Provide a menu creation function:
+\b \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\b0 \cf0 This will be specific to your tool, but it must include this statement:\
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\f1\fs20 \cf2 (setf (tool-menu menu) (cmenu:add-default-tool-menu menu :doc-file (doc-path menu)))\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\f0\fs26 \cf0 \
+This sets the 
+\f1\fs20 \cf2 tool-menu
+\f0\fs26 \cf0  slot mentioned above.  
+\f1\fs20 \cf2 Menu
+\f0\fs26 \cf0  is the menu being created and (
+\f1\fs20 \cf2 doc-path menu)
+\f0\fs26 \cf0  is the path to an optional documentation file.  This call will insert a 
+\b Defaul
+\b0 t 
+\b Tool
+\b0  submenu as your first menu-item.  See list-definition-context-menu in list-definitions-1.lisp.  You can also do this in an 
+\f1\fs20 \cf2 initialize-instance :after
+\f0\fs26 \cf0  method.  See hemlock-commands-1.lisp for an example.\
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\fs24 \cf0 You should probably make your popup menu look like the other popup menus.  This means using the fonts, font-sizes and colors that are used by List-Definitions, Hemlock-Commands and CL-Documentation. \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\fs30 \cf0 \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\b\fs32 \cf0 (4)
+\b0\fs30   
+\fs26 Provide an 
+\f1\fs20 \cf2 #/update
+\f0\fs26 \cf0  method for your new menu class that looks like this:
+\b \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\b0\fs24 \cf0 \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\f1\fs20 \cf2 (objc:defmethod (#/update :void) ((self list-definitions-menu))\
+  (cmenu:update-tool-menu self (tool-menu self))\
+  (call-next-method))\
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\f0\fs26 \cf0 This will update the 
+\b Default
+\b0  
+\b Tool
+\b0  submenu so that it includes all other required tools.  This is necessary, because the number and type of tools will probably not be known when your tool is loaded.  This depends on which tools the user requires and the order in which he requires them.\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\fs30 \cf0 \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\b\fs32 \cf0 (5)
+\b0\fs30   
+\fs26 Provide a 
+\f1\fs20 \cf2 get-<your-toolname>-menu
+\f0\fs26 \cf0  function:
+\b \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\b0 \cf0 See get-list-definitions-menu in list-definitions-1.lisp for an example.
+\fs30 \
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\b\fs32 \cf0 (6)
+\b0\fs30   
+\fs26 Register the new tool:
+\b \cf3 \ul \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\b0 \cf0 \ulnone \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\f1\fs20 \cf2 (cmenu:register-tool "List-Definitions-CM" #'get-list-definitions-menu)
+\f0\fs26 \cf0 \
+\
+The first argument is the name of your tool.\
+The second argument is the function described in item (5) above.
+\fs30 \
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\b\fs32 \cf0 (7)
+\b0\fs30   
+\f1\fs20 \cf2 (provide :your-toolname)\
+\
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\f0\fs26 \cf0 \
+\
+}
