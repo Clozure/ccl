@@ -42,15 +42,12 @@
            #:make-rgb #:rgb-red #:rgb-green #:rgb-blue #:rgb-opacity
            ;; canned dialogs
            #:y-or-n-dialog #:user-pick-color
-           #:choose-file-dialog #:choose-new-file-dialog
-          
+           #:choose-file-dialog #:choose-new-file-dialog #:choose-directory-dialog          
          
            #:dcc
            #:perform-close #:window-may-close
            ;; variables
-           #:*debug-cocoa-calls*
            #:*screen-flipped*
-           #:*cocoa-event*
            #:*suppress-window-flushing*))
 
 (cl:defpackage :easygui-demo
