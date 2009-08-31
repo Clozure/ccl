@@ -4,7 +4,7 @@
 ;;;
 ;;;      hemlock-commands-new.lisp
 ;;;
-;;;      copyright © 2009 Glen Foy
+;;;      copyright ï¿½ 2009 Glen Foy
 ;;;      (Permission is granted to Clozure Associates to distribute this file.)
 ;;;
 ;;;      This code implements a two new Hemlock commands.
@@ -94,6 +94,9 @@
           (setq args (arglist sym))
           (when (macro-function sym) (setq doctype 'macro))
           (when (special-form-p sym) (setq doctype 'special-form)))
+        (when (eq doctype 'type)
+          (when (find-class sym nil)
+            (setq doctype 'class)))
         (open-documentation-dialog
          (if args
            (format nil "~A  ~A" (string-upcase sym) 
