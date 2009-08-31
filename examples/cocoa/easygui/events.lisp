@@ -1,10 +1,13 @@
 (in-package :easygui)
 
-;;; Changed by AWSC Feb 2009:
+;;; Changed by AWSC (arthur.cater@ucd.ie) Feb 2009:
 ;;; Modified define-chaining-responder-method to allow subclasses of easygui
 ;;; views to inherit mouse handling behaviour.
-;;; Original work by an unknown author.
-;;; Permission to use the change is granted.
+;;; Changed by AWSC Apr 2009:
+;;; Modified define-chaining-responder-method to bind *modifier-key-pattern*
+;;; when Lisp mouse handlers are being called.
+;;; The original work I changed is by an unknown author.
+;;; Permission to use disseminate and further modify these changes is granted.
 
 ;;; Event handling basics
 
@@ -18,8 +21,9 @@
        (if (some #'(lambda (super)
                      (find-method #',lisp-name nil (list (class-name super)) nil))
                  superclasses)
-           (,lisp-name (easygui-view-of ,self-arg)
-                     ,@arg-compute-forms)
+           (let ((*modifier-key-pattern* (#/modifierFlags ,event-arg)))
+             (,lisp-name (easygui-view-of ,self-arg)
+                         ,@arg-compute-forms))
            (,objc-name (#/nextResponder ,self-arg) ,event-arg)))))
 
 (defmacro define-useful-mouse-event-handling-routines (class-name)
