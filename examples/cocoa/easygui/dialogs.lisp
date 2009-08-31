@@ -19,46 +19,16 @@
 
 (defvar *beepnsleep* t)
 
-(defun choose-file-dialog (&key button-string)
-  (gui::with-autorelease-pool 
-      (let* ((panel (dcc (#/autorelease (dcc (#/openPanel ns:ns-open-panel)))))) ; allocate an NSOpenPanel
-        (dcc (#/setAllowsMultipleSelection: panel nil)) ; return at most one filename
-        (when button-string
-          (setf button-string (ccl::%make-nsstring button-string))
-          (dcc (#/setPrompt: panel button-string)))
-        (when (eql #$NSOKButton
-                   (dcc (#/runModalForDirectory:file:types: panel
-                           +null-ptr+ ; default to last dir used
-                           +null-ptr+ ; no preselected file
-                           ;; If not NIL below then an ObjC array containing NSStrings could be used
-                           ;; to restrict the file types we're interested in
-                           nil)))
-          ;; Because we told the panel to disallow multiple selection,
-          ;; there should be exactly one object in this array, an
-          ;; NSString describing the selected file.
-          (let* ((files (dcc (#/filenames panel))) thing)
-            (if (eql 1 (dcc (#/count files)))
-              (progn
-                (setf thing (dcc (#/objectAtIndex: files 0)))
-                (gui::lisp-string-from-nsstring thing))
-              "Don't know why we didn't get an NSArray containing exactly 1 file here."))))))
+(defun choose-file-dialog (&key directory file-types file button-string)
+  (gui::cocoa-choose-file-dialog :directory directory :file-types file-types :file file :button-string button-string))
 
-(defun choose-new-file-dialog (&key button-string)
-  (declare (ignorable button-string))
-  (gui::with-autorelease-pool 
-      (let* ((panel (dcc (#/autorelease (dcc (#/savePanel ns:ns-save-panel)))))) ; allocate an NSSavePanel
-        (when button-string (dcc (#/setPrompt: panel (ccl::%make-nsstring button-string))))
-        (when (eql #$NSOKButton
-                   (dcc (#/runModalForDirectory:file: panel
-                      +null-ptr+ ; default to last dir used
-                      +null-ptr+)))
-          ;; Because we told the panel to disallow multiple selection,
-          ;; there should be exactly one object in this array, an
-          ;; NSString describing the selected file.
-          (let* ((files (dcc (#/filenames panel))))
-            (if (eql 1 (dcc (#/count files)))
-              (gui::lisp-string-from-nsstring (dcc (#/objectAtIndex: files 0)))
-              (error "Don't know why we didn't get an NSArray containing exactly 1 file here.")))))))
+(defun choose-new-file-dialog (&key directory file-types file button-string)
+  (declare (ignore button-string))
+  (gui::cocoa-choose-new-file-dialog :directory directory :file-types file-types :file file))
+
+(defun cocoa-choose-directory-dialog (&key directory button-string)
+  (declare (ignore button-string))
+  (cocoa-choose-directory-dialog :directory directory))
 
 (objc:defmethod (#/NSWindowWillCloseNotification :void) ((self ns:ns-color-panel))
   (dcc (#/stopModal (#/sharedApplication ns:ns-application))))
