@@ -29,9 +29,6 @@
 ; - Shift, Command, Control and Option keys may be interrogated
 ; ----------------------------------------------------------------------
 
-(eval-when (:compile-toplevel :execute)
-  (declaim (optimize (speed 0) (space 0) (compilation-speed 0) (safety 3) (debug 3))))
-
 (defmacro running-on-this-thread ((&key (waitp t)) &rest body)
 ;; The purpose of this trivial macro is to mark places where it is thought possible that
 ;; it may be preferable to use running-on-main-thread.
@@ -40,7 +37,7 @@
 
 
 (defparameter *screen-flipped* nil
-"When NIL, window positions are taken as referring to their bottom right,
+"When NIL, window positions are taken as referring to their bottom left,
 as per Cocoa's native coordinate system.
 When non-NIL, window positions are taken to refer to their top left,
 as per - for instance - Digitool's MCL.
@@ -130,6 +127,22 @@ To avoid deallocation, use RETAINING-OBJECTS"))
 ;;; Some view classes inherit from 'background-coloring-mixin'
 ;;; Such classes include STATIC-TEXT-VIEW ... for now
 ;;;
+;;; Some view classes inherit from 'text-coloring-mixin'
+;;; Such classes include ...
+;;;
+;;; Some view classes inherit from 'fonting-mixin'
+;;; Such classes include ...
+;;;
+;;; Some view classes inherit from 'mouse-updownabout-mixin'
+;;; Such classes include ...
+;;;
+;;; Some view classes inherit from 'mouse-tracking-mixin'
+;;; Such classes include ...
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Mixins dealing with text string and numeric equivalents
 
 (defclass value-mixin () ())
 
@@ -137,11 +150,14 @@ To avoid deallocation, use RETAINING-OBJECTS"))
 
 (defclass numeric-value-mixin (value-mixin) ())
 
-(defclass action-view-mixin ()
-  ((action :initarg :action)
-   (enabled :accessor dialog-item-enabled-p :initarg :dialog-item-enabled-p :initform t)))
+(defclass view-text-mixin ()
+     ((text :initarg :text :initarg :dialog-item-text)))
 
-(defclass decline-menu-mixin () ())
+(defclass view-text-via-stringvalue-mixin (view-text-mixin string-value-mixin)
+     ())
+
+(defclass view-text-via-title-mixin (view-text-mixin)
+     ((text :initarg :title)))
 
 (macrolet ((def-type-accessor (class lisp-type cocoa-reader cocoa-writer
                                      &key (new-value-form 'new-value) (return-value-converter 'identity))
@@ -158,15 +174,6 @@ To avoid deallocation, use RETAINING-OBJECTS"))
     :new-value-form (coerce new-value 'single-float))
   (def-type-accessor numeric-value-mixin double  #/doubleValue #/setDoubleValue:
     :new-value-form (coerce new-value 'double-float)))
-
-(defclass view-text-mixin ()
-     ((text :initarg :text :initarg :dialog-item-text)))
-
-(defclass view-text-via-stringvalue-mixin (view-text-mixin string-value-mixin)
-     ())
-
-(defclass view-text-via-title-mixin (view-text-mixin)
-     ((text :initarg :title)))
 
 (defmethod view-text ((view view-text-via-stringvalue-mixin))
   (string-value-of view))
@@ -185,11 +192,46 @@ To avoid deallocation, use RETAINING-OBJECTS"))
   (when (slot-boundp view 'text)
     (setf (view-text view) (slot-value view 'text))))
 
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Mixins dealing with mouse sensitivity (1)
+
+(defclass action-view-mixin ()
+  ((action :initarg :action)
+   (enabled :accessor dialog-item-enabled-p :initarg :dialog-item-enabled-p :initform t)))
+
+(defclass decline-menu-mixin () ())
+
+(defmethod set-dialog-item-enabled-p ((view action-view-mixin) value)
+  (unless (eq (not value) (not (dialog-item-enabled-p view)))
+    (setf (dialog-item-enabled-p view) value)
+    (dcc (#/setEnabled: (cocoa-ref view) (if value #$YES #$NO)))))
+
+(defmethod initialize-view :after ((view action-view-mixin))
+  (when (and (slot-boundp view 'action) (slot-value view 'action))
+    (setf (action view) (slot-value view 'action)))
+  (unless (dialog-item-enabled-p view)
+    (dcc (#/setEnabled: (cocoa-ref view) #$NO))))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Mixins dealing with text properties - font, foreground and background colors, editability
+
 (defclass text-coloring-mixin () ())
 
 (defclass text-fonting-mixin () ())
 
 (defclass editable-mixin () ())
+
+(defclass background-coloring-mixin ()
+  ((drawsbackground     :initform t :initarg :draws-background)))
+
+(defmethod initialize-view :after ((view background-coloring-mixin))
+  (dcc (#/setDrawsBackground: (cocoa-ref view) (slot-value view 'drawsbackground)))
+  (when (and (cocoa-ref view) (slot-boundp view 'background))
+      (dcc (#/setBackgroundColor: (cocoa-ref view) (slot-value view 'background)))))
 
 (defmethod editable-p ((view editable-mixin))
   (dcc (#/isEditable (cocoa-ref view))))
@@ -198,6 +240,11 @@ To avoid deallocation, use RETAINING-OBJECTS"))
   (check-type editable-p boolean)
   (dcc (#/setEditable: (cocoa-ref view) editable-p))
   editable-p)
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Mixin dealing with selection: Possibly obsolete?
 
 (defclass one-selection-mixin () ())
 
@@ -212,12 +259,14 @@ To avoid deallocation, use RETAINING-OBJECTS"))
         (range (ns:ns-range-location range)
                (ns:ns-range-length range)))))
 
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Mixin for content views: window, box, perhaps others.
+
 (defclass content-view-mixin ()
   ((content-view)
    (flipped :initarg :flipped :initform *screen-flipped*)))
-
-(defclass contained-view (view)
-  ((flipped :initarg :flipped)))
 
 (defmethod initialize-view :after ((view content-view-mixin))
   (unless (slot-boundp view 'content-view)
@@ -228,28 +277,66 @@ To avoid deallocation, use RETAINING-OBJECTS"))
       (setf (slot-value view 'content-view) containee
             (slot-value containee 'parent) view))))
 
-(defmethod content-view ((view content-view-mixin))
-  (assert (eql (cocoa-ref (slot-value view 'content-view))
-               (dcc (#/contentView (cocoa-ref view)))))
-  (slot-value view 'content-view))
-
 (defmethod (setf content-view) (new-content-view (view content-view-mixin))
   (setf (slot-value view 'content-view) new-content-view)
   (dcc (#/setContentView: (cocoa-ref view) (cocoa-ref new-content-view)))
   new-content-view)
 
-(defmethod set-dialog-item-enabled-p ((view action-view-mixin) value)
-  (unless (eq (not value) (not (dialog-item-enabled-p view)))
-    (setf (dialog-item-enabled-p view) value)
-    (dcc (#/setEnabled: (cocoa-ref view) (if value #$YES #$NO)))))
 
-(defclass background-coloring-mixin ()
-  ((drawsbackground     :initform t :initarg :draws-background)))
 
-(defmethod initialize-view :after ((view background-coloring-mixin))
-  (dcc (#/setDrawsBackground: (cocoa-ref view) (slot-value view 'drawsbackground)))
-  (when (and (cocoa-ref view) (slot-boundp view 'background))
-      (dcc (#/setBackgroundColor: (cocoa-ref view) (slot-value view 'background)))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Mixin for views that can respond to mouse entry, exit, and movement
+
+(defclass mouse-tracking-mixin ()
+  ((mouse-target :reader view-mouse-target :initform nil)
+   (mouse-enter :accessor view-mouse-enter :initarg :mouse-enter :initform nil)
+   (mouse-exit :accessor view-mouse-exit :initarg :mouse-exit :initform nil)
+   (mouse-move :accessor view-mouse-move :initarg :mouse-move :initform nil)))
+
+(defclass easygui-mouse-target (ns:ns-object)
+  ((view :initarg :view :reader mouse-target-view :initform nil))
+  (:metaclass ns:+ns-object))
+
+(defmethod initialize-view :after ((view mouse-tracking-mixin))
+  (let ((cocoaview (cocoa-ref view)))
+   (when cocoaview
+      (let ((target (make-instance 'easygui-mouse-target :view view)))
+        (setf (slot-value view 'mouse-target) target)
+        (dcc (#/retain target))
+        (dcc (#/addTrackingRect:owner:userData:assumeInside:
+         cocoaview
+         (dcc (#/bounds cocoaview))
+         target
+         ccl:+null-ptr+
+         #$NO))))))
+
+(objc:define-objc-method ((:void :mouse-entered (:id event)) easygui-mouse-target)
+  (let* ((view (mouse-target-view self))
+         (fn (view-mouse-enter view)))
+    (when fn (funcall fn view :event event :allow-other-keys t))))
+
+(objc:define-objc-method ((:void :mouse-exited (:id event)) easygui-mouse-target)
+  (let* ((view (mouse-target-view self))
+         (fn (view-mouse-exit view)))
+    (when fn (funcall fn view :event event :allow-other-keys t))))
+
+(objc:define-objc-method ((:void :mouse-move (:id event)) easygui-mouse-target)
+  (let* ((view (mouse-target-view self))
+         (fn (view-mouse-move view)))
+    (when fn (funcall fn view :event event :allow-other-keys t))))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Class for the sort of view that is contained by a content view.
+
+(defclass contained-view (view)
+  ((flipped :initarg :flipped)))
+
+(defmethod content-view ((view content-view-mixin))
+  (assert (eql (cocoa-ref (slot-value view 'content-view))
+               (dcc (#/contentView (cocoa-ref view)))))
+  (slot-value view 'content-view))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; the actual views (when adding a new class,
@@ -270,13 +357,9 @@ To avoid deallocation, use RETAINING-OBJECTS"))
       (foreground :initarg :fore-color :initform (#/blackColor ns:ns-color))
       (font :reader view-font :initarg :font :initarg :view-font :initform nil)
       (specifically :reader view-specifically :initarg :specifically :initform nil)
-      (mouse-target :reader view-mouse-target :initform nil)
       ;; Next three not yet operative
       (tip :initarg :tip :reader view-tip :initform nil)
-      (tiptag :initform nil)
-      (mouse-enter :accessor view-mouse-enter :initarg :mouse-enter :initform nil)
-      (mouse-exit :accessor view-mouse-exit :initarg :mouse-exit :initform nil)
-      (mouse-move :accessor view-mouse-move :initarg :mouse-move :initform nil)))
+      (tiptag :initform nil)))
 
 (defclass window (content-view-mixin view-text-via-title-mixin view)
      ((text :initarg :title :initform "" :reader window-title)
@@ -294,6 +377,9 @@ To avoid deallocation, use RETAINING-OBJECTS"))
       (style :initarg :window-style :initform #$NSTitledWindowMask))
   (:default-initargs :specifically 'cocoa-contained-view))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+
 (defmethod clear-page ((view view))
   (let* ((cview (cocoa-ref view))
          (rect (dcc (#/bounds cview)))
@@ -305,7 +391,10 @@ To avoid deallocation, use RETAINING-OBJECTS"))
 (defmethod clear-page ((window content-view-mixin))
   (clear-page (content-view window)))
 
-(defclass static-text-view (view view-text-via-stringvalue-mixin action-view-mixin text-coloring-mixin text-fonting-mixin background-coloring-mixin)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+
+(defclass static-text-view (view view-text-via-stringvalue-mixin action-view-mixin text-coloring-mixin text-fonting-mixin background-coloring-mixin mouse-tracking-mixin)
   ((mousedown           :initform nil :initarg :mouse-down    :accessor static-text-view-mouse-down)
    (mouseup             :initform nil :initarg :mouse-up      :accessor static-text-view-mouse-up)
    (mousedragged        :initform nil :initarg :mouse-dragged :accessor static-text-view-mouse-dragged)))
@@ -313,17 +402,24 @@ To avoid deallocation, use RETAINING-OBJECTS"))
 (defclass text-input-view (view editable-mixin text-coloring-mixin text-fonting-mixin view-text-via-stringvalue-mixin
                                 ;; XXX: requires NSTextView, but this is an
                                 ;; NSTextField:
-                                #+not-yet one-selection-mixin)
+                                #+not-yet one-selection-mixin
+                                mouse-tracking-mixin)
      ((input-locked-p :initform nil :initarg :input-locked-p
                       :reader text-input-locked-p)))
 
 (defclass password-input-view (text-input-view)
      ())
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+
 (defclass push-button-view (view view-text-via-title-mixin action-view-mixin decline-menu-mixin)
      ((default-button-p :initarg :default-button-p :initform nil
                         :reader default-button-p)
       (bezelstyle       :reader bezel-style        :initarg :bezel-style      :initform :rounded)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
 
 (defclass form-view (view)
      ((autosize-cells-p :initarg :autosize-cells-p :initform nil)
@@ -334,9 +430,15 @@ To avoid deallocation, use RETAINING-OBJECTS"))
 (defclass form-cell-view (view editable-mixin view-text-via-stringvalue-mixin)
      ())
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+
 (defclass box-view (content-view-mixin view-text-via-title-mixin view) ())
 
-(defclass drawing-view (view)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+
+(defclass drawing-view (view mouse-tracking-mixin)
      (
       ;; TODO: make this a mixin
       (accept-key-events-p :initform nil :initarg :accept-key-events-p
@@ -346,6 +448,9 @@ To avoid deallocation, use RETAINING-OBJECTS"))
       (mouseup             :initform nil :initarg :mouse-up      :accessor drawing-view-mouse-up)
       (mousedragged        :initform nil :initarg :mouse-dragged :accessor drawing-view-mouse-dragged)
       (draw-fn             :initform nil :initarg :draw-fn :accessor draw-fn)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
 
 (defclass slider-view (view numeric-value-mixin action-view-mixin)
      ((max-value :initarg :max-value)
@@ -395,7 +500,6 @@ To avoid deallocation, use RETAINING-OBJECTS"))
 
 (defmacro define-tooltip-accessor (cocoa-class)
   `(progn
-     #|
      (objc:defmethod #/view:stringForToolTip:point:userData:
                      ((view ,cocoa-class)
                       (tag :<NST>ool<T>ip<T>ag)
@@ -403,7 +507,6 @@ To avoid deallocation, use RETAINING-OBJECTS"))
                       (userdata :id))
        (declare (ignorable tag point userdata))
        (ccl::%make-nsstring (or (calculate-ns-tooltip view) "")))
-     |#
      (objc:defmethod #/toolTip ((view ,cocoa-class))
        (ccl::%make-nsstring (or (calculate-ns-tooltip view) "")))))
 
@@ -511,28 +614,6 @@ To avoid deallocation, use RETAINING-OBJECTS"))
                 (slider-view          . cocoa-slider)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Targets for mouse-enter, mouse-exit and mouse-moved handling
-
-(defclass easygui-mouse-target (ns:ns-object)
-  ((view :initarg :view :reader mouse-target-view :initform nil))
-  (:metaclass ns:+ns-object))
-
-(objc:define-objc-method ((:void :mouse-entered (:id event)) easygui-mouse-target)
-  (let* ((view (mouse-target-view self))
-         (fn (view-mouse-enter view)))
-    (when fn (funcall fn view :event event :allow-other-keys t))))
-
-(objc:define-objc-method ((:void :mouse-exited (:id event)) easygui-mouse-target)
-  (let* ((view (mouse-target-view self))
-         (fn (view-mouse-exit view)))
-    (when fn (funcall fn view :event event :allow-other-keys t))))
-
-(objc:define-objc-method ((:void :mouse-move (:id event)) easygui-mouse-target)
-  (let* ((view (mouse-target-view self))
-         (fn (view-mouse-move view)))
-    (when fn (funcall fn view :event event :allow-other-keys t))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; view initialization:
 
 (defmethod shared-initialize :around ((view view) new-slots &rest initargs)
@@ -544,8 +625,7 @@ To avoid deallocation, use RETAINING-OBJECTS"))
 (defmethod initialize-view ((view view))
   "Initializes the view using the class-to-ns-class map both as constraint
 on valid values of the :SPECIFICALLY initarg, and as source of default value.
-Also attaches contextual menu if there is one, and sets up mouse tracking
-rectangle if the view has any non-NIL mouse-enter, mouse-exit or mouse-move."
+Also attaches contextual menu if there is one."
   (when (slot-boundp view 'ref)
     (return-from initialize-view nil))
   (let ((ns-view-class (cdr (assoc (class-name (class-of view))
@@ -580,28 +660,12 @@ rectangle if the view has any non-NIL mouse-enter, mouse-exit or mouse-move."
          ((typep menu 'menu-view)
           (dcc (#/setMenu: cocoaview (slot-value menu 'ns-menu))))
          (t (warn "Ignoring contextmenu value ~s for view ~s" menu view)))))
-   (when (and cocoaview (slot-value view 'tip))
-     (setf (slot-value view 'tiptag)
-           (dcc (#/addToolTipRect:owner:userData: cocoaview (#/bounds cocoaview) cocoaview ccl:+null-ptr+))))
-   (when (and cocoaview (or (slot-value view 'mouse-enter) (slot-value view 'mouse-exit) (slot-value view 'mouse-move)))
-      (let ((target (make-instance 'easygui-mouse-target :view view)))
-        (dcc (#/retain target))
-        (dcc (#/addTrackingRect:owner:userData:assumeInside:
-         cocoaview
-         (dcc (#/bounds cocoaview))
-         target
-         ccl:+null-ptr+
-         #$YES))))))
-    #| OS X Leopard should allow this but ... it didn't when I said VIEW not COCOAVIEW ...:
-     (area (make-instance 'ns:ns-tracking-area
-                    :with-rect (dcc (#/bounds cocoaview))
-                    :options (logior #$NSTrackingMouseEnteredAndExited
-                                     #$NSTrackingActiveInKeyWindow
-                                     #$NSTrackingInVisibleRect)
-                    :owner cocoaview
-                    :userInfo nil)))
-        (dcc (#/addTrackingArea: cocoaview area))))
-    |#
+   (when (and cocoaview
+              (slot-value view 'tip)
+              (dcc (#/respondsToSelector: cocoaview (\@selector #/bounds))))
+     (let ((bounds (#/bounds cocoaview)))
+       (setf (slot-value view 'tiptag)
+             (dcc (#/addToolTipRect:owner:userData: cocoaview bounds cocoaview ccl:+null-ptr+)))))))
 
 (defun screen-height nil
   (running-on-this-thread ()
@@ -673,12 +737,6 @@ rectangle if the view has any non-NIL mouse-enter, mouse-exit or mouse-move."
   (dcc (#/setBordered: (cocoa-ref view) nil))
   (dcc (#/setBezeled: (cocoa-ref view) nil))
   (setf (slot-value (cocoa-ref view) 'easygui-view) view))
-
-(defmethod initialize-view :after ((view action-view-mixin))
-  (when (and (slot-boundp view 'action) (slot-value view 'action))
-    (setf (action view) (slot-value view 'action)))
-  (unless (dialog-item-enabled-p view)
-    (dcc (#/setEnabled: (cocoa-ref view) #$NO))))
 
 (defparameter *bezelstyle-alist*
   `((:round                    . #.#$NSRoundedBezelStyle)
@@ -932,7 +990,6 @@ close button."
     (dcc (#/performClose: (cocoa-ref w)  ccl:+null-ptr+))))
 
 (objc:define-objc-method ((:<BOOL> :window-should-close (:id sender)) cocoa-window)
-  (declare (optimize (safety 0))) ; CCL v1.3 checks a faulty type declaration otherwise
   (declare (ignore sender))  ; The cocoa-window has been set up as its own delegate. Naughty?
   (if (window-may-close (easygui-window-of self)) #$YES #$NO))
 
@@ -982,8 +1039,48 @@ close button."
 (define-useful-mouse-event-handling-routines cocoa-drawing-view)
 (define-useful-mouse-event-handling-routines cocoa-mouseable-text-field)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Around methods for VIEW provide bindings for *modifier-key-pattern* for all kinds of views,
+;; allowing for Shift-Key-P and friends.
+;; Primary methods do nothing, but may be overridden by user code.
+
+;(defmethod mouse-down :around ((view view) &key cocoa-event location button click-count delta)
+;  (declare (ignorable cocoa-event location button click-count delta))
+;  (let ((*cocoa-event* cocoa-event)
+;        (*modifier-key-pattern* (dcc (#/modifierFlags cocoa-event))))
+;    (call-next-method)))
+  
+(defmethod mouse-down ((view view) &key cocoa-event location button click-count delta)
+  (declare (ignorable view cocoa-event location button click-count delta))
+  nil)
+  
+;(defmethod mouse-up :around ((view view) &key cocoa-event location button click-count delta)
+;  (declare (ignorable cocoa-event location button click-count delta))
+;  (let ((*cocoa-event* cocoa-event)
+;        (*modifier-key-pattern* (dcc (#/modifierFlags cocoa-event))))
+;    (call-next-method)))
+  
+(defmethod mouse-up ((view view) &key cocoa-event location button click-count delta)
+  (declare (ignorable view cocoa-event location button click-count delta))
+  nil)
+
+;(defmethod mouse-dragged :around ((view view) &key cocoa-event location button click-count delta)
+;  (declare (ignorable cocoa-event location button click-count delta))
+;  (let ((*cocoa-event* cocoa-event)
+;        (*modifier-key-pattern* (dcc (#/modifierFlags cocoa-event))))
+;    (call-next-method)))
+  
+(defmethod mouse-dragged ((view view) &key cocoa-event location button click-count delta)
+  (declare (ignorable view cocoa-event location button click-count delta))
+  nil)
+  
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Primary methods for DRAWING-VIEW. What now is the point?
+
 (defmethod mouse-down ((view drawing-view) &key cocoa-event location button click-count delta)
-  (let ((mousefn (drawing-view-mouse-down view)) (*cocoa-event* cocoa-event))
+  (let ((mousefn (drawing-view-mouse-down view))
+        (*cocoa-event* cocoa-event)
+        (*modifier-key-pattern* (dcc (#/modifierFlags cocoa-event))))
     (when mousefn
       (funcall mousefn view
                :location location
@@ -994,7 +1091,9 @@ close button."
                :delta delta))))
 
 (defmethod mouse-up ((view drawing-view) &key cocoa-event location button click-count delta)
-  (let ((mousefn (drawing-view-mouse-up view)) (*cocoa-event* cocoa-event))
+  (let ((mousefn (drawing-view-mouse-up view))
+        (*cocoa-event* cocoa-event)
+        (*modifier-key-pattern* (dcc (#/modifierFlags cocoa-event))))
     (when mousefn
       (funcall mousefn view
                :location location
@@ -1005,7 +1104,9 @@ close button."
                :delta delta))))
 
 (defmethod mouse-dragged ((view drawing-view) &key cocoa-event location button click-count delta)
-  (let ((mousefn (drawing-view-mouse-dragged view)) (*cocoa-event* cocoa-event))
+  (let ((mousefn (drawing-view-mouse-dragged view))
+        (*cocoa-event* cocoa-event)
+        (*modifier-key-pattern* (dcc (#/modifierFlags cocoa-event))))
     (when mousefn
       (funcall mousefn view
                :location location
@@ -1015,8 +1116,13 @@ close button."
                :click-count click-count
                :delta delta))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Primary methods for STATIC-TEXT-VIEW. What now is the point?
+
 (defmethod mouse-down ((view static-text-view) &key cocoa-event location button click-count delta)
-  (let ((mousefn (static-text-view-mouse-down view)) (*cocoa-event* cocoa-event))
+  (let ((mousefn (static-text-view-mouse-down view))
+        (*cocoa-event* cocoa-event)
+        (*modifier-key-pattern* (dcc (#/modifierFlags cocoa-event))))
     (when mousefn
       (funcall mousefn view
                :location location
@@ -1027,7 +1133,9 @@ close button."
                :delta delta))))
 
 (defmethod mouse-up ((view static-text-view) &key cocoa-event location button click-count delta)
-  (let ((mousefn (static-text-view-mouse-up view)) (*cocoa-event* cocoa-event))
+  (let ((mousefn (static-text-view-mouse-up view))
+        (*cocoa-event* cocoa-event)
+        (*modifier-key-pattern* (dcc (#/modifierFlags cocoa-event))))
     (when mousefn
       (funcall mousefn view
                :location location
@@ -1038,7 +1146,9 @@ close button."
                :delta delta))))
 
 (defmethod mouse-dragged ((view static-text-view) &key cocoa-event location button click-count delta)
-  (let ((mousefn (static-text-view-mouse-dragged view)) (*cocoa-event* cocoa-event))
+  (let ((mousefn (static-text-view-mouse-dragged view))
+        (*cocoa-event* cocoa-event)
+        (*modifier-key-pattern* (dcc (#/modifierFlags cocoa-event))))
     (when mousefn
       (funcall mousefn view
                :location location
@@ -1408,7 +1518,7 @@ and the second value will always be NIL."
              (item (dcc (#/itemWithTitle: menu ns-title)))
              (ns-nullstring (ccl::%make-nsstring "")))
         (flet ((linkup (leaf action) ;; Modelled on code in easygui/action-targets.lisp
-                 (let ((target (make-instance 'generic-easygui-target :handler (or action #'(lambda () nil)))))
+                 (let ((target (make-instance 'generic-easygui-target :handler (or action #'(lambda () nil)) :shooter leaf)))
                    (dcc (#/setTarget: leaf target))
                    (dcc (#/setAction: leaf (\@selector #/activateAction))))))
           (cond
@@ -1499,37 +1609,41 @@ Example:
 
 (defmethod view-key-event-handler ((view window) char)
   (declare (ignorable char))
-  #| (format t "~&Window ~s got ~:[~;Control-~]~:[~;Alt-~]~:[~;Command-~]~:[~;Shift-~]~s~%"
-            view (control-key-p) (alt-key-p) (command-key-p) (shift-key-p) char))
-  |#
   nil)
 
 (objc:define-objc-method ((:void :key-down (:id event)) cocoa-window)
-  (let ((*cocoa-event* event))
+  (let ((*cocoa-event* event)
+        (*modifier-key-pattern* (#/modifierFlags event)))
     (view-key-event-handler
      (easygui-window-of self)
      (schar (lisp-string-from-nsstring (dcc (#/charactersIgnoringModifiers event))) 0))))
 
 (defun shift-key-p nil
-  (and *cocoa-event*
-       (not (zerop (logand (dcc (#/modifierFlags *cocoa-event*)) #$NSShiftKeyMask)))))
+  (not (zerop (logand *modifier-key-pattern* (key-mask :shift)))))
 
 (defun control-key-p nil
-  (and *cocoa-event*
-       (not (zerop (logand (dcc (#/modifierFlags *cocoa-event*)) (key-mask :control))))))
+  (not (zerop (logand *modifier-key-pattern* (key-mask :control)))))
 
 (defun alt-key-p nil
-  (and *cocoa-event*
-       (not (zerop (logand (dcc (#/modifierFlags *cocoa-event*)) (key-mask :alt))))))
+  (not (zerop (logand *modifier-key-pattern* (key-mask :alt)))))
 
 (defun command-key-p nil
-  (and *cocoa-event*
-       (not (zerop (logand (dcc (#/modifierFlags *cocoa-event*)) (key-mask :command))))))
+  (not (zerop (logand *modifier-key-pattern* (key-mask :command)))))
+
+(defmacro with-modifier-key-information (parameterless-function)
+;; NOT TESTED YET!
+"Wraps the function into a context where control-key-p &c will get their current values.
+To be used primarily when placing a call to a function in another process."
+  (let ((gvar (gensym)))
+    `(let ((,gvar *modifier-key-pattern*))
+       (function (lambda nil
+                   (let ((*modifier-key-pattern* ,gvar))
+                     (funcall ,parameterless-function)))))))
 
 (defun view-mouse-position (view)
   (let* ((w (cocoa-ref (easygui-window-of view)))
          (mouselocation (dcc (#/mouseLocationOutsideOfEventStream w)))
          (cview (if (typep view 'window) (content-view view) view))
-         (nspt (dcc (#/convertPoint:fromView: (cocoa-ref cview) mouselocation nil))))
+         (nspt (dcc (#/convertPoint:fromView: (cocoa-ref cview) mouselocation NIL))))
     ;; todo: check point is inside bounds, lest negative coords
     (point (ns:ns-point-x nspt) (ns:ns-point-y nspt))))
