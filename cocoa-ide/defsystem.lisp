@@ -53,6 +53,11 @@
    open-main-bundle
    )
   (:export
+   "ABSTRACT-NS-LISP-STRING"
+   "NS-LISP-STRING"
+   "NS-LISP-STRING-STRING"
+
+   "EXECUTE-IN-GUI"
    ))
 
 (defparameter *ide-files*
