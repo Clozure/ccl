@@ -157,19 +157,24 @@
 
 ;; Cocoa layer
 
-(defclass ns-lisp-string (ns:ns-string)
+;; General utils, should be moved elsewhere
+(defclass abstract-ns-lisp-string (ns:ns-string)
     ()
   (:metaclass ns:+ns-object))
 
-(defgeneric ns-lisp-string-string (ns-lisp-string))
+(defgeneric ns-lisp-string-string (abstract-ns-lisp-string))
 
-(objc:defmethod (#/length :<NSUI>nteger) ((self ns-lisp-string))
+(objc:defmethod (#/length :<NSUI>nteger) ((self abstract-ns-lisp-string))
     (length (ns-lisp-string-string self)))
 
-(objc:defmethod (#/characterAtIndex: :unichar) ((self ns-lisp-string) (index :<NSUI>nteger))
+(objc:defmethod (#/characterAtIndex: :unichar) ((self abstract-ns-lisp-string) (index :<NSUI>nteger))
   (char-code (char (ns-lisp-string-string self) index)))
 
-(defclass frame-label (ns-lisp-string)
+(defclass ns-lisp-string (abstract-ns-lisp-string)
+  ((lisp-string :initarg :string :reader ns-lisp-string-string))
+  (:metaclass ns:+ns-object))
+
+(defclass frame-label (abstract-ns-lisp-string)
     ((frame-number  :foreign-type :int :accessor frame-label-number)
      (controller :foreign-type :id :reader frame-label-controller))
   (:metaclass ns:+ns-object))
@@ -190,7 +195,7 @@
     obj))
 
 
-(defclass item-label (ns-lisp-string)
+(defclass item-label (abstract-ns-lisp-string)
     ((frame-label :foreign-type :id :accessor item-label-label)
      (index :foreign-type :int :accessor item-label-index))
   (:metaclass ns:+ns-object))
