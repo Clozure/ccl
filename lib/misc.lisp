@@ -965,8 +965,8 @@ are running on, or NIL if we can't find any useful information."
   (let* ((total-cons-size  (* nconses target::cons.size))
          (total-vector-size 0)
          (total-physical-vector-size 0))
-    (format out "~&Object type~42tCount~50tTotal Size in Bytes~72tTotal Size")
-    (format out "~&CONS~36t~12d~48t~16d~16d" nconses total-cons-size total-cons-size)
+    (format out "~&Object type~40tCount~48tTotal Size in Bytes~70tTotal Size")
+    (format out "~&CONS~34t~12d~46t~16d~16d" nconses total-cons-size total-cons-size)
     (dotimes (i (length nvectors))
       (let* ((count (aref nvectors i))
              (sizes (aref vector-sizes i))
@@ -974,8 +974,8 @@ are running on, or NIL if we can't find any useful information."
         (unless (zerop count)
           (incf total-vector-size sizes)
           (incf total-physical-vector-size psizes)
-          (format out "~&~a~36t~12d~48t~16d~16d" (aref *heap-utilization-vector-type-names* i)  count sizes psizes))))
-    (format out "~&   Total sizes: ~49t~16d~16d" (+ total-cons-size total-vector-size) (+ total-cons-size total-physical-vector-size))))
+          (format out "~&~a~34t~12d~46t~16d~16d" (aref *heap-utilization-vector-type-names* i)  count sizes psizes))))
+    (format out "~&   Total sizes: ~47t~16d~16d" (+ total-cons-size total-vector-size) (+ total-cons-size total-physical-vector-size))))
                             
 ;; The number of words to allocate for static conses when the user requests
 ;; one and we don't have any left over
