@@ -230,10 +230,11 @@
                      (not (typep w 'gui::hemlock-listener-frame))))))
                      ;; (#/isKeyWindow w)))))
          (window-pathname (w)
-           (let* ((pane (slot-value w 'gui::pane))
-                  (text-view (gui::text-pane-text-view pane))
-                  (buffer (gui::hemlock-buffer text-view)))
-             (hi::buffer-pathname buffer))))
+           (when w
+             (let* ((pane (slot-value w 'gui::pane))
+                    (text-view (gui::text-pane-text-view pane))
+                    (buffer (gui::hemlock-buffer text-view)))
+               (hi::buffer-pathname buffer)))))
 
     (list (make-button #@"Browse" 480 368 80 32
                        #'(lambda (item)
@@ -257,7 +258,7 @@
                        #'(lambda (item)
                            (declare (ignore item))
                            (let* ((window (front-hemlock-window))
-                                  (path (window-pathname window)))
+                                  (path (when window (window-pathname window))))
                              (when path 
                                (clear-difference-pane w)
                                (setf (path-1 w) path)
@@ -267,7 +268,7 @@
                        #'(lambda (item)
                            (declare (ignore item))
                            (let* ((window (front-hemlock-window))
-                                  (path (window-pathname window)))
+                                  (path (when window (window-pathname window))))
                              (when path 
                                (clear-difference-pane w)
                                (setf (path-2 w) path)
