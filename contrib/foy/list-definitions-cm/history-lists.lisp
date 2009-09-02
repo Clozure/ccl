@@ -516,7 +516,6 @@
 
 (hemlock::bind-key "Add Definition Position" #k"control-shift-space")
 
-;;; *** buffer?
 (defun add-top-level-position (&optional buffer)
   "Maybe add the top-level definition position to the position history list."
   (let* ((buf (or buffer (hi::current-buffer)))

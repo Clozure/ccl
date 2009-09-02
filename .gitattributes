@@ -112,7 +112,7 @@ contrib/foy/list-definitions-cm/list-definitions.lisp -text
 contrib/foy/list-definitions/ReadMe.rtf -text
 contrib/foy/list-definitions/history-lists.lisp -text
 contrib/foy/list-definitions/list-definitions.lisp -text
-contrib/foy/list-definitions/load-list-definitions.lisp -text
+contrib/foy/list-definitions/list-definitions1.lisp -text
 contrib/foy/source-comparison/ReadMe.rtf -text
 contrib/foy/source-comparison/source-compare-dialog.lisp -text
 contrib/foy/source-comparison/source-compare.lisp -text
