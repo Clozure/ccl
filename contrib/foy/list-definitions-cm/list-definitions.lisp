@@ -4,7 +4,7 @@
 ;;;
 ;;;      list-definitionsisp
 ;;;
-;;;      copyright © 2009 Glen Foy
+;;;      copyright (c) 2009 Glen Foy
 ;;;      (Permission is granted to Clozure Associates to distribute this file.)
 ;;;
 ;;;      This code adds a dynamic contextual popup menu to Hemlock.
@@ -66,7 +66,8 @@
   ((text-view :initarg :menu-text-view :reader menu-text-view)
    (path :initarg :menu-path :reader menu-path) ; *** history-path
    (doc-path :initform (merge-pathnames ";ReadMe.rtf" cl-user::*list-definitions-directory-string*) :reader doc-path)
-   (tool-menu :initform nil :accessor tool-menu))
+   (tool-menu :initform nil :accessor tool-menu)
+   (sub-title :initform nil :initarg :sub-title :reader sub-title))
   (:documentation "The definitions popup menu.")
   (:metaclass ns:+ns-object))
 
@@ -74,8 +75,8 @@
   (display-position (menu-text-view m) (item-mark sender))
   (maybe-add-history-entry *position-history-list* (item-info sender) (menu-path m)))
 
-(objc:defmethod (#/update :void) ((self list-definitions-menu))
-  (cmenu:update-tool-menu self (tool-menu self))
+ (objc:defmethod (#/update :void) ((self list-definitions-menu))
+  (cmenu:update-tool-menu self (tool-menu self) :sub-title (sub-title self))
   (call-next-method))
 
 (defun display-position (text-view mark)
@@ -145,6 +146,7 @@
 (defun list-definitions-context-menu (text-view &optional alpha-p)
   "Construct the list-definitions popup menu."
   (let* ((menu (make-instance 'list-definitions-menu 
+                 :sub-title (if alpha-p "alphabetical" "positional")
                  :menu-text-view text-view 
                  :menu-path (window-path (#/window text-view))))
          (window (active-hemlock-window))
@@ -153,7 +155,10 @@
          current-class menu-item)
     (ns:with-ns-size (icon-size 16 16)
       (#/setSize: class-icon icon-size))
-    (setf (tool-menu menu) (cmenu:add-default-tool-menu menu :doc-file (doc-path menu)))
+    (setf (tool-menu menu) 
+          (if alpha-p
+            (cmenu:add-default-tool-menu menu :doc-file (doc-path menu))
+            (cmenu:add-default-tool-menu menu)))
     (dolist (entry alist)
       (let* ((def-info (car entry))
              (def-type (first def-info))

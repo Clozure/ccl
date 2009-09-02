@@ -91,6 +91,7 @@ compiler/nx2.lisp -text
 contrib/README -text
 contrib/baylis/ca-demo.lisp -text
 contrib/foy/cl-documentation-cm/ReadMe.rtf -text
+contrib/foy/cl-documentation-cm/cl-documentation-2.lisp -text
 contrib/foy/cl-documentation-cm/cl-documentation-cm.lisp -text
 contrib/foy/cl-documentation-cm/cl-documentation.lisp -text
 contrib/foy/context-menu-cm/NewTools.rtf -text

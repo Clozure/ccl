@@ -4,7 +4,7 @@
 ;;;
 ;;;      hemlock-documentation-dialog.lisp
 ;;;
-;;;      copyright © 2009 Glen Foy
+;;;      copyright ¬© 2009 Glen Foy
 ;;;      (Permission is granted to Clozure Associates to distribute this file.)
 ;;;
 ;;;      A documentation dialog for Hemlock commands, CL function, symbols, etc.
@@ -265,13 +265,13 @@
            (make-button #@"Okay" (if *graphic-p* 520 370) 10 80 32
                         (ccl::@selector "closeAction:")))
      (setf (source-button dialog)
-           (make-button #@"Source…" (if *graphic-p* 420 270) 10 90 32
+           (make-button #@"Source√â" (if *graphic-p* 420 270) 10 90 32
                         (ccl::@selector "commandSourceAction:")))
      (setf (inspect-button dialog)
-           (make-button #@"Inspect…" (if *graphic-p* 320 170) 10 90 32
+           (make-button #@"Inspect√â" (if *graphic-p* 320 170) 10 90 32
                         (ccl::@selector "inspectSymbolAction:")))
      (setf (hyperspec-button dialog)
-           (make-button #@"HyperSpec…" (if *graphic-p* 180 30) 10 130 32
+           (make-button #@"HyperSpec√â" (if *graphic-p* 180 30) 10 130 32
                         (ccl::@selector "hyperSpecAction:"))))))
 
 

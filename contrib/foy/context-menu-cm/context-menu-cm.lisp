@@ -4,7 +4,7 @@
 ;;;
 ;;;      context-menu-cm.lisp
 ;;;
-;;;      copyright © 2009 Glen Foy
+;;;      copyright (c) 2009 Glen Foy
 ;;;      (Permission is granted to Clozure Associates to distribute this file.)
 ;;;
 ;;;      This code provides a mechanism for switching the tool that has access to 
@@ -16,6 +16,7 @@
 ;;;      This software is offered "as is", without warranty of any kind.
 ;;;
 ;;;      Mod History, most recent first:
+;;;      9/2/9   Changed the appearance of the Default Tool submenu.
 ;;;      8/31/9  version 0.1b1
 ;;;              First cut
 ;;;              Numerous User Interface suggestions, Rainer Joswig
@@ -145,19 +146,15 @@
 (defun add-default-tool-menu (menu &key doc-file)
   "Add the default tool submenu and possibly a documentation menu-item to MENU."
   (let ((default-item (make-instance ns:ns-menu-item))
-        (attributed-string (#/initWithString:attributes:
-                            (#/alloc ns:ns-attributed-string) 
-                            (ccl::%make-nsstring (format nil "TOOL: ~S" (default-tool *menu-manager*)))
-                            *tool-label-dictionary*))
         (tool-menu (make-instance 'default-tool-menu)))
-    (#/setAttributedTitle: default-item attributed-string)
+    ;; Title is set by update method.
     (#/setSubmenu: default-item tool-menu)
     (#/insertItem:atIndex: menu default-item 0)
     (cond (doc-file
            (let ((doc-item (make-instance 'default-tool-doc-menu-item))
                  (attributed-string (#/initWithString:attributes:
                                      (#/alloc ns:ns-attributed-string) 
-                                     (ccl::%make-nsstring (format nil "doc..." (default-tool *menu-manager*)))
+                                     (ccl::%make-nsstring (format nil "     doc..." (default-tool *menu-manager*)))
                                      *tool-doc-dictionary*)))
              (#/setAttributedTitle: doc-item attributed-string)
              (#/setAction: doc-item (ccl::@selector "hemlockDefaultToolDocAction:"))
@@ -169,12 +166,15 @@
            (#/insertItem:atIndex: menu (#/separatorItem ns:ns-menu-item) 1)))
     tool-menu))
 
-(defun update-tool-menu (menu default-menu)
+(defun update-tool-menu (menu default-menu &key sub-title)
   "Update MENU's Tool submenu."
   (let ((first-item (#/itemAtIndex: menu 0))
         (attributed-string (#/initWithString:attributes:
                             (#/alloc ns:ns-attributed-string) 
-                            (ccl::%make-nsstring (format nil "TOOL: ~S" (default-tool *menu-manager*)))
+                            (if sub-title
+                              (ccl::%make-nsstring (format nil "~S
+    (~A)" (default-tool *menu-manager*) sub-title))
+                              (ccl::%make-nsstring (format nil "~S" (default-tool *menu-manager*))))
                             *tool-label-dictionary*)))
     (#/setAttributedTitle: first-item attributed-string)
     (populate-menu default-menu)))

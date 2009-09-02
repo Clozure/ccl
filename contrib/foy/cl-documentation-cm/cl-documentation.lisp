@@ -4,7 +4,7 @@
 ;;;
 ;;;      cl-documentation.lisp
 ;;;
-;;;      copyright © 2009 Glen Foy
+;;;      copyright (c) 2009 Glen Foy
 ;;;      (Permission is granted to Clozure Associates to distribute this file.)
 ;;;
 ;;;      This code is moronically simple, but surprisingly useful.
@@ -16,6 +16,7 @@
 ;;;      This software is offered "as is", without warranty of any kind.
 ;;;
 ;;;      Mod History, most recent first:
+;;;      9/2/9   Added a second menu, providing an alphabetical index.
 ;;;      8/31/9  version 0.1b1
 ;;;              First cut.
 ;;;
@@ -28,12 +29,14 @@
 (cmenu:check-hyperspec-availability "CL-Documentation-CM")
 
 (defparameter *cl-documentation-menu* nil "The cl-documentation-menu instance.")
+(defparameter *cl-alphabetical-menu* nil "The cl-alphabetical-menu instance.")
 
 
 ;;; ----------------------------------------------------------------------------
 ;;;
 (defClass CL-DOCUMENTATION-MENU (ns:ns-menu) 
   ((tool-menu :initform nil :accessor tool-menu)
+   (sub-title :initform "functional groups" :reader sub-title)
    (doc-path :initform (merge-pathnames ";ReadMe.rtf" cl-user::*cl-documentation-directory*) :reader doc-path)
    (text-view :initform nil :accessor text-view))
   (:documentation "A menu containing CL functions sorted into functional groups.")
@@ -43,7 +46,7 @@
   (display-cl-doc (item-symbol sender) (text-view m)))
 
 (objc:defmethod (#/update :void) ((m cl-documentation-menu))
-  (cmenu:update-tool-menu m (tool-menu m))
+  (cmenu:update-tool-menu m (tool-menu m) :sub-title (sub-title m))
   (call-next-method))
 
 (defmethod initialize-instance :after ((m cl-documentation-menu) &key)
@@ -459,8 +462,11 @@
 (add-cl-documentation-submenus *cl-documentation-menu*)
 
 (defun get-cl-documentation-menu (view event) 
-  (declare (ignore event))
-  (setf (text-view *cl-documentation-menu*) view)
-  *cl-documentation-menu*)
+  (cond ((logtest #$NSCommandKeyMask (#/modifierFlags event))
+         (setf (text-view *cl-alphabetical-menu*) view)           
+         *cl-alphabetical-menu*)
+        (t
+         (setf (text-view *cl-documentation-menu*) view)           
+         *cl-documentation-menu*)))
 
 (cmenu:register-tool "CL-Documentation-CM" #'get-cl-documentation-menu)
