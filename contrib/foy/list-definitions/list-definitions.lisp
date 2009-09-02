@@ -24,6 +24,7 @@
 ;;;
 ;;; ----------------------------------------------------------------------------
 
+
 (defpackage "LIST-DEFINITIONS" (:nicknames "LDEFS") (:use :cl :ccl))
 (in-package "LIST-DEFINITIONS")
 
