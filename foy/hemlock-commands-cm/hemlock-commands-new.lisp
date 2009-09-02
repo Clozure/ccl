@@ -12,6 +12,7 @@
 ;;;      This software is offered "as is", without warranty of any kind.
 ;;;
 ;;;      Mod History, most recent first:
+;;;      9/2/9   Added "Show Callers" command.
 ;;;      8/31/9  version 0.1b1
 ;;;              First cut.
 ;;;
@@ -142,28 +143,29 @@
 
 (hi::bind-key "Symbol Documentation" #k"control-x control-d")
 
-
-#| 
 (hi:defcommand "Show Callers" (p)
   "Display a scrolling list of the callers of the symbol at point.
    Double-click a row to go to the caller's definition."
   (declare (ignore p))
-  (let ((symbol (parse-symbol)))
+  (let* ((symbol (parse-symbol))
+         (callers (ccl::callers symbol)))
     (cond (symbol
-           (make-instance 'gui::sequence-window-controller
-             :title (format nil "Callers of ~a" symbol)
-             :sequence (mapcar #'(lambda (entry)
-                                   (if (listp entry)
-                                     (car (last entry))
-                                     entry))
-                               (ccl::callers symbol))
-             :result-callback #'hemlock::edit-definition
-             :display #'princ))
+           (if callers
+             (make-instance 'gui::sequence-window-controller
+               :title (format nil "Callers of ~a" symbol)
+               :sequence (mapcar #'(lambda (entry)
+                                     (if (listp entry)
+                                       (car (last entry))
+                                       entry))
+                                 (ccl::callers symbol))
+               :result-callback #'hemlock::edit-definition
+               :display #'princ)
+             (gui::alert-window :title "Notification"
+                                :message (format nil "Could not find any callers for ~S" symbol))))
           (t
            (hi::editor-error "Could not parse a valid symbol at point.")))))
 
 (hi::bind-key "Show Callers" #k"control-meta-c")
-|#
 
 
 

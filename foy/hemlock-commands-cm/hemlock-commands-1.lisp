@@ -14,6 +14,7 @@
 ;;;      This software is offered "as is", without warranty of any kind.
 ;;;
 ;;;      Mod History, most recent first:
+;;;      9/2/9   Removed doc-path from hemlock-commands-menu.
 ;;;      8/31/9  version 0.1b1
 ;;;              First cut.
 ;;;
@@ -41,7 +42,6 @@
 (defclass HEMLOCK-COMMANDS-MENU (ns:ns-menu)
   ((tool-menu :initform nil :accessor tool-menu)
    (sub-title :initform "basic commands" :reader sub-title)
-   (doc-path :initform (merge-pathnames ";ReadMe.rtf" cl-user::*hemlock-commands-directory*) :reader doc-path)
    (text-view :initform nil :accessor text-view))
   (:documentation "A popup menu listing a useful subset of Hemlock commands: Hemlock's Greatest Hits, for new users.")
   (:metaclass ns:+ns-object))
@@ -66,7 +66,7 @@
              (#/setTarget: menu-item  menu)
              (setf (key-event menu-item) key-event)
              (#/addItem: menu menu-item))))
-    (setf (tool-menu menu) (cmenu:add-default-tool-menu menu :doc-file (doc-path menu)))
+    (setf (tool-menu menu) (cmenu:add-default-tool-menu menu))
     
     ;;; Hemlock's Greatest Hits:
     (create-menu-item "Inspect Symbol  (control-x, control-i)" 
@@ -76,12 +76,10 @@
     (#/addItem: menu (#/separatorItem ns:ns-menu-item))
     (create-menu-item "Current Function Arglist  (control-x, control-a)" 
                       #k"control-x control-a")
-    #|
-    (create-menu-item "Show Callers  (control-meta-c)" 
-                      #k"control-meta-c")
-    |#
     (create-menu-item "Goto Definition  (meta-.)"
                       #k"meta-.")
+    (create-menu-item "Show Callers  (control-meta-c)" 
+                      #k"control-meta-c")
     (#/addItem: menu (#/separatorItem ns:ns-menu-item))
     (create-menu-item "Macroexpand-1 Expression  (control-m)"
                       #k"control-m")
