@@ -556,17 +556,14 @@
       (hemlock::editor-compile-region (hemlock::defun-region (hi::current-point)) t))
   (add-top-level-position))
 
-#|
-(defun gui::cocoa-edit-single-definition (name info)
-  (gui::assume-cocoa-thread)
-  (destructuring-bind (indicator . pathname) info
-    (let* ((view (gui::find-or-make-hemlock-view pathname))
-           (buffer (hi::hemlock-view-buffer view)))
-      (hi::handle-hemlock-event view
-                                #'(lambda ()
-                                    (hemlock::find-definition-in-buffer name indicator)))
-      (add-top-level-position buffer))))
-|#
+;;; gui::cocoa-edit-single-definition didn't last long.
+;;; This one's days are numbered:
+(defun hemlock::move-point-leaving-mark (target)
+  (let ((point (hi::current-point-collapsing-selection)))
+    (hemlock::push-new-buffer-mark point)
+    (hi::move-mark point target)
+    (add-top-level-position (hi::current-buffer))
+    point))
 
 
 (read-history-files)
