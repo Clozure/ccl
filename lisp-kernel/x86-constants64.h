@@ -128,7 +128,7 @@
 #define charcode_shift 8L
 #define node_size 8L
 #define node_shift 3L
-
+#define nargregs 3L
 
 #define tag_fixnum 0L
 #define tag_imm_0 1L		/* subtag_single_float ONLY */

@@ -319,38 +319,30 @@ push_on_lisp_stack(ExceptionInformation *xp, LispObj value)
 void
 finish_function_entry(ExceptionInformation *xp)
 {
-#ifdef X8664
-  natural nargs = (xpGPR(xp,Inargs)&0xffff)>> fixnumshift;
-#else
   natural nargs = xpGPR(xp,Inargs)>>fixnumshift;
-#endif
-  signed_natural disp;
+  signed_natural disp = nargs - nargregs;
   LispObj *vsp =  (LispObj *) xpGPR(xp,Isp), ra = *vsp++;
    
   xpGPR(xp,Isp) = (LispObj) vsp;
 
-#ifdef X8664
-  disp = nargs - 3;
-#endif
-#ifdef X8632
-  disp = nargs - 2;
-#endif
-
-#ifdef X8664
-  if (disp > 0) {               /* implies that nargs > 3 */
-    vsp[disp] = xpGPR(xp,Irbp);
+  if (disp > 0) {               /* implies that nargs > nargregs */
+    vsp[disp] = xpGPR(xp,Ifp);
     vsp[disp+1] = ra;
-    xpGPR(xp,Irbp) = (LispObj)(vsp+disp);
+    xpGPR(xp,Ifp) = (LispObj)(vsp+disp);
+#ifdef X8664
     push_on_lisp_stack(xp,xpGPR(xp,Iarg_x));
+#endif
     push_on_lisp_stack(xp,xpGPR(xp,Iarg_y));
     push_on_lisp_stack(xp,xpGPR(xp,Iarg_z));
   } else {
     push_on_lisp_stack(xp,ra);
-    push_on_lisp_stack(xp,xpGPR(xp,Irbp));
-    xpGPR(xp,Irbp) = xpGPR(xp,Isp);
+    push_on_lisp_stack(xp,xpGPR(xp,Ifp));
+    xpGPR(xp,Ifp) = xpGPR(xp,Isp);
+#ifdef X8664
     if (nargs == 3) {
       push_on_lisp_stack(xp,xpGPR(xp,Iarg_x));
     }
+#endif
     if (nargs >= 2) {
       push_on_lisp_stack(xp,xpGPR(xp,Iarg_y));
     }
@@ -358,27 +350,6 @@ finish_function_entry(ExceptionInformation *xp)
       push_on_lisp_stack(xp,xpGPR(xp,Iarg_z));
     }
   }
-#endif
-#ifdef X8632
-  if (disp > 0) {               /* implies that nargs > 2 */
-    vsp[disp] = xpGPR(xp,Iebp);
-    vsp[disp+1] = ra;
-    xpGPR(xp,Iebp) = (LispObj)(vsp+disp);
-    xpGPR(xp,Isp) = (LispObj)vsp;
-    push_on_lisp_stack(xp,xpGPR(xp,Iarg_y));
-    push_on_lisp_stack(xp,xpGPR(xp,Iarg_z));
-  } else {
-    push_on_lisp_stack(xp,ra);
-    push_on_lisp_stack(xp,xpGPR(xp,Iebp));
-    xpGPR(xp,Iebp) = xpGPR(xp,Isp);
-    if (nargs == 2) {
-      push_on_lisp_stack(xp,xpGPR(xp,Iarg_y));
-    }
-    if (nargs >= 1) {
-      push_on_lisp_stack(xp,xpGPR(xp,Iarg_z));
-    }
-  }
-#endif
 }
 
 Boolean

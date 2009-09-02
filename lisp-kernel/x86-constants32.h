@@ -96,6 +96,7 @@
 #define charcode_shift 8
 #define node_size 4
 #define node_shift 2
+#define nargregs 2
 
 #define tag_fixnum 0
 #define tag_list 1
