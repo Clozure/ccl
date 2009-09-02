@@ -4,7 +4,7 @@
 ;;;
 ;;;      source-compare-dialog.lisp, version 0.1b1
 ;;;
-;;;      copyright © 2009 Glen Foy
+;;;      copyright Â© 2009 Glen Foy
 ;;;      (Permission is granted to Clozure Associates to distribute this file.)
 ;;;
 ;;;      This file provides a GUI for Mark Kantrowitz's source-compare.lisp.
@@ -289,10 +289,10 @@
 
   (cond ((and (path-1 w) (path-2 w))
          (unless (probe-file (path-1 w))
-           (format t "~%; ¥ File: ~A does not exist." (path-1 w))
+           (format t "~%; File: ~A does not exist." (path-1 w))
            (return-from compare))
          (unless (probe-file (path-2 w))
-           (format t "~%; ¥ File: ~A does not exist." (path-2 w))
+           (format t "~%; File: ~A does not exist." (path-2 w))
            (return-from compare))
 
          (let ((stream (make-string-output-stream)))         
@@ -444,11 +444,11 @@
 (defParameter *tools-menu* 
   (#/submenu (#/itemWithTitle: (#/mainMenu (ccl::application-ui-object ccl::*application*)) #@"Tools")))
 
-(let ((item (#/itemWithTitle: *tools-menu* #@"Source CompareÉ")))
+(let ((item (#/itemWithTitle: *tools-menu* #@"Source Compare...")))
   (unless (%null-ptr-p item) (#/removeItem: *tools-menu* item))
   (#/addItem: *tools-menu* (#/separatorItem ns:ns-menu-item))
   (setf item (#/initWithTitle:action:keyEquivalent: (#/alloc ns:ns-menu-item)
-                                                    #@"Source CompareÉ"
+                                                    #@"Source Compare..."
                                                     (ccl::@selector "interfaceAction:")
                                                     #@""))
   (#/setTarget: item *source-compare-dialog*)
