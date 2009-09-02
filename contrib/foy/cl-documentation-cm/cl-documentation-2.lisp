@@ -85,7 +85,9 @@
         (push sym (aref letter-array index))
         (push sym miscellaneous)))
     (dotimes (idx letter-array-length)
-      (let ((submenu-item (make-submenu-item (elt *ABCs* idx) (coerce (aref letter-array idx) 'list))))
+      (let ((submenu-item (make-submenu-item (elt *ABCs* idx) 
+                                             (sort (coerce (aref letter-array idx) 'list)
+                                                   #'string> :key #'string))))
         (#/addItem: menu submenu-item)))
     (when miscellaneous
       (#/addItem: menu (#/separatorItem ns:ns-menu-item))    
