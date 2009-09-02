@@ -4,7 +4,7 @@
 ;;;
 ;;;      hemlock-commands-1.lisp
 ;;;
-;;;      copyright © 2009 Glen Foy
+;;;      copyright (c) 2009 Glen Foy
 ;;;      (Permission is granted to Clozure Associates to distribute this file.)
 ;;;
 ;;;      This code adds a Hemlock Commands documentation tool to the Context-Menu 
@@ -40,6 +40,7 @@
 ;;;
 (defclass HEMLOCK-COMMANDS-MENU (ns:ns-menu)
   ((tool-menu :initform nil :accessor tool-menu)
+   (sub-title :initform "basic commands" :reader sub-title)
    (doc-path :initform (merge-pathnames ";ReadMe.rtf" cl-user::*hemlock-commands-directory*) :reader doc-path)
    (text-view :initform nil :accessor text-view))
   (:documentation "A popup menu listing a useful subset of Hemlock commands: Hemlock's Greatest Hits, for new users.")
@@ -138,7 +139,7 @@
                       #k"meta-v")))
 
 (objc:defmethod (#/update :void) ((self hemlock-commands-menu))
-  (cmenu:update-tool-menu self (tool-menu self))
+  (cmenu:update-tool-menu self (tool-menu self) :sub-title (sub-title self))
   (call-next-method))
 
 (setq *hemlock-commands-menu* (make-instance 'hemlock-commands-menu))

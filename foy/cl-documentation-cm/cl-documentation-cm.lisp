@@ -11,7 +11,8 @@
                                                      *load-pathname*
                                                      *loading-file-source-file*)))
   (defParameter *cl-documentation-files* 
-    (list (merge-pathnames ";cl-documentation.lisp" *cl-documentation-directory*))))
+    (list (merge-pathnames ";cl-documentation.lisp" *cl-documentation-directory*)
+          (merge-pathnames ";cl-documentation-2.lisp" *cl-documentation-directory*))))
  
 (dolist (file *cl-documentation-files*)
   (load file))

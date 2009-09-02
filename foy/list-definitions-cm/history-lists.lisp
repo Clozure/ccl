@@ -4,7 +4,7 @@
 ;;;
 ;;;      history-lists.lisp
 ;;;
-;;;      copyright � 2009 Glen Foy
+;;;      copyright (c) 2009 Glen Foy
 ;;;      (Permission is granted to Clozure Associates to distribute this file.)
 ;;;
 ;;;      This code supports file and position history lists.
@@ -269,7 +269,8 @@
 ;;; ----------------------------------------------------------------------------
 ;;;
 (defclass POSITIONS-MENU (ns:ns-menu)
-  ((tool-menu :initform nil :accessor tool-menu))
+  ((tool-menu :initform nil :accessor tool-menu)
+   (sub-title :initform "position history" :reader sub-title))
   (:documentation "A popup menu of most-recently-visited definition positions.")
   (:metaclass ns:+ns-object))
 
@@ -288,7 +289,7 @@
   (clear-position-history-list))
 
 (objc:defmethod (#/update :void) ((self positions-menu))
-  (cmenu:update-tool-menu self (tool-menu self))
+  (cmenu:update-tool-menu self (tool-menu self) :sub-title (sub-title self))
   (call-next-method))
 
 (defun positions-context-menu ()
@@ -353,7 +354,8 @@
 ;;; ----------------------------------------------------------------------------
 ;;;
 (defclass FILE-MENU (ns:ns-menu)
-  ((tool-menu :initform nil :accessor tool-menu))
+  ((tool-menu :initform nil :accessor tool-menu)
+   (sub-title :initform "file history" :reader sub-title))
   (:documentation "A popup menu of most-recently-visited files.")
   (:metaclass ns:+ns-object))
 
@@ -368,7 +370,7 @@
              (move-entry-to-front *file-history-list* (file-path sender)))))))
 
 (objc:defmethod (#/update :void) ((self file-menu))
-  (cmenu:update-tool-menu self (tool-menu self))
+  (cmenu:update-tool-menu self (tool-menu self) :sub-title (sub-title self))
   (call-next-method))
 
 (objc:defmethod (#/clearFileHistoryAction: :void) ((m file-menu) (sender :id))

@@ -4,7 +4,7 @@
 ;;;
 ;;;      hemlock-commands-new.lisp
 ;;;
-;;;      copyright � 2009 Glen Foy
+;;;      copyright (c) 2009 Glen Foy
 ;;;      (Permission is granted to Clozure Associates to distribute this file.)
 ;;;
 ;;;      This code implements a two new Hemlock commands.
@@ -128,7 +128,7 @@
          (hemlock-view (hi::current-view))
          (pane (when hemlock-view (hi::hemlock-view-pane hemlock-view)))
          (text-view (when pane (gui::text-pane-text-view pane))))
-      (cond (sym
+      (cond ((and sym text-view)
              (cond ((eq (symbol-package sym) (find-package :common-lisp))
                     (or (display-ccl-doc sym text-view)
                         (display-mcl-doc sym text-view)
