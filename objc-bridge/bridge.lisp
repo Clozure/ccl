@@ -758,12 +758,17 @@
   super-function)
 
 (defun objc-method-signature-info (sig)
-  (or (gethash sig *objc-method-signatures*)
-      (setf (gethash sig *objc-method-signatures*)
-            (make-objc-method-signature-info
-             :type-signature sig
-             :function (compile-send-function-for-signature  sig)
-             :super-function (%compile-send-function-for-signature  sig t)))))
+  (values
+   (or (gethash sig *objc-method-signatures*)
+       (setf (gethash sig *objc-method-signatures*)
+             (make-objc-method-signature-info
+              :type-signature sig
+              :function (compile-send-function-for-signature  sig)
+              :super-function (%compile-send-function-for-signature  sig t))))))
+
+(defmethod make-load-form ((siginfo objc-method-signature-info) &optional env)
+  (declare (ignore env))
+  `(objc-method-signature-info ',(objc-method-signature-info-type-signature siginfo)))
 
 (defun concise-foreign-type (ftype)
   (if (typep ftype 'foreign-record-type)
@@ -816,75 +821,77 @@
 
 (defmethod shared-initialize :after ((gf objc-dispatch-function) slot-names &key message-info &allow-other-keys)
   (declare (ignore slot-names))
-  (if message-info
-    (let* ((ambiguous-methods (getf (objc-message-info-flags message-info) :ambiguous))
-           (selector (objc-message-info-selector message-info))
-           (first-method (car (objc-message-info-methods message-info))))
-      (lfun-bits gf (dpb (1+ (objc-message-info-req-args message-info))
-                         $lfbits-numreq
-                         (logior (ash
-                                  (if (getf (objc-message-info-flags message-info)
-                                            :accepts-varargs)
-                                    1
-                                    0)
-                                  $lfbits-rest-bit)
-                                 (logandc2 (lfun-bits gf) (ash 1 $lfbits-aok-bit)))))
-      (flet ((signature-function-for-method (m)
-               (let* ((signature-info (objc-method-info-signature-info m)))
-                 (or (objc-method-signature-info-function signature-info)
-                     (setf (objc-method-signature-info-function signature-info)
-                           (compile-send-function-for-signature
-                                    (objc-method-signature-info-type-signature signature-info)))))))
-                      
-      (if (null ambiguous-methods)
-        ;; Pick an arbitrary method, since all methods have the same
-        ;; signature.
-        (let* ((function (signature-function-for-method first-method)))
-          (set-funcallable-instance-function
-           gf
-           (nfunction
-            send-unambiguous-message
-            (lambda (receiver &rest args)
-               (declare (dynamic-extent args))
-               (or (check-receiver receiver)
-                   (with-ns-exceptions-as-errors 
-                       (apply function receiver selector args)))))))
-        (let* ((protocol-pairs (mapcar #'(lambda (pm)
-                                           (cons (lookup-objc-protocol
-                                                  (objc-method-info-class-name pm))
-                                                 (signature-function-for-method
-                                                  pm)))
-                                       (objc-message-info-protocol-methods message-info)))
-               (method-pairs (mapcar #'(lambda (group)
-                                         (cons (mapcar #'(lambda (m)
-                                                           (get-objc-method-info-class m))
-                                                       group)
-                                               (signature-function-for-method (car group))))
-                                     (objc-message-info-ambiguous-methods message-info)))
-               (default-function (if method-pairs
-                                   (prog1 (cdar (last method-pairs))
-                                     (setq method-pairs (nbutlast method-pairs)))
-                                   (prog1 (cdr (last protocol-pairs))
-                                     (setq protocol-pairs (nbutlast protocol-pairs))))))
-          (set-funcallable-instance-function
-           gf
-           (nfunction
-            send-unambiguous-message
-            (lambda (receiver &rest args)
-               (declare (dynamic-extent args))
-               (or (check-receiver receiver)
+  (with-slots (name) gf
+    (if message-info
+      (let* ((ambiguous-methods (getf (objc-message-info-flags message-info) :ambiguous))
+             (selector (objc-message-info-selector message-info))
+             (first-method (car (objc-message-info-methods message-info))))
+        (lfun-bits gf (dpb (1+ (objc-message-info-req-args message-info))
+                           $lfbits-numreq
+                           (logior (ash
+                                    (if (getf (objc-message-info-flags message-info)
+                                              :accepts-varargs)
+                                      1
+                                      0)
+                                    $lfbits-rest-bit)
+                                   (logandc2 (lfun-bits gf) (ash 1 $lfbits-aok-bit)))))
+        (flet ((signature-function-for-method (m)
+                 (let* ((signature-info (objc-method-info-signature-info m)))
+                   (or (objc-method-signature-info-function signature-info)
+                       (setf (objc-method-signature-info-function signature-info)
+                             (compile-send-function-for-signature
+                              (objc-method-signature-info-type-signature signature-info)))))))
+          (if (null ambiguous-methods)
+            ;; Pick an arbitrary method, since all methods have the same
+            ;; signature.
+            (set-funcallable-instance-function
+             gf
+             (compile-named-function 
+              `(lambda (receiver &rest args)
+                (declare (dynamic-extent args))
+                (or (check-receiver receiver)
+                 (with-ns-exceptions-as-errors 
+                     (apply (objc-method-signature-info-function
+                             (load-time-value                                
+                              (objc-method-info-signature-info ,first-method)))
+                            receiver ,selector args))))
+              :name `(:objc-dispatch ,name)))
+            (let* ((protocol-pairs (mapcar #'(lambda (pm)
+                                               (cons (lookup-objc-protocol
+                                                      (objc-method-info-class-name pm))
+                                                     (objc-method-info-signature-info
+                                                      pm)))
+                                           (objc-message-info-protocol-methods message-info)))
+                   (method-pairs (mapcar #'(lambda (group)
+                                             (cons (mapcar #'(lambda (m)
+                                                               (get-objc-method-info-class m))
+                                                           group)
+                                                   (objc-method-info-signature-info (car group))))
+                                         (objc-message-info-ambiguous-methods message-info)))
+                   (default-function-info (if method-pairs
+                                            (prog1 (cdar (last method-pairs))
+                                              (setq method-pairs (nbutlast method-pairs)))
+                                            (prog1 (cdr (last protocol-pairs))
+                                              (setq protocol-pairs (nbutlast protocol-pairs))))))
+              (set-funcallable-instance-function
+               gf
+               (compile-named-function
+                `(lambda (receiver &rest args)
+                  (declare (dynamic-extent args))
+                  (or (check-receiver receiver)
                    (let* ((function
-                           (or (dolist (pair protocol-pairs)
-                                 (when (conforms-to-protocol receiver (car pair))
-                                   (return (cdr pair))))
-                               (block m
-                                 (dolist (pair method-pairs default-function)
-                                   (dolist (class (car pair))
-                                     (when (typep receiver class)
-                                       (return-from m (cdr pair)))))))))
+                           (objc-method-signature-info-function 
+                            (or (dolist (pair ',protocol-pairs)
+                                  (when (conforms-to-protocol receiver (car pair))
+                                    (return (cdr pair))))
+                                (block m
+                                  (dolist (pair ',method-pairs ,default-function-info)
+                                    (dolist (class (car pair))
+                                      (when (typep receiver class)
+                                        (return-from m (cdr pair))))))))))
                      (with-ns-exceptions-as-errors
-                         (apply function receiver selector args)))))))))))
-    (with-slots (name) gf
+                         (apply function receiver ,selector args)))))
+                :name `(:objc-dispatch ,name)))))))
       (set-funcallable-instance-function
        gf
        #'(lambda (&rest args)
