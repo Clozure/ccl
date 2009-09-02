@@ -4,7 +4,7 @@
 ;;;
 ;;;      list-definitions.lisp
 ;;;
-;;;      copyright © 2009 Glen Foy
+;;;      copyright (c) 2009 Glen Foy
 ;;;      (Permission is granted to Clozure Associates to distribute this file.)
 ;;;
 ;;;      This code adds a dynamic contextual popup menu to Hemlock.
