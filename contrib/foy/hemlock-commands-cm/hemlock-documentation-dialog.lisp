@@ -265,13 +265,13 @@
            (make-button #@"Okay" (if *graphic-p* 520 370) 10 80 32
                         (ccl::@selector "closeAction:")))
      (setf (source-button dialog)
-           (make-button #@"SourceÉ" (if *graphic-p* 420 270) 10 90 32
+           (make-button #@"Source..." (if *graphic-p* 420 270) 10 90 32
                         (ccl::@selector "commandSourceAction:")))
      (setf (inspect-button dialog)
-           (make-button #@"InspectÉ" (if *graphic-p* 320 170) 10 90 32
+           (make-button #@"Inspect..." (if *graphic-p* 320 170) 10 90 32
                         (ccl::@selector "inspectSymbolAction:")))
      (setf (hyperspec-button dialog)
-           (make-button #@"HyperSpecÉ" (if *graphic-p* 180 30) 10 130 32
+           (make-button #@"HyperSpec..." (if *graphic-p* 180 30) 10 130 32
                         (ccl::@selector "hyperSpecAction:"))))))
 
 
