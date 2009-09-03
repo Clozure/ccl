@@ -1167,7 +1167,7 @@
                                               (format nil "Arglist (~(~a~))" type)
                                               "Arglist unknown")))
                                  (list arglist label (if type :colon '(:comment (:plain)))))))
-                       (when doc (list (substitute #\space #\newline doc) "Documentation" :colon))
+                       (when doc (list (list (substitute #\space #\newline doc) "Documentation" :colon)))
                        (when sn (list (list sn "Source Location" :colon))))))
     (setf (slot-value f 'header-lines) lines)
     (+ (length lines) (compute-disassembly-lines f))))
