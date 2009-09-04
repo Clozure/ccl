@@ -476,10 +476,12 @@
 
 (defun standard-object-compute-line-count (i)  
   (let* ((object (ccl::maybe-update-obsolete-instance (inspector-object i)))
-         (class (class-of object)))
-    (multiple-value-bind (instance-slots class-slots) (ccl::extract-instance-and-class-slotds (ccl::class-slots class))
+         (class (class-of object))
+         (all-slots (ccl::class-slots class)))
+    (multiple-value-bind (instance-slots class-slots other-slots) (ccl::extract-instance-class-and-other-slotds all-slots)
       (let* ((ninstance-slots (length instance-slots))
-             (nclass-slots (length class-slots)))
+             (nclass-slots (length class-slots))
+             (nother-slots (length other-slots)))
         (+ 2                                ; class, wrapper
            (if (eql 0 ninstance-slots)
              0
@@ -487,7 +489,10 @@
            (if (eql 0 nclass-slots)
              0
              (1+ nclass-slots))
-           (if (eql 0 (+ nclass-slots ninstance-slots))
+           (if (eql 0 nother-slots)
+             0
+             (1+ nother-slots))
+           (if (eql 0 (+ nclass-slots ninstance-slots nother-slots))
              1
              0))))))
 
@@ -517,9 +522,13 @@
 ;  slots...]
 ; [Class slots:
 ;  slots...]
+; [Other slots:
+;  slots...]
+
 (defun standard-object-line-n (i n)
   (let* ((instance (inspector-object i))
          (class (class-of instance))
+         (all-slots (class-slots class))
          (wrapper (or (ccl::standard-object-p instance)
                       (if (typep instance 'ccl::funcallable-standard-object)
                         (ccl::gf.instance.class-wrapper instance))))
@@ -528,33 +537,43 @@
       (if (eql n 0)
 	(values class "Class: " :normal)
 	(values wrapper "Wrapper: " :static))
-      (let* ((slotds (ccl::extract-instance-effective-slotds class))
-             (instance-count (length slotds))
-             (shared-start (+ instance-start instance-count
-                              (if (eql 0 instance-count) 0 1))))
-        (if (< n shared-start)
-          (if (eql n instance-start)
-            (values nil "Instance slots" :comment)
-            (let ((slot-name (slot-definition-name
-                              (elt slotds (- n instance-start 1)))))
-              (values (slot-value-or-unbound instance slot-name)
-                      slot-name
-                      :colon)))
-          (let* ((slotds (ccl::extract-class-effective-slotds class))
-                 (shared-count (length slotds))
-                 (shared-end (+ shared-start shared-count
-                                (if (eql shared-count 0) 0 1))))
-            (if (< n shared-end)
-              (if (eql n shared-start)
-                (values nil "Class slots" :comment)
-                (let ((slot-name (slot-definition-name 
-                                  (elt slotds (- n shared-start 1)))))
-                  (values (slot-value-or-unbound instance slot-name)
-                           slot-name
-                           :colon)))
-              (if (and (eql 0 instance-count) (eql 0 shared-count) (eql n shared-end))
-                (values nil "No Slots" :comment)
-                (line-n-out-of-range i n)))))))))
+      (multiple-value-bind (instance-slotds class-slotds other-slotds)
+          (ccl::extract-instance-class-and-other-slotds all-slots)
+        (let* ((instance-count (length instance-slotds))
+               (shared-start (+ instance-start instance-count
+                                (if (eql 0 instance-count) 0 1))))
+          (if (< n shared-start)
+            (if (eql n instance-start)
+              (values nil "Instance slots" :comment)
+              (let ((slot-name (slot-definition-name
+                                (elt instance-slotds (- n instance-start 1)))))
+                (values (slot-value-or-unbound instance slot-name)
+                        slot-name
+                        :colon)))
+            (let* ((shared-count (length class-slotds))
+                   (shared-end (+ shared-start shared-count
+                                  (if (eql shared-count 0) 0 1))))
+              (if (< n shared-end)
+                (if (eql n shared-start)
+                  (values nil "Class slots" :comment)
+                  (let ((slot-name (slot-definition-name 
+                                    (elt class-slotds (- n shared-start 1)))))
+                    (values (slot-value-or-unbound instance slot-name)
+                            slot-name
+                            :colon)))
+                (let* ((other-start shared-end)
+                       (other-end (+ other-start (if other-slotds (1+ (length other-slotds)) 0))))
+                  (if (< n other-end)
+                    (if (eql n other-start)
+                      (values nil "Other slots" :comment)
+                      (let ((slot-name (slot-definition-name 
+                                        (elt other-slotds (- n other-start 1)))))
+                        (values (slot-value-or-unbound instance slot-name)
+                                slot-name
+                                :colon)))
+                    (if (and (eql 0 instance-count) (eql 0 shared-count) (null other-slotds) (eql n other-end))
+                      (values nil "No Slots" :comment)
+                      (line-n-out-of-range i n))))))))))))
 
 (defmethod (setf line-n) (value (i standard-object-inspector) n)
   (standard-object-setf-line-n value i n))
