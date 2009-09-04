@@ -2506,7 +2506,7 @@
   (lfd target ppc32::double-float.value source))
   
 
-(define-ppc32-vinsn %double-to-single (((result :single-float))
+(define-ppc32-vinsn double-to-single (((result :single-float))
                                        ((arg :double-float)))
   (frsp result arg))
 
