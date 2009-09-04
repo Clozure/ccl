@@ -52,7 +52,8 @@
    (source-map :initform nil)
    (reading-line :initform nil :accessor hi:input-stream-reading-line)))
 
-
+(defmethod interactive-stream-p ((stream cocoa-listener-input-stream))
+  t)
 
 
 
