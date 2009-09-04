@@ -39,21 +39,16 @@
 (defun extract-class-effective-slotds (class)
   (extract-slotds-with-allocation :class (%class-slots class)))
 
-(defun extract-instance-and-class-slotds (slotds)
+(defun extract-instance-class-and-other-slotds (slotds)
   (collect ((instance-slots)
-	    (shared-slots))
+	    (shared-slots)
+            (other-slots))
     (dolist (s slotds (values (instance-slots) (shared-slots)))
       (case (%slot-definition-allocation s)
         (:instance (instance-slots s))
-        (:class (shared-slots s))))))
+        (:class (shared-slots s))
+        (t (other-slots s))))))
 
-
-
-(defun direct-instance-and-class-slotds (class)
-  (extract-instance-and-class-slotds (%class-direct-slots class)))
-
-(defun effective-instance-and-class-slotds (class)
-  (extract-instance-and-class-slotds (%class-slots class)))
 
 (defun %early-shared-initialize (instance slot-names initargs)
   (unless (or (listp slot-names) (eq slot-names t))
@@ -152,14 +147,10 @@
 
 (defmethod compile-time-class-p ((class class)) nil)
 
-(defmethod direct-slot-definition-class ((class std-class) &key (allocation :instance) &allow-other-keys)
-  (unless (member allocation '(:instance :class))
-    (report-bad-arg allocation '(member (:instance :class))))
+(defmethod direct-slot-definition-class ((class std-class) &key  &allow-other-keys)
   *standard-direct-slot-definition-class*)
 
-(defmethod effective-slot-definition-class ((class std-class) &key (allocation :instance) &allow-other-keys)
-  (unless (member allocation '(:instance :class))
-    (report-bad-arg allocation '(member (:instance :class))))
+(defmethod effective-slot-definition-class ((class std-class) &key  &allow-other-keys)
   *standard-effective-slot-definition-class*)
 
 (defun make-direct-slot-definition (class initargs)
@@ -251,8 +242,8 @@
 
 (defmethod compute-slots :around ((class std-class))
   (let* ((cpl (%class.cpl class)))
-    (multiple-value-bind (instance-slots class-slots)
-        (extract-instance-and-class-slotds (call-next-method))
+    (multiple-value-bind (instance-slots class-slots other-slots)
+        (extract-instance-class-and-other-slotds (call-next-method))
       (setq instance-slots (sort-effective-instance-slotds instance-slots class cpl))
       (do* ((loc 1 (1+ loc))
             (islotds instance-slots (cdr islotds)))
@@ -265,7 +256,7 @@
                      (%class-get (%slot-definition-class eslotd)
 				 :class-slots)
 		     :test #'eq)))
-      (append instance-slots class-slots))))
+      (append instance-slots class-slots other-slots))))
 
 (defmethod compute-slots :around ((class structure-class))
   (let* ((slots (call-next-method))	 )
