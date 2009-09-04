@@ -1333,7 +1333,12 @@
   (let* ((buffer (hemlock-buffer self))
          (package-name (hi::variable-value 'hemlock::current-package :buffer buffer))
          (pathname (hi::buffer-pathname buffer))
-         (ranges (#/selectedRanges self))
+         ;; Cocotron issue 380: NSTextView doesn't implement #/selectedRanges and
+         ;;  #/setSelectedRanges: methods.
+         #-cocotron (ranges (#/selectedRanges self))
+         #+cocotron (ranges (#/arrayWithObject: ns:ns-array 
+                                                (#/valueWithRange: ns:ns-value
+                                                                   (#/selectedRange self))))
          (text (#/string self)))
     (dotimes (i (#/count ranges))
       (let* ((r (#/rangeValue (#/objectAtIndex: ranges i)))
