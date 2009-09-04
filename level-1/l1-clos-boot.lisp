@@ -2738,7 +2738,9 @@ to replace that class with ~s" name old-class new-class)
 	   (eql (typecode slotd) target::subtag-instance)
 	   (eq *standard-effective-slot-definition-class-wrapper*
 	       (instance.class-wrapper slotd))
-	   (eq *standard-class-wrapper* (instance.class-wrapper class)))
+	   (eq *standard-class-wrapper* (instance.class-wrapper class))
+           (let* ((allocation (standard-effective-slot-definition.location slotd)))
+             (or (eq allocation :instance) (eq allocation :class))))
     (%std-slot-vector-value (instance-slots instance) slotd)
     (if (= (the fixnum (typecode instance)) target::subtag-struct)
       (struct-ref instance (standard-effective-slot-definition.location slotd))
@@ -2783,7 +2785,9 @@ to replace that class with ~s" name old-class new-class)
 	   (eql (typecode slotd) target::subtag-instance)
 	   (eq *standard-effective-slot-definition-class-wrapper*
 	       (instance.class-wrapper slotd))
-	   (eq *standard-class-wrapper* (instance.class-wrapper class)))
+	   (eq *standard-class-wrapper* (instance.class-wrapper class))
+           (let* ((allocation (standard-effective-slot-definition.allocation slotd)))
+             (or (eq allocation :instance) (eq allocation :class))))
     ;; Not safe to use instance.slots here, since the instance is not
     ;; definitely of type SUBTAG-INSTANCE.  (Anyway, INSTANCE-SLOTS
     ;; should be inlined here.)
@@ -2899,7 +2903,10 @@ to replace that class with ~s" name old-class new-class)
 	   (eql (typecode slotd) target::subtag-instance)
 	   (eq *standard-effective-slot-definition-class-wrapper*
 	       (instance.class-wrapper slotd))
-	   (eq *standard-class-wrapper* (instance.class-wrapper class)))
+	   (eq *standard-class-wrapper* (instance.class-wrapper class))
+           (let* ((allocation (standard-slot-definition.allocation slotd)))
+             (or (eq allocation :class)
+                 (eq allocation :instance))))
     (%std-slot-vector-boundp (instance-slots instance) slotd)
     (slot-boundp-using-class class instance slotd)))
 
