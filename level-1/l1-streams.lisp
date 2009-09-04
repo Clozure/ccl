@@ -3907,6 +3907,7 @@
   (two-way-input-method stream-read-vector v start end)
   (two-way-input-method stream-surrounding-characters)
   (two-way-input-method stream-input-timeout)
+  (two-way-input-method interactive-stream-p)
   (two-way-output-method stream-write-char c)
   (two-way-output-method stream-write-byte b)
   (two-way-output-method stream-clear-output)
@@ -4828,6 +4829,10 @@
 
 (defmethod interactive-stream-p ((stream buffered-stream-mixin))
   (let* ((ioblock (stream-ioblock stream nil)))
+    (and ioblock (ioblock-interactive ioblock))))
+
+(defmethod interactive-stream-p ((stream basic-stream))
+  (let* ((ioblock (basic-stream.state stream)))
     (and ioblock (ioblock-interactive ioblock))))
 
 
