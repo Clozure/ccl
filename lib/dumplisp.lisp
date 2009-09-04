@@ -192,7 +192,10 @@
 		    len
 		    header-pos))))))))))
 		  
-  
+;;; Note that Windows executable files are in what they call "PE"
+;;; (= "Portable Executable") format, not to be confused with the "PEF"
+;;; (= "PowerPC Executable Format" or "Preferred Executable Format")
+;;; executable format that Apple used on Classic MacOS.
 (defun %prepend-file (out-fd in-fd len #+windows-target application-type)
   (declare (fixnum out-fd in-fd len))
   (fd-lseek in-fd 0 #$SEEK_SET)
@@ -210,19 +213,19 @@
               (let* ((application-byte (ecase application-type
                                          (:console #$IMAGE_SUBSYSTEM_WINDOWS_CUI)
                                          (:gui #$IMAGE_SUBSYSTEM_WINDOWS_GUI)))
-                     (offset (%get-long buf #x3c)))
-                (assert (< offset bufsize) () "PEF header not within first ~D bytes" bufsize)
+                     (offset (%get-long buf (get-field-offset #>IMAGE_DOS_HEADER.lfanew))))
+                (assert (< offset bufsize) () "PE header not within first ~D bytes" bufsize)
                 (assert (= (%get-byte buf (+ offset 0)) (char-code #\P)) ()
-                        "File does not appear to be a PEF file")
+                        "File does not appear to be a PE file")
                 (assert (= (%get-byte buf (+ offset 1)) (char-code #\E)) ()
-                        "File does not appear to be a PEF file")
+                        "File does not appear to be a PE file")
                 (assert (= (%get-byte buf (+ offset 2)) 0) ()
-                        "File does not appear to be a PEF file")
+                        "File does not appear to be a PE file")
                 (assert (= (%get-byte buf (+ offset 3)) 0) ()
-                        "File does not appear to be a PEF file")
-                ;; File is a PEF file -- Windows subsystem byte goes at offset 68 in the
+                        "File does not appear to be a PE file")
+                ;; File is a PE file -- Windows subsystem byte goes at offset 68 in the
                 ;;  "optional header" which appears right after the standard header (20 bytes)
-                ;;  and the PEF cookie (4 bytes)
+                ;;  and the PE cookie (4 bytes)
                 (setf (%get-byte buf (+ offset 4 20 68)) application-byte)))
             (let* ((nwritten (fd-write out-fd buf nread)))
 	      (declare (fixnum nwritten))
