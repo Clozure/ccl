@@ -213,7 +213,7 @@
               (let* ((application-byte (ecase application-type
                                          (:console #$IMAGE_SUBSYSTEM_WINDOWS_CUI)
                                          (:gui #$IMAGE_SUBSYSTEM_WINDOWS_GUI)))
-                     (offset (%get-long buf (get-field-offset #>IMAGE_DOS_HEADER.lfanew))))
+                     (offset (%get-long buf (get-field-offset #>IMAGE_DOS_HEADER.e_lfanew))))
                 (assert (< offset bufsize) () "PE header not within first ~D bytes" bufsize)
                 (assert (= (%get-byte buf (+ offset 0)) (char-code #\P)) ()
                         "File does not appear to be a PE file")
