@@ -2001,6 +2001,7 @@ suspend_tcr(TCR *tcr)
           GetThreadContext(hthread, pcontext);
         }
       }
+#if 0
     } else {
       if (tcr->valence == TCR_STATE_EXCEPTION_RETURN) {
         if (!tcr->pending_exception_context) {
@@ -2010,6 +2011,7 @@ suspend_tcr(TCR *tcr)
         tcr->pending_exception_context = NULL;
         tcr->valence = TCR_STATE_LISP;
       }
+#endif
     }
     tcr->suspend_context = pcontext;
     return true;
