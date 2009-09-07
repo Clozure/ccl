@@ -2267,7 +2267,7 @@ recognize_alloc_instruction(pc program_counter)
   case 0x7f:
   case 0x77: return ID_branch_around_alloc_trap_instruction;
   case 0x48: return ID_set_allocptr_header_instruction;
-#ifdef WINDOWS
+#ifdef TCR_IN_GPR
   case 0x41: return ID_clear_tcr_save_allocptr_tag_instruction;
   case 0x49:
     switch(program_counter[1]) {
