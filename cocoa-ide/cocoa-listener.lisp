@@ -468,6 +468,7 @@
       (dotimes (i (#/count layout-managers))
         (let* ((layout (#/objectAtIndex: layout-managers i)))
           (#/setBackgroundLayoutEnabled: layout nil))))
+    (#/setDelegate: window controller)
     (#/setDelegate: (text-pane-text-view (slot-value window 'pane)) self)
     (#/setShouldCascadeWindows: controller nil)
     (#/addWindowController: self controller)
