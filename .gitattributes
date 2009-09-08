@@ -97,6 +97,7 @@ contrib/foy/cl-documentation-cm/cl-documentation.lisp -text
 contrib/foy/context-menu-cm/NewTools.rtf -text
 contrib/foy/context-menu-cm/ReadMe.rtf -text
 contrib/foy/context-menu-cm/context-menu-cm.lisp -text
+contrib/foy/context-menu-cm/context-menu-dialogs.lisp -text
 contrib/foy/hemlock-commands-cm/MCL-doc.lisp -text
 contrib/foy/hemlock-commands-cm/ReadMe.rtf -text
 contrib/foy/hemlock-commands-cm/hemlock-commands-1.lisp -text
