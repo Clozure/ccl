@@ -506,7 +506,15 @@
       (setq start-mark mark)
       (setq start-mark (hemlock::top-level-offset mark -1)))
     (when start-mark
-      (setq def-info (definition-info start-mark))
+      (let* ((line-end (hi::line-end (hi::copy-mark start-mark :temporary)))
+             (def-mark (hi::copy-mark start-mark :temporary))
+             (objc-mark (hi::copy-mark start-mark :temporary))
+             (def-p (hi::find-pattern def-mark *def-search-pattern* line-end))
+             (objc-p (hi::find-pattern objc-mark *objc-defmethod-search-pattern* line-end)))
+        (cond (def-p
+               (setq def-info (definition-info start-mark)))
+              (objc-p
+               (setq def-info (definition-info start-mark t)))))
       (when (and def-info path)
         (maybe-add-history-entry *position-history-list* def-info path)))))
 
