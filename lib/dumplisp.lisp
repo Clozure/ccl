@@ -226,7 +226,7 @@
                 ;; File is a PE file -- Windows subsystem byte goes at offset 68 in the
                 ;;  "optional header" which appears right after the standard header (20 bytes)
                 ;;  and the PE cookie (4 bytes)
-                (setf (%get-byte buf (+ offset 4 20 68)) application-byte)))
+                (setf (%get-byte buf (+ offset 4 (record-length #>IMAGE_FILE_HEADER) (get-field-offset #>IMAGE_OPTIONAL_HEADER.Subsystem) )) application-byte)))
             (let* ((nwritten (fd-write out-fd buf nread)))
 	      (declare (fixnum nwritten))
 	      (unless (= nwritten nread)
