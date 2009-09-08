@@ -78,7 +78,7 @@
   (let* ((letter-array-length (length *ABCs*))
          (letter-array (make-array letter-array-length :initial-element nil))
          miscellaneous first-letter index)
-    (dolist (sym (apply #'append *cl-symbol-lists*))
+    (dolist (sym (remove-duplicates (apply #'append *cl-symbol-lists*) :test #'eq))
       (setq first-letter (elt (string sym) 0))
       (setq index (position first-letter *ABCs* :test #'char-equal))
       (if index
