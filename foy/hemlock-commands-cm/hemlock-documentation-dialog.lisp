@@ -72,7 +72,7 @@
                 (source-path (string-trim '(#\newline #\space) (gui::call-grep args))))
            (if (and (stringp source-path) (string-not-equal source-path ""))
              (ldefs:find-and-display-definition (format nil "~S" (name d)) source-path)
-             (ldefs:notify (format nil "Could not find: ~S" (name d))))))
+             (cmenu:notify (format nil "Could not find: ~S" (name d))))))
         (t
          (hemlock::edit-definition (symbol d)))))
 
