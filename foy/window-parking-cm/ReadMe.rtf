@@ -1,0 +1,72 @@
+{\rtf1\ansi\ansicpg1252\cocoartf949\cocoasubrtf460
+{\fonttbl\f0\fswiss\fcharset0 Helvetica;\f1\fnil\fcharset0 Monaco;}
+{\colortbl;\red255\green255\blue255;\red0\green79\blue175;\red11\green12\blue197;}
+\margl1440\margr1440\vieww11960\viewh17520\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\f0\b\fs28 \cf2 \ul \ulc3 Window-Parking-CM\
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\b0\fs24 \cf0 \ulnone This code is part of a collection of Context-Menu tools.  For general information see: ccl/contrib/foy/context-menu/ReadMe.  You must (require :context-menu-cm) and (require :list-definitions)  to use this, but you can choose which of the other tools you want to load.\
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\b \cf0 Features
+\b0 :\
+Window-Parking  is a window management utility that lets you define "parking spots" for Hemlock windows.  The idea is to eliminate the need to continually move and resize editor windows.  It works in conjunction with the file history list.  The two together provide a functionality similar to the Emacs's multiple buffers.\
+    \cf2 Right-Click\cf0  -->  produces two menu items: "Define Parking Spot" and "Delete Parking Spot".\
+\
+\
+
+\b Usage
+\b0 :\
+You begin by opening a Hemlock window.  Resize it and move it to position.  Select "Define Parking Spot" from the popup menu.  A dialog will open letting you associate that size and position with a function key.  Choose function key 1 and click Okay.  Move and resize the window and associate it with function key 2.  Do this up to 7 times.  I generally have one large position where I do most of my editing and several smaller positions which are used for reference.\
+\
+When you open a new file, it will be placed in the first available parking spot.  You can move it elsewhere by pressing the appropriate function key.  If all the parking spots are taken, the oldest file will be bumped, but you can reopen it by accessing the file history list  --> \cf2 Alt-Command-Right-Click\cf0 .  The file history list is similar to Emacs's list of open buffers.\
+\
+The parking spot information is persistent and is stored here:\
+~/Library/Preferences/org.clairvaux/window-parking/parking-lot\
+\
+
+\b Setup:
+\b0 \
+\pard\pardeftab720\ql\qnatural
+\cf2 cd  ccl/contrib/\
+svn update\
+\
+\cf0 That will pull in new versions of all contribs, including Context-Menu-CM, List-Definitions-CM and Window-Parking-CM.\
+\cf2 \
+\cf0 In the Listener or in ~/ccl-init.lisp execute these forms:\
+\
+\pard\pardeftab720\ql\qnatural
+
+\f1\fs20 \cf2 ;;; Use your own path here, if you are using a local copy of the HyperSpec:
+\f0\fs24 \cf0 \
+
+\f1\fs20 \cf2 (setq gui::*hyperspec-root-url* (gui::pathname-to-url "/Lisp/hyperspec-7-0/"))
+\f0\fs24 \
+\
+
+\f1\fs20 (require :context-menu-cm)\
+(require :cl-documentation-cm)\
+(require :list-definitions-cm)\
+(require :hemlock-commands-cm)\
+(require :window-parking-cm)\
+(cmenu:set-default-tool "List-Definitions-CM")
+\f0\fs24 \
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+\cf0 Window-Parking-CM and the other tools are also available at:   www.clairvaux.org/downloads/\
+But updating the contribs directory and then requiring what you need works nicely.\
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\b \cf0 Note
+\b0 :  Hemlock may get multiple buffers at some point.  If it does, this utility will probably be retired, or at least modified.\
+\
+\
+
+\b Shareware
+\b0 :\
+If you decide to use Window-Parking-CM on a regular basis, please make a $5 contribution to either the Save Darfur Coalition or the World Wildlife Fund.  You can do this online.}
