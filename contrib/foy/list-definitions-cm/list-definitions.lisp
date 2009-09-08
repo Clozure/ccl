@@ -2,7 +2,7 @@
 
 ;;; ----------------------------------------------------------------------------
 ;;;
-;;;      list-definitionsisp
+;;;      list-definitions.lisp
 ;;;
 ;;;      copyright (c) 2009 Glen Foy
 ;;;      (Permission is granted to Clozure Associates to distribute this file.)
@@ -32,7 +32,7 @@
 
 (require :context-menu-cm)
 
-(export '(find-and-display-definition))
+(export '(find-and-display-definition window-path active-hemlock-window))
 
 (defParameter *objc-defmethod-search-pattern* (hi::new-search-pattern :string-insensitive :forward "(objc:defmethod"))
 (defParameter *def-search-pattern* (hi::new-search-pattern :string-insensitive :forward "(def"))
@@ -44,21 +44,6 @@
 (defVar *file-history-list* nil "The file-history-list instance.")
 
 (defmacro clone (mark) `(hi::copy-mark ,mark :temporary))
-
-(defun active-hemlock-window ()
-  "Return the active hemlock-frame."
-  (gui::first-window-satisfying-predicate 
-   #'(lambda (w)
-       (and (typep w 'gui::hemlock-frame)
-            (not (typep w 'gui::hemlock-listener-frame))
-            (#/isKeyWindow w)))))
-
-(defun window-path (w)
-  "Return the window's path."
-  (let* ((pane (slot-value w 'gui::pane))
-         (hemlock-view (when pane (gui::text-pane-hemlock-view pane)))
-         (buffer (when hemlock-view (hi::hemlock-view-buffer hemlock-view))))
-    (when buffer (hi::buffer-pathname buffer))))
 
 ;;; ----------------------------------------------------------------------------
 ;;; 
@@ -148,8 +133,8 @@
   (let* ((menu (make-instance 'list-definitions-menu 
                  :sub-title (if alpha-p "alphabetical" "positional")
                  :menu-text-view text-view 
-                 :menu-path (window-path (#/window text-view))))
-         (window (active-hemlock-window))
+                 :menu-path (cmenu:window-path (#/window text-view))))
+         (window (cmenu:active-hemlock-window))
          (alist (when window (list-definitions window alpha-p)))
          (class-icon (#/iconForFileType: (#/sharedWorkspace ns:ns-workspace) (ccl::%make-nsstring "lisp")))
          current-class menu-item)
@@ -366,10 +351,10 @@
 ;;; This is used by the Hemlock-Commands tool.  
 (defun find-and-display-definition (name path)
   "Display the file and scroll to the definition position."
-  (let ((window (window-with-path path))
+  (let ((window (cmenu:window-with-path path))
          mark def-list text-view hemlock-view)
     (unless (probe-file path)
-      (notify (format nil "~a does not exist."
+      (cmenu:notify (format nil "~a does not exist."
                       path))
       (return-from find-and-display-definition nil))
     (cond (window 

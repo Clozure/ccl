@@ -31,27 +31,9 @@
 (defParameter *position-history-list-length* 25)
 (defParameter *file-history-list-length* 25)
 
-(export '(notify))
-
-;;; This includes a work-around for what appears to be a bug in the hemlock-frame
-;;; #/close method.  After a #/close, the window remains on the (#/orderedWindows *NSApp*)
-;;; list, but (hi::buffer-document buffer) in NIL.  Therefore the extra tests:
-(defun window-with-path (path)
-  "If a window with PATH is open, return it."
-  (gui::first-window-satisfying-predicate 
-   #'(lambda (w)
-       (when (and (typep w 'gui::hemlock-frame)
-                  (not (typep w 'gui::hemlock-listener-frame)))
-         (let* ((pane (slot-value w 'gui::pane))
-                (text-view (gui::text-pane-text-view pane))
-                (buffer (gui::hemlock-buffer text-view))
-                (document (when buffer (hi::buffer-document buffer)))
-                (p (hi::buffer-pathname buffer)))
-           (when (and document p) (string-equal path p)))))))
-
 (defun maybe-open-file (path)
   "If a window with PATH is open, return it.  Otherwise open a new window."
-  (let ((w (window-with-path path)))
+  (let ((w (cmenu:window-with-path path)))
     (if w 
       w
       (let ((hemlock-view (gui::cocoa-edit path)))
@@ -64,9 +46,6 @@
                                   filename)
                      (hemlock::user-homedir-pathname)))
 
-(defun notify (message)
-  "FYI"
-  (gui::alert-window :title "Notification" :message message))
 
 ;;; ----------------------------------------------------------------------------
 ;;;
@@ -85,10 +64,10 @@
   "Display the file and scroll to position."
   (let* ((name (hle-name entry))
          (path (hle-path entry))
-         (window (window-with-path path))
+         (window (cmenu:window-with-path path))
          mark def-list text-view hemlock-view)
     (unless (probe-file path)
-      (notify (format nil "~a does not exist.  It will be deleted from the history lists."
+      (cmenu:notify (format nil "~a does not exist.  It will be deleted from the history lists."
                       path))
       (purge-file-references *position-history-list* path)
       (remove-path *file-history-list* path)
@@ -116,7 +95,7 @@
              (display-position text-view mark)
              (move-entry-to-front *file-history-list* path) t)
             (t 
-             (notify (format nil "Cannot find ~S.  It will be deleted from the position history list." 
+             (cmenu:notify (format nil "Cannot find ~S.  It will be deleted from the position history list." 
                              name))
              (remove-entry *position-history-list* name) nil)))))
 
@@ -129,11 +108,11 @@
 (defMethod show-entry ((entry file-list-entry))
   (let ((path (hle-path entry)))
     (unless (probe-file path)
-      (notify (format nil "~S does not exist.  It will be deleted from the history lists." path))
+      (cmenu:notify (format nil "~S does not exist.  It will be deleted from the history lists." path))
       (purge-file-references *position-history-list* path)
       (remove-path *file-history-list* path)
       (return-from show-entry nil))
-    (let ((window (window-with-path path))) 
+    (let ((window (cmenu:window-with-path path))) 
       (unless window 
         (let ((hemlock-view (gui::cocoa-edit path)))
           (when hemlock-view 
@@ -425,7 +404,7 @@
 
 (defMethod read-history-list ((hl history-list) stream &optional position-p)
   (flet ((oops ()
-           (notify (format nil "There is a problem with ~S. Setting the history to NIL." (hl-path hl)))
+           (cmenu:notify (format nil "There is a problem with ~S. Setting the history to NIL." (hl-path hl)))
            (setf (hl-list hl) nil)
            ;;; delete the file?
            (return-from read-history-list)))
@@ -493,7 +472,7 @@
 ;;; File History Interface:
 ;;; 
 (objc:defmethod (#/becomeKeyWindow :void) ((w gui::hemlock-frame))
-  (let* ((path (window-path w))
+  (let* ((path (cmenu:window-path w))
          (name (when (and path (string-equal (pathname-type path) "lisp"))
                  (concatenate 'string (pathname-name path) ".lisp"))))
     (when (and name path)
