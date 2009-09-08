@@ -2041,21 +2041,6 @@
   (let ((pane (hi::hemlock-view-pane view)))
     (when (and pane (not (%null-ptr-p pane)))
       (report-condition-in-hemlock-frame condition (#/window pane)))))
-                       
-(objc:defmethod (#/close :void) ((self hemlock-frame))
-  (let* ((content-view (#/contentView self))
-         (subviews (#/subviews content-view)))
-    (do* ((i (1- (#/count subviews)) (1- i)))
-         ((< i 0))
-      (#/removeFromSuperviewWithoutNeedingDisplay (#/objectAtIndex: subviews i))))
-  (let* ((buf (hemlock-frame-echo-area-buffer self))
-         (echo-doc (if buf (hi::buffer-document buf))))
-    (when echo-doc
-      (setf (hemlock-frame-echo-area-buffer self) nil)
-      (#/close echo-doc)))
-  (release-canonical-nsobject self)
-  (#/setFrameAutosaveName: self #@"")
-  (call-next-method))
 
 (defun window-menubar-height ()
   #+cocotron (objc:objc-message-send (ccl::@class "NSMainMenuView") "menuHeight" #>CGFloat)
@@ -2388,6 +2373,20 @@
       (setf (ns:ns-rect-height r) (ns:ns-rect-height default-frame)
             (ns:ns-rect-y r) (ns:ns-rect-y default-frame)))
     r))
+
+(objc:defmethod (#/windowWillClose: :void) ((wc hemlock-editor-window-controller)
+                                            notification)
+  (declare (ignore notification))
+  ;; The echo area "document" should probably be a slot in the document
+  ;; object, and released when the document object is.
+  (let* ((w (#/window wc))
+         (buf (hemlock-frame-echo-area-buffer w))
+         (echo-doc (if buf (hi::buffer-document buf))))
+    (when echo-doc
+      (setf (hemlock-frame-echo-area-buffer w) nil)
+      (#/close echo-doc))
+    (#/setFrameAutosaveName: w #@"")
+    (#/autorelease w)))
 
 (defmethod hemlock-view ((self hemlock-editor-window-controller))
   (let ((frame (#/window self)))
