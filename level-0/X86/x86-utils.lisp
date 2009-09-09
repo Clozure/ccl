@@ -444,6 +444,23 @@ be somewhat larger than what was specified)."
   (uuo-gc-trap)
   (jmp-subprim .SPmakeu64))
 
+(defx86lapfunction %watch ((uvector arg_z))
+  (check-nargs 1)
+  ;; This traps on symbols and functions, which have their own tags.
+  ;; This may be undesirable.
+  (trap-unless-lisptag= uvector x8664::tag-misc imm0)
+  (movl ($ arch::watch-trap-function-watch) (%l imm0))
+  (uuo-watch-trap)
+  (movl ($ nil) (%l arg_z))
+  (single-value-return))
+
+(defx86lapfunction %unwatch ((watched arg_z))
+  (check-nargs 1)
+  (movl ($ arch::watch-trap-function-unwatch) (%l imm0))
+  (uuo-watch-trap)
+  (movl ($ nil) (%l arg_z))
+  (single-value-return))
+
 (defx86lapfunction %allocate-list ((initial-element arg_y) (nconses arg_z))
   (check-nargs 2)
   (save-simple-frame)
