@@ -12,8 +12,7 @@
 ;;;      This software is offered "as is", without warranty of any kind.
 ;;;
 ;;;      Mod History (most recent edit first)
-;;;      9/14/9  version 0.1b1
-;;;              first cut
+;;;      9/9/9  first cut
 ;;;
 ;;; ----------------------------------------------------------------------------
 
