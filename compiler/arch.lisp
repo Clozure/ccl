@@ -357,6 +357,7 @@
 (defconstant gc-trap-function-freeze 129)
 (defconstant gc-trap-function-thaw 130)
 
-
+(defconstant watch-trap-function-watch 0)
+(defconstant watch-trap-function-unwatch 1)
 
 (provide "ARCH")
