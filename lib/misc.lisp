@@ -1043,3 +1043,23 @@ are running on, or NIL if we can't find any useful information."
               (%svref lock target::lock.kind-cell)
               (lock-name lock)
               (%ptr-to-int (%svref lock target::lock._value-cell)))))
+
+(defun watch (&optional thing)
+  (if thing
+    ;; typecheck thing?
+    (%watch thing)
+    (let (result)
+      (%map-areas #'(lambda (x) (push x result)) area-watched area-watched)
+      result)))
+
+(defun unwatch (thing)
+  (%map-areas #'(lambda (x)
+		  (when (eq x thing)
+		    ;; This is a rather questionable thing to do,
+		    ;; since we'll be unlinking an area from the area
+		    ;; list while %map-areas iterates over it, but I
+		    ;; think we'll get away with it.
+		    (%unwatch thing)
+		    (return-from unwatch)))
+	      area-watched area-watched))
+      
