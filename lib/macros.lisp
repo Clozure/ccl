@@ -3595,6 +3595,7 @@ to be at least partially steppable."
   `(do-gc-areas (,area)
      (let ((,code (%fixnum-ref ,area  (area-code))))
        (when (or (eql ,code area-readonly)
+		 (eql ,code area-watched)
                  (eql ,code area-managed-static)
                  (eql ,code area-static)
                  (eql ,code area-dynamic))
