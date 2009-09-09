@@ -391,6 +391,23 @@ be somewhat larger than what was specified)."
   (uuo-gc-trap)
   (jmp-subprim .SPmakeu32))
 
+(defx8632lapfunction %watch ((uvector arg_z))
+  (check-nargs 1)
+  ;; May want to tighten this up to disallow watching functions,
+  ;; symbols, etc.
+  (trap-unless-lisptag= uvector x8632::tag-misc imm0)
+  (movl ($ arch::watch-trap-function-watch) (%l imm0))
+  (uuo-watch-trap)
+  (movl ($ nil) (%l arg_z))
+  (single-value-return))
+
+(defx8632lapfunction %unwatch ((watched arg_z))
+  (check-nargs 1)
+  (movl ($ arch::watch-trap-function-unwatch) (%l imm0))
+  (uuo-watch-trap)
+  (movl ($ nil) (%l arg_z))
+  (single-value-return))
+
 (defx8632lapfunction %allocate-list ((initial-element arg_y) (nconses arg_z))
   (check-nargs 2)
   (save-simple-frame)
