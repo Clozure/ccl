@@ -595,6 +595,14 @@ be somewhat larger than what was specified)."
   #+32-bit-target
   (ba .SPmakeu32))
 
+(defun %watch (uvector)
+  (declare (ignore uvector))
+  (error "watching objects not supported on PPC yet"))
+
+(defun %unwatch (watched)
+  (declare (ignore watched))
+  (error "watching objects not supported on PPC yet"))
+
 ;;; Make a list.  This can be faster than doing so by doing CONS
 ;;; repeatedly, since the latter strategy might triger the GC several
 ;;; times if N is large.
