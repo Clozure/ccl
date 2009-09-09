@@ -414,20 +414,30 @@
                        ()
                        frame-ptr))))
           ((= signal #$SIGSEGV)
-           ;; Stack overflow.
-           (let* ((on-tsp (not (eql 0 code))))
-             (unwind-protect
-                  (%error
-                   (make-condition
-                    'stack-overflow-condition 
-                    :format-control "Stack overflow on ~a stack."
-                    :format-arguments (list
-                                       (if on-tsp "temp" "value"))
-                    )
-                   nil frame-ptr)
-               (ff-call (%kernel-import target::kernel-import-restore-soft-stack-limit)
-                        :unsigned-fullword code
-                        :void))))
+	   (cond
+	     ((or (= code 0) (= code 1))
+	      ;; Stack overflow.
+	      (let* ((on-tsp (= code 1)))
+		(unwind-protect
+		     (%error
+		      (make-condition
+		       'stack-overflow-condition 
+		       :format-control "Stack overflow on ~a stack."
+		       :format-arguments (list (if on-tsp "temp" "value")))
+		      nil frame-ptr)
+		  (ff-call (%kernel-import target::kernel-import-restore-soft-stack-limit)
+			   :unsigned-fullword code
+			   :void))))
+	     ((= code 2)
+	      ;; Write to a watched object.
+	      (flet ((%int-to-object (i)
+		       (rlet ((a :address))
+			 (setf (%get-ptr a) (%int-to-ptr i))
+			 (%get-object a 0))))
+		(%error (make-condition
+			 'write-to-watched-object
+			 :object (%int-to-object addr))
+			nil frame-ptr)))))
           ((= signal #+win32-target 10 #-win32-target #$SIGBUS)
            (if (= code -1)
              (%error (make-condition 'invalid-memory-operation)
