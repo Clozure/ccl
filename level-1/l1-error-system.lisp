@@ -102,6 +102,11 @@
              (declare (ignore c))
              (format s "Invalid memory operation."))))
 
+(define-condition write-to-watched-object (storage-condition)
+  ((object :initform nil :initarg :object))
+  (:report (lambda (c s)
+	     (with-slots (object) c
+	       (format s "Write to watched object ~s." object)))))
 
 (define-condition type-error (error)
   ((datum :initarg :datum)
