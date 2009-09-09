@@ -1380,7 +1380,6 @@ shutdown_thread_tcr(void *arg)
   TCR *tcr = TCR_FROM_TSD(arg),*current=get_tcr(0);
 
   area *vs, *ts, *cs;
-  void *termination_semaphore;
   
   if (current == NULL) {
     current = tcr;
@@ -1423,7 +1422,6 @@ shutdown_thread_tcr(void *arg)
     tcr->tlb_pointer = NULL;
     tcr->osid = 0;
     tcr->interrupt_pending = 0;
-    termination_semaphore = tcr->termination_semaphore;
     tcr->termination_semaphore = NULL;
 #ifdef HAVE_TLS
     dequeue_tcr(tcr);
@@ -1438,9 +1436,6 @@ shutdown_thread_tcr(void *arg)
     tcr->native_thread_info = NULL;
 #endif
     UNLOCK(lisp_global(TCR_AREA_LOCK),current);
-    if (termination_semaphore) {
-      SEM_RAISE(termination_semaphore);
-    }
   } else {
     tsd_set(lisp_global(TCR_KEY), TCR_TO_TSD(tcr));
   }

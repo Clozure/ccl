@@ -484,15 +484,12 @@
 
 ;;; This doesn't quite activate the thread; see PROCESS-TCR-ENABLE.
 (defun %activate-tcr (tcr termination-semaphore allocation-quantum)
+  (declare (ignore termination-semaphore))
   (if (and tcr (not (eql 0 tcr)))
     (with-macptrs (tcrp)
       (%setf-macptr-to-object tcrp tcr)
       (setf (%get-natural tcrp target::tcr.log2-allocation-quantum)
             (or allocation-quantum (default-allocation-quantum)))
-      (setf (%get-ptr tcrp target::tcr.termination-semaphore)
-            (if termination-semaphore
-              (semaphore-value termination-semaphore)
-              (%null-ptr)))
       t)))
                          
 (defvar *canonical-error-value*
@@ -1114,4 +1111,8 @@ no longer being used."
 ;;; the global lists.
 (defun %foreign-thread-terminate ()
   (let* ((proc *current-process*))
-    (when proc (remove-from-all-processes proc))))
+    (when proc
+      (remove-from-all-processes proc)
+      (let* ((ts (process-termination-semaphore proc)))
+        (when ts (signal-semaphore ts))))))
+

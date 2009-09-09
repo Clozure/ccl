@@ -318,15 +318,7 @@
     (%signal-semaphore-ptr (%fixnum-ref-macptr tcr target::tcr.activate))
     ))
 
-(defmethod (setf process-termination-semaphore) :after (new (p process))
-  (with-macptrs (tcrp)
-    (%setf-macptr-to-object tcrp (process-tcr p))
-    (unless (%null-ptr-p tcrp)
-      (setf (%get-ptr tcrp target::tcr.termination-semaphore)
-            (if new
-              (semaphore-value new)
-              (%null-ptr))))
-    new))
+
 
 (defun process-resume (p)
   "Resume a specified process which had previously been suspended
@@ -417,12 +409,13 @@ a given process."
 
 ;;; Separated from run-process-initial-form just so I can change it easily.
 (defun process-initial-form-exited (process kill)
-  ;; Enter the *initial-process* and have it finish us up
   (without-interrupts
    (if (eq kill :shutdown)
      (progn
        (setq *whostate* "Shutdown")
        (add-to-shutdown-processes process)))
+   (let* ((semaphore (process-termination-semaphore process)))
+     (when semaphore (signal-semaphore semaphore)))
    (maybe-finish-process-kill process kill)))
 
 (defun maybe-finish-process-kill (process kill)
