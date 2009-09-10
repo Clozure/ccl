@@ -1162,7 +1162,7 @@ gc(TCR *tcr, signed_natural param)
   get_time(start);
 
   /* The link-inverting marker might need to write to watched areas */
-  unprotect_watched_areas(PROT_READ|PROT_EXEC|PROT_WRITE);
+  unprotect_watched_areas();
 
   lisp_global(IN_GC) = (1<<fixnumshift);
 
