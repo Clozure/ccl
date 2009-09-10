@@ -3751,7 +3751,7 @@ unwatch_object(TCR *tcr, signed_natural param)
       lisp_allocation_failure(xp, tcr, size);
     }
 
-    bcopy(noderef, tcr->save_allocptr, size);
+    memcpy(tcr->save_allocptr, noderef, size);
     delete_watched_area(a, tcr);
     wp_update_references(tcr, old, new);
     check_all_areas(tcr);
