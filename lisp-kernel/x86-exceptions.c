@@ -3639,9 +3639,16 @@ delete_watched_area(area *a, TCR *tcr)
   condemn_area_holding_area_lock(a);
 
   if (nbytes) {
-    int err = munmap(base, nbytes);
-    if (err < 0)
-      Fatal("munmap in delete_watched_area: ", strerror(errno));
+    int err;
+
+/* can't use UnMapMemory() beacuse it only uses MEM_DECOMMIT */
+#ifdef WINDOWS
+    err = VirtualFree(base, nbytes, MEM_RELEASE);
+#else
+    err = munmap(base, nbytes);
+#endif
+    if (err != 0)
+      Fatal("munmap in delete_watched_area", "");
   }
 }
 
@@ -3714,9 +3721,9 @@ watch_object(TCR *tcr, signed_natural param)
     add_area_holding_area_lock(a);
 
     /* move object to watched area */
-    bcopy(noderef, a->low, size);
+    memcpy(a->low, noderef, size);
     ProtectMemory(a->low, size);
-    bzero(noderef, size);
+    memset(noderef, 0, size);
     wp_update_references(tcr, old, new);
     check_all_areas(tcr);
   }
