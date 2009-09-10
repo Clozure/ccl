@@ -25,6 +25,27 @@
 #include <string.h>
 #include <sys/time.h>
 
+#ifdef X8632
+static inline natural
+imm_word_count(LispObj fn)
+{
+  natural w = ((unsigned short *)fn)[-1];
+
+  if (w & 0x8000) {
+    /* 
+     * The low 15 bits encode the number of contants.
+     * Compute and return the immediate word count.
+     */
+    LispObj header = header_of(fn);
+    natural element_count = header_element_count(header);
+
+    return element_count - (w & 0x7fff);
+  } else {
+    /* The immediate word count is encoded directly. */
+    return w;
+  }
+}
+#endif
 
 /* Heap sanity checking. */
 
@@ -317,6 +338,7 @@ check_all_areas(TCR *tcr)
   while (code != AREA_VOID) {
     switch (code) {
     case AREA_DYNAMIC:
+    case AREA_WATCHED:
     case AREA_STATIC:
     case AREA_MANAGED_STATIC:
       check_range((LispObj *)a->low, (LispObj *)a->active, true);
@@ -957,16 +979,7 @@ rmark(LispObj n)
       base = (LispObj *)untag(fn);
       header = *(natural *)base;
       subtag = header_subtag(header);
-      boundary = base + (unsigned short)base[1];
-
-      /* XXX bootstrapping */
-      {
-	natural word_count = (unsigned short)base[1];
-	natural element_count = header_element_count(header);
-
-	if (word_count & 0x8000)
-	  boundary = base + element_count - (word_count & 0x7fff);
-      }
+      boundary = base + imm_word_count(fn);
 
       /*
        * On x8632, the upper 24 bits of the boundary word are zero.
@@ -989,15 +1002,7 @@ rmark(LispObj n)
       header = *((natural *) base);
       subtag = header_subtag(header);
       if (subtag == subtag_function) {
-        boundary = base + (unsigned short)base[1];
-	/* XXX bootstrapping */
-	{
-	  natural word_count = (unsigned short)base[1];
-	  natural element_count = header_element_count(header);
-
-	  if (word_count & 0x8000)
-	    boundary = base + element_count - (word_count & 0x7fff);
-	}
+        boundary = base + imm_word_count(this);
 
 	*((int *)boundary) &= 0xff;
         *((int *)boundary) |= ((this-((LispObj)boundary)) << 8);
@@ -1900,16 +1905,10 @@ update_self_references(LispObj *node)
 {
   LispObj fn = fulltag_misc + (LispObj)node;
   unsigned char *p = (unsigned char *)node;
-  natural i, offset;
-  LispObj header = *node;
+  natural i = imm_word_count(fn);
 
-  i = ((unsigned short *)node)[2];
   if (i) {
-    /* XXX bootstrapping for new scheme */
-    if (i & 0x8000) {
-      i = header_element_count(header) - (i & 0x7fff);
-    }
-    offset = node[--i];
+    natural offset = node[--i];
 
     while (offset) {
       *(LispObj *)(p + offset) = fn;
@@ -1981,12 +1980,8 @@ compact_dynamic_heap()
           dnode += node_dnodes;
 	  if (header_subtag(node) == subtag_function) {
 #ifdef X8632
-	    int skip = *((unsigned short *)src);
 	    LispObj *f = dest;
-
-	    /* XXX bootstrapping for new scheme */
-	    if (skip & 0x8000)
-	      skip = elements - (skip & 0x7fff);
+	    int skip = imm_word_count(fulltag_misc + (LispObj)current);
 #else
 	    int skip = *((int *)src);
 #endif
@@ -2808,4 +2803,225 @@ impurify(TCR *tcr, signed_natural param)
     return 0;
   }
   return -1;
+}
+
+/*
+ * This stuff is all adapted from the forward_xxx functions for use by
+ * the watchpoint code.  It's a lot of duplicated code, and it would
+ * be nice to generalize it somehow.
+ */
+
+static inline void
+wp_maybe_update(LispObj *p, LispObj old, LispObj new)
+{
+  if (*p == old) {
+    *p = new;
+  }
+}
+
+static void
+wp_update_headerless_range(LispObj *start, LispObj *end,
+			   LispObj old, LispObj new)
+{
+  LispObj *p = start;
+
+  while (p < end) {
+    wp_maybe_update(p, old, new);
+    p++;
+  }
+}
+
+static void
+wp_update_range(LispObj *start, LispObj *end, LispObj old, LispObj new)
+{
+  LispObj *p = start, node;
+  int tag_n;
+  natural nwords;
+
+  while (p < end) {
+    node = *p;
+    tag_n = fulltag_of(node);
+
+    if (immheader_tag_p(tag_n)) {
+      p = (LispObj *)skip_over_ivector(ptr_to_lispobj(p), node);
+    } else if (nodeheader_tag_p(tag_n)) {
+      nwords = header_element_count(node);
+      
+      nwords += 1 - (nwords & 1);
+
+      if ((header_subtag(node) == subtag_hash_vector) &&
+          ((((hash_table_vector_header *)p)->flags) & nhash_track_keys_mask)) {
+        natural skip = hash_table_vector_header_count - 1;
+	hash_table_vector_header *hashp = (hash_table_vector_header *)p;
+
+        p++;
+        nwords -= skip;
+        while(skip--) {
+	  if (*p == old) *p = new;
+          p++;
+        }
+        /* "nwords" is odd at this point: there are (floor nwords 2)
+           key/value pairs to look at, and then an extra word for
+           alignment.  Process them two at a time, then bump "p"
+           past the alignment word. */
+        nwords >>= 1;
+        while(nwords--) {
+          if (*p == old && hashp) {
+	    *p = new;
+            hashp->flags |= nhash_key_moved_mask;
+            hashp = NULL;
+          }
+          p++;
+	  if (*p == old) *p = new;
+          p++;
+        }
+        *p++ = 0;
+      } else {
+	if (header_subtag(node) == subtag_function) {
+#ifdef X8632
+	  int skip = (unsigned short)(p[1]);
+
+	  /* XXX bootstrapping */
+	  if (skip & 0x8000)
+	    skip = header_element_count(node) - (skip & 0x7fff);
+
+#else
+	  int skip = (int)(p[1]);
+#endif
+	  p += skip;
+	  nwords -= skip;
+	}
+        p++;
+        while(nwords--) {
+	  wp_maybe_update(p, old, new);
+          p++;
+        }
+      }
+    } else {
+      /* a cons cell */
+      wp_maybe_update(p, old, new);
+      p++;
+      wp_maybe_update(p, old, new);
+      p++;
+    }
+  }
+}
+
+static void
+wp_update_xp(ExceptionInformation *xp, LispObj old, LispObj new)
+{
+  natural *regs = (natural *)xpGPRvector(xp);
+
+#ifdef X8664
+  wp_maybe_update(&regs[Iarg_z], old, new);
+  wp_maybe_update(&regs[Iarg_y], old, new);
+  wp_maybe_update(&regs[Iarg_x], old, new);
+  wp_maybe_update(&regs[Isave3], old, new);
+  wp_maybe_update(&regs[Isave2], old, new);
+  wp_maybe_update(&regs[Isave1], old, new);
+  wp_maybe_update(&regs[Isave0], old, new);
+  wp_maybe_update(&regs[Ifn], old, new);
+  wp_maybe_update(&regs[Itemp0], old, new);
+  wp_maybe_update(&regs[Itemp1], old, new);
+  wp_maybe_update(&regs[Itemp2], old, new);
+#endif
+
+#if 0
+  /* 
+   * We don't allow watching functions, so this presumably doesn't
+   * matter.
+   */
+  update_locref(&(regs[Iip]));
+#endif
+
+}
+
+static void
+wp_update_tcr_xframes(TCR *tcr, LispObj old, LispObj new)
+{
+  xframe_list *xframes;
+  ExceptionInformation *xp;
+
+#ifdef X8664
+  xp = tcr->gc_context;
+  if (xp) {
+    wp_update_xp(xp, old, new);
+  }
+  for (xframes = tcr->xframe; xframes; xframes = xframes->prev) {
+    wp_update_xp(xframes->curr, old, new);
+  }
+#endif
+}
+
+/*
+ * Scan all pointer-bearing areas, updating all references to
+ * "old" to "new".
+ */
+static void
+wp_update_all_areas(LispObj old, LispObj new)
+{
+  area *a = active_dynamic_area;
+  natural code = a->code;
+
+  while (code != AREA_VOID) {
+    switch (code) {
+      case AREA_DYNAMIC:
+      case AREA_STATIC:
+      case AREA_MANAGED_STATIC:
+      case AREA_WATCHED:
+	wp_update_range((LispObj *)a->low, (LispObj *)a->active, old, new);
+	break;
+      case AREA_VSTACK:
+      {
+	LispObj *low = (LispObj *)a->active;
+	LispObj *high = (LispObj *)a->high;
+	
+	wp_update_headerless_range(low, high, old, new);
+      }
+      break;
+      case AREA_TSTACK:
+      {
+	LispObj *current, *next;
+	LispObj *start = (LispObj *)a->active, *end = start;
+	LispObj *limit = (LispObj *)a->high;
+	
+	for (current = start; end != limit; current = next) {
+	  next = ptr_from_lispobj(*current);
+	  end = ((next >= start) && (next < limit)) ? next : limit;
+	  wp_update_range(current+2, end, old, new);
+	}
+      break;
+      }
+      default:
+	break;
+    }
+    a = a->succ;
+    code = a->code;
+  }
+}
+
+static void
+wp_update_tcr_tlb(TCR *tcr, LispObj old, LispObj new)
+{
+  natural n = tcr->tlb_limit;
+  LispObj *start = tcr->tlb_pointer;
+  LispObj *end = start + (n >> fixnumshift);
+
+  while (start < end) {
+    wp_maybe_update(start, old, new);
+    start++;
+  }
+}
+
+void
+wp_update_references(TCR *tcr, LispObj old, LispObj new)
+{
+  TCR *other_tcr = tcr;
+
+  do {
+    wp_update_tcr_xframes(other_tcr, old, new);
+    wp_update_tcr_tlb(other_tcr, old, new);
+    other_tcr = other_tcr->next;
+  } while (other_tcr != tcr);
+  wp_update_all_areas(old, new);
 }

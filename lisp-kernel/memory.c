@@ -289,7 +289,12 @@ MapMemory(LogicalAddress addr, natural nbytes, int protection)
 #ifdef WINDOWS
   return VirtualAlloc(addr, nbytes, MEM_RESERVE|MEM_COMMIT, MEMPROTECT_RWX);
 #else
-  return mmap(addr, nbytes, protection, MAP_PRIVATE|MAP_ANON|MAP_FIXED, -1, 0);
+  {
+    int flags = MAP_PRIVATE|MAP_ANON;
+
+    if (addr > 0) flags |= MAP_FIXED;
+    return mmap(addr, nbytes, protection, flags, -1, 0);
+  }
 #endif
 }
 

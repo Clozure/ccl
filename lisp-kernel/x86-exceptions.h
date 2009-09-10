@@ -137,6 +137,9 @@ void switch_to_foreign_stack(void*, ...);
 #define UUO_ALLOC_TRAP 0xc5
 #define UUO_DEBUG_TRAP 0xca
 #define UUO_DEBUG_TRAP_WITH_STRING 0xcd
+#define UUO_WATCH_TRAP 0xce
+  #define WATCH_TRAP_FUNCTION_WATCH 0
+  #define WATCH_TRAP_FUNCTION_UNWATCH 1
 
 #define XUUO_OPCODE_0 0x0f
 #define XUUO_OPCODE_1 0x0b

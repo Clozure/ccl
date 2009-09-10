@@ -498,7 +498,7 @@ allocate_list(ExceptionInformation *xp, TCR *tcr)
     xpGPR(xp,Iallocptr) = lisp_nil;
     return true;
   }
-  update_bytes_allocated(tcr, (void *)(void *) tcr->save_allocptr);
+  update_bytes_allocated(tcr, (void *)tcr->save_allocptr);
   if (allocate_object(xp,bytes_needed,bytes_needed-fulltag_cons,tcr)) {
     tcr->save_allocptr -= fulltag_cons;
     for (current = xpGPR(xp,Iallocptr);
@@ -802,23 +802,48 @@ handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valenc
       xpGPR(xp,Iimm0) = 0;
       xpPC(xp) = xpGPR(xp,Ira0);
       return true;
-    } else {
+    }
+    
+    {
       protected_area *a = find_protected_area(addr);
       protection_handler *handler;
       
       if (a) {
         handler = protection_handlers[a->why];
         return handler(xp, a, addr);
-      } else {
-        if ((addr >= readonly_area->low) &&
-            (addr < readonly_area->active)) {
-          UnProtectMemory((LogicalAddress)(truncate_to_power_of_2(addr,log2_page_size)),
-                          page_size);
-          return true;
-        }
+      }
+    }
+
+    if ((addr >= readonly_area->low) &&
+	(addr < readonly_area->active)) {
+      UnProtectMemory((LogicalAddress)(truncate_to_power_of_2(addr,log2_page_size)),
+		      page_size);
+      return true;
+    }
+
+    {
+      area *a = area_containing(addr);
+
+      if (a && a->code == AREA_WATCHED && addr < a->high) {
+	/* caught a write to a watched object */
+	LispObj cmain = nrs_CMAIN.vcell;
+	LispObj object = (LispObj)a->low + fulltag_misc; /* always uvectors */
+
+	if ((fulltag_of(cmain) == fulltag_misc) &&
+	    (header_subtag(header_of(cmain)) == subtag_macptr)) {
+	  LispObj xcf = create_exception_callback_frame(xp, tcr);
+	  int skip;
+	  LispObj addr = (LispObj)a->low;
+
+	  /* The magic 2 means this was a write to a watchd object */
+	  skip = callback_to_lisp(tcr, cmain, xp, xcf, SIGSEGV, 2, object, 0);
+	  xpPC(xp) += skip;
+	  return true;
+	}
       }
     }
   }
+
   if (old_valence == TCR_STATE_LISP) {
     LispObj cmain = nrs_CMAIN.vcell,
       xcf;
@@ -992,7 +1017,13 @@ handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TC
             return true;
           }
           break;
-            
+	case UUO_WATCH_TRAP:
+	  /* add or remove watched object */
+	  if (handle_watch_trap(context, tcr)) {
+	    xpPC(context) += 2;
+	    return true;
+	  }
+	  break;
         case UUO_DEBUG_TRAP:
           xpPC(context) = (natural) (program_counter+1);
           lisp_Debugger(context, info, debug_entry_dbg, false, "Lisp Breakpoint");
@@ -3584,3 +3615,159 @@ fatal_mach_error(char *format, ...)
 
 
 #endif
+
+/* watchpoint stuff */
+
+area *
+new_watched_area(natural size)
+{
+  void *p;
+
+  p = MapMemory(NULL, size, MEMPROTECT_RWX);
+  if ((signed_natural)p == -1) {
+    allocation_failure(true, size);
+  }
+  return new_area(p, p + size, AREA_WATCHED);
+}
+
+void
+delete_watched_area(area *a, TCR *tcr)
+{
+  natural nbytes = a->high - a->low;
+  char *base = a->low;
+
+  condemn_area_holding_area_lock(a);
+
+  if (nbytes) {
+    int err = munmap(base, nbytes);
+    if (err < 0)
+      Fatal("munmap in delete_watched_area: ", strerror(errno));
+  }
+}
+
+natural
+uvector_total_size_in_bytes(LispObj *u)
+{
+  LispObj header = header_of(u);
+  natural header_tag = fulltag_of(header);
+  natural subtag = header_subtag(header);
+  natural element_count = header_element_count(header);
+  natural nbytes = 0;
+
+#ifdef X8632
+  if ((nodeheader_tag_p(header_tag)) ||
+      (subtag <= max_32_bit_ivector_subtag)) {
+    nbytes = element_count << 2;
+  } else if (subtag <= max_8_bit_ivector_subtag) {
+    nbytes = element_count;
+  } else if (subtag <= max_16_bit_ivector_subtag) {
+    nbytes = element_count << 1;
+  } else if (subtag == subtag_double_float_vector) {
+    nbytes = element_count << 3;
+  } else {
+    nbytes = (element_count + 7) >> 3;
+  }
+  /* add 4 byte header and round up to multiple of 8 bytes */
+  return ~7 & (4 + nbytes + 7);
+#endif
+#ifdef X8664
+  if ((nodeheader_tag_p(header_tag)) || (header_tag == ivector_class_64_bit)) {
+    nbytes = element_count << 3;
+  } else if (header_tag == ivector_class_32_bit) {
+    nbytes = element_count << 2;
+  } else {
+    /* ivector_class_other_bit contains 8, 16-bit arrays & bit vector */
+    if (subtag == subtag_bit_vector) {
+      nbytes = (element_count + 7) >> 3;
+    } else if (subtag >= min_8_bit_ivector_subtag) {
+      nbytes = element_count;
+    } else {
+      nbytes = element_count << 1;
+    }
+  }
+  /* add 8 byte header and round up to multiple of 16 bytes */
+  return ~15 & (8 + nbytes + 15);
+#endif
+}
+
+extern void wp_update_references(TCR *, LispObj, LispObj);
+
+/*
+ * Other threads are suspended and pc-lusered.
+ *
+ * param contains a tagged pointer to a uvector.
+ */
+signed_natural
+watch_object(TCR *tcr, signed_natural param)
+{
+  TCR *other_tcr;
+  LispObj uvector = (LispObj)param;
+  LispObj *noderef = (LispObj *)untag(uvector);
+  natural size = uvector_total_size_in_bytes(noderef);
+  area *uvector_area = area_containing((BytePtr)noderef);
+
+  if (uvector_area && uvector_area->code != AREA_WATCHED) {
+    area *a = new_watched_area(size);
+    LispObj old = uvector;
+    LispObj new = (LispObj)((natural)a->low + fulltag_misc);
+
+    add_area_holding_area_lock(a);
+
+    /* move object to watched area */
+    bcopy(noderef, a->low, size);
+    ProtectMemory(a->low, size);
+    bzero(noderef, size);
+    wp_update_references(tcr, old, new);
+    check_all_areas(tcr);
+  }
+  return 0;
+}
+
+signed_natural
+unwatch_object(TCR *tcr, signed_natural param)
+{
+  TCR *other_tcr;
+  LispObj uvector = (LispObj)param;
+  LispObj *noderef = (LispObj *)untag(uvector);
+  LispObj old = uvector;
+  LispObj new;
+  natural size = uvector_total_size_in_bytes(noderef);
+  area *a = area_containing((BytePtr)noderef);
+  ExceptionInformation *xp = tcr->xframe->curr;
+
+  if (a && a->code == AREA_WATCHED) {
+    update_bytes_allocated(tcr, (void *)tcr->save_allocptr);
+    if (allocate_object(xp, size, size - fulltag_misc, tcr)) {
+      new = (LispObj)tcr->save_allocptr;
+      tcr->save_allocptr -= fulltag_misc;
+    } else {
+      lisp_allocation_failure(xp, tcr, size);
+    }
+
+    bcopy(noderef, tcr->save_allocptr, size);
+    delete_watched_area(a, tcr);
+    wp_update_references(tcr, old, new);
+    check_all_areas(tcr);
+  }
+  return 0;
+}
+
+Boolean
+handle_watch_trap(ExceptionInformation *xp, TCR *tcr)
+{
+  LispObj selector = xpGPR(xp,Iimm0);
+  LispObj uvector = xpGPR(xp, Iarg_z);
+  
+  switch (selector) {
+    case WATCH_TRAP_FUNCTION_WATCH:
+      gc_like_from_xp(xp, watch_object, uvector);
+      break;
+    case WATCH_TRAP_FUNCTION_UNWATCH:
+      gc_like_from_xp(xp, unwatch_object, uvector);
+      break;
+    default:
+      break;
+  }
+  return true;
+}
+
