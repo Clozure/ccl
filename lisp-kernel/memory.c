@@ -946,3 +946,37 @@ release_readonly_area()
   a->ndnodes = 0;
   pure_space_active = pure_space_start;
 }
+
+void
+protect_watched_areas()
+{
+  area *a = active_dynamic_area;
+  natural code = a->code;
+
+  while (code != AREA_VOID) {
+    if (code == AREA_WATCHED) {
+      natural size = a->high - a->low;
+      
+      ProtectMemory(a->low, size);
+    }
+    a = a->succ;
+    code = a->code;
+  }
+}
+
+void
+unprotect_watched_areas()
+{
+  area *a = active_dynamic_area;
+  natural code = a->code;
+
+  while (code != AREA_VOID) {
+    if (code == AREA_WATCHED) {
+      natural size = a->high - a->low;
+      
+      UnProtectMemory(a->low, size);
+    }
+    a = a->succ;
+    code = a->code;
+  }
+}

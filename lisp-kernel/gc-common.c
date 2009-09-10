@@ -1100,9 +1100,7 @@ gc(TCR *tcr, signed_natural param)
   natural static_dnodes;
 
   install_weak_mark_functions(lisp_global(WEAK_GC_METHOD) >> fixnumshift);
-
-
-
+  
 #ifndef FORCE_DWS_MARK
   if ((natural) (tcr->cs_limit) == CS_OVERFLOW_FORCE_LIMIT) {
     GCstack_limit = CS_OVERFLOW_FORCE_LIMIT;
@@ -1162,6 +1160,10 @@ gc(TCR *tcr, signed_natural param)
   }
 
   get_time(start);
+
+  /* The link-inverting marker might need to write to watched areas */
+  unprotect_watched_areas(PROT_READ|PROT_EXEC|PROT_WRITE);
+
   lisp_global(IN_GC) = (1<<fixnumshift);
 
   if (just_purified_p) {
@@ -1237,6 +1239,7 @@ gc(TCR *tcr, signed_natural param)
           break;
 
         case AREA_STATIC:
+	case AREA_WATCHED:
         case AREA_DYNAMIC:                  /* some heap that isn't "the" heap */
           /* In both of these cases, we -could- use the area's "markbits"
              bitvector as a reference map.  It's safe (but slower) to
@@ -1372,6 +1375,7 @@ gc(TCR *tcr, signed_natural param)
           break;
 
         case AREA_STATIC:
+	case AREA_WATCHED:
         case AREA_DYNAMIC:                  /* some heap that isn't "the" heap */
           if (next_area->younger == NULL) {
             forward_range((LispObj *) next_area->low, (LispObj *) next_area->active);
@@ -1383,7 +1387,7 @@ gc(TCR *tcr, signed_natural param)
         }
       }
     }
-  
+
     if (GCephemeral_low) {
       forward_memoized_area(tenured_area, area_dnode(a->low, tenured_area->low));
     }
@@ -1427,6 +1431,8 @@ gc(TCR *tcr, signed_natural param)
 
   
   lisp_global(IN_GC) = 0;
+  
+  protect_watched_areas();
 
   nrs_GC_EVENT_STATUS_BITS.vcell |= gc_postgc_pending;
   get_time(stop);
