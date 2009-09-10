@@ -70,9 +70,7 @@
                  (#/initWithContentRect:styleMask:backing:defer: 
                   dialog
                   r
-                  (logior  #$NSTitledWindowMask 
-                           #$NSClosableWindowMask  
-                           #$NSMiniaturizableWindowMask)
+                  #$NSTitledWindowMask 
                   #$NSBackingStoreBuffered
                   #$NO))
                (dolist (item (get-items dialog))
@@ -225,9 +223,7 @@
              (#/initWithContentRect:styleMask:backing:defer: 
               dialog
               r
-              (logior  #$NSTitledWindowMask 
-                       #$NSClosableWindowMask  
-                       #$NSMiniaturizableWindowMask)
+              #$NSTitledWindowMask 
               #$NSBackingStoreBuffered
               #$NO))
            (dolist (item (get-delete-items dialog))
