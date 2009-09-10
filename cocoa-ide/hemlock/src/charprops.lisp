@@ -560,9 +560,8 @@
     (when (mark-before m)
       (next-charprops m :view view :filter filter))))
 
-#|
 (defun set-charprops (mark charprops &key (count 1 count-supplied-p)
-                           (end nil end-supplied-p) (filter charprops-names charprops))
+                           (end nil end-supplied-p) (filter (charprops-names charprops)))
   (declare (ignore filter end count charprops mark))
   (when (and count-supplied-p end-supplied-p)
     (error "Only one of count or end can be supplied."))
@@ -572,13 +571,9 @@
     (if end
       (move-mark end-mark end)
       (character-offset end-mark count))
-    (let* ((start-line (mark-line start-mark))
-           (start-charpos (mark-charpos start-mark))
-           (end-line (mark-line end-mark))
-           (end-charpos (mark-charpos end-mark)))
-      (cond ((eq start-line end-line)
-
-|#
+    ;; lame.
+    (loop for (k v) on charprops by #'cddr
+       do (set-charprop-value start-mark k v :end end-mark))))
 
 ;;; Return a list of charprops-change vectors that correspond to the lines
 ;;; of text in the region defined by the paramaters.
