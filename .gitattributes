@@ -1,6 +1,9 @@
 * text=auto !eol
 cocoa-ide/.cvsignore -text
 cocoa-ide/README -text
+cocoa-ide/WaltConsole/Makefile -text
+cocoa-ide/WaltConsole/WaltConsole.c -text
+cocoa-ide/WaltConsole/WaltConsole.exe -text
 cocoa-ide/altconsole/AltConsoleDocument.h -text
 cocoa-ide/altconsole/AltConsoleDocument.m -text
 cocoa-ide/altconsole/AltConsoleDocumentController.h -text
