@@ -562,7 +562,6 @@
 
 (defun set-charprops (mark charprops &key (count 1 count-supplied-p)
                            (end nil end-supplied-p) (filter (charprops-names charprops)))
-  (declare (ignore filter end count charprops mark))
   (when (and count-supplied-p end-supplied-p)
     (error "Only one of count or end can be supplied."))
   (setq charprops (charprops-as-plist charprops :filter filter))
