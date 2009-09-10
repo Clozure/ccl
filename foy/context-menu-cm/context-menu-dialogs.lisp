@@ -21,6 +21,10 @@
 
 (export '(notify window-with-path active-hemlock-window window-path echo-msg))
 
+(defparameter *clozure-jpg* (merge-pathnames ";Clozure.jpg" cl-user::*context-menu-directory*))
+(defparameter *graphic-p* t "To use, or not to use the Clozure graphic.")
+
+
 (defun active-hemlock-window ()
   "Return the active hemlock-frame."
   (gui::first-window-satisfying-predicate 
@@ -59,9 +63,121 @@
       (let ((hi::*current-view* hemlock-view))
         (hi::message string args)))))
 
-(defun notify (message)
+(defun notify (message &rest args)
   "FYI"
-  (gui::alert-window :title "Notification" :message message))
+  (let ((message-string (apply #'format nil message args)))
+    (if *graphic-p*
+      (open-notification-dialog message-string)
+      (gui::alert-window :title "Notification" :message message-string))))
+
+(defparameter *notify-dialog* nil "The notification-dialog instance.")
+
+;;; ----------------------------------------------------------------------------
+;;;
+(defclass NOTIFICATION-DIALOG (ns:ns-window)
+  ((message-field :initform nil :accessor nd-message-field)
+   (okay-button :initform nil :accessor nd-okay-button))
+  (:documentation "A dialog for displaying messages.")
+  (:metaclass ns:+ns-object))
+
+(objc:defmethod (#/okayAction: :void) ((d notification-dialog) (sender :id))
+  (declare (ignore sender))
+  (#/stopModalWithCode: ccl::*nsapp* 0))
+
+(defun open-notification-dialog (message)
+  "Open the notification-dialog and display MESSAGE."
+  (let ((message-string (#/initWithString:attributes: (#/alloc ns:ns-attributed-string) 
+                                                      (ccl::%make-nsstring message)
+                                                      cmenu::*tool-doc-dictionary*)))
+    (cond (*notify-dialog*
+           (#/setStringValue: (nd-message-field *notify-dialog*) message-string)
+           (#/makeKeyAndOrderFront: *notify-dialog* nil)
+           (#/runModalForWindow: ccl::*nsapp* *notify-dialog*)
+           (#/close *notify-dialog*))
+          (t
+           (let ((dialog (#/alloc notification-dialog)))
+             (setq *notify-dialog* dialog)
+             (ns:with-ns-rect (r 10 300 400 127)
+               (#/initWithContentRect:styleMask:backing:defer: 
+                dialog
+                r
+                #$NSTitledWindowMask 
+                #$NSBackingStoreBuffered
+                #$NO))
+             (dolist (item (get-notify-items dialog))
+               (#/addSubview: (#/contentView dialog) item))
+             (#/setTitle: dialog #@"Notification")
+             (#/setReleasedWhenClosed: dialog nil)
+             (#/setDefaultButtonCell: dialog (nd-okay-button dialog))
+             (#/setStringValue: (nd-message-field dialog) message-string)
+             (#/center dialog)
+             (#/makeKeyAndOrderFront: dialog nil)
+             (#/runModalForWindow: ccl::*nsapp* dialog)
+             (#/close dialog))))))
+
+#|
+(open-notification-dialog "foobear")
+|#
+
+(defmethod get-notify-items ((d notification-dialog))
+  (append
+   (make-notify-graphic)
+   ;; (make-notify-prompt)
+   (make-notify-message d)
+   (make-notify-button d)))
+
+(defun make-notify-graphic ()
+  "Create the Clozure graphic."
+  (when (probe-file *clozure-jpg*)
+    (let ((image (#/alloc ns:ns-image))
+          (image-view (#/alloc ns:ns-image-view)))
+      (ns:with-ns-rect (frame 0 0 108 127)
+        (#/initWithFrame: image-view frame))
+      (#/setImageScaling: image-view #$NSScaleToFit)
+      (#/initWithContentsOfFile: image (ccl::%make-nsstring (namestring *clozure-jpg*)))
+      (#/setImage: image-view image)
+      (list image-view))))
+
+(defun make-notify-prompt ()
+  "Create the prompt text-field."
+  (list
+   (let* ((string (#/initWithString:attributes: 
+                   (#/alloc ns:ns-attributed-string) 
+                   #@"Notification"
+                   cmenu::*tool-label-dictionary*))
+          (title (#/alloc ns:ns-text-field)))
+     (ns:with-ns-rect (frame 120 90 150 32)
+       (#/initWithFrame: title frame))
+     (#/setEditable: title nil)
+     (#/setDrawsBackground: title nil)
+     (#/setBordered: title nil)
+     (#/setStringValue: title string)
+     title)))
+
+(defun make-notify-message (dialog)
+  "Create the documentation text-view."
+  (list
+   (let ((field (#/alloc ns:ns-text-field)))
+     (ns:with-ns-rect (frame 120 50 270 60)
+       (#/initWithFrame: field frame))
+     (#/setEditable: field nil)
+     (#/setDrawsBackground: field nil)
+     (#/setBordered: field nil)
+     (setf (nd-message-field dialog) field))))
+
+(defun make-notify-button (dialog)
+  "Construct the button."
+  (list
+   (let ((button (#/alloc ns:ns-button)))
+     (ns:with-ns-rect (frame 310 10 80 32)
+       (#/initWithFrame: button frame))
+     (#/setButtonType: button #$NSMomentaryPushInButton)
+     (#/setBezelStyle: button #$NSRoundedBezelStyle)
+     (#/setTitle: button #@"Okay")
+     (#/setTarget: button dialog)
+     (#/setAction: button (ccl::@selector "okayAction:"))
+     (setf (nd-okay-button dialog) button))))
+
 
 
 
