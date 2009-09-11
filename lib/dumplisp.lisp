@@ -82,6 +82,10 @@
   (let* ((kind (%unix-file-kind (native-translated-namestring filename))))
     (when (and kind (not (eq kind :file )))
       (error "~S is not a regular file." filename)))
+  (let* ((watched (watch)))
+    (when watched
+      (cerror "Un-watch them." "There are watched objects.")
+      (mapc #'unwatch watched)))
   (let* ((ip *initial-process*)
 	 (cp *current-process*))
     (when (process-verify-quit ip)
