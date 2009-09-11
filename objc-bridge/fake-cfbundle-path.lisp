@@ -10,7 +10,7 @@
 ;;; already "inside a bundle".  If it is necessary, it has to happen
 ;;; before the CoreFoundation library's initialized.
 
-(defun fake-cfbundle-path (bundle-root info-plist-proto-path bundle-prefix  bundle-suffix install-frameworks install-libraries)
+(defun fake-cfbundle-path (bundle-root info-plist-proto-path bundle-prefix  bundle-suffix install-frameworks install-libraries #+windows-target icon-path)
   (let* ((kernel-name (standard-kernel-name))
          (translated-root (translate-logical-pathname bundle-root))
 	 (bundle-name (let* ((name (if (directory-pathname-p translated-root)
@@ -73,4 +73,11 @@
                (ensure-directory-pathname (make-pathname :name (car (last (pathname-directory framework))) :defaults target))))
         (dolist (framework install-frameworks)
           (recursive-copy-directory framework (subdir framework executable-dir) :if-exists :overwrite))))
+    #+windows-target
+    (copy-file icon-path (merge-pathnames
+                          (make-pathname :directory "Contents/Resources/"
+                                         :name bundle-name
+                                         :type "ico")
+                          translated-root)
+               :preserve-attributes t :if-exists :supersede)
     (setenv "CFProcessPath" (native-translated-namestring executable-path))))

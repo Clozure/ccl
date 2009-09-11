@@ -94,4 +94,4 @@
 (progn
   (require "FAKE-CFBUNDLE-PATH")
   (create-ide-bundle *cocoa-application-path*)
-  (ccl::fake-cfbundle-path *cocoa-application-path* "ccl:cocoa-ide;Info.plist-proto" "com.clozure" *cocoa-application-bundle-suffix* *cocoa-application-frameworks* *cocoa-application-libraries*))
+  (ccl::fake-cfbundle-path *cocoa-application-path* "ccl:cocoa-ide;Info.plist-proto" "com.clozure" *cocoa-application-bundle-suffix* *cocoa-application-frameworks* *cocoa-application-libraries* #+windows-target "ccl:cocoa-ide;ide-contents;resources;openmcl-icon.ico"))
