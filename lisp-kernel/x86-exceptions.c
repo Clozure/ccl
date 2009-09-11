@@ -827,16 +827,15 @@ handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valenc
       if (a && a->code == AREA_WATCHED && addr < a->high) {
 	/* caught a write to a watched object */
 	LispObj cmain = nrs_CMAIN.vcell;
-	LispObj object = (LispObj)a->low + fulltag_misc; /* always uvectors */
+	LispObj obj = (LispObj)a->low + fulltag_misc; /* always uvectors */
 
 	if ((fulltag_of(cmain) == fulltag_misc) &&
 	    (header_subtag(header_of(cmain)) == subtag_macptr)) {
 	  LispObj xcf = create_exception_callback_frame(xp, tcr);
 	  int skip;
-	  LispObj addr = (LispObj)a->low;
 
 	  /* The magic 2 means this was a write to a watchd object */
-	  skip = callback_to_lisp(tcr, cmain, xp, xcf, SIGSEGV, 2, object, 0);
+	  skip = callback_to_lisp(tcr, cmain, xp, xcf, SIGSEGV, 2, addr, obj);
 	  xpPC(xp) += skip;
 	  return true;
 	}
