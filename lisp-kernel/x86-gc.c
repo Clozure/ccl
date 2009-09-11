@@ -2907,12 +2907,12 @@ wp_update_range(LispObj *start, LispObj *end, LispObj old, LispObj new)
   }
 }
 
+#ifdef X8664
 static void
 wp_update_xp(ExceptionInformation *xp, LispObj old, LispObj new)
 {
   natural *regs = (natural *)xpGPRvector(xp);
 
-#ifdef X8664
   wp_maybe_update(&regs[Iarg_z], old, new);
   wp_maybe_update(&regs[Iarg_y], old, new);
   wp_maybe_update(&regs[Iarg_x], old, new);
@@ -2924,7 +2924,6 @@ wp_update_xp(ExceptionInformation *xp, LispObj old, LispObj new)
   wp_maybe_update(&regs[Itemp0], old, new);
   wp_maybe_update(&regs[Itemp1], old, new);
   wp_maybe_update(&regs[Itemp2], old, new);
-#endif
 
 #if 0
   /* 
@@ -2933,8 +2932,30 @@ wp_update_xp(ExceptionInformation *xp, LispObj old, LispObj new)
    */
   update_locref(&(regs[Iip]));
 #endif
-
 }
+#else
+static void
+wp_update_xp(ExceptionInformation *xp, LispObj old, LispObj new, natural node_regs_mask)
+{
+  natural *regs = (natural *)xpGPRvector(xp);
+
+  if (node_regs_mask & (1<<0)) wp_maybe_update(&regs[REG_EAX], old, new);
+  if (node_regs_mask & (1<<1)) wp_maybe_update(&regs[REG_ECX], old, new);
+
+  if (regs[REG_EFL] & EFL_DF) {
+    /* then EDX is an imm reg */
+    ;
+  } else
+    if (node_regs_mask & (1<<2)) wp_maybe_update(&regs[REG_EDX], old, new);
+
+  if (node_regs_mask & (1<<3)) wp_maybe_update(&regs[REG_EBX], old, new);
+  if (node_regs_mask & (1<<4)) wp_maybe_update(&regs[REG_ESP], old, new);
+  if (node_regs_mask & (1<<5)) wp_maybe_update(&regs[REG_EBP], old, new);
+  if (node_regs_mask & (1<<6)) wp_maybe_update(&regs[REG_ESI], old, new);
+  if (node_regs_mask & (1<<7)) wp_maybe_update(&regs[REG_EDI], old, new);
+  /* we shouldn't watch functions, so no need to update PC */
+}
+#endif
 
 static void
 wp_update_tcr_xframes(TCR *tcr, LispObj old, LispObj new)
@@ -2942,15 +2963,26 @@ wp_update_tcr_xframes(TCR *tcr, LispObj old, LispObj new)
   xframe_list *xframes;
   ExceptionInformation *xp;
 
-#ifdef X8664
   xp = tcr->gc_context;
   if (xp) {
+#ifdef X8664
     wp_update_xp(xp, old, new);
+#else
+    wp_update_xp(xp, old, new, tcr->node_regs_mask);
+    wp_maybe_update(&tcr->save0, old, new);
+    wp_maybe_update(&tcr->save1, old, new);
+    wp_maybe_update(&tcr->save2, old, new);
+    wp_maybe_update(&tcr->save3, old, new);
+    wp_maybe_update(&tcr->next_method_context, old, new);
+#endif
   }
   for (xframes = tcr->xframe; xframes; xframes = xframes->prev) {
+#ifdef X8664
     wp_update_xp(xframes->curr, old, new);
-  }
+#else
+    wp_update_xp(xframes->curr, old, new, xframes->node_regs_mask);
 #endif
+  }
 }
 
 /*
