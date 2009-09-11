@@ -1112,17 +1112,6 @@
                        .8125
                        1.0)))))
                                                         
-;;; Note changes to the textview's background color; record them
-;;; as the value of the "temporary" foreground color (for paren-highlighting).
-(objc:defmethod (#/setBackgroundColor: :void)
-    ((self hemlock-textstorage-text-view) color)
-  #+debug (#_NSLog #@"Set background color: %@" :id color)
-  (let* ((old (text-view-paren-highlight-color self)))
-    (unless (%null-ptr-p old)
-      (#/release old)))
-  (setf (text-view-paren-highlight-color self) (paren-highlight-background-color))
-  (call-next-method color))
-
 
 
 (defmethod remove-paren-highlight ((self hemlock-textstorage-text-view))
@@ -1790,6 +1779,7 @@
               (let* ((tv (#/autorelease (make-instance 'hemlock-text-view
                                                        :with-frame tv-frame
                                                        :text-container container))))
+                (setf (text-view-paren-highlight-color tv) (paren-highlight-background-color))
                 (#/setDelegate: layout tv)
                 (#/setMinSize: tv (ns:make-ns-size 0 (ns:ns-size-height contentsize)))
                 (#/setMaxSize: tv (ns:make-ns-size large-number-for-text large-number-for-text))
