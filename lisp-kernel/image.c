@@ -25,6 +25,7 @@
 #include <sys/mman.h>
 #endif
 #include <stdio.h>
+#include <limits.h>
 
 
 
@@ -174,7 +175,7 @@ load_image_section(int fd, openmcl_image_section_header *sect)
   extern area* allocate_dynamic_area(unsigned);
   off_t
     pos = seek_to_next_page(fd), advance;
-  int 
+  natural
     mem_size = sect->memory_size;
   void *addr;
   area *a;
@@ -378,15 +379,20 @@ write_file_and_section_headers(int fd,
 natural
 writebuf(int fd, char *bytes, natural n)
 {
-  natural remain = n;
-  int result;
+  natural remain = n, this_size;
+  signed_natural result;
 
   while (remain) {
-    result = write(fd, bytes, remain);
+    this_size = remain;
+    if (this_size > INT_MAX) {
+      this_size = INT_MAX;
+    }
+    result = write(fd, bytes, this_size);
     if (result < 0) {
       return errno;
     }
     bytes += result;
+
     remain -= result;
   }
   return 0;
