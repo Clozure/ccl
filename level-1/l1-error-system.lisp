@@ -107,7 +107,20 @@
    (object :initform nil :initarg :object))
   (:report (lambda (c s)
 	     (with-slots (object address) c
-	       (format s "Write to watched object ~s at ~s." object address)))))
+	       (if (uvectorp object)
+		 ;; This is safe only because watched objects are in a
+		 ;; static GC area and won't be moved around.
+		 (let* ((size (uvsize object))
+			(nbytes (if (ivectorp object)
+				  (subtag-bytes (typecode object) size)
+				  (* size target::node-size)))
+			(bytes-per-element (/ nbytes size))
+			(noderef (logandc2 (%address-of object)
+					   target::fulltagmask))
+			(offset (- address (+ noderef target::node-size)))
+			(index (/ offset bytes-per-element)))
+		   (format s "Write to watched object ~s at address #x~x (uvector index ~d)." object address index))
+		 (format s "Write to watched object ~s at address #x~x" object address))))))
 
 (define-condition type-error (error)
   ((datum :initarg :datum)
