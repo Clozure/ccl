@@ -91,9 +91,6 @@
         (push c *event-process-reported-conditions*)
         (cond ((slot-value process 'have-interactive-terminal-io)
                (ccl::application-error ccl::*application* c frame-pointer))
-              #+windows-target
-              ((connect-to-console-window process)
-               (ccl::application-error ccl::*application* c frame-pointer))
               (t
                (catch 'need-a-catch-frame-for-backtrace
                  (let* ((*debug-in-event-process* nil)
@@ -122,25 +119,6 @@
                    (force-output t)
                    ))))))))
 
-#+windows-target
-(defun connect-to-console-window (process)
-  (#_AllocConsole)
-  (when (not (%null-ptr-p (#_GetStdHandle #$STD_OUTPUT_HANDLE)))
-    (flet ((set-lisp-stream-fd (stream fd)
-             (setf (ccl::ioblock-device (ccl::stream-ioblock stream t)) fd)))
-      (let ((input-handle (#_GetStdHandle #$STD_INPUT_HANDLE))
-            (output-handle (#_GetStdHandle #$STD_OUTPUT_HANDLE)))
-        (set-lisp-stream-fd ccl::*stdin* (%ptr-to-int input-handle))
-        (set-lisp-stream-fd ccl::*stdout* (%ptr-to-int output-handle)))
-    ;; Ensure that output to the stream ccl::*stdout* -
-    ;; which is connected to fd 1 - is flushed periodically
-    ;; by the housekeeping task.  (ccl::*stdout* is
-    ;; typically the output side of the two-way stream
-    ;; which is the global/static value of *TERMINAL-IO*;
-    ;; many standard streams are synonym streams to
-    ;; *TERMINAL-IO*.
-    (ccl::add-auto-flush-stream ccl::*stdout*)
-    (setf (slot-value process 'have-interactive-terminal-io) t))))
 
 
 (defloadvar *default-ns-application-proxy-class-name*
