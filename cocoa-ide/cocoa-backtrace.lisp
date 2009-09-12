@@ -237,7 +237,7 @@
        (eql self (frame-label-controller thing))))
 
 (def-cocoa-default *backtrace-font-name* :string #+darwin-target "Monaco"
-                   #-darwin-target "Terminal" "Name of font used in backtrace views")
+                   #-darwin-target "Courier" "Name of font used in backtrace views")
 (def-cocoa-default *backtrace-font-size* :float 9.0f0 "Size of font used in backtrace views")
 
 
@@ -246,6 +246,7 @@
          (font (default-font :name *backtrace-font-name* :size *backtrace-font-size*)))
     (unless (%null-ptr-p outline)
       (#/setTarget: outline self)
+      #-cocotron ; crashes
       (#/setRowHeight: outline  (size-of-char-in-font font))
       (#/setDoubleAction: outline (@selector #/backtraceDoubleClick:))
       (#/setShouldCascadeWindows: self nil)
