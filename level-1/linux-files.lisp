@@ -1661,9 +1661,9 @@ space, and prefixed with PREFIX."
   (defun join-strings (strings)
     (reduce (lambda (left right) (concatenate 'string left " " right)) strings))
 
-  (defun exec-with-io-redirection (new-in new-out new-err args proc &optional env)
+  (defun create-windows-process (new-in new-out new-err cmdstring env)
     (declare (ignore env))              ; until we can do better.
-    (with-filename-cstrs ((command (join-strings args)))
+    (with-filename-cstrs ((command cmdstring))
       (rletz ((proc-info #>PROCESS_INFORMATION)
               (si #>STARTUPINFO))
         (setf (pref si #>STARTUPINFO.cb) (record-length #>STARTUPINFO))
@@ -1692,15 +1692,22 @@ space, and prefixed with PREFIX."
                                      (%null-ptr)
                                      si
                                      proc-info))
-          (progn
-            (setf (external-process-%status proc) :error
-                  (external-process-%exit-code proc) (#_GetLastError))
-            (signal-semaphore (external-process-signal proc))
-            (signal-semaphore (external-process-completed proc))
-            nil)
+          (values nil (#_GetLastError))
           (progn
             (#_CloseHandle (pref proc-info #>PROCESS_INFORMATION.hThread))
-            (pref proc-info #>PROCESS_INFORMATION.hProcess))))))
+            (values t (pref proc-info #>PROCESS_INFORMATION.hProcess)))))))
+
+  (defun exec-with-io-redirection (new-in new-out new-err args proc &optional env)
+    (multiple-value-bind (win handle-to-process-or-error)
+        (create-windows-process new-in new-out new-err (join-strings args) env)
+      (if win
+        handle-to-process-or-error
+        (progn
+          (setf (external-process-%status proc) :error
+                (external-process-%exit-code proc) handle-to-process-or-error)
+          (signal-semaphore (external-process-signal proc))
+          (signal-semaphore (external-process-completed proc))
+          nil))))
 
   (defun fd-uninheritable (fd &key direction)
     (let ((new-fd (fd-dup fd :direction direction)))
@@ -1800,7 +1807,7 @@ space, and prefixed with PREFIX."
     nil)  
 
 
-)
+  )
                                         ;#+windows-target (progn
 
 
