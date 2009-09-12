@@ -52,6 +52,11 @@ open_debug_output(int fd)
   
   if (f) {
     if (setvbuf(f, NULL, _IONBF, 0) == 0) {
+#ifdef WINDOWS
+      if (fileno(stdin) < 0) {
+        fileno(stdin) = 0;
+      }
+#endif
       dbgout = f;
       return true;
     }
@@ -114,46 +119,6 @@ stdin_is_dev_null()
 #endif
 
 
-#ifdef WINDOWS
-Boolean first_debugger_call = TRUE;
-
-void
-setup_debugger_streams()
-{
-  HANDLE h;
-  int fd;
-  FILE *f;
-
-  if (first_debugger_call) {
-    first_debugger_call = FALSE;
-    if (stdin_is_dev_null())
-      AllocConsole();
-    // Reassociate C's stdin with Windows' stdin
-    h = GetStdHandle(STD_INPUT_HANDLE);
-    fd = _open_osfhandle((intptr_t)h, _O_TEXT);
-    if (fd >= 0) {
-      f = _fdopen(fd, "r");
-      *stdin = *f;
-    }
-    // Reassociate C's stdout with Windows' stdout
-    h = GetStdHandle(STD_OUTPUT_HANDLE);
-    fd = _open_osfhandle((intptr_t)h, _O_TEXT);
-    if (fd >= 0) {
-      f = _fdopen(fd, "w");
-      *stdout = *f;
-    }
-    // Reassociate C's stderr with Windows' stderr
-    h = GetStdHandle(STD_ERROR_HANDLE);
-    fd = _open_osfhandle((intptr_t)h, _O_TEXT);
-    if (fd >= 0) {
-      f = _fdopen(fd, "w");
-      *stderr = *f;
-    }
-    dbgout = stderr;
-  }
-  return;
-}
-#endif
 
 
 char *
@@ -749,9 +714,6 @@ debug_command_return
 debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
 {
 
-#ifdef WINDOWS
-  setup_debugger_streams();
-#endif
 
 #ifdef PPC
 #ifdef PPC64
@@ -1179,9 +1141,6 @@ lisp_Debugger(ExceptionInformation *xp,
   va_list args;
   debug_command_return state = debug_continue;
 
-#ifdef WINDOWS
-  setup_debugger_streams();
-#endif
 
   if (stdin_is_dev_null()) {
     return -1;
@@ -1236,7 +1195,7 @@ lisp_Debugger(ExceptionInformation *xp,
 #else
     fprintf(dbgout, "[%d] Clozure CL kernel debugger: ", main_thread_pid);
 #endif
-    fflush(dbgout);
+    fflush(dbgout);             /* dbgout should be unbuffered, so this shouldn't be necessary.  But it can't hurt ... */
     state = apply_debug_command(xp, readc(), info, why);
   }
   switch (state) {
