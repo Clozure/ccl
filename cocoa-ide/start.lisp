@@ -160,17 +160,17 @@
 ;;; AltConsole.app exists in our Resources directory.  If so, execute
 ;;; that bundle'es executable file, with its standard input/output/error
 ;;; descriptors connected to one end of a socketpair, and connect
-;;; lisp's *TERMINAL-IO* and C's stdin/stdout/stderr to the other end
+;;; lisp's *TERMINAL-IO* and the kernel's dbgout to the other end
 ;;; of the socket.
 
 (defun try-connecting-to-altconsole ()
-  #-cocotron
   (with-autorelease-pool
       (let* ((main-bundle (#/mainBundle ns:ns-bundle))
              (resource-path (#/resourcePath main-bundle)))
         (block exit
           (when (%null-ptr-p resource-path)
             (return-from exit nil))
+          #-windows-target
           (let* ((altconsole-bundle
                   (make-instance ns:ns-bundle
                                  :with-path
@@ -240,7 +240,34 @@
                            ;; many standard streams are synonym streams to
                            ;; *TERMINAL-IO*.
                            (ccl::add-auto-flush-stream ccl::*stdout*)
-                           pid)))))))))))))
+                           pid)))))))))
+          #+windows-target
+          (let* ((executable-path (#/stringByAppendingPathComponent:
+                                  resource-path
+                                  #@"WaltConsole.exe")))
+            (unless (#/isExecutableFileAtPath:
+                     (#/defaultManager ns:ns-file-manager)
+                     executable-path)
+              (return-from exit nil))
+            (multiple-value-bind (child-in parent-out) (ccl::pipe)
+              (multiple-value-bind (parent-in child-out) (ccl::pipe)
+                (cond ((ccl::create-windows-process child-in child-out child-out (lisp-string-from-nsstring executable-path) nil)
+                       (#_CloseHandle (ccl::%int-to-ptr child-in))
+                       (#_CloseHandle (ccl::%int-to-ptr child-out))
+                       (let* ((in-fd (#__open_osfhandle parent-in #$_O_RDONLY))
+                              (out-fd (#__open_osfhandle parent-out 0)))
+                         (#_SetStdHandle #$STD_INPUT_HANDLE (%int-to-ptr parent-in))
+                         (#__dup2 in-fd 0) ; Thank god the namespace isn't polluted.
+                         (ff-call (ccl::%kernel-import target::kernel-import-open-debug-output)
+                                  :int out-fd
+                                  :int)                         
+                         (flet ((set-lisp-stream-handle (stream handle)
+                                    (setf (ccl::ioblock-device (ccl::stream-ioblock stream t))
+                                          handle)))
+                           (set-lisp-stream-handle ccl::*stdin* parent-in)
+                           (set-lisp-stream-handle ccl::*stdout* parent-out)
+                           (ccl::add-auto-flush-stream ccl::*stdout*)
+                           t)))))))))))
                       
                     
              
