@@ -835,7 +835,7 @@ handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valenc
 	  int skip;
 
 	  /* The magic 2 means this was a write to a watchd object */
-	  skip = callback_to_lisp(tcr, cmain, xp, xcf, SIGSEGV, 2, addr, obj);
+	  skip = callback_to_lisp(tcr, cmain, xp, xcf, SIGSEGV, 2, (natural) addr, obj);
 	  xpPC(xp) += skip;
 	  return true;
 	}
