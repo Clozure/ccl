@@ -18,10 +18,10 @@ VPATH = ../
 RM = /bin/rm
 # gcc64, as64: until there's a real win64 gcc, assume that gcc and gas
 # are installed under these names
-CC = x86_64-pc-mingw32-gcc
-AS = x86_64-pc-mingw32-as
+CC = x86_64-w64-mingw32-gcc
+AS = x86_64-w64-mingw32-as
 M4 = m4
-LD = x86_64-pc-mingw32-ld
+LD = x86_64-w64-mingw32-ld
 ASFLAGS = -g --64
 M4FLAGS = -DWIN_64 -DWINDOWS -DX86 -DX8664 -DHAVE_TLS -DEMUTLS -DTCR_IN_GPR
 CDEFINES = -DWIN_64 -DWINDOWS -D_REENTRANT -DX86 -DX8664 -D_GNU_SOURCE -DHAVE_TLS -DEMUTLS -DTCR_IN_GPR
