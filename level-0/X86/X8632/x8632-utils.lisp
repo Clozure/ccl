@@ -401,11 +401,10 @@ be somewhat larger than what was specified)."
   (movl ($ nil) (%l arg_z))
   (single-value-return))
 
-(defx8632lapfunction %unwatch ((watched arg_z))
-  (check-nargs 1)
+(defx8632lapfunction %unwatch ((watched arg_y) (new arg_z))
+  (check-nargs 2)
   (movl ($ arch::watch-trap-function-unwatch) (%l imm0))
   (uuo-watch-trap)
-  (movl ($ nil) (%l arg_z))
   (single-value-return))
 
 (defx8632lapfunction %allocate-list ((initial-element arg_y) (nconses arg_z))

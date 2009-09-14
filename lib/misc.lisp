@@ -1059,7 +1059,7 @@ are running on, or NIL if we can't find any useful information."
 		    ;; since we'll be unlinking an area from the area
 		    ;; list while %map-areas iterates over it, but I
 		    ;; think we'll get away with it.
-		    (%unwatch thing)
-		    (return-from unwatch)))
+		    (let ((new (%alloc-misc (uvsize thing) (typecode thing))))
+		      (return-from unwatch (%unwatch thing new)))))
 	      area-watched area-watched))
       

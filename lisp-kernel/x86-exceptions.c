@@ -3706,7 +3706,6 @@ extern void wp_update_references(TCR *, LispObj, LispObj);
 signed_natural
 watch_object(TCR *tcr, signed_natural param)
 {
-  TCR *other_tcr;
   LispObj uvector = (LispObj)param;
   LispObj *noderef = (LispObj *)untag(uvector);
   natural size = uvector_total_size_in_bytes(noderef);
@@ -3729,31 +3728,30 @@ watch_object(TCR *tcr, signed_natural param)
   return 0;
 }
 
+/*
+ * We expect the watched object in arg_y, and the new uninitialized
+ * object (which is just zeroed) in arg_z.
+ */
 signed_natural
 unwatch_object(TCR *tcr, signed_natural param)
 {
-  TCR *other_tcr;
-  LispObj uvector = (LispObj)param;
-  LispObj *noderef = (LispObj *)untag(uvector);
-  LispObj old = uvector;
-  LispObj new;
-  natural size = uvector_total_size_in_bytes(noderef);
-  area *a = area_containing((BytePtr)noderef);
   ExceptionInformation *xp = tcr->xframe->curr;
+  LispObj old = xpGPR(xp, Iarg_y);
+  LispObj new = xpGPR(xp, Iarg_z);
+  LispObj *oldnode = (LispObj *)untag(old);
+  LispObj *newnode = (LispObj *)untag(new);
+  area *a = area_containing((BytePtr)old);
 
   if (a && a->code == AREA_WATCHED) {
-    update_bytes_allocated(tcr, (void *)tcr->save_allocptr);
-    if (allocate_object(xp, size, size - fulltag_misc, tcr)) {
-      new = (LispObj)tcr->save_allocptr;
-      tcr->save_allocptr -= fulltag_misc;
-    } else {
-      lisp_allocation_failure(xp, tcr, size);
-    }
+    natural size = uvector_total_size_in_bytes(oldnode);
 
-    memcpy(tcr->save_allocptr, noderef, size);
+    memcpy(newnode, oldnode, size);
     delete_watched_area(a, tcr);
     wp_update_references(tcr, old, new);
+    /* because wp_update_references doesn't update refbits */
+    tenure_to_area(tenured_area);
     check_all_areas(tcr);
+    xpGPR(xp, Iarg_z) = new;
   }
   return 0;
 }
@@ -3769,7 +3767,7 @@ handle_watch_trap(ExceptionInformation *xp, TCR *tcr)
       gc_like_from_xp(xp, watch_object, uvector);
       break;
     case WATCH_TRAP_FUNCTION_UNWATCH:
-      gc_like_from_xp(xp, unwatch_object, uvector);
+      gc_like_from_xp(xp, unwatch_object, 0);
       break;
     default:
       break;
