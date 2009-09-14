@@ -92,7 +92,8 @@
   #+cocotron
   (let* ((path (probe-file "ccl:cocotron;WaltConsole;WaltConsole.exe")))
     (when path
-      (copy-file path (merge-pathnames ";Contents;Resources;WaltConsole.exe" bundle-path))
+      (copy-file path (merge-pathnames ";Contents;Resources;WaltConsole.exe" bundle-path)
+                 :preserve-attributes t :if-exists :supersede)
       t))
   )
 
