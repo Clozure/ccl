@@ -101,7 +101,7 @@ object."
                                       (not (= (the fixnum detailed-p) frame-number)))
                            (%show-stack-frame-label frame-number p context lfun pc detailed-p)
                            (when detailed-p
-                             (if (eq detailed-p :raw)
+                             (if (or (eq detailed-p :raw) (null lfun))
                                (%show-stack-frame p context lfun pc)
                                (%show-args-and-locals p context lfun pc)))
                            (incf frame-number))))
