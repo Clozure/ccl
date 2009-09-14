@@ -40,7 +40,8 @@
                                         ; into the Info.plist on the "NSMainNibFile" key
                           (application-class 'gui::cocoa-application)
                           (private-frameworks nil)
-                          (toplevel-function nil))
+                          (toplevel-function nil)
+                          (altconsole t))
 
   (let* ((info-plist (or info-plist ; if the user supplied one then we use it
                          (if copy-ide-resources 
@@ -74,6 +75,9 @@
             (copy-nibfile n dest :if-exists :overwrite)))))
     ;; copy any private frameworks into the bundle
     (copy-private-frameworks private-frameworks app-bundle)
+    ;; install the AltConsole application if requested
+    (when altconsole
+      (install-altconsole app-bundle))
     ;; save the application image into the bundle
     (save-application image-path
                       :application-class application-class
