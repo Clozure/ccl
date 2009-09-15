@@ -2670,48 +2670,65 @@
     (format nil "L~d" (- addr entrypoint))))
 
 
-    
+(defmethod x86-lap-operand-constant-offset (op ds)
+  (declare (ignore op ds))
+  nil)
+
+(defmethod x86-lap-operand-constant-offset ((op x86::x86-memory-operand) ds)
+  (let* ((disp (x86::x86-memory-operand-disp op)) 
+         (base (x86::x86-memory-operand-base op))
+         (index (x86::x86-memory-operand-index op))
+         (scale (x86::x86-memory-operand-scale op))
+         (code-limit (x86-ds-code-limit ds))
+         (val (and base
+                   (eq (x86::x86-register-operand-entry base)
+                       (if (x86-ds-mode-64 ds)
+                         (x86::x86-reg64 13)
+                         (x86::x86-reg32 x8632::fn)))
+                   (null index)
+                   (or (eql scale 0) (null scale))
+                   (typecase disp
+                     (constant-x86-lap-expression
+                      (+ (x86-ds-entry-point ds)
+                         (constant-x86-lap-expression-value disp)))
+                     (integer
+                      (+ (x86-ds-entry-point ds) disp))
+                     (t nil)))))
+    (when (and val (>= val code-limit))
+      (- val code-limit))))
+
+(defun x86-lap-operand-constant (op ds)
+  (let ((diff (x86-lap-operand-constant-offset op ds)))
+    (when diff
+      (values (uvref (x86-ds-constants-vector ds)
+                     (1+ (ash diff (if (x86-ds-mode-64 ds)
+                                     (- x8664::word-shift)
+                                     (- x8632::word-shift)))))
+              t))))
+
+
 (defmethod unparse-x86-lap-operand ((x x86::x86-memory-operand) ds)
-  (let* ((seg (x86::x86-memory-operand-seg x))
-         (disp (x86::x86-memory-operand-disp x)) 
-         (base (x86::x86-memory-operand-base x))
-         (index (x86::x86-memory-operand-index x))
-         (scale (x86::x86-memory-operand-scale x))
-         (val nil))
-    (if (and base
-             (eq (x86::x86-register-operand-entry base)
-                 (if (x86-ds-mode-64 ds)
-                   (x86::x86-reg64 13)
-                   (x86::x86-reg32 x8632::fn)))
-             (null index)
-             (or (eql scale 0) (null scale))
-             (and (if (typep disp 'constant-x86-lap-expression)
-                    (+ (x86-ds-entry-point ds)
-                                  (constant-x86-lap-expression-value disp))
-                    (unless (typep disp 'x86-lap-expression)
-                      (setq val (if disp
-                                  (+ (x86-ds-entry-point ds)
-                                     disp)))))
-                  (>= val (x86-ds-code-limit ds))))
-      (let* ((diff (- val (x86-ds-code-limit ds)))
-             (constant (uvref (x86-ds-constants-vector ds)
-			      (1+ (ash diff (if (x86-ds-mode-64 ds)
-					      (- x8664::word-shift)
-					      (- x8632::word-shift)))))))
-        `(@ ',constant ,(unparse-x86-lap-operand base ds)))
-      (collect ((subforms))
-        (subforms '@)
-        (if seg
-          (subforms (unparse-x86-lap-operand seg ds)))
-        (if disp
-          (subforms (unparse-x86-lap-expression disp ds)))
-        (if base
-          (subforms (unparse-x86-lap-operand base ds)))
-        (if index
-          (subforms (unparse-x86-lap-operand index ds)))
-        (if (and scale (not (eql scale 0)))
-          (subforms (ash 1 scale)))
-        (subforms)))))
+  (multiple-value-bind (constant foundp) (x86-lap-operand-constant x ds)
+    (if foundp
+      `(@ ',constant ,(unparse-x86-lap-operand (x86::x86-memory-operand-base x) ds))
+      (let* ((seg (x86::x86-memory-operand-seg x))
+             (disp (x86::x86-memory-operand-disp x)) 
+             (base (x86::x86-memory-operand-base x))
+             (index (x86::x86-memory-operand-index x))
+             (scale (x86::x86-memory-operand-scale x)))
+        (collect ((subforms))
+          (subforms '@)
+          (if seg
+            (subforms (unparse-x86-lap-operand seg ds)))
+          (if disp
+            (subforms (unparse-x86-lap-expression disp ds)))
+          (if base
+            (subforms (unparse-x86-lap-operand base ds)))
+          (if index
+            (subforms (unparse-x86-lap-operand index ds)))
+          (if (and scale (not (eql scale 0)))
+            (subforms (ash 1 scale)))
+          (subforms))))))
     
 (defmethod unparse-x86-lap-operand :around ((op x86::x86-operand)
                                             ds)
@@ -2721,6 +2738,24 @@
     (if (logtest (x86::encode-operand-type :jumpabsolute) type)
       `(* ,usual)
       usual)))
+
+(defun write-x86-lap-operand (stream op ds)
+  ;; Basically, have to princ because some parts are already stringified,
+  ;; plus don't want package prefixes on assembler syntax.  But want to
+  ;; prin1 immediates. 
+  (let ((expr (unparse-x86-lap-operand op ds)))
+    (format stream " ")
+    (labels ((out (stream expr)
+               (cond ((atom expr)
+                      (format stream "~a" expr))
+                     ((quoted-form-p expr)
+                      (format stream "'~s" (cadr expr)))
+                     (t
+                      (loop for item in expr as pre = "(" then " "
+                        do (format stream pre)
+                        do (out stream item))
+                      (format stream ")")))))
+      (out stream expr))))
 
 (defvar *previous-source-note*)
 
@@ -2748,11 +2783,11 @@
            (op1 (x86-di-op1 instruction))
            (op2 (x86-di-op2 instruction)))
       (when op0
-        (format t " ~a" (unparse-x86-lap-operand op0 ds))
+        (write-x86-lap-operand t op0 ds)
         (when op1
-          (format t " ~a" (unparse-x86-lap-operand op1 ds))
+        (write-x86-lap-operand t op1 ds)
           (when op2
-            (format t " ~a" (unparse-x86-lap-operand op2 ds))))))
+            (write-x86-lap-operand t op2 ds)))))
     (format t ")")
     (format t "~%")
     (1+ seq)))
@@ -2768,32 +2803,38 @@
       ;; Fetch source from file if don't already have it.
       (ensure-source-note-text source-note))))
 
-(defun x8664-disassemble-xfunction (function xfunction
-                                    &key (symbolic-names x8664::*x8664-symbolic-register-names*)
-                                         (collect-function #'x86-print-disassembled-instruction)
-                                         (header-function #'x86-print-disassembled-function-header))
+(defun x86-disassemble-xfunction (function xfunction
+                                  &key (symbolic-names #+x8664-target target::*x8664-symbolic-register-names*
+                                                       #+x8632-target target::*x8632-symbolic-register-names*)
+                                       (collect-function #'x86-print-disassembled-instruction)
+                                       (header-function #'x86-print-disassembled-function-header))
   (check-type xfunction xfunction)
   (check-type (uvref xfunction 0) (simple-array (unsigned-byte 8) (*)))
-  (let* ((ds (make-x86-disassembly-state
+  (let* ((entry-point  #+x8664-target 7  #+x8632-target 2)
+         (ds (make-x86-disassembly-state
+              :mode-64 #+x8664-target t #+x8632-target nil
               :code-vector (uvref xfunction 0)
               :constants-vector xfunction
-              :entry-point 7
-              :code-pointer 0           ; for next-u32 below
+              :entry-point entry-point
+              :code-pointer 0           ; for next-u32/next-u16 below
               :symbolic-names symbolic-names
-              :pending-labels (list 7)))
+              :pending-labels (list entry-point)))
          (blocks (x86-ds-blocks ds)))
     (setf (x86-ds-code-limit ds)
-          (ash (x86-ds-next-u32 ds) 3))
+          #+x8664-target (ash (x86-ds-next-u32 ds) 3)
+          #+x8632-target (ash (x86-ds-next-u16 ds) 2))
     (do* ()
          ((null (x86-ds-pending-labels ds)))
       (let* ((lab (pop (x86-ds-pending-labels ds))))
         (or (x86-dis-find-label lab blocks)
             (x86-disassemble-new-block ds lab))))
-    (when (and blocks (let ((something-to-disassemble nil))
-                        (do-dll-nodes (block blocks)
-                          (do-dll-nodes (instruction (x86-dis-block-instructions block))
-                            (setf something-to-disassemble t)))
-                        something-to-disassemble))
+    (when (and header-function
+               blocks
+               (let ((something-to-disassemble nil))
+                 (do-dll-nodes (block blocks)
+                   (do-dll-nodes (instruction (x86-dis-block-instructions block))
+                     (setf something-to-disassemble t)))
+                 something-to-disassemble))
       (funcall header-function function xfunction))
     (let* ((seq 0)
            (*previous-source-note* nil))
@@ -2802,72 +2843,13 @@
         (do-dll-nodes (instruction (x86-dis-block-instructions block))
           (setq seq (funcall collect-function ds instruction seq function)))))))
 
-(defun x8632-disassemble-xfunction (function xfunction
-                                    &key (symbolic-names x8632::*x8632-symbolic-register-names*)
-                                         (collect-function #'x86-print-disassembled-instruction)
-                                         (header-function #'x86-print-disassembled-function-header))
-  (check-type xfunction xfunction)
-  (check-type (uvref xfunction 0) (simple-array (unsigned-byte 8) (*)))
-  (let* ((ds (make-x86-disassembly-state
-	      :mode-64 nil
-              :code-vector (uvref xfunction 0)
-              :constants-vector xfunction
-              :entry-point 2
-              :code-pointer 0           ; for next-u16 below
-              :symbolic-names symbolic-names
-              :pending-labels (list 2)))
-         (blocks (x86-ds-blocks ds)))
-    (setf (x86-ds-code-limit ds) (ash (x86-ds-next-u16 ds) 2))
-    (do* ()
-         ((null (x86-ds-pending-labels ds)))
-      (let* ((lab (pop (x86-ds-pending-labels ds))))
-        (or (x86-dis-find-label lab blocks)
-            (x86-disassemble-new-block ds lab))))
-    (when (and blocks (let ((something-to-disassemble nil))
-                        (do-dll-nodes (block blocks)
-                          (do-dll-nodes (instruction (x86-dis-block-instructions block))
-                            (setf something-to-disassemble t)))
-                        something-to-disassemble))
-      (funcall header-function function xfunction))
-    (let* ((seq 0)
-           (*previous-source-note* nil))
-      (declare (special *previous-source-note*))
-      (do-dll-nodes (block blocks)
-        (do-dll-nodes (instruction (x86-dis-block-instructions block))
-          (setq seq (funcall collect-function ds instruction seq function)))))))
-
-#+x8664-target
-(defun x8664-xdisassemble (function
-                           &optional (collect-function #'x86-print-disassembled-instruction)
-                                     (header-function #'x86-print-disassembled-function-header))
-  (let* ((fv (%function-to-function-vector function))
-         (function-size-in-words (uvsize fv))
-         (code-words (%function-code-words function))
-         (ncode-bytes (ash function-size-in-words x8664::word-shift))
-         (code-bytes (make-array ncode-bytes
-                                 :element-type '(unsigned-byte 8)))
-         (numimms (- function-size-in-words code-words))
-         (xfunction (%alloc-misc (the fixnum (1+ numimms)) target::subtag-xfunction)))
-    (declare (fixnum code-words ncode-bytes numimms))
-    (%copy-ivector-to-ivector fv 0 code-bytes 0 ncode-bytes)
-    (setf (uvref xfunction 0) code-bytes)
-    (do* ((k code-words (1+ k))
-          (j 1 (1+ j)))
-         ((= k function-size-in-words)
-          (x8664-disassemble-xfunction function xfunction
-                                       :collect-function collect-function
-                                       :header-function header-function))
-      (declare (fixnum j k))
-      (setf (uvref xfunction j) (uvref fv k)))))
-
-#+x8632-target
-(defun x8632-xdisassemble (function
-                           &optional (collect-function #'x86-print-disassembled-instruction)
-                                     (header-function #'x86-print-disassembled-function-header))
+(defun x86-xdisassemble (function
+                         &optional (collect-function #'x86-print-disassembled-instruction)
+                                   (header-function #'x86-print-disassembled-function-header))
   (let* ((fv (function-to-function-vector function))
          (function-size-in-words (uvsize fv))
          (code-words (%function-code-words function))
-         (ncode-bytes (ash function-size-in-words x8632::word-shift))
+         (ncode-bytes (ash function-size-in-words target::word-shift))
          (code-bytes (make-array ncode-bytes
                                  :element-type '(unsigned-byte 8)))
          (numimms (- function-size-in-words code-words))
@@ -2878,15 +2860,15 @@
     (do* ((k code-words (1+ k))
           (j 1 (1+ j)))
          ((= k function-size-in-words)
-          (x8632-disassemble-xfunction function xfunction
-                                       :collect-function collect-function
-                                       :header-function header-function))
+          (x86-disassemble-xfunction function xfunction
+                                     :collect-function collect-function
+                                     :header-function header-function))
       (declare (fixnum j k))
       (setf (uvref xfunction j) (uvref fv k)))))
 
 (defun disassemble-list (function)
   (collect ((instructions))
-    (#+x8632-target x8632-xdisassemble #+x8664-target x8664-xdisassemble
+    (x86-xdisassemble
      function
      #'(lambda (ds instruction seq function)
          (declare (ignore function))
@@ -2912,16 +2894,6 @@
                    (when op2
                      (insn (unparse-x86-lap-operand op2 ds))  ))))
              (instructions (insn))
-             (1+ seq)))))
+             (1+ seq))))
+     nil)
     (instructions)))
-                         
-             
-
-           
-         
-
-                                     
-            
-      
-            
-             

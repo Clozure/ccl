@@ -10130,7 +10130,7 @@
       (signal-or-defer-warnings warnings nil)
       (when disassemble
         (format t "~%~%")
-        (apply #'x8664-disassemble-xfunction
+        (apply #'x86-disassemble-xfunction
                xlfun
                (unless symbolic-names (list nil))))
       xlfun)))
@@ -10152,7 +10152,7 @@
       (when disassemble
 	(let ((*target-backend* backend))
 	  (format t "~%~%")
-	  (apply #'x8632-disassemble-xfunction
+	  (apply #'x86-disassemble-xfunction
 		 xlfun
 		 (unless symbolic-names (list nil)))))
       xlfun)))
