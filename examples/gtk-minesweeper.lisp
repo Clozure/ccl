@@ -20,7 +20,7 @@
 ;;; 
 ;;; Make GTK+ interface info available.
 (eval-when (:compile-toplevel :execute)
-  (use-interface-dir :GTK))
+  (use-interface-dir :GTK2))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (require "OPENMCL-GTK-SUPPORT"))
@@ -49,7 +49,7 @@
 
 (defstruct cell
   (buttonstate :button-unknown
-	       :type (member (:button-down :button-unknown :button-flagged)))
+	       :type (member :button-down :button-unknown :button-flagged))
   button
   (bombsnearby 0)
   (has-bomb nil)
@@ -151,8 +151,8 @@
 (defun show-message (title message)
   (let* ((dialog-window (#_gtk_dialog_new)))
     (with-cstrs ((destroy-name "destroy"))
-      (#_gtk_signal_connect dialog-window destroy-name clear-show-message
-			    (%null-ptr)))
+      (#_gtk_signal_connect_full dialog-window destroy-name clear-show-message
+			    (%null-ptr) (%null-ptr) (%null-ptr) 0 0))
     (with-cstrs ((title title))
       (#_gtk_window_set_title dialog-window title))
     (#_gtk_container_set_border_width dialog-window 0)
@@ -160,7 +160,7 @@
     (let* ((button (with-cstrs ((ok "OK"))
 		     (#_gtk_button_new_with_label ok))))
       (with-cstrs ((clicked "clicked"))
-	(#_gtk_signal_connect button clicked close-show-message dialog-window))
+	(#_gtk_signal_connect_full button clicked close-show-message (%null-ptr) dialog-window (%null-ptr) 0 0))
       (setf (pref button :<G>tk<O>bject.flags)
 	    (logior (pref button :<G>tk<O>bject.flags) #$GTK_CAN_DEFAULT))
       (#_gtk_box_pack_start (pref dialog-window :<G>tk<D>ialog.action_area)
@@ -220,16 +220,15 @@ Derived from Minesweeper v0.6 by Eric Harlow"))
       (with-cstrs ((item-name item-name)
 		   (activate "activate"))
 	(setq menuitem (#_gtk_menu_item_new_with_label item-name))
-	(#_gtk_signal_connect menuitem activate func (or data (%null-ptr))))
+	(#_gtk_signal_connect_full menuitem activate func (%null-ptr) (or data (%null-ptr)) (%null-ptr) 0 0))
       (setq menuitem (#_gtk_menu_item_new)))
-    (#_gtk_menu_append menu menuitem)
+    (#_gtk_menu_shell_append menu menuitem)
     (#_gtk_widget_show menuitem)
 
     (unless *accel-group*
       (setq *accel-group*
 	    (#_gtk_accel_group_new))
-      (#_gtk_accel_group_attach *accel-group*
-				*win-main*))
+      (#_gtk_window_add_accel_group *win-main* *accel-group*))
 
     (if (and accel (char= (schar accel 0) #\^))
       (with-cstrs ((activate "activate"))
@@ -254,16 +253,16 @@ Derived from Minesweeper v0.6 by Eric Harlow"))
 		      (%get-ptr group-ptr)
 		      item-name)))
       (setf (%get-ptr group-ptr)
-	    (#_gtk_radio_menu_item_group menuitem))
-      (#_gtk_menu_append menu menuitem)
+	    (#_gtk_radio_menu_item_get_group menuitem))
+      (#_gtk_menu_shell_append menu menuitem)
       (#_gtk_widget_show menuitem)
-      (#_gtk_signal_connect menuitem toggled func (or data (%null-ptr)))
+      (#_gtk_signal_connect_full menuitem toggled func (%null-ptr) (or data (%null-ptr)) (%null-ptr) 0 0)
       menuitem)))
 
 (defun create-bar-sub-menu (menu name)
   (with-cstrs ((name name))
     (let* ((menuitem (#_gtk_menu_item_new_with_label name)))
-      (#_gtk_menu_bar_append menu menuitem)
+      (#_gtk_menu_shell_append menu menuitem)
       (#_gtk_widget_show menuitem)
       (let* ((submenu (#_gtk_menu_new)))
 	(#_gtk_menu_item_set_submenu menuitem submenu)
@@ -643,7 +642,7 @@ Derived from Minesweeper v0.6 by Eric Harlow"))
 (defun create-menu (window vbox-main)
   (setq *win-main* window)
   (setq *accel-group* (#_gtk_accel_group_new))
-  (#_gtk_accel_group_attach *accel-group* *win-main*)
+  (#_gtk_window_add_accel_group *win-main* *accel-group*)
   (let* ((menubar (#_gtk_menu_bar_new)))
     (#_gtk_box_pack_start vbox-main menubar #$FALSE #$TRUE 0)
     (#_gtk_widget_show menubar)
@@ -710,13 +709,13 @@ Derived from Minesweeper v0.6 by Eric Harlow"))
 ;;; Free all of the widgets contained in this one.
 (defun free-children (widget)
   (#_gtk_container_foreach
-   (#_gtk_type_check_object_cast widget (#_gtk_container_get_type))
-				 FreeChildCallback (%null-ptr)))
+   (#_g_type_check_instance_cast widget (#_gtk_container_get_type))
+   FreeChildCallback (%null-ptr)))
 
 (defun add-image-to-mine (cell xpm-data)
   (let* ((widget (create-widget-from-xpm *table* xpm-data)))
     (#_gtk_container_add (cell-button cell) widget)
-    (#_gdk_pixmap_unref widget)
+    (#_gdk_drawable_unref widget)
     nil))
 
 (defun open-nearby-squares (col row)
@@ -843,10 +842,10 @@ Derived from Minesweeper v0.6 by Eric Harlow"))
 	 (cell-id (cell->cell-id cell)))
     (with-cstrs ((toggled "toggled")
 		 (button-press-event "button_press_event"))
-      (#_gtk_signal_connect button toggled cell-toggled
-			    (%int-to-ptr cell-id))
-      (#_gtk_signal_connect button button-press-event
-			    button-press (%int-to-ptr cell-id)))
+      (#_gtk_signal_connect_full button toggled cell-toggled
+                                 (%null-ptr) (%int-to-ptr cell-id) (%null-ptr) 0 0)
+      (#_gtk_signal_connect_full button button-press-event
+			    button-press (%null-ptr) (%int-to-ptr cell-id) (%null-ptr) 0 0))
     (#_gtk_table_attach table button
 			column (1+ column)
 			(1+ row) (+ row 2)
@@ -976,8 +975,8 @@ Derived from Minesweeper v0.6 by Eric Harlow"))
 	(#_gtk_widget_show *bombs-label*)
 	(setq *start-button* (#_gtk_button_new))
 	(with-cstrs ((clicked "clicked"))
-	  (#_gtk_signal_connect *start-button* clicked start-button-clicked
-				(%null-ptr)))
+	  (#_gtk_signal_connect_full *start-button* clicked start-button-clicked
+				(%null-ptr) (%null-ptr) (%null-ptr) 0 0))
 	(#_gtk_box_pack_start hbox *start-button* #$FALSE #$FALSE 0)
 	(#_gtk_widget_show *start-button*)
 	(#_gtk_box_pack_start hbox *time-label* #$FALSE #$FALSE 0)
@@ -985,7 +984,7 @@ Derived from Minesweeper v0.6 by Eric Harlow"))
 	(#_gtk_widget_show hbox)
 	(#_gtk_container_add window *vbox*)
 	(with-cstrs ((destroy "destroy"))
-	  (#_gtk_signal_connect window destroy action-quit window))
+	  (#_gtk_signal_connect_full window destroy action-quit (%null-ptr) window (%null-ptr) 0 0))
 	(#_gtk_widget_show window)
 
 	(set-start-button-icon *xpm-smile*)

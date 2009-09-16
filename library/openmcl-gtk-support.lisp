@@ -23,15 +23,10 @@
 (in-package "CCL")
 
 (eval-when (:compile-toplevel :execute)
-  (use-interface-dir :GTK))
+  (use-interface-dir :GTK2))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  ;; I don't know why it's necessary to explicitly open
-  ;; libgdk.so (which transitively opens half a dozen
-  ;; other libraries), while opening libgtk.so by itself
-  ;; would complain about unresolved symbols from libgdk.
-  (dolist (lib '("libgdk.so" "libgtk.so"))
-    (open-shared-library lib)))
+  (open-shared-library "libgnomeui-2.so"))
 
 
 ;;; All arguments (including the first, required one) should
