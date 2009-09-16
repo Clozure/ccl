@@ -2897,3 +2897,67 @@
              (1+ seq))))
      nil)
     (instructions)))
+
+(defun x86-disassembled-instruction-line (ds instruction function &optional string-stream)
+  (if (null string-stream)
+    (with-output-to-string (stream)
+      (return-from x86-disassembled-instruction-line
+                   (x86-disassembled-instruction-line ds instruction function stream)))
+    (let* ((addr (x86-di-address instruction))
+           (entry (x86-ds-entry-point ds))
+           (pc (- addr entry))
+           (op0 (x86-di-op0 instruction))
+           (op1 (x86-di-op1 instruction))
+           (op2 (x86-di-op2 instruction))
+           (label (if (x86-di-labeled instruction) (list :label pc) pc))
+           (instr (progn
+                    (dolist (p (x86-di-prefixes instruction))
+                      (format string-stream "(~a) " p))
+                    (format string-stream "(~a" (x86-di-mnemonic instruction))
+                    (when op0 (write-x86-lap-operand string-stream op0 ds))
+                    (when op1 (write-x86-lap-operand string-stream op1 ds))
+                    (when op2 (write-x86-lap-operand string-stream op2 ds))
+                    (format string-stream ")")
+                    (get-output-stream-string string-stream)))
+           (comment (let ((source-note (find-source-note-at-pc function pc)))
+                      (unless (eql (source-note-file-range source-note)
+                                   (source-note-file-range *previous-source-note*))
+                        (setf *previous-source-note* source-note)
+                        (let* ((source-text (source-note-text source-note))
+                               (text (if source-text
+                                       (string-sans-most-whitespace source-text 100)
+                                       "#<no source text>")))
+                          (format string-stream ";;; ~A" text)
+                          (get-output-stream-string string-stream)))))
+           (imms (let ((imms nil))
+                   (multiple-value-bind (imm foundp) (x86-lap-operand-constant op2 ds)
+                     (when foundp (push imm imms)))
+                   (multiple-value-bind (imm foundp) (x86-lap-operand-constant op1 ds)
+                     (when foundp (push imm imms)))
+                   (multiple-value-bind (imm foundp) (x86-lap-operand-constant op0 ds)
+                     (when foundp (push imm imms)))
+                   imms)))
+      ;; Subtle difference between no imms and a single NIL imm, so if anybody ever
+      ;; cares for some reason, they could distinguish the two cases.
+      (if imms
+        (values comment label instr (if (cdr imms) (coerce imms 'vector) (car imms)))
+        (values comment label instr)))))
+
+(defun disassemble-lines (function)
+  (let ((source-note (function-source-note function)))
+    (when source-note
+      ;; Fetch source from file if don't already have it.
+      (ensure-source-note-text source-note)))
+  (let ((lines (make-array 20 :adjustable t :fill-pointer 0)))
+    (with-output-to-string (stream)
+      (x86-xdisassemble
+       function
+       #'(lambda (ds instruction seq function)
+           (declare (ignore seq))
+           (multiple-value-bind (comment label instr object)
+                                (x86-disassembled-instruction-line ds instruction function stream)
+             (when comment
+               (vector-push-extend comment lines))
+             (vector-push-extend (list object label instr) lines)))
+       nil))
+    (coerce lines 'simple-vector)))

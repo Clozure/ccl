@@ -36,7 +36,12 @@
 ;;; How to access a constituent, and how to print a constituent to a stream.
 (defclass inspector ()
   ((object :accessor inspector-object :initarg :object)
-   (line-count :accessor inspector-line-count :initarg :line-count :initform nil)))
+   (line-count :accessor inspector-line-count :initarg :line-count :initform nil)
+   ;; so can refresh.
+   (initargs :reader inspector-initargs :initform nil)))
+
+(defmethod initialize-instance :before ((i inspector) &rest initargs)
+  (setf (slot-value i 'initargs) initargs))
 
 ;;; The usual way to cons up an inspector
 (defmethod make-inspector (object)
@@ -46,6 +51,22 @@
 (defmethod initialize-instance :after ((i inspector) &key update-line-count)
   (when update-line-count
     (update-line-count i)))
+
+(defmethod refresh-inspector ((i inspector))
+  (apply #'make-instance (class-of i) (slot-value i 'initargs)))
+
+;; New protocol, used by gui inspector instead of the line-n protocol, which isn't quite right.
+;; Perhaps tty inspector should use it as well.  Returns the line inspector rather than object,
+;; and returns the value string rather than having the caller print it.
+(defmethod inspector-line ((i inspector) index)
+  (let ((line-i (multiple-value-bind (value label type) (inspector::line-n i index)
+		  (and (not (eq (parse-type i type) :comment))
+		       (line-n-inspector i index value label type)))))
+    (multiple-value-bind (label-string value-string) (line-n-strings i index)
+      (values line-i label-string value-string))))
+
+;; for a comment value = nil, label = "the comment" type = :comment
+;;; => line-i = nil
 
 ;;;;;;;
 ;;;
@@ -95,12 +116,26 @@
     (setq function (inspector-print-function i type)))
   (funcall function i stream value label type))
 
-(defmethod inspector-print-function ((i inspector) type)
-  (if (consp type) (setq type (car type)))
-  (if (eq type :comment)
-    'prin1-comment
-    'prin1-normal-line))
+(defvar *collect-labels-if-list* t)
 
+(defmethod end-of-label ((stream string-output-stream))
+  (when (listp *collect-labels-if-list*)
+    (push (get-output-stream-string stream) *collect-labels-if-list*)))
+
+(defmethod line-n-strings ((i inspector) n)
+  (let* ((*collect-labels-if-list* ())
+	 (value-string (with-output-to-string (stream)
+			 (prin1-line-n i stream n)))
+	 (label-string (pop *collect-labels-if-list*))
+         (end (or (position-if-not #'whitespacep label-string :from-end t) -1)))
+    (assert (null *collect-labels-if-list*))
+    (unless (and (>= end 0) (eql (char label-string end) #\:)) (incf end))
+    (setq label-string (subseq label-string 0 end))
+    (values label-string value-string)))
+
+(defmethod inspector-print-function ((i inspector) type)
+  (declare (ignore type))
+  'prin1-normal-line)
 
 ; Print a value to a stream.
 (defmethod prin1-normal-line ((i inspector) stream value &optional label type
@@ -111,7 +146,8 @@
       (prin1-label i stream value label type)
       (if colon-p (princ ": " stream)))
     (end-of-label stream)              ; used by cacheing code
-    (prin1-value i stream value label type)))
+    (unless (eq type-sym :comment)
+      (prin1-value i stream value label type))))
 
 (defun prin1-colon-line (i stream value &optional label type)
   (prin1-normal-line i stream value label type t))
@@ -126,11 +162,6 @@
   (declare (ignore label type))
   (prin1 value stream))
 
-(defmethod prin1-comment ((i inspector) stream value &optional label type)
-  (when label
-    (prin1-label i stream value label type)
-    (end-of-label stream)))
-  
 ;;; Call function on the inspector object and its value, label, & type, for
 ;;; each line in the selected range (default to the whole thing).
 ;;; This can avoid (e.g.) doing NTH for each element of a list.
@@ -139,13 +170,14 @@
 (defmethod map-lines ((i inspector) function &optional 
                       (start 0) 
                       end)
+  (when (null (inspector-line-count i))
+    (update-line-count i))
   (unless end
     (setq end (inspector-line-count i)))
   (when (and start end)
     (let ((index start))
       (dotimes (c (- end start))
-        (declare (fixnum c))
-        (multiple-value-call function i (line-n i index))
+        (multiple-value-call function i index (inspector-line i index))
         (incf index)))))
 
 ;;;;;;;
@@ -214,6 +246,17 @@
          (*signal-printing-errors* nil))
      ,@body))
 
+(defun format-line-for-tty (stream label-string value-string)
+  (when (equal label-string "") (setq label-string nil))
+  (when (equal value-string "") (setq value-string nil))
+  (format stream "~@[~a~]~@[~a~]~@[~a~]"
+	  label-string
+	  (and label-string
+	       value-string 
+	       (not (eql #\space (char label-string (1- (length label-string)))))
+	       ": ")
+	  value-string))
+
 (defun describe (object &optional stream)
   "Print a description of the object X."
   (cond ((null stream) (setq stream *standard-output*))
@@ -226,14 +269,12 @@
 
 (defmethod describe-object (object stream)
   (let ((inspector (make-inspector object)))
-    (when (null (inspector-line-count inspector))
-      (update-line-count inspector))
     (with-errorfree-printing
         (let* ((*print-pretty* (or *print-pretty* *describe-pretty*))
-               (temp #'(lambda (i value &rest rest)
-                         (declare (dynamic-extent rest))
-                         (apply #'prin1-line i stream value rest)
-                         (terpri stream))))
+               (temp #'(lambda (i index child &optional label-string value-string)
+			 (declare (ignore i index child))
+			 (format-line-for-tty stream label-string value-string)
+			 (terpri stream))))
           (declare (dynamic-extent temp))
           (map-lines inspector temp))))
   (values))
@@ -257,10 +298,8 @@
 
 (defmethod prin1-line ((i formatting-inspector) stream value
                        &optional label type (format-string "~s"))
-  (if (eq :comment (if (consp type) (car type) type))
-    (prin1-comment i stream value label type)
-    (funcall (if (listp format-string) #'apply #'funcall)
-             #'format-normal-line i stream value label type format-string)))
+  (funcall (if (listp format-string) #'apply #'funcall)
+           #'format-normal-line i stream value label type format-string))
 
 (defmethod format-normal-line ((i inspector) stream value &optional 
                                label type (format-string "~s") colon-p)
@@ -270,7 +309,8 @@
       (prin1-label i stream value label type)
       (if colon-p (princ ": " stream)))
     (end-of-label stream)              ; used by cacheing code
-    (format stream format-string value)))
+    (unless (eq type-sym :comment)
+      (format stream format-string value))))
 
 ;;;;;;;
 ;;
@@ -351,6 +391,11 @@
       (1 (values (type-of object) "Type: " :static))
       (2 (values (class-of object) "Class: " :static))
       (t (call-next-method i (- n 3))))))
+
+(defmethod line-n-inspector :around ((i basics-first-mixin) n value label type)
+  (if (< n 3)
+    (make-inspector value)
+    (call-next-method i (- n 3) value label type)))
 
 (defmethod (setf line-n) :around (new-value (i basics-first-mixin) n)
   (case n
@@ -997,11 +1042,10 @@
       (type-specifier-p sym) (record-type-p sym nil)
       (find-class sym nil)))
 
-(defmethod inspector-class ((sym symbol)) 'usual-inspector)
+(defmethod inspector-class ((sym symbol)) 'usual-basics-first-inspector)
 
 (defmethod compute-line-count ((sym symbol))
-  (+ 1                                  ; The symbol
-     (if (symbol-has-bindings-p sym) 1 0)
+  (+ (if (symbol-has-bindings-p sym) 1 0)
      1                                  ; package
      1                                  ; symbol-name
      1                                  ; symbol-value
@@ -1013,8 +1057,8 @@
 
 
 (defmethod normalize-line-number ((sym symbol) n)
-  (if (and (>= n 1) (not (symbol-has-bindings-p sym))) (incf n))
-  (if (and (>= n 6) (not (fboundp sym))) (incf n))
+  (if (and (>= n 0) (not (symbol-has-bindings-p sym))) (incf n))
+  (if (and (>= n 5) (not (fboundp sym))) (incf n))
   n)
 
 (defmethod line-n ((sym symbol) n)
@@ -1023,9 +1067,8 @@
         (comment '(:comment (:bold)))
         (static :static))
     (ecase n
-      (0 (values sym "Symbol: " type))
-      (1 (values nil (symbol-type-line sym) comment))
-      (2 (let ((p (symbol-package sym)))
+      (0 (values nil (symbol-type-line sym) comment))
+      (1 (let ((p (symbol-package sym)))
            (if (null p)
              (values nil "No home package." comment)
              (multiple-value-bind (found kind) (find-symbol (symbol-name sym) p)
@@ -1034,32 +1077,31 @@
                          "NOT PRESENT in home package: "
                          (format nil "~a in package: " kind))
                        static)))))
-      (3 (values (symbol-name sym) "Print name: " static))
-      (4 (values (if (boundp sym) (symbol-value sym) *unbound-marker*)
+      (2 (values (symbol-name sym) "Print name: " static))
+      (3 (values (if (boundp sym) (symbol-value sym) *unbound-marker*)
                  "Value: " type))
-      (5 (values (if (fboundp sym)
+      (4 (values (if (fboundp sym)
                    (cond ((macro-function sym))
                          ((special-operator-p sym) sym)
                          (t (symbol-function sym)))
                    *unbound-marker*)
                  "Function: " type))
-      (6 (values (and (fboundp sym) (arglist sym))
+      (5 (values (and (fboundp sym) (arglist sym))
                  "Arglist: " static))
-      (7 (values (symbol-plist sym) "Plist: " type))
-      (8 (values (find-class sym) "Class: " static)))))
+      (6 (values (symbol-plist sym) "Plist: " type))
+      (7 (values (find-class sym) "Class: " static)))))
 
 (defmethod (setf line-n) (value (sym symbol) n)
   (let (resample-p)
     (setq n (normalize-line-number sym n))
     (setq value (restore-unbound value))
     (ecase n
-      (0 (replace-object *inspector* value))
-      ((1 2 3 6) (setf-line-n-out-of-range sym n))
-      (4 (setf resample-p (not (boundp sym))
+      ((0 1 2 5) (setf-line-n-out-of-range sym n))
+      (3 (setf resample-p (not (boundp sym))
                (symbol-value sym) value))
-      (5 (setf resample-p (not (fboundp sym))
+      (4 (setf resample-p (not (fboundp sym))
                (symbol-function sym) value))
-      (7 (setf (symbol-plist sym) value)))
+      (6 (setf (symbol-plist sym) value)))
     (when resample-p (resample-it))
     value))
 
@@ -1121,7 +1163,7 @@
 (defmethod line-n-inspector ((sym symbol) n value label type)
   (declare (ignore label type))
   (setq n (normalize-line-number sym n))
-  (if (eql n 7)
+  (if (eql n 6)
     (make-instance 'plist-inspector :symbol sym :object value)
     (call-next-method)))
 
@@ -1165,17 +1207,17 @@
    (pc-width :accessor pc-width)
    (pc :initarg :pc :initform nil :accessor pc)))
 
-(defmethod header-count ((i function-inspector)) (length (header-lines i)))
+(defmethod standard-header-count ((f function-inspector)) (length (header-lines f)))
+
+(defmethod header-count ((f function-inspector)) (standard-header-count f))
 
 (defclass closure-inspector (function-inspector)
   ((n-closed :accessor closure-n-closed)))
 
-
-
 (defmethod inspector-class ((f function)) 'function-inspector)
 (defmethod inspector-class ((f compiled-lexical-closure)) 'closure-inspector)
 
-(defmethod compute-line-count ((f function-inspector))
+(defmethod compute-line-count :before ((f function-inspector))
   (let* ((o (inspector-object f))
          (doc (documentation o t))
          (sn (ccl::function-source-note o))
@@ -1188,8 +1230,21 @@
                                  (list arglist label (if type :colon '(:comment (:plain)))))))
                        (when doc (list (list (substitute #\space #\newline doc) "Documentation" :colon)))
                        (when sn (list (list sn "Source Location" :colon))))))
-    (setf (slot-value f 'header-lines) lines)
-    (+ (length lines) (compute-disassembly-lines f))))
+    (setf (slot-value f 'header-lines) lines)))
+
+(defmethod compute-line-count ((f function-inspector))
+  (+ (header-count f) (compute-disassembly-lines f)))
+
+(defmethod line-n-strings ((f function-inspector) n)
+  (if (< (decf n (header-count f)) 0)
+    (call-next-method)
+    (disassembly-line-n-strings f n)))
+
+(defmethod line-n-inspector ((f function-inspector) n value label type)
+  (declare (ignore value label type))
+  (if (< (decf n (header-count f)) 0)
+    (call-next-method)
+    (disassembly-line-n-inspector f n)))
 
 (defmethod line-n ((f function-inspector) n)
   (let* ((lines (header-lines f))
@@ -1198,25 +1253,26 @@
       (apply #'values (nth n lines))
       (disassembly-line-n f (- n nlines)))))
 
-(defmethod compute-line-count ((f closure-inspector))
+(defmethod compute-line-count :before ((f closure-inspector))
   (let* ((o (inspector-object f))
 	 (nclosed (nth-value 8 (function-args (ccl::closure-function o)))))
-    (setf (closure-n-closed f) nclosed)
-    (+ (call-next-method)
-       1                              ; the function we close over
-       1                              ; "Closed over values"
-       nclosed
-       (if (disasm-p f) 1 0))))      ; "Disassembly"
+    (setf (closure-n-closed f) nclosed)))
+
+(defmethod header-count ((f closure-inspector))
+  (+ (standard-header-count f)
+     1                              ; the function we close over
+     1                              ; "Closed over values"
+     (closure-n-closed f)))
 
 (defmethod line-n ((f closure-inspector) n)
   (let ((o (inspector-object f))
         (nclosed (closure-n-closed f)))
-    (if (< (decf n (header-count f)) 0)
+    (if (< (decf n (standard-header-count f)) 0)
       (call-next-method)
       (cond ((< (decf n) 0)
              (values (ccl::closure-function o) "Inner lfun: " :static))
             ((< (decf n) 0)
-             (values nclosed "Closed over values" :comment #'prin1-comment))
+             (values nclosed "Closed over values" :comment))
             ((< n nclosed)
              (let* ((value (ccl::nth-immediate o (1+ (- nclosed n))))
                     (map (car (ccl::function-symbol-map (ccl::closure-function o))))
@@ -1227,27 +1283,23 @@
                  (setq value (ccl::closed-over-value value)
                        label (format nil "(~a)" label)))
                (values value label (if cellp :normal :static) #'prin1-colon-line)))
-            ((eql (decf n nclosed) 0)
-             (values 0 "Disassembly" :comment #'prin1-comment))
-            (t (disassembly-line-n f (- n 1)))))))
+            (t (disassembly-line-n f (- n nclosed)))))))
 
 (defmethod (setf line-n) (new-value (f function-inspector) n)
-  (let ((o (inspector-object f)))
-    (case n
-      (0 (replace-object f new-value))
-      (1 (ccl::lfun-name o new-value) (resample-it))
-      (2 (setf (arglist o) new-value))
-      (t
-       (let ((line (- n (header-count f))))
-         (if (>= line 0)
-           (set-disassembly-line-n f line new-value)
-           (setf-line-n-out-of-range f n))))))
+  (let ((o (inspector-object f))
+        (standard-header-count (standard-header-count f)))
+    (if (< n standard-header-count)
+      (case n
+        (0 (replace-object f new-value))
+        (1 (ccl::lfun-name o new-value) (resample-it))
+        (t (setf-line-n-out-of-range f n)))
+      (set-disassembly-line-n f (- n standard-header-count) new-value)))
   new-value)
 
 (defmethod (setf line-n) (new-value (f closure-inspector) en &aux (n en))
   (let ((o (inspector-object f))
         (nclosed (closure-n-closed f)))
-    (if (< (decf n (header-count f)) 0)
+    (if (< (decf n (standard-header-count f)) 0)
       (call-next-method)
       (cond ((< (decf n 2) 0)          ; inner-lfun or "Closed over values"
              (setf-line-n-out-of-range f en))
@@ -1256,72 +1308,75 @@
                     (cellp (ccl::closed-over-value-p value)))
                (unless cellp (setf-line-n-out-of-range f en))
                (ccl::set-closed-over-value value new-value)))
-            ((eql (decf n nclosed) 0)   ; "Disassembly"
-             (setf-line-n-out-of-range f en))
-            (t (set-disassembly-line-n f (- n 1) new-value))))))
+            (t (set-disassembly-line-n f (- n nclosed) new-value))))))
 
 (defun compute-disassembly-lines (f &optional (function (inspector-object f)))
-  (if (functionp function)
-    (let* ((info (and (disasm-p f)  (coerce (ccl::disassemble-list function) 'vector)))
-           (length (length info))
-           (last-pc (if info (car (svref info (1- length))) 0)))
-      (if (listp last-pc) (setq last-pc (cadr last-pc)))
-      (setf (pc-width f) (length (format nil "~d" last-pc)))
-      (setf (disasm-info f) info)
-      length)
+  (if (and (functionp function) (disasm-p f))
+    (let* ((lines (ccl::disassemble-lines function)) ;; list of (object label instr)
+           (length (length lines))
+           (last-label (loop for n from (1- length) downto 0 as line = (aref lines n)
+                             thereis (and (consp line) (cadr line))))
+           (max-pc (if (consp last-label) (cadr last-label) last-label)))
+      (setf (pc-width f) (length (format nil "~d" max-pc)))
+      (setf (disasm-info f) lines)
+      (1+ length))
     0))
 
 (defun disassembly-line-n (f n)
-  (let* ((line (svref (disasm-info f) n))
-         (value (disasm-line-immediate line)))
-    (values value line (if value :static :comment))))
+  (if (< (decf n) 0)
+    (values nil "Disassembly:" :comment)
+    (let ((line (svref (disasm-info f) n)))
+      (if (consp line)
+        (destructuring-bind (object label instr) line
+          (values object (cons label instr) :static))
+        (values nil (cons nil line) :static)))))
+
+(defun disassembly-line-n-inspector (f n)
+  (unless (< (decf n) 0)
+    (let ((line (svref (disasm-info f) n)))
+      (and (consp line)
+	   (car line)
+	   (make-inspector (car line))))))
+
+(defun disassembly-line-n-strings (f n)
+  (if (< (decf n) 0)
+    (values "Disassembly:" nil)
+    (let ((line (svref (disasm-info f) n)))
+      (if (consp line)
+        (destructuring-bind (object label instr) line
+          (declare (ignore object))
+          (unless (stringp label)
+            (setq label (with-output-to-string (stream)
+                          (prin1-disassembly-label f stream label))))
+          (values label instr))
+        (values nil line)))))
 
 (defun set-disassembly-line-n (f n new-value &optional 
                                  (function (inspector-object f)))
   (declare (ignore new-value function))
   (setf-line-n-out-of-range f n))
 
-(defun disasm-line-immediate (line &optional (lookup-functions t))
-  (pop line)                        ; remove address
-  (when (eq (car line) 'ccl::jsr_subprim)
-    (return-from disasm-line-immediate (find-symbol (cadr line) :ccl)))
-  (let ((res nil))
-    (labels ((inner-last (l)
-               (cond ((atom l) l)
-                     ((null (cdr l)) (car l))
-                     (t (inner-last (last l))))))
-      (dolist (e line)
-        (cond ((numberp e) (when (null res) (setq res e)))
-              ((consp e)
-               (cond ((eq (car e) 'function)
-                      (setq res (or (and lookup-functions (fboundp (cadr e))) (cadr e))))
-                     ((eq (car e) 17)   ; locative
-                      (setq e (cadr e))
-                      (unless (atom e)
-                        (cond ((eq (car e) 'special) 
-                               (setq res (cadr e)))
-                              ((eq (car e) 'function) 
-                               (setq res (or (and lookup-functions (fboundp (cadr e))) (cadr e))))
-                              (t (setq res (inner-last e))))))
-                     ((or (null res) (numberp res))
-                      (setq res (inner-last e))))))))
-    res))
-
-(defmethod inspector-print-function ((i function-inspector) type)
-  (declare (ignore type))
-  'prin1-normal-line)
-
-(defmethod prin1-label ((f function-inspector) stream value &optional label type)
+(defmethod prin1-label ((f function-inspector) stream value &optional data type)
   (declare (ignore value type))
-  (if (atom label)                      ; not a disassembly line
+  (if (atom data)                      ; not a disassembly line
     (call-next-method)
-    (let* ((pc (car label))
-           (label-p (and (listp pc) (setq pc (cadr pc))))
-           (pc-mark (pc f)))
-      (if (eq pc pc-mark)
-        (format stream "*~vd" (pc-width f) pc)
-        (format stream "~vd" (+ (pc-width f) (if pc-mark 1 0)) pc))
-      (write-char (if label-p #\= #\ ) stream))))
+    (prin1-disassembly-label f stream (car data))))
+
+(defun prin1-disassembly-label (f stream label)
+  (let* ((pc label)
+         (label-p (and (consp pc) (setq pc (cadr pc))))
+         (pc-mark (pc f))
+         (pc-width (pc-width f)))
+    (when pc
+      (write-char (if (eql pc pc-mark) #\* #\Space) stream)
+      (format stream "~@[L~d~]~vT~v<[~d]~> " label-p (+ pc-width 3) (+ pc-width 2) pc))))
+
+(defmethod prin1-value ((f function-inspector) stream value &optional data type)
+  (declare (ignore value type))
+  (if (atom data) ;; not a disassembly line
+    (call-next-method)
+    (princ (cdr data) stream)))
+
 
 #+ppc-target
 (defmethod prin1-value ((f function-inspector) stream value &optional label type)
@@ -1340,50 +1395,40 @@
 ;; Display the list of methods on a line of its own to make getting at them faster
 ;; (They're also inside the dispatch-table which is the first immediate in the disassembly).
 (defclass gf-inspector (function-inspector)
-  ((method-count :accessor method-count)
-   (slot-count :accessor slot-count :initform 0)))
+  ((method-count :accessor method-count)))
 
 (defmethod inspector-class ((f standard-generic-function))
   (if (functionp f) 
     'gf-inspector
     'standard-object-inspector))
 
-(defmethod compute-line-count ((f gf-inspector))
+(defmethod compute-line-count :before ((f gf-inspector))
   (let* ((gf (inspector-object f))
-         (count (length (generic-function-methods gf)))
-         (res (+ 1 (setf (method-count f) count)  
-                 (call-next-method))))
-    (if (disasm-p f) (1+ res) res)))
+         (count (length (generic-function-methods gf))))
+    (setf (method-count f) count)))
+
+(defmethod header-count ((f gf-inspector))
+  (+ (standard-header-count f) 1 (method-count f)))
 
 (defmethod line-n ((f gf-inspector) n)
   (let* ((count (method-count f))
-         (header-count (header-count f))
-         (slot-count (slot-count f))
-         (lines (1+ count)))
-    (if (<= header-count n (+ lines slot-count header-count))
-      (let ((methods (generic-function-methods (inspector-object f))))
-        (cond ((eql (decf n header-count) 0) (values methods "Methods: " :static))
-              ((<= n count)
-               (values (nth (- n 1) methods) nil :static))
-              ((< (decf n (1+ count)) slot-count)
-               (standard-object-line-n f n))
-              (t
-               (values 0 "Disassembly" :comment #'prin1-comment))))
-      (call-next-method f (if (< n header-count) n (- n lines slot-count 1))))))
+	 (methods (generic-function-methods (inspector-object f))))
+    (cond ((< (decf n  (standard-header-count f)) 0)
+           (call-next-method))
+          ((< (decf n) 0)
+	   (values methods "Methods: " :comment))
+          ((< n count)
+	   (values (nth n methods) nil :static))
+          (t (disassembly-line-n f (- n count))))))
 
 (defmethod (setf line-n) (new-value (f gf-inspector) n)
   (let* ((count (method-count f))
-         (header-count (header-count f))
-         (slot-count (slot-count f))
-         (lines (1+ count)))
-    (if (<= header-count n (+ lines slot-count header-count))
-      (let ((en n))
-        (cond ((<= (decf en header-count) count)
-               (setf-line-n-out-of-range f n))
-              ((< (decf en (1+ count)) slot-count)
-               (standard-object-setf-line-n new-value f en))
-              (t (setf-line-n-out-of-range f n))))
-      (call-next-method new-value f (if (< n header-count) n (- n lines slot-count 1))))))
+         (en n))
+    (cond ((< (decf n (standard-header-count f)) 0)
+           (call-next-method))
+          ((< (decf n) count)
+           (setf-line-n-out-of-range f en))
+          (t (set-disassembly-line-n f (- n count) new-value)))))
 
 #|
 (defmethod inspector-commands ((f gf-inspector))
@@ -1398,39 +1443,6 @@
               (resample-it)))))
       (call-next-method))))
 |#
-
-(defclass method-inspector (standard-object-inspector function-inspector)
-  ((standard-object-lines :accessor standard-object-lines)))
-
-(defmethod inspector-class ((object standard-method))
-  'method-inspector)
-
-(defmethod compute-line-count ((i method-inspector))
-  (+ (setf (standard-object-lines i) (call-next-method))
-     (if (disasm-p i) 1 0)              ; "Disassembly"
-     (compute-disassembly-lines i (method-function (inspector-object i)))))
-
-(defmethod line-n ((i method-inspector) n)
-  (let ((sol (standard-object-lines i)))
-    (cond ((< n sol) (call-next-method))
-          ((eql n sol) (values nil "Disassembly" :comment))
-          (t (disassembly-line-n i (- n sol 1))))))
-
-(defmethod (setf line-n) (new-value (i method-inspector) n)
-  (let ((sol (standard-object-lines i)))
-    (cond ((< n sol) (call-next-method))
-          ((eql n sol) (setf-line-n-out-of-range i n))
-          (t (set-disassembly-line-n
-              i n new-value (method-function (inspector-object i)))))))
-
-;;; funtion-inspector never does prin1-comment.
-(defmethod prin1-normal-line ((i method-inspector) stream value &optional
-                              label type colon-p)
-  (declare (ignore colon-p))
-  (if (eq type :comment)
-    (prin1-comment i stream value label type)
-    (call-next-method)))
-
 
 ;;;;;;;
 ;;
@@ -1799,8 +1811,6 @@
 
 (defmethod ui-present ((ui inspector-tty-ui))
   (let* ((inspector (inspector-ui-inspector ui)))
-    (when (null (inspector-line-count inspector))
-      (update-line-count inspector))
     (with-errorfree-printing
 	(let* ((stream *debug-io*)
 	       (origin (inspector-tty-ui-origin ui))
@@ -1808,23 +1818,19 @@
 	       (page-end (+ origin pagesize))
 	       (n (compute-line-count inspector))
 	       (end (min page-end n))
-	       (tag origin)
+	       (tag -1)
 	       (*print-pretty* (or *print-pretty* *describe-pretty*))
 	       (*print-length* 5)
 	       (*print-level* 5)
-	       (func #'(lambda (i value &rest rest)
-			 (declare (dynamic-extent rest))
-			 (let* ((type (cadr rest)))
-			   (unless (or (eq type :comment)
-				   (and (consp type)
-					(eq (car type) :comment)))
-			     (format stream "[~d] " tag))
-			   (incf tag))
-			 (format stream "~8t")
-			 (apply #'prin1-line i stream value rest)
-			 (terpri stream))))
+	       (func #'(lambda (i index child &optional label-string value-string)
+			 (declare (ignore i))
+			 (when child (incf tag))
+			 (unless (< index origin)
+			   (format stream "~@[[~d]~]~8t" (and child tag))
+			   (format-line-for-tty stream label-string value-string)
+			   (terpri stream)))))
 	  (declare (dynamic-extent func))
-	  (map-lines inspector func origin end)))
+	  (map-lines inspector func 0 end)))
     (values)))
 
 (ccl::define-toplevel-command
@@ -1906,18 +1912,20 @@
           (terpri *debug-io*))))))
 
 (defmethod inspector-ui-inspect-nth ((ui inspector-tty-ui) n)
-  (let* ((inspector (inspector-ui-inspector ui)))
-    (multiple-value-bind (value label type)
-	(line-n inspector n)
-      (unless (or (eq type :comment)
-		  (and (consp type) (eq (car type) :comment)))
-	(let* ((new-inspector (line-n-inspector inspector n value label type))
-	       (ccl::@ value))
-	  (inspector-ui-inspect
-	   (make-instance 'inspector-tty-ui
-			  :level (1+ (inspector-ui-level ui))
-			  :inspector new-inspector)))))))
-      
+  (let* ((inspector (inspector-ui-inspector ui))
+	 (new-inspector (block nil
+			  (let* ((tag -1)
+				 (func #'(lambda (i index child &rest strings)
+					   (declare (ignore i index strings))
+					   (when (and child (eql (incf tag) n)) (return child)))))
+			    (declare (dynamic-extent func))
+			    (map-lines inspector func))))
+	 (ccl::@ (inspector-object new-inspector)))
+    (inspector-ui-inspect
+     (make-instance 'inspector-tty-ui
+       :level (1+ (inspector-ui-level ui))
+       :inspector new-inspector))))
+
 (defparameter *default-inspector-ui-class-name* 'inspector-tty-ui)
 
 (defmethod inspector-ui-inspect ((ui inspector-ui))

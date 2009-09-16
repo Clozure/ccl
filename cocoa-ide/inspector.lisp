@@ -116,12 +116,13 @@ Make preferences for fonts, key commands
     (unless (minusp row)
       (with-slots (next-index viewed-inspector-items) wc
         (let ((ii (get-child (inspector-item wc) row)))
-          (if (and (< next-index (fill-pointer viewed-inspector-items))
-                   (eq ii (aref viewed-inspector-items next-index)))
-            ;;If the ii is the same as the next history item, then just go forward in history
-            (set-current-inspector-item wc next-index)
-            ;;Otherwise forget the forward history
-            (push-inspector-item wc ii)))))))
+	  (when (lisp-inspector ii)
+	    (if (and (< next-index (fill-pointer viewed-inspector-items))
+		     (eql ii (aref viewed-inspector-items next-index)))
+		;;If the ii is the same as the next history item, then just go forward in history
+		(set-current-inspector-item wc next-index)
+		;;Otherwise forget the forward history
+		(push-inspector-item wc ii))))))))
 
 (objc:defmethod (#/inspectSelectionInNewWindow: :void) ((wc ninspector-window-controller) sender)
   (declare (ignore sender))
@@ -129,8 +130,9 @@ Make preferences for fonts, key commands
     (unless (minusp row)
       (with-slots (next-index viewed-inspector-items) wc
         (let* ((ii (get-child (inspector-item wc) row))
-               (ob (inspector-object ii)))
-          (make-inspector ob))))))
+	       (li (lisp-inspector ii)))
+	  (when li
+	    (make-inspector-window li)))))))
 
 (objc:defmethod (#/inspectSelectionInSameWindow: :void) ((wc ninspector-window-controller) sender)
   (declare (ignore sender)))
@@ -148,54 +150,58 @@ Make preferences for fonts, key commands
 
 (objc:defmethod (#/doRefresh: :void) ((wc ninspector-window-controller) sender)
   (declare (ignore sender))
-  (push-inspector-item wc (make-inspector-item (inspector-object (inspector-item wc)))))
+  (let ((inspector::*inspector-disassembly* t))
+    (push-inspector-item wc (make-inspector-item (inspector::refresh-inspector (lisp-inspector wc))))))
 
 (defclass inspector-item (ns:ns-object)
-  ((lisp-inspector :accessor lisp-inspector)
+  ((lisp-inspector :accessor lisp-inspector) ;; null for non-inspectable
    (label :accessor inspector-item-label) ;NSString
    (ob-string :accessor inspector-item-ob-string) ;NSString
-   (type :accessor inspector-item-type) ; oneof: nil :normal :colon :comment :static
    (children :initform nil)) ;initialized lazily
   (:metaclass ns:+ns-object))
 
 (defmethod inspector-item-children ((ii inspector-item))
   (or (slot-value ii 'children)
-      (let* ((li (lisp-inspector ii)))
-        (when (null (inspector::inspector-line-count li))
-          (inspector::update-line-count li))        
-        (setf (slot-value ii 'children)
-            (make-array (inspector::inspector-line-count li) :initial-element nil)))))
+      (setf (slot-value ii 'children)
+	    (make-array (inspector-line-count ii) :initial-element nil))))
 
 (defmethod inspector-object ((ii inspector-item))
-  (inspector::inspector-object (lisp-inspector ii)))
+  (let ((li (lisp-inspector ii)))
+    (and li (inspector::inspector-object li))))
 
 (defmethod inspector-line-count ((ii inspector-item))
   (let ((li (lisp-inspector ii)))
-    (or  (inspector::inspector-line-count li)
+    (or  (and (null li) 0)
+	 (inspector::inspector-line-count li)
          (progn
            (inspector::update-line-count li)
            (inspector::inspector-line-count li)))))
 
-(defun inspector-object-nsstring (ob)
-  (let ((*print-readably* nil)
+(defun inspector-object-nsstring (li)
+  (let ((ob (inspector::inspector-object li))
+	(*print-readably* nil)
         (*signal-printing-errors* nil)
         (*print-circle* t)
         (*print-length* 20)
         (*print-pretty* nil))
     (%make-nsstring (prin1-to-string ob))))
 
-(defun make-inspector-item (value &optional label type)
-  (let* ((item (make-instance 'inspector-item))
-	 (li (inspector::make-inspector value)))
+(defun make-inspector-item (li &optional label-string value-string)
+  (let* ((item (make-instance 'inspector-item)))
     (setf (lisp-inspector item) li
-          (inspector-item-ob-string item) (inspector-object-nsstring value)
-	  (inspector-item-label item) label
-	  (inspector-item-type item) type)
+          (inspector-item-ob-string item) (if value-string
+					    (%make-nsstring value-string)
+					    (inspector-object-nsstring li))
+	  (inspector-item-label item) (%make-nsstring (or label-string "")))
     item))
-
+  
 (defun make-inspector (ob)
+  (let ((inspector::*inspector-disassembly* t))
+    (make-inspector-window (inspector::make-inspector ob))))
+
+(defun make-inspector-window (li)
   (let* ((wc (make-instance 'ninspector-window-controller))
-         (ii (make-inspector-item ob)))
+         (ii (make-inspector-item li)))
     (push-inspector-item wc ii)
     (#/showWindow: wc nil)
     wc))
@@ -215,8 +221,8 @@ Make preferences for fonts, key commands
         @ (inspector-object ii))
   (setf (slot-value wc 'inspector-item) ii)
   (let* ((w (#/window wc))
-         (title (inspector-item-ob-string ii)))
-    (#/setTitle: w (%make-nsstring (concatenate 'string  "Inspector: " 
+         (title (inspector-object-nsstring (lisp-inspector ii))))
+    (#/setTitle: w (%make-nsstring (concatenate 'string  "Inspect: " 
                                                 (lisp-string-from-nsstring title))))
     (#/setStringValue: (object-label wc) title)
     (#/reloadData (table-view wc))))
@@ -259,8 +265,12 @@ NSTableDataSource methods can be defined.
   (let ((arr (inspector-item-children ii))
         (i (1+ index)))
     (or (svref arr i)
-        (multiple-value-bind (ob label type) (inspector::line-n (lisp-inspector ii) i)
-          (setf (svref arr i) (make-inspector-item ob (%make-nsstring (princ-to-string label)) type))))))
+	(setf (svref arr i)
+	      (let ((li (lisp-inspector ii))
+		    (inspector::*inspector-disassembly* t))
+		(multiple-value-bind (child label-string value-string) (inspector::inspector-line li i)
+		  (make-inspector-item child (or label-string "") (or value-string ""))))))))
 
-;;; Make INSPECT call CINSPECT.
+;;; Make CL:INSPECT call NINSPECT.
 (setq inspector::*default-inspector-ui-creation-function* 'ninspect)
+

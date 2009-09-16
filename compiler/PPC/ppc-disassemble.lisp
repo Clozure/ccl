@@ -434,6 +434,37 @@
            (setq label-p nil)))))
     (nreverse res)))
 
+(defun disassemble-lines (thing)
+  (let ((dll (function-to-dll-header (function-for-disassembly thing)))
+        (address 0)
+        (label-p nil)
+        (lines (make-array 20 :adjustable t :fill-pointer 0)))
+    (do-dll-nodes (i dll)
+      (setq address (instruction-element-address i))
+      (etypecase i
+        (lap-label
+         (setq label-p (lap-label-name i)))
+        (lap-instruction
+         (let* ((opcode (lap-instruction-opcode i))
+		(operands (lap-instruction-parsed-operands i))
+		(imms (loop for op in operands
+			 when (and (consp op)
+				   (consp (cdr op))
+				   (null (cddr op))
+				   (or (eq (%car op) 'quote) (eq (%car op) 'function)))
+			 collect op)))
+	   (vector-push-extend (list (if (cdr imms) (coerce imms 'vector) (car imms))
+				     (if label-p `(:label address) address)
+				     (with-output-to-string (s)
+				       (format s "(~a" (if (symbolp opcode) opcode (opcode-name opcode)))
+				       (loop for op in operands
+					  do (princ " " s)
+					  do (disasm-prin1 op s))
+				       (format s ")")))
+			       lines)
+           (setq label-p nil)))))
+    lines))
+
 #+ppc-target
 (defun disasm-prin1 (thing stream)
   (if (and (consp thing) (consp (cdr thing)) (null (cddr thing)))
