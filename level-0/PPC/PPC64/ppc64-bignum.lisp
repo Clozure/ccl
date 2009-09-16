@@ -72,6 +72,46 @@
     (la vsp 16 vsp)
     (blr)))
 
+(defppclapfunction %multiply-and-add-loop64
+    ((x 8) (y 0) (r arg_x) (idx arg_y) (ylen arg_z))
+  (let ((i imm0)
+	(j imm1)
+	(xx imm2)
+	(yy imm3)
+	(rr imm4)
+	(dd imm5)
+	(cc nargs))
+    (ld temp0 x vsp)
+    (la i ppc64::misc-data-offset idx)
+    (ldx xx temp0 i)			;x[i]
+    (rotldi xx xx 32)
+    (ld temp0 y vsp)
+    (li cc 0)
+    (li j ppc64::misc-data-offset)
+    @loop
+    (ldx yy temp0 j)			;y[j]
+    (rotldi yy yy 32)
+    (mulld dd xx yy)  ;low
+    (ldx rr r i)			;r[i]
+    (rotldi rr rr 32)
+    (addc rr rr dd)			;r[i] = r[i] + low
+    (mulhdu dd xx yy)			;high
+    (addze dd dd)			;carry from addding in low
+    (addc rr rr cc)			;add in carry digit
+    (addze cc dd)
+    (rotldi rr rr 32)
+    (stdx rr r i)			;update r[i]
+    (cmpdi ylen '1)
+    (la i 8 i)
+    (la j 8 j)
+    (subi ylen ylen '1)
+    (bne @loop)
+    (rotldi cc cc 32)
+    (stdx cc r i)
+    (set-nargs 0)
+    (la vsp 16 vsp)
+    (blr)))
+
 ;;; Multiply the (32-bit) digits X and Y, producing a 64-bit result.
 ;;; Add the 32-bit "prev" digit and the 32-bit carry-in digit to that 64-bit
 ;;; result; return the halves as (VALUES high low).

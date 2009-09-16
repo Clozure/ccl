@@ -817,9 +817,6 @@
 		 (%multiply-and-add-loop64 a b res i len-b))
 	       res)))
       (let* ((res (with-negated-bignum-buffers a b
-					       #-x86-target
-					       multiply-unsigned-bignums
-					       #+x86-target
 					       multiply-unsigned-bignums64)))
 	(if signs-differ (negate-bignum-in-place res))
 	(%normalize-bignum-macro res)))))
