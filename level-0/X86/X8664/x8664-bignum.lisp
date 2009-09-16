@@ -70,6 +70,34 @@
     (movd (% cc) (@ x8664::misc-data-offset (% temp1) (% i) 4))
     (single-value-return 4)))
 
+(defx86lapfunction %multiply-and-add-loop64
+    ((xs 16) (ys 8) #|(ra 0)|# (r arg_x) (i arg_y) (ylen arg_z))
+  (let ((y temp2)
+	(j temp0)
+	(c imm2))
+    (movq (@ xs (% rsp)) (% temp0))
+    (movq (@ x8664::misc-data-offset (% temp0) (% i)) (% mm0)) ;x[i]
+    (movq (@ ys (% rsp)) (% y))
+    (xorl (%l j) (%l j))
+    (xorl (%l c) (%l c))
+    @loop
+    ;; It's a pity to have to reload this every time, but there's no
+    ;; imm3.  (Give him 16 registers, and he still complains...)
+    (movd (% mm0) (% rax))
+    (mulq (@ x8664::misc-data-offset (% y) (% j))) ;128-bit x * y[j] in rdx:rax
+    (addq (@ x8664::misc-data-offset (% r) (% i)) (% rax)) ;add in r[i]
+    (adcq ($ 0) (% rdx))
+    ;; add in carry digit
+    (addq (% c) (% rax))
+    (movl ($ 0) (%l c))
+    (adcq (% rdx) (% c))				   ;new carry digit
+    (movq (% rax) (@ x8664::misc-data-offset (% r) (% i))) ;update r[i]
+    (addq ($ '1) (% i))
+    (addq ($ '1) (% j))
+    (subq ($ '1) (% ylen))
+    (ja @loop)
+    (movq (% c) (@ x8664::misc-data-offset (% r) (% i)))
+    (single-value-return 4)))
 
 ;;; Multiply the (32-bit) digits X and Y, producing a 64-bit result.
 ;;; Add the 32-bit "prev" digit and the 32-bit carry-in digit to that 64-bit

@@ -800,13 +800,27 @@
 	     (let* ((len-a (%bignum-length a))
 		    (len-b (%bignum-length b))
 		    (len-res (+ len-a len-b))
-		    (res (%allocate-bignum len-res)) )
+		    (res (%allocate-bignum len-res)))
 	       (declare (bignum-index len-a len-b len-res))
 	       (dotimes (i len-a)
 		 (declare (type bignum-index i))
 		 (%multiply-and-add-loop a b res i len-b))
+	       res))
+	   (multiply-unsigned-bignums64 (a b)
+	     (let* ((len-a (ceiling (%bignum-length a) 2))
+		    (len-b (ceiling (%bignum-length b) 2))
+		    (len-res (+ len-a len-b))
+		    (res (%allocate-bignum (+ len-res len-res))))
+	       (declare (bignum-index len-a len-b len-res))
+	       (dotimes (i len-a)
+		 (declare (type bignum-index i))
+		 (%multiply-and-add-loop64 a b res i len-b))
 	       res)))
-      (let* ((res (with-negated-bignum-buffers a b multiply-unsigned-bignums)))
+      (let* ((res (with-negated-bignum-buffers a b
+					       #-x86-target
+					       multiply-unsigned-bignums
+					       #+x86-target
+					       multiply-unsigned-bignums64)))
 	(if signs-differ (negate-bignum-in-place res))
 	(%normalize-bignum-macro res)))))
 
