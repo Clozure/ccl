@@ -402,10 +402,10 @@
          ;; We may need to call #_NSInitializeProcess
          ;; under Cocotron.  If so, we'd need to do
          ;; so on standalone startup, too, and would
-         ;; have to heap-allocated the string vector
+         ;; have to have heap-allocated the string vector
          ;; and its strings.
          #+notyet
-         (with-string-vector (argv (kernel-path))
+         (with-string-vector (argv (list (kernel-path)))
            (#_NSInitializeProcess 1 argv)))
          
        ;(#_GetCurrentEventQueue)
