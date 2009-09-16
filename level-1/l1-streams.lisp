@@ -4224,7 +4224,8 @@
   string)
 
 (defstruct (string-output-stream-ioblock (:include string-stream-ioblock))
-  (index 0))
+  (index 0)
+  freelist)
 
 (defstatic *string-output-stream-class* (make-built-in-class 'string-output-stream 'string-stream 'basic-character-output-stream))
 (defstatic *string-output-stream-class-wrapper* (%class-own-wrapper *string-output-stream-class*))
@@ -4245,11 +4246,25 @@
 ;;; Should only be used for a stream whose class is exactly
 ;;; *string-output-stream-class* 
 (defun %close-string-output-stream (stream ioblock)
-  (when (eq (basic-stream.wrapper stream)
-            *string-output-stream-class-wrapper*)
+  (let* ((pool %string-output-stream-ioblocks%))
+    (when (and pool
+               (eq (basic-stream.wrapper stream)
+                   *string-output-stream-class-wrapper*)
+               (eq (string-output-stream-ioblock-freelist ioblock) pool))
     (without-interrupts
-     (setf (ioblock-stream ioblock) (pool.data %string-output-stream-ioblocks%)
-           (pool.data %string-output-stream-ioblocks%) ioblock))))
+     (setf (ioblock-stream ioblock) (pool.data pool)
+           (pool.data pool) ioblock)))))
+
+;;; If this is the sort of string stream whose ioblock we recycle and
+;;; there's a thread-local binding of the variable we use for a freelist,
+;;; return the value of that binding.
+(defun %string-stream-ioblock-freelist (stream)
+  (and stream
+       (eq (basic-stream.wrapper stream)
+           *string-output-stream-class-wrapper*)
+       (let* ((loc (%tcr-binding-location (%current-tcr) '%string-output-stream-ioblocks%)))
+         (and loc (%fixnum-ref loc)))))
+
 
 (defun create-string-output-stream-ioblock (&rest keys &key stream &allow-other-keys)
   (declare (dynamic-extent keys))
@@ -4281,6 +4296,7 @@
                      :write-char-when-locked-function write-char-function
                      :write-simple-string-function write-string-function
                      :force-output-function #'false
+                     :freelist (%string-stream-ioblock-freelist stream)
                      :close-function #'%close-string-output-stream)))
       (setf (basic-stream.state stream) ioblock)
       stream)))
