@@ -1371,6 +1371,7 @@
       (write-char (if (eql pc pc-mark) #\* #\Space) stream)
       (format stream "~@[L~d~]~vT~v<[~d]~> " label-p (+ pc-width 3) (+ pc-width 2) pc))))
 
+#+x86-target
 (defmethod prin1-value ((f function-inspector) stream value &optional data type)
   (declare (ignore value type))
   (if (atom data) ;; not a disassembly line
