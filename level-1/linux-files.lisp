@@ -963,8 +963,8 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
       (setf (%get-ptr argv argvpos) (%null-ptr))
       (funcall function argv))))
 
-(defmacro with-string-vector ((var &rest strings) &body body)
-  `(call-with-string-vector #'(lambda (,var) ,@body) (list ,@strings)))
+(defmacro with-string-vector ((var strings) &body body)
+  `(call-with-string-vector #'(lambda (,var) ,@body) ,strings))
 
 (defloadvar *max-os-open-files* #-windows-target (#_getdtablesize) #+windows-target 32)
 
