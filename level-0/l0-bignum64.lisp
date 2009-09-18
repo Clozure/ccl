@@ -821,7 +821,14 @@
 	(if signs-differ (negate-bignum-in-place res))
 	(%normalize-bignum-macro res)))))
 
+(defun multiply-bignum-and-fixnum (bignum fixnum)
+  (declare (type bignum-type bignum) (fixnum fixnum))
+  (if (eql fixnum 1)
+    bignum
+    (with-small-bignum-buffers ((big-fix fixnum))
+      (multiply-bignums bignum big-fix))))
 
+#+slower
 (defun multiply-bignum-and-fixnum (bignum fixnum)
   (declare (type bignum-type bignum) (fixnum fixnum))
   (if (eql fixnum 1)
