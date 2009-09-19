@@ -15,12 +15,10 @@
 ;;;      This software is offered "as is", without warranty of any kind.
 ;;;
 ;;;      Mod History, most recent first:
-;;;      8/17/9  version 0.2b1
-;;;              Added position history list and file history list.
-;;;      8/12/9  version 0.1b3
-;;;              Numerous interface suggestions, Alexander Repenning.
-;;;      8/10/9  version 0.1b1
-;;;              First cut.
+;;;      9/19/9  Added parse-over-block to list-definitions.
+;;;      8/17/9  Added position history list and file history list.
+;;;      8/12/9  Numerous interface suggestions, Alexander Repenning.
+;;;      8/10/9  First cut.
 ;;;
 ;;; ----------------------------------------------------------------------------
 
@@ -212,16 +210,19 @@
     (let* ((pane (slot-value hemlock 'gui::pane))
            (text-view (gui::text-pane-text-view pane))
            (buffer (gui::hemlock-buffer text-view))
-           (def-mark (clone (hi::buffer-start-mark buffer)))
-           (objc-mark (clone (hi::buffer-start-mark buffer)))
-           (def-alist (get-defs def-mark *def-search-pattern*))
-           (objc-alist (get-defs objc-mark *objc-defmethod-search-pattern* t)))
-      (when objc-alist
-        (setq def-alist
-              (if alpha-p
-                (merge 'list def-alist objc-alist #'string-lessp :key #'get-name)
-                (merge 'list def-alist objc-alist #'hi::mark< :key #'cdr))))
-      def-alist)))
+           (hi::*current-buffer* buffer))
+      (hemlock::parse-over-block (hi::mark-line (hi::buffer-start-mark buffer))
+                                 (hi::mark-line (hi::buffer-end-mark buffer)))
+      (let* ((def-mark (clone (hi::buffer-start-mark buffer)))
+             (objc-mark (clone (hi::buffer-start-mark buffer)))
+             (def-alist (get-defs def-mark *def-search-pattern*))
+             (objc-alist (get-defs objc-mark *objc-defmethod-search-pattern* t)))
+        (when objc-alist
+          (setq def-alist
+                (if alpha-p
+                  (merge 'list def-alist objc-alist #'string-lessp :key #'get-name)
+                  (merge 'list def-alist objc-alist #'hi::mark< :key #'cdr))))
+        def-alist))))
 
 (defun definition-info (mark &optional objc-p)
   "Returns (type name) or (type name signature specializer) for methods."
