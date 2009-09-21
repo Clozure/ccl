@@ -361,7 +361,7 @@
   ;;
   (:export
    #:invoke-modifying-buffer-storage
-   #:invoke-allowing-buffer-redisplay
+   #:invoke-allowing-buffer-display
    #:note-selection-set-by-search
    #:scroll-view
    #:ensure-selection-visible
