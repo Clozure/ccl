@@ -88,7 +88,7 @@
 ;; If we've done a (cocoa-specific) "beginEditing" on a buffer, finish that (to allow
 ;; layout, etc.)  Call thunk, and maybe restore the editing state after.
 (defmacro allowing-buffer-display ((buffer) &body body)
-  `(hemlock-ext::invoke-allowing-buffer-display ,buffer (lambda () ,@body)))
+  `(hemlock-ext:invoke-allowing-buffer-display ,buffer (lambda () ,@body)))
 
 
 ;;;; A couple funs to hack strings to symbols.

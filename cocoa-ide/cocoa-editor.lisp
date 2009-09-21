@@ -2194,7 +2194,7 @@
         0))
     0))
 
-(defun hemlock-ext::invoke-allowing-buffer-display (buffer thunk)
+(defun hemlock-ext:invoke-allowing-buffer-display (buffer thunk)
   ;; Call THUNK with the buffer's edit-level at 0, then restore the buffer's edit level.
   (let* ((level (hi::buffer-edit-level buffer)))
     (dotimes (i level) (buffer-document-end-editing buffer))
