@@ -2125,7 +2125,7 @@
   (setq sub-ch (char-upcase (require-type sub-ch 'base-char)))
   (unless (digit-char-p sub-ch 10)
     (let* ((def (cdr (nth-value 1 (%get-readtable-char disp-ch readtable)))))
-      (if (consp (cdr def))
+      (if (consp def)
         (cdr (assq sub-ch (cdr def)))
         (error "~A is not a dispatching macro character in ~s ." disp-ch readtable)))))
 
