@@ -110,8 +110,9 @@
 
 (bind-key "Insert File" #k"control-x control-r")
 (bind-key "Save File" #k"control-x control-s")
-(bind-key "Visit File" #k"control-x control-v")
 (bind-key "Write File" #k"control-x control-w")
+;(bind-key "Visit File" #k"control-x control-v")
+(bind-key "Find File" #k"control-x control-v")
 (bind-key "Find File" #k"control-x control-f")
 (bind-key "Backup File" #k"control-x meta-b")
 ;(bind-key "Save All Files" #k"control-x control-m")

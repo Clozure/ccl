@@ -299,6 +299,7 @@
 
 ;;;; Visiting and reverting files.
 
+#+No  ;; Dubious semantics in a document-centered model. Also, doesn't work, see bug #476.
 (defcommand "Visit File" (p &optional pathname (buffer (current-buffer)))
   "Replaces the contents of Buffer with the file Pathname.  The prefix
    argument is ignored.  The buffer is set to be writable, so its region
