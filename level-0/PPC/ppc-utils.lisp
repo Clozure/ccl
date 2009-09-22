@@ -599,8 +599,8 @@ be somewhat larger than what was specified)."
   (declare (ignore uvector))
   (error "watching objects not supported on PPC yet"))
 
-(defun %unwatch (watched)
-  (declare (ignore watched))
+(defun %unwatch (watched new)
+  (declare (ignore watched new))
   (error "watching objects not supported on PPC yet"))
 
 ;;; Make a list.  This can be faster than doing so by doing CONS
