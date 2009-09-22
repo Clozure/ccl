@@ -92,18 +92,7 @@
       (handler-case (edit-definition fun-name)
         (error (c) (editor-error (format nil "~a" c)))))))
       
-
-#|
-;;; "Edit Command Definition" is a hack due to creeping evolution in
-;;; GO-TO-DEFINITION.  We specify :function type and a name with "-COMMAND"
-;;; instead of :command type and the real command name because this causes
-;;; the right pattern to be created for searching.  We could either specify
-;;; that you always edit command definitions with this command (breaking
-;;; "Go to Definition" for commands called as functions), fixing the code,
-;;; or we can hack this command so everything works.
-;;;
 (defcommand "Edit Command Definition" (p)
-  "Prompts for command definition name and goes to it for editing."
   "Prompts for command definition name and goes to it for editing."
   (multiple-value-bind
       (name command)
@@ -115,10 +104,11 @@
           (values (command-name cmd) cmd))
         (prompt-for-keyword :tables (list *command-names*)
                             :prompt "Command to edit: "))
-    (go-to-definition (fun-defined-from-pathname (command-function command))
-		      :function
-		      (concatenate 'simple-string name "-COMMAND"))))
+    (declare (ignore name))
+    (handler-case (edit-definition (command-function command))
+      (error (c) (editor-error (format nil "~a" c))))))
 
+#|
 ;;; FUN-DEFINED-FROM-PATHNAME takes a symbol or function object.  It
 ;;; returns a pathname for the file the function was defined in.  If it was
 ;;; not defined in some file, then nil is returned.
