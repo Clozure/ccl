@@ -225,4 +225,13 @@
                     (push e new)))
                 (setq entries new)))))))
     entries))
-                
+
+(defun nx2-replace-var-refs (var value)
+  (when (acode-p value)
+    (let* ((op (acode-operator value))
+           (operands (acode-operands value)))
+      (when (typep op 'fixnum)
+        (dolist (ref (var-ref-forms var) (setf (var-ref-forms var) nil))
+          (when (acode-p ref)
+            (setf (acode-operator ref) op
+                  (acode-operands ref) operands)))))))

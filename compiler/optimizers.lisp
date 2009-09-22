@@ -1225,12 +1225,9 @@
       `(--2 ,n0 ,n1)
       `(%negate ,n0))))
 
-(define-compiler-macro * (&whole w &environment env &optional (n0 nil n0p) (n1 nil n1p) &rest more)
+(define-compiler-macro * (&optional (n0 nil n0p) (n1 nil n1p) &rest more)
   (if more
-    (let ((type (nx-form-type w env)))
-      (if (and type (numeric-type-p type)) ; go pairwise if type known, else not
-        `(*-2 ,n0 (* ,n1 ,@more))
-        w))
+    `(*-2 ,n0 (* ,n1 ,@more))
     (if n1p
       `(*-2 ,n0 ,n1)
       (if n0p

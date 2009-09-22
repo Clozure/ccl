@@ -321,8 +321,9 @@
 ;;; (assuming, of course, that anyone should ...)
 (defun nx-untyped-form (form)
   (while (and (consp form)
-              (eq (%car form) (%nx1-operator typed-form))
-              (null (nth 3 form)))
+              (or (and (eq (%car form) (%nx1-operator typed-form))
+                       (null (nth 3 form)))
+                  (eq (%car form) (%nx1-operator type-asserted-form))))
     (setq form (%caddr form)))
   form)
 
@@ -1253,7 +1254,7 @@
   (let ((op (if (afunc-inherited-vars afunc)
               (%nx1-operator closed-function)
               (%nx1-operator simple-function)))
-        (ref (afunc-ref-form afunc)))
+        (ref (acode-unwrapped-form (afunc-ref-form afunc))))
     (if ref
       (%rplaca ref op) ; returns ref
       (setf (afunc-ref-form afunc)
@@ -1469,7 +1470,7 @@
             (list (make-acode (%nx1-operator cons) (nx1-form nil) (nx1-form nil)))
             (make-acode
              (%nx1-operator catch)
-             (make-acode (%nx1-operator lexical-reference) tagvar)
+             (nx-make-lexical-reference tagvar)
              body)
             0)))))))
 
@@ -1957,8 +1958,7 @@
                         (setq body (make-acode
                                     (%nx1-operator debind)
                                     nil
-                                    (make-acode 
-                                     (%nx1-operator lexical-reference) var)
+                                    (nx-make-lexical-reference var)
                                     nil 
                                     nil 
                                     rest 

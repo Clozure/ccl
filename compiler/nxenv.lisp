@@ -25,6 +25,13 @@
   (require 'lispequ)
 )
 
+#-bootstrapped
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (when (and (macro-function 'var-decls)
+             (not (macro-function 'var-ref-forms)))
+    (setf (macro-function 'var-ref-forms)
+          (macro-function 'var-decls))))
+
 #+ppc-target (require "PPCENV")
 #+x8632-target (require "X8632ENV")
 #+x8664-target (require "X8664ENV")
@@ -123,7 +130,7 @@
      (tag-label . 0)
      (local-tagbody . #.operator-single-valued-mask)
      (%fixnum-set-natural . #.operator-single-valued-mask)
-     (spushl . #.operator-single-valued-mask)
+     (type-asserted-form . 0)
      (spushp . #.operator-single-valued-mask)
      (simple-function . #.operator-single-valued-mask)
      (closed-function . #.operator-single-valued-mask)
@@ -486,12 +493,16 @@
 
 ; More Bootstrapping Shit.
 (defmacro acode-operator (form)
-  ; Gak.
+  ;; Gak.
   `(%car ,form))
 
 (defmacro acode-operand (n form)
-  ; Gak. Gak.
+  ;; Gak. Gak.
   `(nth ,n (the list ,form)))
+
+(defmacro acode-operands (form)
+  ;; Gak. Gak. Gak.
+  `(%cdr ,form))
 
 (defmacro acode-p (x)
   " A big help this is ..."

@@ -2110,9 +2110,9 @@
   (let* ((arch (backend-target-arch *target-backend*))
          (is-node  (member type-keyword (arch::target-gvector-types arch))))
     (if is-node
-      (cond ((eq form *nx-nil*)
+      (cond ((nx-null form)
              (target-nil-value))
-            ((eq form *nx-t*)
+            ((nx-t form)
              (+ (target-nil-value) (arch::target-t-offset arch)))
             (t
              (let* ((fixval (acode-fixnum-form-p form)))
@@ -3547,8 +3547,8 @@
 (defun x862-acode-operator-supports-push (form)
   (let ((value (acode-unwrapped-form-value form)))
     (when (acode-p value)
-      (if (or (eq value *nx-t*)
-              (eq value *nx-nil*)
+      (if (or (nx-t value)
+              (nx-null value)
               (let* ((operator (acode-operator value)))
                 (member operator *x862-operator-supports-push*)))
         value))))
@@ -3695,12 +3695,12 @@
       (^))))
 
 (defun x862-compare-register-to-constant (seg vreg xfer ireg cr-bit true-p constant)
-  (cond ((eq constant *nx-nil*)
+  (cond ((nx-null constant)
          (x862-compare-register-to-nil seg vreg xfer ireg cr-bit true-p))
         (t
          (with-x86-local-vinsn-macros (seg vreg xfer)
            (when vreg
-             (if (eq constant *nx-t*)
+             (if (nx-t constant)
                (! compare-to-t ireg)
                (let* ((imm (x862-immediate-operand constant))
                       (reg (x862-register-constant-p imm))) 
@@ -4367,12 +4367,13 @@
                    ;; The value returned is acode.
                    (let* ((bits (nx-var-bits var)))
                      (if (%ilogbitp $vbitpuntable bits)
-                       (nx-untyped-form initform)))))
+                       initform))))
             (declare (inline x862-puntable-binding-p))
             (if (and (not (x862-load-ea-p val))
                      (setq puntval (x862-puntable-binding-p var val)))
               (progn
                 (nx-set-var-bits var (%ilogior (%ilsl $vbitpunted 1) bits))
+                (nx2-replace-var-refs var puntval)
                 (x862-set-var-ea seg var puntval))
               (progn
                 (let* ((vloc *x862-vstack*)
@@ -4480,7 +4481,7 @@
 (defun x862-dbind (seg value sym)
   (with-x86-local-vinsn-macros (seg)
     (let* ((ea-p (x862-load-ea-p value))
-           (nil-p (unless ea-p (eq (setq value (nx-untyped-form value)) *nx-nil*)))
+           (nil-p (unless ea-p (nx-null (setq value (nx-untyped-form value)))))
            (self-p (unless ea-p (and (or
                                       (eq (acode-operator value) (%nx1-operator bound-special-ref))
                                       (eq (acode-operator value) (%nx1-operator special-ref)))
@@ -4997,8 +4998,8 @@
   (if (x862-form-typep valform 'fixnum)
     nil
     (let* ((val (acode-unwrapped-form-value valform)))
-      (if (or (eq val *nx-t*)
-              (eq val *nx-nil*)
+      (if (or (nx-t val)
+              (nx-null val)
               (and (acode-p val)
                    (let* ((op (acode-operator val)))
                      (or (eq op (%nx1-operator fixnum)) #|(eq op (%nx1-operator immediate))|#))))
@@ -6337,6 +6338,10 @@
     (x862-typechecked-form seg vreg xfer typespec form)
     (x862-form seg vreg xfer form)))
 
+(defx862 x862-type-asserted-form type-asserted-form (seg vreg xfer typespec form &optional check)
+  (declare (ignore typespec check))
+  (x862-form seg vreg xfer form))
+
 (defx862 x862-%primitive %primitive (seg vreg xfer &rest ignore)
   (declare (ignore seg vreg xfer ignore))
   (compiler-bug "You're probably losing big: using %primitive ..."))
@@ -6733,13 +6738,13 @@
     (multiple-value-bind (cr-bit true-p) (acode-condition-to-x86-cr-bit cc)
       (let* ((f1 (acode-unwrapped-form form1))
              (f2 (acode-unwrapped-form form2)))
-        (cond ((or (eq f1 *nx-nil*)
-                   (eq f1 *nx-t*)
+        (cond ((or (nx-null f1 )
+                   (nx-t f1)
                    (and (acode-p f1)
                         (eq (acode-operator f1) (%nx1-operator immediate))))
                (x862-compare-register-to-constant seg vreg xfer (x862-one-untargeted-reg-form seg form2 ($ *x862-arg-z*)) cr-bit true-p f1))
-              ((or (eq f2 *nx-nil*)
-                   (eq f2 *nx-t*)
+              ((or (nx-null f2)
+                   (nx-t f2)
                    (and (acode-p f2)
                         (eq (acode-operator f2) (%nx1-operator immediate))))
                (x862-compare-register-to-constant seg vreg xfer
