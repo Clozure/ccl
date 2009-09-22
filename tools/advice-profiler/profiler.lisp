@@ -120,7 +120,7 @@
   (defun get-real-time ()
     (ccl:rlet ((ts :mach_timespec))
       (unless (zerop (#_clock_get_time (%get-ptr clock-port) ts))
-        (error "error reading clock ~A: ~A~%" id (ccl::%strerror (ccl::%get-errno))))
+        (error "error reading Mach clock: ~A~%" (ccl::%strerror (ccl::%get-errno))))
       (mach-timespec->nanoseconds ts))))
 
 ;;; For non-Darwin platforms, we use clock_gettime() with the
