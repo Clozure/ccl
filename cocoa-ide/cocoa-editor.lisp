@@ -1485,31 +1485,43 @@
                                (and (eql (#/type event) #$NSLeftMouseDown)
                                     (> (#/clickCount event) 1))))))
            (let* ((cache (hemlock-buffer-string-cache (#/hemlockString textstorage)))
-                  (buffer (if cache (buffer-cache-buffer cache))))
-             (when (and buffer (string= (hi::buffer-major-mode buffer) "Lisp"))
-               (let* ((hi::*current-buffer* buffer))
-                 (hi::with-mark ((m1 (hi::buffer-point buffer)))
-                   (setq index (hi:mark-absolute-position m1))
-                   (hemlock::pre-command-parse-check m1)
-                   (when (hemlock::valid-spot m1 nil)
-                     (cond ((eql (hi::next-character m1) #\()
-                            (hi::with-mark ((m2 m1))
-                              (when (hemlock::list-offset m2 1)
-                                (ns:init-ns-range r index (- (hi:mark-absolute-position m2) index))
-                                (return-from HANDLED r))))
-                           ((eql (hi::previous-character m1) #\))
-                            (hi::with-mark ((m2 m1))
-                              (when (hemlock::list-offset m2 -1)
-                                (ns:init-ns-range r (hi:mark-absolute-position m2) (- index (hi:mark-absolute-position m2)))
-                                (return-from HANDLED r))))))))))))       
-       (call-next-method proposed g)
-       #+debug
-       (#_NSLog #@"range = %@, proposed = %@, granularity = %d"
-                :address (#_NSStringFromRange r)
-                :address (#_NSStringFromRange proposed)
-                :<NSS>election<G>ranularity g))))
+                  (buffer (buffer-cache-buffer cache))
+                  (hi::*current-buffer* buffer)
+                  (point (hi::buffer-point buffer)))
+             (hi::with-mark ((mark point))
+               (move-hemlock-mark-to-absolute-position mark cache index)
+               (when (selection-offset-for-double-click buffer mark)
+                 ;; Act as if we started the selection at the other end, so the heuristic
+                 ;; in #/selectionRangeForProposedRange does the right thing.  ref bug #565.
+                 (hi::move-mark point mark)
+                 (let ((start index)
+                       (end (hi::mark-absolute-position mark)))
+                   (when (< end start) (rotatef start end))
+                   (ns:init-ns-range r start (- end start)))
+                 #+debug
+                 (#_NSLog #@"range = %@, proposed = %@, granularity = %d"
+                          :address (#_NSStringFromRange r)
+                          :address (#_NSStringFromRange proposed)
+                          :<NSS>election<G>ranularity g)
+                 (return-from HANDLED r))))))
+       (prog1
+           (call-next-method proposed g)
+         #+debug
+         (#_NSLog #@"range = %@, proposed = %@, granularity = %d"
+                  :address (#_NSStringFromRange r)
+                  :address (#_NSStringFromRange proposed)
+                  :<NSS>election<G>ranularity g)))))
 
-
+;; Return nil to use the default Cocoa selection, which will be word for double-click, line for triple.
+;; TODO: make this consistent with "current sexp".
+(defun selection-offset-for-double-click (buffer mark)
+  (when (string= (hi::buffer-major-mode buffer) "Lisp") ;; gag
+    (hemlock::pre-command-parse-check mark)
+    (when (hemlock::valid-spot mark nil)
+      (cond ((eql (hi::next-character mark) #\()
+             (hemlock::list-offset mark 1))
+            ((eql (hi::previous-character mark) #\))
+             (hemlock::list-offset mark -1))))))
 
 (defun append-output (view string)
   (assume-cocoa-thread)
@@ -1528,10 +1540,9 @@
      (r :<NSR>ange)
      (affinity :<NSS>election<A>ffinity)
      (still-selecting :<BOOL>))
-  #+debug 
-  (#_NSLog #@"Set selected range called: location = %d, length = %d, affinity = %d, still-selecting = %d"
-           :int (pref r :<NSR>ange.location)
-           :int (pref r :<NSR>ange.length)
+  #+debug
+  (#_NSLog #@"Set selected range called: range = %@, affinity = %d, still-selecting = %d"
+           :address (#_NSStringFromRange r)
            :<NSS>election<A>ffinity affinity
            :<BOOL> (if still-selecting #$YES #$NO))
   #+debug

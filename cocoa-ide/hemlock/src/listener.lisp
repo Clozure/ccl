@@ -597,17 +597,15 @@ between the region's start and end, and if there are no ill-formed expressions i
 
 
 (defcommand "Editor Evaluate Defun" (p)
-  "Evaluates the current or next top-level form in the editor Lisp.
+  "Evaluates the current or next top-level form.
    If the current region is active, this evaluates the region."
-  "Evaluates the current or next top-level form in the editor Lisp."
   (declare (ignore p))
   (if (region-active-p)
     (editor-evaluate-region-command nil)
     (eval-region (defun-region (current-point)))))
 
 (defcommand "Editor Evaluate Region" (p)
-  "Evaluates lisp forms between the point and the mark in the editor Lisp."
-  "Evaluates lisp forms between the point and the mark in the editor Lisp."
+  "Evaluates lisp forms between the point and the mark"
   (declare (ignore p))
   (if (region-active-p)
     (eval-region (current-region))
@@ -630,9 +628,7 @@ between the region's start and end, and if there are no ill-formed expressions i
 
 (defcommand "Editor Re-evaluate Defvar" (p)
   "Evaluate the current or next top-level form if it is a DEFVAR.  Treat the
-   form as if the variable is not bound.  This occurs in the editor Lisp."
-  "Evaluate the current or next top-level form if it is a DEFVAR.  Treat the
-   form as if the variable is not bound.  This occurs in the editor Lisp."
+   form as if the variable is not bound."
   (declare (ignore p))
   (with-input-from-region (stream (defun-region (current-point)))
     (clear-echo-area)
