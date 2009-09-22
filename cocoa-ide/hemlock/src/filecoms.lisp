@@ -348,9 +348,7 @@
    current buffer. Without, reverts to the last checkpoint or last saved
    version, whichever is more recent."
   (declare (ignore p))
-  (let* ((doc (hi::buffer-document (current-buffer))))
-    (when doc
-      (hi::revert-document doc)))
+  (hemlock-ext:revert-hemlock-buffer (current-buffer))
   (clear-echo-area))
 
 
@@ -364,7 +362,7 @@
    read the file into it."
   (declare (ignore p))
   (hi::allowing-buffer-display ((current-buffer))
-    (hi::open-document)))
+    (hemlock-ext:open-hemlock-buffer :pathname :prompt)))
   
 
 #|
@@ -565,24 +563,17 @@
   (invoke-hook write-file-hook buffer))
  
 (defcommand "Write File" (p &optional (buffer (current-buffer)))
-  "Writes the contents of Buffer, which defaults to the current buffer to
-  the file named by Pathname.  The prefix argument is ignored."
-  "Prompts for a file to write the contents of the current Buffer to.
+  "Prompts for a filename, changes the buffer pathname to it and saves it.
   The prefix argument is ignored."
   (declare (ignore p))
-  (let* ((document (hi::buffer-document buffer)))
-    (when document
-      (hi::save-hemlock-document-as document))))
+  (hemlock-ext:save-hemlock-buffer buffer :pathname :prompt))
 
 (defcommand "Save To File" (p &optional (buffer (current-buffer)))
-  "Writes the contents of Buffer, which defaults to the current buffer to
-  the file named by Pathname.  The prefix argument is ignored."
-  "Prompts for a file to write the contents of the current Buffer to.
+  "Prompts for a filename and writes a copy of the buffer to it.  Buffer's
+   pathname (and modified state) is unchanged.
   The prefix argument is ignored."
   (declare (ignore p))
-  (let* ((document (hi::buffer-document buffer)))
-    (when document
-      (hi::save-hemlock-document-to document))))
+  (hemlock-ext:save-hemlock-buffer buffer :pathname :prompt :copy t))
 
 (defcommand "Save File" (p &optional (buffer (current-buffer)))
   "Writes the contents of the current buffer to the associated file.  If there
@@ -590,9 +581,7 @@
   "Writes the contents of the current buffer to the associated file."
   (declare (ignore p))
   (when (buffer-modified buffer)
-    (let* ((document (hi::buffer-document buffer)))
-      (when document
-        (hi::save-hemlock-document document)))))
+    (hemlock-ext:save-hemlock-buffer buffer)))
 
 (defhvar "Save All Files Confirm"
   "When non-nil, prompts for confirmation before writing each modified buffer."

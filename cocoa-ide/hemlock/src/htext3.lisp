@@ -116,7 +116,7 @@
                      character)
                (incf (current-left-open-pos))))))
       (adjust-line-origins-forward line)
-      (buffer-note-insertion buffer mark 1))))
+      (hemlock-ext:buffer-note-insertion buffer mark 1))))
 
 
 (defun insert-string (mark string &key (charprops :neighbor))
@@ -169,7 +169,7 @@
               (%sp-byte-blt string 0 (current-open-chars) (current-left-open-pos) new)
               (setf (current-left-open-pos) new))))
 	  (adjust-line-origins-forward line)
-	  (buffer-note-insertion buffer mark (length string)))))))
+	  (hemlock-ext:buffer-note-insertion buffer mark (length string)))))))
 
 (defconstant line-number-interval-guess 8
   "Our first guess at how we should number an inserted region's lines.")
@@ -251,7 +251,7 @@
 		    (+ last-charpos (- this-charpos charpos)))))
 	    (setf (line-next previous) new-line  previous new-line))
           (adjust-line-origins-forward line)
-          (buffer-note-insertion buffer  mark nins)))))))
+          (hemlock-ext:buffer-note-insertion buffer  mark nins)))))))
 
 (defun ninsert-region (mark region)
   "Inserts the given Region at the Mark, possibly destroying the Region.
@@ -333,7 +333,7 @@
 	  (maybe-move-some-marks (this-charpos line last-line) charpos
 	    (+ last-charpos (- this-charpos charpos)))
           (adjust-line-origins-forward line)
-          (buffer-note-insertion buffer mark nins)))))))
+          (hemlock-ext:buffer-note-insertion buffer mark nins)))))))
 
 (defun paste-characters (position count string)
   "Replace COUNT characters at POSITION with STRING.  POSITION is the

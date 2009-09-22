@@ -583,8 +583,12 @@ between the region's start and end, and if there are no ill-formed expressions i
 		    &key
 		    (package (variable-value 'current-package :buffer (current-buffer)))
 		    (path (buffer-pathname (current-buffer))))
-  (evaluate-input-selection
-   (list package path (region-to-string region) (mark-absolute-position (region-start region)))))
+  (ccl::application-ui-operation ccl:*application*
+                                 :eval-selection
+                                 (list package
+                                       path
+                                       (region-to-string region)
+                                       (mark-absolute-position (region-start region)))))
 
 
 (defun editor-compile-region (region &optional quiet)

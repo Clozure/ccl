@@ -666,10 +666,6 @@
       (error "No listener process found for ~s" listener-buffer))
     (enqueue-listener-input (cocoa-listener-process-input-stream process) string)))
 
-
-(defun hemlock::evaluate-input-selection (selection)
-  (ccl::application-ui-operation *application* :eval-selection selection))
-  
 (defmethod ui-object-choose-listener-for-selection ((app ns:ns-application)
 						    selection)
   (declare (ignore selection))

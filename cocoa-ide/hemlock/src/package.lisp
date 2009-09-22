@@ -363,6 +363,11 @@
    #:invoke-modifying-buffer-storage
    #:invoke-allowing-buffer-display
    #:note-selection-set-by-search
+   #:buffer-note-font-change
+   #:buffer-note-insertion
+   #:buffer-note-modification
+   #:buffer-note-deletion
+   #:buffer-encoding-name
    #:scroll-view
    #:ensure-selection-visible
    #:report-hemlock-error
@@ -373,12 +378,16 @@
    #:note-buffer-unsaved
    #:read-only-listener-p
    #:all-hemlock-views
+   #:open-hemlock-buffer
+   #:save-hemlock-buffer
+   #:revert-hemlock-buffer
    #:open-sequence-dialog
    #:execute-in-file-view
    #:change-active-pane
    #:send-string-to-listener
    #:buffer-process-description
    #:raise-buffer-view
+   #:string-to-clipboard
    ))
 
 (defpackage :hi

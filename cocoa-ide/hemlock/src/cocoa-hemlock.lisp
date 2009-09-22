@@ -82,5 +82,5 @@
 
 ;;; Clipboard
 (defun region-to-clipboard (region)
-  (string-to-clipboard (region-to-string region)))
+  (hemlock-ext:string-to-clipboard (region-to-string region)))
 

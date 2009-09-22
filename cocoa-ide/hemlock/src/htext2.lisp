@@ -197,7 +197,7 @@
 	    (t
 	     (setf (char (the simple-string (current-open-chars)) (current-right-open-pos))
 		   character)
-	     (hi::buffer-note-modification buffer mark 1)))))
+	     (hemlock-ext:buffer-note-modification buffer mark 1)))))
   character)
 
 ;;; %Set-Previous-Character  --  Internal

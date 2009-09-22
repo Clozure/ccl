@@ -112,7 +112,8 @@ i-search, and prompted input (e.g. m-x)"
       (let ((ch (next-character start)))
         (when (alpha-char-p ch)
           (setf (next-character start) (char-upcase ch))
-          (hi::buffer-note-modification (current-buffer) start 1)
+          ;; Yikes!  Somebody should do this at a lower level!
+          (hemlock-ext:buffer-note-modification (current-buffer) start 1)
           (mark-after start)
           (filter-region #'string-downcase region)
           (move-mark start end)

@@ -85,7 +85,7 @@ other than :DEFAULT"
                          ((:lf nil))
                          ((:cr) "CR")
                          ((:crlf) "CRLF")))
-                      (encoding-name (or (buffer-encoding-name buffer)
+                      (encoding-name (or (hemlock-ext:buffer-encoding-name buffer)
 					 "Default")))
                  (format nil "[~a~@[ ~a~]] "
                          encoding-name line-termination-string))))
@@ -121,7 +121,7 @@ other than :DEFAULT"
  :name :modifiedp
  :function #'(lambda (buffer)
 	       "Returns \"* \" if buffer is modified, or \"  \"."
-	       (let ((modifiedp (buffer-document-modified buffer)))
+	       (let ((modifiedp (buffer-modified buffer)))
 		 (if modifiedp
 		     "* "
 		     "  "))))

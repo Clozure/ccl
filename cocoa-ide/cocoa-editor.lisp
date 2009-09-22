@@ -2143,13 +2143,6 @@
     (activate-hemlock-view tv)
    frame))
 
-
-(defun hi::lock-buffer (b)
-  (grab-lock (hi::buffer-lock b)))
-
-(defun hi::unlock-buffer (b)
-  (release-lock (hi::buffer-lock b))) 
-
 (defun hemlock-ext:invoke-modifying-buffer-storage (buffer thunk)
   (assume-cocoa-thread)
   (when buffer ;; nil means just get rid of any prior buffer
@@ -2164,7 +2157,6 @@
 	    (funcall thunk))
 	(buffer-document-end-editing buffer)
 	(buffer-document-begin-editing old)))))
-
 
 (defun buffer-document-end-editing (buffer)
   (when buffer
@@ -2186,7 +2178,7 @@
   (assume-cocoa-thread) ;; see comment in #/editingInProgress
   (slot-value (slot-value document 'textstorage) 'edit-count))
 
-(defun hi::buffer-edit-level (buffer)
+(defun buffer-edit-level (buffer)
   (if buffer
     (let* ((document (hi::buffer-document buffer)))
       (if document
@@ -2196,14 +2188,14 @@
 
 (defun hemlock-ext:invoke-allowing-buffer-display (buffer thunk)
   ;; Call THUNK with the buffer's edit-level at 0, then restore the buffer's edit level.
-  (let* ((level (hi::buffer-edit-level buffer)))
+  (let* ((level (buffer-edit-level buffer)))
     (dotimes (i level) (buffer-document-end-editing buffer))
     (unwind-protect
         (funcall thunk)
       (dotimes (i level) (buffer-document-begin-editing buffer)))))
 
 
-(defun hi::buffer-document-modified (buffer)
+(defun buffer-document-modified (buffer)
   (let* ((doc (hi::buffer-document buffer)))
     (if doc
       (#/isDocumentEdited doc))))
@@ -2228,7 +2220,7 @@
 
 
 
-(defun hi::buffer-note-font-change (buffer region font)
+(defun hemlock-ext:buffer-note-font-change (buffer region font)
   (when (hi::bufferp buffer)
     (let* ((document (hi::buffer-document buffer))
 	   (textstorage (if document (slot-value document 'textstorage)))
@@ -2252,7 +2244,7 @@
       
 ;; Note that inserted a string of length n at mark.  Assumes this is called after
 ;; buffer marks were updated.
-(defun hi::buffer-note-insertion (buffer mark n)
+(defun hemlock-ext:buffer-note-insertion (buffer mark n)
   (when (hi::bufferp buffer)
     (let* ((document (hi::buffer-document buffer))
 	   (textstorage (if document (slot-value document 'textstorage))))
@@ -2267,7 +2259,7 @@
                                             pos
                                             n))))))
 
-(defun hi::buffer-note-modification (buffer mark n)
+(defun hemlock-ext:buffer-note-modification (buffer mark n)
   (when (hi::bufferp buffer)
     (let* ((document (hi::buffer-document buffer))
 	   (textstorage (if document (slot-value document 'textstorage))))
@@ -2278,7 +2270,7 @@
                                               n)))))
   
 
-(defun hi::buffer-note-deletion (buffer mark n)
+(defun hemlock-ext:buffer-note-deletion (buffer mark n)
   (when (hi::bufferp buffer)
     (let* ((document (hi::buffer-document buffer))
 	   (textstorage (if document (slot-value document 'textstorage))))
@@ -2498,7 +2490,7 @@
           (setf (gethash encoding *encoding-name-hash*)
                 (lisp-string-from-nsstring (nsstring-for-nsstring-encoding encoding)))))))
 
-(defun hi::buffer-encoding-name (buffer)
+(defun hemlock-ext:buffer-encoding-name (buffer)
   (let ((doc (hi::buffer-document buffer)))
     (and doc (document-encoding-name doc))))
 
@@ -2682,7 +2674,7 @@
     as buf = (and (typep win 'hemlock-frame) (hemlock-view win))
     when buf collect buf))
 
-(defmethod hi::document-panes ((document hemlock-editor-document))
+(defmethod document-panes ((document hemlock-editor-document))
   (let* ((ts (slot-value document 'textstorage))
 	 (panes ()))
     (for-each-textview-using-storage
@@ -3055,21 +3047,32 @@
                 (nsinteger-to-nsstring-encoding (#/tag (#/selectedItem popup))))))
       result)))
   
-(defun hi::open-document ()
+(defun hemlock-ext:open-hemlock-buffer (&key (pathname :prompt))
+  (assert (eq pathname :prompt)) ;; TODO: should handle pathname
   (#/performSelectorOnMainThread:withObject:waitUntilDone:
    (#/sharedDocumentController hemlock-document-controller)
    (@selector #/openDocument:) +null-ptr+ t))
   
-(defmethod hi::save-hemlock-document ((self hemlock-editor-document))
+(defun hemlock-ext:save-hemlock-buffer (buffer &key pathname copy)
+  (let ((doc (hi::buffer-document buffer)))
+    (cond (copy
+           (assert (eq pathname :prompt)) ;; TODO: should handle pathname
+           (save-hemlock-document-as doc))
+          ((null pathname)
+           (save-hemlock-document doc))
+          (t
+           (assert (eq pathname :prompt)) ;; TODO: should handle pathname
+           (save-hemlock-document-to doc)))))
+
+(defmethod save-hemlock-document ((self hemlock-editor-document))
   (#/performSelectorOnMainThread:withObject:waitUntilDone:
    self (@selector #/saveDocument:) +null-ptr+ t))
 
-
-(defmethod hi::save-hemlock-document-as ((self hemlock-editor-document))
+(defmethod save-hemlock-document-as ((self hemlock-editor-document))
   (#/performSelectorOnMainThread:withObject:waitUntilDone:
    self (@selector #/saveDocumentAs:) +null-ptr+ t))
 
-(defmethod hi::save-hemlock-document-to ((self hemlock-editor-document))
+(defmethod save-hemlock-document-to ((self hemlock-editor-document))
   (#/performSelectorOnMainThread:withObject:waitUntilDone:
    self (@selector #/saveDocumentTo:) +null-ptr+ t))
 
@@ -3096,7 +3099,7 @@
                      new-title targetname cfbundlename #$NSLiteralSearch r))
                   (#/setTitle: item new-title)
                   (#/release new-title))))))))))
-              
+
 (defun initialize-user-interface ()
   ;; The first created instance of an NSDocumentController (or
   ;; subclass thereof) becomes the shared document controller.  So it
@@ -3154,7 +3157,7 @@
     (#/declareTypes:owner: pb (string-pasteboard-types) nil)
     (#/setString:forType: pb string #&NSStringPboardType)))
     
-(defun hi::string-to-clipboard (string)
+(defun hemlock-ext:string-to-clipboard (string)
   (when (> (length string) 0)
     (#/performSelectorOnMainThread:withObject:waitUntilDone:
      *nsapp* (@selector #/stringToPasteBoard:) (%make-nsstring string) t)))
@@ -3276,12 +3279,14 @@
 	(#/makeKeyAndOrderFront: window self)))
     doc))
 
-(defun hi::revert-document (doc)
-  (#/performSelectorOnMainThread:withObject:waitUntilDone:
-   doc
-   (@selector #/revertDocumentToSaved:)
-   +null-ptr+
-   t))
+(defun hemlock-ext:revert-hemlock-buffer (buffer)
+  (let* ((doc (hi::buffer-document buffer)))
+    (when doc
+      (#/performSelectorOnMainThread:withObject:waitUntilDone:
+       doc
+       (@selector #/revertDocumentToSaved:)
+       +null-ptr+
+       t))))
 
 (defun hemlock-ext:raise-buffer-view (buffer &optional action)
   "Bring a window containing buffer to front and then execute action in

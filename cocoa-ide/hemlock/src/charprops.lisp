@@ -478,7 +478,7 @@
 	       (add-line-charprop-value line name value :start start))))
       (let ((n (count-characters (region start-mark end-mark)))
 	    (buffer (line-%buffer start-line)))
-	(buffer-note-modification buffer mark n)))))
+	(hemlock-ext:buffer-note-modification buffer mark n)))))
 
 (defun find-line-charprop-value (line name value &key (start 0) end)
   (unless end

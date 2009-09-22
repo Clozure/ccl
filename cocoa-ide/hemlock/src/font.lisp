@@ -37,7 +37,7 @@
     (push font-start (line-marks start-line))
     (push font-end (line-marks end-line))
     (add-buffer-font-region buffer region)
-    (buffer-note-font-change buffer region font)
+    (hemlock-ext:buffer-note-font-change buffer region font)
     region))
 
 

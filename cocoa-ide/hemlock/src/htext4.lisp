@@ -53,7 +53,7 @@
                                  (if (<= pos bound) (current-left-open-pos) (- pos n))
                                  pos)))))
           (adjust-line-origins-forward line)
-          (buffer-note-deletion buffer mark n)
+          (hemlock-ext:buffer-note-deletion buffer mark n)
           t)))
      
      ;; Deleting some newlines, punt out to delete-region.
@@ -142,7 +142,7 @@
 		   (setf (line-next first-line) next)
 		   (when next (setf (line-previous next) first-line))))))
         (adjust-line-origins-forward first-line)
-        (buffer-note-deletion buffer start ndel)))))
+        (hemlock-ext:buffer-note-deletion buffer start ndel)))))
 
 
 
@@ -261,7 +261,7 @@
                        (mark saved-line 0 :right-inserting)
                        (mark last-line last-charpos :left-inserting))))))
           (adjust-line-origins-forward first-line)
-          (buffer-note-deletion buffer start ndel)))))))
+          (hemlock-ext:buffer-note-deletion buffer start ndel)))))))
 
 
 
@@ -444,6 +444,6 @@
 			(setf (mark-charpos m) first)
 			(setf (mark-line m) start-line)
 			(push m (line-marks start-line)))))))))
-    (hi::buffer-note-modification buffer origin count)
+    (hemlock-ext:buffer-note-modification buffer origin count)
     (delete-mark origin)
     region))
