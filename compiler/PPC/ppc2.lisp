@@ -3753,12 +3753,13 @@
                    ; The value returned is acode.
                    (let* ((bits (nx-var-bits var)))
                      (if (%ilogbitp $vbitpuntable bits)
-                       (nx-untyped-form initform)))))
+                       initform))))
             (declare (inline ppc2-puntable-binding-p))
             (if (and (not (ppc2-load-ea-p val))
                      (setq puntval (ppc2-puntable-binding-p var val)))
               (progn
                 (nx-set-var-bits var (%ilogior (%ilsl $vbitpunted 1) bits))
+                (nx2-replace-var-refs var puntval)
                 (ppc2-set-var-ea seg var puntval))
               (progn
                 (let* ((vloc *ppc2-vstack*)
@@ -3852,7 +3853,7 @@
 (defun ppc2-dbind (seg value sym)
   (with-ppc-local-vinsn-macros (seg)
     (let* ((ea-p (ppc2-load-ea-p value))
-           (nil-p (unless ea-p (eq (setq value (nx-untyped-form value)) *nx-nil*)))
+           (nil-p (unless ea-p (nx-null (setq value (nx-untyped-form value)))))
            (self-p (unless ea-p (and (or
                                       (eq (acode-operator value) (%nx1-operator bound-special-ref))
                                       (eq (acode-operator value) (%nx1-operator special-ref)))
@@ -4491,8 +4492,8 @@
   (if (ppc2-form-typep valform 'fixnum)
     nil
     (let* ((val (acode-unwrapped-form-value valform)))
-      (if (or (eq val *nx-t*)
-              (eq val *nx-nil*)
+      (if (or (nx-t val)
+              (nx-null val)
               (and (acode-p val)
                    (let* ((op (acode-operator val)))
                      (or (eq op (%nx1-operator fixnum)) #|(eq op (%nx1-operator immediate))|#))))
@@ -5538,6 +5539,11 @@
   (if check
     (ppc2-typechecked-form seg vreg xfer typespec form)
     (ppc2-form seg vreg xfer form)))
+
+(defppc2 ppc2-type-asserted-form type-asserted-form (seg vreg xfer typespec form &optional check)
+  (declare (ignore typespec check))
+  (ppc2-form seg vreg xfer form))
+
 
 (defppc2 ppc2-%primitive %primitive (seg vreg xfer &rest ignore)
   (declare (ignore seg vreg xfer ignore))
