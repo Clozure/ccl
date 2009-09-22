@@ -17,25 +17,28 @@
 
 (in-package "CCL")
 
-; If object is a character, it is returned.  If it is an integer, its INT-CHAR
-; is returned. If it is a string of length 1, then the sole element of the
-; string is returned.  If it is a symbol whose pname is of length 1, then
-; the sole element of the pname is returned. Else error.
+(defun character-designator-p (thing)
+  (or (typep thing 'character)
+      (typep thing '(string 1))
+      (and (typep thing 'symbol) (typep (symbol-name thing) '(string 1)))))
+
+;;; If object is a character, it is returned.  If it is a string of
+;;; length 1, then the sole element of the string is returned.  If it
+;;; is a symbol whose pname is of length 1, then the sole element of
+;;; the pname is returned. Else error.
 
 (defun character (arg)
   "Coerce OBJECT into a CHARACTER if possible. Legal inputs are 
   characters, strings and symbols of length 1."
   (if (typep arg 'character)
     arg
-    (if (typep arg 'fixnum)
-      (code-char arg)
-      (if (and (typep arg 'string)
-               (= (the fixnum (length arg)) 1))
-        (char arg 0)
-        (let* ((pname (if (typep arg 'symbol) (symbol-name arg))))
-          (if (and pname (= (the fixnum (length pname)) 1))
-            (char pname 0)
-            (%err-disp $xcoerce arg 'character)))))))
+    (if (and (typep arg 'string)
+             (= (the fixnum (length arg)) 1))
+      (char arg 0)
+      (let* ((pname (if (typep arg 'symbol) (symbol-name arg))))
+        (if (and pname (= (the fixnum (length pname)) 1))
+          (char pname 0)
+          (report-bad-arg arg '(satisfies character-designator-p)))))))
 
 
 
