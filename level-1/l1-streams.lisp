@@ -3421,7 +3421,7 @@
     ())
 
 (defmethod stream-external-format ((s character-stream))
-  (make-external-format :character-encoding #+big-endian-target :utf32-be #+little-endian-target :utf32-le :line-termination :unix))
+  (make-external-format :character-encoding #+big-endian-target :utf-32be #+little-endian-target :utf-32le :line-termination :unix))
 
 
 (defmethod (setf stream-external-format) (new (s character-stream))
