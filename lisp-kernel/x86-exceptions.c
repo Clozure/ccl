@@ -826,17 +826,29 @@ handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valenc
 
       if (a && a->code == AREA_WATCHED && addr < a->high) {
 	/* caught a write to a watched object */
+	LispObj *p = (LispObj *)a->low;
+	LispObj node = *p;
+	unsigned tag_n = fulltag_of(node);
 	LispObj cmain = nrs_CMAIN.vcell;
-	LispObj obj = (LispObj)a->low + fulltag_misc; /* always uvectors */
+	LispObj obj;
+
+	if (immheader_tag_p(tag_n) || nodeheader_tag_p(tag_n))
+	  obj = (LispObj)p + fulltag_misc;
+	else
+	  obj = (LispObj)p + fulltag_cons;
 
 	if ((fulltag_of(cmain) == fulltag_misc) &&
 	    (header_subtag(header_of(cmain)) == subtag_macptr)) {
+	  LispObj save_vsp = xpGPR(xp, Isp);
+	  LispObj save_fp = xpGPR(xp, Ifp);
 	  LispObj xcf = create_exception_callback_frame(xp, tcr);
 	  int skip;
 
 	  /* The magic 2 means this was a write to a watchd object */
 	  skip = callback_to_lisp(tcr, cmain, xp, xcf, SIGSEGV, 2, (natural) addr, obj);
 	  xpPC(xp) += skip;
+	  xpGPR(xp, Ifp) = save_fp;
+	  xpGPR(xp, Isp) = save_vsp;
 	  return true;
 	}
       }
@@ -3701,20 +3713,26 @@ extern void wp_update_references(TCR *, LispObj, LispObj);
 /*
  * Other threads are suspended and pc-lusered.
  *
- * param contains a tagged pointer to a uvector.
+ * param contains a tagged pointer to a uvector or a cons cell
  */
 signed_natural
 watch_object(TCR *tcr, signed_natural param)
 {
-  LispObj uvector = (LispObj)param;
-  LispObj *noderef = (LispObj *)untag(uvector);
-  natural size = uvector_total_size_in_bytes(noderef);
-  area *uvector_area = area_containing((BytePtr)noderef);
+  LispObj object = (LispObj)param;
+  unsigned tag = fulltag_of(object);
+  LispObj *noderef = (LispObj *)untag(object);
+  area *object_area = area_containing((BytePtr)noderef);
+  natural size;
 
-  if (uvector_area && uvector_area->code != AREA_WATCHED) {
+  if (tag == fulltag_cons)
+    size = 2 * node_size;
+  else
+    size = uvector_total_size_in_bytes(noderef);
+
+  if (object_area && object_area->code != AREA_WATCHED) {
     area *a = new_watched_area(size);
-    LispObj old = uvector;
-    LispObj new = (LispObj)((natural)a->low + fulltag_misc);
+    LispObj old = object;
+    LispObj new = (LispObj)((natural)a->low + tag);
 
     add_area_holding_area_lock(a);
 
@@ -3737,13 +3755,19 @@ unwatch_object(TCR *tcr, signed_natural param)
 {
   ExceptionInformation *xp = tcr->xframe->curr;
   LispObj old = xpGPR(xp, Iarg_y);
+  unsigned tag = fulltag_of(old);
   LispObj new = xpGPR(xp, Iarg_z);
   LispObj *oldnode = (LispObj *)untag(old);
   LispObj *newnode = (LispObj *)untag(new);
   area *a = area_containing((BytePtr)old);
 
   if (a && a->code == AREA_WATCHED) {
-    natural size = uvector_total_size_in_bytes(oldnode);
+    natural size;
+
+    if (tag == fulltag_cons)
+      size = 2 * node_size;
+    else
+      size = uvector_total_size_in_bytes(oldnode);
 
     memcpy(newnode, oldnode, size);
     delete_watched_area(a, tcr);
@@ -3760,11 +3784,11 @@ Boolean
 handle_watch_trap(ExceptionInformation *xp, TCR *tcr)
 {
   LispObj selector = xpGPR(xp,Iimm0);
-  LispObj uvector = xpGPR(xp, Iarg_z);
+  LispObj object = xpGPR(xp, Iarg_z);
   
   switch (selector) {
     case WATCH_TRAP_FUNCTION_WATCH:
-      gc_like_from_xp(xp, watch_object, uvector);
+      gc_like_from_xp(xp, watch_object, object);
       break;
     case WATCH_TRAP_FUNCTION_UNWATCH:
       gc_like_from_xp(xp, unwatch_object, 0);

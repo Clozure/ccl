@@ -434,11 +434,16 @@
 		       (rlet ((a :address))
 			 (setf (%get-ptr a) (%int-to-ptr i))
 			 (%get-object a 0))))
-		(%error (make-condition
-			 'write-to-watched-object
-			 :address addr
-			 :object (%int-to-object other))
-			nil frame-ptr)))))
+		(let ((object (%int-to-object other)))
+		  (restart-case (%error (make-condition
+					 'write-to-watched-object
+					 :address addr
+					 :object object)
+					nil frame-ptr)
+		    (unwatch ()
+		      :report (lambda (s)
+				(format s "Unwatch ~s and perform the write." object))
+		      (unwatch object))))))))
           ((= signal #+win32-target 10 #-win32-target #$SIGBUS)
            (if (= code -1)
              (%error (make-condition 'invalid-memory-operation)
@@ -450,4 +455,3 @@
                      ()
                      frame-ptr)))))
   0)
-

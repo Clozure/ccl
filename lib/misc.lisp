@@ -1045,8 +1045,9 @@ are running on, or NIL if we can't find any useful information."
 
 (defun watch (&optional thing)
   (if thing
-    ;; typecheck thing?
-    (%watch thing)
+    (progn
+      (require-type thing '(or cons (satisfies uvectorp)))
+      (%watch thing))
     (let (result)
       (%map-areas #'(lambda (x) (push x result)) area-watched area-watched)
       result)))
@@ -1058,7 +1059,9 @@ are running on, or NIL if we can't find any useful information."
 		    ;; since we'll be unlinking an area from the area
 		    ;; list while %map-areas iterates over it, but I
 		    ;; think we'll get away with it.
-		    (let ((new (%alloc-misc (uvsize thing) (typecode thing))))
+		    (let ((new (if (uvectorp thing)
+				 (%alloc-misc (uvsize thing) (typecode thing))
+				 (cons nil nil))))
 		      (return-from unwatch (%unwatch thing new)))))
 	      area-watched area-watched))
       
