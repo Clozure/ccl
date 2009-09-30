@@ -33,6 +33,9 @@
 
 #-:digitool
 (defun system-namestring (pathname)
+  #+:openmcl
+  (ccl:native-translated-namestring (truename pathname))
+  #-:openmcl
   (namestring (truename pathname)))
 
 #+:digitool
@@ -252,8 +255,8 @@
   (delete-file pathname))
 
 (defun symlink-files (old new)
-  (let* ((old (#-scl namestring #+scl ext:unix-namestring old))
-	 (new (#-scl namestring #+scl ext:unix-namestring new #+scl nil))
+  (let* ((old (#-scl system-namestring #+scl ext:unix-namestring old))
+	 (new (#-scl system-namestring #+scl ext:unix-namestring new #+scl nil))
 	 ;; 20070811 - thanks to Juan Jose Garcia-Ripoll for pointing
 	 ;; that ~a would wreck havoc if the working directory had a space
 	 ;; in the pathname

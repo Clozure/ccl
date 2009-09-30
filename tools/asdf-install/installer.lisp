@@ -290,14 +290,14 @@
 
 (defun tar-arguments (source packagename)
   #-(or :win32 :mswindows :scl)
-  (list "-C" (namestring (truename source))
-	"-xzvf" (namestring (truename packagename)))
+  (list "-C" (system-namestring (truename source))
+	"-xzvf" (system-namestring (truename packagename)))
   #+(or :win32 :mswindows)
   (list "-l"
 	"-c"
 	(format nil "\"tar -C \\\"`cygpath '~A'`\\\" -xzvf \\\"`cygpath '~A'`\\\"\""
-		(namestring (truename source))
-		(namestring (truename packagename))))
+		(system-namestring (truename source))
+		(system-namestring (truename packagename))))
   #+scl
   (list "-C" (ext:unix-namestring (truename source))
 	"-xzvf" (ext:unix-namestring (truename packagename))))
@@ -328,6 +328,7 @@
 			  `(:relative ,(subseq tar 0 pos-slash)))
 	   source)))
     ;(princ tar)
+    (break)
     (loop for sysfile in (append
                           (directory
 		           (make-pathname :defaults *default-pathname-defaults*
@@ -492,7 +493,7 @@
 	       system asd dir))
       #-(or :win32 :mswindows)
       (delete-file asd)
-      (let ((dir (#-scl namestring #+scl ext:unix-namestring (truename dir))))
+      (let ((dir (#-scl system-namestring #+scl ext:unix-namestring (truename dir))))
 	(when dir
 	  (asdf:run-shell-command "rm -r '~A'" dir)))))
 
