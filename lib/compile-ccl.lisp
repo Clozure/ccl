@@ -525,7 +525,14 @@ not runtime errors reported by a successfully created process."
       (setq full t))
     (when full
       (setq clean t kernel t reload t))
-    (when update (update-ccl :verbose (not (eq update :quiet))))
+    (when update
+      (multiple-value-bind (changed conflicts new-binaries)
+	  (update-ccl :verbose (not (eq update :quiet)))
+	(declare (ignore changed conflicts))
+	(when new-binaries
+	  (format t "~&There are new bootstrapping binaries.  Please restart
+the lisp and run REBUILD-CCL again.")
+	  (return-from rebuild-ccl nil))))
     (when (or clean force)
       ;; for better bug reports...
       (format t "~&Rebuilding ~a using ~a"
@@ -642,6 +649,7 @@ not runtime errors reported by a successfully created process."
 
 (defun update-ccl (&key (verbose t))
   (let* ((changed ())
+	 (new-binaries ())
          (conflicts ()))
     (with-output-to-string (out)
       (with-preserved-working-directory ("ccl:")                     
@@ -685,16 +693,20 @@ not runtime errors reported by a successfully created process."
                 ;; to replace the working copies with the (just updated)
                 ;; repository versions.
                 (setq changed (if (or added deleted updated merged conflicts) t))
-              
                 (dolist (f binaries)
-                  (when (member f conflicts :test #'string=)
-                    (svn-revert f)))
+		  (cond ((member f conflicts :test #'string=)
+			 (svn-revert f)
+			 (setq new-binaries t))
+			((or (member f updated :test #'string=)
+			     (member f merged :test #'string=))
+			 (setq new-binaries t))))
+
                 ;; If there are any remaining conflicts, offer
                 ;; to revert them.
                 (when conflicts
                   (with-preserved-working-directory ()
-                    (cerror "Discard local changes to these files (using 'svn revert'."
-                            "'svn update' was unable to merge local changes to the following file~p with the updated versions:~{~&~s~~}" (length conflicts) conflicts)
+                    (cerror "Discard local changes to these files (using 'svn revert')."
+                            "'svn update' was unable to merge local changes to the following file~p with the updated versions:~{~&~s~}" (length conflicts) conflicts)
                     (dolist (c (copy-list conflicts))
                       (svn-revert c))))
                 ;; Report other changes, if verbose.
@@ -710,7 +722,7 @@ not runtime errors reported by a successfully created process."
                     (show-changes "Deleted files/directories" deleted)
                     (show-changes "Updated files" updated)
                     (show-changes "Files with local changes, successfully merged" merged)))))))))
-    (values changed conflicts)))
+    (values changed conflicts new-binaries)))
 
 (defmacro with-preserved-working-directory ((&optional dir) &body body)
   (let ((wd (gensym)))
