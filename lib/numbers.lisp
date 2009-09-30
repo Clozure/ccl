@@ -46,7 +46,13 @@
              (/ -0d0))
 	(ccl:set-fpu-mode :division-by-zero division-by-zero))))
 
-
+(defconstant double-float-nan
+  #.(let ((invalid (get-fpu-mode :invalid)))
+      (unwind-protect
+	   (progn
+	     (set-fpu-mode :invalid nil)
+	     (+ double-float-positive-infinity double-float-negative-infinity))
+	(set-fpu-mode :invalid invalid))))
 
 (defun parse-float (str len off)  
   ; we cant assume this really is a float but dont call with eg s1 or e1
@@ -108,17 +114,7 @@
 		    type)))
 	 (nan 
 	  (return-from parse-float
-            (let* ((invalid (ccl:get-fpu-mode :invalid)))
-	    (unwind-protect
-		(progn
-		  (ccl:set-fpu-mode :invalid nil)
-		  (coerce
-		   ;; we could also have used a double-float-nan
-		   ;; variable binding here:
-		   (+ double-float-positive-infinity
-		      double-float-positive-infinity)
-		   type))
-	      (ccl:set-fpu-mode :invalid invalid)))))
+	    (coerce double-float-nan type)))
 	 (expt (setq expt (%i+ expt (* esign eexp))))
 	 (t (return-from parse-float nil)))))
     (fide sign integer expt (subtypep type 'short-float))))
