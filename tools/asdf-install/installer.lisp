@@ -328,7 +328,6 @@
 			  `(:relative ,(subseq tar 0 pos-slash)))
 	   source)))
     ;(princ tar)
-    (break)
     (loop for sysfile in (append
                           (directory
 		           (make-pathname :defaults *default-pathname-defaults*
