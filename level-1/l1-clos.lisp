@@ -43,7 +43,7 @@
   (collect ((instance-slots)
 	    (shared-slots)
             (other-slots))
-    (dolist (s slotds (values (instance-slots) (shared-slots)))
+    (dolist (s slotds (values (instance-slots) (shared-slots) (other-slots)))
       (case (%slot-definition-allocation s)
         (:instance (instance-slots s))
         (:class (shared-slots s))
