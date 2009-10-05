@@ -337,6 +337,7 @@ lisp-kernel/windows-calls.c -text
 lisp-kernel/x86-asmutils32.s -text
 lisp-kernel/x86-constants32.h -text
 lisp-kernel/x86-constants32.s -text
+lisp-kernel/x86-pad32.s -text
 lisp-kernel/x86-spentry32.s -text
 lisp-kernel/x86-spjump32.s -text
 lisp-kernel/x86-subprims32.s -text
