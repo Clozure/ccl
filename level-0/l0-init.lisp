@@ -28,6 +28,7 @@
     :ccl
     :ccl-1.2
     :ccl-1.3
+    :ccl-1.4
     :clozure
     :clozure-common-lisp
     :ansi-cl
@@ -115,7 +116,6 @@
     #+freebsd-target :freebsd
     #+solaris-target :solaris
     #+windows-target :windows
-    ;; :mcl                                ;deprecated
     )
   "a list of symbols that describe features provided by the
    implementation")
