@@ -24,10 +24,11 @@
     <sect2 id="differences-between-32-bit-and-64-bit-implementations">
 	  <title>Differences Between 32-bit and 64-bit implementations</title>
 
-	  <para>Fixnums on 32-bit systems use 30 bits and are in the
-	    range XXX through YYY.  Fixnums on 64-bit systems use 61-bits
-	    and are in the range XXX through YYY. (see <xref
-	                                                  linkend="Tagging-scheme"/>)</para>
+	  <para>Fixnums on 32-bit systems are 30 bits long, and are in the
+	  range -536870912 through 536870911.  Fixnums on 64-bit
+	  systems are 61 bits long, and are in the range
+	  -1152921504606846976 through 1152921504606846975. (see <xref
+	  linkend="Tagging-scheme"/>)</para>
 
 	  <para>Since we have much larger fixnums on 64-bit systems,
 	    <varname>INTERNAL-TIME-UNITS-PER-SECOND</varname> is 1000000
