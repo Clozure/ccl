@@ -237,7 +237,7 @@ sprint_random_vector(LispObj o, unsigned subtag, natural elements)
 {
   add_c_string("#<");
   sprint_unsigned_decimal(elements);
-  add_c_string("-element vector subtag = ");
+  add_c_string("-element vector subtag = #x");
   add_char(digits[subtag>>4]);
   add_char(digits[subtag&15]);
   add_c_string(" @");
