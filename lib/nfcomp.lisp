@@ -1235,7 +1235,7 @@ Will differ from *compiling-file* during an INCLUDE")
               ;; Treat untyped pointers to the high/low 64K of the address
               ;; space as constants.  Refuse to dump other pointers.
               (unless (and (zerop (%macptr-type exp))
-                           (zerop (%macptr-domain exp)))
+                           (<= (%macptr-domain exp) 1))
                 (error "Can't dump typed pointer ~s" exp))
               (let* ((addr (%ptr-to-int exp)))
                 (unless (or (< addr #x10000)
