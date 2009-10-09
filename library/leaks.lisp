@@ -234,6 +234,7 @@
 (defun parse-mtrace-log (log-file)
   (with-open-file (s log-file)
     (let ((hash (make-hash-table :test 'equal))
+          (free-list '())
           (eof (list :eof)))
       (loop for line = (read-line s nil eof)
             until (eq line eof)
@@ -241,8 +242,8 @@
                       (equal "@ " (subseq line 0 2)))
               do
            (setf line (subseq line 2))
-           (let ((plus-pos (search " + " line))
-                 (minus-pos (search " - " line)))
+           (let ((plus-pos (or (search " + " line) (search " > " line)))
+                 (minus-pos (or (search " - " line) (search " < " line))))
              (cond (plus-pos
                     (let* ((where (subseq line 0 plus-pos))
                            (addr-and-size (subseq line (+ plus-pos 3)))
@@ -251,13 +252,29 @@
                            (size (subseq addr-and-size (1+ space-pos))))
                       (setf (gethash addr hash) (list where size))))
                    (minus-pos
-                    (let ((addr (subseq line (+ minus-pos 3))))
-                      (remhash addr hash))))))
+                    (let* ((where (subseq line 0 minus-pos))
+                           (addr (subseq line (+ minus-pos 3)))
+                           (found (nth-value 1 (gethash addr hash))))
+                      (if found
+                        (remhash addr hash)
+                        (push (list where addr) free-list)))))))
       (let ((res nil))
         (maphash (lambda (key value)
                    (push (append value (list key)) res))
                  hash)
-        res))))
+        (values res free-list)))))
+
+(defun pretty-print-mtrace-summary (file)
+  (let* ((malloc-sum 0))
+    (multiple-value-bind (mallocs frees) (parse-mtrace-log file)
+      (dolist (i mallocs)
+        (incf malloc-sum (parse-integer (second i) :radix 16 :start 2))
+        (format t "~&~A" i))
+      (format t "~&Freed but not malloced:~%~{~A~%~}" frees)
+      (format t "~&total-malloc-not-freed: ~~A ~A free not malloc: ~A"
+              (/ malloc-sum 1024.0)
+              (length mallocs)
+              (length frees)))))
 
 ;; Return the total number of bytes allocated by malloc()
 (defun mallinfo ()
