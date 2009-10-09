@@ -265,4 +265,47 @@
     (#_mallinfo mallinfo)
     (ccl::rref mallinfo :mallinfo.uordblks)))
 
+#||
+http://www.gnu.org/s/libc/manual/html_node/Statistics-of-Malloc.html
+
+int arena
+    This is the total size of memory allocated with sbrk by malloc, in bytes.
+int ordblks
+    This is the number of chunks not in use. (The memory allocator internally gets chunks of memory from the operating system, and then carves them up to satisfy individual malloc requests; see Efficiency and Malloc.)
+int smblks
+    This field is unused.
+int hblks
+    This is the total number of chunks allocated with mmap.
+int hblkhd
+    This is the total size of memory allocated with mmap, in bytes.
+int usmblks
+    This field is unused.
+int fsmblks
+    This field is unused.
+int uordblks
+    This is the total size of memory occupied by chunks handed out by malloc.
+int fordblks
+    This is the total size of memory occupied by free (not in use) chunks.
+int keepcost
+    This is the size of the top-most releasable chunk that normally borders the end of the heap (i.e., the high end of the virtual address space's data segment).
+||#    
+
+(defun show-malloc-info ()
+  (rlet ((info :mallinfo))
+    (#_mallinfo info)                   ;struct return invisible arg.
+    (let* ((arena (pref info :mallinfo.arena))
+           (ordblks (pref info :mallinfo.ordblks))
+           (hblks (pref info :mallinfo.hblks))
+           (hblkhd (pref info :mallinfo.hblkhd))
+           (uordblks (pref info :mallinfo.uordblks))
+           (fordblks (pref info :mallinfo.fordblks))
+           (keepcost (pref info :mallinfo.keepcost)))
+      (format t "~& arena size: ~d/#x~x" arena arena)
+      (format t "~& number of unused chunks = ~d" ordblks)
+      (format t "~& number of mmap'ed chunks = ~d" hblks)
+      (format t "~& total size of mmap'ed chunks = ~d/#x~x" hblkhd hblkhd)
+      (format t "~& total size of malloc'ed chunks = ~d/#x~x" uordblks uordblks)
+      (format t "~& total size of free chunks = ~d/#x~x" fordblks fordblks)
+      (format t "~& size of releaseable chunk = ~d/#x~x" keepcost keepcost))))
+
 )  ;; end of linux-only code
