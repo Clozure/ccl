@@ -560,6 +560,7 @@
   (etypecase w
     (undefined-type-reference (verify-deferred-type-warning w))
     (undefined-function-reference (verify-deferred-function-warning w))
+    (undefined-keyword-reference (verify-deferred-keyword-warning w))
     (compiler-warning nil)))
 
 (defun verify-deferred-type-warning (w)
@@ -592,31 +593,38 @@
       nil)))
 
 
+(defun deferred-function-def (name)
+  (let* ((defs (deferred-warnings.defs *outstanding-deferred-warnings*))
+	 (def (or (let ((cell (gethash name defs)))
+                    (and cell (def-info.function-p (cdr cell)) cell))
+		 (let* ((global (fboundp name)))
+		   (and (typep global 'function) global)))))
+    def))
+
+(defun check-deferred-call-args (w def wargs)
+  (destructuring-bind (arglist spread-p) wargs
+    (multiple-value-bind (deftype reason) (nx1-check-call-args def arglist spread-p)
+      (when deftype
+        (when (eq deftype :deferred-mismatch)
+          (setq deftype (if (consp def) :environment-mismatch :global-mismatch)))
+        (make-condition
+         'invalid-arguments
+         :function-name (compiler-warning-function-name w)
+         :source-note (compiler-warning-source-note w)
+         :warning-type deftype
+         :args (list (car (compiler-warning-args w)) reason arglist spread-p))))))
+
 (defun verify-deferred-function-warning (w)
   (let* ((args (compiler-warning-args w))
 	 (wfname (car args))
-	 (defs (deferred-warnings.defs *outstanding-deferred-warnings*))
-	 (def (or (let ((cell (gethash wfname defs)))
-		   (and cell (def-info.function-p (cdr cell)) cell))
-		 (let* ((global (fboundp wfname)))
-		   (and (typep global 'function) global)))))
+	 (def (deferred-function-def wfname)))
     (cond ((null def) w)
 	  ((or (typep def 'function)
 	       (and (consp def)
 		    (def-info.lfbits (cdr def))))
 	   ;; Check args in call to forward-referenced function.
 	   (when (cdr args)
-	     (destructuring-bind (arglist spread-p) (cdr args)
-	       (multiple-value-bind (deftype reason)
-		   (nx1-check-call-args def arglist spread-p)
-		 (when deftype
-		   (let* ((w2 (make-condition
-			       'invalid-arguments
-			       :function-name (compiler-warning-function-name w)
-			       :source-note (compiler-warning-source-note w)
-			       :warning-type deftype
-			       :args (list (car args) reason arglist spread-p))))
-		     w2))))))
+             (check-deferred-call-args w def (cdr args))))
 	  ((def-info.macro-p (cdr def))
 	   (let* ((w2 (make-condition
 		       'macro-used-before-definition
@@ -625,6 +633,13 @@
 		       :warning-type :macro-used-before-definition
 		       :args (list (car args)))))
 	     w2)))))
+
+(defun verify-deferred-keyword-warning (w)
+  (let* ((args (compiler-warning-args w))
+         (wfname (car args))
+         (def (deferred-function-def wfname)))
+    (when def
+      (check-deferred-call-args w def (cddr args)))))
 
 
 (defun report-deferred-warnings (&optional (file nil))

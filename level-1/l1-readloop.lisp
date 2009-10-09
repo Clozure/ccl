@@ -420,14 +420,17 @@
     lambda-expression))
 
 
-(defun %cons-def-info (type &optional lfbits keyvect lambda specializers qualifiers)
+(defun %cons-def-info (type &optional lfbits keyvect data specializers qualifiers)
   (ecase type
     (defun nil)
-    (defmacro (setq lambda '(macro) lfbits nil)) ;; some code assumes lfbits=nil
-    (defgeneric (setq lambda (list :methods)))
-    (defmethod (setq lambda (list :methods (cons qualifiers specializers))))
-    (deftype (setq lambda '(type) lfbits (cons nil *loading-file-source-file*))))
-  (vector lfbits keyvect *loading-file-source-file* lambda))
+    (defmacro (setq data '(macro) lfbits nil)) ;; some code assumes lfbits=nil
+    (defgeneric (setq data (list :methods) lfbits (logior (ash 1 $lfbits-gfn-bit) lfbits)))
+    (defmethod (setq data (list :methods
+                                (%cons-def-info-method lfbits keyvect qualifiers specializers))
+                     lfbits (logandc2 lfbits (ash 1 $lfbits-aok-bit))
+                     keyvect nil))
+    (deftype (setq data '(type) lfbits (cons nil *loading-file-source-file*))))
+  (vector lfbits keyvect *loading-file-source-file* data))
 
 (defun def-info.lfbits (def-info)
   (and def-info
@@ -450,10 +453,31 @@
        (let ((data (svref def-info 3)))
 	 (and (eq (car data) :methods) (%cdr data)))))
 
-(defun def-info-with-new-methods (def-info new-methods)
-  (if (eq new-methods (def-info.methods def-info))
+(defun %cons-def-info-method (lfbits keyvect qualifiers specializers)
+  (cons (cons (and keyvect
+		   (if (logbitp $lfbits-aok-bit lfbits)
+		     (and (not (logbitp $lfbits-rest-bit lfbits))
+			  (list keyvect))
+		     keyvect))
+              *loading-file-source-file*)
+        (cons qualifiers specializers)))
+
+(defun def-info-method.keyvect (def-info-method)
+  (let ((kv (caar def-info-method)))
+    (if (listp kv)
+      (values (car kv) t)
+      (values kv  nil))))
+
+(defun def-info-method.file (def-info-method)
+  (cdar def-info-method))
+
+(defun def-info-with-new-methods (def-info new-bits new-methods)
+  (if (and (eq new-methods (def-info.methods def-info))
+           (eql new-bits (def-info.lfbits def-info)))
     def-info
-    (let ((new (copy-seq def-info)))
+    (let ((new (copy-seq def-info))
+          (old-bits (svref def-info 0)))
+      (setf (svref new 0) (if (consp old-bits) (cons new-bits (cdr old-bits)) old-bits))
       (setf (svref new 3) (cons :methods new-methods))
       new)))
 
@@ -519,25 +543,66 @@
 	:deftype (def-info.deftype def-info)
 	:deftype-type (def-info.deftype-type def-info)))
 
+(defun combine-gf-def-infos (name old-info new-info)
+  (let* ((old-bits (def-info.lfbits old-info))
+         (new-bits (def-info.lfbits new-info))
+         (old-methods (def-info.methods old-info))
+         (new-methods (def-info.methods new-info)))
+    (when (and (logbitp $lfbits-gfn-bit old-bits) (logbitp $lfbits-gfn-bit new-bits))
+      (when *compiler-warn-on-duplicate-definitions*
+        (nx1-whine :duplicate-definition
+                   name
+                   (def-info.file old-info)
+                   (def-info.file new-info)))
+      (return-from combine-gf-def-infos new-info))
+    (unless (congruent-lfbits-p old-bits new-bits)
+      (if (logbitp $lfbits-gfn-bit new-bits)
+        ;; A defgeneric, incongruent with previously defined methods
+        (nx1-whine :incongruent-gf-lambda-list name)
+        ;; A defmethod incongruent with previously defined explicit or implicit generic
+        (nx1-whine :incongruent-method-lambda-list
+                   (if new-methods `(:method ,@(cadar new-methods) ,name ,(cddar new-methods)) name)
+                   name))
+      ;; Perhaps once this happens, should just mark it somehow to not complain again
+      (return-from combine-gf-def-infos 
+        (if (logbitp $lfbits-gfn-bit old-bits) old-info new-info)))
+    (loop for new-method in new-methods
+          as old = (member (cdr new-method) old-methods :test #'equal :key #'cdr)
+          do (when old
+               (when *compiler-warn-on-duplicate-definitions*
+                 (nx1-whine :duplicate-definition
+                            `(:method ,@(cadr new-method) ,name ,(cddr new-method))
+                            (def-info-method.file (car old))
+                            (def-info-method.file new-method)))
+               (setq old-methods (remove (car old) old-methods :test #'eq)))
+          do (push new-method old-methods))
+    (cond ((logbitp $lfbits-gfn-bit new-bits)
+           ;; If adding a defgeneric, use its info.
+           (setq old-info new-info old-bits new-bits))
+          ((not (logbitp $lfbits-gfn-bit old-bits))
+           ;; If no defgeneric (yet?) just remember whether any method has &key
+           (setq old-bits (logior old-bits (logand new-bits (ash 1 $lfbits-keys-bit))))))
+    ;; Check that all methods implement defgeneric keys
+    (let ((gfkeys (and (logbitp $lfbits-gfn-bit old-bits) (def-info.keyvect old-info))))
+      (when (> (length gfkeys) 0)
+        (loop for minfo in old-methods
+              do (multiple-value-bind (mkeys aok) (def-info-method.keyvect minfo)
+                   (when (and mkeys
+                              (not aok)
+                              (setq mkeys (loop for gk across gfkeys
+                                                unless (find gk mkeys) collect gk)))
+                     (nx1-whine :gf-keys-not-accepted
+                                `(:method ,@(cadr minfo) ,name ,(cddr minfo))
+                                mkeys))))))
+    (def-info-with-new-methods old-info old-bits old-methods)))
+
 (defun combine-definition-infos (name old-info new-info)
-  (let ((old-type (def-info.function-type old-info))  ;; defmacro
-	(old-deftype (def-info.deftype old-info))      ;; nil
-        (new-type (def-info.function-type new-info))  ;; nil
-	(new-deftype (def-info.deftype new-info)))   ;; (nil . file)
+  (let ((old-type (def-info.function-type old-info))
+	(old-deftype (def-info.deftype old-info))
+        (new-type (def-info.function-type new-info))
+	(new-deftype (def-info.deftype new-info)))
     (cond ((and (eq old-type 'defgeneric) (eq new-type 'defgeneric))
-           ;; TODO: Check compatibility of lfbits...
-           ;; TODO: check that all methods implement defgeneric keys
-           (let ((old-methods (def-info.methods old-info))
-                 (new-methods (def-info.methods new-info)))
-             (loop for new-method in new-methods
-                   do (if (member new-method old-methods :test #'equal)
-                        (when *compiler-warn-on-duplicate-definitions*
-                          (nx1-whine :duplicate-definition
-                                     `(method ,@(car new-method) ,name ,(cdr new-method))
-                                     (def-info.file old-info)
-                                     (def-info.file new-info)))
-                        (push new-method old-methods)))
-             (setq new-info (def-info-with-new-methods old-info old-methods))))
+           (setq new-info (combine-gf-def-infos name old-info new-info)))
 	  ((or (eq (or old-type 'defun) (or new-type 'defun))
 	       (eq (or old-type 'defgeneric) (or new-type 'defgeneric)))
            (when (and old-type new-type *compiler-warn-on-duplicate-definitions*)

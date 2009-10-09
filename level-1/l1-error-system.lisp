@@ -83,6 +83,7 @@
 (define-condition invalid-type-warning (style-warning) ())
 (define-condition invalid-arguments (style-warning) ())
 (define-condition invalid-arguments-global (style-warning) ())
+(define-condition undefined-keyword-reference (undefined-reference invalid-arguments) ())
 
 (define-condition simple-error (simple-condition error) ())
 

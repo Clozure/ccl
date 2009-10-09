@@ -1810,21 +1810,14 @@ to open."
         ll)
       (append ll '(&allow-other-keys)))))
 
-(defun encode-gf-lambda-list (lambda-list)
-  (let* ((bits (encode-lambda-list lambda-list)))
-    (declare (fixnum bits))
-    (if (logbitp $lfbits-keys-bit bits)
-      (logior bits (ash 1 $lfbits-aok-bit))
-      bits)))
-
 (defmacro defmethod (name &rest args &environment env)
   (multiple-value-bind (function-form specializers-form qualifiers lambda-list documentation specializers)
       (parse-defmethod name args env)
     `(progn
        (eval-when (:compile-toplevel)
          (record-function-info ',(maybe-setf-function-name name)
-                               ',(%cons-def-info 'defmethod (encode-gf-lambda-list lambda-list) nil nil
-                                                 specializers qualifiers)
+                               ',(multiple-value-bind (bits keyvect) (encode-lambda-list lambda-list t)
+                                   (%cons-def-info 'defmethod bits keyvect nil specializers qualifiers))
                                ,env))
        (compiler-let ((*nx-method-warning-name* '(,name ,@qualifiers ,specializers)))
          (ensure-method ',name ,specializers-form
@@ -2125,7 +2118,8 @@ to open."
       `(progn
          (eval-when (:compile-toplevel)
            (record-function-info ',(maybe-setf-function-name function-name)
-                                 ',(%cons-def-info 'defgeneric (encode-gf-lambda-list lambda-list))
+                                 ',(multiple-value-bind (bits keyvect) (encode-lambda-list lambda-list t)
+                                     (%cons-def-info 'defgeneric bits keyvect))
                                  ,env))
          (let ((,gf (%defgeneric
                      ',function-name ',lambda-list ',method-combination ',generic-function-class 
