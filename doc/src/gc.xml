@@ -637,8 +637,10 @@ that provided by earlier &CCL; versions.</para>
 	<refsect1>
 	  <title>Description</title>
 
-	  <para>If the EGC is currently disabled, puts the indicated
-	  threshold sizes in effect and returns T, otherwise, returns NIL.
+	  <para>Puts the indicated threshold sizes in effect.
+          Each threshold indicates the total size that may be allocated
+          in that and all younger generations before a GC is triggered.
+          Disables EGC while setting the values.
 	  (The provided threshold sizes are rounded up to a multiple of
 	  64Kbytes in &CCL; 0.14 and to a multiple of 32KBytes in earlier
 	  versions.)</para>
