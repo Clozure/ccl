@@ -48,7 +48,6 @@
 ; This is so we can be pedantic about binding &WHOLE/&ENVIRONMENT args
 ; that have been scarfed out of a macro-like lambda list.
 ; The returned value is supposed to be suitable for splicing ...
-#+not-used
 (defun hoist-special-decls (sym decls)
   (when sym
     (dolist (decl decls)
