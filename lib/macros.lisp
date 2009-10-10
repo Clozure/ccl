@@ -196,10 +196,10 @@
               ,tstlab
               (if ,lstsym (go ,toplab))))
          ,@(if ret `((let ((,varsym nil))
-                       ,@(hoist-special-decls varsym decls)
-                       (declare (ignore-if-unused ,varsym))
+                       (declare (ignore-if-unused ,varsym)
+                                ,@(loop for decl in decls
+                                        append (remove 'special (cdr decl) :test #'neq :key #'car)))
                        ,ret)))))))
-
 
 (defmacro dovector ((varsym vector &optional ret) &body body &environment env)
   (if (not (symbolp varsym))(signal-program-error $XNotSym varsym))
