@@ -386,7 +386,8 @@
 ;;; If the signal number is 0, other arguments (besides the exception context XP)
 ;;; may not be meaningful.
 (defcallback xcmain (:address xp :address xcf :int signal :long code :long addr :long other :int)
-  (let* ((frame-ptr (macptr->fixnum xcf)))
+  (let* ((frame-ptr (macptr->fixnum xcf))
+	 (skip 0))
     (cond ((zerop signal)               ;thread interrupt
            (cmain))
           ((< signal 0)
@@ -430,19 +431,27 @@
 			   :void))))
 	     ((= code 2)
 	      ;; Write to a watched object.
-	      (flet ((%int-to-object (i)
-		       (rlet ((a :address))
-			 (setf (%get-ptr a) (%int-to-ptr i))
-			 (%get-object a 0))))
-		(let ((object (%int-to-object other)))
+	      (let* ((offset other)
+		     ;; The kernel exception handler leaves the
+		     ;; watched object on the lisp stack under the
+		     ;; xcf.
+		     (object (%get-object xcf target::xcf.size)))
+		(multiple-value-bind (insn insn-length)
+		    (ignore-errors (x86-faulting-instruction xp))
 		  (restart-case (%error (make-condition
 					 'write-to-watched-object
-					 :address addr
-					 :object object)
+					 :offset offset
+					 :object object
+					 :instruction insn)
 					nil frame-ptr)
+		    (skip ()
+		      :test (lambda (c)
+			      (declare (ignore c))
+			      insn)
+		      :report "Skip over this write instruction."
+		      (setq skip insn-length))
 		    (unwatch ()
-		      :report (lambda (s)
-				(format s "Unwatch ~s and perform the write." object))
+		      :report "Unwatch the object and retry the write."
 		      (unwatch object))))))))
           ((= signal #+win32-target 10 #-win32-target #$SIGBUS)
            (if (= code -1)
@@ -453,5 +462,19 @@
                                      :address addr
                                      :write-p (not (zerop code)))
                      ()
-                     frame-ptr)))))
-  0)
+                     frame-ptr))))
+    skip))
+
+(defun x86-faulting-instruction (xp)
+  (let* ((code-bytes (make-array 15 :element-type '(unsigned-byte 8)))
+         (pc (indexed-gpr-macptr xp #+x8632-target eip-register-offset
+                                    #+x8664-target rip-register-offset)))
+    (dotimes (i (length code-bytes))
+      (setf (aref code-bytes i) (%get-unsigned-byte pc i)))
+    (let* ((ds (make-x86-disassembly-state
+                :mode-64 #+x8664-target t #+x8632-target nil
+                :code-vector code-bytes
+                :code-pointer 0))
+           (insn (x86-disassemble-instruction ds nil))
+           (len (- (x86-ds-code-pointer ds) (x86-ds-insn-start ds))))
+      (values insn len))))
