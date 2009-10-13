@@ -1051,25 +1051,27 @@ are running on, or NIL if we can't find any useful information."
               (lock-name lock)
               (%ptr-to-int (%svref lock target::lock._value-cell)))))
 
+(defun all-watched-objects ()
+  (let (result)
+    (with-other-threads-suspended
+      (%map-areas #'(lambda (x) (push x result)) area-watched area-watched))
+    result))
+    
 (defun watch (&optional thing)
   (if thing
     (progn
       (require-type thing '(or cons (satisfies uvectorp)))
       (%watch thing))
-    (let (result)
-      (%map-areas #'(lambda (x) (push x result)) area-watched area-watched)
-      result)))
+    (all-watched-objects)))
 
 (defun unwatch (thing)
-  (%map-areas #'(lambda (x)
-		  (when (eq x thing)
-		    ;; This is a rather questionable thing to do,
-		    ;; since we'll be unlinking an area from the area
-		    ;; list while %map-areas iterates over it, but I
-		    ;; think we'll get away with it.
-		    (let ((new (if (uvectorp thing)
-				 (%alloc-misc (uvsize thing) (typecode thing))
-				 (cons nil nil))))
-		      (return-from unwatch (%unwatch thing new)))))
-	      area-watched area-watched))
+  (with-other-threads-suspended
+    (%map-areas #'(lambda (x)
+		    (when (eq x thing)
+		      (let ((new (if (uvectorp thing)
+				   (%alloc-misc (uvsize thing)
+						(typecode thing))
+				   (cons nil nil))))
+			(return-from unwatch (%unwatch thing new)))))
+		area-watched area-watched)))
       
