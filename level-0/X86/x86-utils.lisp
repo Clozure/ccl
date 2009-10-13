@@ -448,7 +448,6 @@ be somewhat larger than what was specified)."
   (check-nargs 1)
   (movl ($ arch::watch-trap-function-watch) (%l imm0))
   (uuo-watch-trap)
-  (movl ($ nil) (%l arg_z))
   (single-value-return))
 
 (defx86lapfunction %unwatch ((watched arg_y) (new arg_z))

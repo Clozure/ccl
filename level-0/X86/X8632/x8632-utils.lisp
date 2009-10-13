@@ -393,12 +393,8 @@ be somewhat larger than what was specified)."
 
 (defx8632lapfunction %watch ((uvector arg_z))
   (check-nargs 1)
-  ;; May want to tighten this up to disallow watching functions,
-  ;; symbols, etc.
-  (trap-unless-lisptag= uvector x8632::tag-misc imm0)
   (movl ($ arch::watch-trap-function-watch) (%l imm0))
   (uuo-watch-trap)
-  (movl ($ nil) (%l arg_z))
   (single-value-return))
 
 (defx8632lapfunction %unwatch ((watched arg_y) (new arg_z))
