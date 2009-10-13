@@ -1056,13 +1056,22 @@ are running on, or NIL if we can't find any useful information."
     (with-other-threads-suspended
       (%map-areas #'(lambda (x) (push x result)) area-watched area-watched))
     result))
-    
+
+(defun primitive-watch (thing)
+  (require-type thing '(or cons (satisfies uvectorp)))
+  (%watch thing))
+
 (defun watch (&optional thing)
-  (if thing
-    (progn
-      (require-type thing '(or cons (satisfies uvectorp)))
-      (%watch thing))
-    (all-watched-objects)))
+  (cond ((null thing)
+	 (all-watched-objects))
+	((arrayp thing)
+	 (primitive-watch (array-data-and-offset thing)))
+	((hash-table-p thing)
+	 (primitive-watch (nhash.vector thing)))
+	((standard-instance-p thing)
+	 (primitive-watch (instance-slots thing)))
+	(t
+	 (primitive-watch thing))))
 
 (defun unwatch (thing)
   (with-other-threads-suspended
