@@ -3055,5 +3055,7 @@ wp_update_references(TCR *tcr, LispObj old, LispObj new)
     wp_update_tcr_tlb(other_tcr, old, new);
     other_tcr = other_tcr->next;
   } while (other_tcr != tcr);
+  unprotect_watched_areas();
   wp_update_all_areas(old, new);
+  protect_watched_areas();
 }
