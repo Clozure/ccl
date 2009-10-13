@@ -104,24 +104,48 @@
              (format s "Invalid memory operation."))))
 
 (define-condition write-to-watched-object (storage-condition)
-  ((address :initarg :address)
-   (object :initform nil :initarg :object))
-  (:report (lambda (c s)
-	     (with-slots (object address) c
-	       (if (uvectorp object)
-		 ;; This is safe only because watched objects are in a
-		 ;; static GC area and won't be moved around.
-		 (let* ((size (uvsize object))
-			(nbytes (if (ivectorp object)
-				  (subtag-bytes (typecode object) size)
-				  (* size target::node-size)))
-			(bytes-per-element (/ nbytes size))
-			(noderef (logandc2 (%address-of object)
-					   target::fulltagmask))
-			(offset (- address (+ noderef target::node-size)))
-			(index (/ offset bytes-per-element)))
-		   (format s "Write to watched object ~s at address #x~x (uvector index ~d)." object address index))
-		 (format s "Write to watched object ~s at address #x~x" object address))))))
+  ((object :initform nil :initarg :object
+	   :reader write-to-watched-object-object)
+   (offset :initarg :offset
+	   :reader write-to-watched-object-offset)
+   (instruction :initarg :instruction))
+  (:report report-write-to-watched-object))
+
+(defun report-write-to-watched-object (c s)
+  (with-slots (object offset instruction) c
+    (cond
+      ((uvectorp object)
+       (let* ((count (uvsize object))
+	      (nbytes (if (ivectorp object)
+			(subtag-bytes (typecode object) count)
+			(* count target::node-size)))
+	      (bytes-per-element (/ nbytes count))
+	      (offset (- offset target::misc-data-offset))
+	      (index (/ offset bytes-per-element)))
+	 (format s "Write to watched uvector ~s at " object)
+	 (if (fixnump index)
+	   (format s "index ~s" index)
+	   (format s "an apparently unaligned byte offset ~s" offset))))
+      ((consp object)
+       (format s "Write to ~a watched cons cell ~s"
+               (cond
+		 ((= offset target::cons.cdr) "the CDR of")
+		 ((= offset target::cons.car) "the CAR of")
+		 (t
+		  (format nil "an apparently unaligned byte offset (~s) into"
+			  offset)))
+               object))
+      (t
+       (format s "Write to a strange object ~s at byte offset ~s"
+	       object offset)))
+    (when instruction
+      (let* ((ds (make-x86-disassembly-state :mode-64 #+x8664-target t
+					              #+x8632-target nil
+					     :code-vector nil
+					     :code-pointer 0))
+	     (str (with-output-to-string (*standard-output*)
+		    (x86-print-bare-disassembled-instruction ds instruction))))
+	(format s "~&Faulting instruction: ~a" (string-trim " " str))))))
 
 (define-condition type-error (error)
   ((datum :initarg :datum)
