@@ -2811,12 +2811,14 @@ impurify(TCR *tcr, signed_natural param)
  * be nice to generalize it somehow.
  */
 
-static inline void
+static inline int
 wp_maybe_update(LispObj *p, LispObj old, LispObj new)
 {
   if (*p == old) {
     *p = new;
+    return true;
   }
+  return false;
 }
 
 static void
@@ -2846,7 +2848,6 @@ wp_update_range(LispObj *start, LispObj *end, LispObj old, LispObj new)
       p = (LispObj *)skip_over_ivector(ptr_to_lispobj(p), node);
     } else if (nodeheader_tag_p(tag_n)) {
       nwords = header_element_count(node);
-      
       nwords += 1 - (nwords & 1);
 
       if ((header_subtag(node) == subtag_hash_vector) &&
@@ -2857,7 +2858,7 @@ wp_update_range(LispObj *start, LispObj *end, LispObj old, LispObj new)
         p++;
         nwords -= skip;
         while(skip--) {
-	  if (*p == old) *p = new;
+	  wp_maybe_update(p, old, new);
           p++;
         }
         /* "nwords" is odd at this point: there are (floor nwords 2)
@@ -2866,13 +2867,12 @@ wp_update_range(LispObj *start, LispObj *end, LispObj old, LispObj new)
            past the alignment word. */
         nwords >>= 1;
         while(nwords--) {
-          if (*p == old && hashp) {
-	    *p = new;
+          if (wp_maybe_update(p, old, new) && hashp) {
             hashp->flags |= nhash_key_moved_mask;
             hashp = NULL;
           }
           p++;
-	  if (*p == old) *p = new;
+	  wp_maybe_update(p, old, new);
           p++;
         }
         *p++ = 0;
