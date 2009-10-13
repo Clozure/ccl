@@ -841,11 +841,16 @@ handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valenc
 	    (header_subtag(header_of(cmain)) == subtag_macptr)) {
 	  LispObj save_vsp = xpGPR(xp, Isp);
 	  LispObj save_fp = xpGPR(xp, Ifp);
-	  LispObj xcf = create_exception_callback_frame(xp, tcr);
+	  LispObj xcf;
+	  natural offset = (LispObj)addr - obj;
 	  int skip;
 
+	  push_on_lisp_stack(xp, obj);
+	  xcf = create_exception_callback_frame(xp, tcr);
+
 	  /* The magic 2 means this was a write to a watchd object */
-	  skip = callback_to_lisp(tcr, cmain, xp, xcf, SIGSEGV, 2, (natural) addr, obj);
+	  skip = callback_to_lisp(tcr, cmain, xp, xcf, SIGSEGV, 2,
+				  (natural)addr, offset);
 	  xpPC(xp) += skip;
 	  xpGPR(xp, Ifp) = save_fp;
 	  xpGPR(xp, Isp) = save_vsp;
