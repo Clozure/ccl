@@ -108,7 +108,8 @@
 	   :reader write-to-watched-object-object)
    (offset :initarg :offset
 	   :reader write-to-watched-object-offset)
-   (instruction :initarg :instruction))
+   (instruction :initarg :instruction
+		:reader write-to-watched-object-instruction))
   (:report report-write-to-watched-object))
 
 (defun report-write-to-watched-object (c s)
