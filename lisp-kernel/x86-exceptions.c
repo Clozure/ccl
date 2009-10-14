@@ -3734,7 +3734,7 @@ watch_object(TCR *tcr, signed_natural param)
   else
     size = uvector_total_size_in_bytes(noderef);
 
-  if (object_area && object_area->code != AREA_WATCHED) {
+  if (object_area && object_area->code == AREA_DYNAMIC) {
     area *a = new_watched_area(size);
     LispObj old = object;
     LispObj new = (LispObj)((natural)a->low + tag);
@@ -3747,6 +3747,7 @@ watch_object(TCR *tcr, signed_natural param)
     memset(noderef, 0, size);
     wp_update_references(tcr, old, new);
     check_all_areas(tcr);
+    return 1;
   }
   return 0;
 }
@@ -3790,10 +3791,13 @@ handle_watch_trap(ExceptionInformation *xp, TCR *tcr)
 {
   LispObj selector = xpGPR(xp,Iimm0);
   LispObj object = xpGPR(xp, Iarg_z);
+  signed_natural result;
   
   switch (selector) {
     case WATCH_TRAP_FUNCTION_WATCH:
-      gc_like_from_xp(xp, watch_object, object);
+      result = gc_like_from_xp(xp, watch_object, object);
+      if (result == 0)
+	xpGPR(xp,Iarg_z) = lisp_nil;
       break;
     case WATCH_TRAP_FUNCTION_UNWATCH:
       gc_like_from_xp(xp, unwatch_object, 0);
