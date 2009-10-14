@@ -139,6 +139,7 @@
       (t
        (format s "Write to a strange object ~s at byte offset ~s"
 	       object offset)))
+    #+x86-target
     (when instruction
       (let* ((ds (make-x86-disassembly-state :mode-64 #+x8664-target t
 					              #+x8632-target nil
