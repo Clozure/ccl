@@ -444,6 +444,33 @@
 					 :object object
 					 :instruction insn)
 					nil frame-ptr)
+		    #-windows-target
+		    (emulate ()
+		      :test (lambda (c)
+			      (declare (ignore c))
+			      (x86-can-emulate-instruction insn))
+		      :report
+		      "Emulate this instruction, leaving the object watched."
+		      (flet ((watchedp (object)
+			       (%map-areas #'(lambda (x)
+					       (when (eq object x)
+						 (return-from watchedp t)))
+					   area-watched area-watched)))
+			(let ((result nil))
+			  (with-other-threads-suspended
+			    (when (watchedp object)
+			      ;; We now trust that the object is in a
+			      ;; static gc area.
+			      (let* ((a (+ (%address-of object) offset))
+				     (ptr (%int-to-ptr
+					   (logandc2 a (1- *host-page-size*)))))
+				(#_mprotect ptr *host-page-size* #$PROT_WRITE)
+				(setq result (x86-emulate-instruction xp insn))
+				(#_mprotect ptr *host-page-size*
+					    (logior #$PROT_READ #$PROT_EXEC)))))
+			  (if result
+			    (setq skip insn-length)
+			    (error "could not emulate the instrution")))))
 		    (skip ()
 		      :test (lambda (c)
 			      (declare (ignore c))
