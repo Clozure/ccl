@@ -160,6 +160,7 @@
     (backtrace        "ccl:bin;backtrace"        ("ccl:lib;backtrace.lisp"))
     (ppc-backtrace    "ccl:bin;ppc-backtrace"    ("ccl:lib;ppc-backtrace.lisp"))
     (x86-backtrace    "ccl:bin;x86-backtrace"    ("ccl:lib;x86-backtrace.lisp"))
+    (x86-watch        "ccl:bin;x86-watch"        ("ccl:lib;x86-watch.lisp"))
     (backtrace-lds    "ccl:bin;backtrace-lds"    ("ccl:lib;backtrace-lds.lisp"))
     (apropos          "ccl:bin;apropos"          ("ccl:lib;apropos.lisp"))
     (numbers          "ccl:bin;numbers"          ("ccl:lib;numbers.lisp"))
