@@ -139,15 +139,8 @@
       (t
        (format s "Write to a strange object ~s at byte offset ~s"
 	       object offset)))
-    #+x86-target
     (when instruction
-      (let* ((ds (make-x86-disassembly-state :mode-64 #+x8664-target t
-					              #+x8632-target nil
-					     :code-vector nil
-					     :code-pointer 0))
-	     (str (with-output-to-string (*standard-output*)
-		    (x86-print-bare-disassembled-instruction ds instruction))))
-	(format s "~&Faulting instruction: ~a" (string-trim " " str))))))
+      (format s "~&Faulting instruction: ~s" instruction))))
 
 (define-condition type-error (error)
   ((datum :initarg :datum)
