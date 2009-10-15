@@ -1138,13 +1138,19 @@ generation, and the oldest ephemeral generation."
 effect and returns T, otherwise, returns NIL. (The provided threshold sizes
 are rounded up to a multiple of 64Kbytes in OpenMCL 0.14 and to a multiple
 of 32KBytes in earlier versions.)"
-  (let* ((was-enabled (egc-active-p)))
+  (let* ((was-enabled (egc-active-p))
+         (e2size (require-type e2size '(unsigned-byte 18)))
+         (e1size (require-type e1size '(unsigned-byte 18)))
+         (e0size (require-type e0size '(integer 1 #.(ash 1 18)))))
+    (unless (<= e0size e1size e2size)
+      (error "Generation ~s threshold cannot be smaller than generation ~s threshold"
+             (if (> e0size e1size) 1 2) (if (> e0size e1size) 0 1)))
     (unwind-protect
          (progn
            (egc nil)
-           (setq e2size (logand (lognot #xffff) (+ #xffff (ash (require-type e2size '(unsigned-byte 18)) 10)))
-                 e1size (logand (lognot #xffff) (+ #xffff (ash (require-type e1size '(unsigned-byte 18)) 10)))
-                 e0size (logand (lognot #xffff) (+ #xffff (ash (require-type e0size '(integer 1 #.(ash 1 18))) 10))))
+           (setq e2size (logand (lognot #xffff) (+ #xffff (ash e2size 10)))
+                 e1size (logand (lognot #xffff) (+ #xffff (ash e1size 10)))
+                 e0size (logand (lognot #xffff) (+ #xffff (ash e0size 10))))
            (%configure-egc e0size e1size e2size))
       (egc was-enabled))))
 

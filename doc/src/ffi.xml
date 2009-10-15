@@ -941,7 +941,7 @@
 	        <term>Description</term>
 
 	        <listitem>
-		      <para>Equivalent to (%ptr-to-int 0).</para>
+		      <para>Equivalent to (%int-to-ptr 0).</para>
 	        </listitem>
 	      </varlistentry>
 	    </variablelist>

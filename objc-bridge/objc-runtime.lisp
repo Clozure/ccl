@@ -2548,6 +2548,34 @@ argument lisp string."
               (setq info name-info))))
     (apply (objc-message-info-lisp-name info) instance args)))
                    
+(defun objc-set->setf (method)
+  (let* ((info (get-objc-message-info method))
+         (name (objc-message-info-lisp-name info))
+         (str (symbol-name name))
+         (value-placeholder-index (position #\: str)))
+    (when (and (> (length str) 4) value-placeholder-index)
+      (let* ((truncated-name (nstring-downcase (subseq (remove #\: str
+                                                               :test #'char= :count 1)
+                                                       3)
+                                               :end 1))
+             (reader-name (if (> (length truncated-name)
+                                 (decf value-placeholder-index 3))
+                            (nstring-upcase truncated-name
+                                           :start value-placeholder-index
+                                           :end (1+ value-placeholder-index))
+                            truncated-name))
+             (reader (intern reader-name :nextstep-functions)))
+        (eval `(defun (setf ,reader) (value object &rest args)
+                 (apply #',name object value args)
+                 value))))))
+
+(defun register-objc-set-messages ()
+  (do-interface-dirs (d)
+    (dolist (init (cdb-enumerate-keys (db-objc-methods d)
+                                      #'(lambda (string)
+                                          (string= string "set"
+                                                   :end1 (min (length string) 3)))))
+      (objc-set->setf init))))
 
   
 
@@ -2746,6 +2774,8 @@ argument lisp string."
 	  :typestring typestring
 	  :imp imp
 	  :class-p class-p)))
+  (if (string= selname "set" :end1 (min (length selname) 3))
+    (objc-set->setf selname))
   impname)
     
 

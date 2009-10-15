@@ -194,14 +194,11 @@ lisp_open(wchar_t *path, int flag, int mode)
   dwShareMode = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
 
   if ((flag & _O_WRONLY) == _O_WRONLY) {
-    dwDesiredAccess |= GENERIC_WRITE | FILE_WRITE_DATA |
-      FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES;
+    dwDesiredAccess |= GENERIC_WRITE;
   } else if ((flag & _O_RDWR) == _O_RDWR) {
-    dwDesiredAccess |= GENERIC_WRITE|GENERIC_READ | FILE_READ_DATA |
-      FILE_WRITE_DATA | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES;
+    dwDesiredAccess |= GENERIC_WRITE|GENERIC_READ;
   } else {
-    dwDesiredAccess |= GENERIC_READ | FILE_READ_DATA | FILE_READ_ATTRIBUTES |
-      FILE_WRITE_ATTRIBUTES;
+    dwDesiredAccess |= GENERIC_READ;
   }
     
 

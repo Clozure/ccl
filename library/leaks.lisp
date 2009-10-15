@@ -234,6 +234,7 @@
 (defun parse-mtrace-log (log-file)
   (with-open-file (s log-file)
     (let ((hash (make-hash-table :test 'equal))
+          (free-list '())
           (eof (list :eof)))
       (loop for line = (read-line s nil eof)
             until (eq line eof)
@@ -241,8 +242,8 @@
                       (equal "@ " (subseq line 0 2)))
               do
            (setf line (subseq line 2))
-           (let ((plus-pos (search " + " line))
-                 (minus-pos (search " - " line)))
+           (let ((plus-pos (or (search " + " line) (search " > " line)))
+                 (minus-pos (or (search " - " line) (search " < " line))))
              (cond (plus-pos
                     (let* ((where (subseq line 0 plus-pos))
                            (addr-and-size (subseq line (+ plus-pos 3)))
@@ -251,18 +252,77 @@
                            (size (subseq addr-and-size (1+ space-pos))))
                       (setf (gethash addr hash) (list where size))))
                    (minus-pos
-                    (let ((addr (subseq line (+ minus-pos 3))))
-                      (remhash addr hash))))))
+                    (let* ((where (subseq line 0 minus-pos))
+                           (addr (subseq line (+ minus-pos 3)))
+                           (found (nth-value 1 (gethash addr hash))))
+                      (if found
+                        (remhash addr hash)
+                        (push (list where addr) free-list)))))))
       (let ((res nil))
         (maphash (lambda (key value)
                    (push (append value (list key)) res))
                  hash)
-        res))))
+        (values res free-list)))))
+
+(defun pretty-print-mtrace-summary (file)
+  (let* ((malloc-sum 0))
+    (multiple-value-bind (mallocs frees) (parse-mtrace-log file)
+      (dolist (i mallocs)
+        (incf malloc-sum (parse-integer (second i) :radix 16 :start 2))
+        (format t "~&~A" i))
+      (format t "~&Freed but not malloced:~%~{~A~%~}" frees)
+      (format t "~&total-malloc-not-freed: ~~A ~A free not malloc: ~A"
+              (/ malloc-sum 1024.0)
+              (length mallocs)
+              (length frees)))))
 
 ;; Return the total number of bytes allocated by malloc()
 (defun mallinfo ()
   (ccl:rlet ((mallinfo :mallinfo))
     (#_mallinfo mallinfo)
     (ccl::rref mallinfo :mallinfo.uordblks)))
+
+#||
+http://www.gnu.org/s/libc/manual/html_node/Statistics-of-Malloc.html
+
+int arena
+    This is the total size of memory allocated with sbrk by malloc, in bytes.
+int ordblks
+    This is the number of chunks not in use. (The memory allocator internally gets chunks of memory from the operating system, and then carves them up to satisfy individual malloc requests; see Efficiency and Malloc.)
+int smblks
+    This field is unused.
+int hblks
+    This is the total number of chunks allocated with mmap.
+int hblkhd
+    This is the total size of memory allocated with mmap, in bytes.
+int usmblks
+    This field is unused.
+int fsmblks
+    This field is unused.
+int uordblks
+    This is the total size of memory occupied by chunks handed out by malloc.
+int fordblks
+    This is the total size of memory occupied by free (not in use) chunks.
+int keepcost
+    This is the size of the top-most releasable chunk that normally borders the end of the heap (i.e., the high end of the virtual address space's data segment).
+||#    
+
+(defun show-malloc-info ()
+  (rlet ((info :mallinfo))
+    (#_mallinfo info)                   ;struct return invisible arg.
+    (let* ((arena (pref info :mallinfo.arena))
+           (ordblks (pref info :mallinfo.ordblks))
+           (hblks (pref info :mallinfo.hblks))
+           (hblkhd (pref info :mallinfo.hblkhd))
+           (uordblks (pref info :mallinfo.uordblks))
+           (fordblks (pref info :mallinfo.fordblks))
+           (keepcost (pref info :mallinfo.keepcost)))
+      (format t "~& arena size: ~d/#x~x" arena arena)
+      (format t "~& number of unused chunks = ~d" ordblks)
+      (format t "~& number of mmap'ed chunks = ~d" hblks)
+      (format t "~& total size of mmap'ed chunks = ~d/#x~x" hblkhd hblkhd)
+      (format t "~& total size of malloc'ed chunks = ~d/#x~x" uordblks uordblks)
+      (format t "~& total size of free chunks = ~d/#x~x" fordblks fordblks)
+      (format t "~& size of releaseable chunk = ~d/#x~x" keepcost keepcost))))
 
 )  ;; end of linux-only code

@@ -1,4 +1,3 @@
-
 #!/bin/sh
 #
 # Creates a compresses disk image from the current directory

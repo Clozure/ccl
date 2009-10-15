@@ -582,14 +582,14 @@
         (return-from nx-declared-inline-p (eq (cddr decl) 'inline))))
     (setq env (lexenv.parent-env env))))
 
-(defun report-compile-time-argument-mismatch (condition stream)
+(defun report-compile-time-argument-mismatch (condition stream &aux (type (compiler-warning-warning-type condition)))
   (destructuring-bind (callee reason args spread-p)
       (compiler-warning-args condition)
     (format stream "In the ~a ~s with arguments ~:s,~%  "
             (if spread-p "application of" "call to")
             callee
             args)
-    (case (car reason)
+    (ecase (car reason)
       (:toomany
        (destructuring-bind (provided max)
            (cdr reason)
@@ -604,22 +604,30 @@
       (:unknown-keyword
        (destructuring-bind (badguy goodguys)
            (cdr reason)
-         (format stream "the keyword argument~:[ ~s is~;s~{ ~s~^~#[~; and~:;,~]~} are~] not one of ~s, which are recognized~&  by "
-		 (consp badguy) badguy goodguys))))
+         (format stream "the keyword argument~:[ ~s is~;s~{ ~s~^~#[~; and~:;,~]~} are~] not one of ~:s, which are recognized by "
+		 (consp badguy) badguy goodguys)))
+      (:unknown-gf-keywords
+         (let ((badguys (cadr reason)))
+           (when (and (consp badguys) (null (%cdr badguys))) (setq badguys (car badguys)))
+           (format stream "the keyword argument~:[ ~s is~;s~{ ~s~^~#[~; and~:;,~]~} are~] not recognized by "
+
+                   (consp badguys) badguys))))
     (format stream
-            (ecase (compiler-warning-warning-type condition)       
+            (ecase type
 	      (:ftype-mismatch "the FTYPE declaration of ~s")
               (:global-mismatch "the current global definition of ~s")
               (:environment-mismatch "the definition of ~s visible in the current compilation unit.")
-              (:lexical-mismatch "the lexically visible definition of ~s"))
+              (:lexical-mismatch "the lexically visible definition of ~s")
+              ;; This can happen when compiling without compilation unit:
+              (:deferred-mismatch "~s"))
             callee)))
 
 (defparameter *compiler-warning-formats*
   '((:special . "Undeclared free variable ~S")
     (:unused . "Unused lexical variable ~S")
     (:ignore . "Variable ~S not ignored.")
-    (:undefined-function . "Undefined function ~S") ;; (not reported if defined later)
-    (:undefined-type . "Undefined type ~S")         ;; (not reported if defined later)
+    (:undefined-function . "Undefined function ~S") ;; (deferred)
+    (:undefined-type . "Undefined type ~S")         ;; (deferred)
     (:unknown-type-in-declaration . "Unknown or invalid type ~S, declaration ignored")
     (:bad-declaration . "Unknown or invalid declaration ~S")
     (:invalid-type . report-invalid-type-compiler-warning)
@@ -631,10 +639,14 @@
     (:environment-mismatch . report-compile-time-argument-mismatch)
     (:lexical-mismatch . report-compile-time-argument-mismatch)    
     (:ftype-mismatch . report-compile-time-argument-mismatch)
+    (:deferred-mismatch . report-compile-time-argument-mismatch)
     (:type . "Type declarations violated in ~S")
     (:type-conflict . "Conflicting type declarations for ~S")
     (:special-fbinding . "Attempt to bind compiler special name: ~s. Result undefined.")
     (:lambda . "Suspicious lambda-list: ~s")
+    (:incongruent-gf-lambda-list . "Lambda list of generic function ~s is incongruent with previously defined methods")
+    (:incongruent-method-lambda-list . "Lambda list of ~s is incongruent with previous definition of ~s")
+    (:gf-keys-not-accepted . "~s does not accept keywords ~s required by the generic functions")
     (:result-ignored . "Function result ignored in call to ~s")
     (:duplicate-definition . report-compile-time-duplicate-definition)
     (:format-error . "~:{~@?~%~}")

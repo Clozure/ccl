@@ -2096,11 +2096,11 @@ Or something. Right? ~s ~s" var varbits))
 
 
 (defun innermost-lfun-bits-keyvect (def)
-  (declare (notinline innermost-lfun-bits-keyvect))
   (let* ((inner-def (closure-function (find-unencapsulated-definition def)))
          (bits (lfun-bits inner-def))
          (keys (lfun-keyvect inner-def)))
     (declare (fixnum bits))
+    #+no
     (when (and (eq (ash 1 $lfbits-gfn-bit)
                    (logand bits (logior (ash 1 $lfbits-gfn-bit)
                                         (ash 1 $lfbits-method-bit))))
@@ -2109,73 +2109,108 @@ Or something. Right? ~s ~s" var varbits))
             keys nil))
     (values bits keys)))
 
+(defun def-info-bits-keyvect (info)
+  (let ((bits (def-info.lfbits info)))
+    (when (and (eq (def-info.function-type info) 'defgeneric)
+               (logbitp $lfbits-keys-bit bits)
+               (not (logbitp $lfbits-aok-bit bits))
+	       #-BOOTSTRAPPED (fboundp 'def-info-method.keyvect)
+               (loop for m in (def-info.methods info)
+                     thereis (null (def-info-method.keyvect m))))
+      ;; Some method has &aok, don't bother checking keywords.
+      (setq bits (logior bits (ash 1 $lfbits-aok-bit))))
+    (values bits (def-info.keyvect info))))
+
 
 (defun nx1-check-call-args (def arglist spread-p)
-  (let* ((deftype (if (functionp def) 
-                    :global-mismatch
-                    (if (istruct-typep def 'afunc)
-                      :lexical-mismatch
-                      :environment-mismatch)))
-         (reason nil))
-    (multiple-value-bind (bits keyvect)
-                         (case deftype
-                           (:global-mismatch (innermost-lfun-bits-keyvect def))
-                           (:environment-mismatch
-                              (values (def-info.lfbits (cdr def)) (def-info.keyvect (cdr def))))
-                           (t (let* ((lambda-form (afunc-lambdaform def)))
-                                (if (lambda-expression-p lambda-form)
-                                  (encode-lambda-list (cadr lambda-form))))))
-      (setq reason (nx1-check-call-bits bits keyvect arglist spread-p))
-      (when reason
-	(values deftype reason)))))
+  (multiple-value-bind (bits keyvect)
+      (etypecase def
+        (function (innermost-lfun-bits-keyvect def))
+        (afunc (let ((lambda-form (afunc-lambdaform def)))
+                 (and (lambda-expression-p lambda-form)
+                      (encode-lambda-list (cadr lambda-form) t))))
+        (cons (def-info-bits-keyvect (cdr def))))
+    (when bits
+      (multiple-value-bind (reason defer-p)
+          (or (nx1-check-call-bits bits arglist spread-p) ;; never deferred
+              (nx1-check-call-keywords def bits keyvect arglist spread-p))
+        (when reason
+          #-BOOTSTRAPPED (unless (find-class 'undefined-keyword-reference nil)
+                           (return-from nx1-check-call-args nil))
+          (values (if defer-p
+                    :deferred-mismatch
+                    (typecase def
+                      (function :global-mismatch)
+                      (afunc :lexical-mismatch)
+                      (t :environment-mismatch)))
+                  reason))))))
 
-(defun nx1-check-call-bits (bits keyvect arglist spread-p)
-  (when bits
-    (unless (typep bits 'fixnum) (error "Bug: Bad bits ~s!" bits))
-    (let* ((env *nx-lexical-environment*)
-	   (nargs (length arglist))
-	   (minargs (if spread-p (1- nargs) nargs))
-	   (required (ldb $lfbits-numreq bits))
-	   (max (if (logtest (logior (ash 1 $lfbits-rest-bit) (ash 1 $lfbits-restv-bit) (ash 1 $lfbits-keys-bit)) bits)
-		  nil
-		  (+ required (ldb $lfbits-numopt bits)))))
-      ;; If the (apparent) number of args in the call doesn't
-      ;; match the definition, complain.  If "spread-p" is true,
-      ;; we can only be sure of the case when more than the
-      ;; required number of args have been supplied.
-      (or (and (not spread-p)
-	       (< minargs required)
-	       `(:toofew ,minargs ,required))
-	  (and max
-	       (> minargs max)
-	       (list :toomany nargs max))
-	  (nx1-find-bogus-keywords arglist spread-p bits keyvect env)))))
+(defun nx1-check-call-bits (bits arglist spread-p)
+  (let* ((nargs (length arglist))
+         (minargs (if spread-p (1- nargs) nargs))
+         (required (ldb $lfbits-numreq bits))
+         (max (if (logtest (logior (ash 1 $lfbits-rest-bit) (ash 1 $lfbits-restv-bit) (ash 1 $lfbits-keys-bit)) bits)
+                nil
+                (+ required (ldb $lfbits-numopt bits)))))
+    ;; If the (apparent) number of args in the call doesn't
+    ;; match the definition, complain.  If "spread-p" is true,
+    ;; we can only be sure of the case when more than the
+    ;; required number of args have been supplied.
+    (or (and (not spread-p)
+             (< minargs required)
+             `(:toofew ,minargs ,required))
+        (and max
+             (> minargs max)
+             `(:toomany ,nargs ,max)))))
 
-(defun nx1-find-bogus-keywords (args spread-p bits keyvect env)
-  (declare (fixnum bits))
-  (when (logbitp $lfbits-aok-bit bits)
-    (setq keyvect nil))                 ; only check for even length tail
-  (when (and (logbitp $lfbits-keys-bit bits) 
-             (not spread-p))     ; Can't be sure, last argform may contain :allow-other-keys
-    (do* ((bad-keys nil)
-	  (key-values (nthcdr (+ (ldb $lfbits-numreq bits)  (ldb $lfbits-numopt bits)) args))
-          (key-args key-values  (cddr key-args)))
-         ((null key-args)
-	  (when (and keyvect bad-keys)
-	    (list :unknown-keyword
-		  (if (cdr bad-keys) (nreverse bad-keys) (%car bad-keys))
-		  (coerce keyvect 'list))))
-      (unless (cdr key-args)
-        (return (list :odd-keywords key-values)))
-      (when keyvect
-	(let* ((keyword (%car key-args)))
-	  (unless (nx-form-constant-p keyword env)
-	    (return nil))
-	  (setq keyword (nx-form-constant-value keyword env))
-	  (if (eq keyword :allow-other-keys)
-	    (setq keyvect nil)
-	    (unless (position keyword keyvect)
-	      (push keyword bad-keys))))))))
+(defun nx1-check-call-keywords (def bits keyvect args spread-p &aux (env *nx-lexical-environment*))
+  ;; Ok, if generic function, bits and keyvect are for the generic function itself.
+  ;; Still, since all congruent, can check whether have variable numargs
+  (unless (and (logbitp $lfbits-keys-bit bits)
+               (not spread-p)) ; last argform may contain :allow-other-keys
+    (return-from nx1-check-call-keywords nil))
+  (let* ((bad-keys nil)
+         (key-args (nthcdr (+ (ldb $lfbits-numreq bits) (ldb $lfbits-numopt bits)) args))
+         (generic-p (or (generic-function-p def)
+                        (and (consp def)
+                             (eq (def-info.function-type (cdr def)) 'defgeneric)))))
+    (when (oddp (length key-args))
+      (return-from nx1-check-call-keywords (list :odd-keywords key-args)))
+    (when (logbitp $lfbits-aok-bit bits)
+      (return-from nx1-check-call-keywords nil))
+    (loop for key-form in key-args by #'cddr
+          do (unless (nx-form-constant-p key-form env) ;; could be :aok
+               (return-from nx1-check-call-keywords nil))
+          do (let ((key (nx-form-constant-value key-form env)))
+               (when (eq key :allow-other-keys)
+                 (return-from nx1-check-call-keywords nil))
+               (unless (or (find key keyvect)
+                          (and generic-p (nx1-valid-gf-keyword-p def key)))
+                 (push key bad-keys))))
+    (when bad-keys
+      (if generic-p
+        (values (list :unknown-gf-keywords bad-keys) t)
+        (list :unknown-keyword (if (cdr bad-keys) (nreverse bad-keys) (%car bad-keys)) keyvect)))))
+
+(defun nx1-valid-gf-keyword-p (def key)
+  ;; Can assume has $lfbits-keys-bit and not $lfbits-aok-bit
+  (if (consp def)
+    (let ((definfo (cdr def)))
+      (assert (eq (def-info.function-type definfo) 'defgeneric))
+      (loop for m in (def-info.methods definfo)
+            as keyvect = (def-info-method.keyvect m)
+            thereis (or (null keyvect) (find key keyvect))))
+    (let ((gf (find-unencapsulated-definition def)))
+      (or (find key (%defgeneric-keys gf))
+          (loop for m in (%gf-methods gf)
+                thereis (let* ((func (%inner-method-function m))
+                               (mbits (lfun-bits func)))
+                          (or (and (logbitp $lfbits-aok-bit mbits)
+                                   ;; If no &rest, then either don't use the keyword in which case
+                                   ;; it's good to warn; or it's used via next-method, we'll approve
+                                   ;; it when we get to that method.
+                                   (logbitp $lfbits-rest-bit mbits))
+                              (find key (lfun-keyvect func)))))))))
 
 ;;; we can save some space by going through subprims to call "builtin"
 ;;; functions for us.

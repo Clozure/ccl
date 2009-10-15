@@ -177,69 +177,29 @@
 (defmacro %vstack-block (spec &body forms)
   `(%stack-block (,spec) ,@forms))
 
-
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-(defun extract-type-decl-for-dolist-var (var decls env)
-  (if (null decls)
-    (values nil nil nil)
-    (let* ((declared-type-p nil))
-      (collect ((new-decls)
-                (declared-types))
-        (dolist (declform decls)
-          ;; (assert (eq (car declform) 'declare))
-          (dolist (decl (cdr declform))
-            (if (atom decl)
-              (new-decls decl)
-              (let* ((spec (car decl)))
-                (if (specifier-type-if-known spec env)
-                  (setq spec 'type
-                        decl `(type ,@decl)))
-                (if (eq spec 'type)
-                  (destructuring-bind (typespec &rest vars) (cdr decl)
-                    (cond ((member var vars :test #'eq)
-                           (setq declared-type-p t)
-                           (declared-types typespec)
-                           (new-decls `(type ,typespec ,@(remove var vars))))
-                          (t (new-decls decl))))
-                  (new-decls decl))))))
-        (if (not declared-type-p)
-          (values nil nil (new-decls))
-          (values t
-                  (let* ((declared-type (declared-types)))
-                    (if (cdr declared-type)
-                      `(and ,@declared-type)
-                      (car declared-type)))
-                  (new-decls)))))))
-)
-
-
 (defmacro dolist ((varsym list &optional ret) &body body &environment env)
   (if (not (symbolp varsym)) (signal-program-error $XNotSym varsym))
   (let* ((toplab (gensym))
          (tstlab (gensym))
          (lstsym (gensym)))
     (multiple-value-bind (forms decls) (parse-body body env nil)
-      (multiple-value-bind (var-type-p vartype other-decls)
-          (extract-type-decl-for-dolist-var varsym decls env)
-        (if var-type-p
-          (setq forms `((locally (declare (type ,vartype ,varsym)) (tagbody ,@forms)))))
-        (if other-decls
-          (setq other-decls `((declare ,@other-decls))))
-        `(block nil
-          (let* ((,lstsym ,list) ,varsym)
-            ,@(if var-type-p `((declare (type (or null ,vartype) ,varsym))))
-            ,@other-decls
-            (tagbody
-               (go ,tstlab)
-               ,toplab
-               (setq ,lstsym (cdr (the list ,lstsym)))
-               ,@forms
-               ,tstlab
-               (setq ,varsym (car ,lstsym))
-               (if ,lstsym (go ,toplab)))
-            ,@(if ret `((progn  ,ret)))))))))
-
+      `(block nil
+         (let* ((,lstsym ,list))
+           (tagbody
+              (go ,tstlab)
+              ,toplab
+              (let ((,varsym (car ,lstsym)))
+                ,@decls
+                (tagbody
+                   ,@forms)
+                (setq ,lstsym (cdr (the list ,lstsym))))
+              ,tstlab
+              (if ,lstsym (go ,toplab))))
+         ,@(if ret `((let ((,varsym nil))
+                       (declare (ignore-if-unused ,varsym)
+                                ,@(loop for decl in decls
+                                        append (remove 'special (cdr decl) :test #'neq :key #'car)))
+                       ,ret)))))))
 
 (defmacro dovector ((varsym vector &optional ret) &body body &environment env)
   (if (not (symbolp varsym))(signal-program-error $XNotSym varsym))
@@ -1810,21 +1770,14 @@ to open."
         ll)
       (append ll '(&allow-other-keys)))))
 
-(defun encode-gf-lambda-list (lambda-list)
-  (let* ((bits (encode-lambda-list lambda-list)))
-    (declare (fixnum bits))
-    (if (logbitp $lfbits-keys-bit bits)
-      (logior bits (ash 1 $lfbits-aok-bit))
-      bits)))
-
 (defmacro defmethod (name &rest args &environment env)
   (multiple-value-bind (function-form specializers-form qualifiers lambda-list documentation specializers)
       (parse-defmethod name args env)
     `(progn
        (eval-when (:compile-toplevel)
          (record-function-info ',(maybe-setf-function-name name)
-                               ',(%cons-def-info 'defmethod (encode-gf-lambda-list lambda-list) nil nil
-                                                 specializers qualifiers)
+                               ',(multiple-value-bind (bits keyvect) (encode-lambda-list lambda-list t)
+                                   (%cons-def-info 'defmethod bits keyvect nil specializers qualifiers))
                                ,env))
        (compiler-let ((*nx-method-warning-name* '(,name ,@qualifiers ,specializers)))
          (ensure-method ',name ,specializers-form
@@ -2125,7 +2078,8 @@ to open."
       `(progn
          (eval-when (:compile-toplevel)
            (record-function-info ',(maybe-setf-function-name function-name)
-                                 ',(%cons-def-info 'defgeneric (encode-gf-lambda-list lambda-list))
+                                 ',(multiple-value-bind (bits keyvect) (encode-lambda-list lambda-list t)
+                                     (%cons-def-info 'defgeneric bits keyvect))
                                  ,env))
          (let ((,gf (%defgeneric
                      ',function-name ',lambda-list ',method-combination ',generic-function-class 

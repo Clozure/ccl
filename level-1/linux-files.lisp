@@ -713,7 +713,7 @@ given is that of a group to which the current user belongs."
                     (logior #$FILE_SHARE_READ #$FILE_SHARE_WRITE)
                     (%null-ptr)
                     #$OPEN_EXISTING
-                    #$FILE_ATTRIBUTE_NORMAL
+                    #$FILE_FLAG_BACKUP_SEMANTICS
                     (%null-ptr))))
       (if (eql handle *windows-invalid-handle*)
         (%windows-error-disp (#_GetLastError))

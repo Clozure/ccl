@@ -1230,7 +1230,18 @@ Will differ from *compiling-file* during an INCLUDE")
                                  (ash 1 x8664::fulltag-immheader-1)
                                  (ash 1 x8664::fulltag-immheader-2))))
            (case type-code
-             ((#.target::subtag-macptr #.target::subtag-dead-macptr) (unless (%null-ptr-p exp) (fasl-unknown exp)))
+             (#.target::subtag-dead-macptr (fasl-unknown exp))
+             (#.target::subtag-macptr
+              ;; Treat untyped pointers to the high/low 64K of the address
+              ;; space as constants.  Refuse to dump other pointers.
+              (unless (and (zerop (%macptr-type exp))
+                           (<= (%macptr-domain exp) 1))
+                (error "Can't dump typed pointer ~s" exp))
+              (let* ((addr (%ptr-to-int exp)))
+                (unless (or (< addr #x10000)
+                            (>= addr (- (ash 1 target::nbits-in-word)
+                                        #x10000)))
+                  (error "Can't dump pointer ~s : address is not in the low or high 64K of the address space." exp))))
              (t (fasl-scan-ref exp)))
            (case type-code
              ((#.target::subtag-pool #.target::subtag-weak #.target::subtag-lock) (fasl-unknown exp))

@@ -963,19 +963,27 @@ are running on, or NIL if we can't find any useful information."
 (defun report-heap-utilization (out nconses nvectors vector-sizes vector-physical-sizes)
   (let* ((total-cons-size  (* nconses target::cons.size))
          (total-vector-size 0)
-         (total-physical-vector-size 0))
-    (format out "~&Object type~40tCount~48tTotal Size in Bytes~70tTotal Size")
-    (format out "~&CONS~34t~12d~46t~16d~16d" nconses total-cons-size total-cons-size)
+         (total-physical-vector-size 0)
+         (total-size 0))
+    (format out "~&Object type~42tCount~50tTotal Size in Bytes~72tTotal Size~82t % of Heap")
+    (dotimes( i (length nvectors))
+      (incf total-vector-size (aref vector-sizes i))
+      (incf total-physical-vector-size (aref vector-physical-sizes i)))
+    (setq total-size (+ total-cons-size total-physical-vector-size))
+    (unless (zerop nconses)
+      (format out "~&CONS~36t~12d~48t~16d~16d~8,2f%" nconses total-cons-size total-cons-size
+              (* 100 (/ total-cons-size total-size))))
     (dotimes (i (length nvectors))
-      (let* ((count (aref nvectors i))
-             (sizes (aref vector-sizes i))
-             (psizes (aref vector-physical-sizes i)))
+      (let ((count (aref nvectors i))
+            (sizes (aref vector-sizes i))
+            (psizes (aref vector-physical-sizes i)))
         (unless (zerop count)
-          (incf total-vector-size sizes)
-          (incf total-physical-vector-size psizes)
-          (format out "~&~a~34t~12d~46t~16d~16d" (aref *heap-utilization-vector-type-names* i)  count sizes psizes))))
-    (format out "~&   Total sizes: ~47t~16d~16d" (+ total-cons-size total-vector-size) (+ total-cons-size total-physical-vector-size))))
-                            
+          (format out "~&~a~36t~12d~48t~16d~16d~8,2f%"
+                  (aref *heap-utilization-vector-type-names* i)
+                  count sizes psizes
+                  (* 100.0 (/ psizes total-size))))))
+    (format out "~&   Total sizes: ~49t~16d~16d" (+ total-cons-size total-vector-size) (+ total-cons-size total-physical-vector-size))))
+
 ;; The number of words to allocate for static conses when the user requests
 ;; one and we don't have any left over
 (defparameter *static-cons-chunk* 1048576)
@@ -1043,25 +1051,35 @@ are running on, or NIL if we can't find any useful information."
               (lock-name lock)
               (%ptr-to-int (%svref lock target::lock._value-cell)))))
 
+(defun all-watched-objects ()
+  (let (result)
+    (with-other-threads-suspended
+      (%map-areas #'(lambda (x) (push x result)) area-watched area-watched))
+    result))
+
+(defun primitive-watch (thing)
+  (require-type thing '(or cons (satisfies uvectorp)))
+  (%watch thing))
+
 (defun watch (&optional thing)
-  (if thing
-    (progn
-      (require-type thing '(or cons (satisfies uvectorp)))
-      (%watch thing))
-    (let (result)
-      (%map-areas #'(lambda (x) (push x result)) area-watched area-watched)
-      result)))
+  (cond ((null thing)
+	 (all-watched-objects))
+	((arrayp thing)
+	 (primitive-watch (array-data-and-offset thing)))
+	((hash-table-p thing)
+	 (primitive-watch (nhash.vector thing)))
+	((standard-instance-p thing)
+	 (primitive-watch (instance-slots thing)))
+	(t
+	 (primitive-watch thing))))
 
 (defun unwatch (thing)
-  (%map-areas #'(lambda (x)
-		  (when (eq x thing)
-		    ;; This is a rather questionable thing to do,
-		    ;; since we'll be unlinking an area from the area
-		    ;; list while %map-areas iterates over it, but I
-		    ;; think we'll get away with it.
-		    (let ((new (if (uvectorp thing)
-				 (%alloc-misc (uvsize thing) (typecode thing))
-				 (cons nil nil))))
-		      (return-from unwatch (%unwatch thing new)))))
-	      area-watched area-watched))
-      
+  (with-other-threads-suspended
+    (%map-areas #'(lambda (x)
+		    (when (eq x thing)
+		      (let ((new (if (uvectorp thing)
+				   (%alloc-misc (uvsize thing)
+						(typecode thing))
+				   (cons nil nil))))
+			(return-from unwatch (%unwatch thing new)))))
+		area-watched area-watched)))

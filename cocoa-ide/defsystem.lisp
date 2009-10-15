@@ -76,6 +76,7 @@
     "cocoa-grep"
     "cocoa-backtrace"
     "inspector"
+    "project"
     "preferences"
     "processes-window"
     "apropos-window"
