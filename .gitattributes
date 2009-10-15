@@ -63,6 +63,8 @@ cocoa-ide/ide-contents/Resources/English.lproj/preferences.nib/keyedobjects.nib 
 cocoa-ide/ide-contents/Resources/English.lproj/processes.nib/classes.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/processes.nib/info.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/processes.nib/keyedobjects.nib -text
+cocoa-ide/ide-contents/Resources/English.lproj/project.nib/designable.nib -text
+cocoa-ide/ide-contents/Resources/English.lproj/project.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/updateCCL.nib/designable.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/updateCCL.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/xapropos.nib/classes.nib -text
@@ -78,6 +80,7 @@ cocoa-ide/ide-self-update.lisp -text
 cocoa-ide/inspector.lisp -text
 cocoa-ide/preferences.lisp -text
 cocoa-ide/processes-window.lisp -text
+cocoa-ide/project.lisp -text
 cocoa-ide/search-files.lisp -text
 cocoa-ide/start.lisp -text
 cocoa-ide/swank-ccl-ide.el -text
