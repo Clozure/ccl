@@ -35,7 +35,23 @@
 
 (defmethod print-object ((xdi x86-disassembled-instruction) stream)
   (print-unreadable-object (xdi stream :type t :identity t)
-    (format stream "~a" (x86-di-mnemonic xdi))))
+    (dolist (p (x86-di-prefixes xdi))
+      (format stream "(~a) " p))
+    (format stream "(~a" (x86-di-mnemonic xdi))
+    (let* ((op0 (x86-di-op0 xdi))
+	   (op1 (x86-di-op1 xdi))
+	   (op2 (x86-di-op2 xdi))
+	   (ds (make-x86-disassembly-state :mode-64 #+x8664-target t
+					            #+x8632-target nil
+					   :code-vector nil
+					   :code-pointer 0)))
+      (when op0
+	(write-x86-lap-operand stream op0 ds)
+	(when op1
+	  (write-x86-lap-operand stream op1 ds)
+	  (when op2
+	    (write-x86-lap-operand stream op2 ds)))))
+    (format stream ")")))
 
 (defstruct (x86-disassembly-state (:conc-name x86-ds-))
   (mode-64 t)
