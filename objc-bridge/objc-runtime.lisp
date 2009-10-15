@@ -2553,7 +2553,7 @@ argument lisp string."
          (name (objc-message-info-lisp-name info))
          (str (symbol-name name))
          (value-placeholder-index (position #\: str)))
-    (when (and (> (length str) 3) value-placeholder-index)
+    (when (and (> (length str) 4) value-placeholder-index)
       (let* ((truncated-name (nstring-downcase (subseq (remove #\: str
                                                                :test #'char= :count 1)
                                                        3)
