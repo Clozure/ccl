@@ -106,6 +106,7 @@
 (register-objc-class-decls)
 (maybe-map-objc-classes t)
 (register-objc-init-messages)
+(register-objc-set-messages)
 
 #+gnu-objc
 (defun iterate-over-class-methods (class method-function)
@@ -551,7 +552,8 @@ NSObjects describe themselves in more detail than others."
                                  :test #'equalp)
                         (map-objc-classes)
                         ;; Update info about init messages.
-                        (register-objc-init-messages))
+                        (register-objc-init-messages)
+                        (register-objc-set-messages))
                       (return winning)))))))))))
 
 (defun objc:load-framework (framework-name interfaces-name)
