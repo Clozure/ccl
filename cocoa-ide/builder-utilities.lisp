@@ -91,6 +91,19 @@
 (defparameter $ns-document-class-key #@"NSDocumentClass")
 (defparameter $ns-exportable-as-key #@"NSExportableAs")
 
+;;; NOT-VC-CONTROL-FILE (path)
+;;; ------------------------------------------------------------------------
+;;; Returns T if the specified file (or directory) is not part of a version
+;;; control system's control data
+
+(defun not-vc-control-file (path)
+  (let ((vc-directories '(".svn" "CVS"))
+        (vc-files '("svn-commit.tmp" "svn-commit.tmp~"
+                    "svn-prop.tmp" "svn-prop.tmp~"
+                    ".cvsignore")))
+    (not (or (member (car (last (pathname-directory path))) vc-directories :test #'equalp)
+             (member (file-namestring path) vc-files :test #'equalp)))))
+
 ;;; COPY-NIBFILE (srcnib dest-directory &key (if-exists :overwrite))
 ;;; ------------------------------------------------------------------------
 ;;; Copies a nibfile (which may in fact be a directory) to the
@@ -109,7 +122,7 @@
                             (delete-file dest))))
           (:error (error "The nibfile '~A' already exists" dest))))
     (if (directoryp srcnib)
-        (recursive-copy-directory srcnib dest)
+        (recursive-copy-directory srcnib dest :test #'not-vc-control-file)
         (copy-file srcnib dest))))
 
 ;;; BASENAME path
@@ -374,6 +387,7 @@
                                :defaults target))))
         (dolist (framework private-frameworks)
           (recursive-copy-directory framework (subdir framework frameworks-dir)
+                                    :test #'not-vc-control-file
                                     :if-exists :overwrite)
           #+windows-target
           (let ((executable (find-framework-executable framework)))
