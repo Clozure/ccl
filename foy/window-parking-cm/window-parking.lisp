@@ -28,6 +28,7 @@
 
 (defparameter *window-parker* nil "The window-parker instance.")
 (defparameter *window-parking-menu* nil "The window-parking-menu instance.")
+(defParameter *park-p* t "To park or not to park.")
 
 ;;; ----------------------------------------------------------------------------
 ;;;
@@ -245,7 +246,13 @@
     (init-parking window)
     (ns:with-ns-rect (r (ps-h-position ps) (ps-v-position ps) (ps-h-dimension ps) (ps-v-dimension ps))
       (#/setFrame:display: window r t))
-    (#/makeKeyAndOrderFront: window nil)))
+    (#/makeKeyAndOrderFront: window nil))
+  (let ((style-screen-function (find-symbol "STYLE-SCREEN" (find-package :sax))))
+    (when style-screen-function
+      (let* ((hemlock-view (gui::hemlock-view window))
+             (text-view (gui::text-pane-text-view (hi::hemlock-view-pane hemlock-view))))
+        (when text-view
+          (funcall style-screen-function text-view))))))
 
 ;;; ----------------------------------------------------------------------------
 ;;;
@@ -259,7 +266,7 @@
 (setf *window-parker* (make-instance 'window-parker))
 
 (defMethod park ((wp window-parker) (window parkable-hemlock-frame))
-  (when (wp-parking-spots wp)
+  (when (and (wp-parking-spots wp) *park-p*)
     ;; Already parked?
     (let* ((position (position window (wp-parking-spots wp) :key #'ps-tenant))
            spot)
@@ -371,31 +378,32 @@
 ;;; Move WINDOW to the parking-spot corresponding to the pressed function key,
 ;;; unless the parking-spot is not on screen or the window is already in that location.
 (defMethod move-window-to-position ((wp window-parker) window function-key)
-  (let* ((parking-spot (find function-key (wp-parking-spots wp) :key #'ps-function-key))
-         (tenant (when parking-spot (ps-tenant parking-spot))))
-    (cond ((and parking-spot (parking-spot-on-screen-p parking-spot window))
-           (cond (tenant
-                  (cond ((eql window tenant)
-                         (cmenu:echo-msg "Already in parking-spot ~a." function-key))
-                        (t
-                         (cond ((modified-p tenant)
-                                (cmenu:notify (format nil "First save: ~S. Then try again." 
-                                                      (cmenu:window-path tenant)))
-                                (init-parking tenant))
-                               (t
-                                (vacate-current-location wp window)
-                                (bump-location-and-set-location-values wp parking-spot window)
-                                (#/makeKeyAndOrderFront: window nil)
-                                (cmenu:echo-msg "Moved to parking-spot ~a." function-key))))))
-                 (t 
-                  (vacate-current-location wp window)
-                  (apply-parking-spot-values parking-spot window)
-                  (#/makeKeyAndOrderFront: window nil)
-                  (cmenu:echo-msg "Moved to parking-spot ~a." function-key))))
-          (t
-           (if (null parking-spot)
-             (cmenu:notify (format nil "Parking-spot ~a is not defined." function-key))
-             (cmenu:notify (format nil "Parking-spot ~a is off screen." function-key)))))))
+  (when *park-p*
+    (let* ((parking-spot (find function-key (wp-parking-spots wp) :key #'ps-function-key))
+           (tenant (when parking-spot (ps-tenant parking-spot))))
+      (cond ((and parking-spot (parking-spot-on-screen-p parking-spot window))
+             (cond (tenant
+                    (cond ((eql window tenant)
+                           (cmenu:echo-msg "Already in parking-spot ~a." function-key))
+                          (t
+                           (cond ((modified-p tenant)
+                                  (cmenu:notify (format nil "First save: ~S. Then try again." 
+                                                        (cmenu:window-path tenant)))
+                                  (init-parking tenant))
+                                 (t
+                                  (vacate-current-location wp window)
+                                  (bump-location-and-set-location-values wp parking-spot window)
+                                  (#/makeKeyAndOrderFront: window nil)
+                                  (cmenu:echo-msg "Moved to parking-spot ~a." function-key))))))
+                   (t 
+                    (vacate-current-location wp window)
+                    (apply-parking-spot-values parking-spot window)
+                    (#/makeKeyAndOrderFront: window nil)
+                    (cmenu:echo-msg "Moved to parking-spot ~a." function-key))))
+            (t
+             (if (null parking-spot)
+               (cmenu:notify (format nil "Parking-spot ~a is not defined." function-key))
+               (cmenu:notify (format nil "Parking-spot ~a is off screen." function-key))))))))
 
 ;;; ----------------------------------------------------------------------------
 ;;; file I/O
