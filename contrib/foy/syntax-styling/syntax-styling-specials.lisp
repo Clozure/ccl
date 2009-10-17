@@ -21,7 +21,7 @@
 
 (in-package "SAX")
 
-(defParameter *style-case-p* nil "To set case, or not to set case.")
+(defParameter *style-case-p* t "To set case, or not to set case.")
 
 ;;; ----------------------------------------------------------------------------
 ;;; Configure your style by hacking the colors and style parameters below:
