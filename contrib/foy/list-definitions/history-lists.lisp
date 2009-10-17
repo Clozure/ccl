@@ -475,14 +475,27 @@
 
 ;;; ----------------------------------------------------------------------------
 ;;; File History Interface:
-;;; 
-(objc:defmethod (#/becomeKeyWindow :void) ((w gui::hemlock-frame))
-  (let* ((path (window-path w))
+;;;
+;;; *** Instead of doing all this stuff need the equivalent of:
+;;; *** (setf ccl::*default-editor-class* 'derived-hemlock-frame-class)
+#-syntax-styling 
+(objc:defMethod (#/becomeKeyWindow :void) ((w gui::hemlock-frame))
+  (let* ((path (cmenu:window-path w))
          (name (when (and path (string-equal (pathname-type path) "lisp"))
                  (concatenate 'string (pathname-name path) ".lisp"))))
     (when (and name path)
-      (maybe-add-history-entry *file-history-list* name path))
-    (call-next-method)))
+      (maybe-add-history-entry *file-history-list* name path)))
+  (let ((become-key-function (find-symbol "BECOME-KEY-WINDOW" (find-package :sax))))
+    (when become-key-function (funcall become-key-function w)))
+  (call-next-method))
+
+#+syntax-styling
+(defMethod become-key-window ((w gui::hemlock-frame))
+  (let* ((path (cmenu:window-path w))
+         (name (when (and path (string-equal (pathname-type path) "lisp"))
+                 (concatenate 'string (pathname-name path) ".lisp"))))
+    (when (and name path)
+      (maybe-add-history-entry *file-history-list* name path))))
 
 ;;; ----------------------------------------------------------------------------
 ;;; Position History Interface:
