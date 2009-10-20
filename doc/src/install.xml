@@ -234,6 +234,13 @@ Welcome to Clozure Common Lisp Version 1.2  (DarwinX8664)!
   ? (quit)
   joe:ccl>]]>
         </programlisting>
+
+	<para>
+	  If you don't have a C compiler toolchain installed, the
+	  <literal>rebuild-ccl</literal> will not work.  Please
+	  refer to <xref linkend="building-ccl-from-source"/> for
+	  addtional details.
+	</para>
 	<sect3 id="Checking-Subversion-Installation"><title>Checking Subversion Installation</title>
       <para>If <literal>svn co</literal> doesn't work, then make sure
       that Subversion is installed on your system.  Bring up a command
