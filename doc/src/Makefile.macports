@@ -10,7 +10,7 @@
 # translators use Java, this makefile would need to be rewritten to use
 # anything but xsltproc.
 
-XSLTPROC = /opt/local/bin/xsltproc
+XSLTPROC = xsltproc
 
 
 # On a new system or when using a new version of xsltproc or of the
