@@ -10,7 +10,7 @@
 ; Tested in cclv1.2 on 32-bitPPC, in cclv1.3 on 32-bitPPC and 64-bitIntel Macs.
 ; Tested only in images constructed using (require :cocoa-application).
 
-(setf *debug-cocoa-calls* nil)
+(setf easygui::*debug-cocoa-calls* nil)
 
 (defclass view-hierarchy-demo-window (window)
      ((with :initarg :with :initform :button)
@@ -270,8 +270,8 @@
                     ("Give Example" "With Slider"              ,#'(lambda nil (example :slider)))
                     ("Flipping" "New windows are flipped"      ,#'(lambda nil (setf *screen-flipped* t)))
                     ("Flipping" "New windows are not flipped"  ,#'(lambda nil (setf *screen-flipped* nil)))
-                    ("Tracing" "Cocoa Calls are traced"        ,#'(lambda nil (setf *debug-cocoa-calls* t)))
-                    ("Tracing" "Cocoa Calls are not traced"    ,#'(lambda nil (setf *debug-cocoa-calls* nil)))
+                    ("Tracing" "Cocoa Calls are traced"        ,#'(lambda nil (setf easygui::*debug-cocoa-calls* t)))
+                    ("Tracing" "Cocoa Calls are not traced"    ,#'(lambda nil (setf easygui::*debug-cocoa-calls* nil)))
                     ("Color Picker" "Text"                     ,#'(lambda nil
                                                                     (cl-user::process-run-function "Pick color for text in box"
                                                                      #'(lambda nil

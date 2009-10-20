@@ -501,10 +501,11 @@ To avoid deallocation, use RETAINING-OBJECTS"))
 (defmacro define-tooltip-accessor (cocoa-class)
   `(progn
      (objc:defmethod #/view:stringForToolTip:point:userData:
-                     ((view ,cocoa-class)
+                     ((self ,cocoa-class)
+		      view
                       (tag :<NST>ool<T>ip<T>ag)
                       (point :<NSP>oint)
-                      (userdata :id))
+                      (userdata :address))
        (declare (ignorable tag point userdata))
        (ccl::%make-nsstring (or (calculate-ns-tooltip view) "")))
      (objc:defmethod #/toolTip ((view ,cocoa-class))
