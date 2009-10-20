@@ -78,7 +78,7 @@
                   (setf cur-string s cur-string-pos 1)
                   (return (aref s 0))))))))))
 
-(defmethod ccl::read-toplevel-form ((stream cocoa-listener-input-stream) &key eof-value)
+(defmethod ccl::read-toplevel-form ((stream cocoa-listener-input-stream) &key eof-value file-name start-offset map)
   (with-slots (queue queue-lock read-lock queue-semaphore text-semaphore cur-string cur-string-pos cur-sstream
                cur-env source-map cur-offset)
     stream
