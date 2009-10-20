@@ -73,7 +73,9 @@ cocoa-ide/ide-contents/Resources/English.lproj/xapropos.nib/keyedobjects.nib -te
 cocoa-ide/ide-contents/Resources/English.lproj/xinspector.nib/designable.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/xinspector.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/General.tiff -text
+cocoa-ide/ide-contents/Resources/font-panel.tiff -text
 cocoa-ide/ide-contents/Resources/gear.png -text
+cocoa-ide/ide-contents/Resources/info.tiff -text
 cocoa-ide/ide-contents/Resources/openmcl-icon.icns -text svneol=unset#unset
 cocoa-ide/ide-contents/Resources/openmcl-icon.ico -text
 cocoa-ide/ide-self-update.lisp -text
