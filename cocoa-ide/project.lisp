@@ -134,8 +134,8 @@
                             :with-item-identifier #@"info")))
         (setf (#/label toolbar-item) #@"Get Info"
               (#/paletteLabel toolbar-item) #@"Get Info"
-              (#/image toolbar-item) (#/imageNamed: ns:ns-image
-                                                    #&NSImageNameInfo)
+              #-cocotron (#/image toolbar-item) #-cocotron (#/imageNamed: ns:ns-image
+                                                                          #&NSImageNameInfo)
               (#/target toolbar-item) self
               (#/action toolbar-item) (@selector #/showInfoPanel)
               (#/objectForKey: toolbar-items #@"info") toolbar-item))
@@ -143,8 +143,8 @@
                             :with-item-identifier #@"edit")))
         (setf (#/label toolbar-item) #@"Edit"
               (#/paletteLabel toolbar-item) #@"Edit"
-              (#/image toolbar-item) (#/imageNamed: ns:ns-image
-                                                    #&NSImageNameFontPanel)
+              #-cocotron (#/image toolbar-item) #-cocotron (#/imageNamed: ns:ns-image
+                                                                          #&NSImageNameFontPanel)
               (#/target toolbar-item) self
               (#/action toolbar-item) (@selector #/openSystem:)
               (#/objectForKey: toolbar-items #@"edit") toolbar-item))

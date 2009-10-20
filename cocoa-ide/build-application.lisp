@@ -58,6 +58,7 @@
     (when copy-ide-resources
       (recursive-copy-directory (path ide-bundle-path "Contents" "Resources/")
                                 (path app-bundle  "Contents" "Resources/")
+                                :test #'not-vc-control-file
                                 :if-exists :overwrite))
     ;; write Info.plist
     (write-info-plist info-plist (path app-bundle "Contents" "Info.plist")
