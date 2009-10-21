@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # Change the definition of CCL_DEFAULT_DIRECTORY below to refer to
-# your OpenMCL installation directory.  
+# your Clozure CL installation directory.  
 # Any definition of CCL_DEFAULT_DIRECTORY already present in the environment 
 # takes precedence over definitions made below.
 
@@ -39,7 +39,7 @@ export CCL_DEFAULT_DIRECTORY
 
 DD=${CCL_DEFAULT_DIRECTORY}
 
-# If you don't want to guess the name of the OpenMCL kernel on
+# If you don't want to guess the name of the Clozure CL kernel on
 # every invocation (or if you want to use a kernel with a
 # non-default name), you might want to uncomment and change
 # the following line:

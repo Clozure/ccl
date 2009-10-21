@@ -1,15 +1,15 @@
 ;;-*- Mode: Lisp; Package: CCL -*-
 ;;;
 ;;;   Copyright (C) 1994-2001 Digitool, Inc
-;;;   This file is part of OpenMCL.  
+;;;   This file is part of Clozure CL.  
 ;;;
-;;;   OpenMCL is licensed under the terms of the Lisp Lesser GNU Public
-;;;   License , known as the LLGPL and distributed with OpenMCL as the
+;;;   Clozure CL is licensed under the terms of the Lisp Lesser GNU Public
+;;;   License , known as the LLGPL and distributed with Clozure CL as the
 ;;;   file "LICENSE".  The LLGPL consists of a preamble and the LGPL,
-;;;   which is distributed with OpenMCL as the file "LGPL".  Where these
+;;;   which is distributed with Clozure CL as the file "LGPL".  Where these
 ;;;   conflict, the preamble takes precedence.  
 ;;;
-;;;   OpenMCL is referenced in the preamble as the "LIBRARY."
+;;;   Clozure CL is referenced in the preamble as the "LIBRARY."
 ;;;
 ;;;   The LLGPL is also available online at
 ;;;   http://opensource.franz.com/preamble.html
@@ -1216,11 +1216,11 @@ arg_y) (borrow-in arg_z))
     (blr)))
     
 ;;; Especially when large operands are involved, the GNU Multiple Precision
-;;; library's algorithm's are often faster than OpenMCL's.  GMP's MPN
+;;; library's algorithm's are often faster than Clozure CL's.  GMP's MPN
 ;;; library defines operations on "limb vectors", which are basically
 ;;; just sequences of 32-bit digits (least-significant digit first), which
-;;; is just about exactly the same way that OpenMCL stores bignums.
-;;; We might want to (eventually) link some or all of GMP into OpenMCL;
+;;; is just about exactly the same way that Clozure CL stores bignums.
+;;; We might want to (eventually) link some or all of GMP into Clozure CL;
 ;;; in the meantime, it seems that we get some performance benefit from
 ;;; using GMP representation and algorithms in some mixture of LAP and Lisp.
 ;;; To approximate the "limb vector" representation, we copy operands to

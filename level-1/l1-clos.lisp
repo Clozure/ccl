@@ -2,15 +2,15 @@
 ;;;
 ;;;   Copyright (C) 1994-2001 Digitool, Inc
 ;;;   Copyright (C) 2002-2003 Clozure Associates
-;;;   This file is part of OpenMCL.
+;;;   This file is part of Clozure CL.
 ;;;
-;;;   OpenMCL is licensed under the terms of the Lisp Lesser GNU Public
-;;;   License , known as the LLGPL and distributed with OpenMCL as the
+;;;   Clozure CL is licensed under the terms of the Lisp Lesser GNU Public
+;;;   License , known as the LLGPL and distributed with Clozure CL as the
 ;;;   file "LICENSE".  The LLGPL consists of a preamble and the LGPL,
-;;;   which is distributed with OpenMCL as the file "LGPL".  Where these
+;;;   which is distributed with Clozure CL as the file "LGPL".  Where these
 ;;;   conflict, the preamble takes precedence.  
 ;;;
-;;;   OpenMCL is referenced in the preamble as the "LIBRARY."
+;;;   Clozure CL is referenced in the preamble as the "LIBRARY."
 ;;;
 ;;;   The LLGPL is also available online at
 ;;;   http://opensource.franz.com/preamble.html
@@ -1773,7 +1773,7 @@ changing its name to ~s may have serious consequences." class new))
     ;; Now loop over all of the class's effective slot definitions.
     (dolist (slotd (class-slots class))
       ;; Anything that inherits from STANDARD-EFFECTIVE-SLOT-DEFINITION
-      ;; in OpenMCL will have a CCL::TYPE-PREDICATE slot.  It's not
+      ;; in Clozure CL will have a CCL::TYPE-PREDICATE slot.  It's not
       ;; well-defined to inherit from EFFECTIVE-SLOT-DEFINITION without
       ;; also inheriting from STANDARD-EFFECTIVE-SLOT-DEFINITION,
       ;; and I'd rather not check here.  If you really want to

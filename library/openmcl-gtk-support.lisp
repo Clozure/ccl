@@ -1,7 +1,7 @@
 ;;;-*-Mode: LISP; Package: CCL -*-
 ;;;
 ;;;   Copyright (C) 2001 Clozure Associates
-;;;   This file is part of OpenMCL.  
+;;;   This file is part of Clozure CL.  
 ;;;
 ;;;   Opensourced MCL is free software; you can redistribute it and/or
 ;;;   modify it under the terms of the GNU Lesser General Public
@@ -62,7 +62,7 @@
 ;;; can be set to nil to suppress this behavior.)
 
 ;;; Used in error reporting and to provide default window titles
-(defvar *gtk-init-application-name* "OpenMCL")
+(defvar *gtk-init-application-name* "Clozure CL")
 
 (defvar *gtk-init-arguments* ())
 (defvar *gtk-auto-initialize* t)
