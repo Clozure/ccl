@@ -1,5 +1,6 @@
 ;;;-*-Mode: LISP; Package: CCL -*-
 ;;;
+;;;   Copyright (C) 2009 Clozure Associates
 ;;;   Copyright (C) 2001 Clozure Associates
 ;;;   This file is part of Clozure CL.  
 ;;;

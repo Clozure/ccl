@@ -1,4 +1,4 @@
-/*   Copyright (C) 2003-2005, Clozure Associates. */
+/*   Copyright (C) 2003-2009, Clozure Associates. */
 /*   Copyright (C) 1994-2001 Digitool, Inc */
 /*   This file is part of Clozure CL. */
 

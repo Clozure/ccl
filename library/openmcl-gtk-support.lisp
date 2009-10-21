@@ -1,6 +1,6 @@
 ;;;-*-Mode: LISP; Package: CCL -*-
 ;;;
-;;;   Copyright (C) 2001 Clozure Associates
+;;;   Copyright (C) 2001-2009 Clozure Associates
 ;;;   This file is part of Clozure CL.  
 ;;;
 ;;;   Opensourced MCL is free software; you can redistribute it and/or

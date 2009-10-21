@@ -1,6 +1,6 @@
 ;;; x86-trap-support
 ;;;
-;;;   Copyright (C) 2005-2006 Clozure Associates and contributors
+;;;   Copyright (C) 2005-2009 Clozure Associates and contributors
 ;;;   This file is part of Clozure CL.  
 ;;;
 ;;;   Clozure CL is licensed under the terms of the Lisp Lesser GNU Public

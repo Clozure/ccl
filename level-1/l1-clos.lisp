@@ -1,7 +1,7 @@
 ;;;-*-Mode: LISP; Package: CCL -*-
 ;;;
 ;;;   Copyright (C) 1994-2001 Digitool, Inc
-;;;   Copyright (C) 2002-2003 Clozure Associates
+;;;   Copyright (C) 2002-2009 Clozure Associates
 ;;;   This file is part of Clozure CL.
 ;;;
 ;;;   Clozure CL is licensed under the terms of the Lisp Lesser GNU Public
