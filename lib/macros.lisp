@@ -178,29 +178,62 @@
 (defmacro %vstack-block (spec &body forms)
   `(%stack-block (,spec) ,@forms))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+(defun extract-bound-decls-for-dolist-var (var decls env)
+  (if (null decls)
+    (values nil nil)
+      (collect ((var-decls)
+                (other-decls))
+        (dolist (declform decls
+                 (let* ((vdecls (var-decls))
+                        (others (other-decls)))
+                   (values (if vdecls `((declare ,@vdecls)))
+                           (if others `((declare ,@others))))))
+          ;; (assert (eq (car declform) 'declare))
+          (dolist (decl (cdr declform))
+            (if (atom decl)
+              (other-decls decl)
+              (let* ((spec (car decl)))
+                (if (specifier-type-if-known spec env)
+                  (setq spec 'type
+                        decl `(type ,@decl)))
+                (case spec
+                  (type
+                   (destructuring-bind (typespec &rest vars) (cdr decl)
+                     (cond ((member var vars :test #'eq)
+                            (setq vars (delete var vars))
+                            (var-decls `(type ,typespec ,var))
+                            (when vars
+                              (other-decls `(type ,typespec ,@vars))))
+                           (t (other-decls decl)))))
+                   ((special ingore ignorable ccl::ignore-if-unused)
+                    (let* ((vars (cdr decl)))
+                      (cond ((member var vars :test #'eq)
+                             (setq vars (delete var vars))
+                             (var-decls `(,spec ,var))
+                             (when vars
+                               (other-decls `(,spec ,@vars))))
+                            (t (other-decls decl)))))
+                   (t (other-decls decl))))))))))
+)
+
+
+
 (defmacro dolist ((varsym list &optional ret) &body body &environment env)
   (if (not (symbolp varsym)) (signal-program-error $XNotSym varsym))
-  (let* ((toplab (gensym))
-         (tstlab (gensym))
-         (lstsym (gensym)))
     (multiple-value-bind (forms decls) (parse-body body env nil)
-      `(block nil
-         (let* ((,lstsym ,list))
-           (tagbody
-              (go ,tstlab)
-              ,toplab
-              (let ((,varsym (car ,lstsym)))
-                ,@decls
-                (tagbody
-                   ,@forms)
-                (setq ,lstsym (cdr (the list ,lstsym))))
-              ,tstlab
-              (if ,lstsym (go ,toplab))))
-         ,@(if ret `((let ((,varsym nil))
-                       (declare (ignore-if-unused ,varsym)
-                                ,@(loop for decl in decls
-                                        append (remove 'special (cdr decl) :test #'neq :key #'car)))
-                       ,ret)))))))
+      (multiple-value-bind (var-decls other-decls)
+          (extract-bound-decls-for-dolist-var varsym decls env)
+        (let* ((lstsym (gensym)))
+        `(do* ((,lstsym ,list (cdr (the list ,lstsym))))
+              ((null ,lstsym)
+               ,@(if ret `((let* ((,varsym ()))
+                             (declare (ignorable ,varsym))
+                             ,ret))))
+          ,@other-decls
+          (let* ((,varsym (car ,lstsym)))
+            ,@var-decls
+            (tagbody ,@forms)))))))
 
 (defmacro dovector ((varsym vector &optional ret) &body body &environment env)
   (if (not (symbolp varsym))(signal-program-error $XNotSym varsym))
