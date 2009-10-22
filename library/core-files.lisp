@@ -755,11 +755,11 @@
       (and error (error "No package named ~s" name))))
 
 (defun core-package-names (pkg-ptr)
-  (assert (core-uvtypep pkg-ptr 'package))
+  (assert (core-uvtypep pkg-ptr :package))
   (copy-from-core (core-uvref pkg-ptr pkg.names) :depth 2))
 
 (defun core-package-name (pkg-ptr)
-  (assert (core-uvtypep pkg-ptr 'package))  
+  (assert (core-uvtypep pkg-ptr :package))  
   (copy-from-core (core-car (core-uvref pkg-ptr pkg.names)) :depth 1))
 
 (defun core-find-symbol (name &optional (package (symbol-package name)))
