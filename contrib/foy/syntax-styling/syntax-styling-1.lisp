@@ -774,6 +774,8 @@
                        ;; *** define constants
                        (= code 13) ; #\newline
                        (= code 8)  ; #\delete, #\backspace
+                       ; #\tab, to accommodate anticipatory-symbol-complete
+                       (= code 9)
                        (= code 10) ; $\linefeed
                        (= code 127)) ; #\del
                #+sax-debug (when *char-printable-p-debug* (debug-out "~%printable1"))

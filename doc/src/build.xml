@@ -68,9 +68,9 @@
     <para>A <indexterm><primary>heap
           image</primary></indexterm> <glossterm linkend="lisp_image">heap
         image</glossterm> is a file that can be quickly mapped into a
-      process' address space. Conceptually, it's not too different
+      process's address space. Conceptually, it's not too different
       from an executable file or shared library in the OS's native
-      format (ELF orMach-O/dyld format); for historical reasons,
+      format (ELF or Mach-O/dyld format); for historical reasons,
       &CCL;'s own heap images are in their own (fairly simple)
       format. The term <literal>full heap image</literal> refers to a
       heap image file that contains all of the code and data that
@@ -237,69 +237,50 @@
   <!-- =========================================================== -->
   <sect1 id="Setting-Up-to-Build">
     <title>Setting Up to Build</title>
-    <para>There are currently three versions of &CCL; that you
-      might want to use (and therefore might want to build from
+    <para>At a given time, there are generally two versions of &CCL; that
+    you might want to use (and therefore might want to build from
       source):</para>
     <itemizedlist>
-      <listitem><para>Version 1.0 - the more stable version</para></listitem>
-      <listitem><para>Version 1.1 - the more recent version, which
-          runs on more platforms (including x86-64 platforms) and
-          supports Unicode</para></listitem>
-	  <listitem><para>Version 1.2 - supports (at least) all of the
-	      features and platforms of 1.1, but is distributed and updated
-	      differently</para></listitem>
+      <listitem><para>The released version</para></listitem>
+      <listitem><para>The development version, called the "trunk", which
+      may contain both interesting new features and interesting new bugs
+      </para></listitem>
     </itemizedlist>
-    <para>All versions are available for download from the &CCL;
-      website in the form of archives that contain everything you need
-      to work with &CCL;, including the complete sources, a full
-      heap image, and the foreign-function interface database.</para>
-    <para>Version 1.0 archives are named
-      <literal>openmcl-</literal><replaceable>platform</replaceable><literal>-all-1.0.tar.gz</literal>,
-      where <replaceable>platform</replaceable> is either
-      <literal>darwinppc</literal>, <literal>darwinppc64</literal>, or
-      <literal>linuxppc</literal>.  Because version 1.0 is no longer
-      undergoing active development, you won't ever need to update
-      these sources.</para>
-    <para>Version 1.1 archives are named
-      <literal>openmcl-</literal><replaceable>platform</replaceable><literal>-snapshot-</literal><replaceable>yymmdd</replaceable><literal>.tar.gz</literal>,
-      where <replaceable>platform</replaceable> is either
-      <literal>darwinppc</literal>, <literal>darwinx8664</literal>,
-      <literal>linuxppc</literal>, <literal>linuxx8664</literal>, or
-      <literal>freebsdx8664</literal>, and where
-      <replaceable>yymmdd</replaceable> is the year, month, and day
-      the snapshot was released.</para>
-    <para>Because version 1.1 is undergoing active development,
-      there may be times when you want to get sources that are more
-      recent than the most recent snapshot and use them to build
-      yourself a new bleeding-edge &CCL;.  In that case, you should
-      download and install the latest snapshot, and then update your
-      sources via CVS.  At that point you can rebuild and you'll have
-      the latest and greatest &CCL;.  The snapshot has CVS
-      working-copy information in it, so all you need to do to update
-      is</para>
-    <programlisting>
-$ cd ccl
-$ cvs login             # password is "cvs"
-# this step only needs to be done once,
-# that'll store the trivially encrypted
-# password in ~/.cvspas
-$ cvs update
-    </programlisting>
-    <para>Unless you tell it to, cvs won't delete ("prune") empty
-      directories or create new ones when the repository changes.
-      It's generally a good habit to use</para>
-    <programlisting>
-$ cvs update -d -P      # create dirs as needed, prune empty ones
-    </programlisting>
-    <para>Version 1.2 archives follow naming conventions that are
-      similar to those used by 1.0 (though more platforms are supported.)
-      However, rather than containing CVS working-copy information, the
-      1.2 (and, presumably, later) archives contain metainformation used
-      by the Subversion (svn) source-code control system.</para>
-    <para>Subversion client programs are pre-installed on OSX 10.5 and
+    <para>All versions are available for download from svn.clozure.com via
+    the Subversion source control system.</para>
+    <para>
+      For example, to get a released version (1.3 in this example),
+      use a command like:
+      <programlisting>
+	svn co http://svn.clozure.com/publicsvn/openmcl/release/1.3/xxx/ccl
+      </programlisting>
+    </para>
+    <para>
+      To get the trunk version, use:
+      <programlisting>
+	svn co http://svn.clozure.com/publicsvn/openmcl/trunk/xxx/ccl
+      </programlisting>
+    </para>
+    <para>
+      Change the "xxx" to one of the following names:
+      <literal>darwinx86</literal>,
+      <literal>linuxx86</literal>,
+      <literal>freebsdx86</literal>,
+      <literal>solarisx86</literal>,
+      <literal>window</literal>,
+      <literal>linuxppc</literal>,
+      or 
+      <literal>darwinppc</literal>.
+    </para>
+    <para>
+      In the case of released versions, there may also be tar archives
+      available.  See the <ulink url="http://trac.clozure.com/ccl/">Clozure CL
+      Trac</ulink> for details.
+    </para>
+    <para>Subversion client programs are pre-installed on Mac OS X 10.5 and
       later and are typically either pre-installed or readily available
       on Linux and FreeBSD platforms.  The <ulink url="http://subversion.tigris.org">Subversion web page</ulink> contains links to subversion client programs
-      for many platforms; users of OSX versions 10.4 and earlier can also
+      for many platforms; users of Mac OS X 10.4 can also
       install Subversion clients via Fink or MacPorts.</para>
     
   </sect1>
@@ -403,8 +384,8 @@ $ cvs update -d -P      # create dirs as needed, prune empty ones
 	  <para> In general, the more recent the versions of those
 	    tools, the better; some versions of gcc 3.x on Linux have
 	    difficulty compiling some of the kernel source code correctly
-	    (so gcc 4.0 should be used, if possible.)  On OSX, the
-	    versions of the tools distributed with XCode should work fine;
+	    (so gcc 4.0 should be used, if possible.)  On Mac OS X, the
+	    versions of the tools distributed with Xcode should work fine;
 	    on Linux, the versions of the tools installed with the OS (or
 	    available through its package management system) should work
 	    fine if they're "recent enough".  On FreeBSD, the installed
@@ -412,8 +393,11 @@ $ cvs update -d -P      # create dirs as needed, prune empty ones
 	    some features that the kernel build process depends on; the
 	    GNU version of the m4 macroprocessor (called
 	    <literal>gm4</literal> on FreeBSD) should be installed.
-
 	  </para>
+	  <note><para>In order to build the lisp kernel on Mac OS X
+	  10.6 Snow Leopard, you must install the optional 10.4
+	  support when installing Xcode.</para>
+	  </note>
     </sect2>
 
     <!-- ******************************************************** -->

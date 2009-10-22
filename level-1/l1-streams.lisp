@@ -223,6 +223,8 @@
   (dispose-heap-ivector v))
 
 (defun make-heap-ivector (element-count element-type)
+  (require-type element-count `(unsigned-byte ,(- target::nbits-in-word
+						  target::num-subtag-bits)))
   (let* ((subtag (ccl::element-type-subtype element-type)))
     (unless
         #+ppc32-target
