@@ -1,15 +1,15 @@
 ;;;-*- Mode: Lisp; Package: CCL -*-
 ;;;
-;;;   Copyright (C) 2005, Clozure Associates and contributors.
-;;;   This file is part of OpenMCL.
+;;;   Copyright (C) 2005-2009 Clozure Associates and contributors.
+;;;   This file is part of Clozure CL.
 ;;;
-;;;   OpenMCL is licensed under the terms of the Lisp Lesser GNU Public
-;;;   License , known as the LLGPL and distributed with OpenMCL as the
+;;;   Clozure CL is licensed under the terms of the Lisp Lesser GNU Public
+;;;   License , known as the LLGPL and distributed with Clozure CL as the
 ;;;   file "LICENSE".  The LLGPL consists of a preamble and the LGPL,
-;;;   which is distributed with OpenMCL as the file "LGPL".  Where these
+;;;   which is distributed with Clozure CL as the file "LGPL".  Where these
 ;;;   conflict, the preamble takes precedence.
 ;;;
-;;;   OpenMCL is referenced in the preamble as the "LIBRARY."
+;;;   Clozure CL is referenced in the preamble as the "LIBRARY."
 ;;;
 ;;;   The LLGPL is also available online at
 ;;;   http://opensource.franz.com/preamble.html
@@ -173,7 +173,7 @@
 ;;; the instruction at that address is marked as a label; otherwise,
 ;;; we process the new block which starts at that address.
 ;;; Eventually, this'll terminate with all reachable code having been
-;;; processed.  There's embedded data and alignment padding in OpenMCL
+;;; processed.  There's embedded data and alignment padding in Clozure CL
 ;;; x86 functions and this approach means that we won't try to
 ;;; disassemble any of that; if the compiler generates any unreachable
 ;;; code, we won't see that, either.

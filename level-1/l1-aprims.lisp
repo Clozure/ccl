@@ -1,15 +1,16 @@
 ;;;-*-Mode: LISP; Package: CCL -*-
 ;;;
+;;;   Copyright (C) 2009 Clozure Associates
 ;;;   Copyright (C) 1994-2001 Digitool, Inc
-;;;   This file is part of OpenMCL.  
+;;;   This file is part of Clozure CL.  
 ;;;
-;;;   OpenMCL is licensed under the terms of the Lisp Lesser GNU Public
-;;;   License , known as the LLGPL and distributed with OpenMCL as the
+;;;   Clozure CL is licensed under the terms of the Lisp Lesser GNU Public
+;;;   License , known as the LLGPL and distributed with Clozure CL as the
 ;;;   file "LICENSE".  The LLGPL consists of a preamble and the LGPL,
-;;;   which is distributed with OpenMCL as the file "LGPL".  Where these
+;;;   which is distributed with Clozure CL as the file "LGPL".  Where these
 ;;;   conflict, the preamble takes precedence.  
 ;;;
-;;;   OpenMCL is referenced in the preamble as the "LIBRARY."
+;;;   Clozure CL is referenced in the preamble as the "LIBRARY."
 ;;;
 ;;;   The LLGPL is also available online at
 ;;;   http://opensource.franz.com/preamble.html
@@ -1135,9 +1136,8 @@ generation, and the oldest ephemeral generation."
 
 (defun configure-egc (e0size e1size e2size)
   "If the EGC is currently disabled, put the indicated threshold sizes in
-effect and returns T, otherwise, returns NIL. (The provided threshold sizes
-are rounded up to a multiple of 64Kbytes in OpenMCL 0.14 and to a multiple
-of 32KBytes in earlier versions.)"
+effect and returns T, otherwise, returns NIL.  The provided threshold sizes
+are rounded up to a multiple of 64Kbytes."
   (let* ((was-enabled (egc-active-p))
          (e2size (require-type e2size '(unsigned-byte 18)))
          (e1size (require-type e1size '(unsigned-byte 18)))

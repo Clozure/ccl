@@ -1,15 +1,16 @@
 ;;;-*-Mode: LISP; Package: CCL -*-
 ;;;
+;;;   Copyright (C) 2009 Clozure Associates
 ;;;   Copyright (C) 2001 Clozure Associates
-;;;   This file is part of OpenMCL.  
+;;;   This file is part of Clozure CL.  
 ;;;
-;;;   OpenMCL is licensed under the terms of the Lisp Lesser GNU Public
-;;;   License , known as the LLGPL and distributed with OpenMCL as the
+;;;   Clozure CL is licensed under the terms of the Lisp Lesser GNU Public
+;;;   License , known as the LLGPL and distributed with Clozure CL as the
 ;;;   file "LICENSE".  The LLGPL consists of a preamble and the LGPL,
-;;;   which is distributed with OpenMCL as the file "LGPL".  Where these
+;;;   which is distributed with Clozure CL as the file "LGPL".  Where these
 ;;;   conflict, the preamble takes precedence.  
 ;;;
-;;;   OpenMCL is referenced in the preamble as the "LIBRARY."
+;;;   Clozure CL is referenced in the preamble as the "LIBRARY."
 ;;;
 ;;;   The LLGPL is also available online at
 ;;;   http://opensource.franz.com/preamble.html
@@ -30,7 +31,7 @@
 ;;; just about exactly what we want here.
 ;;;
 ;;; Those of you keeping score may notice that this is the third or forth
-;;; database format that OpenMCL has used for its interface database.
+;;; database format that Clozure CL has used for its interface database.
 ;;; As always, this will hopefully be the last format change; the fact
 ;;; that this code is self-contained (doesn't depend on any Unix database
 ;;; library) should make it easier to port to other platforms.

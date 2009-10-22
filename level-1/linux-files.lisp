@@ -1,15 +1,16 @@
 ;;;-*- Mode: Lisp; Package: CCL -*-
 ;;;
+;;;   Copyright (C) 2009 Clozure Associates
 ;;;   Copyright (C) 1994-2001 Digitool, Inc
-;;;   This file is part of OpenMCL.  
+;;;   This file is part of Clozure CL.  
 ;;;
-;;;   OpenMCL is licensed under the terms of the Lisp Lesser GNU Public
-;;;   License , known as the LLGPL and distributed with OpenMCL as the
+;;;   Clozure CL is licensed under the terms of the Lisp Lesser GNU Public
+;;;   License , known as the LLGPL and distributed with Clozure CL as the
 ;;;   file "LICENSE".  The LLGPL consists of a preamble and the LGPL,
-;;;   which is distributed with OpenMCL as the file "LGPL".  Where these
+;;;   which is distributed with Clozure CL as the file "LGPL".  Where these
 ;;;   conflict, the preamble takes precedence.  
 ;;;
-;;;   OpenMCL is referenced in the preamble as the "LIBRARY."
+;;;   Clozure CL is referenced in the preamble as the "LIBRARY."
 ;;;
 ;;;   The LLGPL is also available online at
 ;;;   http://opensource.franz.com/preamble.html
@@ -206,8 +207,8 @@ checked, though no guarantee is given that one hasn't been created since."
                                 (%get-native-utf-16-cstring buffer)))))
 
 (defun current-directory-name ()
-  "Look up the current working directory of the OpenMCL process; unless
-it has been changed, this is the directory OpenMCL was started in."
+  "Look up the current working directory of the Clozure CL process; unless
+it has been changed, this is the directory Clozure CL was started in."
   (flet ((try-getting-dirname (bufsize)
 	   (%stack-block ((buf bufsize))
 	     (let* ((len (%os-getcwd buf bufsize)))
@@ -285,14 +286,14 @@ environment. If there is no such environment variable, create it."
 #-windows-target                        ; Windows "impersonation" crap ?
 (defun setuid (uid)
   "Attempt to change the current user ID (both real and effective);
-fails unless the OpenMCL process has super-user privileges or the ID
+fails unless the Clozure CL process has super-user privileges or the ID
 given is that of the current user."
   (int-errno-call (#_setuid uid)))
 
 #-windows-target
 (defun setgid (uid)
   "Attempt to change the current group ID (both real and effective);
-fails unless the OpenMCL process has super-user privileges or the ID
+fails unless the Clozure CL process has super-user privileges or the ID
 given is that of a group to which the current user belongs."
   (int-errno-call (#_setgid uid)))
   
@@ -773,7 +774,7 @@ given is that of a group to which the current user belongs."
   (#_tcgetpgrp fd))
 
 (defun getpid ()
-  "Return the ID of the OpenMCL OS process."
+  "Return the ID of the Clozure CL OS process."
   #-windows-target
   (int-errno-call (#_getpid))
   #+windows-target (#_GetCurrentProcessId))
@@ -2115,7 +2116,7 @@ not, why not; and what its result code was if it completed."
                                 (error "Mapping failed: ~a" (%strerror errno))))))
                         (with-macptrs ((v (%inc-ptr header-addr target::fulltag-misc)))
                           (let* ((vector (rlet ((p :address v)) (%get-object p 0))))
-                            ;; Tell some parts of OpenMCL - notably the
+                            ;; Tell some parts of Clozure CL - notably the
                             ;; printer - that this thing off in foreign
                             ;; memory is a real lisp object and not
                             ;; "bogus".

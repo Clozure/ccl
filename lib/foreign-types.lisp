@@ -1,15 +1,15 @@
 ;;;-*-Mode: LISP; Package: CCL -*-
 ;;;
-;;;   Copyright (C) 2001 Clozure Associates
-;;;   This file is part of OpenMCL.  
+;;;   Copyright (C) 2001-2009 Clozure Associates
+;;;   This file is part of Clozure CL.  
 ;;;
-;;;   OpenMCL is licensed under the terms of the Lisp Lesser GNU Public
-;;;   License , known as the LLGPL and distributed with OpenMCL as the
+;;;   Clozure CL is licensed under the terms of the Lisp Lesser GNU Public
+;;;   License , known as the LLGPL and distributed with Clozure CL as the
 ;;;   file "LICENSE".  The LLGPL consists of a preamble and the LGPL,
-;;;   which is distributed with OpenMCL as the file "LGPL".  Where these
+;;;   which is distributed with Clozure CL as the file "LGPL".  Where these
 ;;;   conflict, the preamble takes precedence.  
 ;;;
-;;;   OpenMCL is referenced in the preamble as the "LIBRARY."
+;;;   Clozure CL is referenced in the preamble as the "LIBRARY."
 ;;;
 ;;;   The LLGPL is also available online at
 ;;;   http://opensource.franz.com/preamble.html
@@ -165,14 +165,14 @@
 	(append-dll-node d (ftd-dirlist ftd)))))
 
 (defun use-interface-dir (name &optional (ftd *target-ftd*))
-  "Tell OpenMCL to add the interface directory denoted by dir-id to the
+  "Tell Clozure CL to add the interface directory denoted by dir-id to the
 list of interface directories which it consults for foreign type and
 function information. Arrange that that directory is searched before any
 others.
 
 Note that use-interface-dir merely adds an entry to a search list. If the
 named directory doesn't exist in the file system or doesn't contain a set
-of database files, a runtime error may occur when OpenMCL tries to open some
+of database files, a runtime error may occur when Clozure CL tries to open some
 database file in that directory, and it will try to open such a database
 file whenever it needs to find any foreign type or function information.
 unuse-interface-dir may come in handy in that case."
@@ -181,7 +181,7 @@ unuse-interface-dir may come in handy in that case."
     d))
 
 (defun unuse-interface-dir (name &optional (ftd *target-ftd*))
-  "Tell OpenMCL to remove the interface directory denoted by dir-id from
+  "Tell Clozure CL to remove the interface directory denoted by dir-id from
 the list of interface directories which are consulted for foreign type
 and function information. Returns T if the directory was on the search
 list, NIL otherwise."
@@ -1892,7 +1892,7 @@ result-type-specifer is :VOID or NIL"
       (%def-foreign-type :unsigned-long unsigned-long-type ftd))
     ;;
     ;; Defining the handful of foreign structures that are used
-    ;; to build OpenMCL here ensures that all backends see appropriate
+    ;; to build Clozure CL here ensures that all backends see appropriate
     ;; definitions of them.
     ;;
     ;; Don't use DEF-FOREIGN-TYPE here; this often runs too

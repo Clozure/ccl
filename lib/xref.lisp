@@ -1,15 +1,15 @@
 ;;; -*- Mode: Lisp; Package: CCL; indent-tabs-mode: nil -*-
 ;;;
 ;;;   Copyright (C) 2003 Oliver Markovic <entrox@entrox.org>
-;;;   This file is part of OpenMCL.
+;;;   This file is part of Clozure CL.
 ;;;
-;;;   OpenMCL is licensed under the terms of the Lisp Lesser GNU Public
-;;;   License , known as the LLGPL and distributed with OpenMCL as the
+;;;   Clozure CL is licensed under the terms of the Lisp Lesser GNU Public
+;;;   License , known as the LLGPL and distributed with Clozure CL as the
 ;;;   file "LICENSE".  The LLGPL consists of a preamble and the LGPL,
-;;;   which is distributed with OpenMCL as the file "LGPL".  Where these
+;;;   which is distributed with Clozure CL as the file "LGPL".  Where these
 ;;;   conflict, the preamble takes precedence.
 ;;;
-;;;   OpenMCL is referenced in the preamble as the "LIBRARY."
+;;;   Clozure CL is referenced in the preamble as the "LIBRARY."
 ;;;
 ;;;   The LLGPL is also available online at
 ;;;   http://opensource.franz.com/preamble.html
@@ -651,7 +651,7 @@ print a list of variables set by NAME instead."
   (values))
 
 
-;;; Hook into the OpenMCL compiler frontend, by pointing a couple
+;;; Hook into the Clozure CL compiler frontend, by pointing a couple
 ;;; of its variables at our functions.
 (setq ccl::*nx-discard-xref-info-hook* #'%discard-xref-info-for-function)
 (setq ccl::*nx-add-xref-entry-hook* #'%add-xref-entry)

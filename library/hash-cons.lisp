@@ -1,15 +1,15 @@
 ;;;-*-Mode: LISP; Package: CCL -*-
 ;;;
-;;;   Copyright (C) 2005 Clozure Associates
-;;;   This file is part of OpenMCL.  
+;;;   Copyright (C) 2005-2009 Clozure Associates
+;;;   This file is part of Clozure CL.  
 ;;;
-;;;   OpenMCL is licensed under the terms of the Lisp Lesser GNU Public
-;;;   License , known as the LLGPL and distributed with OpenMCL as the
+;;;   Clozure CL is licensed under the terms of the Lisp Lesser GNU Public
+;;;   License , known as the LLGPL and distributed with Clozure CL as the
 ;;;   file "LICENSE".  The LLGPL consists of a preamble and the LGPL,
-;;;   which is distributed with OpenMCL as the file "LGPL".  Where these
+;;;   which is distributed with Clozure CL as the file "LGPL".  Where these
 ;;;   conflict, the preamble takes precedence.  
 ;;;
-;;;   OpenMCL is referenced in the preamble as the "LIBRARY."
+;;;   Clozure CL is referenced in the preamble as the "LIBRARY."
 ;;;
 ;;;   The LLGPL is also available online at
 ;;;   http://opensource.franz.com/preamble.html
@@ -37,7 +37,7 @@
 ;;; "deleted" cell in a HONS hash table; the CAR and CDR of
 ;;; a pair are set to this value by the GC if the HONS which
 ;;; addresses that pair becomes garbage.  This value is used
-;;; in OpenMCL to denote unbound slots in STANDARD-INSTANCEs,
+;;; in Clozure CL to denote unbound slots in STANDARD-INSTANCEs,
 ;;; so setting a slot in a standard-instance to this value
 ;;; is roughly equivalent to calling SLOT-MAKUNBOUND.  This
 ;;; value prints as #<Slot-Unbound>.
@@ -47,7 +47,7 @@
 ;;; "free" cell in a HONS hash table; the CAR and CDR of
 ;;; a pair are initially set to this value by the GC if the HONS which
 ;;; addresses that pair becomes garbage.  This value is used
-;;; in OpenMCL to denote unbound special variabls
+;;; in Clozure CL to denote unbound special variabls
 ;;; setting a special variable to this value
 ;;; is roughly equivalent to calling MAKUNBOUND.  This
 ;;; value prints as #<Unbound>.
