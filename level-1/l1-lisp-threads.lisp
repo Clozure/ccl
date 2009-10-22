@@ -995,7 +995,7 @@ no longer being used."
              (queue (population.data population)))
         (do* ((prev nil spine)
               (spine queue (cdr spine)))
-             ((null tail))
+             ((null spine))
           (let* ((entry (car spine)))
             (destructuring-bind (o . f) entry
               (when (and (eq o object)
