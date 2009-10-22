@@ -127,6 +127,12 @@ contrib/foy/source-comparison/ReadMe.rtf -text
 contrib/foy/source-comparison/source-compare-dialog.lisp -text
 contrib/foy/source-comparison/source-compare.lisp -text
 contrib/foy/source-comparison/source-comparison.lisp -text
+contrib/foy/syntax-styling/ReadMe.rtf -text
+contrib/foy/syntax-styling/syntax-styling-1.lisp -text
+contrib/foy/syntax-styling/syntax-styling-2.lisp -text
+contrib/foy/syntax-styling/syntax-styling-comments.lisp -text
+contrib/foy/syntax-styling/syntax-styling-specials.lisp -text
+contrib/foy/syntax-styling/syntax-styling.lisp -text
 contrib/foy/window-parking-cm/ReadMe.rtf -text
 contrib/foy/window-parking-cm/window-parking-cm.lisp -text
 contrib/foy/window-parking-cm/window-parking-dialogs.lisp -text

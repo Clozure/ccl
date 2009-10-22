@@ -92,7 +92,7 @@ OSMIDDLELIBS =
 
 OSLIBS = $(OSEARLYLIBS) $(OSMIDDLELIBS) $(OSLATELIBS)
 
-../../dx86cl64:	 $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile
+../../dx86cl64:	 tiger-sdk-check $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile
 	$(LD) $(LDFLAGS) $(KSPOBJ) $(KERNELOBJ)  $(DEBUGOBJ) $(OSLIBS)
 
 
@@ -114,3 +114,9 @@ clean:	cclean
 
 strip:	../../dx86cl64
 	strip -s retain ../../dx86cl64
+
+.PHONY: tiger-sdk-check
+tiger-sdk-check:
+	@test -d /Developer/SDKs/MacOSX10.4u.sdk || \
+		(echo "*** Install Xcode 10.4 support"; exit 1)
+
