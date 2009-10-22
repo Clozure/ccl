@@ -207,6 +207,7 @@
     describe
     cover
     leaks
+    core-files
     asdf
     defsystem
     jp-encode
