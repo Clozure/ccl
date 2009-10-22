@@ -7207,22 +7207,19 @@
 
 (defun x862-inline-add2 (seg vreg xfer form1 form2)
   (with-x86-local-vinsn-macros (seg vreg xfer)
-    (let* ((fix1 (acode-fixnum-form-p form1))
-	   (fix2 (acode-fixnum-form-p form2))
-	   (otherform (if (and fix1
-			       (typep (ash fix1 *x862-target-fixnum-shift*)
-				      '(signed-byte 32)))
+    (let* ((c1 (acode-fixnum-form-p form1))
+	   (c2 (acode-fixnum-form-p form2))
+	   (fix1 (s32-fixnum-constant-p c1))
+	   (fix2 (s32-fixnum-constant-p c2))
+	   (otherform (if fix1
 			form2
-			(if (and fix2
-				 (typep (ash fix2 *x862-target-fixnum-shift*)
-					'(signed-byte 32)))
+			(if fix2
 			  form1))))
       (if otherform
         (x862-one-targeted-reg-form seg otherform ($ *x862-arg-z*))
         (x862-two-targeted-reg-forms seg form1 ($ *x862-arg-y*) form2 ($ *x862-arg-z*)))
       (let* ((out-of-line (backend-get-next-label))
              (done (backend-get-next-label)))
-      
         (ensuring-node-target (target vreg)
           (if otherform
             (unless (acode-fixnum-form-p otherform)
@@ -9220,23 +9217,24 @@
     (if (and fixnum-by (eql 0 fixnum-by))
       (x862-form seg vreg xfer ptr)
       (let* ((ptr-reg (with-imm-target () (ptr-reg :address)
-                        (x862-one-targeted-reg-form seg ptr ptr-reg))))
-        (if fixnum-by
+                        (x862-one-targeted-reg-form seg ptr ptr-reg)))
+	     (s32-by (s32-fixnum-constant-p fixnum-by)))
+        (if s32-by
           (let* ((result ptr-reg))
-            (! add-constant result fixnum-by)
+            (! add-constant result s32-by)
             (<- result))
-            (progn
-              (unless triv-by
-                (x862-push-register seg ptr-reg))
-              (let* ((boxed-by (x862-one-targeted-reg-form seg by *x862-arg-z*)))
-                (unless triv-by
-                  (x862-pop-register seg ptr-reg))
-		(with-additional-imm-reg ()
-		  (with-imm-target (ptr-reg) (by-reg :signed-natural)
-		    (! fixnum->signed-natural by-reg boxed-by)
-		    (let* ((result ptr-reg))
-		      (! fixnum-add2 result by-reg)
-		      (<- result)))))))
+	  (progn
+	    (unless triv-by
+	      (x862-push-register seg ptr-reg))
+	    (let* ((boxed-by (x862-one-targeted-reg-form seg by *x862-arg-z*)))
+	      (unless triv-by
+		(x862-pop-register seg ptr-reg))
+	      (with-additional-imm-reg ()
+		(with-imm-target (ptr-reg) (by-reg :signed-natural)
+		  (! fixnum->signed-natural by-reg boxed-by)
+		  (let* ((result ptr-reg))
+		    (! fixnum-add2 result by-reg)
+		    (<- result)))))))
         (^)))))
 
 
