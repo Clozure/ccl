@@ -39,8 +39,6 @@ compiler/PPC/*~.*
 compiler/PPC/PPC32/*~.*
 compiler/PPC/PPC64/*~.*
 compiler/X86/*~.*
-doc/src/*html
-doc/src/build*
 examples/*~.*
 examples/cocoa/*fsl
 examples/cocoa/*~.*
