@@ -159,8 +159,10 @@ fpurge (FILE* file)
 int
 readc()
 {
+  unsigned tries = 1000;
   int c;
-  while (1) {
+
+  while (tries) {
     c = getchar();
     switch(c) {
     case '\n':
@@ -170,6 +172,8 @@ readc()
     case EOF:
       if (ferror(stdin)) {
 	if ((errno == EINTR) || (errno == EIO)) {
+	  clearerr(stdin);
+	  tries--;
 	  continue;
 	}
       }
@@ -178,6 +182,7 @@ readc()
       return c;
     }
   }
+  return EOF;
 }
 
 #ifdef X8664
