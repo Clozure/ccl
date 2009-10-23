@@ -144,6 +144,8 @@ contrib/montuori/trivial-ldap/trivial-ldap.html -text
 contrib/montuori/trivial-ldap/trivial-ldap.lisp -text
 contrib/paine/workpersistence.lisp -text
 contrib/repenning/anticipat-symbol-complete.lisp -text
+contrib/rittweiler/ccl -text
+contrib/rittweiler/ccl64 -text
 doc/ccl-documentation.html -text
 doc/doc-splitter.lisp -text
 doc/release-notes-1.2.txt -text
