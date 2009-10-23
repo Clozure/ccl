@@ -5420,7 +5420,13 @@
              (if (and milliseconds (> milliseconds 0))
                (values (process-wait-with-timeout "input-wait" milliseconds #'data-available-on-pipe-p fd) 0)
                (values nil 0))))
-    ;(:character-special (windows-tty-input-available-p fd milliseconds))
+    (:file (let* ((curpos (fd-tell fd))
+                  (eofpos (%stack-block ((peofpos 8))
+                            (#_GetFileSizeEx (%int-to-ptr fd) peofpos)
+                            (%%get-unsigned-longlong peofpos 0))))
+             (values (< curpos eofpos) 0)))
+    ;;(:character-special (windows-tty-input-available-p fd milliseconds))
+
     (t (values nil 0)))
   #-windows-target
   (rlet ((pollfds (:array (:struct :pollfd) 1)))
