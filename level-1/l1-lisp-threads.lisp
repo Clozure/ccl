@@ -987,29 +987,26 @@ no longer being used."
 (defun cancel-terminate-when-unreachable (object &optional (function nil function-p))
   (let* ((found nil))
     (with-lock-grabbed (*termination-population-lock*)
-      ;; Have to defer GCing, e.g., defer responding to a GC
-      ;; suspend request here (that also defers interrupts)
-      ;; We absolutely, positively can't take an exception
-      ;; in here, so don't even bother to typecheck on 
-      ;; car/cdr etc.
-      (with-deferred-gc
-          (do ((spine (population-data *termination-population*) (cdr spine))
-               (prev nil spine))
-              ((null spine))
-            (declare (optimize (speed 3) (safety 0)))
-            (let* ((head (car spine))
-                   (tail (cdr spine))
-                   (o (car head))
-                   (f (cdr head)))
+      ;; We don't really need to be very paranoid here.  Nothing can
+      ;; be added to the termination queue while we hold the lock,
+      ;; and the GC can't splice anything out of the list while
+      ;; we hold a strong reference to that list.
+      (let* ((population *termination-population*)
+             (queue (population.data population)))
+        (do* ((prev nil spine)
+              (spine queue (cdr spine)))
+             ((null spine))
+          (let* ((entry (car spine)))
+            (destructuring-bind (o . f) entry
               (when (and (eq o object)
                          (or (null function-p)
                              (eq function f)))
                 (if prev
-                  (setf (cdr prev) tail)
-                  (setf (population-data *termination-population*) tail))
+                  (setf (cdr prev) (cdr spine))
+                  (setf (population.data population) (cdr spine)))
                 (setq found t)
                 (return)))))
-      found)))
+      found))))
 
 
 (defun termination-function (object)
