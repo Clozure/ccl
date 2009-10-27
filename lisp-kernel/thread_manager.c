@@ -105,10 +105,13 @@ raise_thread_interrupt(TCR *target)
          (where >= (pc) 0x15000)) &&
        !((where < (pc) (ts->high)) &&
          (where >= (pc) (ts->low))))) {
+
+    target->interrupt_pending = (1LL << (nbits_in_word - 1LL));
+
+#if 0
     /* If the thread's in a blocking syscall, it'd be nice to
        get it out of that state here. */
     GetThreadIOPendingFlag(hthread,&io_pending);
-    target->interrupt_pending = (1LL << (nbits_in_word - 1LL));
     if (io_pending) {
       pending_io * pending = (pending_io *) (target->pending_io_info);
       if (pending) {
@@ -119,6 +122,7 @@ raise_thread_interrupt(TCR *target)
         }
       }
     }
+#endif
     if (pCancelSynchronousIo) {
       pCancelSynchronousIo(hthread);
     }
