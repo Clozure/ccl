@@ -899,9 +899,9 @@ decremented by the second argument, DELTA, which defaults to 1."
     (dolist (place places) 
       (multiple-value-bind (dummies vals newval setter getter) 
 	  (get-setf-expansion place env) 
-	(setf all-dummies (append all-dummies dummies)) 
-	(setf all-vals (append all-vals vals)) 
-	(setf newvals (append newvals newval)) 
+	(setf all-dummies (append all-dummies dummies (cdr newval))) 
+	(setf all-vals (append all-vals vals (mapcar (constantly nil) (cdr newval)))) 
+	(setf newvals (append newvals (list (car newval)))) 
 	(push setter setters)
 	(push getter getters))) 
       (values all-dummies all-vals newvals 
