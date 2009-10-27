@@ -1921,4 +1921,393 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
     </refsect1>
   </refentry>
   </sect1>
+
+  <sect1 id="watched-objects"><title>Watched Objects</title>
+  <para>
+    As of release 1.4, Clozure CL provides a way for lisp objects to
+    be watched so that a condition will be signaled when a thread
+    attempts to write to the watched object. For a certain class of
+    bugs (someone is changing this value, but I don't know who), this
+    can be extremely helpful.
+  </para>
+  <sect2 id="watched-watch"><title>WATCH</title>
+  <refentry id="f_watch">
+    <indexterm zone="f_watch">
+      <primary>watch</primary>
+    </indexterm>
+    
+    <refnamediv>
+      <refname>WATCH</refname>
+      <refpurpose>
+	Monitor a lisp object for writes.
+      </refpurpose>
+      <refclass>Function</refclass>
+    </refnamediv>
+    
+    <refsynopsisdiv>
+      <synopsis><function>watch</function> &optional; object</synopsis>
+    </refsynopsisdiv>
+    
+    <refsect1>
+      <title>Arguments and Values</title>
+      <variablelist>
+	<varlistentry>
+	  <term>object</term>
+	  <listitem>
+	    <para>
+	      Any memory-allocated lisp object.
+	    </para>
+	  </listitem>
+	</varlistentry>
+      </variablelist>
+    </refsect1>
+
+    <refsect1>
+      <title>Description</title>
+      <para>
+	The WATCH function arranges for the specified object to be
+	monitored for writes. This is accomplished by copying the
+	object to its own set of virtual memory pages, which are then
+	write-protected. This protection is enforced by the computer's
+	memory-management hardware; the write-protection does not slow
+	down reads at all.
+      </para>
+      <para>
+	When any write to the object is attempted, a
+	WRITE-TO-WATCHED-OBJECT condition will be signaled.
+      </para>
+      <para>
+	When called with no arguments, WATCH returns a freshly-consed
+	list of the objects currently being watched.
+      </para>
+      <para>
+	WATCH returns NIL if the object cannot be watched (typically
+	because the object is in a static or pure memory area).
+      </para>
+    </refsect1>
+    <refsect1 id="watch-dwim"><title>DWIM</title>
+    <para>
+      WATCH operates at a fairly low level; it is not possible to
+      avoid the details of the internal representation of objects.
+      Nevertheless, as a convenience, WATCHing a standard-instance,
+      a hash-table, or a multi-dimensional or non-simple CL array
+      will watch the underlying slot-vector, hash-table-vector, or
+      data-vector, respectively.
+      </para>
+    </refsect1>
+    <refsect1 id="watch-discuss"><title>Discussion</title>
+    <para>
+      WATCH can monitor any memory-allocated lisp object.
+    </para>
+    <para>
+      In Clozure CL, a memory-allocated object is either a cons cell
+      or a uvector.
+    </para>
+    <para>
+      WATCH operates on cons cells, not lists. In order to watch a
+      chain of cons cells, each cons cell must be watched
+      individually. Because each watched cons cell takes up its own
+      own virtual memory page (4 Kbytes), it's only feasible to watch
+      relatively short lists.
+    </para>
+    <para>
+      If a memory-allocated object isn't a cons cell, then it is a
+      vector-like object called a uvector. A uvector is a
+      memory-allocated lisp object whose first word is a header that
+      describes the object's type and the number of elements that it
+      contains.
+    </para>
+    <para>
+      So, a hash table is a uvector, as is a string, a standard
+      instance, a double-float, a CL array or vector, and so forth.
+    </para>
+    <para>
+      Some CL objects, like strings and other simple vectors, map in a
+      straightforward way onto the uvector representation. It is easy
+      to understand what happens in such cases. The uvector index
+      corresponds directly to the vector index:
+    </para>
+    <programlisting>
+<![CDATA[
+? (defvar *s* "xxxxx")
+*S*
+? (watch *s*)
+"xxxxx"
+? (setf (char *s* 3) #\o)
+> Error: Write to watched uvector "xxxxx" at index 3
+>        Faulting instruction: (movl (% eax) (@ -5 (% r15) (% rcx)))
+> While executing: SET-CHAR, in process listener(1).
+> Type :POP to abort, :R for a list of available restarts.
+> Type :? for other options.
+]]>
+    </programlisting>
+    <para>
+      In the case of more complicated objects (e.g., a hash-table, a
+      standard-instance, a package, etc.), the elements of the uvector
+      are like slots in a structure. It's necessary to know which one
+      of those "slots" contains the data that will be changed when the
+      object is written to.
+    </para>
+    <para>
+      As mentioned above, watch knows about arrays, hash-tables, and
+      standard-instances, and will automatically watch the appropriate
+      data-containing element.
+    </para>
+    <para>
+      An example might make this clearer.
+    </para>
+    <programlisting>
+<![CDATA[
+? (defclass foo ()
+    (slot-a slot-b slot-c))
+#<STANDARD-CLASS FOO>
+? (defvar *a-foo* (make-instance 'foo))
+*A-FOO*
+? (watch *a-foo*)
+#<SLOT-VECTOR #xDB00D>
+;;; Note that WATCH has watched the internal slot-vector object
+? (setf (slot-value *a-foo* 'slot-a) 'foo)
+> Error: Write to watched uvector #<SLOT-VECTOR #xDB00D> at index 1
+>        Faulting instruction: (movq (% rsi) (@ -5 (% r8) (% rdi)))
+> While executing: %MAYBE-STD-SETF-SLOT-VALUE-USING-CLASS, in process listener(1).
+> Type :POP to abort, :R for a list of available restarts.
+> Type :? for other options.
+]]>
+    </programlisting>
+    <para>
+      Looking at a backtrace would presumably show what object and
+      slot name were written.
+    </para>
+    <para>
+      Note that even though the write was to slot-a, the uvector index
+      was 1 (not 0). This is because the first element of a
+      slot-vector is a pointer to the instance that owns the slots. We
+      can retrieve that to look at the object that was modified:
+    </para>
+    <programlisting>
+<![CDATA[
+1 > (uvref (write-to-watched-object-object *break-condition*) 0)
+#<FOO #x30004113502D>
+1 > (describe *)
+#<FOO #x30004113502D>
+Class: #<STANDARD-CLASS FOO>
+Wrapper: #<CLASS-WRAPPER FOO #x300041135EBD>
+Instance slots
+SLOT-A: #<Unbound>
+SLOT-B: #<Unbound>
+SLOT-C: #<Unbound>
+1 >
+]]> 
+    </programlisting>
+    </refsect1>
+  </refentry>
+</sect2>
+<sect2 id="watched-unwatch"><title>UNWATCH</title>
+<refentry id="f_unwatch">
+  <indexterm zone="f_unwatch">
+    <primary>unwatch</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>UNWATCH</refname>
+      <refpurpose>
+	Stop monitoring a lisp object for writes.
+      </refpurpose>
+      <refclass>Function</refclass>
+  </refnamediv>
+  
+  <refsynopsisdiv>
+    <synopsis><function>unwatch</function> object</synopsis>
+  </refsynopsisdiv>
+  
+  <refsect1><title>Description</title>
+  <para>
+    The UNWATCH function ensures that the specified object is in
+    normal, non-monitored memory. If the object is not currently
+    being watched, UNWATCH does nothing and returns NIL. Otherwise,
+    the newly unwatched object is returned.
+  </para>
+  </refsect1>
+</refentry>
+</sect2>
+<sect2 id="watched-write-to-watched-object">
+  <title>WRITE-TO-WATCHED-OBJECT</title>
+  <refentry id="c_write-to-watched-object">
+    <indexterm zone="c_write-to-watched-object">
+      <primary>write-to-watched-object</primary>
+    </indexterm>
+    
+    <refnamediv>
+      <refname>WRITE-TO-WATCHED-OBJECT</refname>
+      <refpurpose>
+	Condition signaled when a write to a watched object is attempted.
+      </refpurpose>
+      <refclass>Condition</refclass>
+    </refnamediv>
+
+    <refsect1><title>Discussion</title>
+    <para>
+      This condition is signaled when a watched object is written
+      to. There are three slots of interest:
+    </para>
+    <variablelist>
+      <varlistentry>
+	<term>object</term>
+	<listitem>
+	  <para>
+	    The actual object that was the destination of the write.
+	  </para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term>offset</term>
+	<listitem>
+	  <para>
+	    The byte offset from the tagged object pointer to the
+	    address of the write.
+	  </para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term>instruction</term>
+	<listitem>
+	  <para>
+	    The disassembled machine instruction that attempted the write.
+	  </para>
+	</listitem>
+      </varlistentry>
+    </variablelist>
+    </refsect1>
+
+    <refsect1><title>Restarts</title>
+    <para>
+      A few restarts are provided: one will skip over the faulting
+      write instruction and proceed; another offers to unwatch the
+      object and continue.
+    </para>
+    <para>
+      There is also an emulate restart. In some common cases, the
+      faulting write instruction can be emulated, enabling the write
+      to be performed without having to unwatch the object (and
+      therefore let other threads potentially write to it). If the
+      faulting instruction isn't recognized, the emulate restart will
+      not be offered.
+    </para>
+    </refsect1>
+  </refentry>
+</sect2>
+<sect2 id="watch-notes"><title>Notes</title>
+<para>
+  Although some care has been taken to minimize potential problems
+  arising from watching and unwatching objects from multiple
+  threads, there may well be subtle race conditions present that
+  could cause bad behavior.
+</para>
+<para>
+  For example, suppose that a thread attempts to write to a watched
+  object. This causes the operating system to generate an
+  exception. The lisp kernel figures out what the exception is, and
+  calls back into lisp to signal the write-to-watched-object
+  condition and perhaps handle the error.
+</para>
+<para>
+  Now, as soon lisp code starts running again (for the callback),
+  it's possible that some other thread could unwatch the very
+  watched object that caused the exception, perhaps before we even
+  have a chance to signal the condition, much less respond to it.
+</para>
+<para>
+  Having the object unwatched out from underneath a handler may at
+  least confuse it, if not cause deeper trouble. Use caution with
+  unwatch.
+</para>
+</sect2>
+<sect2 id="watch-examples"><title>Examples</title>
+<para>
+  Here are a couple more examples in addition to the above examples
+  of watching a string and a standard-instance.
+</para>
+<sect3><title>Fancy arrays</title>
+<programlisting>
+?  (defvar *f* (make-array '(2 3) :element-type 'double-float))
+*F*
+? (watch *f*)
+#(0.0D0 0.0D0 0.0D0 0.0D0 0.0D0 0.0D0)
+;;; Note that the above vector is the underlying data-vector for the array
+? (setf (aref *f* 1 2) pi)
+> Error: Write to watched uvector #&lt;VECTOR 6 type DOUBLE-FLOAT, simple> at index 5
+>        Faulting instruction: (movq (% rax) (@ -5 (% r8) (% rdi)))
+> While executing: ASET, in process listener(1).
+> Type :POP to abort, :R for a list of available restarts.
+> Type :? for other options.
+1 > 
+  </programlisting>
+  <para>
+    In this case, uvector index in the report is the row-major index
+    of the element that was written to.
+  </para>
+  </sect3>
+  <sect3><title>Hash tables</title>
+  <para>
+    Hash tables are surprisingly complicated. The representation of a
+    hash table includes an element called a hash-table-vector. The
+    keys and values of the elements are stored pairwise in this
+    vector.
+  </para>
+  <para>
+    One problem with trying to monitor hash tables for writes is that
+    the underlying hash-table-vector is replaced with an entirely new
+    one when the hash table is rehashed. A previously-watched
+    hash-table-vector will not be the used by the hash table after
+    rehashing, and writes to the new vector will not be caught.
+  </para>
+  <programlisting>
+? (defvar *h* (make-hash-table))
+*H*
+? (setf (gethash 'noise *h*) 'feep)
+FEEP
+? (watch *h*)
+#&lt;HASH-TABLE-VECTOR #xDD00D>
+;;; underlying hash-table-vector
+? (setf (gethash 'noise *h*) 'ding)
+> Error: Write to watched uvector #&lt;HASH-TABLE-VECTOR #xDD00D> at index 35
+>        Faulting instruction: (lock)
+>          (cmpxchgq (% rsi) (@ (% r8) (% rdx)))
+> While executing: %STORE-NODE-CONDITIONAL, in process listener(1).
+> Type :POP to abort, :R for a list of available restarts.
+> Type :? for other options.
+;;; see what value is being replaced...
+1 > (uvref (write-to-watched-object-object *break-condition*) 35)
+FEEP
+;;; backtrace shows useful context
+1 > :b
+*(1A109F8) : 0 (%STORE-NODE-CONDITIONAL ???) NIL
+ (1A10A50) : 1 (LOCK-FREE-PUTHASH NOISE #&lt;HASH-TABLE :TEST EQL size 1/60 #x30004117D47D> DING) 653
+ (1A10AC8) : 2 (CALL-CHECK-REGS PUTHASH NOISE #&lt;HASH-TABLE :TEST EQL size 1/60 #x30004117D47D> DING) 229
+ (1A10B00) : 3 (TOPLEVEL-EVAL (SETF (GETHASH # *H*) 'DING) NIL) 709
+ ...
+  </programlisting>
+  </sect3>
+  <sect3><title>Lists</title>
+  <para>
+    As previously mentioned, WATCH only watches individual cons cells.
+  </para>
+  <programlisting>
+? (defun watch-list (list)
+    (maplist #'watch list))
+WATCH-LIST
+? (defvar *l* (list 1 2 3))
+*L*
+? (watch-list *l*)
+((1 2 3) (2 3) (3))
+? (setf (nth 2 *l*) 'foo)
+> Error: Write to the CAR of watched cons cell (3)
+>        Faulting instruction: (movq (% rsi) (@ 5 (% rdi)))
+> While executing: %SETNTH, in process listener(1).
+> Type :POP to abort, :R for a list of available restarts.
+> Type :? for other options.
+  </programlisting>
+  </sect3>
+  </sect2>
+</sect1>
 </chapter>
