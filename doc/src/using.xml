@@ -2310,4 +2310,563 @@ WATCH-LIST
   </sect3>
   </sect2>
 </sect1>
+
+<sect1 id="code-coverage"><title>Code Coverage</title>
+<sect2 id="code-coverage-overview"><title>Overview</title>
+<para>
+  In Clozure CL 1.4 and later, code coverage provides information
+  about which paths through generated code have been executed and
+  which haven't. For each source form, it can report one of three
+  possible outcomes:
+</para>
+<itemizedlist>
+  <listitem>
+    <para>
+      Not covered: this form was never entered.
+    </para>
+  </listitem>
+  <listitem>
+    <para>
+      Partly covered: This form was entered, and some parts were
+      executed and some weren't.
+    </para>
+  </listitem>
+  <listitem>
+    <para>
+      Fully covered: Every bit of code generated from this form was
+      executed.
+    </para>
+  </listitem>
+</itemizedlist>
+</sect2>
+
+<sect2 id="code-coverage-limitations"><title>Limitations</title>
+<para>
+  While the information gathered for coverage of generated code is
+  complete and precise, the mapping back to source forms is of
+  necessity heuristic, and depends a great deal on the behavior of
+  macros and the path of the source forms through compiler
+  transforms. Source information is not recorded for variables, which
+  further limits the source mapping. In practice, there is often
+  enough information scattered about a partially covered function to
+  figure out which logical path through the code was taken and which
+  wasn't. If that doesn't work, you can try disassembling to see which
+  parts of the compiled code were not executed: in the disassembled
+  code there will be references to #&lt;CODE-NOTE [xxx] ...> where xxx
+  is NIL if the code that follows was never executed and non-NIL if it
+  was.
+</para>
+<para>
+  Sometimes the situation can be improved by modifying macros to try
+  to preserve more of the input forms, rather than destructuring and
+  rebuilding them.
+</para>
+<para>
+  Because the code coverage information is associated with compiled
+  functions, load-time toplevel expressions do not get reported
+  on. You can work around this by creating a function and calling
+  it. I.e. instead of
+  <programlisting>
+(progn
+  (do-this)
+  (setq that ...) ...))
+  </programlisting>
+  do:
+  <programlisting>
+(defun init-this-and-that ()
+  (do-this)
+  (setq that ...)  ...)
+(init-this-and-that)
+  </programlisting>
+Then you can see the coverage information in the definition of
+init-this-and-that.
+</para>
+</sect2>
+
+<sect2 id="code-coverage-usage"><title>Usage</title>
+<para>
+  In order to gather code coverage information, you first have to
+  recompile all your code to include code coverage
+  instrumentation. Compiling files will generate code coverage
+  instrumentation if <literal>CCL:*COMPILE-CODE-COVERAGE*</literal>
+  is true:
+  <programlisting>
+(setq ccl:*compile-code-coverage* t) 
+(recompile-all-your-files) 
+  </programlisting>
+</para>
+<para>
+  The compilation process will be many times slower than normal, and
+  the fasl files will be many times bigger.
+</para>
+<para>
+  When you execute function loaded from instrumented fasl files, they
+  will record coverage information every time they are executed. The
+  system keeps track of which instrumented files have been loaded.
+</para>
+<para>
+  The following functions can be used to manage the coverage data:
+</para>
+
+<refentry id="f_report-coverage">
+  <indexterm zone="f_report-coverage">
+    <primary>report-coverage</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>REPORT-COVERAGE</refname>
+    <refpurpose>Generate code coverage report</refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis><function>report-coverage</function> &key;
+    (external-format :default) (statistics t) (html t)
+    </synopsis>
+  </refsynopsisdiv>
+
+  <refsect1><title>Arguments and Values</title>
+  <variablelist>
+    <varlistentry>
+      <term>html</term>
+      <listitem>
+	<para>
+	  If non-nil, this will generate an HTML report, consisting of
+	  an index file and one html file for each instrumented source
+	  file that has been loaded in the current session. The
+	  individual source file reports are stored in the same
+	  directory as the index file.
+	</para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>external-format</term>
+      <listitem>
+	<para>
+	  Controls the external format of the html files.
+	</para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>statistics</term>
+      <listitem>
+	<para>
+	  If :statistics is non-nil, a comma-separated file is also
+	  generated with the summary of statistics. You can specify a
+	  filename for the statistics argument, otherwise
+	  "statistics.csv" is created in the output directory. See
+	  documentation of ccl:coverage-statistics below for a
+	  description of the values in the statistics file.
+	</para>
+      </listitem>
+    </varlistentry>
+  </variablelist>
+  </refsect1>
+  <refsect1><title>Example</title>
+    <para>
+      If you've loaded <filename>foo.lx64fsl</filename> and
+      <filename>bar.lx64fsl</filename>, and have run some tests, you could
+      do
+    <programlisting>
+(CCL:REPORT-COVERAGE "/my/dir/coverage/report.html")
+    </programlisting>
+    and this would generate <filename>report.html</filename>,
+    <filename>foo_lisp.html</filename> and
+    <filename>bar_lisp.html</filename>, and
+    <filename>statistics.csv</filename> all in
+    <filename>/my/dir/coverage/</filename>.
+    </para>
+  </refsect1>
+</refentry>
+
+<refentry id="f_reset-coverage">
+  <indexterm zone="f_reset-coverage">
+    <primary>reset-coverage</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>reset-coverage</refname>
+    <refpurpose>
+      Resets all coverage data back to the "Not Executed" state
+    </refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsect1><title>Summary</title>
+    <para>
+      Resets all coverage data back to the "Not Executed" state
+    </para>
+  </refsect1>
+</refentry>
+
+<refentry id="f_clear-coverage">
+  <indexterm zone="f_clear-coverage">
+    <primary>clear-coverage</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>clear-coverage</refname>
+    <refpurpose>
+      Forget about all instrumented files that have been loaded.
+    </refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsect1><title>Summary</title>
+    <para>
+      Gets rid of the information about which instrumented files have
+      been loaded, so ccl:report-coverage will not report any files,
+      and ccl:save-coverage-in-file will not save any info, until more
+      instrumented files are loaded.
+    </para>
+  </refsect1>
+</refentry>
+
+<refentry id="f_save-coverage-in-file">
+  <indexterm zone="f_save-coverage-in-file">
+    <primary>save-coverage-in-file</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>save-coverage-in-file</refname>
+    <refpurpose>
+      Save all coverage into to a file so you can restore it later.
+    </refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis><function>save-coverage-in-file</function> pathname
+    </synopsis>
+  </refsynopsisdiv>
+
+  <refsect1><title>Summary</title>
+    <para>
+      Saves all coverage info in a file, so you can restore the
+      coverage state later. This allows you to combine multiple runs
+      or continue in a later session. Equivalent to
+      (ccl:write-coverage-to-file (ccl:save-coverage) pathname).
+    </para>
+  </refsect1>
+</refentry>
+
+<refentry id="f_restore-coverage-from-file">
+  <indexterm zone="f_restore-coverage-from-file">
+    <primary>restore-coverage-from-file</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>restore-coverage-from-file</refname>
+    <refpurpose>
+      Load coverage state from a file.
+    </refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis><function>restore-coverage-from-file</function> pathname
+    </synopsis>
+  </refsynopsisdiv>
+
+  <refsect1><title>Summary</title>
+    <para>
+      Restores the coverage data previously saved with
+      CCL:SAVE-COVERAGE-IN-FILE, for the set of instrumented fasls
+      that were loaded both at save and restore time. I.e. coverage
+      info is only restored for files that have been loaded in this
+      session. For example if in a previous session you had loaded
+      "foo.lx86fsl" and then saved the coverage info, in this session
+      you must load the same "foo.lx86fsl" before calling
+      ccl:restore-coverage-from-file in order to retrieve the stored
+      coverage info for "foo".  Equivalent to (ccl:restore-coverage
+      (ccl:read-coverage-from-file pathname)).
+    </para>
+  </refsect1>
+</refentry>
+
+<refentry id="f_save-coverage">
+  <indexterm zone="f_save-coverage">
+    <primary>save-coverage</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>save-coverage</refname>
+    <refpurpose>
+      Returns a snapshot of the current coverage data.
+    </refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsect1><title>Summary</title>
+    <para>
+      Returns a snapshot of the current coverage data. A snapshot is a
+      copy of the current coverage state. It can be saved in a file
+      with ccl:write-coverage-to-file, reinstated back as the current
+      state with ccl:restore-coverage, or combined with other
+      snapshots with ccl:combine-coverage.
+    </para>
+  </refsect1>
+</refentry>
+
+<refentry id="f_restore-coverage">
+  <indexterm zone="f_restore-coverage">
+    <primary>restore-coverage</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>RESTORE-COVERAGE</refname>
+    <refpurpose>
+      Reinstalls a coverage snapshot as the current coverage state.
+    </refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis><function>restore-coverage</function> snapshot
+    </synopsis>
+  </refsynopsisdiv>
+
+  <refsect1><title>Summary</title>
+    <para>
+      Reinstalls a coverage snapshot as the current coverage state.
+    </para>
+  </refsect1>
+</refentry>
+
+<refentry id="f_write-coverage-to-file">
+  <indexterm zone="f_write-coverage-to-file">
+    <primary>write-coverage-to-file</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>WRITE-COVERAGE-TO-FILE</refname>
+    <refpurpose>
+      Save a coverage snapshot in a file.
+    </refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis><function>write-coverage-to-file</function> snapshot pathname
+    </synopsis>
+  </refsynopsisdiv>
+
+  <refsect1><title>Summary</title>
+    <para>
+      Saves the coverage snapshot in a file. The snapshot can be
+      loaded back with ccl:read-coverage-from-file or loaded and
+      restored with ccl:restore-coverage-from-file. Note that the file
+      created is actually a lisp source file and can be compiled for
+      faster loading.
+    </para>
+  </refsect1>
+</refentry>
+
+<refentry id="f_read-coverage-from-file">
+  <indexterm zone="f_read-coverage-from-file">
+    <primary>read-coverage-from-file</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>READ-COVERAGE-FROM-FILE</refname>
+    <refpurpose>
+      Return the coverage snapshot saved in a file.
+    </refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis><function>read-coverage-from-file</function> pathname
+    </synopsis>
+  </refsynopsisdiv>
+
+  <refsect1><title>Summary</title>
+    <para>
+      Returns the snapshot saved in pathname. Doesn't affect the
+      current coverage state. pathname can be the file previously
+      created with ccl:write-coverage-to-file or
+      ccl:save-coverage-in-file, or it can be the name of the fasl
+      created from compiling such a file.
+    </para>
+  </refsect1>
+</refentry>
+
+<refentry id="f_coverage-statistics">
+  <indexterm zone="f_coverage-statistics">
+    <primary>coverage-statistics</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>COVERAGE-STATISTICS</refname>
+    <refpurpose>
+      Returns a sequence of coverage-statistics objects, one per source file.
+    </refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis><function>coverage-statistics</function>
+    </synopsis>
+  </refsynopsisdiv>
+
+  <refsect1><title>Summary</title>
+    <para>
+      Returns a sequence ccl:coverage-statistics objects, one for each
+      source file, containing the same information as that written to
+      the statistics file by ccl:report-coverage. The following
+      accessors are defined for ccl:coverage-statistics objects:
+      <variablelist>
+      <varlistentry>
+	<term><function>ccl:coverage-source-file</function></term>
+	<listitem>
+	  <para>
+	    the name of the source file corresponding to this information
+	  </para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term><function>ccl:coverage-expressions-total</function></term>
+	<listitem>
+	  <para>
+	    the total number of expressions
+	  </para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term><function>ccl:coverage-expressions-entered</function></term>
+	<listitem>
+	  <para>
+	    the number of source expressions that have been entered
+	    (i.e. at least partially covered)
+	  </para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term><function>ccl:coverage-expressions-covered</function></term>
+	<listitem>
+	  <para>
+	    the number of source expressions that were fully covered
+	  </para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term><function>ccl:coverage-unreached-branches</function></term>
+	<listitem>
+	  <para>
+	    the number of conditionals with one branch taken and one not taken
+	  </para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term><function>ccl:coverage-code-forms-total</function></term>
+	<listitem>
+	  <para>
+	    the total number of code forms. A code form is an
+	    expression in the final stage of compilation, after all
+	    macroexpansion and compiler transforms and simplification
+	  </para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term><function>ccl:coverage-code-forms-covered</function></term>
+	<listitem>
+	  <para>
+	    the number of code forms that have been entered
+	  </para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term><function>ccl:coverage-functions-total</function></term>
+	<listitem>
+	  <para>
+	    the total number of functions
+	  </para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term><function>ccl:coverage-functions-fully-covered</function></term>
+	<listitem>
+	  <para>
+	    the number of functions that were fully covered
+	  </para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term><function>ccl:coverage-functions-partly-covered</function></term>
+	<listitem>
+	  <para>
+	    the number of functions that were partly covered
+	  </para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term><function>ccl:coverage-functions-not-entered</function></term>
+	<listitem>
+	  <para>
+	    the number of functions never entered
+	  </para>
+	</listitem>
+      </varlistentry>
+      </variablelist>
+    </para>
+  </refsect1>
+</refentry>
+
+<refentry id="v_compile-code-coverage">
+  <indexterm zone="v_compile-code-coverage">
+    <primary>*COMPILE-CODE-COVERAGE*</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>*COMPILE-CODE-COVERAGE*</refname>
+    <refpurpose>
+      When true, instrument functions for code coverage.
+    </refpurpose>
+    <refclass>Variable</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis><varname>*compile-code-coverage*</varname>
+    </synopsis>
+  </refsynopsisdiv>
+
+  <refsect1><title>Summary</title>
+    <para>
+      This variable controls whether functions are instrumented for
+      code coverage. Files compiled while this variable is true will
+      contain code coverage instrumentation.
+    </para>
+  </refsect1>
+</refentry>
+
+<refentry id="v_without-compiling-code-coverage">
+  <indexterm zone="v_without-compiling-code-coverage">
+    <primary>without-compiling-code-coverage</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>WITHOUT-COMPILING-CODE-COVERAGE</refname>
+    <refpurpose>
+      Don't record code coverange for forms within the body.
+    </refpurpose>
+    <refclass>Macro</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis><function>without-compiling-code-coverage</function>
+    </synopsis>
+  </refsynopsisdiv>
+
+  <refsect1><title>Summary</title>
+    <para>
+      This macro arranges so that body doesn't record internal details
+      of code coverage. It will be considered totally covered if it's
+      entered at all. The Common Lisp macros ASSERT and CHECK-TYPE use
+      this macro.
+    </para>
+  </refsect1>
+</refentry>
+
+</sect2>
+</sect1>
 </chapter>
