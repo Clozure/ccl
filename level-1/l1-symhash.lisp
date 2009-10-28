@@ -630,8 +630,9 @@
                       (progn
                         (cerror "Do nothing" 'no-such-package :package package)
                         (return-from delete-package nil)))))
-  (unless (memq package %all-packages%)
-    (return-from delete-package nil))
+  (with-package-list-read-lock
+    (unless (memq package %all-packages%)
+      (return-from delete-package nil)))
   (when (pkg.used-by package)
     (cerror "unuse ~S" 'package-is-used-by :package package
             :using-packages (pkg.used-by package)))
@@ -640,7 +641,8 @@
   (while (pkg.used package)
     (unuse-package (car (pkg.used package)) package))
   (setf (pkg.shadowed package) nil)
-  (setq %all-packages% (nremove package %all-packages%))
+  (with-package-list-write-lock
+    (setq %all-packages% (nremove package %all-packages%)))
   (dolist (n (pkg.names package))
     (let* ((ref (register-package-ref n)))
       (setf (package-ref.pkg ref) nil)))

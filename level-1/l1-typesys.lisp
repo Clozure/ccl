@@ -1484,53 +1484,59 @@
 (defun hash-type-specifier (spec)
   (logand (sxhash spec) type-cache-mask))
 
+
 (let* ((type-cache-specs (make-array type-cache-size))
        (type-cache-ctypes (make-array type-cache-size))
        (probes 0)
        (hits 0)
        (ncleared 0)
-       (locked nil))
+       (locked nil)
+       (lock (make-lock)))
   
   (defun clear-type-cache ()
-    (%init-misc 0 type-cache-specs)
-    (%init-misc 0 type-cache-ctypes)
-    (incf ncleared)
+    (with-lock-grabbed (lock)
+      (%init-misc 0 type-cache-specs)
+      (%init-misc 0 type-cache-ctypes)
+      (incf ncleared))
     nil)
 
   (defun values-specifier-type (spec &optional env)
     (if (typep spec 'class)
       (let* ((class-ctype (%class.ctype spec)))
         (or (class-ctype-translation class-ctype) class-ctype))
-      (if locked
-        (or (values-specifier-type-internal spec env)
-            (make-unknown-ctype :specifier spec))
-        (unwind-protect
-          (progn
-            (setq locked t)
-            (if (or (symbolp spec)
-                    (and (consp spec)
-                         (symbolp (car spec))
-                         ;; hashing scheme uses equal, so only use when equivalent to eql
-                         (not (and (eq (car spec) 'member)
-                                   (some (lambda (x)
-                                           (typep x '(or cons string bit-vector pathname)))
-                                         (cdr spec))))))
-              (let* ((idx (hash-type-specifier spec)))
-                (incf probes)
-                (if (equal (svref type-cache-specs idx) spec)
-                  (progn
-                    (incf hits)
-                    (svref type-cache-ctypes idx))
-                  (let* ((ctype (values-specifier-type-internal spec env)))
-                    (if ctype
-		      (progn
-			(when (cacheable-ctype-p ctype)
-			  (setf (svref type-cache-specs idx) (copy-tree spec)       ; in case it was stack-consed
-				(svref type-cache-ctypes idx) ctype))
-			ctype)
-                      (make-unknown-ctype :specifier spec)))))
-              (values-specifier-type-internal spec env)))
-          (setq locked nil)))))
+      (handler-case
+          (with-lock-grabbed (lock)
+            (if locked
+              (or (values-specifier-type-internal spec env)
+                  (make-unknown-ctype :specifier spec))
+              (unwind-protect
+                   (progn
+                     (setq locked t)
+                     (if (or (symbolp spec)
+                             (and (consp spec)
+                                  (symbolp (car spec))
+                                  ;; hashing scheme uses equal, so only use when equivalent to eql
+                                  (not (and (eq (car spec) 'member)
+                                            (some (lambda (x)
+                                                    (typep x '(or cons string bit-vector pathname)))
+                                                  (cdr spec))))))
+                       (let* ((idx (hash-type-specifier spec)))
+                         (incf probes)
+                         (if (equal (svref type-cache-specs idx) spec)
+                           (progn
+                             (incf hits)
+                             (svref type-cache-ctypes idx))
+                           (let* ((ctype (values-specifier-type-internal spec env)))
+                             (if ctype
+                               (progn
+                                 (when (cacheable-ctype-p ctype)
+                                   (setf (svref type-cache-specs idx) (copy-tree spec) ; in case it was stack-consed
+                                         (svref type-cache-ctypes idx) ctype))
+                                 ctype)
+                               (make-unknown-ctype :specifier spec)))))
+                       (values-specifier-type-internal spec env)))
+                (setq locked nil))))
+        (error (condition) (error condition)))))
   
   (defun type-cache-hit-rate ()
     (values hits probes))
@@ -1540,7 +1546,6 @@
 
   (defun lock-type-cache ()
     (setq locked t)))
-
                     
 
   

@@ -56,7 +56,8 @@
                     ;; those per-session addresses and confuse the
                     ;; startup code.
                     (if (and (eql (typecode o) target::subtag-instance)
-                             (typep o 'buffered-stream-mixin))
+                             (typep o 'buffered-stream-mixin)
+                             (slot-boundp o 'ioblock))
                       (let ((s (slot-value o 'ioblock)))
                         (when (and (typep s 'ioblock)
                                    (ioblock-device s)

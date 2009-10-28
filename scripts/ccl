@@ -1,35 +1,12 @@
 #!/bin/sh
 #
 # Change the definition of CCL_DEFAULT_DIRECTORY below to refer to
-# your Clozure CL installation directory.  
+# your OpenMCL installation directory.  
 # Any definition of CCL_DEFAULT_DIRECTORY already present in the environment 
 # takes precedence over definitions made below.
 
-probe()
-{
-    if [ -e "$1"  -a  -e "$1/scripts/ccl" ]; then
-        CCL_DEFAULT_DIRECTORY="$1"
-    fi
-}
-
-if [ -z "$CCL_DEFAULT_DIRECTORY"  -a  -n "`which readlink`" ]; then
-    dir="`readlink $0`"
-    probe "${dir%/scripts/ccl}"
-fi
-
 if [ -z "$CCL_DEFAULT_DIRECTORY" ]; then
-    probe "`pwd`"
-fi
-
-if [ -z "$CCL_DEFAULT_DIRECTORY" ]; then
-    probe "/usr/local/src/ccl"
-fi
-
-if [ -z "$CCL_DEFAULT_DIRECTORY" ]; then
-    echo "Can't find CCL directory.  Please edit $0 or"
-    echo "set the environment variable CCL_DEFAULT_DIRECTORY"
-    echo "and try again."
-    exit 1
+  CCL_DEFAULT_DIRECTORY=/usr/local/src/ccl
 fi
 
 export CCL_DEFAULT_DIRECTORY
@@ -39,7 +16,7 @@ export CCL_DEFAULT_DIRECTORY
 
 DD=${CCL_DEFAULT_DIRECTORY}
 
-# If you don't want to guess the name of the Clozure CL kernel on
+# If you don't want to guess the name of the OpenMCL kernel on
 # every invocation (or if you want to use a kernel with a
 # non-default name), you might want to uncomment and change
 # the following line:
