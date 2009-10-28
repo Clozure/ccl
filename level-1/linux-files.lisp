@@ -1024,6 +1024,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
     (completed (make-semaphore))
     watched-fds
     watched-streams
+    external-format
     )
 
   (defmethod print-object ((p external-process) stream)
@@ -1040,6 +1041,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                                     &rest keys
                                     &key direction (element-type 'character)
                                     (sharing :private)
+                                    external-format
                                     &allow-other-keys)
     (etypecase object
       ((eql t)
@@ -1064,6 +1066,8 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                                     :interactive nil
                                     :sharing sharing
                                     :basic t
+                                    :encoding (external-format-character-encoding external-format)
+                                    :line-termination (external-format-line-termination external-format)
                                     :auto-close t)
                     (cons read-pipe close-in-parent)
                     (cons write-pipe close-on-error)))
@@ -1075,6 +1079,8 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                                     :interactive nil
                                     :basic t
                                     :sharing sharing
+                                    :encoding (external-format-character-encoding external-format)
+                                    :line-termination (external-format-line-termination external-format)
                                     :auto-close t)
                     (cons write-pipe close-in-parent)
                     (cons read-pipe close-on-error)))
@@ -1089,12 +1095,15 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                    nil
                    (cons fd close-in-parent)
                    (cons fd close-on-error)))))
+      #||
+      ;; What's an FD-STREAM ?
       (fd-stream
        (let ((fd (fd-dup (ioblock-device (stream-ioblock object t)))))
          (values fd
                  nil
                  (cons fd close-in-parent)
                  (cons fd close-on-error))))
+      ||#
       (stream
        (ecase direction
          (:input
@@ -1103,19 +1112,19 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
               (if (< fd 0)
                 (%errno-disp fd))
               (#_unlink template)
-              (loop
-                (multiple-value-bind (line no-newline)
-                    (read-line object nil nil)
-                  (unless line
-                    (return))
-                  (let* ((len (length line)))
-                    (%stack-block ((buf (1+ len)))
-                      (%cstr-pointer line buf)
-                      (fd-write fd buf len)
-                      (if no-newline
-                        (return))
-                      (setf (%get-byte buf) (char-code #\newline))
-                      (fd-write fd buf 1)))))
+              (let* ((out (make-fd-stream (fd-dup fd)
+                                          :direction :output
+                                          :encoding (external-format-character-encoding external-format)
+                                          :line-termination (external-format-line-termination external-format))))
+                (loop
+                  (multiple-value-bind (line no-newline)
+                      (read-line object nil nil)
+                    (unless line
+                      (return))
+                    (if no-newline
+                      (write-string line out)
+                      (write-line line out))))
+                (close out))
               (fd-lseek fd 0 #$SEEK_SET)
               (values fd nil (cons fd close-in-parent) (cons fd close-on-error)))))
          (:output
@@ -1165,7 +1174,18 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
            (terminated)
            (changed)
            (maxfd 0)
-           (pairs (pairlis in-fds out-streams)))
+           (external-format (external-process-external-format p))
+           (encoding (external-format-character-encoding external-format))
+           (line-termination (external-format-line-termination external-format))
+           (pairs (pairlis
+                   (mapcar (lambda (fd)
+                             (cons fd
+                                   (make-fd-stream fd
+                                                   :direction :input
+                                                   :sharing :private
+                                                   :encoding encoding
+                                                   :line-termination line-termination)))
+                                     in-fds) out-streams)))
       (%stack-block ((in-fd-set *fd-set-size*))
         (rlet ((tv #>timeval))
           (loop
@@ -1179,7 +1199,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
               (fd-zero in-fd-set)
               (setq maxfd 0)
               (dolist (p pairs)
-                (let* ((fd (car p)))
+                (let* ((fd (caar p)))
                   (when (> fd maxfd)
                     (setq maxfd fd))
                   (fd-set fd in-fd-set)))
@@ -1188,21 +1208,19 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
               (when (> (#_select (1+ maxfd) in-fd-set (%null-ptr) (%null-ptr) tv)
                        0)
                 (dolist (p pairs)
-                  (let* ((in-fd (car p))
+                  (let* ((in-fd (caar p))
+                         (in-stream (cdar p))
                          (out-stream (cdr p)))
                     (when (fd-is-set in-fd in-fd-set)
-                      (%stack-block ((buf 1024))
-                        (let* ((n (fd-read in-fd buf 1024)))
-                          (declare (fixnum n))
-                          (if (<= n 0)
-                            (without-interrupts
-                              (decf (car token))
-                              (fd-close in-fd)
-                              (setf (car p) nil changed t))
-                            (let* ((string (make-string 1024)))
-                              (declare (dynamic-extent string))
-                              (%str-from-ptr buf n string)
-                              (write-sequence string out-stream :end n))))))))))
+                      (let* ((buf (make-string 1024))
+                             (n (ignore-errors (read-sequence buf in-stream))))
+                        (declare (dynamic-extent buf))
+                        (if (or (null n) (eql n 0))
+                          (without-interrupts
+                           (decf (car token))
+                           (close in-stream)
+                           (setf (car p) nil changed t))
+                          (write-sequence buf out-stream :end n))))))))
             (let* ((statusflags (check-pid (external-process-pid p)
                                            (logior
                                             (if in-fds #$WNOHANG 0)
@@ -1288,6 +1306,7 @@ itself, by setting the status and exit-code fields.")
                               status-hook (element-type 'character)
                               env
                               (sharing :private)
+                              (external-format `(:character-encoding ,*terminal-character-encoding-name*))
                               (silently-ignore-catastrophic-failures
                                *silently-ignore-catastrophic-failure-in-run-program*))
     "Invoke an external program as an OS subprocess of lisp."
@@ -1317,20 +1336,23 @@ itself, by setting the status and exit-code fields.")
              :output nil
              :error nil
              :token token
-             :status-hook status-hook)))
+             :status-hook status-hook
+             :external-format (setq external-format (normalize-external-format t external-format)))))
       (unwind-protect
            (progn
              (multiple-value-setq (in-fd in-stream close-in-parent close-on-error)
                (get-descriptor-for input proc  nil nil :direction :input
                                    :if-does-not-exist if-input-does-not-exist
                                    :element-type element-type
-                                   :sharing sharing))
+                                   :sharing sharing
+                                   :external-format external-format))
              (multiple-value-setq (out-fd out-stream close-in-parent close-on-error)
                (get-descriptor-for output proc close-in-parent close-on-error
                                    :direction :output
                                    :if-exists if-output-exists
                                    :element-type element-type
-                                   :sharing sharing))
+                                   :sharing sharing
+                                   :external-format external-format))
              (multiple-value-setq (error-fd error-stream close-in-parent close-on-error)
                (if (eq error :output)
                  (values out-fd out-stream close-in-parent close-on-error)
@@ -1338,7 +1360,8 @@ itself, by setting the status and exit-code fields.")
                                      :direction :output
                                      :if-exists if-error-exists
                                      :sharing sharing
-                                     :element-type element-type)))
+                                     :element-type element-type
+                                     :external-format external-format)))
              (setf (external-process-input proc) in-stream
                    (external-process-output proc) out-stream
                    (external-process-error proc) error-stream)
@@ -1444,6 +1467,7 @@ space, and prefixed with PREFIX."
                                     &key
                                     direction (element-type 'character)
                                     (sharing :private)
+                                    external-format
                                     &allow-other-keys)
     (etypecase object
       ((eql t)
@@ -1468,6 +1492,8 @@ space, and prefixed with PREFIX."
                                     :interactive nil
                                     :basic t
                                     :sharing sharing
+                                    :encoding (external-format-character-encoding external-format)
+                                    :line-termination (external-format-line-termination external-format)
                                     :auto-close t)
                     (cons read-pipe close-in-parent)
                     (cons write-pipe close-on-error)))
@@ -1479,6 +1505,8 @@ space, and prefixed with PREFIX."
                                     :interactive nil
                                     :basic t
                                     :sharing sharing
+                                    :encoding (external-format-character-encoding external-format)
+                                    :line-termination (external-format-line-termination external-format)
                                     :auto-close t)
                     (cons write-pipe close-in-parent)
                     (cons read-pipe close-on-error)))
@@ -1493,12 +1521,6 @@ space, and prefixed with PREFIX."
                    nil
                    (cons fd close-in-parent)
                    (cons fd close-on-error)))))
-      (fd-stream
-       (let ((fd (fd-dup (ioblock-device (stream-ioblock object t)))))
-         (values fd
-                 nil
-                 (cons fd close-in-parent)
-                 (cons fd close-on-error))))
       (stream
        (ecase direction
          (:input
@@ -1506,19 +1528,20 @@ space, and prefixed with PREFIX."
                  (fd (fd-open tempname #$O_RDWR)))
             (if (< fd 0)
               (%errno-disp fd))
-            (loop
-              (multiple-value-bind (line no-newline)
-                  (read-line object nil nil)
-                (unless line
-                  (return))
-                (let* ((len (length line)))
-                  (%stack-block ((buf (1+ len)))
-                    (%cstr-pointer line buf)
-                    (fd-write fd buf len)
-                    (if no-newline
-                      (return))
-                    (setf (%get-byte buf) (char-code #\newline))
-                    (fd-write fd buf 1)))))
+            (let* ((out (make-fd-stream (fd-dup fd)
+                                        :direction :output
+                                        :encoding (external-format-character-encoding external-format)
+                                        :line-termination (external-format-line-termination external-format))))            
+              (loop
+                (multiple-value-bind (line no-newline)
+                    (read-line object nil nil)
+                  (unless line
+                    (return))
+                  (if no-newline
+                    (write-string line out)
+                    (write-line line out))
+                  ))
+              (close out))
             (fd-lseek fd 0 #$SEEK_SET)
             (values fd nil (cons fd close-in-parent) (cons fd close-on-error))))
          (:output
@@ -1548,6 +1571,7 @@ space, and prefixed with PREFIX."
     (completed (make-semaphore))
     watched-fds
     watched-streams
+    external-format
     )
 
 
@@ -1569,6 +1593,7 @@ space, and prefixed with PREFIX."
                               (error :output) (if-error-exists :error)
                               status-hook (element-type 'character)
                               (sharing :private)
+                              (external-format `(:character-encoding ,*terminal-character-encoding-name* :line-termination :crlf))
                               env)
     "Invoke an external program as an OS subprocess of lisp."
     (declare (ignore pty))
@@ -1593,6 +1618,7 @@ space, and prefixed with PREFIX."
              :output nil
              :error nil
              :token token
+             :external-format (setq external-format (normalize-external-format t external-format))
              :status-hook status-hook)))
       (unwind-protect
            (progn
@@ -1600,13 +1626,15 @@ space, and prefixed with PREFIX."
                (get-descriptor-for input proc  nil nil :direction :input
                                    :if-does-not-exist if-input-does-not-exist
                                    :sharing sharing
-                                   :element-type element-type))
+                                   :element-type element-type
+                                   :external-format external-format))
              (multiple-value-setq (out-fd out-stream close-in-parent close-on-error)
                (get-descriptor-for output proc close-in-parent close-on-error
                                    :direction :output
                                    :if-exists if-output-exists
                                    :sharing sharing
-                                   :element-type element-type))
+                                   :element-type element-type
+                                   :external-format external-format))
              (multiple-value-setq (error-fd error-stream close-in-parent close-on-error)
                (if (eq error :output)
                  (values out-fd out-stream close-in-parent close-on-error)
@@ -1614,7 +1642,8 @@ space, and prefixed with PREFIX."
                                      :direction :output
                                      :if-exists if-error-exists
                                      :sharing sharing
-                                     :element-type element-type)))
+                                     :element-type element-type
+                                     :external-format external-format)))
              (setf (external-process-input proc) in-stream
                    (external-process-output proc) out-stream
                    (external-process-error proc) error-stream)
@@ -1741,7 +1770,15 @@ space, and prefixed with PREFIX."
            (token (external-process-token p))
            (terminated)
            (changed)
-           (pairs (pairlis in-fds out-streams))
+           (pairs (pairlis (mapcar (lambda (fd)
+                                     (cons fd
+                                           (make-fd-stream fd
+                                                           :direction :input
+                                                           :sharing :private
+                                                           :encoding encoding
+                                                           :line-termination line-termination)))
+                                   in-fds)
+                           out-streams))
            )
       (loop
         (when changed
@@ -1766,33 +1803,22 @@ space, and prefixed with PREFIX."
            (signal-semaphore (external-process-completed p))
            (return)))
         (dolist (p pairs)
-          (let* ((in-fd (car p))
+          (let* ((in-fd (caar p))
+                 (in-stream (cdar p))
                  (out-stream (cdr p)))
             (when (or terminated (data-available-on-pipe-p in-fd))
-              (%stack-block ((buf 1024))
-                (let* ((n (fd-read in-fd buf 1024)))
-                  (declare (fixnum n))
-                  (if (<= n 0)
+              (let* ((buf (make-string 1024)))
+                (declare (dynamic-extent buf))
+                (let* ((n (ignore-errors (read-sequence buf in-stream))))
+                  (if (or (null n) (eql n 0))
                     (progn
                       (without-interrupts
                        (decf (car token))
                        (fd-close in-fd)
                        (setf (car p) nil changed t)))
-
-                    (let* ((string (make-string n))
-			   (m 0))
-                      (declare (dynamic-extent string)
-			       (fixnum m))
-		      ;; Not quite right: we really want to map
-		      ;; CRLF to #\Newline, but stripping #\Return
-		      ;; is usually the same thing and easier.
-		      (dotimes (i n)
-			(let* ((code (%get-unsigned-byte buf i)))
-			  (unless (eql code (char-code #\Return))
-			    (setf (schar string m) (code-char code))
-			    (incf m))))
-                      (write-sequence string out-stream :end m)
-		      (force-output out-stream))))))))
+                    (progn
+                      (write-sequence buf out-stream :end n)
+                      (force-output out-stream))))))))
         (unless terminated
           (setq terminated (eql (#_WaitForSingleObjectEx
                                  (external-process-pid p)
