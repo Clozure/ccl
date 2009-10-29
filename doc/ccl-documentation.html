@@ -428,7 +428,7 @@
               </dt>
               <dt>
                 <span class="sect1">
-                  <a href="#id417869">12.12. The Foreign-Function-Interface Dictionary</a>
+                  <a href="#id417898">12.12. The Foreign-Function-Interface Dictionary</a>
                 </span>
               </dt>
             </dl>
@@ -10040,7 +10040,8 @@ Type :? for other options.
               <code><span xmlns="http://www.w3.org/1999/xhtml"><strong class="function">run-program</strong></span>
 	    program args <em xmlns="http://www.w3.org/1999/xhtml" class="varname">&amp;key</em> (wait t) pty sharing input
 	    if-input-does-not-exist output (if-output-exists :error) (error
-	    :output) (if-error-exists :error) status-hook</code>
+	    :output) (if-error-exists :error) status-hook
+	    external-format</code>
             </div>
             <div class="refentrytitle">Invokes an external program as an OS subprocess
 	    of lisp.</div>
@@ -10092,9 +10093,14 @@ Type :? for other options.
 		  EXTERNAL-PROCESS structure.) This function is called
 		  whenever Clozure CL detects a change in the status of the
 		  EXTERNAL-PROCESS.</p>
+                <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">external-format</span></i>---
+		    The external format (see <a xmlns="http://www.w3.org/1999/xhtml" href="#External-Formats" title="4.3.2. External Formats">Section 4.3.2, “External Formats”</a>) for all of the
+		    streams (input, output, and error) used to
+		    communicate with the external process.
+		  </p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id354491"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id354531"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Runs the specified program in an external (Unix) process,
 	    returning an object of type EXTERNAL-PROCESS if successful.</p>
@@ -10114,13 +10120,13 @@ Type :? for other options.
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id336275"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id336315"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">proc</span></i>---An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</p>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">signal</span></i>---A small integer.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id336316"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id336356"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Sends the specified "signal" to the specified
 	    external process. (Typically, it would only be useful to call
@@ -10143,12 +10149,12 @@ Type :? for other options.
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id359666"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id359706"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">proc</span></i>---An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id359692"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id359732"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Returns the <span class="emphasis"><em>process id</em></span> assigned to
 	    the external process by the operating system. This is typically
@@ -10170,12 +10176,12 @@ Type :? for other options.
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id370695"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id370735"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">proc</span></i>---An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id370721"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id370761"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Returns the stream created when the input argument to
 	    run-program is specified as :STREAM.</p>
@@ -10196,12 +10202,12 @@ Type :? for other options.
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id359778"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id359819"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">proc</span></i>---An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id359804"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id359845"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Returns the stream created when the output argument to
 	    run-program is specified as :STREAM.</p>
@@ -10223,12 +10229,12 @@ Type :? for other options.
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id367004"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id367045"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">proc</span></i>---An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id367030"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id367071"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Returns the stream created when the error argument to
 	    run-program is specified as :STREAM.</p>
@@ -10250,12 +10256,12 @@ Type :? for other options.
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id362744"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id362784"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">proc</span></i>---An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id362770"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id362810"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Returns, as multiple values, a keyword denoting the status
 	    of the external process (one of :running, :stopped, :signaled, or
@@ -10285,7 +10291,7 @@ Type :? for other options.
               <dl>
                 <dt>
                   <span class="sect2">
-                    <a href="#id372985">9.1.1. Stream External Encoding</a>
+                    <a href="#id333458">9.1.1. Stream External Encoding</a>
                   </span>
                 </dt>
                 <dt>
@@ -10353,7 +10359,7 @@ Type :? for other options.
             <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
               <div>
                 <div>
-                  <h3 class="title"><a id="id372985"></a>9.1.1. Stream External Encoding</h3>
+                  <h3 class="title"><a id="id333458"></a>9.1.1. Stream External Encoding</h3>
                 </div>
               </div>
             </div>
@@ -10514,12 +10520,12 @@ Type :? for other options.
                 </div>
               </div>
             </div>
-            <a xmlns="http://www.w3.org/1999/xhtml" id="id363902" class="indexterm"></a>
-            <a xmlns="http://www.w3.org/1999/xhtml" id="id363912" class="indexterm"></a>
-            <a xmlns="http://www.w3.org/1999/xhtml" id="id363922" class="indexterm"></a>
+            <a xmlns="http://www.w3.org/1999/xhtml" id="id363903" class="indexterm"></a>
+            <a xmlns="http://www.w3.org/1999/xhtml" id="id363913" class="indexterm"></a>
+            <a xmlns="http://www.w3.org/1999/xhtml" id="id363923" class="indexterm"></a>
             <a xmlns="http://www.w3.org/1999/xhtml" id="id363932" class="indexterm"></a>
-            <a xmlns="http://www.w3.org/1999/xhtml" id="id370458" class="indexterm"></a>
-            <a xmlns="http://www.w3.org/1999/xhtml" id="id364570" class="indexterm"></a>
+            <a xmlns="http://www.w3.org/1999/xhtml" id="id374925" class="indexterm"></a>
+            <a xmlns="http://www.w3.org/1999/xhtml" id="id364573" class="indexterm"></a>
             <p xmlns="http://www.w3.org/1999/xhtml">A stream that is associated with a file descriptor has
         attributes and accessors:
         <span><strong class="function">STREAM-INPUT-TIMEOUT</strong></span>,
@@ -10572,19 +10578,19 @@ Type :? for other options.
             <p>
               <div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id364735"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id364737"></a>
                   <div class="header">Values:</div>
                   <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">stream-list</span></i>---A list of open file streams.  This is a copy of
 		          an internal list so it may be destructively
 		          modified without ill effect.</p>
                 </div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id364762"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id364764"></a>
                   <div class="header">Description:</div>
                   <p xmlns="http://www.w3.org/1999/xhtml">Returns a list of open file streams.</p>
                 </div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id364774"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id364776"></a>
                   <div class="header">See Also:</div>
                   <span xmlns="http://www.w3.org/1999/xhtml" class="simplelist"><a href="#f_note-open-file-stream" title="Function NOTE-OPEN-FILE-STREAM"><b xmlns="http://www.w3.org/TR/xhtml1/transitional">note-open-file-stream</b></a>, <a href="#f_remove-open-file-stream" title="Function REMOVE-OPEN-FILE-STREAM"><b xmlns="http://www.w3.org/TR/xhtml1/transitional">remove-open-file-stream</b></a></span>
                 </div>
@@ -10607,12 +10613,12 @@ Type :? for other options.
             <p>
               <div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id381734"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id381748"></a>
                   <div class="header">Arguments:</div>
                   <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">file-stream</span></i>---A file stream.</p>
                 </div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id381760"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id381774"></a>
                   <div class="header">Description:</div>
                   <p xmlns="http://www.w3.org/1999/xhtml">Adds a file stream to the internal list of open
 	        file streams that is returned by
@@ -10621,7 +10627,7 @@ Type :? for other options.
 	        stream code when a file-stream is created.</p>
                 </div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id381779"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id381793"></a>
                   <div class="header">See Also:</div>
                   <span xmlns="http://www.w3.org/1999/xhtml" class="simplelist"><a href="#f_open-file-streams" title="Function OPEN-FILE-STREAMS"><b xmlns="http://www.w3.org/TR/xhtml1/transitional">open-file-streams</b></a>, <a href="#f_remove-open-file-stream" title="Function REMOVE-OPEN-FILE-STREAM"><b xmlns="http://www.w3.org/TR/xhtml1/transitional">remove-open-file-stream</b></a></span>
                 </div>
@@ -10644,12 +10650,12 @@ Type :? for other options.
             <p>
               <div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id381860"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id381875"></a>
                   <div class="header">Arguments:</div>
                   <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">file-stream</span></i>---A file stream.</p>
                 </div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id381886"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id381901"></a>
                   <div class="header">Description:</div>
                   <p xmlns="http://www.w3.org/1999/xhtml">Remove file stream from the internal list of open file
 	        streams that is returned by
@@ -10658,7 +10664,7 @@ Type :? for other options.
 	        stream code when a file-stream is closed.</p>
                 </div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id381905"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id381920"></a>
                   <div class="header">See Also:</div>
                   <span xmlns="http://www.w3.org/1999/xhtml" class="simplelist"><a href="#f_open-file-streams" title="Function OPEN-FILE-STREAMS"><b xmlns="http://www.w3.org/TR/xhtml1/transitional">open-file-streams</b></a>, <a href="#f_note-open-file-stream" title="Function NOTE-OPEN-FILE-STREAM"><b xmlns="http://www.w3.org/TR/xhtml1/transitional">note-open-file-stream</b></a></span>
                 </div>
@@ -11091,7 +11097,7 @@ Type :? for other options.
             <p>
               <div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id382492"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395150"></a>
                   <div class="header">Arguments and Values:</div>
                   <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">stream</span></i>---a stream, presumably a fundamental-input-stream.</p>
                   <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">list</span></i>---a list. When a STREAM-READ-LIST method is called by
@@ -11102,7 +11108,7 @@ Type :? for other options.
 		          to be greater than the length of the list.</p>
                 </div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395194"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395208"></a>
                   <div class="header">Description:</div>
                   <p xmlns="http://www.w3.org/1999/xhtml">Should try to read up to count elements from stream into the
 	        list list, returning the number of elements actually read (which
@@ -11123,7 +11129,7 @@ Type :? for other options.
             <p>
               <div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395253"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395266"></a>
                   <div class="header">Arguments and Values:</div>
                   <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">stream</span></i>---a stream, presumably a fundamental-output-stream.</p>
                   <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">list</span></i>---a list. When a STREAM-WRITE-LIST method is called by
@@ -11134,7 +11140,7 @@ Type :? for other options.
 		          guaranteed not to be greater than the length of the list.</p>
                 </div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395311"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395325"></a>
                   <div class="header">Description:</div>
                   <p xmlns="http://www.w3.org/1999/xhtml">should try to write the first count elements of list to
 	        stream. The return value of this method is ignored.</p>
@@ -11154,7 +11160,7 @@ Type :? for other options.
             <p>
               <div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395369"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395383"></a>
                   <div class="header">Arguments and Values:</div>
                   <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">stream</span></i>---a stream, presumably a fundamental-input-stream</p>
                   <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">vector</span></i>---a vector. When a STREAM-READ-VECTOR method is called
@@ -11170,7 +11176,7 @@ Type :? for other options.
 		          length of vector.</p>
                 </div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395444"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395458"></a>
                   <div class="header">Description:</div>
                   <p xmlns="http://www.w3.org/1999/xhtml">should try to read successive elements from stream into
 	        vector, starting at element start (inclusive) and continuing
@@ -11193,7 +11199,7 @@ Type :? for other options.
             <p>
               <div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395505"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395518"></a>
                   <div class="header">Arguments and Values:</div>
                   <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">stream</span></i>---a stream, presumably a fundamental-output-stream</p>
                   <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">vector</span></i>---a vector. When a STREAM-WRITE-VECTOR method is called
@@ -11209,7 +11215,7 @@ Type :? for other options.
 		          length of vector.</p>
                 </div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395580"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395594"></a>
                   <div class="header">Description:</div>
                   <p xmlns="http://www.w3.org/1999/xhtml">should try to write successive elements of vector to stream,
 	        starting at element start (inclusive) and continuing through
@@ -11231,13 +11237,13 @@ Type :? for other options.
             <p>
               <div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395640"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395653"></a>
                   <div class="header">Method Signatures:</div>
                   <div class="synopsis"><span xmlns="http://www.w3.org/1999/xhtml"><strong class="function">ccl::stream-device</strong></span> <i>
 	        (s stream) direction =&gt; fd</i></div>
                 </div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395658"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395672"></a>
                   <div class="header">Arguments and Values:</div>
                   <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">s</span></i>---a stream.</p>
                   <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">direction</span></i>---either :INPUT or :OUTPUT.</p>
@@ -11248,7 +11254,7 @@ Type :? for other options.
 		          <em xmlns="http://www.w3.org/1999/xhtml" class="varname">direction</em>.</p>
                 </div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395723"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395737"></a>
                   <div class="header">Description:</div>
                   <p xmlns="http://www.w3.org/1999/xhtml">Returns the file descriptor associated with
 	        <em class="varname">s</em> in the direction given by
@@ -11272,14 +11278,14 @@ Type :? for other options.
             <p>
               <div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395793"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395807"></a>
                   <div class="header">Description:</div>
                   <p xmlns="http://www.w3.org/1999/xhtml">Reads up to max-octets octets from stream into ivector,
 	        storing them at start-octet. Returns the number of octets actually
 	        read.</p>
                 </div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395805"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395819"></a>
                   <div class="header">Arguments:</div>
                   <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">stream</span></i>---An input stream. The method defined on
 		          BUFFERED-INPUT-STREAMs requires that the size in octets of
@@ -11304,13 +11310,13 @@ Type :? for other options.
             <p>
               <div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395924"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395938"></a>
                   <div class="header">Description:</div>
                   <p xmlns="http://www.w3.org/1999/xhtml">Writes max-octets octets to stream from ivector, starting at
 	        start-octet. Returns max-octets.</p>
                 </div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395936"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id395950"></a>
                   <div class="header">Arguments:</div>
                   <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">stream</span></i>---An input stream. The method defined on
 		          BUFFERED-OUTPUT-STREAMs requires that the size in octets of
@@ -11320,7 +11326,7 @@ Type :? for other options.
                   <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">max-octet</span></i>---A non-negative integer.</p>
                 </div>
                 <div class="refsect1" lang="en" xml:lang="en">
-                  <a xmlns="http://www.w3.org/1999/xhtml" id="id396009"></a>
+                  <a xmlns="http://www.w3.org/1999/xhtml" id="id396022"></a>
                   <div class="header">Examples:</div>
                   <pre xmlns="http://www.w3.org/1999/xhtml" class="programlisting">
 ;;; Write the contents of a (SIMPLE-ARRAY(UNSIGNED-BYTE 16) 3) 
@@ -12486,13 +12492,13 @@ profiling-session-&lt;lisp-kernel&gt;-&lt;pid&gt;_&lt;mm&gt;-&lt;dd&gt;-&lt;yyyy
               </div>
             </div>
             <p xmlns="http://www.w3.org/1999/xhtml">
-	    <a id="id348667" class="indexterm"></a>
+	    <a id="id348665" class="indexterm"></a>
 	    <span><strong class="command"><em class="varname"><a id="chud_shark-config-file"></a>CHUD:*SHARK-CONFIG-FILE*</em> [Variable]</strong></span>
 	  </p>
             <p xmlns="http://www.w3.org/1999/xhtml">When non-null, this should be the pathname of an alternate profiling
 	  configuration file created by the "Config Editor" in Shark.app.</p>
             <p xmlns="http://www.w3.org/1999/xhtml">
-	    <a id="id348693" class="indexterm"></a>
+	    <a id="id348691" class="indexterm"></a>
 	    <span><strong class="command"><em class="varname"><a id="chud_meter"></a>CHUD:METER</em> form <em class="varname">&amp;key</em> (reset nil) (debug-output nil) [Macro]</strong></span>
 	  </p>
             <p xmlns="http://www.w3.org/1999/xhtml">Executes FORM (an arbitrary lisp form) and returns whatever result(s) it
@@ -12754,7 +12760,7 @@ profiling-session-&lt;lisp-kernel&gt;-&lt;pid&gt;_&lt;mm&gt;-&lt;dd&gt;-&lt;yyyy
             </dd>
             <dt>
               <span class="sect1">
-                <a href="#id417869">12.12. The Foreign-Function-Interface Dictionary</a>
+                <a href="#id417898">12.12. The Foreign-Function-Interface Dictionary</a>
               </span>
             </dt>
           </dl>
@@ -13582,7 +13588,7 @@ profiling-session-&lt;lisp-kernel&gt;-&lt;pid&gt;_&lt;mm&gt;-&lt;dd&gt;-&lt;yyyy
               <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
                 <div>
                   <div>
-                    <h4 class="title"><a id="id415012"></a>12.3.2.4. %int-to-ptr [Function]</h4>
+                    <h4 class="title"><a id="id415041"></a>12.3.2.4. %int-to-ptr [Function]</h4>
                   </div>
                 </div>
               </div>
@@ -13623,7 +13629,7 @@ profiling-session-&lt;lisp-kernel&gt;-&lt;pid&gt;_&lt;mm&gt;-&lt;dd&gt;-&lt;yyyy
               <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
                 <div>
                   <div>
-                    <h4 class="title"><a id="id415076"></a>12.3.2.5. %inc-ptr [Function]</h4>
+                    <h4 class="title"><a id="id415105"></a>12.3.2.5. %inc-ptr [Function]</h4>
                   </div>
                 </div>
               </div>
@@ -13673,7 +13679,7 @@ profiling-session-&lt;lisp-kernel&gt;-&lt;pid&gt;_&lt;mm&gt;-&lt;dd&gt;-&lt;yyyy
               <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
                 <div>
                   <div>
-                    <h4 class="title"><a id="id415155"></a>12.3.2.6. %ptr-to-int [Function]</h4>
+                    <h4 class="title"><a id="id415184"></a>12.3.2.6. %ptr-to-int [Function]</h4>
                   </div>
                 </div>
               </div>
@@ -13715,7 +13721,7 @@ profiling-session-&lt;lisp-kernel&gt;-&lt;pid&gt;_&lt;mm&gt;-&lt;dd&gt;-&lt;yyyy
               <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
                 <div>
                   <div>
-                    <h4 class="title"><a id="id415220"></a>12.3.2.7. %null-ptr [Macro]</h4>
+                    <h4 class="title"><a id="id415249"></a>12.3.2.7. %null-ptr [Macro]</h4>
                   </div>
                 </div>
               </div>
@@ -13740,7 +13746,7 @@ profiling-session-&lt;lisp-kernel&gt;-&lt;pid&gt;_&lt;mm&gt;-&lt;dd&gt;-&lt;yyyy
               <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
                 <div>
                   <div>
-                    <h4 class="title"><a id="id415255"></a>12.3.2.8. %null-ptr-p [Function]</h4>
+                    <h4 class="title"><a id="id415284"></a>12.3.2.8. %null-ptr-p [Function]</h4>
                   </div>
                 </div>
               </div>
@@ -13782,7 +13788,7 @@ profiling-session-&lt;lisp-kernel&gt;-&lt;pid&gt;_&lt;mm&gt;-&lt;dd&gt;-&lt;yyyy
               <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
                 <div>
                   <div>
-                    <h4 class="title"><a id="id415320"></a>12.3.2.9. %setf-macptr [Function]</h4>
+                    <h4 class="title"><a id="id415349"></a>12.3.2.9. %setf-macptr [Function]</h4>
                   </div>
                 </div>
               </div>
@@ -13830,7 +13836,7 @@ profiling-session-&lt;lisp-kernel&gt;-&lt;pid&gt;_&lt;mm&gt;-&lt;dd&gt;-&lt;yyyy
               <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
                 <div>
                   <div>
-                    <h4 class="title"><a id="id415398"></a>12.3.2.10. %incf-ptr [Macro]</h4>
+                    <h4 class="title"><a id="id415427"></a>12.3.2.10. %incf-ptr [Macro]</h4>
                   </div>
                 </div>
               </div>
@@ -13878,7 +13884,7 @@ profiling-session-&lt;lisp-kernel&gt;-&lt;pid&gt;_&lt;mm&gt;-&lt;dd&gt;-&lt;yyyy
               <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
                 <div>
                   <div>
-                    <h4 class="title"><a id="id415476"></a>12.3.2.11. with-macptrs [Macro]</h4>
+                    <h4 class="title"><a id="id415504"></a>12.3.2.11. with-macptrs [Macro]</h4>
                   </div>
                 </div>
               </div>
@@ -13928,7 +13934,7 @@ profiling-session-&lt;lisp-kernel&gt;-&lt;pid&gt;_&lt;mm&gt;-&lt;dd&gt;-&lt;yyyy
               <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
                 <div>
                   <div>
-                    <h4 class="title"><a id="id415555"></a>12.3.2.12. %stack-block [Macro]</h4>
+                    <h4 class="title"><a id="id415583"></a>12.3.2.12. %stack-block [Macro]</h4>
                   </div>
                 </div>
               </div>
@@ -13979,7 +13985,7 @@ profiling-session-&lt;lisp-kernel&gt;-&lt;pid&gt;_&lt;mm&gt;-&lt;dd&gt;-&lt;yyyy
               <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
                 <div>
                   <div>
-                    <h4 class="title"><a id="id415634"></a>12.3.2.13. make-cstring [Function]</h4>
+                    <h4 class="title"><a id="id415663"></a>12.3.2.13. make-cstring [Function]</h4>
                   </div>
                 </div>
               </div>
@@ -14022,7 +14028,7 @@ profiling-session-&lt;lisp-kernel&gt;-&lt;pid&gt;_&lt;mm&gt;-&lt;dd&gt;-&lt;yyyy
               <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
                 <div>
                   <div>
-                    <h4 class="title"><a id="id415700"></a>12.3.2.14. with-cstrs [Macro]</h4>
+                    <h4 class="title"><a id="id415729"></a>12.3.2.14. with-cstrs [Macro]</h4>
                   </div>
                 </div>
               </div>
@@ -14072,7 +14078,7 @@ profiling-session-&lt;lisp-kernel&gt;-&lt;pid&gt;_&lt;mm&gt;-&lt;dd&gt;-&lt;yyyy
               <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
                 <div>
                   <div>
-                    <h4 class="title"><a id="id415779"></a>12.3.2.15. with-encoded-cstrs [Macro]</h4>
+                    <h4 class="title"><a id="id415808"></a>12.3.2.15. with-encoded-cstrs [Macro]</h4>
                   </div>
                 </div>
               </div>
@@ -14135,7 +14141,7 @@ profiling-session-&lt;lisp-kernel&gt;-&lt;pid&gt;_&lt;mm&gt;-&lt;dd&gt;-&lt;yyyy
               <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
                 <div>
                   <div>
-                    <h4 class="title"><a id="id415887"></a>12.3.2.16. %get-cstring [Function]</h4>
+                    <h4 class="title"><a id="id415916"></a>12.3.2.16. %get-cstring [Function]</h4>
                   </div>
                 </div>
               </div>
@@ -14177,7 +14183,7 @@ profiling-session-&lt;lisp-kernel&gt;-&lt;pid&gt;_&lt;mm&gt;-&lt;dd&gt;-&lt;yyyy
               <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
                 <div>
                   <div>
-                    <h4 class="title"><a id="id415951"></a>12.3.2.17. %str-from-ptr [Function]</h4>
+                    <h4 class="title"><a id="id415980"></a>12.3.2.17. %str-from-ptr [Function]</h4>
                   </div>
                 </div>
               </div>
@@ -15607,7 +15613,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
             <div>
               <div>
-                <h2 class="title" style="clear: both"><a id="id417869"></a>12.12. The Foreign-Function-Interface Dictionary</h2>
+                <h2 class="title" style="clear: both"><a id="id417898"></a>12.12. The Foreign-Function-Interface Dictionary</h2>
               </div>
             </div>
           </div>
@@ -15624,7 +15630,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id417907"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id417936"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Reads a symbol from the current input stream, with *PACKAGE*
 	      bound to the "OS" package and with readtable-case preserved.</p>
@@ -15676,7 +15682,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id418014"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id418042"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">In <code class="literal">CCL</code> 1.2 and later, the #&amp; reader macro can be used to
 	      access foreign variables; this functionality depends on the presence of
@@ -15735,7 +15741,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id418131"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id418160"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">In <code class="literal">CCL</code> 0.14.2 and later, the #? reader macro can be used
 	      to access foreign constants; this functionality depends on the
@@ -15782,7 +15788,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id418214"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id418242"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">In <code class="literal">CCL</code> 1.2 and later, the #/ reader macro can be used to
 	      access foreign functions on the Darwin platform. The current
@@ -15885,7 +15891,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id418353"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id418381"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">In <code class="literal">CCL</code> 1.2 and later, the #&gt; reader macro reads
           the following text as a keyword, preserving the case of the
@@ -15914,14 +15920,14 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id418427"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id418456"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">library</span></i>---either an object of type SHLIB, or a string which
 		        designates one by its so-name.</p>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">completely</span></i>---a boolean.  The default is T.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id418463"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id418492"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">If <em class="varname">completely</em> is T, sets the
 	      reference count of <em class="varname">library</em> to 0.  Otherwise,
@@ -15950,7 +15956,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id418539"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id418568"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">name</span></i>---A symbol which can be made into a special variable</p>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">arg-type-specifer</span></i>---One of the foreign argument-type keywords,
@@ -15967,7 +15973,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		        which can be coerced to the specified result-type.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id418611"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id418639"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Proclaims <em class="varname">name</em>
 	      to be a special variable; sets its value to a
@@ -16003,7 +16009,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id418690"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id418719"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">name</span></i>---NIL or a keyword; the keyword may contain
 		        <a xmlns="http://www.w3.org/1999/xhtml" href="#Case-sensitivity-of-foreign-names-in-CCL" title="12.8. Case-sensitivity of foreign names in CCL">escaping constructs</a>.</p>
@@ -16011,7 +16017,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		        defined above.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id418731"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id418760"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">If name is non-NIL, defines name to be an alias for the
 	      foreign type specified by foreign-type-spec. If foreign-type-spec
@@ -16045,7 +16051,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id418807"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id418833"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">name</span></i>---
 		        a simple-string which names an external symbol.
@@ -16058,7 +16064,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		      </p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id418854"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id418879"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">If there is already an EXTERNAL-ENTRY-POINT for
 	      the symbol named by <em class="varname">name</em>, finds it and
@@ -16086,7 +16092,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id418934"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id418959"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">name</span></i>---A lisp string. See external, above.</p>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">arg-type-specifer</span></i>---One of the foreign argument-type keywords, described
@@ -16099,7 +16105,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		          type specifier</a>.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id419019"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id419044"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Calls the foreign function at the address obtained by
 	      resolving the external-entry-point associated with name, passing
@@ -16126,7 +16132,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id419089"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id419114"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">entrypoint</span></i>---A fixnum or MACPTR</p>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">arg-type-keyword</span></i>---One of the foreign argument-type keywords, described
@@ -16137,7 +16143,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		        above</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id419161"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id419187"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Calls the foreign function at address entrypoint passing the
 	      values of each arg as a foreign argument of type indicated by the
@@ -16163,7 +16169,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id419231"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id419256"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">entrypoint</span></i>---A fixnum or MACPTR</p>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">arg-type-specifer</span></i>---One of the foreign argument-type keywords, described
@@ -16176,7 +16182,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		          type specifier</a>.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id419316"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id419341"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Calls the foreign function at address entrypoint passing the
 	      values of each arg as a foreign argument of type indicated by the
@@ -16201,12 +16207,12 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id419382"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id419407"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">name</span></i>---A lisp string.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id419408"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id419433"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Tries to resolve the address of the foreign symbol
 	      name. If successful, returns that address encapsulated in
@@ -16229,12 +16235,12 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id419478"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id419503"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">name</span></i>---A lisp string.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id419504"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id419529"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Tries to resolve the address of the foreign symbol name. If
 	      successful, returns a fixnum representation of that address, else
@@ -16256,13 +16262,13 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id419568"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id419593"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">ptr</span></i>---A <code xmlns="http://www.w3.org/1999/xhtml" class="code">MACPTR</code> that points to a block of
 		      foreign, heap-allocated memory.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id419598"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id419623"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">In <code class="literal">CCL</code> 1.2 and later, the <code class="code">CCL:FREE</code>
           function invokes the foreign <code class="code">free</code> function from
@@ -16294,7 +16300,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id419705"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id419731"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">element-count</span></i>---A positive integer.</p>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">element-type</span></i>---A type specifier.
@@ -16309,7 +16315,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		      </p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id419792"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id419818"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	An "ivector" is a one-dimensional array that's specialized to
@@ -16344,7 +16350,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id419876"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id419901"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">typespec</span></i>---A foreign type specifier, or a keyword which is used
 		        as the name of a foreign struct or union.</p>
@@ -16361,7 +16367,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		        unreachable.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id419953"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id419978"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	      Allocates a block of foreign memory suitable to hold the foreign
@@ -16410,7 +16416,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id420095"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id420120"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">typespec</span></i>---A foreign type specifier, or a keyword which is used
 		        as the name of a foreign struct or union.</p>
@@ -16424,7 +16430,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		      </p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id420161"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id420186"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	      Expands into code which allocates and initializes
@@ -16465,7 +16471,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	    </p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id420264"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id420289"></a>
                 <div class="header">Notes:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	      It is inconvenient that <span><strong class="function">make-record</strong></span> is a
@@ -16498,7 +16504,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id420361"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id420386"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">name</span></i>---A SIMPLE-STRING which is presumed to be the so-name of
 		        or a filesystem path to the library.</p>
@@ -16506,7 +16512,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		        library denoted by <em xmlns="http://www.w3.org/1999/xhtml" class="varname">name</em>.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id420407"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id420432"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">If the library denoted by <em class="varname">name</em> can
 	      be loaded by the
@@ -16517,7 +16523,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      operating system.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id420424"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id420450"></a>
                 <div class="header">Examples:</div>
                 <pre xmlns="http://www.w3.org/1999/xhtml" class="programlisting">;;; Try to do something simple.
           ? (open-shared-library "libgtk.so")
@@ -16552,7 +16558,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           #&lt;EXTERNAL-ENTRY-POINT "gtk_main" {unresolved} libgtk.so #x3046FE46&gt;</pre>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id420447"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id420472"></a>
                 <div class="header">Notes:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">It would be helpful to describe what an soname is and give
 	      examples of one.</p>
@@ -16575,7 +16581,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id420514"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id420540"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">ptr</span></i>---<a xmlns="http://www.w3.org/1999/xhtml" href="#Referencing-and-Using-Foreign-Memory-Addresses" title="12.3. Referencing and Using Foreign Memory Addresses">a MACPTR</a>.</p>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">accessor-form</span></i>---a keyword which names a foreign type or record, as
@@ -16583,7 +16589,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		      </p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id420566"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id420591"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">References an instance of a foreign type (or a component of
 	      a foreign type) accessible via ptr.</p>
@@ -16609,13 +16615,13 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id420643"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id420668"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">eep</span></i>---An EXTERNAL-ENTRY-POINT, as obtained by the EXTERNAL
 		        macro.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id420669"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id420695"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Tries to resolve the address of the EXTERNAL-ENTRY-POINT
 	      eep; returns a fixnum representation of that address if
@@ -16638,7 +16644,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id420754"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id420780"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">var</span></i>---A symbol (a lisp variable)</p>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">typespec</span></i>---A foreign type specifier or foreign record name.</p>
@@ -16646,7 +16652,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		        <a xmlns="http://www.w3.org/1999/xhtml" href="#m_make-record" title="Macro MAKE-RECORD"><b xmlns="http://www.w3.org/TR/xhtml1/transitional">make-record</b></a></p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id420814"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id420839"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Executes <em class="varname">body</em>
 	      in an environment in which each var is bound
@@ -16676,14 +16682,14 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id420909"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id420934"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">var</span></i>---A symbol (a lisp variable)</p>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">typespec</span></i>---A foreign type specifier or foreign record name.</p>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">initforms</span></i>---As described above, for ccl:make-record</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id420965"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id420990"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Executes body in an environment in which each var is
 	      bound to <a href="#Referencing-and-Using-Foreign-Memory-Addresses" title="12.3. Referencing and Using Foreign Memory Addresses">a
@@ -16710,7 +16716,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id421044"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id421070"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">object</span></i>---A CLOS object of a class for which there exists
 		        a method of the generic function
@@ -16718,7 +16724,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		      </p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id421077"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id421102"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	      The "termination" mechanism is a way to have the garbage
@@ -16755,7 +16761,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	    </p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id421140"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id421165"></a>
                 <div class="header">Example:</div>
                 <pre xmlns="http://www.w3.org/1999/xhtml" class="programlisting">
           (defclass resource-wrapper ()
@@ -16769,7 +16775,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
                 (deallocate (resource x))))</pre>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id421156"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id421181"></a>
                 <div class="header">See Also:</div>
                 <span xmlns="http://www.w3.org/1999/xhtml" class="simplelist">
                   <a href="#Tutorial--Allocating-Foreign-Data-on-the-Lisp-Heap" title="12.11. Tutorial: Allocating Foreign Data on the Lisp Heap">Section 12.11, “Tutorial: Allocating Foreign Data on the Lisp Heap ”</a>
@@ -16791,14 +16797,14 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id421227"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id421252"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">dir-id</span></i>---A keyword whose pname, mapped to lower case, names a
 		        subdirectory of "ccl:headers;" (or
 		        "ccl:darwin-headers;")</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id421254"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id421279"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Tells <code class="literal">CCL</code> to remove the interface directory denoted by
 	      dir-id from the list of interface directories which are
@@ -16822,14 +16828,14 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id421324"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id421349"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">dir-id</span></i>---A keyword whose pname, mapped to lower case, names a
 		        subdirectory of "ccl:headers;" (or
 		        "ccl:darwin-headers;")</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id421351"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id421376"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Tells <code class="literal">CCL</code> to add the interface directory denoted by
 	      dir-id to the list of interface directories which it consults for
@@ -16851,7 +16857,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      handy in that case.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id421394"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id421419"></a>
                 <div class="header">Examples:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">One typically wants interface information to be
 	      available at compile-time (or, in many cases, at read-time).
@@ -16954,12 +16960,12 @@ reverse_int_ptr_ptrtest(int **ptrs)
               <dl>
                 <dt>
                   <span class="sect2">
-                    <a href="#id395060">13.6.1. Using <code class="literal">define-objc-method</code></a>
+                    <a href="#id394995">13.6.1. Using <code class="literal">define-objc-method</code></a>
                   </span>
                 </dt>
                 <dt>
                   <span class="sect2">
-                    <a href="#id414225">13.6.2. Using <code class="literal">objc:defmethod</code></a>
+                    <a href="#id411473">13.6.2. Using <code class="literal">objc:defmethod</code></a>
                   </span>
                 </dt>
                 <dt>
@@ -17565,7 +17571,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
             <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
               <div>
                 <div>
-                  <h3 class="title"><a id="id395060"></a>13.6.1. Using <code class="literal">define-objc-method</code></h3>
+                  <h3 class="title"><a id="id394995"></a>13.6.1. Using <code class="literal">define-objc-method</code></h3>
                 </div>
               </div>
             </div>
@@ -17682,7 +17688,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
             <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
               <div>
                 <div>
-                  <h3 class="title"><a id="id414225"></a>13.6.2. Using <code class="literal">objc:defmethod</code></h3>
+                  <h3 class="title"><a id="id411473"></a>13.6.2. Using <code class="literal">objc:defmethod</code></h3>
                 </div>
               </div>
             </div>
@@ -18506,7 +18512,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id411906"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id411856"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">name</span></i>---a string which is the name of an existing
 		        environment variable;
@@ -18516,7 +18522,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		        is not, NIL</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id411951"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id411900"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	      Looks up the value of the environment variable named by
@@ -18537,7 +18543,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id412012"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id411962"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">name</span></i>---a string which is the name of a new or existing
 		        environment variable;
@@ -18550,7 +18556,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		        the problem</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id410535"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id412022"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	      Sets the value of the environment variable named by
@@ -18574,13 +18580,13 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id410597"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id410546"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">path</span></i>---a string, an absolute pathname in Posix format - with
 		        directory components separated by slashes</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id410624"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id410573"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	      Looks up the current working directory of the Clozure CL process;
@@ -18602,13 +18608,13 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id410683"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id410632"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">uid</span></i>---a non-negative integer, identifying a specific user
 		        account as defined in the OS user database</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id410710"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id410659"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	      Returns the ("real") user ID of the current user.
@@ -18628,7 +18634,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id410767"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id410716"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">uid</span></i>---a non-negative integer, identifying a specific user
 		        account as defined in the OS user database</p>
@@ -18637,7 +18643,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		        the problem</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id400390"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id410759"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	      Attempts to change the current user ID (both "real" and
@@ -18660,7 +18666,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id400449"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id396165"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">gid</span></i>---a non-negative integer, identifying a specific
 		        group as defined in the OS user database</p>
@@ -18669,7 +18675,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		        the problem</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id400492"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id396208"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	      Attempts to change the current group ID (both "real" and
@@ -18692,12 +18698,12 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id400551"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id396268"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">pid</span></i>---a non-negative integer, identifying an OS process</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id400577"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id396293"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	      Returns the ID of the Clozure CL OS process.
@@ -18718,7 +18724,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id400634"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id396351"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">uid</span></i>---a non-negative integer, identifying a specific user
 		        account as defined in the OS user database</p>
@@ -18726,7 +18732,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		        directory components separated by slashes; or NIL</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id396044"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id396393"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	      Looks up and returns the defined home directory of the user
@@ -18751,7 +18757,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id396113"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id400411"></a>
                 <div class="header">Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">command-line</span></i>---a string, obeying all the whitespace and
 	            escaping
@@ -18760,7 +18766,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	            code of a subprocess; zero indicates success</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id396156"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id400453"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	      Invokes the Posix function <span><strong class="function">system()</strong></span>, which
@@ -18776,7 +18782,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	    </p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id396189"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id400487"></a>
                 <div class="header">Notes:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	      By convention, an exit code of 0 indicates success.  There are
@@ -18801,14 +18807,14 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id396250"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id400547"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">class-name</span></i>---a string which denotes an existing class name, or a
 		        symbol which can be mapped to such a string via the standard
 		        name-mapping conventions for class names</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id396277"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id400575"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Used to refer to a known ObjC class by name. (Via the use
 	      LOAD-TIME-VALUE, the results of a class-name -&gt; class lookup
@@ -18833,13 +18839,13 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id396347"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id400644"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">string</span></i>---a string constant, used to canonically refer to an
 		        ObjC method selector</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id396373"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id400671"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Used to refer to an ObjC method selector (method name). Uses
 	      LOAD-TIME-VALUE to cache the result of a string -&gt; selector
@@ -18861,7 +18867,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id412935"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id412985"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">name-and-result-type</span></i>---either an Objective-C message name, for methods
                 that return a value of type <code xmlns="http://www.w3.org/1999/xhtml" class="literal">:ID</code>, or
@@ -18883,7 +18889,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
             is a foreign type specifier.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id413016"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id413066"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Defines an Objective-C-callable method which implements
 	        the specified message selector for instances of the existing
@@ -18908,7 +18914,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id413098"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id413150"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">selector</span></i>---either a string which represents the name of the
 		          selector or a list which describes the method's return
@@ -18923,7 +18929,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		          symbol)</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id413145"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id413196"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Defines an ObjC-callable method which implements the
 	        specified message selector for instances of the existing ObjC
@@ -18944,12 +18950,12 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id413208"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id413259"></a>
                 <div class="header">Arguments and Values:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">As per DEFINE-OBJC-METHOD</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id413219"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id413270"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Like DEFINE-OBJC-METHOD, only used to define methods on the
 	        <span class="emphasis"><em>class</em></span> named by class-name and on its
@@ -18991,7 +18997,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id413296"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id413347"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">This variable is currently only used by the standard reader macro
 	        function for #\; (single-line comments); that function reads successive
@@ -19026,7 +19032,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id413353"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id413404"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Per ANSI CL, Clozure CL supports the :EXTERNAL-FORMAT keyword
 	        argument to the functions OPEN, LOAD, and COMPILE-FILE. This argument is
@@ -19070,7 +19076,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id396852"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id396902"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">The value of this variable is used when :EXTERNAL-FORMAT is
 	        unspecified or specified as :DEFAULT. It can meaningfully be given any
@@ -19094,12 +19100,12 @@ reverse_int_ptr_ptrtest(int **ptrs)
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id396902"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id396952"></a>
                 <div class="header">Superclasses:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">NS:NS-STRING</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id396913"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id396964"></a>
                 <div class="header">Initargs:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">:string</span></i>---
 		          a Lisp string which is to be the content of
@@ -19107,7 +19113,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 		        </p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id396940"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id396991"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	        This class
@@ -19125,7 +19131,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id396959"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id397010"></a>
                 <div class="header">Examples:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	        You can create an ns-lisp-string with
@@ -19156,7 +19162,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 </pre>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id397012"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id397063"></a>
                 <div class="header">Notes:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">
 	        Currently, ns-lisp-string is defined in
@@ -19496,7 +19502,7 @@ that provided by earlier <code class="literal">CCL</code> versions.</p>
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id399252"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id396538"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">type</span></i>---The type of population, one of <code xmlns="http://www.w3.org/1999/xhtml" class="literal">:LIST</code> (the default) or <code xmlns="http://www.w3.org/1999/xhtml" class="literal">:ALIST</code></p>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">initial-contents</span></i>--- A sequence of elements (or conses, for <code xmlns="http://www.w3.org/1999/xhtml" class="literal">:alist</code>) to be used to initialize the
@@ -19504,7 +19510,7 @@ that provided by earlier <code class="literal">CCL</code> versions.</p>
               alist) is not stored in the population, a new list or alist is created to hold the elements.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id413406"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id396597"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Creates a new population of the specified type.</p>
               </div>
@@ -19522,7 +19528,7 @@ that provided by earlier <code class="literal">CCL</code> versions.</p>
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id413463"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id379840"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">returns the type of <code class="literal">population</code>, one of <code class="literal">:LIST</code> or <code class="literal">:ALIST</code></p>
               </div>
@@ -19540,7 +19546,7 @@ that provided by earlier <code class="literal">CCL</code> versions.</p>
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id398832"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id398988"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">returns the list encapsulated in <code class="literal">population</code>.
         Note that as long as there is a direct (non-weak) reference to this
@@ -19563,7 +19569,7 @@ that provided by earlier <code class="literal">CCL</code> versions.</p>
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id398901"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id399057"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Sets the list encapsulated in <code class="literal">population</code> to
         <code class="literal">contents</code>.  <code class="literal">Contents</code> is not copied,
@@ -19596,7 +19602,7 @@ that provided by earlier <code class="literal">CCL</code> versions.</p>
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id398985"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id394875"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Returns the value of the kernel variable that specifies the
 	  amount of free space to leave in the heap after full GC.</p>
@@ -19617,12 +19623,12 @@ that provided by earlier <code class="literal">CCL</code> versions.</p>
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id399046"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id403948"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">new-threshold</span></i>---The requested new lisp-heap-gc-threshold.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id403964"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id403974"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Sets the value of the kernel variable that specifies the
 	  amount of free space to leave in the heap after full GC to
@@ -19646,7 +19652,7 @@ that provided by earlier <code class="literal">CCL</code> versions.</p>
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id404025"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id404035"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Tries to grow or shrink lisp's heap space, so that the
 	  free space is (approximately) equal to the current heap threshold.
@@ -19666,12 +19672,12 @@ that provided by earlier <code class="literal">CCL</code> versions.</p>
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id404084"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id404094"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">arg</span></i>---a generalized boolean</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id404110"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id404120"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Enables the EGC if arg is non-nil, disables the EGC
 	  otherwise. Returns the previous enabled status. Although this
@@ -19697,7 +19703,7 @@ that provided by earlier <code class="literal">CCL</code> versions.</p>
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id404168"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id404178"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Returns T if the EGC was enabled at the time of the call,
 	  NIL otherwise.</p>
@@ -19720,7 +19726,7 @@ that provided by earlier <code class="literal">CCL</code> versions.</p>
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id397055"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id397116"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Returns T if the EGC was active at the time of the call, NIL
 	  otherwise. Since this is generally a volatile piece of
@@ -19745,7 +19751,7 @@ that provided by earlier <code class="literal">CCL</code> versions.</p>
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id397113"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id397174"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Returns, as multiple values, the sizes in kilobytes of the
 	  thresholds associated with the youngest ephemeral generation, the
@@ -19767,7 +19773,7 @@ that provided by earlier <code class="literal">CCL</code> versions.</p>
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id397172"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id397232"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">generation-0-size</span></i>---the requested threshold size of the youngest
 		generation, in kilobytes</p>
@@ -19777,7 +19783,7 @@ that provided by earlier <code class="literal">CCL</code> versions.</p>
 		in kilobytes</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id397227"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id397287"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Puts the indicated threshold sizes in effect.
           Each threshold indicates the total size that may be allocated
@@ -19801,12 +19807,12 @@ that provided by earlier <code class="literal">CCL</code> versions.</p>
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id397292"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id397353"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">arg</span></i>---a generalized boolean</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id397319"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id397379"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Tries to influence the GC to retain/recycle the pages
 	  allocated between GCs if arg is true, and to release them
@@ -19831,7 +19837,7 @@ that provided by earlier <code class="literal">CCL</code> versions.</p>
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id397376"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id397694"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Returns T if the GC tries to retain pages between full GCs
 	  and NIL if it's trying to release them to improve VM paging
@@ -19986,7 +19992,7 @@ that provided by earlier <code class="literal">CCL</code> versions.</p>
                 </dt>
                 <dt>
                   <span class="sect2">
-                    <a href="#id406234">16.7.2. Recommended Reading</a>
+                    <a href="#id406247">16.7.2. Recommended Reading</a>
                   </span>
                 </dt>
               </dl>
@@ -21262,7 +21268,7 @@ L1
               <ol type="1">
                 <li>
                   <p>To support a feature called <span class="emphasis"><em>GCTWA
-                <sup>[<a id="id404966" href="#ftn.id404966">1</a>]</sup>
+                <sup>[<a id="id404978" href="#ftn.id404978">1</a>]</sup>
 	            , </em></span>the vector that contains the internal
 	          symbols of the current package is marked on entry to the
 	          mark phase, but the symbols themselves are not marked at
@@ -21395,7 +21401,7 @@ L1
             <br />
             <hr width="100" align="left" />
             <div xmlns="http://www.w3.org/1999/xhtml" class="footnote">
-              <p><sup>[<a id="ftn.id404966" href="#id404966">1</a>] </sup>I believe that the acronym comes from MACLISP,
+              <p><sup>[<a id="ftn.id404978" href="#id404978">1</a>] </sup>I believe that the acronym comes from MACLISP,
 		            where it stood for "Garbage Collection of Truly
 		            Worthless Atoms".</p>
             </div>
@@ -21455,7 +21461,7 @@ L1
         generations. To avoid the need to scan those (often large) other
         generations looking for such intergenerational references, the
         runtime system must note all such intergenerational references
-        at the point where they're created (via Setf).<sup>[<a id="id406022" href="#ftn.id406022">2</a>]</sup> The
+        at the point where they're created (via Setf).<sup>[<a id="id405214" href="#ftn.id405214">2</a>]</sup> The
         set of pointers that may contain intergenerational references is
         sometimes called <span class="emphasis"><em>the remembered set</em></span>.</p>
           <p xmlns="http://www.w3.org/1999/xhtml">In Clozure CL's EGC, the heap is organized exactly the same
@@ -21502,7 +21508,7 @@ L1
         to and exit from the binding of a special variable), all setfs
         that might introduce an intergenerational reference must be
         memoized.
-        <sup>[<a id="id406091" href="#ftn.id406091">3</a>]</sup> It's always safe to
+        <sup>[<a id="id405283" href="#ftn.id405283">3</a>]</sup> It's always safe to
         push any cons cell or gvector locative onto the memo stack;
         it's never safe to push anything else.
       </p>
@@ -21523,13 +21529,13 @@ L1
             <br />
             <hr width="100" align="left" />
             <div xmlns="http://www.w3.org/1999/xhtml" class="footnote">
-              <p><sup>[<a id="ftn.id406022" href="#id406022">2</a>] </sup>This is
+              <p><sup>[<a id="ftn.id405214" href="#id405214">2</a>] </sup>This is
             sometimes called "The Write Barrier": all assignments which
             might result in intergenerational references must be noted, as
             if the other generations were write-protected.</p>
             </div>
             <div xmlns="http://www.w3.org/1999/xhtml" class="footnote">
-              <p><sup>[<a id="ftn.id406091" href="#id406091">3</a>] </sup>Note that the implicit setfs that occur when
+              <p><sup>[<a id="ftn.id405283" href="#id405283">3</a>] </sup>Note that the implicit setfs that occur when
         initializing an object - as in the case of a call to cons or
         vector - can't introduce intergenerational references, since
         the newly created object is always younger than the objects
@@ -21645,7 +21651,7 @@ L1
             <div xmlns="http://www.w3.org/1999/xhtml" class="titlepage">
               <div>
                 <div>
-                  <h3 class="title"><a id="id406234"></a>16.7.2. Recommended Reading</h3>
+                  <h3 class="title"><a id="id406247"></a>16.7.2. Recommended Reading</h3>
                 </div>
               </div>
             </div>
@@ -22058,7 +22064,7 @@ r24 (save7) = ()
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id379878"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id369506"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">When true, attempts to redefine (via DEFUN or DEFMETHOD)
 	      functions and methods that are marked as being
@@ -22083,7 +22089,7 @@ r24 (save7) = ()
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id399125"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id394952"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Arranges that the outermost special bindings of *PACKAGE*
 	      and *WARN-IF-REDEFINE-KERNEL* restore values of the "CCL"
@@ -22107,7 +22113,7 @@ r24 (save7) = ()
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id400178"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id362374"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Arranges that the outermost special bindings of *PACKAGE*
 	      and *WARN-IF-REDEFINE-KERNEL* restore values of the
@@ -22130,7 +22136,7 @@ r24 (save7) = ()
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id396642"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id362040"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">This variable is initialized each time an Clozure CL session
 	      starts based on information provided by the lisp kernel. Its value
@@ -22155,7 +22161,7 @@ r24 (save7) = ()
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id411169"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id411148"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Returns non-NIL if AltiVec is available.</p>
               </div>
@@ -22173,7 +22179,7 @@ r24 (save7) = ()
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id411212"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id413447"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Intended to control the expansion of certain lap macros.
 	      Initialized to NIL on LinuxPPC; initialized to T on platforms
@@ -22195,13 +22201,13 @@ r24 (save7) = ()
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id398072"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id345536"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">reglist</span></i>---A list of vector register names (vr0 .. vr31).</p>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">body</span></i>---A sequence of PPC LAP instructions.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id398750"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id345577"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Specifies the set of AltiVec registers used in body. If
 	      *altivec-lapmacros-maintain-vrsave-p* is true when the macro is
@@ -22227,7 +22233,7 @@ r24 (save7) = ()
           <p>
             <div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id398812"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id398031"></a>
                 <div class="header">Arguments and Values:</div>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">base</span></i>---Any available general-purpose register.</p>
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">n</span></i>---An integer between 1 and 254, inclusive. (Should
@@ -22236,7 +22242,7 @@ r24 (save7) = ()
                 <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">body</span></i>---A sequence of PPC LAP instructions.</p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
-                <a xmlns="http://www.w3.org/1999/xhtml" id="id398269"></a>
+                <a xmlns="http://www.w3.org/1999/xhtml" id="id405455"></a>
                 <div class="header">Description:</div>
                 <p xmlns="http://www.w3.org/1999/xhtml">Generates code which allocates a 16-byte aligned buffer
 	      large enough to contain N vector registers; the GPR base points to
@@ -22900,6 +22906,6 @@ a
     <div xmlns="http://www.w3.org/TR/xhtml1/transitional" align="center">
       <a href="#Symbol-Index">Symbol Index</a>
     </div>
-    <p xmlns="http://www.w3.org/TR/xhtml1/transitional" xmlns:date="http://exslt.org/dates-and-times" class="footer">This document was last modified at 19:0 on October 27, 2009, in UTC.<br></br>It uses version 1.72.0 of the Norman Walsh Docbook stylesheets.<br></br>Built from subversion rev 13106<br></br>Using libxml 20629, libxslt 10121 and libexslt 813.</p>
+    <p xmlns="http://www.w3.org/TR/xhtml1/transitional" xmlns:date="http://exslt.org/dates-and-times" class="footer">This document was last modified at 4:0 on October 29, 2009, in UTC.<br></br>It uses version 1.72.0 of the Norman Walsh Docbook stylesheets.<br></br>Built from subversion rev 13119<br></br>Using libxml 20629, libxslt 10121 and libexslt 813.</p>
   </body>
 </html>
