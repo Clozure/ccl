@@ -230,19 +230,22 @@
   (let* ((old-results (search-results wc)))
     (setf (search-results wc) (new-results wc))
     ;; release NSString instances.  sigh.
-    (dotimes (f (length old-results))
-      (dotimes (l (length (search-result-file-lines f)))
-	(and (search-result-line-nsstr l)
-	     (#/release (search-result-line-nsstr l))))
-      (and (search-result-file-nsstr f)
-	   (#/release (search-result-file-nsstr f))))
+    (dotimes (idx (length old-results))
+      (let* ((file (aref old-results idx))
+             (lines (when file (search-result-file-lines file))))
+        (dotimes (idx (length lines))
+          (let* ((line (aref lines idx))
+                 (string (when line (search-result-line-nsstr line))))
+            (and string (#/release string))))
+        (and (search-result-file-nsstr file)
+             (#/release (search-result-file-nsstr file)))))
     (set-results-string wc msg)
-    (when (or (auto-expandable-p (search-results wc))
-	      (expand-results-p wc))
-      (expand-all-results wc))
+;;     (when (or (auto-expandable-p (search-results wc))
+;;              (expand-results-p wc))
+;;       (expand-all-results wc))
     (#/reloadData (outline-view wc))
     (#/setEnabled: (search-button wc) t)))
-    
+
 ;;; This is run in a secondary thread.
 (defun run-grep (grep-arglist wc)
   (with-autorelease-pool 
