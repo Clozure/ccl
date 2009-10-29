@@ -1770,6 +1770,9 @@ space, and prefixed with PREFIX."
            (token (external-process-token p))
            (terminated)
            (changed)
+           (external-format (external-process-external-format p))
+           (encoding (external-format-character-encoding external-format))
+           (line-termination (external-format-line-termination external-format))
            (pairs (pairlis (mapcar (lambda (fd)
                                      (cons fd
                                            (make-fd-stream fd
