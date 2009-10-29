@@ -186,8 +186,9 @@
 ;;; Returns two values: fresh charprops change vectors for the line's characters
 ;;; before and after charpos.
 (defun split-line-charprops (line charpos)
-  (let ((changes (line-charprops-changes line)))
-    (when changes
+  (let* ((changes (line-charprops-changes line))
+         (nchanges (length changes)))
+    (when (> nchanges 0)
       (let ((left (make-array 2 :adjustable t :fill-pointer 0))
             (right (make-array 2 :adjustable t :fill-pointer 0))
             (pivot nil)
@@ -195,7 +196,7 @@
         (do* ((i 0 (1+ i))
               (change nil))
              ((or pivot
-                  (= i (length changes)))
+                  (= i nchanges))
               (if (null pivot)
                 ;; The last change extends to the end of line, so that will be the
                 ;; charprops in effect at the beginning of the new line.
@@ -213,7 +214,7 @@
                     (let* ((c (copy-charprops-change prior-change)))
                       (setf (charprops-change-index c) 0)
                       (push-charprops-change c right)))
-                  (loop for i from pivot below (length changes)
+                  (loop for i from pivot below nchanges
                     as change = (aref changes i)
                     do (decf (charprops-change-index change) charpos)
                     (push-charprops-change (aref changes i) right))))
