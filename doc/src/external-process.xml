@@ -76,7 +76,8 @@
 	    <synopsis><function>run-program</function>
 	    program args &key; (wait t) pty sharing input
 	    if-input-does-not-exist output (if-output-exists :error) (error
-	    :output) (if-error-exists :error) status-hook</synopsis>
+	    :output) (if-error-exists :error) status-hook
+	    external-format</synopsis>
 	  </refsynopsisdiv>
 
 	  <refsect1>
@@ -228,6 +229,19 @@
 		  EXTERNAL-PROCESS structure.) This function is called
 		  whenever &CCL; detects a change in the status of the
 		  EXTERNAL-PROCESS.</para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term>external-format</term>
+
+		<listitem>
+		  <para>
+		    The external format (see <xref
+		    linkend="External-Formats"/>) for all of the
+		    streams (input, output, and error) used to
+		    communicate with the external process.
+		  </para>
 		</listitem>
 	      </varlistentry>
 	    </variablelist>
