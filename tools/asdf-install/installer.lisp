@@ -318,7 +318,10 @@
   "Returns a list of system names (ASDF or MK:DEFSYSTEM) for installed systems."
   (ensure-directories-exist source)
   (ensure-directories-exist system)
-  (let* ((tar (extract source packagename))
+  (let* ((tar-output (extract source packagename))
+	 (tar (if (string= tar-output "x " :end1 2)
+		(subseq tar-output 2)
+		tar-output))
 	 (pos-slash (or (position #\/ tar)
                         (position #\Return tar)
                         (position #\Linefeed tar)))

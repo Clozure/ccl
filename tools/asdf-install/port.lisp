@@ -34,7 +34,7 @@
 #-:digitool
 (defun system-namestring (pathname)
   #+:openmcl
-  (ccl:native-translated-namestring (truename pathname))
+  (ccl:native-translated-namestring pathname)
   #-:openmcl
   (namestring (truename pathname)))
 
@@ -308,7 +308,7 @@
 
 (defun open-file-arguments ()
   (append 
-   #+sbcl
+   #+(or sbcl ccl)
    '(:external-format :latin1)
    #+:scl
    '(:external-format :iso-8859-1)
