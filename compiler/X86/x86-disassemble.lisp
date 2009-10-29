@@ -2812,12 +2812,15 @@
   (declare (ignore xfunction))
   (let ((source-note (function-source-note function)))
     (when source-note
-      (format t ";; Source: ~S:~D-~D"
-              (source-note-filename source-note)
-              (source-note-start-pos source-note)
-              (source-note-end-pos source-note))
-      ;; Fetch source from file if don't already have it.
-      (ensure-source-note-text source-note))))
+      (ensure-source-note-text source-note)
+      (if (source-note-filename source-note)
+	(format t ";; ~S:~D-~D"
+		(source-note-filename source-note)
+		(source-note-start-pos source-note)
+		(source-note-end-pos source-note))
+	  (let* ((source-text (source-note-text source-note)))
+	    (when source-text
+	      (format t ";;; ~A" (string-sans-most-whitespace source-text 100))))))))
 
 (defun x86-disassemble-xfunction (function xfunction
                                   &key (symbolic-names #+x8664-target target::*x8664-symbolic-register-names*

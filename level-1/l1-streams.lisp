@@ -5897,11 +5897,14 @@
               (cond ((eq first-char #\:)
                      (read-command-or-keyword stream eof-value))
                     ((eq first-char eof-value) eof-value)
-                    (t (read-recording-source stream :eofval eof-value
-                                              :file-name file-name
-                                              :start-offset start-offset
-                                              :map map
-                                              :save-source-text t))))))
+                    (t (multiple-value-bind (form note)
+			   (read-recording-source stream :eofval eof-value
+						  :file-name file-name
+						  :start-offset start-offset
+						  :map map
+						  :save-source-text t)
+			 (setq *loading-toplevel-location* note)
+			 form))))))
       (if (eq form eof-value)
         (return (values form nil t))
         (progn

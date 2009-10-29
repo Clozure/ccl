@@ -3007,16 +3007,19 @@ arg=char : read delimited list"
 (defun print-source-note (sn stream)
   (let* ((file (source-note-filename sn))
          (text (ignore-errors (source-note-text sn))))
-    ;; Should fix this when record the name.
-    (when (eq (pathname-version file) :newest)
-      (setq file (namestring (make-pathname :version nil :defaults file))))
+    (when file
+      ;; Should fix this when record the name.
+      (when (eq (pathname-version file) :newest)
+	(setq file (namestring (make-pathname :version nil :defaults file)))))
     (when text
       (setq text (string-sans-most-whitespace text 121))
       (when (> (length text) 120)
         (setq text (concatenate 'string (subseq text 0 120) "..."))))
-    (format stream "~s:~s-~s ~s" file
-            (source-note-start-pos sn) (source-note-end-pos sn)
-            text)))
+    (if file
+      (format stream "*~s:~s-~s ~s" file
+	      (source-note-start-pos sn) (source-note-end-pos sn)
+	      text)
+      (format stream "Interactive ~s" text))))
 
 (defun source-note-filename (source)
   (if (source-note-p source)
@@ -3108,7 +3111,8 @@ non-atomic nested subforms."
   (typecase map
     (null (values (read-internal stream nil eofval nil) nil))
     (hash-table
-       (let* ((recording (list stream map file-name start-offset))
+       (let* ((stream (recording-input-stream stream))
+	      (recording (list stream map file-name start-offset))
               (*recording-source-streams* (cons recording *recording-source-streams*)))
          (declare (dynamic-extent recording *recording-source-streams*))
          (multiple-value-bind (form source-note) (read-internal stream nil eofval nil)
@@ -3133,7 +3137,7 @@ non-atomic nested subforms."
                                                (- (source-note-end-pos source-note)
                                                   start-offset)))))
            (values form source-note))))
-    (T
+    (T ;; not clear if this is ever useful
        (let* ((start-pos (stream-position stream))
               (form (read-internal stream nil eofval nil))
               (end-pos (and start-pos (neq form eofval) (stream-position stream)))
@@ -3145,7 +3149,7 @@ non-atomic nested subforms."
            (setf (source-note.source source-note) (fetch-octets-from-stream stream start-pos end-pos)))
          (values form source-note)))))
 
-(defun fetch-octets-from-stream (stream start-offset end-offset)
+(defmethod fetch-octets-from-stream ((stream input-stream) start-offset end-offset)
   ;; We basically want to read the bytes between two positions, but there is no
   ;; direct interface for that.  So we let the stream decode and then we re-encode.
   ;; (Just as well, since otherwise we'd have to remember the file's encoding).
@@ -3196,17 +3200,20 @@ non-atomic nested subforms."
 	  (filename (source-note-filename source-note)))
       (etypecase source
 	(null
-	 (with-open-file (stream filename :if-does-not-exist if-does-not-exist)
-	   (when stream
-	     (let ((start (source-note-start-pos source-note))
-		   (end (source-note-end-pos source-note))
-		   (len (file-length stream)))
-	       (if (<= end len)
-		   (setf (source-note.source source-note)
-			 (fetch-octets-from-stream stream start end))
-		   (when if-does-not-exist
-		     (error 'simple-file-error :pathname filename
-			    :error-type "File ~s changed since source info recorded")))))))
+	 (if filename
+	   (with-open-file (stream filename :if-does-not-exist if-does-not-exist)
+	     (when stream
+	       (let ((start (source-note-start-pos source-note))
+		     (end (source-note-end-pos source-note))
+		     (len (file-length stream)))
+		 (if (<= end len)
+		     (setf (source-note.source source-note)
+			   (fetch-octets-from-stream stream start end))
+		     (when if-does-not-exist
+		       (error 'simple-file-error :pathname filename
+			      :error-type "File ~s changed since source info recorded"))))))
+	   (when if-does-not-exist
+	     (error "Missing source text in internative source note"))))
 	(source-note
 	 (ensure-source-note-text source))
 	((simple-array (unsigned-byte 8) (*))
@@ -3218,6 +3225,111 @@ non-atomic nested subforms."
 ;; This can be called explicitly by macros that do more complicated transforms
 (defun note-source-transformation (original new)
   (nx-note-source-transformation original new))
+
+
+;;; Wrapper stream for recording source of non-random-access streams.
+(defclass recording-character-input-stream (fundamental-stream character-input-stream)
+  ((input-stream :initarg :input-stream)
+   (string :initform (make-array 1024 :element-type 'character :fill-pointer 0 :adjustable t))))
+
+(defmethod stream-element-type ((s recording-character-input-stream))
+  (with-slots (input-stream) s
+    (stream-element-type input-stream)))
+
+(defmethod stream-read-char ((s recording-character-input-stream))
+  (with-slots (input-stream string) s
+    (let ((char (stream-read-char input-stream)))
+      (when (and char (neq char :eof))
+	(vector-push-extend char string))
+      char)))
+
+(defmethod stream-read-char-no-hang ((s recording-character-input-stream))
+  (with-slots (input-stream string) s
+    (let ((char (stream-read-char-no-hang input-stream)))
+      (when (and char (neq char :eof))
+	(vector-push-extend char string))
+      char)))
+
+(defmethod stream-peek-char ((s recording-character-input-stream))
+  (with-slots (input-stream) s
+    (stream-peek-char input-stream)))
+
+(defmethod stream-listen ((s recording-character-input-stream))
+  (with-slots (input-stream) s
+    (stream-listen input-stream)))
+
+(defmethod stream-read-line ((s recording-character-input-stream))
+  (generic-read-line s))
+
+(defmethod stream-read-list ((s recording-character-input-stream) list count)
+  (generic-character-read-list s list count))
+
+(defmethod stream-read-vector ((s recording-character-input-stream) vector start end)
+  (generic-character-read-vector s vector start end))
+
+(defmethod stream-unread-char ((s recording-character-input-stream) char)
+  (with-slots (input-stream string) s
+    (vector-pop string)    ;; Error if no characters read since last reset.
+    (stream-unread-char input-stream char)))
+
+(defmethod stream-eofp ((s recording-character-input-stream))
+  (with-slots (input-stream) s
+    (stream-eofp input-stream)))
+
+(defmethod stream-clear-input ((s recording-character-input-stream))
+  (with-slots (input-stream) s
+    (stream-clear-input input-stream)))
+
+(defmethod stream-position ((s recording-character-input-stream) &optional newpos)
+  (with-slots (string) s
+    (unless newpos
+      (fill-pointer string))))
+
+(defun recording-input-stream (stream)
+  (let ((pos (stream-position stream)))
+    (if (and pos (stream-position stream pos))
+      stream
+      (make-instance 'recording-character-input-stream :input-stream stream))))
+
+(defmethod fetch-octets-from-stream ((s recording-character-input-stream) start-offset end-offset)
+  (declare (fixnum start-offset end-offset))
+  (with-slots (string) s
+    (when (< start-offset end-offset)
+      (let* ((sstring (array-data-and-offset string))
+	     (noctets (loop for i fixnum from start-offset below end-offset
+			 as code fixnum = (%char-code (%schar sstring i))
+			 sum (cond ((< code #x80) 1)
+				   ((< code #x800) 2)
+				   ((< code #x10000) 3)
+				   (t 4))
+			 of-type fixnum))
+	     (vec (make-array noctets :element-type '(unsigned-byte 8)))
+	     (index 0))
+	(declare (type fixnum noctets index)
+		 (type simple-base-string sstring)
+		 (type (simple-array (unsigned-byte 8) (*)) vec))
+	(macrolet ((out (octet) `(progn
+				   (setf (aref vec index) ,octet)
+				   (incf index))))
+	  (loop for i fixnum from start-offset below end-offset
+	     as code fixnum = (%char-code (%schar sstring i))
+	     do (cond ((< code #x80)
+		       (out code))
+		      ((< code #x800)
+		       (out (logior #xc0 (ldb (byte 5 6) code)))
+		       (out (logior #x80 (ldb (byte 6 0) code))))
+		      ((< code #x10000)
+		       (out (logior #xe0 (ldb (byte 4 12) code)))
+		       (out (logior #x80 (ldb (byte 6 6) code)))
+		       (out (logior #x80 (ldb (byte 6 0) code))))
+		      (t
+		       (out (logior #xf0 (ldb (byte 3 18) code)))
+		       (out (logior #xe0 (ldb (byte 6 12) code)))
+		       (out (logior #x80 (ldb (byte 6 6) code)))
+		       (out (logior #x80 (ldb (byte 6 0) code)))))))
+	(setf (fill-pointer string) 0) ;; reset
+	vec))))
+
 
 
 
