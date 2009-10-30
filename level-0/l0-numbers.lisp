@@ -1786,7 +1786,9 @@
 
 (defun init-random-state-seeds ()
   (let* ((ticks (ldb (byte 32 0) (+ (mixup-hash-code (%current-tcr))
-                                    (primary-ip-interface-address)
+                                    (let* ((iface(primary-ip-interface)))
+                                      (or (and iface (ip-interface-addr iface))
+                                          0))
                                     (mixup-hash-code
                                      (logand (get-internal-real-time)
                                              (1- target::target-most-positive-fixnum))))))
