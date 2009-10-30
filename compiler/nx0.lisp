@@ -45,7 +45,7 @@
 (defvar *nx-inner-functions* nil)
 (defvar *nx-cur-func-name* nil)
 (defvar *nx-current-note* nil)
-(defparameter *nx-source-note-map* nil) ;; there might be external refs, from macros.
+(defvar *nx-source-note-map* nil) ;; there might be external refs, from macros.
 (defvar *nx-form-type* t)
 ;(defvar *nx-proclaimed-inline* nil)
 ;(defvar *nx-proclaimed-inline* (make-hash-table :size 400 :test #'eq))
