@@ -235,3 +235,9 @@
           (when (acode-p ref)
             (setf (acode-operator ref) op
                   (acode-operands ref) operands)))))))
+
+(defun acode-immediate-operand (x)
+  (let* ((x (acode-unwrapped-form x)))
+    (if (eq (acode-operator x) (%nx1-operator immediate))
+      (cadr x)
+      (compiler-bug "not an immediate: ~s" x))))

@@ -62,11 +62,7 @@
        (progn
 	 ,@body)))))
 
-  
-(defun x862-immediate-operand (x)
-  (if (eq (acode-operator x) (%nx1-operator immediate))
-    (cadr x)
-    (compiler-bug "not an immediate: ~s" x)))
+
 
 (defmacro with-x86-p2-declarations (declsform &body body)
   `(let* ((*x862-tail-allow* *x862-tail-allow*)
@@ -3702,7 +3698,7 @@
            (when vreg
              (if (nx-t constant)
                (! compare-to-t ireg)
-               (let* ((imm (x862-immediate-operand constant))
+               (let* ((imm (acode-immediate-operand constant))
                       (reg (x862-register-constant-p imm))) 
                  (if reg
                    (! compare-registers reg ireg)
@@ -8527,7 +8523,7 @@
       (x862-form seg nil nil arr)
       (x862-form seg nil nil i)
       (x862-form seg nil xfer j)))
-  (let* ((type-keyword (x862-immediate-operand typename))
+  (let* ((type-keyword (acode-immediate-operand typename))
          (fixtype (nx-lookup-target-uvector-subtag type-keyword ))
          (safe (unless *x862-reckless* fixtype))
          (dim0 (acode-fixnum-form-p dim0))
@@ -8582,7 +8578,7 @@
       (x862-form seg nil nil i)
       (x862-form seg nil nil j)
       (x862-form seg nil xfer k)))
-  (let* ((type-keyword (x862-immediate-operand typename))
+  (let* ((type-keyword (acode-immediate-operand typename))
          (fixtype (nx-lookup-target-uvector-subtag type-keyword ))
          (safe (unless *x862-reckless* fixtype))
          (dim0 (acode-fixnum-form-p dim0))
@@ -8724,7 +8720,7 @@
 
 
 (defx862 x862-%aset2 simple-typed-aset2 (seg vreg xfer typename arr i j new &optional dim0 dim1)
-  (let* ((type-keyword (x862-immediate-operand typename))
+  (let* ((type-keyword (acode-immediate-operand typename))
          (fixtype (nx-lookup-target-uvector-subtag type-keyword))
          (safe (unless *x862-reckless* fixtype))
          (dim0 (acode-fixnum-form-p dim0))
@@ -8733,7 +8729,7 @@
 
 
 (defx862 x862-%aset3 simple-typed-aset3 (seg vreg xfer typename arr i j k new &optional dim0 dim1 dim2)
-  (let* ((type-keyword (x862-immediate-operand typename))
+  (let* ((type-keyword (acode-immediate-operand typename))
          (fixtype (nx-lookup-target-uvector-subtag type-keyword))
          (safe (unless *x862-reckless* fixtype))
          (dim0 (acode-fixnum-form-p dim0))
@@ -8746,7 +8742,7 @@
           (let* ((fixtype (acode-fixnum-form-p subtag)))
             (if fixtype
               (nx-target-uvector-subtag-name fixtype)
-              (x862-immediate-operand subtag)))))
+              (acode-immediate-operand subtag)))))
     (if type-keyword
       (x862-vref seg vreg xfer type-keyword uvector index (unless *x862-reckless* (nx-lookup-target-uvector-subtag type-keyword)))
       (progn
@@ -8765,7 +8761,7 @@
           (let* ((fixtype (acode-fixnum-form-p subtag)))
             (if fixtype
               (nx-target-uvector-subtag-name fixtype)
-              (x862-immediate-operand subtag)))))
+              (acode-immediate-operand subtag)))))
     (if type-keyword
       (x862-vset seg vreg xfer type-keyword uvector index newval (unless *x862-reckless* (nx-lookup-target-uvector-subtag type-keyword)))
       (progn
