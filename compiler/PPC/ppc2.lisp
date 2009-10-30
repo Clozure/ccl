@@ -40,10 +40,6 @@
 
 
   
-(defun ppc2-immediate-operand (x)
-  (if (eq (acode-operator x) (%nx1-operator immediate))
-    (cadr x)
-    (compiler-bug "~&Bug: not an immediate: ~s" x)))
 
 (defmacro with-ppc-p2-declarations (declsform &body body)
   `(let* ((*ppc2-tail-allow* *ppc2-tail-allow*)
@@ -7644,7 +7640,7 @@
       (ppc2-form seg nil nil arr)
       (ppc2-form seg nil nil i)
       (ppc2-form seg nil xfer j))
-    (let* ((type-keyword (ppc2-immediate-operand typename))
+    (let* ((type-keyword (acode-immediate-operand typename))
            (fixtype (nx-lookup-target-uvector-subtag type-keyword ))
            (safe (unless *ppc2-reckless* fixtype))
            (dim0 (acode-fixnum-form-p dim0))
@@ -7697,7 +7693,7 @@
       (ppc2-form seg nil nil i)
       (ppc2-form seg nil nil j)
       (ppc2-form seg nil xfer k)))
-  (let* ((type-keyword (ppc2-immediate-operand typename))
+  (let* ((type-keyword (acode-immediate-operand typename))
          (fixtype (nx-lookup-target-uvector-subtag type-keyword ))
          (safe (unless *ppc2-reckless* fixtype))
          (dim0 (acode-fixnum-form-p dim0))
@@ -7748,7 +7744,7 @@
            (ppc2-fixed-call-builtin seg vreg xfer nil (subprim-name->offset '.SParef3))))))
 
 (defppc2 ppc2-%aset2 simple-typed-aset2 (seg vreg xfer typename arr i j new &optional dim0 dim1)
-  (let* ((type-keyword (ppc2-immediate-operand typename))
+  (let* ((type-keyword (acode-immediate-operand typename))
          (fixtype (nx-lookup-target-uvector-subtag type-keyword ))
          (safe (unless *ppc2-reckless* fixtype))
          (dim0 (acode-fixnum-form-p dim0))
@@ -7841,7 +7837,7 @@
            (ppc2-fixed-call-builtin seg vreg xfer nil (subprim-name->offset '.SPaset3))))))
 
 (defppc2 ppc2-%aset3 simple-typed-aset3 (seg vreg xfer typename arr i j k new &optional dim0 dim1 dim2)
-  (let* ((type-keyword (ppc2-immediate-operand typename))
+  (let* ((type-keyword (acode-immediate-operand typename))
          (fixtype (nx-lookup-target-uvector-subtag type-keyword))
          (safe (unless *ppc2-reckless* fixtype))
          (dim0 (acode-fixnum-form-p dim0))
@@ -7856,7 +7852,7 @@
           (let* ((fixtype (acode-fixnum-form-p subtag)))
             (if fixtype
               (nx-target-uvector-subtag-name fixtype)
-              (ppc2-immediate-operand subtag)))))
+              (acode-immediate-operand subtag)))))
     (if type-keyword
       (ppc2-vref seg vreg xfer type-keyword uvector index (unless *ppc2-reckless* (nx-lookup-target-uvector-subtag type-keyword)))
       (progn
@@ -7870,7 +7866,7 @@
           (let* ((fixtype (acode-fixnum-form-p subtag)))
             (if fixtype
               (nx-target-uvector-subtag-name fixtype)
-              (ppc2-immediate-operand subtag)))))
+              (acode-immediate-operand subtag)))))
     (if type-keyword
       (ppc2-vset seg vreg xfer type-keyword uvector index newval (unless *ppc2-reckless* (nx-lookup-target-uvector-subtag type-keyword)))
       (progn
