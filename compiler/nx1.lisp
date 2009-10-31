@@ -34,7 +34,9 @@
                              *wild-type*))))
              (if (typep ctype 'function-ctype)
                'function
-               (nx-target-type (type-specifier ctype))))))
+               (if (typep ctype 'values-ctype)
+                 '*
+                 (nx-target-type (type-specifier ctype)))))))
     (let* ((typespec (typespec-for-the typespec))
            (*nx-form-type* typespec)
            (transformed (nx-transform form env)))
