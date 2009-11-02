@@ -342,8 +342,10 @@
   "This function is called to signal minor errors within Hemlock;
    these are errors that a normal user could encounter in the course of editing
    such as a search failing or an attempt to delete past the end of the buffer."
-  (let ((message (and args (apply #'format nil args))))
-    (abort-current-command message)))
+  (if (current-view)
+    (let ((message (and args (apply #'format nil args))))
+      (abort-current-command message))
+    (apply #'error args)))
 
 ;;;; Do-Strings
 

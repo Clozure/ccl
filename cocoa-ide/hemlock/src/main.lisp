@@ -31,22 +31,23 @@
 
 (defun %init-hemlock ()
   "Initialize hemlock's internal data structures."
-  ;;
-  ;; This function is defined in Buffer.Lisp.  It creates fundamental mode
-  ;; and the buffer main.  Until this is done it is not possible to define
-  ;; or use Hemlock variables.
-  (setup-initial-buffer)
-  ;;
-  ;; Define some of the system variables.
-  (define-some-variables)
-  ;;
-  ;; Site initializations such as window system variables.
-  (site-init)
-  ;;
-  ;; Set up syntax table data structures.
-  (%init-syntax-table)
-  ;;
-  (setq *hemlock-initialized* t))
+  (let ((*current-buffer* nil)) ;; don't set it globally
+    ;;
+    ;; This function is defined in Buffer.Lisp.  It creates fundamental mode
+    ;; and the buffer main.  Until this is done it is not possible to define
+    ;; or use Hemlock variables.
+    (setup-initial-buffer)
+    ;;
+    ;; Define some of the system variables.
+    (define-some-variables)
+    ;;
+    ;; Site initializations such as window system variables.
+    (site-init)
+    ;;
+    ;; Set up syntax table data structures.
+    (%init-syntax-table)
+    ;;
+    (setq *hemlock-initialized* t)))
 
 
 ;;;; Define some globals.
