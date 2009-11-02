@@ -316,7 +316,8 @@ commands but aren't")
          *** ** * +++ ++ + /// // / -
          (eof-value (cons nil nil))
          (eof-count 0)
-         (*show-available-restarts* (and *show-restarts-on-break* *break-condition*)))
+         (*show-available-restarts* (and *show-restarts-on-break* *break-condition*))
+	 (*nx-source-note-map* (make-hash-table :test #'eq :shared nil)))
     (declare (dynamic-extent eof-value))
     (loop
       (restart-case
@@ -326,11 +327,13 @@ commands but aren't")
             (loop                
               (setq *in-read-loop* nil
                     *break-level* break-level)
+	      (clrhash *nx-source-note-map*)
               (multiple-value-bind (form env print-result)
                   (toplevel-read :input-stream input-stream
                                  :output-stream output-stream
                                  :prompt-function prompt-function
-                                 :eof-value eof-value)
+                                 :eof-value eof-value
+				 :map *nx-source-note-map*)
                 (if (eq form eof-value)
                   (progn
                     (when (> (incf eof-count) *consecutive-eof-limit*)
@@ -391,10 +394,11 @@ commands but aren't")
 (defun toplevel-read (&key (input-stream *standard-input*)
                            (output-stream *standard-output*)
                            (prompt-function #'print-listener-prompt)
-                           (eof-value *eof-value*))
+                           (eof-value *eof-value*)
+		           (map nil))
   (force-output output-stream)
   (funcall prompt-function output-stream)
-  (read-toplevel-form input-stream :eof-value eof-value))
+  (read-toplevel-form input-stream :eof-value eof-value :map map))
 
 (defvar *always-eval-user-defvars* nil)
 
