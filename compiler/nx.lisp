@@ -154,6 +154,8 @@
 
 (defparameter *nx-discard-xref-info-hook* nil)
 
+(defparameter *nx-in-frontend* nil)
+
 (defun compile-named-function (def &key name env policy load-time-eval-token target
                                 function-note keep-lambda keep-symbols source-notes
                                 (record-pc-mapping *record-pc-mapping*)
@@ -179,6 +181,7 @@
           (env (new-lexical-environment env)))
      (setf (lexenv.variables env) 'barrier)
      (let* ((*target-backend* (or (if target (find-backend target)) *host-backend*))
+            (*nx-in-frontend* t)
             (afunc (nx1-compile-lambda 
                     name 
                     def
