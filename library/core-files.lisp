@@ -23,7 +23,7 @@
 (export '(open-core close-core
           core-heap-utilization map-core-areas map-core-pointers
           core-q core-l core-w core-b
-          core-consp core-symbolp core-listp core-nullp core-uvector-p
+          core-consp core-symbolp core-functionp core-listp core-nullp core-uvector-p
           core-uvtype core-uvtypep core-uvref core-uvsize
           core-car core-cdr core-object-type core-istruct-type
           copy-from-core core-list
@@ -32,21 +32,31 @@
           core-map-symbols
           core-symbol-name core-symbol-value core-symbol-package
           core-gethash core-hash-table-count
-          core-lfun-name
+          core-lfun-name core-lfun-bits
           core-find-class
+          core-instance-class
+          core-instance-p
           core-instance-class-name
           core-string-equal
           core-all-processes core-process-name
+          core-find-process-for-id
+          core-print
+          core-print-call-history
           ))
+
+(eval-when (:compile-toplevel :execute)
+  (require "HASHENV" "ccl:xdump;hashenv"))
 
 ;; The intended way to use these facilities is to open up a particular core file once,
 ;; and then repeatedly call functions to examine it.  So for convenience, we keep the
 ;; core file in a global var, rather than making all user functions take an extra arg.
+;; There is nothing intrinsic that would prevent having multiple core files open at once.
 
 (defvar *current-core* nil)
 
 
 (defstruct core-info
+  pathname
   sections
   ;; uses either stream or ivector, determined at runtime
   stream
@@ -56,6 +66,7 @@
   symbol-ptrs
   classes-hash-table-ptr
   lfun-names-table-ptr
+  process-class
   )
 
 (defmethod print-object :around ((core core-info) (stream t))
@@ -85,7 +96,7 @@
   (when *current-core*
     (close-core))
   (let* ((sections (readelf-sections pathname))
-         (core (make-core-info :sections sections)))
+         (core (make-core-info :pathname pathname :sections sections)))
     (ecase method
       (:mmap   (let ((mapped-vector (map-file-to-ivector pathname '(unsigned-byte 8))))
                  (multiple-value-bind (vector offset) (array-data-and-offset mapped-vector)
@@ -247,8 +258,7 @@
 ;; NIL is constant, assume is same in core as here.
 (defun kernel-global-address (global)
   (check-type global symbol)
-  (+ (target-nil-value)
-     (target::%kernel-global (or (find-symbol (symbol-name global) :ccl) global))))
+  (+ (target-nil-value) (target::%kernel-global global)))
 
 (defun nil-relative-symbol-address (sym)
   (+ (target-nil-value)
@@ -389,13 +399,16 @@
                (incf ptr target::cons.size)))))))
 
 
-(declaim (inline core-consp core-symbolp core-listp core-nullp))
+(declaim (inline core-consp core-symbolp core-functionp core-listp core-nullp))
 
 (defun core-consp (ptr)
   (eq (logand ptr target::fulltagmask) target::fulltag-cons))
 
 (defun core-symbolp (ptr)
   (eq (logand ptr target::fulltagmask) target::fulltag-symbol))
+
+(defun core-functionp (ptr)
+  (eq (logand ptr target::fulltagmask) target::fulltag-function))
 
 (defun core-listp (ptr)
   (eq (logand ptr target::tagmask) target::tag-list))
@@ -660,7 +673,7 @@
            (dotimes (i len vec)
              (setf (uvref vec i) (core-w addr (ash i 1))))))))
 
-(defun map-core-pointers (fn)
+(defun map-core-pointers (fn &key area)
   (map-core-areas (lambda (obj)
                     (cond ((core-consp obj)
                            (funcall fn (core-car obj) obj 0)
@@ -679,15 +692,39 @@
                                      (incf addr (ash skip target::word-shift))
                                      (decf len skip)))
                                  (dotimes (i len)
-                                   (funcall fn (core-q addr (ash i target::word-shift)) obj i))))))))))
+                                   (funcall fn (core-q addr (ash i target::word-shift)) obj i))))))))
+                  :area area))
 
+(defun core-find-tra-function (tra)
+  (assert (eq (logand tra target::tagmask) target::tag-tra))
+  (map-core-areas (lambda (obj)
+                    (when (core-uvtypep obj :function)
+                      (let* ((addr (+ (logandc2 obj target::fulltagmask) target::node-size))
+                             (skip  (core-l addr))
+                             (offset (- tra addr)))
+                        (when (<= 0 offset (ash skip target::word-shift))
+                          (return-from core-find-tra-function (values obj (+ offset (- target::node-size
+                                                                                       (logand obj target::fulltagmask)))))))))))
 
-(defun core-instance-class-name (obj)
+(defun core-instance-class (obj)
   (when (core-uvtypep obj :slot-vector)
     (setq obj (core-uvref obj slot-vector.instance)))
   (assert (core-uvtypep obj :instance))
-  (let* ((wrapper (core-uvref obj instance.class-wrapper))
-         (class (core-uvref wrapper %wrapper-class))
+  (core-uvref (core-uvref obj instance.class-wrapper) %wrapper-class))
+
+(defun core-instance-p (obj class)
+  (and (core-uvtypep obj :instance)
+       (labels ((matchp (iclass)
+                  (or (eql iclass class)
+                      (loop for supers = (core-uvref (core-uvref iclass instance.slots) %class.local-supers)
+                              then (core-cdr supers)
+                            while (core-consp supers)
+                            thereis (matchp (core-car supers))))))
+         (matchp (core-instance-class obj)))))
+
+
+(defun core-instance-class-name (obj)
+  (let* ((class (core-instance-class obj))
          (class-slots (core-uvref class instance.slots))
          (name (core-uvref class-slots %class.name)))
     (core-symbol-name name)))
@@ -831,10 +868,36 @@
       (setf (core-info-lfun-names-table-ptr (current-core))
             (core-symbol-value (core-find-symbol '*lfun-names*)))))
 
-(defun core-lfun-name (fn)
-  (assert (core-uvtypep fn :function))
-  (core-gethash fn (core-lfun-names-table-ptr)))
+(defun core-closure-function (fun)
+  (while (and (core-functionp fun)
+              (logbitp $lfbits-trampoline-bit (core-lfun-bits fun)))
+    (let* ((addr (+ (logandc2 fun target::fulltagmask) target::node-size)))
+      (setq fun (core-q addr (ash (core-l addr) target::word-shift)))
+      (when (core-uvtypep fun :simple-vector)
+        (setq fun (core-uvref fun 0)))
+      #+gz (assert (core-functionp fun))))
+  fun)
 
+    
+(defun core-lfun-name (fn)
+  (assert (core-functionp fn))
+  (flet ((lfun-name (fn)
+           (or (core-gethash fn (core-lfun-names-table-ptr))
+               (let* ((lfbits (core-lfun-bits fn))
+                      (name (if (and (logbitp $lfbits-gfn-bit lfbits)
+                                     (not (logbitp $lfbits-method-bit lfbits)))
+                                (core-uvref (core-uvref fn gf.slots) sgf.name)
+                                (unless (logbitp $lfbits-noname-bit lfbits)
+                                  (core-uvref fn (- (core-uvsize fn) 2))))))
+                 (and name
+                      (not (eql name (%fixnum-address-of (%slot-unbound-marker))))
+                      (not (core-nullp name))
+                      name)))))
+    (or (lfun-name fn)
+        (let ((inner-fn (core-closure-function fn)))
+          (and (core-functionp inner-fn)
+               (not (eql inner-fn fn))
+               (lfun-name inner-fn))))))
 
 (defun core-list (ptr)
   (let ((cars (loop while (core-consp ptr)
@@ -866,4 +929,256 @@
          (thread (core-uvref slots 2)))
     (core-uvref thread ccl::lisp-thread.tcr)))
 
-) ; :x8664-target
+(defun core-find-process-for-id (lwp)
+  (loop for proc in (core-all-processes)
+        when (eql lwp (core-q (core-process-tcr proc) target::tcr.native-thread-id))
+          return proc))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun core-process-class ()
+  (or (core-info-process-class (current-core))
+      (setf (core-info-process-class (current-core))
+            (core-find-class 'process))))
+
+(defun core-print (obj &optional (stream t) depth)
+  ;; TODO: could dispatch on core-object-type...
+  (cond ((core-nullp obj) (format stream "NIL"))
+        ((core-symbolp obj)
+         (core-print-symbol obj stream))
+        ((core-uvtypep obj :function)
+         (core-print-function obj stream))
+        ((core-instance-p obj (core-process-class))
+         (core-print-process obj stream))
+        ((and depth (< (decf depth) 0))
+         (format stream "x~x" obj))
+        ((core-consp obj)
+         (loop for sep = "(" then " "
+               for i from 0 below (or *print-length* 100)
+               while (core-consp obj)
+               do (format stream sep)
+               do (core-print (core-car obj) stream depth)
+               do (setq obj (core-cdr obj)))
+         (unless (core-nullp obj)
+           (format stream " . ")
+           (core-print obj stream depth))
+         (format stream ")"))
+        (t (format stream "#<core ~s x~x>"
+                   (core-object-type obj) obj))))
+
+(defun core-print-symbol (sym stream)
+  (let ((package (core-symbol-package sym)))
+    (cond ((core-nullp package)
+           (format stream "#:"))
+          ((eq package (core-keyword-package))
+           (format stream ":"))
+          (t (let ((pkgname (core-package-name package)))
+               (unless (string-equal pkgname "COMMON-LISP")
+                 (format stream "~a::" pkgname)))))
+    (format stream "~a" (core-symbol-name sym))))
+
+(defun core-lfun-bits (fun)
+  (ash (core-uvref fun (1- (core-uvsize fun))) (- target::fixnum-shift)))
+
+(defun core-print-function (fun stream)
+  (let* ((lfbits (core-lfun-bits fun))
+         (name (core-lfun-name fun)))
+    (format stream "#<")
+    (cond ((or (null name) (core-nullp name))
+           (format stream "Anonymous function"))
+          ((logbitp $lfbits-method-bit lfbits)
+           (assert (core-uvtypep name :instance))
+           (let* ((slot-vector (core-uvref name instance.slots))
+                  (method-qualifiers (core-uvref slot-vector %method.qualifiers))
+                  (method-specializers (core-uvref slot-vector %method.specializers))
+                  (method-name (core-uvref slot-vector %method.name)))
+             (format stream "Method-Function ")
+             (core-print method-name stream)
+             (format stream " ")
+             (unless (core-nullp method-qualifiers)
+               (if (core-nullp (core-cdr method-qualifiers))
+                 (core-print (core-car method-qualifiers) stream)
+                 (core-print method-qualifiers stream))
+               (format stream " "))
+             ;; print specializer list but print names instead of classes.
+             (loop for sep = "(" then " "
+                   while (core-consp method-specializers)
+                   do (format stream sep)
+                   do (let ((spec (core-car method-specializers)))
+                        (if (core-uvtypep spec :instance)
+                          (core-print (core-uvref (core-uvref spec instance.slots) %class.name) stream)
+                          (core-print spec stream)))
+                   do (setq method-specializers (core-cdr method-specializers)))
+             (unless (core-nullp method-specializers)
+               (format stream " . ")
+               (core-print method-specializers stream))
+             (format stream ")")))
+          (t
+           (if (logbitp $lfbits-gfn-bit lfbits)
+               (format stream "Generic Function ")
+               (format stream "Function "))
+           (core-print name stream)))
+    (format stream " x~x>" fun)))
+
+(defun core-print-process (proc stream)
+  (format stream "#<~a ~s LWP(~d) #x~x>"
+          (core-instance-class-name proc)
+          (core-process-name proc)
+          (core-q (core-process-tcr proc) target::tcr.native-thread-id)
+          proc))
+
+(defun dwim-core-frame-pointer (tcr &optional end)
+  (let* ((ret1valn (core-q (kernel-global-address 'ret1valaddr)))
+         (lexprs (list (core-q (kernel-global-address 'lexpr-return))
+                       (core-q (kernel-global-address 'lexpr-return1v))))
+         (stack-area (core-q tcr target::tcr.vs-area))
+         (fp (core-q stack-area target::area.high))
+         (low (core-q stack-area target::area.low)))
+    (flet ((validp (pp)
+             (let ((tra (core-q pp target::lisp-frame.return-address)))
+               (when (eql tra ret1valn)
+                 (setq tra (core-q pp target::lisp-frame.xtra)))
+               (or (eql (logand tra target::tagmask) target::tag-tra)
+                   (eql tra 0)
+                   (member tra lexprs)))))
+      (decf fp (* 2 target::node-size))
+      (when (and end (<= low end fp))
+        (setq low (- end 8)))
+      (loop while
+            (loop for pp downfrom (- fp target::node-size) above low by target::node-size
+                  do (when (eql (core-q pp target::lisp-frame.backptr) fp)
+                       (when (validp pp)
+                         (return (setq fp pp))))))
+      fp)))
+
+(defun core-stack-frame-values (tcr fp)
+  (let* ((bottom (core-q fp target::lisp-frame.backptr))
+         (top (if (eql 0 (core-q fp target::lisp-frame.return-address))
+                (+ fp target::xcf.size)
+                (+ fp (if (eql (core-q fp target::lisp-frame.return-address)
+                               (core-q (kernel-global-address 'ret1valaddr)))
+                        target::lisp-frame.size
+                        target::lisp-frame.xtra))))
+         (db-link (loop as db = (core-q tcr target::tcr.db-link) then (core-q db)
+                        until (or (eql db 0) (>= db bottom))
+                        when (<= top db) return db)))
+    (loop for vsp from top below bottom by target::node-size
+          when (eql vsp db-link)
+            ;; The db-link will be followed by var and val, which we'll just collect normally
+            do (setq db-link (core-q db-link) vsp (+ vsp target::node-size))
+            and collect `(:db-link ,db-link)
+          collect (core-q vsp))))
+
+(defun core-print-call-history (process &key (stream t) origin detailed-p)
+  (flet ((fp-backlink (fp vs-end)
+           (let ((backlink (core-q fp target::lisp-frame.backptr)))
+             (when (or (eql backlink 0)
+                       (<= vs-end backlink)
+                       (<= vs-end (core-q backlink target::lisp-frame.backptr)))
+               (setq backlink vs-end))
+             (assert (< fp backlink))
+             backlink))
+         (fp-tra (fp)
+           (let ((tra (core-q fp target::lisp-frame.return-address)))
+             (if (eql tra (core-q (kernel-global-address 'ret1valaddr)))
+               (core-q fp target::lisp-frame.xtra)
+               tra)))
+         (recover-fn (pc)
+           (when (and (eql (logand pc target::tagmask) target::tag-tra)
+                      (eql (core-w pc) target::recover-fn-from-rip-word0)
+                      (eql (core-b pc 2) target::recover-fn-from-rip-byte2))
+             (+ pc target::recover-fn-from-rip-length
+                (- (core-l pc target::recover-fn-from-rip-disp-offset)
+                   #x100000000)))))
+    (format stream "~&")
+    (core-print process stream)
+    (let* ((tcr (core-process-tcr process))
+           (vs-area (core-q tcr target::tcr.vs-area))
+           (vs-end (core-q vs-area target::area.high))
+           (valence (core-q tcr target::tcr.valence))
+           (fp (or origin
+                   ;; TODO: find the registers in the core file!
+                   (case valence
+                     ;; TCR_STATE_LISP
+                     (0 (let ((xp (core-q tcr target::tcr.suspend-context)))
+                          (format stream "~&")
+                          (if (eql xp 0)
+                            (format stream "Unknown lisp context, guessing frame pointer:")
+                            (core-print (core-q xp (* 10 target::node-size)) stream)) ;; r13 = fn
+                          (if (eql xp 0)
+                            (dwim-core-frame-pointer tcr)
+                            ;; uc_mcontext.gregs[rbp]
+                            (core-q xp (* 15 target::node-size)))))
+                     ;; TCR_STATE_FOREIGN
+                     (1 (format stream "~&In foreign code")
+                        ;; the save-rbp seems to include some non-lisp frames sometimes,
+                        ;; shave them down.
+                        #+no (core-q tcr target::tcr.save-rbp)
+                        (dwim-core-frame-pointer tcr (core-q tcr target::tcr.save-rbp)))
+                     ;; TCR_STATE_EXCEPTION_WAIT
+                     (2 (let ((xp (core-q tcr target::tcr.pending-exception-context)))
+                          ;; regs start at index 5, in this order:
+                          ;; arg_x temp1 ra0 save3 save2 fn save1 save0 arg_y arg_z
+                          ;; rbp temp0 imm1 imm0 nargs rsp rip
+                          (format stream " exception-wait")
+                          (if (zerop xp)
+                            (format stream "~&context unknown")
+                            (let* ((fn (core-q xp (* 10 target::node-size)))
+                                   (sp (core-q xp (* 20 target::node-size)))
+                                   (ra (core-q sp)))
+                              (if (and (core-functionp fn)
+                                       (and (<= fn ra)
+                                            (< ra (+ fn (* (core-uvsize fn) target::node-size)))))
+                                (progn
+                                  (format stream "~&")
+                                  (core-print fn stream)
+                                  (format stream " + ~d" (- ra fn)))
+                                (progn
+                                  (format stream "~&top of stack = x~x, r13 = " ra)
+                                  (core-print fn stream)))))
+                          (unless (zerop xp)
+                            (core-q xp (* 15 target::node-size))))))
+                   (error "Cannot find frame pointer"))))
+      (unless (<= (core-q vs-area target::area.low) fp vs-end)
+        (error "frame pointer x~x is not in stack area" fp))
+      (loop while (< fp vs-end) for pc = (fp-tra fp) for fun = (recover-fn pc)
+            do (format stream "~&fp: x~x  pc: x~x : " fp pc)
+            do (cond (fun
+                      (core-print fun stream)
+                      (format stream " + ~d " (- pc fun)))
+                     ((eql pc 0) ;; exception frame
+                      (let* ((nominal-function (core-q fp target::xcf.nominal-function))
+                             (obj (core-q fp target::xcf.containing-object)))
+                        (when (core-functionp nominal-function)
+                          (format stream "exception ")
+                          (core-print nominal-function stream)
+                          (format stream " + ~d"
+                                  (if (eq (- obj target::fulltag-misc)
+                                          (- nominal-function target::fulltag-function))
+                                    (- (core-q fp target::xcf.relative-pc) target::tag-function)
+                                    (let ((pc (core-q fp target::xcf.ra0)))
+                                      (when (eql nominal-function (recover-fn pc))
+                                        (- pc nominal-function))))))))
+                     ((eql pc (core-q (kernel-global-address 'lexpr-return)))
+                      (format stream "lexpr return"))
+                     ((eql pc (core-q (kernel-global-address 'lexpr-return1v)))
+                      (format stream "lexpr1v return"))
+                     (t
+                      (if (eql (logand pc target::tagmask) target::tag-tra)
+                        (format stream " # couldn't recover function")
+                        (unless (core-nullp pc)
+                          (format stream "bad frame!")))
+                      ;; can't trust backlink
+                      (return)))
+               ;; TODO: print stack addressses
+            do (when detailed-p
+                 (loop for val in (core-stack-frame-values tcr fp)
+                       do (format stream "~&     ")
+                       do (if (integerp val)
+                            (handler-case (core-print val stream)
+                              (error () (format stream "#<Error printing value @x~x>" val)))
+                            (format stream "~a x~x" (car val) (cadr val)))))
+            do (setq fp (fp-backlink fp vs-end))))))
+
+
+)                             ; :x8664-target
