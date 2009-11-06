@@ -1782,6 +1782,80 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
     <para></para>
   </sect1>
 
+  <sect1 id="concatenating-fasl-files">
+    <title>Concatenating FASL Files</title>
+    <para>
+      Multiple fasl files can be concatenated into a single file.
+    </para>
+  <refentry id="fasl-concatenate">
+    <indexterm zone="f_fasl-concatenate">
+      <primary>fasl-concatenate</primary>
+    </indexterm>
+
+    <refnamediv>
+      <refname>FASL-CONCATENATE</refname>
+      <refpurpose>
+	Concatenate several fasl files, producing a single output file.
+      </refpurpose>
+      <refclass>Function</refclass>
+    </refnamediv>
+    
+    <refsynopsisdiv>
+      <synopsis><function>fasl-concatenate</function> out-file fasl-files &key; (:if-exists :error)</synopsis>
+    </refsynopsisdiv>
+
+    <refsect1>
+      <title>Arguments and Values</title>
+      <variablelist>
+	<varlistentry>
+	  <term>out-file</term>
+	  <listitem>
+	    <para>
+	      Name of the file in which to store the concatenation.
+	    </para>
+	  </listitem>
+	</varlistentry>
+	<varlistentry>
+	  <term>fasl-files</term>
+	  <listitem>
+	    <para>
+	      List of names of fasl files to concatenate.
+	    </para>
+	  </listitem>
+	</varlistentry>
+	<varlistentry>
+	  <term>:if-exists</term>
+	  <listitem>
+	    <para>
+	      As for <function>OPEN</function>, defaults to <literal>
+	      :error</literal>
+	    </para>
+	  </listitem>
+	</varlistentry>
+      </variablelist>
+    </refsect1>
+    
+    <refsect1>
+      <title>Description</title>
+      <para>
+	Creates a fasl file which, when loaded, will have the same
+	effect as loading the individual input fasl files in the
+	specified order.  The single file might be easier to
+	distribute or install, and loading it may be at least a little
+	faster than loading the individual files (since it avoids the
+	overhead of opening and closing each file in succession.)
+      </para>
+      <para>
+	The PATHNAME-TYPE of the output file and of each input file
+	defaults to the current platform's fasl file type (.dx64fsl or
+	whatever.)  If any of the input files has a different
+	type/extension an error will be signaled, but it doesn't
+	otherwise try too hard to verify that the input files are real
+	fasl files for the current platform.
+      </para>
+    </refsect1>
+  </refentry>
+  </sect1>
   <sect1 id="floating-point">
     <title>Floating Point Numbers</title>
 
