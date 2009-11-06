@@ -4323,7 +4323,7 @@ _spentry(callback)
         __(movl %eax,%ecx)    /* extract args-discard count */
         __(shrl $24,%ecx)
         __(andl $0x007fffff,%eax) /* callback index */
-        __(movl %ecx,-12(%ebp))
+        __(movl %ecx,-20(%ebp))
         /* If the C stack is 16-byte aligned by convention,
            it should still be, and this'll be a NOP. */
         __(andl $~15,%esp)
@@ -4387,13 +4387,13 @@ __(tra(local_label(back_from_callback)))
 	__(pop %ebx)
 	__(pop %esi)
 	__(pop %edi)
+        __(movl -12(%ebp),%ecx) /* magic value for ObjC bridge */
         __(cmpb $1,-16(%ebp))
-        __(movl -12(%ebp),%ecx) /* magic value for ObjC bridge or winapi */
         __(jae 1f)
 	__(movl -8(%ebp),%eax)
         __(movl -4(%ebp),%edx)
         __ifdef([WIN_32])
-         __(testl %ecx,%ecx)
+	 __(cmpl $0,-20(%ebp))
          __(jne local_label(winapi_return))
 	__endif
         /* since we aligned the stack after pushing flags, we're not
@@ -4410,7 +4410,7 @@ __(tra(local_label(back_from_callback)))
         /* single float return in x87 */
         __(flds -8(%ebp))
         __ifdef([WIN_32])
-         __(testl %ecx,%ecx)
+	 __(cmpl $0,-20(%ebp))
          __(jne local_label(winapi_return))
         __endif
         __(leave)
@@ -4418,13 +4418,14 @@ __(tra(local_label(back_from_callback)))
 2:      /* double-float return in x87 */
         __(fldl -8(%ebp))
         __ifdef([WIN_32])
-         __(testl %ecx,%ecx)
+	 __(cmpl $0,-20(%ebp))
          __(jne local_label(winapi_return))
         __endif
         __(leave)
 	__(ret)
         __ifdef([WIN_32])
 local_label(winapi_return):
+	  __(movl -20(%ebp),%ecx)
 	  __(leave)
          /* %ecx is non-zero and contains count of arg words to pop */
           __(popl -4(%esp,%ecx,4))
