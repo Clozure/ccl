@@ -26,9 +26,43 @@
   (%symbol-bits sym (logandc2 (%symbol-bits sym) (ash 1 $sym_bit_special))))
 
 
+(defun heap-area-name (code)
+  (cond ((eq code area-void) :void)
+        ((eq code area-cstack) :cstack)
+        ((eq code area-vstack) :vstack)
+        ((eq code area-tstack) :tstack)
+        ((eq code area-readonly) :readonly)
+        ((eq code area-watched) :watched)
+        ((eq code area-managed-static) :managed-static)
+        ((eq code area-static) :static)
+        ((eq code area-dynamic) :dynamic)
+        (t code)))
+
+(defun heap-area-code (name)
+  (case name
+    (:void area-void)
+    (:cstack area-cstack)
+    (:vstack area-vstack)
+    (:tstack area-tstack)
+    (:readonly area-readonly)
+    (:watched area-watched)
+    (:managed-static area-managed-static)
+    (:static area-static)
+    (:dynamic area-dynamic)
+    (t (if (and (fixnump name)
+                (<= area-readonly name area-dynamic))
+         name
+         (heap-area-code (require-type name '(member :void :cstack :vstack :tstack
+                                                     :readonly :managed-static :static :dynamic)))))))
+
 
 ;;; We MAY need a scheme for finding all of the areas in a lisp library.
-(defun %map-areas (function &optional (maxcode area-dynamic) (mincode area-readonly))
+(defun %map-areas (function &optional area)
+  (let* ((area (cond ((or (eq area t) (eq area nil)) nil)
+                     ((consp area) (mapcar #'heap-area-code area)) ;; list of areas
+                     (t (heap-area-code area))))
+         (mincode area-readonly)
+         (maxcode area-dynamic))
   (declare (fixnum maxcode mincode))
   (do* ((a (%normalize-areas) (%lisp-word-ref a (ash target::area.succ (- target::fixnumshift))))
         (code area-dynamic (%lisp-word-ref a (ash target::area.code (- target::fixnumshift))))
@@ -36,11 +70,14 @@
        ((= code area-void))
     (declare (fixnum code))
     (if (and (<= code maxcode)
-             (>= code mincode))
+             (>= code mincode)
+             (or (null area)
+                 (eql code area)
+                 (and (consp area) (member code area))))
       (if dynamic 
         (walk-dynamic-area a function)
         (unless (= code area-dynamic)        ; ignore egc areas, 'cause walk-dynamic-area sees them.
-          (walk-static-area a function))))))
+          (walk-static-area a function)))))))
 
 
 ;;; there'll be functions in static lib areas.
@@ -51,7 +88,7 @@
                                           target::subtag-function)
                                    (funcall f (lfun-vector-lfun obj))))))
     (declare (dynamic-extent filter))
-    (%map-areas filter area-dynamic area-managed-static)))
+    (%map-areas filter '(:dynamic :static :managed-static))))
 
 
 (defun ensure-simple-string (s)

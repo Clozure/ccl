@@ -455,7 +455,7 @@
 			       (%map-areas #'(lambda (x)
 					       (when (eq object x)
 						 (return-from watchedp t)))
-					   area-watched area-watched)))
+					   area-watched)))
 			(let ((result nil))
 			  (with-other-threads-suspended
 			    (when (watchedp object)

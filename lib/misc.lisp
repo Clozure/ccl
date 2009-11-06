@@ -890,32 +890,139 @@ are running on, or NIL if we can't find any useful information."
 ;;; found.  Report that information.
 
 (defun heap-utilization (&key (stream *debug-io*)
-                              (gc-first t))
+                              (gc-first t)
+                              (area nil)
+                              (unit nil)
+                              (sort :size)
+                              (classes nil))
+  "Show statistic about types of objects in the heap.
+   If :GC-FIRST is true (the default), do a full gc before scanning the heap.
+   :SORT can be one of :COUNT, :LOGICAL-SIZE, or :PHYSICAL-SIZE to sort by count or size.
+   :UNIT can be one of :KB :MB or :GB to show sizes in units other than bytes.
+   :AREA can be used to restrict the walk to one area or a list of areas.  Some possible
+   values are :DYNAMIC, :STATIC, :MANAGED-STATIC, :READONLY.  By default, all areas
+   (including stacks) are examined.
+   If :CLASSES is true, classifies by class rather than just typecode"
+  (let ((data (collect-heap-utilization :gc-first gc-first :area area :classes classes)))
+    (report-heap-utilization data :stream stream :unit unit :sort sort)))
+
+(defun collect-heap-utilization (&key (gc-first t) area classes)
+  ;; returns list of (type-name count logical-sizes-total physical-sizes-total)
+  (if classes
+    (collect-heap-utilization-by-class gc-first area)
+    (collect-heap-utilization-by-typecode gc-first area)))
+
+(defun collect-heap-utilization-by-typecode (gc-first area)
   (let* ((nconses 0)
-         (nvectors (make-array 256))
-         (vector-sizes (make-array 256))
-         (vector-physical-sizes (make-array 256))
+         (counts (make-array 257))
+         (sizes (make-array 257))
+         (physical-sizes (make-array 257))
          (array-size-function (arch::target-array-data-size-function
                                (backend-target-arch *host-backend*))))
-    (declare (type (simple-vector 256) nvectors vector-sizes)
-             (dynamic-extent nvectors vector-sizes vector-physical-sizes))
-    (when gc-first (gc))
-    (%map-areas (lambda (thing)
-                  (if (listp thing)
-                    (incf nconses)
-                    (let* ((typecode (typecode thing))
-                           (logsize (funcall array-size-function typecode (uvsize thing))))
-                      (incf (aref nvectors typecode))
-                      (incf (aref vector-sizes typecode) logsize)
-                      (incf (aref vector-physical-sizes typecode)
-                            (logandc2 (+ logsize
-                                         #+64-bit-target (+ 8 15)
-                                         #+32-bit-target (+ 4 7))
-                                      #+64-bit-target 15
-                                      #+32-bit-target 7))))))
-                                         
-    (report-heap-utilization stream nconses nvectors vector-sizes vector-physical-sizes)
-    (values)))
+    (declare (type (simple-vector 257) counts sizes physical-sizes)
+             (fixnum nconses)
+             (dynamic-extent counts sizes physical-sizes))
+    (flet ((collect (thing)
+             (if (listp thing)
+               (incf nconses)
+               (let* ((typecode (typecode thing))
+                      (logsize (funcall array-size-function typecode (uvsize thing)))
+                      (physize (logandc2 (+ logsize
+                                            #+64-bit-target (+ 8 15)
+                                            #+32-bit-target (+ 4 7))
+                                         #+64-bit-target 15
+                                         #+32-bit-target 7)))
+                 (incf (aref counts typecode))
+                 (incf (aref sizes typecode) logsize)
+                 (incf (aref physical-sizes typecode) physize)))))
+      (declare (dynamic-extent #'collect))
+      (when gc-first (gc))
+      (%map-areas #'collect area))
+    (setf (aref counts 256) nconses)
+    (setf (aref sizes 256) (* nconses target::cons.size))
+    (setf (aref physical-sizes 256) (aref sizes 256))
+    (loop for i from 0 upto 256
+      when (plusp (aref counts i))
+      collect (list (if (eql i 256) 'cons (aref *heap-utilization-vector-type-names* i))
+                    (aref counts i)
+                    (aref sizes i)
+                    (aref physical-sizes i)))))
+
+(defun collect-heap-utilization-by-class (gc-first area)
+  (let* ((nconses 0)
+         (max-classes (+ 100 (hash-table-count %find-classes%)))
+         (map (make-hash-table :shared nil
+                               :test 'eq
+                               :size max-classes))
+         (inst-counts (make-array max-classes :initial-element 0))
+         (slotv-counts (make-array max-classes :initial-element 0))
+         (inst-sizes (make-array max-classes :initial-element 0))
+         (slotv-sizes (make-array max-classes :initial-element 0))
+         (inst-psizes (make-array max-classes :initial-element 0))
+         (slotv-psizes (make-array max-classes :initial-element 0))
+         (overflow nil)
+         (array-size-function (arch::target-array-data-size-function
+                               (backend-target-arch *host-backend*))))
+    (declare (type simple-vector inst-counts slotv-counts inst-sizes slotv-sizes inst-psizes slotv-psizes))
+    (flet ((collect (thing)
+             (if (listp thing)
+               (incf nconses)
+               (unless (or (eq thing map)
+                           (eq thing (nhash.vector map))
+                           (eq thing inst-counts)
+                           (eq thing slotv-counts)
+                           (eq thing inst-sizes)
+                           (eq thing slotv-sizes)
+                           (eq thing inst-psizes)
+                           (eq thing slotv-psizes))
+                 (let* ((typecode (typecode thing))
+                        (logsize (funcall array-size-function typecode (uvsize thing)))
+                        (physize (logandc2 (+ logsize
+                                              #+64-bit-target (+ 8 15)
+                                              #+32-bit-target (+ 4 7))
+                                           #+64-bit-target 15
+                                           #+32-bit-target 7))
+                        (class (class-of (if (eql typecode target::subtag-slot-vector)
+                                           (uvref thing slot-vector.instance)
+                                           thing)))
+                        (index (or (gethash class map)
+                                   (let ((count (hash-table-count map)))
+                                     (if (eql count max-classes)
+                                       (setq overflow t count (1- max-classes))
+                                       (setf (gethash class map) count))))))
+                   
+                   (if (eql typecode target::subtag-slot-vector)
+                     (progn
+                       (incf (aref slotv-counts index))
+                       (incf (aref slotv-sizes index) logsize)
+                       (incf (aref slotv-psizes index) physize))
+                     (progn
+                       (incf (aref inst-counts index))
+                       (incf (aref inst-sizes index) logsize)
+                       (incf (aref inst-psizes index) physize))))))))
+      (declare (dynamic-extent #'collect))
+      (when gc-first (gc))
+      (%map-areas #'collect area))
+    (let ((data ()))
+      (when (plusp nconses)
+        (push (list 'cons nconses (* nconses target::cons.size) (* nconses target::cons.size)) data))
+      (maphash (lambda (class index)
+                 (let* ((icount (aref inst-counts index))
+                        (scount (aref slotv-counts index))
+                        (name (if (and overflow (eql index (1- max-classes)))
+                                "All others"
+                                (or (%class-proper-name class) class))))
+                   (declare (fixnum icount) (fixnum scount))
+                   ;; When printing class names, the package matters.  report-heap-utilization
+                   ;; uses ~a, so print here.
+                   (when (plusp icount)
+                     (push (list (prin1-to-string name)
+                                 icount (aref inst-sizes index) (aref inst-psizes index)) data))
+                   (when (plusp scount)
+                     (push (list (format nil "(SLOT-VECTOR ~s)" name)
+                                 scount (aref slotv-sizes index) (aref slotv-psizes index)) data))))
+               map)
+      data)))
 
 (defvar *heap-utilization-vector-type-names*
   (let* ((a (make-array 256)))
@@ -960,30 +1067,82 @@ are running on, or NIL if we can't find any useful information."
     a))
 
   
-    
-(defun report-heap-utilization (out nconses nvectors vector-sizes vector-physical-sizes)
-  (let* ((total-cons-size  (* nconses target::cons.size))
-         (total-vector-size 0)
-         (total-physical-vector-size 0)
-         (total-size 0))
-    (format out "~&Object type~42tCount~50tTotal Size in Bytes~72tTotal Size~82t % of Heap")
-    (dotimes( i (length nvectors))
-      (incf total-vector-size (aref vector-sizes i))
-      (incf total-physical-vector-size (aref vector-physical-sizes i)))
-    (setq total-size (+ total-cons-size total-physical-vector-size))
-    (unless (zerop nconses)
-      (format out "~&CONS~36t~12d~48t~16d~16d~8,2f%" nconses total-cons-size total-cons-size
-              (* 100 (/ total-cons-size total-size))))
-    (dotimes (i (length nvectors))
-      (let ((count (aref nvectors i))
-            (sizes (aref vector-sizes i))
-            (psizes (aref vector-physical-sizes i)))
-        (unless (zerop count)
-          (format out "~&~a~36t~12d~48t~16d~16d~8,2f%"
-                  (aref *heap-utilization-vector-type-names* i)
-                  count sizes psizes
-                  (* 100.0 (/ psizes total-size))))))
-    (format out "~&   Total sizes: ~49t~16d~16d" (+ total-cons-size total-vector-size) (+ total-cons-size total-physical-vector-size))))
+(defun report-heap-utilization (data &key stream unit sort)
+  (let* ((div (ecase unit
+                ((nil) 1)
+                (:kb 1024.0d0)
+                (:mb (* 1024.0d0 1024.0d0))
+                (:gb (* 1024.0d0 1024.0d0 1024.0d0))))
+         (sort-key (ecase sort
+                     (:count #'cadr)
+                     (:logical-size #'caddr)
+                     ((:physical-size :size) #'cadddr)
+                     ((:name nil) nil)))
+         (total-count 0)
+         (total-lsize 0)
+         (total-psize 0)
+         (max-name 0))
+    (loop for (name count lsize psize) in data
+      do (incf total-count count)
+      do (incf total-lsize lsize)
+      do (incf total-psize psize)
+      do (setq max-name (max max-name
+                             (length (if (stringp name)
+                                       name
+                                       (if (symbolp name)
+                                         (symbol-name name)
+                                         (princ-to-string name)))))))
+    (setq data
+          (if sort-key
+            (sort data #'> :key sort-key)
+            (sort data #'string-lessp :key #'(lambda (name)
+                                               (if (stringp name)
+                                                 name
+                                                 (if (symbolp name)
+                                                   (symbol-name name)
+                                                   (princ-to-string name)))))))
+                                                    
+    (format stream "~&Object type~vtCount     Logical size   Physical size   % of Heap~%~vt ~a~vt ~2:*~a"
+            (+ max-name 7)
+            (+ max-name 15)
+            (ecase unit
+              ((nil) "  (in bytes)")
+              (:kb   "(in kilobytes)")
+              (:mb   "(in megabytes)")
+              (:gb   "(in gigabytes)"))
+            (+ max-name 31))
+    (loop for (type count logsize physsize) in data
+      do (if unit
+           (format stream "~&~a~vt~11d~16,2f~16,2f~11,2f%"
+                   type
+                   (1+ max-name)
+                   count
+                   (/ logsize div)
+                   (/ physsize div)
+                   (* 100.0 (/ physsize total-psize)))
+           (format stream "~&~a~vt~11d~16d~16d~11,2f%"
+                   type
+                   (1+ max-name)
+                   count
+                   logsize
+                   physsize
+                   (* 100.0 (/ physsize total-psize)))))
+    (if unit
+      (format stream "~&~a~vt~11d~16,2f~16,2f~11,2f%"
+              "Total"
+              (1+ max-name)
+              total-count
+              (/ total-lsize div)
+              (/ total-psize div)
+              100.0d0)
+      (format stream "~&~a~vt~11d~16d~16d~11,2f%"
+              "Total"
+              (1+ max-name)
+              total-count
+              total-lsize
+              total-psize
+              100.0d0)))
+  (values))
 
 ;; The number of words to allocate for static conses when the user requests
 ;; one and we don't have any left over
@@ -1055,7 +1214,7 @@ are running on, or NIL if we can't find any useful information."
 (defun all-watched-objects ()
   (let (result)
     (with-other-threads-suspended
-      (%map-areas #'(lambda (x) (push x result)) area-watched area-watched))
+      (%map-areas #'(lambda (x) (push x result)) area-watched))
     result))
 
 (defun primitive-watch (thing)
@@ -1083,4 +1242,4 @@ are running on, or NIL if we can't find any useful information."
 						(typecode thing))
 				   (cons nil nil))))
 			(return-from unwatch (%unwatch thing new)))))
-		area-watched area-watched)))
+                area-watched)))

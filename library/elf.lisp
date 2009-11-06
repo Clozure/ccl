@@ -194,7 +194,6 @@
                                    #-x8664-target 'function)
                         (functions (function-vector-to-function o))))
                     ccl::area-dynamic
-                    ccl::area-dynamic
                     )))
     (functions)))
 

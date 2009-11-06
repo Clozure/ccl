@@ -268,36 +268,11 @@
         target::symbol.size)
      (- target::fulltag-symbol target::fulltag-nil)))
 
-(defun gc-area-name (code)
-  (cond ((eq code area-void) :void)
-        ((eq code area-cstack) :cstack)
-        ((eq code area-vstack) :vstack)
-        ((eq code area-tstack) :tstack)
-        ((eq code area-readonly) :readonly)
-        ((eq code area-watched) :watched)
-        ((eq code area-managed-static) :managed-static)
-        ((eq code area-static) :static)
-        ((eq code area-dynamic) :dynamic)
-        ((eql 0 (logand code (1- (ash 1 target::fixnum-shift))))
-         (gc-area-name (ash code (- target::fixnum-shift))))
-        (t code)))
-
-(defun gc-area-code (name)
-  (case name
-    (:void area-void)
-    (:cstack area-cstack)
-    (:vstack area-vstack)
-    (:tstack area-tstack)
-    (:readonly area-readonly)
-    (:watched area-watched)
-    (:managed-static area-managed-static)
-    (:static area-static)
-    (:dynamic area-dynamic)
-    (t (if (and (fixnump name)
-                (<= area-readonly name area-dynamic))
-         name
-         (gc-area-code (require-type name '(member :void :cstack :vstack :tstack :readonly :managed-static :static :dynamic)))))))
-
+(defun core-area-name (code)
+  (or (heap-area-name code)
+      (and (integerp code)
+           (not (logtest code (1- (ash 1 target::fixnum-shift))))
+           (heap-area-name (ash code (- target::fixnum-shift))))))
 
 (defx86lapfunction %%raw-obj ((address arg_z))
   (unbox-fixnum address arg_z)
@@ -358,8 +333,8 @@
 
 (defun map-core-areas (function &key area)
   (setq area (cond ((or (eq area t) (eq area nil)) nil)
-                   ((consp area) (mapcar #'gc-area-code area))
-                   (t (list (gc-area-code area)))))
+                   ((consp area) (mapcar #'heap-area-code area))
+                   (t (list (heap-area-code area)))))
   (loop for area-ptr = (core-q (core-q (kernel-global-address 'all-areas)) target::area.succ)
           then (core-q area-ptr target::area.succ)
         as code = (ash (core-q area-ptr target::area.code) (- target::fixnum-shift))
@@ -370,7 +345,7 @@
                       (< (core-q area-ptr target::area.low) (core-q area-ptr target::area.active)))
              #+debug
              (format t "~& AREA at x~x, type = ~a low = x~x active = x~x (size = x~x out of x~x)"
-                     area-ptr (gc-area-name code)
+                     area-ptr (core-area-name code)
                      (core-q area-ptr target::area.low)
                      (core-q area-ptr target::area.active)
                      (- (core-q area-ptr target::area.active) (core-q area-ptr target::area.low))

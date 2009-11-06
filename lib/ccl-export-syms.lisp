@@ -706,6 +706,7 @@
      unmap-octet-vector
      ;; Miscellany
      heap-utilization
+     collect-heap-utilization
 
      external-process-creation-failure
 

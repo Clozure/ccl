@@ -140,7 +140,6 @@ in the finder"
                            (when (typep o 'ccl::function-vector)
                              (functions (ccl::function-vector-to-function o))))
                          ccl::area-dynamic
-                         ccl::area-dynamic
                          )))
     (functions)))
 
@@ -155,7 +154,6 @@ in the finder"
                              (return-from walk nil))
                            (when (typep o 'function)
                              (functions o)))
-                         ccl::area-dynamic
                          ccl::area-dynamic
                          )))
     (functions)))
