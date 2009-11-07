@@ -27,7 +27,7 @@
 #include <sys/time.h>
 
 #ifdef X8632
-static inline natural
+inline natural
 imm_word_count(LispObj fn)
 {
   natural w = ((unsigned short *)fn)[-1];

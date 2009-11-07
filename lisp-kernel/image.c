@@ -64,8 +64,10 @@ relocate_area_contents(area *a, LispObj bias)
 #ifdef X8664
         int skip = ((int) start[1])+1;
 #else
-        int skip = ((unsigned short)start[1])+1;
         extern void update_self_references(LispObj *);
+        extern natural imm_word_count(LispObj);
+
+        natural skip = (natural)imm_word_count(((LispObj)start)+fulltag_misc)+1;
         update_self_references(start);
 #endif
      
@@ -90,6 +92,9 @@ relocate_area_contents(area *a, LispObj bias)
       }
       ++start;
     }
+  }
+  if (start > end) {
+    Bug(NULL, "Overran area bounds in relocate_area_contents");
   }
 }
       
