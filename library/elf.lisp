@@ -311,9 +311,17 @@
       (fd-lseek fd pos #$SEEK_SET)
       (fd-read fd shdr (record-length #+64-bit-target :<E>lf64_<S>hdr
                                       #+32-bit-target :<E>lf32_<S>hdr))
+      ;; On 64-bit platforms, the section data precedes the image
+      ;; header; on 32-bit platforms, the image header and image
+      ;; section table precede the image data for the first (static)
+      ;; section.  With alignment, the header/section headers are
+      ;; one 4K page, and the static section size is 8K ...
       (setf (pref shdr #+64-bit-target :<E>lf64_<S>hdr.sh_offset
                   #+32-bit-target :<E>lf32_<S>hdr.sh_offset)
-            (+ #x2000 (logandc2 (+ eof 4095) 4095))) ; #x2000 for nilreg-area
+            (+ #+32-bit-target #x1000 #+64-bit-target 0  #x2000 (logandc2 (+ eof 4095) 4095))) 
+      (setf (pref shdr #+64-bit-target :<E>lf64_<S>hdr.sh_type
+                  #+32-bit-target :<E>lf32_<S>hdr.sh_type)
+            #$SHT_PROGBITS)
       (fd-lseek fd pos #$SEEK_SET)
       (fd-write fd shdr (record-length #+64-bit-target :<E>lf64_<S>hdr
                                        #+32-bit-target :<E>lf32_<S>hdr))
