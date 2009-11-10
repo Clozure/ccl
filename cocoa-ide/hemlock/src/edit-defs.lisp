@@ -52,11 +52,10 @@
 	  (when (mark= mark1 mark2)
 	    ;; Try to get whole form
 	    (pre-command-parse-check point)
-	    (when (valid-spot point t)
-	      (move-mark mark1 point)
-	      (form-offset mark1 -1)
-	      (move-mark mark2 mark1)
-	      (form-offset mark2 1)))))
+            (move-mark mark1 point)
+            (form-offset mark1 -1)
+            (move-mark mark2 mark1)
+            (form-offset mark2 1))))
     (unless (mark= mark1 mark2)
       (region-to-string (region mark1 mark2)))))
 
@@ -90,8 +89,8 @@
     (if error
       (editor-error "unreadable name: ~s" string)
       (handler-case (edit-definition fun-name)
-        (error (c) (editor-error (format nil "~a" c)))))))
-      
+        (error (c) (editor-error "~a" c))))))
+
 (defcommand "Edit Command Definition" (p)
   "Prompts for command definition name and goes to it for editing."
   (multiple-value-bind
@@ -106,7 +105,7 @@
                             :prompt "Command to edit: "))
     (declare (ignore name))
     (handler-case (edit-definition (command-function command))
-      (error (c) (editor-error (format nil "~a" c))))))
+      (error (c) (editor-error "~a" c)))))
 
 #|
 ;;; FUN-DEFINED-FROM-PATHNAME takes a symbol or function object.  It
@@ -389,7 +388,7 @@
                 (find-definition-in-buffer def-type full-name source))))))
     (let* ((info (get-source-alist name))
            (msg nil))
-      (when (null info)
+      (when (and (null info) (symbolp name))
         (let* ((seen (list name))
                (found ())
                (pname (symbol-name name)))

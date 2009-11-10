@@ -1265,6 +1265,8 @@
 (declaim (special hemlock-text-view))
 
 
+(defvar *lisp-string-color* (#/blueColor ns:ns-color))
+(defvar *lisp-comment-color* (#/brownColor ns:ns-color))
 
 ;;; LAYOUT is an NSLayoutManager in which we'll set temporary character
 ;;; attrubutes before redisplay.
@@ -1277,33 +1279,44 @@
 (defun set-temporary-character-attributes (layout pos start-line end-line)
   (ns:with-ns-range (range)
     (let* ((color-attribute #&NSForegroundColorAttributeName)
-           (string-color  (#/blueColor ns:ns-color) )
-           (comment-color (#/darkGrayColor ns:ns-color)))
+           (string-color  *lisp-string-color* )
+           (comment-color *lisp-comment-color*))
       (hi::with-mark ((m (hi::buffer-start-mark hi::*current-buffer*)))
         (hi::line-start m start-line)
-        (hi::pre-command-parse-check m t))
+        (hi::pre-command-parse-check m))
       (do ((p pos (+ p (1+ (hi::line-length line))))
            (line start-line (hi::line-next line)))
           ((eq line end-line))
-        (let* ((parse-info (getf (hi::line-plist line) 'hemlock::lisp-info)))
+        (let* ((parse-info (getf (hi::line-plist line) 'hemlock::lisp-info))
+               (last-end 0))
           (when parse-info
             (dolist (r (hemlock::lisp-info-ranges-to-ignore parse-info))
               (destructuring-bind (istart . iend) r
-                (let* ((is-string (if (= istart 0)
-                                    (hemlock::lisp-info-begins-quoted parse-info)
-                                    (eql (hi::line-character line (1- istart))
-                                         #\")))
-                       (color (if is-string
-                                string-color
-                                comment-color)))
-                  (if (and is-string (not (= istart 0)))
-                    (decf istart))
-                  (setf (ns:ns-range-location range) (+ p istart)
-                        (ns:ns-range-length range) (1+ (- iend istart)))
-		  (let ((attrs (#/dictionaryWithObject:forKey:
-				ns:ns-dictionary color color-attribute)))
-		    (#/addTemporaryAttributes:forCharacterRange:
-		     layout attrs range)))))))))))
+                (let* ((attr (if (= istart 0)
+                               (hemlock::lisp-info-begins-quoted parse-info)
+                               (if (< last-end istart)
+                                 (hi:character-attribute :lisp-syntax
+                                                         (hi::line-character line (1- istart)))
+                                 :comment)))
+                       (type (case attr
+                               ((:char-quote :symbol-quote) nil)
+                               (:string-quote :string)
+                               (t :comment)))
+                       (start (+ p istart))
+                       (len (- iend istart)))
+                  (when type
+                    (when (eq type :string)
+                      (decf start)
+                      (incf len 2))
+                    (setf (ns:ns-range-location range) start
+                          (ns:ns-range-length range) len)
+                    (let ((attrs (#/dictionaryWithObject:forKey:
+                                  ns:ns-dictionary
+                                  (if (eq type :string) string-color comment-color)
+                                  color-attribute)))
+                      (#/addTemporaryAttributes:forCharacterRange:
+                       layout attrs range)))
+                  (setq last-end iend))))))))))
 
 #+no
 (objc:defmethod (#/drawRect: :void) ((self hemlock-text-view) (rect :<NSR>ect))
@@ -1319,6 +1332,7 @@
 
 (objc:defmethod (#/evalSelection: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
+  ;; TODO: this should just invoke editor-evaluate-region-command instead of reinventing the wheel.
   (let* ((buffer (hemlock-buffer self))
          (package-name (hi::variable-value 'hemlock::current-package :buffer buffer))
          (pathname (hi::buffer-pathname buffer))
@@ -1487,23 +1501,32 @@
            (let* ((cache (hemlock-buffer-string-cache (#/hemlockString textstorage)))
                   (buffer (buffer-cache-buffer cache))
                   (hi::*current-buffer* buffer)
-                  (point (hi::buffer-point buffer)))
+                  (point (hi::buffer-point buffer))
+                  (atom-mode (or (eql g #$NSSelectByParagraph)
+                                 (and (eql index (#/length textstorage))
+                                      (let* ((event (#/currentEvent (#/window self))))
+                                        (and (eql (#/type event) #$NSLeftMouseDown)
+                                             (> (#/clickCount event) 2)))))))
              (hi::with-mark ((mark point))
                (move-hemlock-mark-to-absolute-position mark cache index)
-               (when (selection-offset-for-double-click buffer mark)
-                 ;; Act as if we started the selection at the other end, so the heuristic
-                 ;; in #/selectionRangeForProposedRange does the right thing.  ref bug #565.
-                 (hi::move-mark point mark)
-                 (let ((start index)
-                       (end (hi::mark-absolute-position mark)))
-                   (when (< end start) (rotatef start end))
-                   (ns:init-ns-range r start (- end start)))
-                 #+debug
-                 (#_NSLog #@"range = %@, proposed = %@, granularity = %d"
-                          :address (#_NSStringFromRange r)
-                          :address (#_NSStringFromRange proposed)
-                          :<NSS>election<G>ranularity g)
-                 (return-from HANDLED r))))))
+	       (let ((region (selection-for-click mark atom-mode)))
+		 (when region
+		   ;; Act as if we started the selection at the other end, so the heuristic
+		   ;; in #/selectionRangeForProposedRange does the right thing.  ref bug #565.
+		   (cond ((hi::mark= (hi::region-start region) mark)
+			  (hi::move-mark point (hi::region-end region)))
+			 ((hi::mark= (hi::region-end region) mark)
+			  (hi::move-mark point (hi::region-start region))))
+		   (let ((start (hi::mark-absolute-position (hi::region-start region)))
+			 (end (hi::mark-absolute-position (hi::region-end region))))
+		     (assert (<= start end))
+		     (ns:init-ns-range r start (- end start)))
+		   #+debug
+		   (#_NSLog #@"range = %@, proposed = %@, granularity = %d"
+			    :address (#_NSStringFromRange r)
+			    :address (#_NSStringFromRange proposed)
+			    :<NSS>election<G>ranularity g)
+		   (return-from HANDLED r)))))))
        (prog1
            (call-next-method proposed g)
          #+debug
@@ -1513,15 +1536,20 @@
                   :<NSS>election<G>ranularity g)))))
 
 ;; Return nil to use the default Cocoa selection, which will be word for double-click, line for triple.
-;; TODO: make this consistent with "current sexp".
-(defun selection-offset-for-double-click (buffer mark)
-  (when (string= (hi::buffer-major-mode buffer) "Lisp") ;; gag
+(defun selection-for-click (mark paragraph-mode-p)
+  (unless paragraph-mode-p
+    ;; Select a word if near one
+    (hi::with-mark ((fwd mark)
+		    (bwd mark))
+      (or (hi::find-attribute fwd :word-delimiter)
+	  (hi::buffer-end fwd))
+      (or (hi::reverse-find-attribute bwd :word-delimiter)
+	  (hi::buffer-start bwd))
+      (unless (hi::mark= bwd fwd)
+	(return-from selection-for-click (hi::region bwd fwd)))))
+  (when (string= (hi::buffer-major-mode (hi::mark-buffer mark)) "Lisp") ;; gag
     (hemlock::pre-command-parse-check mark)
-    (when (hemlock::valid-spot mark nil)
-      (cond ((eql (hi::next-character mark) #\()
-             (hemlock::list-offset mark 1))
-            ((eql (hi::previous-character mark) #\))
-             (hemlock::list-offset mark -1))))))
+    (hemlock::form-region-at-mark mark)))
 
 (defun append-output (view string)
   (assume-cocoa-thread)

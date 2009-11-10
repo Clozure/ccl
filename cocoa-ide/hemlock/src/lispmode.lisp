@@ -40,12 +40,12 @@
 ;;; LISP-INFO is the structure used to store the data about the line in its
 ;;; Plist.
 ;;;
-;;;     -> BEGINS-QUOTED, ENDING-QUOTED are both Boolean slots that tell whether
-;;;        or not a line's begining and/or ending are quoted.
+;;;     -> BEGINS-QUOTED, ENDING-QUOTED are both slots that tell whether or not
+;;;        a line's begining and/or ending are quoted, and if so, how.
 ;;; 
 ;;;     -> RANGES-TO-IGNORE is a list of cons cells, each having the form
 ;;;        ( [begining-charpos] [end-charpos] ) each of these cells indicating
-;;;        a range to ignore.  End is exclusive.
+;;;        a range where :lisp-syntax attributes are ignored.  End is exclusive.
 ;;; 
 ;;;     -> NET-OPEN-PARENS, NET-CLOSE-PARENS integers that are the number of 
 ;;;        unmatched opening and closing parens that there are on a line.
@@ -54,8 +54,8 @@
 ;;; 
 
 (defstruct (lisp-info (:constructor make-lisp-info ()))
-  (begins-quoted nil)		; (or t nil)
-  (ending-quoted nil)		; (or t nil)
+  (begins-quoted nil)		; nil or quote char attribute or comment nesting depth
+  (ending-quoted nil)		; nil or quote char attribute or comment nesting depth
   (ranges-to-ignore nil)
   (net-open-parens 0 :type fixnum)
   (net-close-parens 0 :type fixnum)
@@ -107,8 +107,8 @@
   "Move MARK to next :LISP-SYNTAX character, if one isn't found, return NIL."
   `(find-attribute ,mark :lisp-syntax
 		   #'(lambda (x)
-		       (member x '(:open-paren :close-paren :newline :comment
-					       :char-quote :string-quote))))) 
+		       (member x '(:open-paren :close-paren :newline :comment :prefix-dispatch
+					       :char-quote :symbol-quote :string-quote)))))
 ;;; 
 ;;; PUSH-RANGE
 
@@ -201,15 +201,13 @@
 	 ;;
 	 
 	 (when (or fer-sure-parse      
-		   (not line-info)     
-		   (not prev-line-info)
-		   
-		   (not (eq (lisp-info-begins-quoted line-info) 
-			    (lisp-info-ending-quoted prev-line-info)))
-		   
-		   (not (eql (line-signature test-line)     
+		   (not line-info)
+		   (not (eq (lisp-info-begins-quoted line-info)
+                            (let ((prev (and prev-line-info (lisp-info-ending-quoted prev-line-info))))
+                              (and (not (eq prev :char-quote)) prev))))
+		   (not (eql (line-signature test-line)
 			     (lisp-info-signature-slot line-info))))
-	   
+
 	   (move-to-position mark 0 test-line)
 	   
 	   (unless line-info
@@ -274,23 +272,25 @@
   (let ((net-open-parens 0)
 	(net-close-parens 0))
     (declare (fixnum net-open-parens net-close-parens))
-    
+
     ;; Re-set the slots necessary
-    
+
     (setf (lisp-info-ranges-to-ignore line-info) nil)
-    
+
+    (setf (lisp-info-ending-quoted line-info) nil)
+
     ;; The only way the current line begins quoted is when there
     ;; is a previous line and it's ending was quoted.
     
     (setf (lisp-info-begins-quoted line-info)
 	  (and prev-line-info 
-	       (lisp-info-ending-quoted prev-line-info)))
-    
-    (if (lisp-info-begins-quoted line-info)
-      (deal-with-string-quote mark line-info)
-      (setf (lisp-info-ending-quoted line-info) nil))
-    
+	       (let ((prev (lisp-info-ending-quoted prev-line-info)))
+		 (and (not (eq prev :char-quote)) prev))))
+
     (assert (eq (hi::mark-buffer mark) (current-buffer)))
+
+    (when (lisp-info-begins-quoted line-info)
+      (deal-with-quote (lisp-info-begins-quoted line-info) mark line-info))
 
     (unless (lisp-info-ending-quoted line-info)
       (loop 
@@ -324,21 +324,33 @@
            (let* ((charpos (mark-charpos mark))
                   (nextpos (1+ charpos))
                   (linelen (line-length (mark-line mark))))
-             (when (> linelen nextpos)
-               (push-range (cons charpos nextpos)
-                           line-info)))
-	   (mark-after mark))
-	  
+             (when (< linelen nextpos)
+               (setf (lisp-info-ending-quoted line-info) :char-quote)
+               (return t))
+             (push-range (cons charpos nextpos) line-info)
+             (mark-after mark)))
+
+          (:prefix-dispatch
+           (mark-after mark)
+           (when (test-char (next-character mark) :lisp-syntax :symbol-quote)
+             (mark-after mark)
+             (unless (deal-with-quote 1 mark line-info (- (mark-charpos mark) 2))
+               (return t))))
+
+          (:symbol-quote
+           (mark-after mark)
+           (unless (deal-with-quote :symbol-quote mark line-info)
+             (return t)))
+
 	  (:string-quote
 	   (mark-after mark)
-	   (unless (deal-with-string-quote mark line-info)
-	     (setf (lisp-info-ending-quoted line-info) t)
+	   (unless (deal-with-quote :string-quote mark line-info)
 	     (return t)))
+
           (t (ERROR "character attribute of: ~s is ~s, at ~s"
                     (next-character mark)
                     (character-attribute :lisp-syntax (next-character mark))
                     mark)))))
-
     (setf (lisp-info-net-open-parens line-info) net-open-parens)
     (setf (lisp-info-net-close-parens line-info) net-close-parens)
     (setf (lisp-info-signature-slot line-info) 
@@ -346,92 +358,102 @@
 
 
 
-;;;; String quote utilities.
+;;;; String/symbol quote utilities.
 
-;;; VALID-STRING-QUOTE-P
+;;; VALID-QUOTE-P
 ;;;
-(defmacro valid-string-quote-p (mark forwardp)
+(defmacro valid-quote-p (quote mark forwardp)
   "Return T if the string-quote indicated by MARK is valid."
-  (let ((test-mark (gensym)))
-    `(with-mark ((,test-mark ,mark))
-       ,(unless forwardp
-	  ;; TEST-MARK should always be right before the String-quote to be
-	  ;; checked.
-	  `(mark-before ,test-mark))
-       (when (test-char (next-character ,test-mark) :lisp-syntax :string-quote)
-	 (let ((slash-count 0))
-	   (loop
-	     (mark-before ,test-mark)
-	     (if (test-char (next-character ,test-mark) :lisp-syntax :char-quote)
-		 (incf slash-count)
-		 (return t)))
-	   (not (oddp slash-count)))))))
+  `(and (eq (character-attribute :lisp-syntax (direction-char ,mark ,forwardp)) ,quote)
+        (not (char-quoted-at-mark-p ,mark ,forwardp))))
+
+(defun char-quoted-at-mark-p (mark forwardp)
+  (unless forwardp
+    (unless (mark-before mark)
+      (return-from char-quoted-at-mark-p nil)))
+  (loop for count upfrom 0
+    do (unless (test-char (previous-character mark) :lisp-syntax :char-quote)
+         (character-offset mark count) ;; go back to where started
+         (unless forwardp
+           (mark-after mark))
+         (return (oddp count)))
+    do (mark-before mark)))
 
 ;;; 
-;;; FIND-VALID-STRING-QUOTE
+;;; FIND-VALID-QUOTE
 
-(defmacro find-valid-string-quote (mark &key forwardp (cease-at-eol nil))
+(defmacro find-valid-quote (quote mark &key forwardp (cease-at-eol nil))
   "Expand to a form that will leave MARK before a valid string-quote character,
   in either a forward or backward direction, according to FORWARDP.  If 
   CEASE-AT-EOL is T then it will return nil if encountering the EOL before a
   valid string-quote."
-  (let ((e-mark (gensym)))
+  (let ((e-mark (gensym))
+        (pred (gensym)))
     `(with-mark ((,e-mark ,mark))
-       
-       (loop
-	(unless (scan-direction ,e-mark ,forwardp :lisp-syntax 
-				,(if cease-at-eol 
-				     `(or :newline :string-quote)
-				     `:string-quote))
-	  (return nil))
-	
+       (let ((,pred ,(if cease-at-eol
+                       `#'(lambda (x) (or (eq x :newline) (eq x ,quote)))
+                       `#'(lambda (x) (eq x ,quote)))))
+
+         (loop
+           (unless (,(if forwardp 'find-attribute 'reverse-find-attribute)
+                    ,e-mark :lisp-syntax ,pred)
+             (return nil))
+
 	,@(if cease-at-eol
 	      `((when (test-char (direction-char ,e-mark ,forwardp) :lisp-syntax
 				 :newline)
 		  (return nil))))
 	
-	(when (valid-string-quote-p ,e-mark ,forwardp)
+	(when (valid-quote-p ,quote ,e-mark ,forwardp)
 	  (move-mark ,mark ,e-mark)
 	  (return t))
 	
-	(neighbor-mark ,e-mark ,forwardp)))))
+	(neighbor-mark ,e-mark ,forwardp))))))
 
-;;;; DEAL-WITH-STRING-QUOTE.
-
-;;; DEAL-WITH-STRING-QUOTE
+;;; DEAL-WITH-QUOTE
 ;;;
-;;; Called when a string is begun (i.e. parse hits a #\").  It checks for a
+;;; Called when a quoted area is begun (i.e. parse hits a #\" or #\|).  It checks for a
 ;;; matching quote on the line that MARK points to, and puts the appropriate
 ;;; area in the RANGES-TO-IGNORE slot and leaves MARK pointing after this area.
 ;;; The "appropriate area" is from MARK to the end of the line or the matching
 ;;; string-quote, whichever comes first.
 ;;;
-(defun deal-with-string-quote (mark info-struct)
+
+(defun deal-with-quote (quote mark info-struct &optional (start (mark-charpos mark)))
   "Alter the current line's info struct as necessary as due to encountering a
-   string quote character."
-  (with-mark ((e-mark mark))
-    (cond ((find-valid-string-quote e-mark :forwardp t :cease-at-eol t)
+  string or symbol quote character."
+  (if (fixnump quote) ;; nesting multi-line comments
+    (loop
+      (unless (and (scan-char mark :lisp-syntax (or :newline :symbol-quote))
+                   (test-char (next-character mark) :lisp-syntax :symbol-quote))
+        (line-end mark)
+        (push-range (cons start (mark-charpos mark)) info-struct)
+        (setf (lisp-info-ending-quoted info-struct) quote)
+        (return nil))
+      (if (prog1 (test-char (previous-character mark) :lisp-syntax :prefix-dispatch) (mark-after mark))
+        (incf quote)
+        (when (test-char (next-character mark) :lisp-syntax :prefix-dispatch)
+          (mark-after mark)
+          (decf quote)
+          (when (<= quote 0)
+            (push-range (cons start (mark-charpos mark)) info-struct)
+            (setf (lisp-info-ending-quoted info-struct) nil)
+            (return mark)))))
+    (cond ((find-valid-quote quote mark :forwardp t :cease-at-eol t)
 	   ;; If matching quote is on this line then mark the area between the
 	   ;; first quote (MARK) and the matching quote as invalid by pushing
 	   ;; its begining and ending into the IGNORE-RANGE.
-	   (push-range (cons (mark-charpos mark) (mark-charpos e-mark))
-		       info-struct)
-	   (setf (lisp-info-ending-quoted info-struct) nil)
-	   (mark-after e-mark)
-	   (move-mark mark e-mark))
+	   (push-range (cons start (mark-charpos mark)) info-struct)
+	   (mark-after mark))
 	  ;; If the EOL has been hit before the matching quote then mark the
 	  ;; area from MARK to the EOL as invalid.
 	  (t
-	   (push-range (cons (mark-charpos mark)
-			     (line-length (mark-line mark)))
-		       info-struct)
-	   ;; The Ending is marked as still being quoted. 
-	   (setf (lisp-info-ending-quoted info-struct) t)
 	   (line-end mark)
+	   (push-range (cons start (mark-charpos mark)) info-struct)
+	   ;; The Ending is marked as still being quoted. 
+	   (setf (lisp-info-ending-quoted info-struct) quote)
 	   nil))))
 
-
-
 ;;;; Character validity checking:
 
 ;;; Find-Ignore-Region  --  Internal
@@ -480,7 +502,6 @@
 	(find-ignore-region mark forwardp)
       (and line (not region)))))
 
-
 ;;; Scan-Direction-Valid  --  Internal
 ;;;
 ;;;    Like scan-direction, but only stop on valid characters.
@@ -507,6 +528,7 @@
 	   ;; The ignore region is off the end of the line causing %FORM-OFFSET
 	   ;; to infinitely loop.
 	   (when (> (mark-charpos ,n-mark) (line-length ,n-line))
+	     #+gz (break "This shouldn't happen any more")
 	     (line-offset ,n-mark 1 0))
 	   (unless (scan-direction ,n-mark ,forwardp ,@forms)
 	     (return nil))
@@ -523,46 +545,50 @@
   "Expand to code that will go forward one list either backward or forward, 
    according to the FORWARDP flag."
   (let ((mark (gensym)))
-    `(let ((paren-count ,extra-parens))
-       (declare (fixnum paren-count))
-       (with-mark ((,mark ,actual-mark))
-	 (loop
-	   (scan-direction ,mark ,forwardp :lisp-syntax
-			   (or :close-paren :open-paren :newline))
-	   (let ((ch (direction-char ,mark ,forwardp)))
-	     (unless ch (return nil))
-	     (when (valid-spot ,mark ,forwardp)
-	       (case (character-attribute :lisp-syntax ch)
-		 (:close-paren
-		  (decf paren-count)
-		  ,(when forwardp
-		     ;; When going forward, an unmatching close-paren means the
-		     ;; end of list.
-		     `(when (<= paren-count 0)
-			(neighbor-mark ,mark ,forwardp)
-			(move-mark ,actual-mark ,mark)
-			(return t))))
-		 (:open-paren
-		  (incf paren-count)
-		  ,(unless forwardp             ; Same as above only end of list
-		     `(when (>= paren-count 0)  ; is opening parens.
-			(neighbor-mark ,mark ,forwardp)
-			(move-mark ,actual-mark ,mark)
-			(return t))))
-		 
-		 (:newline 
-		  ;; When a #\Newline is hit, then the matching paren must lie
-		  ;; on some other line so drop down into the multiple line
-		  ;; balancing function: QUEST-FOR-BALANCING-PAREN If no paren
-		  ;; seen yet, keep going.
-		  (cond ((zerop paren-count))
-			((quest-for-balancing-paren ,mark paren-count ,forwardp)
-			 (move-mark ,actual-mark ,mark)
-			 (return t))
-			(t
-			 (return nil)))))))
-	   
-	   (neighbor-mark ,mark ,forwardp))))))
+    `(with-mark ((,mark ,actual-mark))
+       (if (valid-spot ,mark ,forwardp)
+         (let ((paren-count ,extra-parens))
+           (declare (fixnum paren-count))
+           (loop
+             (unless (scan-direction-valid ,mark ,forwardp :lisp-syntax
+                                           (or :close-paren :open-paren :newline))
+               (return nil))
+             (let ((ch (direction-char ,mark ,forwardp)))
+               (case (character-attribute :lisp-syntax ch)
+                 (:close-paren
+                  (decf paren-count)
+                  ,(when forwardp
+                     ;; When going forward, an unmatching close-paren means the
+                     ;; end of list.
+                     `(when (<= paren-count 0)
+                        (neighbor-mark ,mark ,forwardp)
+                        (move-mark ,actual-mark ,mark)
+                        (return t))))
+                 (:open-paren
+                  (incf paren-count)
+                  ,(unless forwardp             ; Same as above only end of list
+                     `(when (>= paren-count 0)  ; is opening parens.
+                        (neighbor-mark ,mark ,forwardp)
+                        (move-mark ,actual-mark ,mark)
+                          (return t))))
+                   
+                   (:newline 
+                    ;; When a #\Newline is hit, then the matching paren must lie
+                    ;; on some other line so drop down into the multiple line
+                    ;; balancing function: QUEST-FOR-BALANCING-PAREN If no paren
+                    ;; seen yet, keep going.
+                    (cond ((zerop paren-count))
+                          ((quest-for-balancing-paren ,mark paren-count ,forwardp)
+                           (move-mark ,actual-mark ,mark)
+                           (return t))
+                          (t
+                           (return nil))))))
+             (neighbor-mark ,mark ,forwardp)))
+         ;; We're inside a comment or a string.  Try anyway.
+         (when ,(if forwardp
+                  `(%forward-list-at-mark ,mark ,extra-parens t)
+                  `(%backward-list-at-mark ,mark ,extra-parens t))
+           (move-mark ,actual-mark ,mark))))))
 
 ;;; 
 ;;; QUEST-FOR-BALANCING-PAREN
@@ -718,52 +744,296 @@
   (and (start-line-p mark)
        (test-char (next-character mark) :lisp-syntax :open-paren)))
 
-
-
 ;;;; Form offseting.
 
-(defmacro %form-offset (mark forwardp)
-  `(with-mark ((m ,mark))
-     (when (scan-direction-valid m ,forwardp :lisp-syntax
-				 (or :open-paren :close-paren
-				     :char-quote :string-quote
-				     :constituent))
-       (ecase (character-attribute :lisp-syntax (direction-char m ,forwardp))
-	 (:open-paren
-	  (when ,(if forwardp `(list-offset m 1) `(mark-before m))
-	    ,(unless forwardp
-	       '(scan-direction m nil :lisp-syntax (not :prefix)))
-	    (move-mark ,mark m)
-	    t))
-	 (:close-paren
-	  (when ,(if forwardp `(mark-after m) `(list-offset m -1))
-	    ,(unless forwardp
-	       '(scan-direction m nil :lisp-syntax (not :prefix)))
-	    (move-mark ,mark m)
-	    t))
-	 ((:constituent :char-quote)
-	  (scan-direction-valid m ,forwardp :lisp-syntax
-				(not (or :constituent :char-quote)))
-	  ,(if forwardp
-	       `(scan-direction-valid m t :lisp-syntax
-				      (not (or :constituent :char-quote)))
-	       `(scan-direction-valid m nil :lisp-syntax
-				      (not (or :constituent :char-quote
-					       :prefix))))
-	  (move-mark ,mark m)
-	  t)
-	 (:string-quote
-	  (cond ((valid-spot m ,(not forwardp))
-		 (neighbor-mark m ,forwardp)
-		 (when (scan-direction-valid m ,forwardp :lisp-syntax
-					     :string-quote)
-		   (neighbor-mark m ,forwardp)
-		   (move-mark ,mark m)
-		   t))
-		(t (neighbor-mark m ,forwardp)
-		   (move-mark ,mark m)
-		   t)))))))
+;; Heuristic versions, for navigating inside comments, doesn't make use of line info
 
+(defun unparsed-form-offset (mark forwardp)
+  ;; TODO: if called in "invalid" spot, arrange to stay within bounds of current invalid region.
+  ;; For now, just stop at #||# boundaries, as first approximation.
+  (if forwardp
+    (forward-form mark t)
+    (backward-form mark t)))
+
+(defun forward-form (mark &optional in-comment-p)
+  ;; If in-comment-p is true, tries not to go past a |#.
+  (with-mark ((m mark))
+    (when (and (scan-char m :lisp-syntax (or :open-paren :close-paren :prefix-dispatch
+                                             :symbol-quote :string-quote :char-quote
+                                             :comment :constituent))
+               (%forward-form-at-mark m in-comment-p))
+      (move-mark mark m))))
+
+(defun backward-form (mark &optional in-comment-p)
+  ;; If in-comment-p is true, tries not to go past a #|.
+  (with-mark ((m mark))
+    (when (%backward-form-at-mark m in-comment-p)
+      (loop while (test-char (previous-character m) :lisp-syntax :prefix) do (mark-before m))
+      (move-mark mark m))))
+
+(defun %forward-form-at-mark (mark in-comment-p)
+  ;; Warning: moves mark even if returns nil (hence the % in name).
+  (case (character-attribute :lisp-syntax (next-character mark))
+    (:open-paren
+     (mark-after mark)
+     (%forward-list-at-mark mark 1))
+    (:close-paren
+     nil)
+    (:char-quote
+     (%forward-symbol-at-mark mark in-comment-p))
+    (:symbol-quote
+     (mark-after mark)
+     (unless (and in-comment-p (test-char (next-character mark) :lisp-syntax :prefix-dispatch))
+       (mark-before mark)
+       (%forward-symbol-at-mark mark in-comment-p)))
+    (:prefix-dispatch
+     (mark-after mark)
+     (if (test-char (next-character mark) :lisp-syntax :symbol-quote)
+       (progn
+         (mark-after mark)
+         (%forward-nesting-comment-at-mark mark 1))
+       (progn
+         (mark-before mark)
+         (%forward-symbol-at-mark mark in-comment-p))))
+    (:string-quote
+     (%forward-string-at-mark mark))
+    (:constituent
+     (%forward-symbol-at-mark mark in-comment-p))
+    (:comment
+     (%forward-comments-at-mark mark))
+    (t
+     (mark-after mark)
+     (%forward-form-at-mark mark in-comment-p))))
+
+(defun %backward-form-at-mark (mark in-comment-p)
+  ;; Warning: moves mark even if returns nil (hence the % in name).
+  (let* ((char (previous-character mark))
+         (attrib (character-attribute :lisp-syntax char)))
+    (when char
+      (mark-before mark)
+      (when (char-quoted-at-mark-p mark t)
+        (setq attrib :constituent))
+      (case attrib
+        (:open-paren
+         nil)
+        (:close-paren
+         (%backward-list-at-mark mark 1))
+        (:char-quote  ;;; can only happen if starting right after an unquoted char-quote
+         (%backward-symbol-at-mark mark in-comment-p))
+        (:symbol-quote
+         (unless (and in-comment-p (test-char (previous-character mark) :lisp-syntax :prefix-dispatch))
+           (mark-after mark)
+           (%backward-symbol-at-mark mark in-comment-p)))
+        (:prefix-dispatch
+         (if (test-char (previous-character mark) :lisp-syntax :symbol-quote)
+           (progn
+             (mark-before mark)
+             (%backward-nesting-comment-at-mark mark 1))
+           (progn
+             (mark-after mark)
+             (%backward-symbol-at-mark mark in-comment-p))))
+        (:string-quote
+         (mark-after mark)
+         (%backward-string-at-mark mark))
+        (:constituent
+         (mark-after mark)
+         (%backward-symbol-at-mark mark in-comment-p))
+        (:prefix
+         (loop while (test-char (previous-character mark) :lisp-syntax :prefix) do (mark-before mark))
+         mark)
+        (:comment
+         (loop while (test-char (previous-character mark) :lisp-syntax :comment) do (mark-before mark))
+         mark)
+        ;; TODO: it would be nice to skip over ;; comments if starting outside one, i.e. if encounter a newline
+        ;; before a form starts.
+        (t (%backward-form-at-mark mark in-comment-p))))))
+
+(defun %forward-symbol-at-mark (mark in-comment-p)
+  ;; Warning: moves mark even if returns nil (hence the % in name).
+  (loop
+    (unless (scan-char mark :lisp-syntax (not (or :constituent :prefix-dispatch)))
+      (return (buffer-end mark)))
+    (case (character-attribute :lisp-syntax (next-character mark))
+      (:symbol-quote
+       (mark-after mark)
+       (when (and in-comment-p (test-char (next-character mark) :lisp-syntax :prefix-dispatch))
+         (return (mark-before mark)))
+       (unless (loop
+                 (unless (scan-char mark :lisp-syntax (or :char-quote :symbol-quote))
+                   (return nil))
+                 (when (test-char (next-character mark) :lisp-syntax :symbol-quote)
+                   (return t))
+                 (character-offset mark 2))
+         (return nil))
+       (mark-after mark))
+      (:char-quote
+       (character-offset mark 2))
+      (t (return mark)))))
+
+(defun %backward-symbol-at-mark (mark in-comment-p)
+  (loop
+    (unless (rev-scan-char mark :lisp-syntax (not (or :constituent :prefix-dispatch :char-quote)))
+      (buffer-start mark)
+      (return mark))
+    (mark-before mark)
+    (if (char-quoted-at-mark-p mark t)
+      (mark-before mark)
+      (let* ((char (next-character mark)))
+        (case (character-attribute :lisp-syntax char)
+          (:symbol-quote
+           (when (and in-comment-p (test-char (previous-character mark) :lisp-syntax :prefix-dispatch))
+             (return (mark-after mark)))
+           (unless (loop
+                     (unless (rev-scan-char mark :lisp-syntax :symbol-quote)
+                       (return nil))
+                     (mark-before mark)
+                     (unless (char-quoted-at-mark-p mark t)
+                       (return t))
+                     (mark-before mark))
+             (return nil)))
+          (t (mark-after mark)
+             (return mark)))))))
+
+(defun %forward-nesting-comment-at-mark (mark nesting)
+  ;; Warning: moves mark even if returns nil (hence the % in name).
+  (loop
+    (unless (scan-char mark :lisp-syntax :symbol-quote)
+      (return nil))
+    (let ((prev (previous-character mark)))
+      (mark-after mark)
+      (cond ((test-char prev :lisp-syntax :prefix-dispatch)
+             (incf nesting))
+            ((test-char (next-character mark) :lisp-syntax :prefix-dispatch)
+             (mark-after mark)
+             (when (<= (decf nesting) 0)
+               (return mark)))))))
+
+(defun %backward-nesting-comment-at-mark (mark nesting)
+  ;; Warning: moves mark even if returns nil (hence the % in name).
+  (loop
+    (unless (rev-scan-char mark :lisp-syntax :symbol-quote)
+      (return nil))
+    (let ((next (next-character mark)))
+      (mark-before mark)
+      (cond ((test-char next :lisp-syntax :prefix-dispatch)
+             (incf nesting))
+            ((test-char (previous-character mark) :lisp-syntax :prefix-dispatch)
+             (mark-before mark)
+             (when (<= (decf nesting) 0)
+               (return mark)))))))
+
+
+;; %FORM-OFFSET
+
+(defmacro %form-offset (mark forwardp)
+  `(if (valid-spot ,mark ,forwardp)
+     (with-mark ((m ,mark))
+       (when (scan-direction-valid m ,forwardp :lisp-syntax
+                                   (or :open-paren :close-paren
+                                       :char-quote :string-quote :symbol-quote
+                                       :prefix-dispatch :constituent))
+         (ecase (character-attribute :lisp-syntax (direction-char m ,forwardp))
+           (:open-paren
+            (when ,(if forwardp `(list-offset m 1) `(mark-before m))
+              ,(unless forwardp
+                 '(scan-direction m nil :lisp-syntax (not :prefix)))
+              (move-mark ,mark m)
+              t))
+           (:close-paren
+            (when ,(if forwardp `(mark-after m) `(list-offset m -1))
+              ,(unless forwardp
+                 '(scan-direction m nil :lisp-syntax (not :prefix)))
+              (move-mark ,mark m)
+              t))
+           ((:constituent :char-quote :symbol-quote :prefix-dispatch)
+            ,(if forwardp
+               `(scan-direction-valid m t :lisp-syntax
+                                      (not (or :constituent :char-quote :symbol-quote :prefix-dispatch)))
+               `(scan-direction-valid m nil :lisp-syntax
+                                      (not (or :constituent :char-quote :symbol-quote :prefix-dispatch
+                                               :prefix))))
+            (move-mark ,mark m)
+            t)
+           (:string-quote
+            (neighbor-mark m ,forwardp)
+            (when (scan-direction-valid m ,forwardp :lisp-syntax
+                                        :string-quote)
+              (neighbor-mark m ,forwardp)
+              (move-mark ,mark m)
+              t)))))
+     ;; Inside a comment or a string.  Switch to heuristic method.
+     (unparsed-form-offset ,mark ,forwardp)))
+
+(defun %forward-list-at-mark (mark nesting &optional in-comment-p)
+  ;; Warning: moves mark even if returns nil (hence the % in name).
+  (loop
+    (unless (scan-char mark :lisp-syntax (or :open-paren :close-paren :prefix-dispatch
+                                             :symbol-quote :string-quote :char-quote :comment))
+      (return nil))
+    (case (character-attribute :lisp-syntax (next-character mark))
+      (:open-paren
+       (mark-after mark)
+       (incf nesting))
+      (:close-paren
+       (mark-after mark)
+       (when (<= (decf nesting) 0)
+         (return (and (eql nesting 0) mark))))
+      (t
+       (unless (%forward-form-at-mark mark in-comment-p)
+         (return nil))))))
+
+(defun %backward-list-at-mark (mark nesting &optional in-comment-p)
+  ;; Warning: moves mark even if returns nil (hence the % in name).
+  (loop
+    (unless (rev-scan-char mark :lisp-syntax (or :open-paren :close-paren :prefix-dispatch
+                                                 :symbol-quote :string-quote :comment))
+      (return nil))
+    (mark-before mark)
+    (if (char-quoted-at-mark-p mark t)
+      (mark-before mark)
+      (case (character-attribute :lisp-syntax (next-character mark))
+        (:close-paren
+         (incf nesting))
+        (:open-paren
+         (when (<= (decf nesting) 0)
+           (return mark)))
+        (t
+         (mark-after mark)
+         (unless (%backward-form-at-mark mark in-comment-p)
+           (return nil)))))))
+
+(defun %forward-string-at-mark (mark)
+  ;; Warning: moves mark even if returns nil (hence the % in name).
+  (mark-after mark)
+  (loop
+    (unless (scan-char mark :lisp-syntax (or :char-quote :string-quote))
+      (return nil))
+    (unless (test-char (next-character mark) :lisp-syntax :char-quote)
+      (return (mark-after mark)))
+    (character-offset mark 2)))
+
+
+(defun %backward-string-at-mark (mark)
+  ;; Warning: moves mark even if returns nil (hence the % in name).
+  (mark-before mark)
+  (loop
+    (unless (rev-scan-char mark :lisp-syntax :string-quote)
+      (return nil))
+    (mark-before mark)
+    (unless (char-quoted-at-mark-p mark t)
+      (return mark))
+    (mark-before mark)))
+
+(defun %forward-comments-at-mark (mark)
+  ;; Warning: moves mark even if returns nil (hence the % in name).
+  (with-mark ((m mark))
+    (loop
+      (line-end m)
+      (mark-after m)
+      (move-mark mark m)
+      (unless (and (scan-char m :lisp-syntax (not :space))
+                   (test-char (next-character m) :lisp-syntax :comment))
+        (return mark)))))
 
 (defun form-offset (mark offset)
   "Move mark offset number of forms, after if positive, before if negative.
@@ -775,8 +1045,44 @@
       (dotimes (i (- offset) t)
 	(unless (%form-offset mark nil) (return nil)))))
 
+;; Return region for the "current form" at mark.
+;; TODO: See also mark-nearest-form, should merge them
+(defun form-region-at-mark (mark)
+  (with-mark ((bwd-start mark)
+              (bwd-end mark)
+              (fwd-start mark)
+              (fwd-end mark))
+    (let* ((fwd (and (or (and (char-quoted-at-mark-p mark t)       ;; back-up so get whole character
+                              (mark-before fwd-end))
+                         (test-char (next-character mark) :lisp-syntax
+                                    (or :open-paren :string-quote
+                                        :char-quote :symbol-quote :constituent :prefix-dispatch
+                                        :prefix)))
+                     (form-offset fwd-end 1)
+                     (form-offset (move-mark fwd-start fwd-end) -1)
+                     (mark<= fwd-start mark)))
+           (bwd (and (or (char-quoted-at-mark-p mark nil)
+                         (test-char (previous-character mark) :lisp-syntax
+                                    (or :close-paren :string-quote
+                                        :char-quote :symbol-quote :constituent :prefix-dispatch)))
+                     ;; Special case - if at an open paren, always select forward because that's
+                     ;; the matching paren that's highlighted.
+                     (not (and fwd (test-char (next-character mark) :lisp-syntax :open-paren)))
+                     ;; Also prefer string over anything but close paren.
+                     (not (and fwd (test-char (next-character mark) :lisp-syntax :string-quote)
+                               (not (test-char (previous-character mark) :lisp-syntax :close-paren))))
+                     (form-offset bwd-start -1)
+                     (form-offset (move-mark bwd-end bwd-start) 1)
+                     (mark<= mark bwd-end))))
+      (if bwd
+        (when (or (not fwd) ;; back is only option
+                  (and (mark= bwd-start fwd-start) (mark= bwd-end fwd-end)) ;; or they're the same
+                  (and (mark= bwd-start fwd-end)  ;; or had to skip prefix chars to get to forward
+                       (test-char (next-character fwd-start) :lisp-syntax (or :prefix :prefix-dispatch))))
+          (region bwd-start bwd-end))
+        (if fwd
+          (region fwd-start fwd-end))))))
 
-
 ;;;; Table of special forms with special indenting requirements.
 
 (defhvar "Indent Defanything"
@@ -970,7 +1276,7 @@
     (mark-after m)
     (with-mark ((start m))
       (unless (and (scan-char m :lisp-syntax
-			      (not (or :space :prefix :char-quote)))
+			      (not (or :space :prefix :prefix-dispatch :char-quote)))
 		   (test-char (next-character m) :lisp-syntax :constituent))
 	(return-from lisp-indentation (mark-column start)))
       (with-mark ((fstart m))
@@ -1048,7 +1354,7 @@
 	 ;; See if the containing form is named FLET or MACROLET.
 	 (mark-after temp1)
 	 (unless (and (scan-char temp1 :lisp-syntax
-				 (not (or :space :prefix :char-quote)))
+				 (not (or :space :prefix :prefix-dispatch :char-quote)))
 		      (test-char (next-character temp1) :lisp-syntax
 				 :constituent))
 	   (return-from lisp-indentation-check-for-local-def nil))
@@ -1149,7 +1455,8 @@
 ;;; will work.  This is done undoably with save1, save2, buf-region, and
 ;;; undo-region.
 ;;;
-(defun lisp-indent-region (region &optional (undo-text "Lisp region indenting"))  (let* ((start (region-start region))
+(defun lisp-indent-region (region &optional (undo-text "Lisp region indenting"))
+  (let* ((start (region-start region))
          (end (region-end region))
          (buffer (hi::line-%buffer (mark-line start))))
     (with-mark ((m1 start)

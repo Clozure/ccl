@@ -197,7 +197,6 @@ between the region's start and end, and if there are no ill-formed expressions i
 #| old version
 (defcommand "Confirm Listener Input" (p)
   "Evaluate Listener Mode input between point and last prompt."
-  "Evaluate Listener Mode input between point and last prompt."
   (declare (ignore p))
   (let* ((input-region (get-interactive-input))
          (r (if input-region
@@ -317,7 +316,6 @@ between the region's start and end, and if there are no ill-formed expressions i
 
 (defcommand "Confirm Listener Input" (p)
     "Evaluate Listener Mode input between point and last prompt."
-    "Evaluate Listener Mode input between point and last prompt."
   (declare (ignore p))
   (if (point-at-prompt-p)
     (progn
@@ -339,7 +337,6 @@ between the region's start and end, and if there are no ill-formed expressions i
 " "what you have to type to exit a break loop")
 
 (defcommand "POP or Delete Forward" (p)
-  "Send :POP if input-mark is at buffer's end, else delete forward character."
   "Send :POP if input-mark is at buffer's end, else delete forward character."
   (let* ((input-mark (value buffer-input-mark))
          (point (current-point-for-deletion)))
@@ -419,8 +416,6 @@ between the region's start and end, and if there are no ill-formed expressions i
 (defcommand "Search Previous Interactive Input" (p)
   "Search backward through the interactive history using the current input as
    a search string.  Consecutive invocations repeat the previous search."
-  "Search backward through the interactive history using the current input as
-   a search string.  Consecutive invocations repeat the previous search."
   (declare (ignore p))
   (let* ((mark (value buffer-input-mark))
 	 (ring (value interactive-history))
@@ -485,11 +480,9 @@ between the region's start and end, and if there are no ill-formed expressions i
 (defcommand "Next Interactive Input" (p)
   "Rotate the interactive history backwards.  The region is left around the
    inserted text.  With prefix argument, rotate that many times."
-  "Call previous-interactive-input-command with negated arg."
   (previous-interactive-input-command (- (or p 1))))
 
 (defcommand "Kill Interactive Input" (p)
-  "Kill any input to an interactive mode (Listener or Typescript)."
   "Kill any input to an interactive mode (Listener or Typescript)."
   (declare (ignore p))
   (let ((point (buffer-point (current-buffer)))
@@ -508,8 +501,6 @@ between the region's start and end, and if there are no ill-formed expressions i
 	(beginning-of-line-command p))))
 
 (defcommand "Reenter Interactive Input" (p)
-  "Copies the form to the left of point to be after the interactive buffer's
-   input mark.  When the current region is active, it is copied instead."
   "Copies the form to the left of point to be after the interactive buffer's
    input mark.  When the current region is active, it is copied instead."
   (declare (ignore p))
@@ -537,10 +528,9 @@ between the region's start and end, and if there are no ill-formed expressions i
 (defmode "Editor" :hidden t)
 
 (defcommand "Editor Mode" (p)
-  "Turn on \"Editor\" mode in the current buffer.  If it is already on, turn it
-  off.  When in editor mode, most lisp compilation and evaluation commands
+  "Toggle \"Editor\" mode in the current buffer.  
+  When in editor mode, most lisp compilation and evaluation commands
   manipulate the editor process instead of the current eval server."
-  "Toggle \"Editor\" mode in the current buffer."
   (declare (ignore p))
   (setf (buffer-minor-mode (current-buffer) "Editor")
 	(not (buffer-minor-mode (current-buffer) "Editor"))))
@@ -550,23 +540,6 @@ between the region's start and end, and if there are no ill-formed expressions i
   (setf (buffer-minor-mode buffer "Editor") t))
 
 
-
-(defcommand "Editor Compile Defun" (p)
-  "Compiles the current or next top-level form in the editor Lisp.
-   First the form is evaluated, then the result of this evaluation
-   is passed to compile.  If the current region is active, this
-   compiles the region."
-  "Evaluates the current or next top-level form in the editor Lisp."
-  (declare (ignore p))
-  (if (region-active-p)
-      (editor-compile-region (current-region))
-      (editor-compile-region (defun-region (current-point)) t)))
-
-(defcommand "Editor Compile Region" (p)
-  "Compiles lisp forms between the point and the mark in the editor Lisp."
-  "Compiles lisp forms between the point and the mark in the editor Lisp."
-  (declare (ignore p))
-  (editor-compile-region (current-region)))
 
 (defun defun-region (mark)
   "This returns a region around the current or next defun with respect to mark.
@@ -578,6 +551,14 @@ between the region's start and end, and if there are no ill-formed expressions i
     (cond ((not (mark-top-level-form start end))
 	   (editor-error "No current or next top level form."))
 	  (t (region start end)))))
+
+(defun current-form-region (&optional (error t))
+  (if (region-active-p)
+    (current-region)
+    (let ((point (current-point)))
+      (pre-command-parse-check point)
+      (or (form-region-at-mark point)
+          (and error (editor-error "No current expression"))))))
 
 (defun eval-region (region
 		    &key
@@ -591,40 +572,17 @@ between the region's start and end, and if there are no ill-formed expressions i
                                        (mark-absolute-position (region-start region)))))
 
 
-(defun editor-compile-region (region &optional quiet)
-  (unless quiet (message "Compiling region ..."))
-  (eval-region region))
-
-
-(defcommand "Editor Evaluate Defun" (p)
-  "Evaluates the current or next top-level form.
-   If the current region is active, this evaluates the region."
-  (declare (ignore p))
-  (if (region-active-p)
-    (editor-evaluate-region-command nil)
-    (eval-region (defun-region (current-point)))))
-
-(defcommand "Editor Evaluate Region" (p)
-  "Evaluates lisp forms between the point and the mark"
+(defcommand "Editor Execute Defun" (p)
+  "Executes the current or next top-level form in the editor Lisp."
   (declare (ignore p))
   (if (region-active-p)
     (eval-region (current-region))
-    (let* ((point (current-point)))
-      (pre-command-parse-check point)
-      (when (valid-spot point nil)      ; not in the middle of a comment
-        (cond ((eql (next-character point) #\()
-               (with-mark ((m point))
-                 (if (form-offset m 1)
-                   (eval-region (region point m)))))
-              ((eql (previous-character point) #\))
-               (with-mark ((m point))
-                 (if (form-offset m -1)
-                   (eval-region (region m point)))))
-	      (t
-	       (with-mark ((start point)
-			   (end point))
-		 (when (mark-symbol start end)
-		   (eval-region (region start end))))))))))
+    (eval-region (defun-region (current-point)))))
+
+(defcommand "Editor Execute Expression" (p)
+  "Executes the current region in the editor Lisp."
+  (declare (ignore p))
+  (eval-region (current-form-region)))
 
 (defcommand "Editor Re-evaluate Defvar" (p)
   "Evaluate the current or next top-level form if it is a DEFVAR.  Treat the
@@ -639,23 +597,15 @@ between the region's start and end, and if there are no ill-formed expressions i
        (message "Evaluation returned ~S" (eval form))))))
 
 (defun macroexpand-expression (expander)
-  (let* ((point (buffer-point (current-buffer)))
-	 (region (if (region-active-p)
-		   (current-region)
-		   (with-mark ((start point))
-		     (pre-command-parse-check start)
-		     (with-mark ((end start))
-		       (unless (form-offset end 1) (editor-error))
-		       (region start end)))))
-	 (expr (with-input-from-region (s region)
-		 (read s))))
-    (let* ((*print-pretty* t)
-	   (expansion (funcall expander expr)))
-      (format t "~&~s~&" expansion))))
+  (in-lisp
+   (let* ((region (current-form-region))
+          (expr (with-input-from-region (s region)
+                  (read s))))
+     (let* ((*print-pretty* t)
+            (expansion (funcall expander expr)))
+       (format t "~&~s~&" expansion)))))
 
 (defcommand "Editor Macroexpand-1 Expression" (p)
-  "Show the macroexpansion of the current expression in the null environment.
-   With an argument, use MACROEXPAND instead of MACROEXPAND-1."
   "Show the macroexpansion of the current expression in the null environment.
    With an argument, use MACROEXPAND instead of MACROEXPAND-1."
   (macroexpand-expression (if p 'macroexpand 'macroexpand-1)))
@@ -663,13 +613,10 @@ between the region's start and end, and if there are no ill-formed expressions i
 (defcommand "Editor Macroexpand Expression" (p)
   "Show the macroexpansion of the current expression in the null environment.
    With an argument, use MACROEXPAND-1 instead of MACROEXPAND."
-  "Show the macroexpansion of the current expression in the null environment.
-   With an argument, use MACROEXPAND-1 instead of MACROEXPAND."
   (macroexpand-expression (if p 'macroexpand-1 'macroexpand)))
 
 
 (defcommand "Editor Evaluate Expression" (p)
-  "Prompt for an expression to evaluate in the editor Lisp."
   "Prompt for an expression to evaluate in the editor Lisp."
   (declare (ignore p))
   (in-lisp
@@ -696,7 +643,6 @@ between the region's start and end, and if there are no ill-formed expressions i
   "Prompts for file to compile in the editor Lisp.  Does not compare source
    and binary write dates.  Does not check any buffer for that file for
    whether the buffer needs to be saved."
-  "Prompts for file to compile."
   (declare (ignore p))
   (let ((pn (prompt-for-file :default
 			     (buffer-default-pathname (current-buffer))
@@ -766,7 +712,6 @@ between the region's start and end, and if there are no ill-formed expressions i
 
 (defcommand "Editor Describe Function Call" (p)
   "Describe the most recently typed function name in the editor Lisp."
-  "Describe the most recently typed function name in the editor Lisp."
   (declare (ignore p))
   (with-mark ((mark1 (current-point))
 	      (mark2 (current-point)))
@@ -783,13 +728,12 @@ between the region's start and end, and if there are no ill-formed expressions i
 
 (defcommand "Editor Describe Symbol" (p)
   "Describe the previous s-expression if it is a symbol in the editor Lisp."
-  "Describe the previous s-expression if it is a symbol in the editor Lisp."
   (declare (ignore p))
   (with-mark ((mark1 (current-point))
 	      (mark2 (current-point)))
     (mark-symbol mark1 mark2)
     (with-input-from-region (s (region mark1 mark2))
-      (let ((thing (read s)))
+      (let ((thing (in-lisp (read s))))
         (if (symbolp thing)
           (with-pop-up-display (*standard-output* :title (format nil "~s" thing))
             (describe thing))
@@ -830,7 +774,6 @@ between the region's start and end, and if there are no ill-formed expressions i
 (defcommand "Editor Describe" (p)
   "Call Describe on a Lisp object.
   Prompt for an expression which is evaluated to yield the object."
-  "Prompt for an object to describe."
   (declare (ignore p))
   (in-lisp
    (let* ((exp (prompt-for-expression

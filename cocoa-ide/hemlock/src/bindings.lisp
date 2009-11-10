@@ -349,11 +349,12 @@
 
 (bind-key "Editor Evaluate Expression" #k"control-meta-escape")
 (bind-key "Editor Evaluate Expression" #k"meta-escape"  :mode "Editor")
-(bind-key "Editor Evaluate Defun" #k"control-x control-e" :mode "Editor")
-(bind-key "Editor Evaluate Region" #k"enter" :mode "Editor")
-(bind-key "Editor Evaluate Defun" #k"control-meta-x" :mode "Editor")
-(bind-key "Editor Compile Defun" #k"control-x control-c" :mode "Editor")
-(bind-key "Editor Compile Defun" #k"control-x control-C" :mode "Editor")
+
+(bind-key "Editor Execute Expression" #k"enter" :mode "Editor")
+(bind-key "Editor Execute Expression" #k"control-x control-e" :mode "Editor")
+(bind-key "Editor Execute Defun" #k"control-meta-x" :mode "Editor")
+(bind-key "Editor Execute Defun" #k"control-x control-c" :mode "Editor")
+(bind-key "Editor Execute Defun" #k"control-x control-C" :mode "Editor")
 
 (bind-key "Editor Macroexpand-1 Expression" #k"control-m" :mode "Editor")
 (bind-key "Editor Macroexpand Expression" #k"control-x control-m" :mode "Editor")

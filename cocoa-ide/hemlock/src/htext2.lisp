@@ -286,7 +286,7 @@
 
 (defun mark-after (mark)
   "Changes the Mark to point one character after where it currently points.
-  NIL is returned if there is no previous character."
+  NIL is returned if there is no next character."
   (let ((line (mark-line mark))
 	(charpos (mark-charpos mark)))
     (cond ((= charpos (line-length* line))

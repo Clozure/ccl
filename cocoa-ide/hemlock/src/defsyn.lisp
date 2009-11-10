@@ -113,27 +113,37 @@
    :open-paren - An opening bracket.
    :close-paren - A closing bracket.
    :prefix - A character that is a part of any form it appears before.
+   :prefix-dispatch - a prefix char that converts :symbol-quote to multi-line comment
    :string-quote - The character that quotes a string.
    :char-quote - The character that escapes a single character.
+   :symbol-quote - The character that escapes a range of characters
    :comment - The character that comments out to end of line.
    :constituent - Things that make up symbols."
   'symbol nil)
 
-(setf (character-attribute :lisp-syntax #\space) :space)
-(setf (character-attribute :lisp-syntax #\tab) :space)
+;; Default from lisp readtable.
+(dotimes (i 256)
+ (let ((c (code-char i)))
+  (setf (character-attribute :lisp-syntax c)
+   (case (ccl::%get-readtable-char c ccl::%standard-readtable%)
+    (#.ccl::$cht_wsp :space)
+    (#.ccl::$cht_sesc :char-quote)
+    (#.ccl::$cht_mesc :symbol-quote)
+    (#.ccl::$cht_cnst :constituent)))))
 
 (setf (character-attribute :lisp-syntax #\() :open-paren)
 (setf (character-attribute :lisp-syntax #\)) :close-paren)
 (setf (character-attribute :lisp-syntax #\') :prefix)
-(setf (character-attribute :lisp-syntax #\`) :prefix)  
-(setf (character-attribute :lisp-syntax #\#) :prefix)
+(setf (character-attribute :lisp-syntax #\`) :prefix)
 (setf (character-attribute :lisp-syntax #\,) :prefix)
+(setf (character-attribute :lisp-syntax #\#) :prefix-dispatch)
 (setf (character-attribute :lisp-syntax #\") :string-quote)
-(setf (character-attribute :lisp-syntax #\\) :char-quote)
 (setf (character-attribute :lisp-syntax #\;) :comment)
+
 (setf (character-attribute :lisp-syntax #\newline) :newline)
 (setf (character-attribute :lisp-syntax nil) :newline)
 
+#|
 (do-alpha-chars (ch :both)
   (setf (character-attribute :lisp-syntax ch) :constituent))
 
@@ -170,7 +180,7 @@
 (setf (character-attribute :lisp-syntax #\?) :constituent)
 (setf (character-attribute :lisp-syntax #\.) :constituent)
 (setf (character-attribute :lisp-syntax #\:) :constituent)
-
+|#
 
 (defattribute "Sentence Terminator"
   "Used for terminating sentences -- ., !, ?.
