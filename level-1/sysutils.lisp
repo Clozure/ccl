@@ -605,6 +605,26 @@
 (defun check-deferred-call-args (w def wargs)
   (destructuring-bind (arglist spread-p) wargs
     (multiple-value-bind (deftype reason) (nx1-check-call-args def arglist spread-p)
+      (when (and (eq deftype :deferred-mismatch)
+                 (eq (car reason) :unknown-gf-keywords)
+                 (consp def)
+                 (not (logbitp $lfbits-gfn-bit (def-info.lfbits (cdr def)))))
+        ;; If didn't have a defgeneric, check against global defn
+        (let* ((global-def (fboundp (car def)))
+               (bad-keys (cadr reason)))
+          (when (typep global-def 'generic-function)
+            (setq bad-keys
+                  (multiple-value-bind (bits keyvect) (innermost-lfun-bits-keyvect global-def)
+                    (when (and bits
+                               (logbitp  $lfbits-keys-bit bits)
+                               (not (logbitp $lfbits-aok-bit bits)))
+                      (loop for key in bad-keys
+                        unless (or (find key keyvect)
+                                   (nx1-valid-gf-keyword-p global-def key))
+                        collect key)))))
+          (if bad-keys
+            (setq reason (list* :unknown-gf-keys bad-keys (cddr reason)))
+            (setq deftype nil))))
       (when deftype
         (when (eq deftype :deferred-mismatch)
           (setq deftype (if (consp def) :environment-mismatch :global-mismatch)))
