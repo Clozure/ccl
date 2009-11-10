@@ -299,6 +299,8 @@ commands but aren't")
   (let ((fd (stream-device stream :input)))
     (and fd (eof-transient-p fd))))
 
+(defvar *save-interactive-source-locations* t)
+
 ;;; This is the part common to toplevel loop and inner break loops.
 (defun read-loop (&key (input-stream *standard-input*)
                        (output-stream *standard-output*)
@@ -327,13 +329,14 @@ commands but aren't")
             (loop                
               (setq *in-read-loop* nil
                     *break-level* break-level)
-	      (clrhash *nx-source-note-map*)
               (multiple-value-bind (form env print-result)
                   (toplevel-read :input-stream input-stream
                                  :output-stream output-stream
                                  :prompt-function prompt-function
                                  :eof-value eof-value
-				 :map *nx-source-note-map*)
+				 :map (when *save-interactive-source-locations*
+                                        (clrhash *nx-source-note-map*)
+                                        *nx-source-note-map*))
                 (if (eq form eof-value)
                   (progn
                     (when (> (incf eof-count) *consecutive-eof-limit*)
