@@ -319,7 +319,7 @@ commands but aren't")
          (eof-value (cons nil nil))
          (eof-count 0)
          (*show-available-restarts* (and *show-restarts-on-break* *break-condition*))
-	 (*nx-source-note-map* (make-hash-table :test #'eq :shared nil)))
+         (map (make-hash-table :test #'eq :shared nil)))
     (declare (dynamic-extent eof-value))
     (loop
       (restart-case
@@ -335,8 +335,8 @@ commands but aren't")
                                  :prompt-function prompt-function
                                  :eof-value eof-value
 				 :map (when *save-interactive-source-locations*
-                                        (clrhash *nx-source-note-map*)
-                                        *nx-source-note-map*))
+                                        (clrhash map)
+                                        map))
                 (if (eq form eof-value)
                   (progn
                     (when (> (incf eof-count) *consecutive-eof-limit*)
@@ -348,7 +348,7 @@ commands but aren't")
                         (stream-clear-input input-stream)
                         (abort-break))
                       (exit-interactive-process *current-process*)))
-                  (progn
+                  (let ((*nx-source-note-map* (and *save-interactive-source-locations* map)))
                     (setq eof-count 0)
                     (or (check-toplevel-command form)
                         (let* ((values (toplevel-eval form env)))
