@@ -2597,7 +2597,7 @@ defcallback returns the callback pointer, e.g., the value of name."
         (format stream "~A = " arg))
       (if (and type (not (eq type :void)))
           (format stream "[:~A] ~A~%" type val)
-        (format stream ":VOID~%" val))))))
+        (format stream ":VOID~%"))))))
 
 (defun def-trace-print-function (type fn)
   (push (cons type fn) *trace-print-functions*))

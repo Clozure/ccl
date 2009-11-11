@@ -395,7 +395,7 @@
   (:report
    (lambda (c s)
      (let* ((p (package-error-package c)))
-       (format s "The following symbols need to be imported to ~S before they can be exported ~& from that package:~%~s:" p (slot-value c 'to-be-imported) p)))))
+       (format s "The following symbols need to be imported to ~S before they can be exported ~& from that package:~%~s:" p (slot-value c 'to-be-imported))))))
 
 
 (define-condition package-name-conflict-error (package-error simple-error) ())

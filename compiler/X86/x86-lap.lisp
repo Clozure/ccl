@@ -695,7 +695,7 @@
                  (error "Invalid scale factor ~s in ~s" head form))))
             (if (not (or disp base index))
               (setq disp (parse-x86-lap-expression head))
-              (error "~& not expected in ~s" head form)))))))))
+              (error "~&~s not expected in ~s" head form)))))))))
 
      
     

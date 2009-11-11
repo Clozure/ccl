@@ -845,7 +845,7 @@ of the shell itself."
   (with-macptrs (p)
     (%setf-macptr p (#_strerror errno))
     (if (%null-ptr-p p)
-      (format nil "OS Error %d" errno)
+      (format nil "OS Error ~d" errno)
       (%get-cstring p))))
 
 #+windows-target

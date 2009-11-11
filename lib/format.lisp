@@ -2225,7 +2225,6 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
       (catch 'format-escape
 	(sub-format-scan 0 (length *format-control-string*))
 	(note-format-scan-option *format-escape-options*)))
-    #+no
     (when (> (length *format-arguments*) *format-arguments-variance*)
       (format-error "Too many format arguments"))))
 
@@ -2606,12 +2605,18 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 		     (min *format-arguments-variance* (length *format-arguments*)))))
 	    ((< count 0)
 	     (let* ((orig *format-original-arguments*)
-		    (pos (+ (- (length orig) (length *format-arguments*)) count))
+		    (orig-pos (- (length orig) (length *format-arguments*)))
+		    (pos (+ orig-pos count))
 		    (max-pos (+ pos (or *format-arguments-variance* 0))))
 	       (when (< max-pos 0)
 		 (format-error "Target position for ~~* out of bounds"))
+	       ;; After backing up, we may not use up all the arguments we backed over.
+	       ;; Increase the variance allowed to cover those arguments, so we don't
+	       ;; complain about not using them.  E.g. (format t "~a ~a ~2:*~a" 1 2) should
+	       ;; be ok, (format t "~a ~a ~2:*" 1 2) should warn.
+	       (setq max-pos (1- (- max-pos count)))
 	       (if (< pos 0)
 		 (setq *format-arguments* orig
 		       *format-arguments-variance* max-pos)
-		 (setq *format-arguments* (nthcdr pos orig)))))))))
-
+		 (setq *format-arguments* (nthcdr pos orig)
+		       *format-arguments-variance* (- max-pos pos)))))))))
