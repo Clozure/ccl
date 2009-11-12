@@ -1265,8 +1265,8 @@
 (declaim (special hemlock-text-view))
 
 
-(defvar *lisp-string-color* (#/blueColor ns:ns-color))
-(defvar *lisp-comment-color* (#/brownColor ns:ns-color))
+(defloadvar *lisp-string-color* (#/blueColor ns:ns-color))
+(defloadvar *lisp-comment-color* (#/brownColor ns:ns-color))
 
 ;;; LAYOUT is an NSLayoutManager in which we'll set temporary character
 ;;; attrubutes before redisplay.
