@@ -271,7 +271,7 @@
         (incf malloc-sum (parse-integer (second i) :radix 16 :start 2))
         (format t "~&~A" i))
       (format t "~&Freed but not malloced:~%~{~A~%~}" frees)
-      (format t "~&total-malloc-not-freed: ~~A ~A free not malloc: ~A"
+      (format t "~&total-malloc-not-freed: ~A ~A free not malloc: ~A"
               (/ malloc-sum 1024.0)
               (length mallocs)
               (length frees)))))
