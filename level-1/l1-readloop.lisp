@@ -683,8 +683,11 @@
   (let ((defenv (definition-environment env)))
     (and defenv (eq 'compile-file (car (defenv.type defenv))))))
 
+;; This is EVAL.
 (defun cheap-eval (form)
-  (cheap-eval-in-environment form nil))
+  ;; Don't record source locations for explicit calls to EVAL.
+  (let ((*nx-source-note-map* nil))
+    (cheap-eval-in-environment form nil)))
 
 ; used by nfcomp too
 ; Should preserve order of decl-specs; it sometimes matters.
@@ -815,7 +818,8 @@
                      (let ((*loading-toplevel-location* *loading-toplevel-location*))
                        (cheap-eval-in-environment protected-form env))
                    (progn-in-env cleanup-forms env env)))
-               (funcall (cheap-eval-function nil (cheap-eval-transform form `(lambda () (progn ,form))) env))))
+               (let ((fn (cheap-eval-function nil (cheap-eval-transform form `(lambda () (progn ,form))) env)))
+                 (funcall fn))))
             ((and (symbolp sym) (macro-function sym env))
              (cheap-eval-in-environment (cheap-eval-macroexpand-1 form env) env))
             ((or (symbolp sym)
