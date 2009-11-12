@@ -535,6 +535,9 @@
      (eval-when (:load-toplevel :execute)
        ,@body))))
 
+(defvar *strict-checking* nil
+  "If true, issues warnings/errors in more cases, e.g. for valid but non-portable code")
+
 
 ;; Should be true if compiler warnings UI doesn't use source locations, false if it does.
 (defvar *merge-compiler-warnings* t "If false, don't merge compiler warnings with different source locations")

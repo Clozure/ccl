@@ -420,7 +420,8 @@
     (if (constant-symbol-p var)
       (let* ((old-value (%sym-global-value var)))
 	(unless (eq old-value (%unbound-marker-8))
-	  (if (similar-as-constants-p (%sym-global-value var) value)
+	  (if (or (eql old-value value)
+                  (and (not *strict-checking*) (similar-as-constants-p old-value value)))
 	    (return)
 	    ;; This should really be a cell error, allow options other than
 	    ;; redefining (such as don't redefine and continue)...
