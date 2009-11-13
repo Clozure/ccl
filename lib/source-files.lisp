@@ -46,9 +46,14 @@
 
 ;; This used to be weak, but the keys are symbols-with-definitions, so why bother.
 ;; Set a high rehash threshold because space matters more than speed here.
+;; Do not use lock-free hash tables, because they optimize reads at the expense of
+;; writes/rehashes.  Writes/rehashes affect file-compilation speed, which matters.
 (defvar %source-files% (make-hash-table :test #'eq
-                                        :size 13000
-                                        :rehash-threshold .95))
+                                        :size 14000
+                                        :rehash-size 1.8 ;; compensate for high threshold
+                                        :rehash-threshold .95
+                                        :lock-free nil))
+
 
 
 (defvar *direct-methods-only* t
