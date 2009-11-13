@@ -2588,11 +2588,15 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 (defun format-scan-goto (colon atsign count)
   (if atsign 
-    (progn
+    (let* ((orig *format-original-arguments*)
+           (orig-pos (- (length orig) (length *format-arguments*)))
+           (new-pos (or count 0)))
       (format-no-flags colon nil)
-      (setq *format-arguments*
-	    (nthcdr-no-overflow (or count 0) *format-original-arguments*))
-      (setq *format-arguments-variance* 0))
+      ;; After backing up, we may not use up all the arguments we backed over,
+      ;; so even though real variance here is 0, increase variance so we don't
+      ;; complain.
+      (setq *format-arguments-variance* (max 0 (- orig-pos new-pos)))
+      (setq *format-arguments* (nthcdr-no-overflow new-pos orig)))
     (progn
       (when (null count)(setq count 1))
       (when colon (setq count (- count)))
