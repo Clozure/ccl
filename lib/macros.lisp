@@ -1811,6 +1811,8 @@ to open."
        (eval-when (:compile-toplevel)
          (record-function-info ',(maybe-setf-function-name name)
                                ',(multiple-value-bind (bits keyvect) (encode-lambda-list lambda-list t)
+                                   (unless bits ;; verify failed
+                                     (signal-program-error "Invalid lambda list ~s" (car args)))
                                    (%cons-def-info 'defmethod bits keyvect nil specializers qualifiers))
                                ,env))
        (compiler-let ((*nx-method-warning-name* '(,name ,@qualifiers ,specializers)))
