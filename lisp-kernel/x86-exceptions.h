@@ -186,8 +186,8 @@ extern void freebsd_sigreturn(ExceptionInformation *);
 
 #ifdef DARWIN
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV /* Not really, but our Mach handler fakes that */
-#define IS_MAYBE_INT_TRAP(info,xp) ((UC_MCONTEXT(xp)->__es.trapno == 0xd) && (((UC_MCONTEXT(xp)->__es.err)&7)==2))
-#define IS_PAGE_FAULT(info,xp) (UC_MCONTEXT(xp)->__es.trapno == 0xe)
+#define IS_MAYBE_INT_TRAP(info,xp) ((UC_MCONTEXT(xp)->__es.__trapno == 0xd) && (((UC_MCONTEXT(xp)->__es.__err)&7)==2))
+#define IS_PAGE_FAULT(info,xp) (UC_MCONTEXT(xp)->__es.__trapno == 0xe)
 /* The x86 version of sigreturn just needs the context argument; the
    hidden, magic "flavor" argument that sigtramp uses is ignored. */
 #define SIGRETURN(context) DarwinSigReturn(context)

@@ -82,6 +82,7 @@ typedef u32_t unsigned_of_pointer_size;
 #ifdef DARWIN
 #include <sys/signal.h>
 #include <sys/ucontext.h>
+#include <AvailabilityMacros.h>
 
 #ifdef PPC
 #if WORD_SIZE == 64
@@ -109,8 +110,8 @@ typedef struct mcontext *MCONTEXT_T;
 #endif /* PPC */
 
 #ifdef X8664
-/* Broken <i386/ucontext.h> in xcode 2.4 */
-#ifndef _STRUCT_MCONTEXT64 /* A guess at what'll be defined when this is fixed */
+#if MAC_OS_X_VERSION_MIN_REQUIRED <= MAC_OS_X_VERSION_10_4
+/* Broken <i386/ucontext.h> in Mac OS 10.4u SDK */
 struct mcontext64 {
 	x86_exception_state64_t	__es;
 	x86_thread_state64_t 	__ss;	
@@ -124,6 +125,7 @@ typedef ucontext64_t ExceptionInformation;
 #define __fpu_mxcsr fpu_mxcsr
 #define __fpu_xmm0 fpu_xmm0
 #define __rsp rsp
+#define __trapno trapno
 #define __faultvaddr faultvaddr
 #define __err err
 #define __rip rip
@@ -133,12 +135,12 @@ typedef ucontext64_t ExceptionInformation;
 #define __rcx rcx
 #define __r8 r8
 #define __rflags rflags
-#else
+#else /* post-10.4 */
 typedef mcontext_t MCONTEXT_T;
 typedef ucontext_t ExceptionInformation;
 #define UC_MCONTEXT(UC) UC->uc_mcontext
-#endif /* _STRUCT_MCONTEXT64 */
-#endif /* X86_64 */
+#endif
+#endif
 
 #ifdef X8632
 /* Assume rational <i386/ucontext.h> */
@@ -150,7 +152,7 @@ typedef ucontext_t ExceptionInformation;
    foo$UNIX2003 and similar nonsense, and that means getting the old
    names (without leading __ prefixes.)  Confused yet ? */
 
-/* #if STILL_SUPPORT_TIGER */
+#if MAC_OS_X_VERSION_MIN_REQUIRED <= MAC_OS_X_VERSION_10_4
 #define __ss ss
 #define __ds ds
 #define __es es
@@ -164,9 +166,10 @@ typedef ucontext_t ExceptionInformation;
 #define __fpu_xmm0 fpu_xmm0
 #define __fpu_mxcsr fpu_mxcsr
 #define __fpu_stmm0 fpu_stmm0
+#define __trapno trapno
 #define __err err
 #define __faultvaddr faultvaddr
-/* #endif STILL_SUPPORT_TIGER */
+#endif
 
 #define UC_MCONTEXT(UC) UC->uc_mcontext
 typedef mcontext_t MCONTEXT_T;
