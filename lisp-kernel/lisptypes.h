@@ -85,6 +85,33 @@ typedef u32_t unsigned_of_pointer_size;
 #include <AvailabilityMacros.h>
 
 #ifdef PPC
+#if MAC_OS_X_VERSION_MIN_REQUIRED <= MAC_OS_X_VERSION_10_4
+#define __ss ss
+#define __es es
+#define __fs fs
+
+#define __srr0 srr0
+#define __srr1 srr1
+#define __r0 r0
+#define __r1 r1
+#define __r3 r3
+#define __r4 r4
+#define __r5 r5
+#define __r6 r6
+#define __r13 r13
+#define __cr cr
+#define __xer xer
+#define __lr lr
+#define __ctr ctr
+
+#define __dar dar
+#define __dsisr dsisr
+#define __exception exception
+
+#define __fpregs fpregs
+#define __fpscr fpscr
+#endif
+
 #if WORD_SIZE == 64
 #ifdef _STRUCT_UCONTEXT64
 typedef _STRUCT_UCONTEXT64 ExceptionInformation;

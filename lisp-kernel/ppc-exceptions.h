@@ -69,21 +69,21 @@ handle_uuo(ExceptionInformation *, opcode, pc);
 #endif
 
 #ifdef DARWIN
-#define xpGPRvector(x) (&(UC_MCONTEXT(x)->ss.r0))
+#define xpGPRvector(x) (&(UC_MCONTEXT(x)->__ss.__r0))
 #define xpGPR(x,gprno) ((xpGPRvector(x))[gprno])
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (UInt32)(new)
-#define xpPC(x) (*((pc*) &(UC_MCONTEXT(x)->ss.srr0)))
+#define xpPC(x) (*((pc*) &(UC_MCONTEXT(x)->__ss.__srr0)))
 #define set_xpPC(x,new) (xpPC(x) = (pc)(new))
-#define xpLR(x) (*((pc*)(&(UC_MCONTEXT(x)->ss.lr))))
-#define xpCTR(x) (*(pc*)(&(UC_MCONTEXT(x)->ss.ctr)))
-#define xpXER(x) (UC_MCONTEXT(x)->ss.xer)
-#define xpCCR(x) (UC_MCONTEXT(x)->ss.cr)
-#define xpMSR(x) (UC_MCONTEXT(x)->ss.srr1)
-#define xpDSISR(x) (UC_MCONTEXT(x)->es.dsisr)
-#define xpDAR(x) (UC_MCONTEXT(x)->es.dar)
-#define xpTRAP(x) (UC_MCONTEXT(x)->es.exception)
-#define xpFPSCR(x) (UC_MCONTEXT(x)->fs.fpscr)
-#define xpFPRvector(x) (UC_MCONTEXT(x)->fs.fpregs)
+#define xpLR(x) (*((pc*)(&(UC_MCONTEXT(x)->__ss.__lr))))
+#define xpCTR(x) (*(pc*)(&(UC_MCONTEXT(x)->__ss.__ctr)))
+#define xpXER(x) (UC_MCONTEXT(x)->__ss.__xer)
+#define xpCCR(x) (UC_MCONTEXT(x)->__ss.__cr)
+#define xpMSR(x) (UC_MCONTEXT(x)->__ss.__srr1)
+#define xpDSISR(x) (UC_MCONTEXT(x)->__es.__dsisr)
+#define xpDAR(x) (UC_MCONTEXT(x)->__es.__dar)
+#define xpTRAP(x) (UC_MCONTEXT(x)->__es.__exception)
+#define xpFPSCR(x) (UC_MCONTEXT(x)->__fs.__fpscr)
+#define xpFPRvector(x) (UC_MCONTEXT(x)->__fs.__fpregs)
 #define xpFPR(x,fprno) (xpFPRvector(x)[fprno])
 /* There's a bug in some versions of Darwin on G5 processors: FP context
    isn't restored correctly on exit from a signal handler if the integer
@@ -127,7 +127,7 @@ handle_uuo(ExceptionInformation *, opcode, pc);
 #ifdef PPC64
 #define DarwinSigReturn(x)
 #else
-#define DarwinSigReturn(x) (UC_MCONTEXT(x)->ss.xer)^=0x80
+#define DarwinSigReturn(x) (UC_MCONTEXT(x)->__ss.__xer)^=0x80
 #endif
 #define SIGRETURN(context) DarwinSigReturn(context)
 #endif
