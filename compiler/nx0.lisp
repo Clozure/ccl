@@ -1938,7 +1938,7 @@ Or something. Right? ~s ~s" var varbits))
             (nx1-typed-call sym args))))
       (if (lambda-expression-p sym)
         (nx1-lambda-bind (%cadr sym) args (%cddr sym))
-      (nx-error "~S is not a symbol or lambda expression in the form ~S ." sym form)))))
+      (nx-error "In the form ~S, ~S is not a symbol or lambda expression." form sym)))))
 
 (defun nx1-treat-as-call (args)
   (nx1-typed-call (car args) (%cdr args)))
