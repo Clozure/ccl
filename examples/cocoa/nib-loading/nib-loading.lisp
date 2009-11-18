@@ -16,7 +16,7 @@
          (nib-name (%make-nsstring (namestring nib-path)))
          (objects-array (#/arrayWithCapacity: ns:ns-mutable-array 16))
          (dict (#/dictionaryWithObjectsAndKeys: ns:ns-mutable-dictionary
-                    *NSApp* #@"NSNibOwner"
+                    *NSApp* #&NSNibOwner
                     objects-array #&NSNibTopLevelObjects
 		    +null-ptr+))
          (toplevel-objects (list))
