@@ -22,7 +22,7 @@ ASFLAGS = --32
 M4FLAGS = -DLINUX -DX86 -DX8632 -DHAVE_TLS
 CDEFINES = -DLINUX -D_REENTRANT -DX86 -DX8632 -D_GNU_SOURCE -DHAVE_TLS -DUSE_FUTEX #-DGC_INTEGRITY_CHECKING -DDISABLE_EGC
 CDEBUG = -g
-COPT = #-O2
+COPT = -O2
 
 # If the linker supports a "--hash-style=" option, use traditional
 # SysV hash tables.  (If it doesn't support that option, assume

@@ -24,7 +24,7 @@ ASFLAGS = -g --32
 M4FLAGS = -DWIN_32 -DWINDOWS -DX86 -DX8632 -DWIN32_ES_HACK
 CDEFINES = -DWIN_32 -DWINDOWS -D_REENTRANT -DX86 -DX8632 -D_GNU_SOURCE  -D__MSVCRT__ -D__MSVCRT_VERSION__=0x700 -D_WIN32_WINNT=0x0502 -DWIN32_ES_HACK
 CDEBUG = -g
-COPT = #-O2
+COPT = -O2
 
 # If the linker supports a "--hash-style=" option, use traditional
 # SysV hash tables.  (If it doesn't support that option, assume
