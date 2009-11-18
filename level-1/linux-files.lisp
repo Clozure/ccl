@@ -2062,8 +2062,138 @@ not, why not; and what its result code was if it completed."
     (gettimeofday tv)
     (+ (pref tv :timeval.tv_sec) unix-to-universal-time)))
 
+#+windows-target
+(defloadvar *windows-allocation-granularity*
+    (rlet ((info #>SYSTEM_INFO))
+      (#_GetSystemInfo info)
+      (pref info #>SYSTEM_INFO.dwAllocationGranularity)))
+
 #-windows-target
-(progn
+(defun %memory-map-fd (fd len bits-per-element)
+  (let* ((nbytes (+ *host-page-size*
+                    (logandc2 (+ len
+                                 (1- *host-page-size*))
+                              (1- *host-page-size*))))         
+         (ndata-elements
+          (ash len
+               (ecase bits-per-element
+                 (1 3)
+                 (8 0)
+                 (16 -1)
+                 (32 -2)
+                 (64 -3))))
+         (nalignment-elements
+          (ash target::nbits-in-word
+               (ecase bits-per-element
+                 (1 0)
+                 (8 -3)
+                 (16 -4)
+                 (32 -5)
+                 (64 -6)))))
+    (if (>= (+ ndata-elements nalignment-elements)
+            array-total-size-limit)
+      (progn
+        (fd-close fd)
+        (error "Can't make a vector with ~s elements in this implementation." (+ ndata-elements nalignment-elements)))
+      (let* ((addr (#_mmap (%null-ptr)
+                           nbytes
+                           #$PROT_NONE
+                           (logior #$MAP_ANON #$MAP_PRIVATE)
+                           -1
+                           0)))              
+        (if (eql addr (%int-to-ptr (1- (ash 1 target::nbits-in-word)))) ; #$MAP_FAILED
+          (let* ((errno (%get-errno)))
+            (fd-close fd)
+            (error "Can't map ~d bytes: ~a" nbytes (%strerror errno)))
+              ;;; Remap the first page so that we can put a vector header
+              ;;; there; use the first word on the first page to remember
+              ;;; the file descriptor.
+          (progn
+            (#_mmap addr
+                    *host-page-size*
+                    (logior #$PROT_READ #$PROT_WRITE)
+                    (logior #$MAP_ANON #$MAP_PRIVATE #$MAP_FIXED)
+                    -1
+                    0)
+            (setf (pref addr :int) fd)
+            (let* ((header-addr (%inc-ptr addr (- *host-page-size*
+                                                            (* 2 target::node-size)))))
+              
+              (when (> len 0)
+                (let* ((target-addr (%inc-ptr header-addr (* 2 target::node-size))))
+                  (unless (eql target-addr
+                               (#_mmap target-addr
+                                       len
+                                       #$PROT_READ
+                                       (logior #$MAP_PRIVATE #$MAP_FIXED)
+                                       fd
+                                       0))
+                    (let* ((errno (%get-errno)))
+                      (fd-close fd)
+                      (#_munmap addr nbytes)
+                      (error "Mapping failed: ~a" (%strerror errno))))))
+              (values header-addr ndata-elements nalignment-elements))))))))
+
+#+windows-target
+(defun %memory-map-fd (fd len bits-per-element)
+  (let* ((nbytes (+ *windows-allocation-granularity*
+                    (logandc2 (+ len
+                                 (1- *windows-allocation-granularity*))
+                              (1- *windows-allocation-granularity*))))         
+         (ndata-elements
+          (ash len
+               (ecase bits-per-element
+                 (1 3)
+                 (8 0)
+                 (16 -1)
+                 (32 -2)
+                 (64 -3))))
+         (nalignment-elements
+          (ash target::nbits-in-word
+               (ecase bits-per-element
+                 (1 0)
+                 (8 -3)
+                 (16 -4)
+                 (32 -5)
+                 (64 -6)))))
+    (if (>= (+ ndata-elements nalignment-elements)
+            array-total-size-limit)
+      (progn
+        (fd-close fd)
+        (error "Can't make a vector with ~s elements in this implementation." (+ ndata-elements nalignment-elements)))
+      (let* ((mapping (#_CreateFileMappingA (%int-to-ptr fd) (%null-ptr) #$PAGE_READONLY 0 0 (%null-ptr))))
+        (if (%null-ptr-p mapping)
+          (let* ((err (#_GetLastError)))
+            (fd-close fd)
+            (error "Couldn't create a file mapping - ~a." (%windows-error-string err)))
+          (loop
+            (let* ((base (#_VirtualAlloc (%null-ptr) nbytes #$MEM_RESERVE #$PAGE_NOACCESS)))
+              (if (%null-ptr-p base)
+                (let* ((err (#_GetLastError)))
+                  (#_CloseHandle mapping)
+                  (fd-close fd)
+                  (error "Couldn't reserve ~d bytes of address space for mapped file - ~a"
+                         nbytes (%windows-error-string err)))
+                ;; Now we have to free the memory and hope that we can reallocate it ...
+                (progn
+                  (#_VirtualFree base 0 #$MEM_RELEASE)
+                  (unless (%null-ptr-p (#_VirtualAlloc base *windows-allocation-granularity* #$MEM_RESERVE #$PAGE_NOACCESS))
+                    (let* ((fptr (%inc-ptr base *windows-allocation-granularity*)))
+                      (if (%null-ptr-p (#_MapViewOfFileEx mapping #$FILE_MAP_READ 0 0 0 fptr))
+                        (#_VirtualFree base 0 #$MEM_RELEASE)
+                        (let* ((prefix-page (%inc-ptr base (- *windows-allocation-granularity*
+                                                              *host-page-size*))))
+                          (#_VirtualAlloc prefix-page *host-page-size* #$MEM_COMMIT #$PAGE_READWRITE)
+                          (setf (paref prefix-page (:* :address) 0) mapping
+                                (paref prefix-page (:* :address) 1) (%int-to-ptr fd))
+                          (return (values
+                                   (%inc-ptr prefix-page (- *host-page-size*
+                                                            (* 2 target::node-size)))
+                                   ndata-elements
+                                   nalignment-elements)))))))))))))))
+                       
+
+
 (defun map-file-to-ivector (pathname element-type)
   (let* ((upgraded-type (upgraded-array-element-type element-type))
          (upgraded-ctype (specifier-type upgraded-type)))
@@ -2078,72 +2208,12 @@ not, why not; and what its result code was if it completed."
         (let* ((len (fd-size fd)))
           (if (< len 0)
             (signal-file-error fd pathname)
-            (let* ((nbytes (+ *host-page-size*
-                              (logandc2 (+ len
-                                           (1- *host-page-size*))
-                                        (1- *host-page-size*))))
-
-                   (ndata-elements
-                    (ash len
-                         (ecase bits-per-element
-                           (1 3)
-                           (8 0)
-                           (16 -1)
-                           (32 -2)
-                           (64 -3))))
-                   (nalignment-elements
-                    (ash target::nbits-in-word
-                         (ecase bits-per-element
-                           (1 0)
-                           (8 -3)
-                           (16 -4)
-                           (32 -5)
-                           (64 -6)))))
-              (if (>= (+ ndata-elements nalignment-elements)
-                      array-total-size-limit)
-                (progn
-                  (fd-close fd)
-                  (error "Can't make a vector with ~s elements in this implementation." (+ ndata-elements nalignment-elements)))
-                (let* ((addr (#_mmap (%null-ptr)
-                                     nbytes
-                                     #$PROT_NONE
-                                     (logior #$MAP_ANON #$MAP_PRIVATE)
-                                     -1
-                                     0)))              
-                  (if (eql addr (%int-to-ptr (1- (ash 1 target::nbits-in-word)))) ; #$MAP_FAILED
-                    (let* ((errno (%get-errno)))
-                      (fd-close fd)
-                      (error "Can't map ~d bytes: ~a" nbytes (%strerror errno)))
-              ;;; Remap the first page so that we can put a vector header
-              ;;; there; use the first word on the first page to remember
-              ;;; the file descriptor.
-                    (progn
-                      (#_mmap addr
-                              *host-page-size*
-                              (logior #$PROT_READ #$PROT_WRITE)
-                              (logior #$MAP_ANON #$MAP_PRIVATE #$MAP_FIXED)
-                              -1
-                              0)
-                      (setf (pref addr :int) fd)
-                      (let* ((header-addr (%inc-ptr addr (- *host-page-size*
-                                                            (* 2 target::node-size)))))
-                        (setf (pref header-addr :unsigned-long)
-                              (logior (element-type-subtype upgraded-type)
-                                      (ash (+ ndata-elements nalignment-elements) target::num-subtag-bits)))
-                        (when (> len 0)
-                          (let* ((target-addr (%inc-ptr header-addr (* 2 target::node-size))))
-                            (unless (eql target-addr
-                                         (#_mmap target-addr
-                                                 len
-                                                 #$PROT_READ
-                                                 (logior #$MAP_PRIVATE #$MAP_FIXED)
-                                                 fd
-                                                 0))
-                              (let* ((errno (%get-errno)))
-                                (fd-close fd)
-                                (#_munmap addr nbytes)
-                                (error "Mapping failed: ~a" (%strerror errno))))))
-                        (with-macptrs ((v (%inc-ptr header-addr target::fulltag-misc)))
+            (multiple-value-bind (header-address ndata-elements nalignment-elements)
+                (%memory-map-fd fd len bits-per-element)
+              (setf (%get-natural header-address 0)
+                    (logior (element-type-subtype upgraded-type)
+                            (ash (+ ndata-elements nalignment-elements) target::num-subtag-bits)))
+              (with-macptrs ((v (%inc-ptr header-address target::fulltag-misc)))
                           (let* ((vector (rlet ((p :address v)) (%get-object p 0))))
                             ;; Tell some parts of Clozure CL - notably the
                             ;; printer - that this thing off in foreign
@@ -2155,7 +2225,7 @@ not, why not; and what its result code was if it completed."
                                         :element-type upgraded-type
                                         :displaced-to vector
                                         :adjustable t
-                                        :displaced-index-offset nalignment-elements)))))))))))))))
+                                        :displaced-index-offset nalignment-elements))))))))))
 
 (defun map-file-to-octet-vector (pathname)
   (map-file-to-ivector pathname '(unsigned-byte 8)))
@@ -2176,15 +2246,34 @@ not, why not; and what its result code was if it completed."
                           (length v))
                  target::node-size)))))
 
-  
+
+#-windows-target
+(defun %unmap-file (data-address size-in-octets)
+  (let* ((base-address (%inc-ptr data-address (- *host-page-size*)))
+         (fd (pref base-address :int)))
+    (#_munmap base-address (+ *host-page-size* size-in-octets))
+    (fd-close fd)))
+
+#+windows-target
+(defun %unmap-file (data-address size-in-octets)
+  (declare (ignore size-in-octets))
+  (let* ((prefix-page (%inc-ptr data-address (- *host-page-size*)))
+         (prefix-allocation (%inc-ptr data-address (- *windows-allocation-granularity*)))
+         (mapping (paref prefix-page (:* :address) 0))
+         (fd (%ptr-to-int (paref prefix-page (:* :address) 1))))
+    (#_UnmapViewOfFile data-address)
+    (#_CloseHandle mapping)
+    (#_VirtualFree prefix-allocation 0 #$MEM_RELEASE)
+    (fd-close fd)))
+
+    
+
 ;;; Argument should be something returned by MAP-FILE-TO-IVECTOR;
 ;;; this should be called at most once for any such object.
 (defun unmap-ivector (displaced-vector)
   (multiple-value-bind (data-address size-in-octets)
       (mapped-vector-data-address-and-size displaced-vector)
-  (let* ((v (array-displacement displaced-vector))
-         (base-address (%inc-ptr data-address (- *host-page-size*)))
-         (fd (pref base-address :int)))
+  (let* ((v (array-displacement displaced-vector)))
       (let* ((element-type (array-element-type displaced-vector)))
         (adjust-array displaced-vector 0
                       :element-type element-type
@@ -2192,13 +2281,14 @@ not, why not; and what its result code was if it completed."
                       :displaced-index-offset 0))
       (with-lock-grabbed (*heap-ivector-lock*)
         (setq *heap-ivectors* (delete v *heap-ivectors*)))
-      (#_munmap base-address (+ size-in-octets *host-page-size*))      
-      (fd-close fd)
+      (%unmap-file data-address size-in-octets)
       t)))
 
 (defun unmap-octet-vector (v)
   (unmap-ivector v))
 
+#-windows-target
+(progn
 (defun lock-mapped-vector (v)
   (multiple-value-bind (address nbytes)
       (mapped-vector-data-address-and-size v)
@@ -2237,6 +2327,7 @@ not, why not; and what its result code was if it completed."
       (mapped-vector-data-address-and-size v)
     (percentage-of-resident-pages address nbytes)))
 )
+
 
 #+windows-target
 (defun cygpath (winpath)
