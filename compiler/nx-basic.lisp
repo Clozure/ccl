@@ -350,10 +350,10 @@
                      (assq sym *nx-proclaimed-types*))))
     (if decl (%cdr decl) t)))
 
-(defun nx-declared-result-type (sym &optional (env *nx-lexical-environment*))
+(defun nx-declared-result-type (sym &optional (env *nx-lexical-environment*) args)
   (when (symbolp (setq sym (maybe-setf-function-name sym)))
-    (let* ((ftype (find-ftype-decl sym env))
-	   (ctype (if (typep ftype 'ctype) ftype (specifier-type-if-known ftype env))))
+    (let* ((ftype (find-ftype-decl sym env args))
+	   (ctype (and ftype (if (typep ftype 'ctype) ftype (specifier-type-if-known ftype env)))))
       (unless (or (null ctype)
 		  (not (function-ctype-p ctype))
 		  (eq *wild-type* (function-ctype-returns ctype)))
