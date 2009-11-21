@@ -4347,7 +4347,7 @@
 (define-x8664-vinsn misc-set-c-single-float (((val :single-float))
 					     ((v :lisp)
 					      (idx :u32const)))
-  (movsd (:%xmm val) (:@ (:apply + x8664::misc-data-offset (:apply ash idx 2))(:%q v))))
+  (movss (:%xmm val) (:@ (:apply + x8664::misc-data-offset (:apply ash idx 2)) (:%q v))))
 
 (define-x8664-vinsn array-data-vector-ref (((dest :lisp))
 					   ((header :lisp)))
