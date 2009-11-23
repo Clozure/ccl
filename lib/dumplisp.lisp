@@ -269,7 +269,9 @@
     (when (probe-file filename)
       (%delete-file filename))
     (when prepend-fd
-      (setq mode (logior #o111 mode)))
+      ;; Copy the execute mode bits from the prepended "kernel".
+      (let ((prepend-fd-mode (nth-value 1 (%fstat prepend-fd))))
+	(setq mode (logior (logand prepend-fd-mode #o111) mode))))
     (let* ((image-fd (fd-open filename (logior #$O_WRONLY #$O_CREAT) mode)))
       (unless (>= image-fd 0) (signal-file-error image-fd filename))
       (when prepend-fd
