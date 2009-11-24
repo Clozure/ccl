@@ -107,5 +107,16 @@
 			</dict>
 		</dict>
 	</array>
+	<key>NSAppleScriptEnabled</key>
+	<string>YES</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ccl</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -3276,7 +3276,6 @@
                       (let ((view (find-or-make-hemlock-view pathname)))
                         (hi::handle-hemlock-event view thunk)))))
 
-
 (defun hemlock-ext:open-sequence-dialog (&key title sequence action (printer #'prin1))
   (make-instance 'sequence-window-controller
     :title title
@@ -3352,3 +3351,26 @@
 
 (setq ccl::*resident-editor-hook* 'cocoa-edit)
 
+(defclass url-handler-command (ns:ns-script-command)
+  ()
+  (:documentation
+   "Handles AppleEvents that send us URLs to open. Both logical pathnames
+    ('ccl:lib;foo.lisp') and symbols (ccl::*current-process*) can be parsed as a URL
+    with a scheme of 'ccl'. So, we accept those as URLs, and handle them appropriately.")
+  (:metaclass ns:+ns-script-command))
+
+(objc:defmethod #/performDefaultImplementation ((self url-handler-command))
+  (let* ((string (ccl::lisp-string-from-nsstring (#/directParameter self)))
+         (symbol (let ((*read-eval* nil))
+                   (handler-case (read-from-string string)
+                     (error () nil)))))
+    (if symbol
+      (hemlock::edit-definition symbol)
+      (execute-in-gui #'(lambda ()
+                          (find-or-make-hemlock-view
+                           (if (probe-file string)
+                             string
+                             (let ((lpath (merge-pathnames string *.lisp-pathname*)))
+                               (when (probe-file lpath)
+                                 lpath))))))))
+  +null-ptr+)
