@@ -326,6 +326,7 @@
       `(append-2 ,arg0 ,junk)
       call)))
 
+
 (define-compiler-macro apply  (&whole call fn arg0 &rest args)
   ;; Special-case (apply #'make-instance 'name ...)
   ;; Might be good to make this a little more general, e.g., there
@@ -361,7 +362,17 @@
                   (cons
                    original-fn
                    (nreconc (cdr (reverse args)) (%cdr last))))
-            call))))))
+            (if (and (consp last)
+                     (eq (car last) 'quote)
+                     (proper-list-p (cadr last)))
+              (flet ((quotify (arg)
+                       (if (self-evaluating-p arg)
+                         arg
+                         (list 'quote arg))))
+                (cons 'funcall (cons original-fn
+                                     (nreconc (cdr (reverse args)) (mapcar #'quotify (%cadr last))))))
+              call)))))))
+
 
 
 
