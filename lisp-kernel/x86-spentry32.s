@@ -2933,7 +2933,8 @@ local_label(req_loop):
 	__(jne local_label(req_loop))
 	__(movd %mm1,%imm0)
 local_label(opt):
-	__(testb %imm0_bh,%imm0_bh)
+        __(movb %imm0_bh,%imm0_b)
+	__(testb %imm0_b,%imm0_b)
 	__(je local_label(rest_keys))
 	__(btl $initopt_bit,%imm0)
 	__(jc local_label(opt_supp))
@@ -2958,7 +2959,7 @@ local_label(default_simple_opt):
 local_label(opt_supp):
 	__(movb $fulltagmask,%imm0_bh)
 	__(andb %arg_reg_b,%imm0_bh)
-	__(compare_reg_to_nil(%arg_z))
+	__(compare_reg_to_nil(%arg_reg))
 	__(je local_label(default_hard_opt))
 	__(cmpb $fulltag_cons,%imm0_bh)
 	__(jne local_label(badlist))
