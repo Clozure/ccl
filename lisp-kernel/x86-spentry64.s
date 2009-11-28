@@ -3982,7 +3982,7 @@ LocalLabelPrefix[]ffcall:
 	__(push %arg_y)
 	__(push %arg_z)
 	__(push %fn)
-	__ifndef([WINDOWS])
+	__ifndef([TCR_IN_GPR])
 	__(push %save3)  
 	__endif
 	__(push %save2)
@@ -4082,7 +4082,7 @@ LocalLabelPrefix[]ffcall_call_end:
 	__(pop %save0)
 	__(pop %save1)
 	__(pop %save2)
-	__ifndef([WINDOWS])
+	__ifndef([TCR_IN_GPR])
 	__(pop %save3)
 	__endif
 	__(pop %fn)
@@ -4200,7 +4200,7 @@ LocalLabelPrefix[]ffcall_return_registers:
 	__(push %arg_x)
 	__(push %arg_y)
 	__(push %arg_z)
-	__ifndef([WINDOWS])
+	__ifndef([TCR_IN_GPR])
 	__(push %save3)
 	__endif
 	__(push %save2)
@@ -4303,7 +4303,7 @@ LocalLabelPrefix[]ffcall_return_registers_call_end:
 	__(pop %save0)
 	__(pop %save1)
 	__(pop %save2)
-	__ifndef([WINDOWS])
+	__ifndef([TCR_IN_GPR])
 	__(pop %save3)
 	__endif
 	__(pop %arg_z)
@@ -4412,7 +4412,7 @@ _spentry(syscall)
 	__(push %arg_x)
 	__(push %arg_y)
 	__(push %arg_z)
-        __ifndef([WINDOWS])
+        __ifndef([TCR_IN_GPR])
 	 __(push %save3)
         __endif
 	__(push %save2)
@@ -4478,7 +4478,7 @@ _spentry(syscall)
 	__(pop %save0)
 	__(pop %save1)
 	__(pop %save2)
-        __ifndef([WINDOWS])
+        __ifndef([TCR_IN_GPR])
 	 __(pop %save3)
         __endif
 	__(pop %arg_z)
