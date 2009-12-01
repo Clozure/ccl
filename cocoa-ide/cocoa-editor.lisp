@@ -3351,6 +3351,7 @@
 
 (setq ccl::*resident-editor-hook* 'cocoa-edit)
 
+#-cocotron
 (defclass url-handler-command (ns:ns-script-command)
   ()
   (:documentation
@@ -3359,6 +3360,7 @@
     with a scheme of 'ccl'. So, we accept those as URLs, and handle them appropriately.")
   (:metaclass ns:+ns-script-command))
 
+#-cocotron
 (objc:defmethod #/performDefaultImplementation ((self url-handler-command))
   (let* ((string (ccl::lisp-string-from-nsstring (#/directParameter self)))
          (symbol (let ((*read-eval* nil))
