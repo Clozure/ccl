@@ -158,18 +158,18 @@ count_leading_zeros(natural w)
   natural lz;
 #ifdef PPC
 #ifdef PPC64
-  __asm__  ("cntlzd %0,%1" : "=r" (lz) : "r" (w));
+  __asm__ __volatile__("cntlzd %0,%1" : "=r" (lz) : "r" (w));
 #else
-  __asm__  ("cntlzw %0,%1" : "=r" (lz) : "r" (w));
+  __asm__ __volatile__("cntlzw %0,%1" : "=r" (lz) : "r" (w));
 #endif
 #endif /* PPC */
 #ifdef X86
 #ifdef X8664
-  __asm__ ("bsr %1,%0" : "=r" (lz) : "r" (w));
-  __asm__ ("xor $63,%0" : "=r" (lz));
+  __asm__ __volatile__("bsr %1,%0" : "=r" (lz) : "r" (w));
+  __asm__ __volatile__("xor $63,%0" : "=r" (lz));
 #else
-  __asm__ ("bsr %1,%0" : "=r" (lz) : "r" (w));
-  __asm__ ("xor $31,%0" : "=r" (lz));
+  __asm__ __volatile__("bsr %1,%0" : "=r" (lz) : "r" (w));
+  __asm__ __volatile__("xor $31,%0" : "=r" (lz));
 #endif 
 #endif
   return lz;
