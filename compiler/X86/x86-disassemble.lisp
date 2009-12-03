@@ -118,24 +118,24 @@
   (let* ((low (x86-ds-next-u16 ds))
          (high (x86-ds-next-u16 ds)))
     (declare (type (unsigned-byte 16) low high))
-    (logior (the fixnum (ash high 16)) low)))
+    (logior (ash high 16) low)))
 
 (defun x86-ds-next-s32 (ds)
   (let* ((low (x86-ds-next-u16 ds))
          (high (x86-ds-next-s16 ds)))
     (declare (type (unsigned-byte 16) low)
              (type (signed-byte 16) high))
-    (logior (the fixnum (ash high 16)) low)))
+    (logior (ash high 16) low)))
 
 (defun x86-ds-next-u64 (ds)
   (let* ((low (x86-ds-next-u32 ds))
          (high (x86-ds-next-u32 ds)))
-    (logior (the fixnum (ash high 32)) low)))
+    (logior (ash high 32) low)))
 
 (defun x86-ds-next-s64 (ds)
   (let* ((low (x86-ds-next-u32 ds))
          (high (x86-ds-next-s32 ds)))
-    (logior (the fixnum (ash high 32)) low)))
+    (logior (ash high 32) low)))
 
 (defun used-rex (ds value)
   (if (not (zerop value))
