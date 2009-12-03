@@ -241,3 +241,33 @@
     (if (eq (acode-operator x) (%nx1-operator immediate))
       (cadr x)
       (compiler-bug "not an immediate: ~s" x))))
+
+(defun nx2-constant-index-ok-for-type-keyword (idx keyword)
+  (when (>= idx 0)
+    (let* ((arch (backend-target-arch *target-backend*))
+           (limit
+            (case keyword
+              ((:bignum 
+                :single-float 
+                :double-float 
+                :xcode-vector
+                :signed-32-bit-vector 
+                :unsigned-32-bit-vector 
+                :single-float-vector 
+                :simple-string)
+               (arch::target-max-32-bit-constant-index arch))
+              (:bit-vector (arch::target-max-1-bit-constant-index arch))
+              ((:signed-8-bit-vector :unsigned-8-bit-vector)
+               (arch::target-max-8-bit-constant-index arch))
+              ((:signed-16-bit-vector :unsigned-16-bit-vector)
+               (arch::target-max-16-bit-constant-index arch))
+              ((:signed-64-bit-vector 
+                :unsigned-64-bit-vector 
+                :double-float-vector)
+               (arch::target-max-64-bit-constant-index arch))
+              (t
+               ;; :fixnum or node
+               (target-word-size-case
+                (32 (arch::target-max-32-bit-constant-index arch))
+                (64 (arch::target-max-64-bit-constant-index arch)))))))
+      (and limit (< idx limit)))))
