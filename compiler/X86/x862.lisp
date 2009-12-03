@@ -2987,6 +2987,16 @@
   (when (consp (setq form (acode-unwrapped-form-value form)))
     (or (x86-constant-form-p form)
         ;(eq (acode-operator form) (%nx1-operator bound-special-ref))
+        (and (eq (acode-operator form) (%nx1-operator %svref))
+             (destructuring-bind (v i) (acode-operands form)
+               (let* ((idx (acode-fixnum-form-p i)))
+                 (and idx
+                      (nx2-constant-index-ok-for-type-keyword idx :simple-vector)
+                      (consp (setq v (acode-unwrapped-form-value v)))
+                      (eq (acode-operator v) (%nx1-operator lexical-reference))
+                      (let* ((var (cadr v)))
+                        (unless (%ilogbitp $vbitsetq (nx-var-bits var))
+                          (var-nvr var)))))))
         (if (eq (acode-operator form) (%nx1-operator lexical-reference))
           (not (%ilogbitp $vbitsetq (nx-var-bits (%cadr form))))))))
 
@@ -4373,6 +4383,12 @@
                      (setq puntval (x862-puntable-binding-p var val)))
               (progn
                 (nx-set-var-bits var (%ilogior (%ilsl $vbitpunted 1) bits))
+                (let* ((vtype (var-inittype var)))
+                  (when (and vtype (not (eq t vtype)))
+                    (setq puntval (make-acode (%nx1-operator typed-form)
+                                              vtype
+                                              puntval
+                                              nil))))
                 (nx2-replace-var-refs var puntval)
                 (x862-set-var-ea seg var puntval))
               (progn
