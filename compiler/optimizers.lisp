@@ -1221,9 +1221,17 @@
       w
       `(/=-2 ,n0 ,n1))))
 
-(define-compiler-macro + (&optional (n0 nil n0p) (n1 nil n1p) &rest more)
+(define-compiler-macro + (&optional (n0 nil n0p) (n1 nil n1p) &rest more &environment env)
   (if more
-    `(+ (+-2 ,n0 ,n1) ,@more)
+    (if (and (nx-trust-declarations env)
+             (subtypep *nx-form-type* 'fixnum)
+             (nx-form-typep n0 'fixnum env)
+             (nx-form-typep n1 'fixnum env)
+             (dolist (m more t)
+               (unless (nx-form-typep m 'fixnum env)
+                 (return nil))))
+      `(+-2 ,n0 (the fixnum (+ ,n1 ,@more)))
+      `(+ (+-2 ,n0 ,n1) ,@more))
     (if n1p
       `(+-2 ,n0 ,n1)
       (if n0p
