@@ -1300,11 +1300,8 @@
   (with-x86-local-vinsn-macros (seg)
     (if *x862-open-code-inline*
       (let* ((no-overflow (backend-get-next-label)))
-        (! set-bigits-and-header-for-fixnum-overflow target (aref *backend-labels* (or labelno no-overflow)))
-        (! %allocate-uvector target)
-        (! set-bigits-after-fixnum-overflow target)
-        (when labelno
-          (-> labelno))
+        (! handle-fixnum-overflow-inline target (aref *backend-labels* (or labelno no-overflow)))
+        (when labelno (-> labelno))
         (@ no-overflow))
       (if labelno
         (! fix-fixnum-overflow-ool-and-branch target (aref *backend-labels* labelno))
@@ -2510,11 +2507,18 @@
 						  index unscaled-idx
 						  value result-reg)))
 		(:x8664
-                 (multiple-value-setq (src unscaled-idx result-reg)
-                   (x862-three-untargeted-reg-forms seg
+                 (if (and index-known-fixnum
+                          (not safe)
+                          (nx2-constant-index-ok-for-type-keyword index-known-fixnum type-keyword))
+                   (multiple-value-setq (src result-reg unscaled-idx)
+                     (x862-two-untargeted-reg-forms seg
                                                   vector src
-                                                  index unscaled-idx
-                                                  value result-reg))))))
+                                                  value result-reg))
+                   (multiple-value-setq (src unscaled-idx result-reg)
+                     (x862-three-untargeted-reg-forms seg
+                                                      vector src
+                                                      index unscaled-idx
+                                                      value result-reg)))))))
         (when safe
 	  (let* ((*available-backend-imm-temps* *available-backend-imm-temps*)
 		 (value (if (eql (hard-regspec-class result-reg)
