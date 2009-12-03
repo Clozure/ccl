@@ -1105,6 +1105,41 @@
   ;; need 8 bytes of aligned memory for 1 digit bignum
   (movl (:$l (- 8 x8632::fulltag-misc)) (:%l imm)))
 
+(define-x8632-vinsn handle-fixnum-overflow-inline
+    (()
+     ((val :lisp)
+      (no-overflow
+       :label))
+     ((imm (:u32 #.x8632::imm0))
+      (freeptr (:lisp #.x8632::allocptr))))
+  (jo :overflow)
+  (:uuo-section)
+  :overflow
+  (movl (:%l val) (:%l imm))
+  (sarl (:$ub x8632::fixnumshift) (:%l imm))
+  (xorl (:$l #xc0000000) (:%l imm))
+  ;; stash bignum digit
+  (movd (:%l imm) (:%mmx x8632::mm1))
+  ;; set header
+  (movl (:$l x8632::one-digit-bignum-header) (:%l imm))
+  (movd (:%l imm) (:%mmx x8632::mm0))
+  ;; need 8 bytes of aligned memory for 1 digit bignum
+  (movl (:$l (- 8 x8632::fulltag-misc)) (:%l imm))
+  (subl (:%l imm) (:@ (:%seg :rcontext) x8632::tcr.save-allocptr))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.save-allocptr) (:%l freeptr))
+  (rcmpl (:%l freeptr) (:@ (:%seg :rcontext) x8632::tcr.save-allocbase))
+  (ja :no-trap)
+  (uuo-alloc)
+  :no-trap
+  (movd (:%mmx x8632::mm0) (:@ x8632::misc-header-offset (:%l freeptr)))
+  (andb (:$b (lognot x8632::fulltagmask)) (:@ (:%seg :rcontext) x8632::tcr.save-allocptr))
+  ((:not (:pred = freeptr
+		(:apply %hard-regspec-value val)))
+   (movl (:%l freeptr) (:%l val)))
+  (movd (:%mmx x8632::mm1) (:@ x8632::misc-data-offset (:%l val)))
+  (jmp no-overflow))
+
+  
 (define-x8632-vinsn set-bigits-after-fixnum-overflow (()
                                                       ((bignum :lisp)))
   (movd (:%mmx x8632::mm1) (:@ x8632::misc-data-offset (:%l bignum))))  

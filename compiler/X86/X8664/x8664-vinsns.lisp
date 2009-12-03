@@ -1242,6 +1242,38 @@
                                    ((val :imm)))
   (negq (:% val)))
 
+(define-x8664-vinsn handle-fixnum-overflow-inline
+    (()
+     ((val :lisp)
+      (no-overflow :label))
+     ((header (:u64 #.x8664::imm0))
+      (scaled-size (:u64 #.x8664::imm1))
+      (freeptr (:lisp #.x8664::allocptr))))
+  (jo :overflow)
+  (:uuo-section)
+  :overflow
+  (movq (:%q val) (:%q scaled-size))
+  (btcq (:$ub 63) (:%q scaled-size))
+  (sarq (:$ub x8664::fixnumshift) (:%q scaled-size))
+  (btcq (:$ub 60) (:%q scaled-size))
+  (movd (:%q scaled-size) (:%mmx x8664::mm0))
+  (movq (:$l x8664::two-digit-bignum-header) (:%q header))
+  (movq (:$l (- 16 x8664::fulltag-misc)) (:%q scaled-size))
+  (subq (:%q scaled-size) (:rcontext x8664::tcr.save-allocptr))
+  (movq (:rcontext x8664::tcr.save-allocptr) (:%q freeptr))
+  (rcmpq (:%q freeptr) (:rcontext x8664::tcr.save-allocbase))
+  (:byte #x77) (:byte #x02)             ;(ja :no-trap)
+  (uuo-alloc)
+  :no-trap
+  (movq (:%q header) (:@ x8664::misc-header-offset (:%q freeptr)))
+  (andb (:$b (lognot x8664::fulltagmask)) (:rcontext x8664::tcr.save-allocptr))
+  ((:not (:pred = freeptr
+                (:apply %hard-regspec-value val)))
+   (movq (:%q freeptr) (:%q val)))
+  (movq (:%mmx x8664::mm0) (:@ x8664::misc-data-offset (:%q val)))
+  (jmp no-overflow))
+
+    
 ;;; This handles the 1-bit overflow from addition/subtraction/unary negation
 (define-x8664-vinsn set-bigits-and-header-for-fixnum-overflow
     (()
