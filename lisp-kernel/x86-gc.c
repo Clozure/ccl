@@ -528,7 +528,7 @@ mark_root(LispObj n)
       }
 
       if (subtag == subtag_pool) {
-        deref(base, 1) = lisp_nil;
+        deref(n, 1) = lisp_nil;
       }
       
       if (subtag == subtag_weak) {
