@@ -481,7 +481,7 @@
                      (require-list 'list)
                      (require-fixnum 'fixnum)
                      (require-real 'real)
-                     (require-character 'charater)
+                     (require-character 'character)
                      (require-number 'number)
                      (require-symbol 'symbol)
                      (require-s8 '(signed-byte 8))
