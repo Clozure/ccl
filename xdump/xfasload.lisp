@@ -81,6 +81,8 @@
 (defparameter *xload-dynamic-space-size* (ash 1 18))
 (defparameter *xload-managed-static-space-address* nil)
 (defparameter *xload-managed-static-space-size* 0)
+(defparameter *xload-static-cons-space-address* nil)
+(defparameter *xload-static-cons-space-size* 0)
 
 (defstruct backend-xload-info
   name
@@ -110,7 +112,8 @@
     (setq *xload-dynamic-space-address*
           (+ *xload-image-base-address*
              *xload-purespace-reserve*))
-    (setq *xload-managed-static-space-address* *xload-dynamic-space-address*)
+    (setq *xload-managed-static-space-address* *xload-dynamic-space-address*
+          *xload-static-cons-space-address* *xload-dynamic-space-address*)
     (setq *xload-static-space-address*
           (backend-xload-info-static-space-address
            *xload-target-backend*))
@@ -344,6 +347,7 @@
 (defparameter *xload-readonly-space* nil)
 (defparameter *xload-static-space* nil)
 (defparameter *xload-managed-static-space* nil)
+(defparameter *xload-static-cons-space* nil)
 (defparameter *xload-symbols* nil)
 (defparameter *xload-symbol-addresses* nil)
 (defparameter *xload-package-alist* nil)         ; maps real package to clone
@@ -1028,6 +1032,7 @@
          (*xload-dynamic-space* (init-xload-space *xload-dynamic-space-address* *xload-dynamic-space-size* area-dynamic))
 	 (*xload-static-space* (init-xload-space *xload-static-space-address* *xload-static-space-size* area-static))
          (*xload-managed-static-space* (init-xload-space *xload-managed-static-space-address* *xload-managed-static-space-size* area-managed-static))
+         (*xload-static-cons-space* (init-xload-space *xload-static-cons-space-address* *xload-static-cons-space-size* area-static-cons))
 						 
          (*xload-package-alist* (xload-clone-packages (xload-initial-packages)))
          (*xload-cold-load-functions* nil)
@@ -1136,10 +1141,11 @@
   (declare (ftype (function (t t list)) write-image-file))
   (write-image-file output-file
 		    heap-start
-		    (list *xload-readonly-space*
-			  *xload-static-space*
+		    (list *xload-static-space*
+			  *xload-readonly-space*
 			  *xload-dynamic-space*
-                          *xload-managed-static-space*)))
+                          *xload-managed-static-space*
+                          *xload-static-cons-space*)))
 		    
 
 
@@ -1179,11 +1185,59 @@
 (defxloadfaslop $fasl-sfloat (s)
   (%epushval s (xload-make-sfloat *xload-readonly-space* (%fasl-read-long s))))
 
+(defun xload-read-utf-8-string (s v o nchars nextra)
+  (declare (fixnum nchars nextra))
+  (if (eql 0 nextra)
+    (dotimes (i nchars)
+      (setf (u32-ref v (+ o (* i 4) *xload-target-misc-data-offset*))
+            (%fasl-read-byte s)) )
+    (flet ((trailer-byte ()
+             (when (> nextra 0)
+               (decf nextra)
+               (let* ((b (%fasl-read-byte s)))
+                 (declare ((unsigned-byte 8) b))
+                 (and (>= b #x80)
+                      (< b #xc0)
+                      (logand b #x3f))))))
+      (declare (inline trailer-byte))
+      (dotimes (i nchars)
+        (let* ((b0 (%fasl-read-byte s)))
+          (declare ((unsigned-byte 8) b0))
+          (setf (u32-ref v (+ o (* i 4) *xload-target-misc-data-offset*))
+                (or
+                 (cond ((< b0 #x80) b0)
+                       ((and (>= b0 #xc2)
+                             (< b0 #xe0))
+                        (let* ((b1 (trailer-byte)))
+                          (and b1 (logior (ash (logand b0 #x1f) 6) b1))))
+                       ((and (>= b0 #xe0)
+                             (< b0 #xf0))
+                        (let* ((b1 (trailer-byte))
+                               (b2 (trailer-byte)))
+                          (and b1 b2 (logior (ash (logand b0 #x0f) 12)
+                                             (logior (ash b1 6)
+                                                     b2)))))
+                       ((and (>= b0 #xf0)
+                             (< b0 #xf5))
+                        (let* ((b1 (trailer-byte))
+                               (b2 (trailer-byte))
+                               (b3 (trailer-byte)))
+                          (and b1
+                               b2
+                               b3
+                               (logior (ash (logand b0 #x7) 18)
+                                       (logior (ash b1 12)
+                                               (logior (ash b2 6)
+                                                       b3)))))))
+                 (char-code #\Replacement_Character))))))))
+
+
 (defxloadfaslop $fasl-vstr (s)
-  (let* ((n (%fasl-read-count s)))
-    (multiple-value-bind (str v o) (xload-make-ivector *xload-readonly-space* :simple-string n)
+  (let* ((nchars (%fasl-read-count s))
+         (nextra (%fasl-read-count s)))
+    (multiple-value-bind (str v o) (xload-make-ivector *xload-readonly-space* :simple-string nchars)
       (%epushval s str)
-      (%fasl-read-n-bytes s v (+ o *xload-target-misc-data-offset*) n)
+      (xload-read-utf-8-string s v o nchars nextra)
       str)))
 
 (defxloadfaslop $fasl-nvstr (s)
@@ -1194,11 +1248,11 @@
         (256
          (dotimes (i n)
            (setf (u8-ref v (+ o i *xload-target-misc-data-offset*))
-                 (%fasl-read-count s))))
+                 (%fasl-read-byte s))))
         (t
          (dotimes (i n)
            (setf (u32-ref v (+ o (* i 4) *xload-target-misc-data-offset*))
-                 (%fasl-read-count s)))))
+                 (%fasl-read-byte s)))))
       str)))
 
 ;;; Allegedly deprecated.

@@ -467,7 +467,14 @@ be somewhat larger than what was specified)."
   (set-nargs 2)
   (jmp-subprim .SPnvalret))
 
-  
+
+(defx86lapfunction %ensure-static-conses ()
+  (check-nargs 0)
+  (movl ($ arch::gc-trap-function-ensure-static-conses) (% imm0.l))
+  (uuo-gc-trap)
+  (movl ($ (target-nil-value)) (% arg_z.l))
+  (single-value-return))
+
 
 
 ;;; offset is a fixnum, one of the x8664::kernel-import-xxx constants.

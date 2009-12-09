@@ -773,7 +773,7 @@ tenure_to_area(area *target)
   }
    
   a->markbits = new_markbits;
-  lisp_global(OLDSPACE_DNODE_COUNT) = area_dnode(curfree, lisp_global(HEAP_START));
+  lisp_global(OLDSPACE_DNODE_COUNT) = area_dnode(curfree, lisp_global(REF_BASE));
 }
 
 
@@ -808,7 +808,7 @@ untenure_from_area(area *from)
     if (from == tenured_area) {
       /* Everything's in the dynamic area */
       lisp_global(OLDEST_EPHEMERAL) = 0;
-      lisp_global(OLDSPACE_DNODE_COUNT) = 0;
+      lisp_global(OLDSPACE_DNODE_COUNT) = area_dnode(managed_static_area->active,managed_static_area->low);
 
     }
   }
@@ -943,15 +943,6 @@ condemn_area_chain(area *a, TCR *tcr)
   UNLOCK(lisp_global(TCR_AREA_LOCK),tcr);
 }
 
-void
-release_readonly_area()
-{
-  area *a = readonly_area;
-  UnMapMemory(a->low,align_to_power_of_2(a->active-a->low, log2_page_size));
-  a->active = a->low;
-  a->ndnodes = 0;
-  pure_space_active = pure_space_start;
-}
 
 void
 protect_watched_areas()

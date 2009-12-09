@@ -923,73 +923,75 @@ forward_memoized_area(area *a, natural num_memo_dnodes)
   hash_table_vector_header *hashp = NULL;
   Boolean header_p;
 
-  if (GCDebug) {
-    check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
-  }
+  if (num_memo_dnodes) {
+    if (GCDebug) {
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
+    }
 
-  /* This is pretty straightforward, but we have to note
-     when we move a key in a hash table vector that wants
-     us to tell it about that. */
+    /* This is pretty straightforward, but we have to note
+       when we move a key in a hash table vector that wants
+       us to tell it about that. */
 
-  set_bitidx_vars(refbits, 0, bitsp, bits, bitidx);
-  while (memo_dnode < num_memo_dnodes) {
-    if (bits == 0) {
-      int remain = nbits_in_word - bitidx;
-      memo_dnode += remain;
-      p += (remain+remain);
-      bits = *++bitsp;
-      bitidx = 0;
-    } else {
-      nextbit = count_leading_zeros(bits);
-      if ((diff = (nextbit - bitidx)) != 0) {
-        memo_dnode += diff;
-        bitidx = nextbit;
-        p += (diff+diff);
-      }
-      x1 = p[0];
-      x2 = p[1];
-      tag_x1 = fulltag_of(x1);
-      bits &= ~(BIT0_MASK >> bitidx);
-      header_p = (nodeheader_tag_p(tag_x1));
-
-      if (header_p &&
-          (header_subtag(x1) == subtag_hash_vector)) {
-        hashp = (hash_table_vector_header *) p;
-        if (hashp->flags & nhash_track_keys_mask) {
-          hash_dnode_limit = memo_dnode + ((header_element_count(x1)+2)>>1);
-        } else {
-          hashp = NULL;
+    set_bitidx_vars(refbits, 0, bitsp, bits, bitidx);
+    while (memo_dnode < num_memo_dnodes) {
+      if (bits == 0) {
+        int remain = nbits_in_word - bitidx;
+        memo_dnode += remain;
+        p += (remain+remain);
+        bits = *++bitsp;
+        bitidx = 0;
+      } else {
+        nextbit = count_leading_zeros(bits);
+        if ((diff = (nextbit - bitidx)) != 0) {
+          memo_dnode += diff;
+          bitidx = nextbit;
+          p += (diff+diff);
         }
-      }
+        x1 = p[0];
+        x2 = p[1];
+        tag_x1 = fulltag_of(x1);
+        bits &= ~(BIT0_MASK >> bitidx);
+        header_p = (nodeheader_tag_p(tag_x1));
+
+        if (header_p &&
+            (header_subtag(x1) == subtag_hash_vector)) {
+          hashp = (hash_table_vector_header *) p;
+          if (hashp->flags & nhash_track_keys_mask) {
+            hash_dnode_limit = memo_dnode + ((header_element_count(x1)+2)>>1);
+          } else {
+            hashp = NULL;
+          }
+        }
 
 
-      if (! header_p) {
-        new = node_forwarding_address(x1);
-        if (new != x1) {
+        if (! header_p) {
+          new = node_forwarding_address(x1);
+          if (new != x1) {
+            *p = new;
+          }
+        }
+        p++;
+
+        new = node_forwarding_address(x2);
+        if (new != x2) {
           *p = new;
+          if (memo_dnode < hash_dnode_limit) {
+            /* If this code is reached, 'hashp' is non-NULL and pointing
+               at the header of a hash_table_vector, and 'memo_dnode' identifies
+               a pair of words inside the hash_table_vector.  It may be
+               hard for program analysis tools to recognize that, but I
+               believe that warnings about 'hashp' being NULL here can
+               be safely ignored. */
+            hashp->flags |= nhash_key_moved_mask;
+            hash_dnode_limit = 0;
+            hashp = NULL;
+          }
         }
-      }
-      p++;
+        p++;
+        memo_dnode++;
+        bitidx++;
 
-      new = node_forwarding_address(x2);
-      if (new != x2) {
-        *p = new;
-        if (memo_dnode < hash_dnode_limit) {
-          /* If this code is reached, 'hashp' is non-NULL and pointing
-             at the header of a hash_table_vector, and 'memo_dnode' identifies
-             a pair of words inside the hash_table_vector.  It may be
-             hard for program analysis tools to recognize that, but I
-             believe that warnings about 'hashp' being NULL here can
-             be safely ignored. */
-          hashp->flags |= nhash_key_moved_mask;
-          hash_dnode_limit = 0;
-          hashp = NULL;
-        }
       }
-      p++;
-      memo_dnode++;
-      bitidx++;
-
     }
   }
 }
@@ -1015,42 +1017,36 @@ forward_tcr_tlb(TCR *tcr)
 void
 reclaim_static_dnodes()
 {
-  natural nstatic = tenured_area->static_dnodes, i, bits, bitnum;
+  natural nstatic = tenured_area->static_dnodes, 
+    i, 
+    bits, 
+    bitnum,
+    nfree = 0,
+    nstatic_conses = area_dnode(static_cons_area->high, static_cons_area->low);
   cons *c = (cons *)tenured_area->low, *d;
   bitvector bitsp = GCmarkbits;
   LispObj head = lisp_global(STATIC_CONSES);
 
-  if (nstatic) {
-    if (head) {
-      for (i = 0; i < nstatic; i+= nbits_in_word, c+= nbits_in_word) {
-        bits = *bitsp++;
-        if (bits != ALL_ONES) {
-          for (bitnum = 0; bitnum < nbits_in_word; bitnum++) {
-            if (! (bits & (BIT0_MASK>>bitnum))) {
-              d = c + bitnum;
-              d->car = 0;
-              d->cdr = head;
-              head = ((LispObj)d)+fulltag_cons;
-            }
-          }
-        }
-      }
-      lisp_global(STATIC_CONSES) = head;
-    } else {
-      for (i = 0; i < nstatic; i+= nbits_in_word, c+= nbits_in_word) {
-        bits = *bitsp++;
-        if (bits != ALL_ONES) {
-          for (bitnum = 0; bitnum < nbits_in_word; bitnum++) {
-            if (! (bits & (BIT0_MASK>>bitnum))) {
-              d = c + bitnum;
-              d->car = 0;
-              d->cdr = 0;
-            }
+  for (i = 0; i < nstatic; i+= nbits_in_word, c+= nbits_in_word) {
+    bits = *bitsp++;
+    if (bits != ALL_ONES) {
+      for (bitnum = 0; bitnum < nbits_in_word; bitnum++) {
+        if (! (bits & (BIT0_MASK>>bitnum))) {
+          d = c + bitnum;
+          d->car = 0;
+          if (i < nstatic_conses) {                
+            d->cdr = head;
+            head = ((LispObj)d)+fulltag_cons;
+            nfree++;
+          } else {
+            d->cdr = 0;
           }
         }
       }
     }
   }
+  lisp_global(STATIC_CONSES) = head;
+  lisp_global(FREE_STATIC_CONSES)+=(nfree<<fixnumshift);
 }
 
 Boolean
@@ -1085,6 +1081,81 @@ Boolean just_purified_p = false;
 #warning recursive marker disabled for testing; remember to re-enable it
 #endif
 
+
+Boolean
+mark_static_ref(LispObj n, BytePtr dynamic_start, natural ndynamic_dnodes)
+{
+  int tag_n = fulltag_of(n);
+  natural dyn_dnode;
+
+  if (nodeheader_tag_p(tag_n)) {
+    return (header_subtag(n) == subtag_hash_vector);
+  }
+ 
+  if (is_node_fulltag (tag_n)) {
+    dyn_dnode = area_dnode(n, dynamic_start);
+    if (dyn_dnode < ndynamic_dnodes) {
+      mark_root(n);             /* May or may not mark it */
+      return true;              /* but return true 'cause it's a dynamic node */
+    }
+  }
+  return false;                 /* Not a heap pointer or not dynamic */
+}
+
+void
+mark_managed_static_refs(area *a, BytePtr low_dynamic_address, natural ndynamic_dnodes)
+{
+  bitvector refbits = a->refbits;
+  LispObj *p = (LispObj *) a->low, x1, x2;
+  natural inbits, outbits, bits, bitidx, *bitsp, nextbit, diff, memo_dnode = 0,
+    num_memo_dnodes = a->ndnodes;
+  Boolean keep_x1, keep_x2;
+
+  if (num_memo_dnodes) {
+    if (GCDebug) {
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
+    }
+
+ 
+    set_bitidx_vars(refbits, 0, bitsp, bits, bitidx);
+    inbits = outbits = bits;
+    while (memo_dnode < num_memo_dnodes) {
+      if (bits == 0) {
+        int remain = nbits_in_word - bitidx;
+        memo_dnode += remain;
+        p += (remain+remain);
+        if (outbits != inbits) {
+          *bitsp = outbits;
+        }
+        bits = *++bitsp;
+        inbits = outbits = bits;
+        bitidx = 0;
+      } else {
+        nextbit = count_leading_zeros(bits);
+        if ((diff = (nextbit - bitidx)) != 0) {
+          memo_dnode += diff;
+          bitidx = nextbit;
+          p += (diff+diff);
+        }
+        x1 = *p++;
+        x2 = *p++;
+        bits &= ~(BIT0_MASK >> bitidx);
+        keep_x1 = mark_static_ref(x1, low_dynamic_address, ndynamic_dnodes);
+        keep_x2 = mark_static_ref(x2, low_dynamic_address, ndynamic_dnodes);
+        if ((keep_x1 == false) && 
+            (keep_x2 == false)) {
+          outbits &= ~(BIT0_MASK >> bitidx);
+        }
+        memo_dnode++;
+        bitidx++;
+      }
+    }
+    if (GCDebug) {
+      p = (LispObj *) a->low;
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
+    }
+  }
+}
 
 void 
 gc(TCR *tcr, signed_natural param)
@@ -1261,6 +1332,8 @@ gc(TCR *tcr, signed_natural param)
       mark_memoized_area(tenured_area, area_dnode(a->low,tenured_area->low));
     }
 
+    mark_managed_static_refs(managed_static_area,low_markable_address,area_dnode(a->active,low_markable_address));
+    
     other_tcr = tcr;
     do {
       mark_tcr_xframes(other_tcr);
@@ -1393,6 +1466,7 @@ gc(TCR *tcr, signed_natural param)
       forward_memoized_area(tenured_area, area_dnode(a->low, tenured_area->low));
     }
   
+    forward_memoized_area(managed_static_area,area_dnode(managed_static_area->active,managed_static_area->low));
     a->active = (BytePtr) ptr_from_lispobj(compact_dynamic_heap());
     if (to) {
       tenure_to_area(to);

@@ -110,7 +110,7 @@
    #+linuxppc-target #x31000000
    :nil-relative-symbols ppc::*ppc-nil-relative-symbols*
    :static-space-init-function 'ppc32-initialize-static-space
-   :purespace-reserve (ash 64 20)
+   :purespace-reserve (ash 128 20)
    :static-space-address (ash 2 12)
 ))
 
@@ -132,10 +132,10 @@
    :compiler-target-name
    #+linuxppc-target :linuxppc64
    #+darwinppc-target :darwinppc64
-   :image-base-address #x100000000
+   :image-base-address #+linuxppc-target #x50000000000 #+darwinppc-target #x300000000000
    :nil-relative-symbols ppc::*ppc-nil-relative-symbols*
    :static-space-init-function 'ppc64-initialize-static-space
-   :purespace-reserve (ash 64 20)
+   :purespace-reserve (ash 128 30)
    :static-space-address (ash 2 12)
    ))
 

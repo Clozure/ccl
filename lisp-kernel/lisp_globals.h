@@ -53,15 +53,15 @@ extern LispObj lisp_nil;
 #define LEXPR_RETURN (-30)      /* magic &lexpr cleanup code */
 #define LEXPR_RETURN1V (-31)    /* single-value &lexpr cleanup code */
 #define IN_GC (-32)             /* non-zero when lisp addresses may be invalid */
-#define METERING_INFO (-33)     /* address of lisp_metering global */
+#define FREE_STATIC_CONSES (-33)     /* length of freelist */
 #define OBJC_2_END_CACTCH (-34)          /* address of ObjC 2.0 objc_end_catch() */
 #define SHORT_FLOAT_ZERO (-35)  /* low half of 1.0d0 */
 #define DOUBLE_FLOAT_ONE (-36)  /* high half of 1.0d0 */
-#define LISP_RETURN_HOOK (-37)	/* install lisp exception handling */
+#define STATIC_CONS_AREA (-37)	/* static_cons_area */
 #define LISP_EXIT_HOOK (-38)	/* install foreign exception handling */
 #define OLDEST_EPHEMERAL (-39)  /* doubleword address of oldest ephemeral object or 0 */
 #define TENURED_AREA (-40)      /* the tenured area */
-#define ERRNO (-41)             /* address of errno */
+#define REF_BASE (-41)          /* start of oldest pointer-bearing area */
 #define ARGV (-42)              /* pointer to &argv[0] */
 #define HOST_PLATFORM (-43)	/* for platform-specific initialization */
 #define BATCH_FLAG (-44)	/* -b arg */

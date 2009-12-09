@@ -75,7 +75,7 @@ num_lisp_globals = 48		 /* MUST UPDATE THIS !!!   */
 	 _node(batch_flag)	        /* -b */
 	 _node(host_platform)	        /* for runtime platform-specific stuff   */
 	 _node(argv)			/* address of argv[0]   */
-	 _node(errno)		        /* ADDRESS of errno   */
+	 _node(ref_base)                /* start of oldest pointer-bearing area */
 	 _node(tenured_area) 		/* the tenured_area   */
 	 _node(oldest_ephemeral) 	/* dword address of oldest ephemeral object or 0   */
 	 _node(lisp_exit_hook)		/* install foreign exception_handling   */
@@ -90,7 +90,7 @@ num_lisp_globals = 48		 /* MUST UPDATE THIS !!!   */
 	 _node(all_areas) 		/* doubly-linked list of all memory areas   */
 	 _node(kernel_path)	 	/* real executable name */
 	 _node(objc2_begin_catch)	/* objc_begin_catch   */
-	 _node(BAD_current_vs) 		/* current value-stack area   */
+	 _node(stack_size) 		/* from the command line */
 	 _node(statically_linked)	/* non-zero if -static   */
 	 _node(heap_end)                /* end of lisp heap   */
 	 _node(heap_start)              /* start of lisp heap   */

@@ -20,7 +20,7 @@
 #include "area.h"
 
 
-extern area *nilreg_area, *tenured_area, *g2_area, *g1_area, *managed_static_area, *readonly_area;
+extern area *nilreg_area, *tenured_area, *g2_area, *g1_area, *managed_static_area, *readonly_area, *static_cons_area;
 extern area *all_areas;
 extern int cache_block_size;
 

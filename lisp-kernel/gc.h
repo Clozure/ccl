@@ -142,9 +142,9 @@ void report_paging_info_delta(FILE*, paging_info *, paging_info *);
 #define GC_TRAP_FUNCTION_GET_LISP_HEAP_THRESHOLD 16
 #define GC_TRAP_FUNCTION_SET_LISP_HEAP_THRESHOLD 17
 #define GC_TRAP_FUNCTION_USE_LISP_HEAP_THRESHOLD 18
+#define GC_TRAP_FUNCTION_ENSURE_STATIC_CONSES 19
 #define GC_TRAP_FUNCTION_EGC_CONTROL 32
 #define GC_TRAP_FUNCTION_CONFIGURE_EGC 64
-#define GC_TRAP_FUNCTION_SET_HONS_AREA_SIZE 128 /* deprecated */
 #define GC_TRAP_FUNCTION_FREEZE 129
 #define GC_TRAP_FUNCTION_THAW 130
 
@@ -239,5 +239,8 @@ typedef enum {
 typedef void (*xmacptr_dispose_fn)(void *);
 
 extern xmacptr_dispose_fn xmacptr_dispose_functions[];
+
+extern bitvector global_mark_ref_bits, dynamic_mark_ref_bits;
+
 
 #endif                          /* __GC_H__ */

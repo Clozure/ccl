@@ -427,6 +427,13 @@ be somewhat larger than what was specified)."
   (set-nargs 2)
   (jmp-subprim .SPnvalret))
 
+(defx8632lapfunction %ensure-static-conses ()
+  (check-nargs 0)
+  (movl ($ arch::gc-trap-function-ensure-static-conses) (% imm0))
+  (uuo-gc-trap)
+  (movl ($ (target-nil-value)) (% arg_z))
+  (single-value-return))
+
 ;;; offset is a fixnum, one of the x8632::kernel-import-xxx constants.
 ;;; Returns that kernel import, a fixnum.
 (defx8632lapfunction %kernel-import ((offset arg_z))

@@ -1144,46 +1144,27 @@ are running on, or NIL if we can't find any useful information."
               100.0d0)))
   (values))
 
-;; The number of words to allocate for static conses when the user requests
-;; one and we don't have any left over
-(defparameter *static-cons-chunk* 1048576)
 
-(defun initialize-static-cons ()
-  "Activates collection of garbage conses in the static-conses
-   list and allocates initial static conses."
-  ; There might be a race here when multiple threads call this
-  ; function.  However, the discarded static conses will become
-  ; garbage and be added right back to the list.  No harm here
-  ; except for additional garbage collections.
-  (%set-kernel-global 'static-conses nil)
-  (allocate-static-conses))
-
-(defun allocate-static-conses ()
-  "Allocates some memory, freezes it and lets it become garbage.
-   This will add the memory to the list of free static conses."
-  (let* ((nfullgc (full-gccount)))
-    (multiple-value-bind (head tail)
-        (%allocate-list 0 *static-cons-chunk*)
-      (if (eql (full-gccount) nfullgc)
-        (freeze)
-        (flash-freeze))
-      (%augment-static-conses head tail))))
 
 (defun static-cons (car-value cdr-value)
   "Allocates a cons cell that doesn't move on garbage collection,
    and thus doesn't trigger re-hashing when used as a key in a hash
    table.  Usage is equivalent to regular CONS."
-  (when (eq (%get-kernel-global 'static-conses) 0)
-    (initialize-static-cons))
-  (let ((cell (%atomic-pop-static-cons)))
-    (if cell
-      (progn
-	(setf (car cell) car-value)
-	(setf (cdr cell) cdr-value)
-	cell)
-      (progn
-	(allocate-static-conses)
-	(static-cons car-value cdr-value)))))
+  (loop
+    (let ((cell (%atomic-pop-static-cons)))
+      (if cell
+        (progn
+          (setf (car cell) car-value)
+          (setf (cdr cell) cdr-value)
+          (return cell))
+        (progn
+          (%ensure-static-conses))))))
+
+(defun free-static-conses ()
+  (%get-kernel-global free-static-conses))
+
+(defun reserved-static-conses ()
+  (%fixnum-ref-natural (%get-kernel-global static-cons-area) target::area.ndnodes))
 	
 
 (defparameter *weak-gc-method-names*

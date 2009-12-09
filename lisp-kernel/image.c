@@ -230,8 +230,57 @@ load_image_section(int fd, openmcl_image_section_header *sect)
     break;
 
   case AREA_MANAGED_STATIC:
-    a = new_area(pure_space_limit, pure_space_limit, AREA_MANAGED_STATIC);
+    a = new_area(pure_space_limit, pure_space_limit+align_to_power_of_2(mem_size,log2_page_size), AREA_MANAGED_STATIC);
+    a->active = a->low+mem_size;
+    if (mem_size) {
+      natural
+        refbits_size = align_to_power_of_2((((mem_size>>dnode_shift)+7)>>3),
+                                           log2_page_size);
+      if (!MapFile(a->low,
+                   pos,
+                   align_to_power_of_2(mem_size,log2_page_size),
+                   MEMPROTECT_RWX,
+                   fd)) {
+        return;
+      }
+      /* Need to save/restore persistent refbits. */
+      if (!MapFile(global_mark_ref_bits,
+                   align_to_power_of_2(pos+mem_size,log2_page_size),
+                   refbits_size,
+                   MEMPROTECT_RW,
+                   fd)) {
+        return;
+      }
+      advance += refbits_size;
+    }
     sect->area = a;
+    a->ndnodes = area_dnode(a->active, a->low);
+    managed_static_area = a;
+    lisp_global(REF_BASE) = (LispObj) a->low;
+    break;
+
+    /* In many respects, the static_cons_area is part of the dynamic
+       area; it's physically adjacent to it (immediately precedes the
+       dynamic area in memory) and its contents are subject to full
+       GC (but not compaction.)  It's maintained as a seperate section
+       in the image file, at least for now. */
+
+
+  case AREA_STATIC_CONS:
+    addr = (void *) lisp_global(HEAP_START);
+    a = new_area(addr-align_to_power_of_2(mem_size,log2_page_size), addr, AREA_STATIC_CONS);
+    if (mem_size) {      
+      if (!MapFile(a->low,
+                   pos,
+                   align_to_power_of_2(mem_size,log2_page_size),
+                   MEMPROTECT_RWX,
+                   fd)) {
+        return;
+      }
+    }
+    a->ndnodes = area_dnode(a->active, a->low);
+    sect->area = a;
+    static_cons_area = a;
     break;
 
   default:
@@ -298,6 +347,12 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
         break;
         
       case AREA_READONLY:
+        if (bias && 
+            (managed_static_area->active != managed_static_area->low)) {
+          UnProtectMemory(a->low, a->active-a->low);
+          relocate_area_contents(a, bias);
+          ProtectMemory(a->low, a->active-a->low);
+        }
         readonly_area = a;
 	add_area_holding_area_lock(a);
 	break;
@@ -310,10 +365,12 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
         if (bias) {
           relocate_area_contents(a, bias);
         }
-        managed_static_area = a;
         add_area_holding_area_lock(a);
         break;
+      case AREA_STATIC_CONS:
+        break;
       case AREA_DYNAMIC:
+        lower_heap_start(static_cons_area->low,a);
         if (bias) {
           relocate_area_contents(a, bias);
         }
@@ -417,10 +474,26 @@ save_application(unsigned fd, Boolean egc_was_enabled)
   signed_natural section_data_delta;
 #endif
 
+  /*
+    Coerce macptrs to dead_macptrs.
+  */
+  
+  prepare_to_write_dynamic_space(active_dynamic_area);
+
+  /* 
+     If we ever support continuing after saving an image,
+     undo this .. */
+
+  if (static_cons_area->high > static_cons_area->low) {
+    active_dynamic_area->low = static_cons_area->high;
+    tenured_area->static_dnodes -= area_dnode(static_cons_area->high, static_cons_area->low);
+  }
+
   areas[0] = nilreg_area; 
-  areas[1] = active_dynamic_area;
-  areas[2] = readonly_area;
+  areas[1] = readonly_area;
+  areas[2] = active_dynamic_area;
   areas[3] = managed_static_area;
+  areas[4] = static_cons_area;
   for (i = 0; i < NUM_IMAGE_SECTIONS; i++) {
     a = areas[i];
     sections[i].code = a->code;
@@ -459,11 +532,6 @@ save_application(unsigned fd, Boolean egc_was_enabled)
   }
 #endif
 
-  /*
-    Coerce macptrs to dead_macptrs.
-  */
-  
-  prepare_to_write_dynamic_space(active_dynamic_area);
 
   {
     area *g0_area = g1_area->younger;
@@ -482,6 +550,7 @@ save_application(unsigned fd, Boolean egc_was_enabled)
   */
   for (i = MIN_KERNEL_GLOBAL; i < 0; i++) {
     switch (i) {
+    case FREE_STATIC_CONSES:
     case FWDNUM:
     case GC_NUM:
     case STATIC_CONSES:
@@ -504,6 +573,15 @@ save_application(unsigned fd, Boolean egc_was_enabled)
     n = sections[i].memory_size;
     if (writebuf(fd, a->low, n)) {
 	return errno;
+    }
+    if (n &&  ((sections[i].code) == AREA_MANAGED_STATIC)) {
+      natural ndnodes = area_dnode(a->active, a->low);
+      natural nrefbytes = align_to_power_of_2((ndnodes+7)>>3,log2_page_size);
+
+      seek_to_next_page(fd);
+      if (writebuf(fd,(char*)a->refbits,nrefbytes)) {
+        return errno;
+      }
     }
   }
 

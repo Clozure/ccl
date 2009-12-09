@@ -31,10 +31,11 @@ typedef enum {
   AREA_TSTACK = 3<<fixnumshift, /* A temp stack.  It -is- doubleword-aligned */
   AREA_READONLY = 4<<fixnumshift, /* A (cfm) read-only section. */
   AREA_WATCHED = 5<<fixnumshift, /* A static area containing a single object. */
-  AREA_MANAGED_STATIC = 6<<fixnumshift, /* A resizable static area */
-  AREA_STATIC = 7<<fixnumshift, /* A  static section: contains
+  AREA_STATIC_CONS = 6<<fixnumshift, /* static, conses only */
+  AREA_MANAGED_STATIC = 7<<fixnumshift, /* A resizable static area */
+  AREA_STATIC = 8<<fixnumshift, /* A  static section: contains
                                  roots, but not GCed */
-  AREA_DYNAMIC = 8<<fixnumshift /* A heap. Only one such area is "the heap."*/
+  AREA_DYNAMIC = 9<<fixnumshift /* A heap. Only one such area is "the heap."*/
 } area_code;
 
 typedef struct area {
@@ -138,14 +139,14 @@ typedef struct area_list {
 #ifdef PPC
 #ifdef LINUX
 #ifdef PPC64
-#define IMAGE_BASE_ADDRESS 0x100000000L
+#define IMAGE_BASE_ADDRESS 0x50000000000L
 #else
 #define IMAGE_BASE_ADDRESS 0x31000000
 #endif
 #endif
 #ifdef DARWIN
 #ifdef PPC64
-#define IMAGE_BASE_ADDRESS 0x100000000L
+#define IMAGE_BASE_ADDRESS 0x300000000000L
 #else
 #define IMAGE_BASE_ADDRESS 0x04000000
 #endif
@@ -190,10 +191,12 @@ typedef struct area_list {
 #endif
 #endif
 
-#ifdef X8664
-#define PURESPACE_RESERVE 0x40000000 /* 1GB */
+#if (WORD_SIZE==64)
+#define PURESPACE_RESERVE 0x2000000000LL /* 128 GB */
+#define PURESPACE_SIZE (1LL<<30LL)
 #else
-#define PURESPACE_RESERVE 0x04000000 /* 64MB */
+#define PURESPACE_RESERVE (128<<20) /* MB */
+#define PURESPACE_SIZE (64<<20)
 #endif
 
 #define STATIC_RESERVE heap_segment_size
@@ -210,5 +213,7 @@ extern LispObj image_base;
 extern BytePtr pure_space_start, pure_space_active, pure_space_limit;
 extern BytePtr static_space_start, static_space_active, static_space_limit;
 extern area *find_readonly_area(void);
+extern BytePtr low_relocatable_address, high_relocatable_address,
+  low_markable_address, high_markable_address;
 
 #endif /* __AREA_H__ */

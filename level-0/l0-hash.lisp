@@ -175,17 +175,15 @@
 (defun %hash-symbol (sym)
   (if sym    
     (let* ((vector (%symptr->symvector sym))
-           (cell (%svref vector target::symbol.plist-cell)))
-      (or (car cell)
+           (cell (%svref vector target::symbol.plist-cell))
+           (consp (consp cell)))
+      (or (if consp (%car cell) cell)
           (let* ((pname (%svref vector target::symbol.pname-cell))
                  (hash (mixup-hash-code (%pname-hash pname (uvsize pname)))))
-            (declare (type simple-string pname))
-            (if cell
-              (setf (car cell) hash)
-              (progn
-                (setf (%svref vector target::symbol.plist-cell)
-                      (cons hash nil))
-                hash)))))
+            (declare (type simple-string pname) (fixnum hash))
+            (if consp
+              (setf (%car cell) hash)
+              (setf (%svref vector target::symbol.plist-cell) hash)))))
     +nil-hash+))
               
 ;;; Hash on address, or at least on some persistent, immutable

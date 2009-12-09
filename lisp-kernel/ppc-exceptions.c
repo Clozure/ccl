@@ -469,6 +469,10 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
     xpGPR(xp, imm0) = lisp_heap_gc_threshold;
     break;
 
+  case GC_TRAP_FUNCTION_ENSURE_STATIC_CONSES:
+    ensure_static_conses(xp,tcr,32768);
+    break;
+
   case GC_TRAP_FUNCTION_FLASH_FREEZE:
     untenure_from_area(tenured_area);
     gc_like_from_xp(xp,flash_freeze,0);
@@ -507,7 +511,6 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
         impurify_from_xp(xp, 0L);
         /*        nrs_GC_EVENT_STATUS_BITS.vcell |= gc_integrity_check_bit; */
         gc_from_xp(xp, 0L);
-        release_readonly_area();
       }
       if (selector & GC_TRAP_FUNCTION_PURIFY) {
         purify_from_xp(xp, 0L);
@@ -527,9 +530,7 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
         fatal_oserr(": save_application", err);
       }
       switch (selector) {
-      case GC_TRAP_FUNCTION_SET_HONS_AREA_SIZE:
-        xpGPR(xp, imm0) = 0;
-        break;
+
 
       case GC_TRAP_FUNCTION_FREEZE:
         a->active = (BytePtr) align_to_power_of_2(a->active, log2_page_size);
@@ -1984,12 +1985,12 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
       *ea = val;
     }
     if (need_check_memo) {
-      natural  bitnumber = area_dnode(ea, lisp_global(HEAP_START));
+      natural  bitnumber = area_dnode(ea, lisp_global(REF_BASE));
       if ((bitnumber < lisp_global(OLDSPACE_DNODE_COUNT)) &&
           ((LispObj)ea < val)) {
         atomic_set_bit(refbits, bitnumber);
         if (need_memoize_root) {
-          bitnumber = area_dnode(root, lisp_global(HEAP_START));
+          bitnumber = area_dnode(root, lisp_global(REF_BASE));
           atomic_set_bit(refbits, bitnumber);
         }
       }
@@ -3073,8 +3074,6 @@ darwin_exception_init(TCR *tcr)
     fprintf(dbgout, "Couldn't setup exception handler - error = %d\n", kret);
     terminate_lisp();
   }
-  lisp_global(LISP_EXIT_HOOK) = (LispObj) restore_foreign_exception_ports;
-  lisp_global(LISP_RETURN_HOOK) = (LispObj) tcr_establish_lisp_exception_port;
 }
 
 /*

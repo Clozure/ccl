@@ -128,6 +128,8 @@ void init_threads(void *, TCR *);
 void wperror(char *);
 #endif
 
+void ensure_static_conses(ExceptionInformation *, TCR *,natural);
+
 #include <stdio.h>
 
 extern FILE *dbgout;

@@ -1285,6 +1285,7 @@
   tstack                                ; (dynamic-extent) temp stack
   readonly                              ; readonly section
   watched				; static area containing a single object
+  static-cons                           ; static cons cells
   managed-static                        ; growable static area
   static                                ; static data in application
   dynamic                               ; dynmaic (heap) data in application

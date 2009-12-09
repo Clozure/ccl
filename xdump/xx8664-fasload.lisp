@@ -69,7 +69,7 @@
    :image-base-address #x300000000000
    :nil-relative-symbols x86::*x86-nil-relative-symbols*
    :static-space-init-function 'x8664-initialize-static-space
-   :purespace-reserve (ash 1 30)
+   :purespace-reserve (ash 128 30)
    :static-space-address (+ (ash 1 16) (ash 2 12))
 ))
 
@@ -90,7 +90,7 @@
    :image-base-address #x300000000000
    :nil-relative-symbols x86::*x86-nil-relative-symbols*
    :static-space-init-function 'x8664-initialize-static-space
-   :purespace-reserve (ash 1 30)
+   :purespace-reserve (ash 128 30)
    :static-space-address (+ (ash 1 16) (ash 2 12))
 ))
 
@@ -109,7 +109,7 @@
    :image-base-address #x300000000000
    :nil-relative-symbols x86::*x86-nil-relative-symbols*
    :static-space-init-function 'x8664-initialize-static-space
-   :purespace-reserve (ash 1 30)
+   :purespace-reserve (ash 128 30)
    :static-space-address (+ (ash 1 16) (ash 2 12))
 ))
 
@@ -128,7 +128,7 @@
    :image-base-address #x300000000000
    :nil-relative-symbols x86::*x86-nil-relative-symbols*
    :static-space-init-function 'x8664-initialize-static-space
-   :purespace-reserve (ash 1 30)
+   :purespace-reserve (ash 128 30)
    :static-space-address (+ (ash 1 16) (ash 2 12))
 ))
 
@@ -147,7 +147,7 @@
    :image-base-address #x100000000
    :nil-relative-symbols x86::*x86-nil-relative-symbols*
    :static-space-init-function 'x8664-initialize-static-space
-   :purespace-reserve (ash 1 30)
+   :purespace-reserve (ash 128 30)
    :static-space-address (+ (ash 1 16) (ash 2 12))
 ))
 

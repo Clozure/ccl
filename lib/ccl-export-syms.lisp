@@ -451,8 +451,9 @@
      weak-gc-method
      *trace-max-indent* 
      *trace-level* 
-     *static-cons-chunk*
      static-cons
+     free-static-conses
+     reserved-static-conses
 
      population
      make-population

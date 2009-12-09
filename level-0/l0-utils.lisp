@@ -88,7 +88,7 @@
                                           target::subtag-function)
                                    (funcall f (lfun-vector-lfun obj))))))
     (declare (dynamic-extent filter))
-    (%map-areas filter '(:dynamic :static :managed-static))))
+    (%map-areas filter '(:dynamic :static :managed-static :readonly))))
 
 
 (defun ensure-simple-string (s)

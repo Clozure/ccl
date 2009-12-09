@@ -1332,7 +1332,6 @@ new_tcr(natural vstack_size, natural tstack_size)
 #if (WORD_SIZE == 64)
   tcr->single_float_convert.tag = subtag_single_float;
 #endif
-  lisp_global(TCR_COUNT) += (1<<fixnumshift);
   tcr->suspend = new_semaphore(0);
   tcr->resume = new_semaphore(0);
   tcr->reset_completion = new_semaphore(0);

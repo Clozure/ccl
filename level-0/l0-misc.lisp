@@ -293,6 +293,7 @@
          (stack-total)
          (stack-used)
          (stack-free)
+         (static-cons-reserved nil)
          (stack-used-by-thread nil))
     (progn
       (progn
@@ -325,8 +326,17 @@
                 0 0
                 static (k static))
         (when (and frozen-space-size (not (zerop frozen-space-size)))
-          (format t "~&~,3f MB of static memory is \"frozen\" dynamic memory"
-                  (/ frozen-space-size (float (ash 1 20)))))
+          (setq static-cons-reserved (ash (reserved-static-conses) target::dnode-shift)
+                frozen-space-size (- frozen-space-size static-cons-reserved))
+          (unless (zerop static-cons-reserved)
+            (format t "~&~,3f MB of reserved static conses (~d free, ~d reserved)"
+                    (/ static-cons-reserved (float (ash 1 20)))
+                    (free-static-conses)
+                    (reserved-static-conses)))
+
+          (unless (zerop frozen-space-size)
+                  (format t "~&~,3f MB of static memory is \"frozen\" dynamic memory"
+                          (/ frozen-space-size (float (ash 1 20))))))
         (format t "~&~,3f MB reserved for heap expansion."
                 (/ reserved (float (ash 1 20))))
         (unless (eq verbose :default)

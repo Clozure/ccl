@@ -137,7 +137,7 @@ wperror(char* message)
 #endif
 
 LispObj lisp_nil = (LispObj) 0;
-bitvector global_mark_ref_bits = NULL;
+bitvector global_mark_ref_bits = NULL, dynamic_mark_ref_bits = NULL;
 
 
 /* These are all "persistent" : they're initialized when
@@ -371,19 +371,19 @@ unsigned unsigned_max(unsigned x, unsigned y)
 #define MAXIMUM_MAPPABLE_MEMORY (512L<<30L)
 #endif
 #ifdef SOLARIS
-#define MAXIMUM_MAPPABLE_MEMORY (128L<<30L)
+#define MAXIMUM_MAPPABLE_MEMORY (512L<<30L)
 #endif
 #ifdef LINUX
 #ifdef X8664
 #define MAXIMUM_MAPPABLE_MEMORY (512L<<30L)
 #endif
 #ifdef PPC
-#define MAXIMUM_MAPPABLE_MEMORY (128L<<30L)
+#define MAXIMUM_MAPPABLE_MEMORY (512L<<30L)
 #endif
 #endif
 #ifdef WINDOWS
 /* Supposedly, the high-end version of Vista allow 128GB of pageable memory */
-#define MAXIMUM_MAPPABLE_MEMORY (120LL<<30LL)
+#define MAXIMUM_MAPPABLE_MEMORY (512LL<<30LL)
 #endif
 #else
 #ifdef DARWIN
@@ -416,6 +416,7 @@ area
   *g2_area=NULL, 
   *g1_area=NULL,
   *managed_static_area=NULL,
+  *static_cons_area=NULL,
   *readonly_area=NULL;
 
 area *all_areas=NULL;
@@ -510,7 +511,7 @@ find_readonly_area()
 }
 
 area *
-extend_readonly_area(unsigned more)
+extend_readonly_area(natural more)
 {
   area *a;
   unsigned mask;
@@ -589,8 +590,8 @@ create_reserved_area(natural totalsize)
   static_space_start = static_space_active = (BytePtr)STATIC_BASE_ADDRESS;
   static_space_limit = static_space_start + STATIC_RESERVE;
   pure_space_start = pure_space_active = start;
-  pure_space_limit = start + PURESPACE_RESERVE;
-  start = pure_space_limit;
+  pure_space_limit = start + PURESPACE_SIZE;
+  start += PURESPACE_RESERVE;
 
   /*
     Allocate mark bits here.  They need to be 1/64 the size of the
@@ -606,7 +607,6 @@ create_reserved_area(natural totalsize)
   /* The root of all evil is initially linked to itself. */
   reserved->pred = reserved->succ = reserved;
   all_areas = reserved;
-  reserved->markbits = global_mark_ref_bits;
   return reserved;
 }
 
@@ -631,6 +631,63 @@ allocate_from_reserved_area(natural size)
 
 
 BytePtr reloctab_limit = NULL, markbits_limit = NULL;
+BytePtr low_relocatable_address = NULL, high_relocatable_address = NULL,
+  low_markable_address = NULL, high_markable_address = NULL;
+
+void
+map_initial_reloctab(BytePtr low, BytePtr high)  
+{
+  natural ndnodes, reloctab_size, n;
+
+  low_relocatable_address = low; /* will never change */
+  high_relocatable_address = high;
+  ndnodes = area_dnode(high,low);
+  reloctab_size = (sizeof(LispObj)*(((ndnodes+((1<<bitmap_shift)-1))>>bitmap_shift)+1));
+  
+  reloctab_limit = (BytePtr)align_to_power_of_2(((natural)global_reloctab)+reloctab_size,log2_page_size);
+  CommitMemory(global_reloctab,reloctab_limit-(BytePtr)global_reloctab);
+}
+
+void
+map_initial_markbits(BytePtr low, BytePtr high)
+{
+  natural
+    prefix_dnodes = area_dnode(low, pure_space_limit),
+    ndnodes = area_dnode(high, low),
+    prefix_size = (prefix_dnodes+7)>>3,
+    markbits_size = (3*sizeof(LispObj))+((ndnodes+7)>>3),
+    n;
+  low_markable_address = low;
+  high_markable_address = high;
+  dynamic_mark_ref_bits = (bitvector)(((BytePtr)global_mark_ref_bits)+prefix_size);
+  n = align_to_power_of_2(markbits_size,log2_page_size);
+  markbits_limit = ((BytePtr)dynamic_mark_ref_bits)+n;
+  CommitMemory(dynamic_mark_ref_bits,n);
+}
+    
+void
+lower_heap_start(BytePtr new_low, area *a)
+{
+  natural new_dnodes = area_dnode(low_markable_address,new_low);
+
+  if (new_dnodes) {
+    natural n = (new_dnodes+7)>>3;
+
+    BytePtr old_markbits = (BytePtr)dynamic_mark_ref_bits,
+      new_markbits = old_markbits-n;
+    CommitMemory(new_markbits,n);
+    dynamic_mark_ref_bits = (bitvector)new_markbits;
+    if (a->refbits) {
+      a->refbits= dynamic_mark_ref_bits;
+    }
+    a->static_dnodes += new_dnodes;
+    a->ndnodes += new_dnodes;
+    a->low = new_low;
+    low_markable_address = new_low;
+    lisp_global(HEAP_START) = (LispObj)new_low;
+    static_cons_area->ndnodes = area_dnode(static_cons_area->high,new_low);
+  }
+}
 
 void
 ensure_gc_structures_writable()
@@ -642,7 +699,7 @@ ensure_gc_structures_writable()
     n;
   BytePtr 
     new_reloctab_limit = (BytePtr)align_to_power_of_2(((natural)global_reloctab)+reloctab_size,log2_page_size),
-    new_markbits_limit = (BytePtr)align_to_power_of_2(((natural)global_mark_ref_bits)+markbits_size,log2_page_size);
+    new_markbits_limit = (BytePtr)align_to_power_of_2(((natural)dynamic_mark_ref_bits)+markbits_size,log2_page_size);
 
   if (new_reloctab_limit > reloctab_limit) {
     n = new_reloctab_limit - reloctab_limit;
@@ -676,17 +733,14 @@ allocate_dynamic_area(natural initsize)
   a = new_area(start, end, AREA_DYNAMIC);
   a->active = start+initsize;
   add_area_holding_area_lock(a);
-  a->markbits = reserved_area->markbits;
-  reserved_area->markbits = NULL;
   CommitMemory(start, end-start);
   a->h = start;
   a->softprot = NULL;
   a->hardprot = NULL;
+  map_initial_reloctab(a->low, a->high);
+  map_initial_markbits(a->low, a->high);
   lisp_global(HEAP_START) = ptr_to_lispobj(a->low);
   lisp_global(HEAP_END) = ptr_to_lispobj(a->high);
-  markbits_limit = (BytePtr)global_mark_ref_bits;
-  reloctab_limit = (BytePtr)global_reloctab;
-  ensure_gc_structures_writable();
   return a;
  }
 
@@ -1892,13 +1946,16 @@ main(int argc, char *argv[]
     g2_area->younger = g1_area;
     g2_area->older = tenured_area;
     tenured_area->younger = g2_area;
-    tenured_area->refbits = a->markbits;
+    tenured_area->refbits = dynamic_mark_ref_bits;
+    managed_static_area->refbits = global_mark_ref_bits;
+    a->markbits = dynamic_mark_ref_bits;
     tenured_area->static_dnodes = a->static_dnodes;
     a->static_dnodes = 0;
     tenured_area->static_used = a->static_used;
     a->static_used = 0;
     lisp_global(TENURED_AREA) = ptr_to_lispobj(tenured_area);
-    lisp_global(REFBITS) = ptr_to_lispobj(tenured_area->refbits);
+    lisp_global(STATIC_CONS_AREA) = ptr_to_lispobj(static_cons_area);
+    lisp_global(REFBITS) = ptr_to_lispobj(global_mark_ref_bits);
     g2_area->threshold = default_g2_threshold;
     g1_area->threshold = default_g1_threshold;
     a->threshold = default_g0_threshold;
@@ -1908,6 +1965,10 @@ main(int argc, char *argv[]
   stack_base = initial_stack_bottom()-xStackSpace();
   init_threads((void *)(stack_base), tcr);
   thread_init_tcr(tcr, current_sp, current_sp-stack_base);
+
+  if (lisp_global(STATIC_CONSES) == 0) {
+    lisp_global(STATIC_CONSES) = lisp_nil;
+  }
 
   lisp_global(EXCEPTION_LOCK) = ptr_to_lispobj(new_recursive_lock());
   enable_fp_exceptions();
@@ -2350,3 +2411,63 @@ report_paging_info_delta(FILE *out, paging_info *start, paging_info *stop)
 
 #endif
 #endif
+
+void
+allocate_static_conses(natural n)
+{
+  BytePtr old_low = static_cons_area->low,
+    new_low = old_low - (n<<dnode_shift);
+  cons *c;
+  natural i;
+  LispObj prev;
+
+  CommitMemory(new_low,old_low-new_low);
+
+  static_cons_area->low = new_low;
+  lower_heap_start(new_low, tenured_area);
+  if (active_dynamic_area->low == old_low) {
+    active_dynamic_area->low = new_low;
+  }
+  if (g1_area->low == old_low) {
+    g1_area->low = new_low;
+  }
+  if (g1_area->high == old_low) {
+    g1_area->high = new_low;
+  }
+  if (g2_area->low == old_low) {
+    g2_area->low = new_low;
+  }
+  if (g2_area->high == old_low) {
+    g2_area->high = new_low;
+  }
+  for (i=0, prev=lisp_global(STATIC_CONSES), c=(cons *)new_low;
+       i < n;
+       i++, c++) {
+    c->cdr = prev;
+    prev = ((LispObj)c)+fulltag_cons;
+  }
+  lisp_global(STATIC_CONSES)=prev;
+  lisp_global(FREE_STATIC_CONSES)+=(n<<fixnumshift);
+}
+void
+ensure_static_conses(ExceptionInformation *xp, TCR *tcr, natural nconses)
+{
+  area *a = active_dynamic_area;
+  natural nbytes = nconses>>dnode_shift, have;
+  BytePtr p = a->high-nbytes;
+
+  if (p < a->active) {
+    untenure_from_area(tenured_area);
+    gc_from_xp(xp, 0L);
+  }
+
+  have = unbox_fixnum(lisp_global(FREE_STATIC_CONSES));
+  if (have < nconses) {
+    if ((a->high-a->active)>nbytes) {
+      shrink_dynamic_area(nbytes);
+    }
+    allocate_static_conses(nconses);
+    tcr->bytes_allocated += nbytes;
+  }
+}
+      

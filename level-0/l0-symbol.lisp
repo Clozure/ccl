@@ -53,14 +53,16 @@
       (unless (and len (evenp len))
         (error "Bad plist: ~s" plist))))
   (let* ((vector (symptr->symvector (%symbol->symptr sym)))
-         (cell (%svref vector target::symbol.plist-cell)))
+         (cell (%svref vector target::symbol.plist-cell))
+         (consp (consp cell)))
     (if plist
-      (if (consp cell)
+      (if consp
         (setf (cdr cell) plist)
         (cdr (setf (%svref vector target::symbol.plist-cell) (cons nil plist))))
-      (if (car cell)
-        (setf (cdr cell) nil)
-        (if cell (setf (cdr cell) nil))))))
+      (progn
+        (if consp
+          (setf (%svref vector target::symbol.plist-cell) (%car cell)))
+        nil))))
 
 
 (eval-when (:compile-toplevel :execute)
@@ -79,27 +81,30 @@
 
 (defun symbol-plist (sym)
   "Return SYMBOL's property list."
-  (cdr (%svref (symptr->symvector (%symbol->symptr sym)) target::symbol.plist-cell)))
+  (let* ((cell (%svref (symptr->symvector (%symbol->symptr sym)) target::symbol.plist-cell)))
+    (if (consp cell)
+      (cdr cell))))
 
 
 (defun get (sym key &optional default)
   "Look on the property list of SYMBOL for the specified INDICATOR. If this
   is found, return the associated value, else return DEFAULT."
-  (let* ((tail (%pl-search
-                (cdr (%svref (symptr->symvector (%symbol->symptr sym)) target::symbol.plist-cell)) key)))
+  (let* ((cell (%svref (symptr->symvector (%symbol->symptr sym)) target::symbol.plist-cell))
+         (tail (if (consp cell)
+                 (%pl-search (cdr cell ) key))))
     (if tail (%cadr tail) default)))
 
 (defun put (sym key value)
   (let* ((symptr (%symbol->symptr sym))
          (vector (symptr->symvector symptr))
          (cell  (%svref vector target::symbol.plist-cell))
-         (plist (cdr cell))
+         (plist (if (consp cell) (cdr cell)))
          (tail (%pl-search plist key)))
     (if tail 
       (%rplaca (%cdr tail) value)
       (progn
         (setq plist (cons key (cons value plist)))
-        (if cell
+        (if (consp cell)
           (setf (cdr cell) plist)
           (setf (%svref vector target::symbol.plist-cell) (cons nil plist)))))
     value))

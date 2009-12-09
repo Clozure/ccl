@@ -616,7 +616,12 @@ be somewhat larger than what was specified)."
   (set-nargs 2)
   (ba .SPnvalret))
   
-
+(defppclapfunction %ensure-static-conses ()
+  (check-nargs 0)
+  (li imm0 arch::gc-trap-function-ensure-static-conses)
+  (trlgei allocptr 0)
+  (li arg_z nil)
+  (blr))
 
 ;;; offset is a fixnum, one of the target::kernel-import-xxx constants.
 ;;; Returns that kernel import, a fixnum.

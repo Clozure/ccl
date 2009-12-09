@@ -18,6 +18,11 @@
   (use-interface-dir :elf))
 
 
+(defloadvar *readonly-area*
+    (do-consing-areas (a)
+      (when (eql (%fixnum-ref a target::area.code)
+                 ccl::area-readonly)
+        (return a))))
 
 ;;; String tables: used both for symbol names and for section names.
 (defstruct elf-string-table
@@ -163,38 +168,20 @@
   (let* ((name (format nil "~s" f)))
     (subseq (nsubstitute #\0 #\# (nsubstitute #\. #\Space name)) 1)))
 
-#+x8664-target
-(defx86lapfunction dynamic-dnode ((x arg_z))
-  (movq (% x) (% imm0))
-  (ref-global x86::heap-start arg_y)
-  (subq (% arg_y) (% imm0))
-  (shrq ($ x8664::dnode-shift) (% imm0))
-  (box-fixnum imm0 arg_z)
-  (single-value-return))
 
-#+x8632-target
-(defx8632lapfunction dynamic-dnode ((x arg_z))
-  (movl (% x) (% imm0))
-  (ref-global x86::heap-start arg_y)
-  (subl (% arg_y) (% imm0))
-  (shrl ($ x8632::dnode-shift) (% imm0))
-  (box-fixnum imm0 arg_z)
-  (single-value-return))
 
 (defun collect-elf-static-functions ()
   (collect ((functions))
-    (freeze)
+    (purify)
     (block walk
-      (let* ((frozen-dnodes (frozen-space-dnodes)))
-        (%map-areas (lambda (o)
-                      (when (>= (dynamic-dnode o) frozen-dnodes)
-                        (return-from walk nil))
-                      (when (typep o
-                                   #+x8664-target 'function-vector
-                                   #-x8664-target 'function)
-                        (functions (function-vector-to-function o))))
-                    ccl::area-dynamic
-                    )))
+      (%map-areas (lambda (o)
+                    (when (typep o
+                                 #+x8664-target 'function-vector
+                                 #-x8664-target 'function)
+                      (functions (function-vector-to-function o))))
+                  ccl::area-readonly
+                  ccl::area-readonly
+                  ))
     (functions)))
 
 (defun register-elf-functions (section-number)
@@ -360,9 +347,9 @@
           (pref lisp-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_flags
                 #+32-bit-target :<E>lf32_<S>hdr.sh_flags) (logior #$SHF_WRITE #$SHF_ALLOC #$SHF_EXECINSTR)
           (pref lisp-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_addr
-                #+32-bit-target :<E>lf32_<S>hdr.sh_addr) (ash (%get-kernel-global heap-start) target::fixnumshift)
+                #+32-bit-target :<E>lf32_<S>hdr.sh_addr) (ash (%fixnum-ref *readonly-area* target::area.low) target::fixnumshift)
           (pref lisp-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_size
-                #+32-bit-target :<E>lf32_<S>hdr.sh_size) (ash (frozen-space-dnodes) target::dnode-shift)
+                #+32-bit-target :<E>lf32_<S>hdr.sh_size) (ash (- (%fixnum-ref *readonly-area* target::area.active) (%fixnum-ref *readonly-area* target::area.low) )target::fixnumshift)
           (pref lisp-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_offset
                 #+32-bit-target :<E>lf32_<S>hdr.sh_offset) 0
           (pref lisp-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_addralign
@@ -388,7 +375,7 @@
                 #+32-bit-target :<E>lf32_<S>hdr.sh_type) #$SHT_STRTAB
           (pref shstrtab-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_flags
                 #+32-bit-target :<E>lf32_<S>hdr.sh_flags) (logior #$SHF_STRINGS #$SHF_ALLOC))
-    (elf-make-empty-data-for-section object lisp-section (ash (frozen-space-dnodes) target::dnode-shift))
+    (elf-make-empty-data-for-section object lisp-section (ash (- (%fixnum-ref *readonly-area* target::area.active) (%fixnum-ref *readonly-area* target::area.low) )target::fixnumshift))
     (elf-init-section-data-from-string-table object strings-section (elf-symbol-table-strings symbols))
     (elf-init-section-data-from-string-table object shstrtab-section section-names)
     (elf-init-symbol-section-from-symbol-table object symbols-section symbols)
