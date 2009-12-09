@@ -230,8 +230,8 @@
     interrupt-signal			; used by PROCESS-INTERRUPT
     kernel-imports                      ; some things we need to have imported for us.
     objc-2-personality
-    emulator-registers                  ; Where the 68K registers are kept.
-    appmain                             ; application's (c-runtime) main() function
+    savetoc                  ; used to save TOC on some platforms
+    saver13                             ; used to save r13 on some platforms
     subprims-base                       ; start of dynamic subprims jump table
     ret1valaddr                         ; magic multiple-values return address.
     tcr-key                             ; tsd key for thread's tcr
@@ -251,18 +251,18 @@
     heap-start                          ; start of lisp heap
     heap-end                            ; end of lisp heap
     statically-linked                   ; true if the lisp kernel is statically linked
-    stack-size                          ; weak gc policy/algorithm
+    stack-size                          ; value of --stack-size arg
     objc-2-begin-catch                  ; objc_begin_catch
     kernel-path
     all-areas                           ; doubly-linked area list
     lexpr-return                        ; multiple-value lexpr return address
     lexpr-return1v                      ; single-value lexpr return address
     in-gc                               ; non-zero when GC-ish thing active
-    metering-info                       ; kernel metering structure
+    free-static-conses                  ; fixnum
     objc-2-end-catch                    ; _objc_end_catch
     short-float-zero                    ; low half of 1.0d0
     double-float-one                    ; high half of 1.0d0
-    ffi-exception                       ; ffi fpscr[fex] bit
+    static-cons-area                    ; 
     exception-saved-registers           ; saved registers from exception frame
     oldest-ephemeral                    ; doublenode address of oldest ephemeral object or 0
     tenured-area                        ; the tenured_area.
@@ -270,8 +270,8 @@
     argv                                ; address of C lib argv
     host-platform                       ; 0 on MacOS, 1 on PPC Linux, 2 on VxWorks ...
     batch-flag				; non-zero if --batch specified
-    unwind-resume                       ; _Unwind_Resume
-    weak-gc-method                      ; for gc
+    unwind-resume			; _Unwind_Resume
+    weak-gc-method                      ; weak gc algorithm.
     image-name				; current image name
     initial-tcr                         ; initial thread's context record
     ))

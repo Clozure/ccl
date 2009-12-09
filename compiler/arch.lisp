@@ -352,9 +352,9 @@
 (defconstant gc-trap-function-get-lisp-heap-threshold 16)
 (defconstant gc-trap-function-set-lisp-heap-threshold 17)
 (defconstant gc-trap-function-use-lisp-heap-threshold 18)
+(defconstant gc-trap-function-ensure-static-conses 19)
 (defconstant gc-trap-function-egc-control 32)
 (defconstant gc-trap-function-configure-egc 64)
-(defconstant gc-trap-function-set-hons-area-size 128)
 (defconstant gc-trap-function-freeze 129)
 (defconstant gc-trap-function-thaw 130)
 
