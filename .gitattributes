@@ -150,6 +150,7 @@ doc/ccl-documentation.html -text
 doc/doc-splitter.lisp -text
 doc/release-notes-1.2.txt -text
 doc/release-notes.txt -text
+doc/src/Makefile.debian -text
 doc/src/Makefile.fedora -text
 doc/src/Makefile.macports -text
 doc/src/about.xml -text
@@ -188,6 +189,7 @@ doc/src/templates/function -text
 doc/src/threads.xml -text
 doc/src/using.xml -text
 doc/src/xsl/catalog -text
+doc/src/xsl/catalog-debian -text
 doc/src/xsl/catalog-fedora -text
 doc/src/xsl/catalog-fink -text
 doc/src/xsl/catalog-macports -text
