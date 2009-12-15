@@ -1992,6 +1992,8 @@ main(int argc, char *argv[]
 #endif
   if (egc_enabled) {
     egc_control(true, NULL);
+  } else {
+    lisp_global(OLDSPACE_DNODE_COUNT) = area_dnode(managed_static_area->active,managed_static_area->low);
   }
   atexit(lazarus);
   start_lisp(TCR_TO_TSD(tcr), 0);

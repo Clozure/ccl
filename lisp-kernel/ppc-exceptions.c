@@ -510,10 +510,12 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
       if (selector & GC_TRAP_FUNCTION_IMPURIFY) {
         impurify_from_xp(xp, 0L);
         /*        nrs_GC_EVENT_STATUS_BITS.vcell |= gc_integrity_check_bit; */
+        lisp_global(OLDSPACE_DNODE_COUNT) = 0;
         gc_from_xp(xp, 0L);
       }
       if (selector & GC_TRAP_FUNCTION_PURIFY) {
         purify_from_xp(xp, 0L);
+        lisp_global(OLDSPACE_DNODE_COUNT) = area_dnode(managed_static_area->active, managed_static_area->low);
         gc_from_xp(xp, 0L);
       }
       if (selector & GC_TRAP_FUNCTION_SAVE_APPLICATION) {

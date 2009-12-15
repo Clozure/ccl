@@ -1205,7 +1205,7 @@ check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits)
       if (intergen_ref) {
         ref_dnode = area_dnode(start, base);
         if (!ref_bit(refbits, ref_dnode)) {
-          Bug(NULL, "Missing memoization in doublenode at 0x%08X", start);
+          Bug(NULL, "Missing memoization in doublenode at 0x" LISP, start);
           set_bit(refbits, ref_dnode);
         }
       }
