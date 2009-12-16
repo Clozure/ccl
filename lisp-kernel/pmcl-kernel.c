@@ -137,7 +137,7 @@ wperror(char* message)
 #endif
 
 LispObj lisp_nil = (LispObj) 0;
-bitvector global_mark_ref_bits = NULL, dynamic_mark_ref_bits = NULL;
+bitvector global_mark_ref_bits = NULL, dynamic_mark_ref_bits = NULL, relocatable_mark_ref_bits = NULL;
 
 
 /* These are all "persistent" : they're initialized when
@@ -660,6 +660,7 @@ map_initial_markbits(BytePtr low, BytePtr high)
   low_markable_address = low;
   high_markable_address = high;
   dynamic_mark_ref_bits = (bitvector)(((BytePtr)global_mark_ref_bits)+prefix_size);
+  relocatable_mark_ref_bits = dynamic_mark_ref_bits;
   n = align_to_power_of_2(markbits_size,log2_page_size);
   markbits_limit = ((BytePtr)dynamic_mark_ref_bits)+n;
   CommitMemory(dynamic_mark_ref_bits,n);
@@ -693,13 +694,13 @@ void
 ensure_gc_structures_writable()
 {
   natural 
-    ndnodes = area_dnode(lisp_global(HEAP_END),lisp_global(HEAP_START)),
+    ndnodes = area_dnode(lisp_global(HEAP_END),low_relocatable_address),
     markbits_size = (3*sizeof(LispObj))+((ndnodes+7)>>3),
     reloctab_size = (sizeof(LispObj)*(((ndnodes+((1<<bitmap_shift)-1))>>bitmap_shift)+1)),
     n;
   BytePtr 
     new_reloctab_limit = (BytePtr)align_to_power_of_2(((natural)global_reloctab)+reloctab_size,log2_page_size),
-    new_markbits_limit = (BytePtr)align_to_power_of_2(((natural)dynamic_mark_ref_bits)+markbits_size,log2_page_size);
+    new_markbits_limit = (BytePtr)align_to_power_of_2(((natural)relocatable_mark_ref_bits)+markbits_size,log2_page_size);
 
   if (new_reloctab_limit > reloctab_limit) {
     n = new_reloctab_limit - reloctab_limit;
@@ -2427,8 +2428,12 @@ allocate_static_conses(natural n)
 
   static_cons_area->low = new_low;
   lower_heap_start(new_low, tenured_area);
+  /* what a mess this is ... */
   if (active_dynamic_area->low == old_low) {
     active_dynamic_area->low = new_low;
+  }
+  if (!active_dynamic_area->older) {
+    active_dynamic_area->markbits = tenured_area->refbits;
   }
   if (g1_area->low == old_low) {
     g1_area->low = new_low;
