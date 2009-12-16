@@ -240,7 +240,7 @@ typedef void (*xmacptr_dispose_fn)(void *);
 
 extern xmacptr_dispose_fn xmacptr_dispose_functions[];
 
-extern bitvector global_mark_ref_bits, dynamic_mark_ref_bits;
+extern bitvector global_mark_ref_bits, dynamic_mark_ref_bits, relocatable_mark_ref_bits;
 
 
 #endif                          /* __GC_H__ */
