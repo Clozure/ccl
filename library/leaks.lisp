@@ -326,3 +326,40 @@ int keepcost
       (format t "~& size of releaseable chunk = ~d/#x~x" keepcost keepcost))))
 
 )  ;; end of linux-only code
+
+(defun get-allocation-sentinel (&key (gc-first t))
+  ;; Return the object with the highest address that can be guaranteed to be at a lower
+  ;; address than any newer objects.
+  ;; If gc-first is true, can also conversely guarantee that all older objects are at a
+  ;; lower address than the sentinel.  If gc-first is false, than there may be some
+  ;; already-allocated objects at higher addresses, though no more than the size of the
+  ;; youngest generation (and usually even less than that). Second value returned is the
+  ;; size of the active region above the sentinel.
+  (with-other-threads-suspended
+    (when gc-first (gc)) ;; get rid of thread allocation chunks.  Wish could just egc...
+    ;; This mustn't cons.
+    (let* ((first-area (%normalize-areas)) ;; youngest generation
+           (min-base (loop with current = (%current-tcr)
+                           for tcr = (%fixnum-ref current target::tcr.next)
+                             then (%fixnum-ref tcr target::tcr.next)
+                           as base fixnum = (%fixnum-ref tcr target::tcr.save-allocbase)
+                           when (> base 0)
+                             minimize base
+                           until (eql tcr current)))
+           (active (%fixnum-ref first-area  target::area.active))
+           (limit (if (eql min-base 0) active min-base))
+           (last-obj nil))
+      ;; Normally will find it in the youngest generation, but loop in case limit = area.low.
+      (block walk
+        (flet ((skip (obj)
+                 (declare (optimize (speed 3) (safety 0))) ;; lie
+                 (unless (%i< obj limit)
+                   (return-from walk))
+                 (setq last-obj obj)))
+          (declare (dynamic-extent #'skip))
+          (loop for area = first-area then (%fixnum-ref area target::area.succ)
+                until (neq (%fixnum-ref area target::area.code) area-dynamic)
+                when (< (%fixnum-ref area target::area.low) (%fixnum-ref area target::area.active))
+                  do (walk-static-area area #'skip))))
+      (values last-obj (%i- active limit)))))
+

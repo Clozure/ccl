@@ -894,25 +894,34 @@ are running on, or NIL if we can't find any useful information."
                               (area nil)
                               (unit nil)
                               (sort :size)
-                              (classes nil))
+                              (classes nil)
+                              (start nil))
   "Show statistic about types of objects in the heap.
    If :GC-FIRST is true (the default), do a full gc before scanning the heap.
+   If :START is non-nil, it should be an object returned by GET-ALLOCATION-SENTINEL, only
+     objects at higher address are scanned (i.e. roughly, only objects allocated after it).
    :SORT can be one of :COUNT, :LOGICAL-SIZE, or :PHYSICAL-SIZE to sort by count or size.
    :UNIT can be one of :KB :MB or :GB to show sizes in units other than bytes.
    :AREA can be used to restrict the walk to one area or a list of areas.  Some possible
    values are :DYNAMIC, :STATIC, :MANAGED-STATIC, :READONLY.  By default, all areas
    (including stacks) are examined.
    If :CLASSES is true, classifies by class rather than just typecode"
-  (let ((data (collect-heap-utilization :gc-first gc-first :area area :classes classes)))
+  (let ((data (collect-heap-utilization :gc-first gc-first :start start :area area :classes classes)))
     (report-heap-utilization data :stream stream :unit unit :sort sort)))
 
-(defun collect-heap-utilization (&key (gc-first t) area classes)
+(defun collect-heap-utilization (&key (gc-first t) start area classes)
   ;; returns list of (type-name count logical-sizes-total physical-sizes-total)
+  (when start
+    (unless (or (null area)
+                (eq (heap-area-code area) area-dynamic)
+                (and (consp area) (every (lambda (a) (eq (heap-area-code a) area-dynamic)) area)))
+      (error "~s ~s and ~s ~s are incompatible" :start start :area area))
+    (setq area area-dynamic))
   (if classes
-    (collect-heap-utilization-by-class gc-first area)
-    (collect-heap-utilization-by-typecode gc-first area)))
+    (collect-heap-utilization-by-class gc-first area start)
+    (collect-heap-utilization-by-typecode gc-first area start)))
 
-(defun collect-heap-utilization-by-typecode (gc-first area)
+(defun collect-heap-utilization-by-typecode (gc-first area start)
   (let* ((nconses 0)
          (counts (make-array 257))
          (sizes (make-array 257))
@@ -923,18 +932,21 @@ are running on, or NIL if we can't find any useful information."
              (fixnum nconses)
              (dynamic-extent counts sizes physical-sizes))
     (flet ((collect (thing)
-             (if (listp thing)
-               (incf nconses)
-               (let* ((typecode (typecode thing))
-                      (logsize (funcall array-size-function typecode (uvsize thing)))
-                      (physize (logandc2 (+ logsize
-                                            #+64-bit-target (+ 8 15)
-                                            #+32-bit-target (+ 4 7))
-                                         #+64-bit-target 15
-                                         #+32-bit-target 7)))
-                 (incf (aref counts typecode))
-                 (incf (aref sizes typecode) logsize)
-                 (incf (aref physical-sizes typecode) physize)))))
+             (when (or (null start)
+                       (locally (declare (optimize (speed 3) (safety 0))) ;; lie
+                         (%i< start thing)))
+               (if (listp thing)
+                 (incf nconses)
+                 (let* ((typecode (typecode thing))
+                        (logsize (funcall array-size-function typecode (uvsize thing)))
+                        (physize (logandc2 (+ logsize
+                                              #+64-bit-target (+ 8 15)
+                                              #+32-bit-target (+ 4 7))
+                                           #+64-bit-target 15
+                                           #+32-bit-target 7)))
+                   (incf (aref counts typecode))
+                   (incf (aref sizes typecode) logsize)
+                   (incf (aref physical-sizes typecode) physize))))))
       (declare (dynamic-extent #'collect))
       (when gc-first (gc))
       (%map-areas #'collect area))
@@ -948,7 +960,7 @@ are running on, or NIL if we can't find any useful information."
                     (aref sizes i)
                     (aref physical-sizes i)))))
 
-(defun collect-heap-utilization-by-class (gc-first area)
+(defun collect-heap-utilization-by-class (gc-first area start)
   (let* ((nconses 0)
          (max-classes (+ 100 (hash-table-count %find-classes%)))
          (map (make-hash-table :shared nil
@@ -965,41 +977,44 @@ are running on, or NIL if we can't find any useful information."
                                (backend-target-arch *host-backend*))))
     (declare (type simple-vector inst-counts slotv-counts inst-sizes slotv-sizes inst-psizes slotv-psizes))
     (flet ((collect (thing)
-             (if (listp thing)
-               (incf nconses)
-               (unless (or (eq thing map)
-                           (eq thing (nhash.vector map))
-                           (eq thing inst-counts)
-                           (eq thing slotv-counts)
-                           (eq thing inst-sizes)
-                           (eq thing slotv-sizes)
-                           (eq thing inst-psizes)
-                           (eq thing slotv-psizes))
-                 (let* ((typecode (typecode thing))
-                        (logsize (funcall array-size-function typecode (uvsize thing)))
-                        (physize (logandc2 (+ logsize
-                                              #+64-bit-target (+ 8 15)
-                                              #+32-bit-target (+ 4 7))
-                                           #+64-bit-target 15
-                                           #+32-bit-target 7))
-                        (class (class-of (if (eql typecode target::subtag-slot-vector)
-                                           (uvref thing slot-vector.instance)
-                                           thing)))
-                        (index (or (gethash class map)
-                                   (let ((count (hash-table-count map)))
-                                     (if (eql count max-classes)
-                                       (setq overflow t count (1- max-classes))
-                                       (setf (gethash class map) count))))))
+             (when (or (null start)
+                       (locally (declare (optimize (speed 3) (safety 0))) ;; lie
+                         (%i< start thing)))
+               (if (listp thing)
+                 (incf nconses)
+                 (unless (or (eq thing map)
+                             (eq thing (nhash.vector map))
+                             (eq thing inst-counts)
+                             (eq thing slotv-counts)
+                             (eq thing inst-sizes)
+                             (eq thing slotv-sizes)
+                             (eq thing inst-psizes)
+                             (eq thing slotv-psizes))
+                   (let* ((typecode (typecode thing))
+                          (logsize (funcall array-size-function typecode (uvsize thing)))
+                          (physize (logandc2 (+ logsize
+                                                #+64-bit-target (+ 8 15)
+                                                #+32-bit-target (+ 4 7))
+                                             #+64-bit-target 15
+                                             #+32-bit-target 7))
+                          (class (class-of (if (eql typecode target::subtag-slot-vector)
+                                             (uvref thing slot-vector.instance)
+                                             thing)))
+                          (index (or (gethash class map)
+                                     (let ((count (hash-table-count map)))
+                                       (if (eql count max-classes)
+                                         (setq overflow t count (1- max-classes))
+                                         (setf (gethash class map) count))))))
                    
-                   (if (eql typecode target::subtag-slot-vector)
-                     (progn
-                       (incf (aref slotv-counts index))
-                       (incf (aref slotv-sizes index) logsize)
-                       (incf (aref slotv-psizes index) physize))
-                     (progn
-                       (incf (aref inst-counts index))
-                       (incf (aref inst-sizes index) logsize)
-                       (incf (aref inst-psizes index) physize))))))))
+                     (if (eql typecode target::subtag-slot-vector)
+                       (progn
+                         (incf (aref slotv-counts index))
+                         (incf (aref slotv-sizes index) logsize)
+                         (incf (aref slotv-psizes index) physize))
+                       (progn
+                         (incf (aref inst-counts index))
+                         (incf (aref inst-sizes index) logsize)
+                         (incf (aref inst-psizes index) physize)))))))))
       (declare (dynamic-extent #'collect))
       (when gc-first (gc))
       (%map-areas #'collect area))
