@@ -3072,10 +3072,9 @@
    ;; ucomisd
    (def-x86-opcode ucomisd ((:anymem :insert-memory) (:regxmm :insert-xmm-reg))
      #x0f2e #o000 #x0 #x66)
-   (def-x86-opcode comisd ((:regxmm :insert-xmm-rm) (:regxmm :insert-xmm-reg))
-     #x0f2e #o300 #x0 u#x66)
+   (def-x86-opcode ucomisd ((:regxmm :insert-xmm-rm) (:regxmm :insert-xmm-reg))
+     #x0f2e #o300 #x0 #x66)
 
-   
    ;; comiss
    (def-x86-opcode comiss ((:anymem :insert-memory) (:regxmm :insert-xmm-reg))
      #x0f2f #o000 #x0)
@@ -3246,6 +3245,18 @@
    ;; psllw
    
    ;; pslld
+   (def-x86-opcode pslld ((:regmmx :insert-mmx-rm) (:regmmx :insert-mmx-reg))
+     #x0ff2 #o300 #x0)
+   (def-x86-opcode pslld ((:anymem :insert-memory) (:regmmx :insert-mmx-reg))
+     #x0ff2 #o000 #x0)
+   (def-x86-opcode pslld ((:imm8 :insert-imm8) (:regmmx :insert-mmx-rm))
+     #x0f72 #o360 #o0)
+   (def-x86-opcode pslld ((:regxmm :insert-modrm-rm) (:regxmm :insert-modrm-reg))
+     #x0ff2 #o300 #x0 #x66)
+   (def-x86-opcode pslld ((:anymem :insert-memory) (:regxmm :insert-modrm-reg))
+     #x0ff2 #o000 #x0 #x66)
+   (def-x86-opcode pslld ((:imm8 :insert-imm8) (:regxmm :insert-xmm-rm))
+     #x0f72 #o360 #o0 #x66)
 
    ;; pslldq
    (def-x86-opcode pslldq ((:imm8 :insert-imm8) (:regxmm :insert-xmm-rm))
@@ -3266,6 +3277,18 @@
      #x0f73 #o320 #o0 #x66)
 
    ;; psrld
+   (def-x86-opcode psrld ((:regmmx :insert-mmx-rm) (:regmmx :insert-mmx-reg))
+     #x0fd2 #o300 #x0)
+   (def-x86-opcode psrld ((:anymem :insert-memory) (:regmmx :insert-mmx-reg))
+     #x0fd2 #o000 #x0)
+   (def-x86-opcode psrld ((:imm8 :insert-imm8) (:regmmx :insert-mmx-rm))
+     #x0f72 #o320 #o0)
+   (def-x86-opcode psrld ((:regxmm :insert-modrm-rm) (:regxmm :insert-modrm-reg))
+     #x0fd2 #o300 #x0 #x66)
+   (def-x86-opcode psrld ((:anymem :insert-memory) (:regxmm :insert-modrm-reg))
+     #x0fd2 #o000 #x0 #x66)
+   (def-x86-opcode psrld ((:imm8 :insert-imm8) (:regxmm :insert-xmm-rm))
+     #x0f72 #o320 #o0 #x66)
 
    ;; psrldq
    (def-x86-opcode psrldq ((:imm8 :insert-imm8) (:regxmm :insert-xmm-rm))
