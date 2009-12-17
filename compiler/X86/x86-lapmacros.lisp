@@ -636,3 +636,14 @@
      (vector-length ,fn ,dest)
      (box-fixnum ,imm ,imm)
      (subl (% ,imm) (% ,dest))))
+
+(defx86lapmacro double-constant (name value)
+  (multiple-value-bind (high low)
+      (double-float-bits (float value 1.0d0))
+    `(progn
+       (:uuo-section)
+       (:align 3)
+       ,name
+       (:long ,low)
+       (:long ,high)
+       (:main-section))))
