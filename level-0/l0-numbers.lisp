@@ -1782,122 +1782,86 @@
   (declare (ignore type))
   'real)
 
+;;; This is the MRG31k3p random number generator described in
+;;; P. L'Ecuyer and R. Touzin, "Fast Combined Multiple Recursive
+;;; Generators with Multipliers of the form a = +/- 2^d +/- 2^e"",
+;;; Proceedings of the 2000 Winter Simulation Conference, Dec. 2000,
+;;; 683--689.
+;;;
+;;; A link to the paper is available on L'Ecuyer's web site:
+;;; http://www.iro.umontreal.ca/~lecuyer/papers.html.
+;;;
+;;; This generator has a period of about 2^185.  It produces values in
+;;; in the half-open interval [0, 2^31 - 1).
+;;;
+;;; It uses 6 words of state.
+
+(defconstant mrg31k3p-m1 #.(- (expt 2 31) 1))
+(defconstant mrg31k3p-m2 #.(- (expt 2 31) 21069))
+(defconstant mrg31k3p-limit #.(1- (expt 2 31))
+	     "Exclusive upper bound on values returned by %mrg31k3p.")
 
 
-(defun init-random-state-seeds ()
-  (let* ((ticks (ldb (byte 32 0) (+ (mixup-hash-code (%current-tcr))
-                                    (let* ((iface(primary-ip-interface)))
-                                      (or (and iface (ip-interface-addr iface))
-                                          0))
-                                    (mixup-hash-code
-                                     (logand (get-internal-real-time)
-                                             (1- target::target-most-positive-fixnum))))))
-	 (high (ldb (byte 16 16) (if (zerop ticks) #x10000 ticks)))
-	 (low (ldb (byte 16 0) ticks)))
-    (declare (fixnum high low))
-    (values high low)))
+;;; This is a portable version of the MRG31k3p generator.  It's not
+;;; too bad in a 64-bit CCL, but the generator pretty much has to be
+;;; in LAP for 32-bit ports.
+#-(or x8632-target ppc32-target x8664-target)
+(defun %mrg31k3p (state)
+  (let* ((v (random.mrg31k3p-state state)))
+    (declare (type (simple-array (unsigned-byte 32) (*)) v)
+	     (optimize speed))
+    (let ((y1 (+ (+ (ash (logand (aref v 1) #x1ff) 22)
+		    (ash (aref v 1) -9))
+		 (+ (ash (logand (aref v 2) #xffffff) 7)
+		    (ash (aref v 2) -24)))))
+      (declare (type (unsigned-byte 32) y1))
+      (if (>= y1 mrg31k3p-m1) (decf y1 mrg31k3p-m1))
+      (incf y1 (aref v 2))
+      (if (>= y1 mrg31k3p-m1) (decf y1 mrg31k3p-m1))
+      (setf (aref v 2) (aref v 1)
+	    (aref v 1) (aref v 0)
+	    (aref v 0) y1))
+    (let ((y1 (+ (ash (logand (aref v 3) #xffff) 15)
+		 (* 21069 (ash (aref v 3) -16))))
+	  (y2 (+ (ash (logand (aref v 5) #xffff) 15)
+		 (* 21069 (ash (aref v 5) -16)))))
+      (declare (type (unsigned-byte 32) y1 y2))
+      (if (>= y1 mrg31k3p-m2) (decf y1 mrg31k3p-m2))
+      (if (>= y2 mrg31k3p-m2) (decf y2 mrg31k3p-m2))
+      (incf y2 (aref v 5))
+      (if (>= y2 mrg31k3p-m2) (decf y2 mrg31k3p-m2))
+      (incf y2 y1)
+      (if (>= y2 mrg31k3p-m2) (decf y2 mrg31k3p-m2))
+      (setf (aref v 5) (aref v 4)
+	    (aref v 4) (aref v 3)
+	    (aref v 3) y2))
+    (let* ((x10 (aref v 0))
+	   (x20 (aref v 3)))
+      (if (<= x10 x20)
+	(+ (- x10 x20) mrg31k3p-m1)
+	(- x10 x20)))))
 
+(eval-when (:compile-toplevel :execute)
+  (declaim (inline %16-random-bits)))
 
-#+32-bit-target
-(defun random (number &optional (state *random-state*))
-  (if (not (typep state 'random-state)) (report-bad-arg state 'random-state))
-  (cond
-     ((and (fixnump number) (> (the fixnum number) 0))
-      (locally (declare (fixnum number))
-        (if (< number 65536)
-          (fast-mod (%next-random-seed state) number)
-          (let* ((n 0)
-                 (nhalf (ash (+ 15 (integer-length number)) -4)))
-            (declare (fixnum n nhalf))
-            (dotimes (i nhalf (fast-mod n number))
-              (setq n (logior (the fixnum (ash n 16))
-                              (the fixnum (%next-random-seed state)))))))))
-     ((and (typep number 'double-float) (> (the double-float number) 0.0))
-      (%float-random number state))
-     ((and (typep number 'short-float) (> (the short-float number) 0.0s0))
-      (%float-random number state))
-     ((and (bignump number) (> number 0))
-      (%bignum-random number state))
-     (t (report-bad-arg number '(or (integer (0)) (float (0.0)))))))
-
-#+64-bit-target
-(defun random (number &optional (state *random-state*))
-  (if (not (typep state 'random-state)) (report-bad-arg state 'random-state))
-  (cond
-    ((and (fixnump number) (> (the fixnum number) 0))
-     (locally (declare (fixnum number))
-       (let* ((n 0)
-              (n32 (ash (+ 31 (integer-length number)) -5)))
-         (declare (fixnum n n32))
-         (dotimes (i n32 (fast-mod n number))
-           (setq n (logior (the fixnum (ash n 32))
-                           (the fixnum (%next-random-seed state))))))))
-    ((and (typep number 'double-float) (> (the double-float number) 0.0))
-     (%float-random number state))
-    ((and (typep number 'short-float) (> (the short-float number) 0.0s0))
-     (%float-random number state))
-    ((and (bignump number) (> number 0))
-     (%bignum-random number state))
-    (t (report-bad-arg number '(or (integer (0)) (float (0.0)))))))
-
-
-#|
-Date: Mon, 3 Feb 1997 10:04:08 -0500
-To: info-mcl@digitool.com, wineberg@franz.scs.carleton.ca
-From: dds@flavors.com (Duncan Smith)
-Subject: Re: More info on the random number generator
-Sender: owner-info-mcl@digitool.com
-Precedence: bulk
-
-The generator is a Linear Congruential Generator:
-
-   X[n+1] = (aX[n] + c) mod m
-
-where: a = 16807  (Park&Miller recommend 48271)
-       c = 0
-       m = 2^31 - 1
-
-See: Knuth, Seminumerical Algorithms (Volume 2), Chapter 3.
-
-The period is: 2^31 - 2  (zero is excluded).
-
-What makes this generator so simple is that multiplication and addition mod
-2^n-1 is easy.  See Knuth Ch. 4.3.2 (2nd Ed. p 272).
-
-    ab mod m = ...
-
-If         m = 2^n-1
-           u = ab mod 2^n
-           v = floor( ab / 2^n )
-
-    ab mod m = u + v                   :  u+v < 2^n
-    ab mod m = ((u + v) mod 2^n) + 1   :  u+v >= 2^n
-
-What we do is use 2b and 2^n so we can do arithemetic mod 2^32 instead of
-2^31.  This reduces the whole generator to 5 instructions on the 680x0 or
-80x86, and 8 on the 60x.
-
--Duncan
-
-|#
+(defun %16-random-bits (state)
+  (logand #xffff (the fixnum (%mrg31k3p state))))
 
 #+64-bit-target
-(defun %next-random-seed (state)
-  (let* ((n (the fixnum (* (the fixnum (random.seed-1 state)) 48271))))
-    (declare (fixnum n))
-    (setf (random.seed-1 state) (fast-mod n (1- (expt 2 31))))
-    (logand n (1- (ash 1 32)))))
+(defun %big-fixnum-random (number state)
+  (declare (fixnum number)
+	   (ftype (function (random-state) fixnum) %mrg31k3p))
+  (let ((low (ldb (byte 30 0) (%mrg31k3p state)))
+	(high (ldb (byte 30 0) (%mrg31k3p state))))
+    (declare (fixnum low high))
+    (fast-mod (logior low (the fixnum (ash high 30)))
+	      number)))
 
-#+32-bit-target
-(defun %next-random-seed (state)
-  (multiple-value-bind (high low) (%next-random-pair (random.seed-1 state)
-                                                     (random.seed-2 state))
-    (declare (type (unsigned-byte 15) high)
-             (type (unsigned-byte 16) low))
-    (setf (random.seed-1 state) high
-          (random.seed-2 state) low)
-    (logior high (the fixnum (logand low (ash 1 15))))))
-
+;;; When using a dead simple random number generator, it's reasonable
+;;; to take 16 bits of the output and discard the rest.  With a more
+;;; expensive generator, however, it may be worthwhile to do more bit
+;;; fiddling here here so that we can use all of the random bits
+;;; produced by %mrg31k2p.
 #+32-bit-target
 (defun %bignum-random (number state)
   (let* ((bits (+ (integer-length number) 8))
@@ -1913,17 +1877,17 @@ What we do is use 2b and 2^n so we can do arithemetic mod 2^32 instead of
     (loop
        ;; This had better inline due to the lie above, or it will error
        #+big-endian-target
-       (setf (aref 16-bit-dividend index) (%next-random-seed state))
+       (setf (aref 16-bit-dividend index) (%16-random-bits state))
        #+little-endian-target
        (setf (aref 16-bit-dividend (the fixnum (1- index)))
-	     (%next-random-seed state))
+	     (%16-random-bits state))
        (decf half-words)
        (when (<= half-words 0) (return))
        #+big-endian-target
        (setf (aref 16-bit-dividend (the fixnum (1- index)))
-	     (%next-random-seed state))
+	     (%16-random-bits state))
        #+little-endian-target
-       (setf (aref 16-bit-dividend index) (%next-random-seed state))
+       (setf (aref 16-bit-dividend index) (%16-random-bits state))
        (decf half-words)
        (when (<= half-words 0) (return))
        (incf index 2))
@@ -1937,6 +1901,24 @@ What we do is use 2b and 2^n so we can do arithemetic mod 2^32 instead of
   (let ((ratio (gvector :ratio (random target::target-most-positive-fixnum state) target::target-most-positive-fixnum)))
     (declare (dynamic-extent ratio))
     (* number ratio)))
+
+(defun random (number &optional (state *random-state*))
+  (if (not (typep state 'random-state)) (report-bad-arg state 'random-state))
+  (cond
+    ((and (fixnump number) (> (the fixnum number) 0))
+     #+32-bit-target
+     (fast-mod (%mrg31k3p state) number)
+     #+64-bit-target
+     (if (< number mrg31k3p-limit)
+       (fast-mod (%mrg31k3p state) number)
+       (%big-fixnum-random number state)))
+    ((and (typep number 'double-float) (> (the double-float number) 0.0))
+     (%float-random number state))
+    ((and (typep number 'short-float) (> (the short-float number) 0.0s0))
+     (%float-random number state))
+    ((and (bignump number) (> number 0))
+     (%bignum-random number state))
+    (t (report-bad-arg number '(or (integer (0)) (float (0.0)))))))
 
 (eval-when (:compile-toplevel :execute)
   (defmacro bignum-abs (nexp)

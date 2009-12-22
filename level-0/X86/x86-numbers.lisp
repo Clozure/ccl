@@ -189,7 +189,101 @@
     (box-fixnum v arg_z)
     (single-value-return)))
 
+(defx86lapfunction %mrg31k3p ((state arg_z))
+  (let ((seed temp0)
+	(m1 #x7fffffff)
+	(m2 #x7fffadb3)
+	(negative-m1 #x80000001)
+	(negative-m2 #x8000524d))
+    (svref state 1 seed)
+    (movl (@ (+ x8664::misc-data-offset (* 4 1)) (% seed)) (% imm0.l))
+    (andl ($ #x1ff) (% imm0.l))
+    (shll ($ 22) (% imm0.l))
+    (movl (@ (+ x8664::misc-data-offset (* 4 1)) (% seed)) (% imm1.l))
+    (shrl ($ 9) (% imm1.l))
+    (addl (% imm1.l) (% imm0.l))
 
+    (movl (@ (+ x8664::misc-data-offset (* 4 2)) (% seed)) (% imm1.l))
+    (andl ($ #xffffff) (% imm1.l))
+    (shll ($ 7) (% imm1.l))
+    (addl (% imm1.l) (% imm0.l))
+    (movl (@ (+ x8664::misc-data-offset (* 4 2)) (% seed)) (% imm1.l))
+    (shrl ($ 24) (% imm1.l))
+
+    (addl (% imm1.l) (% imm0.l))
+    (leal (@ negative-m1 (% imm0.l)) (% imm1.l))
+    (cmpl ($ m1) (% imm0.l))
+    (cmovael (% imm1.l) (% imm0.l))
+
+    (addl (@ (+ x8664::misc-data-offset (* 4 2)) (% seed)) (% imm0.l))
+    (leal (@ negative-m1 (% imm0.l)) (% imm1.l))
+    (cmpl ($ m1) (% imm0.l))
+    (cmovael (% imm1.l) (% imm0.l))
+
+    ;; update state
+    (movl (@ (+ x8664::misc-data-offset (* 4 1)) (% seed)) (% imm1.l))
+    (movl (% imm1.l) (@ (+ x8664::misc-data-offset (* 4 2)) (% seed)))
+    (movl (@ (+ x8664::misc-data-offset (* 4 0)) (% seed)) (% imm1.l))
+    (movl (% imm1.l) (@ (+ x8664::misc-data-offset (* 4 1)) (% seed)))
+    (movl (% imm0.l) (@ (+ x8664::misc-data-offset (* 4 0)) (% seed)))
+
+    ;; second component
+    (movl (@ (+ x8664::misc-data-offset (* 4 3)) (% seed)) (% imm0.l))
+    (andl ($ #xffff) (% imm0.l))
+    (shll ($ 15) (% imm0.l))
+    (movl (@ (+ x8664::misc-data-offset (* 4 3)) (% seed)) (% imm1.l))
+    (shrl ($ 16) (% imm1.l))
+    (imull ($ 21069) (% imm1.l) (% imm1.l))
+
+    (addl (% imm1.l) (% imm0.l))
+    (leal (@ negative-m2 (% imm0.l)) (% imm1.l))
+    (cmpl ($ m2) (% imm0.l))
+    (cmovael (% imm1.l) (% imm0.l))
+
+    (movl (% imm0.l) (% imm2.l))	;stash t1
+
+    (movl (@ (+ x8664::misc-data-offset (* 4 5)) (% seed)) (% imm0.l))
+    (andl ($ #xffff) (% imm0.l))
+    (shll ($ 15) (% imm0.l))
+    (movl (@ (+ x8664::misc-data-offset (* 4 5)) (% seed)) (% imm1.l))
+    (shrl ($ 16) (% imm1.l))
+    (imull ($ 21069) (% imm1.l) (% imm1.l))
+
+    (addl (% imm1.l) (% imm0.l))
+    (leal (@ negative-m2 (% imm0.l)) (% imm1.l))
+    (cmpl ($ m2) (% imm0.l))
+    (cmovael (% imm1.l) (% imm0.l))
+
+    (addl (@ (+ x8664::misc-data-offset (* 4 5)) (% seed)) (% imm0.l))
+    (leal (@ negative-m2 (% imm0.l)) (% imm1.l))
+    (cmpl ($ m2) (% imm0.l))
+    (cmovael (% imm1.l) (% imm0.l))
+
+    (addl (% imm2.l) (% imm0.l))	;add in t1
+    (leal (@ negative-m2 (% imm0.l)) (% imm1.l))
+    (cmpl ($ m2) (% imm0.l))
+    (cmovael (% imm1.l) (% imm0.l))
+
+    ;; update state
+    (movl (@ (+ x8664::misc-data-offset (* 4 4)) (% seed)) (% imm1.l))
+    (movl (% imm1.l) (@ (+ x8664::misc-data-offset (* 4 5)) (% seed)))
+    (movl (@ (+ x8664::misc-data-offset (* 4 3)) (% seed)) (% imm1.l))
+    (movl (% imm1.l) (@ (+ x8664::misc-data-offset (* 4 4)) (% seed)))
+    (movl (% imm0.l) (@ (+ x8664::misc-data-offset (* 4 3)) (% seed)))
+
+    ;; combination
+    (movl (@ (+ x8664::misc-data-offset (* 4 0)) (% seed)) (% imm1.l))
+    (xchgl (% imm1.l) (% imm0.l))		;for sanity
+    (rcmpl (% imm0.l) (% imm1.l))
+    (ja @ok)
+    (subl (% imm1.l) (% imm0.l))
+    (addl ($ m1) (% imm0.l))
+    (box-fixnum imm0 arg_z)
+    (single-value-return)
+    @ok
+    (subl (% imm1.l) (% imm0.l))
+    (box-fixnum imm0 arg_z)
+    (single-value-return)))
 
 ;;; End of x86-numbers.lisp
 ) ; #+x8664-target

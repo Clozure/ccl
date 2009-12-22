@@ -55,7 +55,7 @@
 
 (def-standard-initial-binding *package*)
 (def-standard-initial-binding *gensym-counter* 0)
-(def-standard-initial-binding *random-state* (initialize-random-state #xFBF1 9))
+(def-standard-initial-binding *random-state* (initial-random-state))
 (def-standard-initial-binding *whostate* "Reset")
 (setq *whostate* "Reset")
 (def-standard-initial-binding *error-print-length* 20)

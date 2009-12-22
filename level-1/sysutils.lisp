@@ -509,6 +509,8 @@
                     (return nil))))))
         ((and (hash-table-p x) (hash-table-p y))
          (%hash-table-equalp x y))
+	((and (random-state-p x) (random-state-p y))
+	 (%random-state-equalp x y))
         (t nil)))
 
 

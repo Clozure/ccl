@@ -421,43 +421,69 @@
       (require-type integer 'integer)
       nil)))
 
-(defun %cons-random-state (seed-1 seed-2)
-  #+32-bit-target
-  (%istruct 'random-state seed-1 seed-2)
-  #+64-bit-target
-  (%istruct 'random-state (the fixnum (+ (the fixnum seed-2)
-                          (the fixnum (ash (the fixnum seed-1) 16))))))
-
 ;;; random associated stuff except for the print-object method which
 ;;; is still in "lib;numbers.lisp"
-(defun initialize-random-state (seed-1 seed-2)
-  (unless (and (fixnump seed-1) (%i<= 0 seed-1) (%i< seed-1 #x10000))
-    (report-bad-arg seed-1 '(unsigned-byte 16)))
-  (unless (and (fixnump seed-2) (%i<= 0 seed-2) (%i< seed-2 #x10000))
-    (report-bad-arg seed-2 '(unsigned-byte 16)))
-    (%cons-random-state seed-1 seed-2))
+
+(defun init-random-state-seeds ()
+  (let* ((ticks (ldb (byte 32 0)
+		     (+ (mixup-hash-code (%current-tcr))
+			(let* ((iface (primary-ip-interface)))
+			  (or (and iface (ip-interface-addr iface))
+			      0))
+			(mixup-hash-code
+			 (logand (get-internal-real-time)
+				 (1- target::target-most-positive-fixnum))))))
+	 (high (ldb (byte 16 16) (if (zerop ticks) #x10000 ticks)))
+	 (low (ldb (byte 16 0) ticks)))
+    (declare (fixnum high low))
+    (values high low)))
+
+(defun %cons-mrg31k3p-state (x0 x1 x2 x3 x4 x5)
+  (let ((array (make-array 6 :element-type '(unsigned-byte 32)
+			   :initial-contents (list x0 x1 x2 x3 x4 x5))))
+    (%istruct 'random-state array)))
+
+(defun initialize-mrg31k3p-state (x0 x1 x2 x3 x4 x5)
+  (let ((args (list x0 x1 x2 x3 x4 x5)))
+    (declare (dynamic-extent args))
+    (dolist (a args)
+      (unless (and (fixnump a) (%i<= 0 a) (< a mrg31k3p-limit))
+	(report-bad-arg a `(integer 0 (,mrg31k3p-limit)))))
+    (when (and (zerop x0) (zerop x1) (zerop x2))
+      (error "The first three arguments must not all be zero."))
+    (when (and (zerop x3) (zerop x4) (zerop x5))
+      (error "The second three arguments must not all be zero."))
+    (%cons-mrg31k3p-state x0 x1 x2 x3 x4 x5)))
+
+(defun random-mrg31k3p-state ()
+  (loop repeat 6
+	for n = (init-random-state-seeds)
+	;; The first three seed elements must not be all zero, and
+	;; likewise for the second three.  Avoid the issue by
+	;; excluding zero values.
+	collect (1+ (mod n (1- mrg31k3p-limit))) into seed
+	finally (return (apply #'%cons-mrg31k3p-state seed))))
+
+(defun initial-random-state ()
+  (initialize-mrg31k3p-state 12345 12345 12345 12345 12345 12345))
 
 (defun make-random-state (&optional state)
-  "Make a random state object. If STATE is not supplied, return a copy
-  of the default random state. If STATE is a random state, then return a
-  copy of it. If STATE is T then return a random state generated from
-  the universal time."
-  (let* ((seed-1 0)
-         (seed-2 0))
-    (if (eq state t)
-      (multiple-value-setq (seed-1 seed-2) (init-random-state-seeds))
-      (progn
-        (setq state (require-type (or state *random-state*) 'random-state))
-        #+32-bit-target
-        (setq seed-1 (random.seed-1 state) seed-2 (random.seed-2 state))
-        #+64-bit-target
-        (let* ((seed (random.seed-1 state)))
-          (declare (type (unsigned-byte 32) seed))
-          (setq seed-1 (ldb (byte 16 16) seed)
-                seed-2 (ldb (byte 16 0) seed)))))
-    (%cons-random-state seed-1 seed-2)))
+  "Make a new random state object. If STATE is not supplied, return a
+  copy of the current random state. If STATE is a random state, then
+  return a copy of it. If STATE is T then return a randomly
+  initialized random state."
+  (if (eq state t)
+    (random-mrg31k3p-state)
+    (progn
+      (setq state (require-type (or state *random-state*) 'random-state))
+      (let ((seed (coerce (random.mrg31k3p-state state) 'list)))
+	(apply #'%cons-mrg31k3p-state seed)))))
 
 (defun random-state-p (thing) (istruct-typep thing 'random-state))
+
+(defun %random-state-equalp (x y)
+  ;; x and y are both random-state objects
+  (equalp (random.mrg31k3p-state x) (random.mrg31k3p-state y)))
 
 ;;; transcendental stuff.  Should go in level-0;l0-float
 ;;; but shleps don't work in level-0.  Or do they ?

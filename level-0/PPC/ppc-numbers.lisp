@@ -437,8 +437,108 @@ What we do is use 2b and 2^n so we can do arithemetic mod 2^32 instead of
     (srdi v v 1)
     (beq cr0 @shiftv)
     (b @loop)))
+
+(defppclapfunction %mrg31k3p ((state arg_z))
+  (let ((seed temp0))
+    (svref seed 1 state)
+    (u32-ref imm0 1 seed)
+    (u32-ref imm3 2 seed)
+    (rlwinm imm1 imm0 22 1 9)
+    (srwi imm2 imm0 9)
+    (add imm0 imm1 imm2)
     
+    ;; construct m1 (1- (expt 2 31))
+    (lis imm1 #x7fff)
+    (ori imm1 imm1 #xffff)
 
+    (rlwinm imm4 imm3 7 1 24)
+    (srwi imm5 imm3 24)
+    (add imm0 imm0 imm4)
+    (add imm0 imm0 imm5)
 
+    ;; reduce mod m1
+    (cmplw cr7 imm0 imm1)
+    (blt cr7 @ok1)
+    (sub imm0 imm0 imm1)
+    @ok1
+
+    (add imm0 imm0 imm3)
+
+    ;; reduce mod m1
+    (cmplw cr7 imm0 imm1)
+    (blt cr7 @ok2)
+    (sub imm0 imm0 imm1)
+    @ok2
+
+    ;; update state
+    (u32-ref imm1 1 seed)
+    (u32-set imm1 2 seed)
+    (u32-ref imm1 0 seed)
+    (u32-set imm1 1 seed)
+    (u32-set imm0 0 seed)
+
+    ;; construct m2 (- (expt 2 31) 21069))
+    (lis imm5 #x7fff)
+    (ori imm5 imm5 44467)
+
+    ;; second component
+    (u32-ref imm0 3 seed)
+    (rlwinm imm1 imm0 15 1 16)
+    (srwi imm2 imm0 16)
+    (mulli imm2 imm2 21069)
+    (add imm0 imm1 imm2)
+
+    ;; reduce mod m2
+    (cmplw cr7 imm0 imm5)
+    (blt cr7 @ok3)
+    (sub imm0 imm0 imm5)
+    @ok3
+
+    (u32-ref imm1 5 seed)
+    (rlwinm imm2 imm1 15 1 16)
+    (srwi imm3 imm1 16)
+    (mulli imm3 imm3 21069)
+    (add imm2 imm2 imm3)
+
+    ;; reduce mod m2
+    (cmplw cr7 imm2 imm5)
+    (blt cr7 @ok4)
+    (sub imm2 imm2 imm5)
+    @ok4
+
+    (add imm2 imm1 imm2)
+    (cmplw cr7 imm2 imm5)
+    (blt cr7 @ok5)
+    (sub imm2 imm2 imm5)
+    @ok5
+
+    (add imm2 imm2 imm0)
+    (cmplw cr7 imm2 imm5)
+    (blt cr7 @ok6)
+    (sub imm2 imm2 imm5)
+    @ok6
+
+    ;; update state
+    (u32-ref imm0 4 seed)
+    (u32-set imm0 5 seed)
+    (u32-ref imm0 3 seed)
+    (u32-set imm0 4 seed)
+    (u32-set imm2 3 seed)
+
+    ;; construct m1 (1- (expt 2 31))
+    (lis imm5 #x7fff)
+    (ori imm5 imm5 #xffff)
+
+    ;; combination
+    (u32-ref imm0 0 seed)
+    (cmplw cr7 imm0 imm2)
+    (sub imm0 imm0 imm2)
+    (bgt cr7 @finish)
+    (add imm0 imm0 imm5)
+    @finish
+    #+ppc32-target
+    (clrlwi imm0 imm0 3)		;don't want negative fixnums
+    (box-fixnum arg_z imm0)
+    (blr)))    
 
 ; End of ppc-numbers.lisp

@@ -1072,6 +1072,11 @@ in stvx and lvx instructions within the body."
     (ldrx ,was ,bitwords ,index)
     (and. ,mask ,was ,mask)))
                                            
+(defppclapmacro u32-ref (dest index vector)
+  `(lwz ,dest (+ (* 4 ,index) target::misc-data-offset) ,vector))
+
+(defppclapmacro u32-set (new-value index vector)
+  `(stw ,new-value (+ (* 4 ,index) target::misc-data-offset) ,vector))
 
 (provide "PPC-LAPMACROS")
 

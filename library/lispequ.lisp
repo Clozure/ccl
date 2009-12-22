@@ -823,8 +823,7 @@
 
 (def-accessors (random-state) %svref
   ()
-  random.seed-1
-  random.seed-2)
+  random.mrg31k3p-state)
 
 ;;; IEEE-floating-point constants.
 
