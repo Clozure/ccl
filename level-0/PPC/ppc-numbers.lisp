@@ -19,10 +19,6 @@
 
 (in-package "CCL")
 
-;(push (cons 'number-case 1) *fred-special-indent-alist*) do later
-
-
-
 (defppclapfunction %fixnum-signum ((number arg_z))
   (cmpri :cr0 number '0)
   (li arg_z '0)
@@ -273,79 +269,6 @@
   (ldr imm1 target::lisp-frame.savelr sp)
   (eq->boolean arg_z imm0 imm1 imm0)
   (blr))
-  
-
-
-
-
-
-
-
-#|
-Date: Mon, 3 Feb 1997 10:04:08 -0500
-To: info-mcl@digitool.com, wineberg@franz.scs.carleton.ca
-From: dds@flavors.com (Duncan Smith)
-Subject: Re: More info on the random number generator
-Sender: owner-info-mcl@digitool.com
-Precedence: bulk
-
-The generator is a Linear Congruential Generator:
-
-   X[n+1] = (aX[n] + c) mod m
-
-where: a = 16807  (Park&Miller recommend 48271)
-       c = 0
-       m = 2^31 - 1
-
-See: Knuth, Seminumerical Algorithms (Volume 2), Chapter 3.
-
-The period is: 2^31 - 2  (zero is excluded).
-
-What makes this generator so simple is that multiplication and addition mod
-2^n-1 is easy.  See Knuth Ch. 4.3.2 (2nd Ed. p 272).
-
-    ab mod m = ...
-
-If         m = 2^n-1
-           u = ab mod 2^n
-           v = floor( ab / 2^n )
-
-    ab mod m = u + v                   :  u+v < 2^n
-    ab mod m = ((u + v) mod 2^n) + 1   :  u+v >= 2^n
-
-What we do is use 2b and 2^n so we can do arithemetic mod 2^32 instead of
-2^31.  This reduces the whole generator to 5 instructions on the 680x0 or
-80x86, and 8 on the 60x.
-
--Duncan
-
-|#
-; Use the two fixnums in state to generate a random fixnum >= 0 and < 65536
-; Scramble those fixnums up a bit.
-
-#+ppc32-target
-(defppclapfunction %next-random-pair ((high arg_y) (low arg_z))
-  (slwi imm0 high (- 16 ppc32::fixnumshift))
-  (rlwimi imm0 low (- 32 ppc32::fixnumshift) 16 31)
-  (lwi imm1 48271)
-  (clrlwi imm0 imm0 1)
-  (mullw imm0 imm1 imm0)
-  (clrrwi arg_y imm0 16 )
-  (srwi arg_y arg_y (- 16 ppc32::fixnumshift))
-  (clrlslwi arg_z imm0 16 ppc32::fixnumshift)
-  (mr temp0 vsp)
-  (vpush arg_y)
-  (vpush arg_z)
-  (set-nargs 2)
-  (ba .SPvalues))
-
-
-
-
-
-
-
-
 
 ;;; n1 and n2 must be positive (esp non zero)
 #+ppc32-target
