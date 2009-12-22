@@ -195,10 +195,13 @@ reapweakv(LispObj weakv)
 
   if (terminatablep) {
     deref(weakv,1+3) = termination_list;
-    if (termination_list != lisp_nil) {
-      deref(weakv,1) = GCweakvll;
-      GCweakvll = weakv;
-    }
+  }
+  if (termination_list != lisp_nil) {
+    deref(weakv,1) = GCweakvll;
+    GCweakvll = untag(weakv);
+  } else {
+    deref(weakv,1) = lisp_global(WEAKVLL);
+    lisp_global(WEAKVLL) = untag(weakv);
   }
 }
 
@@ -212,23 +215,51 @@ reaphashv(LispObj hashv)
   hash_table_vector_header
     *hashp = (hash_table_vector_header *) ptr_from_lispobj(untag(hashv));
   natural
-    dnode,
+    dnode;
+  signed_natural
     npairs = (header_element_count(hashp->header) - 
               (hash_table_vector_header_count -1)) >> 1;
   LispObj *pairp = (LispObj*) (hashp+1), weakelement;
-  Boolean 
-    weak_on_value = ((hashp->flags & nhash_weak_value_mask) != 0);
+  int weak_index = (((hashp->flags & nhash_weak_value_mask) == 0) ? 0 : 1);
   Boolean
     keys_frozen = ((hashp->flags & nhash_keys_frozen_mask) != 0);
   bitvector markbits = GCmarkbits;
   int tag;
 
-  while (npairs--) {
-    if (weak_on_value) {
-      weakelement = pairp[1];
-    } else {
-      weakelement = pairp[0];
+  natural *tenured_low = (LispObj *)tenured_area->low;
+  natural tenured_dnodes = area_dnode(GCarealow, tenured_low);
+  natural memo_dnode = area_dnode(ptr_to_lispobj(pairp+weak_index), tenured_low);
+  Boolean
+    hashv_tenured = (memo_dnode < tenured_dnodes);
+  natural bits, bitidx, *bitsp;
+
+  if (hashv_tenured) {
+    set_bitidx_vars(tenured_area->refbits, memo_dnode, bitsp, bits, bitidx);
+  }
+
+  while (true) {
+    if (hashv_tenured) {
+      while (bits == 0) {
+        int skip = nbits_in_word - bitidx;
+        npairs -= skip;
+        if (npairs <= 0) break;
+        pairp += (skip+skip);
+        bitidx = 0;
+        bits = *++bitsp;
+      }
+      if (bits != 0) {
+        int skip = (count_leading_zeros(bits) - bitidx);
+        if (skip != 0) {
+          npairs -= skip;
+          pairp += (skip+skip);
+          bitidx += skip;
+        }
+      }
     }
+
+    if (npairs <= 0) break;
+
+    weakelement = pairp[weak_index];
     tag = fulltag_of(weakelement);
     if (is_node_fulltag(tag)) {
       dnode = gc_area_dnode(weakelement);
@@ -247,7 +278,10 @@ reaphashv(LispObj hashv)
       }
     }
     pairp += 2;
+    --npairs;
   }
+  deref(hashv, 1) = lisp_global(WEAKVLL);
+  lisp_global(WEAKVLL) = untag(hashv);
 }
 
 void
@@ -255,18 +289,16 @@ traditional_dws_mark_htabv(LispObj htabv)
 {
   /* Do nothing, just add htabv to GCweakvll */
   LispObj *base = (LispObj *) ptr_from_lispobj(untag(htabv));
-  
-  deref(base,1) = GCweakvll;
-  GCweakvll = htabv;
+
+  base[1] = GCweakvll;
+  GCweakvll = ptr_to_lispobj(base);
 }
 
 void
 ncircle_dws_mark_htabv(LispObj htabv)
 {
   /* Do nothing, just add htabv to GCdwsweakvll */
-  LispObj *base = (LispObj *) ptr_from_lispobj(untag(htabv));
-  
-  deref(base,1) = GCdwsweakvll;
+  deref(htabv,1) = GCdwsweakvll;
   GCdwsweakvll = htabv;
 }
 
@@ -274,13 +306,13 @@ void
 traditional_mark_weak_htabv(LispObj htabv)
 {
   int i, skip = hash_table_vector_header_count;;
+  LispObj *base = (LispObj *) ptr_from_lispobj(untag(htabv));
 
   for (i = 2; i <= skip; i++) {
-    rmark(deref(htabv,i));
+    rmark(base[i]);
   }
-
-  deref(htabv,1) = GCweakvll;
-  GCweakvll = htabv;
+  base[1] = GCweakvll;
+  GCweakvll = ptr_to_lispobj(base);
 }
 
 void
@@ -308,30 +340,40 @@ ncircle_mark_weak_htabv(LispObj htabv)
     rmark(*pairp);
     pairp += 2;
   }
-
-  deref(htabv,1) = GCweakvll;
-  GCweakvll = htabv;
+  deref(htabv,1)  = GCweakvll;
+  GCweakvll = (LispObj)untag(htabv);
 }
 
 
 Boolean
 mark_weak_hash_vector(hash_table_vector_header *hashp, natural elements)
 {
-  natural flags = hashp->flags, key_dnode, val_dnode;
+  natural flags = hashp->flags, weak_dnode, nonweak_dnode;
   Boolean 
     marked_new = false, 
-    key_marked,
-    val_marked,
-    weak_value = ((flags & nhash_weak_value_mask) != 0);
+    weak_marked;
+  int non_weak_index = (((flags & nhash_weak_value_mask) != 0) ? 0 : 1);
   int 
     skip = hash_table_vector_header_count-1,
-    key_tag,
-    val_tag,
+    weak_tag,
+    nonweak_tag,
     i;
+  signed_natural
+    npairs = (elements - skip) >> 1;
   LispObj 
     *pairp = (LispObj*) (hashp+1),
-    key,
-    val;
+    weak,
+    nonweak;
+
+  natural *tenured_low = (LispObj *)tenured_area->low;
+  natural tenured_dnodes = area_dnode(GCarealow, tenured_low);
+  natural memo_dnode = area_dnode(ptr_to_lispobj(pairp+non_weak_index), tenured_low);
+  Boolean hashv_tenured = (memo_dnode < tenured_dnodes);
+  natural bits, bitidx, *bitsp;
+
+  if (hashv_tenured) {
+    set_bitidx_vars(tenured_area->refbits, memo_dnode, bitsp, bits, bitidx);
+  }
 
   /* Mark everything in the header */
   
@@ -339,40 +381,53 @@ mark_weak_hash_vector(hash_table_vector_header *hashp, natural elements)
     mark_root(deref(ptr_to_lispobj(hashp),i));
   }
 
-  elements -= skip;
+  while (true) {
+    if (hashv_tenured) {
+      while (bits == 0) {
+        int skip = nbits_in_word - bitidx;
+        npairs -= skip;
+        if (npairs <= 0) break;
+        pairp += (skip+skip);
+        bitidx = 0;
+        bits = *++bitsp;
+      }
+      if (bits != 0) {
+        int skip = count_leading_zeros(bits) - bitidx;
+        if (skip != 0) {
+          npairs -= skip;
+          pairp += (skip+skip);
+          bitidx += skip;
+        }
+      }
+    }
+    if (npairs <= 0) break;
 
-  for (i = 0; i<elements; i+=2, pairp+=2) {
-    key = pairp[0];
-    val = pairp[1];
-    key_marked = val_marked = true;
-    key_tag = fulltag_of(key);
-    val_tag = fulltag_of(val);
-    if (is_node_fulltag(key_tag)) {
-      key_dnode = gc_area_dnode(key);
-      if ((key_dnode < GCndnodes_in_area) &&
-          ! ref_bit(GCmarkbits,key_dnode)) {
-        key_marked = false;
-      }
-    }
-    if (is_node_fulltag(val_tag)) {
-      val_dnode = gc_area_dnode(val);
-      if ((val_dnode < GCndnodes_in_area) &&
-          ! ref_bit(GCmarkbits,val_dnode)) {
-        val_marked = false;
+    nonweak = pairp[non_weak_index];
+    weak = pairp[1-non_weak_index];
+
+    nonweak_tag = fulltag_of(nonweak);
+    if (is_node_fulltag(nonweak_tag)) {
+      nonweak_dnode = gc_area_dnode(nonweak);
+      if ((nonweak_dnode < GCndnodes_in_area) &&
+          ! ref_bit(GCmarkbits,nonweak_dnode)) {
+        weak_marked = true;
+        weak_tag = fulltag_of(weak);
+        if (is_node_fulltag(weak_tag)) {
+          weak_dnode = gc_area_dnode(weak);
+          if ((weak_dnode < GCndnodes_in_area) &&
+              ! ref_bit(GCmarkbits, weak_dnode)) {
+            weak_marked = false;
+          }
+        }
+        if (weak_marked) {
+          mark_root(nonweak);
+          marked_new = true;
+        }
       }
     }
 
-    if (weak_value) {
-      if (val_marked & !key_marked) {
-        mark_root(key);
-        marked_new = true;
-      }
-    } else {
-      if (key_marked & !val_marked) {
-        mark_root(val);
-        marked_new = true;
-      }
-    }
+    pairp+=2;
+    --npairs;
   }
   return marked_new;
 }
@@ -426,9 +481,34 @@ mark_weak_alist(LispObj weak_alist, int weak_type)
 }
   
 void
+mark_termination_lists()
+{
+  /* 
+     Mark the termination lists in all terminatable weak vectors, which
+     are now linked together on GCweakvll, and add them to WEAKVLL,
+     which already contains all other weak vectors.
+  */
+  LispObj pending = GCweakvll,
+          *base = (LispObj *)NULL;
+
+  while (pending) {
+    base = ptr_from_lispobj(pending);
+    pending = base[1];
+
+    mark_root(base[1+3]);
+  }
+  if (base) {
+    base[1] = lisp_global(WEAKVLL);
+    lisp_global(WEAKVLL) = GCweakvll;
+  }
+
+}
+
+
+void
 traditional_markhtabvs()
 {
-  LispObj this, header, pending;
+  LispObj *base, this, header, pending;
   int subtag;
   hash_table_vector_header *hashp;
   Boolean marked_new;
@@ -438,16 +518,17 @@ traditional_markhtabvs()
     marked_new = false;
     
     while (GCweakvll) {
-      this = GCweakvll;
-      GCweakvll = deref(this,1);
+      base = ptr_from_lispobj(GCweakvll);
+      GCweakvll = base[1];
       
-      header = header_of(this);
+      header = base[0];
       subtag = header_subtag(header);
       
       if (subtag == subtag_weak) {
-        natural weak_type = deref(this,2);
-        deref(this,1) = pending;
-        pending = this;
+        natural weak_type = base[2];
+        this = ptr_to_lispobj(base) + fulltag_misc;
+        base[1] = pending;
+        pending = ptr_to_lispobj(base);
         if ((weak_type & population_type_mask) == population_weak_alist) {
           if (mark_weak_alist(this, weak_type)) {
             marked_new = true;
@@ -456,16 +537,16 @@ traditional_markhtabvs()
       } else if (subtag == subtag_hash_vector) {
         natural elements = header_element_count(header);
 
-        hashp = (hash_table_vector_header *) ptr_from_lispobj(untag(this));
+        hashp = (hash_table_vector_header *) base;
         if (hashp->flags & nhash_weak_mask) {
-          deref(this,1) = pending;
-          pending = this;
+          base[1] = pending;
+          pending = ptr_to_lispobj(base);
           if (mark_weak_hash_vector(hashp, elements)) {
             marked_new = true;
           }
         } 
       } else {
-        Bug(NULL, "Strange object on weak vector linked list: 0x~08x\n", this);
+        Bug(NULL, "Strange object on weak vector linked list: " LISP "\n", base);
       }
     }
 
@@ -480,40 +561,27 @@ traditional_markhtabvs()
      */
 
   while (pending) {
-    this = pending;
-    pending = deref(this,1);
-    deref(this,1) = (LispObj)NULL;
+    base = ptr_from_lispobj(pending);
+    pending = base[1];
+    base[1] = (LispObj)NULL;
 
-    subtag = header_subtag(header_of(this));
+    this = ptr_to_lispobj(base) + fulltag_misc;
+
+    subtag = header_subtag(base[0]);
     if (subtag == subtag_weak) {
       reapweakv(this);
     } else {
       reaphashv(this);
     }
   }
-
-  /* Finally, mark the termination lists in all terminatable weak vectors
-     They are now linked together on GCweakvll.
-     This is where to store  lisp_global(TERMINATION_LIST) if we decide to do that,
-     but it will force terminatable popualations to hold on to each other
-     (set TERMINATION_LIST before clearing GCweakvll, and don't clear deref(this,1)).
-     */
-  pending = GCweakvll;
-  GCweakvll = (LispObj)NULL;
-  while (pending) {
-    this = pending;
-    pending = deref(this,1);
-    deref(this,1) = (LispObj)NULL;
-    mark_root(deref(this,1+3));
-  }
+  mark_termination_lists();
 }
 
 void
 ncircle_markhtabvs()
 {
-  LispObj this, header, pending = 0;
+  LispObj *base, this, header, pending = 0;
   int subtag;
-  Boolean marked_new;
 
   /* First, process any weak hash tables that may have
      been encountered by the link-inverting marker; we
@@ -526,20 +594,21 @@ ncircle_markhtabvs()
   }
 
   while (GCweakvll) {
-    this = GCweakvll;
-    GCweakvll = deref(this,1);
-      
-    header = header_of(this);
+    base = ptr_from_lispobj(GCweakvll);
+    GCweakvll = base[1];
+    base[1] = (LispObj)NULL;
+
+    this = ptr_to_lispobj(base) + fulltag_misc;
+
+    header = base[0];
     subtag = header_subtag(header);
       
     if (subtag == subtag_weak) {
-      natural weak_type = deref(this,2);
-      deref(this,1) = pending;
-      pending = this;
+      natural weak_type = base[2];
+      base[1] = pending;
+      pending = ptr_to_lispobj(base);
       if ((weak_type & population_type_mask) == population_weak_alist) {
-        if (mark_weak_alist(this, weak_type)) {
-          marked_new = true;
-          }
+        mark_weak_alist(this, weak_type);
       }
     } else if (subtag == subtag_hash_vector) {
       reaphashv(this);
@@ -552,11 +621,13 @@ ncircle_markhtabvs()
      */
 
   while (pending) {
-    this = pending;
-    pending = deref(this,1);
-    deref(this,1) = (LispObj)NULL;
+    base = ptr_from_lispobj(pending);
+    pending = base[1];
+    base[1] = (LispObj)NULL;
 
-    subtag = header_subtag(header_of(this));
+    this = ptr_to_lispobj(base) + fulltag_misc;
+
+    subtag = header_subtag(base[0]);
     if (subtag == subtag_weak) {
       reapweakv(this);
     } else {
@@ -564,20 +635,7 @@ ncircle_markhtabvs()
     }
   }
 
-  /* Finally, mark the termination lists in all terminatable weak vectors
-     They are now linked together on GCweakvll.
-     This is where to store  lisp_global(TERMINATION_LIST) if we decide to do that,
-     but it will force terminatable popualations to hold on to each other
-     (set TERMINATION_LIST before clearing GCweakvll, and don't clear deref(this,1)).
-     */
-  pending = GCweakvll;
-  GCweakvll = (LispObj)NULL;
-  while (pending) {
-    this = pending;
-    pending = deref(this,1);
-    deref(this,1) = (LispObj)NULL;
-    mark_root(deref(this,1+3));
-  }
+  mark_termination_lists();
 }
 
 void
@@ -844,6 +902,127 @@ install_weak_mark_functions(natural set) {
     break;
   }
 }
+
+void
+init_weakvll ()
+{
+  LispObj this = lisp_global(WEAKVLL); /* all weak vectors as of last gc */
+
+  GCweakvll = (LispObj)NULL;
+  lisp_global(WEAKVLL) = (LispObj)NULL;
+
+  if (GCn_ephemeral_dnodes) {
+    /* For egc case, initialize GCweakvll with weak vectors not in the
+       GC area.  Weak vectors in the GC area will be added during marking.
+    */
+
+    LispObj *tenured_low = (LispObj *)tenured_area->low;
+    natural tenured_dnodes = area_dnode(GCarealow, tenured_low);
+    bitvector refbits = tenured_area->refbits;
+
+    while (this) {
+      LispObj *base = ptr_from_lispobj(this);
+      LispObj next = base[1];
+      natural dnode = gc_dynamic_area_dnode(this);
+      if (dnode < GCndynamic_dnodes_in_area) {
+        base[1] = (LispObj)NULL; /* drop it, might be garbage */
+      } else {
+        base[1] = GCweakvll;
+        GCweakvll = ptr_to_lispobj(base);
+        if (header_subtag(base[0]) == subtag_weak) {
+          dnode = area_dnode(&base[3], tenured_low);
+          if (dnode < tenured_dnodes) {
+            clr_bit(refbits, dnode); /* Don't treat population.data as root */
+          }
+        } else {
+          if (header_subtag(base[0]) != subtag_hash_vector)
+            Bug(NULL, "Unexpected entry " LISP " -> " LISP " on WEAKVLL", base, base[0]);
+          dnode = area_dnode(base, tenured_low);
+          if ((dnode < tenured_dnodes) && !ref_bit(refbits, dnode)) {
+            Boolean drop = true;
+            /* hash vectors get marked headers if they have any ephemeral keys */
+            /* but not if they have ephemeral values. */
+            if (((hash_table_vector_header *)base)->flags & nhash_weak_value_mask) {
+              signed_natural count = (header_element_count(base[0]) + 2) >> 1;
+              natural bits, bitidx, *bitsp;
+              set_bitidx_vars(refbits, dnode, bitsp, bits, bitidx);
+              while ((0 < count) && (bits == 0)) {
+                int skip = nbits_in_word - bitidx;
+                count -= skip;
+                bits = *++bitsp;
+                bitidx = 0;
+              }
+              count -=  (count_leading_zeros(bits) - bitidx);
+
+              if (0 < count) {
+                set_bit(refbits, dnode); /* has ephemeral values, mark header */
+                drop = false;
+              }
+            }
+            if (drop) { /* if nothing ephemeral, drop it from GCweakvll. */
+              GCweakvll = base[1];
+              base[1] = lisp_global(WEAKVLL);
+              lisp_global(WEAKVLL) = ptr_to_lispobj(base);
+            }
+          }
+        }
+      }
+      this = next;
+    }
+  }
+}
+
+  
+void
+preforward_weakvll ()
+{
+  /* reset population refbits for forwarding */
+  if (GCn_ephemeral_dnodes) {
+    LispObj this = lisp_global(WEAKVLL);
+    LispObj *tenured_low = (LispObj *)tenured_area->low;
+    natural tenured_dnodes = area_dnode(GCarealow, tenured_low);
+    bitvector refbits = tenured_area->refbits;
+
+    while (this) {
+      LispObj *base = ptr_from_lispobj(this);
+      if (header_subtag(base[0]) == subtag_weak) {
+        natural dnode = area_dnode(&base[3], tenured_low);
+        if (base[3] >= GCarealow) {
+          if (dnode < tenured_dnodes) {
+            set_bit(refbits, dnode);
+          }
+        }
+        /* might have set termination list to a new pointer */
+        if ((base[2] >> population_termination_bit) && (base[4] >= GCarealow)) {
+          if ((dnode + 1) < tenured_dnodes) {
+            set_bit(refbits, dnode+1);
+          }
+        }
+      }
+      this = base[1];
+    }
+  }
+}
+
+
+void
+forward_weakvll_links()
+{
+  LispObj *ptr = &(lisp_global(WEAKVLL)), this, new, old;
+
+  while (this = *ptr) {
+    old = this + fulltag_misc;
+    new = node_forwarding_address(old);
+    if (old != new) {
+      *ptr = untag(new);
+    }
+    ptr = &(deref(new,1));
+  }
+}
+
+
+
+
 
 LispObj
 node_forwarding_address(LispObj node)
@@ -1170,9 +1349,8 @@ gc(TCR *tcr, signed_natural param)
   BytePtr oldfree = a->active;
   TCR *other_tcr;
   natural static_dnodes;
+  natural weak_method = lisp_global(WEAK_GC_METHOD) >> fixnumshift;
 
-  install_weak_mark_functions(lisp_global(WEAK_GC_METHOD) >> fixnumshift);
-  
 #ifndef FORCE_DWS_MARK
   if ((natural) (tcr->cs_limit) == CS_OVERFLOW_FORCE_LIMIT) {
     GCstack_limit = CS_OVERFLOW_FORCE_LIMIT;
@@ -1216,6 +1394,8 @@ gc(TCR *tcr, signed_natural param)
     note = tenured_area;
   }
 
+  install_weak_mark_functions(weak_method);
+  
   if (GCverbose) {
     char buf[16];
 
@@ -1263,7 +1443,8 @@ gc(TCR *tcr, signed_natural param)
       GCmarkbits + ((GCndnodes_in_area-GCndynamic_dnodes_in_area)>>bitmap_shift);
 
     zero_bits(GCmarkbits, GCndnodes_in_area);
-    GCweakvll = (LispObj)NULL;
+
+    init_weakvll();
 
     if (GCn_ephemeral_dnodes == 0) {
       /* For GCTWA, mark the internal package hash table vector of
@@ -1328,7 +1509,7 @@ gc(TCR *tcr, signed_natural param)
       }
     }
   
-    if (lisp_global(OLDEST_EPHEMERAL)) {
+    if (GCephemeral_low) {
       mark_memoized_area(tenured_area, area_dnode(a->low,tenured_area->low));
     }
 
@@ -1407,6 +1588,8 @@ gc(TCR *tcr, signed_natural param)
   
     reap_gcable_ptrs();
 
+    preforward_weakvll();
+
     GCrelocptr = global_reloctab;
     GCfirstunmarked = calculate_relocation();
 
@@ -1468,6 +1651,9 @@ gc(TCR *tcr, signed_natural param)
   
     forward_memoized_area(managed_static_area,area_dnode(managed_static_area->active,managed_static_area->low));
     a->active = (BytePtr) ptr_from_lispobj(compact_dynamic_heap());
+
+    forward_weakvll_links();
+
     if (to) {
       tenure_to_area(to);
     }

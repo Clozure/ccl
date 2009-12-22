@@ -183,9 +183,10 @@ ifdef([PPC64],[
         include(ppc-constants32.s)
 ])
 
-num_lisp_globals = 48		 /* MUST UPDATE THIS !!! */
+num_lisp_globals = 49		 /* MUST UPDATE THIS !!! */
 	
 	_struct(lisp_globals,lisp_globals_limit-(num_lisp_globals*node_size))
+	 _node(weakvll)                 /* all populations as of last GC */
 	 _node(initial_tcr)	        /* initial thread tcr */
 	 _node(image_name)	        /* --image-name argument */
 	 _node(BADfpscr_save_high)      /* high word of FP reg used to save FPSCR */

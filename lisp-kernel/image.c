@@ -79,7 +79,12 @@ relocate_area_contents(area *a, LispObj bias)
         fulltag = fulltag_of(w0);
       }
 #endif
-
+      if (header_subtag(w0) == subtag_weak) {
+        LispObj link = start[1];
+        if ((link >= low) && (link < high)) {
+          start[1] = (link+bias);
+        }
+      }
       if ((w0 >= low) && (w0 < high) &&
 	  ((1<<fulltag) & RELOCATABLE_FULLTAG_MASK)) {
 	*start = (w0+bias);
@@ -560,6 +565,8 @@ save_application(unsigned fd, Boolean egc_was_enabled)
     case G0_THRESHOLD:
     case G1_THRESHOLD:
     case G2_THRESHOLD:
+      break;
+    case WEAKVLL:
       break;
     default:
       lisp_global(i) = 0;

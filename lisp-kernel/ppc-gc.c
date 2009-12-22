@@ -214,8 +214,6 @@ check_all_areas(TCR *tcr)
 
 
 /* Sooner or later, this probably wants to be in assembler */
-/* Return false if n is definitely not an ephemeral node, true if
-   it might be */
 void
 mark_root(LispObj n)
 {
@@ -308,7 +306,7 @@ mark_root(LispObj n)
       }
 
       if (subtag == subtag_pool) {
-        deref(ptr_to_lispobj(base), 1) = lisp_nil;
+        deref(n, 1) = lisp_nil;
       }
       
       if (subtag == subtag_weak) {
@@ -327,8 +325,8 @@ mark_root(LispObj n)
         rmark(*--base);
       }
       if (subtag == subtag_weak) {
-        deref(ptr_to_lispobj(base),1) = GCweakvll;
-        GCweakvll = n;
+        deref(n, 1) = GCweakvll;
+        GCweakvll = untag(n);
       }
     }
   }
@@ -604,7 +602,7 @@ rmark(LispObj n)
 
       if (subtag == subtag_weak) {
         deref(n, 1) = GCweakvll;
-        GCweakvll = n;
+        GCweakvll = untag(n);
       }
 
     }
@@ -796,7 +794,7 @@ rmark(LispObj n)
 
     if (header_subtag(next) == subtag_weak) {
       deref(this, 1) = GCweakvll;
-      GCweakvll = this;
+      GCweakvll = untag(this);
     }
     goto Climb;
   }
@@ -884,7 +882,7 @@ check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits)
       if (intergen_ref) {
         ref_dnode = area_dnode(start, base);
         if (!ref_bit(refbits, ref_dnode)) {
-          Bug(NULL, "Missing memoization in doublenode at 0x" LISP, start);
+          Bug(NULL, "Missing memoization in doublenode at 0x" LISP "\n", start);
           set_bit(refbits, ref_dnode);
         }
       }
@@ -902,6 +900,9 @@ mark_memoized_area(area *a, natural num_memo_dnodes)
   LispObj *p = (LispObj *) a->low, x1, x2;
   natural inbits, outbits, bits, bitidx, *bitsp, nextbit, diff, memo_dnode = 0;
   Boolean keep_x1, keep_x2;
+  natural hash_dnode_limit = 0;
+  hash_table_vector_header *hashp = NULL;
+  int mark_method = 3;
 
   if (GCDebug) {
     check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
@@ -915,8 +916,6 @@ mark_memoized_area(area *a, natural num_memo_dnodes)
 
      Some headers are "interesting", to the forwarder if not to us. 
 
-     We -don't- give anything any weak treatment here.  Weak things have
-     to be seen by a full gc, for some value of 'full'.
      */
 
   /*
@@ -961,10 +960,51 @@ mark_memoized_area(area *a, natural num_memo_dnodes)
       x1 = *p++;
       x2 = *p++;
       bits &= ~(BIT0_MASK >> bitidx);
+
+      if (hashp) {
+        Boolean force_x1 = false;
+        if ((memo_dnode >= hash_dnode_limit) && (mark_method == 3)) {
+          /* if vector_header_count is odd, x1 might be the last word of the header */
+          force_x1 = (hash_table_vector_header_count & 1) && (memo_dnode == hash_dnode_limit);
+          /* was marking header, switch to data */
+          hash_dnode_limit = area_dnode(((LispObj *)hashp)
+                                        + 1
+                                        + header_element_count(hashp->header),
+                                        a->low);
+          /* In traditional weak method, don't mark vector entries at all. */
+          /* Otherwise mark the non-weak elements only */
+          mark_method = ((lisp_global(WEAK_GC_METHOD) == 0) ? 0 :
+                         ((hashp->flags & nhash_weak_value_mask)
+                          ? (1 + (hash_table_vector_header_count & 1))
+                          : (2 - (hash_table_vector_header_count & 1))));
+        }
+
+        if (memo_dnode < hash_dnode_limit) {
+          /* perhaps ignore one or both of the elements */
+          if (!force_x1 && !(mark_method & 1)) x1 = 0;
+          if (!(mark_method & 2)) x2 = 0;
+        } else {
+          hashp = NULL;
+        }
+      }
+
+      if (header_subtag(x1) == subtag_hash_vector) {
+        if (hashp) Bug(NULL, "header inside hash vector?");
+        hash_table_vector_header *hp = (hash_table_vector_header *)(p - 2);
+        if (hp->flags & nhash_weak_mask) {
+          /* If header_count is odd, this cuts off the last header field */
+          /* That case is handled specially above */
+          hash_dnode_limit = memo_dnode + ((hash_table_vector_header_count) >>1);
+          hashp = hp;
+          mark_method = 3;
+        }
+      }
+
       keep_x1 = mark_ephemeral_root(x1);
       keep_x2 = mark_ephemeral_root(x2);
       if ((keep_x1 == false) && 
-          (keep_x2 == false)) {
+          (keep_x2 == false) &&
+          (hashp == NULL)) {
         outbits &= ~(BIT0_MASK >> bitidx);
       }
       memo_dnode++;
@@ -1020,7 +1060,7 @@ mark_simple_area_range(LispObj *start, LispObj *end)
 	else
 	  element_count -= 1; 
 	start[1] = GCweakvll;
-	GCweakvll = (LispObj) (((natural) start) + fulltag_misc);    
+	GCweakvll = ptr_to_lispobj(start);
       }
 
       base = start + element_count + 1;

@@ -274,6 +274,7 @@
     weak-gc-method                      ; weak gc algorithm.
     image-name				; current image name
     initial-tcr                         ; initial thread's context record
+    weakvll                             ; all populations as of last GC
     ))
 
 ;;; The order here matches "ccl:lisp-kernel;lisp_globals.h" and the nrs record

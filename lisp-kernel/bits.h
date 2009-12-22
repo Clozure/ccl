@@ -72,7 +72,7 @@ void set_n_bits(bitvector,natural,natural);
 static inline int
 clr_bit(bitvector bits, natural bitnum)
 {
-  unsigned 
+  natural
     windex = bitnum>>bitmap_shift, 
     old = bits[windex],
     new = old & ~(BIT0_MASK >> (bitnum & bitmap_shift_count_mask));

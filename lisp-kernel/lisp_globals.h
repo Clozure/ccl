@@ -69,8 +69,9 @@ extern LispObj lisp_nil;
 #define WEAK_GC_METHOD (-46)	/* weak GC algorithm */
 #define IMAGE_NAME (-47)	/* --image-name arg */
 #define INITIAL_TCR (-48)	/* initial thread tcr */
+#define WEAKVLL (-49)           /* all populations as of last GC */
 
-#define MIN_KERNEL_GLOBAL INITIAL_TCR
+#define MIN_KERNEL_GLOBAL WEAKVLL
 
 /* These are only non-zero when an image is being saved or loaded */
 
