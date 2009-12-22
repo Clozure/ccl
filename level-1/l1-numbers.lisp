@@ -456,16 +456,18 @@
     (%cons-mrg31k3p-state x0 x1 x2 x3 x4 x5)))
 
 (defun random-mrg31k3p-state ()
-  (loop repeat 6
-	for n = (init-random-state-seeds)
-	;; The first three seed elements must not be all zero, and
-	;; likewise for the second three.  Avoid the issue by
-	;; excluding zero values.
-	collect (1+ (mod n (1- mrg31k3p-limit))) into seed
-	finally (return (apply #'%cons-mrg31k3p-state seed))))
+  (with-open-file (stream "/dev/urandom" :element-type '(unsigned-byte 32)
+			  :if-does-not-exist nil)
+    (loop repeat 6
+	  for n = (if stream (read-byte stream) (init-random-state-seeds))
+	  ;; The first three seed elements must not be all zero, and
+	  ;; likewise for the second three.  Avoid the issue by
+	  ;; excluding zero values.
+	  collect (1+ (mod n (1- mrg31k3p-limit))) into seed
+	  finally (return (apply #'%cons-mrg31k3p-state seed)))))
 
 (defun initial-random-state ()
-  (initialize-mrg31k3p-state 12345 12345 12345 12345 12345 12345))
+  (initialize-mrg31k3p-state 314159 42 1776 271828 6021023 1066))
 
 (defun make-random-state (&optional state)
   "Make a new random state object. If STATE is not supplied, return a
