@@ -1784,7 +1784,7 @@
 
 ;;; This is the MRG31k3p random number generator described in
 ;;; P. L'Ecuyer and R. Touzin, "Fast Combined Multiple Recursive
-;;; Generators with Multipliers of the form a = +/- 2^d +/- 2^e"",
+;;; Generators with Multipliers of the form a = +/- 2^d +/- 2^e",
 ;;; Proceedings of the 2000 Winter Simulation Conference, Dec. 2000,
 ;;; 683--689.
 ;;;
