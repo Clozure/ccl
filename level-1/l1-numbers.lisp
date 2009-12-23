@@ -455,6 +455,25 @@
       (error "The second three arguments must not all be zero."))
     (%cons-mrg31k3p-state x0 x1 x2 x3 x4 x5)))
 
+#+windows-target
+(defun random-mrg31k3p-state ()
+  (flet ((random-u32 ()
+	   (%stack-block ((buf 4))
+	     ;; BOOLEAN RtlGenRandom(PVOID buf, ULONG len)
+	     (let ((r (external-call "SystemFunction036" :address buf
+				     :unsigned 4 :byte)))
+	       (if (plusp r)
+		 (%get-unsigned-long buf)
+		 (init-random-state-seeds))))))
+    (loop repeat 6
+	  for n = (random-u32)
+	  ;; The first three seed elements must not be all zero, and
+	  ;; likewise for the second three.  Avoid the issue by
+	  ;; excluding zero values.
+	  collect (1+ (mod n (1- mrg31k3p-limit))) into seed
+	  finally (return (apply #'%cons-mrg31k3p-state seed)))))
+
+#-windows-target
 (defun random-mrg31k3p-state ()
   (with-open-file (stream "/dev/urandom" :element-type '(unsigned-byte 32)
 			  :if-does-not-exist nil)
