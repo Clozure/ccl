@@ -14,15 +14,15 @@
 
 	
         include(lisp.s)
-define([_spjump],[
+define(`_spjump',`
         .p2align 3
         .globl _SP$1
 _exportfn(j_SP$1)
           __(.quad _SP$1)
 _endfn
-])
+')
 	_beginfile
-        __ifdef([DARWIN])
+        __ifdef(`DARWIN')
         .space 0x5000,0
         __endif
          .globl C(spjump_start)

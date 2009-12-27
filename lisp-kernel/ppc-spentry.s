@@ -20,26 +20,26 @@
         .align 2
 	
 local_label(start):	
-define([_spentry],[ifdef([__func_name],[_endfn],[])
+define(`_spentry',`ifdef(`__func_name',`_endfn',`')
 	_exportfn(_SP$1)
 	.line  __line__
-])
+')
 
              
-define([_endsubp],[
+define(`_endsubp',`
 	_endfn(_SP$1)
 # __line__
-])
+')
 
 
                 	
                
-define([jump_builtin],[
+define(`jump_builtin',`
 	ref_nrs_value(fname,builtin_functions)
 	set_nargs($2)
 	vrefr(fname,fname,$1)
 	jump_fname()
-])
+')
 	
 _spentry(jmpsym)
 	__(jump_fname())
@@ -610,17 +610,17 @@ C(egc_set_hash_key):
    Interrupt handling (in pc_luser_xp()) notes:	
    If we are in this function and before the test which follows the
    conditional (at egc_store_node_conditional), or at that test
-   and cr0[eq] is clear, pc_luser_xp() should just let this continue
+   and cr0`eq' is clear, pc_luser_xp() should just let this continue
    (we either haven't done the store conditional yet, or got a
    possibly transient failure.)  If we're at that test and the
-   cr0[EQ] bit is set, then the conditional store succeeded and
+   cr0`EQ' bit is set, then the conditional store succeeded and
    we have to atomically memoize the possible intergenerational
    reference.  Note that the local labels 4 and 5 are in the
    body of the next subprim (and at or beyond 'egc_write_barrier_end').
 
    N.B:	it's not possible to really understand what's going on just
-   by the state of the cr0[eq] bit.  A transient failure in the
-   conditional stores that handle memoization might clear cr0[eq]
+   by the state of the cr0`eq' bit.  A transient failure in the
+   conditional stores that handle memoization might clear cr0`eq'
    without having completed the memoization.
 */
 
@@ -660,7 +660,7 @@ C(egc_store_node_conditional_test):
         __(b 4f)
 
 /* arg_z = new value, arg_y = expected old value, arg_x = hash-vector,
-   vsp[0] = (boxed) byte-offset 
+   vsp`0' = (boxed) byte-offset 
    Interrupt-related issues are as in store_node_conditional, but
    we have to do more work to actually do the memoization.*/
 _spentry(set_hash_key_conditional)
@@ -908,7 +908,7 @@ _spentry(progvsave)
 /* Allocate a miscobj on the temp stack.  (Push a frame on the tsp and  */
 /* heap-cons the object if there's no room on the tstack.)  */
 _spentry(stack_misc_alloc)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(extract_unsigned_byte_bits_(imm2,arg_y,56))
          __(unbox_fixnum(imm0,arg_z))
          __(clrldi imm2,imm0,64-nlowtagbits)
@@ -1012,7 +1012,7 @@ _spentry(gvector)
         __(subi nargs,nargs,node_size)
 	__(ldrx(arg_z,vsp,nargs))
 	__(unbox_fixnum(imm0,arg_z))
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(sldi imm1,nargs,num_subtag_bits-fixnum_shift)
          __(or imm0,imm0,imm1)
         __else
@@ -1186,7 +1186,7 @@ _spentry(opt_supplied_p)
 	__(li imm1,0)
 1:
 	/* (vpush (< imm1 nargs))  */
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
 	 __(xor imm2,imm1,nargs)
 	 __(sradi imm2,imm2,63)
 	 __(or imm2,imm2,imm1)
@@ -1297,15 +1297,15 @@ _spentry(keyword_args)
 /* the temp registers used to pass next_method_context  */
 /* (temp1) may still have "live" values in them, as does nfn (temp2).  */
 
-define([keyword_flags],[imm2])
-define([keyword_vector],[temp3])
-define([keyword_count],[imm3])
+define(`keyword_flags',`imm2')
+define(`keyword_vector',`temp3')
+define(`keyword_count',`imm3')
 
 
 
-define([varptr],[save0])
-define([valptr],[save1])
-define([limit],[save2])
+define(`varptr',`save0')
+define(`valptr',`save1')
+define(`limit',`save2')
 
 _spentry(keyword_bind)
         /* Before we can really do anything, we have to  */
@@ -1479,7 +1479,7 @@ badkeys:
 
         
 _spentry(poweropen_ffcall)
-LocalLabelPrefix[]ffcall:                
+LocalLabelPrefix`'ffcall:                
 	__(mflr loc_pc)
 	__(vpush_saveregs())		/* Now we can use save0-save7 to point to stacks  */
 	__(mr save0,rcontext)	/* or address globals.  */
@@ -1509,13 +1509,13 @@ LocalLabelPrefix[]ffcall:
 	__(mtfsf 0xff,fp_zero)	/* zero foreign fpscr  */
 	__(li r4,TCR_STATE_FOREIGN)
 	__(str(r4,tcr.valence(rcontext)))
-        __ifdef([rTOC])
+        __ifdef(`rTOC')
          __(ld rTOC,8(nargs))
          __(ld nargs,0(nargs))
         __else
 	 __(li rcontext,0)
         __endif
-LocalLabelPrefix[]ffcall_setup: 
+LocalLabelPrefix`'ffcall_setup: 
 	__(mtctr nargs)
 	__(ldr(r3,c_frame.param0(sp)))
 	__(ldr(r4,c_frame.param1(sp)))
@@ -1528,10 +1528,10 @@ LocalLabelPrefix[]ffcall_setup:
 	/* Darwin is allegedly very picky about what register points */
 	/* to the function on entry.  */
 	__(mr r12,nargs)
-LocalLabelPrefix[]ffcall_setup_end: 
-LocalLabelPrefix[]ffcall_call:
+LocalLabelPrefix`'ffcall_setup_end: 
+LocalLabelPrefix`'ffcall_call:
 	__(bctrl)
-LocalLabelPrefix[]ffcall_call_end:
+LocalLabelPrefix`'ffcall_call_end:
 	/* C should have preserved save0 (= rcontext) for us.  */
 	__(ldr(sp,0(sp)))
 	__(mr imm2,save0)
@@ -1574,11 +1574,11 @@ LocalLabelPrefix[]ffcall_call_end:
 	__(str(imm2,tcr.ffi_exception(rcontext)))
 	__(lfd f0,tcr.lisp_fpscr(rcontext))
 	__(mtfsf 0xff,f0)
-	__(check_pending_interrupt([cr1]))
+	__(check_pending_interrupt(`cr1'))
         __(mtxer rzero)
         __(mtctr rzero)
-        __ifdef([PPC64])
-         __ifdef([DARWIN])
+        __ifdef(`PPC64')
+         __ifdef(`DARWIN')
           __(li imm3,1<<TCR_FLAG_BIT_FOREIGN_EXCEPTION)
           __(ld imm4,tcr.flags(rcontext))
           __(and. imm3,imm3,imm4)
@@ -1586,8 +1586,8 @@ LocalLabelPrefix[]ffcall_call_end:
          __endif
         __endif
 	__(blr)
-        __ifdef([PPC64])
-         __ifdef([DARWIN])
+        __ifdef(`PPC64')
+         __ifdef(`DARWIN')
 0:        /* Got here because TCR_FLAG_BIT_FOREIGN_EXCEPTION */
           /* was set in tcr.flags.  Clear that bit. */
           __(andc imm4,imm4,imm3)
@@ -1601,27 +1601,27 @@ LocalLabelPrefix[]ffcall_call_end:
           __(set_nargs(2))
           __(b _SPksignalerr)
         /* Handle exceptions, for ObjC 2.0 */
-LocalLabelPrefix[]ffcallLandingPad:      
+LocalLabelPrefix`'ffcallLandingPad:      
           __(mr save1,r3)
           __(cmpdi r4,1)
           __(beq 1f)
-LocalLabelPrefix[]ffcallUnwindResume:
+LocalLabelPrefix`'ffcallUnwindResume:
           __(ref_global(r12,unwind_resume))
           __(mtctr r12)
           __(bctrl)
-LocalLabelPrefix[]ffcallUnwindResume_end:         
+LocalLabelPrefix`'ffcallUnwindResume_end:         
 1:        __(mr r3,save1)
-LocalLabelPrefix[]ffcallBeginCatch:
+LocalLabelPrefix`'ffcallBeginCatch:
           __(ref_global(r12,objc2_begin_catch))
           __(mtctr r12)
           __(bctrl)
-LocalLabelPrefix[]ffcallBeginCatch_end:          
+LocalLabelPrefix`'ffcallBeginCatch_end:          
           __(ld save1,0(r3)) /* indirection is necessary because we don't provide type info in lsda */
-LocalLabelPrefix[]ffcallEndCatch:  
+LocalLabelPrefix`'ffcallEndCatch:  
           __(ref_global(r12,objc2_end_catch))
           __(mtctr r12)
           __(bctrl)              
-LocalLabelPrefix[]ffcallEndCatch_end:     
+LocalLabelPrefix`'ffcallEndCatch_end:     
           __(ref_global(r12,get_tcr))
           __(mtctr r12)
           __(li imm0,1)       
@@ -1630,8 +1630,8 @@ LocalLabelPrefix[]ffcallEndCatch_end:
           __(ori imm2,imm2,1<<TCR_FLAG_BIT_FOREIGN_EXCEPTION)
           __(std imm2,tcr.flags(imm0))
           __(mr imm0,save1)
-	  __(b LocalLabelPrefix[]ffcall_call_end)
-LocalLabelPrefix[]ffcall_end:   
+	  __(b LocalLabelPrefix`'ffcall_call_end)
+LocalLabelPrefix`'ffcall_end:   
 
         	.section __DATA,__gcc_except_tab
 	  .align 3
@@ -1680,7 +1680,7 @@ LLSDA1:
    to lisp.  (We have to do this in the ffcall glue here, because
    r9 and r10 - at least - are overloaded as dedicated lisp registers */
 _spentry(poweropen_ffcall_return_registers)
-LocalLabelPrefix[]ffcall_return_registers:                
+LocalLabelPrefix`'ffcall_return_registers:                
 	__(mflr loc_pc)
 	__(vpush_saveregs())		/* Now we can use save0-save7 to point to stacks  */
         __(ldr(save7,macptr.address(arg_y)))
@@ -1711,13 +1711,13 @@ LocalLabelPrefix[]ffcall_return_registers:
 	__(mtfsf 0xff,fp_zero)	/* zero foreign fpscr  */
 	__(li r4,TCR_STATE_FOREIGN)
 	__(str(r4,tcr.valence(rcontext)))
-        __ifdef([rTOC])
+        __ifdef(`rTOC')
          __(ld rTOC,8(nargs))
          __(ld nargs,0(nargs))
         __else
 	 __(li rcontext,0)
         __endif
-LocalLabelPrefix[]ffcall_return_registers_setup: 
+LocalLabelPrefix`'ffcall_return_registers_setup: 
 	__(mtctr nargs)
 	__(ldr(r3,c_frame.param0(sp)))
 	__(ldr(r4,c_frame.param1(sp)))
@@ -1730,10 +1730,10 @@ LocalLabelPrefix[]ffcall_return_registers_setup:
 	/* Darwin is allegedly very picky about what register points */
 	/* to the function on entry.  */
 	__(mr r12,nargs)
-LocalLabelPrefix[]ffcall_return_registers_setup_end: 
-LocalLabelPrefix[]ffcall_return_registers_call:
+LocalLabelPrefix`'ffcall_return_registers_setup_end: 
+LocalLabelPrefix`'ffcall_return_registers_call:
 	__(bctrl)
-LocalLabelPrefix[]ffcall_return_registers_call_end:
+LocalLabelPrefix`'ffcall_return_registers_call_end:
         __(str(r3,0*node_size(save7)))        
         __(str(r4,1*node_size(save7)))        
         __(str(r5,2*node_size(save7)))        
@@ -1797,11 +1797,11 @@ LocalLabelPrefix[]ffcall_return_registers_call_end:
 	__(str(imm2,tcr.ffi_exception(rcontext)))
 	__(lfd f0,tcr.lisp_fpscr(rcontext))
 	__(mtfsf 0xff,f0)
-	__(check_pending_interrupt([cr1]))
+	__(check_pending_interrupt(`cr1'))
         __(mtxer rzero)
         __(mtctr rzero)
-        __ifdef([DARWIN])
-         __ifdef([PPC64])
+        __ifdef(`DARWIN')
+         __ifdef(`PPC64')
           __(li imm3,1<<TCR_FLAG_BIT_FOREIGN_EXCEPTION)
           __(ld imm4,tcr.flags(rcontext))
           __(and. imm3,imm3,imm4)
@@ -1810,8 +1810,8 @@ LocalLabelPrefix[]ffcall_return_registers_call_end:
         __endif
 	__(blr)
 
-        __ifdef([DARWIN])
-         __ifdef([PPC64])
+        __ifdef(`DARWIN')
+         __ifdef(`PPC64')
 0:        /* Got here because TCR_FLAG_BIT_FOREIGN_EXCEPTION */
           /* was set in tcr.flags.  Clear that bit. */
           __(andc imm4,imm4,imm3)
@@ -1825,27 +1825,27 @@ LocalLabelPrefix[]ffcall_return_registers_call_end:
           __(set_nargs(2))
           __(b _SPksignalerr)
         /* Handle exceptions, for ObjC 2.0 */
-LocalLabelPrefix[]ffcall_return_registersLandingPad:      
+LocalLabelPrefix`'ffcall_return_registersLandingPad:      
           __(mr save1,r3)
           __(cmpdi r4,1)
           __(beq 1f)
-LocalLabelPrefix[]ffcall_return_registersUnwindResume:
+LocalLabelPrefix`'ffcall_return_registersUnwindResume:
           __(ref_global(r12,unwind_resume))
           __(mtctr r12)
           __(bctrl)
-LocalLabelPrefix[]ffcall_return_registersUnwindResume_end:         
+LocalLabelPrefix`'ffcall_return_registersUnwindResume_end:         
 1:        __(mr r3,save1)
-LocalLabelPrefix[]ffcall_return_registersBeginCatch:
+LocalLabelPrefix`'ffcall_return_registersBeginCatch:
           __(ref_global(r12,objc2_begin_catch))
           __(mtctr r12)
           __(bctrl)
-LocalLabelPrefix[]ffcall_return_registersBeginCatch_end:          
+LocalLabelPrefix`'ffcall_return_registersBeginCatch_end:          
           __(ld save1,0(r3)) /* indirection is necessary because we don't provide type info in lsda */
-LocalLabelPrefix[]ffcall_return_registersEndCatch:  
+LocalLabelPrefix`'ffcall_return_registersEndCatch:  
           __(ref_global(r12,objc2_end_catch))
           __(mtctr r12)
           __(bctrl)              
-LocalLabelPrefix[]ffcall_return_registersEndCatch_end:     
+LocalLabelPrefix`'ffcall_return_registersEndCatch_end:     
           __(ref_global(r12,get_tcr))
           __(mtctr r12)
           __(li imm0,1)       
@@ -1854,8 +1854,8 @@ LocalLabelPrefix[]ffcall_return_registersEndCatch_end:
           __(ori imm2,imm2,1<<TCR_FLAG_BIT_FOREIGN_EXCEPTION)
           __(std imm2,tcr.flags(imm0))
           __(mr imm0,save1)
-	  __(b LocalLabelPrefix[]ffcall_return_registers_call_end)
-LocalLabelPrefix[]ffcall_return_registers_end:
+	  __(b LocalLabelPrefix`'ffcall_return_registers_call_end)
+LocalLabelPrefix`'ffcall_return_registers_end:
 	  .section __DATA,__gcc_except_tab
 	  .align 3
 LLSDA2:
@@ -2057,7 +2057,7 @@ local_label(go):
 /* as if it denoted a "natural-sized" value.  */
 /* Argument in arg_z, result in imm0.  May use temp0.  */
 _spentry(getxlong)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
         __else
         __(extract_typecode(imm0,arg_z))
 	__(cmpri(cr0,imm0,tag_fixnum))
@@ -2093,7 +2093,7 @@ local_label(big1):
 /* function call (this may require vpopping a few things.)  */
 /* ppc2-invoke-fn assumes that temp1 is preserved here.  */
 _spentry(spreadargz)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
 	 __(extract_fulltag(imm1,arg_z))
 	 __(cmpri(cr1,imm1,fulltag_cons))
         __else
@@ -2109,7 +2109,7 @@ _spentry(spreadargz)
 	__(_car(arg_x,arg_z))
 	__(_cdr(arg_z,arg_z))
 	__(cmpri(cr0,arg_z,nil_value))
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
 	 __(extract_fulltag(imm1,arg_z))
 	 __(cmpri(cr1,imm1,fulltag_cons))
         __else
@@ -2296,7 +2296,7 @@ _spentry(misc_ref)
 	__(extract_lowbyte(imm1,imm1))	/* imm1 = subtag  */
 	
 local_label(misc_ref_common):   
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(slwi imm1,imm1,3)
          __(li imm0,LO(local_label(misc_ref_jmp)))
          __(addis imm0,imm0,HA(local_label(misc_ref_jmp)))
@@ -3144,7 +3144,7 @@ _spentry(makestackblock)
 	__(str(imm0,tsp_frame.data_offset(tsp)))
 	__(la arg_z,tsp_frame.data_offset+fulltag_misc(tsp))
 	__(str(imm1,macptr.address(arg_z)))
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(std rzero,macptr.domain(arg_z))
          __(std rzero,macptr.type(arg_z))
         __else
@@ -3235,7 +3235,7 @@ _spentry(stkgvector)
 	__(add imm1,vsp,nargs)
 	__(ldru(temp0,-node_size(imm1)))
 	__(slri(imm2,imm0,num_subtag_bits-fixnumshift))
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(unbox_fixnum(imm3,temp0))
          __(or imm2,imm3,imm2)
         __else
@@ -3275,7 +3275,7 @@ _spentry(stkgvector)
 
 
 _spentry(misc_alloc)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(extract_unsigned_byte_bits_(imm2,arg_y,56))
          __(unbox_fixnum(imm0,arg_z))
          __(sldi imm2,arg_y,num_subtag_bits-fixnumshift)
@@ -3369,7 +3369,7 @@ _spentry(poweropen_ffcallX)
 /* length key count.  */
 
 _spentry(macro_bind)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
  	 __(mr whole_reg,arg_reg)
 	 __(extract_fulltag(imm0,arg_reg))
          __(cmpri(cr1,arg_reg,nil_value))
@@ -3403,11 +3403,11 @@ _spentry(destructuring_bind_inner)
 local_label(destbind1): 
 	/* Extract required arg count.  */
 	/* A bug in gas: can't handle shift count of "32" (= 0  */
-	ifelse(eval(mask_req_width+mask_req_start),eval(32),[
+	ifelse(eval(mask_req_width+mask_req_start),eval(32),`
 	__(clrlwi. imm0,nargs,mask_req_start)
-	],[
+	',`
 	__(extrwi. imm0,nargs,mask_req_width,mask_req_start)
-	])
+	')
 	__(extrwi imm1,nargs,mask_opt_width,mask_opt_start)
 	__(rlwinm imm2,nargs,0,mask_initopt,mask_initopt)
 	__(rlwinm imm4,nargs,0,mask_keyp,mask_keyp)
@@ -3421,7 +3421,7 @@ local_label(destbind1):
 	__(beq cr0,2f)
 1:
 	__(cmpri(cr7,arg_reg,nil_value))
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(extract_fulltag(imm3,arg_reg))
          __(cmpri(cr3,imm3,fulltag_cons))
         __else       
@@ -3442,7 +3442,7 @@ local_label(destbind1):
 	/* 'simple' &optionals:	 no supplied-p, default to nil.  */
 simple_opt_loop:
 	__(cmpri(cr0,arg_reg,nil_value))
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(extract_fulltag(imm3,arg_reg))
          __(cmpri(cr3,imm3,fulltag_cons))
         __else
@@ -3471,7 +3471,7 @@ opt_supp:
 	__(li arg_y,t_value)
 opt_supp_loop:
 	__(cmpri(cr0,arg_reg,nil_value))
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(extract_fulltag(imm3,arg_reg))
          __(cmpri(cr3,imm3,fulltag_cons))
         __else        
@@ -3510,7 +3510,7 @@ have_keys:
 	__(li imm0,256)
 	__(mr arg_x,arg_reg)
 count_keys_loop:
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(extract_fulltag(imm3,arg_x))
          __(cmpri(cr3,imm3,fulltag_cons))
         __else
@@ -3523,7 +3523,7 @@ count_keys_loop:
 	__(beq cr0,counted_keys)
 	__(bne cr3,badlist)
 	__(ldr(arg_x,cons.cdr(arg_x)))
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(extract_fulltag(imm3,arg_x))
          __(cmpri(cr3,imm3,fulltag_cons))
         __else
@@ -3713,7 +3713,7 @@ _spentry(integer_sign)
 	__(beqlr+ cr1)
 	__(bne- cr0,1f)
 	__(getvheader(imm0,arg_z))
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(header_size(imm0,imm0))
          __(sldi imm0,imm0,2)
         __else
@@ -3737,7 +3737,7 @@ _spentry(subtag_misc_set)
 	__(trlge(arg_y,imm0))
 	__(unbox_fixnum(imm1,temp0))
 local_label(misc_set_common):
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(slwi imm1,imm1,3)
          __(li imm0,LO(local_label(misc_set_jmp)))
          __(addis imm0,imm0,HA(local_label(misc_set_jmp)))
@@ -4810,7 +4810,7 @@ _spentry(add_values)
 /* Restore lisp context, then funcall #'%pascal-functions% with  */
 /* two args: callback-index, args-ptr (a macptr pointing to the args on the stack)  */
 _spentry(poweropen_callback)
-        __ifdef([rTOC])
+        __ifdef(`rTOC')
          __(mr r11,rTOC)
         __endif
 	/* Save C argument registers  */
@@ -4894,7 +4894,7 @@ _spentry(poweropen_callback)
 
 	/* Recover lisp thread context. Have to call C code to do so.  */
 	__(ref_global(r12,get_tcr))
-        __ifdef([rTOC])
+        __ifdef(`rTOC')
          __(ld rTOC,8(r12))
          __(ld r12,0(r12))
         __endif
@@ -5212,14 +5212,14 @@ _spentry(poweropen_syscall)
 	__(ldr(r10,c_frame.param7(sp)))
 	__(unbox_fixnum(r0,arg_z))
 	__(sc)
-        __ifdef([LINUX])
+        __ifdef(`LINUX')
          __(bns+ 9f)
         __else
 	 __(b 1f)
 	 __(b 9f)
         __endif
 1:
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(neg r3,r3)
         __else
 	 __(ldr(imm2,c_frame.crsave(sp)))
@@ -5266,7 +5266,7 @@ _spentry(poweropen_syscall)
 	__(ldr(fn,lisp_frame.savefn(sp)))
 	__(discard_lisp_frame)
         __(mtxer rzero)
-	__(check_pending_interrupt([cr1]))
+	__(check_pending_interrupt(`cr1'))
 	__(blr)
         
         
@@ -5281,7 +5281,7 @@ _spentry(builtin_plus)
 	__(bnslr+)
 	__(mtxer rzero)
 	__(unbox_fixnum(imm1,arg_z))
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
 	 __(li imm0,two_digit_bignum_header)
          __(rotldi imm1,imm1,32)
 	 __(xoris imm1,imm1,0xe000)
@@ -5307,7 +5307,7 @@ _spentry(builtin_minus)
 	__(bnslr+)
 	__(mtxer rzero)
 	__(unbox_fixnum(imm1,arg_z))
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
 	 __(li imm0,two_digit_bignum_header)
          __(rotldi imm1,imm1,32)
 	 __(xoris imm1,imm1,0xe000)
@@ -5330,7 +5330,7 @@ _spentry(builtin_times)
 	__(unbox_fixnum(imm2,arg_y))
 	__(bne cr0,1f)
         __(bne cr1,1f)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(mulldo. imm3,arg_z,imm2)
          __(bso 2f)
          __(mr arg_z,imm3)
@@ -5474,7 +5474,7 @@ _spentry(builtin_length)
 	__(extract_typecode(imm0,arg_z))
 	__(cmpri(cr0,imm0,min_vector_subtag))
         __(beq cr1,1f)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(cmpdi cr2,imm0,fulltag_cons)
         __else
 	 __(cmpwi cr2,imm0,tag_list)
@@ -5493,7 +5493,7 @@ _spentry(builtin_length)
 	__(li temp2,-1<<fixnum_shift)
 	__(mr temp0,arg_z)	/* fast pointer  */
 	__(mr temp1,arg_z)	/* slow pointer  */
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
 4:       __(extract_fulltag(imm0,temp0))
          __(cmpdi cr7,temp0,nil_value)
          __(cmpdi cr1,imm0,fulltag_cons)
@@ -5533,7 +5533,7 @@ _spentry(builtin_length)
 	__(blr)
         
 _spentry(builtin_seqtype)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(cmpdi cr2,arg_z,nil_value)
          __(extract_typecode(imm0,arg_z))
          __(beq cr2,1f)
@@ -5583,7 +5583,7 @@ _spentry(builtin_memq)
 2:	__(bne cr1,1b)
 	__(blr)
 
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
 logbitp_max_bit = 61
         __else
 logbitp_max_bit = 30
@@ -5598,7 +5598,7 @@ _spentry(builtin_logbitp)
         __(cmpri(cr1,imm1,tag_fixnum))
 	__(unbox_fixnum(imm0,arg_y))
 	__(subfic imm0,imm0,logbitp_max_bit)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(rldcl imm0,arg_z,imm0,63)
          __(mulli imm0,imm0,t_offset)
         __else
@@ -5638,7 +5638,7 @@ _spentry(builtin_logand)
 	__(jump_builtin(_builtin_logand,2))
 	
 _spentry(builtin_ash)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
 	 __(cmpdi cr1,arg_z,0)
          __(extract_lisptag(imm0,arg_y))
          __(extract_lisptag(imm1,arg_z))
@@ -5665,7 +5665,7 @@ _spentry(builtin_ash)
 	 /* Integer-length of arg_y/imm1 to imm2  */
 2:		
 	 __(cntlzd. imm2,imm1)
-	 __(bne 3f)		/* cr0[eq] set if negative  */
+	 __(bne 3f)		/* cr0`eq' set if negative  */
 	 __(not imm2,imm1)
 	 __(cntlzd imm2,imm2)
 3:
@@ -5723,7 +5723,7 @@ _spentry(builtin_ash)
 	 /* Integer-length of arg_y/imm1 to imm2  */
 2:		
 	 __(cntlzw. imm2,imm1)
-	 __(bne 3f)		/* cr0[eq] set if negative  */
+	 __(bne 3f)		/* cr0`eq' set if negative  */
 	 __(not imm2,imm1)
 	 __(cntlzw imm2,imm2)
 3:
@@ -5765,7 +5765,7 @@ _spentry(builtin_negate)
 	__(bnslr+)
 	__(mtxer rzero)
 	__(unbox_fixnum(imm1,arg_z))
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
 	 __(li imm0,two_digit_bignum_header)
          __(rotldi imm1,imm1,32)
 	 __(xoris imm1,imm1,0xe000)
@@ -5814,7 +5814,7 @@ _spentry(breakpoint)
 /* */
 /* We're entered with an eabi_c_frame on the C stack.  There's a */
 /* lisp_frame reserved underneath it; we'll link it in in a minute. */
-/* Load the outgoing GPR arguments from eabi_c_frame.param[0-7], */
+/* Load the outgoing GPR arguments from eabi_c_frame.param`0-7', */
 /* then shrink the eabi_c_frame. */
 /*  */
 	
@@ -5912,7 +5912,7 @@ _spentry(eabi_ff_call)
 	__(str(imm2,tcr.ffi_exception(rcontext)))
 	__(lfd f0,tcr.lisp_fpscr(rcontext))
 	__(mtfsf 0xff,f0)
-	__(check_pending_interrupt([cr1]))
+	__(check_pending_interrupt(`cr1'))
         __(mtxer rzero)
         __(mtctr rzero)
 	__(blr)
@@ -6112,7 +6112,7 @@ _spentry(eabi_callback)
 _spentry(eabi_syscall)
 /*	We're entered with an eabi_c_frame on the C stack.  There's a */
 /*	lisp_frame reserved underneath it; we'll link it in in a minute. */
-/*	Load the outgoing GPR arguments from eabi_c_frame.param[0-7], */
+/*	Load the outgoing GPR arguments from eabi_c_frame.param`0-7', */
 /*	then shrink the eabi_c_frame. */
 
 	__(mflr loc_pc)
@@ -6191,7 +6191,7 @@ _spentry(eabi_syscall)
 	__(bns 1f)
 	__(neg r3,r3)
 1:      
-	__(check_pending_interrupt([cr1]))                
+	__(check_pending_interrupt(`cr1'))                
 	__(mtxer rzero)
 	__(blr)
         
@@ -6200,7 +6200,7 @@ _spentry(eabi_syscall)
 /* On PPC64, return unboxed value in imm0  */
 
 _spentry(getu64)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
         __(extract_typecode(imm0,arg_z))
         __(cmpdi cr0,imm0,tag_fixnum)
         __(cmpdi cr2,arg_z,0)
@@ -6266,7 +6266,7 @@ _spentry(getu64)
 /* PPC64:   return unboxed value in imm0  */
 
 _spentry(gets64)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
 	 __(extract_typecode(imm1,arg_z))
          __(unbox_fixnum(imm0,arg_z))
 	 __(cmpri(cr0,imm1,tag_fixnum))
@@ -6302,7 +6302,7 @@ _spentry(gets64)
 /*        ppc32:    imm0 (high 32 bits) and imm1 (low 32 bits) */
 /*        ppc64:    imm0 (64 bits) .  */
 _spentry(makeu64)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
 	 __(clrrdi. imm1,imm0,63-nfixnumtagbits)
 	 __(cmpri(cr1,imm0,0))
 	 __(box_fixnum(arg_z,imm0))
@@ -6350,7 +6350,7 @@ _spentry(makeu64)
 /*        ppc32:    imm0 (high 32 bits) and imm1 (low 32 bits). */
 /*        ppc64:    imm0  */
 _spentry(makes64)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
 	 __(addo imm1,imm0,imm0)
          __(addo imm1,imm1,imm1)
 	 __(addo. arg_z,imm1,imm1)
@@ -6385,7 +6385,7 @@ _spentry(makes64)
 /* imm0:imm1 constitute an unsigned integer, almost certainly a bignum. */
 /* Make a lisp integer out of those 128 bits ..  */
 _spentry(makeu128)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(cmpdi imm0,0)
          __(cmpdi cr1,imm1,0)
          __(srdi imm3,imm0,32)
@@ -6431,7 +6431,7 @@ _spentry(makeu128)
 /* imm0:imm1 constitute a signed integer, almost certainly a bignum. */
 /* Make a lisp integer out of those 128 bits ..  */
 _spentry(makes128)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          /* Is imm0 just a sign-extension of imm1 ?  */
          __(sradi imm2,imm1,63)
          /* Is the high word of imm0 just a sign-extension of the low word ?  */
@@ -6526,7 +6526,7 @@ _spentry(restoreintlevel)
 
         
 _spentry(makes32)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(box_fixnum(arg_z,imm0))
         __else
 	 __(addo imm1,imm0,imm0)
@@ -6544,7 +6544,7 @@ _spentry(makes32)
 
         
 _spentry(makeu32)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(box_fixnum(arg_z,imm0))
          __(blr)
         __else
@@ -6568,7 +6568,7 @@ _spentry(makeu32)
 /* arg_z should be of type (SIGNED-BYTE 32); return unboxed result in imm0 */
 /*  */
 _spentry(gets32)
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
          __(sldi imm1,arg_z,32-fixnumshift)
          __(extract_lisptag_(imm0,arg_z))
          __(sradi imm1,imm1,32-fixnumshift)
@@ -6629,7 +6629,7 @@ _spentry(getu32)
 _spentry(fix_overflow)
 	__(mtxer rzero)
 	__(unbox_fixnum(imm1,arg_z))
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
 	 __(li imm0,two_digit_bignum_header)
          __(rotldi imm1,imm1,32)
 	 __(xoris imm1,imm1,0xe000)
@@ -6797,7 +6797,7 @@ _spentry(unbind_interrupt_level)
         __(bgelr cr1)
         __(bltlr cr0)
         __(mr imm2,nargs)
-        __(check_pending_interrupt([cr1]))
+        __(check_pending_interrupt(`cr1'))
         __(mr nargs,imm2)
         __(blr)
 5:       /* Missed a suspend request; force suspend now if we're restoring
@@ -6973,8 +6973,8 @@ _spentry(nmkunwind)
         __(b _SPbind_interrupt_level)
 
         .if 1
-        __ifdef([DARWIN])
-         __ifdef([PPC64])
+        __ifdef(`DARWIN')
+         __ifdef(`PPC64')
 L_lisp_objc2_personality:       
         __(ref_global(r12,objc_2_personality))
         __(mtctr r12)

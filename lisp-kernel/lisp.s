@@ -13,13 +13,13 @@
 /*   The LLGPL is also available online at */
 /*   http://opensource.franz.com/preamble.html */
 
-	include(m4macros.m4)
-        ifdef([LOWMEM_BIAS],[
-[LOWMEM_BIAS] = LOWMEM_BIAS
-],[
-[LOWMEM_BIAS] = 0
-])
-        undefine([LOWMEM_BIAS])
+	include(m4macros.m4)        
+        ifdef(`LOWMEM_BIAS',`
+`LOWMEM_BIAS' = LOWMEM_BIAS
+',`
+`LOWMEM_BIAS' = 0
+')
+        undefine(`LOWMEM_BIAS')
         /* DWARF2 exception fsm */
         DW_CFA_advance_loc = 0x40   
         DW_CFA_offset = 0x80
@@ -55,14 +55,14 @@
         DW_CFA_GNU_args_size = 0x2e
         DW_CFA_GNU_negative_offset_extended = 0x2f
 
-        ifdef([PPC],[
+        ifdef(`PPC',`
          include(ppc-constants.s)
          include(ppc-macros.s)
 	 include(ppc-uuo.s)
-        ])
-	ifdef([X86],[
+        ')
+	ifdef(`X86',`
          include(x86-constants.s)
          include(x86-macros.s)
 	 include(x86-uuo.s)
-	])
+	')
 

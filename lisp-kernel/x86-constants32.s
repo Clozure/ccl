@@ -1,79 +1,79 @@
-define([eax_l],[eax])
-define([ecx_l],[ecx])
-define([edx_l],[edx])
-define([ebx_l],[ebx])
-define([esi_l],[esi])
-define([edi_l],[edi])
+define(`eax_l',`eax')
+define(`ecx_l',`ecx')
+define(`edx_l',`edx')
+define(`ebx_l',`ebx')
+define(`esi_l',`esi')
+define(`edi_l',`edi')
 
-define([eax_b],[al])
-define([ecx_b],[cl])
-define([edx_b],[dl])
-define([ebx_b],[bl])
+define(`eax_b',`al')
+define(`ecx_b',`cl')
+define(`edx_b',`dl')
+define(`ebx_b',`bl')
 
-define([imm0],[eax])
-	define([imm0_l],[eax])
-	define([imm0_w],[ax])
-	define([imm0_b],[al])
-	define([imm0_bh],[ah])
-	define([Rimm0],[0])
+define(`imm0',`eax')
+	define(`imm0_l',`eax')
+	define(`imm0_w',`ax')
+	define(`imm0_b',`al')
+	define(`imm0_bh',`ah')
+	define(`Rimm0',`0')
 
-define([temp0],[ecx])
-	define([temp0_l],[ecx])
-	define([temp0_w],[cx])
-	define([temp0_b],[cl])
-	define([temp0_bh],[ch])
-	define([Rtemp0],[1])
+define(`temp0',`ecx')
+	define(`temp0_l',`ecx')
+	define(`temp0_w',`cx')
+	define(`temp0_b',`cl')
+	define(`temp0_bh',`ch')
+	define(`Rtemp0',`1')
 
-define([temp1],[edx])
-	define([temp1_l],[edx])
-	define([temp1_w],[dx])
-	define([temp1_b],[dl])
-	define([temp1_bh],[dh])
-	define([Rtemp1],[2])
+define(`temp1',`edx')
+	define(`temp1_l',`edx')
+	define(`temp1_w',`dx')
+	define(`temp1_b',`dl')
+	define(`temp1_bh',`dh')
+	define(`Rtemp1',`2')
 
-define([arg_z],[ebx])
-	define([arg_z_l],[ebx])
-	define([arg_z_w],[bx])
-	define([arg_z_b],[bl])
-	define([arg_z_bh],[bh])
-	define([Rarg_z],[3])
+define(`arg_z',`ebx')
+	define(`arg_z_l',`ebx')
+	define(`arg_z_w',`bx')
+	define(`arg_z_b',`bl')
+	define(`arg_z_bh',`bh')
+	define(`Rarg_z',`3')
 
-define([arg_y],[esi])
-	define([Rarg_y],[6])
+define(`arg_y',`esi')
+	define(`Rarg_y',`6')
 
-define([fn],[edi])
-	define([Rfn],[7])
+define(`fn',`edi')
+	define(`Rfn',`7')
 
-define([rcontext_reg],[fs])
+define(`rcontext_reg',`fs')
 	
-        ifdef([WINDOWS],[
-undefine([rcontext_reg])        
-define([rcontext_reg],[es])
-        ])
+        ifdef(`WINDOWS',`
+undefine(`rcontext_reg')        
+define(`rcontext_reg',`es')
+        ')
                 
-define([rcontext],[%rcontext_reg:$1])
+define(`rcontext',`%rcontext_reg:$1')
 
-define([fname],[temp0])
-define([allocptr],[temp0])
+define(`fname',`temp0')
+define(`allocptr',`temp0')
 
-define([nargs],[temp1])
-define([nargs_w],[temp1_w])
+define(`nargs',`temp1')
+define(`nargs_w',`temp1_w')
 
-define([ra0],[temp0])
-define([xfn],[temp1])
+define(`ra0',`temp0')
+define(`xfn',`temp1')
 
-define([allocptr],[temp0])
-define([stack_temp],[mm7])
+define(`allocptr',`temp0')
+define(`stack_temp',`mm7')
 
-define([fp0],[xmm0])		
-define([fp1],[xmm1])		
-define([fp2],[xmm2])		
-define([fp3],[xmm3])		
-define([fp4],[xmm4])		
-define([fp5],[xmm5])		
-define([fp6],[xmm6])		
-define([fp7],[xmm7])		
-define([fpzero],[fp7])
+define(`fp0',`xmm0')		
+define(`fp1',`xmm1')		
+define(`fp2',`xmm2')		
+define(`fp3',`xmm3')		
+define(`fp4',`xmm4')		
+define(`fp5',`xmm5')		
+define(`fp6',`xmm6')		
+define(`fp7',`xmm7')		
+define(`fpzero',`fp7')
 
 nbits_in_word = 32
 nbits_in_byte = 8
@@ -116,9 +116,9 @@ fulltag_tra = 5
 fulltag_misc = 6
 fulltag_immheader = 7
 
-define([define_subtag],[subtag_$1 = ($2 | ($3 << ntagbits))])
-define([define_imm_subtag],[define_subtag($1,fulltag_immheader,$2)])
-define([define_node_subtag],[define_subtag($1,fulltag_nodeheader,$2)])
+define(`define_subtag',`subtag_$1 = ($2 | ($3 << ntagbits))')
+define(`define_imm_subtag',`define_subtag($1,fulltag_immheader,$2)')
+define(`define_node_subtag',`define_subtag($1,fulltag_nodeheader,$2)')
 
 define_imm_subtag(bignum,0)
 min_numeric_subtag = subtag_bignum
@@ -443,7 +443,7 @@ symbol_extra = symbol.size-fulltag_misc
 
         _ends
 
-define([def_header],[$1 = ($2<<num_subtag_bits)|$3])
+define(`def_header',`$1 = ($2<<num_subtag_bits)|$3')
 
 def_header(single_float_header,single_float.element_count,subtag_single_float)
 def_header(double_float_header,double_float.element_count,subtag_double_float)
@@ -619,8 +619,8 @@ lisp_globals_limit = (0x13000+(LOWMEM_BIAS))
 INTERRUPT_LEVEL_BINDING_INDEX = fixnumone
 
 
-ifdef([DARWIN],[
+ifdef(`DARWIN',`
 c_stack_16_byte_aligned = 1
-],[
+',`
 c_stack_16_byte_aligned = 0
-])                
+')                

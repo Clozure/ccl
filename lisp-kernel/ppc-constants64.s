@@ -14,7 +14,7 @@
 /*   http://opensource.franz.com/preamble.html */
 
 
-define([rcontext],[r2])
+define(`rcontext',`r2')
         
 nbits_in_word = 64
 nbits_in_byte = 8
@@ -69,14 +69,14 @@ fulltag_imm_3 = 13
 fulltag_immheader_3 = 14
 fulltag_nodeheader_3 = 15
 
-define([define_subtag],[
+define(`define_subtag',`
 subtag_$1 = ($2 | ($3 << ntagbits))
-])
+')
 			
 cl_array_subtag_mask = 0x80
-define([define_cl_array_subtag],[
+define(`define_cl_array_subtag',`
 define_subtag($1,(cl_array_subtag_mask|$2),$3)
-])
+')
 
 define_cl_array_subtag(arrayH,fulltag_nodeheader_1,0)
 define_cl_array_subtag(vectorH,fulltag_nodeheader_2,0)
@@ -144,7 +144,7 @@ define_subtag(complex,fulltag_nodeheader_3,1)
 t_value = (0x3000+fulltag_misc)	
 misc_bias = fulltag_misc
 cons_bias = fulltag_cons
-define([t_offset],-symbol.size)
+define(`t_offset',-symbol.size)
 	
 misc_header_offset = -fulltag_misc
 misc_data_offset = misc_header_offset+node_size /* first word of data */
@@ -179,7 +179,7 @@ max_1_bit_constant_index = ((0x7fff + misc_data_offset)<<5)
 	
 /* The objects themselves look something like this: */
 	
-/* Order of CAR and CDR doesn]t seem to matter much - there aren't */
+/* Order of CAR and CDR doesn't seem to matter much - there aren't */
 /* too many tricks to be played with predecrement/preincrement addressing. */
 /* Keep them in the confusing MCL 3.0 order, to avoid confusion. */
 	_struct(cons,-cons_bias)
@@ -469,8 +469,8 @@ symbol_extra = symbol.size-fulltag_misc
 
 	_ends
 
-define([def_header],[
-$1 = ($2<<num_subtag_bits)|$3])
+define(`def_header',`
+$1 = ($2<<num_subtag_bits)|$3')
 
 	def_header(double_float_header,2,subtag_double_float)
 	def_header(two_digit_bignum_header,2,subtag_bignum)
@@ -587,7 +587,7 @@ TCR_FLAG_BIT_PENDING_SUSPEND = (fixnumshift+7)
 
 nil_value = (0x3000+symbol.size+fulltag_misc+(LOWMEM_BIAS))
         	
-define([RESERVATION_DISCHARGE],(0x2008+(LOWMEM_BIAS)))
+define(`RESERVATION_DISCHARGE',(0x2008+(LOWMEM_BIAS)))
 
 lisp_globals_limit = (0x3000+(LOWMEM_BIAS))
         

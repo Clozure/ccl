@@ -57,9 +57,9 @@ _exportfn(C(flush_cache_lines))
 /* load libm, so lisp code can use it.   Under Darwin, the functionality */
 /* of libm is contained in libsystem, along with libc & everything else. */
 
-        __ifndef([DARWIN])
+        __ifndef(`DARWIN')
         .data
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
         .quad exp
         __else
         .long exp
@@ -84,7 +84,7 @@ _exportfn(C(current_stack_pointer))
 _endfn
 	
 _exportfn(C(count_leading_zeros))
-        __ifdef([PPC64])
+        __ifdef(`PPC64')
         __(cntlzd r3,r3)
         __else
 	__(cntlzw r3,r3)
@@ -117,8 +117,8 @@ _endfn
                 
 
 /* The Linux kernel is constantly enabling and disabling the FPU and enabling */
-/* FPU exceptions.  We can't touch the FPU without turning off the FPSCR[FEX] */
-/* bit and we can't turn off the FPSCR[FEX] bit without touching the FPU. */
+/* FPU exceptions.  We can't touch the FPU without turning off the FPSCR`FEX' */
+/* bit and we can't turn off the FPSCR`FEX' bit without touching the FPU. */
 /* Force a distinguished exception, and let the handler for that exception */
 /* zero the fpscr in its exception context. */
 
@@ -269,7 +269,7 @@ _exportfn(C(atomic_and))
 _endfn
                 
 	
-        __ifdef([DARWIN])
+        __ifdef(`DARWIN')
 _exportfn(C(enable_fp_exceptions))
         __(.long 0)
         __(blr)
@@ -445,7 +445,7 @@ _endfn
 /* big deal out of that at link time.  This is here to try */
 /* to fool those versions of glibc. */
 
-        __ifdef([LINUX])
+        __ifdef(`LINUX')
 	.globl set_errno
 _exportfn(C(madvise))
 	__(li r0,205)	/* _NR_madvise; see /usr/include/asm/unistd.h */

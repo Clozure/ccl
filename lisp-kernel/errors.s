@@ -35,10 +35,10 @@ error_cant_call = 17
         
 error_type_error = 128
 
-define([__type_error_counter__],128)
-define([def_type_error],[
+define(`__type_error_counter__',128)
+define(`def_type_error',`
 error_object_not_$1 = __type_error_counter__
-        define([__type_error_counter__],eval(__type_error_counter__+1))])
+        define(`__type_error_counter__',eval(__type_error_counter__+1))')
 
 	def_type_error(array)
 	def_type_error(bignum)
@@ -169,8 +169,8 @@ error_object_not_$1 = __type_error_counter__
 	
 /* These are the "old" error constants that %ERR-DISP understands */
 
-define([deferr],[
-$1 = $2<<fixnumshift])
+define(`deferr',`
+$1 = $2<<fixnumshift')
 
 
 	deferr(XVUNBND,1)

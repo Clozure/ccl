@@ -14,7 +14,7 @@
 /*   http://opensource.franz.com/preamble.html */
 
 
-define([rcontext],[r13])
+define(`rcontext',`r13')
         
 nbits_in_word = 32
 nbits_in_byte = 8
@@ -72,7 +72,7 @@ fulltag_cons = 1	/* a real (non_null) cons.  Shares TAG with fulltag_nil. */
 fulltag_nodeheader = 2	/* Header of heap_allocated object that contains lisp_object pointers */
 fulltag_imm = 3	/* a "real" immediate object.  Shares TAG with fulltag_immheader. */
 fulltag_odd_fixnum = 4	/* */
-fulltag_nil = 5	/* NIL and nothing but.  (Note that there]s still a hidden NILSYM.) */
+fulltag_nil = 5	/* NIL and nothing but.  (Note that there's still a hidden NILSYM.) */
 fulltag_misc = 6	/* Pointer "real" tag_misc object.  Shares TAG with fulltag_nodeheader. */
 fulltag_immheader = 7	/* Header of heap-allocated object that contains unboxed data. */
 
@@ -93,7 +93,7 @@ cons_bias = tag_list
 	 _struct_label(data_offset)
 	_ends
 
-/* Order of CAR and CDR doesn]t seem to matter much - there aren]t */
+/* Order of CAR and CDR doesn't seem to matter much - there aren't */
 /* too many tricks to be played with predecrement/preincrement addressing. */
 /* Keep them in the confusing MCL 3.0 order, to avoid confusion. */
 	_struct(cons,-cons_bias)
@@ -122,20 +122,20 @@ t_value = nil_value+t_offset
 
 /* The order in which various header values are defined is significant in several ways: */
 /* 1) Numeric subtags precede non-numeric ones; there are further orderings among numeric subtags. */
-/* 2) All subtags which denote CL arrays are preceded by those that don]t, */
+/* 2) All subtags which denote CL arrays are preceded by those that don't, */
 /*    with a further ordering which requires that (< header-arrayH header-vectorH ,@all-other-CL-vector-types) */
 /* 3) The element-size of ivectors is determined by the ordering of ivector subtags. */
 /* 4) All subtags are >= fulltag-immheader . */
 
-define([define_subtag],[
-subtag_$1 = $2|($3<<ntagbits)])
+define(`define_subtag',`
+subtag_$1 = $2|($3<<ntagbits)')
 	
-define([define_imm_subtag],[
-	define_subtag($1,fulltag_immheader,$2)])
+define(`define_imm_subtag',`
+	define_subtag($1,fulltag_immheader,$2)')
 
 	
-define([define_node_subtag],[
-	define_subtag($1,fulltag_nodeheader,$2)])
+define(`define_node_subtag',`
+	define_subtag($1,fulltag_nodeheader,$2)')
 
 		
 /*Immediate subtags. */
@@ -170,7 +170,7 @@ max_numeric_subtag = subtag_complex
 
 /* CL array types.  There are more immediate types than node types; all CL array subtags must be > than */
 /* all non-CL-array subtags.  So we start by defining the immediate subtags in decreasing order, starting */
-/* with that subtag whose element size isn]t an integral number of bits and ending with those whose */
+/* with that subtag whose element size isn't an integral number of bits and ending with those whose */
 /* element size - like all non-CL-array fulltag-immheader types - is 32 bits. */
 
 	define_imm_subtag(bit_vector,31)
@@ -500,8 +500,8 @@ symbol_extra = symbol.size-fulltag_misc
 
 	_ends
 
-define([def_header],[
-$1 = ($2<<num_subtag_bits)|$3])
+define(`def_header',`
+$1 = ($2<<num_subtag_bits)|$3')
 
 	def_header(single_float_header,single_float.element_count,subtag_single_float)
 	def_header(double_float_header,double_float.element_count,subtag_double_float)
@@ -648,39 +648,39 @@ r30 = 30
 r31 = 31
 
 /* Lisp code keeps 0.0 in fp_zero */
-define([fp_zero],[f31])   /* a non-volatile reg as far as FFI is concerned. */
-define([fp_s32conv],[f30])   /* for s32->fp conversion */
+define(`fp_zero',`f31')   /* a non-volatile reg as far as FFI is concerned. */
+define(`fp_s32conv',`f30')   /* for s32->fp conversion */
 	
 /* registers, as used in destrucuring-bind/macro-bind */
 
-define([whole_reg],[temp1])
-define([arg_reg],[temp3])
-define([keyvect_reg],[temp2])
-define([mask_req_start],[24])
-define([mask_req_width],[8])
-define([mask_opt_start],[16])
-define([mask_opt_width],[8])
-define([mask_key_start],[8])
-define([mask_key_width],[8])
-define([mask_initopt],[7])
-define([mask_keyp],[6]) /*  note that keyp can be true even when 0 keys. */
-define([mask_aok],[5])
-define([mask_restp],[4])
+define(`whole_reg',`temp1')
+define(`arg_reg',`temp3')
+define(`keyvect_reg',`temp2')
+define(`mask_req_start',`24')
+define(`mask_req_width',`8')
+define(`mask_opt_start',`16')
+define(`mask_opt_width',`8')
+define(`mask_key_start',`8')
+define(`mask_key_width',`8')
+define(`mask_initopt',`7')
+define(`mask_keyp',`6') /*  note that keyp can be true even when 0 keys. */
+define(`mask_aok',`5')
+define(`mask_restp',`4')
 
-ifdef([DARWIN],[
-	define([STACK_ALIGN],16)
-	define([STACK_ALIGN_MASK],15)
-],[
-	define([STACK_ALIGN],8)
-	define([STACK_ALIGN_MASK],7)
-])
+ifdef(`DARWIN',`
+	define(`STACK_ALIGN',16)
+	define(`STACK_ALIGN_MASK',15)
+',`
+	define(`STACK_ALIGN',8)
+	define(`STACK_ALIGN_MASK',7)
+')
 
-define([TCR_STATE_FOREIGN],1)
-define([TCR_STATE_LISP],0)
-define([TCR_STATE_EXCEPTION_WAIT],2)
-define([TCR_STATE_EXCEPTION_RETURN],4)
+define(`TCR_STATE_FOREIGN',1)
+define(`TCR_STATE_LISP',0)
+define(`TCR_STATE_EXCEPTION_WAIT',2)
+define(`TCR_STATE_EXCEPTION_RETURN',4)
 
-define([RESERVATION_DISCHARGE],0x2004)
+define(`RESERVATION_DISCHARGE',0x2004)
 
 lisp_globals_limit = (0x3010+(LOWMEM_BIAS))
         

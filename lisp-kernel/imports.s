@@ -14,27 +14,27 @@
 /*   http://opensource.franz.com/preamble.html */
 
 	include(m4macros.m4)
-define([PTR],[
-        __ifdef([PPC64])
+define(`PTR',`
+        __ifdef(`PPC64')
         .quad $1
         __else
-	 __ifdef([X8664])
+	 __ifdef(`X8664')
 	 .quad $1
 	 __else
 	  .long $1
 	 __endif
         __endif
-])
+')
 	_beginfile
 
         	
 	.globl C(import_ptrs_base)
-define([defimport],[
+define(`defimport',`
 	.globl C($1)
         PTR(C($1))
                 
 # __line__
-])
+')
 	.data
 import_ptrs_start:
 
@@ -105,9 +105,9 @@ import_ptrs_start:
 C(import_ptrs_base):
 	PTR(import_ptrs_start)
 
-	__ifdef([PPC])
-        __ifdef([LINUX])
-        __ifndef([PPC64])
+	__ifdef(`PPC')
+        __ifdef(`LINUX')
+        __ifndef(`PPC64')
         .globl __trampoline_setup
 	.long  __trampoline_setup
         __endif

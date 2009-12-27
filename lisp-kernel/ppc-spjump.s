@@ -16,13 +16,13 @@
         include(lisp.s)
 	_beginfile
 	
-define([_spjump],[
+define(`_spjump',`
         .align 2
         .globl _SP$1
 _exportfn(j_SP$1)
           __(b _SP$1)
 _endfn
-])
+')
          .org 0x5000-0x2000
         /*	.align 12 */
          .globl C(spjump_start)
@@ -182,8 +182,8 @@ C(spjump_start):
         _spjump(progvrestore)
           .globl C(spjump_end)
 C(spjump_end):
-	__ifdef([DARWIN])
-	 __ifdef([PPC64])
+	__ifdef(`DARWIN')
+	 __ifdef(`PPC64')
            .org 0x5000-0x1000
 	 __endif
 	__endif

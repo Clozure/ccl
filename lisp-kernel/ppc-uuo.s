@@ -46,46 +46,46 @@ UUO_RB_SHIFT = 11
 UUO_RA_SHIFT = 16
 UUO_RT_SHIFT = 21
 
-define([rt_ra_uuo],[
-	.long (UUO_TAG|(($1)<<UUU_MINOR_SHIFT)|(($3)<<UUO_RA_SHIFT)|(($2)<<UUO_RT_SHIFT))])
+define(`rt_ra_uuo',`
+	.long (UUO_TAG|(($1)<<UUU_MINOR_SHIFT)|(($3)<<UUO_RA_SHIFT)|(($2)<<UUO_RT_SHIFT))')
 
-define([rt_ra_rb_uuo],[
-	.long (UUO_TAG|(($1)<<UUU_MINOR_SHIFT)|(($3)<<UUO_RA_SHIFT)|(($4)<<UUO_RB_SHIFT)|(($2)<<UUO_RT_SHIFT))])
+define(`rt_ra_rb_uuo',`
+	.long (UUO_TAG|(($1)<<UUU_MINOR_SHIFT)|(($3)<<UUO_RA_SHIFT)|(($4)<<UUO_RB_SHIFT)|(($2)<<UUO_RT_SHIFT))')
 	
-define([errnum_rb_uuo],[
-	.long (UUO_TAG|(($1)<<UUU_MINOR_SHIFT)|(($2)<<UUO_RA_SHIFT)|(($3)<<UUO_RB_SHIFT))])
+define(`errnum_rb_uuo',`
+	.long (UUO_TAG|(($1)<<UUU_MINOR_SHIFT)|(($2)<<UUO_RA_SHIFT)|(($3)<<UUO_RB_SHIFT))')
 	
-define([errnum_ra_rb_uuo],[ /* minorop,errnum,ra,rb */
-	.long (UUO_TAG|(($1)<<UUU_MINOR_SHIFT)|(($2)<<UUO_RA_SHIFT)|(($3)<<UUO_RB_SHIFT)|((\errnum)<<UUO_RT_SHIFT))])
+define(`errnum_ra_rb_uuo',` /* minorop,errnum,ra,rb */
+	.long (UUO_TAG|(($1)<<UUU_MINOR_SHIFT)|(($2)<<UUO_RA_SHIFT)|(($3)<<UUO_RB_SHIFT)|((\errnum)<<UUO_RT_SHIFT))')
 	
 	
 	
 /* Signal an internal error - type error or whatever - with error   */
 /* number (0-1023) and "register" argument.  */
 
-define([uuo_interr],[
-	errnum_rb_uuo(11,$1,$2)])
+define(`uuo_interr',`
+	errnum_rb_uuo(11,$1,$2)')
 	
 /* As above, but make the error continuable.  (A branch presumably  */
 /* follows the UUO opcode.)  */
 
-define([uuo_intcerr],[
-	errnum_rb_uuo(12,$1,$2)])
+define(`uuo_intcerr',`
+	errnum_rb_uuo(12,$1,$2)')
 
 
 /* Signal an error with a much smaller error number (0-31) and  */
 /* two "register" fields.  */
 
-define([uuo_interr2],[
-	errnum_ra_rb_uuo(13,$1,$2,$3)])
+define(`uuo_interr2',`
+	errnum_ra_rb_uuo(13,$1,$2,$3)')
 	
 /* Continuably ....  */
 
-define([uuo_intcerr2],[
-	errnum_ra_rb_uuo(14,$1,$2,$3)])
+define(`uuo_intcerr2',`
+	errnum_ra_rb_uuo(14,$1,$2,$3)')
 
 	
 
 /* A distinguished UUO: the handler should zero the FPSCR  */
-define([uuo_zero_fpscr],[
-	rt_ra_rb_uuo(25,0,0,0)])
+define(`uuo_zero_fpscr',`
+	rt_ra_rb_uuo(25,0,0,0)')

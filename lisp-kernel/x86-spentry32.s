@@ -2,21 +2,21 @@
 	_beginfile
 
 	.align 2
-define([_spentry],[ifdef([__func_name],[_endfn],[])
+define(`_spentry',`ifdef(`__func_name',`_endfn',`')
         .p2align 3
         _exportfn(_SP$1)
-])
+')
 
-define([_endsubp],[
+define(`_endsubp',`
         _endfn(_SP$1)
-])
+')
 
-define([jump_builtin],[
+define(`jump_builtin',`
 	ref_nrs_value(builtin_functions,%fname)
 	set_nargs($2)
 	vrefr(%fname,%fname,$1)
 	jump_fname()
-])
+')
 
 _spentry(bad_funcall)
 Xspentry_start:                 
@@ -30,7 +30,7 @@ _spentry(fix_overflow)
 C(fix_one_bit_overflow):
         __(movl $one_digit_bignum_header,%imm0)
 	__(movd %imm0,%mm0)
-        __(Misc_Alloc_Fixed([],aligned_bignum_size(1)))
+        __(Misc_Alloc_Fixed(`',aligned_bignum_size(1)))
         __(unbox_fixnum(%arg_z,%imm0))
 	__(xor $0xc0000000,%imm0)
         __(mov %temp0,%arg_z)
@@ -1432,7 +1432,7 @@ local_label(_nthrow1v_nextframe):
 	__(push %temp1)
 	__(push %temp0)
 	__(push %arg_z)
-	__(push [$]local_label(_nthrow1v_back_from_unbind))
+	__(push `$'local_label(_nthrow1v_back_from_unbind))
 	__(jmp _SPunbind_to)
 __(tra(local_label(_nthrow1v_back_from_unbind)))
 	__(pop %arg_z)
@@ -2024,7 +2024,7 @@ local_label(stack_misc_alloc_alloc_ivector):
 	__(dnode_align(%imm0,tsp_frame.fixed_overhead+node_size,%imm0))
 	__(cmpl $tstack_alloc_limit,%imm0)
 	__(ja local_label(stack_misc_alloc_heap_alloc_ivector))
-        __ifdef([WINDOWS])
+        __ifdef(`WINDOWS')
          __(windows_cstack_probe(%imm0,%temp1))
         __endif
 	__(movd rcontext(tcr.foreign_sp),%stack_temp)
@@ -2217,10 +2217,10 @@ _endsubp(keyword_args)
 
 /* N.B.: %ra0 is %temp0, and must not be clobbered. */
 
-define([keyword_flags_aok_bit],[16])
-define([keyword_flags_unknown_keys_bit],[17])
-define([keyword_flags_rest_bit],[18])
-define([keyword_flags_seen_aok_bit],[19])
+define(`keyword_flags_aok_bit',`16')
+define(`keyword_flags_unknown_keys_bit',`17')
+define(`keyword_flags_rest_bit',`18')
+define(`keyword_flags_seen_aok_bit',`19')
 
 _spentry(keyword_bind)
 	__(movl %temp1,rcontext(tcr.unboxed0))	/* save keyword flags */
@@ -2745,7 +2745,7 @@ _spentry(makestackblock)
 	__(dnode_align(%imm0,tsp_frame.fixed_overhead+macptr.size,%imm0))
 	__(cmpl $tstack_alloc_limit,%imm0)
 	__(jae 1f)
-        __ifdef([WINDOWS])
+        __ifdef(`WINDOWS')
          __(windows_cstack_probe(%imm0,%arg_z))
         __endif
 	__(movd rcontext(tcr.foreign_sp),%mm0)
@@ -2775,7 +2775,7 @@ _spentry(makestackblock0)
 	__(dnode_align(%imm0,tsp_frame.fixed_overhead+macptr.size,%imm0))
 	__(cmpl $tstack_alloc_limit,%imm0)
 	__(jae 9f)
-        __ifdef([WINDOWS])
+        __ifdef(`WINDOWS')
          __(windows_cstack_probe(%imm0,%temp0))
         __endif
         __(movl rcontext(tcr.foreign_sp),%temp0)
@@ -4010,7 +4010,7 @@ _endsubp(builtin_memq)
 logbitp_max_bit = 30
 
 _spentry(builtin_logbitp)
-	/* Call out unless: both args fixnums, arg_y in [0, logbitp_max_bit) */
+	/* Call out unless: both args fixnums, arg_y in `0, logbitp_max_bit) */
 	__(movl %arg_z,%imm0)
 	__(orl %arg_y,%imm0)
 	__(testb $fixnummask,%imm0_b)
@@ -4157,7 +4157,7 @@ _endsubp(builtin_aref1)
 /* previous %esp */
 
 _spentry(ffcall)
-LocalLabelPrefix[]ffcall:
+LocalLabelPrefix`'ffcall:
 	__(unbox_fixnum(%arg_z,%imm0))
 	__(testb $fixnummask,%arg_z_b)
 	__(je 0f)
@@ -4171,7 +4171,7 @@ LocalLabelPrefix[]ffcall:
         __(push %arg_y) 	 	 
         __(push %arg_z) 	 	 
         __(push %fn)         
-        __ifdef([WIN32_ES_HACK])
+        __ifdef(`WIN32_ES_HACK')
          __(movl rcontext(tcr.linear),%ebx)
         __endif
 	__(movl %esp,rcontext(tcr.save_vsp))
@@ -4186,21 +4186,21 @@ LocalLabelPrefix[]ffcall:
 	__(emms)
 	__(ldmxcsr rcontext(tcr.foreign_mxcsr))
 	__(movl (%esp),%ebp)
-LocalLabelPrefix[]ffcall_setup:
+LocalLabelPrefix`'ffcall_setup:
         __(lea 15(%esp),%ecx)
         __(andl $-16,%ecx)
         __(movl %ecx,%esp)
 /*	__(addl $node_size,%esp) */
-        __ifdef([WIN32_ES_HACK])
+        __ifdef(`WIN32_ES_HACK')
          __(push %ds)
          __(pop %es)
         __endif
-LocalLabelPrefix[]ffcall_call:
+LocalLabelPrefix`'ffcall_call:
 	__(call *%eax)
-	__ifdef([WIN32_ES_HACK])
+	__ifdef(`WIN32_ES_HACK')
          __(movw tcr.ldt_selector(%ebx),%rcontext_reg)
         __endif
-LocalLabelPrefix[]ffcall_call_end:
+LocalLabelPrefix`'ffcall_call_end:
 	__(movl %ebp,%esp)
 	__(movl %esp,rcontext(tcr.foreign_sp))
         /* The high word of a 64-bit result would be in %edx right now.
@@ -4218,7 +4218,7 @@ LocalLabelPrefix[]ffcall_call_end:
 	__(movl %arg_z,rcontext(tcr.ffi_exception))
 	__(jmp 1f)
 0:
-	__ifdef([SSE2_MATH_LIB])
+	__ifdef(`SSE2_MATH_LIB')
 	__(stmxcsr rcontext(tcr.ffi_exception))
 	__else
 	__(fnstsw rcontext(tcr.ffi_exception))
@@ -4380,7 +4380,7 @@ __(tra(local_label(back_from_callback)))
 	__(pop rcontext(tcr.foreign_sp))
         __(addl $12,%esp)       /* discard alignment padding */
         __(ldmxcsr rcontext(tcr.foreign_mxcsr))
-        __ifdef([WIN32_ES_HACK])
+        __ifdef(`WIN32_ES_HACK')
          __(push %ds)
          __(pop %es)
         __endif
@@ -4393,7 +4393,7 @@ __(tra(local_label(back_from_callback)))
         __(jae 1f)
 	__(movl -8(%ebp),%eax)
         __(movl -4(%ebp),%edx)
-        __ifdef([WIN_32])
+        __ifdef(`WIN_32')
 	 __(cmpl $0,-20(%ebp))
          __(jne local_label(winapi_return))
 	__endif
@@ -4410,7 +4410,7 @@ __(tra(local_label(back_from_callback)))
 1:      __(jne 2f)
         /* single float return in x87 */
         __(flds -8(%ebp))
-        __ifdef([WIN_32])
+        __ifdef(`WIN_32')
 	 __(cmpl $0,-20(%ebp))
          __(jne local_label(winapi_return))
         __endif
@@ -4418,13 +4418,13 @@ __(tra(local_label(back_from_callback)))
 	__(ret)
 2:      /* double-float return in x87 */
         __(fldl -8(%ebp))
-        __ifdef([WIN_32])
+        __ifdef(`WIN_32')
 	 __(cmpl $0,-20(%ebp))
          __(jne local_label(winapi_return))
         __endif
         __(leave)
 	__(ret)
-        __ifdef([WIN_32])
+        __ifdef(`WIN_32')
 local_label(winapi_return):
 	  __(movl -20(%ebp),%ecx)
 	  __(leave)

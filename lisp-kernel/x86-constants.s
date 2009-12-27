@@ -42,28 +42,28 @@ _builtin_aref1 = 21	/* %aref1   */
 _builtin_aset1 = 22	/* %aset1   */
 	
 
-ifdef([X8664],[
+ifdef(`X8664',`
 	include(x86-constants64.s)
-],[
+',`
 	include(x86-constants32.s)
-])						
+')						
 
 /* registers, as used in destructuring-bind/macro-bind   */
-ifdef([X8664],[
-define([whole_reg],[temp1])
-define([arg_reg],[temp0])
-define([keyvect_reg],[arg_x])
-],[
-define([arg_reg],[temp1])
-define([arg_reg_b],[temp1_b])
-define([keyvect_reg],[arg_y])
-])
+ifdef(`X8664',`
+define(`whole_reg',`temp1')
+define(`arg_reg',`temp0')
+define(`keyvect_reg',`arg_x')
+',`
+define(`arg_reg',`temp1')
+define(`arg_reg_b',`temp1_b')
+define(`keyvect_reg',`arg_y')
+')
 
-define([initopt_bit],[24])
-define([keyp_bit],[25]) /*  note that keyp can be true even when 0 keys.   */
-define([aok_bit],[26])
-define([restp_bit],[27])
-define([seen_aok_bit],[28])        
+define(`initopt_bit',`24')
+define(`keyp_bit',`25') /*  note that keyp can be true even when 0 keys.   */
+define(`aok_bit',`26')
+define(`restp_bit',`27')
+define(`seen_aok_bit',`28')        
         
 num_lisp_globals = 49		 /* MUST UPDATE THIS !!!   */
 	
@@ -75,7 +75,7 @@ num_lisp_globals = 49		 /* MUST UPDATE THIS !!!   */
 	 _node(unwind_resume)           /* _Unwind_Resume */
 	 _node(batch_flag)	        /* -b */
 	 _node(host_platform)	        /* for runtime platform-specific stuff   */
-	 _node(argv)			/* address of argv[0]   */
+	 _node(argv)			/* address of argv`0'   */
 	 _node(ref_base)                /* start of oldest pointer-bearing area */
 	 _node(tenured_area) 		/* the tenured_area   */
 	 _node(oldest_ephemeral) 	/* dword address of oldest ephemeral object or 0   */
@@ -110,7 +110,7 @@ num_lisp_globals = 49		 /* MUST UPDATE THIS !!!   */
 	 _node(tcr_key) 		/* tsd key for per-thread tcr   */
 	 _node(ret1val_addr) 		/* address of "dynamic" subprims magic values return addr   */
 	 _node(subprims_base) 		/* address of dynamic subprims jump table   */
-	 _node(saveR13)			/* probably don]t really need this   */
+	 _node(saveR13)			/* probably don't really need this   */
 	 _node(saveTOC)                 /* where the 68K emulator stores the  emulated regs   */
 	 _node(objc_2_personality)		/* exception "personality routine" address for ObjC 2.0 */
 	 _node(kernel_imports) 		/* some things we need imported for us   */
@@ -121,10 +121,10 @@ num_lisp_globals = 49		 /* MUST UPDATE THIS !!!   */
 	
 	
 		
-define([TCR_STATE_FOREIGN],1)
-define([TCR_STATE_LISP],0)
-define([TCR_STATE_EXCEPTION_WAIT],2)
-define([TCR_STATE_EXCEPTION_RETURN],4)
+define(`TCR_STATE_FOREIGN',1)
+define(`TCR_STATE_LISP',0)
+define(`TCR_STATE_EXCEPTION_WAIT',2)
+define(`TCR_STATE_EXCEPTION_RETURN',4)
 
 tstack_alloc_limit = 0xffff
 	

@@ -124,7 +124,7 @@ _exportfn(C(atomic_and))
 _endfn
 
 
-        __ifdef([DARWIN])
+        __ifdef(`DARWIN')
 _exportfn(C(pseudo_sigreturn))
         __(hlt)
         __(jmp C(pseudo_sigreturn))
@@ -151,7 +151,7 @@ _endfn
 
 /* switch_to_foreign_stack(new_sp, func, arg_0, arg_1, arg_2, arg_3)  */
 /*   Not fully general, but should get us off of the signal stack */
-        __ifndef([WINDOWS])
+        __ifndef(`WINDOWS')
 _exportfn(C(switch_to_foreign_stack))
 	__(movq %rdi,%rsp)
 	__(movq %rsi,%rax)
@@ -173,7 +173,7 @@ _endfn
 _exportfn(C(put_vector_registers))
 _endfn				
         
-	__ifdef([DARWIN])
+	__ifdef(`DARWIN')
 _exportfn(C(darwin_sigreturn))
         .globl C(sigreturn)
 /* Need to set the sigreturn 'infostyle' argument, which is mostly
@@ -189,7 +189,7 @@ _endfn
 
 	
         
-        __ifdef([DARWIN_GS_HACK])
+        __ifdef(`DARWIN_GS_HACK')
 /* Check (in an ugly, non-portable way) to see if %gs is addressing
    pthreads data.  If it was, return 0; otherwise, assume that it's
    addressing a lisp tcr and set %gs to point to the tcr's tcr.osid,
@@ -217,7 +217,7 @@ _exportfn(C(set_gs_address))
 _endfn
         __endif
 
-        __ifdef([WIN_64])
+        __ifdef(`WIN_64')
 /* %rcx = CONTEXT, %rdx = tcr, %r8 = old_valence.  This pretty
    much has to be uninterruptible */        
 _exportfn(C(restore_windows_context))

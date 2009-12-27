@@ -93,14 +93,14 @@ _exportfn(C(start_lisp))
 	__(push %csave2)
 	__(push %csave3)
 	__(push %csave4)
-	__ifdef([WINDOWS])
+	__ifdef(`WINDOWS')
 	__(push %csave5)
 	__(push %csave6)
         __endif
-        __ifdef([TCR_IN_GPR])
+        __ifdef(`TCR_IN_GPR')
 	__(movq %carg0,%rcontext_reg)
 	__endif
-        __ifdef([DARWIN_GS_HACK])
+        __ifdef(`DARWIN_GS_HACK')
          __(set_gs_base())
         __endif
 	__(sub $8,%rsp)	/* %rsp is now 16-byte aligned  */
@@ -116,10 +116,10 @@ _exportfn(C(start_lisp))
 	__(clr %save0)
 	__(clr %save1)
 	__(clr %save2)
-	__ifndef([TCR_IN_GPR]) /* no %save3, r11 is %rcontext_reg */
+	__ifndef(`TCR_IN_GPR') /* no %save3, r11 is %rcontext_reg */
 	__(clr %save3)
 	__endif
-	__(pxor %fpzero,%fpzero)	/* fpzero = 0.0[d0] */
+	__(pxor %fpzero,%fpzero)	/* fpzero = 0.0`d0' */
         __(stmxcsr rcontext(tcr.foreign_mxcsr))
         __(andb $~mxcsr_all_exceptions,rcontext(tcr.foreign_mxcsr))
         __(ldmxcsr rcontext(tcr.lisp_mxcsr))
@@ -128,7 +128,7 @@ _exportfn(C(start_lisp))
 	__(movq $TCR_STATE_FOREIGN,rcontext(tcr.valence))
 	__(emms)
 	__(addq $8,%rsp)	/* discard alignment word */
-	__ifdef([WINDOWS])
+	__ifdef(`WINDOWS')
 	__(pop %csave6)
 	__(pop %csave5)
 	__endif
@@ -138,7 +138,7 @@ _exportfn(C(start_lisp))
 	__(pop %csave1)
 	__(pop %csave0)
         __(ldmxcsr rcontext(tcr.foreign_mxcsr))
-        __ifdef([DARWIN_GS_HACK])
+        __ifdef(`DARWIN_GS_HACK')
          __(set_foreign_gs_base)
         __endif
 	__(movl $nil_value,%eax)

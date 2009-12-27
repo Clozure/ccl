@@ -109,7 +109,7 @@ _exportfn(C(atomic_and))
 _endfn
 
 
-        __ifdef([DARWIN])
+        __ifdef(`DARWIN')
 _exportfn(C(pseudo_sigreturn))
         __(hlt)
         __(jmp C(pseudo_sigreturn))
@@ -157,7 +157,7 @@ _exportfn(C(switch_to_foreign_stack))
         __(pop %ecx)            /* arg_2 */
         __(mov %edi,%esp)
         __(pop %edi)            /* Return address pushed by caller */
-        __ifndef([LINUX])
+        __ifndef(`LINUX')
         __(push $0)             /* For alignment. See comment above */
         __endif
         __(push %ecx)           /* arg_2 */
@@ -167,14 +167,14 @@ _exportfn(C(switch_to_foreign_stack))
         __(jmp *%esi)           /* On some platforms, we don't really return */
 _endfn
 
-        __ifdef([FREEBSD])
+        __ifdef(`FREEBSD')
         .globl C(sigreturn)
 _exportfn(C(freebsd_sigreturn))
         __(jmp C(sigreturn))
 _endfn
         __endif
 
-        __ifdef([DARWIN])
+        __ifdef(`DARWIN')
 _exportfn(C(darwin_sigreturn))
 /* Need to set the sigreturn 'infostyle' argument, which is mostly
    undocumented.  On x8632 Darwin, sigtramp() sets it to 0x1e, and
@@ -196,7 +196,7 @@ _exportfn(C(put_vector_registers))
 	__(ret)
 _endfn				
 
-        __ifdef([WIN_32])
+        __ifdef(`WIN_32')
 _exportfn(C(restore_windows_context))
 Xrestore_windows_context_start:
         __(movl 4(%esp),%ecx)   /* context */
@@ -259,14 +259,14 @@ C(restore_windows_context_end): .long Xrestore_windows_context_end
 C(restore_windows_context_iret): .long Xrestore_windows_context_iret
         .text
         
-        __ifdef([WIN32_ES_HACK])
+        __ifdef(`WIN32_ES_HACK')
 /* Something that we shouldn't return to */
 _exportfn(C(windows_halt))
         __(hlt)
 _endfn         
         __endif
 _exportfn(C(ensure_safe_for_string_operations))
-        __ifdef([WIN32_ES_HACK])
+        __ifdef(`WIN32_ES_HACK')
         __(movw %es,%ax)
         __(movw %ds,%dx)
         __(cmpw %ax,%dx)
@@ -275,7 +275,7 @@ _exportfn(C(ensure_safe_for_string_operations))
         __endif
         __(cld)        
 	__(ret)
-        __ifdef([WIN32_ES_HACK])
+        __ifdef(`WIN32_ES_HACK')
 9:      __(hlt)
         __(jmp 0b)
         __endif

@@ -18,24 +18,24 @@
 	_beginfile
 	
         .align 2
-define([_spentry],[ifdef([__func_name],[_endfn],[])
+define(`_spentry',`ifdef(`__func_name',`_endfn',`')
 	.p2align 3
 	_exportfn(_SP$1)
 	.line  __line__
-])
+')
 
              
-define([_endsubp],[
+define(`_endsubp',`
 	_endfn(_SP$1)
 #  __line__ 
-])
+')
 
-define([jump_builtin],[
+define(`jump_builtin',`
 	ref_nrs_value(builtin_functions,%fname)
 	set_nargs($2)
 	vrefr(%fname,%fname,$1)
 	jump_fname()
-])
+')
 
         
 
@@ -51,7 +51,7 @@ _endsubp(bad_funcall)
 _spentry(fix_overflow)
 C(fix_one_bit_overflow):	
 	__(movq $two_digit_bignum_header,%imm0)
-	__(Misc_Alloc_Fixed([],aligned_bignum_size(2)))
+	__(Misc_Alloc_Fixed(`',aligned_bignum_size(2)))
 	__(unbox_fixnum(%arg_z,%imm0))
 	__(movq $0xe000000000000000,%imm1)
 	__(mov %temp0,%arg_z)
@@ -1233,7 +1233,7 @@ __(tra(local_label(_threw_one_value_dont_unbind)))
 	__(movq catch_frame._save0(%temp0),%save0)
 	__(movq catch_frame._save1(%temp0),%save1)
 	__(movq catch_frame._save2(%temp0),%save2)
-	__ifndef([TCR_IN_GPR])
+	__ifndef(`TCR_IN_GPR')
 	__(movq catch_frame._save3(%temp0),%save3)
 	__endif
 	__(movq %imm1,rcontext(tcr.catch_top))
@@ -1279,7 +1279,7 @@ local_label(_threw_multiple_push_test):
 	__(movq catch_frame._save0(%temp0),%save0)
 	__(movq catch_frame._save1(%temp0),%save1)
 	__(movq catch_frame._save2(%temp0),%save2)
-	__ifndef([TCR_IN_GPR])
+	__ifndef(`TCR_IN_GPR')
 	__(movq catch_frame._save3(%temp0),%save3)
 	__endif
 	__(movq %imm1,rcontext(tcr.catch_top))
@@ -1336,7 +1336,7 @@ local_label(_nthrowv_push_test):
 	__(movq %save0,rcontext(tcr.xframe))
 	__(movq %save2,%rsp)
 	__(movq catch_frame.rbp(%temp0),%rbp)
-	__ifndef([TCR_IN_GPR])
+	__ifndef(`TCR_IN_GPR')
 	__(movq catch_frame._save3(%temp0),%save3)
 	__endif
 	__(movq catch_frame._save2(%temp0),%save2)
@@ -1358,7 +1358,7 @@ local_label(_nthrowv_do_unwind):
 	__(push catch_frame._save0(%temp0))
 	__(push catch_frame._save1(%temp0))
 	__(push catch_frame._save2(%temp0))
-	__ifndef([TCR_IN_GPR])
+	__ifndef(`TCR_IN_GPR')
 	__(push catch_frame._save3(%temp0))
 	__endif
 	__(push catch_frame.pc(%temp0))
@@ -1390,7 +1390,7 @@ local_label(_nthrowv_tpushtest):
 	__(subl $node_size,%nargs)
 	__(jns local_label(_nthrowv_tpushloop))
 	__(pop %xfn)
-	__ifndef([TCR_IN_GPR])
+	__ifndef(`TCR_IN_GPR')
 	__(pop %save3)
 	__endif
 	__(pop %save2)
@@ -1468,7 +1468,7 @@ local_label(_nthrow1v_dont_unbind):
 	__(movq %save0,rcontext(tcr.xframe))
 	__(movq catch_frame.rsp(%temp0),%rsp)
 	__(movq catch_frame.rbp(%temp0),%rbp)
-	__ifndef([TCR_IN_GPR])
+	__ifndef(`TCR_IN_GPR')
 	__(movq catch_frame._save3(%temp0),%save3)
 	__endif
 	__(movq catch_frame._save2(%temp0),%save2)
@@ -1492,7 +1492,7 @@ local_label(_nthrow1v_do_unwind):
 	__(movq catch_frame._save0(%temp0),%save0)
 	__(movq catch_frame._save1(%temp0),%save1)
 	__(movq catch_frame._save2(%temp0),%save2)
-	__ifndef([TCR_IN_GPR])
+	__ifndef(`TCR_IN_GPR')
 	__(movq catch_frame._save3(%temp0),%save3)
 	__endif
 	__(movq catch_frame.pc(%temp0),%xfn)
@@ -2067,7 +2067,7 @@ local_label(stack_misc_alloc_alloc_ivector):
 	__(dnode_align(%imm1,tsp_frame.fixed_overhead+node_size,%imm1))
 	__(cmpq $tstack_alloc_limit,%imm1)
 	__(ja local_label(stack_misc_alloc_heap_alloc_ivector))
-        __ifdef([WINDOWS])
+        __ifdef(`WINDOWS')
          __(windows_cstack_probe(%imm1,%temp0))
         __endif
         __(movq rcontext(tcr.foreign_sp),%stack_temp) 
@@ -2247,10 +2247,10 @@ _endsubp(keyword_args)
 /* &allow-other-keys and/or &rest was present in the lambda list.  */
 /* Once we get here, we can use the arg registers.  */
 
-define([keyword_flags_aok_bit],[fixnumshift])
-define([keyword_flags_unknown_keys_bit],[fixnumshift+1])
-define([keyword_flags_rest_bit],[fixnumshift+2])
-define([keyword_flags_seen_aok_bit],[fixnumshift+3])        
+define(`keyword_flags_aok_bit',`fixnumshift')
+define(`keyword_flags_unknown_keys_bit',`fixnumshift+1')
+define(`keyword_flags_rest_bit',`fixnumshift+2')
+define(`keyword_flags_seen_aok_bit',`fixnumshift+3')        
 	
 _spentry(keyword_bind)
 	__(movl %nargs,%imm1_l)
@@ -2682,7 +2682,7 @@ _spentry(makestackblock)
 	__(dnode_align(%imm0,tsp_frame.fixed_overhead+macptr.size,%imm0))
 	__(cmpq $tstack_alloc_limit,%imm0)
 	__(jae 1f)
-        __ifdef([WINDOWS])
+        __ifdef(`WINDOWS')
          __(windows_cstack_probe(%imm0,%arg_z))
         __endif
         __(movq rcontext(tcr.foreign_sp),%imm1)
@@ -2712,7 +2712,7 @@ _spentry(makestackblock0)
 	__(dnode_align(%imm0,tsp_frame.fixed_overhead+macptr.size,%imm0))
 	__(cmpq $tstack_alloc_limit,%imm0)
 	__(jae 9f)
-        __ifdef([WINDOWS])
+        __ifdef(`WINDOWS')
          __(windows_cstack_probe(%imm0,%arg_z))
         __endif        
         __(movq rcontext(tcr.foreign_sp),%imm1)
@@ -3810,7 +3810,7 @@ _spentry(builtin_memq)
 2:      __(uuo_error_reg_not_list(Rarg_z))
 _endsubp(builtin_memq)
 
-        __ifdef([X8664])
+        __ifdef(`X8664')
 logbitp_max_bit = 61
         __else
 logbitp_max_bit = 30
@@ -3964,7 +3964,7 @@ _endsubp(builtin_aref1)
 /*   the function result will be in %rax (and possibly %rdx) or %xmm0 (+ %xmm1).  */
 
 _spentry(ffcall)
-LocalLabelPrefix[]ffcall:                
+LocalLabelPrefix`'ffcall:                
         /* Unbox %arg_z.  It's either a fixnum or macptr (or bignum) ;
           if not a fixnum, get the first word */
         __(unbox_fixnum(%arg_z,%imm1))
@@ -3982,7 +3982,7 @@ LocalLabelPrefix[]ffcall:
 	__(push %arg_y)
 	__(push %arg_z)
 	__(push %fn)
-	__ifndef([TCR_IN_GPR])
+	__ifndef(`TCR_IN_GPR')
 	__(push %save3)  
 	__endif
 	__(push %save2)
@@ -3996,7 +3996,7 @@ LocalLabelPrefix[]ffcall:
 	__(emms)
 	__(ldmxcsr rcontext(tcr.foreign_mxcsr))
 	__(movq (%rsp),%rbp)
-        __ifdef([DARWIN_GS_HACK])
+        __ifdef(`DARWIN_GS_HACK')
          /* At this point, %imm1=%rdx is live (contains
             the entrypoint) and %imm0.b=%al contains
             info about xmm register arguments; the lisp registers are
@@ -4015,14 +4015,14 @@ LocalLabelPrefix[]ffcall:
          __(movq %csave1,%imm1)
          __(movq %csave2,%imm0)
         __endif
-	__ifdef([TCR_IN_GPR])
+	__ifdef(`TCR_IN_GPR')
 	/* Preserve TCR pointer */
 	__(movq %rcontext_reg, %csave0)
 	__endif
-LocalLabelPrefix[]ffcall_setup: 
+LocalLabelPrefix`'ffcall_setup: 
 	__(addq $2*node_size,%rsp)
         __(movq %imm1,%r11)
-        __ifdef([WINDOWS])
+        __ifdef(`WINDOWS')
          /* Leave 0x20 bytes of register spill area on stack */
          __(movq (%rsp),%carg0)
          __(movq 8(%rsp),%carg1)
@@ -4036,15 +4036,15 @@ LocalLabelPrefix[]ffcall_setup:
 	 __(pop %carg4)
 	 __(pop %carg5)
 	__endif
-LocalLabelPrefix[]ffcall_setup_end: 
-LocalLabelPrefix[]ffcall_call:
+LocalLabelPrefix`'ffcall_setup_end: 
+LocalLabelPrefix`'ffcall_call:
 	__(call *%r11)
-LocalLabelPrefix[]ffcall_call_end:               
-	__ifdef([WINDOWS])
+LocalLabelPrefix`'ffcall_call_end:               
+	__ifdef(`WINDOWS')
 	__(add $0x20,%rsp)
 	__endif
 	__(movq %rbp,%rsp)
-        __ifdef([DARWIN_GS_HACK])
+        __ifdef(`DARWIN_GS_HACK')
          /* %rax/%rdx contains the return value (maybe), %csave1 still
             contains the linear tcr address.  Preserve %rax/%rdx here. */
          __(movq %rax,%csave1)
@@ -4053,11 +4053,11 @@ LocalLabelPrefix[]ffcall_call_end:
          __(movq %csave1,%rax)
          __(movq %csave2,%rdx)
         __endif
-	__ifdef([TCR_IN_GPR])
+	__ifdef(`TCR_IN_GPR')
 	__(movq %csave0, %rcontext_reg)
 	__endif
 	__(movq %rsp,rcontext(tcr.foreign_sp))
-	__ifndef([TCR_IN_GPR])
+	__ifndef(`TCR_IN_GPR')
 	__(clr %save3)
 	__endif
 	__(clr %save2)
@@ -4082,7 +4082,7 @@ LocalLabelPrefix[]ffcall_call_end:
 	__(pop %save0)
 	__(pop %save1)
 	__(pop %save2)
-	__ifndef([TCR_IN_GPR])
+	__ifndef(`TCR_IN_GPR')
 	__(pop %save3)
 	__endif
 	__(pop %fn)
@@ -4095,12 +4095,12 @@ LocalLabelPrefix[]ffcall_call_end:
 	__(check_pending_interrupt(%temp0))
 	__(pop %temp0)
         __(leave)
-	__ifdef([DARWIN])
+	__ifdef(`DARWIN')
 	__(btrq $TCR_FLAG_BIT_FOREIGN_EXCEPTION,rcontext(tcr.flags))
 	__(jc 0f)
 	__endif
 	__(ret)
-	__ifdef([DARWIN])
+	__ifdef(`DARWIN')
 0:
 	/* Unboxed foreign exception (likely an NSException) in %imm0. */
 	/* Box it, then signal a lisp error. */
@@ -4112,35 +4112,35 @@ LocalLabelPrefix[]ffcall_call_end:
 	__(set_nargs(2))
 	__(jmp _SPksignalerr)
 	__endif
-        __ifdef([DARWIN])        
+        __ifdef(`DARWIN')        
         /* Handle exceptions, for ObjC 2.0 */
-LocalLabelPrefix[]ffcallLandingPad:      
+LocalLabelPrefix`'ffcallLandingPad:      
         __(movq %rax,%save1)
         __(cmpq $1,%rdx)
         __(je 1f)
         __(movq %rax,%rdi)
-LocalLabelPrefix[]ffcallUnwindResume:            
+LocalLabelPrefix`'ffcallUnwindResume:            
        	__(call *lisp_global(unwind_resume))
-LocalLabelPrefix[]ffcallUnwindResume_end:         
+LocalLabelPrefix`'ffcallUnwindResume_end:         
 1:      __(movq %save1,%rdi)
-LocalLabelPrefix[]ffcallBeginCatch:              
+LocalLabelPrefix`'ffcallBeginCatch:              
         __(call *lisp_global(objc2_begin_catch))
-LocalLabelPrefix[]ffcallBeginCatch_end:          
+LocalLabelPrefix`'ffcallBeginCatch_end:          
         __(movq (%rax),%save1) /* indirection is necessary because we don't provide type info in lsda */
-LocalLabelPrefix[]ffcallEndCatch:                
+LocalLabelPrefix`'ffcallEndCatch:                
         __(call *lisp_global(objc2_end_catch))
-LocalLabelPrefix[]ffcallEndCatch_end:            
+LocalLabelPrefix`'ffcallEndCatch_end:            
 	__(ref_global(get_tcr,%rax))
 	__(movq $1,%rdi)
 	__(call *%rax)
 	__(btsq $TCR_FLAG_BIT_FOREIGN_EXCEPTION,tcr.flags(%rax))
 	__(movq %save1,%rax)
-	__(jmp LocalLabelPrefix[]ffcall_call_end)
-LocalLabelPrefix[]ffcall_end:   
+	__(jmp LocalLabelPrefix`'ffcall_call_end)
+LocalLabelPrefix`'ffcall_end:   
         __endif
 _endsubp(ffcall)
 
-        __ifdef([DARWIN])
+        __ifdef(`DARWIN')
 	.section __DATA,__gcc_except_tab
 GCC_except_table0:
 	.align 3
@@ -4183,7 +4183,7 @@ LLSDA1:
         __endif
 
 _spentry(ffcall_return_registers)
-LocalLabelPrefix[]ffcall_return_registers:                
+LocalLabelPrefix`'ffcall_return_registers:                
         /* Unbox %arg_z.  It's either a fixnum or macptr (or bignum) ;
           if not a fixnum, get the first word */
         __(unbox_fixnum(%arg_z,%imm1))
@@ -4200,7 +4200,7 @@ LocalLabelPrefix[]ffcall_return_registers:
 	__(push %arg_x)
 	__(push %arg_y)
 	__(push %arg_z)
-	__ifndef([TCR_IN_GPR])
+	__ifndef(`TCR_IN_GPR')
 	__(push %save3)
 	__endif
 	__(push %save2)
@@ -4216,7 +4216,7 @@ LocalLabelPrefix[]ffcall_return_registers:
 	__(emms)
 	__(ldmxcsr rcontext(tcr.foreign_mxcsr))
 	__(movq (%rsp),%rbp)
-        __ifdef([DARWIN_GS_HACK])
+        __ifdef(`DARWIN_GS_HACK')
          /* At this point, %imm1=%rdx is live (contains
             the entrypoint) and %imm0.b=%al contains
             xmm argument info; the lisp registers are
@@ -4235,28 +4235,28 @@ LocalLabelPrefix[]ffcall_return_registers:
          __(movq %csave2,%imm0)
          __(movq %csave3,%imm1)
         __endif
-	__ifdef([TCR_IN_GPR])
+	__ifdef(`TCR_IN_GPR')
 	/* Preserve TCR pointer */
 	__(movq %rcontext_reg, %csave1)
 	__endif
         __(movq %imm1,%r11)
-LocalLabelPrefix[]ffcall_return_registers_setup: 
+LocalLabelPrefix`'ffcall_return_registers_setup: 
 	__(addq $2*node_size,%rsp)
 	__(pop %carg0)
 	__(pop %carg1)
 	__(pop %carg2)
 	__(pop %carg3)
-	__ifdef([WINDOWS])
+	__ifdef(`WINDOWS')
 	__(sub $0x20, %rsp) /* Make room for arg register spill */
 	__else
 	__(pop %carg4)
 	__(pop %carg5)
 	__endif
-LocalLabelPrefix[]ffcall_return_registers_setup_end: 
-LocalLabelPrefix[]ffcall_return_registers_call:
+LocalLabelPrefix`'ffcall_return_registers_setup_end: 
+LocalLabelPrefix`'ffcall_return_registers_call:
 	__(call *%r11)
-LocalLabelPrefix[]ffcall_return_registers_call_end:
-	__ifdef([WINDOWS])
+LocalLabelPrefix`'ffcall_return_registers_call_end:
+	__ifdef(`WINDOWS')
 	__(add $0x20, %rsp)
 	__endif
         __(movq %rax,(%csave0))
@@ -4264,7 +4264,7 @@ LocalLabelPrefix[]ffcall_return_registers_call_end:
         __(movsd %xmm0,16(%csave0))
         __(movsd %xmm1,24(%csave0))
 	__(movq %rbp,%rsp)
-        __ifdef([DARWIN_GS_HACK])
+        __ifdef(`DARWIN_GS_HACK')
          /* %rax/%rdx contains the return value (maybe), %save0 still
             contains the linear tcr address.  Preserve %rax/%rdx here. */
          __(set_gs_base(%csave1))
@@ -4273,11 +4273,11 @@ LocalLabelPrefix[]ffcall_return_registers_call_end:
          __(movsd 16(%csave0),%xmm0)
          __(movsd 24(%csave0),%xmm1)
         __endif
-	__ifdef([TCR_IN_GPR])
+	__ifdef(`TCR_IN_GPR')
 	__(movq %csave1, %rcontext_reg)
 	__endif
 	__(movq %rsp,rcontext(tcr.foreign_sp))        
-	__ifndef([TCR_IN_GPR])
+	__ifndef(`TCR_IN_GPR')
 	__(clr %save3)
 	__endif
 	__(clr %save2)
@@ -4303,7 +4303,7 @@ LocalLabelPrefix[]ffcall_return_registers_call_end:
 	__(pop %save0)
 	__(pop %save1)
 	__(pop %save2)
-	__ifndef([TCR_IN_GPR])
+	__ifndef(`TCR_IN_GPR')
 	__(pop %save3)
 	__endif
 	__(pop %arg_z)
@@ -4315,12 +4315,12 @@ LocalLabelPrefix[]ffcall_return_registers_call_end:
 	__(check_pending_interrupt(%temp0))
 	__(pop %temp0)
         __(leave)
-	__ifdef([DARWIN])
+	__ifdef(`DARWIN')
 	__(btrq $TCR_FLAG_BIT_FOREIGN_EXCEPTION,rcontext(tcr.flags))
 	__(jc 0f)
 	__endif
         __(ret)
-	__ifdef([DARWIN])
+	__ifdef(`DARWIN')
 0:
 	/* Unboxed foreign exception (likely an NSException) in %imm0. */
 	/* Box it, then signal a lisp error. */
@@ -4332,35 +4332,35 @@ LocalLabelPrefix[]ffcall_return_registers_call_end:
 	__(set_nargs(2))
 	__(jmp _SPksignalerr)
 	__endif
-        __ifdef([DARWIN])        
+        __ifdef(`DARWIN')        
         /* Handle exceptions, for ObjC 2.0 */
-LocalLabelPrefix[]ffcall_return_registersLandingPad:      
+LocalLabelPrefix`'ffcall_return_registersLandingPad:      
         __(movq %rax,%save1)
         __(cmpq $1,%rdx)
         __(je 1f)
         __(movq %rax,%rdi)
-LocalLabelPrefix[]ffcall_return_registersUnwindResume:            
+LocalLabelPrefix`'ffcall_return_registersUnwindResume:            
        	__(call *lisp_global(unwind_resume))
-LocalLabelPrefix[]ffcall_return_registersUnwindResume_end:         
+LocalLabelPrefix`'ffcall_return_registersUnwindResume_end:         
 1:      __(movq %save1,%rdi)
-LocalLabelPrefix[]ffcall_return_registersBeginCatch:              
+LocalLabelPrefix`'ffcall_return_registersBeginCatch:              
         __(call *lisp_global(objc2_begin_catch))
-LocalLabelPrefix[]ffcall_return_registersBeginCatch_end:          
+LocalLabelPrefix`'ffcall_return_registersBeginCatch_end:          
         __(movq (%rax),%save1) /* indirection is necessary because we don't provide type info in lsda */
-LocalLabelPrefix[]ffcall_return_registersEndCatch:                
+LocalLabelPrefix`'ffcall_return_registersEndCatch:                
         __(call *lisp_global(objc2_end_catch))
-LocalLabelPrefix[]ffcall_return_registersEndCatch_end:            
+LocalLabelPrefix`'ffcall_return_registersEndCatch_end:            
 	__(ref_global(get_tcr,%rax))
 	__(movq $1,%rdi)
 	__(call *%rax)
 	__(btsq $TCR_FLAG_BIT_FOREIGN_EXCEPTION,tcr.flags(%rax))
 	__(movq %save1,%rax)
-	__(jmp LocalLabelPrefix[]ffcall_return_registers_call_end)
-LocalLabelPrefix[]ffcall_return_registers_end:   
+	__(jmp LocalLabelPrefix`'ffcall_return_registers_call_end)
+LocalLabelPrefix`'ffcall_return_registers_end:   
         __endif
 _endsubp(ffcall_returning_registers)
 
-        __ifdef([DARWIN])
+        __ifdef(`DARWIN')
 	.section __DATA,__gcc_except_tab
 GCC_except_table1:
 	.align 3
@@ -4412,7 +4412,7 @@ _spentry(syscall)
 	__(push %arg_x)
 	__(push %arg_y)
 	__(push %arg_z)
-        __ifndef([TCR_IN_GPR])
+        __ifndef(`TCR_IN_GPR')
 	 __(push %save3)
         __endif
 	__(push %save2)
@@ -4426,10 +4426,10 @@ _spentry(syscall)
 	__(emms)
 	__(movq (%rsp),%rbp)
 	__(addq $2*node_size,%rsp)
-        __ifdef([TCR_IN_GPR])
+        __ifdef(`TCR_IN_GPR')
          __(movq %rcontext_reg,%csave0)
         __endif
-        __ifdef([WINDOWS])
+        __ifdef(`WINDOWS')
          __(pop %carg0)
          __(pop %carg1)
          __(pop %carg2)
@@ -4446,18 +4446,18 @@ _spentry(syscall)
 	 __(pop %r8)
 	 __(pop %r9)
 	 __(syscall)
-         __ifdef([SYSCALL_SETS_CARRY_ON_ERROR])
+         __ifdef(`SYSCALL_SETS_CARRY_ON_ERROR')
           __(jnc 0f)
           __(negq %rax)
 0:      
          __endif
         __endif
-        __ifdef([TCR_IN_GPR])
+        __ifdef(`TCR_IN_GPR')
          __(movq %csave0,%rcontext_reg)
         __endif
 	__(movq %rbp,%rsp)
 	__(movq %rsp,rcontext(tcr.foreign_sp))
-        __ifndef([TCR_IN_GPR])
+        __ifndef(`TCR_IN_GPR')
 	 __(clr %save3)
         __endif
 	__(clr %save2)
@@ -4478,7 +4478,7 @@ _spentry(syscall)
 	__(pop %save0)
 	__(pop %save1)
 	__(pop %save2)
-        __ifndef([TCR_IN_GPR])
+        __ifndef(`TCR_IN_GPR')
 	 __(pop %save3)
         __endif
 	__(pop %arg_z)
@@ -4573,12 +4573,12 @@ _spentry(callback)
 	__(push %carg1)
 	__(push %carg2)
 	__(push %carg3)
-	__ifndef([WINDOWS])
+	__ifndef(`WINDOWS')
 	__(push %carg4)
 	__(push %carg5)
 	__endif
 	/* FP arg regs   */
-	__ifdef([WINDOWS])
+	__ifdef(`WINDOWS')
 	__(subq $4*8,%rsp)
 	__(movq %xmm0,3*8(%rsp))	/* -40(%rbp) */
 	__(movq %xmm1,2*8(%rsp))
@@ -4595,7 +4595,7 @@ _spentry(callback)
 	__(movq %xmm6,1*8(%rsp))
 	__(movq %xmm7,0*8(%rsp))
 	__endif
-	__ifndef([WINDOWS])
+	__ifndef(`WINDOWS')
 	__endif
 	/* C NVRs   */
 	__(push %csave0)
@@ -4603,15 +4603,15 @@ _spentry(callback)
 	__(push %csave2)
 	__(push %csave3)
 	__(push %csave4)
-	__ifdef([WINDOWS])
+	__ifdef(`WINDOWS')
 	__(push %csave5)
 	__(push %csave6)
 	__endif
 	__(push %rbp)
 	__(movq %r11,%csave0)
-        __ifdef([HAVE_TLS])
+        __ifdef(`HAVE_TLS')
 	 /* TCR initialized for lisp ?   */
-	 __ifndef([TCR_IN_GPR]) /* FIXME */
+	 __ifndef(`TCR_IN_GPR') /* FIXME */
 	 __(movq %fs:current_tcr@TPOFF+tcr.linear,%rax)
 	 __(testq %rax,%rax)
 	 __(jne 1f)
@@ -4619,17 +4619,17 @@ _spentry(callback)
         __endif
 	__(ref_global(get_tcr,%rax))
 	__(movq $1,%carg0)
-	__ifdef([WINDOWS])
+	__ifdef(`WINDOWS')
 	__(sub $0x20, %rsp)
 	__endif
 	__(call *%rax)
-	__ifdef([WINDOWS])
+	__ifdef(`WINDOWS')
 	__(add $0x20, %rsp)
         __endif
-        __ifdef([TCR_IN_GPR])
+        __ifdef(`TCR_IN_GPR')
 	__(movq %rax, %rcontext_reg)
 	__endif	
-        __ifdef([DARWIN_GS_HACK])
+        __ifdef(`DARWIN_GS_HACK')
          /* linear TCR address in now in %rax; callback index was
             saved in %r12 a moment ago. */
          __(set_gs_base(%rax))
@@ -4640,7 +4640,7 @@ _spentry(callback)
 	/* init lisp registers   */
 	__(movq %csave0,%rax)
 	__(movq %rsp,rcontext(tcr.foreign_sp))
-	__ifndef([TCR_IN_GPR])
+	__ifndef(`TCR_IN_GPR')
 	__(clr %save3)
 	__endif
 	__(clr %save2)
@@ -4662,7 +4662,7 @@ _spentry(callback)
         __(movq (%rsp),%save0)
         __(movq 8(%rsp),%save1)
         __(movq 16(%rsp),%save2)
-        __ifndef([TCR_IN_GPR])
+        __ifndef(`TCR_IN_GPR')
          __(movq 24(%rsp),%save3)
         __endif
         __(stmxcsr rcontext(tcr.foreign_mxcsr))
@@ -4683,12 +4683,12 @@ __(tra(local_label(back_from_callback)))
 	__(pop rcontext(tcr.foreign_sp))
         __(addq $node_size,%rsp)
         __(ldmxcsr rcontext(tcr.foreign_mxcsr))
-        __ifdef([DARWIN_GS_HACK])
+        __ifdef(`DARWIN_GS_HACK')
          /* Lucky us; nothing is live here */
          __(set_foreign_gs_base())
         __endif
 	__(pop %rbp)
-	__ifdef([WINDOWS])
+	__ifdef(`WINDOWS')
 	__(pop %csave6)
 	__(pop %csave5)
 	__endif
@@ -5089,7 +5089,7 @@ _spentry(breakpoint)
 _endsubp(breakpoint)
 
 
-        __ifdef([DARWIN])
+        __ifdef(`DARWIN')
         .if 1
 	.globl  C(lisp_objc_personality)
 C(lisp_objc_personality):
