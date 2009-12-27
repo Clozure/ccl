@@ -33,13 +33,16 @@ M4FLAGS = -DSOLARIS -DX86 -DX8664
 CDEFINES = -DSOLARIS -D_REENTRANT -DX86 -DX8664 -D__EXTENSIONS__ -DHAVE_TLS #-DDISABLE_EGC
 CDEBUG = -g
 COPT = #-O2
+# Once in a while, -Wformat says something useful.  The odds are against that,
+# however.
+WFORMAT = -Wno-format
 
 
 
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) -m64 -o $@
+	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m64 -o $@
 
 SPOBJ = pad.o x86-spjump64.o x86-spentry64.o x86-subprims64.o
 ASMOBJ = x86-asmutils64.o imports.o

@@ -57,11 +57,14 @@ ASFLAGS = -arch ppc64
 CDEFINES = -DDARWIN -DPPC -DPPC64 $(BROKEN_PREPROCESSOR_WORKAROUND)
 CDEBUG = -g
 COPT = -O2
+# Once in a while, -Wformat says something useful.  The odds are against that,
+# however.
+WFORMAT = -Wno-format
 
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c $< -arch ppc64 -m64 $(CDEFINES) $(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) -mmacosx-version-min=10.4 -isysroot /Developer/SDKs/MacOSX10.4u.sdk -o $@
+	$(CC) -c $< -arch ppc64 -m64 $(CDEFINES) $(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) $(WFORMAT) -mmacosx-version-min=10.4 -isysroot /Developer/SDKs/MacOSX10.4u.sdk -o $@
 
 SPOBJ = ppc-spjump.o ppc-spentry.o ppc-subprims.o 
 ASMOBJ = ppc-asmutils.o imports.o

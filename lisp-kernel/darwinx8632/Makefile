@@ -27,12 +27,15 @@ ASFLAGS = -arch i386 -g
 CDEFINES = -DDARWIN -DX86 -DX8632 #-DGC_INTEGRITY_CHECKING -DFORCE_DWS_MARK -DDISABLE_EGC -DDEBUG_MACH_EXCEPTIONS
 CDEBUG = -g
 COPT = -O2
+# Once in a while, -Wformat says something useful.  The odds are against that,
+# however.
+WFORMAT = -Wno-format
 CC=gcc-4.0
 
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c -arch i386 $< $(CDEFINES) $(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) -mmacosx-version-min=10.4 -isysroot /Developer/SDKs/MacOSX10.4u.sdk -o $@
+	$(CC) -c -arch i386 $< $(CDEFINES) $(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) $(WFORMAT) -mmacosx-version-min=10.4 -isysroot /Developer/SDKs/MacOSX10.4u.sdk -o $@
 
 SPOBJ = x86-spjump32.o x86-spentry32.o x86-subprims32.o
 ASMOBJ = x86-asmutils32.o imports.o

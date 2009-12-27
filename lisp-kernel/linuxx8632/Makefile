@@ -23,6 +23,9 @@ M4FLAGS = -DLINUX -DX86 -DX8632 -DHAVE_TLS
 CDEFINES = -DLINUX -D_REENTRANT -DX86 -DX8632 -D_GNU_SOURCE -DHAVE_TLS -DUSE_FUTEX #-DGC_INTEGRITY_CHECKING -DDISABLE_EGC
 CDEBUG = -g
 COPT = -O2
+# Once in a while, -Wformat says something useful.  The odds are against that,
+# however.
+WFORMAT = -Wno-format
 
 # If the linker supports a "--hash-style=" option, use traditional
 # SysV hash tables.  (If it doesn't support that option, assume
@@ -38,7 +41,7 @@ endif
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) -m32 -o $@
+	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m32 -o $@
 
 SPOBJ = pad.o x86-spjump32.o x86-spentry32.o x86-subprims32.o
 ASMOBJ = x86-asmutils32.o imports.o

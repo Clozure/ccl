@@ -25,6 +25,9 @@ M4FLAGS = -DWIN_32 -DWINDOWS -DX86 -DX8632 -DWIN32_ES_HACK
 CDEFINES = -DWIN_32 -DWINDOWS -D_REENTRANT -DX86 -DX8632 -D_GNU_SOURCE  -D__MSVCRT__ -D__MSVCRT_VERSION__=0x700 -D_WIN32_WINNT=0x0502 -DWIN32_ES_HACK
 CDEBUG = -g
 COPT = -O2
+# Once in a while, -Wformat says something useful.  The odds are against that,
+# however.
+WFORMAT = -Wno-format
 
 # If the linker supports a "--hash-style=" option, use traditional
 # SysV hash tables.  (If it doesn't support that option, assume
@@ -52,7 +55,7 @@ SUPPRESS_UNDERSCORES=#-fno-leading-underscore
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) ${SUPPRESS_UNDERSCORES} -mno-cygwin -o $@
+	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) ${SUPPRESS_UNDERSCORES} -mno-cygwin -o $@
 
 # order matters: x86-spjump32.o must be first.
 SPOBJ = x86-spjump32.o x86-spentry32.o x86-subprims32.o

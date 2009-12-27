@@ -23,6 +23,9 @@ M4FLAGS = -DFREEBSD -DX86 -DX8632 -DHAVE_TLS
 CDEFINES = -DFREEBSD -D_REENTRANT -DX86 -DX8632 -D_GNU_SOURCE -DHAVE_TLS
 CDEBUG = -g
 COPT = -O2
+# Once in a while, -Wformat says something useful.  The odds are against that,
+# however.
+WFORMAT = -Wno-format
 
 
 
@@ -56,7 +59,7 @@ OSLIBS = -lm -lthr $(CROSS)
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) -m32 -o $@
+	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m32 -o $@
 
 LINKSCRIPTFILE = # 
 LINKSCRIPT =  # -T $(LINKSCRIPTFILE)

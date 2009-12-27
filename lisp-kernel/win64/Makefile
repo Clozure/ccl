@@ -26,7 +26,11 @@ ASFLAGS = -g --64
 M4FLAGS = -DWIN_64 -DWINDOWS -DX86 -DX8664 -DHAVE_TLS -DEMUTLS -DTCR_IN_GPR
 CDEFINES = -DWIN_64 -DWINDOWS -D_REENTRANT -DX86 -DX8664 -D_GNU_SOURCE -DHAVE_TLS -DEMUTLS -DTCR_IN_GPR
 CDEBUG = -g
-COPT = #-O2
+COPT = -O2
+# Once in a while, -Wformat says something useful.  The odds are against that,
+# however.
+WFORMAT = -Wno-format
+
 
 # If the linker supports a "--hash-style=" option, use traditional
 # SysV hash tables.  (If it doesn't support that option, assume
@@ -52,7 +56,7 @@ SUPPRESS_UNDERSCORES=#-fno-leading-underscore
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) ${SUPPRESS_UNDERSCORES} -m64 -o $@
+	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) ${SUPPRESS_UNDERSCORES} -m64 -o $@
 
 SPOBJ = pad.o x86-spjump64.o x86-spentry64.o x86-subprims64.o
 ASMOBJ = x86-asmutils64.o imports.o
