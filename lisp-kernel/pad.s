@@ -1,4 +1,4 @@
-!!	.globl openmcl_low_address
+	.globl openmcl_low_address
 openmcl_low_address:
         nop
         
