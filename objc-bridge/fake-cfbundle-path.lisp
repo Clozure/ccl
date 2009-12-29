@@ -70,9 +70,22 @@
       (copy-file lib executable-dir :preserve-attributes t :if-exists :supersede))
     (when install-frameworks
       (flet ((subdir (framework target)
-               (ensure-directory-pathname (make-pathname :name (car (last (pathname-directory framework))) :defaults target))))
+               (ensure-directory-pathname (make-pathname :name (car (last (pathname-directory framework))) :defaults target)))
+             (ignore-test (p)
+               (let ((source-ignore '(".svn" "cvs" ".cvsignore")))
+                 (flet ((backup-p (name)
+                          (and (stringp name)
+                               (let ((len (length name)))
+                                 (and (> len 0)
+                                      (or (eql (aref name (1- len)) #\~)
+                                          (eql (aref name 0) #\#)))))))
+                   (not (or (member (car (last (pathname-directory p))) source-ignore
+                                    :test #'equalp)
+                            (backup-p (file-namestring p))
+                            (member (file-namestring p) source-ignore :test #'equalp)))))))
         (dolist (framework install-frameworks)
-          (recursive-copy-directory framework (subdir framework executable-dir) :if-exists :overwrite))))
+          (recursive-copy-directory framework (subdir framework executable-dir)
+                                    :if-exists :overwrite :test #'ignore-test))))
     #+windows-target
     (copy-file icon-path (merge-pathnames
                           (make-pathname :directory "Contents/Resources/"
