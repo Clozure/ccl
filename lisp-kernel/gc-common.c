@@ -97,6 +97,23 @@ LispObj GCephemeral_low = 0;
 natural GCn_ephemeral_dnodes = 0;
 natural GCstack_limit = 0;
 
+void
+check_static_cons_freelist(char *phase)
+{
+  LispObj 
+    n,
+    base = (LispObj)static_cons_area->low, 
+    limit = static_cons_area->ndnodes;
+  natural i=0;
+
+  for (n=lisp_global(STATIC_CONSES);n!=lisp_nil;n=((cons *)untag(n))->cdr, i++) {
+    if ((fulltag_of(n) != fulltag_cons) ||
+        (area_dnode(n,base) >= limit)) {
+      Bug(NULL, "%s: static cons freelist has invalid element 0x" LISP "\n",
+          phase, i);
+    }
+  }
+}
 
 void
 reapweakv(LispObj weakv)
@@ -1426,6 +1443,7 @@ gc(TCR *tcr, signed_natural param)
     if (GCDebug) {
       check_all_areas(tcr);
     }
+    check_static_cons_freelist("in pre-gc static-cons check");
   }
 
   if (from) {
@@ -1689,6 +1707,8 @@ gc(TCR *tcr, signed_natural param)
   if (GCDebug) {
     check_all_areas(tcr);
   }
+  check_static_cons_freelist("in post-gc static-cons check");
+
 
   
   lisp_global(IN_GC) = 0;
