@@ -723,7 +723,8 @@
 (fset 'nx-source-note (nlambda bootstrapping-source-note (form) (declare (ignore form)) nil))
 
 (defun cheap-eval-in-environment (form env &aux sym)
-  (declare (resident))
+  ;; Allow ADVICE, TRACE to have effects on self-calls.
+  (declare (notinline cheap-eval-in-environment))
   ;; records source locations if *nx-source-note-map* is bound by caller
   (setq *loading-toplevel-location* (or (nx-source-note form) *loading-toplevel-location*))
   (flet ((progn-in-env (body&decls parse-env base-env)
@@ -830,7 +831,8 @@
                  (setq *loading-toplevel-location* form-location))
                (apply #'call-check-regs (if (symbolp sym) sym (cheap-eval-function nil sym env))
                       (nreverse args))))
-            (t (signal-simple-condition 'simple-program-error "Car of ~S is not a function name or lambda-expression." form))))))
+            (t
+             (signal-simple-condition 'simple-program-error "Car of ~S is not a function name or lambda-expression." form))))))
 
 
 (%fhave 'eval #'cheap-eval)
