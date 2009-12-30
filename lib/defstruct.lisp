@@ -284,8 +284,12 @@
         (let ((def (assq refname *nx-globally-inline*)))
           (when def (set-function-info refname nil)))
         (when (symbolp refname)(fmakunbound refname)))
+      #|
+      ;; The print-function may indeed have become obsolete,
+      ;; but we can't generally remove user-defined code
       (let ((print-fn (sd-print-function sd)))
         (when (symbolp print-fn) (fmakunbound print-fn)))
+      |#
       (let ((constructor (sd-constructor sd)))
         (when (symbolp constructor) (fmakunbound constructor)))
       (let ((delete-match #'(lambda (pred struct-name)
