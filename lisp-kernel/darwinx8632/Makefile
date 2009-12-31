@@ -72,6 +72,11 @@ OSLATELIBS = -lSystem
 
 OSLIBS = $(OSEARLYLIBS) $(OSMIDDLELIBS) $(OSLATELIBS)
 
+$(KSPOBJ): tiger-sdk-check
+$(KERNELOBJ) : tiger-sdk-check
+$(DEBUGOBJ) : tiger-sdk-check
+Makefile : tiger-sdk-check
+
 ../../dx86cl:	 tiger-sdk-check $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile
 	$(LD)  $(LDFLAGS) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)   $(OSLIBS)
 
