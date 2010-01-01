@@ -3106,7 +3106,7 @@ to replace that class with ~s" name old-class new-class)
                   (primary-class-slot-offset (class-of instance) slot-name))))))))
 
 (defun exchange-slot-vectors-and-wrappers (a b)
-  (if (typep a 'generic-function)
+  (if (typep a 'funcallable-standard-object)
     (let* ((temp-wrapper (gf.instance.class-wrapper a))
            (orig-a-slots (gf.slots a))
            (orig-b-slots (gf.slots b)))
@@ -3153,11 +3153,11 @@ to replace that class with ~s" name old-class new-class)
     (without-interrupts			; Not -close- to being correct
      (let* ((old-wrapper (standard-object-p instance)))
        (unless old-wrapper
-         (when (standard-generic-function-p instance)
+         (when (typep instance 'funcallable-standard-object)
            (setq old-wrapper (gf.instance.class-wrapper instance)))
          (unless old-wrapper
-           (report-bad-arg instance '(or standard-instance standard-generic-function))))
-       (when (eql 0 (%wrapper-instance-slots old-wrapper))   ; is it really obsolete?
+           (report-bad-arg instance '(or standard-instance funcallable-standard-object))))
+       (when (eql 0 (%wrapper-instance-slots old-wrapper)) ; is it really obsolete?
          (let* ((class (%wrapper-class old-wrapper))
                 (new-wrapper (or (%class.own-wrapper class)
                                  (progn
@@ -3169,48 +3169,48 @@ to replace that class with ~s" name old-class new-class)
                 (new-instance-slots (%wrapper-instance-slots new-wrapper))
                 (new-class-slots (%wrapper-class-slots new-wrapper))
 		(new-instance (allocate-instance class))
-		(old-slot-vector (instance.slots instance))
-		(new-slot-vector (instance.slots new-instance)))
-             ;; Lots to do.  Hold onto your hat.
-             (let* ((old-size (uvsize old-instance-slots))
-		    (new-size (uvsize new-instance-slots)))
-	       (declare (fixnum old-size new-size))
-               (dotimes (i old-size)
-	         (declare (fixnum i))
-                 (let* ((slot-name (%svref old-instance-slots i))
-                        (pos (%vector-member slot-name new-instance-slots))
-                        (val (%svref old-slot-vector (%i+ i 1))))
-                   (if pos
-                     (setf (%svref new-slot-vector (%i+ pos 1)) val)
-                     (progn
-		       (push slot-name discarded)
-		       (unless (eq val (%slot-unbound-marker))
-			 (setf (getf plist slot-name) val))))))
-               ;; Go through old class slots
-               (dolist (pair old-class-slots)
-                 (let* ((slot-name (%car pair))
-                        (val (%cdr pair))
-                        (pos (%vector-member slot-name new-instance-slots)))
-                   (if pos
-                     (setf (%svref new-slot-vector (%i+ pos 1)) val)
-                     (progn
-		       (push slot-name discarded)
-		       (unless (eq val (%slot-unbound-marker))
-			 (setf (getf plist slot-name) val))))))
-               ; Go through new instance slots
-               (dotimes (i new-size)
-	         (declare (fixnum i))
-                 (let* ((slot-name (%svref new-instance-slots i)))
-                   (unless (or (%vector-member slot-name old-instance-slots)
-                               (assoc slot-name old-class-slots))
-                     (push slot-name added))))
-               ;; Go through new class slots
-               (dolist (pair new-class-slots)
-                 (let ((slot-name (%car pair)))
-                   (unless (or (%vector-member slot-name old-instance-slots)
-                               (assoc slot-name old-class-slots))
-                     (push slot-name added))))
-               (exchange-slot-vectors-and-wrappers new-instance instance))))))
+		(old-slot-vector (instance-slots instance))
+		(new-slot-vector (instance-slots new-instance)))
+           ;; Lots to do.  Hold onto your hat.
+           (let* ((old-size (uvsize old-instance-slots))
+                  (new-size (uvsize new-instance-slots)))
+             (declare (fixnum old-size new-size))
+             (dotimes (i old-size)
+               (declare (fixnum i))
+               (let* ((slot-name (%svref old-instance-slots i))
+                      (pos (%vector-member slot-name new-instance-slots))
+                      (val (%svref old-slot-vector (%i+ i 1))))
+                 (if pos
+                   (setf (%svref new-slot-vector (%i+ pos 1)) val)
+                   (progn
+                     (push slot-name discarded)
+                     (unless (eq val (%slot-unbound-marker))
+                       (setf (getf plist slot-name) val))))))
+             ;; Go through old class slots
+             (dolist (pair old-class-slots)
+               (let* ((slot-name (%car pair))
+                      (val (%cdr pair))
+                      (pos (%vector-member slot-name new-instance-slots)))
+                 (if pos
+                   (setf (%svref new-slot-vector (%i+ pos 1)) val)
+                   (progn
+                     (push slot-name discarded)
+                     (unless (eq val (%slot-unbound-marker))
+                       (setf (getf plist slot-name) val))))))
+                                        ; Go through new instance slots
+             (dotimes (i new-size)
+               (declare (fixnum i))
+               (let* ((slot-name (%svref new-instance-slots i)))
+                 (unless (or (%vector-member slot-name old-instance-slots)
+                             (assoc slot-name old-class-slots))
+                   (push slot-name added))))
+             ;; Go through new class slots
+             (dolist (pair new-class-slots)
+               (let ((slot-name (%car pair)))
+                 (unless (or (%vector-member slot-name old-instance-slots)
+                             (assoc slot-name old-class-slots))
+                   (push slot-name added))))
+             (exchange-slot-vectors-and-wrappers new-instance instance))))))
     ;; run user code with interrupts enabled.
     (update-instance-for-redefined-class instance added discarded plist))
   instance)
