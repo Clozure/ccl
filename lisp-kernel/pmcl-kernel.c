@@ -2450,6 +2450,7 @@ allocate_static_conses(natural n)
   for (i=0, prev=lisp_global(STATIC_CONSES), c=(cons *)new_low;
        i < n;
        i++, c++) {
+    c->car = unbound;
     c->cdr = prev;
     prev = ((LispObj)c)+fulltag_cons;
   }

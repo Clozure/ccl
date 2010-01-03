@@ -1229,12 +1229,13 @@ reclaim_static_dnodes()
       for (bitnum = 0; bitnum < nbits_in_word; bitnum++) {
         if (! (bits & (BIT0_MASK>>bitnum))) {
           d = c + bitnum;
-          d->car = 0;
           if (i < nstatic_conses) {                
+            d->car = unbound;
             d->cdr = head;
             head = ((LispObj)d)+fulltag_cons;
             nfree++;
           } else {
+            d->car = 0;
             d->cdr = 0;
           }
         }

@@ -825,12 +825,23 @@
 
 (defx8632lapfunction %static-inverse-cons ((n arg_z))
   (check-nargs 1)
+  (testl ($ target::tagmask) (% arg_z))
+  (jne @fail)
   (subl ($ '128) (% arg_z))
   (ref-global static-cons-area temp0)
+  (movl (@ target::area.ndnodes (% temp0)) (% imm0))
+  (box-fixnum imm0 arg_y)
+  (rcmpl (% arg_z) (% arg_y))
+  (ja @fail)
   (movl (@ target::area.high (% temp0)) (% imm0))
   (subl (% arg_z) (% imm0))
   (subl (% arg_z) (% imm0))
   (lea (@ x8632::fulltag-cons (% imm0)) (% arg_z))
+  (cmpl ($ x8632::unbound)  (@ x8632::cons.car (% arg_z)))
+  (je @fail)
+  (single-value-return)
+  @fail
+  (movl ($ (target-nil-value)) (% arg_z))
   (single-value-return))
 
 ;;; Get the thread-specific value of %fs.

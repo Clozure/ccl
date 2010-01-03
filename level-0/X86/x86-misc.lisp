@@ -909,13 +909,24 @@
 
 (defx86lapfunction %static-inverse-cons ((n arg_z))
   (check-nargs 1)
+  (testl ($ target::tagmask) (% arg_z.l))
+  (jne @fail)
   (subq ($ '128) (% arg_z))
   (ref-global static-cons-area temp0)
+  (movq (@ target::area.ndnodes (% temp0)) (% imm0))
+  (box-fixnum imm0 arg_y)
+  (rcmpq (% arg_z) (% arg_y))
+  (ja @fail)
   (movq (@ target::area.high (% temp0)) (% imm0))
   (subq (% arg_z) (% imm0))
   (subq (% arg_z) (% imm0))
   (lea (@ x8664::fulltag-cons (% imm0)) (% arg_z))
-  (single-value-return))
+  (cmpb ($ target::unbound-marker) (@ target::cons.car (% arg_z)))
+  (je @fail)
+  (single-value-return)
+  @fail
+  (movl ($ (target-nil-value)) (% arg_z.l))
+  (single-value-return)
 
 
   
