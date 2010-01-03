@@ -1054,9 +1054,10 @@
 
 (defppclapfunction %static-inverse-cons ((n arg_z))
   (check-nargs 1)
-  (extract-lisptag. imm0 arg_z)
-  (bne @fail)
+  (extract-lisptag imm0 arg_z)
+  (cmpri imm0 0)
   (ref-global temp0 static-cons-area)
+  (bne @fail)
   (la n '-128 n)
   (ldr imm0 target::area.ndwords temp0)
   (ldr imm1 target::area.high temp0)
