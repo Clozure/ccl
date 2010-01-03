@@ -1068,7 +1068,7 @@
   (bgt @fail)
   (la arg_z target::fulltag-cons imm1)
   (ldr arg_y target::cons.car arg_z)
-  (cmpri arg_y target::unbound)
+  (cmpri arg_y target::unbound-marker)
   (bnelr)
   @fail
   (li arg_z nil)
