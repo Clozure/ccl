@@ -1059,7 +1059,7 @@
   (ref-global temp0 static-cons-area)
   (bne @fail)
   (la n '-128 n)
-  (ldr imm0 target::area.ndwords temp0)
+  (ldr imm0 target::area.ndnodes temp0)
   (ldr imm1 target::area.high temp0)
   (box-fixnum arg_y imm0)
   (sub imm1 imm1 n)
