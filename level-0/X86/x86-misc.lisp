@@ -926,7 +926,7 @@
   (single-value-return)
   @fail
   (movl ($ (target-nil-value)) (% arg_z.l))
-  (single-value-return)
+  (single-value-return))
 
 
   
