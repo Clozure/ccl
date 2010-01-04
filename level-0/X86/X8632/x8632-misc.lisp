@@ -837,7 +837,7 @@
   (subl (% arg_z) (% imm0))
   (subl (% arg_z) (% imm0))
   (lea (@ x8632::fulltag-cons (% imm0)) (% arg_z))
-  (cmpl ($ x8632::unbound)  (@ x8632::cons.car (% arg_z)))
+  (cmpl ($ x8632::subtag-unbound)  (@ x8632::cons.car (% arg_z)))
   (je @fail)
   (single-value-return)
   @fail
