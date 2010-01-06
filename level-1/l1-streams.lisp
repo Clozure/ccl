@@ -2471,7 +2471,7 @@
     (let* ((b (funcall rbf ioblock)))
       (if (eq b :eof)
 	(return (- i start)))
-      (setf (uvref vector i) b)
+      (setf (aref vector i) b)
       (incf i)
       (decf need)
       (let* ((idx (io-buffer-idx in))
