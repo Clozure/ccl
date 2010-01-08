@@ -135,7 +135,7 @@
     (movq (@ src-offset (% rsp)) (% rsrc))
     (cmpq (% dest) (% rsrc))
     (jne @front)
-    (cmpq (% src-byte-offset) (% dest-byte-offset))
+    (cmpq (% rsrc-byte-offset) (% dest-byte-offset))
     (jg @back)
     @front
     (testq (% nbytes) (% nbytes))
