@@ -896,7 +896,7 @@ are running on, or NIL if we can't find any useful information."
                               (sort :size)
                               (classes nil)
                               (start nil))
-  "Show statistic about types of objects in the heap.
+  "Show statistics about types of objects in the heap.
    If :GC-FIRST is true (the default), do a full gc before scanning the heap.
    If :START is non-nil, it should be an object returned by GET-ALLOCATION-SENTINEL, only
      objects at higher address are scanned (i.e. roughly, only objects allocated after it).

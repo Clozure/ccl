@@ -2831,4 +2831,4 @@ Or something. Right? ~s ~s" var varbits))
 (defparameter *warn-if-function-result-ignored*
   '(sort stable-sort delete delete-if delete-if-not remf nreverse
     nunion nset-intersection)
-  "Names of functions whos result(s) should ordinarily be used, because of their side-effects or lack of them.")
+  "Names of functions whose result(s) should ordinarily be used, because of their side-effects or lack of them.")
