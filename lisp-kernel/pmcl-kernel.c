@@ -2172,10 +2172,17 @@ load_image(
     err = errno;
   }
   if (image_nil == 0) {
+#ifdef WINDOWS
+    char *fmt = "Couldn't load lisp heap image from %ls";
+#else
+    char *fmt = "Couldn't load lisp heap image from %s";
+#endif
+
+    fprintf(dbgout, fmt, path);
     if (err == 0) {
-      fprintf(dbgout, "Couldn't load lisp heap image from %s\n", path);
+      fprintf(dbgout, "\n");
     } else {
-      fprintf(dbgout, "Couldn't load lisp heap image from %s:\n%s\n", path, strerror(err));
+      fprintf(dbgout, ": %s\n", strerror(err));
     }
     exit(-1);
   }
