@@ -2052,95 +2052,8 @@ xGetSharedLibrary(char *path, int mode)
 void *
 xGetSharedLibrary(char *path, int *resultType)
 {
-#if 0
-  NSObjectFileImageReturnCode code;
-  NSObjectFileImage	         moduleImage;
-  NSModule		         module;
-  const struct mach_header *     header;
-  const char *                   error;
-  void *                         result;
-  /* not thread safe */
-  /*
-  static struct {
-    const struct mach_header  *header;
-    NSModule	              *module;
-    const char                *error;
-  } results;	
-  */
-  result = NULL;
-  error = NULL;
-
-  /* first try to open this as a bundle */
-  code = NSCreateObjectFileImageFromFile(path,&moduleImage);
-  if (code != NSObjectFileImageSuccess &&
-      code != NSObjectFileImageInappropriateFile &&
-      code != NSObjectFileImageAccess)
-    {
-      /* compute error strings */
-      switch (code)
-	{
-	case NSObjectFileImageFailure:
-	  error = "NSObjectFileImageFailure";
-	  break;
-	case NSObjectFileImageArch:
-	  error = "NSObjectFileImageArch";
-	  break;
-	case NSObjectFileImageFormat:
-	  error = "NSObjectFileImageFormat";
-	  break;
-	case NSObjectFileImageAccess:
-	  /* can't find the file */
-	  error = "NSObjectFileImageAccess";
-	  break;
-	default:
-	  error = "unknown error";
-	}
-      *resultType = 0;
-      return (void *)error;
-    }
-  if (code == NSObjectFileImageInappropriateFile ||
-      code == NSObjectFileImageAccess ) {
-    /* the pathname might be a partial pathane (hence the access error)
-       or it might be something other than a bundle, if so perhaps
-       it is a .dylib so now try to open it as a .dylib */
-
-    /* protect against redundant loads, Gary Byers noticed possible
-       heap corruption if this isn't done */
-    header = NSAddImage(path, NSADDIMAGE_OPTION_RETURN_ON_ERROR |
-			NSADDIMAGE_OPTION_WITH_SEARCHING |
-			NSADDIMAGE_OPTION_RETURN_ONLY_IF_LOADED);
-    if (!header)
-      header = NSAddImage(path, NSADDIMAGE_OPTION_RETURN_ON_ERROR |
-			  NSADDIMAGE_OPTION_WITH_SEARCHING);
-    result = (void *)header;
-    *resultType = 1;
-  }
-  else if (code == NSObjectFileImageSuccess) {
-    /* we have a sucessful module image
-       try to link it, don't bind symbols privately */
-
-    module = NSLinkModule(moduleImage, path,
-			  NSLINKMODULE_OPTION_RETURN_ON_ERROR | NSLINKMODULE_OPTION_BINDNOW);
-    NSDestroyObjectFileImage(moduleImage);	
-    result = (void *)module;
-    *resultType = 2;
-  }
-  if (!result)
-    {
-      /* compute error string */
-      NSLinkEditErrors ler;
-      int lerno;
-      const char* file;
-      NSLinkEditError(&ler,&lerno,&file,&error);
-      if (error) {
-	result = (void *)error;
-	*resultType = 0;
-      }
-    }
-  return result;
-#else
-  const char *                   error;
-  void *                         result;
+  const char *error;
+  void *result;
 
   result = dlopen(path, RTLD_NOW | RTLD_GLOBAL);
   
@@ -2151,7 +2064,6 @@ xGetSharedLibrary(char *path, int *resultType)
   }
   *resultType = 1;
   return result;
-#endif
 }
 #endif
 
@@ -2310,7 +2222,6 @@ xFindSymbol(void* handle, char *name)
   return dlsym(handle, name);
 #endif
 #ifdef DARWIN
-#if 1
   void *result;
 
   if ((handle == NULL) || (handle == ((void *) -1))) {
@@ -2321,19 +2232,6 @@ xFindSymbol(void* handle, char *name)
     result = dlsym(handle, name+1);
   }
   return result;
-#else
-  natural address = 0;
-
-  if ((handle == NULL) ||
-      (handle == (void *)-1) ||
-      (handle == (void *)-2)){
-    if (NSIsSymbolNameDefined(name)) { /* Keep dyld_lookup from crashing */
-      _dyld_lookup_and_bind(name, (void *) &address, (void*) NULL);
-    }
-    return (void *)address;
-  }
-  Bug(NULL, "How did this happen ?");
-#endif
 #endif
 #ifdef WINDOWS
   extern void *windows_find_symbol(void *, char *);
