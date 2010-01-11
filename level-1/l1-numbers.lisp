@@ -447,7 +447,7 @@
   (let ((args (list x0 x1 x2 x3 x4 x5)))
     (declare (dynamic-extent args))
     (dolist (a args)
-      (unless (and (fixnump a) (%i<= 0 a) (< a mrg31k3p-limit))
+      (unless (and (integerp a) (<= 0 a) (< a mrg31k3p-limit))
 	(report-bad-arg a `(integer 0 (,mrg31k3p-limit)))))
     (when (and (zerop x0) (zerop x1) (zerop x2))
       (error "The first three arguments must not all be zero."))
