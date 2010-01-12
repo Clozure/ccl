@@ -237,9 +237,8 @@
     res))
 
 #-windows-target
-(defun %gai-strerror (errno)
-  (let* ((err (abs errno))
-         (p (#_gai_strerror err)))
+(defun %gai-strerror (err)
+  (let ((p (#_gai_strerror err)))
     (if (%null-ptr-p p)
       (format nil "Unknown nameserver error ~d" err)
       (%get-cstring p))))
@@ -247,8 +246,8 @@
 (defun socket-error (stream where errno &optional nameserver-p)
   "Creates and signals (via error) one of two socket error 
 conditions, based on the state of the arguments."
-  (when (< errno 0)
-    (setq errno (- errno)))
+  (unless nameserver-p
+    (setq errno (abs errno)))
   (if stream
     (error (make-condition 'socket-error
 			   :stream stream
