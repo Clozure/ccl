@@ -5800,11 +5800,11 @@
 
 
 (defun gen-file-name (path)
-  (let* ((date (file-write-date path))
-         (tem-path (merge-pathnames (make-pathname :name (%integer-to-string date) :type "tem" :defaults nil) path)))
+  (let* ((base (random (ash target::target-most-positive-fixnum -1)))
+         (tem-path (merge-pathnames (make-pathname :name (%integer-to-string base) :type "tem" :defaults nil) path)))
     (loop
       (when (%create-file tem-path :if-exists nil) (return tem-path))      
-      (setf (%pathname-name tem-path) (%integer-to-string (setq date (1+ date)))))))
+      (setf (%pathname-name tem-path) (%integer-to-string (setq base (1+ base)))))))
 
 (defun probe-file-x (path)
   (%probe-file-x (native-translated-namestring path)))
