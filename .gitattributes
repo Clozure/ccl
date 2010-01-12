@@ -324,6 +324,7 @@ library/core-files.lisp -text
 library/cover.lisp -text
 library/darwinx8632-syscalls.lisp -text
 library/elf.lisp -text
+library/intel-io.lisp -text
 library/jp-encode.lisp -text
 library/leaks.lisp -text
 library/mach-o-symbols.lisp -text
