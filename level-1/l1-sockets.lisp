@@ -47,6 +47,10 @@
 	    SOCKET-ERROR-CODE
 	    SOCKET-ERROR-IDENTIFIER
 	    SOCKET-ERROR-SITUATION
+	    SOCKET-CREATION-ERROR
+	    SOCKET-CREATION-ERROR-CODE
+	    SOCKET-CREATION-ERROR-IDENTIFIER
+	    SOCKET-CREATION-ERROR-SITUATION
 	    WITH-OPEN-SOCKET))
   #+windows-target
   (defmacro check-winsock-error (form)
@@ -133,6 +137,10 @@
 		"SOCKET-ERROR-CODE"
 		"SOCKET-ERROR-IDENTIFIER"
 		"SOCKET-ERROR-SITUATION"
+		"SOCKET-CREATION-ERROR"
+		"SOCKET-CREATION-ERROR-CODE"
+		"SOCKET-CREATION-ERROR-IDENTIFIER"
+		"SOCKET-CREATION-ERROR-SITUATION"
 		"WITH-OPEN-SOCKET")
   (:export  "MAKE-SOCKET"
 	    "ACCEPT-CONNECTION"
@@ -161,19 +169,26 @@
 	    "SOCKET-ERROR-CODE"
 	    "SOCKET-ERROR-IDENTIFIER"
 	    "SOCKET-ERROR-SITUATION"
+	    "SOCKET-CREATION-ERROR"
+	    "SOCKET-CREATION-ERROR-CODE"
+	    "SOCKET-CREATION-ERROR-IDENTIFIER"
+	    "SOCKET-CREATION-ERROR-SITUATION"
 	    "WITH-OPEN-SOCKET"))
-
-
 
 (define-condition socket-error (simple-stream-error)
   ((code :initarg :code :reader socket-error-code)
    (identifier :initform :unknown :initarg :identifier :reader socket-error-identifier)
-   (Situation :initarg :situation :reader socket-error-situation)))
+   (situation :initarg :situation :reader socket-error-situation)))
 
 (define-condition socket-creation-error (simple-error)
   ((code :initarg :code :reader socket-creation-error-code)
    (identifier :initform :unknown :initarg :identifier :reader socket-creation-error-identifier)
    (situation :initarg :situation :reader socket-creation-error-situation)))
+
+(defparameter *gai-error-identifiers*
+  (list #$EAI_AGAIN :try-again
+	#$EAI_FAIL :no-recovery
+	#$EAI_NONAME :host-not-found))
 
 (defvar *socket-error-identifiers*
   #-windows-target
@@ -228,13 +243,10 @@
     (if (%null-ptr-p p)
       (format nil "Unknown nameserver error ~d" err)
       (%get-cstring p))))
-    
-
 
 (defun socket-error (stream where errno &optional nameserver-p)
   "Creates and signals (via error) one of two socket error 
 conditions, based on the state of the arguments."
-  #+windows-target (declare (ignore nameserver-p))
   (when (< errno 0)
     (setq errno (- errno)))
   (if stream
@@ -243,34 +255,29 @@ conditions, based on the state of the arguments."
 			   :code errno
 			   :identifier (getf *socket-error-identifiers* errno :unknown)
 			   :situation where
-			   ;; TODO: this is a constant arg, there is a way to put this
-			   ;; in the class definition, just need to remember how...
 			   :format-control "~a (error #~d) during ~a"
 			   :format-arguments (list
-                                              #+windows-target
-                                              (%windows-error-string errno)
-                                              #-windows-target
-					      (if nameserver-p
-						(%gai-strerror errno)
-						(%strerror errno))
+					      #+windows-target
+					      (%windows-error-string errno)
+					      #-windows-target
+					      (%strerror errno)
 					      errno where)))
-    (error (make-condition 'socket-creation-error
-			   :code errno
-			   :identifier (getf *socket-error-identifiers* errno :unknown)
-			   :situation where
-			   ;; TODO: this is a constant arg, there is a way to put this
-			   ;; in the class definition, just need to remember how...
-			   :format-control "~a (error #~d) during socket creation or nameserver operation in ~a"
-			   :format-arguments (list
-                                              #+windows-target
-                                              (%windows-error-string errno)
-                                              #-windows-target
-					      (if nameserver-p
-						(%gai-strerror errno)
-						(%strerror errno))
-					      errno where)))))
-    
-
+    (let ((identifiers (if nameserver-p
+			 *gai-error-identifiers*
+			 *socket-error-identifiers*)))
+      (error (make-condition 'socket-creation-error
+			     :code errno
+			     :identifier (getf identifiers errno :unknown)
+			     :situation where
+			     :format-control "~a (error #~d) during socket creation or nameserver operation in ~a"
+			     :format-arguments (list
+						#+windows-target
+						(%windows-error-string errno)
+						#-windows-target
+						(if nameserver-p
+						  (%gai-strerror errno)
+						  (%strerror errno))
+						errno where))))))
 
 ;; If true, this will try to allow other cooperative processes to run
 ;; while socket io is happening.  Since CCL threads are preemptively
