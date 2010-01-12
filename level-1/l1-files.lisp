@@ -225,7 +225,10 @@
                                           0)))))
     (if (< fd 0)
       (if (and (null if-exists)
-               (eql fd (- #$EEXIST)))
+               (or (eql fd (- #$EEXIST))
+                   #+windows-target
+                   (and (eql fd (- #$EPERM))
+                        (probe-file path))))
         (return-from %create-file nil)
         (signal-file-error fd path))
       (fd-close fd))
