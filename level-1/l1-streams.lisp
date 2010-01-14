@@ -2471,7 +2471,7 @@
     (let* ((b (funcall rbf ioblock)))
       (if (eq b :eof)
 	(return (- i start)))
-      (setf (uvref vector i) b)
+      (setf (aref vector i) b)
       (incf i)
       (decf need)
       (let* ((idx (io-buffer-idx in))
@@ -4227,7 +4227,8 @@
 
 (defstruct (string-output-stream-ioblock (:include string-stream-ioblock))
   (index 0)
-  freelist)
+  freelist
+  (line-length 80))
 
 (defstatic *string-output-stream-class* (make-built-in-class 'string-output-stream 'string-stream 'basic-character-output-stream))
 (defstatic *string-output-stream-class-wrapper* (%class-own-wrapper *string-output-stream-class*))
@@ -4244,6 +4245,15 @@
 
 (defmethod stream-clear-output ((s string-output-stream))
   nil)
+
+(defmethod stream-line-length ((s string-output-stream))
+  (let* ((ioblock (basic-stream-ioblock s)))
+    (string-output-stream-ioblock-line-length ioblock)))
+
+(defmethod (setf stream-line-length) (newlen (s string-output-stream))
+  (let* ((ioblock (basic-stream-ioblock s)))
+    (setf (string-output-stream-ioblock-line-length ioblock) newlen)))
+
 
 ;;; Should only be used for a stream whose class is exactly
 ;;; *string-output-stream-class* 
@@ -4281,7 +4291,8 @@
                                    (ioblock-stream data) stream
                                    (ioblock-device data) -1
                                    (ioblock-charpos data) 0
-                                   (string-output-stream-ioblock-index data) 0))
+                                   (string-output-stream-ioblock-index data) 0
+                                   (string-output-stream-ioblock-line-length data) 80))
                            data)))))
     (or recycled (apply #'make-string-output-stream-ioblock keys))))
                         
