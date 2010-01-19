@@ -78,35 +78,12 @@
       )))
 
 #+darwinx8664-target
-;;; Apple has decided that compliance with some Unix standard or other
-;;; requires gratuitously renaming ucontext/mcontext structures and
-;;; their components.  Do you feel more compliant now ?
 (progn
-  (eval-when (:compile-toplevel :execute)
-    (def-foreign-type nil
-        (:struct :portable_mcontext64
-                 (:es :x86_exception_state64_t)
-                 (:ss :x86_thread_state64_t)
-                 (:fs :x86_float_state64_t)))
-    (def-foreign-type nil
-        (:struct :portable_uc_stack
-                 (:ss_sp (:* :void))
-                 (:ss_size (:unsigned 64))
-                 (:ss_flags  (:signed 32))))
-    (def-foreign-type nil
-        (:struct :portable_ucontext64
-                 (:onstack (:signed 32))
-                 (:sigmask (:unsigned 32))
-                 (:stack (:struct :portable_uc_stack))
-                 (:link :address)
-                 (:uc_mcsize (:unsigned 64))
-                 (:uc_mcontext64 (:* (:struct :portable_mcontext64))))))
-  (defun xp-mxcsr (xp)
-    (%get-unsigned-long
-     (pref (pref xp :portable_ucontext64.uc_mcontext64) :portable_mcontext64.fs) 32))
   (defconstant gp-regs-offset 0)
+  (defun xp-mxcsr (xp)
+     (pref xp :ucontext_t.uc_mcontext.__fs.__fpu_mxcsr))
   (defmacro xp-gp-regs (xp)
-    `(pref (pref ,xp :portable_ucontext64.uc_mcontext64) :portable_mcontext64.ss))
+    `(pref ,xp :ucontext_t.uc_mcontext.__ss))
 
   (defconstant flags-register-offset 17)
   (defconstant rip-register-offset 16)  
