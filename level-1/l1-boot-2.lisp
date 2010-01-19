@@ -255,7 +255,8 @@ present and false otherwise. This variable shouldn't be set by user code.")
       #+x86-target
       (progn
 	(bin-load-provide "X86-DISASSEMBLE" "x86-disassemble")
-	(bin-load-provide "X86-LAPMACROS" "x86-lapmacros"))
+	(bin-load-provide "X86-LAPMACROS" "x86-lapmacros")
+	(bin-load "x86-watch"))
 
 
       (bin-load-provide "FOREIGN-TYPES" "foreign-types")
