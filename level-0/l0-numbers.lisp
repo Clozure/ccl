@@ -1805,7 +1805,7 @@
 ;;; This is a portable version of the MRG31k3p generator.  It's not
 ;;; too bad in a 64-bit CCL, but the generator pretty much has to be
 ;;; in LAP for 32-bit ports.
-#-(or x8632-target ppc32-target x8664-target)
+#-(or x8632-target ppc32-target x8664-target ppc64-target)
 (defun %mrg31k3p (state)
   (let* ((v (random.mrg31k3p-state state)))
     (declare (type (simple-array (unsigned-byte 32) (*)) v)
