@@ -187,9 +187,9 @@
 (progn
   (defconstant gp-regs-offset 0)
   (defmacro xp-gp-regs (xp)
-    `(pref (pref ,xp :ucontext.uc_mcontext) :mcontext.ss))
+    `(pref ,xp :ucontext_t.uc_mcontext.__ss))
   (defun xp-mxcsr (xp)
-    (%get-unsigned-long (pref (pref xp :ucontext.uc_mcontext) :mcontext.fs) 32))
+    (pref xp :ucontext_t.uc_mcontext.__fs.__fpu_mxcsr))
   (defconstant flags-register-offset 9)
   (defconstant eip-register-offset 10)
   (defparameter *encoded-gpr-to-indexed-gpr*
