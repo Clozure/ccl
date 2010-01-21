@@ -11,14 +11,20 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defconstant large-number-for-text (cgfloat 1.0f7)))
 
+;;; Compensates for the fact that Cocotron uses Mac font metrics and assumes
+;;; the default Macintosh DPI (72) vs. that of Windows (96).
+(defun font-size-kludge (size)
+  #-cocotron size
+  #+cocotron (* size (/ 96.0 72.0)))
+    
 (def-cocoa-default *editor-font* :font #'(lambda ()
 					   (#/fontWithName:size:
 					    ns:ns-font
                                             #+darwin-target
 					    #@"Monaco"
                                             #-darwin-target
-                                            #@"Courier"
-                                            10.0))
+                                            #@"Courier New"
+                                            (font-size-kludge 10.0)))
 		   "Default font for editor windows")
 
 (def-cocoa-default *editor-rows* :int 24 "Initial height of editor windows, in characters")

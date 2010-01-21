@@ -10,8 +10,8 @@
                                                     #+darwin-target
 						    #@"Monaco"
                                                     #-darwin-target
-                                                    #@"Courier"
-                                                    10.0))
+                                                    #@"Courier New"
+                                                    (font-size-kludge 10.0)))
 		   "Default font for listener input")
 (def-cocoa-default *listener-output-font* :font #'(lambda ()
 						    (#/fontWithName:size:
@@ -19,8 +19,8 @@
                                                      #+darwin-target
 						     #@"Monaco"
                                                      #-darwin-target
-                                                     #@"Courier"
-                                                     10.0))
+                                                     #@"Courier New"
+                                                     (font-size-kludge 10.0)))
 		   "Default font for listener output")
 
 (def-cocoa-default *listener-rows* :int 16 "Initial height of listener windows, in characters")
