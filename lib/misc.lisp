@@ -1166,7 +1166,7 @@ are running on, or NIL if we can't find any useful information."
    and thus doesn't trigger re-hashing when used as a key in a hash
    table.  Usage is equivalent to regular CONS."
   (loop
-    (let ((cell (%atomic-pop-static-cons)))
+    (let ((cell (without-interrupts (%atomic-pop-static-cons))))
       (if cell
         (progn
           (setf (car cell) car-value)
