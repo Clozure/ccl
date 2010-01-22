@@ -26,7 +26,7 @@ CC=gcc-4.0
 
 ### Current ld64 bugs include the claim that 0x1000 isn't a power of 2.
 ### Gosh.  I always thought that it was.  Go know, right ?
-LDFLAGS = -macosx_version_min 10.4 -arch x86_64 -dynamic  -o $@ -e start -pagezero_size 0x11000 -seg1addr 0x00011000
+LDFLAGS = -macosx_version_min 10.5 -arch x86_64 -dynamic  -o $@ -e start -pagezero_size 0x11000 -seg1addr 0x00011000
 
 
 AS = as
@@ -58,7 +58,7 @@ WFORMAT = -Wno-format
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c $< -arch x86_64 -m64 $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) $(MDYNAMIC_NO_PIC) -mmacosx-version-min=10.4 -isysroot /Developer/SDKs/MacOSX10.4u.sdk -o $@
+	$(CC) -c $< -arch x86_64 $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) $(MDYNAMIC_NO_PIC) -mmacosx-version-min=10.5 -isysroot /Developer/SDKs/MacOSX10.5.sdk -o $@
 
 SPOBJ = x86-spjump64.o x86-spentry64.o x86-subprims64.o 
 ASMOBJ = x86-asmutils64.o imports.o
@@ -95,12 +95,7 @@ OSMIDDLELIBS =
 
 OSLIBS = $(OSEARLYLIBS) $(OSMIDDLELIBS) $(OSLATELIBS)
 
-$(KSPOBJ): tiger-sdk-check
-$(KERNELOBJ) : tiger-sdk-check
-$(DEBUGOBJ) : tiger-sdk-check
-Makefile : tiger-sdk-check
-
-../../dx86cl64:	 tiger-sdk-check $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile
+../../dx86cl64:	 $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile
 	$(LD) $(LDFLAGS) $(KSPOBJ) $(KERNELOBJ)  $(DEBUGOBJ) $(OSLIBS)
 
 
@@ -122,9 +117,4 @@ clean:	cclean
 
 strip:	../../dx86cl64
 	strip -s retain ../../dx86cl64
-
-.PHONY: tiger-sdk-check
-tiger-sdk-check:
-	@test -d /Developer/SDKs/MacOSX10.4u.sdk || \
-		(echo "*** Install Xcode 10.4 support"; exit 1)
 

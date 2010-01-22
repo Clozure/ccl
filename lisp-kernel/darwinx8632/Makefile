@@ -19,7 +19,7 @@ MDYNAMIC_NO_PIC = $(shell ($(CC) --help -v 2>&1 | grep -q -e "-mdynamic-no-pic")
 VPATH = ..
 RM = /bin/rm
 LD = ld
-LDFLAGS =  -macosx_version_min 10.4 -arch i386 -dynamic  -o $@ -e start -pagezero_size 0x11000 -seg1addr 0x00011000 -sectalign __TEXT __text 0x1000 
+LDFLAGS =  -macosx_version_min 10.5 -arch i386 -dynamic  -o $@ -e start -pagezero_size 0x11000 -seg1addr 0x00011000 -sectalign __TEXT __text 0x1000 
 AS = as
 M4 = gm4
 M4FLAGS = -DDARWIN -DX86 -DX8632
@@ -35,7 +35,7 @@ CC=gcc-4.0
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c -arch i386 $< $(CDEFINES) $(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) $(WFORMAT) -mmacosx-version-min=10.4 -isysroot /Developer/SDKs/MacOSX10.4u.sdk -o $@
+	$(CC) -c -arch i386 $< $(CDEFINES) $(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) $(WFORMAT) -mmacosx-version-min=10.5 -isysroot /Developer/SDKs/MacOSX10.5.sdk -o $@
 
 SPOBJ = x86-spjump32.o x86-spentry32.o x86-subprims32.o
 ASMOBJ = x86-asmutils32.o imports.o
@@ -72,12 +72,7 @@ OSLATELIBS = -lSystem
 
 OSLIBS = $(OSEARLYLIBS) $(OSMIDDLELIBS) $(OSLATELIBS)
 
-$(KSPOBJ): tiger-sdk-check
-$(KERNELOBJ) : tiger-sdk-check
-$(DEBUGOBJ) : tiger-sdk-check
-Makefile : tiger-sdk-check
-
-../../dx86cl:	 tiger-sdk-check $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile
+../../dx86cl:	 $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile
 	$(LD)  $(LDFLAGS) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)   $(OSLIBS)
 
 
@@ -101,10 +96,4 @@ clean:	cclean
 # retain file not here at the moment
 strip:	../../dx86cl
 	strip -s retain ../../dx86cl
-
-.PHONY: tiger-sdk-check
-tiger-sdk-check:
-	@test -d /Developer/SDKs/MacOSX10.4u.sdk || \
-		 (echo "*** Install Xcode 10.4 support"; exit 1)
-
 
