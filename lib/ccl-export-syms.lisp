@@ -33,6 +33,7 @@
      *lisp-startup-functions*
      defloadvar
      defstatic
+     defstaticvar
      *break-on-warnings*
 					; misc
      record-source-file
