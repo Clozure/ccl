@@ -14,31 +14,7 @@
 #   http://opensource.franz.com/preamble.html
 
 
-# For versions of GCC prior to 3.3, the option "-traditional-cpp" meant
-# "don't use precompiled headers", which was good advice since they didn't
-# work too well.  Beginning with GCC 3.3, the "-traditional-cpp" means 
-# "use a broken preprocessor", which is (in a sense) the opposite of what
-# it used to mean.
-
-# Try to determine the version of GCC in use.  Invoke gcc with the
-# -v flag, and look for a line containing the phrase "specs from" in
-# the output.  Use sed to extract the full pathname of ths specs file
-# printed in that line, then strip off the trailing "/specs".
-gccdir = $(shell $(CC) -v 2>&1 | grep "specs from" | sed -e 's/.*from //' -e 's|/specs||')
-# $(gccdir) is set to the directory containing the specs file, without the
-# trailing slash.  The make intrinsic 'notdir' will strip a leading directory
-# prefix from that pathname, leaving us with a string that should match
-# the gcc version number
-#gccversion:=$(notdir $(gccdir))
-#oldgcc:=$(shell expr $(gccversion) "<" "3.3")
-#ifeq ($(oldgcc),1)
-#BROKEN_PREPROCESSOR_WORKAROUND = -traditional-cpp
-#endif
-
 MDYNAMIC_NO_PIC = $(shell ($(CC) --help -v 2>&1 | grep -q -e "-mdynamic-no-pic") && /bin/echo "-mdynamic-no-pic")
-
-OPENMCL_MAJOR_VERSION=0
-OPENMCL_MINOR_VERSION=14
 
 VPATH = ..
 RM = /bin/rm
@@ -49,22 +25,23 @@ LD = ld64
 
 ### The -seg1addr and -pagezero_size arguments below are nonsense;
 ### early versions of ld64 were/are broken.
-LDFLAGS = -macosx_version_min 10.4 -M -arch ppc64 -dynamic  -o $@ -e start -pagezero_size 0x1000 -seg1addr 0x1000 -sectalign __TEXT __text 0x1000
+LDFLAGS = -macosx_version_min 10.5 -M -arch ppc64 -dynamic  -o $@ -e start -pagezero_size 0x1000 -seg1addr 0x1000 -sectalign __TEXT __text 0x1000
 AS = as
 M4 = gm4
 M4FLAGS = -DDARWIN -DPPC -DPPC64
 ASFLAGS = -arch ppc64
-CDEFINES = -DDARWIN -DPPC -DPPC64 $(BROKEN_PREPROCESSOR_WORKAROUND)
+CDEFINES = -DDARWIN -DPPC -DPPC64
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
+CC=gcc-4.0
 
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c $< -arch ppc64 -m64 $(CDEFINES) $(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) $(WFORMAT) -mmacosx-version-min=10.4 -isysroot /Developer/SDKs/MacOSX10.4u.sdk -o $@
+	$(CC) -c $< -arch ppc64 $(CDEFINES) $(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) $(WFORMAT) -mmacosx-version-min=10.5 -isysroot /Developer/SDKs/MacOSX10.5.sdk -o $@
 
 SPOBJ = ppc-spjump.o ppc-spentry.o ppc-subprims.o 
 ASMOBJ = ppc-asmutils.o imports.o
@@ -95,16 +72,6 @@ all:	../../dppccl64
 
 OSEARLYLIBS = -lcrt1.o
 OSLATELIBS = -lSystem -lmx
-
-# If the linker can find an absolute path to -lSystemStubs, use
-# -lSystemStubs; otherwise, just use libgcc.a
-SYSTEMSTUBSPATH = $(shell $(CC) --print-file-name=libSystemStubs.a)
-SYSTEMSTUBSABSOLUTE = $(shell expr $(SYSTEMSTUBSPATH) : "^/*")
-ifeq ($(SYSTEMSTUBSABSOLUTE),1)
-OSMIDDLELIBS = -lSystemStubs
-else
-OSMIDDLELIBS = -lgcc
-endif
 
 OSLIBS = $(OSEARLYLIBS) $(OSMIDDLELIBS) $(OSLATELIBS)
 
