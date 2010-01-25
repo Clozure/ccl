@@ -1036,13 +1036,10 @@ TCR_FLAG_BIT_PENDING_SUSPEND = (fixnumshift+7)
 	
 target_most_positive_fixnum = 1152921504606846975
 target_most_negative_fixnum = -1152921504606846976
-
+call_arguments_limit = 0x10000
 
 lisp_globals_limit = 0x13000
-        
+
 INTERRUPT_LEVEL_BINDING_INDEX = fixnumone
 
 c_stack_16_byte_aligned = 1
-        	
-		        
-                

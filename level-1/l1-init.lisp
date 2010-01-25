@@ -139,7 +139,8 @@
   "The exclusive upper bound on the number of parameters which may be specifed
   in a given lambda list. This is actually the limit on required and &OPTIONAL
   parameters. With &KEY and &AUX you can get more.")
-(defconstant call-arguments-limit (floor #x8000 target::node-size)
+(defconstant call-arguments-limit #+ppc-target (floor #x8000 target::node-size)
+	                          #-ppc-target #x10000
   "The exclusive upper bound on the number of arguments which may be passed
   to a function, including &REST args."
 )

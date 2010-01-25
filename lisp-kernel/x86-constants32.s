@@ -612,7 +612,7 @@ TCR_FLAG_BIT_PENDING_SUSPEND = (fixnumshift+7)
 
 target_most_positive_fixnum = 536870911
 target_most_negative_fixnum = -536870912
-call_arguments_limit = 8192
+call_arguments_limit = 0x10000
 
 lisp_globals_limit = (0x13000+(LOWMEM_BIAS))
         
