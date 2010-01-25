@@ -455,7 +455,7 @@
 (defconstant max-32-bit-constant-index (ash (+ #x7fffffff x8664::misc-data-offset) -2))
 (defconstant max-16-bit-constant-index (ash (+ #x7fffffff x8664::misc-data-offset) -1))
 (defconstant max-8-bit-constant-index (+ #x7fffffff x8664::misc-data-offset))
-(defconstant max-1-bit-constant-index (ash (+ #x7fffffff x8664::misc-data-offset) 5))
+(defconstant max-1-bit-constant-index (ash (+ #x7fffffff x8664::misc-data-offset) 3))
 
 )
 (defmacro define-storage-layout (name origin &rest cells)
