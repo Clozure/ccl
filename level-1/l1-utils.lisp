@@ -1094,7 +1094,14 @@ vector
   (when (null size)(setq size (if (listp dims)(apply #'* dims) dims)))
   (let ((vector (%alloc-misc size subtype)))  ; may not get here in that case
     (if initial-element-p
-      (dotimes (i (uvsize vector)) (declare (fixnum i))(uvset vector i initial-element))
+      (cond ((and (eql subtype target::subtag-simple-base-string)
+                  (eql initial-element #\Null)))
+            ((and (eql subtype target::subtag-double-float-vector)
+                  (eql initial-element 0.0d0)))
+            ((and (eql subtype target::subtag-single-float-vector)
+                  (eql initial-element 0.0s0)))
+            (t (or (eql initial-element 0)
+                   (%init-misc initial-element vector))))
       (if initial-contents-p
         (if (null dims) (uvset vector 0 initial-contents)
             (init-uvector-contents vector 0 dims initial-contents))))
