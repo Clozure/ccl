@@ -135,7 +135,7 @@ atomically decremented."
         (multiple-value-bind (secs millis) (milliseconds duration)
           (let* ((now (get-internal-real-time))
                  (stop (+ now
-                          (* secs 1000)
+                          (* secs internal-time-units-per-second)
                           millis)))
             (loop
               (multiple-value-bind (success err)
