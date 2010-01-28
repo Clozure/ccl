@@ -1844,6 +1844,13 @@
    (def-x86-opcode movd ((:regxmm :insert-xmm-reg) (:anymem :insert-memory))
      #x0f7e #o000 #x0 #x66)
 
+   ;; movdqa
+   (def-x86-opcode (movdqa :cpu64)  ((:regxmm :insert-xmm-reg) (:anymem :insert-memory))
+     #x0f7f #o300 #x0 #x66)
+   (def-x86-opcode (movdqa :cpu64) ((:anymem :insert-memory) (:regxmm :insert-xmm-reg)) 
+     #x0f6f #o000 #x0 #x66)
+    
+
    ;; sign-extending mov
    (def-x86-opcode movsbl ((:reg8 :insert-modrm-rm) (:reg32 :insert-modrm-reg))
      #x0fbe #o300 0)
@@ -3025,6 +3032,14 @@
      #x0f28 #o000 #x0 #x66)
    (def-x86-opcode movapd ((:regxmm :insert-xmm-reg) (:anymem :insert-memory))
      #x0f29 #o000 #x0 #x66)
+
+   ;; movaps
+   (def-x86-opcode movaps ((:regxmm :insert-xmm-rm) (:regxmm :insert-xmm-reg))
+     #x0f28 #o300 #x0)
+   (def-x86-opcode movaps ((:anymem :insert-memory) (:regxmm :insert-xmm-reg))
+     #x0f28 #o000 #x0)
+   (def-x86-opcode movaps ((:regxmm :insert-xmm-reg) (:anymem :insert-memory))
+     #x0f29 #o000 #x0)
    
    ;; mulsd
    (def-x86-opcode mulsd ((:anymem :insert-memory) (:regxmm :insert-xmm-reg))
@@ -3208,6 +3223,10 @@
    (def-x86-opcode pandn ((:anymem :insert-memory) (:regxmm :insert-modrm-reg))
      #x0fdf #o000 #x0 #x66)
 
+   ;; pcmpeqb
+   (def-x86-opcode pcmpeqb ((:regxmm :insert-modrm-rm) (:regxmm :insert-modrm-reg))
+     #x0f74 #o300 #x0 #x66)
+   
    ;; por
    (def-x86-opcode por ((:regmmx :insert-mmx-rm) (:regmmx :insert-mmx-reg))
      #x0feb #o300 #x0)
