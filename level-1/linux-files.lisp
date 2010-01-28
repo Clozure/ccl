@@ -149,7 +149,7 @@ atomically decremented."
                 (unless (zerop duration)
                   (let* ((diff (- stop now)))
                     (multiple-value-bind (remaining-seconds remaining-millis)
-                        (floor diff 1000)
+                        (floor diff internal-time-units-per-second)
                       (setq secs remaining-seconds
                             millis remaining-millis)))))))))))
 
