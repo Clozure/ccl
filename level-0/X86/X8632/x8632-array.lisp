@@ -57,129 +57,209 @@
     (set-nargs 2)
     (jmp-subprim  .SPvalues)))
 
-(defx8632lapfunction %boole-clr ((idx 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
-  (movl (@ idx (% esp)) (% temp0))
+(defx8632lapfunction %boole-clr ((len 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
+  (movl (@ len (% esp)) (% temp0))
+  (jmp @test)
+  @loop
   (movl ($ 0) (@ x8632::misc-data-offset (% dest) (% temp0)))
+  @test
+  (subl ($ '1) (% temp0))
+  (jge @loop)
   (single-value-return 4))
 
-(defx8632lapfunction %boole-set ((idx 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
-  (movl (@ idx (% esp)) (% temp0))
+(defx8632lapfunction %boole-set ((len 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
+  (movl (@ len (% esp)) (% temp0))
+  (jmp @test)
+  @loop
   (movl ($ -1) (@ x8632::misc-data-offset (% dest) (% temp0)))
+  @test
+  (subl ($ '1) (% temp0))
+  (jge @loop)
   (single-value-return 4))
 
-(defx8632lapfunction %boole-1 ((idx 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
-  (movl (@ idx (% esp)) (% temp0))
+(defx8632lapfunction %boole-1 ((len 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
+  (movl (@ len (% esp)) (% temp0))
+  (jmp @test)
+  @loop
   (movl (@ b0 (% esp)) (% temp1))
   (movl (@ x8632::misc-data-offset (% temp1) (% temp0)) (% imm0))
   (movl (% imm0) (@ x8632::misc-data-offset (% dest) (% temp0)))
+  @test
+  (subl ($ '1) (% temp0))
+  (jge @loop)
   (single-value-return 4))
 
-(defx8632lapfunction %boole-2 ((idx 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
-  (movl (@ idx (% esp)) (% temp0))
+(defx8632lapfunction %boole-2 ((len 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
+  (movl (@ len (% esp)) (% temp0))
+  (jmp @test)
+  @loop
   (movl (@ x8632::misc-data-offset (% b1) (% temp0)) (% imm0))
   (movl (% imm0) (@ x8632::misc-data-offset (% dest) (% temp0)))
+  @test
+  (subl ($ '1) (% temp0))
+  (jge @loop)
   (single-value-return 4))
 
-(defx8632lapfunction %boole-c1 ((idx 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
-  (movl (@ idx (% esp)) (% temp0))
+(defx8632lapfunction %boole-c1 ((len 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
+  (movl (@ len (% esp)) (% temp0))
+  (jmp @test)
+  @loop
   (movl (@ b0 (% esp)) (% temp1))
   (movl (@ x8632::misc-data-offset (% temp1) (% temp0)) (% imm0))
   (notl (% imm0))
   (movl (% imm0) (@ x8632::misc-data-offset (% dest) (% temp0)))
+  @test
+  (subl ($ '1) (% temp0))
+  (jge @loop)
   (single-value-return 4))
 
-(defx8632lapfunction %boole-c2 ((idx 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
-  (movl (@ idx (% esp)) (% temp0))
+(defx8632lapfunction %boole-c2 ((len 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
+  (movl (@ len (% esp)) (% temp0))
+  (jmp @test)
+  @loop
   (movl (@ x8632::misc-data-offset (% b1) (% temp0)) (% imm0))
   (notl (% imm0))
   (movl (% imm0) (@ x8632::misc-data-offset (% dest) (% temp0)))
+  @test
+  (subl ($ '1) (% temp0))
+  (jge @loop)
   (single-value-return 4))
 
-(defx8632lapfunction %boole-and ((idx 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
-  (movl (@ idx (% esp)) (% temp0))
+(defx8632lapfunction %boole-and ((len 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
+  (movl (@ len (% esp)) (% temp0))
+  (jmp @test)
+  @loop
   (movl (@ b0 (% esp)) (% temp1))
   (movl (@ x8632::misc-data-offset (% temp1) (% temp0)) (% imm0))
   (andl (@ x8632::misc-data-offset (% b1) (% temp0)) (% imm0))
   (movl (% imm0) (@ x8632::misc-data-offset (% dest) (% temp0)))
+  @test
+  (subl ($ '1) (% temp0))
+  (jge @loop)
   (single-value-return 4))
 
-(defx8632lapfunction %boole-ior ((idx 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
-  (movl (@ idx (% esp)) (% temp0))
+(defx8632lapfunction %boole-ior ((len 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
+  (movl (@ len (% esp)) (% temp0))
+  (jmp @test)
+  @loop
   (movl (@ b0 (% esp)) (% temp1))
   (movl (@ x8632::misc-data-offset (% temp1) (% temp0)) (% imm0))
   (orl (@ x8632::misc-data-offset (% b1) (% temp0)) (% imm0))
   (movl (% imm0) (@ x8632::misc-data-offset (% dest) (% temp0)))
+  @test
+  (subl ($ '1) (% temp0))
+  (jge @loop)
   (single-value-return 4))
 
-(defx8632lapfunction %boole-xor ((idx 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
-  (movl (@ idx (% esp)) (% temp0))
+(defx8632lapfunction %boole-xor ((len 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
+  (movl (@ len (% esp)) (% temp0))
+  (jmp @test)
+  @loop
   (movl (@ b0 (% esp)) (% temp1))
   (movl (@ x8632::misc-data-offset (% temp1) (% temp0)) (% imm0))
   (xorl (@ x8632::misc-data-offset (% b1) (% temp0)) (% imm0))
   (movl (% imm0) (@ x8632::misc-data-offset (% dest) (% temp0)))
+  @test
+  (subl ($ '1) (% temp0))
+  (jge @loop)
   (single-value-return 4))
 
-(defx8632lapfunction %boole-eqv ((idx 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
-  (movl (@ idx (% esp)) (% temp0))
+(defx8632lapfunction %boole-eqv ((len 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
+  (movl (@ len (% esp)) (% temp0))
+  (jmp @test)
+  @loop
   (movl (@ b0 (% esp)) (% temp1))
   (movl (@ x8632::misc-data-offset (% temp1) (% temp0)) (% imm0))
   (xorl (@ x8632::misc-data-offset (% b1) (% temp0)) (% imm0))
   (notl (% imm0))
   (movl (% imm0) (@ x8632::misc-data-offset (% dest) (% temp0)))
+  @test
+  (subl ($ '1) (% temp0))
+  (jge @loop)
   (single-value-return 4))
 
-(defx8632lapfunction %boole-nand ((idx 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
-  (movl (@ idx (% esp)) (% temp0))
+(defx8632lapfunction %boole-nand ((len 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
+  (movl (@ len (% esp)) (% temp0))
+  (jmp @test)
+  @loop
   (movl (@ b0 (% esp)) (% temp1))
   (movl (@ x8632::misc-data-offset (% temp1) (% temp0)) (% imm0))
   (andl (@ x8632::misc-data-offset (% b1) (% temp0)) (% imm0))
   (notl (% imm0))
   (movl (% imm0) (@ x8632::misc-data-offset (% dest) (% temp0)))
+  @test
+  (subl ($ '1) (% temp0))
+  (jge @loop)
   (single-value-return 4))
 
-(defx8632lapfunction %boole-nor ((idx 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
-  (movl (@ idx (% esp)) (% temp0))
+(defx8632lapfunction %boole-nor ((len 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
+  (movl (@ len (% esp)) (% temp0))
+  (jmp @test)
+  @loop
   (movl (@ b0 (% esp)) (% temp1))
   (movl (@ x8632::misc-data-offset (% temp1) (% temp0)) (% imm0))
   (orl (@ x8632::misc-data-offset (% b1) (% temp0)) (% imm0))
   (notl (% imm0))
   (movl (% imm0) (@ x8632::misc-data-offset (% dest) (% temp0)))
+  @test
+  (subl ($ '1) (% temp0))
+  (jge @loop)
   (single-value-return 4))
 
-(defx8632lapfunction %boole-andc1 ((idx 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
-  (movl (@ idx (% esp)) (% temp0))
+(defx8632lapfunction %boole-andc1 ((len 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
+  (movl (@ len (% esp)) (% temp0))
+  (jmp @test)
+  @loop
   (movl (@ b0 (% esp)) (% temp1))
   (movl (@ x8632::misc-data-offset (% temp1) (% temp0)) (% imm0))
   (notl (% imm0))
   (andl (@ x8632::misc-data-offset (% b1) (% temp0)) (% imm0))
   (movl (% imm0) (@ x8632::misc-data-offset (% dest) (% temp0)))
+  @test
+  (subl ($ '1) (% temp0))
+  (jge @loop)
   (single-value-return 4))
 
-(defx8632lapfunction %boole-andc2 ((idx 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
-  (movl (@ idx (% esp)) (% temp0))
+(defx8632lapfunction %boole-andc2 ((len 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
+  (movl (@ len (% esp)) (% temp0))
+  (jmp @test)
+  @loop
   (movl (@ b0 (% esp)) (% temp1))
   (movl (@ x8632::misc-data-offset (% b1) (% temp0)) (% imm0))
   (notl (% imm0))
   (andl (@ x8632::misc-data-offset (% temp1) (% temp0)) (% imm0))
   (movl (% imm0) (@ x8632::misc-data-offset (% dest) (% temp0)))
+  @test
+  (subl ($ '1) (% temp0))
+  (jge @loop)
   (single-value-return 4))
 
-(defx8632lapfunction %boole-orc1 ((idx 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
-  (movl (@ idx (% esp)) (% temp0))
+(defx8632lapfunction %boole-orc1 ((len 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
+  (movl (@ len (% esp)) (% temp0))
+  (jmp @test)
+  @loop
   (movl (@ b0 (% esp)) (% temp1))
   (movl (@ x8632::misc-data-offset (% temp1) (% temp0)) (% imm0))
   (notl (% imm0))
   (orl (@ x8632::misc-data-offset (% b1) (% temp0)) (% imm0))
   (movl (% imm0) (@ x8632::misc-data-offset (% dest) (% temp0)))
+  @test
+  (subl ($ '1) (% temp0))
+  (jge @loop)
   (single-value-return 4))
 
-(defx8632lapfunction %boole-orc2 ((idx 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
-  (movl (@ idx (% esp)) (% temp0))
+(defx8632lapfunction %boole-orc2 ((len 8) (b0 4) #|(ra 0)|# (b1 arg_y) (dest arg_z))
+  (movl (@ len (% esp)) (% temp0))
+  (jmp @test)
+  @loop
   (movl (@ b0 (% esp)) (% temp1))
   (movl (@ x8632::misc-data-offset (% b1) (% temp0)) (% imm0))
   (notl (% imm0))
   (orl (@ x8632::misc-data-offset (% temp1) (% temp0)) (% imm0))
   (movl (% imm0) (@ x8632::misc-data-offset (% dest) (% temp0)))
+  @test
+  (subl ($ '1) (% temp0))
+  (jge @loop)
   (single-value-return 4))
 
 (defparameter *simple-bit-boole-functions* ())
@@ -204,9 +284,11 @@
        #'%boole-orc2))
 
 (defun %simple-bit-boole (op b1 b2 result)
-  (let* ((f (svref *simple-bit-boole-functions* op)))
-    (dotimes (i (ash (the fixnum (+ (length result) 31)) -5) result)
-      (funcall f i b1 b2 result))))
+  (funcall (svref *simple-bit-boole-functions* op)
+           (ash (the fixnum (+ (length result) 31)) -5)
+           b1
+           b2
+           result))
 
 (defx8632lapfunction %aref2 ((array 4) #|(ra 0)|# (i arg_y) (j arg_z))
   (check-nargs 3)
