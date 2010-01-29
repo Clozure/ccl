@@ -331,5 +331,37 @@
     (movq (% w1) (@ x8664::misc-data-offset (% dest)))
     (single-value-return)))
 
+;;; Do LOGIOR on the N 32-bit words in A and B, storing the result in
+;;; C.  (It's legal and desirable to do this more than 32 bits at a time.)
 
+(defx86lapfunction %bignum-logior ((n 8) #|ra 0|# (a arg_x) (b arg_y) (c arg)z)
+  (movq (@ n (% rsp)) (% imm0))
+  (shrq (% imm0))
+  (jmp @test)
+  @loop
+  (movl (@ x8664::misc-data-offset (% a) (% imm0)) (%l imm1))
+  (orl (@ x8664::misc-data-offset (% b) (% imm0)) (%l imm1))
+  (movl (%l imm1) (@ x8664::misc-data-offset (% c) (% imm0)))
+  (subq ($  4) (% imm0))
+  @test
+  (jne @loop)
+  (single-value-return 3))
+
+
+
+;;; Do LOGAND on the N 32-bit words in A and B, storing the result in
+;;; C.  (It's legal and desirable to do this more than 32 bits at a time.)
+
+(defx86lapfunction %bignum-logand ((n 8) #|ra 0|# (a arg_x) (b arg_y) (c arg)z)
+  (movq (@ n (% rsp)) (% imm0))
+  (shrq (% imm0))
+  (jmp @test)
+  @loop
+  (movl (@ x8664::misc-data-offset (% a) (% imm0)) (%l imm1))
+  (andl (@ x8664::misc-data-offset (% b) (% imm0)) (%l imm1))
+  (movl (%l imm1) (@ x8664::misc-data-offset (% c) (% imm0)))
+  (subq ($  4) (% imm0))
+  @test
+  (jne @loop)
+  (single-value-return 3))
 
