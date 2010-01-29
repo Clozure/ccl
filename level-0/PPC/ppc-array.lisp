@@ -221,7 +221,8 @@
   (cmpdi cr0 imm1 ppc64::ivector-class-64-bit)
   (cmpdi cr1 imm1 ppc64::ivector-class-32-bit)
   (cmpdi cr2 imm1 ppc64::ivector-class-8-bit)
-  (cmpwi cr7 imm0 ppc64::tag-fixnum)
+  (cmpdi cr7 imm0 ppc64::tag-fixnum)
+  (cmpdi cr5 imm0 ppc64::subtag-bignum)
   (beq cr0 @64)
   (beq cr1 @32)
   (beq cr2 @8)
@@ -233,11 +234,11 @@
   (beq cr1 @s16)
   ; Bit vector.
   (cmpldi cr0 val '1)
-  (la imm3 31 imm3)
-  (srdi imm3 imm3 5)
+  (la imm3 63 imm3)
+  (srdi imm3 imm3 6)
   (unbox-fixnum imm0 val)
   (neg imm0 imm0)
-  (ble+ cr0 @set-32)
+  (ble+ cr0 @set-64)
   @bad
   (li arg_x '#.$xnotelt)
   (save-lisp-context)
@@ -249,11 +250,11 @@
   (cmpdi cr2 imm2 ppc64::subtag-s64-vector)
   (beq cr3 @fixnum)
   (beq cr1 @dfloat)
-  (beq cr2 @u64)
+  (bne cr2 @u64)
   ;; s64
   (unbox-fixnum imm0 val)
   (beq cr7 @set-64)                     ; all fixnums are (SIGNED-BYTE 64)
-  (bne cr3 @bad)                        ; as are 2-digit bignums
+  (bne cr5 @bad)                        ; as are 2-digit bignums
   (getvheader imm1 val)
   (ld imm0 ppc64::misc-data-offset val)
   (cmpdi imm1 ppc64::two-digit-bignum-header)
@@ -268,24 +269,25 @@
   ;; 3-digit bignum with most-significant digit 0.
   @u64
   (cmpdi cr2 val 0)
+  (unbox-fixnum imm0 val)
   (bne cr7 @u64-maybe-bignum)
   (bge cr2 @set-64)
   (b @bad)
   @u64-maybe-bignum
-  (bne cr3 @bad)
+  (bne cr5 @bad)
   (ld imm0 ppc64::misc-data-offset val)
   (getvheader imm1 val)
   (rotldi imm0 imm0 32)
   (cmpdi cr2 imm1 ppc64::two-digit-bignum-header)
   (cmpdi cr3 imm1 ppc64::three-digit-bignum-header)
   (cmpdi cr0 imm0 0)
-  (beq cr2 @u32-two-digit)
+  (beq cr2 @u64-two-digit)
   (bne cr3 @bad)
   (lwz imm1 (+ 8 ppc64::misc-data-offset) val)
-  (cmpwi imm0 0)
+  (cmpwi imm1 0)
   (beq @set-64)
   (b @bad)
-  @u32-two-digit
+  @u64-two-digit
   (bgt cr0 @set-64)
   (b @bad)
   @dfloat
