@@ -341,19 +341,28 @@
 ;;; Do LOGIOR on the N 32-bit words in A and B, storing the result in
 ;;; C.  (It's legal and desirable to do this more than 32 bits at a time.)
 
-(defppclapfunction %bignum-logior ((n 0) #|ra 0|# (a arg_x) (b arg_y) (c arg_z))
+(defppclapfunction %bignum-logior ((n 0) (a arg_x) (b arg_y) (c arg_z))
   (vpop imm0)
-  (srwi. imm0 imm0 1)
-  (la imm2 ppc64::misc-data-offset imm0)
-  (b @test)
-  @loop
-  (cmpwi imm0 4)
+  (srdi imm0 imm0 1)
+  (andi. imm1 imm0 4)
+  (la imm3 ppc64::misc-data-offset imm0)
+  (beq @loop)
+  (cmpdi imm0 4)
+  (subi imm0 imm0 4)
+  (subi imm3 imm3 4)
   (lwzx imm1 a imm3)
   (lwzx imm2 b imm3)
   (or imm1 imm1 imm2)
   (stwx imm1 c imm3)
-  (subi imm0 imm0 4)
-  @test
+  (beqlr)
+  @loop
+  (subi imm0 imm0 8)
+  (subi imm3 imm3 8)
+  (cmpdi imm0 0)                        ;can't happen on 1st iteration
+  (ldx imm1 a imm3)
+  (ldx imm2 b imm3)
+  (or imm1 imm1 imm2)
+  (stdx imm1 c imm3)
   (bne @loop)
   (blr))
 
@@ -362,18 +371,27 @@
 ;;; Do LOGAND on the N 32-bit words in A and B, storing the result in
 ;;; C.  (It's legal and desirable to do this more than 32 bits at a time.)
 
-(defppclapfunction %bignum-logand ((n 0) #|ra 0|# (a arg_x) (b arg_y) (c arg_z))
+(defppclapfunction %bignum-logand ((n 0) (a arg_x) (b arg_y) (c arg_z))
   (vpop imm0)
-  (srwi. imm0 imm0 1)
-  (la imm2 ppc64::misc-data-offset imm0)
-  (b @test)
-  @loop
-  (cmpwi imm0 4)
+  (srdi imm0 imm0 1)
+  (andi. imm1 imm0 4)
+  (la imm3 ppc64::misc-data-offset imm0)
+  (beq @loop)
+  (cmpdi imm0 4)
+  (subi imm0 imm0 4)
+  (subi imm3 imm3 4)
   (lwzx imm1 a imm3)
   (lwzx imm2 b imm3)
   (and imm1 imm1 imm2)
   (stwx imm1 c imm3)
-  (subi imm0 imm0 4)
-  @test
+  (beqlr)
+  @loop
+  (subi imm0 imm0 8)
+  (subi imm3 imm3 8)
+  (cmpdi imm0 0)                        ;can't happen on 1st iteration
+  (ldx imm1 a imm3)
+  (ldx imm2 b imm3)
+  (and imm1 imm1 imm2)
+  (stdx imm1 c imm3)
   (bne @loop)
   (blr))

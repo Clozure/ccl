@@ -1254,45 +1254,23 @@
   (declare (type bignum-type a b))
   (let* ((len-a (%bignum-length a))
 	 (len-b (%bignum-length b))
-	 (a-plusp (bignum-plusp a))
-	 (b-plusp (bignum-plusp b)))
-    (declare (type bignum-index len-a len-b))
-    (cond
-      ((< len-a len-b)
-       (if a-plusp
-	 (logand-shorter-positive a len-a b (%allocate-bignum len-a))
-	 (logand-shorter-negative a len-a b len-b (%allocate-bignum len-b))))
-      ((< len-b len-a)
-       (if b-plusp
-	 (logand-shorter-positive b len-b a (%allocate-bignum len-b))
-	 (logand-shorter-negative b len-b a len-a (%allocate-bignum len-a))))
-      (t (logand-shorter-positive a len-a b (%allocate-bignum len-a))))))
-
-;;; LOGAND-SHORTER-POSITIVE -- Internal.
-;;;
-;;; This takes a shorter bignum, a and len-a, that is positive.  Because this
-;;; is AND, we don't care about any bits longer than a's since its infinite 0
-;;; sign bits will mask the other bits out of b.  The result is len-a big.
-;;;
-(defun logand-shorter-positive (a len-a b res)
-  (declare (type bignum-type a b res)
-	   (type bignum-index len-a))
-  (%bignum-logand len-a a b res)
-  (%normalize-bignum-macro res))
-
-;;; LOGAND-SHORTER-NEGATIVE -- Internal.
-;;;
-;;; This takes a shorter bignum, a and len-a, that is negative.  Because this
-;;; is AND, we just copy any bits longer than a's since its infinite 1 sign
-;;; bits will include any bits from b.  The result is len-b big.
-;;;
-(defun logand-shorter-negative (a len-a b len-b res)
-  (declare (type bignum-type a b res)
-	   (type bignum-index len-a len-b))
-  (%bignum-logand len-a a b res)
-  (bignum-replace res b :start1 len-a :start2 len-a :end1 len-b :end2 len-b)
-  (%normalize-bignum-macro res))
-
+         (shorter a)
+         (longer b)
+         (shorter-len len-a)
+         (longer-len len-b)
+	 (shorter-positive (bignum-plusp a)))
+    (declare (type bignum-index len-a len-b shorter-len longer-len))
+    (when (< len-b len-a)
+      (setq shorter b
+            longer a
+            shorter-len len-b
+            longer-len len-a
+            shorter-positive (bignum-plusp b)))
+    (let* ((result (%allocate-bignum longer-len)))
+      (%bignum-logand shorter-len shorter longer result)
+      (unless shorter-positive
+        (bignum-replace result longer :start1 shorter-len :start2 shorter-len :end1 longer-len :end2 longer-len))
+      (%normalize-bignum-macro result))))
 
 
 ;;;
@@ -1393,51 +1371,28 @@
   (declare (type bignum-type a b))
   (let* ((len-a (%bignum-length a))
 	 (len-b (%bignum-length b))
-	 (a-plusp (bignum-plusp a))
-	 (b-plusp (bignum-plusp b)))
-    (declare (type bignum-index len-a len-b))
-    (cond
-     ((< len-a len-b)
-      (if a-plusp
-	  (logior-shorter-positive a len-a b len-b (%allocate-bignum len-b))
-	  (logior-shorter-negative a len-a b len-b (%allocate-bignum len-b))))
-     ((< len-b len-a)
-      (if b-plusp
-	  (logior-shorter-positive b len-b a len-a (%allocate-bignum len-a))
-	  (logior-shorter-negative b len-b a len-a (%allocate-bignum len-a))))
-     (t (logior-shorter-positive a len-a b len-b (%allocate-bignum len-a))))))
-
-;;; LOGIOR-SHORTER-POSITIVE -- Internal.
-;;;
-;;; This takes a shorter bignum, a and len-a, that is positive.  Because this
-;;; is IOR, we don't care about any bits longer than a's since its infinite
-;;; 0 sign bits will mask the other bits out of b out to len-b.  The result
-;;; is len-b long.
-;;;
-(defun logior-shorter-positive (a len-a b len-b res)
-  (declare (type bignum-type a b res)
-	   (type bignum-index len-a len-b))
-  (%bignum-logior len-a a b res)
-  (if (not (eql len-a len-b))
-    (bignum-replace res b :start1 len-a :start2 len-a :end1 len-b :end2 len-b))
-  (%normalize-bignum-macro res))
-
-;;; LOGIOR-SHORTER-NEGATIVE -- Internal.
-;;;
-;;; This takes a shorter bignum, a and len-a, that is negative.  Because this
-;;; is IOR, we just copy any bits longer than a's since its infinite 1 sign
-;;; bits will include any bits from b.  The result is len-b long.
-;;;
-(defun logior-shorter-negative (a len-a b len-b res)
-  (declare (type bignum-type a b res)
-	   (type bignum-index len-a len-b))
-  (%bignum-logior len-a a b res)
-  (do ((i len-a (1+ i)))
-      ((= i len-b))
-    (declare (type bignum-index i))
-    (setf (bignum-ref res i) #xffffffff))
-  (%normalize-bignum-macro res))
-
+         (longer-len len-b)
+         (shorter-len len-a)
+         (shorter a)
+         (longer b)
+         (shorter-positive (bignum-plusp a)))
+    (declare (type bignum-index len-a len-b longer-len shorter-len))
+    (when (< len-b len-a)
+      (setq shorter b
+            longer a
+            shorter-len len-b
+            longer-len len-a
+            shorter-positive (bignum-plusp b)))
+    (let* ((result (%allocate-bignum longer-len)))
+      (%bignum-logior shorter-len shorter longer result)
+      (unless (= shorter-len longer-len)
+        (if shorter-positive
+          (bignum-replace result longer :start1 shorter-len :start2 shorter-len :end1 longer-len :end2 longer-len)
+          (do* ((i shorter-len (1+ i)))
+               ((= i longer-len))
+            (declare (type bignum-index i))
+            (setf (bignum-ref result i) #xffffffff))))
+      (%normalize-bignum-macro result))))
 
 
 
