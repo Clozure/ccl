@@ -334,7 +334,7 @@
 ;;; Do LOGIOR on the N 32-bit words in A and B, storing the result in
 ;;; C.  (It's legal and desirable to do this more than 32 bits at a time.)
 
-(defx86lapfunction %bignum-logior ((n 8) #|ra 0|# (a arg_x) (b arg_y) (c arg)z)
+(defx86lapfunction %bignum-logior ((n 8) #|ra 0|# (a arg_x) (b arg_y) (c arg_z))
   (movq (@ n (% rsp)) (% imm0))
   (shrq (% imm0))
   (jmp @test)
@@ -352,7 +352,7 @@
 ;;; Do LOGAND on the N 32-bit words in A and B, storing the result in
 ;;; C.  (It's legal and desirable to do this more than 32 bits at a time.)
 
-(defx86lapfunction %bignum-logand ((n 8) #|ra 0|# (a arg_x) (b arg_y) (c arg)z)
+(defx86lapfunction %bignum-logand ((n 8) #|ra 0|# (a arg_x) (b arg_y) (c arg_z))
   (movq (@ n (% rsp)) (% imm0))
   (shrq (% imm0))
   (jmp @test)
