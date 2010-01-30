@@ -337,14 +337,45 @@
 (defx86lapfunction %bignum-logior ((n 8) #|ra 0|# (a arg_x) (b arg_y) (c arg_z))
   (movq (@ n (% rsp)) (% imm0))
   (shrq (% imm0))
-  (jmp @test)
-  @loop
+  (testl ($ 4) (%l imm0))
+  (je @check128)
+  (subq ($ 4) (% imm0))
   (movl (@ x8664::misc-data-offset (% a) (% imm0)) (%l imm1))
   (orl (@ x8664::misc-data-offset (% b) (% imm0)) (%l imm1))
   (movl (%l imm1) (@ x8664::misc-data-offset (% c) (% imm0)))
-  (subq ($  4) (% imm0))
-  @test
-  (jne @loop)
+  (jmp @check128)
+  @loop64
+  (movq (@ x8664::misc-data-offset (% a) (% imm0)) (% imm1))
+  (orq (@ x8664::misc-data-offset (% b) (% imm0)) (% imm1))
+  (movq (% imm1) (@ x8664::misc-data-offset (% c) (% imm0)))
+  @test64
+  (subq ($  8) (% imm0))
+  (jge @loop64)
+  (single-value-return 3)
+  ;; See if we can do some of this using the SSE2 hardware.
+  ;; That's only possible if we have 6 or more words.
+  @check128
+  (rcmpq (% imm0) ($ (* 6 4)))
+  (jl @test64)
+  ;; We'll have to do the first 2 words in a 64-bit operation.
+  ;; If the total number of words is a multiple of 4, we have
+  ;; to do the last 2 words without using SSE2, as well.
+  (testl ($ 8) (%l imm0))
+  (jne @test128)
+  (movq (@ (- x8664::misc-data-offset 8) (% a) (% imm0)) (% imm1))
+  (orq (@ (- x8664::misc-data-offset 8) (% b) (% imm0)) (% imm1))
+  (movq (% imm1) (@ (- x8664::misc-data-offset 8) (% c) (% imm0)))
+  (subq ($ (+ 16 8)) (% imm0))
+  @loop128
+  (movaps (@ x8664::misc-data-offset (% a) (% imm0)) (% xmm0))
+  (por (@ x8664::misc-data-offset (% b) (% imm0)) (% xmm0))
+  (movaps (% xmm0) (@ x8664::misc-data-offset (% c) (% imm0)))
+  @test128
+  (subq ($ 16) (% imm0))
+  (jg @loop128)
+  (movq (@ (- x8664::misc-data-offset 8) (% a)) (% imm1))
+  (orq (@ (- x8664::misc-data-offset 8) (% b)) (% imm1))
+  (movq (% imm1) (@ (- x8664::misc-data-offset 8) (% c)))
   (single-value-return 3))
 
 
@@ -355,13 +386,44 @@
 (defx86lapfunction %bignum-logand ((n 8) #|ra 0|# (a arg_x) (b arg_y) (c arg_z))
   (movq (@ n (% rsp)) (% imm0))
   (shrq (% imm0))
-  (jmp @test)
-  @loop
+  (testl ($ 4) (%l imm0))
+  (je @check128)
+  (subq ($ 4) (% imm0))
   (movl (@ x8664::misc-data-offset (% a) (% imm0)) (%l imm1))
   (andl (@ x8664::misc-data-offset (% b) (% imm0)) (%l imm1))
   (movl (%l imm1) (@ x8664::misc-data-offset (% c) (% imm0)))
-  (subq ($  4) (% imm0))
-  @test
-  (jne @loop)
+  (jmp @check128)
+  @loop64
+  (movq (@ x8664::misc-data-offset (% a) (% imm0)) (% imm1))
+  (andq (@ x8664::misc-data-offset (% b) (% imm0)) (% imm1))
+  (movq (% imm1) (@ x8664::misc-data-offset (% c) (% imm0)))
+  @test64
+  (subq ($  8) (% imm0))
+  (jge @loop64)
+  (single-value-return 3)
+  ;; See if we can do some of this using the SSE2 hardware.
+  ;; That's only possible if we have 6 or more words.
+  @check128
+  (rcmpq (% imm0) ($ (* 6 4)))
+  (jl @test64)
+  ;; We'll have to do the first 2 words in a 64-bit operation.
+  ;; If the total number of words is a multiple of 4, we have
+  ;; to do the last 2 words without using SSE2, as well.
+  (testl ($ 8) (%l imm0))
+  (jne @test128)
+  (movq (@ (- x8664::misc-data-offset 8) (% a) (% imm0)) (% imm1))
+  (andq (@ (- x8664::misc-data-offset 8) (% b) (% imm0)) (% imm1))
+  (movq (% imm1) (@ (- x8664::misc-data-offset 8) (% c) (% imm0)))
+  (subq ($ (+ 16 8)) (% imm0))
+  @loop128
+  (movaps (@ x8664::misc-data-offset (% a) (% imm0)) (% xmm0))
+  (pand (@ x8664::misc-data-offset (% b) (% imm0)) (% xmm0))
+  (movaps (% xmm0) (@ x8664::misc-data-offset (% c) (% imm0)))
+  @test128
+  (subq ($ 16) (% imm0))
+  (jg @loop128)
+  (movq (@ (- x8664::misc-data-offset 8) (% a)) (% imm1))
+  (and (@ (- x8664::misc-data-offset 8) (% b)) (% imm1))
+  (movq (% imm1) (@ (- x8664::misc-data-offset 8) (% c)))
   (single-value-return 3))
 
