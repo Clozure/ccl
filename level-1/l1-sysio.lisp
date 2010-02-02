@@ -124,7 +124,7 @@ is :UNIX.")
     (setq character-encoding
           (default-character-encoding domain)))
   (unless (lookup-character-encoding character-encoding)
-    (error "~S is not the name of a known characer encoding."
+    (error "~S is not the name of a known character encoding."
            character-encoding))
   (let* ((pair (cons character-encoding line-termination)))
     (declare (dynamic-extent pair))    
