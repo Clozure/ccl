@@ -1128,6 +1128,7 @@
 ;;; Common Lisp forms.
 ;;; 
 (defindent "block" 1)
+(defindent "return-from" 1)
 (defindent "case" 1)
 (defindent "catch" 1)
 (defindent "ccase" 1)			   
@@ -1177,6 +1178,9 @@
 (defindent "unwind-protect" 1)
 (defindent "when" 1)
 
+;; CCL extensions
+(defindent "iterate" 2)
+
 ;;; Error/condition system forms.
 ;;; 
 (defindent "define-condition" 2)
@@ -1190,6 +1194,8 @@
 (defindent "muffle-warning" 1)
 (defindent "abort" 1)
 (defindent "continue" 1)
+;;; This is for DEFGENERIC method formatting
+(defindent "method" 1)
 
 ;;; Debug-internals forms.
 ;;;
