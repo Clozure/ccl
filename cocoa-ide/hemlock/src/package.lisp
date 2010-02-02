@@ -106,6 +106,7 @@
    #:buffer-modes
    #:buffer-delete-hook
    #:buffer-package
+   #:buffer-plist
    #:delete-buffer
    #:with-writable-buffer
    #:make-modeline-field

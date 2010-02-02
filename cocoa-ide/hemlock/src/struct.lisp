@@ -118,6 +118,7 @@
   charprops		      ; the buffer's default charprops
   (selection-set-by-command nil) ; boolean: true if selection set by (shifted) motion command.
   (%lines (make-array 10 :adjustable t :fill-pointer 0)) ;; all lines in the buffer
+  (plist ())                  ; plist for users
   )
 
 (defun set-buffer-charprops (buffer charprops)
