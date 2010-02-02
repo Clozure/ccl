@@ -297,7 +297,7 @@
     ;; some early-out special cases
     (cond ((null changes)
            (return-from copy-line-charprops))
-          ((and (= start 0) (null end))
+          ((and (= start 0) (or (null end) (eql end (line-length line))))
            (return-from copy-line-charprops (copy-charprops-changes changes))))
     (unless end
       (setq end (line-length line)))
