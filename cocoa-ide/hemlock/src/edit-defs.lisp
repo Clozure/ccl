@@ -56,6 +56,8 @@
             (form-offset mark1 -1)
             (move-mark mark2 mark1)
             (form-offset mark2 1))))
+    (loop until (or (mark= mark1 mark2) (not (eql (previous-character mark2) #\:)))
+          do (mark-before mark2))
     (unless (mark= mark1 mark2)
       (region-to-string (region mark1 mark2)))))
 
