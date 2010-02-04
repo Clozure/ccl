@@ -1424,6 +1424,11 @@ shutdown_thread_tcr(void *arg)
     tcr->tlb_limit = 0;
     free(tcr->tlb_pointer);
     tcr->tlb_pointer = NULL;
+#ifdef WINDOWS
+    if (tcr->osid != 0) {
+      CloseHandle((HANDLE)(tcr->osid));
+    }
+#endif
     tcr->osid = 0;
     tcr->interrupt_pending = 0;
     tcr->termination_semaphore = NULL;
@@ -1818,18 +1823,19 @@ xThreadCurrentStackSpace(TCR *tcr, unsigned *resultP)
 
 
 #ifdef WINDOWS
-LispObj
+Boolean
 create_system_thread(size_t stack_size,
 		     void* stackaddr,
 		     unsigned CALLBACK (*start_routine)(void *),
 		     void* param)
 {
   HANDLE thread_handle;
+  Boolean won = false;
 
   stack_size = ((stack_size+(((1<<16)-1)))&~((1<<16)-1));
 
   thread_handle = (HANDLE)_beginthreadex(NULL, 
-                                         0/*stack_size*/,
+                                         stack_size,
                                          start_routine,
                                          param,
                                          0, 
@@ -1837,11 +1843,14 @@ create_system_thread(size_t stack_size,
 
   if (thread_handle == NULL) {
     wperror("CreateThread");
+  } else {
+    won = true;
+    CloseHandle(thread_handle);
   }
-  return (LispObj) ptr_to_lispobj(thread_handle);
+  return won;
 }
 #else
-LispObj
+Boolean
 create_system_thread(size_t stack_size,
 		     void* stackaddr,
 		     void* (*start_routine)(void *),
@@ -1885,7 +1894,7 @@ create_system_thread(size_t stack_size,
   pthread_create(&returned_thread, &attr, start_routine, param);
   UNLOCK(lisp_global(TCR_AREA_LOCK),current);
   pthread_attr_destroy(&attr);
-  return (LispObj) ptr_to_lispobj(returned_thread);
+  return (returned_thread != NULL);
 }
 #endif
 
@@ -2125,13 +2134,15 @@ kill_tcr(TCR *tcr)
     if (osid) {
       result = true;
 #ifdef WINDOWS
-      /* What we really want to de hear is (something like)
+      /* What we really want to do here is (something like)
          forcing the thread to run quit_handler().  For now,
-         mark the TCR as dead and kill thw Windows thread. */
+         mark the TCR as dead and kill the Windows thread. */
       tcr->osid = 0;
       if (!TerminateThread((HANDLE)osid, 0)) {
+        CloseHandle((HANDLE)osid);
         result = false;
       } else {
+        CloseHandle((HANDLE)osid);
         shutdown_thread_tcr(tcr);
       }
 #else

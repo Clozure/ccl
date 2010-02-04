@@ -182,7 +182,7 @@ TCR *initial_thread_tcr;
 #define MINIMAL_THREAD_STACK_SIZE ((size_t) 0)
 
 
-LispObj create_system_thread(size_t stack_size, 
+Boolean create_system_thread(size_t stack_size, 
 			     void* stackaddr,
 #ifdef WINDOWS
                              unsigned CALLBACK (*start_routine)(void *)
