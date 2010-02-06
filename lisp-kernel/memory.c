@@ -312,6 +312,10 @@ MapMemoryForStack(natural nbytes)
 #endif
 }
 
+
+/* Cause the mapped memory region at ADDR to become completely unmapped.
+   ADDR should be an address returned by MapMemoryForStack() or MapMemory(),
+   and NBYTES should be the size of the mapped region at that address. */
 int
 UnMapMemory(LogicalAddress addr, natural nbytes)
 {
@@ -319,8 +323,7 @@ UnMapMemory(LogicalAddress addr, natural nbytes)
   fprintf(dbgout, "Unmapping memory at 0x" LISP ", size 0x" LISP "\n", addr, nbytes);
 #endif
 #ifdef WINDOWS
-  /* Can't MEM_RELEASE here because we only want to free a chunk */
-  return VirtualFree(addr, nbytes, MEM_DECOMMIT);
+  return !VirtualFree(addr, 0, MEM_RELEASE);
 #else
   return munmap(addr, nbytes);
 #endif
@@ -456,32 +459,8 @@ new_protected_area(BytePtr start, BytePtr end, lisp_protection_kind reason, natu
   return p;
 }
 
-/*
-  Un-protect the first nbytes bytes in specified area.
-  Note that this may cause the area to be empty.
-*/
-void
-unprotect_area_prefix(protected_area_ptr area, size_t delta)
-{
-  unprotect_area(area);
-  area->start += delta;
-  if ((area->start + area->protsize) <= area->end) {
-    protect_area(area);
-  }
-}
 
 
-/*
-  Extend the protected area, causing the preceding nbytes bytes
-  to be included and protected.
-*/
-void
-protect_area_prefix(protected_area_ptr area, size_t delta)
-{
-  unprotect_area(area);
-  area->start -= delta;
-  protect_area(area);
-}
 
 protected_area_ptr
 AllProtectedAreas = NULL;
@@ -555,6 +534,9 @@ protect_area(protected_area_ptr p)
 
   if (n && ! p->nprot) {
     ProtectMemory(start, n);
+#ifdef WINDOWS
+    VirtualAlloc(start+n-page_size,page_size,MEM_COMMIT,PAGE_READWRITE|PAGE_GUARD);
+#endif
     p->nprot = n;
   }
 }
@@ -947,7 +929,7 @@ void
 release_readonly_area()
 {
   area *a = readonly_area;
-  UnMapMemory(a->low,align_to_power_of_2(a->active-a->low, log2_page_size));
+  UnCommitMemory(a->low,align_to_power_of_2(a->active-a->low, log2_page_size));
   a->active = a->low;
   a->ndnodes = 0;
   pure_space_active = pure_space_start;

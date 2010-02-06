@@ -1835,6 +1835,7 @@ map_windows_exception_code_to_posix_signal(DWORD code, siginfo_t *info, Exceptio
   case EXCEPTION_ILLEGAL_INSTRUCTION:
     return SIGILL;
   case EXCEPTION_IN_PAGE_ERROR:
+  case STATUS_GUARD_PAGE_VIOLATION:
     return SIGBUS;
   default:
     return -1;
@@ -3657,12 +3658,7 @@ delete_watched_area(area *a, TCR *tcr)
   if (nbytes) {
     int err;
 
-/* can't use UnMapMemory() beacuse it only uses MEM_DECOMMIT */
-#ifdef WINDOWS
-    err = VirtualFree(base, nbytes, MEM_RELEASE);
-#else
-    err = munmap(base, nbytes);
-#endif
+    err = UnMapMemory(base, nbytes);
     if (err != 0)
       Fatal("munmap in delete_watched_area", "");
   }

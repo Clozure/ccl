@@ -2784,7 +2784,7 @@ impurify(TCR *tcr, signed_natural param)
       }
       a->active += n;
       memmove(oldfree, ro_base, n);
-      UnMapMemory((void *)ro_base, n);
+      UnCommitMemory((void *)ro_base, n);
       a->ndnodes = area_dnode(a, a->active);
       pure_space_active = r->active = r->low;
       r->ndnodes = 0;
