@@ -1894,7 +1894,7 @@ create_system_thread(size_t stack_size,
   pthread_create(&returned_thread, &attr, start_routine, param);
   UNLOCK(lisp_global(TCR_AREA_LOCK),current);
   pthread_attr_destroy(&attr);
-  return (returned_thread != NULL);
+  return (returned_thread != (pthread_t)0);
 }
 #endif
 
