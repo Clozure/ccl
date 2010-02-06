@@ -373,9 +373,9 @@
   @test128
   (subq ($ 16) (% imm0))
   (jg @loop128)
-  (movq (@ (- x8664::misc-data-offset 8) (% a)) (% imm1))
-  (orq (@ (- x8664::misc-data-offset 8) (% b)) (% imm1))
-  (movq (% imm1) (@ (- x8664::misc-data-offset 8) (% c)))
+  (movq (@ x8664::misc-data-offset (% a)) (% imm1))
+  (orq (@ x8664::misc-data-offset (% b)) (% imm1))
+  (movq (% imm1) (@ x8664::misc-data-offset (% c)))
   (single-value-return 3))
 
 
@@ -422,8 +422,8 @@
   @test128
   (subq ($ 16) (% imm0))
   (jg @loop128)
-  (movq (@ (- x8664::misc-data-offset 8) (% a)) (% imm1))
-  (and (@ (- x8664::misc-data-offset 8) (% b)) (% imm1))
-  (movq (% imm1) (@ (- x8664::misc-data-offset 8) (% c)))
+  (movq (@ x8664::misc-data-offset (% a)) (% imm1))
+  (and (@ x8664::misc-data-offset (% b)) (% imm1))
+  (movq (% imm1) (@ x8664::misc-data-offset (% c)))
   (single-value-return 3))
 
