@@ -2189,7 +2189,8 @@
 
 (defnx1 nx1-symvector ((%symptr->symvector) (%symvector->symptr)) (arg)
   (make-acode (%nx1-default-operator) (nx1-form arg)))
-        
+
+
 (defnx1 nx1-ash (ash) (&whole call &environment env num amt)
   (let* ((unsigned-natural-type (target-word-size-case
                                  (32 '(unsigned-byte 32))
@@ -2207,10 +2208,12 @@
                                      (- amt))
                          (nx1-form num))
              (if (nx-form-typep num unsigned-natural-type env)
-               (make-acode (%nx1-operator natural-shift-right)
-                           (nx1-form num)
-                           (make-acode (%nx1-operator fixnum)
-                                       (min (1- max) (- amt))))
+               (if (< (- amt) max)
+                 (make-acode (%nx1-operator natural-shift-right)
+                             (nx1-form num)
+                             (make-acode (%nx1-operator fixnum)
+                                         (- amt)))
+                 (nx1-form `(progn (require-type ,num 'integer) 0) env))
                (nx1-treat-as-call call))))
           ((and (fixnump amt)
                 (<= 0 amt maxbits)
