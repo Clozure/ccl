@@ -1514,7 +1514,6 @@
                                         (and (eql (#/type event) #$NSLeftMouseDown)
                                              (> (#/clickCount event) 2)))))))
              (hi::with-mark ((mark point))
-               (move-hemlock-mark-to-absolute-position mark cache index)
 	       (let ((region (selection-for-click mark atom-mode)))
 		 (when region
 		   ;; Act as if we started the selection at the other end, so the heuristic
