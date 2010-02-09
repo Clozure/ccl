@@ -1522,15 +1522,15 @@
 
 (defun x862-box-s32 (seg node-dest s32-src)
   (with-x86-local-vinsn-macros (seg)
-    (if (target-arch-case
-         (:x8632 nil)
-         (:x8664 t))
-      (! box-fixnum node-dest s32-src)
+    (target-arch-case
+     (:x8632
       (let* ((arg_z ($ *x862-arg-z*))
-             (imm0 ($ *x862-imm0* :mode :s32)))
-        (x862-copy-register seg imm0 s32-src)
-        (! call-subprim (subprim-name->offset '.SPmakes32))
-        (x862-copy-register seg node-dest arg_z)))))
+	     (imm0 ($ *x862-imm0* :mode :s32)))
+	(x862-copy-register seg imm0 s32-src)
+	(! call-subprim (subprim-name->offset '.SPmakes32))
+	(x862-copy-register seg node-dest arg_z)))
+     (:x8664
+      (! box-fixnum node-dest s32-src)))))
 
 (defun x862-box-s64 (seg node-dest s64-src)
   (with-x86-local-vinsn-macros (seg)
@@ -1627,63 +1627,90 @@
                      (! misc-ref-node target src unscaled-idx)))))))
           (is-32-bit
            (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-32-bit-constant-index arch)))
-             (cond ((eq type-keyword :single-float-vector)
-                    (with-fp-target () (fp-val :single-float)
-                      (if (and (eql vreg-class hard-reg-class-fpr)
-                               (eql vreg-mode hard-reg-class-fpr-mode-single))
-                        (setq fp-val vreg))
-                      (! misc-ref-c-single-float fp-val src index-known-fixnum)
-                      (if (eql vreg-class hard-reg-class-fpr)
-                        (<- fp-val)
-                        (ensuring-node-target (target vreg)
-			  (target-arch-case
-			   (:x8632 (x862-single->heap seg target fp-val))
-			   (:x8664 (! single->node target fp-val)))))))
-                   (t
-		    (with-additional-imm-reg ()
-		      (with-imm-target () temp
-			(if is-signed
-			  (! misc-ref-c-s32 temp src index-known-fixnum)
-			  (! misc-ref-c-u32 temp src index-known-fixnum))
-			(ensuring-node-target (target vreg)
-			  (if (eq type-keyword :simple-string)
-			    (! u32->char target temp)
-			    (target-arch-case
-			     (:x8632
-			      (if is-signed
-				(x862-box-s32 seg target temp)
-				(x862-box-u32 seg target temp)))
-			     (:x8664
-			      (! box-fixnum target temp)))))))))
+             (case type-keyword
+	       (:single-float-vector
+		(with-fp-target () (fp-val :single-float)
+		  (if (and (eql vreg-class hard-reg-class-fpr)
+			   (eql vreg-mode hard-reg-class-fpr-mode-single))
+		    (setq fp-val vreg))
+		  (! misc-ref-c-single-float fp-val src index-known-fixnum)
+		  (if (eql vreg-class hard-reg-class-fpr)
+		    (<- fp-val)
+		    (ensuring-node-target (target vreg)
+		      (target-arch-case
+		       (:x8632 (x862-single->heap seg target fp-val))
+		       (:x8664 (! single->node target fp-val)))))))
+	       (:signed-32-bit-vector
+		(with-imm-target () (s32-reg :s32)
+		  (if (eql vreg-mode hard-reg-class-gpr-mode-s32)
+		    (setq s32-reg vreg))
+		  (! misc-ref-c-s32 s32-reg src index-known-fixnum)
+		  (unless (eq vreg s32-reg)
+		    (ensuring-node-target (target vreg)
+		      (x862-box-s32 seg target s32-reg)))))
+	       (:unsigned-32-bit-vector
+		(with-imm-target () (u32-reg :u32)
+		  (if (eql vreg-mode hard-reg-class-gpr-mode-u32)
+		    (setq u32-reg vreg))
+		  (! misc-ref-c-u32 u32-reg src index-known-fixnum)
+		  (unless (eq vreg u32-reg)
+		    (ensuring-node-target (target vreg)
+		      (x862-box-u32 seg target u32-reg)))))
+	       (t
+		(with-imm-target () temp
+		  (if is-signed
+		    (! misc-ref-c-s32 temp src index-known-fixnum)
+		    (! misc-ref-c-u32 temp src index-known-fixnum))
+		  (ensuring-node-target (target vreg)
+		    (if (eq type-keyword :simple-string)
+		      (! u32->char target temp)
+		      (if is-signed
+			(x862-box-s32 seg target temp)
+			(x862-box-u32 seg target temp)))))))
              (with-imm-target () idx-reg
                (if index-known-fixnum
 		 (x862-absolute-natural seg idx-reg nil (ash index-known-fixnum 2))
 		 (! scale-32bit-misc-index idx-reg unscaled-idx))
-	       (cond ((eq type-keyword :single-float-vector)
-		      (with-fp-target () (fp-val :single-float)
-			(if (and (eql vreg-class hard-reg-class-fpr)
-				 (eql vreg-mode hard-reg-class-fpr-mode-single))
-			  (setq fp-val vreg))
-			(! misc-ref-single-float fp-val src idx-reg)
-			(if (eq vreg-class hard-reg-class-fpr)
-			  (<- fp-val)
-			  (ensuring-node-target (target vreg)
-			    (target-arch-case
-			     (:x8632 (x862-single->heap seg target fp-val))
-			     (:x8664 (! single->node target fp-val)))))))
-		     (t
-		      (with-imm-target () temp
+	       (case type-keyword
+		 (:single-float-vector
+		  (with-fp-target () (fp-val :single-float)
+		    (if (and (eql vreg-class hard-reg-class-fpr)
+			     (eql vreg-mode hard-reg-class-fpr-mode-single))
+		      (setq fp-val vreg))
+		    (! misc-ref-single-float fp-val src idx-reg)
+		    (if (eq vreg-class hard-reg-class-fpr)
+		      (<- fp-val)
+		      (ensuring-node-target (target vreg)
+			(target-arch-case
+			 (:x8632 (x862-single->heap seg target fp-val))
+			 (:x8664 (! single->node target fp-val)))))))
+		 (:signed-32-bit-vector
+		  (with-imm-target () (s32-reg :s32)
+		    (if (eql vreg-mode hard-reg-class-gpr-mode-s32)
+		      (setq s32-reg vreg))
+		    (! misc-ref-s32 s32-reg src idx-reg)
+		    (unless (eq vreg s32-reg)
+		      (ensuring-node-target (target vreg)
+			(x862-box-s32 seg target s32-reg)))))
+		 (:unsigned-32-bit-vector
+		  (with-imm-target () (u32-reg :u32)
+		    (if (eql vreg-mode hard-reg-class-gpr-mode-u32)
+		      (setq u32-reg vreg))
+		    (! misc-ref-u32 u32-reg src idx-reg)
+		    (unless (eq vreg u32-reg)
+		      (ensuring-node-target (target vreg)
+			(x862-box-u32 seg target u32-reg)))))
+		 (t
+		  (with-imm-target () temp
+		    (if is-signed
+		      (! misc-ref-s32 temp src idx-reg)
+		      (! misc-ref-u32 temp src idx-reg))
+		    (ensuring-node-target (target vreg)
+		      (if (eq type-keyword :simple-string)
+			(! u32->char target temp)
 			(if is-signed
-			  (! misc-ref-s32 temp src idx-reg)
-			  (! misc-ref-u32 temp src idx-reg))
-			(ensuring-node-target (target vreg)
-			  (if (eq type-keyword :simple-string)
-			    (! u32->char target temp)
-			    (target-arch-case
-			     (:x8632 (if is-signed
-				       (x862-box-s32 seg target temp)
-				       (x862-box-u32 seg target temp)))
-			     (:x8664 (! box-fixnum target temp)))))))))))
+			  (x862-box-s32 seg target temp)
+			  (x862-box-u32 seg target temp))))))))))
           (is-8-bit
            (with-imm-target () temp
              (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-8-bit-constant-index arch)))
