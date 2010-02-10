@@ -2196,7 +2196,7 @@
 (define-x8632-vinsn misc-set-u32  (()
                                    ((val :u32)
                                     (v :lisp)
-                                    (scaled-idx :s32))
+                                    (scaled-idx :imm))
                                    ())
   (movl (:%l val) (:@ x8632::misc-data-offset (:%l v) (:%l scaled-idx))))
 
@@ -2210,7 +2210,7 @@
 (define-x8632-vinsn misc-set-s32  (()
                                    ((val :s32)
                                     (v :lisp)
-                                    (scaled-idx :s32))
+                                    (scaled-idx :imm))
                                    ())
   (movl (:%l val) (:@ x8632::misc-data-offset (:%l v) (:%l scaled-idx))))
 
