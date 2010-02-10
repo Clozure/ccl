@@ -1816,6 +1816,8 @@
                 ("Nko_Comma" . #\u+07f8)
                 ("Nko_Exclamation_Mark" . #\u+07f9)
                 ("Nko_Lajanyalan" . #\u+07fa)
+		("Figure_Space" . #\u+2007)
+		("Zero_Width_Space" . #\u+200b)
                 ("Line_Separator" . #\u+2028)
                 ("Paragraph_Separator" . #\u+2029)
                 ("Replacement_Character" . #\u+fffd)
