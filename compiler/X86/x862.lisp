@@ -2404,41 +2404,42 @@
                    (! misc-set-immediate-node constval src unscaled-idx)
                    (! misc-set-node val-reg src unscaled-idx)))))
             (t
-	     (with-additional-imm-reg (src unscaled-idx val-reg)
-	       (with-imm-target (unboxed-val-reg) scaled-idx
-		 (cond
-		   (is-64-bit
-		    (if (and index-known-fixnum
-			     (<= index-known-fixnum
-				 (arch::target-max-64-bit-constant-index arch)))
-		      (if (eq type-keyword :double-float-vector)
-			(! misc-set-c-double-float unboxed-val-reg src index-known-fixnum)
-			(if is-signed
-			  (! misc-set-c-s64 unboxed-val-reg src index-known-fixnum)
-			  (! misc-set-c-u64 unboxed-val-reg src index-known-fixnum)))
-		      (progn
+	     (cond
+	       (is-64-bit
+		(if (and index-known-fixnum
+			 (<= index-known-fixnum
+			     (arch::target-max-64-bit-constant-index arch)))
+		  (if (eq type-keyword :double-float-vector)
+		    (! misc-set-c-double-float unboxed-val-reg src index-known-fixnum)
+		    (if is-signed
+		      (! misc-set-c-s64 unboxed-val-reg src index-known-fixnum)
+		      (! misc-set-c-u64 unboxed-val-reg src index-known-fixnum)))
+		  (progn
+		    (if index-known-fixnum
+		      (x862-absolute-natural seg unscaled-idx nil (ash index-known-fixnum 3)))
+		    (if (eq type-keyword :double-float-vector)
+		      (! misc-set-double-float unboxed-val-reg src unscaled-idx)
+		      (if is-signed
+			(! misc-set-s64 unboxed-val-reg src unscaled-idx)
+			(! misc-set-u64 unboxed-val-reg src unscaled-idx))))))
+	       (is-32-bit
+		(if (and index-known-fixnum
+			 (<= index-known-fixnum
+			     (arch::target-max-32-bit-constant-index arch)))
+		  (if (eq type-keyword :single-float-vector)
+		    (if (eq (hard-regspec-class unboxed-val-reg)
+			    hard-reg-class-fpr)
+		      (! misc-set-c-single-float unboxed-val-reg src index-known-fixnum)
+		      (! misc-set-c-u32 unboxed-val-reg src index-known-fixnum))
+		    (if is-signed
+		      (! misc-set-c-s32 unboxed-val-reg src index-known-fixnum)
+		      (! misc-set-c-u32 unboxed-val-reg src index-known-fixnum)))
+		  (progn
+		    (target-arch-case
+		     (:x8632
+		      (with-node-target (src) scaled-idx
 			(if index-known-fixnum
-			  (x862-absolute-natural seg unscaled-idx nil (+ (arch::target-misc-dfloat-offset arch) (ash index-known-fixnum 3))))
-			(if (eq type-keyword :double-float-vector)
-			  (! misc-set-double-float unboxed-val-reg src unscaled-idx)
-			  (if is-signed
-			    (! misc-set-s64 unboxed-val-reg src unscaled-idx)
-			    (! misc-set-u64 unboxed-val-reg src unscaled-idx))))))
-		   (is-32-bit
-		    (if (and index-known-fixnum
-			     (<= index-known-fixnum
-				 (arch::target-max-32-bit-constant-index arch)))
-		      (if (eq type-keyword :single-float-vector)
-			(if (eq (hard-regspec-class unboxed-val-reg)
-				hard-reg-class-fpr)
-			  (! misc-set-c-single-float unboxed-val-reg src index-known-fixnum)
-			  (! misc-set-c-u32 unboxed-val-reg src index-known-fixnum))
-			(if is-signed
-			  (! misc-set-c-s32 unboxed-val-reg src index-known-fixnum)
-			  (! misc-set-c-u32 unboxed-val-reg src index-known-fixnum)))
-		      (progn
-			(if index-known-fixnum
-			  (x862-absolute-natural seg scaled-idx nil (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum 2)))
+			  (x862-lri seg scaled-idx (ash index-known-fixnum 2))
 			  (! scale-32bit-misc-index scaled-idx unscaled-idx))
 			(if (and (eq type-keyword :single-float-vector)
 				 (eql (hard-regspec-class unboxed-val-reg)
@@ -2446,8 +2447,22 @@
 			  (! misc-set-single-float unboxed-val-reg src scaled-idx)
 			  (if is-signed
 			    (! misc-set-s32 unboxed-val-reg src scaled-idx)
-			    (! misc-set-u32 unboxed-val-reg src scaled-idx))))))
-		   (is-16-bit
+			    (! misc-set-u32 unboxed-val-reg src scaled-idx)))))
+		     (:x8664
+		      (with-imm-target (unboxed-val-reg) scaled-idx
+			(if index-known-fixnum
+			  (x862-lri seg scaled-idx (ash index-known-fixnum 2))
+			  (! scale-32bit-misc-index scaled-idx unscaled-idx))
+			(if (and (eq type-keyword :single-float-vector)
+				 (eql (hard-regspec-class unboxed-val-reg)
+				      hard-reg-class-fpr))
+			  (! misc-set-single-float unboxed-val-reg src scaled-idx)
+			  (if is-signed
+			    (! misc-set-s32 unboxed-val-reg src scaled-idx)
+			    (! misc-set-u32 unboxed-val-reg src scaled-idx)))))))))
+	       (is-16-bit
+		(with-additional-imm-reg (src unscaled-idx val-reg)
+		  (with-imm-target (unboxed-val-reg) scaled-idx
 		    (if (and index-known-fixnum
 			     (<= index-known-fixnum
 				 (arch::target-max-16-bit-constant-index arch)))
@@ -2456,27 +2471,32 @@
 			(! misc-set-c-u16 unboxed-val-reg src index-known-fixnum))
 		      (progn
 			(if index-known-fixnum
-			  (x862-absolute-natural seg scaled-idx nil (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum 1)))
+			  (x862-lri seg scaled-idx (ash index-known-fixnum 1))
 			  (! scale-16bit-misc-index scaled-idx unscaled-idx))
 			(if is-signed
 			  (! misc-set-s16 unboxed-val-reg src scaled-idx)
-			  (! misc-set-u16 unboxed-val-reg src scaled-idx)))))
-		   (is-8-bit
+			  (! misc-set-u16 unboxed-val-reg src scaled-idx)))))))
+	       (is-8-bit
+		(with-additional-imm-reg (src unscaled-idx val-reg)
+		  (with-imm-target (unboxed-val-reg) scaled-idx
 		    (if (and index-known-fixnum
 			     (<= index-known-fixnum
 				 (arch::target-max-8-bit-constant-index arch)))
 		      (if is-signed
 			(! misc-set-c-s8 unboxed-val-reg src index-known-fixnum)
-			(! misc-set-c-u8  unboxed-val-reg src index-known-fixnum))
+			(! misc-set-c-u8 unboxed-val-reg src index-known-fixnum))
 		      (progn
 			(if index-known-fixnum
-			  (x862-absolute-natural seg scaled-idx nil (+ (arch::target-misc-data-offset arch) index-known-fixnum))
+			  (x862-lri seg scaled-idx index-known-fixnum)
 			  (! scale-8bit-misc-index scaled-idx unscaled-idx))
 			(if is-signed
 			  (! misc-set-s8 unboxed-val-reg src scaled-idx)
-			  (! misc-set-u8 unboxed-val-reg src scaled-idx)))))
-		   (is-1-bit
-		    (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-1-bit-constant-index arch)))
+			  (! misc-set-u8 unboxed-val-reg src scaled-idx)))))))
+	       (is-1-bit
+		(with-additional-imm-reg (src unscaled-idx val-reg)
+		  (with-imm-target (unboxed-val-reg) scaled-idx
+		    (if (and index-known-fixnum
+			     (<= index-known-fixnum (arch::target-max-1-bit-constant-index arch)))
 		      (if constval
 			(if (zerop constval)
 			  (! set-constant-bit-to-zero src index-known-fixnum)
