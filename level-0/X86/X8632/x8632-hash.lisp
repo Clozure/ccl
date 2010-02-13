@@ -29,7 +29,7 @@
 ;; Faster mod based on Bruce Hoult's Dylan version, modified to use a
 ;; branch-free max.
 (defx8632lapfunction fast-mod-3 ((number 4) #|(ra 0)|# (divisor arg_y) (recip arg_z))
-  (std)					;temp1 now unboxed
+  (mark-as-imm temp1)
   (let ((imm1 temp1)
 	(n temp0))
     (movl (@ number (% esp)) (% n))
@@ -46,8 +46,7 @@
     (sar ($ (1- target::nbits-in-word)) (% imm0))
     (andl (% imm0) (% divisor))
     (addl (% divisor) (% arg_z)))
-  (xorl (% temp1) (% temp1))
-  (cld)					;temp1 now boxed
+  (mark-as-node temp1)
   (single-value-return 3))
 
 (defx8632lapfunction %dfloat-hash ((key arg_z))
