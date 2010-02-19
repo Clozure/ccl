@@ -103,13 +103,6 @@
              (unless (%null-ptr-p nsstring)
                (set name (lisp-string-from-nsstring nsstring)))))
           ((:color :font)
-           #+cocotron
-           (let* ((value (cocoa-default-value d)))
-             (set name
-                  (ecase type
-                    (:color (apply #'color-values-to-nscolor value))
-                    (:font (funcall value)))))
-           #-cocotron
            (let* ((data (#/dataForKey: domain key)))
              (unless (%null-ptr-p data)
                (set name (#/retain (#/unarchiveObjectWithData: ns:ns-keyed-unarchiver data)))))))
