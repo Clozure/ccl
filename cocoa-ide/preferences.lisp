@@ -50,7 +50,7 @@
 
 ;;; Produce description of NSFont object, e.g., "Monaco 10"
 (objc:defmethod #/transformedValue: ((self font-to-name-transformer) value)
-  (let* ((font (#/unarchiveObjectWithData: ns:ns-unarchiver value))
+  (let* ((font (#/unarchiveObjectWithData: ns:ns-keyed-unarchiver value))
          (name (#/displayName font))
          (size (float (#/pointSize font) 0.0d0)))
     (#/stringWithFormat: ns:ns-string #@"%@ %.0f" :id name :double-float size)))
@@ -157,17 +157,17 @@
       (:listener-input
        (setq font (#/convertFont: font-manager *listener-input-font*))
        (unless (%null-ptr-p font)
-	 (setq data (#/archivedDataWithRootObject: ns:ns-archiver font))
+	 (setq data (#/archivedDataWithRootObject: ns:ns-keyed-archiver font))
 	 (#/setObject:forKey: defaults data #@"listenerInputFont")))
       (:listener-output
        (setq font (#/convertFont: font-manager *listener-output-font*))
        (unless (%null-ptr-p font)
-	 (setq data (#/archivedDataWithRootObject: ns:ns-archiver font))
+	 (setq data (#/archivedDataWithRootObject: ns:ns-keyed-archiver font))
 	 (#/setObject:forKey: defaults data #@"listenerOutputFont")))
       (:editor
        (setq font (#/convertFont: font-manager *editor-font*))
        (unless (%null-ptr-p font)
-	 (setq data (#/archivedDataWithRootObject: ns:ns-archiver font))
+	 (setq data (#/archivedDataWithRootObject: ns:ns-keyed-archiver font))
 	 (#/setObject:forKey: defaults data #@"editorFont"))))))
 
 ;;; toolbar delegate methods

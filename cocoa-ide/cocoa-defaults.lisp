@@ -112,7 +112,7 @@
            #-cocotron
            (let* ((data (#/dataForKey: domain key)))
              (unless (%null-ptr-p data)
-               (set name (#/retain (#/unarchiveObjectWithData: ns:ns-unarchiver data)))))))
+               (set name (#/retain (#/unarchiveObjectWithData: ns:ns-keyed-unarchiver data)))))))
         (when hook (funcall hook old-value (symbol-value name)))))))
 
 
@@ -126,19 +126,12 @@
       (let* ((value (cocoa-default-value d)))
         (#/setObject:forKey: dict
                              (case (cocoa-default-type d)                               
-                               (:color #-cocotron
-                                       (#/archivedDataWithRootObject:
-                                        ns:ns-archiver
-                                        (apply #'color-values-to-nscolor value))
-                                       #+cocotron
-                                       (apply #'color-values-to-nscolor value)
-                                       )
-			       (:font #-cocotron
-                                      (#/archivedDataWithRootObject:
-                                       ns:ns-archiver
-                                       (funcall value))
-                                      #+cocotron
-                                      (funcall value))
+                               (:color (#/archivedDataWithRootObject:
+                                        ns:ns-keyed-archiver
+                                        (apply #'color-values-to-nscolor value)))
+			       (:font (#/archivedDataWithRootObject:
+                                       ns:ns-keyed-archiver
+                                       (funcall value)))
                                (:bool (if value #@"YES" #@"NO"))
                                (t
                                 (%make-nsstring (format nil "~a" (cocoa-default-value d)))))
