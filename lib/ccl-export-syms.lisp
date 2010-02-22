@@ -709,7 +709,20 @@
      ;; Miscellany
      heap-utilization
      collect-heap-utilization
-
+     parse-unsigned-integer
+     parse-signed-integer
+     pui-stream
+     psi-stream
+     with-output-to-vector
+     with-input-from-vector
+     make-vector-output-stream
+     make-vector-input-stream
+     unsigned-integer-to-binary
+     signed-integer-to-binary
+     vector-input-stream
+     vector-output-stream
+     get-output-stream-vector
+     
      external-process-creation-failure
 
      ) "CCL"

@@ -1468,6 +1468,16 @@ string bounded by start and end. BODY is executed as an implicit progn."
              ,@(if index `((setf ,index (string-input-stream-index ,var)))))
         (close ,var)))))
 
+(defmacro with-input-from-vector ((var vector &key index (start 0) end external-format) &body forms &environment env)
+  (multiple-value-bind (forms decls) (parse-body forms env nil)
+    `(let ((,var (%make-vector-input-stream ,vector ,start ,end ,external-format)))
+      ,@decls
+      (unwind-protect
+           (multiple-value-prog1
+               (progn ,@forms)
+             ,@(if index `((setf ,index (vector-input-stream-index ,var)))))
+        (close ,var)))))
+
 (defmacro with-output-to-string ((var &optional string &key (element-type 'base-char element-type-p))
                                  &body body 
                                  &environment env)
@@ -1475,23 +1485,37 @@ string bounded by start and end. BODY is executed as an implicit progn."
 may send results to this stream, and then close the stream.  BODY is
 executed as an implicit progn with VAR bound to an output string stream.
 All output to that string stream is saved in a string."
-  (let ((string-var (gensym "string")))
+  (let* ((string-p (not (null string))))
     (multiple-value-bind (forms decls) (parse-body body env nil)
-      `(let* ((,string-var ,string)
-              (,var (if ,string-var
-                      ,@(if element-type-p
-                            `((progn
-                                ,element-type
-                                (%make-string-output-stream ,string-var)))
-                            `((%make-string-output-stream ,string-var)))
-                      ,@(if element-type-p
-                            `((make-string-output-stream :element-type ,element-type))
-                            `((make-string-output-stream))))))
+      `(let* ((,var ,@(if string-p
+                          `((,@(if element-type-p
+                                   `((progn
+                                       ,element-type
+                                       (%make-string-output-stream ,string)))
+                                   `((%make-string-output-stream ,string)))))
+                          `((,@(if element-type-p
+                                   `((make-string-output-stream :element-type ,element-type))
+                                   `((make-string-output-stream))))))))
+        ,@decls
+        (unwind-protect
+             (progn
+               ,@forms
+               ,@(if string-p () `((get-output-stream-string ,var))))
+          (close ,var))))))
+
+(defmacro with-output-to-vector ((var &optional vector &key external-format)
+                                 &body body 
+                                 &environment env)
+  (let* ((vector-p (not (null vector))))
+    (multiple-value-bind (forms decls) (parse-body body env nil)
+      `(let* ((,var ,@(if vector-p
+                          `((%make-vector-output-stream ,vector ,external-format))
+                          `((make-vector-output-stream :external-format ,external-format)))))
          ,@decls
          (unwind-protect
               (progn
                 ,@forms
-                ,@(if string () `((get-output-stream-string ,var))))
+                ,@(if vector-p () `((get-output-stream-vector ,var))))
            (close ,var))))))
 
 (defmacro with-output-to-truncating-string-stream ((var len) &body body

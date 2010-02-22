@@ -1412,10 +1412,8 @@
   (unless (= 0 (the fixnum (ioblock-element-shift ioblock)))
     (error "Can't write vector to stream ~s" (ioblock-stream ioblock)))
   (let* ((written 0)
-	 (out (ioblock-outbuf ioblock))
-	 (bufsize (io-buffer-size out))
-	 (buffer (io-buffer-buffer out)))
-    (declare (fixnum written bufsize))
+	 (out (ioblock-outbuf ioblock)))
+    (declare (fixnum written))
     (do* ((pos start-octet (+ pos written))
 	  (left num-octets (- left written)))
 	 ((= left 0) num-octets)
@@ -1423,8 +1421,10 @@
       (setf (ioblock-dirty ioblock) t)
       (let* ((index (io-buffer-idx out))
 	     (count (io-buffer-count out))
-	     (avail (- bufsize index)))
-	(declare (fixnum index avail count))
+	     (bufsize (io-buffer-size out))
+             (avail (- bufsize index))
+             (buffer (io-buffer-buffer out)))
+	(declare (fixnum index avail count bufsize))
 	(cond
 	  ((= (setq written avail) 0)
 	   (%ioblock-force-output ioblock nil))
@@ -1445,11 +1445,8 @@
   (declare (fixnum start-char num-chars) (simple-string string))
   (let* ((written 0)
 	 (col (ioblock-charpos ioblock))
-	 (out (ioblock-outbuf ioblock))
-	 (bufsize (io-buffer-size out))
-	 (buffer (io-buffer-buffer out)))
-    (declare (fixnum written bufsize col)
-	     (type (simple-array (unsigned-byte 8) (*)) buffer)
+	 (out (ioblock-outbuf ioblock)))
+    (declare (fixnum written col)
 	     (optimize (speed 3) (safety 0)))
     (do* ((pos start-char (+ pos written))
 	  (left num-chars (- left written)))
@@ -1458,8 +1455,11 @@
       (setf (ioblock-dirty ioblock) t)
       (let* ((index (io-buffer-idx out))
 	     (count (io-buffer-count out))
+             (bufsize (io-buffer-size out))
+             (buffer (io-buffer-buffer out))
 	     (avail (- bufsize index)))
-	(declare (fixnum index avail count))
+	(declare (fixnum index bufsize avail count)
+                 (type (simple-array (unsigned-byte 8) (*)) buffer))
 	(cond
 	  ((= (setq written avail) 0)
 	   (%ioblock-force-output ioblock nil))
@@ -1506,25 +1506,7 @@
 		 (ioblock-stream ioblock)
 		 ioblock))))
 
-(declaim (inline %ioblock-write-element))
 
-(defun %ioblock-write-element (ioblock element)
-  (declare (optimize (speed 3) (safety 0)))
-  (let* ((buf (ioblock-outbuf ioblock))
-         (idx (io-buffer-idx buf))
-	 (count (io-buffer-count buf))
-         (limit (io-buffer-limit buf)))
-    (declare (fixnum idx limit count))
-    (when (= idx limit)
-      (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
-    (setf (aref (io-buffer-buffer buf) idx) element)
-    (incf idx)
-    (setf (io-buffer-idx buf) idx)
-    (when (> idx count)
-      (setf (io-buffer-count buf) idx))
-    (setf (ioblock-dirty ioblock) t)
-    element))
 
 (declaim (inline %ioblock-write-u8-element))
 (defun %ioblock-write-u8-element (ioblock element)
@@ -1536,7 +1518,7 @@
     (declare (fixnum idx limit count))
     (when (= idx limit)
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf) count (io-buffer-count buf)))
     (setf (aref (the (simple-array (unsigned-byte 8) (*)) (io-buffer-buffer buf)) idx) element)
     (incf idx)
     (setf (io-buffer-idx buf) idx)
@@ -1555,7 +1537,7 @@
     (declare (fixnum idx limit count))
     (when (= idx limit)
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf) count (io-buffer-count buf)))
     (setf (aref (the (simple-array (signed-byte 8) (*)) (io-buffer-buffer buf)) idx) element)
     (incf idx)
     (setf (io-buffer-idx buf) idx)
@@ -1574,7 +1556,7 @@
     (declare (fixnum idx limit count))
     (when (= idx limit)
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf) count (io-buffer-count buf)))
     (setf (aref (the (simple-array (unsigned-byte 16) (*)) (io-buffer-buffer buf)) idx) element)
     (incf idx)
     (setf (io-buffer-idx buf) idx)
@@ -1602,14 +1584,14 @@
    
     (when (= idx limit)
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf) count (io-buffer-count buf)))
     (setf (aref vector idx) b0)
     (incf idx)
     (when (= idx limit)
       (when (> idx count)
         (setf (io-buffer-count buf) idx))
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf) count (io-buffer-count buf)))
     (setf (aref vector idx) b1)
     (incf idx)
     (setf (io-buffer-idx buf) idx)
@@ -1636,14 +1618,20 @@
    
     (when (= idx limit)
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf)
+            count (io-buffer-count buf)
+            vector (io-buffer-buffer buf)
+            limit (io-buffer-limit buf)))
     (setf (aref vector idx) b1)
     (incf idx)
     (when (= idx limit)
       (when (> idx count)
         (setf (io-buffer-count buf) idx))
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf)
+            count (io-buffer-count buf)
+            vector (io-buffer-buffer buf)
+            limit (io-buffer-limit buf)))
     (setf (aref vector idx) b0)
     (incf idx)
     (setf (io-buffer-idx buf) idx)
@@ -1674,28 +1662,40 @@
              (type (unsigned-byte 8) b0 b1 b2 b3))
     (when (= idx limit)
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf)
+            count (io-buffer-count buf)
+            vector (io-buffer-buffer buf)
+            limit (io-buffer-limit buf)))
     (setf (aref vector idx) b0)
     (incf idx)
     (when (= idx limit)
       (when (> idx count)
         (setf (io-buffer-count buf) idx))
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf)
+            count (io-buffer-count buf)
+            vector (io-buffer-buffer buf)
+            limit (io-buffer-limit buf)))
     (setf (aref vector idx) b1)
     (incf idx)
     (when (= idx limit)
       (when (> idx count)
         (setf (io-buffer-count buf) idx))
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf)
+            count (io-buffer-count buf)
+            vector (io-buffer-buffer buf)
+            limit (io-buffer-limit buf)))
     (setf (aref vector idx) b2)
     (incf idx)
     (when (= idx limit)
       (when (> idx count)
         (setf (io-buffer-count buf) idx))
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf)
+            count (io-buffer-count buf)
+            vector (io-buffer-buffer buf)
+            limit (io-buffer-limit buf)))
     (setf (aref vector idx) b3)
     (incf idx)
     (setf (io-buffer-idx buf) idx)
@@ -1726,28 +1726,37 @@
              (type (unsigned-byte 8) b0 b1 b2 b3))
     (when (= idx limit)
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf)
+            count (io-buffer-count buf)
+            vector (io-buffer-buffer buf)
+            limit (io-buffer-limit buf)))
     (setf (aref vector idx) b0)
     (incf idx)
     (when (= idx limit)
       (when (> idx count)
         (setf (io-buffer-count buf) idx))
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf) count (io-buffer-count buf)))
     (setf (aref vector idx) b1)
     (incf idx)
     (when (= idx limit)
       (when (> idx count)
         (setf (io-buffer-count buf) idx))
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf)
+            count (io-buffer-count buf)
+            vector (io-buffer-buffer buf)
+            limit (io-buffer-limit buf)))
     (setf (aref vector idx) b2)
     (incf idx)
     (when (= idx limit)
       (when (> idx count)
         (setf (io-buffer-count buf) idx))
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf)
+            count (io-buffer-count buf)
+            vector (io-buffer-buffer buf)
+            limit (io-buffer-limit buf)))
     (setf (aref vector idx) b3)
     (incf idx)
     (setf (io-buffer-idx buf) idx)
@@ -1766,7 +1775,8 @@
     (declare (fixnum idx limit count))
     (when (= idx limit)
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf)
+            count (io-buffer-count buf)))
     (setf (aref (the (simple-array (signed-byte 16) (*)) (io-buffer-buffer buf)) idx) element)
     (incf idx)
     (setf (io-buffer-idx buf) idx)
@@ -1785,7 +1795,8 @@
     (declare (fixnum idx limit count))
     (when (= idx limit)
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf)
+            count (io-buffer-count buf)))
     (setf (aref (the (simple-array (unsigned-byte 32) (*)) (io-buffer-buffer buf)) idx) element)
     (incf idx)
     (setf (io-buffer-idx buf) idx)
@@ -1804,7 +1815,8 @@
     (declare (fixnum idx limit count))
     (when (= idx limit)
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf)
+            count (io-buffer-count buf)))
     (setf (aref (the (simple-array (unsigned-byte 32) (*)) (io-buffer-buffer buf)) idx)
           (%swap-u32 element))
     (incf idx)
@@ -1824,7 +1836,7 @@
     (declare (fixnum idx limit count))
     (when (= idx limit)
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf) count (io-buffer-count buf)))
     (setf (aref (the (simple-array (signed-byte 32) (*)) (io-buffer-buffer buf)) idx) element)
     (incf idx)
     (setf (io-buffer-idx buf) idx)
@@ -1845,7 +1857,7 @@
     (declare (fixnum idx limit count))
     (when (= idx limit)
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf) count (io-buffer-count buf)))
     (setf (aref (the (simple-array (unsigned-byte 64) (*)) (io-buffer-buffer buf)) idx) element)
     (incf idx)
     (setf (io-buffer-idx buf) idx)
@@ -1864,7 +1876,7 @@
     (declare (fixnum idx limit count))
     (when (= idx limit)
       (%ioblock-force-output ioblock nil)
-      (setq idx 0 count 0))
+      (setq idx (io-buffer-idx buf) count (io-buffer-count buf)))
     (setf (aref (the (simple-array (signed-byte 64) (*)) (io-buffer-buffer buf)) idx) element)
     (incf idx)
     (setf (io-buffer-idx buf) idx)
@@ -3123,9 +3135,11 @@
           (when (eq sharing :lock)
             (setf (ioblock-inbuf-lock ioblock) (make-lock)))
           (setf (ioblock-line-termination ioblock) line-termination)
-          (setup-ioblock-input ioblock character-p element-type sharing encoding line-termination)
+
           (setf (ioblock-element-shift ioblock) (max 0 (ceiling (log  (/ in-size-in-octets insize) 2))))
           )))
+    (when (ioblock-inbuf ioblock)
+      (setup-ioblock-input ioblock character-p element-type sharing encoding line-termination))      
     (if share-buffers-p
       (if insize
         (progn (setf (ioblock-outbuf ioblock)
@@ -3150,7 +3164,7 @@
               (setf (ioblock-outbuf-lock ioblock) (make-lock)))
             (setf (ioblock-element-shift ioblock) (max 0 (ceiling (log (/ out-size-in-octets outsize) 2))))
             ))))
-    (when (or share-buffers-p outsize)
+    (when (ioblock-outbuf ioblock)
       (setup-ioblock-output ioblock character-p element-type sharing encoding line-termination))
     (when element-type
       (setf (ioblock-element-type ioblock) (if character-p 'character element-type)))
@@ -6073,5 +6087,369 @@ are printed.")
 
 (defmethod select-stream-untyi-function ((s basic-stream) (direction t))
   '%ioblock-untyi)
+
+
+
+;;; Bivalent vector streams.
+(make-built-in-class 'vector-stream 'basic-binary-stream 'basic-character-stream)
+
+(defmethod print-object ((s vector-stream) out)
+  (print-unreadable-object (s out :type t :identity t)
+    (unless (open-stream-p s)  (format out " ~s" :closed))))
+
+
+(defstruct (vector-stream-ioblock (:include ioblock))
+  (displacement 0)                      ;displaced-index-offset
+  )
+
+(defstruct (vector-output-stream-ioblock (:include vector-stream-ioblock))
+  (line-length 80)                      ;for pretty-printer 
+  displaced                             ;original vector if fill-pointer case
+ )
+
+(defstatic *vector-output-stream-class* (make-built-in-class 'vector-output-stream 'vector-stream 'basic-binary-output-stream 'basic-character-output-stream))
+(defstatic *vector-output-stream-class-wrapper* (%class-own-wrapper *vector-output-stream-class*))
+(defstatic *vector-input-stream-class* (make-built-in-class 'vector-input-stream 'vector-stream 'basic-binary-input-stream 'basic-character-input-stream))
+(defstatic *vector-input-stream-class-wrapper* (%class-own-wrapper *vector-input-stream-class*))
+
+(defmethod initialize-basic-stream :after ((s vector-stream) &key ioblock &allow-other-keys)
+  (setf (basic-stream.state s) ioblock))
+
+(defmethod stream-force-output ((s vector-output-stream)))
+
+(defmethod stream-finish-output ((s vector-output-stream)))
+
+
+
+(defun %extend-vector-output-stream (s ioblock count finish-p)
+  (declare (ignore s count finish-p))
+  (check-ioblock-owner ioblock)
+  (let* ((displaced (vector-output-stream-ioblock-displaced ioblock))
+         (outbuf (ioblock-outbuf ioblock)))
+    (cond (displaced
+           (let* ((flags (%svref displaced target::arrayH.flags-cell)))
+             (declare (fixnum flags))
+             (unless (logbitp $arh_adjp_bit flags)
+               (%err-disp $XMALADJUST displaced))
+             (let* ((len (%svref displaced target::vectorH.physsize-cell))
+                    (newlen (max (the fixnum (+ len len)) 16))
+                    (new (%alloc-misc newlen target::subtag-u8-vector)))
+               (declare (fixnum len newlen)
+                        ((simple-array (unsigned-byte 8) (*)) new))
+               (multiple-value-bind (data offset)
+                   (%array-header-data-and-offset displaced)
+                 (declare ((simple-array (unsigned-byte 8) (*)) data)
+                          (fixnum offset))
+                 (%copy-ivector-to-ivector new 0 data offset len)
+                 (setf (vector-output-stream-ioblock-displacement ioblock) 0)
+                 (unless (= 0 offset)
+                   (setf (io-buffer-idx outbuf) len
+                         (io-buffer-count outbuf) len))
+                 (setf (io-buffer-limit outbuf) newlen
+                       (io-buffer-size outbuf) newlen
+                       (io-buffer-buffer outbuf) new)
+                 ;; Adjust the displaced vector.
+                 (setf (%svref displaced target::vectorH.data-vector-cell) new
+                       (%svref displaced target::vectorH.displacement-cell) 0
+                       (%svref displaced target::vectorH.physsize-cell) newlen
+                       (%svref displaced target::vectorH.flags-cell) (bitclr $arh_exp_disp_bit flags)
+                       (%svref displaced target::vectorH.logsize-cell) len)))))
+          (t
+           ;; Simpler. Honest.
+           (let* ((old (io-buffer-buffer outbuf))
+                  (len (length old))
+                  (newlen (max (the fixnum (+ len len)) 16))
+                  (new (%alloc-misc newlen target::subtag-u8-vector)))
+             (declare (fixnum len newlen)
+                      ((simple-array (unsigned-byte 8) (*)) old new))
+             (%copy-ivector-to-ivector new 0 old 0 len)
+             (setf (io-buffer-buffer outbuf) new
+                   (io-buffer-size outbuf) newlen
+                   (io-buffer-limit outbuf) newlen))))))
+
+(defun %vector-output-stream-close (s ioblock)
+  (declare (ignore s))
+  ;; If there's a displaced vector, fix its fill pointer.
+  (let* ((displaced (vector-output-stream-ioblock-displaced ioblock)))
+    (when displaced
+      (setf (%svref displaced target::vectorH.logsize-cell)
+            (the fixnum (- (the fixnum (io-buffer-count (ioblock-outbuf ioblock)))
+                           (the fixnum (vector-output-stream-ioblock-displacement ioblock))))))))
+
+(defmethod stream-line-length ((s vector-output-stream))
+  (let* ((ioblock (basic-stream-ioblock s)))
+    (string-output-stream-ioblock-line-length ioblock)))
+
+(defmethod (setf stream-line-length) (newlen (s vector-output-stream))
+  (let* ((ioblock (basic-stream-ioblock s)))
+    (setf (vector-output-stream-ioblock-line-length ioblock) newlen)))
+
+(defun get-output-stream-vector (s)
+  (unless (and (typep s 'basic-stream)
+               (eq *vector-output-stream-class-wrapper*
+                   (basic-stream.wrapper s)))
+    (report-bad-arg s 'vector-output-stream))
+  (let* ((ioblock (basic-stream-ioblock s))
+         (outbuf (progn
+                   (check-ioblock-owner ioblock)
+                   (ioblock-outbuf ioblock)))
+         (v (io-buffer-buffer outbuf))
+         (offset (vector-output-stream-ioblock-displacement ioblock))
+         (len (the fixnum (- (the fixnum (io-buffer-count outbuf)) offset)))
+         (new (%alloc-misc len target::subtag-u8-vector)))
+    (declare (fixnum offset len))
+    (%copy-ivector-to-ivector v offset new 0 len)
+    (setf (io-buffer-idx outbuf) offset
+          (io-buffer-count outbuf) offset)
+    new))
+
+(defun unsigned-integer-to-binary (value s)
+  (if (< value 0)
+    (signed-integer-to-binary value s)
+    (progn
+      (unless (and (typep s 'basic-stream)
+                   (eq *vector-output-stream-class-wrapper*
+                       (basic-stream.wrapper s)))
+        (report-bad-arg s 'vector-input-stream))
+      (let* ((ioblock (basic-stream-ioblock s))
+             (outbuf (progn
+                       (check-ioblock-owner ioblock)
+                       (ioblock-outbuf ioblock)))
+             (idx (io-buffer-idx outbuf))
+             (limit (io-buffer-limit outbuf))
+             (buffer (io-buffer-buffer outbuf)))
+        (declare (fixnum idx limit)
+                 ((simple-array (unsigned-byte 8) (*)) buffer))
+        (loop
+          (let* ((b (logand value #x7f)))
+            (declare ((unsigned-byte 7) b))
+            (setq value (ash value -7))
+            (when (= idx limit)
+              (%ioblock-force-output ioblock nil)
+              (setq limit (io-buffer-limit outbuf)
+                    buffer (io-buffer-buffer outbuf)))
+            (if (eql 0 value)
+              (progn
+                (setf (aref buffer idx) b)
+                (incf idx)
+                (setf (io-buffer-idx outbuf) idx
+                      (io-buffer-count outbuf) idx)
+                (return))
+              (progn
+                (setf (aref buffer idx) (logior b #x80))
+                (incf idx)))))))))
+
+(defun signed-integer-to-binary (value s)
+  (if (< value 0)
+    (signed-integer-to-binary value s)
+    (progn
+      (unless (and (typep s 'basic-stream)
+                   (eq *vector-output-stream-class-wrapper*
+                       (basic-stream.wrapper s)))
+        (report-bad-arg s 'vector-input-stream))
+      (let* ((ioblock (basic-stream-ioblock s))
+             (outbuf (progn
+                       (check-ioblock-owner ioblock)
+                       (ioblock-outbuf ioblock)))
+             (idx (io-buffer-idx outbuf))
+             (limit (io-buffer-limit outbuf))
+             (buffer (io-buffer-buffer outbuf)))
+        (declare (fixnum idx limit)
+                 ((simple-array (unsigned-byte 8) (*)) buffer))
+        (loop
+          (let* ((b (logand value #x7f)))
+            (declare ((unsigned-byte 7) b))
+            (setq value (ash value -7))
+            (when (= idx limit)
+              (%ioblock-force-output ioblock nil)
+              (setq limit (io-buffer-limit outbuf)
+                    buffer (io-buffer-buffer outbuf)))
+            (if (eql -1 value)
+              (progn
+                (setf (aref buffer idx) b)
+                (incf idx)
+                (setf (io-buffer-idx outbuf) idx
+                      (io-buffer-count outbuf) idx)
+                (return))
+              (progn
+                (setf (aref buffer idx) (logior b #x80))
+                (incf idx)))))))))
+             
+               
+
+         
+
+(defun %make-vector-output-stream (vector external-format)
+  (let* ((data nil)
+         (len nil)
+         (offset 0)
+         (start 0)
+         (displaced nil)
+         (external-format (normalize-external-format t external-format))
+         (encoding (external-format-character-encoding external-format))
+         (line-termination (external-format-line-termination external-format)))
+    (cond ((typep vector '(simple-array (unsigned-byte 8) (*)))
+           (setq data vector len (length vector)))
+          (t
+           (multiple-value-setq (data offset) (array-data-and-offset vector))
+           (unless (eql (typecode data) target::subtag-u8-vector)
+             (report-bad-arg vector '(vector (unsigned-byte 8))))
+           (unless (array-has-fill-pointer-p vector)
+             (error "~S must be a vector with a fill pointer." vector))
+           (setq start (+ (fill-pointer vector) offset)
+                 len (+ (array-total-size vector) offset)
+                 displaced vector)))
+    (make-ioblock-stream *vector-output-stream-class*
+                         :ioblock (make-vector-output-stream-ioblock
+                                   :outbuf (make-io-buffer :buffer data
+                                                           :idx start
+                                                           :count start
+                                                           :limit len
+                                                           :size len)
+                                   :displaced displaced
+                                   :displacement offset)
+                         :encoding encoding
+                         :character-p t
+                         :element-type '(unsigned-byte 8)
+                         :line-termination line-termination
+                         :force-output-function '%extend-vector-output-stream
+                         :close-function '%vector-output-stream-close)))
+
+    
+(defun make-vector-output-stream (&key (external-format :default))
+  (%make-vector-output-stream (make-array 64 :element-type '(unsigned-byte 8))  external-format))
+
+(defun vector-input-stream-index (s)
+  (unless (and (typep s 'basic-stream)
+               (eq *vector-input-stream-class-wrapper*
+                   (basic-stream.wrapper s)))
+    (report-bad-arg s 'vector-input-stream))
+  (let* ((ioblock (basic-stream-ioblock s)))
+    (check-ioblock-owner ioblock)
+    (the fixnum (- (the fixnum (io-buffer-idx (ioblock-inbuf ioblock)))
+                   (the fixnum (vector-stream-ioblock-displacement ioblock))))))
+            
+
+(defun %vector-input-stream-untyi (ioblock char)
+  (check-ioblock-owner ioblock)
+  (let* ((inbuf (ioblock-inbuf ioblock))
+         (idx (io-buffer-idx inbuf))
+         (encoding (ioblock-encoding ioblock))
+         (noctets (if encoding
+                    (funcall (character-encoding-character-size-in-octets-function encoding) char)
+                    1))
+         (newidx (- idx noctets)))
+    (declare (fixnum idx noctets newidx))
+    (if (>= newidx (the fixnum (vector-stream-ioblock-displacement ioblock)))
+      (setf (io-buffer-idx inbuf) newidx)
+      (error "Invalid attempt to unread ~s on ~s." char (ioblock-stream ioblock)))))
+
+  
+
+(defmethod select-stream-untyi-function ((s vector-input-stream) (direction t))
+  '%vector-input-stream-untyi)
+
+
+
+
+(defun %make-vector-input-stream (vector start end external-format)
+  (setq end (check-sequence-bounds vector start end))
+  (let* ((data nil)
+         (offset 0)
+         (external-format (normalize-external-format t external-format))
+         (encoding (external-format-character-encoding external-format))
+         (line-termination (external-format-line-termination external-format)))
+
+      (cond ((typep vector '(simple-array (unsigned-byte 8) (*)))
+             (setq data vector                   offset start))
+            (t (multiple-value-setq (data offset) (array-data-and-offset vector))
+               (unless (typep data '(simple-array (unsigned-byte 8) (*)))
+                 (report-bad-arg vector '(vector (unsigned-byte 8))))
+               (incf start offset)
+               (incf end offset)))
+      (make-ioblock-stream *vector-input-stream-class*
+                           :ioblock (make-vector-stream-ioblock
+                                     :inbuf (make-io-buffer
+                                             :buffer data
+                                             :idx start
+                                             :count end
+                                             :limit end
+                                             :size end)
+                                     :displacement start)
+                           :direction :input
+                           :character-p t
+                           :element-type '(unsigned-byte 8)
+                           :encoding encoding
+                           :line-termination line-termination
+                           :listen-function 'false
+                           :eofp-function 'true
+                           :advance-function 'false
+                           :close-function 'false)))
+      
+(defun make-vector-input-stream (vector &key (start 0) end external-format)
+  (%make-vector-input-stream vector start end external-format))
+
+
+
+
+(defun pui-stream (s)
+  (unless (and (typep s 'basic-stream)
+               (eq *vector-input-stream-class-wrapper*
+                   (basic-stream.wrapper s)))
+    (report-bad-arg s 'vector-input-stream))
+  (let* ((ioblock (basic-stream-ioblock s))
+         (inbuf (progn
+                  (check-ioblock-owner ioblock)
+                  (ioblock-inbuf ioblock)))
+         (idx (io-buffer-idx inbuf))
+         (limit (io-buffer-limit inbuf))
+         (vector (io-buffer-buffer inbuf)))
+    (declare (fixnum idx limit)
+             ((simple-array (unsigned-byte 8) (*)) vector))
+    (let* ((result 0))
+      (do* ((i idx (1+ i))
+            (shift 0 (+ shift 7)))
+           ((= i limit) (error "integer decoding error"))
+        (declare (fixnum i shift))
+        (let* ((b (aref vector i))
+               (done (not (logbitp 7 b))))
+          (declare ((unsigned-byte 8) b))
+          (setq b (logand b #x7f)
+                result (logior result (ash b shift)))
+          (incf idx)
+          (when done
+            (setf (io-buffer-idx inbuf) idx)
+            (return result)))))))
+
+(defun psi-stream (s)
+  (unless (and (typep s 'basic-stream)
+               (eq *vector-input-stream-class-wrapper*
+                   (basic-stream.wrapper s)))
+    (report-bad-arg s 'vector-input-stream))
+  (let* ((ioblock (basic-stream-ioblock s))
+         (inbuf (progn
+                  (check-ioblock-owner ioblock)
+                  (ioblock-inbuf ioblock)))
+         (idx (io-buffer-idx inbuf))
+         (limit (io-buffer-limit inbuf))
+         (vector (io-buffer-buffer inbuf)))
+    (declare (fixnum idx limit)
+             ((simple-array (unsigned-byte 8) (*)) vector))
+    (let* ((result 0))
+      (do* ((i idx (1+ i))
+            (shift 0 (+ shift 7)))
+           ((= i limit) (error "integer decoding error"))
+        (declare (fixnum i shift))
+        (let* ((b (aref vector i))
+               (done (not (logbitp 7 b))))
+          (declare ((unsigned-byte 8) b))
+          (setq b (logand b #x7f)
+                result (logior result (ash b shift)))
+          (incf idx)
+          (when done
+            (setf (io-buffer-idx inbuf) idx)
+            (if (logbitp 6 b)
+              (return (logior result (ash -1 (the fixnum (+ shift 7)))))
+              (return result))))))))
 
 ; end of L1-streams.lisp
