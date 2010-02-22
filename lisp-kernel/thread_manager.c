@@ -1609,25 +1609,11 @@ count_cpus()
 void
 count_cpus()
 {
-#ifdef DARWIN
-  /* As of OSX 10.4, Darwin doesn't define _SC_NPROCESSORS_ONLN */
-#include <mach/host_info.h>
-
-  struct host_basic_info info;
-  mach_msg_type_number_t count = HOST_BASIC_INFO_COUNT;
-  
-  if (KERN_SUCCESS == host_info(mach_host_self(), HOST_BASIC_INFO,(host_info_t)(&info),&count)) {
-    if (info.max_cpus > 1) {
-      spin_lock_tries = 1024;
-    }
-  }
-#else
   int n = sysconf(_SC_NPROCESSORS_ONLN);
   
   if (n > 1) {
     spin_lock_tries = 1024;
   }
-#endif
 }
 #endif
 #endif
@@ -1851,13 +1837,12 @@ create_system_thread(size_t stack_size,
 }
 #else
 Boolean
-create_system_thread(size_t stack_size,
-		     void* stackaddr,
-		     void* (*start_routine)(void *),
-		     void* param)
+create_system_thread(size_t stack_size,  void *stackaddr,
+		     void *(*start_routine)(void *), void *param)
 {
   pthread_attr_t attr;
-  pthread_t returned_thread = (pthread_t) 0;
+  pthread_t returned_thread;
+  int err;
   TCR *current = get_tcr(true);
 
   pthread_attr_init(&attr);
@@ -1870,11 +1855,7 @@ create_system_thread(size_t stack_size,
   stack_size = ensure_stack_limit(stack_size);
   if (stackaddr != NULL) {
     /* Size must have been specified.  Sort of makes sense ... */
-#ifdef DARWIN
-    Fatal("no pthread_attr_setsetstack. "," Which end of stack does address refer to?");
-#else
     pthread_attr_setstack(&attr, stackaddr, stack_size);
-#endif
   } else if (stack_size != DEFAULT_THREAD_STACK_SIZE) {
     pthread_attr_setstacksize(&attr,stack_size);
   }
@@ -1891,10 +1872,10 @@ create_system_thread(size_t stack_size,
      getting suspended (by grabbing TCR_AREA_LOCK)
   */
   LOCK(lisp_global(TCR_AREA_LOCK),current);
-  pthread_create(&returned_thread, &attr, start_routine, param);
+  err = pthread_create(&returned_thread, &attr, start_routine, param);
   UNLOCK(lisp_global(TCR_AREA_LOCK),current);
   pthread_attr_destroy(&attr);
-  return (returned_thread != (pthread_t)0);
+  return (err == 0);
 }
 #endif
 
