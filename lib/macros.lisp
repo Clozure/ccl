@@ -1488,14 +1488,14 @@ All output to that string stream is saved in a string."
   (let* ((string-p (not (null string))))
     (multiple-value-bind (forms decls) (parse-body body env nil)
       `(let* ((,var ,@(if string-p
-                          `((,@(if element-type-p
+                          `(,@(if element-type-p
                                    `((progn
                                        ,element-type
                                        (%make-string-output-stream ,string)))
-                                   `((%make-string-output-stream ,string)))))
-                          `((,@(if element-type-p
+                                   `((%make-string-output-stream ,string))))
+                          `(,@(if element-type-p
                                    `((make-string-output-stream :element-type ,element-type))
-                                   `((make-string-output-stream))))))))
+                                   `((make-string-output-stream)))))))
         ,@decls
         (unwind-protect
              (progn
@@ -1509,8 +1509,8 @@ All output to that string stream is saved in a string."
   (let* ((vector-p (not (null vector))))
     (multiple-value-bind (forms decls) (parse-body body env nil)
       `(let* ((,var ,@(if vector-p
-                          `((%make-vector-output-stream ,vector ,external-format))
-                          `((make-vector-output-stream :external-format ,external-format)))))
+                          `(%make-vector-output-stream ,vector ,external-format)
+                          `(make-vector-output-stream :external-format ,external-format))))
          ,@decls
          (unwind-protect
               (progn
