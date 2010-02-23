@@ -6203,77 +6203,102 @@ are printed.")
           (io-buffer-count outbuf) offset)
     new))
 
-(defun unsigned-integer-to-binary (value s)
-  (if (< value 0)
-    (signed-integer-to-binary value s)
-    (progn
-      (unless (and (typep s 'basic-stream)
-                   (eq *vector-output-stream-class-wrapper*
-                       (basic-stream.wrapper s)))
-        (report-bad-arg s 'vector-input-stream))
-      (let* ((ioblock (basic-stream-ioblock s))
-             (outbuf (progn
-                       (check-ioblock-owner ioblock)
-                       (ioblock-outbuf ioblock)))
-             (idx (io-buffer-idx outbuf))
-             (limit (io-buffer-limit outbuf))
-             (buffer (io-buffer-buffer outbuf)))
-        (declare (fixnum idx limit)
-                 ((simple-array (unsigned-byte 8) (*)) buffer))
-        (loop
-          (let* ((b (logand value #x7f)))
-            (declare ((unsigned-byte 7) b))
-            (setq value (ash value -7))
-            (when (= idx limit)
-              (%ioblock-force-output ioblock nil)
-              (setq limit (io-buffer-limit outbuf)
-                    buffer (io-buffer-buffer outbuf)))
-            (if (eql 0 value)
-              (progn
-                (setf (aref buffer idx) b)
-                (incf idx)
-                (setf (io-buffer-idx outbuf) idx
-                      (io-buffer-count outbuf) idx)
-                (return))
-              (progn
-                (setf (aref buffer idx) (logior b #x80))
-                (incf idx)))))))))
+;;; return something equivalent to (LOGAND #xFF (ASH M (- (* N 8)))),
+;;; though try to do it more quickly.
+(declaim (inline nth-octet-of-signed-integer))
+(defun nth-octet-of-signed-integer (m n)
+  (declare (fixnum n))
+  (etypecase m
+    (fixnum
+     (locally
+         (declare (fixnum m))
+       (logand #xff (the fixnum (%iasr (the fixnum (ash n 3)) m)))))
+    (bignum
+     (let* ((nbytes (ash (the fixnum (uvsize m)) 2)))
+       (declare (fixnum nbytes))
+       (declare (type (simple-array (unsigned-byte 8) (*)) m)
+                (optimize (speed 3) (safety 0)))
+       (if (< n nbytes)
+         (aref m #+big-endian-target (the fixnum (logxor n 3)) #+little-endian-target n)
+         (if (logbitp 7 (the (unsigned-byte 8) (aref m (the fixnum (- nbytes #+big-endian-target 4 #+little-endian-target 1)))))
+           #xff
+           #x00))))))
 
-(defun signed-integer-to-binary (value s)
-  (if (< value 0)
-    (signed-integer-to-binary value s)
-    (progn
-      (unless (and (typep s 'basic-stream)
-                   (eq *vector-output-stream-class-wrapper*
-                       (basic-stream.wrapper s)))
-        (report-bad-arg s 'vector-input-stream))
-      (let* ((ioblock (basic-stream-ioblock s))
-             (outbuf (progn
-                       (check-ioblock-owner ioblock)
-                       (ioblock-outbuf ioblock)))
-             (idx (io-buffer-idx outbuf))
-             (limit (io-buffer-limit outbuf))
-             (buffer (io-buffer-buffer outbuf)))
-        (declare (fixnum idx limit)
-                 ((simple-array (unsigned-byte 8) (*)) buffer))
-        (loop
-          (let* ((b (logand value #x7f)))
-            (declare ((unsigned-byte 7) b))
-            (setq value (ash value -7))
-            (when (= idx limit)
-              (%ioblock-force-output ioblock nil)
-              (setq limit (io-buffer-limit outbuf)
-                    buffer (io-buffer-buffer outbuf)))
-            (if (eql -1 value)
-              (progn
-                (setf (aref buffer idx) b)
-                (incf idx)
-                (setf (io-buffer-idx outbuf) idx
-                      (io-buffer-count outbuf) idx)
-                (return))
-              (progn
-                (setf (aref buffer idx) (logior b #x80))
-                (incf idx)))))))))
+(declaim (inline nth-octet-of-unsigned-integer))
+(defun nth-octet-of-unsigned-integer (m n)
+  (declare (fixnum n))
+  (etypecase m
+    (fixnum
+     (locally
+         (declare (fixnum m))
+       (logand #xff (the fixnum (%ilsr (the fixnum (ash n 3)) m)))))
+    (bignum
+     (let* ((nbytes (ash (the fixnum (uvsize m)) 2)))
+       (declare (fixnum nbytes))
+       (declare (type (simple-array (unsigned-byte 8) (*)) m)
+                (optimize (speed 3) (safety 0)))
+       (if (< n nbytes)
+         (aref m #+big-endian-target (the fixnum (logxor n 3)) #+little-endian-target n)
+         0)))))
+
+
+(defun unsigned-integer-to-binary (value len s)
+  (declare (fixnum len))
+  (unless (and (typep s 'basic-stream)
+               (eq *vector-output-stream-class-wrapper*
+                   (basic-stream.wrapper s)))
+    (report-bad-arg s 'vector-input-stream))
+  (let* ((ioblock (basic-stream-ioblock s))
+         (outbuf (progn
+                   (check-ioblock-owner ioblock)
+                   (ioblock-outbuf ioblock)))
+         (idx (io-buffer-idx outbuf))
+         (limit (io-buffer-limit outbuf))
+         (buffer (io-buffer-buffer outbuf)))
+    (declare (fixnum idx limit)
+             ((simple-array (unsigned-byte 8) (*)) buffer)
+             (optimize (speed 3) (safety 0)))
+    (do* ((n (1- len) (1- n)))
+         ((< n 0) (progn
+                    (setf (io-buffer-idx outbuf) idx
+                          (io-buffer-count outbuf) idx)
+                    value))
+      (declare (fixnum n))
+      (when (= idx limit)
+        (%ioblock-force-output ioblock nil)
+        (setq limit (io-buffer-limit outbuf)
+              buffer (io-buffer-buffer outbuf)))
+      (setf (aref buffer idx) (nth-octet-of-unsigned-integer value n))
+      (incf idx))))
+
+(defun signed-integer-to-binary (value len s)
+  (declare (fixnum len))
+  (unless (and (typep s 'basic-stream)
+               (eq *vector-output-stream-class-wrapper*
+                   (basic-stream.wrapper s)))
+    (report-bad-arg s 'vector-input-stream))
+  (let* ((ioblock (basic-stream-ioblock s))
+         (outbuf (progn
+                   (check-ioblock-owner ioblock)
+                   (ioblock-outbuf ioblock)))
+         (idx (io-buffer-idx outbuf))
+         (limit (io-buffer-limit outbuf))
+         (buffer (io-buffer-buffer outbuf)))
+    (declare (fixnum idx limit)
+             ((simple-array (unsigned-byte 8) (*)) buffer)
+             (optimize (speed 3) (safety 0)))
+    (do* ((n (1- len) (1- n)))
+         ((< n 0) (progn
+                    (setf (io-buffer-idx outbuf) idx
+                          (io-buffer-count outbuf) idx)
+                    value))
+      (declare (fixnum n))
+      (when (= idx limit)
+        (%ioblock-force-output ioblock nil)
+        (setq limit (io-buffer-limit outbuf)
+              buffer (io-buffer-buffer outbuf)))
+      (setf (aref buffer idx) (nth-octet-of-signed-integer value n))
+      (incf idx))))
              
                
 
@@ -6318,6 +6343,23 @@ are printed.")
     
 (defun make-vector-output-stream (&key (external-format :default))
   (%make-vector-output-stream (make-array 64 :element-type '(unsigned-byte 8))  external-format))
+
+(defmethod stream-position ((s vector-output-stream) &optional newpos)
+  (let* ((ioblock (basic-stream-ioblock s))
+         (outbuf (ioblock-outbuf ioblock))
+         (origin (vector-stream-ioblock-displacement ioblock)))
+    (declare (fixnum origin))
+    (if newpos
+      (if (and (typep newpos 'fixnum)
+               (> (the fixnum newpos) -1)
+               (< (the fixnum newpos) (the fixnum (+ origin (the fixnum (io-buffer-limit outbuf))))))
+        (let* ((scaled-new (+ origin (the fixnum newpos))))
+          (declare (fixnum scaled-new))
+          (setf (io-buffer-idx outbuf) scaled-new
+                (io-buffer-count outbuf) scaled-new)
+          newpos)
+        (report-bad-arg newpos `(integer 0 `(,(+ origin (the fixnum (io-buffer-limit outbuf)))))))
+      (the fixnum (- (the fixnum (io-buffer-idx outbuf)) origin)))))
 
 (defun vector-input-stream-index (s)
   (unless (and (typep s 'basic-stream)
@@ -6392,7 +6434,8 @@ are printed.")
 
 
 
-(defun pui-stream (s)
+(defun pui-stream (s count)
+  (declare (fixnum count))
   (unless (and (typep s 'basic-stream)
                (eq *vector-input-stream-class-wrapper*
                    (basic-stream.wrapper s)))
@@ -6402,26 +6445,19 @@ are printed.")
                   (check-ioblock-owner ioblock)
                   (ioblock-inbuf ioblock)))
          (idx (io-buffer-idx inbuf))
+         (end (+ idx count))
          (limit (io-buffer-limit inbuf))
          (vector (io-buffer-buffer inbuf)))
-    (declare (fixnum idx limit)
+    (declare (fixnum idx limit end)
              ((simple-array (unsigned-byte 8) (*)) vector))
-    (let* ((result 0))
-      (do* ((i idx (1+ i))
-            (shift 0 (+ shift 7)))
-           ((= i limit) (error "integer decoding error"))
-        (declare (fixnum i shift))
-        (let* ((b (aref vector i))
-               (done (not (logbitp 7 b))))
-          (declare ((unsigned-byte 8) b))
-          (setq b (logand b #x7f)
-                result (logior result (ash b shift)))
-          (incf idx)
-          (when done
-            (setf (io-buffer-idx inbuf) idx)
-            (return result)))))))
+    (if (< limit end)
+      (error "Integer decoding error"))
+    (let* ((result (%parse-unsigned-integer vector idx end)))
+      (setf (io-buffer-idx inbuf) end)
+      result)))
 
-(defun psi-stream (s)
+(defun psi-stream (s count)
+  (declare (fixnum count))
   (unless (and (typep s 'basic-stream)
                (eq *vector-input-stream-class-wrapper*
                    (basic-stream.wrapper s)))
@@ -6431,25 +6467,30 @@ are printed.")
                   (check-ioblock-owner ioblock)
                   (ioblock-inbuf ioblock)))
          (idx (io-buffer-idx inbuf))
+         (end (+ idx count))
          (limit (io-buffer-limit inbuf))
          (vector (io-buffer-buffer inbuf)))
-    (declare (fixnum idx limit)
+    (declare (fixnum idx limit end)
              ((simple-array (unsigned-byte 8) (*)) vector))
-    (let* ((result 0))
-      (do* ((i idx (1+ i))
-            (shift 0 (+ shift 7)))
-           ((= i limit) (error "integer decoding error"))
-        (declare (fixnum i shift))
-        (let* ((b (aref vector i))
-               (done (not (logbitp 7 b))))
-          (declare ((unsigned-byte 8) b))
-          (setq b (logand b #x7f)
-                result (logior result (ash b shift)))
-          (incf idx)
-          (when done
-            (setf (io-buffer-idx inbuf) idx)
-            (if (logbitp 6 b)
-              (return (logior result (ash -1 (the fixnum (+ shift 7)))))
-              (return result))))))))
+    (if (< limit end)
+      (error "Integer decoding error"))
+    (let* ((result (%parse-signed-integer vector idx end)))
+      (setf (io-buffer-idx inbuf) end)
+      result)))
+
+(defmethod stream-position ((s vector-input-stream) &optional newpos)
+  (let* ((ioblock (basic-stream-ioblock s))
+         (inbuf (ioblock-inbuf ioblock))
+         (origin (vector-stream-ioblock-displacement ioblock)))
+    (declare (fixnum origin))
+    (if newpos
+      (if (and (typep newpos 'fixnum)
+               (> (the fixnum newpos) -1)
+               (< (the fixnum newpos) (the fixnum (+ origin (the fixnum (io-buffer-limit inbuf))))))
+        (progn
+          (setf (io-buffer-idx inbuf) (the fixnum (+ origin (the fixnum newpos))))
+          newpos)
+        (report-bad-arg newpos `(integer 0 `(,(+ origin (the fixnum (io-buffer-limit inbuf)))))))
+      (the fixnum (- (the fixnum (io-buffer-idx inbuf)) origin)))))
 
 ; end of L1-streams.lisp
