@@ -2221,15 +2221,11 @@
                             (shiftcount (:s32 #.x8632::ecx))))
   (movl (:%l count) (:%l temp))
   (sarl (:$ub x8632::fixnumshift) (:%l temp))
-  (rcmpl (:%l temp) (:$l 31))
-  (cmovbw (:%w temp) (:%w shiftcount))
+  (movl (:$l 31) (:%l shiftcount))
+  (rcmpl (:%l temp) (:%l shiftcount))
+  (cmovbel (:%l temp) (:%l shiftcount))
   (movl (:%l src) (:%l temp))
-  (jae :shift-max)
   (sarl (:%shift x8632::cl) (:%l temp))
-  (jmp :done)
-  :shift-max
-  (sarl (:$ub 31) (:%l temp))
-  :done
   (andl (:$l (lognot x8632::fixnummask)) (:%l temp))
   (movl (:%l temp) (:%l dest)))
 
@@ -2240,16 +2236,12 @@
                             (shiftcount (:s32 #.x8632::ecx))))
   (movl (:%l count) (:%l temp))
   (sarl (:$ub x8632::fixnumshift) (:%l temp))
-  (rcmpl (:%l temp) (:$l 31))
-  (cmovbw (:%w temp) (:%w shiftcount))
+  (movl (:$l 31) (:%l shiftcount))
+  (rcmpl (:%l temp) (:%l shiftcount))
+  (cmovbel (:%l temp) (:%l shiftcount))
   (movl (:%l src) (:%l temp))
-  (jae :shift-max)
   (shrl (:%shift x8632::cl) (:%l temp))
-  (jmp :done)
-  :shift-max
-  (shrl (:$ub 31) (:%l temp))
-  :done
-  (andb (:$b (lognot x8632::fixnummask)) (:%b temp))
+  (andl (:$b (lognot x8632::fixnummask)) (:%l temp))
   (movl (:%l temp) (:%l dest)))
 
 (define-x8632-vinsn %iasr-c (((dest :imm))

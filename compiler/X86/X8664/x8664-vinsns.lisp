@@ -2714,16 +2714,12 @@
                             (shiftcount (:s64 #.x8664::rcx))))
   (movq (:%q count) (:%q temp))
   (sarq (:$ub x8664::fixnumshift) (:%q temp))
-  (rcmpq (:%q temp) (:$l 63))
-  (cmovbw (:%w temp) (:%w shiftcount))
+  (movl (:$l 63) (:%l shiftcount))
+  (rcmpq (:%q temp) (:%q shiftcount))
+  (cmovbel (:%l temp) (:%l shiftcount))
   (movq (:%q src) (:%q temp))
-  (jae :shift-max)
   (sarq (:%shift x8664::cl) (:%q temp))
-  (jmp :done)
-  :shift-max
-  (sarq (:$ub 63) (:%q temp))
-  :done
-  (andb (:$b (lognot x8664::fixnummask)) (:%b temp))
+  (andq (:$b (lognot x8664::fixnummask)) (:%q temp))
   (movq (:%q temp) (:%q dest)))
 
 (define-x8664-vinsn %ilsr (((dest :imm))
@@ -2733,17 +2729,14 @@
                             (shiftcount (:s64 #.x8664::rcx))))
   (movq (:%q count) (:%q temp))
   (sarq (:$ub x8664::fixnumshift) (:%q temp))
-  (rcmpq (:%q temp) (:$l 63))
-  (cmovbw (:%w temp) (:%w shiftcount))
+  (movl (:$l 63) (:%l shiftcount))
+  (rcmpq (:%q temp) (:%q shiftcount))
+  (cmovbel (:%l temp) (:%l shiftcount))
   (movq (:%q src) (:%q temp))
-  (jae :shift-max)
   (shrq (:%shift x8664::cl) (:%q temp))
-  (jmp :done)
-  :shift-max
-  (shrq (:$ub 63) (:%q temp))
-  :done
-  (andb (:$b (lognot x8664::fixnummask)) (:%b temp))
+  (andq (:$b (lognot x8664::fixnummask)) (:%q temp))
   (movq (:%q temp) (:%q dest)))
+
 
 (define-x8664-vinsn %iasr-c (((dest :imm))
 			     ((count :u8const)
