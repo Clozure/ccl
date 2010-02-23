@@ -1509,8 +1509,8 @@ All output to that string stream is saved in a string."
   (let* ((vector-p (not (null vector))))
     (multiple-value-bind (forms decls) (parse-body body env nil)
       `(let* ((,var ,@(if vector-p
-                          `(%make-vector-output-stream ,vector ,external-format)
-                          `(make-vector-output-stream :external-format ,external-format))))
+                          `((%make-vector-output-stream ,vector ,external-format))
+                          `((make-vector-output-stream :external-format ,external-format)))))
          ,@decls
          (unwind-protect
               (progn
