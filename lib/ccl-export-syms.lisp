@@ -721,8 +721,8 @@
      signed-integer-to-binary
      vector-input-stream
      vector-output-stream
-     get-output-stream-vector
-     
+     get-output-stream-vector  
+     *vector-output-stream-default-initial-allocation*   
      external-process-creation-failure
 
      ) "CCL"
