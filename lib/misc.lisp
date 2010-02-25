@@ -1244,40 +1244,45 @@ are running on, or NIL if we can't find any useful information."
   (declare ((simple-array (unsigned-byte 8) (*)) vector)
            (fixnum start end)
            (optimize (speed 3) (safety 0)))
-  (let* ((count (- end start)))
-    (declare (fixnum count))
-    (cond
-      ((and (> count 4) (<= count 8))
-       (%stack-block ((buf 8))
-         (unless (= count 8) (setf (%%get-unsigned-longlong buf 0) 0))
-         (dotimes (i count (%%get-unsigned-longlong buf 0))
-           (decf end)
-           (setf (%get-unsigned-byte buf
-                                     #+little-endian-target i
-                                     #+big-endian-target (the fixnum (- 7 i)))
-                 (aref vector end)))))
-      ((= count 4)
-       (%stack-block ((buf 4))
-         (dotimes (i count (%get-unsigned-long buf))
-           (decf end)
-           (setf (%get-unsigned-byte buf
-                                     #+little-endian-target i
-                                     #+big-endian-target (the fixnum (- 3 i)))
-                 (aref vector end)))))
-      ((= count 2) (logior (the fixnum (ash (the (unsigned-byte 8) (aref vector start)) 8)) (the (unsigned-byte 8) (aref vector (the fixnum (1+ start))))))
-      ((= count 0) 0)
-      ((= count 1) (aref vector start))
+  (let* ((count (- end start))
+         (msb 0))
+    (declare (fixnum count) ((unsigned-byte 8) msb))
+    (or
+     (do* ((i start (1+ i)))
+          ((>= i end) 0)
+       (declare (fixnum i))
+       (let* ((b (aref vector i)))
+         (declare ((unsigned-byte 8) b))
+         (cond ((zerop b) (incf start) (decf count))
+               (t (setq msb b) (return)))))
+     (cond
+       ((or (< count #+64-bit-target 8 #+32-bit-target 4)
+            (and (= count #+64-bit-target 8 #+32-bit-target 4)
+                 (< msb #+64-bit-target 16 #+32-bit-target 32)))
+        ;; Result will be a fixnum.
+        (do* ((result 0)
+              (shift 0 (+ shift 8))
+              (i (1- end) (1- i)))
+             ((< i start) result)
+          (declare (fixnum result shift i))
+          (setq result (logior result (the fixnum (%ilsl shift (aref vector i)))))))
+       (t
+        ;; Result will be a bignum.  If COUNT is a multiple of 4
+        ;; and the most significant bit is set, need to add an
+        ;; extra word of zero-extension.
+        (let* ((result (allocate-typed-vector :bignum
+                                              (if (and (logbitp 7 msb)
+                                                       (zerop (the fixnum (logand count 3))))
+                                                (the fixnum (1+ (the fixnum (ash count -2))))
+                                                (the fixnum (ash (the fixnum (+ count 3)) -2))))))
+          (declare ((simple-array (unsigned-byte 8) (*)) result)) ; lie
+          (dotimes (i count result)
+            (decf end)
+            (setf (aref result
+                        #+little-endian-target i
+                        #+big-endian-target (the fixnum (logxor i 3)))
+                  (aref vector end)))))))))
 
-      ((= count 3) (logior (the fixnum (ash (the (unsigned-byte 8) (aref vector start)) 16))
-                           (the fixnum (logior (the fixnum (ash (the (unsigned-byte 8) (aref vector (the fixnum (1+ start)))) 8))
-                                               (aref vector (the fixnum (+ start 2)))))))
-      (t
-       (let* ((result 0))
-         (do* ((shift (ash (1- count) 8) (- shift 8))
-               (i start (1+ i)))
-              ((= i end) result)
-           (declare (fixnum i shift))
-           (setq result (logior result (ash (aref vector i) shift)))))))))
   
 ;;; Octets between START and N encode an unsigned integer in big-endian
 ;;; byte order.
@@ -1302,49 +1307,52 @@ are running on, or NIL if we can't find any useful information."
     (declare (fixnum count))
     (if (zerop count)
       0
-      (let* ((sign-byte (aref vector start))
-             (negative (logbitp 7 sign-byte)))
+      (let* ((sign-byte (aref vector start)))
         (declare (fixnum sign-byte))
-        (if (> sign-byte 127)
-          (decf sign-byte 256))
-        (cond
-          ((and (> count 4) (<= count 8))
-           (%stack-block ((buf 8))
-             (unless (= 8 count)
-               (setf (%%get-signed-longlong buf 0)
-                     (if negative -1 0)))
-             (dotimes (i count (%%get-signed-longlong buf 0))
-               (decf end)
-               (setf (%get-unsigned-byte buf
-                                         #+little-endian-target i
-                                         #+big-endian-target (the fixnum (- 7 i)))
-                     (aref vector end)))))
-          ((= count 4)
-           (%stack-block ((buf 4))
-             (dotimes (i count (%get-signed-long buf))
-               (decf end)
-               (setf (%get-unsigned-byte buf
-                                         #+little-endian-target i
-                                         #+big-endian-target (the fixnum (- 3 i)))
-                     (aref vector end)))))              
-          ((= count 1) sign-byte)
-          ((= count 2) (logior (the fixnum (ash sign-byte 8))
-                               (the (unsigned-byte 8) (aref vector (the fixnum (1+ start))))))
-          ((= count 3)
-           (logior
-            (the fixnum (ash sign-byte 16))
-            (the fixnum (logior (the fixnum (ash (the (unsigned-byte 8) (aref vector (the fixnum (1+ start)))) 8))
-                                (the (unsigned-byte 8)
-                                  (aref vector (the fixnum (+ start 2))))))))
-          (t
-           (decf count)
-           (incf start)
-           (let* ((result (ash sign-byte (ash count 8))))
-             (do* ((shift (ash (1- count) 8) (- shift 8))
-                   (i start (1+ i)))
-                  ((= i end) result)
-               (declare (fixnum i shift))
-               (setq result (logior result (ash (aref vector i) shift)))))))))))
+        (if (< sign-byte 128)
+          (%parse-unsigned-integer vector start end)
+          (progn
+            (decf sign-byte 256)
+            (or
+             (do* ()
+                  ((= count 1) sign-byte)
+               (unless (= sign-byte -1)
+                 (return))
+               (let* ((next (1+ start))
+                      (nextb (aref vector next)))
+                 (declare (fixnum next nextb))
+                 (if (not (logbitp 7 nextb))
+                   (return))
+                 (setq sign-byte (- nextb 256)
+                       start next
+                       count (1- count))))
+             (cond ((or (< count #+64-bit-target 8 #+32-bit-target 4)
+                        (and (= count #+64-bit-target 8 #+32-bit-target 4)
+                             (>= sign-byte
+                                 #+64-bit-target -16
+                                 #+32-bit-target -32)))
+                    ;; Result will be a fixnum
+                    (do* ((result 0)
+                          (shift 0 (+ shift 8))
+                          (i (1- end) (1- i)))
+                         ((= i start) (logior result (the fixnum (%ilsl shift sign-byte))))
+                      (declare (fixnum result shift i))
+                      (setq result (logior result (the fixnum (%ilsl shift (aref vector i)))))))
+                   (t
+                    (let* ((result (allocate-typed-vector :bignum (the fixnum (ash (the fixnum (+ count 3)) -2)))))
+          (declare ((simple-array (unsigned-byte 8) (*)) result)) ; lie
+          (dotimes (i count (do* ((i count (1+ i)))
+                                 ((= 0 (the fixnum (logand i 3)))
+                                  result)
+                              (declare (fixnum i))
+                              (setf (aref result
+                                          #+little-endian-target i
+                                          #+big-endian-target (the fixnum (logxor i 3))) #xff)))
+            (decf end)
+            (setf (aref result
+                        #+little-endian-target i
+                        #+big-endian-target (the fixnum (logxor i 3)))
+                  (aref vector end)))))))))))))
 
 (defun parse-signed-integer (vector &optional (start 0) end)
   (setq end (check-sequence-bounds vector start end))
