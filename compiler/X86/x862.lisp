@@ -874,7 +874,7 @@
     (let* ((symlist *x862-recorded-symbols*)
            (len (length symlist))
            (syms (make-array len))
-           (ptrs (make-array (%i+  (%i+ len len) len)))
+           (ptrs (make-array (%i+  (%i+ len len) len) :element-type '(unsigned-byte 32)))
            (i -1)
            (j -1))
       (declare (fixnum i j))
