@@ -1957,6 +1957,32 @@ update_self_references(LispObj *node)
     }
   }    
 }
+
+void
+update_self_references_in_range(LispObj *start, LispObj *end)
+{
+  LispObj x1;
+  int tag;
+  
+  while (start < end) {
+    x1 = *start;
+    tag = fulltag_of(x1);
+    if (immheader_tag_p(tag)) {
+      start = (LispObj *)ptr_from_lispobj(skip_over_ivector(ptr_to_lispobj(start), x1));
+    } else if (!nodeheader_tag_p(tag)) {
+      start += 2;
+    } else {
+      natural element_count = header_element_count(x1);
+      natural size = (element_count+1+1) &~1;
+
+      if (header_subtag(x1) == subtag_function) {
+        update_self_references(start);
+      }
+      start += size;
+    }
+  }
+}
+
 #endif
 
 /*
@@ -3089,6 +3115,9 @@ impurify_from_area(TCR *tcr, area *src)
   a->active += n;
   memmove(oldfree, base, n);
   UnCommitMemory((void *)base, n);
+#ifdef X8632
+  update_self_references_in_range((LispObj *)oldfree,(LispObj *)(oldfree+n));
+#endif
   a->ndnodes = area_dnode(a, a->active);
   src->active = src->low;
   if (src == readonly_area) {
