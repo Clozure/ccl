@@ -243,9 +243,9 @@
                          (ash 1 x8664::fulltag-immheader-2)))
       (error "~s is not an ivector subtype." element-type))
     (let* ((size-in-octets (ccl::subtag-bytes subtag element-count)))
-      (multiple-value-bind (pointer vector)
+      (multiple-value-bind (vector pointer)
           (ccl::%make-heap-ivector subtag size-in-octets element-count)
-        (values pointer vector size-in-octets)))))
+        (values vector pointer size-in-octets)))))
 
 
 
