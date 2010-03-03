@@ -128,13 +128,10 @@
 (progn
   (eval-when (:compile-toplevel :execute)
     (use-interface-dir :cocoa))
-  ;; If the current (window system) process is visible (has a UI),
-  ;; we can't possibly win.
-  (rlet ((psn #>ProcessSerialNumber))
-    (and (eql 0 (#_GetCurrentProcess psn))
-         (not (eql #$false (#_IsProcessVisible psn)))
-         (error "This is a GLUT example; it can't possibly work ~
-                 in a GUI environment."))))
+  ;; If the IDE appears to be running, complain about that.
+  (if (ignore-errors (find-symbol "*NSAPP*" "GUI"))
+    (error "This is a GLUT example; it can't possibly work ~
+                 in a GUI environment.")))
 (progn
   (ccl:process-run-function
    "housekeeping"
