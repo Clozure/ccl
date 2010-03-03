@@ -2405,14 +2405,20 @@
   (declare (ignore notification))
   ;; The echo area "document" should probably be a slot in the document
   ;; object, and released when the document object is.
-  (let* ((w (#/window wc))
-         (buf (hemlock-frame-echo-area-buffer w))
-         (echo-doc (if buf (hi::buffer-document buf))))
-    (when echo-doc
-      (setf (hemlock-frame-echo-area-buffer w) nil)
-      (#/close echo-doc))
-    (#/setFrameAutosaveName: w #@"")
-    (#/autorelease w)))
+  (let* ((w (#/window wc)))
+    ;; guard against cocotron lossage
+    (if (#/isKindOfClass: w hemlock-frame)
+      (let* ((buf (hemlock-frame-echo-area-buffer w))
+	     (echo-doc (if buf (hi::buffer-document buf))))
+	(when echo-doc
+	  (setf (hemlock-frame-echo-area-buffer w) nil)
+	  (#/close echo-doc))
+	(#/setFrameAutosaveName: w #@"")
+	#+cocotron
+	(#/removeObserver: (#/defaultCenter ns:ns-notification-center) wc)
+	(#/autorelease w))
+      (#_NSLog #@"window controller %@ got windowWillClose for odd window %@ "
+	       :address wc :address w))))
 
 (defmethod hemlock-view ((self hemlock-editor-window-controller))
   (let ((frame (#/window self)))
