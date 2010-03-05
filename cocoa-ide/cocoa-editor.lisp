@@ -2414,8 +2414,6 @@
 	  (setf (hemlock-frame-echo-area-buffer w) nil)
 	  (#/close echo-doc))
 	(#/setFrameAutosaveName: w #@"")
-	#+cocotron
-	(#/removeObserver: (#/defaultCenter ns:ns-notification-center) wc)
 	(#/autorelease w))
       (#_NSLog #@"window controller %@ got windowWillClose for odd window %@ "
 	       :address wc :address w))))
