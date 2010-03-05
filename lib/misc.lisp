@@ -895,7 +895,8 @@ are running on, or NIL if we can't find any useful information."
                               (unit nil)
                               (sort :size)
                               (classes nil)
-                              (start nil))
+                              (start nil)
+                              (threshold (and classes 0.00005)))
   "Show statistics about types of objects in the heap.
    If :GC-FIRST is true (the default), do a full gc before scanning the heap.
    If :START is non-nil, it should be an object returned by GET-ALLOCATION-SENTINEL, only
@@ -907,7 +908,7 @@ are running on, or NIL if we can't find any useful information."
    (including stacks) are examined.
    If :CLASSES is true, classifies by class rather than just typecode"
   (let ((data (collect-heap-utilization :gc-first gc-first :start start :area area :classes classes)))
-    (report-heap-utilization data :stream stream :unit unit :sort sort)))
+    (report-heap-utilization data :stream stream :unit unit :sort sort :threshold threshold)))
 
 (defun collect-heap-utilization (&key (gc-first t) start area classes)
   ;; returns list of (type-name count logical-sizes-total physical-sizes-total)
@@ -999,7 +1000,9 @@ are running on, or NIL if we can't find any useful information."
                                              #+32-bit-target 7))
                           (class (class-of (if (eql typecode target::subtag-slot-vector)
                                              (uvref thing slot-vector.instance)
-                                             thing)))
+                                             (if (eql typecode target::subtag-function)
+                                               (function-vector-to-function thing)
+                                               thing))))
                           (index (or (gethash class map)
                                      (let ((count (hash-table-count map)))
                                        (if (eql count max-classes)
@@ -1034,7 +1037,7 @@ are running on, or NIL if we can't find any useful information."
                      (push (list (prin1-to-string name)
                                  icount (aref inst-sizes index) (aref inst-psizes index)) data))
                    (when (plusp scount)
-                     (push (list (format nil "(SLOT-VECTOR ~s)" name)
+                     (push (list (format nil "~s slot vector" name)
                                  scount (aref slotv-sizes index) (aref slotv-psizes index)) data))))
                map)
       data)))
@@ -1082,7 +1085,8 @@ are running on, or NIL if we can't find any useful information."
     a))
 
   
-(defun report-heap-utilization (data &key stream unit sort)
+(defun report-heap-utilization (data &key stream unit sort threshold)
+  (check-type threshold (or null (real 0 1)))
   (let* ((div (ecase unit
                 ((nil) 1)
                 (:kb 1024.0d0)
@@ -1096,67 +1100,85 @@ are running on, or NIL if we can't find any useful information."
          (total-count 0)
          (total-lsize 0)
          (total-psize 0)
-         (max-name 0))
-    (loop for (name count lsize psize) in data
-      do (incf total-count count)
-      do (incf total-lsize lsize)
-      do (incf total-psize psize)
-      do (setq max-name (max max-name
-                             (length (if (stringp name)
-                                       name
-                                       (if (symbolp name)
-                                         (symbol-name name)
-                                         (princ-to-string name)))))))
-    (setq data
-          (if sort-key
-            (sort data #'> :key sort-key)
-            (sort data #'string-lessp :key #'(lambda (name)
-                                               (if (stringp name)
-                                                 name
-                                                 (if (symbolp name)
-                                                   (symbol-name name)
-                                                   (princ-to-string name)))))))
-                                                    
-    (format stream "~&Object type~vtCount     Logical size   Physical size   % of Heap~%~vt ~a~vt ~2:*~a"
-            (+ max-name 7)
-            (+ max-name 15)
-            (ecase unit
-              ((nil) "  (in bytes)")
-              (:kb   "(in kilobytes)")
-              (:mb   "(in megabytes)")
-              (:gb   "(in gigabytes)"))
-            (+ max-name 31))
-    (loop for (type count logsize physsize) in data
-      do (if unit
-           (format stream "~&~a~vt~11d~16,2f~16,2f~11,2f%"
-                   type
-                   (1+ max-name)
-                   count
-                   (/ logsize div)
-                   (/ physsize div)
-                   (* 100.0 (/ physsize total-psize)))
-           (format stream "~&~a~vt~11d~16d~16d~11,2f%"
-                   type
-                   (1+ max-name)
-                   count
-                   logsize
-                   physsize
-                   (* 100.0 (/ physsize total-psize)))))
-    (if unit
-      (format stream "~&~a~vt~11d~16,2f~16,2f~11,2f%"
-              "Total"
-              (1+ max-name)
-              total-count
-              (/ total-lsize div)
-              (/ total-psize div)
-              100.0d0)
-      (format stream "~&~a~vt~11d~16d~16d~11,2f%"
-              "Total"
-              (1+ max-name)
-              total-count
-              total-lsize
-              total-psize
-              100.0d0)))
+         (max-name 0)
+         (others (list "All others" 0 0 0)))
+
+    (when (hash-table-p data)
+      (setq data
+            (let ((alist nil))
+              (maphash (lambda (type measures) (push (cons type measures) alist)) data)
+              alist)))
+
+    (flet ((type-string (name)
+             (if (stringp name)
+               name
+               (if (symbolp name)
+                 (symbol-name name)
+                 (princ-to-string name)))))
+      (loop for (nil count lsize psize) in data
+            do (incf total-count count)
+            do (incf total-lsize lsize)
+            do (incf total-psize psize))
+
+      (when (and data threshold)
+        (setq data (sort data #'< :key #'cadddr))
+        (loop while (< (/ (cadddr (car data)) total-psize) threshold)
+              do (destructuring-bind (type count lsize psize) (pop data)
+                   (declare (ignore type))
+                   (incf (cadr others) count)
+                   (incf (caddr others) lsize)
+                   (incf (cadddr others) psize))))
+
+      (setq data
+            (if sort-key
+              (sort data #'> :key sort-key)
+              (sort data #'string-lessp :key #'(lambda (s) (type-string (car s))))))
+
+      (when (> (cadr others) 0)
+        (setq data (nconc data (list others))))
+
+      (setq max-name (loop for (name) in data maximize (length (type-string name))))
+
+      (format stream "~&Object type~vtCount     Logical size   Physical size   % of Heap~%~vt ~a~vt ~2:*~a"
+              (+ max-name 7)
+              (+ max-name 15)
+              (ecase unit
+                ((nil) "  (in bytes)")
+                (:kb   "(in kilobytes)")
+                (:mb   "(in megabytes)")
+                (:gb   "(in gigabytes)"))
+              (+ max-name 31))
+      (loop for (type count logsize physsize) in data
+            do (if unit
+                 (format stream "~&~a~vt~11d~16,2f~16,2f~11,2f%"
+                         (type-string type)
+                         (1+ max-name)
+                         count
+                         (/ logsize div)
+                         (/ physsize div)
+                         (* 100.0 (/ physsize total-psize)))
+                 (format stream "~&~a~vt~11d~16d~16d~11,2f%"
+                         (type-string type)
+                         (1+ max-name)
+                         count
+                         logsize
+                         physsize
+                         (* 100.0 (/ physsize total-psize)))))
+      (if unit
+        (format stream "~&~a~vt~11d~16,2f~16,2f~11,2f%"
+                "Total"
+                (1+ max-name)
+                total-count
+                (/ total-lsize div)
+                (/ total-psize div)
+                100.0d0)
+        (format stream "~&~a~vt~11d~16d~16d~11,2f%"
+                "Total"
+                (1+ max-name)
+                total-count
+                total-lsize
+                total-psize
+                100.0d0))))
   (values))
 
 
