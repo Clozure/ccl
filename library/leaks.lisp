@@ -220,61 +220,99 @@
 ;; Do some work.
 ;; (ccl::stop-mtrace)
 ;; (ccl::parse-mtrace-log LOGFILE)
-(defun start-mtrace (log-file)
+(defun start-mtrace (log-file &key gc-first)
+  (delete-file log-file)
   (touch log-file)
-  (setf log-file (probe-file log-file))
-  (setenv "MALLOC_TRACE" (namestring log-file))
-  (gc)
+  (setenv "MALLOC_TRACE" (native-translated-namestring (truename log-file)))
+  (when gc-first (gc))
   (#_mtrace))
 
-(defun stop-mtrace ()
-  (gc)
+(defun stop-mtrace (&key gc-first)
+  (when gc-first (gc))
   (#_muntrace))
 
-(defun parse-mtrace-log (log-file)
-  (with-open-file (s log-file)
-    (let ((hash (make-hash-table :test 'equal))
-          (free-list '())
-          (eof (list :eof)))
-      (loop for line = (read-line s nil eof)
-            until (eq line eof)
-            when (and (> (length line) 2)
-                      (equal "@ " (subseq line 0 2)))
-              do
-           (setf line (subseq line 2))
-           (let ((plus-pos (or (search " + " line) (search " > " line)))
-                 (minus-pos (or (search " - " line) (search " < " line))))
-             (cond (plus-pos
-                    (let* ((where (subseq line 0 plus-pos))
-                           (addr-and-size (subseq line (+ plus-pos 3)))
-                           (space-pos (position #\space addr-and-size))
-                           (addr (subseq addr-and-size 0 space-pos))
-                           (size (subseq addr-and-size (1+ space-pos))))
-                      (setf (gethash addr hash) (list where size))))
-                   (minus-pos
-                    (let* ((where (subseq line 0 minus-pos))
-                           (addr (subseq line (+ minus-pos 3)))
-                           (found (nth-value 1 (gethash addr hash))))
-                      (if found
-                        (remhash addr hash)
-                        (push (list where addr) free-list)))))))
-      (let ((res nil))
-        (maphash (lambda (key value)
-                   (push (append value (list key)) res))
-                 hash)
-        (values res free-list)))))
+(defun parse-mtrace-log (log-file &key (duplicate-alloc :show)
+                                       (unmatched-free :collect)
+                                       (failed-realloc :show)
+                                       (hash (make-hash-table :test 'eql))
+                                       (id nil))
+  (let ((errors nil))
+    (with-open-file (stream log-file)
+      (loop for line = (read-line stream nil nil) while line
+            as pos = (if (and (> (length line) 2) (eql (aref line 0) #\@) (eql (aref line 1) #\space))
+                         (1+ (position #\space line :start 2))
+                         0)
+            as address = (let ((npos (+ pos 2)))
+                           (when (and (< (+ npos 2) (length line))
+                                      (eql (aref line npos) #\0)
+                                      (eql (aref line (1+ npos)) #\x))
+                             (parse-integer line :radix 16
+                                            :start (+ npos 2)
+                                            :end (position #\space line :start npos))))
+            as last-data = (gethash address hash)
+            do (ecase (aref line pos)
+                 ((#\+ #\>)
+                    (let ((this-data (if id (cons id line) line)))
+                      (if last-data
+                          (ecase duplicate-alloc
+                            (:collect (push (list :duplicate
+                                                  (if (eq (aref line pos) #\+) :alloc :realloc)
+                                                  last-data this-data)
+                                            errors))
+                            ((:show nil) (format t "Duplicate ~a:~%~a~%~a~%"
+                                                 (if (eq (aref line pos) #\+) "alloc" "realloc")
+                                                 last-data this-data))
+                            (:ignore nil))
+                          (setf (gethash address hash) this-data))))
+                 ((#\- #\<)
+                    (if last-data
+                        (remhash address hash)
+                        (let ((this-data (if id (cons id line) line)))
+                          (ecase unmatched-free
+                            (:collect (push (list :unmatched
+                                                  (if (eq (aref line pos) #\-) :free :realloc)
+                                                  this-data)
+                                            errors))
+                            ((:show nil) (format t "Unmatched ~a: ~a~%"
+                                                 (if (eq (aref line pos) #\-) "free" "realloc")
+                                                 this-data))
+                            (:ignore nil)))))
+                 ((#\=) ;; ignore start/end
+                    ;; (format t "~&~a" line)
+                    nil)
+                 ((#\!)
+                    (let ((this-data (if id (cons id line) line)))
+                      (ecase failed-realloc
+                        (:collect (push (list :failed :realloc this-data) errors))
+                        ((:show nil) (format t "Failed realloc: ~a" this-data))
+                        (:ignore nil)))))))
+    (values (nreverse errors) hash)))
 
-(defun pretty-print-mtrace-summary (file)
-  (let* ((malloc-sum 0))
-    (multiple-value-bind (mallocs frees) (parse-mtrace-log file)
-      (dolist (i mallocs)
-        (incf malloc-sum (parse-integer (second i) :radix 16 :start 2))
-        (format t "~&~A" i))
-      (format t "~&Freed but not malloced:~%~{~A~%~}" frees)
-      (format t "~&total-malloc-not-freed: ~A ~A free not malloc: ~A"
+(defun pretty-print-mtrace-summary (log-file)
+  (multiple-value-bind (errors malloc-hash) (parse-mtrace-log log-file)
+    (let* ((malloc-sum 0)
+           (malloc-count 0)
+           (free-count 0))
+      (when (> (hash-table-count malloc-hash) 0)
+        (format t "~&Malloced but not freed:~%")
+        (loop for line being the hash-value of malloc-hash
+              do (let* ((plus-pos (or (search " + " line) (search " > " line)))
+                        (size-pos (position #\space line :start (+ plus-pos 3))))
+                   (incf malloc-count)
+                   (incf malloc-sum (parse-integer line :radix 16 :start (+ size-pos 3)))
+                   (format t "~& ~A" line))))
+      (when (find :unmatched errors :key #'car)
+        (format t "~&Freed but not malloced:~%")
+        (loop for (type nil line) in errors
+              do (when (eq type :unmatched)
+                   (incf free-count)
+                   (format t " ~a" line))))
+      (format t "~&~aK in ~a mallocs not freed, ~A frees not malloced"
               (/ malloc-sum 1024.0)
-              (length mallocs)
-              (length frees)))))
+              malloc-count
+              free-count)))
+  (values))
+
 
 ;; Return the total number of bytes allocated by malloc()
 (defun mallinfo ()
@@ -324,6 +362,55 @@ int keepcost
       (format t "~& total size of malloc'ed chunks = ~d/#x~x" uordblks uordblks)
       (format t "~& total size of free chunks = ~d/#x~x" fordblks fordblks)
       (format t "~& size of releaseable chunk = ~d/#x~x" keepcost keepcost))))
+
+
+
+;; Parse /proc/<pid>/maps
+
+(defun parse-proc-maps (&optional (pid (ccl::getpid)))
+  (let ((perm-cache ())
+        (name-cache ()))
+    (with-open-file (s (format nil "/proc/~d/maps" pid))
+      (loop for line = (read-line s nil) while line
+            as low-end = (position #\- line)
+            as high-end = (position #\space line :start (1+ low-end))
+            as perms-end = (position #\space line :start (1+ high-end))
+            as offset-end = (position #\space line :start (1+ perms-end))
+            as device-end = (position #\space line :start (1+ offset-end))
+            as inode-end = (position #\space line :start (1+ device-end))
+            as name-start = (position #\space line :start inode-end :test-not #'eql)
+            as low = (parse-integer line :start 0 :end low-end :radix 16)
+            as high = (parse-integer line :start (1+ low-end) :end high-end :radix 16)
+            as perms = (let ((p (subseq line (1+ high-end) perms-end)))
+                         (or (find p perm-cache :test #'equal)
+                             (car (setq perm-cache (cons p perm-cache)))))
+            as name = (and name-start
+                           (let ((f (subseq line name-start)))
+                             (or (find f name-cache :test #'equal)
+                                 (car (setq name-cache (cons f name-cache))))))
+            collect (list low high perms name)))))
+
+(defun proc-maps-diff (map1 map2)
+  ;; Compute change from map1 to map2.
+  ;;  Remove segment -> (:remove low high ...)
+  ;;  Add segment  -> (:add low high ...)
+  ;;  grow segment -> (:grow low high new-high ...)
+  (let ((added (copy-list map2))
+        (changes nil))
+    (loop for m1 in map1 as match = (find (car m1) added :key #'car)
+          do (when match
+               (setq added (delete match added))
+               (unless (equal (cddr m1) (cddr match))
+                 (warn  "Segment changed ~s -> ~s" m1 match)))
+          do (cond ((null match)
+                    (push `(:remove ,(- (car m1) (cadr m1)) ,@m1) changes))
+                   ((< (cadr m1) (cadr match))
+                    (push `(:grow ,(- (cadr match) (cadr m1)) ,@m1) changes)) 
+                   ((< (cadr match) (cadr m1))
+                    (push `(:shrink ,(- (cadr match) (cadr m1)) ,@m1) changes)) 
+                   (t nil)))
+    (loop for m in added do (push `(:new ,(- (cadr m) (car m)) ,@m) changes))
+    changes))
 
 )  ;; end of linux-only code
 
