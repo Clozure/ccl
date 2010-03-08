@@ -1,5 +1,5 @@
 ;;;
-;;;   Copyright (C) 2009, Clozure Associates and contributors
+;;;   Copyright (C) 2009-2010 Clozure Associates and contributors
 ;;;   This file is part of Clozure CL.
 ;;;
 ;;;   Clozure CL is licensed under the terms of the Lisp Lesser GNU Public
@@ -20,23 +20,33 @@
 #+:linuxx8664-target
 (progn
 
+
+(defconstant $image-nsections 7)
+(defconstant $image-data-offset-64 9)
+(defconstant $image-header-size 16)
+
+(defconstant $image-sect-code 0)
+(defconstant $image-sect-size 4)
+(defconstant $image-sect-header-size 8)
+
 (export '(open-core close-core
-          core-heap-utilization map-core-areas map-core-pointers
+          core-heap-utilization map-core-areas map-core-region map-core-pointers
           core-q core-l core-w core-b
           core-consp core-symbolp core-functionp core-listp core-nullp core-uvector-p
           core-uvtype core-uvtypep core-uvref core-uvsize
-          core-car core-cdr core-object-type core-istruct-type
+          core-car core-cdr core-object-typecode-type
+          core-istruct-type core-struct-type core-instance-type core-function-type
+          core-object-type-key  core-type-string
           copy-from-core core-list
           core-keyword-package core-find-package core-find-symbol
           core-package-names core-package-name
           core-map-symbols
-          core-symbol-name core-symbol-value core-symbol-package
+          core-symbol-name core-symbol-value core-symbol-package core-symbol-plist
           core-gethash core-hash-table-count
-          core-lfun-name core-lfun-bits
+          core-lfun-name core-lfun-bits core-nth-immediate
           core-find-class
           core-instance-class
           core-instance-p
-          core-instance-class-name
           core-string-equal
           core-all-processes core-process-name
           core-find-process-for-id
@@ -59,9 +69,8 @@
   pathname
   sections
   ;; uses either stream or ivector, determined at runtime
-  stream
-  mapped-ivector
-  raw-ivector
+  streams
+  ivectors
   ;; caches
   symbol-ptrs
   classes-hash-table-ptr
@@ -69,8 +78,10 @@
   process-class
   )
 
+
 (defmethod print-object :around ((core core-info) (stream t))
-  (let ((*print-array* nil))
+  (let ((*print-array* nil)
+        (*print-simple-bit-vector* nil))
     (call-next-method)))
 
 (declaim (type (or null core-info) *current-core*)
@@ -84,32 +95,75 @@
   (let ((core *current-core*))
     (setq *current-core* nil)
     (when core
-      (when (core-info-stream core)
-        (close (core-info-stream core)))
-      (when (core-info-mapped-ivector core)
-        (unmap-ivector (core-info-mapped-ivector core)))
+      (map nil #'close (core-info-streams core))
+      (map nil #'unmap-ivector (core-info-ivectors core))
       t)))
+
+;
+(defmacro area-loop (with ptrvar &body body)
+  (assert (eq with 'with))
+  (let ((before (loop while (eq (car body) 'with)
+                      nconc (list (pop body) (pop body) (pop body) (pop body)))))
+    `(loop ,@before
+           for ,ptrvar = (core-q (core-q (kernel-global-address 'all-areas)) target::area.succ)
+             then (core-q ,ptrvar target::area.succ)
+           until (eq (core-q area-ptr target::area.code) (ash area-void target::fixnum-shift))
+           ,@body)))
+
+(def-accessor-macros %svref
+  %core-sect.start-addr
+  %core-sect.offset
+  %core-sect.end-addr
+  %core-sect.ivector
+  %core-sect.stream)
+
+(defun make-core-sect (&key start end offset ivector stream)
+  (vector start offset end ivector stream))
+
+
+(defvar *core-info-class* 'core-info)
 
 ;; TODO: after load sections, check if highest heap address is a fixnum, and
 ;; arrange to use fixnum-only versions of the reading functions.
-(defun open-core (pathname &key (method :mmap))
+(defun open-core (pathname &key (image nil) (method :mmap) (core-info nil))
   (when *current-core*
     (close-core))
-  (let* ((sections (readelf-sections pathname))
-         (core (make-core-info :pathname pathname :sections sections)))
+  (let* ((sections (read-sections pathname))
+         (core (require-type (or core-info (make-instance *core-info-class*)) 'core-info)))
+    (setf (core-info-pathname core) pathname)
+    (setf (core-info-sections core) sections)
+    (setf (core-info-symbol-ptrs core) nil)
+    (setf (core-info-classes-hash-table-ptr core) nil)
+    (setf (core-info-lfun-names-table-ptr core) nil)
+    (setf (core-info-process-class core) nil)
+    (setf (core-info-ivectors core) nil)
+    (setf (core-info-streams core) nil)
     (ecase method
       (:mmap   (let ((mapped-vector (map-file-to-ivector pathname '(unsigned-byte 8))))
                  (multiple-value-bind (vector offset) (array-data-and-offset mapped-vector)
-                   (loop for data across sections do (incf (cdr data) offset))
-                   (setf (core-info-mapped-ivector core) mapped-vector)
-                   (setf (core-info-raw-ivector core) vector))))
-      (:stream (setf (core-info-stream core)
-                     (open pathname :element-type '(unsigned-byte 8)))))
+                   (push mapped-vector (core-info-ivectors core))
+                   (loop for sect across sections
+                         do (incf (%core-sect.offset sect) offset)
+                         do (setf (%core-sect.ivector sect) vector)))))
+      (:stream (let ((stream (open pathname :element-type '(unsigned-byte 8)
+                                   :sharing :lock)))
+                 (push stream (core-info-streams core))
+                 (loop for sect across sections do (setf (%core-sect.stream sect) stream)))))
     (setq *current-core* core))
+  ;;(unless (every (lambda (sect) (fixnump (car sect))) (core-info-sections (current-core)))
+  ;;  (error "Non-fixnum addresses not supported"))
+  (when (and image
+             (area-loop with area-ptr
+                        thereis (and (eq (core-q area-ptr target::area.code)
+                                         (ash area-readonly target::fixnum-shift))
+                                     (< (core-q area-ptr target::area.low) (core-q area-ptr target::area.active))
+                                     (not (core-section-for-address (core-q area-ptr target::area.low))))))
+    ;; Have a missing readonly section, and an image file that might contain it.
+    (add-core-sections-from-image image))
   pathname)
 
 ;; Kinda stupid to call external program for this...
-(defun readelf-sections (pathname)
+(defun read-sections (pathname)
   (flet ((split (line start end)
            (loop while (setq start (position-if-not #'whitespacep line :start start :end end))
                  as match = (cdr (assq (char line start) '((#\[ . #\]) (#\( . #\)) (#\< . #\>))))
@@ -121,31 +175,41 @@
                  do (setq start next))))
     (let* ((file (native-translated-namestring pathname))
            (string (with-output-to-string (output)
-                     (ccl:run-program "readelf" `("--sections" ,file) :output output)))
+                     #+readelf (ccl:run-program "readelf" `("--sections" "--wide" ,file) :output output)
+                     #-readelf (ccl:run-program "objdump" `("-h" "-w" ,file) :output output)))
+           (header-pos (or #+readelf (position #\[ string)
+                           #-readelf (search "Idx Name" string)
+                           (error "Cannot parse: ~%~a" string)))
            (sections (loop
-                       for start = (1+ (position #\newline string
-                                                 :start (1+ (position #\newline string
-                                                                      :start (position #\[ string)))))
-                         then next
-                       for next = (1+ (position #\newline string
-                                                :start (1+ (position #\newline string :start start))))
-                       while (eql #\space (aref string next))
+                       for start = (1+ (position #\newline string :start header-pos)) then (1+ end)
+                       for end = (or (position #\newline string :start start) (length string))
+                       while (and (< start end) (find (aref string start) " 123456789"))
                        nconc
-                       (destructuring-bind (number name type address filepos size &optional ent-size flags link info align)
-                           (split string start next)
-                         (assert (and (eql (char number 0) #\[) (eql (char number (1- (length number))) #\])))
-                         (setq number (read-from-string number :start 1 :end (1- (length number))))
-                         (when (eql number 0)
-                           (shiftf align info link flags ent-size size filepos address type name ""))
-                         (setq address (parse-integer address :radix 16))
-                         (setq filepos  (parse-integer filepos :radix 16))
-                         (setq size (parse-integer size :radix 16))
-                         (setq ent-size (parse-integer ent-size :radix 16))
-                         (unless (eql size 0)
-                           (assert (and (equal link "0") (equal info "0") (equal align "1")))
-                           (list (list address filepos size))))))
-           (sections (cons (list most-positive-fixnum 0 0) sections));; hack for loop below
+                       (multiple-value-bind (name address filepos size)
+                         #+readelf
+                         (destructuring-bind (number name type address filepos size &rest flags)
+                             (split string start end)
+                           (declare (ignore flags))
+                           (assert (and (eql (char number 0) #\[) (eql (char number (1- (length number))) #\])))
+                           (setq number (read-from-string number :start 1 :end (1- (length number))))
+                           (when (eql number 0)
+                             (shiftf size filepos address type))
+                           (values name address filepos size))
+                         #-readelf
+                         (destructuring-bind (number name size address lma filepos &rest flags)
+                             (split string start end)
+                           (declare (ignore lma flags))
+                           (parse-integer number :radix 10) ;; error checking only
+                           (values name address filepos size))
+                         (unless (or (equal name "") (eql (char name 0) #\.))
+                           (setq address (parse-integer address :radix 16))
+                           (setq filepos  (parse-integer filepos :radix 16))
+                           (setq size (parse-integer size :radix 16))
+                           (unless (eql size 0)
+                             (list (list address filepos size)))))))
            (sections (sort sections #'< :key #'car));; sort by address
+           (sections (let ((last (car (last sections))))  ;; hack for loop below
+                       (nconc sections (list (list (+ (car last) (caddr last) 1) 0 0)))))
            (sections (loop
                        with cur-address = -1
                        with cur-filepos = -1
@@ -153,7 +217,10 @@
                        for (address filepos size) in sections
                        unless (or (= (+ cur-filepos (- address cur-address)) filepos)
                                   (= cur-address cur-end))
-                         collect (cons cur-address cur-filepos)
+                         collect (make-core-sect
+                                      :start cur-address
+                                      :end cur-end
+                                      :offset cur-filepos)
                        do (if (= (+ cur-filepos (- address cur-address)) filepos)
                             (setq cur-end (max (+ address size) cur-end))
                             (progn
@@ -161,21 +228,101 @@
                               (setq cur-address address cur-filepos filepos cur-end (+ address size)))))))
       (coerce sections 'vector))))
 
+
+(defun add-core-sections-from-image (pathname)
+  (with-open-file (header-stream  pathname :element-type '(signed-byte 32))
+    (labels ((read-at (&optional pos)
+               (when pos (file-position header-stream pos))
+               (read-byte header-stream))
+             (readn (pos) (+ (logand #xFFFFFFFF (read-at pos)) (ash (read-at) 32))))
+      (let* ((sig '(#x4F70656E #x4D434C49 #x6D616765 #x46696C65))
+             (end (file-length header-stream))
+             (page-mask (1- *host-page-size*))
+             (header (+ end (/ (read-at (1- end)) 4))))
+        (unless (progn
+                  (file-position header-stream (- end 4))
+                  (loop repeat 3 as s in sig always (eql s (read-at))))
+          (error "~s is not a ccl image file" pathname))
+        (assert (and (integerp header) (< header end) (<= 0 header)))
+        (file-position header-stream header)
+        (assert (loop for s in sig always (eql s (read-at))))
+        (let* ((nsections (read-at (+ header $image-nsections)))
+               (offset
+                #+64-bit-host (/ (+ (ash (read-at (+ header $image-data-offset-64)) 32)
+                                    (logand #xFFFFFFFF (read-at))) 4)
+                #-64-bit-host 0)
+               (sections (loop repeat nsections
+                               for pos upfrom (+ header $image-header-size) by $image-sect-header-size
+                               for epos = (* 4 (+ header $image-header-size
+                                                         (* nsections $image-sect-header-size)
+                                                         offset))
+                                 then (+ fpos mem-size)
+                               as fpos = (logandc2 (+ epos page-mask) page-mask)
+                               as mem-size = (readn (+ pos $image-sect-size))
+                               when (eq (readn (+ pos $image-sect-code))
+                                        (ash area-readonly target::fixnum-shift))
+                                 collect (cons fpos mem-size)))
+               (new (area-loop with area-ptr
+                               when (and (eq (core-q area-ptr target::area.code)
+                                             (ash area-readonly target::fixnum-shift))
+                                         (< (core-q area-ptr target::area.low)
+                                            (core-q area-ptr target::area.active))
+                                         (not (core-section-for-address (core-q area-ptr target::area.low))))
+                               collect (let* ((size (- (core-q area-ptr target::area.active)
+                                                       (core-q area-ptr target::area.low)))
+                                              (matches (remove size sections :key 'cdr :test-not 'eql)))
+
+                                         ;; **** should just do nothing if not found
+                                         (assert (eql (length matches) 1))
+                                         (make-core-sect
+                                          :start (core-q area-ptr target::area.low)
+                                          :end (core-q area-ptr target::area.active)
+                                          :offset (caar matches)))))
+               (image-stream (open pathname :element-type '(unsigned-byte 8) :sharing :lock)))
+          (unwind-protect
+               (let ((core (current-core)))
+                 (setf (core-info-sections core)
+                       (sort (concatenate 'vector new (core-info-sections core))
+                             #'< :key (lambda (s) (%core-sect.start-addr s))))
+                 (push image-stream (core-info-streams core))
+                 (loop for s in new do (setf (%core-sect.stream s) image-stream))
+                 (setq image-stream nil))
+            (when image-stream (close image-stream :abort t))))))))
+
+
 (declaim (inline core-ivector-readb core-ivector-readw core-ivector-readl core-ivector-readq
                  core-stream-readb core-stream-readw core-stream-readl core-stream-readq))
 (declaim (ftype (function (t t) (unsigned-byte 8)) core-ivector-readb core-stream-readb)
          (ftype (function (t t) (unsigned-byte 16)) core-ivector-readw core-stream-readw)
          (ftype (function (t t) (unsigned-byte 32)) core-ivector-readl core-stream-readl)
          (ftype (function (t t) (unsigned-byte 64)) core-ivector-readq core-stream-readq)
-         (ftype (function (integer) fixnum) core-offset-for-address))
+         (ftype (function (simple-vector) fixnum) core-section-for-address))
 
-(defun core-offset-for-address (address)
-  ;; sections are sorted, so could do binary search if this became a bottleneck.
-  ;; (there are around 50 sections)
-  (or (loop for prev = nil then sect as sect across (core-info-sections (current-core))
-            do (when (< address (car sect))
-                 (return (and prev (+ (cdr prev) (- address (car prev)))))))
-      (error "Unknown core address x~x" address)))
+(define-condition invalid-core-address (simple-error)
+  ()
+  (:default-initargs :format-control "Unknown core address x~x"))
+
+(declaim (inline core-section-for-address))
+(defun core-section-for-address (address)
+  (loop with sections = (core-info-sections (current-core))
+        with len fixnum = (length sections)
+        with low fixnum = -1
+        with high fixnum = len
+        do (let ((half (the fixnum (ash (%i+ high low) -1))))
+             (declare (fixnum half))
+             (when (eq half low)
+               (return (and (%i<= 0 half)
+                            (%i< half len)
+                            (let ((sect (%svref sections half)))
+                              (and (< address (%core-sect.end-addr (%svref sections half))) sect)))))
+             (let ((sect (%svref sections half)))
+               (if (%i<= (%core-sect.start-addr sect) address)
+                 (setq low half)
+                 (setq high half))))))
+
+(defun core-heap-address-p (address)
+  (core-section-for-address address))
+
 
 (defun core-stream-readb (s offset)
   (declare (type basic-input-stream s) (optimize (speed 3) (safety 0)))
@@ -185,17 +332,17 @@
 (defun core-stream-readw (s offset)
   (declare (type basic-input-stream s) (optimize (speed 3) (safety 0)))
   (when offset (stream-position s offset))
-  (%i+ (core-stream-readb s nil) (ash (core-stream-readb s nil) 8)))
+  (%i+ (core-stream-readb s nil) (%ilsl 8 (core-stream-readb s nil))))
 
 (defun core-stream-readl (s offset)
   (declare (type basic-input-stream s) (optimize (speed 3) (safety 0)))
   (when offset (stream-position s offset))
-  (%i+ (core-stream-readw s nil) (ash (core-stream-readw s nil) 16)))
+  (%i+ (core-stream-readw s nil) (%ilsl 16 (core-stream-readw s nil))))
 
 (defun core-stream-readq (s offset)
   (declare (type basic-input-stream s) (optimize (speed 3) (safety 0)))
   (when offset (stream-position s offset))
-  (+ (core-stream-readl s nil) (ash (core-stream-readl s nil) 32)))
+  (+ (core-stream-readl s nil) (ash (the fixnum (core-stream-readl s nil)) 32)))
 
 (defun core-ivector-readb (vec offset)
   (declare (type (simple-array (unsigned-byte 8) (*)) vec) (fixnum offset)
@@ -204,52 +351,65 @@
 
 (defun core-ivector-readw (vec offset)
   (declare (optimize (speed 3) (safety 0)))
-  (%i+ (core-ivector-readb vec offset) (ash (core-ivector-readb vec (%i+ offset 1)) 8)))
+  (%i+ (core-ivector-readb vec offset) (%ilsl 8 (core-ivector-readb vec (+ offset 1)))))
 
 (defun core-ivector-readl (vec offset)
   (declare (optimize (speed 3) (safety 0)))
-  (%i+ (core-ivector-readw vec offset) (ash (core-ivector-readw vec (%i+ offset 2)) 16)))
+  (%i+ (core-ivector-readw vec offset) (%ilsl 16 (core-ivector-readw vec (+ offset 2)))))
 
 (defun core-ivector-readq (vec offset)
   (declare (optimize (speed 3) (safety 0)))
-  (+ (core-ivector-readl vec offset) (ash (core-ivector-readl vec (%i+ offset 4)) 32)))
+  (+ (core-ivector-readl vec offset) (ash (core-ivector-readl vec (+ offset 4)) 32)))
 
 
 (defun core-q (address &optional (offset 0))
   (declare (optimize (speed 3) (safety 0)))
-  (let* ((core (current-core))
-         (ivector (core-info-raw-ivector core)))
-    (declare (type core-info core))
+  (incf address offset)
+  (let* ((sect (or (core-section-for-address address)
+                   (error 'invalid-core-address
+                          :format-arguments (list address))))
+         (ivector (%core-sect.ivector sect))
+         (pos (+ (%core-sect.offset sect) (- address (%core-sect.start-addr sect)))))
     (if ivector
-      (core-ivector-readq ivector (core-offset-for-address (+ address offset)))
-      (core-stream-readq (core-info-stream core) (core-offset-for-address (+ address offset))))))
+      (core-ivector-readq ivector pos)
+      (core-stream-readq (%core-sect.stream sect) pos))))
+
 
 (defun core-l (address &optional (offset 0))
   (declare (optimize (speed 3) (safety 0)))
-  (let* ((core (current-core))
-         (ivector (core-info-raw-ivector core)))
-    (declare (type core-info core))
+  (incf address offset)
+  (let* ((sect (or (core-section-for-address address)
+                   (error 'invalid-core-address
+                          :format-arguments (list address))))
+         (ivector (%core-sect.ivector sect))
+         (pos (+ (%core-sect.offset sect) (- address (%core-sect.start-addr sect)))))
     (if ivector
-      (core-ivector-readl ivector (core-offset-for-address (+ address offset)))
-      (core-stream-readl (core-info-stream core) (core-offset-for-address (+ address offset))))))
+      (core-ivector-readl ivector pos)
+      (core-stream-readl (%core-sect.stream sect) pos))))
 
 (defun core-w (address &optional (offset 0))
   (declare (optimize (speed 3) (safety 0)))
-  (let* ((core (current-core))
-         (ivector (core-info-raw-ivector core)))
-    (declare (type core-info core))
+  (incf address offset)
+  (let* ((sect (or (core-section-for-address address)
+                   (error 'invalid-core-address
+                          :format-arguments (list address))))
+         (ivector (%core-sect.ivector sect))
+         (pos (+ (%core-sect.offset sect) (- address (%core-sect.start-addr sect)))))
     (if ivector
-      (core-ivector-readw ivector (core-offset-for-address (+ address offset)))
-      (core-stream-readw (core-info-stream core) (core-offset-for-address (+ address offset))))))
+      (core-ivector-readw ivector pos)
+      (core-stream-readw (%core-sect.stream sect) pos))))
 
 (defun core-b (address &optional (offset 0))
   (declare (optimize (speed 3) (safety 0)))
-  (let* ((core (current-core))
-         (ivector (core-info-raw-ivector core)))
-    (declare (type core-info core))
+  (incf address offset)
+  (let* ((sect (or (core-section-for-address address)
+                   (error 'invalid-core-address
+                          :format-arguments (list address))))
+         (ivector (%core-sect.ivector sect))
+         (pos (+ (%core-sect.offset sect) (- address (%core-sect.start-addr sect)))))
     (if ivector
-      (core-ivector-readb ivector (core-offset-for-address (+ address offset)))
-      (core-stream-readb (core-info-stream core) (core-offset-for-address (+ address offset))))))
+      (core-ivector-readb ivector pos)
+      (core-stream-readb (%core-sect.stream sect) pos))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -291,7 +451,7 @@
   (the fixnum (logand #xFF header)))
 
 (defun uvheader-size (header)
-  (ash header (- target::num-subtag-bits)))
+  (the fixnum (ash header (- target::num-subtag-bits))))
 
 (defun uvheader-byte-size (header)
   (x8664::x8664-misc-byte-count (uvheader-typecode header) (uvheader-size header)))
@@ -317,61 +477,77 @@
 (defun uvheader-type-typecode (symbol &aux pos)
   (unless (eq symbol 'bogus)
     (cond ((setq pos (position symbol *immheader-0-types*))
-           (logior (ash pos target::ntagbits) target::fulltag-immheader-0))
+           (%ilogior (%ilsl target::ntagbits pos) target::fulltag-immheader-0))
           ((setq pos (position symbol *immheader-1-types*))
-           (logior (ash pos target::ntagbits) target::fulltag-immheader-1))
+           (%ilogior (%ilsl target::ntagbits pos) target::fulltag-immheader-1))
           ((setq pos (position symbol *immheader-2-types*))
-           (logior (ash pos target::ntagbits) target::fulltag-immheader-2))
+           (%ilogior (%ilsl target::ntagbits pos) target::fulltag-immheader-2))
           ((setq pos (position symbol *nodeheader-0-types*))
-           (logior (ash pos target::ntagbits) target::fulltag-nodeheader-0))
+           (%ilogior (%ilsl target::ntagbits pos) target::fulltag-nodeheader-0))
           ((setq pos (position symbol *nodeheader-1-types*))
-           (logior (ash pos target::ntagbits) target::fulltag-nodeheader-1)))))
+           (%ilogior (%ilsl target::ntagbits pos) target::fulltag-nodeheader-1)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;;  Core heap
 
+
+(defun core-heap-area-code (area)
+  (let ((code (heap-area-code area))
+        (dynamic (ash (core-q (core-q (core-q (kernel-global-address 'all-areas))
+                                      target::area.succ)
+                              target::area.code)
+                      (- target::fixnum-shift))))
+    (if (or (fixnump area)
+            (eq dynamic area-dynamic)
+            ;; account for watched area having been inserted
+            (<= code area-watched))
+      code
+      (1- code))))
+
 (defun map-core-areas (function &key area)
-  (setq area (cond ((or (eq area t) (eq area nil)) nil)
-                   ((consp area) (mapcar #'heap-area-code area))
-                   (t (list (heap-area-code area)))))
-  (loop for area-ptr = (core-q (core-q (kernel-global-address 'all-areas)) target::area.succ)
-          then (core-q area-ptr target::area.succ)
-        as code = (ash (core-q area-ptr target::area.code) (- target::fixnum-shift))
-        until (= code area-void)
-        do (when (and (<= area-readonly code)
-                      (<= code area-dynamic)
-                      (or (null area) (member code area))
-                      (< (core-q area-ptr target::area.low) (core-q area-ptr target::area.active)))
-             #+debug
-             (format t "~& AREA at x~x, type = ~a low = x~x active = x~x (size = x~x out of x~x)"
-                     area-ptr (core-area-name code)
-                     (core-q area-ptr target::area.low)
-                     (core-q area-ptr target::area.active)
-                     (- (core-q area-ptr target::area.active) (core-q area-ptr target::area.low))
-                     (- (core-q area-ptr target::area.high) (core-q area-ptr target::area.low)))
-             (map-core-area area-ptr function))))
+  (if (eq area :tenured)
+    (map-core-area (core-q (kernel-global-address 'tenured-area)) function)
+    (area-loop with area-ptr
+               with area = (cond ((or (eq area t) (eq area nil)) nil)
+                                 ((consp area) (mapcar #'core-heap-area-code area))
+                                 (t (list (core-heap-area-code area))))
+               as code = (ash (core-q area-ptr target::area.code) (- target::fixnum-shift))
+               do (when (and (<= area-readonly code)
+                             (<= code area-dynamic)
+                             (or (null area) (member code area))
+                             (< (core-q area-ptr target::area.low) (core-q area-ptr target::area.active)))
+                    #+debug
+                    (format t "~& AREA at x~x, type = ~a low = x~x active = x~x (size = x~x out of x~x)"
+                            area-ptr (core-area-name code)
+                            (core-q area-ptr target::area.low)
+                            (core-q area-ptr target::area.active)
+                            (- (core-q area-ptr target::area.active) (core-q area-ptr target::area.low))
+                            (- (core-q area-ptr target::area.high) (core-q area-ptr target::area.low)))
+                    (map-core-area area-ptr function)))))
 
 (defun map-core-area (area-ptr fun)
-  (let* ((ptr (core-q area-ptr target::area.low))
-         (end (core-q area-ptr target::area.active)))
-    (loop
-      (when (>= ptr end) (return))
-      (let ((header (core-q ptr)))
-        (cond ((uvheader-p header)
-               (let ((subtag (uvheader-typecode header)))
-                 (funcall fun
-                          (+ ptr (cond ((eq subtag target::subtag-symbol) target::fulltag-symbol)
-                                       ((eq subtag target::subtag-function) target::fulltag-function)
-                                       (t target::fulltag-misc)))))
-               (let* ((bytes (uvheader-byte-size header))
-                      (total (logandc2 (%i+ bytes (+ target::node-size (1- target::dnode-size)))
-                                       (1- target::dnode-size))))
-                 (declare (fixnum bytes total))
-                 (incf ptr total)))
-              (t
-               (funcall fun (+ ptr target::fulltag-cons))
-               (incf ptr target::cons.size)))))))
+  (map-core-region (core-q area-ptr target::area.low)
+		   (core-q area-ptr target::area.active)
+		   fun))
+
+(defun map-core-region (ptr end fun)
+  (loop
+    while (< ptr end) as header = (core-q ptr)
+    do (cond ((uvheader-p header)
+              (let ((subtag (uvheader-typecode header)))
+                (funcall fun
+                         (+ ptr (cond ((eq subtag target::subtag-symbol) target::fulltag-symbol)
+                                      ((eq subtag target::subtag-function) target::fulltag-function)
+                                      (t target::fulltag-misc)))))
+              (let* ((bytes (uvheader-byte-size header))
+                     (total (logandc2 (%i+ bytes (+ target::node-size (1- target::dnode-size)))
+                                      (1- target::dnode-size))))
+                (declare (fixnum bytes total))
+                (incf ptr total)))
+             (t
+              (funcall fun (+ ptr target::fulltag-cons))
+              (incf ptr target::cons.size)))))
 
 
 (declaim (inline core-consp core-symbolp core-functionp core-listp core-nullp))
@@ -426,29 +602,29 @@
   (let* ((header (core-uvheader vec-ptr))
          (addr (+ (logandc2 vec-ptr target::fulltagmask) target::node-size))
          (typecode (uvheader-typecode header))
-         (tag (logand typecode target::fulltagmask))
+         (tag (%ilogand typecode target::fulltagmask))
          (len (uvheader-size header)))
     (assert (< -1 index len))
-    (cond ((or (eql tag target::fulltag-nodeheader-0)
-               (eql tag target::fulltag-nodeheader-1))
-           (core-q addr (ash index target::word-shift)))
-          ((eql tag target::ivector-class-64-bit)
+    (cond ((or (eq tag target::fulltag-nodeheader-0)
+               (eq tag target::fulltag-nodeheader-1))
+           (core-q addr (%ilsl target::word-shift index)))
+          ((eq tag target::ivector-class-64-bit)
            (cond ((eq typecode target::subtag-double-float-vector)
                   (error "~s not implemented yet" 'target::subtag-double-float-vector))
                  (t
-                  (core-q addr (ash index target::word-shift)))))
+                  (core-q addr (%ilsl target::word-shift index)))))
           ((eq tag target::ivector-class-32-bit)
            (cond ((eq typecode target::subtag-simple-base-string)
-                  (code-char (core-l addr (ash index 2))))
+                  (%code-char (core-l addr (%ilsl 2 index))))
                  ((eq typecode target::subtag-single-float-vector)
                   (error "~s not implemented yet" 'target::subtag-single-float-vector))
-                 (t (core-l addr (ash index 2)))))
+                 (t (core-l addr (%ilsl 2 index)))))
           ((eq typecode target::subtag-bit-vector)
-           (let ((byte (core-b addr (ash (+ index 7) -3))))
+           (let ((byte (core-b addr (%iasr 3 (%i+ index 7)))))
              (error "not implemented, for ~b" byte)))
           ((>= typecode target::min-8-bit-ivector-subtag)
            (core-b addr index))
-          (t (core-w addr (ash index 1))))))
+          (t (core-w addr (%ilsl 1 index))))))
 
 (defun core-uvsize (vec-ptr)
   (uvheader-size (core-uvheader vec-ptr)))
@@ -461,7 +637,7 @@
   (assert (core-listp obj))
   (core-q obj target::cons.cdr))
 
-(defun core-object-type (obj)
+(defun core-object-typecode-type (obj)
   (let ((fulltag (logand obj target::fulltagmask)))
     (cond ((eq fulltag target::fulltag-cons) 'cons)
           ((eq fulltag target::fulltag-nil) 'null)
@@ -472,17 +648,73 @@
            ;; Assumes we're running on same architecture as core file.
            (type-of (%%raw-obj obj)))
           ((eq (logand fulltag target::tagmask) target::tag-tra) 'tagged-return-address)
-          ((eq fulltag target::fulltag-misc) (core-uvtype obj))
+          ((eq fulltag target::fulltag-misc)
+           ;; (core-uvtype obj)
+           (handler-case (core-uvtype obj) (invalid-core-address () 'unmapped)))
           ((eq fulltag target::fulltag-symbol) 'symbol)
           ;; TODO: Could get hairier based on lfun-bits, but usually don't care.
           ((eq fulltag target::fulltag-function) 'function)
           (t (cerror "treat as ~*~s" "Invalid object tag at #x~x" obj 'bogus)
            'bogus))))
 
+(defun core-object-type-key (obj)
+  ;; Returns either a symbol (for built-in types) or a pointer to type symbol or class.
+  ;; Whatever it returns must be suitable for use in an eql hash table; use core-type-string
+  ;; to get a printable rep.
+  (let ((type (core-object-typecode-type obj)))
+    (case type
+      (function (core-function-type obj))
+      (internal-structure (core-istruct-type obj))
+      (structure (core-struct-type obj))
+      (instance (core-instance-type obj))
+      (t type))))
+
+(defun core-function-type (obj)
+  (and (core-uvtypep obj :function)
+       (let ((bits (core-lfun-bits obj)))
+         (declare (fixnum bits))
+         (or (if (logbitp $lfbits-trampoline-bit bits)
+               (let* ((inner-fn (core-closure-function obj))
+                      (inner-bits (core-lfun-bits inner-fn)))
+                 (if (neq inner-fn obj)
+                   (if (logbitp $lfbits-method-bit inner-bits)
+                     'compiled-lexical-closure
+                     (unless (logbitp $lfbits-gfn-bit inner-bits)
+                       (if (logbitp $lfbits-cm-bit inner-bits)
+                         'combined-method
+                         'compiled-lexical-closure)))
+                   'compiled-lexical-closure))
+               (if (logbitp  $lfbits-method-bit bits)
+                 'method-function
+                 (unless (logbitp $lfbits-gfn-bit bits)
+                   (if (logbitp $lfbits-cm-bit bits)
+                     'combined-method
+                     'function))))
+             (core-class-name
+              (core-uvref
+               (core-nth-immediate obj gf.instance.class-wrapper)
+               %wrapper-class))))))
+
+(defun core-type-string (object-type)
+  (with-output-to-string (s)
+    (if (fixnump object-type)
+      (core-print object-type s)
+      (prin1 object-type s))))
+
 (defun core-istruct-type (obj)
   (and (core-uvtypep obj :istruct)
        (core-car (core-uvref obj 0))))
        
+(defun core-struct-type (obj)
+  (and (core-uvtypep obj :struct)
+       (core-uvref (core-car (core-uvref obj 0)) 1)))
+
+(defun core-instance-type (obj)
+  (and (core-uvtypep obj :instance)
+       (core-class-name (core-instance-class obj))))
+
+(defun core-class-name (class)
+  (core-uvref (core-uvref class instance.slots) %class.name))
 
 (defun core-object-type-and-size (obj)
   (let ((fulltag (logand obj target::fulltagmask)))
@@ -496,66 +728,44 @@
                                 (1- target::dnode-size))))
           (values (uvheader-type header) logsize total))))))
 
-(defun core-heap-utilization (&key area unit sort)
-  (let* ((hash (make-hash-table :shared nil))
-         (total-physsize 0)
-         (div (ecase unit
-                ((nil) 1)
-                (:kb 1024.0d0)
-                (:mb (* 1024.0d0 1024.0d0))
-                (:gb (* 1024.0d0 1024.0d0 1024.0d0))))
-         (sort-key (ecase sort
-                     (:count #'cadr)
-                     (:logical-size #'caddr)
-                     ((:physical-size nil) #'cdddr)))
+(defun core-heap-utilization (&key (stream *debug-io*) area unit (sort :size) classes (threshold 0.00005))
+  (let* ((obj-hash (make-hash-table :shared nil))
+         (slotv-hash (make-hash-table :shared nil))
          (all nil))
-    (map-core-areas (lambda (obj)
+    (map-core-areas (lambda (obj &aux (hash obj-hash))
                       (multiple-value-bind (type logsize physsize) (core-object-type-and-size obj)
+                        (when classes
+                          (when (core-uvtypep obj :slot-vector)
+                            (setq hash slotv-hash
+                                  obj (core-uvref obj slot-vector.instance)))
+                          (setq type (core-object-type-key obj)))
                         (let ((a (or (gethash type hash)
-                                     (setf (gethash type hash) (list* 0 0 0)))))
+                                     (setf (gethash type hash) (list 0 0 0)))))
                           (incf (car a))
                           (incf (cadr a) logsize)
-                          (incf (cddr a) physsize))))
+                          (incf (caddr a) physsize))))
                     :area area)
     (maphash (lambda (type data)
-               (incf total-physsize (cddr data))
-               (push (cons type data) all))
-             hash)
-    (setq all (sort all #'> :key sort-key))
-    (format t "~&Object type~42tCount    Logical size   Physical size   % of Heap~%~50t~a~66t~:*~a"
-            (ecase unit
-              ((nil) " (in bytes)")
-              (:kb   "(in kilobytes)")
-              (:mb   "(in megabytes)")
-              (:gb   "(in gigabytes)")))
-    (loop for (type count logsize . physsize) in all
-          do (if unit
-               (format t "~&~a~36t~11d~16,2f~16,2f~11,2f%"
-                       type
-                       count
-                       (/ logsize div)
-                       (/ physsize div)
-                       (* 100.0 (/ physsize total-physsize)))
-               (format t "~&~a~36t~11d~16d~16d~11,2f%"
-                       type
-                       count
-                       logsize
-                       physsize
-                       (* 100.0 (/ physsize total-physsize)))))
-    (if unit
-      (format t "~&Total~63t~16,2f" (/ total-physsize div))
-      (format t "~&Total~63t~16d" total-physsize)))
-  (values))
+               (push (cons (core-type-string type) data) all))
+             obj-hash)
+    (maphash (lambda (type data)
+               (push (cons (concatenate 'string (core-type-string type) " slot-vector") data) all))
+             slotv-hash)
+    (report-heap-utilization all :stream stream :unit unit :sort sort :threshold threshold)))
 
 
 (defstruct unresolved-address address)
 
 (defmethod print-object ((obj unresolved-address) stream)
   (let* ((address (unresolved-address-address obj)))
-    (format stream "#<Core ~S~@[[~d]~] #x~x >" 
-            (core-object-type address)
-            (and (core-uvector-p address) (core-uvsize address))
-            address)))
+    (if (and (core-uvector-p address)
+             (not (handler-case (core-uvheader address) (invalid-core-address () nil))))
+      (format stream "#<Unmapped #x~x >" address)
+      (format stream "#<Core ~A~@[[~d]~] #x~x >"
+              (or (ignore-errors (core-type-string (core-object-type-key address)))
+                  (core-object-typecode-type address))
+              (and (core-uvector-p address) (core-uvsize address))
+            address))))
 
 (defun copy-from-core (obj &key (depth 1))
   (check-type depth (integer 0))
@@ -571,7 +781,8 @@
            (%%raw-obj obj))
           ((< (decf depth) 0)
            (make-unresolved-address :address obj))
-          ((%i<= target::fulltag-misc fulltag)
+          ((and (%i<= target::fulltag-misc fulltag)
+                (handler-case (core-uvheader obj) (invalid-core-address nil)))
            (or (and (core-uvtypep obj :package)
                     (find-package (core-package-name obj)))
                (let ((v (%copy-uvector-from-core obj depth)))
@@ -604,21 +815,24 @@
          (tag (logand typecode target::fulltagmask))
          (len (uvheader-size header))
          (vec (%alloc-misc len typecode)))
+    (declare (type fixnum typecode tag len))
     (cond ((or (eq tag target::fulltag-nodeheader-0)
                (eq tag target::fulltag-nodeheader-1))
-           (when (eql typecode target::subtag-function)
+           (when (eq typecode target::subtag-function)
              ;; Don't bother copying the code for now
              (let ((skip (core-l addr)))
+	       (declare (fixnum skip))
                (assert (<= 0 skip len))
                (incf addr (ash skip target::word-shift))
                (decf len skip)))
            (dotimes (i len)
+	     (declare (fixnum i))
              (setf (%svref vec i)
-                   (copy-from-core (core-q addr (ash i target::word-shift)) :depth depth)))
+                   (copy-from-core (core-q addr (%ilsl target::word-shift i)) :depth depth)))
            (let ((ptrtag (logand vec-ptr target::fulltagmask)))
-             (cond ((eql ptrtag target::fulltag-symbol)
+             (cond ((eq ptrtag target::fulltag-symbol)
                     (%symvector->symptr vec))
-                   ((eql ptrtag target::fulltag-function)
+                   ((eq ptrtag target::fulltag-function)
                     (%function-vector-to-function vec))
                    (t vec))))
           ((eq tag target::ivector-class-64-bit)
@@ -627,17 +841,17 @@
                   (make-unresolved-address :address vec-ptr))
                  (t
                   (dotimes (i len vec)
-                    (setf (uvref vec i) (core-q addr (ash i target::word-shift)))))))
+                    (setf (uvref vec i) (core-q addr (%ilsl target::word-shift i)))))))
           ((eq tag target::ivector-class-32-bit)
            (cond ((eq typecode target::subtag-simple-base-string)
                   (dotimes (i len vec)
-                    (setf (uvref vec i) (code-char (core-l addr (ash i 2))))))
+                    (setf (uvref vec i) (%code-char (core-l addr (%ilsl 2 i))))))
                  ((eq typecode target::subtag-single-float-vector)
                   (warn "~s not implemented yet" 'target::subtag-single-float-vector)
                   (make-unresolved-address :address vec-ptr))
                  (t
                   (dotimes (i len vec)
-                    (setf (uvref vec i) (core-l addr (ash i 2)))))))
+                    (setf (uvref vec i) (core-l addr (%ilsl 2 i)))))))
           ((eq typecode target::subtag-bit-vector)
            (warn "bit vector not implemented yet")
            (make-unresolved-address :address vec-ptr))
@@ -646,7 +860,7 @@
              (setf (uvref vec i) (core-b addr i))))
           (t
            (dotimes (i len vec)
-             (setf (uvref vec i) (core-w addr (ash i 1))))))))
+             (setf (uvref vec i) (core-w addr (%ilsl 1 i))))))))
 
 (defun map-core-pointers (fn &key area)
   (map-core-areas (lambda (obj)
@@ -661,13 +875,15 @@
                                (let* ((typecode (uvheader-typecode header))
                                       (len (uvheader-size header))
                                       (addr (+ (logandc2 obj target::fulltagmask) target::node-size)))
-                                 (when (eql typecode target::subtag-function)
+                                 (declare (fixnum typecode len))
+                                 (when (eq typecode target::subtag-function)
                                    (let ((skip (core-l addr)))
+                                     (declare (fixnum skip))
                                      (assert (<= 0 skip len))
-                                     (incf addr (ash skip target::word-shift))
+                                     (incf addr (%ilsl target::word-shift skip))
                                      (decf len skip)))
                                  (dotimes (i len)
-                                   (funcall fn (core-q addr (ash i target::word-shift)) obj i))))))))
+                                   (funcall fn (core-q addr (%ilsl target::word-shift i)) obj i))))))))
                   :area area))
 
 (defun core-find-tra-function (tra)
@@ -698,12 +914,6 @@
          (matchp (core-instance-class obj)))))
 
 
-(defun core-instance-class-name (obj)
-  (let* ((class (core-instance-class obj))
-         (class-slots (core-uvref class instance.slots))
-         (name (core-uvref class-slots %class.name)))
-    (core-symbol-name name)))
-
 (defun core-symptr (obj)
   (if (core-nullp obj)
     (nil-relative-symbol-address 'nil)
@@ -727,6 +937,10 @@
       (if (core-consp cell)
         (core-car cell)
         cell))))
+
+(defun core-symbol-plist (obj)
+  (when (setq obj (core-symptr obj))
+    (core-cdr (core-q obj target::symbol.plist))))
 
 (defun core-all-packages-ptr ()
   (core-symbol-value (nil-relative-symbol-address '%all-packages%)))
@@ -843,17 +1057,20 @@
       (setf (core-info-lfun-names-table-ptr (current-core))
             (core-symbol-value (core-find-symbol '*lfun-names*)))))
 
+(defun core-nth-immediate (fn i)
+  (assert (core-uvtypep fn :function))
+  (let ((addr (+ (logandc2 fn target::fulltagmask) target::node-size)))
+    (core-q addr (%ilsl target::word-shift (+ (core-l addr) i -1)))))
+
 (defun core-closure-function (fun)
   (while (and (core-functionp fun)
               (logbitp $lfbits-trampoline-bit (core-lfun-bits fun)))
-    (let* ((addr (+ (logandc2 fun target::fulltagmask) target::node-size)))
-      (setq fun (core-q addr (ash (core-l addr) target::word-shift)))
-      (when (core-uvtypep fun :simple-vector)
-        (setq fun (core-uvref fun 0)))
-      #+gz (assert (core-functionp fun))))
+    (setq fun (core-nth-immediate fun 1))
+    (when (core-uvtypep fun :simple-vector)
+      (setq fun (core-uvref fun 0)))
+    #+gz (assert (core-functionp fun)))
   fun)
 
-    
 (defun core-lfun-name (fn)
   (assert (core-functionp fn))
   (flet ((lfun-name (fn)
@@ -861,7 +1078,7 @@
                (let* ((lfbits (core-lfun-bits fn))
                       (name (if (and (logbitp $lfbits-gfn-bit lfbits)
                                      (not (logbitp $lfbits-method-bit lfbits)))
-                                (core-uvref (core-uvref fn gf.slots) sgf.name)
+                                (core-uvref (core-nth-immediate fn gf.slots) sgf.name)
                                 (unless (logbitp $lfbits-noname-bit lfbits)
                                   (core-uvref fn (- (core-uvsize fn) 2))))))
                  (and name
@@ -917,7 +1134,7 @@
             (core-find-class 'process))))
 
 (defun core-print (obj &optional (stream t) depth)
-  ;; TODO: could dispatch on core-object-type...
+  ;; TODO: could dispatch on core-object-typecode-type...
   (cond ((core-nullp obj) (format stream "NIL"))
         ((core-symbolp obj)
          (core-print-symbol obj stream))
@@ -938,8 +1155,10 @@
            (format stream " . ")
            (core-print obj stream depth))
          (format stream ")"))
-        (t (format stream "#<core ~s x~x>"
-                   (core-object-type obj) obj))))
+        (t (format stream "#<core ~a x~x>"
+		   (or (ignore-errors (core-type-string (core-object-type-key obj)))
+		       (core-object-typecode-type obj))
+		   obj))))
 
 (defun core-print-symbol (sym stream)
   (let ((package (core-symbol-package sym)))
@@ -948,12 +1167,23 @@
           ((eq package (core-keyword-package))
            (format stream ":"))
           (t (let ((pkgname (core-package-name package)))
-               (unless (string-equal pkgname "COMMON-LISP")
-                 (format stream "~a::" pkgname)))))
-    (format stream "~a" (core-symbol-name sym))))
+               (etypecase pkgname
+                 (unresolved-address (format stream "@~x::" (unresolved-address-address pkgname)))
+                 (string (unless (string-equal pkgname "COMMON-LISP")
+                           (format stream "~a::" pkgname)))))))
+    (let ((symname (core-symbol-name sym)))
+      (etypecase symname
+        (unresolved-address (format stream "@~x" (unresolved-address-address symname)))
+        (string (format stream "~a" symname)))))
+  (values))
 
 (defun core-lfun-bits (fun)
-  (ash (core-uvref fun (1- (core-uvsize fun))) (- target::fixnum-shift)))
+  (let ((unsigned (core-uvref fun (1- (core-uvsize fun)))))
+    (ash (if (logbitp (1- (* target::node-size 8)) unsigned)
+           (logior (ash -1 (* target::node-size 8)) unsigned)
+           unsigned)
+         (- target::fixnum-shift))))
+
 
 (defun core-print-function (fun stream)
   (let* ((lfbits (core-lfun-bits fun))
@@ -981,7 +1211,14 @@
                    do (format stream sep)
                    do (let ((spec (core-car method-specializers)))
                         (if (core-uvtypep spec :instance)
-                          (core-print (core-uvref (core-uvref spec instance.slots) %class.name) stream)
+                          (let ((slots (core-uvref spec instance.slots)))
+                            ;; specializer is either a class or a ccl::eql-specializer
+                            (if (eql (core-uvsize slots) 3)
+                              (progn
+                                (format stream "(EQL ")
+                                (core-print (core-uvref slots 2) stream)
+                                (format stream ")"))
+                              (core-print (core-uvref slots %class.name) stream)))
                           (core-print spec stream)))
                    do (setq method-specializers (core-cdr method-specializers)))
              (unless (core-nullp method-specializers)
@@ -997,7 +1234,7 @@
 
 (defun core-print-process (proc stream)
   (format stream "#<~a ~s LWP(~d) #x~x>"
-          (core-instance-class-name proc)
+          (core-symbol-name (core-instance-type proc))
           (core-process-name proc)
           (core-q (core-process-tcr proc) target::tcr.native-thread-id)
           proc))
@@ -1157,3 +1394,4 @@
 
 
 )                             ; :x8664-target
+
