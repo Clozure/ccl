@@ -208,6 +208,7 @@
     cover
     leaks
     core-files
+    dominance
     asdf
     defsystem
     jp-encode

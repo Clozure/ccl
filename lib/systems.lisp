@@ -208,6 +208,7 @@
     (cover            "ccl:bin;cover"            ("ccl:library;cover.lisp"))
     (leaks            "ccl:bin;leaks"            ("ccl:library;leaks.lisp"))
     (core-files       "ccl:bin;core-files"       ("ccl:library;core-files.lisp"))
+    (dominance        "ccl:bin;dominance"        ("ccl:library;dominance.lisp"))
  
     (prepare-mcl-environment "ccl:bin;prepare-mcl-environment" ("ccl:lib;prepare-mcl-environment.lisp"))
     (defsystem        "ccl:tools;defsystem"      ("ccl:tools;defsystem.lisp"))

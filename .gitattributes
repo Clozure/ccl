@@ -406,6 +406,7 @@ lib/x8632env.lisp -text
 library/core-files.lisp -text
 library/cover.lisp -text
 library/darwinx8632-syscalls.lisp -text
+library/dominance.lisp -text
 library/elf.lisp -text
 library/intel-io.lisp -text
 library/jp-encode.lisp -text
