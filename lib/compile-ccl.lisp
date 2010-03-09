@@ -208,7 +208,6 @@
     cover
     leaks
     core-files
-    #+not-yet
     dominance
     asdf
     defsystem

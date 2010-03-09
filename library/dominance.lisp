@@ -19,6 +19,9 @@
 ;(setq *print-array* nil)
 ;(setq *print-simple-bit-vector* nil)
 
+#+:linuxx8664-target
+(progn
+
 (export '(idom-heap-utilization))
 
 #|
@@ -511,3 +514,5 @@
                            (record next)
                            (descend-pointers next)))))))
             finally (report-idom-heap-utilization type-infos :unit unit :sort sort :threshold threshold)))))
+
+)

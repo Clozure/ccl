@@ -65,6 +65,8 @@
 (defvar *current-core* nil)
 
 
+(eval-when (load eval #-BOOTSTRAPPED compile)
+
 (defstruct core-info
   pathname
   sections
@@ -77,7 +79,7 @@
   lfun-names-table-ptr
   process-class
   )
-
+)
 
 (defmethod print-object :around ((core core-info) (stream t))
   (let ((*print-array* nil)
