@@ -1989,31 +1989,53 @@
 
 (defun copy-readtable (&optional (from *readtable*) to)
   (setq from (if from (readtable-arg from)  %standard-readtable%))
-  (setq to (if to 
-             (readtable-arg to)
-             (%istruct 'readtable
-                        (make-array 256 :element-type '(unsigned-byte 8))
-                         nil (rdtab.case from))))
-  (setf (rdtab.alist to) (copy-tree (rdtab.alist from)))
-  (setf (rdtab.case to) (rdtab.case from))
   (let* ((fttab (rdtab.ttab from))
-         (tttab (rdtab.ttab to)))
-    (%copy-ivector-to-ivector fttab 0 tttab 0 256))
-  to)
+         (ttablen (uvsize fttab)))
+    (declare (fixnum ttablen))
+    (setq to (if to 
+               (readtable-arg to)
+               (%istruct 'readtable
+                         (make-array ttablen :element-type '(unsigned-byte 8))
+                         nil (rdtab.case from))))
+    (setf (rdtab.alist to) (copy-tree (rdtab.alist from)))
+    (setf (rdtab.case to) (rdtab.case from))
+    (let* ((tttab (rdtab.ttab to)))
+      (%copy-ivector-to-ivector fttab 0 tttab 0 ttablen))
+    to))
 
 (declaim (inline %character-attribute))
 
 (defun %character-attribute (char attrtab)
   (declare (character char)
-           (type (simple-array (unsigned-byte 8) (256)) attrtab)
+           (type (simple-array (unsigned-byte 8) (*)) attrtab)
            (optimize (speed 3) (safety 0)))
   (let* ((code (char-code char)))
     (declare (fixnum code))
-    (if (< code 256)
+    (if (< code (uvsize attrtab))
       (aref attrtab code)
-      ;; Should probably have an extension mechanism for things
-      ;; like NBS.
       $cht_cnst)))
+
+(defun %set-character-attribute (char readtable attr)
+  (let* ((code (char-code char))
+         (attrtab (rdtab.ttab readtable))
+         (oldsize (uvsize attrtab)))
+    (declare (type (mod #x110000) code)
+             (type (simple-array (unsigned-byte 8) (*)) attrtab))
+    (when (>= code oldsize)
+      ;; Characters whose code is > the current size of the table
+      ;; are implicitly constituents; don't grow the table just to
+      ;; store that info explicitly.
+      (if (eql attr $cht_cnst)
+        (return-from %set-character-attribute attr)
+        (let* ((newsize (min (+ code code) char-code-limit))
+               (new (make-array newsize
+                                :element-type '(unsigned-byte 8)
+                                :initial-element $cht_cnst)))
+          (declare ((simple-array (unsigned-byte 8) (*)) new))
+          (%copy-ivector-to-ivector attrtab 0 new 0 oldsize)
+          (setf (rdtab.ttab readtable) (setq attrtab new)))))
+    (setf (aref attrtab code) attr)))
+
 
 ;;; returns: (values attrib <aux-info>), where
 ;;;           <aux-info> = (char . fn), if terminating macro
@@ -2046,11 +2068,13 @@
            (push (cons to-char new-tree) (rdtab.alist to-readtable)))
          (if old-to-info
            (setf (rdtab.alist to-readtable) (delq old-to-info (rdtab.alist to-readtable)))))
-       (if (and (= from-attr $cht_cnst)
-                (member to-char '(#\Newline #\Linefeed #\Page #\Return
-                                  #\Space #\Tab #\Backspace #\Rubout)))
-           (setf (uvref (rdtab.ttab to-readtable) (char-code to-char)) $cht_ill)
-           (setf (uvref (rdtab.ttab to-readtable) (char-code to-char)) from-attr)))
+       (%set-character-attribute to-char
+                                 to-readtable
+                                 (if (and (= from-attr $cht_cnst)
+                                          (member to-char '(#\Newline #\Linefeed #\Page #\Return
+                                                            #\Space #\Tab #\Backspace #\Rubout)))
+                                   $cht_ill
+                                   from-attr)))
       t)))
 
 (defun get-macro-character (char &optional readtable)
@@ -2077,8 +2101,8 @@
   (let* ((info (nth-value 1 (%get-readtable-char char readtable))))
     (declare (list info))
     (without-interrupts
-     (setf (uvref (rdtab.ttab readtable) (char-code char))
-           (if (null fn) $cht_cnst (if non-terminating-p $cht_ntmac $cht_tmac)))
+     (%set-character-attribute char readtable
+                               (if (null fn) $cht_cnst (if non-terminating-p $cht_ntmac $cht_tmac)))
      (if (and (null fn) info)
        (setf (rdtab.alist readtable) (delete info (rdtab.alist readtable) :test #'eq)) 
        (if (null info)
@@ -2114,7 +2138,7 @@
   (let* ((info (nth-value 1 (%get-readtable-char char readtable))))
     (declare (list info))
     (without-interrupts
-     (setf (uvref (rdtab.ttab readtable) (char-code char))
+     (%set-character-attribute char readtable
            (if non-terminating-p $cht_ntmac $cht_tmac))
      (if info
        (rplacd (cdr info) nil)
