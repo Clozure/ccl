@@ -1306,7 +1306,7 @@ are running on, or NIL if we can't find any useful information."
                   (aref vector end)))))))))
 
   
-;;; Octets between START and N encode an unsigned integer in big-endian
+;;; Octets between START and END encode an unsigned integer in big-endian
 ;;; byte order.
 (defun parse-unsigned-integer (vector &optional (start 0) end)
   (setq end (check-sequence-bounds vector start end))
@@ -1315,7 +1315,7 @@ are running on, or NIL if we can't find any useful information."
         (multiple-value-bind (data offset) (array-data-and-offset vector)
           (declare (fixnum offset))
           (unless (typep data '(simple-array (unsigned-byte 8) (*)))
-            (report-bad-arg vector '(simple-array (unsigned-byte 8) (*))))
+            (report-bad-arg vector '(vector (unsigned-byte 8))))
           (incf start offset)
           (incf end offset)
           (setq vector data)))
@@ -1383,7 +1383,7 @@ are running on, or NIL if we can't find any useful information."
       (multiple-value-bind (data offset) (array-data-and-offset vector)
         (declare (fixnum offset))
         (unless (typep data '(simple-array (unsigned-byte 8) (*)))
-          (report-bad-arg vector '(simple-array (unsigned-byte 8) (*))))
+          (report-bad-arg vector '(vector (unsigned-byte 8))))
         (incf start offset)
         (incf end offset)
         (setq vector data)))
