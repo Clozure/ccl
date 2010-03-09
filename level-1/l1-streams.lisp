@@ -6227,7 +6227,7 @@ are printed.")
       (fixnum
        (if (< (the fixnum value) 0)
          (report-bad-arg value 'unsigned-byte))
-       (do* ((shift (ash(the fixnum (1- len)) 3) (- shift 8)))
+       (do* ((shift (ash (the fixnum (1- len)) 3) (- shift 8)))
             ((< shift 0) (progn
                            (setf (io-buffer-idx outbuf) idx)
                            (if (> idx (the fixnum (io-buffer-count outbuf)))
