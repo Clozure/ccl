@@ -94,7 +94,8 @@ find_symbol(char *name)
 
   while ((code = a->code) != AREA_VOID) {
     if ((code == AREA_STATIC) ||
-        (code == AREA_DYNAMIC)) {
+        (code == AREA_DYNAMIC) ||
+        (code == AREA_MANAGED_STATIC)) {
       sym = find_symbol_in_range((LispObj *)(a->low), (LispObj *)(a->active), name);
       if (sym) {
         break;
