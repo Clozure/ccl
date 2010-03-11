@@ -691,14 +691,16 @@ debug_thread_info(ExceptionInformation *xp, siginfo_t *info, int arg)
             (cs_area->low), (cs_area->high));
     fprintf(dbgout, "Value (lisp) stack area: low = 0x" LISP ", high = 0x" LISP "\n",
             (u64_t)(natural)(vs_area->low), (u64_t)(natural)vs_area->high);
-    fprintf(dbgout, "Exception stack pointer = 0x" LISP "\n",
+    if (xp) {
+      fprintf(dbgout, "Exception stack pointer = 0x" LISP "\n",
 #ifdef PPC
-            (u64_t) (natural)(xpGPR(xp,1))
+              (u64_t) (natural)(xpGPR(xp,1))
 #endif
 #ifdef X86
-            (u64_t) (natural)(xpGPR(xp,Isp))
-#endif
-            );
+              (u64_t) (natural)(xpGPR(xp,Isp))
+#endif           
+              );
+    }
   }
   return debug_continue;
 }
@@ -967,8 +969,10 @@ debug_backtrace(ExceptionInformation *xp, siginfo_t *info, int arg)
 
   if (xp) {
     plbt(xp);
+#ifndef X86
   } else {
     plbt_sp(current_stack_pointer());
+#endif
   }
   return debug_continue;
 }
@@ -1191,6 +1195,7 @@ lisp_Debugger(ExceptionInformation *xp,
       debug_show_fpu(xp, info, 0);
     }
     debug_backtrace(xp, info, 0);
+
     abort();
   }
 

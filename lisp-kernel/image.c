@@ -50,8 +50,9 @@ relocate_area_contents(area *a, LispObj bias)
     *end = (LispObj *)(a->active),
     low = (LispObj)image_base - bias,
     high = ptr_to_lispobj(active_dynamic_area->active) - bias,
-    w0;
+    w0, w1;
   int fulltag;
+  Boolean fixnum_after_header_is_link = false;
 
   while (start < end) {
     w0 = *start;
@@ -80,21 +81,29 @@ relocate_area_contents(area *a, LispObj bias)
       }
 #endif
       if (header_subtag(w0) == subtag_weak) {
-        LispObj link = start[1];
-        if ((link >= low) && (link < high)) {
-          start[1] = (link+bias);
+        fixnum_after_header_is_link = true;
+      }
+      if (header_subtag(w0) == subtag_hash_vector) {
+        hash_table_vector_header *hashp = (hash_table_vector_header *)start;
+        
+        if (hashp->flags & nhash_track_keys_mask) {
+          hashp->flags |= nhash_key_moved_mask;
         }
+        fixnum_after_header_is_link = true;
       }
+
       if ((w0 >= low) && (w0 < high) &&
 	  ((1<<fulltag) & RELOCATABLE_FULLTAG_MASK)) {
 	*start = (w0+bias);
       }
-      w0 = *++start;
-      fulltag = fulltag_of(w0);
-      if ((w0 >= low) && (w0 < high) &&
-	  ((1<<fulltag) & RELOCATABLE_FULLTAG_MASK)) {
-	*start = (w0+bias);
+      w1 = *++start;
+      fulltag = fulltag_of(w1);
+      if ((w1 >= low) && (w1 < high) &&
+	  (fixnum_after_header_is_link ||
+           ((1<<fulltag) & RELOCATABLE_FULLTAG_MASK))) {
+	*start = (w1+bias);
       }
+      fixnum_after_header_is_link = false;
       ++start;
     }
   }
@@ -295,6 +304,7 @@ load_image_section(int fd, openmcl_image_section_header *sect)
   LSEEK(fd, pos+advance, SEEK_SET);
 }
 
+
 LispObj
 load_openmcl_image(int fd, openmcl_image_file_header *h)
 {
@@ -345,6 +355,12 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
 #endif
 	set_nil(image_nil);
 	if (bias) {
+          LispObj weakvll = lisp_global(WEAKVLL);
+
+          if ((weakvll >= ((LispObj)image_base-bias)) &&
+              (weakvll < (ptr_to_lispobj(active_dynamic_area->active)-bias))) {
+            lisp_global(WEAKVLL) = weakvll+bias;
+          }
 	  relocate_area_contents(a, bias);
 	}
 	make_dynamic_heap_executable(a->low, a->active);
@@ -389,9 +405,8 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
 }
  
 void
-prepare_to_write_dynamic_space()
+prepare_to_write_dynamic_space(area *a)
 {
-  area *a = active_dynamic_area;
   LispObj 
     *start = (LispObj *)(a->low),
     *end = (LispObj *) (a->active),
@@ -484,6 +499,7 @@ save_application(unsigned fd, Boolean egc_was_enabled)
   */
   
   prepare_to_write_dynamic_space(active_dynamic_area);
+  prepare_to_write_dynamic_space(managed_static_area);
 
   /* 
      If we ever support continuing after saving an image,

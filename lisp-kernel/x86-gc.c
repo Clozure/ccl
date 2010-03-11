@@ -1161,7 +1161,7 @@ check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits)
   LispObj x1, *base = start, *prev = start;
   int tag;
   natural ref_dnode, node_dnode;
-  Boolean intergen_ref;
+  Boolean intergen_ref, lenient_next_dnode = false, lenient_this_dnode = false;
 
   while (start < end) {
     x1 = *start;
@@ -1172,16 +1172,20 @@ check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits)
     } else {
       if (header_subtag(x1) == subtag_function) {
 #ifdef X8632
-	int skip = (unsigned short)deref(start,1);
-	/* XXX bootstrapping */
-	if (skip & 0x8000)
-	  skip = header_element_count(x1) - (skip & 0x7fff);
+        int skip = (unsigned short)deref(start,1);
+        /* XXX bootstrapping */
+        if (skip & 0x8000)
+          skip = header_element_count(x1) - (skip & 0x7fff);
 #else
         int skip = (int) deref(start,1);
 #endif
         start += ((1+skip)&~1);
         x1 = *start;
         tag = fulltag_of(x1);
+      } else {
+        if (header_subtag(x1) == subtag_weak) {
+          lenient_next_dnode = true;
+        }
       }
       intergen_ref = false;
       if (is_node_fulltag(tag)) {        
@@ -1190,13 +1194,17 @@ check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits)
           intergen_ref = true;
         }
       }
-      if (intergen_ref == false) {        
-        x1 = start[1];
-        tag = fulltag_of(x1);
-        if (is_node_fulltag(tag)) {        
-          node_dnode = gc_area_dnode(x1);
-          if (node_dnode < GCndnodes_in_area) {
-            intergen_ref = true;
+      if (lenient_this_dnode) {
+        lenient_this_dnode = false;
+      } else {
+        if ((intergen_ref == false)) {        
+          x1 = start[1];
+          tag = fulltag_of(x1);
+          if (is_node_fulltag(tag)) {        
+            node_dnode = gc_area_dnode(x1);
+            if (node_dnode < GCndnodes_in_area) {
+              intergen_ref = true;
+            }
           }
         }
       }
@@ -1208,6 +1216,10 @@ check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits)
         }
       }
       start += 2;
+      if (lenient_next_dnode) {
+        lenient_this_dnode = true;
+      }
+      lenient_next_dnode = false;
     }
   }
   if (start > end) {
@@ -2185,7 +2197,8 @@ immutable_function_p(LispObj thing)
     if (((lfbits & (lfbits_cm_mask | lfbits_method_mask)) !=
          lfbits_cm_mask) &&
         ((lfbits & (lfbits_gfn_mask | lfbits_method_mask)) !=
-         lfbits_gfn_mask)) {
+         lfbits_gfn_mask) &&
+        ((lfbits & lfbits_trampoline_mask) == 0)) {
       return true;
     }
   }
@@ -2293,6 +2306,13 @@ purify_displaced_object(LispObj obj, area *dest, natural disp)
     is_function = (header_subtag(header)==subtag_function);
 #endif
 
+  if (1) {
+    if ((header_subtag(header) == subtag_weak) ||
+        (header_subtag(header) == subtag_hash_vector)) {
+      Bug(NULL, "purifying weak vector "LISP "\n", obj);
+    }
+  }
+
   if (immheader_tag_p(header_tag)) {
     physbytes = ((natural)(skip_over_ivector(start,header))) - start;
   } else if (nodeheader_tag_p(header_tag)) {
@@ -2361,6 +2381,19 @@ purify_locref(LispObj *ref,  BytePtr low, BytePtr high, area *dest, int what)
 }
 
 Boolean
+purify_noderef(LispObj *ref,  BytePtr low, BytePtr high, area *dest, int what)
+{
+  LispObj obj = *ref;
+  natural tag = fulltag_of(obj);
+
+  if (is_node_fulltag(tag)) {
+    return purify_locref(ref,low,high,dest,what);
+  }
+  return false;
+}
+
+
+Boolean
 copy_reference(LispObj *ref, BytePtr low, BytePtr high, area *dest, int what, Boolean recursive)
 {
   LispObj obj = *ref, *scan = NULL;
@@ -2394,18 +2427,23 @@ copy_reference(LispObj *ref, BytePtr low, BytePtr high, area *dest, int what, Bo
             scan = (LispObj *)skip_over_ivector((natural)scan, header);
           } else if (nodeheader_tag_p(tag)) {
             if ((header_subtag(header) == subtag_simple_vector) ||
-                (header_subtag(header) == subtag_struct)) {
+#if 0
+                false
+#else
+                (header_subtag(header) == subtag_struct)
+#endif
+                ) {
               scan++;
-              purify_locref(scan,low,high,dest,what);
+              purify_noderef(scan,low,high,dest,what);
               scan++;
             } else {
               nwords = (header_element_count(header)+2)&~1;
               scan += nwords;
             }
           } else {
-            purify_locref(scan,low,high,dest,what);
+            purify_noderef(scan,low,high,dest,what);
             scan++;
-            purify_locref(scan,low,high,dest,what);
+            purify_noderef(scan,low,high,dest,what);
             scan++;
           }
         }            
