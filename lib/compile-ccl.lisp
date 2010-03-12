@@ -523,15 +523,15 @@ not runtime errors reported by a successfully created process."
 (defun rebuild-ccl (&key update full clean kernel force (reload t) exit
 		    reload-arguments verbose optional-features
 		    (save-source-locations *ccl-save-source-locations*)
-		    allow-constant-redefinition)
+		    (allow-constant-redefinition nil allow-constant-redefinition-p))
   (let* ((*build-time-optional-features* (intersection *known-optional-features* optional-features))
          (*features* (append *build-time-optional-features* *features*))
-	 (*save-source-locations* save-source-locations)
-	 (*cerror-on-constant-redefinition* (not allow-constant-redefinition)))
+	 (*save-source-locations* save-source-locations))
     (when *build-time-optional-features*
       (setq full t))
     (when full
       (setq clean t kernel t reload t))
+
     (when update
       (multiple-value-bind (changed conflicts new-binaries)
 	  (update-ccl :verbose (not (eq update :quiet)))
@@ -544,8 +544,12 @@ the lisp and run REBUILD-CCL again.")
       ;; for better bug reports...
       (format t "~&Rebuilding ~a using ~a"
               (lisp-implementation-type)
-              (lisp-implementation-version)))
-    (let* ((cd (current-directory)))
+              (lisp-implementation-version))
+          (unless allow-constant-redefinition-p
+      (when (or force clean update)
+        (setq allow-constant-redefinition t))))
+    (let* ((cd (current-directory))
+           (*cerror-on-constant-redefinition* (not allow-constant-redefinition )))
       (unwind-protect
            (progn
              (setf (current-directory) "ccl:")
