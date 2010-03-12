@@ -2480,7 +2480,7 @@ purify_headerless_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high,
 void
 purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to, int what, Boolean recursive)
 {
-  LispObj header;
+  LispObj header, pfn;
   unsigned tag;
   natural nwords;
   hash_table_vector_header *hashp;
@@ -2492,6 +2492,13 @@ purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to, 
     } else {
       tag = fulltag_of(header);
       if (immheader_tag_p(tag)) {
+        if ((what & PURIFY_IVECTORS) &&
+            (to == readonly_area) &&
+            (header_subtag(header) != subtag_macptr) &&
+            ((BytePtr)start >= low) &&
+            ((BytePtr)start < high)) {
+          purify_object((LispObj)start,to);
+        }
         start = (LispObj *)skip_over_ivector((natural)start, header);
       } else if (nodeheader_tag_p(tag)) {
         nwords = header_element_count(header);
@@ -2526,6 +2533,7 @@ purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to, 
           }
           *start++ = 0;
         } else {
+          pfn = 0;
           if (header_subtag(header) == subtag_function) {
 #ifdef X8632
             int skip = (unsigned short)(start[1]);
@@ -2536,6 +2544,7 @@ purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to, 
 #else
             int skip = (int)(start[1]);
 #endif
+            pfn = (LispObj)start;
             start += skip;
             nwords -= skip;
           }
@@ -2543,6 +2552,13 @@ purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to, 
           while(nwords--) {
             copy_reference(start, low, high, to, what, recursive);
             start++;
+          }
+          if (((BytePtr)pfn >= low) &&
+              ((BytePtr)pfn < high) &&
+              (what & PURIFY_FUNCTIONS) &&
+              (to == readonly_area) &&
+              (immutable_function_p(pfn))) {
+            purify_object(pfn, to);
           }
         }
       } else {
