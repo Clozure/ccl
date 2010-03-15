@@ -161,6 +161,9 @@
 (defconstant most-negative-fixnum target::target-most-negative-fixnum
   "the fixnum closest in value to negative infinity")
 
+(defstatic *least-positive-bignum* (1+ target::target-most-positive-fixnum)
+  "used internally; value should be treated as a constant")
+
 
 (defconstant lambda-list-keywords 
   '(&OPTIONAL &REST &AUX &KEY &ALLOW-OTHER-KEYS &BODY &ENVIRONMENT &WHOLE)
