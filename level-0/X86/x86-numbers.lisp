@@ -111,11 +111,14 @@
   (single-value-return))
 
 
+
 ;;; We'll get a SIGFPE if divisor is 0.
 ;;; Don't use %rbp.  Trust callback_for_interrupt() to preserve
 ;;; the word below the stack pointer
 (defx86lapfunction %fixnum-truncate ((dividend arg_y) (divisor arg_z))
   (save-simple-frame)
+  (cmpq ($ '-1) (% divisor))
+  (je @neg)
   (unbox-fixnum divisor imm0)
   (movq (% imm0) (% imm2))
   (unbox-fixnum dividend imm0)
@@ -128,7 +131,18 @@
   (pushq (% arg_z))
   (pushq (% arg_y))
   (set-nargs 2)
+  (jmp-subprim .SPvalues)
+  @neg
+  (negq (% dividend))
+  (load-constant *least-positive-bignum* arg_z)
+  (cmovoq (@ x8664::symbol.vcell (% arg_z)) (% dividend))
+  (pop (% rbp))
+  (movq (% rsp) (% temp0))
+  (pushq (% dividend))
+  (pushq ($ 0))
+  (set-nargs 2)
   (jmp-subprim .SPvalues))
+  
 
 (defx86lapfunction called-for-mv-p ()
   (ref-global ret1valaddr imm0)
