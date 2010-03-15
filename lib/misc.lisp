@@ -1042,6 +1042,39 @@ are running on, or NIL if we can't find any useful information."
                map)
       data)))
 
+(defun collect-heap-ivector-utilization-by-typecode ()
+  (let* ((counts (make-array 256 :initial-element 0))
+	 (sizes (make-array 256 :initial-element 0))
+	 (physical-sizes (make-array 256 :initial-element 0))
+	 (array-size-function (arch::target-array-data-size-function
+                               (backend-target-arch *host-backend*)))
+	 (result ()))
+    (declare (dynamic-extent counts sizes))
+    (with-lock-grabbed (*heap-ivector-lock*)
+      (dolist (vector *heap-ivectors*)
+	(let* ((typecode (typecode vector))
+	       (logsize (funcall array-size-function typecode (uvsize vector)))
+	       (physsize (+ logsize
+			    ;; header, delta, round up
+			    #+32-bit-target (+ 4 2 7)
+			    #+64-bit-target (+ 8 2 15))))
+	  (incf (aref counts typecode))
+	  (incf (aref sizes typecode) logsize)
+	  (incf (aref physical-sizes typecode) physsize))))
+    (dotimes (i 256 result)
+      (when (plusp (aref counts i))
+	(push (list (aref *heap-utilization-vector-type-names* i)
+		    (aref counts i)
+		    (aref sizes i)
+		    (aref physical-sizes i))
+	      result)))))
+
+(defun heap-ivector-utilization (&key (stream *debug-io*)
+				      (unit nil)
+				      (sort :size))
+  (let* ((data (collect-heap-ivector-utilization-by-typecode)))
+    (report-heap-utilization data :stream stream :unit unit :sort sort)))
+  
 (defvar *heap-utilization-vector-type-names*
   (let* ((a (make-array 256)))
     #+x8664-target
