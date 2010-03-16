@@ -17,68 +17,91 @@
 
 (in-package "CCL")
 
-(defnx1 nx1-the the (&whole call typespec form &environment env)
+(defun nx1-typespec-for-typep (typespec env)
   ;; Allow VALUES types here (or user-defined types that
   ;; expand to VALUES types).  We could do a better job
   ;; of this, but treat them as wild types.
   ;; Likewise, complex FUNCTION types can be legally used
   ;; in type declarations, but aren't legal args to TYPEP;
   ;; treat them as the simple FUNCTION type.
-  (flet ((typespec-for-the (typespec)
-           (let* ((ctype (handler-case (values-specifier-type (nx-target-type typespec) env)
-                           (parse-unknown-type (c)
-                             (nx1-whine :unknown-type-in-declaration (parse-unknown-type-specifier c))
-                             *wild-type*)
-                           (program-error (c)
-                              (nx1-whine :invalid-type typespec c)
-                             *wild-type*))))
-             (if (typep ctype 'function-ctype)
-               'function
-               (if (typep ctype 'values-ctype)
-                 '*
-                 (nx-target-type (type-specifier ctype)))))))
-    (let* ((typespec (typespec-for-the typespec))
-           (*nx-form-type* typespec)
-           (transformed (nx-transform form env)))
-      (flet ((fold-the ()
-               (do* ()
-                    ((or (atom transformed)
-                         (not (eq (car transformed) 'the))))
-                 (destructuring-bind (ftype form) (cdr transformed)
-                   (setq typespec (nx-target-type (nx1-type-intersect call typespec (typespec-for-the ftype)))
-                         *nx-form-type* typespec
-                         transformed form)))))
+  (labels ((ctype-spec (ctype)
+             (typecase ctype
+               (function-ctype 'function)
+               (values-ctype '*)
+               (array-ctype
+                  (let ((new (ctype-spec (array-ctype-element-type ctype))))
+                    (when new
+                      (list (if (array-ctype-complexp ctype) 'array 'simple-array)
+                            new
+                            (array-ctype-dimensions ctype)))))
+               (negation-ctype
+                  (let ((new (ctype-spec (negation-ctype-type ctype))))
+                    (when new
+                      `(not ,new))))
+               (union-ctype
+                  (let* ((types (union-ctype-types ctype))
+                         (new (mapcar #'ctype-spec types)))
+                    (unless (every #'null new)
+                      `(or ,@(mapcar (lambda (new old) (or new (type-specifier old))) new types)))))
+               (intersection-ctype
+                  (let* ((types (intersection-ctype-types ctype))
+                         (new (mapcar #'ctype-spec types)))
+                    (unless (every #'null new)
+                      `(and ,@(mapcar (lambda (new old) (or new (type-specifier old))) new types)))))
+               (t nil))))
+    (let* ((ctype (handler-case (values-specifier-type (nx-target-type typespec) env)
+                    (parse-unknown-type (c)
+                      (nx1-whine :unknown-type-in-declaration (parse-unknown-type-specifier c))
+                      *wild-type*)
+                    (program-error (c)
+                      (nx1-whine :invalid-type typespec c)
+                      *wild-type*)))
+           (new (ctype-spec ctype)))
+      (nx-target-type (type-specifier (if new (specifier-type new) ctype))))))
+
+(defnx1 nx1-the the (&whole call typespec form &environment env)
+  (let* ((typespec (nx1-typespec-for-typep typespec env))
+         (*nx-form-type* typespec)
+         (transformed (nx-transform form env)))
+    (flet ((fold-the ()
+             (do* ()
+                 ((or (atom transformed)
+                      (not (eq (car transformed) 'the))))
+               (destructuring-bind (ftype form) (cdr transformed)
+                 (setq typespec (nx-target-type (nx1-type-intersect call typespec (nx1-typespec-for-typep ftype env)))
+                       *nx-form-type* typespec
+                       transformed form)))))
+      (fold-the)
+      (do* ((last transformed transformed))
+          ()
+        (setq transformed (nx-transform transformed env))
+        (when (or (atom transformed)
+                  (not (eq (car transformed) 'the)))
+          (return))
         (fold-the)
-        (do* ((last transformed transformed))
-             ()
-          (setq transformed (nx-transform transformed env))
-          (when (or (atom transformed)
-                    (not (eq (car transformed) 'the)))
-            (return))
-          (fold-the)
-          (when (eq transformed last)
-            (return)))
-	(if (and (nx-form-constant-p transformed env)
-                 (or (equal typespec '(values))
-                     (not (typep (nx-form-constant-value transformed env)
-                                 (single-value-type (values-specifier-type typespec))))))
-	  (progn
-            (nx1-whine :type call)
-            (setq typespec '*))
-          (setq typespec (nx-target-type
-                          (or (nx1-type-intersect call
-                                                  typespec
-                                                  (typespec-for-the (nx-form-type transformed env)))
-                              '*))))
-        ;; Wimp out, but don't choke on (the (values ...) form)
-        (when (and (consp typespec) (eq (car typespec) 'values))
+        (when (eq transformed last)
+          (return)))
+      (if (and (nx-form-constant-p transformed env)
+               (or (equal typespec '(values))
+                   (not (typep (nx-form-constant-value transformed env)
+                               (single-value-type (values-specifier-type typespec))))))
+        (progn
+          (nx1-whine :type call)
           (setq typespec '*))
-        (make-acode
-         (%nx1-operator typed-form)
-         typespec
-         (let* ((*nx-form-type* typespec))
-           (nx1-transformed-form transformed env))
-         (nx-declarations-typecheck env))))))
+        (setq typespec (nx-target-type
+                        (or (nx1-type-intersect call
+                                                typespec
+                                                (nx1-typespec-for-typep (nx-form-type transformed env)env))
+                            '*))))
+      ;; Wimp out, but don't choke on (the (values ...) form)
+      (when (and (consp typespec) (eq (car typespec) 'values))
+        (setq typespec '*))
+      (make-acode
+       (%nx1-operator typed-form)
+       typespec
+       (let* ((*nx-form-type* typespec))
+         (nx1-transformed-form transformed env))
+       (nx-declarations-typecheck env)))))
 
 (defnx1 nx1-struct-ref struct-ref (&whole whole structure offset)
   (if (not (fixnump (setq offset (nx-get-fixnum offset))))
