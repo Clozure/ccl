@@ -2399,7 +2399,7 @@
                  (! misc-set-c-node val-reg src index-known-fixnum))
                (progn
                  (if index-known-fixnum
-                   (x862-absolute-natural seg unscaled-idx nil (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum *x862-target-node-shift*))))
+                   (x862-lri seg unscaled-idx (ash index-known-fixnum *x862-target-node-shift*)))
                  (if (typep constval '(signed-byte 32))
                    (! misc-set-immediate-node constval src unscaled-idx)
                    (! misc-set-node val-reg src unscaled-idx)))))
@@ -2461,15 +2461,15 @@
 			    (! misc-set-s32 unboxed-val-reg src scaled-idx)
 			    (! misc-set-u32 unboxed-val-reg src scaled-idx)))))))))
 	       (is-16-bit
-		(with-additional-imm-reg (src unscaled-idx val-reg)
-		  (with-imm-target (unboxed-val-reg) scaled-idx
-		    (if (and index-known-fixnum
-			     (<= index-known-fixnum
-				 (arch::target-max-16-bit-constant-index arch)))
-		      (if is-signed
-			(! misc-set-c-s16 unboxed-val-reg src index-known-fixnum)
-			(! misc-set-c-u16 unboxed-val-reg src index-known-fixnum))
-		      (progn
+		(if (and index-known-fixnum
+			 (<= index-known-fixnum
+			     (arch::target-max-16-bit-constant-index arch)))
+		  (if is-signed
+		    (! misc-set-c-s16 unboxed-val-reg src index-known-fixnum)
+		    (! misc-set-c-u16 unboxed-val-reg src index-known-fixnum))
+		  (progn
+		    (with-additional-imm-reg (src unscaled-idx val-reg)
+		      (with-imm-target (unboxed-val-reg) scaled-idx
 			(if index-known-fixnum
 			  (x862-lri seg scaled-idx (ash index-known-fixnum 1))
 			  (! scale-16bit-misc-index scaled-idx unscaled-idx))
@@ -2477,15 +2477,15 @@
 			  (! misc-set-s16 unboxed-val-reg src scaled-idx)
 			  (! misc-set-u16 unboxed-val-reg src scaled-idx)))))))
 	       (is-8-bit
-		(with-additional-imm-reg (src unscaled-idx val-reg)
-		  (with-imm-target (unboxed-val-reg) scaled-idx
-		    (if (and index-known-fixnum
-			     (<= index-known-fixnum
-				 (arch::target-max-8-bit-constant-index arch)))
-		      (if is-signed
-			(! misc-set-c-s8 unboxed-val-reg src index-known-fixnum)
-			(! misc-set-c-u8 unboxed-val-reg src index-known-fixnum))
-		      (progn
+		(if (and index-known-fixnum
+			 (<= index-known-fixnum
+			     (arch::target-max-8-bit-constant-index arch)))
+		  (if is-signed
+		    (! misc-set-c-s8 unboxed-val-reg src index-known-fixnum)
+		    (! misc-set-c-u8 unboxed-val-reg src index-known-fixnum))
+		  (progn
+		    (with-additional-imm-reg (src unscaled-idx val-reg)
+		      (with-imm-target (unboxed-val-reg) scaled-idx
 			(if index-known-fixnum
 			  (x862-lri seg scaled-idx index-known-fixnum)
 			  (! scale-8bit-misc-index scaled-idx unscaled-idx))
@@ -2493,17 +2493,16 @@
 			  (! misc-set-s8 unboxed-val-reg src scaled-idx)
 			  (! misc-set-u8 unboxed-val-reg src scaled-idx)))))))
 	       (is-1-bit
-		(with-additional-imm-reg (src unscaled-idx val-reg)
-		  (with-imm-target (unboxed-val-reg) scaled-idx
-		    (if (and index-known-fixnum
-			     (<= index-known-fixnum (arch::target-max-1-bit-constant-index arch)))
-		      (if constval
-			(if (zerop constval)
-			  (! set-constant-bit-to-zero src index-known-fixnum)
-			  (! set-constant-bit-to-one src index-known-fixnum))
-			(progn
-			  (! set-constant-bit-to-variable-value src index-known-fixnum val-reg)))
-		      (progn
+		(if (and index-known-fixnum
+			 (<= index-known-fixnum (arch::target-max-1-bit-constant-index arch)))
+		  (if constval
+		    (if (zerop constval)
+		      (! set-constant-bit-to-zero src index-known-fixnum)
+		      (! set-constant-bit-to-one src index-known-fixnum))
+		    (! set-constant-bit-to-variable-value src index-known-fixnum val-reg))
+		  (progn
+		    (with-additional-imm-reg (src unscaled-idx val-reg)
+		      (with-imm-target (unboxed-val-reg) scaled-idx
 			(if index-known-fixnum
 			  (x862-lri seg scaled-idx index-known-fixnum)
 			  (! scale-1bit-misc-index scaled-idx unscaled-idx))
@@ -2511,8 +2510,7 @@
 			  (if (zerop constval)
 			    (! nset-variable-bit-to-zero src scaled-idx)
 			    (! nset-variable-bit-to-one src scaled-idx))
-			  (progn
-			    (! nset-variable-bit-to-variable-value src scaled-idx val-reg)))))))))))
+			  (! nset-variable-bit-to-variable-value src scaled-idx val-reg))))))))))
       (when (and vreg val-reg) (<- val-reg))
       (^))))
 
