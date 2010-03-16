@@ -1139,11 +1139,11 @@
        (truncate-rat-sfloat (number divisor)
          #+32-bit-target
          `(target::with-stack-short-floats ((fnum ,number)
-                                           (f2))
+                                            (f2))
            (let ((res (%unary-truncate (%short-float/-2! fnum ,divisor f2))))
              (values res 
                      (%short-float--2 fnum (%short-float*-2! (%short-float res f2) ,divisor f2)))))
-          #+64-bit-target
+         #+64-bit-target
          `(let* ((temp (%short-float ,number))
                  (res (%unary-truncate (/ (the short-float temp)
                                           (the short-float ,divisor)))))
@@ -1151,25 +1151,17 @@
             (- (the short-float temp)
              (the short-float (* (the short-float (%short-float res))
                                  (the short-float ,divisor)))))))
-         )
+       )
     (number-case number
       (fixnum
-       (if (eql number target::target-most-negative-fixnum)
-         (if (zerop divisor)
-           (error 'division-by-zero :operation 'truncate :operands (list number divisor))
-           (with-small-bignum-buffers ((bn number))
-             (multiple-value-bind (quo rem) (truncate bn divisor)
-               (if (eq quo bn)
-                 (values number rem)
-                 (values quo rem)))))
-         (number-case divisor
-           (fixnum (if (eq divisor 1) (values number 0) (%fixnum-truncate number divisor)))
-           (bignum (values 0 number))
-           (double-float (truncate-rat-dfloat number divisor))
-           (short-float (truncate-rat-sfloat number divisor))
-           (ratio (let ((q (truncate (* number (%denominator divisor)) ; this was wrong
-                                     (%numerator divisor))))
-                    (values q (- number (* q divisor))))))))
+       (number-case divisor
+         (fixnum (if (eq divisor 1) (values number 0) (%fixnum-truncate number divisor)))
+         (bignum (values 0 number))
+         (double-float (truncate-rat-dfloat number divisor))
+         (short-float (truncate-rat-sfloat number divisor))
+         (ratio (let ((q (truncate (* number (%denominator divisor)) ; this was wrong
+                                   (%numerator divisor))))
+                  (values q (- number (* q divisor)))))))
       (bignum (number-case divisor
                 (fixnum (if (eq divisor 1) (values number 0)
                           (if (eq divisor target::target-most-negative-fixnum);; << aargh
@@ -1198,14 +1190,14 @@
                         (let ((res (%unary-truncate
                                     (/ (the short-float number)
                                        (the short-float divisor)))))
-                            (values res
-                                    (- (the short-float number)
-                                       (* (the short-float (%short-float res))
-                                          (the short-float divisor))))))
+                          (values res
+                                  (- (the short-float number)
+                                     (* (the short-float (%short-float res))
+                                        (the short-float divisor))))))
                        ((fixnum bignum ratio)
                         #+32-bit-target
                         (target::with-stack-short-floats ((fdiv divisor)
-                                                         (f2))
+                                                          (f2))
                           (let ((res (%unary-truncate (%short-float/-2! number fdiv f2))))
                             (values res 
                                     (%short-float--2 

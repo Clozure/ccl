@@ -113,8 +113,12 @@
   (box-fixnum imm0 arg_z)  
   (single-value-return))
 
+
+
 ;;; We'll get a SIGFPE if divisor is 0.
 (defx8632lapfunction %fixnum-truncate ((dividend arg_y) (divisor arg_z))
+  (cmpl ($ '-1) (% divisor))
+  (je @neg)
   (mark-as-imm temp0)
   (mark-as-imm temp1)
   (let ((imm2 temp0)
@@ -130,6 +134,15 @@
   (movl (% esp) (% temp0))
   (push (% arg_z))
   (push (% arg_y))
+  (set-nargs 2)
+  (jmp-subprim .SPvalues)
+  @neg
+  (negl (% dividend))
+  (load-constant *least-positive-bignum* arg_z)
+  (cmovol (@ x8632::symbol.vcell (% arg_z)) (% dividend))
+  (movl (% esp) (% temp0))
+  (pushl (% dividend))
+  (pushl ($ 0))
   (set-nargs 2)
   (jmp-subprim .SPvalues))
 

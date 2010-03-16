@@ -206,7 +206,8 @@
 
 
 
-;;;; maybe this could be smarter but frankly scarlett I dont give a damn
+;;; maybe this could be smarter but frankly scarlett I dont give a damn
+;;; ticket:666 describes one reason to give a damn.
 #+ppc32-target
 (defppclapfunction %fixnum-truncate ((dividend arg_y) (divisor arg_z))
   (let ((unboxed-quotient imm0)
@@ -216,8 +217,10 @@
         (product temp0)
         (boxed-quotient temp1)
         (remainder temp2))
+    (cmpwi divisor '-1)    
     (unbox-fixnum unboxed-dividend dividend)
     (unbox-fixnum unboxed-divisor divisor)
+    (beq @neg)
     (divwo. unboxed-quotient unboxed-dividend unboxed-divisor)          ; set OV if divisor = 0
     (box-fixnum boxed-quotient unboxed-quotient)
     (mullw unboxed-product unboxed-quotient unboxed-divisor)
@@ -235,6 +238,18 @@
     (vpush remainder)
     (set-nargs 2)
     (la temp0 8 vsp)
+    (ba .SPvalues)
+    @neg
+    (nego. dividend dividend)
+    (lwz arg_z '*least-positive-bignum* nfn)
+    (bns @ret)
+    (mtxer rzero)
+    (lwz dividend ppc32::symbol.vcell arg_z)
+    @ret
+    (mr temp0 vsp)
+    (vpush dividend)
+    (vpush rzero)
+    (set-nargs 2)
     (ba .SPvalues)))
 
 #+ppc64-target
@@ -246,8 +261,10 @@
         (product temp0)
         (boxed-quotient temp1)
         (remainder temp2))
+    (cmpdi divisor '-1)
     (unbox-fixnum unboxed-dividend dividend)
     (unbox-fixnum unboxed-divisor divisor)
+    (beq @neg)
     (divdo. unboxed-quotient unboxed-dividend unboxed-divisor)          ; set OV if divisor = 0
     (box-fixnum boxed-quotient unboxed-quotient)
     (mulld unboxed-product unboxed-quotient unboxed-divisor)
@@ -265,7 +282,20 @@
     (vpush remainder)
     (set-nargs 2)
     (la temp0 '2 vsp)
-    (ba .SPvalues)))
+    (ba .SPvalues)
+    @neg
+    (nego. dividend dividend)
+    (ld arg_z '*least-positive-bignum* nfn)
+    (bns @ret)
+    (mtxer rzero)
+    (ld dividend ppc64::symbol.vcell arg_z)
+    @ret
+    (mr temp0 vsp)
+    (vpush dividend)
+    (vpush rzero)
+    (set-nargs 2)
+    (ba .SPvalues)    
+    ))
 
 
 (defppclapfunction called-for-mv-p ()
