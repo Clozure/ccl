@@ -67,7 +67,6 @@
       (#/setArrowPosition: (#/cell button) #$NSPopUpArrowAtBottom)
       (#/setImage: item (#/imageNamed: ns:ns-image image-name))
       (#/setMenu: button menu)
-      #-cocotron
       (#/synchronizeTitleAndSelectedItem button)
       button)))
 

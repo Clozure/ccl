@@ -20,7 +20,7 @@
           (#/release s)))
       (#/autorelease types-array))
     (when button-string
-      #-cocotron (#/setPrompt: open-panel (#/autorelease (%make-nsstring button-string))))
+      (#/setPrompt: open-panel (#/autorelease (%make-nsstring button-string))))
     (let ((result (#/runModalForDirectory:file:types: open-panel directory
 						      file types-array)))
       (cond ((= result #$NSOKButton)
@@ -93,7 +93,7 @@
     (#/setCanChooseDirectories: open-panel #$YES)
     (#/setAllowsMultipleSelection: open-panel #$NO)
     (#/setTitle: open-panel #@"Choose Directory")
-    #-cocotron (#/setPrompt: open-panel #@"Choose")
+    (#/setPrompt: open-panel #@"Choose")
     (when directory
       (setq directory (#/autorelease (%make-nsstring directory))))
     (let  ((result (#/runModalForDirectory:file:types: open-panel directory
