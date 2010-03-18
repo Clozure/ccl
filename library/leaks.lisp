@@ -19,6 +19,23 @@
 
 (in-package :ccl)
 
+(export '(find-referencers
+          transitive-referencers
+          map-heap-objects
+          #+linux-target parse-proc-maps
+          #+linux-target proc-maps-diff
+          ))
+
+(defun map-heap-objects (fn &key area)
+  (flet ((mapper (thing)
+           (when (eq (typecode thing) target::subtag-function)
+             (setq thing (function-vector-to-function thing)))
+           (when (eq (typecode thing) target::subtag-symbol)
+             (setq thing (symvector->symptr thing)))
+           (funcall fn thing)))
+    (declare (dynamic-extent #'mapper))
+    (%map-areas #'mapper area)))
+
 ;; Returns all objects that satisfy predicate of one of the types in
 ;; ccl::*heap-utilization-vector-type-names*
 ;; Note that these can contain stack-consed objects that are dead.
@@ -71,10 +88,9 @@
              hash)
     res))
 
-;; Returns all references to object.
-;; Note that these can contain stack-consed objects that are dead.
-;; Use pointer-in-some-dynamic-area-p to be sure to follow only real objects
-(defun find-references (object)
+;; Returns all heap references to object.  By default, includes
+;; includes references from readonly, static and dynamic areas.
+(defun find-referencers (object &optional area)
   (let ((res nil))
     (ccl::%map-areas
      (lambda (thing)
@@ -88,62 +104,59 @@
              ((consp thing)
               (when(or (eq object (car thing))
                        (eq object (cdr thing)))
-                (push thing res))))))
+                (push thing res)))))
+     area)
     res))
 
 ;; Return true if P is heap-consed
 (defun pointer-in-some-dynamic-area-p (p)
  (block found
-   (ccl::do-consing-areas (a)
+   (do-gc-areas (a)
      (when (eql (%fixnum-ref a target::area.code) ccl::area-dynamic)
        (when (ccl::%ptr-in-area-p p a)
          (return-from found t))))))
 
-;; Find all transitive referencers to object-or-list. If as-object is
-;; true, just start with object-or-list. If as-object is false, then if
-;; object-or-list is a list, start with its elements, and ignore its
-;; cons cells.
+;; Find all transitive referencers to any object in the list
 ;; Returns a hash table with the references as keys.
-(defun transitive-referencers (object-or-list &optional as-object)
-  (let ((found (make-hash-table :test 'eq)))
-    (cond ((or (atom object-or-list) as-object)
-           (setf (gethash object-or-list found) t))
-          (t (loop for cons on object-or-list
-                   do
-                (setf (gethash cons found) t
-                      (gethash (car cons) found) t))))
+(defun transitive-referencers (list-of-objects &key area (verbose t))
+  (let ((found (make-hash-table :test 'eq))
+        (objects (if (atom list-of-objects) (list list-of-objects) list-of-objects)))
+    (loop for cons on objects
+          do (setf (gethash cons found) t
+                   (gethash (car cons) found) t))
     (ccl:gc)
-    (format t "Searching") (finish-output)
+    (when verbose (format t "Searching") (finish-output))
     (loop
       (let ((added-one nil))
-        (format t " ~d" (hash-table-count found)) (finish-output)
+        (when verbose (format t " ~d" (hash-table-count found)) (finish-output))
         (ccl::%map-areas
          (lambda (thing)
-           (unless (or (not (pointer-in-some-dynamic-area-p thing))
-                       (gethash thing found))
-             (cond ((and (not (eq thing (ccl::nhash.vector found)))
-                         (ccl::uvectorp thing)
-                         (not (ccl::ivectorp thing))
-                         (not (packagep thing)))
-                    (dotimes (i (ccl::uvsize thing))
-                      (let ((object (ccl::uvref thing i)))
-                        (when (gethash object found)
-                          (setf (gethash thing found) t
-                                added-one t)
-                          (return)))))
-                   ((and (consp thing)
-                         (pointer-in-some-dynamic-area-p (car thing))
-                         (pointer-in-some-dynamic-area-p (cdr thing)))
-                    (when (or (gethash (car thing) found)
-                              (gethash (cdr thing) found))
-                      (setf (gethash thing found) t)))))))
+           (unless (gethash thing found)
+             (when (cond ((eq (typecode thing) target::subtag-function)
+                          (lfunloop for object in (function-vector-to-function thing)
+                            thereis (gethash object found)))
+                         ((and (gvectorp thing)
+                               (not (eq thing (ccl::nhash.vector found)))
+                               (not (eq thing found))
+                               (not (packagep thing)))
+                          (dotimes (i (ccl::uvsize thing))
+                            (when (gethash (%svref thing i) found) (return t))))
+                         ((consp thing)
+                          (or (gethash (%car thing) found)
+                              (gethash (%cdr thing) found))))
+               (setf (gethash thing found) t
+                     added-one t)
+               (when (eq (typecode thing) target::subtag-function)
+                 (setf (gethash (function-vector-to-function thing) found) t))
+               (when (eq (typecode thing) target::subtag-symbol)
+                 (setf (gethash (symvector->symptr thing) found) t)))))
+         area)
         (unless added-one
           (return))))
-    (format t " done.~%") (finish-output)
+    (when verbose (format t " done.~%") (finish-output))
     ;; Eliminate any cons that is referenced by another cons.
     ;; Also eliminate or replace objects that nobody will want to see.
-    (let ((cons-refs (make-hash-table :test 'eq))
-          (additions nil))
+    (let ((cons-refs (make-hash-table :test 'eq)))
       (loop for cons being the hash-keys of found
             when (consp cons)
               do
@@ -153,32 +166,20 @@
              (setf (gethash (cdr cons) cons-refs) t)))
       (loop for key being the hash-keys of found
             when (or (and (consp key) (gethash key cons-refs))
-                     (and (consp key) (eq (car key) 'ccl::%function-source-note))
-                     (typep key 'ccl::hash-table-vector)
-                     (when (and key
-				(typep key
-				  #+x8664-target 'ccl::symbol-vector
-				  #-x8664-target 'symbol
-				  ))
-                       (push (ccl::symvector->symptr key) additions)
-                       t)
-                     (when (typep key
-				  #+x8664-target 'ccl::function-vector
-				  #-x8664-target 'function
-				  )
-                       (push (ccl::function-vector-to-function key) additions)
-                       t))
+                     (and (consp key) (eq (car key) '%function-source-note))
+                     (typep key 'hash-table-vector)
+                     (and (typep key 'slot-vector)
+                          (gethash (slot-vector.instance key) found))
+                     #+x8664-target (typep key 'symbol-vector)
+                     #+x8664-target (typep key 'function-vector)
+                     )
               do
               (remhash key found))
-      (dolist (addition additions)
-        (setf (gethash addition found) t))
-      (remhash object-or-list found)
-      (unless (or (atom object-or-list) as-object)
-        (loop for cons on object-or-list
-             do
-             (remhash cons found)
-             (remhash (car cons) found)))
-      found)))
+      (loop for cons on objects
+            do
+         (remhash cons found)
+         (remhash (car cons) found)))
+      found))
 
 ;; One convenient way to print the hash table returned by transitive-referencers
 (defun print-referencers (hash &key
@@ -355,64 +356,73 @@ int keepcost
            (uordblks (pref info :mallinfo.uordblks))
            (fordblks (pref info :mallinfo.fordblks))
            (keepcost (pref info :mallinfo.keepcost)))
-      (format t "~& arena size: ~d/#x~x" arena arena)
+      (format t "~& arena size: ~d (#x~x)" arena arena)
       (format t "~& number of unused chunks = ~d" ordblks)
       (format t "~& number of mmap'ed chunks = ~d" hblks)
-      (format t "~& total size of mmap'ed chunks = ~d/#x~x" hblkhd hblkhd)
-      (format t "~& total size of malloc'ed chunks = ~d/#x~x" uordblks uordblks)
-      (format t "~& total size of free chunks = ~d/#x~x" fordblks fordblks)
-      (format t "~& size of releaseable chunk = ~d/#x~x" keepcost keepcost))))
+      (format t "~& total size of mmap'ed chunks = ~d (#x~x)" hblkhd hblkhd)
+      (format t "~& total size of malloc'ed chunks = ~d (#x~x)" uordblks uordblks)
+      (format t "~& total size of free chunks = ~d (#x~x)" fordblks fordblks)
+      (format t "~& size of releaseable chunk = ~d (#x~x)" keepcost keepcost))))
 
 
 
 ;; Parse /proc/<pid>/maps
-
+;; returns a list of (address perms name total-size clean-size dirty-size)
 (defun parse-proc-maps (&optional (pid (ccl::getpid)))
   (let ((perm-cache ())
         (name-cache ()))
-    (with-open-file (s (format nil "/proc/~d/maps" pid))
-      (loop for line = (read-line s nil) while line
-            as low-end = (position #\- line)
-            as high-end = (position #\space line :start (1+ low-end))
-            as perms-end = (position #\space line :start (1+ high-end))
-            as offset-end = (position #\space line :start (1+ perms-end))
-            as device-end = (position #\space line :start (1+ offset-end))
-            as inode-end = (position #\space line :start (1+ device-end))
-            as name-start = (position #\space line :start inode-end :test-not #'eql)
-            as low = (parse-integer line :start 0 :end low-end :radix 16)
-            as high = (parse-integer line :start (1+ low-end) :end high-end :radix 16)
-            as perms = (let ((p (subseq line (1+ high-end) perms-end)))
-                         (or (find p perm-cache :test #'equal)
-                             (car (setq perm-cache (cons p perm-cache)))))
-            as name = (and name-start
-                           (let ((f (subseq line name-start)))
-                             (or (find f name-cache :test #'equal)
-                                 (car (setq name-cache (cons f name-cache))))))
-            collect (list low high perms name)))))
+    (with-open-file (s (or (probe-file (format nil "/proc/~d/smaps" pid))
+                           (format nil "/proc/~d/maps" pid)))
+      (loop with current = nil
+            for line = (read-line s nil) while line
+            if (find #\- line)
+              collect (let* ((low-end (position #\- line))
+                             (high-end (position #\space line :start (1+ low-end)))
+                             (perms-end (position #\space line :start (1+ high-end)))
+                             (offset-end (position #\space line :start (1+ perms-end)))
+                             (device-end (position #\space line :start (1+ offset-end)))
+                             (inode-end (position #\space line :start (1+ device-end)))
+                             (name-start (position #\space line :start inode-end :test-not #'eql))
+                             (low (parse-integer line :start 0 :end low-end :radix 16))
+                             (high (parse-integer line :start (1+ low-end) :end high-end :radix 16))
+                             (perms (let ((p (subseq line (1+ high-end) perms-end)))
+                                      (or (find p perm-cache :test #'equal)
+                                          (car (setq perm-cache (cons p perm-cache))))))
+                             (name (and name-start
+                                        (let ((f (subseq line name-start)))
+                                          (or (find f name-cache :test #'equal)
+                                              (car (setq name-cache (cons f name-cache))))))))
+                        (setq current (list low perms name (- high low) nil nil)))
+            else do (let* ((key-end (position #\: line))
+                           (size-start (position #\space line :start (1+ key-end) :test-not #'eql))
+                           (size-end (position #\space line :start (1+ size-start)))
+                           (size (parse-integer line :start size-start :end size-end :radix 10)))
+                      (assert (string-equal " kB" line :start2 size-end))
+                      (assert current)
+                      (setq size (* size 1024))
+                      (macrolet ((is (string)
+                                   `(and (eql key-end ,(length string))
+                                         (string-equal ,string line :end2 key-end))))
+                        (cond ((or (is "Shared_Clean") (is "Private_Clean"))
+                               (setf (nth 4 current) (+ (or (nth 4 current) 0) size)))
+                              ((or (is "Shared_Dirty") (is "Private_Dirty"))
+                               (setf (nth 5 current) (+ (or (nth 5 current) 0) size))))))))))
 
 (defun proc-maps-diff (map1 map2)
-  ;; Compute change from map1 to map2.
-  ;;  Remove segment -> (:remove low high ...)
-  ;;  Add segment  -> (:add low high ...)
-  ;;  grow segment -> (:grow low high new-high ...)
+  ;; Compute change from map1 to map2, return a list of (old-sect . new-sect)
   (let ((added (copy-list map2))
-        (changes nil))
+        (changed nil))
     (loop for m1 in map1 as match = (find (car m1) added :key #'car)
           do (when match
-               (setq added (delete match added))
-               (unless (equal (cddr m1) (cddr match))
-                 (warn  "Segment changed ~s -> ~s" m1 match)))
-          do (cond ((null match)
-                    (push `(:remove ,(- (car m1) (cadr m1)) ,@m1) changes))
-                   ((< (cadr m1) (cadr match))
-                    (push `(:grow ,(- (cadr match) (cadr m1)) ,@m1) changes)) 
-                   ((< (cadr match) (cadr m1))
-                    (push `(:shrink ,(- (cadr match) (cadr m1)) ,@m1) changes)) 
-                   (t nil)))
-    (loop for m in added do (push `(:new ,(- (cadr m) (car m)) ,@m) changes))
-    changes))
+               (if (and (equal (nth 1 m1) (nth 1 match)) (equal (nth 2 m1) (nth 2 match)))
+                   (setq added (delete match added))
+                   (setq match nil)))
+          do (unless (equalp m1 match)
+               (push (list m1 match) changed)))
+    (loop for new in added do (push (list nil new) changed))
+    changed))
 
-)  ;; end of linux-only code
+) ;; end of linux-only code
 
 (defun get-allocation-sentinel (&key (gc-first t))
   ;; Return the object with the highest address that can be guaranteed to be at a lower
