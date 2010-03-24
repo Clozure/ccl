@@ -744,4 +744,17 @@ had invoked abort."
     (cond ((car result) (values-list (cdr result)))
           (t default))))
 
+(defun call-in-initial-process (f)
+  (let* ((process *initial-process*)
+	 (return-values nil)
+	 (done (make-semaphore)))
+    (process-interrupt process
+		       #'(lambda ()
+			   (unwind-protect
+				(progn
+				  (setq return-values
+					(multiple-value-list (funcall f))))
+			     (signal-semaphore done))))
+    (wait-on-semaphore done)
+    (apply #'values return-values)))
 
