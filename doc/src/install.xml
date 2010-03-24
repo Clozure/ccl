@@ -15,48 +15,29 @@
   <!-- ============================================================ -->
   <sect1 id="releases"><title>Releases and System Requirements</title>
     
-    <para>Version 1.3 is the latest stable release of &CCL; as of April
-    2009.</para>
+    <para>As of this writing, &CCL; 1.4 is the latest release; it was
+    made in October 2009.  For up-to-date information about releases,
+    please see <ulink url="http://ccl.clozure.com/"/>.
+    </para>
 
-   <para>Version 1.3 is available for seven platform configurations:</para>
+   <para>&CCL; runs on the following platforms:</para>
     <itemizedlist>
       <listitem>
-        <para>Linux on PowerPC (32-bit and 64-bit implementations)</para>
+        <para>Linux (x86, x86-64, ppc32, ppc64)</para>
       </listitem>
       <listitem>
-        <para>Mac OS X on PowerPC (32-bit and 64-bit implementations)</para>
+        <para>Mac OS X 10.4 and later (x86, x86-64, ppc32, ppc64)</para>
       </listitem>
       <listitem>
-        <para>Linux on x86 (32-bit and 64-bit implementations)</para>
+	<para>FreeBSD 6.x and later (x86, x86-64)</para>
       </listitem>
       <listitem>
-        <para>Mac OS X on x86 (32-bit and 64-bit implementations)</para>
+	<para>Solaris (x86, x86-64)</para>
       </listitem>
       <listitem>
-	<para>FreeBSD on x86 (32-bit and 64-bit implementations)</para>
-      </listitem>
-      <listitem>
-	<para>Solaris on x86 (32-bit and 64-bit implementations)</para>
-      </listitem>
-      <listitem>
-	<para>MS Windows XP and later on x86 (32-bit and 64-bit implementations)</para>
+	<para>Microsoft Windows XP and later (x86, x86-64)</para>
       </listitem>
     </itemizedlist>
-
-    <para>A 64-bit version of &CCL; requires a 64-bit processor
-      running a 64-bit OS variant.</para>
-    
-    <para>Additional platform-specific information is given in the
-      following subsections.</para>
-
-    <para>Older versions are still available for downloading as
-    tarballs.  Version 1.0 was a stable version released in late 2005.
-    Version 1.1 was under active development until late 2007.  A final
-    1.1 release was never made.  It was distributed as a series of
-    development "snapshots" and CVS updates.  1.1 snapshots introduced
-    support for x86-64 platforms, internal use of Unicode, and many
-    other features, but were moving targets.  Version 1.2 was a stable
-    version released in April 2008.</para>
 
     <!-- ***************************************************** -->
     <sect2 id="linuxppc"><title>LinuxPPC</title> 
@@ -88,23 +69,22 @@
     <!-- ***************************************************** -->
     <sect2 id="macosx"><title>Mac OS X (ppc and x86)</title>
 
-      <para> &CCL; runs under Mac OS X versions 10.4 and 10.5.
+      <para> &CCL; runs under Mac OS X versions 10.4 and later.  Post-1.4
+      versions will require at least 10.5.
       </para>
 
-      <para>64-bit versions of &CCL; require 64-bit processors
+      <para>64-bit versions of &CCL; naturally require 64-bit processors
       (e.g., a G5 or Core 2 processor).  Some early Intel-based Macintoshes
       used processors that don't support
       64-bit operation, so the 64-bit &CCL; will not run on them, although
       the 32-bit &CCL; will.
       </para>
-
-      <para>&CCL; hasn't been tested under Darwin proper, but
-        &CCL; doesn't intentionally use any Mac OS X features beyond
-        the Darwin subset and therefore it seems likely that &CCL;
-        would run on Darwin versions that correspond to recent Mac OS X
-        versions.</para>
     </sect2>
-
+    <sect2 id="windows"><title>Microsoft Windows</title>
+    <para>
+      At the moment, the 32-bit &CCL; does not run under 64-bit Windows.
+    </para>
+    </sect2>
   </sect1>
 
 
@@ -132,7 +112,7 @@
 	 or wherever you wish.
          After that you can double-click the Clozure CL application found
 	 inside the ccl directory.  The disk images are available at
-         <ulink url="ftp://clozure.com/pub/release/1.3/"/> </para>
+         <ulink url="ftp://clozure.com/pub/release/1.4/"/> </para>
 
       <para>So that &CCL; can locate its source code, and for other
         reasons explained in
@@ -155,7 +135,7 @@
       using Subversion. This is the preferred way to get either the
       latest, or a specific version of &CCL;, unless you prefer
       the Mac Way.  Subversion is a source code control system that is
-      in wide usage.  Most modern OSes come with Subversion
+      in wide use.  Many OSes come with Subversion
       pre-installed. A complete, buildable and runnable set of &CCL;
       sources and binaries can be retrieved with a single Subversion command.
       </para>
@@ -190,11 +170,11 @@ svn co http://svn.clozure.com/publicsvn/openmcl/trunk/darwinx86/ccl]]>
 
 	<para>Release versions of &CCL; are intended to be stable.  While
 	bugs will be fixed in the release branches, enhancements
-	and new features will go into the trunk.  To get the 1.3 release
+	and new features will go into the trunk.  To get the 1.4 release
 	of &CCL; type:</para>
         <programlisting>
           <![CDATA[
-svn co http://svn.clozure.com/publicsvn/openmcl/release/1.3/darwinx86/ccl]]>
+svn co http://svn.clozure.com/publicsvn/openmcl/release/1.4/darwinx86/ccl]]>
         </programlisting>
 
         
@@ -236,7 +216,7 @@ Welcome to Clozure Common Lisp Version 1.2  (DarwinX8664)!
         </programlisting>
 
 	<para>
-	  If you don't have a C compiler toolchain installed, the
+	  If you don't have a C compiler toolchain installed,
 	  <literal>rebuild-ccl</literal> will not work.  Please
 	  refer to <xref linkend="building-ccl-from-source"/> for
 	  addtional details.
@@ -271,7 +251,7 @@ Type 'svn help' for usage]]>
     <!-- ***************************************************** -->
     <sect2 id="obtaining-via-tarballs"><title>Tarballs</title>
       <para>Tarballs are available at <ulink
-      url="ftp://clozure.com/pub/release/1.3/"/>.  Download and extract
+      url="ftp://clozure.com/pub/release/1.4/"/>.  Download and extract
       one on your local disk.  Then edit the &CCL; shell script to set
       the value of <varname>CCL_DEFAULT_DIRECTORY</varname> and start
       up the appropriate &CCL; kernel. See <xref
@@ -335,11 +315,8 @@ Type 'svn help' for usage]]>
             .bashrc,.bash_profile, .MacOSX/environment.plist, or
             wherever you usually set environment variables.  If there
             is an existing definition of the variable, the ccl
-            script will not override it. The shell script sets a local
-            variable (<literal>OPENMCL_KERNEL</literal>) to the
-            standard name of the &CCL; kernel approprate for the
-            platform, as determined by 'uname -s'. You might prefer to
-            set this variable manually in the shell script.</para>
+            script will not override it.
+	  </para>
         </listitem>
 
         <listitem>
