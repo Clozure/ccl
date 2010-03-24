@@ -1180,6 +1180,8 @@
 
 ;; CCL extensions
 (defindent "iterate" 2)
+(defindent "rlet" 1)
+(defindent "rletz" 1)
 
 ;;; Error/condition system forms.
 ;;; 
@@ -1249,7 +1251,6 @@
 
 ;;; System forms.
 ;;;
-(defindent "rlet" 1)
 
 ;;; Multiprocessing forms.
 (defindent "process-wait" 1)
