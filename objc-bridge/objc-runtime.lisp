@@ -374,21 +374,8 @@
         (#_objc_msgSend pool release-selector))
       nil)))
 
-(defun run-in-cocoa-process-and-wait  (f)
-  (let* ((process *cocoa-event-process*)
-	 (success (cons nil nil))
-	 (done (make-semaphore)))
-    (process-interrupt process #'(lambda ()
-				   (unwind-protect
-					(progn
-					  (setf (car success) (funcall f)))
-				     (signal-semaphore done))))
-    (wait-on-semaphore done)
-    (car success)))
-
-
 (defun load-cocoa-framework ()
-  (run-in-cocoa-process-and-wait
+  (call-in-initial-process
    #'(lambda ()
        ;; We need to load and "initialize" the CoreFoundation library
        ;; in the thread that's going to process events.  Looking up a
