@@ -216,6 +216,7 @@
              (@selector #/invokeLispFunction:)
              arg
              t)
+            (#/release arg)
             (apply #'values return-values))))))
 
 
