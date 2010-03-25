@@ -58,7 +58,9 @@
      find-source-note-at-pc
      caller-functions
      *svn-program*
-     
+     watch
+     unwatch
+
      show-documentation
      %set-toplevel
      toplevel-loop
