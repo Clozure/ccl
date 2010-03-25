@@ -137,6 +137,7 @@ contrib/foy/window-parking-cm/ReadMe.rtf -text
 contrib/foy/window-parking-cm/window-parking-cm.lisp -text
 contrib/foy/window-parking-cm/window-parking-dialogs.lisp -text
 contrib/foy/window-parking-cm/window-parking.lisp -text
+contrib/garret/test -text
 contrib/krueger/InterfaceProjects/Documentation/DocFigures/Loan[!!-~]Flowchart.graffle -text
 contrib/krueger/InterfaceProjects/Documentation/DocFigures/loan1.tiff -text
 contrib/krueger/InterfaceProjects/Documentation/DocFigures/loan10.tiff -text
