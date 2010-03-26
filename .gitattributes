@@ -138,6 +138,10 @@ contrib/foy/window-parking-cm/window-parking-cm.lisp -text
 contrib/foy/window-parking-cm/window-parking-dialogs.lisp -text
 contrib/foy/window-parking-cm/window-parking.lisp -text
 contrib/garret/test -text
+contrib/huebner/advice-profiler/overhead.lisp -text
+contrib/huebner/advice-profiler/package.lisp -text
+contrib/huebner/advice-profiler/profiler.asd -text
+contrib/huebner/advice-profiler/profiler.lisp -text
 contrib/krueger/InterfaceProjects/Documentation/DocFigures/Loan[!!-~]Flowchart.graffle -text
 contrib/krueger/InterfaceProjects/Documentation/DocFigures/loan1.tiff -text
 contrib/krueger/InterfaceProjects/Documentation/DocFigures/loan10.tiff -text
@@ -450,10 +454,6 @@ scripts/ccl64 -text
 scripts/http-to-ssh -text
 scripts/makedmg -text
 scripts/svn-switch -text
-tools/advice-profiler/overhead.lisp -text
-tools/advice-profiler/package.lisp -text
-tools/advice-profiler/profiler.asd -text
-tools/advice-profiler/profiler.lisp -text
 tools/asdf-install/RELNOTES -text
 tools/asdf-install/changes.text -text
 tools/asdf-install/conditions.lisp -text
