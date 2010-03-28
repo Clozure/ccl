@@ -3379,15 +3379,13 @@
 					      (idx :imm)))
   :resume
   (movl (:@ x8632::symbol.binding-index (:%l src)) (:%l idx))
+  (xorl (:%l table) (:%l table))
   (rcmpl (:%l idx) (:@ (:%seg :rcontext) x8632::tcr.tlb-limit))
+  (cmovael (:%l table) (:%l idx))
   (movl (:@ (:%seg :rcontext) x8632::tcr.tlb-pointer) (:%l table))
-  (jae :symbol)
   (movl (:@ (:%l table) (:%l idx)) (:%l dest))
   (cmpl (:$l x8632::subtag-no-thread-local-binding) (:%l dest))
-  (jne :test)
-  :symbol
-  (movl (:@ x8632::symbol.vcell (:%l src)) (:%l dest))
-  :test
+  (cmovel (:@ x8632::symbol.vcell (:%l src)) (:%l dest))
   (cmpl (:$l x8632::unbound-marker) (:%l dest))
   (je :bad)
 
@@ -3404,18 +3402,17 @@
 
 (define-x8632-vinsn %ref-symbol-value-inline (((dest :lisp))
                                               ((src (:lisp (:ne dest))))
-                                              ((table :imm)
-                                               (idx :imm)))
+                                              ((idx :imm)))
+  ;; binding index 0 always contains a no-thread-local-binding
+  ;; marker, so treat out-of-range indices as 0 to avoid branches.
   (movl (:@ x8632::symbol.binding-index (:%l src)) (:%l idx))
+  (xorl (:% dest) (:% dest))
   (rcmpl (:%l idx) (:@ (:%seg :rcontext) x8632::tcr.tlb-limit))
-  (jae :symbol)
+  (cmovael (:% dest) (:% idx))
   (addl (:@ (:%seg :rcontext) x8632::tcr.tlb-pointer) (:%l idx))
   (movl (:@ (:%l idx)) (:%l dest))
   (cmpl (:$l x8632::subtag-no-thread-local-binding) (:%l dest))
-  (jne :done)
-  :symbol
-  (movl (:@ x8632::symbol.vcell (:%l src)) (:%l dest))
-  :done)
+  (cmovel (:@ x8632::symbol.vcell (:%l src)) (:%l dest)))
 
 (define-x8632-vinsn ref-interrupt-level (((dest :imm))
                                          ()

@@ -2117,14 +2117,16 @@
                                                (idx :imm)))
   :resume
   (movq (:@ x8664::symbol.binding-index (:%q src)) (:%q idx))
+  ;; The entry for binding-index 0 in the table always
+  ;; contains a no-thread-local-binding marker; treat
+  ;; out-of-bounds indices as 0 to avoid branches
+  (xorl (:%l table) (:%l table))
   (rcmpq (:%q idx) (:rcontext x8664::tcr.tlb-limit))
+  (cmovael (:%l table) (:%l idx))
   (movq (:rcontext x8664::tcr.tlb-pointer) (:%q table))
-  (jae :symbol)
   (movq (:@ (:%q table) (:%q idx)) (:%q dest))
   (cmpl (:$b x8664::subtag-no-thread-local-binding) (:%l dest))
-  (jne :test)
-  :symbol
-  (movq (:@ x8664::symbol.vcell (:%q src)) (:%q dest))
+  (cmoveq (:@ x8664::symbol.vcell (:%q src)) (:%q dest))
   :test
   (cmpl (:$b x8664::unbound-marker) (:%l dest))
   (je :bad)
@@ -2146,16 +2148,15 @@
                                               ((src (:lisp (:ne dest))))
                                               ((table :imm)
                                                (idx :imm)))
+  ;; Treat out-of-bounds indices as index 0
   (movq (:@ x8664::symbol.binding-index (:%q src)) (:%q idx))
+  (xorl (:%l table) (:%l table))
   (rcmpq (:%q idx) (:rcontext x8664::tcr.tlb-limit))
+  (cmovael (:%l table) (:%l idx))
   (movq (:rcontext x8664::tcr.tlb-pointer) (:%q table))
-  (jae :symbol)
   (movq (:@ (:%q table) (:%q idx)) (:%q dest))
   (cmpb (:$b x8664::subtag-no-thread-local-binding) (:%b dest))
-  (jne :done)
-  :symbol
-  (movq (:@ x8664::symbol.vcell (:%q src)) (:%q dest))
-  :done)
+  (cmoveq (:@ x8664::symbol.vcell (:%q src)) (:%q dest)))
 
 (define-x8664-vinsn ref-interrupt-level (((dest :imm))
                                          ()
