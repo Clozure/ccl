@@ -1420,8 +1420,6 @@ Will differ from *compiling-file* during an INCLUDE")
 
 (defun fasl-dump-block (gnames goffsets forms hash)
   (let ((etab-size (hash-table-count hash)))
-    (when (> etab-size 65535)
-      (error "Too many multiply-referenced objects in fasl file.~%Limit is ~d. Were ~d." 65535 etab-size))
     (fasl-out-word FASL-VERSION)          ; Word 0
     (fasl-out-long  0)
     (fasl-out-byte $fasl-vetab-alloc)
