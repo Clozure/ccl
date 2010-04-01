@@ -41,7 +41,7 @@
     convenient than before to refer to several classes of symbols used
     with the Objective-C bridge. For a full description of these
     reader-macros, see
-    the <link linkend="anchor_Foreign-Function-Interface-Dictionary">Foreign-Function-Interface
+    the <link linkend="Foreign-Function-Interface-Dictionary">Foreign-Function-Interface
     Dictionary</link>, especially the entries at the beginning,
     describing reader macros.</para>
 
@@ -533,7 +533,6 @@
 
   <!-- ============================================================ -->
   <sect1 id="Defining-Objective-C-Methods">
-    <anchor id="anchor_Defining-Objective-C-Methods"/>
     <title>Defining Objective-C Methods</title>
     <para>In Objective-C, unlike in CLOS, every method belongs to some
       particular class.  This is probably not a strange concept to
@@ -551,7 +550,7 @@
       Objective-C classes with the same restrictions as those created
       by <literal>define-objc-method</literal>.</para>
 
-    <sect2>
+    <sect2 id="Using-define-objc-method">
       <title>Using <literal>define-objc-method</literal></title>
       <para>As described in the
         section <link linkend="Calling-Objective-C-Methods">Calling
@@ -679,9 +678,7 @@
       </programlisting>
       </sect2>
 
-    <sect2>
-      <anchor id="anchor_Using-objc-defmethod"/>
-
+    <sect2 id="Using-objc-defmethod">
 	  <title>Using <literal>objc:defmethod</literal></title>
 
       <para>The macro <literal>OBJC:DEFMETHOD</literal> can be used to

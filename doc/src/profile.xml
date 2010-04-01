@@ -12,7 +12,7 @@
   <chapter id="Profiling">
     <title>Profiling</title>
 
-    <sect1 id="Profiling-Using the Linux oprofile system-level profiler">
+    <sect1 id="Profiling-Using-the-Linux-oprofile-system-level-profiler">
       <title>Using the Linux oprofile system-level profiler</title>
 
       <para><ulink url="http://oprofile.sourceforge.net"><code>oprofile</code></ulink> is

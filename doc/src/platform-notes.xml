@@ -1013,7 +1013,7 @@
           <para>For a detailed description of the features and
           restrictions of the <literal>OBJC:DEFMETHOD</literal> macro,
           see the
-          section <link linkend="anchor_Using-objc-defmethod">Using <literal>objc:defmethod</literal></link>.</para>
+          section <link linkend="Using-objc-defmethod">Using <literal>objc:defmethod</literal></link>.</para>
 	    </refsect1>
 	  </refentry>
       

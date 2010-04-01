@@ -47,7 +47,7 @@
           generally to execute the ccl or ccl64 command.</para>
       </listitem>
       <listitem>
-        <para>Evaluate the form <code language="lisp">(require :cocoa-application)</code></para>
+        <para>Evaluate the form <code>(require :cocoa-application)</code></para>
       </listitem>
     </orderedlist>
 
@@ -251,7 +251,7 @@ oshirion:ccl mikel$
 
     <para>
       <indexterm zone="build-application"/>
-      <command><varname id="build-application">BUILD-APPLICATION</varname> <varname>&key;</varname>
+      <command><varname id="build-application">BUILD-APPLICATION</varname> &key;
         (<parameter>name</parameter> <replaceable>"MyApplication"</replaceable>)
         (<parameter>type-string</parameter> <replaceable>"APPL"</replaceable>)
         (<parameter>creator-string</parameter> <replaceable>"OMCL"</replaceable>)

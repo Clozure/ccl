@@ -1787,7 +1787,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
     <para>
       Multiple fasl files can be concatenated into a single file.
     </para>
-  <refentry id="fasl-concatenate">
+  <refentry id="f_fasl-concatenate">
     <indexterm zone="f_fasl-concatenate">
       <primary>fasl-concatenate</primary>
     </indexterm>
