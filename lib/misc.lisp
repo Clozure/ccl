@@ -421,9 +421,11 @@ are running on, or NIL if we can't find any useful information."
   (rlet ((count #>mach_msg_type_number_t #$TASK_EVENTS_INFO_COUNT)
          (info #>task_events_info))
     (#_task_info (#_mach_task_self) #$TASK_EVENTS_INFO info count)
-    (values (pref info #>task_events_info.cow_faults)
-            (pref info #>task_events_info.faults)
-            (pref info #>task_events_info.pageins)))
+    (let* ((faults (pref info #>task_events_info.faults))
+           (pageins (pref info #>task_events_info.pageins)))
+      (values (- faults pageins)
+              pageins
+              0)))
   #+windows-target
   ;; Um, don't know how to determine this, or anything like it.
   (values 0 0 0))
