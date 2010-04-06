@@ -313,6 +313,26 @@
 	   (progn ,@body)
 	 (close-dir ,dirent)))))
 
+(defun path-is-link (path)
+  "Returns T if PATH is a (hard or symbolic) link, NIL otherwise."
+  (eq (%unix-file-kind (native-translated-namestring path) t) :link))
+
+
+(defun %add-directory-result (path result follow-links)
+  (let* ((resolved (and follow-links (path-is-link path) (probe-file path))))
+    (if resolved
+      (push (namestring resolved) (cdr result)) ; may introduce duplicates.
+      (push (namestring path) (car result)))
+    path))
+
+(defun %make-directory-result ()
+  (cons nil nil))
+
+(defun %process-directory-result (result)
+  (dolist (resolved (cdr result) (mapcar #'parse-namestring (sort (car result)  #'string<)))
+    (pushnew resolved (car result) :test #'string=)))
+
+  
 (defun directory (path &key (directories nil) ;; include subdirectories
                             (files t)         ;; include files
 			    (all t)           ;; include Unix dot files (other than dot and dot dot)
@@ -341,16 +361,13 @@
 							     (mac-default-directory))))))
     (assert (eq (car (pathname-directory path)) :absolute) ()
 	    "full-pathname returned relative path ~s??" path)
-    ;; return sorted in alphabetical order, target-Xload-level-0 depends
-    ;; on this.
-    (nreverse
-     (delete-duplicates (%directory "/" dir path '(:absolute) keys) :test #'equal))))
+    (%process-directory-result (%directory "/" dir path '(:absolute) keys (%make-directory-result)))))
 
-(defun %directory (dir rest path so-far keys)
+(defun %directory (dir rest path so-far keys result)
   (multiple-value-bind (sub-dir wild rest) (%split-dir rest)
-    (%some-specific dir sub-dir wild rest path so-far keys)))
+    (%some-specific dir sub-dir wild rest path so-far keys result)))
 
-(defun %some-specific (dir sub-dir wild rest path so-far keys)
+(defun %some-specific (dir sub-dir wild rest path so-far keys result)
   (let* ((start 1)
 	 (end (length sub-dir))
 	 (full-dir (if (eq start end) dir (%str-cat dir (%substr sub-dir start end)))))
@@ -359,15 +376,14 @@
 	(push (%path-std-quotes (%substr sub-dir start pos) nil "/:;*") so-far)
 	(setq start (%i+ 1 pos))))
     (cond ((null wild)
-	   (%files-in-directory full-dir path so-far keys))
+	   (%files-in-directory full-dir path so-far keys result))
 	  ((string= wild "**")
-	   (%all-directories full-dir rest path so-far keys))
-	  (t (%one-wild full-dir wild rest path so-far keys)))))
+	   (%all-directories full-dir rest path so-far keys result))
+	  (t (%one-wild full-dir wild rest path so-far keys result)))))
 
 ; for a * or *x*y
-(defun %one-wild (dir wild rest path so-far keys)
-  (let ((result ())
-	(device (pathname-device path))
+(defun %one-wild (dir wild rest path so-far keys result)
+  (let ((device (pathname-device path))
 	(all (getf keys :all))
 	name)
     (with-open-dir (dirent device dir)
@@ -380,11 +396,11 @@
 	  (let ((subdir (%path-cat nil dir name))
                 (so-far (cons (%path-std-quotes name nil "/;:*") so-far)))
 	    (declare (dynamic-extent so-far))
-	    (setq result
-		  (nconc (%directory (%str-cat subdir "/") rest path so-far keys) result))))))
+            (%directory (%str-cat subdir "/") rest path so-far keys result)
+))))
     result))
 
-(defun %files-in-directory (dir path so-far keys)
+(defun %files-in-directory (dir path so-far keys result)
   (let ((device (pathname-device path))
         (name (pathname-name path))
         (type (pathname-type path))
@@ -395,7 +411,6 @@
 	(follow-links (getf keys :follow-links))
 	(all (getf keys :all))
         (include-emacs-lockfiles (getf keys :include-emacs-lockfiles))
-        (result ())
         sub dir-list ans)
     (if (not (or name type))
       (let (full-path)
@@ -406,7 +421,7 @@
 	  (setq ans (if directory-pathnames full-path
 		      (%cons-pathname (reverse (cdr so-far)) (car so-far) nil nil device)))
 	  (when (and ans (or (null test) (funcall test ans)))
-	    (setq result (list ans)))))
+            (%add-directory-result ans result follow-links))))
       (with-open-dir (dirent (pathname-device path) dir)
 	(while (setq sub (%read-dir dirent))
 	  (when (and (or all (neq (%schar sub 0) #\.))
@@ -427,13 +442,12 @@
 		      (multiple-value-bind (name type) (%std-name-and-type sub)
 			(%cons-pathname (or dir-list (setq dir-list (reverse so-far))) name type nil device)))))
 	    (when (and ans (or (null test) (funcall test ans)))
-	      (push (if follow-links (or (probe-file ans) ans) ans) result))))))
+	      (%add-directory-result ans result follow-links))))))
     result))
 
-(defun %all-directories (dir rest path so-far keys)
+(defun %all-directories (dir rest path so-far keys result)
   (let ((do-files nil)
         (do-dirs nil)
-        (result nil)
         (device (pathname-device path))
         (name (pathname-name path))
         (type (pathname-type path))
@@ -450,11 +464,9 @@
         (setq rest next-rest)
         (multiple-value-setq (next-dir next-wild next-rest) (%split-dir rest)))
       (cond ((not (string= next-dir "/"))
-	     (setq result
-		   (%some-specific dir next-dir next-wild next-rest path so-far keys)))
+	     (%some-specific dir next-dir next-wild next-rest path so-far keys result))
 	    (next-wild
-	     (setq result
-		   (%one-wild dir next-wild next-rest path so-far keys)))
+             (%one-wild dir next-wild next-rest path so-far keys result))
 	    ((or name type)
 	     (when (getf keys :files) (setq do-files t))
 	     (when (getf keys :directories) (setq do-dirs t)))
@@ -463,9 +475,10 @@
 			     (%cons-pathname (setq dir-list (reverse so-far)) nil nil nil device)
 			     (%cons-pathname (reverse (cdr so-far)) (car so-far) nil nil device)))
 		 (when (or (null test) (funcall test sub))
-		   (setq result (list (if follow-links (truename sub) sub))))))))
-    ; now descend doing %all-dirs on dirs and collecting files & dirs if do-x is t
-    (with-open-dir (dirent device dir)
+                   (%add-directory-result sub result follow-links))))))
+    ;; now descend doing %all-dirs on dirs and collecting files & dirs
+    ;; if do-x is t
+    (with-open-dir (dirent device (%path-std-quotes dir nil "*;:"))
       (while (setq sub (%read-dir dirent))
 	(when (and (or all (neq (%schar sub 0) #\.))
 		   (not (string= sub "."))
@@ -474,7 +487,7 @@
 	    (let* ((subfile (%path-cat nil dir sub))
 		   (std-sub (%path-std-quotes sub nil "/;:*"))
 		   (so-far (cons std-sub so-far))
-		   (subdir (%str-cat subfile "/")))
+		   (subdir (%str-cat subfile  "/")))
 	      (declare (dynamic-extent so-far))
 	      (when (and do-dirs (%file*= name type sub))
 		(setq ans (if directory-pathnames
@@ -482,13 +495,13 @@
 			    (%cons-pathname (or dir-list (setq dir-list (reverse (cdr so-far))))
 					    std-sub nil nil device)))
 		(when (or (null test) (funcall test ans))
-		  (push (if follow-links (truename ans) ans) result)))
-	      (setq result (nconc (%all-directories subdir rest path so-far keys) result)))
+		  (%add-directory-result ans result follow-links)))
+	      (%all-directories subdir rest path so-far keys result))
 	    (when (and do-files (%file*= name type sub))
 	      (multiple-value-bind (name type) (%std-name-and-type sub)
 		(setq ans (%cons-pathname (or dir-list (setq dir-list (reverse so-far))) name type nil device))
 		(when (or (null test) (funcall test ans))
-		  (push (if follow-links (truename ans) ans) result))))))))
+		  (%add-directory-result ans result follow-links))))))))
     result))
 
 (defun %split-dir (dir &aux pos)                 ; dir ends in a "/".

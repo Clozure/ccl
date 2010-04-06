@@ -1156,14 +1156,18 @@
       (fixnum
        (number-case divisor
          (fixnum (if (eq divisor 1) (values number 0) (%fixnum-truncate number divisor)))
-         (bignum (values 0 number))
+         (bignum (if (eq number target::target-most-negative-fixnum)
+		   (with-small-bignum-buffers ((bn number))
+		     (bignum-truncate bn divisor))
+		   (values 0 number)))
          (double-float (truncate-rat-dfloat number divisor))
          (short-float (truncate-rat-sfloat number divisor))
          (ratio (let ((q (truncate (* number (%denominator divisor)) ; this was wrong
                                    (%numerator divisor))))
                   (values q (- number (* q divisor)))))))
       (bignum (number-case divisor
-                (fixnum (if (eq divisor 1) (values number 0)
+                (fixnum (if (eq divisor 1)
+			  (values number 0)
                           (if (eq divisor target::target-most-negative-fixnum);; << aargh
                             (with-small-bignum-buffers ((bd divisor))
                               (bignum-truncate number bd))
