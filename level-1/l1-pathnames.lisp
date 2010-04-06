@@ -386,7 +386,9 @@
   ;; Note that %component-match-p is case sensitive.  Need a
   ;; case-insensitive version for hosts. 
   ;; In addition, host components do not support wildcards.
-  (or (eq path-host wild-host)
+  (or (null wild-host) (eq wild-host :wild)
+      (null path-host) (eq path-host :wild)
+      (eq path-host wild-host)
       (and (stringp path-host)
 	   (stringp wild-host)
 	   (string-equal path-host wild-host))))
