@@ -370,12 +370,14 @@
     (declare (simple-vector jumps))
     (when (zerop len) (editor-error "Zero length search string not allowed."))
     ;; The default jump is the length of the search string.
-    (dotimes (i len)
+    (dotimes (i (length jumps))
       (setf (aref jumps i) len))
     ;; For chars in the string the jump is the distance from the end.
     (dotimes (i len)
       (setf (aref jumps (funcall access-fun vec i)) (- len i 1)))
     jumps))
+
+
 
 ;;;; Case insensitive searches
 
