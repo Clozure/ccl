@@ -110,6 +110,16 @@
 			      (list print-function)
 			      print-function)))
 
+(defun sd-refname-in-included-struct-p (sd name &optional env)
+  (dolist (included-type (cdr (sd-superclasses sd)))
+    (let ((sub-sd (or (let ((defenv (definition-environment env)))
+			(when defenv (%cdr (assq included-type
+						 (defenv.structures
+						     defenv)))))
+		      (gethash included-type %defstructs%))))
+      (when sub-sd
+	(if (member name (sd-refnames sub-sd) :test 'eq)
+	  (return t))))))
 
 (defun sd-refname-pos-in-included-struct (sd name)
   (dolist (included-type (cdr (sd-superclasses sd)))
@@ -136,16 +146,17 @@
           (if pos
             (let ((offset (ssd-offset slot)))
               (unless (eql pos offset)
-                ; This should be a style-warning
+                ;; This should be a style-warning
                 (warn "Accessor ~s at different position than in included structure"
                       accessor)))
-            (let ((fn (slot-accessor-fn slot accessor env)))
-              (push
-               `(progn
-                  ,.fn
-                  (puthash ',accessor %structure-refs% ',(ssd-type-and-refinfo slot))
-                  (record-source-file ',accessor 'structure-accessor))
-               stuff))))))
+            (unless (sd-refname-in-included-struct-p sd accessor env)
+              (let ((fn (slot-accessor-fn slot accessor env)))
+                (push
+                 `(progn
+                    ,.fn
+                    (puthash ',accessor %structure-refs% ',(ssd-type-and-refinfo slot))
+                    (record-source-file ',accessor 'structure-accessor))
+                 stuff)))))))
     (nreverse stuff)))
 
 
