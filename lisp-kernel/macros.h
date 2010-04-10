@@ -90,7 +90,6 @@
 
 #define TCR_INTERRUPT_LEVEL(tcr) \
   (((signed_natural *)((tcr)->tlb_pointer))[INTERRUPT_LEVEL_BINDING_INDEX])
-#endif
 
 #ifdef WINDOWS
 #define LSEEK(fd,offset,how) _lseeki64(fd,offset,how)
@@ -114,3 +113,5 @@
 #define ZLISP "%08x"
 #define DECIMAL "%ld"
 #endif
+
+#endif /* __macros __ */
