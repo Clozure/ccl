@@ -41,7 +41,7 @@ CC=gcc-4.0
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c $< -arch ppc64 $(CDEFINES) $(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) $(WFORMAT) -mmacosx-version-min=10.5 -isysroot /Developer/SDKs/MacOSX10.5.sdk -o $@
+	$(CC) -I./ -c $< -arch ppc64 $(CDEFINES) $(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) $(WFORMAT) -mmacosx-version-min=10.5 -isysroot /Developer/SDKs/MacOSX10.5.sdk -o $@
 
 SPOBJ = ppc-spjump.o ppc-spentry.o ppc-subprims.o 
 ASMOBJ = ppc-asmutils.o imports.o

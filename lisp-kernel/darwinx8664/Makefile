@@ -58,7 +58,7 @@ WFORMAT = -Wno-format
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c $< -arch x86_64 $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) $(MDYNAMIC_NO_PIC) -mmacosx-version-min=10.5 -isysroot /Developer/SDKs/MacOSX10.5.sdk -o $@
+	$(CC) -I./ -c $< -arch x86_64 $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) $(MDYNAMIC_NO_PIC) -mmacosx-version-min=10.5 -isysroot /Developer/SDKs/MacOSX10.5.sdk -o $@
 
 SPOBJ = x86-spjump64.o x86-spentry64.o x86-subprims64.o 
 ASMOBJ = x86-asmutils64.o imports.o

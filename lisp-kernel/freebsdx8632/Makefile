@@ -59,7 +59,7 @@ OSLIBS = -lm -lthr $(CROSS)
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m32 -o $@
+	$(CC) -I./ -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m32 -o $@
 
 LINKSCRIPTFILE = # 
 LINKSCRIPT =  # -T $(LINKSCRIPTFILE)

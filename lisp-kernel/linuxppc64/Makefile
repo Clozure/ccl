@@ -43,7 +43,7 @@ endif
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m64 -o $@
+	$(CC) -I./ -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m64 -o $@
 
 SPOBJ = pad.o ppc-spjump.o ppc-spentry.o ppc-subprims.o
 ASMOBJ = ppc-asmutils.o imports.o

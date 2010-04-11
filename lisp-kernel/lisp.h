@@ -19,7 +19,7 @@
 #define __lisp__
 
 
-
+#include "ccl-platform.h"
 #include "lisptypes.h"
 #ifndef LOWMEM_BIAS
 #define LOWMEM_BIAS 0

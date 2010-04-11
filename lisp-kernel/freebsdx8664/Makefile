@@ -56,7 +56,7 @@ OSLIBS = -lm -lthr
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m64 -o $@
+	$(CC) -I./ -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m64 -o $@
 
 LINKSCRIPTFILE = # ./elf_x86_64.x
 LINKSCRIPT =  # -T $(LINKSCRIPTFILE)

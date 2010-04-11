@@ -55,7 +55,7 @@ SUPPRESS_UNDERSCORES=#-fno-leading-underscore
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) ${SUPPRESS_UNDERSCORES} -mno-cygwin -o $@
+	$(CC) -I./ -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) ${SUPPRESS_UNDERSCORES} -mno-cygwin -o $@
 
 # order matters: x86-spjump32.o must be first.
 SPOBJ = x86-spjump32.o x86-spentry32.o x86-subprims32.o
