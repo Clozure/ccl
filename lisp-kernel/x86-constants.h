@@ -58,6 +58,8 @@
 #define X86_DIRECTION_FLAG_BIT (10)
 #define X86_OVERFLOW_FLAG_BIT (11)
 
+#define STATIC_BASE_ADDRESS 0x00012000
+
 
 #endif /* __x86_constants__ */
 

@@ -30,3 +30,6 @@ typedef ucontext_t ExceptionInformation;
 
 #include "standard-inttypes.h"
 
+#define MAXIMUM_MAPPABLE_MEMORY ((1U<<31)-2*heap_segment_size)
+#define IMAGE_BASE_ADDRESS 0x04000000
+

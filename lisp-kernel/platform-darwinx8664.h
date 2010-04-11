@@ -30,3 +30,7 @@ typedef ucontext_t ExceptionInformation;
 #define UC_MCONTEXT(UC) UC->uc_mcontext
 
 #include "standard-inttypes.h"
+
+#define MAXIMUM_MAPPABLE_MEMORY (512L<<30L)
+#define IMAGE_BASE_ADDRESS 0x300000000000L
+

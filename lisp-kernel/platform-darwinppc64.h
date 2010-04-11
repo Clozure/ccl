@@ -29,3 +29,7 @@ typedef _STRUCT_MCONTEXT64 *MCONTEXT_T;
 
 
 #include "standard-inttypes.h"
+
+#define MAXIMUM_MAPPABLE_MEMORY (512L<<30L)
+#define IMAGE_BASE_ADDRESS 0x300000000000L
+

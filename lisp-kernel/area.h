@@ -123,14 +123,17 @@ typedef struct area_list {
 #define CSTACK_SOFTPROT (100<<10)
 #define MIN_VSTACK_SIZE (1<<16)
 #define VSTACK_HARDPROT (1<<12)
+
 #ifdef PPC
 #define VSTACK_SOFTPROT (1<<16)
 #else
 #define VSTACK_SOFTPROT CSTACK_SOFTPROT
 #endif
+
 #define MIN_TSTACK_SIZE (1<<18)
 #define TSTACK_HARDPROT 0
 #define TSTACK_SOFTPROT (1<<16)
+
 #ifdef PPC
 #define CS_OVERFLOW_FORCE_LIMIT ((natural)(-(sizeof(lisp_frame))))
 #endif
@@ -140,60 +143,7 @@ typedef struct area_list {
 #endif
 
 
-#ifdef PPC
-#ifdef LINUX
-#ifdef PPC64
-#define IMAGE_BASE_ADDRESS 0x50000000000L
-#else
-#define IMAGE_BASE_ADDRESS 0x31000000
-#endif
-#endif
-#ifdef DARWIN
-#ifdef PPC64
-#define IMAGE_BASE_ADDRESS 0x300000000000L
-#else
-#define IMAGE_BASE_ADDRESS 0x04000000
-#endif
-#endif
-#endif
 
-#ifdef X86
-#ifdef LINUX
-#ifdef X8664
-#define IMAGE_BASE_ADDRESS 0x300000000000L
-#else
-#define IMAGE_BASE_ADDRESS 0x10000000
-#endif
-#endif
-#ifdef FREEBSD
-#ifdef X8664
-#define IMAGE_BASE_ADDRESS 0x300000000000L /* 0x100000000L */
-#else
-#define IMAGE_BASE_ADDRESS 0x30000000
-#endif
-#endif
-#ifdef SOLARIS
-#ifdef X8664
-#define IMAGE_BASE_ADDRESS 0x300000000000L
-#else
-#define IMAGE_BASE_ADDRESS 0x10000000
-#endif
-#endif
-#ifdef DARWIN
-#ifdef X8664
-#define IMAGE_BASE_ADDRESS 0x300000000000L
-#else
-#define IMAGE_BASE_ADDRESS 0x04000000
-#endif
-#endif
-#endif
-#ifdef WINDOWS
-#ifdef X8664
-#define IMAGE_BASE_ADDRESS 0x100000000LL
-#else
-#define IMAGE_BASE_ADDRESS 0x04000000
-#endif
-#endif
 
 #if (WORD_SIZE==64)
 #define PURESPACE_RESERVE 0x2000000000LL /* 128 GB */
@@ -205,11 +155,6 @@ typedef struct area_list {
 
 #define STATIC_RESERVE heap_segment_size
 
-#ifndef X86
-#define STATIC_BASE_ADDRESS (0x00002000+(LOWMEM_BIAS))
-#else
-#define STATIC_BASE_ADDRESS (0x00012000+(LOWMEM_BIAS))
-#endif
 
 #define SPJUMP_TARGET_ADDRESS (STATIC_BASE_ADDRESS+0x3000)
 

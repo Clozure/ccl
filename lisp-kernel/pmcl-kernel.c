@@ -363,50 +363,6 @@ unsigned unsigned_max(unsigned x, unsigned y)
   }
 }
 
-#if WORD_SIZE == 64
-#ifdef DARWIN
-#define MAXIMUM_MAPPABLE_MEMORY (512L<<30L)
-#endif
-#ifdef FREEBSD
-#define MAXIMUM_MAPPABLE_MEMORY (512L<<30L)
-#endif
-#ifdef SOLARIS
-#define MAXIMUM_MAPPABLE_MEMORY (512L<<30L)
-#endif
-#ifdef LINUX
-#ifdef X8664
-#define MAXIMUM_MAPPABLE_MEMORY (512L<<30L)
-#endif
-#ifdef PPC
-#define MAXIMUM_MAPPABLE_MEMORY (512L<<30L)
-#endif
-#endif
-#ifdef WINDOWS
-/* Supposedly, the high-end version of Vista allow 128GB of pageable memory */
-#define MAXIMUM_MAPPABLE_MEMORY (512LL<<30LL)
-#endif
-#else
-#ifdef DARWIN
-#define MAXIMUM_MAPPABLE_MEMORY ((1U<<31)-2*heap_segment_size)
-#endif
-#ifdef LINUX
-#ifdef X86
-#define MAXIMUM_MAPPABLE_MEMORY (9U<<28)
-#else
-#define MAXIMUM_MAPPABLE_MEMORY (1U<<30)
-#endif
-#endif
-#ifdef WINDOWS
-#define MAXIMUM_MAPPABLE_MEMORY (1U<<30)
-#endif
-#ifdef FREEBSD
-#define MAXIMUM_MAPPABLE_MEMORY (1U<<30)
-#endif
-#ifdef SOLARIS
-#define MAXIMUM_MAPPABLE_MEMORY (1U<<30)
-#endif
-#endif
-
 natural
 reserved_area_size = MAXIMUM_MAPPABLE_MEMORY;
 

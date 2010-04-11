@@ -26,4 +26,6 @@ typedef CONTEXT ExceptionInformation;
 #include "windows-inttypes.h"
 
 
+#define MAXIMUM_MAPPABLE_MEMORY (1U<<30)
+#define IMAGE_BASE_ADDRESS 0x04000000
 

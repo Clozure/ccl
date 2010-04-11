@@ -24,5 +24,6 @@ typedef struct ucontext ExceptionInformation;
 
 #include "solaris-inttypes.h"
 
-
+#define MAXIMUM_MAPPABLE_MEMORY (1U<<30)
+#define IMAGE_BASE_ADDRESS 0x10000000
 

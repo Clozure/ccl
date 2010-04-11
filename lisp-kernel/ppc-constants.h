@@ -86,6 +86,7 @@
 #define dnode_shift (node_shift+1)
 
 #define INTERRUPT_LEVEL_BINDING_INDEX (1)
+#define STATIC_BASE_ADDRESS 0x00002000
 
 #endif /* __ppc_constants__ */
 
