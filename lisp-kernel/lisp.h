@@ -64,7 +64,6 @@ char *
 print_lisp_object(LispObj);
 
 #include "kernel-globals.h"
-#endif
 
 #define PLATFORM_WORD_SIZE_32 0
 #define PLATFORM_WORD_SIZE_64 64
@@ -133,3 +132,5 @@ void ensure_static_conses(ExceptionInformation *, TCR *,natural);
 #include <stdio.h>
 
 extern FILE *dbgout;
+
+#endif /* __lisp__ */
