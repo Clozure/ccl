@@ -28,6 +28,7 @@ COPT = -O2
 # word size issues are a little more relevant on a 64-bit platform
 # than elsewhere, but most gcc format warnings are still nonsense.
 WFORMAT = -Wno-format
+PLATFORM_H = platform-linuxppc64.h
 
 # If the linker supports a "--hash-style=" option, use traditional
 # Sysv hash tables.  (If it doesn't support that option, assume
@@ -43,7 +44,7 @@ endif
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -I./ -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m64 -o $@
+	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m64 -o $@
 
 SPOBJ = pad.o ppc-spjump.o ppc-spentry.o ppc-subprims.o
 ASMOBJ = ppc-asmutils.o imports.o
@@ -58,7 +59,7 @@ SPINC =	lisp.s m4macros.m4 ppc-constants.s ppc-macros.s errors.s ppc-uuo.s ppc-c
 
 CHEADERS = area.h bits.h ppc-constants.h lisp-errors.h gc.h lisp.h \
 	lisp-exceptions.h lisp_globals.h macros.h memprotect.h image.h \
-	Threads.h ppc-constants64.h ppc-exceptions.h
+	Threads.h ppc-constants64.h ppc-exceptions.h $(PLATFORM_H)
 
 # Subprims linked into the kernel ?
 # Yes:

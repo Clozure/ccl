@@ -28,6 +28,7 @@ COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
+PLATFORM_H = platform-linuxppc.h
 
 # If the linker supports a "--hash-style=" option, use traditional
 # Sysv hash tables.  (If it doesn't support that option, assume
@@ -55,7 +56,7 @@ A32 = $(shell ($(AS) --help -v 2>&1 | grep -q -e "-a32") && /bin/echo "-a32")
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(A32) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -I./ -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) $(PPC32) -o $@
+	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) $(PPC32) -o $@
 
 SPOBJ = pad.o ppc-spjump.o ppc-spentry.o ppc-subprims.o
 ASMOBJ = ppc-asmutils.o imports.o
@@ -70,7 +71,7 @@ SPINC =	lisp.s m4macros.m4 ppc-constants.s ppc-macros.s errors.s ppc-uuo.s ppc-c
 
 CHEADERS = area.h bits.h ppc-constants.h lisp-errors.h gc.h lisp.h \
 	lisp-exceptions.h lisp_globals.h macros.h memprotect.h image.h \
-	Threads.h ppc-constants32.h ppc-exceptions.h
+	Threads.h ppc-constants32.h ppc-exceptions.h $(PLATFORM_H)
 
 # Subprims linked into the kernel ?
 # Yes:
