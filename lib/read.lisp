@@ -195,15 +195,42 @@
         index))))
 
 
+(defun get-read-object (arg)
+  (if (listp %read-objects%)
+    (assoc arg %read-objects%)
+    (gethash arg %read-objects%)))
+
+(defparameter *read-objects-hash-threshold* 30)
+
+(defun note-read-object (data)
+  (let* ((lab (car data)))
+    (if (get-read-object lab)
+      (%err-disp $xduprdlbl lab)
+      (if (listp %read-objects%)
+        (if (< (length %read-objects%) *read-objects-hash-threshold*)
+          (push data %read-objects%)
+          (let* ((hash (make-hash-table :test #'eql :shared nil :rehash-size 2.0)))
+            (dolist (info %read-objects%)
+              (let* ((lab (car info)))
+                (setf (gethash lab hash) info)))
+            (setf (gethash lab hash) data)
+            (setq %read-objects% hash)))
+        (setf (gethash lab %read-objects%) data)))))
+
+
+    
+
 (set-dispatch-macro-character #\# #\#
   #'(lambda (stream char arg)
       (declare (ignore stream))
       (if *read-suppress* 
         nil
         (if arg
-          (let ((pair (assoc arg %read-objects%))) ;Not assq, could be bignum!
+          (let ((pair (get-read-object arg)))
             (if pair
-              (cdr pair)
+              (let* ((cell (cdr pair)))
+                (setf (car cell) t)
+                (cdr cell))
               (%err-disp $xnordlbl arg)))
           (%err-disp $xrdndarg char)))))
 
@@ -213,38 +240,57 @@
  #'(lambda (stream char arg &aux lab form)
      (cond (*read-suppress* (values))
            ((null arg) (%err-disp $xrdndarg char))
-           ((assoc arg %read-objects%)    ;Not assq, could be bignum!
-            (%err-disp $xduprdlbl arg))
            (t (setq lab (cons arg nil))
-              (push (%rplacd lab lab) %read-objects%)
+              (%rplacd lab (cons nil lab))
+              (note-read-object lab)
               (setq form (read stream t nil t))
-              (when (eq form lab)   ;#n= #n#.  No can do.
+              (when (eq form lab)       ;#n= #n#.  No can do.
                 (%err-disp $xnordlbl (%car lab)))
-              (%rplacd lab form)
-              (let ((scanned nil))
-                  (labels ((circle-subst (tree)
-                             (if (memq tree %read-objects%)
-                               (progn
-                                 (unless (memq tree scanned)
-                                   (setq scanned (%temp-cons tree scanned))
-                                   (circle-subst (cdr tree)))
-                                 (cdr tree))
-                               (let ((gvectorp (and (gvectorp tree)  (not (or (symbolp tree) (functionp tree))))))
-                                 (unless (or (and (atom tree) (not gvectorp)) (memq tree scanned))
-                                   (setq scanned (%temp-cons tree scanned))
-                                   (if gvectorp
-                                     (let* ((subtype  (typecode tree)))
-                                       (dotimes (i (uvsize tree))
-                                         (declare (fixnum i))
-                                         (unless (and (eql i 0) (eql subtype target::subtag-instance))
-                                           (setf (uvref tree i) (circle-subst (uvref tree i))))))
-                                     (locally 
-                                      (declare (type cons tree))
-                                      (rplaca tree (circle-subst (car tree)))
-                                      (rplacd tree (circle-subst (cdr tree))))))
-                                 tree))))
-                    (declare (dynamic-extent #'circle-subst))
-                    (circle-subst form)))))))
+              (%rplacd (cdr lab) form)
+              (let* ((reffed (cadr lab)))
+                (if (not reffed)
+                  form
+                  (let ((scanned nil))
+                    (labels ((circle-subst (tree)
+                               (if (eq tree lab)
+                                 (progn
+                                   (unless (memq tree scanned)
+                                     (setq scanned (%temp-cons tree scanned))
+                                     (circle-subst (cddr tree)))
+                                   (cddr tree))
+                                 (progn
+                                   (cond ((consp tree)
+                                          (unless (memq tree scanned)
+                                            (push tree scanned)
+                                            (locally 
+                                                (declare (type cons tree))
+                                              (let* ((orig (car tree))
+                                                     (new (circle-subst orig)))
+                                                (unless (eq orig new)
+                                                  (rplaca tree new))
+                                                (setq orig (cdr tree)
+                                                      new (circle-subst orig))
+                                                (unless (eq orig new)
+                                                  (rplacd tree new))))))
+                                         ((let* ((typecode (typecode tree)))
+                                            (declare (type (unsigned-byte 8) typecode))
+                                            (or (= typecode target::subtag-simple-vector)
+                                                (= typecode target::subtag-struct)
+                                                (= typecode target::subtag-arrayH)))
+                                          (unless (memq tree scanned)
+                                            (push tree scanned)
+                                            (let* ((n (uvsize tree)))
+                                              (declare (fixnum n))
+                                              (do* ((i (if (eql (typecode tree) target::subtag-struct) 1 0) (1+ i)))
+                                                   ((= i n))
+                                                (declare (fixnum i))
+                                                (let* ((old (%svref tree i))
+                                                       (new (circle-subst old)))
+                                               (unless (eq old new)
+                                                 (setf (%svref tree i) new))))))))
+                                   tree))))
+                      (declare (dynamic-extent #'circle-subst))
+                      (circle-subst form)))))))))
 
 
 

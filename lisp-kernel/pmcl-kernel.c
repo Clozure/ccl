@@ -930,33 +930,6 @@ path_by_appending_image(char *path)
 }
 #endif
 
-char *
-case_inverted_path(char *path)
-{
-  char *copy = strdup(path), *base = copy, *work = copy, c;
-  if (copy == NULL) {
-    return NULL;
-  }
-  while(*work) {
-    if (*work++ == '/') {
-      base = work;
-    }
-  }
-  work = base;
-  while ((c = *work) != '\0') {
-    if (islower(c)) {
-      *work++ = toupper(c);
-    } else {
-      *work++ = tolower(c);
-    }
-  }
-  return copy;
-}
-/* 
-   The underlying file system may be case-insensitive (e.g., HFS),
-   so we can't just case-invert the kernel's name.
-   Tack ".image" onto the end of the kernel's name.  Much better ...
-*/
 #ifdef WINDOWS
 wchar_t *
 default_image_name(wchar_t *orig)
@@ -969,20 +942,8 @@ default_image_name(wchar_t *orig)
 char *
 default_image_name(char *orig)
 {
-#ifdef WINDOWS
-  char *path = chop_exe_suffix(orig);
-#else
   char *path = orig;
-#endif
   char *image_name = path_by_appending_image(path);
-#if !defined(WINDOWS) && !defined(DARWIN)
-  if (!probe_file(image_name)) {
-    char *legacy = case_inverted_path(path);
-    if (probe_file(legacy)) {
-      image_name = legacy;
-    }
-  }
-#endif
   return image_name;
 }
 #endif
