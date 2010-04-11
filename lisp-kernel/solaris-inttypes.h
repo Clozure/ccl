@@ -20,6 +20,7 @@
    the types defined in Solaris' <stdint.h>.
 */
 
+#include <sys/types.h>
 #include <stdint.h>
 typedef int64_t s64_t;
 typedef uint64_t u64_t;
