@@ -20,6 +20,7 @@
 #define PLATFORM_CPU PLATFORM_CPU_X86
 #define PLATFORM_WORD_SIZE PLATFORM_WORD_SIZE_32
 
+#include <windows.h>
 typedef CONTEXT ExceptionInformation;
 
 #include "windows-inttypes.h"
