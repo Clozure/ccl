@@ -18,8 +18,8 @@
 #ifndef __lisp__
 #define __lisp__
 
+/* a platform-specific header file is pre-included via -include */
 
-#include "ccl-platform.h"
 #include "lisptypes.h"
 #ifndef LOWMEM_BIAS
 #define LOWMEM_BIAS 0
@@ -70,6 +70,7 @@ print_lisp_object(LispObj);
 #define PLATFORM_CPU_PPC (0<<3)
 #define PLATFORM_CPU_SPARC (1<<3)
 #define PLATFORM_CPU_X86 (2<<3)
+#define PLATFORM_CPU_ARM (3<<3)
 #define PLATFORM_OS_VXWORKS 0
 #define PLATFORM_OS_LINUX 1
 #define PLATFORM_OS_SOLARIS 2
