@@ -37,11 +37,12 @@ COPT = -O2
 # however.
 WFORMAT = -Wno-format
 CC=gcc-4.0
+PLATFORM_H = platform-darwinppc64.h
 
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -I./ -c $< -arch ppc64 $(CDEFINES) $(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) $(WFORMAT) -mmacosx-version-min=10.5 -isysroot /Developer/SDKs/MacOSX10.5.sdk -o $@
+	$(CC) -include ../$(PLATFORM_H) -c $< -arch ppc64 $(CDEFINES) $(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) $(WFORMAT) -mmacosx-version-min=10.5 -isysroot /Developer/SDKs/MacOSX10.5.sdk -o $@
 
 SPOBJ = ppc-spjump.o ppc-spentry.o ppc-subprims.o 
 ASMOBJ = ppc-asmutils.o imports.o
@@ -57,7 +58,7 @@ SPINC =	lisp.s m4macros.m4 ppc-constants.s ppc-macros.s errors.s ppc-uuo.s \
 
 CHEADERS = area.h bits.h ppc-constants.h lisp-errors.h gc.h lisp.h \
 	lisp-exceptions.h lisp_globals.h macros.h memprotect.h image.h \
-	Threads.h lisptypes.h ppc-constants64.h ppc-exceptions.h
+	Threads.h lisptypes.h ppc-constants64.h ppc-exceptions.h $(PLATFORM_H)
 
 # Subprims linked into the kernel ?
 # Yes:
