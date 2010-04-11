@@ -16,17 +16,16 @@
 */
 
 #define WORD_SIZE 64
-
+#define PLATFORM_OS PLATFORM_OS_DARWIN
+#define PLATFORM_CPU PLATFORM_CPU_PPC
+#define PLATFORM_WORD_SIZE PLATFORM_WORD_SIZE_64
 
 /* ucontext/mcontext stuff; saner if OS >= 10.5 */
-typedef struct ucontext64 ExceptionInformation;
-typedef struct mcontext64 MCONTEXT_T;
-#define UC_MCONTEXT(UC) UC->uc_mcontext
+#include <sys/signal.h>
+#include <sys/ucontext.h>
+typedef _STRUCT_UCONTEXT64 ExceptionInformation;
+typedef _STRUCT_MCONTEXT64 *MCONTEXT_T;
+#define UC_MCONTEXT(UC) UC->uc_mcontext64
 
-/* Define "standard" C integer types.  There are lots of standards; we
-   basically want to define signed/unsigned 8/16/32/64-bit integer
-   types (s8_t, u32_t) with names that we can use consistently in
-   this code.  (We may or may not actually use them consistently.)
- */
 
 #include "standard-inttypes.h"

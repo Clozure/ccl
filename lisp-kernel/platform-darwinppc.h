@@ -15,9 +15,17 @@
    http://opensource.franz.com/preamble.html
 */
 
-#define WORD_SIZE 32
+#define WORD_SIZE 3
+#define PLATFORM_OS PLATFORM_OS_DARWIN
+#define PLATFORM_CPU PLATFORM_CPU_PPC
+#define PLATFORM_WORD_SIZE PLATFORM_WORD_SIZE_32
+
+#include <sys/signal.h>
+#include <sys/ucontext.h>
 
 /* ucontext/mcontext stuff; saner if OS >= 10.5 */
 typedef ucontext_t ExceptionInformation;
 typedef mcontext_t MCONTEXT_T;
 #define UC_MCONTEXT(UC) UC->uc_mcontext
+
+#include "standard-inttypes.h"

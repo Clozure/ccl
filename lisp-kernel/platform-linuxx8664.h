@@ -16,6 +16,9 @@
 */
 
 #define WORD_SIZE 64
+#define PLATFORM_OS PLATFORM_OS_LINUX
+#define PLATFORM_CPU PLATFORM_CPU_X86
+#define PLATFORM_WORD_SIZE PLATFORM_WORD_SIZE_64
 
 typedef struct ucontext ExceptionInformation;
 

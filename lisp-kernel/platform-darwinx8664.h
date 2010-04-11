@@ -16,6 +16,10 @@
 */
 
 #define WORD_SIZE 64
+#define PLATFORM_OS PLATFORM_OS_DARWIN
+#define PLATFORM_CPU PLATFORM_CPU_X86
+#define PLATFORM_WORD_SIZE PLATFORM_WORD_SIZE_64
+
 
 #include <sys/signal.h>
 #include <sys/ucontext.h>
