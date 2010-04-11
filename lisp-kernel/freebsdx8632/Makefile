@@ -26,7 +26,7 @@ COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
-
+PLATFORM_H = platform-freebsdx8632.h
 
 
 
@@ -44,7 +44,7 @@ SPINC =	lisp.s m4macros.m4 x86-constants.s x86-macros.s errors.s x86-uuo.s \
 
 CHEADERS = area.h bits.h x86-constants.h lisp-errors.h gc.h lisp.h \
 	lisp-exceptions.h lisp_globals.h macros.h memprotect.h image.h \
-	Threads.h x86-constants32.h x86-exceptions.h
+	Threads.h x86-constants32.h x86-exceptions.h $(PLATFORM_H)
 
 .if $(MACHINE) == "amd64"
 CROSS = -B/usr/lib32
@@ -59,7 +59,7 @@ OSLIBS = -lm -lthr $(CROSS)
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -I./ -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m32 -o $@
+	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m32 -o $@
 
 LINKSCRIPTFILE = # 
 LINKSCRIPT =  # -T $(LINKSCRIPTFILE)
