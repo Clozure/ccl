@@ -26,6 +26,7 @@ COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
+PLATFORM_H = platform-linuxx8664.h
 
 # If the linker supports a "--hash-style=" option, use traditional
 # SysV hash tables.  (If it doesn't support that option, assume
@@ -41,7 +42,7 @@ endif
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -I./ -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m64 -o $@
+	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m64 -o $@
 
 SPOBJ = pad.o x86-spjump64.o x86-spentry64.o x86-subprims64.o
 ASMOBJ = x86-asmutils64.o imports.o

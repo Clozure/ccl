@@ -26,6 +26,7 @@ COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
+PLATFORM_H = platform-darwinx8632.h
 
 # If the linker supports a "--hash-style=" option, use traditional
 # SysV hash tables.  (If it doesn't support that option, assume
@@ -41,7 +42,7 @@ endif
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -I./ -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m32 -o $@
+	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m32 -o $@
 
 SPOBJ = pad.o x86-spjump32.o x86-spentry32.o x86-subprims32.o
 ASMOBJ = x86-asmutils32.o imports.o
