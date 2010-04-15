@@ -15,8 +15,8 @@
    http://opensource.franz.com/preamble.html
 */
 
-#ifndef __constants64__
-#define __constants64__ 1
+
+#include "ppc-constants.h"
 
 #define rcontext 2
 
@@ -451,6 +451,4 @@ typedef struct tcr {
 
 #define heap_segment_size 0x00020000L
 #define log2_heap_segment_size 17L
-
-#endif
 

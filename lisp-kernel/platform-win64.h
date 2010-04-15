@@ -30,4 +30,5 @@ typedef CONTEXT ExceptionInformation;
 #define MAXIMUM_MAPPABLE_MEMORY (512LL<<30LL)
 #define IMAGE_BASE_ADDRESS 0x100000000LL
 
-
+#include "lisptypes.h"
+#include "x86-constants64.h"

@@ -19,7 +19,7 @@
 /*	dyld.h included here because something in "lisp.h" causes
     a conflict (actually I think the problem is in "constants.h")
 */
-#include <mach-o/dyld.h>
+/* #include <mach-o/dyld.h> */
 
 #endif
 #include "lisp.h"

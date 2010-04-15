@@ -28,3 +28,5 @@ typedef struct __ucontext ExceptionInformation;
 #define MAXIMUM_MAPPABLE_MEMORY (1U<<30)
 #define IMAGE_BASE_ADDRESS 0x30000000
 
+#include "lisptypes.h"
+#include "x86-constants32.h"

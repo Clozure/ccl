@@ -20,17 +20,11 @@
 
 /* a platform-specific header file is pre-included via -include */
 
-#include "lisptypes.h"
 #ifndef LOWMEM_BIAS
-#define LOWMEM_BIAS 0
+#define LOWMEM_BIAS (0)
 #endif
 
-#ifdef PPC
-#include "ppc-constants.h"
-#endif
-#ifdef X86
-#include "x86-constants.h"
-#endif
+
 #include "macros.h"
 
 extern Boolean use_mach_exception_handling;

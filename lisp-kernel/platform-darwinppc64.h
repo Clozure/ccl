@@ -33,3 +33,5 @@ typedef _STRUCT_MCONTEXT64 *MCONTEXT_T;
 #define MAXIMUM_MAPPABLE_MEMORY (512L<<30L)
 #define IMAGE_BASE_ADDRESS 0x300000000000L
 
+#include "lisptypes.h"
+#include "ppc-constants64.h"

@@ -14,6 +14,8 @@
    http://opensource.franz.com/preamble.html
 */
 
+#include "x86-constants.h"
+
 #ifdef DARWIN
 #define REG_RAX 0
 #define REG_RBX 1

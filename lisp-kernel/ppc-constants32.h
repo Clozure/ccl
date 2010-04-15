@@ -18,6 +18,9 @@
 #ifndef __constants32__
 #define __constants32__ 1
 
+#include "ppc-constants.h"
+
+
 #define rcontext 13
 
 #define nbits_in_word 32
