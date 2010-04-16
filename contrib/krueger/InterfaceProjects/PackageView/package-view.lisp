@@ -22,7 +22,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 |#
 
-(require :NIB)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (require :nib))
 
 (defpackage :package-view
   (:nicknames :pv)

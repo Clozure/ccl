@@ -22,7 +22,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 |#
 
-(require :menu-utils)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (require :menu-utils))
 
 (defpackage :interface-utilities
   (:nicknames :iu)

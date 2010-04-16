@@ -1,12 +1,21 @@
 ;; nslog-utils.lisp
 
-(require :ns-string-utils)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (require :ns-string-utils))
 
 (defpackage :interface-utilities
   (:nicknames :iu)
-  (:export log-rect log-size log-float interleave log-4floats))
+  (:export ns-log ns-error log-rect log-size log-float interleave log-4floats))
 
 (in-package :iu)
+
+(defun ns-log (lisp-str)
+  (#_NSLog (lisp-to-temp-nsstring lisp-str)))
+
+(defmacro ns-error (format-string &rest args)
+  `(progn
+     (ns-log (format nil ,format-string ,@args))
+     (error "See console log for information")))
 
 (defun log-rect (r &optional (log-string ""))
   (#_NSLog (lisp-to-temp-nsstring (concatenate 'string 

@@ -29,7 +29,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ;;; When the Sum button is pushed the sum will be computed and placed into the sum 
 ;;; field in the window.
 
-(require :nib)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (require :nib))
 
 (defpackage :simplesum 
   (:nicknames :ss)
