@@ -1,4 +1,4 @@
-;;; loan-window-controller.lisp
+;;; loan-win-cntrl.lisp
 
 #|
 The MIT license.
@@ -96,3 +96,5 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
   (#/setAllowsUndo: (#/cell (dur-text self)) #$NO)
   (#/setAllowsUndo: (#/cell (pay-text self)) #$NO)
   (#/setAllowsUndo: (#/cell (orig-date-text self)) #$NO))
+
+(provide :loan-win-cntrl)

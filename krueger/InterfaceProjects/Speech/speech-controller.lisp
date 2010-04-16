@@ -27,7 +27,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ;;; as the class of the NIB file owner.
 ;;; We manually create an instance of SpeechController and specify it as the owner for the NIB file.
 
-(require :NIB)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (require :nib))
 
 (defpackage :speech-controller 
   (:nicknames :spc)
