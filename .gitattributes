@@ -507,6 +507,11 @@ lisp-kernel/freebsdx8632/fpu.h -text
 lisp-kernel/gc-common.c -text
 lisp-kernel/linuxx8632/.gdbinit -text
 lisp-kernel/linuxx8632/Makefile -text
+lisp-kernel/os-darwin.h -text
+lisp-kernel/os-freebsd.h -text
+lisp-kernel/os-linux.h -text
+lisp-kernel/os-solaris.h -text
+lisp-kernel/os-windows.h -text
 lisp-kernel/platform-darwinppc.h -text
 lisp-kernel/platform-darwinppc64.h -text
 lisp-kernel/platform-darwinx8632.h -text

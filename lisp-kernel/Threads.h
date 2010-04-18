@@ -234,29 +234,6 @@ atomic_ior(natural*, natural);
 #define CLR_TCR_FLAG(t,bit) atomic_and(&(t->flags),~(1L<<bit))
 
 
-#if defined(SIGRTMIN) && !defined(SOLARIS)
-#define SIG_SUSPEND_THREAD (SIGRTMIN+6)
-#else
-#define SIG_SUSPEND_THREAD SIGUSR2
-#endif
-
-
-#ifdef DARWIN
-#define SIG_KILL_THREAD SIGEMT
-#endif
-
-#if defined(LINUX) && defined(SIGRTMIN)
-#define SIG_KILL_THREAD (SIGRTMIN+7)
-#endif
-
-#ifdef SOLARIS
-#define SIG_KILL_THREAD SIGRTMIN
-#endif
-
-#ifdef FREEBSD
-#define SIG_KILL_THREAD (SIGTHR+5)
-#endif
-
 
 extern int thread_suspend_signal, thread_kill_signal;
 

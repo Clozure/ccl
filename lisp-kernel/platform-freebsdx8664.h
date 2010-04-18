@@ -29,3 +29,19 @@ typedef struct __ucontext ExceptionInformation;
 
 #include "lisptypes.h"
 #include "x86-constants64.h"
+
+#include <machine/fpu.h>
+#define xpGPRvector(x) ((natural *)(&((x)->uc_mcontext)))
+#define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
+#define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
+#define eflags_register(xp) xpGPR(xp,Iflags)
+#define xpPC(x) xpGPR(x,Iip)
+#define xpMMXreg(x,n) *((natural *)(&(((struct savefpu *)(&(x)->uc_mcontext.mc_fpstate))->sv_fp[n])))
+#define xpXMMregs(x)(&(((struct savefpu *)(&(x)->uc_mcontext.mc_fpstate))->sv_xmm[0]))
+extern void freebsd_sigreturn(ExceptionInformation *);
+#define SIGNUM_FOR_INTN_TRAP SIGBUS
+#define IS_MAYBE_INT_TRAP(info,xp) ((xp->uc_mcontext.mc_trapno == T_PROTFLT) && ((xp->uc_mcontext.mc_err & 7) == 2))
+#define IS_PAGE_FAULT(info,xp) (xp->uc_mcontext.mc_trapno == T_PAGEFLT)
+#define SIGRETURN(context) freebsd_sigreturn(context)
+
+#include "os-freebsd.h"

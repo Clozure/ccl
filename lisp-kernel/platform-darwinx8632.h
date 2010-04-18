@@ -35,3 +35,37 @@ typedef ucontext_t ExceptionInformation;
 
 #include "lisptypes.h"
 #include "x86-constants32.h"
+
+
+/* xp accessors, sigreturn stuff */
+#define DARWIN_USE_PSEUDO_SIGRETURN 1
+#define DarwinSigReturn(context) do {\
+    darwin_sigreturn(context);\
+    Bug(context,"sigreturn returned");\
+  } while (0)
+
+#define xpGPRvector(x) ((natural *)(&(UC_MCONTEXT(x)->__ss)))
+#define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
+#define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
+#define xpPC(x) (xpGPR(x,Iip))
+#define eflags_register(xp) xpGPR(xp,Iflags)
+#define xpFPRvector(x) ((natural *)(&(UC_MCONTEXT(x)->__fs.__fpu_xmm0)))
+#define xpMMXvector(x) (&(UC_MCONTEXT(x)->__fs.__fpu_stmm0))
+/* Note that this yields only the lower half of the MMX reg on x8632 */
+#define xpMMXreg(x,n) *(natural *)&(xpMMXvector(x)[n])
+
+#define SIGNUM_FOR_INTN_TRAP SIGSEGV /* Not really, but our Mach handler fakes that */
+#define IS_MAYBE_INT_TRAP(info,xp) ((UC_MCONTEXT(xp)->__es.__trapno == 0xd) && (((UC_MCONTEXT(xp)->__es.__err)&7)==2))
+#define IS_PAGE_FAULT(info,xp) (UC_MCONTEXT(xp)->__es.__trapno == 0xe)
+/* The x86 version of sigreturn just needs the context argument; the
+   hidden, magic "flavor" argument that sigtramp uses is ignored. */
+#define SIGRETURN(context) DarwinSigReturn(context)
+
+#include <mach/mach.h>
+#include <mach/mach_error.h>
+#include <mach/machine/thread_state.h>
+#include <mach/machine/thread_status.h>
+
+pthread_mutex_t *mach_exception_lock;
+
+#include "os-darwin.h"

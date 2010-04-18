@@ -67,3 +67,5 @@ typedef _STRUCT_MCONTEXT64 *MCONTEXT_T;
    restore context.  On DarwinPPC, that's not a factor.
 */
 #define SIGRETURN(context)
+
+#include "os-darwin.h"

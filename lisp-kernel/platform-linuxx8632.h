@@ -30,3 +30,17 @@ typedef struct ucontext ExceptionInformation;
 
 #include "lisptypes.h"
 #include "x86-constants32.h"
+
+/* xp accessors */
+#define xpGPRvector(x) ((natural *)(&((x)->uc_mcontext.gregs)))
+#define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
+#define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
+#define xpPC(x) (xpGPR(x,Iip))
+#define xpMMXreg(x,n)  *((natural *)(&((x)->uc_mcontext.fpregs->_st[n])))
+#define eflags_register(xp) xpGPR(xp,Iflags)
+#define SIGNUM_FOR_INTN_TRAP SIGSEGV
+#define IS_MAYBE_INT_TRAP(info,xp) ((xpGPR(xp,REG_TRAPNO)==0xd)&&((xpGPR(xp,REG_ERR)&7)==2))
+#define IS_PAGE_FAULT(info,xp) (xpGPR(xp,REG_TRAPNO)==0xe)
+#define SIGRETURN(context)
+
+#include "os-linux.h"
