@@ -739,21 +739,6 @@ vector
 
 ;;;;;FUNCTION BINDING Functions
 
-;;; A symbol's entrypoint contains:
-;;;  1) something tagged as $t_lfun if the symbol is
-;;;     not fbound as a macro or special form;
-;;;  2) a cons, otherwise, where the cdr is a fixnum
-;;;     whose value happens to be the same bit-pattern
-;;;     as a "jsr_subprim $sp-apply-macro" instruction.
-;;;     The car of this cons is either:
-;;;     a) a function -> macro-function;
-;;;     b) a symbol: special form not redefined as a macro.
-;;;     c) a cons whose car is a function -> macro function defined
-;;;        on a special form.
-
-
-
-
 (defun symbol-function (name)
   "Return the definition of NAME, even if it is a macro or a special form.
    Error if NAME doesn't have a definition."
