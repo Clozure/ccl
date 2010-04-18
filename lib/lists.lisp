@@ -21,86 +21,22 @@
   (require 'backquote)
   (require 'level-2))
 
-
-
-;;; These functions perform basic list operations:
-
-#|
-(defun caar (list) (car (car list)))
-(defun cadr (list) (car (cdr list)))
-(defun cdar (list) (cdr (car list)))
-(defun cddr (list) (cdr (cdr list)))
-
-(defun caaar (list) (car (caar list)))
-(defun caadr (list) (car (cadr list)))
-(defun cadar (list) (car (cdar list)))
-(defun caddr (list) (car (cddr list)))
-(defun cdaar (list) (cdr (caar list)))
-(defun cdadr (list) (cdr (cadr list)))
-(defun cddar (list) (cdr (cdar list)))
-(defun cdddr (list) (cdr (cddr list)))
-|#
-
-
-(defun caaaar (list)
-  "Return the car of the caaar of a list."
-  (car (caaar list)))
-
-(defun caaadr (list)
-  "Return the car of the caadr of a list."
-  (car (caadr list)))
-
-(defun caadar (list)
-  "Return the car of the cadar of a list."
-  (car (cadar list)))
-
-(defun caaddr (list)
-  "Return the car of the caddr of a list."
-  (car (caddr list)))
-
-(defun cadaar (list)
-  "Return the car of the cdaar of a list."
-  (car (cdaar list)))
-
-(defun cadadr (list)
-  "Return the car of the cdadr of a list."
-  (car (cdadr list)))
-
-(defun caddar (list)
-  "Return the car of the cddar of a list."
-  (car (cddar list)))
-
-(defun cdaaar (list)
-  "Return the cdr of the caaar of a list."
-  (cdr (caaar list)))
-
-(defun cdaadr (list)
-  "Return the cdr of the caadr of a list."
-  (cdr (caadr list)))
-
-(defun cdadar (list)
-  "Return the cdr of the cadar of a list."
-  (cdr (cadar list)))
-
-(defun cdaddr (list)
-  "Return the cdr of the caddr of a list."
-  (cdr (caddr list)))
-
-(defun cddaar (list)
-  "Return the cdr of the cdaar of a list."
-  (cdr (cdaar list)))
-
-(defun cddadr (list)
-  "Return the cdr of the cdadr of a list."
-  (cdr (cdadr list)))
-
-(defun cdddar (list)
-  "Return the cdr of the cddar of a list."
-  (cdr (cddar list)))
-
-(defun cddddr (list)
-  "Return the cdr of the cdddr of a list."
-  (cdr (cdddr list)))
+(defun caaaar (list) (car (caaar list)))
+(defun caaadr (list) (car (caadr list)))
+(defun caadar (list) (car (cadar list)))
+(defun caaddr (list) (car (caddr list)))
+(defun cadaar (list) (car (cdaar list)))
+(defun cadadr (list) (car (cdadr list)))
+(defun caddar (list) (car (cddar list)))
+(defun cadddr (list) (car (cdddr list)))
+(defun cdaaar (list) (cdr (caaar list)))
+(defun cdaadr (list) (cdr (caadr list)))
+(defun cdadar (list) (cdr (cadar list)))
+(defun cdaddr (list) (cdr (caddr list)))
+(defun cddaar (list) (cdr (cdaar list)))
+(defun cddadr (list) (cdr (cdadr list)))
+(defun cdddar (list) (cdr (cddar list)))
+(defun cddddr (list) (cdr (cdddr list)))
 
 (defun tree-equal (x y &key (test (function eql)) test-not)
   "Returns T if X and Y are isomorphic trees with identical leaves."
