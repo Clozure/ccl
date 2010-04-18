@@ -30,3 +30,31 @@ typedef struct ucontext ExceptionInformation;
 
 #include "lisptypes.h"
 #include "ppc-constants32.h"
+
+/* xp accessors.  Logically identical on linuxppc32/64. */
+#define XP_PTREGS(x) ((x)->uc_mcontext.regs)
+#define xpGPRvector(x) ((natural *)(XP_PTREGS(x)))
+#define XP_PTREGS(x) ((x)->uc_mcontext.regs)
+#define xpGPRvector(x) ((natural *)(XP_PTREGS(x)))
+#define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
+#define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
+#define xpPC(x) (*((pc*)(&(XP_PTREGS(x)->nip))))
+#define set_xpPC(x,new) (xpPC(x) = (pc)(new))
+#define xpLR(x) (*((pc*)(&(XP_PTREGS(x)->link))))
+#define xpCTR(x) (*(pc*)(&(XP_PTREGS(x)->ctr)))
+#define xpXER(x) (XP_PTREGS(x)->xer)
+#define xpCCR(x) (XP_PTREGS(x)->ccr)
+#define xpMSR(x) (XP_PTREGS(x)->msr)
+#define xpDSISR(x) (XP_PTREGS(x)->dsisr)
+#define xpDAR(x) (XP_PTREGS(x)->dar)
+#define xpTRAP(x) (XP_PTREGS(x)->trap)
+#define xpFPSCR(x) (XP_PTREGS(x)->gpr[PT_FPSCR])
+#define xpFPRvector(x) ((double *)(&(XP_PTREGS(x)->gpr[PT_FPR0])))
+#define xpFPR(x,fprno) (xpFPRvector(x)[fprno])
+
+/* 
+   Work around a Darwin G5 bug (present in OSX 10.2.7, 10.2.8, and later
+   versions.  See platform-darwinppc*.h for details
+*/
+#define DarwinSigReturn(context)
+#define SIGRETURN(context)

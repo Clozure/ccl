@@ -35,3 +35,35 @@ typedef _STRUCT_MCONTEXT64 *MCONTEXT_T;
 
 #include "lisptypes.h"
 #include "ppc-constants64.h"
+
+
+/* xp accessors.  Logically identical on darwinppc32/64. */
+#define xpGPRvector(x) (&(UC_MCONTEXT(x)->__ss.__r0))
+#define xpGPR(x,gprno) ((xpGPRvector(x))[gprno])
+#define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (UInt32)(new)
+#define xpPC(x) (*((pc*) &(UC_MCONTEXT(x)->__ss.__srr0)))
+#define set_xpPC(x,new) (xpPC(x) = (pc)(new))
+#define xpLR(x) (*((pc*)(&(UC_MCONTEXT(x)->__ss.__lr))))
+#define xpCTR(x) (*(pc*)(&(UC_MCONTEXT(x)->__ss.__ctr)))
+#define xpXER(x) (UC_MCONTEXT(x)->__ss.__xer)
+#define xpCCR(x) (UC_MCONTEXT(x)->__ss.__cr)
+#define xpMSR(x) (UC_MCONTEXT(x)->__ss.__srr1)
+#define xpDSISR(x) (UC_MCONTEXT(x)->__es.__dsisr)
+#define xpDAR(x) (UC_MCONTEXT(x)->__es.__dar)
+#define xpTRAP(x) (UC_MCONTEXT(x)->__es.__exception)
+#define xpFPSCR(x) (UC_MCONTEXT(x)->__fs.__fpscr)
+#define xpFPRvector(x) (UC_MCONTEXT(x)->__fs.__fpregs)
+#define xpFPR(x,fprno) (xpFPRvector(x)[fprno])
+
+/* Late versions of OSX 10.2 had a bug in 32-bit exception handling;
+   machine context wasn't restored correctly if it wasn't modified
+   by the exception handler.  DarwinSigReturn() was a macro that 
+   tried to work around this.
+*/
+#define DarwinSigReturn(x)
+
+/* On some platforms, we may need to do something more than returning
+   from a signal handler in order to return to the kernel and let it
+   restore context.  On DarwinPPC, that's not a factor.
+*/
+#define SIGRETURN(context)
