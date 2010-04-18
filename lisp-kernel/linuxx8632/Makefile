@@ -26,7 +26,7 @@ COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
-PLATFORM_H = platform-darwinx8632.h
+PLATFORM_H = platform-linuxx8632.h
 
 # If the linker supports a "--hash-style=" option, use traditional
 # SysV hash tables.  (If it doesn't support that option, assume
