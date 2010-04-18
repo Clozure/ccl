@@ -638,19 +638,23 @@ some point in the near future, and then return to what it was doing."
   (when (eq process *initial-process*)
     (with-standard-abort-handling "Exit Lisp"
       (prepare-to-quit)
-      ;; We may have abruptly terminated a thread
-      ;; which owned the output lock on *STDOUT*.
-      ;; Don't block waiting on that lock if so.
-      (let* ((s *stdout*)
-	     (lock (ioblock-outbuf-lock (basic-stream-ioblock s)))
-	     (locked (make-lock-acquisition)))
-	(declare (dynamic-extent locked))
-	(when (or (null lock) (%try-recursive-lock-object lock locked))
-	  (unwind-protect
-	       (progn
-		 (fresh-line s)
-		 (finish-output s)))
-	  (when (lock-acquisition.status locked) (release-lock lock)))))
+      ;; We may have abruptly terminated a thread which owned the
+      ;; output lock on a stream we want to flush.  Don't block
+      ;; waiting on the lock if so.
+      (flet ((flush-stream (s)
+	       (let* ((lock (ioblock-outbuf-lock (basic-stream-ioblock s)))
+		      (locked (make-lock-acquisition)))
+		 (declare (dynamic-extent locked))
+		 (when (or (null lock)
+			   (%try-recursive-lock-object lock locked))
+		   (unwind-protect
+			(progn
+			  (fresh-line s)
+			  (finish-output s))
+		     (when (lock-acquisition.status locked)
+		       (release-lock lock)))))))
+	(flush-stream *stdout*)
+	(flush-stream *stderr*)))
     (%set-toplevel thunk)
     (toplevel)))
 
