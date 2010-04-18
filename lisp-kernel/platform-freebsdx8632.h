@@ -31,7 +31,7 @@ typedef struct __ucontext ExceptionInformation;
 #include "lisptypes.h"
 #include "x86-constants32.h"
 
-#include <machine/fpu.h>
+#include "freebsdx8632/fpu.h"
 #define xpGPRvector(x) ((natural *)(&((x)->uc_mcontext)))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
