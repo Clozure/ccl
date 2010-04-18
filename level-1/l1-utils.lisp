@@ -835,59 +835,19 @@ vector
   #-windows-target #\\
   "Not CL.  A Coral addition for compatibility between CL spec and the shell.")
 
+(defun caar (x) (car (car x)))
+(defun cadr (x) (car (cdr x)))
+(defun cdar (x) (cdr (car x)))
+(defun cddr (x) (cdr (cdr x)))
 
-(defun caar (x)
-  "Return the car of the 1st sublist."
- (car (car x)))
-
-(defun cadr (x)
-  "Return the 2nd object in a list."
- (car (cdr x)))
-
-(defun cdar (x)
-  "Return the cdr of the 1st sublist."
- (cdr (car x)))
-
-(defun cddr (x)
-  "Return all but the 1st two objects of a list."
-
- (cdr (cdr x)))
-
-(defun caaar (x)
-  "Return the 1st object in the caar of a list."
- (car (car (car x))))
-
-(defun caadr (x)
-  "Return the 1st object in the cadr of a list."
- (car (car (cdr x))))
-
-(defun cadar (x)
-  "Return the car of the cdar of a list."
- (car (cdr (car x))))
-
-(defun caddr (x)
-  "Return the 1st object in the cddr of a list."
- (car (cdr (cdr x))))
-
-(defun cdaar (x)
-  "Return the cdr of the caar of a list."
- (cdr (car (car x))))
-
-(defun cdadr (x)
-  "Return the cdr of the cadr of a list."
- (cdr (car (cdr x))))
-
-(defun cddar (x)
-  "Return the cdr of the cdar of a list."
- (cdr (cdr (car x))))
-
-(defun cdddr (x)
-  "Return the cdr of the cddr of a list."
- (cdr (cdr (cdr x))))
-
-(defun cadddr (x)
-  "Return the car of the cdddr of a list."
- (car (cdr (cdr (cdr x)))))
+(defun caaar (x) (car (car (car x))))
+(defun caadr (x) (car (car (cdr x))))
+(defun cadar (x) (car (cdr (car x))))
+(defun caddr (x) (car (cdr (cdr x))))
+(defun cdaar (x) (cdr (car (car x))))
+(defun cdadr (x) (cdr (car (cdr x))))
+(defun cddar (x) (cdr (cdr (car x))))
+(defun cdddr (x) (cdr (cdr (cdr x))))
 
 (%fhave 'type-of #'%type-of)
 
