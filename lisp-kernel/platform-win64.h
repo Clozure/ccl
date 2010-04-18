@@ -39,16 +39,13 @@ typedef CONTEXT ExceptionInformation;
 #define eflags_register(xp) xp->EFlags
 #define xpMXCSRptr(x) (DWORD *)(&(x->MxCsr))
 
-#ifdef SOLARIS
-#define SIGNUM_FOR_INTN_TRAP SIGSEGV
-#ifdef X8664
-#define IS_MAYBE_INT_TRAP(info,xp) ((xpGPR(xp,REG_TRAPNO)==0xd)&&((xpGPR(xp,REG_ERR)&7)==2))
-#define IS_PAGE_FAULT(info,xp) (xpGPR(xp,REG_TRAPNO)==0xe)
-#else
-#define IS_MAYBE_INT_TRAP(info,xp) ((xpGPR(xp,TRAPNO)==0xd)&&((xpGPR(xp,ERR)&7)==2))
-#define IS_PAGE_FAULT(info,xp) (xpGPR(xp,TRAPNO)==0xe)
-#endif
-#define SIGRETURN(context) setcontext(context)
-#endif
+
+#define SIGNUM_FOR_INTN_TRAP SIGSEGV /* Also fake */
+#define IS_MAYBE_INT_TRAP(info,xp) \
+  ((info->ExceptionCode == EXCEPTION_ACCESS_VIOLATION) &&       \
+   (info->ExceptionInformation[0]==0) &&                       \
+   (info->ExceptionInformation[1]==(ULONG_PTR)(-1L)))
+#define IS_PAGE_FAULT(info,xp) (1)
+#define SIGRETURN(context)      /* for now */
 
 #include "os-windows.h"
