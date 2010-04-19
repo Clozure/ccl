@@ -899,21 +899,6 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 
 (defstatic *standard-kernel-method-class* nil)
 
-(defun redefine-kernel-method (method)
-  (when (and *warn-if-redefine-kernel*
-             (or (let ((class *standard-kernel-method-class*))
-                   (and class (typep method class)))
-                 (and (standard-method-p method)
-                      (kernel-function-p (%method-function method)))))
-    (cerror "Replace the definition of ~S."
-            "The method ~S is predefined in Clozure CL." method)))
-
-;;; Called by the expansion of generic-labels.  Which doesn't exist.
-(defun %add-methods (gf &rest methods)
-  (declare (dynamic-extent methods))
-  (dolist (m methods)
-    (add-method gf m)))
-
 (defun methods-congruent-p (m1 m2)
   (when (and (standard-method-p m1)(standard-method-p m2))
     (when (equal (%method-qualifiers m1) (%method-qualifiers m2))

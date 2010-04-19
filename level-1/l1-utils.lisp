@@ -747,11 +747,6 @@ vector
 
 (%fhave 'fdefinition #'symbol-function)
 
-
-(defun kernel-function-p (f)
-  (declare (ignore f))
-  nil)
-
 (defun %make-function (name fn env)
   (compile-user-function fn name env))
     

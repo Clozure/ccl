@@ -1558,11 +1558,8 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
     (let ((name (function-name lfun)))
       (if name
 	(prin1 name stream)
-	(let* ((fnaddr (%address-of lfun))
-	       (kernel-function-p (kernel-function-p lfun)))
-	  (%write-string (if kernel-function-p
-			   "Internal " "Anonymous ")
-			 stream)
+	(let* ((fnaddr (%address-of lfun)))
+	  (%write-string "Anonymous " stream)
 	  (if (standard-generic-function-p lfun)
 	    (prin1 (class-name (class-of lfun)) stream)
 	    (%write-string "Function" stream))
