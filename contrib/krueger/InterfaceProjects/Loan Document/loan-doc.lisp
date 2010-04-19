@@ -1,4 +1,4 @@
-;; loan-document.lisp
+;; loan-doc.lisp
 
 #|
 The MIT license.
@@ -22,13 +22,14 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 |#
 
-(require :menu-utils)
-(require :decimal)
-(require :date)
-(require :lisp-doc-controller)
-(require :loan-window-controller)
-(require :loan-print-view)
-(require :ns-string-utils)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (require :menu-utils)
+  (require :decimal)
+  (require :date)
+  (require :lisp-doc-controller)
+  (require :loan-win-cntrl)
+  (require :loan-pr-view)
+  (require :ns-string-utils))
 
 (defpackage :loan-document
   (:nicknames :lnd)
@@ -479,4 +480,4 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                                          pr-view 
                                          (#/printInfo self))))
     
-(provide :loan-document)
+(provide :loan-doc)

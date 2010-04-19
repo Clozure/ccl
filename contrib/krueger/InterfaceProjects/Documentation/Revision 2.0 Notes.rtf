@@ -1,0 +1,65 @@
+{\rtf1\ansi\ansicpg1252\cocoartf949\cocoasubrtf540
+{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+\margl1440\margr1440\vieww13560\viewh11700\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\f0\b\fs30 \cf0 Synopsis of Version changes for:\
+\
+Cocoa Interfaces Using the Apple Interface Builder (IB) and Clozure Common Lisp (CCL)\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\b0\fs24 \cf0 \
+Copyright \'a9 2010 Paul L. Krueger All rights reserved.\
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\b \cf0 Version 2.0 February 2010
+\b0 \
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\i \cf0 New in Version 2.0
+\i0 \
+\
+Project 8: LispController\
+This project creates a lisp-controller class similar to NSArrayController, NSTreeController, etc. but which manages and displays arbitrary Lisp data structures using an NSTableView or NSOutlineView. An Xcode project is provided that can be used to build an IB plugin containing the lisp-controller class and an associated Framework that will be used by the Interface Builder. This allows developers to add lisp-controller objects to their interface designs and configure them. Configuration includes specifying Lisp forms which are used to access objects for display in different columns of one of the table views. Lisp forms can also be provided to specify how to construct new lisp objects and add them to the collection of objects being displayed. See the "LispController Reference" document for more information about how to use it or the InterfaceBuilderWithCCLTutorial2.0 for information about how it was implemented.\
+\
+
+\i Fixes to Version 1.0
+\i0 \
+\
+Thanks to Ben Hyde for finding problems and making useful comments.\
+\
+Added appropriate "(eval-when ...)" so that "(require ...)" forms are evaluated at compile time too.\
+\
+Fixed areas of documentation that were confusing.\
+\
+I've discovered that if you are using Interface Builder version 3.2 or later, then the process for adding an object that will be defined in Lisp is somewhat different. As currently found in my tutorial, the process is to put a new generic object in the document window and then change its class name in the identity inspector before adding outlets and actions via the inspector window. Starting in IB version 3.2 that functionality has been moved to the Library window. There you should select the "Classes" tab, select the class you want to subclass, from the action menu select "New Subclass", enter the name of the Lisp subclass, and choose not to generate source code. Then you can use controls in the library window to add outlets and actions as discussed in the tutorial.\
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\ql\qnatural\pardirnatural
+
+\b \cf0 Version 1.0 January 2010
+\b0 \
+\
+Initial contents containing the following projects:\
+	Hello World\
+	Simple Sum\
+	Menu\
+	Speech\
+	PackageView\
+	Loan Calc\
+	Loan Document\
+\
+plus the following utility source files:\
+	AlertDialog.lisp\
+	date.lisp\
+	decimal.lisp\
+	nib.lisp\
+	ns-string-utils.lisp\
+	nslog-utils.lisp\
+	selector-utils.lisp\
+	\
+See InterfaceBuilderwithCCLTutorial.pdf for detailed descriptions of everything.\
+\
+}

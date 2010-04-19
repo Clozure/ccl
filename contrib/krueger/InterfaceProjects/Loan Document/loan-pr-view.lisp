@@ -1,7 +1,8 @@
-;; loan-print-view.lisp
+;; loan-pr-view.lisp
 
-(require :date)
-(require :nslog-utils)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (require :date)
+  (require :nslog-utils))
 
 (defpackage :loan-document
   (:nicknames :lnd)
@@ -135,4 +136,4 @@
           (dolist (sched-line (subseq (pay-schedule loan) start-indx end-indx))
             (draw-next-payment sched-line)))))))
 
-(provide :loan-print-view)
+(provide :loan-pr-view)
