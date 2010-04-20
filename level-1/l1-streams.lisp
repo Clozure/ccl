@@ -6143,7 +6143,7 @@ are printed.")
                    (%array-header-data-and-offset displaced)
                  (declare ((simple-array (unsigned-byte 8) (*)) data)
                           (fixnum offset))
-                 (%copy-ivector-to-ivector new 0 data offset len)
+                 (%copy-ivector-to-ivector data 0 new offset len)
                  (setf (vector-output-stream-ioblock-displacement ioblock) 0)
                  (unless (= 0 offset)
                    (setf (io-buffer-idx outbuf) len
@@ -6165,7 +6165,7 @@ are printed.")
                   (new (%alloc-misc newlen target::subtag-u8-vector)))
              (declare (fixnum len newlen)
                       ((simple-array (unsigned-byte 8) (*)) old new))
-             (%copy-ivector-to-ivector new 0 old 0 len)
+             (%copy-ivector-to-ivector old 0 new 0 len)
              (setf (io-buffer-buffer outbuf) new
                    (io-buffer-size outbuf) newlen
                    (io-buffer-limit outbuf) newlen))))))
@@ -6207,7 +6207,14 @@ are printed.")
     new))
 
 
-(defun unsigned-integer-to-binary (value len s)
+(defmethod unsigned-integer-to-binary (value len (s binary-output-stream))
+  (unless (typep value 'unsigned-byte)
+    (report-bad-arg value 'unsigned-byte))
+  (do* ((shift (ash (1- len) 3) (- shift 8)))
+       ((< shift 0) value)
+    (write-byte (logand #xff (ash value (- shift))) s)))
+
+(defun %unsigned-integer-to-binary (value len s)
   (declare (fixnum len))
   (unless (and (typep s 'basic-stream)
                (eq *vector-output-stream-class-wrapper*
@@ -6266,7 +6273,10 @@ are printed.")
                      (aref value #+little-endian-target n #+big-endian-target (the fixnum (logxor n 3)))))
              (incf idx))))))))
 
-(defun signed-integer-to-binary (value len s)
+(defmethod unsigned-integer-to-binary (value len (s vector-output-stream))
+  (%unsigned-integer-to-binary value len s))
+
+(defun %signed-integer-to-binary (value len s)
   (declare (fixnum len))
   (unless (and (typep s 'basic-stream)
                (eq *vector-output-stream-class-wrapper*
@@ -6318,8 +6328,14 @@ are printed.")
                      sign-byte
                      (aref value #+little-endian-target n #+big-endian-target (the fixnum (logxor n 3)))))
              (incf idx))))))))
+
+(defmethod signed-integer-to-binary (value len (s vector-output-stream))
+  (%signed-integer-to-binary value len s))
       
-             
+(defmethod signed-integer-to-binary (value len (s binary-output-stream))
+  (do* ((shift (ash (1- len) 3) (- shift 8)))
+       ((< shift 0) value)
+    (write-byte (logand #xff (ash value (- shift))) s)))             
                
 
          
@@ -6457,8 +6473,16 @@ are printed.")
 
 
 
+(defmethod pui-stream ((s binary-input-stream) count)
+  "Parse unsigned integer from a stream."
+  (declare (fixnum count)               ; any integer that cannot be expressed in fixnum bytes is probably (ahem) too long to worry about
+           (optimize (speed 3) (safety 1) (debug 1)))
+  (let ((n 0))
+    (dotimes (i count n)
+      (declare (fixnum i))
+      (setq n (+ (the fixnum (read-byte s)) (the integer (ash n 8)))))))
 
-(defun pui-stream (s count)
+(defun %pui-stream (s count)
   (declare (fixnum count))
   (unless (and (typep s 'basic-stream)
                (eq *vector-input-stream-class-wrapper*
@@ -6480,7 +6504,20 @@ are printed.")
       (setf (io-buffer-idx inbuf) end)
       result)))
 
-(defun psi-stream (s count)
+(defmethod pui-stream ((s vector-input-stream) count)
+  (%pui-stream s count))
+
+(defmethod psi-stream ((s binary-input-stream) count)
+  (declare (fixnum count))
+  (if (zerop count)
+    0
+    (let* ((n (read-byte s)))
+      (if (>= n 128)
+        (setq n (- n 256)))
+      (dotimes (i (the fixnum (1- count)) n)
+        (setq n (logior (read-byte s) (ash n 8)))))))
+
+(defun %psi-stream (s count)
   (declare (fixnum count))
   (unless (and (typep s 'basic-stream)
                (eq *vector-input-stream-class-wrapper*
@@ -6500,6 +6537,9 @@ are printed.")
     (let* ((result (%parse-signed-integer vector idx end)))
       (setf (io-buffer-idx inbuf) end)
       result)))
+
+(defmethod psi-stream ((s vector-input-stream) count)
+  (%psi-stream s count))
 
 (defmethod stream-position ((s vector-input-stream) &optional newpos)
   (let* ((ioblock (basic-stream-ioblock s))
