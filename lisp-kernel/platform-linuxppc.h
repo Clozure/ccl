@@ -34,8 +34,6 @@ typedef struct ucontext ExceptionInformation;
 /* xp accessors.  Logically identical on linuxppc32/64. */
 #define XP_PTREGS(x) ((x)->uc_mcontext.regs)
 #define xpGPRvector(x) ((natural *)(XP_PTREGS(x)))
-#define XP_PTREGS(x) ((x)->uc_mcontext.regs)
-#define xpGPRvector(x) ((natural *)(XP_PTREGS(x)))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
 #define xpPC(x) (*((pc*)(&(XP_PTREGS(x)->nip))))
