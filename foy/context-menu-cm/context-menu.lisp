@@ -155,7 +155,7 @@
            (let ((doc-item (make-instance 'default-tool-doc-menu-item))
                  (attributed-string (#/initWithString:attributes:
                                      (#/alloc ns:ns-attributed-string) 
-                                     (ccl::%make-nsstring (format nil "     doc..." (default-tool *menu-manager*)))
+                                     (ccl::%make-nsstring (format nil "~A     doc..." (default-tool *menu-manager*)))
                                      *tool-doc-dictionary*)))
              (#/setAttributedTitle: doc-item attributed-string)
              (#/setAction: doc-item (ccl::@selector "hemlockDefaultToolDocAction:"))
