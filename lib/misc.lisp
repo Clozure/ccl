@@ -1200,7 +1200,7 @@ are running on, or NIL if we can't find any useful information."
                          physsize
                          (* 100.0 (/ physsize total-psize)))))
       (if unit
-        (format stream "~&~a~vt~11d~16,2f~16,2f~11,2f%"
+        (format stream "~&~a~vt~11d~16,2f~16,2f~11,2f%~%"
                 "Total"
                 (1+ max-name)
                 total-count
