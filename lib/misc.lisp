@@ -1207,7 +1207,7 @@ are running on, or NIL if we can't find any useful information."
                 (/ total-lsize div)
                 (/ total-psize div)
                 100.0d0)
-        (format stream "~&~a~vt~11d~16d~16d~11,2f%"
+        (format stream "~&~a~vt~11d~16d~16d~11,2f%~%"
                 "Total"
                 (1+ max-name)
                 total-count
