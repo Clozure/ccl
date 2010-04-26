@@ -1277,7 +1277,7 @@
             ((< n nclosed)
              (let* ((value (ccl::nth-immediate o (1+ (- nclosed n))))
                     (map (car (ccl::function-symbol-map (ccl::closure-function o))))
-                    (label (or (and map (svref map (+ n (- (length map) nclosed))))
+                    (label (or (and map (aref map (+ n (- (length map) nclosed))))
                                n))
                     (cellp (ccl::closed-over-value-p value)))
                (when cellp
@@ -1326,7 +1326,7 @@
 (defun disassembly-line-n (f n)
   (if (< (decf n) 0)
     (values nil "Disassembly:" :comment)
-    (let ((line (svref (disasm-info f) n)))
+    (let ((line (aref (disasm-info f) n)))
       (if (consp line)
         (destructuring-bind (object label instr) line
           (values object (cons label instr) :static))
@@ -1334,7 +1334,7 @@
 
 (defun disassembly-line-n-inspector (f n)
   (unless (< (decf n) 0)
-    (let ((line (svref (disasm-info f) n)))
+    (let ((line (aref (disasm-info f) n)))
       (and (consp line)
 	   (car line)
 	   (make-inspector (car line))))))
@@ -1342,7 +1342,7 @@
 (defun disassembly-line-n-strings (f n)
   (if (< (decf n) 0)
     (values "Disassembly:" nil)
-    (let ((line (svref (disasm-info f) n)))
+    (let ((line (aref (disasm-info f) n)))
       (if (consp line)
         (destructuring-bind (object label instr) line
           (declare (ignore object))
@@ -1598,7 +1598,7 @@
             (addresses f) addresses)))
 
 (defmethod compute-frame-info ((f error-frame) n)
-  (let* ((frame (svref (addresses f) n))
+  (let* ((frame (aref (addresses f) n))
          (context (context f))
          (marker (unavailable-value-marker f)))
     
@@ -1662,7 +1662,7 @@
   (frame-count (inspector-object f)))
 
 (defmethod line-n ((f stack-inspector) n)
-  (let* ((frame (svref (addresses (inspector-object f)) n)))
+  (let* ((frame (aref (addresses (inspector-object f)) n)))
     (ccl::cfp-lfun frame)))
 
 
