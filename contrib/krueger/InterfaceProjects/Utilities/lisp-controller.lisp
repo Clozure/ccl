@@ -424,7 +424,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
    (add-child-func :accessor add-child-func)
    (children-func :accessor children-func)
    (type-info :accessor type-info)
-   (obj-wrappers :accessor obj-wrappers)
    (column-info :accessor column-info)
    (nib-initialized :accessor nib-initialized)
    (view-class :accessor view-class)
@@ -565,20 +564,20 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         nil)
   (setf (assoc-aref (type-info self) 'vector :initform) 
         '(make-array '(10) :adjustable t :fill-pointer 0 :initial-element nil))
-  (unless (slot-boundp self 'obj-wrappers)
-    (setf (obj-wrappers self) (make-instance 'assoc-array :rank 1)))
   self)
 
 (objc:defmethod (#/awakeFromNib :void)
                 ((self lisp-controller))
   (setf (nib-initialized self) t)
-  (unless (eql (view self) (%null-ptr))
-    (setf (view-class self) (#/class (view self)))
-    (init-column-info self (view self))
+  (let ((has-valid-view (and (slot-boundp self 'view)
+                             (not (eql (view self) (%null-ptr))))))
+    (when has-valid-view
+      (setf (view-class self) (#/class (view self)))
+      (init-column-info self (view self)))
     (when (gen-root self)
       ;; create the root object
       (setf (root self) (new-object-of-type self (root-type self))))
-    (when (objects self)
+    (when (and has-valid-view (objects self))
       (setup-accessors self))))
 
 (defmethod setup-accessors ((self lisp-controller))
@@ -751,12 +750,14 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         (rt (root-type self)))
     (when (not (subtypep typ rt))
       ;; trying to set root to something other than what was specified in IB
-      (error "Type of ~s (~s) is not a subtype of ~s" new-obj typ rt))))
+      (error "Type of ~s (~s) is not a subtype of ~s" new-obj typ rt)))
+  (#/willChangeValueForKey: self #@"root"))
 
 (defmethod (setf root) :after (new-obj (self lisp-controller))
   ;; cache the children of the root object because they are used so frequently
   (setf (objects self) (children-of-object self new-obj))
-  (when (nib-initialized self)
+  (#/didChangeValueForKey: self #@"root")
+  (when (and (nib-initialized self) (not (eql (view self) (%null-ptr))))
     (setup-accessors self)
     (set-can-insert self new-obj)
     (sort-sequence self (objects self))
@@ -1044,22 +1045,16 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                  (child #>NSInteger)
                  (item :id))
   (declare (ignore olview))
-  (with-slots (obj-wrappers objects) self
+  (with-slots (objects) self
     (cond ((typep item 'lisp-ptr-wrapper)
            (let* ((parent (lpw-lisp-ptr item))
                   (parent-depth (lpw-depth item))
                   (children (children-of-object self parent))
                   (child-ptr (elt children child)))
-             (or (assoc-aref obj-wrappers child-ptr)
-                 (setf (assoc-aref obj-wrappers child-ptr)
-                       (make-ptr-wrapper child-ptr 
-                                         :depth (1+ parent-depth)
-                                         :parent parent)))))
+             (wrapper-for self child-ptr :depth (1+ parent-depth) :parent parent)))
           ((eql item (%null-ptr))
            (let ((child-ptr (elt objects child)))
-             (or (assoc-aref obj-wrappers child-ptr)
-                 (setf (assoc-aref obj-wrappers child-ptr)
-                       (make-ptr-wrapper child-ptr :depth 1 :parent nil)))))
+             (wrapper-for self child-ptr :depth 1)))
           (t
            (%null-ptr)))))
 
@@ -1181,6 +1176,39 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
       (when parent
         (remove-child-from self parent child)
         (#/reloadData (view self))))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Methods for using a lisp-controller as an initial binding target
+;; Binding paths must start with "root" or "selected" and can use
+;; lisp accessors from that point to other lisp targets.
+;; Any atomic value found by following the path is converted to an 
+;; Objective-C value and returned. If a non-atomic value is found by 
+;; following the path it is encapsulated within a lisp-ptr-wrapper object
+;; and returned. When that path is subsequently followed the lisp-ptr-wrapper
+;; will handle the path reference in the same way.
+
+(objc:defmethod (#/root :id)
+                ((self lisp-controller))
+  (cond ((typep (root self) 'objc:objc-object)
+             (root self))
+        ((null (root self))
+         (%null-ptr))
+        ((typep (root self) 'objc-displayable)
+         (lisp-to-ns-object (root self)))
+        (t
+         (wrapper-for self (root self)))))
+
+(objc:defmethod (#/selection :id)
+                ((self lisp-controller))
+  (let* ((row-num (#/selectedRow (view self)))
+         (obj (object-at-row self row-num)))
+    (cond ((typep obj 'objc:objc-object)
+           obj)
+          ((typep obj 'objc-displayable)
+           (lisp-to-ns-object obj))
+          (t
+           (wrapper-for self obj)))))
 
 (provide :lisp-controller)
       
