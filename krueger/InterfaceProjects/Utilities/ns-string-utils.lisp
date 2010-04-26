@@ -1,10 +1,31 @@
 ;; ns-string-utils.lisp
+#|
+The MIT license.
+
+Copyright (c) 2010 Paul L. Krueger
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software 
+and associated documentation files (the "Software"), to deal in the Software without restriction, 
+including without limitation the rights to use, copy, modify, merge, publish, distribute, 
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is 
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial 
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT 
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, 
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+|#
 
 (defpackage :interface-utilities
   (:nicknames :iu)
   (:export ns-to-lisp-string lisp-str-to-ns-data ns-data-to-lisp-str 
            lisp-object-to-ns-data ns-data-to-lisp-object lisp-to-temp-nsstring
-           nsstring-to-class nsstring-to-func nsstring-to-sym find-func))
+           nsstring-to-class nsstring-to-func nsstring-to-sym find-func find-substring))
 
 (in-package :iu)
 
@@ -56,5 +77,15 @@
 (defun nsstring-to-sym (ns-str)
   (let ((sym (read-from-string (ns-to-lisp-string ns-str) nil nil)))
     (if (symbolp sym) sym nil)))
+
+(defun find-substring (substr str &key (test #'string=))
+  (let* ((first-char (elt substr 0))
+         (count (length substr))
+         (search-end (1+ (- (length str) count))))
+    (do* ((begin (position first-char str :end search-end)
+                 (position first-char str :start (1+ begin) :end search-end)))
+         ((null begin) nil)
+      (if (funcall test substr (subseq str begin (+ begin count)))
+        (return-from find-substring t)))))
 
 (provide :ns-string-utils)
