@@ -47,7 +47,7 @@
 ;; them up even when the reference is intentional.  (In case of undefined functions,
 ;; you can declare FTYPE and that will turn off any warnings without interfering with
 ;; the function being defined later).  For now just provide this as an out.
-(defvar *compiler-warn-on-undefined-type-references* #+ccl-0711 t #-ccl-0711 t)
+(defvar *compiler-warn-on-undefined-type-references* #+ccl-qres t #-ccl-qres t)
 
 
 
@@ -141,21 +141,21 @@
 
 (let ((policy (%istruct 'compiler-policy
                #'(lambda (env)
-                   #+ccl-0711 (< (debug-optimize-quantity env) 2)
-                   #-ccl-0711 (neq (debug-optimize-quantity env) 3))   ;  allow-tail-recursion-elimination
+                   #+ccl-qres (< (debug-optimize-quantity env) 2)
+                   #-ccl-qres (neq (debug-optimize-quantity env) 3))   ;  allow-tail-recursion-elimination
                #'(lambda (env)
                    (declare (ignorable env))
-                   #+ccl-0711 nil
-                   #-ccl-0711 (eq (debug-optimize-quantity env) 3))   ; inhibit-register-allocation
+                   #+ccl-qres nil
+                   #-ccl-qres (eq (debug-optimize-quantity env) 3))   ; inhibit-register-allocation
                #'(lambda (env)
                    (let* ((safety (safety-optimize-quantity env)))
                      (and (< safety 3)
                           (>= (speed-optimize-quantity env)
                               safety)))) ; trust-declarations
                #'(lambda (env)
-                   #+ccl-0711 (> (speed-optimize-quantity env)
+                   #+ccl-qres (> (speed-optimize-quantity env)
                                  (space-optimize-quantity env))
-                   #-ccl-0711 (>= (speed-optimize-quantity env)
+                   #-ccl-qres (>= (speed-optimize-quantity env)
                                   (+ (space-optimize-quantity env) 2))) ; open-code-inline
                #'(lambda (env)
                    (and (eq (speed-optimize-quantity env) 3) 

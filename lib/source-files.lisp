@@ -125,7 +125,7 @@ redefinition warnings.  The default method returns T.")
   "Defines a class named name-DEFINITION-TYPE and registers it as the class of
 definition type NAME"
   (loop with known-keys = '( ;; Backward compatibility
-                            #+ccl-0711 :default-name-function)
+                            #+ccl-qres :default-name-function)
         for (key . nil) in options
         unless (memq key known-keys)
           do (signal-program-error "Unknown option ~s" key))

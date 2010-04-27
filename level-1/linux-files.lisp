@@ -1294,7 +1294,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
           (signal-semaphore (external-process-signal proc))))))
 
   (defparameter *silently-ignore-catastrophic-failure-in-run-program*
-    #+ccl-0711 t #-ccl-0711 nil
+    #+ccl-qres t #-ccl-qres nil
     "If NIL, signal an error if run-program is unable to start the program.
 If non-NIL, treat failure to start the same as failure from the program
 itself, by setting the status and exit-code fields.")

@@ -625,7 +625,7 @@
   (let* ((native
           (ignore-errors
             (truename
-             (native-to-directory-pathname (or #+ccl-0711 (getenv "HOME")
+             (native-to-directory-pathname (or #+ccl-qres (getenv "HOME")
                                                (get-user-home-dir (getuid))))))))
     (if (and native (eq :absolute (car (pathname-directory native))))
       native
