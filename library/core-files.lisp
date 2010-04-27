@@ -30,12 +30,11 @@
 (defconstant $image-sect-header-size 8)
 
 (export '(open-core close-core
-          core-heap-utilization map-core-areas map-core-region map-core-pointers
+          core-heap-utilization map-core-areas
           core-q core-l core-w core-b
           core-consp core-symbolp core-functionp core-listp core-nullp core-uvector-p
           core-uvtype core-uvtypep core-uvref core-uvsize
           core-car core-cdr core-object-typecode-type
-          core-istruct-type core-struct-type core-instance-type core-function-type
           core-object-type-key  core-type-string
           copy-from-core core-list
           core-keyword-package core-find-package core-find-symbol
@@ -47,7 +46,7 @@
           core-find-class
           core-instance-class
           core-instance-p
-          core-string-equal
+          core-string=
           core-all-processes core-process-name
           core-find-process-for-id
           core-print
@@ -952,25 +951,28 @@
 
 (defun core-symbol-pointers ()
   (or (core-info-symbol-ptrs (current-core))
-      (let ((vector (make-array 1000 :adjustable t :fill-pointer 0))
-            (keys (core-keyword-package)))
+      (let ((vector (make-array 1000 :adjustable t :fill-pointer 0)))
         (map-core-areas (lambda (obj)
                           (when (core-symbolp obj)
-                            (unless (eq (core-symbol-package obj) keys)
-                              (vector-push-extend obj vector)))))
+                            (vector-push-extend obj vector))))
         (setf (core-info-symbol-ptrs (current-core)) vector))))
 
 (defun core-map-symbols (fun)
   (loop for sym-ptr across (core-symbol-pointers) do (funcall fun sym-ptr)))
 
 
-(defun core-string-equal (ptr string &aux (len (length string)))
+(defun core-string= (ptr string &aux (len (length string)))
   (assert (core-uvtypep ptr :simple-string))
   (when (eq (core-uvsize ptr) len)
     (loop for i from 0 below len
           always (eql (core-uvref ptr i) (aref string i)))))
 
 (defun core-find-package (name &key error)
+  (when (integerp name)
+    (when (core-symbolp name)
+      (setq name (core-q name target::symbol.pname)))
+    (when (core-uvtypep name :simple-string)
+      (setq name (copy-from-core name :depth 1))))
   (setq name (string name))
   (or (loop for list-ptr = (core-all-packages-ptr) then (core-cdr list-ptr)
             while (core-consp list-ptr)
@@ -978,7 +980,7 @@
             when (loop for names-ptr = (core-uvref pkg-ptr pkg.names) then (core-cdr names-ptr)
                        while (core-consp names-ptr)
                        as name-ptr = (core-car names-ptr)
-                       thereis (core-string-equal name-ptr name))
+                       thereis (core-string= name-ptr name))
               do (return pkg-ptr))
       (and error (error "No package named ~s" name))))
 
@@ -990,18 +992,27 @@
   (assert (core-uvtypep pkg-ptr :package))  
   (copy-from-core (core-car (core-uvref pkg-ptr pkg.names)) :depth 1))
 
-(defun core-find-symbol (name &optional (package (symbol-package name)))
-  ;; Unlike the real cl:find-symbol, this doesn't look for inherited symbols,
+(defun core-find-symbol (name &optional package)
+  ;; Unlike cl:find-symbol, this doesn't look for inherited symbols,
   ;; you have to get the package right.
+  (when (integerp name)
+    (when (core-symbolp name)
+      (when (null package)
+        (setq package (core-symbol-package name)))
+      (setq name (core-q name target::symbol.pname)))
+    (when (core-uvtypep name :simple-string)
+      (setq name (copy-from-core name :depth 1))))
+  (when (and (null package) (non-nil-symbolp name))
+    (setq package (symbol-package name)))
+  (when (null package) (error "Package is required"))
   (let* ((symbol-name (string name))
          (name-len (length symbol-name))
-         (pkg-ptr (if (integerp package)
+         (pkg-ptr (if (and (integerp package) (core-uvtypep package :package))
                     package
                     (core-find-package (if (packagep package)
                                          (package-name package)
-                                         (string package))
+                                         package)
                                        :error t))))
-    (assert (core-uvtypep pkg-ptr :package))
     (multiple-value-bind (primary secondary) (hash-pname symbol-name name-len)
       (flet ((findsym (htab-ptr)
                (let* ((vec-ptr (core-car htab-ptr))
@@ -1011,7 +1022,7 @@
                        as sym = (core-uvref vec-ptr i)
                        until (eql sym 0)
                        do (when (and (core-symbolp sym)
-                                     (core-string-equal (core-q sym target::symbol.pname) symbol-name))
+                                     (core-string= (core-q sym target::symbol.pname) symbol-name))
                             (return (if (eq sym (nil-relative-symbol-address 'nil))
                                       (target-nil-value)
                                       sym)))))))
