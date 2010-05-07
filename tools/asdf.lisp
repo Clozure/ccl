@@ -49,9 +49,6 @@
 
 (cl:in-package :cl-user)
 
-(declaim (optimize (speed 2) (debug 2) (safety 3))
-         #+sbcl (sb-ext:muffle-conditions sb-ext:compiler-note))
-
 #+ecl (require :cmp)
 
 ;;;; Create packages in a way that is compatible with hot-upgrade.
@@ -70,7 +67,7 @@
                 :test 'equalp :key 'car))
   (let* ((asdf-version
           ;; the 1+ helps the version bumping script discriminate
-          (subseq "VERSION:1.717" (1+ (length "VERSION"))))
+          (subseq "VERSION:1.719" (1+ (length "VERSION"))))
          (existing-asdf (find-package :asdf))
          (vername '#:*asdf-version*)
          (versym (and existing-asdf
@@ -1174,7 +1171,7 @@ to `~a` which is not a directory.~@:>"
 
 (defmethod find-component ((component component) (name symbol))
   (if name
-      (find-component component (string name))
+      (find-component component (coerce-name name))
       component))
 
 (defmethod find-component ((module module) (name cons))
@@ -1661,9 +1658,10 @@ recursive calls to traverse.")
 (defmethod perform :after ((o compile-op) (c cl-source-file))
   ;; Note how we use OUTPUT-FILES to find the binary locations
   ;; This allows the user to override the names.
-  (let* ((input (output-files o c))
-         (output (compile-file-pathname (lispize-pathname (first input)) :type :fasl)))
-    (c:build-fasl output :lisp-files (remove "fas" input :key #'pathname-type :test #'string=))))
+  (let* ((files (output-files o c))
+         (object (first files))
+         (fasl (second files)))
+    (c:build-fasl fasl :lisp-files (list object))))
 
 (defmethod perform :after ((operation operation) (c component))
   (setf (gethash (type-of operation) (component-operation-times c))
@@ -1699,8 +1697,7 @@ recursive calls to traverse.")
   (declare (ignorable operation))
   (let ((p (lispize-pathname (component-pathname c))))
     #-:broken-fasl-loader
-    (list #-ecl (compile-file-pathname p)
-          #+ecl (compile-file-pathname p :type :object)
+    (list (compile-file-pathname p #+ecl :type #+ecl :object)
           #+ecl (compile-file-pathname p :type :fasl))
     #+:broken-fasl-loader (list p)))
 
@@ -2402,9 +2399,7 @@ located."
        #+(and (or win32 windows mswindows mingw32) (not cygwin))
         ,@`(#+lispworks ,(try (sys:get-folder-path :common-appdata) "common-lisp/config/")
             ;;; read-windows-registry HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders\AppData
-           #+(not cygwin)
-           ,(try (or (getenv "USERPROFILE") (user-homedir))
-                 "Application Data/common-lisp/config/"))
+           ,(try (getenv "APPDATA") "common-lisp/config/"))
        ,(try (user-homedir) ".config/common-lisp/")))))
 (defun system-configuration-directories ()
   (remove-if
@@ -2476,27 +2471,16 @@ Each mapping is a pair of a source pathname and destination pathname,
 and the order is by decreasing length of namestring of the source pathname.")
 
 (defvar *user-cache*
-  (or
-   (let ((h (getenv "XDG_CACHE_HOME")))
-     (and h `(,h "common-lisp" :implementation)))
-   #+(and windows lispworks)
-   (let ((h (sys:get-folder-path :common-appdata))) ;; no :common-caches in Windows???
-     (and h `(,h "common-lisp" "cache")))
-   #+(and (or win32 windows mswindows mingw32) (not cygwin))
-   ;;; read-windows-registry HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders\Cache
-   (let ((h (or (getenv "USERPROFILE") (user-homedir))))
-     (and h `(,h "Local Settings" "Temporary Internet Files" "common-lisp")))
-   '(:home ".cache" "common-lisp" :implementation)))
+  (flet ((try (x &rest sub) (and x `(,x ,@sub))))
+    (or
+     (try (getenv "XDG_CACHE_HOME") "common-lisp" :implementation)
+     #+(and (or win32 windows mswindows mingw32) (not cygwin))
+     (try (getenv "APPDATA") "common-lisp" "cache" :implementation)
+     '(:home ".cache" "common-lisp" :implementation))))
 (defvar *system-cache*
-  (or
-   #+(and windows lispworks)
-   (let ((h (sys:get-folder-path :common-appdata))) ;; no :common-caches in Windows???
-     (and h `(,h "common-lisp" "cache")))
-   #+(and (or win32 windows mswindows mingw32) (not cygwin))
-   (let ((h (or (getenv "USERPROFILE") (user-homedir))))
-     (and h `(,h "Local Settings" "Temporary Internet Files" "common-lisp")))
-   #+(or unix cygwin)
-   '("/var/cache/common-lisp" :uid :implementation)))
+  ;; No good default, plus there's a security problem
+  ;; with other users messing with such directories.
+  *user-cache*)
 
 (defun output-translations ()
   (car *output-translations*))
@@ -3170,10 +3154,7 @@ with a different configuration, so the configuration would be re-read then."
            (or (getenv "XDG_DATA_DIRS") "/usr/local/share:/usr/share"))
           (dirs (cons datahome (split-string datadirs :separator ":"))))
          #+(and (or win32 windows mswindows mingw32) (not cygwin))
-         ((datahome
-           #+lispworks (sys:get-folder-path :common-appdata)
-           #-lispworks (try (or (getenv "USERPROFILE") (user-homedir))
-                            "Application Data"))
+         ((datahome (getenv "APPDATA"))
           (datadir
            #+lispworks (sys:get-folder-path :local-appdata)
            #-lispworks (try (getenv "ALLUSERSPROFILE")
@@ -3281,9 +3262,9 @@ with a different configuration, so the configuration would be re-read then."
       (initialize-source-registry)))
 
 ;;;; -----------------------------------------------------------------
-;;;; Hook into REQUIRE for SBCL, ClozureCL and ABCL
+;;;; Hook into REQUIRE for ABCL, ClozureCL, CMUCL, ECL and SBCL
 ;;;;
-#+(or sbcl clozure abcl)
+#+(or abcl clozure cmu ecl sbcl)
 (progn
   (defun module-provide-asdf (name)
     (handler-bind
@@ -3298,9 +3279,11 @@ with a different configuration, so the configuration would be re-read then."
           (load-system name)
           t))))
   (pushnew 'module-provide-asdf
-           #+sbcl sb-ext:*module-provider-functions*
+           #+abcl sys::*module-provider-functions*
            #+clozure ccl::*module-provider-functions*
-           #+abcl sys::*module-provider-functions*))
+           #+cmu ext:*module-provider-functions*
+           #+ecl si:*module-provider-functions*
+           #+sbcl sb-ext:*module-provider-functions*))
 
 ;;;; -------------------------------------------------------------------------
 ;;;; Cleanups after hot-upgrade.
