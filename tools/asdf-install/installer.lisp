@@ -539,8 +539,7 @@
             (return-from sysdef-source-dir-search file)))))))
 
 (defmethod asdf:find-component :around 
-    ((module (eql nil)) name &optional version)
-  (declare (ignore version))
+    ((module (eql nil)) name)
   (when (or (not *propagate-installation*) 
             (member name *systems-installed-this-time* 
                     :test (lambda (a b)
