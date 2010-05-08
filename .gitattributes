@@ -550,6 +550,7 @@ library/mach-o-symbols.lisp -text
 library/mach-o.lisp -text
 library/oprofile.txt -text
 library/sequence-utils.lisp -text
+library/serial-streams.lisp -text
 library/x86-win64-syscalls.lisp -text
 library/x8664-solaris-syscalls.lisp -text
 lisp-kernel/constants.h -text
