@@ -101,7 +101,7 @@
 
     <para> There are three popular ways to use &CCL;: as a
       stand-alone double-clickable application (Mac OS X only), as a
-      command-line application, or with EMACS and SLIME. The following
+      command-line application, or with Emacs and SLIME. The following
       sections describe these options.</para>
 
     <!-- ***************************************************** -->
@@ -562,193 +562,17 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
   <!-- ============================================================ -->
   <sect1 id="Using-CCL-with-GNU-Emacs-and-SLIME">
     <title>Using &CCL; with GNU Emacs and SLIME</title>
-    <para>A very common way to use &CCL; is to run it within the
-      GNU Emacs editor, using a Lisp interface called SLIME ("Superior
-      Lisp Interaction Mode for Emacs"). SLIME is an Emacs package
-      designed to provide good support within Emacs for any of several
-      Common Lisp implementations; one of the supported
-      implementations is &CCL;. This page describes how you can
-      download SLIME and set it up to work with your &CCL;
-      installation.</para>
-    <para>Why use SLIME? With SLIME, you can do the following things from within
-      an Emacs editing session:</para>
-    <itemizedlist>
-      <listitem><para>run and control Lisp</para></listitem>
-      <listitem><para>evaluate, compile, and load files or expressions</para></listitem>
-      <listitem><para>macroexpand expressions</para></listitem>
-      <listitem><para>fetch documentation and source code for Lisp symbols</para></listitem>
-      <listitem><para>autocomplete symbols and package names</para></listitem>
-      <listitem><para>cross-reference function calls</para></listitem>
-      <listitem><para>examine stack traces and debug errors</para></listitem>
-      
-    </itemizedlist>
-    <para>For complete information about SLIME, see the
-      SLIME <ulink url="http://common-lisp.net/project/slime/">home
-      page</ulink>. The SLIME home page provides up-to-date downloads,
-      plus documentation, tutorials, and instructional
-      screencasts.</para>
+    <para>
+      SLIME (see  <ulink url="http://common-lisp.net/project/slime/">
+      the SLIME web page</ulink>) is an Emacs mode for interacting with
+      Common Lisp systems.  &CCL; is well-supported by SLIME.
+    </para>
 
-    <!-- ***************************************************** -->
-    <sect2 id="Assumptions-and-Requirements">
-	  <title>Assumptions and Requirements</title>
-      <para>In order to simplify these instructions, we'll make
-        several assumptions about your system. Specifically, we
-        assume:</para>
-      <itemizedlist>
-        <listitem>
-	      <para>You have a working installation of GNU Emacs. If you
-	        don't have a working copy of GNU Emacs, see the web page on
-	        <ulink url="http://www.gnu.org/software/emacs/#Obtaining">obtaining
-	        Emacs</ulink>.  If you prefer to use XEmacs instead of GNU
-	        Emacs, these instructions should still work; SLIME supports
-	        XEmacs Version21. Mac OS X includes an Emacs installation.
-	        If you want to look into different versions, you can check
-	        out theEmacsWiki, which maintains a
-	        page, EmacsForMacOS, that provides much more information
-	        about using Emacs on the Mac.</para>
-          <para>A popular version of Emacs among Mac users is
-            <ulink url="http://aquamacs.org/">Aquamacs</ulink>. This
-            application is a version of GNU Emacs with a number of
-            customizations meant to make it behave more like a
-            standard Macintosh application, with windows, a menubar,
-            etc.  Aquamacs includes SLIME; if you like Aquamacs then
-            you can use SLIME right away, without getting and
-            installing it separately. You just need to tell SLIME
-            where to find your installation of &CCL;.</para>
-	    </listitem>
-        <listitem>
-          <para>You have a working copy of &CCL;, installed in
-            <literal>"~/ccl"</literal>If you prefer to install
-            &CCL; in some directory other
-            than<literal>"~/ccl"</literal> then these
-            instructions still work, but you must remember to use your
-            path to your ccl directory instead of the one that we give
-            here.</para>
-        </listitem>
-        <listitem>
-          <para>You install emacs add-ons in the folder
-            <literal>"~/emacs/site/"</literal>If this directory
-            doesn't exist on your system, you can just create it.If
-            you prefer to install Emacs add-ons in some place other
-            than<literal>"~/emacs/site/"</literal> then you must
-            remember to use your path to Emacs add-ons in place of
-            ours.</para>
-        </listitem>
-        
-      </itemizedlist>
-    </sect2>
-
-    <!-- ***************************************************** -->
-    <sect2 id="Getting_Slime"><title>Getting SLIME</title>       
-
-      <para>You can get SLIME from the SLIME Home Page. Stable
-        releases and CVS snapshots are available as archive files, or
-        you can follow the instructions on the SLIME Home Page to
-        check out the latest version from their CVS repository.</para>
-
-      <para>It's worth noting that stable SLIME releases happen very
-        seldom, but the SLIME developers often make changes and
-        improvements that are available through CVS updates. If you
-        asked the SLIM developers, they would most likely recommend
-        that you get SLIME from their CVS repository and update it
-        frequently.</para>
-
-      <para>Whether you get it from CVS, or download and unpack one
-        of the available archives, you should end up with a folder
-        named "slime" that contains the SLIME distribution.</para>
-    </sect2>
-
-    <!-- ***************************************************** -->
-    <sect2 id="installing-slime"><title>Installing SLIME</title> 
-
-      <para>Once you have the "slime" folder described in the previous
-        section, installation is a simple matter of copying the folder
-        to the proper place. You can drag it into the "~/emacs/site/"
-        folder, or you can use a terminal command to copy it
-        there. For example, assuming your working directory contains
-        the unpacked "slime" folder:</para> <para><literal>$ cp -R
-        slime ~/emacs/site/</literal></para> <para>That's all it
-        takes.</para>
-
-    </sect2>
-
-    <!-- ***************************************************** -->
-    <sect2 id="Telling-Emacs-About-SLIME">
-	  <title>Telling Emacs About SLIME</title>
-      <para> Once SLIME and &CCL; are installed, you just need to
-        add a line to your "~/.emacs" file that tells SLIME where to
-        find the script that runs &CCL;:</para>
-      <para><literal>(setq inferior-lisp-program "~/ccl/scripts/ccl64")</literal></para>
-      <para>or</para>
-      <para><literal>(setq inferior-lisp-program "~/ccl/scripts/ccl")</literal></para>
-      <warning>
-        <para>Aquamacs users should add this line to the file "~/Library/Preferences/Aquamacs Emacs/Preferences.el".</para>
-      </warning>
-    </sect2>
-
-    <!-- ***************************************************** -->
-    <sect2 id="Running-CCL-with-SLIME">
-	  <title>Running &CCL; with SLIME</title>
-      <para>Once the preparations in the previous section are
-        complete, exit Emacs and restart it, to ensure that it reads
-        the changes you made in your ".emacs" file (alternatively, you
-        could tell Emacs to reload the ".emacs" file). If all went
-        well, you should now be ready to run &CCL; using
-        SLIME.</para>
-      <para>To run &CCL;, execute the command "M-x slime". SLIME
-        should start an &CCL; session in a new buffer.  (If you are
-        unfamiliar with the Emacs notation "M-x command", see the GNU
-        Emacs FAQ; specifically, take a look at questions 1, 2, and
-        128.)</para>
-    </sect2>
-
-    <!-- ***************************************************** -->
-    <sect2 id="What-if-a-New-Version-of-CCL-Breaks-SLIME-">
-	  <title>What if a New Version of &CCL; Breaks SLIME?</title>
-	  <para>Sometimes you'll get a new version of &CCL;, set up
-	    Emacs to use it with SLIME, and SLIME will fail. Most likely
-	    what has happened is that the new version of &CCL; has a
-	    change in the output files produced by the compiler (&CCL;
-	    developers will say "the fasl version has changed." fasl
-	    stands for "fast load" aka compiled files). This
-	    problem is easy to fix: just delete the existing SLIME fasl
-	    files. The next time you launch Emacs and start SLIME, it will
-	    automatically recompile the Lisp files, and that should fix
-	    the problem.</para>
-      <para>SLIME's load process stores its fasl files in a hidden
-        folder inside your home folder. The path is</para>
-      <para><literal>~/.slime/fasl</literal></para>
-      <para>You can use a shell command to remove the fasl files, or
-        remove them using your system's file browser.</para>
-      <para><emphasis role="bold">Note for Macintosh Users:</emphasis> 
-	    The leading "." character in the ".slime" folder's name
-	    prevents the Finder from showing this folder to you. If you
-	    use the "Go To Folder" menu item in the Finder's "Go" menu,
-	    you can type in "~/.slime" and the Finder will show it to
-	    you. You can then drag the "fasl" folder to the trash.
-	  </para>
-    </sect2>
-
-    <!-- ***************************************************** -->
-    <sect2 id="Known-Bugs">
-	  <title>Known Bugs</title>
-	  <para>SLIME has not been updated to account for recent changes
-	    made in &CCL; to support x86-64 processors. You may run into
-	    bugs running on those platforms.</para>
-      <para>The SLIME backtrace sometimes shows incorrect information.</para>
-      <para><literal>return-from-frame</literal> and
-        <literal>apply-in-frame</literal> do not work reliably.  (If
-        they work at all, it's pure luck.)</para>
-      <para>Some versions of Emacs on the Macintosh may have trouble
-        finding the shell script that runs &CCL; unless you specify
-        a full path to it. See the above section "Telling Emacs About
-        SLIME" to learn how to specify the path to the shell
-        script.</para>
-      <para>For more help with &CCL; on Mac OS X, consult the &CCL;
-        mailing lists. You can find information about the mailing
-        lists on the
-        &CCL; <ulink url="http://trac.clozure.com/openmcl">wiki</ulink>.</para>
-    </sect2>
+    <para>
+      See the <ulink url="http://trac.clozure.com/ccl/wiki/InstallingSlime">
+      InstallingSlime</ulink> topic on the &CCL; wiki for some tips
+      on how to get SLIME running with &CCL;.
+    </para>
   </sect1>
 
   <!-- ============================================================ -->
