@@ -2960,6 +2960,14 @@ argument lisp string."
   (unless (eq return-temp value)
     (#_memmove return-temp value size)))
 
+
+(defvar *objc-error-return-condition* 'condition
+  "Type of conditions to be caught by objc:defmethod and resignalled as objc exceptions,
+   allowing handlers for them to safely take a non-local exit despite possible intervening ObjC
+   frames.   The resignalling unwinds the stack before the handler is invoked, which can be
+   a problem for some handlers.")
+
+
 (defmacro objc:defmethod (name (self-arg &rest other-args) &body body &environment env)
   (collect ((arglist)
             (arg-names)
@@ -3058,7 +3066,7 @@ argument lisp string."
                  ,class-p
                  ',result-type
                  ',(cddr arg-types))
-                (defcallback ,impname ( :error-return (condition objc-callback-error-return) ,@(arglist))
+                (defcallback ,impname ( :error-return (,*objc-error-return-condition* objc-callback-error-return) ,@(arglist))
                   (declare (ignorable ,self-name)
                            (unsettable ,self-name)
                            ,@(unless class-p `((type ,lisp-class-name ,self-name))))
