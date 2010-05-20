@@ -301,6 +301,8 @@
            (return-from copy-line-charprops (copy-charprops-changes changes))))
     (unless end
       (setq end (line-length line)))
+    (when (eql start end)
+      (return-from copy-line-charprops))
     (let* ((new-changes (make-empty-charprops-changes))
            (start-idx (charprops-change-index-for-position changes start))
            (end-idx (charprops-change-index-for-position changes (1- end))))
