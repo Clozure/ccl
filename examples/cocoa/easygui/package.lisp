@@ -1,6 +1,7 @@
 (cl:defpackage :easygui
   (:use :cl)
   (:import-from :ccl with-autorelease-pool @selector lisp-string-from-nsstring +null-ptr+)
+  (:import-from :gui execute-in-gui queue-for-gui)
   (:export #:point #:ns-point-from-point #:range #:rectangle #:window
            #:point-x #:point-y #:rectangle-x #:rectangle-y #:rectangle-width
            #:rectangle-height
@@ -26,7 +27,7 @@
            #:string-value-of #:integer-value-of #:float-value-of
            #:double-value-of
            #:view-named #:view-nick-name
-           #:view-size view-position
+           #:view-size #:view-position
            #:view-mouse-position
            #:view-font #:with-focused-view
            #:clear-page
@@ -46,6 +47,9 @@
          
            #:dcc
            #:perform-close #:window-may-close
+
+	   #:execute-in-gui
+	   #:queue-for-gui
            ;; variables
            #:*screen-flipped*
            #:*suppress-window-flushing*))

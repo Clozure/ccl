@@ -138,21 +138,10 @@ causing a crash. During development it happened to me :-(")
 
 ;;; Running things on the main thread:
 
-(defclass cocoa-thunk (ns:ns-object)
-     ((thunk :accessor thunk-of))
-  (:metaclass ns:+ns-object))
-
-(objc:defmethod (#/run :void) ((self cocoa-thunk))
-  (funcall (thunk-of self)))
-
 (defun run-on-main-thread (waitp thunk)
-  (let ((thunk* (make-instance 'cocoa-thunk)))
-    (setf (thunk-of thunk*) thunk)
-    (#/performSelectorOnMainThread:withObject:waitUntilDone:
-     thunk*
-     (@selector #/run)
-     +null-ptr+
-     (not (not waitp)))))
+  (if waitp
+    (execute-in-gui thunk)
+    (queue-for-gui thunk)))
 
 (defmacro running-on-main-thread ((&key (waitp t)) &body body)
   `(run-on-main-thread ,waitp (lambda () ,@body)))

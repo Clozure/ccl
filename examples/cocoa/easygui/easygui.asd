@@ -34,5 +34,4 @@
                         :components
                         ((:file "tiny")
                          (:file "currency-converter")
-                         (:file "view-hierarchy")
-                         (:file "extended-demo")))))
+                         (:file "view-hierarchy")))))

@@ -96,6 +96,7 @@ compiler/acode-rewrite.lisp -text
 compiler/nx2.lisp -text
 contrib/README -text
 contrib/baylis/ca-demo.lisp -text
+contrib/cater/extended-demo.lisp -text
 contrib/foy/cl-documentation-cm/NewTools.rtf -text
 contrib/foy/cl-documentation-cm/ReadMe.rtf -text
 contrib/foy/cl-documentation-cm/cl-documentation-2.lisp -text
@@ -478,7 +479,6 @@ examples/cocoa/easygui/dialogs.lisp -text
 examples/cocoa/easygui/easygui.asd -text
 examples/cocoa/easygui/events.lisp -text
 examples/cocoa/easygui/example/currency-converter.lisp -text
-examples/cocoa/easygui/example/extended-demo.lisp -text
 examples/cocoa/easygui/example/tiny.lisp -text
 examples/cocoa/easygui/example/view-hierarchy.lisp -text
 examples/cocoa/easygui/new-cocoa-bindings.lisp -text
