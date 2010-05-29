@@ -575,7 +575,9 @@ commands but aren't")
               (get-output-stream-string s) prefixchar (%real-err-fn-name error-pointer))
       (format *error-output* "~&~A"
               (get-output-stream-string s)))
-    (format *error-output* ", in process ~a(~d).~%" (process-name *current-process*) (process-serial-number *current-process*))
+    (if *current-process*
+      (format *error-output* ", in process ~a(~d).~%" (process-name *current-process*) (process-serial-number *current-process*))
+      (format *error-output* ", in an uninitialized process~%"))
   (force-output *error-output*)))
 					; returns NIL
 
