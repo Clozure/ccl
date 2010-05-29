@@ -549,7 +549,8 @@ the lisp and run REBUILD-CCL again.")
       (when (or force clean update)
         (setq allow-constant-redefinition t))))
     (let* ((cd (current-directory))
-           (*cerror-on-constant-redefinition* (not allow-constant-redefinition )))
+           (*cerror-on-constant-redefinition* (not allow-constant-redefinition ))
+	   (*warn-if-redefine-kernel* nil))
       (unwind-protect
            (progn
              (setf (current-directory) "ccl:")
