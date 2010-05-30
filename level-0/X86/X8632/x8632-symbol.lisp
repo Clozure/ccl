@@ -140,3 +140,17 @@
     (movl (% accum) (% arg_z))
     @done
     (single-value-return 3)))
+
+;;; Ensure that the current thread's thread-local-binding vector
+;;; contains room for an entry with index INDEX.
+;;; Return the fixnum-tagged tlb vector.
+(defx8632lapfunction %ensure-tlb-index ((idx arg_z))
+  (cmp (:rcontext x8632::tcr.tlb-limit) (% idx))
+  (jb @ok)
+  (push (% arg_z))                      ; exception handler will pop this
+  (ud2a)  (:byte 1)                     ; tlb_too_small()
+  @ok
+  (mov (:rcontext x8632::tcr.tlb-pointer) (% arg_z))
+  (single-value-return))
+
+  

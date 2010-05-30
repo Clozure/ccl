@@ -177,3 +177,12 @@
     (slri accum accum 5)
     (srri arg_z accum (- 5 target::fixnumshift))
     (blr)))
+
+;;; Ensure that the current thread's thread-local-binding vector
+;;; contains room for an entry with index INDEX.
+;;; Return the fixnum-tagged tlb vector.
+(defppclapfunction %ensure-tlb-index ((idx arg_z))
+  (ldr arg_y target::tcr.tlb-limit target::rcontext)
+  (trlle arg_y idx)
+  (ldr arg_z target::tcr.tlb-pointer target::rcontext)
+  (blr))

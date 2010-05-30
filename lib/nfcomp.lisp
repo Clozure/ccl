@@ -1861,7 +1861,7 @@ Will differ from *compiling-file* during an INCLUDE")
            (progn
              (fasl-out-byte (if idx
                               (if ascii $fasl-nvpkg-intern-special $fasl-vpkg-intern-special)
-                              (if ascii $fasl-nvpkg-intern-special $fasl-vpkg-intern)))
+                              (if ascii $fasl-nvpkg-intern $fasl-vpkg-intern)))
              (fasl-dump-form pkg)
              (if ascii
                (fasl-out-nvstring name)

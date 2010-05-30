@@ -1064,7 +1064,7 @@ no longer being used."
     (flet ((save-binding (new-value sym prev)
              (let* ((idx (symbol-binding-index sym))
                     (byte-idx (ash idx target::fixnum-shift))
-                    (binding-vector (%fixnum-ref (%current-tcr) target::tcr.tlb-pointer))
+                    (binding-vector (%ensure-tlb-index idx))
                     (old-value (%fixnum-ref  binding-vector byte-idx)))
 	     (setf (%fixnum-ref binding-vector byte-idx) new-value
                    (%fixnum-ref bsp (ash -1 target::word-shift)) old-value
