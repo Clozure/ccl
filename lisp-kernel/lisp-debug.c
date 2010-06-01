@@ -299,6 +299,38 @@ describe_memfault(ExceptionInformation *xp, siginfo_t *info)
 	  dsisr & (1<<25) ? "Write" : "Read",
 	  dsisr & (1<<27) ? "protected" : "unmapped",
 	  addr);
+#else
+  fprintf(dbgout, "received signal %d; faulting address: %p\n",
+	  info->si_signo, info->si_addr);
+  if (info->si_code > 0) {
+    if (info->si_signo == SIGSEGV) {
+      switch (info->si_code) {
+      case SEGV_MAPERR:
+	fprintf(dbgout, "address not mapped to object\n");
+	break;
+      case SEGV_ACCERR:
+	fprintf(dbgout, "invalid permissions for mapped object\n");
+	break;
+      default:
+	fprintf(dbgout, "unexpected si_code value: %d\n", info->si_code);
+	break;
+      }
+    } else if (info->si_signo == SIGBUS) {
+      switch (info->si_code) {
+      case BUS_ADRALN:
+	fprintf(dbgout, "invalid address alignment\n");
+	break;
+      case BUS_ADRERR:
+	fprintf(dbgout, "non-existent physical address");
+	break;
+      case BUS_OBJERR:
+	fprintf(dbgout, "object-specific hardware error");
+	break;
+      default:
+	fprintf(dbgout, "unexpected si_code value: %d\n", info->si_code);
+      }
+    }
+  }
 #endif
 }
 
@@ -637,6 +669,15 @@ debug_identify_exception(ExceptionInformation *xp, siginfo_t *info, int arg)
       describe_ppc_illegal(xp);
     }
     break;
+  case SIGSEGV:
+  case SIGBUS:
+    describe_memfault(xp, info);
+    break;
+  default:
+    break;
+  }
+#else
+  switch (arg) {
   case SIGSEGV:
   case SIGBUS:
     describe_memfault(xp, info);
@@ -1033,13 +1074,13 @@ debug_command_entry debug_command_entries[] =
    DEBUG_COMMAND_FLAG_REQUIRE_XP | DEBUG_COMMAND_FLAG_EXCEPTION_ENTRY_ONLY,
    NULL,
    'A'},
+#endif
   {debug_identify_exception,
    "Describe the current exception in greater detail",
    DEBUG_COMMAND_FLAG_REQUIRE_XP | DEBUG_COMMAND_FLAG_EXCEPTION_ENTRY_ONLY |
    DEBUG_COMMAND_FLAG_EXCEPTION_REASON_ARG,
    NULL,
    'D'},
-#endif
   {debug_show_registers, 
    "Show raw GPR/SPR register values", 
    DEBUG_COMMAND_FLAG_REQUIRE_XP,
@@ -1234,6 +1275,7 @@ lisp_Debugger(ExceptionInformation *xp,
       debug_lisp_registers(xp, info, 0);
       debug_show_fpu(xp, info, 0);
     }
+    debug_memory_areas(xp, info, 0);
     debug_backtrace(xp, info, 0);
 
     abort();
