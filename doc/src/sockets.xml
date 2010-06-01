@@ -164,8 +164,9 @@
 		This argument is ignored for :stream sockets for now, as
 		:stream sockets are currently always bivalent (i.e. they
 		support both character and byte I/O). For :datagram sockets,
-		the format determines the type of buffer created by
-		receive-from.</para>
+		this argument is ignored (the format of a datagram socket
+		is always :binary).
+		</para>
 	      </listitem>
 	    </varlistentry>
 
@@ -699,7 +700,7 @@
 	      <term>buffer</term>
 
 	      <listitem>
-		<para>If specified, must be either a string or a byte vector
+		<para>If specified, must be an octet vector
 		which will be used to read in the data. If not specified, a
 		new buffer will be created (of type determined by
 		socket-format).</para>
@@ -787,8 +788,7 @@
 
 	      <listitem>
 		<para>A vector containing the data to send. It must be
-		either a string or a byte vector (either one is acceptable
-		regardless of the stream format).</para>
+		an octet vector.</para>
 	      </listitem>
 	    </varlistentry>
 
@@ -796,7 +796,7 @@
 	      <term>size</term>
 
 	      <listitem>
-		<para>Number of bytes to send</para>
+		<para>Number of octets to send</para>
 	      </listitem>
 	    </varlistentry>
 
