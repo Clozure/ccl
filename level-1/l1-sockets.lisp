@@ -452,6 +452,7 @@ operating system resources associated with the socket."))
 
 (defmethod socket-type ((stream udp-socket)) :datagram)
 (defmethod socket-connect ((stream udp-socket)) nil)
+(defmethod socket-format ((stream udp-socket)) :binary)
 
 (defgeneric socket-os-fd (socket)
   (:documentation
@@ -948,8 +949,7 @@ accept-connection on it again."))
                                 (<= subtype x8632::max-8-bit-ivector-subtag))
             #+x8664-target (and (>= subtype x8664::min-8-bit-ivector-subtag)
                                 (<= subtype x8664::max-8-bit-ivector-subtag))
-      (report-bad-arg buf `(or (array character)
-			       (array (unsigned-byte 8))
+      (report-bad-arg buf '(or (array (unsigned-byte 8))
 			       (array (signed-byte 8))))))
   (values buf offset))
 
@@ -1009,8 +1009,7 @@ a packet to arrive. Returns four values:
 	  (setq vec (make-array ret-size
 				:element-type
 				(ecase (socket-format socket)
-				  ((:text) 'base-char)
-				  ((:binary :bivalent) '(unsigned-byte 8))))
+				  ((:binary) '(unsigned-byte 8))))
 		vec-offset 0))
 	(%copy-ptr-to-ivector bufptr 0 vec vec-offset ret-size))
       (values (cond ((null buffer)
