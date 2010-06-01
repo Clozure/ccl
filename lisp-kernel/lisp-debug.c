@@ -299,6 +299,7 @@ describe_memfault(ExceptionInformation *xp, siginfo_t *info)
 	  dsisr & (1<<25) ? "Write" : "Read",
 	  dsisr & (1<<27) ? "protected" : "unmapped",
 	  addr);
+#elif defined(WINDOWS)
 #else
   fprintf(dbgout, "received signal %d; faulting address: %p\n",
 	  info->si_signo, info->si_addr);
