@@ -1550,7 +1550,7 @@ arbstack_signal_handler(int signum, siginfo_t *info, ExceptionInformation *conte
   TCR *tcr = get_interrupt_tcr(false);
 #if 1
   if (tcr->valence != TCR_STATE_LISP) {
-    FBug(context, "exception in foreign context");
+    lisp_Debugger(context, info, signum, true, "exception in foreign context");
   }
 #endif
   {
@@ -1584,7 +1584,7 @@ altstack_signal_handler(int signum, siginfo_t *info, ExceptionInformation  *cont
   TCR* tcr = get_tcr(true);
 #if 1
   if (tcr->valence != TCR_STATE_LISP) {
-    FBug(context, "exception in foreign context");
+    lisp_Debugger(context, info, signum, true, "exception in foreign context");
   }
 #endif
   handle_signal_on_foreign_stack(tcr,signal_handler,signum,info,context,(LispObj)__builtin_return_address(0)
