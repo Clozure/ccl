@@ -504,6 +504,41 @@ describe_ppc_trap(ExceptionInformation *xp)
 }
 #endif
 
+char *
+area_code_name(int code)
+{
+  switch (code) {
+    case AREA_VOID: return "void";
+    case AREA_CSTACK: return "cstack";
+    case AREA_VSTACK: return "vstack";
+    case AREA_TSTACK: return "tstack";
+    case AREA_READONLY: return "readonly";
+    case AREA_WATCHED: return "watched";
+    case AREA_STATIC_CONS: return "static cons";
+    case AREA_MANAGED_STATIC: return "managed static";
+    case AREA_STATIC: return "static";
+    case AREA_DYNAMIC: return "dynamic";
+    default: return "unknown";
+  }
+}
+
+debug_command_return
+debug_memory_areas(ExceptionInformation *xp, siginfo_t *info, int arg)
+{
+  int i;
+  area *a, *header = all_areas;
+  char label[100];
+
+  fprintf(dbgout, "Lisp memory areas:\n");
+  fprintf(dbgout, "%20s %20s %20s\n", "code", "low", "high");
+  for (a = header->succ; a != header; a = a->succ) {
+    snprintf(label, sizeof(label), "%s (%d)", area_code_name(a->code),
+	     a->code >> fixnumshift);
+    fprintf(dbgout, "%20s %20p %20p\n", label, a->low, a->high);
+  }
+  return debug_continue;
+}
+
 debug_command_return
 debug_lisp_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
 {
@@ -1035,6 +1070,11 @@ debug_command_entry debug_command_entries[] =
    0,
    NULL,
    'T'},
+  {debug_memory_areas,
+   "Show memory areas",
+   0,
+   NULL,
+   'M'},
   {debug_win,
    "Exit from this debugger, asserting that any exception was handled",
    0,
@@ -1250,7 +1290,6 @@ FBug(ExceptionInformation *xp, const char *format, ...)
   vsnprintf(s, sizeof(s),format, args);
   va_end(args);
   lisp_Debugger(xp, NULL, debug_entry_bug, true, s);
-
 }
 
 void
