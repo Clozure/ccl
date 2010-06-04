@@ -26,13 +26,6 @@
   (require 'lispequ)
 )
 
-#-bootstrapped
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (when (and (macro-function 'var-decls)
-             (not (macro-function 'var-ref-forms)))
-    (setf (macro-function 'var-ref-forms)
-          (macro-function 'var-decls))))
-
 #+ppc-target (require "PPCENV")
 #+x8632-target (require "X8632ENV")
 #+x8664-target (require "X8664ENV")
@@ -386,10 +379,7 @@
 (declaim (special *nx1-alphatizers* *nx1-operators*))
 
 (defmacro %nx1-default-operator ()
- #-bccl
- `(nx1-default-operator)
- #+bccl
- `(gethash *nx-sfname* *nx1-operators*))
+  `(nx1-default-operator))
 
 (defmacro defnx1 (name sym arglist &body forms)
   (let ((fn `(nfunction ,name ,(parse-macro name arglist forms)))
@@ -440,26 +430,6 @@
 (defconstant $fbitccoverage 10)
 
 (defconstant $eaclosedbit 24)
-
-#+what?
-(progn
-;;; condition codes :
-;;; These are 68K condition code values, but the frontend uses them and
-;;; both backends need to understand them.
-;;; They're really backend-specific; it wouldn't hurt to have the frontend
-;;; use a more "neutral" representation.
-(defconstant $ccT 0)
-(defconstant $ccEQ 7)
-(defconstant $ccNE 6)
-(defconstant $ccVC 8)
-(defconstant $ccMI 11)
-(defconstant $ccPL 10)
-(defconstant $ccGE 12)
-(defconstant $ccLT 13)
-(defconstant $ccGT 14)
-(defconstant $ccLE 15)
-)
-
 
 (defmacro %temp-push (value place &environment env)
   (if (not (consp place))
