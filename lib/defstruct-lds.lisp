@@ -248,8 +248,6 @@
 		    (check-declaration-redefinition ',struct-name 'defstruct))))
        (remove-structure-defs  ',struct-name) ; lose any previous defs
         ,.(defstruct-slot-defs sd refnames env)
-        ,.(if constructor (list (defstruct-constructor sd constructor)))
-        ,.(defstruct-boa-constructors sd boa-constructors)
         ,.(if copier (defstruct-copier sd copier env))
         ,.(if predicate (defstruct-predicate sd named predicate env))
         (eval-when (:compile-toplevel)
@@ -263,6 +261,8 @@
          ,(if (and predicate (null (sd-type sd))) `',predicate)
          ,.(if documentation (list documentation)))
         ,.(%defstruct-compile sd refnames env)
+        ,.(defstruct-boa-constructors sd boa-constructors)
+        ,.(if constructor (list (defstruct-constructor sd constructor)))
        ;; Wait until slot accessors are defined, to avoid
        ;; undefined function warnings in the print function/method.
        (%defstruct-set-print-function
