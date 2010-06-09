@@ -563,11 +563,14 @@ save_application(unsigned fd, Boolean egc_was_enabled)
     lisp_global(G1_THRESHOLD) = g1_area->threshold;
     lisp_global(G2_THRESHOLD) = g2_area->threshold;
     lisp_global(EGC_ENABLED) = (LispObj)egc_was_enabled;
+    lisp_global(GC_NOTIFY_THRESHOLD) = lisp_heap_notify_threshold;
   }
   /*
     lisp_global(GC_NUM) and lisp_global(FWDNUM) are persistent,
     as is DELETED_STATIC_PAIRS.
     Nothing else is even meaningful at this point.
+    Except for those things that've become meaningful since that
+    comment was written.
   */
   for (i = MIN_KERNEL_GLOBAL; i < 0; i++) {
     switch (i) {
@@ -581,6 +584,7 @@ save_application(unsigned fd, Boolean egc_was_enabled)
     case G0_THRESHOLD:
     case G1_THRESHOLD:
     case G2_THRESHOLD:
+    case GC_NOTIFY_THRESHOLD:
       break;
     case WEAKVLL:
       break;

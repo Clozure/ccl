@@ -81,12 +81,14 @@ extern LispObj lisp_nil;
 #define G0_THRESHOLD (-509)
 #define G1_THRESHOLD (-508)
 #define G2_THRESHOLD (-507)
+#define GC_NOTIFY_THRESHOLD (-506)
 #else
 #define LISP_HEAP_THRESHOLD (-1023)
 #define EGC_ENABLED (-1022)
 #define G0_THRESHOLD (-1021)
 #define G1_THRESHOLD (-1020)
 #define G2_THRESHOLD (-1019)
+#define GC_NOTIFY_THRESHOLD (-1018)
 #endif
 
 #ifdef PPC

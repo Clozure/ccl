@@ -475,6 +475,26 @@ be somewhat larger than what was specified)."
   (movl ($ (target-nil-value)) (% arg_z.l))
   (single-value-return))
 
+(defx86lapfunction set-gc-notification-threshold ((threshold arg_z))
+  "Set the value of the kernel variable that can be used to trigger
+GC notifications."
+  (check-nargs 1)
+  (save-simple-frame)
+  (call-subprim .SPgetu64)
+  (movq (% imm0) (% imm1))
+  (movq ($ arch::gc-trap-function-set-gc-notification-threshold) (% imm0))
+  (uuo-gc-trap)
+  (restore-simple-frame)
+  (jmp-subprim .SPmakeu64))
+
+(defx86lapfunction get-gc-notification-threshold ((threshold arg_z))
+  "Get the value of the kernel variable that can be used to trigger
+GC notifications."
+  (check-nargs 1)
+  (movq ($ arch::gc-trap-function-set-gc-notification-threshold) (% imm0))
+  (uuo-gc-trap)
+  (jmp-subprim .SPmakeu64))
+  
 
 
 ;;; offset is a fixnum, one of the x8664::kernel-import-xxx constants.

@@ -54,6 +54,9 @@ page_size = 4096;
 int
 log2_page_size = 12;
 
+Boolean
+did_gc_notification_since_last_full_gc = false;
+
 
 void
 update_bytes_allocated(TCR* tcr, void *cur_allocptr)
@@ -76,11 +79,15 @@ update_bytes_allocated(TCR* tcr, void *cur_allocptr)
 
 
 Boolean
-new_heap_segment(ExceptionInformation *xp, natural need, Boolean extend, TCR *tcr)
+new_heap_segment(ExceptionInformation *xp, natural need, Boolean extend, TCR *tcr, Boolean *crossed_threshold)
 {
   area *a;
   natural newlimit, oldlimit;
   natural log2_allocation_quantum = tcr->log2_allocation_quantum;
+
+  if (crossed_threshold) {
+    *crossed_threshold = false;
+  }
 
   a  = active_dynamic_area;
   oldlimit = (natural) a->active;
@@ -109,6 +116,14 @@ new_heap_segment(ExceptionInformation *xp, natural need, Boolean extend, TCR *tc
   xpGPR(xp,Iallocptr) = (LispObj) newlimit;
   tcr->save_allocbase = (void *) oldlimit;
 
+  if (crossed_threshold && (!extend)) {
+    if (((a->high - (BytePtr)newlimit) < lisp_heap_notify_threshold)&&
+        ((a->high - (BytePtr)oldlimit) >= lisp_heap_notify_threshold)) {
+      *crossed_threshold = true;
+    }
+  }
+    
+
   return true;
 }
 
@@ -116,7 +131,8 @@ Boolean
 allocate_object(ExceptionInformation *xp,
                 natural bytes_needed, 
                 signed_natural disp_from_allocptr,
-		TCR *tcr)
+		TCR *tcr,
+                Boolean *crossed_threshold)
 {
   area *a = active_dynamic_area;
 
@@ -130,7 +146,7 @@ allocate_object(ExceptionInformation *xp,
   /* Life is pretty simple if we can simply grab a segment
      without extending the heap.
   */
-  if (new_heap_segment(xp, bytes_needed, false, tcr)) {
+  if (new_heap_segment(xp, bytes_needed, false, tcr, crossed_threshold)) {
     xpGPR(xp, Iallocptr) -= disp_from_allocptr;
     tcr->save_allocptr = (void *) (xpGPR(xp, Iallocptr));
     return true;
@@ -143,10 +159,11 @@ allocate_object(ExceptionInformation *xp,
   if ((lisp_global(HEAP_END)-lisp_global(HEAP_START)) > bytes_needed) {
     untenure_from_area(tenured_area); /* force a full GC */
     gc_from_xp(xp, 0L);
+    did_gc_notification_since_last_full_gc = false;
   }
   
   /* Try again, growing the heap if necessary */
-  if (new_heap_segment(xp, bytes_needed, true, tcr)) {
+  if (new_heap_segment(xp, bytes_needed, true, tcr, NULL)) {
     xpGPR(xp, Iallocptr) -= disp_from_allocptr;
     tcr->save_allocptr = (void *) (xpGPR(xp, Iallocptr));
     return true;
@@ -220,6 +237,16 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
     xpGPR(xp, Iimm0) = lisp_heap_gc_threshold;
     break;
 
+  case GC_TRAP_FUNCTION_SET_GC_NOTIFICATION_THRESHOLD:
+    if ((signed_natural)arg >= 0) {
+      lisp_heap_notify_threshold = arg;
+    }
+    /* fall through */
+
+  case GC_TRAP_FUNCTION_GET_GC_NOTIFICATION_THRESHOLD:
+    xpGPR(xp, Iimm0) = lisp_heap_notify_threshold;
+    break;
+
   case GC_TRAP_FUNCTION_ENSURE_STATIC_CONSES:
     ensure_static_conses(xp, tcr, 32768);
     break;
@@ -241,6 +268,7 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
     if (selector == GC_TRAP_FUNCTION_IMMEDIATE_GC) {
       if (!full_gc_deferred) {
         gc_from_xp(xp, 0L);
+        did_gc_notification_since_last_full_gc = false;
         break;
       }
       /* Tried to do a full GC when gc was disabled.  That failed,
@@ -252,6 +280,7 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
       egc_control(false, (BytePtr) a->active);
     }
     gc_from_xp(xp, 0L);
+    did_gc_notification_since_last_full_gc = false;
     if (gc_deferred > gc_previously_deferred) {
       full_gc_deferred = 1;
     } else {
@@ -475,6 +504,26 @@ lisp_allocation_failure(ExceptionInformation *xp, TCR *tcr, natural bytes_needed
   xpPC(xp) += skip;
 }
 
+void
+callback_for_gc_notification(ExceptionInformation *xp, TCR *tcr)
+{
+  LispObj cmain = nrs_CMAIN.vcell;
+  if ((fulltag_of(cmain) == fulltag_misc) &&
+      (header_subtag(header_of(cmain)) == subtag_macptr)) {
+    LispObj *save_vsp = (LispObj *)xpGPR(xp,Isp),
+      word_beyond_vsp = save_vsp[-1],
+      save_fp = xpGPR(xp,Ifp),
+      xcf = create_exception_callback_frame(xp, tcr);
+
+    callback_to_lisp(tcr, cmain, xp, xcf, SIGTRAP, 0, 0, 0);
+    did_gc_notification_since_last_full_gc = true;
+    xpGPR(xp,Ifp) = save_fp;
+    xpGPR(xp,Isp) = (LispObj)save_vsp;
+    save_vsp[-1] = word_beyond_vsp;
+  }
+}
+
+
 /*
   Allocate a large list, where "large" means "large enough to
   possibly trigger the EGC several times if this was done
@@ -493,6 +542,7 @@ allocate_list(ExceptionInformation *xp, TCR *tcr)
     prev = lisp_nil,
     current,
     initial = xpGPR(xp,Iarg_y);
+  Boolean notify_pending_gc = false;
 
   if (nconses == 0) {
     /* Silly case */
@@ -501,7 +551,7 @@ allocate_list(ExceptionInformation *xp, TCR *tcr)
     return true;
   }
   update_bytes_allocated(tcr, (void *)tcr->save_allocptr);
-  if (allocate_object(xp,bytes_needed,bytes_needed-fulltag_cons,tcr)) {
+  if (allocate_object(xp,bytes_needed,bytes_needed-fulltag_cons,tcr, &notify_pending_gc)) {
     tcr->save_allocptr -= fulltag_cons;
     for (current = xpGPR(xp,Iallocptr);
          nconses;
@@ -510,6 +560,9 @@ allocate_list(ExceptionInformation *xp, TCR *tcr)
       deref(current,1) = initial;
     }
     xpGPR(xp,Iarg_z) = prev;
+    if (notify_pending_gc && !did_gc_notification_since_last_full_gc) {
+      callback_for_gc_notification(xp,tcr);
+    }
   } else {
     lisp_allocation_failure(xp,tcr,bytes_needed);
   }
@@ -517,11 +570,12 @@ allocate_list(ExceptionInformation *xp, TCR *tcr)
 }
 
 Boolean
-handle_alloc_trap(ExceptionInformation *xp, TCR *tcr)
+handle_alloc_trap(ExceptionInformation *xp, TCR *tcr, Boolean *notify)
 {
   natural cur_allocptr, bytes_needed;
   unsigned allocptr_tag;
   signed_natural disp;
+  Boolean notify_pending_gc = false;
   
   cur_allocptr = xpGPR(xp,Iallocptr);
   allocptr_tag = fulltag_of(cur_allocptr);
@@ -537,7 +591,14 @@ handle_alloc_trap(ExceptionInformation *xp, TCR *tcr)
   bytes_needed = disp+allocptr_tag;
 
   update_bytes_allocated(tcr,((BytePtr)(cur_allocptr+disp)));
-  if (allocate_object(xp, bytes_needed, disp, tcr)) {
+  if (allocate_object(xp, bytes_needed, disp, tcr, notify)) {
+    if (notify && *notify) {
+      xpPC(xp)+=2;
+      /* Finish the allocation: add a header if necessary,
+         clear the tag bits in tcr.save_allocptr. */
+      pc_luser_xp(xp,tcr,NULL);
+      callback_for_gc_notification(xp,tcr);
+    }
     return true;
   }
   
@@ -1011,6 +1072,10 @@ handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TC
 {
   pc program_counter = (pc)xpPC(context);
 
+  if (old_valence != TCR_STATE_LISP) {
+    return false;
+  }
+
   switch (signum) {
   case SIGNUM_FOR_INTN_TRAP:
     if (IS_MAYBE_INT_TRAP(info,context)) {
@@ -1024,9 +1089,18 @@ handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TC
         program_counter++;
         switch (*program_counter) {
         case UUO_ALLOC_TRAP:
-          if (handle_alloc_trap(context, tcr)) {
-            xpPC(context) += 2;	/* we might have GCed. */
-            return true;
+          {
+            Boolean did_notify = false,
+              *notify_ptr = &did_notify;
+            if (did_gc_notification_since_last_full_gc) {
+              notify_ptr = NULL;
+            }
+            if (handle_alloc_trap(context, tcr, notify_ptr)) {
+              if (! did_notify) {
+                xpPC(context) += 2;	/* we might have GCed. */
+              }
+              return true;
+            }
           }
           break;
         case UUO_GC_TRAP:
@@ -1582,7 +1656,7 @@ void
 altstack_signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context)
 {
   TCR* tcr = get_tcr(true);
-#if 1
+#if 0
   if (tcr->valence != TCR_STATE_LISP) {
     lisp_Debugger(context, info, signum, true, "exception in foreign context");
   }

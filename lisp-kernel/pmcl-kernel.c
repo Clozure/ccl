@@ -402,6 +402,9 @@ int cache_block_size=32;
 natural
 lisp_heap_gc_threshold = DEFAULT_LISP_HEAP_GC_THRESHOLD;
 
+natural
+lisp_heap_notify_threshold = 0;
+
 natural 
 initial_stack_size = DEFAULT_INITIAL_STACK_SIZE;
 
@@ -1789,7 +1792,9 @@ main(int argc, char *argv[]
   gc_init();
 
   set_nil(load_image(image_name));
+  lisp_heap_notify_threshold = GC_NOTIFY_THRESHOLD;
   lisp_heap_threshold_from_image = lisp_global(LISP_HEAP_THRESHOLD);
+  
   if (lisp_heap_threshold_from_image) {
     if ((!lisp_heap_threshold_set_from_command_line) &&
         (lisp_heap_threshold_from_image != lisp_heap_gc_threshold)) {

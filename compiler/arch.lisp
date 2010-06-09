@@ -353,6 +353,9 @@
 (defconstant gc-trap-function-set-lisp-heap-threshold 17)
 (defconstant gc-trap-function-use-lisp-heap-threshold 18)
 (defconstant gc-trap-function-ensure-static-conses 19)
+(defconstant gc-trap-function-get-gc-notification-threshold 20)
+(defconstant gc-trap-function-set-gc-notification-threshold 21)
+
 (defconstant gc-trap-function-egc-control 32)
 (defconstant gc-trap-function-configure-egc 64)
 (defconstant gc-trap-function-freeze 129)

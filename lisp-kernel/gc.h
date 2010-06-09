@@ -65,6 +65,7 @@ LispObj *global_reloctab, *GCrelocptr;
 LispObj GCfirstunmarked;
 
 extern natural lisp_heap_gc_threshold;
+extern natural lisp_heap_notify_threshold;
 void mark_root(LispObj);
 void mark_pc_root(LispObj);
 void mark_locative_root(LispObj);
@@ -143,6 +144,8 @@ void report_paging_info_delta(FILE*, paging_info *, paging_info *);
 #define GC_TRAP_FUNCTION_SET_LISP_HEAP_THRESHOLD 17
 #define GC_TRAP_FUNCTION_USE_LISP_HEAP_THRESHOLD 18
 #define GC_TRAP_FUNCTION_ENSURE_STATIC_CONSES 19
+#define GC_TRAP_FUNCTION_GET_GC_NOTIFICATION_THRESHOLD 20
+#define GC_TRAP_FUNCTION_SET_GC_NOTIFICATION_THRESHOLD 21
 #define GC_TRAP_FUNCTION_EGC_CONTROL 32
 #define GC_TRAP_FUNCTION_CONFIGURE_EGC 64
 #define GC_TRAP_FUNCTION_FREEZE 129

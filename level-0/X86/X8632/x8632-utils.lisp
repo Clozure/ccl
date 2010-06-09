@@ -434,6 +434,26 @@ be somewhat larger than what was specified)."
   (movl ($ (target-nil-value)) (% arg_z))
   (single-value-return))
 
+(defx8632lapfunction set-gc-notification-threshold ((threshold arg_z))
+  "Set the value of the kernel variable that can be used to trigger
+GC notifications."
+  (check-nargs 1)
+  (save-simple-frame)
+  (call-subprim .SPgetu32)
+  (movd (% imm0) (% mm0))
+  (movl ($ arch::gc-trap-function-set-gc-notification-threshold) (% imm0))
+  (uuo-gc-trap)
+  (restore-simple-frame)
+  (jmp-subprim .SPmakeu32))
+  
+(defx8632lapfunction get-gc-notification-threshold ()
+  "Get the value of the kernel variable that can be used to trigger
+GC notifications."
+  (check-nargs 0)
+  (movl ($ arch::gc-trap-function-get-gc-notification-threshold) (% imm0))
+  (uuo-gc-trap)
+  (jmp-subprim .SPmakeu32))
+
 ;;; offset is a fixnum, one of the x8632::kernel-import-xxx constants.
 ;;; Returns that kernel import, a fixnum.
 (defx8632lapfunction %kernel-import ((offset arg_z))
