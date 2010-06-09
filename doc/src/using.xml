@@ -483,6 +483,37 @@
 
   </sect1>
 
+  <sect1 id="Directory"><title>Directory</title>
+  <para>&CCL;'s <varname>DIRECTORY</varname> function accepts the following
+implementation-dependent keyword arguments:</para>
+  <variablelist>
+  <varlistentry>
+     <term><varname>:files</varname> <replaceable>boolean</replaceable></term>
+     <listitem>
+       <para> If true, includes regular (non-directory) files in DIRECTORY's output.  Defaults to T.</para>
+     </listitem>
+  </varlistentry>
+  <varlistentry>
+     <term><varname>:directories</varname> <replaceable>boolean</replaceable></term>
+     <listitem>
+       <para> If true, includes directories in DIRECTORY's output.  Defaults to NIL.</para>
+     </listitem>
+  </varlistentry>
+  <varlistentry>
+     <term><varname>:all</varname> <replaceable>boolean</replaceable></term>
+     <listitem>
+       <para> If true, includes files and directories whose names start with a dot character in DIRECTORY's output.  (Entries whose name is "." or ".." are never included.) Defaults to T.</para>
+     </listitem>
+  </varlistentry>
+  <varlistentry>
+     <term><varname>:follow-links</varname> <replaceable>boolean</replaceable></term>
+     <listitem>
+       <para> If true, includes the TRUENAMEs of symbolic or hard links in DIRECTORY's output; if false, includes the link filenames without attempting to resolve them. Defaults to T.</para>
+       <para>Note that legacy HFS alias files are treated as plain files.</para>
+     </listitem>
+  </varlistentry>
+  </variablelist>
+  </sect1>
   <sect1 id="Unicode"><title>Unicode</title>
 
     <para>All characters and strings in &CCL; fully support Unicode by
