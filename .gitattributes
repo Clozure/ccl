@@ -1,5 +1,4 @@
 * text=auto !eol
-cocoa-ide/.cvsignore -text
 cocoa-ide/README -text
 cocoa-ide/altconsole/AltConsoleDocument.h -text
 cocoa-ide/altconsole/AltConsoleDocument.m -text
@@ -421,7 +420,6 @@ doc/src/xsl/parameters.xsl -text
 doc/src/xsl/refentry.xsl -text
 doc/src/xsl/site-navigator.xsl -text
 doc/src/xsl/toc-at-end.xsl -text
-examples/cocoa/.cvsignore -text
 examples/cocoa/currency-converter/CurrencyConverter.nib/designable.nib -text
 examples/cocoa/currency-converter/CurrencyConverter.nib/keyedobjects.nib -text
 examples/cocoa/currency-converter/HOWTO.html -text
@@ -473,7 +471,6 @@ examples/cocoa/currency-converter/HOWTO_files/pages/writing_lisp.html -text
 examples/cocoa/currency-converter/HOWTO_files/stylesheets/styles.css -text
 examples/cocoa/currency-converter/currency-converter.lisp -text
 examples/cocoa/easygui.lisp -text
-examples/cocoa/easygui/.cvsignore -text
 examples/cocoa/easygui/action-targets.lisp -text
 examples/cocoa/easygui/dialogs.lisp -text
 examples/cocoa/easygui/easygui.asd -text
