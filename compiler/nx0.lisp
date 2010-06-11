@@ -1921,8 +1921,7 @@ Or something. Right? ~s ~s" var varbits))
 
 
 (defun nx1-combination (form env)
-  (destructuring-bind (sym &rest args)
-                      form
+  (destructuring-bind (sym &rest args) form
     (if (symbolp sym)
       (let* ((*nx-sfname* sym) special)
         (if (and (setq special (gethash sym *nx1-alphatizers*))
@@ -1931,14 +1930,14 @@ Or something. Right? ~s ~s" var varbits))
                                  %defun        ;; see bug #295
                                  ))
                      (< (safety-optimize-quantity env) 3))
-                 ;(not (nx-lexical-finfo sym env))
+                 ;;(not (nx-lexical-finfo sym env))
                  (not (nx-declared-notinline-p sym *nx-lexical-environment*)))
           (funcall special form env) ; pass environment arg ...
           (progn            
             (nx1-typed-call sym args))))
       (if (lambda-expression-p sym)
         (nx1-lambda-bind (%cadr sym) args (%cddr sym))
-      (nx-error "In the form ~S, ~S is not a symbol or lambda expression." form sym)))))
+	(nx-error "In the form ~S, ~S is not a symbol or lambda expression." form sym)))))
 
 (defun nx1-treat-as-call (args)
   (nx1-typed-call (car args) (%cdr args)))
