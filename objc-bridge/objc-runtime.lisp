@@ -42,12 +42,7 @@
           `(@ ,string)))))))
 
 (eval-when (:compile-toplevel :execute)
-  #+apple-objc
-  (progn
-    (use-interface-dir :cocoa)
-    #+nomore
-    (use-interface-dir :carbon))        ; need :carbon for things in this file
-  #+cocotron-objc
+  #+(or apple-objc cocotron-objc)
   (use-interface-dir :cocoa)
   #+gnu-objc
   (use-interface-dir :gnustep))
@@ -58,16 +53,6 @@
   (require "OBJC-PACKAGE")
   (require "NAME-TRANSLATION")
   (require "OBJC-CLOS"))
-
-;;; NSInteger and NSUInteger probably belong here.
-;;; CGFloat not so much.
-
-#-(or apple-objc-2.0 cocotron-objc)
-(progn
-  (def-foreign-type #>CGFloat :float)
-  (def-foreign-type #>NSUInteger :unsigned)
-  (def-foreign-type #>NSInteger :signed)
-  )
 
 (defconstant +cgfloat-zero+
   #+(and (or apple-objc-2.0 cocotron-objc) 64-bit-target) 0.0d0
