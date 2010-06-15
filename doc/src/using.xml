@@ -483,6 +483,209 @@
 
   </sect1>
 
+  <sect1 id="Advising"><title>Advising</title>
+  <para>
+    The <literal>advise</literal> macro can be thought of as a more
+    general version of <literal>trace</literal>. It allows code that
+    you specify to run before, after, or around a given function, for
+    the purpose of changing the behavior of the function. Each piece
+    of added code is called a piece of advice. Each piece of advice
+    has a unique name, so that you can have multiple pieces of advice
+    on the same function, including multiple
+    <literal>:before</literal>, <literal>:after</literal>, and
+    <literal>:around</literal> pieces of advice.
+  </para>
+  <para>
+    The <literal>:name</literal> and <literal>:when</literal>
+    keywords serve to identify the piece of advice.  A later call to
+    <literal>advise</literal> with the same values of
+    <literal>:name</literal> and <literal>:when</literal> will replace
+    the existing piece of advice; a call with different values will not.
+  </para>
+
+  <refentry id="m_advise">
+    <indexterm zone="m_advise">
+      <primary>advise</primary>
+    </indexterm>
+
+    <refnamediv>
+      <refname>ADVISE</refname>
+      <refpurpose>
+	Add a piece of advice to the function or method specified by
+	<varname>spec</varname> according to
+	<varname>form</varname>.
+      </refpurpose>
+      <refclass>Macro</refclass>
+    </refnamediv>
+    
+    <refsynopsisdiv>
+      <synopsis><function>advise</function> spec form &key; when name</synopsis>
+    </refsynopsisdiv>
+
+    <refsect1>
+      <title>Arguments and Values</title>
+      <variablelist>
+	<varlistentry>
+	  <term>spec</term>
+	  <listitem>
+	    <para>
+	      A specification of the function on which to put the
+	      advice.  This is either a symbol that is the name of a
+	      function or generic function, or an expression of the
+	      form (setf <replaceable>symbol</replaceable>), or a
+	      specific method of a generic function in the form
+	      (:method symbol {qualifiers} (specializer {specializer})).
+	    </para>
+	  </listitem>
+	</varlistentry>
+	<varlistentry>
+	  <term>form</term>
+	  <listitem>
+	    <para>
+	      A form to execute before, after, or around the advised
+	      function. The form can refer to the variable arglist
+	      that is bound to the arguments with which the advised
+	      function was called. You can exit from form with
+	      (return).
+	    </para>
+	  </listitem>
+	</varlistentry>
+	<varlistentry>
+	  <term>name</term>
+	  <listitem>
+	    <para>
+	      A name that identifies the piece of advice.
+	    </para>
+	  </listitem>
+	</varlistentry>
+	<varlistentry>
+	  <term>when</term>
+	  <listitem>
+	    <para>
+	      An argument that specifies when the piece of advice is
+	      run. There are three allowable values. The default is
+	      <literal>:before</literal>, which specifies that form is
+	      executed before the advised function is called. Other
+	      possible values are <literal>:after</literal>, which
+	      specifies that form is executed after the advised
+	      function is called, and <literal>:around</literal>,
+	      which specifies that form is executed around the call to
+	      the advised function. Use <literal>(:do-it)</literal>
+	      within form to indicate invocation of the original
+	      definition.
+	    </para>
+	  </listitem>
+	</varlistentry>
+      </variablelist>
+    </refsect1>
+    
+    <refsect1>
+      <title>Examples</title>
+      <para>
+	The function <literal>foo</literal>, already defined, does
+	something with a list of numbers. The following code uses a
+	piece of advice to make foo return zero if any of its
+	arguments is not a number. Using :around advice, you can do
+	the following:
+	<programlisting>
+(advise foo (if (some #'(lambda (n) (not (numberp n))) arglist)
+	      0
+	      (:do-it))
+	:when :around :name :zero-if-not-nums)
+	</programlisting>
+      </para>
+      <para>
+	To do the same thing using a :before piece of advice:
+	<programlisting>
+(advise foo (if (some #'(lambda (n) (not (numberp n))) arglist)
+	      (return 0))
+	:when :before :name :zero-if-not-nums)
+	</programlisting>
+      </para>
+    </refsect1>
+  </refentry>
+
+  <refentry id="m_unadvise">
+    <indexterm zone="m_unadvise">
+      <primary>unadvise</primary>
+    </indexterm>
+
+    <refnamediv>
+      <refname>UNADVISE</refname>
+      <refpurpose>
+	Remove the piece or pieces of advice matching <varname>spec</varname>,
+	<varname>when</varname>, and <varname>name</varname>.
+      </refpurpose>
+      <refclass>Macro</refclass>
+    </refnamediv>
+    
+    <refsynopsisdiv>
+      <synopsis><function>unadvise</function> spec &key; when name</synopsis>
+    </refsynopsisdiv>
+
+    <refsect1>
+      <title>Description</title>
+      <para>
+	The unadvise macro removes the piece or pieces of advice
+	matching <literal>spec</literal>, <literal>when</literal>,
+	and <literal>name</literal>. When the value of
+	<literal>spec</literal> is t and the values of <literal>when</literal>
+	and <literal>name</literal> are nil, unadvise
+	removes every piece of advice; when <literal>spec</literal> is
+	t, the argument <literal>when</literal> is nil, and
+	<literal>name</literal> is non-nil, unadvise removes all
+	pieces of advice with the given name.
+      </para>
+    </refsect1>
+    <refsect1>
+      <title>Arguments and Values</title>
+      <para>
+	The arguments have the same meaning as in
+	<xref linkend="m_advise"/>.
+      </para>
+    </refsect1>
+  </refentry>
+
+  <refentry id="m_advisedp">
+    <indexterm zone="m_advisedp">
+      <primary>advisedp</primary>
+    </indexterm>
+
+    <refnamediv>
+      <refname>ADVISEDP</refname>
+      <refpurpose>
+	Return a list of the pieces of advice matching <varname>spec</varname>,
+	<varname>when</varname>, and <varname>name</varname>.
+      </refpurpose>
+      <refclass>Macro</refclass>
+    </refnamediv>
+    
+    <refsynopsisdiv>
+      <synopsis><function>advisedp</function> spec &key; when name</synopsis>
+    </refsynopsisdiv>
+
+    <refsect1>
+      <title>Description</title>
+      <para>
+	The advisedp macro returns a list of existing pieces of advice
+	that match <literal>spec</literal>, <literal>when</literal>,
+	and <literal>name</literal>. When the value of
+	<literal>spec</literal> is t and the values of
+	<literal>when</literal> and <literal>name</literal> are nil,
+	advisedp returns all existing pieces of advice.
+      </para>
+    </refsect1>
+    <refsect1>
+      <title>Arguments and Values</title>
+      <para>
+	The arguments have the same meaning as in
+	<xref linkend="m_advise"/>.
+      </para>
+    </refsect1>
+  </refentry>
+
+  </sect1>
+
   <sect1 id="Directory"><title>Directory</title>
   <para>&CCL;'s <varname>DIRECTORY</varname> function accepts the following
 implementation-dependent keyword arguments:</para>
