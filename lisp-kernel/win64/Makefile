@@ -84,7 +84,7 @@ OSLIBS = -lpsapi -lws2_32
 
 
 ../../wx86cl64.exe:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile pei-x86-64.x
-	$(CC) -Wl,--image-base=0x10000 -Wl,-script=pei-x86-64.x -m64 $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -o $@ $(USE_LINK_MAP) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
+	$(CC) -Wl,--image-base=0x10000 -Wl,-script=pei-x86-64.x -m64 $(CDEBUG)   $(HASH_STYLE) -o $@ $(USE_LINK_MAP) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
 
 
 $(SPOBJ): $(SPINC)

@@ -504,6 +504,10 @@ lisp_allocation_failure(ExceptionInformation *xp, TCR *tcr, natural bytes_needed
   xpPC(xp) += skip;
 }
 
+#ifndef SIGTRAP
+#define SIGTRAP 5
+#endif
+
 void
 callback_for_gc_notification(ExceptionInformation *xp, TCR *tcr)
 {
