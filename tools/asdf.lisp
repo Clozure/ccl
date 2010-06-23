@@ -70,7 +70,7 @@
                 :test 'equalp :key 'car))
   (let* ((asdf-version
           ;; the 1+ helps the version bumping script discriminate
-          (subseq "VERSION:2.000" (1+ (length "VERSION"))))
+          (subseq "VERSION:2.002" (1+ (length "VERSION"))))
          (existing-asdf (find-package :asdf))
          (vername '#:*asdf-version*)
          (versym (and existing-asdf
@@ -467,6 +467,16 @@ processed in order by OPERATE."))
 ;;;; General Purpose Utilities
 
 (defmacro while-collecting ((&rest collectors) &body body)
+  "COLLECTORS should be a list of names for collections.  A collector
+defines a function that, when applied to an argument inside BODY, will
+add its argument to the corresponding collection.  Returns multiple values,
+a list for each collection, in order.
+   E.g.,
+\(while-collecting \(foo bar\)
+           \(dolist \(x '\(\(a 1\) \(b 2\) \(c 3\)\)\)
+             \(foo \(first x\)\)
+             \(bar \(second x\)\)\)\)
+Returns two values: \(A B C\) and \(1 2 3\)."
   (let ((vars (mapcar #'(lambda (x) (gensym (symbol-name x))) collectors))
         (initial-values (mapcar (constantly nil) collectors)))
     `(let ,(mapcar #'list vars initial-values)
@@ -604,9 +614,10 @@ pathnames."
                 (values :absolute (cdr components))
                 (values :relative nil))
           (values :relative components))
+      (setf components (remove "" components :test #'equal))
       (cond
         ((equal last-comp "")
-         (values relative (butlast components) nil))
+         (values relative components nil)) ; "" already removed
         (force-directory
          (values relative components nil))
         (t
@@ -2082,7 +2093,7 @@ details."
     (or class
         (and (eq type :file)
              (or (module-default-component-class parent)
-                 (find-class 'cl-source-file)))
+                 (find-class *default-component-class*)))
         (sysdef-error "~@<don't recognize component type ~A~@:>" type))))
 
 (defun maybe-add-tree (tree op1 op2 c)
