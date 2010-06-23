@@ -726,6 +726,7 @@
      get-output-stream-vector  
      *vector-output-stream-default-initial-allocation*   
      external-process-creation-failure
+     object-direct-size
 
      ) "CCL"
    )

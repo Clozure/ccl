@@ -1216,7 +1216,28 @@ are running on, or NIL if we can't find any useful information."
                 100.0d0))))
   (values))
 
-
+(defun object-direct-size (thing)
+  "Returns the size of THING (in bytes), including any headers and
+   alignment overhead.  Does not descend an object's components."
+  (cond ((consp thing) #+64-bit-target 16 #+32-bit-target 8)
+        #+x8664-target ((symbolp thing)
+                        (object-direct-size (%symptr->symvector thing)))
+        #+x8664-target ((functionp thing)
+                        (object-direct-size (function-to-function-vector thing)))
+        ((uvectorp thing)
+         (let* ((typecode (ccl::typecode thing))
+                (element-count (ccl::uvsize thing))
+                (sizeof-content-in-octets
+                 ;; Call the architecture-specific backend function.
+                 (funcall (arch::target-array-data-size-function
+                           (backend-target-arch *host-backend*))
+                          typecode element-count)))
+           (logandc2 (+ sizeof-content-in-octets
+                           #+64-bit-target (+ 8 15)
+                           #+32-bit-target (+ 4 7))
+                     #+64-bit-target 15
+                     #+32-bit-target 7)))
+        (t 0)))
 
 (defun static-cons (car-value cdr-value)
   "Allocates a cons cell that doesn't move on garbage collection,
