@@ -457,7 +457,10 @@
      static-cons
      free-static-conses
      reserved-static-conses
-
+     get-gc-notification-threshold
+     set-gc-notification-threshold
+     *pending-gc-notification-hook*
+     
      population
      make-population
      population-type
