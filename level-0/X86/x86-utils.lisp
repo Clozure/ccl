@@ -487,10 +487,10 @@ GC notifications."
   (restore-simple-frame)
   (jmp-subprim .SPmakeu64))
 
-(defx86lapfunction get-gc-notification-threshold ((threshold arg_z))
+(defx86lapfunction get-gc-notification-threshold ()
   "Get the value of the kernel variable that can be used to trigger
 GC notifications."
-  (check-nargs 1)
+  (check-nargs 0)
   (movq ($ arch::gc-trap-function-set-gc-notification-threshold) (% imm0))
   (uuo-gc-trap)
   (jmp-subprim .SPmakeu64))
