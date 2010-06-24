@@ -2290,19 +2290,31 @@ ensure_static_conses(ExceptionInformation *xp, TCR *tcr, natural nconses)
   area *a = active_dynamic_area;
   natural nbytes = nconses>>dnode_shift, have;
   BytePtr p = a->high-nbytes;
+  Boolean crossed_notify_threshold = false;
+  LispObj before_shrink, after_shrink;
 
   if (p < a->active) {
     untenure_from_area(tenured_area);
     gc_from_xp(xp, 0L);
+    did_gc_notification_since_last_full_gc = false;
   }
 
   have = unbox_fixnum(lisp_global(FREE_STATIC_CONSES));
   if (have < nconses) {
-    if ((a->high-a->active)>nbytes) {
+    before_shrink = a->high-a->active;
+    if (before_shrink>nbytes) {
       shrink_dynamic_area(nbytes);
+      after_shrink = a->high-a->active; 
+      if ((before_shrink >= lisp_heap_notify_threshold) &&
+          (after_shrink < lisp_heap_notify_threshold)) {
+        crossed_notify_threshold = true;
+      }
     }
     allocate_static_conses(nconses);
     tcr->bytes_allocated += nbytes;
+  }
+  if (crossed_notify_threshold && !did_gc_notification_since_last_full_gc) {
+    callback_for_gc_notification(xp,tcr);
   }
 }
       
