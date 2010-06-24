@@ -240,6 +240,7 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
   case GC_TRAP_FUNCTION_SET_GC_NOTIFICATION_THRESHOLD:
     if ((signed_natural)arg >= 0) {
       lisp_heap_notify_threshold = arg;
+      did_gc_notification_since_last_full_gc = false;
     }
     /* fall through */
 
