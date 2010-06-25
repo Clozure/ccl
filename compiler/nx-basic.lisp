@@ -705,4 +705,231 @@
     (when defenv
       (cdr (assq name (defenv.structrefs defenv))))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; decomp-acode
+;;
+;;  Decompile acode into something more readable.
+;;  For debugging, but also used for a code coverage feature
+
+
+(defun decomp-acode (acode)
+  (cond ((eq acode *nx-t*) t)
+        ((eq acode *nx-nil*) nil)
+        (t (let* ((op (car acode))
+                  (num (length *next-nx-operators*))
+                  (name (when (and (fixnump op)
+                                   (<= 0 op)
+                                   (setq op (logand op operator-id-mask))
+                                   (< op num))
+                          (car (nth (- num op 1) *next-nx-operators*)))))
+             (decomp-using-name (or name op) (cdr acode))))))
+
+;; TBD maybe decomp afunc-acode?
+(defun decomp-afunc (afunc)
+  (require-type afunc 'afunc))
+
+(defun decomp-var (var)
+  (var-name (require-type var 'var)))
+
+(defun decomp-formlist (formlist)
+  (mapcar #'decomp-acode formlist))
+
+(defun decomp-arglist (arglist)
+  (destructuring-bind (stack-forms register-forms) arglist
+    (nconc (decomp-formlist stack-forms)
+           (nreverse (decomp-formlist register-forms)))))
+
+(defun decomp-lambda-list (req opt rest keys auxen &optional whole)
+  (flet ((decomp-arg (var)
+           (if (acode-p var)
+             (destructuring-bind (op whole req opt rest keys auxen) var
+               (assert (eq op (%nx1-operator lambda-list))) ;; fake
+               (decomp-lambda-list req opt rest keys auxen whole))
+             (decomp-var var))))
+    (let ((whole (and whole (list '&whole (decomp-arg whole))))
+          (reqs (mapcar #'decomp-arg req))
+          (opts (when opt (cons '&optional (apply #'mapcar
+                                                  (lambda (var init supp)
+                                                    (list (decomp-arg var)
+                                                          (decomp-acode init)
+                                                          (and supp (decomp-arg supp))))
+                                                  opt))))
+          (rest (when rest (list '&rest (decomp-arg rest))))
+          (keys (when keys
+                  (destructuring-bind (aok vars supps inits keyvect) keys
+                    (nconc
+                     (when vars
+                       (cons '&key (map 'list (lambda (var supp init key)
+                                                (list* (list key (decomp-arg var))
+                                                       (decomp-acode init)
+                                                       (and supp (list (decomp-arg supp)))))
+                                        vars supps inits keyvect)))
+                     (when aok (list '&allow-other-keys))))))
+          (auxen (when (car auxen)
+                   (cons '&aux (apply #'mapcar
+                                      (lambda (var init)
+                                        (list (decomp-arg var) (decomp-acode init)))
+                                      auxen)))))
+      (nconc whole reqs opts rest keys auxen))))
+
+(defmacro defdecomp (names arglist &body body)
+  (let ((op-var (car arglist))
+        (args-vars (cdr arglist))
+        (op-decls nil)
+        (args-var (gensym)))
+    (multiple-value-bind (body decls) (parse-body body nil)
+    ;; Kludge but good enuff for here
+      (setq decls (loop for decl in decls
+                    collect (cons (car decl)
+                                  (loop for exp in (cdr decl)
+                                    do (when (and (consp exp) (member op-var (cdr exp)))
+                                         (push (list (car exp) op-var) op-decls))
+                                    collect (cons (car exp) (remove op-var (cdr exp)))))))
+    `(progn
+       ,@(loop for name in (if (atom names) (list names) names)
+           collect `(defmethod decomp-using-name ((,op-var (eql ',name)) ,args-var)
+                      (declare ,@op-decls)
+                      (destructuring-bind ,args-vars ,args-var
+                        ,@decls
+                        ,@body)))))))
+
+;; Default method
+(defmethod decomp-using-name (op forms)
+  `(,op ,@(decomp-formlist forms)))
+
+;; not real op, kludge generated below for lambda-bind
+(defdecomp keyref (op index)
+  `(,op ,index))
+
+(defdecomp immediate (op imm)
+  (declare (ignore op))
+  `',imm)
+
+(defdecomp fixnum (op raw-fixnum)
+  (declare (ignore op))
+  raw-fixnum)
+
+(defdecomp %function (op symbol)
+  (declare (ignore op))
+  `(function ,symbol))
+
+(defdecomp simple-function (op afunc)
+  (declare (ignore op))
+  `(quote ,(decomp-afunc afunc)))
+
+(defdecomp closed-function (op afunc)
+  `(,op ,(decomp-afunc afunc)))
+
+(defdecomp (progn prog1 multiple-value-prog1 or list %temp-list values) (op form-list)
+  `(,op ,@(decomp-formlist form-list)))
+
+(defdecomp multiple-value-call (op fn form-list)
+  `(,op ,(decomp-acode fn) ,@(decomp-formlist form-list)))
+
+(defdecomp vector (op formlist)
+  `(,op ,@(decomp-formlist formlist)))
+
+(defdecomp (%gvector list* %err-disp) (op arglist)
+  `(,op ,@(decomp-arglist arglist)))
+
+(defdecomp (i386-syscall syscall eabi-syscall poweropen-syscall
+            i386-ff-call ff-call eabi-ff-call poweropen-ff-call)
+           (op target argspecs argvals resultspec &rest rest)
+  `(,op
+    ,(decomp-acode target)
+    ,@(mapcan (lambda (spec val) (list spec (decomp-acode val))) argspecs argvals)
+    ,resultspec
+    ,@rest))
+
+(defdecomp (consp characterp istruct-typep %ptr-eql int>0-p %izerop endp eq %ilogbitp %base-char-p not neq) (op cc &rest forms)
+  (if (eq (acode-immediate-operand cc) :eq)
+    `(,op ,@(decomp-formlist forms))
+    `(,op ,(decomp-acode cc) ,@(decomp-formlist forms))))
+
+(defdecomp (typed-form type-asserted-form) (op typespec form &optional check-p)
+  `(,op ',typespec ,(decomp-acode form) ,check-p))
+
+(defdecomp (%i+ %i-) (op form1 form2 &optional overflow-p)
+  `(,op ,(decomp-acode form1) ,(decomp-acode form2) ,overflow-p))
+
+(defdecomp (immediate-get-xxx %immediate-set-xxx) (op bits &rest forms)
+  `(,op ,bits ,@(decomp-formlist forms)))
+
+(defdecomp call (op fn arglist &optional spread-p)
+  (declare (Ignore op))
+  `(,(if spread-p 'apply 'funcall) ,(decomp-acode fn) ,@(decomp-arglist arglist)))
+
+(defdecomp lexical-function-call (op afunc arglist &optional spread-p)
+  (declare (Ignore op))
+  `(,(if spread-p 'apply 'funcall) ,(decomp-afunc afunc) ,@(decomp-arglist arglist)))
+
+(defdecomp self-call (op arglist &optional spread-p)
+  (declare (Ignore op))
+  `(,(if spread-p 'self-apply 'self-funcall) ,@(decomp-arglist arglist)))
+
+(defdecomp (free-reference special-ref bound-special-ref global-ref) (op symbol)
+  `(,op ,symbol))
+
+(defdecomp (setq-special setq-free global-setq) (op symbol form)
+  `(,op ,symbol ,(decomp-acode form)))
+
+(defdecomp (inherited-arg lexical-reference setq-lexical) (op var &rest forms)
+  `(,op ,(decomp-var var) ,@(decomp-formlist forms)))
+
+
+(defdecomp (let let* with-downward-closures) (op vars vals body p2decls)
+  (declare (ignore p2decls))
+  `(,op ,(mapcar (lambda (var val) (list (decomp-var var) (decomp-acode val))) vars vals)
+    ,(decomp-acode body)))
+
+(defdecomp %decls-body (op form p2decls)
+  (declare (ignore p2decls))
+  `(,op ,(decomp-acode form)))
+
+(defdecomp multiple-value-bind (op vars form body p2decls)
+  (declare (ignore p2decls))
+  `(,op ,(mapcar #'decomp-var vars) ,(decomp-acode form) ,(decomp-acode body)))
+
+
+(defdecomp lambda-list (op req opt rest keys auxen body p2decls &optional code-note)
+  (declare (ignore p2decls code-note))
+  `(lambda-list ,(decomp-lambda-list req opt rest keys auxen) ,(decomp-acode body)))
+
+(defdecomp debind (op ll form req opt rest keys auxen whole body p2decls cdr-p)
+  (declare (ignore ll p2decls cdr-p))
+  `(,op ,(decomp-lambda-list req opt rest keys auxen whole) ,(decomp-acode form) ,(decomp-acode body)))
+
+(defdecomp lambda-bind (op vals req rest keys-p auxen body p2decls)
+  (declare (ignore keys-p p2decls))
+  (when (find-if #'fixnump (cadr auxen))
+    (destructuring-bind (vars vals) auxen
+      (setq auxen (list vars
+			(mapcar (lambda (x) (if (fixnump x) `(keyref ,x) x)) vals)))))
+  (let ((lambda-list (decomp-lambda-list req nil rest nil  auxen)))
+    `(,op ,lambda-list ,(decomp-formlist vals) ,(decomp-acode body))))
+
+(defdecomp (flet labels) (op vars afuncs body p2decls)
+  (declare (ignore p2decls))
+  `(,op ,(mapcar (lambda (var afunc)
+                            (list (decomp-var var) (decomp-afunc afunc)))
+                          vars afuncs)
+    ,(decomp-acode body)))
+
+(defdecomp local-go (op tag)
+  `(,op ,(car tag)))
+
+(defdecomp tag-label (op &rest tag)
+  `(,op ,(car tag)))
+
+(defdecomp local-tagbody (op tags forms)
+  (declare (ignore tags))
+  `(,op ,@(decomp-formlist forms)))
+
+(defdecomp local-block (op block body)
+  `(,op ,(car block) ,(decomp-acode body)))
+
+(defdecomp local-return-from (op block form)
+  `(,op ,(car block) ,(decomp-acode form)))
+
 ; end
