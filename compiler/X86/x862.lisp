@@ -10093,6 +10093,16 @@
       (<- dreg)
       (^))))
 
+(defx862 x862-%fixnum-mask-to-natural %fixnum-mask-to-natural (seg vreg xfer arg)
+  (with-imm-target () (target :natural)
+    (let ((r (x862-one-untargeted-reg-form seg arg *x862-arg-z*)))
+      (unless (or (acode-fixnum-form-p arg)
+		  *x862-reckless*)
+	(! trap-unless-finxum r))
+      (! fixnum->signed-natural target r)
+      (<- target)
+      (^))))
+
 (defx862 x862-%double-float %double-float (seg vreg xfer arg)
   (let* ((real (or (acode-fixnum-form-p arg)
                    (let* ((form (acode-unwrapped-form-value arg)))

@@ -588,6 +588,22 @@ function to the indicated name is true.")
            (typep int `(unsigned-byte ,bits)))
          int)))
 
+(defun acode-natural-constant-p (x)
+  (let* ((int (or (acode-fixnum-form-p x)
+                  (progn
+                    (setq x (acode-unwrapped-form x))
+                    (if (acode-p x)
+                      (if (and (eq (acode-operator x) (%nx1-operator immediate))
+                               (typep (cadr x) 'fixnum))
+                        (cadr x)))))))
+    (and int
+         (target-word-size-case
+	  (32 (typep int '(unsigned-byte 32)))
+	  (64 (typep int '(unsigned-byte 64))))
+         int)))
+
+
+
 (defun acode-real-constant-p (x)
   (or (acode-fixnum-form-p x)
       (progn
@@ -691,6 +707,17 @@ function to the indicated name is true.")
 
 (defun nx-acode-fixnum-type-p (form env)
     (acode-fixnum-type-p form (nx-trust-declarations env)))
+
+(defun acode-natural-type-p (form trust-decls)
+  (and trust-decls
+       (acode-p form)
+       (eq (acode-operator form) (%nx1-operator typed-form))
+       (subtypep (cadr form) (target-word-size-case
+			      (32 '(unsigned-byte 32))
+			      (64 '(unsigned-byte 64))))))
+
+(defun nx-acode-natural-type-p (form env)
+  (acode-natural-type-p form (nx-trust-declarations env)))
 
 ; Is acode-expression the result of alphatizing (%int-to-ptr <integer>) ?
 (defun acode-absolute-ptr-p (acode-expression &optional skip)
@@ -2712,7 +2739,6 @@ Or something. Right? ~s ~s" var varbits))
     (typep (nx-form-constant-value arg env) type env)
     (subtypep (nx-form-type arg env) type env)))
 
-
 (defun nx-binary-fixnum-op-p (form1 form2 env &optional ignore-result-type)
   (setq form1 (nx-transform form1 env)
         form2 (nx-transform form2 env))
@@ -2745,8 +2771,63 @@ Or something. Right? ~s ~s" var varbits))
              (32 (subtypep *nx-form-type* '(unsigned-byte 32)))
              (64 (subtypep *nx-form-type* '(unsigned-byte 64))))))))
 
-    
+(defun nx-logand-2-op (arg-1 arg-2 env)
+  (let* ((form-1 (nx1-form arg-1))
+	 (form-2 (nx1-form arg-2))
+	 (fix-1 (nx-acode-fixnum-type-p form-1 env))
+	 (fix-2 (nx-acode-fixnum-type-p form-2 env))
+	 (nat-1 (nx-acode-natural-type-p form-1 env))
+	 (nat-2 (nx-acode-natural-type-p form-2 env)))
+    (cond
+      ((and fix-1 fix-2)
+       (make-acode (%nx1-operator %ilogand2) form-1 form-2))
+      ((and nat-1 nat-2)
+       (make-acode (%nx1-operator typed-form)
+		   (target-word-size-case
+		    (32 '(unsigned-byte 32))
+		    (64 '(unsigned-byte 64)))
+		   (make-acode (%nx1-operator %natural-logand) form-1 form-2)))
+      ((and fix-1 nat-2)
+       (make-acode (%nx1-operator typed-form)
+		   (target-word-size-case
+		    (32 '(unsigned-byte 32))
+		    (64 '(unsigned-byte 64)))
+		   (make-acode (%nx1-operator %natural-logand)
+			       (make-acode (%nx1-operator %fixnum-mask-to-natural)
+					   form-1)
+			       form-2)))
+      ((and nat-1 fix-2)
+       (make-acode (%nx1-operator typed-form)
+		   (target-word-size-case
+		    (32 '(unsigned-byte 32))
+		    (64 '(unsigned-byte 64)))
+		   (make-acode (%nx1-operator %natural-logand)
+			       form-1
+			       (make-acode (%nx1-operator %fixnum-mask-to-natural)
+							  form-2))))
+      (t
+       (make-acode (%nx1-operator logand2) form-1 form-2)))))
 
+(defun nx-logior-2-op (arg-1 arg-2 env)
+  (let* ((form-1 (nx1-form arg-1))
+	 (form-2 (nx1-form arg-2))
+	 (fix-1 (nx-acode-fixnum-type-p form-1 env))
+	 (fix-2 (nx-acode-fixnum-type-p form-2 env))
+	 (nat-1 (or (acode-natural-constant-p form-1)
+		    (nx-acode-natural-type-p form-1 env)))
+	 (nat-2 (or (acode-natural-constant-p form-2)
+		    (nx-acode-natural-type-p form-2 env))))
+    (cond
+      ((and fix-1 fix-2)
+       (make-acode (%nx1-operator %ilogior2) form-1 form-2))
+      ((and nat-1 nat-2)
+       (make-acode (%nx1-operator typed-form)
+		   (target-word-size-case
+		    (32 '(unsigned-byte 32))
+		    (64 '(unsigned-byte 64)))
+		   (make-acode (%nx1-operator %natural-logior) form-1 form-2)))
+      (t
+       (make-acode (%nx1-operator logior2) form-1 form-2)))))
 
 (defun nx-binary-boole-op (whole env arg-1 arg-2 fixop intop naturalop)
   (let* ((use-fixop (nx-binary-fixnum-op-p arg-1 arg-2 env t))

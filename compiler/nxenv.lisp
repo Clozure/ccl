@@ -369,7 +369,8 @@
      (%single-float .  #.(logior operator-acode-subforms-mask operator-assignment-free-mask operator-single-valued-mask))
      (%double-float . #. #.(logior operator-acode-subforms-mask operator-assignment-free-mask operator-single-valued-mask))
      (i386-ff-call . 0)
-     (i386-syscall . 0))))
+     (i386-syscall . 0)
+     (%fixnum-mask-to-natural  . #.(logior operator-assignment-free-mask operator-single-valued-mask operator-acode-subforms-mask operator-side-effect-free-mask)))))
 
 (defmacro %nx1-operator (sym)
   (let ((op (assq sym *next-nx-operators*)))

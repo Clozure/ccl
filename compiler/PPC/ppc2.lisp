@@ -9115,6 +9115,16 @@
 	  (<- sreg)))
       (^))))
 
+(defppc2 ppc2-%fixnum-mask-to-natural %fixnum-mask-to-natural (seg vreg xfer arg)
+  (with-imm-target () (dreg :natural)
+    (let* ((r (ppc2-one-untargeted-reg-form seg arg ppc::arg_z)))
+      (unless (or (acode-fixnum-form-p arg)
+                  *ppc2-reckless*)
+        (! trap-unless-fixnum r))
+      (! fixnum->signed-natural dreg r)
+      (<- dreg)
+      (^))))
+
 (defppc2 ppc2-%double-float %double-float (seg vreg xfer arg)
   (let* ((real (or (acode-fixnum-form-p arg)
                    (let* ((form (acode-unwrapped-form-value arg)))
