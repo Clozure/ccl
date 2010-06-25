@@ -580,7 +580,7 @@ function to the indicated name is true.")
                     (setq x (acode-unwrapped-form x))
                     (if (acode-p x)
                       (if (and (eq (acode-operator x) (%nx1-operator immediate))
-                               (typep (cadr x) 'fixnum))
+                               (typep (cadr x) 'integer))
                         (cadr x)))))))
     (and int
          (or
@@ -594,7 +594,7 @@ function to the indicated name is true.")
                     (setq x (acode-unwrapped-form x))
                     (if (acode-p x)
                       (if (and (eq (acode-operator x) (%nx1-operator immediate))
-                               (typep (cadr x) 'fixnum))
+                               (typep (cadr x) 'integer))
                         (cadr x)))))))
     (and int
          (target-word-size-case
@@ -2777,7 +2777,19 @@ Or something. Right? ~s ~s" var varbits))
 	 (fix-1 (nx-acode-fixnum-type-p form-1 env))
 	 (fix-2 (nx-acode-fixnum-type-p form-2 env))
 	 (nat-1 (nx-acode-natural-type-p form-1 env))
-	 (nat-2 (nx-acode-natural-type-p form-2 env)))
+	 (nat-2 (nx-acode-natural-type-p form-2 env))
+	 (natural-width (target-word-size-case (32 32) (64 64)))
+	 (natural-mask (1- (ash 1 natural-width))))
+    (when (and nat-1
+	       (not nat-2)
+	       (acode-integer-constant-p form-2 natural-width))
+	(setq form-2 (nx1-form (logand natural-mask arg-2))
+	      nat-2 t))
+    (when (and (not nat-1)
+	       nat-2
+	       (acode-integer-constant-p form-1 natural-width))
+	(setq form-1 (nx1-form (logand natural-mask arg-1))
+	      nat-1 t))
     (cond
       ((and fix-1 fix-2)
        (make-acode (%nx1-operator %ilogand2) form-1 form-2))
