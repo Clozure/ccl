@@ -954,9 +954,10 @@ accept-connection on it again."))
   (values buf offset))
 
 (defmethod send-to ((socket udp-socket) msg size
-		    &key remote-host remote-port offset)
+		    &key remote-host remote-port offset (external-format :ISO-8859-1))
   "Send a UDP packet over a socket."
   (let ((fd (socket-device socket)))
+    (when (stringp msg) (setf msg (ccl::ENCODE-STRING-TO-OCTETS msg :external-format external-format)))
     (multiple-value-setq (msg offset) (verify-socket-buffer msg offset size))
     (unless remote-host
       (setq remote-host (or (getf (socket-keys socket) :remote-host)
@@ -972,15 +973,16 @@ accept-connection on it again."))
 	    (if remote-host (host-as-inet-host remote-host) #$INADDR_ANY))
       (setf (pref sockaddr :sockaddr_in.sin_port)
 	    (if remote-port (port-as-inet-port remote-port "udp") 0))
-      (%stack-block ((bufptr size))
+            (%stack-block ((bufptr size))
         (%copy-ivector-to-ptr msg offset bufptr 0 size)
 	(socket-call socket "sendto"
 	  (with-eagain fd :output
 	    (c_sendto fd bufptr size 0 sockaddr (record-length :sockaddr_in))))))))
 
-(defmethod receive-from ((socket udp-socket) size &key buffer extract offset)
+(defmethod receive-from ((socket udp-socket) size &key buffer extract offset (encoding #.(lookup-character-encoding :iso-8859-1)))
   "Read a UDP packet from a socket. If no packets are available, wait for
-a packet to arrive. Returns four values:
+  a packet to arrive. 
+  Returns four values:
   The buffer with the data
   The number of bytes read
   The 32-bit unsigned IP address of the sender of the data
@@ -1002,17 +1004,21 @@ a packet to arrive. Returns four values:
       (setf (pref sockaddr :sockaddr_in.sin_port) 0)
       (setf (pref namelen :signed) (record-length :sockaddr_in))
       (%stack-block ((bufptr size))
-	(setq ret-size (socket-call socket "recvfrom"
-			 (with-eagain fd :input
-			   (c_recvfrom fd bufptr size 0 sockaddr namelen))))
-	(unless vec
-	  (setq vec (make-array ret-size
-				:element-type
-				(ecase (socket-format socket)
-				  ((:text) 'base-char)
-				  ((:binary :bivalent) '(unsigned-byte 8))))
-		vec-offset 0))
-	(%copy-ptr-to-ivector bufptr 0 vec vec-offset ret-size))
+        (setq ret-size (socket-call socket "recvfrom"
+                                    (with-eagain fd :input
+                                      (c_recvfrom fd bufptr size 0 sockaddr namelen))))
+        (unless vec
+          (setq vec (make-array ret-size
+                                :element-type
+                                (ecase (socket-format socket)
+                                  ((:text) 'base-char)
+                                  ((:binary :bivalent) '(unsigned-byte 8))))
+                vec-offset 0))
+        
+        (ecase (socket-format socket)
+          ((:text) (funcall (character-encoding-memory-decode-function encoding) bufptr ret-size 0 vec))
+          ((:binary (%copy-ptr-to-ivector bufptr 0 vec vec-offset ret-size)))))
+      
       (values (cond ((null buffer)
 		     vec)
 		    ((or (not extract)
