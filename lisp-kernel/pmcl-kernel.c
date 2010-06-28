@@ -2284,23 +2284,35 @@ allocate_static_conses(natural n)
   lisp_global(STATIC_CONSES)=prev;
   lisp_global(FREE_STATIC_CONSES)+=(n<<fixnumshift);
 }
+
+#ifdef X86
+#define USE_GC_NOTIFICATION 1
+#else
+#undef USE_GC_NOTIFICATION
+#endif
+
 void
 ensure_static_conses(ExceptionInformation *xp, TCR *tcr, natural nconses)
 {
   area *a = active_dynamic_area;
   natural nbytes = nconses>>dnode_shift, have;
   BytePtr p = a->high-nbytes;
+#ifdef USE_GC_NOTIFICATION
   Boolean crossed_notify_threshold = false;
   LispObj before_shrink, after_shrink;
+#endif
 
   if (p < a->active) {
     untenure_from_area(tenured_area);
     gc_from_xp(xp, 0L);
+#ifdef USE_GC_NOTIFICATION
     did_gc_notification_since_last_full_gc = false;
+#endif
   }
 
   have = unbox_fixnum(lisp_global(FREE_STATIC_CONSES));
   if (have < nconses) {
+#ifdef USE_GC_NOTIFICATION
     before_shrink = a->high-a->active;
     if (before_shrink>nbytes) {
       shrink_dynamic_area(nbytes);
@@ -2310,11 +2322,14 @@ ensure_static_conses(ExceptionInformation *xp, TCR *tcr, natural nconses)
         crossed_notify_threshold = true;
       }
     }
+#endif
     allocate_static_conses(nconses);
     tcr->bytes_allocated += nbytes;
   }
+#ifdef USE_GC_NOTIFICATION
   if (crossed_notify_threshold && !did_gc_notification_since_last_full_gc) {
     callback_for_gc_notification(xp,tcr);
   }
+#endif
 }
       
