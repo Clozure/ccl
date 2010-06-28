@@ -469,7 +469,7 @@
                                      :write-p (not (zerop code)))
                      ()
                      frame-ptr)))
-          ((= signal #$SIGTRAP)
+          ((= signal #-win32-target #$SIGTRAP #+win32-target 5)
            (when (= code 0)
              (let* ((hook *pending-gc-notification-hook*))
                (declare (special *pending-gc-notification-hook*))
