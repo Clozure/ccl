@@ -130,7 +130,7 @@
 
 
 (defun line-length (stream)
-  (or (stream-line-length stream) 80))
+  (or (stream-line-length stream) *default-right-margin*))
 
 (defun write-byte (byte stream)
   (declare (optimize (speed 3) (space 0)))

@@ -1895,6 +1895,16 @@
               (slot-value modeline 'pane) pane))
       tv)))
 
+(defmethod hemlock-view-size ((view hi:hemlock-view))
+  (let* ((pane (hi::hemlock-view-pane view))
+         (bounds (#/bounds (#/contentView (text-pane-scroll-view pane))))
+         (tv (text-pane-text-view pane))
+         (char-width (text-view-char-width tv))
+         (line-height (text-view-line-height tv)))
+    (values (floor (ns:ns-rect-width bounds) char-width)
+            (floor (ns:ns-rect-height bounds) line-height))))
+
+
 (defmethod hemlock-ext:change-active-pane ((view hi:hemlock-view) new-pane)
   #+debug (log-debug "change active pane to ~s" new-pane)
   (let* ((pane (hi::hemlock-view-pane view))

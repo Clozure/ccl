@@ -339,7 +339,7 @@
 (defmethod stream-line-length ((stream stream))
   "This is meant to be shadowed by particular kinds of streams,
    esp those associated with windows."
-  80)
+  *default-right-margin*)
 
 (defmethod interactive-stream-p ((x t))
   (report-bad-arg x 'stream))
@@ -3835,6 +3835,7 @@
            (synonym-method stream-write-byte b)
            (synonym-method stream-clear-output)
            (synonym-method stream-line-column)
+           (synonym-method stream-line-length)
            (synonym-method stream-set-column new)
            (synonym-method stream-advance-to-column new)
            (synonym-method stream-start-line-p)
@@ -3928,6 +3929,7 @@
   (two-way-output-method stream-write-byte b)
   (two-way-output-method stream-clear-output)
   (two-way-output-method stream-line-column)
+  (two-way-output-method stream-line-length)
   (two-way-output-method stream-set-column new)
   (two-way-output-method stream-advance-to-column new)
   (two-way-output-method stream-start-line-p)

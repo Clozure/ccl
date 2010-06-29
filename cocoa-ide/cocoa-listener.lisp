@@ -239,9 +239,8 @@
       (setf (fill-pointer data) 0))))
 
 (defmethod ccl:stream-line-length ((stream cocoa-listener-output-stream))
-  ;; TODO: ** compute length from window size **
-  80)
-
+  (with-slots (hemlock-view) stream
+    (values (hemlock-view-size hemlock-view))))
 
 (defloadvar *cocoa-listener-count* 0)
 
