@@ -99,6 +99,8 @@ raise_thread_interrupt(TCR *target)
       (target->unwinding != 0) ||
       (!((where < (pc)lisp_global(HEAP_END)) &&
          (where >= (pc)lisp_global(HEAP_START))) &&
+       (!((where < (pc)(managed_static_area->active)) &&
+	 (where >= (pc)(readonly_area->low)))) &&
        !((where < spentry_end) && (where >= spentry_start)) &&
        !((where < subprims_end) && (where >= subprims_start)) &&
        !((where < (pc) 0x16000) &&
@@ -1946,7 +1948,11 @@ pc_luser_restore_windows_context(CONTEXT *pcontext, TCR *tcr, pc where)
 #ifdef WIN_64
     *pcontext = * (CONTEXT *)(pcontext->Rcx);
 #else
-    *pcontext = * (CONTEXT *)(pcontext->Ecx);
+    if (where == restore_windows_context_start) {
+      *pcontext = * (CONTEXT *)((pcontext->Esp)+4);
+    } else {
+      *pcontext = * (CONTEXT *)(pcontext->Ecx);
+    }
 #endif
   } else {
     /* Most of the context has already been restored; fix %rcx
@@ -1969,6 +1975,11 @@ pc_luser_restore_windows_context(CONTEXT *pcontext, TCR *tcr, pc where)
 #endif
   }
   tcr->pending_exception_context = NULL;
+  /* We basically never return from an exception unless we
+     were executing lisp code when the exception returned.
+     If that ever changes, we need to know what valence
+     would have been restored here.*/
+  tcr->valence = TCR_STATE_LISP;
 }
 
 Boolean
@@ -2015,6 +2026,8 @@ suspend_tcr(TCR *tcr)
            point. */
         if (!((where < (pc)lisp_global(HEAP_END)) &&
               (where >= (pc)lisp_global(HEAP_START))) &&
+	    (!((where < (pc)(managed_static_area->active)) &&
+	      (where >= (pc)(readonly_area->low)))) &&
             !((where < spentry_end) && (where >= spentry_start)) &&
             !((where < subprims_end) && (where >= subprims_start)) &&
             !((where < (pc) 0x16000) &&
