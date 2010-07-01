@@ -370,7 +370,8 @@ To avoid deallocation, use RETAINING-OBJECTS"))
                    :reader window-resizable-p)
       (closable-p :initarg :closable-p :initform t :reader window-closable-p)
       (level :initarg :window-level :accessor window-level
-             :initform (dcc (#_CGWindowLevelForKey #$kCGNormalWindowLevelKey)))
+             :initform #+cocotron 0
+	               #-cocotron (dcc (#_CGWindowLevelForKey #$kCGNormalWindowLevelKey)))
       (hidden :initarg :hidden :reader window-hidden :initform nil)
       (window-needs-display-on-show :initform t)
       (optimized :initarg :optimized :initform t) ; Set to NIL if you anticipate overlapping views in this window
