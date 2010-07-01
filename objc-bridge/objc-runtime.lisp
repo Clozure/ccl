@@ -2900,7 +2900,7 @@ argument lisp string."
               (declare (ignorable ,_cmd))
               ,@decls
               (rlet ((,super :objc_super
-                       #+(or apple-objc coctron-objc) :receiver #+gnu-objc :self ,self
+                       #+(or apple-objc cocotron-objc) :receiver #+gnu-objc :self ,self
                        #+(or apple-objc-2.0 cocotron-objc) :super_class #-(or apple-objc-2.0 cocotron-objc) :class
                        ,@(if class-p
                              #+(or apple-objc-2.0 cocotron-objc)
