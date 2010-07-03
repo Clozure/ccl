@@ -162,7 +162,7 @@
   (beq+ cr0 @set-16)
   (b @bad)
   @8
-  (cmpwi cr0 imm0 ppc32::subtag-s8-vector)
+  (cmpwi cr0 imm2 ppc32::subtag-s8-vector)
   (la imm3 3 imm3)
   (srwi imm3 imm3 2)
   (beq cr2 @char8)                      ; ppc32::max-8-bit-ivector-subtag
