@@ -1326,7 +1326,7 @@
 (defun disassembly-line-n (f n)
   (if (< (decf n) 0)
     (values nil "Disassembly:" :comment)
-    (let ((line (svref (disasm-info f) n)))
+    (let ((line (aref (disasm-info f) n)))
       (if (consp line)
         (destructuring-bind (object label instr) line
           (values object (cons label instr) :static))
@@ -1334,7 +1334,7 @@
 
 (defun disassembly-line-n-inspector (f n)
   (unless (< (decf n) 0)
-    (let ((line (svref (disasm-info f) n)))
+    (let ((line (aref (disasm-info f) n)))
       (and (consp line)
 	   (car line)
 	   (make-inspector (car line))))))
@@ -1342,7 +1342,7 @@
 (defun disassembly-line-n-strings (f n)
   (if (< (decf n) 0)
     (values "Disassembly:" nil)
-    (let ((line (svref (disasm-info f) n)))
+    (let ((line (aref (disasm-info f) n)))
       (if (consp line)
         (destructuring-bind (object label instr) line
           (declare (ignore object))
