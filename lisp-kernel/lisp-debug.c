@@ -299,7 +299,12 @@ describe_memfault(ExceptionInformation *xp, siginfo_t *info)
 	  dsisr & (1<<25) ? "Write" : "Read",
 	  dsisr & (1<<27) ? "protected" : "unmapped",
 	  addr);
-#elif defined(WINDOWS)
+#elif defined(WINDOWS) || defined(FREEBSD)
+  /*
+   * It's not surprising that Windows doesn't have this signal stuff.
+   * It is somewhat surprising that FreeBSD 6.x lacks the si_code
+   * constants.  (Subsequent FreeBSD versions define them, though.)
+   */
 #else
   fprintf(dbgout, "received signal %d; faulting address: %p\n",
 	  info->si_signo, info->si_addr);
