@@ -172,7 +172,8 @@
 (cl:defstruct (pprint-dispatch-table (:conc-name nil) (:copier nil))
   (conses-with-cars (make-hash-table :test #'eq) :type hash-table)
   (structures (make-hash-table :test #'eq) :type (or null hash-table))
-  (others nil :type list))
+  (others nil :type list)
+  (commit-hook nil))
 
 ;The list and the hash-tables contain entries of the
 ;following form.  When stored in the hash tables, the test entry is 
@@ -196,7 +197,8 @@
     (make-pprint-dispatch-table
       :conses-with-cars new-conses-with-cars
       :structures new-structures
-      :others (copy-list (others table)))))
+      :others (copy-list (others table))
+      :commit-hook (commit-hook table))))
 
 (defun set-pprint-dispatch (type-specifier function
 			    &optional (priority 0) (table *print-pprint-dispatch*))
@@ -925,18 +927,20 @@
 			  (%i> (xp-line-no xp) (section-start-line xp))
 			  (maybe-too-large xp qleft queue linel)))
 	       (T T)) ;(:linear :unconditional :mandatory) 
-	 (output-line xp qleft)
-	 (setup-for-next-line xp qleft))))
+	 (output-line-and-setup-for-next xp qleft))))
     (setf (xp-qleft xp) (setq qleft (qnext qleft))))
   (when flush-out? (flush xp)))))
 
 
 (defun flush (xp)
-  (let ((ostream (xp-out-stream xp)))
+  (let ((ostream (xp-out-stream xp))
+        (len (xp-buffer-ptr xp)))
+    (when (commit-hook *print-pprint-dispatch*)
+      (funcall (commit-hook *print-pprint-dispatch*) xp len 0))
     (when ostream      
-      (write-string (xp-buffer xp) ostream :start 0 :end (xp-buffer-ptr xp)))
-    (incf (xp-buffer-offset xp) (xp-buffer-ptr xp))
-    (incf (xp-charpos xp) (xp-buffer-ptr xp))
+      (write-string (xp-buffer xp) ostream :start 0 :end len))
+    (incf (xp-buffer-offset xp) len)
+    (incf (xp-charpos xp) len)
     (setf (xp-buffer-ptr xp) 0)))
 
 
@@ -953,59 +957,54 @@
 
 ;This prints out a line of stuff.
 
-(defun output-line (xp Qentry)
-  (flet ((find-not-char-reverse (buffer out-point)
-	   (declare (type simple-base-string buffer) (type fixnum out-point))
-	   (do ((i (%i- out-point 1) (%i- i 1)))
-	       ((%i< i 0) nil)
-	     (when (or (neq (schar buffer i) #\Space)
-		       ;; Don't match possibly-quoted space ("possibly" because the #\\ itself might be 
-		       ;; quoted; don't bother checking for that, no big harm leaving the space even if
-		       ;; not totally necessary).
-		       (and (%i< 0 i) (eq (schar buffer (%i- i 1)) #\\)))
-	       (return i)))))
-    (let* ((queue (xp-queue xp))
-           (out-point (BP<-TP xp (xpq-pos queue Qentry)))
-	   (last-non-blank (find-not-char-reverse (xp-buffer xp) out-point))
-	   (end (cond ((memq (xpq-kind queue Qentry) '(:fresh :unconditional)) out-point)
-		      (last-non-blank (%i+ 1 last-non-blank))
-		      (T 0)))
-	   (line-limit-exit (and (xp-line-limit xp) (not (%i> (xp-line-limit xp) (xp-line-no xp))))))
-      (when line-limit-exit
-        (setf (xp-buffer-ptr xp) end)          ;truncate pending output.
-        (write-string+++ " .." xp 0 3)
-        (reverse-string-in-place (xp-suffix xp) 0 (suffix-ptr xp))
-        (write-string+++ (xp-suffix xp) xp 0 (suffix-ptr xp))
-        (setf (xp-qleft xp) (qnext (xp-qright xp)))
-        ;(setq *abbreviation-happened* '*print-lines*)
-        (throw 'line-limit-abbreviation-exit T))
-      (setf (xp-line-no xp)(%i+ 1 (xp-line-no xp)))
-      (let ((bstream (xp-out-stream xp)))
-        (when bstream
-          (write-string (xp-buffer xp) bstream :start 0 :end end)
-          (stream-write-char bstream #\newline))))))
-
-(defun setup-for-next-line (xp Qentry)
+(defun output-line-and-setup-for-next (xp Qentry)
   (let* ((queue (xp-queue xp))
          (out-point (BP<-TP xp (xpq-pos queue Qentry)))
-	 (prefix-end
-          (cond ((memq (xpq-kind queue Qentry) '(:unconditional :fresh))
-                 (non-blank-prefix-ptr xp))
-                (T (prefix-ptr xp))))
-	 (change (- prefix-end out-point)))
-    (declare (fixnum out-point prefix-end change))
+         (unconditional-p (memq (xpq-kind queue Qentry) '(:fresh :unconditional)))
+         (end (if unconditional-p
+                out-point
+                (let ((buffer (xp-buffer xp)))
+                  (declare (type simple-base-string buffer))
+                  (do ((i (%i- out-point 1) (%i- i 1)))
+                      ((%i< i 0) 0)
+                    (when (or (neq (schar buffer i) #\Space)
+                              ;; Don't match possibly-quoted space ("possibly" because the #\\ itself might be 
+                              ;; quoted; don't bother checking for that, no big harm leaving the space even if
+                              ;; not totally necessary).
+                              (and (%i< 0 i) (eq (schar buffer (%i- i 1)) #\\)))
+                      (return (%i+ i 1)))))))
+         (prefix-end
+          (if unconditional-p (non-blank-prefix-ptr xp) (prefix-ptr xp)))
+         (old-ptr (xp-buffer-ptr xp))
+         (new-ptr (%i+ old-ptr (%i- prefix-end out-point)))
+         (line-limit-exit (and (xp-line-limit xp) (not (%i> (xp-line-limit xp) (xp-line-no xp))))))
+    (when line-limit-exit
+      (setf (xp-buffer-ptr xp) end)          ;truncate pending output.
+      (write-string+++ " .." xp 0 3)
+      (reverse-string-in-place (xp-suffix xp) 0 (suffix-ptr xp))
+      (write-string+++ (xp-suffix xp) xp 0 (suffix-ptr xp))
+      (setf (xp-qleft xp) (qnext (xp-qright xp)))
+      ;(setq *abbreviation-happened* '*print-lines*)
+      (throw 'line-limit-abbreviation-exit T))
+    (setf (xp-line-no xp)(%i+ 1 (xp-line-no xp)))
+    (when (commit-hook *print-pprint-dispatch*)
+      (funcall (commit-hook *print-pprint-dispatch*) xp out-point prefix-end))
+    (let ((bstream (xp-out-stream xp)))
+      (when bstream
+        (write-string (xp-buffer xp) bstream :start 0 :end end)
+        (stream-write-char bstream #\newline)))
     (setf (xp-charpos xp) 0)
-    (when (plusp change)                  ;almost never happens
-      (xp-check-size (xp-buffer xp) (%i+ (xp-buffer-ptr xp) change)
-                     #.buffer-min-size #.buffer-entry-size))
+    (when (%i> new-ptr old-ptr)                  ;almost never happens
+      (xp-check-size (xp-buffer xp) new-ptr #.buffer-min-size #.buffer-entry-size))
+    (setf (xp-buffer-ptr xp) new-ptr)
+    (decf (xp-buffer-offset xp) (- prefix-end out-point))
     (let ((buffer (xp-buffer xp)))
-      (replace buffer buffer :start1 prefix-end
-	       :start2 out-point :end2 (xp-buffer-ptr xp))
+      (replace buffer buffer :start1 prefix-end :start2 out-point :end2 old-ptr)
       (replace buffer (xp-prefix xp) :end2 prefix-end)
-      (setf (xp-buffer-ptr xp) (%i+ (xp-buffer-ptr xp) change))
-      (setf (xp-buffer-offset xp) (%i- (xp-buffer-offset xp) change))
-      (when (not (memq (xpq-kind queue Qentry) '(:unconditional :fresh)))
+      (unless unconditional-p
         (setf (section-start-line xp) (xp-line-no xp))))))
+
+
 
 (defun set-indentation-prefix (xp new-position)
   (let ((new-ind (max (non-blank-prefix-ptr xp) new-position)))
@@ -1289,6 +1288,59 @@
 
 (defmethod stream-finish-output ((xp xp-structure))
   (attempt-to-output xp t t))
+
+
+;; pretty-print FORM into STREAM, recording file positions for objects (actually conses only) in MAP.
+;; if ADD-NEW is false, MAP should be pre-populated and only those objects with entries in MAP
+;; will be tracked.
+;; The hair here comes from the fact that the pretty printer backtracks to insert newlines.
+(defun pprint-recording-positions (form stream &key map (add-new t))
+  (when (null map)
+    (assert add-new () ":MAP required")
+    (setq map (make-hash-table :test #'eq)))
+  (let* ((old-table *print-pprint-dispatch*)
+         (rec-pending nil)
+         (map (require-type map 'hash-table)))
+    (flet ((rec-pprint (xp object)
+             #+gz (assert (or (null rec-pending)
+                              (<= (caar rec-pending) (xp-buffer-ptr xp))))
+             (let ((real-printer (get-printer object old-table)))
+               (when real-printer
+                 (push (list* (xp-buffer-ptr xp) t object) rec-pending)
+                 (funcall real-printer xp object)
+                 (push (list* (xp-buffer-ptr xp) nil object) rec-pending))))
+           (rec-commit (xp commited inserted)
+             (loop with change = (- inserted commited)
+               as last = nil then pending
+               as pending = rec-pending then (cdr pending) while pending
+               do (when (<= (caar pending) commited) ;; commit the rest.
+                    (if last
+                      (setf (cdr last) nil)
+                      (setf rec-pending nil))
+                    (loop with start = (stream-position (xp-out-stream xp))
+                      for (offset open-p . object) in pending
+                      as cell = (or (gethash object map)
+                                    (and add-new
+                                         (setf (gethash object map) (cons nil nil))))
+                      when cell
+                      do (if open-p
+                           (setf (car cell) (+ start offset))
+                           (setf (cdr cell) (+ start offset))))
+                    (return nil))
+               do (incf (caar pending) change))))
+      (let* ((*print-pretty* t)
+             (*print-circle* nil)
+             (*print-length* nil)
+             (*print-level* nil)
+             (*print-lines* nil)
+             (*print-miser-width* nil)
+             (*read-suppress* nil)
+             (*print-pprint-dispatch* (make-pprint-dispatch-table :commit-hook #'rec-commit)))
+        (set-pprint-dispatch 'cons #'rec-pprint)
+        (prin1 form stream)
+        #+gz (assert (null rec-pending))))
+    map))
+
 
 
 ;           ---- FUNCTIONAL INTERFACE TO DYNAMIC FORMATTING ----
