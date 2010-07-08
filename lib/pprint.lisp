@@ -935,7 +935,7 @@
 (defun flush (xp)
   (let ((ostream (xp-out-stream xp))
         (len (xp-buffer-ptr xp)))
-    (when (commit-hook *print-pprint-dispatch*)
+    (when (and *print-pprint-dispatch* (commit-hook *print-pprint-dispatch*))
       (funcall (commit-hook *print-pprint-dispatch*) xp len 0))
     (when ostream      
       (write-string (xp-buffer xp) ostream :start 0 :end len))
@@ -987,7 +987,7 @@
       ;(setq *abbreviation-happened* '*print-lines*)
       (throw 'line-limit-abbreviation-exit T))
     (setf (xp-line-no xp)(%i+ 1 (xp-line-no xp)))
-    (when (commit-hook *print-pprint-dispatch*)
+    (when (and *print-pprint-dispatch* (commit-hook *print-pprint-dispatch*))
       (funcall (commit-hook *print-pprint-dispatch*) xp out-point prefix-end))
     (let ((bstream (xp-out-stream xp)))
       (when bstream
