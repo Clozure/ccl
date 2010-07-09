@@ -3368,6 +3368,8 @@ catch_exception_raise(mach_port_t exception_port,
         
       case EXC_ARITHMETIC:
         signum = SIGFPE;
+	if (code == EXC_I386_DIV)
+	  code = FPE_INTDIV;
         break;
         
       default:
