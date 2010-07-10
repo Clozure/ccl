@@ -23,6 +23,7 @@
 #define TCR_FLAG_BIT_PENDING_EXCEPTION (fixnumshift+5)
 #define TCR_FLAG_BIT_FOREIGN_EXCEPTION (fixnumshift+6)
 #define TCR_FLAG_BIT_PENDING_SUSPEND (fixnumshift+7)
+#define TCR_FLAG_BIT_FOREIGN_FPE (fixnumshift+8)
 
 #define TCR_STATE_FOREIGN (1)
 #define TCR_STATE_LISP    (0)

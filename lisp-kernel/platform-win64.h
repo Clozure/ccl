@@ -38,7 +38,7 @@ typedef CONTEXT ExceptionInformation;
 #define xpPC(x) xpGPR(x,Iip)
 #define eflags_register(xp) xp->EFlags
 #define xpMXCSRptr(x) (DWORD *)(&(x->MxCsr))
-
+#define xpMXCSR(x) ((x)->MxCsr)
 
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV /* Also fake */
 #define IS_MAYBE_INT_TRAP(info,xp) \

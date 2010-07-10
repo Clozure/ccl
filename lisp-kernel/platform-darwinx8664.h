@@ -53,6 +53,7 @@ typedef ucontext_t ExceptionInformation;
 #define xpMMXvector(x) (&(UC_MCONTEXT(x)->__fs.__fpu_stmm0))
 /* Note that this yields only the lower half of the MMX reg on x8632 */
 #define xpMMXreg(x,n) *(natural *)&(xpMMXvector(x)[n])
+#define xpMXCSR(x) (UC_MCONTEXT(x)->__fs.__fpu_mxcsr)
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV /* Not really, but our Mach handler fakes that */
 #define IS_MAYBE_INT_TRAP(info,xp) ((UC_MCONTEXT(xp)->__es.__trapno == 0xd) && (((UC_MCONTEXT(xp)->__es.__err)&7)==2))
 #define IS_PAGE_FAULT(info,xp) (UC_MCONTEXT(xp)->__es.__trapno == 0xe)

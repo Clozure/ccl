@@ -3990,9 +3990,7 @@ LocalLabelPrefix`'ffcall:
         __(movq %rbp,rcontext(tcr.save_rbp))
 	__(movq $TCR_STATE_FOREIGN,rcontext(tcr.valence))
         __(movq rcontext(tcr.foreign_sp),%rsp)
-	__(stmxcsr rcontext(tcr.lisp_mxcsr))
 	__(emms)
-	__(ldmxcsr rcontext(tcr.foreign_mxcsr))
 	__(movq (%rsp),%rbp)
         __ifdef(`DARWIN_GS_HACK')
          /* At this point, %imm1=%rdx is live (contains
@@ -4069,11 +4067,18 @@ LocalLabelPrefix`'ffcall_call_end:
 	__(clr %temp0)
 	__(clr %fn)
 	__(pxor %fpzero,%fpzero)
+
+	/* If we got a floating-point exception during the ff-call,
+	   our handler will have set a flag, preserved lisp's MXCSR,
+	   and resumed execution with fp exceptions masked. */
+	__(btrq $TCR_FLAG_BIT_FOREIGN_FPE,rcontext(tcr.flags))
+	__(jnc 1f)
         __(cmpb $0,C(bogus_fp_exceptions)(%rip))
         __(je 0f)
         __(movl %arg_x_l,rcontext(tcr.ffi_exception))
         __(jmp 1f)
 0:      __(stmxcsr rcontext(tcr.ffi_exception))
+	__(ldmxcsr rcontext(tcr.lisp_mxcsr)) /* preserved by the handler */
 1:      __(movq rcontext(tcr.save_vsp),%rsp)
         __(movq rcontext(tcr.save_rbp),%rbp)
 	__(movq $TCR_STATE_LISP,rcontext(tcr.valence))
@@ -4089,7 +4094,6 @@ LocalLabelPrefix`'ffcall_call_end:
 	__(pop %arg_x)
 	__(pop %temp2)
 	__(pop %temp1)
-	__(ldmxcsr rcontext(tcr.lisp_mxcsr))
 	__(check_pending_interrupt(%temp0))
 	__(pop %temp0)
         __(leave)
@@ -4210,9 +4214,7 @@ LocalLabelPrefix`'ffcall_return_registers:
         __(movq %rbp,rcontext(tcr.save_rbp))
 	__(movq $TCR_STATE_FOREIGN,rcontext(tcr.valence))
         __(movq rcontext(tcr.foreign_sp),%rsp)
-	__(stmxcsr rcontext(tcr.lisp_mxcsr))
 	__(emms)
-	__(ldmxcsr rcontext(tcr.foreign_mxcsr))
 	__(movq (%rsp),%rbp)
         __ifdef(`DARWIN_GS_HACK')
          /* At this point, %imm1=%rdx is live (contains
@@ -4289,11 +4291,15 @@ LocalLabelPrefix`'ffcall_return_registers_call_end:
 	__(clr %temp0)
 	__(clr %fn)
 	__(pxor %fpzero,%fpzero)
+	/* Check for fp exceptions as in .SPffcall, above. */
+	__(btrq $TCR_FLAG_BIT_FOREIGN_FPE,rcontext(tcr.flags))
+	__(jnc 1f)
         __(cmpb $0,C(bogus_fp_exceptions)(%rip))
         __(je 0f)
         __(movl %arg_x_l,rcontext(tcr.ffi_exception))
         __(jmp 1f)
 0:      __(stmxcsr rcontext(tcr.ffi_exception))
+	__(ldmxcsr rcontext(tcr.lisp_mxcsr))
 1:      __(movq rcontext(tcr.save_vsp),%rsp)
         __(movq rcontext(tcr.save_rbp),%rbp)
 	__(movq $TCR_STATE_LISP,rcontext(tcr.valence))
@@ -4309,7 +4315,6 @@ LocalLabelPrefix`'ffcall_return_registers_call_end:
 	__(pop %arg_x)
 	__(pop %temp2)
 	__(pop %temp1)
-	__(ldmxcsr rcontext(tcr.lisp_mxcsr))
 	__(check_pending_interrupt(%temp0))
 	__(pop %temp0)
         __(leave)

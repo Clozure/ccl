@@ -941,6 +941,36 @@ handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valenc
 }
 
 Boolean
+handle_foreign_fpe(TCR *tcr, ExceptionInformation *xp, siginfo_t *info)
+{
+#ifdef X8632
+  return false;
+#else
+  int code;
+
+#ifdef WINDOWS
+  if (info->ExceptionCode == EXCEPTION_INT_DIVIDE_BY_ZERO)
+    return false;
+#else
+  if (info->si_code == FPE_INTDIV)
+    return false;
+#endif
+
+  /*
+   * Cooperate with .SPffcall to avoid saving and restoring the MXCSR
+   * around every foreign call.
+   */
+    if (! (tcr->flags & (1<<TCR_FLAG_BIT_FOREIGN_FPE))) {
+      tcr->flags |= (1<<TCR_FLAG_BIT_FOREIGN_FPE);
+      tcr->lisp_mxcsr = xpMXCSR(xp) & ~MXCSR_STATUS_MASK;
+    }
+    xpMXCSR(xp) &= ~MXCSR_STATUS_MASK;
+    xpMXCSR(xp) |= MXCSR_CONTROL_MASK;
+    return true;
+#endif
+}
+
+Boolean
 handle_floating_point_exception(TCR *tcr, ExceptionInformation *xp, siginfo_t *info)
 {
   int code,skip;
@@ -954,7 +984,7 @@ handle_floating_point_exception(TCR *tcr, ExceptionInformation *xp, siginfo_t *i
 #endif  
 
   if ((fulltag_of(cmain) == fulltag_misc) &&
-      (header_subtag(header_of(cmain)) == subtag_macptr)) {
+	     (header_subtag(header_of(cmain)) == subtag_macptr)) {
     xcf = create_exception_callback_frame(xp, tcr);
     skip = callback_to_lisp(tcr, cmain, xp, xcf, SIGFPE, code, 0, 0);
     xpPC(xp) += skip;
@@ -1078,7 +1108,11 @@ handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TC
   pc program_counter = (pc)xpPC(context);
 
   if (old_valence != TCR_STATE_LISP) {
-    return false;
+    if (old_valence == TCR_STATE_FOREIGN && signum == SIGFPE) {
+      return handle_foreign_fpe(tcr, context, info);
+    } else {
+      return false;
+    }
   }
 
   switch (signum) {

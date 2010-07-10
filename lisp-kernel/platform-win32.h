@@ -38,7 +38,8 @@ typedef CONTEXT ExceptionInformation;
 #define eflags_register(xp) xp->EFlags
 #define xpFPRvector(x) ((natural *)(&(x->ExtendedRegisters[10*16])))
 #define xpMMXreg(x,n)  (*((u64_t *)(&(x->FloatSave.RegisterArea[10*(n)]))))
-#define xpMXCSRptr(x) (DWORD *)(&(x->ExtendedRegisters[24]))
+#define xpMXCSRptr(x) ((DWORD *)(&(x->ExtendedRegisters[24])))
+#define xpMXCSR(x) (*xpMXCSRptr(x))
 
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV /* Also fake */
 #define IS_MAYBE_INT_TRAP(info,xp) \

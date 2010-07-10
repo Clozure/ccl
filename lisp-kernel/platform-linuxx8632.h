@@ -37,6 +37,10 @@ typedef struct ucontext ExceptionInformation;
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
 #define xpPC(x) (xpGPR(x,Iip))
 #define xpMMXreg(x,n)  *((natural *)(&((x)->uc_mcontext.fpregs->_st[n])))
+/* You're supposed to look at a magic field in the struct _fpstate
+   to know if there is sse2 state present; we only run on systems
+   with sse2, so we'll assume it's always there. */
+#define xpMXCSR(xp) (((struct _fpstate *)((xp)->uc_mcontext.fpregs))->mxcsr)
 #define eflags_register(xp) xpGPR(xp,Iflags)
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV
 #define IS_MAYBE_INT_TRAP(info,xp) ((xpGPR(xp,REG_TRAPNO)==0xd)&&((xpGPR(xp,REG_ERR)&7)==2))
