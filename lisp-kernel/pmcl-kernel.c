@@ -447,10 +447,11 @@ Boolean
 commit_pages(void *start, size_t len)
 {
   if (len != 0) {
-    if (CommitMemory(start, len)) {
-      if (touch_all_pages(start, len)) {
-	return true;
-      }
+    if (!CommitMemory(start, len)) {
+      return false;
+    }
+    if (!touch_all_pages(start, len)) {
+      return false;
     }
   }
   return true;

@@ -1364,7 +1364,7 @@ gc(TCR *tcr, signed_natural param)
   LispObj
     pkg = 0,
     itabvec = 0;
-  BytePtr oldfree = a->active;
+  BytePtr oldfree = a->active, last_zeroed_addr;
   TCR *other_tcr;
   natural static_dnodes;
   natural weak_method = lisp_global(WEAK_GC_METHOD) >> fixnumshift;
@@ -1677,10 +1677,16 @@ gc(TCR *tcr, signed_natural param)
       tenure_to_area(to);
     }
 
-    zero_memory_range(a->active, oldfree);
 
     resize_dynamic_heap(a->active,
                         (GCephemeral_low == 0) ? lisp_heap_gc_threshold : 0);
+
+    if (oldfree < a->high) {
+      last_zeroed_addr = oldfree;
+    } else {
+      last_zeroed_addr = a->high;
+    }
+    zero_memory_range(a->active, last_zeroed_addr);
 
     /*
       If the EGC is enabled: If there's no room for the youngest
