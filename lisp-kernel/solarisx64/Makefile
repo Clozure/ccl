@@ -17,16 +17,11 @@
 VPATH = ..
 RM = /bin/rm
 AS = /usr/sfw/bin/gas
-# As of this writing, /usr/sfw/bin/gm4 is both more recent (1.4.2 vs 1.4)
-# and more buggy than /opt/sfw/bin/gm4, which is available on the 
-# "Solaris companion" disk.  Do you get the impression that the people
-# who put this stuff together aren't paying much attention ?
-# Marching forward: as of the OpenSolais 0805 (snv_86) release, there
-# doesn't seem to be any way of obtaining a non-broken GNU m4 from Sun.
-# I just downloaded the source to 1.4.11 and installed it in /usr/local/bin;
-# I didn't try blastwave.org or sunfreeware.com; there might be working
-# packages there
-M4 = /usr/local/bin/m4
+# In earlier OpenSolaris releases, the bundled GNU m4 didn't work to
+# build the lisp kernel.  In the 2009.06 release, /usr/bin/gm4 seems
+# to be adequate, but if m4 gives you any trouble, just download
+# the GNU m4 source from somewhere and use that.
+M4 = /usr/bin/gm4
 CC = /usr/sfw/bin/gcc
 ASFLAGS = --64 --divide
 M4FLAGS = -DSOLARIS -DX86 -DX8664
