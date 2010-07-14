@@ -37,7 +37,7 @@ typedef struct ucontext ExceptionInformation;
 #define eflags_register(xp) xpGPR(xp,Iflags)
 #define xpXMMregs(x)(&((x)->uc_mcontext.fpregs.fp_reg_set.fpchip_state.xmm[0]))
 #define xpMMXreg(x,n)*(natural *)(&(((struct fnsave_state *)(&(((x)->uc_mcontext.fpregs))))->f_st[n]))
-#define xmMXCSR(x) ((x)->uc_mcontext.fpregs.fp_reg_set.fpchip_state.xstatus)
+#define xmMXCSR(x) ((x)->uc_mcontext.fpregs.fp_reg_set.fpchip_state.mxcsr)
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV
 #define IS_MAYBE_INT_TRAP(info,xp) ((xpGPR(xp,TRAPNO)==0xd)&&((xpGPR(xp,ERR)&7)==2))
 #define IS_PAGE_FAULT(info,xp) (xpGPR(xp,TRAPNO)==0xe)
