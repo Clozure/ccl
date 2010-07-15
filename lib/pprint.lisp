@@ -1289,18 +1289,11 @@
 (defmethod stream-finish-output ((xp xp-structure))
   (attempt-to-output xp t t))
 
-
-;; pretty-print FORM into STREAM, recording file positions for objects (actually conses only) in MAP.
-;; if ADD-NEW is false, MAP should be pre-populated and only those objects with entries in MAP
-;; will be tracked.
-;; The hair here comes from the fact that the pretty printer backtracks to insert newlines.
-(defun pprint-recording-positions (form stream &key map (add-new t))
-  (when (null map)
-    (assert add-new () ":MAP required")
-    (setq map (make-hash-table :test #'eq)))
+(defun pprint-recording-positions (form stream recorder)
+  ;; The hair here comes from the fact that the pretty printer backtracks to insert newlines.
   (let* ((old-table *print-pprint-dispatch*)
          (rec-pending nil)
-         (map (require-type map 'hash-table)))
+         (record (require-type recorder 'function)))
     (flet ((rec-pprint (xp object)
              #+gz (assert (or (null rec-pending)
                               (<= (caar rec-pending) (xp-buffer-ptr xp))))
@@ -1318,14 +1311,8 @@
                       (setf (cdr last) nil)
                       (setf rec-pending nil))
                     (loop with start = (stream-position (xp-out-stream xp))
-                      for (offset open-p . object) in pending
-                      as cell = (or (gethash object map)
-                                    (and add-new
-                                         (setf (gethash object map) (cons nil nil))))
-                      when cell
-                      do (if open-p
-                           (setf (car cell) (+ start offset))
-                           (setf (cdr cell) (+ start offset))))
+                      for (offset open-p . object) in (nreverse pending)
+                      do (funcall record object open-p (+ start offset)))
                     (return nil))
                do (incf (caar pending) change))))
       (let* ((*print-pretty* t)
@@ -1337,9 +1324,9 @@
              (*read-suppress* nil)
              (*print-pprint-dispatch* (make-pprint-dispatch-table :commit-hook #'rec-commit)))
         (set-pprint-dispatch 'cons #'rec-pprint)
-        (prin1 form stream)
+        (write-1 form stream)
         #+gz (assert (null rec-pending))))
-    map))
+    form))
 
 
 
