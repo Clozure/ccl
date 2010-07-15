@@ -61,14 +61,6 @@
 
 (defvar *nx1-operators* (make-hash-table :size 300 :test #'eq))
 
-
-; The compiler can (generally) use temporary vectors for VARs.
-(defun nx-cons-var (name &optional (bits 0))
-  (%istruct 'var name bits nil nil nil nil 0 nil))
-
-
-
-
 (defvar *nx-lambdalist* (make-symbol "lambdalist"))
 (defvar *nx-nil* (list (make-symbol "nil")))
 (defvar *nx-t* (list (make-symbol "t")))
@@ -1471,6 +1463,9 @@ Or something. Right? ~s ~s" var varbits))
     (setf (afunc-all-vars p) *nx-all-vars*)
     (setf (afunc-vcells p) *nx1-vcells*)
     (setf (afunc-fcells p) *nx1-fcells*)
+    (when *nx-current-code-note*
+      (when (null q) ;; toplevel functions only
+        (nx-record-code-coverage-acode p)))
     (let* ((warnings (merge-compiler-warnings *nx-warnings*))
 	   (name *nx-cur-func-name*))        
       (dolist (inner *nx-inner-functions*)
