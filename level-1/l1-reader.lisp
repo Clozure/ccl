@@ -3083,6 +3083,13 @@ arg=char : read delimited list"
       (+ (ash start-pos 14) len)
       (cons start-pos end-pos))))
 
+(defun decode-file-range (range)
+  (when range
+    (if (consp range)
+      (values (car range) (cdr range))
+      (let ((start-pos (ash range -14)))
+        (values start-pos (+ start-pos (logand range #x3FFF)))))))
+
 (defun source-note-text (source-note &optional start end)
   (when source-note
     (let* ((source (source-note-source source-note))
