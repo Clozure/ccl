@@ -197,7 +197,7 @@
 (define-typed-foreign-struct-class ns::ns-fast-enumeration-state (:<NSF>ast<E>numeration<S>tate ns::ns-fast-enumeration-state-p ns::init-ns-fast-enumeration-state ns::make-ns-fast-enumeration-state ns::with-ns-fast-enumeration-state))
 
 ;;; NSAffineTransformStruct CGAffineTransform
-(define-typed-foreign-struct-class ns::ns-affine-transform-struct (:<NSA>ffine<T>ransform<S>truct ns::ns-affine-transform-struct-p ns::init-ns-affine-transform-struct ns::make-ns-affine-transform-struct ns::wint-ns-affine-transform-struct)
+(define-typed-foreign-struct-class ns::ns-affine-transform-struct (:<NSA>ffine<T>ransform<S>truct ns::ns-affine-transform-struct-p ns::init-ns-affine-transform-struct ns::make-ns-affine-transform-struct ns::with-ns-affine-transform-struct)
     (m11 ns::ns-affine-transform-struct-m11 :<NSA>ffine<T>ransform<S>truct.m11 wrap-cg-float)
     (m12 ns::ns-affine-transform-struct-m12 :<NSA>ffine<T>ransform<S>truct.m12 wrap-cg-float)
     (m21 ns::ns-affine-transform-struct-m21 :<NSA>ffine<T>ransform<S>truct.m21 wrap-cg-float)
