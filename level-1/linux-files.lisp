@@ -170,6 +170,42 @@ atomically decremented, or until a timeout expires."
   "Atomically increment the count of a given semaphore."
   (%signal-semaphore-ptr (semaphore-value s)))
 
+(defun %timed-wait-for-signal (signo seconds millis)
+  (let* ((status (ff-call
+                  (%kernel-import target::kernel-import-wait-for-signal)
+                  :int signo
+                  :unsigned seconds
+                  :unsigned millis
+                  :int)))
+    (values (eql status 0) status)))
+
+(defun wait-for-signal (s duration)
+  (or (%timed-wait-for-signal s 0 0)
+      (with-process-whostate ("signal wait")
+        (let* ((now (get-internal-real-time))
+               (stop (+ now (floor (* duration internal-time-units-per-second)))))
+          (multiple-value-bind (secs millis) (milliseconds duration)
+            (loop
+              (multiple-value-bind (success err)
+                  (progn
+                    (%timed-wait-for-signal s secs millis))
+                (when success
+                  (return t))
+                (if (or (eql err #$ETIMEDOUT)
+                        (>= (setq now (get-internal-real-time)) stop))
+                  (return nil)
+                  (unless (eql err #$EINTR)
+                    (error "Error waiting for signal ~d: ~a." s (%strerror err))))
+                (when (or (not (eql err #$EINTR))
+                          (>= (setq now (get-internal-real-time)) stop))
+                  (return nil))
+                (unless (zerop duration)
+                  (let* ((diff (- stop now)))
+                    (multiple-value-bind (remaining-seconds remaining-itus)
+                        (floor diff internal-time-units-per-second)
+                      (setq secs remaining-seconds
+                            millis (floor remaining-itus (/ internal-time-units-per-second 1000)))))))))))))
+  
 (defun %os-getcwd (buf noctets)
   ;; Return N < 0, if error
   ;;        N < noctets: success, string is of length N (octets).
