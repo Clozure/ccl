@@ -714,6 +714,7 @@
 ;;  decomp-acode can also be used separately for debugging.
 ;;
 (defmacro dbg-assert (form)
+  #-debug-code-notes (declare (ignore form))
   #+debug-code-notes `(assert ,form))
 
 (defvar *acode-right-margin* 120)
