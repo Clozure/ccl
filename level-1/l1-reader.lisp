@@ -2354,6 +2354,8 @@
       *keyword-package*
       (let* ((string (token.string token)))
         (or (%find-pkg string colonpos)
+            (subseq string 0 colonpos)
+            #+nomore
             (signal-reader-error stream "Reference to unknown package ~s." (subseq string 0 colonpos)))))
     *package*))
 
@@ -2459,7 +2461,7 @@
                   (%err-disp $XBADSYM)
                   (progn                  ; Muck with readtable case of extended token.
                     (%casify-token tb (unless (atom escapes) escapes))
-                    (let* ((pkg (or explicit-package *package*)))
+                    (let* ((pkg (if explicit-package (pkg-arg explicit-package) *package*)))
                       (if (or double-colon (eq pkg *keyword-package*))
                         (without-interrupts
                          (multiple-value-bind (symbol access internal-offset external-offset)
