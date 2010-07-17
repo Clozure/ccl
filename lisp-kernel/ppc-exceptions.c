@@ -2298,7 +2298,7 @@ thread_signal_setup()
   thread_kill_signal = SIG_KILL_THREAD;
 
   install_signal_handler(thread_suspend_signal, (void *) suspend_resume_handler, true);
-  install_signal_handler(thread_kill_signal, (void *)thread_kill_handler, tru);
+  install_signal_handler(thread_kill_signal, (void *)thread_kill_handler, true);
 }
 
 
