@@ -551,7 +551,8 @@
 
      process-input-wait
      process-output-wait
-					; termination
+     wait-for-signal
+                                        ; termination
      terminate-when-unreachable
      terminate
      drain-termination-queue
