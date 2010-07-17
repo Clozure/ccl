@@ -48,7 +48,7 @@ import_ptrs_start:
 	defimport(xFindSymbol)
 	defimport(allocate)
 	defimport(deallocate)
-	defimport(jvm_init)
+	defimport(wait_for_signal)
 	defimport(tcr_frame_ptr)
 	defimport(register_xmacptr_dispose_function)
 	defimport(open_debug_output)

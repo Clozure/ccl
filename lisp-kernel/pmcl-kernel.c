@@ -756,12 +756,22 @@ shrink_dynamic_area(natural delta)
   return true;
 }
 
+#ifndef WINDOWS
+natural user_signal_semaphores[NSIG];
+sigset_t user_signals_reserved;
+#endif
+
 
 #ifndef WINDOWS
 void
 user_signal_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 {
-  if (signum == SIGINT) {
+  SEMAPHORE s = (SEMAPHORE)user_signal_semaphores[signum];
+
+  if (s != 0) {
+    signal_semaphore(s);
+  }
+  else if (signum == SIGINT) {
     lisp_global(INTFLAG) = (((signum<<8) + 1) << fixnumshift);
   }
   else if (signum == SIGTERM) {
@@ -777,6 +787,7 @@ user_signal_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 
 #endif
 
+
 void
 register_user_signal_handler()
 {
@@ -787,12 +798,31 @@ register_user_signal_handler()
 
   SetConsoleCtrlHandler(ControlEventHandler,TRUE);
 #else
-  install_signal_handler(SIGINT, (void *)user_signal_handler);
-  install_signal_handler(SIGTERM, (void *)user_signal_handler);
+  install_signal_handler(SIGINT, (void *)user_signal_handler, false);
+  install_signal_handler(SIGTERM, (void *)user_signal_handler, false);
+  install_signal_handler(SIGQUIT, (void *)user_signal_handler, false);
 #endif
 }
 
-
+int
+wait_for_signal(int signo, int seconds, int milliseconds)
+{
+#ifdef WINDOWS
+  return EINVAL;
+#else
+  if ((signo <= 0) || (signo >= NSIG)) {
+    return EINVAL;
+  }
+  if (sigismember(&user_signals_reserved,signo)) {
+    return EINVAL;
+  }
+  if (user_signal_semaphores[signo] == 0) {
+    user_signal_semaphores[signo] = (natural)new_semaphore(0);
+    install_signal_handler(signo,(void *)user_signal_handler, false);
+  }
+  return wait_on_semaphore((void *)user_signal_semaphores[signo],seconds,milliseconds);
+#endif
+}
 
 BytePtr
 initial_stack_bottom()
@@ -2119,29 +2149,6 @@ set_errno(int val)
   return -1;
 }
 
-/* A horrible hack to allow us to initialize a JVM instance from lisp.
-   On Darwin, creating a JVM instance clobbers the thread's existing
-   Mach exception infrastructure, so we save and restore it here.
-*/
-
-typedef int (*jvm_initfunc)(void*,void*,void*);
-
-int
-jvm_init(jvm_initfunc f,void*arg0,void*arg1,void*arg2)
-{
-  int result = -1;
-  TCR *tcr = get_tcr(1);
-#ifdef DARWIN
-  extern kern_return_t tcr_establish_lisp_exception_port(TCR *);
-#endif
-  
-  result = f(arg0,arg1,arg2);
-#ifdef DARWIN
-  tcr_establish_lisp_exception_port(tcr);
-#endif
-  return result;
-}
-  
 
 
 

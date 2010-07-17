@@ -2208,7 +2208,7 @@ interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 
 
 void
-install_signal_handler(int signo, void *handler)
+install_signal_handler(int signo, void *handler, Boolean system)
 {
   struct sigaction sa;
   
@@ -2225,6 +2225,11 @@ install_signal_handler(int signo, void *handler)
     ;
 
   sigaction(signo, &sa, NULL);
+  if (system) {
+    extern sigset_t user_signals_reserved;
+    sigaddset(&user_signals_reserved, signo);
+  }
+
 }
 
 void
@@ -2243,17 +2248,17 @@ install_pmcl_exception_handlers()
     ;
   if (install_signal_handlers_for_exceptions) {
     extern int no_sigtrap;
-    install_signal_handler(SIGILL, (void *)signal_handler);
+    install_signal_handler(SIGILL, (void *)signal_handler, true);
     if (no_sigtrap != 1) {
-      install_signal_handler(SIGTRAP, (void *)signal_handler);
+      install_signal_handler(SIGTRAP, (void *)signal_handler, true);
     }
-    install_signal_handler(SIGBUS,  (void *)signal_handler);
-    install_signal_handler(SIGSEGV, (void *)signal_handler);
-    install_signal_handler(SIGFPE, (void *)signal_handler);
+    install_signal_handler(SIGBUS,  (void *)signal_handler, true);
+    install_signal_handler(SIGSEGV, (void *)signal_handler, true);
+    install_signal_handler(SIGFPE, (void *)signal_handler, true);
   }
   
   install_signal_handler(SIGNAL_FOR_PROCESS_INTERRUPT,
-			 (void *)interrupt_handler);
+			 (void *)interrupt_handler, true);
   signal(SIGPIPE, SIG_IGN);
 }
 
@@ -2292,8 +2297,8 @@ thread_signal_setup()
   thread_suspend_signal = SIG_SUSPEND_THREAD;
   thread_kill_signal = SIG_KILL_THREAD;
 
-  install_signal_handler(thread_suspend_signal, (void *) suspend_resume_handler);
-  install_signal_handler(thread_kill_signal, (void *)thread_kill_handler);
+  install_signal_handler(thread_suspend_signal, (void *) suspend_resume_handler, true);
+  install_signal_handler(thread_kill_signal, (void *)thread_kill_handler, tru);
 }
 
 

@@ -1859,7 +1859,7 @@ altstack_interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *c
 
 #ifndef WINDOWS
 void
-install_signal_handler(int signo, void * handler)
+install_signal_handler(int signo, void * handler, Boolean system)
 {
   struct sigaction sa;
   
@@ -1877,6 +1877,10 @@ install_signal_handler(int signo, void * handler)
     | SA_SIGINFO;
 
   sigaction(signo, &sa, NULL);
+  if (system) {
+    extern sigset_t user_signals_reserved;
+    sigaddset(&user_signals_reserved, signo);
+  }
 }
 #endif
 
@@ -2092,11 +2096,11 @@ install_pmcl_exception_handlers()
     arbstack_signal_handler;
 #endif
   ;
-  install_signal_handler(SIGILL, handler);
+  install_signal_handler(SIGILL, handler, true);
   
-  install_signal_handler(SIGBUS, handler);
-  install_signal_handler(SIGSEGV,handler);
-  install_signal_handler(SIGFPE, handler);
+  install_signal_handler(SIGBUS, handler, true);
+  install_signal_handler(SIGSEGV,handler, true);
+  install_signal_handler(SIGFPE, handler, true);
 #endif
   
   install_signal_handler(SIGNAL_FOR_PROCESS_INTERRUPT,
@@ -2105,7 +2109,7 @@ install_pmcl_exception_handlers()
 #else
                          arbstack_interrupt_handler
 #endif
-);
+                         ,true);
   signal(SIGPIPE, SIG_IGN);
 }
 #endif
@@ -2299,8 +2303,8 @@ thread_signal_setup()
   thread_suspend_signal = SIG_SUSPEND_THREAD;
   thread_kill_signal = SIG_KILL_THREAD;
 
-  install_signal_handler(thread_suspend_signal, (void *)SUSPEND_RESUME_HANDLER);
-  install_signal_handler(thread_kill_signal, (void *)THREAD_KILL_HANDLER);
+  install_signal_handler(thread_suspend_signal, (void *)SUSPEND_RESUME_HANDLER, true);
+  install_signal_handler(thread_kill_signal, (void *)THREAD_KILL_HANDLER, true);
 }
 #endif
 
