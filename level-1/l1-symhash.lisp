@@ -18,7 +18,7 @@
 (in-package "CCL")
 
 (declaim (special %all-packages%))
-(declaim (list %all-package%))
+(declaim (list %all-packages%))
 (declaim (type package *package*))
 
 
