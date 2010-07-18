@@ -1829,23 +1829,26 @@ to open."
       (append ll '(&allow-other-keys)))))
 
 (defmacro defmethod (name &rest args &environment env)
-  (multiple-value-bind (function-form specializers-form qualifiers lambda-list documentation specializers)
-      (parse-defmethod name args env)
-    `(progn
-       (eval-when (:compile-toplevel)
-         (record-function-info ',(maybe-setf-function-name name)
-                               ',(multiple-value-bind (bits keyvect) (encode-lambda-list lambda-list t)
-                                   (unless bits ;; verify failed
-                                     (signal-program-error "Invalid lambda list ~s"
-                                                           (find-if #'listp args)))
-                                   (%cons-def-info 'defmethod bits keyvect nil specializers qualifiers))
-                               ,env))
-       (compiler-let ((*nx-method-warning-name* '(,name ,@qualifiers ,specializers)))
-         (ensure-method ',name ,specializers-form
-                        :function ,function-form
-                        :qualifiers ',qualifiers
-                        :lambda-list ',lambda-list
-                        ,@(if documentation `(:documentation ,documentation)))))))
+  (let* ((method (gensym)))
+    (multiple-value-bind (function-form specializers-form qualifiers lambda-list documentation specializers)
+        (parse-defmethod name args env)
+      `(progn
+        (eval-when (:compile-toplevel)
+          (record-function-info ',(maybe-setf-function-name name)
+                                ',(multiple-value-bind (bits keyvect) (encode-lambda-list lambda-list t)
+                                                       (unless bits;; verify failed
+                                                         (signal-program-error "Invalid lambda list ~s"
+                                                                               (find-if #'listp args)))
+                                                       (%cons-def-info 'defmethod bits keyvect nil specializers qualifiers))
+                                ,env))
+        (compiler-let ((*nx-method-warning-name* '(,name ,@qualifiers ,specializers)))
+          (let* ((,method (ensure-method ',name ,specializers-form
+                                         :function ,function-form
+                                         :qualifiers ',qualifiers
+                                         :lambda-list ',lambda-list
+                                         ,@(if documentation `(:documentation ,documentation)))))
+            (record-source-file ,method 'method)
+            ,method))))))
 
 
 (defun seperate-defmethod-decls (decls)

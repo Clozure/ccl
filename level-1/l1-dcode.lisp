@@ -710,7 +710,7 @@
 
 
 (let* ((eql-specializers-lock (make-lock))
-       (eql-specializers-hash (make-hash-table :test #'eql)))
+       (eql-specializers-hash (make-hash-table :test #'eql  :weak :value)))
   (defun intern-eql-specializer (object)
     (with-lock-grabbed (eql-specializers-lock)
       (or (gethash object eql-specializers-hash)

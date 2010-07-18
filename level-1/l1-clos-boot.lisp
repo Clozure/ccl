@@ -741,10 +741,9 @@
         (%add-method gf method)
         (when (and doc-p *save-doc-strings*)
           (set-documentation method t documentation))
-        (record-source-file method 'method)
         (when old-method (%move-method-encapsulations-maybe old-method method))
         method))))
-        
+
 
 (defun %anonymous-method (function specializers qualifiers  lambda-list &optional documentation
                                    &aux name method-class)
