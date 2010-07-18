@@ -2349,6 +2349,7 @@
 ;;; be added to the token.
 
 (defun %token-package (token colonpos seenbeforecolon stream)
+  (declare (ignorable stream))
   (if colonpos
     (if (and (eql colonpos 0) (not seenbeforecolon))
       *keyword-package*
