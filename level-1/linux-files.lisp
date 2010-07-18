@@ -180,7 +180,13 @@ atomically decremented, or until a timeout expires."
     (values (eql status 0) status)))
 
 (defun wait-for-signal (s duration)
-  (or (%timed-wait-for-signal s 0 0)
+  (or (multiple-value-bind (result err)
+          (%timed-wait-for-signal s 0 0)
+        (or result
+            (if (or (eql err #$EINTR)
+                    (eql err #-windows-target #$ETIMEDOUT #+windows-target #$WAIT_TIMEOUT))
+              nil
+              (error "Error waiting for signal ~d: ~a." s (%strerror err)))))
       (with-process-whostate ("signal wait")
         (let* ((now (get-internal-real-time))
                (stop (+ now (floor (* duration internal-time-units-per-second)))))
@@ -191,14 +197,11 @@ atomically decremented, or until a timeout expires."
                     (%timed-wait-for-signal s secs millis))
                 (when success
                   (return t))
-                (if (or (eql err #$ETIMEDOUT)
+                (if (or (eql err #-windows-target #$ETIMEDOUT #+windows-target #$WAIT_TIMEOUT)
                         (>= (setq now (get-internal-real-time)) stop))
                   (return nil)
                   (unless (eql err #$EINTR)
                     (error "Error waiting for signal ~d: ~a." s (%strerror err))))
-                (when (or (not (eql err #$EINTR))
-                          (>= (setq now (get-internal-real-time)) stop))
-                  (return nil))
                 (unless (zerop duration)
                   (let* ((diff (- stop now)))
                     (multiple-value-bind (remaining-seconds remaining-itus)
