@@ -1437,41 +1437,44 @@ unsigned IP address."
 (defun %get-ip-interfaces ()
   (let* ((socket (#_socket #$AF_INET #$SOCK_DGRAM #$IPPROTO_IP)))
     (unwind-protect
-    (rlet ((realoutlen #>DWORD 0))
-      (do* ((reservedlen (* 4 (record-length #>INTERFACE_INFO))
-                         (* 2 reservedlen)))
-           ()
-        (%stack-block ((buf reservedlen))
-          (unless (eql 0 (#_WSAIoctl
-                          socket
-                          #$SIO_GET_INTERFACE_LIST
-                          (%null-ptr)
-                          0
-                          buf
-                          reservedlen
-                          realoutlen
-                          (%null-ptr)
-                          (%null-ptr)))
-            (return))
-          (let* ((noutbytes (pref realoutlen #>DWORD)))
-            (when (< noutbytes reservedlen)
-              (let* ((interfaces nil))
-                (do* ((offset 0 (+ offset (record-length #>INTERFACE_INFO)))
-                      (nameidx 0 (1+ nameidx)))
-                     ((>= offset noutbytes))
-                  (with-macptrs ((p (%inc-ptr buf offset)))
-                    (push (make-ip-interface 
-                           :name (format nil "ip~d" nameidx)
-                           :addr (ntohl
-                                  (pref (pref p #>INTERFACE_INFO.iiAddress)
-                                        #>sockaddr_gen.AddressIn.sin_addr.S_un.S_addr))
-                           :netmask (ntohl
-                                     (pref (pref p #>INTERFACE_INFO.iiNetmask)
-                                        #>sockaddr_gen.AddressIn.sin_addr.S_un.S_addr))
-                           :flags (pref p #>INTERFACE_INFO.iiFlags)
-                           :address-family #$AF_INET)
-                          interfaces)))
-                (return interfaces)))))))
+         (rlet ((realoutlen #>DWORD 0))
+           (do* ((reservedlen (* 4 (record-length #>INTERFACE_INFO))
+                              (* 2 reservedlen)))
+                ()
+             (%stack-block ((buf reservedlen))
+               (if (eql 0  (#_WSAIoctl
+                            socket
+                            #$SIO_GET_INTERFACE_LIST
+                            (%null-ptr)
+                            0
+                            buf
+                            reservedlen
+                            realoutlen
+                            (%null-ptr)
+                            (%null-ptr)))
+               (let* ((noutbytes (pref realoutlen #>DWORD)))
+                 (when (< noutbytes reservedlen)
+                   (let* ((interfaces nil))
+
+                     (do* ((offset 0 (+ offset (record-length #>INTERFACE_INFO)))
+                           (nameidx 0 (1+ nameidx)))
+                          ((>= offset noutbytes))
+                       (with-macptrs ((p (%inc-ptr buf offset)))
+                         (push (make-ip-interface 
+                                :name (format nil "ip~d" nameidx)
+                                :addr (ntohl
+                                       (pref (pref p #>INTERFACE_INFO.iiAddress)
+                                             #>sockaddr_gen.AddressIn.sin_addr.S_un.S_addr))
+                                :netmask (ntohl
+                                          (pref (pref p #>INTERFACE_INFO.iiNetmask)
+                                                #>sockaddr_gen.AddressIn.sin_addr.S_un.S_addr))
+                                :flags (pref p #>INTERFACE_INFO.iiFlags)
+                                :address-family #$AF_INET)
+                               interfaces)))
+                     (return interfaces))))
+               (let* ((err (#_WSAGetLastError)))
+                 (unless (eql err #$WSAEFAULT)
+                   (return)))))))
       (#_closesocket socket))))
 
       
