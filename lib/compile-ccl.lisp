@@ -797,7 +797,7 @@ the lisp and run REBUILD-CCL again.")
             (load "ccl:tests;ansi-tests;ccl.lsp")))))))
 
 (defun test-ccl (&key force (update t) verbose (catch-errors t) (ansi t) (ccl t)
-                      optimization-settings)
+                      optimization-settings exit)
   (with-preserved-working-directory ()
     (let* ((*package* (find-package "CL-USER")))
       (ensure-tests-loaded :force force :update update :ansi ansi :ccl ccl)
@@ -812,4 +812,8 @@ the lisp and run REBUILD-CCL again.")
           ;; Clean up a little
           (map nil #'delete-file
                (directory (merge-pathnames *.fasl-pathname* "ccl:tests;ansi-tests;temp*"))))
-        (symbol-value failed)))))
+	(let ((failed-tests (symbol-value failed)))
+	  (when exit
+	    (quit (if failed-tests 1 0)))
+	  failed-tests)))))
+
