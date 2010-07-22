@@ -717,8 +717,6 @@ lisp_sigexit(int signum)
   return raise(signum);
 }
 
-#ifdef WIN_64
-
 /* Make sure that the lisp calls these functions, when they do something */
 /* This code is taken from the 32-bit mingw library and is in the
    public domain */
@@ -870,7 +868,6 @@ atanhf(float x)
   return x >= 0 ? z : -z;
 }
 
-#endif
 
 typedef struct {
   char *name;
