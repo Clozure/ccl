@@ -682,14 +682,20 @@
                  (error (condition) (if no-error
                                       (return-from full-pathname nil)
                                       (error condition)))))
-         (dir (%pathname-directory path)))
-    (if (eq (car dir) :absolute)
-      path
-      (cons-pathname (absolute-directory-list dir)
-                       (%pathname-name path)
-                       (%pathname-type path)
-                       (pathname-host path)
-                       (pathname-version path)))))
+         (dir (%pathname-directory path))
+	 (device #+windows-target
+	         (or (pathname-device path)
+		     (pathname-device (mac-default-directory)))
+		 #-windows-target
+		 nil))
+    (cons-pathname (if (eq (car dir) :absolute)
+		     dir
+		     (absolute-directory-list dir))
+		   (%pathname-name path)
+		   (%pathname-type path)
+		   (pathname-host path)
+		   (pathname-version path)
+		   device)))
 
 
 
