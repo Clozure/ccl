@@ -751,20 +751,24 @@ the lisp and run REBUILD-CCL again.")
       (when update
 	(cwd "ccl:tests;")
 	(run-program "svn" '("update")))
-      (let* ((svn (probe-file "ccl:.svn;entries"))
-	     (repo (and svn (svn-repository)))
+      (let* ((repo (svn-repository))
+	     (url (format nil "~a/trunk/tests" repo))
 	     (s (make-string-output-stream)))
-	(when repo
-	  (format t "~&Checking out test suite into ccl:tests;~%")
-	  (cwd "ccl:")
-	  (multiple-value-bind (status exit-code)
+	(if (null repo)
+	  (error "Can't determine svn repository.  ccl directory is ~s"
+		 (ccl-directory))
+	  (progn
+	    (format t "~&Checking out test suite from ~a into ccl:tests;~%"
+		    url)
+	    (cwd "ccl:")
+	    (multiple-value-bind (status exit-code)
 	      (external-process-status
-	       (run-program "svn" (list "checkout" (format nil "~a/trunk/tests" repo) "tests")
-			    :output s
-			    :error s))
-	    (unless (and (eq status :exited)
-			 (eql exit-code 0))
-	      (error "Failed to check out test suite: ~%~a" (get-output-stream-string s)))))))
+	       (run-program "svn" (list "checkout" url "tests")
+			    :output s :error s))
+	      (unless (and (eq status :exited)
+			   (eql exit-code 0))
+		(error "Failed to check out test suite: ~%~a"
+		       (get-output-stream-string s))))))))
     (cwd "ccl:tests;ansi-tests;")
     (run-program "make" '("-k" "clean"))
     (map nil 'delete-file (directory "*.*fsl"))
