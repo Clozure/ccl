@@ -285,10 +285,14 @@
 (defun concat-pnames (name1 name2)
   (intern (%str-cat (string name1) (string name2))))
 
+;; By special dispensation, don't complain about unknown types
+;; mentioned in defstruct :type slot options.
 (defun wrap-with-type-declaration (value slot &aux (slot-type (ssd-type slot)))
   (if (eq t slot-type)
     value
-    `(the ,slot-type ,value)))
+    (if (specifier-type-if-known slot-type)
+      `(the ,slot-type ,value)
+      value)))
 
 (defun make-class-cells-list (class-names)
   (if (and (consp class-names)
