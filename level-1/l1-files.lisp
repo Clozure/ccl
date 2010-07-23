@@ -531,7 +531,6 @@
                                             (defaults *default-pathname-defaults*))
   (require-type reference-host '(or null string))
   (multiple-value-bind (sstr start end) (get-pathname-sstring string start end)
-    #-windows-target
     (if (and (> end start)
              (eql (schar sstr start) #\~))
       (setq sstr (tilde-expand (subseq sstr start end))
