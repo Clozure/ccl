@@ -497,15 +497,48 @@ Will differ from *compiling-file* during an INCLUDE")
       (when *compile-code-coverage*
 	(fcomp-compile-toplevel-forms env)
         (let* ((fns (fcomp-code-covered-functions))
-	       (v (nreverse (coerce fns 'vector))))
+	       (v (nreverse (coerce fns 'vector)))
+               (id (fcomp-file-checksum stream)))
 	  (map nil #'fcomp-digest-code-notes v)
-          (fcomp-random-toplevel-form `(register-code-covered-functions ',v) env)))
+          (fcomp-random-toplevel-form `(register-code-covered-functions ',v
+                                                                        ',*fcomp-external-format*
+                                                                        ,id)
+                                      env)))
       (while (setq form *fasl-eof-forms*)
         (setq *fasl-eof-forms* nil)
         (fcomp-form-list form env processing-mode))
       (when old-file
         (fcomp-output-form $fasl-src env (namestring *compile-file-pathname*)))
       (fcomp-compile-toplevel-forms env))))
+
+(defvar *crc32-table* (let ((crc-table (make-array 256 :element-type '(unsigned-byte 32))))
+                        (loop for i from 0 below 255 as crc = i
+                              do (loop for j from 0 below 8
+                                       do (setq crc (ash crc -1))
+                                       do (when (oddp crc)
+                                            (setq crc (logxor crc  #xEDB88320))))
+                              do (setf (aref crc-table i) crc))
+                        crc-table))
+(declaim (type (simple-array (unsigned-byte 32) (256)) *crc32-table*))
+
+(defun fcomp-stream-checksum (stream)
+  ;; Could consider crc16 for 32-bit targets, but this is only used with code
+  ;; coverage so don't worry about efficiency anyway.
+  (file-position stream 0)
+  (let ((crc 0))
+    (declare (type (unsigned-byte 32) crc))
+    (loop for char base-char = (read-char stream nil) while char
+          do (setq crc (logxor
+                         (%ilogand (ash crc -8) #x00FFFFFF)
+                         (aref *crc32-table* (logand (logxor crc (char-code char)) #xFF)))))
+    (logior (ash (file-position stream) 32) crc)))
+
+(defun fcomp-file-checksum (filename &key (external-format *fcomp-external-format*))
+  (when (setq filename (probe-file filename))
+    (with-open-file (stream filename
+                            :element-type 'base-char
+                            :external-format external-format)
+      (fcomp-stream-checksum stream))))
 
 (defun fcomp-code-covered-functions ()
   (loop for op in *fcomp-output-list*

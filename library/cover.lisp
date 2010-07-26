@@ -121,6 +121,19 @@
                  (not (memq imm refs)))
        nconc (get-function-coverage imm refs acode)))))
 
+(defun code-covered-info.file (data) (and (consp data) (car data)))
+(defun code-covered-info.fns (data) (and (consp data) (if (consp (cdr data)) (cadr data) (cdr data))))
+(defun code-covered-info.ef (data) (and (consp data) (consp (cdr data)) (caddr data)))
+(defun code-covered-info.id (data) (and (consp data) (consp (cdr data)) (cadddr data)))
+
+(defun code-covered-info-with-fns (data new-fns)
+  (assert (consp data))
+  (if (consp (cdr data))
+    (cons (car data) new-fns)
+    (let ((new (copy-list data)))
+      (setf (cadr new) new-fns)
+      new)))
+
 (defun get-coverage ()
   (setq *file-coverage* nil)
   (clrhash *coverage-subnotes*)
@@ -128,17 +141,18 @@
   (clrhash *entry-code-notes*)
   (clrhash *code-note-acode-strings*)
   (loop for data in *code-covered-functions*
-	when (consp data)
-	do (destructuring-bind (file . toplevel-functions) data
-	     (push (list* file
-			  ;; Duplicates are possible if you have multiple instances of
-			  ;; (load-time-value (foo)) where (foo) returns an lfun.
-			  ;; CL-PPCRE does that.
-			  (delete-duplicates
-			   (loop for fn across toplevel-functions
-				nconc (get-function-coverage fn nil nil)))
-			  toplevel-functions)
-		   *file-coverage*)))
+	do (let* ((file (code-covered-info.file data))
+                  (toplevel-functions (code-covered-info.fns data)))
+             (when file
+               (push (list* file
+                            ;; Duplicates are possible if you have multiple instances of
+                            ;; (load-time-value (foo)) where (foo) returns an lfun.
+                            ;; CL-PPCRE does that.
+                            (delete-duplicates
+                             (loop for fn across toplevel-functions
+                                   nconc (get-function-coverage fn nil nil)))
+                            toplevel-functions)
+                     *file-coverage*))))
   ;; Now get subnotes, including un-emitted ones.
   (loop for note being the hash-key of *emitted-code-notes*
         do (loop for n = note then parent as parent = (code-note-parent-note n)
@@ -193,7 +207,7 @@
              alist)))
 
 (defun covered-functions-for-file (path)
-  (cdr (assoc-by-filename path *code-covered-functions*)))
+  (code-covered-info.fns (assoc-by-filename path *code-covered-functions*)))
 
 (defun clear-coverage ()
   "Clear all files from the coverage database. The files will be re-entered
@@ -210,8 +224,8 @@ image."
   "Reset all coverage data back to the `Not executed` state."
   (loop for data in *code-covered-functions*
         do (typecase data
-             (cons ;; (source-file . functions)
-		(loop for fn across (cdr data)
+             (cons
+		(loop for fn across (code-covered-info.fns data)
 		      do (reset-function-coverage fn)))
              (function (reset-function-coverage data)))))
 
@@ -228,10 +242,13 @@ image."
   (throw 'coverage-mismatch (cons why args)))
 
 (defmacro with-coverage-mismatch-catch ((saved-file) &body body)
-  `(let ((file ,saved-file)
-         (err (catch 'coverage-mismatch ,@body nil)))
-     (when err
-       (error "Mismatched coverage data for ~s, ~?" file (car err) (cdr err)))))
+  `(let ((file ,saved-file))
+     (with-simple-restart (ignore-file "Ignore ~s and continue" file)
+       (let ((err (catch 'coverage-mismatch 
+                    ,@body
+                    nil)))
+         (when err
+           (error "Mismatched coverage data for ~s, ~?" file (car err) (cdr err)))))))
 
 
 ;; (name . #(i1 i2 ...)) where in is either an index or (index . subfncoverage).
@@ -311,23 +328,31 @@ image."
   (make-coverage-state
    :alist (loop for data in *code-covered-functions*
                 when (consp data)
-                  collect (cons (car data)
-                                (map 'vector #'save-function-coverage (cdr data))))))
+                  collect (code-covered-info-with-fns
+                               data (map 'vector #'save-function-coverage (code-covered-info.fns data))))))
 
 (defun combine-coverage (coverage-states)
   (let ((result nil))
     (map nil
          (lambda (coverage-state)
-           (loop for (saved-file . saved-fns) in (coverage-state-alist coverage-state)
-                 for result-fns = (cdr (assoc-by-filename saved-file result))
+           (loop for saved-data in (coverage-state-alist coverage-state)
+                 as saved-file = (code-covered-info.file saved-data)
+                 as saved-fns = (code-covered-info.fns saved-data)
+                 as result-data = (assoc-by-filename saved-file result)
+                 as result-fns = (code-covered-info.fns result-data)
                  do (with-coverage-mismatch-catch (saved-file)
                       (cond ((null result-fns)
-                             (push (cons saved-file
-                                         (map 'vector #'copy-function-coverage saved-fns))
+                             (push (code-covered-info-with-fns
+                                    saved-data (map 'vector #'copy-function-coverage saved-fns))
                                    result))
                             ((not (eql (length result-fns) (length saved-fns)))
                              (coverage-mismatch "different function counts"))
-                            (t 
+                            (t
+                             (unless (equal (code-covered-info.id saved-data)
+                                            (code-covered-info.id result-data))
+                               (cerror "Ignore the mismatch"
+                                       "Combining different versions of file ~s (checksum mismatch)"
+                                       saved-file))
                              (loop for result-fn across result-fns
                                    for saved-fn across saved-fns
                                    do (add-function-coverage result-fn saved-fn)))))))
@@ -337,8 +362,11 @@ image."
 
 (defun restore-coverage (coverage-state)
   "Restore the code coverage data back to an earlier state produced by SAVE-COVERAGE."
-  (loop for (saved-file . saved-fns) in (coverage-state-alist coverage-state)
-        for fns = (covered-functions-for-file saved-file)
+  (loop for saved-data in (coverage-state-alist coverage-state)
+        for saved-file = (code-covered-info.file saved-data)
+        as saved-fns = (code-covered-info.fns saved-data)
+        for current-data = (assoc-by-filename saved-file *code-covered-functions*)
+        as fns = (and current-data (code-covered-info.fns current-data))
         do (with-coverage-mismatch-catch (saved-file)
              (cond ((null fns)
                     (warn "Couldn't restore saved coverage for ~s, no matching file present"
@@ -347,6 +375,11 @@ image."
                     (coverage-mismatch "had ~s functions, now have ~s"
                                        (length saved-fns) (length fns)))
                    (t 
+                    (unless (equal (code-covered-info.id saved-data)
+                                   (code-covered-info.id current-data))
+                      (cerror "Ignore the mismatch"
+                              "Restoring different version of file ~s (checksum mismatch)"
+                              saved-file))
                     (map nil #'restore-function-coverage fns saved-fns))))))
 
 (defvar *loading-coverage*)
@@ -385,7 +418,7 @@ image."
 	 (rev-dir ()))
     (loop for data in *code-covered-functions*
        when (consp data)
-       do (let ((file (probe-file (car data))))
+       do (let ((file (probe-file (code-covered-info.file data))))
 	    (when file
 	      (cond ((eq host :unknown)
 		     (setq host (pathname-host file)
@@ -477,21 +510,30 @@ written to the output directory.
     (get-coverage)
     (ensure-directories-exist directory)
     (loop for coverage in *file-coverage*
-      as file = (or (probe-file (file-coverage-file coverage))
+      as truename = (or (probe-file (file-coverage-file coverage))
 		    (progn (warn "Cannot find ~s, won't report coverage" (file-coverage-file coverage))
 			   nil))
-      do (when file
-           (let* ((src-name (enough-namestring file coverage-dir))
+      do (when truename
+           (let* ((src-name (enough-namestring truename coverage-dir))
                   (html-name (substitute
                               #\_ #\: (substitute
                                        #\_ #\. (substitute
-                                                #\_ #\/ (namestring-unquote src-name))))))
+                                                #\_ #\/ (namestring-unquote src-name)))))
+                  (file (file-coverage-file coverage)))
              (when html
-               (with-open-file (stream (make-pathname :name html-name :type "html" :defaults directory)
-                                       :direction :output
-                                       :if-exists :supersede
-                                       :if-does-not-exist :create)
-                 (report-file-coverage index-file coverage stream external-format)))
+               (with-coverage-mismatch-catch (file)
+                 (let* ((data (assoc-by-filename file *code-covered-functions*))
+                        (checksum (fcomp-file-checksum (code-covered-info.file data)
+                                                       :external-format (code-covered-info.ef data))))
+                   (unless (eql checksum (code-covered-info.id data))
+                     (cerror "Try coloring anyway"
+                             "File ~s has changed since coverage source location info was recorded."
+                             (code-covered-info.file data))))
+                 (with-open-file (stream (make-pathname :name html-name :type "html" :defaults directory)
+                                         :direction :output
+                                         :if-exists :supersede
+                                         :if-does-not-exist :create)
+                   (report-file-coverage index-file coverage stream external-format))))
              (push (list* src-name html-name coverage) paths))))
     (when (null paths)
       (error "No code coverage data available"))

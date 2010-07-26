@@ -786,10 +786,10 @@
 
 
 ;;; files compiled with code coverage do this
-;; list of lfuns and (source-fn-name . vector-of-lfuns), the latter put there by fasloading.
+;; list of lfuns and (source-fn-name vector-of-lfuns external-format id), the latter put there by fasloading.
 (defvar *code-covered-functions* nil)
 
-(defun register-code-covered-functions (functions)
+(defun register-code-covered-functions (functions &optional external-format id)
   ;; unpack the parent-note references - see comment at fcomp-digest-code-notes
   (labels ((reg (lfun refs)
 	     (unless (memq lfun refs)
@@ -816,8 +816,11 @@
 				     (let ((p (probe-file p)) (q (probe-file q)))
 				       (and p q (equalp p q)))))))))
     (when (null a)
-      (push (setq a (list nil nil)) *code-covered-functions*))
-    (setf (car a) *loading-file-source-file* (cdr a) functions))
+      (push (setq a (list nil nil nil nil)) *code-covered-functions*))
+    (setf (car a) *loading-file-source-file*
+          (cadr a) functions
+          (caddr a) external-format
+          (cadddr a) id))
   nil)
 
 ;;; The loader itself
