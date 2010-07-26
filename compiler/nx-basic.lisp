@@ -736,7 +736,7 @@
   index)
 
 (defun nx-record-code-coverage-acode (afunc)
-  (assert (and *nx-current-code-note* (null (afunc-parent afunc))))
+  (assert *nx-current-code-note*)
   (let* ((form->note (make-hash-table :test #'eq))
          (*nx-acode-inner-refs* nil)
          (*nx-acode-refs-counter* 0)
@@ -774,7 +774,11 @@
                                          (dbg-assert (eq start end))
                                          (setf (code-note-acode-range note)
                                                (encode-file-range start pos))))))))))))))
-    (setf (afunc-lfun-info afunc) (list* '%function-acode-string string (afunc-lfun-info afunc)))
+    (iterate store ((afunc afunc))
+      (setf (getf (afunc-lfun-info afunc) '%function-acode-string) string)
+      (loop for inner in (afunc-inner-functions afunc)
+        unless (getf (afunc-lfun-info inner) '%function-acode-string)
+        do (store inner)))
     afunc))
 
 (defmethod print-object ((ref acode-afunc-ref) stream)

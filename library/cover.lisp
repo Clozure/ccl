@@ -46,15 +46,18 @@
 
           without-compiling-code-coverage))
 
-(defconstant $not-executed-style 2)
-(defconstant $totally-covered-style 5)
-(defconstant $partially-covered-style 6)
+(defconstant $no-style 0)
+(defconstant $not-executed-style 1)
+(defconstant $totally-covered-style 2)
+(defconstant $partially-covered-style 3)
 
 (defparameter *file-coverage* ())
 (defparameter *coverage-subnotes* (make-hash-table :test #'eq))
 (defparameter *emitted-code-notes* (make-hash-table :test #'eq))
 (defparameter *entry-code-notes* (make-hash-table :test #'eq))
+(defparameter *code-note-acode-strings* (make-hash-table :test #'eq))
 
+(defparameter *coverage-acode-queue* nil)
 
 (defstruct (coverage-state (:conc-name "%COVERAGE-STATE-"))
   alist)
@@ -83,6 +86,9 @@
 (defun entry-code-note-p (note)
   (gethash note *entry-code-notes*))
 
+(defun code-note-acode-string (note)
+  (gethash note *code-note-acode-strings*))
+
 (defun map-function-coverage (lfun fn &optional refs)
   (let ((refs (cons lfun refs)))
     (declare (dynamic-extent refs))
@@ -93,27 +99,34 @@
 			(not (memq imm refs)))
 	      do (map-function-coverage imm fn refs))))
 
-(defun get-function-coverage (fn refs)
+(defun get-function-coverage (fn refs acode)
   (let ((entry (function-entry-code-note fn))
-	(refs (cons fn refs)))
+	(refs (cons fn refs))
+        (acode (or (%function-acode-string fn) acode)))
     (declare (dynamic-extent refs))
     (when entry
       (assert (eq fn (gethash entry *entry-code-notes* fn)))
-      (setf (gethash entry *entry-code-notes*) fn))
+      (setf (gethash entry *entry-code-notes*) fn)
+      (when acode
+        (setf (gethash entry *code-note-acode-strings*) acode)))
     (nconc
      (and entry (list fn))
      (lfunloop for imm in fn
        when (code-note-p imm)
-       do (setf (gethash imm *emitted-code-notes*) t)
+       do (progn
+            (setf (gethash imm *emitted-code-notes*) t)
+            (when acode
+              (setf (gethash imm *code-note-acode-strings*) acode)))
        when (and (functionp imm)
                  (not (memq imm refs)))
-       nconc (get-function-coverage imm refs)))))
+       nconc (get-function-coverage imm refs acode)))))
 
 (defun get-coverage ()
   (setq *file-coverage* nil)
   (clrhash *coverage-subnotes*)
   (clrhash *emitted-code-notes*)
   (clrhash *entry-code-notes*)
+  (clrhash *code-note-acode-strings*)
   (loop for data in *code-covered-functions*
 	when (consp data)
 	do (destructuring-bind (file . toplevel-functions) data
@@ -123,7 +136,7 @@
 			  ;; CL-PPCRE does that.
 			  (delete-duplicates
 			   (loop for fn across toplevel-functions
-				nconc (get-function-coverage fn nil)))
+				nconc (get-function-coverage fn nil nil)))
 			  toplevel-functions)
 		   *file-coverage*)))
   ;; Now get subnotes, including un-emitted ones.
@@ -131,7 +144,25 @@
         do (loop for n = note then parent as parent = (code-note-parent-note n)
                  while parent
                  do (pushnew n (gethash parent *coverage-subnotes*))
-                 until (emitted-code-note-p parent))))
+                 until (emitted-code-note-p parent)))
+  (let ((hash (make-hash-table :test #'eq)))
+    ;; distribute entry acode to the toplevel source note it belongs to.
+    (loop for entry being the hash-key of *entry-code-notes* using (hash-value fn)
+      as acode = (code-note-acode-string entry)
+      as sn = (entry-note-unambiguous-source entry)
+      as toplevel-sn = (function-source-form-note fn)
+      do (when sn
+           (assert toplevel-sn)
+           (let* ((pos (source-note-end-pos sn))
+                  (cell (assq acode (gethash toplevel-sn hash))))
+             (if cell
+               (setf (cdr cell) (max (cdr cell) pos))
+               (push (cons acode pos) (gethash toplevel-sn hash))))))
+    (setf *coverage-acode-queue*
+          (sort (loop for sn being the hash-key of hash using (hash-value alist)
+                  collect (cons (source-note-end-pos sn)
+                                (mapcar #'car (sort alist #'< :key #'cdr))))
+                #'< :key #'car))))
 
 #+debug
 (defun show-notes (note)
@@ -144,6 +175,9 @@
 	       (format t " [Not Emitted]"))
 	     (when (entry-code-note-p note)
 	       (format t " (Entry to ~s)" (entry-code-note-p note)))
+             (when (code-note-acode-range note)
+               (multiple-value-bind (s e) (decode-file-range (code-note-acode-range note))
+                 (format t " [acode ~a:~a]" s e)))
 	     (format t "~%")
 	     (when (code-note-p note)
 	       (loop with subindent = (+ indent 3)
@@ -530,14 +564,16 @@ written to the output directory.
 	(setf (code-note-code-coverage note) 'full)))))
 
 
+(defun style-for-coverage (coverage)
+  (case coverage
+    ((full) $totally-covered-style)
+    ((nil) $not-executed-style)
+    (t $partially-covered-style)))
+  
 (defun fill-with-text-style (coverage location-note styles)
-  (let ((style (case coverage
-		 ((full) $totally-covered-style)
-		 ((nil) $not-executed-style)
-		 (t $partially-covered-style))))
-    (fill styles style
-	  :start (source-note-start-pos location-note)
-	  :end (source-note-end-pos location-note))))
+  (fill styles (style-for-coverage coverage)
+        :start (source-note-start-pos location-note)
+        :end (source-note-end-pos location-note)))
 
 (defun update-text-styles (note styles)
   (let ((source (code-note-source-note note)))
@@ -599,15 +635,36 @@ written to the output directory.
 		   do (setq sn s))
 	     (return sn))))
 
-  
-(defun colorize-function (fn styles &optional refs)
+(defun colorize-acode (fn acode-styles)
+  (let* ((acode (%function-acode-string fn))
+         (note (function-entry-code-note fn))
+         (range (and note (code-note-acode-range note))))
+    (when (and acode range)
+      (let ((styles (or (gethash acode acode-styles)
+                        (setf (gethash acode acode-styles)
+                              (make-array (length acode)
+                                          :initial-element $no-style
+                                          :element-type '(unsigned-byte 2))))))
+        (iterate update ((note note))
+          (multiple-value-bind (start end) (decode-file-range (code-note-acode-range note))
+            (when (and start
+                       (setq start (position-if-not #'whitespacep acode :start start :end end)))
+              (fill styles (style-for-coverage (code-note-code-coverage note))
+                    :start start
+                    :end end)))
+          (loop for sub in (coverage-subnotes note)
+            unless (entry-code-note-p sub)
+            do (update sub)))))))
+
+(defun colorize-function (fn styles acode-styles &optional refs)
   (let* ((note (function-entry-code-note fn))
 	 (source (function-source-form-note fn))
 	 (refs (cons fn refs)))
     (declare (dynamic-extent refs))
     ;; Colorize the body of the function
     (when note
-      (colorize-source-note note styles))
+      (colorize-source-note note styles)
+      (colorize-acode fn acode-styles))
     ;; And now any subfunction references
     (lfunloop for imm in fn
 	      when (and (functionp imm)
@@ -621,7 +678,7 @@ written to the output directory.
 			    #+debug (progn
 				      (warn "Ignoring ref to ~s from ~s" imm fn)
 				      nil)))
-	      do (colorize-function imm styles refs))))
+	      do (colorize-function imm styles acode-styles refs))))
 
 (defun report-file-coverage (index-file coverage html-stream external-format)
   "Print a code coverage report of FILE into the stream HTML-STREAM."
@@ -633,13 +690,14 @@ written to the output directory.
                      (read-sequence string s)
                      string)))
          (styles (make-array (length source)
-                             :initial-element 0
-                             :element-type '(unsigned-byte 2))))
-    (map nil #'(lambda (fn) (colorize-function fn styles)) (file-coverage-toplevel-functions coverage))
-    (print-file-coverage-report index-file html-stream coverage styles source)
+                             :initial-element $no-style
+                             :element-type '(unsigned-byte 2)))
+         (acode-styles (make-hash-table :test #'eq)))
+    (map nil #'(lambda (fn) (colorize-function fn styles acode-styles)) (file-coverage-toplevel-functions coverage))
+    (print-file-coverage-report index-file html-stream coverage styles acode-styles source)
     (format html-stream "</body></html>")))
 
-(defun print-file-coverage-report (index-file html-stream coverage styles source)
+(defun print-file-coverage-report (index-file html-stream coverage styles acode-styles source)
   (let ((*print-case* :downcase))
     (format html-stream "<h3><a href=~s>Coverage report</a>: ~a <br />~%</h3>~%"
             (native-translated-namestring (make-pathname :name (pathname-name index-file)
@@ -651,43 +709,77 @@ written to the output directory.
     (format html-stream "</table>")
 
     (format html-stream "<div class='key'><b>Key</b><br />~%")
-    (format html-stream "<div class='state-~a'>Fully covered - every single instruction executed</div>" $totally-covered-style)
-    (format html-stream "<div class='state-~a'>Partly covered - entered but some subforms not executed</div>" $partially-covered-style)
-    (format html-stream "<div class='state-~a'>Never entered - not a single instruction executed</div>" $not-executed-style)
-    (format html-stream "<p></p><div><code>~%")
+    (format html-stream "<div class='st~a'>Fully covered - every single instruction executed</div>" $totally-covered-style)
+    (format html-stream "<div class='st~a'>Partly covered - entered but some subforms not executed</div>" $partially-covered-style)
+    (format html-stream "<div class='st~a'>Never entered - not a single instruction executed</div>" $not-executed-style)
+    (format html-stream "</div><p></p>~%")
 
-    (flet ((line (line)
-             (unless (eql line 0)
-               (format html-stream "</span>"))
-             (incf line)
-             (format html-stream "</code></div></nobr>~%<nobr><div class='source'><div class='line-number'><code>~A</code></div><code>&#160;" line)
-             line))
-      (loop with line = (line 0) with col = 0
-        for last-style = nil then style
-        for char across source
-        for style across styles
-        do (unless (eq style last-style)
-             (when last-style
-               (format html-stream "</span>"))
-             (format html-stream "<span class='state-~a'>" style))
+    ;; Output source intertwined with acode
+    (iterate output ((start 0) (line 0))
+      (format html-stream "<div class='source'><code>")
+      (let ((next (car *coverage-acode-queue*)))
+        (multiple-value-bind (end last-line)
+                             (output-styled html-stream source styles
+                                            :start start
+                                            :line line
+                                            :limit (car next))
+          (format html-stream "</code></div>~%")
+          (when (and next end (<= (car next) end))
+            (destructuring-bind (pos . strings) next
+              (format html-stream "<a href=javascript:swap('~d')><span class='toggle' id='p~:*~d'>Show expansion</span></a>~%~
+                                   <div class='acode' id='a~:*~d'><code>" pos)
+              (loop for acode in strings as styles = (gethash acode acode-styles)
+                do (assert styles)
+                do (output-styled html-stream acode styles)
+                do (fresh-line html-stream))
+              (format html-stream "</code></div><hr/>~%"))
+            (pop *coverage-acode-queue*)
+            (output (1+ end) last-line)))))))
+
+(defun output-styled (html-stream source styles &key (start 0) line limit)
+  (let ((last-style $no-style)
+        (col 0)
+        (line line))
+    (labels ((outch (char)
+               (if (eql char #\Tab)
+                 (dotimes (i (- 8 (mod col 8)))
+                   (incf col)
+                   (write-string " " html-stream))
+                 (progn
+                   (incf col)
+                   (if (or (alphanumericp char) (find char "()+-:* ")) ;; common and safe
+                     (write-char char html-stream)
+                     (format html-stream "&#~D;" (char-code char))))))
+             (start-line ()
+               (when line
+                 (incf line)
+                 (format html-stream "<span class='line'>~A</span>" line))
+               (write-char #\space html-stream)
+               (setq col 0))
+             (set-style (new)
+               (unless (eq last-style new)
+                 (unless (eq last-style $no-style) (format html-stream "</span>"))
+                 (unless (eq new $no-style) (format html-stream "<span class='st~a'>" new))
+                 (setq last-style new)))
+             (end-line ()
+               (set-style $no-style)
+               (format html-stream "~%")))
+      (declare (inline outch start-line end-line))
+      (unless limit (setq limit (length source)))
+      (start-line)
+      (loop
+        for pos from start below (length source)
+        as char = (aref source pos) as style = (aref styles pos)
+        do (set-style style)
         do (case char
              ((#\Newline)
-              (setq style nil)
-              (setq col 0)
-              (setq line (line line)))
-             ((#\Space)
-              (incf col)
-              (write-string "&#160;" html-stream))
-             ((#\Tab)
-              (dotimes (i (- 8 (mod col 8)))
-                (incf col)
-                (write-string "&#160;" html-stream)))
+              (end-line)
+              (when (<= limit pos)
+                (return (values pos line)))
+              (start-line))
              (t
-              (incf col)
-              (if (alphanumericp char)
-                (write-char char html-stream)
-                (format html-stream "&#~D;" (char-code char))))))
-      (format html-stream "</code></div>"))))
+              (outch char)))
+        finally (end-line)))))
 
 
 (defun coverage-stats-head (html-stream stats-stream)
@@ -832,15 +924,25 @@ written to the output directory.
 
 (defun write-coverage-styles (html-stream)
   (format html-stream "<style type='text/css'>
-*.state-~a { background-color: #ffaaaa }
-*.state-~a { background-color: #aaffaa }
-*.state-~a { background-color: #44dd44 }
-div.key { margin: 20px; width: 88ex }
-div.source { width: 98ex; background-color: #eeeeee; padding-left: 5px;
+*.st~a { background-color: #ffaaaa }
+*.st~a { background-color: #aaffaa }
+*.st~a { background-color: #44dd44 }
+*.key { margin: 20px; width: 88ex }
+*.source { width: 120ex; background-color: #eeeeee; padding-left: 5px;
              /* border-style: solid none none none; border-width: 1px;
-             border-color: #dddddd */ }
+             border-color: #dddddd */
+             white-space: pre; }
 
-*.line-number { color: #666666; float: left; width: 6ex; text-align: right; margin-right: 1ex; }
+*.acode { border-left: 1px dashed #c0c0c0;
+         margin-top: 1ex;
+         margin-left: 6ex;
+         margin-bottom: 2ex;
+         white-space: pre;
+         display: none; }
+
+*.line { color: #666666; float: left; width: 6ex; text-align: right; margin-right: 1ex; }
+
+*.toggle { font-size: small; }
 
 table.summary tr.head-row { background-color: #aaaaff }
 table.summary tr td.text-cell { text-align: left }
@@ -849,8 +951,25 @@ table.summary tr td { text-align: right }
 table.summary tr.even { background-color: #eeeeff }
 table.summary tr.subheading { background-color: #aaaaff}
 table.summary tr.subheading td { text-align: left; font-weight: bold; padding-left: 5ex; }
-</style>"
+
+</style>
+
+<script type='text/javascript'>
+function swap (id) {
+  var acode = document.getElementById('a' + id);
+  var prompt = document.getElementById('p' + id);
+  if (acode.style.display == 'block') {
+      acode.style.display = 'none';
+      prompt.innerHTML = 'Show expansion';
+  } else {
+    acode.style.display = 'block';
+    prompt.innerHTML = 'Hide expansion';
+  }
+}
+</script>
+"
           $not-executed-style
           $partially-covered-style
           $totally-covered-style
           ))
+

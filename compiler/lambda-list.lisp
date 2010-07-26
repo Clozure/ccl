@@ -35,6 +35,9 @@
 (defun function-source-note (fn)
   (getf (%lfun-info fn) '%function-source-note))
 
+(defun %function-acode-string (fn)
+  (getf (%lfun-info fn) '%function-acode-string))
+
 (defun uncompile-function (fn)
   (getf (%lfun-info fn) 'function-lambda-expression ))
 
