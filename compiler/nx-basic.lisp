@@ -836,9 +836,9 @@
       (let ((ref (find afunc *nx-acode-inner-refs* :key #'acode-afunc-ref-afunc)))
 	(if ref ;; seen before, mark that multiply referenced.
 	    (setf (acode-afunc-ref-index ref) 0)
-	    (push (setq ref (make-acode-afunc-ref :afunc afunc
-						  :object (decomp-form (afunc-acode afunc))))
-		  *nx-acode-inner-refs*))
+            (progn
+              (push (setq ref (make-acode-afunc-ref :afunc afunc)) *nx-acode-inner-refs*)
+              (setf (acode-afunc-ref-object ref) (decomp-form (afunc-acode afunc)))))
 	ref)
       afunc))
 
