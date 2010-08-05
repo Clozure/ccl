@@ -839,6 +839,10 @@
            #+64-bit-target
            (%single-float-expt (%short-float b) (%short-float e))
            ))
+	((typep (realpart e) 'double-float)
+	 ;; Avoid intermediate single-float result from LOG
+	 (let ((promoted-base (* 1d0 b)))
+	   (exp (* e (log promoted-base)))))
         (t (exp (* e (log b))))))
 
 
