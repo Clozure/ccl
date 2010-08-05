@@ -16,27 +16,43 @@
 
 VPATH = ../
 RM = /bin/rm
-AS = /Developer/Platforms/iPhoneOS.platform/Developer/usr/libexec/gcc/darwin/arm/as
+# Versions of GNU as >= 2.9.1 all seem to work
+# AS = gas-2.9.1
+AS = as
 M4 = m4
-ASFLAGS = -arch armv7
-M4FLAGS = -DDARWIN -DARM
-CC = /Developer/Platforms/iPhoneOS.platform/usr/bin/llvm-gcc-4.2
-CDEFINES = -isysroot /Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS3.2.sdk/ -DDARWIN -DARM -D_REENTRANT -D_GNU_SOURCE -DDISABLE_EGC -DGC_INTEGRITY_CHECKING -arch armv7
+ASFLAGS = -mfpu=vfpv2
+M4FLAGS = -DLINUX -DARM
+CDEFINES = -DLINUX -DARM -D_REENTRANT -D_GNU_SOURCE -DDISABLE_EGC  -DUSE_FUTEX
 CDEBUG = -g
-COPT = #-O2
+COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
-PLATFORM_H = platform-darwinarm.h
+PLATFORM_H = platform-linuxarm.h
+
+# If the linker supports a "--hash-style=" option, use traditional
+# Sysv hash tables.  (If it doesn't support that option, assume
+# that traditional hash tables will be used by default.)
+ld_has_hash_style = $(shell $(LD) --help | grep "hash-style=")
+ifeq ($(ld_has_hash_style),)
+HASH_STYLE=
+else
+HASH_STYLE="-Wl,--hash-style=sysv"
+endif
 
 
+# Likewise, some versions of GAS may need a "-a32" flag, to force the
+
+# output file to be 32-bit compatible.
+
+A32 = $(shell ($(AS) --help -v 2>&1 | grep -q -e "-a32") && /bin/echo "-a32")
 
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(A32) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -arch arm -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) -marm $(WFORMAT)  -o $@
+	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) -marm $(WFORMAT)  -o $@
 
-SPOBJ = arm-spentry.o arm-subprims.o
+SPOBJ = pad.o  arm-spentry.o arm-subprims.o
 ASMOBJ = arm-asmutils.o imports.o
 
 COBJ  = pmcl-kernel.o gc-common.o arm-gc.o bits.o  arm-exceptions.o \
@@ -51,15 +67,23 @@ CHEADERS = area.h bits.h arm-constants.h lisp-errors.h gc.h lisp.h \
 	lisp-exceptions.h lisp_globals.h macros.h memprotect.h image.h \
 	Threads.h arm-exceptions.h $(PLATFORM_H)
 
+# Subprims linked into the kernel ?
+# Yes:
 
 KSPOBJ = $(SPOBJ)
-all:	../../darmcl
-
-OSLIBS = /Developer/Platforms/iPhoneOS.platform/Developer/usr/llvm-gcc-4.2/lib/gcc/arm-apple-darwin10/4.2.1/v6/libgcc.a -lSystem /Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS3.2.sdk/usr/lib/crt1.o /Developer/Platforms/iPhoneOS.platform/DeviceSupport/3.1.3/Symbols/usr/lib/libgcc_s.1.dylib
+all:	../../armcl
 
 
-../../darmcl:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
-	$(LD) -pagezero_size 0x8000 $(KSPOBJ) -L/Developer/Platforms/iPhoneOS.platform/DeviceSupport/3.1.3/Symbols/usr/lib  -arch armv7 -o $@   $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
+# No:
+
+# KSPOBJ=
+# all:	../../ppccl ../../subprims.so
+
+OSLIBS = -ldl -lm -lpthread
+
+
+../../armcl:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
+	$(CC)  $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -o $@ -T ./armlinux.x $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
 
 
 $(SPOBJ): $(SPINC)
@@ -69,10 +93,10 @@ $(DEBUGOBJ): $(CHEADERS) lispdcmd.h
 
 
 cclean:
-	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) ../../darmcl
+	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) ../../ppccl
 
 clean:	cclean
 	$(RM) -f $(SPOBJ)
 
-strip:	../../darmcl
-	strip -g ../../darmcl
+strip:	../../ppccl
+	strip -g ../../ppccl
