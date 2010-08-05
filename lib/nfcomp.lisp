@@ -1239,7 +1239,8 @@ Will differ from *compiling-file* during an INCLUDE")
       (case type-code
         (#.target::tag-fixnum
          (fasl-scan-fixnum exp))
-        (#.target::tag-list (fasl-scan-list exp))
+        (#+ppc64-target #.target::fulltag-cons
+         #-ppc64-target #.target::tag-list (fasl-scan-list exp))
         #+ppc32-target
         (#.ppc32::tag-imm)
         #+ppc64-target
