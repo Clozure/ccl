@@ -760,7 +760,6 @@ debug_identify_exception(ExceptionInformation *xp, siginfo_t *info, int arg)
       describe_arm_uuo(xp);
     }
     break;
-  }
 #endif
   case SIGSEGV:
   case SIGBUS:
