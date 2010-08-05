@@ -20,10 +20,6 @@
 
 
 
-#include "lisptypes.h"
-#ifdef PPC
-#include "ppc-constants.h"
-#endif
 #include <signal.h>
 #ifndef WINDOWS
 #ifdef DARWIN
