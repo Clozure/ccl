@@ -349,6 +349,13 @@ ProtectMemory(LogicalAddress addr, natural nbytes)
   
   if (status) {
     status = errno;
+    
+    if (status == ENOMEM) {
+      void *mapaddr = mmap(addr,nbytes, PROT_READ | PROT_EXEC, MAP_ANON|MAP_PRIVATE|MAP_FIXED,-1,0);
+      if (mapaddr != MAP_FAILED) {
+        return 0;
+      }
+    }
     Bug(NULL, "couldn't protect " DECIMAL " bytes at " LISP ", errno = %d", nbytes, addr, status);
   }
   return status;
