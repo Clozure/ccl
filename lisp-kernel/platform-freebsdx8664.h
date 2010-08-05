@@ -38,7 +38,7 @@ typedef struct __ucontext ExceptionInformation;
 #define xpPC(x) xpGPR(x,Iip)
 #define xpMMXreg(x,n) *((natural *)(&(((struct savefpu *)(&(x)->uc_mcontext.mc_fpstate))->sv_fp[n])))
 #define xpXMMregs(x)(&(((struct savefpu *)(&(x)->uc_mcontext.mc_fpstate))->sv_xmm[0]))
-#define xpMXCSR(x) ((struct savefpu *)((x)->uc_mcontext.mc_fpstate)->sv_env.en_mxcsr)
+#define xpMXCSR(x) (((struct savefpu *)(&(x)->uc_mcontext.mc_fpstate))->sv_env.en_mxcsr)
 extern void freebsd_sigreturn(ExceptionInformation *);
 #define SIGNUM_FOR_INTN_TRAP SIGBUS
 #define IS_MAYBE_INT_TRAP(info,xp) ((xp->uc_mcontext.mc_trapno == T_PROTFLT) && ((xp->uc_mcontext.mc_err & 7) == 2))
