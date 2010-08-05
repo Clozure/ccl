@@ -2077,6 +2077,7 @@
 				    (dpb (length bindings) $lfbits-numreq 0))))
 
 (defnx1 nx1-arm-lap-function (arm-lap-function) (name bindings &body body)
+  (declare (ftype (function (t t t)) %define-arm-lap-function))
   (require "ARM-LAP")
   (setf (afunc-lfun *nx-current-function*)
         (%define-arm-lap-function name `((let ,bindings ,@body))
