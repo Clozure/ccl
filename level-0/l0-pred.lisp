@@ -114,8 +114,8 @@
   "Return true if OBJECT is a REAL, and NIL otherwise."
   (let* ((typecode (typecode x)))
     (declare (fixnum typecode))
-    (and (<= typecode target::max-real-subtag)
-         (logbitp (the (integer 0 #.target::max-real-subtag)
+    (and (< typecode (- target::nbits-in-word target::fixnumshift))
+         (logbitp (the (integer 0 (#.(- target::nbits-in-word target::fixnumshift)))
                     typecode)
                   (logior (ash 1 target::tag-fixnum)
                           (ash 1 target::subtag-single-float)
@@ -132,8 +132,8 @@
   "Return true if OBJECT is a NUMBER, and NIL otherwise."
   (let* ((typecode (typecode x)))
     (declare (fixnum typecode))
-    (and (<= typecode target::max-numeric-subtag)
-         (logbitp (the (integer 0 #.target::max-numeric-subtag)
+    (and (< typecode (- target::nbits-in-word target::fixnumshift))
+         (logbitp (the (integer 0 (#.(- target::nbits-in-word target::fixnumshift)))
                     typecode)
                   (logior (ash 1 target::tag-fixnum)
                           (ash 1 target::subtag-bignum)
