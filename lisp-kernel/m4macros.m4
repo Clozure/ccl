@@ -3,6 +3,7 @@ changecom(`/*',`*/')
 
 
 /*   Copyright (C) 1994-2001 Digitool, Inc  */
+/*   Copyright (c) 2009 Clozure Associates */
 /*   This file is part of Clozure CL.    */
 
 /*   Clozure CL is licensed under the terms of the Lisp Lesser GNU Public  */
@@ -178,7 +179,7 @@ EndTextLabel():
 define(`_startfn',`define(`__func_name',$1)
 # __line__
 	ifelse(eval(SYSstabs),eval(ELFstabs),`
-	.type $1,@function
+	.type $1,ifdef(`ARM',%function,@function)
 ')
 
 $1:

@@ -27,6 +27,7 @@ if [ -z "$OPENMCL_KERNEL" ]; then
     Linux) case `uname -m` in
               ppc*) OPENMCL_KERNEL=ppccl ;;
               *86*) OPENMCL_KERNEL=lx86cl ;;
+              *arm*) OPENMCL_KERNEL=armcl ;;
            esac ;;
     CYGWIN*)
        OPENMCL_KERNEL=wx86cl.exe

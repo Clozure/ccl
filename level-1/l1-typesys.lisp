@@ -4304,6 +4304,14 @@
            function
            nil
            (dpb 1 $lfbits-numreq 0))
+  #+arm-target
+  (gvector :function
+           arm::*function-initial-entrypoint*
+           (uvref *simple-predicate-function-prototype* 1)
+           datum
+           function
+           nil
+           (dpb 1 $lfbits-numreq 0))
   #+x86-target
   (%clone-x86-function
    *simple-predicate-function-prototype*

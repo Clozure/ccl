@@ -19,7 +19,7 @@
 
 
 ;;; Bootstrapping for futexes
-#+(and linux-target x86-target)
+#+(and linux-target (or x86-target arm-target))
 (eval-when (:compile-toplevel :execute)
   (pushnew :futex *features*))
 
@@ -218,13 +218,13 @@
 
 
 
-;;; Returns six values.
+;;; Returns six values on most platforms, 4 on ARM.
 ;;;   sp free
 ;;;   sp used
 ;;;   vsp free
 ;;;   vsp used
-;;;   tsp free
-;;;   tsp used
+;;;   tsp free  (not on ARM)
+;;;   tsp used  (not on ARM)
 (defun %thread-stack-space (&optional (thread *current-lisp-thread*))
   (when (eq thread *current-lisp-thread*)
     (%normalize-areas))
@@ -271,6 +271,9 @@
 	(values 0 0 0 0 0 0)
 	(multiple-value-bind (cf cu) (free-and-used (%fixnum-ref tcr target::tcr.cs-area))
 	  (multiple-value-bind (vf vu) (free-and-used (%fixnum-ref tcr target::tcr.vs-area))
+            #+arm-target
+            (values cf cu vf vu)
+            #-arm-target
 	    (multiple-value-bind (tf tu) (free-and-used (%fixnum-ref tcr target::tcr.ts-area ))
 	      (values cf cu vf vu tf tu))))))))
 
@@ -343,7 +346,7 @@
           (terpri)
           (let* ((processes (all-processes)))
             (dolist (thread-info stack-used-by-thread)
-              (destructuring-bind (thread sp-free sp-used vsp-free vsp-used tsp-free tsp-used)
+              (destructuring-bind (thread sp-free sp-used vsp-free vsp-used #-arm-target tsp-free #-arm-target tsp-used)
                   thread-info
                 (let* ((process (dolist (p processes)
                                   (when (eq (process-thread p) thread)
@@ -351,14 +354,18 @@
                   (when process
                     (let ((sp-total (+ sp-used sp-free))
                           (vsp-total (+ vsp-used vsp-free))
+                          #-arm-target
                           (tsp-total (+ tsp-used tsp-free)))
                       (format t "~%~a(~d)~%  cstack:~12T~10D (~DK)  ~33T~10D (~DK)  ~54T~10D (~DK)~
-                               ~%  vstack:~12T~10D (~DK)  ~33T~10D (~DK)  ~54T~10D (~DK)~
-                               ~%  tstack:~12T~10D (~DK)  ~33T~10D (~DK)  ~54T~10D (~DK)"
+                               ~%  vstack:~12T~10D (~DK)  ~33T~10D (~DK)  ~54T~10D (~DK)"
                               (process-name process)
                               (process-serial-number process)
                               sp-total (k sp-total) sp-free (k sp-free) sp-used (k sp-used)
-                              vsp-total (k vsp-total) vsp-free (k vsp-free) vsp-used (k vsp-used)
+                              vsp-total (k vsp-total) vsp-free (k vsp-free) vsp-used  (k vsp-used))
+                      #-arm-target
+                      (format t
+                               "~%  tstack:~12T~10D (~DK)  ~33T~10D (~DK)  ~54T~10D (~DK)"
+
                               tsp-total (k tsp-total) tsp-free (k tsp-free) tsp-used (k tsp-used)))))))))))))
 
 
@@ -1135,8 +1142,3 @@
    (%safe-get-ptr p dest)))
 
 
-;;; Useless for anything but using RLET in early level-1 code without
-;;; having to bootstrap canonical type ordinals.
-(%fhave 'parse-foreign-type (lambda (spec) (declare (ignore spec))))
-(%fhave 'foreign-type-ordinal (lambda (thing) (declare (ignore thing)) 0))
-(%fhave '%foreign-type-or-record (lambda (x) (declare (ignore x))))

@@ -28,6 +28,7 @@
 (defconstant platform-cpu-ppc (ash 0 3))
 (defconstant platform-cpu-sparc (ash 1 3))
 (defconstant platform-cpu-x86 (ash 2 3))
+(defconstant platform-cpu-arm (ash 3 3))
 (defconstant platform-os-vxworks 0)
 (defconstant platform-os-linux 1)
 (defconstant platform-os-solaris 2)

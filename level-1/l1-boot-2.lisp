@@ -47,6 +47,8 @@
     (l1-load "ppc-error-signal")
     #+x86-target
     (l1-load "x86-error-signal")
+    #+arm-target
+    (l1-load "arm-error-signal")
     (l1-load "l1-error-signal")
     (l1-load "l1-sockets")
     (setq *LEVEL-1-LOADED* t))
@@ -229,16 +231,22 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "X8632-ARCH" "x8632-arch")
       #+x86-target
       (bin-load-provide "X8664-ARCH" "x8664-arch")
+      #+arm-target
+      (bin-load-provide "ARM-ARCH" "arm-arch")
       (bin-load-provide "VREG" "vreg")
       
       #+ppc-target
       (bin-load-provide "PPC-ASM" "ppc-asm")
+      #+arm-target
+      (bin-load-provide "ARM-ASM" "arm-asm")
       
       (bin-load-provide "VINSN" "vinsn")
       (bin-load-provide "REG" "reg")
       
       #+ppc-target
       (bin-load-provide "PPC-LAP" "ppc-lap")
+      #+arm-target
+      (bin-load-provide "ARM-LAP" "arm-lap")
       (bin-load-provide "BACKEND" "backend")
       (bin-load-provide "NX2" "nx2")
      
@@ -247,6 +255,9 @@ present and false otherwise. This variable shouldn't be set by user code.")
 
       #+x86-target
       (provide "X862")
+
+      #+arm-target
+      (provide "ARM2")
       
       (l1-load-provide "NX" "nx")
       
@@ -255,6 +266,9 @@ present and false otherwise. This variable shouldn't be set by user code.")
 
       #+x86-target
       (bin-load "x862")
+
+      #+arm-target
+      (bin-load "arm2")
       
       (bin-load-provide "LEVEL-2" "level-2")
       (bin-load-provide "MACROS" "macros")
@@ -285,6 +299,10 @@ present and false otherwise. This variable shouldn't be set by user code.")
 	(bin-load-provide "X86-LAPMACROS" "x86-lapmacros")
 	(bin-load "x86-watch"))
 
+      #+arm-target
+      (progn
+	(bin-load-provide "ARM-DISASSEMBLE" "arm-disassemble")
+	(bin-load-provide "ARM-LAPMACROS" "arm-lapmacros"))
 
       (bin-load-provide "FOREIGN-TYPES" "foreign-types")
       (install-standard-foreign-types *host-ftd*)
@@ -317,6 +335,8 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "FFI-SOLARISX8632" "ffi-solarisx8632")
       #+freebsdx8632-target
       (bin-load-provide "FFI-FREEBSDX8632" "ffi-freebsdx8632")
+      #+(and arm-target linux-target)
+      (bin-load-provide "FFI-LINUXARM" "ffi-linuxarm")
 
 
       ;; Knock wood: all standard reader macros and no non-standard

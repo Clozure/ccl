@@ -1442,7 +1442,7 @@
    (nx1-ff-call-internal
     address-expression arg-specs-and-result-spec
     (ecase (backend-name *target-backend*)
-      (:linuxppc32 (%nx1-operator eabi-ff-call))
+      ((:linuxppc32 :linuxarm) (%nx1-operator eabi-ff-call))
       ((:darwinppc32 :linuxppc64 :darwinppc64) (%nx1-operator poweropen-ff-call))
       ((:darwinx8632 :linuxx8632 :win32 :solarisx8632 :freebsdx8632) (%nx1-operator i386-ff-call))
       ((:linuxx8664 :freebsdx8664 :darwinx8664 :solarisx8664 :win64) (%nx1-operator ff-call)))))
@@ -2075,6 +2075,14 @@
   (setf (afunc-lfun *nx-current-function*) 
         (%define-x86-lap-function name `((let ,bindings ,@body))
 				    (dpb (length bindings) $lfbits-numreq 0))))
+
+(defnx1 nx1-arm-lap-function (arm-lap-function) (name bindings &body body)
+  (require "ARM-LAP")
+  (setf (afunc-lfun *nx-current-function*)
+        (%define-arm-lap-function name `((let ,bindings ,@body))
+				    (dpb (length bindings) $lfbits-numreq 0))))
+
+                    
 
 
 

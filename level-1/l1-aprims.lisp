@@ -698,6 +698,30 @@ terminate the list"
               (t 'bogus)))))
   )
 
+#+arm-target
+(progn
+  (defparameter array-element-subtypes
+    #(single-float 
+      (unsigned-byte 32)
+      (signed-byte 32)
+      fixnum
+      base-char                         ;ucs4
+      (unsigned-byte 8)
+      (signed-byte 8)
+      base-char
+      (unsigned-byte 16)
+      (signed-byte 16)
+      double-float
+      bit))
+  
+  ;; given uvector subtype - what is the corresponding element-type
+  (defun element-subtype-type (subtype)
+    (declare (fixnum subtype))
+    (if  (= subtype arm::subtag-simple-vector) t
+        (svref array-element-subtypes 
+               (ash (- subtype arm::min-cl-ivector-subtag) (- arm::ntagbits)))))
+  )
+
 
 ;;; %make-displaced-array assumes the following
 

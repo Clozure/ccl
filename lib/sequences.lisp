@@ -170,7 +170,7 @@
 				   0
 				   (the fixnum (ash n 2))))
 	;; DOUBLE-FLOAT vectors have extra alignment padding on ppc32/x8632.
-	#+(or ppc32-target x8632-target)
+	#+32-bit-target
 	(#.target::subtag-double-float-vector
 	 (%copy-ivector-to-ivector src
 				   (the fixnum (+ (the fixnum (ash start 3))

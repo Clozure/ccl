@@ -78,6 +78,11 @@
 #endif
 #endif
 
+#ifdef ARM
+#define nodeheader_tag_p(tag) (tag == fulltag_nodeheader)
+#define immheader_tag_p(tag) (tag == fulltag_immheader)
+#endif
+
 #ifdef VC
 #define inline
 #define __attribute__(x)

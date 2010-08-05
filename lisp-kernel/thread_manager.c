@@ -1343,11 +1343,15 @@ new_tcr(natural vstack_size, natural tstack_size)
   tcr->vs_area = a;
   a->owner = tcr;
   tcr->save_vsp = (LispObj *) a->active;  
+#ifndef ARM
   a = allocate_tstack_holding_area_lock(tstack_size);
+#endif
   UNLOCK(lisp_global(TCR_AREA_LOCK),tcr);
+#ifndef ARM
   tcr->ts_area = a;
   a->owner = tcr;
   tcr->save_tsp = (LispObj *) a->active;
+#endif
 #ifdef X86
   tcr->next_tsp = tcr->save_tsp;
 #endif
@@ -1364,6 +1368,12 @@ new_tcr(natural vstack_size, natural tstack_size)
     (1 << MXCSR_UM_BIT) | 
 #endif
     (1 << MXCSR_PM_BIT);
+#endif
+#ifdef ARM
+  tcr->lisp_fpscr = 
+    (1 << FPSCR_IOE_BIT) | 
+    (1 << FPSCR_DZE_BIT) |
+    (1 << FPSCR_OFE_BIT);
 #endif
   tcr->save_allocbase = tcr->save_allocptr = (void *) VOID_ALLOCPTR;
   tcr->tlb_limit = 2048<<fixnumshift;
@@ -1406,16 +1416,20 @@ shutdown_thread_tcr(void *arg)
     LOCK(lisp_global(TCR_AREA_LOCK),current);
     vs = tcr->vs_area;
     tcr->vs_area = NULL;
+#ifndef ARM
     ts = tcr->ts_area;
     tcr->ts_area = NULL;
+#endif
     cs = tcr->cs_area;
     tcr->cs_area = NULL;
     if (vs) {
       condemn_area_holding_area_lock(vs);
     }
+#ifndef ARM
     if (ts) {
       condemn_area_holding_area_lock(ts);
     }
+#endif
     if (cs) {
       condemn_area_holding_area_lock(cs);
     }
@@ -1462,10 +1476,12 @@ tcr_cleanup(void *arg)
   if (a) {
     a->active = a->high;
   }
+#ifndef ARM
   a = tcr->ts_area;
   if (a) {
     a->active = a->high;
   }
+#endif
   a = tcr->cs_area;
   if (a) {
     a->active = a->high;
@@ -1515,6 +1531,9 @@ thread_init_tcr(TCR *tcr, void *stack_base, natural stack_size)
   UNLOCK(lisp_global(TCR_AREA_LOCK),tcr);
   tcr->cs_area = a;
   a->owner = tcr;
+#ifdef ARM
+  tcr->last_lisp_frame = (natural)(a->high);
+#endif
   if (!(tcr->flags & (1<<TCR_FLAG_BIT_FOREIGN))) {
     tcr->cs_limit = (LispObj)ptr_to_lispobj(a->softlimit);
   }
@@ -1917,6 +1936,9 @@ get_tcr(Boolean create)
 #ifdef X8632
 #define NSAVEREGS 0
 #endif
+#ifdef ARM
+#define NSAVEREGS 0
+#endif
     for (i = 0; i < NSAVEREGS; i++) {
       *(--current->save_vsp) = 0;
       current->vs_area->active -= node_size;
@@ -2248,10 +2270,12 @@ normalize_dead_tcr_areas(TCR *tcr)
     a->active = a->high;
   }
 
+#ifndef ARM
   a = tcr->ts_area;
   if (a) {
     a->active = a->high;
   }
+#endif
 
   a = tcr->cs_area;
   if (a) {

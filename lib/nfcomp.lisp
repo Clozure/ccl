@@ -143,6 +143,8 @@ Will differ from *compiling-file* during an INCLUDE")
     (when (and target-p (not (setq backend (find-backend target))))
       (warn "Unknown :TARGET : ~S.  Reverting to ~s ..." target *fasl-target*)
       (setq target *fasl-target*  backend *target-backend*))
+    (unless (eq *target-backend* *host-backend*)
+      (setq save-source-locations nil))
     (multiple-value-bind (output-file truename warnings-p serious-p)
         (loop
           (restart-case
@@ -1102,7 +1104,7 @@ Will differ from *compiling-file* during an INCLUDE")
 (defun fcomp-digest-code-notes (lfun &optional refs)
   (unless (memq lfun refs)
     (let* ((lfv (function-to-function-vector lfun))
-	   (start #+ppc-target 0 #+x86-target (%function-code-words lfun))
+	   (start #-x86-target 0 #+x86-target (%function-code-words lfun))
 	   (refs (cons lfun refs)))
       (declare (dynamic-extent refs))
       (loop for i from start below (uvsize lfv) as imm = (uvref lfv i)
@@ -1237,7 +1239,7 @@ Will differ from *compiling-file* during an INCLUDE")
       (case type-code
         (#.target::tag-fixnum
          (fasl-scan-fixnum exp))
-        (#.target::fulltag-cons (fasl-scan-list exp))
+        (#.target::tag-list (fasl-scan-list exp))
         #+ppc32-target
         (#.ppc32::tag-imm)
         #+ppc64-target
@@ -1250,6 +1252,8 @@ Will differ from *compiling-file* during an INCLUDE")
         #+x8664-target
         ((#.x8664::fulltag-imm-0
           #.x8664::fulltag-imm-1))
+        #+arm-target
+        (#.arm::tag-imm)
         (t
          (if
            #+ppc32-target
@@ -1264,6 +1268,8 @@ Will differ from *compiling-file* during an INCLUDE")
                          (logior (ash 1 x8664::fulltag-immheader-0)
                                  (ash 1 x8664::fulltag-immheader-1)
                                  (ash 1 x8664::fulltag-immheader-2))))
+           #+arm-target
+           (= (the fixnum (logand type-code arm::fulltagmask)) arm::fulltag-immheader)
            (case type-code
              (#.target::subtag-dead-macptr (fasl-unknown exp))
              (#.target::subtag-macptr
@@ -1282,7 +1288,8 @@ Will differ from *compiling-file* during an INCLUDE")
              ((#.target::subtag-pool #.target::subtag-weak #.target::subtag-lock) (fasl-unknown exp))
              (#+ppc-target #.target::subtag-symbol
               #+x8632-target #.target::subtag-symbol
-              #+x8664-target #.target::tag-symbol (fasl-scan-symbol exp))
+              #+x8664-target #.target::tag-symbol
+              #+arm-target #.target::subtag-symbol (fasl-scan-symbol exp))
              ((#.target::subtag-instance #.target::subtag-struct)
               (fasl-scan-user-form exp))
              (#.target::subtag-package (fasl-scan-ref exp))
@@ -1707,17 +1714,24 @@ Will differ from *compiling-file* during an INCLUDE")
   (if (and (= (typecode f) target::subtag-xfunction)
            (= (typecode (uvref f 0)) target::subtag-u8-vector))
     (fasl-xdump-clfun f)
-    (let* ((code-size (%function-code-words f))
-           (function-vector (function-to-function-vector f))
-           (function-size (uvsize function-vector)))
-      (fasl-out-opcode $fasl-clfun f)
-      (fasl-out-count function-size)
-      (fasl-out-count code-size)
-      (fasl-out-ivect function-vector 0 (ash code-size target::word-shift))
-      (do* ((k code-size (1+ k)))
-           ((= k function-size))
-        (declare (fixnum k))
-        (fasl-dump-form (uvref function-vector k))))))
+    (if (= (typecode f) target::subtag-xfunction)
+      (let* ((n (uvsize f)))
+        (fasl-out-opcode $fasl-function f)
+        (fasl-out-count n)
+        (dotimes (i n)
+          (fasl-dump-form (%svref f i))))        
+
+      (let* ((code-size (%function-code-words f))
+             (function-vector (function-to-function-vector f))
+             (function-size (uvsize function-vector)))
+        (fasl-out-opcode $fasl-clfun f)
+        (fasl-out-count function-size)
+        (fasl-out-count code-size)
+        (fasl-out-ivect function-vector 0 (ash code-size target::word-shift))
+        (do* ((k code-size (1+ k)))
+             ((= k function-size))
+          (declare (fixnum k))
+          (fasl-dump-form (uvref function-vector k)))))))
         
 
   

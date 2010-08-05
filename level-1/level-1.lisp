@@ -46,6 +46,8 @@
   (l1-load "ppc-callback-support")
   #+x86-target
   (l1-load "x86-callback-support")
+  #+arm-target
+  (l1-load "arm-callback-support")
   (l1-load "l1-callbacks")
   (l1-load "l1-sort")
   (bin-load "lists")
@@ -72,6 +74,8 @@
   (l1-load "ppc-threads-utils")
   #+x86-target
   (l1-load "x86-threads-utils")
+  #+arm-target
+  (l1-load "arm-threads-utils")
   (l1-load "l1-lisp-threads")
   (l1-load "l1-application")
   (l1-load "l1-processes")
@@ -86,6 +90,8 @@
   (l1-load "ppc-trap-support")
   #+x86-target
   (l1-load "x86-trap-support")
+  #+arm-target
+  (l1-load "arm-trap-support")
   (l1-load "l1-format")
   (l1-load "l1-sysio")
   (l1-load "l1-pathnames")

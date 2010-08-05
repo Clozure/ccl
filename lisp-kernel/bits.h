@@ -130,6 +130,9 @@ current_stack_pointer(void)
 #ifdef X8632
   register natural _sp __asm__("%esp");
 #endif
+#ifdef ARM
+  register natural _sp __asm__("sp");
+#endif
   return _sp;
 }
 #else

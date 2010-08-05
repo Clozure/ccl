@@ -56,6 +56,9 @@
 #endif
 #endif
 
+#ifdef ARM
+#define is_node_fulltag(f)  ((1<<(f))&((1<<fulltag_cons)|(1<<fulltag_misc)))
+#endif
 
 extern void zero_memory_range(BytePtr,BytePtr);
 extern LispObj GCarealow, GCareadynamiclow;
@@ -105,7 +108,11 @@ typedef unsigned char qnode;
 #if defined(PPC64) || defined(X8632)
 #define forward_marker subtag_forward_marker
 #else
+#ifdef ARM
+#define forward_marker (0xe7fffff0|uuo_format_unary)
+#else
 #define forward_marker fulltag_nil
+#endif
 #endif
 
 #ifdef PPC64

@@ -93,7 +93,8 @@ are running on, or NIL if we can't find any useful information."
                   (do* ((line (read-line f nil nil)
                               (read-line f nil nil))
                         (target #+ppc-target "machine"
-                                #+x86-target "model name"))
+                                #+x86-target "model name"
+                                #+arm-target "Hardware"))
                        ((null line))
                     (let* ((matched (cpu-info-match target line)))
                       (when matched (return matched)))))))
@@ -777,6 +778,7 @@ are running on, or NIL if we can't find any useful information."
   disassemble."
   (#+ppc-target ppc-xdisassemble
    #+x86-target x86-xdisassemble
+   #+arm-target arm-xdisassemble
    (require-type (function-for-disassembly thing) 'compiled-function)))
 
 (defun function-for-disassembly (thing)
@@ -1109,7 +1111,7 @@ are running on, or NIL if we can't find any useful information."
                      (%svref *immheader-types* (ash i -2)))
                     ((= lowtag ppc64::lowtag-nodeheader)
                      (%svref *nodeheader-types* (ash i -2)))))))
-    #+(or ppc32-target x8632-target)
+    #+(or ppc32-target x8632-target arm-target)
     (dotimes (i 256)
       (let* ((fulltag (logand i target::fulltagmask)))
         (setf (%svref a i)

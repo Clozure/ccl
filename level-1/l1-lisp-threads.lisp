@@ -195,9 +195,11 @@
 (defun init-thread-from-tcr (tcr thread)
   (let* ((cs-area (%fixnum-ref tcr target::tcr.cs-area))
          (vs-area (%fixnum-ref tcr target::tcr.vs-area))
+         #-arm-target
          (ts-area (%fixnum-ref tcr target::tcr.ts-area)))
     (when (or (zerop cs-area)
               (zerop vs-area)
+              #-arm-target
               (zerop ts-area))
       (error "Can't allocate new thread"))
     (setf (lisp-thread.tcr thread) tcr
@@ -206,6 +208,8 @@
           (lisp-thread.vs-size thread)
           (%stack-area-usable-size vs-area)
           (lisp-thread.ts-size thread)
+          #+arm-target 0
+          #-arm-target
           (%stack-area-usable-size ts-area)
           (lisp-thread.startup-function thread)
           (thread-make-startup-function thread tcr)))
@@ -558,6 +562,8 @@
   #+x86-target (or (let* ((xcf (%current-xcf)))
                      (if xcf
                        (%%frame-backlink xcf)))
+                   (%current-frame-ptr))
+  #+arm-target (or (current-fake-stack-frame)
                    (%current-frame-ptr)))
 
 
@@ -675,6 +681,7 @@
 (defun %ptr-to-vstack-p (tcr idx)
   (%ptr-in-area-p idx (%fixnum-ref tcr target::tcr.vs-area)))
 
+#-arm-target
 (defun %on-tsp-stack (tcr object)
   (%ptr-in-area-p object (%fixnum-ref tcr target::tcr.ts-area)))
 
@@ -698,7 +705,7 @@
     (when (object-in-range-p object r)
       (return t))))
 
-
+#-arm-target
 (defun on-any-tsp-stack (object)
   (or (%on-tsp-stack (%current-tcr) object)
       (object-in-some-range object *aux-tsp-ranges*)))
@@ -715,7 +722,10 @@
 (defun temporary-cons-p (x)
   (and (consp x)
        (not (null (or (on-any-vstack x)
-                      (on-any-tsp-stack x))))))
+                      #-arm-target
+                      (on-any-tsp-stack x)
+                      #+arm-target
+                      (on-any-csp-stack x))))))
 
 
 

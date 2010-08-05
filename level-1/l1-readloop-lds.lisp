@@ -683,6 +683,7 @@ commands but aren't")
                                       (%current-frame-ptr)
                                       #+ppc-target *fake-stack-frames*
                                       #+x86-target (%current-frame-ptr)
+                                      #+arm-target (or (current-fake-stack-frame) (%current-frame-ptr))
                                       (db-link)
                                       (1+ *break-level*)))
          (*backtrace-contexts* (cons context *backtrace-contexts*)))

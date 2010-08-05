@@ -169,7 +169,7 @@
     (subseq (nsubstitute #\0 #\# (nsubstitute #\. #\Space name)) 1)))
 
 
-
+#+x86-target
 (defun collect-elf-static-functions ()
   (collect ((functions))
     (purify)
@@ -183,6 +183,43 @@
                   ccl::area-readonly
                   ))
     (functions)))
+
+#+(or arm-target ppc-target)
+(defun collect-elf-static-functions ()
+  (ccl::purify)
+  (multiple-value-bind (pure-low pure-high)
+      (ccl::do-gc-areas (a)
+        (when (eql(ccl::%fixnum-ref a target::area.code)
+                  ccl::area-readonly)
+          (return
+            (values (ash (ccl::%fixnum-ref a target::area.low) target::fixnumshift)
+                    (ash (ccl::%fixnum-ref a target::area.active) target::fixnumshift)))))
+    (let* ((hash (make-hash-table :test #'eq))
+           (code-vector-index #+ppc-target 0 #+arm-target 1))
+      (ccl::%map-lfuns #'(lambda (f)
+                           (let* ((code-vector  (ccl:uvref f code-vector-index))
+                                  (startaddr (+ (ccl::%address-of code-vector)
+                                                target::misc-data-offset)))
+                             (when (and (>= startaddr pure-low)
+                                        (< startaddr pure-high))
+                               (push f (gethash code-vector hash))))))
+      (let* ((n 0))
+        (declare (fixnum n))
+        (maphash #'(lambda (k v)
+                     (declare (ignore k))
+                     (if (null (cdr v))
+                       (incf n)))
+                 hash)
+        (let* ((functions ()))
+          (maphash #'(lambda (k v)
+                       (declare (ignore k))
+                       (when (null (cdr v))
+                         (push (car v) functions)))
+                   hash)
+          (sort functions
+                #'(lambda (x y)
+                    (< (ccl::%address-of (uvref x code-vector-index))
+                       (ccl::%address-of (uvref y code-vector-index))))))))))
 
 (defun register-elf-functions (section-number)
   (let* ((functions (collect-elf-static-functions))
@@ -216,10 +253,17 @@
                   #+32-bit-target :<E>lf32_<S>ym.st_shndx) section-number
             (pref p
                   #+64-bit-target :<E>lf64_<S>ym.st_value
-                  #+32-bit-target :<E>lf32_<S>ym.st_value) (%address-of f)
+                  #+32-bit-target :<E>lf32_<S>ym.st_value)
+            #+x86-target (%address-of f)
+            #+ppc-target (- (%address-of (uvref f 0)) (- ppc::fulltag-misc ppc::node-size))
+            #+arm-target (- (%address-of (uvref f 1)) (- arm::fulltag-misc arm::node-size))
             (pref p
                   #+64-bit-target :<E>lf64_<S>ym.st_size
-                  #+32-bit-target :<E>lf32_<S>ym.st_size) (1+ (ash (1- (%function-code-words f)) target::word-shift))))))
+                  #+32-bit-target :<E>lf32_<S>ym.st_size)
+            #+x86-target (1+ (ash (1- (%function-code-words f)) target::word-shift))
+            #+ppc-target (ash (uvsize (uvref f 0)) ppc::word-shift)
+            #+arm-target (ash (uvsize (uvref f 1)) arm::word-shift)
+            ))))
 
 (defun elf-section-index (section)
   (#_elf_ndxscn section))
@@ -324,6 +368,7 @@
                                            #+x8632-target #$EM_386
                                            #+ppc32-target #$EM_PPC
                                            #+ppc64-target #$EM_PPC64
+                                           #+arm-target #$EM_ARM
                                            ))
          (program-header (new-elf-program-header object))
          (lisp-section (new-elf-section object))

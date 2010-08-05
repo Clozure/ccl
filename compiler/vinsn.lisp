@@ -262,6 +262,8 @@
     :constant-ref
     :sets-cc                            ; vinsn sets condition codes based on result
     :discard                            ; adjusts a stack pointer
+    :sp
+    :predicatable                       ; all instructions can be predicated, no instructions set or test condition codes.
     ))
 
 (defparameter *nvp-max* 10 "size of *vinsn-varparts* freelist elements")

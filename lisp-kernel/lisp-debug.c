@@ -284,7 +284,9 @@ show_lisp_register(ExceptionInformation *xp, char *label, int r)
     fprintf(dbgout, "%%%s (%s) = %s\n", Iregnames[r], label, s);
   }
 #endif
-
+#ifdef ARM
+  fprintf(dbgout, "r%02d (%s) = %s\n", r, label, print_lisp_object(val));
+#endif
 }
 
 
@@ -542,6 +544,61 @@ describe_ppc_trap(ExceptionInformation *xp)
 }
 #endif
 
+#ifdef ARM
+void
+describe_arm_uuo(ExceptionInformation *xp)
+{
+  pc program_counter = xpPC(xp);
+  opcode instruction = *program_counter;
+
+  if (IS_UUO(instruction)) {
+    unsigned format = UUO_FORMAT(instruction);
+
+    switch(format) {
+    case uuo_format_nullary:
+    case uuo_format_nullary_error:
+      switch UUOA_field(instruction) {
+      case 0:
+        fprintf(dbgout,"alloc_trap\n");
+        break;
+      case 1:
+        fprintf(dbgout,"wrong number of args (%d) to %s\n",xpGPR(xp,nargs)>>node_shift,
+                print_lisp_object(xpGPR(xp,nfn)));
+        break;
+      case 2:
+        fprintf(dbgout,"gc trap\n");
+        break;
+      case 3:
+        fprintf(dbgout,"debug trap\n");
+        break;
+      case 4:
+        fprintf(dbgout,"deferred interrupt\n");
+        break;
+      case 5:
+        fprintf(dbgout,"deferred suspend\n");
+        break;
+      default:
+        break;
+      }
+      break;
+
+    case uuo_format_unary_error:
+      switch (UUO_UNARY_field(instruction)) {
+      case 0:
+      case 1:
+        fprintf(dbgout,"%s is unbound\n", print_lisp_object(xpGPR(xp,UUOA_field(instruction))));
+        break;
+
+      default:
+        break;
+      }
+    default:
+      break;
+    }
+  }
+}
+#endif
+
 char *
 area_code_name(int code)
 {
@@ -643,12 +700,29 @@ debug_lisp_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
     fprintf(dbgout,"%%edx (nargs) = %d (maybe)\n", unbox_fixnum(xpGPR(xp,Inargs)));
   }
 #endif
+#ifdef ARM
+    TCR *xpcontext = (TCR *)ptr_from_lispobj(xpGPR(xp, rcontext));
+
+    fprintf(dbgout, "rcontext = 0x%lX ", xpcontext);
+    if (!active_tcr_p(xpcontext)) {
+      fprintf(dbgout, "(INVALID)\n");
+    } else {
+      fprintf(dbgout, "\nnargs = %d\n", xpGPR(xp, nargs) >> fixnumshift);
+      show_lisp_register(xp, "fn", fn);
+      show_lisp_register(xp, "arg_z", arg_z);
+      show_lisp_register(xp, "arg_y", arg_y);
+      show_lisp_register(xp, "arg_x", arg_x);
+      show_lisp_register(xp, "temp0", temp0);
+      show_lisp_register(xp, "temp1/fname/next_method_context", temp1);
+      show_lisp_register(xp, "temp2/nfn", temp2);
+    }
+#endif
   }
   
   return debug_continue;
 }
 
-#ifdef PPC
+#ifndef X86
 debug_command_return
 debug_advance_pc(ExceptionInformation *xp, siginfo_t *info, int arg)
 {
@@ -660,11 +734,13 @@ debug_advance_pc(ExceptionInformation *xp, siginfo_t *info, int arg)
 debug_command_return
 debug_identify_exception(ExceptionInformation *xp, siginfo_t *info, int arg)
 {
-#ifdef PPC
+#ifndef X86
   pc program_counter = xpPC(xp);
   opcode instruction = 0;
+#endif
 
   switch (arg) {
+#ifdef PPC
   case SIGILL:
   case SIGTRAP:
     instruction = *program_counter;
@@ -675,23 +751,24 @@ debug_identify_exception(ExceptionInformation *xp, siginfo_t *info, int arg)
       describe_ppc_illegal(xp);
     }
     break;
-  case SIGSEGV:
-  case SIGBUS:
-    describe_memfault(xp, info);
-    break;
-  default:
-    break;
-  }
-#else
-  switch (arg) {
-  case SIGSEGV:
-  case SIGBUS:
-    describe_memfault(xp, info);
-    break;
-  default:
+#endif
+
+#ifdef ARM  
+  case SIGILL:
+    instruction = *program_counter;
+    if (IS_UUO(instruction)) {
+      describe_arm_uuo(xp);
+    }
     break;
   }
 #endif
+  case SIGSEGV:
+  case SIGBUS:
+    describe_memfault(xp, info);
+    break;
+  default:
+    break;
+  }
   return debug_continue;
 }
 
@@ -718,7 +795,7 @@ debug_get_string_value(char *prompt)
 natural
 debug_get_natural_value(char *prompt)
 {
-  char s[32], *res;
+  char s[32], *res, *endptr;
   int n;
   natural val;
 
@@ -727,8 +804,8 @@ debug_get_natural_value(char *prompt)
     fprintf(dbgout, "\n  %s :", prompt);
     s[0]=0;
     res = fgets(s, 24, stdin);
-    n = sscanf(s, "%lu", &val);
-  } while (n != 1);
+    val = strtoul(res,&endptr,0);
+  } while (*endptr);
   return val;
 }
 
@@ -781,6 +858,9 @@ debug_thread_info(ExceptionInformation *xp, siginfo_t *info, int arg)
 #ifdef X86
               (u64_t) (natural)(xpGPR(xp,Isp))
 #endif           
+#ifdef ARM
+              (u64_t) (natural)(xpGPR(xp,Rsp))
+#endif
               );
     }
   }
@@ -922,6 +1002,15 @@ debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
 
 #endif
 
+#endif
+
+#ifdef ARM
+  int a, b;
+  for (a = 0, b = 8; a < 8; a++, b++) {
+    fprintf(dbgout,"r%02d = 0x%08lX    r%02d = 0x%08lX\n",
+	    a, xpGPR(xp, a),
+	    b, xpGPR(xp, b));
+  }
 #endif
 
   return debug_continue;
@@ -1074,19 +1163,19 @@ debug_command_entry debug_command_entries[] =
    DEBUG_COMMAND_FLAG_AUX_REGNO,
    "GPR to set (0-31) ?",
    'G'},
-#ifdef PPC
+#ifndef X86
   {debug_advance_pc,
    "Advance the program counter by one instruction (use with caution!)",
    DEBUG_COMMAND_FLAG_REQUIRE_XP | DEBUG_COMMAND_FLAG_EXCEPTION_ENTRY_ONLY,
    NULL,
    'A'},
-#endif
   {debug_identify_exception,
    "Describe the current exception in greater detail",
    DEBUG_COMMAND_FLAG_REQUIRE_XP | DEBUG_COMMAND_FLAG_EXCEPTION_ENTRY_ONLY |
    DEBUG_COMMAND_FLAG_EXCEPTION_REASON_ARG,
    NULL,
    'D'},
+#endif
   {debug_show_registers, 
    "Show raw GPR/SPR register values", 
    DEBUG_COMMAND_FLAG_REQUIRE_XP,

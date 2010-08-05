@@ -142,6 +142,9 @@ typedef struct area_list {
 #define CS_OVERFLOW_FORCE_LIMIT ((natural)(-16))
 #endif
 
+#ifdef ARM
+#define CS_OVERFLOW_FORCE_LIMIT ((natural)(-(sizeof(lisp_frame))))
+#endif
 
 
 
@@ -149,11 +152,16 @@ typedef struct area_list {
 #define PURESPACE_RESERVE 0x2000000000LL /* 128 GB */
 #define PURESPACE_SIZE (1LL<<30LL)
 #else
+#ifdef ARM
+#define PURESPACE_RESERVE (64<<20)
+#define PURESPACE_SIZE (32<<20)
+#else
 #define PURESPACE_RESERVE (128<<20) /* MB */
 #define PURESPACE_SIZE (64<<20)
 #endif
+#endif
 
-#define STATIC_RESERVE heap_segment_size
+#define STATIC_RESERVE (2<<12)
 
 
 #define SPJUMP_TARGET_ADDRESS (STATIC_BASE_ADDRESS+0x3000)

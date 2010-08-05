@@ -686,7 +686,7 @@
 	       (declare (bignum-index len-a len-b len-res))
 	       (if (and (>= len-a 16)
 			(>= len-b 16)
-			#+x8632-target
+			#+(or x8632-target arm-target)
 			nil)
 		 (let* ((ubytes (* len-a 4))
 			(vbytes (* len-b 4))
@@ -1423,10 +1423,6 @@
 
 
 
-;;; These are used by BIGNUM-TRUNCATE and friends in the general case.
-;;;
-(defvar *truncate-x* nil)
-(defvar *truncate-y* nil)
 
 ;;; BIGNUM-TRUNCATE -- Public.
 ;;;
@@ -1466,18 +1462,18 @@
               (t
                (let* ((len-x+1 (1+ len-x)))
                  (declare (fixnum len-x+1))
-                 (with-bignum-buffers ((*truncate-x* len-x+1)
-                                       (*truncate-y* (the fixnum (1+ len-y))))
+                 (with-bignum-buffers ((truncate-x len-x+1)
+                                       (truncate-y (the fixnum (1+ len-y))))
                    (let ((y-shift (shift-y-for-truncate y)))
-                     (shift-and-store-truncate-buffers x len-x y len-y y-shift)
-                     (values (do-truncate len-x+1 len-y)
+                     (shift-and-store-truncate-buffers truncate-x truncate-y x len-x y len-y y-shift)
+                     (values (do-truncate truncate-x truncate-y len-x+1 len-y)
                              ;; DO-TRUNCATE must execute first.
                              (when (not no-rem)                               
                                (when (not (eql 0 y-shift))                                  
                                  (let* ((res-len-1 (1- len-y)))
                                    (declare (fixnum res-len-1))
-                                   (bignum-shift-right-loop-1 y-shift *truncate-x* *truncate-x* res-len-1 0)))                                
-                               (let ((the-res (%normalize-bignum-macro *truncate-x* )))
+                                   (bignum-shift-right-loop-1 y-shift truncate-x truncate-x res-len-1 0)))                                
+                               (let ((the-res (%normalize-bignum-macro truncate-x )))
                                  (if (not (fixnump the-res))
                                    (if x-plusp (copy-bignum the-res) (negate-bignum the-res))
                                    (if x-plusp the-res (the fixnum (- (the fixnum the-res)))))
@@ -1512,16 +1508,16 @@
               (t
                (let* ((len-x+1 (1+ len-x)))
                  (declare (fixnum len-x+1))
-                 (with-bignum-buffers ((*truncate-x* len-x+1)
-                                       (*truncate-y* (the fixnum (1+ len-y))))
+                 (with-bignum-buffers ((truncate-x len-x+1)
+                                       (truncate-y (the fixnum (1+ len-y))))
                    (let ((y-shift (shift-y-for-truncate y)))
-                     (shift-and-store-truncate-buffers x len-x y len-y y-shift)
-                     (do-truncate-no-quo len-x+1 len-y)
+                     (shift-and-store-truncate-buffers truncate-x truncate-y x len-x y len-y y-shift)
+                     (do-truncate-no-quo truncate-x truncate-y len-x+1 len-y)
                      (when (not (eql 0 y-shift))                                 
                        (let* ((res-len-1 (1- len-y)))
                          (declare (fixnum res-len-1))
-                         (bignum-shift-right-loop-1 y-shift *truncate-x* *truncate-x* res-len-1 0)))
-                     (let ((the-res (%normalize-bignum-macro *truncate-x*)))
+                         (bignum-shift-right-loop-1 y-shift truncate-x truncate-x res-len-1 0)))
+                     (let ((the-res (%normalize-bignum-macro truncate-x)))
                        (if (not (fixnump the-res))
                          (if x-plusp (copy-bignum the-res) (negate-bignum the-res))
                          (if x-plusp the-res (the fixnum (- (the fixnum the-res)))))))))))))))
@@ -1658,7 +1654,7 @@
 ;;;
 
 
-(defun do-truncate (len-x len-y)
+(defun do-truncate (truncate-x truncate-y len-x len-y)
   (declare (type bignum-index len-x len-y))
   (let* ((len-q (- len-x len-y))
 	 ;; Add one for extra sign digit in case high bit is on.
@@ -1673,8 +1669,8 @@
     (loop
       (digit-bind (h l)
                   (digit-bind (guess-h guess-l)
-                              (bignum-truncate-guess-2 *truncate-x* i *truncate-y* (the fixnum (1- len-y)))                                  
-                    (try-bignum-truncate-guess guess-h guess-l len-y low-x-digit))
+                              (bignum-truncate-guess-2 truncate-x i truncate-y (the fixnum (1- len-y)))                                  
+                    (try-bignum-truncate-guess truncate-x truncate-y guess-h guess-l len-y low-x-digit))
         (%bignum-set q k h l))
       (cond ((zerop k) (return))
             (t (decf k)
@@ -1686,7 +1682,7 @@
         (if (fixnump q) q (copy-bignum q)))
       (%normalize-bignum-macro q))))
 
-(defun do-truncate-no-quo (len-x len-y)
+(defun do-truncate-no-quo (truncate-x truncate-y len-x len-y)
   (declare (type bignum-index len-x len-y))
   (let* ((len-q (- len-x len-y))
 	 (k (1- len-q))
@@ -1694,8 +1690,8 @@
 	 (low-x-digit (- i len-y)))
     (declare (type bignum-index len-q k i  low-x-digit))
     (loop
-      (digit-bind (guess-h guess-l) (bignum-truncate-guess-2 *truncate-x* i *truncate-y* (the fixnum (1- len-y)))                                 
-        (try-bignum-truncate-guess guess-h guess-l len-y low-x-digit)
+      (digit-bind (guess-h guess-l) (bignum-truncate-guess-2 truncate-x i truncate-y (the fixnum (1- len-y)))                                 
+        (try-bignum-truncate-guess truncate-x truncate-y guess-h guess-l len-y low-x-digit)
         (cond ((zerop k) (return))
               (t (decf k)
                  (decf low-x-digit)
@@ -1715,7 +1711,7 @@
 ;;; of 3/b, where b is the base (2 to the digit-size power) -- pretty rarely.
 ;;;
 
-(defun try-bignum-truncate-guess (guess-h guess-l len-y low-x-digit)
+(defun try-bignum-truncate-guess (truncate-x truncate-y guess-h guess-l len-y low-x-digit)
   (declare (type bignum-index low-x-digit len-y))
 
   (let ((carry-digit-h 0)
@@ -1726,7 +1722,7 @@
 	     (fixnum borrow carry-digit-h carry-digit-l))
     ;; Multiply guess and divisor, subtracting from dividend simultaneously.
     (dotimes (j len-y)
-      (multiple-value-bind (y-h y-l) (%bignum-ref *truncate-y* j)
+      (multiple-value-bind (y-h y-l) (%bignum-ref truncate-y j)
 	(multiple-value-bind (high-h high-l low-h low-l)
 	    (%multiply-and-add-1 guess-h
 			       guess-l
@@ -1736,26 +1732,26 @@
 			       carry-digit-l)
 	  (setq carry-digit-h high-h
 		carry-digit-l high-l)
-	  (multiple-value-bind (tx-h tx-l) (%bignum-ref *truncate-x* i)
+	  (multiple-value-bind (tx-h tx-l) (%bignum-ref truncate-x i)
 	    (multiple-value-bind (x-h x-l temp-borrow)
 		(%subtract-with-borrow-1 tx-h tx-l low-h low-l borrow)
-	      (%bignum-set *truncate-x* i x-h x-l)
+	      (%bignum-set truncate-x i x-h x-l)
 	      (setq borrow temp-borrow)))))
       (incf i))
-    (multiple-value-bind (tx-h tx-l) (%bignum-ref *truncate-x* i)
+    (multiple-value-bind (tx-h tx-l) (%bignum-ref truncate-x i)
       (multiple-value-bind (x-h x-l)
 	  (%subtract-with-borrow-1 tx-h tx-l carry-digit-h carry-digit-l borrow)
-	(%bignum-set *truncate-x* i x-h x-l)))
+	(%bignum-set truncate-x i x-h x-l)))
     ;; See if guess is off by one, adding one Y back in if necessary.
 
 
-    (cond ((%digit-0-or-plusp *truncate-x* i)
+    (cond ((%digit-0-or-plusp truncate-x i)
 	   (values guess-h guess-l))
 	  (t
 	   ;; If subtraction has negative result, add one divisor value back
 	   ;; in.  The guess was one too large in magnitude.
            ;; hmm - happens about 1.6% of the time
-           (bignum-add-loop-+ low-x-digit *truncate-x* *truncate-y* len-y)
+           (bignum-add-loop-+ low-x-digit truncate-x truncate-y len-y)
            (%subtract-one guess-h guess-l)
 	   ;(%subtract-with-borrow guess-h guess-l 0 1 1)
            ))))
@@ -1823,15 +1819,15 @@
 ;;; way in.  This assumes x and y are positive and at least two in length, and
 ;;; it assumes *truncate-x* and *truncate-y* are one digit longer than x and y.
 ;;;
-(defun shift-and-store-truncate-buffers (x len-x y len-y shift)
+(defun shift-and-store-truncate-buffers (truncate-x truncate-y x len-x y len-y shift)
   (declare (type bignum-index len-x len-y)
 	   (type (integer 0 (#.digit-size)) shift))
   (cond ((eql 0 shift)
-	 (bignum-replace *truncate-x* x :end1 len-x)
-	 (bignum-replace *truncate-y* y :end1 len-y))
+	 (bignum-replace truncate-x x :end1 len-x)
+	 (bignum-replace truncate-y y :end1 len-y))
 	(t
-	 (bignum-ashift-left-unaligned x 0 shift (the fixnum (1+ len-x)) *truncate-x*)
-	 (bignum-ashift-left-unaligned y 0 shift (the fixnum (1+ len-y)) *truncate-y*))))
+	 (bignum-ashift-left-unaligned x 0 shift (the fixnum (1+ len-x)) truncate-x)
+	 (bignum-ashift-left-unaligned y 0 shift (the fixnum (1+ len-y)) truncate-y))))
 
 
 

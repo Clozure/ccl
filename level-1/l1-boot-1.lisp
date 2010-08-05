@@ -46,7 +46,8 @@
 (defparameter *platform-cpu-names*
   `((,platform-cpu-ppc . :ppc)
     (,platform-cpu-sparc . :sparc)
-    (,platform-cpu-x86 . :x86)))
+    (,platform-cpu-x86 . :x86)
+    (,platform-cpu-arm . :arm)))
 
 (defun host-platform ()
   (let* ((pf (%get-kernel-global 'host-platform)))

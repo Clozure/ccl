@@ -101,7 +101,10 @@
   (etypecase thing
     (string thing)
     (symbol (symbol-name thing))
-    (character (make-string 1 :initial-element thing))))
+    (character
+     (let* ((s (make-string 1)))
+       (setf (schar s 0) thing)
+       s))))
 
 
 (defun dereference-base-string (s)

@@ -83,12 +83,21 @@ extern LispObj lisp_nil;
 #define G2_THRESHOLD (-507)
 #define GC_NOTIFY_THRESHOLD (-506)
 #else
+#ifdef ARM
+#define LISP_HEAP_THRESHOLD (-1021)
+#define EGC_ENABLED (-1020)
+#define G0_THRESHOLD (-1019)
+#define G1_THRESHOLD (-1018)
+#define G2_THRESHOLD (-1017)
+#define GC_NOTIFY_THRESHOLD (-1016)
+#else
 #define LISP_HEAP_THRESHOLD (-1023)
 #define EGC_ENABLED (-1022)
 #define G0_THRESHOLD (-1021)
 #define G1_THRESHOLD (-1020)
 #define G2_THRESHOLD (-1019)
 #define GC_NOTIFY_THRESHOLD (-1018)
+#endif
 #endif
 
 #ifdef PPC
@@ -109,6 +118,11 @@ extern LispObj lisp_nil;
 #ifdef X8632
 #define lisp_global(g) (((LispObj *) (0x13000+(LOWMEM_BIAS)))[(g)])
 #define nrs_symbol(s) (((lispsymbol *) (0x13008+(LOWMEM_BIAS)))[(s)])
+#endif
+
+#ifdef ARM
+#define lisp_global(g) (((LispObj *) (nil_value-fulltag_nil-dnode_size))[(g)])
+#define nrs_symbol(s) (((lispsymbol *) (nil_value-fulltag_nil+dnode_size))[(s)]) 
 #endif
 
 #define nrs_T 				(nrs_symbol(0))		/* t */

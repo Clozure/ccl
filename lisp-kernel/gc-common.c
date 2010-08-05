@@ -1443,8 +1443,8 @@ gc(TCR *tcr, signed_natural param)
     GCDebug = ((nrs_GC_EVENT_STATUS_BITS.vcell & gc_integrity_check_bit) != 0);
     if (GCDebug) {
       check_all_areas(tcr);
+      check_static_cons_freelist("i`n pre-gc static-cons check");
     }
-    check_static_cons_freelist("in pre-gc static-cons check");
   }
 
   if (from) {
@@ -1470,11 +1470,16 @@ gc(TCR *tcr, signed_natural param)
        *PACKAGE*, but don't mark its contents. */
       {
         LispObj
-          itab;
+          itab,
+          pkgidx = nrs_PACKAGE.binding_index;
         natural
           dnode, ndnodes;
       
-        pkg = nrs_PACKAGE.vcell;
+        if ((pkgidx >= tcr->tlb_limit) ||
+            ((pkg = tcr->tlb_pointer[pkgidx>>fixnumshift]) == 
+             no_thread_local_binding_marker)) {
+          pkg = nrs_PACKAGE.vcell;
+        }
         if ((fulltag_of(pkg) == fulltag_misc) &&
             (header_subtag(header_of(pkg)) == subtag_package)) {
           itab = ((package *)ptr_from_lispobj(untag(pkg)))->itab;
@@ -1713,9 +1718,8 @@ gc(TCR *tcr, signed_natural param)
 
   if (GCDebug) {
     check_all_areas(tcr);
+    check_static_cons_freelist("in post-gc static-cons check");
   }
-  check_static_cons_freelist("in post-gc static-cons check");
-
 
   
   lisp_global(IN_GC) = 0;

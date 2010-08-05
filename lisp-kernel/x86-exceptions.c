@@ -984,7 +984,7 @@ handle_floating_point_exception(TCR *tcr, ExceptionInformation *xp, siginfo_t *i
 #endif  
 
   if ((fulltag_of(cmain) == fulltag_misc) &&
-	     (header_subtag(header_of(cmain)) == subtag_macptr)) {
+      (header_subtag(header_of(cmain)) == subtag_macptr)) {
     xcf = create_exception_callback_frame(xp, tcr);
     skip = callback_to_lisp(tcr, cmain, xp, xcf, SIGFPE, code, 0, 0);
     xpPC(xp) += skip;
@@ -1859,7 +1859,7 @@ altstack_interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *c
 
 #ifndef WINDOWS
 void
-install_signal_handler(int signo, void * handler, Boolean system)
+install_signal_handler(int signo, void * handler, Boolean system, Boolean on_altstack)
 {
   struct sigaction sa;
   
@@ -1872,7 +1872,7 @@ install_signal_handler(int signo, void * handler, Boolean system)
   sa.sa_flags = 
     0 /* SA_RESTART */
 #ifdef USE_SIGALTSTACK
-    | SA_ONSTACK
+    | on_altstack ? SA_ONSTACK : 0
 #endif
     | SA_SIGINFO;
 
@@ -2096,11 +2096,11 @@ install_pmcl_exception_handlers()
     arbstack_signal_handler;
 #endif
   ;
-  install_signal_handler(SIGILL, handler, true);
+  install_signal_handler(SIGILL, handler, true, true);
   
-  install_signal_handler(SIGBUS, handler, true);
-  install_signal_handler(SIGSEGV,handler, true);
-  install_signal_handler(SIGFPE, handler, true);
+  install_signal_handler(SIGBUS, handler, true, true);
+  install_signal_handler(SIGSEGV,handler, true, true);
+  install_signal_handler(SIGFPE, handler, true, true);
 #endif
   
   install_signal_handler(SIGNAL_FOR_PROCESS_INTERRUPT,
@@ -2109,7 +2109,7 @@ install_pmcl_exception_handlers()
 #else
                          arbstack_interrupt_handler
 #endif
-                         ,true);
+                         , true, true);
   signal(SIGPIPE, SIG_IGN);
 }
 #endif
@@ -2303,8 +2303,8 @@ thread_signal_setup()
   thread_suspend_signal = SIG_SUSPEND_THREAD;
   thread_kill_signal = SIG_KILL_THREAD;
 
-  install_signal_handler(thread_suspend_signal, (void *)SUSPEND_RESUME_HANDLER, true);
-  install_signal_handler(thread_kill_signal, (void *)THREAD_KILL_HANDLER, true);
+  install_signal_handler(thread_suspend_signal, (void *)SUSPEND_RESUME_HANDLER, true, true);
+  install_signal_handler(thread_kill_signal, (void *)THREAD_KILL_HANDLER, true, true);
 }
 #endif
 

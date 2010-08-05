@@ -821,7 +821,7 @@ form is not evaluated if the variable is already BOUNDP."
 	(i (gensym)))
     `(loop with ,fn = ,function
            with ,lfv = (function-to-function-vector ,fn)
-           for ,i from #+ppc-target 1 #+x86-target (%function-code-words ,fn) below (%i- (uvsize  ,lfv) 1)
+           for ,i from #+ppc-target 1 #+x86-target (%function-code-words ,fn) #+arm-target 2  below (%i- (uvsize  ,lfv) 1)
            as ,var = (%svref ,lfv ,i)
            ,@loop-body)))
 

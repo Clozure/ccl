@@ -95,6 +95,6 @@ void ensure_static_conses(ExceptionInformation *, TCR *,natural);
 extern FILE *dbgout;
 
 void
-install_signal_handler(int, void*, Boolean);
+install_signal_handler(int, void*, Boolean, Boolean);
 
 #endif /* __lisp__ */

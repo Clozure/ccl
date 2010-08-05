@@ -1648,7 +1648,8 @@
              :tcr tcr
              :context context
              :break-condition (ccl::bt.break-condition context))
-           :tsp-range (make-tsp-stack-range tcr context)
+           #-arm-target
+           :tsp-range #-arm-target (make-tsp-stack-range tcr context)
            :vsp-range (make-vsp-stack-range tcr context)
            :csp-range (make-csp-stack-range tcr context)
            initargs)))
@@ -1754,6 +1755,7 @@
 ;;; Each of these stack ranges defines the entire range of (control/value/temp)
 ;;; addresses; they can be used to addresses of stack-allocated objects
 ;;; for printing.
+#-arm-target
 (defun make-tsp-stack-range (tcr bt-info)
   (list (cons (ccl::%catch-tsp (ccl::bt.top-catch bt-info))
               (ccl::%fixnum-ref (ccl::%fixnum-ref tcr target::tcr.ts-area)
@@ -1778,6 +1780,13 @@
               (ccl::%fixnum-ref (ccl::%fixnum-ref tcr target::tcr.vs-area)
                                 target::area.high))))
 
+#+arm-target 
+(defun make-vsp-stack-range (tcr bt-info)
+  (list (cons (ccl::%fixnum-ref (ccl::catch-frame-sp (ccl::bt.top-catch bt-info))
+                                target::lisp-frame.savevsp)
+              (ccl::%fixnum-ref (ccl::%fixnum-ref tcr target::tcr.vs-area)
+                                target::area.high))))
+
 #+ppc-target
 (defun make-csp-stack-range (tcr bt-info)
   (list (cons (ccl::%svref (ccl::bt.top-catch bt-info) target::catch-frame.csp-cell)
@@ -1793,6 +1802,12 @@
 #+x8664-target
 (defun make-csp-stack-range (tcr bt-info)
   (list (cons (ccl::%svref (ccl::bt.top-catch bt-info) target::catch-frame.foreign-sp-cell)
+              (ccl::%fixnum-ref (ccl::%fixnum-ref tcr target::tcr.cs-area)
+                                target::area.high))))
+
+#+arm-target
+(defun make-csp-stack-range (tcr bt-info)
+  (list (cons (ccl::catch-frame-sp (ccl::bt.top-catch bt-info))
               (ccl::%fixnum-ref (ccl::%fixnum-ref tcr target::tcr.cs-area)
                                 target::area.high))))
 

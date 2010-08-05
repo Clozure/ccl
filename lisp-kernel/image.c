@@ -353,6 +353,9 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
 	image_nil = (LispObj)(a->low) + (1024*4) + fulltag_cons;
 #endif
 #endif
+#ifdef ARM
+	image_nil = (LispObj)(a->low) + (1024*4) + fulltag_nil;
+#endif
 	set_nil(image_nil);
 	if (bias) {
           LispObj weakvll = lisp_global(WEAKVLL);

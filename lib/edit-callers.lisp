@@ -188,7 +188,7 @@
                ;; Don't count lfun-info  either
                (when (logbitp $lfbits-info-bit bits)
                  (decf end))
-               (loop for i from #+ppc-target 1 #+x86-target (%function-code-words fun) below end
+               (loop for i from #+ppc-target 1 #+x86-target (%function-code-words fun) #+arm-target 2 below end
                      as im = (%svref lfv i)
                      when (or (eq function im)
                               (and cfun (eq cfun im)))
@@ -235,6 +235,11 @@
          ((= i n))
       (declare (fixnum i))
       (funcall f (%svref lfv (%i+ 1 i))))
+    #+arm-target
+    (do* ((i 2 (1+ i)))
+         ((>= i n))
+      (declare (fixnum i))
+      (funcall f (uvref lfv i)))
     ))
          
     

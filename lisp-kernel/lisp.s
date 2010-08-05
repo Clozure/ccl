@@ -65,4 +65,9 @@
          include(x86-macros.s)
 	 include(x86-uuo.s)
 	')
+        ifdef(`ARM',`
+         include(arm-constants.s)
+         include(arm-macros.s)
+         include(arm-uuo.s)
+        ')
 

@@ -65,6 +65,13 @@
     x86-backend
 ))
 
+(defparameter *arm-compiler-modules*
+  '(arm-arch
+    armenv
+    arm-asm
+    arm-lap
+))
+
 (defparameter *ppc32-compiler-backend-modules*
   '(ppc32-backend ppc32-vinsns))
 
@@ -85,31 +92,38 @@
 (defparameter *x86-compiler-backend-modules*
   '(x862))
 
+(defparameter *arm-compiler-backend-modules*
+  '(arm-backend arm-vinsns arm2))
+
 
 
 
 (defparameter *ppc-xload-modules* '(xppcfasload xfasload heap-image ))
 (defparameter *x8632-xload-modules* '(xx8632fasload xfasload heap-image ))
 (defparameter *x8664-xload-modules* '(xx8664fasload xfasload heap-image ))
+(defparameter *arm-xload-modules* '(xarmfasload xfasload heap-image ))
 
 
 ;;; Not too OS-specific.
 (defparameter *ppc-xdev-modules* '(ppc-lapmacros ))
 (defparameter *x86-xdev-modules* '(x86-lapmacros ))
+(defparameter *arm-xdev-modules* '(arm-lapmacros ))
 
 (defun target-xdev-modules (&optional (target
 				       (backend-target-arch-name
 					*host-backend*)))
   (case target
     ((:ppc32 :ppc64) *ppc-xdev-modules*)
-    ((:x8632 :x8664) *x86-xdev-modules*)))
+    ((:x8632 :x8664) *x86-xdev-modules*)
+    (:arm *arm-xdev-modules*)))
 
 (defun target-xload-modules (&optional (target
 					(backend-target-arch-name *host-backend*)))
   (case target
     ((:ppc32 :ppc64) *ppc-xload-modules*)
     (:x8632 *x8632-xload-modules*)
-    (:x8664 *x8664-xload-modules*)))
+    (:x8664 *x8664-xload-modules*)
+    (:arm *arm-xload-modules*)))
 
 
 
@@ -143,7 +157,8 @@
              (:linuxx8632 'ffi-linuxx8632)
              (:win32 'ffi-win32)
              (:solarisx8632 'ffi-solarisx8632)
-             (:freebsdx8632 'ffi-freebsdx8632)))))
+             (:freebsdx8632 'ffi-freebsdx8632)
+             (:linuxarm 'ffi-linuxarm)))))
 
 
 (defun target-compiler-modules (&optional (target
@@ -161,7 +176,9 @@
                     *x86-compiler-backend-modules*))
     (:x8664 (append *x86-compiler-modules*
                     *x8664-compiler-backend-modules*
-                    *x86-compiler-backend-modules*))))
+                    *x86-compiler-backend-modules*))
+    (:arm (append *arm-compiler-modules*
+                  *arm-compiler-backend-modules*))))
 
 (defparameter *other-lib-modules*
   '(streams pathnames backtrace
@@ -175,7 +192,8 @@
   (append *other-lib-modules*
 	  (case target
 	    ((:ppc32 :ppc64) '(ppc-backtrace ppc-disassemble))
-            ((:x8632 :x8664) '(x86-backtrace x86-disassemble x86-watch)))))
+            ((:x8632 :x8664) '(x86-backtrace x86-disassemble x86-watch))
+            (:arm '(arm-backtrace arm-disassemble)))))
 	  
 
 (defun target-lib-modules (&optional (backend-name
@@ -225,12 +243,15 @@
 	  (case target
 	    ((:linuxppc32 :darwinppc32 :linuxppc64 :darwinppc64)
 	     '(ppc-error-signal ppc-trap-support
-	       ppc-threads-utils ppc-callback-support))
+	       ppc-threads-utils ppc-callback-support))            
             ((:linuxx8664 :freebsdx8664 :darwinx8664 :solarisx8664
                           :darwinx8632 :win64  :linuxx8632 :win32 :solarisx8632
                           :freebsdx8632)
              '(x86-error-signal x86-trap-support
-               x86-threads-utils x86-callback-support)))))
+               x86-threads-utils x86-callback-support))
+            (:linuxarm
+             '(arm-error-signal arm-trap-support
+               arm-threads-utils arm-callback-support)))))
 
 
 ;;; Needed to cross-dump an image
@@ -300,6 +321,14 @@
   (target-compile-modules modules (backend-name *host-backend*) force-compile)
 )
 
+(defmacro with-global-optimization-settings ((&rest override) &body body)
+  `(let* ((*nx-speed* ,(or (cadr (assoc 'speed override)) 1))
+          (*nx-space* ,(or (cadr (assoc 'space override)) 1))
+          (*nx-cspeed* ,(or (cadr (assoc 'compilation-speed override)) 1))
+          (*nx-safety* ,(or (cadr (assoc 'safety override)) 1))
+          (*nx-debug* ,(or (cadr (assoc 'debug override)) 1)))
+    ,@body))
+
 (defun compile-ccl (&optional force-compile)
   (with-compilation-unit ()
     (update-modules *sysdef-modules* force-compile)
@@ -368,7 +397,8 @@
 
 
 (defun target-xcompile-ccl (target &optional force)
-  (require-update-modules *sysdef-modules* force) ;in the host
+  (let* ((*target-backend* *host-backend*))
+    (require-update-modules *sysdef-modules* force)) ;in the host
   (let* ((backend (or (find-backend target) *target-backend*))
 	 (arch (backend-target-arch-name backend))
 	 (*defstruct-share-accessor-functions* nil))
@@ -433,7 +463,8 @@
     (:linuxx8632 "x86-boot32")
     (:win32 "wx86-boot32.image")
     (:solarisx8632 "sx86-boot32")
-    (:freebsdx8632 "fx86-boot32")))
+    (:freebsdx8632 "fx86-boot32")
+    (:linuxarm "arm-boot")))
 
 (defun standard-kernel-name (&optional (target (backend-name *host-backend*)))
   (ecase target
@@ -450,7 +481,8 @@
     (:linuxx8632 "lx86cl")
     (:win32 "wx86cl.exe")
     (:solarisx8632 "sx86cl")
-    (:freebsdx8632 "fx86cl")))
+    (:freebsdx8632 "fx86cl")
+    (:linuxarm "armcl")))
 
 (defun standard-image-name (&optional (target (backend-name *host-backend*)))
   (concatenate 'string (pathname-name (standard-kernel-name target)) ".image"))
@@ -470,7 +502,8 @@
     (:linuxx8632 "linuxx8632")
     (:win32 "win32")
     (:solarisx8632 "solarisx86")
-    (:freebsdx8632 "freebsdx8632")))
+    (:freebsdx8632 "freebsdx8632")
+    (:linuxarm "linuxarm")))
 
 ;;; If we distribute (e.g.) 32- and 64-bit versions for the same
 ;;; machine and OS in the same svn directory, return the name of the
@@ -521,9 +554,9 @@ not runtime errors reported by a successfully created process."
 (defvar *ccl-save-source-locations* :no-text)
 
 (defun rebuild-ccl (&key update full clean kernel force (reload t) exit
-		    reload-arguments verbose optional-features
-		    (save-source-locations *ccl-save-source-locations*)
-		    (allow-constant-redefinition nil allow-constant-redefinition-p))
+                         reload-arguments verbose optional-features
+                         (save-source-locations *ccl-save-source-locations*)
+                         (allow-constant-redefinition nil allow-constant-redefinition-p))
   (let* ((*build-time-optional-features* (intersection *known-optional-features* optional-features))
          (*features* (append *build-time-optional-features* *features*))
 	 (*save-source-locations* save-source-locations))
@@ -545,9 +578,9 @@ the lisp and run REBUILD-CCL again.")
       (format t "~&Rebuilding ~a using ~a"
               (lisp-implementation-type)
               (lisp-implementation-version))
-          (unless allow-constant-redefinition-p
-      (when (or force clean update)
-        (setq allow-constant-redefinition t))))
+      (unless allow-constant-redefinition-p
+        (when (or force clean update)
+          (setq allow-constant-redefinition t))))
     (let* ((cd (current-directory))
            (*cerror-on-constant-redefinition* (not allow-constant-redefinition ))
 	   (*warn-if-redefine-kernel* nil))
@@ -572,59 +605,60 @@ the lisp and run REBUILD-CCL again.")
                                     "clean")))
                (format t "~&;Building lisp-kernel ...")
                (with-output-to-string (s)
-                 (let* ((proc (run-program (make-program)
-                                           (list "-k" "-C" 
-                                                 (format nil "lisp-kernel/~a"
-                                                         (kernel-build-directory))
-                                                 "-j"
+                                      (let* ((proc (run-program (make-program)
+                                                                (list "-k" "-C" 
+                                                                      (format nil "lisp-kernel/~a"
+                                                                              (kernel-build-directory))
+                                                                      "-j"
                                                             
-                                                 (format nil "~d" (1+ (cpu-count))))
-                                           :output s
-                                           :error :output)))
-                   (multiple-value-bind (status exit-code)
-                       (external-process-status proc)
-                     (if (and (eq :exited status) (zerop exit-code))
-                       (progn
-                         (format t "~&;Kernel built successfully.")
-                         (when verbose
-                           (format t "~&;kernel build output:~%~a"
-                                   (get-output-stream-string s)))
-                         (sleep 1))
-                       (error "Error(s) during kernel compilation.~%~a"
-                              (or
-                               (describe-external-process-failure
-                                proc
-                                "Developer tools may not be installed correctly.")
-                               (get-output-stream-string s))))))))
-             (compile-ccl (not (null force)))
-             (if force (xload-level-0 :force) (xload-level-0))
+                                                                      (format nil "~d" (1+ (cpu-count))))
+                                                                :output s
+                                                                :error :output)))
+                                        (multiple-value-bind (status exit-code)
+                                            (external-process-status proc)
+                                          (if (and (eq :exited status) (zerop exit-code))
+                                            (progn
+                                              (format t "~&;Kernel built successfully.")
+                                              (when verbose
+                                                (format t "~&;kernel build output:~%~a"
+                                                        (get-output-stream-string s)))
+                                              (sleep 1))
+                                            (error "Error(s) during kernel compilation.~%~a"
+                                                   (or
+                                                    (describe-external-process-failure
+                                                     proc
+                                                     "Developer tools may not be installed correctly.")
+                                                    (get-output-stream-string s))))))))
+             (with-global-optimization-settings ()
+               (compile-ccl (not (null force)))
+               (if force (xload-level-0 :force) (xload-level-0)))
              (when reload
                (with-input-from-string (cmd (format nil
-                                              "(save-application ~s)"
-                                              (standard-image-name)))
+                                                    "(save-application ~s)"
+                                                    (standard-image-name)))
                  (with-output-to-string (output)
-                   (multiple-value-bind (status exit-code)
-                       (external-process-status
-                        (run-program
-                         (format nil "./~a" (standard-kernel-name))
-                         (list* "--image-name" (standard-boot-image-name)
-                                "--batch"
-                                reload-arguments)
-                         :input cmd
-                         :output output
-                         :error output))
-                     (if (and (eq status :exited)
-                              (eql exit-code 0))
-                       (progn
-                         (format t "~&;Wrote heap image: ~s"
-                                 (truename (format nil "ccl:~a"
-                                                   (standard-image-name))))
-                         (when verbose
-                           (format t "~&;Reload heap image output:~%~a"
-                                   (get-output-stream-string output))))
-                       (error "Errors (~s ~s) reloading boot image:~&~a"
-                              status exit-code
-                              (get-output-stream-string output)))))))
+                                        (multiple-value-bind (status exit-code)
+                                            (external-process-status
+                                             (run-program
+                                              (format nil "./~a" (standard-kernel-name))
+                                              (list* "--image-name" (standard-boot-image-name)
+                                                     "--batch"
+                                                     reload-arguments)
+                                              :input cmd
+                                              :output output
+                                              :error output))
+                                          (if (and (eq status :exited)
+                                                   (eql exit-code 0))
+                                            (progn
+                                              (format t "~&;Wrote heap image: ~s"
+                                                      (truename (format nil "ccl:~a"
+                                                                        (standard-image-name))))
+                                              (when verbose
+                                                (format t "~&;Reload heap image output:~%~a"
+                                                        (get-output-stream-string output))))
+                                            (error "Errors (~s ~s) reloading boot image:~&~a"
+                                                   status exit-code
+                                                   (get-output-stream-string output)))))))
              (when exit
                (quit)))
         (setf (current-directory) cd)))))

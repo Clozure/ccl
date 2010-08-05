@@ -95,7 +95,7 @@
   (let* ((typecode (typecode key)))
     (declare (fixnum typecode))
     (or (= typecode target::subtag-macptr)
-        #+(or ppc32-target x8632-target)
+        #+(or ppc32-target x8632-target arm-target)
         (and (>= typecode target::min-numeric-subtag)
              (<= typecode target::max-numeric-subtag))
         #+64-bit-target

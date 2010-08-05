@@ -241,6 +241,9 @@
                  (logior (ash 1 x8664::fulltag-immheader-0)
                          (ash 1 x8664::fulltag-immheader-1)
                          (ash 1 x8664::fulltag-immheader-2)))
+        #+arm-target
+        (= (logand subtag arm::fulltagmask)
+           arm::fulltag-immheader)
       (error "~s is not an ivector subtype." element-type))
     (let* ((size-in-octets (ccl::subtag-bytes subtag element-count)))
       (multiple-value-bind (vector pointer)

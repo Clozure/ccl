@@ -314,6 +314,10 @@ register_cstack_holding_area_lock(BytePtr bottom, natural size)
 #ifdef USE_SIGALTSTACK
   setup_sigaltstack(a);
 #endif
+#ifdef PROTECT_CSTACK
+  a->softprot=new_protected_area(a->hardlimit,a->softlimit,kSPsoftguard,CSTACK_SOFTPROT,true);
+  a->hardprot=new_protected_area(lowlimit,a->hardlimit,kSPhardguard,CSTACK_HARDPROT,true);
+#endif
   add_area_holding_area_lock(a);
   return a;
 }
@@ -798,9 +802,9 @@ register_user_signal_handler()
 
   SetConsoleCtrlHandler(ControlEventHandler,TRUE);
 #else
-  install_signal_handler(SIGINT, (void *)user_signal_handler, false);
-  install_signal_handler(SIGTERM, (void *)user_signal_handler, false);
-  install_signal_handler(SIGQUIT, (void *)user_signal_handler, false);
+  install_signal_handler(SIGINT, (void *)user_signal_handler, false, false);
+  install_signal_handler(SIGTERM, (void *)user_signal_handler, false, false);
+  install_signal_handler(SIGQUIT, (void *)user_signal_handler, false, false);
 #endif
 }
 
@@ -818,7 +822,7 @@ wait_for_signal(int signo, int seconds, int milliseconds)
   }
   if (user_signal_semaphores[signo] == 0) {
     user_signal_semaphores[signo] = (natural)new_semaphore(0);
-    install_signal_handler(signo,(void *)user_signal_handler, false);
+    install_signal_handler(signo,(void *)user_signal_handler, false, false);
   }
   return wait_on_semaphore((void *)user_signal_semaphores[signo],seconds,milliseconds);
 #endif
@@ -1333,6 +1337,9 @@ terminate_lisp()
 #ifdef X86
 #define min_os_version "2.6"
 #endif
+#ifdef ARM
+#define min_os_version "2.6"
+#endif
 #endif
 #ifdef FREEBSD
 #define min_os_version "6.0"
@@ -1534,8 +1541,10 @@ lazarus()
     LOCK(lisp_global(TCR_AREA_LOCK),tcr);
     tcr->vs_area->active = tcr->vs_area->high - node_size;
     tcr->save_vsp = (LispObj *)(tcr->vs_area->active);
+#ifndef ARM
     tcr->ts_area->active = tcr->ts_area->high;
     tcr->save_tsp = (LispObj *)(tcr->ts_area->active);
+#endif
     tcr->catch_top = 0;
     tcr->db_link = 0;
     tcr->xframe = 0;
@@ -1844,9 +1853,14 @@ main(int argc, char *argv[]
 
 #ifdef X86
   lisp_global(SUBPRIMS_BASE) = (LispObj)((1<<16)+(5<<10));
-#else
+#endif
+#ifdef PPC
   lisp_global(SUBPRIMS_BASE) = (LispObj)(5<<10);
 #endif
+#ifdef ARM
+  lisp_global(SUBPRIMS_BASE) = (LispObj)(9<<12);
+#endif
+
   lisp_global(RET1VALN) = (LispObj)&ret1valn;
   lisp_global(LEXPR_RETURN) = (LispObj)&nvalret;
   lisp_global(LEXPR_RETURN1V) = (LispObj)&popj;
@@ -1969,13 +1983,17 @@ set_nil(LispObj r)
 void
 xMakeDataExecutable(void *start, unsigned long nbytes)
 {
-#ifndef X86
+#ifdef PPC
   extern void flush_cache_lines();
   natural ustart = (natural) start, base, end;
   
   base = (ustart) & ~(cache_block_size-1);
   end = (ustart + nbytes + cache_block_size - 1) & ~(cache_block_size-1);
   flush_cache_lines(base, (end-base)/cache_block_size, cache_block_size);
+#endif
+#ifdef ARM
+  extern void flush_cache_lines(void *, void *);
+  flush_cache_lines(start,((char *)start)+nbytes);
 #endif
 }
 

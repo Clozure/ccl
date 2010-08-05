@@ -65,6 +65,7 @@
     #+x86-target :x86-host
     #+x8664-target :x8664-target
     #+x8664-target :x8664-host
+    #+arm-target :arm-target
     #+linux-target :linux-host
     #+linux-target :linux-target
     #+linuxppc-target :linuxppc-target
@@ -74,6 +75,8 @@
     #+linuxx8664-target :linuxx8664-host
     #+linuxx8632-target :linuxx8632-target
     #+linuxx8632-target :linuxx8632-host
+    #+linuxarm-target :linuxarm-target
+    #+linuxarm-target :linuxarm-host
     #+darwinppc-target :darwinppc-target
     #+darwinppc-target :darwinppc-host
     #+darwinppc-target :darwin-target
@@ -109,15 +112,15 @@
     #+64-bit-target :64-bit-host
     #+32-bit-target :32-bit-target
     #+32-bit-target :32-bit-host
-    #+ppc-target :big-endian-target
-    #+ppc-target :big-endian-host
-    #+x86-target :little-endian-target
-    #+x86-target :little-endian-host
     #+darwin-target :darwin
     #+linux-target :linux
     #+freebsd-target :freebsd
     #+solaris-target :solaris
     #+windows-target :windows
+    #+little-endian-target :little-endian-target
+    #+little-endian-target :little-endian-host
+    #+big-endian-target :big-endian-target
+    #+big-endian-target :big-endian-host
     )
   "a list of symbols that describe features provided by the
    implementation")

@@ -89,7 +89,7 @@
   (or (fixnump x)
       (let* ((typecode (typecode x)))
         (declare (fixnum typecode))
-        #+(or ppc32-target x8632-target)
+        #+(or ppc32-target x8632-target arm-target)
         (and (>= typecode target::min-numeric-subtag)
              (<= typecode target::max-rational-subtag))
         #+(or ppc64-target x8664-target)
@@ -114,26 +114,15 @@
   "Return true if OBJECT is a REAL, and NIL otherwise."
   (let* ((typecode (typecode x)))
     (declare (fixnum typecode))
-    #+(or ppc32-target x8632-target)
-    (or (= typecode target::tag-fixnum)
-        (and (>= typecode target::min-numeric-subtag)
-             (<= typecode target::max-real-subtag)))
-    #+ppc64-target
-    (if (<= typecode ppc64::subtag-double-float)
-      (logbitp (the (integer 0 #.ppc64::subtag-double-float) typecode)
-               (logior (ash 1 ppc64::tag-fixnum)
-                       (ash 1 ppc64::subtag-single-float)
-                       (ash 1 ppc64::subtag-double-float)
-                       (ash 1 ppc64::subtag-bignum)
-                       (ash 1 ppc64::subtag-ratio))))
-    #+x8664-target
-    (if (<= typecode x8664::subtag-double-float)
-      (logbitp (the (integer 0 #.x8664::subtag-double-float) typecode)
-               (logior (ash 1 x8664::tag-fixnum)
-                       (ash 1 x8664::subtag-bignum)
-                       (ash 1 x8664::tag-single-float)
-                       (ash 1 x8664::subtag-double-float)
-                       (ash 1 x8664::subtag-ratio))))))
+    (and (<= typecode target::max-real-subtag)
+         (logbitp (the (integer 0 #.target::max-real-subtag)
+                    typecode)
+                  (logior (ash 1 target::tag-fixnum)
+                          (ash 1 target::subtag-single-float)
+                          (ash 1 target::subtag-double-float)
+                          (ash 1 target::subtag-bignum)
+                          (ash 1 target::subtag-ratio))))))
+
 
 (defun complexp (x)
   "Return true if OBJECT is a COMPLEX, and NIL otherwise."
@@ -143,30 +132,15 @@
   "Return true if OBJECT is a NUMBER, and NIL otherwise."
   (let* ((typecode (typecode x)))
     (declare (fixnum typecode))
-    #+(or ppc32-target x8632-target)
-    (or (= typecode target::tag-fixnum)
-        (and (>= typecode target::min-numeric-subtag)
-             (<= typecode target::max-numeric-subtag)))
-    #+ppc64-target
-    (if (<= typecode ppc64::subtag-double-float)
-      (logbitp (the (integer 0 #.ppc64::subtag-double-float) typecode)
-               (logior (ash 1 ppc64::tag-fixnum)
-                       (ash 1 ppc64::subtag-bignum)
-                       (ash 1 ppc64::subtag-single-float)
-                       (ash 1 ppc64::subtag-double-float)
-                       (ash 1 ppc64::subtag-ratio)
-                       (ash 1 ppc64::subtag-complex))))
-    #+x8664-target
-    (if (< typecode x8664::nbits-in-word)
-      (logbitp (the (integer 0 #.x8664::subtag-double-float) typecode)
-               (logior (ash 1 x8664::tag-fixnum)
-                       (ash 1 x8664::subtag-bignum)
-                       (ash 1 x8664::tag-single-float)
-                       (ash 1 x8664::subtag-double-float)
-                       (ash 1 x8664::subtag-ratio)
-                       (ash 1 x8664::subtag-complex))))
-    
-    ))
+    (and (<= typecode target::max-numeric-subtag)
+         (logbitp (the (integer 0 #.target::max-numeric-subtag)
+                    typecode)
+                  (logior (ash 1 target::tag-fixnum)
+                          (ash 1 target::subtag-bignum)
+                          (ash 1 target::subtag-single-float)
+                          (ash 1 target::subtag-double-float)
+                          (ash 1 target::subtag-ratio)
+                          (ash 1 target::subtag-complex))))))
 
 (defun arrayp (x)
   "Return true if OBJECT is an ARRAY, and NIL otherwise."
@@ -222,7 +196,7 @@
 ;;; Note that this is true of symbols and functions and many other
 ;;; things that it wasn't true of on the 68K.
 (defun gvectorp (x)
-  #+(or ppc32-target x8632-target)
+  #+(or ppc32-target x8632-target arm-target)
   (= (the fixnum (logand (the fixnum (typecode x)) target::fulltagmask)) target::fulltag-nodeheader)
   #+ppc64-target
   (= (the fixnum (logand (the fixnum (typecode x)) ppc64::lowtagmask)) ppc64::lowtag-nodeheader)
@@ -237,7 +211,7 @@
 (setf (type-predicate 'gvector) 'gvectorp)
 
 (defun ivectorp (x)
-  #+(or ppc32-target x8632-target)
+  #+(or ppc32-target x8632-target arm-target)
   (= (the fixnum (logand (the fixnum (typecode x)) target::fulltagmask))
      target::fulltag-immheader)
   #+ppc64-target
@@ -253,7 +227,7 @@
 (setf (type-predicate 'ivector) 'ivectorp)
 
 (defun miscobjp (x)
-  #+(or ppc32-target x8632-target x8664-target)
+  #+(or ppc32-target x8632-target x8664-target arm-target)
   (= (the fixnum (lisptag x)) target::tag-misc)
   #+ppc64-target
   (= (the fixnum (fulltag x)) ppc64::fulltag-misc)
@@ -397,7 +371,7 @@
                                              (equalp (%svref x i) (%svref y i)))
                                    (return))))))))))))))
 
-#+ppc32-target
+#+(or ppc32-target arm-target)
 (progn
 (defparameter *nodeheader-types*
   #(bogus                               ; 0
@@ -474,22 +448,22 @@
 (defun %type-of (thing)
   (let* ((typecode (typecode thing)))
     (declare (fixnum typecode))
-    (if (= typecode ppc32::tag-fixnum)
+    (if (= typecode target::tag-fixnum)
       'fixnum
-      (if (= typecode ppc32::tag-list)
+      (if (= typecode target::tag-list)
         (if thing 'cons 'null)
-        (if (= typecode ppc32::tag-imm)
+        (if (= typecode target::tag-imm)
           (if (base-char-p thing)
             'base-char
             'immediate)
-	  (if (= typecode ppc32::subtag-macptr)
+	  (if (= typecode target::subtag-macptr)
 	    (if (classp thing)
 	      (class-name thing)
 	      'macptr)
-	    (let* ((tag-type (logand typecode ppc32::full-tag-mask))
-		   (tag-val (ash typecode (- ppc32::ntagbits))))
+	    (let* ((tag-type (logand typecode target::full-tag-mask))
+		   (tag-val (ash typecode (- target::ntagbits))))
 	      (declare (fixnum tag-type tag-val))
-	      (if (/= tag-type ppc32::fulltag-nodeheader)
+	      (if (/= tag-type target::fulltag-nodeheader)
 		(%svref *immheader-types* tag-val)
 		(let ((type (%svref *nodeheader-types* tag-val)))
 		  (if (eq type 'function)
@@ -511,11 +485,11 @@
                           'method-function          
                           'compiled-function)))
 		    (if (eq type 'lock)
-		      (or (uvref thing ppc32::lock.kind-cell)
+		      (or (uvref thing target::lock.kind-cell)
 			  type)
 		      type)))))))))))
 
-);#+ppc32-target
+);#+(or ppc32-target arm-target)
 
 #+ppc64-target
 (progn
@@ -1013,14 +987,9 @@
 ;;; that can be.)
 (defun structure-typep (thing type)
   (if (= (the fixnum (typecode thing)) target::subtag-struct)
-    (let* ((types (%svref thing 0)))
-      (if (typep type 'symbol)
-        (dolist (x types)
-          (when (eq (class-cell-name x) type)
-            (return t)))
-        (dolist (x types)
-          (when (eq x type)
-            (return t)))))))
+    (dolist (x (%svref thing 0))
+      (when (eq x type)
+        (return t)))))
 
 
 
@@ -1052,7 +1021,7 @@
 
 (defun symbolp (thing)
   "Return true if OBJECT is a SYMBOL, and NIL otherwise."
-  #+(or ppc32-target x8632-target)
+  #+(or ppc32-target x8632-target arm-target)
   (if thing
     (= (the fixnum (typecode thing)) target::subtag-symbol)
     t)

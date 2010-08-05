@@ -400,15 +400,20 @@
 
 #+ppc-target
 (defvar *fi-trampoline-code* (uvref #'funcallable-trampoline 0))
+#+arm-target
+(defvar *fi-trampoline-code* (uvref #'funcallable-trampoline 1))
 
 
 #+ppc-target
 (defvar *unset-fin-code* (uvref #'unset-fin-trampoline 0))
-
+#+arm-target
+(defvar *unset-fin-code* (uvref #'unset-fin-trampoline 1))
 
 
 #+ppc-target
 (defvar *gf-proto-code* (uvref *gf-proto* 0))
+#+arm-target
+(defvar *gf-proto-code* (uvref *gf-proto* 1))
 
 ;;; The "early" version of %ALLOCATE-GF-INSTANCE.
 (setf (fdefinition '%allocate-gf-instance)
@@ -420,8 +425,9 @@
 							  *standard-generic-function-class*))))
 		 (dt (make-gf-dispatch-table))
 		 (slots (allocate-typed-vector :slot-vector (1+ len) (%slot-unbound-marker)))
-		 (fn #+ppc-target
+		 (fn #+(or ppc-target arm-target)
                    (gvector :function
+                            #+arm-target arm::*function-initial-entrypoint*
 			      *gf-proto-code*
 			      wrapper
 			      slots
@@ -462,10 +468,14 @@
 #+ppc-target
 (defvar *cm-proto-code* (uvref *cm-proto* 0))
 
+#+arm-target
+(defvar *cm-proto-code* (uvref *cm-proto* 1))
+
 (defun %cons-combined-method (gf thing dcode)
   ;; set bits and name = gf
-  #+ppc-target
+  #+(or ppc-target arm-target)
   (gvector :function
+           #+arm-target arm::*function-initial-entrypoint*
            *cm-proto-code*
            thing
            dcode

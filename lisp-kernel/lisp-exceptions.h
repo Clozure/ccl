@@ -150,6 +150,10 @@ exception_fn_name( ExceptionInformation *, int, char *, size_t );
 #include "x86-exceptions.h"
 #endif
 
+#ifdef ARM
+#include "arm-exceptions.h"
+#endif
+
 void suspend_other_threads(Boolean);
 void resume_other_threads(Boolean);
 

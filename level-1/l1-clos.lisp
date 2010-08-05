@@ -374,6 +374,16 @@
 				table
 				(dpb 1 $lfbits-numreq
 				     (ash -1 $lfbits-noname-bit)))
+              #+arm-target
+              (gvector :function
+                       arm::*function-initial-entrypoint*
+                       (%svref (if small
+                                 #'%small-map-slot-id-lookup
+                                 #'%large-map-slot-id-lookup) 1)
+                       map
+                       table
+                       (dpb 1 $lfbits-numreq
+                            (ash -1 $lfbits-noname-bit)))
               #+x86-target
               (%clone-x86-function (if small
 					  #'%small-map-slot-id-lookup
@@ -389,6 +399,19 @@
                        (%svref (if small
                                  #'%small-slot-id-value
                                  #'%large-slot-id-value) 0)
+                       map
+                       table
+                       class
+                       #'%maybe-std-slot-value-using-class
+                       #'%slot-id-ref-missing
+                       (dpb 2 $lfbits-numreq
+                            (ash -1 $lfbits-noname-bit)))
+              #+arm-target
+              (gvector :function
+                       arm::*function-initial-entrypoint*
+                       (%svref (if small
+                                 #'%small-slot-id-value
+                                 #'%large-slot-id-value) 1)
                        map
                        table
                        class
@@ -413,6 +436,19 @@
                        (%svref (if small
                                  #'%small-set-slot-id-value
                                  #'%large-set-slot-id-value) 0)
+                       map
+                       table
+                       class
+                       #'%maybe-std-setf-slot-value-using-class
+                       #'%slot-id-set-missing
+                       (dpb 3 $lfbits-numreq
+                            (ash -1 $lfbits-noname-bit)))
+              #+arm-target
+              (gvector :function
+                       arm::*function-initial-entrypoint*
+                       (%svref (if small
+                                 #'%small-set-slot-id-value
+                                 #'%large-set-slot-id-value) 1)
                        map
                        table
                        class
@@ -1640,9 +1676,19 @@ governs whether DEFCLASS makes that distinction or not.")
                                 #'false
                                 0
                                 (logior (ash 1 $lfbits-gfn-bit)
-                                        (ash 1 $lfbits-aok-bit)))))
-    (setf 
-	  (slot-vector.instance slots) fn)
+                                        (ash 1 $lfbits-aok-bit)))
+           #+arm-target
+           (gvector :function
+                    arm::*function-initial-entrypoint*
+                    *unset-fin-code*
+                    wrapper
+                    slots
+                    dt
+                    #'false
+                    0
+                    (logior (ash 1 $lfbits-gfn-bit)
+                            (ash 1 $lfbits-aok-bit)))))
+    (setf (slot-vector.instance slots) fn)
     (when dt
       (setf (%gf-dispatch-table-gf dt) fn))
     (if gf-p

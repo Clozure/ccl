@@ -172,6 +172,21 @@
     
 )
 
+#+arm-target
+(defconstant arm::*immheader-array-types*
+  '#(short-float
+     (unsigned-byte 32)
+     (signed-byte 32)
+     fixnum
+     character
+     (unsigned-byte 8)
+     (signed-byte 8)
+     unused
+     (unsigned-byte 16)
+     (signed-byte 16)
+     double-float
+     bit))
+
 
 (defun array-element-type (array)
   "Return the type of the elements of the array"
@@ -201,6 +216,9 @@
                (%svref x8664::*immheader-1-array-types* idx))
               (t
                (%svref x8664::*immheader-0-array-types* idx))))
+      #+arm-target
+      (svref arm::*immheader-array-types*
+             (ash (the fixnum (- subtag arm::min-cl-ivector-subtag)) -3))
       )))
 
 
@@ -698,19 +716,19 @@ minimum number of elements to add if it must be extended."
 (defun copy-uvector (src)
   (%extend-vector 0 src (uvsize src)))
 
-#+ppc32-target
+#+(or ppc32-target arm-target)
 (defun subtag-bytes (subtag element-count)
   (declare (fixnum subtag element-count))
-  (unless (= #.ppc32::fulltag-immheader (logand subtag #.ppc32::fulltagmask))
+  (unless (= #.target::fulltag-immheader (logand subtag #.target::fulltagmask))
     (error "Not an ivector subtag: ~s" subtag))
   (let* ((element-bit-shift
-          (if (<= subtag ppc32::max-32-bit-ivector-subtag)
+          (if (<= subtag target::max-32-bit-ivector-subtag)
             5
-            (if (<= subtag ppc32::max-8-bit-ivector-subtag)
+            (if (<= subtag target::max-8-bit-ivector-subtag)
               3
-              (if (<= subtag ppc32::max-16-bit-ivector-subtag)
+              (if (<= subtag target::max-16-bit-ivector-subtag)
                 4
-                (if (= subtag ppc32::subtag-double-float-vector)
+                (if (= subtag target::subtag-double-float-vector)
                   6
                   0)))))
          (total-bits (ash element-count element-bit-shift)))

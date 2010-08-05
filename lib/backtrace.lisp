@@ -22,6 +22,7 @@
 
 #+ppc-target (require "PPC-BACKTRACE")
 #+x86-target (require "X86-BACKTRACE")
+#+arm-target (require "ARM-BACKTRACE")
 
 
 (defparameter *backtrace-show-internal-frames* nil)
@@ -41,7 +42,7 @@
                         nil       ;; condition - not used
                         frame-ptr ;; current
                         #+ppc-target *fake-stack-frames*
-                        #+x86-target frame-ptr
+                        #+(or x86-target arm-target) frame-ptr
                         (%fixnum-ref tcr target::tcr.db-link)
                         0         ;; break level - not used
                         )))

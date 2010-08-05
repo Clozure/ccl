@@ -45,12 +45,12 @@
   ;; some advantage in treating those integers as signed (they might
   ;; be more likely to be fixnums, for instance), so ensure that they
   ;; aren't.
-  #+x86-target
+  #+(or x86-target arm-target)
   (%setf-macptr addr (%int-to-ptr
                       (if (< entry 0)
                         (logand entry (1- (ash 1 target::nbits-in-word)))
                         entry)))
-  #-(or ppc-target x86-target) (dbg "Fix entry->addr"))
+  #-(or ppc-target x86-target arm-target) (dbg "Fix entry->addr"))
 
 
 
@@ -652,7 +652,7 @@ return a fixnum representation of that address, else return NIL."
 			     :address))
       (unless (%null-ptr-p addr)	; No function can have address 0
 	(or (macptr->fixnum addr) (%inc-ptr addr 0))))
-    #+x8632-target
+    #+(or x8632-target arm-target)
     (let* ((addr (ff-call (%kernel-import target::kernel-import-FindSymbol)
 			  :address handle
 			  :address n
