@@ -146,3 +146,13 @@
     (mov accum (:lsl accum (:$ 5)))
     (mov arg_z (:lsr accum (:$ (- 5 arm::fixnumshift))))
     (bx lr)))
+
+;;; Ensure that the current thread's thread-local-binding vector
+;;; contains room for an entry with index INDEX.
+;;; Return the fixnum-tagged tlb vector.
+(defarmlapfunction %ensure-tlb-index ((idx arg_z))
+  (ldr arg_y (:@ rcontext (:$ arm::tcr.tlb-limit)))
+  (cmp arg_y idx)
+  (uuo-tlb-too-small (:? ls) idx)
+  (ldr arg_z (:@ rcontext (:$ arm::tcr.tlb-pointer)))
+  (bx lr))
