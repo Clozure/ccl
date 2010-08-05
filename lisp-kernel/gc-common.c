@@ -1443,7 +1443,7 @@ gc(TCR *tcr, signed_natural param)
     GCDebug = ((nrs_GC_EVENT_STATUS_BITS.vcell & gc_integrity_check_bit) != 0);
     if (GCDebug) {
       check_all_areas(tcr);
-      check_static_cons_freelist("i`n pre-gc static-cons check");
+      check_static_cons_freelist("in pre-gc static-cons check");
     }
   }
 
