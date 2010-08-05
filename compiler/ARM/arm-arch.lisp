@@ -959,7 +959,7 @@
   FindSymbol
   malloc
   free
-  jvm-init
+  wait-for-signal
   tcr-frame-ptr
   register-xmacptr-dispose-function
   open-debug-output
