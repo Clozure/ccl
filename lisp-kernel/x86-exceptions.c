@@ -1871,10 +1871,11 @@ install_signal_handler(int signo, void * handler, Boolean system, Boolean on_alt
 #endif
   sa.sa_flags = 
     0 /* SA_RESTART */
+    | SA_SIGINFO
 #ifdef USE_SIGALTSTACK
-    | on_altstack ? SA_ONSTACK : 0
+    | (on_altstack ? SA_ONSTACK : 0)
 #endif
-    | SA_SIGINFO;
+;
 
   sigaction(signo, &sa, NULL);
   if (system) {
