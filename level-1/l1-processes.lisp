@@ -748,9 +748,8 @@ had invoked abort."
     (cond ((car result) (values-list (cdr result)))
           (t default))))
 
-(defun call-in-initial-process (f)
-  (let* ((process *initial-process*)
-	 (return-values nil)
+(defun call-in-process (f process)
+  (let* ((return-values nil)
 	 (done (make-semaphore)))
     (process-interrupt process
 		       #'(lambda ()
@@ -761,4 +760,7 @@ had invoked abort."
 			     (signal-semaphore done))))
     (wait-on-semaphore done)
     (apply #'values return-values)))
+
+(defun call-in-initial-process (f)
+  (call-in-process f *initial-process*))
 
