@@ -310,12 +310,7 @@
                      
                      
 
-(defun open-shared-library (name)
-  "If the library denoted by name can be loaded by the operating system,
-return an object of type SHLIB that describes the library; if the library
-is already open, increment a reference count. If the library can't be
-loaded, signal a SIMPLE-ERROR which contains an often-cryptic message from
-the operating system."
+(defun open-shared-library-internal (name)
   (let* ((handle (with-cstrs ((name name))
                         (ff-call
                          (%kernel-import target::kernel-import-GetSharedLibrary)
@@ -400,12 +395,7 @@ the operating system."
     found-lib))
 
 
-(defun open-shared-library (name)
-  "If the library denoted by name can be loaded by the operating system,
-return an object of type SHLIB that describes the library; if the library
-is already open, increment a reference count. If the library can't be
-loaded, signal a SIMPLE-ERROR which contains an often-cryptic message from
-the operating system."
+(defun open-shared-library-internal (name)
   (rlet ((type :signed))
     (let ((result (with-cstrs ((cname name))
 		    (ff-call (%kernel-import target::kernel-import-GetSharedLibrary)
@@ -588,12 +578,7 @@ the operating system."
                 (return lib))))))))
 
 
-  (defun open-shared-library (name)
-    "If the library denoted by name can be loaded by the operating system,
-return an object of type SHLIB that describes the library; if the library
-is already open, increment a reference count. If the library can't be
-loaded, signal a SIMPLE-ERROR which contains an often-cryptic message from
-the operating system."
+  (defun open-shared-library-internal (name)
     (let* ((hmodule (with-cstrs ((name name))
                       (ff-call
                        (%kernel-import target::kernel-import-GetSharedLibrary)
@@ -988,5 +973,22 @@ return that address encapsulated in a MACPTR, else returns NIL."
                   (setf (fv.addr v) nil)
                   (resolve-foreign-variable v nil))
               *fvs*))))
+
+(defun open-shared-library (name &optional (process #+darwin-target :initial
+                                                    #-darwin-target :current))
+  "If the library denoted by name can be loaded by the operating system,
+return an object of type SHLIB that describes the library; if the library
+is already open, increment a reference count. If the library can't be
+loaded, signal a SIMPLE-ERROR which contains an often-cryptic message from
+the operating system."
+  (if (or (eq process :current)
+          (eq process *current-process*)
+          (and (eq process :initial)
+               (eq *current-process* *initial-process*)))
+    (open-shared-library-internal name)
+    (call-in-process (lambda () (open-shared-library name))
+                     (if (eq process :initial)
+                       *initial-process*
+                       process))))
 
 
