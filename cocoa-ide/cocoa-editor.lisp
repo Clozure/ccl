@@ -1475,7 +1475,7 @@
   (let* ((textstorage (#/textStorage self))
          (styles (slot-value textstorage 'styles))
          (newcolor (#/color sender)))
-    (dotimes (i 4)
+    (dotimes (i (#/count styles))
       (let* ((dict (#/objectAtIndex: styles i)))
         (#/setValue:forKey: dict newcolor #&NSForegroundColorAttributeName)))
     (call-next-method sender)))
