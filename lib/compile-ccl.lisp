@@ -784,7 +784,7 @@ the lisp and run REBUILD-CCL again.")
     (if (probe-file "ccl:tests;ansi-tests;")
       (when update
 	(cwd "ccl:tests;")
-	(run-program *svn-program* '("update")))
+	(run-program *svn-program* '("update") :output t))
       (let* ((repo (svn-repository))
 	     (url (format nil "~a/trunk/tests" repo))
 	     (s (make-string-output-stream)))
@@ -804,7 +804,7 @@ the lisp and run REBUILD-CCL again.")
 		(error "Failed to check out test suite: ~%~a"
 		       (get-output-stream-string s))))))))
     (cwd "ccl:tests;ansi-tests;")
-    (run-program "make" '("-k" "clean"))
+    (run-program "make" '("-k" "clean") :output t)
     (map nil 'delete-file (directory "*.*fsl"))
     ;; Muffle the typecase "clause ignored" warnings, since there is really nothing we can do about
     ;; it without making the test suite non-portable across platforms...
