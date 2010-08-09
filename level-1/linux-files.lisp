@@ -2039,7 +2039,7 @@ not, why not; and what its result code was if it completed."
                 1))
             #+(or linux-target solaris-target)
             (or
-             (let* ((n (#_sysconf #$_SC_NPROCESSORS_ONLN)))
+             (let* ((n (#_sysconf #$_SC_NPROCESSORS_CONF)))
                (declare (fixnum n))
                (if (> n 0) n))
              #+linux-target
