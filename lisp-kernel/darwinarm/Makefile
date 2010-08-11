@@ -21,8 +21,8 @@ M4 = m4
 ASFLAGS = -arch armv6
 M4FLAGS = -DDARWIN -DARM
 CC = /Developer/Platforms/iPhoneOS.platform/usr/bin/llvm-gcc-4.2
-CDEFINES = -isysroot /Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS3.2.sdk/ -DDARWIN -DARM -D_REENTRANT -D_GNU_SOURCE -DDISABLE_EGC -DGC_INTEGRITY_CHECKING -arch armv6
-CDEBUG = -g
+CDEFINES = -isysroot /Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS3.2.sdk/ -DDARWIN -DARM -D_REENTRANT -D_GNU_SOURCE -DDISABLE_EGC -DGC_INTEGRITY_CHECKING -arch armv6 -mfpu=vfp -Wp,-dM
+CDEBUG = -gstabs
 COPT = #-O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
@@ -59,7 +59,7 @@ OSLIBS = /Developer/Platforms/iPhoneOS.platform/Developer/usr/llvm-gcc-4.2/lib/g
 
 
 ../../darmcl:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
-	$(LD) -pagezero_size 0x8000 $(KSPOBJ) -L/Developer/Platforms/iPhoneOS.platform/DeviceSupport/3.1.3/Symbols/usr/lib  -arch armv6 -o $@   $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
+	$(LD) -pagezero_size 0x8000 -sectalign __TEXT __text 0x1000 $(KSPOBJ) -L/Developer/Platforms/iPhoneOS.platform/DeviceSupport/3.1.3/Symbols/usr/lib  -arch armv6 -o $@   $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
 
 
 $(SPOBJ): $(SPINC)
