@@ -107,7 +107,9 @@ Boolean use_mach_exception_handling =
 #endif
 #include "Threads.h"
 
+#if !(defined(DARWIN) && defined(ARM))
 #include <fenv.h>
+#endif
 #include <sys/stat.h>
 
 #ifndef MAP_NORESERVE
