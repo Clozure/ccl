@@ -92,6 +92,7 @@ handle_trap(ExceptionInformation *, opcode, pc, siginfo_t *);
 #define IS_DEFERRED_INTERRUPT(i)     (((i)&0x0fffffff) == 0x07f004f0)
 #define IS_DEFERRED_SUSPEND(i)       (((i)&0x0fffffff) == 0x07f005f0)
 
+#define PSEUDO_SIGRETURN_UUO         (0xe7fffef1)
 
 OSStatus
 handle_error(ExceptionInformation *, unsigned, unsigned, int*);

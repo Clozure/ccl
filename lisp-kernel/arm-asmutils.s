@@ -127,7 +127,7 @@ _exportfn(C(disable_fp_exceptions))
 _endfn
 
 _exportfn(C(pseudo_sigreturn))
-	__(.long 0)
+	__(uuo_pseudo_sigreturn())
 	__(b C(pseudo_sigreturn))
 _endfn
         __endif
@@ -146,8 +146,25 @@ _exportfn(C(get_vector_registers))
 _endfn        	
 
         __ifdef(`DARWIN')
+/* divide the 64-bit unsigned integer in r0/r1 by the 64-bit unsigned
+   integer in r2/r3; return the 64-bit quotient in r0/r1 and the 64-bit
+   remainder in r2/r3.  Implement this in terms of the libgcc function: 
+
+   unsigned long long __udivti3 (unsigned long long a, 
+                                 unsigned long long b, 
+                                 unsigned long long *c)
+*/        
 _exportfn(C(__aeabi_uldivmod))
-        __(bx lr)
+        __(stmdb sp!,{r7,lr})
+        __(mov r7,sp)
+        __(sub sp,sp,#8)
+        __(mov ip,sp)
+        __(push1(ip,sp))
+        __(push1(ip,sp))
+        __(bl C(__udivmoddi4))
+        __(add sp,sp,#8)
+        __(ldmia sp!,{r2,r3})
+        __(ldmia sp!,{r7,pc})
 _endfn                
         __endif
 

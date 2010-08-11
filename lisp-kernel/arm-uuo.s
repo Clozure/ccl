@@ -104,5 +104,6 @@ define(`uuo_error_array_flags',`binary_errorUUO($1,$2,$3,7)')
         
 /* This should never be generated (never be a legal instruction in a code
    vector); it should only be used by purify/impurify. */
-define(`forward_marker',`uuo(al,uuo_format_unary,0xfff)')
-            
+define(`forward_marker',`UUO(al,uuo_format_unary,0xfff)')
+/* Used by Mach exception return */
+define(`uuo_pseudo_sigreturn',`UUO(al,uuo_format_unary,0xffe)')

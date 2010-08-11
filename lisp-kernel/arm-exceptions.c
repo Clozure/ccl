@@ -2017,6 +2017,7 @@ create_thread_context_frame(mach_port_t thread,
   stackp -= sizeof(*pseudosigcontext);
   pseudosigcontext = (ExceptionInformation *) ptr_from_lispobj(stackp);
 
+  stackp -= sizeof(*mc);
   mc = (_STRUCT_MCONTEXT *) ptr_from_lispobj(stackp);
   memmove(&(mc->__ss),&ts,sizeof(ts));
 
@@ -2093,6 +2094,7 @@ setup_signal_frame(mach_port_t thread,
   ts.__r[2] = (natural)tcr;
   ts.__r[3] = (natural)old_valence;
   ts.__lr = (natural)pseudo_sigreturn;
+  ts.__cpsr = xpPSR(pseudosigcontext);
 
 
   thread_set_state(thread, 
@@ -2146,7 +2148,7 @@ catch_exception_raise(mach_port_t exception_port,
 		      exception_data_t code_vector,
 		      mach_msg_type_number_t code_count)
 {
-  int signum = 0, code = *code_vector, code1;
+  int signum = 0, code = *code_vector;
   TCR *tcr = TCR_FROM_EXCEPTION_PORT(exception_port);
   kern_return_t kret;
 
@@ -2157,9 +2159,11 @@ catch_exception_raise(mach_port_t exception_port,
   if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_EXCEPTION)) {
     CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_EXCEPTION);
   } 
+  /* On the ARM, code_vector[1] contains the undefined instruction
+     in this case, not its address.  */
   if ((exception == EXC_BAD_INSTRUCTION) &&
       (code_vector[0] == EXC_ARM_UNDEFINED) &&
-      (((code1 = code_vector[1]) == (int)pseudo_sigreturn))) {
+      (code_vector[1] == PSEUDO_SIGRETURN_UUO)) {
     kret = do_pseudo_sigreturn(thread, tcr);
   } else if (tcr->flags & (1<<TCR_FLAG_BIT_PROPAGATE_EXCEPTION)) {
     CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PROPAGATE_EXCEPTION);
