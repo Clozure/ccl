@@ -104,10 +104,29 @@
 
 (add-xload-backend *linuxarm-xload-backend*)
 
+(defparameter *darwinarm-xload-backend*
+  (make-backend-xload-info
+   :name :darwinarm
+   :macro-apply-code-function 'arm-fixup-macro-apply-code
+   :closure-trampoline-code *arm-closure-trampoline-code*
+   :udf-code *arm-udf-code*
+   :default-image-name "ccl:ccl;arm-boot.image"
+   :default-startup-file-name "level-1.dafsl"
+   :subdirs '("ccl:level-0;ARM;")
+   :compiler-target-name :darwinarm
+   :image-base-address (+ (- arm::nil-value arm::fulltag-nil) (ash 1 12))
+   :nil-relative-symbols arm::*arm-nil-relative-symbols*
+   :static-space-init-function 'arm-initialize-static-space
+   :purespace-reserve (ash 64 20)
+   :static-space-address (- (- arm::nil-value arm::fulltag-nil) (ash 1 12))
+))
+
+(add-xload-backend *darwinarm-xload-backend*)
 
 
 
-#+linuxarm-backend
+
+#+linuxarm-target
 (progn
 (setq *xload-default-backend* *linuxarm-xload-backend*)
 )
