@@ -199,21 +199,24 @@
 (defx86reg temp1.w r9w)
 (defx86reg temp1.b r9b)
 
-(defx86reg ra0 r10)
-(defx86reg ra0.l r10d)
-(defx86reg ra0.w r10w)
-(defx86reg ra0.b r10b)
-
 (defx86reg temp2 r10)
 (defx86reg temp2.l r10d)
 (defx86reg temp2.w r10w)
 (defx86reg temp2.b r10b)
 
+(defx86reg ra0 r10)
+(defx86reg ra0.l r10d)
+(defx86reg ra0.w r10w)
+(defx86reg ra0.b r10b)
+
+#+(or darwin-target windows-target)
+(defx86reg rcontext r11)
 
 (defx86reg save3 r11)
 (defx86reg save3.l r11d)
 (defx86reg save3.w r11w)
 (defx86reg save3.b r11b)
+
 
 (defx86reg save2 r12)
 (defx86reg save2.l r12d)
