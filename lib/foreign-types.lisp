@@ -102,7 +102,8 @@
                         (:win32 "ccl:win32-headers;")
                         (:solarisx8632 "ccl:solarisx86-headers;")
                         (:freebsdx8632 "ccl:freebsd-headers;")
-                        (:linuxarm "ccl:arm-headers;"))
+                        (:linuxarm "ccl:arm-headers;")
+                        (:darwinarm "ccl:darwin-arm-headers;"))
                     :interface-package-name
                     #.(ftd-interface-package-name *target-ftd*)
                     :attributes
@@ -1437,7 +1438,7 @@ result-type-specifer is :VOID or NIL"
           (format out " (#x~16,'0x) " (if (typep addr 'integer)
                                         (logand #xffffffffffffffff (ash addr 2))
                                         (%ptr-to-int addr))))
-	#+x8632-target
+	#+(or x8632-target arm-target)
 	(format out " (#x~8,'0x) " addr)
         #+x8664-target
         (format out " (#x~16,'0x) " addr)

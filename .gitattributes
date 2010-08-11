@@ -280,6 +280,7 @@ level-1/arm-threads-utils.lisp -text
 level-1/arm-trap-support.lisp -text
 lib/arm-backtrace.lisp -text
 lib/armenv.lisp -text
+lib/ffi-darwinarm.lisp -text
 lib/ffi-darwinx8632.lisp -text
 lib/ffi-freebsdx8632.lisp -text
 lib/ffi-linuxarm.lisp -text

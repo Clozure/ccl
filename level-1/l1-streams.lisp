@@ -3139,7 +3139,14 @@
             (setf (ioblock-inbuf-lock ioblock) (make-lock)))
           (setf (ioblock-line-termination ioblock) line-termination)
 
-          (setf (ioblock-element-shift ioblock) (max 0 (ceiling (log  (/ in-size-in-octets insize) 2))))
+          (setf (ioblock-element-shift ioblock)
+                (let* ((octets-per-element (/ in-size-in-octets insize)))
+                  (case octets-per-element
+                    (1 0)
+                    (2 1)
+                    (4 2)
+                    (8 3)
+                    (t (max 0 (ceiling (log octets-per-element 2)))))))
           )))
     (when (ioblock-inbuf ioblock)
       (setup-ioblock-input ioblock character-p element-type sharing encoding line-termination))      
@@ -3165,7 +3172,15 @@
                                   :size out-size-in-octets))
             (when (eq sharing :lock)
               (setf (ioblock-outbuf-lock ioblock) (make-lock)))
-            (setf (ioblock-element-shift ioblock) (max 0 (ceiling (log (/ out-size-in-octets outsize) 2))))
+            (setf (ioblock-element-shift ioblock)
+                  (let* ((octets-per-element (/ out-size-in-octets outsize)))
+                    (case octets-per-element
+                      (1 0)
+                      (2 1)
+                      (4 2)
+                      (8 3)
+                      (t 
+                       (max 0 (ceiling (log octets-per-element 2)))))))
             ))))
     (when (ioblock-outbuf ioblock)
       (setup-ioblock-output ioblock character-p element-type sharing encoding line-termination))

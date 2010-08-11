@@ -229,18 +229,18 @@
 
 #+darwinarm-target
 (defvar *darwinarm-backend*
-  (make-backend :lookup-opcode #'lookup-arm-opcode
-		:lookup-macro #'arm::arm-macro-function
-		:lap-opcodes arm::*arm-opcodes*
-                :define-vinsn 'define-arm-vinsn
+  (make-backend :lookup-opcode #'arm::lookup-arm-instruction
+		:lookup-macro #'false
+		:lap-opcodes arm::*arm-instruction-table*
+                :define-vinsn '%define-arm-vinsn
                 :platform-syscall-mask (logior platform-os-darwin platform-cpu-arm)                
 		:p2-dispatch *arm2-specials*
 		:p2-vinsn-templates *arm-vinsn-templates*
 		:p2-template-hash-name '*arm-vinsn-templates*
 		:p2-compile 'arm2-compile
 		:target-specific-features
-		'(:powerpc :arm-target :darwin-target :darwinarm-target :arm-target :32-bit-target :big-endian-target)
-		:target-fasl-pathname (make-pathname :type "dfsl")
+		'(:arm :arm-target :darwin-target :darwinarm-target :arm-target :32-bit-target :little-endian-target)
+		:target-fasl-pathname (make-pathname :type "dafsl")
 		:target-platform (logior platform-word-size-32
                                          platform-cpu-arm
                                          platform-os-darwin)
@@ -300,8 +300,7 @@
 			   :interface-package-name "ARM-LINUX"
                            :attributes '(:bits-per-word  32
                                          :signed-char nil
-                                         :struct-by-value t
-                                         :float-results-in-x87 t)
+                                         :struct-by-value t)
                            :ff-call-expand-function
                            (intern "EXPAND-FF-CALL" "ARM-LINUX")
 			   :ff-call-struct-return-by-implicit-arg-function

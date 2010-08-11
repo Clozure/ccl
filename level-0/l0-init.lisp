@@ -77,6 +77,8 @@
     #+linuxx8632-target :linuxx8632-host
     #+linuxarm-target :linuxarm-target
     #+linuxarm-target :linuxarm-host
+    #+darwinarm-target :darwinarm-target
+    #+darwinarm-target :darwinarm-host
     #+darwinppc-target :darwinppc-target
     #+darwinppc-target :darwinppc-host
     #+darwinppc-target :darwin-target

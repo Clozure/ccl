@@ -162,6 +162,7 @@
     (ffi-solarisx8632 "ccl:bin;ffi-solarisx8632" ("ccl:lib;ffi-solarisx8632.lisp"))
     (ffi-freebsdx8632 "ccl:bin;ffi-freebsdx8632" ("ccl:lib;ffi-freebsdx8632.lisp"))
     (ffi-linuxarm     "ccl:bin;ffi-linuxarm"     ("ccl:lib;ffi-linuxarm.lisp"))
+    (ffi-darwinarm    "ccl:bin;ffi-darwinarm"    ("ccl:lib;ffi-darwinarm.lisp"))
     (db-io            "ccl:bin;db-io"            ("ccl:lib;db-io.lisp"))
     (hash             "ccl:bin;hash"             ("ccl:lib;hash.lisp"))
     (nfcomp           "ccl:bin;nfcomp"           ("ccl:lib;nfcomp.lisp"))
