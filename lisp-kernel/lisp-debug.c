@@ -308,34 +308,36 @@ describe_memfault(ExceptionInformation *xp, siginfo_t *info)
    * constants.  (Subsequent FreeBSD versions define them, though.)
    */
 #else
-  fprintf(dbgout, "received signal %d; faulting address: %p\n",
-	  info->si_signo, info->si_addr);
-  if (info->si_code > 0) {
-    if (info->si_signo == SIGSEGV) {
-      switch (info->si_code) {
-      case SEGV_MAPERR:
-	fprintf(dbgout, "address not mapped to object\n");
-	break;
-      case SEGV_ACCERR:
-	fprintf(dbgout, "invalid permissions for mapped object\n");
-	break;
-      default:
-	fprintf(dbgout, "unexpected si_code value: %d\n", info->si_code);
-	break;
-      }
-    } else if (info->si_signo == SIGBUS) {
-      switch (info->si_code) {
-      case BUS_ADRALN:
-	fprintf(dbgout, "invalid address alignment\n");
-	break;
-      case BUS_ADRERR:
-	fprintf(dbgout, "non-existent physical address");
-	break;
-      case BUS_OBJERR:
-	fprintf(dbgout, "object-specific hardware error");
-	break;
-      default:
-	fprintf(dbgout, "unexpected si_code value: %d\n", info->si_code);
+  if (info) {
+    fprintf(dbgout, "received signal %d; faulting address: %p\n",
+            info->si_signo, info->si_addr);
+    if (info->si_code > 0) {
+      if (info->si_signo == SIGSEGV) {
+        switch (info->si_code) {
+        case SEGV_MAPERR:
+          fprintf(dbgout, "address not mapped to object\n");
+          break;
+        case SEGV_ACCERR:
+          fprintf(dbgout, "invalid permissions for mapped object\n");
+          break;
+        default:
+          fprintf(dbgout, "unexpected si_code value: %d\n", info->si_code);
+          break;
+        }
+      } else if (info->si_signo == SIGBUS) {
+        switch (info->si_code) {
+        case BUS_ADRALN:
+          fprintf(dbgout, "invalid address alignment\n");
+          break;
+        case BUS_ADRERR:
+          fprintf(dbgout, "non-existent physical address");
+          break;
+        case BUS_OBJERR:
+          fprintf(dbgout, "object-specific hardware error");
+          break;
+        default:
+          fprintf(dbgout, "unexpected si_code value: %d\n", info->si_code);
+        }
       }
     }
   }
