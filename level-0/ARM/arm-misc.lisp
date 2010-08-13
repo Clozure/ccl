@@ -254,7 +254,7 @@
   (unbox-fixnum imm2 offset)
   (add imm2 imm2 imm1)
   (ldr imm0 (:@ imm2 (:$ 0)))           ;low
-  (ldr imm1 (:@ imm2 (:$ 1)))           ;high
+  (ldr imm1 (:@ imm2 (:$ 4)))           ;high
   (ba .SPmakes64))
 
 
