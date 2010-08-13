@@ -33,6 +33,23 @@
 (defconstant xp-cpsr-regno 16)
 )
 
+#+darwinarm-target
+(progn
+(defmacro with-xp-registers-and-gpr-offset ((xp register-number)
+                                            (registers offset) &body body)
+  (let* ((regform `(pref ,xp :ucontext_t.uc_mcontext.__ss)))
+    `(with-macptrs ((,registers ,regform))
+      (let ((,offset (xp-gpr-offset ,register-number)))
+        ,@body))))
+(defun xp-gpr-offset (register-number)
+  (unless (and (fixnump register-number)
+               (<= 0 (the fixnum register-number))
+               (< (the fixnum register-number) 17))
+    (setq register-number (require-type register-number '(integer 0 (17)))))
+  (the fixnum (* (the fixnum register-number) arm::node-size)))
+(defconstant xp-cpsr-regno 16)
+)
+
 (defun xp-gpr-lisp (xp register-number)
   (with-xp-registers-and-gpr-offset (xp register-number) (registers offset)
     (values (%get-object registers offset))))
@@ -55,17 +72,20 @@
     (values (%get-ptr registers offset))))
 
 (defun return-address-offset (xp fn machine-state-offset)
-  (with-macptrs ((regs (pref xp #+linuxarm-target :ucontext.uc_mcontext)))
+  (with-macptrs ((regs (pref xp #+linuxarm-target :ucontext.uc_mcontext
+                                #+darwinarm-target :ucontext_t.uc_mcontext.__ss)))
     (if (functionp fn)
       (or (%code-vector-pc (uvref fn 0) (%inc-ptr regs machine-state-offset))
            (%get-ptr regs machine-state-offset))
       (%get-ptr regs machine-state-offset))))
 
 (defconstant lr-offset-in-register-context
-  #+linuxarm-target (get-field-offset :sigcontext.arm_lr))
+  #+linuxarm-target (get-field-offset :sigcontext.arm_lr)
+  #+darwinarm-target (get-field-offset :__darwin_arm_thread_state.__lr))
 
 (defconstant pc-offset-in-register-context
-  #+linuxarm-target (get-field-offset :sigcontext.arm_pc))
+  #+linuxarm-target (get-field-offset :sigcontext.arm_pc)
+  #+darwinarm-target (get-field-offset :__darwin_arm_thread_state.__pc))
 
 (defun funcall-with-xp-stack-frames (xp trap-function thunk)
   (cond ((null trap-function)
