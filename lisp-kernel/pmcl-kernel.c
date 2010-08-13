@@ -1994,8 +1994,8 @@ xMakeDataExecutable(void *start, unsigned long nbytes)
   flush_cache_lines(base, (end-base)/cache_block_size, cache_block_size);
 #endif
 #ifdef ARM
-  extern void flush_cache_lines(void *, void *);
-  flush_cache_lines(start,((char *)start)+nbytes);
+  extern void flush_cache_lines(void *, size_t);
+  flush_cache_lines(start,nbytes);
 #endif
 }
 

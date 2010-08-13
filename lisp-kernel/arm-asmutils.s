@@ -21,9 +21,10 @@
 
 	_beginfile
 
-/* Force data from r0 to r1 into the icache */        
+/* Force data from r0, size r1 into the icache */        
 _exportfn(C(flush_cache_lines))
         __ifdef(`LINUX')
+        __(add r1,r1,r0)
         __(mov r2,#0)           /* options.  Pass as 0 until we know better */
         __(mov r12,r7)          /* preserve r7 ;  r12 saved by syscall */
         __(mov r7,#0x0f0000)     /* __ARM_NR_cacheflush */
@@ -31,6 +32,11 @@ _exportfn(C(flush_cache_lines))
 	__(svc #0)
         __(mov r7,r12)
         __endif
+        __ifdef(`DARWIN')
+        __(mov r3,#0)
+        __(mov r12,#0x80000000)
+        __(svc #0)
+        __endif                
 	__(bx lr)
 
 _exportfn(C(touch_page))
