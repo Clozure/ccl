@@ -737,49 +737,55 @@
 
 (defun nx-record-code-coverage-acode (afunc)
   (assert *nx-current-code-note*)
-  (let* ((form->note (make-hash-table :test #'eq))
-         (*nx-acode-inner-refs* nil)
-         (*nx-acode-refs-counter* 0)
-         (form (decomp-acode (afunc-acode afunc)
-                             :prettify t
-                             :hook (lambda (acode form &aux (note (acode-note acode)))
-                                     ;; For expressions within without-compiling-code-coverage, there is a source
-                                     ;; note and not a code note, so need to check for code note explicitly.
-                                     (when (code-note-p note)
-                                       (dbg-assert (null (gethash form form->note)))
-                                       (dbg-assert (null (code-note-acode-range note)))
-                                       (setf (gethash form form->note) note)))))
-         (package *package*)
-         (string (with-standard-io-syntax
+  (let ((form->note (make-hash-table :test #'eq)))
+    (labels ((decomp-hook (acode form &aux (note (acode-note acode)))
+               ;; For expressions within without-compiling-code-coverage, there is a source
+               ;; note and not a code note, so need to check for code note explicitly.
+               (when (code-note-p note)
+                 (dbg-assert (null (gethash form form->note)))
+                 (dbg-assert (null (code-note-acode-range note)))
+                 (setf (gethash form form->note) note)))
+             (print-hook (form open-p pos)
+               (let* ((note (gethash form form->note))
+                      (range (and note (code-note-acode-range note))))
+                 (when note
+                   (cond (open-p
+                          (dbg-assert (null range))
+                          (setf (code-note-acode-range note)
+                                (encode-file-range pos pos)))
+                         (t
+                          (dbg-assert (not (null range)))
+                          (multiple-value-bind (start end)
+                              (decode-file-range range)
+                            (declare (ignorable end))
+                            (dbg-assert (eq start end))
+                            (setf (code-note-acode-range note)
+                                  (encode-file-range start pos))))))))
+             (stringify (acode)
+               (let* ((*nx-acode-refs-counter* 0)
+                      (form (decomp-acode acode :prettify t :hook #'decomp-hook))
+                      (package *package*))
+                 (with-standard-io-syntax
                      (with-output-to-string (*nx-pprint-stream*)
                        (let* ((*package* package)
                               (*print-right-margin* *acode-right-margin*)
                               (*print-case* :downcase)
                               (*print-readably* nil))
-                         (pprint-recording-positions
-                          form *nx-pprint-stream*
-                          (lambda (form open-p pos)
-                            (let* ((note (gethash form form->note))
-                                   (range (and note (code-note-acode-range note))))
-                              (when note
-                                (cond (open-p
-                                       (dbg-assert (null range))
-                                       (setf (code-note-acode-range note)
-                                             (encode-file-range pos pos)))
-                                      (t
-				       (dbg-assert (not (null range)))
-                                       (multiple-value-bind (start end)
-                                                            (decode-file-range range)
-                                         (declare (ignorable end))
-                                         (dbg-assert (eq start end))
-                                         (setf (code-note-acode-range note)
-                                               (encode-file-range start pos))))))))))))))
-    (iterate store ((afunc afunc))
-      (setf (getf (afunc-lfun-info afunc) '%function-acode-string) string)
-      (loop for inner in (afunc-inner-functions afunc)
-        unless (getf (afunc-lfun-info inner) '%function-acode-string)
-        do (store inner)))
-    afunc))
+                         (pprint-recording-positions form *nx-pprint-stream* #'print-hook))))))
+             (record (afunc)
+               (let* ((*nx-acode-inner-refs* nil);; filled in by stringify.
+                      (string (stringify (afunc-acode afunc))))
+                 (setf (getf (afunc-lfun-info afunc) '%function-acode-string) string)
+                 (loop for ref in *nx-acode-inner-refs* as fn = (acode-afunc-ref-afunc ref)
+                       do (dbg-assert (null (getf (afunc-lfun-info fn) '%function-acode-string)))
+                       do (setf (getf (afunc-lfun-info fn) '%function-acode-string) string)))))
+      (if (getf (afunc-lfun-info afunc) '%function-source-note)
+        (record afunc)
+        ;; If don't have a function source note while recording code coverage, it's
+        ;; probably a toplevel function consed up by the file compiler.  Don't store it,
+        ;; as it just confuses things
+        (loop for inner in (afunc-inner-functions afunc) do (record inner)))))
+  afunc)
 
 (defmethod print-object ((ref acode-afunc-ref) stream)
   (if (nx-pprinting-p stream)
@@ -823,7 +829,7 @@
                                    (setq op (logand op operator-id-mask))
                                    (< op num))
                           (car (nth (- num op 1) *next-nx-operators*))))
-                  (new (decomp-using-name (or name op) (cdr acode))))
+                  (new (decomp-using-name (or name op) acode)))
              (when *decomp-hook*
                (funcall *decomp-hook* acode new))
              new))))
@@ -899,8 +905,11 @@
 (defmacro defdecomp (names arglist &body body)
   (let ((op-var (car arglist))
         (args-vars (cdr arglist))
-        (op-decls nil)
-        (args-var (gensym)))
+        (acode-var (gensym))
+        (op-decls nil))
+    (when (eq op-var '&whole)
+      (setq acode-var (pop args-vars))
+      (setq op-var (pop args-vars)))
     (multiple-value-bind (body decls) (parse-body body nil)
     ;; Kludge but good enuff for here
       (setq decls (loop for decl in decls
@@ -911,15 +920,15 @@
                                     collect (cons (car exp) (remove op-var (cdr exp)))))))
     `(progn
        ,@(loop for name in (if (atom names) (list names) names)
-           collect `(defmethod decomp-using-name ((,op-var (eql ',name)) ,args-var)
+           collect `(defmethod decomp-using-name ((,op-var (eql ',name)) ,acode-var)
                       (declare ,@op-decls)
-                      (destructuring-bind ,args-vars ,args-var
+                      (destructuring-bind ,args-vars (cdr ,acode-var)
                         ,@decls
                         ,@body)))))))
 
 ;; Default method
-(defmethod decomp-using-name (op forms)
-  `(,op ,@(decomp-formlist forms)))
+(defmethod decomp-using-name (op acode)
+  `(,op ,@(decomp-formlist (cdr acode))))
 
 ;; not real op, kludge generated below for lambda-bind
 (defdecomp keyref (op index)
@@ -949,7 +958,21 @@
     (setq op 'function))
   `(,op ,(decomp-afunc afunc)))
 
-(defdecomp (progn prog1 multiple-value-prog1 or list %temp-list values) (op form-list)
+(defun decomp-replace (from-form to-form)
+  (let ((note (acode-note from-form)))
+    (unless (and note (acode-note to-form))
+      (when note
+        (setf (acode-note to-form) note))
+      t)))
+           
+(defdecomp progn (&whole form op form-list)
+  (if (and *decomp-prettify*
+           (null (cdr form-list))
+           (decomp-replace form (car form-list)))
+    (decomp-form (car form-list))
+    `(,op ,@(decomp-formlist form-list))))
+
+(defdecomp (prog1 multiple-value-prog1 or list %temp-list values) (op form-list)
   `(,op ,@(decomp-formlist form-list)))
 
 (defdecomp multiple-value-call (op fn form-list)
@@ -975,8 +998,12 @@
     `(,op ,@(decomp-formlist forms))
     `(,op ,(decomp-form cc) ,@(decomp-formlist forms))))
 
-(defdecomp (typed-form type-asserted-form) (op typespec form &optional check-p)
-  `(,op ',typespec ,(decomp-form form) ,@(and check-p (list check-p))))
+(defdecomp (typed-form type-asserted-form) (&whole whole op typespec form &optional check-p)
+  (if (and *decomp-prettify*
+           (not check-p)
+           (decomp-replace whole form))
+    (decomp-form form)
+    `(,op ',typespec ,(decomp-form form) ,@(and check-p (list check-p)))))
 
 (defdecomp (%i+ %i-) (op form1 form2 &optional overflow-p)
   `(,op ,(decomp-form form1) ,(decomp-form form2) ,overflow-p))
@@ -984,7 +1011,7 @@
 (defdecomp (immediate-get-xxx %immediate-set-xxx) (op bits &rest forms)
   `(,op ,bits ,@(decomp-formlist forms)))
 
-(defdecomp call (op fn arglist &optional spread-p)
+(defdecomp (builtin-call call) (op fn arglist &optional spread-p)
   (setq op (if spread-p 'apply 'funcall))
   `(,op ,(decomp-form fn) ,@(decomp-arglist arglist)))
 

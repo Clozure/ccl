@@ -57,8 +57,6 @@
 (defparameter *entry-code-notes* (make-hash-table :test #'eq))
 (defparameter *code-note-acode-strings* (make-hash-table :test #'eq))
 
-(defparameter *coverage-acode-queue* nil)
-
 (defstruct (coverage-state (:conc-name "%COVERAGE-STATE-"))
   alist)
 
@@ -87,7 +85,8 @@
   (gethash note *entry-code-notes*))
 
 (defun code-note-acode-string (note)
-  (gethash note *code-note-acode-strings*))
+  (and *code-note-acode-strings*
+       (gethash note *code-note-acode-strings*)))
 
 (defun map-function-coverage (lfun fn &optional refs)
   (let ((refs (cons lfun refs)))
@@ -99,10 +98,11 @@
 			(not (memq imm refs)))
 	      do (map-function-coverage imm fn refs))))
 
-(defun get-function-coverage (fn refs acode)
+(defun get-function-coverage (fn refs)
   (let ((entry (function-entry-code-note fn))
 	(refs (cons fn refs))
-        (acode (or (%function-acode-string fn) acode)))
+        (acode (%function-acode-string fn))
+        (source (function-source-form-note fn)))
     (declare (dynamic-extent refs))
     (when entry
       (assert (eq fn (gethash entry *entry-code-notes* fn)))
@@ -118,8 +118,14 @@
             (when acode
               (setf (gethash imm *code-note-acode-strings*) acode)))
        when (and (functionp imm)
-                 (not (memq imm refs)))
-       nconc (get-function-coverage imm refs acode)))))
+                 (not (memq imm refs))
+                 ;; Make sure this fn is in the source we're currently looking at.
+                 ;; It might not be, if it is referenced via (load-time-value (foo))
+                 ;; where (foo) returns an lfun from some different source entirely.
+                 ;; CL-PPCRE does that.
+                 (or (null source)
+                     (eq source (function-source-form-note imm))))
+       nconc (get-function-coverage imm refs)))))
 
 (defun code-covered-info.file (data) (and (consp data) (car data)))
 (defun code-covered-info.fns (data) (and (consp data) (if (consp (cdr data)) (cadr data) (cdr data))))
@@ -139,44 +145,44 @@
   (clrhash *coverage-subnotes*)
   (clrhash *emitted-code-notes*)
   (clrhash *entry-code-notes*)
-  (clrhash *code-note-acode-strings*)
+  (when *code-note-acode-strings* (clrhash *code-note-acode-strings*))
   (loop for data in *code-covered-functions*
 	do (let* ((file (code-covered-info.file data))
                   (toplevel-functions (code-covered-info.fns data)))
              (when file
-               (push (list* file
-                            ;; Duplicates are possible if you have multiple instances of
-                            ;; (load-time-value (foo)) where (foo) returns an lfun.
-                            ;; CL-PPCRE does that.
-                            (delete-duplicates
-                             (loop for fn across toplevel-functions
-                                   nconc (get-function-coverage fn nil nil)))
-                            toplevel-functions)
-                     *file-coverage*))))
+               (let* ((all-functions (delete-duplicates
+                                      ;; Duplicates are possible if you have multiple instances of
+                                      ;; (load-time-value (foo)) where (foo) returns an lfun.
+                                      ;; CL-PPCRE does that.
+                                      (loop for fn across toplevel-functions
+                                            nconc (get-function-coverage fn nil))))
+                      (coverage (list* file all-functions toplevel-functions)))
+                 (push coverage *file-coverage*)))))
   ;; Now get subnotes, including un-emitted ones.
   (loop for note being the hash-key of *emitted-code-notes*
         do (loop for n = note then parent as parent = (code-note-parent-note n)
                  while parent
                  do (pushnew n (gethash parent *coverage-subnotes*))
-                 until (emitted-code-note-p parent)))
-  (let ((hash (make-hash-table :test #'eq)))
-    ;; distribute entry acode to the toplevel source note it belongs to.
-    (loop for entry being the hash-key of *entry-code-notes* using (hash-value fn)
-      as acode = (code-note-acode-string entry)
-      as sn = (entry-note-unambiguous-source entry)
-      as toplevel-sn = (function-source-form-note fn)
-      do (when sn
-           (assert toplevel-sn)
-           (let* ((pos (source-note-end-pos sn))
-                  (cell (assq acode (gethash toplevel-sn hash))))
-             (if cell
-               (setf (cdr cell) (max (cdr cell) pos))
-               (push (cons acode pos) (gethash toplevel-sn hash))))))
-    (setf *coverage-acode-queue*
-          (sort (loop for sn being the hash-key of hash using (hash-value alist)
-                  collect (cons (source-note-end-pos sn)
-                                (mapcar #'car (sort alist #'< :key #'cdr))))
-                #'< :key #'car))))
+                 until (emitted-code-note-p parent))))
+
+(defun file-coverage-acode-queue (coverage)
+  (loop with hash = (make-hash-table :test #'eq :shared nil)
+        for fn in (file-coverage-functions coverage)
+        as acode = (%function-acode-string fn)
+        as entry = (function-entry-code-note fn)
+        as sn = (entry-note-unambiguous-source entry)
+        as toplevel-sn = (function-source-form-note fn)
+        do (when sn
+             (assert toplevel-sn)
+             (let* ((pos (source-note-end-pos sn))
+                    (cell (assq acode (gethash toplevel-sn hash))))
+               (if cell
+                 (setf (cdr cell) (max (cdr cell) pos))
+                 (push (cons acode pos) (gethash toplevel-sn hash)))))
+        finally (return (sort (loop for sn being the hash-key of hash using (hash-value alist)
+                                    collect (cons (source-note-end-pos sn)
+                                                  (mapcar #'car (sort alist #'< :key #'cdr))))
+                              #'< :key #'car))))
 
 #+debug
 (defun show-notes (note)
@@ -455,8 +461,9 @@ image."
   (let* ((*file-coverage* nil)
 	 (*coverage-subnotes* (make-hash-table :test #'eq :shared nil))
 	 (*emitted-code-notes* (make-hash-table :test #'eq :shared nil))
-	 (*entry-code-notes* (make-hash-table :test #'eq :shared nil)))
-    (get-coverage)
+	 (*entry-code-notes* (make-hash-table :test #'eq :shared nil))
+         (*code-note-acode-strings* nil))
+    (get-coverage) 
     (loop for coverage in *file-coverage*
           as stats = (make-coverage-statistics :source-file (file-coverage-file coverage))
           do (map nil (lambda (fn)
@@ -501,6 +508,7 @@ written to the output directory.
 	 (*coverage-subnotes* (make-hash-table :test #'eq :shared nil))
 	 (*emitted-code-notes* (make-hash-table :test #'eq :shared nil))
 	 (*entry-code-notes* (make-hash-table :test #'eq :shared nil))
+         (*code-note-acode-strings* (make-hash-table :test #'eq :shared nil))
          (index-file (and html (merge-pathnames output-file "index.html")))
          (stats-file (and statistics (merge-pathnames (if (or (stringp statistics)
                                                               (pathnamep statistics))
@@ -711,10 +719,7 @@ written to the output directory.
     (lfunloop for imm in fn
 	      when (and (functionp imm)
 			(not (memq imm refs))
-			;; Make sure this fn is in the source we're currently looking at.
-			;; It might not be, if it is referenced via (load-time-value (foo))
-			;; where (foo) returns an lfun from some different source entirely.
-			;; CL-PPCRE does that.
+                        ;; See note in get-function-coverage
 			(or (null source)
 			    (eq source (function-source-form-note imm))
 			    #+debug (progn
@@ -735,7 +740,8 @@ written to the output directory.
                              :initial-element $no-style
                              :element-type '(unsigned-byte 2)))
          (acode-styles (make-hash-table :test #'eq)))
-    (map nil #'(lambda (fn) (colorize-function fn styles acode-styles)) (file-coverage-toplevel-functions coverage))
+    (map nil #'(lambda (fn) (colorize-function fn styles acode-styles))
+         (file-coverage-toplevel-functions coverage))
     (print-file-coverage-report index-file html-stream coverage styles acode-styles source)
     (format html-stream "</body></html>")))
 
@@ -757,26 +763,25 @@ written to the output directory.
     (format html-stream "</div><p></p>~%")
 
     ;; Output source intertwined with acode
-    (iterate output ((start 0) (line 0))
+    (iterate output ((start 0) (line 0) (queue (file-coverage-acode-queue coverage)))
       (format html-stream "<div class='source'><code>")
-      (let ((next (car *coverage-acode-queue*)))
+      (let ((next (car queue)))
         (multiple-value-bind (end last-line)
-                             (output-styled html-stream source styles
-                                            :start start
-                                            :line line
-                                            :limit (car next))
+            (output-styled html-stream source styles
+                           :start start
+                           :line line
+                           :limit (car next))
           (format html-stream "</code></div>~%")
           (when (and next end (<= (car next) end))
             (destructuring-bind (pos . strings) next
               (format html-stream "<a href=javascript:swap('~d')><span class='toggle' id='p~:*~d'>Show expansion</span></a>~%~
                                    <div class='acode' id='a~:*~d'><code>" pos)
               (loop for acode in strings as styles = (gethash acode acode-styles)
-                do (assert styles)
-                do (output-styled html-stream acode styles)
-                do (fresh-line html-stream))
-              (format html-stream "</code></div><hr/>~%"))
-            (pop *coverage-acode-queue*)
-            (output (1+ end) last-line)))))))
+                    do (assert styles)
+                    do (when styles (output-styled html-stream acode styles))
+                    do (fresh-line html-stream))
+              (format html-stream "</code></div><hr/>~%")
+              (output (1+ end) last-line (cdr queue)))))))))
 
 (defun output-styled (html-stream source styles &key (start 0) line limit)
   (let ((last-style $no-style)

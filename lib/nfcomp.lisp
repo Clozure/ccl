@@ -310,6 +310,7 @@ Will differ from *compiling-file* during an INCLUDE")
                               (signal c))))
       (funcall (compile-named-function
                 lambda
+                :compile-code-coverage nil
                 :source-notes *fcomp-source-note-map*
                 :env *fasl-compile-time-env*
                 :policy *compile-time-evaluation-policy*)))))
@@ -320,6 +321,7 @@ Will differ from *compiling-file* during an INCLUDE")
 
 ;;; Well, no usable methods by default.  How this is better than
 ;;; getting a NO-APPLICABLE-METHOD error frankly escapes me,
+;;; [Hint: this is called even when there is an applicable method]
 (defun no-make-load-form-for (object)
   (error "No ~S method is defined for ~s" 'make-load-form object))
 
@@ -960,6 +962,9 @@ Will differ from *compiling-file* during an INCLUDE")
 (defun fcomp-source-note (form &aux (notes *fcomp-source-note-map*))
   (and notes (gethash form notes)))
 
+(defun (setf fcomp-source-note) (note form &aux (notes *fcomp-source-note-map*))
+  (and notes (setf (gethash form notes) note)))
+
 (defun fcomp-note-source-transformation (original new)
   (let* ((*nx-source-note-map* *fcomp-source-note-map*))
     (nx-note-source-transformation original new)))
@@ -1038,19 +1043,22 @@ Will differ from *compiling-file* during an INCLUDE")
     (let* ((forms (nreverse *fcomp-toplevel-forms*))
            (*fcomp-stream-position* *fcomp-previous-position*)
 	   (*loading-toplevel-location* *fcomp-loading-toplevel-location*)
-           (lambda (if T ;; (null (cdr forms))
-                     `(lambda () ,@forms)
-                     `(lambda ()
-                        (macrolet ((load-time-value (value)
-                                     (declare (ignore value))
-                                     (compiler-function-overflow)))
-                          ,@forms)))))
+           (body (if T ;; (null (cdr forms))
+                   `(progn ,@forms)
+                   `(macrolet ((load-time-value (value)
+                                 (declare (ignore value))
+                                 (compiler-function-overflow)))
+                      ,@forms)))
+           (lambda `(lambda () ,body)))
+      ;; Don't assign a location to the lambda so it doesn't confuse acode printing, but
+      ;; arrange to assign it to any inner lambdas.
+      (setf (fcomp-source-note body) *loading-toplevel-location*)
       (setq *fcomp-toplevel-forms* nil)
       ;(format t "~& Random toplevel form: ~s" lambda)
       (handler-case (fcomp-output-form
                      $fasl-lfuncall
                      env
-                     (fcomp-named-function lambda nil env *loading-toplevel-location*))
+                     (fcomp-named-function lambda nil env #|*loading-toplevel-location*|#))
         (compiler-function-overflow ()
           (if (null (cdr forms))
             (error "Form ~s cannot be compiled - size exceeds compiler limitation"
