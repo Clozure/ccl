@@ -8126,12 +8126,16 @@
   (let* ((*arm2-vstack* *arm2-vstack*)
          (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*)
          (*arm2-cstack* *arm2-cstack*)
-         (next-arg-word 0))
+         (next-arg-word 0)
+         (natural-64-bit-alignment
+          (case (backend-target-os *target-backend*)
+            (:darwinarm nil)
+            (t t))))
       (declare (fixnum next-arg-word))
       (dolist (argspec argspecs)
         (case argspec
           ((:double-float :unsigned-doubleword :signed-doubleword)
-           (when (oddp next-arg-word)
+           (when (and natural-64-bit-alignment (oddp next-arg-word))
              (incf next-arg-word))
            (incf next-arg-word 2))
           (t (incf next-arg-word))))
@@ -8153,7 +8157,7 @@
           (case spec
             (:double-float
              (let* ((df ($ arm::d0 :class :fpr :mode :double-float)))
-               (when (oddp next-arg-word)
+               (when (and natural-64-bit-alignment (oddp next-arg-word))
                  (incf next-arg-word))
                (arm2-one-targeted-reg-form seg valform df)
                (! set-double-eabi-c-arg df next-arg-word)
@@ -8168,7 +8172,7 @@
              (if (eq spec :signed-doubleword)
                (! gets64)
                (! getu64))
-             (when (oddp next-arg-word)
+             (when (and natural-64-bit-alignment (oddp next-arg-word))
                (incf next-arg-word))
              (! set-eabi-c-arg ($ arm::imm0) next-arg-word)
              (incf next-arg-word)
@@ -8469,7 +8473,7 @@
                                                                (old-stack (arm2-encode-stack)))
   (let* ((reg (arm2-one-untargeted-reg-form seg size arm::arg_z)))
     (ecase (backend-name *target-backend*)
-      (:linuxarm (! alloc-variable-eabi-c-frame reg)))
+      ((:linuxarm :darwinarm) (! alloc-variable-eabi-c-frame reg)))
     (arm2-open-undo $undo-arm-c-frame)
     (arm2-undo-body seg vreg xfer body old-stack)))
 
