@@ -715,40 +715,41 @@ return a fixnum representation of that address, else return NIL."
 ;;;
 
 (defun legacy-shlib-containing-address (addr name)
-  (dotimes (i (ff-call *dyld-image-count* :unsigned-fullword))
-    (let ((header (ff-call *dyld-get-image-header* :unsigned-fullword i :address)))
-      (when (and (not (%null-ptr-p header))
-                 (or (eql (pref header :mach_header.filetype) #$MH_DYLIB)
-                     (eql (pref header :mach_header.filetype) #$MH_BUNDLE)))
-        ;; make sure the image is either a bundle or a dylib
-        ;; (otherwise we will crash, likely OS bug, tested OS X 10.1.5)
-        (with-cstrs ((cname name))
-          ;; also we must check is symbol name is defined in the
-          ;; image otherwise in certain cases there is a crash,
-          ;; another likely OS bug happens in the case where a
-          ;; bundle imports a dylib and then we call
-          ;; nslookupsymbolinimage on the bundle image
-          (when (/= 0
-                    (ff-call *ns-is-symbol-name-defined-in-image* :address header
-                             :address cname :unsigned))
-            (let ((symbol (ff-call *nslookup-symbol-in-image* :address header :address cname
-                                   :unsigned-fullword #$NSLOOKUPSYMBOLINIMAGE_OPTION_RETURN_ON_ERROR
-                                   :address)))
-              (unless (%null-ptr-p symbol)
-                ;; compare the found address to the address we are looking for
-                (let ((foundaddr (ff-call *nsaddress-of-symbol* :address symbol :address)))
-                  ;; (format t "Foundaddr ~s~%" foundaddr)
-                  ;; (format t "Compare to addr ~s~%" addr)
-                  (when (eql foundaddr addr)
-                    (let* ((imgname (ff-call *dyld-get-image-name* :unsigned-fullword i :address))
-                           (libname (unless (%null-ptr-p imgname) (%get-cstring imgname)))
-                           (libmodule (%int-to-ptr 0))
-                           (libheader (%int-to-ptr 0)))
-                      (if (eql (pref header :mach_header.filetype) #$MH_BUNDLE)
-                        (setf libmodule (ff-call *nsmodule-for-symbol* :address symbol :address))
-                        (setf libheader header))
-                      ;; make sure that this shared library is on *shared-libraries*
-                      (return (shared-library-from-header-module-or-name libheader libmodule libname)))))))))))))
+  (when *ns-is-symbol-name-defined-in-image*
+    (dotimes (i (ff-call *dyld-image-count* :unsigned-fullword))
+      (let ((header (ff-call *dyld-get-image-header* :unsigned-fullword i :address)))
+        (when (and (not (%null-ptr-p header))
+                   (or (eql (pref header :mach_header.filetype) #$MH_DYLIB)
+                       (eql (pref header :mach_header.filetype) #$MH_BUNDLE)))
+          ;; make sure the image is either a bundle or a dylib
+          ;; (otherwise we will crash, likely OS bug, tested OS X 10.1.5)
+          (with-cstrs ((cname name))
+            ;; also we must check is symbol name is defined in the
+            ;; image otherwise in certain cases there is a crash,
+            ;; another likely OS bug happens in the case where a
+            ;; bundle imports a dylib and then we call
+            ;; nslookupsymbolinimage on the bundle image
+            (when (/= 0
+                      (ff-call *ns-is-symbol-name-defined-in-image* :address header
+                               :address cname :unsigned))
+              (let ((symbol (ff-call *nslookup-symbol-in-image* :address header :address cname
+                                     :unsigned-fullword #$NSLOOKUPSYMBOLINIMAGE_OPTION_RETURN_ON_ERROR
+                                     :address)))
+                (unless (%null-ptr-p symbol)
+                  ;; compare the found address to the address we are looking for
+                  (let ((foundaddr (ff-call *nsaddress-of-symbol* :address symbol :address)))
+                    ;; (format t "Foundaddr ~s~%" foundaddr)
+                    ;; (format t "Compare to addr ~s~%" addr)
+                    (when (eql foundaddr addr)
+                      (let* ((imgname (ff-call *dyld-get-image-name* :unsigned-fullword i :address))
+                             (libname (unless (%null-ptr-p imgname) (%get-cstring imgname)))
+                             (libmodule (%int-to-ptr 0))
+                             (libheader (%int-to-ptr 0)))
+                        (if (eql (pref header :mach_header.filetype) #$MH_BUNDLE)
+                          (setf libmodule (ff-call *nsmodule-for-symbol* :address symbol :address))
+                          (setf libheader header))
+                        ;; make sure that this shared library is on *shared-libraries*
+                        (return (shared-library-from-header-module-or-name libheader libmodule libname))))))))))))))
 
 (defun shlib-containing-address (address name)
   (if (zerop *dladdr-entry*)
