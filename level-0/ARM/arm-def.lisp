@@ -333,6 +333,7 @@
                         :signed-byte :unsigned-byte)
               (incf total-words))
              ((:double-float :unsigned-doubleword :signed-doubleword)
+              #-darwin-target
               (setq total-words (+ total-words (logand total-words 1)))
               (incf total-words 2))
 
@@ -362,6 +363,7 @@
                             (setf (%get-ptr argptr arg-offset) val)
                             (incf arg-offset 4))
                            (:signed-doubleword
+                            #-darwin-target
                             (when (logtest 7 arg-offset)
                               (incf arg-offset 4))
                             (setf (%%get-signed-longlong argptr arg-offset) val)
@@ -370,6 +372,7 @@
                             (setf (%get-signed-long argptr arg-offset) val)
                             (incf arg-offset 4))
                            (:unsigned-doubleword
+                            #-darwin-target
                              (when (logtest 7 arg-offset)
                                (incf arg-offset 4))
                              (setf (%%get-unsigned-longlong argptr arg-offset) val)
@@ -378,6 +381,7 @@
                             (setf (%get-unsigned-long argptr arg-offset) val)
                             (incf arg-offset 4))
                            (:double-float
+                            #-darwin-target
                             (when (logtest 7 arg-offset)
                               (incf arg-offset 4))
                             (setf (%get-double-float argptr arg-offset) val)
