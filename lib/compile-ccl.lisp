@@ -250,7 +250,7 @@
                           :freebsdx8632)
              '(x86-error-signal x86-trap-support
                x86-threads-utils x86-callback-support))
-            (:linuxarm
+            ((:linuxarm :darwinarm)
              '(arm-error-signal arm-trap-support
                arm-threads-utils arm-callback-support)))))
 
