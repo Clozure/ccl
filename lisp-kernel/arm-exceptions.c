@@ -812,11 +812,7 @@ protection_handler
 Boolean
 is_write_fault(ExceptionInformation *xp, siginfo_t *info)
 {
-#ifdef LINUX
-  /* Based on experiments with a small sample size; need to R TFM. */
-  return ((xp->uc_mcontext.trap_no == 0xe) &&
-          ((xp->uc_mcontext.error_code & 0xfffffff7) == 0x817));
-#endif
+  return ((xpFaultStatus(xp) & 0x800) != 0);
 }
 
 Boolean
