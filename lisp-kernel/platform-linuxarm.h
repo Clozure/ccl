@@ -40,6 +40,7 @@ typedef struct ucontext ExceptionInformation;
 #define xpFaultAddress(x) xpGPR(x,17)
 #define xpTRAP(x) xpGPR(x,-3)
 #define xpERROR(x) xpGPR(x,-2)
+#define xpFaultStatus(x) xpERROR(x)
 
 #define DarwinSigReturn(context)
 #define SIGRETURN(context)

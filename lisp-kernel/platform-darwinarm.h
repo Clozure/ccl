@@ -43,8 +43,8 @@ typedef ucontext_t ExceptionInformation;
 #define xpLR(x) (*((pc*)(&(xpGPR(x,14)))))
 #define xpPSR(x) xpGPR(x,16)
 #define xpFaultAddress(x) ((x)->uc_mcontext->__es.__far)
-#define xpTRAP(x) xpGPR(x,-3)
-#define xpERROR(x) xpGPR(x,-2)
+#define xpFaultStatus(x)  ((x)->uc_mcontext->__es.__fsr)
+
 
 #define DarwinSigReturn(context)
 #define SIGRETURN(context)
