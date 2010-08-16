@@ -73,6 +73,8 @@
      (x862-decls ,declsform)
      ,@body))
 
+(defun x862-emit-vinsn (vlist name vinsn-table &rest vregs)
+  (x862-update-regmap (apply #'%emit-vinsn vlist name vinsn-table vregs)))
 
 (defmacro with-x86-local-vinsn-macros ((segvar &optional vreg-var xfer-var) &body body)
   (declare (ignorable xfer-var))
@@ -87,14 +89,18 @@
                     (unless ,template-temp
                       (warn "VINSN \"~A\" not defined" ,template-name-var))
                     `(prog1
-                      (%emit-vinsn ,',segvar ',,template-name-var (backend-p2-vinsn-templates *target-backend*) ,@,args-var)
+                      (x862-emit-vinsn ,',segvar ',,template-name-var (backend-p2-vinsn-templates *target-backend*) ,@,args-var)
                       (setq *x862-tos-reg* nil)))))
        (macrolet ((<- (,retvreg-var)
                     `(x862-copy-register ,',segvar ,',vreg-var ,,retvreg-var))
                   (@  (,labelnum-var)
-                    `(backend-gen-label ,',segvar ,,labelnum-var))
+		    `(progn
+		       (x862-invalidate-regmap)
+		       (backend-gen-label ,',segvar ,,labelnum-var)))
                   (@= (,labelnum-var)
-                    `(x862-emit-aligned-label ,',segvar ,,labelnum-var))
+                    `(progn
+		       (x862-invalidate-regmap)
+		       (x862-emit-aligned-label ,',segvar ,,labelnum-var)))
                   (-> (,label-var)
                     `(! jump (aref *backend-labels* ,,label-var)))
                   (^ (&rest branch-args)
@@ -198,6 +204,9 @@
 (defvar *x862-emitted-source-notes* nil)
 
 (defvar *x862-result-reg* x8664::arg_z)
+
+(defvar *x862-gpr-locations* nil)
+(defvar *x862-gpr-locations-valid-mask* 0)
 
 (defvar *x8664-nvrs*
   `(,x8664::save0 ,x8664::save1 ,x8664::save2 ,x8664::save3))
@@ -602,7 +611,10 @@
            (*x862-vcells* (x862-ensure-binding-indices-for-vcells (afunc-vcells afunc)))
            (*x862-fcells* (afunc-fcells afunc))
            *x862-recorded-symbols*
-           (*x862-emitted-source-notes* '()))
+           (*x862-emitted-source-notes* '())
+	   (*x862-gpr-locations-valid-mask* 0)
+           (*x862-gpr-locations* (make-array 16 :initial-element nil)))
+      (declare (dynamic-extent *x862-gpr-locations*))
       (set-fill-pointer
        *backend-labels*
        (set-fill-pointer
@@ -804,6 +816,76 @@
               (declare (fixnum i))
               (if (eq (%svref v i) ref)
                 (setf (%svref v i) ref-fun)))))))))
+
+(eval-when (:compile-toplevel)
+  (declaim (inline x862-invalidate-regmap)))
+
+(defun x862-invalidate-regmap ()
+  (setq *x862-gpr-locations-valid-mask* 0))
+
+(defun x862-update-regmap (vinsn)
+  (if (vinsn-attribute-p vinsn :call)
+    (x862-invalidate-regmap)
+    (setq *x862-gpr-locations-valid-mask*
+	  (logandc2 *x862-gpr-locations-valid-mask* (vinsn-gprs-set vinsn))))
+  vinsn)
+
+(defun x862-regmap-note-store (gpr loc)
+  (let* ((gpr (%hard-regspec-value gpr)))
+    (assert (< gpr 16) nil "bad regno")
+    ;; Any other GPRs that had contained loc no longer do so.
+    (dotimes (i 16)
+      (unless (eql i gpr)
+        (when (and (logbitp i *x862-gpr-locations-valid-mask*)
+                   (memq loc (svref *x862-gpr-locations* i)))
+          (when (null (setf (svref *x862-gpr-locations* i)
+                            (delete loc (svref *x862-gpr-locations* i))))
+            (setq *x862-gpr-locations-valid-mask*
+		  (logandc2 *x862-gpr-locations-valid-mask* (ash 1 i)))))))
+    (if (logbitp gpr *x862-gpr-locations-valid-mask*)
+      (push loc (svref *x862-gpr-locations* gpr))
+      (setf (svref *x862-gpr-locations* gpr) (list loc)))
+    (setq *x862-gpr-locations-valid-mask*
+	  (logior *x862-gpr-locations-valid-mask* (ash 1 gpr)))))
+  
+;;; For vpush: nothing else should claim to contain loc.
+(defun x862-regmap-note-reg-location (gpr loc)
+  (let* ((gpr (%hard-regspec-value gpr)))
+    (if (logbitp gpr *x862-gpr-locations-valid-mask*)
+      (push loc (svref *x862-gpr-locations* gpr))
+      (setf (svref *x862-gpr-locations* gpr) (list loc)))
+    (setq *x862-gpr-locations-valid-mask*
+	  (logior *x862-gpr-locations-valid-mask* (ash 1 gpr)))))  
+  
+(defun x862-regmap-note-vstack-delta (new old)
+  (when (< new old)
+    (let* ((mask *x862-gpr-locations-valid-mask*)
+           (info *x862-gpr-locations*))
+    (unless (eql 0 mask)
+      (dotimes (i 16 (setq *x862-gpr-locations-valid-mask* mask))
+        (when (logbitp i mask)
+          (let* ((locs (svref info i))
+                 (head (cons nil locs))
+                 (tail head))
+            (declare (dynamic-extent head))
+            (dolist (loc locs)
+              (if (>= loc new)
+                (setf (cdr tail) (cddr tail))
+                (setq tail (cdr tail))))
+            (when (null (setf (svref info i) (cdr head)))
+              (setq mask (logandc2 mask (ash 1 i)))))))))))
+
+(defun x862-copy-regmap (mask from to)
+  (dotimes (i 16)
+    (when (logbitp i mask)
+      (setf (svref to i) (copy-list (svref from i))))))
+
+(defmacro with-x862-saved-regmap ((mask map) &body body)
+  `(let* ((,mask *x862-gpr-locations-valid-mask*)
+          (,map (make-array 16 :initial-element nil)))
+    (declare (dynamic-extent ,map))
+    (x862-copy-regmap ,mask *x862-gpr-locations* ,map)
+    ,@body))
 
 (defun x862-generate-pc-source-map (debug-info)
   (let* ((definition-source-note (getf debug-info '%function-source-note))
@@ -1342,7 +1424,9 @@
   (x862-set-vstack (%i+ *x862-vstack* delta)))
 
 (defun x862-set-vstack (new)
-  (setq *x862-vstack* (or new 0)))
+  (setq new (or new 0))
+  (x862-regmap-note-vstack-delta new *x862-vstack*)
+  (setq *x862-vstack* new))
 
 
 ;;; Emit a note at the end of the segment.
@@ -1364,10 +1448,17 @@
     (append-dll-node (vinsn-note-label end) seg)
     end))
 
-
-
-
-
+(defun x862-register-for-frame-offset (offset &optional suggested)
+  (let* ((mask *x862-gpr-locations-valid-mask*)
+         (info *x862-gpr-locations*))
+    (if (and suggested
+             (logbitp suggested mask)
+             (memq offset (svref info suggested)))
+      suggested
+      (dotimes (reg 16)
+        (when (and (logbitp reg mask)
+                   (memq offset (svref info reg)))
+          (return reg))))))
 
 (defun x862-stack-to-register (seg memspec reg)
   (with-x86-local-vinsn-macros (seg)
@@ -1376,6 +1467,30 @@
                (= offset (- *x862-vstack* *x862-target-node-size*)))
         (x862-copy-register seg reg *x862-tos-reg*)
         (! vframe-load reg offset  *x862-vstack*)))))
+
+#+not-yet
+(defun x862-stack-to-register (seg memspec reg)
+  (with-x86-local-vinsn-macros (seg)
+    (let* ((offset (memspec-frame-address-offset memspec))
+	   (mask *x862-gpr-locations-valid-mask*)
+	   (info *x862-gpr-locations*)
+	   (regno (%hard-regspec-value reg))
+	   (other (x862-register-for-frame-offset offset regno)))
+      (assert (< regno 16) nil "bad regno")
+      (unless (eql regno other)
+	(cond (other
+	       (let* ((vinsn (! copy-gpr reg other)))
+		 (setq *x862-gpr-locations-valid-mask*
+		       (logior mask (ash 1 regno)))
+		 (setf (svref info regno)
+		       (copy-list (svref info other)))
+		 vinsn))
+	      (t
+	       (let* ((vinsn (! vframe-load reg offset *x862-vstack*)))
+		 (setq *x862-gpr-locations-valid-mask*
+		       (logior mask (ash 1 regno)))
+		 (setf (svref info regno) (list offset))
+		 vinsn)))))))
 
 (defun x862-lcell-to-register (seg lcell reg)
   (with-x86-local-vinsn-macros (seg)
@@ -1387,7 +1502,10 @@
 
 (defun x862-register-to-stack (seg reg memspec)
   (with-x86-local-vinsn-macros (seg)
-    (! vframe-store reg (memspec-frame-address-offset memspec) *x862-vstack*)))
+    (let* ((offset (memspec-frame-address-offset memspec))
+	   (vinsn (! vframe-store reg offset *x862-vstack*)))
+      (x862-regmap-note-store (%hard-regspec-value reg) offset)
+      vinsn)))
 
 
 (defun x862-ea-open (ea)
@@ -3893,6 +4011,7 @@
     (prog1
       (! vpush-register src)
       (setq *x862-tos-reg* src)
+      (x862-regmap-note-store src *x862-vstack*)
       (x862-new-vstack-lcell (or why :node) *x862-target-lcell-size* (or attr 0) info)
       (x862-adjust-vstack *x862-target-node-size*))))
 
