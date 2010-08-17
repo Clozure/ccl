@@ -43,7 +43,7 @@ extern void pseudo_sigreturn(ExceptionInformation *);
 #endif
 
 
-#include "Threads.h"
+#include "threads.h"
 
 
 #ifdef LINUX

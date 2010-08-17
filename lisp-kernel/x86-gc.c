@@ -20,7 +20,7 @@
 #include "bits.h"
 #include "gc.h"
 #include "area.h"
-#include "Threads.h"
+#include "threads.h"
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>

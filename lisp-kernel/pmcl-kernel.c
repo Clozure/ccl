@@ -105,7 +105,7 @@ Boolean use_mach_exception_handling =
 #ifndef WINDOWS
 #include <sys/select.h>
 #endif
-#include "Threads.h"
+#include "threads.h"
 
 #if !(defined(DARWIN) && defined(ARM))
 #include <fenv.h>

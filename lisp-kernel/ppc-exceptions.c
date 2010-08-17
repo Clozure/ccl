@@ -45,7 +45,7 @@ extern void pseudo_sigreturn(ExceptionInformation *);
 #endif
 
 
-#include "Threads.h"
+#include "threads.h"
 
 #define MSR_FE0_MASK (((unsigned)0x80000000)>>20)
 #define MSR_FE1_MASK (((unsigned)0x80000000)>>23)

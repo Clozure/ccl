@@ -49,7 +49,7 @@ SPINC =	lisp.s m4macros.m4 arm-constants.s arm-macros.s errors.s arm-uuo.s
 
 CHEADERS = area.h bits.h arm-constants.h lisp-errors.h gc.h lisp.h \
 	lisp-exceptions.h lisp_globals.h macros.h memprotect.h image.h \
-	Threads.h arm-exceptions.h $(PLATFORM_H)
+	threads.h arm-exceptions.h $(PLATFORM_H)
 
 
 KSPOBJ = $(SPOBJ)

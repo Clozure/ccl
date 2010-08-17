@@ -19,7 +19,7 @@
 #include "lisp-exceptions.h"
 #include "lisp_globals.h"
 #include "area.h"
-#include "Threads.h"
+#include "threads.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <stddef.h>

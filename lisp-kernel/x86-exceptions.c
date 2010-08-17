@@ -17,7 +17,7 @@
 #include "lisp.h"
 #include "lisp-exceptions.h"
 #include "lisp_globals.h"
-#include "Threads.h"
+#include "threads.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <stddef.h>
