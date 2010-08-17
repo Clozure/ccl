@@ -40,7 +40,6 @@
 
 (defparameter *x862-operator-supports-u8-target* ())
 (defparameter *x862-operator-supports-push* ())
-(defparameter *x862-tos-reg* ())
 
 ;; probably should be elsewhere
 
@@ -88,9 +87,7 @@
                   (let* ((,template-temp (get-vinsn-template-cell ,template-name-var (backend-p2-vinsn-templates *target-backend*))))
                     (unless ,template-temp
                       (warn "VINSN \"~A\" not defined" ,template-name-var))
-                    `(prog1
-                      (x862-emit-vinsn ,',segvar ',,template-name-var (backend-p2-vinsn-templates *target-backend*) ,@,args-var)
-                      (setq *x862-tos-reg* nil)))))
+                    `(x862-emit-vinsn ,',segvar ',,template-name-var (backend-p2-vinsn-templates *target-backend*) ,@,args-var))))
        (macrolet ((<- (,retvreg-var)
                     `(x862-copy-register ,',segvar ,',vreg-var ,,retvreg-var))
                   (@  (,labelnum-var)
@@ -550,7 +547,6 @@
            (*x862-target-half-fixnum-type* `(signed-byte ,(- *x862-target-bits-in-word*
                                                             (1+ *x862-target-fixnum-shift*))))
            (*x862-target-dnode-size* (* 2 *x862-target-lcell-size*))
-           (*x862-tos-reg* nil)
            (*x862-all-lcells* ())
            (*x862-top-vstack-lcell* nil)
            (*x862-bottom-vstack-lcell* (x862-new-vstack-lcell :bottom 0 0 nil))
@@ -3999,7 +3995,6 @@
   (with-x86-local-vinsn-macros (seg)
     (prog1
       (! vpush-register src)
-      (setq *x862-tos-reg* src)
       (x862-regmap-note-store src *x862-vstack*)
       (x862-new-vstack-lcell (or why :node) *x862-target-lcell-size* (or attr 0) info)
       (x862-adjust-vstack *x862-target-node-size*))))
