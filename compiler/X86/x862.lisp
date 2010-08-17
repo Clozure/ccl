@@ -832,7 +832,6 @@
 
 (defun x862-regmap-note-store (gpr loc)
   (let* ((gpr (%hard-regspec-value gpr)))
-    (assert (< gpr 16) nil "bad regno")
     ;; Any other GPRs that had contained loc no longer do so.
     (dotimes (i 16)
       (unless (eql i gpr)
@@ -1462,21 +1461,11 @@
 
 (defun x862-stack-to-register (seg memspec reg)
   (with-x86-local-vinsn-macros (seg)
-    (let* ((offset (memspec-frame-address-offset memspec)))
-      (if (and *x862-tos-reg*
-               (= offset (- *x862-vstack* *x862-target-node-size*)))
-        (x862-copy-register seg reg *x862-tos-reg*)
-        (! vframe-load reg offset  *x862-vstack*)))))
-
-#+not-yet
-(defun x862-stack-to-register (seg memspec reg)
-  (with-x86-local-vinsn-macros (seg)
     (let* ((offset (memspec-frame-address-offset memspec))
 	   (mask *x862-gpr-locations-valid-mask*)
 	   (info *x862-gpr-locations*)
 	   (regno (%hard-regspec-value reg))
 	   (other (x862-register-for-frame-offset offset regno)))
-      (assert (< regno 16) nil "bad regno")
       (unless (eql regno other)
 	(cond (other
 	       (let* ((vinsn (! copy-gpr reg other)))
@@ -5384,6 +5373,7 @@
   (multiple-value-bind (target-catch target-cstack target-vstack target-vstack-lcell)
                        (x862-decode-stack encoding)
     (x862-unwind-stack seg xfer target-catch target-cstack target-vstack)
+    (x862-regmap-note-vstack-delta target-vstack *x862-vstack*)
     (setq *x862-undo-count* target-catch 
           *x862-cstack* target-cstack
           *x862-vstack* target-vstack
