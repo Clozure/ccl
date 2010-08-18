@@ -1433,6 +1433,22 @@ shutdown_thread_tcr(void *arg)
     if (cs) {
       condemn_area_holding_area_lock(cs);
     }
+    /* On some platforms - currently just linuxarm - we have to
+       allocate a separate alternate signal stack (rather than just
+       using a few pages of the thread's main stack.)  Disable and
+       free that alternate stack here.
+    */
+#ifdef ARM
+#if defined(LINUX)
+    {
+      stack_t new, current;
+      new.ss_flags = SS_DISABLE;
+      if (sigaltstack(&new, &current) == 0) {
+        munmap(current.ss_sp, current.ss_size);
+      }
+    }
+#endif
+#endif
     destroy_semaphore(&tcr->suspend);
     destroy_semaphore(&tcr->resume);
     destroy_semaphore(&tcr->reset_completion);
