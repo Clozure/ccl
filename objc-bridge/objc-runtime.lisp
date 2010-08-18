@@ -3081,26 +3081,60 @@ argument lisp string."
   #+(or apple-objc cocotron-objc) (#_method_getNumberOfArguments m)
   #+gnu-objc (#_method_get_number_of_arguments m))
 
-#+(and apple-objc (not apple-objc-2.0) ppc-target)
+#+(or apple-objc cocotron-objc)
 (progn
-(defloadvar *original-deallocate-hook*
-        #&_dealloc)
+(defloadvar *original-deallocate-hook* nil)
 
-(defcallback deallocate-nsobject (:address obj :int)
+;;; At one point in the past, an earlier version of
+;;; this code caused problems.  When a thread exits
+;;; and runs tls deallocation code, Mach used to remove
+;;; the message port that enabled it to respond to
+;;; asynchonous signals.  Some of that deallocation
+;;; code involved running this callback, and that meant
+;;; that callbacks were run on a thread that couldn't
+;;; be interrupted (and that could cause GC and other
+;;; problems.)
+;;; I don't know if that's still a problem; if it is,
+;;; we probably have to give up on this idea.
+;;; It's silly (and somewhat expensive) to call REMHASH
+;;; every time an NSObject gets freed; it's only necessary
+;;; to do this for instances of lisp-defined ObjC classes
+;;; that implement lisp slots.
+;;; One somewhat fascist approach would be:
+;;; - the user is prohibited from defining a dealloc method
+;;;   on their classes.
+;;; - for classes whose instances need lisp slot vectors,
+;;;   we automatically define a dealloc method which does
+;;;   the remhash and calls the next method.
+
+;;; ticket:706 suggests that people and libraries are using the
+;;; lisp-slot-on-foreign-object mechanism enough that it's
+;;; not acceptable to leave slot-vectors associated with (possibly
+;;; deallocated) NSObjects.  (Another, unrelated object gets created
+;;; at the same address as the deallocated object and winds up
+;;; getting the deallocated object's slot-vector.)
+(defcallback deallocate-nsobject (:address obj :void)
+  (declare (dynamic-extent obj))
   (unless (%null-ptr-p obj)
     (remhash obj *objc-object-slot-vectors*))
-  (ff-call *original-deallocate-hook* :address obj :int))
+  (ff-call *original-deallocate-hook* :address obj :void))
 
 (defun install-lisp-deallocate-hook ()
-  (setf #&_dealloc deallocate-nsobject))
+  (let* ((class (@class "NSObject"))
+         (sel (@selector "dealloc")))
+    (setq *original-deallocate-hook* (#_class_getMethodImplementation class sel))
+    (with-cstrs ((types (encode-objc-method-arglist '(:id) :void)))
+      (#_class_replaceMethod class sel deallocate-nsobject types))))
 
-#+later
 (def-ccl-pointers install-deallocate-hook ()
   (install-lisp-deallocate-hook))
 
 (defun uninstall-lisp-deallocate-hook ()
   (clrhash *objc-object-slot-vectors*)
-  (setf #&_dealloc *original-deallocate-hook*))
+  (let* ((class (@class "NSObject"))
+         (sel (@selector "dealloc")))
+    (with-cstrs ((types (encode-objc-method-arglist '(:id) :void)))
+      (#_class_replaceMethod class sel *original-deallocate-hook* types))))
 
 (pushnew #'uninstall-lisp-deallocate-hook *save-exit-functions* :test #'eq
          :key #'function-name)
