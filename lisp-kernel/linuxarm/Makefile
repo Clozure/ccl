@@ -22,7 +22,7 @@ AS = as
 M4 = m4
 ASFLAGS = -mfpu=vfpv2
 M4FLAGS = -DLINUX -DARM
-CDEFINES = -DLINUX -DARM -D_REENTRANT -D_GNU_SOURCE -DDISABLE_EGC  -DUSE_FUTEX
+CDEFINES = -DLINUX -DARM -D_REENTRANT -D_GNU_SOURCE -DUSE_FUTEX
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
