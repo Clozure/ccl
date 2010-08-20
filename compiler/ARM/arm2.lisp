@@ -4507,6 +4507,7 @@
   (multiple-value-bind (target-catch target-cstack target-vstack target-vstack-lcell)
                        (arm2-decode-stack encoding)
     (arm2-unwind-stack seg xfer target-catch target-cstack target-vstack)
+    (arm2-regmap-note-vstack-delta target-vstack *arm2-vstack*)
     (setq *arm2-undo-count* target-catch 
           *arm2-cstack* target-cstack
           *arm2-vstack* target-vstack
