@@ -279,6 +279,8 @@
     ((cache :initform nil :initarg :cache :accessor hemlock-buffer-string-cache))
   (:metaclass ns:+ns-object))
 
+
+  
 (defmethod hemlock-buffer ((self hemlock-buffer-string))
   (let ((cache (hemlock-buffer-string-cache self)))
     (when cache
@@ -304,6 +306,19 @@
   workline-length			; length of cached workline
   workline-start-font-index		; current font index at start of workline
   )
+
+(objc:defmethod (#/dealloc :void) ((self hemlock-buffer-string))
+  (let* ((cache (hemlock-buffer-string-cache self))
+         (buffer (if cache (buffer-cache-buffer cache))))
+    (when buffer
+      (setf (buffer-cache-buffer cache) nil
+            (slot-value self 'cache) nil
+            (hi::buffer-document buffer) nil)
+      (when (eq buffer hi::*current-buffer*)
+        (setf hi::*current-buffer* nil))
+      (hi::delete-buffer buffer)))
+  (objc:remove-lisp-slots self)
+  (call-next-method))
 
 (defmethod hemlock-buffer ((self buffer-cache))
   (buffer-cache-buffer self))
@@ -865,17 +880,8 @@
       (setq styles +null-ptr+)))
   (let* ((hemlock-string (slot-value ts 'hemlock-string)))
     (setf (slot-value ts 'hemlock-string) +null-ptr+)
-    
     (unless (%null-ptr-p hemlock-string)
-      (let* ((cache (hemlock-buffer-string-cache hemlock-string))
-             (buffer (if cache (buffer-cache-buffer cache))))
-        (when buffer
-          (setf (buffer-cache-buffer cache) nil
-                (slot-value hemlock-string 'cache) nil
-                (hi::buffer-document buffer) nil)
-          (when (eq buffer hi::*current-buffer*)
-	    (setf hi::*current-buffer* nil))
-	  (hi::delete-buffer buffer))))))
+      (#/release hemlock-string))))
 
 
 ;;; Mostly experimental, so that we can see what happens when a 
@@ -2041,6 +2047,18 @@
       (#/setNeedsDisplay: (text-pane-mode-line (slot-value w 'pane)) t)))
   (call-next-method edited))
 
+(objc:defmethod (#/dealloc :void) ((self hemlock-frame))
+  (let* ((pane (slot-value self 'pane))
+         (echo-view (slot-value self 'echo-area-view)))
+    (unless (%null-ptr-p pane)
+      (setf (slot-value self 'pane) (%null-ptr))
+      (#/release pane))
+    (unless (%null-ptr-p echo-view)
+      (setf (slot-value self 'echo-area-view) (%null-ptr))
+      (#/release echo-view))
+    (objc:remove-lisp-slots self)
+    (call-next-method)))
+  
 
 (objc:defmethod (#/miniaturize: :void) ((w hemlock-frame) sender)
   (let* ((event (#/currentEvent w))
@@ -2910,6 +2928,7 @@
     (unless (%null-ptr-p textstorage)
       (setf (slot-value self 'textstorage) (%null-ptr))
       (close-hemlock-textstorage textstorage)))
+  (objc:remove-lisp-slots self)
   (call-next-method))
 
 
