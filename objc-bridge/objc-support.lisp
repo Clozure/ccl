@@ -167,7 +167,27 @@
              (format s "Objective-C runtime exception: ~&~a"
                      (nsobject-description (ns-exception c))))))
 
+(defun ensure-dealloc-method-for-class (class)
+  (let* ((direct-slots (class-direct-slots class))
+         (effective-slots (class-slots class)))
+    (when (and (dolist (d direct-slots)
+                 (when (and (typep d 'standard-direct-slot-definition)
+                            (eq :instance (slot-definition-allocation d)))
+                   (return t)))
+               (dolist (e effective-slots t)
+                 (when (and (typep e 'standard-effective-slot-definition)
+                            (eq :instance (slot-definition-allocation e))
+                            (not (find (slot-definition-name e)
+                                       direct-slots
+                                         :key #'slot-definition-name
+                                         :test #'eq)))
+                   (return))))
+      (eval `(objc:defmethod (#/dealloc :void) ((self ,(class-name class)))
+              (objc:remove-lisp-slots self)
+              (call-next-method))))))
 
+(eval-when (:compile-toplevel :execute)
+  (declaim (ftype (function (&rest t) t) objc-callback-error-return)))
 
 (defclass ns-lisp-exception (ns::ns-exception)
     ((condition :initarg :condition :initform nil :reader ns-lisp-exception-condition))

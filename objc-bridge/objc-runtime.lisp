@@ -2468,6 +2468,7 @@ argument lisp string."
 	  (pref class :objc_class.info) (logior #$_CLS_RESOLV (pref class :objc_class.info)))
     (#___objc_exec_class m)))
 
+
 #+(or apple-objc-2.0 cocotron-objc)
 (defun %add-objc-class (class)
   (#_objc_registerClassPair class))
@@ -2751,6 +2752,12 @@ argument lisp string."
     
 
 
+
+
+
+                                  
+                   
+                                
 
 
 ;;; If any of the argspecs denote a value of type :<BOOL>, push an
@@ -3081,7 +3088,7 @@ argument lisp string."
   #+(or apple-objc cocotron-objc) (#_method_getNumberOfArguments m)
   #+gnu-objc (#_method_get_number_of_arguments m))
 
-#+(or apple-objc cocotron-objc)
+#+(and bad-idea (or apple-objc cocotron-objc))
 (progn
 (defloadvar *original-deallocate-hook* nil)
 
