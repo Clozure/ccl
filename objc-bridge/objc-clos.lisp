@@ -21,6 +21,7 @@
 ;;;  - How to integrate SEND-SUPER with CALL-NEXT-METHOD?
 ;;;  - Variable arity ObjC methods
 ;;;  - Pass-by-ref structures need to keep track of IN, OUT, IN/OUT info
+
 ;;;  - Need to canonicalize and retain every returned :ID
 ;;;  - Support :BEFORE, :AFTER and :AROUND for ObjC methods
 ;;;  - User-defined ObjC methods via DEFMETHOD (or DEFINE-OBJ-METHOD)
@@ -71,24 +72,7 @@
 (defvar *objc-metaclass-class*)
 
 (defvar *objc-object-slot-vectors* (make-hash-table :test #'eql))
-(defvar *objc-canonical-instances* (make-hash-table :test #'eql :weak :value))
 
-(defun raw-macptr-for-instance (instance)
-  (let* ((p (%null-ptr)))
-    (%set-macptr-domain p 1)		; not an ObjC object, but EQL to one
-    (%setf-macptr p instance)
-    p))
-
-(defun register-canonical-objc-instance (instance raw-ptr)
-  ;(terminate-when-unreachable instance)
-  ;(retain-objc-instance instance)
-  (setf (gethash raw-ptr *objc-canonical-instances*) instance))
-
-(defun canonicalize-objc-instance (instance)
-  (or (gethash instance *objc-canonical-instances*)
-      (register-canonical-objc-instance
-       (setq instance (%inc-ptr instance 0))
-       (raw-macptr-for-instance instance))))
 
 
 (defun recognize-objc-object (p)
@@ -152,6 +136,9 @@
 (defun %remove-lisp-slot-vector (p)
   (remhash p *objc-object-slot-vectors*))
 
+(defun objc:remove-lisp-slots (p)
+  (%remove-lisp-slot-vector p))
+
 (defun %objc-domain-slots-vector (p)
        (let* ((type (%macptr-type p))
              (flags (ldb objc-type-flags type))
@@ -160,12 +147,10 @@
         (ecase flags
           (#.objc-flag-instance (or (gethash p *objc-object-slot-vectors*)
                                     ; try to allocate the slot vector on demand
-                                    (let* ((raw-ptr (raw-macptr-for-instance p))
-                                           (slot-vector (create-foreign-instance-slot-vector (class-of p))))
+                                    (let* ((slot-vector (create-foreign-instance-slot-vector (class-of p))))
                                       (when slot-vector
-                                        (setf (slot-vector.instance slot-vector) raw-ptr)
-                                        (setf (gethash raw-ptr *objc-object-slot-vectors*) slot-vector)
-					(register-canonical-objc-instance p raw-ptr)
+                                        (setf (slot-vector.instance slot-vector) p)
+                                        (setf (gethash p *objc-object-slot-vectors*) slot-vector)
 					(initialize-instance p))
                                       slot-vector)
                                     (error "~s has no slots." p)))
@@ -774,10 +759,8 @@
       (or (gethash instance *objc-object-slot-vectors*)
           (let* ((slot-vector (create-foreign-instance-slot-vector class)))
             (when slot-vector
-              (let* ((raw-ptr (raw-macptr-for-instance instance)))
-                (setf (slot-vector.instance slot-vector) raw-ptr)
-                (setf (gethash raw-ptr *objc-object-slot-vectors*) slot-vector)
-                (register-canonical-objc-instance instance raw-ptr))))))
+              (setf (slot-vector.instance slot-vector) instance)
+              (setf (gethash instance *objc-object-slot-vectors*) slot-vector)))))
     instance))
 
 
@@ -789,15 +772,16 @@
 (defmethod reinitialize-instance ((instance objc:objc-object) &rest initargs)
   (apply #'shared-initialize instance nil initargs))
 
-(defmethod initialize-instance :after ((class objc:objc-class) &rest initargs)
-  (declare (ignore initargs))
+(defmethod initialize-instance :after ((class objc:objc-class) &key name &allow-other-keys)
   (unless (slot-value class 'foreign)
     #-(or apple-objc-2.0 cocotron-objc)
     (multiple-value-bind (ivars instance-size)
 	(%make-objc-ivars class)
       (%add-objc-class class ivars instance-size))
     #+(or apple-objc-2.0 cocotron-objc)
-    (%add-objc-class class)))
+    (%add-objc-class class)
+    (setf (find-class name) class)
+    (ensure-dealloc-method-for-class class)))
 
 (defmethod shared-initialize ((instance objc:objc-object) slot-names 
 			      &rest initargs)
@@ -870,7 +854,9 @@
 	;; Whew! it's ok to reinitialize the class.
 	(progn
 	  (apply #'reinitialize-instance class initargs)
-	  (setf (find-class name) class))
+	  (setf (find-class name) class)
+          (ensure-dealloc-method-for-class class)
+          class)
 	(error "Can't change metaclass of ~s to ~s." class metaclass)))))
 
   
