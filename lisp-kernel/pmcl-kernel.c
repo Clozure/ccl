@@ -15,13 +15,6 @@
    http://opensource.franz.com/preamble.html
 */
 
-#ifdef DARWIN
-/*	dyld.h included here because something in "lisp.h" causes
-    a conflict (actually I think the problem is in "constants.h")
-*/
-/* #include <mach-o/dyld.h> */
-
-#endif
 #include "lisp.h"
 #include "lisp_globals.h"
 #include "gc.h"
@@ -90,6 +83,8 @@ Boolean use_mach_exception_handling =
 #include <mach/vm_region.h>
 #include <mach/port.h>
 #include <sys/sysctl.h>
+#undef undefined
+#include <mach-o/dyld.h>
 #include <dlfcn.h>
 #endif
 
@@ -978,8 +973,8 @@ determine_executable_name(char *argv0)
 #ifdef DARWIN
   uint32_t len = 1024;
   char exepath[1024], *p = NULL;
-
-  if (_NSGetExecutablePath(exepath, (void *)&len) == 0) {
+    
+  if (_NSGetExecutablePath(exepath, &len) == 0) {
     p = malloc(len+1);
     memmove(p, exepath, len);
     p[len]=0;
