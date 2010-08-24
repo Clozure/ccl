@@ -356,9 +356,9 @@ typedef struct tcr {
   signed_natural foreign_exception_status;	/* non-zero -> call lisp_exit_hook */
   void* native_thread_info;	/* platform-dependent */
   void* native_thread_id;	/* mach_thread_t, pid_t, etc. */
-  void* last_allocptr;
-  void* save_allocptr;
-  void* save_allocbase;
+  char *last_allocptr;
+  char *save_allocptr;
+  char *save_allocbase;
   void* reset_completion;
   void* activate;
   signed_natural suspend_count;

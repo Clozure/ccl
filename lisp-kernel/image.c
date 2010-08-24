@@ -196,7 +196,7 @@ load_image_section(int fd, openmcl_image_section_header *sect)
     pos = seek_to_next_page(fd), advance;
   natural
     mem_size = sect->memory_size;
-  void *addr;
+  char *addr;
   area *a;
 
   advance = mem_size;
@@ -281,7 +281,7 @@ load_image_section(int fd, openmcl_image_section_header *sect)
 
 
   case AREA_STATIC_CONS:
-    addr = (void *) lisp_global(HEAP_START);
+    addr = (char *) lisp_global(HEAP_START);
     a = new_area(addr-align_to_power_of_2(mem_size,log2_page_size), addr, AREA_STATIC_CONS);
     if (mem_size) {      
       if (!MapFile(a->low,

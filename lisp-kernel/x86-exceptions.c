@@ -3758,7 +3758,7 @@ fatal_mach_error(char *format, ...)
 area *
 new_watched_area(natural size)
 {
-  void *p;
+  char *p;
 
   p = MapMemory(NULL, size, MEMPROTECT_RWX);
   if ((signed_natural)p == -1) {
