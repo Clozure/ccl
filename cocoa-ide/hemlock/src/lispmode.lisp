@@ -1444,13 +1444,20 @@
   (indent-command nil))
 
 (defcommand "Indent Form" (p)
-  "Indent Lisp code in the next form."
+  "Indent Lisp code in the next form, unless point is to the right of
+   a closing parenthesis, in which case the previous form will be
+   indented."
   "Indent Lisp code in the next form."
   (declare (ignore p))
-  (let ((point (current-point)))
+  (let ((point (current-point))
+        (offset 1))
     (pre-command-parse-check point)
+    (when (eql (previous-character point) #\))
+      (setq offset -1))
     (with-mark ((m point))
-      (unless (form-offset m 1) (editor-error))
+      (unless (form-offset m offset) (editor-error))
+      (when (minusp offset)
+        (rotatef point m))
       (lisp-indent-region (region point m) "Indent Form"))))
 
 ;;; LISP-INDENT-REGION -- Internal.
