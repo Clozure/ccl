@@ -403,6 +403,7 @@
 (bind-key "Delete Previous Character Expanding Tabs" #k"delete" :mode "Lisp")
 (bind-key "Goto Absolute Line" #k"meta-g")
 ;;;(bind-key "Set Package Name" #k"control-x p" :mode "Lisp")
+(bind-key "Insert Sharp Comment" #k"meta-#")
 
 #+listener-bindings
 (progn

@@ -2284,3 +2284,24 @@
 (defcommand "Set Package Name" (p)
   (variable-value 'current-package :buffer buffer)
 ||#                
+
+(defcommand "Insert Sharp Comment" (p)
+  "Inserts #| |# around the selection and puts point between them."
+  (declare (ignore p))
+  (multiple-value-bind (start end) (buffer-selection-range (current-buffer))
+    (let ((point (current-point)))
+      (cond ((= start end)
+             (insert-string point "#|")
+             (insert-character point #\newline)
+             (insert-character point #\newline)
+             (insert-string point "|#")
+             (character-offset point -3))
+            (t
+             (with-mark ((start-mark point :left-inserting)
+                         (end-mark point :left-inserting))
+               (move-to-absolute-position start-mark start)
+               (move-to-absolute-position end-mark end)
+               (insert-string start-mark "#|
+")
+               (insert-string end-mark "
+|#")))))))
