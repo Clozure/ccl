@@ -56,27 +56,16 @@ fatal_oserr(StringPtr param, OSErr err)
   Fatal(param, buf);
 }
 
-
-Ptr
-allocate(natural size)
+void *
+lisp_malloc(size_t size)
 {
-  return (Ptr) malloc(size);
+  return malloc(size);
 }
 
 void
-deallocate(Ptr p)
+lisp_free(void *p)
 {
-  free((void *)p);
-}
-
-Ptr
-zalloc(natural size)
-{
-  Ptr p = allocate(size);
-  if (p != NULL) {
-    memset(p, 0, size);
-  }
-  return p;
+  free(p);
 }
 
 #ifdef DARWIN
@@ -448,7 +437,7 @@ unprotect_area(protected_area_ptr p)
 protected_area_ptr
 new_protected_area(BytePtr start, BytePtr end, lisp_protection_kind reason, natural protsize, Boolean now)
 {
-  protected_area_ptr p = (protected_area_ptr) allocate(sizeof(protected_area));
+  protected_area_ptr p = malloc(sizeof(protected_area));
   
   if (p == NULL) return NULL;
   p->protsize = protsize;
@@ -567,7 +556,7 @@ zero_page(BytePtr start)
 area *
 new_area(BytePtr lowaddr, BytePtr highaddr, area_code code)
 {
-  area *a = (area *) (zalloc(sizeof(area)));
+  area *a = calloc(1, sizeof(area));
   if (a) {
     natural ndnodes = area_dnode(highaddr, lowaddr);
     a->low = lowaddr;
@@ -863,7 +852,7 @@ delete_protected_area(protected_area_ptr p)
     }
   }
 
-  deallocate((Ptr)p);
+  free(p);
 }
 
 
@@ -894,7 +883,7 @@ condemn_area_holding_area_lock(area *a)
   if (p) delete_protected_area(p);
 
   if (h) free_stack(h);
-  deallocate((Ptr)a);
+  free(a);
 }
 
 

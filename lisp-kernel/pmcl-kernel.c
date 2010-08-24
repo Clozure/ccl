@@ -237,7 +237,7 @@ allocate_lisp_stack(natural useable,
     if (hprotp == NULL) {
       if (base_p) *base_p = NULL;
       if (h_p) *h_p = NULL;
-      deallocate(h);
+      free(h);
       return NULL;
     }
     if (hardp) *hardp = hprotp;
@@ -851,7 +851,7 @@ Fatal(StringPtr param0, StringPtr param1)
 {
 
   if (fatal_spare_ptr) {
-    deallocate(fatal_spare_ptr);
+    free(fatal_spare_ptr);
     fatal_spare_ptr = NULL;
   }
   fprintf(dbgout, "Fatal error: %s\n%s\n", param0, param1);

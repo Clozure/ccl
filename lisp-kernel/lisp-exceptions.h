@@ -107,18 +107,6 @@ exception_init();
 void
 Fatal(StringPtr, StringPtr);
 
-
-Ptr
-allocate(natural);
-
-Ptr
-zalloc(natural);
-
-void
-deallocate(Ptr);
-
-
-
 void
 non_fatal_error( char * );
 
