@@ -106,6 +106,10 @@
           "Current font region, for listener output"
         :buffer buffer
         :value nil)
+      (defhvar "Grabbed Input Start Mark"
+        "Mark start of grabbed input"
+        :buffer buffer
+        :value (copy-mark point :right-inserting))
       )
     (let* ((input-mark (variable-value 'buffer-input-mark :buffer buffer)))
       (when (hemlock-ext:read-only-listener-p)
@@ -352,7 +356,7 @@ between the region's start and end, and if there are no ill-formed expressions i
 (defhvar "Interactive History Length"
   "This is the length used for the history ring in interactive buffers.
    It must be set before turning on the mode."
-  :value 10)
+  :value 200)
 
 (defun input-region-containing-mark (m history-list)
   (dolist (pair history-list)
@@ -397,7 +401,7 @@ between the region's start and end, and if there are no ill-formed expressions i
 (defhvar "Minimum Interactive Input Length"
   "When the number of characters in an interactive buffer exceeds this value,
    it is pushed onto the interactive history, otherwise it is lost forever."
-  :value 2)
+  :value 0)
 
 
 (defvar *previous-input-search-string* "ignore")
@@ -463,17 +467,19 @@ between the region's start and end, and if there are no ill-formed expressions i
     (when (or (mark< point mark) (zerop length)) (editor-error "Can't get command history"))
     (cond
      ((eq (last-command-type) :interactive-history)
-      (let ((base (mod (+ (value interactive-pointer) p) length)))
-	(delete-region (region mark point))
-	(insert-region point (ring-ref ring base))
+      (let ((base (mod (+ (value interactive-pointer) p) length))
+            (grab-start (value grabbed-input-start-mark)))
+	(delete-region (region grab-start point))
+	(insert-region grab-start (ring-ref ring base))
 	(setf (value interactive-pointer) base)))
      (t
       (let ((base (mod (if (minusp p) p (1- p)) length))
-	    (region (delete-and-save-region (region mark point))))
-	(insert-region point (ring-ref ring base))
-	(when (mark/= (region-start region) (region-end region))
-	  (ring-push region ring)
-	  (incf base))
+            (region (copy-region (region mark (buffer-end-mark (current-buffer)))))
+            (grab-start (move-mark (value grabbed-input-start-mark) point)))
+        (when (mark/= (region-start region) (region-end region))
+          (ring-push region ring)
+          (incf base))
+	(insert-region grab-start (ring-ref ring base))
 	(setf (value interactive-pointer) base)))))
   (setf (last-command-type) :interactive-history))
 
