@@ -1,0 +1,24 @@
+#!/bin/sh
+
+# This script can be used to rewrite the schema in svn working copy URLs,
+# changing URLs that use 'http' as an access method to use 'svn+ssh' instead.
+# (The http: access method allows read-only access; 'svn+ssh' allows people
+# with appropriate permission to commit changes to the repository.)
+
+SCRIPTS=`dirname $0`
+CCLDIR=$SCRIPTS/..
+
+# This assumes that all directories under CCL are under svn control
+# That's a reasonable assumption after a fresh checkout; if it's
+# violated, svn will warn and we'll move on.
+
+http_root=http://svn.clozure.com/publicsvn/openmcl
+svn_root=svn://svn.clozure.com/openmcl
+
+for d in `ls $CCLDIR`
+do
+ if [ -d $CCLDIR/$d ]; then
+   echo relocating $d
+   (cd $d && svn switch --relocate $http_root $svn_root)
+ fi
+done

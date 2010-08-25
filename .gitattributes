@@ -379,6 +379,7 @@ objc-bridge/obsolete/README -text
 scripts/ccl -text
 scripts/ccl64 -text
 scripts/http-to-ssh -text
+scripts/http-to-svn -text
 scripts/makedmg -text
 scripts/svn-switch -text
 tools/asdf-install/RELNOTES -text
