@@ -2543,7 +2543,7 @@
            (let* ((doc (#/document (#/windowController (#/window self)))))
              (and (not (%null-ptr-p doc))
                   (eq (type-of doc) 'hemlock-editor-document))))
-          ;; if this hemlock-text-view is in an editor windowm and its buffer has
+          ;; if this hemlock-text-view is in an editor window and its buffer has
           ;; an associated pathname, then activate the Load Buffer item
           ((or (eql action (@selector #/loadBuffer:))
                (eql action (@selector #/compileBuffer:))
