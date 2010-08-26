@@ -11,8 +11,6 @@
 
 ;;; Event handling basics
 
-(defvar *modifier-key-pattern*)
-
 (defmacro define-chaining-responder-method (class-name
                                             (objc-name lisp-name)
                                             (self-arg event-arg)
