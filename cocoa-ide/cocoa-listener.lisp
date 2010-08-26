@@ -249,7 +249,7 @@
      (output-stream :reader cocoa-listener-process-output-stream)
      (backtrace-contexts :initform nil
                          :accessor cocoa-listener-process-backtrace-contexts)
-     (window :reader cocoa-listener-process-window)))
+     (window :reader cocoa-listener-process-window :initform nil)))
   
 (defloadvar *first-listener* t)
 
@@ -279,8 +279,7 @@
                        hi:*buffer-list*))
            :initial-function
            #'(lambda ()
-               (setq ccl::*listener-autorelease-pool* (create-autorelease-pool))
-               (when (and *standalone-cocoa-ide*
+               (setq ccl::*listener-autorelease-pool* (create-autorelease-pool))               (when (and *standalone-cocoa-ide*
                         (prog1 *first-listener* (setq *first-listener* nil)))
                  (ccl::startup-ccl (ccl::application-init-file ccl::*application*))
                  (ui-object-note-package *nsapp* *package*))
@@ -300,6 +299,18 @@
 (objc:defmethod (#/setDocumentEdited: :void) ((w hemlock-listener-frame)
                                               (edited #>BOOL))
   (declare (ignorable edited)))
+
+(objc:defmethod (#/windowShouldClose: #>BOOL) ((w hemlock-listener-frame)
+                                               sender)
+  (let* ((doc (#/document w)))
+    (if (or (%null-ptr-p doc)
+            (and (hemlock-document-process doc)
+                 (perform-close-kills-process-p doc)))
+      t
+      (progn
+        (#/orderOut: w sender)
+        nil))))
+
 
 
 (defclass hemlock-listener-window-controller (hemlock-editor-window-controller)
@@ -332,7 +343,7 @@
 
 
 (defclass hemlock-listener-document (hemlock-editor-document)
-  ((process :reader %hemlock-document-process :writer (setf hemlock-document-process)))
+  ((process :reader %hemlock-document-process :writer (setf hemlock-document-process) :initform nil))
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-listener-document))
 
@@ -368,11 +379,14 @@
               (ccl:process-whostate proc)))))
 
 (objc:defmethod #/topListener ((self +hemlock-listener-document))
-  (let* ((all-documents (#/orderedDocuments *NSApp*)))
-    (dotimes (i (#/count all-documents) +null-ptr+)
-      (let* ((doc (#/objectAtIndex: all-documents i)))
-	(when (eql (#/class doc) self)
-	  (return doc))))))
+  (let* ((all-windows (#/orderedWindows *NSApp*)))
+    (dotimes (i (#/count all-windows) +null-ptr+)
+      (let* ((w (#/objectAtIndex: all-windows i)))
+        (when (#/isVisible w)
+          (let* ((wc (#/windowController w))
+                 (doc (#/document wc)))
+            (when (#/isKindOfClass: doc self)
+              (return doc))))))))
 
 (defun symbol-value-in-top-listener-process (symbol)
   (let* ((process (hemlock-document-process (#/topListener hemlock-listener-document))))
@@ -420,7 +434,7 @@
 (defloadvar *next-listener-x-pos* nil) ; set after defaults initialized
 (defloadvar *next-listener-y-pos* nil) ; likewise
 
-(objc:defmethod (#/close :void) ((self hemlock-listener-document))
+(objc:defmethod (#/dealloc :void) ((self hemlock-listener-document))
   (if (zerop (decf *cocoa-listener-count*))
     (setq *next-listener-x-pos* nil
           *next-listener-y-pos* nil))
@@ -428,6 +442,7 @@
     (when p
       (process-kill p)))
   (call-next-method))
+
 
 
 
@@ -472,8 +487,9 @@
     (#/setShouldCascadeWindows: controller nil)
     (#/addWindowController: self controller)
     (#/release controller)
-    (setf (hemlock-document-process self)
-          (new-cocoa-listener-process listener-name window))
+    (unless (hemlock-document-process self)
+      (setf (hemlock-document-process self)
+            (new-cocoa-listener-process listener-name window)))
     (when path
       (unless (#/setFrameAutosaveName: window path)
         (setq path nil)))
@@ -484,13 +500,13 @@
                                         (ns:ns-rect-x frame)
                                         (+ (ns:ns-rect-y frame)
                                            (ns:ns-rect-height frame)))
-                        (let* ((next-point (#/cascadeTopLeftFromPoint:
-                                            window
-                                            current-point)))
-                     (setq *next-listener-x-pos*
-                           (ns:ns-point-x next-point)
-                           *next-listener-y-pos*
-                           (ns:ns-point-y next-point)))))
+                       (let* ((next-point (#/cascadeTopLeftFromPoint:
+                                           window
+                                           current-point)))
+                         (setq *next-listener-x-pos*
+                               (ns:ns-point-x next-point)
+                               *next-listener-y-pos*
+                               (ns:ns-point-y next-point)))))
                    t))
       (ns:with-ns-point (current-point
                          (or *next-listener-x-pos*
@@ -634,6 +650,9 @@
       opinion
       (call-next-method item))))
 
+(defmethod perform-close-kills-process-p ((self hemlock-listener-document))
+  t)
+
 (defun shortest-package-name (package)
   (let* ((name (package-name package))
          (len (length name)))
@@ -709,4 +728,198 @@
           (eval-in-listener-process target-listener string :package package))))))
 
        
- 
+;;; Support for background processes that acquire listener window/document/
+;;; buffer infrastructure iff they try to do I/O to *TERMINAL-IO*.
+
+(defclass hemlock-background-listener-document (hemlock-listener-document)
+    ()
+  (:metaclass ns:+ns-object))
+
+(defmethod perform-close-kills-process-p ((self hemlock-background-listener-document))
+  nil)
+
+(defstruct deferred-cocoa-listener-stream-info
+  real-input-stream
+  real-output-stream
+  process
+  window)
+
+    
+(defclass deferred-cocoa-listener-stream (fundamental-character-stream)
+    ((info :initarg :info :accessor deferred-cocoa-listener-stream-info)))
+
+(defmethod ensure-deferred-stream-info-for-io ((s deferred-cocoa-listener-stream))
+  (let* ((info (slot-value s 'info)))
+    (when info
+      (unless (deferred-cocoa-listener-stream-info-window info)
+        (with-autorelease-pool
+            (let* ((doc (make-instance 'hemlock-background-listener-document))
+                   (buffer (hemlock-buffer doc))
+                   (process (deferred-cocoa-listener-stream-info-process info)))
+              (setf (hi::buffer-name buffer)
+                    (format nil "~a(~d)" (process-name process) (process-serial-number process))
+                    (hemlock-document-process doc) process)
+              (execute-in-gui (lambda () (#/makeWindowControllers doc)))
+              (let* ((wc (#/lastObject (#/windowControllers doc)))
+                     (window (#/window wc)))
+                (setf
+                 (deferred-cocoa-listener-stream-info-real-input-stream info)
+                 (make-instance 'cocoa-listener-input-stream)
+                 (deferred-cocoa-listener-stream-info-real-output-stream info)
+                 (make-instance 'cocoa-listener-output-stream
+                                :hemlock-view (hemlock-view window))
+                 (deferred-cocoa-listener-stream-info-window info)
+                 window
+                 (slot-value process 'window) window)
+                (ui-object-note-package *nsapp* *package*))))))
+    info))
+                
+                      
+
+(defclass deferred-cocoa-listener-output-stream
+          (fundamental-character-output-stream deferred-cocoa-listener-stream)
+    ())
+
+(defmethod stream-element-type ((s deferred-cocoa-listener-output-stream))
+  'character)
+
+
+(defmethod underlying-output-stream ((s deferred-cocoa-listener-output-stream))
+  (let* ((info (ensure-deferred-stream-info-for-io s)))
+    (if info
+      (progn
+        (let* ((window (deferred-cocoa-listener-stream-info-window info)))
+          (unless (#/isVisible window)
+            (execute-in-gui
+             (lambda ()
+               (#/makeKeyAndOrderFront: window (%null-ptr)))))
+          (deferred-cocoa-listener-stream-info-real-output-stream info)))
+      (ccl::stream-is-closed s))))
+
+(defmethod ccl:stream-write-char ((s deferred-cocoa-listener-output-stream)
+                                   char)
+  (with-autorelease-pool
+      (stream-write-char (underlying-output-stream s) char)))
+
+(defmethod ccl:stream-line-column ((s deferred-cocoa-listener-output-stream))
+  (stream-line-column (underlying-output-stream s)))
+
+(defmethod ccl:stream-fresh-line ((s deferred-cocoa-listener-output-stream))
+  (stream-fresh-line (underlying-output-stream s)))
+
+(defmethod ccl::stream-finish-output ((s deferred-cocoa-listener-output-stream))
+  (stream-force-output s))
+
+(defmethod ccl:stream-force-output ((s deferred-cocoa-listener-output-stream))
+  (let* ((info (slot-value s 'info)))
+    (if info
+      (let* ((out (deferred-cocoa-listener-stream-info-real-output-stream info)))
+        (if out
+          (stream-force-output out)))
+      (ccl::stream-is-closed s))))
+
+(defmethod ccl:stream-clear-output ((s deferred-cocoa-listener-output-stream))
+  (stream-clear-output (underlying-output-stream s)))
+
+(defmethod ccl:stream-line-length ((s deferred-cocoa-listener-output-stream))
+  (stream-line-length (underlying-output-stream s)))
+
+(defmethod close ((s deferred-cocoa-listener-output-stream)
+                  &key abort)
+  (let* ((info (slot-value s 'info)))
+    (when info
+      (let* ((out (deferred-cocoa-listener-stream-info-real-output-stream info)))
+        (when out
+          (stream-force-output out)
+          (close out :abort abort)))
+      (setf (slot-value s 'info) nil)
+      t)))
+          
+
+(defclass deferred-cocoa-listener-input-stream
+          (fundamental-character-input-stream deferred-cocoa-listener-stream)
+    ((reading-line :initform nil :accessor hi:input-stream-reading-line)))
+
+
+(defmethod underlying-input-stream ((s deferred-cocoa-listener-input-stream))
+  (let* ((info (ensure-deferred-stream-info-for-io s)))
+    (if info
+      (progn
+        (let* ((window (deferred-cocoa-listener-stream-info-window info)))
+          (unless (#/isVisible window)
+            (execute-in-gui
+             (lambda ()
+               (#/makeKeyAndOrderFront: window (%null-ptr)))))
+          (deferred-cocoa-listener-stream-info-real-input-stream info)))
+      (ccl::stream-is-closed s))))
+
+(defmethod interactive-stream-p ((s deferred-cocoa-listener-input-stream))
+  t)
+
+(defmethod ccl::read-toplevel-form ((s deferred-cocoa-listener-input-stream)
+                                    &key eof-value)
+  (ccl::read-toplevel-form (underlying-input-stream s) :eof-value eof-value))
+
+(defmethod enqueue-toplevel-form ((s deferred-cocoa-listener-input-stream) string &rest args)
+  (apply #'enqueue-toplevel-form (underlying-input-stream s) string args))
+
+(defmethod enqueue-listener-input ((s deferred-cocoa-listener-input-stream) string)
+  (enqueue-listener-input (underlying-input-stream s) string))
+
+(defmethod stream-read-char-no-hang ((s deferred-cocoa-listener-input-stream))
+  (stream-read-char-no-hang (underlying-input-stream s)))
+
+(defmethod stream-read-char ((s deferred-cocoa-listener-input-stream))
+  (stream-read-char (underlying-input-stream s)))
+
+(defmethod stream-unread-char ((s deferred-cocoa-listener-input-stream) char)
+  (stream-unread-char (underlying-input-stream s) char))
+
+(defmethod stream-clear-input ((s deferred-cocoa-listener-input-stream))
+  (stream-clear-input (underlying-input-stream s)))
+
+(defmethod stream-read-line ((s deferred-cocoa-listener-input-stream))
+  (let* ((old-reading-line (hi:input-stream-reading-line s)))
+    (unwind-protect
+         (progn
+           (setf (hi::input-stream-reading-line s) t)
+           (stream-read-line (underlying-input-stream s)))
+      (setf (hi:input-stream-reading-line s) old-reading-line))))
+
+(defclass background-cocoa-listener-process (cocoa-listener-process)
+    ())
+
+(defun background-process-run-function (name function)
+  (let* ((process (make-process name :class 'background-cocoa-listener-process))
+         (info (make-deferred-cocoa-listener-stream-info :process process))
+         (input-stream (make-instance 'deferred-cocoa-listener-input-stream
+                                      :info info))
+         (output-stream (make-instance 'deferred-cocoa-listener-output-stream
+                                       :info info)))
+    (setf (slot-value process 'input-stream) input-stream
+          (slot-value process 'output-stream) output-stream)
+    (process-preset process
+                    (lambda ()
+                      (let* ((*terminal-io* (make-two-way-stream input-stream output-stream)))
+                        (ccl::add-auto-flush-stream output-stream)
+                        (unwind-protect
+                             (funcall function)
+                          (remove-auto-flush-stream output-stream)
+                          (let* ((w (slot-value process 'window)))
+                            (when w
+                              (let* ((doc (#/document w)))
+                                (unless (%null-ptr-p doc)
+                                  (when (eq *current-process*
+                                            (hemlock-document-process doc))
+                                    (setf (hemlock-document-process doc) nil))))
+                              (cond ((#/isVisible w)
+                                     (format output-stream "~%~%{process ~s exiting}~%" *current-process*))
+                                    (t
+                                     (#/performSelectorOnMainThread:withObject:waitUntilDone:
+                                      w
+                                      (@selector #/close)
+                                      +null-ptr+
+                                      t)))
+                              (close input-stream)
+                              (close output-stream)))))))
+    (process-enable process)))
