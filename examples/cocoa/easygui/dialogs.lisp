@@ -14,7 +14,10 @@
   (let ((alert (make-instance 'ns:ns-alert)))
     (#/setMessageText: alert (ccl::%make-nsstring message))
     (#/addButtonWithTitle: alert (ccl::%make-nsstring "Yes"))
-    (#/addButtonWithTitle: alert (ccl::%make-nsstring "No"))
+    (let ((no (#/addButtonWithTitle: alert (ccl::%make-nsstring "No"))))
+          (#/setKeyEquivalent: no (ccl::%make-nsstring "N"))
+          (#/setKeyEquivalent: no (ccl::%make-nsstring "n"))
+          (#/setKeyEquivalentModifierMask: no #$NSCommandKeyMask))
     (eql (#/runModal alert) #$NSAlertFirstButtonReturn)))
 
 (defvar *beepnsleep* t)
@@ -26,9 +29,9 @@
   (declare (ignore button-string))
   (gui::cocoa-choose-new-file-dialog :directory directory :file-types file-types :file file))
 
-(defun cocoa-choose-directory-dialog (&key directory button-string)
+(defun choose-directory-dialog (&key directory button-string)
   (declare (ignore button-string))
-  (cocoa-choose-directory-dialog :directory directory))
+  (gui::cocoa-choose-directory-dialog :directory directory))
 
 (objc:defmethod (#/NSWindowWillCloseNotification :void) ((self ns:ns-color-panel))
   (dcc (#/stopModal (#/sharedApplication ns:ns-application))))
