@@ -1079,8 +1079,10 @@ Which one name refers to depends on foreign-type-spec in the obvious manner."
            (overall-alignment 1)
            (first-field-p t)
            (attributes (ftd-attributes *target-ftd*))
-           (poweropen-alignment (getf attributes :poweropen-alignment)))
-          
+           (poweropen-alignment (getf attributes :poweropen-alignment))
+           (bits-per-word (getf attributes :bits-per-word))
+           (use-natural-alignment (getf attributes :natural-alignment)))
+        
       (dolist (field fields)
         (destructuring-bind (var type &optional bits) field
           (declare (ignore bits))
@@ -1095,7 +1097,9 @@ Which one name refers to depends on foreign-type-spec in the obvious manner."
                                     (setq first-field-p nil)
                                     natural-alignment)
                                   (min 32 natural-alignment))
-                                natural-alignment)))
+                                (if use-natural-alignment
+                                  natural-alignment
+                                  (min bits-per-word natural-alignment)))))
                  (parsed-field
                   (make-foreign-record-field :type field-type
                                              :name var)))

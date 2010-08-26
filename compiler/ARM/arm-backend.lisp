@@ -285,6 +285,7 @@
                            :attributes '(:bits-per-word  32
                                          :signed-char t
                                          :struct-by-value t
+                                         :natural-alignment t
                                          :prepend-underscore nil)
                            :ff-call-expand-function
                            (intern "EXPAND-FF-CALL" "ARM-DARWIN")
@@ -300,6 +301,7 @@
 			   :interface-package-name "ARM-LINUX"
                            :attributes '(:bits-per-word  32
                                          :signed-char nil
+                                         :natural-alignment t
                                          :struct-by-value t)
                            :ff-call-expand-function
                            (intern "EXPAND-FF-CALL" "ARM-LINUX")
