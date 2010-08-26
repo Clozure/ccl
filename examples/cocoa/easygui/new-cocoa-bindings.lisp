@@ -89,10 +89,17 @@
 (defparameter *key-to-mask-alist*
               `((:control . ,#$NSControlKeyMask)
                 (:alt     . ,#$NSAlternateKeyMask)
-                (:command . ,#$NSCommandKeyMask)))
+                (:command . ,#$NSCommandKeyMask)
+                (:shift   . ,#$NSShiftKeyMask)))
 
 (defun key-mask (keyword)
   (or (cdr (assoc keyword *key-to-mask-alist*)) 0))
+
+(defvar *modifier-key-pattern* 0
+"Bound to the description of modifier keys pressed at the time of a mouse-down
+on a view with an action, also a mouse-down mouse-up mouse-enter or mouse-exit on
+a view with an associated method, to permit interrogation using the functions
+shift-key-p control-p-key alt-key-p.")
 
 ;;; Memory management helpers:
 
