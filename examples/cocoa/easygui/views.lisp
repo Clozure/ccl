@@ -54,6 +54,14 @@ calls Flush-Graphics at an appropriate time.
 The same effect can be obtained for an individual use of With-Focused-View by giving
 :WITHOUT-FLUSH as the first form in its body.")
 
+(defvar *report-flipping-errors* nil "
+This variable determines whether messages are printed when an error occurs inside the
+Obj-C methods named 'isFlipped'. Intermittent errors have been happening, having
+something to do with SLOT-VECTORs of instances of NSObjects not having the expected
+number of elements. When it is evident that these problems have been fixed, this
+variable should be removed and the two isFlipped methods redefined. For now, it is
+useful to have a way to tell that such errors have occurred and carry on regardless.")
+
 (defun ns-point-from-point (eg-point)  ;; probably belongs in new-cocoa-bindings.lisp
   (ns:make-ns-point (point-x eg-point) (point-y eg-point)))
 
@@ -889,18 +897,18 @@ Also attaches contextual menu if there is one."
     (unless (view-subviews-busy super-view) (set-needs-display super-view t))))
 
 (defmethod add-1-subview ((view view) (super-view view))
-  (running-on-this-thread ()
-    (setf (slot-value view 'parent) super-view)
-    (push view (slot-value super-view 'subviews))
-    (dcc (#/addSubview: (cocoa-ref super-view) (cocoa-ref view)))))
+  (setf (slot-value view 'parent) super-view)
+  (push view (slot-value super-view 'subviews))
+  (dcc (#/addSubview: (cocoa-ref super-view) (cocoa-ref view))))
 
 (defun add-subviews (superview subview &rest subviews)
-  (setf (view-subviews-busy superview) t)
-  (add-1-subview subview superview)
-  (dolist (subview subviews)
-    (add-1-subview subview superview))
-  (set-needs-display superview t)
-  (setf (view-subviews-busy superview) nil)
+  (running-on-main-thread ()
+     (setf (view-subviews-busy superview) t)
+     (add-1-subview subview superview)
+     (dolist (subview subviews)
+       (add-1-subview subview superview))
+     (set-needs-display superview t)
+     (setf (view-subviews-busy superview) nil))
   superview)
 
 (defmethod remove-1-subview ((view view) (cw-view content-view-mixin))
@@ -917,12 +925,13 @@ Also attaches contextual menu if there is one."
       (dcc (#/removeFromSuperview (cocoa-ref view))))))
 
 (defun remove-subviews (superview subview &rest subviews)
-  (setf (view-subviews-busy superview) t)
-  (remove-1-subview subview superview)
-  (dolist (subview subviews)
-    (remove-1-subview subview superview))
-  (set-needs-display superview t)
-  (setf (view-subviews-busy superview) nil)
+  (running-on-main-thread ()
+    (setf (view-subviews-busy superview) t)
+    (remove-1-subview subview superview)
+    (dolist (subview subviews)
+      (remove-1-subview subview superview))
+    (set-needs-display superview t)
+    (setf (view-subviews-busy superview) nil))
   superview)
 
 (defmethod window-show ((window window))
@@ -1007,10 +1016,26 @@ close button."
       (dcc (#_NSRectFill rect)))))
          
 (objc::defmethod (#/isFlipped :<BOOL>) ((self cocoa-drawing-view))
+  (handler-case (if (slot-value self 'flipped) #$YES #$NO)
+    (simple-error (condition)
+      (when *report-flipping-errors* (format t "'isFlipped ~s' ignores error~%" self))
+      (values (if *screen-flipped* #$YES #$NO) condition))))
+
+(objc::defmethod (#/isFlipped :<BOOL>) ((self cocoa-contained-view))
+  (handler-case (if (slot-value self 'flipped) #$YES #$NO)
+    (simple-error (condition)
+      (when *report-flipping-errors* (format t "'isFlipped ~s' ignores error~%" self))
+      (values (if *screen-flipped* #$YES #$NO) condition))))
+
+#| ------------
+When the problem of wrong-size SLOT-VECTORs is clearly gone, the two definitions above
+should be replaced with these simpler versions:
+(objc::defmethod (#/isFlipped :<BOOL>) ((self cocoa-drawing-view))
   (if (slot-value self 'flipped) #$YES #$NO))
 
 (objc::defmethod (#/isFlipped :<BOOL>) ((self cocoa-contained-view))
   (if (slot-value self 'flipped) #$YES #$NO))
+------------ |#
 
 (defmethod initialize-view :after ((view drawing-view))
   (setf (slot-value (cocoa-ref view) 'flipped) (slot-value view 'flipped))
