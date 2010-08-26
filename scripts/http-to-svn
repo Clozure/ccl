@@ -1,8 +1,8 @@
 #!/bin/sh
 
 # This script can be used to rewrite the schema in svn working copy URLs,
-# changing URLs that use 'http' as an access method to use 'svn+ssh' instead.
-# (The http: access method allows read-only access; 'svn+ssh' allows people
+# changing URLs that use 'http' as an access method to use 'svn' instead.
+# (The http: access method allows read-only access; 'svn' allows people
 # with appropriate permission to commit changes to the repository.)
 
 SCRIPTS=`dirname $0`
