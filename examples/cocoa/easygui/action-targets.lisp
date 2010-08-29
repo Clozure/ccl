@@ -9,8 +9,10 @@
   (:metaclass ns:+ns-object))
 
 (objc:defmethod (#/activateAction :void) ((self generic-easygui-target))
-  (let* ((cell (#/selectedCell (target-shooter self)))
-         (responds (#/respondsToSelector: cell (@selector #/mouseDownFlags)))
+  (let* ((sender (target-shooter self))
+         (cell (and (#/respondsToSelector: sender (@selector #/selectedCell))
+                    (#/selectedCell sender)))
+         (responds (and cell (#/respondsToSelector: cell (@selector #/mouseDownFlags))))
          (*modifier-key-pattern* (if responds (#/mouseDownFlags cell) 0)))
     (funcall (target-handler self))))
 
