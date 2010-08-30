@@ -914,6 +914,7 @@
 
 
 (eval-when (:execute :compile-toplevel)
+  (defconstant single-float-pi (coerce pi 'single-float))
   (defconstant double-float-half-pi (asin 1.0d0))
   (defconstant single-float-half-pi (asin 1.0f0))
 )
@@ -967,24 +968,30 @@
 
 
 
-(defun %df-atan2 (y x &optional result)
+(defun %df-atan2 (y x)
   (if (zerop x)
     (if (zerop y)
       (if (plusp (float-sign x))
-        y
+        (if (eql y -0.0d0)
+          -0.0d0
+          0.0d0)
         (float-sign y pi))
       (float-sign y double-float-half-pi))
-    (%double-float-atan2! y x (or result (%make-dfloat)))))
+    (%double-float-atan2! y x (%make-dfloat))))
 
 #+32-bit-target
-(defun %sf-atan2! (y x &optional result)
+(defun %sf-atan2! (y x)
   (if (zerop x)
     (if (zerop y)
       (if (plusp (float-sign x))
-        y
-        (float-sign y pi))
+        ;; Don't return Y (which may be stack-consed) here.
+        ;; We know that (ZEROP Y) is true, so:
+        (if (eql y -0.0s0)
+          -0.0s0
+          0.0s0)
+        (float-sign y single-float-pi))
       (float-sign y single-float-half-pi))
-    (%single-float-atan2! y x (or result (%make-sfloat)))))
+    (%single-float-atan2! y x (%make-sfloat))))
 
 #+64-bit-target
 (defun %sf-atan2 (y x)
@@ -992,7 +999,7 @@
     (if (zerop y)
       (if (plusp (float-sign x))
         y
-        (float-sign y pi))
+        (float-sign y single-float-pi))
       (float-sign y single-float-half-pi))
     (%single-float-atan2 y x)))
 
