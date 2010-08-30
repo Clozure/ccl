@@ -58,11 +58,8 @@
     ((self lisp-application-delegate) notification)
   (declare (ignore notification))
   (initialize-user-interface)
-  (let* ((event (#_CGEventCreate +null-ptr+))
-	 (flags (#_CGEventGetFlags event)))
-    (unless (logtest flags #$kCGEventFlagMaskShift)
-      (load-ide-init-file))
-    (#_CFRelease event)))
+  (unless (shift-key-p)
+    (load-ide-init-file)))
 
 (objc:defmethod (#/applicationWillTerminate: :void)
 		((self lisp-application-delegate) notification)

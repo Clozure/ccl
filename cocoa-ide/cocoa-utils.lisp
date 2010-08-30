@@ -410,4 +410,15 @@
     (#_Gestalt #$gestaltSystemVersion p)
     (>= (%get-long p) #x1050)))
 
+;; This works even if an event loop is not running.
+#-cocotron
+(defun shift-key-p ()
+  (let* ((event (#_CGEventCreate +null-ptr+))
+	 (flags (#_CGEventGetFlags event)))
+    (prog1
+	(logtest flags #$kCGEventFlagMaskShift)
+      (#_CFRelease event))))
 
+#+cocotron
+(defun shift-key-p ()
+  nil)

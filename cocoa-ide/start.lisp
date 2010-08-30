@@ -81,7 +81,8 @@
 
 
 (defmethod ccl::application-init-file ((a cocoa-application))
-  '("home:ccl-init" "home:\\.ccl-init"))
+  (unless (shift-key-p)
+    '("home:ccl-init" "home:\\.ccl-init")))
 
 ;;; If we're launched via the Finder, the only argument we'll
 ;;; get is of the form -psnXXXXXX.  That's meaningless to us;
