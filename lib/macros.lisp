@@ -1327,7 +1327,14 @@ are no Forms, OR returns NIL."
 
 
 (defmacro %char-code (c) `(char-code (the character ,c)))
-(defmacro %code-char (i) `(code-char (the (mod #.char-code-limit) ,i)))
+;;; %CODE-CHAR is used internally.  It can sometimes exploit the
+;;; assertion that the character code is an (UNSIGNED-BYTE 8) to
+;;; generate better compiled code (partly because all such character
+;;; codes denote characters.)
+;;; Confusingly, it's not just the inverse of %CHAR-CODE.  It's
+;;; almost always going to be open-coded, so this macro definition
+;;; is mostly just a kind of documentation.
+(defmacro %code-char (i) `(code-char (the (mod 256) ,i)))
 
 (defmacro %izerop (x) `(eq ,x 0))
 (defmacro %iminusp (x) `(< (the fixnum ,x) 0))
