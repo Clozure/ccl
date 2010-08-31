@@ -179,8 +179,7 @@
                                  #+x8664-target 'function-vector
                                  #-x8664-target 'function)
                       (functions (function-vector-to-function o))))
-                  ccl::area-readonly
-                  ccl::area-readonly
+                  :readonly
                   ))
     (functions)))
 
