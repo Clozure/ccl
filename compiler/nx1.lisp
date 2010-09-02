@@ -2254,6 +2254,13 @@
            (make-acode (%nx1-operator natural-shift-left)
                        (nx1-form num)
                        (nx1-form amt)))
+	  ((fixnump num)
+	   (let* ((field-width (1+ (integer-length num)))
+		  ;; num fits in a `(signed-byte ,field-width)
+		  (max-shift (- (1+ maxbits) field-width)))
+	     (if (nx-form-typep amt `(mod ,(1+ max-shift)) env)
+	       (nx1-form `(%ilsl ,amt ,num))
+	       (nx1-treat-as-call call))))
           (t (nx1-treat-as-call call)))))
 
     
