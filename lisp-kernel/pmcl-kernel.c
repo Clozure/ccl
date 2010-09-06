@@ -828,18 +828,14 @@ wait_for_signal(int signo, int seconds, int milliseconds)
 BytePtr
 initial_stack_bottom()
 {
-#ifndef WINDOWS
-  extern char **environ;
-  char *p = *environ;
-  while (*p) {
-    p += (1+strlen(p));
-  }
-  return (BytePtr)((((natural) p) +4095) & ~4095);
-#endif
-#ifdef WINDOWS
-  return (BytePtr)((current_stack_pointer() + 4095) & ~ 4095);
-#endif
+  extern void os_get_current_thread_stack_bounds(void **, natural*);
+  void *stack_bottom;
+  natural stack_size;
+  
+  os_get_current_thread_stack_bounds(&stack_bottom, &stack_size);
+  return (BytePtr)stack_bottom;
 }
+
 
 
   
