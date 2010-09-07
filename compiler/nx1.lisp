@@ -449,8 +449,14 @@
                 (nx1-form index) 
                 (nx1-form newvalue)))
 
-(defnx1 nx1-logior-2 ((logior-2)) (&environment env arg-1 arg-2)
-  (nx-logior-2-op arg-1 arg-2 env))
+(defnx1 nx1-logior-2 ((logior-2)) (&whole w &environment env arg-1 arg-2)
+  (nx-binary-boole-op w
+                      env
+                      arg-1
+                      arg-2
+                      (%nx1-operator %ilogior2)
+                      (%nx1-operator logior2)
+		      (%nx1-operator %natural-logior)))
 
 (defnx1 nx1-logxor-2 ((logxor-2)) (&whole w &environment env arg-1 arg-2)
   (nx-binary-boole-op w 
@@ -461,8 +467,14 @@
                       (%nx1-operator logxor2)
 		      (%nx1-operator %natural-logxor)))
 
-(defnx1 nx1-logand-2 ((logand-2)) (&environment env arg-1 arg-2)
-  (nx-logand-2-op arg-1 arg-2 env))
+(defnx1 nx1-logand-2 ((logand-2)) (&whole w &environment env arg-1 arg-2)
+  (nx-binary-boole-op w
+                      env
+                      arg-1
+                      arg-2
+                      (%nx1-operator %ilogand2)
+                      (%nx1-operator logand2)
+		      (%nx1-operator %natural-logand)))
 
 (defnx1 nx1-require ((require-simple-vector)
                      (require-simple-string)
@@ -2192,10 +2204,6 @@
 
 (defnx1 nx1-%fixnum-to-single ((%fixnum-to-single)) (arg)
   (make-acode (%nx1-operator %fixnum-to-single)
-              (nx1-form arg)))
-
-(defnx1 nx1-%fixnum-mask-to-natural ((%fixnum-mask-to-natural)) (arg)
-  (make-acode (%nx1-operator %fixnum-mask-to-natural)
               (nx1-form arg)))
 
 (defnx1 nx1-%double-float ((%double-float)) (&whole whole arg &optional (result nil result-p))
