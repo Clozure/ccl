@@ -385,8 +385,9 @@
         (when (#/isVisible w)
           (let* ((wc (#/windowController w))
                  (doc (#/document wc)))
-            (when (#/isKindOfClass: doc self)
-              (return doc))))))))
+            (unless (%null-ptr-p doc)
+              (when (#/isKindOfClass: doc self)
+                (return doc)))))))))
 
 (defun symbol-value-in-top-listener-process (symbol)
   (let* ((process (hemlock-document-process (#/topListener hemlock-listener-document))))
