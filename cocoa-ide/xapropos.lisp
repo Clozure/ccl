@@ -46,10 +46,6 @@
     (4 . :macro))
   "Associates search menu item tags with keywords.")
 
-;;; action menu item tags
-(defconstant $inspect-item-tag 0)
-(defconstant $source-item-tag 1)
-
 (objc:defmethod #/init ((wc xapropos-window-controller))
   (let ((self (#/initWithWindowNibName: wc #@"xapropos")))
     (unless (%null-ptr-p self)

@@ -141,19 +141,22 @@
                       (cdr (svref (frame-descriptor-values frame) index))
     (values val var)))
 
+(defun show-frame-source (frame)
+  (multiple-value-bind (lfun pc) (frame-descriptor-function frame)
+    (when lfun
+      (let ((source (or (and pc (ccl:find-source-note-at-pc lfun pc))
+                        (ccl:function-source-note lfun))))
+        (if (source-note-p source)
+          (hemlock-ext:execute-in-file-view
+           (ccl:source-note-filename source)
+           (lambda  ()
+             (hemlock::move-to-source-note source)))
+          (hemlock::edit-definition lfun))))))
+
 (defun backtrace-frame-default-action (frame &optional index)
   (if index
     (inspect (frame-descriptor-value frame index))
-    (multiple-value-bind (lfun pc) (frame-descriptor-function frame)
-      (when lfun
-        (let ((source (or (and pc (ccl:find-source-note-at-pc lfun pc))
-                          (ccl:function-source-note lfun))))
-          (if (source-note-p source)
-            (hemlock-ext:execute-in-file-view
-             (ccl:source-note-filename source)
-             (lambda  ()
-               (hemlock::move-to-source-note source)))
-            (hemlock::edit-definition lfun)))))))
+    (show-frame-source frame)))
 
 ;; Cocoa layer
 
@@ -214,7 +217,11 @@
 (defclass backtrace-window-controller (ns:ns-window-controller)
     ((context :initarg :context :reader backtrace-controller-context)
      (stack-descriptor :initform nil :reader backtrace-controller-stack-descriptor)
-     (outline-view :foreign-type :id :reader backtrace-controller-outline-view))
+     (outline-view :foreign-type :id :reader backtrace-controller-outline-view)
+     (message-field :foreign-type :id :accessor message-field)
+     (action-menu :foreign-type :id :accessor action-menu)
+     (action-popup-button :foreign-type :id :accessor action-popup-button)
+     (contextual-menu :foreign-type :id :accessor contextual-menu))
   (:metaclass ns:+ns-object))
 
 (defmethod backtrace-controller-process ((self backtrace-window-controller))
@@ -267,6 +274,8 @@
                         (format nil "~a: ~a"
                                 (class-name (class-of break-condition))
                                 break-condition))))
+                (ccl::with-autoreleased-nsstring (s break-condition-string)
+                  (#/setStringValue: (slot-value self 'message-field) s))
                 (#/setFont: header-cell (default-font :name "Courier" :size 10 :attributes '(:bold)))
                 (#/setStringValue: header-cell (%make-nsstring break-condition-string))))))))
     (let* ((window (#/window  self)))
@@ -398,8 +407,77 @@
             (#/performSelectorOnMainThread:withObject:waitUntilDone: restartswindow (@selector #/close)  +null-ptr+ t)))))))
 
   
+(objc:defmethod (#/validateToolbarItem: #>BOOL) ((self backtrace-window-controller)
+                                                 toolbar-item)
+  (let* ((outline-view (backtrace-controller-outline-view self))
+         (row (#/selectedRow outline-view))
+         (identifier (#/itemIdentifier toolbar-item)))
+    (if (or (#/isEqualToString: identifier #@"expand all")
+            (#/isEqualToString: identifier #@"collapse all"))
+      #$YES
+      (when (/= row -1)
+        (let ((item (#/itemAtRow: outline-view row)))
+          (cond ((typep item 'frame-label)
+                 (if (#/isEqualToString: identifier #@"inspect")
+                   #$NO
+                   #$YES))
+              ((typep item 'item-label)
+               #$YES)
+              (t
+               #$NO)))))))
 
+(objc:defmethod (#/validateMenuItem: #>BOOL) ((self backtrace-window-controller)
+                                                 menu-item)
+  (when (eql (contextual-menu self) (#/menu menu-item))
+    (let* ((ov (backtrace-controller-outline-view self))
+           (clicked-row (#/clickedRow ov))
+           (row (#/selectedRow ov))
+           (tag (#/tag menu-item)))
+      (when (/= clicked-row -1)
+        (setq row clicked-row))
+      (when (/= row -1)
+        (let ((item (#/itemAtRow: ov row)))
+          (cond ((= tag $inspect-item-tag)
+                 (typep item 'item-label))
+                ((= tag $source-item-tag)
+                 t)))))))
 
+(defun frame-descriptor-from-item (item)
+  (etypecase item
+    (frame-label (frame-label-descriptor item))
+    (item-label (frame-label-descriptor (item-label-label item)))))
 
+(objc:defmethod (#/inspect: :void) ((self backtrace-window-controller) sender)
+  (declare (ignore sender))
+  (let* ((ov (backtrace-controller-outline-view self))
+         (row (#/selectedRow ov)))
+    (when (/= row -1)
+      (let ((item (#/itemAtRow: ov row)))
+        (cond ((typep item 'item-label)
+               (let* ((frame (frame-label-descriptor (item-label-label item)))
+                      (index (item-label-index item)))
+                 (inspect (frame-descriptor-value frame index)))))))))
 
+(objc:defmethod (#/source: :void) ((self backtrace-window-controller) sender)
+  (declare (ignore sender))
+  (let* ((ov (backtrace-controller-outline-view self))
+         (row (#/selectedRow ov))
+         (clicked-row (#/clickedRow ov)))
+    (when (/= clicked-row -1)
+      (setq row clicked-row))
+    (when (/= row -1)
+      (let* ((item (#/itemAtRow: ov row))
+             (frame (frame-descriptor-from-item item)))
+        (show-frame-source frame)))))
 
+(objc:defmethod (#/expandAll: :void) ((self backtrace-window-controller) sender)
+  (declare (ignore sender))
+  (let ((ov (backtrace-controller-outline-view self)))
+    (#/expandItem:expandChildren: ov +null-ptr+ #$YES)))
+
+(objc:defmethod (#/collapseAll: :void) ((self backtrace-window-controller) sender)
+  (declare (ignore sender))
+  (let ((ov (backtrace-controller-outline-view self)))
+    (#/collapseItem:collapseChildren: ov +null-ptr+ #$YES)))
+
+  

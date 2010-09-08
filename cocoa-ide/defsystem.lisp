@@ -63,6 +63,7 @@
 
 (defparameter *ide-files*
   '(;"ide-bundle" - loaded by hand above
+    "constants"
     "cocoa-utils"
     "cocoa-defaults"
     "cocoa-prefs"
