@@ -74,6 +74,8 @@ cocoa-ide/ide-contents/Resources/English.lproj/xapropos.nib/keyedobjects.nib -te
 cocoa-ide/ide-contents/Resources/English.lproj/xinspector.nib/designable.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/xinspector.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/General.tiff -text
+cocoa-ide/ide-contents/Resources/collapse-all.png -text
+cocoa-ide/ide-contents/Resources/expand-all.png -text
 cocoa-ide/ide-contents/Resources/font-panel.tiff -text
 cocoa-ide/ide-contents/Resources/gear.png -text
 cocoa-ide/ide-contents/Resources/info.tiff -text
