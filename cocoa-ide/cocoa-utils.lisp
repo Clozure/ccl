@@ -410,15 +410,59 @@
     (#_Gestalt #$gestaltSystemVersion p)
     (>= (%get-long p) #x1050)))
 
-;; This works even if an event loop is not running.
-#-cocotron
+
+;;; This stuff is not Cocoa-specific.
+
+#+windows-target
+(progn
+(defun caps-lock-key-p ()
+  ;; I thought this might work, but it seems to behave oddly.
+  ;;(logbitp 0 (#_GetAsyncKeyState #$VK_CAPITAL))
+  nil)
+
 (defun shift-key-p ()
+  (logbitp 15 (#_GetAsyncKeyState #$VK_SHIFT)))
+
+(defun control-key-p ()
+  (logbitp 15 (#_GetAsyncKeyState #$VK_CONTROL)))
+
+(defun command-key-p ()
+  nil)
+
+(defun option-key-p ()
+  (logbitp 15 (#_GetAsyncKeyState #$VK_MENU)))
+
+(defun alt-key-p ()
+  (option-key-p))
+)
+
+#+darwin-target
+(progn
+
+;; This works even if an event loop is not running.
+(defun cgevent-flags-test (mask)
+  (require-type mask '(unsigned-byte 64))
   (let* ((event (#_CGEventCreate +null-ptr+))
 	 (flags (#_CGEventGetFlags event)))
     (prog1
-	(logtest flags #$kCGEventFlagMaskShift)
+	(logtest flags mask)
       (#_CFRelease event))))
 
-#+cocotron
+(defun caps-lock-key-p ()
+  (cgevent-flags-test #$kCGEventFlagMaskAlphaShift))
+
 (defun shift-key-p ()
-  nil)
+  (cgevent-flags-test #$kCGEventFlagMaskShift))
+
+(defun control-key-p ()
+  (cgevent-flags-test #$kCGEventFlagMaskControl))
+
+(defun command-key-p ()
+  (cgevent-flags-test #$kCGEventFlagMaskCommand))
+
+(defun option-key-p ()
+  (cgevent-flags-test #$kCGEventFlagMaskAlternate))
+
+(defun alt-key-p ()
+  (option-key-p))
+)
