@@ -1562,9 +1562,6 @@ register_thread_tcr(TCR *tcr)
 
   
   
-#ifndef MAP_GROWSDOWN
-#define MAP_GROWSDOWN 0
-#endif
 
 Ptr
 create_stack(natural size)

@@ -308,7 +308,7 @@ MapMemoryForStack(natural nbytes)
 #ifdef WINDOWS
   return VirtualAlloc(0, nbytes, MEM_RESERVE|MEM_COMMIT, MEMPROTECT_RWX);
 #else
-  return mmap(NULL, nbytes, MEMPROTECT_RWX, MAP_PRIVATE|MAP_ANON|MAP_GROWSDOWN, -1, 0);
+  return mmap(NULL, nbytes, MEMPROTECT_RWX, MAP_PRIVATE|MAP_ANON, -1, 0);
 #endif
 }
 
