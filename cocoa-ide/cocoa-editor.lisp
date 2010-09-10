@@ -1799,15 +1799,22 @@
              (not (directory-pathname-p pathname)))
       pathname)))
 
-;;; If we get here, we've already checked that the selection represents
-;;; a valid pathname.
+(defun find-symbol-in-packages (string pkgs)
+  (setq string (string-upcase string))
+  (let (sym)
+    (dolist (p pkgs)
+      (when (setq sym (find-symbol string p))
+        (return)))
+    sym))
+
 (objc:defmethod (#/openSelection: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
   (let* ((text (#/string self))
          (selection (#/substringWithRange: text (#/selectedRange self)))
          (pathname (pathname-for-namestring-fragment
                     (lisp-string-from-nsstring selection))))
-    (ed pathname)))
+    (when (pathnamep pathname)
+      (ed pathname))))
 
 ;;; If we get here, we've already checked that the selection represents
 ;;; a valid symbol name.
@@ -1815,8 +1822,20 @@
   (declare (ignore sender))
   (let* ((text (#/string self))
          (selection (#/substringWithRange: text (#/selectedRange self)))
-         (symbol-name (string-upcase (lisp-string-from-nsstring selection))))
-    (inspect (find-symbol symbol-name))))
+         (symbol-name (string-upcase (lisp-string-from-nsstring selection)))
+         (buffer (hemlock-buffer self))
+         (package-name (hi::variable-value 'hemlock::current-package :buffer buffer)))
+    (inspect (find-symbol-in-packages symbol-name 
+                                      (cons package-name
+                                            (package-use-list package-name))))))
+
+(objc:defmethod (#/sourceForSelection: :void) ((self hemlock-text-view) sender)
+  (declare (ignore sender))
+  (let* ((text (#/string self))
+         (selection (#/substringWithRange: text (#/selectedRange self)))
+         (sym (find-symbol-in-packages (lisp-string-from-nsstring selection)
+                                       (list-all-packages))))
+    (ed sym)))
 
 ;;; If we don't override this, NSTextView will start adding Google/
 ;;; Spotlight search options and dictionary lookup when a selection
@@ -1828,11 +1847,23 @@
 	 (s (lisp-string-from-nsstring selection))
          (menu (if (> (length s) 0)
                  (#/copy (#/menu self))
-                 (#/retain (#/menu self)))))
-    (when (find-symbol (string-upcase s))
+                 (#/retain (#/menu self))))
+         (buffer (hemlock-buffer self))
+         (package-name (hi::variable-value 'hemlock::current-package :buffer buffer)))
+    (when (find-symbol-in-packages (string-upcase s)
+                                   (cons package-name
+                                         (package-use-list package-name)))
       (let* ((title (#/stringByAppendingString: #@"Inspect " selection))
              (item (make-instance 'ns:ns-menu-item :with-title title
                      :action (@selector #/inspectSelection:)
+                     :key-equivalent #@"")))
+        (#/setTarget: item self)
+        (#/insertItem:atIndex: menu item 0)
+        (#/release item)))
+    (when (find-symbol-in-packages (string-upcase s) (list-all-packages))
+      (let* ((title (#/stringByAppendingString: #@"Source of " selection))
+             (item (make-instance 'ns:ns-menu-item :with-title title
+                     :action (@selector #/sourceForSelection:)
                      :key-equivalent #@"")))
         (#/setTarget: item self)
         (#/insertItem:atIndex: menu item 0)
@@ -2601,6 +2632,10 @@
            (let* ((buffer (hemlock-buffer self))
                   (pathname (hi::buffer-pathname buffer)))
              (not (null pathname))))
+          ((eql action (@selector #/openSelection:))
+           (let* ((text (#/string self))
+                  (selection (#/substringWithRange: text (#/selectedRange self))))
+             (pathname-for-namestring-fragment (lisp-string-from-nsstring selection))))
 	  (t (call-next-method item)))))
 
 (defmethod user-input-style ((doc hemlock-editor-document))
