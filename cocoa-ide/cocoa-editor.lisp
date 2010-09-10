@@ -1791,12 +1791,62 @@
 (objc:defmethod #/defaultMenu ((class +hemlock-text-view))
   (text-view-context-menu))
 
+(defun pathname-for-namestring-fragment (string)
+  "Return a pathname that STRING might designate."
+  ;; We could get fancy here, but for now just be stupid.
+  (let ((pathname (ignore-errors (probe-file string))))
+    (if (and (pathnamep pathname)
+             (not (directory-pathname-p pathname)))
+      pathname)))
+
+;;; If we get here, we've already checked that the selection represents
+;;; a valid pathname.
+(objc:defmethod (#/openSelection: :void) ((self hemlock-text-view) sender)
+  (declare (ignore sender))
+  (let* ((text (#/string self))
+         (selection (#/substringWithRange: text (#/selectedRange self)))
+         (pathname (pathname-for-namestring-fragment
+                    (lisp-string-from-nsstring selection))))
+    (ed pathname)))
+
+;;; If we get here, we've already checked that the selection represents
+;;; a valid symbol name.
+(objc:defmethod (#/inspectSelection: :void) ((self hemlock-text-view) sender)
+  (declare (ignore sender))
+  (let* ((text (#/string self))
+         (selection (#/substringWithRange: text (#/selectedRange self)))
+         (symbol-name (string-upcase (lisp-string-from-nsstring selection))))
+    (inspect (find-symbol symbol-name))))
+
 ;;; If we don't override this, NSTextView will start adding Google/
 ;;; Spotlight search options and dictionary lookup when a selection
 ;;; is active.
 (objc:defmethod #/menuForEvent: ((self hemlock-text-view) event)
   (declare (ignore event))
-  (#/menu self))
+  (let* ((text (#/string self))
+	 (selection (#/substringWithRange: text (#/selectedRange self)))
+	 (s (lisp-string-from-nsstring selection))
+         (menu (if (> (length s) 0)
+                 (#/copy (#/menu self))
+                 (#/retain (#/menu self)))))
+    (when (find-symbol (string-upcase s))
+      (let* ((title (#/stringByAppendingString: #@"Inspect " selection))
+             (item (make-instance 'ns:ns-menu-item :with-title title
+                     :action (@selector #/inspectSelection:)
+                     :key-equivalent #@"")))
+        (#/setTarget: item self)
+        (#/insertItem:atIndex: menu item 0)
+        (#/release item)))
+    (when (pathname-for-namestring-fragment s)
+      (let* ((title (#/stringByAppendingString: #@"Open " selection))
+             (item (make-instance 'ns:ns-menu-item :with-title title
+                     :action (@selector #/openSelection:)
+                     :key-equivalent #@"")))
+        (#/setTarget: item self)
+        (#/insertItem:atIndex: menu item 0)
+        (#/release item)))
+
+    (#/autorelease menu)))
 
 (defun make-scrolling-text-view-for-textstorage (textstorage x y width height tracks-width color style)
   (let* ((scrollview (#/autorelease
