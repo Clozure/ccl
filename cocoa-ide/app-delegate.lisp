@@ -58,7 +58,7 @@
     ((self lisp-application-delegate) notification)
   (declare (ignore notification))
   (initialize-user-interface)
-  (unless (shift-key-p)
+  (unless (shift-key-now-p)
     (load-ide-init-file)))
 
 (objc:defmethod (#/applicationWillTerminate: :void)

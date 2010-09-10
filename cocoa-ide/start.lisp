@@ -81,7 +81,7 @@
 
 
 (defmethod ccl::application-init-file ((a cocoa-application))
-  (unless (shift-key-p)
+  (unless (shift-key-now-p)
     '("home:ccl-init" "home:\\.ccl-init")))
 
 ;;; If we're launched via the Finder, the only argument we'll
