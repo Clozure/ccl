@@ -138,6 +138,9 @@
     (map-windows #'(lambda (w) (push w ret)))
     (nreverse ret)))
 
+(defun front-window ()
+  (map-windows #'(lambda (win) (return-from front-window win))))
+
 (defun first-window-satisfying-predicate (pred)
   (block foo
     (map-windows #'(lambda (w) (when (funcall pred w)

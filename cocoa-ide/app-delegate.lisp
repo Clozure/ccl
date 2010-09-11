@@ -119,11 +119,14 @@
   ;;otherwise bring frontmost search files window to the front
   (declare (ignore sender))
   (let ((w nil))
-    (if (or (current-event-command-key-p)
+    (if (or (current-event-modifier-p #$NSFunctionKeyMask)
             (null (setf w (first-window-with-controller-type 'search-files-window-controller))))
       (let* ((wc (make-instance 'search-files-window-controller)))
-        (#/showWindow: wc self))
-      (#/makeKeyAndOrderFront: w self))))
+        (#/showWindow: wc self)
+        (set-search-files-default-dir wc))
+      (progn
+        (#/makeKeyAndOrderFront: w self)
+        (set-search-files-default-dir (#/windowController w))))))
 
 (objc:defmethod (#/newListener: :void) ((self lisp-application-delegate)
                                         sender)

@@ -47,7 +47,8 @@
    (search-str :initform "" :accessor search-str) ;a lisp string
    (recursive-p :initform t :reader recursive-p)
    (case-sensitive-p :initform nil :reader case-sensitive-p)
-   (expand-results-p :initform nil :reader expand-results-p))
+   (expand-results-p :initform nil :reader expand-results-p)
+   (grep-process :initform nil :accessor grep-process))
   (:metaclass ns:+ns-object))
 
 (defmacro def-copying-setter (slot-name class-name)
@@ -61,9 +62,7 @@
 
 (def-copying-setter find-string-value search-files-window-controller)
 (def-copying-setter folder-string-value search-files-window-controller)
-(def-copying-setter file-name-string-value search-files-window-controller)
-
-
+(def-copying-setter file-name-string-value search-files-window-controller)
 
 ;;; Enable and disable the Search button according to the state of the
 ;;; search files dialog.
@@ -74,12 +73,11 @@
        (plusp (#/length (file-name-string-value wc)))))
 
 (defmethod folder-valid-p ((wc search-files-window-controller))
-  (let* ((fm (#/defaultManager ns:ns-file-manager))
-	 (path (folder-string-value wc)))
-    (rlet ((dir-p #>BOOL))
-      (and
-       (#/fileExistsAtPath:isDirectory: fm path dir-p)
-       (plusp (%get-byte dir-p))))))
+  (let* ((nsstr (folder-string-value wc)))
+    (when (and (typep nsstr ns:ns-string) (#/length nsstr))
+      (let ((lstr (lisp-string-from-nsstring nsstr)))
+        (when (valid-host-p lstr)
+          (probe-file (get-full-dir-string lstr)))))))
 
 (objc:defmethod (#/controlTextDidChange: :void) ((wc search-files-window-controller) notification)
   (let* ((object (#/object notification))
@@ -139,9 +137,7 @@
 
 (objc:defmethod (#/updateFileNameString: :void) ((wc search-files-window-controller) sender)
   (setf (file-name-string-value wc) (#/stringValue sender))
-  (update-combo-box sender (file-name-string-value wc)))
-
-
+  (update-combo-box sender (file-name-string-value wc)))
 
 (objc:defmethod #/init ((self search-files-window-controller))
   (prog1
@@ -164,20 +160,27 @@
                 (#/cascadeTopLeftFromPoint: top-dialog zp))))))
   (#/cascadeTopLeftFromPoint: (#/window wc) *search-files-cascade-point*))
 
+(defun set-search-files-default-dir (wc)
+  (let* ((w (first-window-satisfying-predicate #'window-pathname))
+         (path (and w (window-pathname w)))
+         (dir (if path
+                (namestring (ccl::back-translate-pathname (directory-namestring path)))
+                "ccl:"))
+         (nsdir (#/autorelease (%make-nsstring dir))))
+    (with-slots (folder-combo-box) wc
+      (#/setStringValue: folder-combo-box nsdir)
+      (#/updateFolderString: wc folder-combo-box))))
+
 (objc:defmethod (#/awakeFromNib :void) ((wc search-files-window-controller))
   (#/setStringValue: (status-field wc) #@"")
   (with-slots (outline-view) wc
     (#/setTarget: outline-view wc)
     (#/setDoubleAction: outline-view (@selector #/editLine:)))
   (setf (find-string-value wc) #@"")
+  (setf (folder-string-value wc) #@"")
   (with-slots (file-name-combo-box) wc
     (#/setStringValue: file-name-combo-box #@"*.lisp")
-    (#/updateFileNameString: wc file-name-combo-box))
-  (with-slots (folder-combo-box) wc
-    (let ((dir (ccl::native-translated-namestring (ccl:current-directory))))
-    (#/setStringValue: folder-combo-box
-		       (#/autorelease (%make-nsstring dir)))
-    (#/updateFolderString: wc folder-combo-box))))
+    (#/updateFileNameString: wc file-name-combo-box)))
 
 (defun ns-string-equal (ns1 ns2)
   (and (typep ns1 'ns:ns-string)
@@ -187,9 +190,21 @@
 (defmethod get-full-dir-string ((str string))
   ;make sure it has a trailing slash
   (let ((ret (ccl::native-untranslated-namestring str)))
-    (unless (eql #\/ (aref str (1- (length str))))
+    (unless (eql #\/ (aref ret (1- (length ret))))
       (setf ret (concatenate 'string ret "/")))
     ret))
+
+;;; nil host is considered valid
+(defmethod valid-host-p ((ob t))
+  nil)
+
+(defmethod valid-host-p ((str string))
+  (let ((colon-pos (position #\: str)))
+    (or (not colon-pos)
+        (ccl::logical-host-p (subseq str 0 colon-pos)))))
+
+(defmethod valid-host-p ((p pathname))
+  (ccl::logical-host-p (pathname-host p)))
 
 (defmethod get-full-dir-string ((nsstring ns:ns-string))
   (get-full-dir-string (lisp-string-from-nsstring nsstring)))
@@ -201,10 +216,9 @@
 	(folder-string-value wc) (#/stringValue (folder-combo-box wc))
 	(file-name-string-value wc) (#/stringValue (file-name-combo-box wc)))
   (let* ((find-str (lisp-string-from-nsstring (find-string-value wc)))
-	 (folder-str (lisp-string-from-nsstring (folder-string-value wc)))
+	 (folder-str (get-full-dir-string (lisp-string-from-nsstring (folder-string-value wc))))
 	 (file-str (lisp-string-from-nsstring (file-name-string-value wc)))
-	 (grep-args (list "-I" "-s" "-c" "-e" find-str "--include" file-str
-			  (get-full-dir-string folder-str))))
+	 (grep-args (list "-I" "-s" "-c" "-e" find-str "--include" file-str folder-str)))
     (when (recursive-p wc)
       (push "-r" grep-args))
     (unless (case-sensitive-p wc)
@@ -212,10 +226,16 @@
     (setf (search-dir wc) folder-str
 	  (search-str wc) find-str)
     (#/setEnabled: (search-button wc) nil)
-    (process-run-function "grep" 'run-grep grep-args wc)
+    (setf (grep-process wc) (process-run-function "grep" 'run-grep grep-args wc))
     (#/setTitle: (#/window wc) (#/autorelease
 				(%make-nsstring (format nil "Search Files: ~a"
 							find-str))))))
+
+(objc:defmethod (#/windowWillClose: :void) ((wc search-files-window-controller)
+					    notification)
+  (declare (ignore notification))
+  (let* ((proc (grep-process wc)))
+    (when proc (process-kill proc))))
 
 (defun auto-expandable-p (results)
   (let ((n 0))
@@ -243,6 +263,7 @@
 ;;     (when (or (auto-expandable-p (search-results wc))
 ;;              (expand-results-p wc))
 ;;       (expand-all-results wc))
+    (setf (grep-process wc) nil)
     (#/reloadData (outline-view wc))
     (#/setEnabled: (search-button wc) t)))
 
@@ -326,7 +347,8 @@
           (setf line-result (get-line-result wc file-result 0)))))          
     (when line-result
       (cocoa-edit-grep-line (concatenate 'string (search-dir wc) "/" (search-result-line-file line-result))
-                      (1- (search-result-line-number line-result))))))
+                      (1- (search-result-line-number line-result))
+                      (search-str wc)))))
 
 (defun get-selected-item (outline-view)
   (let ((index (#/selectedRow outline-view)))
@@ -348,7 +370,7 @@
 (objc:defmethod #/outlineView:child:ofItem: ((wc search-files-window-controller) view (child :<NSI>nteger) item)
   (declare (ignore view))
   (with-slots (results) wc
-    (if (eql item +null-ptr+)
+    (if (Eql Item +Null-Ptr+)
       (let ((result (aref results child)))
         (or (search-result-file-nsstr result)
             (setf (search-result-file-nsstr result)

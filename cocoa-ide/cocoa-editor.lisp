@@ -2574,6 +2574,22 @@
     (unless (%null-ptr-p ts)
       (hemlock-buffer ts))))
 
+(defmethod window-document ((w ns:ns-window))
+  (let* ((sc (#/sharedDocumentController ns:ns-document-controller))
+         (doc (#/documentForWindow: sc w)))
+    (if (%null-ptr-p doc)
+      nil
+      doc)))
+
+(defmethod window-pathname ((w ns:ns-window))
+  (document-pathname (window-document w)))
+
+(defmethod document-pathname ((doc NULL))
+  nil)
+
+(defmethod document-pathname ((doc hemlock-editor-document))
+  (hi:buffer-pathname (hemlock-buffer doc)))
+
 (defmethod assume-not-editing ((doc hemlock-editor-document))
   (assume-not-editing (slot-value doc 'textstorage)))
 

@@ -6,16 +6,21 @@
 
 (defvar *grep-program* "grep")
 
-(defun cocoa-edit-grep-line (file line-num)
+(defun cocoa-edit-grep-line (file line-num &optional search-string)
   (assume-cocoa-thread)
   (let ((view (find-or-make-hemlock-view file)))
     (hi::handle-hemlock-event view #'(lambda ()
-                                       (edit-grep-line-in-buffer line-num)))))
+                                       (edit-grep-line-in-buffer line-num search-string)))))
 
-(defun edit-grep-line-in-buffer (line-num)
+(defun edit-grep-line-in-buffer (line-num search-string)
   (let ((point (hi::current-point-collapsing-selection)))
     (hi::buffer-start point)
-    (unless (hi::line-offset point line-num)
+    (if (hi::line-offset point line-num)
+      (when search-string
+        (setf hi::*last-search-string* search-string)
+        (hemlock::start-isearch-mode :forward)
+        (let ((iss (hi::value hemlock::i-search-state)))
+          (hemlock::i-search-repeat iss)))      
       (hi::buffer-end point))))
 
 (defun parse-grep-line (line)
