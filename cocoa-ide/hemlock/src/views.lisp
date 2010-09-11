@@ -217,7 +217,7 @@
     (unless (and eps (eps-parse-results eps))
       (let ((msg (shiftf (hemlock-cancel-message view) nil)))
 	(if msg
-	  (loud-message msg)
+	  (loud-message "~a" msg)
 	  ;; Echo command in progress if there is one, unless in a recursive parse
 	  (unless eps
 	    (let ((cmd (hemlock-current-command view)))
