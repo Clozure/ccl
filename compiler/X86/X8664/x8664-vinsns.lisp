@@ -1184,9 +1184,9 @@
   (leaq (:@ (:^ entry) (:% x8664::rip)) (:%q x8664::fn)))
 
 ;;; Call a subprimitive using a tail-aligned CALL instruction.
-(define-x8664-vinsn (call-subprim :call)  (()
-                                           ((spno :s32const))
-                                           ((entry (:label 1))))
+(define-x8664-vinsn (call-subprim :call :subprim-call) (()
+							((spno :s32const))
+							((entry (:label 1))))
   (:talign 4)
   (call (:@ spno))
   (leaq (:@ (:^ entry) (:% x8664::rip)) (:%q x8664::fn)))
@@ -1360,7 +1360,7 @@
   (imulq (:$b x8664::fixnumone) (:%q src)(:%q dest)))
 
 
-(define-x8664-vinsn (fix-fixnum-overflow-ool :call)
+(define-x8664-vinsn (fix-fixnum-overflow-ool :call :subprim-call)
     (((val :lisp))
      ((val :lisp))
      ((unboxed (:s64 #.x8664::imm1))
@@ -1384,7 +1384,7 @@
    (movq (:%q x8664::arg_z) (:%q val)))
   (jmp :done))
 
-(define-x8664-vinsn (fix-fixnum-overflow-ool-and-branch :call)
+(define-x8664-vinsn (fix-fixnum-overflow-ool-and-branch :call :subprim-call)
     (((val :lisp))
      ((val :lisp)
       (lab :label))
@@ -1781,16 +1781,16 @@
   (:long (:^ label)))
 
 ;;; %ra0 is pointing into %fn, so no need to copy %fn here.
-(define-x8664-vinsn pass-multiple-values-symbol (()
-                                                 ())
+(define-x8664-vinsn (pass-multiple-values-symbol :jumplr) (()
+							 ())
   (pushq (:@ (:apply + (:apply target-nil-value) (x8664::%kernel-global 'x86::ret1valaddr)))) 
   (jmp (:@ x8664::symbol.fcell (:% x8664::fname))))
 
 ;;; It'd be good to have a variant that deals with a known function
 ;;; as well as this. 
-(define-x8664-vinsn pass-multiple-values (()
-                                          ()
-                                          ((tag :u8)))
+(define-x8664-vinsn (pass-multiple-values :jumplr) (()
+						  ()
+						  ((tag :u8)))
   :resume
   (movl (:%l x8664::temp0) (:%l tag))
   (andl (:$b x8664::fulltagmask) (:%l tag))
@@ -1821,7 +1821,8 @@
   (leaq (:@ (:^ entry) (:% x8664::rip)) (:%q x8664::fn)))
 
 (define-x8664-vinsn (jump-known-function :jumplr) (()
-                                                   ())
+						   ()
+                                                   ((xfn (:lisp #.x8664::xfn))))
   (movq (:%q x8664::fn) (:%q x8664::xfn))
   (movq (:%q x8664::temp0)  (:%q x8664::fn))
   (jmp (:%q x8664::fn)))
@@ -2050,10 +2051,10 @@
 
 ;;; Call something callable and obtain the single value that it
 ;;; returns.
-(define-x8664-vinsn funcall (()
-                             ()
-                             ((tag :u8)
-                              (entry (:label 1))))
+(define-x8664-vinsn (funcall :call) (()
+				     ()
+				     ((tag :u8)
+				      (entry (:label 1))))
   :resume
   (movl (:%l x8664::temp0) (:%l tag))
   (andl (:$b x8664::fulltagmask) (:%l tag))
@@ -2068,9 +2069,9 @@
   :bad
   (:anchored-uuo (uuo-error-not-callable)))
 
-(define-x8664-vinsn tail-funcall (()
-                                  ()
-                                  ((tag (:u8 #.x8664::imm0))))
+(define-x8664-vinsn (tail-funcall :jumplr) (()
+					    ()
+					    ((tag (:u8 #.x8664::imm0))))
   :resume
   (movl (:%l x8664::temp0) (:%l tag))
   (andl (:$b x8664::fulltagmask) (:%l tag))
