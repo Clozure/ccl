@@ -4016,6 +4016,7 @@
 
 (defmethod stream-read-line ((s echoing-two-way-stream))
   (let* ((out (two-way-stream-output-stream s)))
+    (force-output out)
     (multiple-value-bind (string eof)
         (call-next-method)
       (unless eof
