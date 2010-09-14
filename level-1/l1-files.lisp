@@ -851,7 +851,7 @@ a host-structure or string."
        (%directory-string-list sstr start (setq pos (%i+ pos 1)) host)
        pos)
       (values (and (neq host :unspecific)
-		   (neq start end)
+                   ;;(neq start end)
 		   '(:absolute))
 	      start))))
 
