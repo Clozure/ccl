@@ -1938,6 +1938,7 @@ to open."
                                             (%call-next-method ,methvar)))
                                         (next-method-p () (%next-method-p ,methvar)))
                                    (declare (inline call-next-method next-method-p))
+                                   (declare (ftype (function (&rest t)) ,name))
                                    ,@inner-decls
                                    ,@body)))))
           (values
