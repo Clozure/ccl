@@ -759,6 +759,8 @@
 
 
 (defun type-keyword-code (type-keyword &optional target)
+  ;; Don't really care about speed, but turn off typechecking for bootstrapping reasons
+  (declare (optimize (speed 3) (safety 0)))
   (let* ((backend (if target (find-backend target) *target-backend*))
          (alist (arch::target-uvector-subtags (backend-target-arch backend)))
          (entry (assq type-keyword alist)))

@@ -34,9 +34,31 @@
              refinfo
              (cons type refinfo)))))
 
-(declaim (inline type-and-refinfo-p))
-(defun type-and-refinfo-p (object)
-  (or (fixnump object) (consp object)))
+(declaim (inline accessor-structref-info-p))
+(defun accessor-structref-info-p (object) ;; as opposed to predicate structref-info.
+  (consp object))
+
+(declaim (inline structref-info-type))
+(defun structref-info-type (info)
+  (when (consp info)
+    (if (consp (%car info)) (%caar info) 't)))
+
+(declaim (inline structref-info-refinfo))
+(defun structref-info-refinfo (info)
+  (when (consp info)
+    (if (consp (%car info)) (%cdar info) (%car info))))
+
+(defun structref-set-r/o (sym &optional env)
+  (let ((info (structref-info sym env)))
+    (when (accessor-structref-info-p info)
+      (if (consp (%car info))
+        (setf (%cdar info) (%ilogior2 (%ilsl $struct-r/o 1) (%cdar info)))
+        (setf (%car info) (%ilogior2 (%ilsl $struct-r/o 1) (%car info)))))))
+
+(declaim (inline structref-info-struct))
+(defun structref-info-struct (info)
+  (when (consp info)
+    (%cdr info)))
 
 (defun ssd-set-reftype (ssd reftype)
   (ssd-update-refinfo (ssd refinfo)
@@ -45,7 +67,7 @@
 
 (defun ssd-set-r/o (ssd) 
   (ssd-update-refinfo (ssd refinfo)
-                      (%ilogior2 #x1000000 refinfo)))
+                      (%ilogior2 (%ilsl $struct-r/o 1) refinfo)))
 
 (defun ssd-set-inherited (ssd)
   (ssd-update-refinfo (ssd refinfo)
@@ -138,7 +160,8 @@
 
 ;;; return stuff for defstruct to compile
 (defun %defstruct-compile (sd refnames env)
-  (let ((stuff))    
+  (let ((stuff)
+        (struct (and (not (sd-type sd)) (sd-name sd))))
     (dolist (slot (sd-slots sd))
       (unless (fixnump (ssd-name slot))
         (let* ((accessor (if refnames (pop refnames) (ssd-name slot)))
@@ -150,75 +173,45 @@
                 (warn "Accessor ~s at different position than in included structure"
                       accessor)))
             (unless (sd-refname-in-included-struct-p sd accessor env)
-              (let ((fn (slot-accessor-fn slot accessor env)))
+              (let ((fn (slot-accessor-fn sd slot accessor env))
+                    (info (cons (ssd-type-and-refinfo slot) struct)))
                 (push
                  `(progn
                     ,.fn
-                    (puthash ',accessor %structure-refs% ',(ssd-type-and-refinfo slot))
+                    (puthash ',accessor %structure-refs% ',info)
                     (record-source-file ',accessor 'structure-accessor))
                  stuff)))))))
     (nreverse stuff)))
 
+(defun defstruct-var (name env)
+  (declare (ignore env))
+  (if (symbolp name)
+    (if (or (constant-symbol-p name) (proclaimed-special-p name))
+      (make-symbol (symbol-name name))
+      name)
+    'object))
 
-; no #. for cross compile
-(defvar *struct-ref-vector* 
-  (vector #'(lambda (x) (struct-ref x 0))
-          #'(lambda (x) (struct-ref x 1))
-          #'(lambda (x) (struct-ref x 2))
-          #'(lambda (x) (struct-ref x 3))
-          #'(lambda (x) (struct-ref x 4))
-          #'(lambda (x) (struct-ref x 5))
-          #'(lambda (x) (struct-ref x 6))
-          #'(lambda (x) (struct-ref x 7))
-          #'(lambda (x) (struct-ref x 8))
-          #'(lambda (x) (struct-ref x 9))))
-
-(defvar *svref-vector*
-  (vector #'(lambda (x) (svref x 0))
-          #'(lambda (x) (svref x 1))
-          #'(lambda (x) (svref x 2))
-          #'(lambda (x) (svref x 3))
-          #'(lambda (x) (svref x 4))
-          #'(lambda (x) (svref x 5))
-          #'(lambda (x) (svref x 6))
-          #'(lambda (x) (svref x 7))
-          #'(lambda (x) (svref x 8))
-          #'(lambda (x) (svref x 9))))
-
-
-;;; too bad there isnt a way to suppress generating these darn
-;;; functions when you dont want them.  Makes no sense to fetch
-;;; functions from a vector of 68K functions and send them over to
-;;; PPC.  So can use that space optimization iff host and target are
-;;; the same.
-
-
-(defparameter *defstruct-share-accessor-functions* t)   ;; TODO: isn't it time to get rid of this?
-
-(defun slot-accessor-fn (slot name env &aux (ref (ssd-reftype slot)) (offset (ssd-offset slot)))
-  (cond ((eq ref $defstruct-nth)
-         (if (and  (%i< offset 10) *defstruct-share-accessor-functions*)
-           `((eval-when (:compile-toplevel)
-               (record-function-info ',name ',*one-arg-defun-def-info* ,env))
-              (fset ',name
-                    ,(symbol-function
-                      (%svref '#(first second third fourth fifth
-                                 sixth seventh eighth ninth tenth) offset))))
-           `((defun ,name (x)  (nth ,offset x)))))
-        ((eq ref $defstruct-struct)
-         (if (and (%i< offset 10) *defstruct-share-accessor-functions*)
-           `((eval-when (:compile-toplevel)
-               (record-function-info ',name ',*one-arg-defun-def-info* ,env))                
-             (fset ',name , (%svref *struct-ref-vector* offset)))
-           `((defun ,name (x)  (struct-ref x ,offset)))))
-        ((or (eq ref target::subtag-simple-vector)
-             (eq ref $defstruct-simple-vector))
-         (if (and (%i< offset 10) *defstruct-share-accessor-functions*)
-           `((eval-when (:compile-toplevel)
-               (record-function-info ',name ',*one-arg-defun-def-info* ,env))
-             (fset ',name ,(%svref *svref-vector* offset)))
-           `((defun ,name (x)  (svref x ,offset)))))
-        (t `((defun ,name (x) (uvref x ,offset))))))
+(defun slot-accessor-fn (sd slot name env)
+  (let* ((ref (ssd-reftype slot))
+         (offset (ssd-offset slot))
+         (arg (defstruct-var (sd-name sd) env))
+         (value (gensym "VALUE"))
+         (type (defstruct-type-for-typecheck (ssd-type slot) env))
+         (form (cond ((eq ref $defstruct-nth)
+                      `(nth ,offset ,arg))
+                     ((eq ref $defstruct-struct)
+                      `(struct-ref (typecheck ,arg ,(sd-name sd)) ,offset))
+                     ((or (eq ref target::subtag-simple-vector)
+                          (eq ref $defstruct-simple-vector))
+                      `(svref ,arg ,offset))
+                     (t `(uvref ,arg ,offset)))))
+    `((defun ,name (,arg)
+        ,(if (eq type 't) form `(the ,type ,form)))
+      ,@(unless (ssd-r/o slot)
+          `((defun (setf ,name) (,value ,arg)
+              ,(if (eq type 't)
+                 `(setf ,form ,value)
+                 `(the ,type (setf ,form (typecheck ,value ,type))))))))))
 
 (defun defstruct-reftype (type)
   (cond ((null type) $defstruct-struct)
@@ -237,38 +230,52 @@
     (setq defs (nreverse defs))
     `((declaim (inline ,@defs)))))
 
+(defun structref-info (sym &optional env)
+  (let ((info (or (and env (environment-structref-info sym env))
+                  (gethash sym %structure-refs%))))
+    ;; This can be removed once $fasl-min-vers is greater than #x5e
+    #-BOOTSTRAPPED
+    (when (or (fixnump info)
+              (and (consp info) (fixnump (%cdr info))))
+      ;; Old style, without struct type info.
+      (setq info (cons info 'structure-object)))
+    info))
+
+(defun defstruct-type-for-typecheck (type env)
+  (if (or (eq type 't)
+          (specifier-type-if-known type env)
+          (nx-declarations-typecheck env))
+    type
+    ;; Else have an unknown type used only for an implicit declaration.
+    ;; Just ignore it, it's most likely a forward reference, and while it
+    ;; means we might be missing out on a possible optimization, most of
+    ;; the time it's not worth warning about.
+    't))
+
 ;;;Used by nx-transform, setf, and whatever...
-(defun defstruct-ref-transform (predicate-or-type-and-refinfo args &optional env)
-  (if (type-and-refinfo-p predicate-or-type-and-refinfo)
-    (multiple-value-bind (type refinfo)
-                         (if (consp predicate-or-type-and-refinfo)
-                           (values (%car predicate-or-type-and-refinfo)
-                                   (%cdr predicate-or-type-and-refinfo))
-                           (values 't predicate-or-type-and-refinfo))
-      (let* ((offset (refinfo-offset refinfo))
-             (ref (refinfo-reftype refinfo))
-             (accessor
-              (cond ((eq ref $defstruct-nth)
-                     `(nth ,offset ,@args))
-                    ((eq ref $defstruct-struct)
-                     `(struct-ref ,@args ,offset))
-                    ((eq ref target::subtag-simple-vector)
-                     `(svref ,@args ,offset))
-                    (ref
-                     `(aref (the (simple-array ,(element-subtype-type ref) (*))
-                                 ,@args) ,offset))
-                    (t `(uvref ,@args ,offset)))))
-        (if (eq type 't)
-          accessor
-          (if (specifier-type-if-known type env)
-            `(the ,type ,accessor)
-            (if (nx-declarations-typecheck env)
-              `(require-type ,accessor ',type)
-              ;; Otherwise just ignore the type, it's most likely a forward reference,
-              ;; and while it means we might be missing out on a possible optimization,
-              ;; most of the time it's not worth warning about.
-              accessor)))))
-    `(structure-typep ,@args ',predicate-or-type-and-refinfo)))
+(defun defstruct-ref-transform (structref-info args env &optional no-type-p)
+  (if (accessor-structref-info-p structref-info)
+    (let* ((type (if no-type-p
+                   't
+                   (defstruct-type-for-typecheck (structref-info-type structref-info) env)))
+           (refinfo (structref-info-refinfo structref-info))
+           (offset (refinfo-offset refinfo))
+           (ref (refinfo-reftype refinfo))
+           (accessor
+            (cond ((eq ref $defstruct-nth)
+                   `(nth ,offset ,@args))
+                  ((eq ref $defstruct-struct)
+                   `(struct-ref (typecheck ,@args ,(structref-info-struct structref-info)) ,offset))
+                  ((eq ref target::subtag-simple-vector)
+                   `(svref ,@args ,offset))
+                  (ref
+                   `(aref (the (simple-array ,(element-subtype-type ref) (*))
+                               ,@args) ,offset))
+                  (t `(uvref ,@args ,offset)))))
+      (if (eq type 't)
+        accessor
+        `(the ,type ,accessor)))
+    `(structure-typep ,@args ',structref-info)))
 
 ;;; Should probably remove the constructor, copier, and predicate as
 ;;; well. Can't remove the inline proclamations for the refnames,
@@ -291,10 +298,13 @@
   (let ((sd (gethash class-name %defstructs%)))
     (when sd
       (dolist (refname (sd-refnames sd))
-        (remhash refname %structure-refs%)
         (let ((def (assq refname *nx-globally-inline*)))
           (when def (set-function-info refname nil)))
-        (when (symbolp refname)(fmakunbound refname)))
+        (let ((info (structref-info refname)))
+          (when (accessor-structref-info-p info)
+            (unless (refinfo-r/o (structref-info-refinfo info))
+              (fmakunbound (setf-function-name refname)))
+            (fmakunbound refname))))
       #|
       ;; The print-function may indeed have become obsolete,
       ;; but we can't generally remove user-defined code

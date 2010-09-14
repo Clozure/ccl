@@ -589,17 +589,15 @@
                                          #|,getter|#
                                          ,setter)))
                                  (push (list (car d) (car v)) let-list)))))
-                          ((and (type-and-refinfo-p (setq temp (or (environment-structref-info accessor env)
-                                                                   (and #-bccl (boundp '%structure-refs%)
-                                                                        (gethash accessor %structure-refs%)))))
-                                (not (refinfo-r/o (if (consp temp) (%cdr temp) temp))))
-                           (if (consp temp)
-                             ;; strip off type, but add in a require-type
-                             (let ((type (%car temp)))
-                               `(the ,type (setf ,(defstruct-ref-transform (%cdr temp) (%cdar args) env)
-                                            (require-type ,value ',type))))
-                             `(setf ,(defstruct-ref-transform temp (%cdar args) env)
-                               ,value)))
+                          ((and (setq temp (structref-info accessor env))
+                                (accessor-structref-info-p temp)
+                                (not (refinfo-r/o (structref-info-refinfo temp))))
+                           (let ((form (defstruct-ref-transform temp (%cdar args) env t))
+                                 (type (defstruct-type-for-typecheck (structref-info-type temp) env)))
+                             (if (eq type t)
+                               `(setf ,form ,value)
+                               ;; strip off type, but add in a typecheck
+                               `(the ,type (setf ,form (typecheck ,value ,type))))))
                           (t
                            (multiple-value-bind (res win)
                                (macroexpand-1 form env)
@@ -2826,7 +2824,13 @@ defcallback returns the callback pointer, e.g., the value of name."
           ((typep ,val ',typespec))
        (setf ,place (%check-type ,val ',typespec ',place ,string))))))
 
-
+(defmacro typecheck (object typespec &environment env)
+  (cond ((eq typespec 't)
+         object)
+        ((nx-inhibit-safety-checking env)
+         `(the ,typespec ,object))
+        (t
+         `(require-type ,object ',(nx1-typespec-for-typep typespec env)))))
 
 
 (defmacro with-hash-table-iterator ((mname hash-table) &body body)
@@ -3310,8 +3314,7 @@ element-type is numeric."
   (setq place (macroexpand place env))
   (if (consp place)
     (let* ((sym (car place))
-	   (struct-transform (or (environment-structref-info sym env)
-                                 (gethash sym %structure-refs%))))
+	   (struct-transform (structref-info sym env)))
       (if struct-transform
         (setq place (defstruct-ref-transform struct-transform (cdr place) env)
               sym (car place)))
@@ -3554,8 +3557,7 @@ element-type is numeric."
           (ccl::%store-node-conditional ,offset ,base ,old-value ,new-value)))
       (signal-program-error "~s is not a special variable ." place))
     (let* ((sym (car place))
-           (struct-transform (or (ccl::environment-structref-info sym env)
-                                 (gethash sym ccl::%structure-refs%))))
+           (struct-transform (structref-info sym env)))
       (if struct-transform
         (setq place (defstruct-ref-transform struct-transform (cdr place) env)
               sym (car place)))

@@ -2281,7 +2281,10 @@ not, why not; and what its result code was if it completed."
            (ctype (specifier-type element-type))
            (arch (backend-target-arch *target-backend*)))
       (values (%inc-ptr pv (- (* 2 target::node-size) target::fulltag-misc))
-              (- (funcall (arch::target-array-data-size-function arch)
+              (- (funcall (locally
+			      ;; Don't really care about speed, but need to turn off typechecking for bootstrapping reasons
+			      (declare (optimize (speed 3) (safety 0)))
+			    (arch::target-array-data-size-function arch))
                           (ctype-subtype ctype)
                           (length v))
                  target::node-size)))))

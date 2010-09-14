@@ -477,7 +477,7 @@
 (defun regs-set-in-vinsn-sequence (start end)
   (let* ((gprs-set 0)
 	 (fprs-set 0))
-    (do* ((element (vinsn-succ start) (vinsn-succ element)))
+    (do* ((element (dll-node-succ start) (dll-node-succ element)))
 	 ((eq element end) (values gprs-set fprs-set))n
       (if (typep element 'vinsn)
 	(if (vinsn-attribute-p element :call)
@@ -487,7 +487,7 @@
       
 ;;; Return T if any vinsn between START and END (exclusive) sets REG.
 (defun vinsn-sequence-sets-reg-p (start end reg)
-  (do* ((element (vinsn-succ start) (vinsn-succ element)))
+  (do* ((element (dll-node-succ start) (dll-node-succ element)))
        ((eq element end))
     (if (vinsn-sets-reg-p element reg)
       (return t))))
@@ -496,7 +496,7 @@
 ;;; Return T if any vinsn between START and END (exclusive) has all
 ;;; attributes set in MASK set.
 (defun %vinsn-sequence-has-attribute-p (start end attr)
-  (do* ((element (vinsn-succ start) (vinsn-succ element)))
+  (do* ((element (dll-node-succ start) (dll-node-succ element)))
        ((eq element end))
     (when (typep element 'vinsn)
       (when (eql attr (logand (vinsn-template-attributes (vinsn-template element))))

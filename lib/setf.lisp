@@ -30,16 +30,8 @@
 
 (defun store-setf-method (name fn &optional doc)
   (puthash name %setf-methods% fn)
-  (let ((type-and-refinfo (and #-bccl (boundp '%structure-refs%)
-                               (gethash name %structure-refs%))))
-    (typecase type-and-refinfo
-      (fixnum
-       (puthash name %structure-refs% (%ilogior2 (%ilsl $struct-r/o 1)
-                                                 type-and-refinfo)))
-      (cons
-       (setf (%cdr type-and-refinfo) (%ilogior2 (%ilsl $struct-r/o 1)
-                                                (%cdr type-and-refinfo))))
-      (otherwise nil)))
+  (when (structref-info name)
+    (structref-set-r/o name))
   (set-documentation name 'setf doc) ;clears it if doc = nil.
   name)
 
@@ -102,22 +94,21 @@
                 (when (and (not multiple-store-vars-p) (not (= (length storevars) 1)))
                   (signal-program-error "Multiple store variables not expected in setf expansion of ~S" form))
                 (values temps values storevars storeform accessform))))
-           ((and (type-and-refinfo-p (setq temp (or (environment-structref-info accessor environment)
-                                                    (and #-bccl (boundp '%structure-refs%)
-                                                         (gethash accessor %structure-refs%)))))
-                 (not (refinfo-r/o (if (consp temp) (%cdr temp) temp))))
-            (if (consp temp)
-              (let ((type (%car temp)))
-                (multiple-value-bind
-                  (temps values storevars storeform accessform)
-                  (get-setf-method (defstruct-ref-transform (%cdr temp) (%cdr form) environment) environment)
+           ((and (setq temp (structref-info accessor environment))
+                 (accessor-structref-info-p temp)
+                 (not (refinfo-r/o (structref-info-refinfo temp))))
+            (let ((form (defstruct-ref-transform temp (%cdr form) environment t))
+                  (type (defstruct-type-for-typecheck (structref-info-type temp) environment)))
+              (if (eq type 't)
+                (get-setf-method form environment)
+                (multiple-value-bind (temps values storevars storeform accessform)
+                                     (get-setf-method form environment)
                   (values temps values storevars
                           (let ((storevar (first storevars)))
                             `(the ,type
-                                  (let ((,storevar (require-type ,storevar ',type)))
+                                  (let ((,storevar (typecheck ,storevar ,type)))
                                     ,storeform)))
-                          `(the ,type ,accessform))))
-              (get-setf-method (defstruct-ref-transform temp (%cdr form) environment) environment)))
+                          `(the ,type ,accessform))))))
 	   (t
 	    (multiple-value-bind (res win)
 				 (macroexpand-1 form environment)

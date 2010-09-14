@@ -43,6 +43,9 @@
       (error "subprim named ~s not found." name))))
 
 (defun subprim-name->offset (name &optional (backend *target-backend*))
+  ;; Don't care about speed, but for bootstrapping reasons avoid typechecking
+  ;; against symbols in the arch package.
+  (declare (optimize (speed 3) (safety 0)))
   (+ (backend-lowmem-bias backend)
      (%subprim-name->offset name  (arch::target-subprims-table
                                    (backend-target-arch backend)))))

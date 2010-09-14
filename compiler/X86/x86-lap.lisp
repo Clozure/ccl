@@ -1143,7 +1143,7 @@
     (let* ((label-diff (min (- (x86-lap-label-address regsave-label)
                                *x86-lap-entry-offset*)
                             255))
-           (first-frag (frag-list-succ frag-list)))
+           (first-frag (dll-header-succ frag-list)))
       (setf (frag-ref first-frag 4) label-diff
             (frag-ref first-frag 5) regsave-addr
             (frag-ref first-frag 6) regsave-mask))

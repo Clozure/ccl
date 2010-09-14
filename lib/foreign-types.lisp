@@ -1355,7 +1355,9 @@ Which one name refers to depends on foreign-type-spec in the obvious manner."
 (defun %foreign-array-access-form (base-form type index-form)
   (etypecase type
     ((or foreign-pointer-type foreign-array-type)
-     (let* ((to (foreign-pointer-type-to type))
+     (let* ((to (if (foreign-array-type-p type)
+                  (foreign-array-type-element-type type)
+                  (foreign-pointer-type-to type)))
             (size (foreign-type-bits to))
             (bit-offset `(the fixnum (* ,size (the fixnum ,index-form)))))
        (invoke-foreign-type-method :extract-gen to base-form bit-offset)))))

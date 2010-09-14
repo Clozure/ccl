@@ -401,8 +401,7 @@
   (let* ((*target-backend* *host-backend*))
     (require-update-modules *sysdef-modules* force)) ;in the host
   (let* ((backend (or (find-backend target) *target-backend*))
-	 (arch (backend-target-arch-name backend))
-	 (*defstruct-share-accessor-functions* nil))
+	 (arch (backend-target-arch-name backend)))
     (target-compile-modules 'nxenv target force)
     (target-compile-modules *compiler-modules* target force)
     (target-compile-modules (target-compiler-modules arch) target force)

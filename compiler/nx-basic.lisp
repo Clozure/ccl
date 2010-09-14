@@ -707,6 +707,14 @@
     (when defenv
       (cdr (assq name (defenv.structrefs defenv))))))
 
+ ;; can be removed once new images are checked in
+#-BOOTSTRAPPED
+(unless (fboundp 'structref-info)
+  (fset 'structref-info
+        (nlambda boostrapping-structref-info (sym &optional env)
+                 (or (and env (environment-structref-info sym env))
+                     (gethash sym %structure-refs%)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;;  For code coverage, pretty-print acode to string and store position info in code notes.

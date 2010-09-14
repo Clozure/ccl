@@ -248,8 +248,6 @@
 		    (check-declaration-redefinition ',struct-name 'defstruct))))
        (remove-structure-defs  ',struct-name) ; lose any previous defs
         ,.(defstruct-slot-defs sd refnames env)
-        ,.(if copier (defstruct-copier sd copier env))
-        ,.(if predicate (defstruct-predicate sd named predicate env))
         (eval-when (:compile-toplevel)
           (define-compile-time-structure 
             ',sd 
@@ -260,9 +258,11 @@
          ',sd
          ,(if (and predicate (null (sd-type sd))) `',predicate)
          ,.(if documentation (list documentation)))
+        ,.(if copier (defstruct-copier sd copier env))
+        ,.(if predicate (defstruct-predicate sd named predicate env))
         ,.(%defstruct-compile sd refnames env)
-        ,.(defstruct-boa-constructors sd boa-constructors)
-        ,.(if constructor (list (defstruct-constructor sd constructor)))
+        ,.(defstruct-boa-constructors sd boa-constructors env)
+        ,.(if constructor (list (defstruct-constructor sd constructor env)))
        ;; Wait until slot accessors are defined, to avoid
        ;; undefined function warnings in the print function/method.
        (%defstruct-set-print-function
@@ -285,14 +285,11 @@
 (defun concat-pnames (name1 name2)
   (intern (%str-cat (string name1) (string name2))))
 
-;; By special dispensation, don't complain about unknown types
-;; mentioned in defstruct :type slot options.
-(defun wrap-with-type-declaration (value slot &aux (slot-type (ssd-type slot)))
-  (if (eq t slot-type)
-    value
-    (if (specifier-type-if-known slot-type)
-      `(the ,slot-type ,value)
-      value)))
+(defun wrap-with-typecheck (value slot env)
+  (let ((slot-type (defstruct-type-for-typecheck (ssd-type slot) env)))
+    (if (eq t slot-type)
+      value
+      `(typecheck ,value ,slot-type))))
 
 (defun make-class-cells-list (class-names)
   (if (and (consp class-names)
@@ -304,11 +301,11 @@
     `',(mapcar (lambda (name) (find-class-cell name t)) (cadr class-names))
     class-names))
 
-(defun defstruct-constructor (sd constructor &aux (offset 0)
-                                                  (args ())
-                                                  (values ())
-                                                  slot-offset
-                                                  name)
+(defun defstruct-constructor (sd constructor env &aux (offset 0)
+                                                      (args ())
+                                                      (values ())
+                                                      slot-offset
+                                                      name)
   (dolist (slot (sd-slots sd))
     (setq slot-offset (ssd-offset slot))
     #-bccl (when (%i< slot-offset offset)
@@ -319,10 +316,10 @@
     (if (fixnump (setq name (ssd-name slot)))
       (if (eql 0 name)
         (push (make-class-cells-list (ssd-initform slot)) values) 
-        (push (wrap-with-type-declaration (ssd-initform slot) slot) values))
+        (push (wrap-with-typecheck (ssd-initform slot) slot env) values))
       (let* ((temp (make-symbol (symbol-name name))))
         (push (list (list (make-keyword name) temp) (ssd-initform slot)) args)
-        (push (wrap-with-type-declaration temp slot) values)))
+        (push (wrap-with-typecheck temp slot env) values)))
     (setq offset (%i+ offset 1)))
   (setq values (nreverse values))
   `(defun ,constructor (&key ,@(nreverse args))
@@ -333,11 +330,11 @@
            `(gvector :struct ,@values))
           (t `(uvector ,name ,@values)))))
 
-(defun defstruct-boa-constructors (sd boas &aux (list ()))
+(defun defstruct-boa-constructors (sd boas env &aux (list ()))
   (dolist (boa boas list)
-    (push (defstruct-boa-constructor sd boa) list)))
+    (push (defstruct-boa-constructor sd boa env) list)))
 
-(defun defstruct-boa-constructor (sd boa &aux (args ())
+(defun defstruct-boa-constructor (sd boa env &aux (args ())
                                      (used-slots ())
                                      (values ())
                                      (offset 0)
@@ -378,21 +375,22 @@
                   (ssd-name slot)))))
           values)
     (setq offset (%i+ offset 1)))
-  (setq values (mapcar #'wrap-with-type-declaration (nreverse values) (sd-slots sd)))
+  (setq values (mapcar (lambda (v s) (wrap-with-typecheck v s env)) (nreverse values) (sd-slots sd)))
   `(defun ,(car boa) ,(nreverse args)
-    ,(case (setq slot (defstruct-reftype (sd-type sd)))
-           (#.$defstruct-nth `(list ,@values))
-           (#.target::subtag-simple-vector `(vector ,@values))
-           ((#.target::subtag-struct #.$defstruct-struct)
-            `(gvector :struct ,@values))
-           (t `(uvector ,slot ,@values)))))
+     ,(case (setq slot (defstruct-reftype (sd-type sd)))
+        (#.$defstruct-nth `(list ,@values))
+        (#.target::subtag-simple-vector `(vector ,@values))
+        ((#.target::subtag-struct #.$defstruct-struct)
+         `(gvector :struct ,@values))
+        (t `(uvector ,slot ,@values)))))
 
 (defun defstruct-copier (sd copier env)
-  `((eval-when (:compile-toplevel)
-      (record-function-info ',copier ',*one-arg-defun-def-info* ,env))
-    (fset ',copier
-          ,(if (eq (sd-type sd) 'list) '#'copy-list '#'copy-uvector))
-    (record-source-file ',copier 'function)))
+  (let* ((sd-name (sd-name sd))
+         (sd-type (sd-type sd))
+         (var (defstruct-var sd-name env))
+         (arg (if sd-type var `(typecheck ,var ,sd-name)))
+         (fn (if (eq sd-type 'list) 'copy-list 'copy-uvector)))
+    `((defun ,copier (,var) (,fn ,arg)))))
 
 (defun defstruct-predicate (sd named predicate env)
   (declare (ignore env))
