@@ -365,17 +365,22 @@
 ;;; String might be stack allocated; make a copy before complaining
 ;;; about it.
 (defun check-objc-message-name (string)
-  (dotimes (i (length string))
-    (let* ((ch (char string i)))
-      (unless (or (alpha-char-p ch)
-                  (digit-char-p ch 10)
-                  (eql ch #\:)
-                  (eql ch #\_))
-        (error "Illegal character ~s in ObjC message name ~s"
-               ch (copy-seq string)))))
-  (when (and (position #\: string)
-             (not (eql (char string (1- (length string))) #\:)))
-    (error "ObjC message name ~s contains colons, but last character is not a colon" (copy-seq string))))
+  (let* ((initial-p t)
+         (colon nil)
+         (lastch nil))
+    (dotimes (i (length string))
+      (let* ((ch (char string i)))
+        (if (eql ch #\:)
+          (setq initial-p t colon t)
+          (progn
+            (if (and initial-p (digit-char-p ch 10))
+              (error "Digit ~d not allowed at position ~d of ObjC message name ~s."
+                     ch i (copy-seq string)))
+            (setq initial-p nil)))
+        (setq lastch ch)))
+    (when (and colon
+               (not (eql lastch #\:)))
+      (error "ObjC message name ~s contains colons, but last character is not a colon" (copy-seq string)))))
       
 
 (setf (pkg.intern-hook (find-package "NSFUN"))
@@ -384,16 +389,17 @@
 (set-dispatch-macro-character #\# #\/ 
                               (lambda (stream subchar numarg)
                                 (declare (ignorable subchar numarg))
-                                (let* ((token (make-array 16 :element-type 'character :fill-pointer 0 :adjustable t))
-                                       (attrtab (rdtab.ttab *readtable*)))
-                                  (when (peek-char t stream nil nil)
-                                    (loop
-                                      (multiple-value-bind (char attr)
-                                          (%next-char-and-attr stream attrtab)
-                                        (unless (eql attr $cht_cnst)
-                                          (when char (unread-char char stream))
-                                          (return))
-                                        (vector-push-extend char token))))
+                                (let* ((token (make-array 16 :element-type 'character :fill-pointer 0 :adjustable t)))
+                                  (loop
+                                    (let* ((char (read-char stream nil nil)))
+                                      (if (or (eql char #\:)
+                                              (eql char #\_)
+                                              (digit-char-p char 36))
+                                        (vector-push-extend char token)
+                                        (progn
+                                          (when char
+                                            (unread-char char stream))
+                                          (return)))))
                                   (unless *read-suppress*
                                     (unless (> (length token) 0)
                                       (signal-reader-error stream "Invalid token after #/."))
@@ -1122,7 +1128,8 @@
       (if (and (getf (objc-message-info-flags info) :ambiguous)
                (not was-ambiguous))
         (warn "previously declared methods on ~s all had the same type signature, but ~s introduces ambiguity" message-name method-info))
-           
+      (when (string= message-name "init" :end1 (min 4 (length message-name)))
+        (process-init-message info))
       (objc-method-info-signature method-info))))
 
 
@@ -1430,6 +1437,7 @@
                     (symbol (find-class cname))
                     (class cname))))
       (send-objc-init-message (#/alloc class) ks vs))))
+
 
 
 

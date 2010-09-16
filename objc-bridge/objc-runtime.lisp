@@ -2492,6 +2492,12 @@ argument lisp string."
 
 
 
+
+
+                           
+    
+                   
+
 ;;; Call get-objc-message-info for all known init messages.  (A
 ;;; message is an "init message" if it starts with the string "init",
 ;;; and has at least one declared method that returns :ID and is not a
@@ -2501,7 +2507,7 @@ argument lisp string."
     (dolist (init (cdb-enumerate-keys (db-objc-methods d)
                                       #'(lambda (string)
                                           (string= string "init" :end1 (min (length string) 4)))))
-      (get-objc-message-info init))))
+      (process-init-message (get-objc-message-info init)))))
 
     
 (defvar *objc-init-messages-for-init-keywords* (make-hash-table :test #'equal)

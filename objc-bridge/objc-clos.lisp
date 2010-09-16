@@ -745,25 +745,20 @@
 	  (if (> loc max)
 	    (setq max loc)))))))
 
+
+(defun ensure-lisp-slots (instance class)
+  (unless (%null-ptr-p instance)
+    (or (gethash instance *objc-object-slot-vectors*)
+        (let* ((slot-vector (create-foreign-instance-slot-vector class)))
+          (when slot-vector
+            (setf (slot-vector.instance slot-vector) instance)
+            (setf (gethash instance *objc-object-slot-vectors*) slot-vector)))))
+  instance)
 	       
-					 
 (defmethod allocate-instance ((class objc:objc-class) &rest initargs &key &allow-other-keys)
   (unless (class-finalized-p class)
     (finalize-inheritance class))
-  (let* ((instance
-	  (multiple-value-bind (ks vs) (keys-and-vals (remove-slot-initargs
-						       class
-						       initargs))
-	    (send-objc-init-message (allocate-objc-object class) ks vs))))
-    (unless (%null-ptr-p instance)
-      (or (gethash instance *objc-object-slot-vectors*)
-          (let* ((slot-vector (create-foreign-instance-slot-vector class)))
-            (when slot-vector
-              (setf (slot-vector.instance slot-vector) instance)
-              (setf (gethash instance *objc-object-slot-vectors*) slot-vector)))))
-    instance))
-
-
+  (send-init-message-for-class class initargs))
 
 
 (defmethod initialize-instance ((instance objc:objc-object) &rest initargs)

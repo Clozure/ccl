@@ -105,8 +105,89 @@
 
 (register-objc-class-decls)
 (maybe-map-objc-classes t)
+
+
+(defvar *class-init-keywords* (make-hash-table))
+
+(defun process-init-message (message-info)
+  (let* ((keys (objc-to-lisp-init (objc-message-info-message-name message-info))))
+    (when keys
+      (let* ((keyinfo (cons keys (objc-message-info-lisp-name message-info))))
+        (dolist (method (objc-message-info-methods message-info))
+          (when (and (eq :id (objc-method-info-result-type method))
+                     (let* ((flags (objc-method-info-flags method)))
+                       (not (or (memq :class flags)
+                                (memq :protocol flags)))))
+            (let* ((class (canonicalize-registered-class
+                           (find-objc-class (objc-method-info-class-name method)))))
+              (pushnew keyinfo (gethash class *class-init-keywords*)
+                       :test #'equal))))))))
+
 (register-objc-init-messages)
 (register-objc-set-messages)
+
+
+
+
+
+(defun all-init-keywords-for-class (c)
+  (let* ((keyinfo ()))
+    (dolist (class (class-precedence-list c))
+      (when (eq class ns:ns-object)
+        (return keyinfo))
+      (dolist (class-keys (gethash class *class-init-keywords*))
+        (pushnew class-keys keyinfo :test #'equal)))))
+
+(defun send-init-message-for-class (class initargs)
+  (let* ((all-keywords-for-class (all-init-keywords-for-class class)))
+    (multiple-value-bind (initfunction args)
+        (if all-keywords-for-class
+          (let* ((candidate-functions ())
+                 (candidate-arglists ())
+                 (missing-keyword (cons nil nil)))
+            (declare (dynamic-extent missing-keyword))
+            (dolist (keys-and-function all-keywords-for-class)
+              (collect ((arglist))
+                (destructuring-bind (keys . function) keys-and-function
+                  (dolist (key keys (progn (push function candidate-functions)
+                                           (push (arglist) candidate-arglists)))
+                    (let* ((val (getf initargs key missing-keyword)))
+                      (if (eq missing-keyword val)
+                        (return)
+                        (arglist val)))))))
+            (if candidate-functions
+              (if (null (cdr candidate-functions))
+                (values (car candidate-functions) (car candidate-arglists))
+                ;; Pick the longest match, if that's unique.  If there's
+                ;; no unique longest match, complain.
+                (let* ((maxlen 0)
+                       (maxfun ())
+                       (maxargs ())
+                       (duplicate-match nil))
+                  (declare (fixnum maxlen))
+                  (do* ((functions candidate-functions (cdr functions))
+                        (arglists candidate-arglists (cdr arglists)))
+                       ((null functions)
+                        (if duplicate-match
+                          (values nil nil)
+                          (values maxfun maxargs)))
+                    (let* ((arglist (car arglists))
+                           (n (length arglist)))
+                      (declare (fixnum n))
+                      (if (> n maxlen)
+                        (setq n maxlen
+                              duplicate-match nil
+                              maxargs arglist
+                              maxfun (car functions))
+                        (if (= n maxlen)
+                          (setq duplicate-match t)))))))
+              (values '#/init nil)))
+          (values '#/init nil))
+      (if initfunction
+        (let* ((instance (apply initfunction (#/alloc class) args)))
+          (ensure-lisp-slots instance class)
+          instance)
+        (error "Can't determine ObjC init function for class ~s and initargs ~s." class initargs)))))
 
 #+gnu-objc
 (defun iterate-over-class-methods (class method-function)
@@ -135,8 +216,6 @@
   (def-ccl-pointers revive-objc-classes ()
     (reset-objc-class-count)))
 
-(defun retain-obcj-object (x)
-  (objc-message-send x "retain"))
 
 
 #+apple-objc-2.0
@@ -203,16 +282,19 @@
 
 (pushnew 'recognize-objc-exception *foreign-error-condition-recognizers*)
 
-(defun %make-nsstring (string)
+(defun objc:make-nsstring (string)
   (with-encoded-cstrs :utf-8 ((s string))
     (#/initWithUTF8String: (#/alloc ns:ns-string) s)))
+
+(defun %make-nsstring (string)
+  (objc:make-nsstring string))
 
 (defmacro with-autoreleased-nsstring ((nsstring lisp-string) &body body)
   `(let* ((,nsstring (%make-nsstring ,lisp-string)))
      (#/autorelease ,nsstring)
      ,@body))
 
-(defmacro with-autoreleased-nsstrings (speclist &body body)
+(defmacro objc:with-autoreleased-nsstrings (speclist &body body)
   (with-specs-aux 'with-autoreleased-nsstring speclist body))
 
 (defun retain-objc-instance (instance)
@@ -229,40 +311,14 @@
   (objc-message-send p "release" :void))
 
 
-#-ascii-only
-(progn
-#-windows-target
 (defun lisp-string-from-nsstring (nsstring)
-  ;; The NSData object created here is autoreleased.
-  (let* ((data (#/dataUsingEncoding:allowLossyConversion:
-                nsstring
-                #+little-endian-target #x9c000100
-                #+big-endian-target #x98000100
-                nil)))
-    (unless (%null-ptr-p data)
-      (let* ((nbytes (#/length data))
-             (string (make-string (ash nbytes -2))))
-        ;; BLT the 4-byte code-points from the NSData object
-        ;; to the string, return the string.
-        (%copy-ptr-to-ivector (#/bytes data) 0 string 0 nbytes)))))
+  ;; The value returned by #/UTF8String is autoreleased.
+  (%get-utf-8-cstring (#/UTF8String nsstring)))
 
-#+windows-target
-(defun lisp-string-from-nsstring (nsstring)
-  (let* ((n (#/length nsstring)))
-    (%stack-block ((buf (* (1+ n) (record-length :unichar))))
-      (#/getCharacters: nsstring buf)
-      (setf (%get-unsigned-word buf (+ n n)) 0)
-      (%get-native-utf-16-cstring buf))))
-        
-)
 
-#+ascii-only
-(defun lisp-string-from-nsstring (nsstring)
-  (with-macptrs (cstring)
-    (%setf-macptr cstring
-                  (#/cStringUsingEncoding: nsstring #$NSASCIIStringEncoding))
-    (unless (%null-ptr-p cstring)
-      (%get-cstring cstring))))
+     
+
+
 
 
 (objc:defmethod #/reason ((self ns-lisp-exception))
@@ -453,12 +509,11 @@ NSObjects describe themselves in more detail than others."
 
 
 
-;;; This can fail if the nsstring contains non-8-bit characters.
 (defun lisp-string-from-nsstring-substring (nsstring start length)
-  (%stack-block ((cstring (1+ length)))
-    (#/getCString:maxLength:range:remainingRange:
-       nsstring  cstring  length (ns:make-ns-range start length) +null-ptr+)
-    (%get-cstring cstring)))
+  (let* ((substring (#/substringWithRange: nsstring (ns:make-ns-range start length))))
+    (prog1
+        (lisp-string-from-nsstring substring)
+      (#/release substring))))
 
 (def-standard-initial-binding *listener-autorelease-pool* nil)
 

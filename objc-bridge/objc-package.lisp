@@ -44,7 +44,9 @@
            "OBJC-MESSAGE-SEND" "OBJC-MESSAGE-SEND-STRET"
            "OBJC-MESSAGE-SEND-SUPER" "OBJC-MESSAGE-SEND-SUPER-STRET"
            "LOAD-FRAMEWORK" "*OBJC-DESCRIPTION-MAX-LENGTH*"
-           "REMOVE-LISP-SLOTS"
+           "REMOVE-LISP-SLOTS" "WITH-AUTORELEASE-POOL"
+           "MAKE-NSSTRING" "LISP-STRING-FROM-NSSTRING"
+           "WITH-AUTORELEASED-NSSTRINGS"
            ))
 
 
@@ -55,7 +57,8 @@
             objc:define-objc-method objc:define-objc-class-method
             objc:objc-message-send objc:objc-message-send-stret
             objc:objc-message-send-super objc:objc-message-send-super-stret
-            objc:*objc-description-max-length*)
+            objc:*objc-description-max-length* objc:with-autorelease-pool
+            objc:lisp-string-from-nsstring objc:with-autoreleased-nsstrings)
           "CCL"))
 
 (provide "OBJC-PACKAGE")
