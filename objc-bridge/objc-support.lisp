@@ -511,9 +511,7 @@ NSObjects describe themselves in more detail than others."
 
 (defun lisp-string-from-nsstring-substring (nsstring start length)
   (let* ((substring (#/substringWithRange: nsstring (ns:make-ns-range start length))))
-    (prog1
-        (lisp-string-from-nsstring substring)
-      (#/release substring))))
+    (lisp-string-from-nsstring substring)))
 
 (def-standard-initial-binding *listener-autorelease-pool* nil)
 
