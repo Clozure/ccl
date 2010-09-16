@@ -340,7 +340,140 @@
                           (%make-nsstring title))
                         #@"") ))
 
-(defun new-cocoa-window (&key
+(defmethod allocate-instance ((class ns:+ns-window)
+                              &rest initargs
+                              &key
+                              (with-content-rect nil content-rect-p)
+                              (style-mask 0 style-mask-p)
+                              (x 200)
+                              (y 200)
+                              (width 500)
+                              (height 200)
+                              (closable t)
+                              (iconifyable t)
+                              (expandable t)
+                              (metal nil)
+                              (backing :buffered)
+                              (defer t defer-p)
+                              &allow-other-keys)
+  (declare (ignore defer with-content-rect))
+  (unless content-rect-p
+    (setq initargs (cons :with-content-rect
+                         (cons (ns:make-ns-rect x y width height)
+                               initargs))))
+  (unless (and style-mask-p (typep style-mask 'fixnum))
+    (setq initargs (cons :style-mask
+                         (cons (logior #$NSTitledWindowMask
+                                       (if closable #$NSClosableWindowMask 0)
+                                       (if iconifyable #$NSMiniaturizableWindowMask 0)
+                                       (if expandable #$NSResizableWindowMask 0)
+                                       (if metal #$NSTexturedBackgroundWindowMask 0))
+                               initargs))))
+  (unless (typep (getf initargs :backing) 'fixnum)
+    (setq initargs
+          (cons :backing
+                (cons (ecase backing
+                        ((t :retained) #$NSBackingStoreRetained)
+                        ((nil :nonretained) #$NSBackingStoreNonretained)
+                        (:buffered #$NSBackingStoreBuffered))
+                      initargs))))
+  (unless defer-p
+    (setq initargs (cons :defer (cons t initargs))))
+  (apply #'call-next-method class initargs))
+
+(defmethod initialize-instance :after ((w ns:ns-window)
+                                       &key
+                                       (title nil)
+                                       (x 200.0)
+                                       (y 200.0)
+                                       (height 200.0)
+                                       (width 500.0)
+                                       (closable t)
+                                       (iconifyable t)
+                                       (metal nil)
+                                       (expandable t)
+                                       (backing :buffered)
+                                       (defer t)
+                                       (accepts-mouse-moved-events nil)
+                                       (auto-display t)
+                                       (activate nil)
+                                       &allow-other-keys)
+  ;; Several of the keyword args we claim to accept are actually processed
+  ;; by the ALLOCATE-INSTANCE method above and are ignored here.
+  (declare (ignore x y width height closable iconifyable expandable metal
+                   backing defer))
+  (setf (get-cocoa-window-flag w :accepts-mouse-moved-events)
+        accepts-mouse-moved-events
+        (get-cocoa-window-flag w :auto-display)
+        auto-display)
+  ;;; Should maybe have a way of controlling this.
+  (#/setBackgroundColor: w (#/whiteColor ns:ns-color))
+  (when title
+    (set-window-title w title))
+  (when activate
+    (activate-window w)))
+
+
+(defmethod allocate-instance ((class ns:+ns-view)
+                              &rest initargs
+                              &key
+                              (with-frame nil with-frame-p)
+                              (x 0)
+                              (y 0)
+                              (width 0)
+                              (height 0)
+                              &allow-other-keys)
+  (unless with-frame-p
+    (setq initargs (cons :with-frame
+                         (cons (ns:make-ns-rect x y width height) initargs))))
+  (apply #'call-next-method class initargs))
+
+
+(defmethod initialize-instance :after ((view ns:ns-view)
+                                       &key
+                                       (horizontally-resizable nil hrp)
+                                       (vertically-resizable nil vrp)
+                                       (max-x-margin nil maxxp)
+                                       (min-x-margin nil minxp)
+                                       (max-y-margin nil maxyp)
+                                       (min-y-margin nil minyp)
+                                       (resizes-subviews t rsp)
+                                       &allow-other-keys)
+  (let* ((mask (#/autoresizingMask view))
+         (newmask mask))
+    (when hrp
+      (setq newmask (if horizontally-resizable
+                      (logior newmask #$NSViewWidthSizable)
+                      (logandc2 newmask #$NSViewWidthSizable))))
+    (when vrp
+      (setq newmask (if vertically-resizable
+                      (logior newmask #$NSViewHeightSizable)
+                      (logandc2 newmask #$NSViewHeightSizable))))
+    (when minxp
+      (setq newmask (if min-x-margin
+                      (logior newmask #$NSViewMinXMargin)
+                      (logandc2 newmask #$NSViewMinXMargin))))
+    (when maxxp
+      (setq newmask (if max-x-margin
+                      (logior newmask #$NSViewMaxXMargin)
+                      (logandc2 newmask #$NSViewMaxXMargin))))
+    (when minyp
+      (setq newmask (if min-y-margin
+                      (logior newmask #$NSViewMinYMargin)
+                      (logandc2 newmask #$NSViewMinYMargin))))
+    (when maxyp
+      (setq newmask (if max-y-margin
+                      (logior newmask #$NSViewMaxYMargin)
+                      (logandc2 newmask #$NSViewMaxYMargin))))
+    (unless (eql mask newmask)
+      (#/setAutoresizingMask: view newmask)))
+  (when rsp
+    (#/setAutoresizesSubviews: view resizes-subviews)))
+                              
+
+(defun new-cocoa-window (&rest
+                         initargs
+                         &key
                          (class (find-class 'ns:ns-window))
                          (title nil)
                          (x 200.0)
@@ -356,33 +489,12 @@
                          (accepts-mouse-moved-events nil)
                          (auto-display t)
                          (activate t))
-  (ns:with-ns-rect (frame x y width height)
-    (let* ((stylemask
-            (logior #$NSTitledWindowMask
-                    (if closable #$NSClosableWindowMask 0)
-                    (if iconifyable #$NSMiniaturizableWindowMask 0)
-                    (if expandable #$NSResizableWindowMask 0)
-		    (if metal #$NSTexturedBackgroundWindowMask 0)))
-           (backing-type
-            (ecase backing
-              ((t :retained) #$NSBackingStoreRetained)
-              ((nil :nonretained) #$NSBackingStoreNonretained)
-              (:buffered #$NSBackingStoreBuffered)))
-           (w (make-instance
-	       class
-	       :with-content-rect frame
-	       :style-mask stylemask
-	       :backing backing-type
-	       :defer defer)))
-      (setf (get-cocoa-window-flag w :accepts-mouse-moved-events)
-            accepts-mouse-moved-events
-            (get-cocoa-window-flag w :auto-display)
-            auto-display)
-      (#/setBackgroundColor: w (#/whiteColor ns:ns-color))
-      (when activate (activate-window w))
-      (when title (set-window-title w title))
+  (declare (ignore title x y width height closable iconifyable metal
+                   expandable backing defer accepts-mouse-moved-events
+                   auto-display activate))
+  (apply #'make-instance class initargs))
+
+(defmethod view-window ((view ns:ns-view))
+  (let* ((w (#/window view)))
+    (unless (%null-ptr-p w)
       w)))
-
-
-
-
