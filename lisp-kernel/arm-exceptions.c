@@ -27,8 +27,10 @@
 #ifdef LINUX
 #include <strings.h>
 #include <sys/mman.h>
+#ifndef ANDROID
 #include <fpu_control.h>
 #include <linux/prctl.h>
+#endif
 #endif
 
 #ifdef DARWIN
@@ -47,32 +49,16 @@ extern void pseudo_sigreturn(ExceptionInformation *);
 
 
 #ifdef LINUX
-/* Some relatively recent kernels support this interface.
-   If this prctl isn't supported, assume that we're always
-   running with excptions enabled and "precise". 
-*/
-#ifndef PR_SET_FPEXC
-#define PR_SET_FPEXC 12
-#endif
-#ifndef PR_FP_EXC_DISABLED
-#define PR_FP_EXC_DISABLED 0
-#endif
-#ifndef PR_FP_EXC_PRECISE
-#define PR_FP_EXC_PRECISE 3
-#endif
 
 void
 enable_fp_exceptions()
 {
-  prctl(PR_SET_FPEXC, PR_FP_EXC_PRECISE);
 }
 
 void
 disable_fp_exceptions()
 {
-  prctl(PR_SET_FPEXC, PR_FP_EXC_DISABLED);
 }
-
 #endif
 
 /*
@@ -1186,7 +1172,7 @@ callback_to_lisp (LispObj callback_macptr, ExceptionInformation *xp,
 {
   natural  callback_ptr;
   area *a;
-  natural fnreg = fn,  codevector, offset;
+  natural fnreg = Rfn,  codevector, offset;
   pc where = xpPC(xp);
   int delta;
 
