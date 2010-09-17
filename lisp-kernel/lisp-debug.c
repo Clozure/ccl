@@ -134,12 +134,14 @@ foreign_name_and_offset(natural addr, int *delta)
     *delta = 0;
   }
 #ifndef WINDOWS
+#ifndef ANDROID
   if (dladdr((void *)addr, &info)) {
     ret = (char *)info.dli_sname;
     if (delta) {
       *delta = ((natural)addr - (natural)info.dli_saddr);
     }
   }
+#endif
 #endif
   return ret;
 }
@@ -710,7 +712,7 @@ debug_lisp_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
       fprintf(dbgout, "(INVALID)\n");
     } else {
       fprintf(dbgout, "\nnargs = %d\n", xpGPR(xp, nargs) >> fixnumshift);
-      show_lisp_register(xp, "fn", fn);
+      show_lisp_register(xp, "fn", Rfn);
       show_lisp_register(xp, "arg_z", arg_z);
       show_lisp_register(xp, "arg_y", arg_y);
       show_lisp_register(xp, "arg_x", arg_x);
