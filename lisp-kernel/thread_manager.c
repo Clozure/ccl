@@ -1807,25 +1807,12 @@ active_tcr_p(TCR *q)
   return false;
 }
 
-#ifdef WINDOWS
+
 OSErr
 xDisposeThread(TCR *tcr)
 {
   return 0;                     /* I don't think that this is ever called. */
 }
-#else
-OSErr
-xDisposeThread(TCR *tcr)
-{
-  if (tcr != (TCR *)ptr_from_lispobj(lisp_global(INITIAL_TCR))) {
-    if (active_tcr_p(tcr) && (tcr != get_tcr(false))) {
-      pthread_cancel((pthread_t)(tcr->osid));
-      return 0;
-    }
-  }
-  return -50;
-}
-#endif
 
 OSErr
 xYieldToThread(TCR *target)
