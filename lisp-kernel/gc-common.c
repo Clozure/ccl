@@ -1113,7 +1113,7 @@ void
 forward_memoized_area(area *a, natural num_memo_dnodes)
 {
   bitvector refbits = a->refbits;
-  LispObj *p = (LispObj *) a->low, x1, x2, new;
+  LispObj *p = (LispObj *) a->low, *p0 = p, x1, x2, new;
   natural bits, bitidx, *bitsp, nextbit, diff, memo_dnode = 0, hash_dnode_limit = 0;
   int tag_x1;
   hash_table_vector_header *hashp = NULL;
@@ -1164,6 +1164,16 @@ forward_memoized_area(area *a, natural num_memo_dnodes)
           new = node_forwarding_address(x1);
           if (new != x1) {
             *p = new;
+#ifdef ARM
+            if (p != p0) {
+              if(header_subtag(p[-2]) == subtag_function) {
+                /* Just updated the code vector; fix the entrypoint */
+                if (p[-1] == (untag(x1)+fulltag_odd_fixnum)) {
+                  p[-1] = (untag(new)+fulltag_odd_fixnum);
+                }
+              }
+            }
+#endif
           }
         }
         p++;
