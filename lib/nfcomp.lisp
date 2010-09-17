@@ -1712,7 +1712,12 @@ Will differ from *compiling-file* during an INCLUDE")
       (fasl-out-opcode $fasl-function f)
       (fasl-out-count n)
       (dotimes (i n)
-        (fasl-dump-form (%svref f i))))))
+        (if (= i 0)
+          (target-arch-case
+           (:arm (fasl-dump-form
+                  (ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- target::fixnumshift)))) ; host's fixnumshift
+           (t (fasl-dump-form (%svref f i))))
+          (fasl-dump-form (%svref f i)))))))
 
 #+x86-target
 (defun fasl-dump-function (f)
