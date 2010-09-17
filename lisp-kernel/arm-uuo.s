@@ -50,7 +50,7 @@ uuo_format_binary_error = 15    /* binary format, call out to lisp */
 
 /* Encode a UUO with cond = $1, format = $2, info = $3 */
 define(`UUO',`
-        .word (uuo_base_opcode|($1<<28)|$2|($3<<8))
+        .word (uuo_base_opcode|(($1)<<28)|($2)|(($3)<<8))
 ')
 /* Nullary UUO with cond = $1, info = $2 */        
 define(`nullaryUUO',`UUO($1,uuo_format_nullary,$2)')
