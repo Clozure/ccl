@@ -118,6 +118,14 @@ check_range(LispObj *start, LispObj *end, Boolean header_allowed)
       if (! header_allowed) {
         Bug(NULL, "Header not expected at 0x%lx\n", prev);
       }
+      if (header_subtag(node) == subtag_function) {
+        if (fulltag_of(current[0]) == fulltag_odd_fixnum) {
+          if (untag(current[0]) != untag(current[1])) {
+            Bug(NULL, "In function at 0x%lx, entrypoint (0x%lx) and codevector (0x%lx) don't match\n", (LispObj)prev,current[0],current[1]);
+          }
+        }
+      }
+                
       elements = header_element_count(node) | 1;
       while (elements--) {
         check_node(*current++);
@@ -1008,7 +1016,7 @@ mark_xp(ExceptionInformation *xp)
      stacks, nilreg-relative globals, etc.
      */
 
-  for (r = arg_z; r <= fn; r++) {
+  for (r = arg_z; r <= Rfn; r++) {
     mark_root((regs[r]));
   }
 
@@ -1290,7 +1298,7 @@ forward_xp(ExceptionInformation *xp)
      the PC and LR should be treated as "locatives".
      */
 
-  for (r = arg_z; r <= fn;  r++) {
+  for (r = arg_z; r <= Rfn;  r++) {
     update_noderef((LispObj*) (&(regs[r])));
   }
 
@@ -1739,7 +1747,7 @@ purify_xp(ExceptionInformation *xp, BytePtr low, BytePtr high, area *to)
      The PC and LR should be treated as "locatives".
    */
 
-  for (r = arg_z; r <= fn; r++) {
+  for (r = arg_z; r <= Rfn; r++) {
     copy_ivector_reference((LispObj*) (&(regs[r])), low, high, to);
   };
 
@@ -1951,7 +1959,7 @@ impurify_xp(ExceptionInformation *xp, LispObj low, LispObj high, int delta)
      The PC and LR should be treated as "locatives".
    */
 
-  for (r = arg_z; r <= fn; r++) {
+  for (r = arg_z; r <= Rfn; r++) {
     impurify_noderef((LispObj*) (&(regs[r])), low, high, delta);
   };
 
