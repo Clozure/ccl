@@ -30,8 +30,6 @@
 #include <unistd.h>
 #ifdef LINUX
 #include <strings.h>
-#include <fpu_control.h>
-#include <linux/prctl.h>
 #endif
 
 #ifndef WINDOWS
