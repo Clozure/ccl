@@ -151,6 +151,7 @@ print_lisp_frame(lisp_frame *frame)
   if ((fun == 0) || (fun == fulltag_misc)) {
     spname = "unknown ?";
 #ifndef STATIC
+#ifndef ANDROID
     if (dladdr((void *)ptr_from_lispobj(rpc), &info)) {
       spname = (char *)(info.dli_sname);
 #ifdef DARWIN
@@ -159,6 +160,7 @@ print_lisp_frame(lisp_frame *frame)
       }
 #endif
     }
+#endif
 #endif
     Dprintf("(#x%08X) #x%08X : (subprimitive %s)", frame, rpc, spname);
   } else {
