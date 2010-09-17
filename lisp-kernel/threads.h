@@ -78,7 +78,9 @@ struct timespec {
 #endif
 
 #ifndef WINDOWS
+#ifndef ANDROID
 #include <sched.h>
+#endif
 #endif
 
 #include "lisp.h"
