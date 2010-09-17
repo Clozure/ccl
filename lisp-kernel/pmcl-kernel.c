@@ -36,7 +36,9 @@
 #endif
 
 #ifdef LINUX
+#ifndef ANDROID
 #include <mcheck.h>
+#endif
 #include <dirent.h>
 #include <dlfcn.h>
 #include <sys/time.h>
