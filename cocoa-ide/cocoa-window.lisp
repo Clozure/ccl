@@ -471,9 +471,7 @@
     (#/setAutoresizesSubviews: view resizes-subviews)))
                               
 
-(defun new-cocoa-window (&rest
-                         initargs
-                         &key
+(defun new-cocoa-window (&key
                          (class (find-class 'ns:ns-window))
                          (title nil)
                          (x 200.0)
@@ -489,10 +487,21 @@
                          (accepts-mouse-moved-events nil)
                          (auto-display t)
                          (activate t))
-  (declare (ignore title x y width height closable iconifyable metal
-                   expandable backing defer accepts-mouse-moved-events
-                   auto-display activate))
-  (apply #'make-instance class initargs))
+  (make-instance class
+                 :title title
+                 :x x
+                 :y y
+                 :height height
+                 :width width
+                 :closable closable
+                 :iconifyable iconifyable
+                 :metal metal
+                 :expandable expandable
+                 :backing backing
+                 :defer defer
+                 :accepts-mouse-moved-events accepts-mouse-moved-events
+                 :auto-display auto-display
+                 :activate activate))
 
 (defmethod view-window ((view ns:ns-view))
   (let* ((w (#/window view)))

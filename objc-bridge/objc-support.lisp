@@ -175,7 +175,7 @@
                            (n (length arglist)))
                       (declare (fixnum n))
                       (if (> n maxlen)
-                        (setq n maxlen
+                        (setq maxlen n
                               duplicate-match nil
                               maxargs arglist
                               maxfun (car functions))
