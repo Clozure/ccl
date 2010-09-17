@@ -346,6 +346,7 @@ lisp-kernel/os-freebsd.h -text
 lisp-kernel/os-linux.h -text
 lisp-kernel/os-solaris.h -text
 lisp-kernel/os-windows.h -text
+lisp-kernel/platform-androidarm.h -text
 lisp-kernel/platform-darwinarm.h -text
 lisp-kernel/platform-darwinppc.h -text
 lisp-kernel/platform-darwinppc64.h -text
