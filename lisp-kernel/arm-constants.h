@@ -28,7 +28,7 @@
 #define temp1    8
 #define temp2    9
 #define vsp      10
-#define fn       11
+#define Rfn      11
 #define allocptr 12
 #define Rsp      13
 #define Rlr      14
