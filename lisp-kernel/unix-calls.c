@@ -143,3 +143,15 @@ lisp_sigexit(int signum)
   signal(signum, SIG_DFL);
   return kill(getpid(), signum);
 }
+
+#ifdef ANDROID
+/* I for one welcome our new Android overlords. */
+#ifndef __NR_sigaltstack
+#define __NR_sigaltstack		(__NR_SYSCALL_BASE+186)
+#endif
+int
+sigaltstack(stack_t *in, stack_t *out)
+{
+  return syscall(__NR_sigaltstack,in,out);
+}
+#endif
