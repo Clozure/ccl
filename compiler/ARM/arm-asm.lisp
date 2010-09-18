@@ -406,10 +406,10 @@
       (#x00e00010 . #x0ff00090))
      ())
    (define-arm-instruction rscs (:rd :rn :shifter)
-     #x00e00000
-     ((#x02e00000 . #x0ff00000)
-      (#x00e00000 . #x0ff00010)
-      (#x00e00010 . #x0ff00090))
+     #x00f00000
+     ((#x02f00000 . #x0ff00000)
+      (#x00f00000 . #x0ff00010)
+      (#x00f00010 . #x0ff00090))
      ())
    (define-arm-instruction tst (:rn :shifter)
      #x01100000
