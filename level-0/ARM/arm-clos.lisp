@@ -101,7 +101,8 @@
   (ldr nfn (:@ nfn '%slot-id-ref-missing))
   (set-nargs 2)
   (ldr pc (:@ nfn (:$ arm::function.entrypoint))))
-  
+
+
 (defarmlapfunction %small-set-slot-id-value ((instance arg_x)
                                              (slot-id arg_y)
                                              (new-value arg_z))
