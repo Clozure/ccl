@@ -908,12 +908,12 @@ arg_y) (borrow-in arg_z))
     (mul gy1-lo guess y1)
     (ldr m (:@ sp (:$ x1-idx)))      ; get x1
     (subs m m gy1-lo)      ; x1 - gy1-lo => m
-    (umull gy1-hi y2 guess y1)
+    (umull y2 gy1-hi guess y1)
     (ldr y2 (:@ sp (:$ x0-idx)))    ; get x0
     (rscs y2 gy1-hi y2)      ; - val not used just cr
     (ldr y2 (:@ sp (:$ y2-idx)))     ; get y2
     (str m (:@ sp (:$ m-save)))
-    (umull gy2-hi m guess y2)   ; does it pay to do this now even tho may not need?
+    (umull m gy2-hi guess y2)   ; does it pay to do this now even tho may not need?
     (ldr m (:@ sp (:$ m-save)))
     (bne @done)
     (cmp gy2-hi m)       ; if > or = and foo then more - L means logical means unsigned
