@@ -291,6 +291,55 @@ show_lisp_register(ExceptionInformation *xp, char *label, int r)
 #endif
 }
 
+void
+describe_siginfo(siginfo_t *info)
+{
+#if defined(WINDOWS) || defined(FREEBSD) || defined(DARWIN)
+  /*
+   * It's not surprising that Windows doesn't have this signal stuff.
+   * It is somewhat surprising that FreeBSD 6.x lacks the si_code
+   * constants.  (Subsequent FreeBSD versions define them, though.)
+   *
+   * On Darwin, recall that we handle exceptions at the Mach level,
+   * and build a "fake" signal context ourselves.  We don't try very
+   * hard to translate the Mach exception information to Unix-style
+   * information, so avoid printing out possibly-misleading garbage.
+   * (bsd/dev/i386/unix_signal.c from the xnu sources is where that
+   * happens for Mac OS X's own Mach-exception-to-Unix-signal
+   * translation.
+   */
+#else
+  if (info->si_code > 0) {
+    if (info->si_signo == SIGSEGV) {
+      switch (info->si_code) {
+      case SEGV_MAPERR:
+	fprintf(dbgout, "address not mapped to object\n");
+	break;
+      case SEGV_ACCERR:
+	fprintf(dbgout, "invalid permissions for mapped object\n");
+	break;
+      default:
+	fprintf(dbgout, "unexpected si_code value: %d\n", info->si_code);
+	break;
+      }
+    } else if (info->si_signo == SIGBUS) {
+      switch (info->si_code) {
+      case BUS_ADRALN:
+	fprintf(dbgout, "invalid address alignment\n");
+	break;
+      case BUS_ADRERR:
+	fprintf(dbgout, "non-existent physical address");
+	break;
+      case BUS_OBJERR:
+	fprintf(dbgout, "object-specific hardware error");
+	break;
+      default:
+	fprintf(dbgout, "unexpected si_code value: %d\n", info->si_code);
+      }
+    }
+  }
+#endif
+}
 
 void
 describe_memfault(ExceptionInformation *xp, siginfo_t *info)
@@ -303,45 +352,11 @@ describe_memfault(ExceptionInformation *xp, siginfo_t *info)
 	  dsisr & (1<<25) ? "Write" : "Read",
 	  dsisr & (1<<27) ? "protected" : "unmapped",
 	  addr);
-#elif defined(WINDOWS) || defined(FREEBSD)
-  /*
-   * It's not surprising that Windows doesn't have this signal stuff.
-   * It is somewhat surprising that FreeBSD 6.x lacks the si_code
-   * constants.  (Subsequent FreeBSD versions define them, though.)
-   */
 #else
   if (info) {
     fprintf(dbgout, "received signal %d; faulting address: %p\n",
             info->si_signo, info->si_addr);
-    if (info->si_code > 0) {
-      if (info->si_signo == SIGSEGV) {
-        switch (info->si_code) {
-        case SEGV_MAPERR:
-          fprintf(dbgout, "address not mapped to object\n");
-          break;
-        case SEGV_ACCERR:
-          fprintf(dbgout, "invalid permissions for mapped object\n");
-          break;
-        default:
-          fprintf(dbgout, "unexpected si_code value: %d\n", info->si_code);
-          break;
-        }
-      } else if (info->si_signo == SIGBUS) {
-        switch (info->si_code) {
-        case BUS_ADRALN:
-          fprintf(dbgout, "invalid address alignment\n");
-          break;
-        case BUS_ADRERR:
-          fprintf(dbgout, "non-existent physical address");
-          break;
-        case BUS_OBJERR:
-          fprintf(dbgout, "object-specific hardware error");
-          break;
-        default:
-          fprintf(dbgout, "unexpected si_code value: %d\n", info->si_code);
-        }
-      }
-    }
+    describe_siginfo(info);
   }
 #endif
 }
