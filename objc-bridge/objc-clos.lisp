@@ -140,22 +140,23 @@
   (%remove-lisp-slot-vector p))
 
 (defun %objc-domain-slots-vector (p)
-       (let* ((type (%macptr-type p))
-             (flags (ldb objc-type-flags type))
-             (index (ldb objc-type-index type)))
-        (declare (fixnum type flags index))
-        (ecase flags
-          (#.objc-flag-instance (or (gethash p *objc-object-slot-vectors*)
-                                    ; try to allocate the slot vector on demand
-                                    (let* ((slot-vector (create-foreign-instance-slot-vector (class-of p))))
-                                      (when slot-vector
-                                        (setf (slot-vector.instance slot-vector) p)
-                                        (setf (gethash p *objc-object-slot-vectors*) slot-vector)
-					(initialize-instance p))
-                                      slot-vector)
-                                    (error "~s has no slots." p)))
-          (#.objc-flag-class (id->objc-class-slots-vector index))
-          (#.objc-flag-metaclass (id->objc-metaclass-slots-vector index)))))
+  (let* ((type (%macptr-type p))
+         (flags (ldb objc-type-flags type))
+         (index (ldb objc-type-index type)))
+    (declare (fixnum type flags index))
+    (ecase flags
+      (#.objc-flag-instance (or (gethash p *objc-object-slot-vectors*)
+                                        ; try to allocate the slot vector on demand
+                                (let* ((slot-vector (create-foreign-instance-slot-vector (class-of p))))
+                                  (when slot-vector
+                                    (let* ((copy (%inc-ptr p)))
+                                      (setf (slot-vector.instance slot-vector) copy)
+                                      (setf (gethash copy *objc-object-slot-vectors*) slot-vector))
+                                    (initialize-instance p))
+                                  slot-vector)
+                                (error "~s has no slots." p)))
+      (#.objc-flag-class (id->objc-class-slots-vector index))
+      (#.objc-flag-metaclass (id->objc-metaclass-slots-vector index)))))
 
 (defun %objc-domain-class-ordinal (p)
   (let* ((type (%macptr-type p))
@@ -751,8 +752,9 @@
     (or (gethash instance *objc-object-slot-vectors*)
         (let* ((slot-vector (create-foreign-instance-slot-vector class)))
           (when slot-vector
-            (setf (slot-vector.instance slot-vector) instance)
-            (setf (gethash instance *objc-object-slot-vectors*) slot-vector)))))
+            (let* ((copy (%inc-ptr instance)))
+              (setf (slot-vector.instance slot-vector) copy)
+            (setf (gethash copy *objc-object-slot-vectors*) slot-vector))))))
   instance)
 	       
 (defmethod allocate-instance ((class objc:objc-class) &rest initargs &key &allow-other-keys)
