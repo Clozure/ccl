@@ -891,7 +891,7 @@ of the shell itself."
 #+windows-target
 (progn
 (defun get-last-windows-error ()
-  (#_GetLastError()))
+  (#_GetLastError))
 
 (defun %windows-error-string (error-number)
   (rlet ((pbuffer :address (%null-ptr)))
