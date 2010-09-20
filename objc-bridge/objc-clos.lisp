@@ -149,7 +149,7 @@
                                         ; try to allocate the slot vector on demand
                                 (let* ((slot-vector (create-foreign-instance-slot-vector (class-of p))))
                                   (when slot-vector
-                                    (let* ((copy (%inc-ptr p)))
+                                    (let* ((copy (%inc-ptr p 0)))
                                       (setf (slot-vector.instance slot-vector) copy)
                                       (setf (gethash copy *objc-object-slot-vectors*) slot-vector))
                                     (initialize-instance p))
@@ -752,7 +752,7 @@
     (or (gethash instance *objc-object-slot-vectors*)
         (let* ((slot-vector (create-foreign-instance-slot-vector class)))
           (when slot-vector
-            (let* ((copy (%inc-ptr instance)))
+            (let* ((copy (%inc-ptr instance 0)))
               (setf (slot-vector.instance slot-vector) copy)
             (setf (gethash copy *objc-object-slot-vectors*) slot-vector))))))
   instance)
