@@ -117,24 +117,28 @@ present and false otherwise. This variable shouldn't be set by user code.")
     (setq *stderr* (make-fd-stream #-windows-target 2
                                    #+windows-target (%ptr-to-int
                                                      (#_GetStdHandle #$STD_ERROR_HANDLE))
-                    :basic t :direction :output :sharing :lock :encoding encoding-name #+windows-target :line-termination #+windows-target :crlf))
+                                   :basic t :direction :output :sharing :lock :encoding encoding-name #+windows-target :line-termination #+windows-target :crlf))
+    (add-auto-flush-stream *stdout*)
+    (add-auto-flush-stream *stderr*)
     (if *batch-flag*
       (let* ((tty-fd
-               #-windows-target
+              #-windows-target
                (let* ((fd (fd-open "/dev/tty" #$O_RDWR)))
                  (if (>= fd 0) fd)))
              (can-use-tty #-windows-target (and tty-fd (eql (tcgetpgrp tty-fd) (getpid)))))
         (if can-use-tty
-          (setq
-           *terminal-input* (make-fd-stream tty-fd
-                                            :basic t
-                                            :direction :input
-                                            :interactive t
-                                            :sharing :lock
-                                            :encoding encoding-name)
-           *terminal-output* (make-fd-stream tty-fd :basic t :direction :output :sharing :lock :encoding encoding-name)
-           *terminal-io* (make-echoing-two-way-stream
-                          *terminal-input* *terminal-output*))
+          (progn
+            (setq
+             *terminal-input* (make-fd-stream tty-fd
+                                              :basic t
+                                              :direction :input
+                                              :interactive t
+                                              :sharing :lock
+                                              :encoding encoding-name)
+             *terminal-output* (make-fd-stream tty-fd :basic t :direction :output :sharing :lock :encoding encoding-name)
+             *terminal-io* (make-echoing-two-way-stream
+                            *terminal-input* *terminal-output*))
+            (add-auto-flush-stream *terminal-output*))
           (progn
             (when tty-fd (fd-close tty-fd))
             (setq *terminal-input* *stdin*

@@ -331,7 +331,7 @@
                          (pref p :address)
                          (%null-ptr))))))
     (if (%null-ptr-p link-map)
-      (error "Error opening shared library ~s: ~a" name (dlerror))
+      (values nil (dlerror))
       (prog1 (let* ((lib (shlib-from-map-entry link-map)))
 	       (incf (shlib.opencount lib))
                (setf (shlib.handle lib) handle)
@@ -411,9 +411,8 @@
 	  (shared-library-from-header-module-or-name (%null-ptr) result name))
 	 ((= 0 (pref type :signed))
 	  ;; neither a dylib nor bundle was found
-	  (error "Error opening shared library ~s: ~a" name
-		 (%get-cstring result)))
-	 (t (error "Unknown error opening shared library ~s." name))))))
+          (values nil (%get-cstring result)))
+	 (t (values nil "unknown error"))))))
 
 ;;; Walk over all registered entrypoints, invalidating any whose container
 ;;; is the specified library.  Return true if any such entrypoints were
@@ -592,7 +591,7 @@
           (incf (shlib.opencount shlib))
           (setf (shlib.handle shlib) hmodule)
           shlib)
-        (error "Can't open shared library ~s" name))))
+        (values nil (%windows-error-string (get-last-windows-error))))))
 
 (init-shared-libraries)
 
@@ -982,14 +981,18 @@ return an object of type SHLIB that describes the library; if the library
 is already open, increment a reference count. If the library can't be
 loaded, signal a SIMPLE-ERROR which contains an often-cryptic message from
 the operating system."
-  (if (or (eq process :current)
-          (eq process *current-process*)
-          (and (eq process :initial)
-               (eq *current-process* *initial-process*)))
-    (open-shared-library-internal name)
-    (call-in-process (lambda () (open-shared-library name))
-                     (if (eq process :initial)
-                       *initial-process*
-                       process))))
+    (multiple-value-bind (lib error-string)
+        (if (or (eq process :current)
+                (eq process *current-process*)
+                (and (eq process :initial)
+                     (eq *current-process* *initial-process*)))
+          (open-shared-library-internal name)
+          
+          (call-in-process (lambda () (open-shared-library-internal  name))
+                           (if (eq process :initial)
+                             *initial-process*
+                             process)))
+      (or lib
+          (error "Error opening shared library ~a : ~a." name error-string))))
 
 

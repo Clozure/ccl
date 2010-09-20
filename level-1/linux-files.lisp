@@ -889,7 +889,11 @@ of the shell itself."
       (%get-cstring p))))
 
 #+windows-target
-(defun %windows-error-string (error-number)  
+(progn
+(defun get-last-windows-error ()
+  (#_GetLastError()))
+
+(defun %windows-error-string (error-number)
   (rlet ((pbuffer :address (%null-ptr)))
     (if (eql 0
              (#_FormatMessageW (logior #$FORMAT_MESSAGE_ALLOCATE_BUFFER
@@ -907,6 +911,7 @@ of the shell itself."
              (q (%get-native-utf-16-cstring p)))
         (#_LocalFree p)
         q))))
+)
         
                       
 
@@ -1943,7 +1948,8 @@ not, why not; and what its result code was if it completed."
       (when verbose
 	(format t "~%~%;;;~%;;; ~a requires access to ~a~%;;; Type (:y ~D) to yield control to this thread.~%;;;~%"
 		*current-process* (shared-resource-name resource)
-                (process-serial-number *current-process*)))
+                (process-serial-number *current-process*))
+        (force-output t))
       (with-lock-grabbed ((shared-resource-lock resource))
 	(append-dll-node request (shared-resource-requestors resource)))
       (wait-on-semaphore (shared-resource-request-signal request))
