@@ -2115,7 +2115,7 @@ to open."
 			      unless (or (eq key :metaclass) (find key keyvect)) collect key)))
 	      (when illegal
 		(signal-program-error "Class option~p~{ ~s~} is not one of ~s"
-				      (length illegal) illegal keyvect))))
+				      (length illegal) illegal (coerce keyvect 'list)))))
 	  `(progn
 	     (when (memq ',class-name *nx-known-declarations*)
 	       (check-declaration-redefinition ',class-name 'defclass))
