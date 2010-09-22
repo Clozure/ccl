@@ -80,6 +80,7 @@ LispObj calculate_relocation();
 LispObj locative_forwarding_address(LispObj);
 LispObj node_forwarding_address(LispObj);
 void forward_range(LispObj *, LispObj *);
+void forward_tcr_xframes(TCR *);
 void note_memoized_references(ExceptionInformation *,LogicalAddress, LogicalAddress, BytePtr *, BytePtr *);
 void gc(TCR *, signed_natural);
 int change_hons_area_size(TCR *, signed_natural);

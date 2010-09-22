@@ -27,7 +27,7 @@
 #include <sys/time.h>
 
 #ifdef X8632
-inline natural
+natural
 imm_word_count(LispObj fn)
 {
   natural w = ((unsigned short *)fn)[-1];
@@ -250,7 +250,7 @@ check_range(LispObj *start, LispObj *end, Boolean header_allowed)
 void
 check_xp(ExceptionInformation *xp, natural node_regs_mask)
 {
-  natural *regs = (natural *) xpGPRvector(xp), dnode;
+  natural *regs = (natural *) xpGPRvector(xp);
 
   if (node_regs_mask & (1<<0)) check_node(regs[REG_EAX]);
   if (node_regs_mask & (1<<1)) check_node(regs[REG_ECX]);
@@ -270,7 +270,7 @@ check_xp(ExceptionInformation *xp, natural node_regs_mask)
 void
 check_xp(ExceptionInformation *xp)
 {
-  natural *regs = (natural *) xpGPRvector(xp), dnode;
+  natural *regs = (natural *) xpGPRvector(xp);
 
   check_node(regs[Iarg_z]);
   check_node(regs[Iarg_y]);
@@ -1524,7 +1524,6 @@ mark_xp(ExceptionInformation *xp, natural node_regs_mask)
 {
   natural *regs = (natural *) xpGPRvector(xp), dnode;
   LispObj eip;
-  int i;
 
   if (node_regs_mask & (1<<0)) mark_root(regs[REG_EAX]);
   if (node_regs_mask & (1<<1)) mark_root(regs[REG_ECX]);

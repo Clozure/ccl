@@ -600,7 +600,7 @@ BytePtr low_relocatable_address = NULL, high_relocatable_address = NULL,
 void
 map_initial_reloctab(BytePtr low, BytePtr high)  
 {
-  natural ndnodes, reloctab_size, n;
+  natural ndnodes, reloctab_size;
 
   low_relocatable_address = low; /* will never change */
   high_relocatable_address = high;
@@ -854,6 +854,14 @@ Fatal(StringPtr param0, StringPtr param1)
   }
   fprintf(dbgout, "Fatal error: %s\n%s\n", param0, param1);
   _exit(-1);
+}
+
+void
+fatal_oserr(StringPtr param, OSErr err)
+{
+  char buf[64];
+  sprintf(buf," - operating system error %d.", err);
+  Fatal(param, buf);
 }
 
 OSErr application_load_err = noErr;
@@ -1445,20 +1453,17 @@ check_os_version(char *progname)
   struct utsname uts;
   long got, want;
   char *got_end,*want_end;
-#ifdef X8632
-  extern Boolean rcontext_readonly;
-#endif
 
   want = strtoul(min_os_version,&want_end,10);
 
   uname(&uts);
   got = strtoul(uts.release,&got_end,10);
-#ifdef X8632
-#ifdef FREEBSD
+#if defined(X8632) && defined(FREEBSD)
   if (!strcmp(uts.machine,"amd64")) {
+    extern Boolean rcontext_readonly;
+
     rcontext_readonly = true;
   }
-#endif
 #endif
   while (got == want) {
     if (*want_end == '.') {
@@ -1649,7 +1654,7 @@ wide_argv_to_utf_8(wchar_t *wide_argv[], int argc)
 
 int
 main(int argc, char *argv[]
-#ifndef WINDOWS
+#if defined(PPC) && defined(LINUX)
 , char *envp[], void *aux
 #endif
 )

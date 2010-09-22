@@ -86,6 +86,7 @@ typedef struct {
 LispObj
 load_openmcl_image(int, openmcl_image_file_header*);
 
+Boolean find_openmcl_image_file_header(int fd, openmcl_image_file_header *h);
 
 
 

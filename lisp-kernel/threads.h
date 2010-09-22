@@ -135,6 +135,8 @@ typedef semaphore_t SEMAPHORE;
 #define SEM_TIMEDWAIT(s,t) semaphore_timedwait((SEMAPHORE)(natural)s,t)
 #endif
 
+void signal_semaphore(SEMAPHORE s);
+int wait_on_semaphore(void *s, int seconds, int millis);
 void sem_wait_forever(SEMAPHORE s);
 
 #ifdef USE_POSIX_SEMAPHORES
@@ -178,6 +180,7 @@ void destroy_semaphore(void**);
 void tsd_set(LispObj, void *);
 void *tsd_get(LispObj);
 TCR *new_tcr(natural, natural);
+void thread_init_tcr(TCR *tcr, void *stack_base, natural stack_size);
 TCR *initial_thread_tcr;
 
 #define DEFAULT_THREAD_STACK_SIZE ((size_t) -1)
@@ -196,8 +199,17 @@ Boolean create_system_thread(size_t stack_size,
 
 TCR *get_tcr(Boolean);
 TCR *get_interrupt_tcr(Boolean);
+
 Boolean suspend_tcr(TCR *);
 Boolean resume_tcr(TCR *);
+Boolean kill_tcr(TCR *);
+
+int raise_thread_interrupt(TCR *target);
+
+Boolean lisp_suspend_tcr(TCR *);
+Boolean lisp_resume_tcr(TCR *);
+void lisp_suspend_other_threads(void);
+void lisp_resume_other_threads(void);
 
 typedef struct
 {

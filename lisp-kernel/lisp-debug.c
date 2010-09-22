@@ -639,7 +639,6 @@ area_code_name(int code)
 debug_command_return
 debug_memory_areas(ExceptionInformation *xp, siginfo_t *info, int arg)
 {
-  int i;
   area *a, *header = all_areas;
   char label[100];
 
@@ -814,7 +813,6 @@ natural
 debug_get_natural_value(char *prompt)
 {
   char s[32], *res, *endptr;
-  int n;
   natural val;
 
   do {
@@ -1306,6 +1304,7 @@ apply_debug_command(ExceptionInformation *xp, int c, siginfo_t *info, int why)
   }
 }
 
+void
 debug_identify_function(ExceptionInformation *xp, siginfo_t *info) 
 {
 #ifdef PPC

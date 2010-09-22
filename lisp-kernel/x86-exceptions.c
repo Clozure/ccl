@@ -580,7 +580,6 @@ handle_alloc_trap(ExceptionInformation *xp, TCR *tcr, Boolean *notify)
   natural cur_allocptr, bytes_needed;
   unsigned allocptr_tag;
   signed_natural disp;
-  Boolean notify_pending_gc = false;
   
   cur_allocptr = xpGPR(xp,Iallocptr);
   allocptr_tag = fulltag_of(cur_allocptr);
@@ -3882,6 +3881,7 @@ unwatch_object(TCR *tcr, signed_natural param)
   LispObj *oldnode = (LispObj *)untag(old);
   LispObj *newnode = (LispObj *)untag(new);
   area *a = area_containing((BytePtr)old);
+  extern void update_managed_refs(area *, BytePtr, natural);
 
   if (a && a->code == AREA_WATCHED) {
     natural size;

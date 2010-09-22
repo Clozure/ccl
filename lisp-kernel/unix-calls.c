@@ -36,6 +36,7 @@
 #include <sys/time.h>
 #include <stdint.h>
 #include <signal.h>
+#include <fcntl.h>
 
 ssize_t
 lisp_read(int fd, void *buf, size_t count)

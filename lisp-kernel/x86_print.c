@@ -315,16 +315,16 @@ sprint_function(LispObj o, int depth)
       sprint_specializers_list(method_specializers, depth);
       add_char(' ');
     } else if (lfbits & lfbits_gfn_mask) {
-      LispObj gf_slots;
-      LispObj gf_name;
-
       add_c_string("Generic Function ");
 
 #ifdef X8632
-      gf_slots = nth_immediate(o, 2);
-      gf_name = deref(gf_slots, 2);
-      sprint_lisp_object(gf_name, depth);
-      add_char(' ');
+      {
+	LispObj gf_slots = nth_immediate(o, 2);
+	LispObj gf_name = deref(gf_slots, 2);
+
+	sprint_lisp_object(gf_name, depth);
+	add_char(' ');
+      }
 #endif
     } else {
       add_c_string("Function ");

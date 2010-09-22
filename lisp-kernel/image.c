@@ -26,7 +26,7 @@
 #endif
 #include <stdio.h>
 #include <limits.h>
-
+#include <time.h>
 
 
 #if defined(PPC64) || defined(X8632)

@@ -39,6 +39,7 @@ typedef ucontext_t ExceptionInformation;
 
 /* xp accessors, sigreturn stuff */
 #define DARWIN_USE_PSEUDO_SIGRETURN 1
+extern int darwin_sigreturn(ExceptionInformation *context);
 #define DarwinSigReturn(context) do {\
     darwin_sigreturn(context);\
     Bug(context,"sigreturn returned");\

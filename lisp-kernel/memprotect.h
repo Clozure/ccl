@@ -75,6 +75,10 @@ UnProtectMemory(LogicalAddress, natural);
 
 int
 MapFile(LogicalAddress addr, natural pos, natural nbytes, int permissions, int fd);
+void allocation_failure(Boolean pointerp, natural size);
+
+void protect_watched_areas(void);
+void unprotect_watched_areas(void);
 
 typedef enum {
   kNotProtected,		/* At least not at the moment. */
@@ -100,6 +104,7 @@ struct protected_area {
   lisp_protection_kind why;
 } protected_area, *protected_area_ptr;
 
+void unprotect_area(protected_area_ptr);
 
 /* Various functions that try to respond to a protection violation */
 typedef 

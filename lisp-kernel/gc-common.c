@@ -741,7 +741,7 @@ freeGCptrs()
 {
   void *p, *next, *addr;
   struct xmacptr *x, *xnext;
-  int i, flags;
+  int flags;
   xmacptr_dispose_fn dfn;
 
   for (p = postGCptrs; p; p = next) {
@@ -751,7 +751,7 @@ freeGCptrs()
   postGCptrs = NULL;
   
   for (x = user_postGC_macptrs; x; x = xnext) {
-    xnext = (xmacptr *) (x->class);;
+    xnext = (xmacptr *) (x->class);
     flags = x->flags - xmacptr_flag_user_first;
     dfn = xmacptr_dispose_functions[flags];
     addr = (void *) x->address;
@@ -1027,7 +1027,7 @@ forward_weakvll_links()
 {
   LispObj *ptr = &(lisp_global(WEAKVLL)), this, new, old;
 
-  while (this = *ptr) {
+  while ((this = *ptr)) {
     old = this + fulltag_misc;
     new = node_forwarding_address(old);
     if (old != new) {
@@ -1100,7 +1100,7 @@ forward_gcable_ptrs()
     prev = &(((xmacptr *)ptr_from_lispobj(untag(next)))->link);
   }
   xprev = &user_postGC_macptrs;
-  while (xnext = *xprev) {
+  while ((xnext = *xprev)) {
     xnew = (struct xmacptr *)locative_forwarding_address((LispObj)xnext);
     if (xnew != xnext) {
       *xprev = xnew;
@@ -1113,7 +1113,10 @@ void
 forward_memoized_area(area *a, natural num_memo_dnodes)
 {
   bitvector refbits = a->refbits;
-  LispObj *p = (LispObj *) a->low, *p0 = p, x1, x2, new;
+  LispObj *p = (LispObj *) a->low, x1, x2, new;
+#ifdef ARM
+  LispObj *p0 = p;
+#endif
   natural bits, bitidx, *bitsp, nextbit, diff, memo_dnode = 0, hash_dnode_limit = 0;
   int tag_x1;
   hash_table_vector_header *hashp = NULL;

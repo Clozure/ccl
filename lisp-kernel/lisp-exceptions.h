@@ -107,6 +107,8 @@ exception_init();
 void
 Fatal(StringPtr, StringPtr);
 
+void fatal_oserr(StringPtr, OSErr);
+
 void
 non_fatal_error( char * );
 
@@ -142,9 +144,16 @@ exception_fn_name( ExceptionInformation *, int, char *, size_t );
 #include "arm-exceptions.h"
 #endif
 
+#ifdef DARWIN
+void darwin_exception_init(TCR *tcr);
+void darwin_exception_cleanup(TCR *tcr);
+#endif
+
+void thread_signal_setup(void);
 void suspend_other_threads(Boolean);
 void resume_other_threads(Boolean);
-
+void reset_lisp_process(ExceptionInformation *);
+void terminate_lisp(void);
 
 #endif /* __lisp_exceptions_h__ */
 

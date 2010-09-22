@@ -46,14 +46,6 @@ allocation_failure(Boolean pointerp, natural size)
   Fatal(":   Kernel memory allocation failure.  ", buf);
 }
 
-void
-fatal_oserr(StringPtr param, OSErr err)
-{
-  char buf[64];
-  sprintf(buf," - operating system error %d.", err);
-  Fatal(param, buf);
-}
-
 void *
 lisp_malloc(size_t size)
 {
@@ -113,6 +105,7 @@ address_unmapped_p(char *addr, natural len)
   return vm_addr >= (vm_address_t)(addr+len);
 }
 #endif
+
 
 
   /*
@@ -205,11 +198,12 @@ ReserveMemoryForHeap(LogicalAddress want, natural totalsize)
 int
 CommitMemory (LogicalAddress start, natural len) 
 {
-  LogicalAddress rc;
 #if DEBUG_MEMORY
   fprintf(dbgout, "Committing memory at 0x" LISP ", size 0x" LISP "\n", start, len);
 #endif
 #ifdef WINDOWS
+  LogicalAddress rc;
+
   if ((start < ((LogicalAddress)nil_value)) &&
       (((LogicalAddress)nil_value) < (start+len))) {
     /* nil area is in the executable on Windows; ensure range is
@@ -227,7 +221,7 @@ CommitMemory (LogicalAddress start, natural len)
   }
   return true;
 #else
-  int i, err;
+  int i;
   void *addr;
 
   for (i = 0; i < 3; i++) {
@@ -503,10 +497,9 @@ Boolean
 resize_dynamic_heap(BytePtr newfree, 
 		    natural free_space_size)
 {
-  extern int page_size;
   area *a = active_dynamic_area;
-  BytePtr newlimit, protptr, zptr;
-  int psize = page_size;
+  BytePtr newlimit;
+
   if (free_space_size) {
     BytePtr lowptr = a->active;
     newlimit = lowptr + align_to_power_of_2(newfree-lowptr+free_space_size,
@@ -518,6 +511,7 @@ resize_dynamic_heap(BytePtr newfree,
       return true;
     }
   }
+  return false;
 }
 
 void
@@ -717,11 +711,8 @@ tenure_to_area(area *target)
   area *a = active_dynamic_area, *child;
   BytePtr 
     curfree = a->active,
-    target_low = target->low,
-    tenured_low = tenured_area->low;
-  natural 
-    dynamic_dnodes = area_dnode(curfree, a->low),
-    new_tenured_dnodes = area_dnode(curfree, tenured_area->low);
+    target_low = target->low;
+  natural new_tenured_dnodes = area_dnode(curfree, tenured_area->low);
   bitvector 
     refbits = tenured_area->refbits,
     markbits = a->markbits,

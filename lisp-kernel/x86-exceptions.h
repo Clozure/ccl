@@ -45,6 +45,11 @@ void switch_to_foreign_stack(void*, ...);
 #define XUUO_KILL 9
 #define XUUO_ALLOCATE_LIST 10
 
+int callback_to_lisp (TCR *tcr, LispObj callback_macptr, ExceptionInformation *xp,
+		      natural arg1, natural arg2, natural arg3, natural arg4,
+		      natural arg5);
+
+
 void
 pc_luser_xp(ExceptionInformation*, TCR*, signed_natural*);
 
@@ -96,6 +101,7 @@ void setup_sigaltstack(area *);
 
 extern natural get_mxcsr();
 extern void set_mxcsr(natural);
+void enable_fp_exceptions(void);
 
 #ifdef X8632
 /* The 32-bit immediate value in the instruction
@@ -105,6 +111,8 @@ extern void set_mxcsr(natural);
 #define RECOVER_FN_OPCODE 0xbf
 #define RECOVER_FN_LENGTH 5
 #endif
+
+void callback_for_gc_notification(ExceptionInformation *xp, TCR *tcr);
 
 #endif /* X86_EXCEPTIONS_H */
 

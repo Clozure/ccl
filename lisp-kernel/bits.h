@@ -114,7 +114,7 @@ void ior_bits(bitvector,bitvector,natural);
 { BITPvar = bits_word_ptr(BITVvar,BITNUMvar); BITIDXvar = bits_bit_index(BITNUMvar); \
     BITWvar = (*BITPvar << BITIDXvar) >> BITIDXvar; }
 
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__)
 static __inline__ natural
 current_stack_pointer(void) __attribute__((always_inline));
 
