@@ -94,31 +94,34 @@
   '("xinspector"
     ))
 
-(defun load-ide (&optional force-compile)
+(defun load-ide-files (names src-dir force-compile)
   (declare (special *hemlock-files*)) ;; kludge
-  (let ((src-dir "ccl:cocoa-ide;")
-	(bin-dir "ccl:cocoa-ide;fasls;"))
+  (let* ((bin-dir (merge-pathnames ";fasls;" src-dir)))
     (ensure-directories-exist bin-dir)
-    ;; kludge to limit experimental files to Leopard
-    #+darwin-target
-    (rlet ((p :int))
-      (#_Gestalt #$gestaltSystemVersion p)
-      (when (>= (%get-long p) #x1050)
-        (setq *ide-files* (append *ide-files* *leopard-only-ide-files*))))
     (with-compilation-unit ()
-      (dolist (name *ide-files*)
-	(let* ((source (make-pathname :name name :type (pathname-type *.lisp-pathname*)
-				      :defaults src-dir))
-	       (fasl (make-pathname :name name :type (pathname-type *.fasl-pathname*)
-				    :defaults bin-dir))
-	       (sources (cons source
-			      (and (equalp name "hemlock")
-				   ;; This is defined in compile-hemlock, which is loaded first
-				   (mapcar #'hemlock-source-pathname *hemlock-files*)))))
-	  (if (needs-compile-p fasl sources force-compile)
-	    (progn
-	      ;; Once compile something, keep compiling, in case macros changed.
-	      (setq force-compile t)
-	      (compile-file source :output-file fasl :verbose t :load t))
-	    (load fasl :verbose t)))))
-    (provide "COCOA")))
+      (dolist (name names)
+        (let* ((source (make-pathname :name name :type (pathname-type *.lisp-pathname*)
+                                      :defaults src-dir))
+               (fasl (make-pathname :name name :type (pathname-type *.fasl-pathname*)
+                                    :defaults bin-dir))
+               (sources (cons source
+                              (and (equalp name "hemlock")
+                                   ;; This is defined in compile-hemlock, which is loaded first
+                                   (mapcar #'hemlock-source-pathname *hemlock-files*)))))
+          (if (needs-compile-p fasl sources force-compile)
+            (progn
+              ;; Once compile something, keep compiling, in case macros changed.
+              (setq force-compile t)
+              (compile-file source :output-file fasl :verbose t :load t))
+            (load fasl :verbose t))))))
+  force-compile)
+
+(defun load-ide (&optional force-compile)
+  ;; kludge to limit experimental files to Leopard
+  #+darwin-target
+  (rlet ((p :int))
+    (#_Gestalt #$gestaltSystemVersion p)
+    (when (>= (%get-long p) #x1050)
+      (setq *ide-files* (append *ide-files* *leopard-only-ide-files*))))
+  (load-ide-files *ide-files* "ccl:cocoa-ide;" force-compile)
+  (provide "COCOA"))
