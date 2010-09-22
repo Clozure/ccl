@@ -1714,8 +1714,12 @@ Will differ from *compiling-file* during an INCLUDE")
       (dotimes (i n)
         (if (= i 0)
           (target-arch-case
-           (:arm (fasl-dump-form
-                  (ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- target::fixnumshift)))) ; host's fixnumshift
+           (:arm
+	    (let ((arm-subprimitive-address
+		   (find-symbol "ARM-SUBPRIMITIVE-ADDRESS" "ARM")))
+	      (fasl-dump-form
+	       (ash (funcall arm-subprimitive-address '.SPfix-nfn-entrypoint)
+		    (- target::fixnumshift))))) ; host's fixnumshift
            (t (fasl-dump-form (%svref f i))))
           (fasl-dump-form (%svref f i)))))))
 
