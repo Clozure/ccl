@@ -55,7 +55,6 @@
 (defparameter *coverage-subnotes* (make-hash-table :test #'eq))
 (defparameter *emitted-code-notes* (make-hash-table :test #'eq))
 (defparameter *entry-code-notes* (make-hash-table :test #'eq))
-(defparameter *code-note-acode-strings* (make-hash-table :test #'eq))
 
 (defstruct (coverage-state (:conc-name "%COVERAGE-STATE-"))
   alist)
@@ -84,10 +83,6 @@
 (defun entry-code-note-p (note)
   (gethash note *entry-code-notes*))
 
-(defun code-note-acode-string (note)
-  (and *code-note-acode-strings*
-       (gethash note *code-note-acode-strings*)))
-
 (defun map-function-coverage (lfun fn &optional refs)
   (let ((refs (cons lfun refs)))
     (declare (dynamic-extent refs))
@@ -101,22 +96,16 @@
 (defun get-function-coverage (fn refs)
   (let ((entry (function-entry-code-note fn))
 	(refs (cons fn refs))
-        (acode (%function-acode-string fn))
         (source (function-source-form-note fn)))
     (declare (dynamic-extent refs))
     (when entry
       (assert (eq fn (gethash entry *entry-code-notes* fn)))
-      (setf (gethash entry *entry-code-notes*) fn)
-      (when acode
-        (setf (gethash entry *code-note-acode-strings*) acode)))
+      (setf (gethash entry *entry-code-notes*) fn))
     (nconc
      (and entry (list fn))
      (lfunloop for imm in fn
        when (code-note-p imm)
-       do (progn
-            (setf (gethash imm *emitted-code-notes*) t)
-            (when acode
-              (setf (gethash imm *code-note-acode-strings*) acode)))
+       do (setf (gethash imm *emitted-code-notes*) t)
        when (and (functionp imm)
                  (not (memq imm refs))
                  ;; Make sure this fn is in the source we're currently looking at.
@@ -145,7 +134,6 @@
   (clrhash *coverage-subnotes*)
   (clrhash *emitted-code-notes*)
   (clrhash *entry-code-notes*)
-  (when *code-note-acode-strings* (clrhash *code-note-acode-strings*))
   (loop for data in *code-covered-functions*
 	do (let* ((file (code-covered-info.file data))
                   (toplevel-functions (code-covered-info.fns data)))
@@ -461,8 +449,7 @@ image."
   (let* ((*file-coverage* nil)
 	 (*coverage-subnotes* (make-hash-table :test #'eq :shared nil))
 	 (*emitted-code-notes* (make-hash-table :test #'eq :shared nil))
-	 (*entry-code-notes* (make-hash-table :test #'eq :shared nil))
-         (*code-note-acode-strings* nil))
+	 (*entry-code-notes* (make-hash-table :test #'eq :shared nil)))
     (get-coverage) 
     (loop for coverage in *file-coverage*
           as stats = (make-coverage-statistics :source-file (file-coverage-file coverage))
@@ -508,7 +495,6 @@ written to the output directory.
 	 (*coverage-subnotes* (make-hash-table :test #'eq :shared nil))
 	 (*emitted-code-notes* (make-hash-table :test #'eq :shared nil))
 	 (*entry-code-notes* (make-hash-table :test #'eq :shared nil))
-         (*code-note-acode-strings* (make-hash-table :test #'eq :shared nil))
          (index-file (and html (merge-pathnames output-file "index.html")))
          (stats-file (and statistics (merge-pathnames (if (or (stringp statistics)
                                                               (pathnamep statistics))
@@ -690,11 +676,14 @@ written to the output directory.
          (note (function-entry-code-note fn))
          (range (and note (code-note-acode-range note))))
     (when (and acode range)
-      (let ((styles (or (gethash acode acode-styles)
-                        (setf (gethash acode acode-styles)
-                              (make-array (length acode)
-                                          :initial-element $no-style
-                                          :element-type '(unsigned-byte 2))))))
+      (let* ((cell (or (gethash acode acode-styles)
+                       (setf (gethash acode acode-styles)
+                             (let ((string (decode-string-from-octets acode :external-format :utf-8)))
+                               (cons string
+                                     (make-array (length string)
+                                                 :initial-element $no-style
+                                                 :element-type '(unsigned-byte 2)))))))
+             (styles (cdr cell)))
         (iterate update ((note note))
           (multiple-value-bind (start end) (decode-file-range (code-note-acode-range note))
             (when (and start
@@ -776,9 +765,8 @@ written to the output directory.
             (destructuring-bind (pos . strings) next
               (format html-stream "<a href=javascript:swap('~d')><span class='toggle' id='p~:*~d'>Show expansion</span></a>~%~
                                    <div class='acode' id='a~:*~d'><code>" pos)
-              (loop for acode in strings as styles = (gethash acode acode-styles)
-                    do (assert styles)
-                    do (when styles (output-styled html-stream acode styles))
+              (loop for acode in strings as (string . styles) = (gethash acode acode-styles)
+                    do (output-styled html-stream string styles)
                     do (fresh-line html-stream))
               (format html-stream "</code></div><hr/>~%")
               (output (1+ end) last-line (cdr queue)))))))))

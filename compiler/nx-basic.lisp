@@ -782,11 +782,14 @@
                          (pprint-recording-positions form *nx-pprint-stream* #'print-hook))))))
              (record (afunc)
                (let* ((*nx-acode-inner-refs* nil);; filled in by stringify.
-                      (string (stringify (afunc-acode afunc))))
-                 (setf (getf (afunc-lfun-info afunc) '%function-acode-string) string)
+                      (string (stringify (afunc-acode afunc)))
+                      ;; Can't use with-output-to-vector directly above because we
+                      ;; want the recorded positions to be relative to the string.
+                      (vec (encode-string-to-octets string :external-format :utf-8)))
+                 (setf (getf (afunc-lfun-info afunc) '%function-acode-string) vec)
                  (loop for ref in *nx-acode-inner-refs* as fn = (acode-afunc-ref-afunc ref)
                        do (dbg-assert (null (getf (afunc-lfun-info fn) '%function-acode-string)))
-                       do (setf (getf (afunc-lfun-info fn) '%function-acode-string) string)))))
+                       do (setf (getf (afunc-lfun-info fn) '%function-acode-string) vec)))))
       (if (getf (afunc-lfun-info afunc) '%function-source-note)
         (record afunc)
         ;; If don't have a function source note while recording code coverage, it's
