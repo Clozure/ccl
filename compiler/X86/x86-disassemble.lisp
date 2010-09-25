@@ -2763,7 +2763,10 @@
     (format stream " ")
     (labels ((out (stream expr)
                (cond ((atom expr)
-                      (format stream "~a" expr))
+		      (if (and (typep expr 'integer)
+			       (> (abs expr) 100))
+			(format stream "#x~x" expr)
+			(format stream "~a" expr)))
                      ((quoted-form-p expr)
                       (format stream "'~s" (cadr expr)))
                      (t
