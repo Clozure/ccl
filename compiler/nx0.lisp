@@ -570,46 +570,28 @@ function to the indicated name is true.")
     (if (eq (acode-operator x) (%nx1-operator fixnum)) 
       (cadr x))))
 
+(defun acode-xxx-form-p (x fixnum-supertype)
+  (or (acode-fixnum-form-p x)
+      (progn
+	(setq x (acode-unwrapped-form-value x))
+	(if (acode-p x)
+	  (if (and (eq (acode-operator x) (%nx1-operator immediate))
+		   (typep (cadr x) fixnum-supertype))
+	    (cadr x))))))
+
+(defun acode-integer-form-p (x)
+  (acode-xxx-form-p x 'integer))
+
 (defun acode-integer-constant-p (x bits)
-  (let* ((int (or (acode-fixnum-form-p x)
-                  (progn
-                    (setq x (acode-unwrapped-form x))
-                    (if (acode-p x)
-                      (if (and (eq (acode-operator x) (%nx1-operator immediate))
-                               (typep (cadr x) 'integer))
-                        (cadr x)))))))
+  (let ((int (acode-integer-form-p x)))
     (and int
          (or
            (typep int `(signed-byte ,bits))
            (typep int `(unsigned-byte ,bits)))
          int)))
 
-(defun acode-natural-constant-p (x)
-  (let* ((int (or (acode-fixnum-form-p x)
-                  (progn
-                    (setq x (acode-unwrapped-form x))
-                    (if (acode-p x)
-                      (if (and (eq (acode-operator x) (%nx1-operator immediate))
-                               (typep (cadr x) 'integer))
-                        (cadr x)))))))
-    (and int
-         (target-word-size-case
-	  (32 (typep int '(unsigned-byte 32)))
-	  (64 (typep int '(unsigned-byte 64))))
-         int)))
-
-
-
 (defun acode-real-constant-p (x)
-  (or (acode-fixnum-form-p x)
-      (progn
-        (setq x (acode-unwrapped-form x))
-        (if (acode-p x)
-          (if (and (eq (acode-operator x) (%nx1-operator immediate))
-                   (typep (cadr x) 'real))
-            (cadr x))))))
-
-
+  (acode-xxx-form-p x 'real))
 
 (defun nx-lookup-target-uvector-subtag (name)
   (or (cdr (assoc name (arch::target-uvector-subtags (backend-target-arch *target-backend*))))
