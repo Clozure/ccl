@@ -206,12 +206,23 @@
                       `(svref ,arg ,offset))
                      (t `(uvref ,arg ,offset)))))
     `((defun ,name (,arg)
-        ,(if (eq type 't) form `(the ,type ,form)))
+        ,(cond ((eq type t) form)
+	       ((nx-declarations-typecheck env)
+		;; TYPE may be unknown.  For example, it may be
+		;; forward-referenced.  Insert a run-time check in
+		;; this case.
+		`(require-type ,form ',type))
+	       (t `(the ,type ,form))))
       ,@(unless (ssd-r/o slot)
           `((defun (setf ,name) (,value ,arg)
-              ,(if (eq type 't)
-                 `(setf ,form ,value)
-                 `(the ,type (setf ,form (typecheck ,value ,type))))))))))
+              ,(cond
+		((eq type t) `(setf ,form ,value))
+		((nx-declarations-typecheck env)
+		 ;; Checking the type of SETF's return value seems
+		 ;; kind of pointless here.
+		 `(require-type (setf ,form (typecheck ,value ,type)) ',type))
+		(t
+		 `(the ,type (setf ,form (typecheck ,value ,type)))))))))))
 
 (defun defstruct-reftype (type)
   (cond ((null type) $defstruct-struct)
