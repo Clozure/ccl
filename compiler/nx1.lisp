@@ -51,13 +51,18 @@
                (t nil))))
     (let* ((ctype (handler-case (values-specifier-type (nx-target-type typespec) env)
                     (parse-unknown-type (c)
-                      (when whine
-			(nx1-whine :unknown-type-in-declaration (parse-unknown-type-specifier c)))
-                      *wild-type*)
+                      (if whine
+			(progn
+			  (nx1-whine :unknown-type-in-declaration
+				     (parse-unknown-type-specifier c))
+			  *wild-type*)
+			(specifier-type typespec env)))
                     (program-error (c)
-		      (when whine
-			(nx1-whine :invalid-type typespec c))
-                      *wild-type*)))
+		      (if whine
+			(progn
+			  (nx1-whine :invalid-type typespec c)
+			  *wild-type*)
+			(specifier-type typespec)))))
            (new (ctype-spec ctype)))
       (nx-target-type (type-specifier (if new (specifier-type new) ctype))))))
 
