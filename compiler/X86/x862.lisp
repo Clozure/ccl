@@ -6637,8 +6637,8 @@
           (ensuring-node-target (target vreg)
             (x862-one-targeted-reg-form seg otherform target)
             (! %logand-c target target (ash fixval *x862-target-fixnum-shift*))))
-         (multiple-value-bind (r1 r2) (x862-two-untargeted-reg-forms seg form1 *x862-arg-y* form2 *x862-arg-z*)
-            (if vreg (ensuring-node-target (target vreg) (! %logand2 target r1 r2)))))
+	(multiple-value-bind (r1 r2) (x862-two-untargeted-reg-forms seg form1 *x862-arg-y* form2 *x862-arg-z*)
+	  (if vreg (ensuring-node-target (target vreg) (! %logand2 target r1 r2)))))
       (^))))
 
 (defx862 x862-%ilogxor2 %ilogxor2 (seg vreg xfer form1 form2)
