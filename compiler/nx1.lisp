@@ -17,7 +17,7 @@
 
 (in-package "CCL")
 
-(defun nx1-typespec-for-typep (typespec env)
+(defun nx1-typespec-for-typep (typespec env &key (whine t))
   ;; Allow VALUES types here (or user-defined types that
   ;; expand to VALUES types).  We could do a better job
   ;; of this, but treat them as wild types.
@@ -51,10 +51,12 @@
                (t nil))))
     (let* ((ctype (handler-case (values-specifier-type (nx-target-type typespec) env)
                     (parse-unknown-type (c)
-                      (nx1-whine :unknown-type-in-declaration (parse-unknown-type-specifier c))
+                      (when whine
+			(nx1-whine :unknown-type-in-declaration (parse-unknown-type-specifier c)))
                       *wild-type*)
                     (program-error (c)
-                      (nx1-whine :invalid-type typespec c)
+		      (when whine
+			(nx1-whine :invalid-type typespec c))
                       *wild-type*)))
            (new (ctype-spec ctype)))
       (nx-target-type (type-specifier (if new (specifier-type new) ctype))))))
