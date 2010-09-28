@@ -2830,8 +2830,8 @@ defcallback returns the callback pointer, e.g., the value of name."
         ((nx-inhibit-safety-checking env)
          `(the ,typespec ,object))
         (t
-         `(require-type ,object ',(nx1-typespec-for-typep typespec env)))))
-
+         `(require-type ,object ',(nx1-typespec-for-typep typespec env
+							  :whine nil)))))
 
 (defmacro with-hash-table-iterator ((mname hash-table) &body body)
   "WITH-HASH-TABLE-ITERATOR ((function hash-table) &body body)
