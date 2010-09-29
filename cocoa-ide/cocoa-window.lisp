@@ -438,6 +438,7 @@
                                        (max-y-margin nil maxyp)
                                        (min-y-margin nil minyp)
                                        (resizes-subviews t rsp)
+                                       view-container
                                        &allow-other-keys)
   (let* ((mask (#/autoresizingMask view))
          (newmask mask))
@@ -468,7 +469,9 @@
     (unless (eql mask newmask)
       (#/setAutoresizingMask: view newmask)))
   (when rsp
-    (#/setAutoresizesSubviews: view resizes-subviews)))
+    (#/setAutoresizesSubviews: view resizes-subviews))
+  (when view-container
+    (install-view-in-container view view-container)))
                               
 
 (defun new-cocoa-window (&key
@@ -507,3 +510,9 @@
   (let* ((w (#/window view)))
     (unless (%null-ptr-p w)
       w)))
+
+(defmethod install-view-in-container ((view ns:ns-view) (container ns:ns-view))
+  (#/addSubview: container view))
+
+(defmethod install-view-in-container ((view ns:ns-view) (container ns:ns-window))
+  (#/addSubview: (#/contentView container) view))
