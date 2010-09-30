@@ -203,6 +203,7 @@
 (defparameter *compiler-whining-conditions*
   '((:undefined-function . undefined-function-reference)
     (:undefined-type . undefined-type-reference)
+    (:unknown-type-in-declaration . undefined-type-reference)
     (:deferred-mismatch . undefined-keyword-reference)
     (:invalid-type . invalid-type-warning)
     (:global-mismatch . invalid-arguments-global)
