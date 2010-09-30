@@ -123,7 +123,7 @@ Will differ from *compiling-file* during an INCLUDE")
                          (verbose *compile-verbose*)
                          (print *compile-print*)
                          load
-                         features
+                         (features nil features-p)
                          (target *fasl-target* target-p)
                          (save-local-symbols *fasl-save-local-symbols*)
                          (save-doc-strings *fasl-save-doc-strings*)
@@ -139,20 +139,28 @@ Will differ from *compiling-file* during an INCLUDE")
                                                     t  ;; really SLIME being interactive...
                                                     *fasl-break-on-program-errors*)))
   "Compile SRC, producing a corresponding fasl file and returning its filename."
-  (let* ((backend *target-backend*))
+  (let* ((backend *target-backend*)
+         (symbols ())
+         (values ()))
     (when (and target-p (not (setq backend (find-backend target))))
       (warn "Unknown :TARGET : ~S.  Reverting to ~s ..." target *fasl-target*)
       (setq target *fasl-target*  backend *target-backend*))
-    (unless (eq *target-backend* *host-backend*)
-      (setq save-source-locations nil))
+    (if (eq *target-backend* *host-backend*)
+      (when features-p
+        (setq symbols '(*features*)
+              values (list (append (if (listp features) features (list features)) *features*))))
+      (setq symbols '(*features*)
+            values (list (setup-target-features *target-backend* *features*))
+            save-source-locations nil))
     (multiple-value-bind (output-file truename warnings-p serious-p)
         (loop
           (restart-case
-              (return (%compile-file src output-file verbose print features
-                                     save-local-symbols save-doc-strings save-definitions
-                                     save-source-locations break-on-program-errors
-                                     force backend external-format
-                                     compile-file-original-truename compile-file-original-buffer-offset))
+              (return (progv symbols values
+                        (%compile-file src output-file verbose print
+                                       save-local-symbols save-doc-strings save-definitions
+                                       save-source-locations break-on-program-errors
+                                       force backend external-format
+                                       compile-file-original-truename compile-file-original-buffer-offset)))
             (retry-compile-file ()
               :report (lambda (stream) (format stream "Retry compiling ~s" src))
               nil)
@@ -168,7 +176,7 @@ Will differ from *compiling-file* during an INCLUDE")
 
 (defvar *fasl-compile-time-env* nil)
 
-(defun %compile-file (src output-file verbose print features
+(defun %compile-file (src output-file verbose print
                           save-local-symbols save-doc-strings save-definitions
                           save-source-locations break-on-program-errors
                           force target-backend external-format
@@ -198,8 +206,7 @@ Will differ from *compiling-file* during an INCLUDE")
               output-file (pathname-type
                            (backend-target-fasl-pathname
                             *target-backend*))))
-    (let* ((*features* (append (if (listp features) features (list features)) (setup-target-features target-backend *features*)))
-           (*fasl-deferred-warnings* nil) ; !!! WITH-COMPILATION-UNIT ...
+    (let* ((*fasl-deferred-warnings* nil) ; !!! WITH-COMPILATION-UNIT ...
            (*fasl-save-local-symbols* save-local-symbols)
            (*save-source-locations* save-source-locations)
            (*fasl-save-doc-strings* save-doc-strings)
