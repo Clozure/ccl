@@ -285,7 +285,9 @@
                   (t `(uvref ,@args ,offset)))))
       (if (eq type 't)
         accessor
-        `(the ,type ,accessor)))
+	(if (nx-declarations-typecheck env)
+	  `(typecheck ,accessor ,type)
+	  `(the ,type ,accessor))))
     `(structure-typep ,@args ',structref-info)))
 
 ;;; Should probably remove the constructor, copier, and predicate as
