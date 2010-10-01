@@ -165,7 +165,8 @@
     ()
   (:metaclass ns:+ns-object))
 
-(defgeneric ns-lisp-string-string (abstract-ns-lisp-string))
+(defgeneric ns-lisp-string-string (abstract-ns-lisp-string)
+  (:method ((self abstract-ns-lisp-string)) nil))
 
 (objc:defmethod (#/length :<NSUI>nteger) ((self abstract-ns-lisp-string))
     (length (ns-lisp-string-string self)))
