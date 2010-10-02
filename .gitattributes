@@ -314,7 +314,7 @@ library/x86-win64-syscalls.lisp -text
 library/x8664-solaris-syscalls.lisp -text
 lisp-kernel/albt.c -text
 lisp-kernel/androidarm/Makefile -text
-lisp-kernel/androidarm/armlinux.x -text
+lisp-kernel/androidarm/armandroid.x -text
 lisp-kernel/androidarm/link.h -text
 lisp-kernel/androidarm/ucontext.h -text
 lisp-kernel/arm-asmutils.s -text

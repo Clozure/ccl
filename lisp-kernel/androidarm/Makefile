@@ -13,23 +13,26 @@
 #   The LLGPL is also available online at
 #   http://opensource.franz.com/preamble.html
 
-
+NDK = /usr/local/android-ndk-r4b
+HOST = linux-x86
+ANDROIDVERSION = android-8
+NDKLIB = $(NDK)/build/platforms/$(ANDROIDVERSION)/arch-arm/usr/lib
 VPATH = ../
 RM = /bin/rm
-# Versions of GNU as >= 2.9.1 all seem to work
-# AS = gas-2.9.1
-AS = as
+AS = $(NDK)/build/prebuilt/$(HOST)/arm-eabi-4.4.0/bin/arm-eabi-as
+CC = $(NDK)/build/prebuilt/$(HOST)/arm-eabi-4.4.0/bin/arm-eabi-gcc
+LD = $(NDK)/build/prebuilt/$(HOST)/arm-eabi-4.4.0/bin/arm-eabi-ld
 M4 = m4
 ASFLAGS = -mfpu=vfpv2
 M4FLAGS = -DLINUX -DARM -DANDROID
 CDEFINES = -DLINUX -DARM -DANDROID -D_REENTRANT -D_GNU_SOURCE -DUSE_FUTEX
 CDEBUG = -g
-COPT = -O2
+COPT = #-O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
 PLATFORM_H = platform-androidarm.h
-NDK=/usr/local/src/ndk
+
 
 # If the linker supports a "--hash-style=" option, use traditional
 # Sysv hash tables.  (If it doesn't support that option, assume
@@ -42,16 +45,11 @@ HASH_STYLE="-Wl,--hash-style=sysv"
 endif
 
 
-# Likewise, some versions of GAS may need a "-a32" flag, to force the
-
-# output file to be 32-bit compatible.
-
-A32 = $(shell ($(AS) --help -v 2>&1 | grep -q -e "-a32") && /bin/echo "-a32")
 
 .s.o:
-	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(A32) $(ASFLAGS) -o $@
+	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -include ../$(PLATFORM_H) -nostdinc -isystem ${NDK}/usr/gcc-include -isystem $(NDK)/usr/include -isystem . -c $<  $(CDEFINES) $(CDEBUG) $(COPT)  $(WFORMAT)  -o $@
+	$(CC) -include ../$(PLATFORM_H) -I. -I$(NDK)/build/platforms/$(ANDROIDVERSION)/arch-arm/usr/include -c $<  $(CDEFINES) $(CDEBUG) $(COPT) -fpic  $(WFORMAT)  -o $@
 
 # -nostdinc -isystem ${NDK}/usr/gcc-include -isystem $(NDK)/usr/include
 SPOBJ = pad.o  arm-spentry.o arm-subprims.o
@@ -81,11 +79,11 @@ all:	../../aarmcl
 # KSPOBJ=
 # all:	../../armcl ../../subprims.so
 
-OSLIBS = -ldl -lm $(NDK)/usr/lib/crtbegin_dynamic.o $(NDK)/usr/lib/crtend_android.o
+OSLIBS = -ldl -lm -lc $(NDKLIB)/crtbegin_dynamic.o $(NDKLIB)/crtend_android.o
 
 
 ../../aarmcl:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
-	$(LD) --build-id -e _start --eh-frame-hdr -dynamic-linker /system/bin/linker -X -m armelf_linux_eabi -nostdlib -o ../../aarmcl -z relro  --hash-style=sysv -L$(NDK)/usr/lib pad.o arm-spentry.o arm-subprims.o pmcl-kernel.o gc-common.o arm-gc.o bits.o arm-exceptions.o image.o thread_manager.o lisp-debug.o memory.o unix-calls.o arm-asmutils.o imports.o lispdcmd.o plprint.o plsym.o albt.o arm_print.o -ldl -lm /usr/local/src/ndk/usr/lib/crtbegin_dynamic.o /usr/local/src/ndk/usr/lib/crtend_android.o -lgcc -lc -lgcc  --no-as-needed -T ./armlinux.x
+	$(LD) -Bdynamic -e _start  -dynamic-linker /system/bin/linker -nostdlib -z nocopyreloc  -o ../../aarmcl  -L $(NDKLIB) pad.o arm-spentry.o arm-subprims.o pmcl-kernel.o gc-common.o arm-gc.o bits.o arm-exceptions.o image.o thread_manager.o lisp-debug.o memory.o unix-calls.o arm-asmutils.o imports.o lispdcmd.o plprint.o plsym.o albt.o arm_print.o $(OSLIBS) -T ./armandroid.x
 
 
 
