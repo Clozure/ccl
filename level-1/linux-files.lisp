@@ -864,7 +864,7 @@ environment variable. Returns NIL if there is no user with the ID uid."
               (return nil))))))))
 
 (defun %delete-file (name)
-  (with-cstrs ((n name))
+  (with-filename-cstrs ((n name))
     (int-errno-call (#+windows-target #__unlink #-windows-target #_unlink n))))
 
 (defun os-command (string)
