@@ -622,19 +622,13 @@
 (defun user-homedir-pathname (&optional host)
   "Return the home directory of the user as a pathname."
   (declare (ignore host))
-  (let* ((native
-          (ignore-errors
-            (truename
-             (native-to-directory-pathname (or #+ccl-qres (getenv "HOME")
-                                               (get-user-home-dir (getuid))))))))
-    (if (and native (eq :absolute (car (pathname-directory native))))
-      native
-      ;; Another plausible choice here is
-      ;; #p"/tmp/.hidden-directory-of-some-irc-bot-in-eastern-europe/"
-      ;; Of course, that might already be the value of $HOME.  Anyway,
-      ;; the user's home directory just contains "config files" (like
-      ;; SSH keys), and spoofing it can't hurt anything.
+  (let* ((native (get-user-home-dir (getuid)))
+	 (pathname (and native
+			(truename (native-to-directory-pathname native)))))
+    (if (and pathname (eq :absolute (car (pathname-directory pathname))))
+      pathname
       (make-pathname :directory '(:absolute) :defaults nil))))
+  
 
 
 
