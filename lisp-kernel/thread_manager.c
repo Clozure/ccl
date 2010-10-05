@@ -1643,7 +1643,7 @@ count_cpus()
 void
 count_cpus()
 {
-  int n = sysconf(_SC_NPROCESSORS_ONLN);
+  int n = sysconf(_SC_NPROCESSORS_CONF);
   
   if (n > 1) {
     spin_lock_tries = 1024;
