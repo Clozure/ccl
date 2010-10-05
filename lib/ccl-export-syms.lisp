@@ -731,6 +731,8 @@
      *vector-output-stream-default-initial-allocation*   
      external-process-creation-failure
      object-direct-size
+     add-feature
+     remove-feature
 
      ) "CCL"
    )

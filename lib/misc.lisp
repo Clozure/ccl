@@ -529,15 +529,44 @@ are running on, or NIL if we can't find any useful information."
 
 
 
-;;; site names and machine-instance is in the init file.
 
-(defun add-feature (symbol)
-  "Not CL but should be."
-  (if (symbolp symbol)
-      (if (not (memq symbol *features*))
-          (setq *features* (cons symbol *features*)))))
+(defun add-feature (thing)
+  (when (typep thing 'symbol)
+    (let* ((gvector-or-fixnum (%symptr-binding-address '*features*)))
+      (if (typep gvector-or-fixnum 'fixnum)
+        ;; Thread-local binding of *FEATURES*.
+        (if (not (member thing *features* :test #'eq))
+          (setq *features* (cons thing *features*)))
+        (loop
+          (let* ((old (%svref gvector-or-fixnum target::symbol.vcell-cell)))
+            (when (member thing old :test #'eq)
+              (return))
+            (let* ((new (cons thing old)))
+              (when (store-gvector-conditional target::symbol.vcell-cell
+                                               gvector-or-fixnum
+                                               old
+                                               new)
+                (return)))))))
+    thing))
 
-;;; (dotimes (i 5000) (declare (fixnum i)) (add-feature 'junk))
+(defun remove-feature (thing)
+  (let* ((gvector-or-fixnum (%symptr-binding-address '*features*)))
+    (if (typep gvector-or-fixnum 'fixnum)
+      ;; Thread-local binding of *FEATURES*.
+      (setq *features* (delete thing *features*))
+      (loop
+        (let* ((old (%svref gvector-or-fixnum target::symbol.vcell-cell)))
+          (unless (member thing old :test #'eq)
+            (return))
+          (let* ((new (remove thing old)))
+            (when (store-gvector-conditional target::symbol.vcell-cell
+                                           gvector-or-fixnum
+                                           old
+                                           new)
+              (return))))))
+    thing))
+  
+
 
 
 
