@@ -1957,6 +1957,7 @@ do_pseudo_sigreturn(mach_port_t thread, TCR *tcr)
 #ifdef DEBUG_MACH_EXCEPTIONS
   fprintf(dbgout, "doing pseudo_sigreturn for 0x%x\n",tcr);
 #endif
+  tcr->last_lisp_frame = *((natural *)(tcr->last_lisp_frame));
   xp = tcr->pending_exception_context;
   if (xp) {
     tcr->pending_exception_context = NULL;
@@ -2051,14 +2052,19 @@ setup_signal_frame(mach_port_t thread,
   arm_thread_state_t ts;
   ExceptionInformation *pseudosigcontext;
   int old_valence = tcr->valence;
-  natural stackp;
+  natural stackp, *pstackp;
 
 #ifdef DEBUG_MACH_EXCEPTIONS
   fprintf(dbgout,"Setting up exception handling for 0x%x\n", tcr);
 #endif
   pseudosigcontext = create_thread_context_frame(thread, &stackp);
+  pstackp = (natural *)stackp;
+  *--pstackp = tcr->last_lisp_frame;
+  stackp = (natural)pstackp;
+  tcr->last_lisp_frame = stackp;
   pseudosigcontext->uc_onstack = 0;
   pseudosigcontext->uc_sigmask = (sigset_t) 0;
+  pseudosigcontext->uc_mcsize = ARM_MCONTEXT_SIZE;
   tcr->pending_exception_context = pseudosigcontext;
   tcr->valence = TCR_STATE_EXCEPTION_WAIT;
   
