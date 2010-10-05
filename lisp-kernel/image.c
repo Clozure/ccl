@@ -213,12 +213,14 @@ load_image_section(int fd, openmcl_image_section_header *sect)
   advance = mem_size;
   switch(sect->code) {
   case AREA_READONLY:
-    if (!MapFile(pure_space_active,
-		 pos,
-		 align_to_power_of_2(mem_size,log2_page_size),
-		 MEMPROTECT_RX,
-		 fd)) {
-      return;
+    if (mem_size != 0) {
+      if (!MapFile(pure_space_active,
+                   pos,
+                   align_to_power_of_2(mem_size,log2_page_size),
+                   MEMPROTECT_RX,
+                   fd)) {
+        return;
+      }
     }
     a = new_area(pure_space_active, pure_space_limit, AREA_READONLY);
     pure_space_active += mem_size;
