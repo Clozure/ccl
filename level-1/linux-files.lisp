@@ -180,10 +180,13 @@ atomically decremented, or until a timeout expires."
     (values (eql status 0) status)))
 
 (defun wait-for-signal (s duration)
+  (if duration
+    (check-type duration (real 0 #x7fffffff))
+    (setq duration #x7fffffff))
   (or (multiple-value-bind (result err)
           (%timed-wait-for-signal s 0 0)
         (or result
-            (if (or (eql err #$EINTR)
+            (if (or (eql err #$EINTR) ; probably not possible
                     (eql err #-windows-target #$ETIMEDOUT #+windows-target #$WAIT_TIMEOUT))
               nil
               (error "Error waiting for signal ~d: ~a." s (%strerror err)))))
