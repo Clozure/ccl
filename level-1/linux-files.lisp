@@ -868,7 +868,7 @@ environment variable. Returns NIL if there is no user with the ID uid."
 
 (defun %delete-file (name)
   (with-filename-cstrs ((n name))
-    (int-errno-call (#+windows-target #__unlink #-windows-target #_unlink n))))
+    (int-errno-call (#+windows-target #__wunlink #-windows-target #_unlink n))))
 
 (defun os-command (string)
   "Invoke the Posix function system(), which invokes the user's default

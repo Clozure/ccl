@@ -82,8 +82,9 @@
   (with-filename-cstrs ((old old-name)
 			(new new-name))
     #+windows-target
-    (#__unlink new)
-    (let* ((res (#_rename old new)))
+    (#__wunlink new)
+    (let* ((res #-windows-target (#_rename old new)
+		#+windows-target (#__wrename old new)))
       (declare (fixnum res))
       (if (zerop res)
         (values t nil)
