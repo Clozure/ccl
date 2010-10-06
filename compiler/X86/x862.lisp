@@ -9598,23 +9598,153 @@
 				     (t :u32))))))))
     (^)))
 
+
+(defun x862-x8664-ff-call-return (seg vreg resultspec)
+  (with-x86-local-vinsn-macros (seg vreg)
+    (when vreg
+      (cond ((eq resultspec :void) (<- nil))
+            ((eq resultspec :double-float)
+             (<- ($  x8664::fp0 :class :fpr :mode :double-float)))
+            ((eq resultspec :single-float)
+             (<- ($ x8664::fp0 :class :fpr :mode :single-float)))
+            ((eq resultspec :unsigned-doubleword)
+             (if (node-reg-p vreg)
+               (progn
+                 (! makeu64)
+                 (<- ($ x8664::arg_z)))
+               (<- ($  x8664::rax :class :gpr :mode :u64))))
+            ((eq resultspec :signed-doubleword)
+             (if (node-reg-p vreg)
+               (progn
+                 (! makes64)
+                 (<- ($ x8664::arg_z)))
+               (<- ($  x8664::rax :class :gpr :mode :s64))))
+            (t
+             (case resultspec
+               (:signed-byte (! sign-extend-s8 x8664::imm0 x8664::imm0))
+               (:signed-halfword (! sign-extend-s16 x8664::imm0 x8664::imm0))
+               (:signed-fullword (! sign-extend-s32 x8664::imm0 x8664::imm0))
+               (:unsigned-byte (! zero-extend-u8 x8664::imm0 x8664::imm0))
+               (:unsigned-halfword (! zero-extend-u16 x8664::imm0 x8664::imm0))
+               (:unsigned-fullword (! zero-extend-u32 x8664::imm0 x8664::imm0)))
+             (<- (make-wired-lreg x8664::imm0
+                                  :mode
+                                  (gpr-mode-name-value
+                                   (case resultspec
+                                     (:address :address)
+                                     (:signed-byte :s8)
+                                     (:unsigned-byte :u8)
+                                     (:signed-halfword :s16)
+                                     (:unsigned-halfword :u16)
+                                     (:signed-fullword :s32)
+                                     (t :u32))))))))))
+
+(defun x862-win64-ff-call (seg vreg xfer address argspecs argvals resultspec)
+  (with-x86-local-vinsn-macros (seg vreg xfer)
+    (let* ((*x862-vstack* *x862-vstack*)
+           (*x862-top-vstack-lcell* *x862-top-vstack-lcell*)
+           (*x862-cstack* *x862-cstack*)
+           (nargwords 0)
+           (arg-offset 0)
+           (simple-foreign-args nil)
+           (fp-loads ()))
+      (declare (fixnum nargwords arg-offset))
+      (dolist (argspec argspecs)
+        (case argspec
+          (:double-float (incf nargwords))
+          (:single-float (incf nargwords))
+          (:registers (compiler-bug "Foreign argument type ~s not supported on Win64" argspec))
+          (t
+           (if (typep argspec 'unsigned-byte)
+             (incf nargwords argspec)
+             (incf nargwords)))))
+      (when (null argspecs)
+        (setq simple-foreign-args t))
+      (! alloc-c-frame nargwords)
+      (x862-open-undo $undo-x86-c-frame)
+      (unless simple-foreign-args
+        (x862-vpush-register seg (x862-one-untargeted-reg-form seg address x8664::arg_z)))
+      ;; Evaluate each form into the C frame, according to the
+      ;; matching argspec.  Remember type and arg offset of any FP
+      ;; args, since FP regs will have to be loaded later.
+      (do* ((specs argspecs (cdr specs))
+            (vals argvals (cdr vals)))
+           ((null specs))
+        (declare (list specs vals))
+        (let* ((valform (car vals))
+               (spec (car specs))
+               (absptr (acode-absolute-ptr-p valform)))
+          (case spec
+            (:double-float
+             (let* ((df ($ x8664::fp1 :class :fpr :mode :double-float))) 
+               (x862-one-targeted-reg-form seg valform df )
+               (! set-double-c-arg df arg-offset)
+               (when (< arg-offset 4)
+                 (push (cons :double-float arg-offset) fp-loads))
+               (incf arg-offset)))
+            (:single-float
+             (let* ((sf ($ x8664::fp1 :class :fpr :mode :single-float)))
+               (x862-one-targeted-reg-form seg valform sf)
+               (! set-single-c-arg sf arg-offset)
+               (when (< arg-offset 4)
+                 (push (cons :single-float arg-offset) fp-loads))
+               (incf arg-offset)))
+            (:address
+             (with-imm-target () (ptr :address)
+               (if absptr
+                 (x862-lri seg ptr absptr)
+                 (x862-form seg ptr nil valform))
+               (! set-c-arg ptr arg-offset)
+               (incf arg-offset)))
+            (t
+             (if (typep spec 'unsigned-byte)
+               (progn
+                 (with-imm-target () (ptr :address)
+                   (x862-one-targeted-reg-form seg valform ptr)
+                   (with-imm-target (ptr) (r :natural)
+                     (dotimes (i spec)
+                       (! mem-ref-c-doubleword r ptr (ash i x8664::word-shift))
+                       (! set-c-arg r arg-offset)
+                       (incf arg-offset)))))               
+               (with-imm-target () (valreg :natural)
+                 (let* ((reg (x862-unboxed-integer-arg-to-reg seg valform valreg spec)))
+                   (! set-c-arg reg arg-offset)
+                   (incf arg-offset))))))))
+      (dolist (reload fp-loads)
+        (let* ((size (car reload))
+               (offset (cdr reload))
+               (fpr (+ x8664::fp0 offset)))
+          (if (eq size :double-float)
+            (! reload-double-c-arg ($ fpr :class :fpr :mode :double-float) offset)
+            (! reload-single-c-arg ($ fpr :class :fpr :mode :single-float) offset))))
+
+      (if simple-foreign-args
+        (x862-one-targeted-reg-form seg address x8664::arg_z)
+        (x862-vpop-register seg ($ x8664::arg_z)))
+      (! ff-call)
+      (x862-close-undo)
+      (x862-x8664-ff-call-return seg vreg resultspec)
+      (^))))
+    
 (defx862 x862-ff-call ff-call (seg vreg xfer address argspecs argvals resultspec &optional monitor)
   (declare (ignore monitor))
-  (let* ((*x862-vstack* *x862-vstack*)
-         (*x862-top-vstack-lcell* *x862-top-vstack-lcell*)
-         (*x862-cstack* *x862-cstack*)
-         (gpr-offset 0)
-         (other-offset 6)
-         (single-float-offset 6)
-         (double-float-offset 6)
-         (nsingle-floats 0)              ; F
-         (ndouble-floats 0)             ; D
-         (nother-words 0)
-         (nfpr-args 0)
-         (ngpr-args 0)
-         (simple-foreign-args nil)
-         (fp-loads ())
-         (return-registers ()))
+  (if (eq (backend-target-os *target-backend*) :win64)
+    (x862-win64-ff-call seg vreg xfer address argspecs argvals resultspec)
+    (let* ((*x862-vstack* *x862-vstack*)
+           (*x862-top-vstack-lcell* *x862-top-vstack-lcell*)
+           (*x862-cstack* *x862-cstack*)
+           (gpr-offset 0)
+           (other-offset 6)
+           (single-float-offset 6)
+           (double-float-offset 6)
+           (nsingle-floats 0)           ; F
+           (ndouble-floats 0)           ; D
+           (nother-words 0)
+           (nfpr-args 0)
+           (ngpr-args 0)
+           (simple-foreign-args nil)
+           (fp-loads ())
+           (return-registers ()))
       (declare (fixnum  nsingle-floats ndouble-floats nfpr-args ngpr-args nother-words
                         gpr-offset other-offset single-float-offset double-float-offset))
       (dolist (argspec argspecs)
@@ -9736,44 +9866,8 @@
         (! ff-call-return-registers)
         (! ff-call) )
       (x862-close-undo)
-      (when vreg
-        (cond ((eq resultspec :void) (<- nil))
-              ((eq resultspec :double-float)
-               (<- ($  x8664::fp0 :class :fpr :mode :double-float)))
-              ((eq resultspec :single-float)
-               (<- ($ x8664::fp0 :class :fpr :mode :single-float)))
-              ((eq resultspec :unsigned-doubleword)
-               (if (node-reg-p vreg)
-                 (progn
-                   (! makeu64)
-                   (<- ($ x8664::arg_z)))
-                 (<- ($  x8664::rax :class :gpr :mode :u64))))
-              ((eq resultspec :signed-doubleword)
-               (if (node-reg-p vreg)
-                 (progn
-                   (! makes64)
-                   (<- ($ x8664::arg_z)))
-                 (<- ($  x8664::rax :class :gpr :mode :s64))))
-              (t
-               (case resultspec
-                 (:signed-byte (! sign-extend-s8 x8664::imm0 x8664::imm0))
-                 (:signed-halfword (! sign-extend-s16 x8664::imm0 x8664::imm0))
-                 (:signed-fullword (! sign-extend-s32 x8664::imm0 x8664::imm0))
-                 (:unsigned-byte (! zero-extend-u8 x8664::imm0 x8664::imm0))
-                 (:unsigned-halfword (! zero-extend-u16 x8664::imm0 x8664::imm0))
-                 (:unsigned-fullword (! zero-extend-u32 x8664::imm0 x8664::imm0)))
-               (<- (make-wired-lreg x8664::imm0
-                                    :mode
-                                    (gpr-mode-name-value
-                                     (case resultspec
-                                       (:address :address)
-                                       (:signed-byte :s8)
-                                       (:unsigned-byte :u8)
-                                       (:signed-halfword :s16)
-                                       (:unsigned-halfword :u16)
-                                       (:signed-fullword :s32)
-                                       (t :u32))))))))
-      (^)))
+      (x862-x8664-ff-call-return seg vreg resultspec)
+      (^))))
 
 
              
