@@ -2750,20 +2750,16 @@
 (define-x8664-vinsn %ilsl (((dest :imm))
 			   ((count :imm)
 			    (src :imm))
-			   ((temp :s64)
-                            (shiftcount (:s64 #.x8664::rcx))))
-  (movq (:%q count) (:%q temp))
-  (sarq (:$ub x8664::fixnumshift) (:%q temp))
-  (rcmpq (:%q temp) (:$l 63))
-  (cmovbw (:%w temp) (:%w shiftcount))
-  (movq (:%q src) (:%q temp))
-  (jae :shift-max)
-  (shlq (:%shift x8664::cl) (:%q temp))
-  (jmp :done)
-  :shift-max
-  (xorq (:%q temp) (:%q temp))
-  :done
-  (movq (:%q temp) (:%q dest)))
+			   ((shiftcount (:s64 #.x8664::rcx))))
+  (movl (:$l (ash 63 x8664::fixnumshift)) (:%l shiftcount))
+  (rcmpq (:%q count) (:%q shiftcount))
+  (cmovbl (:%l count) (:%l shiftcount))
+  (sarl (:$ub x8664::fixnumshift) (:%l shiftcount))
+  ((:not (:pred =
+                (:apply %hard-regspec-value src)
+                (:apply %hard-regspec-value dest)))
+   (movq (:%q src) (:%q dest)))
+  (shlq (:%shift x8664::cl) (:%q dest)))
 
 (define-x8664-vinsn %ilsl-c (((dest :imm))
 			     ((count :u8const)
@@ -4547,6 +4543,12 @@
                                   ()
                                   ((entry (:label 1))))
   (leaq (:@ (:^ entry) (:% x8664::rip)) (:%q x8664::fn)))
+
+(define-x8664-vinsn %ilognot (((dest :imm)
+                               (src :imm))
+                              ((src :imm)))
+  (xorq (:$b (- x8664::fixnumone)) (:%q dest)))
+                              
 
 (define-x8664-vinsn align-loop-head (()
                                      ()

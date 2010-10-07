@@ -1036,6 +1036,11 @@
                                            (x t)))
   (subl (:%l y) (:%l x)))
 
+(define-x8632-vinsn %ilognot (((dest :imm)
+                               (src :imm))
+                              ((src :imm)))
+  (xorl (:$b (- x8632::fixnumone)) (:%l dest)))
+
 (define-x8632-vinsn %logand-c (((dest t)
                                 (val t))
                                ((val t)
@@ -2266,20 +2271,17 @@
 (define-x8632-vinsn %ilsl (((dest :imm))
 			   ((count :imm)
 			    (src :imm))
-			   ((temp (:s32 #.x8632::eax))
-                            (shiftcount (:s32 #.x8632::ecx))))
-  (movl (:%l count) (:%l temp))
-  (sarl (:$ub x8632::fixnumshift) (:%l temp))
-  (rcmpl (:%l temp) (:$l 31))
-  (cmovbw (:%w temp) (:%w shiftcount))
-  (movl (:%l src) (:%l temp))
-  (jae :shift-max)
-  (shll (:%shift x8632::cl) (:%l temp))
-  (jmp :done)
-  :shift-max
-  (xorl (:%l temp) (:%l temp))
-  :done
-  (movl (:%l temp) (:%l dest)))
+			   ((shiftcount (:s32 #.x8632::ecx))))
+  
+  (movl (:$l (ash 31 x8632::fixnumshift)) (:%l shiftcount))
+  (rcmpl (:%l count) (:%l shiftcount))
+  (cmovbl (:%l count) (:%l shiftcount))
+  (sarl (:$ub x8632::fixnumshift) (:%l shiftcount))
+  ((:not (:pred =
+                (:apply %hard-regspec-value src)
+                (:apply %hard-regspec-value dest)))
+   (movl (:%l src) (:%l dest)))
+  (shll (:%shift x8632::cl) (:%l dest)))
 
 (define-x8632-vinsn %ilsl-c (((dest :imm))
 			     ((count :u8const)
