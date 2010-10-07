@@ -10353,6 +10353,19 @@
                                          '%short-float)
                              (list nil (list arg))))))))
 
+(defx862 x862-%ilognot %ilognot (seg vreg xfer form)
+  (ensuring-node-target (target vreg)
+    (! %ilognot target (x862-one-targeted-reg-form seg form target)))
+  (^))
+
+(defx862 x862-ash ash (seg vreg xfer num amt)
+  (or (acode-optimize-ash seg vreg xfer num amt *x862-trust-declarations*)
+      (progn
+        (x862-two-targeted-reg-forms seg num ($ *x862-arg-y*) amt ($ *x862-arg-z*))
+        (x862-fixed-call-builtin seg vreg xfer nil (subprim-name->offset '.SPbuiltin-ash)))))
+      
+    
+
 
 (defx862 x862-%new-ptr %new-ptr (seg vreg xfer size clear-p )
   (x862-call-fn seg
@@ -10363,18 +10376,9 @@
                 (list nil (list clear-p size))
                 nil))
 
-;------
-
-#+not-yet
-(progn
-
-
-;;;Make a gcable macptr.
 
 
 
-
-)
 
 #-x86-target
 (defun x8664-xcompile-lambda (def &key show-vinsns (symbolic-names t)
