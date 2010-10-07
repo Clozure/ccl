@@ -271,3 +271,112 @@
                 (32 (arch::target-max-32-bit-constant-index arch))
                 (64 (arch::target-max-64-bit-constant-index arch)))))))
       (and limit (< idx limit)))))
+
+(defun backend-use-operator (op seg vreg xfer &rest forms)
+  (declare (dynamic-extent forms))
+  (apply (svref (backend-p2-dispatch *target-backend*)
+                (%ilogand op operator-id-mask))
+         seg vreg xfer forms))
+
+;;; Return non-nil iff we can do something better than a subprim call
+;;; to .SPbuiltin-ash.
+(defun acode-optimize-ash (seg vreg xfer num amt trust-decls &optional (result-type 'integer))
+  (let* ((unsigned-natural-type (target-word-size-case
+                                 (32 '(unsigned-byte 32))
+                                 (64 '(unsigned-byte 64))))
+         (target-fixnum-type (target-word-size-case
+                              (32 '(signed-byte 30))
+                              (64 '(signed-byte 61))))
+         (max (target-word-size-case (32 32) (64 64)))
+         (maxbits (target-word-size-case
+                   (32 29)
+                   (64 60)))
+         (const-num (acode-integer-form-p num))
+         (const-amt (acode-integer-form-p amt))
+         (shifted (and const-num const-amt (ash const-num const-amt))))
+    (cond (shifted
+           (if (nx1-target-fixnump shifted)
+             (backend-use-operator (%nx1-operator fixnum) seg vreg xfer shifted)
+             (backend-use-operator (%nx1-operator immediate) seg vreg xfer shifted))
+           t)
+          ((eql const-amt 0)
+           (backend-use-operator (%nx1-operator require-integer) seg vreg xfer num)
+           t)
+          ((and (fixnump const-amt) (< const-amt 0))
+           (if (acode-form-typep num target-fixnum-type trust-decls)
+             (progn
+               (backend-use-operator (%nx1-operator %iasr)
+                                     seg
+                                     vreg
+                                     xfer
+                                     (make-acode (%nx1-operator fixnum)
+                                                 (- const-amt))
+                                     num)
+               t)
+             (if (acode-form-typep num unsigned-natural-type trust-decls)
+               (progn
+                 (if (< (- const-amt) max)
+                   (backend-use-operator (%nx1-operator natural-shift-right)
+                                         seg
+                                         vreg
+                                         xfer
+                                         num
+                                         (make-acode (%nx1-operator fixnum)
+                                                   (- const-amt)))
+                   (progn
+                     (backend-use-operator (%nx1-operator require-fixnum)
+                                           seg
+                                           nil
+                                           nil
+                                           num)
+                     (backend-use-operator (%nx1-operator fixnum)
+                                           seg
+                                           vreg
+                                           xfer
+                                           0)))
+                 t))))
+          ((and (fixnump const-amt)
+                (<= 0 const-amt maxbits)
+                (or (acode-form-typep num `(signed-byte ,(- (1+ maxbits) const-amt)) trust-decls)
+                      (and (acode-form-typep num 'fixnum trust-decls)
+                           trust-decls
+                           (subtypep result-type 'fixnum))))
+           (progn
+             (backend-use-operator (%nx1-operator %ilsl)
+                                   seg
+                                   vreg
+                                   xfer
+                                   (make-acode (%nx1-operator fixnum)
+                                               const-amt)
+                                   num)
+             t))
+          ((and (fixnump const-amt)
+                (< 0 const-amt max)
+                (acode-form-typep num unsigned-natural-type trust-decls)
+                trust-decls
+                (subtypep result-type unsigned-natural-type))
+           (backend-use-operator (%nx1-operator natural-shift-left)
+                                 seg
+                                 vreg
+                                 xfer
+                                 num
+                                 amt)
+           t)
+          ((typep const-num target-fixnum-type)
+           (let* ((field-width (1+ (integer-length const-num)))
+                    ;; num fits in a `(signed-byte ,field-width)
+                    (max-shift (- (1+ maxbits) field-width)))
+               (when (acode-form-typep amt `(mod ,(1+ max-shift)) trust-decls)
+                 (backend-use-operator (%nx1-operator %ilsl)
+                                       seg
+                                       vreg
+                                       xfer
+                                       amt
+                                       (make-acode (%nx1-operator fixnum)
+                                                   const-num))
+                 t)))
+          (t nil))))
+          
+                   
+                 
+                
