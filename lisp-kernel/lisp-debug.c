@@ -45,6 +45,15 @@ typedef enum {
   debug_kill
 } debug_command_return;
 
+#ifdef SVN_REVISION
+#define xstr(s) str(s)
+#define str(s) #s
+char *kernel_svn_revision = xstr(SVN_REVISION);
+#undef xstr
+#undef str
+#else
+char *kernel_svn_revision = "unknown";
+#endif
 
 Boolean
 open_debug_output(int fd)
@@ -854,6 +863,16 @@ debug_show_symbol(ExceptionInformation *xp, siginfo_t *info, int arg)
 }
 
 debug_command_return
+debug_show_lisp_version(ExceptionInformation *xp, siginfo_t *info, int arg)
+{
+  extern void *plsym(ExceptionInformation *,char*);
+
+  fprintf(dbgout, "Lisp kernel svn revision: %s\n", kernel_svn_revision);
+  plsym(xp, "*OPENMCL-VERSION*");
+  return debug_continue;
+}
+
+debug_command_return
 debug_thread_info(ExceptionInformation *xp, siginfo_t *info, int arg)
 {
   TCR * tcr = get_tcr(false);
@@ -1258,6 +1277,11 @@ debug_command_entry debug_command_entries[] =
    0,
    NULL,
    'K'},
+  {debug_show_lisp_version,
+   "Show Subversion revision information",
+   0,
+   NULL,
+   'V'},
   {debug_help,
    "Show this help",
    0,
