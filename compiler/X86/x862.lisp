@@ -331,7 +331,11 @@
               (x862-stack-to-register seg ea target)
               (! vcell-ref target target)
               (! vpush-register target))
-            (! vframe-push (memspec-frame-address-offset ea) *x862-vstack*))
+            (let* ((offset (memspec-frame-address-offset ea))
+                   (reg (x862-register-for-frame-offset offset)))
+              (if reg
+                (x862-vpush-register seg reg)
+                (! vframe-push offset *x862-vstack*))))
           (! vpush-register ea))
         (if (memory-spec-p ea)
           (ensuring-node-target (target vreg)
