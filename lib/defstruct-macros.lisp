@@ -50,10 +50,12 @@
 (defmacro refinfo-offset (refinfo) `(%ilogand2 #xFFFF ,refinfo))
 (defmacro refinfo-r/o (refinfo) `(%ilogbitp $struct-r/o ,refinfo))
 (defmacro refinfo-reftype (refinfo) `(%ilogand2 #xFF (%ilsr 16 ,refinfo)))
+(defmacro refinfo-inherited (refinfo) `(%ilogbitp $struct-inherited ,refinfo))
 
 (defmacro ssd-offset (ssd) `(refinfo-offset (ssd-refinfo ,ssd)))
 (defmacro ssd-r/o (ssd) `(refinfo-r/o (ssd-refinfo ,ssd)))
 (defmacro ssd-reftype (ssd) `(refinfo-reftype (ssd-refinfo ,ssd)))
+(defmacro ssd-inherited (ssd) `(refinfo-inherited (ssd-refinfo ,ssd)))
 
 (defmacro ssd-set-initform (ssd value) `(rplaca (cdr ,ssd) ,value))
 

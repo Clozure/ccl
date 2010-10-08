@@ -958,11 +958,16 @@ Will differ from *compiling-file* during an INCLUDE")
         (when (and predicate class-name)
           (setq structrefs (alist-adjoin predicate class-name structrefs)))
         (dolist (slot (sd-slots sd))
-          (unless (fixnump (ssd-name slot))
-            (setq structrefs
-                (alist-adjoin (if refnames (pop refnames) (ssd-name slot))
-                              (cons (ssd-type-and-refinfo slot) class-name)
-                              structrefs))))
+	  (cond
+	    ((fixnump (ssd-name slot)))	;skip
+	    ((ssd-inherited slot)
+	     (when refnames (pop refnames)))
+	    (t
+	     (setq structrefs
+		   ;; structrefs isn't a proper alist
+		   (alist-adjoin (if refnames (pop refnames) (ssd-name slot))
+				 (cons (ssd-type-and-refinfo slot) class-name)
+				 structrefs)))))
         (setf (defenv.structrefs defenv) structrefs)))))
 
 (defun fcomp-source-note (form &aux (notes *fcomp-source-note-map*))
