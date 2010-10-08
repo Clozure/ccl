@@ -52,7 +52,7 @@ examples/rubix/*~.*
 l1-fasls/*fsl
 level-0/*fsl
 level-0/*~.*
-level-0/ARM/*.lafsl
+level-0/ARM/*fsl
 level-0/PPC/*.d64fsl
 level-0/PPC/*.dfsl
 level-0/PPC/*.p64fsl
