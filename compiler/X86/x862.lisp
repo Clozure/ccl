@@ -334,7 +334,9 @@
             (let* ((offset (memspec-frame-address-offset ea))
                    (reg (x862-register-for-frame-offset offset)))
               (if reg
-                (x862-vpush-register seg reg)
+                (progn
+                  (! vpush-register reg)
+                  (x862-regmap-note-store reg *x862-vstack*))
                 (! vframe-push offset *x862-vstack*))))
           (! vpush-register ea))
         (if (memory-spec-p ea)
