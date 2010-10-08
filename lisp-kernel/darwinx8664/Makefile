@@ -15,6 +15,7 @@
 
 
 
+SVN_REVISION=$(shell svnversion || echo "unknown")
 
 MDYNAMIC_NO_PIC = $(shell ($(CC) --help -v 2>&1 | grep -q -e "-mdynamic-no-pic") && /bin/echo "-mdynamic-no-pic")
 
@@ -48,7 +49,7 @@ M4 = gm4
 ### Apple never
 M4FLAGS = -DDARWIN -DX86 -DX8664 -DTCR_IN_GPR
 ASFLAGS = -arch x86_64 -g
-CDEFINES = -DDARWIN -DX86 -DX8664 -DTCR_IN_GPR
+CDEFINES = -DDARWIN -DX86 -DX8664 -DTCR_IN_GPR -DSVN_REVISION=$(SVN_REVISION)
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,

@@ -14,6 +14,8 @@
 #   http://opensource.franz.com/preamble.html
 
 
+SVN_REVISION=$(shell svnversion || echo "unknown")
+
 MDYNAMIC_NO_PIC = $(shell ($(CC) --help -v 2>&1 | grep -q -e "-mdynamic-no-pic") && /bin/echo "-mdynamic-no-pic")
 
 VPATH = ..
@@ -24,7 +26,7 @@ AS = as
 M4 = gm4
 M4FLAGS = -DDARWIN -DX86 -DX8632
 ASFLAGS = -arch i386 -g
-CDEFINES = -DDARWIN -DX86 -DX8632 #-DGC_INTEGRITY_CHECKING -DFORCE_DWS_MARK -DDISABLE_EGC -DDEBUG_MACH_EXCEPTIONS
+CDEFINES = -DDARWIN -DX86 -DX8632 -DSVN_REVISION=$(SVN_REVISION)
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
