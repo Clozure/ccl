@@ -623,8 +623,7 @@
   "Return the home directory of the user as a pathname."
   (declare (ignore host))
   (let* ((native (get-user-home-dir (getuid)))
-	 (pathname (and native
-			(truename (native-to-directory-pathname native)))))
+	 (pathname (and native (native-to-directory-pathname native))))
     (if (and pathname (eq :absolute (car (pathname-directory pathname))))
       pathname
       (make-pathname :directory '(:absolute) :defaults nil))))
