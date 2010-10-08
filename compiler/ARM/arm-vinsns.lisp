@@ -3818,6 +3818,12 @@
   (tst tag (:$ arm::fixnummask))
   (bne lab))
 
+(define-arm-vinsn %ilognot (((dest :imm))
+                            ((src :imm))
+                            ((temp :u32)))
+  (orr temp src (:$ arm::fixnummask))
+  (mvn dest temp))
+
 ;;; In case arm::*arm-opcodes* was changed since this file was compiled.
 #+maybe-never
 (queue-fixup

@@ -5406,6 +5406,12 @@
 (defarm2 arm2-char-code char-code (seg vreg xfer c)
   (arm2-extract-charcode seg vreg xfer c (not (arm2-form-typep c 'character))))
 
+(defarm2 arm2-%ilognot %ilognot (seg vreg xfer form)
+  (ensuring-node-target (target vreg)
+    (! %ilognot target (arm2-one-untargeted-reg-form seg form target)))
+  (^))
+
+
 (defarm2 arm2-%ilogior2 %ilogior2 (seg vreg xfer form1 form2)
   (let* ((fix1 (acode-fixnum-form-p form1))
          (fix2 (acode-fixnum-form-p form2)))
@@ -8640,3 +8646,8 @@
                 (list nil (list clear-p size))
                 nil))
 
+(defarm2 arm2-ash ash (seg vreg xfer num amt)
+  (or (acode-optimize-ash seg vreg xfer num amt *arm2-trust-declarations*)
+      (progn
+        (arm2-two-targeted-reg-forms seg num ($ arm::arg_y) amt ($ arm::arg_z))
+        (arm2-fixed-call-builtin seg vreg xfer '.SPbuiltin-ash))))
