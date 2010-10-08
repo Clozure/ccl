@@ -2742,7 +2742,7 @@
                             (src :imm))
                            ((temp :u32)
                             (crx :crf)))
-  (cmpwi crx count (ash 31 ppc32::fixnumshift))
+  (cmplwi crx count (ash 31 ppc32::fixnumshift))
   (srwi temp count ppc32::fixnumshift)
   (slw dest src temp)
   (ble+ crx :foo)
@@ -2752,7 +2752,8 @@
 (define-ppc32-vinsn %ilsl-c (((dest :imm))
                              ((count :u8const)
                               (src :imm)))
-                                        ; Hard to use ppcmacroinstructions that expand into expressions involving variables.
+  ;; Hard to use ppcmacroinstructions that expand into expressions
+  ;; involving variables.
   (rlwinm dest src count 0 (:apply - ppc32::least-significant-bit count)))
 
 
@@ -4027,6 +4028,10 @@
   (clrlwi tag arg0 (- ppc32::nbits-in-word ppc32::nlisptagbits))
   (rlwimi. tag arg1 ppc32::nlisptagbits 28 29)
   (bne cr0 lab))
+
+(define-ppc32-vinsn %ilognot (((dest :imm))
+                              ((src :imm)))
+  (subfic dest src (ash -1 ppc32::fixnumshift)))
 
 ;;; In case ppc32::*ppc-opcodes* was changed since this file was compiled.
 (queue-fixup

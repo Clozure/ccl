@@ -9177,6 +9177,17 @@
                                          '%short-float)
                              (list nil (list arg))))))))
 
+(defppc2 ppc2-%ilognot %ilognot (seg vreg xfer form)
+  (ensuring-node-target (target vreg)
+    (! %ilognot target (ppc2-one-untargeted-reg-form seg form target)))
+  (^))
+
+(defppc2 ppc2-ash ash (seg vreg xfer num amt)
+  (or (acode-optimize-ash seg vreg xfer num amt *ppc2-trust-declarations*)
+      (progn
+        (ppc2-two-targeted-reg-forms seg num ($ ppc::arg_y) amt ($ ppc::arg_z))
+        (ppc2-fixed-call-builtin seg vreg xfer nil (subprim-name->offset '.SPbuiltin-ash)))))
+
 (defun show-function-constants (f)
   (cond ((typep f 'function)
 	 (do* ((i 0 j)

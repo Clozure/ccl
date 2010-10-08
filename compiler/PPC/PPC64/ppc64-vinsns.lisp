@@ -2755,7 +2755,7 @@
 			    (src :imm))
 			   ((temp :u32)
 			    (crx :crf)))
-  (cmpdi crx count (ash 63 ppc64::fixnumshift))
+  (cmpldi crx count (ash 63 ppc64::fixnumshift))
   (srdi temp count ppc64::fixnumshift)
   (sld dest src temp)
   (ble+ crx :foo)
@@ -4022,7 +4022,9 @@
   (rldimi. tag arg1 ppc64::nlisptagbits 58)
   (bne cr0 lab))
   
-                                              
+(define-ppc64-vinsn %ilognot (((dest :imm))
+                              ((src :imm)))
+  (subfic dest src (ash -1 ppc64::fixnumshift)))
                                            
 
 ;;; In case ppc64::*ppc-opcodes* was changed since this file was compiled.
