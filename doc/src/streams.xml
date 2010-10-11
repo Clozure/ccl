@@ -15,11 +15,13 @@
   <sect1 id="CCL-Stream-Extensions">
     <title>Stream Extensions</title>
 
-    <sect2><title>Stream External Encoding</title>
-    <para>&CCL; streams have an external-encoding attribute that
-    may be read using
-    <function>STREAM-EXTERNAL-ENCODING</function> and set using <function>(SETF
-    STREAM-EXTERNAL-ENCODING)</function>.
+    <sect2><title>Stream External Format</title>
+    <para><function>STREAM-EXTERNAL-FORMAT</function> can be applied to
+    (and may return a non-null result for) open streams that are not
+    <literal>FILE-STREAM</literal>s.</para>
+    <para><function>(SETF STREAM-EXTERNAL-FORMAT)</function> can be used to
+    change the external format of open streams created with <function>
+    OPEN</function> or <function>MAKE-SOCKET</function>.
     </para>
     </sect2>
 
@@ -1068,15 +1070,15 @@
 
 ;;; Write a vector of DOUBLE-FLOATs. Note that (to maintain
 ;;; alignment) there are 4 octets of padding before the 0th 
-;;; element of a (VECTOR DOUBLE-FLOAT).
-;;; (Note that (= (- arch::misc-dfloat-offset 
-;;;                  arch::misc-data-offset) 4))
+;;; element of a (VECTOR DOUBLE-FLOAT) on 32-bit platforms.
+;;; (Note that (= (- target::misc-dfloat-offset 
+;;;                  target::misc-data-offset) 4))
 (defun write-double-float-vector
     (stream vector &#38;key (start 0) (end (length vector)))
      (check-type vector (vector double-float))
      (let* ((start-octet (+ (* start 8) 
-                            (- arch::misc-dfloat-offset
-                               arch::misc-data-offset)))
+                            (- target::misc-dfloat-offset
+                               target::misc-data-offset)))
 	        (num-octets (* 8 (- end start))))
        (stream-write-ivector stream vector start-octet num-octets)))
           </programlisting>
