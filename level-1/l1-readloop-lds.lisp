@@ -638,7 +638,7 @@ commands but aren't")
 (defvar *break-condition* nil "condition argument to innermost break-loop.")
 (defvar *break-frame* nil "frame-pointer arg to break-loop")
 (defvar *break-loop-when-uninterruptable* t)
-(defvar *show-restarts-on-break* #+ccl-qres t #-ccl-qres nil)
+(defvar *show-restarts-on-break* nil)
 (defvar *show-available-restarts* nil)
 
 (defvar *error-reentry-count* 0)

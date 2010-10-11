@@ -71,7 +71,7 @@
 (defvar *fasl-target-big-endian* *fasl-host-big-endian*)
 (defvar *fcomp-external-format* :default)
 
-(defvar *fasl-break-on-program-errors* #+ccl-qres nil #-ccl-qres :defer
+(defvar *fasl-break-on-program-errors* :defer
   "Controls what happens when the compiler detects PROGRAM-ERROR's during file compilation.
 
   If T, the compiler signals an error immediately when it detects the program-error.

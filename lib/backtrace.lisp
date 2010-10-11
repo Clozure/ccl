@@ -29,7 +29,7 @@
 (defparameter *backtrace-print-level* 2)
 (defparameter *backtrace-print-length* 5)
 
-(defparameter *backtrace-format* #+ccl-qres :direct #-ccl-qres :traditional
+(defparameter *backtrace-format* :traditional
   "If :TRADITIONAL, shows calls to non-toplevel functions using FUNCALL, and shows frame address values.
    If :DIRECT, uses a more streamlined format.")
 

@@ -121,14 +121,9 @@ redefinition warnings.  The default method returns T.")
 (defmethod name-of ((thing definition-type))
   (definition-type-name thing))
 
-(defmacro define-definition-type (name supers &rest options)
+(defmacro define-definition-type (name supers)
   "Defines a class named name-DEFINITION-TYPE and registers it as the class of
 definition type NAME"
-  (loop with known-keys = '( ;; Backward compatibility
-                            #+ccl-qres :default-name-function)
-        for (key . nil) in options
-        unless (memq key known-keys)
-          do (signal-program-error "Unknown option ~s" key))
   (let ((class-name (intern (%str-cat (symbol-name name) "-DEFINITION-TYPE"))))
     `(progn
        (defclass ,class-name ,(or supers '(definition-type))
