@@ -868,7 +868,8 @@ debug_show_lisp_version(ExceptionInformation *xp, siginfo_t *info, int arg)
   extern void *plsym(ExceptionInformation *,char*);
 
   fprintf(dbgout, "Lisp kernel svn revision: %s\n", kernel_svn_revision);
-  plsym(xp, "*OPENMCL-VERSION*");
+  if (xp)
+    plsym(xp, "*OPENMCL-VERSION*");
   return debug_continue;
 }
 
@@ -1420,6 +1421,7 @@ lisp_Debugger(ExceptionInformation *xp,
     }
     debug_memory_areas(xp, info, 0);
     debug_backtrace(xp, info, 0);
+    debug_show_lisp_version(xp, info, 0);
 
     abort();
   }
