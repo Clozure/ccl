@@ -36,6 +36,9 @@
 
 (defvar *compile-code-coverage* nil "True to instrument for code coverage")
 
+
+
+
 (defvar *nx-blocks* nil)
 (defvar *nx-tags* nil)
 (defvar *nx-parent-function* nil)
@@ -690,9 +693,7 @@ function to the indicated name is true.")
   (and trust-decls
        (acode-p form)
        (eq (acode-operator form) (%nx1-operator typed-form))
-       (subtypep (cadr form) (target-word-size-case
-			      (32 '(unsigned-byte 32))
-			      (64 '(unsigned-byte 64))))))
+       (subtypep (cadr form) *nx-target-natural-type*)))
 
 (defun nx-acode-natural-type-p (form env)
   (acode-natural-type-p form (nx-trust-declarations env)))
@@ -1793,9 +1794,7 @@ Or something. Right? ~s ~s" var varbits))
     (let* ((val (if (or (eq (acode-operator form) (%nx1-operator fixnum))
 			(eq (acode-operator form) (%nx1-operator immediate)))
 		  (cadr form))))
-      (target-word-size-case
-       (32 (and (typep val '(unsigned-byte 32)) val))
-       (64 (and (typep val '(unsigned-byte 64)) val))))))
+      (and (typep val *nx-target-natural-type*) val))))
 
 (defun nx-u32-constant-p (form)
   (setq form (nx-untyped-form form))
@@ -2722,33 +2721,20 @@ Or something. Right? ~s ~s" var varbits))
   (setq form1 (nx-transform form1 env)
         form2 (nx-transform form2 env))
   (and
-   (target-word-size-case
-    (32 (nx-form-typep form1 '(signed-byte 30) env))
-    (64 (nx-form-typep form1 '(signed-byte 61) env)))
-   (target-word-size-case
-    (32 (nx-form-typep form2 '(signed-byte 30) env))
-    (64 (nx-form-typep form2 '(signed-byte 61) env)))
+   (nx-form-typep form1 *nx-target-fixnum-type* env)
+   (nx-form-typep form2 *nx-target-fixnum-type* env)
    (or ignore-result-type
         (and (nx-trust-declarations env)
-                (target-word-size-case
-                 (32 (subtypep *nx-form-type* '(signed-byte 30)))
-                 (64 (subtypep *nx-form-type* '(signed-byte 61))))))))
+             (subtypep *nx-form-type* *nx-target-fixnum-type*)))))
 
 
 (defun nx-binary-natural-op-p (form1 form2 env &optional (ignore-result-type t))
   (and
-   (target-word-size-case
-    (32
-     (and (nx-form-typep form1 '(unsigned-byte 32)  env)
-          (nx-form-typep form2 '(unsigned-byte 32)  env)))
-    (64
-     (and (nx-form-typep form1 '(unsigned-byte 64)  env)
-          (nx-form-typep form2 '(unsigned-byte 64)  env))))
+   (nx-form-typep form1 *nx-target-natural-type* env)
+   (nx-form-typep form2 *nx-target-natural-type* env)
    (or ignore-result-type
        (and (nx-trust-declarations env)
-            (target-word-size-case
-             (32 (subtypep *nx-form-type* '(unsigned-byte 32)))
-             (64 (subtypep *nx-form-type* '(unsigned-byte 64))))))))
+            (subtypep *nx-form-type* *nx-target-natural-type*)))))
 
 (defun nx-binary-boole-op (whole env arg-1 arg-2 fixop intop naturalop)
   (let* ((use-fixop (nx-binary-fixnum-op-p arg-1 arg-2 env t))

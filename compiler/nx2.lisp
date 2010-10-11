@@ -278,15 +278,25 @@
                 (%ilogand op operator-id-mask))
          seg vreg xfer forms))
 
+(defun acode-constant-fold-integer-binop (seg vreg xfer x y function)
+  (let* ((const-x (acode-integer-form-p x))
+         (const-y (acode-integer-form-p y))
+         (result (and const-x const-y (ignore-errors (funcall function x y)))))
+    (when result
+      (backend-use-operator (if (nx1-target-fixnump result)
+                              (%nx1-operator fixnum)
+                              (%nx1-operator immediate))
+                            seg
+                            vreg
+                            xfer
+                            result)
+      t)))
+
 ;;; Return non-nil iff we can do something better than a subprim call
 ;;; to .SPbuiltin-ash.
 (defun acode-optimize-ash (seg vreg xfer num amt trust-decls &optional (result-type 'integer))
-  (let* ((unsigned-natural-type (target-word-size-case
-                                 (32 '(unsigned-byte 32))
-                                 (64 '(unsigned-byte 64))))
-         (target-fixnum-type (target-word-size-case
-                              (32 '(signed-byte 30))
-                              (64 '(signed-byte 61))))
+  (let* ((unsigned-natural-type *nx-target-natural-type*)
+         (target-fixnum-type *nx-target-fixnum-type*)
          (max (target-word-size-case (32 32) (64 64)))
          (maxbits (target-word-size-case
                    (32 29)
@@ -376,7 +386,129 @@
                                                    const-num))
                  t)))
           (t nil))))
-          
-                   
+
+
+
+
+(defun acode-optimize-logand2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'integer))
+  (declare (ignore result-type))        ;see below
+  (or (acode-constant-fold-integer-binop seg vreg xfer num1 num2 'logand)
+      (let* ((unsigned-natural-type *nx-target-natural-type*)
+             (target-fixnum-type *nx-target-fixnum-type*))
+        (cond ((eql (acode-fixnum-form-p num1) -1)
+               (backend-use-operator (%nx1-operator require-integer)
+                                     seg
+                                     vreg
+                                     xfer
+                                     num2)
+               t)
+              ((eql (acode-fixnum-form-p num2) -1)
+               (backend-use-operator (%nx1-operator require-integer)
+                                     seg
+                                     vreg
+                                     xfer
+                                     num1)
+               t)
+              ((and (acode-form-typep num1 target-fixnum-type trust-decls)
+                    (acode-form-typep num2 target-fixnum-type trust-decls))
+               (backend-use-operator (%nx1-operator %ilogand2)
+                                     seg
+                                     vreg
+                                     xfer
+                                     num1
+                                     num2)
+               t)
+              ((and (acode-form-typep num1 unsigned-natural-type trust-decls)
+                    (acode-form-typep num2 unsigned-natural-type trust-decls))
+               (backend-use-operator (%nx1-operator %natural-logand)
+                                     seg
+                                     vreg
+                                     xfer
+                                     num1
+                                     num2)
+               t)
+              ;; LOGAND of a natural integer N and a signed integer
+              ;; is a natural integer <= N, and there may be cases
+              ;; where we want to truncate a larger result to the
+              ;; machine word size based on the result type.  Later.
+              (t nil)))))
+
+(defun acode-optimize-logior2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'integer))
+  (declare (ignorable result-type))
+  (or (acode-constant-fold-integer-binop seg vreg xfer num1 num2 'logior)
+      (let* ((unsigned-natural-type *nx-target-natural-type*)
+             (target-fixnum-type *nx-target-fixnum-type*))
+        (cond ((eql (acode-fixnum-form-p num1) 0)
+               (backend-use-operator (%nx1-operator require-integer)
+                                     seg
+                                     vreg
+                                     xfer
+                                     num2)
+               t)
+              ((eql (acode-fixnum-form-p num2) 0)
+               (backend-use-operator (%nx1-operator require-integer)
+                                     seg
+                                     vreg
+                                     xfer
+                                     num1)
+               t)
+              ((and (acode-form-typep num1 target-fixnum-type trust-decls)
+                    (acode-form-typep num2 target-fixnum-type trust-decls))
+               (backend-use-operator (%nx1-operator %ilogior2)
+                                     seg
+                                     vreg
+                                     xfer
+                                     num1
+                                     num2)
+               t)
+              ((and (acode-form-typep num1 unsigned-natural-type trust-decls)
+                    (acode-form-typep num2 unsigned-natural-type trust-decls))
+               (backend-use-operator (%nx1-operator %natural-logior)
+                                     seg
+                                     vreg
+                                     xfer
+                                     num1
+                                     num2)
+               t)
+              (t nil)))))
+
+(defun acode-optimize-logxor2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'integer))
+  (declare (ignorable result-type))
+  (or (acode-constant-fold-integer-binop seg vreg xfer num1 num2 'logxor)
+      (let* ((unsigned-natural-type *nx-target-natural-type*)
+             (target-fixnum-type *nx-target-fixnum-type*))
+        (cond ((eql (acode-fixnum-form-p num1) 0)
+               (backend-use-operator (%nx1-operator require-integer)
+                                     seg
+                                     vreg
+                                     xfer
+                                     num2)
+               t)
+              ((eql (acode-fixnum-form-p num2) 0)
+               (backend-use-operator (%nx1-operator require-integer)
+                                     seg
+                                     vreg
+                                     xfer
+                                     num1)
+               t)
+              ((and (acode-form-typep num1 target-fixnum-type trust-decls)
+                    (acode-form-typep num2 target-fixnum-type trust-decls))
+               (backend-use-operator (%nx1-operator %ilogxor2)
+                                     seg
+                                     vreg
+                                     xfer
+                                     num1
+                                     num2)
+               t)
+              ((and (acode-form-typep num1 unsigned-natural-type trust-decls)
+                    (acode-form-typep num2 unsigned-natural-type trust-decls))
+               (backend-use-operator (%nx1-operator %natural-logxor)
+                                     seg
+                                     vreg
+                                     xfer
+                                     num1
+                                     num2)
+               t)
+              (t nil)))))
                  
                 

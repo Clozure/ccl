@@ -630,9 +630,7 @@
           (nx1-form `(%short-float+-2 ,num1 ,num2))
 	  (if (nx-binary-natural-op-p num1 num2 env nil)
 	    (make-acode (%nx1-operator typed-form)
-                        (target-word-size-case
-                         (32 '(unsigned-byte 32))
-                         (64 '(unsigned-byte 64)))
+                        *nx-target-natural-type*
 			(make-acode (%nx1-operator %natural+) f1 f2))
 	    (make-acode (%nx1-operator typed-form) 'number 
 			(make-acode (%nx1-operator add2) f1 f2))))))))
@@ -2252,9 +2250,7 @@
                             (nx1-form num)
                             (nx1-form amt)))
                (nx1-treat-as-call call))))
-    (let* ((unsigned-natural-type (target-word-size-case
-                                   (32 '(unsigned-byte 32))
-                                   (64 '(unsigned-byte 64)))) 
+    (let* ((unsigned-natural-type *nx-target-natural-type*) 
            (max (target-word-size-case (32 32) (64 64)))
            (maxbits (target-word-size-case
                      (32 29)

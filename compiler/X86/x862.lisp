@@ -7577,13 +7577,15 @@
             (^)))))))
 
 (defx862 x862-logior2 logior2 (seg vreg xfer form1 form2)
-  (if (or (x862-explicit-non-fixnum-type-p form1)
-          (x862-explicit-non-fixnum-type-p form2))
-    (x862-binary-builtin seg vreg xfer 'logior-2 form1 form2)
-    (x862-inline-logior2 seg vreg xfer form1 form2)))
+  (or (acode-optimize-logior2 seg vreg xfer form1 form2 *x862-trust-declarations*)
+      (if (or (x862-explicit-non-fixnum-type-p form1)
+              (x862-explicit-non-fixnum-type-p form2))
+        (x862-binary-builtin seg vreg xfer 'logior-2 form1 form2)
+        (x862-inline-logior2 seg vreg xfer form1 form2))))
 
 (defx862 x862-logxor2 logxor2 (seg vreg xfer form1 form2)
-  (x862-binary-builtin seg vreg xfer 'logxor-2 form1 form2))
+  (or (acode-optimize-logxor2 seg vreg xfer form1 form2 *x862-trust-declarations*)
+      (x862-binary-builtin seg vreg xfer 'logxor-2 form1 form2)))
 
 (defun x862-inline-logand2 (seg vreg xfer form1 form2)
   (with-x86-local-vinsn-macros (seg vreg xfer)
@@ -7622,10 +7624,11 @@
             (^)))))))
 
 (defx862 x862-logand2 logand2 (seg vreg xfer form1 form2)
-    (if (or (x862-explicit-non-fixnum-type-p form1)
-            (x862-explicit-non-fixnum-type-p form2))
-      (x862-binary-builtin seg vreg xfer 'logand-2 form1 form2)
-      (x862-inline-logand2 seg vreg xfer form1 form2)))
+  (or (acode-optimize-logand2 seg vreg xfer form1 form2 *x862-trust-declarations*)
+      (if (or (x862-explicit-non-fixnum-type-p form1)
+              (x862-explicit-non-fixnum-type-p form2))
+        (x862-binary-builtin seg vreg xfer 'logand-2 form1 form2)
+        (x862-inline-logand2 seg vreg xfer form1 form2))))
 
 (defx862 x862-%quo2 %quo2 (seg vreg xfer form1 form2)
   (x862-binary-builtin seg vreg xfer '/-2 form1 form2))

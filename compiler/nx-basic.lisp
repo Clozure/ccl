@@ -37,6 +37,16 @@
 
 (defvar *lisp-compiler-version* 666 "I lost count.")
 
+(defparameter *nx-32-bit-fixnum-type* '(signed-byte 30))
+(defparameter *nx-64-bit-fixnum-type* '(signed-byte 61))
+(defparameter *nx-32-bit-natural-type* '(unsigned-byte 32))
+(defparameter *nx-64-bit-natural-type* '(unsigned-byte 64))
+(defparameter *nx-target-fixnum-type* 'fixnum)
+
+(defparameter *nx-target-natural-type*
+  #+32-bit-target *nx-32-bit-natural-type*
+  #+64-bit-target *nx-64-bit-natural-type*)
+
 (defvar *nx-compile-time-types* nil)
 (defvar *nx-proclaimed-types* nil)
 (defvar *nx-method-warning-name* nil)

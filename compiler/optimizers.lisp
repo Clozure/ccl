@@ -1314,19 +1314,18 @@
     w))
 
 
+(define-compiler-macro logandc1 (n0 n1)
+  `(logand (lognot ,n0) ,n1))
+
 (define-compiler-macro logandc2 (n0 n1)
-  (let ((n1var (gensym))
-        (n0var (gensym)))
-    `(let ((,n0var ,n0)
-           (,n1var ,n1))
-       (logandc1 ,n1var ,n0var))))
+  `(logand ,n0 (lognot ,n1)))
+
+
+(define-compiler-macro logorc1 (n0 n1)
+  `(logior (lognot ,n0) ,n1))
 
 (define-compiler-macro logorc2 (n0 n1)
-  (let ((n1var (gensym))
-        (n0var (gensym)))
-    `(let ((,n0var ,n0)
-           (,n1var ,n1))
-       (logorc1 ,n1var ,n0var))))
+  `(logior ,n0 (lognot ,n1)))
 
 (define-compiler-macro lognand (n0 n1)
   `(lognot (logand ,n0 ,n1)))
