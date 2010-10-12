@@ -1352,10 +1352,9 @@ a host-structure or string."
 
 (defun delete-file (path)
   "Delete the specified FILE."
-  (let* ((namestring (native-translated-namestring path)))
-    (when (%realpath namestring)
-      (let* ((err (%delete-file namestring)))
-        (or (eql 0 err) (signal-file-error err path))))))
+  (let* ((namestring (native-translated-namestring path))
+	 (err (%delete-file namestring)))
+    (or (eql 0 err) (signal-file-error err path))))
 
 (defvar *known-backends* ())
 
