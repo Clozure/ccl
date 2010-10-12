@@ -6375,13 +6375,15 @@
           (^))))))
 
 (defarm2 arm2-logior2 logior2 (seg vreg xfer form1 form2)
-  (if (or (arm2-explicit-non-fixnum-type-p form1)
-          (arm2-explicit-non-fixnum-type-p form2))
-    (arm2-binary-builtin seg vreg xfer 'logior-2 form1 form2)
-    (arm2-inline-logior2 seg vreg xfer form1 form2)))
+  (or (acode-optimize-logior2 seg vreg xfer form1 form2 *arm2-trust-declarations*)
+      (if (or (arm2-explicit-non-fixnum-type-p form1)
+              (arm2-explicit-non-fixnum-type-p form2))
+        (arm2-binary-builtin seg vreg xfer 'logior-2 form1 form2)
+        (arm2-inline-logior2 seg vreg xfer form1 form2))))
 
 (defarm2 arm2-logxor2 logxor2 (seg vreg xfer form1 form2)
-  (arm2-binary-builtin seg vreg xfer 'logxor-2 form1 form2))
+  (or (acode-optimize-logxor2 seg vreg xfer form1 form2 *arm2-trust-declarations*)
+      (arm2-binary-builtin seg vreg xfer 'logxor-2 form1 form2)))
 
 (defun arm2-inline-logand2 (seg vreg xfer form1 form2)
   (with-arm-local-vinsn-macros (seg vreg xfer)
@@ -6422,10 +6424,11 @@
         (^))))))
 
 (defarm2 arm2-logand2 logand2 (seg vreg xfer form1 form2)
-  (if (or (arm2-explicit-non-fixnum-type-p form1)
-          (arm2-explicit-non-fixnum-type-p form2))
-    (arm2-binary-builtin seg vreg xfer 'logand-2 form1 form2)
-    (arm2-inline-logand2 seg vreg xfer form1 form2)))
+  (or (acode-optimize-logand2 seg vreg xfer form1 form2 *arm2-trust-declarations*)
+      (if (or (arm2-explicit-non-fixnum-type-p form1)
+              (arm2-explicit-non-fixnum-type-p form2))
+        (arm2-binary-builtin seg vreg xfer 'logand-2 form1 form2)
+        (arm2-inline-logand2 seg vreg xfer form1 form2))))
 
 
 
