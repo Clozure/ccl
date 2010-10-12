@@ -36,10 +36,10 @@ typedef struct ucontext ExceptionInformation;
 #define xpGPR(x,gprno) (xpGPRvector(x))[gprno]
 #define xpPC(x) (*((pc*)(&(xpGPR(x,15)))))
 #define xpLR(x) (*((pc*)(&(xpGPR(x,14)))))
-#define xpPSR(x) xpGPR(x,16)
-#define xpFaultAddress(x) xpGPR(x,17)
-#define xpTRAP(x) xpGPR(x,-3)
-#define xpERROR(x) xpGPR(x,-2)
+#define xpPSR(x) ((x)->uc_mcontext.arm_cpsr)
+#define xpFaultAddress(x) ((x)->uc_mcontext.fault_address)
+#define xpTRAP(x) ((x)->uc_mcontext.trap_no)
+#define xpERROR(x) ((x)->uc_mcontext.error_code)
 #define xpFaultStatus(x) xpERROR(x)
 
 #define DarwinSigReturn(context)

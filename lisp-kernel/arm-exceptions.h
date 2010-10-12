@@ -71,18 +71,18 @@ handle_trap(ExceptionInformation *, opcode, pc, siginfo_t *);
 #define IS_SUB_FROM_ALLOCPTR(i)      (((i)&0x0ffff000) == 0x024cc000)
 #define IS_SUB_LO_FROM_ALLOCPTR(i)   (((i)&0x0fffff00) == 0x024cc000)
 #define IS_SUB_HI_FROM_ALLOCPTR(i)   (IS_SUB_FROM_ALLOCPTR(i) && \
-                                     !(IS_SUB_LOW_FROM_ALLOCPTR(i)))
+                                     !(IS_SUB_LO_FROM_ALLOCPTR(i)))
 #define IS_LOAD_RD_FROM_ALLOCBASE(i) (((i)&0x0fff0fff) == \
-                                      ( 0x05930000 | offsetof(tcr,allocbase)))
-#define IS_COMPARE_ALLOCPTR_TO_RM(i) (((i)&0x0fffff0) == 0x0140c000)
+                                      ( 0x05930000 | offsetof(TCR,save_allocbase)))
+#define IS_COMPARE_ALLOCPTR_TO_RM(i) (((i)&0x0fff0ff0) == 0x015c0000)
 #define IS_ALLOC_TRAP(i) (((i)&0x0fffffff) == 0x07f000f0)
 #define IS_SET_ALLOCPTR_HEADER_RD(i) (((i)&0x0fff0fff) == \
                                       (0x050c0000 | (- misc_header_offset)))
-/* The 1 here - and the 3 in the following definition - are based on
-   the tagged offsets of cars and cdrs.  Fix these definitions of that ever
+/* The 5 here - and the 1 in the following definition - are based on
+   the tagged offsets of cars and cdrs.  Fix these definitions if that ever
    changes ... */
-#define IS_SET_ALLOCPTR_CDR_RD(i)    (((i)&0x0fff0fff) == 0x050c0001)
-#define IS_SET_ALLOCPTR_CAR_RD(i)    (((i)&0x0fff0fff) == 0x058c0003)
+#define IS_SET_ALLOCPTR_CDR_RD(i)    (((i)&0x0fff0fff) == 0x050c0005)
+#define IS_SET_ALLOCPTR_CAR_RD(i)    (((i)&0x0fff0fff) == 0x050c0001)
 #define IS_SET_ALLOCPTR_RESULT_RD(i) (((i)&0x0fff0fff) == 0x01a0000c)
 #define IS_CLR_ALLOCPTR_TAG(i)       (((i)&0x0fffffff) == 0x03ccc007)
 

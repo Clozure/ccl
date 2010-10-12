@@ -1573,23 +1573,55 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
         */
       } else {
         update_bytes_allocated(tcr, (void *) ptr_from_lispobj(cur_allocptr + disp));
-        xpGPR(xp, allocptr) = VOID_ALLOCPTR - disp;
+        xpGPR(xp, allocptr) = VOID_ALLOCPTR + disp;
+        instr = program_counter[-1];
+        if (IS_COMPARE_ALLOCPTR_TO_RM(instr)){
+          xpGPR(xp,RM_field(instr)) = VOID_ALLOCPTR;
+        } else {
+          Bug(NULL, "unexpected instruction preceding alloc trap.");
+        }
+        /* Clear the carry bit, so that the trap will be taken. */
+        xpPSR(xp) &= ~PSR_C_MASK;
       }
     } else {
-      /* If we're already past the alloc_trap, finish allocating
-         the object. */
-      if (allocptr_tag == fulltag_cons) {
-        finish_allocating_cons(xp);
-      } else {
-        if (allocptr_tag == fulltag_misc) {
-          finish_allocating_uvector(xp);
-        } else {
-          Bug(xp, "what's being allocated here ?");
-        }
+      /* we may be before or after the alloc trap.  If before, set
+         allocptr to VOID_ALLOCPTR and back up to the start of the
+         instruction sequence; if after, finish the allocation. */
+      Boolean before_alloc_trap = false;
+
+      if (IS_COMPARE_ALLOCPTR_TO_RM(instr)) {
+        before_alloc_trap = true;
+        --program_counter;
+        instr = *program_counter;
       }
-      /* Whatever we finished allocating, reset allocptr/allocbase to
-         VOID_ALLOCPTR */
-      xpGPR(xp,allocptr) = VOID_ALLOCPTR;
+      if (IS_LOAD_RD_FROM_ALLOCBASE(instr)) {
+        before_alloc_trap = true;
+        --program_counter;
+        instr = *program_counter;
+      }
+      if (IS_SUB_HI_FROM_ALLOCPTR(instr)) {
+        before_alloc_trap = true;
+        --program_counter;
+      }
+      if (before_alloc_trap) {
+        xpPC(xp) = program_counter;
+        xpGPR(xp,allocptr) = VOID_ALLOCPTR;
+      } else {
+        /* If we're already past the alloc_trap, finish allocating
+           the object. */
+        if (allocptr_tag == fulltag_cons) {
+          finish_allocating_cons(xp);
+        } else {
+          if (allocptr_tag == fulltag_misc) {
+            finish_allocating_uvector(xp);
+          } else {
+            Bug(xp, "what's being allocated here ?");
+          }
+        }
+        /* Whatever we finished allocating, reset allocptr/allocbase to
+           VOID_ALLOCPTR */
+        xpGPR(xp,allocptr) = VOID_ALLOCPTR;
+      }
     }
     return;
   }
