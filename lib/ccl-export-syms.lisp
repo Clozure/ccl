@@ -319,6 +319,7 @@
      unlock-file
      file-locked-p
      directoryp
+     delete-directory
 
 
      *module-search-path*
