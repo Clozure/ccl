@@ -156,6 +156,29 @@
                                              :defaults dest-path)))
               (copy-file f dest-file :if-exists :supersede :preserve-attributes t)))))))
 
+(defun delete-empty-directory (path)
+  (let* ((namestring (native-translated-namestring path))
+	 (err (%rmdir namestring)))
+    (or (eql 0 err) (signal-file-error err path))))
+
+(defun delete-directory (path)
+  "Delete specified directory and all its contents."
+  (let ((namestring (native-translated-namestring path)))
+    (if (eq :directory (%unix-file-kind namestring t))
+      (let* ((dir (ensure-directory-pathname path))
+	     (wild (make-pathname :name :wild :type :wild :defaults dir))
+	     (files (directory wild :directories nil :files t
+			       :follow-links nil :include-emacs-lockfiles t))
+	     (subdirs (directory wild :directories t :files nil
+				 :follow-links nil
+				 :include-emacs-lockfiles t)))
+	(dolist (f files)
+	  (delete-file f))
+	(dolist (d subdirs)
+	  (delete-directory d))
+	(delete-empty-directory path))
+      (error "~s is not a directory" path))))
+
 ;;; use with caution!
 ;;; blows away a directory and all its contents
 (defun recursive-delete-directory (path &key (if-does-not-exist :error))
