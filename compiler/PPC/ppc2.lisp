@@ -6554,13 +6554,15 @@
           (^))))))
 
 (defppc2 ppc2-logior2 logior2 (seg vreg xfer form1 form2)
-  (if (or (ppc2-explicit-non-fixnum-type-p form1)
-          (ppc2-explicit-non-fixnum-type-p form2))
-    (ppc2-binary-builtin seg vreg xfer 'logior-2 form1 form2)
-    (ppc2-inline-logior2 seg vreg xfer form1 form2)))
+  (or (acode-optimize-logior2 seg vreg xfer form1 form2 *ppc2-trust-declarations*)
+      (if (or (ppc2-explicit-non-fixnum-type-p form1)
+              (ppc2-explicit-non-fixnum-type-p form2))
+        (ppc2-binary-builtin seg vreg xfer 'logior-2 form1 form2)
+        (ppc2-inline-logior2 seg vreg xfer form1 form2))))
 
 (defppc2 ppc2-logxor2 logxor2 (seg vreg xfer form1 form2)
-  (ppc2-binary-builtin seg vreg xfer 'logxor-2 form1 form2))
+  (or (acode-optimize-logxor2 seg vreg xfer form1 form2 *ppc2-trust-declarations*)
+      (ppc2-binary-builtin seg vreg xfer 'logxor-2 form1 form2)))
 
 (defun ppc2-inline-logand2 (seg vreg xfer form1 form2)
   (with-ppc-local-vinsn-macros (seg vreg xfer)
@@ -6611,10 +6613,11 @@
         (^))))))
 
 (defppc2 ppc2-logand2 logand2 (seg vreg xfer form1 form2)
-  (if (or (ppc2-explicit-non-fixnum-type-p form1)
-          (ppc2-explicit-non-fixnum-type-p form2))
-    (ppc2-binary-builtin seg vreg xfer 'logand-2 form1 form2)
-    (ppc2-inline-logand2 seg vreg xfer form1 form2)))
+  (or (acode-optimize-logand2 seg vreg xfer form1 form2 *ppc2-trust-declarations*)
+      (if (or (ppc2-explicit-non-fixnum-type-p form1)
+              (ppc2-explicit-non-fixnum-type-p form2))
+        (ppc2-binary-builtin seg vreg xfer 'logand-2 form1 form2)
+        (ppc2-inline-logand2 seg vreg xfer form1 form2))))
 
 
 
