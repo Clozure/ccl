@@ -121,7 +121,7 @@
 
 
 
-(defloadvar *default-ns-application-proxy-class-name*
+(defvar *default-ns-application-proxy-class-name*
     "LispApplicationDelegate")
 
 
@@ -197,26 +197,27 @@
   
   (flet ((cocoa-startup ()
 	   ;; Start up a thread to run periodic tasks.
-	   (process-run-function "housekeeping" #'ccl::housekeeping-loop)
-           (with-autorelease-pool
-             (enable-foreground)
-             (or *NSApp* (setq *NSApp* (init-cocoa-application)))
-             #-cocotron
-             (let* ((icon (#/imageNamed: ns:ns-image #@"NSApplicationIcon")))
-               (unless (%null-ptr-p icon)
-                 (#/setApplicationIconImage: *NSApp* icon)))
-             (setf (ccl::application-ui-object *application*) *NSApp*)
-             (when application-proxy-class-name
-               (let* ((classptr (ccl::%objc-class-classptr
-                                 (ccl::load-objc-class-descriptor application-proxy-class-name)))
-                      (instance (#/init (#/alloc classptr))))
-
-                 (#/setDelegate: *NSApp* instance))))
-           (run-event-loop)))
+           (ccl::with-standard-initial-bindings
+               (process-run-function "housekeeping" #'ccl::housekeeping-loop)
+               (with-autorelease-pool
+                   (enable-foreground)
+                 (or *NSApp* (setq *NSApp* (init-cocoa-application)))
+                 #-cocotron
+                 (let* ((icon (#/imageNamed: ns:ns-image #@"NSApplicationIcon")))
+                   (unless (%null-ptr-p icon)
+                     (#/setApplicationIconImage: *NSApp* icon)))
+                 (setf (ccl::application-ui-object *application*) *NSApp*)
+                 (when application-proxy-class-name
+                   (let* ((classptr (ccl::%objc-class-classptr
+                                     (ccl::load-objc-class-descriptor application-proxy-class-name)))
+                          (instance (#/init (#/alloc classptr))))
+                     
+                     (#/setDelegate: *NSApp* instance))))
+               (run-event-loop))))
     (process-interrupt *cocoa-event-process* #'(lambda ()
-						 (%set-toplevel 
-						  #'cocoa-startup)
-						 (toplevel)))))
+                                                 (%set-toplevel 
+                                                  #'cocoa-startup)
+                                                 (toplevel)))))
 
 (defparameter *font-attribute-names*
   '((:bold . #.#$NSBoldFontMask)
@@ -423,6 +424,7 @@
                               (width 0)
                               (height 0)
                               &allow-other-keys)
+  (declare (ignorable with-frame))
   (unless with-frame-p
     (setq initargs (cons :with-frame
                          (cons (ns:make-ns-rect x y width height) initargs))))

@@ -143,104 +143,104 @@ and END to OUTPUT-STREAM then output a #\Newline at end."
 
 
 ;; coral extensions
-(defvar *print-abbreviate-quote* t
+(def-standard-initial-binding *print-abbreviate-quote* t
   "Non-NIL means that the normal lisp printer --
 not just the pretty-printer -- should print
 lists whose first element is QUOTE or FUNCTION specially.
 This variable is not part of standard Common Lisp.")
 
-(defvar *print-structure* t
+(def-standard-initial-binding *print-structure* t
   "Non-NIL means that lisp structures should be printed using
 \"#S(...)\" syntax.  if nil, structures are printed using \"#<...>\".
 This variable is not part of standard Common Lisp.")
 
 ;; things Richard Mlynarik likes.
-(defvar *print-simple-vector* nil
+(def-standard-initial-binding *print-simple-vector* nil
   "Non-NIL means that simple-vectors whose length is less than
 the value of this variable are printed even if *PRINT-ARRAY* is false.
 this variable is not part of standard Common Lisp.")
 
-(defvar *print-simple-bit-vector* nil
+(def-standard-initial-binding *print-simple-bit-vector* nil
   "Non-NIL means that simple-bit-vectors whose length is less than
 the value of this variable are printed even if *PRINT-ARRAY* is false.
 This variable is not part of standard Common Lisp.")
 
-(defvar *print-string-length* nil
+(def-standard-initial-binding *print-string-length* nil
   "Non-NIL means that strings longer than this are printed
 using abbreviated #<string ...> syntax.
 This variable is not part of standard Common Lisp.")
 
-(defvar *print-escape* t
+(def-standard-initial-binding *print-escape* t
   "Non-NIL means that the lisp printer should -attempt- to output
 expressions `readably.'  When NIL the attempts to produce output
 which is a little more human-readable (for example, pathnames
 are represented by the characters of their namestring.)")
 
-(defvar *print-pretty* nil
+(def-standard-initial-binding *print-pretty* nil
   "Non-NIL means that the lisp printer should insert extra
 indentation and newlines to make output more readable and `prettier.'")
 
-(defvar *print-base* 10.
+(def-standard-initial-binding *print-base* 10.
   "The output base for integers and rationals.
 Must be an integer between 2 and 36.")
 
-(defvar *print-radix* nil
+(def-standard-initial-binding *print-radix* nil
   "Non-NIL means that the lisp printer will explicitly indicate
 the output radix (see *PRINT-BASE*) which is used to print
 integers and rational numbers.")
 
-(defvar *print-level* nil
+(def-standard-initial-binding *print-level* nil
   "Specifies the depth at which printing of lisp expressions
 should be truncated.  NIL means that no such truncation should occur.
 Truncation is indicated by printing \"#\" instead of the
 representation of the too-deeply-nested structure.
 See also *PRINT-LENGTH*")
 
-(defvar *print-length* nil
+(def-standard-initial-binding *print-length* nil
   "Specifies the length at which printing of lisp expressions
 should be truncated.  NIL means that no such truncation should occur.
 truncation is indicated by printing \"...\" instead of the
 rest of the overly-long list or vector.
 See also *PRINT-LEVEL*")
 
-(defvar *print-circle* nil
+(def-standard-initial-binding *print-circle* nil
   "Non-NIL means that the lisp printer should attempt to detect
 circular structures, indicating them by using \"#n=\" and \"#n#\" syntax.
 If this variable is false then an attempt to
 output circular structure may cause unbounded output.")
 
-(defvar *print-case* ':upcase
+(def-standard-initial-binding *print-case* ':upcase
   "Specifies the alphabetic case in which symbols should
 be printed.  Possible values include :UPCASE, :DOWNCASE and :CAPITALIZE") ; and :StuDLy
 
-(defvar *print-array* t
+(def-standard-initial-binding *print-array* t
   "Non-NIL means that arrays should be printed using \"#(...)\" or
 \"=#nA(...)\" syntax to show their contents.
 If NIL, arrays other than strings are printed using \"#<...>\".
 See also the (non-Common Lisp) variables *PRINT-SIMPLE-VECTOR*
 and *PRINT-SIMPLE-BIT-VECTOR*")
 
-(defvar *print-gensym* t
+(def-standard-initial-binding *print-gensym* t
   "Non-NIL means that symbols with no home package should be
 printed using \"#:\" syntax.  NIL means no prefix is printed.")
 
-(defvar *print-readably* nil
+(def-standard-initial-binding *print-readably* nil
   "Non-NIL means that attempts to print unreadable objects
    signal PRINT-NOT-READABLE errors.  NIL doesn't.")
 
-(defvar *PRINT-RIGHT-MARGIN* nil
+(def-standard-initial-binding *PRINT-RIGHT-MARGIN* nil
   "+#/NIL the right margin for pretty printing")
 
-(defvar *PRINT-MISER-WIDTH* 40.
+(def-standard-initial-binding *PRINT-MISER-WIDTH* 40.
   "+#/NIL miser format starts when there is less than this width left")
 
-(defvar *PRINT-LINES* nil
+(def-standard-initial-binding *PRINT-LINES* nil
   "+#/NIL truncates printing after # lines")
 
-(defvar *DEFAULT-RIGHT-MARGIN* 70
+(def-standard-initial-binding *DEFAULT-RIGHT-MARGIN* 70
   "Controls default line length;  Must be a non-negative integer")
 
-(defvar *PRINT-PPRINT-DISPATCH* nil) ; We have to support this.
+(def-standard-initial-binding *PRINT-PPRINT-DISPATCH* nil) ; We have to support this.
 
 (defvar *xp-current-object* nil)  ; from xp
 

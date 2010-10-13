@@ -3853,3 +3853,14 @@ stream-output-timeout set to TIMEOUT."
 
 (defmacro int-errno-ffcall (entry &rest args)
   `(int-errno-call (ff-call ,entry ,@args)))
+
+(defmacro with-initial-bindings (bindings &body body)
+  (let* ((syms (gensym))
+         (values (gensym)))
+    `(multiple-value-bind (,syms ,values)
+        (initial-bindings ,bindings)
+      (progv ,syms ,values ,@body))))
+
+(defmacro with-standard-initial-bindings (&body body)
+  `(with-initial-bindings (standard-initial-bindings) ,@body))
+

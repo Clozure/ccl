@@ -370,11 +370,9 @@ a given process."
       #'(lambda (process initial-form)
 	  (let* ((*current-process* process))
 	    (add-to-all-processes process)
-	    (multiple-value-bind (syms values)
-		(initial-bindings (process-initial-bindings process))
-	      (progv syms values
-                (setq *whostate* "Active")
-		(run-process-initial-form process initial-form)))))
+            (with-initial-bindings (process-initial-bindings process)
+              (setq *whostate* "Active")
+              (run-process-initial-form process initial-form))))
       process
       initial-form)
      process))
