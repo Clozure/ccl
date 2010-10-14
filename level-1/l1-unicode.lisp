@@ -4797,7 +4797,7 @@ mark."
     (multiple-value-bind (array offset)
         (array-data-and-offset vector)
       (unless (= (typecode array) target::subtag-u8-vector)
-        (report-bad-arg vector '(array (unsgigned-byte 8) (*))))
+        (report-bad-arg vector '(array (unsigned-byte 8) (*))))
       (setq vector array
             start (+ start offset)
             end (+ end offset))))
