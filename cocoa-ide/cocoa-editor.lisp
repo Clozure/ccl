@@ -566,7 +566,7 @@
 
 ;;; This runs on the main thread; it synchronizes the "real" NSMutableAttributedString
 ;;; with the hemlock string and informs the textstorage of the insertion.
-(objc:defmethod (#/noteHemlockInsertionAtPosition:length: :void) ((self hemlock-text-storage)
+(objc:defmethod (#/noteHemlockInsertionAtPosition:length:extra: :void) ((self hemlock-text-storage)
                                                                   (pos :<NSI>nteger)
                                                                   (n :<NSI>nteger)
                                                                   (extra :<NSI>nteger))
@@ -597,10 +597,10 @@
     (#/setAttributes:range: mirror attributes (ns:make-ns-range pos n))
     (textstorage-note-insertion-at-position self pos n)))
 
-(objc:defmethod (#/noteHemlockDeletionAtPosition:length: :void) ((self hemlock-text-storage)
-                                                                 (pos :<NSI>nteger)
-                                                                 (n :<NSI>nteger)
-                                                                 (extra :<NSI>nteger))
+(objc:defmethod (#/noteHemlockDeletionAtPosition:length:extra: :void) ((self hemlock-text-storage)
+                                                                       (pos :<NSI>nteger)
+                                                                       (n :<NSI>nteger)
+                                                                       (extra :<NSI>nteger))
   (declare (ignorable extra))
   #+debug
   (#_NSLog #@"delete: pos = %ld, n = %ld" :long pos :long n)
@@ -624,10 +624,10 @@
       (reset-buffer-cache display)
       (update-line-cache-for-index display pos))))
 
-(objc:defmethod (#/noteHemlockModificationAtPosition:length: :void) ((self hemlock-text-storage)
-                                                                     (pos :<NSI>nteger)
-                                                                     (n :<NSI>nteger)
-                                                                     (extra :<NSI>nteger))
+(objc:defmethod (#/noteHemlockModificationAtPosition:length:extra: :void) ((self hemlock-text-storage)
+                                                                           (pos :<NSI>nteger)
+                                                                           (n :<NSI>nteger)
+                                                                           (extra :<NSI>nteger))
   (declare (ignorable extra))
   #+debug
   (#_NSLog #@"modify: pos = %ld, n = %ld" :long pos :long n)
@@ -646,10 +646,10 @@
 	 (#/prepareWithInvocationTarget: undo-mgr self)
 	 pos n deleted-string)))))
 
-(objc:defmethod (#/noteHemlockAttrChangeAtPosition:length: :void) ((self hemlock-text-storage)
-                                                                   (pos :<NSI>nteger)
-                                                                   (n :<NSI>nteger)
-                                                                   (fontnum :<NSI>nteger))
+(objc:defmethod (#/noteHemlockAttrChangeAtPosition:length:fontNum: :void) ((self hemlock-text-storage)
+                                                                           (pos :<NSI>nteger)
+                                                                           (n :<NSI>nteger)
+                                                                           (fontnum :<NSI>nteger))
   (ns:with-ns-range (range pos n)
     (#/setAttributes:range: (#/mirror self) (#/objectAtIndex: (#/styles self) fontnum) range)
     (#/edited:range:changeInLength: self #$NSTextStorageEditedAttributes range 0)))
@@ -661,7 +661,7 @@
                    (#/invocationWithMethodSignature: ns:ns-invocation
                                                      (#/instanceMethodSignatureForSelector:
                                                       hemlock-text-storage
-                                            (@selector #/noteHemlockInsertionAtPosition:length:))))))
+                                            (@selector #/noteHemlockInsertionAtPosition:length:extra:))))))
 
 (defstatic *buffer-change-invocation-lock* (make-lock))
 
@@ -2379,11 +2379,16 @@
 	   (textstorage (if document (slot-value document 'textstorage)))
            (pos (hi:mark-absolute-position (hi::region-start region)))
            (n (- (hi:mark-absolute-position (hi::region-end region)) pos)))
-      (perform-edit-change-notification textstorage
-                                        (@selector #/noteHemlockAttrChangeAtPosition:length:)
-                                        pos
-                                        n
-                                        font))))
+      (if (eq *current-process* *cocoa-event-process*)
+        (#/noteHemlockAttrChangeAtPosition:length:fontNum: textstorage
+                                                           pos
+                                                           n
+                                                           font)
+        (perform-edit-change-notification textstorage
+                                          (@selector #/noteHemlockAttrChangeAtPosition:length:fontNum:)
+                                          pos
+                                          n
+                                          font)))))
 
 (defun buffer-active-font-attributes (buffer)
   (let* ((style 0)
@@ -2407,20 +2412,30 @@
 	    ;; Make up for the fact that the mark moved forward with the insertion.
 	    ;; For :right-inserting and :temporary marks, they should be left back.
             (decf pos n))
-          (perform-edit-change-notification textstorage
-                                            (@selector #/noteHemlockInsertionAtPosition:length:)
-                                            pos
-                                            n))))))
+          (if (eq *current-process* *cocoa-event-process*)
+            (#/noteHemlockInsertionAtPosition:length:extra: textstorage
+                                                            pos
+                                                            n
+                                                            0)
+            (perform-edit-change-notification textstorage
+                                              (@selector #/noteHemlockInsertionAtPosition:length:extra:)
+                                              pos
+                                              n)))))))
 
 (defun hemlock-ext:buffer-note-modification (buffer mark n)
   (when (hi::bufferp buffer)
     (let* ((document (hi::buffer-document buffer))
 	   (textstorage (if document (slot-value document 'textstorage))))
       (when textstorage
-            (perform-edit-change-notification textstorage
-                                              (@selector #/noteHemlockModificationAtPosition:length:)
-                                              (hi:mark-absolute-position mark)
-                                              n)))))
+        (if (eq *current-process* *cocoa-event-process*)
+          (#/noteHemlockModificationAtPosition:length:extra: textstorage
+                                                             (hi:mark-absolute-position mark)
+                                                             n
+                                                             0)
+          (perform-edit-change-notification textstorage
+                                            (@selector #/noteHemlockModificationAtPosition:length:extra:)
+                                            (hi:mark-absolute-position mark)
+                                            n))))))
   
 
 (defun hemlock-ext:buffer-note-deletion (buffer mark n)
@@ -2429,10 +2444,15 @@
 	   (textstorage (if document (slot-value document 'textstorage))))
       (when textstorage
         (let* ((pos (hi:mark-absolute-position mark)))
-          (perform-edit-change-notification textstorage
-                                            (@selector #/noteHemlockDeletionAtPosition:length:)
-                                            pos
-                                            (abs n)))))))
+          (if (eq *current-process* *cocoa-event-process*)
+            (#/noteHemlockDeletionAtPosition:length:extra: textstorage
+                                                           pos
+                                                           (abs n)
+                                                           0)
+            (perform-edit-change-notification textstorage
+                                              (@selector #/noteHemlockDeletionAtPosition:length:extra:)
+                                              pos
+                                              (abs n))))))))
 
 
 
