@@ -101,18 +101,16 @@ whose name or ID matches <p>, or to any process if <p> is null"
 (define-toplevel-command :break q () "return to toplevel" (toplevel))
 (define-toplevel-command :break r () "list restarts" (list-restarts))
 
-(define-toplevel-command :break set (n frame value) "Set <n>th item of frame <frame> to <value>"
-  (let* ((frame-sp (nth-raw-frame frame *break-frame* nil)))
-    (if frame-sp
-        (toplevel-print (list (set-nth-value-in-frame frame-sp n nil value)))
-        (format *debug-io* "No frame with number ~D~%" frame))))
 
 (define-toplevel-command :break nframes ()
   "print the number of stack frames accessible from this break loop"
   (do* ((p *break-frame* (parent-frame p nil))
-        (i 0 (1+ i))
+        (i 0 )
         (last (last-frame-ptr)))
-      ((eql p last) (toplevel-print (list i)))))
+      ((eql p last) (toplevel-print (list i)))
+    (declare (fixnum i))
+    (when (function-frame-p p nil)
+      (incf i))))
 
 (define-toplevel-command :global ? () "help"
   (format t "~&The following toplevel commands are available:")
@@ -148,12 +146,12 @@ whose name or ID matches <p>, or to any process if <p> is null"
                        :detailed-p t))
 
 (define-toplevel-command :break return-from-frame (i &rest values) "Return VALUES from the I'th stack frame"
-  (let* ((frame-sp (nth-raw-frame  i *break-frame* nil)))
+  (let* ((frame-sp (nth-function-frame  i *break-frame* nil)))
     (if frame-sp
       (apply #'return-from-frame frame-sp values))))
 
 (define-toplevel-command :break apply-in-frame (i function &rest args) "Applies FUNCTION to ARGS in the execution context of the Ith stack frame"
-  (let* ((frame-sp (nth-raw-frame  i *break-frame* nil)))
+  (let* ((frame-sp (nth-function-frame  i *break-frame* nil)))
     (if frame-sp
       (apply-in-frame frame-sp function args))))
                          
@@ -166,12 +164,12 @@ whose name or ID matches <p>, or to any process if <p> is null"
                        :detailed-p :raw))
 
 (define-toplevel-command :break v (n frame-number) "Return value <n> in frame <frame-number>"
-  (let* ((frame-sp (nth-raw-frame frame-number *break-frame* nil)))
+  (let* ((frame-sp (nth-function-frame frame-number *break-frame* nil)))
     (if frame-sp
       (toplevel-print (list (nth-value-in-frame frame-sp n nil))))))
 
 (define-toplevel-command :break arg (name frame-number) "Return value of argument named <name> in frame <frame-number>"
-  (let* ((frame-sp (nth-raw-frame frame-number *break-frame* nil)))
+  (let* ((frame-sp (nth-function-frame frame-number *break-frame* nil)))
     (when frame-sp
       (multiple-value-bind (lfun pc) (cfp-lfun frame-sp)
         (when (and lfun pc)
@@ -183,7 +181,7 @@ whose name or ID matches <p>, or to any process if <p> is null"
                 (toplevel-print (list value))))))))))
 
 (define-toplevel-command :break set-arg (name frame-number new) "Set value of argument named <name> in frame <frame-number> to value <new>."
-  (let* ((frame-sp (nth-raw-frame frame-number *break-frame* nil)))
+  (let* ((frame-sp (nth-function-frame frame-number *break-frame* nil)))
     (when frame-sp
       (multiple-value-bind (lfun pc) (cfp-lfun frame-sp)
         (when (and lfun pc)
@@ -193,7 +191,7 @@ whose name or ID matches <p>, or to any process if <p> is null"
 
 (define-toplevel-command :break local (name frame-number) "Return value of local denoted by <name> in frame <frame-number> <name> can either be a symbol - in which case the most recent
 binding of that symbol is used - or an integer index into the frame's set of local bindings."
-  (let* ((frame-sp (nth-raw-frame frame-number *break-frame* nil)))
+  (let* ((frame-sp (nth-function-frame frame-number *break-frame* nil)))
     (when frame-sp
       (multiple-value-bind (lfun pc) (cfp-lfun frame-sp)
         (when (and lfun pc)
@@ -205,7 +203,7 @@ binding of that symbol is used - or an integer index into the frame's set of loc
                 (toplevel-print (list value))))))))))
 
 (define-toplevel-command :break set-local (name frame-number new) "Set value of argument denoted <name> (see :LOCAL) in frame <frame-number> to value <new>."
-  (let* ((frame-sp (nth-raw-frame frame-number *break-frame* nil)))
+  (let* ((frame-sp (nth-function-frame frame-number *break-frame* nil)))
     (when frame-sp
       (multiple-value-bind (lfun pc) (cfp-lfun frame-sp)
         (when (and lfun pc)
@@ -224,7 +222,7 @@ binding of that symbol is used - or an integer index into the frame's set of loc
 ;;; Ordinarily, form follows function.
 (define-toplevel-command :break function (frame-number)
   "Returns the function invoked in backtrace frame <frame-number>.  This may be useful for, e.g., disassembly"
-  (let* ((cfp (nth-raw-frame frame-number *break-frame* nil)))
+  (let* ((cfp (nth-function-frame frame-number *break-frame* nil)))
     (when (and cfp (not (catch-csp-p cfp nil)))
       (let* ((function (cfp-lfun cfp)))
         (when function
