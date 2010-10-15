@@ -186,7 +186,7 @@ finish_allocating_uvector(ExceptionInformation *xp)
       return;
     }
     if (IS_SET_ALLOCPTR_HEADER_RD(instr)) {
-      header_of(cur_allocptr) == xpGPR(xp,RD_field(instr));
+      header_of(cur_allocptr) = xpGPR(xp,RD_field(instr));
     } else if (IS_SET_ALLOCPTR_RESULT_RD(instr)) {
       xpGPR(xp,RD_field(instr)) = cur_allocptr;
     } else {

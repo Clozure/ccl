@@ -1006,8 +1006,8 @@ mark_xp(ExceptionInformation *xp)
   natural *regs = (natural *) xpGPRvector(xp);
 
   int r;
-  /* registers >= fn should be tagged and marked as roots.
-     the PC, and LR should be treated as "pc_locatives".
+  /* registers between arg_z and Rfn should be tagged and marked as
+     roots.  the PC, and LR should be treated as "pc_locatives".
 
      In general, marking a locative is more expensive than marking
      a node is, since it may be neccessary to back up and find the
@@ -1294,7 +1294,7 @@ forward_xp(ExceptionInformation *xp)
 
   int r;
 
-  /* registers >= fn should be tagged and forwarded as roots.
+  /* registers between arg_z and Rfn should be tagged and forwarded as roots.
      the PC and LR should be treated as "locatives".
      */
 
