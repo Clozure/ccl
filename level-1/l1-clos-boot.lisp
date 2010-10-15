@@ -3194,7 +3194,7 @@ to replace that class with ~s" name old-class new-class)
          (when (typep instance 'funcallable-standard-object)
            (setq old-wrapper (gf.instance.class-wrapper instance)))
          (unless old-wrapper
-           (report-bad-arg instance '(or standard-instance funcallable-standard-object))))
+           (report-bad-arg instance '(or standard-object funcallable-standard-object))))
        (when (eql 0 (%wrapper-instance-slots old-wrapper)) ; is it really obsolete?
          (let* ((class (%wrapper-class old-wrapper))
                 (new-wrapper (or (%class.own-wrapper class)

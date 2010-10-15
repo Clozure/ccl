@@ -263,8 +263,11 @@
             (if (%i< ,indexsym ,lengthsym) (go ,toplab)))
           ,@(if ret `((progn (setq ,varsym nil) ,ret))))))))
 
-(defmacro report-bad-arg (&rest args)
-  `(values (%badarg ,@args)))
+(defmacro report-bad-arg (&whole w thing typespec &environment env)
+  (when (quoted-form-p typespec)
+    (unless (ignore-errors (specifier-type-if-known (cadr typespec) env))
+      (warn "Unknown type specifier ~s in ~s." (cadr typespec) w)))
+  `(values (%badarg ,thing ,typespec)))
 
 (defmacro %cons-restart (name action report interactive test)
  `(%istruct 'restart ,name ,action ,report ,interactive ,test))

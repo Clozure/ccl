@@ -6419,7 +6419,7 @@ are printed.")
             (when displaced
               (setf (fill-pointer displaced) newpos)))
           newpos)
-        (report-bad-arg newpos `(integer 0 `(,(- (the fixnum (io-buffer-limit outbuf)) origin)))))
+        (report-bad-arg newpos `(integer 0 (,(- (the fixnum (io-buffer-limit outbuf)) origin)))))
       (the fixnum (- (the fixnum (io-buffer-idx outbuf)) origin)))))
 
 (defun vector-input-stream-index (s)
@@ -6574,7 +6574,7 @@ are printed.")
         (progn
           (setf (io-buffer-idx inbuf) (the fixnum (+ origin (the fixnum newpos))))
           newpos)
-        (report-bad-arg newpos `(integer 0 `(,(- (the fixnum (io-buffer-limit inbuf)) origin)))))
+        (report-bad-arg newpos `(integer 0 (,(- (the fixnum (io-buffer-limit inbuf)) origin)))))
       (the fixnum (- (the fixnum (io-buffer-idx inbuf)) origin)))))
 
 ; end of L1-streams.lisp
