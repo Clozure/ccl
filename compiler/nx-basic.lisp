@@ -639,7 +639,7 @@
     (:ignore . "Variable ~S not ignored.")
     (:undefined-function . "Undefined function ~S") ;; (deferred)
     (:undefined-type . "Undefined type ~S")         ;; (deferred)
-    (:unknown-type-in-declaration . "Unknown or invalid type ~S, declaration ignored")
+    (:unknown-type-in-declaration . "Unknown type ~S, declaration ignored")
     (:bad-declaration . "Unknown or invalid declaration ~S")
     (:invalid-type . report-invalid-type-compiler-warning)
     (:unknown-declaration-variable . "~s declaration for unknown variable ~s")
