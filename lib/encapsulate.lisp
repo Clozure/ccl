@@ -717,6 +717,7 @@ functions are called."
               &rest arglist)
        ,@(and dynamic-extent-arglist '((declare (dynamic-extent arglist))))
        (declare (ftype function ,def))
+       (declare (ignorable arglist))
        (let ()
          ,(ecase
             when
