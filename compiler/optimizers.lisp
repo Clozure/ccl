@@ -2503,4 +2503,10 @@
   `(read-char-internal ,stream ,eof-error-p (values ,eof-value ,recursive-p)))
 
 
+(define-compiler-macro concatenate (&whole w type &rest sequences)
+  (if (and (quoted-form-p type)
+           (ignore-errors (subtypep (cadr type) 'string)))
+    `(concat-to-string ,@sequences)
+    w))
+
 (provide "OPTIMIZERS")
