@@ -1553,9 +1553,9 @@
 	   (:x8632
 	    (if (and (= (hard-regspec-class vreg) hard-reg-class-gpr)
 		     (member (get-regspec-mode vreg)
-			     '(hard-reg-class-gpr-mode-u32
-			       hard-reg-class-gpr-mode-s32
-			       hard-reg-class-gpr-mode-address))
+			     '(#.hard-reg-class-gpr-mode-u32
+			       #.hard-reg-class-gpr-mode-s32
+			       #.hard-reg-class-gpr-mode-address))
 		     (or (typep form '(unsigned-byte 32))
 			 (typep form '(signed-byte 32))))
 	      ;; The bits fit.  Get them in the register somehow.
@@ -1567,16 +1567,21 @@
 		  (! load-character-constant target (char-code form))
 		  (x862-store-immediate seg form target)))))
 	   (:x8664
-	    (if (and (typep form '(unsigned-byte 32))
-		     (= (hard-regspec-class vreg) hard-reg-class-gpr)
-		     (= (get-regspec-mode vreg)
-			hard-reg-class-gpr-mode-u32))
-	      (x862-lri seg vreg form)
-	      (ensuring-node-target
-		  (target vreg)
-		(if (characterp form)
-		  (! load-character-constant target (char-code form))
-		  (x862-store-immediate seg form target)))))))
+            (let* ((mode (if (= (hard-regspec-class vreg) hard-reg-class-gpr)
+                           (get-regspec-mode vreg))))
+            
+              (if (and (eql mode hard-reg-class-gpr-mode-s64)
+                       (typep form '(signed-byte 64)))
+                (x862-lri seg vreg form)
+                (if (and (or (eql mode hard-reg-class-gpr-mode-u64)
+                                 (eql mode hard-reg-class-gpr-mode-address))
+                             (typep form '(unsigned-byte 64)))
+                  (x862-lriu seg vreg form)
+                  (ensuring-node-target
+                      (target vreg)
+                    (if (characterp form)
+                      (! load-character-constant target (char-code form))
+                      (x862-store-immediate seg form target)))))))))
         (if (and (listp form) *load-time-eval-token* (eq (car form) *load-time-eval-token*))
           (x862-store-immediate seg form ($ *x862-temp0*))))
       (^))))
