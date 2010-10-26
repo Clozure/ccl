@@ -1516,3 +1516,83 @@ unsigned IP address."
 	  
 (defmethod stream-io-error ((stream socket) errno where)
   (socket-error stream where errno))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun snarf-url (url &key max-redirects (user-agent "CCL") &aux conn)
+  "GET the contents of the url as a (VECTOR (UNSIGNED-BYTE 8))"
+  (labels ((is-prefix (prefix string) (eql (length prefix) (string-lessp prefix string)))
+	   (header (prefix lines)
+	     (let ((line (find prefix lines :test #'is-prefix)))
+	       (and line (string-trim ccl::wsp (subseq line (length prefix))))))
+	   (header-value (prefix lines)
+	     (let ((line (find prefix lines :test #'is-prefix)))
+	       (and line (parse-integer line :start (length prefix)))))
+	   (split-url (string)
+             (if (is-prefix "/" string)
+               (list nil 80 string)
+               (if (not (is-prefix "http://" string))
+                 (error "Unknown scheme in ~s" string)
+                 (let* ((start (length "http://"))
+                        (end (length string))
+                        (ppos (or (position #\/ string :start start) end))
+                        (hend (or (position #\: string :start start :end ppos) ppos)))
+                   (list (subseq string start hend)
+                         (if (< hend ppos) (parse-integer string :start (1+ hend) :end ppos) 80)
+                         (if (< ppos end) (subseq string ppos) "/"))))))
+	   (read-header (conn)
+	     (loop as lines = (loop for line = (read-line conn nil)
+				    until (= 0 (length line)) ; eof or empty line
+				    collect line)
+		   as status = (let ((status-line (pop lines)))
+				 (or (parse-integer status-line
+						    :start (position #\Space status-line)
+						    :junk-allowed t)
+				     0))
+		   while (= status 100)
+		   finally (return (values lines status)))))
+    (unwind-protect
+       (loop with original-url = url
+	     with redirects = (or max-redirects 20)
+	     with (host port path) = (split-url original-url)
+	     do (setq conn (make-socket :remote-host host
+					:remote-port port
+					:external-format '(:character-encoding :us-ascii
+							   :line-termination :crlf)))
+	     do (format conn "GET ~a HTTP/1.1~%Host: ~a:~d~%Connection: close~%User-Agent: ~a~2%"
+			path host port user-agent)
+	     do (finish-output conn)
+	     do (multiple-value-bind (header-lines status) (read-header conn)
+		  (when (= status 200)
+		    (let ((encoding (header "transfer-encoding:" header-lines)))
+		      ;; Here would recognize chunked encoding if cared about that...
+		      (when (and encoding (not (string-equal encoding "identity")))
+			(error "Unsupported encoding ~s" encoding)))
+		    (return
+		      (let* ((count (header-value "content-length:" header-lines)))
+			(if count
+			    (let ((vec (make-array count :element-type '(unsigned-byte 8))))
+			      (loop for i from 0 below count
+				    do (setf (aref vec i) (read-byte conn)))
+			      vec)
+			    (let ((vec (make-array 1000
+						   :element-type '(unsigned-byte 8)
+						   :fill-pointer 0
+						   :adjustable t)))
+			      (loop for byte = (read-byte conn nil) while byte
+				    do (vector-push-extend byte vec))
+			      (subseq vec 0 (length vec)))))))
+		  (unless (and (<= 300 status 399) (<= 0 (decf redirects)))
+		    (if (<= 300 status 399)
+			(error "Too many redirects")
+			(error "Unknown response ~s" status)))
+		  (let* ((new (or (header "location:" header-lines)
+				  (error "Missing Location: header"))))
+		    (destructuring-bind (new-host new-port new-path) (split-url new)
+		      (when new-host
+			(setq host new-host port new-port))
+		      (setq path new-path))
+		    (close conn)
+		    (setq conn nil)))
+      (when conn (close conn))))))
