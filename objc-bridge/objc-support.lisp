@@ -107,7 +107,7 @@
 (maybe-map-objc-classes t)
 
 
-(defvar *class-init-keywords* (make-hash-table))
+(defvar *class-init-keywords* (make-hash-table :test #'eq))
 
 (defun process-init-message (message-info)
   (let* ((keys (objc-to-lisp-init (objc-message-info-message-name message-info))))
