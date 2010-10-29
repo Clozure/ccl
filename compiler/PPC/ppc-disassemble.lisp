@@ -244,8 +244,8 @@
 (defun insert-ppc-label (l instructions)
   (let* ((labaddr (lap-label-address l)))
    (do-dll-nodes (insn instructions (append-dll-node l instructions))
-     (when (>= (lap-instruction-address insn) labaddr)
-       (return (insert-dll-node-after l (lap-instruction-pred insn)))))))
+     (when (>= (instruction-element-address insn) labaddr)
+       (return (insert-dll-node-after l (instruction-element-pred insn)))))))
 
 (defun ppc-disassemble-cr (val operand-spec)
   (declare (type (mod 32) val))
