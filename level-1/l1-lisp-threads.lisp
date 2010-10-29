@@ -852,6 +852,18 @@
     (if (= i n)
       (return p))))
 
+(defun nth-function-frame (n start-frame context)
+  (declare (fixnum n))
+  (do* ((p start-frame (parent-frame p context))
+	(i -1)
+	(q (last-frame-ptr context)))
+       ((or (null p) (eq p q) (%stack< q p context)))
+    (declare (fixnum i))
+    (when (function-frame-p p context)
+      (incf i)
+      (if (= i n)
+        (return p)))))
+
 ;;; True if the object is in one of the heap areas
 (defun %in-consing-area-p (x area)
   (declare (optimize (speed 3) (safety 0)) (fixnum x))       ; lie

@@ -818,6 +818,8 @@
      (%single-float-exp (%short-float x)))))
 
 
+(defun positive-realpart-p (n)
+  (> (realpart n) 0))
 
 (defun expt (b e)
   "Return BASE raised to the POWER."
@@ -825,7 +827,7 @@
 	((integerp e)
          (if (minusp e) (/ 1 (%integer-power b (- e))) (%integer-power b e)))
         ((zerop b)
-         (if (plusp (realpart e)) b (report-bad-arg e '(number (0) *))))
+         (if (plusp (realpart e)) b (report-bad-arg e '(satisfies positive-realpart-p))))
         ((and (realp b) (plusp b) (realp e))
          (if (or (typep b 'double-float)
                  (typep e 'double-float))

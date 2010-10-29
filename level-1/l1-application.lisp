@@ -297,7 +297,9 @@ Default version returns Clozure CL version info."
              :temp-stack-size *initial-listener-default-temp-stack-size*
              :class 'tty-listener
              :process initial-listener-process))))
-  (%set-toplevel #'housekeeping-loop)
+  (%set-toplevel (lambda ()
+                   (with-standard-initial-bindings
+                       (housekeeping-loop))))
   (toplevel))
 
 (defun housekeeping-loop ()

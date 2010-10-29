@@ -233,6 +233,7 @@ examples/cocoa/nib-loading/HOWTO_files/stylesheets/styles.css -text
 examples/cocoa/nib-loading/hello.nib/designable.nib -text
 examples/cocoa/nib-loading/hello.nib/keyedobjects.nib -text
 examples/cocoa/nib-loading/nib-loading.lisp -text
+examples/cocoa/progress-view-controller/progress-view-controller.lisp -text
 examples/cocoa/qtvidcapture/QTVidCapture.nib/classes.nib -text
 examples/cocoa/qtvidcapture/QTVidCapture.nib/info.nib -text
 examples/cocoa/qtvidcapture/QTVidCapture.nib/keyedobjects.nib -text

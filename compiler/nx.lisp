@@ -220,6 +220,7 @@
     (:lexical-mismatch . invalid-arguments)
     (:environment-mismatch . invalid-arguments)
     (:ftype-mismatch . invalid-arguments)
+    (:unknown-type-in-declaration . style-warning)
     (:ignore . style-warning)
     (:result-ignored . style-warning)
     (:lambda . style-warning)

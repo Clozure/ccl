@@ -474,14 +474,49 @@
                       (%nx1-operator logxor2)
 		      (%nx1-operator %natural-logxor)))
 
-(defnx1 nx1-logand-2 ((logand-2)) (&whole w &environment env arg-1 arg-2)
-  (nx-binary-boole-op w
-                      env
-                      arg-1
-                      arg-2
-                      (%nx1-operator %ilogand2)
-                      (%nx1-operator logand2)
-		      (%nx1-operator %natural-logand)))
+(defnx1 nx1-logand-2 ((logand-2)) (&environment env arg-1 arg-2)
+  (let* ((nat1 (nx-form-typep arg-1 *nx-target-natural-type* env))
+         (nat2 (nx-form-typep arg-2 *nx-target-natural-type* env)))
+    (cond ((and (nx-form-typep arg-1 *nx-target-fixnum-type* env)
+                (nx-form-typep arg-2 *nx-target-fixnum-type* env))
+           (make-acode (%nx1-operator typed-form)
+                       *nx-target-fixnum-type*
+                       (make-acode (%nx1-operator %ilogand2)
+                                   (nx1-form arg-1 env)
+                                   (nx1-form arg-2 env))))
+          ((and nat1 (typep arg-2 'integer))
+           (make-acode (%nx1-operator typed-form)
+                       *nx-target-natural-type*
+                       (make-acode (%nx1-operator %natural-logand)
+                                   (nx1-form arg-1 env)
+                                   (nx1-form (logand arg-2
+                                                     (1- (ash 1 (target-word-size-case
+                                                                 (32 32)
+                                                                 (64 64)))))
+                                             env))))
+          ((and nat2 (typep arg-1 'integer))
+           (make-acode (%nx1-operator typed-form)
+                       *nx-target-natural-type*
+                       (make-acode (%nx1-operator %natural-logand)
+                                   (nx1-form arg-2 env)
+                                   (nx1-form (logand arg-1
+                                                     (1- (ash 1 (target-word-size-case
+                                                                 (32 32)
+                                                                 (64 64)))))
+                                             env))))
+          ((and nat1 nat2)
+           (make-acode (%nx1-operator typed-form)
+                       *nx-target-natural-type*
+                       (make-acode (%nx1-operator %natural-logand)
+                                   (nx1-form arg-1 env)
+                                   (nx1-form arg-2 env))))
+          (t
+           (make-acode (%nx1-operator typed-form)
+                       'integer
+                       (make-acode (%nx1-operator logand2)
+                                   (nx1-form arg-1 env)
+                                   (nx1-form arg-2 env)))))))
+
 
 (defnx1 nx1-require ((require-simple-vector)
                      (require-simple-string)

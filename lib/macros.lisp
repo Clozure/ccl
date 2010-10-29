@@ -263,8 +263,11 @@
             (if (%i< ,indexsym ,lengthsym) (go ,toplab)))
           ,@(if ret `((progn (setq ,varsym nil) ,ret))))))))
 
-(defmacro report-bad-arg (&rest args)
-  `(values (%badarg ,@args)))
+(defmacro report-bad-arg (&whole w thing typespec &environment env)
+  (when (quoted-form-p typespec)
+    (unless (ignore-errors (specifier-type-if-known (cadr typespec) env))
+      (warn "Unknown type specifier ~s in ~s." (cadr typespec) w)))
+  `(values (%badarg ,thing ,typespec)))
 
 (defmacro %cons-restart (name action report interactive test)
  `(%istruct 'restart ,name ,action ,report ,interactive ,test))
@@ -3853,3 +3856,14 @@ stream-output-timeout set to TIMEOUT."
 
 (defmacro int-errno-ffcall (entry &rest args)
   `(int-errno-call (ff-call ,entry ,@args)))
+
+(defmacro with-initial-bindings (bindings &body body)
+  (let* ((syms (gensym))
+         (values (gensym)))
+    `(multiple-value-bind (,syms ,values)
+        (initial-bindings ,bindings)
+      (progv ,syms ,values ,@body))))
+
+(defmacro with-standard-initial-bindings (&body body)
+  `(with-initial-bindings (standard-initial-bindings) ,@body))
+

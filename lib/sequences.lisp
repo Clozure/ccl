@@ -484,7 +484,8 @@
              (incf out)))
           (list
            (dolist (elt seq)
-             (setf (schar result out) elt))))))))
+             (setf (schar result out) elt)
+             (incf out))))))))
 
 ;This one doesn't choke on circular lists, doesn't cons as much, and is
 ;about 1/8K smaller to boot.

@@ -2182,7 +2182,15 @@
 ;;				Reader					;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defvar *read-eval* t "When nil, #. signals an error.")
+(def-standard-initial-binding *read-eval* t "When nil, #. signals an error.")
+(def-standard-initial-binding *read-default-float-format* 'single-float)
+
+(def-standard-initial-binding *read-suppress* nil
+  "Suppress most interpreting in the reader when T.")
+
+(def-standard-initial-binding *read-base* 10.
+  "the radix that Lisp reads numbers in")
+
 (defvar %read-objects% nil)
 (defvar %keep-whitespace% nil)
 

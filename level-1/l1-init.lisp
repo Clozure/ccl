@@ -173,13 +173,6 @@
 
 (defparameter %toplevel-catch% ':toplevel)
 
-(defvar *read-default-float-format* 'single-float)
-
-(defvar *read-suppress* nil
-  "Suppress most interpreting in the reader when T.")
-
-(defvar *read-base* 10.
-  "the radix that Lisp reads numbers in")
 
 
 (defparameter *warn-if-redefine-kernel* nil
