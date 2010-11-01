@@ -4298,9 +4298,9 @@
                (eq (basic-stream.wrapper stream)
                    *string-output-stream-class-wrapper*)
                (eq (string-output-stream-ioblock-freelist ioblock) pool))
-    (without-interrupts
-     (setf (ioblock-stream ioblock) (pool.data pool)
-           (pool.data pool) ioblock)))))
+      (without-interrupts
+       (setf (ioblock-stream ioblock) (pool.data pool)
+             (pool.data pool) ioblock)))))
 
 ;;; If this is the sort of string stream whose ioblock we recycle and
 ;;; there's a thread-local binding of the variable we use for a freelist,
@@ -4313,8 +4313,7 @@
          (and loc (%fixnum-ref loc)))))
 
 
-(defun create-string-output-stream-ioblock (&rest keys &key stream &allow-other-keys)
-  (declare (dynamic-extent keys))
+(defun create-string-output-stream-ioblock (stream string write-char-function write-string-function)
   (let* ((recycled (and stream
                         (eq (basic-stream.wrapper stream)
                             *string-output-stream-class-wrapper*)
@@ -4329,25 +4328,29 @@
                                    (string-output-stream-ioblock-index data) 0
                                    (string-output-stream-ioblock-line-length data) 80))
                            data)))))
-    (or recycled (apply #'make-string-output-stream-ioblock keys))))
+    (or recycled
+        (make-string-output-stream-ioblock :stream stream
+                                           :string string
+                                           :element-type 'character
+                                           :write-char-function write-char-function
+                                           :write-char-when-locked-function write-char-function
+                                           :write-simple-string-function write-string-function
+                                           :force-output-function #'false
+                                           :freelist (%string-stream-ioblock-freelist stream)
+                                           :close-function #'%close-string-output-stream
+                                           :device -1))))
                         
 
 
 (defun %%make-string-output-stream (class string write-char-function write-string-function)
-  (let* ((stream (allocate-basic-stream class)))
-    (initialize-basic-stream stream :element-type 'character)
-    (let* ((ioblock (create-string-output-stream-ioblock
-                     :stream stream
-                     :string string
-                     :element-type 'character
-                     :write-char-function write-char-function
-                     :write-char-when-locked-function write-char-function
-                     :write-simple-string-function write-string-function
-                     :force-output-function #'false
-                     :freelist (%string-stream-ioblock-freelist stream)
-                     :close-function #'%close-string-output-stream)))
+  (let* ((stream (gvector :basic-stream (%class.own-wrapper class)
+                          (logior (ash 1 basic-stream-flag.open-character)
+                                  (ash 1 basic-stream-flag.open-output))
+                          nil
+                          nil))
+         (ioblock (create-string-output-stream-ioblock stream string write-char-function write-string-function)))
       (setf (basic-stream.state stream) ioblock)
-      stream)))
+      stream))
 
 (declaim (inline %string-push-extend))
 (defun %string-push-extend (char string)
