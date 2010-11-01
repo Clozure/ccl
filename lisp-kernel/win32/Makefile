@@ -13,6 +13,7 @@
 #   The LLGPL is also available online at
 #   http://opensource.franz.com/preamble.html
 
+SVN_REVISION=$(shell svnversion || echo "unknown")
 
 VPATH = ../
 RM = /bin/rm
@@ -22,7 +23,7 @@ M4 = m4
 LD = ld
 ASFLAGS = -g --32
 M4FLAGS = -DWIN_32 -DWINDOWS -DX86 -DX8632 -DWIN32_ES_HACK
-CDEFINES = -DWIN_32 -DWINDOWS -D_REENTRANT -DX86 -DX8632 -D_GNU_SOURCE  -D__MSVCRT__ -D__MSVCRT_VERSION__=0x700 -D_WIN32_WINNT=0x0502 -DWIN32_ES_HACK
+CDEFINES = -DWIN_32 -DWINDOWS -D_REENTRANT -DX86 -DX8632 -D_GNU_SOURCE  -D__MSVCRT__ -D__MSVCRT_VERSION__=0x700 -D_WIN32_WINNT=0x0502 -DWIN32_ES_HACK -DSVN_REVISION=$(SVN_REVISION)
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,

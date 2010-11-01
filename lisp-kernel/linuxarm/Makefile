@@ -13,6 +13,7 @@
 #   The LLGPL is also available online at
 #   http://opensource.franz.com/preamble.html
 
+SVN_REVISION=$(shell svnversion || echo "unknown")
 
 VPATH = ../
 RM = /bin/rm
@@ -22,7 +23,7 @@ AS = as
 M4 = m4
 ASFLAGS = -mfpu=vfpv2
 M4FLAGS = -DLINUX -DARM
-CDEFINES = -DLINUX -DARM -D_REENTRANT -D_GNU_SOURCE -DUSE_FUTEX
+CDEFINES = -DLINUX -DARM -D_REENTRANT -D_GNU_SOURCE -DUSE_FUTEX -DSVN_REVISION=$(SVN_REVISION)
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,

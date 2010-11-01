@@ -13,6 +13,8 @@
 #   The LLGPL is also available online at
 #   http://opensource.franz.com/preamble.html
 
+SVN_REVISION=$(shell svnversion || echo "unknown")
+
 MDYNAMIC_NO_PIC = $(shell ($(CC) --help -v 2>&1 | grep -q -e "-mdynamic-no-pic") && /bin/echo "-mdynamic-no-pic")
 
 VPATH = ..
@@ -23,7 +25,7 @@ AS = as
 M4 = gm4
 M4FLAGS = -DDARWIN -DPPC
 ASFLAGS = -arch ppc -force_cpusubtype_ALL
-CDEFINES = -DDARWIN -DPPC  #-DDEBUG -DGC_INTEGRITY_CHECKING
+CDEFINES = -DDARWIN -DPPC -DSVN_REVISION=$(SVN_REVISION) #-DDEBUG -DGC_INTEGRITY_CHECKING
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,

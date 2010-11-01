@@ -13,6 +13,7 @@
 #   The LLGPL is also available online at
 #   http://opensource.franz.com/preamble.html
 
+SVN_REVISION=$(shell svnversion || echo "unknown")
 
 VPATH = ..
 RM = /bin/rm
@@ -25,7 +26,7 @@ M4 = /usr/bin/gm4
 CC = /usr/sfw/bin/gcc
 ASFLAGS = --32 --divide
 M4FLAGS = -DSOLARIS -DX86 -DX8632
-CDEFINES = -DSOLARIS -D_REENTRANT -DX86 -DX8632 -D__EXTENSIONS__ -DHAVE_TLS #-DDISABLE_EGC
+CDEFINES = -DSOLARIS -D_REENTRANT -DX86 -DX8632 -D__EXTENSIONS__ -DHAVE_TLS -DSVN_REVISION=$(SVN_REVISION) #-DDISABLE_EGC
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
