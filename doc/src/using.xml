@@ -3214,5 +3214,39 @@ init-this-and-that.
     </para>
   </refsect1>
 </refentry>
+
+<refentry id="v_wait-for-signal">
+  <indexterm zone="v_wait-for-signal">
+    <primary>wait-for-signal</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>WAIT-FOR-SIGNAL</refname>
+    <refpurpose>
+      Wait for a particular signal to be received.
+    </refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis><function>wait-for-signal</function> s duration
+    </synopsis>
+  </refsynopsisdiv>
+
+  <refsect1><title>Summary</title>
+    <para>
+      Wait for the signal with signal number s to be received, or until
+      duration seconds have elapsed.  If duration is nil, wait for an
+      indeterminate "very long time" (many years).
+    </para>
+    <para>
+      If signal number s is outside the range of valid signals, or is
+      reserved by the lisp for its own use, an error is signaled.
+      (An error is always signaled on Windows systems.)
+    </para>
+  </refsect1>
+</refentry>
+
+
 </sect1>
 </chapter>
