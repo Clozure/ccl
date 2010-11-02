@@ -3177,4 +3177,42 @@ init-this-and-that.
 
 </sect2>
 </sect1>
+<sect1 id="other-extensions"><title>Other Extensions</title>
+<refentry id="v_quit">
+  <indexterm zone="v_quit">
+    <primary>quit</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>QUIT</refname>
+    <refpurpose>
+      Cleanly exit the lisp.
+    </refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis><function>quit</function> &optional; (exit 0) &key; error-handler
+    </synopsis>
+  </refsynopsisdiv>
+
+  <refsect1><title>Summary</title>
+    <para>
+      Cleanly exit from lisp.  If the exit argument is a value of type
+      (signed-byte 32), that value will be passed to the C library
+      function _exit() as the status code.  (A value of nil is treated
+      as a zero.)
+    </para>
+    <para>
+      Alternatively, exit may be a function of no arguments;  this function
+      will be called instead of _exit() to exit the lisp.
+    </para>
+    <para>
+      The error-handler argument, if supplied, must be a function of one
+      argument, the condition, that will be called if an error occurs when
+      preparing to quit.  The error-handler function should exit the lisp.
+    </para>
+  </refsect1>
+</refentry>
+</sect1>
 </chapter>
