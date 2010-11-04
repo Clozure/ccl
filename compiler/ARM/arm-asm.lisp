@@ -181,6 +181,18 @@
      #xf57ff01f
      #xffffffff
      (:non-conditional))
+   (define-arm-instruction isb ()
+     #xf57ff06f
+     #xffffffff
+     (:non-conditional))
+   (define-arm-instruction dmb ()
+     #xf57ff05f
+     #xffffffff
+     (:non-conditional))
+   (define-arm-instruction dsb ()
+     #xf57ff04f
+     #xffffffff
+     (:non-conditional))   
    
 ;;; UUOs.
 

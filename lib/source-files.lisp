@@ -418,7 +418,9 @@ definition type NAME"
       (when source
         (list (list* (cons *method-definition-type* (%method-function-method fn)) source nil)))))
   (:method ((m method))
-    (get-object-sources (method-function m))))
+    (get-object-sources (method-function m)))
+  (:method ((fn compiled-lexical-closure))
+    (get-object-sources (closure-function fn))))
 
 (defun find-definition-sources (name &optional (type t))
   "Returns a list of entries ((a-type . a-name) source . previous-sources), where

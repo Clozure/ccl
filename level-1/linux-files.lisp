@@ -295,10 +295,10 @@ it has been changed, this is the directory Clozure CL was started in."
 
 (defun %rmdir (name)
   (let* ((last (1- (length name))))
+    (when (and (>= last 0)
+	       (eql (char name last) #\/))
+      (setq name (subseq name 0 last)))
     (with-filename-cstrs ((name name))
-      (when (and (>= last 0)
-		 (eql (%get-byte name last) (char-code #\/)))
-	(setf (%get-byte name last) 0))
       (int-errno-call (#+windows-target #__wrmdir #-windows-target #_rmdir  name)))))
 
 

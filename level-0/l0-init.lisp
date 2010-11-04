@@ -66,6 +66,7 @@
     #+x86-target :x86-host
     #+x8664-target :x8664-target
     #+x8664-target :x8664-host
+    #+arm-target :arm
     #+arm-target :arm-target
     #+linux-target :linux-host
     #+linux-target :linux-target
