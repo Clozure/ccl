@@ -59,10 +59,10 @@
 (defconstant $regnote-ea 1)
 
 (defmacro nx-null (x)
- `(eq ,x *nx-nil*))
+ `(%nx-null ,x))
 
 (defmacro nx-t (x)
- `(eq ,x *nx-t*))
+ `(%nx-t ,x))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
 
@@ -166,8 +166,8 @@
      (struct-ref . 0)
      (struct-set . 0)
      (%aref1 . #.(logior operator-acode-subforms-mask operator-assignment-free-mask operator-single-valued-mask operator-side-effect-free-mask))
-     (embedded-nlexit . 0)
-     (embedded-conditional . 0) 
+     (nil . #.(logior operator-assignment-free-mask operator-single-valued-mask operator-side-effect-free-mask))
+     (t . #.(logior operator-assignment-free-mask operator-single-valued-mask operator-side-effect-free-mask))
      (%word-to-int . #.(logior operator-assignment-free-mask operator-single-valued-mask))
      (%svref . #.(logior operator-acode-subforms-mask operator-assignment-free-mask operator-single-valued-mask))
      (%svset . #.(logior operator-acode-subforms-mask operator-single-valued-mask))

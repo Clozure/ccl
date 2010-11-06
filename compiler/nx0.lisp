@@ -65,8 +65,20 @@
 (defvar *nx1-operators* (make-hash-table :size 300 :test #'eq))
 
 (defvar *nx-lambdalist* (make-symbol "lambdalist"))
-(defvar *nx-nil* (list (make-symbol "nil")))
-(defvar *nx-t* (list (make-symbol "t")))
+(defvar *nx-nil* (make-acode (%nx1-operator nil)))
+(defvar *nx-t* (make-acode (%nx1-operator t)))
+
+(defun %nx-null (x)
+  (or (eq x *nx-nil*)
+      (if (acode-p x)
+        (eql (acode-operator x)
+             (%nx1-operator nil)))))
+
+(defun %nx-t (x)
+  (or (eq x *nx-t*)
+      (if (acode-p x)
+        (eql (acode-operator x)
+             (%nx1-operator t)))))
 
 (defparameter *nx-current-compiler-policy* (%default-compiler-policy))
 
@@ -1761,19 +1773,26 @@ Or something. Right? ~s ~s" var varbits))
 
 (defun nx1-target-fixnump (form)
   (when (typep form 'integer)
-       (let* ((target (backend-target-arch *target-backend*)))
-         (and
-          (>= form (arch::target-most-negative-fixnum target))
-          (<= form (arch::target-most-positive-fixnum target))))))
+    (let* ((target (backend-target-arch *target-backend*)))
+      (and
+       (>= form (arch::target-most-negative-fixnum target))
+       (<= form (arch::target-most-positive-fixnum target))))))
 
 
 (defun nx1-immediate (form)
+  #+notyet
+  (cond ((eq form t) (make-acode (%nx1-operator t)))
+        ((null form) (make-acode (%nx1-operator nil)))
+        ((nx1-target-fixnump form)
+         (make-acode (%nx1-operator fixnum) form))
+        (t (make-acode (%nx1-operator immediate) form)))
+  #-notyet
   (if (or (eq form t) (null form))
     (nx1-sysnode form)
-    (make-acode 
+    (make-acode
      (if (nx1-target-fixnump form) 
        (%nx1-operator fixnum)
-        (%nx1-operator immediate))   ; Screw: chars
+       (%nx1-operator immediate))   ; Screw: chars
      form)))
 
 (defun nx2-constant-form-value (form)

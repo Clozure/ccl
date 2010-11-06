@@ -1506,7 +1506,7 @@
 
 (defun x862-set-NARGS (seg n)
   (if (> n call-arguments-limit)
-    (error "~s exceeded." call-arguments-limit)
+    (error "~s exceeded." 'call-arguments-limit)
     (with-x86-local-vinsn-macros (seg)
       (! set-nargs n))))
 
@@ -4540,7 +4540,7 @@
             (declare (inline x862-puntable-binding-p))
             (if (and (not (x862-load-ea-p val))
                      (setq puntval (x862-puntable-binding-p var val)))
-              (progn
+              (unless (%ilogbitp $vbitpunted bits)
                 (nx-set-var-bits var (%ilogior (%ilsl $vbitpunted 1) bits))
                 (let* ((vtype (var-inittype var)))
                   (when (and vtype (not (eq t vtype)))

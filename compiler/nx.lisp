@@ -28,6 +28,7 @@
   (require 'sort)    ; just calls '%sort-list-no-keys'
   (require 'hash))
 
+
 (%include "ccl:compiler;nx-basic.lisp")
 
 (eval-when (:load-toplevel :execute)
@@ -225,7 +226,8 @@
     (:result-ignored . style-warning)
     (:lambda . style-warning)
     (:format-error . style-warning)
-    (:unused . style-warning)))
+    (:unused . style-warning)
+    (:type-conflict . style-warning)))
 
 
 
