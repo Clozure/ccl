@@ -67,7 +67,7 @@
 (defvar *nx-lambdalist* (make-symbol "lambdalist"))
 
 (defmacro make-nx-nil () `(make-acode ,(%nx1-operator nil)))
-(defmacro make-nx-t () `(make-acode `(%nx1-operator t)))
+(defmacro make-nx-t () `(make-acode ,(%nx1-operator t)))
 
 (defun %nx-null (x)
   (let* ((x (acode-unwrapped-form x)))
