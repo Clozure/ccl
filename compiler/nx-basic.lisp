@@ -836,8 +836,8 @@
     (decomp-form acode)))
 
 (defun decomp-form (acode)
-  (cond ((eq acode *nx-t*) t)
-        ((eq acode *nx-nil*) nil)
+  (cond ((nx-null acode) t)
+        ((nx-t acode) nil)
         (t (let* ((op (car acode))
                   (num (length *next-nx-operators*))
                   (name (when (and (fixnump op)
@@ -886,7 +886,7 @@
           (reqs (mapcar #'decomp-arg req))
           (opts (when opt (cons '&optional (apply #'mapcar
                                                   (lambda (var init supp)
-                                                    (if (and (not supp) (eq init *nx-nil*))
+                                                    (if (and (not supp) (nx-null init))
                                                       (decomp-arg var)
                                                       (list* (decomp-arg var)
                                                              (decomp-form init)
@@ -902,7 +902,7 @@
                                                        (arg (if (and (symbolp sym) (eq (make-keyword sym) key))
                                                               sym
                                                               (list key sym))))
-                                                  (if (and (not supp) (eq init *nx-nil*) (eq arg sym))
+                                                  (if (and (not supp) (nx-null init) (eq arg sym))
                                                     sym
                                                     (list* arg
                                                            (decomp-form init)
@@ -912,7 +912,7 @@
           (auxen (when (car auxen)
                    (cons '&aux (apply #'mapcar
                                       (lambda (var init)
-                                        (if (eq init *nx-nil*)
+                                        (if (nx-null init)
                                           (decomp-arg var)
                                           (list (decomp-arg var) (decomp-form init))))
                                       auxen)))))

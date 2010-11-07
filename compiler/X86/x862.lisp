@@ -8698,7 +8698,7 @@
 
 (defx862 x862-fixnum-overflow fixnum-overflow (seg vreg xfer form)
   (destructuring-bind (op n0 n1) (acode-unwrapped-form form)
-    (x862-use-operator op seg vreg xfer n0 n1 *nx-t*)))
+    (x862-use-operator op seg vreg xfer n0 n1 (make-nx-t))))
 
 (defx862 x862-%aref2 simple-typed-aref2 (seg vreg xfer typename arr i j &optional dim0 dim1)
   (if (null vreg)

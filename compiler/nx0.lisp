@@ -65,20 +65,21 @@
 (defvar *nx1-operators* (make-hash-table :size 300 :test #'eq))
 
 (defvar *nx-lambdalist* (make-symbol "lambdalist"))
-(defvar *nx-nil* (make-acode (%nx1-operator nil)))
-(defvar *nx-t* (make-acode (%nx1-operator t)))
+
+(defmacro make-nx-nil () `(make-acode ,(%nx1-operator nil)))
+(defmacro make-nx-t () `(make-acode `(%nx1-operator t)))
 
 (defun %nx-null (x)
-  (or (eq x *nx-nil*)
-      (if (acode-p x)
-        (eql (acode-operator x)
-             (%nx1-operator nil)))))
+  (let* ((x (acode-unwrapped-form x)))
+    (if (acode-p x)
+      (eql (acode-operator x)
+           (%nx1-operator nil)))))
 
 (defun %nx-t (x)
-  (or (eq x *nx-t*)
-      (if (acode-p x)
-        (eql (acode-operator x)
-             (%nx1-operator t)))))
+  (let* ((x (acode-unwrapped-form x)))
+        (if (acode-p x)
+          (eql (acode-operator x)
+               (%nx1-operator t)))))
 
 (defparameter *nx-current-compiler-policy* (%default-compiler-policy))
 
@@ -448,7 +449,7 @@ function to the indicated name is true.")
   (let* ((typespec
           (if (nx-null form)
             'null
-            (if (eq form *nx-t*)
+            (if (nx-t form)
               'boolean
               (nx-target-type 
                (if (acode-p form)
@@ -1586,7 +1587,7 @@ Or something. Right? ~s ~s" var varbits))
              (ksupp))
         (until (eq keytail auxtail)
           (unless (eq (setq sym (pop keytail)) '&allow-other-keys)      
-            (setq kinit *nx-nil* ksupp nil)
+            (setq kinit (make-nx-nil) ksupp nil)
             (if (atom sym)
               (setq kvar sym kkey (make-keyword sym))
               (progn
@@ -1682,7 +1683,7 @@ Or something. Right? ~s ~s" var varbits))
              (ksupp))
         (until (eq keytail auxtail)
           (unless (eq (setq sym (pop keytail)) '&allow-other-keys)      
-            (setq kinit *nx-nil* ksupp nil)
+            (setq kinit (make-nx-nil) ksupp nil)
             (if (atom sym)
               (setq kvar sym kkey (make-keyword sym))
               (progn
@@ -1780,20 +1781,11 @@ Or something. Right? ~s ~s" var varbits))
 
 
 (defun nx1-immediate (form)
-  #+notyet
   (cond ((eq form t) (make-acode (%nx1-operator t)))
         ((null form) (make-acode (%nx1-operator nil)))
         ((nx1-target-fixnump form)
          (make-acode (%nx1-operator fixnum) form))
-        (t (make-acode (%nx1-operator immediate) form)))
-  #-notyet
-  (if (or (eq form t) (null form))
-    (nx1-sysnode form)
-    (make-acode
-     (if (nx1-target-fixnump form) 
-       (%nx1-operator fixnum)
-       (%nx1-operator immediate))   ; Screw: chars
-     form)))
+        (t (make-acode (%nx1-operator immediate) form))))
 
 (defun nx2-constant-form-value (form)
   (setq form (nx-untyped-form form))

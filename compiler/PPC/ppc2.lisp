@@ -7633,7 +7633,7 @@
 
 (defppc2 ppc2-fixnum-overflow fixnum-overflow (seg vreg xfer form)
   (destructuring-bind (op n0 n1) (acode-unwrapped-form form)
-    (ppc2-use-operator op seg vreg xfer n0 n1 *nx-t*)))
+    (ppc2-use-operator op seg vreg xfer n0 n1 (make-nx-t))))
 
 
 
@@ -7677,7 +7677,7 @@
                          i
                          j
                          (if *ppc2-reckless*
-                           *nx-nil*
+                           (make-nx-nil)
                            (nx-lookup-target-uvector-subtag keyword ))
                          keyword        ;(make-acode (%nx1-operator immediate) )
                          (if (typep dim0 'fixnum) dim0) (if (typep dim1 'fixnum) dim1))))
@@ -7732,7 +7732,7 @@
                          j
                          k
                          (if *ppc2-reckless*
-                           *nx-nil*
+                           (make-nx-nil)
                            (nx-lookup-target-uvector-subtag keyword ))
                          keyword ;(make-acode (%nx1-operator immediate) )
                          (if (typep dim0 'fixnum) dim0)

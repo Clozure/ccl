@@ -7438,7 +7438,7 @@
                          i
                          j
                          (if *arm2-reckless*
-                           *nx-nil*
+                           (make-nx-nil)
                            (nx-lookup-target-uvector-subtag keyword ))
                          keyword        ;(make-acode (%nx1-operator immediate) )
                          (if (typep dim0 'fixnum) dim0) (if (typep dim1 'fixnum) dim1))))
@@ -7493,7 +7493,7 @@
                          j
                          k
                          (if *arm2-reckless*
-                           *nx-nil*
+                           (make-nx-nil)
                            (nx-lookup-target-uvector-subtag keyword ))
                          keyword ;(make-acode (%nx1-operator immediate) )
                          (if (typep dim0 'fixnum) dim0)

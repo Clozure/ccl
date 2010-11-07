@@ -1421,7 +1421,7 @@
           (make-acode
            (%nx1-operator let*)
            (list catchvar indexvar)
-           (list (make-acode (%nx1-operator cons) *nx-nil* *nx-nil*) *nx-nil*)
+           (list (make-acode (%nx1-operator cons) (make-nx-nil) (make-nx-nil)) (make-nx-nil))
            (make-acode
             (%nx1-operator local-tagbody)
             (list looplabel)
@@ -1440,7 +1440,7 @@
                  newtags
                  body)))
               (make-acode (%nx1-operator local-go) looplabel)
-              *nx-nil*)))
+              (make-nx-nil))))
            0))))))
 
 
@@ -2011,18 +2011,18 @@
                 (if arglist
                   (progn
                     (push (%car optvars) vars) (push (%car arglist) vals)
-                    (when (%car spvars) (push (%car spvars) vars) (push *nx-t* vals)))
+                    (when (%car spvars) (push (%car spvars) vars) (push (make-nx-t) vals)))
                   (progn
                     (push (%car optvars) vars*) (push (%car inits) vals*)
-                    (when (%car spvars) (push (%car spvars) vars*) (push *nx-nil* vals*))))
+                    (when (%car spvars) (push (%car spvars) vars*) (push (make-nx-nil) vals*))))
                 (setq optvars (%cdr optvars) spvars (%cdr spvars) inits (%cdr inits)
                       arglist (%cdr arglist))))
             (if arglist
               (when (and (not keys) (not rest))
                 (nx-error "Extra args ~s for (LAMBDA ~s ...)" args lambda-list))
               (when rest
-                (push rest vars*) (push *nx-nil* vals*)
-                (nx1-punt-bindings (cons rest nil) (cons *nx-nil* nil))
+                (push rest vars*) (push (make-nx-nil) vals*)
+                (nx1-punt-bindings (cons rest nil) (cons (make-nx-nil) nil))
                 (setq rest nil)))
             (when keys
               (let* ((punt nil))
@@ -2049,7 +2049,7 @@
                           (push (or (%svref keyargs i) (%car inits)) vals*)
                           (when (%car spvars)
                             (push (%car spvars) vars*)
-                            (push (if (%svref keyargs i) *nx-t* *nx-nil*) vals*))
+                            (push (if (%svref keyargs i) (make-nx-t) (make-nx-nil)) vals*))
                           (setq keyvars (%cdr keyvars) inits (%cdr inits) spvars (%cdr spvars)))
                         (setq keys hit))
                     (setq arg (%car argl))

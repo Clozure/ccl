@@ -505,7 +505,6 @@
           nx-decl-set-fbit
           nx-adjust-setq-count
           nx-init-var
-          nx1-sysnode
           ))
 
 (defun nx-init-var (state node)
@@ -557,11 +556,7 @@
     new))
 
 
-(defun nx1-sysnode (form)
-  (if form
-    (if (eq form t)
-      *nx-t*)
-    *nx-nil*))
+
 )
 
 (defmacro make-mask (&rest weights)
