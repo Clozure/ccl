@@ -241,8 +241,9 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (provide "X862")
 
       #+arm-target
-      (provide "ARM2")
-      
+      (provide "ARM2") 
+      (bin-load-provide "ACODE-REWRITE" "acode-rewrite")
+     
       (l1-load-provide "NX" "nx")
       
       #+ppc-target

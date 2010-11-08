@@ -1,6 +1,6 @@
 ;;;-*- Mode: Lisp; Package: CCL -*-
 ;;;
-;;;   Copyright (C) 2007-2009 Clozure Associates
+;;;   Copyright (C) 2007-2010 Clozure Associates
 ;;;   This file is part of Clozure CL.  
 ;;;
 ;;;   Clozure CL is licensed under the terms of the Lisp Lesser GNU Public
@@ -17,11 +17,16 @@
 (in-package "CCL")
 
 
-(defvar *acode-post-trust-decls* nil)
+(defvar *acode-rewrite-tail-allow* nil)
+(defvar *acode-rewrite-reckless* nil)
+(defvar *acode-rewrite-open-code-inline* nil)
+(defvar *acode-rewrite-trust-declarations* nil)
+(defvar *acode-rewrite-full-safety* nil)
+
 
 ;;; Rewrite acode trees.
 
-(next-nx-defops)
+;(next-nx-defops)
 (defvar *acode-rewrite-functions* nil)
 (let* ((newsize (%i+ (next-nx-num-ops) 10))
        (old *acode-rewrite-functions*)
@@ -33,28 +38,42 @@
         (setf (svref v i) (svref old i))))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defmacro def-acode-rewrite (name operator-list arglist &body body)
+  (defmacro def-acode-rewrite (name operator-list typecons arglist &body body)
     (if (atom operator-list)
       (setq operator-list (list operator-list)))
-    (multiple-value-bind (body decls)
-        (parse-body body nil t)
-      (collect ((let-body))
-        (dolist (operator operator-list)
-          (let-body `(setf (svref *acode-rewrite-functions* (logand operator-id-mask (%nx1-operator ,operator))) fun)))
-        (destructuring-bind (op whole type) arglist
+    (multiple-value-bind (lambda-list whole)
+        (normalize-lambda-list arglist t)
+      (multiple-value-bind (body decls)
+          (parse-body body nil t)
+        (collect ((let-body))
+          (dolist (operator operator-list)
+            (let-body `(setf (svref *acode-rewrite-functions* (logand operator-id-mask (%nx1-operator ,operator))) fun)))
+          (let* ((whole-var (gensym "WHOLE")))
+            (multiple-value-bind (bindings binding-decls)
+                (%destructure-lambda-list lambda-list whole-var nil nil
+                                          :cdr-p t
+                                          :whole-p nil
+                                          :use-whole-var t
+                                          :default-initial-value nil)
+              (when whole
+                (setq bindings (nconc bindings (list `(,whole ,whole-var)))))
+              
         `(let* ((fun (nfunction ,name 
-                                (lambda (,op ,whole ,type)
-                                  (declare (ignorable ,op ,type))
-                                  ,@decls
-                                  (block ,name ,@body)))))
-          ,@(let-body)))))))
+                                (lambda (,typecons ,whole-var)
+                                  (declare (ignorable ,typecons))
+                                  (block ,name
+                                    (let* ,(nreverse bindings)
+                                      ,@(when binding-decls `((declare ,@binding-decls)))
+                                      ,@decls
+                                      ,@body))))))
+          ,@(let-body)))))))))
 
 ;;; Don't walk the form (that's already happened.)
 (defun acode-post-form-type (form)
   (when (acode-p form)
     (let* ((op (acode-operator form))
            (operands (cdr form)))
-      (cond ((and *acode-post-trust-decls*
+      (cond ((and *acode-rewrite-trust-declarations*
                   (eq op (%nx1-operator typed-form)))
              (acode-operand 0 operands))
             ((eq op (%nx1-operator fixnum))
@@ -64,23 +83,30 @@
             (t t)))))
 
 (defun acode-constant-p (form)
-  (let* ((form (acode-unwrapped-form-value form)))
-    (or (eq form *nx-nil*)
-        (eq form *nx-t*)
-        (let* ((operator (if (acode-p form) (acode-operator form))))
-          (or (eq operator (%nx1-operator fixnum))
-              (eq operator (%nx1-operator immediate)))))))
+  ;; This returns (values constant-value constantp); some code
+  ;; may need to check constantp if constant-value is nil.
+  (let* ((form (acode-unwrapped-form-value form))
+         (op (if (acode-p form) (acode-operator form))))
+    (cond ((eql op (%nx1-operator nil))
+           (values nil t))
+          ((eql op (%nx1-operator t))
+           (values t t))
+          ((or (eql op (%nx1-operator fixnum))
+               (eql op (%nx1-operator immediate)))
+           (values (cadr form) t))
+          (t (values nil nil)))))
+
 
 (defun acode-post-form-typep (form type)
   (let* ((ctype (specifier-type type))
          (form (acode-unwrapped-form-value form)))
-    (cond ((eq form *nx-nil*) (ctypep nil ctype))
-          ((eq form *nx-t*) (ctypep t ctype))
+    (cond ((nx-null form) (ctypep nil ctype))
+          ((nx-t form) (ctypep t ctype))
           ((not (acode-p form)) (values nil nil))
           (t
            (let* ((op (acode-operator form))
                   (operands (cdr form)))
-             (cond ((and *acode-post-trust-decls*
+             (cond ((and *acode-rewrite-trust-declarations*
                          (eq op (%nx1-operator typed-form)))
                     (subtypep (acode-operand 0 operands) type))
                    ((or (eq op (%nx1-operator fixnum))
@@ -88,292 +114,181 @@
                     (ctypep (acode-operand 0 operands) (specifier-type type)))
                    (t (values nil nil))))))))
 
-             
-
-(defun rewrite-acode-ref (ref &optional (type t))
-  (let* ((form (car ref)))
-    (if (acode-p form)
-      (let* ((op (acode-operator form))
-             (rewrite (svref *acode-rewrite-functions* (logand op operator-id-mask))))
-        (when rewrite
-          (let* ((new (funcall rewrite op (cdr form) type)))
-            (when new
-              (setf (car ref) new)
-              t)))))))
-
-;;; Maybe ewrite the operands of a binary real arithmetic operation
-(defun acode-post-binop-numeric-contagion (pform1 pform2)
-  (let* ((form1 (car pform1))
-         (form2 (car pform2)))
-    (cond ((acode-post-form-typep form1 'double-float)
-           (unless (acode-post-form-typep form2 'double-float)
-             (let* ((c2 (acode-real-constant-p form2)))
-               (if c2
-                 (setf (car pform2)
-                       (make-acode (%nx1-operator immediate)
-                                   (float c2 0.0d0)))
-                 (if (acode-post-form-typep form2 'fixnum)
-                   (setf (car pform2)
-                         (make-acode (%nx1-operator typed-form)
-                                     'double-float
-                                     (make-acode (%nx1-operator %fixnum-to-double)
-                                                 form2))))))))
-          ((acode-post-form-typep form2 'double-float)
-           (let* ((c1 (acode-real-constant-p form1)))
-             (if c1
-               (setf (car pform1)
-                     (make-acode (%nx1-operator immediate)
-                                 (float c1 0.0d0)))
-               (if (acode-post-form-typep form1 'fixnum)
-                 (setf (car pform1)
-                       (make-acode (%nx1-operator typed-form)
-                                   'double-float
-                                   (make-acode (%nx1-operator %fixnum-to-double)
-                                               form1)))))))
-          ((acode-post-form-typep form1 'single-float)
-           (unless (acode-post-form-typep form2 'single-float)
-             (let* ((c2 (acode-real-constant-p form2)))
-               (if c2
-                 (setf (car pform2) (make-acode (%nx1-operator immediate)
-                                                (float c2 0.0f0)))
-                 (if (acode-post-form-typep form2 'fixnum)
-                   (setf (car pform2)
-                         (make-acode (%nx1-operator typed-form)
-                                     'single-float
-                                     (make-acode (%nx1-operator %fixnum-to-single)
-                                                 form2))))))))
-          ((acode-post-form-typep form2 'single-float)
-           (let* ((c1 (acode-real-constant-p form1)))
-             (if c1
-               (setf (car pform1) (make-acode (%nx1-operator immediate)
-                                              (float c1 0.0f0)))
-
-               (if (acode-post-form-typep form1 'fixnum)
-                 (setf (car pform1)
-                       (make-acode (%nx1-operator typed-form)
-                                   'single-float
-                                   (make-acode (%nx1-operator %fixnum-to-single)
-                                               form1))))))))))
-
-(defun constant-fold-acode-binop (function x y)
-  (let* ((constant-x (acode-real-constant-p x))
-         (constant-y (acode-real-constant-p y)))
-    (if (and constant-x constant-y)
-      (let* ((result (ignore-errors (funcall function x y))))
-        (when result
-          (nx1-form result))))))
-
-(defun acode-rewrite-and-fold-binop (function args)
-  (rewrite-acode-ref args)
-  (rewrite-acode-ref (cdr args))
-  (constant-fold-acode-binop function (car args) (cadr args)))
-
-(defun rewrite-acode-forms (forms)
-  (do* ((head forms (cdr head)))
-       ((null head))
-    (rewrite-acode-ref head)))
-
-(defun acode-assert-type (actualtype operator operands assertedtype)
-  (make-acode (%nx1-operator typed-form)
-              (type-specifier (type-intersection (specifier-type actualtype)
-                                                 (specifier-type assertedtype)))
-              (cons operator operands)))
-
-(def-acode-rewrite acode-rewrite-progn progn (op w type)
-  (rewrite-acode-forms w))
-
-(def-acode-rewrite acode-rewrite-not not (op w type)
-  (rewrite-acode-ref w))
-
-(def-acode-rewrite acode-rewrite-%i+ %i+ (op w type)
-  (or 
-   (acode-rewrite-and-fold-binop '+ w)
-   ;; TODO: maybe cancel overflow check, assert FIXNUM result.
-   (acode-assert-type 'integer op w type)))
-
-(def-acode-rewrite acode-rewrite-%i- %i- (op w type)
-  (or
-   (acode-rewrite-and-fold-binop '- w))
-   ;; TODO: maybe cancel overflow check, assert FIXNUM result.
-   (acode-assert-type 'integer op w type))  
-
-(def-acode-rewrite acode-rewrite-%ilsl %ilsl (op w type)
-  (or
-   (acode-rewrite-and-fold-binop '%ilsl w)
-   (acode-assert-type 'fixnum op w type)))
-
-(def-acode-rewrite acode-rewrite-%ilogand2 %ilogand2 (op w type)
-  (or
-   (acode-rewrite-and-fold-binop 'logand w)
-   ;; If either argument's an UNSIGNED-BYTE constant, the result
-   ;; is an UNSIGNED-BYTE no greater than that constant.
-   (destructuring-bind (x y) w
-     (let* ((fix-x (acode-fixnum-form-p x))
-            (fix-y (acode-fixnum-form-p y)))
-       (acode-assert-type (if fix-x
-                            `(integer 0 ,fix-x)
-                            (if fix-y
-                              `(integer 0 ,fix-y)
-                              'fixnum))
-                          op w type)))))
-
-(def-acode-rewrite acode-rewrite-%ilogior2 %ilogior2 (op w type)
-  (or
-   (acode-rewrite-and-fold-binop 'logior w)
-   ;; If either argument's an UNSIGNED-BYTE constant, the result
-   ;; is an UNSIGNED-BYTE no greater than that constant.
-   (destructuring-bind (x y) w
-     (let* ((fix-x (acode-fixnum-form-p x))
-            (fix-y (acode-fixnum-form-p y)))
-       (acode-assert-type (if fix-x
-                            `(integer 0 ,fix-x)
-                            (if fix-y
-                              `(integer 0 ,fix-y)
-                              'fixnum))
-                          op w type)))))
-
-(def-acode-rewrite acode-rewrite-ilogbitp (logbitp %ilogbitp) (op w type)
-  (or (acode-rewrite-and-fold-binop 'logbitp w)
-      (acode-assert-type 'boolean op w type)))
-
-(def-acode-rewrite acode-rewrite-eq eq (op w type)
-  (or (acode-rewrite-and-fold-binop 'eq w)
-      (acode-assert-type 'boolean op w type)))
-
-(def-acode-rewrite acode-rewrite-neq neq (op w type)
-  (or (acode-rewrite-and-fold-binop 'neq w)
-      (acode-assert-type 'boolean op w type))  )
-
-(def-acode-rewrite acode-rewrite-list list (op w type)
-  (rewrite-acode-forms (car w))
-  (acode-assert-type 'list op w type))
-
-(def-acode-rewrite acode-rewrite-values values (op w type)
-  (rewrite-acode-forms (car w)))
-
-(def-acode-rewrite acode-rewrite-if if (op w type)
-  (rewrite-acode-forms w)
-  (destructuring-bind (test true &optional (false *nx-nil*)) w
-    (if (acode-constant-p test)
-      (if (eq *nx-nil* (acode-unwrapped-form-value test))
-        false
-        true))))
-
-(def-acode-rewrite acode-rewrite-or or (op w type)
-  (rewrite-acode-forms (car w))
-  ;; Try to short-circuit if there are any true constants.
-  ;; The constant-valued case will return a single value.
-  (do* ((forms w (cdr forms)))
-       ((null (cdr forms)))
-    (let* ((form (car forms)))
-      (when (and (acode-constant-p form)
-                 (not (eq *nx-nil* (acode-unwrapped-form-value form))))
-        (progn
-          (rplacd forms nil)
-          (return))))))
-
-(def-acode-rewrite acode-rewrite-%fixnum-ref (%fixnum-ref %fixnum-ref-natural) (op w type)
-  (rewrite-acode-forms w))
-
-(def-acode-rewrite acode-rewrite-multiple-value-prog1 multiple-value-prog1 (op w type)
-  (rewrite-acode-forms w))
-
-(def-acode-rewrite acode-rewrite-multiple-value-bind multiple-value-bind (op w type)
-  (rewrite-acode-forms (cdr w)))
-
-(def-acode-rewrite acode-rewrite-multiple-value-call multiple-value-call (op w type)
-  (rewrite-acode-forms w))
-
-(def-acode-rewrite acode-rewrite-typed-form typed-form (op w type)
-  (let* ((ourtype (car w)))
-    (rewrite-acode-ref (cdr w) ourtype)
-    (let* ((subform (cadr w)))
-      (and (acode-p subform) (eq (acode-operator subform) op) subform))))
-
-;; w: vars, list of initial-value forms, body
-(def-acode-rewrite acode-rewrite-let (let let*) (op w type)
-  (collect ((newvars)
-            (newvals))
-    (do* ((vars (car w) (cdr vars))
-          (vals (cadr w) (cdr vals)))
-         ((null vars)
-          (rplaca w (newvars))
-          (rplaca (cdr w) (newvals))
-          (rewrite-acode-ref (cddr w))
-          (unless (car w) (caddr w)))
-      (rewrite-acode-ref (car vals))
-      (let* ((var (car vars))
-             (bits (nx-var-bits var)))
-        (cond ((logbitp $vbitpuntable bits)
-               (setf (var-bits var)
-                     (logior (ash 1 $vbitpunted) bits)
-                     (var-ea var) (car vals)))
-              (t
-               (newvars var)
-               (newvals (car vals))))))))
-        
-    
+(defun rewrite-acode-form (form type)
+  (when (acode-p form)
+    (let* ((op (acode-operator form))
+           (rest (acode-operands form))
+           (rewrite (svref *acode-rewrite-functions* (logand op operator-id-mask))))
+      (when rewrite
+        (let* ((new (cons op rest))
+               (type-cons (list type new)))
+          (setf (car form) (%nx1-operator type-asserted-form)
+                (cdr form) type-cons)
+          (funcall rewrite type-cons new))))))
       
+    
 
+(defun acode-constant-fold-numeric-binop (type-cons whole form1 form2 function)
+  (rewrite-acode-form form1 t)
+  (rewrite-acode-form form2 t)
+  (let* ((v1 (acode-xxx-form-p form1 'number))
+         (v2 (acode-xxx-form-p form2 'number))
+         (val (and v1 v2 (ignore-errors (funcall function v1 v2)))))
+    (when val
+      (setf (car whole) (if (typep val *nx-target-fixnum-type*)
+                          (%nx1-operator fixnum)
+                          (%nx1-operator immediate))
+            (cadr whole) val
+            (cddr whole) nil
+            (car type-cons) (if (typep val 'integer)
+                             `(integer ,val ,val)
+                             (type-of val)))
+      val)))
 
+(defun acode-rewrite-decls (decls)
+  (if (fixnump decls)
+    (locally (declare (fixnum decls))
+      (setq *acode-rewrite-tail-allow* (neq 0 (%ilogand2 $decl_tailcalls decls))
+            *acode-rewrite-open-code-inline* (neq 0 (%ilogand2 $decl_opencodeinline decls))
+            *acode-rewrite-full-safety* (neq 0 (%ilogand2 $decl_full_safety decls))
+            *acode-rewrite-reckless* (neq 0 (%ilogand2 $decl_unsafe decls))
+            *acode-rewrite-trust-declarations* (neq 0 (%ilogand2 $decl_trustdecls decls))))))
 
-(def-acode-rewrite acode-rewrite-lexical-reference lexical-reference (op w type)
-  (let* ((var (car w)))
-    (if (acode-punted-var-p var)
-      (var-ea var))))
+(defmacro with-acode-declarations (declsform &body body)
+  `(let* ((*acode-rewrite-tail-allow* *acode-rewrite-tail-allow*)
+          (*acode-rewrite-reckless* *acode-rewrite-reckless*)
+          (*acode-rewrite-open-code-inline* *acode-rewrite-open-code-inline*)
+          (*acode-rewrite-trust-declarations* *acode-rewrite-trust-declarations*)
+          (*acode-rewrite-full-safety* *acode-rewrite-full-safety*))
+     (acode-rewrite-decls ,declsform)
+     ,@body))
 
-(def-acode-rewrite acode-rewrite-add2 add2 (op w type)
-  (or (acode-rewrite-and-fold-binop '+ w)
+(defun acode-maybe-punt-var (var initform)
+  (let* ((bits (nx-var-bits var)))
+    (declare (fixnum bits))
+    (cond ((and (logbitp $vbitpuntable var)
+                (not (logbitp $vbitpunted var)))
+           (nx-set-var-bits var (logior (ash 1 $vbitpunted) bits))
+           (rewrite-acode-form initform (or (var-inittype var) t))
+           (nx2-replace-var-refs var initform)
+           (setf (var-ea var) initform))
+          (t
+           (rewrite-acode-form initform t)))))
+           
+(defun acode-type-merge (type-cons derived)
+  (let* ((asserted (car type-cons))
+         (intersection (ignore-errors (type-specifier (specifier-type `(and ,asserted ,derived))))))
+    (when intersection
+      (setf (car type-cons) intersection))))
+
+         
+    
+  
+
+(def-acode-rewrite acode-rewrite-lambda lambda-list type-cons (req opt rest keys auxen body p2-decls &optional code-note)
+  (declare (ignore code-note req rest))
+  (with-acode-declarations p2-decls
+    (dolist (optinit (cadr opt))
+      (rewrite-acode-form optinit t))
+    (dolist (keyinit (nth 3 keys))
+      (rewrite-acode-form keyinit t))
+    (do* ((auxvars (car auxen) (cdr auxvars))
+          (auxvals (cadr auxen) (cdr auxvals)))
+         ((null auxvars))
+      (acode-maybe-punt-var (car auxvars) (car auxvals)))
+    (rewrite-acode-form body (car type-cons))
+    (acode-type-merge type-cons (acode-form-type body *acode-rewrite-trust-declarations*))))
+
+(def-acode-rewrite acode-rewrite-progn progn type-cons (&rest forms)
+  (do* ((form (pop forms) (pop forms)))
+       ((null forms))
+    (if forms
+      (rewrite-acode-form form t)
       (progn
-        (acode-post-binop-numeric-contagion w (cdr w))
-        (let* ((xtype (acode-post-form-type (car w)))
-               (ytype (acode-post-form-type (cadr w))))
-          (cond ((and (subtypep xtype 'double-float)
-                      (subtypep ytype 'double-float))
-                 (make-acode (%nx1-operator typed-form)
-                             'double-float
-                             (make-acode* (%nx1-operator %double-float+-2)
-                                          w)))
-                ((and (subtypep xtype 'single-float)
-                      (subtypep ytype 'single-float))
-                 (make-acode (%nx1-operator typed-form)
-                             'single-float
-                             (make-acode* (%nx1-operator %short-float+-2)
-                                          w)))
-                ((and (subtypep xtype 'fixnum)
-                      (subtypep ytype 'fixnum))
-                 (make-acode (%nx1-operator typed-form)
-                             'fixnum
-                             (make-acode (%nx1-operator %i+)
-                                         (car w)
-                                         (cadr w)
-                                         (not (subtypep type 'fixnum))))))))))
+        (rewrite-acode-form form (car type-cons))
+        (acode-type-merge type-cons (acode-form-type form *acode-rewrite-trust-declarations*))))))
 
-(def-acode-rewrite acode-rewrite-sub2 sub2 (op w type)
-  (or (acode-rewrite-and-fold-binop '- w)
-      (progn
-        (acode-post-binop-numeric-contagion w (cdr w))
-        (let* ((xtype (acode-post-form-type (car w)))
-               (ytype (acode-post-form-type (cadr w))))
-          (cond ((and (subtypep xtype 'double-float)
-                      (subtypep ytype 'double-float))
-                 (make-acode (%nx1-operator typed-form)
-                             'double-float
-                             (make-acode* (%nx1-operator %double-float--2)
-                                          w)))
-                ((and (subtypep xtype 'single-float)
-                      (subtypep ytype 'single-float))
-                 (make-acode (%nx1-operator typed-form)
-                             'single-float
-                             (make-acode* (%nx1-operator %short-float--2)
-                                          w)))
-                ((and (subtypep xtype 'fixnum)
-                      (subtypep ytype 'fixnum))
-                 (make-acode (%nx1-operator typed-form)
-                             'fixnum
-                             (make-acode (%nx1-operator %i-)
-                                         (car w)
-                                         (cadr w)
-                                         (not (subtypep type 'fixnum))))))))))
-                 
+(def-acode-rewrite acode-rewrite-prog1 prog1 type-cons (first &rest others)
+  (rewrite-acode-form first (car type-cons))
+  (dolist (other others) (rewrite-acode-form other t))
+  (acode-type-merge type-cons (acode-form-type first *acode-rewrite-trust-declarations*)))
 
+(def-acode-rewrite acode-rewrite-%slot-ref %slot-ref type-cons (instance idx)
+  (rewrite-acode-form instance t)
+  (rewrite-acode-form idx t))
+
+(def-acode-rewrite acode-rewrite-svref (%svref svref) type-cons (&whole w vector idx)
+  (rewrite-acode-form vector t)
+  (rewrite-acode-form idx t)
+  (let* ((cv (acode-constant-p vector)))
+    (when (if (eql (car w) (%nx1-operator svref))
+            (typep cv 'simple-vector)
+            (gvectorp cv))
+      (let* ((cidx (acode-fixnum-form-p idx)))
+        (when (and (typep cidx 'fixnum)
+                   (>= (the fixnum cidx) 0)
+                   (< (the fixnum cidx) (the fixnum (uvsize cv))))
+          (let* ((val (%svref cv cidx)))
+            (setf (car w) (if (nx1-target-fixnump val)
+                            (%nx1-operator fixnum)
+                            (%nx1-operator immediate))
+                  (cadr w) val
+                  (cddr w) nil)
+            (acode-type-merge type-cons (type-of val))))))))
+
+(def-acode-rewrite acode-rewrite-%sbchar %sbchar type-cons (&whole w string idx)
+  (rewrite-acode-form string t)
+  (rewrite-acode-form idx t)
+  (let* ((cv (acode-constant-p string)))
+    (when (typep cv 'simple-string)
+      (let* ((cidx (acode-fixnum-form-p idx)))
+        (when (and (typep cidx 'fixnum)
+                   (>= (the fixnum cidx) 0)
+                   (< (the fixnum cidx) (the fixnum (length cv))))
+          (let* ((val (%schar cv cidx)))
+            (setf (car w) (%nx1-operator immediate)
+                  (cadr w) val
+                  (cddr w) nil)
+            (acode-type-merge type-cons 'character)))))))
+
+(def-acode-rewrite acode-rewrite-svset (%svset svset) type-cons (vector idx value)
+  (rewrite-acode-form vector t)
+  (rewrite-acode-form idx t)
+  (rewrite-acode-form value (car type-cons))
+  (acode-type-merge type-cons (acode-form-type value *acode-rewrite-trust-declarations*)))
+
+(def-acode-rewrite acode-rewrite-consp consp type-cons (&whole w cc thing)
+  (rewrite-acode-form thing t)
+  (multiple-value-bind (cthing constantp) (acode-constant-p thing)
+    (if constantp
+      (let* ((consp (consp cthing))
+             (ccode (cadr cc))
+             (val (if (eq ccode :eq) (not (not consp)) (not consp))))
+        (setf (car w) (if val (%nx1-operator t) (%nx1-operator nil))
+              (cdr w) nil)))))
+
+(def-acode-rewrite acode-rewrite-cons cons type-cons (x y)
+  (rewrite-acode-form x t)
+  (rewrite-acode-form y t)
+  (acode-type-merge type-cons 'cons))
+
+(def-acode-rewrite acode-rewrite-rplacx (%rplaca %rplacd rplaca rplacd) type-cons (cell val)
+  (rewrite-acode-form cell t)
+  (rewrite-acode-form val t)
+  (acode-type-merge type-cons 'cons))
+
+(def-acode-rewrite acode-rewrite-set-cxr (set-car set-cdr) type-cons (cell val)
+  (rewrite-acode-form cell t)
+  (rewrite-acode-form val t)
+  (acode-type-merge type-cons (acode-form-type val *acode-rewrite-trust-declarations*)))
+
+(def-acode-rewrite acode-rewrite-cxr (%car %cdr car cdr) type-cons (cell)
+  (rewrite-acode-form cell t))
+
+(def-acode-rewrite acode-rewrite-vector vector type-cons (arglist)
+  (dolist (f arglist) (rewrite-acode-form f t))
+  (acode-type-merge type-cons 'simple-vector))
+
+                   
+        
+        

@@ -40,7 +40,7 @@
 
 (defparameter *compiler-modules*
   '(nx optimizers dll-node arch vreg vinsn 
-    reg subprims  backend nx2))
+    reg subprims  backend nx2 acode-rewrite))
 
 
 (defparameter *ppc-compiler-modules*

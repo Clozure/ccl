@@ -157,7 +157,7 @@
 (defparameter *nx-discard-xref-info-hook* nil)
 
 (defparameter *nx-in-frontend* nil)
-
+(defparameter *nx-rewrite-acode* nil)
 
 
 (defun compile-named-function (def &key name env policy load-time-eval-token target
@@ -205,11 +205,15 @@
        (setq *nx-in-frontend* nil)
        (if (afunc-lfun afunc)
          afunc
-         (funcall (backend-p2-compile *target-backend*)
-                  afunc
-                  ;; will also bind *nx-lexical-environment*
-                  (if keep-lambda (if (lambda-expression-p keep-lambda) keep-lambda def))
-                  keep-symbols)))))
+         (progn
+           (when (and *nx-rewrite-acode*
+                      (afunc-acode afunc))
+             (rewrite-acode-form (afunc-acode afunc) t))
+           (funcall (backend-p2-compile *target-backend*)
+                    afunc
+                    ;; will also bind *nx-lexical-environment*
+                    (if keep-lambda (if (lambda-expression-p keep-lambda) keep-lambda def))
+                    keep-symbols))))))
   (values (afunc-lfun def) (afunc-warnings def)))
 
 (defparameter *compiler-whining-conditions*

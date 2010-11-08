@@ -81,6 +81,7 @@
                                                   "ccl:compiler;nx1.lisp"))
     (nxenv            "ccl:bin;nxenv"            ("ccl:compiler;nxenv.lisp"))
     (nx2              "ccl:bin;nx2"              ("ccl:compiler;nx2.lisp"))
+    (acode-rewrite    "ccl:bin;acode-rewrite"    ("ccl:compiler;acode-rewrite.lisp"))
     (nx-base-app      "ccl:l1f;nx-base-app"      ("ccl:compiler;nx-base-app.lisp"
                                                   "ccl:compiler;lambda-list.lisp"))
     (dll-node         "ccl:bin;dll-node"         ("ccl:compiler;dll-node.lisp"))
