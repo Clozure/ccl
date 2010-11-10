@@ -1137,7 +1137,9 @@ forward_memoized_area(area *a, natural num_memo_dnodes)
         int remain = nbits_in_word - bitidx;
         memo_dnode += remain;
         p += (remain+remain);
-        bits = *++bitsp;
+        if (memo_dnode < num_memo_dnodes) {
+          bits = *++bitsp;
+        }
         bitidx = 0;
       } else {
         nextbit = count_leading_zeros(bits);
@@ -1337,7 +1339,9 @@ mark_managed_static_refs(area *a, BytePtr low_dynamic_address, natural ndynamic_
         if (outbits != inbits) {
           *bitsp = outbits;
         }
-        bits = *++bitsp;
+        if (memo_dnode < num_memo_dnodes) {
+          bits = *++bitsp;
+        }
         inbits = outbits = bits;
         bitidx = 0;
       } else {
