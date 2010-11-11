@@ -34,7 +34,7 @@
 (defun frame-function (frame context)
   "Returns the function using the frame, and pc offset within the function, if known"
   (declare (ignore context))
-  (cfp-lfun (require-type frame 'integer)))
+  (cfp-lfun frame))
 
 (defun frame-supplied-arguments (frame context &key (unknown-marker (%unbound-marker)))
   "Return a list of supplied arguments to the call which opened this frame, as best we can reconstruct it"
