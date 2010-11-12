@@ -3989,9 +3989,16 @@ LocalLabelPrefix`'ffcall:
 	__(movq %rsp,rcontext(tcr.save_vsp))
         __(movq %rbp,rcontext(tcr.save_rbp))
 	__(movq $TCR_STATE_FOREIGN,rcontext(tcr.valence))
-	__(movq $0,rcontext(tcr.ffi_exception))
         __(movq rcontext(tcr.foreign_sp),%rsp)
+        __ifdef(`WINDOWS')
+	__(stmxcsr rcontext(tcr.lisp_mxcsr))
+        __else
+	__(movq $0,rcontext(tcr.ffi_exception))
+        __endif
 	__(emms)
+        __ifdef(`WINDOWS')
+	__(ldmxcsr rcontext(tcr.foreign_mxcsr))
+        __endif
 	__(movq (%rsp),%rbp)
         __ifdef(`DARWIN_GS_HACK')
          /* At this point, %imm1=%rdx is live (contains
@@ -4069,17 +4076,21 @@ LocalLabelPrefix`'ffcall_call_end:
 	__(clr %fn)
 	__(pxor %fpzero,%fpzero)
 
+        __ifndef(`WINDOWS')
 	/* If we got a floating-point exception during the ff-call,
 	   our handler will have set a flag, preserved lisp's MXCSR,
 	   and resumed execution with fp exceptions masked. */
 	__(btrq $TCR_FLAG_BIT_FOREIGN_FPE,rcontext(tcr.flags))
 	__(jnc 1f)
+        __endif
         __(cmpb $0,C(bogus_fp_exceptions)(%rip))
         __(je 0f)
         __(movl %arg_x_l,rcontext(tcr.ffi_exception))
         __(jmp 1f)
 0:      __(stmxcsr rcontext(tcr.ffi_exception))
+        __ifndef(`WINDOWS')
 	__(ldmxcsr rcontext(tcr.lisp_mxcsr)) /* preserved by the handler */
+        __endif
 1:      __(movq rcontext(tcr.save_vsp),%rsp)
         __(movq rcontext(tcr.save_rbp),%rbp)
 	__(movq $TCR_STATE_LISP,rcontext(tcr.valence))
@@ -4095,6 +4106,9 @@ LocalLabelPrefix`'ffcall_call_end:
 	__(pop %arg_x)
 	__(pop %temp2)
 	__(pop %temp1)
+        __ifdef(`WINDOWS')
+	__(ldmxcsr rcontext(tcr.lisp_mxcsr))
+        __endif
 	__(check_pending_interrupt(%temp0))
 	__(pop %temp0)
         __(leave)
