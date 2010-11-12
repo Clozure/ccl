@@ -1694,11 +1694,15 @@ void
 altstack_signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context)
 {
   TCR* tcr = get_tcr(true);
-#if 0
-  if (tcr->valence != TCR_STATE_LISP) {
-    lisp_Debugger(context, info, signum, true, "exception in foreign context");
+
+#if WORD_SIZE==64
+  if ((signum == SIGFPE) && (tcr->valence != TCR_STATE_LISP)) {
+    if (handle_foreign_fpe(tcr,context,info)) {
+      return;
+    }
   }
 #endif
+     
   handle_signal_on_foreign_stack(tcr,signal_handler,signum,info,context,(LispObj)__builtin_return_address(0)
 #ifdef DARWIN_GS_HACK
                                  , false
