@@ -114,6 +114,11 @@ C(import_ptrs_base):
         __endif
 	__endif
 
+	__ifdef(`WINDOWS')
+	.globl C(SystemFunction036)
+	.long C(SystemFunction036)
+	__endif
+
 
 
 
