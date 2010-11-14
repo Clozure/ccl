@@ -114,7 +114,9 @@ C(import_ptrs_base):
         __endif
 	__endif
 
-	__ifdef(`WINDOWS')
+        /* Need to be sure that the kernel links against advapi32.dll ;
+           the random number generator needs to call into that library */
+	__ifdef(`WIN_64')
 	.globl C(SystemFunction036)
 	.long C(SystemFunction036)
 	__endif
