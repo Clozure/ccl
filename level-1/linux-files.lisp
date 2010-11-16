@@ -25,10 +25,7 @@
 
             
 
-(defun nbackslash-to-forward-slash (namestring)
-  (dotimes (i (length namestring) namestring)
-    (when (eql (schar namestring i) #\\)
-      (setf (schar namestring i) #\/))))
+
 
 (defconstant univeral-time-start-in-windows-seconds 9435484800)
 

@@ -1794,7 +1794,11 @@
 (defun pathname-for-namestring-fragment (string)
   "Return a pathname that STRING might designate."
   ;; We could get fancy here, but for now just be stupid.
-  (let ((pathname (ignore-errors (probe-file string))))
+  (let* ((rfs (ignore-errors (read-from-string string nil nil)))
+         (pathname (or (ignore-errors (probe-file string))
+                       (ignore-errors (probe-file rfs))
+                       (ignore-errors (probe-file (merge-pathnames *.lisp-pathname* string)))
+                       (ignore-errors (probe-file (merge-pathnames *.lisp-pathname* rfs))))))
     (if (and (pathnamep pathname)
              (not (directory-pathname-p pathname)))
       pathname)))

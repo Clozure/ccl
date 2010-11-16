@@ -317,7 +317,10 @@
       (locally (declare (optimize (speed 3) (safety 0))
                         (type (simple-array (unsigned-byte 8) (*)) containing-object))
         (aref containing-object (the fixnum (+ byte-offset delta))))
-      (%get-unsigned-byte (%int-to-ptr byte-offset) delta))))
+      ;; xcf.relative-pc is a fixnum, but it might be negative.
+      (let* ((encoded-pc (%get-ptr xcf-ptr target::xcf.relative-pc))
+	     (pc (ash (%ptr-to-int encoded-pc) (- target::fixnumshift))))
+	(%get-unsigned-byte (%int-to-ptr pc) delta)))))
 
 ;;; If the byte following a uuo (which is "skip" bytes long, set
 ;;; the xcf's relative PC to the value contained in the 32-bit

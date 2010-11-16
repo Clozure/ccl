@@ -28,7 +28,7 @@ M4FLAGS = -DDARWIN -DX86 -DX8632
 ASFLAGS = -arch i386 -g
 CDEFINES = -DDARWIN -DX86 -DX8632 -DSVN_REVISION=$(SVN_REVISION)
 CDEBUG = -g
-COPT = -O2
+COPT = #-O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format

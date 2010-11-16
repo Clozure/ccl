@@ -1694,11 +1694,15 @@ void
 altstack_signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context)
 {
   TCR* tcr = get_tcr(true);
-#if 0
-  if (tcr->valence != TCR_STATE_LISP) {
-    lisp_Debugger(context, info, signum, true, "exception in foreign context");
+
+#if WORD_SIZE==64
+  if ((signum == SIGFPE) && (tcr->valence != TCR_STATE_LISP)) {
+    if (handle_foreign_fpe(tcr,context,info)) {
+      return;
+    }
   }
 #endif
+     
   handle_signal_on_foreign_stack(tcr,signal_handler,signum,info,context,(LispObj)__builtin_return_address(0)
 #ifdef DARWIN_GS_HACK
                                  , false
@@ -3413,6 +3417,31 @@ catch_exception_raise(mach_port_t exception_port,
       default:
         break;
       }
+#if WORD_SIZE==64
+      if ((signum==SIGFPE) && 
+          (code != FPE_INTDIV) && 
+          (tcr->valence != TCR_STATE_LISP)) {
+        mach_msg_type_number_t thread_state_count = x86_FLOAT_STATE64_COUNT;
+        x86_float_state64_t fs;
+
+        thread_get_state(thread,
+                         x86_FLOAT_STATE64,
+                         (thread_state_t)&fs,
+                         &thread_state_count);
+        
+        if (! (tcr->flags & (1<<TCR_FLAG_BIT_FOREIGN_FPE))) {
+          tcr->flags |= (1<<TCR_FLAG_BIT_FOREIGN_FPE);
+          tcr->lisp_mxcsr = (fs.__fpu_mxcsr & ~MXCSR_STATUS_MASK);
+        }
+        fs.__fpu_mxcsr &= ~MXCSR_STATUS_MASK;
+        fs.__fpu_mxcsr |= MXCSR_CONTROL_MASK;
+        thread_set_state(thread,
+                         x86_FLOAT_STATE64,
+                         (thread_state_t)&fs,
+                         x86_FLOAT_STATE64_COUNT);
+        return 0;
+      }
+#endif
       if (signum) {
         kret = setup_signal_frame(thread,
                                   (void *)DARWIN_EXCEPTION_HANDLER,

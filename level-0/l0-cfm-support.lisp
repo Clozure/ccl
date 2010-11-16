@@ -478,6 +478,10 @@
   (defvar *get-module-base-name-addr*)
   (defvar *get-module-handle-ex-addr*)
 
+  (defun nbackslash-to-forward-slash (namestring)
+    (dotimes (i (length namestring) namestring)
+      (when (eql (schar namestring i) #\\)
+        (setf (schar namestring i) #\/))))
 
   (defun init-windows-ffi ()
     (%revive-macptr *windows-invalid-handle*)
@@ -490,20 +494,19 @@
   (init-windows-ffi)
   
   (defun hmodule-pathname (hmodule)
-    (do* ((bufsize 64))
+    (do* ((bufsize 128))
          ()
       (%stack-block ((name bufsize))
         (let* ((needed (ff-call *get-module-file-name-addr*
-                                :address *current-process-handle*
                                 :address hmodule
                                 :address name
                                 :signed-fullword bufsize
                                 :signed-fullword)))
           (if (eql 0 needed)
             (return nil)
-            (if (< bufsize needed)
-              (setq bufsize needed)
-              (return (%str-from-ptr name needed))))))))
+            (if (<= bufsize needed)
+              (setq bufsize (+ bufsize bufsize))
+              (return (nbackslash-to-forward-slash (%str-from-ptr name needed)))))))))
 
   (defun hmodule-basename (hmodule)
     (do* ((bufsize 64))
@@ -593,10 +596,47 @@
           shlib)
         (values nil (%windows-error-string (get-last-windows-error))))))
 
-(init-shared-libraries)
+  (init-shared-libraries)
+
+  (defun revive-shared-libraries ()
+    (dolist (lib *shared-libraries*)
+      (setf (shlib.map lib) nil
+            (shlib.handle lib) nil
+            (shlib.pathname lib) nil
+            (shlib.base lib) nil)
+      (let* ((soname (shlib.soname lib))
+             (soname-len (length soname)))
+        (block found
+          (for-each-loaded-module
+           (lambda (m)
+             (let* ((module-soname (hmodule-basename m)))
+               (when (%simple-string= soname module-soname 0 0 soname-len (length module-soname))
+                 (let* ((m (%inc-ptr m 0)))
+                   (setf (shlib.base lib) m
+                         (shlib.map lib) m
+                         (shlib.pathname lib) (hmodule-pathname m)))
+                 (return-from found)))))))))
+
+  (defun reopen-user-libraries ()
+    (dolist (lib *shared-libraries*)
+      (unless (shlib.map lib)
+        (let* ((handle (with-cstrs ((name (shlib.soname lib)))
+                         (ff-call
+                          (%kernel-import target::kernel-import-GetSharedLibrary)
+                          :address name
+                          :unsigned-fullword 0
+                          :address))))
+          (unless (%null-ptr-p handle)
+            (setf (shlib.handle lib) handle
+                  (shlib.base lib) handle
+                  (shlib.map lib) handle
+                  (shlib.pathname lib) (hmodule-pathname handle)
+                  (shlib.opencount lib) 1))))))
+           
+              
 
 ;;; end windows-target
-)  
+  )  
 
 
 (defun ensure-open-shlib (c force)
@@ -958,7 +998,10 @@ return that address encapsulated in a MACPTR, else returns NIL."
     (setup-lookup-calls)
     (reopen-user-libraries))
   #+windows-target
-  (init-windows-ffi)
+  (progn
+    (init-windows-ffi)
+    (revive-shared-libraries)
+    (reopen-user-libraries))
   (when *eeps*
     (without-interrupts 
      (maphash #'(lambda (k v) 
