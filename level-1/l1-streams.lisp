@@ -5626,8 +5626,9 @@
   (ioblock-eof ioblock))
   
 (defun fd-stream-listen (s ioblock)
-  (declare (ignore s))
-  (unread-data-available-p (ioblock-device ioblock)))
+  (if (interactive-stream-p s)
+    (unread-data-available-p (ioblock-device ioblock))
+    (not (fd-stream-eofp s ioblock))))
 
 (defun fd-stream-close (s ioblock)
   (cancel-terminate-when-unreachable s)
