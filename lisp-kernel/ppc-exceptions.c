@@ -1540,6 +1540,9 @@ callback_to_lisp (LispObj callback_macptr, ExceptionInformation *xp,
   tcr->save_vsp = (LispObj*) ptr_from_lispobj(xpGPR(xp, vsp));
   tcr->save_tsp = (LispObj*) ptr_from_lispobj(xpGPR(xp, tsp));
 
+#ifdef DARWIN
+  enable_fp_exceptions();
+#endif
 
 
   /* Call back.
@@ -2721,32 +2724,8 @@ thread_set_fp_exceptions_enabled(mach_port_t thread, Boolean enabled)
   } else {
     ts.__srr1 &= ~MSR_FE0_FE1_MASK;
   }
-  /* 
-     Hack-o-rama warning (isn't it about time for such a warning?):
-     pthread_kill() seems to want to lose the MSR's FE0/FE1 bits.
-     Our handler for lisp's use of pthread_kill() pushes a phony
-     lisp frame on the stack and force the context to resume at
-     the UUO in enable_fp_exceptions(); the "saveLR" field of that
-     lisp frame contains the -real- address that process_interrupt
-     should have returned to, and the fact that it's in a lisp
-     frame should convince the GC to notice that address if it
-     runs in the tiny time window between returning from our
-     interrupt handler and ... here.
-     If the top frame on the stack is a lisp frame, discard it
-     and set ts.srr0 to the saveLR field in that frame.  Otherwise,
-     just adjust ts.srr0 to skip over the UUO.
-  */
-  {
-    lisp_frame *tos = (lisp_frame *)ts.__r1,
-      *next_frame = tos->backlink;
-    
-    if (tos == (next_frame -1)) {
-      ts.__srr0 = tos->savelr;
-      ts.__r1 = (LispObj) next_frame;
-    } else {
-      ts.__srr0 += 4;
-    }
-  }
+  
+  ts.__srr0 += 4;
   thread_set_state(thread, 
 #ifdef PPC64
 		   PPC_THREAD_STATE64,	/* GPRs, some SPRs  */
