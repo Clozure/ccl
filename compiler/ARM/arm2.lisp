@@ -7394,7 +7394,7 @@
 
 (defarm2 arm2-fixnum-overflow fixnum-overflow (seg vreg xfer form)
   (destructuring-bind (op n0 n1) (acode-unwrapped-form form)
-    (arm2-use-operator op seg vreg xfer n0 n1 *nx-t*)))
+    (arm2-use-operator op seg vreg xfer n0 n1 (make-nx-t))))
 
 
 
