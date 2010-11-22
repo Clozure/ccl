@@ -335,6 +335,9 @@ lisp-kernel/darwinx8632/.gdbinit -text
 lisp-kernel/darwinx8632/Makefile -text
 lisp-kernel/freebsdx8632/.gdbinit -text
 lisp-kernel/freebsdx8632/Makefile -text
+lisp-kernel/freebsdx8632/e_exp.c -text
+lisp-kernel/freebsdx8632/e_expf.c -text
+lisp-kernel/freebsdx8632/fdlibm.h -text
 lisp-kernel/freebsdx8632/fpu.h -text
 lisp-kernel/gc-common.c -text
 lisp-kernel/linuxarm/.gdbinit -text
