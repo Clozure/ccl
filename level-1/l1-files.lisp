@@ -371,7 +371,7 @@
 				      (pathname-name path)
 				      (pathname-type path)
 				      nil)))
-		       nil nil (pathname-host path)))))
+		       nil nil (pathname-host path) nil #+windows-target (pathname-device path)))))
 
 (defun %directory-list-namestring (list &optional logical-p)
   (if (null list)
