@@ -48,12 +48,7 @@
 	(ccl:set-fpu-mode :division-by-zero division-by-zero))))
 
 (defconstant double-float-nan
-  #.(let ((invalid (get-fpu-mode :invalid)))
-      (unwind-protect
-	   (progn
-	     (set-fpu-mode :invalid nil)
-	     (+ double-float-positive-infinity double-float-negative-infinity))
-	(set-fpu-mode :invalid invalid))))
+  #.(make-float-from-fixnums #x8000 0 #x3ff 1))
 
 (defun parse-float (str len off)  
   ; we cant assume this really is a float but dont call with eg s1 or e1
