@@ -49,6 +49,7 @@
 
 (defconstant double-float-nan
   #.(let ((invalid (get-fpu-mode :invalid)))
+      (declare (notinline +))
       (unwind-protect
 	   (progn
 	     (set-fpu-mode :invalid nil)
