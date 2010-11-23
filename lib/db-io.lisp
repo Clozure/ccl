@@ -1321,9 +1321,11 @@ satisfy the optional predicate PREDICATE."
            (:void `(,encoded-type-void))
            (:signed `(,encoded-type-signed-32))
            (:unsigned `(,encoded-type-unsigned-32))
-           ((:long-double :complex-int
-                        :complex-float :complex-double :complex-long-double)
-            (encode-ffi-type `(:struct ,primtype))))
+           ((:long-float :long-double) (encode-ffi-type '(:array 2 (:primitive :double))))
+           (:complex-int (encode-ffi-type '(:array 2 (:primitive :signed))))
+           (:complex-float (encode-ffi-type '(:array 2 (:primitive :float))))
+           (:complex-double (encode-ffi-type '(:array 2 (:primitive :double))))
+           (:complex-long-double (encode-ffi-type '(:array 4 (:primitive :double)))))
          (ecase (car primtype)
            (* `(,encoded-type-pointer ,@(encode-ffi-type
                                            (if (eq (cadr primtype) t)
@@ -1395,7 +1397,7 @@ satisfy the optional predicate PREDICATE."
            (:signed `(#\F))
            (:unsigned `(f))
            ((:long-double :complex-int
-			  :complex-float :complex-double :complex-long-double)            
+			  :complex-float :complex-double :complex-long-double)
             #|(encode-ffi-arg-type `(:struct ,primtype))|#
             `(#\?)))
          (ecase (car primtype)
@@ -1427,7 +1429,10 @@ satisfy the optional predicate PREDICATE."
           (:struct #\r)
           (:union #\u)
           (:transparent-union #\U))
-           ,@(encode-name (ffi-struct-reference (cadr spec)))))
+           ,@(encode-name
+              (if (eq (car spec) :struct)
+                (ffi-struct-reference (cadr spec))
+                (ffi-union-reference (cadr spec))))))
     (:typedef
      `(#\t ,@(encode-name (ffi-typedef-name (cadr spec)))))
     (:pointer
