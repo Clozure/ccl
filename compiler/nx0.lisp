@@ -881,9 +881,10 @@ function to the indicated name is true.")
         (if (types-disjoint-p ctype (specifier-type 'function))
           (nx-bad-decls decl)
           (dolist (s fnames)
-            (if (or (symbolp s) (setf-function-name-p s))
-              (nx-new-fdecl pending s 'ftype type)
-              (unless (shiftf whined t) (nx-bad-decls decl)))))))))
+            (multiple-value-bind (valid nm) (valid-function-name-p s)
+            (if valid
+              (nx-new-fdecl pending nm 'ftype type)
+              (unless (shiftf whined t) (nx-bad-decls decl))))))))))
 
 (defnxdecl settable (pending decl env)
   (nx-settable-decls pending decl env t))
