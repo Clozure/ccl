@@ -5593,7 +5593,7 @@
     (setf (io-buffer-idx buf) 0
           (io-buffer-count buf) 0
           (ioblock-eof ioblock) nil)
-      (when (or read-p (setq avail (stream-listen s)))
+      (when (or read-p (setq avail (fd-input-available-p fd 0)))
         (unless avail
           (let* ((deadline (ioblock-deadline ioblock))
                  (timeout
