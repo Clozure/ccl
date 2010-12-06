@@ -1121,7 +1121,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                     (make-fd-stream read-pipe
                                     :direction :input
                                     :element-type element-type
-                                    :interactive nil
+                                    :interactive t
                                     :basic t
                                     :sharing sharing
                                     :encoding (external-format-character-encoding external-format)
@@ -1229,6 +1229,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                                                    :direction :input
                                                    :sharing :private
                                                    :encoding encoding
+                                                   :interactive t
                                                    :line-termination line-termination)))
                                      in-fds) out-streams)))
       (%stack-block ((in-fd-set *fd-set-size*))
@@ -1546,7 +1547,7 @@ space, and prefixed with PREFIX."
                     (make-fd-stream (fd-uninheritable read-pipe :direction :input)
                                     :direction :input
                                     :element-type element-type
-                                    :interactive nil
+                                    :interactive t
                                     :basic t
                                     :sharing sharing
                                     :encoding (external-format-character-encoding external-format)
@@ -1823,6 +1824,7 @@ space, and prefixed with PREFIX."
                                                            :direction :input
                                                            :sharing :private
                                                            :encoding encoding
+                                                           :interactive t
                                                            :line-termination line-termination)))
                                    in-fds)
                            out-streams))

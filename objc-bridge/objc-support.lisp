@@ -47,8 +47,13 @@
         (return n)
         (incf n)))))
 
+
 (defun %note-protocol (p)
-  (with-macptrs ((cname (objc-message-send p "name" :address)))
+  ;; In Cocotron (which is ultimately based on the GNU ObjC runtime),
+  ;; it may be the case that some Protocol objects aren't fully initialized
+  ;; when this code runs, hence the sleazy use of PREF here.
+  (with-macptrs ((cname #+cocotron-objc (pref p #>Protocol.nameCString)
+                        #-cocotron-objc (objc-message-send p "name" :address)))
     (let* ((namelen (%cstrlen cname))
            (name (make-string namelen)))
       (declare (dynamic-extent name))
@@ -63,7 +68,7 @@
         proto))))
 
 (defun note-class-protocols (class)
-  #-(or apple-objc-2.0 cocotron-objc)
+  #-(or apple-objc-2.0)
   (do* ((protocols (pref class :objc_class.protocols)
                    (pref protocols :objc_protocol_list.next)))
        ((%null-ptr-p protocols))
@@ -72,7 +77,7 @@
         (dotimes (i count)
           (with-macptrs ((p (paref list (:* (:* (:struct :<P>rotocol))) i)))
             (%note-protocol p))))))
-  #+(or apple-objc-2.0 cocotron-objc)
+  #+(or apple-objc-2.0)
   (rlet ((p-out-count :int 0))
     (with-macptrs ((protocols (#_class_copyProtocolList class p-out-count)))
       (let* ((n (pref p-out-count :int)))

@@ -1307,28 +1307,29 @@
     (note-function-info (%cadr def) (caddr def) env))
   (nx1-treat-as-call w))
 
-
 (defnx1 nx1-function function (arg &aux fn afunc)
-  (if (symbolp arg)
-    (progn
-      (when (macro-function arg *nx-lexical-environment*)
-        (nx-error
-         "~S can't be used to reference lexically visible macro ~S." 
-         'function arg))
-      (if (multiple-value-setq (fn afunc) (nx-lexical-finfo arg))
-        (progn
-          (when afunc 
-            (incf (afunc-fn-refcount afunc))
-            (when (%ilogbitp $fbitbounddownward (afunc-bits afunc))
-              (incf (afunc-fn-downward-refcount afunc))))
-          (nx1-symbol (%cddr fn)))
-        (progn
-          (while (setq fn (assq arg *nx-synonyms*))
-            (setq arg (%cdr fn)))
-          (nx1-form `(%function ',arg)))))
-    (if (and (consp arg) (eq (%car arg) 'setf))
-      (nx1-form `(function ,(nx-need-function-name arg)))
-      (nx1-ref-inner-function nil arg))))
+  (cond ((symbolp arg)
+	 (when (macro-function arg *nx-lexical-environment*)
+	   (nx-error
+	    "~S can't be used to reference lexically visible macro ~S." 
+	    'function arg))
+	 (if (multiple-value-setq (fn afunc) (nx-lexical-finfo arg))
+	   (progn
+	     (when afunc 
+	       (incf (afunc-fn-refcount afunc))
+	       (when (%ilogbitp $fbitbounddownward (afunc-bits afunc))
+		 (incf (afunc-fn-downward-refcount afunc))))
+	     (nx1-symbol (%cddr fn)))
+	   (progn
+	     (while (setq fn (assq arg *nx-synonyms*))
+	       (setq arg (%cdr fn)))
+	     (nx1-form `(%function ',arg)))))
+	((setf-function-name-p arg)
+	 (nx1-form `(function ,(nx-need-function-name arg))))
+	((lambda-expression-p arg)
+	 (nx1-ref-inner-function nil arg))
+	(t
+	 (nx-error "~S is not a function name or lambda expression" arg))))
 
 (defnx1 nx1-nfunction nfunction (name def)
  (nx1-ref-inner-function name def))
