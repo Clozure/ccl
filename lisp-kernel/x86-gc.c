@@ -2890,6 +2890,7 @@ purify(TCR *tcr, signed_natural param)
         CommitMemory(managed_static_area->refbits, refbytes); /* zeros them */
         update_managed_refs(managed_static_area, low_markable_address, area_dnode(a->active,low_markable_address));
       }
+      managed_static_area->high = managed_static_area->active;
     }
     ProtectMemory(pure_area->low,
 		  align_to_power_of_2(pure_area->active-pure_area->low,
