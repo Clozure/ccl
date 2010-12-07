@@ -49,6 +49,8 @@
 
 (cl:in-package :cl-user)
 
+#+gcl (defpackage :asdf (:use :cl)) ;; GCL treats defpackage magically and needs this
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   ;;; make package if it doesn't exist yet.
   ;;; DEFPACKAGE may cause errors on discrepancies, so we avoid it.
@@ -66,20 +68,25 @@
 
 ;;;; Create packages in a way that is compatible with hot-upgrade.
 ;;;; See https://bugs.launchpad.net/asdf/+bug/485687
-;;;; See more at the end of the file.
+;;;; See more near the end of the file.
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defvar *asdf-version* nil)
   (defvar *upgraded-p* nil)
-  (let* ((asdf-version "2.010") ;; same as 2.146
+  (let* (;; For bug reporting sanity, please always bump this version when you modify this file.
+         ;; "2.345" would be an official release
+         ;; "2.345.6" would be a development version in the official upstream
+         ;; "2.345.0.7" would be your local modification of an official release
+         ;; "2.345.6.7" would be your local modification of a development version
+         (asdf-version "2.011")
          (existing-asdf (fboundp 'find-system))
          (existing-version *asdf-version*)
          (already-there (equal asdf-version existing-version)))
     (unless (and existing-asdf already-there)
       (when existing-asdf
-        (format *error-output*
-                "~&Upgrading ASDF package ~@[from version ~A ~]to version ~A~%"
-                existing-version asdf-version))
+        (format *trace-output*
+         "~&~@<; ~@;Upgrading ASDF package ~@[from version ~A ~]to version ~A~@:>~%"
+         existing-version asdf-version))
       (labels
           ((unlink-package (package)
              (let ((u (find-package package)))
@@ -180,7 +187,8 @@
             #:apply-output-translations #:translate-pathname* #:resolve-location)
            :unintern
            (#:*asdf-revision* #:around #:asdf-method-combination
-            #:split #:make-collector)
+            #:split #:make-collector
+            #:output-files-for-system-and-operation) ; obsolete ASDF-BINARY-LOCATION function
            :fmakunbound
            (#:system-source-file
             #:component-relative-pathname #:system-relative-pathname
@@ -234,6 +242,7 @@
             #:system-relative-pathname
             #:map-systems
 
+            #:operation-description
             #:operation-on-warnings
             #:operation-on-failure
             #:component-visited-p
@@ -286,7 +295,7 @@
 
             ;; Utilities
             #:absolute-pathname-p
-	    ;; #:aif #:it
+            ;; #:aif #:it
             ;; #:appendf
             #:coerce-name
             #:directory-pathname-p
@@ -295,11 +304,12 @@
             #:getenv
             ;; #:get-uid
             ;; #:length=n-p
+            ;; #:find-symbol*
             #:merge-pathnames*
             #:pathname-directory-pathname
             #:read-file-forms
-	    ;; #:remove-keys
-	    ;; #:remove-keyword
+            ;; #:remove-keys
+            ;; #:remove-keyword
             #:resolve-symlinks
             #:split-string
             #:component-name-to-pathname-components
@@ -311,31 +321,6 @@
               *upgraded-p* (if existing-version
                                (cons existing-version *upgraded-p*)
                                *upgraded-p*))))))
-
-;; More cleanups in case of hot-upgrade. See https://bugs.launchpad.net/asdf/+bug/485687
-(when *upgraded-p*
-   #+ecl
-   (when (find-class 'compile-op nil)
-     (defmethod update-instance-for-redefined-class :after
-         ((c compile-op) added deleted plist &key)
-       (declare (ignore added deleted))
-       (let ((system-p (getf plist 'system-p)))
-         (when system-p (setf (getf (slot-value c 'flags) :system-p) system-p)))))
-   (when (find-class 'module nil)
-     (eval
-      '(progn
-         (defmethod update-instance-for-redefined-class :after
-             ((m module) added deleted plist &key)
-           (declare (ignorable deleted plist))
-           (when *asdf-verbose* (format *trace-output* "Updating ~A~%" m))
-           (when (member 'components-by-name added)
-             (compute-module-components-by-name m)))
-         (defmethod update-instance-for-redefined-class :after
-             ((s system) added deleted plist &key)
-           (declare (ignorable deleted plist))
-           (when *asdf-verbose* (format *trace-output* "Updating ~A~%" s))
-           (when (member 'source-file added)
-             (%set-system-source-file (probe-asd (component-name s) (component-pathname s)) s)))))))
 
 ;;;; -------------------------------------------------------------------------
 ;;;; User-visible parameters
@@ -378,7 +363,8 @@ Note that ASDF ALWAYS raises an error if it fails to create an output file when 
     (setf excl:*warn-on-nested-reader-conditionals* nil)))
 
 ;;;; -------------------------------------------------------------------------
-;;;; ASDF Interface, in terms of generic functions.
+;;;; General Purpose Utilities
+
 (macrolet
     ((defdef (def* def)
        `(defmacro ,def* (name formals &rest rest)
@@ -389,113 +375,6 @@ Note that ASDF ALWAYS raises an error if it fails to create an output file when 
              (,',def ,name ,formals ,@rest)))))
   (defdef defgeneric* defgeneric)
   (defdef defun* defun))
-
-(defgeneric* find-system (system &optional error-p))
-(defgeneric* perform-with-restarts (operation component))
-(defgeneric* perform (operation component))
-(defgeneric* operation-done-p (operation component))
-(defgeneric* explain (operation component))
-(defgeneric* output-files (operation component))
-(defgeneric* input-files (operation component))
-(defgeneric* component-operation-time (operation component))
-(defgeneric* operation-description (operation component)
-  (:documentation "returns a phrase that describes performing this operation
-on this component, e.g. \"loading /a/b/c\".
-You can put together sentences using this phrase."))
-
-(defgeneric* system-source-file (system)
-  (:documentation "Return the source file in which system is defined."))
-
-(defgeneric* component-system (component)
-  (:documentation "Find the top-level system containing COMPONENT"))
-
-(defgeneric* component-pathname (component)
-  (:documentation "Extracts the pathname applicable for a particular component."))
-
-(defgeneric* component-relative-pathname (component)
-  (:documentation "Returns a pathname for the component argument intended to be
-interpreted relative to the pathname of that component's parent.
-Despite the function's name, the return value may be an absolute
-pathname, because an absolute pathname may be interpreted relative to
-another pathname in a degenerate way."))
-
-(defgeneric* component-property (component property))
-
-(defgeneric* (setf component-property) (new-value component property))
-
-(defgeneric* version-satisfies (component version))
-
-(defgeneric* find-component (base path)
-  (:documentation "Finds the component with PATH starting from BASE module;
-if BASE is nil, then the component is assumed to be a system."))
-
-(defgeneric* source-file-type (component system))
-
-(defgeneric* operation-ancestor (operation)
-  (:documentation
-   "Recursively chase the operation's parent pointer until we get to
-the head of the tree"))
-
-(defgeneric* component-visited-p (operation component)
-  (:documentation "Returns the value stored by a call to
-VISIT-COMPONENT, if that has been called, otherwise NIL.
-This value stored will be a cons cell, the first element
-of which is a computed key, so not interesting.  The
-CDR wil be the DATA value stored by VISIT-COMPONENT; recover
-it as (cdr (component-visited-p op c)).
-  In the current form of ASDF, the DATA value retrieved is
-effectively a boolean, indicating whether some operations are
-to be performed in order to do OPERATION X COMPONENT.  If the
-data value is NIL, the combination had been explored, but no
-operations needed to be performed."))
-
-(defgeneric* visit-component (operation component data)
-  (:documentation "Record DATA as being associated with OPERATION
-and COMPONENT.  This is a side-effecting function:  the association
-will be recorded on the ROOT OPERATION \(OPERATION-ANCESTOR of the
-OPERATION\).
-  No evidence that DATA is ever interesting, beyond just being
-non-NIL.  Using the data field is probably very risky; if there is
-already a record for OPERATION X COMPONENT, DATA will be quietly
-discarded instead of recorded.
-  Starting with 2.006, TRAVERSE will store an integer in data,
-so that nodes can be sorted in decreasing order of traversal."))
-
-
-(defgeneric* (setf visiting-component) (new-value operation component))
-
-(defgeneric* component-visiting-p (operation component))
-
-(defgeneric* component-depends-on (operation component)
-  (:documentation
-   "Returns a list of dependencies needed by the component to perform
-    the operation.  A dependency has one of the following forms:
-
-      (<operation> <component>*), where <operation> is a class
-        designator and each <component> is a component
-        designator, which means that the component depends on
-        <operation> having been performed on each <component>; or
-
-      (FEATURE <feature>), which means that the component depends
-        on <feature>'s presence in *FEATURES*.
-
-    Methods specialized on subclasses of existing component types
-    should usually append the results of CALL-NEXT-METHOD to the
-    list."))
-
-(defgeneric* component-self-dependencies (operation component))
-
-(defgeneric* traverse (operation component)
-  (:documentation
-"Generate and return a plan for performing OPERATION on COMPONENT.
-
-The plan returned is a list of dotted-pairs. Each pair is the CONS
-of ASDF operation object and a COMPONENT object. The pairs will be
-processed in order by OPERATE."))
-
-
-;;;; -------------------------------------------------------------------------
-;;;; General Purpose Utilities
 
 (defmacro while-collecting ((&rest collectors) &body body)
   "COLLECTORS should be a list of names for collections.  A collector
@@ -535,11 +414,11 @@ Also, if either argument is NIL, then the other argument is returned unmodified.
          (directory (pathname-directory specified))
          (directory
           (cond
-            #-(or sbcl cmu)
+            #-(or sbcl cmu scl)
             ((stringp directory) `(:absolute ,directory) directory)
             #+gcl
-            ((and (consp directory) (stringp (first directory)))
-             `(:absolute ,@directory))
+            ((and (consp directory) (not (member (first directory) '(:absolute :relative))))
+             `(:relative ,@directory))
             ((or (null directory)
                  (and (consp directory) (member (first directory) '(:absolute :relative))))
              directory)
@@ -675,9 +554,8 @@ pathnames."
     :append (list k v)))
 
 (defun* getenv (x)
-  (#+abcl ext:getenv
+  (#+(or abcl clisp) ext:getenv
    #+allegro sys:getenv
-   #+clisp ext:getenv
    #+clozure ccl:getenv
    #+(or cmu scl) (lambda (x) (cdr (assoc x ext:*environment-list* :test #'string=)))
    #+ecl si:getenv
@@ -723,7 +601,8 @@ actually-existing directory."
                    :defaults pathspec))))
 
 (defun* absolute-pathname-p (pathspec)
-  (and pathspec (eq :absolute (car (pathname-directory (pathname pathspec))))))
+  (and (typep pathspec '(or pathname string))
+       (eq :absolute (car (pathname-directory (pathname pathspec))))))
 
 (defun* length=n-p (x n) ;is it that (= (length x) n) ?
   (check-type n (integer 0 *))
@@ -755,7 +634,7 @@ actually-existing directory."
   (defun* get-uid ()
     #+allegro (excl.osi:getuid)
     #+clisp (loop :for s :in '("posix:uid" "LINUX:getuid")
-	          :for f = (ignore-errors (read-from-string s))
+                  :for f = (ignore-errors (read-from-string s))
                   :when f :return (funcall f))
     #+(or cmu scl) (unix:unix-getuid)
     #+ecl #.(cl:if (cl:< ext:+ecl-version-number+ 100601)
@@ -777,6 +656,9 @@ actually-existing directory."
                  :directory '(:absolute)
                  :name nil :type nil :version nil))
 
+(defun* find-symbol* (s p)
+  (find-symbol (string s) p))
+
 (defun* probe-file* (p)
   "when given a pathname P, probes the filesystem for a file or directory
 with given pathname and if it exists return its truename."
@@ -785,8 +667,8 @@ with given pathname and if it exists return its truename."
    (string (probe-file* (parse-namestring p)))
    (pathname (unless (wild-pathname-p p)
                #.(or #+(or allegro clozure cmu ecl sbcl scl) '(probe-file p)
-               #+clisp (aif (find-symbol (string :probe-pathname) :ext) `(ignore-errors (,it p)))
-	       '(ignore-errors (truename p)))))))
+               #+clisp (aif (find-symbol (string '#:probe-pathname) :ext) `(ignore-errors (,it p)))
+               '(ignore-errors (truename p)))))))
 
 (defun* truenamize (p)
   "Resolve as much of a pathname as possible"
@@ -857,6 +739,134 @@ with given pathname and if it exists return its truename."
              (make-pathname :defaults root
                             :directory `(:absolute ,@path))))
         (translate-pathname absolute-pathname wild-root (wilden new-base))))))
+
+;;;; -------------------------------------------------------------------------
+;;;; ASDF Interface, in terms of generic functions.
+(defgeneric* find-system (system &optional error-p))
+(defgeneric* perform-with-restarts (operation component))
+(defgeneric* perform (operation component))
+(defgeneric* operation-done-p (operation component))
+(defgeneric* explain (operation component))
+(defgeneric* output-files (operation component))
+(defgeneric* input-files (operation component))
+(defgeneric* component-operation-time (operation component))
+(defgeneric* operation-description (operation component)
+  (:documentation "returns a phrase that describes performing this operation
+on this component, e.g. \"loading /a/b/c\".
+You can put together sentences using this phrase."))
+
+(defgeneric* system-source-file (system)
+  (:documentation "Return the source file in which system is defined."))
+
+(defgeneric* component-system (component)
+  (:documentation "Find the top-level system containing COMPONENT"))
+
+(defgeneric* component-pathname (component)
+  (:documentation "Extracts the pathname applicable for a particular component."))
+
+(defgeneric* component-relative-pathname (component)
+  (:documentation "Returns a pathname for the component argument intended to be
+interpreted relative to the pathname of that component's parent.
+Despite the function's name, the return value may be an absolute
+pathname, because an absolute pathname may be interpreted relative to
+another pathname in a degenerate way."))
+
+(defgeneric* component-property (component property))
+
+(defgeneric* (setf component-property) (new-value component property))
+
+(defgeneric* version-satisfies (component version))
+
+(defgeneric* find-component (base path)
+  (:documentation "Finds the component with PATH starting from BASE module;
+if BASE is nil, then the component is assumed to be a system."))
+
+(defgeneric* source-file-type (component system))
+
+(defgeneric* operation-ancestor (operation)
+  (:documentation
+   "Recursively chase the operation's parent pointer until we get to
+the head of the tree"))
+
+(defgeneric* component-visited-p (operation component)
+  (:documentation "Returns the value stored by a call to
+VISIT-COMPONENT, if that has been called, otherwise NIL.
+This value stored will be a cons cell, the first element
+of which is a computed key, so not interesting.  The
+CDR wil be the DATA value stored by VISIT-COMPONENT; recover
+it as (cdr (component-visited-p op c)).
+  In the current form of ASDF, the DATA value retrieved is
+effectively a boolean, indicating whether some operations are
+to be performed in order to do OPERATION X COMPONENT.  If the
+data value is NIL, the combination had been explored, but no
+operations needed to be performed."))
+
+(defgeneric* visit-component (operation component data)
+  (:documentation "Record DATA as being associated with OPERATION
+and COMPONENT.  This is a side-effecting function:  the association
+will be recorded on the ROOT OPERATION \(OPERATION-ANCESTOR of the
+OPERATION\).
+  No evidence that DATA is ever interesting, beyond just being
+non-NIL.  Using the data field is probably very risky; if there is
+already a record for OPERATION X COMPONENT, DATA will be quietly
+discarded instead of recorded.
+  Starting with 2.006, TRAVERSE will store an integer in data,
+so that nodes can be sorted in decreasing order of traversal."))
+
+
+(defgeneric* (setf visiting-component) (new-value operation component))
+
+(defgeneric* component-visiting-p (operation component))
+
+(defgeneric* component-depends-on (operation component)
+  (:documentation
+   "Returns a list of dependencies needed by the component to perform
+    the operation.  A dependency has one of the following forms:
+
+      (<operation> <component>*), where <operation> is a class
+        designator and each <component> is a component
+        designator, which means that the component depends on
+        <operation> having been performed on each <component>; or
+
+      (FEATURE <feature>), which means that the component depends
+        on <feature>'s presence in *FEATURES*.
+
+    Methods specialized on subclasses of existing component types
+    should usually append the results of CALL-NEXT-METHOD to the
+    list."))
+
+(defgeneric* component-self-dependencies (operation component))
+
+(defgeneric* traverse (operation component)
+  (:documentation
+"Generate and return a plan for performing OPERATION on COMPONENT.
+
+The plan returned is a list of dotted-pairs. Each pair is the CONS
+of ASDF operation object and a COMPONENT object. The pairs will be
+processed in order by OPERATE."))
+
+
+;;;; -------------------------------------------------------------------------
+;;; Methods in case of hot-upgrade. See https://bugs.launchpad.net/asdf/+bug/485687
+(when *upgraded-p*
+   #+ecl
+   (when (find-class 'compile-op nil)
+     (defmethod update-instance-for-redefined-class :after
+         ((c compile-op) added deleted plist &key)
+       (declare (ignore added deleted))
+       (let ((system-p (getf plist 'system-p)))
+         (when system-p (setf (getf (slot-value c 'flags) :system-p) system-p)))))
+   (when (find-class 'module nil)
+     (eval
+      `(defmethod update-instance-for-redefined-class :after
+           ((m module) added deleted plist &key)
+         (declare (ignorable deleted plist))
+         (when (or *asdf-verbose* *load-verbose*)
+           (asdf-message "~&~@<; ~@; Updating ~A for ASDF ~A~@:>~%" m ,(asdf-version)))
+         (when (member 'components-by-name added)
+           (compute-module-components-by-name m))
+         (when (and (typep m 'system) (member 'source-file added))
+           (%set-system-source-file (probe-asd (component-name m) (component-pathname m)) m))))))
 
 ;;;; -------------------------------------------------------------------------
 ;;;; Classes, Conditions
@@ -1000,7 +1010,7 @@ with given pathname and if it exists return its truename."
   (format s "~@<component ~S not found~@[ in ~A~]~@:>"
           (missing-requires c)
           (when (missing-parent c)
-            (component-name (missing-parent c)))))
+            (coerce-name (missing-parent c)))))
 
 (defmethod print-object ((c missing-component-of-version) s)
   (format s "~@<component ~S does not match version ~A~@[ in ~A~]~@:>"
@@ -1295,7 +1305,7 @@ Going forward, we recommend new users should be using the source-registry.
                                     :condition condition))))
                  (let ((*package* package))
                    (asdf-message
-                    "~&~@<; ~@;loading system definition from ~A into ~A~@:>~%"
+                    "~&~@<; ~@;Loading system definition from ~A into ~A~@:>~%"
                     on-disk *package*)
                    (load on-disk)))
             (delete-package package))))
@@ -1309,19 +1319,22 @@ Going forward, we recommend new users should be using the source-registry.
            (error 'missing-component :requires name)))))))
 
 (defun* register-system (name system)
-  (asdf-message "~&~@<; ~@;registering ~A as ~A~@:>~%" system name)
+  (asdf-message "~&~@<; ~@;Registering ~A as ~A~@:>~%" system name)
   (setf (gethash (coerce-name name) *defined-systems*)
         (cons (get-universal-time) system)))
 
 (defun* find-system-fallback (requested fallback &rest keys &key source-file &allow-other-keys)
   (setf fallback (coerce-name fallback)
-        source-file (or source-file *compile-file-truename* *load-truename*)
+        source-file (or source-file
+                        (if *resolve-symlinks*
+                            (or *compile-file-truename* *load-truename*)
+                            (or *compile-file-pathname* *load-pathname*)))
         requested (coerce-name requested))
   (when (equal requested fallback)
     (let* ((registered (cdr (gethash fallback *defined-systems*)))
            (system (or registered
                        (apply 'make-instance 'system
-			      :name fallback :source-file source-file keys))))
+                              :name fallback :source-file source-file keys))))
       (unless registered
         (register-system fallback system))
       (throw 'find-system system))))
@@ -2201,9 +2214,9 @@ details."
 
 (defun* class-for-type (parent type)
   (or (loop :for symbol :in (list
-                             (unless (keywordp type) type)
-                             (find-symbol (symbol-name type) *package*)
-                             (find-symbol (symbol-name type) :asdf))
+                             type
+                             (find-symbol* type *package*)
+                             (find-symbol* type :asdf))
         :for class = (and symbol (find-class symbol nil))
         :when (and class (subtypep class 'component))
         :return class)
@@ -2390,8 +2403,8 @@ output to *VERBOSE-OUT*.  Returns the shell's exit code."
                  #+mswindows "sh" #-mswindows "/bin/sh" command)
          :input nil :whole nil
          #+mswindows :show-window #+mswindows :hide)
-      (format *verbose-out* "~{~&; ~a~%~}~%" stderr)
-      (format *verbose-out* "~{~&; ~a~%~}~%" stdout)
+      (asdf-message "~{~&; ~a~%~}~%" stderr)
+      (asdf-message "~{~&; ~a~%~}~%" stdout)
       exit-code)
 
     #+clisp                     ;XXX not exactly *verbose-out*, I know
@@ -3121,6 +3134,18 @@ effectively disabling the output translation facility."
 ;;;; -----------------------------------------------------------------
 ;;;; Compatibility mode for ASDF-Binary-Locations
 
+(defmethod operate :before (operation-class system &rest args &key &allow-other-keys)
+  (declare (ignorable operation-class system args))
+  (when (find-symbol* '#:output-files-for-system-and-operation :asdf)
+    (error "ASDF 2 is not compatible with ASDF-BINARY-LOCATIONS, which you are using.
+ASDF 2 now achieves the same purpose with its builtin ASDF-OUTPUT-TRANSLATIONS,
+which should be easier to configure. Please stop using ASDF-BINARY-LOCATIONS,
+and instead use ASDF-OUTPUT-TRANSLATIONS. See the ASDF manual for details.
+In case you insist on preserving your previous A-B-L configuration, but
+do not know how to achieve the same effect with A-O-T, you may use function
+ASDF:ENABLE-ASDF-BINARY-LOCATIONS-COMPATIBILITY as documented in the manual;
+call that function where you would otherwise have loaded and configured A-B-L.")))
+
 (defun* enable-asdf-binary-locations-compatibility
     (&key
      (centralize-lisp-binaries nil)
@@ -3548,7 +3573,7 @@ with a different configuration, so the configuration would be re-read then."
   (clear-output-translations))
 
 ;;;; -----------------------------------------------------------------
-;;;; Hook into REQUIRE for ABCL, ClozureCL, CMUCL, ECL and SBCL
+;;;; Hook into REQUIRE for ABCL, CLISP, ClozureCL, CMUCL, ECL and SBCL
 ;;;;
 (defun* module-provide-asdf (name)
   (handler-bind
@@ -3564,7 +3589,7 @@ with a different configuration, so the configuration would be re-read then."
         t))))
 
 #+(or abcl clisp clozure cmu ecl sbcl)
-(let ((x (and #+clisp (find-symbol "*MODULE-PROVIDER-FUNCTIONS*" :custom))))
+(let ((x (and #+clisp (find-symbol* '#:*module-provider-functions* :custom))))
   (when x
     (eval `(pushnew 'module-provide-asdf
             #+abcl sys::*module-provider-functions*
