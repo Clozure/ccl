@@ -668,24 +668,18 @@
      ((val :double-float)
       (src :address)
       (index :s16const))
-     ((low (:u32 #.arm::imm0))
-      (high (:u32 #.arm::imm1))
-      (addr (:u32 #.arm::imm2))))       ; addr should be :address
+     ((addr :u32)))
   (add addr src (:$ index))
-  (fmrrd low high src)
-  (strd low (:@ addr (:$ 0))))
+  (fstd src (:@ addr (:$ 0))))
 
 (define-arm-vinsn (mem-set-double-float :predicatable)
     (()
      ((val :double-float)
       (src :address)
       (index :s32))                     
-     ((low (:u32 #.arm::imm0))
-      (high (:u32 #.arm::imm1))
-      (addr (:u32 #.arm::imm2))))       ; addr should be :address
+     ((addr :u32)))
   (add addr src index)
-  (fmrrd low high src)
-  (strd low (:@ addr (:$ 0))))
+  (fstd src (:@ addr (:$ 0))))
 
 (define-arm-vinsn (mem-ref-c-single-float :predicatable)
     (((dest :single-float))
@@ -709,7 +703,7 @@
       (src :address)
       (index :s16const))
      ((temp :u32)))
-  (fmrs temp src)
+  (fmrs temp val)
   (str temp (:@ src (:$ index))))
 
 (define-arm-vinsn (mem-set-single-float :predicatable)
@@ -718,8 +712,8 @@
       (src :address)
       (index :s32))
      ((temp :u32)))
-  (fmrs temp src)
-  (str temp (:@ src (:$ index))))
+  (fmrs temp val)
+  (str temp (:@ src  index)))
 
 
 (define-arm-vinsn (mem-set-c-address :predicatable)
@@ -2210,8 +2204,8 @@
     (((result :imm)) 
      ((val :s8)) 
      ())
-  (mov result (:lsr val (:$ 24)))
-  (mov result (:asr val (:$ (- 24 arm::fixnumshift)))))
+  (mov result (:lsl val (:$ 24)))
+  (mov result (:asr result (:$ (- 24 arm::fixnumshift)))))
 
 
 ;;; Treat the low 16 bits of VAL as an unsigned integer; set RESULT to the equivalent fixnum.
@@ -2356,29 +2350,27 @@
   (fmrrd low high source)
   (strd low (:@ dest (:$ arm::double-float.value))))
 
-(define-arm-vinsn (get-double :predicatable)
+(define-arm-vinsn (get-double :predicatable :sets-lr)
     (((target :double-float))
-     ((source :lisp))
-     ((low (:u32 #.arm::imm0))
-      (high (:u32 #.arm::imm1))))
-  (ldrd low (:@ source (:$ arm::double-float.value)))
-  (fmdrr target low high))
+     ((source :lisp)))
+  (add lr source (:$ arm::double-float.pad))
+  (fldd target (:@ lr (:$ (- arm::double-float.value arm::double-float.pad)))))
 
 ;;; Extract a double-float value, typechecking in the process.
 ;;; IWBNI we could simply call the "trap-unless-typecode=" vinsn here,
 ;;; instead of replicating it ..
 
-(define-arm-vinsn get-double? (((target :double-float))
-                               ((source :lisp))
-                               ((low (:u32 #.arm::imm0))
-                                (high (:u32 #.arm::imm1))))
-  (and low source (:$ arm::tagmask))
-  (cmp low (:$ arm::tag-misc))
-  (ldrbeq low (:@ source (:$ arm::misc-subtag-offset)))
-  (cmp imm0 (:$ arm::subtag-double-float))
+(define-arm-vinsn (get-double? :sets-lr)
+    (((target :double-float))
+     ((source :lisp))
+     ((tag :u8)))
+  (and tag source (:$ arm::tagmask))
+  (cmp tag (:$ arm::tag-misc))
+  (ldrbeq tag (:@ source (:$ arm::misc-subtag-offset)))
+  (cmp tag (:$ arm::subtag-double-float))
   (uuo-error-reg-not-xtype (:? ne) source (:$ arm::subtag-double-float))
-  (ldrd imm0 (:@ source (:$ arm::double-float.value)))
-  (fmdrr target imm0 imm1))
+  (add lr source (:$ arm::double-float.pad))
+  (fldd target (:@ lr (:$ (- arm::double-float.value arm::double-float.pad)))))
   
 
 (define-arm-vinsn double-to-single (((result :single-float))

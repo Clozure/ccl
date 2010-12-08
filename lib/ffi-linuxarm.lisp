@@ -147,7 +147,7 @@
                                            (signed (foreign-integer-type-signed argtype)))
                                       (cond ((<= bits 8)
                                              (if signed
-                                               '%get-signed-byte '
+                                               '%get-signed-byte
                                                '%get-unsigned-byte))
                                             ((<= bits 16)
                                              (if signed

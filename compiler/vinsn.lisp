@@ -264,6 +264,7 @@
     :discard                            ; adjusts a stack pointer
     :sp
     :predicatable                       ; all instructions can be predicated, no instructions set or test condition codes.
+    :sets-lr                            ; uses the link register, if there is one.
     ))
 
 (defparameter *nvp-max* 10 "size of *vinsn-varparts* freelist elements")
