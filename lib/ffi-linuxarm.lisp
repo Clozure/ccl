@@ -119,7 +119,7 @@
                         `(,(cond
                             ((typep argtype 'foreign-single-float-type)
                              (setq nextoffset (+ offset 4))
-                             '%get-single-float-from-double-ptr)
+                             '%get-single-float)
                             ((typep argtype 'foreign-double-float-type)
                              (when (logtest offset 4)
                                (incf offset 4))
@@ -166,6 +166,7 @@
                   (when name (lets (list name access-form)))
                   (setq offset nextoffset))))))))
 
+
 (defun arm-linux::generate-callback-return-value (stack-ptr fp-args-ptr result return-type struct-return-arg)
   (declare (ignore fp-args-ptr))
   (unless (eq return-type *void-foreign-type*)
@@ -181,7 +182,8 @@
                 (:address '%get-ptr)
                 (:signed-doubleword '%%get-signed-longlong)
                 (:unsigned-doubleword '%%get-unsigned-longlong)
-                ((:double-float :single-float) '%get-double-float)
+                (:double-float '%get-double-float)
+                (:single-float '%get-single-float)
                 (t '%get-long)) ,stack-ptr ,offset) ,result))))
       
                  
