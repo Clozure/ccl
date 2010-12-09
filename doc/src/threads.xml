@@ -1584,6 +1584,62 @@ Type :? for other options.
 	  </refsect1>
     </refentry>
 
+    <refentry id="f_process-reset-and-enable">
+	  <indexterm zone="f_process-reset-and-enable">
+	    <primary>process-reset-and-enable</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>PROCESS-RESET-AND-ENABLE</refname>
+	    <refpurpose>Reset and enable the specified process, which
+	    may not be the current process.</refpurpose>
+	    <refclass>Function</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis><function>process-reset-and-enable</function>
+	      process => result</synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Arguments and Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>process</term>
+	        <listitem>
+		      <para>a lisp process (thread), which
+		      may not be the current process.</para>
+	        </listitem>
+	      </varlistentry>
+	      <varlistentry>
+	        <term>result</term>
+	        <listitem>
+		      <para>undefined.</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>
+	      Equivalent to calling (process-reset process) and
+	      (process-enable process).
+	    </para>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>See Also</title>
+	    
+	    <simplelist type="inline">
+	      <member><xref linkend="f_process-reset"/></member>
+	      <member><xref linkend="f_process-enable"/></member>
+	    </simplelist>
+	  </refsect1>
+    </refentry>
+
     <refentry id="f_process-kill">
 	  <indexterm zone="f_process-kill">
 	    <primary>process-kill</primary>
