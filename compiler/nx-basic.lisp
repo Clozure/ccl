@@ -728,7 +728,8 @@
 ;;
 (defmacro dbg-assert (form)
   #-debug-code-notes (declare (ignore form))
-  #+debug-code-notes `(assert ,form))
+  #+debug-code-notes `(unless ,form (cerror "Ignore assertion failure"
+                                            "Assertion failure: ~s" ',form)))
 
 (defvar *acode-right-margin* 120)
 (defvar *nx-pprint-stream* nil)
@@ -755,7 +756,7 @@
                ;; For expressions within without-compiling-code-coverage, there is a source
                ;; note and not a code note, so need to check for code note explicitly.
                (when (code-note-p note)
-                 (dbg-assert (null (gethash form form->note)))
+                 (dbg-assert (eq note (gethash form form->note note)))
                  (dbg-assert (null (code-note-acode-range note)))
                  (setf (gethash form form->note) note)))
              (print-hook (form open-p pos)
@@ -836,8 +837,8 @@
     (decomp-form acode)))
 
 (defun decomp-form (acode)
-  (cond ((nx-null acode) t)
-        ((nx-t acode) nil)
+  (cond ((nx-t acode) t)
+        ((nx-null acode) nil)
         (t (let* ((op (car acode))
                   (num (length *next-nx-operators*))
                   (name (when (and (fixnump op)
