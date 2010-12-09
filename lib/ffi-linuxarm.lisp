@@ -184,6 +184,7 @@
                 (:unsigned-doubleword '%%get-unsigned-longlong)
                 (:double-float '%get-double-float)
                 (:single-float '%get-single-float)
+                (:unsigned-fullword '%get-unsigned-long)
                 (t '%get-long)) ,stack-ptr ,offset) ,result))))
       
                  
