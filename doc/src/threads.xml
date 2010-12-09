@@ -201,7 +201,7 @@
         <listitem>
 	      <para>It has traditionally been possible to reset and enable
 	        a process that's "exhausted" . (As used here, the
-	        term"exhausted" means that the process's initial function
+	        term "exhausted" means that the process's initial function
 	        has run and returned and the underlying native thread has
 	        been deallocated.) One of the principal uses of PROCESS-RESET
 	        is to "recycle" threads; enabling an exhausted process
@@ -1623,9 +1623,10 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Entirely equivalent to calling
-	      (PROCESS-RESET PROCESS T).  Causes <varname>process</varname>
-	      to cleanly exit from any ongoing computation, and then exit.</para>
+	    <para>
+	      Causes <varname>process</varname> to cleanly exit
+	      from any ongoing computation, and then exit.
+	    </para>
 	  </refsect1>
 
 	  <refsect1>
