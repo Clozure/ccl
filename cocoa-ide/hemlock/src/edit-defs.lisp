@@ -323,9 +323,20 @@
     (move-mark point target)
     point))
 
+;;; Adjust for CRLF line termination.  Multibyte character encodings
+;;; can also cause discrepancies between physical/logical positions.
+;;; Handling that would require making the source location stuff
+;;; aware of that newfangled Unicode thing ...
+(defun byte-position-to-character-position (pos &optional (buffer (current-buffer)))
+  (let* ((line-termination (hi::buffer-line-termination buffer)))
+    (if (eq line-termination :crlf)
+      (- pos (hi::buffer-lines-before-absolute-position buffer pos))
+      pos)))
+
 (defun move-to-source-note (source)
   (let ((start-pos (ccl:source-note-start-pos source)))
     (when start-pos
+      (setq start-pos (byte-position-to-character-position start-pos))
       (let ((full-text (ccl:source-note-text source))
             (pattern nil)
             (offset 0))
@@ -345,6 +356,7 @@
                                               (ccl:source-note-start-pos toplevel)))
                      (text (and toplevel-start-pos (ccl:source-note-text toplevel))))
                 (when text
+                  (setq toplevel-start-pos (byte-position-to-character-position toplevel-start-pos))
                   (setq offset (- start-pos toplevel-start-pos))
                   (setq start-pos toplevel-start-pos)
                   (setq full-text text)

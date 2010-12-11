@@ -525,6 +525,14 @@
           (setq end middle)
           (setq start middle))))))
 
+(defun buffer-lines-before-absolute-position (buffer position)
+  (do* ((prev (line-previous (buffer-line-at-absolute-position buffer position))
+              (line-previous prev))
+        (n 0))
+       ((null prev) n)
+    (declare (fixnum n))
+    (incf n)))
+
 ;; Called whenever change a line's next or previous pointer.  Don't update immediately
 ;; so don't thrash when inserting multiple lines.
 (declaim (inline invalidate-buffer-lines))
