@@ -3360,6 +3360,37 @@
     (#/performSelectorOnMainThread:withObject:waitUntilDone:
      *nsapp* (@selector #/stringToPasteBoard:) (%make-nsstring string) t)))
 
+#+cocotron
+;;; Work around a byte-order bug that affects #/paste.
+(defun maybe-byte-reverse-string (nsstring)
+  (let* ((len (#/length nsstring))
+         (maybe-reversed-count  0))
+    (dotimes (i len)
+      (when (not (logtest #xff (#/characterAtIndex: nsstring i)))
+        (incf maybe-reversed-count)))
+    (if (> maybe-reversed-count (ash len -1))
+      (%stack-block ((chars (* 2 len)))
+        (ns:with-ns-range (r 0 len)
+          (#/getCharacters:range: nsstring chars r)
+          (dotimes (i len)
+            (declare (fixnum i))
+            (let* ((j (+ i i)))
+              (declare (fixnum j))
+              (let* ((w (%get-unsigned-word chars j)))
+                (setf (%get-unsigned-word chars j)
+                      (dpb (ldb (byte 8 0) w)
+                           (byte 8 8)
+                           (ldb (byte 8 8) w))))))
+
+            
+          (#/autorelease
+           (make-instance ns:ns-string
+                          :with-characters chars
+                          :length len))))
+      nsstring)))
+                        
+                    
+                                                            
 ;;; The default #/paste method seems to want to set the font to
 ;;; something ... inappropriate.  If we can figure out why it
 ;;; does that and persuade it not to, we wouldn't have to do
@@ -3375,6 +3406,7 @@
          (string (progn (#/types pb) (#/stringForType: pb #&NSStringPboardType))))
     #+debug (log-debug "   string = ~s" string)
     (unless (%null-ptr-p string)
+      #+cocotron (setq string (maybe-byte-reverse-string string))
       (unless (zerop (ns:ns-range-length (#/rangeOfString: string *ns-cr-string*)))
         (setq string (make-instance 'ns:ns-mutable-string :with-string string))
         (#/replaceOccurrencesOfString:withString:options:range:
