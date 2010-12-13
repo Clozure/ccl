@@ -1414,7 +1414,7 @@ remap_spjump()
   if ((void *)(&spjump_start) != (void *) SPJUMP_TARGET_ADDRESS) {
     if (!VirtualProtect((pc) SPJUMP_TARGET_ADDRESS,
                         0x1000,
-                        PAGE_EXECUTE_READWRITE,
+                        PAGE_READWRITE,
                         &old_protect)) {
       wperror("VirtualProtect spjump");
       _exit(1);
@@ -1429,7 +1429,7 @@ remap_spjump()
   extern opcode spjump_start;
   pc new = mmap((pc) SPJUMP_TARGET_ADDRESS,
                 0x1000,
-                PROT_READ | PROT_WRITE | PROT_EXEC,
+                PROT_READ | PROT_WRITE,
                 MAP_PRIVATE | MAP_ANON | MAP_FIXED,
                 -1,
                 0),
