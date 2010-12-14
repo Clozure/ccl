@@ -475,6 +475,7 @@ commands but aren't")
 (defun abnormal-application-exit ()
   (ignore-errors
     (print-call-history)
+    (write-line (lisp-implementation-version) *debug-io*)
     (force-output *debug-io*)
     (quit -1))
   (#__exit -1))
