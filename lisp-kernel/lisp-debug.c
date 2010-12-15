@@ -1420,9 +1420,8 @@ lisp_Debugger(ExceptionInformation *xp,
       debug_show_fpu(xp, info, 0);
     }
     debug_memory_areas(xp, info, 0);
-    debug_backtrace(xp, info, 0);
     debug_show_lisp_version(xp, info, 0);
-
+    debug_backtrace(xp, info, 0);
     abort();
   }
 

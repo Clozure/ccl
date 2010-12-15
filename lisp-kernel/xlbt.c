@@ -16,6 +16,7 @@
 
 #include "lispdcmd.h"
 #include <stdio.h>
+#include <signal.h>
 
 
 
@@ -104,7 +105,7 @@ walk_stack_frames(lisp_frame *start, lisp_frame *end)
       print_lisp_frame(start);
     } else {
       if (start->backlink) {
-        fprintf(dbgout, "Bogus  frame %lx\n", start);
+        fprintf(dbgout, "Bogus frame %lx\n", start);
       }
       return;
     }
@@ -154,6 +155,21 @@ plbt_sp(LispObj current_fp)
     Dprintf("\nFrame pointer [#x" LISP "] in unknown area.", current_fp);
   } else {
     fprintf(dbgout, "current thread: tcr = 0x" LISP ", native thread ID = 0x" LISP ", interrupts %s\n", tcr, tcr->native_thread_id, ilevel);
+
+#ifndef WINDOWS
+    if (lisp_global(BATCH_FLAG)) {
+      /*
+       * In batch mode, we will be exiting.  Reset some signal actions
+       * to the default to avoid a loop of "Unhandled exception 11" or
+       * whatever if we try to print some call stack that is totally
+       * screwed up.  (Instead, we'll just die horribly and get it
+       * over with.)
+       */
+      signal(SIGBUS, SIG_DFL);
+      signal(SIGSEGV, SIG_DFL);
+    }
+#endif
+
     walk_stack_frames((lisp_frame *) ptr_from_lispobj(current_fp), (lisp_frame *) (vs_area->high));
     /*      walk_other_areas();*/
   }
@@ -163,9 +179,5 @@ plbt_sp(LispObj current_fp)
 void
 plbt(ExceptionInformation *xp)
 {
-#ifdef X8632
-  plbt_sp(xpGPR(xp,Iebp));
-#else
-  plbt_sp(xpGPR(xp,Irbp));
-#endif
+  plbt_sp(xpGPR(xp, Ifp));
 }
