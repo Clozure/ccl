@@ -406,8 +406,8 @@
                (:signed-halfword (%get-signed-word result 0))
                (:unsigned-fullword (%get-unsigned-long result 0))
                (:signed-fullword (%get-signed-long result 0))
-               (:unsigned-doubleword (%get-natural result 0))
-               (:signed-doubleword (%get-signed-natural result 0))
+               (:unsigned-doubleword (%%get-unsigned-longlong result 0))
+               (:signed-doubleword (%%get-signed-longlong result 0))
                (:single-float (%get-single-float result 0))
                (:double-float (%get-double-float result 0))))))))))
 
