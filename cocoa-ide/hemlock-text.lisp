@@ -250,7 +250,7 @@
     #+debug
     (#_NSLog #@"after endEditing on %@, edit-count now = %d" :id self :int edit-count)))
 
-(objc:defmethod (#/noteHemlockInsertionAtPosition:length: :void)
+(objc:defmethod (#/noteHemlockInsertionAtPosition:length:extra: :void)
     ((self xhemlock-text-storage) (pos :<NSI>nteger) (n :<NSI>nteger)
      (extra :<NSI>nteger))
   (declare (ignore extra))
@@ -267,7 +267,7 @@
   (unless *suppress-edit-notifications*
     (textstorage-note-insertion-at-position self pos n)))
 
-(objc:defmethod (#/noteHemlockDeletionAtPosition:length: :void)
+(objc:defmethod (#/noteHemlockDeletionAtPosition:length:extra: :void)
     ((self xhemlock-text-storage) (pos :<NSI>nteger) (n :<NSI>nteger)
      (extra :<NSI>nteger))
   (declare (ignorable extra))
@@ -281,7 +281,7 @@
 					      #$NSTextStorageEditedAttributes)
 				      range (- n)))))
 
-(objc:defmethod (#/noteHemlockModificationAtPosition:length: :void)
+(objc:defmethod (#/noteHemlockModificationAtPosition:length:extra: :void)
     ((self xhemlock-text-storage) (pos :<NSI>nteger) (n :<NSI>nteger)
      (extra :<NSI>nteger))
   (declare (ignorable extra))
@@ -292,7 +292,7 @@
 					      #$NSTextStorageEditedAttributes)
 				      range 0))))
 
-(objc:defmethod (#/noteHemlockAttrChangeAtPosition:length: :void)
+(objc:defmethod (#/noteHemlockAttrChangeAtPosition:length:fontNum: :void)
     ((self xhemlock-text-storage) (pos :<NSI>nteger) (n :<NSI>nteger)
      (fontnum :<NSI>nteger))
   (declare (ignore fontnum))
