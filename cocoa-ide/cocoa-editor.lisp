@@ -1144,8 +1144,7 @@
     (remove-paren-highlight self)))
 
 
-(defmethod compute-temporary-attributes ((self hemlock-textstorage-text-view))
-  (let* ((container (#/textContainer self))
+(defmethod compute-temporary-attributes ((self hemlock-textstorage-text-view))    (let* ((container (#/textContainer self))
          ;; If there's a containing scroll view, use its contentview         
          ;; Otherwise, just use the current view.
          (scrollview (#/enclosingScrollView self))
@@ -1158,6 +1157,7 @@
                       layout glyph-range +null-ptr+))
          (start (ns:ns-range-location char-range))
          (length (ns:ns-range-length char-range)))
+                                                                                    #-cocotron
     (when (> length 0)
       ;; Remove all temporary attributes from the character range
       (#/removeTemporaryAttribute:forCharacterRange:
