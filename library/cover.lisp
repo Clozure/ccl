@@ -687,7 +687,7 @@ written to the output directory.
         (iterate update ((note note))
           (multiple-value-bind (start end) (decode-file-range (code-note-acode-range note))
             (when (and start
-                       (setq start (position-if-not #'whitespacep acode :start start :end end)))
+                       (setq start (position-if-not #'whitespacep acode :start start :end end :key #'code-char)))
               (fill styles (style-for-coverage (code-note-code-coverage note))
                     :start start
                     :end end)))
