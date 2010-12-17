@@ -1110,6 +1110,7 @@
   #+debug (#_NSLog #@"layout complete: container = %@, atend = %d" :id cont :int (if flag 1 0))
   (unless *layout-text-in-background*
     (#/setDelegate: layout +null-ptr+)
+    #-cocotron
     (#/setBackgroundLayoutEnabled: layout nil)))
 
 (defloadvar *paren-highlight-background-color* ())
@@ -1144,7 +1145,9 @@
     (remove-paren-highlight self)))
 
 
-(defmethod compute-temporary-attributes ((self hemlock-textstorage-text-view))    (let* ((container (#/textContainer self))
+(defmethod compute-temporary-attributes ((self hemlock-textstorage-text-view))
+  #-cocotron
+  (let* ((container (#/textContainer self))
          ;; If there's a containing scroll view, use its contentview         
          ;; Otherwise, just use the current view.
          (scrollview (#/enclosingScrollView self))
@@ -1157,7 +1160,6 @@
                       layout glyph-range +null-ptr+))
          (start (ns:ns-range-location char-range))
          (length (ns:ns-range-length char-range)))
-                                                                                    #-cocotron
     (when (> length 0)
       ;; Remove all temporary attributes from the character range
       (#/removeTemporaryAttribute:forCharacterRange:
@@ -1168,30 +1170,30 @@
              (cache (hemlock-buffer-string-cache (slot-value ts 'hemlock-string)))
              (hi::*current-buffer* (buffer-cache-buffer cache)))
         (multiple-value-bind (start-line start-offset)
-                             (update-line-cache-for-index cache start)
+            (update-line-cache-for-index cache start)
           (let* ((end-line (update-line-cache-for-index cache (+ start length))))
             (set-temporary-character-attributes
              layout
              (- start start-offset)
              start-line
-             (hi::line-next end-line))))))
-    (when (eql #$YES (text-view-paren-highlight-enabled self))
-      (let* ((background #&NSBackgroundColorAttributeName)
-             (paren-highlight-left (text-view-paren-highlight-left-pos self))
-             (paren-highlight-right (text-view-paren-highlight-right-pos self))
-             (paren-highlight-color (text-view-paren-highlight-color self))
-	     (attrs (#/dictionaryWithObject:forKey: ns:ns-dictionary
-						    paren-highlight-color
-						    background))
-             (ts (#/textStorage self)))
-        (ns:with-ns-range (left-range paren-highlight-left 1)
-          (ns:with-ns-range (right-range paren-highlight-right 1)
-            (#/beginEditing ts)
-            (#/addAttributes:range: ts attrs left-range)
-            ;(#/edited:range:changeInLength: ts #$NSTextStorageEditedAttributes left-range 0)
-            (#/addAttributes:range: ts attrs right-range)
-            ;(#/edited:range:changeInLength: ts #$NSTextStorageEditedAttributes right-range 0)
-            (#/endEditing ts)))))))
+             (hi::line-next end-line)))))))
+  (when (eql #$YES (text-view-paren-highlight-enabled self))
+    (let* ((background #&NSBackgroundColorAttributeName)
+           (paren-highlight-left (text-view-paren-highlight-left-pos self))
+           (paren-highlight-right (text-view-paren-highlight-right-pos self))
+           (paren-highlight-color (text-view-paren-highlight-color self))
+           (attrs (#/dictionaryWithObject:forKey: ns:ns-dictionary
+                                                  paren-highlight-color
+                                                  background))
+           (ts (#/textStorage self)))
+      (ns:with-ns-range (left-range paren-highlight-left 1)
+        (ns:with-ns-range (right-range paren-highlight-right 1)
+          (#/beginEditing ts)
+          (#/addAttributes:range: ts attrs left-range)
+          ;;(#/edited:range:changeInLength: ts #$NSTextStorageEditedAttributes left-range 0)
+          (#/addAttributes:range: ts attrs right-range)
+          ;;(#/edited:range:changeInLength: ts #$NSTextStorageEditedAttributes right-range 0)
+          (#/endEditing ts))))))
 
 (defmethod update-paren-highlight ((self hemlock-textstorage-text-view))
   (disable-paren-highlight self)
@@ -1290,6 +1292,7 @@
 ;;; end of a range of lines
 ;;; HI::*CURRENT-BUFFER* is bound to the buffer containing START-LINE
 ;;; and END-LINE
+#-cocotron
 (defun set-temporary-character-attributes (layout pos start-line end-line)
   (ns:with-ns-range (range)
     (let* ((color-attribute #&NSForegroundColorAttributeName)
@@ -3489,7 +3492,8 @@
 		 title
 		 string)
   (assume-cocoa-thread)
-  (let* ((doc (#/makeUntitledDocumentOfType:error: self #@"html" +null-ptr+)))
+  (let* ((doc #+cocotron (#/makeUntitledDocumentOfType: self #@"html")
+              #-cocotron (#/makeUntitledDocumentOfType:error: self #@"html" +null-ptr+)))
     (unless (%null-ptr-p doc)
       (#/addDocument: self doc)
       (#/makeWindowControllers doc)

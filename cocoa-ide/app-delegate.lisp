@@ -169,7 +169,8 @@
       (let* ((dc (#/sharedDocumentController ns:ns-document-controller))
 	     (wc nil))
 	(setq top-listener-document
-	      (#/makeUntitledDocumentOfType:error: dc #@"Listener" +null-ptr+))
+              #+cocotron (#/makeUntitledDocumentOfType: dc #@"Listener")
+	      #-cocotron (#/makeUntitledDocumentOfType:error: dc #@"Listener" +null-ptr+))
 	(#/addDocument: dc top-listener-document)
 	(#/makeWindowControllers top-listener-document)
 	(setq wc (#/lastObject (#/windowControllers top-listener-document)))
