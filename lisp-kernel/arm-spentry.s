@@ -4159,6 +4159,7 @@ _exportfn(C(progvsave))
         __(stmdb sp!,{imm0,imm1})
         __(b 9f)
 2:
+        __(orr imm1,imm1,fixnumone) /* force odd */
         __(mov imm1,imm1,lsl #num_subtag_bits-fixnumshift)
         __(orr imm1,imm1,#subtag_u32_vector)
         __(mov temp1,sp)

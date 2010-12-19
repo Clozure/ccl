@@ -210,6 +210,10 @@ check_all_areas(TCR *tcr)
       }
       break;
 
+    case AREA_CSTACK:
+      check_range((LispObj *)a->active, (LispObj *)a->high, true);
+      break;
+
     }
     a = a->succ;
     code = (a->code);
