@@ -143,6 +143,48 @@ check_range(LispObj *start, LispObj *end, Boolean header_allowed)
 }
 
 void
+check_xp(ExceptionInformation *xp)
+{
+  natural *regs = (natural *) xpGPRvector(xp);
+  LispObj lr_value;
+  int r;
+
+  for (r = arg_z; r <= Rfn; r++) {
+    check_node((regs[r]));
+  }
+}
+
+
+
+void
+check_tcrs(TCR *first)
+{
+  xframe_list *xframes;
+  ExceptionInformation *xp;
+  
+  TCR *tcr = first;
+  LispObj *tlb_start,*tlb_end;
+
+  do {
+    xp = tcr->gc_context;
+    if (xp) {
+      check_xp(xp);
+    }
+    for (xframes = (xframe_list *) tcr->xframe; 
+         xframes; 
+         xframes = xframes->prev) {
+      check_xp(xframes->curr);
+    }
+    tlb_start = tcr->tlb_pointer;
+    if (tlb_start) {
+      tlb_end = tlb_start + ((tcr->tlb_limit)>>fixnumshift);
+      check_range(tlb_start,tlb_end,false);
+    }
+    tcr = tcr->next;
+  } while (tcr != first);
+}
+
+void
 check_all_areas(TCR *tcr)
 {
   area *a = active_dynamic_area;
@@ -168,10 +210,15 @@ check_all_areas(TCR *tcr)
       }
       break;
 
+    case AREA_CSTACK:
+      check_range((LispObj *)a->active, (LispObj *)a->high, true);
+      break;
+
     }
     a = a->succ;
     code = (a->code);
   }
+  check_tcrs(tcr);
 }
 
 
