@@ -71,7 +71,7 @@ print_lisp_object(LispObj);
 #define PLATFORM_OS_DARWIN 3
 #define PLATFORM_OS_FREEBSD 4
 #define PLATFORM_OS_WINDOWS 5
-#deffne PLATFORM_OS_ANDROID 6
+#define PLATFORM_OS_ANDROID 6
 
 
 
