@@ -69,7 +69,7 @@
        If true, no setter function is defined for this slot."
   ;There's too much state to keep around here to break it up into little
   ;functions, so what the hell, let's do it all inline...
-  (prog (struct-name type conc-name constructor copier predicate include
+  (prog (struct-name type conc-name constructors copier predicate include
          print-function print-object  named initial-offset boa-constructors print-p
          documentation (slot-list ()) (offset 0) superclasses sd
          refnames)
@@ -78,7 +78,7 @@
       (setq struct-name options options ())
       (setq struct-name (pop options)))
     (unless (symbolp struct-name) (signal-program-error $XNotSym struct-name))
-    (let (name args constructor-p predicate-p)
+    (let (name args no-constructors-p predicate-p)
       (while options
         (if (atom (car options))
           (setq name (%car options) args ())
@@ -91,9 +91,12 @@
           (:constructor
            (when (cddr args) (go bad-options))
            (cond ((cdr args) (push args boa-constructors))
-                 (t (when constructor (go dup-options))
-                    (unless (symbolp (%car args)) (go bad-options))
-                    (setq constructor-p t constructor args))))
+		 ((null args)
+		  (push (concat-pnames "MAKE-" struct-name) constructors))
+		 ((eq (%car args) nil)
+		  (setq no-constructors-p t))
+                 (t (unless (symbolp (%car args)) (go bad-options))
+		    (push (%car args) constructors))))
           (:copier
            (when copier (go dup-options))
            (when (or (cdr args) (not (symbolp (%car args)))) (go bad-options))
@@ -157,10 +160,13 @@
       (setq conc-name
             (if (null conc-name) (%str-cat (symbol-name struct-name) "-")
                 (if (%car conc-name) (string (%car conc-name)))))
-      (unless (and boa-constructors (not constructor-p))
-        (setq constructor
-              (if (null constructor)
-                (concat-pnames "MAKE-" struct-name) (%car constructor))))
+      (when (and no-constructors-p
+		 (or constructors boa-constructors))
+	(error "~s combined with other ~s options"
+	       '(:constructor nil) :constructor))
+      (unless no-constructors-p
+	(unless (or boa-constructors constructors)
+	  (push (concat-pnames "MAKE-" struct-name) constructors)))
       (setq copier
             (if (null copier) (concat-pnames "COPY-" struct-name) (%car copier))))
     ;Process included slots
@@ -240,7 +246,7 @@
                   (ssd-name slot))
                 refnames)))
       (setq refnames (nreverse refnames)))
-    (setq sd (vector type slot-list superclasses offset constructor () refnames))
+    (setq sd (vector type slot-list superclasses offset (car constructors) () refnames))
     (return
      `(progn
 	,@(when (null (sd-type sd))
@@ -262,7 +268,7 @@
         ,.(if predicate (defstruct-predicate sd named predicate env))
         ,.(%defstruct-compile sd refnames env)
         ,.(defstruct-boa-constructors sd boa-constructors env)
-        ,.(if constructor (list (defstruct-constructor sd constructor env)))
+	,.(defstruct-constructors sd constructors env)
        ;; Wait until slot accessors are defined, to avoid
        ;; undefined function warnings in the print function/method.
        (%defstruct-set-print-function
@@ -300,6 +306,10 @@
            (every #'symbolp (cadr class-names)))
     `',(mapcar (lambda (name) (find-class-cell name t)) (cadr class-names))
     class-names))
+
+(defun defstruct-constructors (sd constructors env &aux (list ()))
+  (dolist (c constructors list)
+    (push (defstruct-constructor sd c env) list)))
 
 (defun defstruct-constructor (sd constructor env &aux (offset 0)
                                                       (args ())
