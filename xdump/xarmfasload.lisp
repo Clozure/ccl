@@ -123,7 +123,24 @@
 
 (add-xload-backend *darwinarm-xload-backend*)
 
+(defparameter *androidarm-xload-backend*
+  (make-backend-xload-info
+   :name :androidarm
+   :macro-apply-code-function 'arm-fixup-macro-apply-code
+   :closure-trampoline-code *arm-closure-trampoline-code*
+   :udf-code *arm-udf-code*
+   :default-image-name "ccl:aarm-boot"
+   :default-startup-file-name "level-1.aafsl"
+   :subdirs '("ccl:level-0;ARM;")
+   :compiler-target-name :androidarm
+   :image-base-address #x50000000
+   :nil-relative-symbols arm::*arm-nil-relative-symbols*
+   :static-space-init-function 'arm-initialize-static-space
+   :purespace-reserve (ash 64 20)
+   :static-space-address (- (- arm::nil-value arm::fulltag-nil) (ash 1 12))
+))
 
+(add-xload-backend *androidarm-xload-backend*)
 
 
 #+linuxarm-target

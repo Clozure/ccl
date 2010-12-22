@@ -103,7 +103,8 @@
                         (:solarisx8632 "ccl:solarisx86-headers;")
                         (:freebsdx8632 "ccl:freebsd-headers;")
                         (:linuxarm "ccl:arm-headers;")
-                        (:darwinarm "ccl:darwin-arm-headers;"))
+                        (:darwinarm "ccl:darwin-arm-headers;")
+                       (:androidarm "ccl:android-headers;"))
                     :interface-package-name
                     #.(ftd-interface-package-name *target-ftd*)
                     :attributes

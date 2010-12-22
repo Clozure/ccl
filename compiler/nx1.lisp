@@ -1483,7 +1483,7 @@
    (nx1-ff-call-internal
     address-expression arg-specs-and-result-spec
     (ecase (backend-name *target-backend*)
-      ((:linuxppc32 :linuxarm :darwinarm) (%nx1-operator eabi-ff-call))
+      ((:linuxppc32 :linuxarm :darwinarm :androidarm) (%nx1-operator eabi-ff-call))
       ((:darwinppc32 :linuxppc64 :darwinppc64) (%nx1-operator poweropen-ff-call))
       ((:darwinx8632 :linuxx8632 :win32 :solarisx8632 :freebsdx8632) (%nx1-operator i386-ff-call))
       ((:linuxx8664 :freebsdx8664 :darwinx8664 :solarisx8664 :win64) (%nx1-operator ff-call)))))

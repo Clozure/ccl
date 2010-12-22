@@ -8490,7 +8490,7 @@
                                                                (old-stack (arm2-encode-stack)))
   (let* ((reg (arm2-one-untargeted-reg-form seg size arm::arg_z)))
     (ecase (backend-name *target-backend*)
-      ((:linuxarm :darwinarm) (! alloc-variable-eabi-c-frame reg)))
+      ((:linuxarm :darwinarm :androidarm) (! alloc-variable-eabi-c-frame reg)))
     (arm2-open-undo $undo-arm-c-frame)
     (arm2-undo-body seg vreg xfer body old-stack)))
 

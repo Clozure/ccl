@@ -214,7 +214,7 @@
     res))
 
 ;; Linux-only malloc leak finding
-#+linux-target
+#+(and linux-target (not android-target))
 (progn
 
 ;; (ccl::start-mtrace LOGFILE)

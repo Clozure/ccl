@@ -158,7 +158,7 @@
              (:win32 'ffi-win32)
              (:solarisx8632 'ffi-solarisx8632)
              (:freebsdx8632 'ffi-freebsdx8632)
-             (:linuxarm 'ffi-linuxarm)
+             ((:linuxarm :androidarm) 'ffi-linuxarm)
              (:darwinarm 'ffi-darwinarm)))))
 
 
@@ -250,7 +250,7 @@
                           :freebsdx8632)
              '(x86-error-signal x86-trap-support
                x86-threads-utils x86-callback-support))
-            ((:linuxarm :darwinarm)
+            ((:linuxarm :darwinarm :androidarm)
              '(arm-error-signal arm-trap-support
                arm-threads-utils arm-callback-support)))))
 
@@ -464,7 +464,8 @@
     (:win32 "wx86-boot32.image")
     (:solarisx8632 "sx86-boot32")
     (:freebsdx8632 "fx86-boot32")
-    (:linuxarm "arm-boot")))
+    (:linuxarm "arm-boot")
+    (:androidarm "aarm-boot")))
 
 (defun standard-kernel-name (&optional (target (backend-name *host-backend*)))
   (ecase target
@@ -482,7 +483,9 @@
     (:win32 "wx86cl.exe")
     (:solarisx8632 "sx86cl")
     (:freebsdx8632 "fx86cl")
-    (:linuxarm "armcl")))
+    (:linuxarm "armcl")
+    (:darwinarm "darmcl")
+    (:androidarm "aarmcl")))
 
 (defun standard-image-name (&optional (target (backend-name *host-backend*)))
   (concatenate 'string (pathname-name (standard-kernel-name target)) ".image"))
@@ -503,7 +506,9 @@
     (:win32 "win32")
     (:solarisx8632 "solarisx86")
     (:freebsdx8632 "freebsdx8632")
-    (:linuxarm "linuxarm")))
+    (:linuxarm "linuxarm")
+    (:darwinarm "darwinarm")
+    (:androidarm "androidarm")))
 
 ;;; If we distribute (e.g.) 32- and 64-bit versions for the same
 ;;; machine and OS in the same svn directory, return the name of the
