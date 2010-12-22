@@ -311,13 +311,14 @@
   (let ((sd (gethash class-name %defstructs%)))
     (when sd
       (dolist (refname (sd-refnames sd))
-        (let ((def (assq refname *nx-globally-inline*)))
-          (when def (set-function-info refname nil)))
-        (let ((info (structref-info refname)))
-          (when (accessor-structref-info-p info)
-            (unless (refinfo-r/o (structref-info-refinfo info))
-              (fmakunbound (setf-function-name refname)))
-            (fmakunbound refname))))
+	(unless (sd-refname-in-included-struct-p sd refname)
+	  (let ((def (assq refname *nx-globally-inline*)))
+	    (when def (set-function-info refname nil)))
+	  (let ((info (structref-info refname)))
+	    (when (accessor-structref-info-p info)
+	      (unless (refinfo-r/o (structref-info-refinfo info))
+		(fmakunbound (setf-function-name refname)))
+	      (fmakunbound refname)))))
       #|
       ;; The print-function may indeed have become obsolete,
       ;; but we can't generally remove user-defined code
