@@ -288,9 +288,11 @@
   <!-- =========================================================== -->
   <sect1 id="Building-Everything">
     <title>Building Everything</title>
-    <para>Given that you now have everything you need, do the
-      following in a running &CCL; to bring your Lisp system
-      completely up to date.</para>
+    <para>You now have everything you need.  Start up
+      &CCL; with the <literal>-n</literal> or <literal>--no-init</literal>
+      option to avoid potential interference from code in your init file,
+      and evaluate the following form to bring your Lisp system
+      up to date.</para>
     <programlisting>
 ? (ccl:rebuild-ccl :full t)
     </programlisting>
