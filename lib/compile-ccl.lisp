@@ -549,7 +549,7 @@ not runtime errors reported by a successfully created process."
                (%strerror exit-code))
               #-windows-target
               (:exited
-               (when(= exit-code #$EX_OSERR)
+               (when(= exit-code #-android-target #$EX_OSERR #+android-target 71)
                  "generic OS error in fork/exec")))))
       (when string
         (format nil "Error executing ~a: ~a~&~a" procname string reminder)))))

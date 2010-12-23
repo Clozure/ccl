@@ -349,7 +349,8 @@ given is that of a group to which the current user belongs."
        t
        (pref stat :stat.st_mode)
        (pref stat :stat.st_size)
-       #+(or linux-target solaris-target)
+       #+android-target (pref stat :stat.st_mtime)
+       #+(or (and linux-target (not android-target)) solaris-target)
        (pref stat :stat.st_mtim.tv_sec)
        #-(or linux-target solaris-target)
        (pref stat :stat.st_mtimespec.tv_sec)
@@ -357,7 +358,8 @@ given is that of a group to which the current user belongs."
        (pref stat :stat.st_uid)
        (pref stat :stat.st_blksize)
        #+(or linux-target solaris-target)
-       (round (pref stat :stat.st_mtim.tv_nsec) 1000)
+       (round (pref stat #-android-target :stat.st_mtim.tv_nsec
+                         #+android-target :stat.st_mtime_nsec) 1000)
        #-(or linux-target solaris-target)
        (round (pref stat :stat.st_mtimespec.tv_nsec) 1000)
        (pref stat :stat.st_gid))
@@ -408,9 +410,9 @@ given is that of a group to which the current user belongs."
 (defun %%stat (name stat)
   (with-filename-cstrs ((cname #+windows-target (windows-strip-trailing-slash name) #-windows-target name))
     (%stat-values
-     #+linux-target
+     #+(and linux-target (not android-target))
      (#_ __xstat #$_STAT_VER_LINUX cname stat)
-     #-linux-target
+     #-(and linux-target (not android-target))
      (int-errno-ffcall (%kernel-import target::kernel-import-lisp-stat)
                        :address cname
                        :address stat
@@ -419,9 +421,9 @@ given is that of a group to which the current user belongs."
 
 (defun %%fstat (fd stat)
   (%stat-values
-   #+linux-target
+   #+(and linux-target (not android-target))
    (#_ __fxstat #$_STAT_VER_LINUX fd stat)
-   #-linux-target
+   #-(and linux-target (not android-target))
    (int-errno-ffcall (%kernel-import target::kernel-import-lisp-fstat)
                      :int fd
                      :address stat
@@ -432,9 +434,9 @@ given is that of a group to which the current user belongs."
 (defun %%lstat (name stat)
   (with-filename-cstrs ((cname name))
     (%stat-values
-     #+linux-target
+     #+(and linux-target (not android-target))
      (#_ __lxstat #$_STAT_VER_LINUX cname stat)
-     #-linux-target
+     #-(and linux-target (not android-target))
      (#_lstat cname stat)
      stat)))
 
@@ -499,7 +501,8 @@ given is that of a group to which the current user belongs."
 #-windows-target
 (defun %uts-string (result idx buf)
   (if (>= result 0)
-    (%get-cstring (%inc-ptr buf (* #+linux-target #$_UTSNAME_LENGTH
+    (%get-cstring (%inc-ptr buf (* #+(and linux-target (not android-target)) #$_UTSNAME_LENGTH
+                                   #+android-target (1+ #$__NEW_UTS_LEN)
 				   #+darwin-target #$_SYS_NAMELEN
                                    #+(or freebsd-target solaris-target) #$SYS_NMLN
                                    idx)))
@@ -541,9 +544,14 @@ given is that of a group to which the current user belongs."
   (declare (ignore source-path dest-path)))
 
 
-#+linux-target
+#+(and linux-target (not android-target))
 (defun %uname (idx)
   (%stack-block ((buf (* #$_UTSNAME_LENGTH 6)))  
+    (%uts-string (#_uname buf) idx buf)))
+
+#+android-target
+(defun %uname (idx)
+  (%stack-block ((buf (* (1+ #$__NEW_UTS_LEN) 6)))  
     (%uts-string (#_uname buf) idx buf)))
 
 #+darwin-target
@@ -1036,7 +1044,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
 (progn
   (defun %execvp (argv)
     (#_execvp (%get-ptr argv) argv)
-    (#_exit #$EX_OSERR))
+    (#_exit #-android-target #$EX_OSERR #+android-target 71))
 
   (defun exec-with-io-redirection (new-in new-out new-err argv)
     (#_setpgid 0 0)
@@ -1293,8 +1301,10 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                                      :stopped
                                      :signaled)
                                    signal
-                                   (logtest #-solaris-target #$WCOREFLAG
+                                   (logtest #-(or solaris-target android-target)
+                                            #$WCOREFLAG
                                             #+solaris-target #$WCOREFLG
+                                            #+android-target #x80
                                             statusflags)))))
                        (setf (external-process-%status p) status
                              (external-process-%exit-code p) code
@@ -2093,11 +2103,14 @@ not, why not; and what its result code was if it completed."
   (process-allow-schedule))
 
 (defloadvar *host-page-size*
-    #-windows-target (#_getpagesize)
+    #-(or windows-target android-target)
+    (#_getpagesize)
     #+windows-target
     (rlet ((info #>SYSTEM_INFO))
       (#_GetSystemInfo info)
       (pref info #>SYSTEM_INFO.dwPageSize))
+    #+android-target
+    (#_sysconf #$_SC_PAGE_SIZE)
     )
 
 ;;(assert (= (logcount *host-page-size*) 1))

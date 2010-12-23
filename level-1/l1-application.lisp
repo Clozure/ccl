@@ -166,7 +166,7 @@
 	       (:unknown-option "Unknown option: ~a")
 	       (t "~a"))
 	     opts)
-     #-windows-target #$EX_USAGE #+windows-target #$EXIT_FAILURE
+     #-windows-target #-android-target #$EX_USAGE #+android-target 64 #+windows-target #$EXIT_FAILURE
      (summarize-option-syntax a))))
 	       
 
@@ -260,7 +260,7 @@ Default version returns Clozure CL version info."
   (call-next-method)			; handle help, errors
   (if args
     (%usage-exit (format nil "Unrecognized non-option arguments: ~a" args)
-		 #-windows-target #$EX_USAGE #+windows-target #$EXIT_FAILURE
+		 #-windows-target #-android-target #$EX_USAGE #+android-target 64 #+windows-target #$EXIT_FAILURE
 		 (summarize-option-syntax a))
     (progn
       (setq *load-lisp-init-file* (not (assoc :noinit options))
