@@ -1345,6 +1345,7 @@ unsigned IP address."
 
 #-(or windows-target solaris-target)
 (defun %get-ip-interfaces ()
+  #-android-target
   (rlet ((p :address (%null-ptr)))
     (if (zerop (#_getifaddrs p))
       (unwind-protect
