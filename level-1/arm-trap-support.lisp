@@ -16,6 +16,56 @@
 
 (in-package "CCL")
 
+#+androidarm-target
+(eval-when (:compile-toplevel :execute)
+  (def-foreign-type :__sigset_t
+      (:struct nil
+        (:__val (:array :unsigned-long 32)))) 
+  (def-foreign-type nil
+      (:struct :sigcontext
+        (:trap_no :unsigned-long)
+        (:error_code :unsigned-long)
+        (:oldmask :unsigned-long)
+        (:arm_r0 :unsigned-long)
+        (:arm_r1 :unsigned-long)
+        (:arm_r2 :unsigned-long)
+        (:arm_r3 :unsigned-long)
+        (:arm_r4 :unsigned-long)
+        (:arm_r5 :unsigned-long)
+        (:arm_r6 :unsigned-long)
+        (:arm_r7 :unsigned-long)
+        (:arm_r8 :unsigned-long)
+        (:arm_r9 :unsigned-long)
+        (:arm_r10 :unsigned-long)
+        (:arm_fp :unsigned-long)
+        (:arm_ip :unsigned-long)
+        (:arm_sp :unsigned-long)
+        (:arm_lr :unsigned-long)
+        (:arm_pc :unsigned-long)
+        (:arm_cpsr :unsigned-long)
+        (:fault_address :unsigned-long)))
+  (def-foreign-type :mcontext_t (:struct :sigcontext))
+  (def-foreign-type nil
+      (:struct :sigaltstack
+        (:ss_sp :address)
+        (:ss_flags :int)
+        (:ss_size :size_t)))
+  (def-foreign-type :stack_t (:struct :sigaltstack))
+  (def-foreign-type nil
+      (:struct :ucontext
+        (:uc_flags :unsigned-long)
+        (:uc_link (:* (:struct :ucontext)))
+        (:uc_stack :stack_t)
+        (:uc_mcontext :mcontext_t)
+        (:uc_sigmask :__sigset_t)
+        (:uc_regspace (:array :unsigned-long 128))))
+  (def-foreign-type :ucontext_t (:struct :ucontext)))
+  
+    
+  
+  
+        
+        
 #+linuxarm-target
 (progn
 (defmacro with-xp-registers-and-gpr-offset ((xp register-number)
