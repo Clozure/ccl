@@ -41,7 +41,8 @@
     (,platform-os-solaris . :solaris)
     (,platform-os-darwin . :darwin)
     (,platform-os-freebsd . :freebsd)
-    (,platform-os-windows . :windows)))
+    (,platform-os-windows . :windows)
+    (,platform-os-android . :android)))
 
 (defparameter *platform-cpu-names*
   `((,platform-cpu-ppc . :ppc)
