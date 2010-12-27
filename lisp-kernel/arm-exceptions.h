@@ -85,6 +85,7 @@ handle_trap(ExceptionInformation *, opcode, pc, siginfo_t *);
 #define IS_SET_ALLOCPTR_CAR_RD(i)    (((i)&0x0fff0fff) == 0x050c0001)
 #define IS_SET_ALLOCPTR_RESULT_RD(i) (((i)&0x0fff0fff) == 0x01a0000c)
 #define IS_CLR_ALLOCPTR_TAG(i)       (((i)&0x0fffffff) == 0x03ccc007)
+#define IS_BRANCH_AROUND_ALLOC_TRAP(i) (((i)&0x0fffffff) == 0x0a000000)
 
 
 #define IS_GC_TRAP(i)                (((i)&0x0fffffff) == 0x07f002f0)

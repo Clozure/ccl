@@ -254,9 +254,12 @@ define(`_rplacd',`
 
 
 define(`trap_unless_lisptag_equal',`
+       	new_macro_labels()
 	__(extract_lisptag($3,$1))
         __(cmp $3,#$2)
-	__(uuo_error_reg_not_lisptag(ne,$3,$2))
+        __(beq macro_label(ok))
+	__(uuo_error_reg_not_lisptag(al,$3,$2))
+macro_label(ok):                
 ')
 
 define(`trap_unless_list',`
@@ -264,20 +267,29 @@ define(`trap_unless_list',`
 ')
 
 define(`trap_unless_fixnum',`
+        __(new_macro_labels())
         __(test_fixnum($1))
-        __(uuo_error_reg_not_lisptag(ne,$1,tag_fixnum))
+        __(beq macro_label(ok))
+        __(uuo_error_reg_not_lisptag(al,$1,tag_fixnum))
+macro_label(ok):        
         ')
                 
 define(`trap_unless_fulltag_equal',`
+        new_macro_labels()
 	__(extract_fulltag($3,$1))
         __(cmp $3,#$2)
-        __(uuo_error_reg_not_fulltag(ne,$1,$2))
+        __(beq macro_label(ok))
+        __(uuo_error_reg_not_fulltag(al,$1,$2))
+macro_label(ok):        
 ')
 	
 define(`trap_unless_typecode_equal',`
+        new_macro_labels()
         __(extract_typecode($3,$1))
         __(cmp $3,#$2)
-        __(uuo_error_reg_not_xtype(ne,$2))
+        __(beq macro_label(ok))
+        __(uuo_error_reg_not_xtype(al,$2))
+macro_label(ok):                
 ')
         
 /* "jump" to the code-vector of the function in nfn. */
@@ -311,7 +323,7 @@ define(`funcall_nfn',`
         __(ldreq nfn,[fname,#symbol.fcell])
         __(cmpne imm0,#subtag_function)
         __(ldreq pc,[nfn,#_function.entrypoint])
-        __(uuo_error_not_callable(ne,nfn))
+        __(uuo_error_not_callable(al,nfn))
 
 ')
 
@@ -351,10 +363,13 @@ define(`clear_alloc_tag',`
 ')
 
 define(`Cons',`
+       	new_macro_labels()
         __(add allocptr,allocptr,#-cons.size+fulltag_cons)
         __(ldr allocbase,[rcontext,#tcr.save_allocbase])
         __(cmp allocptr,allocbase)
-        __(uuo_alloc_trap(lo))
+        __(bhi macro_label(ok))
+        __(uuo_alloc_trap(al))
+macro_label(ok):                
         __(str $3,[allocptr,#cons.cdr])
         __(str $2,[allocptr,#cons.car])
         __(mov $1,allocptr)
@@ -387,11 +402,14 @@ define(`Cons',`
 
 
 define(`Misc_Alloc',`
+        new_macro_labels()
 	__(sub $3,$3,#fulltag_misc)
 	__(sub allocptr,allocptr,$3)
         __(ldr allocbase,[rcontext,#tcr.save_allocbase])
         __(cmp allocptr,allocbase)
-        __(uuo_alloc_trap(lo))
+        __(bhi macro_label(ok))
+        __(uuo_alloc_trap(al))
+macro_label(ok):                
 	__(str $2,[allocptr,#misc_header_offset])
 	__(mov $1,allocptr)
 	__(clear_alloc_tag())
@@ -399,10 +417,13 @@ define(`Misc_Alloc',`
 
 /*  Parameters $1, $2 as above; $3 = physical size constant. */
 define(`Misc_Alloc_Fixed',`
+        new_macro_labels()
         __(add allocptr,allocptr,#(-$3)+fulltag_misc)
         __(ldr allocbase,[rcontext,#tcr.save_allocbase])
         __(cmp allocptr,allocbase)
-        __(uuo_alloc_trap(lo))
+        __(bhi macro_label(ok))
+        __(uuo_alloc_trap(al))
+macro_label(ok):                
 	__(str $2,[allocptr,#misc_header_offset])
 	__(mov $1,allocptr)
 	__(clear_alloc_tag())
@@ -438,7 +459,8 @@ macro_label(test):
 define(`check_enabled_pending_interrupt',`
         __(ldr $1,[rcontext,#tcr.interrupt_pending])
         __(cmp $1,0)
-        __(uuo_interrupt_now(gt))
+        __(ble $2)
+        __(uuo_interrupt_now(al))
         ')
         
 define(`check_pending_interrupt',`
@@ -447,7 +469,7 @@ define(`check_pending_interrupt',`
 	__(ldr $1,[$1,$INTERRUPT_LEVEL_BINDING_INDEX])
         __(cmp $1,#0)
         __(blt macro_label(done))
-        __(check_enabled_pending_interrupt($1))
+        __(check_enabled_pending_interrupt($1,macro_label(done)))
 macro_label(done):
 ')
 

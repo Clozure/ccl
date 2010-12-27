@@ -96,11 +96,15 @@ allocptr_displacement(ExceptionInformation *xp)
 {
   pc program_counter = xpPC(xp);
   opcode instr = *program_counter, prev_instr;
+  int delta = -3;
 
   if (IS_ALLOC_TRAP(instr)) {
     /* The alloc trap must have been preceded by a cmp and a
        load from tcr.allocbase. */
-    prev_instr = program_counter[-3];
+    if (IS_BRANCH_AROUND_ALLOC_TRAP(program_counter[-1])) {
+      delta = -4;
+    }
+    prev_instr = program_counter[delta];
 
     if (IS_SUB_RM_FROM_ALLOCPTR(prev_instr)) {
       return -((signed_natural)xpGPR(xp,RM_field(prev_instr)));
@@ -113,7 +117,7 @@ allocptr_displacement(ExceptionInformation *xp)
     if (IS_SUB_FROM_ALLOCPTR(prev_instr)) {
       natural disp = ror(prev_instr&0xff,(prev_instr&0xf00)>>7);
 
-      instr = program_counter[-4];
+      instr = program_counter[delta-1];
       if (IS_SUB_LO_FROM_ALLOCPTR(instr)) {
         return -((signed_natural)(disp | (instr & 0xff)));
       }
