@@ -1393,6 +1393,62 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context, TCR 
   }
 }
 
+
+void
+sigill_handler(int signum, siginfo_t *info, ExceptionInformation  *xp)
+{
+  pc program_counter = xpPC(xp);
+  opcode instr = *program_counter;
+
+  if (IS_UUO(instr)) {
+    natural psr = xpPSR(xp);
+    Boolean opcode_matched_condition = false,
+      flip = ((instr & (1<<28)) != 0);
+   
+
+    switch (instr >> 29) {
+    case 0: 
+      opcode_matched_condition = ((psr & PSR_Z_MASK) != 0);
+      break;
+    case 1:
+      opcode_matched_condition = ((psr & PSR_C_MASK) != 0);
+      break;
+    case 2:
+      opcode_matched_condition = ((psr & PSR_N_MASK) != 0);
+      break;
+    case 3:
+      opcode_matched_condition = ((psr & PSR_V_MASK) != 0);
+      break;
+    case 4:
+      opcode_matched_condition = (((psr & PSR_C_MASK) != 0) &&
+                                  ((psr & PSR_Z_MASK) == 0));
+      break;
+    case 5:
+      opcode_matched_condition = (((psr & PSR_N_MASK) != 0) ==
+                                  ((psr & PSR_V_MASK) != 0));
+      break;
+    case 6:
+      opcode_matched_condition = ((((psr & PSR_N_MASK) != 0) ==
+                                   ((psr & PSR_V_MASK) != 0)) &&
+                                  ((psr & PSR_Z_MASK) == 0));
+      break;
+    case 7:
+      opcode_matched_condition = true;
+      flip = false;
+      break;
+    }
+    if (flip) {
+      opcode_matched_condition = !opcode_matched_condition;
+    }
+    if (!opcode_matched_condition) {
+      adjust_exception_pc(xp,4);
+      return;
+    }
+  }
+  signal_handler(signum,info,xp, NULL, 0, 0);
+}
+
+
 #ifdef USE_SIGALTSTACK
 void
 invoke_handler_on_main_stack(int signo, siginfo_t *info, ExceptionInformation *xp, void *return_address, void *handler)
@@ -1722,7 +1778,7 @@ install_pmcl_exception_handlers()
 #endif
     ;
   if (install_signal_handlers_for_exceptions) {
-    install_signal_handler(SIGILL, (void *)signal_handler, true, false);
+    install_signal_handler(SIGILL, (void *)sigill_handler, true, false);
     install_signal_handler(SIGSEGV, (void *)ALTSTACK(signal_handler),true, true);
 
   }
