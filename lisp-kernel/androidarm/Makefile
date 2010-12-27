@@ -13,17 +13,21 @@
 #   The LLGPL is also available online at
 #   http://opensource.franz.com/preamble.html
 
-NDK = /usr/local/android-ndk-r4b
-HOST = linux-x86
+NDK = /usr/local/android-ndk-r5
+HOST = darwin-x86
 ANDROIDVERSION = android-8
-NDKLIB = $(NDK)/build/platforms/$(ANDROIDVERSION)/arch-arm/usr/lib
+SYSROOT = $(NDK)/platforms/$(ANDROIDVERSION)/arch-arm
+NDKLIB = $(SYSROOT)/usr/lib
+NDKINC = $(SYSROOT)/usr/include
+ABI = arm-linux-androideabi
+NDKBIN = $(NDK)/toolchains/$(ABI)-4.4.3/prebuilt/$(HOST)/bin/$(ABI)-
 VPATH = ../
 RM = /bin/rm
-AS = $(NDK)/build/prebuilt/$(HOST)/arm-eabi-4.4.0/bin/arm-eabi-as
-CC = $(NDK)/build/prebuilt/$(HOST)/arm-eabi-4.4.0/bin/arm-eabi-gcc
-LD = $(NDK)/build/prebuilt/$(HOST)/arm-eabi-4.4.0/bin/arm-eabi-ld
+AS = $(NDKBIN)as
+CC = $(NDKBIN)gcc --sysroot $(SYSROOT)
+LD = $(NDKBIN)ld
 M4 = m4
-ASFLAGS = -mfpu=vfpv2
+ASFLAGS = -mfpu=vfp
 M4FLAGS = -DLINUX -DARM -DANDROID
 CDEFINES = -DLINUX -DARM -DANDROID -D_REENTRANT -D_GNU_SOURCE -DUSE_FUTEX
 CDEBUG = -g
@@ -49,7 +53,7 @@ endif
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -include ../$(PLATFORM_H) -I. -I$(NDK)/build/platforms/$(ANDROIDVERSION)/arch-arm/usr/include -c $<  $(CDEFINES) $(CDEBUG) $(COPT) -fpic  $(WFORMAT)  -o $@
+	$(CC) -include ../$(PLATFORM_H) -I. -I$(NDKINC) -c $<  $(CDEFINES) $(CDEBUG) $(COPT) -fpic  $(WFORMAT)  -o $@
 
 # -nostdinc -isystem ${NDK}/usr/gcc-include -isystem $(NDK)/usr/include
 SPOBJ = pad.o  arm-spentry.o arm-subprims.o
@@ -72,7 +76,6 @@ CHEADERS = area.h bits.h arm-constants.h lisp-errors.h gc.h lisp.h \
 
 KSPOBJ = $(SPOBJ)
 all:	../../aarmcl
-
 
 # No:
 

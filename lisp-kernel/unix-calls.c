@@ -145,7 +145,7 @@ lisp_sigexit(int signum)
   return kill(getpid(), signum);
 }
 
-#ifdef ANDROID
+#ifdef ANDROID_NEEDS_SIGALTSTACK
 /* I for one welcome our new Android overlords. */
 #ifndef __NR_sigaltstack
 #define __NR_sigaltstack		(__NR_SYSCALL_BASE+186)
