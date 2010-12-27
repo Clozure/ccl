@@ -396,7 +396,9 @@
   (ldr temp (:@ v (:$ arm::misc-header-offset)))
   (bic temp temp (:$ arm::subtag-mask))
   (cmp idx (:lsr temp (:$ (- arm::num-subtag-bits arm::fixnum-shift))))
-  (uuo-error-vector-bounds (:? hs) idx v))
+  (blo :ok)
+  (uuo-error-vector-bounds idx v)
+  :ok)
 
 (define-arm-vinsn (2d-unscaled-index :predicatable)
     (((dest :imm)
@@ -449,10 +451,14 @@
                                    (header :lisp)))
   (ldr dim (:@ header (:$ (+ arm::misc-data-offset (* 4 arm::arrayH.dim0-cell)))))
   (cmp i dim)
-  (uuo-error-array-bounds (:? hs) i header)
+  (blo :ok1)
+  (uuo-error-array-bounds  i header)
+  :ok1
   (ldr dim (:@ header (:$ (+ arm::misc-data-offset (* 4 (1+ arm::arrayH.dim0-cell))))))
   (cmp j dim)
-  (uuo-error-array-bounds (:? hs) j header)
+  (blo :ok2)
+  (uuo-error-array-bounds  j header)
+  :ok2
   (mov dim (:asr dim (:$ arm::fixnumshift))))
 
 (define-arm-vinsn check-3d-bound (((dim1 :u32)
@@ -463,13 +469,19 @@
                                    (header :lisp)))
   (ldr dim1 (:@ header (:$ (+ arm::misc-data-offset (* 4 arm::arrayH.dim0-cell)))))
   (cmp i dim1)
-  (uuo-error-array-bounds (:? hs) i header)
+  (blo :ok1)
+  (uuo-error-array-bounds  i header)
+  :ok1
   (ldr dim1 (:@ header (:$ (+ arm::misc-data-offset (* 4 (1+ arm::arrayH.dim0-cell))))))
   (cmp j dim1)
-  (uuo-error-array-bounds (:? hs) i header)
+  (blo :ok2)
+  (uuo-error-array-bounds  i header)
+  :ok2
   (ldr dim2 (:@ header (:$ (+ arm::misc-data-offset (* 4 (+ 2 arm::arrayH.dim0-cell))))))
   (cmp k dim2)
-  (uuo-error-array-bounds (:? hs) i header)
+  (blo :ok3)
+  (uuo-error-array-bounds  i header)
+  :ok3
   (mov dim1 (:asr dim1 (:$ arm::fixnumshift)))
   (mov dim2 (:asr dim2 (:$ arm::fixnumshift))))
 
@@ -477,13 +489,6 @@
     (((dest :lisp))
      ((header :lisp)))
   (ldr dest (:@ header (:$ arm::arrayH.data-vector))))
-  
-
-
-
-
-  
-
 
   
 (define-arm-vinsn (node-slot-ref :predicatable)
@@ -501,7 +506,9 @@
   (add scaled index (:$ arm::misc-data-offset))
   (ldr dest (:@ instance scaled))
   (cmp dest (:$ arm::slot-unbound-marker))
-  (uuo-error-slot-unbound (:? eq) dest instance index))
+  (bne :ok)
+  (uuo-error-slot-unbound  dest instance index)
+  :ok)
 
 
 ;;; Untagged memory reference & assignment.
@@ -824,7 +831,9 @@
   (and bit-shift bit-shift (:lsr bit-index (:$ arm::fixnumshift)))
   (mov mask (:lsl mask bit-shift))
   (ldrb bit-shift (:@ src (:lsr bit-index (:$ (+ 3 arm::fixnumshift)))))
-  (uuo-error-reg-not-xtype (:? hi) val (:$ arm::xtype-bit))
+  (bls :ok)
+  (uuo-error-reg-not-xtype  val (:$ arm::xtype-bit))
+  :ok
   (orrne bit-shift bit-shift mask)
   (biceq bit-shift bit-shift mask)
   (strb bit-shift (:@ src (:lsr bit-index (:$ (+ 3 arm::fixnumshift))))))
@@ -878,7 +887,9 @@
                                   ((object :lisp))
                                   ())
   (tst object (:$ arm::tagmask))
-  (uuo-cerror-reg-not-lisptag (:? ne) object (:$ arm::tag-fixnum)))
+  (beq :ok)
+  (uuo-cerror-reg-not-lisptag object (:$ arm::tag-fixnum))
+  :ok)
 
 (define-arm-vinsn require-integer (()
                                    ((object :lisp))
@@ -888,7 +899,8 @@
   (cmp tag (:$ arm::tag-misc))
   (ldrbeq tag (:@ object (:$ arm::misc-subtag-offset)))
   (cmp tag (:$ arm::subtag-bignum))
-  (uuo-cerror-reg-not-xtype (:? ne) object (:$ arm::xtype-integer))
+  (beq :got-it)
+  (uuo-cerror-reg-not-xtype object (:$ arm::xtype-integer))
   :got-it)
 
 (define-arm-vinsn require-simple-vector (()
@@ -898,7 +910,9 @@
   (cmp tag (:$ arm::tag-misc))
   (ldrbeq tag (:@ object (:$ arm::misc-subtag-offset)))
   (cmp tag (:$ arm::subtag-simple-vector))
-  (uuo-cerror-reg-not-xtype (:? ne) object (:$ arm::subtag-simple-vector)))
+  (beq :ok)
+  (uuo-cerror-reg-not-xtype object (:$ arm::subtag-simple-vector))
+  :ok)
 
 (define-arm-vinsn require-simple-string (()
                                          ((object :lisp))
@@ -907,7 +921,9 @@
   (cmp tag (:$ arm::tag-misc))
   (ldrbeq tag (:@ object (:$ arm::misc-subtag-offset)))
   (cmp tag (:$ arm::subtag-simple-base-string))
-  (uuo-cerror-reg-not-xtype (:? ne) object (:$ arm::subtag-simple-base-string)))
+  (beq :ok)
+  (uuo-cerror-reg-not-xtype object (:$ arm::subtag-simple-base-string))
+  :ok)
 
   
 (define-arm-vinsn require-real (()
@@ -922,7 +938,9 @@
   (movt realtags (:$ (ldb (byte 16 16) arm::real-tags-mask)))
   (ldrbeq tag (:@ object (:$ arm::misc-subtag-offset)))
   (tst realtags (:lsl mask tag))
-  (uuo-cerror-reg-not-xtype (:? eq) object (:$ arm::xtype-real)))
+  (bne :ok)
+  (uuo-cerror-reg-not-xtype object (:$ arm::xtype-real))
+  :ok)
 
 (define-arm-vinsn require-number (()
                                   ((object :lisp))
@@ -936,7 +954,9 @@
   (movt numtags (:$ (ldb (byte 16 16) arm::numeric-tags-mask)))
   (ldrbeq tag (:@ object (:$ arm::misc-subtag-offset)))
   (tst numtags (:lsl mask tag))
-  (uuo-cerror-reg-not-xtype (:? eq) object (:$ arm::xtype-number)))
+  (bne :ok)
+  (uuo-cerror-reg-not-xtype object (:$ arm::xtype-number))
+  :ok)
 
 
 (define-arm-vinsn require-list (()
@@ -944,7 +964,9 @@
                                 ((tag :u8)))
   (and tag object (:$ arm::tagmask))
   (cmp tag (:$ arm::tag-list))
-  (uuo-cerror-reg-not-lisptag (:? ne) object (:$ arm::tag-list)))
+  (beq :ok)
+  (uuo-cerror-reg-not-lisptag object (:$ arm::tag-list))
+  :ok)
 
 (define-arm-vinsn require-symbol (()
                                   ((object :lisp))
@@ -954,14 +976,18 @@
   (ldrbeq tag (:@ object (:$ arm::misc-subtag-offset)))
   (cmpeq tag (:$ arm::subtag-symbol))
   (cmpne object (:$ arm::nil-value))
-  (uuo-cerror-reg-not-xtype (:? ne) object (:$ arm::subtag-symbol)))
+  (beq :ok)
+  (uuo-cerror-reg-not-xtype object (:$ arm::subtag-symbol))
+  :ok)
 
 (define-arm-vinsn require-character (()
                                      ((object :lisp))
                                      ((tag :u8)))
   (and tag object (:$ arm::subtag-mask))
   (cmp tag (:$ arm::subtag-character))
-  (uuo-cerror-reg-not-xtype (:? ne) object (:$ arm::subtag-character)))
+  (beq :ok)
+  (uuo-cerror-reg-not-xtype object (:$ arm::subtag-character))
+  :ok)
 
 
 (define-arm-vinsn require-s8 (()
@@ -970,7 +996,9 @@
   (mov tag (:lsl object (:$ (- arm::nbits-in-word (+ 8 arm::fixnumshift)))))
   (mov tag (:asr tag (:$ (- arm::nbits-in-word (+ 8 arm::fixnumshift)))))
   (cmp object (:lsl tag (:$ arm::fixnumshift)))
-  (uuo-cerror-reg-not-xtype (:? ne)  object (:$ arm::xtype-s8)))
+  (beq :ok)
+  (uuo-cerror-reg-not-xtype object (:$ arm::xtype-s8))
+  :ok)
 
 
 (define-arm-vinsn require-u8 (()
@@ -978,7 +1006,9 @@
                               ((temp :u32)))
   (mov temp (:$ (lognot (ash #xff arm::fixnumshift))))
   (tst object temp)
-  (uuo-cerror-reg-not-xtype (:? ne) object (:$ arm::xtype-u8)))
+  (beq :ok)
+  (uuo-cerror-reg-not-xtype object (:$ arm::xtype-u8))
+  :ok)
 
 (define-arm-vinsn require-s16 (()
                                ((object :lisp))
@@ -986,7 +1016,9 @@
   (mov tag (:lsl object (:$ (- arm::nbits-in-word (+ 16 arm::fixnumshift)))))
   (mov tag (:asr tag (:$ (- arm::nbits-in-word 16))))
   (cmp object (:lsl tag (:$ arm::fixnumshift)))
-  (uuo-cerror-reg-not-xtype (:? ne) object (:$ arm::xtype-s16)))
+  (beq :ok)
+  (uuo-cerror-reg-not-xtype object (:$ arm::xtype-s16))
+  :ok)
 
 (define-arm-vinsn require-u16 (()
                                ((object :lisp))
@@ -994,7 +1026,9 @@
   (mov tag (:$ (lognot (ash #xff arm::fixnumshift))))
   (bic tag tag (:$ (ash #xff (+ 8 arm::fixnumshift))))
   (tst object tag)
-  (uuo-cerror-reg-not-xtype (:? ne) object (:$ arm::xtype-u16)))
+  (beq :ok)
+  (uuo-cerror-reg-not-xtype object (:$ arm::xtype-u16))
+  :ok)
 
 (define-arm-vinsn require-s32 (()
                                ((src :lisp))
@@ -1006,7 +1040,8 @@
   (movw tag (:$ arm::one-digit-bignum-header))
   (ldreq header (:@ src (:$ arm::misc-header-offset)))
   (cmpeq tag header)
-  (uuo-cerror-reg-not-xtype (:? ne) src (:$ arm::xtype-s32))
+  (beq :got-it)
+  (uuo-cerror-reg-not-xtype src (:$ arm::xtype-s32))
   :got-it)
 
 
@@ -1034,7 +1069,8 @@
   (ldr temp (:@ src (:$ (+ 4 arm::misc-data-offset))))
   (cmp temp (:$ 0))
   :bad-if-ne
-  (uuo-cerror-reg-not-xtype (:? ne) src (:$ arm::xtype-u32))
+  (beq :got-it)
+  (uuo-cerror-reg-not-xtype src (:$ arm::xtype-u32))
   :got-it)
 
 (define-arm-vinsn require-s64 (()
@@ -1053,6 +1089,7 @@
   (beq :got-it)
   (cmp header (:$ 2))
   :bad-if-ne
+  (beq :got-it)
   (uuo-cerror-reg-not-xtype src (:$ arm::xtype-s64))
   :got-it)
 
@@ -1085,7 +1122,8 @@
   :three
   (cmp temp (:$ 0))
   :bad-if-ne
-  (uuo-cerror-reg-not-xtype (:? ne) src (:$ arm::xtype-s64))
+  (beq :got-it)
+  (uuo-cerror-reg-not-xtype src (:$ arm::xtype-s64))
   :got-it)
 
 
@@ -1098,7 +1136,7 @@
   (cmp object (:$ (ash char-code-limit arm::fixnumshift)))
   (bls :got-it)
   :bad
-  (uuo-error-reg-not-xtype (:? al) object (:$ arm::xtype-char-code))
+  (uuo-error-reg-not-xtype object (:$ arm::xtype-char-code))
   :got-it)
 
 
@@ -1131,22 +1169,25 @@
   (beq :got-it)
   (and temp src (:$ arm::tagmask))
   (cmp temp (:$ arm::tag-misc))
-  (uuo-error-reg-not-xtype (:? ne) src (:$ arm::xtype-u32))
+  (beq :is-uvector)
+  (uuo-error-reg-not-xtype src (:$ arm::xtype-u32))
+  :is-uvector
   (ldr dest (:@ src (:$ arm::misc-header-offset)))
   (movw temp (:$ arm::one-digit-bignum-header))
   (cmp dest temp)
   (bne :maybe-two-digit)
   (ldr dest (:@ src (:$ arm::misc-data-offset)))
   (tst dest (:$ (ash 1 31)))
-  (uuo-error-reg-not-xtype (:? ne) src (:$ arm::xtype-u32))
-  (b  :got-it)
+  (beq :got-it)
+  (uuo-error-reg-not-xtype src (:$ arm::xtype-u32))
   :maybe-two-digit
   (add temp temp (:$ (ash 1 arm::num-subtag-bits)))
   (cmp dest temp)
   (ldreq temp (:@ src (:$ (+ arm::misc-data-offset 4))))
   (cmpeq temp (:$ 0))
   (ldreq dest (:@ src (:$ arm::misc-data-offset)))
-  (uuo-error-reg-not-xtype (:? ne) src (:$ arm::xtype-u32))
+  (beq :got-it)
+  (uuo-error-reg-not-xtype src (:$ arm::xtype-u32))
   :got-it)
 
 ;;; an object is of type (SIGNED-BYTE 32) iff
@@ -1164,7 +1205,8 @@
   (ldreq tag (:@ src (:$ arm::misc-header-offset)))
   (cmpeq dest tag)
   (ldreq dest (:@ src (:$ arm::misc-data-offset)))
-  (uuo-error-reg-not-xtype (:? ne) src (:$ arm::xtype-s32))
+  (beq :got-it)
+  (uuo-error-reg-not-xtype src (:$ arm::xtype-s32))
   :got-it)
 
 
@@ -1174,14 +1216,18 @@
   (mov dest (:lsl src (:$ (- 16 arm::fixnumshift))))
   (mov dest (:lsr dest (:$ 16)))
   (cmp src (:lsl dest (:$ arm::fixnumshift)))
-  (uuo-error-reg-not-xtype (:? ne) src (:$ arm::xtype-u16)))
+  (beq :ok)
+  (uuo-error-reg-not-xtype src (:$ arm::xtype-u16))
+  :ok)
 
 (define-arm-vinsn unbox-s16 (((dest :s16))
                              ((src :lisp)))
   (mov dest (:lsl src (:$ (- arm::nbits-in-word (+ 16 arm::fixnumshift)))))
   (mov dest (:asr dest (:$ 16)))
   (cmp src (:lsl dest (:$ arm::fixnumshift)))
-  (uuo-error-reg-not-xtype (:? ne) src (:$ arm::xtype-s16)))
+  (beq :ok)
+  (uuo-error-reg-not-xtype src (:$ arm::xtype-s16))
+  :ok)
 
   
   
@@ -1190,7 +1236,9 @@
   (mov dest (:lsl src (:$ (- 24 arm::fixnumshift))))
   (mov dest (:lsr dest (:$ 24)))
   (cmp src (:lsl dest (:$ arm::fixnumshift)))
-  (uuo-error-reg-not-xtype (:? ne) src (:$ arm::xtype-u8)))
+  (beq :ok)
+  (uuo-error-reg-not-xtype src (:$ arm::xtype-u8))
+  :ok)
 
 (define-arm-vinsn (%unbox-u8 :predicatable)
     (((dest :u8))
@@ -1203,21 +1251,27 @@
   (mov dest (:lsl src (:$ (- 24 arm::fixnumshift))))
   (mov dest (:asr dest (:$ 24)))
   (cmp src (:lsl dest (:$ arm::fixnumshift)))
-  (uuo-error-reg-not-xtype (:? ne) src (:$ arm::xtype-s8)))
+  (beq :ok)
+  (uuo-error-reg-not-xtype src (:$ arm::xtype-s8))
+  :ok)
 
 (define-arm-vinsn unbox-base-char (((dest :u32))
                                    ((src :lisp)))
   (and dest src (:$ arm::subtag-mask))
   (cmp dest (:$ arm::subtag-character))
   (mov dest (:lsr src (:$ arm::charcode-shift)))
-  (uuo-error-reg-not-xtype (:? ne) src (:$ arm::subtag-character)))
+  (beq :ok)
+  (uuo-error-reg-not-xtype src (:$ arm::subtag-character))
+  :ok)
 
 
 (define-arm-vinsn unbox-bit (((dest :u32))
                              ((src :lisp)))
   (cmp src (:$ arm::fixnumone))
   (mov dest (:lsr src (:$ arm::fixnumshift)))
-  (uuo-error-reg-not-xtype (:? hi) src (:$ arm::xtype-bit)))
+  (bls :ok)
+  (uuo-error-reg-not-xtype src (:$ arm::xtype-bit))
+  :ok)
 
 
 
@@ -1292,14 +1346,18 @@
 (define-arm-vinsn trap-unless-fixnum (()
                                       ((object :lisp)))
   (tst object (:$ arm::fixnummask))
-  (uuo-error-reg-not-lisptag (:? ne) object (:$ arm::tag-fixnum)))
+  (beq :ok)
+  (uuo-error-reg-not-lisptag object (:$ arm::tag-fixnum))
+  :ok)
 
 (define-arm-vinsn trap-unless-list (()
                                     ((object :lisp))
                                     ((tag :u8)))
   (and tag object (:$ arm::tagmask))
   (cmp tag (:$ arm::tag-list))
-  (uuo-error-reg-not-lisptag (:? ne) object (:$ arm::tag-list)))
+  (beq :ok)
+  (uuo-error-reg-not-lisptag object (:$ arm::tag-list))
+  :ok)
 
 (define-arm-vinsn trap-unless-single-float (()
                                             ((object :lisp))
@@ -1308,7 +1366,9 @@
   (cmp tag (:$ arm::tag-misc))
   (ldrbeq tag (:@ object (:$ arm::misc-subtag-offset)))
   (cmp tag (:$ arm::subtag-single-float))
-  (uuo-error-reg-not-xtype (:? ne) object (:$ arm::subtag-single-float)))
+  (beq :ok)
+  (uuo-error-reg-not-xtype object (:$ arm::subtag-single-float))
+  :ok)
 
 (define-arm-vinsn trap-unless-double-float (()
                                             ((object :lisp))
@@ -1317,7 +1377,9 @@
   (cmp tag (:$ arm::tag-misc))
   (ldrbeq tag (:@ object (:$ arm::misc-subtag-offset)))
   (cmp tag (:$ arm::subtag-double-float))
-  (uuo-error-reg-not-xtype (:? ne) object (:$ arm::subtag-double-float)))
+  (beq :ok)
+  (uuo-error-reg-not-xtype object (:$ arm::subtag-double-float))
+  :ok)
 
 
 (define-arm-vinsn trap-unless-array-header (()
@@ -1327,7 +1389,9 @@
   (cmp tag (:$ arm::tag-misc))
   (ldrbeq tag (:@ object (:$ arm::misc-subtag-offset)))
   (cmp tag (:$ arm::subtag-arrayH))
-  (uuo-error-reg-not-xtype (:? ne) object (:$ arm::subtag-arrayH)))
+  (beq :ok)
+  (uuo-error-reg-not-xtype object (:$ arm::subtag-arrayH))
+  :ok)
 
 (define-arm-vinsn trap-unless-macptr (()
                                       ((object :lisp))
@@ -1336,7 +1400,9 @@
   (cmp tag (:$ arm::tag-misc))
   (ldrbeq tag (:@ object (:$ arm::misc-subtag-offset)))
   (cmp tag (:$ arm::subtag-macptr))
-  (uuo-error-reg-not-xtype (:? ne) object (:$ arm::subtag-macptr)))
+  (beq :ok)
+  (uuo-error-reg-not-xtype object (:$ arm::subtag-macptr))
+  :ok)
 
 
 
@@ -1345,7 +1411,9 @@
                                        ((tag :u8)))
   (and tag object (:$ arm::tagmask))
   (cmp tag (:$ arm::tag-misc))
-  (uuo-error-reg-not-lisptag (:? ne) object (:$ arm::tag-misc)))
+  (beq :ok)
+  (uuo-error-reg-not-lisptag object (:$ arm::tag-misc))
+  :ok)
 
 
 
@@ -1354,14 +1422,18 @@
                                          ((tag :u8)))
   (and tag object (:$ arm::subtag-mask))
   (cmp tag (:$ arm::subtag-character))
-  (uuo-error-reg-not-xtype (:? ne) object (:$ arm::subtag-character)))
+  (beq :ok)
+  (uuo-error-reg-not-xtype object (:$ arm::subtag-character))
+  :ok)
 
 (define-arm-vinsn trap-unless-cons (()
                                     ((object :lisp))
                                     ((tag :u8)))
   (and tag object (:$ arm::fulltagmask))
   (cmp tag (:$ arm::fulltag-cons))
-  (uuo-error-reg-not-fulltag (:? ne) object (:$ arm::fulltag-cons)))
+  (beq :ok)
+  (uuo-error-reg-not-fulltag  object (:$ arm::fulltag-cons))
+  :ok)
 
 (define-arm-vinsn trap-unless-typecode= (()
                                          ((object :lisp)
@@ -1371,7 +1443,9 @@
   (cmp tag (:$ arm::tag-misc))
   (ldrbeq tag (:@ object (:$ arm::misc-subtag-offset)))
   (cmp tag (:$ tagval))
-  (uuo-error-reg-not-xtype (:? ne) object (:$ tagval)))
+  (beq :ok)
+  (uuo-error-reg-not-xtype object (:$ tagval))
+  :ok)
   
 (define-arm-vinsn (subtract-constant :predicatable)
     (((dest :imm))
@@ -1793,7 +1867,9 @@
   (sub allocptr allocptr (:$ (- arm::value-cell.size arm::fulltag-misc)))
   (ldr dest (:@ rcontext (:$ arm::tcr.save-allocbase)))
   (cmp allocptr dest)
-  (uuo-alloc-trap (:? lo))
+  (bhi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
   (str header (:@ allocptr (:$ arm::misc-header-offset)))
   (mov dest allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
@@ -2060,7 +2136,9 @@
   (sub allocptr allocptr (:$ (- arm::cons.size arm::fulltag-cons)))
   (ldr allocbase (:@ rcontext (:$ arm::tcr.save-allocbase)))
   (cmp allocptr allocbase)
-  (uuo-alloc-trap (:? lo))
+  (bhi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
   (str newcdr (:@ allocptr (:$ arm::cons.cdr)))
   (str newcar (:@ allocptr (:$ arm::cons.car)))
   (mov dest allocptr)
@@ -2091,7 +2169,9 @@
                                               arm::fulltag-misc)))))
   (ldr dest (:@ rcontext (:$ arm::tcr.save-allocbase)))
   (cmp allocptr dest)
-  (uuo-alloc-trap (:? lo))
+  (bhi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
   (str Rheader (:@ allocptr (:$ arm::misc-header-offset)))
   (mov dest allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
@@ -2125,7 +2205,9 @@
                                               arm::fulltag-misc)))))
   (ldr dest (:@ rcontext (:$ arm::tcr.save-allocbase)))
   (cmp allocptr dest)
-  (uuo-alloc-trap (:? lo))
+  (bhi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
   (str Rheader (:@ allocptr (:$ arm::misc-header-offset)))
   (mov dest allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask)))
@@ -2242,7 +2324,9 @@
   (add allocptr allocptr (:$ (- arm::fulltag-misc 8)))
   (ldr result (:@ rcontext (:$ arm::tcr.save-allocbase)))
   (cmp allocptr result)
-  (uuo-alloc-trap (:? lo))
+  (bhi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
   (str temp (:@ allocptr (:$ arm::misc-header-offset)))
   (mov result allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
@@ -2267,7 +2351,9 @@
   (sub allocptr allocptr size)
   (ldr result (:@ rcontext (:$ arm::tcr.save-allocbase)))
   (cmp allocptr result)
-  (uuo-alloc-trap (:? lo))
+  (bhi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
   (str temp (:@ allocptr (:$ arm::misc-header-offset)))
   (mov result allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
@@ -2312,7 +2398,9 @@
   (sub allocptr allocptr (:$ (- arm::double-float.size arm::fulltag-misc)))
   (ldr result (:@ rcontext (:$ arm::tcr.save-allocbase)))
   (cmp allocptr result)
-  (uuo-alloc-trap (:? lo))
+  (bhi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
   (str header-temp (:@ allocptr (:$ arm::misc-header-offset)))
   (mov result allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
@@ -2331,7 +2419,9 @@
   (sub allocptr allocptr (:$ (- arm::single-float.size arm::fulltag-misc)))
   (ldr result (:@ rcontext (:$ arm::tcr.save-allocbase)))
   (cmp allocptr result)
-  (uuo-alloc-trap (:? lo))
+  (bhi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
   (str header-temp (:@ allocptr (:$ arm::misc-header-offset)))
   (mov result allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
@@ -2368,7 +2458,9 @@
   (cmp tag (:$ arm::tag-misc))
   (ldrbeq tag (:@ source (:$ arm::misc-subtag-offset)))
   (cmp tag (:$ arm::subtag-double-float))
-  (uuo-error-reg-not-xtype (:? ne) source (:$ arm::subtag-double-float))
+  (beq :ok)
+  (uuo-error-reg-not-xtype source (:$ arm::subtag-double-float))
+  :ok
   (add lr source (:$ arm::double-float.pad))
   (fldd target (:@ lr (:$ (- arm::double-float.value arm::double-float.pad)))))
   
@@ -2466,7 +2558,9 @@
   (sub allocptr allocptr (:$ (- arm::macptr.size arm::fulltag-misc)))
   (ldr dest (:@ rcontext (:$ arm::tcr.save-allocbase)))
   (cmp allocptr dest)
-  (uuo-alloc-trap (:? lo))
+  (bhi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
   (str header (:@ allocptr (:$ arm::misc-header-offset)))
   (mov dest allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
@@ -2532,7 +2626,9 @@
   (sub allocptr allocptr (:$ (- arm::dnode-size arm::fulltag-misc)))
   (ldr dest (:@ rcontext (:$ arm::tcr.save-allocbase)))
   (cmp allocptr dest)
-  (uuo-alloc-trap (:? lo))
+  (bhi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
   (str header (:@ allocptr (:$ arm::misc-header-offset)))
   (mov dest allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
@@ -2700,11 +2796,15 @@
   (mov flags (:$ (ash 2 arm::fixnumshift)))
   (ldr tag (:@ object (:$ arm::arrayH.rank)))
   (cmp tag flags)
-  (uuo-error-array-rank (:? ne) flags object)
+  (beq :ok)
+  (uuo-error-array-rank flags object)
+  :ok
   (ldr flags (:@ object (:$ arm::arrayH.flags)))
   (cmp flags rexpected-flags)
   :bad-if-ne
-  (uuo-error-array-flags (:? ne) rexpected-flags object ))
+  (beq :done)
+  (uuo-error-array-flags rexpected-flags object )
+  :done)
 
 (define-arm-vinsn trap-unless-simple-array-3 (()
                                               ((object :lisp)
@@ -2719,11 +2819,15 @@
   (ldr tag (:@ object (:$ arm::arrayH.rank)))
   (mov flags (:$ (ash 3 arm::fixnumshift)))
   (cmp tag flags)
-  (uuo-error-array-rank (:? ne) flags object)
+  (beq :rank-ok)
+  (uuo-error-array-rank flags object)
+  :rank-ok
   (ldr flags (:@ object (:$ arm::arrayH.flags)))
   (cmp rexpected-flags flags)
   :bad-if-ne
-  (uuo-error-array-flags (:? ne) rexpected-flags object))
+  (beq :done)
+  (uuo-error-array-flags rexpected-flags object)
+  :done)
   
   
   
@@ -2764,7 +2868,9 @@
   (sub allocptr allocptr (:$ (- arm::dnode-size arm::fulltag-misc)))
   (ldr dest (:@ rcontext (:$ arm::tcr.save-allocbase)))
   (cmp allocptr dest)
-  (uuo-alloc-trap (:? lo))
+  (bhi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
   (str header (:@ allocptr (:$ arm::misc-header-offset)))
   (mov dest allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
@@ -2785,7 +2891,9 @@
   (sub allocptr allocptr (:$ (- arm::dnode-size arm::fulltag-misc)))
   (ldr dest (:@ rcontext (:$ arm::tcr.save-allocptr)))
   (cmp allocptr dest)
-  (uuo-alloc-trap (:? lo))
+  (bhi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
   (str header (:@ allocptr (:$ arm::misc-header-offset)))
   (mov dest allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
@@ -2832,7 +2940,9 @@
   (sub allocptr allocptr (:$ (- arm::dnode-size arm::fulltag-misc)))
   (ldr dest (:@ rcontext (:$ arm::tcr.save-allocbase)))
   (cmp allocptr dest)
-  (uuo-alloc-trap (:? lo))
+  (bhi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
   (str header (:@ allocptr (:$ arm::misc-header-offset)))
   (mov dest allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
@@ -2853,7 +2963,9 @@
   (sub allocptr allocptr (:$ (- arm::dnode-size arm::fulltag-misc)))
   (ldr dest (:@ rcontext (:$ arm::tcr.save-allocbase)))
   (cmp allocptr dest)
-  (uuo-alloc-trap (:? lo))
+  (bhi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
   (str header (:@ allocptr (:$ arm::misc-header-offset)))
   (mov dest allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
@@ -2915,7 +3027,9 @@
   (cmp dest (:$ arm::subtag-no-thread-local-binding))
   (ldreq dest (:@ src (:$ arm::symbol.vcell)))
   (cmp dest (:$ arm::unbound-marker))
-  (uuo-error-unbound (:? eq) src))
+  (bne :bound)
+  (uuo-error-unbound src)
+  :bound)
 
 (define-arm-vinsn (%ref-symbol-value :call :subprim-call)
     (((val :lisp))
@@ -2951,7 +3065,9 @@
   (cmp tag (:$ arm::tag-misc))
   (ldrbeq tag (:@ val (:$ arm::misc-subtag-offset)))
   (cmp tag (:$ arm::subtag-function))
-  (uuo-error-udf (:? ne) sym))
+  (beq :defined)
+  (uuo-error-udf sym)
+  :defined)
 
 (define-arm-vinsn (temp-push-unboxed-word :push :word :sp :predicatable)
     
@@ -3058,7 +3174,9 @@
 (define-arm-vinsn check-exact-nargs (()
                                      ((n :u16const)))
   (cmp nargs (:$ (:apply ash n 2)))
-  (uuo-error-wrong-nargs (:? ne)))
+  (beq :ok)
+  (uuo-error-wrong-nargs (:? ne))
+  :ok)
 
 (define-arm-vinsn check-exact-nargs-large (()
                                            ((n :u16const))
@@ -3066,12 +3184,16 @@
                                             (temp :u32)))
   (movw temp (:$ (:apply ash n 2)))
   (cmp nargs temp)
-  (uuo-error-wrong-nargs (:? ne)))
+  (beq :ok)
+  (uuo-error-wrong-nargs (:? ne))
+  :ok)
 
 (define-arm-vinsn check-min-nargs (()
                                    ((min :u16const)))
   (cmp nargs (:$ (:apply ash min 2)))
-  (uuo-error-wrong-nargs (:? lo)))
+  (bhs :ok)
+  (uuo-error-wrong-nargs (:? lo))
+  :ok)
 
 (define-arm-vinsn check-min-nargs-large (()
                                          ((min :u16const))
@@ -3079,13 +3201,17 @@
                                           (temp :u32)))
   (movw temp (:$ (:apply ash min 2)))
   (cmp nargs temp)
-  (uuo-error-wrong-nargs (:? lo)))
+  (bhs :ok)
+  (uuo-error-wrong-nargs (:? lo))
+  :ok)
 
 
 (define-arm-vinsn check-max-nargs (()
                                    ((max :u16const)))
   (cmp nargs (:$ (:apply ash max 2)))
-  (uuo-error-wrong-nargs (:? hi)))
+  (bls :ok)
+  (uuo-error-wrong-nargs (:? hi))
+  :ok)
 
 (define-arm-vinsn check-max-nargs-large (()
                                          ((max :u16const))
@@ -3093,7 +3219,9 @@
                                           (temp :u32)))
   (movw temp (:$ (:apply ash max 2)))
   (cmp nargs temp)
-  (uuo-error-wrong-nargs (:? hi)))
+  (bls :ok)
+  (uuo-error-wrong-nargs (:? hi))
+  :ok)
 
 ;;; Save context and establish FN.  The current VSP is the the
 ;;; same as the caller's, e.g., no arguments were vpushed.
@@ -3416,14 +3544,16 @@
 ;;; Clobbers LR
 (define-arm-vinsn %debug-trap (()
                                                      ())
-  (uuo-debug-trap (:? al)))
+  (uuo-debug-trap))
 
 
 (define-arm-vinsn eep.address (((dest t))
                                ((src (:lisp (:ne dest )))))
   (ldr dest (:@ src (:$ (+ (ash 1 2) arm::misc-data-offset))))
   (cmp dest (:$ arm::nil-value))
-  (uuo-eep-unresolved (:? eq) dest src))
+  (bne :ok)
+  (uuo-eep-unresolved  dest src)
+  :ok)
                  
 (define-arm-vinsn (%natural+ :predicatable)
     (((dest :u32))
@@ -3520,7 +3650,9 @@
   (cmp tag (:$ arm::tag-misc))
   (ldrbeq tag (:@ src (:$ arm::misc-subtag-offset)))
   (cmp tag (:$ arm::subtag-symbol))
-  (uuo-error-reg-not-xtype (:? ne) src (:$ arm::subtag-symbol))
+  (beq :symbol)
+  (uuo-error-reg-not-xtype src (:$ arm::subtag-symbol))
+  :symbol
   ((:not (:pred =
                 (:apply %hard-regspec-value dest)
                 (:apply %hard-regspec-value src)))
@@ -3729,7 +3861,8 @@
   (bge :done)
   (ldr nargs (:@ rcontext (:$ arm::tcr.interrupt-pending)))
   (cmp nargs (:$ 0))
-  (uuo-interrupt-now (:? ne))
+  (beq :done)
+  (uuo-interrupt-now)
   :done)
                                                     
   
@@ -3781,7 +3914,8 @@
   (bge :done)
   (ldr link (:@ rcontext (:$ arm::tcr.interrupt-pending)))
   (cmp link (:$ 0))
-  (uuo-interrupt-now (:? ne))
+  (beq :done)
+  (uuo-interrupt-now)
   :done)
 
 (define-arm-vinsn test-fixnum  (((dest :crf))

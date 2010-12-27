@@ -26,24 +26,36 @@
   `(mov nargs ($ (ash ,n arm::fixnumshift))))
 
 (defarmlapmacro check-nargs (min &optional (max min))
-  (if (eq max min)
-    `(progn
-      (cmp nargs (:$ (ash ,min arm::fixnumshift)))
-      (uuo-error-wrong-nargs (:? ne)))
-    (if (null max)
-      (unless (= min 0)
-        `(progn
-          (cmp nargs (:$ (ash ,min arm::fixnumshift)))
-          (uuo-error-wrong-nargs (:? lo))))
-      (if (= min 0)
-        `(progn
-          (cmp nargs ($ (ash ,max arm::fixnumshift)))
-          (uuo-error-wrong-nargs (:? hi)))
-        `(progn
-          (cmp nargs ($ (ash ,max arm::fixnumshift)))
-          (uuo-error-wrong-nargs (:? lo))
-          (cmp nargs ($ (ash ,max arm::fixnumshift)))
-          (uuo-error-wrong-nargs (:? hi)))))))
+  (let* ((ok1 (gensym))
+         (ok2 (gensym)))
+    (if (eq max min)
+      `(progn
+        (cmp nargs (:$ (ash ,min arm::fixnumshift)))
+        (beq ,ok1)
+        (uuo-error-wrong-nargs (:? ne))
+        ,ok1)
+      (if (null max)
+        (unless (= min 0)
+          `(progn
+            (cmp nargs (:$ (ash ,min arm::fixnumshift)))
+            (bhs ,ok1)
+            (uuo-error-wrong-nargs (:? lo))
+            ,ok1))
+        (if (= min 0)
+          `(progn
+            (cmp nargs ($ (ash ,max arm::fixnumshift)))
+            (bls ,ok1)
+            (uuo-error-wrong-nargs (:? hi))
+            ,ok1)
+          `(progn
+            (cmp nargs ($ (ash ,max arm::fixnumshift)))
+            (bhs ,ok1)
+            (uuo-error-wrong-nargs (:? lo))
+            ,ok1
+            (cmp nargs ($ (ash ,max arm::fixnumshift)))
+            (bls ,ok2)
+            (uuo-error-wrong-nargs (:? hi))
+            ,ok2))))))
 
 
 
@@ -114,29 +126,41 @@
   `(tst ,node (:$ arm::tagmask)))
 
 (defarmlapmacro trap-unless-fixnum (node)
+  (let* ((ok (gensym)))
   `(progn
     (test-fixnum ,node)
-    (uuo-error-reg-not-lisptag (:? ne) ,node (:$ arm::tag-fixnum))))
+    (beq ,ok)
+    (uuo-error-reg-not-lisptag ,node (:$ arm::tag-fixnum))
+    ,ok)))
 
 
 (defarmlapmacro trap-unless-lisptag= (node tag &optional (immreg 'imm0))
+  (let* ((ok (gensym)))
   `(progn
     (extract-lisptag ,immreg ,node)
     (cmp ,immreg (:$ ,tag))
-    (uuo-error-reg-not-lisptag (:? ne) ,node (:$ ,tag))))
+    (beq ,ok)
+    (uuo-error-reg-not-lisptag ,node (:$ ,tag))
+    ,ok)))
 
 (defarmlapmacro trap-unless-fulltag= (node tag &optional (immreg 'imm0))
+  (let* ((ok (gensym)))
   `(progn
     (extract-fulltag ,immreg ,node)
     (cmp ,immreg (:$ ,tag))
-    (uuo-error-reg-not-fulltag (:? ne) ,node (:$ ,tag))))
+    (beq ,ok)
+    (uuo-error-reg-not-fulltag ,node (:$ ,tag))
+    ,ok)))
 
 
 (defarmlapmacro trap-unless-xtype= (node tag &optional (immreg 'imm0))
+  (let* ((ok (gensym)))
   `(progn
     (extract-typecode ,immreg ,node)
     (cmp ,immreg (:$ ,tag))
-    (uuo-error-reg-not-xtype (:? ne) ,node (:$ ,tag))))
+    (beq ,ok)
+    (uuo-error-reg-not-xtype ,node (:$ ,tag))
+    ,ok)))
 
 
 (defarmlapmacro load-constant (dest constant)

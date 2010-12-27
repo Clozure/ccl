@@ -188,14 +188,18 @@
     (sub allocptr allocptr (:$ (- arm::cons.size arm::fulltag-cons)))
     (ldr imm1 (:@ rcontext (:$ arm::tcr.save-allocbase)))
     (cmp allocptr imm1)
-    (uuo-alloc-trap (:? lo))
+    (bhi @no-trap)
+    (uuo-alloc-trap)
+    @no-trap
     (mov sentinel allocptr)
     (bic allocptr allocptr (:$ arm::fulltagmask))
     (ldr obj (:@ a (:$ arm::area.low)))
     (b @test)
     @loop
     (test-fixnum obj)
-    (uuo-debug-trap (:? ne))
+    (beq @no-debug-trap)
+    (uuo-debug-trap)
+    @no-debug-trap
     (ldr header (:@ obj (:$ 0)))
     (extract-fulltag tag header)
     (cmp tag (:$ arm::fulltag-immheader))    
@@ -313,7 +317,7 @@
 (defarmlapfunction gc ()
   (check-nargs 0)
   (mov imm0 (:$ arch::gc-trap-function-gc))
-  (uuo-gc-trap (:? al))
+  (uuo-gc-trap)
   (mov arg_z 'nil)
   (bx lr))
 
@@ -325,7 +329,7 @@
   (check-nargs 2)
   (build-lisp-frame)
   (mov fn nfn)
-  (uuo-kernel-service (:? al) (:$ arch::error-allocate-list))
+  (uuo-kernel-service (:$ arch::error-allocate-list))
   (vpush1 arg_z)
   (vpush1 arg_y)
   (set-nargs 2)
@@ -341,7 +345,7 @@ of sense to be turning the EGC on and off from multiple threads ..."
   (check-nargs 1)
   (sub imm1 arg 'nil)
   (mov imm0 (:$ arch::gc-trap-function-egc-control))
-  (uuo-gc-trap (:? al))
+  (uuo-gc-trap)
   (bx lr))
 
 
@@ -351,19 +355,19 @@ of sense to be turning the EGC on and off from multiple threads ..."
 				   (e2size arg_z))
   (check-nargs 3)
   (mov imm0 (:$ arch::gc-trap-function-configure-egc))
-  (uuo-gc-trap (:? al))
+  (uuo-gc-trap)
   (bx lr))
 
 (defarmlapfunction purify ()
   (mov imm0 (:$ arch::gc-trap-function-purify))
-  (uuo-gc-trap (:? al))
+  (uuo-gc-trap)
   (mov arg_z 'nil)
   (bx lr))
 
 
 (defarmlapfunction impurify ()
   (mov imm0 (:$ arch::gc-trap-function-impurify))
-  (uuo-gc-trap (:? al))
+  (uuo-gc-trap)
   (mov arg_z 'nil)
   (bx lr))
 
@@ -372,7 +376,7 @@ of sense to be turning the EGC on and off from multiple threads ..."
 of free space to leave in the heap after full GC."
   (check-nargs 0)
   (mov imm0 (:$ arch::gc-trap-function-get-lisp-heap-threshold))
-  (uuo-gc-trap (:? al))
+  (uuo-gc-trap)
   (ba .SPmakeu32))
 
 (defarmlapfunction set-lisp-heap-gc-threshold ((new arg_z))
@@ -385,7 +389,7 @@ be somewhat larger than what was specified)."
   (bla .SPgetu32)
   (mov imm1 imm0)
   (mov imm0 (:$ arch::gc-trap-function-set-lisp-heap-threshold))
-  (uuo-gc-trap (:? al))
+  (uuo-gc-trap)
   (restore-lisp-frame imm1)
   (ba .SPmakeu32))
 
@@ -394,7 +398,7 @@ be somewhat larger than what was specified)."
   "Try to grow or shrink lisp's heap space, so that the free space is(approximately) equal to the current heap threshold. Return NIL"
   (check-nargs 0) 
   (mov imm0 (:$ arch::gc-trap-function-use-lisp-heap-threshold))
-  (uuo-gc-trap (:? al))
+  (uuo-gc-trap)
   (mov arg_z 'nil)
   (bx lr))
 
@@ -403,14 +407,14 @@ be somewhat larger than what was specified)."
   "Do a full GC, then consider all heap-allocated objects which survive to be non-relocatable."
   (check-nargs 0)
   (mov imm0 (:$ arch::gc-trap-function-freeze))
-  (uuo-gc-trap (:? al))
+  (uuo-gc-trap)
   (ba .SPmakeu32))
 
 (defarmlapfunction flash-freeze ()
   "Like FREEZE, but don't GC first."
   (check-nargs 0)
   (mov imm0 (:$ arch::gc-trap-function-flash-freeze))
-  (uuo-gc-trap (:? al))
+  (uuo-gc-trap)
   (ba .SPmakeu32))
 
 (defun %watch (uvector)
@@ -426,7 +430,7 @@ be somewhat larger than what was specified)."
 (defarmlapfunction %ensure-static-conses ()
   (check-nargs 0)
   (mov imm0 (:$ arch::gc-trap-function-ensure-static-conses))
-  (uuo-gc-trap (:? al))
+  (uuo-gc-trap)
   (mov arg_z 'nil)
   (bx lr))
 

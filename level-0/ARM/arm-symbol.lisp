@@ -40,7 +40,8 @@
     (ldr def (:@ symptr (:$ arm::symbol.fcell)))
     (extract-typecode imm0 def)
     (cmp imm0 (:$ arm::subtag-function))
-    (uuo-error-udf (:? ne) symbol)
+    (bxeq lr)
+    (uuo-error-udf symbol)
     (bx lr)))
 
 
@@ -153,6 +154,8 @@
 (defarmlapfunction %ensure-tlb-index ((idx arg_z))
   (ldr arg_y (:@ rcontext (:$ arm::tcr.tlb-limit)))
   (cmp arg_y idx)
-  (uuo-tlb-too-small (:? ls) idx)
+  (bhi @ok)
+  (uuo-tlb-too-small idx)
+  @ok
   (ldr arg_z (:@ rcontext (:$ arm::tcr.tlb-pointer)))
   (bx lr))
