@@ -1649,7 +1649,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
          instruction sequence; if after, finish the allocation. */
       Boolean before_alloc_trap = false;
 
-      if (IS_BRANCH_AROUND_ALLOC_TRAP(instr) {
+      if (IS_BRANCH_AROUND_ALLOC_TRAP(instr)) {
         before_alloc_trap = true;
         --program_counter;
         instr = *program_counter;
