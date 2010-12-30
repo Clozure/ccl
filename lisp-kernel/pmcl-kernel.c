@@ -2174,6 +2174,11 @@ void *
 xFindSymbol(void* handle, char *name)
 {
 #if defined(LINUX) || defined(FREEBSD) || defined(SOLARIS)
+#ifdef ANDROID
+  if (handle == NULL) {
+    handle = RTLD_DEFAULT;
+  }
+#endif
   return dlsym(handle, name);
 #endif
 #ifdef DARWIN
