@@ -111,9 +111,11 @@
                  (setq cur-string val cur-string-pos 0))
                 (t
                  (destructuring-bind (string package-name pathname offset) val
-                   ;; This env is used both for read and eval.  *nx-source-note-map* is for the latter.
-                   (let ((env (cons '(*loading-file-source-file* *loading-toplevel-location* ccl::*nx-source-note-map*)
-                                    (list pathname nil source-map))))
+                   ;; This env is used both for read and eval.
+                   (let ((env (cons '(*loading-file-source-file* *load-pathname* *load-truename* *loading-toplevel-location*
+				      ccl::*nx-source-note-map*)
+                                    (list pathname pathname (and pathname (or (probe-file pathname) pathname)) nil
+					  source-map))))
                      (when package-name
                        (push '*package* (car env))
                        (push (ccl::pkg-arg package-name) (cdr env)))
