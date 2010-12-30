@@ -2168,6 +2168,53 @@ Type :? for other options.
 	  </refsect1>
     </refentry>
 
+    <refentry id="m_with-interrupts-enabled">
+	  <indexterm zone="m_with-interrupts-enabled">
+	    <primary>with-interrupts-enabled</primary>
+	  </indexterm>
+
+	  <refnamediv>
+	    <refname>WITH-INTERRUPTS-ENABLED</refname>
+	    <refpurpose>Evaluates its body in an environment in which
+	      process-interrupt requests have immediate effect.</refpurpose>
+	    <refclass>Macro</refclass>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+	    <synopsis><function>with-interrupts-enabled</function>
+	      &body; body => result</synopsis>
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Arguments and Values</title>
+
+	    <variablelist>
+	      <varlistentry>
+	        <term>body</term>
+	        <listitem>
+		      <para>an implicit progn.</para>
+	        </listitem>
+	      </varlistentry>
+	      <varlistentry>
+	        <term>result</term>
+	        <listitem>
+		      <para>the primary value returned by
+		        <varname>body</varname>.</para>
+	        </listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect1>
+
+	  <refsect1>
+	    <title>Description</title>
+
+	    <para>Executes <varname>body</varname>
+	      in an environment in which <xref linkend="f_process-interrupt"/>
+	      requests have immediate effect.
+	    </para>
+	  </refsect1>
+    </refentry>
+
     <refentry id="f_make-lock">
 	  <indexterm zone="f_make-lock">
 	    <primary>make-lock</primary>

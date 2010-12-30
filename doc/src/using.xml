@@ -3247,6 +3247,34 @@ init-this-and-that.
   </refsect1>
 </refentry>
 
+<refentry id="v_unwind-protect">
+  <indexterm zone="v_unwind-protect">
+    <primary>unwind-protect</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>UNWIND-PROTECT</refname>
+    <refpurpose>
+      Ensure cleanup-forms are executed.
+    </refpurpose>
+    <refclass>Special operator</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis>
+      <function>unwind-protect</function> protected-form {cleanup-form}*
+    </synopsis>
+  </refsynopsisdiv>
+
+  <refsect1><title>Summary</title>
+    <para>
+      In &CCL;, the cleanup forms are always executed as if they were
+      wrapped with <xref linkend="m_without-interrupts"/>.
+      To allow interrupts, use
+      <xref linkend="m_with-interrupts-enabled"/>.
+    </para>
+  </refsect1>
+</refentry>
 
 </sect1>
 </chapter>
