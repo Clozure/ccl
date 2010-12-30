@@ -2513,6 +2513,7 @@
         (#/setContentSize: window sv-size)
         (setf (slot-value tv 'char-width) char-width
               (slot-value tv 'line-height) line-height)
+	#-cocotron
         (#/setResizeIncrements: window
                                 (ns:make-ns-size char-width line-height))))))
 				    
