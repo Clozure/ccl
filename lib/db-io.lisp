@@ -1215,9 +1215,9 @@ satisfy the optional predicate PREDICATE."
     (if name
       `(,(logior encoded-type-named-transparent-union-ref alt-align-in-bytes-mask)
         ,@(encode-name name)
-        ,@(encode-ffi-field-list (ffi-union-fields u)))
+        ,@(encode-ffi-field-list (ffi-transparent-union-fields u)))
       `(,(logior encoded-type-anon-transparent-union-ref alt-align-in-bytes-mask)
-        ,@(encode-ffi-field-list (ffi-union-fields u))))))
+        ,@(encode-ffi-field-list (ffi-transparent-union-fields u))))))
 
 (defun encode-ffi-struct (s)
   (let* ((name (ffi-struct-name s))
@@ -1366,7 +1366,7 @@ satisfy the optional predicate PREDICATE."
      (:transparent-union
       (let* ((u (cadr spec))
              (name (ffi-transparent-union-name u))
-	     (alt-align-bytes-mask (ash (or (ffi-union-alt-alignment-bits u)
+	     (alt-align-bytes-mask (ash (or (ffi-transparent-union-alt-alignment-bits u)
 					    0)
 					(- 5 3)))	     )
       `(,(if name
