@@ -3346,6 +3346,7 @@
                                     #-solaris-target #$SO_SNDLOWAT))
                    ((:character-special :tty) (#_fpathconf fd #$_PC_MAX_INPUT))
                    (t nominal))))
+    (when (<= octets 0) (setq octets nominal))
     (case (subtag-bytes (element-type-subtype element-type) 1)
       (1 octets)
       (2 (ash octets -1))
