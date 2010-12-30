@@ -1493,8 +1493,6 @@
 (defmethod text-view-string-cache ((self hemlock-textstorage-text-view))
   (hemlock-buffer-string-cache (#/hemlockString (#/textStorage self))))
 
-#-cocotron                             ; for now, small struct return FFI issue
-
 (objc:defmethod (#/selectionRangeForProposedRange:granularity: :ns-range)
     ((self hemlock-textstorage-text-view)
      (proposed :ns-range)
