@@ -207,7 +207,8 @@
                    (unless (%null-ptr-p icon)
                      (#/setApplicationIconImage: *NSApp* icon)))
                  (setf (ccl::application-ui-object *application*) *NSApp*)
-                 (when application-proxy-class-name
+                 (when (and application-proxy-class-name
+			    (%null-ptr-p (#/delegate *nsapp*)))
                    (let* ((classptr (ccl::%objc-class-classptr
                                      (ccl::load-objc-class-descriptor application-proxy-class-name)))
                           (instance (#/init (#/alloc classptr))))
