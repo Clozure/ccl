@@ -837,7 +837,7 @@ given is that of a group to which the current user belongs."
   "Look up and return the defined home directory of the user identified
 by uid. This value comes from the OS user database, not from the $HOME
 environment variable. Returns NIL if there is no user with the ID uid."
-  #+windows-target
+  #+(or windows-target android-target)
   (declare (ignore userid))
   #+windows-target
   (dolist (k '(#||"HOME"||# "USERPROFILE")) 
@@ -846,6 +846,8 @@ environment variable. Returns NIL if there is no user with the ID uid."
         (unless (%null-ptr-p p)
           (return (get-foreign-namestring p))))))
   #-windows-target
+  #+android-target "/data/local" ; for now
+  #-android-target
   (rlet ((pwd :passwd)
          (result :address pwd))
     (do* ((buflen 512 (* 2 buflen)))
