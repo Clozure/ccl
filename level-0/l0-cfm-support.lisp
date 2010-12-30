@@ -138,6 +138,22 @@
 
 #+(or linux-target freebsd-target solaris-target)
 (progn
+#+android-target
+(eval-when (:compile-toplevel :execute)
+  (def-foreign-type nil
+      (:struct :link_map
+         (:l_addr :unsigned)
+         (:l_name (:* :char))
+         (:l_ld :address)
+         (:l_next (:* (:struct :link_map)))
+         (:l_prev (:* (:struct :link_map)))))
+  (def-foreign-type nil
+      (:struct :r_debug
+         (:r_version :int32_t)
+         (:r_map (:* (:struct :link_map)))
+         (:r_brk :address)
+         (:r_state :int32_t)
+         (:r_ldbase :address))))
 
 (defun soname-ptr-from-link-map (map)
   (let* ((path (pref map :link_map.l_name)))
@@ -149,63 +165,65 @@
         path
         (with-macptrs ((dyn-strings)
                        (dynamic-entries (pref map :link_map.l_ld)))
-          (let* ((soname-offset nil))
-            ;; Walk over the entries in the file's dynamic segment; the
-            ;; last such entry will have a tag of #$DT_NULL.  Note the
-            ;; (loaded,on Linux; relative to link_map.l_addr on FreeBSD)
-            ;; address of the dynamic string table and the offset of the
-            ;; #$DT_SONAME string in that string table.
-            ;; Actually, the above isn't quite right; there seem to
-            ;; be cases (involving vDSO) where the address of a library's
-            ;; dynamic string table is expressed as an offset relative
-            ;; to link_map.l_addr as well.
-            (loop
-              (case #+32-bit-target (pref dynamic-entries :<E>lf32_<D>yn.d_tag)
-                    #+64-bit-target (pref dynamic-entries :<E>lf64_<D>yn.d_tag)
-                    (#. #$DT_NULL (return))
-                    (#. #$DT_SONAME
-                        (setq soname-offset
-                              #+32-bit-target (pref dynamic-entries
-                                                    :<E>lf32_<D>yn.d_un.d_val)
-                              #+64-bit-target (pref dynamic-entries
-                                                    :<E>lf64_<D>yn.d_un.d_val)))
-                    (#. #$DT_STRTAB
-                        (%setf-macptr dyn-strings
-                                      ;; Try to guess whether we're dealing
-                                      ;; with a displacement or with an
-                                      ;; absolute address.  There may be
-                                      ;; a better way to determine this,
-                                      ;; but for now we assume that absolute
-                                      ;; addresses aren't negative and that
-                                      ;; displacements are.
-                                      (let* ((disp (%get-signed-natural
-                                                    dynamic-entries
-                                                    target::node-size)))
-                                        #+(or freebsd-target solaris-target)
-                                        (%inc-ptr (pref map :link_map.l_addr) disp)
-                                        #-(or freebsd-target solaris-target)
-                                        (let* ((udisp #+32-bit-target (pref dynamic-entries
-                                                                            :<E>lf32_<D>yn.d_un.d_val)
-                                                      #+64-bit-target (pref dynamic-entries
-                                                                            :<E>lf64_<D>yn.d_un.d_val)))
-                                          (if (and (> udisp (pref map :link_map.l_addr))
-                                                   (< udisp (%ptr-to-int dynamic-entries)))
-                                            (%int-to-ptr udisp)
-                                            (%int-to-ptr 
-                                             (if (< disp 0) 
-                                               (+ disp (pref map :link_map.l_addr))
-                                               disp))))))))
-              (%setf-macptr dynamic-entries
-                            (%inc-ptr dynamic-entries
-                                      #+32-bit-target
-                                      (record-length :<E>lf32_<D>yn)
-                                      #+64-bit-target
-                                      (record-length :<E>lf64_<D>yn))))
-            (if (and soname-offset
-                     (not (%null-ptr-p dyn-strings)))
-              (%inc-ptr dyn-strings soname-offset)
-              ;; Use the full pathname of the library.
-             (pref map :link_map.l_name))))))))
+          (if (%null-ptr-p dynamic-entries)
+            (%null-ptr)
+            (let* ((soname-offset nil))
+              ;; Walk over the entries in the file's dynamic segment; the
+              ;; last such entry will have a tag of #$DT_NULL.  Note the
+              ;; (loaded,on Linux; relative to link_map.l_addr on FreeBSD)
+              ;; address of the dynamic string table and the offset of the
+              ;; #$DT_SONAME string in that string table.
+              ;; Actually, the above isn't quite right; there seem to
+              ;; be cases (involving vDSO) where the address of a library's
+              ;; dynamic string table is expressed as an offset relative
+              ;; to link_map.l_addr as well.
+              (loop
+                (case #+32-bit-target (pref dynamic-entries :<E>lf32_<D>yn.d_tag)
+                      #+64-bit-target (pref dynamic-entries :<E>lf64_<D>yn.d_tag)
+                      (#. #$DT_NULL (return))
+                      (#. #$DT_SONAME
+                          (setq soname-offset
+                                #+32-bit-target (pref dynamic-entries
+                                                      :<E>lf32_<D>yn.d_un.d_val)
+                                #+64-bit-target (pref dynamic-entries
+                                                      :<E>lf64_<D>yn.d_un.d_val)))
+                      (#. #$DT_STRTAB
+                          (%setf-macptr dyn-strings
+                                        ;; Try to guess whether we're dealing
+                                        ;; with a displacement or with an
+                                        ;; absolute address.  There may be
+                                        ;; a better way to determine this,
+                                        ;; but for now we assume that absolute
+                                        ;; addresses aren't negative and that
+                                        ;; displacements are.
+                                        (let* ((disp (%get-signed-natural
+                                                      dynamic-entries
+                                                      target::node-size)))
+                                          #+(or freebsd-target solaris-target android-target)
+                                          (%inc-ptr (pref map :link_map.l_addr) disp)
+                                          #-(or freebsd-target solaris-target android-target)
+                                          (let* ((udisp #+32-bit-target (pref dynamic-entries
+                                                                              :<E>lf32_<D>yn.d_un.d_val)
+                                                        #+64-bit-target (pref dynamic-entries
+                                                                              :<E>lf64_<D>yn.d_un.d_val)))
+                                            (if (and (> udisp (pref map :link_map.l_addr))
+                                                     (< udisp (%ptr-to-int dynamic-entries)))
+                                              (%int-to-ptr udisp)
+                                              (%int-to-ptr 
+                                               (if (< disp 0) 
+                                                 (+ disp (pref map :link_map.l_addr))
+                                                 disp))))))))
+                (%setf-macptr dynamic-entries
+                              (%inc-ptr dynamic-entries
+                                        #+32-bit-target
+                                        (record-length :<E>lf32_<D>yn)
+                                        #+64-bit-target
+                                        (record-length :<E>lf64_<D>yn))))
+              (if (and soname-offset
+                       (not (%null-ptr-p dyn-strings)))
+                (%inc-ptr dyn-strings soname-offset)
+                ;; Use the full pathname of the library.
+                (pref map :link_map.l_name)))))))))
 
 (defun shared-library-at (base)
   (dolist (lib *shared-libraries*)
@@ -230,24 +248,25 @@
     (when (%null-ptr-p base)
       (let* ((addr (%library-base-containing-address (pref m :link_map.l_ld))))
         (if addr (setq base addr))))
-    (or (let* ((existing-lib (shared-library-at base)))
-	  (when (and existing-lib (null (shlib.map existing-lib)))
-	    (setf (shlib.map existing-lib) m
-		  (shlib.pathname existing-lib)
-		  (%get-cstring (pref m :link_map.l_name))
-		  (shlib.base existing-lib) base))
-	  existing-lib)
-        (let* ((soname-ptr (soname-ptr-from-link-map m))
-               (soname (unless (%null-ptr-p soname-ptr) (%get-cstring soname-ptr)))
-               (pathname (%get-cstring (pref m :link_map.l_name)))
-	       (shlib (shared-library-with-name soname)))
-	  (if shlib
-	    (setf (shlib.map shlib) m
-		  (shlib.base shlib) base
-		  (shlib.pathname shlib) pathname)
-	    (push (setq shlib (%cons-shlib soname pathname m base))
-		  *shared-libraries*))
-          shlib))))
+    (unless (%null-ptr-p base)
+      (or (let* ((existing-lib (shared-library-at base)))
+            (when (and existing-lib (null (shlib.map existing-lib)))
+              (setf (shlib.map existing-lib) m
+                    (shlib.pathname existing-lib)
+                    (%get-cstring (pref m :link_map.l_name))
+                    (shlib.base existing-lib) base))
+            existing-lib)
+          (let* ((soname-ptr (soname-ptr-from-link-map m))
+                 (soname (unless (%null-ptr-p soname-ptr) (%get-cstring soname-ptr)))
+                 (pathname (%get-cstring (pref m :link_map.l_name)))
+                 (shlib (shared-library-with-name soname)))
+            (if shlib
+              (setf (shlib.map shlib) m
+                    (shlib.base shlib) base
+                    (shlib.pathname shlib) pathname)
+              (push (setq shlib (%cons-shlib soname pathname m base))
+                    *shared-libraries*))
+            shlib)))))
 
 
 (defun %get-r-debug ()
