@@ -3200,35 +3200,35 @@ Return the pointer."
     ,@body))
 
 
-
-
-
 (defmacro with-read-lock ((lock) &body body)
   "Wait until a given lock is available for read-only access, then evaluate
 its body with the lock held."
-  (let* ((p (gensym)))
+  (let* ((locked (gensym))
+         (p (gensym)))
     `(with-lock-context
-      (let* ((,p ,lock))
-        (unwind-protect
-             (progn
-               (read-lock-rwlock ,p)
-               ,@body)
-          (unlock-rwlock ,p))))))
-
+       (let* ((,locked (make-lock-acquisition))
+              (,p ,lock))
+         (declare (dynamic-extent ,locked))
+         (unwind-protect
+              (progn
+                (read-lock-rwlock ,p ,locked)
+                ,@body)
+           (when (lock-acquisition.status ,locked) (unlock-rwlock ,p)))))))
 
 (defmacro with-write-lock ((lock) &body body)
   "Wait until the given lock is available for write access, then execute
 its body with the lock held."
-  (let* ((p (gensym)))
+  (let* ((locked (gensym))
+         (p (gensym)))
     `(with-lock-context
-      (let* ((,p ,lock))
-      (unwind-protect
-           (progn
-             (write-lock-rwlock ,p)
-             ,@body)
-        (unlock-rwlock ,p))))))
-
-
+       (let* ((,locked (make-lock-acquisition))
+              (,p ,lock))
+         (declare (dynamic-extent ,locked))
+         (unwind-protect
+              (progn
+                (write-lock-rwlock ,p ,locked)
+                ,@body)
+           (when (lock-acquisition.status ,locked) (unlock-rwlock ,p)))))))
 
 (defmacro without-gcing (&body body)
   `(unwind-protect
