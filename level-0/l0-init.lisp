@@ -111,6 +111,10 @@
     #+solarisx8664-target :solarisx8664-host
     #+solarisx8632-target :solarisx8632-target
     #+solarisx8632-target :solarisx8632-host
+    #+android-target :android-host
+    #+android-target :android-target
+    #+androidarm-target :androidarm-target
+    #+androidarm-target :androidarm-host
     #+(and ppc-target poweropen-target) :poweropen-target
     #+64-bit-target :64-bit-target
     #+64-bit-target :64-bit-host
@@ -121,6 +125,7 @@
     #+freebsd-target :freebsd
     #+solaris-target :solaris
     #+windows-target :windows
+    #+android-target :android
     #+little-endian-target :little-endian-target
     #+little-endian-target :little-endian-host
     #+big-endian-target :big-endian-target
