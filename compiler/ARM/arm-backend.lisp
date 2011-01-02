@@ -227,7 +227,7 @@
                 :target-arch arm::*arm-target-arch*))
 
 
-#+darwinarm-target
+#+(or darwinarm-target (not arm-target))
 (defvar *darwinarm-backend*
   (make-backend :lookup-opcode #'arm::lookup-arm-instruction
 		:lookup-macro #'false
@@ -250,7 +250,7 @@
 		:target-foreign-type-data nil
                 :target-arch arm::*arm-target-arch*))
 
-#+androidarm-target
+#+(or androidarm-target (not arm-target))
 (defvar *androidarm-backend*
   (make-backend :lookup-opcode #'arm::lookup-arm-instruction
 		:lookup-macro #'false
@@ -277,10 +277,10 @@
 (pushnew *linuxarm-backend* *known-arm-backends* :key #'backend-name)
 
 
-#+darwinarm-target
+#+(or darwinarm-target (not arm-target))
 (pushnew *darwinarm-backend* *known-arm-backends* :key #'backend-name)
 
-#+androidarm-target
+#+(or androidarm-target (not arm-target))
 (pushnew *androidarm-backend* *known-arm-backends* :key #'backend-name)
 
 (defvar *arm-backend* (car *known-arm-backends*))
@@ -359,11 +359,17 @@
         (setf (backend-target-foreign-type-data backend) ftd))))
 
 (pushnew *arm-backend* *known-backends* :key #'backend-name)
+#-arm-target
+(progn
+  (pushnew *linuxarm-backend* *known-backends* :key #'backend-name)
+  (pushnew *darwinarm-backend* *known-backends* :key #'backend-name)  
+  (pushnew *androidarm-backend* *known-backends* :key #'backend-name))
 
 
 (defmacro make-fake-stack-frame (sp next-sp fn lr vsp xp)
   `(ccl::%istruct 'arm::fake-stack-frame ,sp ,next-sp ,fn ,lr ,vsp ,xp))
 
+#+arm-target
 (require "ARM-VINSNS")
 
 
