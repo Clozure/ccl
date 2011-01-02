@@ -44,7 +44,7 @@
 
 (defun current-fake-stack-frame ()
   (do* ((p (%get-frame-ptr) (%%frame-backlink p)))
-       ((zerop p))
+       ((or (zerop p) (bottom-of-stack-p p nil)))
     (when (fake-stack-frame-p p) (return p))))
 
 
