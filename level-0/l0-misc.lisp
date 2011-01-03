@@ -889,13 +889,14 @@
               ((eql 0 (%get-signed-natural ptr target::rwlock.state))
                ;; That wasn't so bad, was it ?  We have the spinlock now.
                (setf (%get-signed-natural ptr target::rwlock.state) 1)
+               (setf (%get-signed-long write-signal) -1)
                (%unlock-futex ptr)
                (%set-object ptr target::rwlock.writer tcr)
                (if flag
                  (setf (lock-acquisition.status flag) t))
                t)
            (incf (%get-natural ptr target::rwlock.blocked-writers))
-           (let* ((waitval (%get-natural write-signal 0)))
+           (let* ((waitval -1))
              (%unlock-futex ptr)
              (with-process-whostate ((rwlock-write-whostate lock))
                (let* ((*interrupt-level* level))
@@ -963,13 +964,14 @@
                ;; That wasn't so bad, was it ?  We have the spinlock now.
                (setf (%get-signed-natural ptr target::rwlock.state)
                      (the fixnum (1- state)))
+               (setf (%get-signed-long reader-signal) -1) ; can happen multiple times, but that's harmless
                (%unlock-futex ptr)
                (if flag
                  (setf (lock-acquisition.status flag) t))
                t)
            (declare (fixnum state))
            (incf (%get-natural ptr target::rwlock.blocked-readers))
-           (let* ((waitval (%get-natural reader-signal 0)))
+           (let* ((waitval -1))
              (%unlock-futex ptr)
              (let* ((*interrupt-level* level))
                (futex-wait reader-signal waitval (rwlock-read-whostate lock))))
@@ -1066,7 +1068,7 @@
              (setq signal writer-signal wakeup 1)
              (if (> nreaders 0)
                (setq signal reader-signal wakeup #$INT_MAX)))))
-       (when signal (incf (%get-signed-natural signal 0)))
+       (when signal (setf (%get-signed-long signal) 0))
        (%unlock-futex ptr)
        (when signal (futex-wake signal wakeup))
        t)))))
