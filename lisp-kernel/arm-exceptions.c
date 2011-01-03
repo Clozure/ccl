@@ -1,3 +1,5 @@
+
+
 /*
    Copyright (C) 2010 Clozure Associates
    This file is part of Clozure CL.  
@@ -1113,7 +1115,7 @@ handle_uuo(ExceptionInformation *xp, siginfo_t *info, opcode the_uuo)
 
     case 4:
       tcr->interrupt_pending = 0;
-      callback_for_trap(nrs_CMAIN.vcell, xp, 0, 0, &bump);
+      callback_for_trap(nrs_CMAIN.vcell, xp, 0, 0, NULL);
       handled = true;
       break;
     default:
