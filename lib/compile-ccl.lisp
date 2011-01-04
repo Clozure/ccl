@@ -158,7 +158,8 @@
              (:win32 'ffi-win32)
              (:solarisx8632 'ffi-solarisx8632)
              (:freebsdx8632 'ffi-freebsdx8632)
-             ((:linuxarm :androidarm) 'ffi-linuxarm)
+             (:linuxarm 'ffi-linuxarm)
+             (:androidarm 'ffi-androidarm)
              (:darwinarm 'ffi-darwinarm)))))
 
 

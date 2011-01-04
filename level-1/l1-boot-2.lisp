@@ -320,8 +320,10 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "FFI-SOLARISX8632" "ffi-solarisx8632")
       #+freebsdx8632-target
       (bin-load-provide "FFI-FREEBSDX8632" "ffi-freebsdx8632")
-      #+(and arm-target linux-target)
+      #+(and arm-target linux-target (not android-target))
       (bin-load-provide "FFI-LINUXARM" "ffi-linuxarm")
+      #+(and arm-target android-target)
+      (bin-load-provide "FFI-ANDROIDARM" "ffi-androidarm")
       #+(and arm-target darwin-target)
       (bin-load-provide "FFI-DARWINARM" "ffi-darwinarm")
 

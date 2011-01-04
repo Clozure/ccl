@@ -16,15 +16,15 @@
 
 (in-package "CCL")
 
-;;; LinuxARM:
+;;; AndroidARM:
 ;;; Structures whose size is 64 bits are passed by value; the caller
 ;;; instead passes a pointer to the structure or a copy of it.
 ;;; Structures whose size is <= 32 bits are returned as scalars.
-(defun arm-linux::record-type-returns-structure-as-first-arg (rtype)
+(defun arm-android::record-type-returns-structure-as-first-arg (rtype)
   (arm::eabi-record-type-returns-structure-as-first-arg rtype))
 
 
-(defun arm-linux::expand-ff-call (callform args &key (arg-coerce #'null-coerce-foreign-arg) (result-coerce #'null-coerce-foreign-result))
+(defun arm-android::expand-ff-call (callform args &key (arg-coerce #'null-coerce-foreign-arg) (result-coerce #'null-coerce-foreign-result))
   (arm::eabi-expand-ff-call callform args :arg-coerce arg-coerce :result-coerce result-coerce))
 
 ;;; Return 7 values:
@@ -34,13 +34,13 @@
 ;;; A list of initializaton forms for (some) structure args
 ;;; A FOREIGN-TYPE representing the "actual" return type.
 ;;; A form which can be used to initialize FP-ARGS-PTR, relative
-;;;  to STACK-PTR.  (This is unused on linuxarm.)
+;;;  to STACK-PTR.  (This is unused on androidarm.)
 ;;; The byte offset of the foreign return address, relative to STACK-PTR
-(defun arm-linux::generate-callback-bindings (stack-ptr fp-args-ptr argvars argspecs result-spec struct-result-name)
+(defun arm-android::generate-callback-bindings (stack-ptr fp-args-ptr argvars argspecs result-spec struct-result-name)
   (arm::eabi-generate-callback-bindings stack-ptr fp-args-ptr argvars argspecs result-spec struct-result-name))
 
 
-(defun arm-linux::generate-callback-return-value (stack-ptr fp-args-ptr result return-type struct-return-arg)
+(defun arm-android::generate-callback-return-value (stack-ptr fp-args-ptr result return-type struct-return-arg)
   (arm::eabi-generate-callback-return-value stack-ptr fp-args-ptr result return-type struct-return-arg))
       
                  

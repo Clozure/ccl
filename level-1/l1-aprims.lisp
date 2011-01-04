@@ -3656,10 +3656,7 @@ are rounded up to a multiple of 64Kbytes."
   (:nicknames "OS")
   (:use "COMMON-LISP"))
 
-;;; androidarm uses the same FFI as linuxarm
-#+androidarm-target
-(defpackage "ARM-LINUX"
-  (:use "COMMON-LISP"))
+
 
 
 
