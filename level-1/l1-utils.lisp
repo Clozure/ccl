@@ -752,6 +752,10 @@ vector
     
 ;;;;;;;;; VALUE BINDING Functions
 
+;; Lock used only to make sure calls to GENSYM don't step on each other.  Users who
+;; modify *gensym-counter* in multi-threaded apps will need to do their own locking.
+(defparameter *gensym-lock* (make-lock))
+
 (defun gensym (&optional (string-or-integer nil string-or-integer-p))
   "Creates a new uninterned symbol whose name is a prefix string (defaults
    to \"G\"), followed by a decimal number. Thing, when supplied, will
@@ -766,7 +770,8 @@ vector
         (integer (setq counter string-or-integer)) ; & emit-style-warning
         (string (setq prefix (ensure-simple-string string-or-integer)))))
     (unless counter
-      (setq *gensym-counter* (1+ (setq counter *gensym-counter*))))
+      (with-lock-grabbed (*gensym-lock*)
+        (setq *gensym-counter* (1+ (setq counter *gensym-counter*)))))
     (make-symbol (%str-cat prefix (%integer-to-string counter)))))
 
 (defun make-keyword (name)

@@ -54,7 +54,6 @@
     (%get-kernel-global-ptr exception-lock q)))
 
 (def-standard-initial-binding *package*)
-(def-standard-initial-binding *gensym-counter* 0)
 (def-standard-initial-binding *random-state* (initial-random-state))
 (def-standard-initial-binding *whostate* "Reset")
 (setq *whostate* "Reset")
