@@ -42,6 +42,7 @@
 #endif
 #include <sysexits.h>
 
+
 /* a distinguished UUO at a distinguished address */
 extern void pseudo_sigreturn(ExceptionInformation *);
 #endif
@@ -49,6 +50,9 @@ extern void pseudo_sigreturn(ExceptionInformation *);
 
 #include "threads.h"
 
+#ifdef ANDROID
+#define pthread_sigmask(how,in,out) rt_sigprocmask(how,in,out,8)
+#endif
 
 #ifdef LINUX
 
@@ -1336,10 +1340,14 @@ raise_pending_interrupt(TCR *tcr)
 void
 exit_signal_handler(TCR *tcr, int old_valence, natural old_last_lisp_frame)
 {
+#ifndef ANDROID
   sigset_t mask;
   sigfillset(&mask);
+#else
+  int mask [] = {0,0};
+#endif
   
-  pthread_sigmask(SIG_SETMASK,&mask, NULL);
+  pthread_sigmask(SIG_SETMASK,(sigset_t *)&mask, NULL);
   tcr->valence = old_valence;
   tcr->pending_exception_context = NULL;
   tcr->last_lisp_frame = old_last_lisp_frame;
@@ -1755,11 +1763,14 @@ void
 install_signal_handler(int signo, void *handler, Boolean system_p, Boolean on_altstack)
 {
   struct sigaction sa;
+
+  sigfillset(&sa.sa_mask);
   
   sa.sa_sigaction = (void *)handler;
   sigfillset(&sa.sa_mask);
   sa.sa_flags = 
     0 /* SA_RESTART */
+    | SA_NODEFER
     | SA_SIGINFO
 #ifdef USE_SIGALTSTACK
     | (on_altstack ? SA_ONSTACK : 0)
@@ -1819,9 +1830,13 @@ thread_kill_handler(int signum, siginfo_t info, ExceptionInformation *xp)
 {
   TCR *tcr = get_tcr(false);
   area *a;
+#ifndef ANDROID
   sigset_t mask;
   
   sigemptyset(&mask);
+#else
+  int mask[] = {0,0};
+#endif
 
   if (tcr) {
     tcr->valence = TCR_STATE_FOREIGN;
@@ -1835,7 +1850,7 @@ thread_kill_handler(int signum, siginfo_t info, ExceptionInformation *xp)
     }
   }
   
-  pthread_sigmask(SIG_SETMASK,&mask,NULL);
+  pthread_sigmask(SIG_SETMASK,(sigset_t *)&mask,NULL);
   pthread_exit(NULL);
 }
 

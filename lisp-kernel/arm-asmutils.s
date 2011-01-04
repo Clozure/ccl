@@ -149,7 +149,17 @@ _exportfn(C(put_vector_registers))
 _endfn        	
 _exportfn(C(get_vector_registers))
         __(uuo_debug_trap(al))
-_endfn        	
+_endfn
+	
+        __ifdef(`ANDROID')
+_exportfn(rt_sigprocmask)
+        __(stmdb sp!,{r7,lr})
+        __(mov r7,#175)
+        __(svc #0)
+        __(ldmia sp!,{r7,pc})
+_endfn
+        __endif
+        
 
         __ifdef(`DARWIN')
 /* divide the 64-bit unsigned integer in r0/r1 by the 64-bit unsigned
@@ -180,6 +190,7 @@ _exportfn(call_handler_on_main_stack)
         __(mov sp,r1)
         __(bx ip)
 _endfn                
-                        
+
+                                
 	_endfile
 

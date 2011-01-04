@@ -101,7 +101,7 @@ exception_init();
 #define ALLOW_EXCEPTIONS(context) // blank stare for now
 #else
 #define ALLOW_EXCEPTIONS(context) \
-  pthread_sigmask(SIG_SETMASK, &context->uc_sigmask, NULL);
+pthread_sigmask(SIG_SETMASK, (sigset_t *)(&context->uc_sigmask), NULL);
 #endif
 
 void
