@@ -1162,7 +1162,8 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
       (stream
        (ecase direction
          (:input
-          (with-cstrs ((template "/tmp/lisp-tempXXXXXX"))
+          (with-cstrs ((template #-android-target "/tmp/lisp-tempXXXXXX"
+                                 #+android-target "/data/local/tmp/lisp-tempXXXXXX"))
             (let* ((fd (#_mkstemp template)))
               (if (< fd 0)
                 (%errno-disp fd))
