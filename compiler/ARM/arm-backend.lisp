@@ -393,7 +393,7 @@
       (collect ((argforms))
         (when (typep result-type 'foreign-record-type)
           (setq result-form (pop args))
-          (if (arm-linux::record-type-returns-structure-as-first-arg result-type)
+          (if (arm::eabi-record-type-returns-structure-as-first-arg result-type)
             (progn
               (setq result-type *void-foreign-type*
                     result-type-spec :void)
