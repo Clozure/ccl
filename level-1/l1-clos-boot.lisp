@@ -2778,7 +2778,7 @@ to replace that class with ~s" name old-class new-class)
 	   (eq *standard-effective-slot-definition-class-wrapper*
 	       (instance.class-wrapper slotd))
 	   (eq *standard-class-wrapper* (instance.class-wrapper class))
-           (let* ((allocation (standard-effective-slot-definition.location slotd)))
+           (let* ((allocation (standard-effective-slot-definition.allocation slotd)))
              (or (eq allocation :instance) (eq allocation :class))))
     (%std-slot-vector-value (instance-slots instance) slotd)
     (if (= (the fixnum (typecode instance)) target::subtag-struct)
