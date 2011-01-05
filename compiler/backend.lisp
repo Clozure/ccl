@@ -37,6 +37,12 @@
 (defconstant platform-os-windows 5)
 (defconstant platform-os-android 6)
 
+(defun backend-real-lowmem-bias (backend)
+  (let* ((b (backend-lowmem-bias backend)))
+    (if (atom b) b (car b))))
+
+
+
 (defstruct backend
   (name :a :type keyword)
   (num-arg-regs 3 :type fixnum)    ; number of args passed in registers
@@ -65,15 +71,9 @@
   ;; difference between canonical static address for arch and this
   ;; target's. Usually 0.
   ;; Can be a cons of (static-area-bias . subprims-bias)
-  (%lowmem-bias 0))
+  (lowmem-bias 0))
 
-(defun backend-lowmem-bias (backend)
-  (let* ((b (backend-%lowmem-bias backend)))
-    (if (atom b) b (car b))))
 
-(defun backend-subprims-bias (backend)
-  (let* ((b (backend-%lowmem-bias backend)))
-    (if (atom b) b (cdr b))))
 
 (defmethod print-object ((b backend) s)
   (print-unreadable-object (b s :type t :identity t)
@@ -492,13 +492,13 @@
 
 (defun target-nil-value (&optional (backend *target-backend*))
   (+ (arch::target-nil-value (backend-target-arch backend))
-     (backend-lowmem-bias backend)))
+     (backend-real-lowmem-bias backend)))
 
 (defun target-t-value (&optional (backend *target-backend*))
   (let* ((arch (backend-target-arch backend)))
     (+ (arch::target-nil-value arch)
        (arch::target-t-offset arch)
-       (backend-lowmem-bias backend))))
+       (backend-real-lowmem-bias backend))))
 
 
      
