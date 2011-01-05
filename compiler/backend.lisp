@@ -64,7 +64,16 @@
   (lisp-context-register 0)
   ;; difference between canonical static address for arch and this
   ;; target's. Usually 0.
-  (lowmem-bias 0))
+  ;; Can be a cons of (static-area-bias . subprims-bias)
+  (%lowmem-bias 0))
+
+(defun backend-lowmem-bias (backend)
+  (let* ((b (backend-%lowmem-bias backend)))
+    (if (atom b) b (car b))))
+
+(defun backend-subprims-bias (backend)
+  (let* ((b (backend-%lowmem-bias backend)))
+    (if (atom b) b (cdr b))))
 
 (defmethod print-object ((b backend) s)
   (print-unreadable-object (b s :type t :identity t)

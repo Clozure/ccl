@@ -46,7 +46,7 @@
   ;; Don't care about speed, but for bootstrapping reasons avoid typechecking
   ;; against symbols in the arch package.
   (declare (optimize (speed 3) (safety 0)))
-  (+ (backend-lowmem-bias backend)
+  (+ (backend-subprims-bias backend)
      (%subprim-name->offset name  (arch::target-subprims-table
                                    (backend-target-arch backend)))))
 

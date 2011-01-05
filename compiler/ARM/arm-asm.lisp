@@ -52,10 +52,11 @@
   (if (and x (or (symbolp x) (stringp x)))
     (let* ((info (find x arm::*arm-subprims* :test #'string-equal :key #'ccl::subprimitive-info-name)))
       (when info
-        (ccl::subprimitive-info-offset info)))))
+        (+ (ccl::backend-subprims-bias ccl::*target-backend*)
+           (ccl::subprimitive-info-offset info))))))
 
 (defun arm-subprimitive-name (addr)
-  (let* ((info (find addr arm::*arm-subprims* :key #'ccl::subprimitive-info-offset)))
+  (let* ((info (find (- addr (ccl::backend-subprims-bias ccl::*target-backend*)) arm::*arm-subprims* :key #'ccl::subprimitive-info-offset)))
     (when info
       (string (ccl::subprimitive-info-name info)))))
 
