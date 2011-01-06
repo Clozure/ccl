@@ -8544,11 +8544,12 @@
 
 (defarm2 arm2-%fixnum-to-double %fixnum-to-double (seg vreg xfer arg)
   (with-fp-target () (dreg :double-float)
-    (let* ((r (arm2-one-untargeted-reg-form seg arg arm::arg_z)))
+    (let* ((sreg (make-wired-lreg (* (hard-regspec-value dreg) 2) :mode hard-reg-class-fpr-mode-single))
+           (r (arm2-one-untargeted-reg-form seg arg arm::arg_z)))
       (unless (or (acode-fixnum-form-p arg)
                   *arm2-reckless*)
         (! trap-unless-fixnum r))
-      (! fixnum->double dreg r)
+      (! fixnum->double dreg r sreg)
       (<- dreg)
       (^))))
 

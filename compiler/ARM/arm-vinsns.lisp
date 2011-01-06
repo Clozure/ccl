@@ -1277,9 +1277,9 @@
 
 (define-arm-vinsn (fixnum->double :predicatable)
     (((dest :double-float))
-     ((src :lisp))
-     ((imm :s32)
-      (temp :single-float)))
+     ((src :lisp)
+      (temp :single-float))
+     ((imm :s32)))
   (mov imm (:asr src (:$ arm::fixnumshift)))
   (fmsr temp imm)
   (fsitod dest temp))
