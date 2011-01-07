@@ -275,7 +275,7 @@
            (arm2-copy-register seg arm::arg_z valreg)
            (arm2-stack-to-register seg ea arm::arg_x)
            (arm2-lri seg arm::arg_y 0)
-           (! call-subprim-3 arm::arg_z (subprim-name->offset '.SPgvset) arm::arg_x arm::arg_y arm::arg_z))
+           (! call-subprim-3 arm::arg_z (arm::arm-subprimitive-address  '.SPgvset) arm::arg_x arm::arg_y arm::arg_z))
           ((memory-spec-p ea)    ; vstack slot
            (arm2-register-to-stack seg valreg ea))
           (t
@@ -1318,7 +1318,7 @@
       (let* ((arg_z ($ arm::arg_z))
              (imm0 ($ arm::imm0 :mode :s32)))
         (arm2-copy-register seg imm0 s32-src)
-        (! call-subprim (subprim-name->offset '.SPmakes32))
+        (! call-subprim (arm::arm-subprimitive-address '.SPmakes32))
         (arm2-copy-register seg node-dest arg_z)))))
 
 
@@ -1330,7 +1330,7 @@
       (let* ((arg_z ($ arm::arg_z))
              (imm0 ($ arm::imm0 :mode :u32)))
         (arm2-copy-register seg imm0 u32-src)
-        (! call-subprim (subprim-name->offset '.SPmakeu32))
+        (! call-subprim (arm::arm-subprimitive-address '.SPmakeu32))
         (arm2-copy-register seg node-dest arg_z)))))
 
 
@@ -2049,7 +2049,7 @@
                           (eql (hard-regspec-value unscaled-idx) arm::arg_y)
                           (eql (hard-regspec-value val-reg) arm::arg_z))
                (compiler-bug "Bug: invalid register targeting for gvset: ~s" (list src unscaled-idx val-reg)))
-             (! call-subprim-3 val-reg (subprim-name->offset '.SPgvset) src unscaled-idx val-reg))
+             (! call-subprim-3 val-reg (arm::arm-subprimitive-address '.SPgvset) src unscaled-idx val-reg))
             (is-node
              (if (and index-known-fixnum (<= index-known-fixnum
                                              (arch::target-max-32-bit-constant-index arch)))
@@ -2518,7 +2518,7 @@
             (let* ((*arm2-vstack* *arm2-vstack*)
                    (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*))
               (arm2-lri seg arm::arg_x (ash (nx-lookup-target-uvector-subtag :function) *arm2-target-fixnum-shift*))
-              (arm2-lri seg arm::temp0 (subprim-name->offset '.SPfix-nfn-entrypoint))
+              (arm2-lri seg arm::temp0 (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint))
               (! %closure-code% arm::arg_y)
               (arm2-store-immediate seg (arm2-afunc-lfun-ref afunc) arm::arg_z)
               (arm2-vpush-register-arg seg arm::arg_x)
@@ -2543,7 +2543,7 @@
                         (arch::make-vheader vsize (nx-lookup-target-uvector-subtag :function)))
               (! %alloc-misc-fixed dest arm::imm0 (ash vsize (arch::target-word-shift arch)))
               )
-            (! lri arm::arg_x (subprim-name->offset '.SPfix-nfn-entrypoint))
+            (! lri arm::arg_x (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint))
             (! misc-set-c-node arm::arg_x dest 0)
             (! %closure-code% arm::arg_x)
             (arm2-store-immediate seg (arm2-afunc-lfun-ref afunc) arm::arg_y)
@@ -4333,8 +4333,8 @@
       (when safe
         (! trap-unless-cons ptr-vreg))
       (if setcdr
-        (! call-subprim-2 ($ arm::arg_z) (subprim-name->offset '.SPrplacd) ptr-vreg val-vreg)
-        (! call-subprim-2 ($ arm::arg_z) (subprim-name->offset '.SPrplaca) ptr-vreg val-vreg))
+        (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-address '.SPrplacd) ptr-vreg val-vreg)
+        (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-address '.SPrplaca) ptr-vreg val-vreg))
       (if returnptr
         (<- ptr-vreg)
         (<- val-vreg))
@@ -5916,17 +5916,17 @@
               (compiler-bug "Isn't this code long since unused ?")
               #+nil
               (case nargs
-                (0 (subprim-name->offset '.SPcallbuiltin0))
-                (1 (subprim-name->offset '.SPcallbuiltin1))
-                (2 (subprim-name->offset '.SPcallbuiltin2))
-                (3 (subprim-name->offset '.SPcallbuiltin3))
-                (t (subprim-name->offset '.SPcallbuiltin))))))
+                (0 (arm::arm-subprimitive-address '.SPcallbuiltin0))
+                (1 (arm::arm-subprimitive-address '.SPcallbuiltin1))
+                (2 (arm::arm-subprimitive-address '.SPcallbuiltin2))
+                (3 (arm::arm-subprimitive-address '.SPcallbuiltin3))
+                (t (arm::arm-subprimitive-address '.SPcallbuiltin))))))
     (when tail-p
       (arm2-restore-full-lisp-context seg))
     #+nil
     (unless idx-subprim
       (! lri arm::imm0 (ash idx *arm2-target-fixnum-shift*))
-      (when (eql subprim (subprim-name->offset '.SPcallbuiltin))
+      (when (eql subprim (arm::arm-subprimitive-address '.SPcallbuiltin))
         (arm2-set-nargs seg nargs)))
     (if tail-p
       (! jump-subprim subprim)
@@ -6170,7 +6170,7 @@
             (! fixnum-add-overflow-ool ($ arm::arg_z) ($ arm::arg_y) ($ arm::arg_z))
             (-> done)))
         (@ out-of-line)
-        (! call-subprim-2 ($ arm::arg_z) (subprim-name->offset '.SPbuiltin-plus) ($ arm::arg_y) ($ arm::arg_z))
+        (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-address '.SPbuiltin-plus) ($ arm::arg_y) ($ arm::arg_z))
         (@ done)
         (arm2-copy-register seg target ($ arm::arg_z)))
       (^))))
@@ -6192,7 +6192,7 @@
             (! fixnum-sub-overflow-ool ($ arm::arg_z)($ arm::arg_y) ($ arm::arg_z))
             (-> done)))
         (@ out-of-line)
-        (! call-subprim-2 ($ arm::arg_z) (subprim-name->offset '.SPbuiltin-minus) ($ arm::arg_y) ($ arm::arg_z))
+        (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-address '.SPbuiltin-minus) ($ arm::arg_y) ($ arm::arg_z))
         (@ done)
         (arm2-copy-register seg target ($ arm::arg_z)))
       (^))))
@@ -6369,7 +6369,7 @@
             (@ out-of-line)
             (if otherform
               (arm2-lri seg ($ arm::arg_y) (ash fixval *arm2-target-fixnum-shift*)))
-            (! call-subprim-2 ($ arm::arg_z) (subprim-name->offset '.SPbuiltin-logior) ($ arm::arg_y) ($ arm::arg_z))
+            (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-address '.SPbuiltin-logior) ($ arm::arg_y) ($ arm::arg_z))
             (@ done)
             (arm2-copy-register seg target ($ arm::arg_z)))
           (^))))))
@@ -6418,7 +6418,7 @@
           (@ out-of-line)
           (if otherform
             (arm2-lri seg ($ arm::arg_y) (ash fixval *arm2-target-fixnum-shift*)))
-            (! call-subprim-2 ($ arm::arg_z) (subprim-name->offset '.SPbuiltin-logand) ($ arm::arg_y) ($ arm::arg_z))          
+            (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-address '.SPbuiltin-logand) ($ arm::arg_y) ($ arm::arg_z))          
             (@ done)
             (arm2-copy-register seg target ($ arm::arg_z)))
         (^))))))

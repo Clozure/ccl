@@ -2613,7 +2613,7 @@ to replace that class with ~s" name old-class new-class)
    (dpb 1 $lfbits-numreq (ash 1 $lfbits-method-bit)))
   #+arm-target
   (gvector :function
-           arm::*function-initial-entrypoint*
+           #.(ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift))
            (uvref *reader-method-function-proto* 1)
            (ensure-slot-id (%slot-definition-name dslotd))
            'slot-id-value
@@ -2639,7 +2639,7 @@ to replace that class with ~s" name old-class new-class)
      (dpb 2 $lfbits-numreq (ash 1 $lfbits-method-bit)))
     #+arm-target
     (gvector :function
-             arm::*function-initial-entrypoint*
+             #.(ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift))
              (uvref *writer-method-function-proto* 1)
              (ensure-slot-id (%slot-definition-name dslotd))
              'set-slot-id-value

@@ -376,7 +376,7 @@
 				     (ash -1 $lfbits-noname-bit)))
               #+arm-target
               (gvector :function
-                       arm::*function-initial-entrypoint*
+                       #.(ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift))
                        (%svref (if small
                                  #'%small-map-slot-id-lookup
                                  #'%large-map-slot-id-lookup) 1)
@@ -408,7 +408,7 @@
                             (ash -1 $lfbits-noname-bit)))
               #+arm-target
               (gvector :function
-                       arm::*function-initial-entrypoint*
+                       #.(ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift))
                        (%svref (if small
                                  #'%small-slot-id-value
                                  #'%large-slot-id-value) 1)
@@ -445,7 +445,7 @@
                             (ash -1 $lfbits-noname-bit)))
               #+arm-target
               (gvector :function
-                       arm::*function-initial-entrypoint*
+                       #.(ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift))
                        (%svref (if small
                                  #'%small-set-slot-id-value
                                  #'%large-set-slot-id-value) 1)
@@ -1679,7 +1679,7 @@ governs whether DEFCLASS makes that distinction or not.")
                                         (ash 1 $lfbits-aok-bit)))
            #+arm-target
            (gvector :function
-                    arm::*function-initial-entrypoint*
+                    #.(ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift))
                     *unset-fin-code*
                     wrapper
                     slots

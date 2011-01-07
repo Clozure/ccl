@@ -7,7 +7,7 @@ SEARCH_DIR("=/usr/local/lib"); SEARCH_DIR("=/lib"); SEARCH_DIR("=/usr/lib");
 SECTIONS
 {
   /* Read-only sections, merged into text segment: */
-  PROVIDE (__executable_start = 0x8000); . = 0x8000 + SIZEOF_HEADERS;
+  PROVIDE (__executable_start = 0x04001000); . = 0x04001000 + SIZEOF_HEADERS;
   .pad : { pad.o(.text) }
   .subprims ALIGN(0x1000) :
   {

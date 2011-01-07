@@ -4306,7 +4306,7 @@
            (dpb 1 $lfbits-numreq 0))
   #+arm-target
   (gvector :function
-           arm::*function-initial-entrypoint*
+           #.(ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift))
            (uvref *simple-predicate-function-prototype* 1)
            datum
            function

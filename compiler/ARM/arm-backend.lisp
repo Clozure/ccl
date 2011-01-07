@@ -271,7 +271,8 @@
 		:name :androidarm
 		:target-arch-name :arm
 		:target-foreign-type-data nil
-                :target-arch arm::*arm-target-arch*))
+                :target-arch arm::*arm-target-arch*
+                :lowmem-bias (cons 0 (- #x04002000 #x9000))))
 
 #+(or linuxarm-target (not arm-target))
 (pushnew *linuxarm-backend* *known-arm-backends* :key #'backend-name)

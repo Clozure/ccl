@@ -427,7 +427,7 @@
 		 (slots (allocate-typed-vector :slot-vector (1+ len) (%slot-unbound-marker)))
 		 (fn #+(or ppc-target arm-target)
                    (gvector :function
-                            #+arm-target arm::*function-initial-entrypoint*
+                            #+arm-target #.(ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift))
 			      *gf-proto-code*
 			      wrapper
 			      slots
@@ -475,7 +475,7 @@
   ;; set bits and name = gf
   #+(or ppc-target arm-target)
   (gvector :function
-           #+arm-target arm::*function-initial-entrypoint*
+           #+arm-target #.(ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift))
            *cm-proto-code*
            thing
            dcode

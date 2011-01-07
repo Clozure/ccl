@@ -523,13 +523,13 @@
       (unless (eql total-size (uvsize target))
         (error "Wrong size target ~s" target)))
     (%copy-gvector-to-gvector proto 0 new 0 total-size)
-    (setf (%svref new 0 )arm::*function-initial-entrypoint*)
+    (setf (%svref new 0) #.(ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift)))
     new))
 
 (defun replace-function-code (target-fn proto-fn)
   (if (typep target-fn 'function)
     (if (typep proto-fn 'function)
-      (setf (uvref target-fn 0) arm::*function-initial-entrypoint*
+      (setf (uvref target-fn 0) #.(ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift))
             (uvref target-fn 1) (uvref proto-fn 1))
       (report-bad-arg proto-fn 'function))
     (report-bad-arg target-fn 'function)))

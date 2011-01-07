@@ -2213,7 +2213,8 @@
     (push (cons instruction :b) (lap-label-refs label))))
 
 (defun vinsn-insert-subprim-operand (instruction value)
-  (let* ((name (arm-subprimitive-name value))
+  (let* ((name (or (arm-subprimitive-name value)
+                   (arm-subprimitive-name (+ value (ccl::backend-real-subprims-bias ccl::*target-backend*)))))
          (label (or (find-lap-label name)
                     (make-lap-label name))))
     (pushnew label *called-subprim-jmp-labels*)
