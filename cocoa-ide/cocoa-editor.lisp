@@ -1126,15 +1126,28 @@
                        1.0)))))
                                                         
 
-;;; This assumes that NSBackgroundColorAttributeName can only be 
-;;; present id it's (possibly stale) paren highlighting info.
-;;; We can't be sure of the locations (because of insertions/deletions),
-;;; so remove the attribute from the entire textstorage.
 (defmethod remove-paren-highlight ((self hemlock-textstorage-text-view))
+  #-cocotron
+  (let* ((left (text-view-paren-highlight-left-pos self))
+         (right (text-view-paren-highlight-right-pos self)))
+    (ns:with-ns-range (char-range left 1)
+      (let* ((layout (#/layoutManager self)))
+        (#/removeTemporaryAttribute:forCharacterRange: layout
+                                                       #&NSBackgroundColorAttributeName
+                                                       char-range)
+        (setf (pref char-range #>NSRange.location) right)
+        (#/removeTemporaryAttribute:forCharacterRange: layout
+                                                       #&NSBackgroundColorAttributeName
+                                                       char-range))))
+  ;;; This assumes that NSBackgroundColorAttributeName can only be 
+  ;;; present id it's (possibly stale) paren highlighting info.
+  ;;; We can't be sure of the locations (because of insertions/deletions),
+  ;;; so remove the attribute from the entire textstorage.
+  #+cocotron
   (let* ((textstorage (#/textStorage self))
          (len (#/length textstorage)))
     (#/beginEditing textstorage)
-    (ns:with-ns-range  (char-range 0 len)
+    (ns:with-ns-range (char-range 0 len)
       (#/removeAttribute:range: textstorage #&NSBackgroundColorAttributeName
                                 char-range))
     (#/endEditing textstorage)))
@@ -1184,16 +1197,19 @@
            (paren-highlight-color (text-view-paren-highlight-color self))
            (attrs (#/dictionaryWithObject:forKey: ns:ns-dictionary
                                                   paren-highlight-color
-                                                  background))
-           (ts (#/textStorage self)))
+                                                  background)))
       (ns:with-ns-range (left-range paren-highlight-left 1)
         (ns:with-ns-range (right-range paren-highlight-right 1)
-          (#/beginEditing ts)
-          (#/addAttributes:range: ts attrs left-range)
-          ;;(#/edited:range:changeInLength: ts #$NSTextStorageEditedAttributes left-range 0)
-          (#/addAttributes:range: ts attrs right-range)
-          ;;(#/edited:range:changeInLength: ts #$NSTextStorageEditedAttributes right-range 0)
-          (#/endEditing ts))))))
+          #-cocotron
+          (let ((layout (#/layoutManager (#/textContainer self))))
+            (#/addTemporaryAttributes:forCharacterRange: layout attrs left-range)
+            (#/addTemporaryAttributes:forCharacterRange: layout attrs right-range))
+          #+cocotron
+          (let ((ts (#/textStorage self)))
+            (#/beginEditing ts)
+            (#/addAttributes:range: ts attrs left-range)
+            (#/addAttributes:range: ts attrs right-range)
+            (#/endEditing ts)))))))
 
 (defmethod update-paren-highlight ((self hemlock-textstorage-text-view))
   (disable-paren-highlight self)
