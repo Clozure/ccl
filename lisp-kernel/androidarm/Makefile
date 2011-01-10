@@ -13,6 +13,7 @@
 #   The LLGPL is also available online at
 #   http://opensource.franz.com/preamble.html
 
+LIBBASE = 0x04001000
 NDK = /usr/local/android-ndk-r5
 HOST = darwin-x86
 ANDROIDVERSION = android-8
@@ -26,17 +27,17 @@ RM = /bin/rm
 AS = $(NDKBIN)as
 CC = $(NDKBIN)gcc --sysroot $(SYSROOT)
 LD = $(NDKBIN)ld
+HOSTCC = cc -m32
 M4 = m4
 ASFLAGS = -mfpu=vfp
-M4FLAGS = -DLINUX -DARM -DANDROID
-CDEFINES = -DLINUX -DARM -DANDROID -D_REENTRANT -D_GNU_SOURCE -DUSE_FUTEX
+M4FLAGS = -DLINUX -DARM -DANDROID -DLIBBASE=$(LIBBASE)
+CDEFINES = -DLINUX -DARM -DANDROID -D_REENTRANT -D_GNU_SOURCE -DUSE_FUTEX -DCCLSHARED
 CDEBUG = -g
 COPT = #-O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
 PLATFORM_H = platform-androidarm.h
-
 
 # If the linker supports a "--hash-style=" option, use traditional
 # Sysv hash tables.  (If it doesn't support that option, assume
@@ -53,10 +54,12 @@ endif
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -include ../$(PLATFORM_H) -I. -I$(NDKINC) -c $<  $(CDEFINES) $(CDEBUG) $(COPT) -fpic  $(WFORMAT)  -o $@
+	$(CC) -include ../$(PLATFORM_H) -I. -I$(NDKINC) -c $<  $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -fpic -o $@
+
 
 # -nostdinc -isystem ${NDK}/usr/gcc-include -isystem $(NDK)/usr/include
-SPOBJ = pad.o  arm-spentry.o arm-subprims.o
+SPOBJ = pad.o  arm-spentry.o 
+#arm-subprims.o
 ASMOBJ = arm-asmutils.o imports.o
 
 COBJ  = pmcl-kernel.o gc-common.o arm-gc.o bits.o  arm-exceptions.o \
@@ -75,20 +78,29 @@ CHEADERS = area.h bits.h arm-constants.h lisp-errors.h gc.h lisp.h \
 # Yes:
 
 KSPOBJ = $(SPOBJ)
-all:	../../aarmcl
+all:	../../aarmcl.so ../../aarmcl
+
+aarmcl.o: aarmcl.c
+	$(CC) -g -I$(NDKINC) -c $< -fpic -o $@
 
 # No:
 
 # KSPOBJ=
 # all:	../../armcl ../../subprims.so
 
-OSLIBS = -ldl -lm -lc $(NDKLIB)/crtbegin_dynamic.o $(NDKLIB)/crtend_android.o
+OSLIBS = -ldl -lm -lc 
+APPLIBS = $(OSLIBS) $(NDKLIB)/crtbegin_dynamic.o $(NDKLIB)/crtend_android.o
 
 
-../../aarmcl:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
-	$(LD) -Bdynamic -e _start  -dynamic-linker /system/bin/linker -nostdlib -z nocopyreloc  -o ../../aarmcl  -L $(NDKLIB) pad.o arm-spentry.o arm-subprims.o pmcl-kernel.o gc-common.o arm-gc.o bits.o arm-exceptions.o image.o thread_manager.o lisp-debug.o memory.o unix-calls.o arm-asmutils.o imports.o lispdcmd.o plprint.o plsym.o albt.o arm_print.o $(OSLIBS) -T ./armandroid.x
+../../aarmcl.so:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) ./armandroid.x ./fixlib
+	$(LD) --shared -Bdynamic -dynamic-linker /system/bin/linker -nostdlib -z nocopyreloc  -o ../../aarmcl.so  -L $(NDKLIB) pad.o arm-spentry.o  pmcl-kernel.o gc-common.o arm-gc.o bits.o arm-exceptions.o image.o thread_manager.o lisp-debug.o memory.o unix-calls.o arm-asmutils.o imports.o lispdcmd.o plprint.o plsym.o albt.o arm_print.o $(OSLIBS) -T ./armandroid.x -M
+	./fixlib $(LIBBASE) >> ../../aarmcl.so
 
+../../aarmcl:	aarmcl.o
+		$(LD) -Bdynamic -e _start  -dynamic-linker /system/bin/linker -nostdlib -z nocopyreloc  -o ../../aarmcl -L $(NDKLIB) aarmcl.o $(APPLIBS)
 
+./fixlib: ./fixlib.c
+	$(HOSTCC) -g $< -o $@
 
 $(SPOBJ): $(SPINC)
 $(ASMOBJ): $(SPINC)
@@ -97,10 +109,8 @@ $(DEBUGOBJ): $(CHEADERS) lispdcmd.h
 
 
 cclean:
-	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) ../../aarmcl
+	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) ../../aarmcl ../../aarmcl.so ./fixlib
 
 clean:	cclean
 	$(RM) -f $(SPOBJ)
 
-strip:	../../ppccl
-	strip -g ../../ppccl
