@@ -66,6 +66,15 @@
                 :initial-contents
                 (list code0 0 3 (arm::arm-subprimitive-address '.SPcall-closure)))))
 
+(defun adjust-closure-trampoline-for-subprims-bias (backend-name)
+  (let* ((backend (find-backend backend-name))
+         (bias (if backend (backend-real-subprims-bias backend)))
+         (code *arm-closure-trampoline-code*))
+    (if (eql bias 0)
+      code
+      (let* ((new (copy-seq code)))
+        (incf (aref new (1- (length new))) bias)
+        new))))
 
 ;;; For now, do this with a UUO so that the kernel can catch it.
 (defparameter *arm-udf-code*
@@ -127,7 +136,7 @@
   (make-backend-xload-info
    :name :androidarm
    :macro-apply-code-function 'arm-fixup-macro-apply-code
-   :closure-trampoline-code *arm-closure-trampoline-code*
+   :closure-trampoline-code (adjust-closure-trampoline-for-subprims-bias :androidarm)
    :udf-code *arm-udf-code*
    :default-image-name "ccl:aarm-boot"
    :default-startup-file-name "level-1.aafsl"
