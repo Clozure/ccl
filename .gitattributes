@@ -318,6 +318,7 @@ lisp-kernel/albt.c -text
 lisp-kernel/androidarm/Makefile -text
 lisp-kernel/androidarm/armandroid.x -text
 lisp-kernel/androidarm/link.h -text
+lisp-kernel/androidarm/linker.h -text
 lisp-kernel/androidarm/ucontext.h -text
 lisp-kernel/arm-asmutils.s -text
 lisp-kernel/arm-constants.h -text
