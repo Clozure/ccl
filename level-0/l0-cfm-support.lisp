@@ -138,22 +138,6 @@
 
 #+(or linux-target freebsd-target solaris-target)
 (progn
-#+android-target
-(eval-when (:compile-toplevel :execute)
-  (def-foreign-type nil
-      (:struct :link_map
-         (:l_addr :unsigned)
-         (:l_name (:* :char))
-         (:l_ld :address)
-         (:l_next (:* (:struct :link_map)))
-         (:l_prev (:* (:struct :link_map)))))
-  (def-foreign-type nil
-      (:struct :r_debug
-         (:r_version :int32_t)
-         (:r_map (:* (:struct :link_map)))
-         (:r_brk :address)
-         (:r_state :int32_t)
-         (:r_ldbase :address))))
 
 (defun soname-ptr-from-link-map (map)
   (let* ((path (pref map :link_map.l_name)))
@@ -336,7 +320,7 @@
                          :address name
                          :unsigned-fullword *dlopen-flags*
                          :address)))
-         (link-map #-(or freebsd-target solaris-target) handle
+         (link-map #+(and linux-target (not android-target)) handle
                    #+(or freebsd-target solaris-target)
                    (if (%null-ptr-p handle)
                      handle
@@ -348,7 +332,8 @@
                                    :address p
                                    :int))
                          (pref p :address)
-                         (%null-ptr))))))
+                         (%null-ptr))))
+                   #+android-target (pref handle :soinfo.linkmap)))
     (if (%null-ptr-p link-map)
       (values nil (dlerror))
       (prog1 (let* ((lib (shlib-from-map-entry link-map)))
