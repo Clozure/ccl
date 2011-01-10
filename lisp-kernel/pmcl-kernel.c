@@ -43,8 +43,17 @@
 #include <dlfcn.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#ifdef ANDROID
+#ifdef ARM
+#define ANDROID_ARM_LINKER 1
+#endif
+#include <linker.h>
+#else
 #include <link.h>
+#endif
+#ifndef ANDROID
 #include <elf.h>
+#endif
 
 /* 
    The version of <asm/cputable.h> provided by some distributions will
@@ -1653,7 +1662,12 @@ wide_argv_to_utf_8(wchar_t *wide_argv[], int argc)
 
 
 int
-main(int argc, char *argv[]
+#ifdef CCLSHARED
+cclmain
+#else
+main
+#endif
+(int argc, char *argv[]
 #if defined(PPC) && defined(LINUX)
 , char *envp[], void *aux
 #endif
@@ -2198,29 +2212,95 @@ xFindSymbol(void* handle, char *name)
   return windows_find_symbol(handle, name);
 #endif
 }
+#if defined(LINUX) || defined(FREEBSD) || defined(SOLARIS)
+#if WORD_SIZE == 64
+typedef Elf64_Dyn Elf_Dyn;
+typedef Elf64_Ehdr Elf_Ehdr;
+typedef Elf64_Shdr Elf_Shdr;
+#else
+typedef Elf32_Dyn Elf_Dyn;
+typedef Elf32_Ehdr Elf_Ehdr;
+typedef Elf32_Shdr Elf_Shdr;
+#endif
+
+Elf32_Dyn *
+get_executable_dynamic_entries()
+{
+#ifndef CCLSHARED
+  extern Elf_Dyn _DYNAMIC[];
+  return _DYNAMIC;
+#else
+#ifdef ANDROID
+  /* Deep, dark secret: the "handle" returned by dlopen() is
+     a pointer to an soinfo structure, as defined in linker.h.
+     We can get the link map from there ...
+  */
+  
+
+ 
+  /* Woe unto us - and lots of it - if the executable is mapped
+     at an address other than 0x8000.  Todo: parse /proc/self/maps. */
+  char *p;
+  Elf_Ehdr *elf_header;
+  Elf_Shdr *section_header;
+  int i,fd;
+  struct stat _stat;
+  Elf_Dyn *result = NULL;
+  
+  fd = open("/proc/self/exe",O_RDONLY);
+  if (fd >= 0) {
+    if (fstat(fd,&_stat) == 0) {
+      p = (char *)mmap(NULL,_stat.st_size,PROT_READ,MAP_PRIVATE,fd,0);
+      if (p != MAP_FAILED) {
+        elf_header = (Elf_Ehdr *)p;
+        for (section_header = (Elf_Shdr *)(p+elf_header->e_shoff),
+               i = 0;
+             i < elf_header->e_shnum;
+             i++,section_header++) {
+          if (section_header->sh_type == SHT_DYNAMIC) {
+            result = (Elf_Dyn *)section_header->sh_addr;
+            break;
+          }
+        }
+        munmap(p,_stat.st_size);
+      }
+    }
+    close(fd);
+  }
+  return result;
+#else
+#error need implementation for get_executable_dynamic_entries from dso
+#endif
+#endif
+}
+
+
+void *cached_r_debug = NULL;
 
 void *
 get_r_debug()
 {
-#if defined(LINUX) || defined(FREEBSD) || defined(SOLARIS)
-#if WORD_SIZE == 64
-  extern Elf64_Dyn _DYNAMIC[];
-  Elf64_Dyn *dp;
-#else
-  extern Elf32_Dyn _DYNAMIC[];
-  Elf32_Dyn *dp;
-#endif
   int tag;
+  Elf_Dyn *dp;
 
-  for (dp = _DYNAMIC; (tag = dp->d_tag) != 0; dp++) {
-    if (tag == DT_DEBUG) {
-      return (void *)(dp->d_un.d_ptr);
+  if (cached_r_debug == NULL) {
+    for (dp = get_executable_dynamic_entries(); (tag = dp->d_tag) != 0; dp++) {
+      if (tag == DT_DEBUG) {
+        cached_r_debug = (void *)(dp->d_un.d_ptr);
+        break;
+      }
     }
   }
-#endif
-  return NULL;
+  return cached_r_debug;
 }
 
+#else
+void *
+get_r_debug()
+{
+  return NULL;
+}
+#endif
 
 #ifdef DARWIN
 void
