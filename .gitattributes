@@ -329,7 +329,6 @@ lisp-kernel/arm-exceptions.h -text
 lisp-kernel/arm-gc.c -text
 lisp-kernel/arm-macros.s -text
 lisp-kernel/arm-spentry.s -text
-lisp-kernel/arm-subprims.s -text
 lisp-kernel/arm-uuo.s -text
 lisp-kernel/arm_print.c -text
 lisp-kernel/constants.h -text

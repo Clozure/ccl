@@ -31,7 +31,8 @@ define(`_spentry',`ifdef(`__func_name',`_endfn',`')
         .if spnum >= 112
         .set delta,1024
         .endif
-	_exportfn(_SP$1)
+	_startfn(_SP$1)
+L__SP$1:                        
 	.line  __line__
 ')
 
@@ -73,7 +74,7 @@ _spentry(fix_nfn_entrypoint)
         is easiest if we use a fixed address here. */
         
         .org sporg-delta+0x40
-_exportfn(udfcall)
+_startfn(udfcall)
         __(uuo_error_udf_call(al,fname))
         __(jump_fname)
 _endfn                
@@ -3122,284 +3123,284 @@ _spentry(eabi_callback)
        
 /*  EOF, basically  */
 	
-_exportfn(C(misc_ref_common))
-	__(adr imm0,(local_label(misc_ref_jmp)))
-	__(ldr pc,[imm0,imm1,lsl #2])
+_startfn(C(misc_ref_common))
+        __(add pc,pc,imm1,lsl #2)
+        __(nop)
 
 local_label(misc_ref_jmp):          
 	/* 00-0f  */
-	.long local_label(misc_ref_invalid) /* 00 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 00 even_fixnum  */
 	
-	.long local_label(misc_ref_invalid) /* 01 cons  */
-	.long local_label(misc_ref_invalid) /* 02 nodeheader  */
-	.long local_label(misc_ref_invalid) /* 03 imm  */
-	.long local_label(misc_ref_invalid) /* 04 odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 05 nil  */
-	.long local_label(misc_ref_invalid) /* 06 misc  */
-	.long local_label(misc_ref_u32) /* 07 bignum  */
-	.long local_label(misc_ref_invalid) /* 08 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 09 cons  */
-	.long local_label(misc_ref_node) /* 0a ratio  */
-	.long local_label(misc_ref_invalid) /* 0b imm  */
-	.long local_label(misc_ref_invalid) /* 0c odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 0d nil  */
-	.long local_label(misc_ref_invalid) /* 0e misc  */
-	.long local_label(misc_ref_u32) /* 0f single_float  */
+	__(b local_label(misc_ref_invalid)) /* 01 cons  */
+	__(b local_label(misc_ref_invalid)) /* 02 nodeheader  */
+	__(b local_label(misc_ref_invalid)) /* 03 imm  */
+	__(b local_label(misc_ref_invalid)) /* 04 odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 05 nil  */
+	__(b local_label(misc_ref_invalid)) /* 06 misc  */
+	__(b local_label(misc_ref_u32)) /* 07 bignum  */
+	__(b local_label(misc_ref_invalid)) /* 08 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 09 cons  */
+	__(b local_label(misc_ref_node)) /* 0a ratio  */
+	__(b local_label(misc_ref_invalid)) /* 0b imm  */
+	__(b local_label(misc_ref_invalid)) /* 0c odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 0d nil  */
+	__(b local_label(misc_ref_invalid)) /* 0e misc  */
+	__(b local_label(misc_ref_u32)) /* 0f single_float  */
 	/* 10-1f  */
-	.long local_label(misc_ref_invalid) /* 10 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 11 cons  */
-	.long local_label(misc_ref_invalid) /* 12 nodeheader  */
-	.long local_label(misc_ref_invalid) /* 13 imm  */
-	.long local_label(misc_ref_invalid) /* 14 odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 15 nil  */
-	.long local_label(misc_ref_invalid) /* 16 misc  */
-	.long local_label(misc_ref_u32) /* 17 double_float  */
-	.long local_label(misc_ref_invalid) /* 18 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 19 cons  */
-	.long local_label(misc_ref_node) /* 1a complex  */
-	.long local_label(misc_ref_invalid) /* 1b imm  */
-	.long local_label(misc_ref_invalid) /* 1c odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 1d nil  */
-	.long local_label(misc_ref_invalid) /* 1e misc  */
-	.long local_label(misc_ref_u32) /* 1f macptr  */
+	__(b local_label(misc_ref_invalid)) /* 10 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 11 cons  */
+	__(b local_label(misc_ref_invalid)) /* 12 nodeheader  */
+	__(b local_label(misc_ref_invalid)) /* 13 imm  */
+	__(b local_label(misc_ref_invalid)) /* 14 odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 15 nil  */
+	__(b local_label(misc_ref_invalid)) /* 16 misc  */
+	__(b local_label(misc_ref_u32)) /* 17 double_float  */
+	__(b local_label(misc_ref_invalid)) /* 18 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 19 cons  */
+	__(b local_label(misc_ref_node)) /* 1a complex  */
+	__(b local_label(misc_ref_invalid)) /* 1b imm  */
+	__(b local_label(misc_ref_invalid)) /* 1c odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 1d nil  */
+	__(b local_label(misc_ref_invalid)) /* 1e misc  */
+	__(b local_label(misc_ref_u32)) /* 1f macptr  */
 	/* 20-2f  */
-	.long local_label(misc_ref_invalid) /* 20 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 21 cons  */
-	.long local_label(misc_ref_node) /* 22 catch_frame  */
-	.long local_label(misc_ref_invalid) /* 23 imm  */
-	.long local_label(misc_ref_invalid) /* 24 odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 25 nil  */
-	.long local_label(misc_ref_invalid) /* 26 misc  */
-	.long local_label(misc_ref_u32) /* 27 dead_macptr  */
-	.long local_label(misc_ref_invalid) /* 28 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 29 cons  */
-	.long local_label(misc_ref_node) /* 2a function  */
-	.long local_label(misc_ref_invalid) /* 2b imm  */
-	.long local_label(misc_ref_invalid) /* 2c odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 2d nil  */
-	.long local_label(misc_ref_invalid) /* 2e misc  */
-	.long local_label(misc_ref_u32) /* 2f code_vector  */
+	__(b local_label(misc_ref_invalid)) /* 20 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 21 cons  */
+	__(b local_label(misc_ref_node)) /* 22 catch_frame  */
+	__(b local_label(misc_ref_invalid)) /* 23 imm  */
+	__(b local_label(misc_ref_invalid)) /* 24 odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 25 nil  */
+	__(b local_label(misc_ref_invalid)) /* 26 misc  */
+	__(b local_label(misc_ref_u32)) /* 27 dead_macptr  */
+	__(b local_label(misc_ref_invalid)) /* 28 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 29 cons  */
+	__(b local_label(misc_ref_node)) /* 2a function  */
+	__(b local_label(misc_ref_invalid)) /* 2b imm  */
+	__(b local_label(misc_ref_invalid)) /* 2c odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 2d nil  */
+	__(b local_label(misc_ref_invalid)) /* 2e misc  */
+	__(b local_label(misc_ref_u32)) /* 2f code_vector  */
 	/* 30-3f  */
-	.long local_label(misc_ref_invalid) /* 30 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 31 cons  */
-	.long local_label(misc_ref_node) /* 32 lisp_thread  */
-	.long local_label(misc_ref_invalid) /* 33 imm  */
-	.long local_label(misc_ref_invalid) /* 34 odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 35 nil  */
-	.long local_label(misc_ref_invalid) /* 36 misc  */
-	.long local_label(misc_ref_u32) /* 37 creole  */
-	.long local_label(misc_ref_invalid) /* 38 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 39 cons  */
-	.long local_label(misc_ref_node) /* 3a symbol  */
-	.long local_label(misc_ref_invalid) /* 3b imm  */
-	.long local_label(misc_ref_invalid) /* 3c odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 3d nil  */
-	.long local_label(misc_ref_invalid) /* 3e misc  */
-	.long local_label(misc_ref_u32) /* 3f xcode_vector  */
+	__(b local_label(misc_ref_invalid)) /* 30 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 31 cons  */
+	__(b local_label(misc_ref_node)) /* 32 lisp_thread  */
+	__(b local_label(misc_ref_invalid)) /* 33 imm  */
+	__(b local_label(misc_ref_invalid)) /* 34 odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 35 nil  */
+	__(b local_label(misc_ref_invalid)) /* 36 misc  */
+	__(b local_label(misc_ref_u32)) /* 37 creole  */
+	__(b local_label(misc_ref_invalid)) /* 38 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 39 cons  */
+	__(b local_label(misc_ref_node)) /* 3a symbol  */
+	__(b local_label(misc_ref_invalid)) /* 3b imm  */
+	__(b local_label(misc_ref_invalid)) /* 3c odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 3d nil  */
+	__(b local_label(misc_ref_invalid)) /* 3e misc  */
+	__(b local_label(misc_ref_u32)) /* 3f xcode_vector  */
 	/* 40-4f  */
-	.long local_label(misc_ref_invalid) /* 40 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 41 cons  */
-	.long local_label(misc_ref_node) /* 42 lock  */
-	.long local_label(misc_ref_invalid) /* 43 imm  */
-	.long local_label(misc_ref_invalid) /* 44 odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 45 nil  */
-	.long local_label(misc_ref_invalid) /* 46 misc  */
-	.long local_label(misc_ref_invalid) /* 47 immheader  */
-	.long local_label(misc_ref_invalid) /* 48 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 49 cons  */
-	.long local_label(misc_ref_node) /* 4a hash_vector  */
-	.long local_label(misc_ref_invalid) /* 4b imm  */
-	.long local_label(misc_ref_invalid) /* 4c odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 4d nil  */
-	.long local_label(misc_ref_invalid) /* 4e misc  */
-	.long local_label(misc_ref_invalid) /* 4f immheader  */
+	__(b local_label(misc_ref_invalid)) /* 40 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 41 cons  */
+	__(b local_label(misc_ref_node)) /* 42 lock  */
+	__(b local_label(misc_ref_invalid)) /* 43 imm  */
+	__(b local_label(misc_ref_invalid)) /* 44 odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 45 nil  */
+	__(b local_label(misc_ref_invalid)) /* 46 misc  */
+	__(b local_label(misc_ref_invalid)) /* 47 immheader  */
+	__(b local_label(misc_ref_invalid)) /* 48 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 49 cons  */
+	__(b local_label(misc_ref_node)) /* 4a hash_vector  */
+	__(b local_label(misc_ref_invalid)) /* 4b imm  */
+	__(b local_label(misc_ref_invalid)) /* 4c odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 4d nil  */
+	__(b local_label(misc_ref_invalid)) /* 4e misc  */
+	__(b local_label(misc_ref_invalid)) /* 4f immheader  */
 	/* 50-5f  */
-	.long local_label(misc_ref_invalid) /* 50 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 51 cons  */
-	.long local_label(misc_ref_node) /* 52 pool  */
-	.long local_label(misc_ref_invalid) /* 53 imm  */
-	.long local_label(misc_ref_invalid) /* 54 odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 55 nil  */
-	.long local_label(misc_ref_invalid) /* 56 misc  */
-	.long local_label(misc_ref_invalid) /* 57 immheader  */
-	.long local_label(misc_ref_invalid) /* 58 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 59 cons  */
-	.long local_label(misc_ref_node) /* 5a weak  */
-	.long local_label(misc_ref_invalid) /* 5b imm  */
-	.long local_label(misc_ref_invalid) /* 5c odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 5d nil  */
-	.long local_label(misc_ref_invalid) /* 5e misc  */
-	.long local_label(misc_ref_invalid) /* 5f immheader  */
+	__(b local_label(misc_ref_invalid)) /* 50 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 51 cons  */
+	__(b local_label(misc_ref_node)) /* 52 pool  */
+	__(b local_label(misc_ref_invalid)) /* 53 imm  */
+	__(b local_label(misc_ref_invalid)) /* 54 odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 55 nil  */
+	__(b local_label(misc_ref_invalid)) /* 56 misc  */
+	__(b local_label(misc_ref_invalid)) /* 57 immheader  */
+	__(b local_label(misc_ref_invalid)) /* 58 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 59 cons  */
+	__(b local_label(misc_ref_node)) /* 5a weak  */
+	__(b local_label(misc_ref_invalid)) /* 5b imm  */
+	__(b local_label(misc_ref_invalid)) /* 5c odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 5d nil  */
+	__(b local_label(misc_ref_invalid)) /* 5e misc  */
+	__(b local_label(misc_ref_invalid)) /* 5f immheader  */
 	/* 60-6f  */
-	.long local_label(misc_ref_invalid) /* 60 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 61 cons  */
-	.long local_label(misc_ref_node) /* 62 package  */
-	.long local_label(misc_ref_invalid) /* 63 imm  */
-	.long local_label(misc_ref_invalid) /* 64 odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 65 nil  */
-	.long local_label(misc_ref_invalid) /* 66 misc  */
-	.long local_label(misc_ref_invalid) /* 67 immheader  */
-	.long local_label(misc_ref_invalid) /* 68 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 69 cons  */
-	.long local_label(misc_ref_node) /* 6a slot_vector  */
-	.long local_label(misc_ref_invalid) /* 6b imm  */
-	.long local_label(misc_ref_invalid) /* 6c odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 6d nil  */
-	.long local_label(misc_ref_invalid) /* 6e misc  */
-	.long local_label(misc_ref_invalid) /* 6f immheader  */
+	__(b local_label(misc_ref_invalid)) /* 60 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 61 cons  */
+	__(b local_label(misc_ref_node)) /* 62 package  */
+	__(b local_label(misc_ref_invalid)) /* 63 imm  */
+	__(b local_label(misc_ref_invalid)) /* 64 odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 65 nil  */
+	__(b local_label(misc_ref_invalid)) /* 66 misc  */
+	__(b local_label(misc_ref_invalid)) /* 67 immheader  */
+	__(b local_label(misc_ref_invalid)) /* 68 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 69 cons  */
+	__(b local_label(misc_ref_node)) /* 6a slot_vector  */
+	__(b local_label(misc_ref_invalid)) /* 6b imm  */
+	__(b local_label(misc_ref_invalid)) /* 6c odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 6d nil  */
+	__(b local_label(misc_ref_invalid)) /* 6e misc  */
+	__(b local_label(misc_ref_invalid)) /* 6f immheader  */
 	/* 70-7f  */
-	.long local_label(misc_ref_invalid) /* 70 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 71 cons  */
-	.long local_label(misc_ref_node) /* 72 instance  */
-	.long local_label(misc_ref_invalid) /* 73 imm  */
-	.long local_label(misc_ref_invalid) /* 74 odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 75 nil  */
-	.long local_label(misc_ref_invalid) /* 76 misc  */
-	.long local_label(misc_ref_invalid) /* 77 immheader  */
-	.long local_label(misc_ref_invalid) /* 78 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 79 cons  */
-	.long local_label(misc_ref_node) /* 7a struct  */
-	.long local_label(misc_ref_invalid) /* 7b imm  */
-	.long local_label(misc_ref_invalid) /* 7c odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 7d nil  */
-	.long local_label(misc_ref_invalid) /* 7e misc  */
-	.long local_label(misc_ref_invalid) /* 7f immheader  */
+	__(b local_label(misc_ref_invalid)) /* 70 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 71 cons  */
+	__(b local_label(misc_ref_node)) /* 72 instance  */
+	__(b local_label(misc_ref_invalid)) /* 73 imm  */
+	__(b local_label(misc_ref_invalid)) /* 74 odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 75 nil  */
+	__(b local_label(misc_ref_invalid)) /* 76 misc  */
+	__(b local_label(misc_ref_invalid)) /* 77 immheader  */
+	__(b local_label(misc_ref_invalid)) /* 78 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 79 cons  */
+	__(b local_label(misc_ref_node)) /* 7a struct  */
+	__(b local_label(misc_ref_invalid)) /* 7b imm  */
+	__(b local_label(misc_ref_invalid)) /* 7c odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 7d nil  */
+	__(b local_label(misc_ref_invalid)) /* 7e misc  */
+	__(b local_label(misc_ref_invalid)) /* 7f immheader  */
 	/* 80-8f  */
-	.long local_label(misc_ref_invalid) /* 80 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 81 cons  */
-	.long local_label(misc_ref_node) /* 82 istruct  */
-	.long local_label(misc_ref_invalid) /* 83 imm  */
-	.long local_label(misc_ref_invalid) /* 84 odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 85 nil  */
-	.long local_label(misc_ref_invalid) /* 86 misc  */
-	.long local_label(misc_ref_invalid) /* 87 immheader  */
-	.long local_label(misc_ref_invalid) /* 88 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 89 cons  */
-	.long local_label(misc_ref_node) /* 8a value_cell  */
-	.long local_label(misc_ref_invalid) /* 8b imm  */
-	.long local_label(misc_ref_invalid) /* 8c odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 8d nil  */
-	.long local_label(misc_ref_invalid) /* 8e misc  */
-	.long local_label(misc_ref_invalid) /* 8f immheader  */
+	__(b local_label(misc_ref_invalid)) /* 80 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 81 cons  */
+	__(b local_label(misc_ref_node)) /* 82 istruct  */
+	__(b local_label(misc_ref_invalid)) /* 83 imm  */
+	__(b local_label(misc_ref_invalid)) /* 84 odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 85 nil  */
+	__(b local_label(misc_ref_invalid)) /* 86 misc  */
+	__(b local_label(misc_ref_invalid)) /* 87 immheader  */
+	__(b local_label(misc_ref_invalid)) /* 88 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 89 cons  */
+	__(b local_label(misc_ref_node)) /* 8a value_cell  */
+	__(b local_label(misc_ref_invalid)) /* 8b imm  */
+	__(b local_label(misc_ref_invalid)) /* 8c odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 8d nil  */
+	__(b local_label(misc_ref_invalid)) /* 8e misc  */
+	__(b local_label(misc_ref_invalid)) /* 8f immheader  */
 	/* 90-9f  */
-	.long local_label(misc_ref_invalid) /* 90 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 91 cons  */
-	.long local_label(misc_ref_node) /* 92 xfunction  */
-	.long local_label(misc_ref_invalid) /* 93 imm  */
-	.long local_label(misc_ref_invalid) /* 94 odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 95 nil  */
-	.long local_label(misc_ref_invalid) /* 96 misc  */
-	.long local_label(misc_ref_invalid) /* 97 immheader  */
-	.long local_label(misc_ref_invalid) /* 98 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* 99 cons  */
-	.long local_label(misc_ref_node) /* 9a arrayN  */
-	.long local_label(misc_ref_invalid) /* 9b imm  */
-	.long local_label(misc_ref_invalid) /* 9c odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* 9d nil  */
-	.long local_label(misc_ref_invalid) /* 9e misc  */
-	.long local_label(misc_ref_invalid) /* 9f immheader  */
+	__(b local_label(misc_ref_invalid)) /* 90 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 91 cons  */
+	__(b local_label(misc_ref_node)) /* 92 xfunction  */
+	__(b local_label(misc_ref_invalid)) /* 93 imm  */
+	__(b local_label(misc_ref_invalid)) /* 94 odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 95 nil  */
+	__(b local_label(misc_ref_invalid)) /* 96 misc  */
+	__(b local_label(misc_ref_invalid)) /* 97 immheader  */
+	__(b local_label(misc_ref_invalid)) /* 98 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 99 cons  */
+	__(b local_label(misc_ref_node)) /* 9a arrayN  */
+	__(b local_label(misc_ref_invalid)) /* 9b imm  */
+	__(b local_label(misc_ref_invalid)) /* 9c odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* 9d nil  */
+	__(b local_label(misc_ref_invalid)) /* 9e misc  */
+	__(b local_label(misc_ref_invalid)) /* 9f immheader  */
 	/* a0-af  */
-	.long local_label(misc_ref_invalid) /* a0 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* a1 cons  */
-	.long local_label(misc_ref_node) /* a2 vectorH  */
-	.long local_label(misc_ref_invalid) /* a3 imm  */
-	.long local_label(misc_ref_invalid) /* a4 odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* a5 nil  */
-	.long local_label(misc_ref_invalid) /* a6 misc  */
-	.long local_label(misc_ref_single_float_vector) /* a7 sf_vector  */
-	.long local_label(misc_ref_invalid) /* a8 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* a9 cons  */
-	.long local_label(misc_ref_node) /* aa simple_vector  */
-	.long local_label(misc_ref_invalid) /* ab imm  */
-	.long local_label(misc_ref_invalid) /* ac odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* ad nil  */
-	.long local_label(misc_ref_invalid) /* ae misc  */
-	.long local_label(misc_ref_u32) /* af u32  */
+	__(b local_label(misc_ref_invalid)) /* a0 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* a1 cons  */
+	__(b local_label(misc_ref_node)) /* a2 vectorH  */
+	__(b local_label(misc_ref_invalid)) /* a3 imm  */
+	__(b local_label(misc_ref_invalid)) /* a4 odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* a5 nil  */
+	__(b local_label(misc_ref_invalid)) /* a6 misc  */
+	__(b local_label(misc_ref_single_float_vector)) /* a7 sf_vector  */
+	__(b local_label(misc_ref_invalid)) /* a8 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* a9 cons  */
+	__(b local_label(misc_ref_node)) /* aa simple_vector  */
+	__(b local_label(misc_ref_invalid)) /* ab imm  */
+	__(b local_label(misc_ref_invalid)) /* ac odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* ad nil  */
+	__(b local_label(misc_ref_invalid)) /* ae misc  */
+	__(b local_label(misc_ref_u32)) /* af u32  */
 	/* b0-bf  */
-	.long local_label(misc_ref_invalid) /* b0 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* b1 cons  */
-	.long local_label(misc_ref_invalid) /* b2 nodeheader  */
-	.long local_label(misc_ref_invalid) /* b3 imm  */
-	.long local_label(misc_ref_invalid) /* b4 odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* b5 nil  */
-	.long local_label(misc_ref_invalid) /* b6 misc  */
-	.long local_label(misc_ref_s32) /* b7 s32  */
-	.long local_label(misc_ref_invalid) /* b8 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* b9 cons  */
-	.long local_label(misc_ref_invalid) /* ba nodeheader  */
-	.long local_label(misc_ref_invalid) /* bb imm  */
-	.long local_label(misc_ref_invalid) /* bc odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* bd nil  */
-	.long local_label(misc_ref_invalid) /* be misc  */
-	.long local_label(misc_ref_fixnum_vector) /* bf fixnum_vector  */
+	__(b local_label(misc_ref_invalid)) /* b0 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* b1 cons  */
+	__(b local_label(misc_ref_invalid)) /* b2 nodeheader  */
+	__(b local_label(misc_ref_invalid)) /* b3 imm  */
+	__(b local_label(misc_ref_invalid)) /* b4 odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* b5 nil  */
+	__(b local_label(misc_ref_invalid)) /* b6 misc  */
+	__(b local_label(misc_ref_s32)) /* b7 s32  */
+	__(b local_label(misc_ref_invalid)) /* b8 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* b9 cons  */
+	__(b local_label(misc_ref_invalid)) /* ba nodeheader  */
+	__(b local_label(misc_ref_invalid)) /* bb imm  */
+	__(b local_label(misc_ref_invalid)) /* bc odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* bd nil  */
+	__(b local_label(misc_ref_invalid)) /* be misc  */
+	__(b local_label(misc_ref_fixnum_vector)) /* bf fixnum_vector  */
 	/* c0-cf  */
-	.long local_label(misc_ref_invalid) /* c0 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* c1 cons  */
-	.long local_label(misc_ref_invalid) /* c2 nodeheader  */
-	.long local_label(misc_ref_invalid) /* c3 imm  */
-	.long local_label(misc_ref_invalid) /* c4 odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* c5 nil  */
-	.long local_label(misc_ref_invalid) /* c6 misc  */
-	.long local_label(misc_ref_new_string) /* c7 new_string  */
-	.long local_label(misc_ref_invalid) /* c8 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* c9 cons  */
-	.long local_label(misc_ref_invalid) /* ca nodeheader  */
-	.long local_label(misc_ref_invalid) /* cb imm  */
-	.long local_label(misc_ref_invalid) /* cc odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* cd nil  */
-	.long local_label(misc_ref_invalid) /* ce misc  */
-	.long local_label(misc_ref_u8) /* cf u8  */
+	__(b local_label(misc_ref_invalid)) /* c0 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* c1 cons  */
+	__(b local_label(misc_ref_invalid)) /* c2 nodeheader  */
+	__(b local_label(misc_ref_invalid)) /* c3 imm  */
+	__(b local_label(misc_ref_invalid)) /* c4 odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* c5 nil  */
+	__(b local_label(misc_ref_invalid)) /* c6 misc  */
+	__(b local_label(misc_ref_new_string)) /* c7 new_string  */
+	__(b local_label(misc_ref_invalid)) /* c8 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* c9 cons  */
+	__(b local_label(misc_ref_invalid)) /* ca nodeheader  */
+	__(b local_label(misc_ref_invalid)) /* cb imm  */
+	__(b local_label(misc_ref_invalid)) /* cc odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* cd nil  */
+	__(b local_label(misc_ref_invalid)) /* ce misc  */
+	__(b local_label(misc_ref_u8)) /* cf u8  */
 	/* d0-df  */
-	.long local_label(misc_ref_invalid) /* d0 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* d1 cons  */
-	.long local_label(misc_ref_invalid) /* d2 nodeheader  */
-	.long local_label(misc_ref_invalid) /* d3 imm  */
-	.long local_label(misc_ref_invalid) /* d4 odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* d5 nil  */
-	.long local_label(misc_ref_invalid) /* d6 misc  */
-	.long local_label(misc_ref_s8)      /* d7 s8  */
-	.long local_label(misc_ref_invalid) /* d8 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* d9 cons  */
-	.long local_label(misc_ref_invalid) /* da nodeheader  */
-	.long local_label(misc_ref_invalid) /* db imm  */
-	.long local_label(misc_ref_invalid) /* dc odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* dd nil  */
-	.long local_label(misc_ref_invalid) /* de misc  */
-	.long local_label(misc_ref_old_string) /* df (old)subtag_simple_base_string  */
+	__(b local_label(misc_ref_invalid)) /* d0 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* d1 cons  */
+	__(b local_label(misc_ref_invalid)) /* d2 nodeheader  */
+	__(b local_label(misc_ref_invalid)) /* d3 imm  */
+	__(b local_label(misc_ref_invalid)) /* d4 odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* d5 nil  */
+	__(b local_label(misc_ref_invalid)) /* d6 misc  */
+	__(b local_label(misc_ref_s8))      /* d7 s8  */
+	__(b local_label(misc_ref_invalid)) /* d8 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* d9 cons  */
+	__(b local_label(misc_ref_invalid)) /* da nodeheader  */
+	__(b local_label(misc_ref_invalid)) /* db imm  */
+	__(b local_label(misc_ref_invalid)) /* dc odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* dd nil  */
+	__(b local_label(misc_ref_invalid)) /* de misc  */
+	__(b local_label(misc_ref_old_string)) /* df (old)subtag_simple_base_string  */
 	/* e0-ef  */
-	.long local_label(misc_ref_invalid) /* e0 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* e1 cons  */
-	.long local_label(misc_ref_invalid) /* e2 nodeheader  */
-	.long local_label(misc_ref_invalid) /* e3 imm  */
-	.long local_label(misc_ref_invalid) /* e4 odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* e5 nil  */
-	.long local_label(misc_ref_invalid) /* e6 misc  */
-	.long local_label(misc_ref_u16) /* e7 u16  */
-	.long local_label(misc_ref_invalid) /* e8 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* e9 cons  */
-	.long local_label(misc_ref_invalid) /* ea nodeheader  */
-	.long local_label(misc_ref_invalid) /* eb imm  */
-	.long local_label(misc_ref_invalid) /* ec odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* ed nil  */
-	.long local_label(misc_ref_invalid) /* ee misc  */
-	.long local_label(misc_ref_s16) /* ef s16  */
+	__(b local_label(misc_ref_invalid)) /* e0 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* e1 cons  */
+	__(b local_label(misc_ref_invalid)) /* e2 nodeheader  */
+	__(b local_label(misc_ref_invalid)) /* e3 imm  */
+	__(b local_label(misc_ref_invalid)) /* e4 odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* e5 nil  */
+	__(b local_label(misc_ref_invalid)) /* e6 misc  */
+	__(b local_label(misc_ref_u16)) /* e7 u16  */
+	__(b local_label(misc_ref_invalid)) /* e8 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* e9 cons  */
+	__(b local_label(misc_ref_invalid)) /* ea nodeheader  */
+	__(b local_label(misc_ref_invalid)) /* eb imm  */
+	__(b local_label(misc_ref_invalid)) /* ec odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* ed nil  */
+	__(b local_label(misc_ref_invalid)) /* ee misc  */
+	__(b local_label(misc_ref_s16)) /* ef s16  */
 	/* f0-ff  */
-	.long local_label(misc_ref_invalid) /* f0 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* f1 cons  */
-	.long local_label(misc_ref_invalid) /* f2 nodeheader  */
-	.long local_label(misc_ref_invalid) /* f3 imm  */
-	.long local_label(misc_ref_invalid) /* f4 odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* f5 nil  */
-	.long local_label(misc_ref_invalid) /* f6 misc  */
-	.long local_label(misc_ref_double_float_vector) /* f7 df vector  */
-	.long local_label(misc_ref_invalid) /* f8 even_fixnum  */
-	.long local_label(misc_ref_invalid) /* f9 cons  */
-	.long local_label(misc_ref_invalid) /* fa nodeheader  */
-	.long local_label(misc_ref_invalid) /* fb imm  */
-	.long local_label(misc_ref_invalid) /* fc odd_fixnum  */
-	.long local_label(misc_ref_invalid) /* fd nil  */
-	.long local_label(misc_ref_invalid) /* fe misc  */
-	.long local_label(misc_ref_bit_vector) /* ff bit_vector  */
+	__(b local_label(misc_ref_invalid)) /* f0 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* f1 cons  */
+	__(b local_label(misc_ref_invalid)) /* f2 nodeheader  */
+	__(b local_label(misc_ref_invalid)) /* f3 imm  */
+	__(b local_label(misc_ref_invalid)) /* f4 odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* f5 nil  */
+	__(b local_label(misc_ref_invalid)) /* f6 misc  */
+	__(b local_label(misc_ref_double_float_vector)) /* f7 df vector  */
+	__(b local_label(misc_ref_invalid)) /* f8 even_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* f9 cons  */
+	__(b local_label(misc_ref_invalid)) /* fa nodeheader  */
+	__(b local_label(misc_ref_invalid)) /* fb imm  */
+	__(b local_label(misc_ref_invalid)) /* fc odd_fixnum  */
+	__(b local_label(misc_ref_invalid)) /* fd nil  */
+	__(b local_label(misc_ref_invalid)) /* fe misc  */
+	__(b local_label(misc_ref_bit_vector)) /* ff bit_vector  */
 
 local_label(misc_ref_node):        
 	/* A node vector.  */
@@ -3490,282 +3491,282 @@ local_label(misc_ref_invalid):
 	__(b _SPksignalerr)        
 _endfn
         
-_exportfn(C(misc_set_common))
-	__(adr imm0,local_label(misc_set_jmp))
-	__(ldr pc,[imm0,imm1,lsl #2])
+_startfn(C(misc_set_common))
+        __(add pc,pc,imm1,lsl #2)
+        __(nop)
 local_label(misc_set_jmp):             
 	/* 00-0f  */
-	.long local_label(misc_set_invalid) /* 00 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 01 cons  */
-	.long local_label(misc_set_invalid) /* 02 nodeheader  */
-	.long local_label(misc_set_invalid) /* 03 imm  */
-	.long local_label(misc_set_invalid) /* 04 odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 05 nil  */
-	.long local_label(misc_set_invalid) /* 06 misc  */
-	.long local_label(misc_set_u32) /* 07 bignum  */
-	.long local_label(misc_set_invalid) /* 08 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 09 cons  */
-	.long _SPgvset /* 0a ratio  */
-	.long local_label(misc_set_invalid) /* 0b imm  */
-	.long local_label(misc_set_invalid) /* 0c odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 0d nil  */
-	.long local_label(misc_set_invalid) /* 0e misc  */
-	.long local_label(misc_set_u32) /* 0f single_float  */
+	__(b local_label(misc_set_invalid)) /* 00 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 01 cons  */
+	__(b local_label(misc_set_invalid)) /* 02 nodeheader  */
+	__(b local_label(misc_set_invalid)) /* 03 imm  */
+	__(b local_label(misc_set_invalid)) /* 04 odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 05 nil  */
+	__(b local_label(misc_set_invalid)) /* 06 misc  */
+	__(b local_label(misc_set_u32)) /* 07 bignum  */
+	__(b local_label(misc_set_invalid)) /* 08 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 09 cons  */
+	__(b _SPgvset) /* 0a ratio  */
+	__(b  local_label(misc_set_invalid)) /* 0b imm  */
+	__(b local_label(misc_set_invalid)) /* 0c odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 0d nil  */
+	__(b local_label(misc_set_invalid)) /* 0e misc  */
+	__(b local_label(misc_set_u32)) /* 0f single_float  */
 	/* 10-1f  */
-	.long local_label(misc_set_invalid) /* 10 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 11 cons  */
-	.long local_label(misc_set_invalid) /* 12 nodeheader  */
-	.long local_label(misc_set_invalid) /* 13 imm  */
-	.long local_label(misc_set_invalid) /* 14 odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 15 nil  */
-	.long local_label(misc_set_invalid) /* 16 misc  */
-	.long local_label(misc_set_u32) /* 17 double_float  */
-	.long local_label(misc_set_invalid) /* 18 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 19 cons  */
-	.long _SPgvset /* 1a complex  */
-	.long local_label(misc_set_invalid) /* 1b imm  */
-	.long local_label(misc_set_invalid) /* 1c odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 1d nil  */
-	.long local_label(misc_set_invalid) /* 1e misc  */
-	.long local_label(misc_set_u32) /* 1f macptr  */
+	__(b local_label(misc_set_invalid)) /* 10 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 11 cons  */
+	__(b local_label(misc_set_invalid)) /* 12 nodeheader  */
+	__(b local_label(misc_set_invalid)) /* 13 imm  */
+	__(b local_label(misc_set_invalid)) /* 14 odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 15 nil  */
+	__(b local_label(misc_set_invalid)) /* 16 misc  */
+	__(b local_label(misc_set_u32)) /* 17 double_float  */
+	__(b local_label(misc_set_invalid)) /* 18 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 19 cons  */
+	__(b _SPgvset) /* 1a complex  */
+	__(b  local_label(misc_set_invalid)) /* 1b imm  */
+	__(b local_label(misc_set_invalid)) /* 1c odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 1d nil  */
+	__(b local_label(misc_set_invalid)) /* 1e misc  */
+	__(b local_label(misc_set_u32)) /* 1f macptr  */
 	/* 20-2f  */
-	.long local_label(misc_set_invalid) /* 20 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 21 cons  */
-	.long _SPgvset /* 22 catch_frame  */
-	.long local_label(misc_set_invalid) /* 23 imm  */
-	.long local_label(misc_set_invalid) /* 24 odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 25 nil  */
-	.long local_label(misc_set_invalid) /* 26 misc  */
-	.long local_label(misc_set_u32) /* 27 dead_macptr  */
-	.long local_label(misc_set_invalid) /* 28 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 29 cons  */
-	.long _SPgvset /* 2a function  */
-	.long local_label(misc_set_invalid) /* 2b imm  */
-	.long local_label(misc_set_invalid) /* 2c odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 2d nil  */
-	.long local_label(misc_set_invalid) /* 2e misc  */
-	.long local_label(misc_set_u32) /* 2f code_vector  */
+	__(b local_label(misc_set_invalid)) /* 20 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 21 cons  */
+	__(b _SPgvset) /* 22 catch_frame  */
+	__(b  local_label(misc_set_invalid)) /* 23 imm  */
+	__(b local_label(misc_set_invalid)) /* 24 odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 25 nil  */
+	__(b local_label(misc_set_invalid)) /* 26 misc  */
+	__(b local_label(misc_set_u32)) /* 27 dead_macptr  */
+	__(b local_label(misc_set_invalid)) /* 28 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 29 cons  */
+	__(b _SPgvset) /* 2a function  */
+	__(b  local_label(misc_set_invalid)) /* 2b imm  */
+	__(b local_label(misc_set_invalid)) /* 2c odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 2d nil  */
+	__(b local_label(misc_set_invalid)) /* 2e misc  */
+	__(b local_label(misc_set_u32)) /* 2f code_vector  */
 	/* 30-3f  */
-	.long local_label(misc_set_invalid) /* 30 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 31 cons  */
-	.long _SPgvset /* 32 lisp_thread  */
-	.long local_label(misc_set_invalid) /* 33 imm  */
-	.long local_label(misc_set_invalid) /* 34 odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 35 nil  */
-	.long local_label(misc_set_invalid) /* 36 misc  */
-	.long local_label(misc_set_u32) /* 37 creole  */
-	.long local_label(misc_set_invalid) /* 38 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 39 cons  */
-	.long _SPgvset /* 3a symbol  */
-	.long local_label(misc_set_invalid) /* 3b imm  */
-	.long local_label(misc_set_invalid) /* 3c odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 3d nil  */
-	.long local_label(misc_set_invalid) /* 3e misc  */
-	.long local_label(misc_set_u32) /* 3f xcode_vector  */
+	__(b local_label(misc_set_invalid)) /* 30 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 31 cons  */
+	__(b _SPgvset) /* 32 lisp_thread  */
+	__(b  local_label(misc_set_invalid)) /* 33 imm  */
+	__(b local_label(misc_set_invalid)) /* 34 odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 35 nil  */
+	__(b local_label(misc_set_invalid)) /* 36 misc  */
+	__(b local_label(misc_set_u32)) /* 37 creole  */
+	__(b local_label(misc_set_invalid)) /* 38 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 39 cons  */
+	__(b _SPgvset) /* 3a symbol  */
+	__(b  local_label(misc_set_invalid)) /* 3b imm  */
+	__(b local_label(misc_set_invalid)) /* 3c odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 3d nil  */
+	__(b local_label(misc_set_invalid)) /* 3e misc  */
+	__(b local_label(misc_set_u32)) /* 3f xcode_vector  */
 	/* 40-4f  */
-	.long local_label(misc_set_invalid) /* 40 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 41 cons  */
-	.long _SPgvset /* 42 lock  */
-	.long local_label(misc_set_invalid) /* 43 imm  */
-	.long local_label(misc_set_invalid) /* 44 odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 45 nil  */
-	.long local_label(misc_set_invalid) /* 46 misc  */
-	.long local_label(misc_set_invalid) /* 47 immheader  */
-	.long local_label(misc_set_invalid) /* 48 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 49 cons  */
-	.long _SPgvset /* 4a hash_vector  */
-	.long local_label(misc_set_invalid) /* 4b imm  */
-	.long local_label(misc_set_invalid) /* 4c odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 4d nil  */
-	.long local_label(misc_set_invalid) /* 4e misc  */
-	.long local_label(misc_set_invalid) /* 4f immheader  */
+	__(b local_label(misc_set_invalid)) /* 40 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 41 cons  */
+	__(b _SPgvset) /* 42 lock  */
+	__(b  local_label(misc_set_invalid)) /* 43 imm  */
+	__(b local_label(misc_set_invalid)) /* 44 odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 45 nil  */
+	__(b local_label(misc_set_invalid)) /* 46 misc  */
+	__(b local_label(misc_set_invalid)) /* 47 immheader  */
+	__(b local_label(misc_set_invalid)) /* 48 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 49 cons  */
+	__(b _SPgvset) /* 4a hash_vector  */
+	__(b  local_label(misc_set_invalid)) /* 4b imm  */
+	__(b local_label(misc_set_invalid)) /* 4c odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 4d nil  */
+	__(b local_label(misc_set_invalid)) /* 4e misc  */
+	__(b local_label(misc_set_invalid)) /* 4f immheader  */
 	/* 50-5f  */
-	.long local_label(misc_set_invalid) /* 50 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 51 cons  */
-	.long _SPgvset /* 52 pool  */
-	.long local_label(misc_set_invalid) /* 53 imm  */
-	.long local_label(misc_set_invalid) /* 54 odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 55 nil  */
-	.long local_label(misc_set_invalid) /* 56 misc  */
-	.long local_label(misc_set_invalid) /* 57 immheader  */
-	.long local_label(misc_set_invalid) /* 58 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 59 cons  */
-	.long _SPgvset /* 5a weak  */
-	.long local_label(misc_set_invalid) /* 5b imm  */
-	.long local_label(misc_set_invalid) /* 5c odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 5d nil  */
-	.long local_label(misc_set_invalid) /* 5e misc  */
-	.long local_label(misc_set_invalid) /* 5f immheader  */
+	__(b local_label(misc_set_invalid)) /* 50 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 51 cons  */
+	__(b _SPgvset) /* 52 pool  */
+	__(b  local_label(misc_set_invalid)) /* 53 imm  */
+	__(b local_label(misc_set_invalid)) /* 54 odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 55 nil  */
+	__(b local_label(misc_set_invalid)) /* 56 misc  */
+	__(b local_label(misc_set_invalid)) /* 57 immheader  */
+	__(b local_label(misc_set_invalid)) /* 58 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 59 cons  */
+	__(b _SPgvset) /* 5a weak  */
+	__(b  local_label(misc_set_invalid)) /* 5b imm  */
+	__(b local_label(misc_set_invalid)) /* 5c odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 5d nil  */
+	__(b local_label(misc_set_invalid)) /* 5e misc  */
+	__(b local_label(misc_set_invalid)) /* 5f immheader  */
 	/* 60-6f  */
-	.long local_label(misc_set_invalid) /* 60 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 61 cons  */
-	.long _SPgvset /* 62 package  */
-	.long local_label(misc_set_invalid) /* 63 imm  */
-	.long local_label(misc_set_invalid) /* 64 odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 65 nil  */
-	.long local_label(misc_set_invalid) /* 66 misc  */
-	.long local_label(misc_set_invalid) /* 67 immheader  */
-	.long local_label(misc_set_invalid) /* 68 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 69 cons  */
-	.long _SPgvset /* 6a slot_vector  */
-	.long local_label(misc_set_invalid) /* 6b imm  */
-	.long local_label(misc_set_invalid) /* 6c odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 6d nil  */
-	.long local_label(misc_set_invalid) /* 6e misc  */
-	.long local_label(misc_set_invalid) /* 6f immheader  */
+	__(b local_label(misc_set_invalid)) /* 60 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 61 cons  */
+	__(b _SPgvset) /* 62 package  */
+	__(b  local_label(misc_set_invalid)) /* 63 imm  */
+	__(b local_label(misc_set_invalid)) /* 64 odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 65 nil  */
+	__(b local_label(misc_set_invalid)) /* 66 misc  */
+	__(b local_label(misc_set_invalid)) /* 67 immheader  */
+	__(b local_label(misc_set_invalid)) /* 68 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 69 cons  */
+	__(b _SPgvset) /* 6a slot_vector  */
+	__(b  local_label(misc_set_invalid)) /* 6b imm  */
+	__(b local_label(misc_set_invalid)) /* 6c odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 6d nil  */
+	__(b local_label(misc_set_invalid)) /* 6e misc  */
+	__(b local_label(misc_set_invalid)) /* 6f immheader  */
 	/* 70-7f  */
-	.long local_label(misc_set_invalid) /* 70 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 71 cons  */
-	.long _SPgvset /* 72 instance  */
-	.long local_label(misc_set_invalid) /* 73 imm  */
-	.long local_label(misc_set_invalid) /* 74 odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 75 nil  */
-	.long local_label(misc_set_invalid) /* 76 misc  */
-	.long local_label(misc_set_invalid) /* 77 immheader  */
-	.long local_label(misc_set_invalid) /* 78 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 79 cons  */
-	.long _SPgvset /* 7a struct  */
-	.long local_label(misc_set_invalid) /* 7b imm  */
-	.long local_label(misc_set_invalid) /* 7c odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 7d nil  */
-	.long local_label(misc_set_invalid) /* 7e misc  */
-	.long local_label(misc_set_invalid) /* 7f immheader  */
+	__(b local_label(misc_set_invalid)) /* 70 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 71 cons  */
+	__(b _SPgvset) /* 72 instance  */
+	__(b  local_label(misc_set_invalid)) /* 73 imm  */
+	__(b local_label(misc_set_invalid)) /* 74 odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 75 nil  */
+	__(b local_label(misc_set_invalid)) /* 76 misc  */
+	__(b local_label(misc_set_invalid)) /* 77 immheader  */
+	__(b local_label(misc_set_invalid)) /* 78 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 79 cons  */
+	__(b _SPgvset) /* 7a struct  */
+	__(b  local_label(misc_set_invalid)) /* 7b imm  */
+	__(b local_label(misc_set_invalid)) /* 7c odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 7d nil  */
+	__(b local_label(misc_set_invalid)) /* 7e misc  */
+	__(b local_label(misc_set_invalid)) /* 7f immheader  */
 	/* 80-8f  */
-	.long local_label(misc_set_invalid) /* 80 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 81 cons  */
-	.long _SPgvset /* 82 istruct  */
-	.long local_label(misc_set_invalid) /* 83 imm  */
-	.long local_label(misc_set_invalid) /* 84 odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 85 nil  */
-	.long local_label(misc_set_invalid) /* 86 misc  */
-	.long local_label(misc_set_invalid) /* 87 immheader  */
-	.long local_label(misc_set_invalid) /* 88 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 89 cons  */
-	.long _SPgvset /* 8a value_cell  */
-	.long local_label(misc_set_invalid) /* 8b imm  */
-	.long local_label(misc_set_invalid) /* 8c odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 8d nil  */
-	.long local_label(misc_set_invalid) /* 8e misc  */
-	.long local_label(misc_set_invalid) /* 8f immheader  */
+	__(b local_label(misc_set_invalid)) /* 80 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 81 cons  */
+	__(b _SPgvset) /* 82 istruct  */
+	__(b  local_label(misc_set_invalid)) /* 83 imm  */
+	__(b local_label(misc_set_invalid)) /* 84 odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 85 nil  */
+	__(b local_label(misc_set_invalid)) /* 86 misc  */
+	__(b local_label(misc_set_invalid)) /* 87 immheader  */
+	__(b local_label(misc_set_invalid)) /* 88 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 89 cons  */
+	__(b _SPgvset) /* 8a value_cell  */
+	__(b  local_label(misc_set_invalid)) /* 8b imm  */
+	__(b local_label(misc_set_invalid)) /* 8c odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 8d nil  */
+	__(b local_label(misc_set_invalid)) /* 8e misc  */
+	__(b local_label(misc_set_invalid)) /* 8f immheader  */
 	/* 90-9f  */
-	.long local_label(misc_set_invalid) /* 90 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 91 cons  */
-	.long _SPgvset /* 92 xfunction  */
-	.long local_label(misc_set_invalid) /* 93 imm  */
-	.long local_label(misc_set_invalid) /* 94 odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 95 nil  */
-	.long local_label(misc_set_invalid) /* 96 misc  */
-	.long local_label(misc_set_invalid) /* 97 immheader  */
-	.long local_label(misc_set_invalid) /* 98 even_fixnum  */
-	.long local_label(misc_set_invalid) /* 99 cons  */
-	.long _SPgvset /* 9a arrayH  */
-	.long local_label(misc_set_invalid) /* 9b imm  */
-	.long local_label(misc_set_invalid) /* 9c odd_fixnum  */
-	.long local_label(misc_set_invalid) /* 9d nil  */
-	.long local_label(misc_set_invalid) /* 9e misc  */
-	.long local_label(misc_set_invalid) /* 9f immheader  */
+	__(b local_label(misc_set_invalid)) /* 90 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 91 cons  */
+	__(b _SPgvset) /* 92 xfunction  */
+	__(b  local_label(misc_set_invalid)) /* 93 imm  */
+	__(b local_label(misc_set_invalid)) /* 94 odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 95 nil  */
+	__(b local_label(misc_set_invalid)) /* 96 misc  */
+	__(b local_label(misc_set_invalid)) /* 97 immheader  */
+	__(b local_label(misc_set_invalid)) /* 98 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 99 cons  */
+	__(b _SPgvset) /* 9a arrayH  */
+	__(b  local_label(misc_set_invalid)) /* 9b imm  */
+	__(b local_label(misc_set_invalid)) /* 9c odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* 9d nil  */
+	__(b local_label(misc_set_invalid)) /* 9e misc  */
+	__(b local_label(misc_set_invalid)) /* 9f immheader  */
 	/* a0-af  */
-	.long local_label(misc_set_invalid) /* a0 even_fixnum  */
-	.long local_label(misc_set_invalid) /* a1 cons  */
-	.long _SPgvset /* a2 vectorH  */
-	.long local_label(misc_set_invalid) /* a3 imm  */
-	.long local_label(misc_set_invalid) /* a4 odd_fixnum  */
-	.long local_label(misc_set_invalid) /* a5 nil  */
-	.long local_label(misc_set_invalid) /* a6 misc  */
-	.long local_label(misc_set_single_float_vector) /* a7 sf vector  */
-	.long local_label(misc_set_invalid) /* a8 even_fixnum  */
-	.long local_label(misc_set_invalid) /* a9 cons  */
-	.long _SPgvset /* aa vectorH  */
-	.long local_label(misc_set_invalid) /* ab imm  */
-	.long local_label(misc_set_invalid) /* ac odd_fixnum  */
-	.long local_label(misc_set_invalid) /* ad nil  */
-	.long local_label(misc_set_invalid) /* ae misc  */
-	.long local_label(misc_set_u32) /* af u32  */
+	__(b local_label(misc_set_invalid)) /* a0 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* a1 cons  */
+	__(b _SPgvset) /* a2 vectorH  */
+	__(b  local_label(misc_set_invalid)) /* a3 imm  */
+	__(b local_label(misc_set_invalid)) /* a4 odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* a5 nil  */
+	__(b local_label(misc_set_invalid)) /* a6 misc  */
+	__(b local_label(misc_set_single_float_vector)) /* a7 sf vector  */
+	__(b local_label(misc_set_invalid)) /* a8 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* a9 cons  */
+	__(b _SPgvset) /* aa vectorH  */
+	__(b  local_label(misc_set_invalid)) /* ab imm  */
+	__(b local_label(misc_set_invalid)) /* ac odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* ad nil  */
+	__(b local_label(misc_set_invalid)) /* ae misc  */
+	__(b local_label(misc_set_u32)) /* af u32  */
 	/* b0-bf  */
-	.long local_label(misc_set_invalid) /* b0 even_fixnum  */
-	.long local_label(misc_set_invalid) /* b1 cons  */
-	.long local_label(misc_set_invalid) /* b2 node  */
-	.long local_label(misc_set_invalid) /* b3 imm  */
-	.long local_label(misc_set_invalid) /* b4 odd_fixnum  */
-	.long local_label(misc_set_invalid) /* b5 nil  */
-	.long local_label(misc_set_invalid) /* b6 misc  */
-	.long local_label(misc_set_s32) /* b7 s32  */
-	.long local_label(misc_set_invalid) /* b8 even_fixnum  */
-	.long local_label(misc_set_invalid) /* b9 cons  */
-	.long local_label(misc_set_invalid) /* ba nodeheader  */
-	.long local_label(misc_set_invalid) /* bb imm  */
-	.long local_label(misc_set_invalid) /* bc odd_fixnum  */
-	.long local_label(misc_set_invalid) /* bd nil  */
-	.long local_label(misc_set_invalid) /* be misc  */
-	.long local_label(misc_set_fixnum_vector) /* bf fixnum_vector  */
+	__(b local_label(misc_set_invalid)) /* b0 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* b1 cons  */
+	__(b local_label(misc_set_invalid)) /* b2 node  */
+	__(b local_label(misc_set_invalid)) /* b3 imm  */
+	__(b local_label(misc_set_invalid)) /* b4 odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* b5 nil  */
+	__(b local_label(misc_set_invalid)) /* b6 misc  */
+	__(b local_label(misc_set_s32)) /* b7 s32  */
+	__(b local_label(misc_set_invalid)) /* b8 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* b9 cons  */
+	__(b local_label(misc_set_invalid)) /* ba nodeheader  */
+	__(b local_label(misc_set_invalid)) /* bb imm  */
+	__(b local_label(misc_set_invalid)) /* bc odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* bd nil  */
+	__(b local_label(misc_set_invalid)) /* be misc  */
+	__(b local_label(misc_set_fixnum_vector)) /* bf fixnum_vector  */
 	/* c0-cf  */
-	.long local_label(misc_set_invalid) /* c0 even_fixnum  */
-	.long local_label(misc_set_invalid) /* c1 cons  */
-	.long local_label(misc_set_invalid) /* c2 nodeheader  */
-	.long local_label(misc_set_invalid) /* c3 imm  */
-	.long local_label(misc_set_invalid) /* c4 odd_fixnum  */
-	.long local_label(misc_set_invalid) /* c5 nil  */
-	.long local_label(misc_set_invalid) /* c6 misc  */
-	.long local_label(misc_set_new_string) /* c7 new_string  */
-	.long local_label(misc_set_invalid) /* c8 even_fixnum  */
-	.long local_label(misc_set_invalid) /* c9 cons  */
-	.long local_label(misc_set_invalid) /* ca nodeheader  */
-	.long local_label(misc_set_invalid) /* cb imm  */
-	.long local_label(misc_set_invalid) /* cc odd_fixnum  */
-	.long local_label(misc_set_invalid) /* cd nil  */
-	.long local_label(misc_set_invalid) /* ce misc  */
-	.long local_label(misc_set_u8) /* cf u8  */
+	__(b local_label(misc_set_invalid)) /* c0 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* c1 cons  */
+	__(b local_label(misc_set_invalid)) /* c2 nodeheader  */
+	__(b local_label(misc_set_invalid)) /* c3 imm  */
+	__(b local_label(misc_set_invalid)) /* c4 odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* c5 nil  */
+	__(b local_label(misc_set_invalid)) /* c6 misc  */
+	__(b local_label(misc_set_new_string)) /* c7 new_string  */
+	__(b local_label(misc_set_invalid)) /* c8 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* c9 cons  */
+	__(b local_label(misc_set_invalid)) /* ca nodeheader  */
+	__(b local_label(misc_set_invalid)) /* cb imm  */
+	__(b local_label(misc_set_invalid)) /* cc odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* cd nil  */
+	__(b local_label(misc_set_invalid)) /* ce misc  */
+	__(b local_label(misc_set_u8)) /* cf u8  */
 	/* d0-df  */
-	.long local_label(misc_set_invalid) /* d0 even_fixnum  */
-	.long local_label(misc_set_invalid) /* d1 cons  */
-	.long local_label(misc_set_invalid) /* d2 nodeheader  */
-	.long local_label(misc_set_invalid) /* d3 imm  */
-	.long local_label(misc_set_invalid) /* d4 odd_fixnum  */
-	.long local_label(misc_set_invalid) /* d5 nil  */
-	.long local_label(misc_set_invalid) /* d6 misc  */
-	.long local_label(misc_set_s8) /* d7 s8  */
-	.long local_label(misc_set_invalid) /* d8 even_fixnum  */
-	.long local_label(misc_set_invalid) /* d9 cons  */
-	.long local_label(misc_set_invalid) /* da nodeheader  */
-	.long local_label(misc_set_invalid) /* db imm  */
-	.long local_label(misc_set_invalid) /* dc odd_fixnum  */
-	.long local_label(misc_set_invalid) /* dd nil  */
-	.long local_label(misc_set_invalid) /* de misc  */
-	.long local_label(misc_set_old_string) /* df (old) simple_base_string  */
+	__(b local_label(misc_set_invalid)) /* d0 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* d1 cons  */
+	__(b local_label(misc_set_invalid)) /* d2 nodeheader  */
+	__(b local_label(misc_set_invalid)) /* d3 imm  */
+	__(b local_label(misc_set_invalid)) /* d4 odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* d5 nil  */
+	__(b local_label(misc_set_invalid)) /* d6 misc  */
+	__(b local_label(misc_set_s8)) /* d7 s8  */
+	__(b local_label(misc_set_invalid)) /* d8 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* d9 cons  */
+	__(b local_label(misc_set_invalid)) /* da nodeheader  */
+	__(b local_label(misc_set_invalid)) /* db imm  */
+	__(b local_label(misc_set_invalid)) /* dc odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* dd nil  */
+	__(b local_label(misc_set_invalid)) /* de misc  */
+	__(b local_label(misc_set_old_string)) /* df (old) simple_base_string  */
 	/* e0-ef  */
-	.long local_label(misc_set_invalid) /* e0 even_fixnum  */
-	.long local_label(misc_set_invalid) /* e1 cons  */
-	.long local_label(misc_set_invalid) /* e2 nodeheader  */
-	.long local_label(misc_set_invalid) /* e3 imm  */
-	.long local_label(misc_set_invalid) /* e4 odd_fixnum  */
-	.long local_label(misc_set_invalid) /* e5 nil  */
-	.long local_label(misc_set_invalid) /* e6 misc  */
-	.long local_label(misc_set_u16) /* e7 u16  */
-	.long local_label(misc_set_invalid) /* e8 even_fixnum  */
-	.long local_label(misc_set_invalid) /* e9 cons  */
-	.long local_label(misc_set_invalid) /* ea nodeheader  */
-	.long local_label(misc_set_invalid) /* eb imm  */
-	.long local_label(misc_set_invalid) /* ec odd_fixnum  */
-	.long local_label(misc_set_invalid) /* ed nil  */
-	.long local_label(misc_set_invalid) /* ee misc  */
-	.long local_label(misc_set_s16) /* ef s16  */
+	__(b local_label(misc_set_invalid)) /* e0 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* e1 cons  */
+	__(b local_label(misc_set_invalid)) /* e2 nodeheader  */
+	__(b local_label(misc_set_invalid)) /* e3 imm  */
+	__(b local_label(misc_set_invalid)) /* e4 odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* e5 nil  */
+	__(b local_label(misc_set_invalid)) /* e6 misc  */
+	__(b local_label(misc_set_u16)) /* e7 u16  */
+	__(b local_label(misc_set_invalid)) /* e8 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* e9 cons  */
+	__(b local_label(misc_set_invalid)) /* ea nodeheader  */
+	__(b local_label(misc_set_invalid)) /* eb imm  */
+	__(b local_label(misc_set_invalid)) /* ec odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* ed nil  */
+	__(b local_label(misc_set_invalid)) /* ee misc  */
+	__(b local_label(misc_set_s16)) /* ef s16  */
 	/* f0-ff  */
-	.long local_label(misc_set_invalid) /* f0 even_fixnum  */
-	.long local_label(misc_set_invalid) /* f1 cons  */
-	.long local_label(misc_set_invalid) /* f2 nodeheader  */
-	.long local_label(misc_set_invalid) /* f3 imm  */
-	.long local_label(misc_set_invalid) /* f4 odd_fixnum  */
-	.long local_label(misc_set_invalid) /* f5 nil  */
-	.long local_label(misc_set_invalid) /* f6 misc  */
-	.long local_label(misc_set_double_float_vector) /* f7 df vector  */
-	.long local_label(misc_set_invalid) /* f8 even_fixnum  */
-	.long local_label(misc_set_invalid) /* f9 cons  */
-	.long local_label(misc_set_invalid) /* fa nodeheader  */
-	.long local_label(misc_set_invalid) /* fb imm  */
-	.long local_label(misc_set_invalid) /* fc odd_fixnum  */
-	.long local_label(misc_set_invalid) /* fd nil  */
-	.long local_label(misc_set_invalid) /* fe misc  */
-	.long local_label(misc_set_bit_vector) /* ff bit_vector  */
+	__(b local_label(misc_set_invalid)) /* f0 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* f1 cons  */
+	__(b local_label(misc_set_invalid)) /* f2 nodeheader  */
+	__(b local_label(misc_set_invalid)) /* f3 imm  */
+	__(b local_label(misc_set_invalid)) /* f4 odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* f5 nil  */
+	__(b local_label(misc_set_invalid)) /* f6 misc  */
+	__(b local_label(misc_set_double_float_vector)) /* f7 df vector  */
+	__(b local_label(misc_set_invalid)) /* f8 even_fixnum  */
+	__(b local_label(misc_set_invalid)) /* f9 cons  */
+	__(b local_label(misc_set_invalid)) /* fa nodeheader  */
+	__(b local_label(misc_set_invalid)) /* fb imm  */
+	__(b local_label(misc_set_invalid)) /* fc odd_fixnum  */
+	__(b local_label(misc_set_invalid)) /* fd nil  */
+	__(b local_label(misc_set_invalid)) /* fe misc  */
+	__(b local_label(misc_set_bit_vector)) /* ff bit_vector  */
 
 local_label(misc_set_u32):        
 	/* Either a non-negative fixnum, a positive one-digit bignum, */
@@ -3930,7 +3931,7 @@ local_label(misc_set_invalid):
 /* temp0: (stack-consed) target catch frame, imm0: count of intervening  */
 /* frames. If target isn't a multiple-value receiver, discard extra values */
 /* (less hair, maybe.)  */
-_exportfn(C(_throw_found))
+_startfn(C(_throw_found))
         new_local_labels()
         __(ldr imm1,[temp0,#catch_frame.mvflag])
         __(cmp imm1,#0)
@@ -3979,7 +3980,7 @@ local_label(throw_pushed_values):
         __(bx lr)
 _endfn(C(_throw_found))        
 
-_exportfn(C(nthrow1v))
+_startfn(C(nthrow1v))
         new_local_labels()
 local_label(_nthrow1v_nextframe):
         __(subs temp2,temp2,#fixnum_one)
@@ -4042,7 +4043,7 @@ local_label(_nthrow1v_done):
         __(bx lr)
 _endfn        
 
-_exportfn(C(nthrownv))
+_startfn(C(nthrownv))
         new_local_labels()
 local_label(nthrownv_nextframe):
         __(subs temp2,temp2,#fixnum_one)
@@ -4143,7 +4144,7 @@ local_label(nthrownv_done):
         __(bx lr)
 _endfn                
 
-_exportfn(C(progvsave))        
+_startfn(C(progvsave))        
         /* Error if arg_z isn't a proper list.  That's unlikely, */
         /* but it's better to check now than to crash later. */
         __(cmp arg_z,#nil_value)
@@ -4227,13 +4228,13 @@ _endfn
                
 /* Too large to safely fit on tstack.  Heap-cons the vector, but make  */
 /* sure that there's an empty tsp frame to keep the compiler happy.  */
-_exportfn(stack_misc_alloc_no_room)
+_startfn(stack_misc_alloc_no_room)
         __(mov imm0,#stack_alloc_marker)
         __(mov imm1,sp)
         __(stmdb sp!,{imm0,imm1})
         __(b _SPmisc_alloc)
 _endfn        
-_exportfn(stack_misc_alloc_init_no_room)
+_startfn(stack_misc_alloc_init_no_room)
 /* Too large to safely fit on tstack.  Heap-cons the vector, but make  */
 /* sure that there's an empty tsp frame to keep the compiler happy.  */
         __(mov imm0,#stack_alloc_marker)
@@ -4241,7 +4242,7 @@ _exportfn(stack_misc_alloc_init_no_room)
         __(stmdb sp!,{imm0,imm1})
         __(b _SPmisc_alloc_init)
 _endfn        
-_exportfn(stack_misc_alloc_init_ivector)
+_startfn(stack_misc_alloc_init_ivector)
         __(mov imm0,arg_x,lsl #num_subtag_bits-fixnumshift)
         __(orr imm0,imm0,arg_y,lsr #fixnumshift)
         __(cmp arg_y,#max_32_bit_ivector_subtag<<fixnumshift)
@@ -4269,4 +4270,77 @@ _exportfn(stack_misc_alloc_init_ivector)
         __(stmdb sp!,{temp0,temp1})
         __(b initialize_vector)
 _endfn        
+/* This is called from a lisp-style context and calls a lisp function. */
+/* This does the moral equivalent of */
+/*   (loop  */
+/*	(let* ((fn (%function_on_top_of_lisp_stack))) */
+/*	  (if fn */
+/*           (catch %toplevel-catch% */
+/*	       (funcall fn)) */
+/*            (return nil)))) */
+
+_startfn(toplevel_loop)
+        __(build_lisp_frame(imm0))
+	__(b local_label(test))
+local_label(loop):
+	__(ref_nrs_value(arg_z,toplcatch))
+	__(bl _SPmkcatch1v)     /* preserves nfn, at the moment */
+	__(b local_label(test))	/* cleanup address, not really a branch */
+        __(ldr nfn,[vsp,#0])
+	__(set_nargs(0))
+        __(bl _SPfuncall)
+	__(mov arg_z,#nil_value)
+	__(mov imm0,fixnum_one)
+	__(bl _SPnthrow1value)
+local_label(test):
+        __(ldr nfn,[vsp,#0])
+        __(cmp nfn,#nil_value)
+	__(bne local_label(loop))
+        __(return_lisp_frame(imm0))
+	_endfn
+
+
+/* This gets called with R0 pointing to the current TCR. */
+/* r1 is 0 if we want to start the whole thing rolling, */
+/* non-zero if we want to reset the current process */
+/* by throwing to toplevel */
+
+	.globl _SPreset
+_exportfn(C(start_lisp))
+        __(stmdb sp!,{r4,r5,r6,r7,r8,r9,r10,r11,r12,lr})
+        __(mov rcontext,r0)
+        __(mov r0,sp)
+        __(tst sp,#4)
+        __(strne r0,[sp,#-4]!)
+        __(streq r0,[sp,#-8]!)
+        __(mov arg_z,#0)
+        __(mov arg_y,#0)
+        __(mov arg_x,#0)
+        __(mov temp0,#0)
+        __(mov temp1,#0)
+        __(mov temp2,#0)
+        __(mov allocptr,#VOID_ALLOCPTR)
+        __(mov fn,#0)
+        __(ldr vsp,[rcontext,#tcr.save_vsp])
+        __(ldr imm2,[rcontext,#tcr.last_lisp_frame])
+        __(sub imm0,imm2,sp)
+        __(add imm0,imm0,#node_size)
+        __(mov imm0,imm0,lsl #num_subtag_bits-word_shift)
+        __(orr imm0,imm0,#subtag_u32_vector)
+        __(stmdb sp!,{imm0,imm2})
+        __(mov imm0,#TCR_STATE_LISP)
+        __(str imm0,[rcontext,#tcr.valence])
+        __(ldr allocptr,[rcontext,#tcr.save_allocptr])
+        __(bl toplevel_loop)
+        __(ldmia sp!,{imm0,imm1})
+        __(mov imm0,#TCR_STATE_FOREIGN)
+        __(str imm1,[rcontext,#tcr.last_lisp_frame])
+        __(str imm0,[rcontext,#tcr.valence])
+        __(mov imm0,#nil_value)
+        __(ldr sp,[sp])
+        __(ldmia sp!,{r4,r5,r6,r7,r8,r9,r10,r11,r12,lr})
+        __(bx lr)
+
+_exportfn(_SPsp_end)
+        __(nop)
         	_endfile
