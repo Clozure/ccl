@@ -315,11 +315,11 @@
 
 (defun open-shared-library-internal (name)
   (let* ((handle (with-cstrs ((name name))
-                        (ff-call
-                         (%kernel-import target::kernel-import-GetSharedLibrary)
-                         :address name
-                         :unsigned-fullword *dlopen-flags*
-                         :address)))
+                   (ff-call
+                    (%kernel-import target::kernel-import-GetSharedLibrary)
+                    :address name
+                    :unsigned-fullword *dlopen-flags*
+                    :address)))
          (link-map #+(and linux-target (not android-target)) handle
                    #+(or freebsd-target solaris-target)
                    (if (%null-ptr-p handle)
@@ -333,7 +333,9 @@
                                    :int))
                          (pref p :address)
                          (%null-ptr))))
-                   #+android-target (pref handle :soinfo.linkmap)))
+                   #+android-target (if (%null-ptr-p handle)
+                                      handle
+                                      (pref handle :soinfo.linkmap))))
     (if (%null-ptr-p link-map)
       (values nil (dlerror))
       (prog1 (let* ((lib (shlib-from-map-entry link-map)))
@@ -342,10 +344,11 @@
 	       lib)
 	(%walk-shared-libraries
 	 #'(lambda (map)
-	     (unless (shared-library-at
-		      (%int-to-ptr (pref map :link_map.l_addr)))
-	       (let* ((new (shlib-from-map-entry map)))
-		 (%dlopen-shlib new)))))))))
+             (let* ((addr (pref map :link_map.l_addr)))
+               (unless (or (eql addr 0)
+                           (shared-library-at (%int-to-ptr addr)))
+                 (let* ((new (shlib-from-map-entry map)))
+                   (%dlopen-shlib new))))))))))
 
 )
 
