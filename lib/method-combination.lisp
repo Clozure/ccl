@@ -714,8 +714,8 @@
 ; The user visible error functions
 ; We don't add any contextual information yet.
 ; Maybe we never will.
-(setf (symbol-function 'method-combination-error) #'%method-combination-error)
-(setf (symbol-function 'invalid-method-error) #'%invalid-method-error)
+(setf (fdefinition 'method-combination-error) #'%method-combination-error)
+(setf (fdefinition 'invalid-method-error) #'%invalid-method-error)
 
 ;;;;;;;
 ;

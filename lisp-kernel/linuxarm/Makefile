@@ -25,7 +25,7 @@ ASFLAGS = -mfpu=vfp
 M4FLAGS = -DLINUX -DARM
 CDEFINES = -DLINUX -DARM -D_REENTRANT -D_GNU_SOURCE -DUSE_FUTEX -DSVN_REVISION=$(SVN_REVISION)
 CDEBUG = -g
-COPT = -O2
+COPT = #-O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
@@ -53,7 +53,7 @@ A32 = $(shell ($(AS) --help -v 2>&1 | grep -q -e "-a32") && /bin/echo "-a32")
 .c.o:
 	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) -marm $(WFORMAT)  -o $@
 
-SPOBJ = pad.o  arm-spentry.o arm-subprims.o
+SPOBJ = pad.o  arm-spentry.o
 ASMOBJ = arm-asmutils.o imports.o
 
 COBJ  = pmcl-kernel.o gc-common.o arm-gc.o bits.o  arm-exceptions.o \

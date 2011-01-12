@@ -367,7 +367,7 @@
   (defvar suffix-min-size 256.)) 
 
 (progn
-  (setf (symbol-function 'xp-stream-stream) #'(lambda (s) (xp-stream s)))
+  (setf (fdefinition 'xp-stream-stream) #'(lambda (s) (xp-stream s)))
 
   (defmethod streamp ((x xp-structure)) t)
   (defmethod streamp ((x xp-stream)) t)

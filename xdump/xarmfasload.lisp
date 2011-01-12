@@ -68,7 +68,7 @@
 
 (defun adjust-closure-trampoline-for-subprims-bias (backend-name)
   (let* ((backend (find-backend backend-name))
-         (bias (if backend (backend-real-subprims-bias backend)))
+         (bias (if backend (backend-real-subprims-bias backend) 0))
          (code *arm-closure-trampoline-code*))
     (if (eql bias 0)
       code
