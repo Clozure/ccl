@@ -406,7 +406,7 @@
     (funcall fhave name function)
     function))
 
-(defsetf symbol-function fset)
+(defsetf symbol-function fset-symbol)
 (defsetf fdefinition fset)
 
 (defun (setf macro-function) (macro-fun name &optional env)

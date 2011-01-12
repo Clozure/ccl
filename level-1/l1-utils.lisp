@@ -739,13 +739,15 @@ vector
 
 ;;;;;FUNCTION BINDING Functions
 
-(defun symbol-function (name)
-  "Return the definition of NAME, even if it is a macro or a special form.
-   Error if NAME doesn't have a definition."
+(defun fdefinition (name)
   (or (fboundp name) ;Our fboundp returns the binding
       (prog1 (%err-disp $xfunbnd name))))
 
-(%fhave 'fdefinition #'symbol-function)
+(defun symbol-function (name)
+  "Return the definition of NAME, even if it is a macro or a special form.
+   Error if NAME doesn't have a definition."
+  (fdefinition (require-type name 'symbol)))
+
 
 (defun %make-function (name fn env)
   (compile-user-function fn name env))

@@ -67,6 +67,10 @@
 ;Redefined in sysutils.
 (%fhave 'fset #'bootstrapping-fset)
 
+(defun fset-symbol (name fn)
+  (fset (require-type name 'symbol) fn))
+
+
 (defun bootstrapping-record-source-file (fn &optional type)
   (declare (ignore fn type))
   nil)
