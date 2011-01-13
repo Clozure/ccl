@@ -3330,32 +3330,32 @@
     (:inferred . nil)
     (:unicode . :unicode)))
 
-
 (defun optimal-buffer-size (fd element-type)
   #+windows-target (declare (ignore fd))
-  (let* (#-windows-target (nominal (or (nth-value 6 (%fstat fd)) *elements-per-buffer*))
-         (octets #+windows-target #$BUFSIZ
-                 #-windows-target
-                 (case (%unix-fd-kind fd)
-                   (:pipe (#_fpathconf fd #$_PC_PIPE_BUF))
-                   (:socket
-                    #+linux-target nominal
-                    #-linux-target
-                    (int-getsockopt fd #$SOL_SOCKET
-                                    #+solaris-target #$SO_SNDBUF
-                                    #-solaris-target #$SO_SNDLOWAT))
-                   ((:character-special :tty) (#_fpathconf fd #$_PC_MAX_INPUT))
-                   (t nominal))))
-    (when (<= octets 0) (setq octets nominal))
-    (case (subtag-bytes (element-type-subtype element-type) 1)
-      (1 octets)
-      (2 (ash octets -1))
-      (4 (ash octets -2))
-      (8 (ash octets -3)))))
-
-
-
-
+  (flet ((scale-buffer-size (octets)
+	   (case (subtag-bytes (element-type-subtype element-type) 1)
+	     (1 octets)
+	     (2 (ash octets -1))
+	     (4 (ash octets -2))
+	     (8 (ash octets -3)))))
+    #+windows-target
+    (let ((octets #$BUFSIZ))
+      (scale-buffer-size octets))
+    #-windows-target
+    (let* ((nominal (or (nth-value 6 (%fstat fd)) *elements-per-buffer*))
+	   (octets (case (%unix-fd-kind fd)
+		     (:pipe (#_fpathconf fd #$_PC_PIPE_BUF))
+		     (:socket
+		      #+linux-target nominal
+		      #-linux-target
+		      (int-getsockopt fd #$SOL_SOCKET
+				      #+solaris-target #$SO_SNDBUF
+				      #-solaris-target #$SO_SNDLOWAT))
+		     ((:character-special :tty)
+		      (#_fpathconf fd #$_PC_MAX_INPUT))
+		     (t nominal))))
+      (when (<= octets 0) (setq octets nominal))
+      (scale-buffer-size octets))))
 
 (defun milliseconds-until-deadline (deadline ioblock)
   (let* ((now (get-internal-real-time)))
