@@ -794,6 +794,8 @@ given is that of a group to which the current user belongs."
   #-windows-target
   (= 1 (#_isatty fd)))
 
+#-win64-target
+(progn
 (defun %open-dir (namestring)
   (with-filename-cstrs ((name namestring))
     (let* ((DIR (ff-call (%kernel-import target::kernel-import-lisp-opendir)
@@ -815,6 +817,56 @@ given is that of a group to which the current user belongs."
       (get-foreign-namestring (pref res
                                     #+windows-target :_wdirent.d_name
                                     #-windows-target :dirent.d_name)))))
+)
+
+#+win64-target
+(progn
+  (eval-when (:compile-toplevel :execute)
+    (def-foreign-type nil
+        (:struct :win64-dir
+                 (:data #>WIN32_FIND_DATAW)
+                 (:handle :address)
+                 (:state :int))))
+
+(defun %open-dir (namestring)
+  ;;; Namestring should end in /*.  Honest.
+  (let* ((len (length namestring))
+         (lastchar (if (> len 0) (schar namestring (1- len))))
+         (penultimatechar (if (> len 1) (schar namestring (- len 2)))))
+    (unless (and (eql lastchar #\*)
+                 (or (eql penultimatechar #\\)
+                     (eql penultimatechar #\/)))
+      (if (or (eql lastchar #\\)
+              (eql lastchar #\/))
+        (setq namestring (concatenate 'string namestring "*"))
+        (setq namestring (concatenate 'string namestring "/*")))))
+  (let* ((dir (make-record :win64-dir :state -1)))
+    (with-filename-cstrs ((name namestring))
+      (let* ((handle (#_FindFirstFileW name dir)))
+        (cond ((eql handle #$INVALID_HANDLE_VALUE)
+               (free dir)
+               nil)
+              (t
+               (setf (pref dir :win64-dir.state) 0
+                     (pref dir :win64-dir.handle) handle)
+               dir))))))
+          
+(defun %read-dir (dir)
+  (when (eql 0 (pref dir :win64-dir.state))
+    (prog1
+        (get-foreign-namestring (pref dir  #>WIN32_FIND_DATAW.cFileName))
+      (if (eql 0 (#_FindNextFileW (pref dir :win64-dir.handle) dir))
+        (setf (pref dir :win64-dir.state) -1)))))
+
+(defun close-dir (dir) 
+  (#_FindClose (pref dir :win64-dir.handle))
+  (free dir)
+  nil)
+)
+                       
+  
+
+                         
 
 
 #-windows-target
