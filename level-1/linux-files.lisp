@@ -840,7 +840,7 @@ given is that of a group to which the current user belongs."
               (eql lastchar #\/))
         (setq namestring (concatenate 'string namestring "*"))
         (setq namestring (concatenate 'string namestring "/*")))))
-  (let* ((dir (make-record :win64-dir :state -1)))
+  (let* ((dir (malloc (record-length :win64-dir))))
     (with-filename-cstrs ((name namestring))
       (let* ((handle (#_FindFirstFileW name dir)))
         (cond ((eql handle #$INVALID_HANDLE_VALUE)
