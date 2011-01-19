@@ -1010,3 +1010,41 @@ init_winsock()
   WSAStartup((2<<8)|2,&data);
 }
 
+/*
+ * Reserve TLS slots 32 through 63 in the TEB for (part of) the TCR.
+ *
+ * On Windows 7 x64, #_TlsAlloc returns 23 in a fresh lisp.  On
+ * Windows XP, it returns 11.  With any luck, this will leave enough
+ * wiggle room for the C runtime or whatever to use a few more TLS
+ * slots, and still leave 32 through 63 free for us.
+ */
+void
+reserve_tls_slots()
+{
+  unsigned int first_available, n, i;
+
+  first_available = TlsAlloc();
+  if (first_available > 32) {
+    fprintf(dbgout, "Can't allocate required TLS indexes.\n");
+    fprintf(dbgout, "First available index value was %u\n", first_available);
+    exit(1);
+  }
+  TlsFree(first_available);
+
+  for (i = first_available; i < 32; i++) {
+    n = TlsAlloc();
+    if (n != i) {
+      fprintf(dbgout, "unexpected TLS index value: wanted %u, got %u\n", i, n);
+      exit(1);
+    }
+  }
+  for (i = 32; i < 64; i++) {
+    n = TlsAlloc();
+    if (n != i) {
+      fprintf(dbgout, "unexpected TLS index value: wanted %u, got %u\n", i, n);
+      exit(1);
+    }
+  }
+  for (i = first_available; i < 32; i++)
+    TlsFree(i);
+}

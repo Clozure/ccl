@@ -1707,6 +1707,7 @@ main
     int wide_argc;
     extern void init_winsock(void);
     extern void init_windows_io(void);
+    extern void reserve_tls_slots(void);
 
     _fmode = O_BINARY;
     _setmode(1, O_BINARY);
@@ -1714,6 +1715,7 @@ main
     setvbuf(dbgout, NULL, _IONBF, 0);
     init_winsock();
     init_windows_io();
+    reserve_tls_slots();
     utf_16_argv = CommandLineToArgvW(GetCommandLineW(),&wide_argc);
   }
 #endif
