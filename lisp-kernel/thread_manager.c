@@ -75,7 +75,7 @@ raise_thread_interrupt(TCR *target)
   CONTEXT  *pcontext;
   HANDLE hthread = (HANDLE)(target->osid);
   pc where;
-  area *cs = target->cs_area, *ts = target->cs_area;
+  area *ts = target->ts_area;
   DWORD rc;
   BOOL io_pending;
 
