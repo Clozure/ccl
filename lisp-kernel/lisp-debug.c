@@ -885,17 +885,17 @@ debug_thread_info(ExceptionInformation *xp, siginfo_t *info, int arg)
     fprintf(dbgout, "Control (C) stack area:  low = 0x" LISP ", high = 0x" LISP "\n",
             (cs_area->low), (cs_area->high));
     fprintf(dbgout, "Value (lisp) stack area: low = 0x" LISP ", high = 0x" LISP "\n",
-            (u64_t)(natural)(vs_area->low), (u64_t)(natural)vs_area->high);
+            (natural)(vs_area->low), (natural)vs_area->high);
     if (xp) {
       fprintf(dbgout, "Exception stack pointer = 0x" LISP "\n",
 #ifdef PPC
-              (u64_t) (natural)(xpGPR(xp,1))
+              (natural)(xpGPR(xp,1))
 #endif
 #ifdef X86
-              (u64_t) (natural)(xpGPR(xp,Isp))
+              (natural)(xpGPR(xp,Isp))
 #endif           
 #ifdef ARM
-              (u64_t) (natural)(xpGPR(xp,Rsp))
+              (natural)(xpGPR(xp,Rsp))
 #endif
               );
     }
