@@ -1054,7 +1054,7 @@ _spentry(syscall)
 	__(movl rcontext(tcr.foreign_sp),%esp)
 	/* preserve state of direction flag */
 	__(pushfl)
-	__(popl rcontext(tcr.save_eflags))
+	__(popl rcontext(tcr.unboxed0))
 	__(cld)
 	__(emms)
 	__(pop %ebp)		/* backlink */
@@ -1078,7 +1078,7 @@ local_label(back_from_sysenter):
 	__(clr %temp0)
 	__(clr %fn)
 	__(pxor %fpzero,%fpzero)
-	__(pushl rcontext(tcr.save_eflags))
+	__(pushl rcontext(tcr.unboxed0))
 	__(popfl)
 	__(movl rcontext(tcr.save_vsp),%esp)
 	__(movl rcontext(tcr.save_ebp),%ebp)
@@ -1110,7 +1110,7 @@ _spentry(syscall2)
 	__(movl rcontext(tcr.foreign_sp),%esp)
 	/* preserve state of direction flag */
 	__(pushfl)
-	__(popl rcontext(tcr.save_eflags))
+	__(popl rcontext(tcr.unboxed0))
 	__(cld)
 	__(emms)
 	__(pop %ebp)		/* backlink */
@@ -1138,7 +1138,7 @@ local_label(back_from_syscall):
 	__(clr %temp0)
 	__(clr %fn)
 	__(pxor %fpzero,%fpzero)
-	__(pushl rcontext(tcr.save_eflags))
+	__(pushl rcontext(tcr.unboxed0))
 	__(popf)
 	__(movl rcontext(tcr.save_vsp),%esp)
 	__(movl rcontext(tcr.save_ebp),%ebp)
@@ -4181,7 +4181,7 @@ LocalLabelPrefix`'ffcall:
 	__(movl rcontext(tcr.foreign_sp),%esp)
 	/* preserve state of direction flag */
 	__(pushfl)
-	__(popl rcontext(tcr.save_eflags))
+	__(popl rcontext(tcr.unboxed0))
 	__(cld)        
 	__(stmxcsr rcontext(tcr.lisp_mxcsr))
 	__(emms)
@@ -4225,7 +4225,7 @@ LocalLabelPrefix`'ffcall_call_end:
 	__(fnstsw rcontext(tcr.ffi_exception))
 	__(fnclex)
 	__endif
-1:	__(pushl rcontext(tcr.save_eflags))
+1:	__(pushl rcontext(tcr.unboxed0))
 	__(popfl)
 	__(movl rcontext(tcr.save_vsp),%esp)
 	__(movl rcontext(tcr.save_ebp),%ebp)
