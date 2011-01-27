@@ -20,7 +20,12 @@
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <unistd.h>
+#include <sys/fcntl.h>
+#include <sys/mman.h>
+#include <dlfcn.h>
 #include "lisp.h"
+#include "gc.h"
 
 #if WORD_SIZE==64
 typedef struct mach_header_64 macho_header;
@@ -29,13 +34,15 @@ typedef struct mach_header_64 macho_header;
 typedef struct segment_command_64 macho_segment_command;
 typedef struct section_64 macho_section;
 typedef struct nlist_64 macho_nlist;
+typedef struct dylib_module_64 macho_module;
 #else
-typedef struct mach_header_64 macho_header;
+typedef struct mach_header macho_header;
 #define MACHO_MAGIC MH_MAGIC
 #define MACHO_LC_SEGMENT LC_SEGMENT
 typedef struct segment_command macho_segment_command;
 typedef struct section macho_section;
 typedef struct nlist macho_nlist;
+typedef struct dylib_module macho_module;
 #endif
 
 typedef struct {
@@ -132,10 +139,11 @@ create_string_table()
   macho_string_table *t = malloc(sizeof(macho_string_table));
   char *data = malloc(allocated);
 
-  *data = 0;
+  data[0] = ' ';
+  data[1] = 0;
   t->allocated = allocated;
   t->data = data;
-  t->used = 1;
+  t->used = 2;
   return t;
 }
 
@@ -206,9 +214,9 @@ compare_macho_symbols(const void *a, const void *b)
 }
 
 void
-sort_macho_symbol_table(macho_symbol_table *t)
+sort_macho_symbol_table(macho_symbol_table *t, int first, int n)
 {
-  qsort(t->symbols,t->used,sizeof(macho_nlist),compare_macho_symbols);
+  qsort(t->symbols+first,n,sizeof(macho_nlist),compare_macho_symbols);
 }
 
 macho_symbol_table *
@@ -248,6 +256,7 @@ void
 add_lisp_function_stab(LispObj f, natural size_in_bytes, macho_string_table *strings, macho_symbol_table *syms, int section_ordinal)
 {
   macho_nlist symbol;
+  natural strx = save_string(print_lisp_object(f),strings);
   
   symbol.n_type = N_BNSYM;
   symbol.n_un.n_strx = 1;
@@ -257,7 +266,7 @@ add_lisp_function_stab(LispObj f, natural size_in_bytes, macho_string_table *str
   add_symbol(&symbol, syms);
 
   symbol.n_type = N_FUN;
-  symbol.n_un.n_strx = save_string(print_lisp_object(f),strings);
+  symbol.n_un.n_strx = strx;
   symbol.n_sect = section_ordinal;
   symbol.n_desc = 0;
   symbol.n_value = f;
@@ -276,6 +285,14 @@ add_lisp_function_stab(LispObj f, natural size_in_bytes, macho_string_table *str
   symbol.n_desc = 0;
   symbol.n_value = size_in_bytes;
   add_symbol(&symbol, syms);
+
+  symbol.n_type = N_SECT;
+  symbol.n_un.n_strx = strx;
+  symbol.n_sect = section_ordinal;
+  symbol.n_desc = 0;
+  symbol.n_value = f;
+  add_symbol(&symbol, syms);
+  
 }
 
 #ifdef X86
@@ -289,6 +306,21 @@ add_lisp_function_stabs(macho_symbol_table *symbols, macho_string_table *strings
     f;
   int tag;
   natural size_in_bytes;
+  macho_nlist symbol;
+
+  symbol.n_type = N_SO;
+  symbol.n_un.n_strx = save_string("/pretend/", strings);
+  symbol.n_sect = NO_SECT;
+  symbol.n_desc = 0;
+  symbol.n_value = 0;
+  add_symbol(&symbol, symbols);
+  
+  symbol.n_type = N_SO;
+  symbol.n_un.n_strx = save_string("pretend.lisp", strings);
+  symbol.n_sect = NO_SECT;
+  symbol.n_desc = 0;
+  symbol.n_value = 0;
+  add_symbol(&symbol, symbols);
 
   while (start < end) {
     header = *start;
@@ -349,13 +381,27 @@ add_load_command(macho_prefix *p, uint32_t cmd, uint32_t cmdsize)
 }
 
 macho_segment_command *
-add_segment(macho_prefix *p,char *segname, int nsections, ...) /* sectnames */
+add_macho_segment(macho_prefix *p,
+                  char *segname,
+                  natural vmaddr,
+                  natural vmsize,
+                  natural fileoff,
+                  natural filesize,
+                  vm_prot_t maxprot,
+                  vm_prot_t initprot,
+                  int nsections, ...) /* sectnames */
 {
   macho_segment_command *seg = (macho_segment_command *) add_load_command(p, MACHO_LC_SEGMENT, sizeof(macho_segment_command)+(nsections * sizeof(macho_section)));
   macho_section *sect = nth_section_in_segment(seg, 0);
   va_list sectnames;
   char *sectname;
-  
+
+  seg->vmaddr = vmaddr;
+  seg->vmsize = vmsize;
+  seg->fileoff = fileoff;
+  seg->filesize = filesize;
+  seg->maxprot = maxprot;
+  seg->initprot = initprot;  
   seg->nsects = nsections;
   strncpy(seg->segname,segname,sizeof(seg->segname));
   va_start(sectnames,nsections);
@@ -368,9 +414,25 @@ add_segment(macho_prefix *p,char *segname, int nsections, ...) /* sectnames */
   return seg;
 }
 
-    
+
+macho_section *
+init_macho_section(macho_segment_command *seg,
+                   int sectno,
+                   natural addr,
+                   natural size,
+                   natural offset,
+                   uint32_t flags)
+{
+  macho_section *sect = nth_section_in_segment(seg,sectno);
+  sect->addr = addr;
+  sect->size = size;
+  sect->offset = offset;
+  sect->flags = flags;
+  return sect;
+}
+             
 void
-save_native_library(int fd)
+save_native_library(int fd, Boolean egc_was_enabled)
 {
   macho_prefix *p = init_macho_prefix(MACHO_MAGIC,
 #ifdef X8632
@@ -378,6 +440,7 @@ save_native_library(int fd)
                                       CPU_SUBTYPE_X86_ALL,
 #endif
 #ifdef X8664
+
                                       CPU_TYPE_X86_64,
                                       CPU_SUBTYPE_X86_64_ALL,
 #endif
@@ -398,37 +461,340 @@ save_native_library(int fd)
   macho_segment_command *seg;
   macho_section *sect;
   off_t curpos = 4096;
+  struct dylib_command *dylib;
+  struct symtab_command *symtab;
+  struct dysymtab_command *dysymtab;
+  char *dylib_name = "CCL Heap Image.dylib";
+  macho_nlist symbol;
+  macho_module m;
+  struct dylib_table_of_contents *toc;
+  struct dylib_reference *refs;
+  int 
+    readonly_section_ordinal = 0,
+    managed_static_section_ordinal = 0,
+    managed_static_refbits_section_ordinal = 0,
+    dynamic_section_ordinal = 0,
+    static_section_ordinal = 0,
+    next_section_ordinal;
+  natural nrefbytes, first_external_symbol, num_external_symbols, i, j;
+    
+  all_symbols = new_macho_symbol_table(100000);
+  global_string_table = create_string_table();
 
-
-  seg = add_segment(p, "innocent", 1, "bystander");
-  seg->vmaddr = (natural)(readonly_area->low-4096);
-  seg->vmsize = 4096;
-  seg->fileoff = 0;
-  seg->filesize = 4096;
-  seg->maxprot = VM_PROT_READ|VM_PROT_WRITE|VM_PROT_EXECUTE;
-  seg->initprot = VM_PROT_READ|VM_PROT_EXECUTE;
-  sect = nth_section_in_segment(seg,0);
-  sect->addr = (natural)(readonly_area->low-1);
-  sect->size = 1;
-  sect->offset = 4095;
-  sect->flags = S_ATTR_SOME_INSTRUCTIONS | S_ATTR_PURE_INSTRUCTIONS;
-  p->page[4095] = 0xcc;
-
-  seg = add_segment(p,"READONLY",1,"readonly");
-  seg->vmaddr = (natural)(readonly_area->low);
-  seg->vmsize = align_to_power_of_2(readonly_area->active-readonly_area->low,12);
-  seg->fileoff = curpos;
-  seg->filesize = seg->vmsize;
-  seg->maxprot = VM_PROT_READ|VM_PROT_WRITE|VM_PROT_EXECUTE;
-  seg->initprot = VM_PROT_READ|VM_PROT_EXECUTE;
-  sect = nth_section_in_segment(seg,0);
-  sect->addr = (natural)(readonly_area->low);
-  sect->size = readonly_area->active-readonly_area->low;
-  sect->offset = seg->fileoff;
-  sect->flags = S_ATTR_SOME_INSTRUCTIONS;
+  seg = add_macho_segment(p, 
+                          "__TEXT",
+                          (natural)(readonly_area->low-4096),
+                          4096+align_to_power_of_2(readonly_area->active-readonly_area->low,12),
+                          0,
+                          4096+align_to_power_of_2(readonly_area->active-readonly_area->low,12),
+                          VM_PROT_READ|VM_PROT_WRITE|VM_PROT_EXECUTE,
+                          VM_PROT_READ|VM_PROT_EXECUTE,
+                          1, 
+                          "text");
+  init_macho_section(seg,
+                     0,
+                     (natural)(readonly_area->low),
+                     readonly_area->active-readonly_area->low,
+                     curpos,
+                     S_ATTR_SOME_INSTRUCTIONS);
+  readonly_section_ordinal = ++next_section_ordinal;
+  add_lisp_function_stabs(all_symbols,global_string_table,readonly_section_ordinal);
   lseek(fd,curpos,SEEK_SET);
   safe_write(fd,readonly_area->low,seg->filesize);
+  curpos = align_to_power_of_2(lseek(fd,0,SEEK_CUR),12);
+  
+  if (managed_static_area->active != managed_static_area->low) {
+    nrefbytes = (((area_dnode(managed_static_area->active,managed_static_area->low)>>dnode_shift)+7)>>3);
 
+    prepare_to_write_dynamic_space(managed_static_area);
+    seg = add_macho_segment(p,
+                            "MANAGED-STATIC",
+                            (natural)(managed_static_area->low),
+                            align_to_power_of_2((managed_static_area->active-managed_static_area->low)+nrefbytes,12),
+                            curpos,
+                            align_to_power_of_2((managed_static_area->active-managed_static_area->low)+nrefbytes,12),
+                            VM_PROT_READ|VM_PROT_WRITE|VM_PROT_EXECUTE,
+                            VM_PROT_READ|VM_PROT_WRITE|VM_PROT_EXECUTE,
+                            2,
+                            "contents",
+                            "refbits");
+    init_macho_section(seg,
+                       0,
+                       seg->vmaddr,
+                       managed_static_area->active-managed_static_area->low,
+                       curpos,
+                       S_ATTR_SOME_INSTRUCTIONS);
+    managed_static_section_ordinal=++next_section_ordinal;
+    lseek(fd,curpos,SEEK_SET);
+    safe_write(fd,managed_static_area->low,managed_static_area->active-managed_static_area->low);
+    curpos = lseek(fd,0,SEEK_CUR);
+    init_macho_section(seg,
+                       1,
+                       seg->vmaddr+(managed_static_area->active-managed_static_area->low),
+                       nrefbytes,
+                       curpos,
+                       S_REGULAR);
+    managed_static_refbits_section_ordinal=++next_section_ordinal;
+    safe_write(fd,(char *)managed_static_area->refbits,nrefbytes);
+    curpos = align_to_power_of_2(lseek(fd,0,SEEK_CUR),12);
+  }
+  prepare_to_write_dynamic_space(active_dynamic_area);
+  seg = add_macho_segment(p,
+                          "DYNAMIC",
+                          truncate_to_power_of_2((natural)static_cons_area->low,12),
+                          align_to_power_of_2(active_dynamic_area->active,12)-truncate_to_power_of_2((natural)static_cons_area->low,12),
+                          curpos,
+                          align_to_power_of_2(active_dynamic_area->active,12)-truncate_to_power_of_2((natural)static_cons_area->low,12),
 
+                          VM_PROT_READ|VM_PROT_WRITE|VM_PROT_EXECUTE,
+                          VM_PROT_READ|VM_PROT_WRITE|VM_PROT_EXECUTE,
+                          1,
+                          "heap");
+  init_macho_section(seg,
+                     0,
+                     truncate_to_power_of_2((natural)static_cons_area->low,12),
+                     align_to_power_of_2(active_dynamic_area->active,12)-truncate_to_power_of_2((natural)static_cons_area->low,12),
+                     curpos,
+                     S_ATTR_SOME_INSTRUCTIONS);
+  dynamic_section_ordinal=++next_section_ordinal;
+  lseek(fd,curpos,SEEK_SET);
+  safe_write(fd,(char *)truncate_to_power_of_2((natural)static_cons_area->low,12), align_to_power_of_2(active_dynamic_area->active,12)-truncate_to_power_of_2((natural)static_cons_area->low,12));
+  curpos = align_to_power_of_2(lseek(fd,0,SEEK_CUR),12);
 
+  prepare_to_write_static_space(egc_was_enabled);
+  seg = add_macho_segment(p,
+                          "STATIC",
+                          align_to_power_of_2(active_dynamic_area->active,12),
+                          8192,
+                          curpos,
+                          8192,
+                          VM_PROT_READ|VM_PROT_WRITE|VM_PROT_EXECUTE,
+                          VM_PROT_READ|VM_PROT_WRITE|VM_PROT_EXECUTE,
+                          1,
+                          "copy");
+  init_macho_section(seg,
+                     0,
+                     align_to_power_of_2(active_dynamic_area->active,12),
+                     8192,
+                     curpos,
+                     S_ATTR_SOME_INSTRUCTIONS);
+  static_section_ordinal=++next_section_ordinal;
+  lseek(fd,curpos,SEEK_SET);
+  safe_write(fd,nilreg_area->low,8192);
+  curpos = align_to_power_of_2(lseek(fd,0,SEEK_CUR),12);
+  seg = add_macho_segment(p,
+                          "__LINKEDIT",
+                          align_to_power_of_2(reserved_region_end,12),
+                          0,    /* tbd */
+                          curpos,
+                          0,    /* tbd */
+                          VM_PROT_READ|VM_PROT_WRITE|VM_PROT_EXECUTE,
+                          VM_PROT_READ,
+                          0);
+  dylib = (struct dylib_command *)add_load_command(p,LC_ID_DYLIB,sizeof(struct dylib_command)+strlen(dylib_name)+1);
+  dylib->dylib.name.offset = sizeof(struct dylib_command);
+  strcpy((char *)dylib+sizeof(struct dylib_command),dylib_name);
+  symtab = (struct symtab_command *)add_load_command(p,LC_SYMTAB,sizeof(struct symtab_command));
+  dysymtab = (struct dysymtab_command *)add_load_command(p,LC_DYSYMTAB,sizeof(struct dysymtab_command));
+  dysymtab->nlocalsym=all_symbols->used;
+  first_external_symbol = all_symbols->used;
+
+  /* Add external symbols describing section boundaries. */
+  symbol.n_un.n_strx = save_string("_READONLY_START",global_string_table);
+  symbol.n_type = N_SECT|N_EXT;
+  symbol.n_sect = readonly_section_ordinal;
+  symbol.n_desc = 0;
+  symbol.n_value = (natural)readonly_area->low;
+  add_symbol(&symbol,all_symbols);
+
+  symbol.n_un.n_strx = save_string("_READONLY_END",global_string_table);
+  symbol.n_value = (natural)readonly_area->active;
+  add_symbol(&symbol,all_symbols);
+  
+  if (managed_static_section_ordinal) {
+    symbol.n_un.n_strx = save_string("_MANAGED_STATIC_START",global_string_table);
+    symbol.n_sect = managed_static_section_ordinal;
+    symbol.n_value = (natural)managed_static_area->low;
+    add_symbol(&symbol,all_symbols);
+
+    symbol.n_un.n_strx = save_string("_MANAGED_STATIC_END",global_string_table);
+    symbol.n_value = (natural)managed_static_area->active;
+    add_symbol(&symbol,all_symbols);
+
+    symbol.n_un.n_strx = save_string("_MANAGED_STATIC_REFMAP_END",global_string_table);
+    symbol.n_sect = managed_static_refbits_section_ordinal;
+    symbol.n_value = (natural)managed_static_area->active+nrefbytes;
+    add_symbol(&symbol,all_symbols);
+  }
+  symbol.n_un.n_strx = save_string("_STATIC_CONS_START",global_string_table);
+  symbol.n_sect = dynamic_section_ordinal;
+  symbol.n_value = (natural)static_cons_area->low;
+  add_symbol(&symbol,all_symbols);
+
+  symbol.n_un.n_strx = save_string("_STATIC_CONS_END",global_string_table);
+  symbol.n_value = (natural)static_cons_area->high;
+  add_symbol(&symbol,all_symbols);
+
+  symbol.n_un.n_strx = save_string("_DYNAMIC_HEAP_END",global_string_table);
+  symbol.n_value = (natural)active_dynamic_area->active;
+  add_symbol(&symbol,all_symbols);
+
+  num_external_symbols = all_symbols->used - first_external_symbol;
+  dysymtab->iextdefsym = first_external_symbol;
+  dysymtab->nextdefsym = num_external_symbols;
+  sort_macho_symbol_table(all_symbols,first_external_symbol,num_external_symbols);
+  symtab->symoff = curpos;
+  symtab->nsyms = all_symbols->used;
+  safe_write(fd,(char *)all_symbols->symbols,all_symbols->used*sizeof(macho_nlist));
+  curpos = lseek(fd, 0, SEEK_CUR);
+  dysymtab->tocoff = curpos;
+  dysymtab->ntoc = num_external_symbols;
+  toc = (struct dylib_table_of_contents *)malloc(num_external_symbols*sizeof(struct dylib_table_of_contents));
+  
+  for (i=0,j=first_external_symbol;
+       i<num_external_symbols;
+       i++,j++) {
+    toc[i].symbol_index = j;
+    toc[i].module_index = 0;
+  }
+  safe_write(fd,(char *)toc,num_external_symbols*sizeof(struct dylib_table_of_contents));
+  curpos = lseek(fd, 0, SEEK_CUR);
+  dysymtab->modtaboff = curpos;
+  dysymtab->nmodtab = 1;
+  memset(&m,0,sizeof(macho_module));
+  m.module_name = save_string("single_module",global_string_table);
+  m.iextdefsym = first_external_symbol;
+  m.nextdefsym = num_external_symbols;
+  m.irefsym = 0;
+  m.nrefsym = num_external_symbols;
+  m.ilocalsym = 0;
+  m.nlocalsym = first_external_symbol;
+  safe_write(fd,(char *)&m,sizeof(macho_module));
+  curpos = lseek(fd, 0, SEEK_CUR);
+  dysymtab->extrefsymoff = curpos;
+  dysymtab->nextrefsyms = num_external_symbols;
+  refs = (struct dylib_reference *)malloc(sizeof(struct dylib_reference)*num_external_symbols);
+  for (i = 0, j = first_external_symbol;
+       i < num_external_symbols;
+       i++, j++) {
+    refs[i].isym = j;
+    refs[i].flags = REFERENCE_FLAG_DEFINED;
+  }
+  safe_write(fd,(char *)refs,sizeof(struct dylib_reference)*num_external_symbols);
+  curpos = lseek(fd, 0, SEEK_CUR);
+  symtab->stroff = curpos;
+  symtab->strsize = global_string_table->used;
+  safe_write(fd,global_string_table->data,global_string_table->used);
+  curpos = lseek(fd, 0, SEEK_CUR);
+  /* 'seg' still refers to the last segment, i.e., the __LINKEDIT segment */
+  seg->filesize = curpos - seg->fileoff;
+  seg->vmsize = align_to_power_of_2(seg->filesize,12);
+  
+  lseek(fd,0,SEEK_SET);
+  safe_write(fd,p->page,4096);
+}                
+
+LispObj
+load_native_library(char *path)
+{
+  void *lib;
+  LispObj image_nil = 0;
+
+  /* Because of the way that we've reserved memory, we can only
+     load the image's segments at their preferred address if we
+     make the pages at those addresses free. */
+  {
+    int fd = open(path,O_RDONLY);
+    Boolean win = false;
+
+    if (fd >= 0) {
+      char * p = mmap(NULL, 4096, PROT_READ, MAP_PRIVATE, fd, 0);   
+      
+      if (p != MAP_FAILED) {
+        macho_header *h = (macho_header *)p;
+        
+        if ((h->magic == MH_MAGIC) &&
+            (h->cputype ==
+#ifdef X8632
+             CPU_TYPE_I386
+#endif
+#ifdef X8664
+             CPU_TYPE_X86_64
+#endif
+             )) {
+          struct load_command *lc;
+          macho_segment_command *seg;
+          
+          for (lc = (struct load_command *)(p+sizeof(macho_header));
+               lc->cmd == MACHO_LC_SEGMENT;
+               lc = (struct load_command *)(((char *)lc)+lc->cmdsize)) {
+            seg = (macho_segment_command *) lc;
+            if (seg->vmaddr && seg->vmsize) {
+              munmap((void *)seg->vmaddr, seg->vmsize);
+            }
+          }
+          win = true;
+        }
+        munmap(p,4096);
+      }
+      close(fd);
+    }
+    if (! win) {
+      return 0;
+    }
+  }
+  lib = dlopen(path, RTLD_GLOBAL);
+  if (lib == NULL) {
+    return 0;
+  } else {
+    area *a;
+    char *p, *q;
+
+    p = (BytePtr)dlsym(lib,"DYNAMIC_HEAP_END");
+    if (null p) {
+      dlclose(lib);
+      return 0;
+    }
+    p = (BytePtr)align_to_power_of_2(p,12);
+    q = static_space_active;
+    mprotect(q,8192,PROT_READ|PROT_WRITE|PROT_EXEC);
+    memcpy(q,p,8192);
+
+    a = nilreg_area = new_area(q,q+8192,AREA_STATIC);
+    nilreg_area->active = nilreg_area->high; /* a little wrong */
+    #ifdef PPC
+#ifdef PPC64
+        image_nil = ptr_to_lispobj(a->low + (1024*4) + sizeof(lispsymbol) + fulltag_misc);
+#else
+	image_nil = (LispObj)(a->low + 8 + 8 + (1024*4) + fulltag_nil);
+#endif
+#endif
+#ifdef X86
+#ifdef X8664
+	image_nil = (LispObj)(a->low) + (1024*4) + fulltag_nil;
+#else
+	image_nil = (LispObj)(a->low) + (1024*4) + fulltag_cons;
+#endif
+#endif
+#ifdef ARM
+	image_nil = (LispObj)(a->low) + (1024*4) + fulltag_nil;
+#endif
+	set_nil(image_nil);
+        
+        
+  }
+
+    
+    
+    if ((BytePtr)dlsym(lib,"READONLY_START") == pure_space_active) {
+      a = new_area(pure_space_active,pure_space_limit,AREA_READONLY);
+      readonly_area = a;
+      add_area_holding_area_lock(a);
+      pure_space_active = a->active = (BytePtr)dlsym(lib,"READONLY_END");
+
+  
+  
+       
+    }
+  }
 }
