@@ -269,23 +269,27 @@ sprint_function(LispObj o, int depth)
     add_c_string("Anonymous Function ");
   } else {
     if (lfbits & lfbits_method_mask) {
-      LispObj 
-	slot_vector = deref(name,3),
-        method_name = deref(slot_vector, 6),
-        method_qualifiers = deref(slot_vector, 2),
-        method_specializers = deref(slot_vector, 3);
-      add_c_string("Method-Function ");
-      sprint_lisp_object(method_name, depth);
-      add_char(' ');
-      if (method_qualifiers != lisp_nil) {
-        if (cdr(method_qualifiers) == lisp_nil) {
-          sprint_lisp_object(car(method_qualifiers), depth);
-        } else {
-          sprint_lisp_object(method_qualifiers, depth);
-        }
+      if (header_subtag(header_of(name)) == subtag_instance) {
+        LispObj 
+          slot_vector = deref(name,3),
+          method_name = deref(slot_vector, 6),
+          method_qualifiers = deref(slot_vector, 2),
+          method_specializers = deref(slot_vector, 3);
+        add_c_string("Method-Function ");
+        sprint_lisp_object(method_name, depth);
         add_char(' ');
+        if (method_qualifiers != lisp_nil) {
+          if (cdr(method_qualifiers) == lisp_nil) {
+            sprint_lisp_object(car(method_qualifiers), depth);
+          } else {
+            sprint_lisp_object(method_qualifiers, depth);
+          }
+        add_char(' ');
+        }
+        sprint_specializers_list(method_specializers, depth);
+      } else {
+        sprint_lisp_object(name, depth);
       }
-      sprint_specializers_list(method_specializers, depth);
       add_char(' ');
     } else {
       add_c_string("Function ");
