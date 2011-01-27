@@ -301,14 +301,14 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
       }
       if (selector & GC_TRAP_FUNCTION_SAVE_APPLICATION) {
         OSErr err;
-        extern OSErr save_application(unsigned, Boolean);
+        extern OSErr save_application(int, Boolean);
         area *vsarea = tcr->vs_area;
 
 #ifdef WINDOWS	
         arg = _open_osfhandle(arg,0);
 #endif
         nrs_TOPLFUNC.vcell = *((LispObj *)(vsarea->high)-1);
-        err = save_application(arg, egc_was_enabled);
+        err = save_application((int)arg, egc_was_enabled);
         if (err == noErr) {
           _exit(0);
         }
