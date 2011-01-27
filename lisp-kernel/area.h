@@ -174,6 +174,6 @@ extern BytePtr pure_space_start, pure_space_active, pure_space_limit;
 extern BytePtr static_space_start, static_space_active, static_space_limit;
 extern area *find_readonly_area(void);
 extern BytePtr low_relocatable_address, high_relocatable_address,
-  low_markable_address, high_markable_address;
+  low_markable_address, high_markable_address, reserved_region_end;
 
 #endif /* __AREA_H__ */
