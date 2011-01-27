@@ -496,8 +496,51 @@ writebuf(int fd, char *bytes, natural n)
   return 0;
 }
 
+void
+prepare_to_write_static_space(Boolean egc_was_enabled)
+{
+  area *g0_area = g1_area->younger;
+  int i;
+
+  /* Save GC config */
+  lisp_global(LISP_HEAP_THRESHOLD) = lisp_heap_gc_threshold;
+  lisp_global(G0_THRESHOLD) = g0_area->threshold;
+  lisp_global(G1_THRESHOLD) = g1_area->threshold;
+  lisp_global(G2_THRESHOLD) = g2_area->threshold;
+  lisp_global(EGC_ENABLED) = (LispObj)egc_was_enabled;
+  lisp_global(GC_NOTIFY_THRESHOLD) = lisp_heap_notify_threshold;
+  /*
+    lisp_global(GC_NUM) and lisp_global(FWDNUM) are persistent,
+    as is DELETED_STATIC_PAIRS.
+    Nothing else is even meaningful at this point.
+    Except for those things that've become meaningful since that
+    comment was written.
+  */
+  for (i = MIN_KERNEL_GLOBAL; i < 0; i++) {
+    switch (i) {
+    case FREE_STATIC_CONSES:
+    case FWDNUM:
+    case GC_NUM:
+    case STATIC_CONSES:
+    case WEAK_GC_METHOD:
+    case LISP_HEAP_THRESHOLD:
+    case EGC_ENABLED:
+    case G0_THRESHOLD:
+    case G1_THRESHOLD:
+    case G2_THRESHOLD:
+    case GC_NOTIFY_THRESHOLD:
+      break;
+    case WEAKVLL:
+      break;
+    default:
+      lisp_global(i) = 0;
+    }
+  }
+}
+
+
 OSErr
-save_application(unsigned fd, Boolean egc_was_enabled)
+save_application_internal(unsigned fd, Boolean egc_was_enabled)
 {
   openmcl_image_file_header fh;
   openmcl_image_section_header sections[NUM_IMAGE_SECTIONS];
@@ -569,45 +612,9 @@ save_application(unsigned fd, Boolean egc_was_enabled)
   }
 #endif
 
+  prepare_to_write_static_space(egc_was_enabled);
 
-  {
-    area *g0_area = g1_area->younger;
 
-    /* Save GC config */
-    lisp_global(LISP_HEAP_THRESHOLD) = lisp_heap_gc_threshold;
-    lisp_global(G0_THRESHOLD) = g0_area->threshold;
-    lisp_global(G1_THRESHOLD) = g1_area->threshold;
-    lisp_global(G2_THRESHOLD) = g2_area->threshold;
-    lisp_global(EGC_ENABLED) = (LispObj)egc_was_enabled;
-    lisp_global(GC_NOTIFY_THRESHOLD) = lisp_heap_notify_threshold;
-  }
-  /*
-    lisp_global(GC_NUM) and lisp_global(FWDNUM) are persistent,
-    as is DELETED_STATIC_PAIRS.
-    Nothing else is even meaningful at this point.
-    Except for those things that've become meaningful since that
-    comment was written.
-  */
-  for (i = MIN_KERNEL_GLOBAL; i < 0; i++) {
-    switch (i) {
-    case FREE_STATIC_CONSES:
-    case FWDNUM:
-    case GC_NUM:
-    case STATIC_CONSES:
-    case WEAK_GC_METHOD:
-    case LISP_HEAP_THRESHOLD:
-    case EGC_ENABLED:
-    case G0_THRESHOLD:
-    case G1_THRESHOLD:
-    case G2_THRESHOLD:
-    case GC_NOTIFY_THRESHOLD:
-      break;
-    case WEAKVLL:
-      break;
-    default:
-      lisp_global(i) = 0;
-    }
-  }
 
   for (i = 0; i < NUM_IMAGE_SECTIONS; i++) {
     natural n;
@@ -656,6 +663,23 @@ save_application(unsigned fd, Boolean egc_was_enabled)
   close(fd);
   return i;
 }
+
+OSErr
+save_application(int fd, Boolean egc_was_enabled)
+{
+#ifdef DARWIN
+#ifdef X86
+  extern void save_native_library(int, Boolean);
+ 
+  if (fd < 0) {
+    save_native_library(-fd, egc_was_enabled);
+    return 0;
+  }
+#endif
+#endif
+  return save_application_internal(fd, egc_was_enabled);
+}
+
       
 
 
