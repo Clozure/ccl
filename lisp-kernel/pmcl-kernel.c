@@ -378,6 +378,8 @@ unsigned unsigned_max(unsigned x, unsigned y)
 natural
 reserved_area_size = MAXIMUM_MAPPABLE_MEMORY;
 
+BytePtr reserved_region_end = NULL;
+
 area 
   *nilreg_area=NULL,
   *tenured_area=NULL, 
@@ -570,6 +572,7 @@ create_reserved_area(natural totalsize)
      maximum useable area of the heap (+ 3 words for the EGC.)
   */
   end = lastbyte;
+  reserved_region_end = lastbyte;
   end = (BytePtr) ((natural)((((natural)end) - ((totalsize+63)>>6)) & ~4095));
 
   global_mark_ref_bits = (bitvector)end;
@@ -2158,6 +2161,14 @@ load_image(
   } else {
     err = errno;
   }
+#ifdef DARWIN
+#ifdef X86
+  if (image_nil == 0) {
+    extern LispObj load_native_library(char *);
+    image_nil = load_native_library(path);
+  }
+#endif
+#endif
   if (image_nil == 0) {
 #ifdef WINDOWS
     char *fmt = "Couldn't load lisp heap image from %ls";
