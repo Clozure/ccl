@@ -751,7 +751,7 @@ load_native_library(char *path)
     char *p, *q;
 
     p = (BytePtr)dlsym(lib,"DYNAMIC_HEAP_END");
-    if (null p) {
+    if (p == NULL) {
       dlclose(lib);
       return 0;
     }
@@ -762,27 +762,27 @@ load_native_library(char *path)
 
     a = nilreg_area = new_area(q,q+8192,AREA_STATIC);
     nilreg_area->active = nilreg_area->high; /* a little wrong */
-    #ifdef PPC
+#ifdef PPC
 #ifdef PPC64
-        image_nil = ptr_to_lispobj(a->low + (1024*4) + sizeof(lispsymbol) + fulltag_misc);
+    image_nil = ptr_to_lispobj(a->low + (1024*4) + sizeof(lispsymbol) + fulltag_misc);
 #else
-	image_nil = (LispObj)(a->low + 8 + 8 + (1024*4) + fulltag_nil);
+    image_nil = (LispObj)(a->low + 8 + 8 + (1024*4) + fulltag_nil);
 #endif
 #endif
 #ifdef X86
 #ifdef X8664
-	image_nil = (LispObj)(a->low) + (1024*4) + fulltag_nil;
+    image_nil = (LispObj)(a->low) + (1024*4) + fulltag_nil;
 #else
-	image_nil = (LispObj)(a->low) + (1024*4) + fulltag_cons;
+    image_nil = (LispObj)(a->low) + (1024*4) + fulltag_cons;
 #endif
 #endif
 #ifdef ARM
-	image_nil = (LispObj)(a->low) + (1024*4) + fulltag_nil;
+    image_nil = (LispObj)(a->low) + (1024*4) + fulltag_nil;
 #endif
-	set_nil(image_nil);
+    set_nil(image_nil);
+      
         
-        
-  }
+  
 
     
     
