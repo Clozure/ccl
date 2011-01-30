@@ -26,6 +26,7 @@
 #include <dlfcn.h>
 #include "lisp.h"
 #include "gc.h"
+#include "lisp_globals.h"
 
 #if WORD_SIZE==64
 typedef struct mach_header_64 macho_header;
@@ -482,7 +483,7 @@ save_native_library(int fd, Boolean egc_was_enabled)
   global_string_table = create_string_table();
 
   seg = add_macho_segment(p, 
-                          "__TEXT",
+                          "READONLY",
                           (natural)(readonly_area->low-4096),
                           4096+align_to_power_of_2(readonly_area->active-readonly_area->low,12),
                           0,
@@ -490,7 +491,7 @@ save_native_library(int fd, Boolean egc_was_enabled)
                           VM_PROT_READ|VM_PROT_WRITE|VM_PROT_EXECUTE,
                           VM_PROT_READ|VM_PROT_EXECUTE,
                           1, 
-                          "text");
+                          "purespace");
   init_macho_section(seg,
                      0,
                      (natural)(readonly_area->low),
@@ -504,7 +505,7 @@ save_native_library(int fd, Boolean egc_was_enabled)
   curpos = align_to_power_of_2(lseek(fd,0,SEEK_CUR),12);
   
   if (managed_static_area->active != managed_static_area->low) {
-    nrefbytes = (((area_dnode(managed_static_area->active,managed_static_area->low)>>dnode_shift)+7)>>3);
+    nrefbytes = ((area_dnode(managed_static_area->active,managed_static_area->low)+7)>>3);
 
     prepare_to_write_dynamic_space(managed_static_area);
     seg = add_macho_segment(p,
@@ -697,6 +698,7 @@ save_native_library(int fd, Boolean egc_was_enabled)
 LispObj
 load_native_library(char *path)
 {
+  extern BytePtr allocate_from_reserved_area(natural);
   void *lib;
   LispObj image_nil = 0;
 
@@ -748,17 +750,29 @@ load_native_library(char *path)
     return 0;
   } else {
     area *a;
-    char *p, *q;
+    natural initsize,totalsize,nrefbytes;
+    char 
+      *ro_start = dlsym(lib,"READONLY_START"), 
+      *ro_end   = dlsym(lib,"READONLY_END"), 
+      *ms_start = dlsym(lib,"MANAGED_STATIC_START"), 
+      *ms_end   = dlsym(lib,"MANAGED_STATIC_END"), 
+      *msr_end  = dlsym(lib,"MANAGED_STATIC_REFMAP_END"), 
+      *sc_start = dlsym(lib,"STATIC_CONS_START"),
+      *sc_end   = dlsym(lib,"STATIC_CONS_START"), 
+      *dh_end   = dlsym(lib,"DYNAMIC_HEAP_END"),
+      *p,
+      *q;
 
-    p = (BytePtr)dlsym(lib,"DYNAMIC_HEAP_END");
-    if (p == NULL) {
+    if ((dh_end == NULL) ||
+        (ro_start != pure_space_active)) {
       dlclose(lib);
       return 0;
     }
-    p = (BytePtr)align_to_power_of_2(p,12);
+    p = (BytePtr)align_to_power_of_2(dh_end,12);
     q = static_space_active;
     mprotect(q,8192,PROT_READ|PROT_WRITE|PROT_EXEC);
     memcpy(q,p,8192);
+    memset(p,0,8192);
 
     a = nilreg_area = new_area(q,q+8192,AREA_STATIC);
     nilreg_area->active = nilreg_area->high; /* a little wrong */
@@ -780,21 +794,45 @@ load_native_library(char *path)
     image_nil = (LispObj)(a->low) + (1024*4) + fulltag_nil;
 #endif
     set_nil(image_nil);
-      
-        
-  
-
+    add_area_holding_area_lock(a);
     
+    a = new_area(pure_space_active,pure_space_limit,AREA_READONLY);
+    readonly_area = a;
+    add_area_holding_area_lock(a);
+    pure_space_active = a->active = ro_end;
     
-    if ((BytePtr)dlsym(lib,"READONLY_START") == pure_space_active) {
-      a = new_area(pure_space_active,pure_space_limit,AREA_READONLY);
-      readonly_area = a;
-      add_area_holding_area_lock(a);
-      pure_space_active = a->active = (BytePtr)dlsym(lib,"READONLY_END");
+    initsize = dh_end - sc_end;
+    totalsize = align_to_power_of_2(initsize, log2_heap_segment_size);
+    
+    p = allocate_from_reserved_area(totalsize);
+    q = p+totalsize;
+    a = new_area(p,q,AREA_DYNAMIC);
+    a->active = dh_end;
+    a->h = p;
+    CommitMemory((char *)(align_to_power_of_2(dh_end,12)),
+                 q-(char *)align_to_power_of_2(dh_end,12));
+    map_initial_reloctab(p, q);
+    map_initial_markbits(p, q);
+    lisp_global(HEAP_START) = (LispObj)p;
+    lisp_global(HEAP_END) = (LispObj)q;
+    add_area_holding_area_lock(a);
+    resize_dynamic_heap(dh_end, lisp_heap_gc_threshold);
+    xMakeDataExecutable(a->low, a->active - a->low);
 
-  
-  
-       
-    }
+    static_cons_area = new_area(sc_start, sc_end, AREA_STATIC_CONS);
+    static_cons_area->active = sc_start;
+    lower_heap_start(sc_start,a);
+    a->static_dnodes = area_dnode(sc_end,sc_start);
+    
+    managed_static_area = new_area(ms_start,ms_end,AREA_MANAGED_STATIC);
+    managed_static_area->active = ms_end;
+    lisp_global(REF_BASE) = (LispObj) ms_start;
+    
+    nrefbytes = msr_end - ms_end;
+    CommitMemory(global_mark_ref_bits,align_to_power_of_2(nrefbytes, 12));
+    memcpy(global_mark_ref_bits,ms_end,nrefbytes);
+    memset(ms_end,0,nrefbytes);
+    
+    return image_nil;
   }
 }

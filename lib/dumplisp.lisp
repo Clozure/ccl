@@ -74,7 +74,8 @@
                          impurify
 			 (mode #o644)
 			 prepend-kernel
-			 #+windows-target (application-type :console))
+			 #+windows-target (application-type :console)
+                         native)
   (declare (ignore toplevel-function error-handler application-class
                    clear-clos-caches init-file impurify))
   #+windows-target (check-type application-type (member :console :gui))
@@ -88,6 +89,8 @@
     (when watched
       (cerror "Un-watch them." "There are watched objects.")
       (mapc #'unwatch watched)))
+  (when (and native prepend-kernel)
+    (error "~S and ~S can't both be specified (yet)." :native :prepend-kernel))
   (let* ((ip *initial-process*)
 	 (cp *current-process*))
     (when (process-verify-quit ip)
@@ -96,6 +99,12 @@
                                      :prepend-kernel prepend-kernel
                                      #+windows-target  #+windows-target 
                                      :application-type application-type)))
+        (when native
+          #+(or darwinx8632-target darwin-x8664-target) (setq fd (- fd))
+          #-(or darwinx8632-target darwin-x8664-target)
+          (progn
+            (warn "native image support not available, ignoring ~s option." :native)))
+            
         (process-interrupt ip
                            #'(lambda ()
                                (process-exit-application
@@ -118,8 +127,9 @@
                                       (init-file nil init-file-p)
                                       (clear-clos-caches t)
                                       prepend-kernel
-                                      #+windows-target application-type)
-  (declare (ignore mode prepend-kernel #+windows-target application-type))
+                                      #+windows-target application-type
+                                      native)
+  (declare (ignore mode prepend-kernel #+windows-target application-type native))
   (when (and application-class (neq  (class-of *application*)
                                      (if (symbolp application-class)
                                        (find-class application-class)
