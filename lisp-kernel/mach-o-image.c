@@ -82,11 +82,11 @@ safe_read(int fd, char *buf, size_t nbytes)
     n = read(fd, buf, n);
     if (n < 0) {
       perror("reading from image");
-      exit(1);
+      _exit(1);
     }
     if (n == 0) {
       fprintf(stderr, "unexpected end of file reading image\n");
-      exit(1);
+      _exit(1);
     }
     total += n;
     buf += n;
@@ -107,7 +107,7 @@ safe_write(int fd, char *buf, size_t nbytes)
     n = write(fd, buf, n);
     if (n < 0) {
       perror("writing to image");
-      exit(1);
+      _exit(1);
     }
     total += n;
     buf += n;
@@ -306,7 +306,7 @@ add_lisp_function_stabs(macho_symbol_table *symbols, macho_string_table *strings
     header,
     f;
   int tag;
-  natural size_in_bytes;
+  natural size_in_bytes, code_words;
   macho_nlist symbol;
 
   symbol.n_type = N_SO;
@@ -329,11 +329,16 @@ add_lisp_function_stabs(macho_symbol_table *symbols, macho_string_table *strings
     if (tag == subtag_function) {
 #ifdef X8632
       f = ((LispObj)start)+fulltag_misc;
-      size_in_bytes = (header_element_count(header)<<node_shift)-tag_misc;
+      code_words = (unsigned short)deref(f,1);
+      if (code_words & 0x8000) {
+        code_words = header_element_count(header) - (code_words & 0x7fff);
+      }
+      size_in_bytes = (code_words<<node_shift)-tag_misc;
 #endif
 #ifdef X8664
       f = ((LispObj)start)+fulltag_function;
-      size_in_bytes = (header_element_count(header)<<node_shift)-tag_function;
+      code_words = (int)deref(f,1);
+      size_in_bytes = (code_words<<node_shift)-tag_function;
 #endif
 
       add_lisp_function_stab(f,size_in_bytes,strings,symbols,section_ordinal);
@@ -483,7 +488,7 @@ save_native_library(int fd, Boolean egc_was_enabled)
   global_string_table = create_string_table();
 
   seg = add_macho_segment(p, 
-                          "READONLY",
+                          "__TEXT",
                           (natural)(readonly_area->low-4096),
                           4096+align_to_power_of_2(readonly_area->active-readonly_area->low,12),
                           0,
@@ -491,7 +496,7 @@ save_native_library(int fd, Boolean egc_was_enabled)
                           VM_PROT_READ|VM_PROT_WRITE|VM_PROT_EXECUTE,
                           VM_PROT_READ|VM_PROT_EXECUTE,
                           1, 
-                          "purespace");
+                          "text");
   init_macho_section(seg,
                      0,
                      (natural)(readonly_area->low),
@@ -826,6 +831,7 @@ load_native_library(char *path)
     
     managed_static_area = new_area(ms_start,ms_end,AREA_MANAGED_STATIC);
     managed_static_area->active = ms_end;
+    add_area_holding_area_lock(managed_static_area);
     lisp_global(REF_BASE) = (LispObj) ms_start;
     
     nrefbytes = msr_end - ms_end;
