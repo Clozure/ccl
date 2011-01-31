@@ -371,6 +371,7 @@
        (progn
          (open-shared-library "Foundation.1.0.dll")
          (open-shared-library "AppKit.1.0.dll")
+         (open-shared-library "CoreData.1.0.dll")
          ;; We may need to call #_NSInitializeProcess
          ;; under Cocotron.  If so, we'd need to do
          ;; so on standalone startup, too, and would
