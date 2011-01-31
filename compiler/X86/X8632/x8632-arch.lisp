@@ -649,7 +649,7 @@
 (progn
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defconstant tcr-bias #xe88))
+  (defconstant tcr-bias 0))
 
 (define-storage-layout tcr (- tcr-bias)
   next					; in doubly-linked list
