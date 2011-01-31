@@ -46,11 +46,6 @@ define(`fn',`edi')
 
 define(`rcontext_reg',`fs')
 	
-        ifdef(`WINDOWS',`
-undefine(`rcontext_reg')        
-define(`rcontext_reg',`es')
-        ')
-                
 define(`rcontext',`%rcontext_reg:$1')
 
 define(`fname',`temp0')
@@ -484,8 +479,77 @@ sym_vbit_const_mask = (1<<sym_vbit_const)
          _node(nextref) 
         _ends
 
+ifdef(`WIN_32',`
+TCR_BIAS = 0xe10 + (4 * 30)	/* last 34 words of TlsSlots */
+',`
 TCR_BIAS = 0
-                
+')
+
+ifdef(`WIN_32',`
+        _struct(tcr,TCR_BIAS)
+         _node(linear)          /* our linear (non-segment-based) address. */
+	 _word(aux)		/* pointer to tcr_aux struct, see below */
+         _node(valence)         /* odd when in foreign code */
+         _word(node_regs_mask)
+         _node(save_allocbase)
+         _node(save_allocptr)
+         _node(last_allocptr)
+         _node(catch_top)       /* top catch frame */
+         _node(db_link)         /* special binding chain head */
+         _node(tlb_limit)
+         _node(tlb_pointer)     /* Consider using tcr+N as tlb_pointer */
+         _node(ffi_exception)   /* mxcsr exception bits from ff-call */
+         _node(foreign_sp)      /* Saved foreign SP when in lisp code */
+         _node(interrupt_pending)
+	 _node(next_method_context)
+         _node(next_tsp)
+         _node(safe_ref_address)
+         _node(save_tsp)        /* TSP when in foreign code */
+         _node(save_vsp)        /* VSP when in foreign code */
+         _node(save_ebp)        /* lisp EBP when in foreign code */
+         _node(ts_area)         /* tstack area pointer */
+         _node(vs_area)         /* vstack area pointer */
+         _node(xframe)          /* per-thread exception frame list */
+         _node(unwinding)
+         _node(flags)      
+	 _node(foreign_mxcsr)
+         _word(lisp_mxcsr)
+	 _word(pending_exception_context)
+	 _word(unboxed0)
+	 _word(unboxed1)
+	 _node(save0)		/* spill area for node registers... */
+	 _node(save1)	 	/* ...must be 16-byte aligned */
+	 _node(save2)
+	 _node(save3)
+        _ends
+
+	_struct(tcr_aux,0)
+         _word(bytes_allocated)
+         _word(bytes_allocated_high)
+         _node(cs_area)         /* cstack area pointer */
+         _node(cs_limit)        /* cstack overflow limit */
+         _node(log2_allocation_quantum)
+         _node(errno_loc)       /* per-thread  errno location */
+         _node(osid)            /* OS thread id */
+         _node(foreign_exception_status)
+         _node(native_thread_info)
+         _node(native_thread_id)
+         _node(reset_completion)
+         _node(activate)
+         _node(gc_context)
+         _node(termination_semaphore)
+         _node(shutdown_count)
+         _node(suspend_count)
+         _node(suspend_context)
+         _node(suspend)         /* semaphore for suspension notify */
+         _node(resume)          /* sempahore for resumption notify */
+         _word(allocated)
+         _word(pending_io_info)
+         _word(io_datum)
+         _node(next)            /* in doubly-linked list */
+         _node(prev)            /* in doubly-linked list */
+	_ends
+',`
 /*  Thread context record.  */
 
         _struct(tcr,TCR_BIAS)
@@ -550,6 +614,7 @@ TCR_BIAS = 0
          _word(pending_io_info)
          _word(io_datum)
         _ends
+')
 
         _struct(win32_context,0)
 	 _field(ContextFlags, 4)

@@ -73,7 +73,7 @@ raise_thread_interrupt(TCR *target)
   /* GCC doesn't align CONTEXT corrcectly */
   char _contextbuf[sizeof(CONTEXT)+__alignof(CONTEXT)];
   CONTEXT  *pcontext;
-  HANDLE hthread = (HANDLE)(target->osid);
+  HANDLE hthread = (HANDLE)(TCR_AUX(target)->osid);
   pc where;
   area *ts = target->ts_area;
   DWORD rc;
@@ -156,9 +156,6 @@ raise_thread_interrupt(TCR *target)
       p[2] = (DWORD)icontext;
       *(--p) = (LispObj)raise_thread_interrupt;;
       xpGPR(pcontext,Isp) = (DWORD)p;
-#ifdef WIN32_ES_HACK
-      pcontext->SegEs = pcontext->SegDs;
-#endif
     }
 #endif
     pcontext->EFlags &= ~0x400;  /* clear direction flag */
@@ -172,7 +169,7 @@ raise_thread_interrupt(TCR *target)
 int
 raise_thread_interrupt(TCR *target)
 {
-  pthread_t thread = (pthread_t)target->osid;
+  pthread_t thread = (pthread_t)TCR_AUX(target)->osid;
 #ifdef DARWIN_not_yet
   if (use_mach_exception_handling) {
     return mach_raise_thread_interrupt(target);
@@ -533,7 +530,7 @@ current_thread_osid()
   LispObj current = 0;
 
   if (tcr) {
-    current = tcr->osid;
+    current = TCR_AUX(tcr)->osid;
   }
   if (current == 0) {
     DuplicateHandle(GetCurrentProcess(),
@@ -544,7 +541,7 @@ current_thread_osid()
                     FALSE,
                     DUPLICATE_SAME_ACCESS);
     if (tcr) {
-      tcr->osid = current;
+      TCR_AUX(tcr)->osid = current;
     }
   }
   return current;
@@ -588,7 +585,7 @@ suspend_resume_handler(int signo, siginfo_t *info, ExceptionInformation *context
     void register_thread_tcr(TCR *);
     
     tcr = new_tcr(initial_stack_size, MIN_TSTACK_SIZE);
-    tcr->suspend_count = 1;
+    TCR_AUX(tcr)->suspend_count = 1;
     tcr->vs_area->active -= node_size;
     *(--tcr->save_vsp) = lisp_nil;
     register_thread_tcr(tcr);
@@ -596,10 +593,10 @@ suspend_resume_handler(int signo, siginfo_t *info, ExceptionInformation *context
   if (TCR_INTERRUPT_LEVEL(tcr) <= (-2<<fixnumshift)) {
     SET_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_SUSPEND);
   } else {
-    tcr->suspend_context = context;
-    SEM_RAISE(tcr->suspend);
-    SEM_WAIT_FOREVER(tcr->resume);
-    tcr->suspend_context = NULL;
+    TCR_AUX(tcr)->suspend_context = context;
+    SEM_RAISE(TCR_AUX(tcr)->suspend);
+    SEM_WAIT_FOREVER(TCR_AUX(tcr)->resume);
+    TCR_AUX(tcr)->suspend_context = NULL;
   }
 #ifdef DARWIN_GS_HACK
   if (gs_was_tcr) {
@@ -775,12 +772,12 @@ dequeue_tcr(TCR *tcr)
 {
   TCR *next, *prev;
 
-  next = tcr->next;
-  prev = tcr->prev;
+  next = TCR_AUX(tcr)->next;
+  prev = TCR_AUX(tcr)->prev;
 
-  prev->next = next;
-  next->prev = prev;
-  tcr->prev = tcr->next = NULL;
+  TCR_AUX(prev)->next = next;
+  TCR_AUX(next)->prev = prev;
+  TCR_AUX(tcr)->prev = TCR_AUX(tcr)->next = NULL;
 #ifdef X8664
   tcr->linear = NULL;
 #endif
@@ -793,11 +790,11 @@ enqueue_tcr(TCR *new)
   
   LOCK(lisp_global(TCR_AREA_LOCK),new);
   head = (TCR *)ptr_from_lispobj(lisp_global(INITIAL_TCR));
-  tail = head->prev;
-  tail->next = new;
-  head->prev = new;
-  new->prev = tail;
-  new->next = head;
+  tail = TCR_AUX(head)->prev;
+  TCR_AUX(tail)->next = new;
+  TCR_AUX(head)->prev = new;
+  TCR_AUX(new)->prev = tail;
+  TCR_AUX(new)->next = head;
   UNLOCK(lisp_global(TCR_AREA_LOCK),new);
 }
 
@@ -805,10 +802,19 @@ enqueue_tcr(TCR *new)
 TCR *
 allocate_tcr()
 {
-  void *p = calloc(1,sizeof(TCR)+15);
-  TCR *tcr = (TCR *)((((natural)p)+15)&~15);
+  void *p = calloc(1,sizeof(struct tcr_aux));
+  char *teb = (char *)NtCurrentTeb();
+  TCR *tcr = (TCR *)(teb + TCR_BIAS);
 
-  tcr->allocated = p;
+  if (p == NULL)
+    allocation_failure(true, sizeof(struct tcr_aux));
+
+  if ((intptr_t)p & 03) {
+    fprintf(dbgout, "%p not aligned\n", p);
+    exit(1);
+  }
+  memset(tcr, 0, sizeof(TCR));
+  tcr->aux = p;
   return tcr;
 }
 #else
@@ -1062,88 +1068,11 @@ init_win32_ldt()
 void
 setup_tcr_extra_segment(TCR *tcr)
 {
-  int i, status;
-  DWORD nret;
-  win32_ldt_info info;
-  LDT_ENTRY *entry = &(info.entry);
-  DWORD *words = (DWORD *)entry, tcraddr = (DWORD)tcr;
-
-
-  WaitForSingleObject(ldt_lock,INFINITE);
-
-  for (i = 0; i < 8192; i++) {
-    if (!ref_bit(ldt_entries_in_use,i)) {
-      info.offset = i << 3;
-      info.size = sizeof(LDT_ENTRY);
-      words[0] = 0;
-      words[1] = 0;
-      status = NtQueryInformationProcess(GetCurrentProcess(),10,&info,sizeof(info),&nret);
-      if (status == 0) {
-        if ((info.size == 0) ||
-            ((words[0] == 0) && (words[1] == 0))) {
-          break;
-        }
-      }
-    }
-  }
-  if (i == 8192) {
-    ReleaseMutex(ldt_lock);
-    fprintf(dbgout, "All 8192 ldt entries in use ?\n");
-    _exit(1);
-  }
-  set_bit(ldt_entries_in_use,i);
-  words[0] = 0;
-  words[1] = 0;
-  entry->LimitLow = sizeof(TCR);
-  entry->BaseLow = tcraddr & 0xffff;
-  entry->HighWord.Bits.BaseMid = (tcraddr >> 16) & 0xff;
-  entry->HighWord.Bits.BaseHi = (tcraddr >> 24);
-  entry->HighWord.Bits.Pres = 1;
-  entry->HighWord.Bits.Default_Big = 1;
-  entry->HighWord.Bits.Type = 16 | 2; /* read-write data */
-  entry->HighWord.Bits.Dpl = 3; /* for use by the great unwashed */
-  info.size = sizeof(LDT_ENTRY);
-  status = NtSetInformationProcess(GetCurrentProcess(),10,&info,sizeof(info));
-  if (status != 0) {
-    ReleaseMutex(ldt_lock);
-    FBug(NULL, "can't set LDT entry %d, status = 0x%x", i, status);
-  }
-#if 1
-  /* Sanity check */
-  info.offset = i << 3;
-  info.size = sizeof(LDT_ENTRY);
-  words[0] = 0;
-  words[0] = 0;
-  NtQueryInformationProcess(GetCurrentProcess(),10,&info,sizeof(info),&nret);
-  if (((entry->BaseLow)|((entry->HighWord.Bits.BaseMid)<<16)|((entry->HighWord.Bits.BaseHi)<<24)) != tcraddr) {
-    Bug(NULL, "you blew it: bad address in ldt entry\n");
-  }
-#endif
-  tcr->ldt_selector = (i << 3) | 7;
-  ReleaseMutex(ldt_lock);
 }
 
 void 
 free_tcr_extra_segment(TCR *tcr)
 {
-  win32_ldt_info info;
-  LDT_ENTRY *entry = &(info.entry);
-  DWORD *words = (DWORD *)entry;
-  int idx = tcr->ldt_selector >> 3;
-
-
-  info.offset = idx << 3;
-  info.size = sizeof(LDT_ENTRY);
-
-  words[0] = 0;
-  words[1] = 0;
-
-  WaitForSingleObject(ldt_lock,INFINITE);
-  NtSetInformationProcess(GetCurrentProcess(),10,&info,sizeof(info));
-  clr_bit(ldt_entries_in_use,idx);
-  ReleaseMutex(ldt_lock);
-
-  tcr->ldt_selector = 0;
 }
 
 #endif
@@ -1334,10 +1263,10 @@ new_tcr(natural vstack_size, natural tstack_size)
 #if (WORD_SIZE == 64)
   tcr->single_float_convert.tag = subtag_single_float;
 #endif
-  tcr->suspend = new_semaphore(0);
-  tcr->resume = new_semaphore(0);
-  tcr->reset_completion = new_semaphore(0);
-  tcr->activate = new_semaphore(0);
+  TCR_AUX(tcr)->suspend = new_semaphore(0);
+  TCR_AUX(tcr)->resume = new_semaphore(0);
+  TCR_AUX(tcr)->reset_completion = new_semaphore(0);
+  TCR_AUX(tcr)->activate = new_semaphore(0);
   LOCK(lisp_global(TCR_AREA_LOCK),tcr);
   a = allocate_vstack_holding_area_lock(vstack_size);
   tcr->vs_area = a;
@@ -1385,7 +1314,7 @@ new_tcr(natural vstack_size, natural tstack_size)
 #ifndef WINDOWS
   tcr->shutdown_count = PTHREAD_DESTRUCTOR_ITERATIONS;
 #else
-  tcr->shutdown_count = 1;
+  TCR_AUX(tcr)->shutdown_count = 1;
 #endif
   return tcr;
 }
@@ -1401,7 +1330,7 @@ shutdown_thread_tcr(void *arg)
     current = tcr;
   }
 
-  if (--(tcr->shutdown_count) == 0) {
+  if (--(TCR_AUX(tcr)->shutdown_count) == 0) {
     if (tcr->flags & (1<<TCR_FLAG_BIT_FOREIGN)) {
       LispObj callback_macptr = nrs_FOREIGN_THREAD_CONTROL.vcell,
 	callback_ptr = ((macptr *)ptr_from_lispobj(untag(callback_macptr)))->address;
@@ -1420,8 +1349,8 @@ shutdown_thread_tcr(void *arg)
     ts = tcr->ts_area;
     tcr->ts_area = NULL;
 #endif
-    cs = tcr->cs_area;
-    tcr->cs_area = NULL;
+    cs = TCR_AUX(tcr)->cs_area;
+    TCR_AUX(tcr)->cs_area = NULL;
     if (vs) {
       condemn_area_holding_area_lock(vs);
     }
@@ -1449,32 +1378,36 @@ shutdown_thread_tcr(void *arg)
     }
 #endif
 #endif
-    destroy_semaphore(&tcr->suspend);
-    destroy_semaphore(&tcr->resume);
-    destroy_semaphore(&tcr->reset_completion);
-    destroy_semaphore(&tcr->activate);
+    destroy_semaphore(&TCR_AUX(tcr)->suspend);
+    destroy_semaphore(&TCR_AUX(tcr)->resume);
+    destroy_semaphore(&TCR_AUX(tcr)->reset_completion);
+    destroy_semaphore(&TCR_AUX(tcr)->activate);
     tcr->tlb_limit = 0;
     free(tcr->tlb_pointer);
     tcr->tlb_pointer = NULL;
 #ifdef WINDOWS
-    if (tcr->osid != 0) {
-      CloseHandle((HANDLE)(tcr->osid));
+    if (TCR_AUX(tcr)->osid != 0) {
+      CloseHandle((HANDLE)(TCR_AUX(tcr)->osid));
     }
 #endif
-    tcr->osid = 0;
+    TCR_AUX(tcr)->osid = 0;
     tcr->interrupt_pending = 0;
-    tcr->termination_semaphore = NULL;
-#ifdef HAVE_TLS
+    TCR_AUX(tcr)->termination_semaphore = NULL;
+#if defined(HAVE_TLS) || defined(WIN_32)
     dequeue_tcr(tcr);
 #endif
 #ifdef X8632
     free_tcr_extra_segment(tcr);
 #endif
-#ifdef WIN32
-    CloseHandle((HANDLE)tcr->io_datum);
-    tcr->io_datum = NULL;
-    free(tcr->native_thread_info);
-    tcr->native_thread_info = NULL;
+#ifdef WINDOWS
+    CloseHandle((HANDLE)TCR_AUX(tcr)->io_datum);
+    TCR_AUX(tcr)->io_datum = NULL;
+    free(TCR_AUX(tcr)->native_thread_info);
+    TCR_AUX(tcr)->native_thread_info = NULL;
+#ifdef WIN_32
+    free(tcr->aux);
+    tcr->aux = NULL;
+#endif
 #endif
     UNLOCK(lisp_global(TCR_AREA_LOCK),current);
   } else {
@@ -1498,12 +1431,12 @@ tcr_cleanup(void *arg)
     a->active = a->high;
   }
 #endif
-  a = tcr->cs_area;
+  a = TCR_AUX(tcr)->cs_area;
   if (a) {
     a->active = a->high;
   }
   tcr->valence = TCR_STATE_FOREIGN;
-  tcr->shutdown_count = 1;
+  TCR_AUX(tcr)->shutdown_count = 1;
   shutdown_thread_tcr(tcr);
   tsd_set(lisp_global(TCR_KEY), NULL);
 }
@@ -1540,18 +1473,18 @@ thread_init_tcr(TCR *tcr, void *stack_base, natural stack_size)
 {
   area *a, *register_cstack_holding_area_lock(BytePtr, natural);
 
-  tcr->osid = current_thread_osid();
-  tcr->native_thread_id = current_native_thread_id();
+  TCR_AUX(tcr)->osid = current_thread_osid();
+  TCR_AUX(tcr)->native_thread_id = current_native_thread_id();
   LOCK(lisp_global(TCR_AREA_LOCK),tcr);
   a = register_cstack_holding_area_lock((BytePtr)stack_base, stack_size);
   UNLOCK(lisp_global(TCR_AREA_LOCK),tcr);
-  tcr->cs_area = a;
+  TCR_AUX(tcr)->cs_area = a;
   a->owner = tcr;
 #ifdef ARM
   tcr->last_lisp_frame = (natural)(a->high);
 #endif
   if (!(tcr->flags & (1<<TCR_FLAG_BIT_FOREIGN))) {
-    tcr->cs_limit = (LispObj)ptr_to_lispobj(a->softlimit);
+    TCR_AUX(tcr)->cs_limit = (LispObj)ptr_to_lispobj(a->softlimit);
   }
 #ifdef LINUX
 #ifdef PPC
@@ -1560,7 +1493,7 @@ thread_init_tcr(TCR *tcr, void *stack_base, natural stack_size)
 #endif
 #endif
 #endif
-  tcr->errno_loc = &errno;
+  TCR_AUX(tcr)->errno_loc = &errno;
   tsd_set(lisp_global(TCR_KEY), TCR_TO_TSD(tcr));
 #ifdef DARWIN
   extern Boolean use_mach_exception_handling;
@@ -1572,10 +1505,10 @@ thread_init_tcr(TCR *tcr, void *stack_base, natural stack_size)
   linux_exception_init(tcr);
 #endif
 #ifdef WINDOWS
-  tcr->io_datum = (VOID *)CreateEvent(NULL, true, false, NULL);
-  tcr->native_thread_info = malloc(sizeof(CONTEXT));
+  TCR_AUX(tcr)->io_datum = (VOID *)CreateEvent(NULL, true, false, NULL);
+  TCR_AUX(tcr)->native_thread_info = malloc(sizeof(CONTEXT));
 #endif
-  tcr->log2_allocation_quantum = unbox_fixnum(lisp_global(DEFAULT_ALLOCATION_QUANTUM));
+  TCR_AUX(tcr)->log2_allocation_quantum = unbox_fixnum(lisp_global(DEFAULT_ALLOCATION_QUANTUM));
 }
 
 /*
@@ -1702,8 +1635,8 @@ lisp_thread_entry(void *param)
   activation->tcr = tcr;
   SEM_RAISE(activation->created);
   do {
-    SEM_RAISE(tcr->reset_completion);
-    SEM_WAIT_FOREVER(tcr->activate);
+    SEM_RAISE(TCR_AUX(tcr)->reset_completion);
+    SEM_WAIT_FOREVER(TCR_AUX(tcr)->activate);
     /* Now go run some lisp code */
     start_lisp(TCR_TO_TSD(tcr),0);
     tcr->save_vsp = start_vsp;
@@ -1756,7 +1689,7 @@ cooperative_thread_startup(void *arg)
   SET_TCR_FLAG(tcr,TCR_FLAG_BIT_AWAITING_PRESET);
   start_vsp = tcr->save_vsp;
   do {
-    SEM_RAISE(tcr->reset_completion);
+    SEM_RAISE(TCR_AUX(tcr)->reset_completion);
     suspend_current_cooperative_thread();
       
     start_lisp(tcr, 0);
@@ -1802,7 +1735,7 @@ active_tcr_p(TCR *q)
     if (p == q) {
       return true;
     }
-    p = p->next;
+    p = TCR_AUX(p)->next;
   } while (p != head);
   return false;
 }
@@ -1905,6 +1838,8 @@ get_tcr(Boolean create)
 {
 #ifdef HAVE_TLS
   TCR *current = current_tcr;
+#elif defined(WIN_32)
+  TCR *current = (TCR *)((char *)NtCurrentTeb() + TCR_BIAS);
 #else
   void *tsd = (void *)tsd_get(lisp_global(TCR_KEY));
   TCR *current = (tsd == NULL) ? NULL : TCR_FROM_TSD(tsd);
@@ -1948,7 +1883,7 @@ get_tcr(Boolean create)
       *(--current->save_vsp) = 0;
       current->vs_area->active -= node_size;
     }
-    current->shutdown_count = 1;
+    TCR_AUX(current)->shutdown_count = 1;
     ((void (*)())ptr_from_lispobj(callback_ptr))(0);
 
   }
@@ -2007,13 +1942,13 @@ pc_luser_restore_windows_context(CONTEXT *pcontext, TCR *tcr, pc where)
 Boolean
 suspend_tcr(TCR *tcr)
 {
-  int suspend_count = atomic_incf(&(tcr->suspend_count));
+  int suspend_count = atomic_incf(&(TCR_AUX(tcr)->suspend_count));
   DWORD rc;
   if (suspend_count == 1) {
-    CONTEXT  *pcontext = (CONTEXT *)tcr->native_thread_info;
-    HANDLE hthread = (HANDLE)(tcr->osid);
+    CONTEXT  *pcontext = (CONTEXT *)TCR_AUX(tcr)->native_thread_info;
+    HANDLE hthread = (HANDLE)(TCR_AUX(tcr)->osid);
     pc where;
-    area *cs = tcr->cs_area;
+    area *cs = TCR_AUX(tcr)->cs_area;
     LispObj foreign_rsp;
 
     if (hthread == NULL) {
@@ -2064,12 +1999,12 @@ suspend_tcr(TCR *tcr)
           /* There are likely race conditions here */
           SET_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_SUSPEND);
           ResumeThread(hthread);
-          SEM_WAIT_FOREVER(tcr->suspend);
+          SEM_WAIT_FOREVER(TCR_AUX(tcr)->suspend);
           SuspendThread(hthread);
           /* The thread is either waiting for its resume semaphore to
              be signaled or is about to wait.  Signal it now, while
              the thread's suspended. */
-          SEM_RAISE(tcr->resume);
+          SEM_RAISE(TCR_AUX(tcr)->resume);
           pcontext->ContextFlags = CONTEXT_ALL;
           GetThreadContext(hthread, pcontext);
         }
@@ -2086,7 +2021,7 @@ suspend_tcr(TCR *tcr)
       }
 #endif
     }
-    tcr->suspend_context = pcontext;
+    TCR_AUX(tcr)->suspend_context = pcontext;
     return true;
   }
   return false;
@@ -2145,7 +2080,7 @@ kill_tcr(TCR *tcr)
 
   LOCK(lisp_global(TCR_AREA_LOCK),current);
   {
-    LispObj osid = tcr->osid;
+    LispObj osid = TCR_AUX(tcr)->osid;
     
     if (osid) {
       result = true;
@@ -2153,7 +2088,8 @@ kill_tcr(TCR *tcr)
       /* What we really want to do here is (something like)
          forcing the thread to run quit_handler().  For now,
          mark the TCR as dead and kill the Windows thread. */
-      tcr->osid = 0;
+      /* xxx TerminateThread() bad */
+      TCR_AUX(tcr)->osid = 0;
       if (!TerminateThread((HANDLE)osid, 0)) {
         CloseHandle((HANDLE)osid);
         result = false;
@@ -2191,15 +2127,15 @@ lisp_suspend_tcr(TCR *tcr)
 Boolean
 resume_tcr(TCR *tcr)
 {
-  int suspend_count = atomic_decf(&(tcr->suspend_count)), err;
+  int suspend_count = atomic_decf(&(TCR_AUX(tcr)->suspend_count)), err;
   DWORD rc;
   if (suspend_count == 0) {
-    CONTEXT *context = tcr->suspend_context;
-    HANDLE hthread = (HANDLE)(tcr->osid);
+    CONTEXT *context = TCR_AUX(tcr)->suspend_context;
+    HANDLE hthread = (HANDLE)(TCR_AUX(tcr)->osid);
 
     if (context) {
       context->ContextFlags = CONTEXT_ALL;
-      tcr->suspend_context = NULL;
+      TCR_AUX(tcr)->suspend_context = NULL;
       SetThreadContext(hthread,context);
       rc = ResumeThread(hthread);
       if (rc == -1) {
@@ -2249,7 +2185,7 @@ void
 enqueue_freed_tcr (TCR *tcr)
 {
 #ifndef HAVE_TLS
-  tcr->next = freed_tcrs;
+  TCR_AUX(tcr)->next = freed_tcrs;
   freed_tcrs = tcr;
 #endif
 }
@@ -2277,7 +2213,7 @@ normalize_dead_tcr_areas(TCR *tcr)
   }
 #endif
 
-  a = tcr->cs_area;
+  a = TCR_AUX(tcr)->cs_area;
   if (a) {
     a->active = a->high;
   }
@@ -2289,10 +2225,11 @@ free_freed_tcrs ()
   TCR *current, *next;
 
   for (current = freed_tcrs; current; current = next) {
-    next = current->next;
+    next = TCR_AUX(current)->next;
 #ifndef HAVE_TLS
-#ifdef WIN32
-    free(current->allocated);
+#ifdef WIN_32
+    /* We sort of have TLS in that the TEB is per-thread.  We free the
+     * tcr aux vector elsewhere. */
 #else
     free(current);
 #endif
@@ -2309,10 +2246,10 @@ suspend_other_threads(Boolean for_gc)
   Boolean all_acked;
 
   LOCK(lisp_global(TCR_AREA_LOCK), current);
-  for (other = current->next; other != current; other = other->next) {
-    if ((other->osid != 0)) {
+  for (other = TCR_AUX(current)->next; other != current; other = TCR_AUX(other)->next) {
+    if ((TCR_AUX(other)->osid != 0)) {
       suspend_tcr(other);
-      if (other->osid == 0) {
+      if (TCR_AUX(other)->osid == 0) {
 	dead_tcr_count++;
       }
     } else {
@@ -2322,8 +2259,8 @@ suspend_other_threads(Boolean for_gc)
 
   do {
     all_acked = true;
-    for (other = current->next; other != current; other = other->next) {
-      if ((other->osid != 0)) {
+    for (other = TCR_AUX(current)->next; other != current; other = TCR_AUX(other)->next) {
+      if ((TCR_AUX(other)->osid != 0)) {
         if (!tcr_suspend_ack(other)) {
           all_acked = false;
         }
@@ -2335,9 +2272,9 @@ suspend_other_threads(Boolean for_gc)
 
   /* All other threads are suspended; can safely delete dead tcrs now */
   if (dead_tcr_count) {
-    for (other = current->next; other != current; other = next) {
-      next = other->next;
-      if ((other->osid == 0))  {
+    for (other = TCR_AUX(current)->next; other != current; other = next) {
+      next = TCR_AUX(other)->next;
+      if ((TCR_AUX(other)->osid == 0))  {
         normalize_dead_tcr_areas(other);
 	dequeue_tcr(other);
 	enqueue_freed_tcr(other);
@@ -2356,8 +2293,8 @@ void
 resume_other_threads(Boolean for_gc)
 {
   TCR *current = get_tcr(true), *other;
-  for (other = current->next; other != current; other = other->next) {
-    if ((other->osid != 0)) {
+  for (other = TCR_AUX(current)->next; other != current; other = TCR_AUX(other)->next) {
+    if ((TCR_AUX(other)->osid != 0)) {
       resume_tcr(other);
     }
   }

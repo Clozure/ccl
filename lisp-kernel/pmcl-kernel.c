@@ -1661,7 +1661,6 @@ wide_argv_to_utf_8(wchar_t *wide_argv[], int argc)
 #endif
 
 
-  
 
 
 int
@@ -1967,7 +1966,7 @@ main
 #if STATIC
   lisp_global(STATICALLY_LINKED) = 1 << fixnumshift;
 #endif
-  tcr->prev = tcr->next = tcr;
+  TCR_AUX(tcr)->prev = TCR_AUX(tcr)->next = tcr;
 #ifndef WINDOWS
   lisp_global(INTERRUPT_SIGNAL) = (LispObj) box_fixnum(SIGNAL_FOR_PROCESS_INTERRUPT);
 #endif
@@ -2448,7 +2447,7 @@ ensure_static_conses(ExceptionInformation *xp, TCR *tcr, natural nconses)
     }
 #endif
     allocate_static_conses(nconses);
-    tcr->bytes_allocated += nbytes;
+    TCR_AUX(tcr)->bytes_allocated += nbytes;
   }
 #ifdef USE_GC_NOTIFICATION
   if (crossed_notify_threshold && !did_gc_notification_since_last_full_gc) {

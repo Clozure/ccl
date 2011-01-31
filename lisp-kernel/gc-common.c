@@ -685,7 +685,7 @@ mark_tcr_xframes(TCR *tcr)
   xframe_list *xframes;
   ExceptionInformation *xp;
 
-  xp = tcr->gc_context;
+  xp = TCR_AUX(tcr)->gc_context;
   if (xp) {
 #ifndef X8632
     mark_xp(xp);
@@ -1387,10 +1387,10 @@ gc(TCR *tcr, signed_natural param)
   natural weak_method = lisp_global(WEAK_GC_METHOD) >> fixnumshift;
 
 #ifndef FORCE_DWS_MARK
-  if ((natural) (tcr->cs_limit) == CS_OVERFLOW_FORCE_LIMIT) {
+  if ((natural) (TCR_AUX(tcr)->cs_limit) == CS_OVERFLOW_FORCE_LIMIT) {
     GCstack_limit = CS_OVERFLOW_FORCE_LIMIT;
   } else {
-    GCstack_limit = (natural)(tcr->cs_limit)+(natural)page_size;
+    GCstack_limit = (natural)(TCR_AUX(tcr)->cs_limit)+(natural)page_size;
   }
 #else
   GCstack_limit = CS_OVERFLOW_FORCE_LIMIT;
@@ -1560,7 +1560,7 @@ gc(TCR *tcr, signed_natural param)
     do {
       mark_tcr_xframes(other_tcr);
       mark_tcr_tlb(other_tcr);
-      other_tcr = other_tcr->next;
+      other_tcr = TCR_AUX(other_tcr)->next;
     } while (other_tcr != tcr);
 
 
@@ -1644,7 +1644,7 @@ gc(TCR *tcr, signed_natural param)
     do {
       forward_tcr_xframes(other_tcr);
       forward_tcr_tlb(other_tcr);
-      other_tcr = other_tcr->next;
+      other_tcr = TCR_AUX(other_tcr)->next;
     } while (other_tcr != tcr);
 
   

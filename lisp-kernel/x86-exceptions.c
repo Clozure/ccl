@@ -61,11 +61,12 @@ did_gc_notification_since_last_full_gc = false;
 void
 update_bytes_allocated(TCR* tcr, void *cur_allocptr)
 {
-  BytePtr 
-    last = (BytePtr) tcr->last_allocptr, 
-    current = (BytePtr) cur_allocptr;
+  char *last = tcr->last_allocptr;
+  char *current = cur_allocptr;
+  u64_t *bytes_allocated = (u64_t *)&TCR_AUX(tcr)->bytes_allocated;
+
   if (last && (tcr->save_allocbase != ((void *)VOID_ALLOCPTR))) {
-    tcr->bytes_allocated += last-current;
+    *bytes_allocated += last - current;
   }
   tcr->last_allocptr = 0;
 }
@@ -83,7 +84,7 @@ new_heap_segment(ExceptionInformation *xp, natural need, Boolean extend, TCR *tc
 {
   area *a;
   natural newlimit, oldlimit;
-  natural log2_allocation_quantum = tcr->log2_allocation_quantum;
+  natural log2_allocation_quantum = TCR_AUX(tcr)->log2_allocation_quantum;
 
   if (crossed_threshold) {
     *crossed_threshold = false;
@@ -1304,8 +1305,8 @@ prepare_to_wait_for_exception_lock(TCR *tcr, ExceptionInformation *context)
 #ifdef WINDOWS
   if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_SUSPEND)) {
     CLR_TCR_FLAG(tcr, TCR_FLAG_BIT_PENDING_SUSPEND);
-    SEM_RAISE(tcr->suspend);
-    SEM_WAIT_FOREVER(tcr->resume);
+    SEM_RAISE(TCR_AUX(tcr)->suspend);
+    SEM_WAIT_FOREVER(TCR_AUX(tcr)->resume);
   }
 #else
   ALLOW_EXCEPTIONS(context);
@@ -1528,7 +1529,7 @@ tcr_frame_ptr(TCR *tcr)
   if (tcr->pending_exception_context)
     xp = tcr->pending_exception_context;
   else if (tcr->valence == TCR_STATE_LISP) {
-    xp = tcr->suspend_context;
+    xp = TCR_AUX(tcr)->suspend_context;
   } else {
     xp = NULL;
   }
@@ -2017,9 +2018,6 @@ setup_exception_handler_call(CONTEXT *context,
   *(--p) = (LispObj)windows_halt;
   context->Esp = (DWORD)p;
   context->Eip = (DWORD)handler;
-#ifdef WIN32_ES_HACK
-  context->SegEs = context->SegDs;
-#endif
 #endif
   context->EFlags &= ~0x400;  /* clear direction flag */
 }
@@ -2061,7 +2059,7 @@ windows_arbstack_exception_handler(EXCEPTION_POINTERS *exception_pointers)
     return EXCEPTION_CONTINUE_SEARCH;
   } else {
     TCR *tcr = get_interrupt_tcr(false);
-    area *cs = tcr->cs_area;
+    area *cs = TCR_AUX(tcr)->cs_area;
     BytePtr current_sp = (BytePtr) current_stack_pointer();
     CONTEXT *context = exception_pointers->ContextRecord;
     
@@ -2197,7 +2195,7 @@ empty_tcr_stacks(TCR *tcr)
     if (a) {
       a->active = a->high;
     }
-    a = tcr->cs_area;
+    a = TCR_AUX(tcr)->cs_area;
     if (a) {
       a->active = a->high;
     }
@@ -2470,23 +2468,26 @@ recognize_alloc_instruction(pc program_counter)
    doesn't match what we expect; until that's fixed, we may need to
    account for this extra byte when adjusting the PC */
 #define LISP_ASSEMBLER_EXTRA_SIB_BYTE
-#ifdef WIN32_ES_HACK
-/* Win32 keeps the TCR in %es */
-#define TCR_SEG_PREFIX 0x26     /* %es: */
+#define TCR_SEG_PREFIX 0x64
+
+#ifdef WIN_32
+#define SAVE_ALLOCPTR 0x9c,0x0e,0x0,0x0
+#define SAVE_ALLOCBASE 0x98,0x0e,0x0,0x0
 #else
-/* Other platfroms use %fs */
-#define TCR_SEG_PREFIX 0x64     /* %fs: */
+#define SAVE_ALLOCPTR 0x84,0x0,0x0,0x0
+#define SAVE_ALLOCBASE 0x88,0x0,0x0,0x0
 #endif
+
 opcode load_allocptr_reg_from_tcr_save_allocptr_instruction[] =
-  {TCR_SEG_PREFIX,0x8b,0x0d,0x84,0x00,0x00,0x00};  /* may have extra SIB byte */
+  {TCR_SEG_PREFIX,0x8b,0x0d,SAVE_ALLOCPTR};  /* may have extra SIB byte */
 opcode compare_allocptr_reg_to_tcr_save_allocbase_instruction[] =
-  {TCR_SEG_PREFIX,0x3b,0x0d,0x88,0x00,0x00,0x00};  /* may have extra SIB byte */
+  {TCR_SEG_PREFIX,0x3b,0x0d,SAVE_ALLOCBASE};  /* may have extra SIB byte */
 opcode branch_around_alloc_trap_instruction[] =
   {0x77,0x02};                  /* no SIB byte issue */
 opcode alloc_trap_instruction[] =
   {0xcd,0xc5};                  /* no SIB byte issue */
 opcode clear_tcr_save_allocptr_tag_instruction[] =
-  {TCR_SEG_PREFIX,0x80,0x25,0x84,0x00,0x00,0x00,0xf8}; /* maybe SIB byte */
+  {TCR_SEG_PREFIX,0x80,0x25,SAVE_ALLOCPTR,0xf8}; /* maybe SIB byte */
 opcode set_allocptr_header_instruction[] =
   {0x0f,0x7e,0x41,0xfa};        /* no SIB byte issue */
 
@@ -2499,7 +2500,7 @@ recognize_alloc_instruction(pc program_counter)
   case 0x7f:
   case 0x77: return ID_branch_around_alloc_trap_instruction;
   case 0x0f: return ID_set_allocptr_header_instruction;
-  case TCR_SEG_PREFIX: 
+  case 0x64: 
     switch(program_counter[1]) {
     case 0x80: return ID_clear_tcr_save_allocptr_tag_instruction;
     case 0x3b: return ID_compare_allocptr_reg_to_tcr_save_allocbase_instruction;
@@ -2843,18 +2844,19 @@ gc_like_from_xp(ExceptionInformation *xp,
   normalize_tcr(xp, tcr, false);
 
 
-  for (other_tcr = tcr->next; other_tcr != tcr; other_tcr = other_tcr->next) {
+  for (other_tcr = TCR_AUX(tcr)->next; other_tcr != tcr;
+       other_tcr = TCR_AUX(other_tcr)->next) {
     if (other_tcr->pending_exception_context) {
-      other_tcr->gc_context = other_tcr->pending_exception_context;
+      TCR_AUX(other_tcr)->gc_context = other_tcr->pending_exception_context;
     } else if (other_tcr->valence == TCR_STATE_LISP) {
-      other_tcr->gc_context = other_tcr->suspend_context;
+      TCR_AUX(other_tcr)->gc_context = TCR_AUX(other_tcr)->suspend_context;
     } else {
       /* no pending exception, didn't suspend in lisp state:
 	 must have executed a synchronous ff-call. 
       */
-      other_tcr->gc_context = NULL;
+      TCR_AUX(other_tcr)->gc_context = NULL;
     }
-    normalize_tcr(other_tcr->gc_context, other_tcr, true);
+    normalize_tcr(TCR_AUX(other_tcr)->gc_context, other_tcr, true);
   }
     
 
@@ -2863,8 +2865,8 @@ gc_like_from_xp(ExceptionInformation *xp,
 
   other_tcr = tcr;
   do {
-    other_tcr->gc_context = NULL;
-    other_tcr = other_tcr->next;
+    TCR_AUX(other_tcr)->gc_context = NULL;
+    other_tcr = TCR_AUX(other_tcr)->next;
   } while (other_tcr != tcr);
 
   gc_tcr = NULL;

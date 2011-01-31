@@ -120,7 +120,8 @@
 
 (defun %stack< (index1 index2 &optional context)
   (let* ((tcr (if context (bt.tcr context) (%current-tcr)))
-         (vs-area (%fixnum-ref tcr target::tcr.vs-area)))
+         (vs-area (%fixnum-ref tcr (- target::tcr.vs-area
+				      target::tcr-bias))))
     (and (%ptr-in-area-p index1 vs-area)
          (%ptr-in-area-p index2 vs-area)
          (< (the fixnum index1) (the fixnum index2)))))
@@ -299,7 +300,8 @@
 
 (defun last-tsp-before (target)
   (declare (fixnum target))
-  (do* ((tsp (%fixnum-ref (%current-tcr) target::tcr.save-tsp)
+  (do* ((tsp (%fixnum-ref (%current-tcr) (- target::tcr.save-tsp
+					    target::tcr-bias))
              (%fixnum-ref tsp target::tsp-frame.backptr)))
        ((zerop tsp) nil)
     (declare (fixnum tsp))
@@ -314,7 +316,8 @@
 ;;; We can't determine this reliably (yet).
 (defun last-foreign-sp-before (target)
   (declare (fixnum target))
-  (do* ((cfp (%fixnum-ref (%current-tcr) target::tcr.foreign-sp)
+  (do* ((cfp (%fixnum-ref (%current-tcr) (- target::tcr.foreign-sp
+					    target::tcr-bias))
              (%fixnum-ref cfp target::csp-frame.backptr)))
        ((zerop cfp))
     (declare (fixnum cfp))
@@ -329,7 +332,8 @@
 
 (defun %tsp-frame-containing-progv-binding (db)
   (declare (fixnum db))
-  (do* ((tsp (%fixnum-ref (%current-tcr) target::tcr.save-tsp) next)
+  (do* ((tsp (%fixnum-ref (%current-tcr) (- target::tcr.save-tsp
+					    target::tcr-bias)) next)
         (next (%fixnum-ref tsp target::tsp-frame.backptr)
               (%fixnum-ref tsp target::tsp-frame.backptr)))
        ()
@@ -352,7 +356,8 @@
   (declare (fixnum frame))
   (do* ((db (%current-db-link) (%fixnum-ref db 0))
         (tcr (%current-tcr))
-        (vs-area (%fixnum-ref tcr target::tcr.vs-area))
+        (vs-area (%fixnum-ref tcr (- target::tcr.vs-area
+				     target::tcr-bias)))
         (vs-low (%fixnum-ref vs-area target::area.low))
         (vs-high (%fixnum-ref vs-area target::area.high)))
        ((eql db 0) nil)

@@ -316,6 +316,10 @@
 
 (defmethod process-tcr-enable ((process process) tcr)
   (when (and tcr (not (eql 0 tcr)))
+    #+(and windows-target x8632-target)
+    (let ((aux (%fixnum-ref tcr (- target::tcr.aux target::tcr-bias))))
+      (%signal-semaphore-ptr (%fixnum-ref-macptr aux target::tcr-aux.activate)))
+    #-(and windows-target x8632-target)
     (%signal-semaphore-ptr (%fixnum-ref-macptr tcr target::tcr.activate))
     ))
 
@@ -694,9 +698,14 @@ had invoked abort."
   (if (valid-allocation-quantum-p new)
     (with-macptrs (tcrp)
       (%setf-macptr-to-object tcrp (%current-tcr))
-      (setf (slot-value *current-process* 'allocation-quantum) new
-            (%get-natural tcrp target::tcr.log2-allocation-quantum)
+      #+(and windows-target x8632-target)
+      (let ((aux (%get-ptr tcrp (- target::tcr.aux target::tcr-bias))))
+	(setf (%get-natural aux target::tcr-aux.log2-allocation-quantum)
+	      (1- (integer-length new))))
+      #-(and windows-target x8632-target)
+      (setf (%get-natural tcrp target::tcr.log2-allocation-quantum)
             (1- (integer-length new)))
+      (setf (slot-value *current-process* 'allocation-quantum) new)
       new)
     (report-bad-arg new '(satisfies valid-allocation-quantum-p))))
 

@@ -308,25 +308,25 @@ lisp_standard_read(HANDLE hfile, void *buf, unsigned int count)
   tcr = (TCR *)get_tcr(1);
   pending.h = hfile;
   pending.o = &overlapped;
-  tcr->pending_io_info = &pending;
-  hevent = (HANDLE)(tcr->io_datum);
+  TCR_AUX(tcr)->pending_io_info = &pending;
+  hevent = (HANDLE)(TCR_AUX(tcr)->io_datum);
   overlapped.hEvent = hevent;
   ResetEvent(hevent);
   if (ReadFile(hfile, buf, count, &nread, &overlapped)) {
-    tcr->pending_io_info = NULL;
+    TCR_AUX(tcr)->pending_io_info = NULL;
     return nread;
   }
 
   err = GetLastError();
   
   if (err == ERROR_HANDLE_EOF) {
-    tcr->pending_io_info = NULL;
+    TCR_AUX(tcr)->pending_io_info = NULL;
     return 0;
   }
 
   if (err != ERROR_IO_PENDING) {
     _dosmaperr(err);
-    tcr->pending_io_info = NULL;
+    TCR_AUX(tcr)->pending_io_info = NULL;
     return -1;
   }
   
@@ -337,7 +337,7 @@ lisp_standard_read(HANDLE hfile, void *buf, unsigned int count)
 
 
 
-  tcr->pending_io_info = NULL;
+  TCR_AUX(tcr)->pending_io_info = NULL;
   if (wait_result == WAIT_OBJECT_0) {
     err = overlapped.Internal;
     if (err == ERROR_HANDLE_EOF) {
@@ -463,7 +463,7 @@ lisp_write(HANDLE hfile, void *buf, ssize_t count)
   pending_io pending;
   TCR *tcr = (TCR *)get_tcr(1);
 
-  hevent = (HANDLE)tcr->io_datum;
+  hevent = (HANDLE)TCR_AUX(tcr)->io_datum;
   if (hfile == (HANDLE)1) {
     hfile = GetStdHandle(STD_OUTPUT_HANDLE);
   } else if (hfile == (HANDLE) 2) {
@@ -480,23 +480,23 @@ lisp_write(HANDLE hfile, void *buf, ssize_t count)
 
   pending.h = hfile;
   pending.o = &overlapped;
-  tcr->pending_io_info = &pending;
+  TCR_AUX(tcr)->pending_io_info = &pending;
   overlapped.hEvent = hevent;
   ResetEvent(hevent);
   if (WriteFile(hfile, buf, count, &nwritten, &overlapped)) {
-    tcr->pending_io_info = NULL;
+    TCR_AUX(tcr)->pending_io_info = NULL;
     return nwritten;
   }
   
   err = GetLastError();
   if (err != ERROR_IO_PENDING) {
     _dosmaperr(err);
-    tcr->pending_io_info = NULL;
+    TCR_AUX(tcr)->pending_io_info = NULL;
     return -1;
   }
   err = 0;
   wait_result = WaitForSingleObjectEx(hevent, INFINITE, true);
-  tcr->pending_io_info = NULL;
+  TCR_AUX(tcr)->pending_io_info = NULL;
   if (wait_result == WAIT_OBJECT_0) {
     err = overlapped.Internal;
     if (err) {
@@ -995,10 +995,6 @@ windows_open_shared_library(char *path)
 void
 init_windows_io()
 {
-#ifdef WIN_32
-  extern void init_win32_ldt(void);
-  init_win32_ldt();
-#endif
   find_symbol_lock = CreateMutex(NULL,false,NULL);
 }
 
@@ -1011,12 +1007,12 @@ init_winsock()
 }
 
 /*
- * Reserve TLS slots 32 through 63 in the TEB for (part of) the TCR.
+ * Reserve TLS slots 30 through 63 in the TEB for (part of) the TCR.
  *
  * On Windows 7 x64, #_TlsAlloc returns 23 in a fresh lisp.  On
  * Windows XP, it returns 11.  With any luck, this will leave enough
  * wiggle room for the C runtime or whatever to use a few more TLS
- * slots, and still leave 32 through 63 free for us.
+ * slots, and still leave 30 through 63 free for us.
  */
 void
 reserve_tls_slots()
@@ -1024,27 +1020,27 @@ reserve_tls_slots()
   unsigned int first_available, n, i;
 
   first_available = TlsAlloc();
-  if (first_available > 32) {
+  if (first_available > 30) {
     fprintf(dbgout, "Can't allocate required TLS indexes.\n");
     fprintf(dbgout, "First available index value was %u\n", first_available);
     exit(1);
   }
   TlsFree(first_available);
 
-  for (i = first_available; i < 32; i++) {
+  for (i = first_available; i < 30; i++) {
     n = TlsAlloc();
     if (n != i) {
       fprintf(dbgout, "unexpected TLS index value: wanted %u, got %u\n", i, n);
       exit(1);
     }
   }
-  for (i = 32; i < 64; i++) {
+  for (i = 30; i < 64; i++) {
     n = TlsAlloc();
     if (n != i) {
       fprintf(dbgout, "unexpected TLS index value: wanted %u, got %u\n", i, n);
       exit(1);
     }
   }
-  for (i = first_available; i < 32; i++)
+  for (i = first_available; i < 30; i++)
     TlsFree(i);
 }

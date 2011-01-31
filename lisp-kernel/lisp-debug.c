@@ -879,7 +879,10 @@ debug_thread_info(ExceptionInformation *xp, siginfo_t *info, int arg)
   TCR * tcr = get_tcr(false);
   
   if (tcr) {
-    area *vs_area = tcr->vs_area, *cs_area = tcr->cs_area;
+    area *vs_area = tcr->vs_area, *cs_area;
+
+    if (TCR_AUX(tcr))
+      cs_area = TCR_AUX(tcr)->cs_area;
 
     fprintf(dbgout, "Current Thread Context Record (tcr) = 0x" LISP "\n", tcr);
     fprintf(dbgout, "Control (C) stack area:  low = 0x" LISP ", high = 0x" LISP "\n",

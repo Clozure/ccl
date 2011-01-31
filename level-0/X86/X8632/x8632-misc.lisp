@@ -207,8 +207,13 @@
   (movl (@ (% :rcontext) x8632::tcr.save-allocptr) (% temp1))
   (movl (@ (% :rcontext) x8632::tcr.last-allocptr) (% temp0))
   (cmpl ($ -8) (% temp1))		;void_allocptr
-  (movq (@ (% :rcontext) x8632::tcr.total-bytes-allocated-low) (% mm0))
   (jz @go)
+  #+windows-target
+  (progn
+    (movl (:rcontext x8632::tcr.aux) (% imm0))
+    (movq (@ x8632::tcr-aux.total-bytes-allocated-low (% imm0)) (% mm0)))
+  #-windows-target
+  (movq (@ (% :rcontext) x8632::tcr.total-bytes-allocated-low) (% mm0))
   (movl (% temp0) (% arg_y))
   (subl (% temp1) (% temp0))
   (testl (% arg_y) (% arg_y))
@@ -339,7 +344,7 @@
 
 (defx8632lapfunction %tcr-toplevel-function ((tcr arg_z))
   (check-nargs 1)
-  (movl (@ x8632::tcr.vs-area (% tcr)) (% temp0))
+  (movl (@ (- x8632::tcr.vs-area x8632::tcr-bias) (% tcr)) (% temp0))
   (movl (@ x8632::area.high (% temp0)) (% imm0)) ;bottom of vstack
   (cmpl (% tcr) (@ (% :rcontext) x8632::tcr.linear))
   (jz @myself)
@@ -354,7 +359,7 @@
   
 (defx8632lapfunction %set-tcr-toplevel-function ((tcr arg_y) (fun arg_z))
   (check-nargs 2)
-  (movl (@ x8632::tcr.vs-area (% tcr)) (% temp0))
+  (movl (@ (- x8632::tcr.vs-area x8632::tcr-bias) (% tcr)) (% temp0))
   (movl (@ x8632::area.high (% temp0)) (% imm0))
   (cmpl (% tcr) (@ (% :rcontext) x8632::tcr.linear))
   (jz @myself)
@@ -367,7 +372,7 @@
   (movl ($ 0) (@ (% imm0)))
   (jne @have-room)
   (movl (% imm0) (@ x8632::area.active (% temp0)))
-  (movl (% imm0) (@ x8632::tcr.save-vsp (% tcr)))
+  (movl (% imm0) (@ (- x8632::tcr.save-vsp x8632::tcr-bias) (% tcr)))
   (jmp @have-room)
   @have-room
   (movl (% fun) (@ (% imm0)))

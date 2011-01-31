@@ -4343,7 +4343,10 @@ _spentry(callback)
 	__(call *%eax)
 	__(addl $16,%esp)		/* discard arg, alignment words */
 	/* linear TCR addr now in %eax */
+	ifdef(`WINDOWS',`
+	',`
 	__(movw tcr.ldt_selector(%eax), %rcontext_reg)
+	')
 0:      
 
         /* ebp is 16-byte aligned, and we've pushed 4 words.  Make

@@ -1771,7 +1771,8 @@
 #+x8632-target
 (defun make-vsp-stack-range (tcr bt-info)
   (list (cons (ccl::%svref (ccl::bt.top-catch bt-info) target::catch-frame.esp-cell)
-              (ccl::%fixnum-ref (ccl::%fixnum-ref tcr target::tcr.vs-area)
+              (ccl::%fixnum-ref (ccl::%fixnum-ref tcr (- target::tcr.vs-area
+							 target::tcr-bias))
                                 target::area.high))))
 
 #+x8664-target
@@ -1795,9 +1796,14 @@
 
 #+x8632-target
 (defun make-csp-stack-range (tcr bt-info)
+  (let ((cs-area nil))
+    #+windows-target
+    (let ((aux (ccl::%fixnum-ref tcr (- target::tcr.aux target::tcr-bias))))
+      (setq cs-area (ccl::%fixnum-ref aux target::tcr-aux.cs-area)))
+    #-windows-target
+    (setq cs-area (ccl::%fixnum-ref tcr target::tcr.cs-area))
   (list (cons (ccl::%svref (ccl::bt.top-catch bt-info) target::catch-frame.foreign-sp-cell)
-              (ccl::%fixnum-ref (ccl::%fixnum-ref tcr target::tcr.cs-area)
-                                target::area.high))))
+              (ccl::%fixnum-ref cs-area target::area.high)))))
 
 #+x8664-target
 (defun make-csp-stack-range (tcr bt-info)

@@ -107,8 +107,13 @@ Boolean extern log_tcr_info;
 #define LOCK_SPINLOCK(x,tcr) get_spin_lock(&(x),tcr)
 #define RELEASE_SPINLOCK(x) (x)=0
 
+#ifdef WIN_32
+#define TCR_TO_TSD(tcr) ((void *)((natural)(tcr)))
+#define TCR_FROM_TSD(tsd) ((TCR *)((natural)(tsd)))
+#else
 #define TCR_TO_TSD(tcr) ((void *)((natural)(tcr)+TCR_BIAS))
 #define TCR_FROM_TSD(tsd) ((TCR *)((natural)(tsd)-TCR_BIAS))
+#endif
 
 #ifdef USE_WINDOWS_SEMAPHORES
 

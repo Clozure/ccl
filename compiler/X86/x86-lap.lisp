@@ -1428,23 +1428,40 @@ execute them very quickly.")
                                            (+ 2
                                               (if name 1 0)
                                               (if debug-info 1 0)))
-                                        target::subtag-xfunction)))
+                                        target::subtag-xfunction))
+	 (nconstants (length constants)))
     (unless name (setq bits (logior bits (ash -1 $lfbits-noname-bit))))
     (let* ((last (1- (uvsize constants-vector))))
       (declare (fixnum last))
       (setf (uvref constants-vector last) bits)
       (when name
+	(incf nconstants)
         (setf (uvref constants-vector (decf last)) name))
       (when debug-info
+	(incf nconstants)
         (setf (uvref constants-vector (decf last)) debug-info))
+      (incf nconstants)
       (dolist (c constants)
         (setf (uvref constants-vector (decf last)) (car c)))
-      (let* ((nbytes 0))
-        (do-dll-nodes (frag frag-list)
-          (incf nbytes (frag-length frag)))
-	#+x8632-target
-	(when (>= nbytes (ash 1 18)) (compiler-function-overflow))
-        (let* ((code-vector (make-array nbytes
+      (let* ((code-bytes (let ((nbytes 0))
+			   (do-dll-nodes (frag frag-list nbytes)
+			     (incf nbytes (frag-length frag)))))
+	     (arch (backend-target-arch *target-backend*))
+	     (shift (arch::target-word-shift arch))
+	     (code-words (ash code-bytes (- shift))))
+	(target-word-size-case
+	 (32
+	  (let* ((ncode (- code-words nconstants)))
+	    (when (>= ncode #x8000)
+	      ;;(break "hey, a big function!")
+	      (if (>= nconstants #x8000)
+		(compiler-function-overflow)
+		(let* ((buf (car (frag-code-buffer
+				  (dll-header-first frag-list))))
+		       (new-word (logior #x8000 nconstants)))
+		  (setf (aref buf 0) (ldb (byte 8 0) new-word)
+			(aref buf 1) (ldb (byte 8 8) new-word))))))))
+        (let* ((code-vector (make-array code-bytes
                                         :element-type '(unsigned-byte 8)))
                (target-offset 0))
           (declare (fixnum target-offset))

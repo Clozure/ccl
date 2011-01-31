@@ -43,7 +43,8 @@
                         frame-ptr ;; current
                         #+ppc-target *fake-stack-frames*
                         #+(or x86-target arm-target) frame-ptr
-                        (%fixnum-ref tcr target::tcr.db-link)
+                        (%fixnum-ref tcr (- target::tcr.db-link
+					    target::tcr-bias))
                         0         ;; break level - not used
                         )))
   

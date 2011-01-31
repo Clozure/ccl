@@ -32,10 +32,20 @@
 
 #+x8632-target
 (defx8632lapfunction %get-errno ()
+  #+windows-target
+  (progn
+    (movl (:rcontext x8632::tcr.aux) (% imm0))
+    (movl (@ x8632::tcr-aux.errno-loc (% imm0)) (% imm0)))
+  #-windows-target
   (movl (:rcontext x8632::tcr.errno-loc) (% imm0))
   (movl (@ (% imm0)) (% imm0))
   (neg (% imm0))
   (box-fixnum imm0 arg_z)
+  #+windows-target
+  (progn
+    (movl (:rcontext x8632::tcr.aux) (% imm0))
+    (movl (@ x8632::tcr-aux.errno-loc (% imm0)) (% imm0)))
+  #-windows-target
   (movl (:rcontext x8632::tcr.errno-loc) (% imm0))
   (movss (% fpzero) (@ (% imm0)))
   (single-value-return))

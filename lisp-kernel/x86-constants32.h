@@ -289,8 +289,6 @@ typedef struct xframe_list {
 typedef unsigned short sel_t;   /* for now */
 #endif
 
-#define TCR_BIAS 0
-
 /*
  * bits correspond to reg encoding used in instructions
  *   7   6   5   4   3   2   1   0
@@ -298,6 +296,77 @@ typedef unsigned short sel_t;   /* for now */
  */
 
 #define X8632_DEFAULT_NODE_REGS_MASK 0xce
+
+#ifdef WIN_32
+/* TCR is in the last 34 words of NtCurrentTeb()->TlsSlots[] */
+#define TCR_BIAS (0xe10 + 30 * sizeof(natural))
+
+typedef struct tcr {
+  struct tcr *linear;
+  struct tcr_aux *aux;
+  signed_natural valence;	/* odd when in foreign code */
+  natural node_regs_mask;	/* bit set means register contains node */
+  char *save_allocbase;
+  char *save_allocptr;
+  char *last_allocptr;
+  LispObj catch_top;            /* top catch frame */
+  special_binding *db_link;     /* special binding chain head */
+  natural tlb_limit;
+  LispObj *tlb_pointer;
+  LispObj ffi_exception;        /* fpscr bits from ff-call */
+  LispObj *foreign_sp;
+  signed_natural interrupt_pending;     /* pending interrupt flag */
+  LispObj next_method_context;  /* used in lieu of register */
+  LispObj *next_tsp;
+  void *safe_ref_address;
+  LispObj *save_tsp;		/* TSP when in foreign code */
+  LispObj *save_vsp;		/* VSP when in foreign code */
+  LispObj *save_fp;		/* EBP when in foreign code */
+  struct area *ts_area;		/* tstack area pointer */
+  struct area *vs_area;		/* vstack area pointer */
+  xframe_list *xframe;		/* exception-frame linked list */
+  signed_natural unwinding;
+  natural flags;
+  natural foreign_mxcsr;
+  natural lisp_mxcsr;
+  ExceptionInformation *pending_exception_context;
+  natural unboxed0;		/* unboxed scratch locations */
+  natural unboxed1;
+  LispObj save0;		/* spill area for node registers: */
+  LispObj save1;		/*  it must be 16-byte aligned */
+  LispObj save2;
+  LispObj save3;
+} TCR;
+
+struct tcr_aux {
+  unsigned long long bytes_allocated;
+  struct area *cs_area;		/* cstack area pointer */
+  LispObj cs_limit;		/* stack overflow limit */
+  natural log2_allocation_quantum;      /* for per-thread consing */
+  int *errno_loc;               /* per-thread (?) errno location */
+  LispObj osid;                 /* OS thread id */
+  signed_natural foreign_exception_status; /* non-zero -> call lisp_exit_hook */
+  void *native_thread_info;	/* platform-dependent */
+  void *native_thread_id;	/* mach_thread_t, pid_t, etc. */
+  void *reset_completion;
+  void *activate;
+  ExceptionInformation *gc_context;
+  void *termination_semaphore;
+  natural shutdown_count;
+  natural save_eflags;
+  sel_t ldt_selector;
+  signed_natural suspend_count;
+  ExceptionInformation *suspend_context;
+  void *suspend;                /* suspension semaphore */
+  void *resume;                 /* resumption semaphore */
+  void *allocated;
+  void *pending_io_info;
+  void *io_datum;
+  struct tcr *next;
+  struct tcr *prev;
+};
+#else
+#define TCR_BIAS 0
 
 typedef struct tcr {
   struct tcr *next;
@@ -362,6 +431,9 @@ typedef struct tcr {
   void *pending_io_info;
   void *io_datum;
 } TCR;
+#endif
+
+/* expansion of "TCR_AUX(tcr)": TCR_AUX(tcr) */
 
 #define nil_value ((0x13000 + (fulltag_cons))+(LOWMEM_BIAS))
 #define t_value ((0x13008 + (fulltag_misc))+(LOWMEM_BIAS))

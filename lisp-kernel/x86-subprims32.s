@@ -76,7 +76,10 @@ _exportfn(C(start_lisp))
 	__(mov 8(%ebp), %ebx)	/* get tcr */
         __(cmpb $0,C(rcontext_readonly))
         __(jne 0f)
+ifdef(`WIN_32',`
+',`
         __(movw tcr.ldt_selector(%ebx), %rcontext_reg)
+')
 0:              
         __(movl 8(%ebp),%eax)
         __(cmpl rcontext(tcr.linear),%eax)

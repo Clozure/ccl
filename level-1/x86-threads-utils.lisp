@@ -27,7 +27,8 @@
   (and (fixnump p)
        (locally (declare (fixnum p))
 	 (let* ((tcr (if context (bt.tcr context) (%current-tcr)))
-                (vs-area (%fixnum-ref tcr target::tcr.vs-area)))
+                (vs-area (%fixnum-ref tcr (- target::tcr.vs-area
+					     target::tcr-bias))))
 	   (not (%ptr-in-area-p p vs-area))))))
 
 

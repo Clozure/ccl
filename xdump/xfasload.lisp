@@ -1083,7 +1083,10 @@
     (xload-set '*keyword-package* (xload-package->addr *keyword-package*))
     (xload-set '%all-packages% (xload-save-list (mapcar #'cdr *xload-aliased-package-addresses*)))
     (xload-set '%unbound-function% (%xload-unbound-function%))
-    (xload-set '*gc-event-status-bits* (xload-integer 0 #|(ash 1 $gc-integrity-check-bit)|#))
+    (xload-set '*gc-event-status-bits*
+	       (xload-integer 0 (logior (ash 1 $gc-integrity-check-bit)
+					(ash 1 $egc-verbose-bit)
+					(ash 1 $gc-verbose-bit))))
     (xload-set '%toplevel-catch% (xload-copy-symbol :toplevel))
     (if *xload-target-use-code-vectors*
       (xload-set '%closure-code% (xload-save-code-vector
@@ -1803,6 +1806,11 @@
 (defun xload-fixup-self-references (addr)
   (let* ((imm-word-count (xload-u16-at-address
 			  (+ addr *xload-target-misc-data-offset*))))
+    (when (logbitp 15 imm-word-count)
+      (let* ((header (xload-natural-at-address
+		      (+ addr *xload-target-misc-header-offset*)))
+	     (len (ash header (- target::num-subtag-bits))))
+	(setq imm-word-count (- len (ldb (byte 15 0) imm-word-count)))))
     (do* ((i (- imm-word-count 2) (1- i))
 	  (offset (xload-%fullword-ref addr i) (xload-%fullword-ref addr i)))
 	 ((zerop offset))

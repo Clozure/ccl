@@ -576,8 +576,80 @@
   protsize                              ; number of bytes to protect
   why)
 
+#+windows-target
+(progn
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defconstant tcr-bias 0))
+  (defconstant tcr-bias #xe88))
+
+(define-storage-layout tcr tcr-bias
+  linear
+  aux
+  valence
+  node-regs-mask       ; bit set means corresponding reg contains node
+  save-allocbase
+  save-allocptr
+  last-allocptr
+  catch-top
+  db-link
+  tlb-limit
+  tlb-pointer
+  ffi-exception
+  foreign-sp
+  interrupt-pending
+  next-method-context
+  next-tsp
+  safe-ref-address
+  save-tsp
+  save-vsp
+  save-ebp
+  ts-area
+  vs-area
+  xframe
+  unwinding
+  flags
+  foreign-mxcsr
+  lisp-mxcsr
+  pending-exception-context
+  unboxed0
+  unboxed1
+  save0
+  save1
+  save2
+  save3)
+
+(define-storage-layout tcr-aux 0
+  total-bytes-allocated-low
+  total-bytes-allocated-high
+  cs-area
+  cs-limit
+  log2-allocation-quantum
+  errno-loc
+  osid
+  foreign-exception-status
+  native-thread-info
+  native-thread-id
+  reset-completion
+  activate
+  gc-context
+  termination-semaphore
+  shutdown-count
+  suspend-count
+  suspend-context
+  suspend
+  resume
+  allocated
+  pending-io-info
+  io-datum
+  next
+  prev)
+
+)
+
+#-windows-target
+(progn
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defconstant tcr-bias #xe88))
 
 (define-storage-layout tcr (- tcr-bias)
   next					; in doubly-linked list
@@ -641,6 +713,7 @@
   allocated                             ;maybe unaligned TCR pointer
   pending-io-info
   io-datum                              ;for windows overlapped I/O
+)
 )
 
 (defconstant interrupt-level-binding-index (ash 1 fixnumshift))

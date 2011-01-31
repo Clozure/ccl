@@ -279,8 +279,8 @@
 
 ;;; Return the MXCSR as a fixnum
 (defx8632lapfunction %get-mxcsr ()
-  (stmxcsr (:rcontext x8632::tcr.scratch-mxcsr))
-  (movl (:rcontext x8632::tcr.scratch-mxcsr) (% imm0))
+  (stmxcsr (:rcontext x8632::tcr.unboxed0))
+  (movl (:rcontext x8632::tcr.unboxed0) (% imm0))
   (box-fixnum imm0 arg_z)
   (single-value-return))
 
@@ -290,8 +290,8 @@
 (defx8632lapfunction %set-mxcsr ((val arg_z))
   (unbox-fixnum val imm0)
   (andl ($ x86::mxcsr-write-mask) (% imm0))
-  (movl (% imm0) (:rcontext x8632::tcr.scratch-mxcsr))
-  (ldmxcsr (:rcontext x8632::tcr.scratch-mxcsr))
+  (movl (% imm0) (:rcontext x8632::tcr.unboxed0))
+  (ldmxcsr (:rcontext x8632::tcr.unboxed0))
   (single-value-return))
 
 

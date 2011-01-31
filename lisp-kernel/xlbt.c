@@ -145,7 +145,7 @@ plbt_sp(LispObj current_fp)
   char *ilevel = interrupt_level_description(tcr);
 
   vs_area = tcr->vs_area;
-  cs_area = tcr->cs_area;
+  cs_area = TCR_AUX(tcr)->cs_area;
   if ((((LispObj) ptr_to_lispobj(vs_area->low)) > current_fp) ||
       (((LispObj) ptr_to_lispobj(vs_area->high)) < current_fp)) {
     current_fp = (LispObj) (tcr->save_fp);
@@ -154,7 +154,7 @@ plbt_sp(LispObj current_fp)
       (((LispObj) ptr_to_lispobj(vs_area->high)) < current_fp)) {
     Dprintf("\nFrame pointer [#x" LISP "] in unknown area.", current_fp);
   } else {
-    fprintf(dbgout, "current thread: tcr = 0x" LISP ", native thread ID = 0x" LISP ", interrupts %s\n", tcr, tcr->native_thread_id, ilevel);
+    fprintf(dbgout, "current thread: tcr = 0x" LISP ", native thread ID = 0x" LISP ", interrupts %s\n", tcr, TCR_AUX(tcr)->native_thread_id, ilevel);
 
 #ifndef WINDOWS
     if (lisp_global(BATCH_FLAG)) {

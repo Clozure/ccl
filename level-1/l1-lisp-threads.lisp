@@ -193,10 +193,15 @@
 	(cleanup-thread-tcr thread tcr))))
 
 (defun init-thread-from-tcr (tcr thread)
-  (let* ((cs-area (%fixnum-ref tcr target::tcr.cs-area))
-         (vs-area (%fixnum-ref tcr target::tcr.vs-area))
+  (let* ((cs-area nil)
+         (vs-area (%fixnum-ref tcr (- target::tcr.vs-area target::tcr-bias)))
          #-arm-target
-         (ts-area (%fixnum-ref tcr target::tcr.ts-area)))
+         (ts-area (%fixnum-ref tcr (- target::tcr.ts-area target::tcr-bias))))
+    #+(and windows-target x8632-target)
+    (let ((aux (%fixnum-ref tcr (- target::tcr.aux target::tcr-bias))))
+      (setq cs-area (%fixnum-ref aux target::tcr-aux.cs-area)))
+    #-(and windows-target x8632-target)
+    (setq cs-area (%fixnum-ref tcr target::tcr.cs-area))
     (when (or (zerop cs-area)
               (zerop vs-area)
               #-arm-target
@@ -333,7 +338,7 @@
 
 
 (defun tcr-flags (tcr)
-  (%fixnum-ref tcr target::tcr.flags))
+  (%fixnum-ref tcr (- target::tcr.flags target::tcr-bias)))
 
 
 
@@ -360,7 +365,8 @@
   ;; pending interrupt won't have been taken yet.
   ;; When a thread dies, it should try to clear its interrupt-pending
   ;; flag.
-  (if (eql 0 (%fixnum-ref tcr target::tcr.interrupt-pending))
+  (if (eql 0 (%fixnum-ref tcr (- target::tcr.interrupt-pending
+				 target::tcr-bias)))
     (%%tcr-interrupt tcr)
     0))
 
@@ -414,6 +420,10 @@
 (defun thread-enable (thread termination-semaphore allocation-quantum &optional (timeout (* 60 60 24)))
   (let* ((tcr (or (lisp-thread.tcr thread) (new-tcr-for-thread thread))))
     (with-macptrs (s)
+      #+(and windows-target x8632-target)
+      (let ((aux (%fixnum-ref tcr (- target::tcr.aux target::tcr-bias))))
+	(%setf-macptr-to-object s (%fixnum-ref aux target::tcr-aux.reset-completion)))
+      #-(and windows-target x8632-target)
       (%setf-macptr-to-object s (%fixnum-ref tcr target::tcr.reset-completion))
       (when (%timed-wait-on-semaphore-ptr s timeout nil)
         (%set-tcr-toplevel-function
@@ -424,7 +434,8 @@
 			      
 
 (defun cleanup-thread-tcr (thread tcr)
-  (let* ((flags (%fixnum-ref tcr target::tcr.flags)))
+  (let* ((flags (%fixnum-ref tcr (- target::tcr.flags
+				    target::tcr-bias))))
     (declare (fixnum flags))
     (if (logbitp arch::tcr-flag-bit-awaiting-preset flags)
       (thread-change-state thread :run :reset)
@@ -446,7 +457,13 @@
   (with-macptrs (tcrp)
     (%setf-macptr-to-object tcrp (lisp-thread.tcr thread))
     (unless (%null-ptr-p tcrp)
-      (let* ((natural (%get-natural tcrp target::tcr.osid)))
+      
+      (let* ((natural #+(and windows-target x8632-target)
+		      (%get-natural (%get-ptr tcrp (- target::tcr.aux
+						      target::tcr-bias))
+				    target::tcr-aux.osid)
+		      #-(and windows-target x8632-target)
+		      (%get-natural tcrp target::tcr.osid)))
         (unless (zerop natural) natural)))))
 
 
@@ -465,6 +482,10 @@
   (with-macptrs (tcrp)
     (%setf-macptr-to-object tcrp (lisp-thread.tcr thread))
     (unless (%null-ptr-p tcrp)
+      #+(and windows-target x8632-target)
+      (let ((aux (%get-ptr tcrp (- target::tcr.aux target::tcr-bias))))
+	(%get-unsigned-long aux target::tcr-aux.native-thread-id))
+      #-(and windows-target x8632-target)
       (#+32-bit-target %get-unsigned-long
        #+64-bit-target %%get-unsigned-longlong tcrp target::tcr.native-thread-id))))
 
@@ -472,19 +493,23 @@
   (with-macptrs (tcrp)
     (%setf-macptr-to-object tcrp (lisp-thread.tcr thread))
     (unless (%null-ptr-p tcrp)
+      #+(and windows-target x8632-target)
+      (let ((aux (%get-ptr tcrp (- target::tcr.aux target::tcr-bias))))
+	(%get-unsigned-long aux target::tcr-aux.suspend-count))
+      #-(and windows-target x8632-target)
       (#+32-bit-target %get-unsigned-long
        #+64-bit-target %%get-unsigned-longlong tcrp target::tcr.suspend-count))))
 
 (defun tcr-clear-preset-state (tcr)
-  (let* ((flags (%fixnum-ref tcr target::tcr.flags)))
+  (let* ((flags (%fixnum-ref tcr (- target::tcr.flags target::tcr-bias))))
     (declare (fixnum flags))
-    (setf (%fixnum-ref tcr target::tcr.flags)
+    (setf (%fixnum-ref tcr (- target::tcr.flags target::tcr-bias))
 	  (bitclr arch::tcr-flag-bit-awaiting-preset flags))))
 
 (defun tcr-set-preset-state (tcr)
-  (let* ((flags (%fixnum-ref tcr target::tcr.flags)))
+  (let* ((flags (%fixnum-ref tcr (- target::tcr.flags target::tcr-bias))))
     (declare (fixnum flags))
-    (setf (%fixnum-ref tcr target::tcr.flags)
+    (setf (%fixnum-ref tcr (- target::tcr.flags target::tcr-bias))
 	  (bitset arch::tcr-flag-bit-awaiting-preset flags))))  
 
 ;;; This doesn't quite activate the thread; see PROCESS-TCR-ENABLE.
@@ -493,6 +518,11 @@
   (if (and tcr (not (eql 0 tcr)))
     (with-macptrs (tcrp)
       (%setf-macptr-to-object tcrp tcr)
+      #+(and windows-target x8632-target)
+      (let ((aux (%get-ptr tcrp (- target::tcr.aux target::tcr-bias))))
+	(setf (%get-unsigned-long aux target::tcr-aux.log2-allocation-quantum)
+	      (or allocation-quantum (default-allocation-quantum))))
+      #-(and windows-target x8632-target)
       (setf (%get-natural tcrp target::tcr.log2-allocation-quantum)
             (or allocation-quantum (default-allocation-quantum)))
       t)))
@@ -679,14 +709,22 @@
           (return a)))))
 
 (defun %ptr-to-vstack-p (tcr idx)
-  (%ptr-in-area-p idx (%fixnum-ref tcr target::tcr.vs-area)))
+  (%ptr-in-area-p idx (%fixnum-ref tcr (- target::tcr.vs-area
+					  target::tcr-bias))))
 
 #-arm-target
 (defun %on-tsp-stack (tcr object)
-  (%ptr-in-area-p object (%fixnum-ref tcr target::tcr.ts-area)))
+  (%ptr-in-area-p object (%fixnum-ref tcr (- target::tcr.ts-area
+					     target::tcr-bias))))
 
 (defun %on-csp-stack (tcr object)
-  (%ptr-in-area-p object (%fixnum-ref tcr target::tcr.cs-area)))
+  (let ((cs-area #+(and windows-target x8632-target)
+		 (%fixnum-ref (%fixnum-ref tcr (- target::tcr.aux
+						  target::tcr-bias))
+			      target::tcr-aux.cs-area)
+		 #-(and windows-target x8632-target)
+		 (%fixnum-ref tcr target::tcr.cs-area)))
+    (%ptr-in-area-p object cs-area)))
 
 (defparameter *aux-tsp-ranges* ())
 (defparameter *aux-vsp-ranges* ())

@@ -296,7 +296,7 @@ check_tcrs(TCR *first)
   LispObj *tlb_start,*tlb_end;
 
   do {
-    xp = tcr->gc_context;
+    xp = TCR_AUX(tcr)->gc_context;
     if (xp) {
 #ifdef X8632
       check_xp(xp,tcr->node_regs_mask);
@@ -325,7 +325,7 @@ check_tcrs(TCR *first)
       tlb_end = tlb_start + ((tcr->tlb_limit)>>fixnumshift);
       check_range(tlb_start,tlb_end,false);
     }
-    tcr = tcr->next;
+    tcr = TCR_AUX(tcr)->next;
   } while (tcr != first);
 }
 
@@ -1927,7 +1927,7 @@ forward_tcr_xframes(TCR *tcr)
   xframe_list *xframes;
   ExceptionInformation *xp;
 
-  xp = tcr->gc_context;
+  xp = TCR_AUX(tcr)->gc_context;
   if (xp) {
 #ifdef X8664
     forward_xp(xp);
@@ -2674,7 +2674,7 @@ purify_tcr_xframes(TCR *tcr, BytePtr low, BytePtr high, area *to, int what)
   xframe_list *xframes;
   ExceptionInformation *xp;
   
-  xp = tcr->gc_context;
+  xp = TCR_AUX(tcr)->gc_context;
   if (xp) {
 #ifdef X8632
     purify_xp(xp, low, high, to, what, tcr->node_regs_mask);
@@ -2836,7 +2836,7 @@ purify(TCR *tcr, signed_natural param)
     do {
       purify_tcr_xframes(other_tcr, low, high, pure_area, flags);
       purify_tcr_tlb(other_tcr, low, high, pure_area, flags);
-      other_tcr = other_tcr->next;
+      other_tcr = TCR_AUX(other_tcr)->next;
     } while (other_tcr != tcr);
 
     purify_gcable_ptrs(low, high, pure_area, flags);
@@ -2874,7 +2874,7 @@ purify(TCR *tcr, signed_natural param)
       do {
         purify_tcr_xframes(other_tcr, low, high, NULL, PURIFY_NOTHING);
         purify_tcr_tlb(other_tcr, low, high, NULL, PURIFY_NOTHING);
-        other_tcr = other_tcr->next;
+        other_tcr = TCR_AUX(other_tcr)->next;
       } while (other_tcr != tcr);
       
       purify_gcable_ptrs(low, high, NULL, PURIFY_NOTHING);
@@ -3102,7 +3102,7 @@ impurify_tcr_xframes(TCR *tcr, LispObj low, LispObj high, signed_natural delta)
   xframe_list *xframes;
   ExceptionInformation *xp;
   
-  xp = tcr->gc_context;
+  xp = TCR_AUX(tcr)->gc_context;
   if (xp) {
 #ifdef X8632
     impurify_xp(xp, low, high, delta, tcr->node_regs_mask);
@@ -3222,7 +3222,7 @@ impurify_from_area(TCR *tcr, area *src)
   do {
     impurify_tcr_xframes(other_tcr, ptr_to_lispobj(base), ptr_to_lispobj(limit), delta);
     impurify_tcr_tlb(other_tcr, ptr_to_lispobj(base), ptr_to_lispobj(limit), delta);
-    other_tcr = other_tcr->next;
+    other_tcr = TCR_AUX(other_tcr)->next;
   } while (other_tcr != tcr);
   
   impurify_gcable_ptrs(ptr_to_lispobj(base), ptr_to_lispobj(limit), delta);
@@ -3396,7 +3396,7 @@ wp_update_tcr_xframes(TCR *tcr, LispObj old, LispObj new)
   xframe_list *xframes;
   ExceptionInformation *xp;
 
-  xp = tcr->gc_context;
+  xp = TCR_AUX(tcr)->gc_context;
   if (xp) {
 #ifdef X8664
     wp_update_xp(xp, old, new);
@@ -3486,7 +3486,7 @@ wp_update_references(TCR *tcr, LispObj old, LispObj new)
   do {
     wp_update_tcr_xframes(other_tcr, old, new);
     wp_update_tcr_tlb(other_tcr, old, new);
-    other_tcr = other_tcr->next;
+    other_tcr = TCR_AUX(other_tcr)->next;
   } while (other_tcr != tcr);
   unprotect_watched_areas();
   wp_update_all_areas(old, new);

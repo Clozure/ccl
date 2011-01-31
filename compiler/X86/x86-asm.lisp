@@ -548,6 +548,9 @@
     :rex-prefix ,rex-prefix
     :modrm-byte ,modrm-byte))
 
+;;(ccl::pdbg "about to define *x86-opcode-templates*")
+;;(ccl::dbg 1)
+
 (defparameter *x86-opcode-templates*
   (vector
    ;; adc
@@ -3424,6 +3427,7 @@
 
    ))
 
+;;(ccl::pdbg "about to set ordinals")
 
 (dotimes (i (length *x86-opcode-templates*))
   (setf (x86-opcode-template-ordinal (svref *x86-opcode-templates* i)) i))

@@ -202,7 +202,6 @@ Xrestore_windows_context_start:
         __(movl 4(%esp),%ecx)   /* context */
         __(movl 12(%esp),%edx)  /* old valence */
         __(movl 8(%esp),%eax)   /* tcr */
-        __(movw tcr.ldt_selector(%eax), %rcontext_reg)
         __(movl %edx,rcontext(tcr.valence))
         __(movl $0,rcontext(tcr.pending_exception_context))
         __(frstor win32_context.FloatSave(%ecx))
@@ -259,12 +258,11 @@ C(restore_windows_context_end): .long Xrestore_windows_context_end
 C(restore_windows_context_iret): .long Xrestore_windows_context_iret
         .text
         
-        __ifdef(`WIN32_ES_HACK')
 /* Something that we shouldn't return to */
 _exportfn(C(windows_halt))
         __(hlt)
 _endfn         
-        __endif
+
 _exportfn(C(ensure_safe_for_string_operations))
         __ifdef(`WIN32_ES_HACK')
         __(movw %es,%ax)

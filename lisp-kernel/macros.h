@@ -119,4 +119,9 @@
 #define DECIMAL "%ld"
 #endif
 
+#ifdef WIN_32
+#define TCR_AUX(tcr) tcr->aux
+#else
+#define TCR_AUX(tcr) tcr
+#endif
 #endif /* __macros __ */

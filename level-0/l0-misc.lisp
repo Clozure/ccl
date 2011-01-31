@@ -265,16 +265,26 @@
 		     (declare (fixnum low high))
 		     (incf used (- high low))))
 		 (values free used)))))
-    (let* ((tcr (lisp-thread.tcr thread)))
+    (let* ((tcr (lisp-thread.tcr thread))
+	   (cs-area #+(and windows-target x8632-target)
+		    (%fixnum-ref (%fixnum-ref tcr (- target::tcr.aux
+						     target::tcr-bias))
+				 target::tcr-aux.cs-area)
+		    #-(and windows-target x8632-target)
+		    (%fixnum-ref tcr target::tcr.cs-area)))
       (if (or (null tcr)
-	      (zerop (%fixnum-ref (%fixnum-ref tcr target::tcr.cs-area))))
+	      (zerop (%fixnum-ref cs-area)))
 	(values 0 0 0 0 0 0)
-	(multiple-value-bind (cf cu) (free-and-used (%fixnum-ref tcr target::tcr.cs-area))
-	  (multiple-value-bind (vf vu) (free-and-used (%fixnum-ref tcr target::tcr.vs-area))
+	(multiple-value-bind (cf cu) (free-and-used cs-area)
+	  (multiple-value-bind (vf vu)
+	      (free-and-used (%fixnum-ref tcr (- target::tcr.vs-area
+						 target::tcr-bias)))
             #+arm-target
             (values cf cu vf vu)
             #-arm-target
-	    (multiple-value-bind (tf tu) (free-and-used (%fixnum-ref tcr target::tcr.ts-area ))
+	    (multiple-value-bind (tf tu)
+		(free-and-used (%fixnum-ref tcr (- target::tcr.ts-area
+						   target::tcr-bias)))
 	      (values cf cu vf vu tf tu))))))))
 
 
