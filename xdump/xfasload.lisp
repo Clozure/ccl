@@ -1083,10 +1083,8 @@
     (xload-set '*keyword-package* (xload-package->addr *keyword-package*))
     (xload-set '%all-packages% (xload-save-list (mapcar #'cdr *xload-aliased-package-addresses*)))
     (xload-set '%unbound-function% (%xload-unbound-function%))
-    (xload-set '*gc-event-status-bits*
-	       (xload-integer 0 (logior (ash 1 $gc-integrity-check-bit)
-					(ash 1 $egc-verbose-bit)
-					(ash 1 $gc-verbose-bit))))
+    (xload-set '*gc-event-status-bits* (xload-integer 0 #|(ash 1 $gc-integrity-check-bit)|#))
+
     (xload-set '%toplevel-catch% (xload-copy-symbol :toplevel))
     (if *xload-target-use-code-vectors*
       (xload-set '%closure-code% (xload-save-code-vector
