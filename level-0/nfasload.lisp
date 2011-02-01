@@ -427,12 +427,6 @@
     (%fasl-read-n-bytes s vector 0 (ash size-of-code target::word-shift))
     #+x8632-target
     (%update-self-references vector)
-    #+x8632-target
-    (let* ((addr (%address-of vector))
-	   (insn (%get-unsigned-long (%int-to-ptr addr))))
-      (when (eql insn #xbf)
-	(pdbg "update-self-references blew it")
-	(dbg vector)))
     (do* ((numconst (- size-in-elements size-of-code))
           (i 0 (1+ i))
           (constidx size-of-code (1+ constidx)))

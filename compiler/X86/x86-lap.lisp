@@ -1453,7 +1453,6 @@ execute them very quickly.")
 	 (32
 	  (let* ((ncode (- code-words nconstants)))
 	    (when (>= ncode #x8000)
-	      ;;(break "hey, a big function!")
 	      (if (>= nconstants #x8000)
 		(compiler-function-overflow)
 		(let* ((buf (car (frag-code-buffer
