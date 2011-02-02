@@ -100,8 +100,8 @@
                                      #+windows-target  #+windows-target 
                                      :application-type application-type)))
         (when native
-          #+(or darwinx8632-target darwin-x8664-target) (setq fd (- fd))
-          #-(or darwinx8632-target darwin-x8664-target)
+          #+(or darwinx8632-target darwinx8664-target) (setq fd (- fd))
+          #-(or darwinx8632-target darwinx8664-target)
           (progn
             (warn "native image support not available, ignoring ~s option." :native)))
             
