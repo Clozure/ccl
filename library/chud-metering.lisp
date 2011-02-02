@@ -125,6 +125,7 @@ in the finder"
     (when path (finder-open-file path))))
     
 (defun scan-shark-process-output (p)
+  (format t "~&;;; Waiting for shark to process samples ...")
   (with-interrupts-enabled 
       (let* ((out (ccl::external-process-output p)))
 	(do* ((line (read-line out nil nil) (read-line out nil nil)))
@@ -132,6 +133,7 @@ in the finder"
 	  (when *debug-shark-process-output*
 	    (format t "~&~a" line))
 	  (when (search "Created session file:" line)
+            (format t "done.~&")
 	    (display-shark-session-file line)
 	    (return))))))
 
