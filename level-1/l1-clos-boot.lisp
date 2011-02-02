@@ -842,7 +842,7 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 (defun congruent-lambda-lists-p (gf method &optional
                                     error-p gbits mbits gkeys)
   (unless gbits (setq gbits (inner-lfun-bits gf)))
-  (unless mbits (setq mbits (lfun-bits (%method-function method))))
+  (unless mbits (setq mbits (encode-lambda-list (%method-lambda-list method))))
   (and (congruent-lfbits-p gbits mbits)
        (or (and (or (logbitp $lfbits-rest-bit mbits)
                     (logbitp $lfbits-restv-bit mbits))
