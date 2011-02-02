@@ -541,9 +541,15 @@ define(`extract_fulltag',`
 	__(andb `$'fulltagmask,$2_b)
 ')
 
+ifdef(`X8664',`
 define(`extract_subtag',`
 	__(movzbl misc_subtag_offset($1),$2_l)
 ')
+',`
+define(`extract_subtag',`
+	__(movb misc_subtag_offset($1),$2)
+')')        
+                
 
 
 ifdef(`X8632',`
