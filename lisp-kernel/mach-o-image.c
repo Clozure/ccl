@@ -481,7 +481,7 @@ save_native_library(int fd, Boolean egc_was_enabled)
     managed_static_refbits_section_ordinal = 0,
     dynamic_section_ordinal = 0,
     static_section_ordinal = 0,
-    next_section_ordinal;
+    next_section_ordinal = 0;
   natural nrefbytes, first_external_symbol, num_external_symbols, i, j;
     
   all_symbols = new_macho_symbol_table(100000);
@@ -720,7 +720,7 @@ load_native_library(char *path)
       if (p != MAP_FAILED) {
         macho_header *h = (macho_header *)p;
         
-        if ((h->magic == MH_MAGIC) &&
+        if ((h->magic == MACHO_MAGIC) &&
             (h->cputype ==
 #ifdef X8632
              CPU_TYPE_I386
