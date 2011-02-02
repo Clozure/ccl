@@ -996,20 +996,7 @@ before doing so.")
                ;; Delete the value from the table.
                (setf (%svref vector vector-index) deleted-hash-key-marker
                      (%svref vector (the fixnum (1+ vector-index))) nil)
-               (setq foundp t))))
-         (when (and foundp
-                    (zerop (the fixnum (nhash.vector.count vector))))
-           (do* ((i $nhash.vector_overhead (1+ i))
-                 (n (uvsize vector)))
-                ((= i n))
-             (declare (fixnum i n))
-             (setf (%svref vector i) free-hash-marker))
-           (setf (nhash.grow-threshold hash)
-                 (+ (nhash.vector.deleted-count vector)
-                    (nhash.vector.weak-deletions-count vector)
-                    (nhash.grow-threshold hash))
-                 (nhash.vector.deleted-count vector) 0
-                 (nhash.vector.weak-deletions-count vector) 0)))
+               (setq foundp t)))))
        ;; Return T if we deleted something
        (%unlock-gc-lock)
        (unlock-hash-table hash nil)))
@@ -1133,6 +1120,14 @@ before doing so.")
     (setq hash (require-type hash 'hash-table)))
   (%grow-hash-table hash))
 
+(defun %grow-hash-table-in-place-p (hash)
+  ;; Arbitrarily: if the number of deleted entries is > half
+  ;; the number of used entries, do an in-place rehash.
+  (let* ((vec (nhash.vector hash)))
+    (> (the fixnum (nhash.vector.deleted-count vec))
+       (the fixnum (ash (the fixnum (nhash.vector.count vec)) -1)))))
+            
+
 ;;; Interrupts are disabled, and the caller has an exclusive
 ;;; lock on the hash table.
 (defun %grow-hash-table (hash)
@@ -1145,7 +1140,7 @@ before doing so.")
            (flags-sans-weak 0)
            (weak-flags nil))
       (declare (fixnum old-total-size flags flags-sans-weak))
-      (when (> (nhash.vector.deleted-count old-vector) 0)
+      (when (%grow-hash-table-in-place-p hash)
         ;; There are enough deleted entries. Rehash to get rid of them
         (%rehash hash)
         (return-from grow-hash-table))
@@ -1163,7 +1158,7 @@ before doing so.")
                     weak-flags (logand flags $nhash_weak_flags_mask))
               (setf (nhash.vector.flags old-vector) flags-sans-weak)      ; disable GC weak stuff
               (%normalize-hash-table-count hash)
-              (when (> (nhash.vector.deleted-count old-vector) 0)
+              (when (%grow-hash-table-in-place-p hash)
                 (setf (nhash.vector.flags old-vector) flags)
                 (setq weak-flags nil)
                 (return-from grow-hash-table (%rehash hash)))
