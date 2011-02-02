@@ -542,8 +542,9 @@ define(`extract_fulltag',`
 ')
 
 define(`extract_subtag',`
-	__(movb misc_subtag_offset($1),$2)
+	__(movzbl misc_subtag_offset($1),$2_l)
 ')
+
 
 ifdef(`X8632',`
 define(`extract_typecode',`
