@@ -1917,8 +1917,8 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       tool that runs the same way any command-line program
       does. Alternatively, if you choose not to prepend the kernel, you
       can save an image and then later run it by passing it as a
-      command-line parameter to the <literal>opencml</literal>
-      or <literal>opencml64</literal> script.</para>
+      command-line parameter to the <literal>ccl</literal>
+      or <literal>ccl64</literal> script.</para>
 
     <para>
       <indexterm zone="save-application"/>
@@ -1934,6 +1934,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
         <parameter>impurify</parameter>
         <parameter>(mode #o644)</parameter>
         <parameter>prepend-kernel</parameter>
+        <parameter>native</parameter>
         [Function]</command>
     </para>
     
@@ -2008,6 +2009,15 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
             CLOS caches are clear when the image starts up, you can pass
             any true value.</para>
         </listitem>
+     </varlistentry>
+     <varlistentry>
+        <term><varname>native</varname></term>
+        <listitem>
+          <para>If true, saves the image as a native (ELF, Mach-O, PE)
+          shared library.  (On platforms where this isn't yet supported,
+          a warning is issued and the option is ignored.)
+         </para>
+      </listitem>
       </varlistentry>
       
       
