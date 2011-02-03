@@ -2061,7 +2061,7 @@ xGetSharedLibrary(char *path, int *resultType)
 int
 fd_setsize_bytes()
 {
-  return FD_SETSIZE/8;
+  return sizeof(fd_set);
 }
 
 void
