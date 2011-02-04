@@ -92,8 +92,8 @@
 (defx8632lapfunction %tcr-binding-location ((tcr arg_y) (sym arg_z))
   (movl (@ x8632::symbol.binding-index (% sym)) (% temp0))
   (movl ($ (target-nil-value)) (% arg_z))
-  (rcmp (% temp0) (@ x8632::tcr.tlb-limit (% tcr)))
-  (movl (@ x8632::tcr.tlb-pointer (% tcr)) (% arg_y))
+  (rcmp (% temp0) (@ (- x8632::tcr.tlb-limit x8632::tcr-bias) (% tcr)))
+  (movl (@ (- x8632::tcr.tlb-pointer x8632::tcr-bias) (% tcr)) (% arg_y))
   (jae @done)
   (lea (@ (% arg_y) (% temp0)) (% arg_y))
   ;; We're little-endian, so the tag is at the EA with no
