@@ -292,7 +292,8 @@
   )
 
 (defun %current-xp ()
-  (let ((xframe (%fixnum-ref (%current-tcr) target::tcr.xframe)))
+  (let ((xframe (%fixnum-ref (%current-tcr) (- target::tcr.xframe
+					       target::tcr-bias))))
     (when (eql xframe 0)
       (error "No current exception frame"))
     (%fixnum-ref xframe
@@ -661,7 +662,7 @@
 (defun db-link (&optional context)
   (if context
     (bt.db-link context)
-    (%fixnum-ref (%current-tcr)  target::tcr.db-link)))
+    (%fixnum-ref (%current-tcr) (- target::tcr.db-link target::tcr-bias))))
 
 (defun previous-db-link (db-link start )
   (declare (fixnum db-link start))
@@ -1139,10 +1140,13 @@ no longer being used."
       ;; If they are, just set the current tcr's db-link to point
       ;; to BSP; if not, "append" them to the end of the current
       ;; linked list.
-      (let* ((current-db-link (%fixnum-ref (%current-tcr) target::tcr.db-link)))
+      (let* ((current-db-link (%fixnum-ref (%current-tcr)
+					   (- target::tcr.db-link
+					      target::tcr-bias))))
         (declare (fixnum current-db-link))
         (if (zerop current-db-link)
-          (setf (%fixnum-ref (%current-tcr) target::tcr.db-link) bsp)
+          (setf (%fixnum-ref (%current-tcr) (- target::tcr.db-link
+					       target::tcr-bias)) bsp)
           (do* ((binding current-db-link)
                 (next (%fixnum-ref binding 0)
                       (%fixnum-ref binding 0)))
@@ -1153,7 +1157,8 @@ no longer being used."
       ;; Ensure that pending unwind-protects (for WITHOUT-INTERRUPTS
       ;; on the callback) don't try to unwind the binding stack beyond
       ;; where it was just set.
-      (do* ((catch (%fixnum-ref (%current-tcr) target::tcr.catch-top)
+      (do* ((catch (%fixnum-ref (%current-tcr) (- target::tcr.catch-top
+						  target::tcr-bias))
                    (%fixnum-ref catch target::catch-frame.link)))
            ((zerop catch))
         (declare (fixnum catch))
