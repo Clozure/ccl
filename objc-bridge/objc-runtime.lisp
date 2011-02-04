@@ -3216,7 +3216,8 @@ argument lisp string."
                (with-c-frame ,cframe
                  (%associate-jmp-buf-with-catch-frame
                   ,xframe
-                  (%fixnum-ref (%current-tcr) target::tcr.catch-top)
+                  (%fixnum-ref (%current-tcr) (- target::tcr.catch-top
+						 target::tcr-bias))
                   ,cframe)
                  (progn
                    ,@body))))
