@@ -372,6 +372,12 @@
          (open-shared-library "Foundation.1.0.dll")
          (open-shared-library "AppKit.1.0.dll")
          (open-shared-library "CoreData.1.0.dll")
+         ;; If the BOOL variable NSDebugEnabled can be found, ensure
+         ;; that it's set to #$NO.  (When set to non-zero values, it
+         ;; can cause attempts to raise NSExceptions to do nothing.
+         ;; It's not clear how it gets set to a non-zero value.)
+         (let* ((addr (foreign-symbol-address "NSDebugEnabled")))
+           (when addr (setf (%get-unsigned-byte addr) #$NO)))
          ;; We may need to call #_NSInitializeProcess
          ;; under Cocotron.  If so, we'd need to do
          ;; so on standalone startup, too, and would
