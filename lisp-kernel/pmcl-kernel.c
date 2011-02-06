@@ -1477,6 +1477,9 @@ check_os_version(char *progname)
     rcontext_readonly = true;
   }
 #endif
+#ifdef WIN_32
+  rcontext_readonly = true;
+#endif
   while (got == want) {
     if (*want_end == '.') {
       want = strtoul(want_end+1,&want_end,10);
