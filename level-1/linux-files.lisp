@@ -975,10 +975,21 @@ of the shell itself."
         q))))
 )
         
-                      
+(defun %probe-shared-library (shlib)
+  #-(or windows-target freebsd-target)
+  (with-cstrs ((name (shlib.pathname shlib)))
+    (not (%null-ptr-p (#_dlopen name (logior #$RTLD_NOW #$RTLD_NOLOAD)))))
+  ;; FreeBSD may support #$RTLD_NOLOAD in 8.0, and that support may
+  ;; have been backported to 7.2.  Until then ...
+  #+freebsd-target                      
+  (rlet ((info #>Dl_info))
+    (not (eql 0 (#_dladdr (shlib.base shlib) info))))
+  #+windows-target
+  (with-filename-cstrs ((name (shlib.pathname shlib)))
+    (not (%null-ptr-p (#_FindModuleW name)))))
+
 
 ;;; Kind of has something to do with files, and doesn't work in level-0.
-#+(or linux-target freebsd-target solaris-target)
 (defun close-shared-library (lib &key (completely t))
   "If completely is T, set the reference count of library to 0. Otherwise,
 decrements it by 1. In either case, if the reference count becomes 0,
@@ -990,20 +1001,21 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
 		(require-type lib 'shlib)))
 	 (handle (shlib.handle lib)))
       (when handle
-	(let* ((found nil)
-	       (base (shlib.base lib)))
+	(let* ((found nil))
 	  (do* ()
-	       ((progn		  
-		  (#_dlclose handle)
-		  (or (not (setq found (shlib-containing-address base)))
+	       ((progn
+                  #-windows-target (#_dlclose handle)
+                  #+windows-target (#_FreeLibrary handle)
+		  (or (not (setq found
+                                 (%probe-shared-library lib)))
 		      (not completely)))))
 	  (when (not found)
 	    (setf (shlib.pathname lib) nil
-	      (shlib.base lib) nil
-              (shlib.handle lib) nil
-	      (shlib.map lib) nil)
-            (unload-foreign-variables lib)
-	    (unload-library-entrypoints lib))))))
+                  (shlib.base lib) nil
+                  (shlib.handle lib) nil
+                  (shlib.map lib) nil)
+            (unload-foreign-variables nil)
+	    (unload-library-entrypoints nil))))))
 
 #+darwin-target
 ;; completely specifies whether to remove it totally from our list

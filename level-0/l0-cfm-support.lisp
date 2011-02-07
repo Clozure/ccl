@@ -114,8 +114,9 @@
     (when fvs
       (maphash #'(lambda (k fv)
                    (declare (ignore k))
-                   (when (eq (fv.container fv) lib)
-                     (setf (fv.addr fv) nil)))
+                   (when (fv.addr fv)
+                     (when (or (null lib) (eq (fv.container fv) lib))
+                       (setf (fv.addr fv) nil))))
                fvs))))
 
 (defun generate-external-functions (path)
@@ -432,9 +433,10 @@
     (declare (fixnum count))
     (maphash #'(lambda (k eep)
 		 (declare (ignore k))
-		 (when (eq (eep.container eep) lib)
-		   (setf (eep.address eep) nil)
-		   (incf count)))
+                 (when (eep.address eep)
+                   (when (or (null lib) (eq (eep.container eep) lib))
+                     (setf (eep.address eep) nil)
+                     (incf count))))
 	     (eeps))    
     (not (zerop count))))
 
