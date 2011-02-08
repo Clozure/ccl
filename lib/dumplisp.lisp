@@ -145,9 +145,15 @@
     (let* ((user-toplevel-function (coerce-to-function toplevel-function)))
       (setq toplevel-function
             (lambda ()
-              (process-run-function "toplevel" (lambda ()
-                                                 (funcall user-toplevel-function)
-                                                 (quit)))
+              (make-mcl-listener-process
+               "toplevel"
+                *stdin*
+                *stdout*
+                 #'quit
+               :initial-function (lambda ()
+                                   (catch :toplevel
+                                     (funcall user-toplevel-function)))
+               )
               (%set-toplevel #'housekeeping-loop)
               (toplevel)))))
   (when error-handler
