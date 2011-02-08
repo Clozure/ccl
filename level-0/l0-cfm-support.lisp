@@ -134,11 +134,13 @@
 	     (eeps))    
     (not (zerop count))))
 
-(defun shared-library-with-name (name)
+(defun shared-library-with-name (name &optional (is-unloaded nil))
   (let* ((namelen (length name)))
     (dolist (lib *shared-libraries*)
       (let* ((libname (shlib.soname lib)))
-	(when (%simple-string= name libname 0 0 namelen (length libname))
+	(when (and (%simple-string= name libname 0 0 namelen (length libname))
+		   (or (not is-unloaded) (and (null (shlib.map lib))
+					      (null (shlib.base lib)))))
 	  (return lib))))))
 
 (defun generate-external-functions (path)
@@ -372,14 +374,7 @@
     (when (eql (shlib.base lib) module)
       (return lib))))
 
-(defun shared-library-with-name (name &optional (is-unloaded nil))
-  (let* ((namelen (length name)))
-    (dolist (lib *shared-libraries*)
-      (let* ((libname (shlib.soname lib)))
-	(when (and (%simple-string= name libname 0 0 namelen (length libname))
-		   (or (not is-unloaded) (and (null (shlib.map lib))
-					      (null (shlib.base lib)))))
-	  (return lib))))))
+
 
 ;;;    
 ;;; maybe we could fix this up name to get the "real name"
@@ -1029,7 +1024,11 @@ the operating system."
                      (eq *current-process* *initial-process*)))
           (open-shared-library-internal name)
           
-          (call-in-process (lambda () (open-shared-library-internal  name))
+          (call-in-process (lambda ()
+                             (handler-case (open-shared-library-internal  name)
+                               (error (condition) (values nil (format nil "~a" condition)))))
+                                                                     
+                             
                            (if (eq process :initial)
                              *initial-process*
                              process)))
