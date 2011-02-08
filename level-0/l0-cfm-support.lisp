@@ -119,6 +119,28 @@
                        (setf (fv.addr fv) nil))))
                fvs))))
 
+;;; Walk over all registered entrypoints, invalidating any whose container
+;;; is the specified library.  Return true if any such entrypoints were
+;;; found.
+(defun unload-library-entrypoints (lib)
+  (let* ((count 0))
+    (declare (fixnum count))
+    (maphash #'(lambda (k eep)
+		 (declare (ignore k))
+                 (when (eep.address eep)
+                   (when (or (null lib) (eq (eep.container eep) lib))
+                     (setf (eep.address eep) nil)
+                     (incf count))))
+	     (eeps))    
+    (not (zerop count))))
+
+(defun shared-library-with-name (name)
+  (let* ((namelen (length name)))
+    (dolist (lib *shared-libraries*)
+      (let* ((libname (shlib.soname lib)))
+	(when (%simple-string= name libname 0 0 namelen (length libname))
+	  (return lib))))))
+
 (defun generate-external-functions (path)
   (let* ((names ()))
     (maphash #'(lambda (k ignore)
@@ -215,12 +237,7 @@
     (when (eql (shlib.base lib) base)
       (return lib))))
 
-(defun shared-library-with-name (name)
-  (let* ((namelen (length name)))
-    (dolist (lib *shared-libraries*)
-      (let* ((libname (shlib.soname lib)))
-	(when (%simple-string= name libname 0 0 namelen (length libname))
-	  (return lib))))))
+
 
 (defun shlib-from-map-entry (m)
   (let* ((base (%int-to-ptr (pref m :link_map.l_addr))))
@@ -296,19 +313,7 @@
 
 (init-shared-libraries)
 
-;;; Walk over all registered entrypoints, invalidating any whose container
-;;; is the specified library.  Return true if any such entrypoints were
-;;; found.
-(defun unload-library-entrypoints (lib)
-  (let* ((count 0))
-    (declare (fixnum count))
-    (maphash #'(lambda (k eep)
-		 (declare (ignore k))
-		 (when (eq (eep.container eep) lib)
-		   (setf (eep.address eep) nil)
-		   (incf count)))
-	     (eeps))    
-    (not (zerop count))))
+
 
 
                      
@@ -422,23 +427,7 @@
           (values nil (%get-cstring result)))
 	 (t (values nil "unknown error"))))))
 
-;;; Walk over all registered entrypoints, invalidating any whose container
-;;; is the specified library.  Return true if any such entrypoints were
-;;; found.
-;;;
-;;; SAME AS LINUX VERSION
-;;;
-(defun unload-library-entrypoints (lib)
-  (let* ((count 0))
-    (declare (fixnum count))
-    (maphash #'(lambda (k eep)
-		 (declare (ignore k))
-                 (when (eep.address eep)
-                   (when (or (null lib) (eq (eep.container eep) lib))
-                     (setf (eep.address eep) nil)
-                     (incf count))))
-	     (eeps))    
-    (not (zerop count))))
+
 
 ;;;
 ;;; When restarting from a saved image

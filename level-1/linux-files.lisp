@@ -986,7 +986,7 @@ of the shell itself."
     (not (eql 0 (#_dladdr (shlib.base shlib) info))))
   #+windows-target
   (with-filename-cstrs ((name (shlib.pathname shlib)))
-    (not (%null-ptr-p (#_FindModuleW name)))))
+    (not (%null-ptr-p (#_GetModuleHandleW name)))))
 
 
 ;;; Kind of has something to do with files, and doesn't work in level-0.
