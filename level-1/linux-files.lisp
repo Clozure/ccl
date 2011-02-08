@@ -1017,40 +1017,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
             (unload-foreign-variables nil)
 	    (unload-library-entrypoints nil))))))
 
-#+darwin-target
-;; completely specifies whether to remove it totally from our list
-(defun close-shared-library (lib &key (completely nil))
-  "If completely is T, set the reference count of library to 0. Otherwise,
-decrements it by 1. In either case, if the reference count becomes 0,
-close-shared-library frees all memory resources consumed library and causes
-any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
-  (let* ((lib (if (typep lib 'string)
-		  (or (shared-library-with-name lib)
-		      (error "Shared library ~s not found." lib))
-		(require-type lib 'shlib))))
-    ;; no possible danger closing libsystem since dylibs can't be closed
-    (cond
-     ((or (not (shlib.map lib)) (not (shlib.base lib)))
-      (error "Shared library ~s uninitialized." (shlib.soname lib)))
-     ((and (not (%null-ptr-p (shlib.map lib)))
-	   (%null-ptr-p (shlib.base lib)))
-      (warn "Dynamic libraries cannot be closed on Darwin."))
-     ((and (%null-ptr-p (shlib.map lib))
-	   (not (%null-ptr-p (shlib.base lib))))
-      ;; we have a bundle type library not sure what to do with the
-      ;; completely flag when we open the same bundle more than once,
-      ;; Darwin gives back a new module address, so we have multiple
-      ;; entries on *shared-libraries* the best we can do is unlink
-      ;; the module asked for (or our best guess based on name) and
-      ;; invalidate any entries which refer to this container
-      (if (= 0 (#_NSUnLinkModule (shlib.base lib) #$NSUNLINKMODULE_OPTION_NONE))
-	  (error "Unable to close shared library, NSUnlinkModule failed.")
-	(progn
-	  (setf (shlib.map lib) nil
-		(shlib.base lib) nil)
-	  (unload-library-entrypoints lib)
-	  (when completely
-	    (setq *shared-libraries* (delete lib *shared-libraries*)))))))))
+
 
 
 
