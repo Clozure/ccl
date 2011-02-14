@@ -1547,6 +1547,74 @@ check_x86_cpu()
 }
 #endif
 
+#ifdef ARM
+Boolean
+check_arm_cpu()
+{
+  Boolean win = false;
+#ifdef LINUX
+/* It's hard to determine ARM features in general, and especially
+   hard to do so from user mode.  Parse /proc/cpuinfo. 
+   According to Android's cpufeatures library, some ARMv6 chips
+   are reported to have archutecture version 7; check the ELF
+   architecture in this case.
+
+   (In other words, we assume that we're on ARMv7 or later if
+   the reported architecture is > 7, or if it's = 7 and the 
+   ELF architecture is "v7l".)
+*/
+  FILE *f = fopen("/proc/cpuinfo", "r");
+  char *procline = NULL, *cpuline = NULL, **lineptr, *line = NULL;
+  size_t n;
+  ssize_t result;
+
+  if (f) {
+    while (1) {
+      n = 0;
+      line = NULL;
+      lineptr = &line;
+      result = getline(lineptr, &n, f);
+      if (result < 0) {
+        break;
+      }
+      line = *lineptr;
+      if (strncmp(line,"Processor",sizeof("Processor")-1) == 0) {
+        procline = line;
+      } else if (strncmp(line, "CPU architecture",sizeof("CPU architecture")-1) == 0) {
+        cpuline = line;
+      } else {
+        free(line);
+      }
+    }
+    line = NULL;
+    if (cpuline) {
+      line = index(cpuline,':');
+      if (line) {
+        n = strtol(line+1,lineptr,0);
+        if (n >= 7) {
+          if (n == 7) {
+            if (procline) {
+              win = (strstr(procline, "v7l") != NULL);
+            }
+          } else {
+            win = true;
+          }
+        }
+      }
+    }
+    if (procline) {
+      free(procline);
+    }
+    if (cpuline) {
+      free(cpuline);
+    }
+    fclose(f);
+  }
+#endif
+  return win;
+}
+#endif  
+
 void
 lazarus()
 {
@@ -1797,6 +1865,13 @@ main
 
 #ifdef X86
   if (!check_x86_cpu()) {
+    fprintf(dbgout, "CPU doesn't support required features\n");
+    exit(1);
+  }
+#endif
+
+#ifdef ARM
+  if (!check_arm_cpu()) {
     fprintf(dbgout, "CPU doesn't support required features\n");
     exit(1);
   }
