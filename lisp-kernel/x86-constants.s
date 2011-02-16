@@ -147,3 +147,6 @@ TCR_FLAG_BIT_PENDING_EXCEPTION = (fixnumshift+5)
 TCR_FLAG_BIT_FOREIGN_EXCEPTION = (fixnumshift+6)
 TCR_FLAG_BIT_PENDING_SUSPEND = (fixnumshift+7)        
 TCR_FLAG_BIT_FOREIGN_FPE = (fixnumshift+8)        
+
+CF_BIT = 0
+DF_BIT = 10

@@ -4225,8 +4225,11 @@ LocalLabelPrefix`'ffcall_call_end:
 	__(fnstsw rcontext(tcr.ffi_exception))
 	__(fnclex)
 	__endif
-1:	__(pushl rcontext(tcr.unboxed0))
-	__(popfl)
+1:	/* restore state of DF from saved flags */
+	__(bt $DF_BIT,rcontext(tcr.unboxed0))
+	__(jnc 2f)
+	__(std)
+2:	
 	__(movl rcontext(tcr.save_vsp),%esp)
 	__(movl rcontext(tcr.save_ebp),%ebp)
 	__(movl $TCR_STATE_LISP,rcontext(tcr.valence))
