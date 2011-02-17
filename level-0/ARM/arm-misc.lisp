@@ -438,6 +438,7 @@
 
 (defarmlapfunction %atomic-decf-ptr ((ptr arg_z))
   (macptr-ptr imm1 ptr)
+  (dmb)
   @again
   (ldrex imm0 (:@ imm1))
   (sub imm0 imm0 (:$ 1))
@@ -488,6 +489,7 @@
   (strex imm2 imm2 (:@ imm0))
   (cmp imm2 (:$ 0))
   (bne @again)
+  (dmb)
   (box-fixnum arg_z imm1)
   (bx lr)
   @done
@@ -853,6 +855,7 @@
   (strex imm2 imm0 (:@ imm2))
   (cmp imm2 (:$ 0))
   (bne @again)
+  (dmb)
   (box-fixnum arg_z imm1)
   (bx lr))
                           
