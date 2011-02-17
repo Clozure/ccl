@@ -427,3 +427,22 @@
     (prog1
 	(logtest flags #$kCGEventFlagMaskShift)
       (#_CFRelease event))))
+
+;;; I would remove this, but I think that people use it...
+
+(defclass abstract-ns-lisp-string (ns:ns-string)
+    ()
+  (:metaclass ns:+ns-object))
+
+(defgeneric ns-lisp-string-string (abstract-ns-lisp-string)
+  (:method ((self abstract-ns-lisp-string)) nil))
+
+(objc:defmethod (#/length :<NSUI>nteger) ((self abstract-ns-lisp-string))
+    (length (ns-lisp-string-string self)))
+
+(objc:defmethod (#/characterAtIndex: :unichar) ((self abstract-ns-lisp-string) (index :<NSUI>nteger))
+  (char-code (char (ns-lisp-string-string self) index)))
+
+(defclass ns-lisp-string (abstract-ns-lisp-string)
+  ((lisp-string :initarg :string :reader ns-lisp-string-string))
+  (:metaclass ns:+ns-object))

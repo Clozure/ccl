@@ -158,71 +158,65 @@
     (inspect (frame-descriptor-value frame index))
     (show-frame-source frame)))
 
-;; Cocoa layer
+;;; Cocoa layer
 
-;; General utils, should be moved elsewhere
-(defclass abstract-ns-lisp-string (ns:ns-string)
-    ()
+;; An NSOutlineView wants to manage a collection of item objects.
+;; These guys fill the bill.
+(defclass backtrace-ov-item (ns:ns-object)
+  ((label :foreign-type :id)
+   (container :accessor container :initarg :container
+	      :documentation "A stack-descriptor or frame-descriptor")
+   (index :accessor index :initarg :index)
+   (children :initform nil :accessor children :initarg :children))
   (:metaclass ns:+ns-object))
 
-(defgeneric ns-lisp-string-string (abstract-ns-lisp-string)
-  (:method ((self abstract-ns-lisp-string)) nil))
+(objc:defmethod (#/dealloc :void) ((self backtrace-ov-item))
+  (with-slots (label children) self
+    (#/release label)
+    (map nil #'(lambda (item) (#/release item)) children))
+  (objc:remove-lisp-slots self)
+  (call-next-method))
 
-(objc:defmethod (#/length :<NSUI>nteger) ((self abstract-ns-lisp-string))
-    (length (ns-lisp-string-string self)))
+;; Lazily create the NSString instances for backtrace-ov-item objects.
+(defmethod label ((self backtrace-ov-item))
+  (with-slots (label container index) self
+    (when (%null-ptr-p label)
+      (etypecase container
+	(stack-descriptor
+	 (let ((frame (stack-descriptor-frame container index)))
+	   (setf label (%make-nsstring (frame-descriptor-label frame)))))
+	(frame-descriptor
+	 (setf label (%make-nsstring (frame-descriptor-value-label container index))))))
+    label))
 
-(objc:defmethod (#/characterAtIndex: :unichar) ((self abstract-ns-lisp-string) (index :<NSUI>nteger))
-  (char-code (char (ns-lisp-string-string self) index)))
-
-(defclass ns-lisp-string (abstract-ns-lisp-string)
-  ((lisp-string :initarg :string :reader ns-lisp-string-string))
-  (:metaclass ns:+ns-object))
-
-(defclass frame-label (abstract-ns-lisp-string)
-    ((frame-number  :foreign-type :int :accessor frame-label-number)
-     (controller :foreign-type :id :reader frame-label-controller))
-  (:metaclass ns:+ns-object))
-
-(defmethod frame-label-descriptor ((self frame-label))
-  (stack-descriptor-frame
-    (backtrace-controller-stack-descriptor (frame-label-controller self))
-    (frame-label-number self)))
-  
-(defmethod ns-lisp-string-string ((self frame-label))
-  (frame-descriptor-label (frame-label-descriptor self)))
-
-(objc:defmethod #/initWithFrameNumber:controller: ((self frame-label) (frame-number :int) controller)
-  (let* ((obj (#/init self)))
-    (unless (%null-ptr-p obj)
-      (setf (slot-value obj 'frame-number) frame-number
-            (slot-value obj 'controller) controller))
-    obj))
-
-
-(defclass item-label (abstract-ns-lisp-string)
-    ((frame-label :foreign-type :id :accessor item-label-label)
-     (index :foreign-type :int :accessor item-label-index))
-  (:metaclass ns:+ns-object))
-
-(defmethod ns-lisp-string-string ((self item-label))
-  (frame-descriptor-value-label (frame-label-descriptor (item-label-label self))
-                                (item-label-index self)))
-
-(objc:defmethod #/initWithFrameLabel:index: ((self item-label) the-frame-label (index :int))
-  (let* ((obj (#/init self)))
-    (unless (%null-ptr-p obj)
-      (setf (slot-value obj 'frame-label) the-frame-label
-            (slot-value obj 'index) index))
-    obj))
+(defun generate-ov-items (stack-descriptor)
+  (let ((items '())
+        (nframes (count-stack-descriptor-frames stack-descriptor)))
+    (dotimes (i nframes)
+      (let* ((frame (stack-descriptor-frame stack-descriptor i))
+             (item (make-instance 'backtrace-ov-item :index i
+                     :container stack-descriptor))
+             (nvalues (frame-descriptor-value-count frame))
+             (children nil))
+        ;; create items for frame values
+        (unless (zerop (frame-descriptor-value-count frame))
+          (dotimes (j nvalues)
+            (let ((item (make-instance 'backtrace-ov-item :index j
+                          :container frame)))
+              (push item children))))
+        (setf (children item) (nreverse children))
+        (push item items)))
+    (coerce (nreverse items) 'vector)))
 
 (defclass backtrace-window-controller (ns:ns-window-controller)
-    ((context :initarg :context :reader backtrace-controller-context)
-     (stack-descriptor :initform nil :reader backtrace-controller-stack-descriptor)
-     (outline-view :foreign-type :id :reader backtrace-controller-outline-view)
-     (message-field :foreign-type :id :accessor message-field)
-     (action-menu :foreign-type :id :accessor action-menu)
-     (action-popup-button :foreign-type :id :accessor action-popup-button)
-     (contextual-menu :foreign-type :id :accessor contextual-menu))
+  ((context :initarg :context :reader backtrace-controller-context)
+   (stack-descriptor :initform nil :reader backtrace-controller-stack-descriptor)
+   (outline-view :foreign-type :id :reader backtrace-controller-outline-view)
+   (message-field :foreign-type :id :accessor message-field)
+   (action-menu :foreign-type :id :accessor action-menu)
+   (action-popup-button :foreign-type :id :accessor action-popup-button)
+   (contextual-menu :foreign-type :id :accessor contextual-menu)
+   (ov-items :accessor ov-items :initarg :ov-items :initform nil))
   (:metaclass ns:+ns-object))
 
 (defmethod backtrace-controller-process ((self backtrace-window-controller))
@@ -236,50 +230,42 @@
 (objc:defmethod #/windowNibName ((self backtrace-window-controller))
   #@"backtrace")
 
+(defmethod initialize-instance :after ((self backtrace-window-controller)
+                                       &key &allow-other-keys)
+  (let ((sd (make-stack-descriptor (backtrace-controller-context self))))
+    (setf (slot-value self 'stack-descriptor) sd)
+    (setf (slot-value self 'ov-items) (generate-ov-items sd))))
+
 (objc:defmethod (#/close :void) ((self backtrace-window-controller))
   (setf (slot-value self 'context) nil)
   (call-next-method))
 
-(defmethod our-frame-label-p ((self backtrace-window-controller) thing)
-  (and (typep thing 'frame-label)
-       (eql self (frame-label-controller thing))))
-
-(def-cocoa-default *backtrace-font-name* :string #+darwin-target "Monaco"
-                   #-darwin-target "Courier" "Name of font used in backtrace views")
-(def-cocoa-default *backtrace-font-size* :float 9.0f0 "Size of font used in backtrace views")
-
+(objc:defmethod (#/dealloc :void) ((self backtrace-window-controller))
+  (with-slots (ov-items) self
+    (map nil #'(lambda (item) (#/release item)) ov-items))
+  (objc:remove-lisp-slots self)
+  (call-next-method))
 
 (objc:defmethod (#/windowDidLoad :void) ((self backtrace-window-controller))
-  (let* ((outline (slot-value self 'outline-view))
-         (font (default-font :name *backtrace-font-name* :size *backtrace-font-size*)))
+  (let* ((outline (slot-value self 'outline-view)))
     (unless (%null-ptr-p outline)
       (#/setTarget: outline self)
-      #-cocotron ; crashes
-      (#/setRowHeight: outline  (size-of-char-in-font font))
       (#/setDoubleAction: outline (@selector #/backtraceDoubleClick:))
-      (#/setShouldCascadeWindows: self nil)
-      (let* ((columns (#/tableColumns outline)))
-        (dotimes (i (#/count columns))
-          (let* ((column (#/objectAtIndex:  columns i))
-                 (data-cell (#/dataCell column)))
-            (#/setEditable: data-cell nil)
-            (#/setFont: data-cell font)
-            (when (eql i 0)
-              (let* ((header-cell (#/headerCell column))
-                     (sd (backtrace-controller-stack-descriptor self))
-                     (break-condition (stack-descriptor-condition sd))
-                     (break-condition-string
-                      (let* ((*print-level* 5)
-                             (*print-length* 5)
-                             (*print-circle* t))
-                        (format nil "~a: ~a"
-                                (class-name (class-of break-condition))
-                                break-condition))))
-                (ccl::with-autoreleased-nsstring (s break-condition-string)
-                  (#/setStringValue: (slot-value self 'message-field) s))
-                (#/setFont: header-cell (default-font :name "Courier" :size 10 :attributes '(:bold)))
-                (#/setStringValue: header-cell (%make-nsstring break-condition-string))))))))
-    (let* ((window (#/window  self)))
+      (#/setShouldCascadeWindows: self nil))
+    
+    (let* ((sd (backtrace-controller-stack-descriptor self))
+	   (break-condition (stack-descriptor-condition sd))
+	   (break-condition-string (let* ((*print-level* 5)
+					  (*print-length* 5)
+					  (*print-circle* t))
+				     (format nil "~a: ~a"
+					     (class-name
+					      (class-of break-condition))
+					     break-condition))))
+      (ccl::with-autoreleased-nsstring (s break-condition-string)
+	(#/setStringValue: (slot-value self 'message-field) s)))
+
+    (let* ((window (#/window self)))
       (unless (%null-ptr-p window)
         (let* ((process (backtrace-controller-process self))
                (listener-window (if (typep process 'cocoa-listener-process)
@@ -290,13 +276,18 @@
                    (new-x (- (+ (ns:ns-rect-x listener-frame)
                                 (/ (ns:ns-rect-width listener-frame) 2))
                              (/ backtrace-width 2))))
-              (ns:with-ns-point (p new-x (+ (ns:ns-rect-y listener-frame) (ns:ns-rect-height listener-frame)))
+              (ns:with-ns-point (p new-x (+ (ns:ns-rect-y listener-frame)
+					    (ns:ns-rect-height listener-frame)))
                 (#/setFrameOrigin: window p))))
-          (#/setTitle:  window (%make-nsstring
-                                (format nil "Backtrace for ~a(~d), break level ~d"
-                                        (process-name process)
-                                        (process-serial-number process)
-                                        (backtrace-controller-break-level self)))))))))
+	  (let ((title (format nil "Backtrace for ~a(~d), break level ~d"
+			       (process-name process)
+			       (process-serial-number process)
+			       (backtrace-controller-break-level self))))
+	    (ccl::with-autoreleased-nsstring (s title)
+	      (#/setTitle: window s))))
+	;; make initial contents appear
+	#+cocotron
+	(#/reloadData (slot-value self 'outline-view))))))
 
 (objc:defmethod (#/continue: :void) ((self backtrace-window-controller) sender)
   (declare (ignore sender))
@@ -317,57 +308,62 @@
     ((self backtrace-window-controller) sender)
   (let* ((row (#/clickedRow sender)))
     (if (>= row 0)
-      (let* ((item (#/itemAtRow: sender row)))
-        (cond ((typep item 'frame-label)
-               (let ((frame (frame-label-descriptor item)))
+      (let* ((item (#/itemAtRow: sender row))
+	     (container (container item))
+	     (index (index item)))
+        (cond ((typep container 'stack-descriptor)
+               (let ((frame (stack-descriptor-frame container index)))
                  (backtrace-frame-default-action frame)))
-              ((typep item 'item-label)
-               (let* ((frame (frame-label-descriptor (item-label-label item)))
-                      (index (item-label-index item)))
-                 (backtrace-frame-default-action frame index))))))))
+              ((typep container 'frame-descriptor)
+	       (backtrace-frame-default-action container index)))))))
 
-(objc:defmethod (#/outlineView:isItemExpandable: :<BOOL>)
+;;; outline view data source methods
+
+(objc:defmethod (#/outlineView:isItemExpandable: #>BOOL)
     ((self backtrace-window-controller) view item)
   (declare (ignore view))
-  (or (%null-ptr-p item)
-      (and (our-frame-label-p self item)
-           (> (frame-descriptor-value-count (frame-label-descriptor item)) 0))))
+  (if (%null-ptr-p item)
+    #$YES
+    (let ((container (container item)))
+      (cond ((typep container 'stack-descriptor)
+	     (let ((frame (stack-descriptor-frame container (index item))))
+	       (if (plusp (frame-descriptor-value-count frame))
+		 #$YES
+		 #$NO)))
+	    (t
+	     #$NO)))))
 
-(objc:defmethod (#/outlineView:numberOfChildrenOfItem: :<NSI>nteger)
+(objc:defmethod (#/outlineView:numberOfChildrenOfItem: #>NSInteger)
     ((self backtrace-window-controller) view item)
     (declare (ignore view))
-    (let* ((sd (backtrace-controller-stack-descriptor self)))
-      (cond ((%null-ptr-p item)
-             (stack-descriptor-frame-count sd))
-            ((our-frame-label-p self item)
-             (let ((frame (stack-descriptor-frame sd (frame-label-number item))))
-               (frame-descriptor-value-count frame)))
-            (t -1))))
+    (let ((sd (backtrace-controller-stack-descriptor self)))
+      (if (%null-ptr-p item)
+	(stack-descriptor-frame-count sd)
+	(let ((container (container item)))
+	  (cond ((typep container 'stack-descriptor)
+		 (let ((frame (stack-descriptor-frame container (index item))))
+		   (frame-descriptor-value-count frame)))
+		(t 0))))))
 
 (objc:defmethod #/outlineView:child:ofItem:
     ((self backtrace-window-controller) view (index :<NSI>nteger) item)
   (declare (ignore view))
   (cond ((%null-ptr-p item)
-         (make-instance 'frame-label
-           :with-frame-number index
-           :controller self))
-        ((our-frame-label-p self item)
-         (make-instance 'item-label
-           :with-frame-label item
-           :index index))
-        (t (break) (%make-nsstring "Huh?"))))
+	 (elt (ov-items self) index))
+	((typep (container item) 'stack-descriptor)
+	 (elt (children item) index))
+	(t +null-ptr+)))
 
 (objc:defmethod #/outlineView:objectValueForTableColumn:byItem:
     ((self backtrace-window-controller) view column item)
   (declare (ignore view column))
   (if (%null-ptr-p item)
     #@"Open this"
-    (%setf-macptr (%null-ptr) item)))
+    (label item)))
 
-(defmethod initialize-instance :after ((self backtrace-window-controller)
-                                       &key &allow-other-keys)
-  (setf (slot-value self 'stack-descriptor)
-        (make-stack-descriptor (backtrace-controller-context self))))
+(objc:defmethod (#/outlineView:isGroupItem: #>BOOL)
+    ((self backtrace-window-controller) ov item)
+  (#/outlineView:isItemExpandable: self ov item))
 
 (defun backtrace-controller-for-context (context)
   (let ((bt (ccl::bt.dialog context)))
@@ -382,6 +378,14 @@
 #+debug
 (objc:defmethod (#/willLoad :void) ((self backtrace-window-controller))
   (#_NSLog #@"will load %@" :address  (#/windowNibName self)))
+
+(objc:defmethod (#/windowWillClose: :void) ((self backtrace-window-controller) notification)
+  (declare (ignore notification))
+  (with-slots (context) self
+    (when context
+      (setf (ccl::bt.dialog context) nil)))
+  #-cocotron
+  (#/autorelease self))
 
 ;; Called when current process is about to enter a breakloop
 (defmethod ui-object-enter-backtrace-context ((app ns:ns-application)
@@ -412,17 +416,20 @@
                                                  toolbar-item)
   (let* ((outline-view (backtrace-controller-outline-view self))
          (row (#/selectedRow outline-view))
+	 (clicked-row (#/clickedRow outline-view))
          (identifier (#/itemIdentifier toolbar-item)))
+    (when (/= clicked-row -1)
+      (setq row clicked-row))
     (if (or (#/isEqualToString: identifier #@"expand all")
             (#/isEqualToString: identifier #@"collapse all"))
       #$YES
       (when (/= row -1)
         (let ((item (#/itemAtRow: outline-view row)))
-          (cond ((typep item 'frame-label)
+          (cond ((typep (container item) 'stack-descriptor)
                  (if (#/isEqualToString: identifier #@"inspect")
                    #$NO
                    #$YES))
-              ((typep item 'item-label)
+              ((typep (container item) 'frame-descriptor)
                #$YES)
               (t
                #$NO)))))))
@@ -439,24 +446,29 @@
       (when (/= row -1)
         (let ((item (#/itemAtRow: ov row)))
           (cond ((= tag $inspect-item-tag)
-                 (typep item 'item-label))
+                 (typep (container item) 'frame-descriptor))
                 ((= tag $source-item-tag)
                  t)))))))
 
 (defun frame-descriptor-from-item (item)
-  (etypecase item
-    (frame-label (frame-label-descriptor item))
-    (item-label (frame-label-descriptor (item-label-label item)))))
+  (let ((container (container item))
+	(index (index item)))
+    (etypecase (container item)
+      (stack-descriptor (stack-descriptor-frame container index))
+      (frame-descriptor container))))
 
 (objc:defmethod (#/inspect: :void) ((self backtrace-window-controller) sender)
   (declare (ignore sender))
   (let* ((ov (backtrace-controller-outline-view self))
-         (row (#/selectedRow ov)))
+         (row (#/selectedRow ov))
+	 (clicked-row (#/clickedRow ov)))
+    (when (/= clicked-row -1)
+      (setq row clicked-row))
     (when (/= row -1)
       (let ((item (#/itemAtRow: ov row)))
-        (cond ((typep item 'item-label)
-               (let* ((frame (frame-label-descriptor (item-label-label item)))
-                      (index (item-label-index item)))
+        (cond ((typep (container item) 'frame-descriptor)
+               (let* ((frame (container item))
+                      (index (index item)))
                  (inspect (frame-descriptor-value frame index)))))))))
 
 (objc:defmethod (#/source: :void) ((self backtrace-window-controller) sender)
