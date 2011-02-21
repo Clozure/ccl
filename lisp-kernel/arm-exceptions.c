@@ -1485,7 +1485,22 @@ void
 altstack_signal_handler(int signo, siginfo_t *info, ExceptionInformation *xp)
 {
   TCR *tcr=get_tcr(true);
-  if (signo == SIGSEGV) {
+  
+  if (signo == SIGBUS) {
+    BytePtr addr = (BytePtr)(xp->uc_mcontext.fault_address); 
+    area *a = tcr->cs_area;
+    if (((BytePtr)truncate_to_power_of_2(addr,log2_page_size))== a->softlimit) 
+{
+      if (mmap(a->softlimit,
+               page_size,
+               PROT_READ|PROT_WRITE|PROT_EXEC,
+               MAP_PRIVATE|MAP_ANON|MAP_FIXED,
+               -1,
+               0) == a->softlimit) {
+        return;
+      }
+    }
+  } else if (signo == SIGSEGV) {
     BytePtr addr = (BytePtr)(xp->uc_mcontext.fault_address);
     area *a = tcr->cs_area;
     
@@ -1798,6 +1813,7 @@ install_pmcl_exception_handlers()
   if (install_signal_handlers_for_exceptions) {
     install_signal_handler(SIGILL, (void *)sigill_handler, true, false);
     install_signal_handler(SIGSEGV, (void *)ALTSTACK(signal_handler),true, true);
+    install_signal_handler(SIGBUS, (void *)ALTSTACK(signal_handler),true,true);
 
   }
   
