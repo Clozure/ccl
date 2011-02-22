@@ -134,13 +134,11 @@
 	     (eeps))    
     (not (zerop count))))
 
-(defun shared-library-with-name (name &optional (is-unloaded nil))
+(defun shared-library-with-name (name)
   (let* ((namelen (length name)))
     (dolist (lib *shared-libraries*)
       (let* ((libname (shlib.soname lib)))
-	(when (and (%simple-string= name libname 0 0 namelen (length libname))
-		   (or (not is-unloaded) (and (null (shlib.map lib))
-					      (null (shlib.base lib)))))
+	(when (%simple-string= name libname 0 0 namelen (length libname))
 	  (return lib))))))
 
 (defun generate-external-functions (path)
@@ -364,101 +362,18 @@
 #+darwin-target
 (progn
 
-(defun shared-library-with-header (header)
+(defun shared-library-with-handle (handle)
   (dolist (lib *shared-libraries*)
-    (when (eql (shlib.map lib) header)
-      (return lib))))
-
-(defun shared-library-with-module (module)
-  (dolist (lib *shared-libraries*)
-    (when (eql (shlib.base lib) module)
+    (when (eql (shlib.handle lib) handle)
       (return lib))))
 
 
 
-;;;    
-;;; maybe we could fix this up name to get the "real name"
-;;; this is might be possible for dylibs but probably not for modules
-;;; for now soname and pathname are just the name that the user passed in
-;;; if the library is "discovered" later, it is the name the system gave
-;;; to it -- usually a full pathname
-;;;
-;;; header and module are ptr types
-;;;
-(defun shared-library-from-header-module-or-name (header module name)
-  ;; first try to find the library based on its address
-  (let ((found-lib (if (%null-ptr-p module)
-		       (shared-library-with-header header)
-		     (shared-library-with-module module))))
-    
-    (unless found-lib
-      ;; check if the library name is still on our list but has been unloaded
-      (setq found-lib (shared-library-with-name name t))
-      (if found-lib
-	(setf (shlib.map found-lib) header
-	      (shlib.base found-lib) module)
-	;; otherwise add it to the list
-	(push (setq found-lib (%cons-shlib name name header module))
-	      *shared-libraries*)))
-    found-lib))
-
-
-(defun open-shared-library-internal (name)
-  (rlet ((type :signed))
-    (let ((result (with-cstrs ((cname name))
-		    (ff-call (%kernel-import target::kernel-import-GetSharedLibrary)
-			     :address cname
-			     :address type
-			     :address))))
-	(cond
-	 ((= 1 (pref type :signed))
-	  ;; dylib
-	  (shared-library-from-header-module-or-name result (%null-ptr) name))
-	 ((= 2 (pref type :signed))
-	  ;; bundle
-	  (shared-library-from-header-module-or-name (%null-ptr) result name))
-	 ((= 0 (pref type :signed))
-	  ;; neither a dylib nor bundle was found
-          (values nil (%get-cstring result)))
-	 (t (values nil "unknown error"))))))
 
 
 
-;;;
-;;; When restarting from a saved image
-;;;
-(defun reopen-user-libraries ()
-  (dolist (lib *shared-libraries*)
-    (setf (shlib.map lib) nil
-	  (shlib.base lib) nil))
-  (loop
-      (let* ((win nil)
-	     (lose nil))
-	(dolist (lib *shared-libraries*)
-	  (let* ((header (shlib.map lib))
-		 (module (shlib.base lib)))
-	    (unless (and header module)
-	      (rlet ((type :signed))
-		(let ((result (with-cstrs ((cname (shlib.soname lib)))
-				(ff-call (%kernel-import target::kernel-import-GetSharedLibrary)
-					 :address cname
-					 :address type
-					 :address))))
-		  (cond
-		   ((= 1 (pref type :signed))
-		    ;; dylib
-		    (setf (shlib.map lib) result
-			  (shlib.base lib) (%null-ptr)
-			  win t))
-		   ((= 2 (pref type :signed))
-		    ;; bundle
-		    (setf (shlib.map lib) (%null-ptr)
-			  (shlib.base lib) result
-			  win t))
-		   (t
-		    ;; neither a dylib nor bundle was found
-		    (setq lose t))))))))
-	(when (or (not lose) (not win)) (return)))))
+
+
 
 ;;; end darwin-target
   )  
@@ -720,84 +635,69 @@ return a fixnum representation of that address, else return NIL."
 (defvar *nsmodule-for-symbol*)
 (defvar *ns-is-symbol-name-defined-in-image*)
 (defvar *dladdr-entry* 0)
+(defvar *dlopen-entry* 0)
+(defvar *dlerror-entry* 0)
 
 (defun setup-lookup-calls ()
-  #+notyet
-  (setq *dladdr-entry* (foreign-symbol-entry "_dladdr"))
-  (setq *dyld-image-count* (foreign-symbol-entry "__dyld_image_count"))
-  (setq *dyld-get-image-header* (foreign-symbol-entry "__dyld_get_image_header"))
-  (setq *dyld-get-image-name* (foreign-symbol-entry "__dyld_get_image_name"))
-  (setq *nslookup-symbol-in-image* (foreign-symbol-entry "_NSLookupSymbolInImage"))
-  (setq *nsaddress-of-symbol* (foreign-symbol-entry "_NSAddressOfSymbol"))
-  (setq *nsmodule-for-symbol* (foreign-symbol-entry "_NSModuleForSymbol"))
-  (setq *ns-is-symbol-name-defined-in-image* (foreign-symbol-entry "_NSIsSymbolNameDefinedInImage")))
+  (setq *dladdr-entry* (foreign-symbol-entry "dladdr"))
+  (setq *dlopen-entry* (foreign-symbol-entry "dlopen"))
+  (setq *dlerror-entry* (foreign-symbol-entry "dlerror")) 
+  (setq *dyld-image-count* (foreign-symbol-entry "_dyld_image_count"))
+  (setq *dyld-get-image-header* (foreign-symbol-entry "_dyld_get_image_header"))
+  (setq *dyld-get-image-name* (foreign-symbol-entry "_dyld_get_image_name"))
+)
 
 (setup-lookup-calls)
 
-;;;
-;;; given an entry address (a number) and a symbol name (lisp string)
-;;; find the associated dylib or module
-;;; if the dylib or module is not found in *shared-libraries* list it is added
-;;; if not found in the OS list it returns nil
-;;;
-;;; got this error before putting in the call to
-;;; NSIsObjectNameDefinedInImage dyld: /usr/local/lisp/ccl/dppccl dead
-;;; lock (dyld operation attempted in a thread already doing a dyld
-;;; operation)
-;;;
+(defun open-shared-library-internal (name)
+  (with-cstrs ((cname name))
+    (let* ((handle (ff-call *dlopen-entry*
+                            :address cname
+                            :int (logior #$RTLD_GLOBAL #$RTLD_NOW)
+                            :address)))
+      (if (%null-ptr-p handle)
+        (values nil (%get-cstring (ff-call *dlerror-entry* :address)))
+        (let* ((lib (shared-library-with-handle handle)))
+          (unless lib
+            (setq lib (%cons-shlib name name nil nil))
+            (setf (shlib.handle lib) handle))
+          (incf (shlib.opencount lib))
+          (values lib nil))))))
 
-(defun legacy-shlib-containing-address (addr name)
-  (when *ns-is-symbol-name-defined-in-image*
-    (dotimes (i (ff-call *dyld-image-count* :unsigned-fullword))
-      (let ((header (ff-call *dyld-get-image-header* :unsigned-fullword i :address)))
-        (when (and (not (%null-ptr-p header))
-                   (or (eql (pref header :mach_header.filetype) #$MH_DYLIB)
-                       (eql (pref header :mach_header.filetype) #$MH_BUNDLE)))
-          ;; make sure the image is either a bundle or a dylib
-          ;; (otherwise we will crash, likely OS bug, tested OS X 10.1.5)
-          (with-cstrs ((cname name))
-            ;; also we must check is symbol name is defined in the
-            ;; image otherwise in certain cases there is a crash,
-            ;; another likely OS bug happens in the case where a
-            ;; bundle imports a dylib and then we call
-            ;; nslookupsymbolinimage on the bundle image
-            (when (/= 0
-                      (ff-call *ns-is-symbol-name-defined-in-image* :address header
-                               :address cname :unsigned))
-              (let ((symbol (ff-call *nslookup-symbol-in-image* :address header :address cname
-                                     :unsigned-fullword #$NSLOOKUPSYMBOLINIMAGE_OPTION_RETURN_ON_ERROR
-                                     :address)))
-                (unless (%null-ptr-p symbol)
-                  ;; compare the found address to the address we are looking for
-                  (let ((foundaddr (ff-call *nsaddress-of-symbol* :address symbol :address)))
-                    ;; (format t "Foundaddr ~s~%" foundaddr)
-                    ;; (format t "Compare to addr ~s~%" addr)
-                    (when (eql foundaddr addr)
-                      (let* ((imgname (ff-call *dyld-get-image-name* :unsigned-fullword i :address))
-                             (libname (unless (%null-ptr-p imgname) (%get-cstring imgname)))
-                             (libmodule (%int-to-ptr 0))
-                             (libheader (%int-to-ptr 0)))
-                        (if (eql (pref header :mach_header.filetype) #$MH_BUNDLE)
-                          (setf libmodule (ff-call *nsmodule-for-symbol* :address symbol :address))
-                          (setf libheader header))
-                        ;; make sure that this shared library is on *shared-libraries*
-                        (return (shared-library-from-header-module-or-name libheader libmodule libname))))))))))))))
+;;;
+;;; When restarting from a saved image
+;;;
+(defun reopen-user-libraries ()
+  (dolist (lib *shared-libraries*)
+    (setf (shlib.handle lib) nil
+	  (shlib.base lib) nil))
+  (dolist (lib *shared-libraries*)
+    (with-cstrs ((cname (shlib.soname lib)))
+      (let* ((handle (ff-call *dlopen-entry*
+                              :address cname
+                              :int (logior #$RTLD_GLOBAL #$RTLD_NOW)
+                              :address)))
+        (unless (%null-ptr-p handle)
+          (setf (shlib.handle lib) handle))))))
 
-(defun shlib-containing-address (address name)
-  (if (zerop *dladdr-entry*)
-    (legacy-shlib-containing-address address name)
-    ;; Bootstrapping.  RLET might be clearer here.
-    (%stack-block ((info (record-length #>Dl_info) :clear t))
-      (unless (zerop (ff-call *dladdr-entry*
-                              :address address
-                              :address info
-                              :signed-fullword))
-        (let* ((addr (pref info #>Dl_info.dli_fbase)))
-          (format t "~&name = ~s" (pref info  #>Dl_info.dli_fname))
-          
-          (dolist (lib *shared-libraries*)
-            (when (eql (shlib.base lib) addr)
-              (return lib))))))))
+(defun shlib-containing-address (address &optional name)
+  (declare (ignore name))
+  (%stack-block ((info (record-length #>Dl_info) :clear t))
+    (unless (zerop (ff-call *dladdr-entry*
+                            :address address
+                            :address info
+                            :signed-fullword))
+      (let* ((addr (pref info #>Dl_info.dli_fbase))
+             (name (%get-cstring (pref info #>Dl_info.dli_fname)))
+             (namelen (length name)))
+        (dolist (lib *shared-libraries*)
+          (let* ((shlibname  (shlib.pathname lib))
+                 (shlibnamelen (length shlibname)))
+          (when (%simple-string= name shlibname 0 0 namelen shlibnamelen)
+            (unless (shlib.base lib)
+              (setf (shlib.base lib) addr
+                    (shlib.soname lib) (soname-from-mach-header addr)))
+            (return lib))))))))
 
 (defun shlib-containing-entry (entry &optional name)
   (unless name
@@ -805,6 +705,37 @@ return a fixnum representation of that address, else return NIL."
   (with-macptrs (addr)
     (entry->addr entry addr)
     (shlib-containing-address addr name)))
+
+(defun soname-from-mach-header (header)
+  (do* ((p (%inc-ptr header
+                     #+64-bit-target (record-length :mach_header_64)
+                     #-64-bit-target (record-length :mach_header))
+           (%inc-ptr p (pref p :load_command.cmdsize)))
+        (i 0 (1+ i))
+        (n (pref header
+                 #+64-bit-target :mach_header_64.ncmds
+                 #-64-bit-target :mach_header.ncmds)))
+       ((= i n))
+    (when (= #$LC_ID_DYLIB (pref p :load_command.cmd))
+      (return (%get-cstring (%inc-ptr p (record-length :dylib_command)))))))
+
+                 
+                     
+                                                           
+(defun init-shared-libraries ()
+  (do* ((count (ff-call *dyld-image-count* :unsigned-fullword))
+        (i 1 (1+ i)))
+       ((= i count))
+    (declare (fixnum i count))
+    (let* ((addr (ff-call *dyld-get-image-header* :unsigned-fullword i :address))
+           (nameptr (ff-call *dyld-get-image-name* :unsigned-fullword i :address))
+           (name (%get-cstring nameptr ))
+           (lib (%cons-shlib (soname-from-mach-header addr) name nil addr)))
+      (setf (shlib.handle lib)
+            (ff-call *dlopen-entry* :address nameptr :unsigned-fullword (logior #$RTLD_GLOBAL #$RTLD_NOLOAD)))
+      (push lib *shared-libraries*))))
+
+(init-shared-libraries)
 
 ;; end Darwin progn
 )

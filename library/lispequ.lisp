@@ -1387,7 +1387,7 @@
   )
 
 
-(def-accessor-macros %svref
+(def-accessors (shlib) %svref
     nil					;'shlib
   shlib.soname
   shlib.pathname
