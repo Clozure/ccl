@@ -1052,10 +1052,6 @@ _spentry(syscall)
 	__(movl %ebp,rcontext(tcr.save_ebp))
 	__(movl $TCR_STATE_FOREIGN,rcontext(tcr.valence))
 	__(movl rcontext(tcr.foreign_sp),%esp)
-	/* preserve state of direction flag */
-	__(pushfl)
-	__(popl rcontext(tcr.unboxed0))
-	__(cld)
 	__(emms)
 	__(pop %ebp)		/* backlink */
         __(lea 15(%esp),%edx)
@@ -1078,8 +1074,6 @@ local_label(back_from_sysenter):
 	__(clr %temp0)
 	__(clr %fn)
 	__(pxor %fpzero,%fpzero)
-	__(pushl rcontext(tcr.unboxed0))
-	__(popfl)
 	__(movl rcontext(tcr.save_vsp),%esp)
 	__(movl rcontext(tcr.save_ebp),%ebp)
 	__(movl $TCR_STATE_LISP,rcontext(tcr.valence))
@@ -1108,10 +1102,6 @@ _spentry(syscall2)
 	__(movl %ebp,rcontext(tcr.save_ebp))
 	__(movl $TCR_STATE_FOREIGN,rcontext(tcr.valence))
 	__(movl rcontext(tcr.foreign_sp),%esp)
-	/* preserve state of direction flag */
-	__(pushfl)
-	__(popl rcontext(tcr.unboxed0))
-	__(cld)
 	__(emms)
 	__(pop %ebp)		/* backlink */
         __(lea 15(%esp),%edx)
@@ -1138,8 +1128,6 @@ local_label(back_from_syscall):
 	__(clr %temp0)
 	__(clr %fn)
 	__(pxor %fpzero,%fpzero)
-	__(pushl rcontext(tcr.unboxed0))
-	__(popf)
 	__(movl rcontext(tcr.save_vsp),%esp)
 	__(movl rcontext(tcr.save_ebp),%ebp)
 	__(movl $TCR_STATE_LISP,rcontext(tcr.valence))
@@ -4157,6 +4145,11 @@ _endsubp(builtin_aref1)
 /* space for alignment */
 /* previous %esp */
 
+/*
+ * Note that we assume that the lisp registers are in the default
+ * state here:  that is, tcr.node_regs_mask has its default value,
+ * and the DF is clear.
+ */
 _spentry(ffcall)
 LocalLabelPrefix`'ffcall:
 	__(unbox_fixnum(%arg_z,%imm0))
@@ -4179,10 +4172,6 @@ LocalLabelPrefix`'ffcall:
 	__(movl %ebp,rcontext(tcr.save_ebp))
 	__(movl $TCR_STATE_FOREIGN,rcontext(tcr.valence))
 	__(movl rcontext(tcr.foreign_sp),%esp)
-	/* preserve state of direction flag */
-	__(pushfl)
-	__(popl rcontext(tcr.unboxed0))
-	__(cld)        
 	__(stmxcsr rcontext(tcr.lisp_mxcsr))
 	__(emms)
 	__(ldmxcsr rcontext(tcr.foreign_mxcsr))
@@ -4225,11 +4214,6 @@ LocalLabelPrefix`'ffcall_call_end:
 	__(fnstsw rcontext(tcr.ffi_exception))
 	__(fnclex)
 	__endif
-1:	/* restore state of DF from saved flags */
-	__(bt $DF_BIT,rcontext(tcr.unboxed0))
-	__(jnc 2f)
-	__(std)
-2:	
 	__(movl rcontext(tcr.save_vsp),%esp)
 	__(movl rcontext(tcr.save_ebp),%ebp)
 	__(movl $TCR_STATE_LISP,rcontext(tcr.valence))
