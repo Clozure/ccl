@@ -1325,6 +1325,9 @@ shutdown_thread_tcr(void *arg)
   TCR *tcr = TCR_FROM_TSD(arg),*current=get_tcr(0);
 
   area *vs, *ts, *cs;
+#ifdef DARWIN
+  mach_port_t kernel_thread;
+#endif
   
   if (current == NULL) {
     current = tcr;
@@ -1341,6 +1344,7 @@ shutdown_thread_tcr(void *arg)
     }
 #ifdef DARWIN
     darwin_exception_cleanup(tcr);
+    kernel_thread = (mach_port_t) (uint32_t)(natural)( TCR_AUX(tcr)->native_thread_id);
 #endif
     LOCK(lisp_global(TCR_AREA_LOCK),current);
     vs = tcr->vs_area;
@@ -1410,6 +1414,18 @@ shutdown_thread_tcr(void *arg)
 #endif
 #endif
     UNLOCK(lisp_global(TCR_AREA_LOCK),current);
+#ifdef DARWIN
+    {
+      mach_port_urefs_t nrefs;
+      ipc_space_t task = mach_task_self();
+
+      if (mach_port_get_refs(task,kernel_thread,MACH_PORT_RIGHT_SEND,&nrefs) == KERN_SUCCESS) {
+        if (nrefs > 1) {
+          mach_port_mod_refs(task,kernel_thread,MACH_PORT_RIGHT_SEND,-(nrefs-1));
+        }
+      }
+    }
+#endif
   } else {
     tsd_set(lisp_global(TCR_KEY), TCR_TO_TSD(tcr));
   }
@@ -1453,7 +1469,7 @@ current_native_thread_id()
 #endif
 #endif
 #ifdef DARWIN
-	  mach_thread_self()
+          pthread_mach_thread_np(pthread_self())
 #endif
 #ifdef FREEBSD
 	  pthread_self()
@@ -2660,4 +2676,19 @@ rwlock_destroy(rwlock *rw)
 }
 
 
+
+#ifdef DARWIN
+/* For debugging. */
+int
+mach_port_send_refs(mach_port_t port)
+{
+  mach_port_urefs_t nrefs;
+  ipc_space_t task = mach_task_self();
+  
+  if (mach_port_get_refs(task,port,MACH_PORT_RIGHT_SEND,&nrefs) == KERN_SUCCESS) {
+    return nrefs;
+  }
+  return -1;
+}
+#endif
 
