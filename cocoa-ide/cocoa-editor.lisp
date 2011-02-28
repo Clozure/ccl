@@ -590,6 +590,8 @@
       (ns:with-ns-range (replacerange pos 0)
         (#/replaceCharactersInRange:withString:
          mirror replacerange replacestring))
+      #+cocotron
+      (#/updateChangeCount: document #$NSChangeDone)
       (when (and undo-mgr (not (#/isUndoing undo-mgr)))
         (#/replaceCharactersAtPosition:length:withString:
 	 (#/prepareWithInvocationTarget: undo-mgr self)
@@ -617,6 +619,8 @@
 						   #$NSTextStorageEditedAttributes)
 				      range (- n))
       (#/deleteCharactersInRange: mirror range)
+      #+cocotron
+      (#/updateChangeCount: document #$NSChangeDone)      
       (when (and undo-mgr (not (#/isUndoing undo-mgr)))
         (#/replaceCharactersAtPosition:length:withString:
 	 (#/prepareWithInvocationTarget: undo-mgr self)
@@ -641,6 +645,8 @@
        mirror range (#/substringWithRange: hemlock-string range))
       (#/edited:range:changeInLength: self (logior #$NSTextStorageEditedCharacters
                                                    #$NSTextStorageEditedAttributes) range 0)
+      #+cocotron
+      (#/updateChangeCount: document #$NSChangeDone)      
       (when (and undo-mgr (not (#/isUndoing undo-mgr)))
         (#/replaceCharactersAtPosition:length:withString:
 	 (#/prepareWithInvocationTarget: undo-mgr self)
