@@ -304,7 +304,7 @@
 
 (objc:defmethod (#/windowShouldClose: #>BOOL) ((w hemlock-listener-frame)
                                                sender)
-  (let* ((doc (#/document w)))
+  (let* ((doc (#/document (#/windowController w))))
     (if (or (%null-ptr-p doc)
             (and (hemlock-document-process doc)
                  (perform-close-kills-process-p doc)))
