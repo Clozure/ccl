@@ -212,25 +212,22 @@
     (create-directory path))
   (when (directory-pathname-p path)
     (return-from %create-file (probe-file-x path)))
-  (assert (or (eql if-exists :overwrite)
-              (null if-exists)
-              (eq if-exists :error)
-              (not (probe-file path))) ()
-	  "~s ~s not implemented yet" :if-exists if-exists)
   (let* ((unix-name (native-translated-namestring path))
-	 (fd (fd-open unix-name (logior #$O_WRONLY #$O_CREAT #$O_TRUNC
-                                        (if (or (null if-exists)
-                                                (eq if-exists :error))
-                                          #$O_EXCL
-                                          0)))))
-    (if (< fd 0)
-      (if (and (null if-exists)
+	 (fd (fd-open unix-name (logior #$O_WRONLY #$O_CREAT
+                                        (if (eq if-exists :overwrite)
+                                          #$O_TRUNC
+                                          #$O_EXCL)))))
+    (when (and (neq if-exists :error)
                (or (eql fd (- #$EEXIST))
                    #+windows-target
                    (and (eql fd (- #$EPERM))
                         (probe-file path))))
-        (return-from %create-file nil)
-        (signal-file-error fd path))
+      (when (null if-exists)
+        (return-from %create-file nil))
+      (error "~s ~s not implemented yet" :if-exists if-exists))
+
+    (if (< fd 0)
+      (signal-file-error fd path)
       (fd-close fd))
     (%realpath unix-name)))
 
