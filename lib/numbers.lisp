@@ -744,8 +744,7 @@
       (%single-float-atanh! x (%make-sfloat))
       #+64-bit-target
       (%single-float-atanh x))
-    (/ (log (/ (+ 1 x) (- 1 x))) 2)))
-
+    (/ (- (log (+ 1 x)) (log (- 1 x))) 2)))
 
 (defun ffloor (number &optional divisor)
   "Same as FLOOR, but returns first value as a float."
