@@ -400,13 +400,5 @@ scripts/http-to-ssh -text
 scripts/http-to-svn -text
 scripts/makedmg -text
 scripts/svn-switch -text
-tools/asdf-install/RELNOTES -text
-tools/asdf-install/changes.text -text
-tools/asdf-install/conditions.lisp -text
-tools/asdf-install/dead-letter.lisp -text
-tools/asdf-install/deprecated.lisp -text
-tools/asdf-install/lift-standard.config -text
-tools/asdf-install/notes.text -text
-tools/asdf-install/variables.lisp -text
 xdump/xarmfasload.lisp -text
 xdump/xx8632-fasload.lisp -text
