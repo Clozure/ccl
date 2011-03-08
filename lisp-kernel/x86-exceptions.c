@@ -2924,6 +2924,30 @@ gc_from_xp(ExceptionInformation *xp, signed_natural param)
 
 #ifdef DARWIN
 
+#ifdef X8664
+#define ts_pc(t) t->__rip
+typedef x86_thread_state64_t native_thread_state_t;
+#define NATIVE_THREAD_STATE_COUNT x86_THREAD_STATE64_COUNT
+#define NATIVE_THREAD_STATE_FLAVOR x86_THREAD_STATE64
+typedef x86_float_state64_t native_float_state_t;
+#define NATIVE_FLOAT_STATE_COUNT x86_FLOAT_STATE64_COUNT
+#define NATIVE_FLOAT_STATE_FLAVOR x86_FLOAT_STATE64
+typedef x86_exception_state64_t native_exception_state_t;
+#define NATIVE_EXCEPTION_STATE_COUNT x86_EXCEPTION_STATE64_COUNT
+#define NATIVE_EXCEPTION_STATE_FLAVOR x86_EXCEPTION_STATE64
+#else
+#define ts_pc(t) t->__eip
+typedef x86_thread_state32_t native_thread_state_t;
+#define NATIVE_THREAD_STATE_COUNT x86_THREAD_STATE32_COUNT
+#define NATIVE_THREAD_STATE_FLAVOR x86_THREAD_STATE32
+typedef x86_float_state32_t native_float_state_t;
+#define NATIVE_FLOAT_STATE_COUNT x86_FLOAT_STATE32_COUNT
+#define NATIVE_FLOAT_STATE_FLAVOR x86_FLOAT_STATE32
+typedef x86_exception_state32_t native_exception_state_t;
+#define NATIVE_EXCEPTION_STATE_COUNT x86_EXCEPTION_STATE32_COUNT
+#define NATIVE_EXCEPTION_STATE_FLAVOR x86_EXCEPTION_STATE32
+#endif
+
 #define TCR_FROM_EXCEPTION_PORT(p) ((TCR *)((natural)p))
 #define TCR_TO_EXCEPTION_PORT(tcr) ((mach_port_t)((natural)(tcr)))
 
@@ -3027,7 +3051,7 @@ fatal_mach_error(char *format, ...);
 
 
 void
-restore_mach_thread_state(mach_port_t thread, ExceptionInformation *pseudosigcontext)
+restore_mach_thread_state(mach_port_t thread, ExceptionInformation *pseudosigcontext, native_thread_state_t *ts)
 {
   kern_return_t kret;
 #if WORD_SIZE == 64
@@ -3037,46 +3061,16 @@ restore_mach_thread_state(mach_port_t thread, ExceptionInformation *pseudosigcon
 #endif
 
   /* Set the thread's FP state from the pseudosigcontext */
-#if WORD_SIZE == 64
   kret = thread_set_state(thread,
-                          x86_FLOAT_STATE64,
+                          NATIVE_FLOAT_STATE_FLAVOR,
                           (thread_state_t)&(mc->__fs),
-                          x86_FLOAT_STATE64_COUNT);
-#else
-  kret = thread_set_state(thread,
-                          x86_FLOAT_STATE32,
-                          (thread_state_t)&(mc->__fs),
-                          x86_FLOAT_STATE32_COUNT);
-#endif
+                          NATIVE_FLOAT_STATE_COUNT);
   MACH_CHECK_ERROR("setting thread FP state", kret);
-
-  /* The thread'll be as good as new ... */
-#if WORD_SIZE == 64
-  kret = thread_set_state(thread,
-                          x86_THREAD_STATE64,
-                          (thread_state_t)&(mc->__ss),
-                          x86_THREAD_STATE64_COUNT);
-#else
-  kret = thread_set_state(thread, 
-                          x86_THREAD_STATE32,
-                          (thread_state_t)&(mc->__ss),
-                          x86_THREAD_STATE32_COUNT);
-#endif
-  MACH_CHECK_ERROR("setting thread state", kret);
+  *ts = mc->__ss;
 }  
 
-/* This code runs in the exception handling thread, in response
-   to an attempt to execute the UU0 at "pseudo_sigreturn" (e.g.,
-   in response to a call to pseudo_sigreturn() from the specified
-   user thread.
-   Find that context (the user thread's R3 points to it), then
-   use that context to set the user thread's state.  When this
-   function's caller returns, the Mach kernel will resume the
-   user thread.
-*/
-
 kern_return_t
-do_pseudo_sigreturn(mach_port_t thread, TCR *tcr)
+do_pseudo_sigreturn(mach_port_t thread, TCR *tcr, native_thread_state_t *out)
 {
   ExceptionInformation *xp;
 
@@ -3087,7 +3081,7 @@ do_pseudo_sigreturn(mach_port_t thread, TCR *tcr)
   if (xp) {
     tcr->pending_exception_context = NULL;
     tcr->valence = TCR_STATE_LISP;
-    restore_mach_thread_state(thread, xp);
+    restore_mach_thread_state(thread, xp, out);
     raise_pending_interrupt(tcr);
   } else {
     Bug(NULL, "no xp here!\n");
@@ -3103,11 +3097,7 @@ create_thread_context_frame(mach_port_t thread,
 			    natural *new_stack_top,
                             siginfo_t **info_ptr,
                             TCR *tcr,
-#ifdef X8664
-                            x86_thread_state64_t *ts
-#else
-                            x86_thread_state32_t *ts
-#endif
+                            native_thread_state_t *ts
                             )
 {
   mach_msg_type_number_t thread_state_count;
@@ -3137,31 +3127,17 @@ create_thread_context_frame(mach_port_t thread,
   
   memmove(&(mc->__ss),ts,sizeof(*ts));
 
-#ifdef X8664
-  thread_state_count = x86_FLOAT_STATE64_COUNT;
+  thread_state_count = NATIVE_FLOAT_STATE_COUNT;
   thread_get_state(thread,
-		   x86_FLOAT_STATE64,
+		   NATIVE_FLOAT_STATE_FLAVOR,
 		   (thread_state_t)&(mc->__fs),
 		   &thread_state_count);
 
-  thread_state_count = x86_EXCEPTION_STATE64_COUNT;
+  thread_state_count = NATIVE_EXCEPTION_STATE_COUNT;
   thread_get_state(thread,
-                   x86_EXCEPTION_STATE64,
+                   NATIVE_EXCEPTION_STATE_FLAVOR,
 		   (thread_state_t)&(mc->__es),
 		   &thread_state_count);
-#else
-  thread_state_count = x86_FLOAT_STATE32_COUNT;
-  thread_get_state(thread,
-		   x86_FLOAT_STATE32,
-		   (thread_state_t)&(mc->__fs),
-		   &thread_state_count);
-
-  thread_state_count = x86_EXCEPTION_STATE32_COUNT;
-  thread_get_state(thread,
-                   x86_EXCEPTION_STATE32,
-		   (thread_state_t)&(mc->__es),
-		   &thread_state_count);
-#endif
 
 
   UC_MCONTEXT(pseudosigcontext) = mc;
@@ -3194,18 +3170,10 @@ setup_signal_frame(mach_port_t thread,
 		   int signum,
                    int code,
 		   TCR *tcr,
-#ifdef X8664
-                   x86_thread_state64_t *ts
-#else
-                   x86_thread_state32_t *ts
-#endif
+                   native_thread_state_t *ts,
+                   native_thread_state_t *new_ts
                    )
 {
-#ifdef X8664
-  x86_thread_state64_t new_ts;
-#else
-  x86_thread_state32_t new_ts;
-#endif
   ExceptionInformation *pseudosigcontext;
   int  old_valence = tcr->valence;
   natural stackp, *stackpp;
@@ -3237,29 +3205,27 @@ setup_signal_frame(mach_port_t thread,
   */
 
 #ifdef X8664
-  new_ts.__rip = (natural) handler_address;
+  new_ts->__rip = (natural) handler_address;
   stackpp = (natural *)stackp;
   *--stackpp = (natural)pseudo_sigreturn;
   stackp = (natural)stackpp;
-  new_ts.__rdi = signum;
-  new_ts.__rsi = (natural)info;
-  new_ts.__rdx = (natural)pseudosigcontext;
-  new_ts.__rcx = (natural)tcr;
-  new_ts.__r8 = (natural)old_valence;
-  new_ts.__rsp = stackp;
-  new_ts.__rflags = ts->__rflags;
+  new_ts->__rdi = signum;
+  new_ts->__rsi = (natural)info;
+  new_ts->__rdx = (natural)pseudosigcontext;
+  new_ts->__rcx = (natural)tcr;
+  new_ts->__r8 = (natural)old_valence;
+  new_ts->__rsp = stackp;
+  new_ts->__rflags = ts->__rflags;
 #else
-#define USER_CS 0x17
-#define USER_DS 0x1f
-  bzero(&new_ts, sizeof(new_ts));
-  new_ts.__cs = ts->__cs;
-  new_ts.__ss = ts->__ss;
-  new_ts.__ds = ts->__ds;
-  new_ts.__es = ts->__es;
-  new_ts.__fs = ts->__fs;
-  new_ts.__gs = ts->__gs;
+  bzero(new_ts, sizeof(*new_ts));
+  new_ts->__cs = ts->__cs;
+  new_ts->__ss = ts->__ss;
+  new_ts->__ds = ts->__ds;
+  new_ts->__es = ts->__es;
+  new_ts->__fs = ts->__fs;
+  new_ts->__gs = ts->__gs;
 
-  new_ts.__eip = (natural)handler_address;
+  new_ts->__eip = (natural)handler_address;
   stackpp = (natural *)stackp;
   *--stackpp = 0;		/* alignment */
   *--stackpp = 0;
@@ -3271,20 +3237,8 @@ setup_signal_frame(mach_port_t thread,
   *--stackpp = (natural)signum;
   *--stackpp = (natural)pseudo_sigreturn;
   stackp = (natural)stackpp;
-  new_ts.__esp = stackp;
-  new_ts.__eflags = ts->__eflags;
-#endif
-
-#ifdef X8664
-  thread_set_state(thread,
-                   x86_THREAD_STATE64,
-                   (thread_state_t)&new_ts,
-                   x86_THREAD_STATE64_COUNT);
-#else
-  thread_set_state(thread, 
-		   x86_THREAD_STATE32,
-		   (thread_state_t)&new_ts,
-		   x86_THREAD_STATE32_COUNT);
+  new_ts->__esp = stackp;
+  new_ts->__eflags = ts->__eflags;
 #endif
 #ifdef DEBUG_MACH_EXCEPTIONS
   fprintf(dbgout,"Set up exception context for 0x%x at 0x%x\n", tcr, tcr->pending_exception_context);
@@ -3315,73 +3269,42 @@ setup_signal_frame(mach_port_t thread,
   Some exceptions could and should be handled here directly.
 */
 
-/* We need the thread's state earlier on x86_64 than we did on PPC;
-   the PC won't fit in code_vector[1].  We shouldn't try to get it
-   lazily (via catch_exception_raise_state()); until we own the
-   exception lock, we shouldn't have it in userspace (since a GCing
-   thread wouldn't know that we had our hands on it.)
-*/
 
-#ifdef X8664
-#define ts_pc(t) t.__rip
-#else
-#define ts_pc(t) t.__eip
-#endif
 
 
 #define DARWIN_EXCEPTION_HANDLER signal_handler
 
 
 kern_return_t
-catch_exception_raise(mach_port_t exception_port,
-		      mach_port_t thread,
-		      mach_port_t task, 
-		      exception_type_t exception,
-		      exception_data_t code_vector,
-		      mach_msg_type_number_t code_count)
+catch_exception_raise_state(mach_port_t exception_port,
+                            exception_type_t exception,
+                            exception_data_t code_vector,
+                            mach_msg_type_number_t code_count,
+                            int * flavor,
+                            thread_state_t in_state,
+                            mach_msg_type_number_t in_state_count,
+                            thread_state_t out_state,
+                            mach_msg_type_number_t * out_state_count)
 {
   int signum = 0, code = *code_vector;
   TCR *tcr = TCR_FROM_EXCEPTION_PORT(exception_port);
+  mach_port_t thread = (mach_port_t)((natural)tcr->native_thread_id);
   kern_return_t kret, call_kret;
-#ifdef X8664
-  x86_thread_state64_t ts;
-#else
-  x86_thread_state32_t ts;
-#endif
+
+  native_thread_state_t
+    *ts = (native_thread_state_t *)in_state,
+    *out_ts = (native_thread_state_t*)out_state;
   mach_msg_type_number_t thread_state_count;
 
 
 
-
-#ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(dbgout, "obtaining Mach exception lock in exception thread\n");
-#endif
-
-
   if (1) {
-#ifdef X8664
-    do {
-      thread_state_count = x86_THREAD_STATE64_COUNT;
-      call_kret = thread_get_state(thread,
-                                   x86_THREAD_STATE64,
-                                   (thread_state_t)&ts,
-                                   &thread_state_count);
-    } while (call_kret == KERN_ABORTED);
-  MACH_CHECK_ERROR("getting thread state",call_kret);
-#else
-    thread_state_count = x86_THREAD_STATE32_COUNT;
-    call_kret = thread_get_state(thread,
-				 x86_THREAD_STATE32,
-				 (thread_state_t)&ts,
-				 &thread_state_count);
-    MACH_CHECK_ERROR("getting thread state",call_kret);
-#endif
     if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_EXCEPTION)) {
       CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_EXCEPTION);
     } 
     if ((code == EXC_I386_GPFLT) &&
         ((natural)(ts_pc(ts)) == (natural)pseudo_sigreturn)) {
-      kret = do_pseudo_sigreturn(thread, tcr);
+      kret = do_pseudo_sigreturn(thread, tcr, out_ts);
 #if 0
       fprintf(dbgout, "Exception return in 0x%x\n",tcr);
 #endif
@@ -3450,15 +3373,19 @@ catch_exception_raise(mach_port_t exception_port,
                                   signum,
                                   code,
                                   tcr, 
-                                  &ts);
-#if 0
-        fprintf(dbgout, "Setup pseudosignal handling in 0x%x\n",tcr);
-#endif
+                                  ts,
+                                  out_ts);
         
       } else {
         kret = 17;
       }
     }
+  }
+  if (kret) {
+    *out_state_count = 0;
+    *flavor = 0;
+  } else {
+    *out_state_count = NATIVE_THREAD_STATE_COUNT;
   }
   return kret;
 }
@@ -3554,8 +3481,12 @@ tcr_establish_exception_port(TCR *tcr, mach_port_t thread)
   kret = thread_swap_exception_ports(thread,
 				     LISP_EXCEPTIONS_HANDLED_MASK,
 				     lisp_port,
-				     EXCEPTION_DEFAULT,
-				     THREAD_STATE_NONE,
+				     EXCEPTION_STATE,
+#if WORD_SIZE==64
+                                     x86_THREAD_STATE64,
+#else
+                                     x86_THREAD_STATE32,
+#endif
 				     fxs->masks,
 				     &n,
 				     fxs->ports,
@@ -3680,89 +3611,7 @@ darwin_exception_cleanup(TCR *tcr)
 }
 
 
-Boolean
-suspend_mach_thread(mach_port_t mach_thread)
-{
-  kern_return_t status;
-  Boolean aborted = false;
-  
-  do {
-    aborted = false;
-    status = thread_suspend(mach_thread);
-    if (status == KERN_SUCCESS) {
-      status = thread_abort_safely(mach_thread);
-      if (status == KERN_SUCCESS) {
-        aborted = true;
-      } else {
-        fprintf(dbgout, "abort failed on thread = 0x%x\n",mach_thread);
-        thread_resume(mach_thread);
-      }
-    } else {
-      return false;
-    }
-  } while (! aborted);
-  return true;
-}
 
-/*
-  Only do this if pthread_kill indicated that the pthread isn't
-  listening to signals anymore, as can happen as soon as pthread_exit()
-  is called on Darwin.  The thread could still call out to lisp as it
-  is exiting, so we need another way to suspend it in this case.
-*/
-Boolean
-mach_suspend_tcr(TCR *tcr)
-{
-  mach_port_t mach_thread = (mach_port_t)((natural)( tcr->native_thread_id));
-  ExceptionInformation *pseudosigcontext;
-  Boolean result = false;
-  
-  result = suspend_mach_thread(mach_thread);
-  if (result) {
-    mach_msg_type_number_t thread_state_count;
-#ifdef X8664
-    x86_thread_state64_t ts;
-    thread_state_count = x86_THREAD_STATE64_COUNT;
-    thread_get_state(mach_thread,
-                     x86_THREAD_STATE64,
-                     (thread_state_t)&ts,
-                     &thread_state_count);
-#else
-    x86_thread_state32_t ts;
-    thread_state_count = x86_THREAD_STATE_COUNT;
-    thread_get_state(mach_thread,
-                     x86_THREAD_STATE,
-                     (thread_state_t)&ts,
-                     &thread_state_count);
-#endif
-
-    pseudosigcontext = create_thread_context_frame(mach_thread, NULL, NULL,tcr, &ts);
-    pseudosigcontext->uc_onstack = 0;
-    pseudosigcontext->uc_sigmask = (sigset_t) 0;
-    tcr->suspend_context = pseudosigcontext;
-  }
-  return result;
-}
-
-void
-mach_resume_tcr(TCR *tcr)
-{
-  ExceptionInformation *xp;
-  mach_port_t mach_thread = (mach_port_t)((natural)(tcr->native_thread_id));
-  
-  xp = tcr->suspend_context;
-#ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(dbgout, "resuming TCR 0x%x, pending_exception_context = 0x%x\n",
-          tcr, tcr->pending_exception_context);
-#endif
-  tcr->suspend_context = NULL;
-  restore_mach_thread_state(mach_thread, xp);
-#ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(dbgout, "restored state in TCR 0x%x, pending_exception_context = 0x%x\n",
-          tcr, tcr->pending_exception_context);
-#endif
-  thread_resume(mach_thread);
-}
 
 void
 fatal_mach_error(char *format, ...)
