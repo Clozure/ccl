@@ -745,10 +745,9 @@
       #+64-bit-target
       (%sf-atan2 (%short-float y) (%short-float x)))
     (if (typep y 'complex)
-      ;; atan y = atanh(i*y)/i = -i atanh(i*y)
-      (let* ((iy (complex (- (imagpart y)) (realpart y)))
-	     (h (/ (- (log (+ 1 iy)) (log (- 1 iy))) 2))) ;(atanh iy)
-	(complex (imagpart h) (- (realpart h))))
+      (let ((iy (complex (- (imagpart y)) (realpart y))))
+	(/ (- (log (+ 1 iy)) (log (- 1 iy)))
+	   #c(0 2)))
       (if (typep y 'double-float)
         (%double-float-atan! y (%make-dfloat))
         #+32-bit-target
