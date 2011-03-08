@@ -3364,7 +3364,9 @@ catch_exception_raise_state(mach_port_t exception_port,
                          x86_FLOAT_STATE64,
                          (thread_state_t)&fs,
                          x86_FLOAT_STATE64_COUNT);
-        return 0;
+        *out_state_count = NATIVE_THREAD_STATE_COUNT;
+        *out_ts = *ts;
+        return KERN_SUCCESS;
       }
 #endif
       if (signum) {
