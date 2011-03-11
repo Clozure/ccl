@@ -914,10 +914,10 @@
         (rational
          (sqrt (+ (* rx rx) (* ix ix))))
         (short-float
-         (%short-float (%hypot (%double-float rx)
-                               (%double-float ix))))
+         (%short-float (%double-float-hypot (%double-float rx)
+					    (%double-float ix))))
         (double-float
-         (%hypot rx ix)))))))
+         (%double-float-hypot rx ix)))))))
 
 
 
@@ -2001,13 +2001,18 @@
 (defun %quo-1 (n)
   (/ 1 n))
 
-; x & y must both be double floats
-(defun %hypot (x y)
-  (with-stack-double-floats ((x**2) (y**2))
-    (let ((res**2 x**2))
-      (%double-float*-2! x x x**2)
-      (%double-float*-2! y y y**2)
-      (%double-float+-2! x**2 y**2 res**2)
-      (fsqrt res**2))))
-
-
+;; Compute (sqrt (+ (* x x) (* y y))), but
+;; try to be a little more careful about it.
+;; Both x and y must be double-floats.
+(defun %double-float-hypot (x y)
+  (with-stack-double-floats ((a) (b) (c))
+    (%%double-float-abs! x a)
+    (%%double-float-abs! y b)
+    (when (> a b)
+      (psetq a b b a))
+    (if (= b 0d0)
+      0d0
+      (progn
+	(%double-float/-2! a b c)
+	(* b (fsqrt (+ 1d0 (* c c))))))))
+					
