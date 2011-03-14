@@ -16,29 +16,34 @@
 
 SVN_REVISION=$(shell svnversion || echo "unknown")
 
+SDKROOT=/Developer/SDKs/MacOSX10.5.sdk
+OSVERSION=10.5
+#SDKROOT=/Developer/SDKs/MacOSX10.6.sdk
+#OSVERSION=10.6
+
 MDYNAMIC_NO_PIC = $(shell ($(CC) --help -v 2>&1 | grep -q -e "-mdynamic-no-pic") && /bin/echo "-mdynamic-no-pic")
 
 VPATH = ..
 RM = /bin/rm
 LD = ld
-LDFLAGS =  -macosx_version_min 10.5 -arch i386 -dynamic  -o $@ -e start -pagezero_size 0x11000 -seg1addr 0x00011000 -sectalign __TEXT __text 0x1000 
+LDFLAGS =  -macosx_version_min $(OSVERSION) -arch i386 -dynamic  -o $@ -e start -pagezero_size 0x11000 -seg1addr 0x00011000 -sectalign __TEXT __text 0x1000 
 AS = as
 M4 = gm4
 M4FLAGS = -DDARWIN -DX86 -DX8632
 ASFLAGS = -arch i386 -g
-CDEFINES = -DDARWIN -DX86 -DX8632 -DSVN_REVISION=$(SVN_REVISION)
+CDEFINES = -DDARWIN -DX86 -DX8632 -DSVN_REVISION=$(SVN_REVISION) -D_DARWIN_NO_64_BIT_INODE
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
-CC=gcc-4.0
+CC=cc
 PLATFORM_H = platform-darwinx8632.h
 
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -include ../$(PLATFORM_H) -c -arch i386 $< $(CDEFINES) $(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) $(WFORMAT) -mmacosx-version-min=10.5 -isysroot /Developer/SDKs/MacOSX10.5.sdk -o $@
+	$(CC) -include ../$(PLATFORM_H) -c -arch i386 $< $(CDEFINES) $(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) $(WFORMAT) -mmacosx-version-min=$(OSVERSION) -isysroot $(SDKROOT) -o $@
 
 SPOBJ = x86-spjump32.o x86-spentry32.o x86-subprims32.o
 ASMOBJ = x86-asmutils32.o imports.o
