@@ -16,7 +16,7 @@
 
 SVN_REVISION=$(shell svnversion || echo "unknown")
 
-SDKROOT=/Developer/SDKs/MacOSX10.5.sdk
+SDKROOT=/
 OSVERSION=10.5
 #SDKROOT=/Developer/SDKs/MacOSX10.6.sdk
 #OSVERSION=10.6
