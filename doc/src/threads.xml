@@ -750,7 +750,11 @@ Type :? for other options.
 		        bindings" are put into effect in the new thread before. See
 		        DEF-STANDARD-INITIAL-BINDING.  "standard" initial bindings
 		        are put into effect before any bindings specified by
-		        :initial-bindings are.  The default is t.</para>
+		        :initial-bindings are.  The default is t.
+
+                       <emphasis role="strong">This option is deprecated: the correct
+                      behavior of many &CCL; components depends on thread-local
+                      bindings of many special variables being in effect.</emphasis></para>
 	        </listitem>
 	      </varlistentry>
 	      

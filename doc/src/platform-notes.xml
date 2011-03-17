@@ -1145,7 +1145,7 @@
 	        function for #\; (single-line comments); that function reads successive
 	        characters until EOF, a #\NewLine is read, or a character EQL to the
 	        value of *alternate-line-terminator* is read. In &CCL; for Darwin, the
-	        value of this variable is initially #\Return ; in &CCL; for LinuxPPC,
+	        value of this variable is initially #\Return ; in &CCL; for other OSes,
 	        it&#39;s initially NIL.</para>
 	      
 	      <para>Their default treatment by the #\; reader macro is the primary way
@@ -1163,80 +1163,8 @@
 	    </refsect1>
 	  </refentry>
 
-	  <refentry id="k_external-format">
-	    <indexterm zone="k_external-format">
-	      <primary>:external-format</primary>
-	    </indexterm>
 
-	    <refnamediv>
-	      <refname>:EXTERNAL-FORMAT</refname>
-	      <refpurpose></refpurpose>
-	      <refclass>Keyword Argument</refclass>
-	    </refnamediv>
 
-	    <refsect1>
-	      <title>Description</title>
-
-	      <para>Per ANSI CL, &CCL; supports the :EXTERNAL-FORMAT keyword
-	        argument to the functions OPEN, LOAD, and COMPILE-FILE. This argument is
-	        intended to provide a standard way of providing implementation-dependent
-	        information about the format of files opened with an element-type of
-	        CHARACTER. This argument can meaningfully take on the values :DEFAULT
-	        (the default), :MACOS, :UNIX, or :INFERRED in &CCL;.</para>
-	      
-	      <para>When defaulted to or specified as :DEFAULT, the format of the file
-	        stream is determined by the value of the variable
-	        CCL:*DEFAULT-EXTERNAL-FORMAT*. See below.</para>
-	      
-	      <para>When specified as :UNIX, all characters are read from and written
-	        to files verbatim.</para>
-	      
-	      <para>When specified as :MACOS, all #\Return characters read from the
-	        file are immediately translated to #\Linefeed (#\Newline); all #\Newline
-	        (#\Linefeed) characters are written externally as #\Return characters.</para>
-	      
-	      <para>When specified as :INFERRED and the file is open for input, the
-	        first buffer-full of input data is examined; if a #\Return character
-	        appears in the buffer before the first #\Linefeed, the file stream&#39;s
-	        external-format is set to :MACOS; otherwise, it is set to :UNIX.</para>
-	      
-	      <para>All other values of :EXTERNAL-FORMAT - and any combinations that
-	        don&#39;t make sense, such as trying to infer the format of a
-	        newly-created output file stream - are treated as if :UNIX was
-	        specified. As mentioned above, the :EXTERNAL-FORMAT argument doesn&#39;t
-	        apply to binary file streams.</para>
-	      
-	      <para>The translation performed when :MACOS is specified or inferred has
-	        a somewhat greater chance of doing the right thing than the
-	        *alternate-line-terminator* mechanism does; it probably has a somewhat
-	        greater chance of doing the wrong thing, as well.</para>
-	    </refsect1>
-	  </refentry>
-
-	  <refentry id="v_default-external-format">
-	    <indexterm zone="v_default-external-format">
-	      <primary>*default-external-format*</primary>
-	    </indexterm>
-	    
-	    <refnamediv>
-	      <refname>CCL:*DEFAULT-EXTERNAL-FORMAT*</refname>
-	      <refpurpose></refpurpose>
-	      <refclass>Variable</refclass>
-	    </refnamediv>
-
-	    <refsect1>
-	      <title>Description</title>
-
-	      <para>The value of this variable is used when :EXTERNAL-FORMAT is
-	        unspecified or specified as :DEFAULT. It can meaningfully be given any
-	        of the values :UNIX, :MACOS, or :INFERRED, each of which is interpreted
-	        as described above.</para>
-	      
-	      <para>Because there&#39;s some risk that unsolicited newline translation
-	        could have undesirable consequences, the initial value of this variable
-	        in &CCL; is :UNIX.</para>
-	    </refsect1>
-	  </refentry>
 
 	  <refentry id="c_ns-lisp-string">
 	    <indexterm zone="c_ns-lisp-string">

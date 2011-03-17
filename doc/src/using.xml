@@ -804,13 +804,64 @@ implementation-dependent keyword arguments:</para>
     most a character encoding or a line termination convention, but
     never both.</para>
 
-    <para>EXTERNAL-FORMATs are objects (structures) with three
+    <para>EXTERNAL-FORMATs are objects (structures) with two
     read-only fields that can be accessed via the functions:
-    <function>EXTERNAL-FORMAT-DOMAIN</function>,
     <function>EXTERNAL-FORMAT-LINE-TERMINATION</function> and
     <function>EXTERNAL-FORMAT-CHARACTER-ENCODING</function>.</para>
 
   
+    <refentry id="v_default-external-format">
+	<indexterm zone="v_default-external-format">
+	  <primary>*default-external-format*</primary>
+	</indexterm>
+	    
+	<refnamediv>
+	  <refname>CCL:*DEFAULT-EXTERNAL-FORMAT*</refname>
+	  <refpurpose></refpurpose>
+	  <refclass>Variable</refclass>
+	</refnamediv>
+
+	<refsect1>
+	  <title>Description</title>
+
+	  <para>The value of this variable is used when :EXTERNAL-FORMAT is
+	        unspecified or specified as :DEFAULT. It can
+	        meaningfully be given any value that can be used as an
+                external-format (except for the value :DEFAULT.)
+	      </para>
+	  <para>The initial value of this variable
+	        in &CCL; is <literal>:UNIX</literal>, which is equivalent to
+                <literal>(:LINE-TERMINATION :UNIX)</literal>, among other
+                things.  </para>
+	</refsect1>
+    </refentry>
+
+    <refentry id="v_default-line-termination">
+	<indexterm zone="v_default-line-termination">
+	  <primary>*default-line-termination*</primary>
+	</indexterm>
+	    
+	<refnamediv>
+	  <refname>CCL:*DEFAULT-LINE-TERMINATION*</refname>
+	  <refpurpose></refpurpose>
+	  <refclass>Variable</refclass>
+	</refnamediv>
+
+	<refsect1>
+	  <title>Description</title>
+
+	  <para>The value of this variable is used when an external-format
+                doesn't specify a line-termination convention (or specifies
+                it as :DEFAULT.) It can meaningfully be given any value 
+                that can be used as a line termination keyword 
+                (see <xref linkend="Line-Termination-Keywords"/>).
+	      </para>
+	  <para>The initial value of this variable
+	        in &CCL; is <literal>:UNIX</literal>.
+          </para>
+	</refsect1>
+    </refentry>
+
     <refentry id="f_make-external-format">
       <indexterm zone="f_make-external-format">
 	<primary>make-external-format</primary>
@@ -968,8 +1019,13 @@ implementation-dependent keyword arguments:</para>
   <literal>:IO</literal>.  The first buffer full of data is examined,
   and if a <literal>#\Return</literal> character occurs before any
   <literal>#\Linefeed</literal> character, then the line termination
-  type is set to <literal>:MACOS</literal>, otherwise it is set to
-  <literal>:UNIX</literal>.</para>
+  type is set to <literal>:WINDOWS</literal> if that
+  <literal>#\Return</literal> character is immediately followed by a
+  <literal>#\Linefeed</literal> character and to <literal>:MACOS</literal>
+  otherwise.  If a <literal>#\Return</literal> character isn't found in
+  the buffer or if <literal>#\Return</literal> is preceded by
+  <literal>#\Linefeed</literal>, the file's line terminationt type
+  is set to <literal>:UNIX</literal>.</para>
   </sect2>
   
 
