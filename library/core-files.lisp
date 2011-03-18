@@ -163,8 +163,67 @@
     (add-core-sections-from-image image))
   pathname)
 
+#-run-external-program-to-find-sections
+(defun sections-from-elf-file (pathname)
+  (let* ((fd (fd-open (native-translated-namestring pathname) #$O_RDONLY)))
+    (if (< fd 0)
+      (signal-file-error fd pathname)
+      (let* ((size (fd-size fd))
+             (map (#_mmap +null-ptr+ size #$PROT_READ #$MAP_PRIVATE fd 0)))
+        (if (eql map #$MAP_FAILED)
+          (progn
+            (fd-close fd)
+            (error "Can't memory map file ~a." pathname))
+          (unwind-protect
+               (progn
+                 (unless (and (eql (%get-unsigned-byte map 0) #x7f)
+                              (eql (%get-unsigned-byte map 1) (char-code #\E))
+                              (eql (%get-unsigned-byte map 2) (char-code #\L))
+                              (eql (%get-unsigned-byte map 3) (char-code #\F))
+                              (eql (pref map
+                                         #+64-bit-host #>Elf64_Ehdr.e_type
+                                         #-64-bit-host #>Elf32_Ehdr.e_type)
+                                   #$ET_CORE))
+                   (error "Not an ELF core file: ~a." pathname))
+                 (let* ((nsects (pref map
+                                      #+64-bit-host #>Elf64_Ehdr.e_shnum
+                                      #-64-bit-host #>Elf32_Ehdr.e_shnum))
+                        (sectptr (%inc-ptr map
+                                           (pref map
+                                                 #+64-bit-host #>Elf64_Ehdr.e_shoff
+                                                 #-64-bit-host #>Elf32_Ehdr.e_shoff)))
+                        (core-sections ()))
+                   (dotimes (i nsects (sort (coerce core-sections 'vector)
+                                            #'<
+                                            :key (lambda (x) (%core-sect.start-addr x))))
+                     (when (logtest #$SHF_ALLOC (pref sectptr
+                                                      #+64-bit-host #>Elf64_Shdr.sh_flags
+                                                      #-64-bit-host #>Elf32_Shdr.sh_flags))
+                       (let* ((start (pref sectptr
+                                           #+64-bit-host #>Elf64_Shdr.sh_addr
+                                           #-64-bit-host #>Elf32_Shdr.sh_addr))
+                              (end (+ start (pref sectptr
+                                           #+64-bit-host #>Elf64_Shdr.sh_size
+                                           #-64-bit-host #>Elf32_Shdr.sh_size)))
+                              (offset (pref sectptr
+                                           #+64-bit-host #>Elf64_Shdr.sh_offset
+                                           #-64-bit-host #>Elf32_Shdr.sh_offset)))
+                         (push (make-core-sect :start start :end end :offset offset)
+                               core-sections)))
+                     (%incf-ptr sectptr (record-length #+64-bit-host #>Elf64_Shdr
+                                                       #-64-bit-host #>Elf32_Shdr)))))
+            (#_munmap map size)
+            (fd-close fd)))))))
+                                             
+                       
+                       
+                   
+    
+    
 ;; Kinda stupid to call external program for this...
 (defun read-sections (pathname)
+  #-run-external-program-to-find-sections (sections-from-elf-file pathname)
+  #+run-external-program-to-find-sections
   (flet ((split (line start end)
            (loop while (setq start (position-if-not #'whitespacep line :start start :end end))
                  as match = (cdr (assq (char line start) '((#\[ . #\]) (#\( . #\)) (#\< . #\>))))
