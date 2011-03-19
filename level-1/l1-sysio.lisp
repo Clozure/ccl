@@ -760,7 +760,7 @@ is :UNIX.")
     (block open
       (if (or (memq element-type '(:default character base-char))
 	      (subtypep element-type 'character))
-	(if (eq element-type :default)(setq element-type 'character))
+	(if (eq element-type :default) (setq element-type 'character))
 	(progn
 	  (setq element-type (type-expand element-type))
 	  (cond ((equal element-type '#.(type-expand 'signed-byte))
@@ -773,56 +773,56 @@ is :UNIX.")
 	((:io :output) nil)
 	(t (report-bad-arg direction '(member :input :output :io :probe))))
       (check-pathname-not-wild filename) ;; probe-file-x misses wild versions....
-      (multiple-value-bind (native-truename kind)(probe-file-x filename)
-       (tagbody retry
-        (if native-truename
-	  (if (eq kind :directory)
-	    (if (eq direction :probe)
-	      (return-from open nil)
-	      (signal-file-error (- #$EISDIR)  filename))
-	    (if (setq filename (if-exists if-exists filename "Open ..."))
-	      (progn
-		(multiple-value-setq (native-truename kind) (probe-file-x filename))
-		(cond 
-		  ((not native-truename)
-		   (setq native-truename (%create-file filename)
-                         created t))
-		  ((memq direction '(:output :io))
-		   (when (eq if-exists :supersede)
-		     (let ((truename (native-to-pathname native-truename)))
-		       (setq temp-name (gen-file-name truename))
-		       (unix-rename native-truename (native-untranslated-namestring temp-name))
-		       (%create-file native-truename))))))
-	      (return-from open nil)))
-	  (if (setq filename (if-does-not-exist if-does-not-exist filename))
-            (progn
-              (unless (setq native-truename (%create-file filename :if-exists (case if-exists
-                                                                                ;; Let %create file handle these cases
-                                                                                ((:error :overwrite) if-exists)
-                                                                                (t nil))))
-                ;; Somebody else created the file while we're trying to create it.
-                (when (null if-exists) (return-from open nil))
-                (multiple-value-setq (native-truename kind) (probe-file-x filename))
-                (unless native-truename ;; huh?  Perhaps it disappeared again?
-                  (error "Attempt to create ~s failed unexpectedly" filename))
-                (go retry))
-              (setq created t))
-	    (return-from open nil))))
+      (multiple-value-bind (native-truename kind) (probe-file-x filename)
+	(tagbody retry
+	   (if native-truename
+	     (if (eq kind :directory)
+	       (if (eq direction :probe)
+		 (return-from open nil)
+		 (signal-file-error (- #$EISDIR)  filename))
+	       (if (setq filename (if-exists if-exists filename "Open ..."))
+		 (progn
+		   (multiple-value-setq (native-truename kind) (probe-file-x filename))
+		   (cond 
+		     ((not native-truename)
+		      (setq native-truename (%create-file filename)
+			    created t))
+		     ((memq direction '(:output :io))
+		      (when (eq if-exists :supersede)
+			(let ((truename (native-to-pathname native-truename)))
+			  (setq temp-name (gen-file-name truename))
+			  (unix-rename native-truename (native-untranslated-namestring temp-name))
+			  (%create-file native-truename))))))
+		 (return-from open nil)))
+	     (if (setq filename (if-does-not-exist if-does-not-exist filename))
+	       (progn
+		 (unless (setq native-truename (%create-file filename :if-exists (case if-exists
+										   ;; Let %create file handle these cases
+										   ((:error :overwrite) if-exists)
+										   (t nil))))
+		   ;; Somebody else created the file while we're trying to create it.
+		   (when (null if-exists) (return-from open nil))
+		   (multiple-value-setq (native-truename kind) (probe-file-x filename))
+		   (unless native-truename ;; huh?  Perhaps it disappeared again?
+		     (error "Attempt to create ~s failed unexpectedly" filename))
+		   (go retry))
+		 (setq created t))
+	       (return-from open nil))))
 	(let* ((fd (fd-open native-truename (case direction
 					      ((:probe :input) #$O_RDONLY)
 					      (:output #$O_WRONLY)
 					      (:io #$O_RDWR)))))
 	  (when (< fd 0)  (signal-file-error fd filename))
-          (let* ((fd-kind (%unix-fd-kind fd)))
-            (if (not (eq fd-kind :file))
-              (make-fd-stream fd :direction direction
-                              :element-type element-type
-                              :sharing sharing
-                              :basic basic)
-              (progn
-                (when basic
-                  (setq class (map-to-basic-stream-class-name class))
-                  (setq basic (subtypep (find-class class) 'basic-stream)))
+	  (let* ((fd-kind (%unix-fd-kind fd)))
+	    (if (not (eq fd-kind :file))
+	      (make-fd-stream fd :direction direction
+			      :element-type element-type
+			      :sharing sharing
+			      :basic basic)
+	      (progn
+		(when basic
+		  (setq class (map-to-basic-stream-class-name class))
+		  (setq basic (subtypep (find-class class) 'basic-stream)))
                 (let* ((in-p (member direction '(:io :input)))
                        (out-p (member direction '(:io :output)))
                        (io-p (eq direction :io))
@@ -853,7 +853,7 @@ is :UNIX.")
                                  (if in-p (select-stream-advance-function class direction))
                                  :force-output-function
                                  (if out-p (select-stream-force-output-function
-                                           class direction))
+					    class direction))
                                  :device fd
                                  :encoding encoding
                                  :external-format (or real-external-format :binary)
