@@ -1481,6 +1481,12 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
     Returns, as multiple values, the decoded string and the position in
     <varname>vector</varname> where the decoding ended.
   </para>
+  <para>
+    Sequences of octets in <varname>vector</varname> that cannot be
+    decoded into characters according to
+    <varname>external-format</varname> will be decoded as
+    #\Replacement_Character.
+  </para>
   </refsect1>
 </refentry>
 
@@ -1531,6 +1537,13 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
   <para>
     If <varname>vector-offset</varname> is supplied, data will be written
     into the output vector starting at that offset.
+  </para>
+  <para>
+    Characters in <varname>string</varname> that cannot be encoded
+    into <varname>external-format</varname> will be replaced with an
+    encoding-dependent replacement character
+    (#\Replacement_Character or #\Sub) before being encoded and written
+    into the output vector.
   </para>
   </refsect1>
 </refentry>
