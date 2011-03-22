@@ -1122,6 +1122,13 @@ Will differ from *compiling-file* during an INCLUDE")
 ;; from parent slots, making notes less likely to be multiply-referenced.
 (defun fcomp-digest-code-notes (lfun &optional refs)
   (unless (memq lfun refs)
+    (let ((source (function-source-note lfun)))
+      (when (and (source-note-p source)
+                 (not (equalp (source-note-filename source) *loading-file-source-file*)))
+        ;; Function is from a different file than being compiled, so don't digest it.
+        ;; This can happen when #. is used to create arbitrary literal constants.
+        #+no (warn "Reference to non-externalizable literal ~s" lfun)
+        (return-from fcomp-digest-code-notes)))
     (let* ((lfv (function-to-function-vector lfun))
 	   (start #-x86-target 0 #+x86-target (%function-code-words lfun))
 	   (refs (cons lfun refs)))
