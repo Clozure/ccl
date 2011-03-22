@@ -3053,7 +3053,7 @@ arg=char : read delimited list"
       (when (> (length text) 120)
         (setq text (concatenate 'string (subseq text 0 120) "..."))))
     (if file
-      (format stream "*~s:~s-~s ~s" file
+      (format stream "~s:~s-~s ~s" file
 	      (source-note-start-pos sn) (source-note-end-pos sn)
 	      text)
       (format stream "Interactive ~s" text))))
