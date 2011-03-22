@@ -2372,6 +2372,18 @@ setup_sigaltstack(area *a)
   stack.ss_size = SIGSTKSZ*8;
   stack.ss_flags = 0;
   mmap(stack.ss_sp,stack.ss_size, PROT_READ|PROT_WRITE|PROT_EXEC,MAP_FIXED|MAP_ANON|MAP_PRIVATE,-1,0);
+#ifdef LINUX
+  /* The ucontext pushed on the altstack may not contain the (largish)
+     __fpregs_mem field; copy_ucontext() wants to copy what it thinks
+     is a pointer to a full ucontext.  That'll touch a page beyond the
+     bottom of the altstack, and when this happens on the initial
+     thread's stack on a recent (2.6.32+?) kernel, we'll SIGBUS instead
+     of mapping that page.
+     It's easier to just reserve that page here than it would be to
+     change copy_ucontext().
+  */
+  stack.ss_size -= sizeof(struct ucontext);
+#endif
   if (sigaltstack(&stack, NULL) != 0) {
     perror("sigaltstack");
     exit(-1);
