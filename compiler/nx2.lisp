@@ -435,7 +435,7 @@
 
 (defun acode-optimize-logior2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'integer))
   (declare (ignorable result-type))
-  (or (and nil (acode-constant-fold-integer-binop seg vreg xfer num1 num2 'logior))
+  (or (acode-constant-fold-integer-binop seg vreg xfer num1 num2 'logior)
       (let* ((unsigned-natural-type *nx-target-natural-type*)
              (target-fixnum-type *nx-target-fixnum-type*))
         (cond ((eql (acode-fixnum-form-p num1) 0)
