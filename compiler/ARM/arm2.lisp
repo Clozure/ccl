@@ -5416,8 +5416,8 @@
   (let* ((fix1 (acode-fixnum-form-p form1))
          (fix2 (acode-fixnum-form-p form2)))
     (if (and fix1 fix2)
-      (arm2-use-operator (%nx1-operator fixnum) seg vreg xfer (logior fix1 fix2)))
-    (let* ((fixval (or fix1 fix2))
+      (arm2-use-operator (%nx1-operator fixnum) seg vreg xfer (logior fix1 fix2))
+      (let* ((fixval (or fix1 fix2))
            (unboxed-fixval (if fixval (ash fixval *arm2-target-fixnum-shift*)))
            (ok-imm (and unboxed-fixval
                         (arm::encode-arm-immediate unboxed-fixval)))
@@ -5429,7 +5429,7 @@
               (! logior-immediate target other-reg (logand #xffffffff unboxed-fixval)))))
         (multiple-value-bind (r1 r2) (arm2-two-untargeted-reg-forms seg form1 arm::arg_y form2 arm::arg_z)
           (if vreg (ensuring-node-target (target vreg) (! %logior2 target r1 r2)))))   
-      (^))))
+      (^)))))
 
 
 (defarm2 arm2-%ilogand2 %ilogand2 (seg vreg xfer form1 form2)
@@ -5458,7 +5458,7 @@
   (let* ((fix1 (acode-fixnum-form-p form1))
          (fix2 (acode-fixnum-form-p form2)))
     (if (and fix1 fix2)
-      (arm2-use-operator (%nx1-operator fixnum) seg vreg xfer (logxor fix1 fix2)))
+      (arm2-use-operator (%nx1-operator fixnum) seg vreg xfer (logxor fix1 fix2))
     (let* ((fixval (or fix1 fix2))
            (unboxed-fixval (if fixval (ash fixval *arm2-target-fixnum-shift*)))
            (ok-imm (if unboxed-fixval (arm::encode-arm-immediate unboxed-fixval)))
@@ -5470,7 +5470,7 @@
               (! logxor-immediate target other-reg (logand unboxed-fixval #xffffffff)))))
         (multiple-value-bind (r1 r2) (arm2-two-untargeted-reg-forms seg form1 arm::arg_y form2 arm::arg_z)
           (if vreg (ensuring-node-target (target vreg) (! %logxor2 vreg r1 r2)))))
-      (^))))
+      (^)))))
 
 (defarm2 arm2-%ineg %ineg (seg vreg xfer n)
   (let* ((src (arm2-one-untargeted-reg-form seg n arm::arg_z)))

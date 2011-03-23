@@ -281,7 +281,7 @@
 (defun acode-constant-fold-integer-binop (seg vreg xfer x y function)
   (let* ((const-x (acode-integer-form-p x))
          (const-y (acode-integer-form-p y))
-         (result (and const-x const-y (ignore-errors (funcall function x y)))))
+         (result (and const-x const-y (ignore-errors (funcall function const-x const-y)))))
     (when result
       (backend-use-operator (if (nx1-target-fixnump result)
                               (%nx1-operator fixnum)
@@ -435,7 +435,7 @@
 
 (defun acode-optimize-logior2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'integer))
   (declare (ignorable result-type))
-  (or (acode-constant-fold-integer-binop seg vreg xfer num1 num2 'logior)
+  (or (and nil (acode-constant-fold-integer-binop seg vreg xfer num1 num2 'logior))
       (let* ((unsigned-natural-type *nx-target-natural-type*)
              (target-fixnum-type *nx-target-fixnum-type*))
         (cond ((eql (acode-fixnum-form-p num1) 0)
