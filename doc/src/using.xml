@@ -2080,6 +2080,66 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
         </listitem>
      </varlistentry>
      <varlistentry>
+        <term><varname>purify</varname></term>
+        <listitem>
+          <para>
+	    When true, calls (in effect) <code>purify</code> before
+	    saving the heap image.  This moves certain objects that
+	    are unlikely to become garbage to a special memory area
+	    that is not scanned by the GC (since it is expected that
+	    the GC wouldn't find anything to collect).
+         </para>
+      </listitem>
+      </varlistentry>
+
+     <varlistentry>
+        <term><varname>impurify</varname></term>
+        <listitem>
+          <para>
+	    If true, calls (in effect) <code>impurify</code> before
+	    saving the heap image.  (If both <literal>:impurify</literal>
+	    and <literal>:purify</literal> are true, first
+	    <code>impurify</code> is done, and then <code>purify</code>.)
+         </para>
+	 <para>
+	   <code>impurify</code> moves objects in certain special memory
+	   areas into the regular dynamic heap, where they will be scanned
+	   by the GC.
+	 </para>
+      </listitem>
+      </varlistentry>
+
+     <varlistentry>
+        <term><varname>mode</varname></term>
+        <listitem>
+          <para>
+	    A number specifying the mode (permission bits) of the output file.
+	  </para>
+      </listitem>
+      </varlistentry>
+
+     <varlistentry>
+        <term><varname>prepend-kernel</varname></term>
+        <listitem>
+          <para>Specifies the file to prepend to the saved heap
+	  image.  A value of <literal>t</literal> means to prepend
+	  the lisp kernel binary that the lisp started with.
+	  Otherwise, the value of <literal>:prepend-kernel</literal>
+	  should be a pathname designator for the file to be
+	  prepended.
+         </para>
+	 <para>
+	   If the prepended file is execuatable, its execute
+	   mode bits will be copied to the output file.
+	 </para>
+	 <para>
+	   This argument can be used to prepend any kind of file to
+	   the saved heap image.  This can be useful in some special
+	   cases.
+	 </para>	   
+      </listitem>
+      </varlistentry>
+     <varlistentry>
         <term><varname>native</varname></term>
         <listitem>
           <para>If true, saves the image as a native (ELF, Mach-O, PE)
