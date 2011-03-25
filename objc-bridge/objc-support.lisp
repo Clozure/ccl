@@ -317,8 +317,21 @@
 
 
 (defun lisp-string-from-nsstring (nsstring)
-  ;; The value returned by #/UTF8String is autoreleased.
-  (%get-utf-8-cstring (#/UTF8String nsstring)))
+  (with-autorelease-pool
+      ;; It's not clear that it's even possible to lose information
+      ;; when converting to UTF-8, but allow lossage to occur, just in
+      ;; case.
+      (let* ((data (#/dataUsingEncoding:allowLossyConversion:
+                    nsstring #$NSUTF8StringEncoding t))
+             (len (#/length data)))
+        (if (= len 0)
+          ""
+          (let* ((bytes (#/bytes data))
+                 (nchars (utf-8-length-of-memory-encoding bytes len 0))
+                 (string (make-string nchars)))
+            (utf-8-memory-decode bytes len 0 string)
+            string)))))
+
 
 
      
