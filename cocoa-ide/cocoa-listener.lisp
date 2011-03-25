@@ -863,7 +863,7 @@
                                     &key eof-value)
   (ccl::read-toplevel-form (underlying-input-stream s) :eof-value eof-value))
 
-(defmethod enqueue-toplevel-form ((s deferred-cocoa-listener-input-stream) string &rest args)
+(defmethod enqueue-toplevel-form ((s deferred-cocoa-listener-input-stream) string &rest args &key &allow-other-keys)
   (apply #'enqueue-toplevel-form (underlying-input-stream s) string args))
 
 (defmethod enqueue-listener-input ((s deferred-cocoa-listener-input-stream) string)
