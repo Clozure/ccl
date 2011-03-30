@@ -267,7 +267,8 @@ NSTableDataSource methods can be defined.
     (or (svref arr i)
 	(setf (svref arr i)
 	      (let ((li (lisp-inspector ii))
-		    (inspector::*inspector-disassembly* t))
+		    (inspector::*inspector-disassembly* t)
+		    (*print-length* 20))
 		(multiple-value-bind (child label-string value-string) (inspector::inspector-line li i)
 		  (make-inspector-item child (or label-string "") (or value-string ""))))))))
 
