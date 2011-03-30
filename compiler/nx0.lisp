@@ -1933,6 +1933,8 @@ Or something. Right? ~s ~s" var varbits))
       (when (and (eq (car decl) sym)
                  (eq (cadr decl) 'inline))
          (return-from nx-declared-notinline-p (eq (cddr decl) 'notinline))))
+    (when (assq sym (lexenv.functions env))
+      (return nil))
     (setq env (lexenv.parent-env env))))
 
 
