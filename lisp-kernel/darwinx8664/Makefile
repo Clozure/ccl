@@ -18,8 +18,8 @@ SVN_REVISION=$(shell svnversion || echo "unknown")
 
 SDKROOT=/
 OSVERSION=10.5
-#SDKROOT=/Developer/SDKs/MacOSX10.6.sdk
-#OSVERSION=10.6
+SDKROOT=/Developer/SDKs/MacOSX10.6.sdk
+OSVERSION=10.6
 
 MDYNAMIC_NO_PIC = $(shell ($(CC) --help -v 2>&1 | grep -q -e "-mdynamic-no-pic") && /bin/echo "-mdynamic-no-pic")
 
@@ -31,7 +31,8 @@ CC=cc
 ### Current ld64 bugs include the claim that 0x1000 isn't a power of 2.
 ### Gosh.  I always thought that it was.  Go know, right ?
 LDFLAGS = -macosx_version_min $(OSVERSION) -arch x86_64 -dynamic \
-	  -o $@ -e start -pagezero_size 0x11000 -seg1addr 0x00011000
+	  -o $@ -e start -pagezero_size 0x11000 -seg1addr 0x00011000 \
+	  -exported_symbols_list exports
 
 AS = as
 M4 = gm4
