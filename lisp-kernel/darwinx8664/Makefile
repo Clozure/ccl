@@ -18,8 +18,6 @@ SVN_REVISION=$(shell svnversion || echo "unknown")
 
 SDKROOT=/
 OSVERSION=10.5
-SDKROOT=/Developer/SDKs/MacOSX10.6.sdk
-OSVERSION=10.6
 
 MDYNAMIC_NO_PIC = $(shell ($(CC) --help -v 2>&1 | grep -q -e "-mdynamic-no-pic") && /bin/echo "-mdynamic-no-pic")
 
