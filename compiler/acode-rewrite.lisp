@@ -26,7 +26,6 @@
 
 ;;; Rewrite acode trees.
 
-;(next-nx-defops)
 (defvar *acode-rewrite-functions* nil)
 (let* ((newsize (%i+ (next-nx-num-ops) 10))
        (old *acode-rewrite-functions*)
@@ -181,6 +180,14 @@
     (when intersection
       (setf (car type-cons) intersection))))
 
+
+#||
+(defun acode-set-immediate-type (type-cons acode-expr)
+  (let* ((type 
+          (cond ((nx-null acode-expr) 'null)
+                ((nx-t acode-expr) '(eql t))
+                ((
+||#
          
     
   
@@ -290,5 +297,48 @@
   (acode-type-merge type-cons 'simple-vector))
 
                    
+(def-acode-rewrite acode-rewrite-%gvector %gvector type-cons (arglist)
+  (let* ((all-args (append (car arglist) (reverse (cadr arglist)))))
+    (dolist (arg all-args)
+      (rewrite-acode-form arg t))
+    ;; Could try to map constant subtag to type here
+    ))
+
+(def-acode-rewrite acode-rewrite-char-code (%char-code char-code) type-cons (&whole w c)
+  (rewrite-acode-form c t)
+  (let* ((char (acode-constant-p c)))
+    (when char
+      (let* ((code (char-code char)))
+        (setf (car w) (%nx1-operator fixnum)
+              (cadr w) code
+              (cddr w) nil)))
+    (acode-type-merge type-cons 'valid-char-code)))
+
+(def-acode-rewrite acode-rewrite-%ilogior2 %ilogior2 type-cons (&whole w x y) 
+  (acode-constant-fold-numeric-binop type-cons w x y 'logior)
+  (acode-type-merge type-cons `(or ,(acode-form-type x *acode-rewrite-trust-declarations*) ,(acode-form-type y *acode-rewrite-trust-declarations*))))
+
+(def-acode-rewrite acode-rewrite-%ilogand2 %ilogand2 type-cons (&whole w x y) 
+  (acode-constant-fold-numeric-binop type-cons w x y 'logand)
+  (acode-type-merge type-cons `(and ,(acode-form-type x *acode-rewrite-trust-declarations*) ,(acode-form-type y *acode-rewrite-trust-declarations*))))
+
+(def-acode-rewrite acode-rewrite-%ilogxor %ilogxor2 type-cons (&whole w x y) 
+  (acode-constant-fold-numeric-binop type-cons w x y 'logxor))
+    
+(def-acode-rewrite acode-rewrite-%ineg %ineg type-cons (&whole w x)
+  (rewrite-acode-form x 'fixnum)
+  (let* ((val (acode-fixnum-form-p x))
+         (negated (if val (- val))))
+    (if negated
+      (setf (acode-operator w) (if (typep negated *nx-target-fixnum-type*)
+                                 (%nx1-operator fixnum)
+                                 (%nx1-operator immediate))
+            (cadr w) negated
+            (cddr w) nil))))
+
+            
+      
+    
+    
         
         
