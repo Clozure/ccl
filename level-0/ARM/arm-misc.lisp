@@ -687,6 +687,18 @@
   (str temp0 (:@ arg_z (:$ arm::macptr.address)))
   (bx lr))
 
+(defarmlapfunction %ivector-from-macptr ((ptr arg_z))
+  ;; Assuming that PTR points to the first byte of vector data
+  ;; (in an ivector allocated on a stack or in foreign memory),
+  ;; return the (tagged) ivector.  Crash and burn if the assumption
+  ;; is incorrect.
+  (macptr-ptr imm0 arg_z)
+  (and imm1 imm0 (:$ arm::node-size))
+  (eor imm1 imm1 (:$ arm::node-size))
+  (add imm0 imm0 (:$ (- arm::fulltag-misc arm::node-size)))
+  (sub arg_z imm0 imm1)
+  (bx lr))
+
 (defun get-saved-register-values ()
   (values))
 
