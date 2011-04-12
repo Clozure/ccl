@@ -916,6 +916,21 @@
   (std imm0 ppc64::macptr.address ptr)
   (blr))
 
+#+ppc32-target
+(defppclapfunction %ivector-from-macptr ((ptr arg_z))
+  (macptr-ptr imm0 ptr)
+  (andi. imm1 imm0 target::node-size)
+  (xori imm1 imm1 target::node-size)
+  (addi imm0 imm0 (- target::fulltag-misc target::node-size))
+  (sub arg_z imm0 imm1)
+  (blr))
+
+#+ppc64-target
+(defppclapfunction %ivector-from-macptr ((ptr arg_z))
+  (macptr-ptr imm0 ptr)
+  (addi arg_z imm0 (- target::fulltag-misc target::node-size))
+  (blr))
+
 (defppclapfunction get-saved-register-values ()
   (vpush save0)
   (vpush save1)
