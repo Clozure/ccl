@@ -175,7 +175,7 @@
       (idx :u32const))
      ((low (:u32 #.arm::imm0))
       (high (:u32 #.arm::imm1))))
-  (ldrd low (:@ v (:$ idx)))
+  (ldrd low (:@ v (:$ (:apply + arm::misc-dfloat-offset (:apply ash idx 3)))))
   (fmdrr dest low high))
 
 (define-arm-vinsn (misc-set-c-double-float :predicatable)
