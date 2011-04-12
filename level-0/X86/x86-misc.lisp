@@ -603,6 +603,11 @@
   (movq (% imm0) (@ x8664::macptr.address (% ptr)))
   (single-value-return))
 
+(defx86lapfunction %ivector-from-macptr ((ptr arg_z))
+  (macptr-ptr ptr imm0)
+  (lea (@ (- target::fulltag-misc target::node-size) (% imm0)) (% arg_z))
+  (single-value-return))
+
 (defx86lapfunction get-saved-register-values ()
   (movq (% rsp) (% temp0))
   (push (% save0))

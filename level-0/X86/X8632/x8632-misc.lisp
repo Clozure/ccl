@@ -665,6 +665,19 @@
   (movl (% imm0) (@ x8632::macptr.address (% ptr)))
   (single-value-return))
 
+(defx8632lapfunction %ivector-from-macptr ((ptr arg_z))
+  (macptr-ptr ptr imm0)
+  (mark-as-imm temp0)
+  (let ((imm1 temp0))
+    (movl (% imm0) (% imm1))
+    (andl ($ target::node-size) (% imm1))
+    (xorl ($ target::node-size) (% imm1))
+    (addl ($ (- target::fulltag-misc target::node-size)) (% imm0))
+    (subl (% imm1) (% imm0))
+    (mark-as-node imm1))
+  (movl (% imm0) (% arg_z))
+  (single-value-return))
+
 ;;; Sadly, we have no NVRs on x8632.
 (defun get-saved-register-values ()
   (values))
