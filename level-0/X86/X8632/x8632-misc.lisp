@@ -674,7 +674,7 @@
     (xorl ($ target::node-size) (% imm1))
     (addl ($ (- target::fulltag-misc target::node-size)) (% imm0))
     (subl (% imm1) (% imm0))
-    (mark-as-node imm1))
+    (mark-as-node temp0))
   (movl (% imm0) (% arg_z))
   (single-value-return))
 
