@@ -774,7 +774,8 @@ is :UNIX.")
 	(t (report-bad-arg direction '(member :input :output :io :probe))))
       (check-pathname-not-wild filename) ;; probe-file-x misses wild versions....
       (multiple-value-bind (native-truename kind)(probe-file-x filename)
-	(if native-truename
+       (tagbody retry
+        (if native-truename
 	  (if (eq kind :directory)
 	    (if (eq direction :probe)
 	      (return-from open nil)
@@ -795,10 +796,18 @@ is :UNIX.")
 	      (return-from open nil)))
 	  (if (setq filename (if-does-not-exist if-does-not-exist filename))
             (progn
-              (unless (setq native-truename (%create-file filename :if-exists if-exists))
-                (return-from open nil))
+              (unless (setq native-truename (%create-file filename :if-exists (case if-exists
+                                                                                ;; Let %create file handle these cases
+                                                                                ((:error :overwrite) if-exists)
+                                                                                (t nil))))
+                ;; Somebody else created the file while we're trying to create it.
+                (when (null if-exists) (return-from open nil))
+                (multiple-value-setq (native-truename kind) (probe-file-x filename))
+                (unless native-truename ;; huh?  Perhaps it disappeared again?
+                  (error "Attempt to create ~s failed unexpectedly" filename))
+                (go retry))
               (setq created t))
-	    (return-from open nil)))
+	    (return-from open nil))))
 	(let* ((fd (fd-open native-truename (case direction
 					      ((:probe :input) #$O_RDONLY)
 					      (:output #$O_WRONLY)
