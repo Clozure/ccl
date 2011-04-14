@@ -591,6 +591,8 @@
       (when (and (eq (car decl) sym)
                  (eq (cadr decl) 'inline))
         (return-from nx-declared-inline-p (eq (cddr decl) 'inline))))
+    (when (assq sym (lexenv.functions env))
+      (return nil))
     (setq env (lexenv.parent-env env))))
 
 (defun report-compile-time-argument-mismatch (condition stream &aux (type (compiler-warning-warning-type condition)))
