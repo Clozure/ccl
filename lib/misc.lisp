@@ -257,6 +257,10 @@ are running on, or NIL if we can't find any useful information."
 (defmethod documentation ((f function) (doc-type (eql 'function)))
   (documentation f t))
 
+(defmethod documentation ((slot slot-definition) (doc-type t))
+   (when (or (eq doc-type t)(eq doc-type 'slot-definition))
+     (slot-definition-documentation slot)))
+
 (defmethod (setf documentation) ((new t)
 				 (f function)
 				 (doc-type (eql 'function)))
