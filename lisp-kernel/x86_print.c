@@ -159,7 +159,14 @@ sprint_specializers_list(LispObj o, int depth)
     if (o != lisp_nil) {
       the_car = car(o);
       if (fulltag_of(the_car) == fulltag_misc) {
-        sprint_lisp_object(deref(deref(the_car,3), 4), depth);
+	LispObj header = header_of(the_car);
+	unsigned subtag = header_subtag(header);
+
+	if (subtag == subtag_instance) {
+	  sprint_lisp_object(deref(deref(the_car,3), 4), depth);
+	} else {
+	  sprint_lisp_object(the_car, depth);
+	}
       } else {
         sprint_lisp_object(the_car, depth);
       }
