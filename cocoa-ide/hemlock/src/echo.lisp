@@ -447,22 +447,27 @@
 
 ;;;; Package names.
 (defun make-package-string-table ()
-  (let ((names ()))
-    (dolist (p (list-all-packages))
-      (let* ((name (package-name p)))
-        (push (cons name name) names)
-        (dolist (nick (package-nicknames p))
-          (push (cons nick name) names))))
-    (make-string-table :initial-contents names)))
+  (let ((table (make-string-table)))
+    (loop for package in (list-all-packages)
+      do (setf (getstring (package-name package) table) package)
+      do (loop for nick in (package-nicknames package)
+           do (setf (getstring nick table) package)))
+    table))
 
-#||
 (defun prompt-for-package (&key (must-exist t)
-				(default nil defaultp)
+				default
 				default-string
 				(prompt "Package Name:")
 				(help "Type a package name."))
-)
-||#
+  (parse-for-something
+   :verification-function #'keyword-verification-function
+   :type :keyword
+   :string-tables (list (make-package-string-table))
+   :value-must-exist must-exist
+   :default-string default-string
+   :default default
+   :prompt prompt
+   :help help))
 
 
 ;;;; Yes-or-no and y-or-n prompting.

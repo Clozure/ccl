@@ -294,6 +294,7 @@
 (bind-key "Help on Parse" #k"home" :mode "Echo Area")
 (bind-key "Help on Parse" #k"control-_" :mode "Echo Area")
 (bind-key "Help on Parse" #k"control-h" :mode "Echo Area")
+(bind-key "Help on Parse" #k"?" :mode "Echo Area")
 
 (bind-key "Complete Keyword" #k"escape" :mode "Echo Area")
 (bind-key "Complete Keyword" #k"tab" :mode "Echo Area")

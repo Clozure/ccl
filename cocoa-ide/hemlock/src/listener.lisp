@@ -55,8 +55,18 @@
       :buffer buffer
       :value (or name (package-name *package*)))))
       
+(defcommand "Set Default Package" (p)
+  "Set the package to use for forms in this buffer that are
+  not preceeded by an in-package or modeline package"
+  (declare (ignore p))
+  (let ((package (prompt-for-package
+                  :must-exist t
+                  :prompt "Package: "
+                  :default (variable-value 'default-package :buffer (current-buffer))
+                  :help "Package to use when no in-package is specified")))
+    (setf (variable-value 'default-package :buffer (current-buffer)) package)))
 
-
+
 ;;;; Listener Mode Interaction.
 
 
@@ -350,7 +360,7 @@ between the region's start and end, and if there are no ill-formed expressions i
         (hemlock-ext:send-string-to-listener (current-buffer) *pop-string*)
         (delete-next-character-command p)))))
 
-
+
 ;;;; General interactive commands used in eval and typescript buffers.
 
 (defhvar "Interactive History Length"
@@ -528,7 +538,7 @@ between the region's start and end, and if there are no ill-formed expressions i
       (setf (last-command-type) :ephemerally-active))))
 
 
-
+
 ;;; Other stuff.
 
 (defmode "Editor" :hidden t)
@@ -701,7 +711,6 @@ between the region's start and end, and if there are no ill-formed expressions i
 
 
 
-
 ;;;; Lisp documentation stuff.
 
 ;;; FUNCTION-TO-DESCRIBE is used in "Editor Describe Function Call" and

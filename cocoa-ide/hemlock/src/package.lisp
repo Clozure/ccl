@@ -246,6 +246,7 @@
    #:beep
    #:command-case
    #:prompt-for-buffer
+   #:prompt-for-package
    #:prompt-for-key-event
    #:prompt-for-key
    #:prompt-for-file
@@ -522,7 +523,7 @@
    #:eps-parse-type #:eps-parse-starting-mark #:eps-parse-input-region
    #:eps-parse-verification-function #:eps-parse-string-tables
    #:eps-parse-default #:eps-parse-help #:eps-parse-key-handler
-   #:prompt-for-buffer #:prompt-for-file #:prompt-for-integer
+   #:prompt-for-buffer #:prompt-for-package #:prompt-for-file #:prompt-for-integer
    #:prompt-for-keyword #:prompt-for-expression #:prompt-for-string
    #:prompt-for-variable #:prompt-for-yes-or-no #:prompt-for-y-or-n
    #:prompt-for-key-event #:prompt-for-key
