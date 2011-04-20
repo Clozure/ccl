@@ -295,6 +295,7 @@
 (bind-key "Help on Parse" #k"control-_" :mode "Echo Area")
 
 (bind-key "Complete Keyword" #k"escape" :mode "Echo Area")
+(bind-key "Complete Keyword" #k"tab" :mode "Echo Area")
 (bind-key "Complete Field" #k"space" :mode "Echo Area")
 (bind-key "Confirm Parse" #k"return" :mode "Echo Area")
 
@@ -302,7 +303,6 @@
 ;;; 
 ;;(bind-key "Kill Parse" #k"control-u" :mode "Echo Area")
 (bind-key "Insert Parse Default" #k"control-i" :mode "Echo Area")
-(bind-key "Insert Parse Default" #k"tab" :mode "Echo Area")
 (bind-key "Echo Area Delete Previous Character" #k"delete" :mode "Echo Area")
 (bind-key "Echo Area Delete Previous Character" #k"backspace" :mode "Echo Area")
 (bind-key "Echo Area Kill Previous Word" #k"meta-h" :mode "Echo Area")
