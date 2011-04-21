@@ -1252,7 +1252,7 @@ mark_memoized_area(area *a, natural num_memo_dnodes)
 
      Some headers are "interesting", to the forwarder if not to us. 
 
-     */
+  */
 
   /*
     We need to ensure that there are no bits set at or beyond
@@ -1260,7 +1260,7 @@ mark_memoized_area(area *a, natural num_memo_dnodes)
     tenures/untenures things.)  We find bits by grabbing a fullword at
     a time and doing a cntlzw instruction; and don't want to have to
     check for (< memo_dnode num_memo_dnodes) in the loop.
-    */
+  */
 
   {
     natural 
@@ -1297,6 +1297,7 @@ mark_memoized_area(area *a, natural num_memo_dnodes)
       x2 = *p++;
       bits &= ~(BIT0_MASK >> bitidx);
 
+
       if (hashp) {
         Boolean force_x1 = false;
         if ((memo_dnode >= hash_dnode_limit) && (mark_method == 3)) {
@@ -1328,11 +1329,23 @@ mark_memoized_area(area *a, natural num_memo_dnodes)
         if (hashp) Bug(NULL, "header inside hash vector?");
         hash_table_vector_header *hp = (hash_table_vector_header *)(p - 2);
         if (hp->flags & nhash_weak_mask) {
-          /* If header_count is odd, this cuts off the last header field */
-          /* That case is handled specially above */
-          hash_dnode_limit = memo_dnode + ((hash_table_vector_header_count) >>1);
-          hashp = hp;
-          mark_method = 3;
+          /* Work around the issue that seems to cause ticket:817,
+             which is that tenured hash vectors that are weak on value
+             aren't always maintained on GCweakvll.  If they aren't and
+             we process them weakly here, nothing will delete the unreferenced
+             elements. */
+          if (!(hp->flags & nhash_weak_value_mask)) {
+            /* If header_count is odd, this cuts off the last header field */
+            /* That case is handled specially above */
+            hash_dnode_limit = memo_dnode + ((hash_table_vector_header_count) >>1);
+            hashp = hp;
+            mark_method = 3;
+
+
+
+
+
+          }
         }
       }
 

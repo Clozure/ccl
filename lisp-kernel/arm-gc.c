@@ -885,11 +885,14 @@ mark_memoized_area(area *a, natural num_memo_dnodes)
         if (hashp) Bug(NULL, "header inside hash vector?");
         hash_table_vector_header *hp = (hash_table_vector_header *)(p - 2);
         if (hp->flags & nhash_weak_mask) {
-          /* If header_count is odd, this cuts off the last header field */
-          /* That case is handled specially above */
-          hash_dnode_limit = memo_dnode + ((hash_table_vector_header_count) >>1);
-          hashp = hp;
-          mark_method = 3;
+          /* Workaround for ticket:817 */
+          if (!(hp->flags & nhash_weak_value_mask)) {
+            /* If header_count is odd, this cuts off the last header field */
+            /* That case is handled specially above */
+            hash_dnode_limit = memo_dnode + ((hash_table_vector_header_count) >>1);
+            hashp = hp;
+            mark_method = 3;
+          }
         }
       }
 
