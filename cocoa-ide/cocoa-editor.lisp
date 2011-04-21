@@ -1538,18 +1538,21 @@
                   (point (hi::buffer-point buffer))
                   (atom-mode (or (eql g #$NSSelectByParagraph)
                                  (and (eql index (#/length textstorage))
-                                      (let* ((event (#/currentEvent (#/window self))))
-                                        (and (eql (#/type event) #$NSLeftMouseDown)
+                                      (let* ((event (#/currentEvent (#/window self)))
+                                             (type (#/type event)))
+                                        (and (or (eql type #$NSLeftMouseDown) (eql type #$NSLeftMouseUp))
                                              (> (#/clickCount event) 2)))))))
              (hi::with-mark ((mark point))
 	       (let ((region (selection-for-click mark atom-mode)))
 		 (when region
 		   ;; Act as if we started the selection at the other end, so the heuristic
-		   ;; in #/selectionRangeForProposedRange does the right thing.  ref bug #565.
-		   (cond ((hi::mark= (hi::region-start region) mark)
-			  (hi::move-mark point (hi::region-end region)))
-			 ((hi::mark= (hi::region-end region) mark)
-			  (hi::move-mark point (hi::region-start region))))
+		   ;; in #/setSelectedRange does the right thing.  ref bug #565.
+                   ;; However, only do so on mouse up, ref bug #851.
+                   (when (eql (#/type (#/currentEvent (#/window self))) #$NSLeftMouseUp)
+                     (cond ((hi::mark= (hi::region-start region) mark)
+                            (hi::move-mark point (hi::region-end region)))
+                           ((hi::mark= (hi::region-end region) mark)
+                            (hi::move-mark point (hi::region-start region)))))
 		   (let ((start (hi::mark-absolute-position (hi::region-start region)))
 			 (end (hi::mark-absolute-position (hi::region-end region))))
 		     (assert (<= start end))
