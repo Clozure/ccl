@@ -81,19 +81,7 @@
              (type-of (acode-operand 0 operands)))
             (t t)))))
 
-(defun acode-constant-p (form)
-  ;; This returns (values constant-value constantp); some code
-  ;; may need to check constantp if constant-value is nil.
-  (let* ((form (acode-unwrapped-form-value form))
-         (op (if (acode-p form) (acode-operator form))))
-    (cond ((eql op (%nx1-operator nil))
-           (values nil t))
-          ((eql op (%nx1-operator t))
-           (values t t))
-          ((or (eql op (%nx1-operator fixnum))
-               (eql op (%nx1-operator immediate)))
-           (values (cadr form) t))
-          (t (values nil nil)))))
+
 
 
 (defun acode-post-form-typep (form type)
