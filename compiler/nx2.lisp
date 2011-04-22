@@ -278,19 +278,28 @@
                 (%ilogand op operator-id-mask))
          seg vreg xfer forms))
 
-(defun acode-constant-fold-integer-binop (seg vreg xfer x y function)
-  (let* ((const-x (acode-integer-form-p x))
-         (const-y (acode-integer-form-p y))
-         (result (and const-x const-y (ignore-errors (funcall function const-x const-y)))))
-    (when result
-      (backend-use-operator (if (nx1-target-fixnump result)
-                              (%nx1-operator fixnum)
-                              (%nx1-operator immediate))
-                            seg
-                            vreg
-                            xfer
-                            result)
-      t)))
+(defun backend-apply-acode (acode seg vreg xfer)
+  (apply (svref (backend-p2-dispatch *target-backend*)
+                (%ilogand (acode-operator acode) operator-id-mask))
+         seg vreg xfer (acode-operands acode)))
+
+
+
+(defun acode-constant-fold-binop (seg vreg xfer x y function)
+  (multiple-value-bind (x-p const-x) (acode-constant-p x)
+    (when x-p
+      (multiple-value-bind (y-p const-y) (acode-constant-p y)
+        (when y-p
+          (let* ((result (ignore-errors (funcall function const-x const-y))))
+            (when result
+              (backend-use-operator (if (nx1-target-fixnump result)
+                                      (%nx1-operator fixnum)
+                                      (%nx1-operator immediate))
+                                    seg
+                                    vreg
+                                    xfer
+                                    result)
+              t)))))))
 
 ;;; Return non-nil iff we can do something better than a subprim call
 ;;; to .SPbuiltin-ash.
@@ -392,7 +401,7 @@
 
 (defun acode-optimize-logand2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'integer))
   (declare (ignore result-type))        ;see below
-  (or (acode-constant-fold-integer-binop seg vreg xfer num1 num2 'logand)
+  (or (acode-constant-fold-binop seg vreg xfer num1 num2 'logand)
       (let* ((unsigned-natural-type *nx-target-natural-type*)
              (target-fixnum-type *nx-target-fixnum-type*))
         (cond ((eql (acode-fixnum-form-p num1) -1)
@@ -435,7 +444,7 @@
 
 (defun acode-optimize-logior2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'integer))
   (declare (ignorable result-type))
-  (or (acode-constant-fold-integer-binop seg vreg xfer num1 num2 'logior)
+  (or (acode-constant-fold-binop seg vreg xfer num1 num2 'logior)
       (let* ((unsigned-natural-type *nx-target-natural-type*)
              (target-fixnum-type *nx-target-fixnum-type*))
         (cond ((eql (acode-fixnum-form-p num1) 0)
@@ -474,7 +483,7 @@
 
 (defun acode-optimize-logxor2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'integer))
   (declare (ignorable result-type))
-  (or (acode-constant-fold-integer-binop seg vreg xfer num1 num2 'logxor)
+  (or (acode-constant-fold-binop seg vreg xfer num1 num2 'logxor)
       (let* ((unsigned-natural-type *nx-target-natural-type*)
              (target-fixnum-type *nx-target-fixnum-type*))
         (cond ((eql (acode-fixnum-form-p num1) 0)
@@ -510,5 +519,185 @@
                                      num2)
                t)
               (t nil)))))
+
+
+
+(defun acode-optimize-add2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'number))
+  (declare (ignorable result-type))
+  (or (acode-constant-fold-binop seg vreg xfer num1 num2 '+)
+      (multiple-value-bind (num1 num2)
+          (nx-binop-numeric-contagion num1 num2 trust-decls)
+        (if (and (acode-form-typep num1 'double-float trust-decls)
+                 (acode-form-typep num2 'double-float trust-decls))
+          (progn
+            (backend-use-operator (%nx1-operator %double-float+-2)
+                                  seg
+                                  vreg
+                                  xfer
+                                  num1
+                                  num2)
+            t)
+          (if (and (acode-form-typep num1 'single-float trust-decls)
+                   (acode-form-typep num2 'single-float trust-decls))
+            (progn
+              (backend-use-operator (%nx1-operator %short-float+-2)
+                                    seg
+                                    vreg
+                                    xfer
+                                    num1
+                                    num2)
+              t)
+            (if (and (acode-form-typep num1 *nx-target-fixnum-type* trust-decls)
+                     (acode-form-typep num2 *nx-target-fixnum-type* trust-decls))
+              (progn
+                (backend-use-operator (%nx1-operator %i+)
+                                      seg
+                                      vreg
+                                      xfer
+                                      num1
+                                      num2
+                                      t)
+                t)))))))
+
+(defun acode-optimize-sub2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'number))
+  (declare (ignorable result-type))
+  (or (acode-constant-fold-binop seg vreg xfer num1 num2 '-)
+      (multiple-value-bind (num1 num2)
+          (nx-binop-numeric-contagion num1 num2 trust-decls)
+        (if (and (acode-form-typep num1 'double-float trust-decls)
+                 (acode-form-typep num2 'double-float trust-decls))
+          (progn
+            (backend-use-operator (%nx1-operator %double-float--2)
+                                  seg
+                                  vreg
+                                  xfer
+                                  num1
+                                  num2)
+            t)
+          (if (and (acode-form-typep num1 'single-float trust-decls)
+                   (acode-form-typep num2 'single-float trust-decls))
+            (progn
+              (backend-use-operator (%nx1-operator %short-float--2)
+                                    seg
+                                    vreg
+                                    xfer
+                                    num1
+                                    num2)
+              t)
+            (if (and (acode-form-typep num1 *nx-target-fixnum-type* trust-decls)
+                     (acode-form-typep num2 *nx-target-fixnum-type* trust-decls))
+              (progn
+                (backend-use-operator (%nx1-operator %i-)
+                                      seg
+                                      vreg
+                                      xfer
+                                      num1
+                                      num2
+                                      t)
+                t)))))))
+        
+
+        
+(defun acode-optimize-mul2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'number))
+  (declare (ignorable result-type))
+  (or (acode-constant-fold-binop seg vreg xfer num1 num2 '*)
+      (let* ((f1 (acode-fixnum-form-p num1)))
+        (when f1
+          (cond ((and (eql f1 1)
+                      (acode-form-typep num2 'number trust-decls))
+                 (backend-apply-acode num2 seg vreg xfer)
+                 t)
+                ((and (eql (logcount f1) 1)
+                      (acode-form-typep num2 *nx-target-fixnum-type* trust-decls))
+                 (backend-use-operator (%nx1-operator ash)
+                                       seg
+                                       vreg
+                                       xfer
+                                       num2
+                                       (make-acode (%nx1-operator fixnum)
+                                                   (1- (integer-length f1))))
+                 t))))
+      (let* ((f2 (acode-fixnum-form-p num2)))
+        (when f2
+          (cond ((and (eql f2 1)
+                      (acode-form-typep num1 'number trust-decls))
+                 (backend-apply-acode num1 seg vreg xfer)
+                 t)
+                ((and (eql (logcount f2) 1) (acode-form-typep num1 *nx-target-fixnum-type* trust-decls))
+                 (backend-use-operator (%nx1-operator ash)
+                                       seg
+                                       vreg
+                                       xfer
+                                       num1
+                                       (make-acode (%nx1-operator fixnum)
+                                                   (1- (integer-length f2))))
+                 t))))
+      (multiple-value-bind (form1 form2)
+          (nx-binop-numeric-contagion num1 num2 trust-decls)
+        (if (and (acode-form-typep form1 'double-float trust-decls)
+                 (acode-form-typep form2 'double-float trust-decls))
+          (progn
+            (backend-use-operator (%nx1-operator %double-float*-2)
+                                  seg
+                                  vreg
+                                  xfer
+                                  form1
+                                  form2)
+            t)
+          (if (and (acode-form-typep form1 'single-float trust-decls)
+                   (acode-form-typep form2 'single-float trust-decls))
+            (progn
+              (backend-use-operator (%nx1-operator %short-float*-2)
+                                    seg
+                                    vreg
+                                    xfer
+                                    form1
+                                    form2)
+              t))))))
+
+(defun acode-optimize-div2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'number))
+  (declare (ignorable result-type))
+  (or (acode-constant-fold-binop seg vreg xfer num1 num2 '/)
+      (multiple-value-bind (num1 num2)
+          (nx-binop-numeric-contagion num1 num2 trust-decls)
+        (if (and (acode-form-typep num1 'double-float trust-decls)
+                 (acode-form-typep num2 'double-float trust-decls))
+          (progn
+            (backend-use-operator (%nx1-operator %double-float/-2)
+                                  seg
+                                  vreg
+                                  xfer
+                                  num1
+                                  num2)
+            t)
+          (if (and (acode-form-typep num1 'single-float trust-decls)
+                   (acode-form-typep num2 'single-float trust-decls))
+            (progn
+              (backend-use-operator (%nx1-operator %short-float/-2)
+                                    seg
+                                    vreg
+                                    xfer
+                                    num1
+                                    num2)
+              t)
+            (let* ((f2 (acode-fixnum-form-p num2))
+                   (unwrapped (acode-unwrapped-form num1))
+                   (f1 nil)
+                   (f1/f2 nil))
+              (if (and f2
+                       (not (zerop f2))
+                       (acode-p unwrapped)
+                       (or (eq (acode-operator unwrapped) (%nx1-operator mul2))
+                           (eq (acode-operator unwrapped) (%nx1-operator %i*)))
+                       (setq f1 (acode-fixnum-form-p (cadr unwrapped)))
+                       (typep (setq f1/f2 (/ f1 f2)) 'fixnum))
+                (progn
+                  (backend-use-operator (%nx1-operator mul2)
+                                        seg
+                                        vreg
+                                        xfer
+                                        (make-acode (%nx1-operator fixnum) f1/f2)
+                                        (caddr unwrapped))
+                  t))))))))
                  
                 
