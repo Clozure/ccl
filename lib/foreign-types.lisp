@@ -1361,7 +1361,9 @@ Which one name refers to depends on foreign-type-spec in the obvious manner."
                   (foreign-pointer-type-to type)))
             (size (foreign-type-bits to))
             (bit-offset `(the fixnum (* ,size (the fixnum ,index-form)))))
-       (invoke-foreign-type-method :extract-gen to base-form bit-offset)))))
+       (invoke-foreign-type-method :extract-gen to base-form bit-offset)))
+    (foreign-type
+     (%foreign-array-access-form base-form (make-foreign-pointer-type :to type) index-form))))
 
 
 
