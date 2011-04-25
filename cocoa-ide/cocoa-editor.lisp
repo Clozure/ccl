@@ -1573,17 +1573,21 @@
 
 ;; Return nil to use the default Cocoa selection, which will be word for double-click, line for triple.
 (defun selection-for-click (mark paragraph-mode-p)
-  (unless paragraph-mode-p
-    ;; Select a word if near one
-    (hi::with-mark ((fwd mark)
-		    (bwd mark))
-      (or (hi::find-attribute fwd :word-delimiter)
-	  (hi::buffer-end fwd))
-      (or (hi::reverse-find-attribute bwd :word-delimiter)
-	  (hi::buffer-start bwd))
-      (unless (hi::mark= bwd fwd)
-	(return-from selection-for-click (hi::region bwd fwd)))))
+  ;; Handle lisp mode specially, otherwise just go with default Cocoa behavior
   (when (string= (hi::buffer-major-mode (hi::mark-buffer mark)) "Lisp") ;; gag
+    (unless paragraph-mode-p
+      ;; Select a word if near one
+      (hi:with-mark ((fwd mark)
+                     (bwd mark))
+        (or (hi:find-attribute  fwd :word-delimiter)
+            (hi:buffer-end fwd))
+        (or (hi:reverse-find-attribute bwd :word-delimiter)
+            (hi:buffer-start bwd))
+        (unless (hi:mark= bwd fwd)
+          (when (eq (hi:character-attribute :lisp-syntax (hi:previous-character bwd)) :prefix-dispatch)
+            ;; let :prefix-dispatch take on the attribute of the following char, which is a word constituent
+            (hi:mark-before bwd))
+          (return-from selection-for-click (hi::region bwd fwd)))))
     (hemlock::pre-command-parse-check mark)
     (hemlock::form-region-at-mark mark)))
 

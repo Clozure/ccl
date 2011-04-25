@@ -768,7 +768,7 @@
   ;; If in-comment-p is true, tries not to go past a #|.
   (with-mark ((m mark))
     (when (%backward-form-at-mark m in-comment-p)
-      (loop while (test-char (previous-character m) :lisp-syntax :prefix) do (mark-before m))
+      (loop while (test-char (previous-character m) :lisp-syntax (or :prefix :prefix-dispatch)) do (mark-before m))
       (move-mark mark m))))
 
 (defun %forward-form-at-mark (mark in-comment-p)
@@ -788,13 +788,16 @@
        (%forward-symbol-at-mark mark in-comment-p)))
     (:prefix-dispatch
      (mark-after mark)
-     (if (test-char (next-character mark) :lisp-syntax :symbol-quote)
-       (progn
-         (mark-after mark)
-         (%forward-nesting-comment-at-mark mark 1))
-       (progn
-         (mark-before mark)
-         (%forward-symbol-at-mark mark in-comment-p))))
+     (case (character-attribute :lisp-syntax (next-character mark))
+       (:symbol-quote
+        (mark-after mark)
+        (%forward-nesting-comment-at-mark mark 1))
+       (:prefix
+        (mark-after mark)
+        (%forward-form-at-mark mark in-comment-p))
+       (t
+        (mark-before mark)
+        (%forward-symbol-at-mark mark in-comment-p))))
     (:string-quote
      (%forward-string-at-mark mark))
     (:constituent
@@ -923,26 +926,42 @@
                (return mark)))))))
 
 
+(defun %scan-to-form (m forwardp)
+  (if forwardp
+    ;; Stop at :prefix-dispatch if it is not followed by :prefix. If it's followed by :prefix,
+    ;; assume it has the semantics of :prefix and skip it.
+    (loop while (scan-direction-valid m t :lisp-syntax
+                                      (or :open-paren :close-paren
+                                          :char-quote :string-quote :symbol-quote
+                                          :prefix-dispatch :constituent))
+      do (unless (and (test-char (next-character m) :lisp-syntax :prefix-dispatch)
+                      (mark-after m))
+           (return t))
+      do (unless (test-char (next-character m) :lisp-syntax :prefix)
+           (mark-before m)
+           (return t)))
+    (scan-direction-valid m nil :lisp-syntax
+                          (or :open-paren :close-paren
+                              :char-quote :string-quote :symbol-quote
+                              :prefix-dispatch :constituent))))
+
 ;; %FORM-OFFSET
 
 (defmacro %form-offset (mark forwardp)
   `(if (valid-spot ,mark ,forwardp)
      (with-mark ((m ,mark))
-       (when (scan-direction-valid m ,forwardp :lisp-syntax
-                                   (or :open-paren :close-paren
-                                       :char-quote :string-quote :symbol-quote
-                                       :prefix-dispatch :constituent))
+       (when (%scan-to-form m ,forwardp)
          (ecase (character-attribute :lisp-syntax (direction-char m ,forwardp))
            (:open-paren
             (when ,(if forwardp `(list-offset m 1) `(mark-before m))
               ,(unless forwardp
-                 '(scan-direction m nil :lisp-syntax (not :prefix)))
+                 '(scan-direction m nil :lisp-syntax (not (or :prefix-dispatch :prefix))))
               (move-mark ,mark m)
               t))
            (:close-paren
             (when ,(if forwardp `(mark-after m) `(list-offset m -1))
               ,(unless forwardp
-                 '(scan-direction m nil :lisp-syntax (not :prefix)))
+                 '(scan-direction m nil :lisp-syntax (not (or :prefix-dispatch :prefix))))
               (move-mark ,mark m)
               t))
            ((:constituent :char-quote :symbol-quote :prefix-dispatch)
