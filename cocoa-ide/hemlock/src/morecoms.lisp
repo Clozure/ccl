@@ -47,6 +47,30 @@ i-search, and prompted input (e.g. m-x)"
   (declare (ignore p))
   (abort-to-toplevel))
 
+
+(defcommand "Insert Date and Time" (p)
+  "Inserts the current date and time.  With prefix argument, inserts date only"
+  (multiple-value-bind (date time) (current-date-time-strings)
+    (let ((point (current-point)))
+      (push-new-buffer-mark point) ;; leave mark at beginning
+      (insert-string point (if p date (format nil "~a ~a" date time))))))
+
+(defcommand "Insert Date" (p)
+  "Inserts the current date.  With prefix argument, inserts date and time"
+  (multiple-value-bind (date time) (current-date-time-strings)
+    (let ((point (current-point)))
+      (push-new-buffer-mark point) ;; leave mark at beginning
+      (insert-string point (if p (format nil "~a ~a" date time) date)))))
+
+(defun current-date-time-strings ()
+  (multiple-value-bind (sec min hour day month year) (get-decoded-time)
+    (values (format nil "~2,'0D-~A-~4D"
+                    day (svref '#("Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug"
+                                  "Sep" "Oct" "Nov" "Dec")
+                               (1- month))
+                    year)
+            (format nil "~2,'0D:~2,'0D:~2,'0D" hour min sec))))
+    
 ;;;; Casing commands...
 
 (defcommand "Uppercase Word" (p)

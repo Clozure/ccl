@@ -64,7 +64,9 @@
 (bind-key "Select Previous Line" #k"shift-uparrow")
 (bind-key "Query Replace" #k"meta-%")
 (bind-key "Reverse Incremental Search" #k"control-r")
+(bind-key "Reverse Incremental Search" #k"control-R")
 (bind-key "Incremental Search" #k"control-s")
+(bind-key "Incremental Search" #k"control-S")
 (bind-key "Forward Search" #k"meta-s")
 (bind-key "Reverse Search" #k"meta-r")
 (bind-key "Transpose Characters" #k"control-t")
@@ -84,6 +86,8 @@
 (bind-key "Abort Command" #k"control-x control-g")
 (bind-key "Abort Command" #k"control-x control-G")
 
+;(bind-key "Insert Date" #k"control-x control-d")
+(bind-key "Insert Date and Time" #k"control-x control-d")
 
 (bind-key "Process File Options" #k"control-x m" :global)
 (bind-key "Ensure File Options Line" #k"control-meta-M" :global)
@@ -93,6 +97,7 @@
 (bind-key "Undo" #k"control-\/")
 (bind-key "Describe Key" #k"meta-?")
 (bind-key "What Cursor Position" #k"control-x =")
+(bind-key "What Cursor Position" #k"control-=")
 
 
 #||
@@ -326,7 +331,9 @@
 (bind-key "Illegal" #k"control-meta-l" :mode "Echo Area")
 (bind-key "Illegal" #k"meta-x" :mode "Echo Area")
 (bind-key "Illegal" #k"control-s" :mode "Echo Area")
+(bind-key "Illegal" #k"control-S" :mode "Echo Area")
 (bind-key "Illegal" #k"control-r" :mode "Echo Area")
+(bind-key "Illegal" #k"control-R" :mode "Echo Area")
 (bind-key "Illegal" #k"hyper-t" :mode "Echo Area")
 
 
@@ -917,7 +924,9 @@
       (bind-key "I-Search Self Insert" key :mode "I-Search"))))
 
 (bind-key "I-Search Repeat Forward" #k"control-s" :mode "I-Search")
+(bind-key "I-Search Repeat Forward" #k"control-S" :mode "I-Search")
 (bind-key "I-Search Repeat Backward" #k"control-r" :mode "I-Search")
+(bind-key "I-Search Repeat Backward" #k"control-R" :mode "I-Search")
 (bind-key "I-Search Backup" #k"backspace" :mode "I-Search")
 (bind-key "I-Search Backup" #k"delete" :mode "I-Search")
 (bind-key "I-Search Abort" #k"control-g" :mode "I-Search")

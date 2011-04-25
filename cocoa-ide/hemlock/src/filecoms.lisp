@@ -657,15 +657,3 @@
     (setf (buffer-writable buffer) t)
     (message "Buffer ~S is now writable." (buffer-name buffer))))
 
-
-
-
-(defun universal-time-to-string (ut)
-  (multiple-value-bind (sec min hour day month year)
-		       (decode-universal-time ut)
-    (format nil "~2,'0D-~A-~2,'0D ~2,'0D:~2,'0D:~2,'0D"
-	    day (svref '#("Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug"
-			  "Sep" "Oct" "Nov" "Dec")
-		       (1- month))
-	    (rem year 100)
-	    hour min sec)))
