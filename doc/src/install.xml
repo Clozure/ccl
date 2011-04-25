@@ -557,6 +557,13 @@ shell&gt;<replaceable>ccl</replaceable> <emphasis>args</emphasis>
       the command line, after the init file (if there is one) is
       loaded and before the toplevel read-eval-print loop is
       entered.</para>
+
+      <para>
+	Finally, any arguments following the pseudo-argument
+	<literal>--</literal> are not processed, and are made
+	available to the lisp as the value of
+	<literal>ccl:*unprocessed-command-line-arguments*</literal>.
+      </para>
   </sect1>
 
   <!-- ============================================================ -->
