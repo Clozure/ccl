@@ -1087,6 +1087,7 @@ Will differ from *compiling-file* during an INCLUDE")
   ;; if source location saving is off, both values are NIL, so this will do nothing,
   ;; don't need to check explicitly.
   (unless (eq *fcomp-loading-toplevel-location* *loading-toplevel-location*)
+    (fcomp-compile-toplevel-forms env)
     (setq *fcomp-loading-toplevel-location* *loading-toplevel-location*)
     (fcomp-output-form $fasl-toplevel-location env *loading-toplevel-location*)))
 
