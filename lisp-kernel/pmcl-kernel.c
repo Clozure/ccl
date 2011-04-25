@@ -1103,6 +1103,10 @@ usage_exit(char *herald, int exit_status, char* other_args)
   fprintf(dbgout, "\t and <image-name> defaults to %s\n", 
 	  default_image_name(program_name));
 #endif
+  fprintf(dbgout, "\n\tAny arguments following the pseudoargument \"--\" are\n");
+  fprintf(dbgout, "\tnot processed and are available to the application as\n");
+  fprintf(dbgout, "\tthe value of CCL:*UNPROCESSED-COMMAND-LINE-ARGUMENTS* .\n");
+
   fprintf(dbgout, "\n");
   _exit(exit_status);
 }
