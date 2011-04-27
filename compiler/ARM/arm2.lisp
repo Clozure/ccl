@@ -5701,17 +5701,18 @@
     (arm2-compare seg vreg xfer form1 form2 cr-bit true-p)))
 
 (defarm2 arm2-numcmp numcmp (seg vreg xfer cc form1 form2)
-  (let* ((name (ecase (cadr cc)
-                 (:eq '=-2)
-                 (:ne '/=-2)
-                 (:lt '<-2)
-                 (:le '<=-2)
-                 (:gt '>-2)
-                 (:ge '>=-2))))
-    (if (or (arm2-explicit-non-fixnum-type-p form1)
-            (arm2-explicit-non-fixnum-type-p form2))
-      (arm2-binary-builtin seg vreg xfer name form1 form2)
-      (arm2-inline-numcmp seg vreg xfer cc name form1 form2))))
+  (or (acode-optimize-numcmp seg vreg xfer cc form1 form2 *arm2-trust-declarations*)
+      (let* ((name (ecase (cadr cc)
+                     (:eq '=-2)
+                     (:ne '/=-2)
+                     (:lt '<-2)
+                     (:le '<=-2)
+                     (:gt '>-2)
+                     (:ge '>=-2))))
+        (if (or (arm2-explicit-non-fixnum-type-p form1)
+                (arm2-explicit-non-fixnum-type-p form2))
+          (arm2-binary-builtin seg vreg xfer name form1 form2)
+          (arm2-inline-numcmp seg vreg xfer cc name form1 form2)))))
 
 (defun arm2-inline-numcmp (seg vreg xfer cc name form1 form2)
   (with-arm-local-vinsn-macros (seg vreg xfer)
@@ -6208,130 +6209,27 @@
     
 
 (defarm2 arm2-add2 add2 (seg vreg xfer form1 form2)
-  (multiple-value-bind (form1 form2)
-      (nx-binop-numeric-contagion form1 form2 *arm2-trust-declarations*)
-    (if (and (arm2-form-typep form1 'double-float)
-             (arm2-form-typep form2 'double-float))
-      (arm2-use-operator (%nx1-operator %double-float+-2)
-                         seg
-                         vreg
-                         xfer
-                         form1
-                         form2)
-      (if (and (arm2-form-typep form1 'single-float)
-               (arm2-form-typep form2 'single-float))
-        (arm2-use-operator (%nx1-operator %short-float+-2)
-                           seg
-                           vreg
-                           xfer
-                           form1
-                           form2)
-        (if (and (arm2-form-typep form1 'fixnum)
-                 (arm2-form-typep form2 'fixnum))
-          (arm2-use-operator (%nx1-operator %i+)
-                             seg
-                             vreg
-                             xfer
-                             form1
-                             form2
-                             t)
-          (if (or (arm2-explicit-non-fixnum-type-p form1)
-                  (arm2-explicit-non-fixnum-type-p form2))
-            (arm2-binary-builtin seg vreg xfer '+-2 form1 form2)
-            (arm2-inline-add2 seg vreg xfer form1 form2)))))))
+  (or (acode-optimize-add2 seg vreg xfer form1 form2 *arm2-trust-declarations*)
+      (if (or (arm2-explicit-non-fixnum-type-p form1)
+              (arm2-explicit-non-fixnum-type-p form2))
+        (arm2-binary-builtin seg vreg xfer '+-2 form1 form2)
+        (arm2-inline-add2 seg vreg xfer form1 form2))))
 
 (defarm2 arm2-sub2 sub2 (seg vreg xfer form1 form2)
-  (multiple-value-bind (form1 form2)
-      (nx-binop-numeric-contagion form1 form2 *arm2-trust-declarations*)
-    (if (and (arm2-form-typep form1 'double-float)
-             (arm2-form-typep form2 'double-float))
-      (arm2-use-operator (%nx1-operator %double-float--2)
-                         seg
-                         vreg
-                         xfer
-                         form1
-                         form2)
-      (if (and (arm2-form-typep form1 'single-float)
-               (arm2-form-typep form2 'single-float))
-        (arm2-use-operator (%nx1-operator %short-float--2)
-                           seg
-                           vreg
-                           xfer
-                           form1
-                           form2)
-        (if (and (arm2-form-typep form1 'fixnum)
-                 (arm2-form-typep form2 'fixnum))
-          (arm2-use-operator (%nx1-operator %i-)
-                             seg
-                             vreg
-                             xfer
-                             form1
-                             form2
-                             t)
-          (if (or (arm2-explicit-non-fixnum-type-p form1)
-                  (arm2-explicit-non-fixnum-type-p form2))
-            (arm2-binary-builtin seg vreg xfer '--2 form1 form2)
-            (arm2-inline-sub2 seg vreg xfer form1 form2)))))))
+  (or (acode-optimize-sub2 seg vreg xfer form1 form2 *arm2-trust-declarations*)
+      (if (or (arm2-explicit-non-fixnum-type-p form1)
+              (arm2-explicit-non-fixnum-type-p form2))
+        (arm2-binary-builtin seg vreg xfer '--2 form1 form2)
+        (arm2-inline-sub2 seg vreg xfer form1 form2))))
 
 (defarm2 arm2-mul2 mul2 (seg vreg xfer form1 form2)
-  (multiple-value-bind (form1 form2)
-      (nx-binop-numeric-contagion form1 form2 *arm2-trust-declarations*)
-    (if (and (arm2-form-typep form1 'double-float)
-             (arm2-form-typep form2 'double-float))
-      (arm2-use-operator (%nx1-operator %double-float*-2)
-                         seg
-                         vreg
-                         xfer
-                         form1
-                         form2)
-      (if (and (arm2-form-typep form1 'single-float)
-               (arm2-form-typep form2 'single-float))
-        (arm2-use-operator (%nx1-operator %short-float*-2)
-                           seg
-                           vreg
-                           xfer
-                           form1
-                           form2)
-        (arm2-binary-builtin seg vreg xfer '*-2 form1 form2)))))
+  (or (acode-optimize-mul2 seg vreg xfer form1 form2 *arm2-trust-declarations*)
+      (arm2-binary-builtin seg vreg xfer '*-2 form1 form2)))
 
 
 (defarm2 arm2-div2 div2 (seg vreg xfer form1 form2)
-  (multiple-value-bind (form1 form2)
-      (nx-binop-numeric-contagion form1 form2 *arm2-trust-declarations*)
-    (if (and (arm2-form-typep form1 'double-float)
-             (arm2-form-typep form2 'double-float))
-      (arm2-use-operator (%nx1-operator %double-float/-2)
-                         seg
-                         vreg
-                         xfer
-                         form1
-                         form2)
-      (if (and (arm2-form-typep form1 'single-float)
-               (arm2-form-typep form2 'single-float))
-        (arm2-use-operator (%nx1-operator %short-float/-2)
-                           seg
-                           vreg
-                           xfer
-                           form1
-                           form2)
-        (let* ((f2 (acode-fixnum-form-p form2))
-               (unwrapped (acode-unwrapped-form form1))
-               (f1 nil)
-               (f1/f2 nil))
-          (if (and f2
-                   (not (zerop f2))
-                   (acode-p unwrapped)
-                   (or (eq (acode-operator unwrapped) (%nx1-operator mul2))
-                       (eq (acode-operator unwrapped) (%nx1-operator %i*)))
-                   (setq f1 (acode-fixnum-form-p (cadr unwrapped)))
-                   (typep (setq f1/f2 (/ f1 f2)) 'fixnum))
-            (arm2-use-operator (%nx1-operator mul2)
-                               seg
-                               vreg
-                               xfer
-                               (make-acode (%nx1-operator fixnum) f1/f2)
-                               (caddr unwrapped))
-            (arm2-binary-builtin seg vreg xfer '/-2 form1 form2)))))))
+  (or (acode-optimize-div2 seg vreg xfer form1 form2 *arm2-trust-declarations*)
+      (arm2-binary-builtin seg vreg xfer '/-2 form1 form2)))
 
 (defarm2 arm2-logbitp logbitp (seg vreg xfer bitnum int)
   (arm2-binary-builtin seg vreg xfer 'logbitp bitnum int))
@@ -6833,7 +6731,8 @@
            (arm2-form seg nil xfer offset))
           (t
            (let* ((fixoffset (acode-fixnum-form-p offset)))
-             (if (typep fixoffset '(unsigned-byte 15))
+             (if (and (typep fixoffset '(signed-byte 12))
+                      (eql (logcount fixoffset) 1))
                (with-imm-target () (ptrreg :address)
                  (arm2-form seg ptrreg nil ptr)
                  (if double-p
