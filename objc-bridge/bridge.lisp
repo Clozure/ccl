@@ -394,7 +394,7 @@
                                     (let* ((char (read-char stream nil nil)))
                                       (if (or (eql char #\:)
                                               (eql char #\_)
-                                              (digit-char-p char 36))
+                                              (and char (digit-char-p char 36)))
                                         (vector-push-extend char token)
                                         (progn
                                           (when char
