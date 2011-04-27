@@ -1537,12 +1537,27 @@
     (unless (or (eq result-spec :void)
 		(memq result-spec *arg-spec-keywords*))
       (error "Unknown result spec: ~s" result-spec))
-    (make-acode operator
-		(nx1-form address-expression)
-		(nreverse specs)
-		(mapcar #'nx1-form (nreverse vals))
-		result-spec
-		nil)))
+    (make-acode (%nx1-operator typed-form)
+                (case result-spec
+                  (:double-float 'double-float)
+                  (:single-float 'single-float)
+                  (:address 'macptr)
+                  (:signed-doubleword '(signed-byte 64))
+                  (:unsigned-doubleword '(unsigned-byte 64))
+                  (:signed-fullword '(signed-byte 32))
+                  (:unsigned-fullword '(unsigned-byte 32))
+                  (:signed-halfword '(signed-byte 16))
+                  (:unsigned-halfword '(unsigned-byte 16))
+                  (:signed-byte '(signed-byte 8))
+                  (:unsigned-byte '(unsigned-byte 8))
+                  (t t))
+                (make-acode operator
+                            (nx1-form address-expression)
+                            (nreverse specs)
+                            (mapcar #'nx1-form (nreverse vals))
+                            result-spec
+                            nil)
+                nil)))
   
 (defnx1 nx1-block block (blockname &body forms)
   (let* ((*nx-blocks* *nx-blocks*)
