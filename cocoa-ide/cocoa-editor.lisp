@@ -1365,26 +1365,12 @@
     (when pane (hemlock-view pane))))
 
 
-
 (objc:defmethod (#/evalSelection: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
-  ;; TODO: this should just invoke editor-evaluate-region-command instead of reinventing the wheel.
-  (let* ((buffer (hemlock-buffer self))
-         (package-name (hi::variable-value 'hemlock::current-package :buffer buffer))
-         (pathname (hi::buffer-pathname buffer))
-         ;; Cocotron issue 380: NSTextView doesn't implement #/selectedRanges and
-         ;;  #/setSelectedRanges: methods.
-         #-cocotron (ranges (#/selectedRanges self))
-         #+cocotron (ranges (#/arrayWithObject: ns:ns-array 
-                                                (#/valueWithRange: ns:ns-value
-                                                                   (#/selectedRange self))))
-         (text (#/string self)))
-    (dotimes (i (#/count ranges))
-      (let* ((r (#/rangeValue (#/objectAtIndex: ranges i)))
-             (s (#/substringWithRange: text r))
-             (o (ns:ns-range-location r)))
-        (setq s (lisp-string-from-nsstring s))
-        (ui-object-eval-selection *NSApp* (list package-name pathname s o))))))
+  (let* ((view (hemlock-view self)))
+    (when view
+      (hi::handle-hemlock-event view #'(lambda ()
+                                         (hemlock::editor-execute-expression-command nil))))))
 
 (objc:defmethod (#/evalAll: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
@@ -1523,71 +1509,74 @@
   (#_NSLog #@"Granularity = %d" :int g)
   (objc:returning-foreign-struct (r)
      (block HANDLED
-       (let* ((index (ns:ns-range-location proposed))  
+       (let* ((index (ns:ns-range-location proposed))
               (length (ns:ns-range-length proposed))
-              (textstorage (#/textStorage self)))
-         (when (and (eql 0 length)      ; not extending existing selection
-                    (or (not (eql g #$NSSelectByCharacter))
-                        (and (eql index (#/length textstorage))
-                             (let* ((event (#/currentEvent (#/window self))))
-                               (and (eql (#/type event) #$NSLeftMouseDown)
-                                    (> (#/clickCount event) 1))))))
+              (textstorage (#/textStorage self))
+              (event (#/currentEvent (#/window self)))
+              (event-type (#/type event)))
+         ;; Workaround for bug #150
+         (when (and (eql g #$NSSelectByCharacter)
+                    (eql index (#/length textstorage))
+                    (or (eql event-type #$NSLeftMouseDown) (eql event-type #$NSLeftMouseUp)))
+           (setq g (case (#/clickCount event)
+                     ((0 1) #$NSSelectByCharacter)
+                     (2 #$NSSelectByWord)
+                     (t #$NSSelectByParagraph))))
+         (unless (eql g #$NSSelectByCharacter)
            (let* ((cache (hemlock-buffer-string-cache (#/hemlockString textstorage)))
                   (buffer (buffer-cache-buffer cache))
                   (hi::*current-buffer* buffer)
-                  (point (hi::buffer-point buffer))
-                  (atom-mode (or (eql g #$NSSelectByParagraph)
-                                 (and (eql index (#/length textstorage))
-                                      (let* ((event (#/currentEvent (#/window self)))
-                                             (type (#/type event)))
-                                        (and (or (eql type #$NSLeftMouseDown) (eql type #$NSLeftMouseUp))
-                                             (> (#/clickCount event) 2)))))))
-             (hi::with-mark ((mark point))
-	       (let ((region (selection-for-click mark atom-mode)))
-		 (when region
-		   ;; Act as if we started the selection at the other end, so the heuristic
-		   ;; in #/setSelectedRange does the right thing.  ref bug #565.
-                   ;; However, only do so on mouse up, ref bug #851.
-                   (when (eql (#/type (#/currentEvent (#/window self))) #$NSLeftMouseUp)
-                     (cond ((hi::mark= (hi::region-start region) mark)
-                            (hi::move-mark point (hi::region-end region)))
-                           ((hi::mark= (hi::region-end region) mark)
-                            (hi::move-mark point (hi::region-start region)))))
-		   (let ((start (hi::mark-absolute-position (hi::region-start region)))
-			 (end (hi::mark-absolute-position (hi::region-end region))))
-		     (assert (<= start end))
-		     (ns:init-ns-range r start (- end start)))
-		   #+debug
-		   (#_NSLog #@"range = %@, proposed = %@, granularity = %d"
-			    :address (#_NSStringFromRange r)
-			    :address (#_NSStringFromRange proposed)
-			    :<NSS>election<G>ranularity g)
-		   (return-from HANDLED r)))))))
-       (prog1
-           (call-next-method proposed g)
-         #+debug
-         (#_NSLog #@"range = %@, proposed = %@, granularity = %d"
-                  :address (#_NSStringFromRange r)
-                  :address (#_NSStringFromRange proposed)
-                  :<NSS>election<G>ranularity g)))))
+                  (point (hi:buffer-point buffer))
+                  (atom-mode (eql g #$NSSelectByParagraph)))
+             (hi:with-mark ((mark point))
+               (when (or (= length 0) (hi:move-to-absolute-position mark index))
+                 (let* ((region (selection-for-click mark atom-mode))
+                        (other-region (and (< 0 length)
+                                           (hi:character-offset mark length)
+                                           (selection-for-click mark atom-mode))))
+                   (when (null region) (setq region other-region other-region nil))
+                   (when region
+                     (let ((start-pos (min (hi:mark-absolute-position (hi:region-start region))
+                                           (if other-region
+                                             (hi:mark-absolute-position (hi:region-start other-region))
+                                             index)))
+                           (end-pos (max (hi:mark-absolute-position (hi:region-end region))
+                                         (if other-region
+                                           (hi:mark-absolute-position (hi:region-end other-region))
+                                           (+ index length)))))
+                       (assert (<= start-pos end-pos))
+                       ;; Act as if we started the selection at the other end, so the heuristic
+                       ;; in #/setSelectedRange does the right thing.  ref bug #565.
+                       ;; However, only do so at the end, so don't keep toggling during selection, ref bug #851.
+                       (when (and (eql event-type #$NSLeftMouseUp) (< start-pos end-pos))
+                         (let ((point-pos (hi:mark-absolute-position point)))
+                           (cond ((eql point-pos start-pos)
+                                  (hi:move-to-absolute-position point end-pos))
+                                 ((eql point-pos end-pos)
+                                  (hi:move-to-absolute-position point start-pos)))))
+                       (ns:init-ns-range r start-pos (- end-pos start-pos))
+                       #+debug
+                       (#_NSLog #@"range = %@, proposed = %@, granularity = %d"
+                                :address (#_NSStringFromRange r)
+                                :address (#_NSStringFromRange proposed)
+                                :<NSS>election<G>ranularity g)
+                       (return-from HANDLED r))))))))
+         (prog1
+             (call-next-method proposed g)
+           #+debug
+           (#_NSLog #@"range = %@, proposed = %@, granularity = %d"
+                    :address (#_NSStringFromRange r)
+                    :address (#_NSStringFromRange proposed)
+                    :<NSS>election<G>ranularity g))))))
 
 ;; Return nil to use the default Cocoa selection, which will be word for double-click, line for triple.
 (defun selection-for-click (mark paragraph-mode-p)
   ;; Handle lisp mode specially, otherwise just go with default Cocoa behavior
-  (when (string= (hi::buffer-major-mode (hi::mark-buffer mark)) "Lisp") ;; gag
+  (when (string= (hi:buffer-major-mode (hi::mark-buffer mark)) "Lisp") ;; gag
     (unless paragraph-mode-p
-      ;; Select a word if near one
-      (hi:with-mark ((fwd mark)
-                     (bwd mark))
-        (or (hi:find-attribute  fwd :word-delimiter)
-            (hi:buffer-end fwd))
-        (or (hi:reverse-find-attribute bwd :word-delimiter)
-            (hi:buffer-start bwd))
-        (unless (hi:mark= bwd fwd)
-          (when (eq (hi:character-attribute :lisp-syntax (hi:previous-character bwd)) :prefix-dispatch)
-            ;; let :prefix-dispatch take on the attribute of the following char, which is a word constituent
-            (hi:mark-before bwd))
-          (return-from selection-for-click (hi::region bwd fwd)))))
+      (let ((region (hemlock::word-region-at-mark mark)))
+        (when region
+          (return-from selection-for-click region))))
     (hemlock::pre-command-parse-check mark)
     (hemlock::form-region-at-mark mark)))
 
@@ -1599,6 +1588,16 @@
 				       (hemlock::append-buffer-output (hi::hemlock-view-buffer view) string)))))
 
 
+(defun move-point-for-click (buffer index)
+  (let* ((point (hi::buffer-point buffer))
+         (mark (and (hemlock::%buffer-region-active-p buffer) (hi::buffer-mark buffer))))
+    (setf (hi::buffer-region-active buffer) nil)
+    (unless (eql (hi:mark-absolute-position point) index)  ;; if point is already at target, leave mark alone
+      (if (and mark (eql (hi:mark-absolute-position mark) index))
+        (hi:move-mark mark point)
+        (hi::push-new-buffer-mark point))
+      (hi:move-to-absolute-position point index))))
+  
 ;;; Update the underlying buffer's point (and "active region", if appropriate.
 ;;; This is called in response to a mouse click or other event; it shouldn't
 ;;; be called from the Hemlock side of things.
@@ -1621,15 +1620,14 @@
     (let* ((d (hemlock-buffer-string-cache (#/hemlockString (#/textStorage self))))
            (buffer (buffer-cache-buffer d))
 	   (hi::*current-buffer* buffer)
-           (point (hi::buffer-point buffer))
            (location (pref r :<NSR>ange.location))
            (len (pref r :<NSR>ange.length)))
       (setf (hi::buffer-selection-set-by-command buffer) nil)
       (cond ((eql len 0)
              #+debug
              (#_NSLog #@"Moving point to absolute position %d" :int location)
-             (setf (hi::buffer-region-active buffer) nil)
-             (move-hemlock-mark-to-absolute-position point d location)
+             ;; Do this even if still-selecting, in order to enable the heuristic below.
+             (move-point-for-click buffer location)
              (update-paren-highlight self))
             (t
              ;; We don't get much information about which end of the
@@ -1637,10 +1635,10 @@
              ;; we have to sort of guess.  In every case I've ever seen,
              ;; selection via the mouse generates a sequence of calls to
              ;; this method whose parameters look like:
-             ;; a: range: {n0,0} still-selecting: false  [ rarely repeats ]
+             ;; a: range: {n0,0} still-selecting: false  [ rarely repeats ] (this doesn't actually happen)
              ;; b: range: {n0,0) still-selecting: true   [ rarely repeats ]
              ;; c: range: {n1,m} still-selecting: true   [ often repeats ]
-             ;; d: range: {n1,m} still-selecting: false  [ rarely repeats ]
+             ;; d: range: {n1,m} still-selecting: false  [ rarely repeats ] (mouse up)
              ;;
              ;; (Sadly, "affinity" doesn't tell us anything interesting.)
              ;; We've handled a and b in the clause above; after handling
@@ -1655,25 +1653,26 @@
              ;; selection: mark at n1, point at n1+m.
              ;; In all cases, activate Hemlock selection.
              (unless still-selecting
-                (let* ((pointpos (hi:mark-absolute-position point))
-                       (selection-end (+ location len))
-                       (mark (hi::copy-mark point :right-inserting)))
-                   (cond ((eql pointpos location)
-                          (move-hemlock-mark-to-absolute-position point
-                                                                  d
-                                                                  selection-end))
-                         ((eql pointpos selection-end)
-                          (move-hemlock-mark-to-absolute-position point
-                                                                  d
-                                                                  location))
-                         (t
-                          (move-hemlock-mark-to-absolute-position mark
-                                                                  d
-                                                                  location)
-                          (move-hemlock-mark-to-absolute-position point
-                                                                  d
-                                                                  selection-end)))
-                   (hemlock::%buffer-push-buffer-mark buffer mark t)))))))
+               (let* ((point (hi::buffer-point buffer))
+                      (pointpos (hi:mark-absolute-position point))
+                      (selection-end (+ location len))
+                      (mark (hi::copy-mark point :right-inserting)))
+                 (cond ((eql pointpos location)
+                        (move-hemlock-mark-to-absolute-position point
+                                                                d
+                                                                selection-end))
+                       ((eql pointpos selection-end)
+                        (move-hemlock-mark-to-absolute-position point
+                                                                d
+                                                                location))
+                       (t
+                        (move-hemlock-mark-to-absolute-position mark
+                                                                d
+                                                                location)
+                        (move-hemlock-mark-to-absolute-position point
+                                                                d
+                                                                selection-end)))
+                 (hemlock::%buffer-push-buffer-mark buffer mark t)))))))
   (call-next-method r affinity still-selecting))
 
 
@@ -2689,7 +2688,12 @@
              (and (> (ns:ns-range-length selection))
                   (#/shouldChangeTextInRange:replacementString: self selection #@""))))
           ((eql action (@selector #/evalSelection:))
-           (not (eql 0 (ns:ns-range-length (#/selectedRange self)))))
+           (when (hemlock-view self)
+             (if (eql 0 (ns:ns-range-length (#/selectedRange self)))
+               ;; Should check whether there is a current form
+               (#/setTitle: item #@"Execute Expression")
+               (#/setTitle: item #@"Execute Selection"))
+             t))
           ((eql action (@selector #/evalAll:))
            (let* ((doc (#/document (#/windowController (#/window self)))))
              (and (not (%null-ptr-p doc))

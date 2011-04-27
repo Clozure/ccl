@@ -1102,6 +1102,26 @@
         (if fwd
           (region fwd-start fwd-end))))))
 
+;; Return region for the current word at mark, or nil if there isn't one.
+(defun word-region-at-mark (mark)
+  (with-mark ((fwd mark)
+              (bwd mark))
+    (or (find-attribute  fwd :word-delimiter)
+        (buffer-end fwd))
+    (or (reverse-find-attribute bwd :word-delimiter)
+        (buffer-start bwd))
+    (unless (mark= bwd fwd)
+      ;; Special-case for keywords (and gensyms)
+      (when (eq (previous-character bwd) #\:)
+        (mark-before bwd)
+        (when (test-char (previous-character bwd) :lisp-syntax :constituent)
+          (mark-after bwd))) ;; oops, never mind
+      ;; Special-case for stuff like  #_foo.
+      (when (test-char (previous-character bwd) :lisp-syntax :prefix-dispatch)
+        ;; let :prefix-dispatch take on the attribute of the following char, which is a word constituent
+        (mark-before bwd))
+      (region bwd fwd))))
+
 ;;;; Table of special forms with special indenting requirements.
 
 (defhvar "Indent Defanything"
