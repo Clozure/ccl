@@ -408,9 +408,10 @@ list, NIL otherwise."
 
 
 (defmethod make-load-form ((s foreign-type) &optional env)
+  (declare (ignore env))
   (if (eq s *void-foreign-type*)
     '*void-foreign-type*
-    (make-load-form-saving-slots s :environment env)))
+    `(parse-foreign-type ',(unparse-foreign-type s))))
 
 
 
@@ -1869,31 +1870,31 @@ result-type-specifer is :VOID or NIL"
     (def-foreign-type-translator boolean (&optional (bits 32))
       (make-foreign-boolean-type :bits bits :signed nil))
 
-    (def-foreign-type signed-char (signed 8))
-    (def-foreign-type signed-byte (signed 8))
-    (def-foreign-type short (signed 16))
-    (def-foreign-type signed-halfword short)
-    (def-foreign-type int (signed 32))
-    (def-foreign-type signed-fullword int)
-    (def-foreign-type signed-short (signed 16))
-    (def-foreign-type signed-int (signed 32))
-    (def-foreign-type signed-doubleword (signed 64))
-    (def-foreign-type char #-darwin-target (unsigned 8)
-                      #+darwin-target (signed 8))
-    (def-foreign-type unsigned-char (unsigned 8))
-    (def-foreign-type unsigned-byte (unsigned 8))
-    (def-foreign-type unsigned-short (unsigned 16))
-    (def-foreign-type unsigned-halfword unsigned-short)
-    (def-foreign-type unsigned-int (unsigned 32))
-    (def-foreign-type unsigned-fullword unsigned-int)
-    (def-foreign-type unsigned-doubleword (unsigned 64))
-    (def-foreign-type bit (bitfield 1))
+    (%def-foreign-type :signed-char (parse-foreign-type '(:signed 8) ftd))
+    (%def-foreign-type :signed-byte (parse-foreign-type '(:signed 8) ftd))
+    (%def-foreign-type :short (parse-foreign-type '(:signed 16) ftd))
+    (%def-foreign-type :signed-halfword (parse-foreign-type :short ftd))
+    (%def-foreign-type :int (parse-foreign-type '(:signed 32) ftd))
+    (%def-foreign-type :signed-fullword (parse-foreign-type :int ftd))
+    (%def-foreign-type :signed-short (parse-foreign-type '(:signed 16) ftd))
+    (%def-foreign-type :signed-int (parse-foreign-type '(:signed 32) ftd))
+    (%def-foreign-type :signed-doubleword (parse-foreign-type '(:signed 64) ftd))
+    (%def-foreign-type :char (parse-foreign-type #-darwin-target '(:unsigned 8)
+                      #+darwin-target '(:signed 8) ftd))
+    (%def-foreign-type :unsigned-char (parse-foreign-type '(:unsigned 8) ftd))
+    (%def-foreign-type :unsigned-byte (parse-foreign-type '(:unsigned 8) ftd))
+    (%def-foreign-type :unsigned-short (parse-foreign-type '(:unsigned 16) ftd))
+    (%def-foreign-type :unsigned-halfword (parse-foreign-type :unsigned-short ftd))
+    (%def-foreign-type :unsigned-int (parse-foreign-type '(:unsigned 32) ftd))
+    (%def-foreign-type :unsigned-fullword (parse-foreign-type :unsigned-int ftd))
+    (%def-foreign-type :unsigned-doubleword (parse-foreign-type '(:unsigned 64) ftd))
+    (%def-foreign-type :bit (parse-foreign-type '(:bitfield 1) ftd))
 
-    (def-foreign-type float single-float)
-    (def-foreign-type double double-float)
+    (%def-foreign-type :float (parse-foreign-type :single-float ftd))
+    (%def-foreign-type :double (parse-foreign-type :double-float ftd))
 
     (%def-foreign-type :void *void-foreign-type*)
-    (def-foreign-type address (* :void))
+    (%def-foreign-type :address (parse-foreign-type '(:* :void) ftd))
     (let* ((signed-long-type (parse-foreign-type
                               `(:signed ,long-word-size)))
            (unsigned-long-type (parse-foreign-type
