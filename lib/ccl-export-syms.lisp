@@ -399,6 +399,8 @@
      pref
      rref
      paref
+     dparef
+     sparef
      with-cstrs
      with-encoded-cstrs
      with-string-vector

@@ -3061,6 +3061,13 @@ or returns a pointer to a composite type."
   (let* ((*target-ftd* (backend-target-foreign-type-data *target-backend*)))
     (%foreign-array-access-form  pointer (%foreign-type-or-record type-name) index)))
 
+;;; Shorter versions for paref of :double, :float arrays
+(defmacro dparef (pointer index)
+  `(paref ,pointer :double ,index))
+
+(defmacro sparef (pointer index)
+  `(paref ,pointer :float ,index))
+
 (defmacro rref (pointer accessor &key (storage :pointer storage-p))
   (when storage-p
     (warn "Use of :storage option ignored: ~a" storage))
