@@ -1845,18 +1845,21 @@ result-type-specifer is :VOID or NIL"
              (pair (cons type dims)))
         (declare (dynamic-extent pair))
         (ensure-foreign-type-bits type)
-        (or (gethash pair (ftd-array-types *target-ftd*))
-            (setf (gethash (cons type dims) (ftd-array-types *target-ftd*))
-                  
-                  (make-foreign-array-type
-                   :element-type type
-                   :dimensions dims
-                   :alignment (foreign-type-alignment type)
-                   :bits (if (and (ensure-foreign-type-bits type)
-                                  (every #'integerp dims))
-                           (* (align-offset (foreign-type-bits type)
-                                            (foreign-type-alignment type))
-                              (reduce #'* dims))))))))
+        (let* ((atype 
+                (or (gethash pair (ftd-array-types *target-ftd*))
+                    (setf (gethash (cons type dims) (ftd-array-types *target-ftd*))
+                          
+                          (make-foreign-array-type
+                           :element-type type
+                           :dimensions dims
+                           :alignment (foreign-type-alignment type)
+                           :bits (if (and (ensure-foreign-type-bits type)
+                                          (every #'integerp dims))
+                                   (* (align-offset (foreign-type-bits type)
+                                                    (foreign-type-alignment type))
+                                      (reduce #'* dims))))))))
+          (note-foreign-type-ordinal atype *target-ftd*)
+          atype)))
 
     (def-foreign-type-translator * (to)
       (let* ((ftd *target-ftd*)
