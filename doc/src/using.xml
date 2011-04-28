@@ -2810,8 +2810,8 @@ WATCH-LIST
 </para>
 <para>
   Because the code coverage information is associated with compiled
-  functions, load-time toplevel expressions do not get reported
-  on. You can work around this by creating a function and calling
+  functions, code coverage information is not available for load-time toplevel
+  expressions.  You can work around this by creating a function and calling
   it. I.e. instead of
   <programlisting>
 (progn
@@ -2826,7 +2826,7 @@ WATCH-LIST
 (init-this-and-that)
   </programlisting>
 Then you can see the coverage information in the definition of
-init-this-and-that.
+<literal>init-this-and-that</literal>.
 </para>
 </sect2>
 
@@ -2862,12 +2862,12 @@ init-this-and-that.
   
   <refnamediv>
     <refname>REPORT-COVERAGE</refname>
-    <refpurpose>Generate code coverage report</refpurpose>
+    <refpurpose>Generate a code coverage report</refpurpose>
     <refclass>Function</refclass>
   </refnamediv>
 
   <refsynopsisdiv>
-    <synopsis><function>report-coverage</function> &key;
+    <synopsis><function>report-coverage</function> output-file &key;
     (external-format :default) (statistics t) (html t)
     </synopsis>
   </refsynopsisdiv>
@@ -2875,14 +2875,22 @@ init-this-and-that.
   <refsect1><title>Arguments and Values</title>
   <variablelist>
     <varlistentry>
+      <term>output-file</term>
+      <listitem>
+	<para>
+          Pathname for the output index file.
+	</para>
+      </listitem>
+    </varlistentry>
+    
+    <varlistentry>
       <term>html</term>
       <listitem>
 	<para>
-	  If non-nil, this will generate an HTML report, consisting of
-	  an index file and one html file for each instrumented source
-	  file that has been loaded in the current session. The
-	  individual source file reports are stored in the same
-	  directory as the index file.
+	  If non-nil (the default), this will generate an HTML report, consisting of
+	  an index file in <varname>output-file</varname> and, in the same directory,
+          one html file for each instrumented source file that has been loaded in the
+          current session.
 	</para>
       </listitem>
     </varlistentry>
@@ -2898,11 +2906,11 @@ init-this-and-that.
       <term>statistics</term>
       <listitem>
 	<para>
-	  If :statistics is non-nil, a comma-separated file is also
+	  If non-nil (the default), a comma-separated file is also
 	  generated with the summary of statistics. You can specify a
 	  filename for the statistics argument, otherwise
-	  "statistics.csv" is created in the output directory. See
-	  documentation of ccl:coverage-statistics below for a
+	  "statistics.csv" is created in the directory of <varname>output-file</varname>.
+          See documentation of coverage-statistics below for a
 	  description of the values in the statistics file.
 	</para>
       </listitem>
@@ -2915,7 +2923,7 @@ init-this-and-that.
       <filename>bar.lx64fsl</filename>, and have run some tests, you could
       do
     <programlisting>
-(CCL:REPORT-COVERAGE "/my/dir/coverage/report.html")
+(REPORT-COVERAGE "/my/dir/coverage/report.html")
     </programlisting>
     and this would generate <filename>report.html</filename>,
     <filename>foo_lisp.html</filename> and
@@ -2932,14 +2940,14 @@ init-this-and-that.
   </indexterm>
   
   <refnamediv>
-    <refname>reset-coverage</refname>
+    <refname>RESET-COVERAGE</refname>
     <refpurpose>
       Resets all coverage data back to the "Not Executed" state
     </refpurpose>
     <refclass>Function</refclass>
   </refnamediv>
 
-  <refsect1><title>Summary</title>
+  <refsect1><title>Description</title>
     <para>
       Resets all coverage data back to the "Not Executed" state
     </para>
@@ -2952,14 +2960,14 @@ init-this-and-that.
   </indexterm>
   
   <refnamediv>
-    <refname>clear-coverage</refname>
+    <refname>CLEAR-COVERAGE</refname>
     <refpurpose>
       Forget about all instrumented files that have been loaded.
     </refpurpose>
     <refclass>Function</refclass>
   </refnamediv>
 
-  <refsect1><title>Summary</title>
+  <refsect1><title>Description</title>
     <para>
       Gets rid of the information about which instrumented files have
       been loaded, so ccl:report-coverage will not report any files,
@@ -2975,7 +2983,7 @@ init-this-and-that.
   </indexterm>
   
   <refnamediv>
-    <refname>save-coverage-in-file</refname>
+    <refname>SAVE-COVERAGE-IN-FILE</refname>
     <refpurpose>
       Save all coverage into to a file so you can restore it later.
     </refpurpose>
@@ -2987,7 +2995,7 @@ init-this-and-that.
     </synopsis>
   </refsynopsisdiv>
 
-  <refsect1><title>Summary</title>
+  <refsect1><title>Description</title>
     <para>
       Saves all coverage info in a file, so you can restore the
       coverage state later. This allows you to combine multiple runs
@@ -3003,7 +3011,7 @@ init-this-and-that.
   </indexterm>
   
   <refnamediv>
-    <refname>restore-coverage-from-file</refname>
+    <refname>RESTORE-COVERAGE-FROM-FILE</refname>
     <refpurpose>
       Load coverage state from a file.
     </refpurpose>
@@ -3015,16 +3023,16 @@ init-this-and-that.
     </synopsis>
   </refsynopsisdiv>
 
-  <refsect1><title>Summary</title>
+  <refsect1><title>Description</title>
     <para>
       Restores the coverage data previously saved with
-      CCL:SAVE-COVERAGE-IN-FILE, for the set of instrumented fasls
+      ccl:save-coverage-in-file, for the set of instrumented fasls
       that were loaded both at save and restore time. I.e. coverage
       info is only restored for files that have been loaded in this
       session. For example if in a previous session you had loaded
       "foo.lx86fsl" and then saved the coverage info, in this session
       you must load the same "foo.lx86fsl" before calling
-      ccl:restore-coverage-from-file in order to retrieve the stored
+      restore-coverage-from-file in order to retrieve the stored
       coverage info for "foo".  Equivalent to (ccl:restore-coverage
       (ccl:read-coverage-from-file pathname)).
     </para>
@@ -3037,14 +3045,14 @@ init-this-and-that.
   </indexterm>
   
   <refnamediv>
-    <refname>save-coverage</refname>
+    <refname>SAVE-COVERAGE</refname>
     <refpurpose>
       Returns a snapshot of the current coverage data.
     </refpurpose>
     <refclass>Function</refclass>
   </refnamediv>
 
-  <refsect1><title>Summary</title>
+  <refsect1><title>Description</title>
     <para>
       Returns a snapshot of the current coverage data. A snapshot is a
       copy of the current coverage state. It can be saved in a file
@@ -3073,12 +3081,39 @@ init-this-and-that.
     </synopsis>
   </refsynopsisdiv>
 
-  <refsect1><title>Summary</title>
+  <refsect1><title>Description</title>
     <para>
       Reinstalls a coverage snapshot as the current coverage state.
     </para>
   </refsect1>
 </refentry>
+
+<refentry id="f_combine-coverage">
+  <indexterm zone="f_combine-coverage">
+    <primary>combine-coverage</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>COMBINE-COVERAGE</refname>
+    <refpurpose>
+      Combines multiple coverage snapshots into one.
+    </refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+   <refsynopsisdiv>
+     <synopsis><function>combine-coverage</function> snapshots
+     </synopsis>
+   </refsynopsisdiv>
+
+  <refsect1><title>Description</title>
+    <para>
+      Takes a list of coverage snapshots and returns a new coverage snapshot
+      representing a union of all the coverage data.
+    </para>
+  </refsect1>
+</refentry>
+
 
 <refentry id="f_write-coverage-to-file">
   <indexterm zone="f_write-coverage-to-file">
@@ -3098,7 +3133,7 @@ init-this-and-that.
     </synopsis>
   </refsynopsisdiv>
 
-  <refsect1><title>Summary</title>
+  <refsect1><title>Description</title>
     <para>
       Saves the coverage snapshot in a file. The snapshot can be
       loaded back with ccl:read-coverage-from-file or loaded and
@@ -3127,7 +3162,7 @@ init-this-and-that.
     </synopsis>
   </refsynopsisdiv>
 
-  <refsect1><title>Summary</title>
+  <refsect1><title>Description</title>
     <para>
       Returns the snapshot saved in pathname. Doesn't affect the
       current coverage state. pathname can be the file previously
@@ -3146,7 +3181,7 @@ init-this-and-that.
   <refnamediv>
     <refname>COVERAGE-STATISTICS</refname>
     <refpurpose>
-      Returns a sequence of coverage-statistics objects, one per source file.
+      Returns a sequence of ccl:coverage-statistics objects, one per source file.
     </refpurpose>
     <refclass>Function</refclass>
   </refnamediv>
@@ -3156,7 +3191,7 @@ init-this-and-that.
     </synopsis>
   </refsynopsisdiv>
 
-  <refsect1><title>Summary</title>
+  <refsect1><title>Description</title>
     <para>
       Returns a sequence ccl:coverage-statistics objects, one for each
       source file, containing the same information as that written to
@@ -3164,7 +3199,7 @@ init-this-and-that.
       accessors are defined for ccl:coverage-statistics objects:
       <variablelist>
       <varlistentry>
-	<term><function>ccl:coverage-source-file</function></term>
+	<term><function>coverage-source-file</function></term>
 	<listitem>
 	  <para>
 	    the name of the source file corresponding to this information
@@ -3172,7 +3207,7 @@ init-this-and-that.
 	</listitem>
       </varlistentry>
       <varlistentry>
-	<term><function>ccl:coverage-expressions-total</function></term>
+	<term><function>coverage-expressions-total</function></term>
 	<listitem>
 	  <para>
 	    the total number of expressions
@@ -3180,7 +3215,7 @@ init-this-and-that.
 	</listitem>
       </varlistentry>
       <varlistentry>
-	<term><function>ccl:coverage-expressions-entered</function></term>
+	<term><function>coverage-expressions-entered</function></term>
 	<listitem>
 	  <para>
 	    the number of source expressions that have been entered
@@ -3189,7 +3224,7 @@ init-this-and-that.
 	</listitem>
       </varlistentry>
       <varlistentry>
-	<term><function>ccl:coverage-expressions-covered</function></term>
+	<term><function>coverage-expressions-covered</function></term>
 	<listitem>
 	  <para>
 	    the number of source expressions that were fully covered
@@ -3197,7 +3232,7 @@ init-this-and-that.
 	</listitem>
       </varlistentry>
       <varlistentry>
-	<term><function>ccl:coverage-unreached-branches</function></term>
+	<term><function>coverage-unreached-branches</function></term>
 	<listitem>
 	  <para>
 	    the number of conditionals with one branch taken and one not taken
@@ -3205,7 +3240,7 @@ init-this-and-that.
 	</listitem>
       </varlistentry>
       <varlistentry>
-	<term><function>ccl:coverage-code-forms-total</function></term>
+	<term><function>coverage-code-forms-total</function></term>
 	<listitem>
 	  <para>
 	    the total number of code forms. A code form is an
@@ -3215,7 +3250,7 @@ init-this-and-that.
 	</listitem>
       </varlistentry>
       <varlistentry>
-	<term><function>ccl:coverage-code-forms-covered</function></term>
+	<term><function>coverage-code-forms-covered</function></term>
 	<listitem>
 	  <para>
 	    the number of code forms that have been entered
@@ -3223,7 +3258,7 @@ init-this-and-that.
 	</listitem>
       </varlistentry>
       <varlistentry>
-	<term><function>ccl:coverage-functions-total</function></term>
+	<term><function>coverage-functions-total</function></term>
 	<listitem>
 	  <para>
 	    the total number of functions
@@ -3231,7 +3266,7 @@ init-this-and-that.
 	</listitem>
       </varlistentry>
       <varlistentry>
-	<term><function>ccl:coverage-functions-fully-covered</function></term>
+	<term><function>coverage-functions-fully-covered</function></term>
 	<listitem>
 	  <para>
 	    the number of functions that were fully covered
@@ -3239,7 +3274,7 @@ init-this-and-that.
 	</listitem>
       </varlistentry>
       <varlistentry>
-	<term><function>ccl:coverage-functions-partly-covered</function></term>
+	<term><function>coverage-functions-partly-covered</function></term>
 	<listitem>
 	  <para>
 	    the number of functions that were partly covered
@@ -3247,7 +3282,7 @@ init-this-and-that.
 	</listitem>
       </varlistentry>
       <varlistentry>
-	<term><function>ccl:coverage-functions-not-entered</function></term>
+	<term><function>coverage-functions-not-entered</function></term>
 	<listitem>
 	  <para>
 	    the number of functions never entered
@@ -3267,7 +3302,7 @@ init-this-and-that.
   <refnamediv>
     <refname>*COMPILE-CODE-COVERAGE*</refname>
     <refpurpose>
-      When true, instrument functions for code coverage.
+      When true, instrument functions being compiled to collect code coverage information.
     </refpurpose>
     <refclass>Variable</refclass>
   </refnamediv>
@@ -3277,7 +3312,7 @@ init-this-and-that.
     </synopsis>
   </refsynopsisdiv>
 
-  <refsect1><title>Summary</title>
+  <refsect1><title>Description</title>
     <para>
       This variable controls whether functions are instrumented for
       code coverage. Files compiled while this variable is true will
@@ -3304,7 +3339,7 @@ init-this-and-that.
     </synopsis>
   </refsynopsisdiv>
 
-  <refsect1><title>Summary</title>
+  <refsect1><title>Description</title>
     <para>
       This macro arranges so that body doesn't record internal details
       of code coverage. It will be considered totally covered if it's
@@ -3315,7 +3350,43 @@ init-this-and-that.
 </refentry>
 
 </sect2>
+
+<sect2 id="code-coverage-interpreting-code-coloring"><title>Interpreting Code Coloring</title>
+<para>
+
+ The output of ccl:report-coverage consists of formatted source code, with coverage indicated by
+ coloring.  Four colors are used: dark green for forms that compiled to code in which every single
+ instruction was executed, light green for forms that have been entered but weren't totally covered, red
+ for forms that were never entered, and the page background color for toplevel forms that weren't
+ instrumented.
+
+</para>
+<para>
+ The source coloring is applied from outside in.  So for example if you have
+
+  <programlisting>
+(outer-form ... (inner-form ...) ...)
+  </programlisting>
+
+ first the whole outer form is painted with whatever color expresses the outer form coverage, and then the
+ inner form color is replaced with whatever color expresses the inner form coverage.  One consequence of
+ this approach is that every part of the outer form that is not specifically inside some executable inner
+ form will have the outer form's coverage color. If the syntax of outer form involves some non-executable
+ forms, or forms that do not have coverage info of their own for whatever reason, then they will just
+ inherit the color of the outer form, because it doesn't get replaced with a color of its own.
+</para>
+
+<para>
+ One case in which this approach can be confusing is in the case of symbols.  As noted in the Limitations
+ section, coverage information is not recorded for variables; hence the coloring of a variable does not
+ convey information about whether the variable was evaluated or not -- that information is not available,
+ and the variable just inherits the color of the form that contains it.
+</para>
+
+
+</sect2>
 </sect1>
+
 <sect1 id="other-extensions"><title>Other Extensions</title>
 <refentry id="v_quit">
   <indexterm zone="v_quit">
