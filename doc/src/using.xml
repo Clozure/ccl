@@ -2906,7 +2906,7 @@ Then you can see the coverage information in the definition of
       <term>statistics</term>
       <listitem>
 	<para>
-	  If non-nil (the default), a comma-separated file is also
+	  If non-nil (the default), a comma-separated file is 
 	  generated with the summary of statistics. You can specify a
 	  filename for the statistics argument, otherwise
 	  "statistics.csv" is created in the directory of <varname>output-file</varname>.
@@ -3329,7 +3329,7 @@ Then you can see the coverage information in the definition of
   <refnamediv>
     <refname>WITHOUT-COMPILING-CODE-COVERAGE</refname>
     <refpurpose>
-      Don't record code coverange for forms within the body.
+      Don't record code coverage for forms within the body.
     </refpurpose>
     <refclass>Macro</refclass>
   </refnamediv>
