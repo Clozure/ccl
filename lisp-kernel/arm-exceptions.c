@@ -1657,16 +1657,23 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
            and the trap may or may not be taken.
         */
       } else {
+        Boolean ok = false;
         update_bytes_allocated(tcr, (void *) ptr_from_lispobj(cur_allocptr + disp));
         xpGPR(xp, allocptr) = VOID_ALLOCPTR + disp;
         instr = program_counter[-1];
-        if (IS_COMPARE_ALLOCPTR_TO_RM(instr)){
-          xpGPR(xp,RM_field(instr)) = VOID_ALLOCPTR;
+        if (IS_BRANCH_AROUND_ALLOC_TRAP(instr)) {
+          instr = program_counter[-2];
+          if (IS_COMPARE_ALLOCPTR_TO_RM(instr)){
+            xpGPR(xp,RM_field(instr)) = VOID_ALLOCPTR;
+            ok = true;
+          }
+        }
+        if (ok) {
+        /* Clear the carry bit, so that the trap will be taken. */
+        xpPSR(xp) &= ~PSR_C_MASK;
         } else {
           Bug(NULL, "unexpected instruction preceding alloc trap.");
         }
-        /* Clear the carry bit, so that the trap will be taken. */
-        xpPSR(xp) &= ~PSR_C_MASK;
       }
     } else {
       /* we may be before or after the alloc trap.  If before, set
