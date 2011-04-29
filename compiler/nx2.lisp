@@ -580,33 +580,39 @@
         (if (and (acode-form-typep num1 'double-float trust-decls)
                  (acode-form-typep num2 'double-float trust-decls))
           (progn
-            (backend-use-operator (%nx1-operator %double-float--2)
+            (if (eql (acode-constant-p num1) 0.0d0)
+              (backend-use-operator (%nx1-operator %double-float-negate) seg vreg xfer num2)
+              (backend-use-operator (%nx1-operator %double-float--2)
                                   seg
                                   vreg
                                   xfer
                                   num1
-                                  num2)
+                                  num2))
             t)
           (if (and (acode-form-typep num1 'single-float trust-decls)
                    (acode-form-typep num2 'single-float trust-decls))
             (progn
-              (backend-use-operator (%nx1-operator %short-float--2)
-                                    seg
-                                    vreg
-                                    xfer
-                                    num1
-                                    num2)
-              t)
-            (if (and (acode-form-typep num1 *nx-target-fixnum-type* trust-decls)
-                     (acode-form-typep num2 *nx-target-fixnum-type* trust-decls))
-              (progn
-                (backend-use-operator (%nx1-operator %i-)
+              (if (eql (acode-constant-p num1) 0.0s0)
+                (backend-use-operator (%nx1-operator %single-float-negate) seg vreg xfer num2)
+                (backend-use-operator (%nx1-operator %short-float--2)
                                       seg
                                       vreg
                                       xfer
                                       num1
-                                      num2
-                                      t)
+                                      num2))
+              t)
+            (if (and (acode-form-typep num1 *nx-target-fixnum-type* trust-decls)
+                     (acode-form-typep num2 *nx-target-fixnum-type* trust-decls))
+              (progn
+                (if (eql (acode-constant-p num1) 0)
+                  (backend-use-operator (%nx1-operator %ineg) seg vreg xfer num2)
+                  (backend-use-operator (%nx1-operator %i-)
+                                        seg
+                                        vreg
+                                        xfer
+                                        num1
+                                        num2
+                                        t))
                 t)))))))
         
 
