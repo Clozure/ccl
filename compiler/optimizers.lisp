@@ -941,6 +941,9 @@
   (if first-p
     (if rest call first)))
 
+
+
+
 ;;; This isn't quite right... The idea is that (car (require-type foo
 ;;; 'list)) ;can become just (<typechecking-car> foo) [regardless of
 ;;; optimize settings], ;but I don't think this can be done just with
@@ -1002,6 +1005,10 @@
                            #+nil
                            ((and (symbolp type)(find-class type nil env))
                             `(%require-type-class-cell ,arg (load-time-value (find-class-cell ',type t))))
+                           ((and (symbolp type)
+                                 #-bootstrapped-this (fboundp 'require-structure-type)
+                                 (structure-class-p type env))
+                            `(require-structure-type ,arg (load-time-value (find-class-cell ',type t))))
                            (t (let* ((val (gensym)))
                                 `(the ,type
                                    (let* ((,val ,arg))
