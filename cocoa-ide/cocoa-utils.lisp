@@ -141,6 +141,14 @@
 (defun front-window ()
   (map-windows #'(lambda (win) (return-from front-window win))))
 
+(defun target ()
+  "Returns the second window in the list returned by (windows)."
+  (let ((first? nil))
+    (map-windows #'(lambda (win)
+                     (if first?
+                       (return-from target win)
+                       (setf first? t))))))
+
 (defun first-window-satisfying-predicate (pred)
   (block foo
     (map-windows #'(lambda (w) (when (funcall pred w)
