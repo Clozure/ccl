@@ -892,37 +892,59 @@
 (defclass background-cocoa-listener-process (cocoa-listener-process)
     ())
 
-(defun background-process-run-function (name function)
-  (let* ((process (make-process name :class 'background-cocoa-listener-process))
-         (info (make-deferred-cocoa-listener-stream-info :process process))
-         (input-stream (make-instance 'deferred-cocoa-listener-input-stream
-                                      :info info))
-         (output-stream (make-instance 'deferred-cocoa-listener-output-stream
-                                       :info info)))
-    (setf (slot-value process 'input-stream) input-stream
-          (slot-value process 'output-stream) output-stream)
-    (process-preset process
-                    (lambda ()
-                      (let* ((*terminal-io* (make-two-way-stream input-stream output-stream)))
-                        (ccl::add-auto-flush-stream output-stream)
-                        (unwind-protect
-                             (funcall function)
-                          (remove-auto-flush-stream output-stream)
-                          (let* ((w (slot-value process 'window)))
-                            (when w
-                              (let* ((doc (#/document w)))
-                                (unless (%null-ptr-p doc)
-                                  (when (eq *current-process*
-                                            (hemlock-document-process doc))
-                                    (setf (hemlock-document-process doc) nil))))
-                              (cond ((#/isVisible w)
-                                     (format output-stream "~%~%{process ~s exiting}~%" *current-process*))
-                                    (t
-                                     (#/performSelectorOnMainThread:withObject:waitUntilDone:
-                                      w
-                                      (@selector #/close)
-                                      +null-ptr+
-                                      t)))
-                              (close input-stream)
-                              (close output-stream)))))))
-    (process-enable process)))
+(defun background-process-run-function (keywords function)
+  (destructuring-bind (&key (name "Anonymous")
+                            (priority  0)
+			    (stack-size ccl::*default-control-stack-size*)
+			    (vstack-size ccl::*default-value-stack-size*)
+			    (tstack-size ccl::*default-temp-stack-size*)
+			    (initial-bindings ())
+                            (persistent nil)
+			    (use-standard-initial-bindings t)
+                            (termination-semaphore nil)
+                            (allocation-quantum (default-allocation-quantum)))
+                      keywords
+    (setq priority (require-type priority 'fixnum))
+    (let* ((process (make-process name
+                                  :class 'background-cocoa-listener-process
+                                  :priority priority
+                                  :stack-size stack-size
+				  :vstack-size vstack-size
+				  :tstack-size tstack-size
+                                  :persistent persistent
+				  :use-standard-initial-bindings use-standard-initial-bindings
+				  :initial-bindings initial-bindings
+                                  :termination-semaphore termination-semaphore
+                                  :allocation-quantum allocation-quantum))
+           (info (make-deferred-cocoa-listener-stream-info :process process))
+           (input-stream (make-instance 'deferred-cocoa-listener-input-stream
+                           :info info))
+           (output-stream (make-instance 'deferred-cocoa-listener-output-stream
+                            :info info)))
+      (setf (slot-value process 'input-stream) input-stream
+            (slot-value process 'output-stream) output-stream)
+      (process-preset process
+                      (lambda ()
+                        (let* ((*terminal-io* (make-two-way-stream input-stream output-stream)))
+                          (ccl::add-auto-flush-stream output-stream)
+                          (unwind-protect
+                              (funcall function)
+                            (remove-auto-flush-stream output-stream)
+                            (let* ((w (slot-value process 'window)))
+                              (when w
+                                (let* ((doc (#/document w)))
+                                  (unless (%null-ptr-p doc)
+                                    (when (eq *current-process*
+                                              (hemlock-document-process doc))
+                                      (setf (hemlock-document-process doc) nil))))
+                                (cond ((#/isVisible w)
+                                       (format output-stream "~%~%{process ~s exiting}~%" *current-process*))
+                                      (t
+                                       (#/performSelectorOnMainThread:withObject:waitUntilDone:
+                                        w
+                                        (@selector #/close)
+                                        +null-ptr+
+                                        t)))
+                                (close input-stream)
+                                (close output-stream)))))))
+      (process-enable process))))
