@@ -322,12 +322,7 @@
     arg
     (%kernel-restart $xwrongtype arg (car type-cell))))
 
-(defun require-structure-type (arg token)
-  (or(and (= (the fixnum (typecode arg)) target::subtag-struct)
-           (dolist (x (%svref arg 0))
-             (declare (optimize (speed 3) (safety 0)))
-             (when (eq x token) (return arg))))
-    (%kernel-restart $xwrongtype arg (if (typep token 'class-cell) (class-cell-name token) token))))
+
 
 ;;; In lieu of an inverted mapping, at least try to find cases involving
 ;;; builtin numeric types and predicates associated with them.

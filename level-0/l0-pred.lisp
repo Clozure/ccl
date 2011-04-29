@@ -991,7 +991,12 @@
       (when (eq x type)
         (return t)))))
 
-
+(defun require-structure-type (arg token)
+  (or(and (= (the fixnum (typecode arg)) target::subtag-struct)
+           (dolist (x (%svref arg 0))
+             (declare (optimize (speed 3) (safety 0)))
+             (when (eq x token) (return arg))))
+    (%kernel-restart $xwrongtype arg (if (typep token 'class-cell) (class-cell-name token) token))))
 
 (defun istruct-typep (thing type)
   (if (= (the fixnum (typecode thing)) target::subtag-istruct)
