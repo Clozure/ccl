@@ -440,7 +440,7 @@
     (declare (fixnum flags))
     (if (logbitp arch::tcr-flag-bit-awaiting-preset flags)
       (thread-change-state thread :run :reset)
-      (progn
+      (with-lock-grabbed ((lisp-thread.state-change-lock thread))
 	(thread-change-state thread :run :exit)
 	(setf (lisp-thread.tcr thread) nil)))))
 
@@ -491,15 +491,18 @@
        #+64-bit-target %%get-unsigned-longlong tcrp target::tcr.native-thread-id))))
 
 (defun lisp-thread-suspend-count (thread)
-  (with-macptrs (tcrp)
-    (%setf-macptr-to-object tcrp (lisp-thread.tcr thread))
-    (unless (%null-ptr-p tcrp)
-      #+(and windows-target x8632-target)
-      (let ((aux (%get-ptr tcrp (- target::tcr.aux target::tcr-bias))))
-	(%get-unsigned-long aux target::tcr-aux.suspend-count))
-      #-(and windows-target x8632-target)
-      (#+32-bit-target %get-unsigned-long
-       #+64-bit-target %%get-unsigned-longlong tcrp target::tcr.suspend-count))))
+  (with-lock-grabbed ((lisp-thread.state-change-lock thread))
+    (let* ((tcr (lisp-thread.tcr thread)))
+      (if (null tcr)
+        0
+        (with-macptrs (tcrp)
+          (%setf-macptr-to-object tcrp tcr)
+          #+(and windows-target x8632-target)
+          (let ((aux (%get-ptr tcrp (- target::tcr.aux target::tcr-bias))))
+            (%get-unsigned-long aux target::tcr-aux.suspend-count))
+          #-(and windows-target x8632-target)
+          (#+32-bit-target %get-unsigned-long
+                             #+64-bit-target %%get-unsigned-longlong tcrp target::tcr.suspend-count))))))
 
 (defun tcr-clear-preset-state (tcr)
   (let* ((flags (%fixnum-ref tcr (- target::tcr.flags target::tcr-bias))))
