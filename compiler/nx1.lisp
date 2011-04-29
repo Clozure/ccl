@@ -698,7 +698,8 @@
     (if (subtypep *nx-form-type* 'fixnum)
       (make-acode (%nx1-operator %%ineg)(nx1-form num))
       (make-acode (%nx1-operator %ineg) (nx1-form num)))
-    (make-acode (%nx1-operator minus1) (nx1-form num))))
+    (nx1-form `(- 0 ,num))))
+          
 
         
 (defnx1 nx1--2 ((--2)) (&environment env num0 num1)        
