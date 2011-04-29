@@ -757,6 +757,7 @@ written to the output directory.
     (format html-stream "<div class='st~a'>Fully covered - every single instruction executed</div>" $totally-covered-style)
     (format html-stream "<div class='st~a'>Partly covered - entered but some subforms not executed</div>" $partially-covered-style)
     (format html-stream "<div class='st~a'>Never entered - not a single instruction executed</div>" $not-executed-style)
+    (format html-stream "<div class='stsource'>Uninstrumented - a form whose coverage was not measured</div>")
     (format html-stream "</div><p></p>~%")
 
     ;; Output source intertwined with acode
@@ -995,6 +996,7 @@ written to the output directory.
 *.st~a { background-color: #ffaaaa }
 *.st~a { background-color: #aaffaa }
 *.st~a { background-color: #44dd44 }
+*.stsource { background-color: #eeeeee; }
 *.key { margin: 20px; width: 88ex }
 *.source { width: 120ex; background-color: #eeeeee; padding-left: 5px;
              /* border-style: solid none none none; border-width: 1px;
