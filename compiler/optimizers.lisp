@@ -1008,7 +1008,7 @@
                            ((and (symbolp type)
                                  #-bootstrapped-this (fboundp 'require-structure-type)
                                  (structure-class-p type env))
-                            `(require-structure-type ,arg (load-time-value (find-class-cell ',type t))))
+                            `(require-structure-type ,arg ',(find-class-cell type t)))
                            (t (let* ((val (gensym)))
                                 `(the ,type
                                    (let* ((,val ,arg))
