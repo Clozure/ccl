@@ -655,20 +655,17 @@
 (define-arm-vinsn (mem-ref-c-double-float :predicatable)
     (((dest :double-float))
      ((src :address)
-      (index :s16const))
-     ((low (:u32 #.arm::imm0))
-      (high (:u32 #.arm::imm1))))
-  (ldrd low (:@ src (:$ index)))
-  (fmdrr dest low high))
+      (index :s16const)))
+  (fldd dest (:@ src (:$ index)))
+)
 
 (define-arm-vinsn (mem-ref-double-float :predicatable)
-    (((dest :double-float))
+    (((dest :double-float)
+      (src :address))
      ((src :address)
-      (index :s32))
-     ((low (:u32 #.arm::imm0))
-      (high (:u32 #.arm::imm1))))
-  (ldrd low (:@ src  index))
-  (fmdrr dest low high))
+      (index :s32)))
+  (add src src index)
+  (fldd dest (:@ src (:$ 0))))
 
 (define-arm-vinsn (mem-set-c-double-float :predicatable)
     (()
@@ -699,9 +696,9 @@
 (define-arm-vinsn (mem-ref-single-float :predicatable)
     (((dest :single-float))
      ((src :address)
-      (index :s32))
+      (index :lisp))
      ((temp :u32)))
-  (ldr temp (:@ src index))
+  (ldr temp (:@ src (:asr index (:$ arm::fixnumshift))))
   (fmsr dest temp))
 
 (define-arm-vinsn (mem-set-c-single-float :predicatable)
@@ -1588,6 +1585,11 @@
   (fdivd result x y)
   (bla .SPcheck-fpu-exception))
 
+(define-arm-vinsn (double-float-negate :predicatable) (((dest :double-float))
+                                                       ((src :double-float)))
+  (fnegd dest src))
+
+
 
 (define-arm-vinsn single-float-compare (((crf :crf))
                                         ((arg0 :single-float)
@@ -1665,6 +1667,9 @@
   (fdivs result x y)
   (bla .SPcheck-fpu-exception))
 
+(define-arm-vinsn (single-float-negate :predicatable) (((dest :single-float))
+                                                       ((src :single-float)))
+  (fnegs dest src))
 
 
 (define-arm-vinsn compare-unsigned (()
@@ -3069,7 +3074,7 @@
   (uuo-error-udf sym)
   :defined)
 
-(define-arm-vinsn (temp-push-unboxed-word :push :word :sp :predicatable)
+(define-arm-vinsn (temp-push-unboxed-word :push :word :csp :predicatable)
     
     (()
      ((w :u32))
@@ -3078,14 +3083,14 @@
   (str header (:@! sp (:$ (- arm::dnode-size))))
   (str w (:@ sp (:$ 4))))
 
-(define-arm-vinsn (temp-pop-unboxed-word :pop :word :sp :predicatable)
+(define-arm-vinsn (temp-pop-unboxed-word :pop :word :csp :predicatable)
     
     (((w :u32))
      ())
   (ldr w (:@ sp (:$ 4)))
   (add sp sp (:$ arm::dnode-size)))
 
-(define-arm-vinsn (temp-push-double-float :push :doubleword :sp :predicatable)
+(define-arm-vinsn (temp-push-double-float :push :doubleword :csp :predicatable)
     
     (()
      ((d :double-float))
@@ -3094,7 +3099,7 @@
   (str header (:@! sp (:$ (- (* 2 arm::dnode-size)))))
   (fstd d (:@ sp (:$ 8))))
 
-(define-arm-vinsn (temp-pop-double-float :pop :doubleword :sp :predicatable)
+(define-arm-vinsn (temp-pop-double-float :pop :doubleword :csp :predicatable)
     
     (()
      ((d :double-float)))
@@ -3112,7 +3117,7 @@
   (fsts s (:@ sp (:$ 4))))
 
 
-(define-arm-vinsn (temp-pop-single-float :pop :word :sp :predicatable)
+(define-arm-vinsn (temp-pop-single-float :pop :word :csp :predicatable)
     
     (()
      ((s :single-float)))
