@@ -2764,16 +2764,16 @@
 
 ;;; The compiler often generates superfluous pushes & pops.  Try to
 ;;; eliminate them.
-;;; It's easier to elide pushes and pops to the TSP.
+;;; It's easier to elide pushes and pops to the SP.
 (defun arm2-elide-pushes (seg push-vinsn pop-vinsn)
   (with-arm-local-vinsn-macros (seg)
     (let* ((pushed-reg (svref (vinsn-variable-parts push-vinsn) 0))
            (popped-reg (svref (vinsn-variable-parts pop-vinsn) 0))
            (same-reg (eq (hard-regspec-value pushed-reg)
                          (hard-regspec-value popped-reg)))
-           (sp-p (vinsn-attribute-p push-vinsn :sp)))
+           (sp-p (vinsn-attribute-p push-vinsn :csp)))
       (when (and sp-p t)               ; vsp case is harder.
-        (unless (vinsn-sequence-has-attribute-p push-vinsn pop-vinsn :tsp :discard)
+        (unless (vinsn-sequence-has-attribute-p push-vinsn pop-vinsn :csp :discard)
           (let* ((pushed-reg-is-set (vinsn-sequence-sets-reg-p
                                      push-vinsn pop-vinsn pushed-reg))
                  (popped-reg-is-set (if same-reg
@@ -5494,7 +5494,12 @@
   (arm2-char-p seg vreg xfer cc form))
 
 (defarm2 arm2-struct-ref struct-ref (seg vreg xfer struct offset)
-  (arm2-vref seg vreg xfer :struct struct offset (unless *arm2-reckless* (nx-lookup-target-uvector-subtag :struct))))
+  ;; Assume that typechecking for a specific structure type has already
+  ;; occurred, unless we're generating unsafe code.  If we're not, we
+  ;; still want to bounds-check, since the typecheck doesn't really
+  ;; give us a whole lot of safety: we may be dealing with an instance
+  ;; of a different version of the structure type than we expect.
+  (arm2-vref seg vreg xfer :struct struct offset (unless *arm2-reckless* t)))
 
 (defarm2 arm2-struct-set struct-set (seg vreg xfer struct offset value)
   (arm2-vset seg vreg xfer :struct  struct offset value (unless *arm2-reckless* (nx-lookup-target-uvector-subtag :struct))))
@@ -6154,6 +6159,33 @@
 (defarm2 arm2-minus1 minus1 (seg vreg xfer form)
   (arm2-unary-builtin seg vreg xfer '%negate form))
 
+(defarm2 arm2-%double-float-negate %double-float-negate (seg vreg xfer form)
+  (with-fp-target () (r1 :double-float)
+    (setq r1 (arm2-one-untargeted-reg-form seg form r1))
+    (if (and vreg
+             (= (hard-regspec-class vreg) hard-reg-class-fpr)
+             (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double))
+      (! double-float-negate vreg r1)
+      (with-fp-target (r1) (r2 :double-float)
+        (! double-float-negate r2 r1)
+        (ensuring-node-target (target vreg)
+          (arm2-copy-register seg target r2))))
+    (^)))
+             
+
+(defarm2 arm2-%single-float-negate %single-float-negate (seg vreg xfer form)
+  (with-fp-target () (r1 :single-float)
+    (setq r1 (arm2-one-untargeted-reg-form seg form r1))
+    (if (and vreg
+             (= (hard-regspec-class vreg) hard-reg-class-fpr)
+             (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-single))
+      (! double-float-negate vreg r1)
+      (with-fp-target (r1) (r2 :single-float)
+        (! double-float-negate r2 r1)
+        (ensuring-node-target (target vreg)
+          (arm2-copy-register seg target r2))))
+    (^)))
+
 (defun arm2-inline-add2 (seg vreg xfer form1 form2)
   (with-arm-local-vinsn-macros (seg vreg xfer)
     (arm2-two-targeted-reg-forms seg form1 ($ arm::arg_y) form2 ($ arm::arg_z))
@@ -6731,8 +6763,8 @@
            (arm2-form seg nil xfer offset))
           (t
            (let* ((fixoffset (acode-fixnum-form-p offset)))
-             (if (and (typep fixoffset '(signed-byte 12))
-                      (eql (logcount fixoffset) 1))
+             (if (and (typep fixoffset '(signed-byte 10))
+                      (not (logtest fixoffset #x3)))
                (with-imm-target () (ptrreg :address)
                  (arm2-form seg ptrreg nil ptr)
                  (if double-p
@@ -6740,20 +6772,34 @@
                    (! mem-ref-c-single-float fp-reg ptrreg fixoffset)))
                (with-imm-target () (ptrreg :address)
                  (with-imm-target (ptrreg) (offsetreg :s32)
-                   (arm2-two-targeted-reg-forms seg
-                                                ptr ptrreg
-                                                offset ($ arm::arg_z))
-                   (! fixnum->signed-natural offsetreg arm::arg_z)
-                   (if double-p
-                     (! mem-ref-double-float fp-reg ptrreg offsetreg)
-                     (! mem-ref-single-float fp-reg ptrreg offsetreg)))))
+                 (arm2-two-targeted-reg-forms seg
+                                              ptr ptrreg
+                                              offset offsetreg)
+                 (let* ((last (dll-node-pred seg)))
+                   (if (and (typep last 'vinsn)
+                              (eq (vinsn-template-name (vinsn-template last)) 'lri)
+                              (typep (setq fixoffset (svref (vinsn-variable-parts last) 1))
+                                     '(signed-byte 10))
+                              (not (logtest fixoffset #x3)))
+                     (progn
+                       (remove-dll-node last)
+                       (if double-p
+                         (! mem-ref-c-double-float fp-reg ptrreg fixoffset)
+                         (! mem-ref-c-single-float fp-reg ptrreg fixoffset)))
+                     (progn
+                       (if double-p
+                         (! mem-ref-double-float fp-reg ptrreg offsetreg)
+                         (! mem-ref-single-float fp-reg ptrreg offsetreg))))))))
              (<- fp-reg))
            (^)))))
     
 
 (defarm2 arm2-%get-double-float %get-double-float (seg vreg xfer ptr offset)
-  (with-fp-target () (fp-reg :double-float)
-    (arm2-get-float seg vreg xfer ptr offset t fp-reg)))
+  (if (and vreg (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                 (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double))
+    (arm2-get-float seg vreg xfer ptr offset t vreg)
+    (with-fp-target () (fp-reg :double-float)
+      (arm2-get-float seg vreg xfer ptr offset t fp-reg))))
 
 (defarm2 arm2-%get-single-float %get-single-float (seg vreg xfer ptr offset)
   (with-fp-target () (fp-reg :single-float)
@@ -6762,10 +6808,12 @@
 (defun arm2-set-float (seg vreg xfer ptr offset newval double-p fp-reg)
   (with-arm-local-vinsn-macros (seg vreg xfer)
     (let* ((fixoffset (acode-fixnum-form-p offset))
-           (immoffset (typep fixoffset '(unsigned-byte 15))))
+           (immoffset (and (typep fixoffset '(unsigned-byte 10))
+                           (not (logtest fixoffset #x3)))))
       (with-imm-target () (ptr-reg :address) 
         (cond ((or (null vreg)
-                   (= (hard-regspec-class vreg) hard-reg-class-fpr))
+                   (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                        (= (get-regspec-mode vreg) (if double-p hard-reg-class-fpr-mode-double hard-reg-class-fpr-mode-single))))
                (cond (immoffset
                       (arm2-push-register
                        seg
@@ -8076,14 +8124,14 @@
                (absptr (acode-absolute-ptr-p valform)))
           (case spec
             (:double-float
-             (let* ((df ($ arm::d0 :class :fpr :mode :double-float)))
+             (with-fp-target () (df :double-float)
                (when (and natural-64-bit-alignment (oddp next-arg-word))
                  (incf next-arg-word))
                (arm2-one-targeted-reg-form seg valform df)
                (! set-double-eabi-c-arg df next-arg-word)
                (incf next-arg-word 2)))
             (:single-float
-             (let* ((sf ($ arm::s0 :class :fpr :mode :single-float)))
+             (with-fp-target () (sf :single-float)
                (arm2-one-targeted-reg-form seg valform sf)
                (! set-single-eabi-c-arg sf next-arg-word)
                (incf next-arg-word)))
@@ -8127,11 +8175,19 @@
       (when vreg
         (cond ((eq resultspec :void) (<- nil))
               ((eq resultspec :double-float)
-               (! gpr-pair-to-double-float arm::d0 arm::imm0 arm::imm1)
-               (<- ($  arm::d0 :class :fpr :mode :double-float)))
+               (if (and (eq (hard-regspec-class vreg) hard-reg-class-fpr)
+                        (eq (get-regspec-mode vreg) hard-reg-class-fpr-mode-double))
+                 (! gpr-pair-to-double-float vreg  arm::imm0 arm::imm1)
+                 (progn
+                   (! gpr-pair-to-double-float arm::d0 arm::imm0 arm::imm1)
+                   (<- ($  arm::d0 :class :fpr :mode :double-float)))))
               ((eq resultspec :single-float)
-               (! gpr-to-single-float arm::s0 arm::imm0)
-               (<- ($ arm::s0 :class :fpr :mode :single-float)))
+               (if (and (eq (hard-regspec-class vreg) hard-reg-class-fpr)
+                        (eq (get-regspec-mode vreg) hard-reg-class-fpr-mode-single))
+                 (! gpr-to-single-float vreg arm::imm0)
+                 (progn
+                   (! gpr-to-single-float arm::s0 arm::imm0)
+                   (<- ($ arm::s0 :class :fpr :mode :single-float)))))
               ((eq resultspec :unsigned-doubleword)
                (ensuring-node-target (target vreg)
                  (! makeu64)
