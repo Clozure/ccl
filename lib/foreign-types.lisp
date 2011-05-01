@@ -1757,6 +1757,8 @@ result-type-specifer is :VOID or NIL"
       (canonicalize-foreign-type-ordinal '(:struct :dirent))
       (canonicalize-foreign-type-ordinal '(:struct :timeval))
       (canonicalize-foreign-type-ordinal '(:struct :addrinfo))
+      (canonicalize-foreign-type-ordinal :float)
+      (canonicalize-foreign-type-ordinal :double)
 
       (setq canonical-ordinal (1- max-common-foreign-type-ordinal))
 
