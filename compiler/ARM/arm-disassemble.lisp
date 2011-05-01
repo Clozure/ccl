@@ -383,7 +383,8 @@
 (defun disassemble-arm-xfunction (xfunction &optional (stream *debug-io*) (*hide-spjump-internals* *hide-spjump-internals*))
   (let* ((adi-vector (process-adi-vector (make-adi-vector (uvref xfunction 1))))
          (functionp (typep xfunction 'function)) ;not cross-compiling
-         (previous-source-note nil))
+         (previous-source-note nil)
+         (pc-counter 0))
     (labels ((format-spname (name stream)
                (let* ((string (string name))
                       (n (length string))
@@ -418,10 +419,12 @@
                      (text (if source-text
                              (string-sans-most-whitespace source-text 100)
                              "#<no source text>")))
-                (format stream "~&~%;;; ~A" text)))))
+                (format stream "~&~%;;; ~A" text)
+                (setq pc-counter 3)))))
         (let* ((info (svref adi-vector i))
                (labeled (adi-labeled info)))
           (when labeled
+            (setq pc-counter 0)
             (if (eq t labeled)
               (format stream "~&L~d~&" (ash i 2))
               (if *hide-spjump-internals*
@@ -485,7 +488,10 @@
                               (write-char #\) stream))))))
                 (dolist (op (adi-operands info))
                   (format-operand op))
-                (write-char #\) stream)))))))))
+                (write-char #\) stream)
+                (when (eql (incf pc-counter) 4)
+                  (setq pc-counter 0)
+                  (format stream "~40t;[~d]" (* i 4)))))))))))
 
                              
                        
