@@ -48,7 +48,7 @@
             (uuo-error-wrong-nargs (:? hi))
             ,ok1)
           `(progn
-            (cmp nargs ($ (ash ,max arm::fixnumshift)))
+            (cmp nargs ($ (ash ,min arm::fixnumshift)))
             (bhs ,ok1)
             (uuo-error-wrong-nargs (:? lo))
             ,ok1
