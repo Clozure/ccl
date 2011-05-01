@@ -125,7 +125,7 @@
   (with-macptrs ((regs (pref xp #+linuxarm-target :ucontext.uc_mcontext
                                 #+darwinarm-target :ucontext_t.uc_mcontext.__ss)))
     (if (functionp fn)
-      (or (%code-vector-pc (uvref fn 0) (%inc-ptr regs machine-state-offset))
+      (or (%code-vector-pc (uvref fn 1) (%inc-ptr regs machine-state-offset))
            (%get-ptr regs machine-state-offset))
       (%get-ptr regs machine-state-offset))))
 
