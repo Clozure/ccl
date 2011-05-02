@@ -698,7 +698,17 @@
     (if (subtypep *nx-form-type* 'fixnum)
       (make-acode (%nx1-operator %%ineg)(nx1-form num))
       (make-acode (%nx1-operator %ineg) (nx1-form num)))
-    (nx1-form `(- 0 ,num))))
+    (let* ((acode (make-acode (%nx1-operator minus1) (nx1-form num env))))
+      (if (nx-form-typep num 'double-float env)
+        (make-acode (%nx1-operator typed-form)
+                    'double-float
+                    acode)
+        (if (nx-form-typep num 'single-float env)
+          (make-acode (%nx1-operator typed-form)
+                      'single-float
+                      acode)
+          acode)))))
+
           
 
         
