@@ -735,4 +735,17 @@
               (acode-form-typep num2 'single-float trust-decls))
          (backend-use-operator (%nx1-operator short-float-compare) seg vreg xfer cc num1 num2)
          t)))
+
+(defun acode-optimize-minus1 (seg vreg xfer form trust-decls &optional (result-type 'number))
+  (declare (ignorable result-type))
+  (cond ((acode-form-typep form 'double-float trust-decls)
+         (backend-use-operator (%nx1-operator %double-float-negate) seg vreg xfer form)
+         t)
+        ((acode-form-typep form 'single-float trust-decls)
+         (backend-use-operator (%nx1-operator %single-float-negate) seg vreg xfer form)
+         t)
+        ((acode-form-typep form *nx-target-fixnum-type* trust-decls)
+         (backend-use-operator (%nx1-operator %ineg) seg vreg xfer form)
+         t)))
+
                 

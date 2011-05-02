@@ -4033,6 +4033,14 @@
                               ((src :imm)))
   (subfic dest src (ash -1 ppc32::fixnumshift)))
 
+(define-ppc32-vinsn double-float-negate (((dest :double-float))
+                                         ((src :double-float)))
+  (fneg dest src))
+
+(define-ppc32-vinsn single-float-negate (((dest :single-float))
+                                         ((src :single-float)))
+  (fneg dest src))
+
 ;;; In case ppc32::*ppc-opcodes* was changed since this file was compiled.
 (queue-fixup
  (fixup-vinsn-templates *ppc32-vinsn-templates* ppc::*ppc-opcode-numbers*))

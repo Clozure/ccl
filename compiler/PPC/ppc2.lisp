@@ -6327,7 +6327,35 @@
   (^))
 
 (defppc2 ppc2-minus1 minus1 (seg vreg xfer form)
-  (ppc2-unary-builtin seg vreg xfer '%negate form))
+  (or (acode-optimize-minus1 seg vreg xfer form *ppc2-trust-declarations*)
+      (ppc2-unary-builtin seg vreg xfer '%negate form)))
+
+(defppc2 ppc2-%double-float-negate %double-float-negate (seg vreg xfer form)
+  (with-fp-target () (r1 :double-float)
+    (setq r1 (ppc2-one-untargeted-reg-form seg form r1))
+    (if (and vreg
+             (= (hard-regspec-class vreg) hard-reg-class-fpr)
+             (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double))
+      (! double-float-negate vreg r1)
+      (with-fp-target (r1) (r2 :double-float)
+        (! double-float-negate r2 r1)
+        (ensuring-node-target (target vreg)
+          (ppc2-copy-register seg target r2))))
+    (^)))
+             
+
+(defppc2 ppc2-%single-float-negate %single-float-negate (seg vreg xfer form)
+  (with-fp-target () (r1 :single-float)
+    (setq r1 (ppc2-one-untargeted-reg-form seg form r1))
+    (if (and vreg
+             (= (hard-regspec-class vreg) hard-reg-class-fpr)
+             (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-single))
+      (! double-float-negate vreg r1)
+      (with-fp-target (r1) (r2 :single-float)
+        (! double-float-negate r2 r1)
+        (ensuring-node-target (target vreg)
+          (ppc2-copy-register seg target r2))))
+    (^)))
 
 (defun ppc2-inline-add2 (seg vreg xfer form1 form2)
   (with-ppc-local-vinsn-macros (seg vreg xfer)
