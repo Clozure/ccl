@@ -404,8 +404,7 @@
      ((dim1 :u32)
       (i :imm)
       (j :imm)))
-  (mul dim1 i dim1)
-  (add dest dim1 j))
+  (mla dest i dim1 j))
 
 ;; dest <- (+ (* i dim1 dim2) (* j dim2) k)
 
@@ -419,11 +418,8 @@
       (j :imm)
       (k :imm)))
   (mul dim1 dim1 dim2)
-  (mul dim2 j dim2)
-  (mul dim1 i dim1)
-  (add dim2 dim1 dim2)
-  (add dest dim2 k))
-
+  (mla dim2 j dim2 k)
+  (mla dest dim1 i dim2))
 
 (define-arm-vinsn (2d-dim1 :predicatable)
     (((dest :u32))

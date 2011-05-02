@@ -562,6 +562,15 @@
      #x00100090
      #x0ff000f0
      ())
+
+   (define-arm-instruction mla (:rn :rm :rs :rd)
+     #x00200090
+     #x0ff000f0
+     ())
+   (define-arm-instruction mlas (:rn :rm :rs :rd)
+     #x00300090
+     #x0ff000f0
+     ())
    
    (define-arm-instruction stm (:rnw :reglist)
      #x08800000
