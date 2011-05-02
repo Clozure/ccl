@@ -169,23 +169,21 @@
   (fmdrr dest low high))
 
 
-(define-arm-vinsn (misc-ref-c-double-float :predicatable)
+
+
+(define-arm-vinsn (misc-ref-c-double-float :predicatable :sets-lr)
     (((dest :double-float))
      ((v :lisp)
-      (idx :u32const))
-     ((low (:u32 #.arm::imm0))
-      (high (:u32 #.arm::imm1))))
-  (ldrd low (:@ v (:$ (:apply + arm::misc-dfloat-offset (:apply ash idx 3)))))
-  (fmdrr dest low high))
+      (idx :u32const)))
+  (add lr v (:$ arm::double-float.pad))
+  (fldd dest (:@ lr (:$ (:apply + (:apply ash idx 3) (- arm::double-float.value arm::double-float.pad))))))
 
 (define-arm-vinsn (misc-set-c-double-float :predicatable)
     (((val :double-float))
      ((v :lisp)
-      (idx :u32const))
-     ((low (:u32 #.arm::imm0))
-      (high (:u32 #.arm::imm1))))
-  (fmrrd low high val)
-  (strd low (:@ v (:$ (:apply + arm::misc-dfloat-offset (:apply ash idx 3))))))
+      (idx :u32const)))
+  (add lr v (:$ arm::double-float.pad))
+  (fstd val (:@ lr (:$ (:apply + (:apply ash idx 3) (- arm::double-float.value arm::double-float.pad))))))
 
 (define-arm-vinsn (misc-set-double-float :predicatable)
     (()
@@ -2405,8 +2403,8 @@
   (str header-temp (:@ allocptr (:$ arm::misc-header-offset)))
   (mov result allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
-  (fmrrd header-temp high fpreg)
-  (strd header-temp (:@ result (:$ arm::double-float.value))))
+  (add lr result (:$ arm::double-float.pad))
+  (fstd fpreg (:@ lr (:$ (- arm::double-float.value arm::double-float.pad)))))
 
 
 ;;; This is about as bad as heap-consing a double-float.  (In terms of
