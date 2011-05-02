@@ -7350,7 +7350,36 @@
   (^))
 
 (defx862 x862-minus1 minus1 (seg vreg xfer form)
-  (x862-unary-builtin seg vreg xfer '%negate form))
+  (or (acode-optimize-minus1 seg vreg xfer form *x862-trust-declarations*)
+      (x862-unary-builtin seg vreg xfer '%negate form)))
+
+(defx862 x862-%double-float-negate %double-float-negate (seg vreg xfer form)
+  (if (and vreg
+           (= (hard-regspec-class vreg) hard-reg-class-fpr)
+           (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double))
+    (progn
+      (x862-one-targeted-reg-form seg form vreg)
+      (! double-float-negate vreg))
+    (with-fp-target () (r1 :double-float)
+      (setq r1 (x862-one-untargeted-reg-form seg form r1))
+      (! double-float-negate r1)
+      (ensuring-node-target (target vreg)
+        (x862-copy-register seg target r1))))
+  (^))
+
+(defx862 x862-%single-float-negate %single-float-negate (seg vreg xfer form)
+  (if (and vreg
+           (= (hard-regspec-class vreg) hard-reg-class-fpr)
+           (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-single))
+    (progn
+      (x862-one-targeted-reg-form seg form vreg)
+      (! single-float-negate vreg))
+    (with-fp-target () (r1 :single-float)
+      (setq r1 (x862-one-untargeted-reg-form seg form r1))
+      (! single-float-negate r1)
+      (ensuring-node-target (target vreg)
+        (x862-copy-register seg target r1))))
+  (^))
 
 ;;; Return T if form is declare to be something that couldn't be a fixnum.
 (defun x862-explicit-non-fixnum-type-p (form)
