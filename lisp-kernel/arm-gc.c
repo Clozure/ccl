@@ -1075,7 +1075,7 @@ mark_xp(ExceptionInformation *xp)
 
   mark_pc_root(ptr_to_lispobj(xpPC(xp)));
   lr_value = ptr_to_lispobj(xpLR(xp));
-  if (*((LispObj *)lr_value) == 0) { /* pointing into a double-float */
+  if (*((LispObj *)lr_value) == 0) { /* pointing into a double-float/double-float vector */
     mark_root(untag(lr_value)+fulltag_misc);
   } else {
     mark_pc_root(lr_value);
