@@ -3114,7 +3114,7 @@ to binary 0."
                            ordinal
                            `(foreign-type-ordinal (load-time-value (%foreign-type-or-record ',record-name))))))
       (when (eq *host-backend* *target-backend*)
-        (setq result (nconc result `((%set-macptr-type ,name ,ordinal-form)))))
+        (setq result (nconc result `((setf (uvref ,name target::macptr.type-cell) ,ordinal-form)))))
       (if (typep ftype 'foreign-record-type)
         (setq result
               (nconc result (%foreign-record-field-forms name ftype record-name inits)))
@@ -3208,7 +3208,27 @@ Return the pointer."
       (%set-macptr-type ,ptr (foreign-type-ordinal (load-time-value (parse-foreign-type ',type))))
       ,ptr)))
 
-    
+(defun with-constrained-values (type specs body env)
+  (multiple-value-bind (body decls) (parse-body body env)
+    (collect ((inits))
+      (dolist (spec specs)
+        (when (cdr spec)
+          (inits `(setq ,(car spec) ,(cadr spec)))))        
+  (let* ((vector (gensym))
+         (idx -1))
+    `(let* ((,vector (make-array ,(length specs) :element-type ',type)))
+      (declare (dynamic-extent ,vector))
+      (symbol-macrolet ,(mapcar (lambda (spec) `(,(car spec) (aref ,vector ,(incf idx)))) specs)
+        ,@decls
+        ,@(inits)
+        ,@body))))))  
+
+(defmacro with-constrained-double-floats (specs &body body &environment env)
+  (with-constrained-values 'double-float specs body env))
+
+
+(defmacro with-constrained-single-floats (specs &body body &environment env)
+  (with-constrained-values 'single-float specs body env))
 
 (defmacro with-terminal-input (&body body)
   "Execute body in an environment with exclusive read access to the terminal."
