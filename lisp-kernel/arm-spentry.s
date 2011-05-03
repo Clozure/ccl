@@ -2586,16 +2586,16 @@ _spentry(aset3)
         __(blo 3f)
         __(uuo_error_array_bounds(al,arg_x,temp1))
 3:              
-        __(unbox_fixnum(imm1,imm1))
         __(cmp temp0,imm0)
         __(blo 4f)
         __(uuo_error_array_bounds(al,temp0,temp1))
 4:              
-        __(mul arg_x,imm2,arg_x)
-        __(mul imm1,imm2,imm1)
-        __(mul temp0,imm1,temp0)
-        __(add arg_y,arg_y,arg_x)
-        __(add arg_y,arg_y,temp0)
+	__(unbox_fixnum(imm1,imm1))
+	__(unbox_fixnum(imm2,imm2))
+	/* (+ (* i dim1 dim2) (* j dim2) k) */
+	__(mul imm1,imm2,imm1)
+	__(mla imm2,arg_x,imm2,arg_y)	/* imm2 now a fixnum */
+	__(mla arg_y,temp0,imm1,imm2)
         __(mov arg_x,temp1)
 0:      __(ldr temp0,[arg_x,#arrayH.displacement])
         __(ldr arg_x,[arg_x,#arrayH.data_vector])
