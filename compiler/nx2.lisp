@@ -580,7 +580,7 @@
         (if (and (acode-form-typep num1 'double-float trust-decls)
                  (acode-form-typep num2 'double-float trust-decls))
           (progn
-              (backend-use-operator (%nx1-operator %double-float--2)
+            (backend-use-operator (%nx1-operator %double-float--2)
                                   seg
                                   vreg
                                   xfer
@@ -590,14 +590,12 @@
           (if (and (acode-form-typep num1 'single-float trust-decls)
                    (acode-form-typep num2 'single-float trust-decls))
             (progn
-              (if (eql (acode-constant-p num1) 0.0s0)
-                (backend-use-operator (%nx1-operator %short-float--2)
-                                      seg
-                                      vreg
-                                      xfer
-                                      num1
-                                      num2)
-)
+              (backend-use-operator (%nx1-operator %short-float--2)
+                                    seg
+                                    vreg
+                                    xfer
+                                    num1
+                                    num2)
               t)
             (if (and (acode-form-typep num1 *nx-target-fixnum-type* trust-decls)
                      (acode-form-typep num2 *nx-target-fixnum-type* trust-decls))
