@@ -4137,26 +4137,24 @@
 )
 
 (define-x8632-vinsn double-float-negate (((reg :double-float))
-                                         ((reg :double-float)))
-  (pxor (:@ (:^ :const) (:% x8632::fn)) (:%xmm reg))
+                                         ((reg :double-float)
+                                          (tmp :double-float)))
+  (movsd (:@ (:^ :const) (:% x8632::fn)) (:%xmm tmp))
+  (pxor (:%xmm tmp) (:%xmm reg))
+
   (:uuo-section)
-  (:align 4)
   :const
   (:long 0)
-  (:long #x-80000000)
-  (:long 0)
-  (:long 0))
+  (:long #x-80000000))
 
 (define-x8632-vinsn single-float-negate (((reg :single-float))
-                                         ((reg :single-float)))
-  (pxor (:@ (:^ :const) (:% x8632::fn)) (:%xmm reg))
+                                         ((reg :single-float)
+                                          (tmp :single-float)))
+  (movss (:@ (:^ :const) (:% x8632::fn)) (:%xmm tmp))
+  (pxor (:%xmm tmp) (:%xmm reg))
   (:uuo-section)
-  (:align 4)
   :const
-  (:long #x80000000)
-  (:long 0)
-  (:long 0)
-  (:long 0))
+  (:long #x80000000))
 
 (queue-fixup
  (fixup-x86-vinsn-templates
