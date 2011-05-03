@@ -2464,8 +2464,7 @@ _spentry(aref2)
         __(uuo_error_array_bounds(al,arg_z,arg_x))
 3:              
         __(unbox_fixnum(imm0,imm0))
-        __(mul temp0,arg_y,imm0) /* no MLA on ARMv5 */
-        __(add arg_z,arg_z,temp0)
+	__(mla arg_z,arg_y,imm0,arg_z)
         /* arg_z is now row-major-index; get data vector and
            add in possible offset */
         __(mov arg_y,arg_x)
@@ -2508,11 +2507,10 @@ _spentry(aref3)
 4:              
         __(unbox_fixnum(imm2,imm2))
         __(unbox_fixnum(imm1,imm1))
-        __(mul arg_y,imm2,arg_y)
-        __(mul imm1,imm2,imm1)
-        __(mul arg_x,imm1,arg_x)
-        __(add arg_z,arg_z,arg_y)
-        __(add arg_z,arg_z,arg_x)
+	/* (+ (* i dim1 dim2) (* j dim2) k) */
+	__(mul imm1,imm2,imm1)
+	__(mla imm2,arg_y,imm2,arg_z)	/* imm2 now a fixnum */
+	__(mla arg_z,arg_x,imm1,imm2)
         __(mov arg_y,temp0)
 0:      __(ldr arg_x,[arg_y,#arrayH.displacement])
         __(ldr arg_y,[arg_y,#arrayH.data_vector])
@@ -2548,8 +2546,7 @@ _spentry(aset2)
         __(uuo_error_array_bounds(al,arg_y,temp0))
 3:              
         __(unbox_fixnum(imm0,imm0))
-        __(mul temp1,arg_x,imm0)
-        __(add arg_y,arg_y,temp1)
+	__(mla arg_y,arg_x,imm0,arg_y)
         /* arg_y is now row-major-index; get data vector and
            add in possible offset */
         __(mov arg_x,temp0)
