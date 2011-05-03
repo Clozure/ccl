@@ -21,7 +21,9 @@ RM = /bin/rm
 # AS = gas-2.9.1
 AS = as
 M4 = m4
-ASFLAGS = -mfpu=vfp
+# we use the swp instruction in a couple of places;  tell the assembler
+# to remain caim.
+ASFLAGS = -mfpu=vfp -march=armv7-a -mno-warn-deprecated
 M4FLAGS = -DLINUX -DARM
 CDEFINES = -DLINUX -DARM -D_REENTRANT -D_GNU_SOURCE -DUSE_FUTEX -DSVN_REVISION=$(SVN_REVISION)
 CDEBUG = -g
