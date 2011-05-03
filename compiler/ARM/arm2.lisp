@@ -6157,7 +6157,8 @@
   (^))
 
 (defarm2 arm2-minus1 minus1 (seg vreg xfer form)
-  (arm2-unary-builtin seg vreg xfer '%negate form))
+  (or (acode-optimize-minus1 seg vreg xfer form *arm2-trust-declarations*)
+      (arm2-unary-builtin seg vreg xfer '%negate form)))
 
 (defarm2 arm2-%double-float-negate %double-float-negate (seg vreg xfer form)
   (with-fp-target () (r1 :double-float)
