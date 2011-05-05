@@ -15,6 +15,8 @@
 
 SVN_REVISION=$(shell svnversion || echo "unknown")
 
+NO_WARN_DEPRECATED = $(shell ($(AS) --help -v 2>&1 | grep -q -e "-no-warn-deprecated") && /bin/echo "-no-warn-deprecated")
+
 VPATH = ../
 RM = /bin/rm
 # Versions of GNU as >= 2.9.1 all seem to work
@@ -23,7 +25,7 @@ AS = as
 M4 = m4
 # we use the swp instruction in a couple of places;  tell the assembler
 # to remain caim.
-ASFLAGS = -mfpu=vfp -march=armv7-a -mno-warn-deprecated
+ASFLAGS = -mfpu=vfp -march=armv7-a $(NO_WARN_DEPRECATED)
 M4FLAGS = -DLINUX -DARM
 CDEFINES = -DLINUX -DARM -D_REENTRANT -D_GNU_SOURCE -DUSE_FUTEX -DSVN_REVISION=$(SVN_REVISION)
 CDEBUG = -g
