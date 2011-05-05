@@ -15,7 +15,7 @@
 
 SVN_REVISION=$(shell svnversion || echo "unknown")
 
-NO_WARN_DEPRECATED = $(shell ($(AS) --help -v 2>&1 | grep -q -e "-no-warn-deprecated") && /bin/echo "-no-warn-deprecated")
+NO_WARN_DEPRECATED = $(shell ($(AS) --help -v 2>&1 | grep -q -e "-mno-warn-deprecated") && /bin/echo "-mno-warn-deprecated")
 
 VPATH = ../
 RM = /bin/rm
@@ -24,7 +24,7 @@ RM = /bin/rm
 AS = as
 M4 = m4
 # we use the swp instruction in a couple of places;  tell the assembler
-# to remain caim.
+# to remain calm.
 ASFLAGS = -mfpu=vfp -march=armv7-a $(NO_WARN_DEPRECATED)
 M4FLAGS = -DLINUX -DARM
 CDEFINES = -DLINUX -DARM -D_REENTRANT -D_GNU_SOURCE -DUSE_FUTEX -DSVN_REVISION=$(SVN_REVISION)
