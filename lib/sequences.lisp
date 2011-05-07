@@ -599,13 +599,16 @@
                   (setq min-vector-length (min min-vector-length
                                                (length seq)))))
   (dotimes (index min-vector-length)
-    (dolist (one-seq sequences)
+    (do* ((sequences sequences (cdr sequences))
+          (one-seq (car sequences) (car sequences)))
+         ((null sequences))
+      (declare (list sequences))
       (%rplaca cur-slice
                (if (vectorp one-seq)
                    (aref one-seq index)
                    (if one-seq
                        (progn
-                         (%rplaca (memq one-seq sequences) (cdr one-seq))
+                         (setf (car sequences) (cdr one-seq))
                          (%car one-seq))
                        (return-from some-xx-multi at-end))))
       (setq cur-slice (%cdr cur-slice)))
