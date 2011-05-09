@@ -329,7 +329,6 @@ terminate the list"
 
 (defun logical-pathname-p (thing) (istruct-typep thing 'logical-pathname))
 
-(progn
 ;;; It's back ...
 (defun list-nreverse (list)
   (nreconc list nil))
@@ -353,7 +352,7 @@ terminate the list"
   (when seq
     (seq-dispatch seq
                   (list-nreverse seq)
-                  (vector-nreverse seq)))))
+                  (vector-nreverse seq))))
 
 (defun nreconc (x y)
   "Return (NCONC (NREVERSE X) Y)."
@@ -381,17 +380,6 @@ terminate the list"
             (dolist (element list)
                 (setq tail (cdr (rplacd tail (cons element nil)))))))))))
 
-
-
-                     
-
-
-
-
-
-
-
-(progn
 (defun list-reverse (l)
   (do* ((new ()))
        ((null l) new)
@@ -412,8 +400,6 @@ terminate the list"
 (defun reverse (seq)
   "Return a new sequence containing the same elements but in reverse order."
   (seq-dispatch seq (list-reverse seq) (vector-reverse seq)))
-)
-
 
 (defun check-sequence-bounds (seq start end)
   (flet ((bad-sequence-interval (seq start end)
