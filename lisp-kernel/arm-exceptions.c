@@ -1544,7 +1544,9 @@ extern opcode
   egc_rplaca,
   egc_rplacd,
   egc_set_hash_key_conditional,
-  egc_set_hash_key_conditional_test;
+  egc_set_hash_key_conditional_test,
+  swap_lr_lisp_frame_temp0,
+  swap_lr_lisp_frame_arg_z;
 
 
 extern opcode ffcall_return_window, ffcall_return_window_end;
@@ -1719,8 +1721,31 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
            VOID_ALLOCPTR */
         xpGPR(xp,allocptr) = VOID_ALLOCPTR;
       }
+      return;
     }
     return;
+  }
+  {
+    lisp_frame *swap_frame = NULL;
+    pc base = &swap_lr_lisp_frame_temp0;
+    
+    if ((program_counter >base)             /* sic */
+        && (program_counter < (base+3))) {
+      swap_frame = (lisp_frame *)xpGPR(xp,temp0);
+    } else {
+      base = &swap_lr_lisp_frame_arg_z;
+      if ((program_counter > base) && (program_counter < (base+3))) { 
+        swap_frame = (lisp_frame *)xpGPR(xp,arg_z);
+      }
+    }
+    if (swap_frame) {
+      if (program_counter == (base+1)) {
+        swap_frame->savelr = xpGPR(xp,Rlr);
+      }
+      xpGPR(xp,Rlr) = xpGPR(xp,imm0);
+      xpPC(xp) = base+3;
+      return;
+    }
   }
 }
 

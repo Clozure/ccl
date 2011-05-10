@@ -4009,15 +4009,29 @@ local_label(_nthrow1v_do_unwind):
         /* Save our caller's LR and FN in the csp frame created by the unwind-  */
         /* protect.  (Clever, eh ?)  */
         __(add sp,sp,#catch_frame.size)
-        /* swp is deprecated on ARMv6+.  It's not useful as a basis
-           for synchronization, but that's not why we're using it here. */
+        /* We used to use a swp instruction to exchange the lr with
+        the lisp_frame.savelr field of the lisp frame that temp0 addresses.
+        Multicore ARMv7 machines include the ability to disable the swp
+        instruction, and some Linux kernels do so and emulate the instruction.
+        There seems to be evidence that they sometimes do so incorrectly,
+        so we stopped using swp.
+        pc_luser_xp() needs to do some extra work if the thread is interrupted
+        in the midst of the three-instruction sequence at
+	swap_lr_lisp_frame_temp0.
+        */
         __(mov imm1,#0)
         __(mov temp0,sp)
         __(mov imm0,#3<<num_subtag_bits)
         __(orr imm0,imm0,#subtag_simple_vector)
         __(stmdb sp!,{imm0,imm1,arg_z,temp2})
-        __(add imm0,temp0,#lisp_frame.savelr)
-        __(swp lr,lr,[imm0])
+        .globl C(swap_lr_lisp_frame_temp0)
+        .globl C(swap_lr_lisp_frame_temp0_end)
+        /* This instruction sequence needs support from pc_luser_xp() */
+C(swap_lr_lisp_frame_temp0):            
+        __(ldr imm0,[temp0,#lisp_frame.savelr])
+        __(str lr,[temp0,#lisp_frame.savelr])
+        __(mov lr,imm0)
+C(swap_lr_lisp_frame_temp0_end):            
         __(ldr nfn,[temp0,#lisp_frame.savefn])
         __(str fn,[temp0,#lisp_frame.savefn])
         __(ldr vsp,[temp0,#lisp_frame.savevsp])
@@ -4104,8 +4118,14 @@ local_label(nthrownv_tpushtest):
         __(subs nargs,nargs,#fixnumone)
         __(bge local_label(nthrownv_tpushloop))
         __(mov imm1,#0)
-        __(add imm0,arg_z,#lisp_frame.savelr)
-        __(swp lr,lr,[imm0])
+        /* This instruction sequence needs support from pc_luser_xp() */
+        .globl C(swap_lr_lisp_frame_arg_z)
+        .globl C(swap_lr_lisp_frame_arg_z_end)
+C(swap_lr_lisp_frame_arg_z):                   
+        __(ldr imm0,[arg_z,#lisp_frame.savelr])
+        __(str lr,[arg_z,#lisp_frame.savelr])
+        __(mov lr,imm0)
+C(swap_lr_lisp_frame_arg_z_end):                   
         __(ldr nfn,[arg_z,#lisp_frame.savefn])
         __(str fn,[arg_z,#lisp_frame.savefn])
         __(ldr vsp,[arg_z,#lisp_frame.savevsp])
