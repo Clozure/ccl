@@ -1623,8 +1623,124 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
         <varname>CCL_DEFAULT_DIRECTORY</varname> is not set, then it is set
         to the directory containing the current heap image.</para>
     </sect2>
-    
-    
+    <sect2 id="pathname-namestrings">
+      <title>Pathname Namestrings</title>
+      <para>
+	The syntax of namestrings is implementation-defined in Common Lisp.
+	Portable programs cannot assume much of anything about them.  (See
+	section 19.1.1 of the Common Lisp standard for more information.)
+      </para>
+      <para>
+	When translating a namestring into a pathname object, most
+	implementations seem to follow the convention that a dot
+	character in the namestring separates the
+	<literal>pathname-name</literal> and
+	the <literal>pathname-type</literal>.  When there is more
+	than one dot in involved, or when dots appear at the beginning
+	or end of the namestrings, what to do is less clear: does
+	".emacs" describe a pathname whose name is
+	<literal>nil</literal> and whose type is <literal>emacs</literal>
+	or something else?  Similarly, given "a.b.c", the question
+	is which parts are parsed as the pathname name, and which are
+	parsed as the pathname type?
+      </para>
+      <para>
+	When generating a namestring from a pathname object (as happens,
+	for example, when printing a pathname), &CCL;
+	tries to avoid some potential ambiguity by escaping characters
+	that might otherwise be used to separate pathname components.
+	The character used to quote or escape the separators is a
+	backlash on Unix systems, and a #\&gt; character on Windows.
+	So, for example, "a\\.b.c"
+	has name "a.b" and type "c", whereas "a.b\\.c" has name
+	"a" and type "b.c".
+      </para>
+      <para>
+	To get a native namestring suitable for passing to an
+	operating system command, use the function
+	<literal>ccl:native-translated-namestring</literal>.
+      </para>
+
+    <sect3>
+      <title>Working with native namestrings</title>
+      <refentry id="f_native-translated-namestring">
+	<indexterm zone="f_native-translated-namestring">
+	  <primary>native-translated-namestring</primary>
+	</indexterm>
+	
+	<refnamediv>
+	  <refname>native-translated-namestring</refname>
+	  <refpurpose>
+	    Return a namestring that uses the conventions of the
+	    native operating system.
+	  </refpurpose>
+	  <refclass>Function</refclass>
+	</refnamediv>
+	
+	<refsynopsisdiv>
+	  <synopsis><function>native-translated-namestring</function> pathname-designator</synopsis>
+	</refsynopsisdiv>
+	
+	<refsect1><title>Description</title>
+	<para>
+	  This function returns a namestring that represents a pathname
+	  using the native conventions of the operating system.
+	  Any quoting or escaping of special characters will be removed.
+	</para>
+	<para>
+	  For example, suppose that <varname>p</varname> is a pathname made
+	  by <literal>(make-pathname :name "a.b" :type "c")</literal>.
+	  Then, <literal>(native-translated-namestring p)</literal> evaluates
+	  to "a.b.c".  By contrast, <literal>(namestring p)</literal> evaluates
+	  to "a\\.b.c".
+	</para>
+	</refsect1>
+      </refentry>
+
+      <refentry id="m_with-filename-cstrs">
+	<indexterm zone="m_with-filename-cstrs">
+	  <primary>with-filename-cstrs</primary>
+	</indexterm>
+	
+	<refnamediv>
+	  <refname>with-filename-cstrs</refname>
+	  <refpurpose>
+	    Suitably encode strings to be used as filenames for foreign code.
+	  </refpurpose>
+	  <refclass>Macro</refclass>
+	</refnamediv>
+	
+	<refsynopsisdiv>
+	  <synopsis><function>with-filename-cstrs</function> ( {(var value)}* ) {form}*</synopsis>
+	</refsynopsisdiv>
+	
+	<refsect1><title>Description</title>
+	<para>
+	  Executes <varname>forms</varname> in an environemt in which each
+	  <varname>var</varname> is bound to a stack-allocated foreign
+	  pointer which refers to a C-style string suitable for passing
+	  to foreign code which expects a filename argument.
+	</para>
+	<para>
+	  For example, one might use this macro in the following way:
+  <programlisting>
+(with-filename-cstrs ((s (native-translated-namestring pathname)))
+  (#_unlink s))
+  </programlisting>
+	</para>
+	<para>
+	  Various operating systems have different conventions for how
+	  they expect native pathname strings to be encoded.  Darwin
+	  expects then to be decomposed UTF-8.  The Unicode variants
+	  to Windows file-handling functions expect UTF-16.  Other
+	  systems just treat them as opaque byte sequences.  This macro
+	  ensures that the correct encoding is used, whatever
+	  the host operating system.
+	</para>
+	</refsect1>
+      </refentry>
+    </sect3>
+  </sect2>
     <sect2 id="pathnames-on-darwin">
       <title>OS X (Darwin)</title>
       
