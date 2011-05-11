@@ -276,7 +276,7 @@
             (cond ((eq ref $defstruct-nth)
                    `(nth ,offset ,@args))
                   ((eq ref $defstruct-struct)
-                   `(struct-ref (typecheck ,@args ,(structref-info-struct structref-info)) ,offset))
+                   `(struct-ref (structure-typecheck ,@args ,(structref-info-struct structref-info)) ,offset))
                   ((eq ref target::subtag-simple-vector)
                    `(svref ,@args ,offset))
                   (ref

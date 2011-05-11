@@ -332,6 +332,12 @@ function to the indicated name is true.")
 (defun nx-declarations-typecheck (env)
   (nx-apply-env-hook policy.declarations-typecheck env))
 
+(defun nx-strict-structure-typechecking (env)
+  (let* ((hook (getf (policy.misc *nx-current-compiler-policy*) :strict-structure-typechecking)))
+    (when hook
+      (if (functionp hook)
+        (funcall hook env)
+        t))))
 
 #-bccl
 (defun nx1-default-operator ()

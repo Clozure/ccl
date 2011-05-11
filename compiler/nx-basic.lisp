@@ -184,7 +184,16 @@
                #'(lambda (var val env)       ; allow-constant-substitution
                    (declare (ignore var val env))
                    t)
-               nil           ; extensions
+               `(:strict-structure-typechecking
+                 ,(lambda (env)
+                   (let* ((debug (debug-optimize-quantity env))
+                          (safety (safety-optimize-quantity env))
+                          (speed (speed-optimize-quantity env)))
+                     (declare (fixnum debug safety speed))
+                     (or (>= debug 2)
+                         (>= safety 2)
+                         (> debug speed)
+                         (> safety speed))))) ; extensions
                )))
   (defun new-compiler-policy (&key (allow-tail-recursion-elimination nil atr-p)
                                    (inhibit-register-allocation nil ira-p)
@@ -195,7 +204,8 @@
                                    (allow-transforms nil at-p)
                                    (force-boundp-checks nil fb-p)
                                    (allow-constant-substitution nil acs-p)
-                                   (declarations-typecheck nil dt-p))
+                                   (declarations-typecheck nil dt-p)
+                                   (strict-structure-typechecking nil sst-p))
     (let ((p (copy-uvector policy)))
       (if atr-p (setf (policy.allow-tail-recursion-elimination p) allow-tail-recursion-elimination))
       (if ira-p (setf (policy.inhibit-register-allocation p) inhibit-register-allocation))
@@ -207,6 +217,7 @@
       (if fb-p (setf (policy.force-boundp-checks p) force-boundp-checks))
       (if acs-p (setf (policy.allow-constant-substitution p) allow-constant-substitution))
       (if dt-p (setf (policy.declarations-typecheck p) declarations-typecheck))
+      (if sst-p (setf (getf (policy.misc p) :strict-structure-typechecking) strict-structure-typechecking))
       p))
   (defun %default-compiler-policy () policy))
 
