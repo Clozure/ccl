@@ -855,21 +855,33 @@ are running on, or NIL if we can't find any useful information."
     #+windows-target (not (null (getenv "CYGWIN")))
     #-windows-target nil)
 
+(defun run-svn (args &key (output :string) (error :output) (if-fail :error ifp))
+  (if (eq output :stream)
+    (external-process-output-stream (run-program *svn-program* args :output :stream :error error :wait nil))
+    (flet ((check-status (proc)
+             (multiple-value-bind (status exit-code) (external-process-status proc)
+               (unless (and (eq status :exited) (or (not ifp) (zerop exit-code)))
+                 (if (eq if-fail :error)
+                   (error "Running \"svn ~a\" produced exit status ~s, code ~s" (car args) status exit-code)
+                   (return-from run-svn if-fail))))
+             proc))
+      (if (eq output :string)
+        (with-output-to-string (stream)
+          (check-status (run-program *svn-program* args :output stream :error error)))
+        (check-status (run-program *svn-program* args :output output :error error))))))
+
 (defun svn-info-component (component)
-  (let* ((component-length (length component)))
-    (let* ((s (make-string-output-stream)))
-      (multiple-value-bind (status exit-code)
-          (external-process-status
-           (run-program *svn-program*  (list "info" (native-translated-namestring "ccl:")) :output s :error :output))
-        (when (and (eq :exited status) (zerop exit-code))
-          (with-input-from-string (output (get-output-stream-string s))
-            (do* ((line (read-line output nil nil) (read-line output nil nil)))
-                 ((null line))
-              (when (and (>= (length line) component-length)
-                         (string= component line :end2 component-length))
-                (return-from svn-info-component
-                  (string-trim " " (subseq line component-length)))))))))
-    nil))
+  (let ((component-length (length component))
+        (string (run-svn (list "info" (native-translated-namestring "ccl:")) :if-fail nil)))
+    (when string
+      (with-input-from-string (output string)
+        (do* ((line (read-line output nil nil) (read-line output nil nil)))
+             ((null line))
+          (when (and (>= (length line) component-length)
+                     (string= component line :end2 component-length))
+            (return-from svn-info-component
+              (string-trim " " (subseq line component-length))))))
+      nil)))
 
 (defun svn-url () (svn-info-component "URL:"))
 (defun svn-repository () (svn-info-component "Repository Root:"))
@@ -922,6 +934,118 @@ are running on, or NIL if we can't find any useful information."
               (return-from local-svn-revision line))))))
     nil))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; svn diffs
+
+(defun get-svn-changes (&key (directory (current-directory)) (revision :base) (reverse nil))
+  "Run svn diff to compare REVISION and working copy of DIRECTORY, and return a list of
+  the changed regions (in the form of source notes) in the working copy.  If REVERSE is true,
+  returns regions in the REVISION version rather than the working copy."
+  (let* ((svn-revision (format nil "-r~a" revision))
+         (diff (run-svn `("diff" ,svn-revision ,(native-translated-namestring directory)))))
+    (unless (equal diff "")
+      (unless (string-equal "Index: " diff :end2 7)
+        (error "Cannot understand svn output: ~s" diff))
+      (parse-svn-changes diff directory (if reverse svn-revision)))))
+
+(defun parse-svn-changes (string directory svn-revision)
+  ;; Parse svn diff output string into source-note's
+  (unless (equal string "")
+    (assert (string-equal "Index: " string :end2 7))
+    (loop
+      for pos = 7 then (+ end 8)
+      as file = (subseq string pos (setq pos (position #\newline string :start pos)))
+      as pathname = (merge-pathnames file directory)
+      as end = (search #.(%str-cat (string #\newline) "Index: ") string :start2 pos)
+      nconc (parse-svn-changes-in-file string pos end pathname svn-revision)
+      while end)))
+
+(defun parse-svn-changes-in-file (string pos end pathname svn-revision)
+  (let* ((line-ranges (parse-svn-changed-lines-in-file string (1+ pos) (or end (length string)) svn-revision))
+         (lines (loop for (start-line . line-count) in line-ranges
+                  collect start-line
+                  collect (+ start-line line-count)))
+         ;; Convert line ranges to character ranges.
+         (line-posns (flet ((posns (stream)
+                              (flet ((skip-lines (stream count)
+                                       (let ((chars 0))
+                                         (loop while (> count 0)
+                                           do (let ((ch (read-char stream)))
+                                                (loop until (or (eql ch #\newline) (null ch))
+                                                  do (incf chars)
+                                                  do (setq ch (read-char stream nil)))
+                                                (when ch (incf chars))
+                                                (decf count)))
+                                         chars)))
+                                (loop
+                                  for last-line = 1 then line-no
+                                  for last-pos = 0 then pos
+                                  for line-no in (remove-duplicates (sort lines #'<))
+                                  for pos = (+ last-pos (skip-lines stream (- line-no last-line)))
+                                  collect (cons line-no pos)))))
+                       (if svn-revision
+                         (let ((stream (run-svn `("cat"
+                                                  ,svn-revision
+                                                  ,(native-translated-namestring pathname))
+                                                :output :stream)))
+                           (posns stream))
+                         (with-open-file (stream pathname) (posns stream))))))
+    (loop for (start-line . line-count) in line-ranges
+      collect (make-source-note :filename pathname
+                                :start-pos (cdr (assq start-line line-posns))
+                                :end-pos (cdr (assq (+ start-line line-count) line-posns))))))
+
+
+(defun parse-svn-changed-lines-in-file (string start end svn-revision)
+  (flet ((next-line (str start end)
+           (let ((pos (position #\Newline str :start start :end end)))
+             (if pos (1+ pos) end))))
+    (unless (eql start end)
+      (assert 
+       (let ((pos start))
+         (and (loop repeat 67 always (eql (char string pos) #\=) do (incf pos))
+              (eql (char string pos) #\Newline)
+              (string-equal "--- " string :start2 (incf pos) :end2 (+ pos 4))
+              (setq pos (position #\newline string :start pos))
+              (string-equal "+++ " string :start2 (incf pos) :end2 (+ pos 4))
+              (< pos end)
+              (or (null (setq pos (position #\newline string :start pos :end end)))
+                  (string-equal "@@ -" string :start2 (1+ pos) :end2 (+ pos 5))))))
+      (when (setq start (search #.(%str-cat (string #\newline) "@@ -") string :start2 start :end2 end))
+        (incf start)
+        (loop
+          do (incf start 4)
+          collect (multiple-value-bind (start-line npos)
+                                       (parse-integer string
+                                                      :start (if svn-revision
+                                                               start
+                                                               (1+ (position #\+ string :start start :end end)))
+                                                      :end end
+                                                      :junk-allowed t)
+                    (assert (eql (char string npos) #\,))
+                    (multiple-value-bind (num-lines npos) (parse-integer string :start (1+ npos) :end end
+                                                                         :junk-allowed t)
+                      (assert (eql (char string npos) #\space))
+                      ;; adjust for context lines
+                      (loop with first = t
+                        as ch = (and (< (setq npos (next-line string npos end)) end)
+                                     (char string npos))
+                        while (memq ch '(#\space #\+ #\-))
+                        do (cond ((eq ch #\space)
+                                  (decf num-lines)
+                                  (when first (incf start-line)))
+                                 (t (setq first nil)))
+                        finally (setq start npos))
+                      (cons start-line num-lines)))
+          while (and (< (+ start 4) end) (string-equal "@@ -" string :start2 start :end2 (+ start 4)))
+          finally (assert (eql start end)))))))
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;; Scan the heap, collecting infomation on the primitive object types
 ;;; found.  Report that information.
