@@ -26,6 +26,8 @@
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
             href="ide.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
+            href="hemlock.xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
             href="threads.xml"/>
 <xi:include xmlns:xi="http://www.w3.org/2001/XInclude"
             href="sockets.xml"/>

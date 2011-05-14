@@ -132,6 +132,7 @@ doc/src/external-process.xml -text
 doc/src/ffi.xml -text
 doc/src/gc.xml -text
 doc/src/glossary.xml -text
+doc/src/hemlock.xml -text
 doc/src/ide.xml -text
 doc/src/implementation.xml -text
 doc/src/install.xml -text
